@@ -4,12 +4,12 @@
 
 ### JSON file creation
 
-### Requirements
+#### Requirements
 - [ ] Error checking / Type Checking / Field Checking
 - [ ] Reduce “conversion” code.
 - [ ] More streamlined from td objects to schema.
 
-### Constraints / Keep in Mind
+#### Constraints / Keep in Mind
 - [ ] object attributes dont always correspond to schema keys
 - [ ] changes in schema can affect C++ but also web UI, so be careful
 - [ ] numpy arrays convert to list or float
@@ -17,11 +17,13 @@
 - [ ] Unit conversion
 - [ ] Backwards compatibility with default values
 
-### Implement
-- [ ] “master” schema with
+#### Implement
+- [ ] define “master” schema with
 	- [ ] Type annotation
 	- [ ] Conversion as needed
 	- [ ] Error checking
+- [ ] make compatible with existing tidy3d objects
+- [ ] test all edge cases
 
 ### Python API
 - [ ] Simplify the objects to be data classes or similar so they work better with JSON.
@@ -31,11 +33,12 @@
 	- [ ] Geometry 
 	- [ ] Mesh
 
-### Open Source Stuff
+### Open Source Features
 - [ ] Automatic code formatting
 - [ ] Automatic testing / CI (add more tests)
-- [ ] Type Annotation
-- [ ] Tags on GitHub, issue tracking.
+- [ ] Type annotation
+- [ ] handling example notebooks and documentation
+- [ ] Tags on GitHub, issue tracking, other nice features.
 
 ### Features
 
