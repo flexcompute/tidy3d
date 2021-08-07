@@ -33,12 +33,12 @@ def ensure_greater_or_equal(field_name, value):
     return is_greater_or_equal_to
 
 def ensure_less_than(field_name, value):
-    """makes sure a field_name is greater than value"""
+    """makes sure a field_name is less than value"""
 
     @pydantic.validator(field_name, allow_reuse=True, always=True)
-    def is_less_than(val):
-        assert (val < value), f"value of '{field_name}' must be less than {value}, given {val}"
-        return val
+    def is_less_than(field_val):
+        assert (field_val < value), f"value of '{field_name}' must be less than {value}, given {field_val}"
+        return field_val
 
     return is_less_than
 
@@ -71,7 +71,7 @@ class Geometry(pydantic.BaseModel):
     def __init__(self, **data: Any):
         """ checks the bounds after any Geometry instance is initialized """
         super().__init__(**data)
-        _ = check_bounds()
+        _bound_validator = check_bounds()
 
 class Cuboid(Geometry):
     """ rectangular cuboid (has size and center) """
@@ -100,8 +100,8 @@ class Medium(pydantic.BaseModel):
     permittivity: float = 1.0
     conductivity: float = 0.0
 
-    _ = ensure_greater_or_equal("permittivity", 1.0)
-    _ = ensure_greater_or_equal("conductivity", 0.0)
+    _permittivity_validator = ensure_greater_or_equal("permittivity", 1.0)
+    _conductivity_validator = ensure_greater_or_equal("conductivity", 0.0)
 
 # to do: dispersion
 
@@ -128,7 +128,7 @@ class Pulse(SourceTime):
     fwidth: pydantic.PositiveFloat
     offset: pydantic.NonNegativeFloat = 5.0
 
-    _ = ensure_greater_or_equal("offset", 2.5)
+    _validate_offset = ensure_greater_or_equal("offset", 2.5)
 
 class Source(pydantic.BaseModel):
     """ Defines electric and magnetic currents that produce electromagnetic field """
@@ -142,7 +142,7 @@ class ModeSource(Source):
 
     mode_index : pydantic.NonNegativeInt = 0
 
-    _ = assert_plane("geometry")
+    _geometry_validator = assert_plane("geometry")
 
 """ ==== Monitor ==== """
 
@@ -160,7 +160,7 @@ class ModeMonitor(Monitor):
     store_values: Tuple[STORE_VALUES] = ('flux', 'amplitudes')
     store_mode_indices : Tuple[pydantic.NonNegativeInt] = (0,)
 
-    _ = assert_plane("geometry")
+    _geo_validator = assert_plane("geometry")
 
 """" ==== Models for stored data ==== """
 
@@ -255,11 +255,11 @@ sim = Simulation(
     structures={
         "square": Structure(
             geometry=Cuboid(size=(1, 1, 1), center=(0, 0, 0)),
-            medium=Medium(permittivity=-2.0),
+            medium=Medium(permittivity=2.0),
         ),
         "box": Structure(
             geometry=Cuboid(size=(1, 1, 1), center=(0, 0, 0)),
-            medium=Medium(conductivity=3.0),
+            medium=Medium(permittivity=1.0, conductivity=3.0),
         ),
     },
     sources={
@@ -326,7 +326,7 @@ def viz_data(sim: Simulation, monitor_name: str) -> None:
 if __name__ == "__main__":
     json = export(sim)  # validation, schema matching
     task_id = new_project(json)  # export to server
-    load(sim, task_id)  # load data into sim.data containers
+    # load(sim, task_id)  # load data into sim.data containers
     # viz_data(sim, "plane")  # vizualize
 
 
