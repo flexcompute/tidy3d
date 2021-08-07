@@ -1,195 +1,294 @@
 import numpy as np
 import pydantic
-from typing import Tuple, Dict, List, Callable, Any, Union
+from typing import Tuple, Dict, List, Callable, Any, Union, Literal
+from enum import Enum, unique
 
 import shutil
 
-""" ==== Types ==== """
+""" === Constants === """
 
-size = Tuple[float, float, float]
-point = Tuple[float, float, float]
-bound = Tuple[Tuple[float, float], Tuple[float, float], Tuple[float, float]]
+C0 = 3e8
 
-""" ==== Validators ==== """
+""" ==== Types Used in Multiple Places ==== """
 
+# tuple containing three non-negative floats
+Size = Tuple[pydantic.NonNegativeFloat, pydantic.NonNegativeFloat, pydantic.NonNegativeFloat]
 
-def validate_non_neg(field_name="size"):
-    """makes sure all elements of field_name are non negative"""
-    @pydantic.validator(field_name, allow_reuse=True, each_item=True)
-    def is_non_neg(val):
-        assert (
-            val >= 0
-        ), f"all values of '{field_name}' must be non-negative, given {val}"
+# tuple containing three floats
+Coordinate = Tuple[float, float, float]
+
+# tuple of three tuples containing min & max values
+Bound = Tuple[Tuple[float, float], Tuple[float, float], Tuple[float, float]]
+
+""" ==== Validators Used in Multiple Models ==== """
+
+def ensure_greater_or_equal(field_name, value):
+    """ makes sure a field_name is >= value """
+
+    @pydantic.validator(field_name, allow_reuse=True, always=True)
+    def is_greater_or_equal_to(val):
+        assert (val >= value), f"value of '{field_name}' must be greater than {value}, given {val}"
         return val
 
-    return is_non_neg
+    return is_greater_or_equal_to
 
-
-def validate_greater_than(field_name, value):
+def ensure_less_than(field_name, value):
     """makes sure a field_name is greater than value"""
 
-    @pydantic.validator(field_name, allow_reuse=True)
-    def is_greater_than(val):
-        assert (
-            val > value
-        ), f"value of '{field_name}' must be greater than {value}, given {val}"
+    @pydantic.validator(field_name, allow_reuse=True, always=True)
+    def is_less_than(val):
+        assert (val < value), f"value of '{field_name}' must be less than {value}, given {val}"
         return val
 
-    return is_greater_than
+    return is_less_than
 
+def assert_plane(field_name="geometry"):
+    """ makes sure a field's `size` attribute has exactly 1 zero """
 
-""" ==== Geometry ==== """
+    @pydantic.validator(field_name, allow_reuse=True, always=True)
+    def is_plane(cls, v):
+        assert v.size.count(0.0) == 1, "mode objects only works with plane geometries with one size element of 0.0"
+        return v
+    return is_plane
 
 def check_bounds():
-    
+    """ makes sure the model's `bounds` field is Not none and is ordered correctly """
+
     @pydantic.validator("bounds", allow_reuse=True)
     def valid_bounds(val):
-        print('asserting valid bounds')
-        assert val is not None, "bounds must be set"
+        assert val is not None, "bounds must be set, are None"
         for v in val:
             bound_min, bound_max = v
-            assert bound_min <= bound_max, "min bound can not be greater than max bound"
+            assert bound_min <= bound_max, "min bound is smaller than max bound"
         return val
     return valid_bounds
 
+""" ==== Geometry Models ==== """
 
 class Geometry(pydantic.BaseModel):
-    """defines where something exists in space"""
+    """defines where something exists in space """
 
     def __init__(self, **data: Any):
         """ checks the bounds after any Geometry instance is initialized """
         super().__init__(**data)
         _ = check_bounds()
 
-class Box(Geometry):
-    size: size
-    center: point
-    bounds: bound = None
+class Cuboid(Geometry):
+    """ rectangular cuboid (has size and center) """
 
-    validate_non_neg("size")
+    size: Size
+    center: Coordinate
+    bounds: Bound = None
 
     @pydantic.validator("bounds", always=True)
     def set_bounds(cls, v, values):
-        print(f'setting bounds for {cls.__name__}')
+        """ sets bounds based on size and center """
+        if v is None:
+            return None
         size = values.get('size')
         center = values.get('center')     
         bounds = tuple((c - s/2.0, c + s/2.0) for (c, s) in zip(size, center))
         values['bounds'] = bounds
         return bounds
 
-class Point(Box):
-    def __init__(self, **data: Any):
-        data['size'] = (0., 0., 0.)
-        super().__init__(**data)
 
-class Plane(Box):
-
-    @pydantic.validator("size")
-    def check_size_has_one_zero(cls, v, values):       
-        assert v.count(0.0) == 1,  f"plane must have one element of size with value = 0.0, given {v}"
-        return v
-
-""" ==== Structure ==== """
-
+""" ==== Medium Models ==== """
 
 class Medium(pydantic.BaseModel):
+    """ Defines properties of a medium where electromagnetic waves propagate """
+
     permittivity: float = 1.0
     conductivity: float = 0.0
 
-    validate_greater_than("permittivity", 1.0)
-    validate_greater_than("conductivity", 0.0)
+    _ = ensure_greater_or_equal("permittivity", 1.0)
+    _ = ensure_greater_or_equal("conductivity", 0.0)
 
+# to do: dispersion
+
+""" ==== Structure Models ==== """
 
 class Structure(pydantic.BaseModel):
+    """ An object that interacts with the electromagnetic fields """
+
     geometry: Geometry
     medium: Medium
 
+""" ==== Source ==== """
 
-""" ==== source ==== """
+class SourceTime(pydantic.BaseModel):
+    """ Base class describing the time dependence of a source """
 
+    amplitude: pydantic.NonNegativeFloat = 1.0
+    phase: float = 0.0
+
+class Pulse(SourceTime):
+    """ A general pulse time dependence """
+
+    freq0: pydantic.PositiveFloat
+    fwidth: pydantic.PositiveFloat
+    offset: pydantic.NonNegativeFloat = 5.0
+
+    _ = ensure_greater_or_equal("offset", 2.5)
 
 class Source(pydantic.BaseModel):
+    """ Defines electric and magnetic currents that produce electromagnetic field """
+
     geometry: Geometry
-    source_time: List[float]
+    polarization: Tuple[float, float, float]
+    source_time: SourceTime
 
+class ModeSource(Source):
+    """ does mode solver over geometry """
 
-""" ==== monitor ==== """
+    mode_index : pydantic.NonNegativeInt = 0
 
+    _ = assert_plane("geometry")
+
+""" ==== Monitor ==== """
+
+STORE_VALUES = Literal['E', 'H', 'flux', 'amplitudes']
 
 class Monitor(pydantic.BaseModel):
     geometry: Geometry
-    monitor_time: List[float]
+    store_values: Tuple[STORE_VALUES] = ('E', 'H', 'flux')
+    store_times: List[float] = []
+    store_freqs: List[float] = []
 
+class ModeMonitor(Monitor):
+    """ does mode solver over geometry """
+
+    store_values: Tuple[STORE_VALUES] = ('flux', 'amplitudes')
+    store_mode_indices : Tuple[pydantic.NonNegativeInt] = (0,)
+
+    _ = assert_plane("geometry")
+
+"""" ==== Models for stored data ==== """
+
+import numpy
+
+class _ArrayMeta(type):
+    """ nasty stuff to define numpy arrays """
+    def __getitem__(self, t):
+        return type('NumpyArray', (NumpyArray,), {'__dtype__': t})
+
+class NumpyArray(numpy.ndarray, metaclass=_ArrayMeta):
+    """ Type for numpy arrays, if we need this """
+    @classmethod
+    def __get_validators__(cls):
+        yield cls.validate_type
+
+    @classmethod
+    def validate_type(cls, val):
+        dtype = getattr(cls, '__dtype__', None)
+        if isinstance(dtype, tuple):
+            dtype, shape = dtype
+        else:
+            shape = tuple()
+
+        result = numpy.array(val, dtype=dtype, copy=False, ndmin=len(shape))
+        assert not shape or len(shape) == len(result.shape)  # ndmin guarantees this
+
+        if any((shape[i] != -1 and shape[i] != result.shape[i]) for i in range(len(shape))):
+            result = result.reshape(shape)
+        return result
+
+class Field(pydantic.BaseModel):
+    """ stores data for electromagnetic field or current (E, H, J, or M) """
+    shape: Tuple[pydantic.NonNegativeInt, pydantic.NonNegativeInt, pydantic.NonNegativeInt]
+    x: NumpyArray[float]
+    y: NumpyArray[float]
+    z: NumpyArray[float]
 
 class Data(pydantic.BaseModel):
     monitor: Monitor
+    # field: xarray containg monitor's `store_values` as keys / indices
 
-
-""" ==== simulation ==== """
+""" ==== Mesh ==== """
 
 
 class Mesh(pydantic.BaseModel):
-    resolution: size = None
-    step_size: size = None
 
-    @pydantic.root_validator
-    def set_mesh(cls, values):
-        resolution = values.get("resolution")
-        step_size = values.get("step_size")
+    center: Coordinate = (0.0, 0.0, 0.0)
+    size: Size
+    grid_step: Size
+    run_time: pydantic.NonNegativeFloat = 0.0
 
-        assert (resolution is not None) or (step_size is not None), "either resolution or step size must be set"
-        assert (resolution is None) or (step_size is None), "resolution or step size can not both be set"
-        if resolution is None:
-            values["resolution"] = tuple(1 / dl for dl in step_size)
-        if step_size is None:
-            values["step_size"] = tuple(1 / res for res in resolution)
-        return values
+""" ==== PML ==== """
 
-    _ = validate_non_neg("resolution")
-    _ = validate_non_neg("step_size")
+class PMLLayer(pydantic.BaseModel):
+    """ single layer of a PML (profile and num layers) """
+    profile: Literal['standard', 'stable', 'absorber'] = 'standard'
+    num_layers: pydantic.NonNegativeInt = 0
+
+""" ==== Symmetry ==== """
+
+class Symmetry(Enum):
+    """ types of symmetries allowed across plane """
+    NONE = 0
+    EVEN = 1
+    ODD = -1
+
+""" ==== Simulation ==== """
 
 class Simulation(pydantic.BaseModel):
-    center: point = (0.0, 0.0, 0.0)
-    size: size
     mesh: Mesh
-    structures: Dict[str, Structure]
-    sources: Dict[str, Source]
-    monitors: Dict[str, Monitor]
-    data: Dict[str, Data]
+    structures: Dict[str, Structure] = {}
+    sources: Dict[str, Source] = {}
+    monitors: Dict[str, Monitor] = {}
+    data: Dict[str, Data] = {}
+    pml_layers: Tuple[PMLLayer, PMLLayer, PMLLayer] = (PMLLayer(), PMLLayer(), PMLLayer())
+    symmetry: Tuple[Symmetry, Symmetry, Symmetry] = (Symmetry.NONE, Symmetry.NONE, Symmetry.NONE)
+    shutoff: pydantic.NonNegativeFloat = 1e-5
+    courant: pydantic.NonNegativeFloat = 0.9
+    subpixel: bool = True
 
+    _ = ensure_less_than("courant", 1)
+
+""" ==== Example Instance ==== """
 
 sim = Simulation(
-    size=(2.0, 2.0, 2.0),
     mesh=Mesh(
-        step_size=(0.01, 0.01, 0.01),
+        size=(2.0, 2.0, 2.0),        
+        grid_step=(0.01, 0.01, 0.01),
+        run_time=1e-12
     ),
     structures={
         "square": Structure(
-            geometry=Box(size=(1, 1, 1), center=(0, 0, 0)),
+            geometry=Cuboid(size=(1, 1, 1), center=(0, 0, 0)),
             medium=Medium(permittivity=-2.0),
         ),
         "box": Structure(
-            geometry=Box(size=(1, 1, 1), center=(0, 0, 0)),
+            geometry=Cuboid(size=(1, 1, 1), center=(0, 0, 0)),
             medium=Medium(conductivity=3.0),
         ),
     },
     sources={
-        "planewave": Source(
-            geometry=Plane(size=(1, 0, 1), center=(0, 0, 0)),
-            source_time=[0.0, 0.01, 0.1, 0.2, 0.1, 0.01, 0.0],
+        "dipole": Source(
+            geometry=Cuboid(size=(0, 0, 0), center=(0, -.5, 0)),
+            polarization=(1, 0, 1),
+            source_time=Pulse(
+                freq0=1e14,
+                fwidth=1e12,
+                )
         )
     },
     monitors={
         "point": Monitor(
-            geometry=Point(center=(0, 0, 0)),
+            geometry=Cuboid(size=(1,0,0), center=(0, 0, 0)),
             monitor_time=[0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0],
         ),
         "plane": Monitor(
-            geometry=Box(size=(1, 0, 0), center=(0, 0, 0)),
+            geometry=Cuboid(size=(1, 1, 0), center=(0, 0, 0)),
             monitor_time=[0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0],
         ),
     },
-    data={},
+    symmetry=(Symmetry.NONE, Symmetry.ODD, Symmetry.EVEN),
+    pml_layers=(PMLLayer(profile='absorber', num_layers=20),
+                PMLLayer(profile='stable', num_layers=30),
+                PMLLayer(profile='standard')),
+    shutoff=1e-6,
+    courant=0.8,
+    subpixel=False
 )
 
 
@@ -231,10 +330,21 @@ if __name__ == "__main__":
     # viz_data(sim, "plane")  # vizualize
 
 
-def test_geometry():
-    b = Box(size=(1, 1, 1), center=(0, 0, 0))
-    b = Box(size=(1, 1, 1), center=(0, 0, 0))
-    p = Plane(size=(1, 1, 1), center=(0, 0, 0))
-    p = Plane(size=(1, 1, 1), center=(0, 0, 0))
-    q = Point(size=(1, 1, 1), center=(0, 0, 0))
-    q = Point(size=(1, 1, 1), center=(0, 0, 0))
+""" Tests """
+
+import pytest
+
+def test_negative_sizes():
+
+    for size in (-1, 1, 1), (1, -1, 1), (1, 1, -1):
+        with pytest.raises(pydantic.ValidationError) as e_info:
+            a = Cuboid(size=size, center=(0, 0, 0))
+
+        with pytest.raises(pydantic.ValidationError) as e_info:
+            m = Mesh(mesh_step=size)
+
+def test_medium():
+
+    with pytest.raises(pydantic.ValidationError) as e_info:
+        m = Medium(permittivity=0.0)
+        m = Medium(conductivity=-1.0)
