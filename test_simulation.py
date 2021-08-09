@@ -15,7 +15,7 @@ sim = Simulation(
     ),
     structures={
         "square": Structure(
-            geometry=Cuboid(size=(1, 1, 1), center=(-10, 0, 0)),
+            geometry=Cuboid(size=(1, 1, 1), center=(-1, 0, 0)),
             medium=Medium(permittivity=2.0),
         ),
         "box": Structure(
@@ -77,3 +77,44 @@ def test_medium():
     with pytest.raises(pydantic.ValidationError) as e_info:
         m = Medium(permittivity=0.0)
         m = Medium(conductivity=-1.0)
+
+def test_bounds():
+
+    def place_box(center):
+        sim = Simulation(
+            mesh=Mesh(
+                geometry=Cuboid(size=(1, 1, 1)),
+                grid_step=(0.1, 0.1, 0.1),
+                run_time=1e-12
+            ),
+            structures={
+                'box': Structure(
+                    geometry=Cuboid(
+                        size=(1,1,1),
+                        center=center
+                    ),
+                    medium=Medium()
+                )
+            }
+        )
+
+    # create all permutations of squares being shifted 1, -1, or zero in all three directions
+    bin_strings = [list(format(i, '03b')) for i in range(8)]
+    bin_ints = [[int(b) for b in bin_string] for bin_string in bin_strings]
+    bin_ints = np.array(bin_ints)
+    bin_signs = 2*(bin_ints - 0.5)
+
+    # test all cases where box is shifted +/- 1 in x,y,z and still intersects
+    for amp in bin_ints:
+        for sign in bin_signs:
+            center = amp*sign
+            place_box(tuple(center))
+
+    # test all cases where box is shifted +/- 2 in x,y,z and no longer intersects
+    for amp in bin_ints:
+        for sign in bin_signs:
+            center = 2 * amp * sign
+            if np.sum(center) < 1e-12:
+                continue
+            with pytest.raises(pydantic.ValidationError) as e_info:
+                place_box(tuple(center))
