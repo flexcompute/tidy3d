@@ -2,8 +2,11 @@ import numpy as np
 import pydantic
 from typing import Tuple, Dict, List, Callable, Any, Union, Literal
 from enum import Enum, unique
+from schema import validate_schema
 
+import json
 import shutil
+import jsonschema
 
 """ === Constants === """
 
@@ -220,14 +223,6 @@ class PMLLayer(pydantic.BaseModel):
     profile: Literal['standard', 'stable', 'absorber'] = 'standard'
     num_layers: pydantic.NonNegativeInt = 0
 
-""" ==== Symmetry ==== """
-
-class Symmetry(Enum):
-    """ types of symmetries allowed across plane """
-    NONE = 0
-    EVEN = 1
-    ODD = -1
-
 """ ==== Simulation ==== """
 
 class Simulation(pydantic.BaseModel):
@@ -237,7 +232,7 @@ class Simulation(pydantic.BaseModel):
     monitors: Dict[str, Monitor] = {}
     data: Dict[str, Data] = {}
     pml_layers: Tuple[PMLLayer, PMLLayer, PMLLayer] = (PMLLayer(), PMLLayer(), PMLLayer())
-    symmetry: Tuple[Symmetry, Symmetry, Symmetry] = (Symmetry.NONE, Symmetry.NONE, Symmetry.NONE)
+    symmetry: Tuple[Literal[0, -1, 1], Literal[0, -1, 1], Literal[0, -1, 1]] = [0, 0, 0]
     shutoff: pydantic.NonNegativeFloat = 1e-5
     courant: pydantic.NonNegativeFloat = 0.9
     subpixel: bool = True
@@ -282,23 +277,38 @@ sim = Simulation(
             monitor_time=[0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0],
         ),
     },
-    symmetry=(Symmetry.NONE, Symmetry.ODD, Symmetry.EVEN),
-    pml_layers=(PMLLayer(profile='absorber', num_layers=20),
+    symmetry=[0, -1, 1],
+    pml_layers=[PMLLayer(profile='absorber', num_layers=20),
                 PMLLayer(profile='stable', num_layers=30),
-                PMLLayer(profile='standard')),
+                PMLLayer(profile='standard')],
     shutoff=1e-6,
     courant=0.8,
     subpixel=False
 )
 
+def save_schema(fname_schema: str='schema.json') -> None:
+    """ saves simulation object schema to json """
+    schema_str = Simulation.schema_json(indent=2)
+    with open(fname_schema, 'w') as fp:
+        fp.write(schema_str)
 
-def export(sim: Simulation) -> str:
-    return sim.dict()
+fname_schema = 'schema.json'
+save_schema(fname_schema)
 
+def export(sim: Simulation, fname: str = 'data_user/sim.json') -> str:
+    sim_dict = sim.dict()
+    validate_schema(sim_dict)
+    with open(fname, 'w') as fp:
+        json.dump(sim_dict, fp)
+    return fname
 
-def new_project(json: Dict) -> int:
+def new_project(json: Dict, fname: str = 'data_user/sim.json') -> int:
     task_id = 101
-    monitors = json["monitors"]
+    with open(fname, 'r') as fp:
+        sim_dict = json.load(fp)
+    monitors = sim_dict.get("monitors")
+    if monitors is None:
+        monitors = {}
     for name, mon in monitors.items():
         data = np.random.random((4, 4))
         np.save(f"data_server/task_{task_id}_monitor_{name}.npy", data)
@@ -324,10 +334,10 @@ def viz_data(sim: Simulation, monitor_name: str) -> None:
 
 # example usage
 if __name__ == "__main__":
-    json = export(sim)  # validation, schema matching
+    fname = export(sim)  # validation, schema matching
     task_id = new_project(json)  # export to server
-    # load(sim, task_id)  # load data into sim.data containers
-    # viz_data(sim, "plane")  # vizualize
+    load(sim, task_id)  # load data into sim.data containers
+    viz_data(sim, "plane")  # vizualize
 
 
 """ Tests """

@@ -1,0 +1,371 @@
+{
+  "title": "Simulation",
+  "type": "object",
+  "properties": {
+    "mesh": {
+      "$ref": "#/definitions/Mesh"
+    },
+    "structures": {
+      "title": "Structures",
+      "default": {},
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/definitions/Structure"
+      }
+    },
+    "sources": {
+      "title": "Sources",
+      "default": {},
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/definitions/Source"
+      }
+    },
+    "monitors": {
+      "title": "Monitors",
+      "default": {},
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/definitions/Monitor"
+      }
+    },
+    "data": {
+      "title": "Data",
+      "default": {},
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/definitions/Data"
+      }
+    },
+    "pml_layers": {
+      "title": "Pml Layers",
+      "default": [
+        {
+          "profile": "standard",
+          "num_layers": 0
+        },
+        {
+          "profile": "standard",
+          "num_layers": 0
+        },
+        {
+          "profile": "standard",
+          "num_layers": 0
+        }
+      ],
+      "type": "array",
+      "items": [
+        {
+          "$ref": "#/definitions/PMLLayer"
+        },
+        {
+          "$ref": "#/definitions/PMLLayer"
+        },
+        {
+          "$ref": "#/definitions/PMLLayer"
+        }
+      ]
+    },
+    "symmetry": {
+      "title": "Symmetry",
+      "default": [
+        0,
+        0,
+        0
+      ],
+      "type": "array",
+      "items": [
+        {
+          "enum": [
+            0,
+            -1,
+            1
+          ],
+          "type": "integer"
+        },
+        {
+          "enum": [
+            0,
+            -1,
+            1
+          ],
+          "type": "integer"
+        },
+        {
+          "enum": [
+            0,
+            -1,
+            1
+          ],
+          "type": "integer"
+        }
+      ]
+    },
+    "shutoff": {
+      "title": "Shutoff",
+      "default": 1e-05,
+      "minimum": 0,
+      "type": "number"
+    },
+    "courant": {
+      "title": "Courant",
+      "default": 0.9,
+      "minimum": 0,
+      "type": "number"
+    },
+    "subpixel": {
+      "title": "Subpixel",
+      "default": true,
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "mesh"
+  ],
+  "definitions": {
+    "Mesh": {
+      "title": "Mesh",
+      "type": "object",
+      "properties": {
+        "center": {
+          "title": "Center",
+          "default": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "type": "array",
+          "items": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            }
+          ]
+        },
+        "size": {
+          "title": "Size",
+          "type": "array",
+          "items": [
+            {
+              "type": "number",
+              "minimum": 0
+            },
+            {
+              "type": "number",
+              "minimum": 0
+            },
+            {
+              "type": "number",
+              "minimum": 0
+            }
+          ]
+        },
+        "grid_step": {
+          "title": "Grid Step",
+          "type": "array",
+          "items": [
+            {
+              "type": "number",
+              "minimum": 0
+            },
+            {
+              "type": "number",
+              "minimum": 0
+            },
+            {
+              "type": "number",
+              "minimum": 0
+            }
+          ]
+        },
+        "run_time": {
+          "title": "Run Time",
+          "default": 0.0,
+          "minimum": 0,
+          "type": "number"
+        }
+      },
+      "required": [
+        "size",
+        "grid_step"
+      ]
+    },
+    "Geometry": {
+      "title": "Geometry",
+      "description": "defines where something exists in space ",
+      "type": "object",
+      "properties": {}
+    },
+    "Medium": {
+      "title": "Medium",
+      "description": "Defines properties of a medium where electromagnetic waves propagate ",
+      "type": "object",
+      "properties": {
+        "permittivity": {
+          "title": "Permittivity",
+          "default": 1.0,
+          "type": "number"
+        },
+        "conductivity": {
+          "title": "Conductivity",
+          "default": 0.0,
+          "type": "number"
+        }
+      }
+    },
+    "Structure": {
+      "title": "Structure",
+      "description": "An object that interacts with the electromagnetic fields ",
+      "type": "object",
+      "properties": {
+        "geometry": {
+          "$ref": "#/definitions/Geometry"
+        },
+        "medium": {
+          "$ref": "#/definitions/Medium"
+        }
+      },
+      "required": [
+        "geometry",
+        "medium"
+      ]
+    },
+    "SourceTime": {
+      "title": "SourceTime",
+      "description": "Base class describing the time dependence of a source ",
+      "type": "object",
+      "properties": {
+        "amplitude": {
+          "title": "Amplitude",
+          "default": 1.0,
+          "minimum": 0,
+          "type": "number"
+        },
+        "phase": {
+          "title": "Phase",
+          "default": 0.0,
+          "type": "number"
+        }
+      }
+    },
+    "Source": {
+      "title": "Source",
+      "description": "Defines electric and magnetic currents that produce electromagnetic field ",
+      "type": "object",
+      "properties": {
+        "geometry": {
+          "$ref": "#/definitions/Geometry"
+        },
+        "polarization": {
+          "title": "Polarization",
+          "type": "array",
+          "items": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            }
+          ]
+        },
+        "source_time": {
+          "$ref": "#/definitions/SourceTime"
+        }
+      },
+      "required": [
+        "geometry",
+        "polarization",
+        "source_time"
+      ]
+    },
+    "Monitor": {
+      "title": "Monitor",
+      "type": "object",
+      "properties": {
+        "geometry": {
+          "$ref": "#/definitions/Geometry"
+        },
+        "store_values": {
+          "title": "Store Values",
+          "default": [
+            "E",
+            "H",
+            "flux"
+          ],
+          "type": "array",
+          "items": {
+            "enum": [
+              "E",
+              "H",
+              "flux",
+              "amplitudes"
+            ],
+            "type": "string"
+          }
+        },
+        "store_times": {
+          "title": "Store Times",
+          "default": [],
+          "type": "array",
+          "items": {
+            "type": "number"
+          }
+        },
+        "store_freqs": {
+          "title": "Store Freqs",
+          "default": [],
+          "type": "array",
+          "items": {
+            "type": "number"
+          }
+        }
+      },
+      "required": [
+        "geometry"
+      ]
+    },
+    "Data": {
+      "title": "Data",
+      "type": "object",
+      "properties": {
+        "monitor": {
+          "$ref": "#/definitions/Monitor"
+        }
+      },
+      "required": [
+        "monitor"
+      ]
+    },
+    "PMLLayer": {
+      "title": "PMLLayer",
+      "description": "single layer of a PML (profile and num layers) ",
+      "type": "object",
+      "properties": {
+        "profile": {
+          "title": "Profile",
+          "default": "standard",
+          "enum": [
+            "standard",
+            "stable",
+            "absorber"
+          ],
+          "type": "string"
+        },
+        "num_layers": {
+          "title": "Num Layers",
+          "default": 0,
+          "minimum": 0,
+          "type": "integer"
+        }
+      }
+    }
+  }
+}
