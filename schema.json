@@ -123,47 +123,18 @@
     "mesh"
   ],
   "definitions": {
+    "Geometry": {
+      "title": "Geometry",
+      "description": "defines where something exists in space",
+      "type": "object",
+      "properties": {}
+    },
     "Mesh": {
       "title": "Mesh",
       "type": "object",
       "properties": {
-        "center": {
-          "title": "Center",
-          "default": [
-            0.0,
-            0.0,
-            0.0
-          ],
-          "type": "array",
-          "items": [
-            {
-              "type": "number"
-            },
-            {
-              "type": "number"
-            },
-            {
-              "type": "number"
-            }
-          ]
-        },
-        "size": {
-          "title": "Size",
-          "type": "array",
-          "items": [
-            {
-              "type": "number",
-              "minimum": 0
-            },
-            {
-              "type": "number",
-              "minimum": 0
-            },
-            {
-              "type": "number",
-              "minimum": 0
-            }
-          ]
+        "geometry": {
+          "$ref": "#/definitions/Geometry"
         },
         "grid_step": {
           "title": "Grid Step",
@@ -191,19 +162,13 @@
         }
       },
       "required": [
-        "size",
+        "geometry",
         "grid_step"
       ]
     },
-    "Geometry": {
-      "title": "Geometry",
-      "description": "defines where something exists in space ",
-      "type": "object",
-      "properties": {}
-    },
     "Medium": {
       "title": "Medium",
-      "description": "Defines properties of a medium where electromagnetic waves propagate ",
+      "description": "Defines properties of a medium where electromagnetic waves propagate",
       "type": "object",
       "properties": {
         "permittivity": {
@@ -220,7 +185,7 @@
     },
     "Structure": {
       "title": "Structure",
-      "description": "An object that interacts with the electromagnetic fields ",
+      "description": "An object that interacts with the electromagnetic fields",
       "type": "object",
       "properties": {
         "geometry": {
@@ -237,7 +202,7 @@
     },
     "SourceTime": {
       "title": "SourceTime",
-      "description": "Base class describing the time dependence of a source ",
+      "description": "Base class describing the time dependence of a source",
       "type": "object",
       "properties": {
         "amplitude": {
@@ -255,7 +220,7 @@
     },
     "Source": {
       "title": "Source",
-      "description": "Defines electric and magnetic currents that produce electromagnetic field ",
+      "description": "Defines electric and magnetic currents that produce electromagnetic field",
       "type": "object",
       "properties": {
         "geometry": {
@@ -346,7 +311,7 @@
     },
     "PMLLayer": {
       "title": "PMLLayer",
-      "description": "single layer of a PML (profile and num layers) ",
+      "description": "single layer of a PML (profile and num layers)",
       "type": "object",
       "properties": {
         "profile": {

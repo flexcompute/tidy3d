@@ -2,11 +2,6 @@ import numpy as np
 import pydantic
 from typing import Tuple, Dict, List, Callable, Any, Union, Literal
 from enum import Enum, unique
-from schema import validate_schema
-
-import json
-import shutil
-import jsonschema
 
 """ === Constants === """
 
@@ -97,18 +92,20 @@ class Cuboid(Geometry):
     """rectangular cuboid (has size and center)"""
 
     size: Size
-    center: Coordinate
-    bounds: Bound = None
+    center: Coordinate = (0.0, 0.0, 0.0)
+
+    # refactor below so that all subclasses of Geometry must implement
+    # "set_bounds" method given `values` and hide this nasty code
+    bounds: Bound = None  # 
 
     @pydantic.validator("bounds", always=True)
     def set_bounds(cls, v, values):
         """sets bounds based on size and center"""
-        if v is None:
-            return None
         size = values.get("size")
         center = values.get("center")
-        coord_min = tuple(c - s / 2.0 for (c, s) in zip(size, center))
-        coord_max = tuple(c + s / 2.0 for (c, s) in zip(size, center))
+        coord_min = tuple(c - s / 2.0 for (s, c) in zip(size, center))
+        coord_max = tuple(c + s / 2.0 for (s, c) in zip(size, center))
+        bounds = (coord_min, coord_max)
         values["bounds"] = (coord_min, coord_max)
         return bounds
 
@@ -199,7 +196,6 @@ class ModeMonitor(Monitor):
 
 import numpy
 
-
 class _ArrayMeta(type):
     """nasty stuff to define numpy arrays"""
 
@@ -253,8 +249,7 @@ class Data(pydantic.BaseModel):
 
 class Mesh(pydantic.BaseModel):
 
-    center: Coordinate = (0.0, 0.0, 0.0)
-    size: Size
+    geometry: Geometry
     grid_step: Size
     run_time: pydantic.NonNegativeFloat = 0.0
 
@@ -290,52 +285,31 @@ class Simulation(pydantic.BaseModel):
 
     _ = ensure_less_than("courant", 1)
 
+    @pydantic.root_validator()
+    def all_in_bounds(cls, values):
+        sim_bounds = values.get("mesh").geometry.bounds
+        sim_bmin, sim_bmax = sim_bounds
 
-""" ==== Example Instance ==== """
+        check_objects = ("structures", "sources", "monitors")
+        for obj_name in check_objects:
 
-sim = Simulation(
-    mesh=Mesh(size=(2.0, 2.0, 2.0), grid_step=(0.01, 0.01, 0.01), run_time=1e-12),
-    structures={
-        "square": Structure(
-            geometry=Cuboid(size=(1, 1, 1), center=(0, 0, 0)),
-            medium=Medium(permittivity=2.0),
-        ),
-        "box": Structure(
-            geometry=Cuboid(size=(1, 1, 1), center=(0, 0, 0)),
-            medium=Medium(permittivity=1.0, conductivity=3.0),
-        ),
-    },
-    sources={
-        "dipole": Source(
-            geometry=Cuboid(size=(0, 0, 0), center=(0, -0.5, 0)),
-            polarization=(1, 0, 1),
-            source_time=Pulse(
-                freq0=1e14,
-                fwidth=1e12,
-            ),
-        )
-    },
-    monitors={
-        "point": Monitor(
-            geometry=Cuboid(size=(1, 0, 0), center=(0, 0, 0)),
-            monitor_time=[0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0],
-        ),
-        "plane": Monitor(
-            geometry=Cuboid(size=(1, 1, 0), center=(0, 0, 0)),
-            monitor_time=[0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0],
-        ),
-    },
-    symmetry=(0, -1, 1),
-    pml_layers=(
-        PMLLayer(profile="absorber", num_layers=20),
-        PMLLayer(profile="stable", num_layers=30),
-        PMLLayer(profile="standard"),
-    ),
-    shutoff=1e-6,
-    courant=0.8,
-    subpixel=False,
-)
+            # get all objects of name and continue if there are none
+            objs = values.get(obj_name)
+            if objs is None:
+                continue
 
+            # get bounds of each object
+            for name, obj in objs.items():
+                obj_bounds = obj.geometry.bounds
+                obj_bmin, obj_bmax = obj_bounds
+
+                # assert all of the object's max coordinates are greater than the simulation's min coordinate
+                assert all(o >= s for (o, s) in zip(obj_bmax, sim_bmin)), f"{obj_name[:-1]} object '{name}' is outside of simulation bounds (on minus side)"
+
+                # assert all of the object's min coordinates are less than than the simulation's max coordinate
+                assert all(o <= s for (o, s) in zip(obj_bmin, sim_bmax)), f"{obj_name[:-1]} object '{name}' is outside of simulation bounds (on plus side)"
+
+        return values
 
 def save_schema(fname_schema: str = "schema.json") -> None:
     """saves simulation object schema to json"""
@@ -343,74 +317,5 @@ def save_schema(fname_schema: str = "schema.json") -> None:
     with open(fname_schema, "w") as fp:
         fp.write(schema_str)
 
-
 fname_schema = "schema.json"
 save_schema(fname_schema)
-
-
-def export(sim: Simulation, fname: str = "data_server/sim.json") -> str:
-    sim_dict = sim.dict()
-    validate_schema(sim_dict)
-    with open(fname, "w") as fp:
-        json.dump(sim_dict, fp)
-    return fname
-
-
-def new_project(json: Dict, fname: str = "data_server/sim.json") -> int:
-    task_id = 101
-    with open(fname, "r") as fp:
-        sim_dict = json.load(fp)
-    monitors = sim_dict.get("monitors")
-    if monitors is None:
-        monitors = {}
-    for name, mon in monitors.items():
-        data = np.random.random((4, 4))
-        np.save(f"data_server/task_{task_id}_monitor_{name}.npy", data)
-    return task_id
-
-
-def load(sim: Simulation, task_id: int) -> None:
-    monitors = sim.monitors
-    for name, mon in monitors.items():
-        fname = f"task_{task_id}_monitor_{name}.npy"
-        shutil.copyfile(f"data_server/{fname}", f"data_user/{fname}")
-        data = np.load(f"data_user/{fname}")
-        sim.data[name] = data
-
-
-def viz_data(sim: Simulation, monitor_name: str) -> None:
-    data = sim.data[monitor_name]
-    import matplotlib.pylab as plt
-
-    plt.imshow(data)
-    plt.show()
-
-
-# example usage
-if __name__ == "__main__":
-    fname = export(sim)  # validation, schema matching
-    task_id = new_project(json)  # export to server
-    load(sim, task_id)  # load data into sim.data containers
-    viz_data(sim, "plane")  # vizualize
-
-
-""" Tests """
-
-import pytest
-
-
-def test_negative_sizes():
-
-    for size in (-1, 1, 1), (1, -1, 1), (1, 1, -1):
-        with pytest.raises(pydantic.ValidationError) as e_info:
-            a = Cuboid(size=size, center=(0, 0, 0))
-
-        with pytest.raises(pydantic.ValidationError) as e_info:
-            m = Mesh(mesh_step=size)
-
-
-def test_medium():
-
-    with pytest.raises(pydantic.ValidationError) as e_info:
-        m = Medium(permittivity=0.0)
-        m = Medium(conductivity=-1.0)
