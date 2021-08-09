@@ -12,37 +12,40 @@ import numpy as np
 
 """
 
+
 class Base(pydantic.BaseModel):
     name: str
     val: float = 2
 
     @pydantic.validator("name")
     def has_a(cls, val, values):
-        print('validating name')
-        print(f'values = {values}')
-        assert 'a' in val
+        print("validating name")
+        print(f"values = {values}")
+        assert "a" in val
         return val
 
     @pydantic.validator("val")
     def greater_than_4(cls, val, values):
-        print('validating val')
-        print(f'values = {values}')
+        print("validating val")
+        print(f"values = {values}")
         assert val > 4
         return val
+
 
 class Child(Base):
     order: int
 
     @pydantic.validator("order")
     def greater_than_4(cls, val, values):
-        print('validating order')
-        print(f'values = {values}')
+        print("validating order")
+        print(f"values = {values}")
         assert val > 0
         return val
 
-Base(name='tylera')
-Child(name='mychilda', val=5, order=1)
-print(70*'=')
+
+Base(name="tylera")
+Child(name="mychilda", val=5, order=1)
+print(70 * "=")
 
 
 # """ Validation """
@@ -148,7 +151,6 @@ print(70*'=')
 #     print(e)
 
 
-
 # class DemoModel(pydantic.BaseModel):
 #     ts: str = ''
 
@@ -173,12 +175,12 @@ print(70*'=')
 #     return validator(field_name, allow_reuse=True)(normalize_list)
 
 # class TimeData(BaseModel):
-#     """ gets a list of data and stores the normalized version """    
+#     """ gets a list of data and stores the normalized version """
 #     data: List[float]
 #     _data_validator = normalize_field('data')
 
 # class FreqData(BaseModel):
-#     """ gets a list of data and stores the normalized version """    
+#     """ gets a list of data and stores the normalized version """
 #     data: List[float]
 #     _data_validator = normalize_field('data')
 
