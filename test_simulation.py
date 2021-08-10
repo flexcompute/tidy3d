@@ -1,15 +1,16 @@
 from tidy3d import *
 import web
 import viz
+import numpy as np
 
 """ ==== Example simulation instance ==== """
 
 sim = Simulation(
+    geometry=Box(
+        size=(2.0, 2.0, 2.0),
+        center=(0, 0, 0)
+    ),
     mesh=Mesh(
-        geometry=Box(
-            size=(2.0, 2.0, 2.0),
-            center=(0, 0, 0)
-        ),
         grid_step=(0.01, 0.01, 0.01),
     ),
     run_time=1e-12,
@@ -71,7 +72,7 @@ sim = Simulation(
 def test_run():
     web.run(sim)
 
-def test_viz():
+def _test_viz():
     viz.viz_data(sim, "plane")  # vizualize
 
 """ unit tests """
@@ -103,9 +104,11 @@ def test_bounds():
         shifted_center = tuple(c + s for (c, s) in zip(center_offset, CENTER_SHIFT))
 
         sim = Simulation(
+            geometry=Box(
+                size=(1, 1, 1),
+                center=CENTER_SHIFT
+            ),
             mesh=Mesh(
-                geometry=Box(size=(1, 1, 1),
-                                center=CENTER_SHIFT),
                 grid_step=(0.1, 0.1, 0.1),
             ),
             run_time=1e-12,

@@ -3,6 +3,9 @@
   "description": "Contains all information about simulation ",
   "type": "object",
   "properties": {
+    "geometry": {
+      "$ref": "#/definitions/Box"
+    },
     "mesh": {
       "$ref": "#/definitions/Mesh"
     },
@@ -41,7 +44,7 @@
       "default": {},
       "type": "object",
       "additionalProperties": {
-        "$ref": "#/definitions/Data"
+        "type": "string"
       }
     },
     "pml_layers": {
@@ -127,6 +130,7 @@
     }
   },
   "required": [
+    "geometry",
     "mesh"
   ],
   "additionalProperties": false,
@@ -216,12 +220,9 @@
     },
     "Mesh": {
       "title": "Mesh",
-      "description": "https://pydantic-docs.helpmanual.io/usage/model_config/ ",
+      "description": "tells us how to discretize the simulation and it's GeometryObjects ",
       "type": "object",
       "properties": {
-        "geometry": {
-          "$ref": "#/definitions/Box"
-        },
         "grid_step": {
           "title": "Grid Step",
           "type": "array",
@@ -242,7 +243,6 @@
         }
       },
       "required": [
-        "geometry",
         "grid_step"
       ],
       "additionalProperties": false
@@ -380,7 +380,7 @@
     },
     "Monitor": {
       "title": "Monitor",
-      "description": "https://pydantic-docs.helpmanual.io/usage/model_config/ ",
+      "description": "an object with a geometry ",
       "type": "object",
       "properties": {
         "geometry": {
@@ -398,45 +398,14 @@
             "enum": [
               "E",
               "H",
-              "flux",
-              "amplitudes"
+              "flux"
             ],
             "type": "string"
-          }
-        },
-        "store_times": {
-          "title": "Store Times",
-          "default": [],
-          "type": "array",
-          "items": {
-            "type": "number"
-          }
-        },
-        "store_freqs": {
-          "title": "Store Freqs",
-          "default": [],
-          "type": "array",
-          "items": {
-            "type": "number"
           }
         }
       },
       "required": [
         "geometry"
-      ],
-      "additionalProperties": false
-    },
-    "Data": {
-      "title": "Data",
-      "description": "https://pydantic-docs.helpmanual.io/usage/model_config/ ",
-      "type": "object",
-      "properties": {
-        "monitor": {
-          "$ref": "#/definitions/Monitor"
-        }
-      },
-      "required": [
-        "monitor"
       ],
       "additionalProperties": false
     },
