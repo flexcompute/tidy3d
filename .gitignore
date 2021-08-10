@@ -1,3 +1,7 @@
+data_server/
+data_user/
+out/
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]

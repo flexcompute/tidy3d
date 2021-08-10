@@ -1,9 +1,12 @@
-import numpy as np
 import pydantic
-from typing import Tuple, Dict, List, Callable, Any, Union, Literal
-from enum import Enum, unique
+from typing import Tuple, Dict, List, Callable, Any, Union
 
-from abc import abstractmethod, ABC
+# Literal only available in python 3.8 + so try import otherwise use extensions
+try:
+    from typing import Literal
+except ImportError:
+    from typing_extensions import Literal
+
 
 """ === Constants === """
 
@@ -20,7 +23,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         error_msg_templates = {          # custom error messages
             'value_error.extra': "extra kwarg supplied"
         }
-        schema_extra = {}                # can use to add fields to schema (task_id?)
+        schema_extra = {}                # can use to add fields to schema (task_id? path to schema?)
 
 """ ==== Types Used in Multiple Places ==== """
 
@@ -31,6 +34,7 @@ Size = Tuple[
 
 # tuple containing three floats
 Coordinate = Tuple[float, float, float]
+Coordinate2D = Tuple[float, float]
 
 # tuple containing min coordinate (in each x,y,z) and max coordinate
 Bound = Tuple[Coordinate, Coordinate]
@@ -91,6 +95,34 @@ def check_bounds():
 
     return valid_bounds
 
+def check_simulation_bounds():
+    @pydantic.root_validator()
+    def all_in_bounds(cls, values):
+        sim_bounds = values.get("geometry").bounds
+        sim_bmin, sim_bmax = sim_bounds
+
+        check_objects = ("structures", "sources", "monitors")
+        for obj_name in check_objects:
+
+            # get all objects of name and continue if there are none
+            objs = values.get(obj_name)
+            if objs is None:
+                continue
+
+            # get bounds of each object
+            for name, obj in objs.items():
+                obj_bounds = obj.geometry.bounds
+                obj_bmin, obj_bmax = obj_bounds
+
+                # assert all of the object's max coordinates are greater than the simulation's min coordinate
+                assert all(o >= s for (o, s) in zip(obj_bmax, sim_bmin)), f"{obj_name[:-1]} object '{name}' is outside of simulation bounds (on minus side)"
+
+                # assert all of the object's min coordinates are less than than the simulation's max coordinate
+                assert all(o <= s for (o, s) in zip(obj_bmin, sim_bmax)), f"{obj_name[:-1]} object '{name}' is outside of simulation bounds (on plus side)"
+
+        return values
+    return all_in_bounds
+
 
 """ ==== Geometry Models ==== """
 
@@ -150,7 +182,33 @@ class Cylinder(Geometry):
         return (tuple(coord_min), tuple(coord_max))
 
 class PolySlab(Geometry):
-    pass
+    vertices: List[Coordinate2D]
+    slab_bounds: Tuple[float, float]
+    axis: Axis = 2
+
+    def _get_bounds(self):
+
+        # get the min and max points in polygon plane
+        xpoints = tuple(c[0] for c in self.vertices)
+        ypoints = tuple(c[1] for c in self.vertices)
+        xmin, xmax = min(xpoints), max(xpoints)
+        ymin, ymax = min(ypoints), max(ypoints)
+
+        # create min and max coordinates for polygon in 2D
+        coord_min = [xmin, ymin]
+        coord_max = [xmax, ymax]
+
+        # insert the slab bounds at the specified `axis`
+        zmin, zmax = slab_bounds
+        coord_min.insert(axis, zmin)
+        coord_max.insert(axis, zmax)
+
+        return (tuple(coord_min), tuple(coord_max))
+
+class GeometryObject(Tidy3dBaseModel):
+    """ an object with a geometry """
+
+    geometry: Geometry
 
 """ ==== Medium Models ==== """
 
@@ -170,10 +228,9 @@ class Medium(Tidy3dBaseModel):
 """ ==== Structure Models ==== """
 
 
-class Structure(Tidy3dBaseModel):
+class Structure(GeometryObject):
     """An object that interacts with the electromagnetic fields"""
 
-    geometry: Geometry
     medium: Medium
 
 
@@ -197,10 +254,9 @@ class Pulse(SourceTime):
     _validate_offset = ensure_greater_or_equal("offset", 2.5)
 
 
-class Source(Tidy3dBaseModel):
+class Source(GeometryObject):
     """Defines electric and magnetic currents that produce electromagnetic field"""
 
-    geometry: Geometry
     polarization: Tuple[float, float, float]
     source_time: SourceTime
 
@@ -210,20 +266,24 @@ class ModeSource(Source):
 
     mode_index: pydantic.NonNegativeInt = 0
 
-    _geometry_validator = assert_plane("geometry")
+    _plane_validator = assert_plane("geometry")
 
 
 """ ==== Monitor ==== """
 
-STORE_VALUES = Literal["E", "H", "flux", "amplitudes"]
+STORE_VALUES = Literal["E", "H", "flux"]
 
-
-class Monitor(Tidy3dBaseModel):
+class Monitor(GeometryObject):
     geometry: Box
-    store_values: Tuple[STORE_VALUES, ...] = ("E", "H", "flux")
-    store_times: List[float] = []
-    store_freqs: List[float] = []
+    store_values: List[STORE_VALUES] = ["E", "H", "flux"]
 
+class FreqMonitor(Monitor):
+    freqs: List[pydantic.NonNegativeFloat]
+
+class TimeMonitor(Monitor):
+    t_start: pydantic.NonNegativeFloat = 0
+    t_stop: pydantic.NonNegativeFloat = None
+    t_step: pydantic.PositiveFloat = None
 
 class ModeMonitor(Monitor):
     """does mode solver over geometry"""
@@ -231,69 +291,14 @@ class ModeMonitor(Monitor):
     store_values: Tuple[STORE_VALUES] = ("flux", "amplitudes")
     store_mode_indices: Tuple[pydantic.NonNegativeInt] = (0,)
 
-    _geo_validator = assert_plane("geometry")
-
-
-"""" ==== Models for stored data ==== """
-
-import numpy
-
-class _ArrayMeta(type):
-    """nasty stuff to define numpy arrays"""
-
-    def __getitem__(self, t):
-        return type("NumpyArray", (NumpyArray,), {"__dtype__": t})
-
-
-class NumpyArray(numpy.ndarray, metaclass=_ArrayMeta):
-    """Type for numpy arrays, if we need this"""
-
-    @classmethod
-    def __get_validators__(cls):
-        yield cls.validate_type
-
-    @classmethod
-    def validate_type(cls, val):
-        dtype = getattr(cls, "__dtype__", None)
-        if isinstance(dtype, tuple):
-            dtype, shape = dtype
-        else:
-            shape = tuple()
-
-        result = numpy.array(val, dtype=dtype, copy=False, ndmin=len(shape))
-        assert not shape or len(shape) == len(result.shape)  # ndmin guarantees this
-
-        if any(
-            (shape[i] != -1 and shape[i] != result.shape[i]) for i in range(len(shape))
-        ):
-            result = result.reshape(shape)
-        return result
-
-
-class Field(Tidy3dBaseModel):
-    """stores data for electromagnetic field or current (E, H, J, or M)"""
-
-    shape: Tuple[
-        pydantic.NonNegativeInt, pydantic.NonNegativeInt, pydantic.NonNegativeInt
-    ]
-    x: NumpyArray[float]
-    y: NumpyArray[float]
-    z: NumpyArray[float]
-
-
-class Data(Tidy3dBaseModel):
-    monitor: Monitor
-    # field: xarray containg monitor's `store_values` as keys / indices
+    _plane_validator = assert_plane("geometry")
 
 
 """ ==== Mesh ==== """
 
-
 class Mesh(Tidy3dBaseModel):
-
-    geometry: Box
+    """ tells us how to discretize the simulation and it's GeometryObjects """
     grid_step: Size
-
 
 """ ==== PML ==== """
 
@@ -307,15 +312,16 @@ class PMLLayer(Tidy3dBaseModel):
 
 """ ==== Simulation ==== """
 
-class Simulation(Tidy3dBaseModel):
+class Simulation(GeometryObject):
     """ Contains all information about simulation """
 
     mesh: Mesh
+    geometry: Box    
     run_time: pydantic.NonNegativeFloat = 0.0
     structures: Dict[str, Structure] = {}
     sources: Dict[str, Source] = {}
     monitors: Dict[str, Monitor] = {}
-    data: Dict[str, Data] = {}
+    data: Dict[str, str] = {}
     pml_layers: Tuple[PMLLayer, PMLLayer, PMLLayer] = (
         PMLLayer(),
         PMLLayer(),
@@ -327,32 +333,7 @@ class Simulation(Tidy3dBaseModel):
     subpixel: bool = True
 
     _courant_validator = ensure_less_than("courant", 1)
-
-    @pydantic.root_validator()
-    def all_in_bounds(cls, values):
-        sim_bounds = values.get("mesh").geometry.bounds
-        sim_bmin, sim_bmax = sim_bounds
-
-        check_objects = ("structures", "sources", "monitors")
-        for obj_name in check_objects:
-
-            # get all objects of name and continue if there are none
-            objs = values.get(obj_name)
-            if objs is None:
-                continue
-
-            # get bounds of each object
-            for name, obj in objs.items():
-                obj_bounds = obj.geometry.bounds
-                obj_bmin, obj_bmax = obj_bounds
-
-                # assert all of the object's max coordinates are greater than the simulation's min coordinate
-                assert all(o >= s for (o, s) in zip(obj_bmax, sim_bmin)), f"{obj_name[:-1]} object '{name}' is outside of simulation bounds (on minus side)"
-
-                # assert all of the object's min coordinates are less than than the simulation's max coordinate
-                assert all(o <= s for (o, s) in zip(obj_bmin, sim_bmax)), f"{obj_name[:-1]} object '{name}' is outside of simulation bounds (on plus side)"
-
-        return values
+    _sim_bounds_validator = check_simulation_bounds()
 
 def save_schema(fname_schema: str = "schema.json") -> None:
     """saves simulation object schema to json"""
