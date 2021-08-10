@@ -6,6 +6,12 @@
     "mesh": {
       "$ref": "#/definitions/Mesh"
     },
+    "run_time": {
+      "title": "Run Time",
+      "default": 0.0,
+      "minimum": 0,
+      "type": "number"
+    },
     "structures": {
       "title": "Structures",
       "default": {},
@@ -125,19 +131,96 @@
   ],
   "additionalProperties": false,
   "definitions": {
-    "Geometry": {
-      "title": "Geometry",
-      "description": "defines where something exists in space",
+    "Box": {
+      "title": "Box",
+      "description": "rectangular Box (has size and center)",
       "type": "object",
-      "properties": {},
+      "properties": {
+        "bounds": {
+          "title": "Bounds",
+          "type": "array",
+          "items": [
+            {
+              "type": "array",
+              "items": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "number"
+                }
+              ]
+            },
+            {
+              "type": "array",
+              "items": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "number"
+                }
+              ]
+            }
+          ]
+        },
+        "size": {
+          "title": "Size",
+          "type": "array",
+          "items": [
+            {
+              "type": "number",
+              "minimum": 0
+            },
+            {
+              "type": "number",
+              "minimum": 0
+            },
+            {
+              "type": "number",
+              "minimum": 0
+            }
+          ]
+        },
+        "center": {
+          "title": "Center",
+          "default": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "type": "array",
+          "items": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            }
+          ]
+        }
+      },
+      "required": [
+        "size"
+      ],
       "additionalProperties": false
     },
     "Mesh": {
       "title": "Mesh",
+      "description": "https://pydantic-docs.helpmanual.io/usage/model_config/ ",
       "type": "object",
       "properties": {
         "geometry": {
-          "$ref": "#/definitions/Geometry"
+          "$ref": "#/definitions/Box"
         },
         "grid_step": {
           "title": "Grid Step",
@@ -156,18 +239,54 @@
               "minimum": 0
             }
           ]
-        },
-        "run_time": {
-          "title": "Run Time",
-          "default": 0.0,
-          "minimum": 0,
-          "type": "number"
         }
       },
       "required": [
         "geometry",
         "grid_step"
       ],
+      "additionalProperties": false
+    },
+    "Geometry": {
+      "title": "Geometry",
+      "description": "defines where something exists in space",
+      "type": "object",
+      "properties": {
+        "bounds": {
+          "title": "Bounds",
+          "type": "array",
+          "items": [
+            {
+              "type": "array",
+              "items": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "number"
+                }
+              ]
+            },
+            {
+              "type": "array",
+              "items": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "number"
+                }
+              ]
+            }
+          ]
+        }
+      },
       "additionalProperties": false
     },
     "Medium": {
@@ -261,10 +380,11 @@
     },
     "Monitor": {
       "title": "Monitor",
+      "description": "https://pydantic-docs.helpmanual.io/usage/model_config/ ",
       "type": "object",
       "properties": {
         "geometry": {
-          "$ref": "#/definitions/Geometry"
+          "$ref": "#/definitions/Box"
         },
         "store_values": {
           "title": "Store Values",
@@ -308,6 +428,7 @@
     },
     "Data": {
       "title": "Data",
+      "description": "https://pydantic-docs.helpmanual.io/usage/model_config/ ",
       "type": "object",
       "properties": {
         "monitor": {
