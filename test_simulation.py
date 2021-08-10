@@ -6,26 +6,42 @@ import viz
 
 sim = Simulation(
     mesh=Mesh(
-        geometry=Cuboid(
+        geometry=Box(
             size=(2.0, 2.0, 2.0),
             center=(0, 0, 0)
         ),
         grid_step=(0.01, 0.01, 0.01),
-        run_time=1e-12
     ),
+    run_time=1e-12,
     structures={
         "square": Structure(
-            geometry=Cuboid(size=(1, 1, 1), center=(-1, 0, 0)),
+            geometry=Box(size=(1, 1, 1), center=(-1, 0, 0)),
             medium=Medium(permittivity=2.0),
         ),
         "box": Structure(
-            geometry=Cuboid(size=(1, 1, 1), center=(0, 0, 0)),
+            geometry=Box(size=(1, 1, 1), center=(0, 0, 0)),
             medium=Medium(permittivity=1.0, conductivity=3.0),
         ),
+        "sphere": Structure(
+            geometry=Sphere(
+                radius=1.4,
+                center=(1.0, 0.0, 1.0)
+            ),
+            medium=Medium()
+        ),
+        "cylinder": Structure(
+            geometry=Cylinder(
+                radius=1.4,
+                length=2.0,
+                center=(1.0, 0.0, -1.0),
+                axis=1
+            ),
+            medium=Medium()
+        )        
     },
     sources={
         "dipole": Source(
-            geometry=Cuboid(size=(0, 0, 0), center=(0, -0.5, 0)),
+            geometry=Box(size=(0, 0, 0), center=(0, -0.5, 0)),
             polarization=(1, 0, 1),
             source_time=Pulse(
                 freq0=1e14,
@@ -35,12 +51,10 @@ sim = Simulation(
     },
     monitors={
         "point": Monitor(
-            geometry=Cuboid(size=(0, 0, 0), center=(0, 1, 0)),
-            monitor_time=[0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0],
+            geometry=Box(size=(0, 0, 0), center=(0, 1, 0)),
         ),
         "plane": Monitor(
-            geometry=Cuboid(size=(1, 1, 0), center=(0, 0, 0)),
-            monitor_time=[0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0],
+            geometry=Box(size=(1, 1, 0), center=(0, 0, 0)),
         ),
     },
     symmetry=(0, -1, 1),
@@ -54,10 +68,11 @@ sim = Simulation(
     subpixel=False,
 )
 
-# example usage
-if __name__ == "__main__":
+def test_run():
     web.run(sim)
-    # viz.viz_data(sim, "plane")  # vizualize
+
+def test_viz():
+    viz.viz_data(sim, "plane")  # vizualize
 
 """ unit tests """
 
@@ -67,7 +82,7 @@ def test_negative_sizes():
 
     for size in (-1, 1, 1), (1, -1, 1), (1, 1, -1):
         with pytest.raises(pydantic.ValidationError) as e_info:
-            a = Cuboid(size=size, center=(0, 0, 0))
+            a = Box(size=size, center=(0, 0, 0))
 
         with pytest.raises(pydantic.ValidationError) as e_info:
             m = Mesh(mesh_step=size)
@@ -89,14 +104,14 @@ def test_bounds():
 
         sim = Simulation(
             mesh=Mesh(
-                geometry=Cuboid(size=(1, 1, 1),
+                geometry=Box(size=(1, 1, 1),
                                 center=CENTER_SHIFT),
                 grid_step=(0.1, 0.1, 0.1),
-                run_time=1e-12
             ),
+            run_time=1e-12,
             structures={
                 'box': Structure(
-                    geometry=Cuboid(
+                    geometry=Box(
                         size=(1, 1, 1),
                         center=shifted_center
                     ),
@@ -125,3 +140,6 @@ def test_bounds():
                 continue
             with pytest.raises(pydantic.ValidationError) as e_info:
                 place_box(tuple(center))
+
+if __name__ == '__main__':
+    test_run()

@@ -3,6 +3,7 @@ import pydantic
 from typing import Tuple, Dict, List, Callable, Any, Union, Literal
 from enum import Enum, unique
 
+from abc import abstractmethod, ABC
 
 """ === Constants === """
 
@@ -33,6 +34,8 @@ Coordinate = Tuple[float, float, float]
 
 # tuple containing min coordinate (in each x,y,z) and max coordinate
 Bound = Tuple[Coordinate, Coordinate]
+
+Axis = Literal[0, 1, 2]
 
 """ ==== Validators Used in Multiple Models ==== """
 
@@ -95,33 +98,59 @@ def check_bounds():
 class Geometry(Tidy3dBaseModel):
     """defines where something exists in space"""
 
+    bounds: Bound = None
+
     def __init__(self, **data: Any):
         """checks the bounds after any Geometry instance is initialized"""
         super().__init__(**data)
+        self.bounds = self._get_bounds()
         _bound_validator = check_bounds()
 
+    def _get_bounds(self) -> Bound:
+        """ returns bounding box for this geometry """
+        raise NotImplementedError(f"Must implement self._get_bounds() for '{type(self).__name__}' geometry")
 
-class Cuboid(Geometry):
-    """rectangular cuboid (has size and center)"""
+
+class Box(Geometry):
+    """rectangular Box (has size and center)"""
 
     size: Size
     center: Coordinate = (0.0, 0.0, 0.0)
 
-    # refactor below so that all subclasses of Geometry must implement
-    # "set_bounds" method given `values` and hide this nasty code
-    bounds: Bound = None  # 
-
-    @pydantic.validator("bounds", always=True)
-    def set_bounds(cls, v, values):
+    def _get_bounds(self) -> Bound:
         """sets bounds based on size and center"""
-        size = values.get("size")
-        center = values.get("center")
-        coord_min = tuple(c - s / 2.0 for (s, c) in zip(size, center))
-        coord_max = tuple(c + s / 2.0 for (s, c) in zip(size, center))
-        bounds = (coord_min, coord_max)
-        values["bounds"] = (coord_min, coord_max)
-        return bounds
+        size = self.size
+        center = self.center
+        coord_min = tuple(c - s/2. for (s, c) in zip(size, center))
+        coord_max = tuple(c + s/2. for (s, c) in zip(size, center))
+        return (coord_min, coord_max)
 
+
+class Sphere(Geometry):
+    radius: pydantic.NonNegativeFloat
+    center: Coordinate = (0.0, 0.0, 0.0)
+
+    def _get_bounds(self):
+        coord_min = tuple(c - self.radius for c in self.center)
+        coord_max = tuple(c + self.radius for c in self.center)
+        return (coord_min, coord_max)
+
+
+class Cylinder(Geometry):
+    radius: pydantic.NonNegativeFloat
+    length: pydantic.NonNegativeFloat
+    center: Coordinate = (0.0, 0.0, 0.0)
+    axis: Axis = 2
+
+    def _get_bounds(self):
+        coord_min = list(c - self.radius for c in self.center)
+        coord_max = list(c + self.radius for c in self.center)
+        coord_min[self.axis] = self.center[self.axis] - self.length/2.
+        coord_max[self.axis] = self.center[self.axis] + self.length/2.
+        return (tuple(coord_min), tuple(coord_max))
+
+class PolySlab(Geometry):
+    pass
 
 """ ==== Medium Models ==== """
 
@@ -190,7 +219,7 @@ STORE_VALUES = Literal["E", "H", "flux", "amplitudes"]
 
 
 class Monitor(Tidy3dBaseModel):
-    geometry: Geometry
+    geometry: Box
     store_values: Tuple[STORE_VALUES, ...] = ("E", "H", "flux")
     store_times: List[float] = []
     store_freqs: List[float] = []
@@ -262,9 +291,8 @@ class Data(Tidy3dBaseModel):
 
 class Mesh(Tidy3dBaseModel):
 
-    geometry: Geometry
+    geometry: Box
     grid_step: Size
-    run_time: pydantic.NonNegativeFloat = 0.0
 
 
 """ ==== PML ==== """
@@ -283,6 +311,7 @@ class Simulation(Tidy3dBaseModel):
     """ Contains all information about simulation """
 
     mesh: Mesh
+    run_time: pydantic.NonNegativeFloat = 0.0
     structures: Dict[str, Structure] = {}
     sources: Dict[str, Source] = {}
     monitors: Dict[str, Monitor] = {}
@@ -297,7 +326,7 @@ class Simulation(Tidy3dBaseModel):
     courant: pydantic.NonNegativeFloat = 0.9
     subpixel: bool = True
 
-    _ = ensure_less_than("courant", 1)
+    _courant_validator = ensure_less_than("courant", 1)
 
     @pydantic.root_validator()
     def all_in_bounds(cls, values):
