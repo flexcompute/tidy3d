@@ -80,18 +80,25 @@ def test_medium():
 
 def test_bounds():
 
-    def place_box(center):
+    # make sure all things are shifted to this central location
+    CENTER_SHIFT = (-1., 1., 100.)
+
+    def place_box(center_offset):
+
+        shifted_center = tuple(c + s for (c, s) in zip(center_offset, CENTER_SHIFT))
+
         sim = Simulation(
             mesh=Mesh(
-                geometry=Cuboid(size=(1, 1, 1)),
+                geometry=Cuboid(size=(1, 1, 1),
+                                center=CENTER_SHIFT),
                 grid_step=(0.1, 0.1, 0.1),
                 run_time=1e-12
             ),
             structures={
                 'box': Structure(
                     geometry=Cuboid(
-                        size=(1,1,1),
-                        center=center
+                        size=(1, 1, 1),
+                        center=shifted_center
                     ),
                     medium=Medium()
                 )
