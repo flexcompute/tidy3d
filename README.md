@@ -5,45 +5,45 @@
 ### JSON file creation
 
 #### Requirements
-- [ ] Error checking / Type Checking / Field Checking
-- [ ] Reduce “conversion” code.
-- [ ] More streamlined from td objects to schema.
+- [x] Error checking / Type Checking / Field Checking
+- [x] Reduce “conversion” code.
+- [x] More streamlined from td objects to schema.
 
 #### Constraints / Keep in Mind
-- [ ] object attributes dont always correspond to schema keys
-- [ ] changes in schema can affect C++ but also web UI, so be careful
-- [ ] numpy arrays convert to list or float
+- [x] object attributes dont always correspond to schema keys
+- [x] changes in schema can affect C++ but also web UI, so be careful
+- [x] numpy arrays convert to list or float
 - [ ] Converting various things (GDS → Polyslabs)
 - [ ] Unit conversion
 - [ ] Backwards compatibility with default values
 
 #### Implement
-- [ ] define “master” schema with
-	- [ ] Type annotation
-	- [ ] Conversion as needed
-	- [ ] Error checking
-- [ ] make compatible with existing tidy3d objects
+- [x] define “master” schema with
+	- [x] Type annotation
+	- [x] Conversion as needed
+	- [x] Error checking
+- [x] make compatible with existing tidy3d objects
 - [ ] test all edge cases
 
 ### Python API
-- [ ] Simplify the objects to be data classes or similar so they work better with JSON.
-- [ ] `simulation.data(monitor).E`  instead of `[‘E’]`
-- [ ] grab monitors and sources by name `sim.monitors[‘name’]`
-- [ ] Refactor
-	- [ ] Geometry 
-	- [ ] Mesh
+- [x] Simplify the objects to be data classes or similar so they work better with JSON.
+- [x] `simulation.data(monitor).E`  instead of `[‘E’]`
+- [x] grab monitors and sources by name `sim.monitors[‘name’]`
+- [x] Refactor
+	- [x] Geometry 
+	- [x] Mesh
 
 ### Open Source Features
 - [ ] Automatic code formatting
 - [ ] Automatic testing / CI (add more tests)
-- [ ] Type annotation
+- [x] Type annotation
 - [ ] handling example notebooks and documentation
 - [ ] Tags on GitHub, issue tracking, other nice features.
 
 ### Features
 
 #### Visualization
-- [ ] Viz uses geometry alone.
+- [x] Viz uses geometry alone.
 - [ ] With the simulation can get mesh and discretized with DL showing.
 
 #### Circuit Simulation
