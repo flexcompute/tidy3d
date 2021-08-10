@@ -3,9 +3,23 @@ import pydantic
 from typing import Tuple, Dict, List, Callable, Any, Union, Literal
 from enum import Enum, unique
 
+
 """ === Constants === """
 
 C0 = 3e8
+
+""" === Global Config === """
+
+class Tidy3dBaseModel(pydantic.BaseModel):
+    """ https://pydantic-docs.helpmanual.io/usage/model_config/ """
+    class Config:
+        validate_all = True              # validate default values too
+        extra = 'forbid'                 # forbid extra kwargs not specified in model
+        validate_assignment = True       # validate when attributes are set after initialization
+        error_msg_templates = {          # custom error messages
+            'value_error.extra': "extra kwarg supplied"
+        }
+        schema_extra = {}                # can use to add fields to schema (task_id?)
 
 """ ==== Types Used in Multiple Places ==== """
 
@@ -21,7 +35,6 @@ Coordinate = Tuple[float, float, float]
 Bound = Tuple[Coordinate, Coordinate]
 
 """ ==== Validators Used in Multiple Models ==== """
-
 
 def ensure_greater_or_equal(field_name, value):
     """makes sure a field_name is >= value"""
@@ -79,7 +92,7 @@ def check_bounds():
 """ ==== Geometry Models ==== """
 
 
-class Geometry(pydantic.BaseModel):
+class Geometry(Tidy3dBaseModel):
     """defines where something exists in space"""
 
     def __init__(self, **data: Any):
@@ -113,7 +126,7 @@ class Cuboid(Geometry):
 """ ==== Medium Models ==== """
 
 
-class Medium(pydantic.BaseModel):
+class Medium(Tidy3dBaseModel):
     """Defines properties of a medium where electromagnetic waves propagate"""
 
     permittivity: float = 1.0
@@ -128,7 +141,7 @@ class Medium(pydantic.BaseModel):
 """ ==== Structure Models ==== """
 
 
-class Structure(pydantic.BaseModel):
+class Structure(Tidy3dBaseModel):
     """An object that interacts with the electromagnetic fields"""
 
     geometry: Geometry
@@ -138,7 +151,7 @@ class Structure(pydantic.BaseModel):
 """ ==== Source ==== """
 
 
-class SourceTime(pydantic.BaseModel):
+class SourceTime(Tidy3dBaseModel):
     """Base class describing the time dependence of a source"""
 
     amplitude: pydantic.NonNegativeFloat = 1.0
@@ -155,7 +168,7 @@ class Pulse(SourceTime):
     _validate_offset = ensure_greater_or_equal("offset", 2.5)
 
 
-class Source(pydantic.BaseModel):
+class Source(Tidy3dBaseModel):
     """Defines electric and magnetic currents that produce electromagnetic field"""
 
     geometry: Geometry
@@ -176,9 +189,9 @@ class ModeSource(Source):
 STORE_VALUES = Literal["E", "H", "flux", "amplitudes"]
 
 
-class Monitor(pydantic.BaseModel):
+class Monitor(Tidy3dBaseModel):
     geometry: Geometry
-    store_values: Tuple[STORE_VALUES] = ("E", "H", "flux")
+    store_values: Tuple[STORE_VALUES, ...] = ("E", "H", "flux")
     store_times: List[float] = []
     store_freqs: List[float] = []
 
@@ -228,7 +241,7 @@ class NumpyArray(numpy.ndarray, metaclass=_ArrayMeta):
         return result
 
 
-class Field(pydantic.BaseModel):
+class Field(Tidy3dBaseModel):
     """stores data for electromagnetic field or current (E, H, J, or M)"""
 
     shape: Tuple[
@@ -239,7 +252,7 @@ class Field(pydantic.BaseModel):
     z: NumpyArray[float]
 
 
-class Data(pydantic.BaseModel):
+class Data(Tidy3dBaseModel):
     monitor: Monitor
     # field: xarray containg monitor's `store_values` as keys / indices
 
@@ -247,7 +260,7 @@ class Data(pydantic.BaseModel):
 """ ==== Mesh ==== """
 
 
-class Mesh(pydantic.BaseModel):
+class Mesh(Tidy3dBaseModel):
 
     geometry: Geometry
     grid_step: Size
@@ -257,7 +270,7 @@ class Mesh(pydantic.BaseModel):
 """ ==== PML ==== """
 
 
-class PMLLayer(pydantic.BaseModel):
+class PMLLayer(Tidy3dBaseModel):
     """single layer of a PML (profile and num layers)"""
 
     profile: Literal["standard", "stable", "absorber"] = "standard"
@@ -266,8 +279,9 @@ class PMLLayer(pydantic.BaseModel):
 
 """ ==== Simulation ==== """
 
+class Simulation(Tidy3dBaseModel):
+    """ Contains all information about simulation """
 
-class Simulation(pydantic.BaseModel):
     mesh: Mesh
     structures: Dict[str, Structure] = {}
     sources: Dict[str, Source] = {}

@@ -1,5 +1,6 @@
 {
   "title": "Simulation",
+  "description": "Contains all information about simulation ",
   "type": "object",
   "properties": {
     "mesh": {
@@ -122,12 +123,14 @@
   "required": [
     "mesh"
   ],
+  "additionalProperties": false,
   "definitions": {
     "Geometry": {
       "title": "Geometry",
       "description": "defines where something exists in space",
       "type": "object",
-      "properties": {}
+      "properties": {},
+      "additionalProperties": false
     },
     "Mesh": {
       "title": "Mesh",
@@ -164,7 +167,8 @@
       "required": [
         "geometry",
         "grid_step"
-      ]
+      ],
+      "additionalProperties": false
     },
     "Medium": {
       "title": "Medium",
@@ -181,7 +185,8 @@
           "default": 0.0,
           "type": "number"
         }
-      }
+      },
+      "additionalProperties": false
     },
     "Structure": {
       "title": "Structure",
@@ -198,7 +203,8 @@
       "required": [
         "geometry",
         "medium"
-      ]
+      ],
+      "additionalProperties": false
     },
     "SourceTime": {
       "title": "SourceTime",
@@ -216,7 +222,8 @@
           "default": 0.0,
           "type": "number"
         }
-      }
+      },
+      "additionalProperties": false
     },
     "Source": {
       "title": "Source",
@@ -249,7 +256,8 @@
         "geometry",
         "polarization",
         "source_time"
-      ]
+      ],
+      "additionalProperties": false
     },
     "Monitor": {
       "title": "Monitor",
@@ -295,7 +303,8 @@
       },
       "required": [
         "geometry"
-      ]
+      ],
+      "additionalProperties": false
     },
     "Data": {
       "title": "Data",
@@ -307,7 +316,8 @@
       },
       "required": [
         "monitor"
-      ]
+      ],
+      "additionalProperties": false
     },
     "PMLLayer": {
       "title": "PMLLayer",
@@ -330,7 +340,8 @@
           "minimum": 0,
           "type": "integer"
         }
-      }
+      },
+      "additionalProperties": false
     }
   }
 }
