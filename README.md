@@ -2,23 +2,23 @@
 
 ## Roadmap
 
-### Basics
+---
 
 ### Basics
 
 #### Data Structure
-- [ ] Implement basic `Tidy3d` structure using `pydantic`
-- [ ] Implement basic validation of fields using `pydantic.validators`
-- [ ] Write basic emulation of `td.web` interface for submitting simulations and loading results
+- [x] Implement basic `Tidy3d` structure using `pydantic`
+- [x] Implement basic validation of fields using `pydantic.validators`
+- [x] Write basic emulation of `td.web` interface for submitting simulations and loading results
 
 #### Schema
-- [ ] Automatically generate schema from `Simulation` model
-- [ ] Generate JSON output from `Simulation` instance
-- [ ] Custom validatation of json file against schema using `jsonschema`
-- [ ] Integrate schema into `td.web` emulation
+- [x] Automatically generate schema from `Simulation` model
+- [x] Generate JSON output from `Simulation` instance
+- [x] Custom validatation of json file against schema using `jsonschema`
+- [x] Integrate schema into `td.web` emulation
 
 #### Data
-- [ ] Load `Tidy3d` monitor data (.hdf5) into `xarray` datastructure for ease of accessing various axes
+- [x] Load `Tidy3d` monitor data (.hdf5) into `xarray` datastructure for ease of accessing various axes
 - [ ] Store return of `data.load()` with `Simulation`.
 - [ ] Implement basic viz and postprocessing `Tidy3d` functions for output data
 - [ ] Integrate data loading into `td.web` emulation
@@ -50,6 +50,8 @@
 - [ ] Implement complete geometric plotting of all `GeometryObject` attributes of `Simulation`.
 - [ ] Add mesh overlay with 3D plots.
 - [ ] Explore interactive plotting inline in notebook.
+
+---
 
 ### Integration
 
@@ -83,6 +85,8 @@
 - [ ] Export to PyPI.
 - [ ] Make public on github.
 - [ ] existing `tidy3d` -> `tidy3d core`, make consistent with this schema.
+
+---
 
 ### Enhacement
 
