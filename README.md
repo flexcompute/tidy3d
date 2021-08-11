@@ -64,6 +64,7 @@
 - [ ] Port docs into package.
 - [ ] Update docs to be consistent with changes.
 - [ ] Set up and document workflow for updating and pushing docs.
+- [ ] Logo.
 
 #### Open Source Tools
 - [ ] Finalize testing setup.
