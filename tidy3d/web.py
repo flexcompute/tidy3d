@@ -2,8 +2,8 @@ import json
 import shutil
 import numpy as np  # note: only needed to generate fake data
 
-from tidy3d import Simulation
-from schema import validate_schema
+from .tidy3d import Simulation
+from .schema import validate_schema
 
 def export(sim: Simulation) -> dict:
     print('exporting sim to dict')
