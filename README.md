@@ -24,11 +24,11 @@
 - [ ] Integrate data loading into `td.web` emulation
 
 #### Sources
-- [ ] Define and implement basic (non-modal) `Sources`, make consistent with current schema.
+- [x] Define and implement basic (non-modal) `Sources`, make consistent with current schema.
 - [ ] Define `td.viz` function for vieweing source data.
 
 #### Monitors
-- [ ] Define and implement basic (non-modal) `Monitors`, make consistent with current schema.
+- [x] Define and implement basic (non-modal) `Monitors`, make consistent with current schema.
 
 #### Modes
 - [ ] Integrate mode solver into `Tidy3d`
@@ -47,7 +47,7 @@
 - [ ] Write viz functions / geometrical plotting
 
 #### Viz
-- [ ] Implement complete geometric plotting of all `GeometryObject` attributes of `Simulation`.
+- [x] Implement complete geometric plotting of all `GeometryObject` attributes of `Simulation`.
 - [ ] Add mesh overlay with 3D plots.
 - [ ] Explore interactive plotting inline in notebook.
 
