@@ -7,11 +7,6 @@ try:
 except ImportError:
     from typing_extensions import Literal
 
-
-""" === Constants === """
-
-C0 = 3e8
-
 """ === Global Config === """
 
 class Tidy3dBaseModel(pydantic.BaseModel):
@@ -257,16 +252,14 @@ class Pulse(SourceTime):
 class Source(GeometryObject):
     """Defines electric and magnetic currents that produce electromagnetic field"""
 
-    polarization: Tuple[float, float, float]
+    geometry: Box
     source_time: SourceTime
+    polarization: Tuple[float, float, float]
 
-
-class ModeSource(Source):
-    """does mode solver over geometry"""
-
-    mode_index: pydantic.NonNegativeInt = 0
-
-    _plane_validator = assert_plane("geometry")
+# class ModeSource(Source):
+#     """does mode solver over geometry"""
+#     mode_index: pydantic.NonNegativeInt = 0
+#     _plane_validator = assert_plane("geometry")
 
 
 """ ==== Monitor ==== """
@@ -276,22 +269,18 @@ STORE_VALUES = Literal["E", "H", "flux"]
 class Monitor(GeometryObject):
     geometry: Box
     store_values: List[STORE_VALUES] = ["E", "H", "flux"]
+    freqs: List[pydantic.NonNegativeFloat] = []
+    times: List[pydantic.NonNegativeFloat] = []
 
-class FreqMonitor(Monitor):
-    freqs: List[pydantic.NonNegativeFloat]
-
-class TimeMonitor(Monitor):
-    t_start: pydantic.NonNegativeFloat = 0
-    t_stop: pydantic.NonNegativeFloat = None
-    t_step: pydantic.PositiveFloat = None
-
-class ModeMonitor(Monitor):
-    """does mode solver over geometry"""
-
-    store_values: Tuple[STORE_VALUES] = ("flux", "amplitudes")
-    store_mode_indices: Tuple[pydantic.NonNegativeInt] = (0,)
-
-    _plane_validator = assert_plane("geometry")
+# class FreqMonitor(Monitor):
+#     freqs: List[pydantic.NonNegativeFloat]
+# class TimeMonitor(Monitor):
+#     times: List[pydantic.NonNegativeFloat]
+# class ModeMonitor(Monitor):
+#     """does mode solver over geometry"""
+#     store_values: Tuple[STORE_VALUES] = ("flux", "amplitudes")
+#     store_mode_indices: Tuple[pydantic.NonNegativeInt] = (0,)
+#     _plane_validator = assert_plane("geometry")
 
 
 """ ==== Mesh ==== """
@@ -301,7 +290,6 @@ class Mesh(Tidy3dBaseModel):
     grid_step: Size
 
 """ ==== PML ==== """
-
 
 class PMLLayer(Tidy3dBaseModel):
     """single layer of a PML (profile and num layers)"""
@@ -341,5 +329,6 @@ def save_schema(fname_schema: str = "schema.json") -> None:
     with open(fname_schema, "w") as fp:
         fp.write(schema_str)
 
-fname_schema = "schema.json"
-save_schema(fname_schema)
+if __name__ == '__main__':
+    fname_schema = "../schema.json"
+    save_schema(fname_schema)

@@ -1,7 +1,11 @@
-from tidy3d import *
-import web
-import viz
 import numpy as np
+
+import sys
+sys.path.append('../')
+
+from tidy3d.tidy3d import *
+import tidy3d.web as web
+import tidy3d.viz as viz
 
 """ ==== Example simulation instance ==== """
 
