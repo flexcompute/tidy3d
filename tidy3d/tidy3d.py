@@ -121,6 +121,7 @@ def check_simulation_bounds():
 
 """ ==== Geometry Models ==== """
 
+BOUND_EPS = 1e-3  # expand bounds by this much
 
 class Geometry(Tidy3dBaseModel):
     """defines where something exists in space"""
@@ -148,8 +149,8 @@ class Box(Geometry):
         """sets bounds based on size and center"""
         size = self.size
         center = self.center
-        coord_min = tuple(c - s/2. for (s, c) in zip(size, center))
-        coord_max = tuple(c + s/2. for (s, c) in zip(size, center))
+        coord_min = tuple(c - s/2 - BOUND_EPS for (s, c) in zip(size, center))
+        coord_max = tuple(c + s/2 + BOUND_EPS for (s, c) in zip(size, center))
         return (coord_min, coord_max)
 
 

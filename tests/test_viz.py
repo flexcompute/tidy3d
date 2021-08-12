@@ -31,25 +31,36 @@ def test_sim_plot():
         run_time=1e-12,
         structures={
             "box1": Structure(
-                geometry=Box(size=(1, 1, 1), center=(-1.5, 0, 0)),
+                geometry=Box(
+                    size=(1, 1, 1),
+                    center=(-1.5, 0, 0)
+                ),
                 medium=Medium(permittivity=2.0),
             ),
             "box2": Structure(
-                geometry=Box(size=(1, 1, 1), center=(1.5, 0, 0)),
+                geometry=Box(
+                    size=(1, 1, 1),
+                    center=(1.5, 0, 0)),
                 medium=Medium(permittivity=2.0),
             ),
             "box3": Structure(
-                geometry=Box(size=(1, 1, 1), center=(0, 1.5, 0)),
+                geometry=Box(
+                    size=(1, 1, 1),
+                    center=(0, 1.5, 0)),
                 medium=Medium(permittivity=2.0),
             ),
             "box4": Structure(
-                geometry=Box(size=(1, 1, 1), center=(0,-1.5, 0)),
+                geometry=Box(
+                    size=(1, 1, 1),
+                    center=(0,-1.5, 0)),
                 medium=Medium(permittivity=2.0),
             )
         },
         sources={
             "plane_source": Source(
-                geometry=Box(size=(4, 4, 0.01), center=(0, 0, -1.5)),
+                geometry=Box(
+                    size=(4, 4, 0.),
+                    center=(0, 0, -1.5)),
                 source_time=Pulse(
                     freq0=1e14,
                     fwidth=1e12,
@@ -58,11 +69,11 @@ def test_sim_plot():
             )
         },
         monitors={
-            "point": Monitor(
-                geometry=Box(size=(4, 4, 0.01), center=(0, 0, 1.5)),
-            ),
             "plane": Monitor(
-                geometry=Box(size=(1, 1, 0.01), center=(0, 0, 0)),
+                geometry=Box(size=(4, 4, 0.), center=(0, 0, 1.5)),
+            ),
+            "point": Monitor(
+                geometry=Box(size=(0.1, 0.1, 0.1), center=(0, 0, 0)),
             ),
         },
         symmetry=(0, -1, 1),
