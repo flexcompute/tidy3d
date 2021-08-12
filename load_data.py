@@ -33,12 +33,12 @@ DATA_COORD_MAP = {
     'indspan': None
 }
 
-# accounting of the keys and what groups they belong to
+# accounting of the keys and what groups they belong to ('|' means union of sets)
 DEFAULT_COORD_KEYS = set(('x', 'y', 'z', 't', 'freq'))
 EXTRA_COORD_KEYS = set(EXTRA_COORDS.keys())
-COORD_KEYS = DEFAULT_COORD_KEYS.union(EXTRA_COORD_KEYS)
+COORD_KEYS = DEFAULT_COORD_KEYS | EXTRA_COORD_KEYS
 DATA_KEYS = set(('E', 'H', 'S', 'flux', 'amps', 'modes', 'indspan'))
-ALL_KEYS = COORD_KEYS.union(DATA_KEYS)
+ALL_KEYS = COORD_KEYS | DATA_KEYS
 
 def parse_group(hdf5_group) -> Tuple[Dict, Dict]:
     """ does conversions on HDF5 group and separates into coordinates and data """
@@ -92,8 +92,10 @@ def assemble_data_array(data_name: str, data_value: np.ndarray, coords: dict) ->
     # make suire axis coords have same number of entries as dimensions in
     if len(axis_coords) == data_value.ndim:
         return xr.DataArray(data_value, axis_coords)
-    else:
-        return xr.DataArray(data_value)
+
+    # otherwise just return one without coordinates
+    print('warning, coordinate axes didnt match so just returning without coords')
+    return xr.DataArray(data_value)
 
 
 
