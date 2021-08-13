@@ -195,9 +195,9 @@ class PolySlab(Geometry):
         coord_max = [xmax, ymax]
 
         # insert the slab bounds at the specified `axis`
-        zmin, zmax = slab_bounds
-        coord_min.insert(axis, zmin)
-        coord_max.insert(axis, zmax)
+        zmin, zmax = self.slab_bounds
+        coord_min.insert(self.axis, zmin)
+        coord_max.insert(self.axis, zmax)
 
         return (tuple(coord_min), tuple(coord_max))
 
