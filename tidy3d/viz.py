@@ -1,30 +1,53 @@
 import plotly.graph_objects as go
 import numpy as np
+from typing import List
 
-from .tidy3d import GeometryObject, Box
-from .tidy3d import Simulation, Monitor, Source, Structure
+from .tidy3d import GeometryObject, Box, Sphere, Cylinder, PolySlab
+from .tidy3d import Simulation, Monitor, Source, Structure, PMLLayer
+
+""" Handles plotting and visualzation 
+
+Features
+ - [x] plotting simple Boxes
+ - [x] plotting all geometric objects in simulation
+ - [x] customize viz options
+ - [ ] add text, interactive info
+ - [ ] viz functions for spheres, cylinders
+ - [ ] viz functions for polygons / gds files
+
+"""
 
 DEFAULT_KWARGS = {
+    # note: kwargs for go.Mesh3D()
+    # colors: https://coolors.co/palettes/trending
     'Simulation': {
         'color': '#f4f1de',
-        'opacity': 0.2
+        'opacity': 0.1
     },
     'Structure': {
         'color' : '#e07a5f',
-        'opacity': 0.4        
+        'opacity': 0.5        
     },
     'Source': {
         'color' : '#81b29a',
-        'opacity': 0.3       
+        'opacity': 0.4       
     },
     'Monitor': {
         'color' : '#f2cc8f',
-        'opacity': 0.3      
+        'opacity': 0.4      
+    },
+    'PML': {
+        'color' : '#3d405b',
+        'opacity': .1
+    },
+    'Mesh': {
+        'color' : '#3d405b',
+        'opacity': .05
     }
 }
 
 
-def viz_sim(sim: Simulation):
+def viz_sim(sim: Simulation, mesh_lines=False):
     meshes = []
 
     # add simulation
@@ -46,28 +69,186 @@ def viz_sim(sim: Simulation):
         monitor_mesh = viz_geo(monitor, **DEFAULT_KWARGS['Monitor'])
         meshes.append(monitor_mesh)
 
+    # add pml
+    pml_meshes = get_pml_meshes(sim, **DEFAULT_KWARGS['PML'])
+    meshes += pml_meshes
+
+    # add mesh_lines
+    if mesh_lines and False:
+        # not ready
+        mesh_meshes = get_mesh_meshes(sim, **DEFAULT_KWARGS['Mesh'])
+        meshes += mesh_meshes
+
     return meshes
+
+""" ==== Helper functions === """
+
+def _meshgrid_flatten(*args):
+    """ meshgrids all args and flattens the results """    
+    coords = np.meshgrid(*args, indexing='ij')
+    return tuple(c.flatten() for c in coords)
+
+def _rotate_points(dl1, dl2, dl3, axis=2):
+    """ rotates order of three objects such that the 3rd is at axis """
+    if axis == 0:
+        return dl3, dl1, dl2
+    elif axis == 1:
+        return dl2, dl3, dl1
+    elif axis == 2:
+        return dl1, dl2, dl3
+
+""" ==== Viualization of different GeometryObjects === """
 
 def viz_geo(obj: GeometryObject, **kwargs):
 
     assert hasattr(obj, 'geometry'), f"object '{obj}' does not have a geometry"
 
     if isinstance(obj.geometry, Box):
-
         return viz_box(obj.geometry, **kwargs)
+    elif isinstance(obj.geometry, Sphere):
+        return viz_sphere(obj.geometry, **kwargs)
+    elif isinstance(obj.geometry, Cylinder):
+        return viz_cylinder(obj.geometry, **kwargs)
+    elif isinstance(obj.geometry, PolySlab):
+        return viz_polyslab(obj.geometry, **kwargs)
     else:
-        return None
+        raise ValueError(f"object '{obj}' not recognized")
 
 def viz_box(box: Box, **kwargs):
 
     ((xm, ym, zm), (xp, yp, zp)) = box.bounds
-    coords = np.meshgrid([xm, xp], [ym, yp], [zm, zp])
-    x, y, z = tuple(c.flatten() for c in coords)
+    x, y, z = _meshgrid_flatten([xm, xp], [ym, yp], [zm, zp])
 
     mesh = go.Mesh3d(
         alphahull=0,
         x=x, y=y, z=z,
         **kwargs,
         flatshading=True)
+    return mesh
+
+def viz_sphere(sph: Sphere, num_pts=20, **kwargs):
+
+    r = sph.radius
+    center = x0, y0, z0 = sph.center
+    phis = np.linspace(0, 2*np.pi, num_pts)
+    thetas = np.linspace(0, np.pi, num_pts)    
+
+    p, t = _meshgrid_flatten(phis, thetas)
+
+
+    x = x0 + r * np.cos(p) * np.sin(t)
+    y = y0 + r * np.sin(p) * np.sin(t)
+    z = z0 + r * np.cos(t)
+
+    mesh = go.Mesh3d(
+        alphahull=0,
+        x=x, y=y, z=z,
+        **kwargs,
+        flatshading=True)
+    return mesh
+
+def viz_cylinder(cyl: Cylinder, num_pts=20, **kwargs):
+
+    r = cyl.radius
+    l = cyl.length
+    axis = cyl.axis
+    center = cyl.center
+    phis = np.linspace(0, 2*np.pi, num_pts)
+    lengths = np.linspace(-l/2, l/2, num_pts)
+    p, l = _meshgrid_flatten(phis, lengths)
+
+    dl1 = r * np.cos(p)
+    dl2 = r * np.sin(p)
+    dl = l
+
+    points = _rotate_points(dl1, dl2, dl, axis=axis)
+    points += np.array([center]).T
+    xyz = {k:v for (k,v) in zip('xyz', points)}
+
+    mesh = go.Mesh3d(
+        alphahull=0,
+        **xyz,
+        **kwargs,
+        flatshading=True)
+
+    return mesh
+
+def viz_polyslab(psb: PolySlab, num_pts=15, **kwargs):
+    
+    xy_plane = np.array(psb.vertices).T
+    xy_plane2 = np.tile(xy_plane, 2)
+
+    dl1, dl2 = xy_plane2
+
+    dl3 = np.array(psb.slab_bounds)
+    dl3 = np.concatenate((psb.slab_bounds[0] * np.ones(len(psb.vertices)), psb.slab_bounds[1] * np.ones(len(psb.vertices))), axis=0)
+    # dl3 = np.tile(dl3, xy_plane.shape[1])
+    dl1, dl2, dl3 = _rotate_points(dl1, dl2, dl3, axis=psb.axis)
+    points = dl1, dl2, dl3
+
+    xyz = {k:v for (k, v) in zip('xyz', points)}
+
+    mesh = go.Mesh3d(
+        alphahull=-1,
+        **xyz,
+        **kwargs,
+        flatshading=True)
+
+    return mesh
+
+""" ==== Helper functions for Simulation plotting === """
+
+def get_pml_meshes(sim: Simulation, **kwargs) -> list:
+
+    pml_layers = sim.pml_layers
+
+    dls = np.array(sim.mesh.grid_step)
+    Nls = np.array([pml_layer.num_layers for pml_layer in pml_layers])
+    thicknesses = dls * Nls
+    bounds_m, bounds_p = np.array(sim.geometry.bounds)
+
+    sim_size = sim.geometry.size
+    sim_center = sim.geometry.center
+
+    sizes = [list(sim_size) for _ in range(6)]
+    centers = [list(sim_center) for _ in range(6)]
+
+    for axis in range(3):
+        index_p = 2*axis
+        index_m = 2*axis + 1
+        sizes[index_p][axis] = thicknesses[axis]
+        sizes[index_m][axis] = thicknesses[axis]
+        centers[index_p][axis] += (sim_size[axis] + thicknesses[axis]) / 2
+        centers[index_m][axis] -= (sim_size[axis] + thicknesses[axis]) / 2
+
+    boxes = []
+    for (s, c) in zip(sizes, centers):
+        if 0.0 not in s:
+            boxes.append(Box(size=s, center=c))
+
+    meshes = [viz_box(box, **kwargs) for box in boxes]
+    return meshes
+
+def get_mesh_meshes(sim: Simulation, **kwargs) -> list:
+
+    dls = np.array(sim.mesh.grid_step)
+    sim_size = np.array(sim.geometry.size)
+    sim_center = np.array(sim.geometry.center)
+    sim_bounds = np.array(sim.geometry.bounds)
+
+    meshes = []
+    for axis in range(3):
+        bmin, bmax = sim_bounds
+        centers_axis = np.arange(bmin[axis], bmax[axis], dls[axis])
+        for center_axis in centers_axis:
+            center = sim_center.copy()
+            center[axis] = center_axis
+            size = sim_size.copy()
+            size[axis] = 0.1
+            print(center)
+            box = Box(size=list(size), center=list(center))
+            meshes.append(viz_box(box, **kwargs))
+    return meshes
+
 
     return mesh
