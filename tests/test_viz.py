@@ -46,7 +46,7 @@ def test_polyslab_plot():
         y = 13*np.cos(t) - 5*np.cos(2*t) - 2*np.cos(3*t) - np.cos(4*t)
         return [x,y]
 
-    tpoints =  np.linspace(0, 2*np.pi, 300)
+    tpoints =  np.linspace(0, 2*np.pi, 100)
     vertices = [heart_coords(t) for t in tpoints]
 
     p1 = PolySlab(vertices=vertices, slab_bounds=(-.5,.5), axis=2)
