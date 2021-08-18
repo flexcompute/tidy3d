@@ -141,7 +141,7 @@ def viz_sphere(sph: Sphere, num_pts=20, **kwargs):
     z = z0 + r * np.cos(t)
 
     mesh = go.Mesh3d(
-        alphahull=0,
+        alphahull=1,
         x=x, y=y, z=z,
         **kwargs,
         flatshading=True)
@@ -175,21 +175,20 @@ def viz_cylinder(cyl: Cylinder, num_pts=20, **kwargs):
 
 def viz_polyslab(psb: PolySlab, num_pts=15, **kwargs):
     
-    xy_plane = np.array(psb.vertices).T
-    xy_plane2 = np.tile(xy_plane, 2)
+    num_vertices = len(psb.vertices)
 
-    dl1, dl2 = xy_plane2
+    xy_plane = np.array(psb.vertices)
+    xs, ys = xy_plane.T
 
-    dl3 = np.array(psb.slab_bounds)
-    dl3 = np.concatenate((psb.slab_bounds[0] * np.ones(len(psb.vertices)), psb.slab_bounds[1] * np.ones(len(psb.vertices))), axis=0)
-    # dl3 = np.tile(dl3, xy_plane.shape[1])
-    dl1, dl2, dl3 = _rotate_points(dl1, dl2, dl3, axis=psb.axis)
-    points = dl1, dl2, dl3
+    zs = np.array(psb.slab_bounds)
+    x, z = _meshgrid_flatten(xs, zs)
+    y, z = _meshgrid_flatten(ys, zs)
 
+    points = _rotate_points(x, y, z, axis=psb.axis)
     xyz = {k:v for (k, v) in zip('xyz', points)}
 
     mesh = go.Mesh3d(
-        alphahull=-1,
+        alphahull=0,
         **xyz,
         **kwargs,
         flatshading=True)
