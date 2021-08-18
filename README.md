@@ -36,19 +36,21 @@
 - [ ] Integrate Mode objects with `xarray`
 
 #### WebAPI
+- [ ] Define all unit operations of submitting and loading jobs.
 - [ ] Refactor existing webAPI interface.
 - [ ] Port webAPI interface into `Tidy3d` and hook up with existing monitors and data.
 - [ ] Improve or rework batch processing interface.
 
 #### Structures
-- [ ] Implement basic Polyslab
-- [ ] Test all structure bounds
-- [ ] Determine best plotting package for geometric shapes
-- [ ] Write viz functions / geometrical plotting
+- [-] Implement basic Polyslab
+- [-] Test all structure bounds
+- [-] Determine best plotting package for geometric shapes
+- [-] Write viz functions / geometrical plotting
+- [ ] GDS slab wrapper
 
 #### Viz
 - [x] Implement complete geometric plotting of all `GeometryObject` attributes of `Simulation`.
-- [ ] Add mesh overlay with 3D plots.
+- [ ] Fix polyslab plotting of concave shapes, or use GDSpy.
 - [ ] Explore interactive plotting inline in notebook.
 
 ---
