@@ -39,7 +39,7 @@ def _test_cyl_plot():
     fig = go.Figure(data=mesh_data)
     fig.show()
 
-def test_polyslab_plot():
+def _test_polyslab_plot():
 
     def heart_coords(t):
         x = 16*np.sin(t)**3
@@ -55,7 +55,7 @@ def test_polyslab_plot():
     fig.show()
 
 
-def _test_sim_plot():
+def test_sim_plot():
 
     sim = Simulation(
         geometry=Box(
