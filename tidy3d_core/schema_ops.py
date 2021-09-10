@@ -2,14 +2,18 @@ import json
 from jsonschema import Draft3Validator
 from jsonschema.validators import extend
 
+""" creates schema validator and function for validating simulation dict """
+
 VALIDATOR = Draft3Validator
+SCHEMA_PATH = 'schema.json'
+SCHEMA_DICT = load_json(SCHEMA_PATH)
+SCHEMA_VALIDATOR = _create_validator(SCHEMA_DICT)
 
-def load_schema(fname_schema: str = "schema.json") -> dict:
-    """loads schema from json file into dict"""
-    with open(fname_schema, "r") as fp:
-        schema_dict = json.load(fp)
-    return schema_dict
-
+def load_json(fname: str) -> dict:
+    """loads a json file into dictionary """
+    with open(fname, "r") as fp:
+        data_dict = json.load(fp)
+    return data_dict
 
 def _accepts_tuple(checker, instance):
     """custom validator for array types, accept tuple as ok"""
@@ -25,9 +29,6 @@ def _create_validator(schema: dict) -> Draft3Validator:
     validator = custom_validator(schema)
     return validator
 
-
-def validate_schema(sim_dict: dict, fname_schema: str = "schema.json") -> None:
-    """makes sure simulation dict is consistent with schema json"""
-    schema_dict = load_schema(fname_schema)
-    validator = _create_validator(schema_dict)
-    validator.is_valid(sim_dict)
+def validate_dict(sim_dict: dict) -> None:
+    """makes sure a simulation dict is consistent with schema """
+    SCHEMA_VALIDATOR.is_valid(sim_dict)
