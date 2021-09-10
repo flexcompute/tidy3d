@@ -1,6 +1,6 @@
 import pydantic
 
-""" === Global Config === """
+""" global configuration / base class for pydantic models used to make simulation """
 
 class Tidy3dBaseModel(pydantic.BaseModel):
     """ https://pydantic-docs.helpmanual.io/usage/model_config/ """

@@ -1,5 +1,4 @@
 import pydantic
-
 from typing import Tuple, Dict, List, Callable, Any, Union
 
 # Literal only available in python 3.8 + so try import otherwise use extensions
@@ -12,6 +11,10 @@ except ImportError:
 Size = Tuple[
     pydantic.NonNegativeFloat, pydantic.NonNegativeFloat, pydantic.NonNegativeFloat
 ]
+
+
+""" Defines 'types' that various fields can be """
+
 
 # tuple containing three floats
 Coordinate = Tuple[float, float, float]
