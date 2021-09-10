@@ -1,5 +1,7 @@
 import pydantic
 
+""" Defines various validation functions that get used to ensure inputs are legit """
+
 def ensure_greater_or_equal(field_name, value):
     """makes sure a field_name is >= value"""
 

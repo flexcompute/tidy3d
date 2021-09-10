@@ -4,6 +4,7 @@ from .base import Tidy3dBaseModel
 from .types import Literal, Dict, Tuple, Size
 from .validators import ensure_less_than, check_simulation_bounds
 from .geometry import GeometryObject, Box
+from .medium import Medium
 from .structure import Structure
 from .source import Source
 from .monitor import Monitor
@@ -30,6 +31,7 @@ class Simulation(GeometryObject):
 
     mesh: Mesh
     geometry: Box    
+    medium: Medium()
     run_time: pydantic.NonNegativeFloat = 0.0
     structures: Dict[str, Structure] = {}
     sources: Dict[str, Source] = {}
@@ -47,9 +49,3 @@ class Simulation(GeometryObject):
 
     _courant_validator = ensure_less_than("courant", 1)
     _sim_bounds_validator = check_simulation_bounds()
-
-def save_schema(fname_schema: str = "schema.json") -> None:
-    """saves simulation object schema to json"""
-    schema_str = Simulation.schema_json(indent=2)
-    with open(fname_schema, "w") as fp:
-        fp.write(schema_str)
