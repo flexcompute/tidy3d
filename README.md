@@ -30,6 +30,8 @@
 - [ ] Finalize writing of internal documentation (1 week)
 ---
 - [ ] Set up documentation (1 week)
+	- [ ] Docs
+	- [ ] Notebooks
 ---
 - [ ] Add extensive tests (2 weeks)
 ---
