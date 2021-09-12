@@ -12,6 +12,7 @@
 ---
 - [ ] Write emulated webAPI to transfer files back and forth (1 day)
 - [ ] Write tidy3d core and make webAPI functional for simplest cases (2-3 weeks, w/ Momchil’s help)
+	- [ ] Make `task` its own pydantic dataclass
 ---
 ---
 ---
@@ -21,6 +22,7 @@
 	- [ ] Dispersion fit (.5 days)
 	- [ ] Mode solver (3 days)
 	- [ ] Analyze (3 days)
+		- [ ] Read output files in different formats.
 	- [ ] S matrix (5 days)
 ---
 ---
