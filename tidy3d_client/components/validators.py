@@ -44,7 +44,7 @@ def assert_plane(field_name="geometry"):
 def check_bounds():
     """makes sure the model's `bounds` field is Not none and is ordered correctly"""
 
-    @pydantic.validator("bounds", allow_reuse=True)
+    @pydantic.validator("bounds", allow_reuse=True, pre=True)
     def valid_bounds(val):
         assert val is not None, "bounds must be set, are None"
         coord_min, coord_max = val
@@ -54,30 +54,4 @@ def check_bounds():
 
     return valid_bounds
 
-def check_simulation_bounds():
-    @pydantic.root_validator()
-    def all_in_bounds(cls, values):
-        sim_bounds = values.get("geometry").bounds
-        sim_bmin, sim_bmax = sim_bounds
 
-        check_objects = ("structures", "sources", "monitors")
-        for obj_name in check_objects:
-
-            # get all objects of name and continue if there are none
-            objs = values.get(obj_name)
-            if objs is None:
-                continue
-
-            # get bounds of each object
-            for name, obj in objs.items():
-                obj_bounds = obj.geometry.bounds
-                obj_bmin, obj_bmax = obj_bounds
-
-                # assert all of the object's max coordinates are greater than the simulation's min coordinate
-                assert all(o >= s for (o, s) in zip(obj_bmax, sim_bmin)), f"{obj_name[:-1]} object '{name}' is outside of simulation bounds (on minus side)"
-
-                # assert all of the object's min coordinates are less than than the simulation's max coordinate
-                assert all(o <= s for (o, s) in zip(obj_bmin, sim_bmax)), f"{obj_name[:-1]} object '{name}' is outside of simulation bounds (on plus side)"
-
-        return values
-    return all_in_bounds
