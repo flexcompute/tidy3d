@@ -7,45 +7,77 @@
 - [x] Organize repo in basic structure we want moving forward (.5 days)
 ---
 - [ ] Decide on schema for all fields in tidy3d public (1 week)
+	- [ ] Simulation
+	- [ ] Geometry
+	- [ ] Medium
+	- [ ] Structure
+	- [ ] Source
+	- [ ] Monitor
 ---
 - [ ] Write boilerplate for all plugins / packages (1 week)
+	- [ ] Dispersion fit
+	- [ ] Mode Solver
+	- [ ] Component Modeler
+	- [ ] Adjoint Optimizer
+	- [ ] Data Analyzer
 ---
 - [ ] Write emulated webAPI to transfer files back and forth (1 day)
+	- [ ] Make `task` its own pydantic dataclass.
+	- [ ] Create basic mock data creation.
+	- [ ] Create set of basic API calls.
+	- [ ] Simple batch / job interface.
 - [ ] Write tidy3d core and make webAPI functional for simplest cases (2-3 weeks, w/ Momchil’s help)
-	- [ ] Make `task` its own pydantic dataclass
+	- [ ] What are tidy3d core endpoints for C++?
+	- [ ] Load simulation.json into `tidy3d.Simulation`.
+	- [ ] Postprocess `tidy3d.Simulation` into solver files.
+	- [ ] add http / authentication etc.
+	- [ ] Test test test.
 ---
 ---
 ---
 - [ ] Flesh out all details for plugins (18.5 days total)
 
-  - [ ] Viz (1 week)
+	- [ ] Viz (1 week)
 	- [ ] Dispersion fit (.5 days)
 	- [ ] Mode solver (3 days)
 	- [ ] Analyze (3 days)
 		- [ ] Read output files in different formats.
 	- [ ] S matrix (5 days)
+	---
 ---
 ---
 ---
----
-- [ ] Write yaml -> json conversion tool (.5 days)
+- [ ] Supply other ways to create simulation files (2 days)
+	- [ ] yaml -> json conversion 
+	- [ ] command line interface to submit yaml or json.
+	- [ ] simple yaml editor?  flask app?
 - [ ] Finalize writing of internal documentation (1 week)
+	- [ ] Add and edit docstrings to all.
 ---
 - [ ] Set up documentation (1 week)
-	- [ ] Docs
-	- [ ] Notebooks
+	- [ ] Move Docs into repo.
+	- [ ] Move tidy3d notebooks into repo.
+	- [ ] Set up binder links.
 ---
-- [ ] Add extensive tests (2 weeks)
+- [ ] Add extensive amount of tests (2 weeks)
+	- [ ] Test simulation.json validation / error catching.
+	- [ ] Test plugins.
+	- [ ] Test submitting jobs if possible.
 ---
 ---
 - [ ] Automate everything using GitHub extensions (2 weeks)
+	- [ ] CI / tests.
+	- [ ] Version / releases.
+	- [ ] changelog
+	- [ ] Contributing guide / developer documentation.
+	- [ ] What else?
 ---
 ---
 - [ ] Add finishing touches (2 days)
 	- [ ] Logo (1 day, outsource?)
 	- [ ] Github issue templates (.5 days)
-	- [ ] Releases, pyPI setup (.5 days)
-	- [ ] wipe history
+	- [ ] Releases, PyPI setup (.5 days)
+	- [ ] Wipe commit history
 	- [ ] decide how to manage branches
 ---
 - [ ] Finding bugs and fixing things, testing (2 weeks)
