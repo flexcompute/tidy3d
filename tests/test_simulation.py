@@ -1,22 +1,17 @@
 import numpy as np
 
 import sys
-sys.path.append('../')
+sys.path.append('./')
 
-from tidy3d.tidy3d import *
-import tidy3d.web as web
-import tidy3d.viz as viz
+from tidy3d_client import *
+import tidy3d_client.web as web
+import tidy3d_client.viz as viz
 
 """ ==== Example simulation instance ==== """
 
 sim = Simulation(
-    geometry=Box(
-        size=(2.0, 2.0, 2.0),
-        center=(0, 0, 0)
-    ),
-    mesh=Mesh(
-        grid_step=(0.01, 0.01, 0.01),
-    ),
+    size=(2.0, 2.0, 2.0),
+    grid_size=(0.01, 0.01, 0.01),
     run_time=1e-12,
     structures={
         "square": Structure(
@@ -73,7 +68,7 @@ sim = Simulation(
     subpixel=False,
 )
 
-def test_run():
+def _test_run():
     web.run(sim)
 
 def _test_viz():
@@ -88,9 +83,6 @@ def test_negative_sizes():
     for size in (-1, 1, 1), (1, -1, 1), (1, 1, -1):
         with pytest.raises(pydantic.ValidationError) as e_info:
             a = Box(size=size, center=(0, 0, 0))
-
-        with pytest.raises(pydantic.ValidationError) as e_info:
-            m = Mesh(mesh_step=size)
 
 def test_medium():
 
@@ -108,13 +100,9 @@ def test_bounds():
         shifted_center = tuple(c + s for (c, s) in zip(center_offset, CENTER_SHIFT))
 
         sim = Simulation(
-            geometry=Box(
-                size=(1, 1, 1),
-                center=CENTER_SHIFT
-            ),
-            mesh=Mesh(
-                grid_step=(0.1, 0.1, 0.1),
-            ),
+            size=(1,1,1),
+            center=CENTER_SHIFT,
+            grid_size=(0.1, 0.1, 0.1),
             run_time=1e-12,
             structures={
                 'box': Structure(
@@ -145,7 +133,7 @@ def test_bounds():
             center = 2 * amp * sign
             if np.sum(center) < 1e-12:
                 continue
-            with pytest.raises(pydantic.ValidationError) as e_info:
+            with pytest.raises(AssertionError) as e_info:
                 place_box(tuple(center))
 
 if __name__ == '__main__':

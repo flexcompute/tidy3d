@@ -43,7 +43,8 @@ def _write_json(data_dict: dict, fname: str) -> None:
 def _join_paths(*paths: str) -> str:
     return os.path.join(*paths)
 
-from .compoments import Simulation
+# from .compoments import Simulation
+
 def save_schema(fname_schema: str = "schema.json") -> None:
     """saves simulation object schema to json"""
     schema_str = Simulation.schema_json(indent=2)

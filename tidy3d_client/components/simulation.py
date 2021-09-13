@@ -1,42 +1,25 @@
 import pydantic
 
 from .base import Tidy3dBaseModel
-from .types import Literal, Dict, Tuple, Size
-from .validators import ensure_less_than, check_simulation_bounds
-from .geometry import GeometryObject, Box
+from .types import Literal, Dict, Tuple, Union, Any
+from .types import GridSize, Coordinate, Size, Bound
+from .validators import ensure_less_than
+from .geometry import Geometry, Box
 from .medium import Medium
 from .structure import Structure
 from .source import Source
 from .monitor import Monitor
+from .pml import PMLLayer
 
-""" ==== Mesh ==== """
-
-class Mesh(Tidy3dBaseModel):
-    """ tells us how to discretize the simulation and it's GeometryObjects """
-    grid_step: Size
-
-""" ==== PML ==== """
-
-class PMLLayer(Tidy3dBaseModel):
-    """single layer of a PML (profile and num layers)"""
-
-    profile: Literal["standard", "stable", "absorber"] = "standard"
-    num_layers: pydantic.NonNegativeInt = 0
-
-
-""" ==== Simulation ==== """
-
-class Simulation(GeometryObject):
+class Simulation(Box):
     """ Contains all information about simulation """
 
-    mesh: Mesh
-    geometry: Box    
-    medium: Medium()
+    grid_size: Union[pydantic.PositiveFloat, Tuple[GridSize, GridSize, GridSize]]
+    medium: Medium = Medium()
     run_time: pydantic.NonNegativeFloat = 0.0
     structures: Dict[str, Structure] = {}
     sources: Dict[str, Source] = {}
     monitors: Dict[str, Monitor] = {}
-    data: Dict[str, str] = {}
     pml_layers: Tuple[PMLLayer, PMLLayer, PMLLayer] = (
         PMLLayer(),
         PMLLayer(),
@@ -48,4 +31,24 @@ class Simulation(GeometryObject):
     subpixel: bool = True
 
     _courant_validator = ensure_less_than("courant", 1)
-    _sim_bounds_validator = check_simulation_bounds()
+
+    def __init__(self, **kwargs):
+        """ initialize sim and then do more validations """
+        super().__init__(**kwargs)
+        self._check_nonuniform_grid_size()
+        self._check_geo_objs_in_bounds()
+        self._check_pw_in_homogeneos()
+
+    def _check_nonuniform_grid_size(self):
+        """ make sure nonuniform grid_size covers size (if added) """
+        pass
+
+    def _check_geo_objs_in_bounds(self):
+        """ for each geometry-containing object in simulation, check whether intersects simulation """
+        for geo_obj_dict in (self.structures, self.sources, self.monitors):
+            for name, geo_obj in geo_obj_dict.items():
+                assert self._intersects(geo_obj.geometry), "object '{name}' is completely outside simulation"
+
+    def _check_pw_in_homogeneos(self):
+        """ is PW in homogeneous medium (if added) """
+        pass

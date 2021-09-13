@@ -7,7 +7,7 @@
 - [x] Organize repo in basic structure we want moving forward (.5 days)
 ---
 - [ ] Decide on schema for all fields in tidy3d public (1 week)
-	- [ ] Simulation
+	- [x] Simulation
 	- [ ] Geometry
 	- [ ] Medium
 	- [ ] Structure

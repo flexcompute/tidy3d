@@ -1,4 +1,5 @@
 import pydantic
+from abc import ABC, abstractmethod
 
 from .base import Tidy3dBaseModel
 from .types import Bound, Size, Coordinate, Axis, Coordinate2D, Any, List, Tuple
@@ -6,21 +7,38 @@ from .validators import check_bounds
 
 BOUND_EPS = 1e-3  # expand bounds by this much
 
-class Geometry(Tidy3dBaseModel):
-    """defines where something exists in space"""
+""" defines objects in space """
 
-    bounds: Bound = None
+class Geometry(ABC, Tidy3dBaseModel):
+    """ abstract base class, defines where something exists in space"""
 
-    def __init__(self, **data: Any):
-        """checks the bounds after any Geometry instance is initialized"""
-        super().__init__(**data)
-        self.bounds = self._get_bounds()
-        _bound_validator = check_bounds()
-
+    @abstractmethod
     def _get_bounds(self) -> Bound:
-        """ returns bounding box for this geometry """
-        raise NotImplementedError(f"Must implement self._get_bounds() for '{type(self).__name__}' geometry")
+        """ Returns bounding box for this geometry, must implement for subclasses """
+        pass
 
+    def _intersects(self, other) -> bool:
+        """ method determining whether two geometries' bounds intersect """
+
+        self_bmin, self_bmax = self._get_bounds()
+        other_bmin, other_bmax = other._get_bounds()
+
+        # are all of other's minimum coordinates less than self's maximum coordinate?
+        in_minus = all(o <= s for (s, o) in zip(self_bmax, other_bmin))
+
+        # are all of other's maximum coordinates greater than self's minum coordinate?
+        in_plus = all(o >= s for (s, o) in zip(self_bmin, other_bmax))
+
+        # for intersection of bounds, both must be true
+        return in_minus and in_plus
+
+
+class GeometryObject(ABC, Tidy3dBaseModel):
+    """ signifies an object containing a geometry, (such as structure, source, monitor) """
+
+    geometry: Geometry = None
+
+""" geometry subclasses """
 
 class Box(Geometry):
     """rectangular Box (has size and center)"""
@@ -83,8 +101,3 @@ class PolySlab(Geometry):
         coord_max.insert(self.axis, zmax)
 
         return (tuple(coord_min), tuple(coord_max))
-
-class GeometryObject(Tidy3dBaseModel):
-    """ an object with a geometry """
-
-    geometry: Geometry
