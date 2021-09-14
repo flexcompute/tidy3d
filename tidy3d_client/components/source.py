@@ -4,7 +4,7 @@ from abc import ABC, abstractmethod
 
 from .base import Tidy3dBaseModel
 from .types import Tuple, List, Direction, Polarization
-from .validators import ensure_greater_or_equal, assert_plane, assert_has_one_zero
+from .validators import ensure_greater_or_equal, assert_plane
 from .geometry import GeometryObject, Box
 from .constants import inf
 from .mode import Mode
@@ -100,14 +100,14 @@ class ModeSource(AbstractSource):
 
     direction: Direction
     mode: Mode
-    _plane_validator = assert_has_one_zero(field_name='size')
+    _plane_validator = assert_plane()
 
 class DirectionalSource(AbstractSource, ABC):
     """ A Planar Source with uni-directional propagation """
 
     direction: Direction
     polarization: Polarization
-    _plane_validator = assert_has_one_zero(field_name='size')
+    _plane_validator = assert_plane()
 
     @pydantic.root_validator()
     def polarization_is_orthogonal(cls, values):

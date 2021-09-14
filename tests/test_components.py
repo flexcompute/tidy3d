@@ -51,12 +51,8 @@ def test_sim():
             )
         },
         monitors={
-            "point": Monitor(
-                geometry=Box(size=(0, 0, 0), center=(0, 1, 0)),
-            ),
-            "plane": Monitor(
-                geometry=Box(size=(1, 1, 0), center=(0, 0, 0)),
-            ),
+            "point": FreqMonitor(size=(0, 0, 0), center=(0, 1, 0), freqs=[1,2,3]),
+            "plane": TimeMonitor(size=(1, 1, 0), center=(0, 0, 0)),
         },
         symmetry=(0, -1, 1),
         pml_layers=(
@@ -250,5 +246,21 @@ def test_source_data():
     g = GaussianPulse(freq0=1, fwidth=0.1)
     d = np.random.random((5, 5))
     ds = DataSource(size=(1, 0, 1), source_time=g, data=d)
+
+def test_monitor():
+    m = FreqMonitor(size=(1,2,3), center=(1,0,0), freqs=[1., 2., 3.], store=('E', 'H'))
+    m = TimeMonitor(size=(1,2,3), center=(1,0,0), t_start=1.0, t_step=2, t_stop=5, store=('E', 'H'))
+    with pytest.raises(pydantic.ValidationError) as e_info:
+        m = TimeMonitor(size=(1,2,3), center=(1,0,0), t_start=1.0, t_step=2, t_stop=-5, store=('E', 'H'))
+    with pytest.raises(pydantic.ValidationError) as e_info:
+        m = TimeMonitor(size=(1,2,3), center=(1,0,0), t_start=2.0, t_step=2, t_stop=1, store=('E', 'H'))
+    mode = Mode(mode_index=1)
+    m = ModeMonitor(size=(1,1,0), freqs=[1,2,3], modes=[mode, mode])
+    with pytest.raises(pydantic.ValidationError) as e_info:
+        m = ModeMonitor(size=(0,0,0), freqs=[1,2,3], modes=[mode, mode])
+    with pytest.raises(pydantic.ValidationError) as e_info:
+        m = ModeMonitor(size=(1,0,0), freqs=[1,2,3], modes=[mode, mode])
+    with pytest.raises(pydantic.ValidationError) as e_info:
+        m = ModeMonitor(size=(1,1,1), freqs=[1,2,3], modes=[mode, mode])
 
 """ monitors """

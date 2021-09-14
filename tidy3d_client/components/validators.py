@@ -42,7 +42,7 @@ def assert_has_one_zero(field_name="size"):
     return is_plane
 
 
-def assert_plane(field_name="geometry"):
+def assert_geo_plane(field_name="geometry"):
     """makes sure a field's `size` attribute has exactly 1 zero"""
 
     @pydantic.validator(field_name, allow_reuse=True, always=True)
@@ -54,6 +54,17 @@ def assert_plane(field_name="geometry"):
 
     return is_plane
 
+def assert_plane():
+    """makes sure a field's `size` attribute has exactly 1 zero"""
+
+    @pydantic.validator("size", allow_reuse=True, always=True)
+    def is_plane(cls, val):
+        assert (
+            val.count(0.0) == 1
+        ), f"'{cls.__name__}' object must be planar, given size={val}"
+        return val
+
+    return is_plane
 
 def check_bounds():
     """makes sure the model's `bounds` field is Not none and is ordered correctly"""
