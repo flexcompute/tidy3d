@@ -19,7 +19,7 @@ def nk_to_eps_sigma(n, k, freq):
     eps_complex = nk_to_eps_complex(n, k)
     eps_real, eps_imag = eps_complex.real, eps_complex.imag
     omega = 2 * np.pi * freq
-    sigma = omega * eps_imag / 1j
+    sigma = omega * eps_imag
     return eps_real, sigma
 
 def nk_to_medium(n, k, freq):
