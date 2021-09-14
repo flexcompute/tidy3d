@@ -246,4 +246,9 @@ def test_source_modal():
     mode = Mode(mode_index=0)
     m = ModeSource(size=(0, 1, 1), direction='+', source_time=g, mode=mode)
 
+def test_source_data():
+    g = GaussianPulse(freq0=1, fwidth=0.1)
+    d = np.random.random((5, 5))
+    ds = DataSource(size=(1, 0, 1), source_time=g, data=d)
+
 """ monitors """
