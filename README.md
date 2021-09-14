@@ -14,6 +14,7 @@
 	- [ ] Structure
 	- [ ] Source
 	- [ ] Monitor
+- [ ] Write documentation explaining all components / design choices.
 ---
 - [ ] Write boilerplate for all plugins / packages (1 week)
 	- [ ] Dispersion fit
