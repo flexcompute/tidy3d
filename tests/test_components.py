@@ -43,7 +43,7 @@ def test_sim_full():
             "dipole": Source(
                 geometry=Box(size=(0, 0, 0), center=(0, -0.5, 0)),
                 polarization=(1, 0, 1),
-                source_time=Pulse(
+                source_time=GaussianPulse(
                     freq0=1e14,
                     fwidth=1e12,
                 ),
@@ -104,7 +104,21 @@ def test_medium():
     with pytest.raises(pydantic.ValidationError) as e_info:
         m = Medium(conductivity=-1.0)
 
-def test_dispersion():
+def test_medium_conversions():
+    n = 4.0
+    k = 1.0
+    freq = 3.0
+
+    # test medium creation
+    medium = nk_to_medium(n, k, freq)
+
+    # test consistency
+    eps_z = nk_to_eps_complex(n, k)
+    eps, sig = nk_to_eps_sigma(n, k, freq)
+    _eps_z = eps_sigma_to_eps_complex(eps, sig, freq)
+    assert np.isclose(eps_z, _eps_z)
+
+def test_dispersion_models():
 
     # construct media
     m_PR = PoleResidue(eps_inf=1.0, poles=[((1,2),(1,3)), ((2,4),(1,5))])
@@ -115,9 +129,6 @@ def test_dispersion():
     freqs = np.linspace(0.01, 1, 1001)
     for medium in [m_PR, m_SM, m_LZ, m_DB]:
         eps_c = medium.eps_model(freqs)
-
-    # m3 = PoleResidue(eps_inf=1.0, poles=[((1,2),(1,3)), ((2,4),(1,5))])
-    # m4 = PoleResidue(eps_inf=1.0, poles=[((1,2),(1,3)), ((2,4),(1,5))])
 
 def test_geometry():
     b = Box(size=(1,1,1), center=(0,0,0))
@@ -188,6 +199,24 @@ def test_bounds():
                 continue
             with pytest.raises(AssertionError) as e_info:
                 place_box(tuple(center))
+
+def test_source():
+
+    # test we can make gaussian pulse
+    g = GaussianPulse(freq0=1, fwidth=0.1)
+    ts = np.linspace(0, 30, 1001)
+    g.amp_time(ts)
+
+    # test we can make generic source
+    s = Source(geometry=Box(size=(1,1,1)), source_time=g, polarization=(1,1,1))
+
+    # test we can make planewave
+    s = PlaneWave(geometry=Box(size=(0,1,1)), source_time=g, polarization=(1,1,1), direction='+')
+
+    # test that non-planar geometry crashes plane wave
+    with pytest.raises(pydantic.ValidationError) as e_info:
+        s = PlaneWave(geometry=Box(size=(1,1,1)), source_time=g, polarization=(1,1,1), direction='+')
+
 
 if __name__ == '__main__':
     test_run()

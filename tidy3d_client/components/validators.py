@@ -35,7 +35,7 @@ def assert_plane(field_name="geometry"):
     def is_plane(cls, v):
         assert (
             v.size.count(0.0) == 1
-        ), "mode objects only works with plane geometries with one size element of 0.0"
+        ), "{cls.__name__} only works with plane geometries with one size element of 0.0"
         return v
 
     return is_plane
