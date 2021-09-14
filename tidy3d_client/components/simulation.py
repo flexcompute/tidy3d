@@ -47,7 +47,10 @@ class Simulation(Box):
         """ for each geometry-containing object in simulation, check whether intersects simulation """
         for geo_obj_dict in (self.structures, self.sources, self.monitors):
             for name, geo_obj in geo_obj_dict.items():
-                assert self._intersects(geo_obj.geometry), "object '{name}' is completely outside simulation"
+                if hasattr(geo_obj, "geometry"):
+                    assert self._intersects(geo_obj.geometry), "object '{name}' is completely outside simulation"
+                else:
+                    assert self._intersects(geo_obj), "object '{name}' is completely outside simulation"
 
     def _check_pw_in_homogeneos(self):
         """ is PW in homogeneous medium (if added) """

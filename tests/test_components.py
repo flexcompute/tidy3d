@@ -8,7 +8,7 @@ from tidy3d_client import *
 
 """ ==== Example simulation instance ==== """
 
-def test_sim_full():
+def test_sim():
     sim = Simulation(
         size=(2.0, 2.0, 2.0),
         grid_size=(0.01, 0.01, 0.01),
@@ -41,8 +41,9 @@ def test_sim_full():
         },
         sources={
             "dipole": Source(
-                geometry=Box(size=(0, 0, 0), center=(0, -0.5, 0)),
-                polarization=(1, 0, 1),
+                size=(0, 0, 0),
+                center=(0, -0.5, 0),
+                polarization='Mx',
                 source_time=GaussianPulse(
                     freq0=1e14,
                     fwidth=1e12,
@@ -68,93 +69,7 @@ def test_sim_full():
         subpixel=False,
     )
 
-def test_negative_sizes():
-
-    # negative in size kwargs errors
-    for size in (-1, 1, 1), (1, -1, 1), (1, 1, -1):
-        with pytest.raises(pydantic.ValidationError) as e_info:
-            a = Box(size=size, center=(0, 0, 0))
-        with pytest.raises(pydantic.ValidationError) as e_info:        
-            s = Simulation(size=size, grid_size=1.0)
-        with pytest.raises(pydantic.ValidationError) as e_info:
-            s = Simulation(size=(1,1,1), grid_size=size)
-
-    # negative grid sizes error?
-    with pytest.raises(pydantic.ValidationError) as e_info:
-        s = Simulation(size=(1,1,1), grid_size=-1.0)
-
-def test_grid_size_def():
-
-    size = (1,1,1)
-    s = Simulation(size=size, grid_size=1.0)
-    s = Simulation(size=size, grid_size=(1.0, 1.0, 1.0))
-    s = Simulation(size=size, grid_size=((1.0, 2.0), 1.0, 1.0))
-    s = Simulation(size=size, grid_size=(1.0, (1.0, 2.0), 1.0))
-    s = Simulation(size=size, grid_size=(1.0, 1.0, (1.0, 2.0)))
-    s = Simulation(size=size, grid_size=(1.0, (1.0, 2.0), (1.0, 2.0)))
-    s = Simulation(size=size, grid_size=((1.0, 2.0), 1.0, (1.0, 2.0)))
-    s = Simulation(size=size, grid_size=((1.0, 2.0), (1.0, 2.0), 1.0))
-    s = Simulation(size=size, grid_size=((1.0, 2.0), (1.0, 2.0), (1.0, 2.0)))
-
-def test_medium():
-
-    # mediums error with unacceptable values
-    with pytest.raises(pydantic.ValidationError) as e_info:
-        m = Medium(permittivity=0.0)
-    with pytest.raises(pydantic.ValidationError) as e_info:
-        m = Medium(conductivity=-1.0)
-
-def test_medium_conversions():
-    n = 4.0
-    k = 1.0
-    freq = 3.0
-
-    # test medium creation
-    medium = nk_to_medium(n, k, freq)
-
-    # test consistency
-    eps_z = nk_to_eps_complex(n, k)
-    eps, sig = nk_to_eps_sigma(n, k, freq)
-    _eps_z = eps_sigma_to_eps_complex(eps, sig, freq)
-    assert np.isclose(eps_z, _eps_z)
-
-def test_dispersion_models():
-
-    # construct media
-    m_PR = PoleResidue(eps_inf=1.0, poles=[((1,2),(1,3)), ((2,4),(1,5))])
-    m_SM = Sellmeier(coeffs=[(2,3), (2,4)])
-    m_LZ = Lorentz(eps_inf=1.0, coeffs=[(1,3,2), (2,4,1)])
-    m_DB = Debye(eps_inf=1.0, coeffs=[(1,3), (2,4)])
-
-    freqs = np.linspace(0.01, 1, 1001)
-    for medium in [m_PR, m_SM, m_LZ, m_DB]:
-        eps_c = medium.eps_model(freqs)
-
-def test_geometry():
-    b = Box(size=(1,1,1), center=(0,0,0))
-    s = Sphere(radius=1, center=(0,0,0))
-    s = Cylinder(radius=1, center=(0,0,0), axis=1, length=1)
-    s = PolySlab(vertices=((1, 2), (3, 4), (5, 4)), slab_bounds=(-1, 1), axis=1)
-
-    # make sure wrong axis arguments error
-    with pytest.raises(pydantic.ValidationError) as e_info:
-        s = Cylinder(radius=1, center=(0,0,0), axis=-1, length=1)
-    with pytest.raises(pydantic.ValidationError) as e_info:
-        s = PolySlab(radius=1, center=(0,0,0), axis=-1, slab_bounds=1)
-    with pytest.raises(pydantic.ValidationError) as e_info:
-        s = Cylinder(radius=1, center=(0,0,0), axis=3, length=1)
-    with pytest.raises(pydantic.ValidationError) as e_info:
-        s = PolySlab(radius=1, center=(0,0,0), axis=3, slab_bounds=1)
-
-    # make sure negative values error
-    with pytest.raises(pydantic.ValidationError) as e_info:
-        s = Sphere(radius=-1, center=(0,0,0))        
-    with pytest.raises(pydantic.ValidationError) as e_info:
-        s = Cylinder(radius=-1, center=(0,0,0), axis=3, length=1)
-    with pytest.raises(pydantic.ValidationError) as e_info:
-        s = Cylinder(radius=1, center=(0,0,0), axis=3, length=-1)
-
-def test_bounds():
+def test_sim_bounds():
 
     # make sure all things are shifted to this central location
     CENTER_SHIFT = (-1., 1., 100.)
@@ -200,23 +115,135 @@ def test_bounds():
             with pytest.raises(AssertionError) as e_info:
                 place_box(tuple(center))
 
+def test_sim_grid_size():
+
+    size = (1,1,1)
+    s = Simulation(size=size, grid_size=1.0)
+    s = Simulation(size=size, grid_size=(1.0, 1.0, 1.0))
+    s = Simulation(size=size, grid_size=((1.0, 2.0), 1.0, 1.0))
+    s = Simulation(size=size, grid_size=(1.0, (1.0, 2.0), 1.0))
+    s = Simulation(size=size, grid_size=(1.0, 1.0, (1.0, 2.0)))
+    s = Simulation(size=size, grid_size=(1.0, (1.0, 2.0), (1.0, 2.0)))
+    s = Simulation(size=size, grid_size=((1.0, 2.0), 1.0, (1.0, 2.0)))
+    s = Simulation(size=size, grid_size=((1.0, 2.0), (1.0, 2.0), 1.0))
+    s = Simulation(size=size, grid_size=((1.0, 2.0), (1.0, 2.0), (1.0, 2.0)))
+
+""" geometry """
+
+def test_geometry():
+
+    b = Box(size=(1,1,1), center=(0,0,0))
+    s = Sphere(radius=1, center=(0,0,0))
+    s = Cylinder(radius=1, center=(0,0,0), axis=1, length=1)
+    s = PolySlab(vertices=((1, 2), (3, 4), (5, 4)), slab_bounds=(-1, 1), axis=1)
+
+    # make sure wrong axis arguments error
+    with pytest.raises(pydantic.ValidationError) as e_info:
+        s = Cylinder(radius=1, center=(0,0,0), axis=-1, length=1)
+    with pytest.raises(pydantic.ValidationError) as e_info:
+        s = PolySlab(radius=1, center=(0,0,0), axis=-1, slab_bounds=1)
+    with pytest.raises(pydantic.ValidationError) as e_info:
+        s = Cylinder(radius=1, center=(0,0,0), axis=3, length=1)
+    with pytest.raises(pydantic.ValidationError) as e_info:
+        s = PolySlab(radius=1, center=(0,0,0), axis=3, slab_bounds=1)
+
+    # make sure negative values error
+    with pytest.raises(pydantic.ValidationError) as e_info:
+        s = Sphere(radius=-1, center=(0,0,0))        
+    with pytest.raises(pydantic.ValidationError) as e_info:
+        s = Cylinder(radius=-1, center=(0,0,0), axis=3, length=1)
+    with pytest.raises(pydantic.ValidationError) as e_info:
+        s = Cylinder(radius=1, center=(0,0,0), axis=3, length=-1)
+
+def test_geometry_sizes():
+
+    # negative in size kwargs errors
+    for size in (-1, 1, 1), (1, -1, 1), (1, 1, -1):
+        with pytest.raises(pydantic.ValidationError) as e_info:
+            a = Box(size=size, center=(0, 0, 0))
+        with pytest.raises(pydantic.ValidationError) as e_info:        
+            s = Simulation(size=size, grid_size=1.0)
+        with pytest.raises(pydantic.ValidationError) as e_info:
+            s = Simulation(size=(1,1,1), grid_size=size)
+
+    # negative grid sizes error?
+    with pytest.raises(pydantic.ValidationError) as e_info:
+        s = Simulation(size=(1,1,1), grid_size=-1.0)
+
+""" medium """
+
+def test_medium():
+
+    # mediums error with unacceptable values
+    with pytest.raises(pydantic.ValidationError) as e_info:
+        m = Medium(permittivity=0.0)
+    with pytest.raises(pydantic.ValidationError) as e_info:
+        m = Medium(conductivity=-1.0)
+
+def test_medium_conversions():
+    n = 4.0
+    k = 1.0
+    freq = 3.0
+
+    # test medium creation
+    medium = nk_to_medium(n, k, freq)
+
+    # test consistency
+    eps_z = nk_to_eps_complex(n, k)
+    eps, sig = nk_to_eps_sigma(n, k, freq)
+    _eps_z = eps_sigma_to_eps_complex(eps, sig, freq)
+    assert np.isclose(eps_z, _eps_z)
+
+def test_medium_dispersion():
+
+    # construct media
+    m_PR = PoleResidue(eps_inf=1.0, poles=[((1,2),(1,3)), ((2,4),(1,5))])
+    m_SM = Sellmeier(coeffs=[(2,3), (2,4)])
+    m_LZ = Lorentz(eps_inf=1.0, coeffs=[(1,3,2), (2,4,1)])
+    m_DB = Debye(eps_inf=1.0, coeffs=[(1,3), (2,4)])
+
+    freqs = np.linspace(0.01, 1, 1001)
+    for medium in [m_PR, m_SM, m_LZ, m_DB]:
+        eps_c = medium.eps_model(freqs)
+
+""" sources """
+
 def test_source():
+
+    g = GaussianPulse(freq0=1, fwidth=0.1)
+
+    # test we can make generic source
+    s = Source(size=(1,1,1), source_time=g, polarization='Jz')
+
+def test_source_times():
 
     # test we can make gaussian pulse
     g = GaussianPulse(freq0=1, fwidth=0.1)
     ts = np.linspace(0, 30, 1001)
     g.amp_time(ts)
 
-    # test we can make generic source
-    s = Source(geometry=Box(size=(1,1,1)), source_time=g, polarization=(1,1,1))
+    # test we can make cq pulse
+    c = CW(freq0=1, fwidth=0.1)
+    ts = np.linspace(0, 30, 1001)
+    c.amp_time(ts)
+
+def test_source_directional():
+    g = GaussianPulse(freq0=1, fwidth=0.1)
 
     # test we can make planewave
-    s = PlaneWave(geometry=Box(size=(0,1,1)), source_time=g, polarization=(1,1,1), direction='+')
+    s = PlaneWave(size=(0,1,1), source_time=g, polarization='Jz', direction='+')
 
     # test that non-planar geometry crashes plane wave
     with pytest.raises(pydantic.ValidationError) as e_info:
-        s = PlaneWave(geometry=Box(size=(1,1,1)), source_time=g, polarization=(1,1,1), direction='+')
+        s = PlaneWave(size=(1,1,1), source_time=g, polarization='Jz', direction='+')
 
+    # test that non-planar geometry crashes plane wave
+    with pytest.raises(pydantic.ValidationError) as e_info:
+        s = PlaneWave(size=(1,1,0), source_time=g, polarization='Jz', direction='+')
 
-if __name__ == '__main__':
-    test_run()
+def test_source_modal():
+    g = GaussianPulse(freq0=1, fwidth=0.1)
+    mode = Mode(mode_index=0)
+    m = ModeSource(size=(0, 1, 1), direction='+', source_time=g, mode=mode)
+
+""" monitors """

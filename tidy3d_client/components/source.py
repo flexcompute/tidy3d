@@ -3,9 +3,11 @@ import numpy as np
 from abc import ABC, abstractmethod
 
 from .base import Tidy3dBaseModel
-from .types import Tuple, Literal
-from .validators import ensure_greater_or_equal, assert_plane
+from .types import Tuple, Direction, Polarization
+from .validators import ensure_greater_or_equal, assert_plane, assert_has_one_zero
 from .geometry import GeometryObject, Box
+from .constants import inf
+from .mode import Mode
 
 # def dft(amp_time, time, freq):
 #     freq = np.array(freq)[None, :]
@@ -14,6 +16,8 @@ from .geometry import GeometryObject, Box
 #     phases = 2j * np.pi * freq * time
 #     spectrum = np.sum(amp_time * np.exp(phases), axis=0)
 #     return dt / np.sqrt(2 * np.pi) * spectrum
+
+""" Source Times define the time dependence of the source """
 
 class SourceTime(ABC, Tidy3dBaseModel):
     """Base class describing the time dependence of a source"""
@@ -26,19 +30,20 @@ class SourceTime(ABC, Tidy3dBaseModel):
         """ complex amplitude as a function of time """
         pass
 
-class GaussianPulse(SourceTime):
-    """A gaussian pulse time dependence"""
+class Pulse(SourceTime, ABC):
+    """ Source ramps up and ramps down """
 
     freq0: pydantic.PositiveFloat
     fwidth: pydantic.PositiveFloat
     offset: pydantic.NonNegativeFloat = 5.0
-
     _validate_offset = ensure_greater_or_equal("offset", 2.5)
+
+class GaussianPulse(Pulse):
+    """A gaussian pulse time dependence"""
 
     def amp_time(self, time):
         twidth = 1.0 / (2 * np.pi * self.fwidth)
         omega0 = 2 * np.pi * self.freq0
-
         time_shifted = time - self.offset * twidth
 
         const = (1j + time_shifted / twidth**2 / omega0)
@@ -48,18 +53,69 @@ class GaussianPulse(SourceTime):
 
         return const * offset * oscillation * amp
 
+class CW(Pulse):
+    """ ramping up and holding steady """
 
-class Source(GeometryObject):
-    """Defines electric and magnetic currents that produce electromagnetic field"""
+    def amp_time(self, time):
+        twidth = 1.0 / (2 * np.pi * self.fwidth)
+        omega0 = 2 * np.pi * self.freq0
+        time_shifted = time - self.offset * twidth
 
-    geometry: Box
+        const = 1.0
+        offset = np.exp(1j * self.phase)
+        oscillation = np.exp(-1j * omega0 * time)
+        amp = 1 / (1 + np.exp(-time_shifted/twidth))
+
+        return const * offset * oscillation * amp
+
+
+""" Source objects """
+
+class AbstractSource(Box, ABC):
+    """ Template for all sources, all have Box geometry """
+
     source_time: SourceTime
-    polarization: Tuple[float, float, float]
 
-class PlaneWave(Source):
-    """Defines Plane Wave Source """
+class Source(AbstractSource):
+    """ Volume Source with time dependence and polarization """
 
-    direction: Literal["+", "-"] 
+    polarization: Polarization
 
-    _pw_validator = assert_plane(field_name="geometry")
+class ModeSource(AbstractSource):
+    """ Modal profile on finite extent plane """
+
+    direction: Direction
+    mode: Mode
+    _plane_validator = assert_has_one_zero(field_name='size')
+
+class DirectionalSource(AbstractSource, ABC):
+    """ A Planar Source with uni-directional propagation """
+
+    direction: Direction
+    polarization: Polarization
+    _plane_validator = assert_has_one_zero(field_name='size')
+
+    @pydantic.root_validator()
+    def polarization_is_orthogonal(cls, values):
+        """ ensure we dont allow a polarization parallel to the propagation direction """
+        size = values.get('size')
+        polarization = values.get('polarization')
+        assert size is not None
+        assert polarization is not None
+
+        normal_axis_index = size.index(0.0)
+        normal_axis = 'xyz'[normal_axis_index]
+        polarization_axis = polarization[-1]
+        assert normal_axis != polarization_axis, f"Directional source '{cls.__name__}' can not have polarization component ({polarization_axis}) parallel to plane's normal direction ({normal_axis})"
+        return values
+
+class PlaneWave(DirectionalSource):
+    """ uniform distribution on infinite extent plane """
+    pass
+
+class GaussianBeam(DirectionalSource):
+    """ guassian distribution on finite extent plane """
+
+    sigma_plane = Tuple[pydantic.NonNegativeFloat, pydantic.NonNegativeFloat]
+
 
