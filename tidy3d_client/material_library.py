@@ -1,4 +1,4 @@
-from components.medium import PoleResidue
+from .components.medium import PoleResidue
 
 
 """ guide to material library
