@@ -9,6 +9,9 @@ except ImportError:
 
 """ Defines 'types' that various fields can be """
 
+# 'complex number'
+Complex = Tuple[float, float]
+
 # tuple containing three non-negative floats
 Size = Tuple[
     pydantic.NonNegativeFloat, pydantic.NonNegativeFloat, pydantic.NonNegativeFloat
@@ -26,3 +29,6 @@ GridSize = Union[pydantic.PositiveFloat, Tuple[pydantic.PositiveFloat, ...]]
 
 # axis type
 Axis = Literal[0, 1, 2]
+
+# pole-residue poles (each pole has two complex numbers)
+PoleResidue = Tuple[Complex, Complex]

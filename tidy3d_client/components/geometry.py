@@ -82,6 +82,8 @@ class PolySlab(Geometry):
     vertices: List[Coordinate2D]
     slab_bounds: Tuple[float, float]
     axis: Axis = 2
+    sidewall_angle_rad: float = 0  # note, not supported yet
+    dilation: float = 0            # note, not supported yet
 
     def _get_bounds(self):
 
@@ -101,3 +103,4 @@ class PolySlab(Geometry):
         coord_max.insert(self.axis, zmax)
 
         return (tuple(coord_min), tuple(coord_max))
+
