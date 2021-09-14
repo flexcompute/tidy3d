@@ -12,3 +12,4 @@ class Tidy3dBaseModel(pydantic.BaseModel):
             'value_error.extra': "extra kwarg supplied"
         }
         schema_extra = {}                # can use to add fields to schema (task_id? path to schema?)
+        arbitrary_types_allowed = True
