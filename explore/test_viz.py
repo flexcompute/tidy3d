@@ -1,5 +1,5 @@
 import numpy as np
-import plotly.graph_objects as go
+# import plotly.graph_objects as go
 
 import sys
 sys.path.append('../')
@@ -55,7 +55,7 @@ def _test_polyslab_plot():
     fig.show()
 
 
-def test_sim_plot():
+def _test_sim_plot():
 
     sim = Simulation(
         geometry=Box(

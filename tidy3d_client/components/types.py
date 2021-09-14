@@ -32,3 +32,7 @@ Axis = Literal[0, 1, 2]
 
 # pole-residue poles (each pole has two complex numbers)
 PoleResidue = Tuple[Complex, Complex]
+
+# sources
+Polarization = Literal['Jx', 'Jy', 'Jz', 'Mx', 'My', 'Mz']
+Direction = Literal['+', '-']
