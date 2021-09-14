@@ -35,6 +35,7 @@ def eps_sigma_to_eps_complex(eps_real, sigma, freq):
 """ Medium Definitions """
 
 class AbstractMedium(ABC, Tidy3dBaseModel):
+    """Defines properties of a medium within which electromagnetic waves propagate"""
     
     @abstractmethod
     def eps_model(self, frequency: float) -> complex:
@@ -44,7 +45,7 @@ class AbstractMedium(ABC, Tidy3dBaseModel):
 """ Dispersionless Medium """
 
 class Medium(AbstractMedium):
-    """Defines properties of a medium where electromagnetic waves propagate"""
+    """ Dispersionless Medium """
 
     permittivity: float = 1.0
     conductivity: float = 0.0
@@ -58,6 +59,7 @@ class Medium(AbstractMedium):
 """ Dispersive Media """
 
 class DispersiveMedium(AbstractMedium):
+    """ A Medium with dispersion (propagation characteristics depend on frequency) """
     pass
 
 class PoleResidue(DispersiveMedium):
@@ -74,7 +76,7 @@ class PoleResidue(DispersiveMedium):
             a = ar + 1j*ai
             c = cr + 1j*ci
             a_cc = np.conj(a)
-            c_cc = np.conj(a)
+            c_cc = np.conj(c)
             eps -= c / (1j * omega + a)
             eps -= c_cc / (1j * omega + a_cc)
         return eps
