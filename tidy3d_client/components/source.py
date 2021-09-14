@@ -3,7 +3,7 @@ import numpy as np
 from abc import ABC, abstractmethod
 
 from .base import Tidy3dBaseModel
-from .types import Tuple, Direction, Polarization
+from .types import Tuple, List, Direction, Polarization
 from .validators import ensure_greater_or_equal, assert_plane, assert_has_one_zero
 from .geometry import GeometryObject, Box
 from .constants import inf
@@ -81,6 +81,20 @@ class Source(AbstractSource):
 
     polarization: Polarization
 
+class DataSource(AbstractSource):
+
+    data: np.ndarray
+
+    @pydantic.validator("data")
+    def is_right_shape(cls, val, values):
+        data_shape = val.shape
+        dims_data = len(data_shape)
+        source_size = values.get("size")
+        assert source_size is not None
+        dims_box = 3 - source_size.count(0.0)
+        assert dims_data == dims_box, f"data must have one axis per non-zero shape of Source, data.shape={data_shape}, source.size={source_size}"
+        return val
+
 class ModeSource(AbstractSource):
     """ Modal profile on finite extent plane """
 
@@ -117,5 +131,4 @@ class GaussianBeam(DirectionalSource):
     """ guassian distribution on finite extent plane """
 
     sigma_plane = Tuple[pydantic.NonNegativeFloat, pydantic.NonNegativeFloat]
-
 
