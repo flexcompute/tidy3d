@@ -37,9 +37,12 @@ def eps_sigma_to_eps_complex(eps_real, sigma, freq):
 class AbstractMedium(ABC, Tidy3dBaseModel):
     """Defines properties of a medium within which electromagnetic waves propagate"""
     
+    # frequencies within which the medium is valid
+    frequency_range: Tuple[float, float] = (-np.inf, np.inf)
+
     @abstractmethod
     def eps_model(self, frequency: float) -> complex:
-        """ return complex permittivity at frequency """
+        """ complex permittivity as a function of frequency """
         pass
 
 """ Dispersionless Medium """
