@@ -8,8 +8,8 @@
 ---
 - [ ] Decide on schema for all fields in tidy3d public (1 week)
 	- [x] Simulation
-	- [ ] Geometry
-	- [ ] Medium
+	- [x] Geometry
+	- [x] Medium
 	- [ ] Structure
 	- [ ] Source
 	- [ ] Monitor
