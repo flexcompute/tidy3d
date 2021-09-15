@@ -4,7 +4,7 @@ import numpy as np
 import sys
 sys.path.append('./')
 
-from tidy3d_client.material_library import material_library
+from tidy3d.material_library import material_library
 
 def test_library():
     """ for each member of material library, ensure that it evaluates eps_model correctly """
