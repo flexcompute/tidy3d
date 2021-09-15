@@ -4,7 +4,7 @@ import numpy as np
 import sys
 sys.path.append('./')
 
-from tidy3d_client import *
+from tidy3d import *
 
 
 def test_sim():
