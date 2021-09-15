@@ -32,12 +32,6 @@ class Geometry(ABC, Tidy3dBaseModel):
         # for intersection of bounds, both must be true
         return in_minus and in_plus
 
-
-class GeometryObject(ABC, Tidy3dBaseModel):
-    """ signifies an object containing a geometry, (such as structure, source, monitor) """
-
-    geometry: Geometry = None
-
 """ geometry subclasses """
 
 class Box(Geometry):
