@@ -6,7 +6,6 @@ sys.path.append('./')
 
 from tidy3d_client import *
 
-""" ==== Example simulation instance ==== """
 
 def test_sim():
     sim = Simulation(
@@ -51,8 +50,8 @@ def test_sim():
             )
         },
         monitors={
-            "point": FreqMonitor(size=(0, 0, 0), center=(0, 1, 0), freqs=[1,2,3]),
-            "plane": TimeMonitor(size=(1, 1, 0), center=(0, 0, 0)),
+            "point": FieldMonitor(size=(0,0,0), center=(0,0,0), sampler=FreqSampler(freqs=[1,2])),
+            "plane": FluxMonitor(size=(1,1,0), center=(0,0,0), sampler=TimeSampler(times=[1,2]))
         },
         symmetry=(0, -1, 1),
         pml_layers=(
@@ -229,38 +228,61 @@ def test_source_directional():
     # test we can make planewave
     s = PlaneWave(size=(0,1,1), source_time=g, polarization='Jz', direction='+')
 
+    # test we can make planewave
+    s = GaussianBeam(size=(0,1,1), source_time=g, polarization='Jz', direction='+', waist_size=(1., 2.))
+
     # test that non-planar geometry crashes plane wave
     with pytest.raises(pydantic.ValidationError) as e_info:
         s = PlaneWave(size=(1,1,1), source_time=g, polarization='Jz', direction='+')
 
-    # test that non-planar geometry crashes plane wave
+    # test that non-planar geometry crashes plane wave and gaussian beam
     with pytest.raises(pydantic.ValidationError) as e_info:
         s = PlaneWave(size=(1,1,0), source_time=g, polarization='Jz', direction='+')
+    with pytest.raises(pydantic.ValidationError) as e_info:
+        s = GaussianBeam(size=(1,1,1), source_time=g, polarization='Jz', direction='+', waist_size=(1., 2.))
 
 def test_source_modal():
     g = GaussianPulse(freq0=1, fwidth=0.1)
     mode = Mode(mode_index=0)
     m = ModeSource(size=(0, 1, 1), direction='+', source_time=g, mode=mode)
 
-def test_source_data():
-    g = GaussianPulse(freq0=1, fwidth=0.1)
-    d = np.random.random((5, 5))
-    ds = DataSource(size=(1, 0, 1), source_time=g, data=d)
+# def test_source_data():
+#     g = GaussianPulse(freq0=1, fwidth=0.1)
+#     d = np.random.random((5, 5))
+#     ds = DataSource(size=(1, 0, 1), source_time=g, data=d)
 
 def test_monitor():
-    m = FreqMonitor(size=(1,2,3), center=(1,0,0), freqs=[1., 2., 3.], store=('E', 'H'))
-    m = TimeMonitor(size=(1,2,3), center=(1,0,0), t_start=1.0, t_step=2, t_stop=5, store=('E', 'H'))
-    with pytest.raises(pydantic.ValidationError) as e_info:
-        m = TimeMonitor(size=(1,2,3), center=(1,0,0), t_start=1.0, t_step=2, t_stop=-5, store=('E', 'H'))
-    with pytest.raises(pydantic.ValidationError) as e_info:
-        m = TimeMonitor(size=(1,2,3), center=(1,0,0), t_start=2.0, t_step=2, t_stop=1, store=('E', 'H'))
-    mode = Mode(mode_index=1)
-    m = ModeMonitor(size=(1,1,0), freqs=[1,2,3], modes=[mode, mode])
-    with pytest.raises(pydantic.ValidationError) as e_info:
-        m = ModeMonitor(size=(0,0,0), freqs=[1,2,3], modes=[mode, mode])
-    with pytest.raises(pydantic.ValidationError) as e_info:
-        m = ModeMonitor(size=(1,0,0), freqs=[1,2,3], modes=[mode, mode])
-    with pytest.raises(pydantic.ValidationError) as e_info:
-        m = ModeMonitor(size=(1,1,1), freqs=[1,2,3], modes=[mode, mode])
+    freq_sampler = FreqSampler(freqs=[1,2,3])
+    time_sampler = TimeSampler(times=[1,2,3])
+    size = (1,2,3)
+    center = (1,2,3)
+
+    m = FieldMonitor(size=size, center=center, sampler=freq_sampler)
+
+def test_monitor_sampler():
+
+    freq_sampler = FreqSampler(freqs=[1,2,3])
+    time_sampler = TimeSampler(times=[1,2,3])
+
+    time_sampler = uniform_time_sampler(0, 10, 1)
+    freq_sampler = uniform_freq_sampler(1.0, 2.0, 10)
+
+    for M in (FieldMonitor, FluxMonitor):
+        for s in (time_sampler, freq_sampler):
+            M(size=(1,0,1), sampler=s)
+    ModeMonitor(size=(1,0,1), sampler=freq_sampler, modes=[])
+
+def test_monitor_plane():
+
+    freq_sampler = FreqSampler(freqs=[1,2,3])
+    time_sampler = TimeSampler(times=[1,2,3])
+
+    # make sure flux and mode monitors fail with non planar geometries
+    for s in (time_sampler, freq_sampler):
+        for size in ((0,0,0), (1,0,0), (1,1,1)):
+            with pytest.raises(pydantic.ValidationError) as e_info:
+                ModeMonitor(size=size, sampler=s, modes=[])
+            with pytest.raises(pydantic.ValidationError) as e_info:
+                FluxMonitor(size=size, sampler=s, modes=[])
 
 """ monitors """
