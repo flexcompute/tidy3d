@@ -1,8 +1,9 @@
 from .base import Tidy3dBaseModel
-from .geometry import GeometryObject
+from .geometry import Geometry
 from .medium import Medium
 
-class Structure(GeometryObject):
+class Structure(Tidy3dBaseModel):
     """An object that interacts with the electromagnetic fields"""
 
+    geometry: Geometry
     medium: Medium

@@ -5,7 +5,7 @@ from abc import ABC, abstractmethod
 from .base import Tidy3dBaseModel
 from .types import Tuple, List, Direction, Polarization
 from .validators import ensure_greater_or_equal, assert_plane
-from .geometry import GeometryObject, Box
+from .geometry import Box
 from .constants import inf
 from .mode import Mode
 

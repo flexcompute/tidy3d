@@ -5,7 +5,7 @@ from abc import ABC
 
 from .base import Tidy3dBaseModel
 from .types import List, Union
-from .geometry import GeometryObject, Box
+from .geometry import Box
 from .validators import assert_plane
 from .mode import Mode
 
