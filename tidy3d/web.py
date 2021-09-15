@@ -29,21 +29,23 @@ def _clear(json_fname: str = 'simulation.json'):
     except:
         pass
 
-class fake_sim:
+class FakeSimulation:
     def asdict(self):
         return {'a':1, 'b':2}
-FAKE_SIM = fake_sim()
+FAKE_SIM = FakeSimulation()
 
 """ utilities """
 
 def _write_json(data_dict: dict, fname: str) -> None:
+    """ write dictionary to json file"""
     with open(fname, "w") as fp:
         json.dump(data_dict, fp)
 
 def _join_paths(*paths: str) -> str:
+    """ join path strings in a nice way """
     return os.path.join(*paths)
 
-# from .compoments import Simulation
+from tidy3d import Simulation
 
 def save_schema(fname_schema: str = "schema.json") -> None:
     """saves simulation object schema to json"""
