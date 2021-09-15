@@ -36,6 +36,3 @@ PoleResidue = Tuple[Complex, Complex]
 # sources
 Polarization = Literal['Jx', 'Jy', 'Jz', 'Mx', 'My', 'Mz']
 Direction = Literal['+', '-']
-
-# monitors
-FieldStore = Literal['E', 'H', 'S', 'flux']

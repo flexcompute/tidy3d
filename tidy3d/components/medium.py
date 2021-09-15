@@ -4,7 +4,7 @@ from abc import ABC, abstractmethod
 from .base import Tidy3dBaseModel
 from .validators import ensure_greater_or_equal
 from .types import List, Tuple, PoleResidue
-from .constants import C_0
+from .constants import C_0, inf
 
 """ conversion helpers """
 
@@ -35,10 +35,10 @@ def eps_sigma_to_eps_complex(eps_real, sigma, freq):
 """ Medium Definitions """
 
 class AbstractMedium(ABC, Tidy3dBaseModel):
-    """Defines properties of a medium within which electromagnetic waves propagate"""
+    """A medium within which electromagnetic waves propagate"""
     
     # frequencies within which the medium is valid
-    frequency_range: Tuple[float, float] = (-np.inf, np.inf)
+    frequency_range: Tuple[float, float] = (-inf, inf)
 
     @abstractmethod
     def eps_model(self, frequency: float) -> complex:
@@ -48,7 +48,7 @@ class AbstractMedium(ABC, Tidy3dBaseModel):
 """ Dispersionless Medium """
 
 class Medium(AbstractMedium):
-    """ Dispersionless Medium """
+    """ Dispersionless medium"""
 
     permittivity: float = 1.0
     conductivity: float = 0.0
@@ -85,7 +85,8 @@ class PoleResidue(DispersiveMedium):
         return eps
 
 class Sellmeier(DispersiveMedium):
-    
+    """ Sellmeier model for dispersion"""
+
     coeffs: List[Tuple[float, float]]
 
     def _n_model(self, frequency):
@@ -101,6 +102,7 @@ class Sellmeier(DispersiveMedium):
         return nk_to_eps_complex(n)
 
 class Lorentz(DispersiveMedium):
+    """ Lorentz model for dispersion"""
     
     eps_inf: float = 1.0
     coeffs: List[Tuple[float, float, float]]
@@ -112,6 +114,8 @@ class Lorentz(DispersiveMedium):
         return eps
 
 class Debye(DispersiveMedium):
+    """ Debye model for dispersion"""
+
     eps_inf: float = 1.0
     coeffs: List[Tuple[float, float]]
 
@@ -121,6 +125,6 @@ class Debye(DispersiveMedium):
             eps += de / (1 + 1j*frequency*tau)
         return eps
 
-class Drude(DispersiveMedium):
-    """ need to do """
-    pass
+# class Drude(DispersiveMedium):
+#     """ need to do """
+#     pass
