@@ -81,20 +81,6 @@ class Source(AbstractSource):
 
     polarization: Polarization
 
-class DataSource(AbstractSource):
-
-    data: np.ndarray
-
-    @pydantic.validator("data")
-    def is_right_shape(cls, val, values):
-        data_shape = val.shape
-        dims_data = len(data_shape)
-        source_size = values.get("size")
-        assert source_size is not None
-        dims_box = 3 - source_size.count(0.0)
-        assert dims_data == dims_box, f"data must have one axis per non-zero shape of Source, data.shape={data_shape}, source.size={source_size}"
-        return val
-
 class ModeSource(AbstractSource):
     """ Modal profile on finite extent plane """
 
@@ -109,7 +95,7 @@ class DirectionalSource(AbstractSource, ABC):
     polarization: Polarization
     _plane_validator = assert_plane()
 
-    @pydantic.root_validator()
+    @pydantic.root_validator(allow_reuse=True)
     def polarization_is_orthogonal(cls, values):
         """ ensure we dont allow a polarization parallel to the propagation direction """
         size = values.get('size')
@@ -130,5 +116,20 @@ class PlaneWave(DirectionalSource):
 class GaussianBeam(DirectionalSource):
     """ guassian distribution on finite extent plane """
 
-    sigma_plane = Tuple[pydantic.NonNegativeFloat, pydantic.NonNegativeFloat]
+    waist_size: Tuple[pydantic.NonNegativeFloat, pydantic.NonNegativeFloat]
 
+
+# class DataSource(AbstractSource):
+#     """ user specified J(r) data on source surface """
+
+#     data: np.ndarray
+
+#     @pydantic.validator("data")
+#     def is_right_shape(cls, val, values):
+#         data_shape = val.shape
+#         dims_data = len(data_shape)
+#         source_size = values.get("size")
+#         assert source_size is not None
+#         dims_box = 3 - source_size.count(0.0)
+#         assert dims_data == dims_box, f"data must have one axis per non-zero shape of Source, data.shape={data_shape}, source.size={source_size}"
+#         return val

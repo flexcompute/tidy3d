@@ -9,33 +9,43 @@ from .geometry import GeometryObject, Box
 from .validators import assert_plane
 from .mode import Mode
 
-""" Domains """
+""" Convenience functions for creating uniformly spaced samplers """
 
-class Domain(Tidy3dBaseModel, ABC):
-    """ specifies how the data is stored, whether in time or frequency domain """
+def _uniform_arange(start, stop, step):
+    assert start <= stop, "start must not be greater than stop"
+    return list(np.arange(start, stop, step))
+
+def _uniform_linspace(start, stop, num):
+    assert start <= stop, "start must not be greater than stop"
+    return list(np.linspace(start, stop, num))
+
+def uniform_time_sampler(t_start, t_stop, t_step=1):
+    """ create TimeSampler at evenly spaced time steps """
+    assert isinstance(t_start, int), "`t_start` must be integer for time sampler"
+    assert isinstance(t_stop, int), "`t_stop` must be integer for time sampler"
+    assert isinstance(t_step, int), "`t_step` must be integer for time sampler"
+
+    times = _uniform_arange(t_start, t_stop, t_step)
+    return TimeSampler(times=times)
+
+def uniform_freq_sampler(f_start, f_stop, N_freqs):
+    """ create FreqSampler at evenly spaced frequency points """
+    freqs = _uniform_linspace(f_start, f_stop, N_freqs)
+    return FreqSampler(freqs=freqs)    
+
+""" Samplers """
+
+class Sampler(Tidy3dBaseModel, ABC):
+    """ specifies how the data is sampled as the simulation is run """
     pass
 
-class TimeDomain(Domain):
-    """ specifies how often data is sampled in time domain """
+class TimeSampler(Sampler):
+    """ specifies at what time steps the data is measured """
+    times: List[pydantic.NonNegativeInt]
 
-    t_start: pydantic.NonNegativeFloat = 0
-    t_stop: pydantic.NonNegativeFloat = None
-    t_step: pydantic.PositiveInt = 1
-
-    @pydantic.root_validator(allow_reuse=True)
-    def stop_gt_start(cls, values):
-        """ make sure stop time is greater than start time """
-        t_stop = values.get('t_stop')
-        t_start = values.get('t_start')
-        assert t_start is not None
-        if t_stop is not None:
-            assert t_stop > t_start, f'`t_stop` (given {t_stop}) must be greater than `t_start` (given {t_start})'
-        return values
-
-class FreqDomain(Domain):
-    """ specifies at what frequencies data is stored """
+class FreqSampler(Sampler):
+    """ specifies at what frequencies the data is measured using running DFT """
     freqs: List[pydantic.NonNegativeFloat]
-
 
 """ Monitors """
 
@@ -45,15 +55,15 @@ class Monitor(Box, ABC):
 
 class FieldMonitor(Monitor):
     """ stores E, H data on the monitor """
-    domain: Domain
+    sampler: Sampler
 
 class FluxMonitor(Monitor):
     """ Stores flux on a surface """
-    domain: Domain
+    sampler: Sampler
     _plane_validator = assert_plane()
 
 class ModeMonitor(Monitor):
     """ stores amplitudes associated with modes """
-    domain: FreqDomain
+    sampler: FreqSampler
     modes: List[Mode]
     _plane_validator = assert_plane()
