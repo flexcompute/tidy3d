@@ -6,15 +6,15 @@
 
 - [x] Organize repo in basic structure we want moving forward (.5 days)
 ---
-- [ ] Decide on schema for all fields in tidy3d public (1 week)
+- [x] Decide on schema for all fields in tidy3d public (1 week)
 	- [x] Simulation
 	- [x] Geometry
 	- [x] Medium
 	- [x] MaterialLibrary
-	- [ ] Structure
+	- [x] Structure
 	- [x] Source
 	- [x] Monitor
-	- [ ] Mode
+	- [x] Mode
 - [ ] Write documentation explaining all components / design choices.
 ---
 - [ ] Write boilerplate for all plugins / packages (1 week)
