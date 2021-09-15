@@ -12,8 +12,8 @@
 	- [x] Medium
 	- [x] MaterialLibrary
 	- [ ] Structure
-	- [ ] Source
-	- [ ] Monitor
+	- [x] Source
+	- [x] Monitor
 - [ ] Write documentation explaining all components / design choices.
 ---
 - [ ] Write boilerplate for all plugins / packages (1 week)
