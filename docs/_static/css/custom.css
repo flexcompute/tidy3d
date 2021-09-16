@@ -1,0 +1,8 @@
+
+.wy-side-nav-search { background-color: #b5445b; }
+.wy-nav-top { background-color: #666666; }
+.wy-menu > .caption > span.caption-text { color: #b5445b; }
+
+.wy-nav-content { max-width: 900px !important; }
+.wy-table-responsive table td { white-space: normal !important; }
+.wy-table-responsive { overflow: visible !important; }

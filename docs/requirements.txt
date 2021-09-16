@@ -1,0 +1,4 @@
+sphinx_rtd_theme
+nbsphinx
+ipython
+autodoc_pydantic
