@@ -1,4 +1,8 @@
+import sys
+sys.path.append('../')
+
 import tidy3d as td
+from tidy3d.components import Geometry, Source, Monitor
 import erdantic as erd
 
 def save_diagram(obj):
@@ -8,7 +12,7 @@ def save_diagram(obj):
 	model.draw(fname)
 
 def main():
-	objects = [td.Simulation, td.Geometry, td.AbstractSource, td.Monitor]
+	objects = [Geometry, td.Simulation, td.Structure, Source, Monitor]
 	for obj in objects:
 		save_diagram(obj)
 
