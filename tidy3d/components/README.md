@@ -38,6 +38,15 @@ For example, there is a validator that checks whether a given `Box` class or sub
 
 Several physical constants are defined in `constants.py` as well as the default value for various parameters, like `td.inf`.
 
+### Abstract Base Classes
+
+You may see `ABC` being used in a subclass definition.
+This signifies that the class is an "abstract base class".
+For all intents and purposes, this means that the class exists to give some organizational structure, but is not intended to be used directly.
+For example, `AbstractMedium(Tidy3dBaseModel, ABC)` is used to define common characteristics of both dispersive and non-dispersive media, but isn't intemded to be used in a simulation.
+
+The `@abstractmethod` decorator is similarly used to indicate that the method is indended to be implemented in the subclasses of the `ABC`, but not used or defined directly in the base class.
+
 ## Component Structure
 
 ### Geometry
@@ -131,5 +140,48 @@ More development work will be needed here to make the `Mode()` definition more r
 
 ## Sources
 
+`Sources()` define the electromagnetic current sources in the simulation, which give rise to the field patterns we are interested in.
+
+Sources are geometric objects (have spatial definitions) so they inherit from the `Geometry` class.
+However, since we only consider rectangular sources in this version of the code, sources are `Box` subclasses and therefore take `center` and `size` among other arguments.
+
+The `AbstractSource()` is the base class for all sources, which contains the `SourceTime()`
+
+From `AbstractSource()`, we get either:
+- `Source(polarization)` (defines a `Box` with current oscillating in uniform the direction and component specified in `polarization`).
+- `DirectionalSource(direction)` (which defines a plane that emits waves in one direction (+ or -), normal to the plane).
+
+The three types of `DirectionalSources` are:
+- `PlaneWave()` (plane wave in homogeneous medium).
+- `GaussianBeam(waist_size)` (Gaussian Beam (tbd))
+- `ModeSource(mode)` (which defines modal injection with mode solver parameters specified in `mode`.
+
+### Source Time-Dependence
+
+All sources require a `SourceTime()` definition, which specifies the time-dependence.
+`SourceTime()` objects implement a `amp_time(self, time)` method, which returns the complex amplitude of the source at a given `time`.
+
+A `Pulse()` is the only subclass of `SourceTime()` currently implemented, but is used to define an object with an envelope "ramping up" in time and containing a central frequency.
+In the future, we may want to allow arbitrary `SourceTime()` definitions through either a function or data array.
+
+The only `Pulse` time-dependences (and `SourceTime()` objects more generally) currently defined are `GaussianPulse()` and `CW()`.
+However, `CW()` is not currently supported on the backend.
+
 ## Monitors
 
+`Monitors` define how the simulation data is stored.
+As monitors also have spatial extend, which is restricted to rectangular objects, they are subclasses of `Box` and have a `center` and `size`.
+
+There are three types of usable monitors, each stores different types of data:
+- `FieldMonitors()` store the E and H fields within their domain.
+- `FluxMonitors()` store the flux through their (planar only) geometry
+- `ModeMonitors(mode)` store the mode amplitudes found by decomposition on their (planar only) geometry.
+
+### Samplers
+
+All monitors must be told how to sample the data in either time or frequency domain.
+For this, the `Sampler()` object is supplied to each `Monitor()`, which can either be:
+- `TimeSampler(times)` (defines the time steps to sample the data at)
+- `FreqSampler(freqs)` (defines the frequencies to sample the data at using running time discrete Fourier tranform).
+Note that `ModeMonitors()` can only accept `FreqSamplers()` as the modes are only defined at a specific frequency.
+The functions `uniform_time_sampler()` and `uniform_freq_sampler()` allow one to easily make evenly spaced samplers.
