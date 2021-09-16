@@ -49,6 +49,42 @@ The `@abstractmethod` decorator is similarly used to indicate that the method is
 
 ## Component Structure
 
+Here is a map of the inheritance of various tidy3d components.
+
+
+pydantic.BaseModel
+	Tidy3dBaseModel
+		Geometry
+			Box
+				Simulation
+				Source
+					VolumeSource
+					DirectionalSource
+						PlaneWave
+						GaussianBeam
+				Monitor
+					FieldMonitor
+					FluxMonitor
+					ModeMonitor
+			Sphere
+			Cylinder
+			Polyslab
+		AbstractMedium
+			Medium
+			DispersiveMedium
+				PoleResidue
+				Sellmeier
+				Lorentz
+				Debye
+		Structure
+		SourceTime
+			GaussianPulse
+			CW
+		Sampler
+			TimeSampler
+			FreqSampler
+		Mode
+
 ### Geometry
 
 The `Geometry` component is used to define the layout of objects with a spatial component.
