@@ -1,5 +1,4 @@
 import pydantic
-import numpy as np
 
 """ global configuration / base class for pydantic models used to make simulation """
 

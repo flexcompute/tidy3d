@@ -1,10 +1,8 @@
 import pydantic
 
-from .base import Tidy3dBaseModel
-from .types import Literal, Dict, Tuple, Union, Any
-from .types import GridSize, Coordinate, Size, Bound
-from .validators import ensure_less_than
-from .geometry import Geometry, Box
+from .types import Literal, Dict, Tuple, Union
+from .types import GridSize
+from .geometry import Box
 from .medium import Medium
 from .structure import Structure
 from .source import Source
@@ -27,10 +25,10 @@ class Simulation(Box):
     )
     symmetry: Tuple[Literal[0, -1, 1], Literal[0, -1, 1], Literal[0, -1, 1]] = [0, 0, 0]
     shutoff: pydantic.NonNegativeFloat = 1e-5
-    courant: pydantic.NonNegativeFloat = 0.9
+    courant: pydantic.confloat(ge=0.0, le=1.0) = 0.9
     subpixel: bool = True
 
-    _courant_validator = ensure_less_than("courant", 1)
+    # _courant_validator = ensure_less_than("courant", 1)
 
     def __init__(self, **kwargs):
         """ initialize sim and then do more validations """

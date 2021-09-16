@@ -2,8 +2,7 @@ import pydantic
 from abc import ABC, abstractmethod
 
 from .base import Tidy3dBaseModel
-from .types import Bound, Size, Coordinate, Axis, Coordinate2D, Any, List, Tuple
-from .validators import check_bounds
+from .types import Bound, Size, Coordinate, Axis, Coordinate2D, List, Tuple
 
 BOUND_EPS = 1e-3  # expand bounds by this much
 

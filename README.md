@@ -1,5 +1,7 @@
 # Tidy3D Client Revamp
 
+[![Binder](https://mybinder.org/badge_logo.svg)](https://mybinder.org/v2/gh/flexcompute/Tidy3D-client-revamp/HEAD?filepath=notebooks)
+
 ## Roadmap (113.5 days = 16.2 weeks = 3.7 months ~ jan 1)
 
 ### Setup
@@ -15,7 +17,7 @@
 	- [x] Source
 	- [x] Monitor
 	- [x] Mode
-- [ ] Write documentation explaining all components & design choices.
+- [x] Write documentation explaining all components & design choices.
 ---
 - [ ] Write boilerplate for all plugins / packages (1 week)
 	- [ ] Dispersion fit

@@ -1,5 +1,5 @@
 import pydantic
-from typing import Tuple, Dict, List, Callable, Any, Union
+from typing import Tuple, Dict, List, Union, Optional
 
 # Literal only available in python 3.8 + so try import otherwise use extensions
 try:
@@ -8,9 +8,6 @@ except ImportError:
     from typing_extensions import Literal
 
 """ Defines 'types' that various fields can be """
-
-# 'complex number'
-Complex = Tuple[float, float]
 
 # tuple containing three non-negative floats
 Size = Tuple[
@@ -25,13 +22,14 @@ Coordinate2D = Tuple[float, float]
 Bound = Tuple[Coordinate, Coordinate]
 
 # grid size
-GridSize = Union[pydantic.PositiveFloat, Tuple[pydantic.PositiveFloat, ...]]
+GridSize = Union[pydantic.PositiveFloat, List[pydantic.PositiveFloat]]
 
-# axis type
+# axis index
 Axis = Literal[0, 1, 2]
 
 # pole-residue poles (each pole has two complex numbers)
-PoleResidue = Tuple[Complex, Complex]
+Complex = Tuple[float, float]
+PoleAndResidue = Tuple[Complex, Complex]
 
 # sources
 Polarization = Literal['Jx', 'Jy', 'Jz', 'Mx', 'My', 'Mz']
