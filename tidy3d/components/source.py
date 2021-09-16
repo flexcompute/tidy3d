@@ -6,7 +6,6 @@ from .base import Tidy3dBaseModel
 from .types import Tuple, List, Direction, Polarization
 from .validators import ensure_greater_or_equal, assert_plane
 from .geometry import Box
-from .constants import inf
 from .mode import Mode
 
 # def dft(amp_time, time, freq):
@@ -31,7 +30,7 @@ class SourceTime(ABC, Tidy3dBaseModel):
         pass
 
 class Pulse(SourceTime, ABC):
-    """ Source ramps up and ramps down """
+    """ Source ramps up and oscillates with freq0 """
 
     freq0: pydantic.PositiveFloat
     fwidth: pydantic.PositiveFloat

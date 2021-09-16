@@ -60,9 +60,9 @@ class Sphere(Geometry):
 
 
 class Cylinder(Geometry):
+    center: Coordinate = (0.0, 0.0, 0.0)
     radius: pydantic.NonNegativeFloat
     length: pydantic.NonNegativeFloat
-    center: Coordinate = (0.0, 0.0, 0.0)
     axis: Axis = 2
 
     def _get_bounds(self):

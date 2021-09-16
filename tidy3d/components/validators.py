@@ -1,6 +1,5 @@
 import pydantic
 
-from .constants import inf
 
 """ Defines various validation functions that get used to ensure inputs are legit """
 
