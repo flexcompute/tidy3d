@@ -35,13 +35,6 @@ Medium
 
    Medium
 
-Material Library
-
-.. autosummary::
-   :toctree: _autosummary/
-
-   material_library
-
 Dispersive Media
 ----------------
 
@@ -52,6 +45,14 @@ Dispersive Media
    Sellmeier
    Lorentz
    Debye
+
+Material Library
+----------------
+
+.. autosummary::
+   :toctree: _autosummary/
+
+   material_library
 
 
 Structure
@@ -69,10 +70,10 @@ Source
 .. autosummary::
    :toctree: _autosummary/
 
-   Source
+   VolumeSource
    ModeSource
    PlaneWave
-   GaussianBeam
+   ..GaussianBeam
 
 Source Time Dependence
 ----------------------
@@ -80,9 +81,8 @@ Source Time Dependence
 .. autosummary::
    :toctree: _autosummary/
 
-   SourceTime
    GaussianPulse
-   CW
+   ..CW
 
 
 Monitor
@@ -91,7 +91,6 @@ Monitor
 .. autosummary::
    :toctree: _autosummary/
 
-   Monitor
    FluxMonitor
    FieldMonitor
    ModeMonitor

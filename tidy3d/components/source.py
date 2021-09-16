@@ -3,8 +3,8 @@ import numpy as np
 from abc import ABC, abstractmethod
 
 from .base import Tidy3dBaseModel
-from .types import Tuple, List, Direction, Polarization
-from .validators import ensure_greater_or_equal, assert_plane
+from .types import Tuple, Direction, Polarization
+from .validators import assert_plane
 from .geometry import Box
 from .mode import Mode
 
@@ -34,8 +34,7 @@ class Pulse(SourceTime, ABC):
 
     freq0: pydantic.PositiveFloat
     fwidth: pydantic.PositiveFloat
-    offset: pydantic.NonNegativeFloat = 5.0
-    _validate_offset = ensure_greater_or_equal("offset", 2.5)
+    offset: pydantic.confloat(ge=2.5) = 5.0
 
 class GaussianPulse(Pulse):
     """A gaussian pulse time dependence"""
@@ -70,24 +69,24 @@ class CW(Pulse):
 
 """ Source objects """
 
-class AbstractSource(Box, ABC):
+class Source(Box, ABC):
     """ Template for all sources, all have Box geometry """
 
     source_time: SourceTime
 
-class Source(AbstractSource):
+class VolumeSource(Source):
     """ Volume Source with time dependence and polarization """
 
     polarization: Polarization
 
-class ModeSource(AbstractSource):
+class ModeSource(Source):
     """ Modal profile on finite extent plane """
 
     direction: Direction
     mode: Mode
     _plane_validator = assert_plane()
 
-class DirectionalSource(AbstractSource, ABC):
+class DirectionalSource(Source, ABC):
     """ A Planar Source with uni-directional propagation """
 
     direction: Direction

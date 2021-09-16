@@ -1,9 +1,9 @@
+import pydantic
 import numpy as np
 from abc import ABC, abstractmethod
 
 from .base import Tidy3dBaseModel
-from .validators import ensure_greater_or_equal
-from .types import List, Tuple, PoleResidue
+from .types import List, Tuple, PoleAndResidue, Optional
 from ..constants import C_0, inf
 
 """ conversion helpers """
@@ -38,7 +38,7 @@ class AbstractMedium(ABC, Tidy3dBaseModel):
     """A medium within which electromagnetic waves propagate"""
     
     # frequencies within which the medium is valid
-    frequency_range: Tuple[float, float] = (-inf, inf)
+    frequency_range: Optional[Tuple[float, float]] = (-inf, inf)
 
     @abstractmethod
     def eps_model(self, frequency: float) -> complex:
@@ -50,18 +50,15 @@ class AbstractMedium(ABC, Tidy3dBaseModel):
 class Medium(AbstractMedium):
     """ Dispersionless medium"""
 
-    permittivity: float = 1.0
-    conductivity: float = 0.0
-
-    _permittivity_validator = ensure_greater_or_equal("permittivity", 1.0)
-    _conductivity_validator = ensure_greater_or_equal("conductivity", 0.0)
+    permittivity: pydantic.confloat(ge=1.0) = 1.0
+    conductivity: pydantic.confloat(ge=0.0) = 0.0
 
     def eps_model(self, frequency):
         return eps_sigma_to_eps_complex(self.permittivity, self.conductivity, frequency)
 
 """ Dispersive Media """
 
-class DispersiveMedium(AbstractMedium):
+class DispersiveMedium(AbstractMedium, ABC):
     """ A Medium with dispersion (propagation characteristics depend on frequency) """
     pass
 
@@ -69,7 +66,7 @@ class PoleResidue(DispersiveMedium):
     """defines a dispersion model"""
 
     eps_inf: float = 1.0
-    poles: List[PoleResidue]
+    poles: List[PoleAndResidue]
 
     def eps_model(self, frequency):
         omega = 2 * np.pi * frequency

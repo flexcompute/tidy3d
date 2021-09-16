@@ -38,7 +38,7 @@ def test_sim():
             )        
         },
         sources={
-            "dipole": Source(
+            "dipole": VolumeSource(
                 size=(0, 0, 0),
                 center=(0, -0.5, 0),
                 polarization='Mx',
@@ -200,14 +200,14 @@ def test_medium_dispersion():
     for medium in [m_PR, m_SM, m_LZ, m_DB]:
         eps_c = medium.eps_model(freqs)
 
-""" sources """
+""" VolumeSources """
 
-def test_source():
+def test_VolumeSource():
 
     g = GaussianPulse(freq0=1, fwidth=0.1)
 
-    # test we can make generic source
-    s = Source(size=(1,1,1), source_time=g, polarization='Jz')
+    # test we can make generic VolumeSource
+    s = VolumeSource(size=(1,1,1), source_time=g, polarization='Jz')
 
 def test_source_times():
 
@@ -221,7 +221,7 @@ def test_source_times():
     # ts = np.linspace(0, 30, 1001)
     # c.amp_time(ts)
 
-def test_source_directional():
+def test_VolumeSource_directional():
     g = GaussianPulse(freq0=1, fwidth=0.1)
 
     # test we can make planewave
@@ -240,15 +240,15 @@ def test_source_directional():
     # with pytest.raises(pydantic.ValidationError) as e_info:
         # s = GaussianBeam(size=(1,1,1), source_time=g, polarization='Jz', direction='+', waist_size=(1., 2.))
 
-def test_source_modal():
+def test_VolumeSource_modal():
     g = GaussianPulse(freq0=1, fwidth=0.1)
     mode = Mode(mode_index=0)
     m = ModeSource(size=(0, 1, 1), direction='+', source_time=g, mode=mode)
 
-# def test_source_data():
+# def test_VolumeSource_data():
 #     g = GaussianPulse(freq0=1, fwidth=0.1)
 #     d = np.random.random((5, 5))
-#     ds = DataSource(size=(1, 0, 1), source_time=g, data=d)
+#     ds = DataVolumeSource(size=(1, 0, 1), source_time=g, data=d)
 
 def test_monitor():
     freq_sampler = FreqSampler(freqs=[1,2,3])
