@@ -1,11 +1,9 @@
 from .components.medium import PoleResidue
 
-
 """ guide to material library
         material instances are called material_name + "_" + variant_name.
 
 Silver ("Ag") 
-
     Parameters
     ----------
     variant : str, optional

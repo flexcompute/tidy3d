@@ -1,13 +1,9 @@
 import json
 from jsonschema import Draft3Validator
 from jsonschema.validators import extend
+import jsonschema2md
 
 """ creates schema validator and function for validating simulation dict """
-
-VALIDATOR = Draft3Validator
-SCHEMA_PATH = 'schema.json'
-SCHEMA_DICT = load_json(SCHEMA_PATH)
-SCHEMA_VALIDATOR = _create_validator(SCHEMA_DICT)
 
 def load_json(fname: str) -> dict:
     """loads a json file into dictionary """
@@ -32,3 +28,21 @@ def _create_validator(schema: dict) -> Draft3Validator:
 def validate_dict(sim_dict: dict) -> None:
     """makes sure a simulation dict is consistent with schema """
     SCHEMA_VALIDATOR.is_valid(sim_dict)
+
+def generate_schema_docs(fname_schema: str, fname_readme: str = 'SCHEMA.md') -> None:
+    parser = jsonschema2md.Parser()
+    with open(fname_schema, "r") as fp:
+        md_lines = parser.parse_schema(json.load(fp))
+    with open(fname_readme, "w") as fp:
+        for line in md_lines:
+            fp.write(md_lines)
+
+VALIDATOR = Draft3Validator
+SCHEMA_PATH = 'schema.json'
+SCHEMA_DICT = load_json(SCHEMA_PATH)
+SCHEMA_VALIDATOR = _create_validator(SCHEMA_DICT)
+
+
+if __name__ == '__main__':
+    # pass
+    generate_schema_docs(SCHEMA_PATH)
