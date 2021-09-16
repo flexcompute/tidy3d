@@ -51,7 +51,7 @@ The `@abstractmethod` decorator is similarly used to indicate that the method is
 
 Here is a map of the inheritance of various tidy3d components.
 
-
+```
 pydantic.BaseModel
 	Tidy3dBaseModel
 		Geometry
@@ -69,6 +69,7 @@ pydantic.BaseModel
 			Sphere
 			Cylinder
 			Polyslab
+		PMLLayer
 		AbstractMedium
 			Medium
 			DispersiveMedium
@@ -84,6 +85,7 @@ pydantic.BaseModel
 			TimeSampler
 			FreqSampler
 		Mode
+```
 
 ### Geometry
 
