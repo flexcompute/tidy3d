@@ -125,6 +125,8 @@ The keys of these dictionaries are the names of the components and the values ar
 - `sources`, a dictionary of `Source()` objects, defining the current sources in the simulation domain.
 - `monitors`, a dictionary of `Monitor()` objects, defining what data is being measured and where.
 
+![Call Structure](../../docs/img/diagram_Simulation.png)
+
 #### Validations
 
 Upon intialization, the simulation checks whether any of the objects are completely outside of the simulation bounding box, at which point it will error.
@@ -170,6 +172,8 @@ Note that there is an extensive library of pre-defined dispersive materials, all
 
 `Structure()` objects simply combine a shape definition through `Geometry()` with a medium definition through `Medium()`.
 
+![Call Structure](../../docs/img/diagram_Structure.png)
+
 ## Modes
 
 `Mode()` objects store the parameters that tell the mode solver how to set up the mode profile for the source.
@@ -183,16 +187,18 @@ More development work will be needed here to make the `Mode()` definition more r
 Sources are geometric objects (have spatial definitions) so they inherit from the `Geometry` class.
 However, since we only consider rectangular sources in this version of the code, sources are `Box` subclasses and therefore take `center` and `size` among other arguments.
 
-The `AbstractSource()` is the base class for all sources, which contains the `SourceTime()`
+The `Source()` is the base class for all sources, which contains the `SourceTime()`
 
-From `AbstractSource()`, we get either:
-- `Source(polarization)` (defines a `Box` with current oscillating in uniform the direction and component specified in `polarization`).
+From `Source()`, we get either:
+- `VolumeSource(polarization)` (defines a `Box` with current oscillating in uniform the direction and component specified in `polarization`).
 - `DirectionalSource(direction)` (which defines a plane that emits waves in one direction (+ or -), normal to the plane).
 
 The three types of `DirectionalSources` are:
 - `PlaneWave()` (plane wave in homogeneous medium).
 - `GaussianBeam(waist_size)` (Gaussian Beam (tbd))
 - `ModeSource(mode)` (which defines modal injection with mode solver parameters specified in `mode`.
+
+![Call Structure](../../docs/img/diagram_Stource.png)
 
 ### Source Time-Dependence
 
@@ -214,6 +220,8 @@ There are three types of usable monitors, each stores different types of data:
 - `FieldMonitors()` store the E and H fields within their domain.
 - `FluxMonitors()` store the flux through their (planar only) geometry
 - `ModeMonitors(mode)` store the mode amplitudes found by decomposition on their (planar only) geometry.
+
+![Call Structure](../../docs/img/diagram_Monitor.png)
 
 ### Samplers
 
