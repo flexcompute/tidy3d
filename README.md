@@ -15,7 +15,7 @@
 	- [x] Source
 	- [x] Monitor
 	- [x] Mode
-- [ ] Write documentation explaining all components / design choices.
+- [ ] Write documentation explaining all components & design choices.
 ---
 - [ ] Write boilerplate for all plugins / packages (1 week)
 	- [ ] Dispersion fit
@@ -58,6 +58,7 @@
 	- [ ] Add and edit docstrings to all.
 ---
 - [ ] Set up documentation (1 week)
+	- [ ] Autodocstrings from pydantic models? https://github.com/mansenfranzen/autodoc_pydantic
 	- [ ] Move Docs into repo.
 	- [ ] Move tidy3d notebooks into repo.
 	- [ ] Set up binder links.
