@@ -48,6 +48,10 @@ We should consider encouraging open source developers to contribute various plug
 
 The webAPI as defined in `web/` is used to talk to the server and provides a set of API calls for managing jobs.
 
+### Constants
+
+Several physical constants are defined in `constants.py` as well as the default value for various parameters, like `td.inf`.
+
 ### Miscellaneous
 
 The `viz` module provides methods for visualizing various components and output data.

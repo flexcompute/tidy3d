@@ -1,11 +1,10 @@
 import pytest
 import numpy as np
+import pydantic
 
 import sys
 sys.path.append('./')
-
 from tidy3d import *
-
 
 def test_sim():
     sim = Simulation(
@@ -218,9 +217,9 @@ def test_source_times():
     g.amp_time(ts)
 
     # test we can make cq pulse
-    c = CW(freq0=1, fwidth=0.1)
-    ts = np.linspace(0, 30, 1001)
-    c.amp_time(ts)
+    # c = CW(freq0=1, fwidth=0.1)
+    # ts = np.linspace(0, 30, 1001)
+    # c.amp_time(ts)
 
 def test_source_directional():
     g = GaussianPulse(freq0=1, fwidth=0.1)
@@ -229,7 +228,7 @@ def test_source_directional():
     s = PlaneWave(size=(0,1,1), source_time=g, polarization='Jz', direction='+')
 
     # test we can make planewave
-    s = GaussianBeam(size=(0,1,1), source_time=g, polarization='Jz', direction='+', waist_size=(1., 2.))
+    # s = GaussianBeam(size=(0,1,1), source_time=g, polarization='Jz', direction='+', waist_size=(1., 2.))
 
     # test that non-planar geometry crashes plane wave
     with pytest.raises(pydantic.ValidationError) as e_info:
@@ -238,8 +237,8 @@ def test_source_directional():
     # test that non-planar geometry crashes plane wave and gaussian beam
     with pytest.raises(pydantic.ValidationError) as e_info:
         s = PlaneWave(size=(1,1,0), source_time=g, polarization='Jz', direction='+')
-    with pytest.raises(pydantic.ValidationError) as e_info:
-        s = GaussianBeam(size=(1,1,1), source_time=g, polarization='Jz', direction='+', waist_size=(1., 2.))
+    # with pytest.raises(pydantic.ValidationError) as e_info:
+        # s = GaussianBeam(size=(1,1,1), source_time=g, polarization='Jz', direction='+', waist_size=(1., 2.))
 
 def test_source_modal():
     g = GaussianPulse(freq0=1, fwidth=0.1)

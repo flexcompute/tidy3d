@@ -4,7 +4,7 @@ from abc import ABC, abstractmethod
 from .base import Tidy3dBaseModel
 from .validators import ensure_greater_or_equal
 from .types import List, Tuple, PoleResidue
-from .constants import C_0, inf
+from ..constants import C_0, inf
 
 """ conversion helpers """
 
