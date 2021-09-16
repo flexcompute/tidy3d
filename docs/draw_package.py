@@ -1,6 +1,8 @@
 import sys
 sys.path.append('../')
 
+# note, run from docs/
+
 import tidy3d as td
 from tidy3d.components import Geometry, Source, Monitor
 import erdantic as erd
