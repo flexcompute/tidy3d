@@ -1,5 +1,6 @@
 import nbconvert
 import nbformat
+from nbconvert.preprocessors import CellExecutionError
 
 import os
 import sys
@@ -15,10 +16,28 @@ notebook_filenames = [notebook_directory + f for f in os.listdir(notebook_direct
 
 def test_notebooks():
 
-	# loop through notebooks and run each of them
+	# loop through notebooks and test each of them
 	for fname in notebook_filenames:
-		with open(fname) as f:
-			nb = nbformat.read(f, as_version=4)
+		_run_notebook(fname)
 
-			# specify we are running the notebook from this path, so tidy3d is correctly imported
-			ep.preprocess(nb, {'metadata': {'path': '.'}})
+def _run_notebook(notebook_fname):
+	# open the notebook
+	with open(notebook_fname) as f:
+		nb = nbformat.read(f, as_version=4)
+
+		# try running the notebook
+		try:
+			out = ep.preprocess(nb, {'metadata': {'path': '.'}})
+
+		# if there is an error, print message and fail test
+		except CellExecutionError as e:
+			out = None
+			msg = 'Error executing the notebook "%s".\n\n' % notebook_fname
+			msg += 'See notebook "%s" for the traceback.' % notebook_fname
+			print(msg)
+			raise
+
+		# write the executed notebook to file
+		finally:
+			with open(notebook_fname, mode='w', encoding='utf-8') as f:
+				nbformat.write(nb, f)

@@ -13,6 +13,8 @@ from .components.monitor import TimeSampler, FreqSampler, uniform_freq_sampler, 
 from .components.monitor import FieldMonitor, FluxMonitor, ModeMonitor
 from .components.mode import Mode
 
+from .constants import inf
+
 # plugins imported as `from tidy3d.plugins.dispersion_fitter import *` for now
 from . import plugins
 
