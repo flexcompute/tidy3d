@@ -60,15 +60,16 @@
 	- [ ] Add and edit docstrings to all.
 ---
 - [ ] Set up documentation (1 week)
-	- [ ] Autodocstrings from pydantic models? https://github.com/mansenfranzen/autodoc_pydantic
-	- [ ] Move Docs into repo.
-	- [ ] Move tidy3d notebooks into repo.
-	- [ ] Set up binder links.
+	- [ ] Make pydantic autosummaries more pretty.
+	- [x] Move Docs into repo.
+	- [x] Move tidy3d notebooks into repo.
+	- [ ] test binder links.
 ---
 - [ ] Add extensive amount of tests (2 weeks)
 	- [ ] Test simulation.json validation / error catching.
 	- [ ] Test plugins.
 	- [ ] Test submitting jobs if possible.
+	- [ ] Test notebooks.
 ---
 ---
 - [ ] Automate everything using GitHub extensions (2 weeks)

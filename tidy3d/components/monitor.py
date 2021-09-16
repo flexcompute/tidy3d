@@ -43,9 +43,15 @@ class TimeSampler(Sampler):
     """ specifies at what time steps the data is measured """
     times: List[pydantic.NonNegativeInt]
 
+    def __len__(self):
+        return len(self.times)
+
 class FreqSampler(Sampler):
     """ specifies at what frequencies the data is measured using running DFT """
     freqs: List[pydantic.NonNegativeFloat]
+
+    def __len__(self):
+        return len(self.freqs)
 
 """ Monitors """
 
