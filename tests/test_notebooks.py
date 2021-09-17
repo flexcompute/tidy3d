@@ -21,6 +21,7 @@ def test_notebooks():
 		_run_notebook(fname)
 
 def _run_notebook(notebook_fname):
+
 	# open the notebook
 	with open(notebook_fname) as f:
 		nb = nbformat.read(f, as_version=4)
@@ -41,3 +42,5 @@ def _run_notebook(notebook_fname):
 		finally:
 			with open(notebook_fname, mode='w', encoding='utf-8') as f:
 				nbformat.write(nb, f)
+
+		# can we get notebook's local variables and do more individual tests?

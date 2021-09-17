@@ -13,6 +13,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         error_msg_templates = {          # custom error messages
             'value_error.extra': "extra kwarg supplied"
         }
+        # note: put tidy3d version in here?
         schema_extra = {}                # can use to add fields to schema (task_id? path to schema?)
 
         # needed to support numpy.ndarray, but not needed generally
