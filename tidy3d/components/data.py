@@ -2,9 +2,7 @@ import pydantic
 from abc import ABC, abstractmethod
 import xarray as xr
 import numpy as np
-
-# import holoviews as hv
-# hv.extension('bokeh')
+import holoviews as hv
 
 from .simulation import Simulation
 from .monitor import Monitor, FluxMonitor, FieldMonitor, ModeMonitor
@@ -22,34 +20,40 @@ class Tidy3dData(pydantic.BaseModel):
 		allow_mutation = False           # dont allow one to change the data
 
 class MonitorData(xr.DataArray, ABC):
-	pass
-	# @abstractmethod
-	# def visualize(self, simulation):
-	# 	pass
+	__slots__ = ()  # need this for xarray subclassing
+
+	def sampler_label(self):
+		return 'freqs' if 'freqs' in self.coords else 'times'
+
+	@abstractmethod
+	def visualize(self, simulation):
+		pass
 
 
 class FieldData(MonitorData):
-	pass
-	# def visualize(self):
-	#     hv_ds = hv.Dataset(self)    
-	#     image = hv_ds.to(hv.Image, kdims=["xs", "ys"], dynamic=True)
-	#     return image.options(cmap='RdBu', colorbar=True)
+	__slots__ = ()  # need this for xarray subclassing
+
+	def visualize(self):
+		hv_ds = hv.Dataset(self.copy())
+		image = hv_ds.to(hv.Image, kdims=["xs", "ys"], dynamic=True)
+		return image.options(cmap='RdBu', colorbar=True, aspect='equal')
 
 class FluxData(MonitorData):
-	pass
+	__slots__ = ()  # need this for xarray subclassing
 	
-	# def visualize(self):
-	#     hv_ds = hv.Dataset(self) 
-	#     image = hv_ds.to(hv.Curve, 'freqs')
-	#     return image
+	def visualize(self):
+		hv.extension('bokeh')		
+		hv_ds = hv.Dataset(self.copy())
+		image = hv_ds.to(hv.Curve, self.sampler_label())
+		return image
 
 class ModeData(MonitorData):
-	pass
+	__slots__ = ()  # need this for xarray subclassing
 	
-	# def visualize(self):
-	#     hv_ds = hv.Dataset(self)
-	#     image = hv_ds.to(hv.Curve, "freqs", dynamic=True)
-	#     return image
+	def visualize(self):
+		hv_ds = hv.Dataset(self.copy())
+		image = hv_ds.to(hv.Curve, self.sampler_label(), dynamic=True)
+		return image
 
 class SimulationData(Tidy3dData):
 
