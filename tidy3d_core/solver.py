@@ -36,7 +36,7 @@ def solve(simulation: Simulation) -> dict[str, dict[str, np.ndarray]]:
 			num_modes = len(monitor.modes)
 			data_array = make_fake_mode_data(sample_values, num_modes)
 			data_dict[name] = {
-				'dir': ['+', '-'],
+				'direction': ['+', '-'],
 				'data': data_array,
 				'mode_index': np.arange(num_modes),
 				sample_name:sample_values,
@@ -56,7 +56,7 @@ def unpack_sampler(sampler: Sampler) -> Tuple[str, np.ndarray]:
 	if isinstance(sampler, FreqSampler):
 		return 'freqs', sampler.freqs
 	else:
-		return 'ts', sampler.times
+		return 'times', sampler.times
 
 """ Discretization functions """
 

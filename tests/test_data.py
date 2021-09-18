@@ -5,9 +5,7 @@ import sys
 sys.path.append('./')
 
 from tidy3d import *
-from tidy3d_core.solver import solve
-from tidy3d_core.postprocess import load_solver_results
-from pprint import pprint as print
+import tidy3d_core as td_core
 
 SIM = Simulation(
     size=(2.0, 2.0, 2.0),
@@ -22,7 +20,5 @@ SIM = Simulation(
 )
 
 def test_solve():
-    solver_data_dict = solve(SIM)
-    solver_data = load_solver_results(simulation=SIM, solver_data_dict=solver_data_dict)
-    for data in solver_data.monitor_data:
-        data.visualize()
+    solver_data_dict = td_core.solve(SIM)
+    solver_data = td_core.load_solver_results(simulation=SIM, solver_data_dict=solver_data_dict)
