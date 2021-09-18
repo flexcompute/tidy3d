@@ -44,7 +44,7 @@
 
 ## Roadmap (113.5 days = 16.2 weeks = 3.7 months ~ jan 1)
 
-### Setup
+### Component / API definition
 
 - [x] Organize repo in basic structure we want moving forward (.5 days)
 ---
@@ -59,18 +59,27 @@
 	- [x] Mode
 - [x] Write documentation explaining all components & design choices.
 ---
-- [ ] Write boilerplate for all plugins / packages (1 week)
-	- [ ] Dispersion fit
-	- [ ] Mode Solver
-	- [ ] Component Modeler
-	- [ ] Adjoint Optimizer
-	- [ ] Data Analyzer
----
-- [ ] Write emulated webAPI to transfer files back and forth (1 day)
-	- [ ] Make `task` its own pydantic dataclass.
+- [x] Write boilerplate for all plugins / packages (1 week)
+	- [x] Dispersion fit (create `DispersiveMedium()` objects from nk data)
+	- [x] Mode Solver (create specifications for waveguide modes using the solver)
+	- [x] Batch Processor (submit and manage batches of jobs, used by below)
+	- [x] Component Modeler (wrapper for analyzing S-matrix of device using ports)
+	- [x] Device Optimizer (wrapper for parameter sweep / adjoint optimization routines)
+
+### Web Emulation
+
+- [x]  Write simple tidy3d_core
+	- [x]  Preprocess simulation.json into Simulation
+	- [x]  "solver" that generates fake data.
+	- [x]  Postprocess solver data into tidy3d data objects.
+- [ ]  Write emulated webAPI to transfer files back and forth (1 day)
+	- [ ] Make `task` its own dataclass.
 	- [ ] Create basic mock data creation.
 	- [ ] Create set of basic API calls.
 	- [ ] Simple batch / job interface.
+---
+### Web Integration
+
 - [ ] Write tidy3d core and make webAPI functional for simplest cases (2-3 weeks, w/ Momchil’s help)
 	- [ ] What are tidy3d core endpoints for C++?
 	- [ ] Load simulation.json into `tidy3d.Simulation`.
@@ -78,33 +87,37 @@
 	- [ ] add http / authentication etc.
 	- [ ] Test test test.
 ---
----
+### Plugins
 ---
 - [ ] Flesh out all details for plugins (18.5 days total)
-
-	- [ ] Viz (1 week)
-	- [ ] Dispersion fit (.5 days)
-	- [ ] Mode solver (3 days)
-	- [ ] Analyze (3 days)
-		- [ ] Read output files in different formats.
-	- [ ] S matrix (5 days)
+	- [ ] Dispersion fit (1 day)
+	- [ ] Mode solver (1 week) (just load in local one for now)
+	- [ ] Batch processor (1 week)
+	- [ ] S matrix (1 week)
+	- [ ] Optimizer (2 days)
 	---
 ---
 ---
 ---
+### IO
 - [ ] Supply other ways to create simulation files (2 days)
 	- [ ] yaml -> json conversion 
 	- [ ] command line interface to submit yaml or json.
 	- [ ] simple yaml editor?  flask app?
+
+### Documentation
+
 - [ ] Finalize writing of internal documentation (1 week)
 	- [ ] Add and edit docstrings to all.
 ---
 - [ ] Set up documentation (1 week)
 	- [ ] Make pydantic autosummaries more pretty.
-	- [x] Move Docs into repo.
-	- [x] Move tidy3d notebooks into repo.
+	- [ ] Move Docs into repo.
+	- [ ] Move tidy3d notebooks into repo, make them work with new code.
 	- [ ] test binder links.
 ---
+### Testing
+
 - [ ] Add extensive amount of tests (2 weeks)
 	- [ ] Test simulation.json validation / error catching.
 	- [ ] Test plugins.
@@ -112,6 +125,7 @@
 	- [ ] Test notebooks.
 ---
 ---
+### Github Integration
 - [ ] Automate everything using GitHub extensions (2 weeks)
 	- [ ] CI / tests.
 	- [ ] Version / releases.
@@ -120,6 +134,8 @@
 	- [ ] What else?
 ---
 ---
+### Refine
+
 - [ ] Add finishing touches (2 days)
 	- [ ] Logo (1 day, outsource?)
 	- [ ] Github issue templates (.5 days)
@@ -127,7 +143,17 @@
 	- [ ] Wipe commit history
 	- [ ] decide how to manage branches
 ---
+
+### Final
 - [ ] Finding bugs and fixing things, testing (2 weeks)
 ---
 ---
 - [ ]  Release publicly! :partying_face:
+
+### After this
+- [ ] Mode solver API using web.
+- [ ] More advanced plotting
+- [ ] Non-uniform mesh
+- [ ] Angled sources
+
+
