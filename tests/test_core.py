@@ -5,9 +5,8 @@ import pydantic
 import sys
 sys.path.append('./')
 
-from tidy3d.plugins.data_analyzer import *
 from tidy3d import *
-from tidy3d_core.package_data import create_xarray
+import tidy3d_core as tdcore
 
 SIM = Simulation(
     size=(2.0, 2.0, 2.0),
@@ -21,6 +20,5 @@ SIM = Simulation(
     },
 )
 
-
-def test_data_xarray():
-    sim_data = create_xarray(SIM)
+def test():
+    pass
