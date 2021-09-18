@@ -2,6 +2,46 @@
 
 [![Binder](https://mybinder.org/badge_logo.svg)](https://mybinder.org/v2/gh/flexcompute/Tidy3D-client-revamp/HEAD?filepath=notebooks)
 
+## Flow
+
+### Client (Pre)
+
+- Make `tidy3d.components` to define simulation.
+	- Using builtin `tidy3d` imports (`td.PlaneWave`, `td.ModeMonitor`, etc.)
+	- Using `tidy3d.plugins` to construct more specialized components (mode solver, dispersion fitter, etc.).
+- Create a `td.Simulation` object containing all simulation parameters (pydantic will automaticall validate all components).
+- Upload `Simulation` to server using `tidy3d.web`.
+	- Export `Simulation` to a .json file format with `Simulation.json()`
+	- Save as .json file.
+	- Upload to server using http request, authenticate, etc.
+	- Use `plugins.batch_processor` to submit batches of simulations.
+- Manage task with `tidy3d.web`
+	- Run task explicitly (if draft).
+	- Monitor progress.
+	- Cancel / delete task.
+
+### Core
+
+- Validate received .json file using `Simulation` schema file from our local copy of client.
+- Load `.json` into `Simulation` object using local copy of client.
+- Preprocess `Simulation` into files needed for core solver (need momchil's help).
+- Run solver, export solver data files (need momchil's help).
+- Postprocess solver data files into `SimulationData` containing `MonitorData` using definitions from local copy of client (need momchil's help).
+- Export data file visualizations as .html to display on browser.
+- Store data objects as .hdf5 files on server for download.
+
+### Client (Post)
+
+- Monitor solver progress, manage tasks.
+- Load results into `SimulationData` and `MonitorData` objects locally.
+	- Download .hdf5 files locally.
+	- Open .hdf5 files as `SimulationData` and `MonitorData`.
+- Visualize / post process results
+	- data management using `xarray.DataArray` operations like `.sel()`, `.iterpolate()`.
+	- simple plots with `MonitorData.plot()`
+	- interactive plots with `MonitorData.visualize()` 
+	- plugins for `near2far`, spectral analysis.
+
 ## Roadmap (113.5 days = 16.2 weeks = 3.7 months ~ jan 1)
 
 ### Setup
