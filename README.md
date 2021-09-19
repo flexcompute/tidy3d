@@ -99,6 +99,9 @@
 ---
 ---
 ---
+
+https://github.com/crusaderky/python_project_template
+
 ### IO
 - [ ] Supply other ways to create simulation files (2 days)
 	- [ ] yaml -> json conversion 
