@@ -24,7 +24,7 @@ class SourceTime(ABC, Tidy3dBaseModel):
     amplitude: pydantic.NonNegativeFloat = 1.0
     phase: float = 0.0
 
-    @abstractmethod
+    # @abstractmethod
     def amp_time(self, time):
         """ complex amplitude as a function of time """
         pass

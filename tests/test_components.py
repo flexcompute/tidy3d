@@ -12,22 +12,22 @@ def test_sim():
         grid_size=(0.01, 0.01, 0.01),
         run_time=1e-12,
         structures={
-            "square": Structure(
+            "my_square": Structure(
                 geometry=Box(size=(1, 1, 1), center=(-1, 0, 0)),
                 medium=Medium(permittivity=2.0),
             ),
-            "box": Structure(
+            "my_box": Structure(
                 geometry=Box(size=(1, 1, 1), center=(0, 0, 0)),
                 medium=Medium(permittivity=1.0, conductivity=3.0),
             ),
-            "sphere": Structure(
+            "my_sphere": Structure(
                 geometry=Sphere(
                     radius=1.4,
                     center=(1.0, 0.0, 1.0)
                 ),
                 medium=Medium()
             ),
-            "cylinder": Structure(
+            "my_cylinder": Structure(
                 geometry=Cylinder(
                     radius=1.4,
                     length=2.0,
@@ -38,7 +38,7 @@ def test_sim():
             )        
         },
         sources={
-            "dipole": VolumeSource(
+            "my_dipole": VolumeSource(
                 size=(0, 0, 0),
                 center=(0, -0.5, 0),
                 polarization='Mx',
@@ -62,6 +62,7 @@ def test_sim():
         courant=0.8,
         subpixel=False,
     )
+
 
 def test_sim_bounds():
 

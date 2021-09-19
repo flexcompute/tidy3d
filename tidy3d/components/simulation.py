@@ -5,6 +5,7 @@ from .types import GridSize
 from .geometry import Box
 from .medium import Medium
 from .structure import Structure
+from .geometry import Geometry
 from .source import Source
 from .monitor import Monitor
 from .pml import PMLLayer
@@ -30,6 +31,7 @@ class Simulation(Box):
 
     # _courant_validator = ensure_less_than("courant", 1)
 
+
     def __init__(self, **kwargs):
         """ initialize sim and then do more validations """
         super().__init__(**kwargs)
@@ -53,3 +55,19 @@ class Simulation(Box):
     def _check_pw_in_homogeneos(self):
         """ is PW in homogeneous medium (if added) """
         pass
+
+    def export(self, fname: str = 'simulation.json') -> None:
+        json_string = self.json(indent=2)
+        with open(fname, "w") as fp:
+            fp.write(json_string)
+
+    @classmethod
+    def load(cls, fname: str = 'simulation.json'):
+        return cls.parse_file(fname)
+
+    # def schema(fname_schema: str = "schema.json") -> None:
+    #     """saves simulation object schema to json"""
+    #     schema_str = Simulation.schema_json(indent=2)
+    #     with open(fname_schema, "w") as fp:
+    #         fp.write(schema_str)
+

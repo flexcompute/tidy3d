@@ -219,7 +219,8 @@
     "courant": {
       "title": "Courant",
       "default": 0.9,
-      "minimum": 0,
+      "minimum": 0.0,
+      "maximum": 1.0,
       "type": "number"
     },
     "subpixel": {
@@ -258,11 +259,13 @@
         "permittivity": {
           "title": "Permittivity",
           "default": 1.0,
+          "minimum": 1.0,
           "type": "number"
         },
         "conductivity": {
           "title": "Conductivity",
           "default": 0.0,
+          "minimum": 0.0,
           "type": "number"
         }
       },
@@ -314,7 +317,7 @@
     },
     "Source": {
       "title": "Source",
-      "description": "Volume Source with time dependence and polarization ",
+      "description": "Template for all sources, all have Box geometry ",
       "type": "object",
       "properties": {
         "size": {
@@ -357,24 +360,11 @@
         },
         "source_time": {
           "$ref": "#/definitions/SourceTime"
-        },
-        "polarization": {
-          "title": "Polarization",
-          "enum": [
-            "Jx",
-            "Jy",
-            "Jz",
-            "Mx",
-            "My",
-            "Mz"
-          ],
-          "type": "string"
         }
       },
       "required": [
         "size",
-        "source_time",
-        "polarization"
+        "source_time"
       ],
       "additionalProperties": false
     },
