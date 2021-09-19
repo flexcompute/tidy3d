@@ -8,10 +8,10 @@ BOUND_EPS = 1e-3  # expand bounds by this much
 
 """ defines objects in space """
 
-class Geometry(ABC, Tidy3dBaseModel):
+class Geometry(Tidy3dBaseModel):
     """ abstract base class, defines where something exists in space"""
 
-    @abstractmethod
+    # @abstractmethod
     def _get_bounds(self) -> Bound:
         """ Returns bounding box for this geometry, must implement for subclasses """
         pass
@@ -36,8 +36,8 @@ class Geometry(ABC, Tidy3dBaseModel):
 class Box(Geometry):
     """rectangular Box (has size and center)"""
 
-    size: Size
     center: Coordinate = (0.0, 0.0, 0.0)
+    size: Size
 
     def _get_bounds(self) -> Bound:
         """sets bounds based on size and center"""

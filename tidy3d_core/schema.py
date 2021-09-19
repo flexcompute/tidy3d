@@ -3,6 +3,11 @@ from jsonschema import Draft3Validator
 from jsonschema.validators import extend
 import jsonschema2md
 
+import sys
+sys.path.append('../')
+
+from tidy3d import Simulation
+
 """ creates schema validator and function for validating simulation dict """
 
 def load_json(fname: str) -> dict:
@@ -29,7 +34,8 @@ def validate_dict(sim_dict: dict) -> None:
     """makes sure a simulation dict is consistent with schema """
     SCHEMA_VALIDATOR.is_valid(sim_dict)
 
-def generate_schema_docs(fname_schema: str, fname_readme: str = 'SCHEMA.md') -> None:
+def generate_schema_docs(fname_schema: str, fname_readme: str='SCHEMA.md') -> None:
+    """ make some docs, note this doesnt really work yet"""
     parser = jsonschema2md.Parser()
     with open(fname_schema, "r") as fp:
         md_lines = parser.parse_schema(json.load(fp))
@@ -37,12 +43,19 @@ def generate_schema_docs(fname_schema: str, fname_readme: str = 'SCHEMA.md') -> 
         for line in md_lines:
             fp.write(md_lines)
 
+def write_schema(fname_schema: str = "schema.json") -> None:
+    """saves simulation object schema to json"""
+    schema_str = Simulation.schema_json(indent=2)
+    with open(fname_schema, "w") as fp:
+        fp.write(schema_str)
+
 VALIDATOR = Draft3Validator
 SCHEMA_PATH = 'schema.json'
 SCHEMA_DICT = load_json(SCHEMA_PATH)
 SCHEMA_VALIDATOR = _create_validator(SCHEMA_DICT)
 
-
 if __name__ == '__main__':
-    # pass
-    generate_schema_docs(SCHEMA_PATH)
+    write_schema(SCHEMA_PATH)
+    SCHEMA_DICT = load_json(SCHEMA_PATH)
+    SCHEMA_VALIDATOR = _create_validator(SCHEMA_DICT)    
+    # generate_schema_docs(SCHEMA_PATH)

@@ -10,9 +10,9 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         validate_all = True              # validate default values too
         extra = 'forbid'                 # forbid extra kwargs not specified in model
         validate_assignment = True       # validate when attributes are set after initialization
-        error_msg_templates = {          # custom error messages
-            'value_error.extra': "extra kwarg supplied"
-        }
+        # error_msg_templates = {          # custom error messages
+        #     'value_error.extra': "extra kwarg supplied"
+        # }
         # note: put tidy3d version in here?
         schema_extra = {}                # can use to add fields to schema (task_id? path to schema?)
 
@@ -21,3 +21,6 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         # json_encoders = {
         #     np.ndarray: lambda x: list(x),
         # }
+        extra = 'allow'
+        allow_population_by_field_name=True
+
