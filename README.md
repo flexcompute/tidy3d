@@ -68,10 +68,11 @@
 
 ### Web Emulation
 
-- [x]  Write simple tidy3d_core
+- [ ]  Write simple tidy3d_core
 	- [x]  Preprocess simulation.json into Simulation
 	- [x]  "solver" that generates fake data.
 	- [x]  Postprocess solver data into tidy3d data objects.
+	- [ ]  Export and load Solver data into files for download.
 - [ ]  Write emulated webAPI to transfer files back and forth (1 day)
 	- [ ] Make `task` its own dataclass.
 	- [ ] Create basic mock data creation.
@@ -82,8 +83,8 @@
 
 - [ ] Write tidy3d core and make webAPI functional for simplest cases (2-3 weeks, w/ Momchil’s help)
 	- [ ] What are tidy3d core endpoints for C++?
-	- [ ] Load simulation.json into `tidy3d.Simulation`.
-	- [ ] Postprocess `tidy3d.Simulation` into solver files.
+	- [x] Load simulation.json into `tidy3d.Simulation`.
+	- [x] Postprocess `tidy3d.Simulation` into solver files.
 	- [ ] add http / authentication etc.
 	- [ ] Test test test.
 ---
