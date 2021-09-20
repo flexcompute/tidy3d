@@ -28,22 +28,21 @@ class Simulation(Box):
     courant: pydantic.confloat(ge=0.0, le=1.0) = 0.9
     subpixel: bool = True
 
-    # _courant_validator = ensure_less_than("courant", 1)
-
-
     def __init__(self, **kwargs):
         """ initialize sim and then do more validations """
         super().__init__(**kwargs)
-        self._check_nonuniform_grid_size()
-        self._check_geo_objs_in_bounds()
-        self._check_pw_in_homogeneos()
 
-    def _check_nonuniform_grid_size(self):
-        """ make sure nonuniform grid_size covers size (if added) """
-        pass
+        self._check_geo_objs_in_bounds()
+        # to do:
+        # - check sources in medium frequency range
+        # - check PW in homogeneous medium
+        # - check nonuniform grid covers the whole simulation domain
+
+    """ Post-Init validations """
 
     def _check_geo_objs_in_bounds(self):
-        """ for each geometry-containing object in simulation, check whether intersects simulation """
+        """ for each geometry-containing object in simulation, make sure it intersects simulation """
+
         for i, structure in enumerate(self.structures):
             assert self._intersects(structure.geometry), f"Structure '{structure}' (at position {i}) is completely outside simulation"
 
@@ -51,9 +50,7 @@ class Simulation(Box):
             for name, geo_obj in geo_obj_dict.items():
                 assert self._intersects(geo_obj), f"object '{name}' is completely outside simulation"
 
-    def _check_pw_in_homogeneos(self):
-        """ is PW in homogeneous medium (if added) """
-        pass
+    """ IO """
 
     def export(self, fname: str = 'simulation.json') -> None:
         json_string = self.json(indent=2)
@@ -63,10 +60,3 @@ class Simulation(Box):
     @classmethod
     def load(cls, fname: str = 'simulation.json'):
         return cls.parse_file(fname)
-
-    # def schema(fname_schema: str = "schema.json") -> None:
-    #     """saves simulation object schema to json"""
-    #     schema_str = Simulation.schema_json(indent=2)
-    #     with open(fname_schema, "w") as fp:
-    #         fp.write(schema_str)
-

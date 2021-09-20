@@ -4,7 +4,7 @@ from jsonschema.validators import extend
 import jsonschema2md
 
 import sys
-sys.path.append('../')
+sys.path.append('../../')
 
 from tidy3d import Simulation
 
