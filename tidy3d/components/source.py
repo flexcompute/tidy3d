@@ -3,7 +3,7 @@ import numpy as np
 from abc import ABC, abstractmethod
 
 from .base import Tidy3dBaseModel
-from .types import Tuple, Direction, Polarization
+from .types import Tuple, Direction, Polarization, Union
 from .validators import assert_plane
 from .geometry import Box
 from .mode import Mode
@@ -66,13 +66,14 @@ class CW(Pulse):
 
         return const * offset * oscillation * amp
 
+SourceTimeType = Union[GaussianPulse, CW]
 
 """ Source objects """
 
 class Source(Box, ABC):
     """ Template for all sources, all have Box geometry """
 
-    source_time: SourceTime
+    source_time: SourceTimeType
 
 class VolumeSource(Source):
     """ Volume Source with time dependence and polarization """
@@ -117,17 +118,5 @@ class GaussianBeam(DirectionalSource):
     waist_size: Tuple[pydantic.NonNegativeFloat, pydantic.NonNegativeFloat]
 
 
-# class DataSource(AbstractSource):
-#     """ user specified J(r) data on source surface """
-
-#     data: np.ndarray
-
-#     @pydantic.validator("data")
-#     def is_right_shape(cls, val, values):
-#         data_shape = val.shape
-#         dims_data = len(data_shape)
-#         source_size = values.get("size")
-#         assert source_size is not None
-#         dims_box = 3 - source_size.count(0.0)
-#         assert dims_data == dims_box, f"data must have one axis per non-zero shape of Source, data.shape={data_shape}, source.size={source_size}"
-#         return val
+# allowable sources to use in Simulation.sources
+SourceType = Union[VolumeSource, ModeSource, GaussianBeam]

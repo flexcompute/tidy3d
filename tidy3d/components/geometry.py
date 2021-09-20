@@ -2,7 +2,7 @@ import pydantic
 from abc import ABC, abstractmethod
 
 from .base import Tidy3dBaseModel
-from .types import Bound, Size, Coordinate, Axis, Coordinate2D, List, Tuple
+from .types import Bound, Size, Coordinate, Axis, Coordinate2D, List, Tuple, Union
 
 BOUND_EPS = 1e-3  # expand bounds by this much
 
@@ -97,3 +97,4 @@ class PolySlab(Geometry):
 
         return (tuple(coord_min), tuple(coord_max))
 
+GeometryType = Union[Box, Sphere, Cylinder, PolySlab]

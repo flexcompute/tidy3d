@@ -1,49 +1,68 @@
 import pydantic
 
-class Base(pydantic.BaseModel):
+import sys
+sys.path.append('./')
 
-    class Config:
-        extra = 'forbid'   # forbid use of extra kwargs
+from tidy3d import *
 
-
-class Thing(Base):
-    thing_id: int
-
-class SubThing(Thing):
-    name: str
-
-class Container(Base):
-    thing: Thing
-
-# make instance of container
-c = Container(
-    thing = SubThing(
-        thing_id=1,
-        name='my_thing')
+s1 = Simulation(
+    size=(2.0, 2.0, 2.0),
+    grid_size=(0.01, 0.01, 0.01),
+    run_time=1e-12,
+    structures={
+        "my_square": Structure(
+            geometry=Box(size=(1, 1, 1), center=(-1, 0, 0)),
+            medium=Medium(permittivity=2.0),
+        ),
+        "my_box": Structure(
+            geometry=Box(size=(1, 1, 1), center=(0, 0, 0)),
+            medium=Medium(permittivity=1.0, conductivity=3.0),
+        ),
+        "my_sphere": Structure(
+            geometry=Sphere(
+                radius=1.4,
+                center=(1.0, 0.0, 1.0)
+            ),
+            medium=Medium()
+        ),
+        "my_cylinder": Structure(
+            geometry=Cylinder(
+                radius=1.4,
+                length=2.0,
+                center=(1.0, 0.0, -1.0),
+                axis=1
+            ),
+            medium=Medium()
+        )        
+    },
+    sources={
+        "my_dipole": VolumeSource(
+            size=(0, 0, 0),
+            center=(0, -0.5, 0),
+            polarization='Mx',
+            source_time=GaussianPulse(
+                freq0=1e14,
+                fwidth=1e12,
+            ),
+        )
+    },
+    monitors={
+        "point": FieldMonitor(size=(0,0,0), center=(0,0,0), sampler=FreqSampler(freqs=[1,2])),
+        "plane": FluxMonitor(size=(1,1,0), center=(0,0,0), sampler=TimeSampler(times=[1,2]))
+    },
+    symmetry=(0, -1, 1),
+    pml_layers=(
+        PMLLayer(profile="absorber", num_layers=20),
+        PMLLayer(profile="stable", num_layers=30),
+        PMLLayer(profile="standard"),
+    ),
+    shutoff=1e-6,
+    courant=0.8,
+    subpixel=False,
 )
 
-json_string = c.json(indent=2)
-print(json_string)
-
-"""
-{
-  "thing": {
-    "thing_id": 1,
-    "name": "my_thing"
-  }
-}
-"""
-
-c = Container.parse_raw(json_string)
-print(c)
-"""
-Traceback (most recent call last):
-  File "...", line 36, in <module>
-    c = Container.parse_raw(json_string)
-  File "pydantic/main.py", line 601, in pydantic.main.BaseModel.parse_raw
-  File "pydantic/main.py", line 578, in pydantic.main.BaseModel.parse_obj
-  File "pydantic/main.py", line 406, in pydantic.main.BaseModel.__init__
-pydantic.error_wrappers.ValidationError: 1 validation error for Container
-thing -> name
-  extra fields not permitted (type=value_error.extra)
-"""
+def test_load_export():
+    path = 'tests/tmp/simulation.json'
+    s1.export(path)
+    s2 = Simulation.load(path)
+    assert s1 == s2, "original and loaded simulations are not the same"

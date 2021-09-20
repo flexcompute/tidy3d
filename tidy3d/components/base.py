@@ -21,6 +21,5 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         # json_encoders = {
         #     np.ndarray: lambda x: list(x),
         # }
-        extra = 'allow'
         allow_population_by_field_name=True
 
