@@ -1,59 +1,54 @@
-import pydantic
-
+from dataclasses import dataclass
 from typing import Any, Union
 
-class Base(pydantic.BaseModel):
+@dataclass
+class Base:
     class Config:
         extra = 'forbid'   # forbid use of extra kwargs
 
 
     klass: str = None
 
-    def __init__(self, **kwargs):
-        kwargs['klass'] = self.__class__.__name__
-        super().__init__(**kwargs)
-
-class Thing(Base):
+@dataclass
+class Thing:
 
     thing_id: int
-    name: str
 
-    def __init__(self, **kwargs):
-        kwargs['klass'] = self.__class__.__name__
-        super().__init__(**kwargs)
-
+@dataclass
 class SubThing1(Thing):
-    name: str
+    name1: str
 
+@dataclass
 class SubThing2(Thing):
-    name: str
+    name2: str
 
-class Container(Base):
+@dataclass
+class Container:
     thing_a: Union[SubThing1, SubThing2]
     thing_b: Union[SubThing1, SubThing2]
 
-t1 = SubThing1(thing_id=1, name='my_thing1')
-t2 = SubThing2(thing_id=1, name='my_thing2')
-c1 = Container(
-    thing_a=t1,
-    thing_b=t2,
-)
+def _test_dataclasses():
+    from dataclass_wizard import asdict, fromdict
 
-from pprint import pprint as print
+    # currently fails
 
-d = c1.dict()
-print(d)
-# {'thing': {'thing_id': 1, 'name': 'my_thing'}}
+    t1 = SubThing1(thing_id=1, name1='my_thing1')
+    t2 = SubThing2(thing_id=1, name2='my_thing2')
+    c1 = Container(
+        thing_a=t1,
+        thing_b=t2,
+    )
 
+    from pprint import pprint as print
 
-# Now it works!
-c2 = Container(**d)
+    d = asdict(c1)
 
-print(c2)
-# thing=SubThing(thing_id=1, name='my_thing')
+    c2 = fromdict(Container, d)
 
-# assert that the values for the de-serialized instance is the same
-assert c1 == c2
+    print(c1)
+    print(c2)
 
-assert isinstance(c1.thing_b, SubThing2)
+    assert c1 == c2
+    assert isinstance(c1.thing_b, SubThing2)
+
 
