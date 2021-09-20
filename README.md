@@ -51,7 +51,6 @@
 #### Component / API definition
 
 - [x] Organize repo in basic structure we want moving forward (.5 days)
----
 - [x] Decide on schema for all fields in tidy3d public (1 week)
 	- [x] Simulation
 	- [x] Geometry
@@ -62,13 +61,13 @@
 	- [x] Monitor
 	- [x] Mode
 - [x] Write documentation explaining all components & design choices.
----
 - [x] Write boilerplate for all plugins / packages (1 week)
 	- [x] Dispersion fit (create `DispersiveMedium()` objects from nk data)
 	- [x] Mode Solver (create specifications for waveguide modes using the solver)
 	- [x] Batch Processor (submit and manage batches of jobs, used by below)
 	- [x] Component Modeler (wrapper for analyzing S-matrix of device using ports)
 	- [x] Device Optimizer (wrapper for parameter sweep / adjoint optimization routines)
+---
 
 #### Web Emulation
 
@@ -83,6 +82,7 @@
 	- [ ] **Create set of basic API calls.**
 	- [ ] **Simple batch / job interface.**
 ---
+
 ### Stage 2: Integration
 
 #### Solver Integration
@@ -93,6 +93,7 @@
 	- [ ] **Hook up Simulation.json to solver (momchil)**
 	- [ ] **Postprocess solver output into `tidy3d.SimulationData` (momchil)**
 - [ ] Test test test.
+---
 
 #### Web Integration
 - [ ] refactor webapi
@@ -100,17 +101,16 @@
 - [ ] set up so that daemon recgonizes new json files.
 - [ ] Test test test.
 ---
+
 #### Plugins
----
+
 - [ ] Flesh out all details for plugins (18.5 days total)
 	- [ ] Dispersion fit (1 day)
 	- [ ] Mode solver (1 week) (just load in local one for now)
 	- [ ] Batch processor (1 week)
 	- [ ] S matrix (1 week)
 	- [ ] Optimizer (2 days)
-	---
----
----
+
 ---
 #### Visualization
 - [ ] write all visuaization routines
@@ -122,6 +122,7 @@
 	- [ ] Overlay structures onto fields.
 	- [ ] SimulationData
 
+---
 #### IO
 - [ ] Supply other ways to create simulation files (2 days)
 	- [ ] yaml -> json conversion 
@@ -129,6 +130,7 @@
 	- [ ] simple yaml editor?  flask app?
 	- [ ] Output Simulation as blender file?
 
+---
 ### Stage 3: Refining
 
 A good template:
@@ -138,7 +140,6 @@ https://github.com/crusaderky/python_project_template
 
 - [ ] Finalize writing of internal documentation (1 week)
 	- [ ] Add and edit docstrings to all.
----
 - [ ] Set up documentation (1 week)
 	- [ ] Make pydantic autosummaries more pretty.
 	- [ ] Move Docs into repo.
@@ -153,7 +154,6 @@ https://github.com/crusaderky/python_project_template
 	- [ ] Test submitting jobs if possible.
 	- [ ] Test notebooks.
 ---
----
 #### Github Integration
 - [ ] Automate everything using GitHub extensions (2 weeks)
 	- [ ] CI / tests.
@@ -161,7 +161,6 @@ https://github.com/crusaderky/python_project_template
 	- [ ] changelog
 	- [ ] Contributing guide / developer documentation.
 	- [ ] What else?
----
 ---
 #### Refine
 
@@ -172,12 +171,10 @@ https://github.com/crusaderky/python_project_template
 	- [ ] Wipe commit history
 	- [ ] decide how to manage branches
 ---
-
 #### Final
 - [ ] Finding bugs and fixing things, testing (2 weeks)
----
----
 - [ ]  Release publicly! :partying_face:
+---
 
 ### After this
 - [ ] Mode solver API using web.
