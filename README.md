@@ -44,7 +44,11 @@
 
 ## Roadmap (113.5 days = 16.2 weeks = 3.7 months ~ jan 1)
 
-### Component / API definition
+**Bold** = in progress this week-ish.
+
+### Stage 1: Definition
+
+#### Component / API definition
 
 - [x] Organize repo in basic structure we want moving forward (.5 days)
 ---
@@ -66,28 +70,37 @@
 	- [x] Component Modeler (wrapper for analyzing S-matrix of device using ports)
 	- [x] Device Optimizer (wrapper for parameter sweep / adjoint optimization routines)
 
-### Web Emulation
+#### Web Emulation
 
-- [x]  Write simple tidy3d_core
+- [ ]  *Write simple tidy3d_core*
 	- [x]  Preprocess simulation.json into Simulation
 	- [x]  "solver" that generates fake data.
 	- [x]  Postprocess solver data into tidy3d data objects.
-- [ ]  Write emulated webAPI to transfer files back and forth (1 day)
-	- [ ] Make `task` its own dataclass.
-	- [ ] Create basic mock data creation.
-	- [ ] Create set of basic API calls.
-	- [ ] Simple batch / job interface.
+	- [ ]  **Export and load Solver data into files for download.**
+- [ ]  **Write emulated webAPI to transfer files back and forth (1 day)**
+	- [ ] **Make `task` its own dataclass.**
+	- [ ] **Create basic mock data creation.**
+	- [ ] **Create set of basic API calls.**
+	- [ ] **Simple batch / job interface.**
 ---
-### Web Integration
+### Stage 2: Integration
 
-- [ ] Write tidy3d core and make webAPI functional for simplest cases (2-3 weeks, w/ Momchil’s help)
-	- [ ] What are tidy3d core endpoints for C++?
-	- [ ] Load simulation.json into `tidy3d.Simulation`.
-	- [ ] Postprocess `tidy3d.Simulation` into solver files.
-	- [ ] add http / authentication etc.
-	- [ ] Test test test.
+#### Solver Integration
+
+- [ ] **Add version to simulation.json**
+- [ ] **Make tidy3d_core functional with existing (or slightly modified) solver.**
+	- [ ] **Load simulation.json into `tidy3d.Simulation` (momchil).**
+	- [ ] **Hook up Simulation.json to solver (momchil)**
+	- [ ] **Postprocess solver output into `tidy3d.SimulationData` (momchil)**
+- [ ] Test test test.
+
+#### Web Integration
+- [ ] refactor webapi
+- [ ] add http / authentication etc.
+- [ ] set up so that daemon recgonizes new json files.
+- [ ] Test test test.
 ---
-### Plugins
+#### Plugins
 ---
 - [ ] Flesh out all details for plugins (18.5 days total)
 	- [ ] Dispersion fit (1 day)
@@ -99,16 +112,28 @@
 ---
 ---
 ---
+#### Visualization
+- [ ] write all visuaization routines
+	- [x] MonitorData
+	- [ ] **Structure cross section, sliding bar**
+	- [ ] **3 panel lumerical style plot `Simulation.visualize()`**
+	- [ ] **3D structure plotting**
+	- [ ] Overlay structures onto fields.
+	- [ ] SimulationData
 
-https://github.com/crusaderky/python_project_template
-
-### IO
+#### IO
 - [ ] Supply other ways to create simulation files (2 days)
 	- [ ] yaml -> json conversion 
 	- [ ] command line interface to submit yaml or json.
 	- [ ] simple yaml editor?  flask app?
+	- [ ] Output Simulation as blender file?
 
-### Documentation
+### Stage 3: Refining
+
+A good template:
+https://github.com/crusaderky/python_project_template
+
+#### Documentation
 
 - [ ] Finalize writing of internal documentation (1 week)
 	- [ ] Add and edit docstrings to all.
@@ -119,7 +144,7 @@ https://github.com/crusaderky/python_project_template
 	- [ ] Move tidy3d notebooks into repo, make them work with new code.
 	- [ ] test binder links.
 ---
-### Testing
+#### Testing
 
 - [ ] Add extensive amount of tests (2 weeks)
 	- [ ] Test simulation.json validation / error catching.
@@ -128,7 +153,7 @@ https://github.com/crusaderky/python_project_template
 	- [ ] Test notebooks.
 ---
 ---
-### Github Integration
+#### Github Integration
 - [ ] Automate everything using GitHub extensions (2 weeks)
 	- [ ] CI / tests.
 	- [ ] Version / releases.
@@ -137,7 +162,7 @@ https://github.com/crusaderky/python_project_template
 	- [ ] What else?
 ---
 ---
-### Refine
+#### Refine
 
 - [ ] Add finishing touches (2 days)
 	- [ ] Logo (1 day, outsource?)
@@ -147,7 +172,7 @@ https://github.com/crusaderky/python_project_template
 	- [ ] decide how to manage branches
 ---
 
-### Final
+#### Final
 - [ ] Finding bugs and fixing things, testing (2 weeks)
 ---
 ---
