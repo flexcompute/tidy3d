@@ -119,4 +119,4 @@ class GaussianBeam(DirectionalSource):
 
 
 # allowable sources to use in Simulation.sources
-SourceType = Union[VolumeSource, ModeSource, GaussianBeam]
+SourceType = Union[VolumeSource, PlaneWave, ModeSource, GaussianBeam]

@@ -97,4 +97,5 @@ class PolySlab(Geometry):
 
         return (tuple(coord_min), tuple(coord_max))
 
+# geometries allowed to be in simulation.structures
 GeometryType = Union[Box, Sphere, Cylinder, PolySlab]

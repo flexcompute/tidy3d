@@ -9,23 +9,23 @@ s1 = Simulation(
     size=(2.0, 2.0, 2.0),
     grid_size=(0.01, 0.01, 0.01),
     run_time=1e-12,
-    structures={
-        "my_square": Structure(
+    structures=[
+        Structure(
             geometry=Box(size=(1, 1, 1), center=(-1, 0, 0)),
             medium=Medium(permittivity=2.0),
         ),
-        "my_box": Structure(
+        Structure(
             geometry=Box(size=(1, 1, 1), center=(0, 0, 0)),
             medium=Medium(permittivity=1.0, conductivity=3.0),
         ),
-        "my_sphere": Structure(
+        Structure(
             geometry=Sphere(
                 radius=1.4,
                 center=(1.0, 0.0, 1.0)
             ),
             medium=Medium()
         ),
-        "my_cylinder": Structure(
+        Structure(
             geometry=Cylinder(
                 radius=1.4,
                 length=2.0,
@@ -34,7 +34,7 @@ s1 = Simulation(
             ),
             medium=Medium()
         )        
-    },
+    ],
     sources={
         "my_dipole": VolumeSource(
             size=(0, 0, 0),

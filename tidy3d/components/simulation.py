@@ -1,6 +1,6 @@
 import pydantic
 
-from .types import Literal, Dict, Tuple, Union
+from .types import Literal, Dict, Tuple, Union, List
 from .types import GridSize
 from .geometry import Box
 from .medium import Medium, MediumType
@@ -15,7 +15,7 @@ class Simulation(Box):
     grid_size: Union[pydantic.PositiveFloat, Tuple[GridSize, GridSize, GridSize]]
     medium: MediumType = Medium()
     run_time: pydantic.NonNegativeFloat = 0.0
-    structures: Dict[str, Structure] = {}
+    structures: List[Structure] = []
     sources: Dict[str, SourceType] = {}
     monitors: Dict[str, MonitorType] = {}
     pml_layers: Tuple[PMLLayer, PMLLayer, PMLLayer] = (
@@ -44,12 +44,12 @@ class Simulation(Box):
 
     def _check_geo_objs_in_bounds(self):
         """ for each geometry-containing object in simulation, check whether intersects simulation """
-        for geo_obj_dict in (self.structures, self.sources, self.monitors):
+        for i, structure in enumerate(self.structures):
+            assert self._intersects(structure.geometry), f"Structure '{structure}' (at position {i}) is completely outside simulation"
+
+        for geo_obj_dict in (self.sources, self.monitors):
             for name, geo_obj in geo_obj_dict.items():
-                if hasattr(geo_obj, "geometry"):
-                    assert self._intersects(geo_obj.geometry), "object '{name}' is completely outside simulation"
-                else:
-                    assert self._intersects(geo_obj), "object '{name}' is completely outside simulation"
+                assert self._intersects(geo_obj), f"object '{name}' is completely outside simulation"
 
     def _check_pw_in_homogeneos(self):
         """ is PW in homogeneous medium (if added) """

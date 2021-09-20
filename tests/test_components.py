@@ -11,23 +11,23 @@ def test_sim():
         size=(2.0, 2.0, 2.0),
         grid_size=(0.01, 0.01, 0.01),
         run_time=1e-12,
-        structures={
-            "my_square": Structure(
+        structures=[
+            Structure(
                 geometry=Box(size=(1, 1, 1), center=(-1, 0, 0)),
                 medium=Medium(permittivity=2.0),
             ),
-            "my_box": Structure(
+            Structure(
                 geometry=Box(size=(1, 1, 1), center=(0, 0, 0)),
                 medium=Medium(permittivity=1.0, conductivity=3.0),
             ),
-            "my_sphere": Structure(
+            Structure(
                 geometry=Sphere(
                     radius=1.4,
                     center=(1.0, 0.0, 1.0)
                 ),
                 medium=Medium()
             ),
-            "my_cylinder": Structure(
+            Structure(
                 geometry=Cylinder(
                     radius=1.4,
                     length=2.0,
@@ -36,7 +36,7 @@ def test_sim():
                 ),
                 medium=Medium()
             )        
-        },
+        ],
         sources={
             "my_dipole": VolumeSource(
                 size=(0, 0, 0),
@@ -78,15 +78,15 @@ def test_sim_bounds():
             center=CENTER_SHIFT,
             grid_size=(0.1, 0.1, 0.1),
             run_time=1e-12,
-            structures={
-                'box': Structure(
+            structures=[
+                Structure(
                     geometry=Box(
                         size=(1, 1, 1),
                         center=shifted_center
                     ),
                     medium=Medium()
                 )
-            }
+            ]
         )
 
     # create all permutations of squares being shifted 1, -1, or zero in all three directions
@@ -245,11 +245,6 @@ def test_VolumeSource_modal():
     g = GaussianPulse(freq0=1, fwidth=0.1)
     mode = Mode(mode_index=0)
     m = ModeSource(size=(0, 1, 1), direction='+', source_time=g, mode=mode)
-
-# def test_VolumeSource_data():
-#     g = GaussianPulse(freq0=1, fwidth=0.1)
-#     d = np.random.random((5, 5))
-#     ds = DataVolumeSource(size=(1, 0, 1), source_time=g, data=d)
 
 def test_monitor():
     freq_sampler = FreqSampler(freqs=[1,2,3])

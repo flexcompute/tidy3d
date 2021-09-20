@@ -53,6 +53,7 @@ class FreqSampler(Sampler):
     def __len__(self):
         return len(self.freqs)
 
+# samplers allowed to be used in monitors
 SamplerType = Union[TimeSampler, FreqSampler]
 
 """ Monitors """
@@ -76,7 +77,6 @@ class ModeMonitor(Monitor):
     modes: List[Mode]
     _plane_validator = assert_plane()
 
-
-# allowable sources to use in Simulation.sources
+# monitors allowed to be used in simulation.monitors
 MonitorType = Union[FieldMonitor, FluxMonitor, ModeMonitor]
 
