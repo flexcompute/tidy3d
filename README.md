@@ -79,14 +79,18 @@
 	- [ ] Create set of basic API calls.
 	- [ ] Simple batch / job interface.
 ---
-### Web Integration
+### Solver Integration
 
-- [ ] Write tidy3d core and make webAPI functional for simplest cases (2-3 weeks, w/ Momchil’s help)
-	- [ ] What are tidy3d core endpoints for C++?
+- [ ] Make tidy3d_core functional with existing (or slightly modified) solver.
 	- [x] Load simulation.json into `tidy3d.Simulation`.
-	- [x] Postprocess `tidy3d.Simulation` into solver files.
-	- [ ] add http / authentication etc.
-	- [ ] Test test test.
+	- [ ] Hook up Simulation.json to solver (momchil)
+	- [x] Postprocess solver output into `tidy3d.SimulationData` (momchil)
+- [ ] Test test test.
+
+### Web Integration
+- [ ] refactor webapi
+- [ ] add http / authentication etc.
+- [ ] Test test test.
 ---
 ### Plugins
 ---
