@@ -18,10 +18,11 @@ class Thing(Base):
     thing_id: int
 
 class SubThing1(Thing):
-    name1: str
+    name: str
 
 class SubThing2(Thing):
-    name2: str
+    name: str
+    thing2: Any=None
 
 class Container(Base):
     thing_a: Union[SubThing1, SubThing2]
@@ -29,8 +30,8 @@ class Container(Base):
 
 def test_pydantic():
 
-    t1 = SubThing1(thing_id=1, name1='my_thing1')
-    t2 = SubThing2(thing_id=1, name2='my_thing2')
+    t1 = SubThing1(thing_id=1, name='my_thing1')
+    t2 = SubThing2(thing_id=1, name='my_thing2')
     c1 = Container(
         thing_a=t1,
         thing_b=t2,
