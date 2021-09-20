@@ -115,6 +115,7 @@
 #### Visualization
 - [ ] write all visuaization routines
 	- [x] MonitorData
+	- [x] Basic sliding window for cross section.
 	- [ ] **Structure cross section, sliding bar**
 	- [ ] **3 panel lumerical style plot `Simulation.visualize()`**
 	- [ ] **3D structure plotting**
