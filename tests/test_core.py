@@ -21,4 +21,8 @@ SIM = Simulation(
 )
 
 def test():
-    pass
+    json_path = 'tests/tmp/simulation.json'
+    SIM.export(json_path)
+    sim_core = tdcore.load_simulation_json(json_path)
+    solver_data = tdcore.solve(sim_core)
+    sim_data = tdcore.load_solver_results(sim_core, solver_data)
