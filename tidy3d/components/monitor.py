@@ -53,6 +53,8 @@ class FreqSampler(Sampler):
     def __len__(self):
         return len(self.freqs)
 
+SamplerType = Union[TimeSampler, FreqSampler]
+
 """ Monitors """
 
 class Monitor(Box, ABC):
@@ -61,11 +63,11 @@ class Monitor(Box, ABC):
 
 class FieldMonitor(Monitor):
     """ stores E, H data on the monitor """
-    sampler: Sampler
+    sampler: SamplerType
 
 class FluxMonitor(Monitor):
     """ Stores flux on a surface """
-    sampler: Sampler
+    sampler: SamplerType
     _plane_validator = assert_plane()
 
 class ModeMonitor(Monitor):
@@ -73,3 +75,8 @@ class ModeMonitor(Monitor):
     sampler: FreqSampler
     modes: List[Mode]
     _plane_validator = assert_plane()
+
+
+# allowable sources to use in Simulation.sources
+MonitorType = Union[FieldMonitor, FluxMonitor, ModeMonitor]
+

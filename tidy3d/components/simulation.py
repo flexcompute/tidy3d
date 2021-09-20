@@ -3,22 +3,21 @@ import pydantic
 from .types import Literal, Dict, Tuple, Union
 from .types import GridSize
 from .geometry import Box
-from .medium import Medium
+from .medium import Medium, MediumType
 from .structure import Structure
-from .geometry import Geometry
-from .source import Source
-from .monitor import Monitor
+from .source import SourceType
+from .monitor import MonitorType
 from .pml import PMLLayer
 
 class Simulation(Box):
     """ Contains all information about simulation """
 
     grid_size: Union[pydantic.PositiveFloat, Tuple[GridSize, GridSize, GridSize]]
-    medium: Medium = Medium()
+    medium: MediumType = Medium()
     run_time: pydantic.NonNegativeFloat = 0.0
     structures: Dict[str, Structure] = {}
-    sources: Dict[str, Source] = {}
-    monitors: Dict[str, Monitor] = {}
+    sources: Dict[str, SourceType] = {}
+    monitors: Dict[str, MonitorType] = {}
     pml_layers: Tuple[PMLLayer, PMLLayer, PMLLayer] = (
         PMLLayer(),
         PMLLayer(),

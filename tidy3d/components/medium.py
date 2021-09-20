@@ -3,7 +3,7 @@ import numpy as np
 from abc import ABC, abstractmethod
 
 from .base import Tidy3dBaseModel
-from .types import List, Tuple, PoleAndResidue, Optional
+from .types import List, Tuple, PoleAndResidue, Optional, Union
 from ..constants import C_0, inf
 
 """ conversion helpers """
@@ -122,6 +122,6 @@ class Debye(DispersiveMedium):
             eps += de / (1 + 1j*frequency*tau)
         return eps
 
-# class Drude(DispersiveMedium):
-#     """ need to do """
-#     pass
+MediumType = Union[Medium, PoleResidue, Sellmeier, Lorentz, Debye]
+
+
