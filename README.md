@@ -44,6 +44,8 @@
 
 ## Roadmap (113.5 days = 16.2 weeks = 3.7 months ~ jan 1)
 
+*Bold* = in progress this week-ish.
+
 ### Stage 1: Definition
 
 #### Component / API definition
@@ -70,30 +72,32 @@
 
 #### Web Emulation
 
-- [ ]  Write simple tidy3d_core
+- [ ]  *Write simple tidy3d_core*
 	- [x]  Preprocess simulation.json into Simulation
 	- [x]  "solver" that generates fake data.
 	- [x]  Postprocess solver data into tidy3d data objects.
-	- [ ]  Export and load Solver data into files for download.
-- [ ]  Write emulated webAPI to transfer files back and forth (1 day)
-	- [ ] Make `task` its own dataclass.
-	- [ ] Create basic mock data creation.
-	- [ ] Create set of basic API calls.
-	- [ ] Simple batch / job interface.
+	- [ ]  *Export and load Solver data into files for download.*
+- [ ]  *Write emulated webAPI to transfer files back and forth (1 day)*
+	- [ ] *Make `task` its own dataclass.*
+	- [ ] *Create basic mock data creation.*
+	- [ ] *Create set of basic API calls.*
+	- [ ] *Simple batch / job interface.*
 ---
 ### Stage 2: Integration
 
 #### Solver Integration
 
-- [ ] Make tidy3d_core functional with existing (or slightly modified) solver.
-	- [x] Load simulation.json into `tidy3d.Simulation`.
-	- [ ] Hook up Simulation.json to solver (momchil)
-	- [x] Postprocess solver output into `tidy3d.SimulationData` (momchil)
+- [ ] *Add version to simulation.json*
+- [ ] *Make tidy3d_core functional with existing (or slightly modified) solver.*
+	- [ ] *Load simulation.json into `tidy3d.Simulation` (momchil).*
+	- [ ] *Hook up Simulation.json to solver (momchil)*
+	- [ ] *Postprocess solver output into `tidy3d.SimulationData` (momchil)*
 - [ ] Test test test.
 
 #### Web Integration
 - [ ] refactor webapi
 - [ ] add http / authentication etc.
+- [ ] set up so that daemon recgonizes new json files.
 - [ ] Test test test.
 ---
 #### Plugins
@@ -110,12 +114,12 @@
 ---
 #### Visualization
 - [ ] write all visuaization routines
-	- [ ] SimulationData
 	- [x] MonitorData
-	- [ ] Structure cross section, sliding bar
-	- [ ] 3 panel lumerical style plot `Simulation.visualize()`
-	- [ ] 3D structure plotting
+	- [ ] *Structure cross section, sliding bar
+	- [ ] *3 panel lumerical style plot `Simulation.visualize()`*
+	- [ ] *3D structure plotting*
 	- [ ] Overlay structures onto fields.
+	- [ ] SimulationData
 
 #### IO
 - [ ] Supply other ways to create simulation files (2 days)
