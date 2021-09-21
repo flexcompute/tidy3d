@@ -38,7 +38,7 @@ class MonitorData(xr.DataArray, ABC):
 
 	@classmethod
 	def load(cls, path: str):
-		""" Load MonitorData from file """
+		""" Load MonitorData from hdf5 file """
 		data_array = xr.open_dataarray(path, engine='h5netcdf')
 		return cls(data_array)
 
@@ -70,13 +70,6 @@ class ModeData(MonitorData):
 		image = hv_ds.to(hv.Curve, self.sampler_label(), dynamic=True)
 		return image
 
-# maps monitor data class name to the monitor data type
-monitor_data_name_type_map = {
-	'FieldData': FieldData,
-	'FluxData': FluxData,
-	'ModeData': ModeData
-}
-
 # maps monitor type to corresponding data type
 monitor_data_map = {
 	FieldMonitor: FieldData,
@@ -96,14 +89,6 @@ class SimulationData(Tidy3dData):
 		get_mon_path = lambda name: os.path.join(path_base, name)
 		self.simulation.export(sim_path)
 
-		# write a file mapping monitor name to monitor class name
-		monitor_map = {}
-		for mon_name, mon_data in self.monitor_data.items():
-			monitor_map[mon_name] = mon_data.__class__.__name__
-		monitor_map_path = os.path.join(path_base, 'monitor_map.json')
-		with open(monitor_map_path, 'w') as f:
-			f.write(json.dumps(monitor_map, indent=2))
-
 		# write monitor data to file
 		for mon_name, mon_data in self.monitor_data.items():
 			mon_path = os.path.join(path_base, f"monitor_data_{mon_name}.hdf5")
@@ -117,11 +102,6 @@ class SimulationData(Tidy3dData):
 		simulation_json_path = os.path.join(path_base, sim_fname)
 		simulation = Simulation.load(simulation_json_path)
 
-		# load monitor map 
-		monitor_map_path = os.path.join(path_base, 'monitor_map.json')
-		with open(monitor_map_path, "r") as f:
-			monitor_map = json.load(f)
-
 		# load monitor data
 		monitor_data = {}
 		for f in os.listdir(path_base):
@@ -129,16 +109,17 @@ class SimulationData(Tidy3dData):
 			# for all monitor data files
 			if 'monitor_data' in f:
 
-				# get the monitor name from the file
-				mon_name = f[len('monitor_data_'):-len(".hdf5")]
+				# open the dataset as an xr.dataArray and get its name
+				data_path = os.path.join(path_base, f)
+				data_array = xr.open_dataarray(data_path, engine='h5netcdf')
+				mon_name = data_array.name
 
-				# get the monitor type from the saved file
-				mon_data_type_name = monitor_map[mon_name]
-				mon_data_type = monitor_data_name_type_map[mon_data_type_name]
+				# from the name, lookup the monitor type and get monitor data type
+				mon_type = type(simulation.monitors[mon_name])
+				mon_data_type = monitor_data_map[mon_type]
 
-				# get the path to the monitor data and load it using the monitor type
-				mon_path = os.path.join(path_base, 'monitor_data_' + mon_name + '.hdf5')
-				mon_data = mon_data_type.load(mon_path)
+				# create a MonitorData instance from the MonitorData type and DataArray
+				mon_data = mon_data_type(data_array)
 				monitor_data[mon_name] = mon_data
 
 		return cls(simulation=simulation, monitor_data=monitor_data)
