@@ -5,9 +5,10 @@ import numpy as np
 import holoviews as hv
 import os
 import json
+import h5py
 
 from .simulation import Simulation
-from .monitor import Monitor, FluxMonitor, FieldMonitor, ModeMonitor
+from .monitor import Monitor, FluxMonitor, FieldMonitor, ModeMonitor, FreqSampler
 from .types import Dict
 
 class Tidy3dData(pydantic.BaseModel):
@@ -81,52 +82,72 @@ monitor_data_map = {
 	FluxMonitor: FluxData,
 	ModeMonitor: ModeData}
 
+data_dim_map = {
+	FieldData: ['field', 'component', 'xs', 'ys', 'zs', 'sampler_value(replace)'],
+	FluxData: ['sampler_value(replace)'],
+	ModeData: ['direction', 'mode_index', 'sampler_value(replace)'],
+}
+
 class SimulationData(Tidy3dData):
 
 	simulation: Simulation
 	monitor_data: Dict[str, MonitorData]
 
-	def export(self, path_base: str, sim_fname: str='simulation.json') -> None:
-		""" Export all data to files"""
+	def export(self, path: str) -> None:
+		""" Export all data to a file """
 
-		# write simulation.json to file
-		sim_path = os.path.join(path_base, sim_fname)
-		get_mon_path = lambda name: os.path.join(path_base, name)
-		self.simulation.export(sim_path)
-
-		# write monitor data to file
-		for mon_name, mon_data in self.monitor_data.items():
-			mon_path = os.path.join(path_base, f"monitor_data_{mon_name}.hdf5")
-			mon_data.export(path=mon_path)
+		with h5py.File(path, 'a') as f:
+			mon_data_grp = f.create_group('monitor_data')
+			json_string = self.simulation.json()
+			f.attrs['json_string'] = json_string
+			for mon_name, mon_data in self.monitor_data.items():
+				mon_grp = mon_data_grp.create_group(mon_name)
+				mon_grp.create_dataset('data', data=mon_data.data)
+				for coord_name in mon_data.coords:
+					print(coord_name)
+					coord_val = mon_data[coord_name].data
+					if isinstance(coord_val, str):
+						print(coord_val)
+					mon_grp.create_dataset(coord_name, data=coord_val)
 
 	@classmethod
-	def load(cls, path_base: str, sim_fname='simulation.json'):
+	def load(cls, path: str):
 		""" Load SimulationData from files"""
 
-		# load simulation
-		simulation_json_path = os.path.join(path_base, sim_fname)
-		simulation = Simulation.load(simulation_json_path)
+		# read from file
+		with h5py.File(path, 'r') as f:
 
-		# load monitor data
-		monitor_data = {}
-		for f in os.listdir(path_base):
+			# construct the original simulation from the json string
+			json_string = f.attrs['json_string']
+			sim = Simulation.parse_raw(json_string)
 
-			# for all monitor data files
-			if 'monitor_data' in f:
+			# loop through monitor dataset and create all MonitorData instances
+			monitor_data_dict = {}
+			monitor_data = f['monitor_data']
+			for mon_name, mon_data in monitor_data.items():
 
-				# open the dataset as an xr.dataArray and get its name
-				data_path = os.path.join(path_base, f)
-				data_array = xr.open_dataarray(data_path, engine='h5netcdf')
-				mon_name = data_array.name
-
-				# from the name, lookup the monitor type and get monitor data type
-				mon_type = type(simulation.monitors[mon_name])
-				mon_data_type = monitor_data_map[mon_type]
-
-				# create a MonitorData instance from the MonitorData type and DataArray
-				mon_data = mon_data_type(data_array)
-				monitor_data[mon_name] = mon_data
-
-		return cls(simulation=simulation, monitor_data=monitor_data)
-
-
+				# get info about the original monitor
+				monitor = sim.monitors.get(mon_name)
+				assert monitor is not None, "monitor not found in original simulation"
+				mon_type = type(monitor)
+				data_type = monitor_data_map[mon_type]
+				
+				# get the dimensions for this data type, replace sampler data with correct value
+				dims = data_dim_map[data_type]
+				sampler_dim = 'freqs' if isinstance(monitor.sampler, FreqSampler) else 'times'
+				dims[-1] = sampler_dim
+				
+				# load data from dataset, separate data and coordinates 
+				coords = {}
+				for data_name, dataset in mon_data.items():
+					data_value = np.array(dataset)
+					coords[data_name] = data_value
+				data_value = coords.pop('data')
+				
+				# load into an xarray.DataArray and make a monitor data to append to dictionary
+				darray = xr.DataArray(data_value, coords, dims=dims, name='mon_name')
+				monitor_data_instance = data_type(darray)
+				monitor_data_dict['mon_name'] = monitor_data_instance
+			
+		# return a SimulationData object containing all of the information
+		return cls(simulation=sim, monitor_data=monitor_data_dict)

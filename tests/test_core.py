@@ -37,23 +37,30 @@ def clear_tmp(fn):
 def prepend_tmp(path):
 	return os.path.join(TMP_DIR, path)
 
-@clear_tmp
-def test_flow_object_only():
+PATH_JSON = prepend_tmp('simulation.json')
+PATH_DATA = prepend_tmp('sim.hdf5')
+
+""" each stage of the flow """
+
+def solve_sim(sim):
 	solver_data = tdcore.solve(SIM)
 	sim_data = tdcore.load_solver_results(SIM, solver_data)
+	return sim_data
+
+
+@clear_tmp
+def test_flow_object_only():
+	sim_data = solve_sim(SIM)
 
 @clear_tmp
 def test_flow_file_input():
-	json_path = prepend_tmp('simulation.json')
-	SIM.export(json_path)
-	sim_core = tdcore.load_simulation_json(json_path)
-	solver_data = tdcore.solve(sim_core)
-	sim_data = tdcore.load_solver_results(sim_core, solver_data)
+	SIM.export(PATH_JSON)
+	sim_core = tdcore.load_simulation_json(PATH_JSON)
+	sim_data = solve_sim(sim_core)
 
 @clear_tmp
-def test_flow_file_output():
-	solver_data = tdcore.solve(SIM)    
-	sim_data = tdcore.load_solver_results(SIM, solver_data)    
+def _test_flow_file_output():
+	sim_data = solve_sim(SIM)  
 	for mon_name, mon_data in sim_data.monitor_data.items():
 		path = prepend_tmp(f'monitor_data_{mon_name}')
 		mon_data.export(path=path)
@@ -62,40 +69,22 @@ def test_flow_file_output():
 		assert mon_data == _mon_data
 
 @clear_tmp
-def test_flow_file_output():
-	solver_data = tdcore.solve(SIM)    
-	sim_data = tdcore.load_solver_results(SIM, solver_data)  
-	sim_fname = 'simulation.json'
-	sim_data.export(path_base=TMP_DIR, sim_fname='simulation.json')
-	_sim_data = SimulationData.load(path_base=TMP_DIR, sim_fname='simulation.json')
+def _test_flow_file_output():
+	sim_data = solve_sim(SIM)   
+	# sim_data.export(path=PATH_DATA)
+	# _sim_data = SimulationData.load(PATH_DATA)
 
 	assert sim_data == _sim_data
 
 @clear_tmp
 def test_flow_file_all():
-	json_path = prepend_tmp('simulation.json')
-	SIM.export(json_path)
-	sim_core = tdcore.load_simulation_json(json_path)
-	solver_data = tdcore.solve(sim_core)    
-	sim_data = tdcore.load_solver_results(sim_core, solver_data)  
-	sim_fname = 'simulation.json'
-	sim_data.export(path_base=TMP_DIR, sim_fname='simulation.json')
-	_sim_data = SimulationData.load(path_base=TMP_DIR, sim_fname='simulation.json')
 
-	assert _sim_data == sim_data
+	SIM.export(PATH_JSON)
+	sim_core = tdcore.load_simulation_json(PATH_JSON)
+	solver_data_dict = tdcore.solve(sim_core)
+	tdcore.save_solver_results(PATH_DATA, sim_core, solver_data_dict)
+	_sim_data = SimulationData.load(PATH_DATA)
 
-@clear_tmp
-def _test_groups():
-	json_path = prepend_tmp('simulation.json')
-	SIM.export(json_path)
-	sim_core = tdcore.load_simulation_json(json_path)
-	solver_data = tdcore.solve(sim_core)    
-	sim_data = tdcore.load_solver_results(sim_core, solver_data) 
+	import pdb; pdb.set_trace()
 
-	import h5py
-	fname = prepend_tmp('data.hdf5')
-	with h5py.File(fname, 'a') as f:
-		mon_grp = f.create_group('monitor_data')
-		for mon_name, mon_data in sim_data.monitor_data.items():
-			mon_data.to_netcdf(f, engine="netcdf4", group='monitor_data', mode='a')
-
+	assert _sim_data.simulation == SIM
