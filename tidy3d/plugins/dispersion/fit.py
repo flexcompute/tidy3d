@@ -4,7 +4,8 @@ import nlopt
 from tqdm import tqdm
 
 import sys
-sys.path.append('../..')
+
+sys.path.append("../..")
 
 from tidy3d.components.medium import nk_to_eps, eps_to_nk, eps_pole_residue
 from tidy3d.components.medium import PoleResidue
@@ -88,7 +89,7 @@ def test_coeffs():
 class DispersionFit:
     def __init__(self, wavelengths, n_data, k_data=None):
         """Creates a DispersionFit object from measured lambda, n, k data.
-        
+
         Parameters
         ----------
         wavelengths : array-like
@@ -96,7 +97,7 @@ class DispersionFit:
         n_data : array-like
             Real part of the refractive index at wavelengths.
         k_data : array-like, optional
-            Imaginary part of the refractive index at wavelengths 
+            Imaginary part of the refractive index at wavelengths
             (positive = lossy).
         """
 
@@ -134,16 +135,16 @@ class DispersionFit:
     def model(self, wavelengths, coeffs=None):
         """Returns the nk data at a set of wavelengths; if ``coeffs`` is not
         supplied, they are taken from last fit.
-        
+
         Parameters
         ----------
         wavelengths : array-like
             (micron) array of wavelengths to evaluate model at.
         coeffs : None, optional
-            If supplied, use for pole coefficients in model, otherwise use 
+            If supplied, use for pole coefficients in model, otherwise use
             fit's last result. These are in eV, while ``eps_pole_residue``
             assumes Hz. The conversion happens in ``make_poles``.
-        
+
         Returns
         -------
         tuple
@@ -167,11 +168,9 @@ class DispersionFit:
         n, k = eps_to_nk(complex_epsilon)
         return n, k
 
-    def fit(
-        self, num_poles=3, num_tries=100, tolerance_rms=0.0, plot=True, globalopt=True, bound=np.inf
-    ):
+    def fit(self, num_poles=3, num_tries=100, tolerance_rms=0.0, plot=True, globalopt=True, bound=np.inf):
         """Fits data a number of times and returns best results.
-        
+
         Parameters
         ----------
         num_poles : int, optional
@@ -186,7 +185,7 @@ class DispersionFit:
             Perform global optimization (if False, does local optimization).
         bound : float, optional
             Free parameters are bound between [-bound, +bound].
-        
+
         Returns
         -------
         tuple
@@ -198,9 +197,7 @@ class DispersionFit:
         best_rms = np.inf
         pbar = tqdm(range(num_tries))
         for _ in pbar:
-            coeffs, rms_error = self.fit_single(
-                num_poles=num_poles, globalopt=globalopt, bound=bound
-            )
+            coeffs, rms_error = self.fit_single(num_poles=num_poles, globalopt=globalopt, bound=bound)
 
             # if improvement, set the best RMS and coeffs
             if rms_error < best_rms:
@@ -219,9 +216,7 @@ class DispersionFit:
                 return best_coeffs, best_rms
 
         # if exited loop, did not reach tolerance (warn)
-        print(
-            f"\twarning: did not find fit with RMS error under tolerance_rms of {tolerance_rms:.2e}"
-        )
+        print(f"\twarning: did not find fit with RMS error under tolerance_rms of {tolerance_rms:.2e}")
         print(f"\treturning best fit with RMS error {best_rms:.2e}")
         self.coeffs = best_coeffs
         self.rms_error = best_rms
@@ -229,15 +224,14 @@ class DispersionFit:
         return best_coeffs, best_rms
 
     def fit_single(self, num_poles=3, globalopt=True, bound=np.inf):
-        """Perform a single fit to the data and return optimization result.
-        """
+        """Perform a single fit to the data and return optimization result."""
 
         def constraint(coeffs, _grad):
             """Evaluates the nonlinear stability criterion of
             Hongjin Choi, Jae-Woo Baek, and Kyung-Young Jung,
             "Comprehensive Study on Numerical Aspects of Modified
             Lorentz Model Based Dispersive FDTD Formulations,"
-            IEEE TAP 2019. """
+            IEEE TAP 2019."""
 
             a, c = unpack_coeffs(coeffs)
             ar, ai = unpack_complex(a)
@@ -248,7 +242,7 @@ class DispersionFit:
             return np.sum(res)
 
         def obj(coeffs, _grad):
-            """objective function for fit """
+            """objective function for fit"""
 
             model_n, model_k = self.model(self.wavelengths, coeffs)
             model_eps = nk_to_eps(model_n, model_k)
@@ -333,7 +327,7 @@ class DispersionFit:
         k_model_color="dodgerblue",
     ):
         """Make plot of model vs data, at a set of wavelengths (if supplied).
-        
+
         Parameters
         ----------
         wavelengths : array-like, optional
@@ -352,7 +346,7 @@ class DispersionFit:
             Color (matplotlib) of n model.
         k_model_color : str, optional
             Color (matplotlib) of k model.
-        
+
         Returns
         -------
         Matplotlib image object.
@@ -370,9 +364,7 @@ class DispersionFit:
         ax.plot(wavelengths, model_n, linewidth=linewidth, color=n_model_color, label="n (model)")
         if self.lossy:
             ax.scatter(self.wavelengths, self.k_data, s=dot_sizes, c=k_data_color, label="k (data)")
-            ax.plot(
-                wavelengths, model_k, linewidth=linewidth, color=k_model_color, label="k (model)"
-            )
+            ax.plot(wavelengths, model_k, linewidth=linewidth, color=k_model_color, label="k (model)")
         ax.set_ylabel("value")
         ax.set_xlabel("Wavelength ($\\mu m$)")
         ax.set_title(f"{self.num_poles} pole fit")
@@ -381,14 +373,14 @@ class DispersionFit:
         return im
 
     def as_medium(self, name=None):
-        """Returns a :class:`.Medium` representation of the fit, which can be used directly in 
+        """Returns a :class:`.Medium` representation of the fit, which can be used directly in
         a simulation.
-        
+
         Parameters
         ----------
         name : str, optional
             Custom name of the material.
-        
+
         Returns
         -------
         :class:`.DispersionModel`
@@ -399,7 +391,7 @@ class DispersionFit:
 
     def print_medium(self, name=None):
         """Prints a string representation of the fit so it can be copied and pasted into script.
-        
+
         Parameters
         ----------
         name : str, optional
@@ -418,7 +410,7 @@ class DispersionFit:
 
     def save_poles(self, fname="poles.txt"):
         """Saves poles as a txt file containing (num_poles, 2) array.
-        
+
         Parameters
         ----------
         fname : str, optional
@@ -430,14 +422,14 @@ class DispersionFit:
 def load_poles(fname="poles.txt", name=None):
     """Loads txt file with (num_poles, 2) complex array data into
     :class:`.Medium`.
-    
+
     Parameters
     ----------
     fname : str, optional
         Path to file containing the pole data.
     name : str, optional
         Custom name of the material.
-    
+
     Returns
     -------
     :class:`.Medium`
@@ -456,14 +448,14 @@ def load_poles(fname="poles.txt", name=None):
 def load_nk_file(fname, **load_txt_kwargs):
     """Loads nk data from file, performs validation on input. Wavelengths
     must be in micron.
-    
+
     Parameters
     ----------
     fname : str
         Path to file containing wavelength (um), n, k (optional) data in columns.
     **load_txt_kwargs
         Kwargs passed to ``np.loadtxt``.
-    
+
     Returns
     -------
     tuple
@@ -481,7 +473,7 @@ def load_nk_file(fname, **load_txt_kwargs):
 
 if __name__ == "__main__":
 
-    """ initializing fitter """
+    """initializing fitter"""
 
     fname1 = "n_data.csv"
     fname2 = "waveguide-material.csv"
@@ -507,9 +499,7 @@ if __name__ == "__main__":
 
         print(f"\nfitting with {num_poles} poles...")
 
-        poles, rms_error = dispFit.fit(
-            num_poles=num_poles, tolerance_rms=1e-4, num_tries=1000, globalopt=True, bound=np.inf
-        )
+        poles, rms_error = dispFit.fit(num_poles=num_poles, tolerance_rms=1e-4, num_tries=1000, globalopt=True, bound=np.inf)
 
         """ visualizing fit """
 

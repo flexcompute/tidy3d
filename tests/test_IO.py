@@ -5,7 +5,8 @@ import os
 from time import time
 
 import sys
-sys.path.append('./')
+
+sys.path.append("./")
 
 from tidy3d import *
 
@@ -22,38 +23,21 @@ s1 = Simulation(
             geometry=Box(size=(1, 1, 1), center=(0, 0, 0)),
             medium=Medium(permittivity=1.0, conductivity=3.0),
         ),
-        Structure(
-            geometry=Sphere(
-                radius=1.4,
-                center=(1.0, 0.0, 1.0)
-            ),
-            medium=Medium()
-        ),
-        Structure(
-            geometry=Cylinder(
-                radius=1.4,
-                length=2.0,
-                center=(1.0, 0.0, -1.0),
-                axis=1
-            ),
-            medium=Medium()
-        )        
+        Structure(geometry=Sphere(radius=1.4, center=(1.0, 0.0, 1.0)), medium=Medium()),
+        Structure(geometry=Cylinder(radius=1.4, length=2.0, center=(1.0, 0.0, -1.0), axis=1), medium=Medium()),
     ],
     sources={
         "my_dipole": VolumeSource(
             size=(0, 0, 0),
             center=(0, -0.5, 0),
-            polarization='Mx',
+            polarization="Mx",
             source_time=GaussianPulse(
                 freq0=1e14,
                 fwidth=1e12,
             ),
         )
     },
-    monitors={
-        "point": FieldMonitor(size=(0,0,0), center=(0,0,0), sampler=FreqSampler(freqs=[1,2])),
-        "plane": FluxMonitor(size=(1,1,0), center=(0,0,0), sampler=TimeSampler(times=[1,2]))
-    },
+    monitors={"point": FieldMonitor(size=(0, 0, 0), center=(0, 0, 0), sampler=FreqSampler(freqs=[1, 2])), "plane": FluxMonitor(size=(1, 1, 0), center=(0, 0, 0), sampler=TimeSampler(times=[1, 2]))},
     symmetry=(0, -1, 1),
     pml_layers=(
         PMLLayer(profile="absorber", num_layers=20),
@@ -65,17 +49,19 @@ s1 = Simulation(
     subpixel=False,
 )
 
+
 def test_simulation_load_export():
-    path = 'tests/tmp/simulation.json'
+    path = "tests/tmp/simulation.json"
     s1.export(path)
     s2 = Simulation.load(path)
     assert s1 == s2, "original and loaded simulations are not the same"
+
 
 def test_validation_speed():
 
     sizes_bytes = []
     times_sec = []
-    path = 'tests/tmp/simulation.json'
+    path = "tests/tmp/simulation.json"
 
     sim_base = s1
     N_tests = 10
@@ -83,7 +69,7 @@ def test_validation_speed():
 
     for n in num_structures:
         S = s1.copy()
-        S.structures = n*[s1.structures[0]]
+        S.structures = n * [s1.structures[0]]
 
         S.export(path)
         time_start = time()
@@ -95,4 +81,4 @@ def test_validation_speed():
         size = os.path.getsize(path)
         sizes_bytes.append(size)
 
-        print(f'{n} structures \t {size:.1e} bytes \t {time_validate:.1f} seconds to validate')
+        print(f"{n} structures \t {size:.1e} bytes \t {time_validate:.1f} seconds to validate")

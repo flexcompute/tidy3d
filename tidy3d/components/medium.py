@@ -8,47 +8,55 @@ from ..constants import C_0, inf
 
 """ conversion helpers """
 
+
 def nk_to_eps_complex(n, k=0.0):
-    """ convert n, k to complex permittivity """
-    eps_real = n**2 - k**2
-    eps_imag = 2*n*k
-    return eps_real + 1j*eps_imag
+    """convert n, k to complex permittivity"""
+    eps_real = n ** 2 - k ** 2
+    eps_imag = 2 * n * k
+    return eps_real + 1j * eps_imag
+
 
 def nk_to_eps_sigma(n, k, freq):
-    """ convert n, k at freq to permittivity and conductivity """
+    """convert n, k at freq to permittivity and conductivity"""
     eps_complex = nk_to_eps_complex(n, k)
     eps_real, eps_imag = eps_complex.real, eps_complex.imag
     omega = 2 * np.pi * freq
     sigma = omega * eps_imag
     return eps_real, sigma
 
+
 def nk_to_medium(n, k, freq):
-    """ convert n, k at freq to Medium """
+    """convert n, k at freq to Medium"""
     eps, sigma = nk_to_eps_sigma(n, k, freq)
     return Medium(permittivity=eps, conductivity=sigma)
 
+
 def eps_sigma_to_eps_complex(eps_real, sigma, freq):
-    """ convert permittivity and conductivity to complex permittivity at freq """
+    """convert permittivity and conductivity to complex permittivity at freq"""
     omega = 2 * np.pi * freq
     return eps_real + 1j * sigma / omega
 
+
 """ Medium Definitions """
+
 
 class AbstractMedium(ABC, Tidy3dBaseModel):
     """A medium within which electromagnetic waves propagate"""
-    
+
     # frequencies within which the medium is valid
     frequency_range: Optional[Tuple[float, float]] = (-inf, inf)
 
     @abstractmethod
     def eps_model(self, frequency: float) -> complex:
-        """ complex permittivity as a function of frequency """
+        """complex permittivity as a function of frequency"""
         pass
+
 
 """ Dispersionless Medium """
 
+
 class Medium(AbstractMedium):
-    """ Dispersionless medium"""
+    """Dispersionless medium"""
 
     permittivity: pydantic.confloat(ge=1.0) = 1.0
     conductivity: pydantic.confloat(ge=0.0) = 0.0
@@ -56,11 +64,15 @@ class Medium(AbstractMedium):
     def eps_model(self, frequency):
         return eps_sigma_to_eps_complex(self.permittivity, self.conductivity, frequency)
 
+
 """ Dispersive Media """
 
+
 class DispersiveMedium(AbstractMedium, ABC):
-    """ A Medium with dispersion (propagation characteristics depend on frequency) """
+    """A Medium with dispersion (propagation characteristics depend on frequency)"""
+
     pass
+
 
 class PoleResidue(DispersiveMedium):
     """defines a dispersion model"""
@@ -73,22 +85,23 @@ class PoleResidue(DispersiveMedium):
         eps = self.eps_inf + 0.0j
         for p in self.poles:
             (ar, ai), (cr, ci) = p
-            a = ar + 1j*ai
-            c = cr + 1j*ci
+            a = ar + 1j * ai
+            c = cr + 1j * ci
             a_cc = np.conj(a)
             c_cc = np.conj(c)
             eps -= c / (1j * omega + a)
             eps -= c_cc / (1j * omega + a_cc)
         return eps
 
+
 class Sellmeier(DispersiveMedium):
-    """ Sellmeier model for dispersion"""
+    """Sellmeier model for dispersion"""
 
     coeffs: List[Tuple[float, float]]
 
     def _n_model(self, frequency):
         wvl = C_0 / frequency
-        wvl2 = wvl**2
+        wvl2 = wvl ** 2
         n_squared = 1.0
         for (B, C) in self.coeffs:
             n_squared += B * wvl2 / (wvl2 - C)
@@ -98,20 +111,22 @@ class Sellmeier(DispersiveMedium):
         n = self._n_model(frequency)
         return nk_to_eps_complex(n)
 
+
 class Lorentz(DispersiveMedium):
-    """ Lorentz model for dispersion"""
-    
+    """Lorentz model for dispersion"""
+
     eps_inf: float = 1.0
     coeffs: List[Tuple[float, float, float]]
 
     def eps_model(self, frequency):
         eps = self.eps_inf + 0.0j
         for (de, f, delta) in self.coeffs:
-            eps += (de * f**2) / (f**2 + 2j*f*delta - frequency**2)
+            eps += (de * f ** 2) / (f ** 2 + 2j * f * delta - frequency ** 2)
         return eps
 
+
 class Debye(DispersiveMedium):
-    """ Debye model for dispersion"""
+    """Debye model for dispersion"""
 
     eps_inf: float = 1.0
     coeffs: List[Tuple[float, float]]
@@ -119,9 +134,8 @@ class Debye(DispersiveMedium):
     def eps_model(self, frequency):
         eps = self.eps_inf + 0.0j
         for (de, tau) in self.coeffs:
-            eps += de / (1 + 1j*frequency*tau)
+            eps += de / (1 + 1j * frequency * tau)
         return eps
 
+
 MediumType = Union[Medium, PoleResidue, Sellmeier, Lorentz, Debye]
-
-

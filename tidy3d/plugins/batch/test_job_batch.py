@@ -35,9 +35,7 @@ source = td.PlaneWave(
 )
 
 # create monitor
-freq_mnt = td.FreqMonitor(
-    center=[0, 0, 0], size=[6, 0, 6], freqs=[fcen], name="xz plane"
-)
+freq_mnt = td.FreqMonitor(center=[0, 0, 0], size=[6, 0, 6], freqs=[fcen], name="xz plane")
 
 # Initialize simulation
 sim = td.Simulation(
@@ -67,29 +65,29 @@ except:
 
 
 def test_a_submit_job():
-    """ tests whether a job can be submitted successfully """
+    """tests whether a job can be submitted successfully"""
     my_job = Job(sim, task_name="test_submit")
 
 
 def test_job_init():
-    """ Tests whether we can initialize job from Job Id of previous job"""
+    """Tests whether we can initialize job from Job Id of previous job"""
     default_job.monitor()
     new_job = Job.load_from_task_id(task_id=default_job.task_id)
 
 
 def test_job_get_info():
-    """ tests whether a submitted job will return info successfully """
+    """tests whether a submitted job will return info successfully"""
     default_job.get_info()
 
 
 def test_job_monitor():
-    """ tests whether we can monitor a submitted job """
+    """tests whether we can monitor a submitted job"""
     my_job = Job(sim, task_name="test_monitor")
     my_job.monitor()
 
 
 def test_job_delete():
-    """ makes sure we can delete a job and it's status reflects it """
+    """makes sure we can delete a job and it's status reflects it"""
     my_job = Job(sim, task_name="test_delete")
     task_id = my_job.task_id
     job_dict_before = webapi.get_project(task_id)
@@ -102,22 +100,22 @@ def test_job_delete():
 
 
 def test_job_load_results():
-    """ tests whether we can load results from run job """
+    """tests whether we can load results from run job"""
     default_job.load_results()
 
 
 def test_job_download_results():
-    """ tests whether we can download results from run job """
+    """tests whether we can download results from run job"""
     default_job.download_results()
 
 
 def test_job_download_json():
-    """ tests whether we can download json from run job """
+    """tests whether we can download json from run job"""
     default_job.download_json()
 
 
 def test_submit_batch():
-    """ tests submit_batch() works as expected """
+    """tests submit_batch() works as expected"""
     num_sims = 2
     my_sims = num_sims * [sim]
     task_names = ["test_batch_" + str(i) for i in range(1, num_sims + 1)]
@@ -125,13 +123,13 @@ def test_submit_batch():
 
 
 def test_a_batch_get_info():
-    """ tests whether job dicts are returned for each job in batch """
+    """tests whether job dicts are returned for each job in batch"""
     job_dicts = default_batch.get_info()
     assert len(job_dicts) == len(default_batch.jobs)
 
 
 def test_batch_monitor():
-    """ tests whether each job in batch is monitored """
+    """tests whether each job in batch is monitored"""
     num_sims = 2
     my_sims = num_sims * [sim]
     task_names = ["test_batch_" + str(i) for i in range(1, num_sims + 1)]
@@ -139,7 +137,7 @@ def test_batch_monitor():
 
 
 def test_batch_delete():
-    """ tests whether each job is deleted """
+    """tests whether each job is deleted"""
     num_sims = 2
     my_sims = num_sims * [sim]
     task_names = ["test_batch_" + str(i) for i in range(1, num_sims + 1)]
@@ -150,29 +148,29 @@ def test_batch_delete():
     my_batch.delete()
     job_dicts_after = my_batch.get_info()
     for job_dict_after in job_dicts_after:
-        assert 'delet' in job_dict_after['status']
+        assert "delet" in job_dict_after["status"]
 
 
 def test_batch_load_results():
-    """ tests whether results are loaded for each job in batch """
+    """tests whether results are loaded for each job in batch"""
     default_batch.monitor()
     default_batch.load_results()
 
 
 def test_batch_download_results():
-    """ tests whether results are downloaded for each job in batch """
+    """tests whether results are downloaded for each job in batch"""
     default_batch.monitor()
     default_batch.download_results()
 
 
 def test_batch_download_json():
-    """ tests whether json is downloaded for each job in batch """
+    """tests whether json is downloaded for each job in batch"""
     default_batch.monitor()
     default_batch.download_json()
 
 
 def test_batch_save_load():
-    """ tests whether json is downloaded for each job in batch """
+    """tests whether json is downloaded for each job in batch"""
     num_sims = 2
     my_sims = num_sims * [sim]
     task_names = ["test_batch_" + str(i) for i in range(1, num_sims + 1)]

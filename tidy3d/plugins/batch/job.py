@@ -3,7 +3,7 @@ from . import webapi as web
 
 class Job:
     """Container for single simulation and associated task.
-    
+
     Attributes
     ----------
     simulation : Simulation
@@ -25,7 +25,7 @@ class Job:
         draft=False,
     ):
         """Construct.
-        
+
         Parameters
         ----------
         simulation : Simulation
@@ -47,9 +47,7 @@ class Job:
         sim_dict = simulation.export()
         if task_id is None:
             # submit a task
-            info_dict = web.new_project(
-                sim_dict, task_name=task_name, folder_name=folder_name, draft=draft
-            )
+            info_dict = web.new_project(sim_dict, task_name=task_name, folder_name=folder_name, draft=draft)
             self.task_id = info_dict["taskId"]
         else:
             # use task_id
@@ -57,11 +55,9 @@ class Job:
         self.target_folder = base_dir.replace("/", "") + "/" + str(self.task_id)
 
     @classmethod
-    def load_from_task_id(
-        cls, task_id, base_dir="out/", task_name=None, folder_name="default"
-    ):
+    def load_from_task_id(cls, task_id, base_dir="out/", task_name=None, folder_name="default"):
         """Loads a Job from it's task id.
-        
+
         Parameters
         ----------
         task_id : str
@@ -73,7 +69,7 @@ class Job:
             Custom name for the task.
         folder_name : str, optional
             Server folder to hold the task.
-        
+
         Returns
         ------------------
         Job
@@ -95,12 +91,12 @@ class Job:
     def _get_target_folder(self, target_folder):
         """Get target folder for this :class:`.Job`.
         If it was specified use that, otherwise use default.
-        
+
         Parameters
         ----------
         target_folder : str
             specified ``target_folder``.
-        
+
         Returns
         -------
         str
@@ -112,7 +108,7 @@ class Job:
 
     def get_info(self):
         """Returns dictionary containing :class:`.Job` metadata.
-        
+
         Returns
         -------
         dict
@@ -122,7 +118,7 @@ class Job:
 
     def delete(self):
         """Deletes the :class:`.Job` from our server.
-        
+
         Returns
         -------
         dict
@@ -131,18 +127,17 @@ class Job:
         return web.delete_project(self.task_id)
 
     def monitor(self):
-        """Prints status of :class:`.Job` in real time.
-        """
+        """Prints status of :class:`.Job` in real time."""
         web.monitor_project(self.task_id)
 
     def load_results(self, target_folder=None):
         """Downloads data to ``target_folder``, loads data into either saved simulation or newly created simulation.
-        
+
         Parameters
         ----------
         target_folder : str, optional
             Path to where this job stores its data.
-        
+
         Returns
         -------
         Simulation
@@ -155,7 +150,7 @@ class Job:
 
     def download_json(self, target_folder=None):
         """Download the json file associated with this job to ``target_folder``.
-        
+
         Parameters
         ----------
         target_folder : None, optional
@@ -166,7 +161,7 @@ class Job:
 
     def download_results(self, target_folder=None):
         """Download the job results to ``target_folder``.
-        
+
         Parameters
         ----------
         target_folder : str, optional
@@ -178,11 +173,9 @@ class Job:
     """ methods we might want to implememnt sometime """
 
     def _pause(self):
-        """Pauses job running on server.
-        """
+        """Pauses job running on server."""
         pass
 
     def _resume(self):
-        """Resumes job running on server.
-        """
+        """Resumes job running on server."""
         pass

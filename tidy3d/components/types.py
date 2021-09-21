@@ -10,9 +10,7 @@ except ImportError:
 """ Defines 'types' that various fields can be """
 
 # tuple containing three non-negative floats
-Size = Tuple[
-    pydantic.NonNegativeFloat, pydantic.NonNegativeFloat, pydantic.NonNegativeFloat
-]
+Size = Tuple[pydantic.NonNegativeFloat, pydantic.NonNegativeFloat, pydantic.NonNegativeFloat]
 
 # tuple containing three floats
 Coordinate = Tuple[float, float, float]
@@ -32,5 +30,5 @@ Complex = Tuple[float, float]
 PoleAndResidue = Tuple[Complex, Complex]
 
 # sources
-Polarization = Literal['Jx', 'Jy', 'Jz', 'Mx', 'My', 'Mz']
-Direction = Literal['+', '-']
+Polarization = Literal["Jx", "Jy", "Jz", "Mx", "My", "Mz"]
+Direction = Literal["+", "-"]

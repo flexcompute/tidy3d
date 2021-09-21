@@ -9,23 +9,22 @@ except ImportError:
 
 """ === Global Config === """
 
+
 class Tidy3dBaseModel(pydantic.BaseModel):
-    """ https://pydantic-docs.helpmanual.io/usage/model_config/ """
+    """https://pydantic-docs.helpmanual.io/usage/model_config/"""
+
     class Config:
-        validate_all = True              # validate default values too
-        extra = 'forbid'                 # forbid extra kwargs not specified in model
-        validate_assignment = True       # validate when attributes are set after initialization
-        error_msg_templates = {          # custom error messages
-            'value_error.extra': "extra kwarg supplied"
-        }
-        schema_extra = {}                # can use to add fields to schema (task_id? path to schema?)
+        validate_all = True  # validate default values too
+        extra = "forbid"  # forbid extra kwargs not specified in model
+        validate_assignment = True  # validate when attributes are set after initialization
+        error_msg_templates = {"value_error.extra": "extra kwarg supplied"}  # custom error messages
+        schema_extra = {}  # can use to add fields to schema (task_id? path to schema?)
+
 
 """ ==== Types Used in Multiple Places ==== """
 
 # tuple containing three non-negative floats
-Size = Tuple[
-    pydantic.NonNegativeFloat, pydantic.NonNegativeFloat, pydantic.NonNegativeFloat
-]
+Size = Tuple[pydantic.NonNegativeFloat, pydantic.NonNegativeFloat, pydantic.NonNegativeFloat]
 
 # tuple containing three floats
 Coordinate = Tuple[float, float, float]
@@ -38,14 +37,13 @@ Axis = Literal[0, 1, 2]
 
 """ ==== Validators Used in Multiple Models ==== """
 
+
 def ensure_greater_or_equal(field_name, value):
     """makes sure a field_name is >= value"""
 
     @pydantic.validator(field_name, allow_reuse=True, always=True)
     def is_greater_or_equal_to(val):
-        assert (
-            val >= value
-        ), f"value of '{field_name}' must be greater than {value}, given {val}"
+        assert val >= value, f"value of '{field_name}' must be greater than {value}, given {val}"
         return val
 
     return is_greater_or_equal_to
@@ -56,9 +54,7 @@ def ensure_less_than(field_name, value):
 
     @pydantic.validator(field_name, allow_reuse=True, always=True)
     def is_less_than(field_val):
-        assert (
-            field_val < value
-        ), f"value of '{field_name}' must be less than {value}, given {field_val}"
+        assert field_val < value, f"value of '{field_name}' must be less than {value}, given {field_val}"
         return field_val
 
     return is_less_than
@@ -69,9 +65,7 @@ def assert_plane(field_name="geometry"):
 
     @pydantic.validator(field_name, allow_reuse=True, always=True)
     def is_plane(cls, v):
-        assert (
-            v.size.count(0.0) == 1
-        ), "mode objects only works with plane geometries with one size element of 0.0"
+        assert v.size.count(0.0) == 1, "mode objects only works with plane geometries with one size element of 0.0"
         return v
 
     return is_plane
@@ -89,6 +83,7 @@ def check_bounds():
         return val
 
     return valid_bounds
+
 
 def check_simulation_bounds():
     @pydantic.root_validator()
@@ -116,12 +111,14 @@ def check_simulation_bounds():
                 assert all(o <= s for (o, s) in zip(obj_bmin, sim_bmax)), f"{obj_name[:-1]} object '{name}' is outside of simulation bounds (on plus side)"
 
         return values
+
     return all_in_bounds
 
 
 """ ==== Geometry Models ==== """
 
 BOUND_EPS = 1e-3  # expand bounds by this much
+
 
 class Geometry(Tidy3dBaseModel):
     """defines where something exists in space"""
@@ -135,7 +132,7 @@ class Geometry(Tidy3dBaseModel):
         _bound_validator = check_bounds()
 
     def _get_bounds(self) -> Bound:
-        """ returns bounding box for this geometry """
+        """returns bounding box for this geometry"""
         raise NotImplementedError(f"Must implement self._get_bounds() for '{type(self).__name__}' geometry")
 
 
@@ -149,8 +146,8 @@ class Box(Geometry):
         """sets bounds based on size and center"""
         size = self.size
         center = self.center
-        coord_min = tuple(c - s/2 - BOUND_EPS for (s, c) in zip(size, center))
-        coord_max = tuple(c + s/2 + BOUND_EPS for (s, c) in zip(size, center))
+        coord_min = tuple(c - s / 2 - BOUND_EPS for (s, c) in zip(size, center))
+        coord_max = tuple(c + s / 2 + BOUND_EPS for (s, c) in zip(size, center))
         return (coord_min, coord_max)
 
 
@@ -173,9 +170,10 @@ class Cylinder(Geometry):
     def _get_bounds(self):
         coord_min = list(c - self.radius for c in self.center)
         coord_max = list(c + self.radius for c in self.center)
-        coord_min[self.axis] = self.center[self.axis] - self.length/2.
-        coord_max[self.axis] = self.center[self.axis] + self.length/2.
+        coord_min[self.axis] = self.center[self.axis] - self.length / 2.0
+        coord_max[self.axis] = self.center[self.axis] + self.length / 2.0
         return (tuple(coord_min), tuple(coord_max))
+
 
 class PolySlab(Geometry):
     vertices: List[Coordinate2D]
@@ -201,10 +199,12 @@ class PolySlab(Geometry):
 
         return (tuple(coord_min), tuple(coord_max))
 
+
 class GeometryObject(Tidy3dBaseModel):
-    """ an object with a geometry """
+    """an object with a geometry"""
 
     geometry: Geometry
+
 
 """ ==== Medium Models ==== """
 
@@ -257,6 +257,7 @@ class Source(GeometryObject):
     source_time: SourceTime
     polarization: Tuple[float, float, float]
 
+
 # class ModeSource(Source):
 #     """does mode solver over geometry"""
 #     mode_index: pydantic.NonNegativeInt = 0
@@ -267,11 +268,13 @@ class Source(GeometryObject):
 
 STORE_VALUES = Literal["E", "H", "flux"]
 
+
 class Monitor(GeometryObject):
     geometry: Box
     store_values: List[STORE_VALUES] = ["E", "H", "flux"]
     freqs: List[pydantic.NonNegativeFloat] = []
     times: List[pydantic.NonNegativeFloat] = []
+
 
 # class FreqMonitor(Monitor):
 #     freqs: List[pydantic.NonNegativeFloat]
@@ -286,11 +289,15 @@ class Monitor(GeometryObject):
 
 """ ==== Mesh ==== """
 
+
 class Mesh(Tidy3dBaseModel):
-    """ tells us how to discretize the simulation and it's GeometryObjects """
+    """tells us how to discretize the simulation and it's GeometryObjects"""
+
     grid_step: Size
 
+
 """ ==== PML ==== """
+
 
 class PMLLayer(Tidy3dBaseModel):
     """single layer of a PML (profile and num layers)"""
@@ -301,11 +308,12 @@ class PMLLayer(Tidy3dBaseModel):
 
 """ ==== Simulation ==== """
 
+
 class Simulation(GeometryObject):
-    """ Contains all information about simulation """
+    """Contains all information about simulation"""
 
     mesh: Mesh
-    geometry: Box    
+    geometry: Box
     run_time: pydantic.NonNegativeFloat = 0.0
     structures: Dict[str, Structure] = {}
     sources: Dict[str, Source] = {}
@@ -324,12 +332,14 @@ class Simulation(GeometryObject):
     _courant_validator = ensure_less_than("courant", 1)
     _sim_bounds_validator = check_simulation_bounds()
 
+
 def save_schema(fname_schema: str = "schema.json") -> None:
     """saves simulation object schema to json"""
     schema_str = Simulation.schema_json(indent=2)
     with open(fname_schema, "w") as fp:
         fp.write(schema_str)
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     fname_schema = "../schema.json"
     save_schema(fname_schema)

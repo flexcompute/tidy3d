@@ -9,8 +9,9 @@ from .source import SourceType
 from .monitor import MonitorType
 from .pml import PMLLayer
 
+
 class Simulation(Box):
-    """ Contains all information about simulation """
+    """Contains all information about simulation"""
 
     grid_size: Union[pydantic.PositiveFloat, Tuple[GridSize, GridSize, GridSize]]
     medium: MediumType = Medium()
@@ -29,7 +30,7 @@ class Simulation(Box):
     subpixel: bool = True
 
     def __init__(self, **kwargs):
-        """ initialize sim and then do more validations """
+        """initialize sim and then do more validations"""
         super().__init__(**kwargs)
 
         self._check_geo_objs_in_bounds()
@@ -41,7 +42,7 @@ class Simulation(Box):
     """ Post-Init validations """
 
     def _check_geo_objs_in_bounds(self):
-        """ for each geometry-containing object in simulation, make sure it intersects simulation """
+        """for each geometry-containing object in simulation, make sure it intersects simulation"""
 
         for i, structure in enumerate(self.structures):
             assert self._intersects(structure.geometry), f"Structure '{structure}' (at position {i}) is completely outside simulation"
@@ -52,11 +53,11 @@ class Simulation(Box):
 
     """ IO """
 
-    def export(self, fname: str = 'simulation.json') -> None:
+    def export(self, fname: str = "simulation.json") -> None:
         json_string = self.json(indent=2)
         with open(fname, "w") as fp:
             fp.write(json_string)
 
     @classmethod
-    def load(cls, fname: str = 'simulation.json'):
+    def load(cls, fname: str = "simulation.json"):
         return cls.parse_file(fname)
