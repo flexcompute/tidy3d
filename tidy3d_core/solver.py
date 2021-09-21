@@ -1,4 +1,5 @@
 import numpy as np
+from typing import Dict, Tuple
 
 import sys
 sys.path.append('../')
@@ -8,7 +9,10 @@ from tidy3d.components.types import GridSize, Tuple
 
 """ Creates fake data for the simulation and returns a monitor data dict containing all fields """
 
-def solve(simulation: Simulation) -> dict[str, dict[str, np.ndarray]]:
+# maps monitor name to dictionary mapping data label to data value
+SolverDataDict = Dict[str, Dict[str, np.ndarray]]
+
+def solve(simulation: Simulation) -> SolverDataDict:
 	""" takes simulation and returns dictionary of dictionaries storing the data """
 
 	data_dict = {}
