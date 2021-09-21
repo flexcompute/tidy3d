@@ -24,6 +24,10 @@ class Tidy3dData(pydantic.BaseModel):
 class MonitorData(xr.DataArray, ABC):
 	__slots__ = ()  # need this for xarray subclassing
 
+	def __eq__(self, other):
+		assert isinstance(other, MonitorData), "can only check eqality on two monitor data objects"
+		return self.equals(other)
+
 	def sampler_label(self):
 		return 'freqs' if 'freqs' in self.coords else 'times'
 
@@ -36,11 +40,12 @@ class MonitorData(xr.DataArray, ABC):
 		""" Export MonitorData to hdf5 file """
 		self.to_netcdf(path=path, engine='h5netcdf', invalid_netcdf=True)
 
-	@classmethod
-	def load(cls, path: str):
-		""" Load MonitorData from hdf5 file """
-		data_array = xr.open_dataarray(path, engine='h5netcdf')
-		return cls(data_array)
+	# @classmethod
+	# def load(cls, path: str):
+	# this conflicts with xr.DataArray
+	# 	""" Load MonitorData from hdf5 file """
+	# 	data_array = xr.open_dataarray(path, engine='h5netcdf')
+	# 	return cls(data_array)
 
 class FieldData(MonitorData):
 	__slots__ = ()  # need this for xarray subclassing
