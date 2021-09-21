@@ -9,6 +9,7 @@ sys.path.append('./')
 from tidy3d import *
 import tidy3d_core as tdcore
 
+# reference simulation
 SIM = Simulation(
 	size=(2.0, 2.0, 2.0),
 	grid_size=.1,
@@ -24,6 +25,7 @@ SIM = Simulation(
 TMP_DIR = 'tests/tmp/'
 
 def _clear_dir(path=TMP_DIR):
+	""" clears a dir """
 	for f in os.listdir(path):
 		os.remove(os.path.join(path, f))	
 
@@ -35,56 +37,125 @@ def clear_tmp(fn):
 	return new_fn
  
 def prepend_tmp(path):
+	""" prepents "TMP_DIR" to the path """
 	return os.path.join(TMP_DIR, path)
 
+# where we store json files
 PATH_JSON = prepend_tmp('simulation.json')
+
+# where we store simulation data files
 PATH_DATA = prepend_tmp('sim.hdf5')
 
-""" each stage of the flow """
+def _solve_sim(simulation: Simulation) -> SimulationData:
+	""" solves simulation and loads results into SimulationData """
+	solver_data_dict = tdcore.solve(simulation)
+	return tdcore.load_solver_results(simulation, solver_data_dict)
 
-def solve_sim(sim):
-	solver_data = tdcore.solve(SIM)
-	sim_data = tdcore.load_solver_results(SIM, solver_data)
-	return sim_data
+def _assert_same_sim_data(sim_data1: SimulationData, sim_data2: SimulationData, sim_reference: Simulation = None):
+	""" ensure two SimulationDatas are the same """
 
+	# assert the Simulations are the same as each other and original 
+	assert sim_data1.simulation == sim_data2.simulation
+	if sim_reference is not None:
+		assert sim_data1.simulation == sim_reference
+
+	# check all monitors are the same
+	monitor_data1 = sim_data1.monitor_data
+	monitor_data2 = sim_data2.monitor_data
+	assert monitor_data1.keys() == monitor_data2.keys()
+	for mon_name in monitor_data1.keys():
+		mon_data1 = monitor_data1[mon_name]
+		mon_data2 = monitor_data2[mon_name]
+		assert mon_data1 == mon_data2
+
+	# assert the two SimulationData are equal generally
+	assert sim_data1 == sim_data2
+
+""" tests"""
 
 @clear_tmp
-def test_flow_object_only():
-	sim_data = solve_sim(SIM)
+def test_flow():
+	""" Test entire step in pipeline """
 
-@clear_tmp
-def test_flow_file_input():
+	""" CLIENT SIDE """
+
+	# export simulation to json
 	SIM.export(PATH_JSON)
-	sim_core = tdcore.load_simulation_json(PATH_JSON)
-	sim_data = solve_sim(sim_core)
+
+	""" SERVER SIDE """
+
+	# load json file 
+	sim_core = Simulation.load(PATH_JSON)
+
+	# get raw results in dict of dict of np.ndarray
+	solver_data_dict = tdcore.solve(sim_core)
+
+	# load these results as SimulationData server side if you want
+	sim_data_core = tdcore.load_solver_results(sim_core, solver_data_dict)
+
+	# or, download these results to hdf5 file
+	tdcore.save_solver_results(PATH_DATA, sim_core, solver_data_dict)	
+
+	""" CLIENT SIDE """
+
+	# load the file into SimulationData
+	sim_data_client = SimulationData.load(PATH_DATA)
+
+	# make sure the SimulationData is identical
+	_assert_same_sim_data(sim_data_client, sim_data_core, sim_reference=SIM)
 
 @clear_tmp
-def _test_flow_file_output():
-	sim_data = solve_sim(SIM)  
-	for mon_name, mon_data in sim_data.monitor_data.items():
-		path = prepend_tmp(f'monitor_data_{mon_name}')
-		mon_data.export(path=path)
-		_mon_data = type(mon_data).load(path=path)
+def test_mon_data():
+	""" Test that exporting and loading a MonitorData gives same results """
+	
+	# make data
+	sim_data = _solve_sim(SIM)
+
+	# make sure all monitor data are same when exported and loaded
+	for mon_name, mon in SIM.monitors.items():
+		mon_data = sim_data.monitor_data[mon_name]
+
+		# export MonitorData
+		mon_path = prepend_tmp(f'monitor_{mon_name}.hdf5')
+		mon_data.export_as_file(mon_path)
+
+		# load with the correct MonitorData
+		mon_data_type = monitor_data_map[type(mon)]
+		_mon_data = mon_data_type.load_from_file(mon_path)
 
 		assert mon_data == _mon_data
 
 @clear_tmp
-def _test_flow_file_output():
-	sim_data = solve_sim(SIM)   
-	# sim_data.export(path=PATH_DATA)
-	# _sim_data = SimulationData.load(PATH_DATA)
+def test_sim_data():
+	""" Test that exporting and loading a SimulationData gives same results """
 
-	assert sim_data == _sim_data
+	# make data
+	sim_data = _solve_sim(SIM)
 
-@clear_tmp
-def test_flow_file_all():
+	# save SimulationData to file
+	sim_data.export(PATH_DATA)
 
-	SIM.export(PATH_JSON)
-	sim_core = tdcore.load_simulation_json(PATH_JSON)
-	solver_data_dict = tdcore.solve(sim_core)
-	tdcore.save_solver_results(PATH_DATA, sim_core, solver_data_dict)
+	# load different SimulationData from file
 	_sim_data = SimulationData.load(PATH_DATA)
 
-	import pdb; pdb.set_trace()
+	# make sure the SimulationData is identical
+	_assert_same_sim_data(sim_data, _sim_data, sim_reference=SIM)
 
-	assert _sim_data.simulation == SIM
+@clear_tmp
+def test_sim_data_postprocess():
+	""" Tests that Simulation data exported from postprocess.py/save_solver_results is consistent same as original """
+
+	# make data, load into SimulationData
+	solver_data = tdcore.solve(SIM)
+	sim_data = tdcore.load_solver_results(SIM, solver_data)
+
+	# save the SimulationData to file using tdcore convenience function
+	tdcore.save_solver_results(PATH_DATA, SIM, solver_data)
+
+	# load different SimulationData from file
+	_sim_data = SimulationData.load(PATH_DATA)
+
+	# make sure the SimulationData is identical
+	_assert_same_sim_data(sim_data, _sim_data, sim_reference=SIM)
+
+

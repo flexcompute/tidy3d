@@ -37,16 +37,15 @@ class MonitorData(xr.DataArray, ABC):
 		""" make interactive plot"""
 		pass
 
-	def export(self, path: str) -> None:
-		""" Export MonitorData to hdf5 file """
+	def export_as_file(self, path: str) -> None:
+		""" Export MonitorData to hdf5 file (named this to avoid namespace conflicts with xarray)  """
 		self.to_netcdf(path=path, engine='h5netcdf', invalid_netcdf=True)
 
-	# @classmethod
-	# def load(cls, path: str):
-	# this conflicts with xr.DataArray
-	# 	""" Load MonitorData from hdf5 file """
-	# 	data_array = xr.open_dataarray(path, engine='h5netcdf')
-	# 	return cls(data_array)
+	@classmethod
+	def load_from_file(cls, path: str):
+		""" Load MonitorData from hdf5 file (named this to avoid namespace conflicts with xarray) """
+		data_array = xr.open_dataarray(path, engine='h5netcdf')
+		return cls(data_array)
 
 class FieldData(MonitorData):
 	__slots__ = ()  # need this for xarray subclassing
@@ -96,25 +95,40 @@ class SimulationData(Tidy3dData):
 	def export(self, path: str) -> None:
 		""" Export all data to a file """
 
+		# write to the file at path
 		with h5py.File(path, 'a') as f:
-			mon_data_grp = f.create_group('monitor_data')
+
+			# save json string as an attribute
 			json_string = self.simulation.json()
 			f.attrs['json_string'] = json_string
+
+			# make a group for monitor_data
+			mon_data_grp = f.create_group('monitor_data')
 			for mon_name, mon_data in self.monitor_data.items():
+
+				# for each monitor, make new group with the same name
 				mon_grp = mon_data_grp.create_group(mon_name)
+
+				# add the data value to the moniitor
 				mon_grp.create_dataset('data', data=mon_data.data)
+
+				# for each of the coordinates
 				for coord_name in mon_data.coords:
-					print(coord_name)
+
+					# get the data and convert it to the correct type if it contains strings
 					coord_val = mon_data[coord_name].data
-					if isinstance(coord_val, str):
-						print(coord_val)
+					if isinstance(coord_val[0], np.str_):						
+						dt = h5py.special_dtype(vlen=str) 
+						coord_val = np.array(coord_val, dtype=dt) 						
+
+					# add the data to the group
 					mon_grp.create_dataset(coord_name, data=coord_val)
 
 	@classmethod
 	def load(cls, path: str):
 		""" Load SimulationData from files"""
 
-		# read from file
+		# read from file at path
 		with h5py.File(path, 'r') as f:
 
 			# construct the original simulation from the json string
@@ -136,18 +150,22 @@ class SimulationData(Tidy3dData):
 				dims = data_dim_map[data_type]
 				sampler_dim = 'freqs' if isinstance(monitor.sampler, FreqSampler) else 'times'
 				dims[-1] = sampler_dim
-				
+
 				# load data from dataset, separate data and coordinates 
 				coords = {}
-				for data_name, dataset in mon_data.items():
-					data_value = np.array(dataset)
+				for data_name, data_value in mon_data.items():
+
+					# convert bytes to string if neceessary and add to dict
+					if isinstance(data_value[0], bytes):
+						data_value = np.array([v.decode('UTF-8') for v in data_value])
 					coords[data_name] = data_value
+
 				data_value = coords.pop('data')
-				
+
 				# load into an xarray.DataArray and make a monitor data to append to dictionary
-				darray = xr.DataArray(data_value, coords, dims=dims, name='mon_name')
+				darray = xr.DataArray(data_value, coords, dims=dims, name=mon_name)
 				monitor_data_instance = data_type(darray)
-				monitor_data_dict['mon_name'] = monitor_data_instance
-			
+				monitor_data_dict[mon_name] = monitor_data_instance
+
 		# return a SimulationData object containing all of the information
 		return cls(simulation=sim, monitor_data=monitor_data_dict)
