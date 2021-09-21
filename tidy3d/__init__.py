@@ -13,6 +13,7 @@ from .components.monitor import TimeSampler, FreqSampler, uniform_freq_sampler, 
 from .components.monitor import FieldMonitor, FluxMonitor, ModeMonitor
 from .components.mode import Mode
 from .components.data import SimulationData, FieldData, FluxData, ModeData
+from .components.data import monitor_data_map
 
 from .constants import inf
 
