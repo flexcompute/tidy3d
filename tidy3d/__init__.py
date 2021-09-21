@@ -12,6 +12,7 @@ from .components.source import VolumeSource, PlaneWave, ModeSource
 from .components.monitor import TimeSampler, FreqSampler, uniform_freq_sampler, uniform_time_sampler
 from .components.monitor import FieldMonitor, FluxMonitor, ModeMonitor
 from .components.mode import Mode
+from .components.data import SimulationData, FieldData, FluxData, ModeData
 
 from .constants import inf
 
