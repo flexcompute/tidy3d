@@ -71,11 +71,11 @@
 
 #### Web Emulation
 
-- [ ]  *Write simple tidy3d_core*
+- [x]  Write simple tidy3d_core
 	- [x]  Preprocess simulation.json into Simulation
 	- [x]  "solver" that generates fake data.
 	- [x]  Postprocess solver data into tidy3d data objects.
-	- [ ]  **Export and load Solver data into files for download.**
+	- [x]  Export and load Solver data into files for download.
 - [ ]  **Write emulated webAPI to transfer files back and forth (1 day)**
 	- [ ] **Make `task` its own dataclass.**
 	- [ ] **Create basic mock data creation.**
