@@ -89,9 +89,10 @@
 
 - [ ] **Add version to simulation.json**
 - [ ] **Make tidy3d_core functional with existing (or slightly modified) solver.**
-	- [ ] **Load simulation.json into `tidy3d.Simulation` (momchil).**
-	- [ ] **Hook up Simulation.json to solver (momchil)**
-	- [ ] **Postprocess solver output into `tidy3d.SimulationData` (momchil)**
+	- [x] Load simulation.json into `tidy3d.Simulation`.
+	- [ ] **Hook up Simulation to solver (momchil)**
+	- [ ] **Write solver outputs to SimulationData (momchil)**
+	- [x] IO SimulationData
 - [ ] Test test test.
 ---
 
