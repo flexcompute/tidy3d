@@ -1,4 +1,3 @@
-
 # -- Path setup --------------------------------------------------------------
 
 import os
@@ -7,29 +6,32 @@ import codecs
 import sys
 
 here = os.path.abspath(os.path.dirname(__file__))
-sys.path.append(os.path.abspath('../'))
+sys.path.append(os.path.abspath("../"))
 print(sys.path)
 
+
 def read(*parts):
-    with codecs.open(os.path.join(here, *parts), 'r') as fp:
+    with codecs.open(os.path.join(here, *parts), "r") as fp:
         return fp.read()
+
 
 def find_version(*file_paths):
     version_file = read(*file_paths)
-    version_match = re.search(r"^__version__ = ['\"]([^'\"]*)['\"]",
-                              version_file, re.M)
+    version_match = re.search(r"^__version__ = ['\"]([^'\"]*)['\"]", version_file, re.M)
     if version_match:
         return version_match.group(1)
     raise RuntimeError("Unable to find version string.")
+
+
 #
 
 # -- Project information -----------------------------------------------------
 
-project = 'Tidy3d'
-copyright = 'Flexcompute 2020'
+project = "Tidy3d"
+copyright = "Flexcompute 2020"
 # release = find_version('..', 'legume', '__init__.py')
 
-master_doc = 'index'
+master_doc = "index"
 
 # -- General configuration ---------------------------------------------------
 
@@ -38,7 +40,7 @@ master_doc = 'index'
 # ones.
 extensions = [
     "sphinx.ext.autodoc",
-   'sphinxcontrib.autodoc_pydantic',
+    "sphinxcontrib.autodoc_pydantic",
     "sphinx.ext.autosummary",
     "sphinx.ext.extlinks",
     "sphinx.ext.mathjax",
@@ -56,16 +58,15 @@ autodoc_pydantic_model_show_json = True
 autodoc_pydantic_model_show_config_summary = False
 autodoc_pydantic_model_show_validator_summary = False
 
-extlinks = {
-}
+extlinks = {}
 
 # Add any paths that contain templates here, relative to this directory.
-templates_path = ['_templates']
+templates_path = ["_templates"]
 
 # List of patterns, relative to source directory, that match files and
 # directories to ignore when looking for source files.
 # This pattern also affects html_static_path and html_extra_path.
-exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store', '**.ipynb_checkpoints']
+exclude_patterns = ["_build", "Thumbs.db", ".DS_Store", "**.ipynb_checkpoints"]
 
 autosummary_generate = True
 autodoc_typehints = "none"
@@ -85,8 +86,8 @@ napoleon_use_rtype = True
 # -- Options for HTML output -------------------------------------------------
 
 # The theme to use for HTML and HTML Help pages.
-html_theme_path = ['_themes']
-html_theme = 'sphinx_rtd_theme'
+html_theme_path = ["_themes"]
+html_theme = "sphinx_rtd_theme"
 # pygments_style = 'monokai-dark'
 
 # import stanford_theme
@@ -96,11 +97,12 @@ html_theme = 'sphinx_rtd_theme'
 # Add any paths that contain custom static files (such as style sheets) here,
 # relative to this directory. They are copied after the builtin static files,
 # so a file named "default.css" will overwrite the builtin "default.css".
-html_static_path = ['_static']
+html_static_path = ["_static"]
 
 html_theme_options = {"logo_only": True}
 # html_logo = "_static/logo.svg"
 html_favicon = "_static/logo.svg"
 
-def setup (app):
-    app.add_css_file('css/custom.css')
+
+def setup(app):
+    app.add_css_file("css/custom.css")

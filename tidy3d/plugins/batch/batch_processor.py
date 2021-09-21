@@ -1,4 +1,3 @@
-
 """ 
 Point of this plugin:
 
@@ -34,54 +33,60 @@ way 3: leverage existing open source tool.
 
 BatchId = List[int]
 
+
 def submit_batch(simulations: List[Simulation]) -> BatchId:
-	task_ids = []
-	for sim in simulations:
-		task_id = web.submit(sim)
-		task_ids.append(task_id)
-	return task_id
+    task_ids = []
+    for sim in simulations:
+        task_id = web.submit(sim)
+        task_ids.append(task_id)
+    return task_id
+
 
 def monitor_batch(batch_id: BatchId) -> None:
-	for task_id in batch_id:
-		web.monitor(task_id)
+    for task_id in batch_id:
+        web.monitor(task_id)
+
 
 def load_batch(batch_id: BatchId) -> None:
-	return BatchData(batch_id=batch_id)
+    return BatchData(batch_id=batch_id)
+
 
 class BatchData(pydantic.BaseModel):
 
-	batch_id: BatchId
+    batch_id: BatchId
 
-	def iter(self):
-		for task_id in self.batch_id:
-			sim_data = web.load(task_id)
-			yield sim_data
-			# clear sim data
+    def iter(self):
+        for task_id in self.batch_id:
+            sim_data = web.load(task_id)
+            yield sim_data
+            # clear sim data
+
 
 # way 2
 
+
 class Batch(pydantic.BaseModel):
-	simulations: List[Simulation]
-	batch_id: Optional[BatchId] = None
+    simulations: List[Simulation]
+    batch_id: Optional[BatchId] = None
 
-	def _assert_submitted(self):
-		assert self.batch_id is not None, "batch not subimtted"		
+    def _assert_submitted(self):
+        assert self.batch_id is not None, "batch not subimtted"
 
-	def submit(self):
-		batch_id = []
-		for sim in self.simulations:
-			task_id = web.submit(sim)
-			batch_id.append(task_id)
-		self.batch_id = batch_id
+    def submit(self):
+        batch_id = []
+        for sim in self.simulations:
+            task_id = web.submit(sim)
+            batch_id.append(task_id)
+        self.batch_id = batch_id
 
-	def monitor(self):
-		self._assert_submitted()
-		for task_id in self.batch_id:
-			web.monitor(task_id)
+    def monitor(self):
+        self._assert_submitted()
+        for task_id in self.batch_id:
+            web.monitor(task_id)
 
-	def load(self):
-		self._assert_submitted()
-		for task_id in self.batch_id:
-			sim_data = web.load(task_id)
-			yield sim_data
-			# clear sim data
+    def load(self):
+        self._assert_submitted()
+        for task_id in self.batch_id:
+            sim_data = web.load(task_id)
+            yield sim_data
+            # clear sim data

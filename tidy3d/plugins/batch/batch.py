@@ -10,7 +10,7 @@ from ..simulation import Simulation
 
 class Batch:
     """Container for processing set of simulations.
-    
+
     Attributes
     ----------
     jobs : list
@@ -29,7 +29,7 @@ class Batch:
         draft=False,
     ):
         """Construct.
-        
+
         Parameters
         ----------
         simulations : list
@@ -72,7 +72,7 @@ class Batch:
         draft=False,
     ):
         """Load a :class:`.Batch` from file containing newline separated list of ``task_ids``.
-        
+
         Parameters
         ----------
         filename : str
@@ -86,7 +86,7 @@ class Batch:
         draft : bool, optional
             If ``True``, each job will be submitted but not run. It can then
             be visualized in the web UI and run from there when needed.
-        
+
         No Longer Returned
         ------------------
         Batch
@@ -114,7 +114,7 @@ class Batch:
         draft=False,
     ):
         """Load a :class:`.Batch` from file containing newline separated list of ``task_ids``.
-        
+
         Parameters
         ----------
         task_ids : list
@@ -127,8 +127,8 @@ class Batch:
             Folder to store the :class:`.Batch` on the server / UI.
         draft : bool, optional
             If ``True``, each job will be submitted but not run. It can then
-            be visualized in the web UI and run from there when needed.        
-        
+            be visualized in the web UI and run from there when needed.
+
         No Longer Returned
         ------------------
         Batch
@@ -152,7 +152,7 @@ class Batch:
 
     def get_info(self):
         """Return list of dictionaries storing :class:`.Batch` metadata.
-        
+
         Returns
         -------
         list
@@ -165,8 +165,7 @@ class Batch:
         return info_dicts
 
     def monitor(self):
-        """Monitor progress of :class:`.Batch` in terms of number of jobs completed.
-        """
+        """Monitor progress of :class:`.Batch` in terms of number of jobs completed."""
         done_states = ("success", "error", "diverged", "deleted", "draft")
         with tqdm(total=self.num_jobs) as pbar:
             pbar.set_description("Percentage of jobs completed: ")
@@ -184,7 +183,7 @@ class Batch:
     def save(self, filename):
         """Save :class:`.Batch` info to file of newline-separated ``task_ids``.
         :class:`.Batch` may be loaded from this file by ``Batch.load_from_file(filename)``.
-        
+
         Parameters
         ----------
         filename : str
@@ -195,14 +194,13 @@ class Batch:
                 f.write(str(job.task_id) + "\n")
 
     def delete(self):
-        """Delete all jobs in :class:`.Batch`.
-        """
+        """Delete all jobs in :class:`.Batch`."""
         for job_index in range(self.num_jobs):
             self.jobs[job_index].delete()
 
     def load_results(self):
         """downloads results and either loads into list of simulations or returns list of new simulations
-        
+
         Returns
         -------
         list
@@ -216,15 +214,13 @@ class Batch:
         return sims_loaded
 
     def download_json(self):
-        """Downalod json file of each :class:`.Job` to it's corresponding ``target_folder``.
-        """
+        """Downalod json file of each :class:`.Job` to it's corresponding ``target_folder``."""
         for job_index in range(self.num_jobs):
             print(f"\ndownloading json for job ({job_index+1}/{self.num_jobs})\n")
             self.jobs[job_index].download_json()
 
     def download_results(self):
-        """Downalod data of each :class:`.Job` to it's corresponding ``target_folder``.
-        """
+        """Downalod data of each :class:`.Job` to it's corresponding ``target_folder``."""
         for job_index in range(self.num_jobs):
             print(f"\ndownloading results for job ({job_index+1}/{self.num_jobs})\n")
             self.jobs[job_index].download_results()

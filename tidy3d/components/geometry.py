@@ -8,16 +8,17 @@ BOUND_EPS = 1e-3  # expand bounds by this much
 
 """ defines objects in space """
 
+
 class Geometry(Tidy3dBaseModel):
-    """ abstract base class, defines where something exists in space"""
+    """abstract base class, defines where something exists in space"""
 
     # @abstractmethod
     def _get_bounds(self) -> Bound:
-        """ Returns bounding box for this geometry, must implement for subclasses """
+        """Returns bounding box for this geometry, must implement for subclasses"""
         pass
 
     def _intersects(self, other) -> bool:
-        """ method determining whether two geometries' bounds intersect """
+        """method determining whether two geometries' bounds intersect"""
 
         self_bmin, self_bmax = self._get_bounds()
         other_bmin, other_bmax = other._get_bounds()
@@ -31,7 +32,9 @@ class Geometry(Tidy3dBaseModel):
         # for intersection of bounds, both must be true
         return in_minus and in_plus
 
+
 """ geometry subclasses """
+
 
 class Box(Geometry):
     """rectangular Box (has size and center)"""
@@ -43,8 +46,8 @@ class Box(Geometry):
         """sets bounds based on size and center"""
         size = self.size
         center = self.center
-        coord_min = tuple(c - s/2 - BOUND_EPS for (s, c) in zip(size, center))
-        coord_max = tuple(c + s/2 + BOUND_EPS for (s, c) in zip(size, center))
+        coord_min = tuple(c - s / 2 - BOUND_EPS for (s, c) in zip(size, center))
+        coord_max = tuple(c + s / 2 + BOUND_EPS for (s, c) in zip(size, center))
         return (coord_min, coord_max)
 
 
@@ -67,16 +70,17 @@ class Cylinder(Geometry):
     def _get_bounds(self):
         coord_min = list(c - self.radius for c in self.center)
         coord_max = list(c + self.radius for c in self.center)
-        coord_min[self.axis] = self.center[self.axis] - self.length/2.
-        coord_max[self.axis] = self.center[self.axis] + self.length/2.
+        coord_min[self.axis] = self.center[self.axis] - self.length / 2.0
+        coord_max[self.axis] = self.center[self.axis] + self.length / 2.0
         return (tuple(coord_min), tuple(coord_max))
+
 
 class PolySlab(Geometry):
     vertices: List[Coordinate2D]
     slab_bounds: Tuple[float, float]
     axis: Axis = 2
     sidewall_angle_rad: float = 0  # note, not supported yet
-    dilation: float = 0            # note, not supported yet
+    dilation: float = 0  # note, not supported yet
 
     def _get_bounds(self):
 
@@ -96,6 +100,7 @@ class PolySlab(Geometry):
         coord_max.insert(self.axis, zmax)
 
         return (tuple(coord_min), tuple(coord_max))
+
 
 # geometries allowed to be in simulation.structures
 GeometryType = Union[Box, Sphere, Cylinder, PolySlab]

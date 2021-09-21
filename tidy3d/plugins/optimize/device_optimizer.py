@@ -7,9 +7,8 @@ For now, we can consider this as a brute force optimization routine, but eventua
 
 """
 
-class Optimizer:
+# class Optimizer:
 
-	simulation_constructor: Callable[float..., Simulation]
-	initial_parameters: List[float]
-	objective_function: Callable[MonitorData..., float]
-
+# 	simulation_constructor: Callable[float..., Simulation]
+# 	initial_parameters: List[float]
+# 	objective_function: Callable[MonitorData..., float]

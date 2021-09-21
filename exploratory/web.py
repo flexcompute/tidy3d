@@ -5,12 +5,14 @@ import numpy as np  # note: only needed to generate fake data
 from .tidy3d import Simulation
 from .schema import validate_schema
 
+
 def export(sim: Simulation) -> dict:
-    print('exporting sim to dict')
+    print("exporting sim to dict")
     return sim.dict()
 
+
 def submit_task(sim_dict: dict) -> int:
-    print('submiting task')
+    print("submiting task")
 
     # create json file
     with open("data_user/simulation.json", "w") as fp:
@@ -26,15 +28,18 @@ def submit_task(sim_dict: dict) -> int:
 
     return task_id
 
+
 def monitor_task(task_id: int) -> None:
-    print('monitoring task')
+    print("monitoring task")
     import time
-    print(f'\trunning task {task_id}')
+
+    print(f"\trunning task {task_id}")
     time.sleep(0.5)
-    print(f'\ttask {task_id} completed')
+    print(f"\ttask {task_id} completed")
+
 
 def _run_task(task_id: int) -> None:
-    print('running task')
+    print("running task")
 
     # 'load' simulation from json on server
     with open("data_server/simulation.json", "r") as fp:
@@ -50,8 +55,9 @@ def _run_task(task_id: int) -> None:
         data = np.random.random((4, 4))
         np.save(f"data_server/task_{task_id}_monitor_{name}.npy", data)
 
+
 def load(task_id: int, sim: Simulation) -> None:
-    print('loading task into sim')
+    print("loading task into sim")
 
     # get monitors and return if nothing to be done
     monitors = sim.monitors
@@ -67,7 +73,8 @@ def load(task_id: int, sim: Simulation) -> None:
 
         # load it server side and import into sim.data
         data = np.load(f"data_user/{fname}")
-        sim.data[name] = data    
+        sim.data[name] = data
+
 
 def run(sim: Simulation) -> None:
 
@@ -75,4 +82,3 @@ def run(sim: Simulation) -> None:
     task_id = submit_task(sim_dict)
     monitor_task(task_id)
     load(task_id, sim)
-
