@@ -65,7 +65,7 @@ s1 = Simulation(
     subpixel=False,
 )
 
-def test_load_export():
+def test_simulation_load_export():
     path = 'tests/tmp/simulation.json'
     s1.export(path)
     s2 = Simulation.load(path)
