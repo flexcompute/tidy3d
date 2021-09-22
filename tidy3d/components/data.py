@@ -9,35 +9,29 @@ import h5py
 
 from .simulation import Simulation
 from .monitor import Monitor, FluxMonitor, FieldMonitor, ModeMonitor, FreqSampler
-from .types import Dict
-
-
-class Tidy3dData(pydantic.BaseModel):
-    """base class for data associated with a specific task."""
-
-    class Config:
-        """sets config for all Tidy3dBaseModel objects"""
-
-        validate_all = True  # validate default values too
-        extra = "forbid"  # forbid extra kwargs not specified in model
-        validate_assignment = True  # validate when attributes are set after initialization
-        arbitrary_types_allowed = True  # allow us to specify a type for an arg that is an arbitrary class (np.ndarray)
-        allow_mutation = False  # dont allow one to change the data
+from typing import Callable, Dict, List
 
 
 class MonitorData(xr.DataArray, ABC):
     __slots__ = ()  # need this for xarray subclassing
 
     def __eq__(self, other):
+        """ check equality against another MonitorData instance """
         assert isinstance(other, MonitorData), "can only check eqality on two monitor data objects"
         return self.equals(other)
 
-    def sampler_label(self):
+    def _sampler_label(self):
+        """ get the label associated with sampler """
         return "freqs" if "freqs" in self.coords else "times"
+
+    # @abstractmethod
+    # def _get_dims(self) -> List[str]:
+    #   """ return list of strings specifying coordinate names (and how to process?)"""
+    #   pass
 
     @abstractmethod
     def visualize(self, simulation):
-        """make interactive plot"""
+        """make interactive plot (impement in subclasses)"""
         pass
 
     def export_as_file(self, path: str) -> None:
@@ -54,6 +48,10 @@ class MonitorData(xr.DataArray, ABC):
 class FieldData(MonitorData):
     __slots__ = ()  # need this for xarray subclassing
 
+    # def _get_dims(self):
+    #   sampler_label = self._sampler_label()
+    #   return ["field", "component", "xs", "ys", "zs", sampler_label]
+
     def visualize(self):
         """make interactive plot"""
         hv_ds = hv.Dataset(self.copy())
@@ -64,21 +62,29 @@ class FieldData(MonitorData):
 class FluxData(MonitorData):
     __slots__ = ()  # need this for xarray subclassing
 
+    # def _get_dims(self):
+    #   sampler_label = self._sampler_label()
+    #   return [sampler_label]
+
     def visualize(self):
         """make interactive plot"""
         hv.extension("bokeh")
         hv_ds = hv.Dataset(self.copy())
-        image = hv_ds.to(hv.Curve, self.sampler_label())
+        image = hv_ds.to(hv.Curve, self._sampler_label())
         return image
 
 
 class ModeData(MonitorData):
     __slots__ = ()  # need this for xarray subclassing
 
+    # def _get_dims(self):
+    #   sampler_label = self._sampler_label()
+    #   return ["direction", "mode_index", sampler_label]
+
     def visualize(self):
         """make interactive plot"""
         hv_ds = hv.Dataset(self.copy())
-        image = hv_ds.to(hv.Curve, self.sampler_label(), dynamic=True)
+        image = hv_ds.to(hv.Curve, self._sampler_label(), dynamic=True)
         return image
 
 
@@ -92,7 +98,21 @@ data_dim_map = {
 }
 
 
+class Tidy3dData(pydantic.BaseModel):
+    """base class for data associated with a specific task."""
+
+    class Config:
+        """sets config for all Tidy3dBaseModel objects"""
+
+        validate_all = True  # validate default values too
+        extra = "forbid"  # forbid extra kwargs not specified in model
+        validate_assignment = True  # validate when attributes are set after initialization
+        arbitrary_types_allowed = True  # allow us to specify a type for an arg that is an arbitrary class (np.ndarray)
+        allow_mutation = False  # dont allow one to change the data
+
+
 class SimulationData(Tidy3dData):
+    """ holds simulation and its monitors' data."""
 
     simulation: Simulation
     monitor_data: Dict[str, MonitorData]
