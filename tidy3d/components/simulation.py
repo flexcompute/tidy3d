@@ -8,6 +8,7 @@ from .structure import Structure
 from .source import SourceType
 from .monitor import MonitorType
 from .pml import PMLLayer
+from .. import __version__ as version_number
 
 
 class Simulation(Box):
@@ -28,6 +29,7 @@ class Simulation(Box):
     shutoff: pydantic.NonNegativeFloat = 1e-5
     courant: pydantic.confloat(ge=0.0, le=1.0) = 0.9
     subpixel: bool = True
+    version: str = str(version_number)
 
     def __init__(self, **kwargs):
         """initialize sim and then do more validations"""
