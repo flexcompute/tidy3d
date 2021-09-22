@@ -9,6 +9,8 @@ from tidy3d import *
 
 
 def test_sim():
+    """ make sure a simulation can be initialized """
+
     sim = Simulation(
         size=(2.0, 2.0, 2.0),
         grid_size=(0.01, 0.01, 0.01),
@@ -52,7 +54,21 @@ def test_sim():
     )
 
 
+def test_version():
+    """ ensure there's a version in simulation """
+
+    sim = Simulation(
+        size=(1,1,1),
+        grid_size=.1,
+    )
+    path = 'tests/tmp/simulation.json'
+    sim.export('tests/tmp/simulation.json')
+    with open(path, 'r') as f:
+        s = f.read()
+        assert '"version": ' in s
+
 def test_sim_bounds():
+    """ make sure bounds are working correctly """
 
     # make sure all things are shifted to this central location
     CENTER_SHIFT = (-1.0, 1.0, 100.0)

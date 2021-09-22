@@ -1,3 +1,11 @@
+import pkg_resources
+
+try:
+    __version__ = pkg_resources.get_distribution("tidy3d").version
+except Exception:  # pragma: nocover
+    # Local copy, not installed with setuptools
+    __version__ = "0.0.0"
+
 # assuming `import tidy3d as td`
 
 # import component as `from tidy3d import Simulation`
