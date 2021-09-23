@@ -87,7 +87,7 @@
 
 #### Solver Integration
 
-- [ ] **Add version to simulation.json**
+- [x] Add version to simulation.json
 - [ ] **Make tidy3d_core functional with existing (or slightly modified) solver.**
 	- [x] Load simulation.json into `tidy3d.Simulation`.
 	- [ ] **Hook up Simulation to solver (momchil)**
@@ -96,7 +96,7 @@
 - [ ] Test test test.
 ---
 
-#### Web Integration
+#### Web Integration (requires solver integration)
 - [ ] refactor webapi
 - [ ] add http / authentication etc.
 - [ ] set up so that daemon recgonizes new json files.
@@ -108,9 +108,9 @@
 - [ ] Flesh out all details for plugins (18.5 days total)
 	- [ ] Dispersion fit (1 day)
 	- [ ] Mode solver (1 week) (just load in local one for now)
-	- [ ] Batch processor (1 week)
-	- [ ] S matrix (1 week)
-	- [ ] Optimizer (2 days)
+	- [x] Batch processor (1 week) <- done in webapi
+	- [ ] S matrix (1 week) <- do later
+	- [ ] Optimizer (2 days) <- do later
 
 ---
 #### Visualization
