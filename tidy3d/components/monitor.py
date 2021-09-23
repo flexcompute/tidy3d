@@ -1,7 +1,8 @@
+""" Objects that define how data is recorded from simulation """
+from abc import ABC
+
 import pydantic
 import numpy as np
-
-from abc import ABC
 
 from .base import Tidy3dBaseModel
 from .types import List, Union
@@ -13,11 +14,13 @@ from .mode import Mode
 
 
 def _uniform_arange(start, stop, step):
+    """uniform spacing from start to stop with spacing of step"""
     assert start <= stop, "start must not be greater than stop"
     return list(np.arange(start, stop, step))
 
 
 def _uniform_linspace(start, stop, num):
+    """uniform spacing from start to stop with num elements"""
     assert start <= stop, "start must not be greater than stop"
     return list(np.linspace(start, stop, num))
 
@@ -43,8 +46,6 @@ def uniform_freq_sampler(f_start, f_stop, N_freqs):
 
 class Sampler(Tidy3dBaseModel, ABC):
     """specifies how the data is sampled as the simulation is run"""
-
-    pass
 
 
 class TimeSampler(Sampler):
@@ -73,8 +74,6 @@ SamplerType = Union[TimeSampler, FreqSampler]
 
 class Monitor(Box, ABC):
     """base class for monitors, which all have Box shape"""
-
-    pass
 
 
 class FieldMonitor(Monitor):

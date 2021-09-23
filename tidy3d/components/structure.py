@@ -1,3 +1,5 @@
+""" defines Geometric objects with Medium properties """
+
 from .base import Tidy3dBaseModel
 from .geometry import GeometryType
 from .medium import Medium

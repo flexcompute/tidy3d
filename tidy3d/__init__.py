@@ -1,12 +1,7 @@
+""" Tidy3d package imports"""
+__version__ = "0.0.0"
+
 import pkg_resources
-
-try:
-    __version__ = pkg_resources.get_distribution("tidy3d").version
-except Exception:  # pragma: nocover
-    # Local copy, not installed with setuptools
-    __version__ = "0.0.0"
-
-# assuming `import tidy3d as td`
 
 # import component as `from tidy3d import Simulation`
 from .components.simulation import Simulation
@@ -36,3 +31,9 @@ from . import web
 # material library dict imported as `from tidy3d import material_library`
 # specific material imported as `from tidy3d.material_library import SiC_xxx`
 from .material_library import material_library
+
+# try:
+#     __version__ = pkg_resources.get_distribution("tidy3d").version
+# except ImportError:  # pragma: nocover
+#     # Local copy, not installed with setuptools
+#     __version__ = "0.0.0"

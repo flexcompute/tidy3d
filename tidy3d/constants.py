@@ -1,3 +1,5 @@
+""" defines constants used elsewhere in the package"""
+
 import numpy as np
 
 EPSILON_0 = np.float32(8.85418782e-18)  # vacuum permittivity [F/um]

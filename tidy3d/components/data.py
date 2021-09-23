@@ -1,18 +1,21 @@
-import pydantic
+""" Classes for Storing Monitor and Simulation Data """
+
 from abc import ABC, abstractmethod
+from typing import Dict
+
 import xarray as xr
 import numpy as np
 import holoviews as hv
-import os
-import json
 import h5py
+import pydantic
 
 from .simulation import Simulation
-from .monitor import Monitor, FluxMonitor, FieldMonitor, ModeMonitor, FreqSampler
-from typing import Callable, Dict, List
+from .monitor import FluxMonitor, FieldMonitor, ModeMonitor, FreqSampler
 
 
 class MonitorData(xr.DataArray, ABC):
+    """Stores data from a Monitor"""
+
     __slots__ = ()  # need this for xarray subclassing
 
     def __eq__(self, other):
@@ -24,15 +27,9 @@ class MonitorData(xr.DataArray, ABC):
         """get the label associated with sampler"""
         return "freqs" if "freqs" in self.coords else "times"
 
-    # @abstractmethod
-    # def _get_dims(self) -> List[str]:
-    #   """ return list of strings specifying coordinate names (and how to process?)"""
-    #   pass
-
     @abstractmethod
-    def visualize(self, simulation):
+    def visualize(self):
         """make interactive plot (impement in subclasses)"""
-        pass
 
     def export_as_file(self, path: str) -> None:
         """Export MonitorData to hdf5 file (named this to avoid namespace conflicts with xarray)"""
@@ -46,6 +43,8 @@ class MonitorData(xr.DataArray, ABC):
 
 
 class FieldData(MonitorData):
+    """Stores Electric and Magnetic fields from a FieldMonitor"""
+
     __slots__ = ()  # need this for xarray subclassing
 
     # def _get_dims(self):
@@ -60,6 +59,8 @@ class FieldData(MonitorData):
 
 
 class FluxData(MonitorData):
+    """Stores power flux data through a planar FluxMonitor"""
+
     __slots__ = ()  # need this for xarray subclassing
 
     # def _get_dims(self):
@@ -75,6 +76,8 @@ class FluxData(MonitorData):
 
 
 class ModeData(MonitorData):
+    """Stores modal amplitdudes from a ModeMonitor"""
+
     __slots__ = ()  # need this for xarray subclassing
 
     # def _get_dims(self):
@@ -123,14 +126,14 @@ class SimulationData(Tidy3dData):
         """Export all data to a file"""
 
         # write to the file at path
-        with h5py.File(path, "a") as f:
+        with h5py.File(path, "a") as f_handle:
 
             # save json string as an attribute
             json_string = self.simulation.json()
-            f.attrs["json_string"] = json_string
+            f_handle.attrs["json_string"] = json_string
 
             # make a group for monitor_data
-            mon_data_grp = f.create_group("monitor_data")
+            mon_data_grp = f_handle.create_group("monitor_data")
             for mon_name, mon_data in self.monitor_data.items():
 
                 # for each monitor, make new group with the same name
@@ -145,8 +148,8 @@ class SimulationData(Tidy3dData):
                     # get the data and convert it to the correct type if it contains strings
                     coord_val = mon_data[coord_name].data
                     if isinstance(coord_val[0], np.str_):
-                        dt = h5py.special_dtype(vlen=str)
-                        coord_val = np.array(coord_val, dtype=dt)
+                        dtype = h5py.special_dtype(vlen=str)
+                        coord_val = np.array(coord_val, dtype=dtype)
 
                     # add the data to the group
                     mon_grp.create_dataset(coord_name, data=coord_val)
@@ -156,15 +159,15 @@ class SimulationData(Tidy3dData):
         """Load SimulationData from files"""
 
         # read from file at path
-        with h5py.File(path, "r") as f:
+        with h5py.File(path, "r") as f_handle:
 
             # construct the original simulation from the json string
-            json_string = f.attrs["json_string"]
+            json_string = f_handle.attrs["json_string"]
             sim = Simulation.parse_raw(json_string)
 
             # loop through monitor dataset and create all MonitorData instances
             monitor_data_dict = {}
-            monitor_data = f["monitor_data"]
+            monitor_data = f_handle["monitor_data"]
             for mon_name, mon_data in monitor_data.items():
 
                 # get info about the original monitor

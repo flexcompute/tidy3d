@@ -1,6 +1,9 @@
+""" Defines current sources """
+
+from abc import ABC
+
 import pydantic
 import numpy as np
-from abc import ABC, abstractmethod
 
 from .base import Tidy3dBaseModel
 from .types import Tuple, Direction, Polarization, Union
@@ -16,8 +19,6 @@ from .mode import Mode
 #     spectrum = np.sum(amp_time * np.exp(phases), axis=0)
 #     return dt / np.sqrt(2 * np.pi) * spectrum
 
-""" Source Times define the time dependence of the source """
-
 
 class SourceTime(ABC, Tidy3dBaseModel):
     """Base class describing the time dependence of a source"""
@@ -28,7 +29,6 @@ class SourceTime(ABC, Tidy3dBaseModel):
     # @abstractmethod
     def amp_time(self, time):
         """complex amplitude as a function of time"""
-        pass
 
 
 class Pulse(SourceTime, ABC):
@@ -122,8 +122,6 @@ class DirectionalSource(Source, ABC):
 
 class PlaneWave(DirectionalSource):
     """uniform distribution on infinite extent plane"""
-
-    pass
 
 
 class GaussianBeam(DirectionalSource):

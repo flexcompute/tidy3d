@@ -1,21 +1,21 @@
-import pydantic
+""" defines objects in space """
+
 from abc import ABC, abstractmethod
+
+import pydantic
 
 from .base import Tidy3dBaseModel
 from .types import Bound, Size, Coordinate, Axis, Coordinate2D, List, Tuple, Union
 
 BOUND_EPS = 1e-3  # expand bounds by this much
 
-""" defines objects in space """
 
-
-class Geometry(Tidy3dBaseModel):
+class Geometry(Tidy3dBaseModel, ABC):
     """abstract base class, defines where something exists in space"""
 
-    # @abstractmethod
+    @abstractmethod
     def _get_bounds(self) -> Bound:
         """Returns bounding box for this geometry, must implement for subclasses"""
-        pass
 
     def _intersects(self, other) -> bool:
         """method determining whether two geometries' bounds intersect"""
@@ -52,6 +52,8 @@ class Box(Geometry):
 
 
 class Sphere(Geometry):
+    """A sphere geometry (radius and center)"""
+
     radius: pydantic.NonNegativeFloat
     center: Coordinate = (0.0, 0.0, 0.0)
 
@@ -62,6 +64,8 @@ class Sphere(Geometry):
 
 
 class Cylinder(Geometry):
+    """A Cylinder geometry (radius, center, height, axis)"""
+
     center: Coordinate = (0.0, 0.0, 0.0)
     radius: pydantic.NonNegativeFloat
     length: pydantic.NonNegativeFloat
@@ -76,6 +80,8 @@ class Cylinder(Geometry):
 
 
 class PolySlab(Geometry):
+    """A polygon with vertices and bounds in plane"""
+
     vertices: List[Coordinate2D]
     slab_bounds: Tuple[float, float]
     axis: Axis = 2

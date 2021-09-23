@@ -1,3 +1,5 @@
+""" Imports all tidy3d.components """
+
 from .medium import *
 from .geometry import *
 from .structure import *

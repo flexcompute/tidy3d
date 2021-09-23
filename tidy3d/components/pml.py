@@ -1,3 +1,5 @@
+""" Defines profile of Perfectly-matched layers (absorber) """
+
 import pydantic
 
 from .base import Tidy3dBaseModel

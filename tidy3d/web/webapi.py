@@ -1,26 +1,24 @@
-import pydantic
-import numpy as np
-
-from ..components import Simulation
-from .task import TaskId, Task, TaskInfo, RunInfo
-from .task import TaskStatus
-
 """ Provides lowest level, user-facing interface to server """
 
-""" filesystem emulation for tests """
 import os
+import sys
 import time
 from shutil import copyfile
-
-import sys
-
 sys.path.append("../../")
+
 import tidy3d_core as tdcore
+import numpy as np
+
+from ..components.simulation import Simulation
+from .task import TaskId, Task, TaskInfo, RunInfo, TaskStatus
+
+""" filesystem emulation for tests """
 
 SERVER_DIR = "tests/tmp/server"
 
 
 def server_path(fname):
+    """gets path to fname in server dir"""
     return os.path.join(SERVER_DIR, fname)
 
 
@@ -28,23 +26,27 @@ CLIENT_DIR = "tests/tmp/client"
 
 
 def client_path(fname):
+    """gets path to fname in client dir"""
     return os.path.join(CLIENT_DIR, fname)
 
 
-def make_fake_task_id():
+def make_fake_task_id(num_letters=4):
+    """constructs a fake task_id with `num_letters` letters"""
     alphabet = list("abcdefghijklmnopqrstuvwxyz")
-    task_str_list = [np.random.choice(alphabet) for _ in range(4)]
+    task_str_list = [np.random.choice(alphabet) for _ in range(num_letters)]
     task_str = "".join(task_str_list)
     return f"task_{task_str}"
 
 
 def make_fake_task() -> Task:
+    """make a fake task"""
     task_id = make_fake_task_id()
     task_info = make_fake_info()
     return Task(id=task_id, info=task_info)
 
 
 def make_fake_info() -> TaskInfo:
+    """make fake task info"""
     return TaskInfo(
         task_id=make_fake_task_id(),
         status=TaskStatus.INIT,
@@ -53,9 +55,10 @@ def make_fake_info() -> TaskInfo:
     )
 
 
-def make_fake_run_info() -> RunInfo:
+def make_fake_run_info(task_id: TaskId) -> RunInfo:
+    """make fake run info"""
+    print(task_id)
     return RunInfo(
-        status=RunStatus.QUEUE,
         perc_done=100 * np.random.random(),
         field_decay=1 * np.random.random(),
     )
@@ -66,20 +69,24 @@ TASKS = {}
 
 
 def get_task_by_id(task_id: TaskId) -> Task:
+    """look up Task by task_id in TASKS"""
     task = TASKS.get(task_id)
     assert task is not None, f"task_id {task_id} not found"
     return task
 
 
 def _get_sim_path(task_id: TaskId):
+    """get path to simulation file on server"""
     return server_path(f"sim_{task_id}.json")
 
 
 def _get_data_path_server(task_id: TaskId):
+    """get path to data file on server"""
     return server_path(f"sim_{task_id}.hdf5")
 
 
 def _get_data_path_client(task_id: TaskId):
+    """get path to data file on client"""
     return client_path(f"sim_{task_id}.hdf5")
 
 
@@ -112,9 +119,9 @@ def get_info(task_id: TaskId) -> TaskInfo:
 
 def get_run_info(task_id: TaskId) -> RunInfo:
     """get information about running status of task"""
-    task = get_task_by_id(task_id)
+    # task = get_task_by_id(task_id)
     # call server
-    return make_fake_run_info()
+    return make_fake_run_info(task_id)
 
 
 def run(task_id: TaskId) -> None:
@@ -132,7 +139,7 @@ def run(task_id: TaskId) -> None:
     solver_data_dict = tdcore.solve(sim_core)
 
     # load these results as SimulationData server side if you want
-    sim_data_core = tdcore.load_solver_results(sim_core, solver_data_dict)
+    # sim_data_core = tdcore.load_solver_results(sim_core, solver_data_dict)
 
     # or, download these results to hdf5 file
     data_path = _get_data_path_server(task_id)
@@ -215,5 +222,5 @@ def delete(task_id: TaskId) -> None:
     _rm(data_path)
 
     # remove task from emulated server queue if still there
-    if task_id in TASKS.keys():
+    if task_id in TASKS:
         TASKS.pop(task_id)
