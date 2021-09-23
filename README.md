@@ -76,10 +76,10 @@
 	- [x]  "solver" that generates fake data.
 	- [x]  Postprocess solver data into tidy3d data objects.
 	- [x]  Export and load Solver data into files for download.
-- [ ]  **Write emulated webAPI to transfer files back and forth (1 day)**
-	- [ ] **Make `task` its own dataclass.**
-	- [ ] **Create basic mock data creation.**
-	- [ ] **Create set of basic API calls.**
+- [x]  Write emulated webAPI to transfer files back and forth (1 day)
+	- [x] Make `task` its own dataclass.
+	- [x] Create basic mock data creation.
+	- [x] Create set of basic API calls.
 	- [ ] **Simple batch / job interface.**
 ---
 
