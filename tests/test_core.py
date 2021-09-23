@@ -20,11 +20,14 @@ def clear_tmp(fn):
     def new_fn(*args, **kwargs):
         clear_dir(TMP_DIR)
         return fn(*args, **kwargs)
+
     return new_fn
+
 
 def prepend_tmp(path):
     """prepents "TMP_DIR" to the path"""
     return os.path.join(TMP_DIR, path)
+
 
 # where we store json files
 PATH_JSON = prepend_tmp("simulation.json")

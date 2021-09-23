@@ -16,12 +16,12 @@ class MonitorData(xr.DataArray, ABC):
     __slots__ = ()  # need this for xarray subclassing
 
     def __eq__(self, other):
-        """ check equality against another MonitorData instance """
+        """check equality against another MonitorData instance"""
         assert isinstance(other, MonitorData), "can only check eqality on two monitor data objects"
         return self.equals(other)
 
     def _sampler_label(self):
-        """ get the label associated with sampler """
+        """get the label associated with sampler"""
         return "freqs" if "freqs" in self.coords else "times"
 
     # @abstractmethod
@@ -112,7 +112,7 @@ class Tidy3dData(pydantic.BaseModel):
 
 
 class SimulationData(Tidy3dData):
-    """ holds simulation and its monitors' data."""
+    """holds simulation and its monitors' data."""
 
     simulation: Simulation
     monitor_data: Dict[str, MonitorData]
