@@ -31,7 +31,6 @@ def _clear_dir(path=TMP_DIR):
 	for f in os.listdir(path):
 		os.remove(os.path.join(path, f))
 
-
 # decorator that clears the tmp/ diretory before test
 def clear_tmp(fn):
 	def new_fn(*args, **kwargs):

@@ -1,11 +1,9 @@
 import pydantic
 import numpy as np
-
 import os
 from time import time
 
 import sys
-
 sys.path.append("./")
 
 from tidy3d import *
@@ -48,7 +46,6 @@ s1 = Simulation(
     courant=0.8,
     subpixel=False,
 )
-
 
 def test_simulation_load_export():
     path = "tests/tmp/simulation.json"
