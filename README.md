@@ -80,7 +80,7 @@
 	- [x] Make `task` its own dataclass.
 	- [x] Create basic mock data creation.
 	- [x] Create set of basic API calls.
-	- [ ] **Simple batch / job interface.**
+	- [x] Simple batch / job interface.
 ---
 
 ### Stage 2: Integration
