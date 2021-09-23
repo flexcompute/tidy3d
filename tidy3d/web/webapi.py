@@ -13,68 +13,81 @@ import time
 from shutil import copyfile
 
 import sys
-sys.path.append('../../')
+
+sys.path.append("../../")
 import tidy3d_core as tdcore
 
-SERVER_DIR = 'tests/tmp/server'
+SERVER_DIR = "tests/tmp/server"
+
+
 def server_path(fname):
     return os.path.join(SERVER_DIR, fname)
 
-CLIENT_DIR = 'tests/tmp/client'
+
+CLIENT_DIR = "tests/tmp/client"
+
+
 def client_path(fname):
     return os.path.join(CLIENT_DIR, fname)
+
 
 def make_fake_task_id():
     alphabet = list("abcdefghijklmnopqrstuvwxyz")
     task_str_list = [np.random.choice(alphabet) for _ in range(4)]
-    task_str = ''.join(task_str_list)
-    return f'task_{task_str}'
+    task_str = "".join(task_str_list)
+    return f"task_{task_str}"
+
 
 def make_fake_task() -> Task:
     task_id = make_fake_task_id()
     task_info = make_fake_info()
-    return Task(
-        id=task_id,
-        info=task_info
-    )
+    return Task(id=task_id, info=task_info)
+
 
 def make_fake_info() -> TaskInfo:
     return TaskInfo(
-        task_id = make_fake_task_id(),
+        task_id=make_fake_task_id(),
         status=TaskStatus.INIT,
-        size_bytes=1e4*np.random.random(),
-        credits=100*np.random.random(),
+        size_bytes=1e4 * np.random.random(),
+        credits=100 * np.random.random(),
     )
+
 
 def make_fake_run_info() -> RunInfo:
     return RunInfo(
         status=RunStatus.QUEUE,
-        perc_done=100*np.random.random(),
-        field_decay=1*np.random.random(),
+        perc_done=100 * np.random.random(),
+        field_decay=1 * np.random.random(),
     )
+
 
 # global variable maps TaskID -> Task
 TASKS = {}
+
 
 def get_task_by_id(task_id: TaskId) -> Task:
     task = TASKS.get(task_id)
     assert task is not None, f"task_id {task_id} not found"
     return task
 
+
 def _get_sim_path(task_id: TaskId):
-    return server_path(f'sim_{task_id}.json')
+    return server_path(f"sim_{task_id}.json")
+
 
 def _get_data_path_server(task_id: TaskId):
-    return server_path(f'sim_{task_id}.hdf5')
+    return server_path(f"sim_{task_id}.hdf5")
+
 
 def _get_data_path_client(task_id: TaskId):
-    return client_path(f'sim_{task_id}.hdf5')
+    return client_path(f"sim_{task_id}.hdf5")
 
 
 """ webapi functions """
 
+
 def upload(simulation: Simulation) -> TaskId:
-    """ upload simulation to server (as draft, dont run)."""
+    """upload simulation to server (as draft, dont run)."""
 
     # create the task
     task = make_fake_task()
@@ -85,24 +98,27 @@ def upload(simulation: Simulation) -> TaskId:
     sim_path = _get_sim_path(task_id)
     simulation.export(sim_path)
 
-    # add task to 'server' and return id    
+    # add task to 'server' and return id
     TASKS[task_id] = task
     return task_id
 
+
 def get_info(task_id: TaskId) -> TaskInfo:
-    """ get information about task (status, size, credits, etc)."""
+    """get information about task (status, size, credits, etc)."""
     task = get_task_by_id(task_id)
     # call server
     return task.info
 
+
 def get_run_info(task_id: TaskId) -> RunInfo:
-    """ get information about running status of task """
+    """get information about running status of task"""
     task = get_task_by_id(task_id)
     # call server
     return make_fake_run_info()
 
+
 def run(task_id: TaskId) -> None:
-    """ start running the task."""
+    """start running the task."""
     task = get_task_by_id(task_id)
     task.info.status = TaskStatus.RUN
 
@@ -124,18 +140,21 @@ def run(task_id: TaskId) -> None:
 
     task.info.status = TaskStatus.SUCCESS
 
+
 MONITOR_MESSAGE = {
-    TaskStatus.INIT: 'task hasnt been run, start with `web.run(task)`',
-    TaskStatus.SUCCESS: 'task finished succesfully, download with `web.download(task, path)`',
-    TaskStatus.ERROR: 'task errored',
+    TaskStatus.INIT: "task hasnt been run, start with `web.run(task)`",
+    TaskStatus.SUCCESS: "task finished succesfully, download with `web.download(task, path)`",
+    TaskStatus.ERROR: "task errored",
 }
+
 
 def _print_status(task_id: TaskId) -> None:
     status = get_info(task_id).status
     print(f'status = "{status.value}"')
 
+
 def monitor(task_id: TaskId) -> None:
-    """ monitor the task progress (% done, time step, total time step, field_decay)."""
+    """monitor the task progress (% done, time step, total time step, field_decay)."""
 
     # emulate running the task
     task = get_task_by_id(task_id)
@@ -147,7 +166,7 @@ def monitor(task_id: TaskId) -> None:
 
         _print_status(task_id)
         if status in (TaskStatus.SUCCESS, TaskStatus.ERROR):
-            print('-> returning')
+            print("-> returning")
             return
 
         task.info.status = TaskStatus.QUEUE
@@ -156,11 +175,11 @@ def monitor(task_id: TaskId) -> None:
         _print_status(task_id)
 
         task.info.status = TaskStatus.RUN
-        num_steps=4
+        num_steps = 4
         for i in range(num_steps):
             run_info = RunInfo(
-                perc_done=(i+1)/num_steps,
-                field_decay=np.exp(-i/num_steps),
+                perc_done=(i + 1) / num_steps,
+                field_decay=np.exp(-i / num_steps),
             )
             _print_status(task_id)
             run_info.display()
@@ -172,19 +191,22 @@ def monitor(task_id: TaskId) -> None:
         # emulate completing the task
         task.info.status = TaskStatus.SUCCESS
 
+
 def download(task_id: TaskId, path: str) -> None:
-    """ download results of simulation run to client side """
+    """download results of simulation run to client side"""
 
     # load the file into SimulationData
     data_path_server = _get_data_path_server(task_id)
     copyfile(data_path_server, path)
 
+
 def _rm(path: str):
     if os.path.exists(path) and not os.path.isdir(path):
         os.remove(path)
 
+
 def delete(task_id: TaskId) -> None:
-    """ delete data associated with task_id from server """
+    """delete data associated with task_id from server"""
 
     # remove from server directories
     sim_path = _get_sim_path(task_id)
@@ -195,5 +217,3 @@ def delete(task_id: TaskId) -> None:
     # remove task from emulated server queue if still there
     if task_id in TASKS.keys():
         TASKS.pop(task_id)
-
-

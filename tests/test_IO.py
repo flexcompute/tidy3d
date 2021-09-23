@@ -4,10 +4,12 @@ import os
 from time import time
 
 import sys
+
 sys.path.append("./")
 
 from tidy3d import *
 from .utils import SIM_FULL as SIM
+
 
 def test_simulation_load_export():
     path = "tests/tmp/simulation.json"
