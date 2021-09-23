@@ -21,3 +21,12 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         #     np.ndarray: lambda x: list(x),
         # }
         allow_population_by_field_name = True
+
+    def export(self, fname: str) -> None:
+        json_string = self.json(indent=2)
+        with open(fname, "w") as fp:
+            fp.write(json_string)
+
+    @classmethod
+    def load(cls, fname: str):
+        return cls.parse_file(fname)
