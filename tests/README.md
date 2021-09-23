@@ -1,13 +1,16 @@
 # Tests
 
-Note: all tests must be run from the root directory.
+All tests must be run from the root directory.
 Ie: `tidy3d-client-revamp/`
 
 From there, to run all tests:
 
-`pytest tests`
+```pytest -rA tests```
 
-To run a specific test:
+To run tests in a specific test file:
 
-`pytest tests/specific_test.py`
+```pytest -rA tests/test_specific.py```
 
+To run a specific test in a specific test file:
+
+```pytest -rA tests/test_specific.py -k specific_test```

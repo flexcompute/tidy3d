@@ -5,9 +5,12 @@ from ..components import Simulation
 from .task import TaskId, Task, TaskInfo, RunInfo
 from .task import TaskStatus
 
+""" Provides lowest level, user-facing interface to server """
+
 """ filesystem emulation for tests """
 import os
 import time
+from shutil import copyfile
 
 import sys
 sys.path.append('../../')
@@ -22,7 +25,10 @@ def client_path(fname):
     return os.path.join(CLIENT_DIR, fname)
 
 def make_fake_task_id():
-    return f'task_{np.random.choice(list("abcdefghijklmnopqrstuvwxyz"))}'
+    alphabet = list("abcdefghijklmnopqrstuvwxyz")
+    task_str_list = [np.random.choice(alphabet) for _ in range(4)]
+    task_str = ''.join(task_str_list)
+    return f'task_{task_str}'
 
 def make_fake_task() -> Task:
     task_id = make_fake_task_id()
@@ -34,6 +40,7 @@ def make_fake_task() -> Task:
 
 def make_fake_info() -> TaskInfo:
     return TaskInfo(
+        task_id = make_fake_task_id(),
         status=TaskStatus.INIT,
         size_bytes=1e4*np.random.random(),
         credits=100*np.random.random(),
@@ -165,11 +172,28 @@ def monitor(task_id: TaskId) -> None:
         # emulate completing the task
         task.info.status = TaskStatus.SUCCESS
 
-
 def download(task_id: TaskId, path: str) -> None:
     """ download results of simulation run to client side """
 
     # load the file into SimulationData
     data_path_server = _get_data_path_server(task_id)
-    os.rename(data_path_server, path)
+    copyfile(data_path_server, path)
+
+def _rm(path: str):
+    if os.path.exists(path) and not os.path.isdir(path):
+        os.remove(path)
+
+def delete(task_id: TaskId) -> None:
+    """ delete data associated with task_id from server """
+
+    # remove from server directories
+    sim_path = _get_sim_path(task_id)
+    data_path = _get_data_path_server(task_id)
+    _rm(sim_path)
+    _rm(data_path)
+
+    # remove task from emulated server queue if still there
+    if task_id in TASKS.keys():
+        TASKS.pop(task_id)
+
 

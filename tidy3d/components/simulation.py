@@ -55,11 +55,12 @@ class Simulation(Box):
 
     """ IO """
 
-    def export(self, fname: str = "simulation.json") -> None:
-        json_string = self.json(indent=2)
-        with open(fname, "w") as fp:
-            fp.write(json_string)
+    # moved to base class
+    # def export(self, fname: str = "simulation.json") -> None:
+    #     json_string = self.json(indent=2)
+    #     with open(fname, "w") as fp:
+    #         fp.write(json_string)
 
-    @classmethod
-    def load(cls, fname: str = "simulation.json"):
-        return cls.parse_file(fname)
+    # @classmethod
+    # def load(cls, fname: str = "simulation.json"):
+    #     return cls.parse_file(fname)
