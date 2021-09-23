@@ -1,5 +1,6 @@
-import pydantic
-from typing import Tuple, Dict, List, Union, Optional
+""" Defines 'types' that various fields can be """
+
+from typing import Tuple, List, Union
 
 # Literal only available in python 3.8 + so try import otherwise use extensions
 try:
@@ -7,7 +8,8 @@ try:
 except ImportError:
     from typing_extensions import Literal
 
-""" Defines 'types' that various fields can be """
+import pydantic
+
 
 # tuple containing three non-negative floats
 Size = Tuple[pydantic.NonNegativeFloat, pydantic.NonNegativeFloat, pydantic.NonNegativeFloat]

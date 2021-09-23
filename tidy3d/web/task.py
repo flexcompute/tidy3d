@@ -1,11 +1,11 @@
-import pydantic
+""" Defnes information about a task """
+
 from enum import Enum
 from abc import ABC
 
-from ..components.types import Literal
-from ..components.base import Tidy3dBaseModel
+import pydantic
 
-""" Defnes information about a task """
+from ..components.base import Tidy3dBaseModel
 
 
 class TaskStatus(Enum):
@@ -22,8 +22,6 @@ class TaskStatus(Enum):
 
 class TaskBase(Tidy3dBaseModel, ABC):
     """base config for all task objects"""
-
-    pass
 
 
 # type of the task_id
@@ -46,6 +44,7 @@ class RunInfo(TaskBase):
     field_decay: pydantic.confloat(ge=0.0, le=1.0)
 
     def display(self):
+        """print some info"""
         print(f" - {self.perc_done:.2f} (%) done")
         print(f" - {self.field_decay:.2e} field decay from max")
 

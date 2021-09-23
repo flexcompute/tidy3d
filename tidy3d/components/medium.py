@@ -1,9 +1,12 @@
+""" Defines properties of the medium / materials """
+
+from abc import ABC, abstractmethod
+from typing import List, Tuple, Optional, Union
 import pydantic
 import numpy as np
-from abc import ABC, abstractmethod
 
 from .base import Tidy3dBaseModel
-from .types import List, Tuple, PoleAndResidue, Optional, Union
+from .types import PoleAndResidue
 from ..constants import C_0, inf
 
 """ conversion helpers """
@@ -49,7 +52,6 @@ class AbstractMedium(ABC, Tidy3dBaseModel):
     @abstractmethod
     def eps_model(self, frequency: float) -> complex:
         """complex permittivity as a function of frequency"""
-        pass
 
 
 """ Dispersionless Medium """
@@ -70,8 +72,6 @@ class Medium(AbstractMedium):
 
 class DispersiveMedium(AbstractMedium, ABC):
     """A Medium with dispersion (propagation characteristics depend on frequency)"""
-
-    pass
 
 
 class PoleResidue(DispersiveMedium):

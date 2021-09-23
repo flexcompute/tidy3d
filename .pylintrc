@@ -1,7 +1,10 @@
 [MASTER]
+extension-pkg-allow-list=pydantic
+ignore=material_library.py, plugins
 
 [BASIC]
 
 [pre-commit-hook]
 command=custom_pylint
-disable=E0401, C0301
+disable=E0401, C0301, R0901, W0105, C0103
+

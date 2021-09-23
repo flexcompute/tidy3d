@@ -1,7 +1,9 @@
-import pydantic
-from .. import __version__ as version_number
+""" Container holding all information about simulation and its components"""
+from typing import Dict, Literal, Tuple, Union, List
 
-from .types import Literal, Dict, Tuple, Union, List
+import pydantic
+
+from .. import __version__ as version_number
 from .types import GridSize
 from .geometry import Box
 from .medium import Medium, MediumType

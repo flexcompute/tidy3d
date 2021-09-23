@@ -1,21 +1,18 @@
-import pydantic
+""" higher level wrappers for webapi functions for individual (Job) and batch (Batch) tasks. """
+
 import os
 from abc import ABC
-
-from .task import TaskId, TaskInfo, RunInfo
+from typing import Dict
 
 from .. import web
-from ..components import Simulation, SimulationData
-from ..components.types import Dict
+from .task import TaskId, TaskInfo, RunInfo
+from ..components.simulation import Simulation
+from ..components.data import SimulationData
 from ..components.base import Tidy3dBaseModel
-
-""" higher level wrappers for webapi functions for individual (Job) and batch (Batch) tasks. """
 
 
 class WebContainer(Tidy3dBaseModel, ABC):
     """base class for job and batch, technically not used"""
-
-    pass
 
 
 # type of task_name
@@ -23,6 +20,7 @@ TaskName = str
 
 
 class Job(WebContainer):
+    """Holds a task and its simulation"""
 
     simulation: Simulation
     task_name: TaskName
@@ -69,6 +67,7 @@ class Job(WebContainer):
 
 
 class Batch(WebContainer):
+    """Holds a dictionary of jobs"""
 
     simulations: Dict[TaskName, Simulation]
     jobs: Dict[TaskName, Job] = None
@@ -86,7 +85,7 @@ class Batch(WebContainer):
 
     def upload(self) -> None:
         """upload simulations to server, record task ids"""
-        for task_name, job in self.jobs.items():
+        for _, job in self.jobs.items():
             job.upload()
 
     def get_info(self) -> Dict[TaskName, TaskInfo]:
@@ -139,12 +138,12 @@ class Batch(WebContainer):
 
     def delete(self):
         """delete server-side data associated with job"""
-        for task_name, job in self.jobs.items():
+        for _, job in self.jobs.items():
             job.delete()
             self.jobs = None
 
     def save(self, fname: str) -> None:
-        # alias for export
+        """alias for self.export"""
         self.export(fname=fname)
 
     def items(self, path_dir: str):
