@@ -1,4 +1,5 @@
 import pydantic
+from .. import __version__ as version_number
 
 from .types import Literal, Dict, Tuple, Union, List
 from .types import GridSize
@@ -8,7 +9,6 @@ from .structure import Structure
 from .source import SourceType
 from .monitor import MonitorType
 from .pml import PMLLayer
-from .. import __version__ as version_number
 
 
 class Simulation(Box):
@@ -47,20 +47,12 @@ class Simulation(Box):
         """for each geometry-containing object in simulation, make sure it intersects simulation"""
 
         for i, structure in enumerate(self.structures):
-            assert self._intersects(structure.geometry), f"Structure '{structure}' (at position {i}) is completely outside simulation"
+            assert self._intersects(
+                structure.geometry
+            ), f"Structure '{structure}' (at position {i}) is completely outside simulation"
 
         for geo_obj_dict in (self.sources, self.monitors):
             for name, geo_obj in geo_obj_dict.items():
-                assert self._intersects(geo_obj), f"object '{name}' is completely outside simulation"
-
-    """ IO """
-
-    # moved to base class
-    # def export(self, fname: str = "simulation.json") -> None:
-    #     json_string = self.json(indent=2)
-    #     with open(fname, "w") as fp:
-    #         fp.write(json_string)
-
-    # @classmethod
-    # def load(cls, fname: str = "simulation.json"):
-    #     return cls.parse_file(fname)
+                assert self._intersects(
+                    geo_obj
+                ), f"object '{name}' is completely outside simulation"

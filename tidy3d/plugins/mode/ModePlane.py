@@ -115,7 +115,14 @@ class ModePlane(object):
             sim_mesh = [mesh[a] for a in self.old_ax]
 
             for freq in self.freqs:
-                eps = sim._get_eps(sim_mesh, edges="average", freq=freq, syms=False, pec_val=pec_val, component=comps[self.new_ax[im]])
+                eps = sim._get_eps(
+                    sim_mesh,
+                    edges="average",
+                    freq=freq,
+                    syms=False,
+                    pec_val=pec_val,
+                    component=comps[self.new_ax[im]],
+                )
                 eps = np.squeeze(eps, axis=self.norm_ind)
                 eps_freqs.append(eps)
 
@@ -138,7 +145,9 @@ class ModePlane(object):
 
             for freq in self.freqs:
                 # eps = sim._get_eps(sim_mesh, edges='average', freq=freq, syms=False)
-                eps, _, _ = get_mat_params(sim.structures, sim._mat_inds, sim_mesh, component=self.new_ax[im])
+                eps, _, _ = get_mat_params(
+                    sim.structures, sim._mat_inds, sim_mesh, component=self.new_ax[im]
+                )
                 eps = np.squeeze(eps, axis=self.norm_ind)
                 eps_freqs.append(eps)
 
@@ -179,7 +188,16 @@ class ModePlane(object):
         epses = [self.eps_ex[ifreq], self.eps_ey[ifreq] + 1e-6, self.eps_ez[ifreq]]
 
         # Get modes
-        modes = get_modes(epses, freq, mesh_step=self.grid.mesh_step, pml_layers=pml_layers, num_modes=Nmodes, target_neff=target_neff, symmetries=self.symmetries, coords=self.grid.coords[:2])
+        modes = get_modes(
+            epses,
+            freq,
+            mesh_step=self.grid.mesh_step,
+            pml_layers=pml_layers,
+            num_modes=Nmodes,
+            target_neff=target_neff,
+            symmetries=self.symmetries,
+            coords=self.grid.coords[:2],
+        )
 
         for mode in modes:
             # Normalize to unit power flux

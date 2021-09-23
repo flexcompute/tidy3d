@@ -31,7 +31,11 @@ def get_html_theme_path():
 def config_initiated(app, config):
     theme_options = config.html_theme_options or {}
     if theme_options.get("canonical_url"):
-        logger.warning(_("The canonical_url option is deprecated, use the html_baseurl option from Sphinx instead."))
+        logger.warning(
+            _(
+                "The canonical_url option is deprecated, use the html_baseurl option from Sphinx instead."
+            )
+        )
 
 
 # See http://www.sphinx-doc.org/en/stable/theming.html#distribute-your-theme-as-a-python-package

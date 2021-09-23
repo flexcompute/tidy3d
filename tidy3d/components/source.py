@@ -114,7 +114,9 @@ class DirectionalSource(Source, ABC):
         normal_axis_index = size.index(0.0)
         normal_axis = "xyz"[normal_axis_index]
         polarization_axis = polarization[-1]
-        assert normal_axis != polarization_axis, f"Directional source '{cls.__name__}' can not have polarization component ({polarization_axis}) parallel to plane's normal direction ({normal_axis})"
+        assert (
+            normal_axis != polarization_axis
+        ), f"Directional source '{cls.__name__}' can not have polarization component ({polarization_axis}) parallel to plane's normal direction ({normal_axis})"
         return values
 
 

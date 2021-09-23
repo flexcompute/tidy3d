@@ -54,7 +54,9 @@ def ensure_less_than(field_name, value):
 
     @pydantic.validator(field_name, allow_reuse=True, always=True)
     def is_less_than(field_val):
-        assert field_val < value, f"value of '{field_name}' must be less than {value}, given {field_val}"
+        assert (
+            field_val < value
+        ), f"value of '{field_name}' must be less than {value}, given {field_val}"
         return field_val
 
     return is_less_than
@@ -65,7 +67,9 @@ def assert_plane(field_name="geometry"):
 
     @pydantic.validator(field_name, allow_reuse=True, always=True)
     def is_plane(cls, v):
-        assert v.size.count(0.0) == 1, "mode objects only works with plane geometries with one size element of 0.0"
+        assert (
+            v.size.count(0.0) == 1
+        ), "mode objects only works with plane geometries with one size element of 0.0"
         return v
 
     return is_plane
@@ -105,10 +109,14 @@ def check_simulation_bounds():
                 obj_bmin, obj_bmax = obj_bounds
 
                 # assert all of the object's max coordinates are greater than the simulation's min coordinate
-                assert all(o >= s for (o, s) in zip(obj_bmax, sim_bmin)), f"{obj_name[:-1]} object '{name}' is outside of simulation bounds (on minus side)"
+                assert all(
+                    o >= s for (o, s) in zip(obj_bmax, sim_bmin)
+                ), f"{obj_name[:-1]} object '{name}' is outside of simulation bounds (on minus side)"
 
                 # assert all of the object's min coordinates are less than than the simulation's max coordinate
-                assert all(o <= s for (o, s) in zip(obj_bmin, sim_bmax)), f"{obj_name[:-1]} object '{name}' is outside of simulation bounds (on plus side)"
+                assert all(
+                    o <= s for (o, s) in zip(obj_bmin, sim_bmax)
+                ), f"{obj_name[:-1]} object '{name}' is outside of simulation bounds (on plus side)"
 
         return values
 
@@ -133,7 +141,9 @@ class Geometry(Tidy3dBaseModel):
 
     def _get_bounds(self) -> Bound:
         """returns bounding box for this geometry"""
-        raise NotImplementedError(f"Must implement self._get_bounds() for '{type(self).__name__}' geometry")
+        raise NotImplementedError(
+            f"Must implement self._get_bounds() for '{type(self).__name__}' geometry"
+        )
 
 
 class Box(Geometry):

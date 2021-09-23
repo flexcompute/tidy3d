@@ -23,7 +23,15 @@ def solve(simulation: Simulation) -> SolverDataDict:
         if isinstance(monitor, FieldMonitor):
             xs, ys, zs = discretize_montor(simulation, monitor)
             data_array = make_fake_field_data(xs, ys, zs, sample_values)
-            data_dict[name] = {"field": ["E", "H"], "component": ["x", "y", "z"], "xs": xs, "ys": ys, "zs": zs, sample_name: sample_values, "data": data_array}
+            data_dict[name] = {
+                "field": ["E", "H"],
+                "component": ["x", "y", "z"],
+                "xs": xs,
+                "ys": ys,
+                "zs": zs,
+                sample_name: sample_values,
+                "data": data_array,
+            }
         elif isinstance(monitor, FluxMonitor):
             data_array = make_fake_flux_data(sample_values)
             data_dict[name] = {
@@ -63,7 +71,9 @@ def unpack_sampler(sampler: Sampler) -> Tuple[str, np.ndarray]:
 """ Discretization functions """
 
 
-def discretize_montor(simulation: Simulation, mon: FieldMonitor) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+def discretize_montor(
+    simulation: Simulation, mon: FieldMonitor
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Discretizes spatial extent of a monitor"""
     grid_size = simulation.grid_size
     center = mon.center
@@ -82,7 +92,9 @@ def make_coordinates_3d(center, size, grid_size):
     rmin = np.array([c - s / 2.0 for (c, s) in zip(center, size)])
     rmax = np.array([c + s / 2.0 for (c, s) in zip(center, size)])
     grid_size = unpack_grid_size(grid_size)
-    xs, ys, zs = [make_coordinates_1d(cmin, cmax, dl) for (cmin, cmax, dl) in zip(rmin, rmax, grid_size)]
+    xs, ys, zs = [
+        make_coordinates_1d(cmin, cmax, dl) for (cmin, cmax, dl) in zip(rmin, rmax, grid_size)
+    ]
     return xs, ys, zs
 
 
