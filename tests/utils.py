@@ -20,11 +20,24 @@ SIM_MONITORS = Simulation(
     size=(2.0, 2.0, 2.0),
     grid_size=0.1,
     monitors={
-        "field_freq": FieldMonitor(size=(1, 1, 1), center=(0, 1, 0), sampler=FreqSampler(freqs=[1, 2, 5, 7, 8])),
-        "field_time": FieldMonitor(size=(1, 1, 0), center=(1, 0, 0), sampler=TimeSampler(times=[1])),
-        "flux_freq": FluxMonitor(size=(1, 1, 0), center=(0, 0, 0), sampler=FreqSampler(freqs=[1, 2, 5, 9])),
-        "flux_time": FluxMonitor(size=(1, 1, 0), center=(0, 0, 0), sampler=TimeSampler(times=[1, 2, 3])),
-        "mode": ModeMonitor(size=(1, 1, 0), center=(0, 0, 0), sampler=FreqSampler(freqs=[1.90, 2.01, 2.2]), modes=[Mode(mode_index=1)]),
+        "field_freq": FieldMonitor(
+            size=(1, 1, 1), center=(0, 1, 0), sampler=FreqSampler(freqs=[1, 2, 5, 7, 8])
+        ),
+        "field_time": FieldMonitor(
+            size=(1, 1, 0), center=(1, 0, 0), sampler=TimeSampler(times=[1])
+        ),
+        "flux_freq": FluxMonitor(
+            size=(1, 1, 0), center=(0, 0, 0), sampler=FreqSampler(freqs=[1, 2, 5, 9])
+        ),
+        "flux_time": FluxMonitor(
+            size=(1, 1, 0), center=(0, 0, 0), sampler=TimeSampler(times=[1, 2, 3])
+        ),
+        "mode": ModeMonitor(
+            size=(1, 1, 0),
+            center=(0, 0, 0),
+            sampler=FreqSampler(freqs=[1.90, 2.01, 2.2]),
+            modes=[Mode(mode_index=1)],
+        ),
     },
 )
 
@@ -42,7 +55,10 @@ SIM_FULL = Simulation(
             medium=Medium(permittivity=1.0, conductivity=3.0),
         ),
         Structure(geometry=Sphere(radius=1.4, center=(1.0, 0.0, 1.0)), medium=Medium()),
-        Structure(geometry=Cylinder(radius=1.4, length=2.0, center=(1.0, 0.0, -1.0), axis=1), medium=Medium()),
+        Structure(
+            geometry=Cylinder(radius=1.4, length=2.0, center=(1.0, 0.0, -1.0), axis=1),
+            medium=Medium(),
+        ),
     ],
     sources={
         "my_dipole": VolumeSource(

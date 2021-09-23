@@ -39,7 +39,9 @@ def load_solver_results(simulation: Simulation, solver_data_dict: SolverDataDict
     return SimulationData(simulation=simulation, monitor_data=monitor_data)
 
 
-def save_solver_results(path: str, simulation: Simulation, solver_data_dict: SolverDataDict) -> None:
+def save_solver_results(
+    path: str, simulation: Simulation, solver_data_dict: SolverDataDict
+) -> None:
     """save the solver_data_dict and simulation json to file"""
 
     # create SimulationData object

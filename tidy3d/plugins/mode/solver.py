@@ -8,7 +8,16 @@ from .derivatives import create_S_matrices as S_mats
 from .Mode import Mode
 
 
-def compute_modes(eps_cross, freq, mesh_step, pml_layers, num_modes=1, target_neff=None, symmetries=(0, 0), coords=None):
+def compute_modes(
+    eps_cross,
+    freq,
+    mesh_step,
+    pml_layers,
+    num_modes=1,
+    target_neff=None,
+    symmetries=(0, 0),
+    coords=None,
+):
     """Solve for the modes of a waveguide cross section.
 
     Parameters
@@ -176,8 +185,12 @@ def compute_modes(eps_cross, freq, mesh_step, pml_layers, num_modes=1, target_ne
     # Store all the information about the modes.
     modes = []
     for im in range(num_modes):
-        E = np.array([Ex[:, im].reshape(Nx, Ny), Ey[:, im].reshape(Nx, Ny), Ez[:, im].reshape(Nx, Ny)])
-        H = np.array([Hx[:, im].reshape(Nx, Ny), Hy[:, im].reshape(Nx, Ny), Hz[:, im].reshape(Nx, Ny)])
+        E = np.array(
+            [Ex[:, im].reshape(Nx, Ny), Ey[:, im].reshape(Nx, Ny), Ez[:, im].reshape(Nx, Ny)]
+        )
+        H = np.array(
+            [Hx[:, im].reshape(Nx, Ny), Hy[:, im].reshape(Nx, Ny), Hz[:, im].reshape(Nx, Ny)]
+        )
         modes.append(Mode(E, H, neff[im], keff[im]))
 
     if vals.size == 0:

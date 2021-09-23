@@ -13,7 +13,9 @@ mon = Monitor(
 mesh = Mesh(grid_step=(0.1, 0.1, 0.1))
 
 
-def transpose_bounds(bounds: Bound) -> Tuple[Tuple[float, float], Tuple[float, float], Tuple[float, float]]:
+def transpose_bounds(
+    bounds: Bound,
+) -> Tuple[Tuple[float, float], Tuple[float, float], Tuple[float, float]]:
     coord_min, coord_max = bounds
     x_min, y_min, z_min = coord_min
     x_max, y_max, z_max = coord_max

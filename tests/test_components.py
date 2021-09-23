@@ -25,7 +25,10 @@ def test_sim():
                 medium=Medium(permittivity=1.0, conductivity=3.0),
             ),
             Structure(geometry=Sphere(radius=1.4, center=(1.0, 0.0, 1.0)), medium=Medium()),
-            Structure(geometry=Cylinder(radius=1.4, length=2.0, center=(1.0, 0.0, -1.0), axis=1), medium=Medium()),
+            Structure(
+                geometry=Cylinder(radius=1.4, length=2.0, center=(1.0, 0.0, -1.0), axis=1),
+                medium=Medium(),
+            ),
         ],
         sources={
             "my_dipole": VolumeSource(
@@ -39,8 +42,12 @@ def test_sim():
             )
         },
         monitors={
-            "point": FieldMonitor(size=(0, 0, 0), center=(0, 0, 0), sampler=FreqSampler(freqs=[1, 2])),
-            "plane": FluxMonitor(size=(1, 1, 0), center=(0, 0, 0), sampler=TimeSampler(times=[1, 2])),
+            "point": FieldMonitor(
+                size=(0, 0, 0), center=(0, 0, 0), sampler=FreqSampler(freqs=[1, 2])
+            ),
+            "plane": FluxMonitor(
+                size=(1, 1, 0), center=(0, 0, 0), sampler=TimeSampler(times=[1, 2])
+            ),
         },
         symmetry=(0, -1, 1),
         pml_layers=(
@@ -78,7 +85,15 @@ def test_sim_bounds():
 
         shifted_center = tuple(c + s for (c, s) in zip(center_offset, CENTER_SHIFT))
 
-        sim = Simulation(size=(1, 1, 1), center=CENTER_SHIFT, grid_size=(0.1, 0.1, 0.1), run_time=1e-12, structures=[Structure(geometry=Box(size=(1, 1, 1), center=shifted_center), medium=Medium())])
+        sim = Simulation(
+            size=(1, 1, 1),
+            center=CENTER_SHIFT,
+            grid_size=(0.1, 0.1, 0.1),
+            run_time=1e-12,
+            structures=[
+                Structure(geometry=Box(size=(1, 1, 1), center=shifted_center), medium=Medium())
+            ],
+        )
 
     # create all permutations of squares being shifted 1, -1, or zero in all three directions
     bin_strings = [list(format(i, "03b")) for i in range(8)]

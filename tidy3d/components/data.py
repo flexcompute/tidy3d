@@ -107,7 +107,9 @@ class Tidy3dData(pydantic.BaseModel):
         validate_all = True  # validate default values too
         extra = "forbid"  # forbid extra kwargs not specified in model
         validate_assignment = True  # validate when attributes are set after initialization
-        arbitrary_types_allowed = True  # allow us to specify a type for an arg that is an arbitrary class (np.ndarray)
+        arbitrary_types_allowed = (
+            True  # allow us to specify a type for an arg that is an arbitrary class (np.ndarray)
+        )
         allow_mutation = False  # dont allow one to change the data
 
 

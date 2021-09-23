@@ -14,7 +14,11 @@ ep = ExecutePreprocessor(timeout=1000)
 
 # get all notebook files
 notebook_directory = "notebooks/"
-notebook_filenames = [notebook_directory + f for f in os.listdir(notebook_directory) if ".ipynb" in f and f != ".ipynb_checkpoints"]
+notebook_filenames = [
+    notebook_directory + f
+    for f in os.listdir(notebook_directory)
+    if ".ipynb" in f and f != ".ipynb_checkpoints"
+]
 
 
 def test_notebooks():

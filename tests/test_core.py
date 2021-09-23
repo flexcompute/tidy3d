@@ -42,7 +42,9 @@ def _solve_sim(simulation: Simulation) -> SimulationData:
     return tdcore.load_solver_results(simulation, solver_data_dict)
 
 
-def _assert_same_sim_data(sim_data1: SimulationData, sim_data2: SimulationData, sim_reference: Simulation = None):
+def _assert_same_sim_data(
+    sim_data1: SimulationData, sim_data2: SimulationData, sim_reference: Simulation = None
+):
     """ensure two SimulationDatas are the same"""
 
     # assert the Simulations are the same as each other and original

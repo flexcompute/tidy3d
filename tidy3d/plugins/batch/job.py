@@ -47,7 +47,9 @@ class Job:
         sim_dict = simulation.export()
         if task_id is None:
             # submit a task
-            info_dict = web.new_project(sim_dict, task_name=task_name, folder_name=folder_name, draft=draft)
+            info_dict = web.new_project(
+                sim_dict, task_name=task_name, folder_name=folder_name, draft=draft
+            )
             self.task_id = info_dict["taskId"]
         else:
             # use task_id

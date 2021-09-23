@@ -168,7 +168,9 @@ class DispersionFit:
         n, k = eps_to_nk(complex_epsilon)
         return n, k
 
-    def fit(self, num_poles=3, num_tries=100, tolerance_rms=0.0, plot=True, globalopt=True, bound=np.inf):
+    def fit(
+        self, num_poles=3, num_tries=100, tolerance_rms=0.0, plot=True, globalopt=True, bound=np.inf
+    ):
         """Fits data a number of times and returns best results.
 
         Parameters
@@ -197,7 +199,9 @@ class DispersionFit:
         best_rms = np.inf
         pbar = tqdm(range(num_tries))
         for _ in pbar:
-            coeffs, rms_error = self.fit_single(num_poles=num_poles, globalopt=globalopt, bound=bound)
+            coeffs, rms_error = self.fit_single(
+                num_poles=num_poles, globalopt=globalopt, bound=bound
+            )
 
             # if improvement, set the best RMS and coeffs
             if rms_error < best_rms:
@@ -216,7 +220,9 @@ class DispersionFit:
                 return best_coeffs, best_rms
 
         # if exited loop, did not reach tolerance (warn)
-        print(f"\twarning: did not find fit with RMS error under tolerance_rms of {tolerance_rms:.2e}")
+        print(
+            f"\twarning: did not find fit with RMS error under tolerance_rms of {tolerance_rms:.2e}"
+        )
         print(f"\treturning best fit with RMS error {best_rms:.2e}")
         self.coeffs = best_coeffs
         self.rms_error = best_rms
@@ -360,11 +366,15 @@ class DispersionFit:
         if ax is None:
             f, ax = plt.subplots(1, 1)
 
-        im = ax.scatter(self.wavelengths, self.n_data, s=dot_sizes, c=n_data_color, label="n (data)")
+        im = ax.scatter(
+            self.wavelengths, self.n_data, s=dot_sizes, c=n_data_color, label="n (data)"
+        )
         ax.plot(wavelengths, model_n, linewidth=linewidth, color=n_model_color, label="n (model)")
         if self.lossy:
             ax.scatter(self.wavelengths, self.k_data, s=dot_sizes, c=k_data_color, label="k (data)")
-            ax.plot(wavelengths, model_k, linewidth=linewidth, color=k_model_color, label="k (model)")
+            ax.plot(
+                wavelengths, model_k, linewidth=linewidth, color=k_model_color, label="k (model)"
+            )
         ax.set_ylabel("value")
         ax.set_xlabel("Wavelength ($\\mu m$)")
         ax.set_title(f"{self.num_poles} pole fit")
@@ -499,7 +509,9 @@ if __name__ == "__main__":
 
         print(f"\nfitting with {num_poles} poles...")
 
-        poles, rms_error = dispFit.fit(num_poles=num_poles, tolerance_rms=1e-4, num_tries=1000, globalopt=True, bound=np.inf)
+        poles, rms_error = dispFit.fit(
+            num_poles=num_poles, tolerance_rms=1e-4, num_tries=1000, globalopt=True, bound=np.inf
+        )
 
         """ visualizing fit """
 

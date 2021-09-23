@@ -14,7 +14,9 @@ from .components.pml import PMLLayer
 from .components.geometry import Box, Sphere, Cylinder, PolySlab
 from .components.structure import Structure
 from .components.medium import Medium, PoleResidue, Sellmeier, Debye, Lorentz
-from .components.medium import nk_to_eps_complex, nk_to_eps_sigma, nk_to_medium, eps_sigma_to_eps_complex
+from .components.medium import nk_to_eps_complex, nk_to_eps_sigma
+from .components.medium import nk_to_medium, eps_sigma_to_eps_complex
+
 from .components.source import GaussianPulse
 from .components.source import VolumeSource, PlaneWave, ModeSource
 from .components.monitor import TimeSampler, FreqSampler, uniform_freq_sampler, uniform_time_sampler
