@@ -4,6 +4,7 @@ import os
 import sys
 import time
 from shutil import copyfile
+
 sys.path.append("../../")
 
 import tidy3d_core as tdcore
