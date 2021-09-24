@@ -1,4 +1,4 @@
-""" command-line interface """
+""" command-line interface for instructions run `python tidy3d.py --help` """
 
 import argparse
 import pyfiglet
@@ -21,16 +21,16 @@ parser.add_argument(
 parser.add_argument(
     "--inspect_sim",
     "-i",
-    default=True,
     required=False,
+    action="store_true",
     help="visualize simulation and prompt before submitting",
 )
 
 parser.add_argument(
     "--inspect_credits",
     "-c",
-    default=True,
     required=False,
+    action="store_true",
     help="visualize simulation and prompt before submitting",
 )
 
@@ -39,7 +39,11 @@ parser.add_argument(
 )
 
 parser.add_argument(
-    "--viz_results", "-v", default=True, required=False, help="visualize results after submitting"
+    "--viz_results",
+    "-v",
+    action="store_true",
+    required=False,
+    help="visualize results after submitting",
 )
 
 args = parser.parse_args()
@@ -66,21 +70,27 @@ if inspect_sim:
     looks_good = input("Do you want to continue to submit? [y]/[n]")
     if looks_good.lower() != "y":
         print(" - exiting")
-    else:
-        job = Job(simulation=simulation, task_name=task_name)
-        job.upload()
-        info = job.get_info()
-        print(
-            f'task "{task_name}" estimated to use \n\t{info.credits:.2f} credits and \n\t{info.size_bytes:.2e} bytes of storage.'
-        )
-        looks_good = input("Do you want to continue to submit? [y]/[n]")
-        if looks_good.lower() != "y":
-            print(" - exiting")
-        else:
-            job.run()
-            job.monitor()
-            sim_data = job.load_results(path=out_file)
+        exit(0)
 
-            if viz_results:
-                ascii_banner = pyfiglet.figlet_format("Simulation Data")
-                print(ascii_banner)
+job = Job(simulation=simulation, task_name=task_name)
+job.upload()
+
+if inspect_credits:
+    info = job.get_info()
+    print(
+        f'task "{task_name}" estimated to use '
+        f"\n\t{info.credits:.2f} credits and "
+        f"\n\t{info.size_bytes:.2e} bytes of storage."
+    )
+    looks_good = input("Do you want to continue to submit? [y]/[n]")
+    if looks_good.lower() != "y":
+        print(" - exiting")
+        exit(0)
+
+job.run()
+job.monitor()
+sim_data = job.load_results(path=out_file)
+
+if viz_results:
+    ascii_banner = pyfiglet.figlet_format("Simulation Data")
+    print(ascii_banner)
