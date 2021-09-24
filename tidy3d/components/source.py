@@ -104,7 +104,7 @@ class DirectionalSource(Source, ABC):
     _plane_validator = assert_plane()
 
     @pydantic.root_validator(allow_reuse=True)
-    def polarization_is_orthogonal(cls, values):
+    def polarization_is_orthogonal(cls, values):  # pylint: disable=no-self-argument
         """ensure we dont allow a polarization parallel to the propagation direction"""
         size = values.get("size")
         polarization = values.get("polarization")
@@ -116,7 +116,9 @@ class DirectionalSource(Source, ABC):
         polarization_axis = polarization[-1]
         assert (
             normal_axis != polarization_axis
-        ), f"Directional source '{cls.__name__}' can not have polarization component ({polarization_axis}) parallel to plane's normal direction ({normal_axis})"
+        ), f"Directional source '{cls.__name__}' "  # pylint: disable=no-member
+        " can not have polarization component ({polarization_axis})"
+        "parallel to plane's normal direction ({normal_axis})"
         return values
 
 

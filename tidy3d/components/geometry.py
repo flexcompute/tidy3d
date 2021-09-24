@@ -21,7 +21,7 @@ class Geometry(Tidy3dBaseModel, ABC):
         """method determining whether two geometries' bounds intersect"""
 
         self_bmin, self_bmax = self._get_bounds()
-        other_bmin, other_bmax = other._get_bounds()
+        other_bmin, other_bmax = other._get_bounds()  # pylint: disable=protected-access
 
         # are all of other's minimum coordinates less than self's maximum coordinate?
         in_minus = all(o <= s for (s, o) in zip(self_bmax, other_bmin))

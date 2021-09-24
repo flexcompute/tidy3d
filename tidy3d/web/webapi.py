@@ -5,13 +5,10 @@ import sys
 import time
 from shutil import copyfile
 
-sys.path.append("../../")
-
-import tidy3d_core as tdcore
 import numpy as np
 
-from ..components.simulation import Simulation
 from .task import TaskId, Task, TaskInfo, RunInfo, TaskStatus
+from ..components.simulation import Simulation
 
 """ filesystem emulation for tests """
 
@@ -130,11 +127,13 @@ def run(task_id: TaskId) -> None:
     task = get_task_by_id(task_id)
     task.info.status = TaskStatus.RUN
 
-    # emulate a solve
-
     # load json file
     sim_path = _get_sim_path(task_id)
     sim_core = Simulation.load(sim_path)
+
+    # import tidy3d core to emulate solve
+    sys.path.append("../../")
+    import tidy3d_core as tdcore  # pylint: disable=import-outside-toplevel
 
     # get raw results in dict of dict of np.ndarray
     solver_data_dict = tdcore.solve(sim_core)

@@ -6,7 +6,7 @@ import pydantic
 class Tidy3dBaseModel(pydantic.BaseModel):
     """https://pydantic-docs.helpmanual.io/usage/model_config/"""
 
-    class Config:
+    class Config:  # pylint: disable=too-few-public-methods
         """sets config for all Tidy3dBaseModel objects"""
 
         validate_all = True  # validate default values too
@@ -17,7 +17,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
     def export(self, fname: str) -> None:
         """Exports Tidy3dBaseModel instance to .json file"""
         json_string = self.json(indent=2)
-        with open(fname, "w") as file_handle:
+        with open(fname, "w", encoding="utf-8") as file_handle:
             file_handle.write(json_string)
 
     @classmethod

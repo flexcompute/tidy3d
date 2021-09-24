@@ -3,7 +3,6 @@ from typing import Dict, Literal, Tuple, Union, List
 
 import pydantic
 
-from .. import __version__ as version_number
 from .types import GridSize
 from .geometry import Box
 from .medium import Medium, MediumType
@@ -11,6 +10,9 @@ from .structure import Structure
 from .source import SourceType
 from .monitor import MonitorType
 from .pml import PMLLayer
+
+# technically this is creating a circular import issue because it calls tidy3d/__init__.py
+# from .. import __version__ as version_number
 
 
 class Simulation(Box):
@@ -31,7 +33,7 @@ class Simulation(Box):
     shutoff: pydantic.NonNegativeFloat = 1e-5
     courant: pydantic.confloat(ge=0.0, le=1.0) = 0.9
     subpixel: bool = True
-    version: str = str(version_number)
+    # version: str = str(version_number)
 
     def __init__(self, **kwargs):
         """initialize sim and then do more validations"""

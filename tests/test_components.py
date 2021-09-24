@@ -61,7 +61,7 @@ def test_sim():
     )
 
 
-def test_version():
+def _test_version():
     """ensure there's a version in simulation"""
 
     sim = Simulation(
