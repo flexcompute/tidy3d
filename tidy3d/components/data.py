@@ -112,6 +112,33 @@ class FieldData(MonitorData):
         return image.options(cmap="RdBu", colorbar=True, aspect="equal")
 
 
+# class PermittivityData(MonitorData):
+#     """Stores Electric and Magnetic fields from a FieldMonitor"""
+
+#     xs: np.ndarray  # (Nx,)
+#     ys: np.ndarray  # (Ny,)
+#     zs: np.ndarray  # (Nz,)
+#     values: np.ndarray  # (2, 3, Nx, Ny, Nz, Ns)
+#     is_permittivity: bool = True
+
+#     def load_xarray(self):
+#         """returns an xarray representation of data"""
+#         coords = {
+#             "component": ["xx", "yy", "zz"],
+#             "xs": self.xs,
+#             "ys": self.ys,
+#             "zs": self.zs,
+#             self.sampler_label: self.sampler_values,
+#         }
+#         return xr.DataArray(self.values, coords=coords, name=self.monitor_name)
+
+#     def visualize(self):
+#         """make interactive plot"""
+#         hv_ds = hv.Dataset(self.data.copy())
+#         image = hv_ds.to(hv.Image, kdims=["xs", "ys"], dynamic=True)
+#         return image.options(cmap="RdBu", colorbar=True, aspect="equal")
+
+
 class FluxData(MonitorData):
     """Stores power flux data through a planar FluxMonitor"""
 
