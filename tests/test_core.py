@@ -9,19 +9,10 @@ sys.path.append("./")
 
 from tidy3d import *
 import tidy3d_core as tdcore
-from .utils import clear_dir
+from .utils import clear_dir, clear_tmp
 from .utils import SIM_MONITORS as SIM
 
 TMP_DIR = "tests/tmp/"
-
-
-# decorator that clears the tmp/ diretory before test
-def clear_tmp(fn):
-    def new_fn(*args, **kwargs):
-        clear_dir(TMP_DIR)
-        return fn(*args, **kwargs)
-
-    return new_fn
 
 
 def prepend_tmp(path):

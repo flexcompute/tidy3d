@@ -9,6 +9,7 @@ sys.path.append("./")
 
 from tidy3d import *
 from .utils import SIM_FULL as SIM
+from .utils import clear_tmp
 
 
 def test_simulation_load_export():
@@ -43,3 +44,14 @@ def test_validation_speed():
         sizes_bytes.append(size)
 
         print(f"{n} structures \t {size:.1e} bytes \t {time_validate:.1f} seconds to validate")
+
+
+@clear_tmp
+def test_yaml():
+    path = "tests/tmp/simulation.json"
+    SIM.export(path)
+    sim = Simulation.load(path)
+    path1 = "tests/tmp/simulation.yaml"
+    sim.export_yaml(path1)
+    sim1 = Simulation.load_yaml(path1)
+    assert sim1 == sim

@@ -16,6 +16,17 @@ def clear_dir(path: str):
             os.remove(full_path)
 
 
+TMP_DIR = "tests/tmp/"
+
+# decorator that clears the tmp/ diretory before test
+def clear_tmp(fn):
+    def new_fn(*args, **kwargs):
+        clear_dir(TMP_DIR)
+        return fn(*args, **kwargs)
+
+    return new_fn
+
+
 SIM_MONITORS = Simulation(
     size=(2.0, 2.0, 2.0),
     grid_size=0.1,
