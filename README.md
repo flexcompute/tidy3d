@@ -127,7 +127,7 @@
 #### IO
 - [ ] Supply other ways to create simulation files (2 days)
 	- [ ] yaml -> json conversion 
-	- [ ] command line interface to submit yaml or json.
+	- [x] command line interface to submit yaml or json.
 	- [ ] simple yaml editor?  flask app?
 	- [ ] Output Simulation as blender file?
 
