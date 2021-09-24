@@ -35,9 +35,9 @@ def uniform_time_sampler(t_start, t_stop, t_step=1):
     return TimeSampler(times=times)
 
 
-def uniform_freq_sampler(f_start, f_stop, N_freqs):
+def uniform_freq_sampler(f_start, f_stop, num_freqs):
     """create FreqSampler at evenly spaced frequency points"""
-    freqs = _uniform_linspace(f_start, f_stop, N_freqs)
+    freqs = _uniform_linspace(f_start, f_stop, num_freqs)
     return FreqSampler(freqs=freqs)
 
 

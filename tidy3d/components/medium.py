@@ -1,3 +1,4 @@
+# pylint: disable=invalid-name
 """ Defines properties of the medium / materials """
 
 from abc import ABC, abstractmethod
