@@ -150,10 +150,10 @@ https://github.com/crusaderky/python_project_template
 #### Testing
 
 - [ ] Add extensive amount of tests (2 weeks)
-	- [ ] Test simulation.json validation / error catching.
+	- [x] Test simulation.json validation / error catching.
 	- [ ] Test plugins.
 	- [ ] Test submitting jobs if possible.
-	- [ ] Test notebooks.
+	- [x] Test notebooks.
 ---
 #### Github Integration
 - [ ] Automate everything using GitHub extensions (2 weeks)
