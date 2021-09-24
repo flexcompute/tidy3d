@@ -85,6 +85,16 @@
 
 ### Stage 2: Integration
 
+#### Monitor Data
+- [x] Define monitor data.
+- [x] Export and Load
+- [ ] Expose especially useful xarray methods to MonitorData API.
+- [ ] Define Permittivity Monitor
+- [ ] Expose arguments to each MonitorData
+- [ ] Separate FieldData into different "fields" (xr.dataset?)
+- [ ] How to more cleanly specify what fields are required to construct each MonitorData?
+---
+
 #### Solver Integration
 
 - [x] Add version to simulation.json
@@ -109,10 +119,8 @@
 	- [ ] Dispersion fit (1 day)
 	- [ ] Mode solver (1 week) (just load in local one for now)
 	- [x] Batch processor (1 week) <- done in webapi
-	- [ ] S matrix (1 week) <- do later
-	- [ ] Optimizer (2 days) <- do later
-
 ---
+
 #### Visualization
 - [ ] write all visuaization routines
 	- [x] MonitorData
@@ -122,16 +130,18 @@
 	- [ ] **3D structure plotting**
 	- [ ] Overlay structures onto fields.
 	- [ ] SimulationData
-
 ---
+
 #### IO
 - [x] Supply other ways to create simulation files (2 days)
 	- [x] yaml -> json conversion 
 	- [x] command line interface to submit yaml or json.
-	- [x] simple yaml editor?  flask app? -> do later
-	- [x] Output Simulation as blender file? -> do later
-
 ---
+
+#### Finishing Integration
+- [ ] Mode Sources / Monitors
+- [ ] Nonuniform Mesh
+
 ### Stage 3: Refining
 
 A good template:
@@ -147,6 +157,7 @@ https://github.com/crusaderky/python_project_template
 	- [ ] Move tidy3d notebooks into repo, make them work with new code.
 	- [ ] test binder links.
 ---
+
 #### Testing
 
 - [ ] Add extensive amount of tests (2 weeks)
@@ -155,6 +166,7 @@ https://github.com/crusaderky/python_project_template
 	- [ ] Test submitting jobs if possible.
 	- [x] Test notebooks.
 ---
+
 #### Github Integration
 - [ ] Automate everything using GitHub extensions (2 weeks)
 	- [ ] CI / tests.
@@ -163,6 +175,7 @@ https://github.com/crusaderky/python_project_template
 	- [ ] Contributing guide / developer documentation.
 	- [ ] What else?
 ---
+
 #### Refine
 
 - [ ] Add finishing touches (2 days)
@@ -172,15 +185,17 @@ https://github.com/crusaderky/python_project_template
 	- [ ] Wipe commit history
 	- [ ] decide how to manage branches
 ---
+
 #### Final
 - [ ] Finding bugs and fixing things, testing (2 weeks)
 - [ ]  Release publicly! :partying_face:
+
 ---
-
 ### After this
-- [ ] Mode solver API using web.
+- [ ] S matrix plugin
+- [ ] Optimizer plugin
+- [ ] Mode solver API using web
 - [ ] More advanced plotting
-- [ ] Non-uniform mesh
 - [ ] Angled sources
-
-
+- [ ] simple yaml editor?  flask app
+- [ ] Output Simulation as blender file
