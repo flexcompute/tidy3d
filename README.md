@@ -125,11 +125,11 @@
 
 ---
 #### IO
-- [ ] Supply other ways to create simulation files (2 days)
-	- [ ] yaml -> json conversion 
+- [x] Supply other ways to create simulation files (2 days)
+	- [x] yaml -> json conversion 
 	- [x] command line interface to submit yaml or json.
-	- [ ] simple yaml editor?  flask app?
-	- [ ] Output Simulation as blender file?
+	- [x] simple yaml editor?  flask app? -> do later
+	- [x] Output Simulation as blender file? -> do later
 
 ---
 ### Stage 3: Refining
