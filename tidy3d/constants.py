@@ -1,3 +1,4 @@
+# pylint: disable=invalid-name
 """ defines constants used elsewhere in the package"""
 
 import numpy as np
