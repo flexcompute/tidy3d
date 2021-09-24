@@ -11,7 +11,7 @@ parser.add_argument(
     "-p",
     "--path",
     help="path to directory you want to run pylint | " "Default: %(default)s | " "Type: %(type)s ",
-    default="./src",
+    default="./tidy3d",
     type=str,
 )
 
