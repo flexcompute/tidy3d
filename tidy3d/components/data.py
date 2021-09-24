@@ -13,94 +13,6 @@ from .simulation import Simulation
 from .monitor import FluxMonitor, FieldMonitor, ModeMonitor, FreqSampler
 
 
-class MonitorData(xr.DataArray, ABC):
-    """Stores data from a Monitor"""
-
-    __slots__ = ()  # need this for xarray subclassing
-
-    def __eq__(self, other):
-        """check equality against another MonitorData instance"""
-        assert isinstance(other, MonitorData), "can only check eqality on two monitor data objects"
-        return self.equals(other)
-
-    def _sampler_label(self):
-        """get the label associated with sampler"""
-        return "freqs" if "freqs" in self.coords else "times"
-
-    @abstractmethod
-    def visualize(self):
-        """make interactive plot (impement in subclasses)"""
-
-    def export_as_file(self, path: str) -> None:
-        """Export MonitorData to hdf5 file (named this to avoid namespace conflicts with xarray)"""
-        self.to_netcdf(path=path, engine="h5netcdf", invalid_netcdf=True)
-
-    @classmethod
-    def load_from_file(cls, path: str):
-        """Load MonitorData from hdf5 file (named this to avoid namespace conflicts with xarray)"""
-        data_array = xr.open_dataarray(path, engine="h5netcdf")
-        return cls(data_array)
-
-
-class FieldData(MonitorData):
-    """Stores Electric and Magnetic fields from a FieldMonitor"""
-
-    __slots__ = ()  # need this for xarray subclassing
-
-    # def _get_dims(self):
-    #   sampler_label = self._sampler_label()
-    #   return ["field", "component", "xs", "ys", "zs", sampler_label]
-
-    def visualize(self):
-        """make interactive plot"""
-        hv_ds = hv.Dataset(self.copy())
-        image = hv_ds.to(hv.Image, kdims=["xs", "ys"], dynamic=True)
-        return image.options(cmap="RdBu", colorbar=True, aspect="equal")
-
-
-class FluxData(MonitorData):
-    """Stores power flux data through a planar FluxMonitor"""
-
-    __slots__ = ()  # need this for xarray subclassing
-
-    # def _get_dims(self):
-    #   sampler_label = self._sampler_label()
-    #   return [sampler_label]
-
-    def visualize(self):
-        """make interactive plot"""
-        hv.extension("bokeh")
-        hv_ds = hv.Dataset(self.copy())
-        image = hv_ds.to(hv.Curve, self._sampler_label())
-        return image
-
-
-class ModeData(MonitorData):
-    """Stores modal amplitdudes from a ModeMonitor"""
-
-    __slots__ = ()  # need this for xarray subclassing
-
-    # def _get_dims(self):
-    #   sampler_label = self._sampler_label()
-    #   return ["direction", "mode_index", sampler_label]
-
-    def visualize(self):
-        """make interactive plot"""
-        hv_ds = hv.Dataset(self.copy())
-        image = hv_ds.to(hv.Curve, self._sampler_label(), dynamic=True)
-        return image
-
-
-# maps monitor type to corresponding data type
-monitor_data_map = {FieldMonitor: FieldData, FluxMonitor: FluxData, ModeMonitor: ModeData}
-
-data_dim_map = {
-    FieldData: ["field", "component", "xs", "ys", "zs", "sampler_value(replace)"],
-    FluxData: ["sampler_value(replace)"],
-    ModeData: ["direction", "mode_index", "sampler_value(replace)"],
-}
-
-
 class Tidy3dData(pydantic.BaseModel):
     """base class for data associated with a specific task."""
 
@@ -116,11 +28,105 @@ class Tidy3dData(pydantic.BaseModel):
         allow_mutation = False  # dont allow one to change the data
 
 
+class MonitorData(Tidy3dData, ABC):
+    """Stores data from a Monitor"""
+
+    data: xr.DataArray
+
+    def __eq__(self, other):
+        """check equality against another MonitorData instance"""
+        assert isinstance(other, MonitorData), "can only check eqality on two monitor data objects"
+        return self.data.equals(other.data)
+
+    def _sampler_label(self):
+        """get the label associated with sampler"""
+        return "freqs" if "freqs" in self.data.coords else "times"
+
+    @abstractmethod
+    def visualize(self):
+        """make interactive plot (impement in subclasses)"""
+
+    def export_as_file(self, path: str) -> None:
+        """Export MonitorData to hdf5 file (named this to avoid namespace conflicts with xarray)"""
+        self.data.to_netcdf(path=path, engine="h5netcdf", invalid_netcdf=True)
+
+    @classmethod
+    def load_from_file(cls, path: str):
+        """Load MonitorData from hdf5 file (named this to avoid namespace conflicts with xarray)"""
+        data_array = xr.open_dataarray(path, engine="h5netcdf")
+        return cls(data=data_array)
+
+
+class FieldData(MonitorData):
+    """Stores Electric and Magnetic fields from a FieldMonitor"""
+
+    # def _get_dims(self):
+    #   sampler_label = self._sampler_label()
+    #   return ["field", "component", "xs", "ys", "zs", sampler_label]
+
+    def visualize(self):
+        """make interactive plot"""
+        hv_ds = hv.Dataset(self.data.copy())
+        image = hv_ds.to(hv.Image, kdims=["xs", "ys"], dynamic=True)
+        return image.options(cmap="RdBu", colorbar=True, aspect="equal")
+
+
+class FluxData(MonitorData):
+    """Stores power flux data through a planar FluxMonitor"""
+
+    # def _get_dims(self):
+    #   sampler_label = self._sampler_label()
+    #   return [sampler_label]
+
+    def visualize(self):
+        """make interactive plot"""
+        hv.extension("bokeh")
+        hv_ds = hv.Dataset(self.data.copy())
+        image = hv_ds.to(hv.Curve, self._sampler_label())
+        return image
+
+
+class ModeData(MonitorData):
+    """Stores modal amplitdudes from a ModeMonitor"""
+
+    # def _get_dims(self):
+    #   sampler_label = self._sampler_label()
+    #   return ["direction", "mode_index", sampler_label]
+
+    def visualize(self):
+        """make interactive plot"""
+        hv_ds = hv.Dataset(self.data.copy())
+        image = hv_ds.to(hv.Curve, self._sampler_label(), dynamic=True)
+        return image
+
+
+# maps monitor type to corresponding data type
+monitor_data_map = {FieldMonitor: FieldData, FluxMonitor: FluxData, ModeMonitor: ModeData}
+
+data_dim_map = {
+    FieldData: ["field", "component", "xs", "ys", "zs", "sampler_value(replace)"],
+    FluxData: ["sampler_value(replace)"],
+    ModeData: ["direction", "mode_index", "sampler_value(replace)"],
+}
+
+
 class SimulationData(Tidy3dData):
     """holds simulation and its monitors' data."""
 
     simulation: Simulation
     monitor_data: Dict[str, MonitorData]
+
+    def __eq__(self, other):
+        """check equality against another SimulationData instance"""
+        if self.simulation != other.simulation:
+            return False
+        for mon_name, mon_data in self.monitor_data.items():
+            other_data = other.monitor_data.get(mon_name)
+            if other_data is None:
+                return False
+            if mon_data != other.monitor_data[mon_name]:
+                return False
+        return True
 
     def export(self, path: str) -> None:
         """Export all data to a file"""
@@ -140,13 +146,13 @@ class SimulationData(Tidy3dData):
                 mon_grp = mon_data_grp.create_group(mon_name)
 
                 # add the data value to the moniitor
-                mon_grp.create_dataset("data", data=mon_data.data)
+                mon_grp.create_dataset("data", data=mon_data.data.data)
 
                 # for each of the coordinates
-                for coord_name in mon_data.coords:
+                for coord_name in mon_data.data.coords:
 
                     # get the data and convert it to the correct type if it contains strings
-                    coord_val = mon_data[coord_name].data
+                    coord_val = mon_data.data[coord_name].data
                     if isinstance(coord_val[0], np.str_):
                         dtype = h5py.special_dtype(vlen=str)
                         coord_val = np.array(coord_val, dtype=dtype)
@@ -182,7 +188,7 @@ class SimulationData(Tidy3dData):
 
         # load into an xarray.DataArray and make a monitor data to append to dictionary
         darray = xr.DataArray(data_value, coords, dims=dims, name=mon_name)
-        monitor_data_instance = data_type(darray)
+        monitor_data_instance = data_type(data=darray)
         return monitor_data_instance
 
     @classmethod

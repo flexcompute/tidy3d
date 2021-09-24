@@ -3,7 +3,7 @@ import numpy as np
 from typing import Dict, Tuple
 import os
 import h5py
-
+import xarray as xr
 import sys
 
 sys.path.append("../")
@@ -33,7 +33,8 @@ def load_solver_results(simulation: Simulation, solver_data_dict: SolverDataDict
         coords = monitor_data_dict
 
         # construct MonitorData and add to dictionary
-        mon_data = monitor_data_type(data=data, coords=coords, name=name)
+        data = xr.DataArray(data=data, coords=coords, name=name)
+        mon_data = monitor_data_type(data=data)
         monitor_data[name] = mon_data
 
     return SimulationData(simulation=simulation, monitor_data=monitor_data)
