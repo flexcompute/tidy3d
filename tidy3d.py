@@ -12,33 +12,35 @@ print(ascii_banner)
 
 parser = argparse.ArgumentParser(description=ascii_banner)
 
-parser.add_argument('simulation',
-    help='path to the .json file containing the simulation')
+parser.add_argument("simulation", help="path to the .json file containing the simulation")
 
-parser.add_argument('--out', '-o',
-    default='simulation.hdf5',
-    required=False,
-    help='path to output the data')
+parser.add_argument(
+    "--out", "-o", default="simulation.hdf5", required=False, help="path to output the data"
+)
 
-parser.add_argument('--inspect_sim', '-i',
-    default=True, 
+parser.add_argument(
+    "--inspect_sim",
+    "-i",
+    default=True,
     required=False,
-    help='visualize simulation and prompt before submitting')
+    help="visualize simulation and prompt before submitting",
+)
 
-parser.add_argument('--inspect_credits', '-c',
-    default=True, 
+parser.add_argument(
+    "--inspect_credits",
+    "-c",
+    default=True,
     required=False,
-    help='visualize simulation and prompt before submitting')
+    help="visualize simulation and prompt before submitting",
+)
 
-parser.add_argument('--task_name', '-t',
-    default='my_task', 
-    required=False,
-    help='set name for task')
+parser.add_argument(
+    "--task_name", "-t", default="my_task", required=False, help="set name for task"
+)
 
-parser.add_argument('--viz_results', '-v',
-    default=True, 
-    required=False,
-    help='visualize results after submitting')
+parser.add_argument(
+    "--viz_results", "-v", default=True, required=False, help="visualize results after submitting"
+)
 
 args = parser.parse_args()
 
@@ -62,16 +64,18 @@ if inspect_sim:
     ascii_banner = pyfiglet.figlet_format("Simulation Plot")
     print(ascii_banner)
     looks_good = input("Do you want to continue to submit? [y]/[n]")
-    if looks_good.lower() != 'y':
-        print(' - exiting')
+    if looks_good.lower() != "y":
+        print(" - exiting")
     else:
         job = Job(simulation=simulation, task_name=task_name)
         job.upload()
         info = job.get_info()
-        print(f'task "{task_name}" estimated to use \n\t{info.credits:.2f} credits and \n\t{info.size_bytes:.2e} bytes of storage.')
+        print(
+            f'task "{task_name}" estimated to use \n\t{info.credits:.2f} credits and \n\t{info.size_bytes:.2e} bytes of storage.'
+        )
         looks_good = input("Do you want to continue to submit? [y]/[n]")
-        if looks_good.lower() != 'y':
-            print(' - exiting')
+        if looks_good.lower() != "y":
+            print(" - exiting")
         else:
             job.run()
             job.monitor()
