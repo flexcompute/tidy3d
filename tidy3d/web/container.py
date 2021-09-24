@@ -4,7 +4,7 @@ import os
 from abc import ABC
 from typing import Dict
 
-from .. import web
+from . import webapi as web
 from .task import TaskId, TaskInfo, RunInfo
 from ..components.simulation import Simulation
 from ..components.data import SimulationData

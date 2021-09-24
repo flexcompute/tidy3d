@@ -104,7 +104,7 @@ data_dim_map = {
 class Tidy3dData(pydantic.BaseModel):
     """base class for data associated with a specific task."""
 
-    class Config:
+    class Config:  # pylint: disable=too-few-public-methods
         """sets config for all Tidy3dBaseModel objects"""
 
         validate_all = True  # validate default values too
@@ -154,6 +154,37 @@ class SimulationData(Tidy3dData):
                     # add the data to the group
                     mon_grp.create_dataset(coord_name, data=coord_val)
 
+    @staticmethod
+    def _load_monitor_data(sim: Simulation, mon_name: str, mon_data: np.ndarray) -> MonitorData:
+        """load the solver data for a monitor into a MonitorData instance"""
+
+        # get info about the original monitor
+        monitor = sim.monitors.get(mon_name)
+        assert monitor is not None, "monitor not found in original simulation"
+        mon_type = type(monitor)
+        data_type = monitor_data_map[mon_type]
+
+        # get the dimensions for this data type, replace sampler data with correct value
+        dims = data_dim_map[data_type]
+        sampler_dim = "freqs" if isinstance(monitor.sampler, FreqSampler) else "times"
+        dims[-1] = sampler_dim
+
+        # load data from dataset, separate data and coordinates
+        coords = {}
+        for data_name, data_value in mon_data.items():
+
+            # convert bytes to string if neceessary and add to dict
+            if isinstance(data_value[0], bytes):
+                data_value = np.array([v.decode("UTF-8") for v in data_value])
+            coords[data_name] = data_value
+
+        data_value = coords.pop("data")
+
+        # load into an xarray.DataArray and make a monitor data to append to dictionary
+        darray = xr.DataArray(data_value, coords, dims=dims, name=mon_name)
+        monitor_data_instance = data_type(darray)
+        return monitor_data_instance
+
     @classmethod
     def load(cls, path: str):
         """Load SimulationData from files"""
@@ -169,32 +200,7 @@ class SimulationData(Tidy3dData):
             monitor_data_dict = {}
             monitor_data = f_handle["monitor_data"]
             for mon_name, mon_data in monitor_data.items():
-
-                # get info about the original monitor
-                monitor = sim.monitors.get(mon_name)
-                assert monitor is not None, "monitor not found in original simulation"
-                mon_type = type(monitor)
-                data_type = monitor_data_map[mon_type]
-
-                # get the dimensions for this data type, replace sampler data with correct value
-                dims = data_dim_map[data_type]
-                sampler_dim = "freqs" if isinstance(monitor.sampler, FreqSampler) else "times"
-                dims[-1] = sampler_dim
-
-                # load data from dataset, separate data and coordinates
-                coords = {}
-                for data_name, data_value in mon_data.items():
-
-                    # convert bytes to string if neceessary and add to dict
-                    if isinstance(data_value[0], bytes):
-                        data_value = np.array([v.decode("UTF-8") for v in data_value])
-                    coords[data_name] = data_value
-
-                data_value = coords.pop("data")
-
-                # load into an xarray.DataArray and make a monitor data to append to dictionary
-                darray = xr.DataArray(data_value, coords, dims=dims, name=mon_name)
-                monitor_data_instance = data_type(darray)
+                monitor_data_instance = cls._load_monitor_data(sim, mon_name, mon_data)
                 monitor_data_dict[mon_name] = monitor_data_instance
 
         # return a SimulationData object containing all of the information
