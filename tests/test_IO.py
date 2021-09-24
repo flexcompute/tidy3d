@@ -20,6 +20,11 @@ def test_simulation_load_export():
     assert SIM == SIM2, "original and loaded simulations are not the same"
 
 
+def test_simulation_preserve_monitors():
+    for name, mon in SIM2.monitors.items():
+        print(type(mon))
+
+
 def test_1a_simulation_load_export2():
     path = "tests/tmp/simulation.json"
     SIM2.export(path)

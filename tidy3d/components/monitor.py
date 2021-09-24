@@ -82,14 +82,20 @@ class FieldMonitor(Monitor):
     """stores E, H data on the monitor"""
 
     sampler: SamplerType
-    is_field: bool = True
+    is_field: bool = True  # hack to get pydantic to recognize these as distinct
+
+
+# class PermittivityMonitor(Monitor):
+#     """stores permittivity data on the monitor"""
+
+#     sampler: FreqSampler
 
 
 class FluxMonitor(Monitor):
     """Stores flux on a surface"""
 
     sampler: SamplerType
-    is_flux: bool = True
+    is_flux: bool = True  # hack to get pydantic to recognize these as distinct
     _plane_validator = assert_plane()
 
 
@@ -98,6 +104,7 @@ class ModeMonitor(Monitor):
 
     sampler: FreqSampler
     modes: List[Mode]
+    is_mode: bool = True  # hack to get pydantic to recognize these as distinct
     _plane_validator = assert_plane()
 
 

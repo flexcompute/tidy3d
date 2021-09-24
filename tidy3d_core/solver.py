@@ -5,7 +5,8 @@ import sys
 
 sys.path.append("../")
 from tidy3d import Simulation
-from tidy3d.components.monitor import FieldMonitor, FluxMonitor, ModeMonitor, Sampler, FreqSampler
+from tidy3d.components.monitor import FieldMonitor, FluxMonitor, ModeMonitor
+from tidy3d.components.monitor import Sampler, FreqSampler
 from tidy3d.components.types import GridSize, Tuple
 
 """ Creates fake data for the simulation and returns a monitor data dict containing all fields """
