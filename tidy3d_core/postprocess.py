@@ -28,38 +28,22 @@ def load_solver_results(simulation: Simulation, solver_data_dict: SolverDataDict
         monitor_data_type = monitor_data_map[type(monitor)]
 
         # separate coordinates and data from the SolverDataDict
-        monitor_data_dict = solver_data_dict[name].copy()
-        data = monitor_data_dict.pop("data")
-        coords = monitor_data_dict
-
-        # construct MonitorData and add to dictionary
-        data = xr.DataArray(data=data, coords=coords, name=name)
-        mon_data = monitor_data_type(data=data)
-        monitor_data[name] = mon_data
+        monitor_data_dict = solver_data_dict[name]
+        sampler_label = monitor.sampler._label
+        monitor_data_dict["sampler_label"] = sampler_label
+        monitor_data_dict["sampler_values"] = monitor.sampler.dict()[sampler_label]
+        monitor_data_dict["monitor_name"] = name
+        monitor_data[name] = monitor_data_type(**monitor_data_dict)
 
     return SimulationData(simulation=simulation, monitor_data=monitor_data)
 
 
-def save_solver_results(
-    path: str, simulation: Simulation, solver_data_dict: SolverDataDict
-) -> None:
+def save_solver_results(path: str, sim: Simulation, solver_dict: SolverDataDict) -> None:
     """save the solver_data_dict and simulation json to file"""
 
     # create SimulationData object
-    sim_data = load_solver_results(simulation, solver_data_dict)
+    sim_data = load_solver_results(sim, solver_dict)
 
     # export the solver data to path
     sim_data.export(path)
     # potentially: export HTML for viz or other files here?
-
-    """ or, you can do it manually if you dont want to use export(), see below """
-    # if os.path.exists(path):
-    # 	os.remove(path)
-    # json_string = simulation.json()
-    # with h5py.File(path, 'a') as f:
-    # 	mon_data_grp = f.create_group('monitor_data')
-    # 	f.attrs['json_string'] = json_string
-    # 	for mon_name, mon_data in solver_data_dict.items():
-    # 		mon_grp = mon_data_grp.create_group(mon_name)
-    # 		for data_name, data_value in mon_data.items():
-    # 			mon_grp.create_dataset(data_name, data=data_value)

@@ -52,6 +52,7 @@ class TimeSampler(Sampler):
     """specifies at what time steps the data is measured"""
 
     times: List[pydantic.NonNegativeInt]
+    _label: str = "times"
 
     def __len__(self):
         return len(self.times)
@@ -61,6 +62,7 @@ class FreqSampler(Sampler):
     """specifies at what frequencies the data is measured using running DFT"""
 
     freqs: List[pydantic.NonNegativeFloat]
+    _label: str = "freqs"
 
     def __len__(self):
         return len(self.freqs)
@@ -80,12 +82,14 @@ class FieldMonitor(Monitor):
     """stores E, H data on the monitor"""
 
     sampler: SamplerType
+    is_field: bool = True
 
 
 class FluxMonitor(Monitor):
     """Stores flux on a surface"""
 
     sampler: SamplerType
+    is_flux: bool = True
     _plane_validator = assert_plane()
 
 

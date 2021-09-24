@@ -22,7 +22,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
 
     def _json_string(self) -> str:
         """returns string representation of self"""
-        return self.json(indent=INDENT, exclude_unset=True)
+        return self.json(indent=INDENT)
 
     def export(self, fname: str) -> None:
         """Exports Tidy3dBaseModel instance to .json file"""

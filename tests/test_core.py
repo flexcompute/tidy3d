@@ -104,11 +104,11 @@ def test_mon_data():
 
         # export MonitorData
         mon_path = prepend_tmp(f"monitor_{mon_name}.hdf5")
-        mon_data.export_as_file(mon_path)
+        mon_data.export(mon_path)
 
         # load with the correct MonitorData
         mon_data_type = monitor_data_map[type(mon)]
-        _mon_data = mon_data_type.load_from_file(mon_path)
+        _mon_data = mon_data_type.load(mon_path)
 
         assert mon_data == _mon_data
 
