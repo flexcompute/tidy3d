@@ -9,6 +9,7 @@ sys.path.append("./")
 
 from tidy3d import *
 from .utils import SIM_FULL as SIM
+from .utils import SIM_MONITORS as SIM2
 from .utils import clear_tmp
 
 
@@ -17,6 +18,13 @@ def test_simulation_load_export():
     SIM.export(path)
     SIM2 = Simulation.load(path)
     assert SIM == SIM2, "original and loaded simulations are not the same"
+
+
+def test_1a_simulation_load_export2():
+    path = "tests/tmp/simulation.json"
+    SIM2.export(path)
+    SIM3 = Simulation.load(path)
+    assert SIM2 == SIM3, "original and loaded simulations are not the same"
 
 
 def test_validation_speed():

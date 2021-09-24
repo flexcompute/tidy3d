@@ -1,68 +1,109 @@
 """ Classes for Storing Monitor and Simulation Data """
 
 from abc import ABC, abstractmethod
-from typing import Dict
+from typing import Dict, List
 
 import xarray as xr
 import numpy as np
 import holoviews as hv
 import h5py
-import pydantic
 
 from .simulation import Simulation
-from .monitor import FluxMonitor, FieldMonitor, ModeMonitor, FreqSampler
+from .monitor import FluxMonitor, FieldMonitor, ModeMonitor
+from .base import Tidy3dBaseModel
 
 
-class Tidy3dData(pydantic.BaseModel):
+class Tidy3dData(Tidy3dBaseModel):
     """base class for data associated with a specific task."""
 
     class Config:  # pylint: disable=too-few-public-methods
         """sets config for all Tidy3dBaseModel objects"""
 
         validate_all = True  # validate default values too
-        extra = "forbid"  # forbid extra kwargs not specified in model
+        extra = "allow"  # allow extra kwargs not specified in model (like dir=['+', '-'])
         validate_assignment = True  # validate when attributes are set after initialization
-        arbitrary_types_allowed = (
-            True  # allow us to specify a type for an arg that is an arbitrary class (np.ndarray)
-        )
-        allow_mutation = False  # dont allow one to change the data
+        arbitrary_types_allowed = True
 
 
 class MonitorData(Tidy3dData, ABC):
     """Stores data from a Monitor"""
 
-    data: xr.DataArray
+    # data: xr.DataArray = None
+    sampler_label: str
+    sampler_values: List
+    values: np.ndarray
+    monitor_name: str
+    data: xr.DataArray = None
+
+    def __init__(self, **kwargs):
+        """compute xarray and add to monitor after init"""
+        super().__init__(**kwargs)
+        self.data = self.load_xarray()
 
     def __eq__(self, other):
         """check equality against another MonitorData instance"""
         assert isinstance(other, MonitorData), "can only check eqality on two monitor data objects"
-        return self.data.equals(other.data)
-
-    def _sampler_label(self):
-        """get the label associated with sampler"""
-        return "freqs" if "freqs" in self.data.coords else "times"
+        return np.all(self.values == self.values)
 
     @abstractmethod
-    def visualize(self):
+    def visualize(self) -> None:
         """make interactive plot (impement in subclasses)"""
 
-    def export_as_file(self, path: str) -> None:
-        """Export MonitorData to hdf5 file (named this to avoid namespace conflicts with xarray)"""
-        self.data.to_netcdf(path=path, engine="h5netcdf", invalid_netcdf=True)
+    @abstractmethod
+    def load_xarray(self) -> xr.DataArray:
+        """create an xarray for the dataset and set it to self.data"""
+
+    def export(self, fname: str) -> None:
+        """Export MonitorData's xarray to hdf5 file"""
+        self.data.to_netcdf(fname, engine="h5netcdf", invalid_netcdf=True)
 
     @classmethod
-    def load_from_file(cls, path: str):
-        """Load MonitorData from hdf5 file (named this to avoid namespace conflicts with xarray)"""
-        data_array = xr.open_dataarray(path, engine="h5netcdf")
-        return cls(data=data_array)
+    def load(cls, fname: str):
+        """Load MonitorData from .hdf5 file containing xarray"""
+
+        # open from file
+        data_array = xr.open_dataarray(fname, engine="h5netcdf")
+
+        # strip out sampler info and data values
+        sampler_label = "freqs" if "freqs" in data_array.coords else "times"
+        sampler_values = list(data_array.coords[sampler_label])
+        values = data_array.values
+
+        # kwargs that all MonitorData instances have
+        kwargs = {
+            "sampler_label": sampler_label,
+            "sampler_values": sampler_values,
+            "values": values,
+            "monitor_name": data_array.name,
+        }
+
+        # get other kwargs from the data array, allow extras
+        for name, val in data_array.coords.items():
+            if name not in kwargs:
+                kwargs[name] = np.array(val)
+
+        return cls(**kwargs)
 
 
 class FieldData(MonitorData):
     """Stores Electric and Magnetic fields from a FieldMonitor"""
 
-    # def _get_dims(self):
-    #   sampler_label = self._sampler_label()
-    #   return ["field", "component", "xs", "ys", "zs", sampler_label]
+    xs: np.ndarray  # (Nx,)
+    ys: np.ndarray  # (Ny,)
+    zs: np.ndarray  # (Nz,)
+    values: np.ndarray  # (2, 3, Nx, Ny, Nz, Ns)
+
+    def load_xarray(self):
+        """returns an xarray representation of data"""
+        coords = {
+            "field": ["E", "H"],
+            "component": ["x", "y", "z"],
+            "xs": self.xs,
+            "ys": self.ys,
+            "zs": self.zs,
+            self.sampler_label: self.sampler_values,
+        }
+        return xr.DataArray(self.values, coords=coords, name=self.monitor_name)
 
     def visualize(self):
         """make interactive plot"""
@@ -74,40 +115,45 @@ class FieldData(MonitorData):
 class FluxData(MonitorData):
     """Stores power flux data through a planar FluxMonitor"""
 
-    # def _get_dims(self):
-    #   sampler_label = self._sampler_label()
-    #   return [sampler_label]
+    values: np.ndarray  # (Ns,)
+
+    def load_xarray(self):
+        """returns an xarray representation of data"""
+        coords = {self.sampler_label: self.sampler_values}
+        return xr.DataArray(self.values, coords=coords, name=self.monitor_name)
 
     def visualize(self):
         """make interactive plot"""
         hv.extension("bokeh")
         hv_ds = hv.Dataset(self.data.copy())
-        image = hv_ds.to(hv.Curve, self._sampler_label())
+        image = hv_ds.to(hv.Curve, self.sampler_label)
         return image
 
 
 class ModeData(MonitorData):
     """Stores modal amplitdudes from a ModeMonitor"""
 
-    # def _get_dims(self):
-    #   sampler_label = self._sampler_label()
-    #   return ["direction", "mode_index", sampler_label]
+    mode_index: np.ndarray  # (Nm,)
+    values: np.ndarray  # (Nm, Ns)
+
+    def load_xarray(self):
+        """returns an xarray representation of data"""
+        coords = {
+            "direction": ["+", "-"],
+            "mode_index": self.mode_index,
+            self.sampler_label: self.sampler_values,
+        }
+        return xr.DataArray(self.values, coords=coords, name=self.monitor_name)
 
     def visualize(self):
         """make interactive plot"""
         hv_ds = hv.Dataset(self.data.copy())
-        image = hv_ds.to(hv.Curve, self._sampler_label(), dynamic=True)
+        image = hv_ds.to(hv.Curve, self.sampler_label, dynamic=True)
         return image
 
 
 # maps monitor type to corresponding data type
 monitor_data_map = {FieldMonitor: FieldData, FluxMonitor: FluxData, ModeMonitor: ModeData}
-
-data_dim_map = {
-    FieldData: ["field", "component", "xs", "ys", "zs", "sampler_value(replace)"],
-    FluxData: ["sampler_value(replace)"],
-    ModeData: ["direction", "mode_index", "sampler_value(replace)"],
-}
 
 
 class SimulationData(Tidy3dData):
@@ -118,6 +164,7 @@ class SimulationData(Tidy3dData):
 
     def __eq__(self, other):
         """check equality against another SimulationData instance"""
+
         if self.simulation != other.simulation:
             return False
         for mon_name, mon_data in self.monitor_data.items():
@@ -128,11 +175,10 @@ class SimulationData(Tidy3dData):
                 return False
         return True
 
-    def export(self, path: str) -> None:
-        """Export all data to a file"""
+    def export(self, fname: str) -> None:
+        """Export all data to an hdf5"""
 
-        # write to the file at path
-        with h5py.File(path, "a") as f_handle:
+        with h5py.File(fname, "a") as f_handle:
 
             # save json string as an attribute
             json_string = self.simulation.json()
@@ -145,20 +191,15 @@ class SimulationData(Tidy3dData):
                 # for each monitor, make new group with the same name
                 mon_grp = mon_data_grp.create_group(mon_name)
 
-                # add the data value to the moniitor
-                mon_grp.create_dataset("data", data=mon_data.data.data)
+                # for each attribute in MonitorData
+                for name, value in mon_data.dict().items():
 
-                # for each of the coordinates
-                for coord_name in mon_data.data.coords:
+                    # ignore data
+                    if name == "data":
+                        continue
 
-                    # get the data and convert it to the correct type if it contains strings
-                    coord_val = mon_data.data[coord_name].data
-                    if isinstance(coord_val[0], np.str_):
-                        dtype = h5py.special_dtype(vlen=str)
-                        coord_val = np.array(coord_val, dtype=dtype)
-
-                    # add the data to the group
-                    mon_grp.create_dataset(coord_name, data=coord_val)
+                    # add dataset to hdf5
+                    mon_grp.create_dataset(name, data=value)
 
     @staticmethod
     def _load_monitor_data(sim: Simulation, mon_name: str, mon_data: np.ndarray) -> MonitorData:
@@ -168,46 +209,40 @@ class SimulationData(Tidy3dData):
         monitor = sim.monitors.get(mon_name)
         assert monitor is not None, "monitor not found in original simulation"
         mon_type = type(monitor)
-        data_type = monitor_data_map[mon_type]
+        mon_data_type = monitor_data_map[mon_type]
 
-        # get the dimensions for this data type, replace sampler data with correct value
-        dims = data_dim_map[data_type]
-        sampler_dim = "freqs" if isinstance(monitor.sampler, FreqSampler) else "times"
-        dims[-1] = sampler_dim
-
-        # load data from dataset, separate data and coordinates
-        coords = {}
+        # construct kwarg dict from hdf5 data group for monitor
+        kwargs = {}
         for data_name, data_value in mon_data.items():
+            kwargs[data_name] = np.array(data_value)
 
-            # convert bytes to string if neceessary and add to dict
-            if isinstance(data_value[0], bytes):
-                data_value = np.array([v.decode("UTF-8") for v in data_value])
-            coords[data_name] = data_value
+        # these fields are specific types, not np.arrays()
+        kwargs["sampler_values"] = list(kwargs["sampler_values"])
+        kwargs["sampler_label"] = str(kwargs["sampler_label"])
+        kwargs["monitor_name"] = str(mon_name)
 
-        data_value = coords.pop("data")
-
-        # load into an xarray.DataArray and make a monitor data to append to dictionary
-        darray = xr.DataArray(data_value, coords, dims=dims, name=mon_name)
-        monitor_data_instance = data_type(data=darray)
+        # construct MonitorData and return
+        monitor_data_instance = mon_data_type(**kwargs)
         return monitor_data_instance
 
     @classmethod
-    def load(cls, path: str):
+    def load(cls, fname: str):
         """Load SimulationData from files"""
 
-        # read from file at path
-        with h5py.File(path, "r") as f_handle:
+        # read from file at fname
+        with h5py.File(fname, "r") as f_handle:
 
             # construct the original simulation from the json string
             json_string = f_handle.attrs["json_string"]
             sim = Simulation.parse_raw(json_string)
 
             # loop through monitor dataset and create all MonitorData instances
-            monitor_data_dict = {}
             monitor_data = f_handle["monitor_data"]
+            monitor_data_dict = {}
             for mon_name, mon_data in monitor_data.items():
+
+                # load this monitor data, add to dict
                 monitor_data_instance = cls._load_monitor_data(sim, mon_name, mon_data)
                 monitor_data_dict[mon_name] = monitor_data_instance
 
-        # return a SimulationData object containing all of the information
         return cls(simulation=sim, monitor_data=monitor_data_dict)

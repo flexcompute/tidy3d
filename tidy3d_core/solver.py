@@ -13,40 +13,38 @@ from tidy3d.components.types import GridSize, Tuple
 # maps monitor name to dictionary mapping data label to data value
 SolverDataDict = Dict[str, Dict[str, np.ndarray]]
 
+# note: "values" is a special key in the Monitor data dict, corresponds to the raw data, not coords (xs,ys,zs, etc)
+
 
 def solve(simulation: Simulation) -> SolverDataDict:
     """takes simulation and returns dictionary of dictionaries storing the data"""
 
     data_dict = {}
     for name, monitor in simulation.monitors.items():
-        sample_name, sample_values = unpack_sampler(monitor.sampler)
+        sampler_label, sampler_values = unpack_sampler(monitor.sampler)
         if isinstance(monitor, FieldMonitor):
             xs, ys, zs = discretize_montor(simulation, monitor)
-            data_array = make_fake_field_data(xs, ys, zs, sample_values)
+            data_array = make_fake_field_values(xs, ys, zs, sampler_values)
             data_dict[name] = {
-                "field": ["E", "H"],
-                "component": ["x", "y", "z"],
                 "xs": xs,
                 "ys": ys,
                 "zs": zs,
-                sample_name: sample_values,
-                "data": data_array,
+                "values": data_array,
             }
         elif isinstance(monitor, FluxMonitor):
-            data_array = make_fake_flux_data(sample_values)
+            data_array = make_fake_flux_values(sampler_values)
             data_dict[name] = {
-                "data": data_array,
-                sample_name: sample_values,
+                "values": data_array,
             }
         elif isinstance(monitor, ModeMonitor):
             num_modes = len(monitor.modes)
-            data_array = make_fake_mode_data(sample_values, num_modes)
+            data_array = make_fake_mode_values(sampler_values, num_modes)
             data_dict[name] = {
-                "direction": ["+", "-"],
-                "data": data_array,
                 "mode_index": np.arange(num_modes),
-                sample_name: sample_values,
+                "values": data_array,
             }
+        data_dict[name]["sampler_label"] = sampler_label
+        data_dict[name]["sampler_values"] = sampler_values
     return data_dict
 
 
@@ -62,6 +60,9 @@ def unpack_grid_size(grid_size: GridSize) -> Tuple[float, float, float]:
 
 def unpack_sampler(sampler: Sampler) -> Tuple[str, np.ndarray]:
     """gets the correct coordinate labels and values for a sampler"""
+    sampler_label = sampler._label
+    sampler_values = sampler.dict()[sampler_label]
+    return sampler_label, sampler_values
     if isinstance(sampler, FreqSampler):
         return "freqs", sampler.freqs
     else:
@@ -101,7 +102,7 @@ def make_coordinates_3d(center, size, grid_size):
 """ Fake data constructures, to be replaced by actual solver"""
 
 
-def make_fake_field_data(xs, ys, zs, sample_values) -> np.ndarray:
+def make_fake_field_values(xs, ys, zs, sample_values) -> np.ndarray:
     """constructs an artificial electromagnetic field data based loosely on dipole radiation."""
     xx, yy, zz = np.meshgrid(xs, ys, zs)
     rr = np.sqrt(xx ** 2 + yy ** 2 + zz ** 2)[..., None]
@@ -116,7 +117,7 @@ def make_fake_field_data(xs, ys, zs, sample_values) -> np.ndarray:
     return np.stack((E, H))
 
 
-def make_fake_mode_data(freqs: np.ndarray, Nm: int) -> np.ndarray:
+def make_fake_mode_values(freqs: np.ndarray, Nm: int) -> np.ndarray:
     """create a fake flux spectrum."""
     oscillation = np.exp(1j * np.array(freqs))
     envelope = np.ones_like(freqs)
@@ -126,7 +127,7 @@ def make_fake_mode_data(freqs: np.ndarray, Nm: int) -> np.ndarray:
     return np.stack((trans, ref))
 
 
-def make_fake_flux_data(sample_values: np.ndarray) -> np.ndarray:
+def make_fake_flux_values(sample_values: np.ndarray) -> np.ndarray:
     """create a fake flux spectrum."""
     oscillation = np.cos(sample_values)
     envelope = np.ones_like(sample_values)
