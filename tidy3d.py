@@ -12,7 +12,7 @@ print(ascii_banner)
 
 parser = argparse.ArgumentParser(description=ascii_banner)
 
-parser.add_argument("simulation", help="path to the .json file containing the simulation")
+parser.add_argument("simulation", help="path to the .json or .yaml file containing the simulation")
 
 parser.add_argument(
     "--out", "-o", default="simulation.hdf5", required=False, help="path to output the data"
@@ -62,8 +62,15 @@ print("inspect credits: ", inspect_credits)
 print("task name: ", task_name)
 print("visualize results: ", viz_results)
 
-# main script
-simulation = Simulation.load(sim_file)
+""" main script """
+
+# load the simulation
+if ".yaml" in sim_file or ".yml" in sim_file:
+    simulation = Simulation.load_yaml(sim_file)
+else:
+    simulation = Simulation.load(sim_file)
+
+# inspect the simulation
 if inspect_sim:
     ascii_banner = pyfiglet.figlet_format("Simulation Plot")
     print(ascii_banner)
@@ -72,9 +79,11 @@ if inspect_sim:
         print(" - exiting")
         exit(0)
 
+# upload to server
 job = Job(simulation=simulation, task_name=task_name)
 job.upload()
 
+# inspect credit and data usage
 if inspect_credits:
     info = job.get_info()
     print(
@@ -87,10 +96,12 @@ if inspect_credits:
         print(" - exiting")
         exit(0)
 
+# run the simulation and load results
 job.run()
 job.monitor()
 sim_data = job.load_results(path=out_file)
 
+# visualize results
 if viz_results:
     ascii_banner = pyfiglet.figlet_format("Simulation Data")
     print(ascii_banner)
