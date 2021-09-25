@@ -37,6 +37,9 @@ SIM_MONITORS = Simulation(
         "field_time": FieldMonitor(
             size=(1, 1, 0), center=(1, 0, 0), sampler=TimeSampler(times=[1])
         ),
+        "eps_freq": PermittivityMonitor(
+            size=(1, 1, 1), center=(0, 1, 0), sampler=FreqSampler(freqs=[1, 2, 5, 7, 8])
+        ),
         "flux_freq": FluxMonitor(
             size=(1, 1, 0), center=(0, 0, 0), sampler=FreqSampler(freqs=[1, 2, 5, 9])
         ),

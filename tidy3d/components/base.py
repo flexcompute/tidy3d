@@ -51,3 +51,38 @@ class Tidy3dBaseModel(pydantic.BaseModel):
             json_dict = yaml.safe_load(yaml_in)
         json_raw = json.dumps(json_dict, indent=INDENT)
         return cls.parse_raw(json_raw)
+
+
+def register_subclasses(name_dict):
+    """attempt at a decorator factory"""
+
+    def _register_subclasses(cls):
+        """attempt at a decorator"""
+
+        class _class(cls):
+            class_name: str
+
+            def __init__(self, **kwargs):
+                print(kwargs)
+                class_name = type(self).__name__
+                kwargs["class_name"] = class_name
+                super().__init__(**kwargs)
+
+            @classmethod
+            def __get_validators__(cls):
+                yield cls.validate
+
+            @classmethod
+            def validate(cls, v):
+                if isinstance(v, dict):
+                    class_name = v.get("class_name")
+                    json_string = json.dumps(v)
+                else:
+                    class_name = v.class_name
+                    json_string = v.json()
+                cls_type = name_dict[class_name]
+                return cls_type.parse_raw(json_string)
+
+        return _class
+
+    return _register_subclasses
