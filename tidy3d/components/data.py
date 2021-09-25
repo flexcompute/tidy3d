@@ -9,7 +9,7 @@ import holoviews as hv
 import h5py
 
 from .simulation import Simulation
-from .monitor import FluxMonitor, FieldMonitor, ModeMonitor
+from .monitor import FluxMonitor, FieldMonitor, ModeMonitor, PermittivityMonitor
 from .base import Tidy3dBaseModel
 
 
@@ -51,7 +51,7 @@ class MonitorData(Tidy3dData, ABC):
 
     @abstractmethod
     def load_xarray(self) -> xr.DataArray:
-        """create an xarray for the dataset and set it to self.data"""
+        """returns an xarray representation of data"""
 
     def export(self, fname: str) -> None:
         """Export MonitorData's xarray to hdf5 file"""
@@ -112,31 +112,30 @@ class FieldData(MonitorData):
         return image.options(cmap="RdBu", colorbar=True, aspect="equal")
 
 
-# class PermittivityData(MonitorData):
-#     """Stores Electric and Magnetic fields from a FieldMonitor"""
+class PermittivityData(MonitorData):
+    """Stores Electric and Magnetic fields from a FieldMonitor"""
 
-#     xs: np.ndarray  # (Nx,)
-#     ys: np.ndarray  # (Ny,)
-#     zs: np.ndarray  # (Nz,)
-#     values: np.ndarray  # (2, 3, Nx, Ny, Nz, Ns)
-#     is_permittivity: bool = True
+    xs: np.ndarray  # (Nx,)
+    ys: np.ndarray  # (Ny,)
+    zs: np.ndarray  # (Nz,)
+    values: np.ndarray  # (3, Nx, Ny, Nz, Ns)
 
-#     def load_xarray(self):
-#         """returns an xarray representation of data"""
-#         coords = {
-#             "component": ["xx", "yy", "zz"],
-#             "xs": self.xs,
-#             "ys": self.ys,
-#             "zs": self.zs,
-#             self.sampler_label: self.sampler_values,
-#         }
-#         return xr.DataArray(self.values, coords=coords, name=self.monitor_name)
+    def load_xarray(self):
+        """returns an xarray representation of data"""
+        coords = {
+            "component": ["xx", "yy", "zz"],
+            "xs": self.xs,
+            "ys": self.ys,
+            "zs": self.zs,
+            self.sampler_label: self.sampler_values,
+        }
+        return xr.DataArray(self.values, coords=coords, name=self.monitor_name)
 
-#     def visualize(self):
-#         """make interactive plot"""
-#         hv_ds = hv.Dataset(self.data.copy())
-#         image = hv_ds.to(hv.Image, kdims=["xs", "ys"], dynamic=True)
-#         return image.options(cmap="RdBu", colorbar=True, aspect="equal")
+    def visualize(self):
+        """make interactive plot"""
+        hv_ds = hv.Dataset(self.data.copy())
+        image = hv_ds.to(hv.Image, kdims=["xs", "ys"], dynamic=True)
+        return image.options(cmap="RdBu", colorbar=True, aspect="equal")
 
 
 class FluxData(MonitorData):
@@ -180,7 +179,12 @@ class ModeData(MonitorData):
 
 
 # maps monitor type to corresponding data type
-monitor_data_map = {FieldMonitor: FieldData, FluxMonitor: FluxData, ModeMonitor: ModeData}
+monitor_data_map = {
+    FieldMonitor: FieldData,
+    PermittivityMonitor: PermittivityData,
+    FluxMonitor: FluxData,
+    ModeMonitor: ModeData,
+}
 
 
 class SimulationData(Tidy3dData):

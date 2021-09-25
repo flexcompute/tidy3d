@@ -5,14 +5,15 @@ import sys
 
 sys.path.append("../")
 from tidy3d import Simulation
-from tidy3d.components.monitor import FieldMonitor, FluxMonitor, ModeMonitor
+from tidy3d.components.monitor import FieldMonitor, FluxMonitor, ModeMonitor, PermittivityMonitor
 from tidy3d.components.monitor import Sampler, FreqSampler
 from tidy3d.components.types import GridSize, Tuple
 
 """ Creates fake data for the simulation and returns a monitor data dict containing all fields """
 
 # maps monitor name to dictionary mapping data label to data value
-SolverDataDict = Dict[str, Dict[str, np.ndarray]]
+MonitorDataDict = Dict[str, np.ndarray]
+SolverDataDict = Dict[str, MonitorDataDict]
 
 # note: "values" is a special key in the Monitor data dict, corresponds to the raw data, not coords (xs,ys,zs, etc)
 
@@ -31,6 +32,15 @@ def solve(simulation: Simulation) -> SolverDataDict:
                 "ys": ys,
                 "zs": zs,
                 "values": data_array,
+            }
+        if isinstance(monitor, PermittivityMonitor):
+            xs, ys, zs = discretize_montor(simulation, monitor)
+            data_array = make_fake_field_values(xs, ys, zs, sampler_values)
+            data_dict[name] = {
+                "xs": xs,
+                "ys": ys,
+                "zs": zs,
+                "values": np.sum(np.abs(data_array), axis=0),
             }
         elif isinstance(monitor, FluxMonitor):
             data_array = make_fake_flux_values(sampler_values)
@@ -64,10 +74,6 @@ def unpack_sampler(sampler: Sampler) -> Tuple[str, np.ndarray]:
     sampler_label = sampler._label
     sampler_values = sampler.dict()[sampler_label]
     return sampler_label, sampler_values
-    if isinstance(sampler, FreqSampler):
-        return "freqs", sampler.freqs
-    else:
-        return "times", sampler.times
 
 
 """ Discretization functions """

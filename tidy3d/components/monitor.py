@@ -1,5 +1,6 @@
 """ Objects that define how data is recorded from simulation """
 from abc import ABC
+import json
 
 import pydantic
 import numpy as np
@@ -77,25 +78,49 @@ SamplerType = Union[TimeSampler, FreqSampler]
 class Monitor(Box, ABC):
     """base class for monitors, which all have Box shape"""
 
+    mon_type: str
+
+    def __init__(self, **kwargs):
+        mon_type = type(self).__name__
+        kwargs["mon_type"] = mon_type
+        super().__init__(**kwargs)
+
+    @classmethod
+    def __get_validators__(cls):
+        yield cls.validate
+
+    @classmethod
+    def validate(cls, v):
+        if isinstance(v, dict):
+            mon_type = v.get("mon_type")
+            json_string = json.dumps(v)
+        else:
+            mon_type = v.mon_type
+            json_string = v.json()
+        cls_type = MonitorMap[mon_type]
+        return cls_type.parse_raw(json_string)
+
+
+class Monitor(Box, ABC):
+    """base class for monitors, which all have Box shape"""
+
 
 class FieldMonitor(Monitor):
     """stores E, H data on the monitor"""
 
     sampler: SamplerType
-    is_field: bool = True  # hack to get pydantic to recognize these as distinct
 
 
-# class PermittivityMonitor(Monitor):
-#     """stores permittivity data on the monitor"""
+class PermittivityMonitor(Monitor):
+    """stores permittivity data on the monitor"""
 
-#     sampler: FreqSampler
+    sampler: FreqSampler
 
 
 class FluxMonitor(Monitor):
     """Stores flux on a surface"""
 
     sampler: SamplerType
-    is_flux: bool = True  # hack to get pydantic to recognize these as distinct
     _plane_validator = assert_plane()
 
 
@@ -104,9 +129,17 @@ class ModeMonitor(Monitor):
 
     sampler: FreqSampler
     modes: List[Mode]
-    is_mode: bool = True  # hack to get pydantic to recognize these as distinct
     _plane_validator = assert_plane()
 
 
-# monitors allowed to be used in simulation.monitors
-MonitorType = Union[FieldMonitor, FluxMonitor, ModeMonitor]
+# cls_name -> monitors allowed to be used in simulation.monitors
+MonitorMap = {
+    "FieldMonitor": FieldMonitor,
+    "FluxMonitor": FluxMonitor,
+    "PermittivityMonitor": PermittivityMonitor,
+    "ModeMonitor": ModeMonitor,
+}
+
+MonitorType = Union[tuple(MonitorMap.values())]
+# from .base import register_subclasses
+# Monitor=register_subclasses(MonitorMap)(Monitor())
