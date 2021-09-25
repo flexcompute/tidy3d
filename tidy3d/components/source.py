@@ -1,12 +1,13 @@
 """ Defines current sources """
 
 from abc import ABC
+from typing import Tuple, Union, Literal
 
 import pydantic
 import numpy as np
 
 from .base import Tidy3dBaseModel
-from .types import Tuple, Direction, Polarization, Union
+from .types import Direction, Polarization
 from .validators import assert_plane
 from .geometry import Box
 from .mode import Mode
@@ -86,6 +87,7 @@ class VolumeSource(Source):
     """Volume Source with time dependence and polarization"""
 
     polarization: Polarization
+    type: Literal["VolumeSource"] = "VolumeSource"
 
 
 class ModeSource(Source):
@@ -93,6 +95,7 @@ class ModeSource(Source):
 
     direction: Direction
     mode: Mode
+    type: Literal["ModeSource"] = "ModeSource"
     _plane_validator = assert_plane()
 
 
@@ -101,6 +104,7 @@ class DirectionalSource(Source, ABC):
 
     direction: Direction
     polarization: Polarization
+
     _plane_validator = assert_plane()
 
     @pydantic.root_validator(allow_reuse=True)
@@ -125,11 +129,14 @@ class DirectionalSource(Source, ABC):
 class PlaneWave(DirectionalSource):
     """uniform distribution on infinite extent plane"""
 
+    type: Literal["PlaneWave"] = "PlaneWave"
+
 
 class GaussianBeam(DirectionalSource):
     """guassian distribution on finite extent plane"""
 
     waist_size: Tuple[pydantic.NonNegativeFloat, pydantic.NonNegativeFloat]
+    type: Literal["GaussianBeam"] = "GaussianBeam"
 
 
 # allowable sources to use in Simulation.sources

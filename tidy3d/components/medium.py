@@ -7,7 +7,7 @@ import pydantic
 import numpy as np
 
 from .base import Tidy3dBaseModel
-from .types import PoleAndResidue
+from .types import PoleAndResidue, Literal
 from ..constants import C_0, inf
 
 """ conversion helpers """
@@ -63,6 +63,7 @@ class Medium(AbstractMedium):
 
     permittivity: pydantic.confloat(ge=1.0) = 1.0
     conductivity: pydantic.confloat(ge=0.0) = 0.0
+    type: Literal["Medium"] = "Medium"
 
     def eps_model(self, frequency):
         return eps_sigma_to_eps_complex(self.permittivity, self.conductivity, frequency)
@@ -80,6 +81,7 @@ class PoleResidue(DispersiveMedium):
 
     eps_inf: float = 1.0
     poles: List[PoleAndResidue]
+    type: Literal["PoleResidue"] = "PoleResidue"
 
     def eps_model(self, frequency):
         omega = 2 * np.pi * frequency
@@ -99,6 +101,7 @@ class Sellmeier(DispersiveMedium):
     """Sellmeier model for dispersion"""
 
     coeffs: List[Tuple[float, float]]
+    type: Literal["Sellmeier"] = "Sellmeier"
 
     def _n_model(self, frequency):
         wvl = C_0 / frequency
@@ -118,6 +121,7 @@ class Lorentz(DispersiveMedium):
 
     eps_inf: float = 1.0
     coeffs: List[Tuple[float, float, float]]
+    type: Literal["Lorentz"] = "Lorentz"
 
     def eps_model(self, frequency):
         eps = self.eps_inf + 0.0j
@@ -131,6 +135,7 @@ class Debye(DispersiveMedium):
 
     eps_inf: float = 1.0
     coeffs: List[Tuple[float, float]]
+    type: Literal["Debye"] = "Debye"
 
     def eps_model(self, frequency):
         eps = self.eps_inf + 0.0j
