@@ -10,7 +10,7 @@ from .medium import nk_to_eps_complex, nk_to_eps_sigma
 from .medium import nk_to_medium, eps_sigma_to_eps_complex
 
 from .source import GaussianPulse
-from .source import VolumeSource, PlaneWave, ModeSource
+from .source import VolumeSource, PlaneWave, ModeSource, GaussianBeam
 from .monitor import TimeSampler, FreqSampler, uniform_freq_sampler, uniform_time_sampler
 from .monitor import FieldMonitor, FluxMonitor, ModeMonitor, PermittivityMonitor
 from .mode import Mode
