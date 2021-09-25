@@ -10,7 +10,7 @@ from .components import nk_to_eps_complex, nk_to_eps_sigma
 from .components import nk_to_medium, eps_sigma_to_eps_complex
 
 from .components import GaussianPulse
-from .components import VolumeSource, PlaneWave, ModeSource
+from .components import VolumeSource, PlaneWave, ModeSource, GaussianBeam
 from .components import TimeSampler, FreqSampler, uniform_freq_sampler, uniform_time_sampler
 from .components import FieldMonitor, FluxMonitor, ModeMonitor, PermittivityMonitor
 from .components import Mode

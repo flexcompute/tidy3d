@@ -5,7 +5,7 @@ from typing import List, Tuple, Union
 
 import pydantic
 
-from .base import Tidy3dBaseModel, register_subclasses
+from .base import Tidy3dBaseModel
 from .types import Bound, Size, Coordinate, Axis, Coordinate2D, Literal
 
 BOUND_EPS = 1e-3  # expand bounds by this much
@@ -115,4 +115,3 @@ class PolySlab(Geometry):
 
 GeometryFields = (Box, Sphere, Cylinder, PolySlab)
 GeometryType = Union[GeometryFields]
-# register_subclasses(GeometryFields)(Geometry)

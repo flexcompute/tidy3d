@@ -1,12 +1,11 @@
 """ Objects that define how data is recorded from simulation """
-import json
 from abc import ABC
 from typing import List, Union
 
 import pydantic
 import numpy as np
 
-from .base import Tidy3dBaseModel  # , register_subclasses
+from .base import Tidy3dBaseModel
 from .types import Literal
 from .geometry import Box
 from .validators import assert_plane
