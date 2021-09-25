@@ -5,7 +5,7 @@ import json
 import pydantic
 import numpy as np
 
-from .base import Tidy3dBaseModel
+from .base import Tidy3dBaseModel, register_subclasses
 from .types import List, Union
 from .geometry import Box
 from .validators import assert_plane
@@ -78,28 +78,6 @@ SamplerType = Union[TimeSampler, FreqSampler]
 class Monitor(Box, ABC):
     """base class for monitors, which all have Box shape"""
 
-    mon_type: str
-
-    def __init__(self, **kwargs):
-        mon_type = type(self).__name__
-        kwargs["mon_type"] = mon_type
-        super().__init__(**kwargs)
-
-    @classmethod
-    def __get_validators__(cls):
-        yield cls.validate
-
-    @classmethod
-    def validate(cls, v):
-        if isinstance(v, dict):
-            mon_type = v.get("mon_type")
-            json_string = json.dumps(v)
-        else:
-            mon_type = v.mon_type
-            json_string = v.json()
-        cls_type = MonitorMap[mon_type]
-        return cls_type.parse_raw(json_string)
-
 
 class Monitor(Box, ABC):
     """base class for monitors, which all have Box shape"""
@@ -132,14 +110,6 @@ class ModeMonitor(Monitor):
     _plane_validator = assert_plane()
 
 
-# cls_name -> monitors allowed to be used in simulation.monitors
-MonitorMap = {
-    "FieldMonitor": FieldMonitor,
-    "FluxMonitor": FluxMonitor,
-    "PermittivityMonitor": PermittivityMonitor,
-    "ModeMonitor": ModeMonitor,
-}
-
-MonitorType = Union[tuple(MonitorMap.values())]
-# from .base import register_subclasses
-# Monitor=register_subclasses(MonitorMap)(Monitor())
+MonitorFields = (FieldMonitor, FluxMonitor, PermittivityMonitor, ModeMonitor)
+MonitorType = Union[MonitorFields]
+Monitor = register_subclasses(MonitorFields)(Monitor)

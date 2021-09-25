@@ -4,7 +4,7 @@ from abc import ABC, abstractmethod
 
 import pydantic
 
-from .base import Tidy3dBaseModel
+from .base import Tidy3dBaseModel, register_subclasses
 from .types import Bound, Size, Coordinate, Axis, Coordinate2D, List, Tuple, Union
 
 BOUND_EPS = 1e-3  # expand bounds by this much
@@ -108,5 +108,6 @@ class PolySlab(Geometry):
         return (tuple(coord_min), tuple(coord_max))
 
 
-# geometries allowed to be in simulation.structures
-GeometryType = Union[Box, Sphere, Cylinder, PolySlab]
+GeometryFields = (Box, Sphere, Cylinder, PolySlab)
+GeometryType = Union[GeometryFields]
+register_subclasses(GeometryFields)(Geometry)
