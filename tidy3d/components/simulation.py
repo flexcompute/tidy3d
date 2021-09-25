@@ -1,9 +1,9 @@
 """ Container holding all information about simulation and its components"""
-from typing import Dict, Literal, Tuple, Union, List
+from typing import Dict, Tuple, Union, List
 
 import pydantic
 
-from .types import GridSize
+from .types import GridSize, Literal
 from .geometry import Box
 from .medium import Medium, MediumType
 from .structure import Structure

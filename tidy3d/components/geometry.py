@@ -1,11 +1,12 @@
 """ defines objects in space """
 
 from abc import ABC, abstractmethod
+from typing import List, Tuple, Union
 
 import pydantic
 
 from .base import Tidy3dBaseModel, register_subclasses
-from .types import Bound, Size, Coordinate, Axis, Coordinate2D, List, Tuple, Union
+from .types import Bound, Size, Coordinate, Axis, Coordinate2D, Literal
 
 BOUND_EPS = 1e-3  # expand bounds by this much
 
@@ -41,6 +42,7 @@ class Box(Geometry):
 
     center: Coordinate = (0.0, 0.0, 0.0)
     size: Size
+    type: Literal["Box"] = "Box"
 
     def _get_bounds(self) -> Bound:
         """sets bounds based on size and center"""
@@ -56,6 +58,7 @@ class Sphere(Geometry):
 
     radius: pydantic.NonNegativeFloat
     center: Coordinate = (0.0, 0.0, 0.0)
+    type: Literal["Sphere"] = "Sphere"
 
     def _get_bounds(self):
         coord_min = tuple(c - self.radius for c in self.center)
@@ -70,6 +73,7 @@ class Cylinder(Geometry):
     radius: pydantic.NonNegativeFloat
     length: pydantic.NonNegativeFloat
     axis: Axis = 2
+    type: Literal["Cylinder"] = "Cylinder"
 
     def _get_bounds(self):
         coord_min = list(c - self.radius for c in self.center)
@@ -87,6 +91,7 @@ class PolySlab(Geometry):
     axis: Axis = 2
     sidewall_angle_rad: float = 0  # note, not supported yet
     dilation: float = 0  # note, not supported yet
+    type: Literal["PolySlab"] = "PolySlab"
 
     def _get_bounds(self):
 
@@ -110,4 +115,4 @@ class PolySlab(Geometry):
 
 GeometryFields = (Box, Sphere, Cylinder, PolySlab)
 GeometryType = Union[GeometryFields]
-register_subclasses(GeometryFields)(Geometry)
+# register_subclasses(GeometryFields)(Geometry)

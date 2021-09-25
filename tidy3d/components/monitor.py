@@ -1,12 +1,13 @@
 """ Objects that define how data is recorded from simulation """
-from abc import ABC
 import json
+from abc import ABC
+from typing import List, Union
 
 import pydantic
 import numpy as np
 
-from .base import Tidy3dBaseModel, register_subclasses
-from .types import List, Union
+from .base import Tidy3dBaseModel  # , register_subclasses
+from .types import Literal
 from .geometry import Box
 from .validators import assert_plane
 from .mode import Mode
@@ -79,20 +80,18 @@ class Monitor(Box, ABC):
     """base class for monitors, which all have Box shape"""
 
 
-class Monitor(Box, ABC):
-    """base class for monitors, which all have Box shape"""
-
-
 class FieldMonitor(Monitor):
     """stores E, H data on the monitor"""
 
     sampler: SamplerType
+    type: Literal["FieldMonitor"] = "FieldMonitor"
 
 
 class PermittivityMonitor(Monitor):
     """stores permittivity data on the monitor"""
 
     sampler: FreqSampler
+    type: Literal["PermittivityMonitor"] = "PermittivityMonitor"
 
 
 class FluxMonitor(Monitor):
@@ -100,6 +99,7 @@ class FluxMonitor(Monitor):
 
     sampler: SamplerType
     _plane_validator = assert_plane()
+    type: Literal["ModeMonitor"] = "ModeMonitor"
 
 
 class ModeMonitor(Monitor):
@@ -108,8 +108,9 @@ class ModeMonitor(Monitor):
     sampler: FreqSampler
     modes: List[Mode]
     _plane_validator = assert_plane()
+    type: Literal["ModeMonitor"] = "ModeMonitor"
 
 
 MonitorFields = (FieldMonitor, FluxMonitor, PermittivityMonitor, ModeMonitor)
 MonitorType = Union[MonitorFields]
-Monitor = register_subclasses(MonitorFields)(Monitor)
+# Monitor = register_subclasses(MonitorFields)(Monitor)
