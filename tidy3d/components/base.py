@@ -53,20 +53,25 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         return cls.parse_raw(json_raw)
 
 
-def register_subclasses(name_dict):
+def register_subclasses(fields: tuple):
     """attempt at a decorator factory"""
+
+    field_map = {field.__name__: field for field in fields}
 
     def _register_subclasses(cls):
         """attempt at a decorator"""
 
-        class _class(cls):
+        orig_init = cls.__init__
+
+        class _class:
             class_name: str
 
             def __init__(self, **kwargs):
                 print(kwargs)
                 class_name = type(self).__name__
                 kwargs["class_name"] = class_name
-                super().__init__(**kwargs)
+                print(kwargs)
+                orig_init(**kwargs)
 
             @classmethod
             def __get_validators__(cls):
@@ -80,7 +85,7 @@ def register_subclasses(name_dict):
                 else:
                     class_name = v.class_name
                     json_string = v.json()
-                cls_type = name_dict[class_name]
+                cls_type = field_map[class_name]
                 return cls_type.parse_raw(json_string)
 
         return _class
