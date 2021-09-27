@@ -116,7 +116,7 @@
 #### Plugins
 
 - [ ] Flesh out all details for plugins (18.5 days total)
-	- [ ] **Make dispersion fitting tool compatible **
+	- [x] Make dispersion fitting tool compatible
 	- [ ] **Make mode solver compatible (2)**
 	- [x] Batch processor <- done in webapi
 ---
