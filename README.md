@@ -89,7 +89,7 @@
 - [x] Define monitor data.
 - [x] Export and Load
 - [ ] Expose especially useful xarray methods to MonitorData API.
-- [ ] Define Permittivity Monitor
+- [x] Define Permittivity Monitor
 - [x] Expose arguments to each MonitorData
 - [ ] Separate FieldData into different "fields" (xr.dataset?)
 - [x] How to more cleanly specify what fields are required to construct each MonitorData?
