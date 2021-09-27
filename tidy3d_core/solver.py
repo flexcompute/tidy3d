@@ -15,7 +15,7 @@ from tidy3d.components.types import GridSize, Tuple
 MonitorDataDict = Dict[str, np.ndarray]
 SolverDataDict = Dict[str, MonitorDataDict]
 
-# note: "values" is a special key in the Monitor data dict, corresponds to the raw data, not coords (xs,ys,zs, etc)
+# note: "values" is a special key in the Monitor data dict, corresponds to the raw data, not coords (x,y,z, etc)
 
 
 def solve(simulation: Simulation) -> SolverDataDict:
@@ -25,21 +25,21 @@ def solve(simulation: Simulation) -> SolverDataDict:
     for name, monitor in simulation.monitors.items():
         sampler_label, sampler_values = unpack_sampler(monitor.sampler)
         if isinstance(monitor, FieldMonitor):
-            xs, ys, zs = discretize_montor(simulation, monitor)
-            data_array = make_fake_field_values(xs, ys, zs, sampler_values)
+            x, y, z = discretize_montor(simulation, monitor)
+            data_array = make_fake_field_values(x, y, z, sampler_values)
             data_dict[name] = {
-                "xs": xs,
-                "ys": ys,
-                "zs": zs,
+                "x": x,
+                "y": y,
+                "z": z,
                 "values": data_array,
             }
         if isinstance(monitor, PermittivityMonitor):
-            xs, ys, zs = discretize_montor(simulation, monitor)
-            data_array = make_fake_field_values(xs, ys, zs, sampler_values)
+            x, y, z = discretize_montor(simulation, monitor)
+            data_array = make_fake_field_values(x, y, z, sampler_values)
             data_dict[name] = {
-                "xs": xs,
-                "ys": ys,
-                "zs": zs,
+                "x": x,
+                "y": y,
+                "z": z,
                 "values": np.sum(np.abs(data_array), axis=0),
             }
         elif isinstance(monitor, FluxMonitor):
@@ -71,8 +71,8 @@ def unpack_grid_size(grid_size: GridSize) -> Tuple[float, float, float]:
 
 def unpack_sampler(sampler: Sampler) -> Tuple[str, np.ndarray]:
     """gets the correct coordinate labels and values for a sampler"""
-    sampler_label = sampler._label
-    sampler_values = sampler.dict()[sampler_label]
+    sampler_label = "f" if sampler._label == "freqs" else "t"
+    sampler_values = sampler.dict()[sampler._label]
     return sampler_label, sampler_values
 
 
@@ -86,8 +86,8 @@ def discretize_montor(
     grid_size = simulation.grid_size
     center = mon.center
     size = mon.size
-    xs, ys, zs = make_coordinates_3d(center, size, grid_size)
-    return xs, ys, zs
+    x, y, z = make_coordinates_3d(center, size, grid_size)
+    return x, y, z
 
 
 def make_coordinates_1d(cmin: float, cmax: float, dl: float) -> np.ndarray:
@@ -100,18 +100,18 @@ def make_coordinates_3d(center, size, grid_size):
     rmin = np.array([c - s / 2.0 for (c, s) in zip(center, size)])
     rmax = np.array([c + s / 2.0 for (c, s) in zip(center, size)])
     grid_size = unpack_grid_size(grid_size)
-    xs, ys, zs = [
+    x, y, z = [
         make_coordinates_1d(cmin, cmax, dl) for (cmin, cmax, dl) in zip(rmin, rmax, grid_size)
     ]
-    return xs, ys, zs
+    return x, y, z
 
 
 """ Fake data constructures, to be replaced by actual solver"""
 
 
-def make_fake_field_values(xs, ys, zs, sample_values) -> np.ndarray:
+def make_fake_field_values(x, y, z, sample_values) -> np.ndarray:
     """constructs an artificial electromagnetic field data based loosely on dipole radiation."""
-    xx, yy, zz = np.meshgrid(xs, ys, zs)
+    xx, yy, zz = np.meshgrid(x, y, z)
     rr = np.sqrt(xx ** 2 + yy ** 2 + zz ** 2)[..., None]
     ks = sample_values
     ikr = 1j * rr * ks
