@@ -1,1 +1,3 @@
-notebooks/ -linguist-detectable
+docs/* -linguist-detectable
+*.ipynb linguist-detectable=false
+*.ipynb linguist-generated=true
