@@ -88,10 +88,9 @@
 #### Monitor Data
 - [x] Define monitor data.
 - [x] Export and Load
-- [ ] Expose especially useful xarray methods to MonitorData API.
+- [ ] **Expose especially useful xarray methods to MonitorData API.**
 - [x] Define Permittivity Monitor
 - [x] Expose arguments to each MonitorData
-- [ ] Separate FieldData into different "fields" (xr.dataset?)
 - [x] How to more cleanly specify what fields are required to construct each MonitorData?
 ---
 
@@ -100,14 +99,15 @@
 - [x] Add version to simulation.json
 - [ ] **Make tidy3d_core functional with existing (or slightly modified) solver.**
 	- [x] Load simulation.json into `tidy3d.Simulation`.
-	- [ ] **Hook up Simulation to solver (momchil)**
-	- [ ] **Write solver outputs to SimulationData (momchil)**
 	- [x] IO SimulationData
+	- [ ] Process Simulation to solver inputs. (momchil)
+	- [ ] Write solver outputs to SimulationData. (momchil)
+	- [ ] Separate FieldData into different xr.DataArrays with different xs, ys, zs at positions in yee lattice
 - [ ] Test test test.
 ---
 
 #### Web Integration (requires solver integration)
-- [ ] refactor webapi
+- [ ] refactor webapi <- can do without integration?
 - [ ] add http / authentication etc.
 - [ ] set up so that daemon recgonizes new json files.
 - [ ] Test test test.
@@ -116,9 +116,9 @@
 #### Plugins
 
 - [ ] Flesh out all details for plugins (18.5 days total)
-	- [ ] Dispersion fit (1 day)
-	- [ ] Mode solver (1 week) (just load in local one for now)
-	- [x] Batch processor (1 week) <- done in webapi
+	- [ ] **Make dispersion fitting tool compatible **
+	- [ ] **Make mode solver compatible (2)**
+	- [x] Batch processor <- done in webapi
 ---
 
 #### Visualization
@@ -127,7 +127,6 @@
 	- [x] Basic sliding window for cross section.
 	- [ ] **Structure cross section, sliding bar**
 	- [ ] **3 panel lumerical style plot `Simulation.visualize()`**
-	- [ ] **3D structure plotting**
 	- [ ] Overlay structures onto fields.
 	- [ ] SimulationData
 ---
@@ -188,10 +187,11 @@ https://github.com/crusaderky/python_project_template
 
 #### Final
 - [ ] Finding bugs and fixing things, testing (2 weeks)
-- [ ]  Release publicly! :partying_face:
+- [ ] Release publicly! :partying_face:
 
 ---
-### After this
+### After this'
+- [ ] 3D structure plotting (matplotlib?)
 - [ ] S matrix plugin
 - [ ] Optimizer plugin
 - [ ] Mode solver API using web
