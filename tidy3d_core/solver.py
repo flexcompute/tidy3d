@@ -56,6 +56,7 @@ def solve(simulation: Simulation) -> SolverDataDict:
             }
         data_dict[name]["sampler_label"] = sampler_label
         data_dict[name]["sampler_values"] = sampler_values
+        data_dict[name]["monitor_name"] = name
     return data_dict
 
 
@@ -71,8 +72,9 @@ def unpack_grid_size(grid_size: GridSize) -> Tuple[float, float, float]:
 
 def unpack_sampler(sampler: Sampler) -> Tuple[str, np.ndarray]:
     """gets the correct coordinate labels and values for a sampler"""
-    sampler_label = "f" if sampler._label == "freqs" else "t"
-    sampler_values = sampler.dict()[sampler._label]
+    sampler_label = sampler._label
+    sampler_key = "freqs" if "f" in sampler_label else "times"
+    sampler_values = sampler.dict()[sampler_key]
     return sampler_label, sampler_values
 
 
