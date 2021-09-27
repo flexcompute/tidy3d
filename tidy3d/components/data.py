@@ -53,31 +53,31 @@ class MonitorData(Tidy3dData, ABC):
         """returns an xarray representation of data"""
 
     def sel(self, *args, **kwargs):
-        """ http://xarray.pydata.org/en/stable/generated/xarray.DataArray.sel.html """
+        """http://xarray.pydata.org/en/stable/generated/xarray.DataArray.sel.html"""
         return self.data.sel(*args, **kwargs)
 
     def isel(self, *args, **kwargs):
-        """ http://xarray.pydata.org/en/stable/generated/xarray.DataArray.isel.html """
+        """http://xarray.pydata.org/en/stable/generated/xarray.DataArray.isel.html"""
         return self.data.sel(*args, **kwargs)
 
     def squeeze(self, *args, **kwargs):
-        """ http://xarray.pydata.org/en/stable/generated/xarray.DataArray.squeeze.html """
+        """http://xarray.pydata.org/en/stable/generated/xarray.DataArray.squeeze.html"""
         return self.data.squeeze(*args, **kwargs)
 
     def interp(self, *args, **kwargs):
-        """ http://xarray.pydata.org/en/stable/generated/xarray.DataArray.interp.html """
+        """http://xarray.pydata.org/en/stable/generated/xarray.DataArray.interp.html"""
         return self.data.interp(*args, **kwargs)
 
     def query(self, *args, **kwargs):
-        """ http://xarray.pydata.org/en/stable/generated/xarray.DataArray.query.html """
+        """http://xarray.pydata.org/en/stable/generated/xarray.DataArray.query.html"""
         return self.data.query(*args, **kwargs)
 
     def isin(self, *args, **kwargs):
-        """ http://xarray.pydata.org/en/stable/generated/xarray.DataArray.isin.html#xarray.DataArray.isin """
-        return self.data.isin(*args, **kwargs)        
+        """http://xarray.pydata.org/en/stable/generated/xarray.DataArray.isin.html#xarray.DataArray.isin"""
+        return self.data.isin(*args, **kwargs)
 
     def where(self, *args):
-        """ http://xarray.pydata.org/en/stable/generated/xarray.DataArray.where.html """
+        """http://xarray.pydata.org/en/stable/generated/xarray.DataArray.where.html"""
         return self.data.where(*args)
 
     def export(self, fname: str) -> None:
@@ -92,7 +92,7 @@ class MonitorData(Tidy3dData, ABC):
         data_array = xr.open_dataarray(fname, engine="h5netcdf")
 
         # strip out sampler info and data values
-        sampler_label = "freqs" if "freqs" in data_array.coords else "times"
+        sampler_label = "f" if "f" in data_array.coords else "t"
         sampler_values = list(data_array.coords[sampler_label])
         values = data_array.values
 
@@ -115,9 +115,9 @@ class MonitorData(Tidy3dData, ABC):
 class FieldData(MonitorData):
     """Stores Electric and Magnetic fields from a FieldMonitor"""
 
-    xs: np.ndarray  # (Nx,)
-    ys: np.ndarray  # (Ny,)
-    zs: np.ndarray  # (Nz,)
+    x: np.ndarray  # (Nx,)
+    y: np.ndarray  # (Ny,)
+    z: np.ndarray  # (Nz,)
     values: np.ndarray  # (2, 3, Nx, Ny, Nz, Ns)
 
     def _make_xarray(self):
@@ -125,9 +125,9 @@ class FieldData(MonitorData):
         coords = {
             "field": ["E", "H"],
             "component": ["x", "y", "z"],
-            "xs": self.xs,
-            "ys": self.ys,
-            "zs": self.zs,
+            "x": self.x,
+            "y": self.y,
+            "z": self.z,
             self.sampler_label: self.sampler_values,
         }
         return xr.DataArray(self.values, coords=coords, name=self.monitor_name)
@@ -135,25 +135,25 @@ class FieldData(MonitorData):
     def visualize(self):
         """make interactive plot"""
         hv_ds = hv.Dataset(self.data.real.copy())
-        image = hv_ds.to(hv.Image, kdims=["xs", "ys"], dynamic=True)
+        image = hv_ds.to(hv.Image, kdims=["x", "y"], dynamic=True)
         return image.options(cmap="RdBu", colorbar=True, aspect="equal")
 
 
 class PermittivityData(MonitorData):
     """Stores Electric and Magnetic fields from a FieldMonitor"""
 
-    xs: np.ndarray  # (Nx,)
-    ys: np.ndarray  # (Ny,)
-    zs: np.ndarray  # (Nz,)
+    x: np.ndarray  # (Nx,)
+    y: np.ndarray  # (Ny,)
+    z: np.ndarray  # (Nz,)
     values: np.ndarray  # (3, Nx, Ny, Nz, Ns)
 
     def _make_xarray(self):
         """returns an xarray representation of data"""
         coords = {
-            "component": ["xx", "yy", "zz"],
-            "xs": self.xs,
-            "ys": self.ys,
-            "zs": self.zs,
+            "component": ["x", "y", "z"],
+            "x": self.x,
+            "y": self.y,
+            "z": self.z,
             self.sampler_label: self.sampler_values,
         }
         return xr.DataArray(self.values, coords=coords, name=self.monitor_name)
@@ -161,7 +161,7 @@ class PermittivityData(MonitorData):
     def visualize(self):
         """make interactive plot"""
         hv_ds = hv.Dataset(self.data.real.copy())
-        image = hv_ds.to(hv.Image, kdims=["xs", "ys"], dynamic=True)
+        image = hv_ds.to(hv.Image, kdims=["x", "y"], dynamic=True)
         return image.options(cmap="RdBu", colorbar=True, aspect="equal")
 
 
@@ -274,7 +274,7 @@ class SimulationData(Tidy3dData):
         for data_name, data_value in mon_data.items():
             kwargs[data_name] = np.array(data_value)
 
-        # these fields are specific types, not np.arrays()
+        # these fields are specific types, not np.array()
         kwargs["sampler_values"] = list(kwargs["sampler_values"])
         kwargs["sampler_label"] = str(kwargs["sampler_label"])
         kwargs["monitor_name"] = str(mon_name)
