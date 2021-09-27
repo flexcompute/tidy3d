@@ -1,3 +1,6 @@
-docs/* -linguist-detectable
+docs/* linguist-vendored
+notebooks/* linguist-vendored
+tests/* linguist-vendored
+
 *.ipynb linguist-detectable=false
 *.ipynb linguist-generated=true
