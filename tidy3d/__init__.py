@@ -6,7 +6,7 @@ from .components import PMLLayer
 from .components import Box, Sphere, Cylinder, PolySlab
 from .components import Structure
 from .components import Medium, PoleResidue, Sellmeier, Debye, Lorentz
-from .components import nk_to_eps_complex, nk_to_eps_sigma
+from .components import nk_to_eps_complex, nk_to_eps_sigma, eps_complex_to_nk
 from .components import nk_to_medium, eps_sigma_to_eps_complex
 
 from .components import GaussianPulse
