@@ -73,7 +73,7 @@ class MonitorData(Tidy3dData, ABC):
         return self.data.query(*args, **kwargs)
 
     def isin(self, *args, **kwargs):
-        """http://xarray.pydata.org/en/stable/generated/xarray.DataArray.isin.html#xarray.DataArray.isin"""
+        """http://xarray.pydata.org/en/stable/generated/xarray.DataArray.isin.html"""
         return self.data.isin(*args, **kwargs)
 
     def where(self, *args):

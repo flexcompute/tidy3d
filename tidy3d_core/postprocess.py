@@ -13,6 +13,7 @@ from .solver import solve, SolverDataDict
 from tidy3d import Simulation
 from tidy3d.components.data import SimulationData, monitor_data_map
 from tidy3d.components.data import FieldData, FluxData, ModeData
+from tidy3d.components.monitor import Sampler
 
 """ Loads solver raw data dictionary into forms to use later """
 
@@ -29,10 +30,7 @@ def load_solver_results(simulation: Simulation, solver_data_dict: SolverDataDict
 
         # separate coordinates and data from the SolverDataDict
         monitor_data_dict = solver_data_dict[name]
-        sampler_label = monitor.sampler._label
-        monitor_data_dict["sampler_label"] = sampler_label
-        monitor_data_dict["sampler_values"] = monitor.sampler.dict()[sampler_label]
-        monitor_data_dict["monitor_name"] = name
+
         monitor_data[name] = monitor_data_type(**monitor_data_dict)
 
     return SimulationData(simulation=simulation, monitor_data=monitor_data)
