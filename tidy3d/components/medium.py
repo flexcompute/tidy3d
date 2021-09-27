@@ -20,6 +20,12 @@ def nk_to_eps_complex(n, k=0.0):
     return eps_real + 1j * eps_imag
 
 
+def eps_complex_to_nk(eps_c):
+    """convert complex permittivity to n, k"""
+    ref_index = np.sqrt(eps_c)
+    return ref_index.real, ref_index.imag
+
+
 def nk_to_eps_sigma(n, k, freq):
     """convert n, k at freq to permittivity and conductivity"""
     eps_complex = nk_to_eps_complex(n, k)
@@ -68,6 +74,14 @@ class Medium(AbstractMedium):
     def eps_model(self, frequency):
         return eps_sigma_to_eps_complex(self.permittivity, self.conductivity, frequency)
 
+    def __str__(self):
+        return (
+            f"td.Medium("
+            f"permittivity={self.permittivity},"
+            f"conductivity={self.conductivity},"
+            f"frequency_range={self.frequency_range})"
+        )
+
 
 """ Dispersive Media """
 
@@ -95,6 +109,13 @@ class PoleResidue(DispersiveMedium):
             eps -= c / (1j * omega + a)
             eps -= c_cc / (1j * omega + a_cc)
         return eps
+
+    def __str__(self):
+        return (
+            f"td.PoleResidue("
+            f"\n\tpoles={self.poles}, "
+            f"\n\tfrequency_range={self.frequency_range})"
+        )
 
 
 class Sellmeier(DispersiveMedium):

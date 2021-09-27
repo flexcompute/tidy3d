@@ -199,8 +199,12 @@ def test_medium_conversions():
     # test consistency
     eps_z = nk_to_eps_complex(n, k)
     eps, sig = nk_to_eps_sigma(n, k, freq)
-    _eps_z = eps_sigma_to_eps_complex(eps, sig, freq)
-    assert np.isclose(eps_z, _eps_z)
+    eps_z_ = eps_sigma_to_eps_complex(eps, sig, freq)
+    assert np.isclose(eps_z, eps_z_)
+
+    n_, k_ = eps_complex_to_nk(eps_z)
+    assert np.isclose(n, n_)
+    assert np.isclose(k, k_)
 
 
 def test_medium_dispersion():
