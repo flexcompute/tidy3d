@@ -88,7 +88,7 @@
 #### Monitor Data
 - [x] Define monitor data.
 - [x] Export and Load
-- [ ] **Expose especially useful xarray methods to MonitorData API.**
+- [x] Expose especially useful xarray methods to MonitorData API.
 - [x] Define Permittivity Monitor
 - [x] Expose arguments to each MonitorData
 - [x] How to more cleanly specify what fields are required to construct each MonitorData?
