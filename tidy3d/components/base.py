@@ -53,6 +53,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         return cls.parse_raw(json_raw)
 
 
+# # note: functions below are my attempt to automatically register subclasses distinct
 # def register_subclasses(fields: tuple):
 #     """attempt at a decorator factory"""
 #     field_map = {field.__name__: field for field in fields}
@@ -82,7 +83,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
 #                 return cls_type.parse_raw(json_string)
 #         return _class
 #     return _register_subclasses
-
+#
 # from typing import Literal
 # from pydantic.fields import ModelField
 # def make_subclass_distinct(cls):
