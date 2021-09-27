@@ -56,13 +56,14 @@ def write_schema(fname_schema: str = "schema.json") -> None:
         fp.write(schema_str)
 
 
-VALIDATOR = Draft3Validator
-SCHEMA_PATH = "schema.json"
-SCHEMA_DICT = load_json(SCHEMA_PATH)
-SCHEMA_VALIDATOR = _create_validator(SCHEMA_DICT)
+# VALIDATOR = Draft3Validator
+# SCHEMA_PATH = "schema.json"
+# SCHEMA_DICT = load_json(SCHEMA_PATH)
+# SCHEMA_VALIDATOR = _create_validator(SCHEMA_DICT)
 
 if __name__ == "__main__":
-    write_schema(SCHEMA_PATH)
-    SCHEMA_DICT = load_json(SCHEMA_PATH)
-    SCHEMA_VALIDATOR = _create_validator(SCHEMA_DICT)
+    pass
+    # write_schema(SCHEMA_PATH)
+    # SCHEMA_DICT = load_json(SCHEMA_PATH)
+    # SCHEMA_VALIDATOR = _create_validator(SCHEMA_DICT)
     # generate_schema_docs(SCHEMA_PATH)
