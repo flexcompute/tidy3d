@@ -28,17 +28,16 @@ class Tidy3dData(Tidy3dBaseModel):
 class MonitorData(Tidy3dData, ABC):
     """Stores data from a Monitor"""
 
-    # data: xr.DataArray = None
+    monitor_name: str
     sampler_label: str
     sampler_values: List
     values: np.ndarray
-    monitor_name: str
     data: xr.DataArray = None
 
     def __init__(self, **kwargs):
         """compute xarray and add to monitor after init"""
         super().__init__(**kwargs)
-        self.data = self.load_xarray()
+        self.data = self._make_xarray()
 
     def __eq__(self, other):
         """check equality against another MonitorData instance"""
@@ -50,8 +49,36 @@ class MonitorData(Tidy3dData, ABC):
         """make interactive plot (impement in subclasses)"""
 
     @abstractmethod
-    def load_xarray(self) -> xr.DataArray:
+    def _make_xarray(self) -> xr.DataArray:
         """returns an xarray representation of data"""
+
+    def sel(self, *args, **kwargs):
+        """ http://xarray.pydata.org/en/stable/generated/xarray.DataArray.sel.html """
+        return self.data.sel(*args, **kwargs)
+
+    def isel(self, *args, **kwargs):
+        """ http://xarray.pydata.org/en/stable/generated/xarray.DataArray.isel.html """
+        return self.data.sel(*args, **kwargs)
+
+    def squeeze(self, *args, **kwargs):
+        """ http://xarray.pydata.org/en/stable/generated/xarray.DataArray.squeeze.html """
+        return self.data.squeeze(*args, **kwargs)
+
+    def interp(self, *args, **kwargs):
+        """ http://xarray.pydata.org/en/stable/generated/xarray.DataArray.interp.html """
+        return self.data.interp(*args, **kwargs)
+
+    def query(self, *args, **kwargs):
+        """ http://xarray.pydata.org/en/stable/generated/xarray.DataArray.query.html """
+        return self.data.query(*args, **kwargs)
+
+    def isin(self, *args, **kwargs):
+        """ http://xarray.pydata.org/en/stable/generated/xarray.DataArray.isin.html#xarray.DataArray.isin """
+        return self.data.isin(*args, **kwargs)        
+
+    def where(self, *args):
+        """ http://xarray.pydata.org/en/stable/generated/xarray.DataArray.where.html """
+        return self.data.where(*args)
 
     def export(self, fname: str) -> None:
         """Export MonitorData's xarray to hdf5 file"""
@@ -93,7 +120,7 @@ class FieldData(MonitorData):
     zs: np.ndarray  # (Nz,)
     values: np.ndarray  # (2, 3, Nx, Ny, Nz, Ns)
 
-    def load_xarray(self):
+    def _make_xarray(self):
         """returns an xarray representation of data"""
         coords = {
             "field": ["E", "H"],
@@ -107,7 +134,7 @@ class FieldData(MonitorData):
 
     def visualize(self):
         """make interactive plot"""
-        hv_ds = hv.Dataset(self.data.copy())
+        hv_ds = hv.Dataset(self.data.real.copy())
         image = hv_ds.to(hv.Image, kdims=["xs", "ys"], dynamic=True)
         return image.options(cmap="RdBu", colorbar=True, aspect="equal")
 
@@ -120,7 +147,7 @@ class PermittivityData(MonitorData):
     zs: np.ndarray  # (Nz,)
     values: np.ndarray  # (3, Nx, Ny, Nz, Ns)
 
-    def load_xarray(self):
+    def _make_xarray(self):
         """returns an xarray representation of data"""
         coords = {
             "component": ["xx", "yy", "zz"],
@@ -133,7 +160,7 @@ class PermittivityData(MonitorData):
 
     def visualize(self):
         """make interactive plot"""
-        hv_ds = hv.Dataset(self.data.copy())
+        hv_ds = hv.Dataset(self.data.real.copy())
         image = hv_ds.to(hv.Image, kdims=["xs", "ys"], dynamic=True)
         return image.options(cmap="RdBu", colorbar=True, aspect="equal")
 
@@ -143,7 +170,7 @@ class FluxData(MonitorData):
 
     values: np.ndarray  # (Ns,)
 
-    def load_xarray(self):
+    def _make_xarray(self):
         """returns an xarray representation of data"""
         coords = {self.sampler_label: self.sampler_values}
         return xr.DataArray(self.values, coords=coords, name=self.monitor_name)
@@ -162,7 +189,7 @@ class ModeData(MonitorData):
     mode_index: np.ndarray  # (Nm,)
     values: np.ndarray  # (Nm, Ns)
 
-    def load_xarray(self):
+    def _make_xarray(self):
         """returns an xarray representation of data"""
         coords = {
             "direction": ["+", "-"],
@@ -173,7 +200,7 @@ class ModeData(MonitorData):
 
     def visualize(self):
         """make interactive plot"""
-        hv_ds = hv.Dataset(self.data.copy())
+        hv_ds = hv.Dataset(self.data.real.copy())
         image = hv_ds.to(hv.Curve, self.sampler_label, dynamic=True)
         return image
 
