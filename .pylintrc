@@ -9,4 +9,4 @@ max-line-length=100
 
 [pre-commit-hook]
 command=custom_pylint
-disable=pointless-string-statement, too-many-ancestors
+disable=pointless-string-statement, too-many-ancestors, too-few-public-methods

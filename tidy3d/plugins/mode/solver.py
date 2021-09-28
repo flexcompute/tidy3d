@@ -40,7 +40,7 @@ def compute_modes(
         Ey, and Ez locations of the Yee cell, respectively.
     freq : float
         (Hertz) Frequency at which the eigenmodes are computed.
-    mesh_step : list or tuple of float
+    grid_size : list or tuple of float
         (micron) Step size in x, y and z. The mesh step in z is currently
         unused, but it could be needed if numerical dispersion is to be taken
         into account.
@@ -59,7 +59,7 @@ def compute_modes(
         (no symmetry), ``1`` (even, i.e. 'PMC' symmetry) or ``-1`` (odd, i.e.
         'PEC' symmetry).
     coords : List of array_like or None, optional
-        If provided, overrides ``mesh_step``, and must be a list of two arrays
+        If provided, overrides ``grid_size``, and must be a list of two arrays
         with size one larger than the corresponding axis of ``eps_cross`.
         Defines a non-uniform Cartesian grid on which the modes are computed.
 
@@ -95,8 +95,8 @@ def compute_modes(
     N = eps_xx.size
 
     if coords is None:
-        coords_x = [mesh_step[0] * np.arange(Nx + 1)]
-        coords_y = [mesh_step[1] * np.arange(Ny + 1)]
+        coords_x = [grid_size[0] * np.arange(Nx + 1)]
+        coords_y = [grid_size[1] * np.arange(Ny + 1)]
         coords = [coords_x, coords_y]
     else:
         if coords[0].size != Nx + 1 or coords[1].size != Ny + 1:
@@ -179,7 +179,7 @@ def compute_modes(
     keff = vim / 2 / (neff_tmp + 1e-10)
 
     # Correct formula taking numerical dispersion into account
-    # neff = 2/mesh_step[2]*np.arcsin((neff_tmp + 1j*keff)*mesh_step[2]/2)
+    # neff = 2/grid_size[2]*np.arcsin((neff_tmp + 1j*keff)*grid_size[2]/2)
     neff = neff_tmp
 
     # Field components from eigenvectors
