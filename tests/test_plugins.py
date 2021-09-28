@@ -6,9 +6,23 @@ import sys
 
 sys.path.append("./")
 
+import tidy3d as td
+
 from tidy3d.plugins import DispersionFitter
 from tidy3d.plugins.dispersion.fit import _poles_to_coeffs, _coeffs_to_poles
 from tidy3d.plugins.dispersion.fit import _pack_coeffs, _unpack_coeffs
+
+from tidy3d.plugins import ModeSolver
+
+
+def test_mode_solver():
+    simulation = td.Simulation(
+        size=(2, 2, 2),
+        grid_size=0.1,
+    )
+    plane = td.Box(center=(0, 0, 0), size=(1, 1, 0))
+    ms = ModeSolver(simulation=simulation, plane=plane, freq=1.0)
+    # modes = ms.solve(mode=td.Mode(mode_index=1))
 
 
 def test_coeffs():
@@ -45,8 +59,8 @@ def test_dispersion_load():
     fitter = DispersionFitter.load("tests/data/nk_data.csv", skiprows=1, delimiter=",")
     medium, rms = fitter.fit(num_tries=20, verbose=False)
 
+
 def test_dispersion_plot():
     fitter = DispersionFitter.load("tests/data/nk_data.csv", skiprows=1, delimiter=",")
     medium, rms = fitter.fit(num_tries=20, verbose=False)
     fitter.plot(medium)
-

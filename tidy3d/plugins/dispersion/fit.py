@@ -7,7 +7,7 @@ import nlopt
 import numpy as np
 import matplotlib.pylab as plt
 
-from ... import PoleResidue, nk_to_eps_complex, eps_complex_to_nk
+from ...components import PoleResidue, nk_to_eps_complex, eps_complex_to_nk
 from ...constants import C_0, HBAR
 
 
