@@ -17,15 +17,11 @@ from tidy3d.plugins import ModeSolver
 
 def test_mode_solver():
     waveguide = td.Structure(
-        geometry=td.Box(size=(td.inf, 0.5, 0.5)),
-        medium=td.Medium(permittivity=4.0))
-    simulation = td.Simulation(
-        size=(2, 2, 2),
-        grid_size=0.1,
-        structures=[waveguide]
+        geometry=td.Box(size=(td.inf, 0.5, 0.5)), medium=td.Medium(permittivity=4.0)
     )
+    simulation = td.Simulation(size=(2, 2, 2), grid_size=0.1, structures=[waveguide])
     plane = td.Box(center=(0, 0, 0), size=(0, 2, 2))
-    ms = ModeSolver(simulation=simulation, plane=plane, freq=td.constants.C_0/1.5)
+    ms = ModeSolver(simulation=simulation, plane=plane, freq=td.constants.C_0 / 1.5)
     # modes = ms.solve(mode=td.Mode(mode_index=1))
 
 
