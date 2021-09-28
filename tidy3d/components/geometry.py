@@ -6,12 +6,14 @@ from typing import List, Tuple, Union
 
 import pydantic
 import numpy as np
+import holoviews as hv
 
 from .base import Tidy3dBaseModel
 from .types import Numpy, Bound, Size, Coordinate, Axis, Coordinate2D, Literal, Vertices
 
 BOUND_EPS = 1e-3  # expand bounds by this much
 NUM_PTS_RADIUS = 20  # number of edges around circular shapes
+PLOT_BUFFER = 1.0  # add this around extents of .visualize()
 
 
 class Geometry(Tidy3dBaseModel, ABC):
@@ -39,6 +41,37 @@ class Geometry(Tidy3dBaseModel, ABC):
 
         # for intersection of bounds, both must be true
         return in_minus and in_plus
+
+    def visualize(self, axis: Axis):
+        """make interactive plot"""
+
+        hv.extension("bokeh")
+
+        _, (xlabel, ylabel) = self._pop_axis("xyz", axis=axis)
+
+        b_min, b_max = self._get_bounds()
+        _, (x_min, y_min) = self._pop_axis(b_min, axis=axis)
+        _, (x_max, y_max) = self._pop_axis(b_max, axis=axis)
+        extents = (
+            x_min - PLOT_BUFFER,
+            y_min - PLOT_BUFFER,
+            x_max + PLOT_BUFFER,
+            y_max + PLOT_BUFFER,
+        )
+
+        def poly_fn(position=0):
+            vertices_list = self._get_crosssection_polygons(position, axis=axis)
+            polygons = []
+            for vertices in vertices_list:
+                xs = [x for (x, y) in vertices]
+                ys = [y for (x, y) in vertices]
+                polygons.append({"x": xs, "y": ys})
+            poly = hv.Polygons(polygons, extents=extents)
+            return poly
+
+        pos_dim = hv.Dimension("position", range=(-3.0, 3.0), step=0.0001)
+        dmap = hv.DynamicMap(poly_fn, kdims=[pos_dim])
+        return dmap.opts(xlabel=xlabel, ylabel=ylabel)
 
     @staticmethod
     def _pop_axis(coord: Coordinate, axis: Axis) -> Tuple[float, Coordinate2D]:
