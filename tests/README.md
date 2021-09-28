@@ -88,3 +88,28 @@ def test_test_other():
     pass
 ```
 
+# Porting old tests
+
+Below is a list of all the test files in the `test/python` folder in the old repository. Most of them require running the C++ solver, but some do not. We may not end up porting everything if some things don't make sense, but we should make sure that everything that is covered in the old version is covered in the new version too.
+
+| Test file                       | Requires C++ | Ported to file(s)                                         |
+| ------------------------------- | ------------ | --------------------------------------------------------- |
+| test_anisotropic.py             | Y            |                                                           | 
+| test_checks.py                  | N            |                                                           | 
+| test_divergence.py              | Y            |                                                           | 
+| test_grid.py                    | N            |                                                           | 
+| test_material_dispersion.py     | Y            |                                                           | 
+| test_material_library.py        | Y            |                                                           | 
+| test_medium.py                  | N            |                                                           | 
+| test_mode_nonuniform.py         | Y            |                                                           | 
+| test_mode_source.py             | Y            |                                                           | 
+| test_mode_symmetry.py           | Y            |                                                           | 
+| test_monitors.py                | Y            |                                                           | 
+| test_mpi.py                     | Y            |                                                           | 
+| test_near2far.py                | Y            |                                                           | 
+| test_pec.py                     | Y            |                                                           | 
+| test_pml.py                     | Y            |                                                           | 
+| test_sidewall.py                | Y            |                                                           | 
+| test_structure_bounded.py       | N            |                                                           | 
+| test_symmetries.py              | Y            |                                                           | 
+| test_volume_source.py           | Y            |                                                           | 
