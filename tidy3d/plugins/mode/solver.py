@@ -1,17 +1,29 @@
 import numpy as np
 import scipy.sparse as sp
 import scipy.sparse.linalg as spl
+from pydantic import BaseModel
 
-from ..constants import EPSILON_0, ETA_0, C_0, MU_0, fp_eps, pec_val
+from ...components import FieldData, Mode
+from ...constants import EPSILON_0, ETA_0, C_0, MU_0, fp_eps, pec_val
 from .derivatives import create_D_matrices as D_mats
 from .derivatives import create_S_matrices as S_mats
-from .Mode import Mode
+
+# from .Mode import Mode
+
+
+class ModeInfo(BaseModel):
+    """stores information about a (solved) mode"""
+
+    mode: Mode
+    field_data: FieldData
+    n_eff: float
+    k_eff: float
 
 
 def compute_modes(
     eps_cross,
     freq,
-    mesh_step,
+    grid_size,
     pml_layers,
     num_modes=1,
     target_neff=None,

@@ -1,7 +1,7 @@
 import numpy as np
 import scipy.sparse as sp
 
-from ..constants import EPSILON_0, ETA_0
+from ...constants import EPSILON_0, ETA_0
 
 
 def make_Dxf(dLs, shape):
