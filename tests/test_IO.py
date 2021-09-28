@@ -98,7 +98,9 @@ def test_validation_speed():
 
     sim_base = SIM
     N_tests = 10
-    num_structures = np.logspace(0, 4, N_tests).astype(int)
+
+    # adjust as needed, keeping small to speed tests up
+    num_structures = np.logspace(0, 2, N_tests).astype(int)
 
     for n in num_structures:
         S = SIM.copy()

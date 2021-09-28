@@ -117,7 +117,7 @@
 
 - [ ] Flesh out all details for plugins (18.5 days total)
 	- [x] Make dispersion fitting tool compatible
-	- [ ] **Make mode solver compatible (2)**
+	- [ ] Make mode solver compatible (2) <- waiting on discretization Simulation.epsilon()
 	- [x] Batch processor <- done in webapi
 ---
 
@@ -127,6 +127,7 @@
 	- [x] Basic sliding window for cross section.
 	- [ ] **Structure cross section, sliding bar**
 	- [ ] **3 panel lumerical style plot `Simulation.visualize()`**
+	- [ ] **Simulation epsilon discretization from structure polygons.**
 	- [ ] Overlay structures onto fields.
 	- [ ] SimulationData
 ---
