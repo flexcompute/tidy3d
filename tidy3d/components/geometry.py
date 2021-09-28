@@ -7,6 +7,8 @@ from typing import List, Tuple, Union
 import pydantic
 import numpy as np
 import holoviews as hv
+import matplotlib as mpl
+import matplotlib.pylab as plt
 
 from .base import Tidy3dBaseModel
 from .types import Numpy, Bound, Size, Coordinate, Axis, Coordinate2D, Literal, Vertices
@@ -42,13 +44,20 @@ class Geometry(Tidy3dBaseModel, ABC):
         # for intersection of bounds, both must be true
         return in_minus and in_plus
 
-    def visualize(self, axis: Axis):
-        """make interactive plot"""
+    @staticmethod
+    def _pop_axis(coord: Coordinate, axis: Axis) -> Tuple[float, Coordinate2D]:
+        """separate axis coordinate from planar coordinate"""
+        plane_vals = list(coord)
+        axis_val = plane_vals.pop(axis)
+        return axis_val, plane_vals
 
-        hv.extension("bokeh")
-
+    def _get_plot_labels(self, axis: Axis) -> Tuple[str, str]:
+        """get x, y axis labels for cross section plots"""
         _, (xlabel, ylabel) = self._pop_axis("xyz", axis=axis)
+        return xlabel, ylabel
 
+    def _get_plot_extents(self, axis: Axis) -> Tuple[float, float, float, float]:
+        """get xmin, ymin, xmax, ymax extents for cross section plots"""
         b_min, b_max = self._get_bounds()
         _, (x_min, y_min) = self._pop_axis(b_min, axis=axis)
         _, (x_max, y_max) = self._pop_axis(b_max, axis=axis)
@@ -58,13 +67,42 @@ class Geometry(Tidy3dBaseModel, ABC):
             x_max + PLOT_BUFFER,
             y_max + PLOT_BUFFER,
         )
+        return extents
+
+    def plot(self, position: float, axis: Axis, ax=None):
+        """plot the geometry on the plane"""
+
+        xlabel, ylabel = self._get_plot_labels(axis=axis)
+        (xmin, ymin, xmax, ymax) = self._get_plot_extents(axis=axis)
+
+        vertices_list = self._get_crosssection_polygons(position, axis=axis)
+
+        if ax is None:
+            figure, ax = plt.subplots(1, 1)
+        for vertices in vertices_list:
+            patch = mpl.patches.Polygon(vertices)
+            ax.add_patch(patch)
+        ax.set_xlim(xmin, xmax)
+        ax.set_ylim(ymin, ymax)
+        ax.set_xlabel(xlabel)
+        ax.set_ylabel(ylabel)
+        return figure
+
+    def visualize(self, axis: Axis):
+        """make interactive plot"""
+
+        hv.extension("bokeh")
+
+        xlabel, ylabel = self._get_plot_labels(axis=axis)
+        extents = self._get_plot_extents(axis=axis)
 
         def poly_fn(position=0):
+            """returns hv.polygons as function of sliding bar position"""
             vertices_list = self._get_crosssection_polygons(position, axis=axis)
             polygons = []
             for vertices in vertices_list:
-                xs = [x for (x, y) in vertices]
-                ys = [y for (x, y) in vertices]
+                xs = [x for (x, _) in vertices]
+                ys = [y for (_, y) in vertices]
                 polygons.append({"x": xs, "y": ys})
             poly = hv.Polygons(polygons, extents=extents)
             return poly
@@ -72,13 +110,6 @@ class Geometry(Tidy3dBaseModel, ABC):
         pos_dim = hv.Dimension("position", range=(-3.0, 3.0), step=0.0001)
         dmap = hv.DynamicMap(poly_fn, kdims=[pos_dim])
         return dmap.opts(xlabel=xlabel, ylabel=ylabel)
-
-    @staticmethod
-    def _pop_axis(coord: Coordinate, axis: Axis) -> Tuple[float, Coordinate2D]:
-        """separate axis coordinate from planar coordinate"""
-        plane_vals = list(coord)
-        axis_val = plane_vals.pop(axis)
-        return axis_val, plane_vals
 
 
 """ geometry subclasses """
@@ -122,6 +153,7 @@ class Sphere(Geometry):
     type: Literal["Sphere"] = "Sphere"
 
     def _get_bounds(self):
+        """returns bounding box (rmin, rmax)"""
         coord_min = tuple(c - self.radius for c in self.center)
         coord_max = tuple(c + self.radius for c in self.center)
         return (coord_min, coord_max)
@@ -150,6 +182,7 @@ class Cylinder(Geometry):
     type: Literal["Cylinder"] = "Cylinder"
 
     def _get_bounds(self):
+        """returns bounding box (rmin, rmax)"""
         coord_min = list(c - self.radius for c in self.center)
         coord_max = list(c + self.radius for c in self.center)
         coord_min[self.axis] = self.center[self.axis] - self.length / 2.0
@@ -204,6 +237,7 @@ class PolySlab(Geometry):
     type: Literal["PolySlab"] = "PolySlab"
 
     def _get_bounds(self):
+        """returns bounding box (rmin, rmax)"""
 
         # get the min and max points in polygon plane
         xpoints = tuple(c[0] for c in self.vertices)
