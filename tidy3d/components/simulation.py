@@ -4,7 +4,7 @@ from typing import Dict, Tuple, Union, List
 import pydantic
 import numpy as np
 
-from .types import GridSize, Literal
+from .types import GridSize, Literal, Symmetry
 from .geometry import Box
 from .medium import Medium, MediumType
 from .structure import Structure
@@ -30,7 +30,7 @@ class Simulation(Box):
         PMLLayer(),
         PMLLayer(),
     )
-    symmetry: Tuple[Literal[0, -1, 1], Literal[0, -1, 1], Literal[0, -1, 1]] = (0, 0, 0)
+    symmetry: Tuple[Symmetry, Symmetry, Symmetry] = (0, 0, 0)
     shutoff: pydantic.NonNegativeFloat = 1e-5
     courant: pydantic.confloat(ge=0.0, le=1.0) = 0.9
     subpixel: bool = True

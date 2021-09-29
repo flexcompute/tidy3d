@@ -38,3 +38,5 @@ Polarization = Literal["Jx", "Jy", "Jz", "Mx", "My", "Mz"]
 Direction = Literal["+", "-"]
 
 Numpy = np.ndarray
+
+Symmetry = Literal[0, -1, 1]
