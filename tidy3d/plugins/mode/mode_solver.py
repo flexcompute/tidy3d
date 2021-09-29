@@ -69,36 +69,35 @@ class ModeSolver:
     def solve(self, mode: Mode) -> ModeInfo:
         """gets information about the mode specification from mode solver"""
 
-        eps_cross = np.squeeze(self.simulation.epsilon(self.plane, self.freq))
-        target_neff = np.max(eps_complex_to_nk(eps_cross)[0])
-        plane_indices = [index for index in range(3) if self.plane.size[index] > 0.0]
-        symmetries = [self.simulation.symmetry[i] for i in plane_indices]
-        pml_layers = [self.simulation.pml_layers[i].num_layers for i in plane_indices]
-        pml_layers = (0, 0)  # note: just ignore simulation boundaries for now
+        # note discretizing, need to make consistent
+        eps_cross = self.simulation.epsilon(self.plane, self.freq)
 
+        # note, internally discretizing, need to make consistent.
         field, n_eff_complex = compute_modes(
-            eps_cross=eps_cross,
+            eps_cross=np.squeeze(eps_cross),
             freq=self.freq,
             grid_size=self.simulation.grid_size,
-            pml_layers=pml_layers,
+            pml_layers=mode.num_pml,
             num_modes=mode.mode_index + 1,
-            target_neff=None,
-            symmetries=symmetries,
+            target_neff=mode.target_neff,
+            symmetries=(0, 0),  # note: mode symmetries not handled yet.
             coords=None,
         )
 
         # field.shape = (2, 3, Nx, Ny, 1, Nmodes)
-        n_eff_complex = n_eff_complex[mode.mode_index]
         field_values = field[..., mode.mode_index]
-        Nx = field_values.shape[2]
-        Ny = field_values.shape[3]
-        (xmin, ymin, zmin), (xmax, ymax, zmax) = self.plane._get_bounds()
+
+        # note: re-discretizing, need to make consistent.
+        (_, _, Nx, Ny, _) = field_values.shape
+        (xmin, ymin, zmin), (xmax, ymax, zmax) = self.plane.get_bounds()
         xs = np.linspace(xmin, xmax, Nx)
         ys = np.linspace(ymin, ymax, Ny)
         zs = np.linspace(zmin, zmax, 1)
 
+        n_eff_complex = n_eff_complex[mode.mode_index]
+
         field_data = FieldData(
-            monitor_name="mode_solver",
+            monitor_name="mode_solver_output",
             sampler_label="f",
             sampler_values=[self.freq],
             values=field_values[..., None],
