@@ -94,6 +94,20 @@
 - [x] How to more cleanly specify what fields are required to construct each MonitorData?
 ---
 
+#### Plugins
+
+- [x] Flesh out all details for plugins
+	- [x] Make dispersion fitting tool compatible
+	- [x] Make mode solver compatible
+	- [x] Batch processor <- done in webapi
+---
+
+#### IO
+- [x] Supply other ways to create simulation files (2 days)
+	- [x] yaml -> json conversion 
+	- [x] command line interface to submit yaml or json.
+---
+
 #### Solver Integration
 
 - [x] Add version to simulation.json
@@ -113,13 +127,11 @@
 - [ ] Test test test.
 ---
 
-#### Plugins
-
-- [ ] Flesh out all details for plugins (18.5 days total)
-	- [x] Make dispersion fitting tool compatible
-	- [ ] Make mode solver compatible (2) <- waiting on discretization Simulation.epsilon()
-	- [x] Batch processor <- done in webapi
----
+#### Finishing Integration
+- [ ] Mode Sources / Monitors
+- [ ] Nonuniform Mesh
+- [ ] Handling symmetries properly
+- [ ] Handling client-side discretization properly.
 
 #### Visualization
 - [ ] write all visuaization routines
@@ -129,18 +141,8 @@
 	- [ ] **3 panel lumerical style plot `Simulation.visualize()`**
 	- [ ] **Simulation epsilon discretization from structure polygons.**
 	- [ ] Overlay structures onto fields.
-	- [ ] SimulationData
+	- [ ] `SimulationData.visualize` method
 ---
-
-#### IO
-- [x] Supply other ways to create simulation files (2 days)
-	- [x] yaml -> json conversion 
-	- [x] command line interface to submit yaml or json.
----
-
-#### Finishing Integration
-- [ ] Mode Sources / Monitors
-- [ ] Nonuniform Mesh
 
 ### Stage 3: Refining
 
@@ -162,9 +164,10 @@ https://github.com/crusaderky/python_project_template
 
 - [ ] Add extensive amount of tests (2 weeks)
 	- [x] Test simulation.json validation / error catching.
-	- [ ] Test plugins.
-	- [ ] Test submitting jobs if possible.
+	- [x] Test plugins.
 	- [x] Test notebooks.
+	- [ ] Test submitting jobs if possible.
+	- [ ] Import and integrate tests from existing solvers.
 ---
 
 #### Github Integration
@@ -198,5 +201,5 @@ https://github.com/crusaderky/python_project_template
 - [ ] Mode solver API using web
 - [ ] More advanced plotting
 - [ ] Angled sources
-- [ ] simple yaml editor?  flask app
+- [ ] simple yaml editor? flask app
 - [ ] Output Simulation as blender file
