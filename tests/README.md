@@ -94,6 +94,7 @@ Below is a list of all the test files in the `test/python` folder in the old rep
 
 | Test file                       | Requires C++ | Ported to file(s)                                         |
 | ------------------------------- | ------------ | --------------------------------------------------------- |
+| test_adjoint.py                 | Y            |                                                           | 
 | test_anisotropic.py             | Y            |                                                           | 
 | test_checks.py                  | N            |                                                           | 
 | test_divergence.py              | Y            |                                                           | 
