@@ -60,3 +60,6 @@ class Simulation(Box):
                 assert self._intersects(
                     geo_obj
                 ), f"object '{name}' is completely outside simulation"
+
+    def epsilon(self, box: Box):
+        """get permittivity at volume specified by Box"""

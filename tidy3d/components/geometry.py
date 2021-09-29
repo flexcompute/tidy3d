@@ -29,6 +29,10 @@ class Geometry(Tidy3dBaseModel, ABC):
     def _get_crosssection_polygons(self, position: float, axis: Axis) -> List[Vertices]:
         """returns list of polygon vertices that intersect with plane"""
 
+    @abstractmethod
+    def _is_inside(self, x, y, z) -> bool:
+        """returns True if (x,y,z) is inside of geometry"""
+
     def _intersects(self, other) -> bool:
         """method determining whether two geometries' bounds intersect"""
 
@@ -130,6 +134,18 @@ class Box(Geometry):
         coord_max = tuple(c + s / 2 + BOUND_EPS for (s, c) in zip(size, center))
         return (coord_min, coord_max)
 
+    def _is_inside(self, x, y, z) -> bool:
+        """returns True if (x,y,z) is inside of geometry"""
+
+        x0, y0, z0 = self.center
+        Lx, Ly, Lz = self.size
+
+        dist_x = x - x0
+        dist_y = y - y0
+        dist_z = z - z0
+
+        return (dist_x < Lx / 2) * (dist_y < Ly / 2) * (dist_z < Lz / 2)
+
     def _get_crosssection_polygons(self, position: float, axis: Axis) -> List[Vertices]:
         """returns list of polygon vertices that intersect with plane"""
         z0, (x0, y0) = self._pop_axis(self.center, axis=axis)
@@ -157,6 +173,14 @@ class Sphere(Geometry):
         coord_min = tuple(c - self.radius for c in self.center)
         coord_max = tuple(c + self.radius for c in self.center)
         return (coord_min, coord_max)
+
+    def _is_inside(self, x, y, z) -> bool:
+        """returns True if (x,y,z) is inside of geometry"""
+        x0, y0, z0 = self.center
+        dist_x = x - x0
+        dist_y = y - y0
+        dist_z = z - z0
+        return dist_x ** 2 + dist_y ** 2 + dist_z ** 2 <= self.radius ** 2
 
     def _get_crosssection_polygons(self, position: float, axis: Axis) -> List[Vertices]:
         """returns list of polygon vertices that intersect with plane"""
@@ -188,6 +212,15 @@ class Cylinder(Geometry):
         coord_min[self.axis] = self.center[self.axis] - self.length / 2.0
         coord_max[self.axis] = self.center[self.axis] + self.length / 2.0
         return (tuple(coord_min), tuple(coord_max))
+
+    def _is_inside(self, x, y, z) -> bool:
+        """returns True if (x,y,z) is inside of geometry"""
+        z0, (x0, y0) = self._pop_axis(self.center, axis=self.axis)
+        z, (x, y) = self._pop_axis((x, y, z), axis=self.axis)
+        dist_x = x - x0
+        dist_y = y - y0
+        dist_z = z - z0
+        return (dist_z <= self.length) * (dist_x ** 2 + dist_y ** 2 <= self.radius ** 2)
 
     def _get_crosssection_polygons(self, position: float, axis: Axis) -> List[Vertices]:
         """returns list of polygon vertices that intersect with plane"""
@@ -256,6 +289,15 @@ class PolySlab(Geometry):
 
         return (tuple(coord_min), tuple(coord_max))
 
+    def _is_inside(self, x, y, z) -> bool:
+        """returns True if (x,y,z) is inside of geometry"""
+        z, (x, y) = self._pop_axis((x, y, z), axis=self.axis)
+        z_min, z_max = self.slab_bounds
+        path = mpl.path.Path(self.vertices)
+        xy_points = np.stack((x, y), axis=1)
+        in_polygon_xy = path.contains_points(xy_points)
+        return (z >= z_min) * (z <= z_max) * in_polygon_xy
+
     def _get_crosssection_polygons(self, position: float, axis: Axis) -> List[Vertices]:
         """returns list of polygon vertices that intersect with plane"""
         if axis == self.axis:
@@ -280,10 +322,6 @@ class PolySlab(Geometry):
         # make polygon with intersections and z axis information
         polys = []
         for i in range(len(ints_y) // 2):
-
-            # consecutive smaller and larger y points, respectively, assumed material between them
-            # y1 = np.float64(ints_y[2 * i])
-            # y2 = np.float64(ints_y[2 * i + 1])
             y1 = ints_y[2 * i]
             y2 = ints_y[2 * i + 1]
             poly = [(y1, z_min), (y2, z_min), (y2, z_max), (y1, z_max)]
@@ -319,14 +357,11 @@ class PolySlab(Geometry):
 
         ints_y = []
         for (vertices_f, vertices_b) in zip(iverts_b, iverts_f):
-            # find the interescting y
             x1, y1 = vertices_f
             x2, y2 = vertices_b
             slope = (y2 - y1) / (x2 - x1)
             y = y1 + slope * (position - x1)
             ints_y.append(y)
-
-        # sort the intersections just to be safe
         ints_y.sort()
         return ints_y
 
