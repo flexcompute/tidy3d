@@ -1,15 +1,18 @@
 """ Turn Mode Specifications into Mode profiles """
 
 import numpy as np
+from pydantic import BaseModel
 
 from ...components import Box
 from ...components import Simulation
 from ...components import Mode
+from ...components import FieldData
 from ...components import FreqSampler, ModeMonitor
 from ...components import ModeSource, GaussianPulse
 from ...components import eps_complex_to_nk
+from ...components.validators import assert_plane
 
-from .solver import compute_modes, ModeInfo
+from .solver import compute_modes
 
 
 """
@@ -40,6 +43,15 @@ src = ModeSource.load('data/my_source.json')  # and loaded in our script
 """
 
 
+class ModeInfo(BaseModel):
+    """stores information about a (solved) mode"""
+
+    field_data: FieldData
+    mode: Mode
+    n_eff: float
+    k_eff: float
+
+
 class ModeSolver:
     """inferface for finding mode specification for ModeSource and ModeMonitor objects"""
 
@@ -50,25 +62,53 @@ class ModeSolver:
         self.plane = plane
         self.freq = freq
 
+        assert 0.0 in plane.size, "plane must have at least one axis with size=0"
+
     def solve(self, mode: Mode) -> ModeInfo:
         """gets information about the mode specification from mode solver"""
 
-        # to do
-        eps_cross = self.simulation.epsilon(self.plane)
-        pml_layers = [p.num_layers for p in self.simulation.pml_layers]
+        eps_cross = np.squeeze(self.simulation.epsilon(self.plane, self.freq))
         target_neff = np.mean(eps_complex_to_nk(eps_cross))
         plane_indices = [index for index in range(3) if self.plane.size[index] > 0.0]
-        symmetries = [self.simulation.symmetries[i] for i in plane_indices]
+        symmetries = [self.simulation.symmetry[i] for i in plane_indices]
+        pml_layers = [self.simulation.pml_layers[i].num_layers for i in plane_indices]
 
-        return compute_modes(
+        field, n_eff_complex = compute_modes(
             eps_cross=eps_cross,
             freq=self.freq,
             grid_size=self.simulation.grid_size,
             pml_layers=pml_layers,
-            num_modes=mode.mode_index,
+            num_modes=mode.mode_index + 1,
             target_neff=target_neff,
             symmetries=symmetries,
             coords=None,
+        )
+
+        # field.shape = (2, 3, Nx, Ny, 1, Nmodes)
+        n_eff_complex = n_eff_complex[mode.mode_index]
+        field_values = field[..., mode.mode_index]
+        Nx = field_values.shape[2]
+        Ny = field_values.shape[3]
+        (xmin, ymin, zmin), (xmax, ymax, zmax) = self.plane._get_bounds()
+        xs = np.linspace(xmin, xmax, Nx)
+        ys = np.linspace(ymin, ymax, Ny)
+        zs = np.linspace(zmin, zmax, 1)
+
+        field_data = FieldData(
+            monitor_name="mode_solver",
+            sampler_label="f",
+            sampler_values=[self.freq],
+            values=field_values[..., None],
+            x=xs,
+            y=ys,
+            z=zs,
+        )
+
+        return ModeInfo(
+            field_data=field_data,
+            mode=mode,
+            n_eff=n_eff_complex.real,
+            k_eff=n_eff_complex.imag,
         )
 
     def make_source(self, mode: Mode, fwidth: float) -> ModeSource:
