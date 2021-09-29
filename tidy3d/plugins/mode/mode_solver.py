@@ -70,22 +70,42 @@ class ModeSolver:
         """gets information about the mode specification from mode solver"""
 
         # note discretizing, need to make consistent
-        eps_cross = self.simulation.epsilon(self.plane, self.freq)
+        eps_cross = np.squeeze(self.simulation.epsilon(self.plane, self.freq))
+
+        Nx, Ny = eps_cross.shape
+        if mode.symmetries[0] != 0:
+            eps_cross = eps_cross[Nx // 2 :, :]
+        if mode.symmetries[1] != 0:
+            eps_cross = eps_cross[:, Ny // 2 :]
 
         # note, internally discretizing, need to make consistent.
         field, n_eff_complex = compute_modes(
-            eps_cross=np.squeeze(eps_cross),
+            eps_cross=eps_cross,
             freq=self.freq,
             grid_size=self.simulation.grid_size,
             pml_layers=mode.num_pml,
             num_modes=mode.mode_index + 1,
             target_neff=mode.target_neff,
-            symmetries=(0, 0),  # note: mode symmetries not handled yet.
+            symmetries=mode.symmetries,
             coords=None,
         )
 
         # field.shape = (2, 3, Nx, Ny, 1, Nmodes)
         field_values = field[..., mode.mode_index]
+        E, H = field_values
+
+        # note: need to handle signs correctly and refactor symmetry
+        if mode.symmetries[0] != 0:
+            E_tmp = E[:, 1:, ...]
+            H_tmp = H[:, 1:, ...]
+            E = np.concatenate((+E_tmp[:, ::-1, ...], E_tmp), axis=1)
+            H = np.concatenate((-H_tmp[:, ::-1, ...], H_tmp), axis=1)
+        if mode.symmetries[1] != 0:
+            E_tmp = E[:, :, 1:, ...]
+            H_tmp = H[:, :, 1:, ...]
+            E = np.concatenate((+E_tmp[:, :, ::-1, ...], E_tmp), axis=2)
+            H = np.concatenate((-H_tmp[:, :, ::-1, ...], H_tmp), axis=2)
+        field_values = np.stack((E, H), axis=0)
 
         # note: re-discretizing, need to make consistent.
         (_, _, Nx, Ny, _) = field_values.shape
