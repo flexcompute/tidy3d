@@ -52,20 +52,18 @@ class Simulation(Box):
         """for each geometry-containing object in simulation, make sure it intersects simulation"""
 
         for i, structure in enumerate(self.structures):
-            assert self._intersects(
+            assert self.intersects(
                 structure.geometry
             ), f"Structure '{structure}' (at position {i}) is completely outside simulation"
 
         for geo_obj_dict in (self.sources, self.monitors):
             for name, geo_obj in geo_obj_dict.items():
-                assert self._intersects(
-                    geo_obj
-                ), f"object '{name}' is completely outside simulation"
+                assert self.intersects(geo_obj), f"object '{name}' is completely outside simulation"
 
-    def _discretize(self, box: Box):
+    def _discretize(self, box: Box):  # pylint: disable=too-many-locals
         """get x,y,z positions of box using self.grid_size"""
 
-        (xmin, ymin, zmin), (xmax, ymax, zmax) = box._get_bounds()
+        (xmin, ymin, zmin), (xmax, ymax, zmax) = box.get_bounds()
         dlx, dly, dlz = self.grid_size
         x_range = np.arange(xmin, xmax + dlx / 2, dlx)
         y_range = np.arange(ymin, ymax + dly / 2, dly)
@@ -81,11 +79,11 @@ class Simulation(Box):
         eps_array = eps_background * np.ones(x_pts.shape, dtype=complex)
         for structure in self.structures:
             geo = structure.geometry
-            if not geo._intersects(box):
+            if not geo.intersects(box):
                 continue
             eps_structure = structure.medium.eps_model(freq)
             # structure_box = geo._get_bounding_box()
             # _x, _y, _z = self._discretize(structure_box)
-            structure_map = geo._is_inside(x_pts, y_pts, z_pts)
+            structure_map = geo.is_inside(x_pts, y_pts, z_pts)
             eps_array[structure_map] = eps_structure
         return eps_array

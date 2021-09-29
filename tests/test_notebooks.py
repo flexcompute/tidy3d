@@ -1,3 +1,4 @@
+import pytest
 import nbconvert
 import nbformat
 from nbconvert.preprocessors import CellExecutionError
@@ -20,12 +21,16 @@ notebook_filenames = [
     if ".ipynb" in f and f != ".ipynb_checkpoints"
 ]
 
+# if you want to run only some notebooks, put here, if empty, run all
+run_only = ("Fitting", "ModeSolver", "StartHere")
+if len(run_only):
+    notebook_filenames = [notebook_directory + base + ".ipynb" for base in run_only]
 
-def test_notebooks():
 
-    # loop through notebooks and test each of them
-    for fname in notebook_filenames:
-        _run_notebook(fname)
+@pytest.mark.parametrize("fname", notebook_filenames)
+def test_notebooks(fname):
+    # loop through notebooks in notebook_filenames and test each of them separately
+    _run_notebook(fname)
 
 
 def _run_notebook(notebook_fname):
@@ -36,7 +41,8 @@ def _run_notebook(notebook_fname):
 
         # try running the notebook
         try:
-            out = ep.preprocess(nb, {"metadata": {"path": "."}})
+            # run from the `notebooks/` directory
+            out = ep.preprocess(nb, {"metadata": {"path": "./notebooks"}})
 
         # if there is an error, print message and fail test
         except CellExecutionError as e:

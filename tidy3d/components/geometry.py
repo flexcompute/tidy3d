@@ -22,12 +22,12 @@ class Geometry(Tidy3dBaseModel, ABC):
     """abstract base class, defines where something exists in space"""
 
     @abstractmethod
-    def _get_bounds(self) -> Bound:
+    def get_bounds(self) -> Bound:
         """Returns bounding box for this geometry, must implement for subclasses"""
 
     def _get_bounding_box(self):
         """Get Box() representing bounding box of geometry"""
-        (xmin, ymin, zmin), (xmax, ymax, zmax) = self._get_bounds()
+        (xmin, ymin, zmin), (xmax, ymax, zmax) = self.get_bounds()
         Lx = xmax - xmin
         Ly = ymax - ymin
         Lz = zmax - zmin
@@ -41,14 +41,14 @@ class Geometry(Tidy3dBaseModel, ABC):
         """returns list of polygon vertices that intersect with plane"""
 
     @abstractmethod
-    def _is_inside(self, x, y, z) -> bool:
+    def is_inside(self, x, y, z) -> bool:
         """returns True if (x,y,z) is inside of geometry"""
 
-    def _intersects(self, other) -> bool:
+    def intersects(self, other) -> bool:
         """method determining whether two geometries' bounds intersect"""
 
-        self_bmin, self_bmax = self._get_bounds()
-        other_bmin, other_bmax = other._get_bounds()  # pylint: disable=protected-access
+        self_bmin, self_bmax = self.get_bounds()
+        other_bmin, other_bmax = other.get_bounds()  # pylint: disable=protected-access
 
         # are all of other's minimum coordinates less than self's maximum coordinate?
         in_minus = all(o <= s for (s, o) in zip(self_bmax, other_bmin))
@@ -73,7 +73,7 @@ class Geometry(Tidy3dBaseModel, ABC):
 
     def _get_plot_extents(self, axis: Axis) -> Tuple[float, float, float, float]:
         """get xmin, ymin, xmax, ymax extents for cross section plots"""
-        b_min, b_max = self._get_bounds()
+        b_min, b_max = self.get_bounds()
         _, (x_min, y_min) = self._pop_axis(b_min, axis=axis)
         _, (x_max, y_max) = self._pop_axis(b_max, axis=axis)
         extents = (
@@ -137,7 +137,7 @@ class Box(Geometry):
     size: Size
     type: Literal["Box"] = "Box"
 
-    def _get_bounds(self) -> Bound:
+    def get_bounds(self) -> Bound:
         """sets bounds based on size and center"""
         size = self.size
         center = self.center
@@ -145,7 +145,7 @@ class Box(Geometry):
         coord_max = tuple(c + s / 2 + BOUND_EPS for (s, c) in zip(size, center))
         return (coord_min, coord_max)
 
-    def _is_inside(self, x, y, z) -> bool:
+    def is_inside(self, x, y, z) -> bool:
         """returns True if (x,y,z) is inside of geometry"""
 
         x0, y0, z0 = self.center
@@ -179,13 +179,13 @@ class Sphere(Geometry):
     center: Coordinate = (0.0, 0.0, 0.0)
     type: Literal["Sphere"] = "Sphere"
 
-    def _get_bounds(self):
+    def get_bounds(self):
         """returns bounding box (rmin, rmax)"""
         coord_min = tuple(c - self.radius for c in self.center)
         coord_max = tuple(c + self.radius for c in self.center)
         return (coord_min, coord_max)
 
-    def _is_inside(self, x, y, z) -> bool:
+    def is_inside(self, x, y, z) -> bool:
         """returns True if (x,y,z) is inside of geometry"""
         x0, y0, z0 = self.center
         dist_x = np.abs(x - x0)
@@ -216,7 +216,7 @@ class Cylinder(Geometry):
     axis: Axis = 2
     type: Literal["Cylinder"] = "Cylinder"
 
-    def _get_bounds(self):
+    def get_bounds(self):
         """returns bounding box (rmin, rmax)"""
         coord_min = list(c - self.radius for c in self.center)
         coord_max = list(c + self.radius for c in self.center)
@@ -224,7 +224,7 @@ class Cylinder(Geometry):
         coord_max[self.axis] = self.center[self.axis] + self.length / 2.0
         return (tuple(coord_min), tuple(coord_max))
 
-    def _is_inside(self, x, y, z) -> bool:
+    def is_inside(self, x, y, z) -> bool:
         """returns True if (x,y,z) is inside of geometry"""
         z0, (x0, y0) = self._pop_axis(self.center, axis=self.axis)
         z, (x, y) = self._pop_axis((x, y, z), axis=self.axis)
@@ -280,7 +280,7 @@ class PolySlab(Geometry):
     dilation: float = 0  # note, not supported yet
     type: Literal["PolySlab"] = "PolySlab"
 
-    def _get_bounds(self):
+    def get_bounds(self):
         """returns bounding box (rmin, rmax)"""
 
         # get the min and max points in polygon plane
@@ -300,7 +300,7 @@ class PolySlab(Geometry):
 
         return (tuple(coord_min), tuple(coord_max))
 
-    def _is_inside(self, x, y, z) -> bool:
+    def is_inside(self, x, y, z) -> bool:
         """returns True if (x,y,z) is inside of geometry"""
         z, (x, y) = self._pop_axis((x, y, z), axis=self.axis)
         z_min, z_max = self.slab_bounds
