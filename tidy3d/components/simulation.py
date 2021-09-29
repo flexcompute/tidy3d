@@ -1,10 +1,10 @@
 """ Container holding all information about simulation and its components"""
-from typing import Dict, Tuple, Union, List
+from typing import Dict, Tuple, List
 
 import pydantic
 import numpy as np
 
-from .types import GridSize, Literal, Symmetry
+from .types import GridSize, Symmetry
 from .geometry import Box
 from .medium import Medium, MediumType
 from .structure import Structure
@@ -64,19 +64,21 @@ class Simulation(Box):
 
     def _discretize(self, box: Box):
         """get x,y,z positions of box using self.grid_size"""
+
         (xmin, ymin, zmin), (xmax, ymax, zmax) = box._get_bounds()
         dlx, dly, dlz = self.grid_size
-        xs = np.arange(xmin, xmax + dlx / 2, dlx)
-        ys = np.arange(ymin, ymax + dly / 2, dly)
-        zs = np.arange(zmin, zmax + dlz / 2, dlz)
-        x, y, z = np.meshgrid(xs, ys, zs, indexing="ij")
-        return x, y, z
+        x_range = np.arange(xmin, xmax + dlx / 2, dlx)
+        y_range = np.arange(ymin, ymax + dly / 2, dly)
+        z_range = np.arange(zmin, zmax + dlz / 2, dlz)
+        x_pts, y_pts, z_pts = np.meshgrid(x_range, y_range, z_range, indexing="ij")
+
+        return x_pts, y_pts, z_pts
 
     def epsilon(self, box: Box, freq: float):
         """get permittivity at volume specified by box and frequency"""
-        x, y, z = self._discretize(box)
+        x_pts, y_pts, z_pts = self._discretize(box)
         eps_background = self.medium.eps_model(freq)
-        eps_array = eps_background * np.ones(x.shape, dtype=complex)
+        eps_array = eps_background * np.ones(x_pts.shape, dtype=complex)
         for structure in self.structures:
             geo = structure.geometry
             if not geo._intersects(box):
@@ -84,6 +86,6 @@ class Simulation(Box):
             eps_structure = structure.medium.eps_model(freq)
             # structure_box = geo._get_bounding_box()
             # _x, _y, _z = self._discretize(structure_box)
-            structure_map = geo._is_inside(x, y, z)
+            structure_map = geo._is_inside(x_pts, y_pts, z_pts)
             eps_array[structure_map] = eps_structure
         return eps_array
