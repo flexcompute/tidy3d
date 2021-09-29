@@ -2,6 +2,7 @@
 from typing import Dict, Tuple, Union, List
 
 import pydantic
+import numpy as np
 
 from .types import GridSize, Literal
 from .geometry import Box
@@ -18,7 +19,7 @@ from .pml import PMLLayer
 class Simulation(Box):
     """Contains all information about simulation"""
 
-    grid_size: Union[pydantic.PositiveFloat, Tuple[GridSize, GridSize, GridSize]]
+    grid_size: Tuple[GridSize, GridSize, GridSize]
     medium: MediumType = Medium()
     run_time: pydantic.NonNegativeFloat = 0.0
     structures: List[Structure] = []
@@ -29,7 +30,7 @@ class Simulation(Box):
         PMLLayer(),
         PMLLayer(),
     )
-    symmetry: Tuple[Literal[0, -1, 1], Literal[0, -1, 1], Literal[0, -1, 1]] = [0, 0, 0]
+    symmetry: Tuple[Literal[0, -1, 1], Literal[0, -1, 1], Literal[0, -1, 1]] = (0, 0, 0)
     shutoff: pydantic.NonNegativeFloat = 1e-5
     courant: pydantic.confloat(ge=0.0, le=1.0) = 0.9
     subpixel: bool = True
@@ -61,5 +62,28 @@ class Simulation(Box):
                     geo_obj
                 ), f"object '{name}' is completely outside simulation"
 
-    def epsilon(self, box: Box):
-        """get permittivity at volume specified by Box"""
+    def _discretize(self, box: Box):
+        """get x,y,z positions of box using self.grid_size"""
+        (xmin, ymin, zmin), (xmax, ymax, zmax) = box._get_bounds()
+        dlx, dly, dlz = self.grid_size
+        xs = np.arange(xmin, xmax + dlx / 2, dlx)
+        ys = np.arange(ymin, ymax + dly / 2, dly)
+        zs = np.arange(zmin, zmax + dlz / 2, dlz)
+        x, y, z = np.meshgrid(xs, ys, zs, indexing="ij")
+        return x, y, z
+
+    def epsilon(self, box: Box, freq: float):
+        """get permittivity at volume specified by box and frequency"""
+        x, y, z = self._discretize(box)
+        eps_background = self.medium.eps_model(freq)
+        eps_array = eps_background * np.ones(x.shape, dtype=complex)
+        for structure in self.structures:
+            geo = structure.geometry
+            if not geo._intersects(box):
+                continue
+            eps_structure = structure.medium.eps_model(freq)
+            # structure_box = geo._get_bounding_box()
+            # _x, _y, _z = self._discretize(structure_box)
+            structure_map = geo._is_inside(x, y, z)
+            eps_array[structure_map] = eps_structure
+        return eps_array

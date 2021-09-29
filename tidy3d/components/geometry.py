@@ -25,6 +25,17 @@ class Geometry(Tidy3dBaseModel, ABC):
     def _get_bounds(self) -> Bound:
         """Returns bounding box for this geometry, must implement for subclasses"""
 
+    def _get_bounding_box(self):
+        """Get Box() representing bounding box of geometry"""
+        (xmin, ymin, zmin), (xmax, ymax, zmax) = self._get_bounds()
+        Lx = xmax - xmin
+        Ly = ymax - ymin
+        Lz = zmax - zmin
+        x0 = (xmax + xmin) / 2.0
+        y0 = (ymax + ymin) / 2.0
+        z0 = (zmax + zmin) / 2.0
+        return Box(center=(x0, y0, z0), size=(Lx, Ly, Lz))
+
     @abstractmethod
     def _get_crosssection_polygons(self, position: float, axis: Axis) -> List[Vertices]:
         """returns list of polygon vertices that intersect with plane"""

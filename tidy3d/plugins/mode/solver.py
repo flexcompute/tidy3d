@@ -1,23 +1,15 @@
+from typing import Tuple
+
 import numpy as np
 import scipy.sparse as sp
 import scipy.sparse.linalg as spl
-from pydantic import BaseModel
 
-from ...components import FieldData, Mode
+from ...components.types import Numpy
 from ...constants import EPSILON_0, ETA_0, C_0, MU_0, fp_eps, pec_val
 from .derivatives import create_D_matrices as D_mats
 from .derivatives import create_S_matrices as S_mats
 
 # from .Mode import Mode
-
-
-class ModeInfo(BaseModel):
-    """stores information about a (solved) mode"""
-
-    mode: Mode
-    field_data: FieldData
-    n_eff: float
-    k_eff: float
 
 
 def compute_modes(
@@ -29,7 +21,7 @@ def compute_modes(
     target_neff=None,
     symmetries=(0, 0),
     coords=None,
-):
+) -> Tuple[Numpy, Numpy]:
     """Solve for the modes of a waveguide cross section.
 
     Parameters
@@ -77,6 +69,7 @@ def compute_modes(
     ValueError
         Description
     """
+
     omega = 2 * np.pi * freq
     k0 = omega / C_0
 
@@ -95,8 +88,8 @@ def compute_modes(
     N = eps_xx.size
 
     if coords is None:
-        coords_x = [grid_size[0] * np.arange(Nx + 1)]
-        coords_y = [grid_size[1] * np.arange(Ny + 1)]
+        coords_x = grid_size[0] * np.arange(Nx + 1)
+        coords_y = grid_size[1] * np.arange(Ny + 1)
         coords = [coords_x, coords_y]
     else:
         if coords[0].size != Nx + 1 or coords[1].size != Ny + 1:
@@ -195,20 +188,18 @@ def compute_modes(
     Ez = inv_eps_zz.dot((Dxb.dot(Hy) - Dyb.dot(Hx)))
 
     # Store all the information about the modes.
-    modes = []
-    for im in range(num_modes):
-        E = np.array(
-            [Ex[:, im].reshape(Nx, Ny), Ey[:, im].reshape(Nx, Ny), Ez[:, im].reshape(Nx, Ny)]
-        )
-        H = np.array(
-            [Hx[:, im].reshape(Nx, Ny), Hy[:, im].reshape(Nx, Ny), Hz[:, im].reshape(Nx, Ny)]
-        )
-        modes.append(Mode(E, H, neff[im], keff[im]))
 
-    if vals.size == 0:
-        raise RuntimeError("Could not find any eigenmodes for this waveguide")
+    def reshape(array):
+        return array.reshape(Nx, Ny, 1, num_modes)
 
-    return modes
+    (Ex, Ey, Ez, Hx, Hy, Hz) = tuple(map(reshape, (Ex, Ey, Ez, Hx, Hy, Hz)))
+
+    E = np.stack((Ex, Ey, Ez), axis=0)
+    H = np.stack((Hx, Hy, Hz), axis=0)
+
+    F = np.stack((E, H), axis=0)
+
+    return F, neff + 1j * keff
 
 
 def solver_eigs(A, num_modes, guess_value=1.0):

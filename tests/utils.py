@@ -29,7 +29,7 @@ def clear_tmp(fn):
 
 SIM_MONITORS = Simulation(
     size=(2.0, 2.0, 2.0),
-    grid_size=0.1,
+    grid_size=(0.1, 0.1, 0.1),
     monitors={
         "field_freq": FieldMonitor(
             size=(1, 1, 1), center=(0, 1, 0), sampler=FreqSampler(freqs=[1, 2, 5, 7, 8])

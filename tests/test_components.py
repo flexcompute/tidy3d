@@ -66,7 +66,7 @@ def _test_version():
 
     sim = Simulation(
         size=(1, 1, 1),
-        grid_size=0.1,
+        grid_size=(0.1, 0.1, 0.1),
     )
     path = "tests/tmp/simulation.json"
     sim.export("tests/tmp/simulation.json")
@@ -120,7 +120,6 @@ def test_sim_bounds():
 def test_sim_grid_size():
 
     size = (1, 1, 1)
-    s = Simulation(size=size, grid_size=1.0)
     s = Simulation(size=size, grid_size=(1.0, 1.0, 1.0))
     s = Simulation(size=size, grid_size=((1.0, 2.0), 1.0, 1.0))
     s = Simulation(size=size, grid_size=(1.0, (1.0, 2.0), 1.0))
@@ -167,7 +166,7 @@ def test_geometry_sizes():
         with pytest.raises(pydantic.ValidationError) as e_info:
             a = Box(size=size, center=(0, 0, 0))
         with pytest.raises(pydantic.ValidationError) as e_info:
-            s = Simulation(size=size, grid_size=1.0)
+            s = Simulation(size=size, grid_size=(1.0, 1.0, 1.0))
         with pytest.raises(pydantic.ValidationError) as e_info:
             s = Simulation(size=(1, 1, 1), grid_size=size)
 
