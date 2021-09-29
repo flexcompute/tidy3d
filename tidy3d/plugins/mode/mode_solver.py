@@ -1,5 +1,7 @@
 """ Turn Mode Specifications into Mode profiles """
 
+from typing import List
+
 import numpy as np
 from pydantic import BaseModel
 
@@ -10,7 +12,7 @@ from ...components import FieldData
 from ...components import FreqSampler, ModeMonitor
 from ...components import ModeSource, GaussianPulse
 from ...components import eps_complex_to_nk
-from ...components.validators import assert_plane
+from ...components.types import Direction
 
 from .solver import compute_modes
 
@@ -68,10 +70,11 @@ class ModeSolver:
         """gets information about the mode specification from mode solver"""
 
         eps_cross = np.squeeze(self.simulation.epsilon(self.plane, self.freq))
-        target_neff = np.mean(eps_complex_to_nk(eps_cross))
+        target_neff = np.max(eps_complex_to_nk(eps_cross)[0])
         plane_indices = [index for index in range(3) if self.plane.size[index] > 0.0]
         symmetries = [self.simulation.symmetry[i] for i in plane_indices]
         pml_layers = [self.simulation.pml_layers[i].num_layers for i in plane_indices]
+        pml_layers = (0, 0)  # note: just ignore simulation boundaries for now
 
         field, n_eff_complex = compute_modes(
             eps_cross=eps_cross,
@@ -79,7 +82,7 @@ class ModeSolver:
             grid_size=self.simulation.grid_size,
             pml_layers=pml_layers,
             num_modes=mode.mode_index + 1,
-            target_neff=target_neff,
+            target_neff=None,
             symmetries=symmetries,
             coords=None,
         )
@@ -111,16 +114,18 @@ class ModeSolver:
             k_eff=n_eff_complex.imag,
         )
 
-    def make_source(self, mode: Mode, fwidth: float) -> ModeSource:
-        """creates ModeMonitor from a Mode"""
+    def make_source(self, mode: Mode, fwidth: float, direction: Direction) -> ModeSource:
+        """creates ModeSource from a Mode + additional specs"""
         center = self.plane.center
         size = self.plane.size
         source_time = GaussianPulse(freq0=self.freq, fwidth=fwidth)
-        return ModeSource(center=center, size=size, source_time=source_time, modes=[mode])
+        return ModeSource(
+            center=center, size=size, source_time=source_time, mode=mode, direction=direction
+        )
 
-    def make_monitor(self, mode: Mode) -> ModeMonitor:
-        """creates ModeMonitor from a Mode"""
+    def make_monitor(self, mode: Mode, freqs: List[float]) -> ModeMonitor:
+        """creates ModeMonitor from a Mode + additional specs"""
         center = self.plane.center
         size = self.plane.size
-        sampler = FreqSampler(freqs=[self.freq])
+        sampler = FreqSampler(freqs=freqs)
         return ModeMonitor(center=center, size=size, sampler=sampler, modes=[mode])

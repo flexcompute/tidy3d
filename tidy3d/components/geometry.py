@@ -151,9 +151,9 @@ class Box(Geometry):
         x0, y0, z0 = self.center
         Lx, Ly, Lz = self.size
 
-        dist_x = x - x0
-        dist_y = y - y0
-        dist_z = z - z0
+        dist_x = np.abs(x - x0)
+        dist_y = np.abs(y - y0)
+        dist_z = np.abs(z - z0)
 
         return (dist_x < Lx / 2) * (dist_y < Ly / 2) * (dist_z < Lz / 2)
 
@@ -188,9 +188,9 @@ class Sphere(Geometry):
     def _is_inside(self, x, y, z) -> bool:
         """returns True if (x,y,z) is inside of geometry"""
         x0, y0, z0 = self.center
-        dist_x = x - x0
-        dist_y = y - y0
-        dist_z = z - z0
+        dist_x = np.abs(x - x0)
+        dist_y = np.abs(y - y0)
+        dist_z = np.abs(z - z0)
         return dist_x ** 2 + dist_y ** 2 + dist_z ** 2 <= self.radius ** 2
 
     def _get_crosssection_polygons(self, position: float, axis: Axis) -> List[Vertices]:
@@ -228,9 +228,9 @@ class Cylinder(Geometry):
         """returns True if (x,y,z) is inside of geometry"""
         z0, (x0, y0) = self._pop_axis(self.center, axis=self.axis)
         z, (x, y) = self._pop_axis((x, y, z), axis=self.axis)
-        dist_x = x - x0
-        dist_y = y - y0
-        dist_z = z - z0
+        dist_x = np.abs(x - x0)
+        dist_y = np.abs(y - y0)
+        dist_z = np.abs(z - z0)
         return (dist_z <= self.length) * (dist_x ** 2 + dist_y ** 2 <= self.radius ** 2)
 
     def _get_crosssection_polygons(self, position: float, axis: Axis) -> List[Vertices]:

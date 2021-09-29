@@ -134,9 +134,9 @@ class FieldData(MonitorData):
 
     def visualize(self):
         """make interactive plot"""
-        hv_ds = hv.Dataset(self.data.real.copy())
+        hv_ds = hv.Dataset(np.abs(self.data.copy()))
         image = hv_ds.to(hv.Image, kdims=["x", "y"], dynamic=True)
-        return image.options(cmap="RdBu", colorbar=True, aspect="equal")
+        return image.options(cmap="magma", colorbar=True, aspect="equal")
 
 
 class PermittivityData(MonitorData):
