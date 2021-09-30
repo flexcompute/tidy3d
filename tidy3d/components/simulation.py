@@ -1,9 +1,12 @@
+# pylint: disable=invalid-name
 """ Container holding all information about simulation and its components"""
 from typing import Dict, Tuple, List
 
 import pydantic
 import numpy as np
 import matplotlib.pylab as plt
+import matplotlib as mpl
+from matplotlib.cm import Set2 as mat_cmap  # pylint: disable=no-name-in-module
 
 from .types import GridSize, Symmetry, Axis, AxesSubplot
 from .geometry import Box
@@ -12,7 +15,7 @@ from .structure import Structure
 from .source import SourceType
 from .monitor import MonitorType
 from .pml import PMLLayer
-from .viz import VizParams
+from ..constants import inf
 
 # technically this is creating a circular import issue because it calls tidy3d/__init__.py
 # from .. import __version__ as version_number
@@ -61,14 +64,119 @@ class Simulation(Box):
             for name, geo_obj in geo_obj_dict.items():
                 assert self.intersects(geo_obj), f"object '{name}' is completely outside simulation"
 
+    """ Accounting """
+
+    @property
+    def medium_map(self):
+        """medium_map[medium] returns index of unique medium"""
+        mediums = {s.medium for s in self.structures}
+        return {m: i for i, m in enumerate(mediums)}
+
     """ Visualization """
 
-    def plot(self, position: float, axis: Axis, facecolor=None, ax=None) -> AxesSubplot:
-        """plot each of structures on plane"""
-        qual_cm = VizParams.qualatative_cmap
-        for i, structure in enumerate(self.structures):
-            facecolor = qual_cm(i % len(qual_cm.colors))
+    def plot(self, position: float, axis: Axis, ax: AxesSubplot = None) -> AxesSubplot:
+        """plot each of simulation's components on a plane"""
+
+        ax = self.plot_structures(position=position, axis=axis, ax=ax)
+        ax = self.plot_sources(position=position, axis=axis, ax=ax)
+        ax = self.plot_monitors(position=position, axis=axis, ax=ax)
+        ax = self.plot_pml(position=position, axis=axis, ax=ax)
+        ax = self.set_plot_bounds(axis=axis, ax=ax)
+        return ax
+
+    def plot_eps(
+        self, position: float, axis: Axis, frequency: float = None, ax: AxesSubplot = None
+    ) -> AxesSubplot:
+        """plot the permittivity of each of simulation's components on a plane"""
+
+        ax = self.plot_structures_eps(position=position, axis=axis, frequency=frequency, ax=ax)
+        ax = self.plot_sources(position=position, axis=axis, ax=ax)
+        ax = self.plot_monitors(position=position, axis=axis, ax=ax)
+        ax = self.plot_pml(position=position, axis=axis, ax=ax)
+        ax = self.set_plot_bounds(axis=axis, ax=ax)
+        return ax
+
+    def plot_structures(self, position: float, axis: Axis, ax: AxesSubplot = None) -> AxesSubplot:
+        """plots all of simulation's structures as materials"""
+        medium_map = self.medium_map
+        for structure in self.structures:
+            if not structure.geometry.intersects_plane(position=position, axis=axis):
+                continue
+            mat_index = medium_map[structure.medium]
+            facecolor = mat_cmap(mat_index % len(mat_cmap.colors))
             ax = structure.plot(position=position, axis=axis, facecolor=facecolor, ax=ax)
+        return ax
+
+    def plot_structures_eps(
+        self, position: float, axis: Axis, frequency: float = None, ax: AxesSubplot = None
+    ) -> AxesSubplot:
+        """plots all of simulation's structures as permittivity"""
+        max_eps = max([s.medium.eps_model(frequency).real for s in self.structures])
+        max_chi = max_eps - 1.0
+        for structure in self.structures:
+            if structure.geometry.intersects_plane(position=position, axis=axis):
+                eps = structure.medium.eps_model(frequency).real
+                chi = eps - 1.0
+                facecolor = str(1 - chi / max_chi)
+                ax = structure.plot(position=position, axis=axis, facecolor=facecolor, ax=ax)
+        norm = mpl.colors.Normalize(vmin=1, vmax=1 + max_chi)
+        plt.colorbar(
+            mpl.cm.ScalarMappable(norm=norm, cmap="gist_yarg"), ax=ax, label=r"$\epsilon_r$"
+        )
+        return ax
+
+    def plot_sources(self, position: float, axis: Axis, ax: AxesSubplot = None) -> AxesSubplot:
+        """plots each of simulation's sources on plane"""
+        for _, source in self.sources.items():
+            if source.intersects_plane(position=position, axis=axis):
+                ax = source.plot(position=position, axis=axis, ax=ax)
+        return ax
+
+    def plot_monitors(self, position: float, axis: Axis, ax: AxesSubplot = None) -> AxesSubplot:
+        """plots each of simulation's monitors on plane"""
+        for _, monitor in self.monitors.items():
+            if monitor.intersects_plane(position=position, axis=axis):
+                ax = monitor.plot(position=position, axis=axis, ax=ax)
+        return ax
+
+    def plot_pml(self, position: float, axis: Axis, ax: AxesSubplot = None) -> AxesSubplot:
+        """plots each of simulation's PML regions"""
+        for pml_axis, pml_layer in enumerate(self.pml_layers):
+            if pml_layer.num_layers == 0:
+                continue
+            pml_thickness = self.grid_size[pml_axis] * pml_layer.num_layers
+            pml_size = [inf, inf, inf]
+            pml_size[pml_axis] = pml_thickness
+            pml_offset_center = (self.size[pml_axis] + pml_thickness) / 2.0
+            for sign in (-1, 1):
+                pml_center = list(self.center)
+                pml_center[pml_axis] += sign * pml_offset_center
+                pml_box = Box(center=pml_center, size=pml_size)
+                if pml_box.intersects_plane(position=position, axis=axis):
+                    ax = pml_box.plot(
+                        position=position,
+                        axis=axis,
+                        ax=ax,
+                        facecolor="sandybrown",
+                        alpha=0.7,
+                        edgecolor="sandybrown",
+                    )
+        ax = self.set_plot_bounds(axis=axis, ax=ax)
+        return ax
+
+    def set_plot_bounds(self, axis: Axis, ax: AxesSubplot = None) -> AxesSubplot:
+        """plots the boundaries of the simulation and sets xy lims"""
+
+        _, ((xmin, ymin), (xmax, ymax)) = self._pop_bounds(axis=axis)
+
+        pml_thicknesses = [
+            dl * pml.num_layers for (dl, pml) in zip(self.grid_size, self.pml_layers)
+        ]
+
+        _, (pml_thick_x, pml_thick_y) = self._pop_axis(pml_thicknesses, axis=axis)
+
+        ax.set_xlim(xmin - pml_thick_x, xmax + pml_thick_x)
+        ax.set_ylim(ymin - pml_thick_y, ymax + pml_thick_y)
         return ax
 
     """ Discretization """

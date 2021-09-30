@@ -15,7 +15,7 @@ from .types import Coordinate2D, Vertices, AxesSubplot
 
 BOUND_EPS = 1e-3  # expand bounds by this much
 NUM_PTS_RADIUS = 20  # number of edges around circular shapes
-PLOT_BUFFER = 1.0  # add this around extents of .visualize()
+PLOT_BUFFER = 0.3  # add this around extents of .visualize()
 
 
 class Geometry(Tidy3dBaseModel, ABC):
@@ -59,12 +59,28 @@ class Geometry(Tidy3dBaseModel, ABC):
         # for intersection of bounds, both must be true
         return in_minus and in_plus
 
+    def intersects_plane(self, position: float, axis: Axis) -> bool:
+        """whether self intersects plane at `position` along normal `axis`"""
+        (zmin, zmax), _ = self._pop_bounds(axis=axis)
+        is_above_bottom = position >= zmin
+        is_below_top = position <= zmax
+        return is_above_bottom and is_below_top
+
     @staticmethod
     def _pop_axis(coord: Coordinate, axis: Axis) -> Tuple[float, Coordinate2D]:
         """separate axis coordinate from planar coordinate"""
         plane_vals = list(coord)
         axis_val = plane_vals.pop(axis)
         return axis_val, plane_vals
+
+    def _pop_bounds(
+        self, axis: Axis
+    ) -> Tuple[Tuple[float, float], Tuple[Tuple[float, float], Tuple[float, float]]]:
+        """returns min and max bounds in plane normal to `axis`"""
+        b_min, b_max = self.get_bounds()
+        zmin, (xmin, ymin) = self._pop_axis(b_min, axis=axis)
+        zmax, (xmax, ymax) = self._pop_axis(b_max, axis=axis)
+        return (zmin, zmax), ((xmin, ymin), (xmax, ymax))
 
     def _get_plot_labels(self, axis: Axis) -> Tuple[str, str]:
         """get x, y axis labels for cross section plots"""
@@ -73,33 +89,45 @@ class Geometry(Tidy3dBaseModel, ABC):
 
     def _get_plot_extents(self, axis: Axis) -> Tuple[float, float, float, float]:
         """get xmin, ymin, xmax, ymax extents for cross section plots"""
-        b_min, b_max = self.get_bounds()
-        _, (x_min, y_min) = self._pop_axis(b_min, axis=axis)
-        _, (x_max, y_max) = self._pop_axis(b_max, axis=axis)
+        _, ((xmin, ymin), (xmax, ymax)) = self._pop_bounds(axis=axis)
         extents = (
-            x_min - PLOT_BUFFER,
-            y_min - PLOT_BUFFER,
-            x_max + PLOT_BUFFER,
-            y_max + PLOT_BUFFER,
+            xmin - PLOT_BUFFER,
+            ymin - PLOT_BUFFER,
+            xmax + PLOT_BUFFER,
+            ymax + PLOT_BUFFER,
         )
         return extents
 
-    def plot(self, position: float, axis: Axis, facecolor=None, ax=None) -> AxesSubplot:
-        """plot the geometry on the plane"""
-
+    def _add_ax_labels_lims(self, axis: Axis, ax: AxesSubplot) -> AxesSubplot:
+        """sets the x,y labels based on axis and the extends based on self.bounds"""
         xlabel, ylabel = self._get_plot_labels(axis=axis)
         (xmin, ymin, xmax, ymax) = self._get_plot_extents(axis=axis)
-
-        vertices_list = self._get_crosssection_polygons(position, axis=axis)
-
-        for vertices in vertices_list:
-            patch = mpl.patches.Polygon(vertices)
-            patch.set_facecolor(facecolor)
-            ax.add_patch(patch)
         ax.set_xlim(xmin, xmax)
         ax.set_ylim(ymin, ymax)
         ax.set_xlabel(xlabel)
         ax.set_ylabel(ylabel)
+        return ax
+
+    def plot(  # pylint: disable=too-many-arguments
+        self,
+        position: float,
+        axis: Axis,
+        facecolor: str = None,
+        edgecolor: str = None,
+        fill: bool = True,
+        alpha: float = 1.0,
+        ax: AxesSubplot = None,
+    ) -> AxesSubplot:
+        """plot the geometry on the plane"""
+
+        vertices_list = self._get_crosssection_polygons(position, axis=axis)
+
+        for vertices in vertices_list:
+            patch = mpl.patches.Polygon(vertices, fill=fill, alpha=alpha)
+            patch.set_facecolor(facecolor)
+            patch.set_edgecolor(edgecolor)
+            ax.add_patch(patch)
+        ax = self._add_ax_labels_lims(axis=axis, ax=ax)
         return ax
 
     def visualize(self, axis: Axis):
@@ -169,6 +197,12 @@ class Box(Geometry):
             (x0 - Lx / 2, y0 + Ly / 2),
         ]
         return [rect_vertices]
+
+    @property
+    def geometry(self):
+        """return a `Box` representation of self
+        useful for subclasses of Box, eg. FieldMonitor.geometry -> Box"""
+        return Box(center=self.center, size=self.size)
 
 
 class Sphere(Geometry):
@@ -293,20 +327,20 @@ class PolySlab(Geometry):
         coord_max = [xmax, ymax]
 
         # insert the slab bounds at the specified `axis`
-        z_min, z_max = self.slab_bounds
-        coord_min.insert(self.axis, z_min)
-        coord_max.insert(self.axis, z_max)
+        zmin, zmax = self.slab_bounds
+        coord_min.insert(self.axis, zmin)
+        coord_max.insert(self.axis, zmax)
 
         return (tuple(coord_min), tuple(coord_max))
 
     def is_inside(self, x, y, z) -> bool:
         """returns True if (x,y,z) is inside of geometry"""
         z, (x, y) = self._pop_axis((x, y, z), axis=self.axis)
-        z_min, z_max = self.slab_bounds
+        zmin, zmax = self.slab_bounds
         path = mpl.path.Path(self.vertices)
         xy_points = np.stack((x, y), axis=1)
         in_polygon_xy = path.contains_points(xy_points)
-        return (z >= z_min) * (z <= z_max) * in_polygon_xy
+        return (z >= zmin) * (z <= zmax) * in_polygon_xy
 
     def _get_crosssection_polygons(self, position: float, axis: Axis) -> List[Vertices]:
         """returns list of polygon vertices that intersect with plane"""
@@ -317,15 +351,15 @@ class PolySlab(Geometry):
     def _get_crosssection_top(self, position: float) -> List[Vertices]:
         """get cross section when plane normal axis is slab axis"""
 
-        z_min, z_max = self.slab_bounds
-        if (z_min > position) or (z_max < position):
+        zmin, zmax = self.slab_bounds
+        if (zmin > position) or (zmax < position):
             return []
         return [self.vertices]
 
     def _get_crosssection_side(self, position: float, axis: Axis) -> List[Vertices]:
         """get cross section when plane normal axis is not slab axis"""
 
-        z_min, z_max = self.slab_bounds
+        zmin, zmax = self.slab_bounds
         iverts_b, iverts_f = self._find_intersecting_vertices(position, axis)
         ints_y = self._find_intersecting_ys(iverts_b, iverts_f, position)
 
@@ -334,7 +368,7 @@ class PolySlab(Geometry):
         for i in range(len(ints_y) // 2):
             y1 = ints_y[2 * i]
             y2 = ints_y[2 * i + 1]
-            poly = [(y1, z_min), (y2, z_min), (y2, z_max), (y1, z_max)]
+            poly = [(y1, zmin), (y2, zmin), (y2, zmax), (y1, zmax)]
 
             polys.append(np.array(poly))
 

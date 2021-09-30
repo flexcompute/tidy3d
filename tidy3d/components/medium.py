@@ -71,7 +71,9 @@ class Medium(AbstractMedium):
     conductivity: pydantic.confloat(ge=0.0) = 0.0
     type: Literal["Medium"] = "Medium"
 
-    def eps_model(self, frequency):
+    def eps_model(self, frequency: float = None):
+        if frequency is None:
+            return self.permittivity
         return eps_sigma_to_eps_complex(self.permittivity, self.conductivity, frequency)
 
     def __str__(self):
