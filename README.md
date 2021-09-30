@@ -140,12 +140,24 @@
 	- [x] Basic sliding window for cross section.
 	- [x] Structure cross section
 	- [x] Simulation epsilon discretization from structure polygons.
-	- [ ] **3 panel lumerical style plot `Simulation.visualize()`**
-	- [ ] Medium-aware structure / simulation plotting.
-	- [ ] Add Monitor / Source plotting
+	- [x] Medium-aware structure / simulation plotting.
+	- [x] Add Monitor / Source plotting
+	- [ ] Visualize symmetry in ``Simulation.plot``
 	- [ ] Add "plot" to all tidy3d objects.
+		- [ ] source time
+		- [ ] medium
+		- [ ] sampler
+		- [ ] separate plots for `structure.geometry.plot()`, `structure.medium.plot()`, and `structure.plot()` (both on two axes), change in ``simulation.plot()``		
+		- [ ] separate plots for `source.geometry.plot()`, `source.source_time.plot()`, and `source.plot()` (both on two axes), change in ``simulation.plot()``
+		- [ ] separate plots for `monitor.geometry.plot()`, `monitor.sampler.plot()`, and `monitor.plot()` (both on two axes), change in ``simulation.plot()``
 	- [ ] Overlay structures onto fields.
-	- [ ] `SimulationData.visualize` method
+	- [ ] add .plot method to `SimulationData`
+
+#### "Tidying" Up
+- [ ] Make Uniform Samplers separate classes (dont evaluate / store freqs, times)?
+- [ ] Fix MyPy warnings
+- [ ] 
+
 ---
 
 ### Stage 3: Refining
@@ -201,6 +213,7 @@ https://github.com/crusaderky/python_project_template
 ---
 ### After this'
 - [ ] Simple gui?  https://github.com/hoffstadt/DearPyGui
+- [ ] 3 panel lumerical style plot `Simulation.visualize()`
 - [ ] 3D structure plotting (matplotlib?)
 - [ ] S matrix plugin
 - [ ] Optimizer plugin
