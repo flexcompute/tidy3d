@@ -3,14 +3,16 @@ from typing import Dict, Tuple, List
 
 import pydantic
 import numpy as np
+import matplotlib.pylab as plt
 
-from .types import GridSize, Symmetry
+from .types import GridSize, Symmetry, Axis, AxesSubplot
 from .geometry import Box
 from .medium import Medium, MediumType
 from .structure import Structure
 from .source import SourceType
 from .monitor import MonitorType
 from .pml import PMLLayer
+from .viz import VizParams
 
 # technically this is creating a circular import issue because it calls tidy3d/__init__.py
 # from .. import __version__ as version_number
@@ -37,28 +39,39 @@ class Simulation(Box):
     # version: str = str(version_number)
 
     def __init__(self, **kwargs):
-        """initialize sim and then do more validations"""
+        """initialize sim and then do validations"""
         super().__init__(**kwargs)
-
         self._check_geo_objs_in_bounds()
         # to do:
         # - check sources in medium frequency range
         # - check PW in homogeneous medium
         # - check nonuniform grid covers the whole simulation domain
 
-    """ Post-Init validations """
+    """ Post-Init Validation """
 
     def _check_geo_objs_in_bounds(self):
         """for each geometry-containing object in simulation, make sure it intersects simulation"""
 
         for i, structure in enumerate(self.structures):
-            assert self.intersects(
-                structure.geometry
-            ), f"Structure '{structure}' (at position {i}) is completely outside simulation"
+            assert self.intersects(structure.geometry), (
+                f"Structure '{structure}' (at position {i}) " "is completely outside simulation"
+            )
 
         for geo_obj_dict in (self.sources, self.monitors):
             for name, geo_obj in geo_obj_dict.items():
                 assert self.intersects(geo_obj), f"object '{name}' is completely outside simulation"
+
+    """ Visualization """
+
+    def plot(self, position: float, axis: Axis, facecolor=None, ax=None) -> AxesSubplot:
+        """plot each of structures on plane"""
+        qual_cm = VizParams.qualatative_cmap
+        for i, structure in enumerate(self.structures):
+            facecolor = qual_cm(i % len(qual_cm.colors))
+            ax = structure.plot(position=position, axis=axis, facecolor=facecolor, ax=ax)
+        return ax
+
+    """ Discretization """
 
     def _discretize(self, box: Box):  # pylint: disable=too-many-locals
         """get x,y,z positions of box using self.grid_size"""

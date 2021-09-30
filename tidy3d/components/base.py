@@ -5,6 +5,9 @@ import yaml
 
 import pydantic
 
+from .viz import add_ax_if_none, make_aspect_equal
+from .types import AxesSubplot
+
 # default indentation (# spaces) in files
 INDENT = 4
 
@@ -20,11 +23,20 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         validate_assignment = True  # validate when attributes are set after initialization
         allow_population_by_field_name = True
 
+    def __init_subclass__(cls, **kwargs):
+        """add `add_ax_if_none` decorator to all subclass .plot methods"""
+        cls.plot = add_ax_if_none(cls.plot)
+        cls.plot = make_aspect_equal(cls.plot)
+
     def _json_string(self) -> str:
         """returns string representation of self"""
         return self.json(
             indent=INDENT
         )  # , exclude_unset=True) # if I exclude unset, it throws away info
+
+    def plot(self, *args, **kwargs) -> AxesSubplot:
+        """generic plotting function for tidy3d components, if ax=None, creates one"""
+        raise NotImplementedError(".plot() is not implemented for this object")
 
     def export(self, fname: str) -> None:
         """Exports Tidy3dBaseModel instance to .json file"""
@@ -51,52 +63,3 @@ class Tidy3dBaseModel(pydantic.BaseModel):
             json_dict = yaml.safe_load(yaml_in)
         json_raw = json.dumps(json_dict, indent=INDENT)
         return cls.parse_raw(json_raw)
-
-
-# # note: functions below are my attempt to automatically register subclasses distinct
-# def register_subclasses(fields: tuple):
-#     """attempt at a decorator factory"""
-#     field_map = {field.__name__: field for field in fields}
-#     def _register_subclasses(cls):
-#         """attempt at a decorator"""
-#         orig_init = cls.__init__
-#         class _class:
-#             class_name: str
-#             def __init__(self, **kwargs):
-#                 print(kwargs)
-#                 class_name = type(self).__name__
-#                 kwargs["class_name"] = class_name
-#                 print(kwargs)
-#                 orig_init(**kwargs)
-#             @classmethod
-#             def __get_validators__(cls):
-#                 yield cls.validate
-#             @classmethod
-#             def validate(cls, v):
-#                 if isinstance(v, dict):
-#                     class_name = v.get("class_name")
-#                     json_string = json.dumps(v)
-#                 else:
-#                     class_name = v.class_name
-#                     json_string = v.json()
-#                 cls_type = field_map[class_name]
-#                 return cls_type.parse_raw(json_string)
-#         return _class
-#     return _register_subclasses
-#
-# from typing import Literal
-# from pydantic.fields import ModelField
-# def make_subclass_distinct(cls):
-#     def tag_subclass(**kwargs):
-#         name = 'tag'
-#         value = cls.__name__
-#         annotation = Literal[value]
-#         tag_field = ModelField.infer(name=name,
-#           value=value,
-#            annotation=annotation,
-#           class_validators=None,
-#           config=cls.__config__)
-#         cls.__fields__[name] = tag_field
-#         cls.__annotations__[name] = annotation
-#     cls.__init_subclass__ = tag_subclass
-#     return cls
