@@ -10,7 +10,7 @@ ETA_0 = np.sqrt(MU_0 / EPSILON_0)  # vacuum impedance
 Q_e = 1.602176634e-19  # funamental charge
 HBAR = 6.582119569e-16  # reduced Planck constant [eV*s]
 
-inf = 1e20
+inf = 1e4
 
 dp_eps = np.finfo(np.float64).eps
 fp_eps = np.finfo(np.float32).eps

@@ -132,14 +132,18 @@
 - [ ] Support for Nonuniform Mesh
 - [ ] Handling symmetries properly
 - [ ] Handling client-side discretization properly.
+---
 
 #### Visualization
 - [ ] write all visuaization routines
 	- [x] MonitorData
 	- [x] Basic sliding window for cross section.
-	- [ ] **Structure cross section, sliding bar**
+	- [x] Structure cross section
+	- [x] Simulation epsilon discretization from structure polygons.
 	- [ ] **3 panel lumerical style plot `Simulation.visualize()`**
-	- [ ] **Simulation epsilon discretization from structure polygons.**
+	- [ ] Medium-aware structure / simulation plotting.
+	- [ ] Add Monitor / Source plotting
+	- [ ] Add "plot" to all tidy3d objects.
 	- [ ] Overlay structures onto fields.
 	- [ ] `SimulationData.visualize` method
 ---

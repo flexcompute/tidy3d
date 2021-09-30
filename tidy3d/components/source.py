@@ -7,18 +7,10 @@ import pydantic
 import numpy as np
 
 from .base import Tidy3dBaseModel
-from .types import Direction, Polarization
+from .types import Direction, Polarization, AxesSubplot, Axis
 from .validators import assert_plane
 from .geometry import Box
 from .mode import Mode
-
-# def dft(amp_time, time, freq):
-#     freq = np.array(freq)[None, :]
-#     time = np.array(time)
-#     amp_time = np.array(amp_time)
-#     phases = 2j * np.pi * freq * time
-#     spectrum = np.sum(amp_time * np.exp(phases), axis=0)
-#     return dt / np.sqrt(2 * np.pi) * spectrum
 
 
 class SourceTime(ABC, Tidy3dBaseModel):
@@ -81,6 +73,17 @@ class Source(Box, ABC):
     """Template for all sources, all have Box geometry"""
 
     source_time: SourceTimeType
+
+    def plot(self, position: float, axis: Axis, ax: AxesSubplot = None) -> AxesSubplot:
+        ax = self.geometry.plot(
+            position=position,
+            axis=axis,
+            alpha=0.7,
+            facecolor="blueviolet",
+            edgecolor="blueviolet",
+            ax=ax,
+        )
+        return ax
 
 
 class VolumeSource(Source):

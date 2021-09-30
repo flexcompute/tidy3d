@@ -12,6 +12,8 @@ class Structure(Tidy3dBaseModel):
     geometry: GeometryType
     medium: MediumType
 
-    def plot(self, position: float, axis: Axis, facecolor=None, ax=None) -> AxesSubplot:
+    def plot(  # pytest: disable=invalid-name
+        self, position: float, axis: Axis, facecolor=None, ax: AxesSubplot = None
+    ) -> AxesSubplot:
         """plot just plots self.geometry"""
-        return self.geometry.plot(ax=ax, position=position, facecolor=facecolor, axis=axis)
+        return self.geometry.plot(position=position, facecolor=facecolor, axis=axis, ax=ax)

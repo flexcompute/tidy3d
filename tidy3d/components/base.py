@@ -23,20 +23,21 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         validate_assignment = True  # validate when attributes are set after initialization
         allow_population_by_field_name = True
 
-    def __init_subclass__(cls, **kwargs):
-        """add `add_ax_if_none` decorator to all subclass .plot methods"""
+    def __init_subclass__(cls):
+        """add plot or other method decorators here so all method subclasses do the same thing"""
         cls.plot = add_ax_if_none(cls.plot)
         cls.plot = make_aspect_equal(cls.plot)
 
-    def _json_string(self) -> str:
-        """returns string representation of self"""
-        return self.json(
-            indent=INDENT
-        )  # , exclude_unset=True) # if I exclude unset, it throws away info
+    def __hash__(self):
+        """hash tidy3dBaseModel objects using their json strings"""
+        return hash(self.json())
 
-    def plot(self, *args, **kwargs) -> AxesSubplot:
-        """generic plotting function for tidy3d components, if ax=None, creates one"""
-        raise NotImplementedError(".plot() is not implemented for this object")
+    def plot(self, ax: AxesSubplot = None) -> AxesSubplot: # pylint: disable=invalid-name
+        """generic plotting function for tidy3d components."""
+
+    def _json_string(self, exclude_unset: bool = False) -> str:
+        """returns string representation of self"""
+        return self.json(indent=INDENT, exclude_unset=exclude_unset)
 
     def export(self, fname: str) -> None:
         """Exports Tidy3dBaseModel instance to .json file"""
