@@ -32,7 +32,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         """hash tidy3dBaseModel objects using their json strings"""
         return hash(self.json())
 
-    def plot(self, ax: AxesSubplot = None) -> AxesSubplot: # pylint: disable=invalid-name
+    def plot(self, ax: AxesSubplot = None) -> AxesSubplot:  # pylint: disable=invalid-name
         """generic plotting function for tidy3d components."""
 
     def _json_string(self, exclude_unset: bool = False) -> str:
