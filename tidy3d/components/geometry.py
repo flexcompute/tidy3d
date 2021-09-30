@@ -8,10 +8,10 @@ import pydantic
 import numpy as np
 import holoviews as hv
 import matplotlib as mpl
-import matplotlib.pylab as plt
 
 from .base import Tidy3dBaseModel
-from .types import Numpy, Bound, Size, Coordinate, Axis, Coordinate2D, Literal, Vertices
+from .types import Literal, Numpy, Bound, Size, Coordinate, Axis
+from .types import Coordinate2D, Vertices, AxesSubplot
 
 BOUND_EPS = 1e-3  # expand bounds by this much
 NUM_PTS_RADIUS = 20  # number of edges around circular shapes
@@ -84,7 +84,7 @@ class Geometry(Tidy3dBaseModel, ABC):
         )
         return extents
 
-    def plot(self, position: float, axis: Axis, ax=None):
+    def plot(self, position: float, axis: Axis, facecolor=None, ax=None) -> AxesSubplot:
         """plot the geometry on the plane"""
 
         xlabel, ylabel = self._get_plot_labels(axis=axis)
@@ -92,16 +92,15 @@ class Geometry(Tidy3dBaseModel, ABC):
 
         vertices_list = self._get_crosssection_polygons(position, axis=axis)
 
-        if ax is None:
-            figure, ax = plt.subplots(1, 1)
         for vertices in vertices_list:
             patch = mpl.patches.Polygon(vertices)
+            patch.set_facecolor(facecolor)
             ax.add_patch(patch)
         ax.set_xlim(xmin, xmax)
         ax.set_ylim(ymin, ymax)
         ax.set_xlabel(xlabel)
         ax.set_ylabel(ylabel)
-        return figure
+        return ax
 
     def visualize(self, axis: Axis):
         """make interactive plot"""

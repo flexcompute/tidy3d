@@ -10,7 +10,7 @@ except ImportError:
 
 import pydantic
 import numpy as np
-
+from matplotlib.axes._subplots import Axes
 
 # tuple containing three non-negative floats
 Size = Tuple[pydantic.NonNegativeFloat, pydantic.NonNegativeFloat, pydantic.NonNegativeFloat]
@@ -40,3 +40,5 @@ Direction = Literal["+", "-"]
 Numpy = np.ndarray
 
 Symmetry = Literal[0, -1, 1]
+
+AxesSubplot = Axes
