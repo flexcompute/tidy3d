@@ -187,6 +187,7 @@ https://github.com/crusaderky/python_project_template
 	- [ ] Releases, PyPI setup (.5 days)
 	- [ ] Wipe commit history
 	- [ ] decide how to manage branches
+	- [ ] Nice web api plotting / progressbars using `rich`
 ---
 
 #### Final
@@ -195,6 +196,7 @@ https://github.com/crusaderky/python_project_template
 
 ---
 ### After this'
+- [ ] Simple gui?  https://github.com/hoffstadt/DearPyGui
 - [ ] 3D structure plotting (matplotlib?)
 - [ ] S matrix plugin
 - [ ] Optimizer plugin
