@@ -38,9 +38,7 @@ overall_task = overall_progress.add_task("All Jobs", total=int(total))
 
 progress_table = Table.grid()
 progress_table.add_row(
-    Panel.fit(
-        overall_progress, title="Overall Progress", border_style="green", padding=(2, 2)
-    ),
+    Panel.fit(overall_progress, title="Overall Progress", border_style="green", padding=(2, 2)),
     Panel.fit(job_progress, title="[b]Jobs", border_style="red", padding=(1, 2)),
 )
 
