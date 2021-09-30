@@ -2,48 +2,6 @@
 
 This document explains the organization of the `tidy3d` package defined in this directory and some of the design decisions.
 
-📂 Tidy3D-client-revamp/tidy3d
-┣━━ 📂 components
-┃   ┣━━ 🐍 __init__.py (776 bytes)
-┃   ┣━━ 🐍 base.py (3.7 kB)
-┃   ┣━━ 🐍 data.py (10.5 kB)
-┃   ┣━━ 🐍 geometry.py (14.5 kB)
-┃   ┣━━ 🐍 medium.py (4.6 kB)
-┃   ┣━━ 🐍 mode.py (408 bytes)
-┃   ┣━━ 🐍 monitor.py (3.1 kB)
-┃   ┣━━ 🐍 pml.py (347 bytes)
-┃   ┣━━ 📄 README.md (10.2 kB)
-┃   ┣━━ 🐍 simulation.py (3.4 kB)
-┃   ┣━━ 🐍 source.py (4.1 kB)
-┃   ┣━━ 🐍 structure.py (312 bytes)
-┃   ┣━━ 🐍 types.py (1.1 kB)
-┃   ┗━━ 🐍 validators.py (420 bytes)
-┣━━ 📂 plugins
-┃   ┣━━ 📂 dispersion
-┃   ┃   ┣━━ 🐍 __init__.py (0 bytes)
-┃   ┃   ┗━━ 🐍 fit.py (11.2 kB)
-┃   ┣━━ 📂 mode
-┃   ┃   ┣━━ 🐍 __init__.py (135 bytes)
-┃   ┃   ┣━━ 🐍 derivatives.py (5.4 kB)
-┃   ┃   ┣━━ 📄 LICENSE (1.2 kB)
-┃   ┃   ┣━━ 🐍 mode_solver.py (5.6 kB)
-┃   ┃   ┗━━ 🐍 solver.py (7.4 kB)
-┃   ┣━━ 📂 optimize
-┃   ┃   ┗━━ 🐍 device_optimizer.py (347 bytes)
-┃   ┣━━ 📂 smatrix
-┃   ┃   ┗━━ 🐍 component_modeler.py (1.8 kB)
-┃   ┗━━ 🐍 __init__.py (152 bytes)
-┣━━ 📂 web
-┃   ┣━━ 🐍 __init__.py (173 bytes)
-┃   ┣━━ 🐍 container.py (5.2 kB)
-┃   ┣━━ 🐍 task.py (1.1 kB)
-┃   ┗━━ 🐍 webapi.py (6.0 kB)
-┣━━ 🐍 __init__.py (1.5 kB)
-┣━━ 🐍 constants.py (562 bytes)
-┣━━ 🐍 material_library.py (64.6 kB)
-┗━━ 📄 README.md (2.9 kB)
-
-
 ## Design Overview
 
 The principal goal of the `tidy3d` python client is define the parameters that are needed to run a simulation.
