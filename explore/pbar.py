@@ -6,7 +6,7 @@ from tests.utils import clear_dir
 from tests.utils import SIM_FULL as sim
 
 # sim = {f"sim_{i}": sim for i in range(10)}
-job = web.Job(simulation=sim, task_name='test')
+job = web.Job(simulation=sim, task_name="test")
 job.upload()
 job.get_info()
 job.run()
