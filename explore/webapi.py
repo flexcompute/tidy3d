@@ -54,6 +54,7 @@ def make_fake_info() -> TaskInfo:
         credits=100 * np.random.random(),
     )
 
+
 def make_fake_run_info(task_id: TaskId) -> RunInfo:
     """make fake run info"""
     # print(task_id)
@@ -61,6 +62,7 @@ def make_fake_run_info(task_id: TaskId) -> RunInfo:
         perc_done=100 * np.random.random(),
         field_decay=1 * np.random.random(),
     )
+
 
 # global variable maps TaskID -> Task
 TASKS = {}
@@ -171,6 +173,7 @@ def run(task_id: TaskId) -> None:
     task.info.status = TaskStatus.SUCCESS
     yield
 
+
 MONITOR_MESSAGE = {
     TaskStatus.INIT: "task hasnt been run, start with `web.run(task)`",
     TaskStatus.SUCCESS: "task finished succesfully, download with `web.download(task, path)`",
@@ -185,6 +188,7 @@ def monitor(task_id: TaskId) -> None:
     task = get_task_by_id(task_id)
     return task
 
+
 def download(task_id: TaskId, path: str) -> None:
     """download results of simulation run to client side"""
 
@@ -196,6 +200,7 @@ def download(task_id: TaskId, path: str) -> None:
 def _rm(path: str):
     if os.path.exists(path) and not os.path.isdir(path):
         os.remove(path)
+
 
 def delete(task_id: TaskId) -> None:
     """delete data associated with task_id from server"""

@@ -14,6 +14,7 @@ from ..components.simulation import Simulation
 from ..components.data import SimulationData
 from ..components.base import Tidy3dBaseModel
 
+
 class WebContainer(Tidy3dBaseModel, ABC):
     """base class for job and batch, technically not used"""
 
@@ -49,7 +50,7 @@ class Job(WebContainer):
         return run_info
 
     def get_status(self) -> TaskStatus:
-        """ gets current status """
+        """gets current status"""
         task = web.monitor(task_id=self.task_id)
         return task.info.status
 
@@ -87,7 +88,7 @@ class Job(WebContainer):
                 field_decay = run_info.field_decay
 
                 progress.update(task1, advance=perc_done_update)
-                progress.update(task2, advance=feld_decay_update)                        
+                progress.update(task2, advance=feld_decay_update)
 
         prev_status = TaskStatus.POST
 
@@ -95,7 +96,6 @@ class Job(WebContainer):
         prev_status = TaskStatus.SUCCESS
         time.sleep(1)
         console.log(f"status = {prev_status.value}")
-
 
     def download(self, path: str) -> None:
         """download results."""
@@ -165,7 +165,7 @@ class Batch(WebContainer):
                 while True:
                     task = job.monitor()
                     time.sleep(mon_frequency)
-                console.log(f"task '{task_name}' complete")                
+                console.log(f"task '{task_name}' complete")
 
     @staticmethod
     def _job_data_path(task_id: TaskId, path_dir: str):
