@@ -128,8 +128,8 @@
 ---
 
 #### Finishing Integration
-- [ ] Mode Sources / Monitors
-- [ ] Nonuniform Mesh
+- [ ] ModeSolver uses Permittivity Monitor for discretization / eps_cross.
+- [ ] Support for Nonuniform Mesh
 - [ ] Handling symmetries properly
 - [ ] Handling client-side discretization properly.
 
@@ -187,6 +187,7 @@ https://github.com/crusaderky/python_project_template
 	- [ ] Releases, PyPI setup (.5 days)
 	- [ ] Wipe commit history
 	- [ ] decide how to manage branches
+	- [ ] Nice web api plotting / progressbars using `rich`
 ---
 
 #### Final
@@ -195,11 +196,12 @@ https://github.com/crusaderky/python_project_template
 
 ---
 ### After this'
+- [ ] Simple gui?  https://github.com/hoffstadt/DearPyGui
 - [ ] 3D structure plotting (matplotlib?)
 - [ ] S matrix plugin
 - [ ] Optimizer plugin
-- [ ] Mode solver API using web
 - [ ] More advanced plotting
 - [ ] Angled sources
+- [ ] Angled Sidewalls
 - [ ] simple yaml editor? flask app
 - [ ] Output Simulation as blender file
