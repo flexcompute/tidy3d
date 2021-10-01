@@ -6,7 +6,7 @@ import pydantic
 import numpy as np
 
 from .base import Tidy3dBaseModel
-from .types import Literal
+from .types import Literal, Axis, AxesSubplot
 from .geometry import Box
 from .validators import assert_plane
 from .mode import Mode
@@ -78,12 +78,16 @@ SamplerType = Union[TimeSampler, FreqSampler]
 class Monitor(Box, ABC):
     """base class for monitors, which all have Box shape"""
 
-    # def plot(self, position: float, axis: Axis, ax=None) -> AxesSubplot:
-    #     ax = self.geometry.plot(
-    #         position=position, axis=axis, alpha=0.5, facecolor="crimson",
-    #         edgecolor="crimson", ax=ax
-    #     )
-    #     return ax
+    def plot(self, position: float, axis: Axis, ax: AxesSubplot = None) -> AxesSubplot:
+        ax = self.geometry.plot(
+            position=position,
+            axis=axis,
+            alpha=0.7,
+            facecolor="crimson",
+            edgecolor="crimson",
+            ax=ax,
+        )
+        return ax
 
 
 class FieldMonitor(Monitor):
