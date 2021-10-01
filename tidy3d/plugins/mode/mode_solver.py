@@ -9,7 +9,7 @@ from ...components import Box
 from ...components import Simulation
 from ...components import Mode
 from ...components import FieldData
-from ...components import FreqSampler, ModeMonitor
+from ...components import ModeMonitor
 from ...components import ModeSource, GaussianPulse
 from ...components import eps_complex_to_nk
 from ...components.types import Direction
@@ -118,12 +118,11 @@ class ModeSolver:
 
         field_data = FieldData(
             monitor_name="mode_solver_output",
-            sampler_label="f",
-            sampler_values=[self.freq],
             values=field_values[..., None],
             x=xs,
             y=ys,
             z=zs,
+            f=np.array([self.freq]),
         )
 
         return ModeInfo(
@@ -146,5 +145,4 @@ class ModeSolver:
         """creates ModeMonitor from a Mode + additional specs"""
         center = self.plane.center
         size = self.plane.size
-        sampler = FreqSampler(freqs=freqs)
-        return ModeMonitor(center=center, size=size, sampler=sampler, modes=[mode])
+        return ModeMonitor(center=center, size=size, freqs=freqs, modes=[mode])

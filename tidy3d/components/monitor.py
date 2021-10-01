@@ -1,107 +1,48 @@
 """ Objects that define how data is recorded from simulation """
-from abc import ABC, abstractmethod
+from abc import ABC
 from typing import List, Union
 
-import pydantic
 import numpy as np
 
-from .base import Tidy3dBaseModel
 from .types import Literal, Axis, AxesSubplot
 from .geometry import Box
 from .validators import assert_plane
 from .mode import Mode
 from .viz import add_ax_if_none, MonitorParams
 
-""" Convenience functions for creating uniformly spaced samplers """
+
+""" Samplers """
+
+FreqSampler = List[float]
+TimeSampler = List[int]
 
 
-def _uniform_arange(start, stop, step):
+def _uniform_arange(start: int, stop: int, step: int) -> TimeSampler:
     """uniform spacing from start to stop with spacing of step"""
     assert start <= stop, "start must not be greater than stop"
     return list(np.arange(start, stop, step))
 
 
-def _uniform_linspace(start, stop, num):
+def _uniform_linspace(start: float, stop: float, num: int) -> FreqSampler:
     """uniform spacing from start to stop with num elements"""
     assert start <= stop, "start must not be greater than stop"
     return list(np.linspace(start, stop, num))
 
 
-def uniform_time_sampler(t_start, t_stop, t_step=1):
+def uniform_time_sampler(t_start: int, t_stop: int, t_step: int = 1) -> TimeSampler:
     """create TimeSampler at evenly spaced time steps"""
     assert isinstance(t_start, int), "`t_start` must be integer for time sampler"
     assert isinstance(t_stop, int), "`t_stop` must be integer for time sampler"
     assert isinstance(t_step, int), "`t_step` must be integer for time sampler"
-
     times = _uniform_arange(t_start, t_stop, t_step)
-    return TimeSampler(times=times)
+    return times
 
 
-def uniform_freq_sampler(f_start, f_stop, num_freqs):
+def uniform_freq_sampler(f_start, f_stop, num_freqs) -> FreqSampler:
     """create FreqSampler at evenly spaced frequency points"""
     freqs = _uniform_linspace(f_start, f_stop, num_freqs)
-    return FreqSampler(freqs=freqs)
+    return freqs
 
-
-""" Samplers """
-
-
-class Sampler(Tidy3dBaseModel, ABC):
-    """specifies how the data is sampled as the simulation is run"""
-
-    @abstractmethod
-    @add_ax_if_none
-    def plot(self, ax: AxesSubplot = None) -> AxesSubplot:  # pylint: disable=invalid-name
-        """plot the sampler values"""
-
-
-class TimeSampler(Sampler):
-    """specifies at what time steps the data is measured"""
-
-    times: List[pydantic.NonNegativeInt]
-    _label: str = "t"
-
-    def plot(self, ax: AxesSubplot = None) -> AxesSubplot:  # pylint: disable=invalid-name
-        """plot the sampler values"""
-
-        time_steps = np.array(self.times)
-        ones = np.ones_like(time_steps)
-        ax.plot((time_steps, time_steps), (0 * ones, ones), color="black")
-        ax.scatter(time_steps, ones)
-        ax.set_xlabel("time (steps)")
-        ax.set_title("sampler times")
-        ax.set_aspect("auto")
-        return ax
-
-    def __len__(self):
-        return len(self.times)
-
-
-class FreqSampler(Sampler):
-    """specifies at what frequencies the data is measured using running DFT"""
-
-    freqs: List[pydantic.NonNegativeFloat]
-    _label: str = "f"
-
-    @add_ax_if_none
-    def plot(self, ax: AxesSubplot = None) -> AxesSubplot:  # pylint: disable=invalid-name
-        """plot the sampler values"""
-
-        freqs_thz = np.array(self.freqs) / 1e12
-        ones = np.ones_like(freqs_thz)
-        ax.plot((freqs_thz, freqs_thz), (0 * ones, ones), color="black")
-        ax.scatter(freqs_thz, ones)
-        ax.set_xlabel("frequency (THz)")
-        ax.set_title("sampler frequencies")
-        ax.set_aspect("auto")
-        return ax
-
-    def __len__(self):
-        return len(self.freqs)
-
-
-# samplers allowed to be used in monitors
-SamplerType = Union[TimeSampler, FreqSampler]
 
 """ Monitors """
 
@@ -119,37 +60,77 @@ class Monitor(Box, ABC):
         return ax
 
 
-class FieldMonitor(Monitor):
-    """stores E, H data on the monitor"""
+class FreqMonitor(Monitor, ABC):
+    """stores data in frequency domain"""
 
-    sampler: SamplerType
+    freqs: FreqSampler
+
+
+class TimeMonitor(Monitor, ABC):
+    """stores data in time domain"""
+
+    times: TimeSampler
+
+
+class AbstractFieldMonitor(Monitor, ABC):
+    """stores data as a function of x,y,z"""
+
+
+class AbstractFluxMonitor(Monitor, ABC):
+    """stores flux data through a surface"""
+
+    _plane_validator = assert_plane()
+
+
+""" usable """
+
+
+class FieldMonitor(FreqMonitor, AbstractFieldMonitor):
+    """stores EM fields as a function of frequency"""
+
     type: Literal["FieldMonitor"] = "FieldMonitor"
 
 
-class PermittivityMonitor(Monitor):
-    """stores permittivity data on the monitor"""
+class FieldTimeMonitor(TimeMonitor, AbstractFieldMonitor):
+    """stores EM fields as a function of time"""
 
-    sampler: FreqSampler
+    type: Literal["FieldTimeMonitor"] = "FieldTimeMonitor"
+
+
+class PermittivityMonitor(FreqMonitor, AbstractFieldMonitor):
+    """stores permittivity data as a function of frequency"""
+
     type: Literal["PermittivityMonitor"] = "PermittivityMonitor"
 
 
-class FluxMonitor(Monitor):
-    """Stores flux on a surface"""
+class FluxMonitor(FreqMonitor, AbstractFluxMonitor):
+    """Stores flux through a plane as a function of frequency"""
 
-    sampler: SamplerType
-    _plane_validator = assert_plane()
     type: Literal["ModeMonitor"] = "ModeMonitor"
 
 
-class ModeMonitor(Monitor):
-    """stores amplitudes associated with modes"""
+class FluxTimeMonitor(TimeMonitor, AbstractFluxMonitor):
+    """Stores flux through a plane as a function of time"""
 
-    sampler: FreqSampler
+    type: Literal["FluxTimeMonitor"] = "FluxTimeMonitor"
+
+
+class ModeMonitor(FreqMonitor):
+    """stores modal amplitudes associated with modes"""
+
     modes: List[Mode]
-    _plane_validator = assert_plane()
     type: Literal["ModeMonitor"] = "ModeMonitor"
 
+    _plane_validator = assert_plane()
 
-MonitorFields = (FieldMonitor, FluxMonitor, PermittivityMonitor, ModeMonitor)
+
+MonitorFields = (
+    FieldMonitor,
+    FieldTimeMonitor,
+    PermittivityMonitor,
+    FluxMonitor,
+    FluxTimeMonitor,
+    ModeMonitor,
+)
 MonitorType = Union[MonitorFields]
 # Monitor = register_subclasses(MonitorFields)(Monitor)

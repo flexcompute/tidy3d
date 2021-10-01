@@ -24,7 +24,6 @@ def test_simulation_load_export():
 @clear_tmp
 def test_simulation_preserve_types():
 
-    fs = FreqSampler(freqs=[1, 1, 1])
     st = GaussianPulse(freq0=1.0, fwidth=1.0)
 
     sim_all = Simulation(
@@ -54,10 +53,10 @@ def test_simulation_preserve_types():
             ),
         },
         monitors={
-            "field": FieldMonitor(size=(1, 1, 1), sampler=fs),
-            "eps": PermittivityMonitor(size=(1, 1, 1), sampler=fs),
-            "flux": FluxMonitor(size=(1, 0, 1), sampler=fs),
-            "mode": ModeMonitor(size=(1, 0, 1), sampler=fs, modes=[Mode(mode_index=1)]),
+            "field": FieldMonitor(size=(1, 1, 1), freqs=[1, 2, 3]),
+            "eps": PermittivityMonitor(size=(1, 1, 1), freqs=[1, 2, 3]),
+            "flux": FluxMonitor(size=(1, 0, 1), freqs=[1, 2, 3]),
+            "mode": ModeMonitor(size=(1, 0, 1), freqs=[1, 2, 3], modes=[Mode(mode_index=1)]),
         },
     )
 
