@@ -39,6 +39,7 @@ class PatchParams(BaseModel):
     alpha: Any = None
     edgecolor: Any = None
     facecolor: Any = None
+    fill: bool = True
 
 
 class PatchParamSwitcher(BaseModel):
@@ -49,7 +50,9 @@ class PatchParamSwitcher(BaseModel):
         default_plot_params = self.get_plot_params()
         default_plot_params_dict = default_plot_params.dict().copy()
         default_plot_params_dict.update(plot_params)
-        return default_plot_params_dict
+
+        # get rid of pairs with value of None as they will mess up plots down the line
+        return {key: val for key, val in default_plot_params_dict.items() if val is not None}
 
     @abstractmethod
     def get_plot_params(self) -> PatchParams:
@@ -128,3 +131,11 @@ class SymParams(PatchParamSwitcher):
         if self.sym_value == -1:
             return PatchParams(alpha=0.5, facecolor="lightgreen", edgecolor="lightgreen")
         return PatchParams()
+
+
+class SimDataGeoParams(PatchParamSwitcher):
+    """Patch plotting parameters for `td.Simulation.symmetry`"""
+
+    def get_plot_params(self) -> PatchParams:
+        """returns PatchParams based on attributes of self"""
+        return PatchParams(alpha=0.4, edgecolor="black")

@@ -88,21 +88,25 @@ class Geometry(Tidy3dBaseModel, ABC):
         _, (xlabel, ylabel) = self._pop_axis("xyz", axis=axis)
         return xlabel, ylabel
 
-    def _get_plot_extents(self, axis: Axis) -> Tuple[float, float, float, float]:
+    def _get_plot_extents(
+        self, axis: Axis, buffer: float = PLOT_BUFFER
+    ) -> Tuple[float, float, float, float]:
         """get xmin, ymin, xmax, ymax extents for cross section plots"""
         _, ((xmin, ymin), (xmax, ymax)) = self._pop_bounds(axis=axis)
         extents = (
-            xmin - PLOT_BUFFER,
-            ymin - PLOT_BUFFER,
-            xmax + PLOT_BUFFER,
-            ymax + PLOT_BUFFER,
+            xmin - buffer,
+            ymin - buffer,
+            xmax + buffer,
+            ymax + buffer,
         )
         return extents
 
-    def _add_ax_labels_lims(self, axis: Axis, ax: AxesSubplot) -> AxesSubplot:
+    def _add_ax_labels_lims(
+        self, axis: Axis, ax: AxesSubplot, buffer: float = PLOT_BUFFER
+    ) -> AxesSubplot:
         """sets the x,y labels based on axis and the extends based on self.bounds"""
         xlabel, ylabel = self._get_plot_labels(axis=axis)
-        (xmin, ymin, xmax, ymax) = self._get_plot_extents(axis=axis)
+        (xmin, ymin, xmax, ymax) = self._get_plot_extents(axis=axis, buffer=buffer)
         ax.set_xlim(xmin, xmax)
         ax.set_ylim(ymin, ymax)
         ax.set_xlabel(xlabel)
