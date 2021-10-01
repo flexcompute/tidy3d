@@ -10,7 +10,7 @@ from .types import Literal, Axis, AxesSubplot
 from .geometry import Box
 from .validators import assert_plane
 from .mode import Mode
-from .viz import add_ax_if_none, plot_params_mon
+from .viz import add_ax_if_none, MonitorParams
 
 """ Convenience functions for creating uniformly spaced samplers """
 
@@ -109,10 +109,11 @@ class Monitor(Box, ABC):
     """base class for monitors, which all have Box shape"""
 
     def plot(  # pylint: disable=invalid-name, arguments-differ
-        self, position: float, axis: Axis, ax: AxesSubplot = None
+        self, position: float, axis: Axis, ax: AxesSubplot = None, **plot_params: dict
     ) -> AxesSubplot:
         """plot monitor geometry"""
-        ax = self.geometry.plot(position=position, axis=axis, ax=ax, **plot_params_mon)
+        plot_params = MonitorParams().update_params(**plot_params)
+        ax = self.geometry.plot(position=position, axis=axis, ax=ax, **plot_params)
         return ax
 
 

@@ -155,6 +155,7 @@
 #### "Tidying" Up
 - [ ] Make Uniform Samplers separate classes (dont evaluate / store freqs, times)?
 - [ ] Fix MyPy warnings
+- [ ] Logging
 
 ---
 

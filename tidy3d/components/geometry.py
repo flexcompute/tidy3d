@@ -12,7 +12,7 @@ import matplotlib as mpl
 from .base import Tidy3dBaseModel
 from .types import Literal, Numpy, Bound, Size, Coordinate, Axis
 from .types import Coordinate2D, Vertices, AxesSubplot
-from .viz import add_ax_if_none
+from .viz import add_ax_if_none, GeoParams
 
 BOUND_EPS = 1e-3  # expand bounds by this much
 NUM_PTS_RADIUS = 20  # number of edges around circular shapes
@@ -118,10 +118,11 @@ class Geometry(Tidy3dBaseModel, ABC):
         **plot_params: dict,
     ) -> AxesSubplot:
         """plot the geometry on the plane"""
+        plot_params_new = GeoParams().update_params(**plot_params)
 
         vertices_list = self._get_crosssection_polygons(position, axis=axis)
         for vertices in vertices_list:
-            patch = mpl.patches.Polygon(vertices, **plot_params)
+            patch = mpl.patches.Polygon(vertices, **plot_params_new)
             ax.add_patch(patch)
         ax = self._add_ax_labels_lims(axis=axis, ax=ax)
         ax.set_aspect("equal")

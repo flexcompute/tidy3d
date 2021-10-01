@@ -22,7 +22,7 @@ notebook_filenames = [
 ]
 
 # if you want to run only some notebooks, put here, if empty, run all
-run_only = ("Fitting", "ModeSolver", "StartHere", "VizData", "VizGeometry")
+run_only = ("StartHere", "VizData", "VizSimulation", "Fitting", "ModeSolver", "Near2Far")
 if len(run_only):
     notebook_filenames = [notebook_directory + base + ".ipynb" for base in run_only]
 

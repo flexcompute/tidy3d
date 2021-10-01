@@ -7,10 +7,13 @@ import xarray as xr
 import numpy as np
 import holoviews as hv
 import h5py
+import matplotlib.pylab as plt
 
 from .simulation import Simulation
 from .monitor import FluxMonitor, FieldMonitor, ModeMonitor, PermittivityMonitor
 from .base import Tidy3dBaseModel
+from .types import AxesSubplot, Axis
+from .viz import add_ax_if_none
 
 
 class Tidy3dData(Tidy3dBaseModel):
@@ -43,6 +46,10 @@ class MonitorData(Tidy3dData, ABC):
         """check equality against another MonitorData instance"""
         assert isinstance(other, MonitorData), "can only check eqality on two monitor data objects"
         return np.all(self.values == self.values)
+
+    # @abstractmethod
+    # def plot(self) -> AxesSubplot:
+    #     """ make static plot"""
 
     @abstractmethod
     def visualize(self) -> None:
@@ -131,6 +138,24 @@ class FieldData(MonitorData):
             self.sampler_label: self.sampler_values,
         }
         return xr.DataArray(self.values, coords=coords, name=self.monitor_name)
+
+    @add_ax_if_none
+    def plot(
+        self,
+        field_component: str,
+        sampler_value: float,
+        position: float,
+        axis: Axis,
+        ax: AxesSubplot = None,
+    ) -> AxesSubplot:
+        """make plot of field data along plane"""
+        field, component = field_component
+        field_data = self.data.sel(field=field, component=component)
+        interp_kwargs = {"xyz"[axis]: position, self.sampler_label: sampler_value}
+        data_plane = field_data.interp(**interp_kwargs)
+        data_plane.real.plot.imshow(ax=ax)
+        ax = plt.gca()
+        return ax
 
     def visualize(self):
         """make interactive plot"""

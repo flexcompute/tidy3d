@@ -11,7 +11,7 @@ from .types import Direction, Polarization, Axis, AxesSubplot, ArrayLike
 from .validators import assert_plane
 from .geometry import Box
 from .mode import Mode
-from .viz import add_ax_if_none, plot_params_src
+from .viz import add_ax_if_none, SourceParams
 
 
 class SourceTime(ABC, Tidy3dBaseModel):
@@ -47,7 +47,7 @@ class Pulse(SourceTime, ABC):
     """Source ramps up and oscillates with freq0"""
 
     freq0: pydantic.PositiveFloat
-    fwidth: pydantic.PositiveFloat
+    fwidth: pydantic.PositiveFloat  # currently standard deviation
     offset: pydantic.confloat(ge=2.5) = 5.0
 
 
@@ -96,11 +96,11 @@ class Source(Box, ABC):
     source_time: SourceTimeType
 
     def plot(  # pylint: disable=invalid-name, arguments-differ
-        self, position: float, axis: Axis, ax: AxesSubplot = None
+        self, position: float, axis: Axis, ax: AxesSubplot = None, **plot_params: dict
     ) -> AxesSubplot:
         """plot source geometry"""
-
-        ax = self.geometry.plot(position=position, axis=axis, ax=ax, **plot_params_src)
+        plot_params = SourceParams().update_params(**plot_params)
+        ax = self.geometry.plot(position=position, axis=axis, ax=ax, **plot_params)
         return ax
 
 
