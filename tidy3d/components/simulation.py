@@ -133,12 +133,9 @@ class Simulation(Box):
         """plots each of simulation's sources on plane"""
         for _, source in self.sources.items():
             if source.intersects_plane(position=position, axis=axis):
-                ax = source.geometry.plot(
+                ax = source.plot(
                     position=position,
                     axis=axis,
-                    alpha=0.7,
-                    facecolor="blueviolet",
-                    edgecolor="blueviolet",
                     ax=ax,
                 )
         return ax
@@ -147,12 +144,9 @@ class Simulation(Box):
         """plots each of simulation's monitors on plane"""
         for _, monitor in self.monitors.items():
             if monitor.intersects_plane(position=position, axis=axis):
-                ax = monitor.geometry.plot(
+                ax = monitor.plot(
                     position=position,
                     axis=axis,
-                    alpha=0.5,
-                    facecolor="crimson",
-                    edgecolor="crimson",
                     ax=ax,
                 )
         return ax
