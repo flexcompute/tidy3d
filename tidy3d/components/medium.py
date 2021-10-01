@@ -2,49 +2,15 @@
 """ Defines properties of the medium / materials """
 
 from abc import ABC, abstractmethod
-from typing import List, Tuple, Optional, Union
+from typing import List, Tuple, Union
 import pydantic
 import numpy as np
 
 from .base import Tidy3dBaseModel
-from .types import PoleAndResidue, Literal, AxesSubplot
+from .types import PoleAndResidue, Literal, AxesSubplot, ArrayLike
+from .viz import add_ax_if_none
+
 from ..constants import C_0, inf
-
-""" conversion helpers """
-
-
-def nk_to_eps_complex(n, k=0.0):
-    """convert n, k to complex permittivity"""
-    eps_real = n ** 2 - k ** 2
-    eps_imag = 2 * n * k
-    return eps_real + 1j * eps_imag
-
-
-def eps_complex_to_nk(eps_c):
-    """convert complex permittivity to n, k"""
-    ref_index = np.sqrt(eps_c)
-    return ref_index.real, ref_index.imag
-
-
-def nk_to_eps_sigma(n, k, freq):
-    """convert n, k at freq to permittivity and conductivity"""
-    eps_complex = nk_to_eps_complex(n, k)
-    eps_real, eps_imag = eps_complex.real, eps_complex.imag
-    omega = 2 * np.pi * freq
-    sigma = omega * eps_imag
-    return eps_real, sigma
-
-
-def nk_to_medium(n, k, freq):
-    """convert n, k at freq to Medium"""
-    eps, sigma = nk_to_eps_sigma(n, k, freq)
-    return Medium(permittivity=eps, conductivity=sigma)
-
-
-def eps_sigma_to_eps_complex(eps_real, sigma, freq):
-    """convert permittivity and conductivity to complex permittivity at freq"""
-    omega = 2 * np.pi * freq
-    return eps_real + 1j * sigma / omega
 
 
 """ Medium Definitions """
@@ -53,21 +19,26 @@ def eps_sigma_to_eps_complex(eps_real, sigma, freq):
 class AbstractMedium(ABC, Tidy3dBaseModel):
     """A medium within which electromagnetic waves propagate"""
 
-    # frequencies within which the medium is valid
-    frequency_range: Optional[Tuple[float, float]] = (-inf, inf)
+    frequency_range: Tuple[float, float] = (-inf, inf)
 
     @abstractmethod
     def eps_model(self, frequency: float) -> complex:
         """complex permittivity as a function of frequency"""
 
-    def plot(self, freqs: List[float], ax=None) -> AxesSubplot:
+    @add_ax_if_none
+    def plot(
+        self, freqs: ArrayLike, ax: AxesSubplot = None
+    ) -> AxesSubplot:  # pylint: disable=invalid-name
+        """plot n, k of medium as a function of frequencies"""
         freqs = np.array(freqs)
         eps_complex = self.eps_model(freqs)
         n, k = eps_complex_to_nk(eps_complex)
 
-        ax.plot(freqs, n, label="n")
-        ax.plot(freqs, k, label="k")
-        ax.set_xlabel("frequency (Hz)")
+        freqs_thz = freqs / 1e12
+        ax.plot(freqs_thz, n, label="n")
+        ax.plot(freqs_thz, k, label="k")
+        ax.set_xlabel("frequency (THz)")
+        ax.set_title("medium dispersion")
         ax.legend()
         ax.set_aspect("auto")
         return ax
@@ -83,12 +54,12 @@ class Medium(AbstractMedium):
     conductivity: pydantic.confloat(ge=0.0) = 0.0
     type: Literal["Medium"] = "Medium"
 
-    def eps_model(self, frequency: float = None):
-        if frequency is None:
-            return self.permittivity
+    def eps_model(self, frequency: float) -> complex:
+        """complex permittivity as a function of frequency"""
         return eps_sigma_to_eps_complex(self.permittivity, self.conductivity, frequency)
 
-    def __str__(self):
+    def __str__(self) -> str:
+        """string representation"""
         return (
             f"td.Medium("
             f"permittivity={self.permittivity},"
@@ -111,7 +82,8 @@ class PoleResidue(DispersiveMedium):
     poles: List[PoleAndResidue]
     type: Literal["PoleResidue"] = "PoleResidue"
 
-    def eps_model(self, frequency):
+    def eps_model(self, frequency: float) -> complex:
+        """complex permittivity as a function of frequency"""
         omega = 2 * np.pi * frequency
         eps = self.eps_inf + 0.0j
         for p in self.poles:
@@ -125,6 +97,7 @@ class PoleResidue(DispersiveMedium):
         return eps
 
     def __str__(self):
+        """string representation"""
         return (
             f"td.PoleResidue("
             f"\n\tpoles={self.poles}, "
@@ -138,7 +111,8 @@ class Sellmeier(DispersiveMedium):
     coeffs: List[Tuple[float, float]]
     type: Literal["Sellmeier"] = "Sellmeier"
 
-    def _n_model(self, frequency):
+    def _n_model(self, frequency: float) -> complex:
+        """complex refractive index as a function of frequency"""
         wvl = C_0 / frequency
         wvl2 = wvl ** 2
         n_squared = 1.0
@@ -146,7 +120,8 @@ class Sellmeier(DispersiveMedium):
             n_squared += B * wvl2 / (wvl2 - C)
         return np.sqrt(n_squared)
 
-    def eps_model(self, frequency):
+    def eps_model(self, frequency: float) -> complex:
+        """complex permittivity as a function of frequency"""
         n = self._n_model(frequency)
         return nk_to_eps_complex(n)
 
@@ -158,7 +133,8 @@ class Lorentz(DispersiveMedium):
     coeffs: List[Tuple[float, float, float]]
     type: Literal["Lorentz"] = "Lorentz"
 
-    def eps_model(self, frequency):
+    def eps_model(self, frequency: float) -> complex:
+        """complex permittivity as a function of frequency"""
         eps = self.eps_inf + 0.0j
         for (de, f, delta) in self.coeffs:
             eps += (de * f ** 2) / (f ** 2 + 2j * f * delta - frequency ** 2)
@@ -172,7 +148,8 @@ class Debye(DispersiveMedium):
     coeffs: List[Tuple[float, float]]
     type: Literal["Debye"] = "Debye"
 
-    def eps_model(self, frequency):
+    def eps_model(self, frequency: float) -> complex:
+        """complex permittivity as a function of frequency"""
         eps = self.eps_inf + 0.0j
         for (de, tau) in self.coeffs:
             eps += de / (1 + 1j * frequency * tau)
@@ -180,3 +157,39 @@ class Debye(DispersiveMedium):
 
 
 MediumType = Union[Medium, PoleResidue, Sellmeier, Lorentz, Debye]
+
+""" conversion helpers """
+
+
+def nk_to_eps_complex(n: float, k: float = 0.0) -> complex:
+    """convert n, k to complex permittivity"""
+    eps_real = n ** 2 - k ** 2
+    eps_imag = 2 * n * k
+    return eps_real + 1j * eps_imag
+
+
+def eps_complex_to_nk(eps_c: complex) -> Tuple[float, float]:
+    """convert complex permittivity to n, k"""
+    ref_index = np.sqrt(eps_c)
+    return ref_index.real, ref_index.imag
+
+
+def nk_to_eps_sigma(n: float, k: float, freq: float) -> Tuple[float, float]:
+    """convert n, k at freq to permittivity and conductivity"""
+    eps_complex = nk_to_eps_complex(n, k)
+    eps_real, eps_imag = eps_complex.real, eps_complex.imag
+    omega = 2 * np.pi * freq
+    sigma = omega * eps_imag
+    return eps_real, sigma
+
+
+def nk_to_medium(n: float, k: float, freq: float) -> Medium:
+    """convert n, k at freq to Medium"""
+    eps, sigma = nk_to_eps_sigma(n, k, freq)
+    return Medium(permittivity=eps, conductivity=sigma)
+
+
+def eps_sigma_to_eps_complex(eps_real: float, sigma: float, freq: float) -> complex:
+    """convert permittivity and conductivity to complex permittivity at freq"""
+    omega = 2 * np.pi * freq
+    return eps_real + 1j * sigma / omega

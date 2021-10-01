@@ -6,7 +6,6 @@ import pydantic
 import numpy as np
 import matplotlib.pylab as plt
 import matplotlib as mpl
-from matplotlib.cm import Set2 as mat_cmap  # pylint: disable=no-name-in-module
 
 from .types import GridSize, Symmetry, Axis, AxesSubplot
 from .geometry import Box
@@ -15,6 +14,8 @@ from .structure import Structure
 from .source import SourceType
 from .monitor import MonitorType
 from .pml import PMLLayer
+from .viz import plot_params_geo_eps, plot_params_geo_med, plot_params_pml, plot_params_sym
+
 from ..constants import inf
 
 # technically this is creating a circular import issue because it calls tidy3d/__init__.py
@@ -74,7 +75,9 @@ class Simulation(Box):
 
     """ Visualization """
 
-    def plot(self, position: float, axis: Axis, ax: AxesSubplot = None) -> AxesSubplot:
+    def plot(  # pylint: disable=arguments-differ
+        self, position: float, axis: Axis, ax: AxesSubplot = None
+    ) -> AxesSubplot:
         """plot each of simulation's components on a plane"""
 
         ax = self.plot_structures(position=position, axis=axis, ax=ax)
@@ -102,31 +105,29 @@ class Simulation(Box):
         """plots all of simulation's structures as materials"""
         medium_map = self.medium_map
         for structure in self.structures:
-            if not structure.geometry.intersects_plane(position=position, axis=axis):
-                continue
-            mat_index = medium_map[structure.medium]
-            facecolor = mat_cmap(mat_index % len(mat_cmap.colors))
-            ax = structure.geometry.plot(position=position, axis=axis, facecolor=facecolor, ax=ax)
+            if structure.geometry.intersects_plane(position=position, axis=axis):
+                plot_params = plot_params_geo_med(medium=structure.medium, medium_map=medium_map)
+                ax = structure.geometry.plot(position=position, axis=axis, ax=ax, **plot_params)
+        ax = self.set_plot_bounds(axis=axis, ax=ax)
         return ax
 
     def plot_structures_eps(
         self, position: float, axis: Axis, frequency: float = None, ax: AxesSubplot = None
     ) -> AxesSubplot:
         """plots all of simulation's structures as permittivity"""
-        max_eps = max([s.medium.eps_model(frequency).real for s in self.structures])
-        max_chi = max_eps - 1.0
+        if frequency is None:
+            frequency = inf
+        eps_max = max([s.medium.eps_model(frequency).real for s in self.structures])
         for structure in self.structures:
             if structure.geometry.intersects_plane(position=position, axis=axis):
                 eps = structure.medium.eps_model(frequency).real
-                chi = eps - 1.0
-                facecolor = str(1 - chi / max_chi)
-                ax = structure.geometry.plot(
-                    position=position, axis=axis, facecolor=facecolor, ax=ax
-                )
-        norm = mpl.colors.Normalize(vmin=1, vmax=1 + max_chi)
+                plot_params = plot_params_geo_eps(eps=eps, eps_max=eps_max)
+                ax = structure.geometry.plot(position=position, axis=axis, ax=ax, **plot_params)
+        norm = mpl.colors.Normalize(vmin=1, vmax=eps_max)
         plt.colorbar(
             mpl.cm.ScalarMappable(norm=norm, cmap="gist_yarg"), ax=ax, label=r"$\epsilon_r$"
         )
+        ax = self.set_plot_bounds(axis=axis, ax=ax)
         return ax
 
     def plot_sources(self, position: float, axis: Axis, ax: AxesSubplot = None) -> AxesSubplot:
@@ -138,6 +139,7 @@ class Simulation(Box):
                     axis=axis,
                     ax=ax,
                 )
+        ax = self.set_plot_bounds(axis=axis, ax=ax)
         return ax
 
     def plot_monitors(self, position: float, axis: Axis, ax: AxesSubplot = None) -> AxesSubplot:
@@ -149,6 +151,7 @@ class Simulation(Box):
                     axis=axis,
                     ax=ax,
                 )
+        ax = self.set_plot_bounds(axis=axis, ax=ax)
         return ax
 
     def plot_symmetries(self, position: float, axis: Axis, ax: AxesSubplot = None) -> AxesSubplot:
@@ -156,21 +159,15 @@ class Simulation(Box):
         for sym_axis, sym_value in enumerate(self.symmetry):
             if sym_value == 0:
                 continue
-            color = "lightgreen" if sym_value == 1 else "lightsteelblue"
             sym_size = [inf, inf, inf]
             sym_size[sym_axis] = inf / 2
             sym_center = list(self.center)
             sym_center[sym_axis] += sym_size[sym_axis] / 2
             sym_box = Box(center=sym_center, size=sym_size)
+            plot_params = plot_params_sym(sym_value)
             if sym_box.intersects_plane(position=position, axis=axis):
-                ax = sym_box.plot(
-                    position=position,
-                    axis=axis,
-                    ax=ax,
-                    facecolor=color,
-                    alpha=0.5,
-                    edgecolor=color,
-                )
+                ax = sym_box.plot(position=position, axis=axis, ax=ax, **plot_params)
+        ax = self.set_plot_bounds(axis=axis, ax=ax)
         ax = self.set_plot_bounds(axis=axis, ax=ax)
         return ax
 
@@ -188,19 +185,12 @@ class Simulation(Box):
                 pml_center[pml_axis] += sign * pml_offset_center
                 pml_box = Box(center=pml_center, size=pml_size)
                 if pml_box.intersects_plane(position=position, axis=axis):
-                    ax = pml_box.plot(
-                        position=position,
-                        axis=axis,
-                        ax=ax,
-                        facecolor="sandybrown",
-                        alpha=0.7,
-                        edgecolor="sandybrown",
-                    )
+                    ax = pml_box.plot(position=position, axis=axis, ax=ax, **plot_params_pml)
         ax = self.set_plot_bounds(axis=axis, ax=ax)
         return ax
 
-    def set_plot_bounds(self, axis: Axis, ax: AxesSubplot = None) -> AxesSubplot:
-        """plots the boundaries of the simulation and sets xy lims"""
+    def set_plot_bounds(self, axis: Axis, ax: AxesSubplot) -> AxesSubplot:
+        """sets the xy limits of the simulation, useful after plotting"""
 
         _, ((xmin, ymin), (xmax, ymax)) = self._pop_bounds(axis=axis)
 

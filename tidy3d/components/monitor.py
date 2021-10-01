@@ -1,5 +1,5 @@
 """ Objects that define how data is recorded from simulation """
-from abc import ABC
+from abc import ABC, abstractmethod
 from typing import List, Union
 
 import pydantic
@@ -10,6 +10,7 @@ from .types import Literal, Axis, AxesSubplot
 from .geometry import Box
 from .validators import assert_plane
 from .mode import Mode
+from .viz import add_ax_if_none, plot_params_mon
 
 """ Convenience functions for creating uniformly spaced samplers """
 
@@ -48,12 +49,29 @@ def uniform_freq_sampler(f_start, f_stop, num_freqs):
 class Sampler(Tidy3dBaseModel, ABC):
     """specifies how the data is sampled as the simulation is run"""
 
+    @abstractmethod
+    @add_ax_if_none
+    def plot(self, ax: AxesSubplot = None) -> AxesSubplot:  # pylint: disable=invalid-name
+        """plot the sampler values"""
+
 
 class TimeSampler(Sampler):
     """specifies at what time steps the data is measured"""
 
     times: List[pydantic.NonNegativeInt]
     _label: str = "t"
+
+    def plot(self, ax: AxesSubplot = None) -> AxesSubplot:  # pylint: disable=invalid-name
+        """plot the sampler values"""
+
+        time_steps = np.array(self.times)
+        ones = np.ones_like(time_steps)
+        ax.plot((time_steps, time_steps), (0 * ones, ones), color="black")
+        ax.scatter(time_steps, ones)
+        ax.set_xlabel("time (steps)")
+        ax.set_title("sampler times")
+        ax.set_aspect("auto")
+        return ax
 
     def __len__(self):
         return len(self.times)
@@ -64,6 +82,18 @@ class FreqSampler(Sampler):
 
     freqs: List[pydantic.NonNegativeFloat]
     _label: str = "f"
+
+    def plot(self, ax: AxesSubplot = None) -> AxesSubplot:  # pylint: disable=invalid-name
+        """plot the sampler values"""
+
+        freqs_thz = np.array(self.freqs) / 1e12
+        ones = np.ones_like(freqs_thz)
+        ax.plot((freqs_thz, freqs_thz), (0 * ones, ones), color="black")
+        ax.scatter(freqs_thz, ones)
+        ax.set_xlabel("frequency (THz)")
+        ax.set_title("sampler frequencies")
+        ax.set_aspect("auto")
+        return ax
 
     def __len__(self):
         return len(self.freqs)
@@ -78,15 +108,11 @@ SamplerType = Union[TimeSampler, FreqSampler]
 class Monitor(Box, ABC):
     """base class for monitors, which all have Box shape"""
 
-    def plot(self, position: float, axis: Axis, ax: AxesSubplot = None) -> AxesSubplot:
-        ax = self.geometry.plot(
-            position=position,
-            axis=axis,
-            alpha=0.7,
-            facecolor="crimson",
-            edgecolor="crimson",
-            ax=ax,
-        )
+    def plot(  # pylint: disable=invalid-name, arguments-differ
+        self, position: float, axis: Axis, ax: AxesSubplot = None
+    ) -> AxesSubplot:
+        """plot monitor geometry"""
+        ax = self.geometry.plot(position=position, axis=axis, ax=ax, **plot_params_mon)
         return ax
 
 

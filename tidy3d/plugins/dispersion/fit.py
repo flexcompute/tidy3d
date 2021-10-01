@@ -9,6 +9,8 @@ import matplotlib.pylab as plt
 
 from ...components import PoleResidue, nk_to_eps_complex, eps_complex_to_nk
 from ...constants import C_0, HBAR
+from ...components.viz import add_ax_if_none
+from ...components.types import AxesSubplot
 
 
 def _unpack_complex(complex_num):
@@ -235,12 +237,13 @@ class DispersionFitter:
         medium = self._make_medium(coeffs)
         return medium, rms_error
 
-    def plot(
+    @add_ax_if_none
+    def plot(  # pylint: disable=invalid-name
         self,
         medium: PoleResidue = None,
         wvl_um: np.ndarray = None,
-        axis=None,
-    ):
+        ax: AxesSubplot = None,
+    ) -> AxesSubplot:
         """Make plot of model vs data, at a set of wavelengths (if supplied).
 
         Parameters
@@ -250,7 +253,7 @@ class DispersionFitter:
         wvl_um : array-like, optional
             (micron) wavelengths to evaluate modeal at.
         ax : matplotlib.axis.Axes, optional
-            axis to plot the data on.
+            axes to plot the data on.
         dot_sizes : float, optional
             Size of input data scatter plots.
         linewidth : float, optional
@@ -266,7 +269,7 @@ class DispersionFitter:
 
         Returns
         -------
-        Matplotlib image object.
+        matplotlib.axis.Axes
         """
 
         if wvl_um is None:
@@ -276,24 +279,21 @@ class DispersionFitter:
         eps_model = medium.eps_model(freqs)
         n_model, k_model = eps_complex_to_nk(eps_model)
 
-        if axis is None:
-            _, axis = plt.subplots(1, 1)
-
         dot_sizes = 25
         linewidth = 3
 
-        image = axis.scatter(self.wvl_um, self.n_data, s=dot_sizes, c="black", label="n (data)")
-        axis.plot(wvl_um, n_model, linewidth=linewidth, color="crimson", label="n (model)")
+        image = ax.scatter(self.wvl_um, self.n_data, s=dot_sizes, c="black", label="n (data)")
+        ax.plot(wvl_um, n_model, linewidth=linewidth, color="crimson", label="n (model)")
 
         if self.lossy:
-            axis.scatter(self.wvl_um, self.k_data, s=dot_sizes, c="black", label="k (data)")
-            axis.plot(wvl_um, k_model, linewidth=linewidth, color="blueviolet", label="k (model)")
+            ax.scatter(self.wvl_um, self.k_data, s=dot_sizes, c="black", label="k (data)")
+            ax.plot(wvl_um, k_model, linewidth=linewidth, color="blueviolet", label="k (model)")
 
-        axis.set_ylabel("value")
-        axis.set_xlabel("Wavelength ($\\mu m$)")
-        axis.legend()
+        ax.set_ylabel("value")
+        ax.set_xlabel("Wavelength ($\\mu m$)")
+        ax.legend()
 
-        return image
+        return ax
 
     @classmethod
     def load(cls, fname, **loadtxt_kwargs):
