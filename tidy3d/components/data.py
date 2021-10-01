@@ -168,9 +168,9 @@ class FieldData(MonitorData):
         size_x = np.ptp(self.x)
         size_y = np.ptp(self.y)
         size_z = np.ptp(self.z)
-        center_x = np.min(self.x) + Lx / 2.0
-        center_y = np.min(self.y) + Ly / 2.0
-        center_z = np.min(self.z) + Lz / 2.0
+        center_x = np.min(self.x) + size_x / 2.0
+        center_y = np.min(self.y) + size_y / 2.0
+        center_z = np.min(self.z) + size_z / 2.0
         return Box(center=(center_x, center_y, center_z), size=(size_x, size_y, size_z))
 
 
@@ -205,9 +205,9 @@ class PermittivityData(MonitorData):
         size_x = np.ptp(self.x)
         size_y = np.ptp(self.y)
         size_z = np.ptp(self.z)
-        center_x = np.min(self.x) + Lx / 2.0
-        center_y = np.min(self.y) + Ly / 2.0
-        center_z = np.min(self.z) + Lz / 2.0
+        center_x = np.min(self.x) + size_x / 2.0
+        center_y = np.min(self.y) + size_y / 2.0
+        center_z = np.min(self.z) + size_z / 2.0
         return Box(center=(center_x, center_y, center_z), size=(size_x, size_y, size_z))
 
 
