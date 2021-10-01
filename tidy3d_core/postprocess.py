@@ -13,7 +13,6 @@ from .solver import solve, SolverDataDict
 from tidy3d import Simulation
 from tidy3d.components.data import SimulationData, monitor_data_map
 from tidy3d.components.data import FieldData, FluxData, ModeData
-from tidy3d.components.monitor import Sampler
 
 """ Loads solver raw data dictionary into forms to use later """
 

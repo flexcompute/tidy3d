@@ -42,12 +42,8 @@ def test_sim():
             )
         },
         monitors={
-            "point": FieldMonitor(
-                size=(0, 0, 0), center=(0, 0, 0), sampler=FreqSampler(freqs=[1, 2])
-            ),
-            "plane": FluxMonitor(
-                size=(1, 1, 0), center=(0, 0, 0), sampler=TimeSampler(times=[1, 2])
-            ),
+            "point": FieldMonitor(size=(0, 0, 0), center=(0, 0, 0), freqs=[1, 2]),
+            "plane": FluxTimeMonitor(size=(1, 1, 0), center=(0, 0, 0), times=[1, 2]),
         },
         symmetry=(0, -1, 1),
         pml_layers=(
@@ -269,41 +265,24 @@ def test_VolumeSource_modal():
     m = ModeSource(size=(0, 1, 1), direction="+", source_time=g, mode=mode)
 
 
+""" monitors """
+
+
 def test_monitor():
-    freq_sampler = FreqSampler(freqs=[1, 2, 3])
-    time_sampler = TimeSampler(times=[1, 2, 3])
+
     size = (1, 2, 3)
     center = (1, 2, 3)
 
-    m = FieldMonitor(size=size, center=center, sampler=freq_sampler)
-
-
-def test_monitor_sampler():
-
-    freq_sampler = FreqSampler(freqs=[1, 2, 3])
-    time_sampler = TimeSampler(times=[1, 2, 3])
-
-    time_sampler = uniform_time_sampler(0, 10, 1)
-    freq_sampler = uniform_freq_sampler(1.0, 2.0, 10)
-
-    for M in (FieldMonitor, FluxMonitor):
-        for s in (time_sampler, freq_sampler):
-            M(size=(1, 0, 1), sampler=s)
-    ModeMonitor(size=(1, 0, 1), sampler=freq_sampler, modes=[])
+    m = FieldMonitor(size=size, center=center, freqs=[1, 2, 3])
 
 
 def test_monitor_plane():
 
-    freq_sampler = FreqSampler(freqs=[1, 2, 3])
-    time_sampler = TimeSampler(times=[1, 2, 3])
+    freqs = [1, 2, 3]
 
     # make sure flux and mode monitors fail with non planar geometries
-    for s in (time_sampler, freq_sampler):
-        for size in ((0, 0, 0), (1, 0, 0), (1, 1, 1)):
-            with pytest.raises(pydantic.ValidationError) as e_info:
-                ModeMonitor(size=size, sampler=s, modes=[])
-            with pytest.raises(pydantic.ValidationError) as e_info:
-                FluxMonitor(size=size, sampler=s, modes=[])
-
-
-""" monitors """
+    for size in ((0, 0, 0), (1, 0, 0), (1, 1, 1)):
+        with pytest.raises(pydantic.ValidationError) as e_info:
+            ModeMonitor(size=size, freqs=freqs, modes=[])
+        with pytest.raises(pydantic.ValidationError) as e_info:
+            FluxMonitor(size=size, freqs=freqs, modes=[])

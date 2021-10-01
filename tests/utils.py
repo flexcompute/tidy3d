@@ -31,26 +31,13 @@ SIM_MONITORS = Simulation(
     size=(2.0, 2.0, 2.0),
     grid_size=(0.1, 0.1, 0.1),
     monitors={
-        "field_freq": FieldMonitor(
-            size=(1, 1, 1), center=(0, 1, 0), sampler=FreqSampler(freqs=[1, 2, 5, 7, 8])
-        ),
-        "field_time": FieldMonitor(
-            size=(1, 1, 0), center=(1, 0, 0), sampler=TimeSampler(times=[1])
-        ),
-        "eps_freq": PermittivityMonitor(
-            size=(1, 1, 1), center=(0, 1, 0), sampler=FreqSampler(freqs=[1, 2, 5, 7, 8])
-        ),
-        "flux_freq": FluxMonitor(
-            size=(1, 1, 0), center=(0, 0, 0), sampler=FreqSampler(freqs=[1, 2, 5, 9])
-        ),
-        "flux_time": FluxMonitor(
-            size=(1, 1, 0), center=(0, 0, 0), sampler=TimeSampler(times=[1, 2, 3])
-        ),
+        "field_freq": FieldMonitor(size=(1, 1, 1), center=(0, 1, 0), freqs=[1, 2, 5, 7, 8]),
+        "field_time": FieldTimeMonitor(size=(1, 1, 0), center=(1, 0, 0), times=[1]),
+        "eps_freq": PermittivityMonitor(size=(1, 1, 1), center=(0, 1, 0), freqs=[1, 2, 5, 7, 8]),
+        "flux_freq": FluxMonitor(size=(1, 1, 0), center=(0, 0, 0), freqs=[1, 2, 5, 9]),
+        "flux_time": FluxTimeMonitor(size=(1, 1, 0), center=(0, 0, 0), times=[1, 2, 3]),
         "mode": ModeMonitor(
-            size=(1, 1, 0),
-            center=(0, 0, 0),
-            sampler=FreqSampler(freqs=[1.90, 2.01, 2.2]),
-            modes=[Mode(mode_index=1)],
+            size=(1, 1, 0), center=(0, 0, 0), freqs=[1.90, 2.01, 2.2], modes=[Mode(mode_index=1)]
         ),
     },
 )
@@ -86,8 +73,8 @@ SIM_FULL = Simulation(
         )
     },
     monitors={
-        "point": FieldMonitor(size=(0, 0, 0), center=(0, 0, 0), sampler=FreqSampler(freqs=[1, 2])),
-        "plane": FluxMonitor(size=(1, 1, 0), center=(0, 0, 0), sampler=TimeSampler(times=[1, 2])),
+        "point": FieldMonitor(size=(0, 0, 0), center=(0, 0, 0), freqs=[1, 2]),
+        "plane": FluxTimeMonitor(size=(1, 1, 0), center=(0, 0, 0), times=[1, 2]),
     },
     symmetry=(0, -1, 1),
     pml_layers=(

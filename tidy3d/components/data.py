@@ -1,7 +1,7 @@
 """ Classes for Storing Monitor and Simulation Data """
 
 from abc import ABC, abstractmethod
-from typing import Dict, List
+from typing import Dict
 
 import xarray as xr
 import numpy as np
@@ -10,7 +10,15 @@ import h5py
 
 from .simulation import Simulation
 from .geometry import Box
-from .monitor import FluxMonitor, FieldMonitor, ModeMonitor, PermittivityMonitor
+from .monitor import (
+    FluxMonitor,
+    FluxTimeMonitor,
+    FieldMonitor,
+    FieldTimeMonitor,
+    ModeMonitor,
+    PermittivityMonitor,
+)
+from .monitor import AbstractFieldMonitor, AbstractFluxMonitor, FreqMonitor, TimeMonitor
 from .base import Tidy3dBaseModel
 from .types import AxesSubplot, Axis, Numpy
 from .viz import add_ax_if_none, SimDataGeoParams
@@ -32,8 +40,6 @@ class MonitorData(Tidy3dData, ABC):
     """Stores data from a Monitor"""
 
     monitor_name: str
-    sampler_label: str
-    sampler_values: List
     values: Numpy
     data: xr.DataArray = None
 
@@ -50,41 +56,13 @@ class MonitorData(Tidy3dData, ABC):
     def plot(self) -> AxesSubplot:
         """make static plot"""
 
-    @abstractmethod
+    # @abstractmethod
     def visualize(self) -> None:
         """make interactive plot (impement in subclasses)"""
 
     @abstractmethod
     def _make_xarray(self) -> xr.DataArray:
         """returns an xarray representation of data"""
-
-    def sel(self, *args, **kwargs):
-        """http://xarray.pydata.org/en/stable/generated/xarray.DataArray.sel.html"""
-        return self.data.sel(*args, **kwargs)
-
-    def isel(self, *args, **kwargs):
-        """http://xarray.pydata.org/en/stable/generated/xarray.DataArray.isel.html"""
-        return self.data.sel(*args, **kwargs)
-
-    def squeeze(self, *args, **kwargs):
-        """http://xarray.pydata.org/en/stable/generated/xarray.DataArray.squeeze.html"""
-        return self.data.squeeze(*args, **kwargs)
-
-    def interp(self, *args, **kwargs):
-        """http://xarray.pydata.org/en/stable/generated/xarray.DataArray.interp.html"""
-        return self.data.interp(*args, **kwargs)
-
-    def query(self, *args, **kwargs):
-        """http://xarray.pydata.org/en/stable/generated/xarray.DataArray.query.html"""
-        return self.data.query(*args, **kwargs)
-
-    def isin(self, *args, **kwargs):
-        """http://xarray.pydata.org/en/stable/generated/xarray.DataArray.isin.html"""
-        return self.data.isin(*args, **kwargs)
-
-    def where(self, *args):
-        """http://xarray.pydata.org/en/stable/generated/xarray.DataArray.where.html"""
-        return self.data.where(*args)
 
     def export(self, fname: str) -> None:
         """Export MonitorData's xarray to hdf5 file"""
@@ -97,17 +75,10 @@ class MonitorData(Tidy3dData, ABC):
         # open from file
         data_array = xr.open_dataarray(fname, engine="h5netcdf")
 
-        # strip out sampler info and data values
-        sampler_label = "f" if "f" in data_array.coords else "t"
-        sampler_values = list(data_array.coords[sampler_label])
-        values = data_array.values
-
         # kwargs that all MonitorData instances have
         kwargs = {
-            "sampler_label": sampler_label,
-            "sampler_values": sampler_values,
-            "values": values,
             "monitor_name": data_array.name,
+            "values": data_array.values,
         }
 
         # get other kwargs from the data array, allow extras
@@ -118,13 +89,48 @@ class MonitorData(Tidy3dData, ABC):
         return cls(**kwargs)
 
 
-class FieldData(MonitorData):
-    """Stores Electric and Magnetic fields from a FieldMonitor"""
+class FreqData(MonitorData, ABC):
+    """stores data in frequency domain"""
+
+    f: Numpy
+
+
+class TimeData(MonitorData, ABC):
+    """stores data in time domain"""
+
+    t: Numpy
+
+
+class AbstractFieldData(MonitorData, ABC):
+    """stores data as a function of x,y,z"""
 
     x: Numpy  # (Nx,)
     y: Numpy  # (Ny,)
     z: Numpy  # (Nz,)
-    values: Numpy  # (2, 3, Nx, Ny, Nz, Ns)
+
+    @property
+    def geometry(self):
+        """return Box representation of field data"""
+        size_x = np.ptp(self.x)
+        size_y = np.ptp(self.y)
+        size_z = np.ptp(self.z)
+        center_x = np.min(self.x) + size_x / 2.0
+        center_y = np.min(self.y) + size_y / 2.0
+        center_z = np.min(self.z) + size_z / 2.0
+        return Box(center=(center_x, center_y, center_z), size=(size_x, size_y, size_z))
+
+
+class AbstractFluxData(MonitorData, ABC):
+    """stores flux data through a surface"""
+
+
+""" usable monitors """
+
+
+class FieldData(AbstractFieldData, FreqData):
+    """Stores Electric and Magnetic fields from a FieldMonitor"""
+
+    # values.shape = (2, 3, Nx, Ny, Nz, Nf)
 
     def _make_xarray(self):
         """returns an xarray representation of data"""
@@ -134,7 +140,7 @@ class FieldData(MonitorData):
             "x": self.x,
             "y": self.y,
             "z": self.z,
-            self.sampler_label: self.sampler_values,
+            "f": self.f,
         }
         return xr.DataArray(self.values, coords=coords, name=self.monitor_name)
 
@@ -142,15 +148,15 @@ class FieldData(MonitorData):
     def plot(
         self,
         field_component: str,
-        sampler_value: float,
+        freq: float,
         position: float,
         axis: Axis,
         ax: AxesSubplot = None,
     ) -> AxesSubplot:
         """make plot of field data along plane"""
         field, component = field_component
-        field_data = self.data.sel(field=field, component=component)
-        interp_kwargs = {"xyz"[axis]: position, self.sampler_label: sampler_value}
+        field_data = self.data.sel(field=field, component=component, f=freq)
+        interp_kwargs = {"xyz"[axis]: position}
         data_plane = field_data.interp(**interp_kwargs)
         data_plane.real.plot.imshow(ax=ax)
         ax = self.geometry._add_ax_labels_lims(axis=axis, ax=ax, buffer=0.0)
@@ -162,25 +168,29 @@ class FieldData(MonitorData):
         image = hv_ds.to(hv.Image, kdims=["x", "y"], dynamic=True)
         return image.options(cmap="magma", colorbar=True, aspect="equal")
 
-    @property
-    def geometry(self):
-        """return Box representation of self"""
-        size_x = np.ptp(self.x)
-        size_y = np.ptp(self.y)
-        size_z = np.ptp(self.z)
-        center_x = np.min(self.x) + size_x / 2.0
-        center_y = np.min(self.y) + size_y / 2.0
-        center_z = np.min(self.z) + size_z / 2.0
-        return Box(center=(center_x, center_y, center_z), size=(size_x, size_y, size_z))
+
+class FieldTimeData(AbstractFieldData, TimeData):
+    """Stores Electric and Magnetic fields from a FieldTimeMonitor"""
+
+    # values.shape = (2, 3, Nx, Ny, Nz, Nt)
+
+    def _make_xarray(self):
+        """returns an xarray representation of data"""
+        coords = {
+            "field": ["E", "H"],
+            "component": ["x", "y", "z"],
+            "x": self.x,
+            "y": self.y,
+            "z": self.z,
+            "t": self.t,
+        }
+        return xr.DataArray(self.values, coords=coords, name=self.monitor_name)
 
 
-class PermittivityData(MonitorData):
-    """Stores Electric and Magnetic fields from a FieldMonitor"""
+class PermittivityData(AbstractFieldData, FreqData):
+    """Stores Reltive Permittivity from a FieldMonitor"""
 
-    x: Numpy  # (Nx,)
-    y: Numpy  # (Ny,)
-    z: Numpy  # (Nz,)
-    values: Numpy  # (3, Nx, Ny, Nz, Ns)
+    # values.shape = (3, Nx, Ny, Nz, Nf)
 
     def _make_xarray(self):
         """returns an xarray representation of data"""
@@ -189,7 +199,7 @@ class PermittivityData(MonitorData):
             "x": self.x,
             "y": self.y,
             "z": self.z,
-            self.sampler_label: self.sampler_values,
+            "f": self.f,
         }
         return xr.DataArray(self.values, coords=coords, name=self.monitor_name)
 
@@ -199,64 +209,77 @@ class PermittivityData(MonitorData):
         image = hv_ds.to(hv.Image, kdims=["x", "y"], dynamic=True)
         return image.options(cmap="RdBu", colorbar=True, aspect="equal")
 
-    @property
-    def geometry(self):
-        """return Box representation of self"""
-        size_x = np.ptp(self.x)
-        size_y = np.ptp(self.y)
-        size_z = np.ptp(self.z)
-        center_x = np.min(self.x) + size_x / 2.0
-        center_y = np.min(self.y) + size_y / 2.0
-        center_z = np.min(self.z) + size_z / 2.0
-        return Box(center=(center_x, center_y, center_z), size=(size_x, size_y, size_z))
 
-
-class FluxData(MonitorData):
+class FluxData(AbstractFluxData, FreqData):
     """Stores power flux data through a planar FluxMonitor"""
 
-    values: Numpy  # (Ns,)
+    # values.shape = (Nt,)
 
     def _make_xarray(self):
         """returns an xarray representation of data"""
-        coords = {self.sampler_label: self.sampler_values}
+        coords = {"f": self.f}
         return xr.DataArray(self.values, coords=coords, name=self.monitor_name)
 
     def visualize(self):
         """make interactive plot"""
         hv.extension("bokeh")
         hv_ds = hv.Dataset(self.data.copy())
-        image = hv_ds.to(hv.Curve, self.sampler_label)
+        image = hv_ds.to(hv.Curve, "f")
         return image
 
 
-class ModeData(MonitorData):
+class FluxTimeData(AbstractFluxData, TimeData):
+    """Stores power flux data through a planar FluxMonitor"""
+
+    # values.shape = (Nt,)
+
+    def _make_xarray(self):
+        """returns an xarray representation of data"""
+        coords = {"t": self.t}
+        return xr.DataArray(self.values, coords=coords, name=self.monitor_name)
+
+    def visualize(self):
+        """make interactive plot"""
+        hv.extension("bokeh")
+        hv_ds = hv.Dataset(self.data.copy())
+        image = hv_ds.to(hv.Curve, "t")
+        return image
+
+
+class ModeData(FreqData):
     """Stores modal amplitdudes from a ModeMonitor"""
 
     mode_index: Numpy  # (Nm,)
-    values: Numpy  # (Nm, Ns)
+    # values.shape = (Nm, Ns)
 
     def _make_xarray(self):
         """returns an xarray representation of data"""
         coords = {
             "direction": ["+", "-"],
             "mode_index": self.mode_index,
-            self.sampler_label: self.sampler_values,
+            "f": self.f,
         }
         return xr.DataArray(self.values, coords=coords, name=self.monitor_name)
 
     def visualize(self):
         """make interactive plot"""
         hv_ds = hv.Dataset(self.data.real.copy())
-        image = hv_ds.to(hv.Curve, self.sampler_label, dynamic=True)
+        image = hv_ds.to(hv.Curve, "f", dynamic=True)
         return image
 
 
 # maps monitor type to corresponding data type
 monitor_data_map = {
     FieldMonitor: FieldData,
+    FieldTimeMonitor: FieldTimeData,
     PermittivityMonitor: PermittivityData,
     FluxMonitor: FluxData,
+    FluxTimeMonitor: FluxTimeData,
     ModeMonitor: ModeData,
+    AbstractFieldMonitor: AbstractFieldData,
+    AbstractFluxMonitor: AbstractFluxData,
+    FreqMonitor: FreqData,
+    TimeMonitor: TimeData,
 }
 
 
@@ -279,30 +302,15 @@ class SimulationData(Tidy3dData):
                 return False
         return True
 
-    def plot_fields(
-        self,
-        field_mon_name: str,
-        position: float,
-        axis: Axis,
-        field_component: str,
-        sampler_value: float,
-        ax: AxesSubplot = None,
-        **plot_params
-    ) -> AxesSubplot:
+    def plot(self, field_mon_name: str, ax: AxesSubplot = None, **plot_params: dict) -> AxesSubplot:
         """plot the monitor with simulation object overlay"""
+
         monitor_data = self.monitor_data[field_mon_name]
-        assert isinstance(monitor_data, FieldData), "must be data for field monitor"
-        plot_params_new = SimDataGeoParams().update_params(**plot_params)
-        ax = self.simulation.plot_structures_eps(
-            position=position, axis=axis, ax=ax, cbar=False, **plot_params_new
-        )
-        ax = monitor_data.plot(
-            position=position,
-            axis=axis,
-            field_component=field_component,
-            sampler_value=sampler_value,
-            ax=ax,
-        )
+        # plot_params_new = SimDataGeoParams().update_params(**plot_params)
+        # ax = self.simulation.plot_structures_eps(
+        #     position=position, axis=axis, ax=ax, cbar=False, **plot_params_new
+        # )
+        ax = monitor_data.plot(ax=ax, **plot_params)
         return ax
 
     def export(self, fname: str) -> None:
@@ -346,9 +354,6 @@ class SimulationData(Tidy3dData):
         for data_name, data_value in mon_data.items():
             kwargs[data_name] = np.array(data_value)
 
-        # these fields are specific types, not np.array()
-        kwargs["sampler_values"] = list(kwargs["sampler_values"])
-        kwargs["sampler_label"] = str(kwargs["sampler_label"])
         kwargs["monitor_name"] = str(mon_name)
 
         # construct MonitorData and return

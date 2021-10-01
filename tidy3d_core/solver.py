@@ -5,8 +5,8 @@ import sys
 
 sys.path.append("../")
 from tidy3d import Simulation
-from tidy3d.components.monitor import FieldMonitor, FluxMonitor, ModeMonitor, PermittivityMonitor
-from tidy3d.components.monitor import Sampler, FreqSampler
+from tidy3d.components.monitor import AbstractFieldMonitor, AbstractFluxMonitor
+from tidy3d.components.monitor import ModeMonitor, FreqMonitor, TimeMonitor, PermittivityMonitor
 from tidy3d.components.types import GridSize, Tuple
 
 """ Creates fake data for the simulation and returns a monitor data dict containing all fields """
@@ -23,39 +23,37 @@ def solve(simulation: Simulation) -> SolverDataDict:
 
     data_dict = {}
     for name, monitor in simulation.monitors.items():
-        sampler_label, sampler_values = unpack_sampler(monitor.sampler)
-        if isinstance(monitor, FieldMonitor):
-            x, y, z = discretize_montor(simulation, monitor)
+        if isinstance(monitor, FreqMonitor):
+            sampler_values = np.array(monitor.freqs)
+            sampler_label = "f"
+            value_fn = lambda x: x
+        elif isinstance(monitor, TimeMonitor):
+            sampler_values = np.array(monitor.times)
+            sampler_label = "t"
+            value_fn = lambda x: np.real(x)
+        if isinstance(monitor, AbstractFieldMonitor):
+            x, y, z = discretize_monitor(simulation, monitor)
             data_array = make_fake_field_values(x, y, z, sampler_values)
             data_dict[name] = {
                 "x": x,
                 "y": y,
                 "z": z,
                 "values": data_array,
+                sampler_label: value_fn(sampler_values),
             }
-        if isinstance(monitor, PermittivityMonitor):
-            x, y, z = discretize_montor(simulation, monitor)
-            data_array = make_fake_field_values(x, y, z, sampler_values)
-            data_dict[name] = {
-                "x": x,
-                "y": y,
-                "z": z,
-                "values": np.sum(np.abs(data_array), axis=0),
-            }
-        elif isinstance(monitor, FluxMonitor):
+            if isinstance(monitor, PermittivityMonitor):
+                data_dict[name]["values"] = data_dict[name]["values"].sum(axis=0)
+        elif isinstance(monitor, AbstractFluxMonitor):
             data_array = make_fake_flux_values(sampler_values)
-            data_dict[name] = {
-                "values": data_array,
-            }
+            data_dict[name] = {"values": data_array, sampler_label: value_fn(sampler_values)}
         elif isinstance(monitor, ModeMonitor):
             num_modes = len(monitor.modes)
             data_array = make_fake_mode_values(sampler_values, num_modes)
             data_dict[name] = {
                 "mode_index": np.arange(num_modes),
                 "values": data_array,
+                sampler_label: value_fn(sampler_values),
             }
-        data_dict[name]["sampler_label"] = sampler_label
-        data_dict[name]["sampler_values"] = sampler_values
         data_dict[name]["monitor_name"] = name
     return data_dict
 
@@ -70,19 +68,11 @@ def unpack_grid_size(grid_size: GridSize) -> Tuple[float, float, float]:
     return grid_size
 
 
-def unpack_sampler(sampler: Sampler) -> Tuple[str, np.ndarray]:
-    """gets the correct coordinate labels and values for a sampler"""
-    sampler_label = sampler._label
-    sampler_key = "freqs" if "f" in sampler_label else "times"
-    sampler_values = sampler.dict()[sampler_key]
-    return sampler_label, sampler_values
-
-
 """ Discretization functions """
 
 
-def discretize_montor(
-    simulation: Simulation, mon: FieldMonitor
+def discretize_monitor(
+    simulation: Simulation, mon: AbstractFieldMonitor
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Discretizes spatial extent of a monitor"""
     grid_size = simulation.grid_size
