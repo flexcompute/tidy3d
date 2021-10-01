@@ -7,13 +7,13 @@ import xarray as xr
 import numpy as np
 import holoviews as hv
 import h5py
-import matplotlib.pylab as plt
 
 from .simulation import Simulation
+from .geometry import Box
 from .monitor import FluxMonitor, FieldMonitor, ModeMonitor, PermittivityMonitor
 from .base import Tidy3dBaseModel
-from .types import AxesSubplot, Axis
-from .viz import add_ax_if_none
+from .types import AxesSubplot, Axis, Numpy
+from .viz import add_ax_if_none, SimDataGeoParams
 
 
 class Tidy3dData(Tidy3dBaseModel):
@@ -34,7 +34,7 @@ class MonitorData(Tidy3dData, ABC):
     monitor_name: str
     sampler_label: str
     sampler_values: List
-    values: np.ndarray
+    values: Numpy
     data: xr.DataArray = None
 
     def __init__(self, **kwargs):
@@ -47,9 +47,8 @@ class MonitorData(Tidy3dData, ABC):
         assert isinstance(other, MonitorData), "can only check eqality on two monitor data objects"
         return np.all(self.values == self.values)
 
-    # @abstractmethod
-    # def plot(self) -> AxesSubplot:
-    #     """ make static plot"""
+    def plot(self) -> AxesSubplot:
+        """make static plot"""
 
     @abstractmethod
     def visualize(self) -> None:
@@ -122,10 +121,10 @@ class MonitorData(Tidy3dData, ABC):
 class FieldData(MonitorData):
     """Stores Electric and Magnetic fields from a FieldMonitor"""
 
-    x: np.ndarray  # (Nx,)
-    y: np.ndarray  # (Ny,)
-    z: np.ndarray  # (Nz,)
-    values: np.ndarray  # (2, 3, Nx, Ny, Nz, Ns)
+    x: Numpy  # (Nx,)
+    y: Numpy  # (Ny,)
+    z: Numpy  # (Nz,)
+    values: Numpy  # (2, 3, Nx, Ny, Nz, Ns)
 
     def _make_xarray(self):
         """returns an xarray representation of data"""
@@ -154,7 +153,7 @@ class FieldData(MonitorData):
         interp_kwargs = {"xyz"[axis]: position, self.sampler_label: sampler_value}
         data_plane = field_data.interp(**interp_kwargs)
         data_plane.real.plot.imshow(ax=ax)
-        ax = plt.gca()
+        ax = self.geometry._add_ax_labels_lims(axis=axis, ax=ax, buffer=0.0)
         return ax
 
     def visualize(self):
@@ -163,14 +162,25 @@ class FieldData(MonitorData):
         image = hv_ds.to(hv.Image, kdims=["x", "y"], dynamic=True)
         return image.options(cmap="magma", colorbar=True, aspect="equal")
 
+    @property
+    def geometry(self):
+        """return Box representation of self"""
+        size_x = np.ptp(self.x)
+        size_y = np.ptp(self.y)
+        size_z = np.ptp(self.z)
+        center_x = np.min(self.x) + Lx / 2.0
+        center_y = np.min(self.y) + Ly / 2.0
+        center_z = np.min(self.z) + Lz / 2.0
+        return Box(center=(center_x, center_y, center_z), size=(size_x, size_y, size_z))
+
 
 class PermittivityData(MonitorData):
     """Stores Electric and Magnetic fields from a FieldMonitor"""
 
-    x: np.ndarray  # (Nx,)
-    y: np.ndarray  # (Ny,)
-    z: np.ndarray  # (Nz,)
-    values: np.ndarray  # (3, Nx, Ny, Nz, Ns)
+    x: Numpy  # (Nx,)
+    y: Numpy  # (Ny,)
+    z: Numpy  # (Nz,)
+    values: Numpy  # (3, Nx, Ny, Nz, Ns)
 
     def _make_xarray(self):
         """returns an xarray representation of data"""
@@ -189,11 +199,22 @@ class PermittivityData(MonitorData):
         image = hv_ds.to(hv.Image, kdims=["x", "y"], dynamic=True)
         return image.options(cmap="RdBu", colorbar=True, aspect="equal")
 
+    @property
+    def geometry(self):
+        """return Box representation of self"""
+        size_x = np.ptp(self.x)
+        size_y = np.ptp(self.y)
+        size_z = np.ptp(self.z)
+        center_x = np.min(self.x) + Lx / 2.0
+        center_y = np.min(self.y) + Ly / 2.0
+        center_z = np.min(self.z) + Lz / 2.0
+        return Box(center=(center_x, center_y, center_z), size=(size_x, size_y, size_z))
+
 
 class FluxData(MonitorData):
     """Stores power flux data through a planar FluxMonitor"""
 
-    values: np.ndarray  # (Ns,)
+    values: Numpy  # (Ns,)
 
     def _make_xarray(self):
         """returns an xarray representation of data"""
@@ -211,8 +232,8 @@ class FluxData(MonitorData):
 class ModeData(MonitorData):
     """Stores modal amplitdudes from a ModeMonitor"""
 
-    mode_index: np.ndarray  # (Nm,)
-    values: np.ndarray  # (Nm, Ns)
+    mode_index: Numpy  # (Nm,)
+    values: Numpy  # (Nm, Ns)
 
     def _make_xarray(self):
         """returns an xarray representation of data"""
@@ -258,6 +279,32 @@ class SimulationData(Tidy3dData):
                 return False
         return True
 
+    def plot_fields(
+        self,
+        field_mon_name: str,
+        position: float,
+        axis: Axis,
+        field_component: str,
+        sampler_value: float,
+        ax: AxesSubplot = None,
+        **plot_params
+    ) -> AxesSubplot:
+        """plot the monitor with simulation object overlay"""
+        monitor_data = self.monitor_data[field_mon_name]
+        assert isinstance(monitor_data, FieldData), "must be data for field monitor"
+        plot_params_new = SimDataGeoParams().update_params(**plot_params)
+        ax = self.simulation.plot_structures_eps(
+            position=position, axis=axis, ax=ax, cbar=False, **plot_params_new
+        )
+        ax = monitor_data.plot(
+            position=position,
+            axis=axis,
+            field_component=field_component,
+            sampler_value=sampler_value,
+            ax=ax,
+        )
+        return ax
+
     def export(self, fname: str) -> None:
         """Export all data to an hdf5"""
 
@@ -285,7 +332,7 @@ class SimulationData(Tidy3dData):
                     mon_grp.create_dataset(name, data=value)
 
     @staticmethod
-    def _load_monitor_data(sim: Simulation, mon_name: str, mon_data: np.ndarray) -> MonitorData:
+    def _load_monitor_data(sim: Simulation, mon_name: str, mon_data: Numpy) -> MonitorData:
         """load the solver data for a monitor into a MonitorData instance"""
 
         # get info about the original monitor

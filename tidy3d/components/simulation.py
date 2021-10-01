@@ -14,7 +14,7 @@ from .structure import Structure
 from .source import SourceType
 from .monitor import MonitorType
 from .pml import PMLLayer
-from .viz import StructMediumParams, StructEpsParams, PMLParams, SymParams
+from .viz import StructMediumParams, StructEpsParams, PMLParams, SymParams, add_ax_if_none
 from ..constants import inf
 
 # technically this is creating a circular import issue because it calls tidy3d/__init__.py
@@ -74,6 +74,7 @@ class Simulation(Box):
 
     """ Visualization """
 
+    @add_ax_if_none
     def plot(  # pylint: disable=arguments-differ
         self, position: float, axis: Axis, ax: AxesSubplot = None, **plot_params: dict
     ) -> AxesSubplot:
@@ -87,6 +88,7 @@ class Simulation(Box):
         ax = self.set_plot_bounds(axis=axis, ax=ax, **plot_params)
         return ax
 
+    @add_ax_if_none
     def plot_eps(
         self,
         position: float,
@@ -105,6 +107,7 @@ class Simulation(Box):
         ax = self.set_plot_bounds(axis=axis, ax=ax, **plot_params)
         return ax
 
+    @add_ax_if_none
     def plot_structures(
         self, position: float, axis: Axis, ax: AxesSubplot = None, **plot_params: dict
     ) -> AxesSubplot:
@@ -118,13 +121,14 @@ class Simulation(Box):
         ax = self.set_plot_bounds(axis=axis, ax=ax)
         return ax
 
+    @add_ax_if_none
     def plot_structures_eps(  # pylint: disable=too-many-arguments
         self,
         position: float,
         axis: Axis,
         freq: float = None,
         ax: AxesSubplot = None,
-        colorbar: bool = True,
+        cbar: bool = True,
         **plot_params: dict,
     ) -> AxesSubplot:
         """plots all of simulation's structures as permittivity"""
@@ -136,11 +140,10 @@ class Simulation(Box):
         for structure in self.structures:
             if structure.geometry.intersects_plane(position=position, axis=axis):
                 eps = structure.medium.eps_model(freq).real
-                plot_params_new = StructEpsParams(eps=eps, eps_max=eps_max).update_params(
-                    **plot_params
-                )
+                params_updater = StructEpsParams(eps=eps, eps_max=eps_max)
+                plot_params_new = params_updater.update_params(**plot_params)
                 ax = structure.geometry.plot(position=position, axis=axis, ax=ax, **plot_params_new)
-        if colorbar:
+        if cbar:
             norm = mpl.colors.Normalize(vmin=eps_min, vmax=eps_max)
             plt.colorbar(
                 mpl.cm.ScalarMappable(norm=norm, cmap="gist_yarg"), ax=ax, label=r"$\epsilon_r$"
@@ -148,6 +151,7 @@ class Simulation(Box):
         ax = self.set_plot_bounds(axis=axis, ax=ax)
         return ax
 
+    @add_ax_if_none
     def plot_sources(
         self, position: float, axis: Axis, ax: AxesSubplot = None, **plot_params: dict
     ) -> AxesSubplot:
@@ -158,6 +162,7 @@ class Simulation(Box):
         ax = self.set_plot_bounds(axis=axis, ax=ax)
         return ax
 
+    @add_ax_if_none
     def plot_monitors(
         self, position: float, axis: Axis, ax: AxesSubplot = None, **plot_params: dict
     ) -> AxesSubplot:
@@ -168,6 +173,7 @@ class Simulation(Box):
         ax = self.set_plot_bounds(axis=axis, ax=ax)
         return ax
 
+    @add_ax_if_none
     def plot_symmetries(
         self, position: float, axis: Axis, ax: AxesSubplot = None, **plot_params: dict
     ) -> AxesSubplot:
@@ -187,6 +193,7 @@ class Simulation(Box):
         ax = self.set_plot_bounds(axis=axis, ax=ax)
         return ax
 
+    @add_ax_if_none
     def plot_pml(
         self, position: float, axis: Axis, ax: AxesSubplot = None, **plot_params: dict
     ) -> AxesSubplot:

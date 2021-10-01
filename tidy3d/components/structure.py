@@ -4,6 +4,7 @@ from .base import Tidy3dBaseModel
 from .geometry import GeometryType
 from .medium import MediumType
 from .types import Axis, AxesSubplot
+from .viz import add_ax_if_none
 
 
 class Structure(Tidy3dBaseModel):
@@ -12,6 +13,7 @@ class Structure(Tidy3dBaseModel):
     geometry: GeometryType
     medium: MediumType
 
+    @add_ax_if_none
     def plot(  # pylint: disable=invalid-name
         self, position: float, axis: Axis, ax=None, **plot_params: dict
     ) -> AxesSubplot:

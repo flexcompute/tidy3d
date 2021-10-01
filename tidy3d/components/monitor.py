@@ -83,6 +83,7 @@ class FreqSampler(Sampler):
     freqs: List[pydantic.NonNegativeFloat]
     _label: str = "f"
 
+    @add_ax_if_none
     def plot(self, ax: AxesSubplot = None) -> AxesSubplot:  # pylint: disable=invalid-name
         """plot the sampler values"""
 
@@ -108,6 +109,7 @@ SamplerType = Union[TimeSampler, FreqSampler]
 class Monitor(Box, ABC):
     """base class for monitors, which all have Box shape"""
 
+    @add_ax_if_none
     def plot(  # pylint: disable=invalid-name, arguments-differ
         self, position: float, axis: Axis, ax: AxesSubplot = None, **plot_params: dict
     ) -> AxesSubplot:

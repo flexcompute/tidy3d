@@ -95,6 +95,7 @@ class Source(Box, ABC):
 
     source_time: SourceTimeType
 
+    @add_ax_if_none
     def plot(  # pylint: disable=invalid-name, arguments-differ
         self, position: float, axis: Axis, ax: AxesSubplot = None, **plot_params: dict
     ) -> AxesSubplot:
