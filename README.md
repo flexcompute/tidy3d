@@ -100,6 +100,8 @@
 	- [x] Make dispersion fitting tool compatible
 	- [x] Make mode solver compatible
 	- [x] Batch processor <- done in webapi
+	- [ ] Near2Far
+
 ---
 
 #### IO
@@ -142,21 +144,17 @@
 	- [x] Simulation epsilon discretization from structure polygons.
 	- [x] Medium-aware structure / simulation plotting.
 	- [x] Add Monitor / Source plotting
-	- [ ] Visualize symmetry in ``Simulation.plot``
-	- [ ] Add "plot" to all tidy3d objects.
-		- [ ] source time
-		- [ ] medium
-		- [ ] sampler
-		- [ ] separate plots for `structure.geometry.plot()`, `structure.medium.plot()`, and `structure.plot()` (both on two axes), change in ``simulation.plot()``		
-		- [ ] separate plots for `source.geometry.plot()`, `source.source_time.plot()`, and `source.plot()` (both on two axes), change in ``simulation.plot()``
-		- [ ] separate plots for `monitor.geometry.plot()`, `monitor.sampler.plot()`, and `monitor.plot()` (both on two axes), change in ``simulation.plot()``
+	- [x] Visualize symmetry in ``Simulation.plot``
+	- [x] Add "plot" to all tidy3d objects.
+		- [x] source time
+		- [x] medium
+		- [x] sampler
 	- [ ] Overlay structures onto fields.
 	- [ ] add .plot method to `SimulationData`
 
 #### "Tidying" Up
 - [ ] Make Uniform Samplers separate classes (dont evaluate / store freqs, times)?
 - [ ] Fix MyPy warnings
-- [ ] 
 
 ---
 

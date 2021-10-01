@@ -12,6 +12,7 @@ import matplotlib as mpl
 from .base import Tidy3dBaseModel
 from .types import Literal, Numpy, Bound, Size, Coordinate, Axis
 from .types import Coordinate2D, Vertices, AxesSubplot
+from .viz import add_ax_if_none
 
 BOUND_EPS = 1e-3  # expand bounds by this much
 NUM_PTS_RADIUS = 20  # number of edges around circular shapes
@@ -108,27 +109,23 @@ class Geometry(Tidy3dBaseModel, ABC):
         ax.set_ylabel(ylabel)
         return ax
 
+    @add_ax_if_none
     def plot(  # pylint: disable=too-many-arguments
         self,
         position: float,
         axis: Axis,
-        facecolor: str = None,
-        edgecolor: str = None,
-        fill: bool = True,
-        alpha: float = 1.0,
         ax: AxesSubplot = None,
+        **plot_params: dict,
     ) -> AxesSubplot:
         """plot the geometry on the plane"""
 
         vertices_list = self._get_crosssection_polygons(position, axis=axis)
-
         for vertices in vertices_list:
-            patch = mpl.patches.Polygon(vertices, fill=fill, alpha=alpha)
-            patch.set_facecolor(facecolor)
-            patch.set_edgecolor(edgecolor)
+            patch = mpl.patches.Polygon(vertices, **plot_params)
             ax.add_patch(patch)
         ax = self._add_ax_labels_lims(axis=axis, ax=ax)
         ax.set_aspect("equal")
+        ax.set_title(f"cross section at {'xyz'[axis]}={position:.2f}")
         return ax
 
     def visualize(self, axis: Axis):

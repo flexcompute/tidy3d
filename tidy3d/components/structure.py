@@ -12,6 +12,8 @@ class Structure(Tidy3dBaseModel):
     geometry: GeometryType
     medium: MediumType
 
-    def plot(self, position: float, axis: Axis, ax=None) -> AxesSubplot:
+    def plot(  # pylint: disable=invalid-name
+        self, position: float, axis: Axis, ax=None, **plot_params: dict
+    ) -> AxesSubplot:
         """plot geometry"""
-        return self.geometry.plot(position=position, axis=axis, ax=ax)
+        return self.geometry.plot(position=position, axis=axis, ax=ax, **plot_params)

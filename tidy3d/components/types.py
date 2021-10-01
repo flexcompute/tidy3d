@@ -42,3 +42,5 @@ Numpy = np.ndarray
 Symmetry = Literal[0, -1, 1]
 
 AxesSubplot = Axes
+
+ArrayLike = Union[List[float], Numpy]
