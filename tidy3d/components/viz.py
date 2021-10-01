@@ -26,15 +26,15 @@ def add_ax_if_none(plot):
     return _plot
 
 
-def make_aspect_equal(plot):
-    """decorates `ax = plot()` function,
-    sets equal aspect ratio for return ax
-    """
+# def make_aspect_equal(plot):
+#     """decorates `ax = plot()` function,
+#     sets equal aspect ratio for return ax
+#     """
 
-    def _plot(*args, **kwargs) -> AxesSubplot:
-        """calls `ax = plot()` and sets apect ratio of `ax` to "equal"`"""
-        ax = plot(*args, **kwargs)
-        ax.set_aspect("equal")
-        return ax
+#     def _plot(*args, **kwargs) -> AxesSubplot:
+#         """calls `ax = plot()` and sets apect ratio of `ax` to "equal"`"""
+#         ax = plot(*args, **kwargs)
+#         ax.set_aspect("equal")
+#         return ax
 
-    return _plot
+#     return _plot

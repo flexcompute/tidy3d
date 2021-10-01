@@ -7,7 +7,7 @@ import pydantic
 import numpy as np
 
 from .base import Tidy3dBaseModel
-from .types import Direction, Polarization, AxesSubplot, Axis
+from .types import Direction, Polarization
 from .validators import assert_plane
 from .geometry import Box
 from .mode import Mode
@@ -74,16 +74,16 @@ class Source(Box, ABC):
 
     source_time: SourceTimeType
 
-    def plot(self, position: float, axis: Axis, ax: AxesSubplot = None) -> AxesSubplot:
-        ax = self.geometry.plot(
-            position=position,
-            axis=axis,
-            alpha=0.7,
-            facecolor="blueviolet",
-            edgecolor="blueviolet",
-            ax=ax,
-        )
-        return ax
+    # def plot(self, position: float, axis: Axis, ax: AxesSubplot = None) -> AxesSubplot:
+    #     ax = self.geometry.plot(
+    #         position=position,
+    #         axis=axis,
+    #         alpha=0.7,
+    #         facecolor="blueviolet",
+    #         edgecolor="blueviolet",
+    #         ax=ax,
+    #     )
+    #     return ax
 
 
 class VolumeSource(Source):

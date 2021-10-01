@@ -80,6 +80,7 @@ class Simulation(Box):
         ax = self.plot_structures(position=position, axis=axis, ax=ax)
         ax = self.plot_sources(position=position, axis=axis, ax=ax)
         ax = self.plot_monitors(position=position, axis=axis, ax=ax)
+        ax = self.plot_symmetries(position=position, axis=axis, ax=ax)
         ax = self.plot_pml(position=position, axis=axis, ax=ax)
         ax = self.set_plot_bounds(axis=axis, ax=ax)
         return ax
@@ -92,6 +93,7 @@ class Simulation(Box):
         ax = self.plot_structures_eps(position=position, axis=axis, frequency=frequency, ax=ax)
         ax = self.plot_sources(position=position, axis=axis, ax=ax)
         ax = self.plot_monitors(position=position, axis=axis, ax=ax)
+        ax = self.plot_symmetries(position=position, axis=axis, ax=ax)
         ax = self.plot_pml(position=position, axis=axis, ax=ax)
         ax = self.set_plot_bounds(axis=axis, ax=ax)
         return ax
@@ -104,7 +106,7 @@ class Simulation(Box):
                 continue
             mat_index = medium_map[structure.medium]
             facecolor = mat_cmap(mat_index % len(mat_cmap.colors))
-            ax = structure.plot(position=position, axis=axis, facecolor=facecolor, ax=ax)
+            ax = structure.geometry.plot(position=position, axis=axis, facecolor=facecolor, ax=ax)
         return ax
 
     def plot_structures_eps(
@@ -118,7 +120,9 @@ class Simulation(Box):
                 eps = structure.medium.eps_model(frequency).real
                 chi = eps - 1.0
                 facecolor = str(1 - chi / max_chi)
-                ax = structure.plot(position=position, axis=axis, facecolor=facecolor, ax=ax)
+                ax = structure.geometry.plot(
+                    position=position, axis=axis, facecolor=facecolor, ax=ax
+                )
         norm = mpl.colors.Normalize(vmin=1, vmax=1 + max_chi)
         plt.colorbar(
             mpl.cm.ScalarMappable(norm=norm, cmap="gist_yarg"), ax=ax, label=r"$\epsilon_r$"
@@ -129,14 +133,51 @@ class Simulation(Box):
         """plots each of simulation's sources on plane"""
         for _, source in self.sources.items():
             if source.intersects_plane(position=position, axis=axis):
-                ax = source.plot(position=position, axis=axis, ax=ax)
+                ax = source.geometry.plot(
+                    position=position,
+                    axis=axis,
+                    alpha=0.7,
+                    facecolor="blueviolet",
+                    edgecolor="blueviolet",
+                    ax=ax,
+                )
         return ax
 
     def plot_monitors(self, position: float, axis: Axis, ax: AxesSubplot = None) -> AxesSubplot:
         """plots each of simulation's monitors on plane"""
         for _, monitor in self.monitors.items():
             if monitor.intersects_plane(position=position, axis=axis):
-                ax = monitor.plot(position=position, axis=axis, ax=ax)
+                ax = monitor.geometry.plot(
+                    position=position,
+                    axis=axis,
+                    alpha=0.5,
+                    facecolor="crimson",
+                    edgecolor="crimson",
+                    ax=ax,
+                )
+        return ax
+
+    def plot_symmetries(self, position: float, axis: Axis, ax: AxesSubplot = None) -> AxesSubplot:
+        """plots each of the non-zero symmetries"""
+        for sym_axis, sym_value in enumerate(self.symmetry):
+            if sym_value == 0:
+                continue
+            color = "lightgreen" if sym_value == 1 else "lightsteelblue"
+            sym_size = [inf, inf, inf]
+            sym_size[sym_axis] = inf / 2
+            sym_center = list(self.center)
+            sym_center[sym_axis] += sym_size[sym_axis] / 2
+            sym_box = Box(center=sym_center, size=sym_size)
+            if sym_box.intersects_plane(position=position, axis=axis):
+                ax = sym_box.plot(
+                    position=position,
+                    axis=axis,
+                    ax=ax,
+                    facecolor=color,
+                    alpha=0.5,
+                    edgecolor=color,
+                )
+        ax = self.set_plot_bounds(axis=axis, ax=ax)
         return ax
 
     def plot_pml(self, position: float, axis: Axis, ax: AxesSubplot = None) -> AxesSubplot:
