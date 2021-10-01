@@ -1,5 +1,7 @@
 """ defines Geometric objects with Medium properties """
 
+from typing import List, Tuple
+
 from .base import Tidy3dBaseModel
 from .geometry import GeometryType
 from .medium import MediumType
@@ -12,8 +14,13 @@ class Structure(Tidy3dBaseModel):
     geometry: GeometryType
     medium: MediumType
 
-    def plot(  # pytest: disable=invalid-name
-        self, position: float, axis: Axis, facecolor=None, ax: AxesSubplot = None
-    ) -> AxesSubplot:
-        """plot just plots self.geometry"""
-        return self.geometry.plot(position=position, facecolor=facecolor, axis=axis, ax=ax)
+    def plot(
+        self, position: float, axis: Axis, freqs: List[float] = None, ax=None
+    ) -> Tuple[AxesSubplot, AxesSubplot]:
+        """plot geometry with inset of medium"""
+        ax = self.geometry.plot(position=position, axis=axis, ax=ax)
+        if freqs is None:
+            return ax, None
+        axins = ax.inset_axes([0.5, 0.5, 0.47, 0.47])
+        axins = self.medium.plot(freqs=freqs, ax=axins)
+        return ax, axins

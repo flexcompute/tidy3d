@@ -7,7 +7,7 @@ import pydantic
 import numpy as np
 
 from .base import Tidy3dBaseModel
-from .types import PoleAndResidue, Literal
+from .types import PoleAndResidue, Literal, AxesSubplot
 from ..constants import C_0, inf
 
 """ conversion helpers """
@@ -59,6 +59,18 @@ class AbstractMedium(ABC, Tidy3dBaseModel):
     @abstractmethod
     def eps_model(self, frequency: float) -> complex:
         """complex permittivity as a function of frequency"""
+
+    def plot(self, freqs: List[float], ax=None) -> AxesSubplot:
+        freqs = np.array(freqs)
+        eps_complex = self.eps_model(freqs)
+        n, k = eps_complex_to_nk(eps_complex)
+
+        ax.plot(freqs, n, label="n")
+        ax.plot(freqs, k, label="k")
+        ax.set_xlabel("frequency (Hz)")
+        ax.legend()
+        ax.set_aspect("auto")
+        return ax
 
 
 """ Dispersionless Medium """

@@ -128,6 +128,7 @@ class Geometry(Tidy3dBaseModel, ABC):
             patch.set_edgecolor(edgecolor)
             ax.add_patch(patch)
         ax = self._add_ax_labels_lims(axis=axis, ax=ax)
+        ax.set_aspect("equal")
         return ax
 
     def visualize(self, axis: Axis):

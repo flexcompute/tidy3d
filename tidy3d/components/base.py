@@ -5,7 +5,7 @@ import yaml
 
 import pydantic
 
-from .viz import add_ax_if_none, make_aspect_equal
+from .viz import add_ax_if_none
 from .types import AxesSubplot
 
 # default indentation (# spaces) in files
@@ -26,7 +26,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
     def __init_subclass__(cls):
         """add plot or other method decorators here so all method subclasses do the same thing"""
         cls.plot = add_ax_if_none(cls.plot)
-        cls.plot = make_aspect_equal(cls.plot)
+        # cls.plot = make_aspect_equal(cls.plot)
 
     def __hash__(self):
         """hash tidy3dBaseModel objects using their json strings"""
