@@ -125,12 +125,12 @@ class ModeMonitor(FreqMonitor):
 
 
 monitor_type_map = {
-    'FieldMonitor': FieldMonitor,
-    'FieldTimeMonitor': FieldTimeMonitor,
-    'PermittivityMonitor': PermittivityMonitor,
-    'FluxMonitor': FluxMonitor,
-    'FluxTimeMonitor': FluxTimeMonitor,
-    'ModeMonitor': ModeMonitor,
+    "FieldMonitor": FieldMonitor,
+    "FieldTimeMonitor": FieldTimeMonitor,
+    "PermittivityMonitor": PermittivityMonitor,
+    "FluxMonitor": FluxMonitor,
+    "FluxTimeMonitor": FluxTimeMonitor,
+    "ModeMonitor": ModeMonitor,
 }
 
 MonitorType = Union[tuple(monitor_type_map.values())]

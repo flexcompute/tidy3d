@@ -117,9 +117,7 @@ class ModeSolver:
         n_eff_complex = n_eff_complex[mode.mode_index]
 
         field_monitor = FieldMonitor(
-            center=self.plane.center,
-            size=self.plane.size,
-            freqs=[self.freq]
+            center=self.plane.center, size=self.plane.size, freqs=[self.freq]
         )
 
         field_data = FieldData(

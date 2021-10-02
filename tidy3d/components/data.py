@@ -12,7 +12,14 @@ import h5py
 from .simulation import Simulation
 from .geometry import Box
 from .monitor import FluxMonitor, FluxTimeMonitor, FieldMonitor, FieldTimeMonitor, ModeMonitor
-from .monitor import PermittivityMonitor, Monitor, AbstractFluxMonitor, AbstractFieldMonitor, FreqMonitor, TimeMonitor
+from .monitor import (
+    PermittivityMonitor,
+    Monitor,
+    AbstractFluxMonitor,
+    AbstractFieldMonitor,
+    FreqMonitor,
+    TimeMonitor,
+)
 from .monitor import monitor_type_map
 from .base import Tidy3dBaseModel
 from .types import AxesSubplot, Axis, Numpy
@@ -173,7 +180,6 @@ class FieldData(AbstractFieldData, FreqData):
             "f": self.f,
         }
 
-
     @add_ax_if_none
     def plot(
         self,
@@ -306,6 +312,7 @@ monitor_data_map = {
     FreqMonitor: FreqData,
     TimeMonitor: TimeData,
 }
+
 
 class SimulationData(Tidy3dData):
     """holds simulation and its monitors' data."""
