@@ -105,7 +105,7 @@ def test_mon_data():
         # export MonitorData
         mon_path = prepend_tmp(f"monitor_{mon_name}.hdf5")
         mon_data.export(mon_path)
-        print(type(mon).__name__)
+
         # load with the correct MonitorData
         mon_data_type = monitor_data_map[type(mon)]
         _mon_data = mon_data_type.load(mon_path)

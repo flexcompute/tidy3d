@@ -1,7 +1,8 @@
 """ Classes for Storing Monitor and Simulation Data """
 
-from abc import ABC, abstractmethod
+from abc import ABC
 from typing import Dict
+import json
 
 import xarray as xr
 import numpy as np
@@ -10,15 +11,9 @@ import h5py
 
 from .simulation import Simulation
 from .geometry import Box
-from .monitor import (
-    FluxMonitor,
-    FluxTimeMonitor,
-    FieldMonitor,
-    FieldTimeMonitor,
-    ModeMonitor,
-    PermittivityMonitor,
-)
-from .monitor import AbstractFieldMonitor, AbstractFluxMonitor, FreqMonitor, TimeMonitor
+from .monitor import FluxMonitor, FluxTimeMonitor, FieldMonitor, FieldTimeMonitor, ModeMonitor
+from .monitor import PermittivityMonitor, Monitor, AbstractFluxMonitor, AbstractFieldMonitor, FreqMonitor, TimeMonitor
+from .monitor import monitor_type_map
 from .base import Tidy3dBaseModel
 from .types import AxesSubplot, Axis, Numpy
 from .viz import add_ax_if_none, SimDataGeoParams
@@ -40,6 +35,7 @@ class MonitorData(Tidy3dData, ABC):
     """Stores data from a Monitor"""
 
     monitor_name: str
+    monitor: Monitor
     values: Numpy
     data: xr.DataArray = None
 
@@ -60,33 +56,67 @@ class MonitorData(Tidy3dData, ABC):
     def visualize(self) -> None:
         """make interactive plot (impement in subclasses)"""
 
-    @abstractmethod
+    def _get_xarray_coords(self) -> dict:
+        """returns dictionary of coords for xarray creation"""
+
     def _make_xarray(self) -> xr.DataArray:
         """returns an xarray representation of data"""
+        coords = self._get_xarray_coords()
+        return xr.DataArray(self.values, coords=coords, name=self.monitor_name)
 
     def export(self, fname: str) -> None:
-        """Export MonitorData's xarray to hdf5 file"""
-        self.data.to_netcdf(fname, engine="h5netcdf", invalid_netcdf=True)
+        """Export MonitorData to hdf5 file"""
+
+        with h5py.File(fname, "a") as f_handle:
+
+            # save json string as an attribute
+            mon_json = self.monitor.json()
+            f_handle.attrs["mon_json"] = mon_json
+
+            mon_data_grp = f_handle.create_group("monitor_data")
+
+            for name, value in self.dict().items():
+
+                ignore = ("data", "monitor")
+                if name not in ignore:
+                    mon_data_grp.create_dataset(name, data=value)
 
     @classmethod
     def load(cls, fname: str):
-        """Load MonitorData from .hdf5 file containing xarray"""
+        """Load MonitorData from .hdf5 file"""
 
-        # open from file
-        data_array = xr.open_dataarray(fname, engine="h5netcdf")
+        with h5py.File(fname, "r") as f_handle:
 
-        # kwargs that all MonitorData instances have
-        kwargs = {
-            "monitor_name": data_array.name,
-            "values": data_array.values,
-        }
+            # construct the original monitor from the json string
+            mon_json = f_handle.attrs["mon_json"]
+            monitor_type_str = json.loads(mon_json)["type"]
+            monitor_type = monitor_type_map[monitor_type_str]
+            monitor = monitor_type.parse_raw(mon_json)
 
-        # get other kwargs from the data array, allow extras
-        for name, val in data_array.coords.items():
-            if name not in kwargs:
-                kwargs[name] = np.array(val)
+            # load the raw monitor data into a MonitorData instance
+            monitor_data = f_handle["monitor_data"]
+            return cls._load_from_data(monitor, monitor_data)
 
-        return cls(**kwargs)
+    @staticmethod
+    def _load_from_data(monitor: Monitor, monitor_data: dict):
+        """load the solver data for a monitor into a MonitorData instance"""
+
+        # get info about the original monitor
+        mon_type = type(monitor)
+        mon_data_type = monitor_data_map[mon_type]
+
+        # construct kwarg dict from hdf5 data group for monitor
+        kwargs = {}
+        for data_name, data_value in monitor_data.items():
+            kwargs[data_name] = np.array(data_value)
+
+        # convert name to string and add monitor to kwargs
+        kwargs["monitor_name"] = str(kwargs["monitor_name"])
+        kwargs["monitor"] = monitor
+
+        # construct MonitorData and return
+        monitor_data_instance = mon_data_type(**kwargs)
+        return monitor_data_instance
 
 
 class FreqData(MonitorData, ABC):
@@ -132,9 +162,9 @@ class FieldData(AbstractFieldData, FreqData):
 
     # values.shape = (2, 3, Nx, Ny, Nz, Nf)
 
-    def _make_xarray(self):
-        """returns an xarray representation of data"""
-        coords = {
+    def _get_xarray_coords(self):
+        """returns dictionary of coords for xarray creation"""
+        return {
             "field": ["E", "H"],
             "component": ["x", "y", "z"],
             "x": self.x,
@@ -142,7 +172,7 @@ class FieldData(AbstractFieldData, FreqData):
             "z": self.z,
             "f": self.f,
         }
-        return xr.DataArray(self.values, coords=coords, name=self.monitor_name)
+
 
     @add_ax_if_none
     def plot(
@@ -174,9 +204,9 @@ class FieldTimeData(AbstractFieldData, TimeData):
 
     # values.shape = (2, 3, Nx, Ny, Nz, Nt)
 
-    def _make_xarray(self):
-        """returns an xarray representation of data"""
-        coords = {
+    def _get_xarray_coords(self):
+        """returns dictionary of coords for xarray creation"""
+        return {
             "field": ["E", "H"],
             "component": ["x", "y", "z"],
             "x": self.x,
@@ -184,7 +214,6 @@ class FieldTimeData(AbstractFieldData, TimeData):
             "z": self.z,
             "t": self.t,
         }
-        return xr.DataArray(self.values, coords=coords, name=self.monitor_name)
 
 
 class PermittivityData(AbstractFieldData, FreqData):
@@ -192,16 +221,15 @@ class PermittivityData(AbstractFieldData, FreqData):
 
     # values.shape = (3, Nx, Ny, Nz, Nf)
 
-    def _make_xarray(self):
-        """returns an xarray representation of data"""
-        coords = {
+    def _get_xarray_coords(self):
+        """returns dictionary of coords for xarray creation"""
+        return {
             "component": ["x", "y", "z"],
             "x": self.x,
             "y": self.y,
             "z": self.z,
             "f": self.f,
         }
-        return xr.DataArray(self.values, coords=coords, name=self.monitor_name)
 
     def visualize(self):
         """make interactive plot"""
@@ -215,10 +243,9 @@ class FluxData(AbstractFluxData, FreqData):
 
     # values.shape = (Nt,)
 
-    def _make_xarray(self):
-        """returns an xarray representation of data"""
-        coords = {"f": self.f}
-        return xr.DataArray(self.values, coords=coords, name=self.monitor_name)
+    def _get_xarray_coords(self):
+        """returns dictionary of coords for xarray creation"""
+        return {"f": self.f}
 
     def visualize(self):
         """make interactive plot"""
@@ -233,10 +260,9 @@ class FluxTimeData(AbstractFluxData, TimeData):
 
     # values.shape = (Nt,)
 
-    def _make_xarray(self):
-        """returns an xarray representation of data"""
-        coords = {"t": self.t}
-        return xr.DataArray(self.values, coords=coords, name=self.monitor_name)
+    def _get_xarray_coords(self):
+        """returns dictionary of coords for xarray creation"""
+        return {"t": self.t}
 
     def visualize(self):
         """make interactive plot"""
@@ -252,14 +278,13 @@ class ModeData(FreqData):
     mode_index: Numpy  # (Nm,)
     # values.shape = (Nm, Ns)
 
-    def _make_xarray(self):
-        """returns an xarray representation of data"""
-        coords = {
+    def _get_xarray_coords(self):
+        """returns dictionary of coords for xarray creation"""
+        return {
             "direction": ["+", "-"],
             "mode_index": self.mode_index,
             "f": self.f,
         }
-        return xr.DataArray(self.values, coords=coords, name=self.monitor_name)
 
     def visualize(self):
         """make interactive plot"""
@@ -281,7 +306,6 @@ monitor_data_map = {
     FreqMonitor: FreqData,
     TimeMonitor: TimeData,
 }
-
 
 class SimulationData(Tidy3dData):
     """holds simulation and its monitors' data."""
@@ -319,8 +343,8 @@ class SimulationData(Tidy3dData):
         with h5py.File(fname, "a") as f_handle:
 
             # save json string as an attribute
-            json_string = self.simulation.json()
-            f_handle.attrs["json_string"] = json_string
+            sim_json = self.simulation.json()
+            f_handle.attrs["sim_json"] = sim_json
 
             # make a group for monitor_data
             mon_data_grp = f_handle.create_group("monitor_data")
@@ -332,33 +356,12 @@ class SimulationData(Tidy3dData):
                 # for each attribute in MonitorData
                 for name, value in mon_data.dict().items():
 
-                    # ignore data
-                    if name == "data":
+                    ignore = ("data", "monitor")
+                    if name in ignore:
                         continue
 
                     # add dataset to hdf5
                     mon_grp.create_dataset(name, data=value)
-
-    @staticmethod
-    def _load_monitor_data(sim: Simulation, mon_name: str, mon_data: Numpy) -> MonitorData:
-        """load the solver data for a monitor into a MonitorData instance"""
-
-        # get info about the original monitor
-        monitor = sim.monitors.get(mon_name)
-        assert monitor is not None, "monitor not found in original simulation"
-        mon_type = type(monitor)
-        mon_data_type = monitor_data_map[mon_type]
-
-        # construct kwarg dict from hdf5 data group for monitor
-        kwargs = {}
-        for data_name, data_value in mon_data.items():
-            kwargs[data_name] = np.array(data_value)
-
-        kwargs["monitor_name"] = str(mon_name)
-
-        # construct MonitorData and return
-        monitor_data_instance = mon_data_type(**kwargs)
-        return monitor_data_instance
 
     @classmethod
     def load(cls, fname: str):
@@ -368,16 +371,17 @@ class SimulationData(Tidy3dData):
         with h5py.File(fname, "r") as f_handle:
 
             # construct the original simulation from the json string
-            json_string = f_handle.attrs["json_string"]
-            sim = Simulation.parse_raw(json_string)
+            sim_json = f_handle.attrs["sim_json"]
+            sim = Simulation.parse_raw(sim_json)
 
             # loop through monitor dataset and create all MonitorData instances
             monitor_data = f_handle["monitor_data"]
             monitor_data_dict = {}
-            for mon_name, mon_data in monitor_data.items():
+            for monitor_name, monitor_data in monitor_data.items():
 
                 # load this monitor data, add to dict
-                monitor_data_instance = cls._load_monitor_data(sim, mon_name, mon_data)
-                monitor_data_dict[mon_name] = monitor_data_instance
+                monitor = sim.monitors.get(monitor_name)
+                monitor_data_instance = MonitorData._load_from_data(monitor, monitor_data)
+                monitor_data_dict[monitor_name] = monitor_data_instance
 
         return cls(simulation=sim, monitor_data=monitor_data_dict)
