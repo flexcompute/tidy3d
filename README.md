@@ -137,7 +137,7 @@
 ---
 
 #### Visualization
-- [ ] write all visuaization routines
+- [x] write all visuaization routines
 	- [x] MonitorData
 	- [x] Basic sliding window for cross section.
 	- [x] Structure cross section
@@ -149,13 +149,16 @@
 		- [x] source time
 		- [x] medium
 		- [x] sampler
-	- [ ] Overlay structures onto fields.
-	- [ ] add .plot method to `SimulationData`
+	- [x] Overlay structures onto fields.
+	- [x] add .plot method to `SimulationData`
 
 #### "Tidying" Up
 - [ ] Make Uniform Samplers separate classes (dont evaluate / store freqs, times)?
 - [ ] Fix MyPy warnings
 - [ ] Logging
+- [ ] clean up data.plot arguments.
+- [ ] fix overlapping structure plotting.
+- [ ] .json conversion to use old solver code?
 
 ---
 
@@ -171,6 +174,11 @@ https://github.com/crusaderky/python_project_template
 - [ ] Set up documentation (1 week)
 	- [ ] Make pydantic autosummaries more pretty.
 	- [ ] Move Docs into repo.
+	- [ ] write tutorial notebooks for
+		- [ ] Visualizing simulation.
+		- [ ] Loading data.
+		- [ ] Visualizing data.
+		- [ ] Batch simulation.
 	- [ ] Move tidy3d notebooks into repo, make them work with new code.
 	- [ ] test binder links.
 ---

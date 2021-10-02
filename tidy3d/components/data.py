@@ -1,6 +1,6 @@
 """ Classes for Storing Monitor and Simulation Data """
 
-from abc import ABC
+from abc import ABC, abstractmethod
 from typing import Dict
 import json
 
@@ -8,6 +8,7 @@ import xarray as xr
 import numpy as np
 import holoviews as hv
 import h5py
+import matplotlib.pylab as plt
 
 from .simulation import Simulation
 from .geometry import Box
@@ -22,7 +23,7 @@ from .monitor import (
 )
 from .monitor import monitor_type_map
 from .base import Tidy3dBaseModel
-from .types import AxesSubplot, Axis, Numpy
+from .types import AxesSubplot, Axis, Numpy, Literal
 from .viz import add_ax_if_none, SimDataGeoParams
 
 
@@ -63,6 +64,12 @@ class MonitorData(Tidy3dData, ABC):
     def visualize(self) -> None:
         """make interactive plot (impement in subclasses)"""
 
+    @property
+    def geometry(self):
+        """return Box representation of field data"""
+        return self.monitor.geometry
+
+    @abstractmethod
     def _get_xarray_coords(self) -> dict:
         """returns dictionary of coords for xarray creation"""
 
@@ -145,17 +152,6 @@ class AbstractFieldData(MonitorData, ABC):
     y: Numpy  # (Ny,)
     z: Numpy  # (Nz,)
 
-    @property
-    def geometry(self):
-        """return Box representation of field data"""
-        size_x = np.ptp(self.x)
-        size_y = np.ptp(self.y)
-        size_z = np.ptp(self.z)
-        center_x = np.min(self.x) + size_x / 2.0
-        center_y = np.min(self.y) + size_y / 2.0
-        center_z = np.min(self.z) + size_z / 2.0
-        return Box(center=(center_x, center_y, center_z), size=(size_x, size_y, size_z))
-
 
 class AbstractFluxData(MonitorData, ABC):
     """stores flux data through a surface"""
@@ -188,13 +184,24 @@ class FieldData(AbstractFieldData, FreqData):
         position: float,
         axis: Axis,
         ax: AxesSubplot = None,
+        **pcolormesh_params: dict,
     ) -> AxesSubplot:
         """make plot of field data along plane"""
         field, component = field_component
+        z_label, (x_label, y_label) = self.geometry._pop_axis("xyz", axis=axis)
+        x_coords = self.data.coords[x_label]
+        y_coords = self.data.coords[y_label]
         field_data = self.data.sel(field=field, component=component, f=freq)
-        interp_kwargs = {"xyz"[axis]: position}
-        data_plane = field_data.interp(**interp_kwargs)
-        data_plane.real.plot.imshow(ax=ax)
+        data_plane = field_data.interp(**{z_label: position})
+        image = ax.pcolormesh(
+            x_coords,
+            y_coords,
+            np.real(data_plane.values),
+            cmap="RdBu",
+            shading="auto",
+            **pcolormesh_params,
+        )
+        plt.colorbar(image, ax=ax)
         ax = self.geometry._add_ax_labels_lims(axis=axis, ax=ax, buffer=0.0)
         return ax
 
@@ -209,6 +216,35 @@ class FieldTimeData(AbstractFieldData, TimeData):
     """Stores Electric and Magnetic fields from a FieldTimeMonitor"""
 
     # values.shape = (2, 3, Nx, Ny, Nz, Nt)
+
+    @add_ax_if_none
+    def plot(
+        self,
+        field_component: str,
+        time: int,
+        position: float,
+        axis: Axis,
+        ax: AxesSubplot = None,
+        **pcolormesh_params: dict,
+    ) -> AxesSubplot:
+        """make plot of field data along plane"""
+        field, component = field_component
+        z_label, (x_label, y_label) = self.geometry._pop_axis("xyz", axis=axis)
+        x_coords = self.data.coords[x_label]
+        y_coords = self.data.coords[y_label]
+        field_data = self.data.sel(field=field, component=component, t=time)
+        data_plane = field_data.interp(**{z_label: position})
+        im = ax.pcolormesh(
+            x_coords,
+            y_coords,
+            np.real(data_plane.values),
+            cmap="RdBu",
+            shading="auto",
+            **pcolormesh_params,
+        )
+        plt.colorbar(im, ax=ax)
+        ax = self.geometry._add_ax_labels_lims(axis=axis, ax=ax, buffer=0.0)
+        return ax
 
     def _get_xarray_coords(self):
         """returns dictionary of coords for xarray creation"""
@@ -227,10 +263,40 @@ class PermittivityData(AbstractFieldData, FreqData):
 
     # values.shape = (3, Nx, Ny, Nz, Nf)
 
+    @add_ax_if_none
+    def plot(
+        self,
+        freq: float,
+        component: Literal["xx", "yy", "zz"],
+        position: float,
+        axis: Axis,
+        ax: AxesSubplot = None,
+        **pcolormesh_params: dict,
+    ) -> AxesSubplot:
+        """make plot of field data along plane"""
+        z_label, (x_label, y_label) = self.geometry._pop_axis("xyz", axis=axis)
+        x_coords = self.data.coords[x_label]
+        y_coords = self.data.coords[y_label]
+        field_data = self.data.sel(component=component, f=freq)
+        data_plane = field_data.interp(**{z_label: position})
+        im = ax.pcolormesh(
+            x_coords,
+            y_coords,
+            np.real(data_plane.values),
+            vmin=1,
+            vmax=np.max(np.real(data_plane)),
+            cmap="gist_yarg",
+            shading="auto",
+            **pcolormesh_params,
+        )
+        plt.colorbar(im, ax=ax)
+        ax = self.geometry._add_ax_labels_lims(axis=axis, ax=ax, buffer=0.0)
+        return ax
+
     def _get_xarray_coords(self):
         """returns dictionary of coords for xarray creation"""
         return {
-            "component": ["x", "y", "z"],
+            "component": ["xx", "yy", "zz"],
             "x": self.x,
             "y": self.y,
             "z": self.z,
@@ -249,6 +315,14 @@ class FluxData(AbstractFluxData, FreqData):
 
     # values.shape = (Nt,)
 
+    @add_ax_if_none
+    def plot(self, ax: AxesSubplot = None, **plot_params) -> AxesSubplot:
+        """make static plot"""
+        ax.plot(self.f, self.values, **plot_params)
+        ax.set_xlabel("frequency (Hz)")
+        ax.set_ylabel("flux")
+        return ax
+
     def _get_xarray_coords(self):
         """returns dictionary of coords for xarray creation"""
         return {"f": self.f}
@@ -266,6 +340,14 @@ class FluxTimeData(AbstractFluxData, TimeData):
 
     # values.shape = (Nt,)
 
+    @add_ax_if_none
+    def plot(self, ax: AxesSubplot = None, **plot_params: dict) -> AxesSubplot:
+        """make static plot"""
+        ax.plot(self.t, self.values, **plot_params)
+        ax.set_xlabel("time steps")
+        ax.set_ylabel("flux")
+        return ax
+
     def _get_xarray_coords(self):
         """returns dictionary of coords for xarray creation"""
         return {"t": self.t}
@@ -282,7 +364,20 @@ class ModeData(FreqData):
     """Stores modal amplitdudes from a ModeMonitor"""
 
     mode_index: Numpy  # (Nm,)
-    # values.shape = (Nm, Ns)
+    # values.shape = (Nm, Nf)
+
+    @add_ax_if_none
+    def plot(
+        self, direction: Literal["+", "-"], ax: AxesSubplot = None, **plot_params: dict
+    ) -> AxesSubplot:
+        """make static plot"""
+        values_dir = self.data.sel(direction="+").values
+        for mode_index, mode_spectrum in enumerate(values_dir):
+            ax.plot(self.f, np.abs(mode_spectrum.real), label=f"mode {mode_index}", **plot_params)
+        ax.set_xlabel("frequency (Hz)")
+        ax.set_ylabel("Re{mode amplitude}")
+        ax.legend()
+        return ax
 
     def _get_xarray_coords(self):
         """returns dictionary of coords for xarray creation"""
@@ -320,28 +415,36 @@ class SimulationData(Tidy3dData):
     simulation: Simulation
     monitor_data: Dict[str, MonitorData]
 
-    def __eq__(self, other):
-        """check equality against another SimulationData instance"""
+    """ add __getitem__ or __index__ for monitor """
 
-        if self.simulation != other.simulation:
-            return False
-        for mon_name, mon_data in self.monitor_data.items():
-            other_data = other.monitor_data.get(mon_name)
-            if other_data is None:
-                return False
-            if mon_data != other.monitor_data[mon_name]:
-                return False
-        return True
-
-    def plot(self, field_mon_name: str, ax: AxesSubplot = None, **plot_params: dict) -> AxesSubplot:
+    @add_ax_if_none
+    def plot(self, monitor_name: str, ax: AxesSubplot = None, **plot_params: dict) -> AxesSubplot:
         """plot the monitor with simulation object overlay"""
 
-        monitor_data = self.monitor_data[field_mon_name]
-        # plot_params_new = SimDataGeoParams().update_params(**plot_params)
-        # ax = self.simulation.plot_structures_eps(
-        #     position=position, axis=axis, ax=ax, cbar=False, **plot_params_new
-        # )
+        monitor_data = self.monitor_data[monitor_name]
         ax = monitor_data.plot(ax=ax, **plot_params)
+        return ax
+
+    @add_ax_if_none
+    def plot_fields(
+        self,
+        monitor_name: str,
+        position: float,
+        axis: Axis,
+        ax: AxesSubplot = None,
+        **plot_params: dict,
+    ) -> AxesSubplot:
+        """make field plot with structure permittivity overlayed with transparency"""
+        monitor_data = self.monitor_data[monitor_name]
+        assert isinstance(
+            monitor_data, (FieldData, FieldTimeData)
+        ), f"must be FieldData or FieldTimeData, given {type(monitor_data)}"
+        plot_params_structures = SimDataGeoParams().update_params(**{})
+        ax = monitor_data.plot(position=position, axis=axis, ax=ax, **plot_params)
+        ax = self.simulation.plot_structures_eps(
+            position=position, axis=axis, ax=ax, cbar=False, **plot_params_structures
+        )
+        ax = monitor_data.geometry._add_ax_labels_lims(axis=axis, ax=ax, buffer=0.0)
         return ax
 
     def export(self, fname: str) -> None:
@@ -392,3 +495,20 @@ class SimulationData(Tidy3dData):
                 monitor_data_dict[monitor_name] = monitor_data_instance
 
         return cls(simulation=sim, monitor_data=monitor_data_dict)
+
+    def __getitem__(self, monitor_name: str) -> MonitorData:
+        """get the monitor directly by name"""
+        return self.monitor_data[monitor_name]
+
+    def __eq__(self, other):
+        """check equality against another SimulationData instance"""
+
+        if self.simulation != other.simulation:
+            return False
+        for mon_name, mon_data in self.monitor_data.items():
+            other_data = other.monitor_data.get(mon_name)
+            if other_data is None:
+                return False
+            if mon_data != other.monitor_data[mon_name]:
+                return False
+        return True
