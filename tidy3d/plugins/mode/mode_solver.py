@@ -9,7 +9,7 @@ from ...components import Box
 from ...components import Simulation
 from ...components import Mode
 from ...components import FieldData
-from ...components import ModeMonitor
+from ...components import ModeMonitor, FieldMonitor
 from ...components import ModeSource, GaussianPulse
 from ...components import eps_complex_to_nk
 from ...components.types import Direction
@@ -116,8 +116,15 @@ class ModeSolver:
 
         n_eff_complex = n_eff_complex[mode.mode_index]
 
+        field_monitor = FieldMonitor(
+            center=self.plane.center,
+            size=self.plane.size,
+            freqs=[self.freq]
+        )
+
         field_data = FieldData(
-            monitor_name="mode_solver_output",
+            monitor=field_monitor,
+            monitor_name="mode_solver_plane_fields",
             values=field_values[..., None],
             x=xs,
             y=ys,

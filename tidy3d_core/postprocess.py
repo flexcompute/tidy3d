@@ -29,6 +29,7 @@ def load_solver_results(simulation: Simulation, solver_data_dict: SolverDataDict
 
         # separate coordinates and data from the SolverDataDict
         monitor_data_dict = solver_data_dict[name]
+        monitor_data_dict["monitor"] = monitor
         monitor_data[name] = monitor_data_type(**monitor_data_dict)
 
     return SimulationData(simulation=simulation, monitor_data=monitor_data)

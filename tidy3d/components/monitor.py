@@ -106,7 +106,7 @@ class PermittivityMonitor(FreqMonitor, AbstractFieldMonitor):
 class FluxMonitor(FreqMonitor, AbstractFluxMonitor):
     """Stores flux through a plane as a function of frequency"""
 
-    type: Literal["ModeMonitor"] = "ModeMonitor"
+    type: Literal["FluxMonitor"] = "FluxMonitor"
 
 
 class FluxTimeMonitor(TimeMonitor, AbstractFluxMonitor):
@@ -124,13 +124,13 @@ class ModeMonitor(FreqMonitor):
     _plane_validator = assert_plane()
 
 
-MonitorFields = (
-    FieldMonitor,
-    FieldTimeMonitor,
-    PermittivityMonitor,
-    FluxMonitor,
-    FluxTimeMonitor,
-    ModeMonitor,
-)
-MonitorType = Union[MonitorFields]
-# Monitor = register_subclasses(MonitorFields)(Monitor)
+monitor_type_map = {
+    'FieldMonitor': FieldMonitor,
+    'FieldTimeMonitor': FieldTimeMonitor,
+    'PermittivityMonitor': PermittivityMonitor,
+    'FluxMonitor': FluxMonitor,
+    'FluxTimeMonitor': FluxTimeMonitor,
+    'ModeMonitor': ModeMonitor,
+}
+
+MonitorType = Union[tuple(monitor_type_map.values())]
