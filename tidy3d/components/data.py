@@ -1,7 +1,7 @@
 """ Classes for Storing Monitor and Simulation Data """
 
 from abc import ABC, abstractmethod
-from typing import Dict
+from typing import Dict, List
 import json
 
 import xarray as xr
@@ -13,17 +13,12 @@ import matplotlib.pylab as plt
 from .simulation import Simulation
 from .geometry import Box
 from .monitor import FluxMonitor, FluxTimeMonitor, FieldMonitor, FieldTimeMonitor, ModeMonitor
-from .monitor import (
-    PermittivityMonitor,
-    Monitor,
-    AbstractFluxMonitor,
-    AbstractFieldMonitor,
-    FreqMonitor,
-    TimeMonitor,
-)
+from .monitor import PermittivityMonitor, Monitor, AbstractFluxMonitor, AbstractFieldMonitor
+from .monitor import FreqMonitor, TimeMonitor
+
 from .monitor import monitor_type_map
 from .base import Tidy3dBaseModel
-from .types import AxesSubplot, Axis, Numpy, Literal
+from .types import AxesSubplot, Axis, Numpy, Literal, EMField, Component, Direction
 from .viz import add_ax_if_none, SimDataGeoParams
 
 
@@ -45,7 +40,12 @@ class MonitorData(Tidy3dData, ABC):
     monitor_name: str
     monitor: Monitor
     values: Numpy
-    data: xr.DataArray = None
+
+    # dims stores the keys (strings) of the coordinates of each MonitorData subclass
+    # they are in order corresponding to their index into `values`.
+    # underscore is used so _dims() is a class variable (static, not stored in json)
+    # dims are used to construct xrrays.
+    _dims = ()
 
     def __init__(self, **kwargs):
         """compute xarray and add to monitor after init"""
@@ -69,13 +69,10 @@ class MonitorData(Tidy3dData, ABC):
         """return Box representation of field data"""
         return self.monitor.geometry
 
-    @abstractmethod
-    def _get_xarray_coords(self) -> dict:
-        """returns dictionary of coords for xarray creation"""
-
     def _make_xarray(self) -> xr.DataArray:
-        """returns an xarray representation of data"""
-        coords = self._get_xarray_coords()
+        """returns an xarray representation of self"""
+        data_dict = self.dict()
+        coords = {dim: data_dict[dim] for dim in self._dims}
         return xr.DataArray(self.values, coords=coords, name=self.monitor_name)
 
     def export(self, fname: str) -> None:
@@ -115,20 +112,31 @@ class MonitorData(Tidy3dData, ABC):
     def _load_from_data(monitor: Monitor, monitor_data: dict):
         """load the solver data for a monitor into a MonitorData instance"""
 
-        # get info about the original monitor
-        mon_type = type(monitor)
-        mon_data_type = monitor_data_map[mon_type]
+        # kwargs that gets passed to MonitorData.__init__() to make new MonitorData
+        kwargs = {}
 
         # construct kwarg dict from hdf5 data group for monitor
-        kwargs = {}
         for data_name, data_value in monitor_data.items():
             kwargs[data_name] = np.array(data_value)
+
+        def _process_string_kwarg(array_of_bytes: Numpy) -> List[str]:
+            """convert numpy array containing bytes to list of strings"""
+            list_of_bytes = array_of_bytes.tolist()
+            list_of_str = [v.decode("utf-8") for v in list_of_bytes]
+            return list_of_str
+
+        # handle data stored as np.array() of bytes instead of strings
+        for str_kwarg in ("component", "field", "direction"):
+            if kwargs.get(str_kwarg) is not None:
+                kwargs[str_kwarg] = _process_string_kwarg(kwargs[str_kwarg])
 
         # convert name to string and add monitor to kwargs
         kwargs["monitor_name"] = str(kwargs["monitor_name"])
         kwargs["monitor"] = monitor
 
-        # construct MonitorData and return
+        # get MontiorData type and initialize using kwargs
+        mon_type = type(monitor)
+        mon_data_type = monitor_data_map[mon_type]
         monitor_data_instance = mon_data_type(**kwargs)
         return monitor_data_instance
 
@@ -148,9 +156,10 @@ class TimeData(MonitorData, ABC):
 class AbstractFieldData(MonitorData, ABC):
     """stores data as a function of x,y,z"""
 
-    x: Numpy  # (Nx,)
-    y: Numpy  # (Ny,)
-    z: Numpy  # (Nz,)
+    component: List[Component] = ["x", "y", "z"]
+    x: Numpy
+    y: Numpy
+    z: Numpy
 
 
 class AbstractFluxData(MonitorData, ABC):
@@ -163,18 +172,9 @@ class AbstractFluxData(MonitorData, ABC):
 class FieldData(AbstractFieldData, FreqData):
     """Stores Electric and Magnetic fields from a FieldMonitor"""
 
-    # values.shape = (2, 3, Nx, Ny, Nz, Nf)
+    field: List[EMField] = ["E", "H"]
 
-    def _get_xarray_coords(self):
-        """returns dictionary of coords for xarray creation"""
-        return {
-            "field": ["E", "H"],
-            "component": ["x", "y", "z"],
-            "x": self.x,
-            "y": self.y,
-            "z": self.z,
-            "f": self.f,
-        }
+    _dims = ("field", "component", "x", "y", "z", "f")
 
     @add_ax_if_none
     def plot(
@@ -208,14 +208,16 @@ class FieldData(AbstractFieldData, FreqData):
     def visualize(self):
         """make interactive plot"""
         hv_ds = hv.Dataset(np.abs(self.data.copy()))
-        image = hv_ds.to(hv.Image, kdims=["x", "y"], dynamic=True)
+        image = hv_ds.to(hv.Image, k_dims=["x", "y"], dynamic=True)
         return image.options(cmap="magma", colorbar=True, aspect="equal")
 
 
 class FieldTimeData(AbstractFieldData, TimeData):
     """Stores Electric and Magnetic fields from a FieldTimeMonitor"""
 
-    # values.shape = (2, 3, Nx, Ny, Nz, Nt)
+    field: List[EMField] = ["E", "H"]
+
+    _dims = ("field", "component", "x", "y", "z", "t")
 
     @add_ax_if_none
     def plot(
@@ -246,28 +248,17 @@ class FieldTimeData(AbstractFieldData, TimeData):
         ax = self.geometry._add_ax_labels_lims(axis=axis, ax=ax, buffer=0.0)
         return ax
 
-    def _get_xarray_coords(self):
-        """returns dictionary of coords for xarray creation"""
-        return {
-            "field": ["E", "H"],
-            "component": ["x", "y", "z"],
-            "x": self.x,
-            "y": self.y,
-            "z": self.z,
-            "t": self.t,
-        }
-
 
 class PermittivityData(AbstractFieldData, FreqData):
     """Stores Reltive Permittivity from a FieldMonitor"""
 
-    # values.shape = (3, Nx, Ny, Nz, Nf)
+    _dims = ("component", "x", "y", "z", "f")
 
     @add_ax_if_none
     def plot(
         self,
         freq: float,
-        component: Literal["xx", "yy", "zz"],
+        component: Literal["x", "y", "z"],
         position: float,
         axis: Axis,
         ax: AxesSubplot = None,
@@ -293,27 +284,17 @@ class PermittivityData(AbstractFieldData, FreqData):
         ax = self.geometry._add_ax_labels_lims(axis=axis, ax=ax, buffer=0.0)
         return ax
 
-    def _get_xarray_coords(self):
-        """returns dictionary of coords for xarray creation"""
-        return {
-            "component": ["xx", "yy", "zz"],
-            "x": self.x,
-            "y": self.y,
-            "z": self.z,
-            "f": self.f,
-        }
-
     def visualize(self):
         """make interactive plot"""
         hv_ds = hv.Dataset(self.data.real.copy())
-        image = hv_ds.to(hv.Image, kdims=["x", "y"], dynamic=True)
+        image = hv_ds.to(hv.Image, k_dims=["x", "y"], dynamic=True)
         return image.options(cmap="RdBu", colorbar=True, aspect="equal")
 
 
 class FluxData(AbstractFluxData, FreqData):
     """Stores power flux data through a planar FluxMonitor"""
 
-    # values.shape = (Nt,)
+    _dims = ("f",)
 
     @add_ax_if_none
     def plot(self, ax: AxesSubplot = None, **plot_params) -> AxesSubplot:
@@ -322,10 +303,6 @@ class FluxData(AbstractFluxData, FreqData):
         ax.set_xlabel("frequency (Hz)")
         ax.set_ylabel("flux")
         return ax
-
-    def _get_xarray_coords(self):
-        """returns dictionary of coords for xarray creation"""
-        return {"f": self.f}
 
     def visualize(self):
         """make interactive plot"""
@@ -338,7 +315,7 @@ class FluxData(AbstractFluxData, FreqData):
 class FluxTimeData(AbstractFluxData, TimeData):
     """Stores power flux data through a planar FluxMonitor"""
 
-    # values.shape = (Nt,)
+    _dims = ("t",)
 
     @add_ax_if_none
     def plot(self, ax: AxesSubplot = None, **plot_params: dict) -> AxesSubplot:
@@ -347,10 +324,6 @@ class FluxTimeData(AbstractFluxData, TimeData):
         ax.set_xlabel("time steps")
         ax.set_ylabel("flux")
         return ax
-
-    def _get_xarray_coords(self):
-        """returns dictionary of coords for xarray creation"""
-        return {"t": self.t}
 
     def visualize(self):
         """make interactive plot"""
@@ -363,8 +336,10 @@ class FluxTimeData(AbstractFluxData, TimeData):
 class ModeData(FreqData):
     """Stores modal amplitdudes from a ModeMonitor"""
 
-    mode_index: Numpy  # (Nm,)
-    # values.shape = (Nm, Nf)
+    direction: List[Direction] = ["+", "-"]
+    mode_index: Numpy
+
+    _dims = ("direction", "mode_index", "f")
 
     @add_ax_if_none
     def plot(
@@ -378,14 +353,6 @@ class ModeData(FreqData):
         ax.set_ylabel("Re{mode amplitude}")
         ax.legend()
         return ax
-
-    def _get_xarray_coords(self):
-        """returns dictionary of coords for xarray creation"""
-        return {
-            "direction": ["+", "-"],
-            "mode_index": self.mode_index,
-            "f": self.f,
-        }
 
     def visualize(self):
         """make interactive plot"""

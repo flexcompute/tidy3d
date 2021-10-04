@@ -4,7 +4,7 @@ from typing import List, Union
 
 import numpy as np
 
-from .types import Literal, Axis, AxesSubplot
+from .types import Literal, Axis, AxesSubplot, Direction, EMField, Component
 from .geometry import Box
 from .validators import assert_plane
 from .mode import Mode
@@ -75,6 +75,8 @@ class TimeMonitor(Monitor, ABC):
 class AbstractFieldMonitor(Monitor, ABC):
     """stores data as a function of x,y,z"""
 
+    component: List[Component] = ["x", "y", "z"]
+
 
 class AbstractFluxMonitor(Monitor, ABC):
     """stores flux data through a surface"""
@@ -88,12 +90,14 @@ class AbstractFluxMonitor(Monitor, ABC):
 class FieldMonitor(FreqMonitor, AbstractFieldMonitor):
     """stores EM fields as a function of frequency"""
 
+    field: List[EMField] = ["E", "H"]
     type: Literal["FieldMonitor"] = "FieldMonitor"
 
 
 class FieldTimeMonitor(TimeMonitor, AbstractFieldMonitor):
     """stores EM fields as a function of time"""
 
+    field: List[EMField] = ["E", "H"]
     type: Literal["FieldTimeMonitor"] = "FieldTimeMonitor"
 
 
@@ -118,6 +122,7 @@ class FluxTimeMonitor(TimeMonitor, AbstractFluxMonitor):
 class ModeMonitor(FreqMonitor):
     """stores modal amplitudes associated with modes"""
 
+    direction: List[Direction] = ["+", "-"]
     modes: List[Mode]
     type: Literal["ModeMonitor"] = "ModeMonitor"
 
