@@ -100,7 +100,7 @@
 	- [x] Make dispersion fitting tool compatible
 	- [x] Make mode solver compatible
 	- [x] Batch processor <- done in webapi
-	- [ ] Near2Far
+	- [ ] **Near2Far**
 
 ---
 
