@@ -11,15 +11,11 @@ from .medium import nk_to_medium, eps_sigma_to_eps_complex
 
 from .source import GaussianPulse
 from .source import VolumeSource, PlaneWave, ModeSource, GaussianBeam
+
 from .monitor import uniform_freq_sampler, uniform_time_sampler
-from .monitor import (
-    FieldMonitor,
-    FieldTimeMonitor,
-    FluxMonitor,
-    FluxTimeMonitor,
-    ModeMonitor,
-    PermittivityMonitor,
-)
+from .monitor import FieldMonitor, FieldTimeMonitor, FluxMonitor, FluxTimeMonitor
+from .monitor import ModeMonitor, PermittivityMonitor
+
 from .mode import Mode
 
 from .data import SimulationData, FieldData, FluxData, ModeData, FieldTimeData, FluxTimeData

@@ -1,4 +1,3 @@
-# pylint: disable=invalid-name
 """ defines objects in space """
 
 from abc import ABC, abstractmethod

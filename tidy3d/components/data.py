@@ -11,7 +11,6 @@ import h5py
 import matplotlib.pylab as plt
 
 from .simulation import Simulation
-from .geometry import Box
 from .monitor import FluxMonitor, FluxTimeMonitor, FieldMonitor, FieldTimeMonitor, ModeMonitor
 from .monitor import PermittivityMonitor, Monitor, AbstractFluxMonitor, AbstractFieldMonitor
 from .monitor import FreqMonitor, TimeMonitor
@@ -57,20 +56,21 @@ class MonitorData(Tidy3dData, ABC):
         assert isinstance(other, MonitorData), "can only check eqality on two monitor data objects"
         return np.all(self.values == self.values)
 
+    @abstractmethod
     def plot(self) -> AxesSubplot:
         """make static plot"""
 
-    # @abstractmethod
+    @abstractmethod
     def visualize(self) -> None:
         """make interactive plot (impement in subclasses)"""
 
     @property
     def geometry(self):
-        """return Box representation of field data"""
+        """return Box representation of monitor's geometry."""
         return self.monitor.geometry
 
     def _make_xarray(self) -> xr.DataArray:
-        """returns an xarray representation of self"""
+        """returns an xarray representation of self."""
         data_dict = self.dict()
         coords = {dim: data_dict[dim] for dim in self._dims}
         return xr.DataArray(self.values, coords=coords, name=self.monitor_name)
@@ -161,6 +161,12 @@ class AbstractFieldData(MonitorData, ABC):
     y: Numpy
     z: Numpy
 
+    def visualize(self):
+        """make interactive plot"""
+        hv_ds = hv.Dataset(np.abs(self.data.copy()))
+        image = hv_ds.to(hv.Image, k_dims=["x", "y"], dynamic=True)
+        return image.options(cmap="magma", colorbar=True, aspect="equal")
+
 
 class AbstractFluxData(MonitorData, ABC):
     """stores flux data through a surface"""
@@ -204,12 +210,6 @@ class FieldData(AbstractFieldData, FreqData):
         plt.colorbar(image, ax=ax)
         ax = self.geometry._add_ax_labels_lims(axis=axis, ax=ax, buffer=0.0)
         return ax
-
-    def visualize(self):
-        """make interactive plot"""
-        hv_ds = hv.Dataset(np.abs(self.data.copy()))
-        image = hv_ds.to(hv.Image, k_dims=["x", "y"], dynamic=True)
-        return image.options(cmap="magma", colorbar=True, aspect="equal")
 
 
 class FieldTimeData(AbstractFieldData, TimeData):
@@ -284,12 +284,6 @@ class PermittivityData(AbstractFieldData, FreqData):
         ax = self.geometry._add_ax_labels_lims(axis=axis, ax=ax, buffer=0.0)
         return ax
 
-    def visualize(self):
-        """make interactive plot"""
-        hv_ds = hv.Dataset(self.data.real.copy())
-        image = hv_ds.to(hv.Image, k_dims=["x", "y"], dynamic=True)
-        return image.options(cmap="RdBu", colorbar=True, aspect="equal")
-
 
 class FluxData(AbstractFluxData, FreqData):
     """Stores power flux data through a planar FluxMonitor"""
@@ -343,10 +337,10 @@ class ModeData(FreqData):
 
     @add_ax_if_none
     def plot(
-        self, direction: Literal["+", "-"], ax: AxesSubplot = None, **plot_params: dict
+        self, direction: Direction, ax: AxesSubplot = None, **plot_params: dict
     ) -> AxesSubplot:
         """make static plot"""
-        values_dir = self.data.sel(direction="+").values
+        values_dir = self.data.sel(direction=direction).values
         for mode_index, mode_spectrum in enumerate(values_dir):
             ax.plot(self.f, np.abs(mode_spectrum.real), label=f"mode {mode_index}", **plot_params)
         ax.set_xlabel("frequency (Hz)")
