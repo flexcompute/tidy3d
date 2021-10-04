@@ -25,7 +25,7 @@ class SourceTime(ABC, Tidy3dBaseModel):
         """complex amplitude as a function of time"""
 
     @add_ax_if_none
-    def plot(  # pylint: disable=rguments-differ
+    def plot(  # pylint: disable=arguments-differ
         self, times: ArrayLike, ax: AxesSubplot = None
     ) -> AxesSubplot:
         """plot the time series"""

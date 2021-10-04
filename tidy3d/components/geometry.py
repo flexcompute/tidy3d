@@ -367,9 +367,9 @@ class PolySlab(Geometry):
 
         # make polygon with intersections and z axis information
         polys = []
-        for i in range(len(ints_y) // 2):
-            y1 = ints_y[2 * i]
-            y2 = ints_y[2 * i + 1]
+        for y_index in range(len(ints_y) // 2):
+            y1 = ints_y[2 * y_index]
+            y2 = ints_y[2 * y_index + 1]
             poly = [(y1, zmin), (y2, zmin), (y2, zmax), (y1, zmax)]
 
             polys.append(np.array(poly))

@@ -54,10 +54,10 @@ class Simulation(Box):
     def _check_geo_objs_in_bounds(self):
         """for each geometry-containing object in simulation, make sure it intersects simulation"""
 
-        for i, structure in enumerate(self.structures):
-            assert self.intersects(structure.geometry), (
-                f"Structure '{structure}' (at position {i}) " "is completely outside simulation"
-            )
+        for position_index, structure in enumerate(self.structures):
+            assert self.intersects(
+                structure.geometry
+            ), f"Structure '{structure}' (at position {position_index} in structures list) is completely outside simulation"
 
         for geo_obj_dict in (self.sources, self.monitors):
             for name, geo_obj in geo_obj_dict.items():
