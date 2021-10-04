@@ -37,6 +37,10 @@ PoleAndResidue = Tuple[Complex, Complex]
 Polarization = Literal["Jx", "Jy", "Jz", "Mx", "My", "Mz"]
 Direction = Literal["+", "-"]
 
+# monitors
+EMField = Literal["E", "H"]
+Component = Literal["x", "y", "z"]
+
 Numpy = np.ndarray
 
 Symmetry = Literal[0, -1, 1]

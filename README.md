@@ -153,7 +153,7 @@
 	- [x] add .plot method to `SimulationData`
 
 #### "Tidying" Up
-- [ ] Make Uniform Samplers separate classes (dont evaluate / store freqs, times)?
+- [ ] Make Uniform Samplers separate classes? (dont evaluate / store freqs, times)?
 - [ ] Fix MyPy warnings
 - [ ] Logging
 - [ ] clean up data.plot arguments.
