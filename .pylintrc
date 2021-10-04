@@ -1,7 +1,7 @@
 [MASTER]
 extension-pkg-allow-list=pydantic
 ignore=material_library.py, plugins
-good-names=ax, im
+good-names=ax, im, Lx, Ly, Lz, x0, y0, z0, x, y, z, f, t
 
 [BASIC]
 
