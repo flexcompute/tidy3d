@@ -15,7 +15,7 @@ from .types import Coordinate2D, Vertices, AxesSubplot
 from .viz import add_ax_if_none, GeoParams
 
 BOUND_EPS = 1e-3  # expand bounds by this much
-NUM_PTS_RADIUS = 20  # number of edges around circular shapes
+NUM_PTS_RADIUS = 101  # number of edges around circular shapes
 PLOT_BUFFER = 0.3  # add this around extents of .visualize()
 
 
