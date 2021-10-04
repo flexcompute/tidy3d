@@ -183,10 +183,10 @@ def monitor(task_id: TaskId) -> None:
 
         task.info.status = TaskStatus.RUN
         num_steps = 4
-        for i in range(num_steps):
+        for step_num in range(num_steps):
             run_info = RunInfo(
-                perc_done=(i + 1) / num_steps,
-                field_decay=np.exp(-i / num_steps),
+                perc_done=(step_num + 1) / num_steps,
+                field_decay=np.exp(-step_num / num_steps),
             )
             _print_status(task_id)
             run_info.display()

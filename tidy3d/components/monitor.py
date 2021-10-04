@@ -51,7 +51,7 @@ class Monitor(Box, ABC):
     """base class for monitors, which all have Box shape"""
 
     @add_ax_if_none
-    def plot(  # pylint: disable=invalid-name, arguments-differ
+    def plot(  # pylint: disable=arguments-differ
         self, position: float, axis: Axis, ax: AxesSubplot = None, **plot_params: dict
     ) -> AxesSubplot:
         """plot monitor geometry"""

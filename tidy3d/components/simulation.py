@@ -1,4 +1,3 @@
-# pylint: disable=invalid-name
 """ Container holding all information about simulation and its components"""
 from typing import Dict, Tuple, List
 
