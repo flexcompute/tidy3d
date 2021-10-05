@@ -1,7 +1,5 @@
-data_server/
-data_user/
-out/
 tests/tmp
+tests/data
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
