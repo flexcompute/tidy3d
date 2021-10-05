@@ -15,17 +15,17 @@ class Near2Far:
         self.f = field_data.f
         self.k0 = 2 * np.pi * self.f / C_0
 
-        # get normal axis
-        xs = field_data.x
-        ys = field_data.y
-        zs = field_data.z
-        mon_size = [len(xs), len(ys), len(zs)]
+        # get normal axis (ignore components)
+        xs = field_data.x[0, 0]
+        ys = field_data.y[0, 0]
+        zs = field_data.z[0, 0]
+        mon_size = [xs.shape[-1], ys.shape[-1], zs.shape[-1]]
         self.axis = mon_size.index(1)
         assert self.axis == 2, "Currently only works for z normal."
 
         # get normal and planar coordinates
         zs, (xs, ys) = field_data.geometry.pop_axis((xs, ys, zs), axis=self.axis)
-        z0 = zs[0]
+        self.z0 = zs[0]
         self.xs = xs
         self.ys = ys
         self.xx, self.yy = np.meshgrid(self.xs, self.ys, indexing="ij")
@@ -36,18 +36,14 @@ class Near2Far:
         assert field_data.values.shape[0] == 2, "Monitor must have E and H components"
         E = np.squeeze(field_data.values[0])
         H = np.squeeze(field_data.values[1])
-        Ez, (Ex, Ey) = field_data.geometry.pop_axis(E, axis=self.axis)
-        Hz, (Hx, Hy) = field_data.geometry.pop_axis(H, axis=self.axis)
-        self.Ex = Ex
-        self.Ey = Ey
-        self.Hx = Hx
-        self.Hy = Hy
+        _, (self.Ex, self.Ey) = field_data.geometry.pop_axis(E, axis=self.axis)
+        _, (self.Hx, self.Hy) = field_data.geometry.pop_axis(H, axis=self.axis)
 
         # compute equivalent sources
-        self.Jx = -Hy
-        self.Jy = Hx
-        self.Mx = Ey
-        self.My = -Ex
+        self.Jx = -self.Hy
+        self.Jy = self.Hx
+        self.Mx = self.Ey
+        self.My = -self.Ex
 
     def _radiation_vectors(self, theta, phi):
         """Compute radiation vectors at an angle in spherical coordinates

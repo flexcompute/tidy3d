@@ -10,7 +10,7 @@ import matplotlib.pylab as plt
 from ...components import PoleResidue, nk_to_eps_complex, eps_complex_to_nk
 from ...constants import C_0, HBAR
 from ...components.viz import add_ax_if_none
-from ...components.types import Ax
+from ...components.types import Ax, Numpy
 
 
 def _unpack_complex(complex_num):
@@ -65,7 +65,7 @@ def _poles_to_coeffs(poles):
 class DispersionFitter:
     """Tool for fitting raw nk data to get Dispersive Medium"""
 
-    def __init__(self, wvl_um: np.ndarray, n_data: np.ndarray, k_data: np.ndarray = None):
+    def __init__(self, wvl_um: Numpy, n_data: Numpy, k_data: Numpy = None):
         """initialize fitter with raw data"""
 
         self._validate_data(wvl_um, n_data, k_data)
@@ -82,7 +82,7 @@ class DispersionFitter:
         self.frequency_range = (np.min(self.freqs), np.max(self.freqs))
 
     @staticmethod
-    def _validate_data(wvl_um: np.ndarray, n_data: np.ndarray, k_data: np.ndarray = None):
+    def _validate_data(wvl_um: Numpy, n_data: Numpy, k_data: Numpy = None):
         """make sure data is correctly shaped"""
         assert wvl_um.shape == n_data.shape
         if k_data is not None:
@@ -241,7 +241,7 @@ class DispersionFitter:
     def plot(  # pylint: disable=invalid-name
         self,
         medium: PoleResidue = None,
-        wvl_um: np.ndarray = None,
+        wvl_um: Numpy = None,
         ax: Ax = None,
     ) -> Ax:
         """Make plot of model vs data, at a set of wavelengths (if supplied).

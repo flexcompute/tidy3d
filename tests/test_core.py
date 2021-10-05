@@ -73,7 +73,7 @@ def test_flow():
     # load json file
     sim_core = Simulation.load(PATH_JSON)
 
-    # get raw results in dict of dict of np.ndarray
+    # get raw results in dict of dict of Numpy
     solver_data_dict = tdcore.solve(sim_core)
 
     # load these results as SimulationData server side if you want
