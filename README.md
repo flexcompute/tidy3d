@@ -100,7 +100,7 @@
 	- [x] Make dispersion fitting tool compatible
 	- [x] Make mode solver compatible
 	- [x] Batch processor <- done in webapi
-	- [ ] **Near2Far**
+	- [x] Near2Far
 
 ---
 
@@ -118,7 +118,6 @@
 	- [x] IO SimulationData
 	- [ ] Process Simulation to solver inputs. (momchil)
 	- [ ] Write solver outputs to SimulationData. (momchil)
-	- [ ] Separate FieldData into different xr.DataArrays with different xs, ys, zs at positions in yee lattice
 - [ ] Test test test.
 ---
 
@@ -130,6 +129,7 @@
 ---
 
 #### Finishing Integration
+- [ ] **Separate FieldData into different xr.DataArrays with different xs, ys, zs at positions in yee lattice**
 - [ ] ModeSolver uses Permittivity Monitor for discretization / eps_cross.
 - [ ] Support for Nonuniform Mesh
 - [ ] Handling symmetries properly
@@ -153,10 +153,11 @@
 	- [x] add .plot method to `SimulationData`
 
 #### "Tidying" Up
+- [ ] **Material library refactor.**
 - [ ] Make Uniform Samplers separate classes? (dont evaluate / store freqs, times)?
 - [ ] Fix MyPy warnings
-- [ ] Logging
-- [ ] clean up data.plot arguments.
+- [ ] **Logging**
+- [ ] **clean up data.plot arguments.**
 - [ ] fix overlapping structure plotting.
 - [ ] .json conversion to use old solver code?
 
