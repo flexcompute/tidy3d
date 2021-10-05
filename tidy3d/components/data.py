@@ -17,7 +17,7 @@ from .monitor import FreqMonitor, TimeMonitor
 
 from .monitor import monitor_type_map
 from .base import Tidy3dBaseModel
-from .types import Ax, Axis, Numpy, Literal, EMField, Component, Direction
+from .types import Ax, Axis, Numpy, EMField, Component, Direction
 from .viz import add_ax_if_none, SimDataGeoParams
 
 
@@ -66,7 +66,7 @@ class MonitorData(Tidy3dData, ABC):
         return self.monitor.geometry
 
     def _make_xarray(self) -> xr.DataArray:
-        """returns an xarray representation of self."""
+        """make xarray.DataArray representation of data."""
         data_dict = self.dict()
         coords = {dim: data_dict[dim] for dim in self._dims}
         return xr.DataArray(self.values, coords=coords, name=self.monitor_name)
@@ -163,6 +163,52 @@ class AbstractFieldData(MonitorData, ABC):
         image = hv_ds.to(hv.Image, k_dims=["x", "y"], dynamic=True)
         return image.options(cmap="magma", colorbar=True, aspect="equal")
 
+    def _make_xarray(self):
+        """reutrn dataset"""
+        data_dict = self.dict()
+        data_arrays = {}
+        for field_index, field_name in enumerate(self.field):
+            for component_index, component in enumerate(self.component):
+                name = field_name + component  # Ex, Hy, etc.
+                coords = {dim: data_dict[dim] for dim in self._dims}
+                values = self.values[field_index, component_index]
+                coords.pop("component")
+                coords.pop("field")
+                for dimension in "xyz":
+                    coords[dimension] = coords[dimension][field_index, component_index]
+                data_array = xr.DataArray(values, coords=coords, name=self.monitor_name)
+                data_arrays[name] = data_array
+        return xr.Dataset(data_arrays)
+
+    @add_ax_if_none
+    def plot(
+        self,
+        field_name: str,
+        freq: float,
+        position: float,
+        axis: Axis,
+        ax: Ax = None,
+        **pcolormesh_params: dict,
+    ) -> Ax:
+        """make plot of field data along plane"""
+        z_label, (x_label, y_label) = self.geometry.pop_axis("xyz", axis=axis)
+        x_coords = self.data.coords[x_label]
+        y_coords = self.data.coords[y_label]
+        field_data = self.data[field_name]
+        field_data = field_data.sel(f=freq)
+        field_data = field_data.interp(**{z_label: position})
+        image = ax.pcolormesh(
+            x_coords,
+            y_coords,
+            np.real(field_data.values),
+            cmap="RdBu",
+            shading="auto",
+            **pcolormesh_params,
+        )
+        plt.colorbar(image, ax=ax)
+        ax = self.geometry.add_ax_labels_lims(axis=axis, ax=ax, buffer=0.0)
+        return ax
+
 
 class AbstractFluxData(MonitorData, ABC):
     """stores flux data through a surface"""
@@ -178,35 +224,6 @@ class FieldData(AbstractFieldData, FreqData):
 
     _dims = ("field", "component", "x", "y", "z", "f")
 
-    @add_ax_if_none
-    def plot(
-        self,
-        field_component: str,
-        freq: float,
-        position: float,
-        axis: Axis,
-        ax: Ax = None,
-        **pcolormesh_params: dict,
-    ) -> Ax:
-        """make plot of field data along plane"""
-        field, component = field_component
-        z_label, (x_label, y_label) = self.geometry.pop_axis("xyz", axis=axis)
-        x_coords = self.data.coords[x_label]
-        y_coords = self.data.coords[y_label]
-        field_data = self.data.sel(field=field, component=component, f=freq)
-        data_plane = field_data.interp(**{z_label: position})
-        image = ax.pcolormesh(
-            x_coords,
-            y_coords,
-            np.real(data_plane.values),
-            cmap="RdBu",
-            shading="auto",
-            **pcolormesh_params,
-        )
-        plt.colorbar(image, ax=ax)
-        ax = self.geometry.add_ax_labels_lims(axis=axis, ax=ax, buffer=0.0)
-        return ax
-
 
 class FieldTimeData(AbstractFieldData, TimeData):
     """Stores Electric and Magnetic fields from a FieldTimeMonitor"""
@@ -215,70 +232,26 @@ class FieldTimeData(AbstractFieldData, TimeData):
 
     _dims = ("field", "component", "x", "y", "z", "t")
 
-    @add_ax_if_none
-    def plot(
-        self,
-        field_component: str,
-        time: int,
-        position: float,
-        axis: Axis,
-        ax: Ax = None,
-        **pcolormesh_params: dict,
-    ) -> Ax:
-        """make plot of field data along plane"""
-        field, component = field_component
-        z_label, (x_label, y_label) = self.geometry.pop_axis("xyz", axis=axis)
-        x_coords = self.data.coords[x_label]
-        y_coords = self.data.coords[y_label]
-        field_data = self.data.sel(field=field, component=component, t=time)
-        data_plane = field_data.interp(**{z_label: position})
-        im = ax.pcolormesh(
-            x_coords,
-            y_coords,
-            np.real(data_plane.values),
-            cmap="RdBu",
-            shading="auto",
-            **pcolormesh_params,
-        )
-        plt.colorbar(im, ax=ax)
-        ax = self.geometry.add_ax_labels_lims(axis=axis, ax=ax, buffer=0.0)
-        return ax
-
 
 class PermittivityData(AbstractFieldData, FreqData):
     """Stores Reltive Permittivity from a FieldMonitor"""
 
     _dims = ("component", "x", "y", "z", "f")
 
-    @add_ax_if_none
-    def plot(
-        self,
-        freq: float,
-        component: Literal["x", "y", "z"],
-        position: float,
-        axis: Axis,
-        ax: Ax = None,
-        **pcolormesh_params: dict,
-    ) -> Ax:
-        """make plot of field data along plane"""
-        z_label, (x_label, y_label) = self.geometry.pop_axis("xyz", axis=axis)
-        x_coords = self.data.coords[x_label]
-        y_coords = self.data.coords[y_label]
-        field_data = self.data.sel(component=component, f=freq)
-        data_plane = field_data.interp(**{z_label: position})
-        im = ax.pcolormesh(
-            x_coords,
-            y_coords,
-            np.real(data_plane.values),
-            vmin=1,
-            vmax=np.max(np.real(data_plane)),
-            cmap="gist_yarg",
-            shading="auto",
-            **pcolormesh_params,
-        )
-        plt.colorbar(im, ax=ax)
-        ax = self.geometry.add_ax_labels_lims(axis=axis, ax=ax, buffer=0.0)
-        return ax
+    def _make_xarray(self):
+        """reutrn dataset"""
+        data_dict = self.dict()
+        data_arrays = {}
+        for component_index, component in enumerate(self.component):
+            field_name = f"epsilon_{component}"
+            coords = {dim: data_dict[dim] for dim in self._dims}
+            values = self.values[component_index]
+            coords.pop("component")
+            for dimension in "xyz":
+                coords[dimension] = coords[dimension][component_index]
+            data_array = xr.DataArray(values, coords=coords, name=self.monitor_name)
+            data_arrays[field_name] = data_array
+        return xr.Dataset(data_arrays)
 
 
 class FluxData(AbstractFluxData, FreqData):

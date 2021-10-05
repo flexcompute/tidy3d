@@ -135,7 +135,7 @@ def run(task_id: TaskId) -> None:
     sys.path.append("../../")
     import tidy3d_core as tdcore  # pylint: disable=import-outside-toplevel
 
-    # get raw results in dict of dict of np.ndarray
+    # get raw results in dict of dict of Numpy
     solver_data_dict = tdcore.solve(sim_core)
 
     # load these results as SimulationData server side if you want
