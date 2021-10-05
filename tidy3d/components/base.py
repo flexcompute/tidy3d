@@ -5,9 +5,6 @@ import yaml
 
 import pydantic
 
-# from .viz import add_ax_if_none
-# from .types import AxesSubplot
-
 # default indentation (# spaces) in files
 INDENT = 4
 
@@ -23,17 +20,9 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         validate_assignment = True  # validate when attributes are set after initialization
         allow_population_by_field_name = True
 
-    # def __init_subclass__(cls):
-    #     """add plot or other method decorators here so all method subclasses do the same thing"""
-    #     cls.plot = add_ax_if_none(cls.plot)
-    #     # cls.plot = make_aspect_equal(cls.plot)
-
     def __hash__(self):
         """hash tidy3dBaseModel objects using their json strings"""
         return hash(self.json())
-
-    # def plot(self, ax: AxesSubplot = None) -> AxesSubplot:  # pylint: disable=invalid-name
-    #     """generic plotting function for tidy3d components."""
 
     def _json_string(self, exclude_unset: bool = False) -> str:
         """returns string representation of self"""
@@ -64,3 +53,11 @@ class Tidy3dBaseModel(pydantic.BaseModel):
             json_dict = yaml.safe_load(yaml_in)
         json_raw = json.dumps(json_dict, indent=INDENT)
         return cls.parse_raw(json_raw)
+
+    # def plot(self, ax: Ax = None) -> Ax:  # pylint: disable=invalid-name
+    #     """generic plotting function for tidy3d components."""
+
+    # def __init_subclass__(cls):
+    #     """add plot or other method decorators here so all method subclasses do the same thing"""
+    #     cls.plot = add_ax_if_none(cls.plot)
+    #     # cls.plot = make_aspect_equal(cls.plot)

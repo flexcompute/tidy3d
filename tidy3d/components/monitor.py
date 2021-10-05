@@ -4,7 +4,7 @@ from typing import List, Union
 
 import numpy as np
 
-from .types import Literal, Axis, AxesSubplot, Direction, EMField, Component
+from .types import Literal, Axis, Ax, Direction, EMField, Component
 from .geometry import Box
 from .validators import assert_plane
 from .mode import Mode
@@ -18,19 +18,19 @@ TimeSampler = List[int]
 
 
 def _uniform_arange(start: int, stop: int, step: int) -> TimeSampler:
-    """uniform spacing from start to stop with spacing of step"""
+    """uniform spacing from start to stop with spacing of step."""
     assert start <= stop, "start must not be greater than stop"
     return list(np.arange(start, stop, step))
 
 
 def _uniform_linspace(start: float, stop: float, num: int) -> FreqSampler:
-    """uniform spacing from start to stop with num elements"""
+    """uniform spacing from start to stop with num elements."""
     assert start <= stop, "start must not be greater than stop"
     return list(np.linspace(start, stop, num))
 
 
 def uniform_time_sampler(t_start: int, t_stop: int, t_step: int = 1) -> TimeSampler:
-    """create TimeSampler at evenly spaced time steps"""
+    """create times at evenly spaced steps."""
     assert isinstance(t_start, int), "`t_start` must be integer for time sampler"
     assert isinstance(t_stop, int), "`t_stop` must be integer for time sampler"
     assert isinstance(t_step, int), "`t_step` must be integer for time sampler"
@@ -39,7 +39,7 @@ def uniform_time_sampler(t_start: int, t_stop: int, t_step: int = 1) -> TimeSamp
 
 
 def uniform_freq_sampler(f_start, f_stop, num_freqs) -> FreqSampler:
-    """create FreqSampler at evenly spaced frequency points"""
+    """create frequencies at evenly spaced points."""
     freqs = _uniform_linspace(f_start, f_stop, num_freqs)
     return freqs
 
@@ -51,12 +51,10 @@ class Monitor(Box, ABC):
     """base class for monitors, which all have Box shape"""
 
     @add_ax_if_none
-    def plot(  # pylint: disable=arguments-differ
-        self, position: float, axis: Axis, ax: AxesSubplot = None, **plot_params: dict
-    ) -> AxesSubplot:
+    def plot(self, position: float, axis: Axis, ax: Ax = None, **plot_params: dict) -> Ax:
         """plot monitor geometry"""
-        plot_params = MonitorParams().update_params(**plot_params)
-        ax = self.geometry.plot(position=position, axis=axis, ax=ax, **plot_params)
+        plot_params_new = MonitorParams().update_params(**plot_params)
+        ax = self.geometry.plot(position=position, axis=axis, ax=ax, **plot_params_new)
         return ax
 
 

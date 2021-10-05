@@ -7,7 +7,7 @@ import pydantic
 import numpy as np
 
 from .base import Tidy3dBaseModel
-from .types import PoleAndResidue, Literal, AxesSubplot, ArrayLike
+from .types import PoleAndResidue, Literal, Ax, ArrayLike
 from .viz import add_ax_if_none
 
 from ..constants import C_0, inf
@@ -26,9 +26,7 @@ class AbstractMedium(ABC, Tidy3dBaseModel):
         """complex permittivity as a function of frequency"""
 
     @add_ax_if_none
-    def plot(
-        self, freqs: ArrayLike, ax: AxesSubplot = None
-    ) -> AxesSubplot:  # pylint: disable=invalid-name
+    def plot(self, freqs: ArrayLike, ax: Ax = None) -> Ax:  # pylint: disable=invalid-name
         """plot n, k of medium as a function of frequencies"""
         freqs = np.array(freqs)
         eps_complex = self.eps_model(freqs)

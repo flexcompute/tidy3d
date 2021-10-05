@@ -24,7 +24,7 @@ class Near2Far:
         assert self.axis == 2, "Currently only works for z normal."
 
         # get normal and planar coordinates
-        zs, (xs, ys) = field_data.geometry._pop_axis((xs, ys, zs), axis=self.axis)
+        zs, (xs, ys) = field_data.geometry.pop_axis((xs, ys, zs), axis=self.axis)
         z0 = zs[0]
         self.xs = xs
         self.ys = ys
@@ -36,8 +36,8 @@ class Near2Far:
         assert field_data.values.shape[0] == 2, "Monitor must have E and H components"
         E = np.squeeze(field_data.values[0])
         H = np.squeeze(field_data.values[1])
-        Ez, (Ex, Ey) = field_data.geometry._pop_axis(E, axis=self.axis)
-        Hz, (Hx, Hy) = field_data.geometry._pop_axis(H, axis=self.axis)
+        Ez, (Ex, Ey) = field_data.geometry.pop_axis(E, axis=self.axis)
+        Hz, (Hx, Hy) = field_data.geometry.pop_axis(H, axis=self.axis)
         self.Ex = Ex
         self.Ey = Ey
         self.Hx = Hx

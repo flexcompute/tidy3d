@@ -89,7 +89,7 @@ def test_1a_simulation_load_export2():
     assert SIM2 == SIM3, "original and loaded simulations are not the same"
 
 
-def test_validation_speed():
+def test_validation_speed():  
 
     sizes_bytes = []
     times_sec = []

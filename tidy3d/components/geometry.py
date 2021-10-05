@@ -10,7 +10,7 @@ import matplotlib as mpl
 
 from .base import Tidy3dBaseModel
 from .types import Literal, Numpy, Bound, Size, Coordinate, Axis
-from .types import Coordinate2D, Vertices, AxesSubplot
+from .types import Coordinate2D, Vertices, Ax
 from .viz import add_ax_if_none, GeoParams
 
 BOUND_EPS = 1e-3  # expand bounds by this much
@@ -67,7 +67,7 @@ class Geometry(Tidy3dBaseModel, ABC):
         return is_above_bottom and is_below_top
 
     @staticmethod
-    def _pop_axis(coord: Coordinate, axis: Axis) -> Tuple[float, Coordinate2D]:
+    def pop_axis(coord: Coordinate, axis: Axis) -> Tuple[float, Coordinate2D]:
         """separate axis coordinate from planar coordinate"""
         plane_vals = list(coord)
         axis_val = plane_vals.pop(axis)
@@ -78,13 +78,13 @@ class Geometry(Tidy3dBaseModel, ABC):
     ) -> Tuple[Tuple[float, float], Tuple[Tuple[float, float], Tuple[float, float]]]:
         """returns min and max bounds in plane normal to `axis`"""
         b_min, b_max = self.get_bounds()
-        zmin, (xmin, ymin) = self._pop_axis(b_min, axis=axis)
-        zmax, (xmax, ymax) = self._pop_axis(b_max, axis=axis)
+        zmin, (xmin, ymin) = self.pop_axis(b_min, axis=axis)
+        zmax, (xmax, ymax) = self.pop_axis(b_max, axis=axis)
         return (zmin, zmax), ((xmin, ymin), (xmax, ymax))
 
     def _get_plot_labels(self, axis: Axis) -> Tuple[str, str]:
         """get x, y axis labels for cross section plots"""
-        _, (xlabel, ylabel) = self._pop_axis("xyz", axis=axis)
+        _, (xlabel, ylabel) = self.pop_axis("xyz", axis=axis)
         return xlabel, ylabel
 
     def _get_plot_extents(
@@ -100,9 +100,7 @@ class Geometry(Tidy3dBaseModel, ABC):
         )
         return extents
 
-    def _add_ax_labels_lims(
-        self, axis: Axis, ax: AxesSubplot, buffer: float = PLOT_BUFFER
-    ) -> AxesSubplot:
+    def add_ax_labels_lims(self, axis: Axis, ax: Ax, buffer: float = PLOT_BUFFER) -> Ax:
         """sets the x,y labels based on axis and the extends based on self.bounds"""
         xlabel, ylabel = self._get_plot_labels(axis=axis)
         (xmin, ymin, xmax, ymax) = self._get_plot_extents(axis=axis, buffer=buffer)
@@ -117,9 +115,9 @@ class Geometry(Tidy3dBaseModel, ABC):
         self,
         position: float,
         axis: Axis,
-        ax: AxesSubplot = None,
+        ax: Ax = None,
         **plot_params: dict,
-    ) -> AxesSubplot:
+    ) -> Ax:
         """plot the geometry on the plane"""
         plot_params_new = GeoParams().update_params(**plot_params)
 
@@ -127,7 +125,7 @@ class Geometry(Tidy3dBaseModel, ABC):
         for vertices in vertices_list:
             patch = mpl.patches.Polygon(vertices, **plot_params_new)
             ax.add_patch(patch)
-        ax = self._add_ax_labels_lims(axis=axis, ax=ax)
+        ax = self.add_ax_labels_lims(axis=axis, ax=ax)
         ax.set_aspect("equal")
         ax.set_title(f"cross section at {'xyz'[axis]}={position:.2f}")
         return ax
@@ -188,8 +186,8 @@ class Box(Geometry):
 
     def _get_crosssection_polygons(self, position: float, axis: Axis) -> List[Vertices]:
         """returns list of polygon vertices that intersect with plane"""
-        z0, (x0, y0) = self._pop_axis(self.center, axis=axis)
-        Lz, (Lx, Ly) = self._pop_axis(self.size, axis=axis)
+        z0, (x0, y0) = self.pop_axis(self.center, axis=axis)
+        Lz, (Lx, Ly) = self.pop_axis(self.size, axis=axis)
         if np.abs(z0 - position) > Lz / 2:
             return []
         rect_vertices = [
@@ -230,7 +228,7 @@ class Sphere(Geometry):
 
     def _get_crosssection_polygons(self, position: float, axis: Axis) -> List[Vertices]:
         """returns list of polygon vertices that intersect with plane"""
-        z0, (x0, y0) = self._pop_axis(self.center, axis=axis)
+        z0, (x0, y0) = self.pop_axis(self.center, axis=axis)
         dist_center = np.abs(position - z0)
         if dist_center > self.radius:
             return []
@@ -261,8 +259,8 @@ class Cylinder(Geometry):
 
     def is_inside(self, x, y, z) -> bool:
         """returns True if (x,y,z) is inside of geometry"""
-        z0, (x0, y0) = self._pop_axis(self.center, axis=self.axis)
-        z, (x, y) = self._pop_axis((x, y, z), axis=self.axis)
+        z0, (x0, y0) = self.pop_axis(self.center, axis=self.axis)
+        z, (x, y) = self.pop_axis((x, y, z), axis=self.axis)
         dist_x = np.abs(x - x0)
         dist_y = np.abs(y - y0)
         dist_z = np.abs(z - z0)
@@ -270,7 +268,7 @@ class Cylinder(Geometry):
 
     def _get_crosssection_polygons(self, position: float, axis: Axis) -> List[Vertices]:
         """returns list of polygon vertices that intersect with plane"""
-        z0, (x0, y0) = self._pop_axis(self.center, axis=axis)
+        z0, (x0, y0) = self.pop_axis(self.center, axis=axis)
         dist_center = np.abs(position - z0)
         if axis == self.axis:
             return self._get_crosssection_top(dist_center, x0, y0)
@@ -295,7 +293,7 @@ class Cylinder(Geometry):
         radius_intersect = np.sqrt(self.radius ** 2 - dist_center ** 2)
         sizes = [2 * radius_intersect, 2 * radius_intersect, 2 * radius_intersect]
         sizes[self.axis] = self.length
-        _, (Lx, Ly) = self._pop_axis(sizes, axis=axis)
+        _, (Lx, Ly) = self.pop_axis(sizes, axis=axis)
         rect_vertices = [
             (x0 - Lx / 2, y0 - Ly / 2),
             (x0 + Lx / 2, y0 - Ly / 2),
@@ -337,7 +335,7 @@ class PolySlab(Geometry):
 
     def is_inside(self, x, y, z) -> bool:
         """returns True if (x,y,z) is inside of geometry"""
-        z, (x, y) = self._pop_axis((x, y, z), axis=self.axis)
+        z, (x, y) = self.pop_axis((x, y, z), axis=self.axis)
         zmin, zmax = self.slab_bounds
         path = mpl.path.Path(self.vertices)
         xy_points = np.stack((x, y), axis=1)
