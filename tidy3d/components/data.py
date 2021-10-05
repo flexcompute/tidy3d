@@ -1,14 +1,12 @@
 """ Classes for Storing Monitor and Simulation Data """
 
-from abc import ABC, abstractmethod
-from typing import Dict, List
+from abc import ABC
+from typing import Dict, List, Union
 import json
 
 import xarray as xr
 import numpy as np
-import holoviews as hv
 import h5py
-import matplotlib.pylab as plt
 
 from .simulation import Simulation
 from .monitor import FluxMonitor, FluxTimeMonitor, FieldMonitor, FieldTimeMonitor, ModeMonitor
@@ -17,8 +15,7 @@ from .monitor import FreqMonitor, TimeMonitor
 
 from .monitor import monitor_type_map
 from .base import Tidy3dBaseModel
-from .types import Ax, Axis, Numpy, EMField, Component, Direction
-from .viz import add_ax_if_none, SimDataGeoParams
+from .types import Numpy, EMField, Component, Direction
 
 
 class Tidy3dData(Tidy3dBaseModel):
@@ -51,25 +48,21 @@ class MonitorData(Tidy3dData, ABC):
         super().__init__(**kwargs)
         self.data = self._make_xarray()
 
+    def _make_xarray(self) -> Union[xr.DataArray, xr.Dataset]:
+        """make xarray representation of data, either DataArray or Dataset (fields)"""
+        data_dict = self.dict()
+        coords = {dim: data_dict[dim] for dim in self._dims}
+        return xr.DataArray(self.values, coords=coords, name=self.monitor_name)
+
     def __eq__(self, other):
         """check equality against another MonitorData instance"""
         assert isinstance(other, MonitorData), "can only check eqality on two monitor data objects"
         return np.all(self.values == self.values)
 
-    @abstractmethod
-    def visualize(self) -> None:
-        """make interactive plot (impement in subclasses)"""
-
     @property
     def geometry(self):
         """return Box representation of monitor's geometry."""
         return self.monitor.geometry
-
-    def _make_xarray(self) -> xr.DataArray:
-        """make xarray.DataArray representation of data."""
-        data_dict = self.dict()
-        coords = {dim: data_dict[dim] for dim in self._dims}
-        return xr.DataArray(self.values, coords=coords, name=self.monitor_name)
 
     def export(self, fname: str) -> None:
         """Export MonitorData to hdf5 file"""
@@ -105,7 +98,7 @@ class MonitorData(Tidy3dData, ABC):
             return cls.load_from_data(monitor, monitor_data)
 
     @staticmethod
-    def load_from_data(monitor: Monitor, monitor_data: dict):
+    def load_from_data(monitor: Monitor, monitor_data: Dict[str, Numpy]):
         """load the solver data for a monitor into a MonitorData instance"""
 
         # kwargs that gets passed to MonitorData.__init__() to make new MonitorData
@@ -137,6 +130,8 @@ class MonitorData(Tidy3dData, ABC):
         return monitor_data_instance
 
 
+""" Differentiates between frequency and time domain data """
+
 class FreqData(MonitorData, ABC):
     """stores data in frequency domain"""
 
@@ -149,19 +144,21 @@ class TimeData(MonitorData, ABC):
     t: Numpy
 
 
-class AbstractFieldData(MonitorData, ABC):
-    """stores data as a function of x,y,z"""
+""" Differentiates between types of field data """
+
+class VectorFieldData(MonitorData, ABC):
+    """stores general vector field data as a function of {component, x, y, z}"""
 
     component: List[Component] = ["x", "y", "z"]
     x: Numpy
     y: Numpy
     z: Numpy
 
-    def visualize(self):
-        """make interactive plot"""
-        hv_ds = hv.Dataset(np.abs(self.data.copy()))
-        image = hv_ds.to(hv.Image, k_dims=["x", "y"], dynamic=True)
-        return image.options(cmap="magma", colorbar=True, aspect="equal")
+
+class AbstractEMFieldData(VectorFieldData, ABC):
+    """stores collections of electromagnetic fields"""
+
+    field: List[EMField] = ["E", "H"]
 
     def _make_xarray(self):
         """reutrn dataset"""
@@ -180,35 +177,6 @@ class AbstractFieldData(MonitorData, ABC):
                 data_arrays[name] = data_array
         return xr.Dataset(data_arrays)
 
-    @add_ax_if_none
-    def plot(
-        self,
-        field_name: str,
-        freq: float,
-        position: float,
-        axis: Axis,
-        ax: Ax = None,
-        **pcolormesh_params: dict,
-    ) -> Ax:
-        """make plot of field data along plane"""
-        z_label, (x_label, y_label) = self.geometry.pop_axis("xyz", axis=axis)
-        x_coords = self.data.coords[x_label]
-        y_coords = self.data.coords[y_label]
-        field_data = self.data[field_name]
-        field_data = field_data.sel(f=freq)
-        field_data = field_data.interp(**{z_label: position})
-        image = ax.pcolormesh(
-            x_coords,
-            y_coords,
-            np.real(field_data.values),
-            cmap="RdBu",
-            shading="auto",
-            **pcolormesh_params,
-        )
-        plt.colorbar(image, ax=ax)
-        ax = self.geometry.add_ax_labels_lims(axis=axis, ax=ax, buffer=0.0)
-        return ax
-
 
 class AbstractFluxData(MonitorData, ABC):
     """stores flux data through a surface"""
@@ -217,23 +185,19 @@ class AbstractFluxData(MonitorData, ABC):
 """ usable monitors """
 
 
-class FieldData(AbstractFieldData, FreqData):
+class FieldData(AbstractEMFieldData, FreqData):
     """Stores Electric and Magnetic fields from a FieldMonitor"""
-
-    field: List[EMField] = ["E", "H"]
 
     _dims = ("field", "component", "x", "y", "z", "f")
 
 
-class FieldTimeData(AbstractFieldData, TimeData):
+class FieldTimeData(AbstractEMFieldData, TimeData):
     """Stores Electric and Magnetic fields from a FieldTimeMonitor"""
-
-    field: List[EMField] = ["E", "H"]
 
     _dims = ("field", "component", "x", "y", "z", "t")
 
 
-class PermittivityData(AbstractFieldData, FreqData):
+class PermittivityData(VectorFieldData, FreqData):
     """Stores Reltive Permittivity from a FieldMonitor"""
 
     _dims = ("component", "x", "y", "z", "f")
@@ -243,14 +207,14 @@ class PermittivityData(AbstractFieldData, FreqData):
         data_dict = self.dict()
         data_arrays = {}
         for component_index, component in enumerate(self.component):
-            field_name = f"epsilon_{component}"
+            name = component + component  # xx, yy, zz
             coords = {dim: data_dict[dim] for dim in self._dims}
             values = self.values[component_index]
             coords.pop("component")
             for dimension in "xyz":
                 coords[dimension] = coords[dimension][component_index]
             data_array = xr.DataArray(values, coords=coords, name=self.monitor_name)
-            data_arrays[field_name] = data_array
+            data_arrays[name] = data_array
         return xr.Dataset(data_arrays)
 
 
@@ -259,41 +223,11 @@ class FluxData(AbstractFluxData, FreqData):
 
     _dims = ("f",)
 
-    @add_ax_if_none
-    def plot(self, ax: Ax = None, **plot_params) -> Ax:
-        """make static plot"""
-        ax.plot(self.f, self.values, **plot_params)
-        ax.set_xlabel("frequency (Hz)")
-        ax.set_ylabel("flux")
-        return ax
-
-    def visualize(self):
-        """make interactive plot"""
-        hv.extension("bokeh")
-        hv_ds = hv.Dataset(self.data.copy())
-        image = hv_ds.to(hv.Curve, "f")
-        return image
-
 
 class FluxTimeData(AbstractFluxData, TimeData):
     """Stores power flux data through a planar FluxMonitor"""
 
     _dims = ("t",)
-
-    @add_ax_if_none
-    def plot(self, ax: Ax = None, **plot_params: dict) -> Ax:
-        """make static plot"""
-        ax.plot(self.t, self.values, **plot_params)
-        ax.set_xlabel("time steps")
-        ax.set_ylabel("flux")
-        return ax
-
-    def visualize(self):
-        """make interactive plot"""
-        hv.extension("bokeh")
-        hv_ds = hv.Dataset(self.data.copy())
-        image = hv_ds.to(hv.Curve, "t")
-        return image
 
 
 class ModeData(FreqData):
@@ -304,23 +238,6 @@ class ModeData(FreqData):
 
     _dims = ("direction", "mode_index", "f")
 
-    @add_ax_if_none
-    def plot(self, direction: Direction, ax: Ax = None, **plot_params: dict) -> Ax:
-        """make static plot"""
-        values_dir = self.data.sel(direction=direction).values
-        for mode_index, mode_spectrum in enumerate(values_dir):
-            ax.plot(self.f, np.abs(mode_spectrum.real), label=f"mode {mode_index}", **plot_params)
-        ax.set_xlabel("frequency (Hz)")
-        ax.set_ylabel("Re{mode amplitude}")
-        ax.legend()
-        return ax
-
-    def visualize(self):
-        """make interactive plot"""
-        hv_ds = hv.Dataset(self.data.real.copy())
-        image = hv_ds.to(hv.Curve, "f", dynamic=True)
-        return image
-
 
 # maps monitor type to corresponding data type
 monitor_data_map = {
@@ -330,7 +247,7 @@ monitor_data_map = {
     FluxMonitor: FluxData,
     FluxTimeMonitor: FluxTimeData,
     ModeMonitor: ModeData,
-    AbstractFieldMonitor: AbstractFieldData,
+    AbstractFieldMonitor: VectorFieldData,
     AbstractFluxMonitor: AbstractFluxData,
     FreqMonitor: FreqData,
     TimeMonitor: TimeData,
@@ -342,38 +259,6 @@ class SimulationData(Tidy3dData):
 
     simulation: Simulation
     monitor_data: Dict[str, MonitorData]
-
-    """ add __getitem__ or __index__ for monitor """
-
-    @add_ax_if_none
-    def plot(self, monitor_name: str, ax: Ax = None, **plot_params: dict) -> Ax:
-        """plot the monitor with simulation object overlay"""
-
-        monitor_data = self.monitor_data[monitor_name]
-        ax = monitor_data.plot(ax=ax, **plot_params)
-        return ax
-
-    @add_ax_if_none
-    def plot_fields(
-        self,
-        monitor_name: str,
-        position: float,
-        axis: Axis,
-        ax: Ax = None,
-        **plot_params: dict,
-    ) -> Ax:
-        """make field plot with structure permittivity overlayed with transparency"""
-        monitor_data = self.monitor_data[monitor_name]
-        assert isinstance(
-            monitor_data, (FieldData, FieldTimeData)
-        ), f"must be FieldData or FieldTimeData, given {type(monitor_data)}"
-        plot_params_structures = SimDataGeoParams().update_params(**{})
-        ax = monitor_data.plot(position=position, axis=axis, ax=ax, **plot_params)
-        ax = self.simulation.plot_structures_eps(
-            position=position, axis=axis, ax=ax, cbar=False, **plot_params_structures
-        )
-        ax = monitor_data.geometry.add_ax_labels_lims(axis=axis, ax=ax, buffer=0.0)
-        return ax
 
     def export(self, fname: str) -> None:
         """Export all data to an hdf5"""
