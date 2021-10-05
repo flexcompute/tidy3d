@@ -1,4 +1,4 @@
-""" Defines current sources """
+"""Defines current sources."""
 
 from abc import ABC, abstractmethod
 from typing import Tuple, Union, Literal
@@ -7,7 +7,7 @@ import pydantic
 import numpy as np
 
 from .base import Tidy3dBaseModel
-from .types import Direction, Polarization, Axis, AxesSubplot, ArrayLike
+from .types import Direction, Polarization, Axis, Ax, ArrayLike
 from .validators import assert_plane
 from .geometry import Box
 from .mode import Mode
@@ -22,13 +22,23 @@ class SourceTime(ABC, Tidy3dBaseModel):
 
     @abstractmethod
     def amp_time(self, time):
-        """complex amplitude as a function of time"""
+        """Complex-valued source amplitude as a function of time.
+
+        Args:
+            time (float): time in seconds.
+        """
 
     @add_ax_if_none
-    def plot(  # pylint: disable=arguments-differ
-        self, times: ArrayLike, ax: AxesSubplot = None
-    ) -> AxesSubplot:
-        """plot the time series"""
+    def plot(self, times: ArrayLike, ax: Ax = None) -> Ax:
+        """plot the time series
+
+        Args:
+            times (ArrayLike): Description
+            ax (Ax, optional): Description
+
+        Returns:
+            Ax: Description
+        """
         times = np.array(times)
         amp_complex = self.amp_time(times)
 
@@ -55,7 +65,14 @@ class GaussianPulse(Pulse):
     """A gaussian pulse time dependence"""
 
     def amp_time(self, time):
-        """complex amplitude as a function of time"""
+        """complex amplitude as a function of time
+
+        Args:
+            time (TYPE): Description
+
+        Returns:
+            TYPE: Description
+        """
         twidth = 1.0 / (2 * np.pi * self.fwidth)
         omega0 = 2 * np.pi * self.freq0
         time_shifted = time - self.offset * twidth
@@ -72,7 +89,14 @@ class CW(Pulse):
     """ramping up and holding steady"""
 
     def amp_time(self, time):
-        """complex amplitude as a function of time"""
+        """complex amplitude as a function of time
+
+        Args:
+            time (TYPE): Description
+
+        Returns:
+            TYPE: Description
+        """
         twidth = 1.0 / (2 * np.pi * self.fwidth)
         omega0 = 2 * np.pi * self.freq0
         time_shifted = time - self.offset * twidth
@@ -96,9 +120,7 @@ class Source(Box, ABC):
     source_time: SourceTimeType
 
     @add_ax_if_none
-    def plot(  # pylint: disable=invalid-name, arguments-differ
-        self, position: float, axis: Axis, ax: AxesSubplot = None, **plot_params: dict
-    ) -> AxesSubplot:
+    def plot(self, position: float, axis: Axis, ax: Ax = None, **plot_params: dict) -> Ax:
         """plot source geometry"""
         plot_params = SourceParams().update_params(**plot_params)
         ax = self.geometry.plot(position=position, axis=axis, ax=ax, **plot_params)

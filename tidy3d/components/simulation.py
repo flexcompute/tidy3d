@@ -6,7 +6,7 @@ import numpy as np
 import matplotlib.pylab as plt
 import matplotlib as mpl
 
-from .types import GridSize, Symmetry, Axis, AxesSubplot, Numpy
+from .types import GridSize, Symmetry, Axis, Ax, Numpy
 from .geometry import Box
 from .medium import Medium, MediumType
 from .structure import Structure
@@ -57,7 +57,7 @@ class Simulation(Box):
         for position_index, structure in enumerate(self.structures):
             assert self.intersects(
                 structure.geometry
-            ), f"Structure '{structure}' (at position {position_index} in structures list) is completely outside simulation"
+            ), f"Structure '{structure}' (structures[{position_index}]) is outside simulation"
 
         for geo_obj_dict in (self.sources, self.monitors):
             for name, geo_obj in geo_obj_dict.items():
@@ -75,8 +75,8 @@ class Simulation(Box):
 
     @add_ax_if_none
     def plot(  # pylint: disable=arguments-differ
-        self, position: float, axis: Axis, ax: AxesSubplot = None, **plot_params: dict
-    ) -> AxesSubplot:
+        self, position: float, axis: Axis, ax: Ax = None, **plot_params: dict
+    ) -> Ax:
         """plot each of simulation's components on a plane"""
 
         ax = self.plot_structures(position=position, axis=axis, ax=ax, **plot_params)
@@ -93,9 +93,9 @@ class Simulation(Box):
         position: float,
         axis: Axis,
         freq: float = None,
-        ax: AxesSubplot = None,
+        ax: Ax = None,
         **plot_params: dict,
-    ) -> AxesSubplot:
+    ) -> Ax:
         """plot the permittivity of each of simulation's components on a plane"""
 
         ax = self.plot_structures_eps(position=position, axis=axis, freq=freq, ax=ax, **plot_params)
@@ -108,8 +108,8 @@ class Simulation(Box):
 
     @add_ax_if_none
     def plot_structures(
-        self, position: float, axis: Axis, ax: AxesSubplot = None, **plot_params: dict
-    ) -> AxesSubplot:
+        self, position: float, axis: Axis, ax: Ax = None, **plot_params: dict
+    ) -> Ax:
         """plots all of simulation's structures as materials"""
         medium_map = self.medium_map
         for structure in self.structures:
@@ -126,10 +126,10 @@ class Simulation(Box):
         position: float,
         axis: Axis,
         freq: float = None,
-        ax: AxesSubplot = None,
+        ax: Ax = None,
         cbar: bool = True,
         **plot_params: dict,
-    ) -> AxesSubplot:
+    ) -> Ax:
         """plots all of simulation's structures as permittivity"""
         if freq is None:
             freq = inf
@@ -151,9 +151,7 @@ class Simulation(Box):
         return ax
 
     @add_ax_if_none
-    def plot_sources(
-        self, position: float, axis: Axis, ax: AxesSubplot = None, **plot_params: dict
-    ) -> AxesSubplot:
+    def plot_sources(self, position: float, axis: Axis, ax: Ax = None, **plot_params: dict) -> Ax:
         """plots each of simulation's sources on plane"""
         for _, source in self.sources.items():
             if source.intersects_plane(position=position, axis=axis):
@@ -162,9 +160,7 @@ class Simulation(Box):
         return ax
 
     @add_ax_if_none
-    def plot_monitors(
-        self, position: float, axis: Axis, ax: AxesSubplot = None, **plot_params: dict
-    ) -> AxesSubplot:
+    def plot_monitors(self, position: float, axis: Axis, ax: Ax = None, **plot_params: dict) -> Ax:
         """plots each of simulation's monitors on plane"""
         for _, monitor in self.monitors.items():
             if monitor.intersects_plane(position=position, axis=axis):
@@ -174,8 +170,8 @@ class Simulation(Box):
 
     @add_ax_if_none
     def plot_symmetries(
-        self, position: float, axis: Axis, ax: AxesSubplot = None, **plot_params: dict
-    ) -> AxesSubplot:
+        self, position: float, axis: Axis, ax: Ax = None, **plot_params: dict
+    ) -> Ax:
         """plots each of the non-zero symmetries"""
         for sym_axis, sym_value in enumerate(self.symmetry):
             if sym_value == 0:
@@ -193,9 +189,7 @@ class Simulation(Box):
         return ax
 
     @add_ax_if_none
-    def plot_pml(
-        self, position: float, axis: Axis, ax: AxesSubplot = None, **plot_params: dict
-    ) -> AxesSubplot:
+    def plot_pml(self, position: float, axis: Axis, ax: Ax = None, **plot_params: dict) -> Ax:
         """plots each of simulation's PML regions"""
         plot_params_new = PMLParams().update_params(**plot_params)
         for pml_axis, pml_layer in enumerate(self.pml_layers):
@@ -214,7 +208,7 @@ class Simulation(Box):
         ax = self.set_plot_bounds(axis=axis, ax=ax)
         return ax
 
-    def set_plot_bounds(self, axis: Axis, ax: AxesSubplot) -> AxesSubplot:
+    def set_plot_bounds(self, axis: Axis, ax: Ax) -> Ax:
         """sets the xy limits of the simulation, useful after plotting"""
 
         _, ((xmin, ymin), (xmax, ymax)) = self._pop_bounds(axis=axis)
@@ -223,7 +217,7 @@ class Simulation(Box):
             dl * pml.num_layers for (dl, pml) in zip(self.grid_size, self.pml_layers)
         ]
 
-        _, (pml_thick_x, pml_thick_y) = self._pop_axis(pml_thicknesses, axis=axis)
+        _, (pml_thick_x, pml_thick_y) = self.pop_axis(pml_thicknesses, axis=axis)
 
         ax.set_xlim(xmin - pml_thick_x, xmax + pml_thick_x)
         ax.set_ylim(ymin - pml_thick_y, ymax + pml_thick_y)

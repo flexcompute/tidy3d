@@ -7,10 +7,10 @@ import matplotlib.pylab as plt
 from matplotlib import cm
 from pydantic import BaseModel
 
-from .types import AxesSubplot
+from .types import Ax
 
 
-def make_ax() -> AxesSubplot:
+def make_ax() -> Ax:
     """makes an empty `ax`"""
     _, ax = plt.subplots(1, 1, tight_layout=True)
     return ax
@@ -21,7 +21,7 @@ def add_ax_if_none(plot):
     if ax=None, creates ax and feeds it to `plot`.
     """
 
-    def _plot(*args, **kwargs) -> AxesSubplot:
+    def _plot(*args, **kwargs) -> Ax:
         """new `plot()` function with `ax=ax`"""
         if kwargs.get("ax") is None:
             ax = make_ax()

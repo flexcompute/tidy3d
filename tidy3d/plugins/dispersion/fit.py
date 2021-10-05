@@ -10,7 +10,7 @@ import matplotlib.pylab as plt
 from ...components import PoleResidue, nk_to_eps_complex, eps_complex_to_nk
 from ...constants import C_0, HBAR
 from ...components.viz import add_ax_if_none
-from ...components.types import AxesSubplot
+from ...components.types import Ax
 
 
 def _unpack_complex(complex_num):
@@ -242,8 +242,8 @@ class DispersionFitter:
         self,
         medium: PoleResidue = None,
         wvl_um: np.ndarray = None,
-        ax: AxesSubplot = None,
-    ) -> AxesSubplot:
+        ax: Ax = None,
+    ) -> Ax:
         """Make plot of model vs data, at a set of wavelengths (if supplied).
 
         Parameters

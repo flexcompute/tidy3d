@@ -17,7 +17,7 @@ from .monitor import FreqMonitor, TimeMonitor
 
 from .monitor import monitor_type_map
 from .base import Tidy3dBaseModel
-from .types import AxesSubplot, Axis, Numpy, Literal, EMField, Component, Direction
+from .types import Ax, Axis, Numpy, Literal, EMField, Component, Direction
 from .viz import add_ax_if_none, SimDataGeoParams
 
 
@@ -55,10 +55,6 @@ class MonitorData(Tidy3dData, ABC):
         """check equality against another MonitorData instance"""
         assert isinstance(other, MonitorData), "can only check eqality on two monitor data objects"
         return np.all(self.values == self.values)
-
-    @abstractmethod
-    def plot(self) -> AxesSubplot:
-        """make static plot"""
 
     @abstractmethod
     def visualize(self) -> None:
@@ -106,10 +102,10 @@ class MonitorData(Tidy3dData, ABC):
 
             # load the raw monitor data into a MonitorData instance
             monitor_data = f_handle["monitor_data"]
-            return cls._load_from_data(monitor, monitor_data)
+            return cls.load_from_data(monitor, monitor_data)
 
     @staticmethod
-    def _load_from_data(monitor: Monitor, monitor_data: dict):
+    def load_from_data(monitor: Monitor, monitor_data: dict):
         """load the solver data for a monitor into a MonitorData instance"""
 
         # kwargs that gets passed to MonitorData.__init__() to make new MonitorData
@@ -189,12 +185,12 @@ class FieldData(AbstractFieldData, FreqData):
         freq: float,
         position: float,
         axis: Axis,
-        ax: AxesSubplot = None,
+        ax: Ax = None,
         **pcolormesh_params: dict,
-    ) -> AxesSubplot:
+    ) -> Ax:
         """make plot of field data along plane"""
         field, component = field_component
-        z_label, (x_label, y_label) = self.geometry._pop_axis("xyz", axis=axis)
+        z_label, (x_label, y_label) = self.geometry.pop_axis("xyz", axis=axis)
         x_coords = self.data.coords[x_label]
         y_coords = self.data.coords[y_label]
         field_data = self.data.sel(field=field, component=component, f=freq)
@@ -208,7 +204,7 @@ class FieldData(AbstractFieldData, FreqData):
             **pcolormesh_params,
         )
         plt.colorbar(image, ax=ax)
-        ax = self.geometry._add_ax_labels_lims(axis=axis, ax=ax, buffer=0.0)
+        ax = self.geometry.add_ax_labels_lims(axis=axis, ax=ax, buffer=0.0)
         return ax
 
 
@@ -226,12 +222,12 @@ class FieldTimeData(AbstractFieldData, TimeData):
         time: int,
         position: float,
         axis: Axis,
-        ax: AxesSubplot = None,
+        ax: Ax = None,
         **pcolormesh_params: dict,
-    ) -> AxesSubplot:
+    ) -> Ax:
         """make plot of field data along plane"""
         field, component = field_component
-        z_label, (x_label, y_label) = self.geometry._pop_axis("xyz", axis=axis)
+        z_label, (x_label, y_label) = self.geometry.pop_axis("xyz", axis=axis)
         x_coords = self.data.coords[x_label]
         y_coords = self.data.coords[y_label]
         field_data = self.data.sel(field=field, component=component, t=time)
@@ -245,7 +241,7 @@ class FieldTimeData(AbstractFieldData, TimeData):
             **pcolormesh_params,
         )
         plt.colorbar(im, ax=ax)
-        ax = self.geometry._add_ax_labels_lims(axis=axis, ax=ax, buffer=0.0)
+        ax = self.geometry.add_ax_labels_lims(axis=axis, ax=ax, buffer=0.0)
         return ax
 
 
@@ -261,11 +257,11 @@ class PermittivityData(AbstractFieldData, FreqData):
         component: Literal["x", "y", "z"],
         position: float,
         axis: Axis,
-        ax: AxesSubplot = None,
+        ax: Ax = None,
         **pcolormesh_params: dict,
-    ) -> AxesSubplot:
+    ) -> Ax:
         """make plot of field data along plane"""
-        z_label, (x_label, y_label) = self.geometry._pop_axis("xyz", axis=axis)
+        z_label, (x_label, y_label) = self.geometry.pop_axis("xyz", axis=axis)
         x_coords = self.data.coords[x_label]
         y_coords = self.data.coords[y_label]
         field_data = self.data.sel(component=component, f=freq)
@@ -281,7 +277,7 @@ class PermittivityData(AbstractFieldData, FreqData):
             **pcolormesh_params,
         )
         plt.colorbar(im, ax=ax)
-        ax = self.geometry._add_ax_labels_lims(axis=axis, ax=ax, buffer=0.0)
+        ax = self.geometry.add_ax_labels_lims(axis=axis, ax=ax, buffer=0.0)
         return ax
 
 
@@ -291,7 +287,7 @@ class FluxData(AbstractFluxData, FreqData):
     _dims = ("f",)
 
     @add_ax_if_none
-    def plot(self, ax: AxesSubplot = None, **plot_params) -> AxesSubplot:
+    def plot(self, ax: Ax = None, **plot_params) -> Ax:
         """make static plot"""
         ax.plot(self.f, self.values, **plot_params)
         ax.set_xlabel("frequency (Hz)")
@@ -312,7 +308,7 @@ class FluxTimeData(AbstractFluxData, TimeData):
     _dims = ("t",)
 
     @add_ax_if_none
-    def plot(self, ax: AxesSubplot = None, **plot_params: dict) -> AxesSubplot:
+    def plot(self, ax: Ax = None, **plot_params: dict) -> Ax:
         """make static plot"""
         ax.plot(self.t, self.values, **plot_params)
         ax.set_xlabel("time steps")
@@ -336,9 +332,7 @@ class ModeData(FreqData):
     _dims = ("direction", "mode_index", "f")
 
     @add_ax_if_none
-    def plot(
-        self, direction: Direction, ax: AxesSubplot = None, **plot_params: dict
-    ) -> AxesSubplot:
+    def plot(self, direction: Direction, ax: Ax = None, **plot_params: dict) -> Ax:
         """make static plot"""
         values_dir = self.data.sel(direction=direction).values
         for mode_index, mode_spectrum in enumerate(values_dir):
@@ -379,7 +373,7 @@ class SimulationData(Tidy3dData):
     """ add __getitem__ or __index__ for monitor """
 
     @add_ax_if_none
-    def plot(self, monitor_name: str, ax: AxesSubplot = None, **plot_params: dict) -> AxesSubplot:
+    def plot(self, monitor_name: str, ax: Ax = None, **plot_params: dict) -> Ax:
         """plot the monitor with simulation object overlay"""
 
         monitor_data = self.monitor_data[monitor_name]
@@ -392,9 +386,9 @@ class SimulationData(Tidy3dData):
         monitor_name: str,
         position: float,
         axis: Axis,
-        ax: AxesSubplot = None,
+        ax: Ax = None,
         **plot_params: dict,
-    ) -> AxesSubplot:
+    ) -> Ax:
         """make field plot with structure permittivity overlayed with transparency"""
         monitor_data = self.monitor_data[monitor_name]
         assert isinstance(
@@ -405,7 +399,7 @@ class SimulationData(Tidy3dData):
         ax = self.simulation.plot_structures_eps(
             position=position, axis=axis, ax=ax, cbar=False, **plot_params_structures
         )
-        ax = monitor_data.geometry._add_ax_labels_lims(axis=axis, ax=ax, buffer=0.0)
+        ax = monitor_data.geometry.add_ax_labels_lims(axis=axis, ax=ax, buffer=0.0)
         return ax
 
     def export(self, fname: str) -> None:
@@ -452,7 +446,7 @@ class SimulationData(Tidy3dData):
 
                 # load this monitor data, add to dict
                 monitor = sim.monitors.get(monitor_name)
-                monitor_data_instance = MonitorData._load_from_data(monitor, monitor_data)
+                monitor_data_instance = MonitorData.load_from_data(monitor, monitor_data)
                 monitor_data_dict[monitor_name] = monitor_data_instance
 
         return cls(simulation=sim, monitor_data=monitor_data_dict)
