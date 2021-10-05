@@ -132,6 +132,7 @@ class MonitorData(Tidy3dData, ABC):
 
 """ Differentiates between frequency and time domain data """
 
+
 class FreqData(MonitorData, ABC):
     """stores data in frequency domain"""
 
@@ -145,6 +146,7 @@ class TimeData(MonitorData, ABC):
 
 
 """ Differentiates between types of field data """
+
 
 class VectorFieldData(MonitorData, ABC):
     """stores general vector field data as a function of {component, x, y, z}"""
