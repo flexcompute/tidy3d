@@ -1,10 +1,6 @@
 """ Generates data"""
 from typing import Dict, Tuple
-import sys
-
 import numpy as np
-
-sys.path.append("../")
 
 from tidy3d import Simulation
 from tidy3d.components.monitor import ScalarFieldMonitor, AbstractFluxMonitor

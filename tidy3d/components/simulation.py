@@ -56,6 +56,12 @@ class Simulation(Box):
         Uses subpixel averaging of permittivity if True for much higher accuracy, defaults to True.
     """
 
+    """TODO: Some parameters (e.g. pml_layers, courant, shutoff) contain more information in the
+    current doc version. There should probably be a more extended discussion in the documents
+    proper, but we may want to keep the necessary informatino to understand the parameter here as
+    well (or a link to the document section where it's discussed in more detail).
+    """
+
     grid_size: Tuple[GridSize, GridSize, GridSize]
     medium: MediumType = Medium()
     run_time: pydantic.NonNegativeFloat = 0.0
@@ -69,6 +75,7 @@ class Simulation(Box):
     )
     symmetry: Tuple[Symmetry, Symmetry, Symmetry] = (0, 0, 0)
     shutoff: pydantic.NonNegativeFloat = 1e-5
+    # TODO: We should see if we can safely increase courant to 0.99
     courant: pydantic.confloat(ge=0.0, le=1.0) = 0.9
     subpixel: bool = True
     # version: str = str(version_number)

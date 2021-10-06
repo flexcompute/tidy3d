@@ -4,9 +4,6 @@ from typing import Dict, Tuple
 import os
 import h5py
 import xarray as xr
-import sys
-
-sys.path.append("../")
 
 from .solver import solve, SolverDataDict
 
