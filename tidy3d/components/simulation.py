@@ -225,7 +225,7 @@ class Simulation(Box):
 
     """ Discretization """
 
-    def _discretize(self, box: Box):  # pylint: disable=too-many-locals
+    def _discretize(self, box: Box) -> Numpy:
         """get x,y,z positions of box using self.grid_size"""
 
         (xmin, ymin, zmin), (xmax, ymax, zmax) = box.get_bounds()
@@ -233,22 +233,25 @@ class Simulation(Box):
         x_range = np.arange(xmin, xmax + dlx / 2, dlx)
         y_range = np.arange(ymin, ymax + dly / 2, dly)
         z_range = np.arange(zmin, zmax + dlz / 2, dlz)
-        x_pts, y_pts, z_pts = np.meshgrid(x_range, y_range, z_range, indexing="ij")
-
-        return x_pts, y_pts, z_pts
+        x, y, z = np.meshgrid(x_range, y_range, z_range, indexing="ij")
+        xx = (x + dlx / 2.0, y, z)
+        yy = (x, y + dly / 2.0, z)
+        zz = (x, y, z + dlz / 2.0)
+        return np.stack((xx, yy, zz), axis=0)
 
     def epsilon(self, box: Box, freq: float) -> Numpy:
         """get permittivity at volume specified by box and freq"""
-        x_pts, y_pts, z_pts = self._discretize(box)
+        xyz_pts = self._discretize(box)
         eps_background = self.medium.eps_model(freq)
-        eps_array = eps_background * np.ones(x_pts.shape, dtype=complex)
+        eps_array = eps_background * np.ones(xyz_pts.shape[1:], dtype=complex)
+        # print(eps_array.shape)
         for structure in self.structures:
             geo = structure.geometry
             if not geo.intersects(box):
                 continue
             eps_structure = structure.medium.eps_model(freq)
-            # structure_box = geo._get_bounding_box()
-            # _x, _y, _z = self._discretize(structure_box)
-            structure_map = geo.is_inside(x_pts, y_pts, z_pts)
-            eps_array[structure_map] = eps_structure
+            for i, pts in enumerate(xyz_pts):
+                x, y, z = pts
+                structure_map = geo.is_inside(x, y, z)
+                eps_array[i, structure_map] = eps_structure
         return eps_array

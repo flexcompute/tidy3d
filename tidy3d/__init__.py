@@ -38,3 +38,7 @@ from .material_library import material_library
 # except ImportError:  # pragma: nocover
 #     # Local copy, not installed with setuptools
 #     __version__ = "0.0.0"
+
+from rich import pretty
+
+pretty.install()
