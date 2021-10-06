@@ -46,7 +46,7 @@ SIM_MONITORS = Simulation(
 
 SIM_FULL = Simulation(
     size=(2.0, 2.0, 2.0),
-    grid_size=(0.01, 0.01, 0.01),
+    grid_size=(0.1, 0.2, 0.15),
     run_time=1e-12,
     structures=[
         Structure(
@@ -62,23 +62,31 @@ SIM_FULL = Simulation(
             geometry=Cylinder(radius=1.4, height=2.0, center=(1.0, 0.0, -1.0), axis=1),
             medium=Medium(),
         ),
+        Structure(
+            geometry=PolySlab(
+                vertices=[(-1.5, -1.5), (-0.5, -1.5), (-0.5, -0.5)], slab_bounds=[-1, 1]
+            ),
+            # medium=Lorentz(eps_inf=1., coeffs=[(2., 3., 4.)])
+            # medium=PoleResidue(eps_inf=1., coeffs=[(2., 3.,)])
+            medium=Medium(permittivity=3.0),
+        ),
     ],
     sources={
         "my_dipole": VolumeSource(
             size=(0, 0, 0),
-            center=(0, -0.5, 0),
+            center=(0, 0.5, 0),
             polarization="Mx",
             source_time=GaussianPulse(
-                freq0=1e14,
-                fwidth=1e12,
+                freq0=2e14,
+                fwidth=4e13,
             ),
         )
     },
     monitors={
-        "point": FieldMonitor(size=(0, 0, 0), center=(0, 0, 0), freqs=[1, 2]),
-        "plane": FluxTimeMonitor(size=(1, 1, 0), center=(0, 0, 0), times=[1, 2]),
+        "point": FieldMonitor(size=(0, 0, 0), center=(0, 0, 0), freqs=[1.5e14, 2e14]),
+        "plane": FluxMonitor(size=(1, 1, 0), center=(0, 0, 0), freqs=[2e14, 2.5e14]),
     },
-    symmetry=(0, -1, 1),
+    symmetry=(0, 0, 0),
     pml_layers=(
         PMLLayer(profile="absorber", num_layers=20),
         PMLLayer(profile="stable", num_layers=30),

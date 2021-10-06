@@ -541,20 +541,22 @@ class SimulationData(Tidy3dData):
     simulation : :class:`Simulation`
         Original :class:`Simulation`.
     monitor_data : ``Dict[str, :class:`MonitorData`]``
-        Mapping of monitor name to :class:`MonitorData` intance.
+        Mapping of monitor name to :class:`MonitorData` intance. The dictionary keys must
+        exist in ``simulation.monitors.keys()``.
 
     Example
     -------
 
     >>> f = np.linspace(2e14, 3e14, 1001)
+    >>> mnt_name = 'flux'
     >>> flux_monitor = FluxMonitor(size=(2, 4, 0), freqs=f)
     >>> simulation = Simulation(
     ...     size=(4,4,4),
     ...     grid_size=(0.1, 0.1, 0.1),
-    ...     monitors={'flux': flux_monitor})
+    ...     monitors={mnt_name: flux_monitor})
     >>> values = np.random.random((1001,))
-    >>> flux_data = FluxData(monitor=flux_monitor, monitor_name='flux', values=values, f=f)
-    >>> sim_data = SimulationData(simulation=simulation, monitor_data={'flux_data': flux_data})
+    >>> flux_data = FluxData(monitor=flux_monitor, monitor_name=mnt_name, values=values, f=f)
+    >>> sim_data = SimulationData(simulation=simulation, monitor_data={mnt_name: flux_data})
     """
 
     simulation: Simulation
@@ -569,11 +571,16 @@ class SimulationData(Tidy3dData):
             Path to data file (including filename).
         """
 
+        """ TODO: Provide optional args to only export the MonitorData of selected monitors. """
+
         with h5py.File(fname, "a") as f_handle:
 
             # save json string as an attribute
             sim_json = self.simulation.json()
-            f_handle.attrs["sim_json"] = sim_json
+            # TODO: wrap this in a small helper function?
+            str_type = h5py.special_dtype(vlen=str)
+            f_handle.create_dataset("sim_json", (1,), dtype=str_type)
+            f_handle["sim_json"][0] = sim_json
 
             # make a group for monitor_data
             mon_data_grp = f_handle.create_group("monitor_data")
@@ -609,7 +616,7 @@ class SimulationData(Tidy3dData):
         with h5py.File(fname, "r") as f_handle:
 
             # construct the original simulation from the json string
-            sim_json = f_handle.attrs["sim_json"]
+            sim_json = f_handle["sim_json"][0]
             sim = Simulation.parse_raw(sim_json)
 
             # loop through monitor dataset and create all MonitorData instances
@@ -662,3 +669,14 @@ class SimulationData(Tidy3dData):
             if mon_data != other.monitor_data[mon_name]:
                 return False
         return True
+
+
+""" TODO:
+ - assert all SimulationData.monitor_data.keys() are in SimulationData.simulation.monitor.keys()
+ - remove MonitorData.monitor and MonitorData.monitor_name attributes - actually, can keep
+ - remove MonitorData.load() and MonitorData.export() - can keep but should not be unused, so
+   maybe remove
+ - provide optional args to SimulationData.export() and SimulationData.load() to only export/load
+   a subset of all possible MonitorData objects
+ - change data dictionary structure to ['monitor_name']['Ex']['values'], etc.
+"""
