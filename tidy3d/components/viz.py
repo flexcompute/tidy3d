@@ -2,6 +2,7 @@
 """ utilities for plotting """
 from typing import Any
 from abc import abstractmethod
+from functools import wraps
 
 import matplotlib.pylab as plt
 from matplotlib import cm
@@ -21,8 +22,8 @@ def add_ax_if_none(plot):
     if ax=None, creates ax and feeds it to `plot`.
     """
 
+    @wraps(plot)
     def _plot(*args, **kwargs) -> Ax:
-        """new `plot()` function with `ax=ax`"""
         if kwargs.get("ax") is None:
             ax = make_ax()
             kwargs["ax"] = ax

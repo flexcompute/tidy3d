@@ -1,4 +1,5 @@
-"""Near field to far field transformation plugin"""
+"""Near field to far field transformation plugin
+"""
 import numpy as np
 
 from ...constants import C_0, ETA_0
@@ -9,7 +10,13 @@ class Near2Far:
     """Near field to far field transformation tool."""
 
     def __init__(self, field_data: FieldData):
-        """Constructs near field to far field transformation object from monitor data."""
+        """Constructs near field to far field transformation object from monitor data.
+
+        Parameters
+        ----------
+        field_data : FieldData
+            Description
+        """
 
         # get frequency info
         self.f = field_data.f
@@ -50,17 +57,15 @@ class Near2Far:
 
         Parameters
         ----------
-        r : float
-            radius
         theta : float
-            polar angle (rad) downward from x=y=0 line
+            Polar angle (rad) downward from x=y=0 line.
         phi : float
-            azimuthal (rad) angle from x=z=0 line
+            Azimuthal (rad) angle from x=z=0 line.
 
         Returns
         -------
         tuple
-            N_theta, N_phi, L_theta, L_phi radiation vectors
+            ``N_theta``, ``N_phi``, ``L_theta``, ``L_phi`` radiation vectors.
         """
 
         # precompute trig functions and add extra dimensions
@@ -110,7 +115,7 @@ class Near2Far:
 
         return N_theta, N_phi, L_theta, L_phi
 
-    def get_fields_spherical(self, r, theta, phi):
+    def fields_spherical(self, r, theta, phi):
         """Get fields at a point relative to monitor center in spherical
         coordintes.
 
@@ -141,7 +146,7 @@ class Near2Far:
         H = np.stack((H_r, H_theta, H_phi))
         return E, H
 
-    def get_fields_cartesian(self, x, y, z):
+    def fields_cartesian(self, x, y, z):
         """Get fields at a point relative to monitor center in cartesian
         coordintes.
 
@@ -160,14 +165,14 @@ class Near2Far:
             (Ex, Ey, Ez), (Hx, Hy, Hz), fields in cartesian coordinates.
         """
         r, theta, phi = self._car_2_sph(x, y, z)
-        E, H = self.get_fields_spherical(r, theta, phi)
+        E, H = self.fields_spherical(r, theta, phi)
         Er, Etheta, Ephi = E
         Hr, Htheta, Hphi = H
         E = Ex, Ey, Ez = self._sph_2_car_field(Er, Etheta, Ephi, theta, phi)
         H = Hx, Hy, Hz = self._sph_2_car_field(Hr, Htheta, Hphi, theta, phi)
         return E, H
 
-    def get_power_spherical(self, r, theta, phi):
+    def power_spherical(self, r, theta, phi):
         """Get power scattered to a point relative to monitor center in
         spherical coordinates.
 
@@ -185,14 +190,14 @@ class Near2Far:
         float
             Power at point relative to monitor center.
         """
-        E, H = self.get_fields_spherical(r, theta, phi)
+        E, H = self.fields_spherical(r, theta, phi)
         _, E_theta, E_phi = E
         _, H_theta, H_phi = H
         power_theta = 0.5 * np.real(E_theta * np.conj(H_phi))
         power_phi = 0.5 * np.real(-E_phi * np.conj(H_theta))
         return power_theta + power_phi
 
-    def get_power_cartesian(self, x, y, z):
+    def power_cartesian(self, x, y, z):
         """Get power scattered to a point relative to monitor center in
         cartesian coordinates.
 
@@ -211,9 +216,9 @@ class Near2Far:
             Power at point relative to monitor center.
         """
         r, theta, phi = self._car_2_sph(x, y, z)
-        return self.get_power_spherical(r, theta, phi)
+        return self.power_spherical(r, theta, phi)
 
-    def get_radar_cross_section(self, theta, phi):
+    def radar_cross_section(self, theta, phi):
         """Get radar cross section at a point relative to monitor center in
         units of incident power.
 

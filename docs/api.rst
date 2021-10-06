@@ -5,114 +5,209 @@ API Reference
 *************
 
 
-Simulation
+Components
 ==========
 
 .. autosummary::
    :toctree: _autosummary/
 
    Simulation
-   PMLLayer
 
+Submitting Simulations
+======================
 
-Geometry
-========
-
-.. autosummary::
-   :toctree: _autosummary/
-
-   Box
-   Sphere
-   Cylinder
-   PolySlab
-
-
-Medium
-======
+Web API
+-------
 
 .. autosummary::
    :toctree: _autosummary/
 
-   Medium
+   web.upload
+   web.get_info
+   web.get_run_info
+   web.run
+   web.monitor
+   web.download
+   web.load_results
+   web.delete
 
-Dispersive Media
+Job Interface
+-------------
+
+.. autosummary::
+   :toctree: _autosummary/
+
+   web.Job
+   web.Job.upload
+   web.Job.get_info
+   web.Job.get_run_info
+   web.Job.run
+   web.Job.monitor
+   web.Job.download
+   web.Job.load_results
+   web.Job.delete   
+
+Batch Processing
 ----------------
 
 .. autosummary::
    :toctree: _autosummary/
 
-   PoleResidue
-   Sellmeier
-   Lorentz
-   Debye
+   web.Batch
+   web.Batch.upload
+   web.Batch.get_info
+   web.Batch.get_run_info
+   web.Batch.run
+   web.Batch.monitor
+   web.Batch.download
+   web.Batch.load_results
+   web.Batch.delete
 
-Material Library
-----------------
-
-.. autosummary::
-   :toctree: _autosummary/
-
-   material_library
-
-
-Structure
-=========
-
-.. autosummary::
-   :toctree: _autosummary/
-
-   Structure
-
-
-Source
-======
-
-.. autosummary::
-   :toctree: _autosummary/
-
-   VolumeSource
-   ModeSource
-   PlaneWave
-   ..GaussianBeam
-
-Source Time Dependence
-----------------------
-
-.. autosummary::
-   :toctree: _autosummary/
-
-   GaussianPulse
-   ..CW
-
-
-Monitor
+Plugins
 =======
 
-.. autosummary::
-   :toctree: _autosummary/
-
-   FluxMonitor
-   FieldMonitor
-   ModeMonitor
-
-Monitor Samplers
-----------------
+Dispersive Model Fitting Tool
+-----------------------------
 
 .. autosummary::
    :toctree: _autosummary/
 
-   TimeSampler
-   FreqSampler
+   plugins.DispersionFitter
+   plugins.DispersionFitter.load
+   plugins.DispersionFitter.fit
+   plugins.DispersionFitter.plot
 
-   uniform_time_sampler
-   uniform_freq_sampler
-
-
-Modes
-=====
+Mode Solver
+-----------
 
 .. autosummary::
    :toctree: _autosummary/
 
-   Mode
+   plugins.ModeSolver
+   plugins.ModeSolver.solve
+
+Near Field to Far Field Transformation
+--------------------------------------
+
+.. autosummary::
+   :toctree: _autosummary/
+
+   plugins.Near2Far
+   plugins.Near2Far.fields_cartesian
+   plugins.Near2Far.fields_spherical
+   plugins.Near2Far.power_cartesian
+   plugins.Near2Far.power_spherical
+   plugins.Near2Far.radar_cross_section
+
+
+.. Simulation
+.. ==========
+
+.. .. autosummary::
+..    :toctree: _autosummary/
+
+..    Simulation
+..    PMLLayer
+
+
+.. Geometry
+.. ========
+
+.. .. autosummary::
+..    :toctree: _autosummary/
+
+..    Box
+..    Sphere
+..    Cylinder
+..    PolySlab
+
+
+.. Medium
+.. ======
+
+.. .. autosummary::
+..    :toctree: _autosummary/
+
+..    Medium
+
+.. Dispersive Media
+.. ----------------
+
+.. .. autosummary::
+..    :toctree: _autosummary/
+
+..    PoleResidue
+..    Sellmeier
+..    Lorentz
+..    Debye
+
+.. Material Library
+.. ----------------
+
+.. .. autosummary::
+..    :toctree: _autosummary/
+
+..    material_library
+
+
+.. Structure
+.. =========
+
+.. .. autosummary::
+..    :toctree: _autosummary/
+
+..    Structure
+
+
+.. Source
+.. ======
+
+.. .. autosummary::
+..    :toctree: _autosummary/
+
+..    VolumeSource
+..    ModeSource
+..    PlaneWave
+..    ..GaussianBeam
+
+.. Source Time Dependence
+.. ----------------------
+
+.. .. autosummary::
+..    :toctree: _autosummary/
+
+..    GaussianPulse
+..    ..CW
+
+
+.. Monitor
+.. =======
+
+.. .. autosummary::
+..    :toctree: _autosummary/
+
+..    FluxMonitor
+..    FieldMonitor
+..    ModeMonitor
+
+.. Monitor Samplers
+.. ----------------
+
+.. .. autosummary::
+..    :toctree: _autosummary/
+
+..    TimeSampler
+..    FreqSampler
+
+..    uniform_time_sampler
+..    uniform_freq_sampler
+
+
+.. Modes
+.. =====
+
+.. .. autosummary::
+..    :toctree: _autosummary/
+
+..    Mode
 
