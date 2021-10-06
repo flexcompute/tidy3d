@@ -5,8 +5,9 @@ import pydantic
 import numpy as np
 import matplotlib.pylab as plt
 import matplotlib as mpl
+from mpl_toolkits.axes_grid1 import make_axes_locatable
 
-from .types import GridSize, Symmetry, Axis, Ax, Numpy
+from .types import GridSize, Symmetry, Ax, Numpy
 from .geometry import Box
 from .medium import Medium, MediumType
 from .structure import Structure
@@ -74,61 +75,53 @@ class Simulation(Box):
     """ Visualization """
 
     @add_ax_if_none
-    def plot(  # pylint: disable=arguments-differ
-        self, position: float, axis: Axis, ax: Ax = None, **plot_params: dict
-    ) -> Ax:
+    def plot(self, ax: Ax = None, **kwargs) -> Ax:
         """plot each of simulation's components on a plane"""
 
-        ax = self.plot_structures(position=position, axis=axis, ax=ax, **plot_params)
-        ax = self.plot_sources(position=position, axis=axis, ax=ax, **plot_params)
-        ax = self.plot_monitors(position=position, axis=axis, ax=ax, **plot_params)
-        ax = self.plot_symmetries(position=position, axis=axis, ax=ax, **plot_params)
-        ax = self.plot_pml(position=position, axis=axis, ax=ax, **plot_params)
-        ax = self.set_plot_bounds(axis=axis, ax=ax, **plot_params)
+        ax = self.plot_structures(ax=ax, **kwargs)
+        ax = self.plot_sources(ax=ax, **kwargs)
+        ax = self.plot_monitors(ax=ax, **kwargs)
+        ax = self.plot_symmetries(ax=ax, **kwargs)
+        ax = self.plot_pml(ax=ax, **kwargs)
+        ax = self.set_plot_bounds(ax=ax, **kwargs)
         return ax
 
     @add_ax_if_none
-    def plot_eps(
-        self,
-        position: float,
-        axis: Axis,
-        freq: float = None,
-        ax: Ax = None,
-        **plot_params: dict,
-    ) -> Ax:
+    def plot_eps(self, freq: float = None, ax: Ax = None, **kwargs) -> Ax:
         """plot the permittivity of each of simulation's components on a plane"""
 
-        ax = self.plot_structures_eps(position=position, axis=axis, freq=freq, ax=ax, **plot_params)
-        ax = self.plot_sources(position=position, axis=axis, ax=ax, **plot_params)
-        ax = self.plot_monitors(position=position, axis=axis, ax=ax, **plot_params)
-        ax = self.plot_symmetries(position=position, axis=axis, ax=ax, **plot_params)
-        ax = self.plot_pml(position=position, axis=axis, ax=ax, **plot_params)
-        ax = self.set_plot_bounds(axis=axis, ax=ax, **plot_params)
+        ax = self.plot_structures_eps(freq=freq, cbar=True, ax=ax, **kwargs)
+        ax = self.plot_sources(ax=ax, **kwargs)
+        ax = self.plot_monitors(ax=ax, **kwargs)
+        ax = self.plot_symmetries(ax=ax, **kwargs)
+        ax = self.plot_pml(ax=ax, **kwargs)
+        ax = self.set_plot_bounds(ax=ax, **kwargs)
         return ax
 
     @add_ax_if_none
-    def plot_structures(
-        self, position: float, axis: Axis, ax: Ax = None, **plot_params: dict
-    ) -> Ax:
+    def plot_structures(self, ax: Ax = None, **kwargs) -> Ax:
         """plots all of simulation's structures as materials"""
         medium_map = self.medium_map
         for structure in self.structures:
-            if structure.geometry.intersects_plane(position=position, axis=axis):
+            if structure.geometry.intersects_plane(**kwargs):
                 params_updater = StructMediumParams(medium=structure.medium, medium_map=medium_map)
-                plot_params_new = params_updater.update_params(**plot_params)
-                ax = structure.geometry.plot(position=position, axis=axis, ax=ax, **plot_params_new)
-        ax = self.set_plot_bounds(axis=axis, ax=ax)
+                kwargs_struct = params_updater.update_params(**kwargs)
+                ax = structure.geometry.plot(ax=ax, **kwargs_struct)
+        ax = self.set_plot_bounds(ax=ax, **kwargs)
         return ax
 
+    @staticmethod
+    def _add_cbar(eps_min: float, eps_max: float, ax: Ax = None) -> None:
+        """add colorbar to eps plot"""
+        norm = mpl.colors.Normalize(vmin=eps_min, vmax=eps_max)
+        divider = make_axes_locatable(ax)
+        cax = divider.append_axes("right", size="5%", pad=0.15)
+        mappable = mpl.cm.ScalarMappable(norm=norm, cmap="gist_yarg")
+        plt.colorbar(mappable, cax=cax, label=r"$\epsilon_r$")
+
     @add_ax_if_none
-    def plot_structures_eps(  # pylint: disable=too-many-arguments
-        self,
-        position: float,
-        axis: Axis,
-        freq: float = None,
-        ax: Ax = None,
-        cbar: bool = True,
-        **plot_params: dict,
+    def plot_structures_eps(
+        self, freq: float = None, cbar: bool = True, ax: Ax = None, **kwargs
     ) -> Ax:
         """plots all of simulation's structures as permittivity"""
         if freq is None:
@@ -137,41 +130,36 @@ class Simulation(Box):
         eps_max = max(eps_list)
         eps_min = min(eps_list)
         for structure in self.structures:
-            if structure.geometry.intersects_plane(position=position, axis=axis):
+            if structure.geometry.intersects_plane(**kwargs):
                 eps = structure.medium.eps_model(freq).real
                 params_updater = StructEpsParams(eps=eps, eps_max=eps_max)
-                plot_params_new = params_updater.update_params(**plot_params)
-                ax = structure.geometry.plot(position=position, axis=axis, ax=ax, **plot_params_new)
+                kwargs_struct = params_updater.update_params(**kwargs)
+                ax = structure.geometry.plot(ax=ax, **kwargs_struct)
         if cbar:
-            norm = mpl.colors.Normalize(vmin=eps_min, vmax=eps_max)
-            plt.colorbar(
-                mpl.cm.ScalarMappable(norm=norm, cmap="gist_yarg"), ax=ax, label=r"$\epsilon_r$"
-            )
-        ax = self.set_plot_bounds(axis=axis, ax=ax)
+            self._add_cbar(eps_min=eps_min, eps_max=eps_max, ax=ax)
+        ax = self.set_plot_bounds(ax=ax, **kwargs)
         return ax
 
     @add_ax_if_none
-    def plot_sources(self, position: float, axis: Axis, ax: Ax = None, **plot_params: dict) -> Ax:
+    def plot_sources(self, ax: Ax = None, **kwargs) -> Ax:
         """plots each of simulation's sources on plane"""
         for _, source in self.sources.items():
-            if source.intersects_plane(position=position, axis=axis):
-                ax = source.plot(position=position, axis=axis, ax=ax, **plot_params)
-        ax = self.set_plot_bounds(axis=axis, ax=ax)
+            if source.intersects_plane(**kwargs):
+                ax = source.plot(ax=ax, **kwargs)
+        ax = self.set_plot_bounds(ax=ax, **kwargs)
         return ax
 
     @add_ax_if_none
-    def plot_monitors(self, position: float, axis: Axis, ax: Ax = None, **plot_params: dict) -> Ax:
+    def plot_monitors(self, ax: Ax = None, **kwargs) -> Ax:
         """plots each of simulation's monitors on plane"""
         for _, monitor in self.monitors.items():
-            if monitor.intersects_plane(position=position, axis=axis):
-                ax = monitor.plot(position=position, axis=axis, ax=ax, **plot_params)
-        ax = self.set_plot_bounds(axis=axis, ax=ax)
+            if monitor.intersects_plane(**kwargs):
+                ax = monitor.plot(ax=ax, **kwargs)
+        ax = self.set_plot_bounds(ax=ax, **kwargs)
         return ax
 
     @add_ax_if_none
-    def plot_symmetries(
-        self, position: float, axis: Axis, ax: Ax = None, **plot_params: dict
-    ) -> Ax:
+    def plot_symmetries(self, ax: Ax = None, **kwargs) -> Ax:
         """plots each of the non-zero symmetries"""
         for sym_axis, sym_value in enumerate(self.symmetry):
             if sym_value == 0:
@@ -181,17 +169,17 @@ class Simulation(Box):
             sym_center = list(self.center)
             sym_center[sym_axis] += sym_size[sym_axis] / 2
             sym_box = Box(center=sym_center, size=sym_size)
-            if sym_box.intersects_plane(position=position, axis=axis):
-                plot_params_new = SymParams(sym_value=sym_value).update_params(**plot_params)
-                ax = sym_box.plot(position=position, axis=axis, ax=ax, **plot_params_new)
-        ax = self.set_plot_bounds(axis=axis, ax=ax)
-        ax = self.set_plot_bounds(axis=axis, ax=ax)
+            if sym_box.intersects_plane(**kwargs):
+                new_kwargs = SymParams(sym_value=sym_value).update_params(**kwargs)
+                ax = sym_box.plot(ax=ax, **new_kwargs)
+        ax = self.set_plot_bounds(ax=ax, **kwargs)
+        ax = self.set_plot_bounds(ax=ax, **kwargs)
         return ax
 
     @add_ax_if_none
-    def plot_pml(self, position: float, axis: Axis, ax: Ax = None, **plot_params: dict) -> Ax:
+    def plot_pml(self, ax: Ax = None, **kwargs) -> Ax:
         """plots each of simulation's PML regions"""
-        plot_params_new = PMLParams().update_params(**plot_params)
+        kwargs = PMLParams().update_params(**kwargs)
         for pml_axis, pml_layer in enumerate(self.pml_layers):
             if pml_layer.num_layers == 0:
                 continue
@@ -203,14 +191,15 @@ class Simulation(Box):
                 pml_center = list(self.center)
                 pml_center[pml_axis] += sign * pml_offset_center
                 pml_box = Box(center=pml_center, size=pml_size)
-                if pml_box.intersects_plane(position=position, axis=axis):
-                    ax = pml_box.plot(position=position, axis=axis, ax=ax, **plot_params_new)
-        ax = self.set_plot_bounds(axis=axis, ax=ax)
+                if pml_box.intersects_plane(**kwargs):
+                    ax = pml_box.plot(ax=ax, **kwargs)
+        ax = self.set_plot_bounds(ax=ax, **kwargs)
         return ax
 
-    def set_plot_bounds(self, axis: Axis, ax: Ax) -> Ax:
+    def set_plot_bounds(self, ax: Ax, **kwargs) -> Ax:
         """sets the xy limits of the simulation, useful after plotting"""
 
+        axis, _ = self.strip_loc_kwargs(**kwargs)
         _, ((xmin, ymin), (xmax, ymax)) = self._pop_bounds(axis=axis)
 
         pml_thicknesses = [

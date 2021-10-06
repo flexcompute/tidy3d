@@ -7,7 +7,7 @@ import pydantic
 import numpy as np
 
 from .base import Tidy3dBaseModel
-from .types import Direction, Polarization, Axis, Ax, ArrayLike
+from .types import Direction, Polarization, Ax, ArrayLike
 from .validators import assert_plane
 from .geometry import Box
 from .mode import Mode
@@ -120,10 +120,10 @@ class Source(Box, ABC):
     source_time: SourceTimeType
 
     @add_ax_if_none
-    def plot(self, position: float, axis: Axis, ax: Ax = None, **plot_params: dict) -> Ax:
+    def plot(self, ax: Ax = None, **kwargs) -> Ax:
         """plot source geometry"""
-        plot_params = SourceParams().update_params(**plot_params)
-        ax = self.geometry.plot(position=position, axis=axis, ax=ax, **plot_params)
+        kwargs = SourceParams().update_params(**kwargs)
+        ax = self.geometry.plot(ax=ax, **kwargs)
         return ax
 
 
