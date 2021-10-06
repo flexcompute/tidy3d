@@ -1,5 +1,6 @@
 tests/tmp/*
 tests/data
+notebooks/tmp/*
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
