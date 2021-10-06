@@ -3,7 +3,7 @@
 from .base import Tidy3dBaseModel
 from .geometry import GeometryType
 from .medium import MediumType
-from .types import Axis, Ax
+from .types import Ax
 from .viz import add_ax_if_none
 
 
@@ -14,6 +14,6 @@ class Structure(Tidy3dBaseModel):
     medium: MediumType
 
     @add_ax_if_none
-    def plot(self, position: float, axis: Axis, ax=None, **plot_params: dict) -> Ax:
+    def plot(self, ax=None, **kwargs) -> Ax:
         """plot geometry"""
-        return self.geometry.plot(position=position, axis=axis, ax=ax, **plot_params)
+        return self.geometry.plot(ax=ax, **kwargs)

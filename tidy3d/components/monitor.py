@@ -4,7 +4,7 @@ from typing import List, Union
 
 import numpy as np
 
-from .types import Literal, Axis, Ax, Direction, EMField, Component
+from .types import Literal, Ax, Direction, EMField, Component
 from .geometry import Box
 from .validators import assert_plane
 from .mode import Mode
@@ -51,10 +51,10 @@ class Monitor(Box, ABC):
     """base class for monitors, which all have Box shape"""
 
     @add_ax_if_none
-    def plot(self, position: float, axis: Axis, ax: Ax = None, **plot_params: dict) -> Ax:
+    def plot(self, ax: Ax = None, **kwargs) -> Ax:
         """plot monitor geometry"""
-        plot_params_new = MonitorParams().update_params(**plot_params)
-        ax = self.geometry.plot(position=position, axis=axis, ax=ax, **plot_params_new)
+        kwargs = MonitorParams().update_params(**kwargs)
+        ax = self.geometry.plot(ax=ax, **kwargs)
         return ax
 
 

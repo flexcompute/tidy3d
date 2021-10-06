@@ -33,6 +33,8 @@ from . import web
 # specific material imported as `from tidy3d.material_library import SiC_xxx`
 from .material_library import material_library
 
+from .log import log
+
 # make all stdout and errors pretty
 pretty.install()
 traceback.install()

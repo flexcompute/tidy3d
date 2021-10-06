@@ -59,12 +59,24 @@ class Geometry(Tidy3dBaseModel, ABC):
         # for intersection of bounds, both must be true
         return in_minus and in_plus
 
-    def intersects_plane(self, position: float, axis: Axis) -> bool:
+    def intersects_plane(self, **kwargs) -> bool:
         """whether self intersects plane at `position` along normal `axis`"""
+        axis, position = self.strip_loc_kwargs(**kwargs)
         (zmin, zmax), _ = self._pop_bounds(axis=axis)
         is_above_bottom = position >= zmin
         is_below_top = position <= zmax
         return is_above_bottom and is_below_top
+
+    @staticmethod
+    def strip_loc_kwargs(**kwargs) -> Axis:
+        """gets axis and position from kwargs containing location eg (x=0)"""
+        has_loc = [direction in kwargs for direction in "xyz"]
+        num_loc_kwargs = sum(has_loc)
+        assert num_loc_kwargs > 0, "does not contain location kwarg (eg. x=1)."
+        assert num_loc_kwargs < 2, "has {num_loc_kwargs} location kwargs, only 1 accepted."
+        axis = has_loc.index(True)
+        position = kwargs.get("xyz"[axis])
+        return axis, position
 
     @staticmethod
     def pop_axis(coord: Coordinate, axis: Axis) -> Tuple[float, Coordinate2D]:
@@ -111,19 +123,16 @@ class Geometry(Tidy3dBaseModel, ABC):
         return ax
 
     @add_ax_if_none
-    def plot(  # pylint: disable=too-many-arguments
-        self,
-        position: float,
-        axis: Axis,
-        ax: Ax = None,
-        **plot_params: dict,
-    ) -> Ax:
+    def plot(self, ax: Ax = None, **kwargs) -> Ax:
         """plot the geometry on the plane"""
-        plot_params_new = GeoParams().update_params(**plot_params)
-
+        axis, position = self.strip_loc_kwargs(**kwargs)
         vertices_list = self._get_crosssection_polygons(position, axis=axis)
+        kwargs = GeoParams().update_params(**kwargs)
+        for direction in "xyz":
+            if direction in kwargs:
+                kwargs.pop(direction)
         for vertices in vertices_list:
-            patch = mpl.patches.Polygon(vertices, **plot_params_new)
+            patch = mpl.patches.Polygon(vertices, **kwargs)
             ax.add_patch(patch)
         ax = self.add_ax_labels_lims(axis=axis, ax=ax)
         ax.set_aspect("equal")
