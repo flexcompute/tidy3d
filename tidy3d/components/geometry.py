@@ -127,12 +127,12 @@ class Geometry(Tidy3dBaseModel, ABC):
         """plot the geometry on the plane"""
         axis, position = self.strip_loc_kwargs(**kwargs)
         vertices_list = self._get_crosssection_polygons(position, axis=axis)
-        kwargs = GeoParams().update_params(**kwargs)
-        for direction in "xyz":
-            if direction in kwargs:
-                kwargs.pop(direction)
+        kwargs_new = GeoParams().update_params(**kwargs)
+        for ignore in "xyzft":
+            if ignore in kwargs:
+                kwargs_new.pop(ignore)
         for vertices in vertices_list:
-            patch = mpl.patches.Polygon(vertices, **kwargs)
+            patch = mpl.patches.Polygon(vertices, **kwargs_new)
             ax.add_patch(patch)
         ax = self.add_ax_labels_lims(axis=axis, ax=ax)
         ax.set_aspect("equal")
