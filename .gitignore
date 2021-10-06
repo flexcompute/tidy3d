@@ -1,4 +1,4 @@
-tests/tmp
+tests/tmp/*
 tests/data
 
 # Byte-compiled / optimized / DLL files
