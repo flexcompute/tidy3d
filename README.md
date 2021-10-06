@@ -129,7 +129,7 @@
 ---
 
 #### Finishing Integration
-- [ ] **Separate FieldData into different xr.DataArrays with different xs, ys, zs at positions in yee lattice**
+- [x] Separate FieldData into different xr.DataArrays with different xs, ys, zs at positions in yee lattice
 - [ ] ModeSolver uses Permittivity Monitor for discretization / eps_cross.
 - [ ] Support for Nonuniform Mesh
 - [ ] Handling symmetries properly
@@ -157,7 +157,7 @@
 - [ ] Make Uniform Samplers separate classes? (dont evaluate / store freqs, times)?
 - [ ] Fix MyPy warnings
 - [ ] **Logging**
-- [ ] **clean up data.plot arguments.**
+- [x] clean up data.plot arguments. <- using xarray.
 - [ ] fix overlapping structure plotting.
 - [ ] .json conversion to use old solver code?
 
