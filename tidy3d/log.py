@@ -1,3 +1,4 @@
+""" logging for tidy3d"""
 import logging
 from rich.logging import RichHandler
 

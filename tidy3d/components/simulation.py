@@ -225,7 +225,7 @@ class Simulation(Box):
 
     """ Discretization """
 
-    def _discretize(self, box: Box) -> Numpy:
+    def _discretize(self, box: Box) -> Numpy:  # pylint: disable=too-many-locals
         """get x,y,z positions of box using self.grid_size"""
 
         (xmin, ymin, zmin), (xmax, ymax, zmax) = box.get_bounds()
@@ -244,14 +244,13 @@ class Simulation(Box):
         xyz_pts = self._discretize(box)
         eps_background = self.medium.eps_model(freq)
         eps_array = eps_background * np.ones(xyz_pts.shape[1:], dtype=complex)
-        # print(eps_array.shape)
         for structure in self.structures:
             geo = structure.geometry
             if not geo.intersects(box):
                 continue
             eps_structure = structure.medium.eps_model(freq)
-            for i, pts in enumerate(xyz_pts):
+            for component_index, pts in enumerate(xyz_pts):
                 x, y, z = pts
                 structure_map = geo.is_inside(x, y, z)
-                eps_array[i, structure_map] = eps_structure
+                eps_array[component_index, structure_map] = eps_structure
         return eps_array

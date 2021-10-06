@@ -1,6 +1,8 @@
 """ Tidy3d package imports"""
 __version__ = "0.0.0"
 
+from rich import pretty
+
 # import component as `from tidy3d import Simulation` or `td.Simulation`
 from .components import PMLLayer
 from .components import Box, Sphere, Cylinder, PolySlab
@@ -31,14 +33,5 @@ from . import web
 # specific material imported as `from tidy3d.material_library import SiC_xxx`
 from .material_library import material_library
 
-# if we want to automatically grab version from setup.py, uncomment and set up below
-# import pkg_resources
-# try:
-#     __version__ = pkg_resources.get_distribution("tidy3d").version
-# except ImportError:  # pragma: nocover
-#     # Local copy, not installed with setuptools
-#     __version__ = "0.0.0"
-
-from rich import pretty
-
+# make all stdout pretty
 pretty.install()
