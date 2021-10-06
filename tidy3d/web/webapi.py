@@ -1,4 +1,16 @@
-""" Provides lowest level, user-facing interface to server """
+"""Provides lowest level, user-facing interface to server 
+
+Attributes
+----------
+CLIENT_DIR : str
+    Description
+MONITOR_MESSAGE : TYPE
+    Description
+SERVER_DIR : str
+    Description
+TASKS : dict
+    Description
+"""
 
 import os
 import sys
@@ -9,6 +21,7 @@ import numpy as np
 
 from .task import TaskId, Task, TaskInfo, RunInfo, TaskStatus
 from ..components.simulation import Simulation
+from ..components.data import SimulationData
 
 """ filesystem emulation for tests """
 
@@ -92,7 +105,18 @@ def _get_data_path_client(task_id: TaskId):
 
 
 def upload(simulation: Simulation) -> TaskId:
-    """upload simulation to server (as draft, dont run)."""
+    """upload simulation to server (as draft, dont run).
+
+    Parameters
+    ----------
+    simulation : Simulation
+        Simulation to upload to server.
+
+    Returns
+    -------
+    TaskId
+        Unique identifier of task on server.
+    """
 
     # create the task
     task = make_fake_task()
@@ -109,21 +133,49 @@ def upload(simulation: Simulation) -> TaskId:
 
 
 def get_info(task_id: TaskId) -> TaskInfo:
-    """get information about task (status, size, credits, etc)."""
+    """Return information about a task.
+
+    Parameters
+    ----------
+    task_id : TaskId
+        Unique identifier of task on server.
+
+    Returns
+    -------
+    TaskInfo
+        Object containing information about status, size, credits of task.
+    """
     task = get_task_by_id(task_id)
     # call server
     return task.info
 
 
 def get_run_info(task_id: TaskId) -> RunInfo:
-    """get information about running status of task"""
+    """get information about running status of task
+
+    Parameters
+    ----------
+    task_id : TaskId
+        Description
+
+    Returns
+    -------
+    RunInfo
+        Description
+    """
     # task = get_task_by_id(task_id)
     # call server
     return make_fake_run_info(task_id)
 
 
 def run(task_id: TaskId) -> None:
-    """start running the task."""
+    """Start running the simulation associated with task.
+
+    Parameters
+    ----------
+    task_id : TaskId
+        Unique identifier of task on server.
+    """
     task = get_task_by_id(task_id)
     task.info.status = TaskStatus.RUN
 
@@ -161,7 +213,13 @@ def _print_status(task_id: TaskId) -> None:
 
 
 def monitor(task_id: TaskId) -> None:
-    """monitor the task progress (% done, time step, total time step, field_decay)."""
+    """Print the real time task progress until completion.
+
+    Parameters
+    ----------
+    task_id : TaskId
+        Unique identifier of task on server.
+    """
 
     # emulate running the task
     task = get_task_by_id(task_id)
@@ -200,11 +258,38 @@ def monitor(task_id: TaskId) -> None:
 
 
 def download(task_id: TaskId, path: str) -> None:
-    """download results of simulation run to client side"""
+    """Fownload results of task to file.
+
+    Parameters
+    ----------
+    task_id : TaskId
+        Unique identifier of task on server.
+    path : str
+        Download path to .hdf5 data file (including filename).
+    """
 
     # load the file into SimulationData
     data_path_server = _get_data_path_server(task_id)
     copyfile(data_path_server, path)
+
+
+def load_results(task_id: TaskId, path: str) -> SimulationData:
+    """Download and Load simultion results into ``SimulationData`` object.
+
+    Parameters
+    ----------
+    task_id : TaskId
+        Unique identifier of task on server.
+    path : str
+        Download path to .hdf5 data file (including filename).
+
+    Returns
+    -------
+    SimulationData
+        Object containing simulation data.
+    """
+    download(task_id=task_id, path=path)
+    return SimulationData.load(path)
 
 
 def _rm(path: str):
@@ -213,7 +298,13 @@ def _rm(path: str):
 
 
 def delete(task_id: TaskId) -> None:
-    """delete data associated with task_id from server"""
+    """Delete server-side data associated with task.
+
+    Parameters
+    ----------
+    task_id : TaskId
+        Unique identifier of task on server.
+    """
 
     # remove from server directories
     sim_path = _get_sim_path(task_id)

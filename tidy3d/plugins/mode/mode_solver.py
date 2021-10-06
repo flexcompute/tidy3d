@@ -1,4 +1,5 @@
-""" Turn Mode Specifications into Mode profiles """
+"""Turn Mode Specifications into Mode profiles 
+"""
 
 from typing import List
 
@@ -46,7 +47,7 @@ src = ModeSource.load('data/my_source.json')  # and loaded in our script
 
 
 class ModeInfo(BaseModel):
-    """stores information about a (solved) mode"""
+    """stores information about a (solved) mode."""
 
     field_data: FieldData
     mode: Mode
@@ -55,10 +56,30 @@ class ModeInfo(BaseModel):
 
 
 class ModeSolver:
-    """inferface for finding mode specification for ModeSource and ModeMonitor objects"""
+    """Interface for creating ``Mode`` objects.
+
+    Attributes
+    ----------
+    freq : TYPE
+        Description
+    plane : TYPE
+        Description
+    simulation : TYPE
+        Description
+    """
 
     def __init__(self, simulation: Simulation, plane: Box, freq: float):
-        """makes a mode solver object"""
+        """Create a ``ModeSolver`` instance
+
+        Parameters
+        ----------
+        simulation : Simulation
+            ``Simulation`` the ``Mode`` will be inserted into.
+        plane : Box
+            Plane where the mode will be computed in ``Simulation``.
+        freq : float
+            Frequency of mode (Hz).
+        """
 
         self.simulation = simulation
         self.plane = plane
@@ -67,7 +88,18 @@ class ModeSolver:
         assert 0.0 in plane.size, "plane must have at least one axis with size=0"
 
     def solve(self, mode: Mode) -> ModeInfo:
-        """gets information about the mode specification from mode solver"""
+        """Solves for modal profile and effective index of ``Mode`` object.
+
+        Parameters
+        ----------
+        mode : Mode
+            ``Mode`` object containing specifications of mode.
+
+        Returns
+        -------
+        ModeInfo
+            Object containing mode profile and effective index data.
+        """
 
         # note discretizing, need to make consistent
         eps_cross = self.simulation.epsilon(self.plane, self.freq)
@@ -139,7 +171,22 @@ class ModeSolver:
         )
 
     def make_source(self, mode: Mode, fwidth: float, direction: Direction) -> ModeSource:
-        """creates ModeSource from a Mode + additional specs"""
+        """Creates ``ModeSource`` from a Mode + additional specifications.
+
+        Parameters
+        ----------
+        mode : Mode
+            ``Mode`` object containing specifications of mode.
+        fwidth : float
+            Standard deviation of ``GaussianPulse`` of source (Hz).
+        direction : Direction
+            Whether source will inject in ``"+"`` or ``"-"`` direction relative to plane normal.
+
+        Returns
+        -------
+        ModeSource
+            Modal source containing specification in ``mode``.
+        """
         center = self.plane.center
         size = self.plane.size
         source_time = GaussianPulse(freq0=self.freq, fwidth=fwidth)
@@ -148,7 +195,20 @@ class ModeSolver:
         )
 
     def make_monitor(self, mode: Mode, freqs: List[float]) -> ModeMonitor:
-        """creates ModeMonitor from a Mode + additional specs"""
+        """Creates ``ModeMonitor`` from a Mode + additional specifications.
+
+        Parameters
+        ----------
+        mode : Mode
+            ``Mode`` object containing specifications of mode.
+        freqs : List[float]
+            Frequencies to include in Monitor (Hz).
+
+        Returns
+        -------
+        ModeMonitor
+            Monitor that measures ``Mode`` on ``plane`` at ``freqs``.
+        """
         center = self.plane.center
         size = self.plane.size
         return ModeMonitor(center=center, size=size, freqs=freqs, modes=[mode])

@@ -1,11 +1,11 @@
-""" basically copy and paste contents from fit.py with some modifications """
+"""Fit PoleResidue Dispersion models to optical NK data
+"""
 
 from typing import Tuple
 
 from tqdm import tqdm
 import nlopt
 import numpy as np
-import matplotlib.pylab as plt
 
 from ...components import PoleResidue, nk_to_eps_complex, eps_complex_to_nk
 from ...constants import C_0, HBAR
@@ -14,18 +14,53 @@ from ...components.types import Ax, Numpy
 
 
 def _unpack_complex(complex_num):
-    """returns real and imaginary parts from complex number"""
+    """Returns real and imaginary parts from complex number.
+
+    Parameters
+    ----------
+    complex_num : complex
+        Complex number.
+
+    Returns
+    -------
+    Tuple[float, float]
+        Real and imaginary parts of the complex number.
+    """
     return complex_num.real, complex_num.imag
 
 
 def _pack_complex(real_part, imag_part):
-    """returns complex number from real and imaginary parts"""
+    """Returns complex number from real and imaginary parts.
+
+    Parameters
+    ----------
+    real_part : float
+        Real part of the complex number.
+    imag_part : float
+        Imaginary part of the complex number.
+
+    Returns
+    -------
+    complex
+        The complex number.
+    """
     return real_part + 1j * imag_part
 
 
 def _unpack_coeffs(coeffs):
-    """unpacks coefficient vector into complex a and c pole parameters"""
-    assert len(coeffs) % 4 == 0
+    """Unpacks coefficient vector into complex pole parameters.
+
+    Parameters
+    ----------
+    coeffs : np.ndarray[real]
+        Array of real coefficients for the pole residue fit.
+
+    Returns
+    -------
+    Tuple[np.ndarray[complex], np.ndarray[complex]]
+        "a" and "c" poles for the PoleResidue model.
+    """
+    assert len(coeffs) % 4 == 0, "len(coeffs) must be multiple of 4."
     num_poles = len(coeffs) // 4
     indices = 4 * np.arange(num_poles)
 
@@ -40,7 +75,20 @@ def _unpack_coeffs(coeffs):
 
 
 def _pack_coeffs(pole_a, pole_c):
-    """packs complex a and c pole parameters into coefficient vector"""
+    """Packs complex a and c pole parameters into coefficient array.
+
+    Parameters
+    ----------
+    pole_a : np.ndarray[complex]
+        Array of complex "a" poles for the PoleResidue dispersive model.
+    pole_c : np.ndarray[complex]
+        Array of complex "c" poles for the PoleResidue dispersive model.
+
+    Returns
+    -------
+    np.ndarray[float]
+        Array of real coefficients for the pole residue fit.
+    """
     a_real, a_imag = _unpack_complex(pole_a)
     c_real, c_imag = _unpack_complex(pole_c)
     stacked_coeffs = np.stack((a_real, a_imag, c_real, c_imag), axis=1)
@@ -48,7 +96,18 @@ def _pack_coeffs(pole_a, pole_c):
 
 
 def _coeffs_to_poles(coeffs):
-    """Converts model coefficients to poles"""
+    """Converts model coefficients to poles.
+
+    Parameters
+    ----------
+    coeffs : np.ndarray[float]
+        Array of real coefficients for the pole residue fit.
+
+    Returns
+    -------
+    List[Tuple[complex, complex]]
+        List of complex poles (a, c)
+    """
     coeffs_scaled = coeffs / HBAR
     poles_a, poles_c = _unpack_coeffs(coeffs_scaled)
     poles = [(complex(a), complex(c)) for (a, c) in zip(poles_a, poles_c)]
@@ -56,34 +115,66 @@ def _coeffs_to_poles(coeffs):
 
 
 def _poles_to_coeffs(poles):
-    """Converts poles to model coefficients"""
+    """Converts poles to model coefficients.
+
+    Parameters
+    ----------
+    poles : List[Tuple[complex, complex]]
+        List of complex poles (a, c)
+
+    Returns
+    -------
+    np.ndarray[float]
+        Array of real coefficients for the pole residue fit.
+    """
     poles_a, poles_c = np.array([[a, c] for (a, c) in poles]).T
     coeffs = _pack_coeffs(poles_a, poles_c)
     return coeffs * HBAR
 
 
 class DispersionFitter:
-    """Tool for fitting raw nk data to get Dispersive Medium"""
+    """Tool for fitting refractive index data to get a dispersive ``Medium``."""
 
     def __init__(self, wvl_um: Numpy, n_data: Numpy, k_data: Numpy = None):
-        """initialize fitter with raw data"""
+        """Make a ``DispersionFitter`` with raw wavelength-nk data.
+
+        Parameters
+        ----------
+        wvl_um : Numpy
+            Wavelength data in micrometers.
+        n_data : Numpy
+            Real part of refractive index in micrometers.
+        k_data : Numpy, optional
+            Imaginary part of refractive index in micrometers.
+        """
 
         self._validate_data(wvl_um, n_data, k_data)
         self.wvl_um = wvl_um
         self.n_data = n_data
+        self.k_data = k_data
+        self.lossy = True
+
+        # handle lossless case
         if k_data is None:
             self.k_data = np.zeros_like(n_data)
             self.lossy = False
-        else:
-            self.k_data = k_data
-            self.lossy = True
         self.eps_data = nk_to_eps_complex(n=self.n_data, k=self.k_data)
         self.freqs = C_0 / wvl_um
         self.frequency_range = (np.min(self.freqs), np.max(self.freqs))
 
     @staticmethod
     def _validate_data(wvl_um: Numpy, n_data: Numpy, k_data: Numpy = None):
-        """make sure data is correctly shaped"""
+        """make sure raw data is correctly shaped.
+
+        Parameters
+        ----------
+        wvl_um : Numpy
+            Wavelength data in micrometers.
+        n_data : Numpy
+            Real part of refractive index in micrometers.
+        k_data : Numpy, optional
+            Imaginary part of refractive index in micrometers.
+        """
         assert wvl_um.shape == n_data.shape
         if k_data is not None:
             assert wvl_um.shape == k_data.shape
@@ -100,20 +191,18 @@ class DispersionFitter:
         Parameters
         ----------
         num_poles : int, optional
-            Number of poles in model.
+            Number of poles in the model.
         num_tries : int, optional
-            Number of optimizations to run with different initial guess.
+            Number of optimizations to run with random initial guess.
         tolerance_rms : float, optional
-            RMS error below which the fit is successful and result is returned.
-        plot : bool, optional
-            Plot the results at the end.
-        verbose: bool, optional
-            Whether to print out information about fit
+            RMS error below which the fit is successful and the result is returned.
+        verbose : bool, optional
+            Whether to print out information about fit.
 
         Returns
         -------
-        PoleResidue, rms_error
-            Medium containing fit result and the corresponding error of the fit
+        Tuple[``PoleResidue``, float]
+            Best results of multiple fits: (dispersive medium, RMS error).
         """
 
         # Run it a number of times.
@@ -148,7 +237,18 @@ class DispersionFitter:
         return best_medium, best_rms
 
     def _make_medium(self, coeffs):
-        """returns medium from coeffs from optimizer"""
+        """returns medium from coeffs from optimizer
+
+        Parameters
+        ----------
+        coeffs : np.ndarray[float]
+            Array of real coefficients for the pole residue fit.
+
+        Returns
+        -------
+        ``PoleResidue``
+            Dispersive medium corresponding to this set of ``coeffs``.
+        """
         poles_complex = _coeffs_to_poles(coeffs)
         poles_re_im = [(_unpack_complex(a), _unpack_complex(c)) for (a, c) in poles_complex]
         return PoleResidue(poles=poles_re_im, frequency_range=self.frequency_range)
@@ -157,14 +257,38 @@ class DispersionFitter:
         self,
         num_poles: int = 3,
     ) -> Tuple[PoleResidue, float]:
-        """Perform a single fit to the data and return optimization result."""
+        """Perform a single fit to the data and return optimization result.
+
+        Parameters
+        ----------
+        num_poles : int, optional
+            Number of poles in the model.
+
+        Returns
+        -------
+        Tuple[``PoleResidue``, float]
+            Results of single fit: (dispersive medium, RMS error).
+        """
 
         def constraint(coeffs, _grad):
             """Evaluates the nonlinear stability criterion of
             Hongjin Choi, Jae-Woo Baek, and Kyung-Young Jung,
             "Comprehensive Study on Numerical Aspects of Modified
             Lorentz Model Based Dispersive FDTD Formulations,"
-            IEEE TAP 2019.  Note: not used."""
+            IEEE TAP 2019.  Note: not used.
+
+            Parameters
+            ----------
+            coeffs : np.ndarray[float]
+                Array of real coefficients for the pole residue fit.
+            _grad : np.ndarray[float]
+                Gradient of ``constraint`` w.r.t coeffs, not used.
+
+            Returns
+            -------
+            float
+                Value of constraint.
+            """
             poles_a, poles_c = _unpack_coeffs(coeffs)
             a_real, a_imag = _unpack_complex(poles_a)
             c_real, c_imag = _unpack_complex(poles_c)
@@ -174,7 +298,20 @@ class DispersionFitter:
             return np.sum(res)
 
         def obj(coeffs, _grad):
-            """objective function for fit"""
+            """objective function for fit
+
+            Parameters
+            ----------
+            coeffs : np.ndarray[float]
+                Array of real coefficients for the pole residue fit.
+            _grad : np.ndarray[float]
+                Gradient of ``obj`` w.r.t coeffs, not used.
+
+            Returns
+            -------
+            float
+                RMS error correponding to current coeffs.
+            """
 
             medium = self._make_medium(coeffs)
             eps_model = medium.eps_model(self.freqs)
@@ -238,7 +375,7 @@ class DispersionFitter:
         return medium, rms_error
 
     @add_ax_if_none
-    def plot(  # pylint: disable=invalid-name
+    def plot(
         self,
         medium: PoleResidue = None,
         wvl_um: Numpy = None,
@@ -248,28 +385,17 @@ class DispersionFitter:
 
         Parameters
         ----------
-        medium: td.PoleReside
+        medium : PoleResidue, optional
             medium containing model to plot against data
-        wvl_um : array-like, optional
-            (micron) wavelengths to evaluate modeal at.
-        ax : matplotlib.axis.Axes, optional
-            axes to plot the data on.
-        dot_sizes : float, optional
-            Size of input data scatter plots.
-        linewidth : float, optional
-            Width of model plot lines.
-        n_data_color : str, optional
-            Color (matplotlib) of n data.
-        k_data_color : str, optional
-            Color (matplotlib) of k data.
-        n_model_color : str, optional
-            Color (matplotlib) of n model.
-        k_model_color : str, optional
-            Color (matplotlib) of k model.
+        wvl_um : Numpy, optional
+            Wavelengths to evaluate model at for plot in micrometers.
+        ax : Ax, optional
+            Axes to plot the data on, if None, a new one is created.
 
         Returns
         -------
         matplotlib.axis.Axes
+            Matplotlib axis corresponding to plot.
         """
 
         if wvl_um is None:
@@ -282,7 +408,7 @@ class DispersionFitter:
         dot_sizes = 25
         linewidth = 3
 
-        image = ax.scatter(self.wvl_um, self.n_data, s=dot_sizes, c="black", label="n (data)")
+        _ = ax.scatter(self.wvl_um, self.n_data, s=dot_sizes, c="black", label="n (data)")
         ax.plot(wvl_um, n_model, linewidth=linewidth, color="crimson", label="n (model)")
 
         if self.lossy:
@@ -297,19 +423,19 @@ class DispersionFitter:
 
     @classmethod
     def load(cls, fname, **loadtxt_kwargs):
-        """Loads nk data from file, performs validation on input. wvl_um
-        must be in micron.
+        """Loads ``DispersionFitter`` from file contining wavelength, n, k data.
 
         Parameters
         ----------
         fname : str
             Path to file containing wavelength (um), n, k (optional) data in columns.
         **loadtxt_kwargs
-            Kwargs passed to ``np.loadtxt``.
+            Kwargs passed to ``np.loadtxt``, such as ``skiprows``, ``delimiter``.
 
         Returns
         -------
-        dispersion fitter
+        DispersionFitter
+            A ``DispersionFitter`` instance.
         """
         data = np.loadtxt(fname, **loadtxt_kwargs)
         assert len(data.shape) == 2, "data must contain [wavelength, ndata, kdata] in columns"

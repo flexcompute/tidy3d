@@ -118,6 +118,7 @@
 	- [x] IO SimulationData
 	- [ ] Process Simulation to solver inputs. (momchil)
 	- [ ] Write solver outputs to SimulationData. (momchil)
+- [ ] Convert to old .json conversion to use old solver code?
 - [ ] Test test test.
 ---
 
@@ -151,16 +152,19 @@
 		- [x] sampler
 	- [x] Overlay structures onto fields.
 	- [x] add .plot method to `SimulationData`
+---
 
 #### "Tidying" Up
-- [ ] **Material library refactor.**
-- [ ] Make Uniform Samplers separate classes? (dont evaluate / store freqs, times)?
-- [ ] Fix MyPy warnings
-- [ ] **Logging**
 - [x] clean up data.plot arguments. <- using xarray.
-- [ ] fix overlapping structure plotting.
-- [ ] .json conversion to use old solver code?
-
+- [ ] Refactor material library.
+- [ ] Fix MyPy warnings
+- [ ] Add Logging.
+- [ ] Fix overlapping structure plotting.
+- [ ] Make Uniform Samplers separate classes? (dont evaluate / store freqs, times)?
+- [ ] Simplify plotting kwargs.
+- [ ] Migrate notebooks into static tests.
+- [ ] Interactive visualization?
+- [ ] Add PEC PMC.
 ---
 
 ### Stage 3: Refining
@@ -217,9 +221,9 @@ https://github.com/crusaderky/python_project_template
 #### Final
 - [ ] Finding bugs and fixing things, testing (2 weeks)
 - [ ] Release publicly! :partying_face:
-
 ---
-### After this'
+
+### Entensions
 - [ ] Simple gui?  https://github.com/hoffstadt/DearPyGui
 - [ ] 3 panel lumerical style plot `Simulation.visualize()`
 - [ ] 3D structure plotting (matplotlib?)
@@ -228,5 +232,5 @@ https://github.com/crusaderky/python_project_template
 - [ ] More advanced plotting
 - [ ] Angled sources
 - [ ] Angled Sidewalls
-- [ ] simple yaml editor? flask app
+- [ ] Simple yaml editor? flask app
 - [ ] Output Simulation as blender file
