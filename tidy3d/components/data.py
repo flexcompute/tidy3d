@@ -312,8 +312,8 @@ class SimulationData(Tidy3dData):
         return cls(simulation=sim, monitor_data=monitor_data_dict)
 
     def __getitem__(self, monitor_name: str) -> MonitorData:
-        """get the monitor directly by name"""
-        return self.monitor_data[monitor_name]
+        """get the monitor xarray directly by name"""
+        return self.monitor_data[monitor_name].data
 
     def __eq__(self, other):
         """check equality against another SimulationData instance"""

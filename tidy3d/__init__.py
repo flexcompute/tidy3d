@@ -1,7 +1,7 @@
 """ Tidy3d package imports"""
 __version__ = "0.0.0"
 
-from rich import pretty
+from rich import pretty, traceback
 
 # import component as `from tidy3d import Simulation` or `td.Simulation`
 from .components import PMLLayer
@@ -33,5 +33,6 @@ from . import web
 # specific material imported as `from tidy3d.material_library import SiC_xxx`
 from .material_library import material_library
 
-# make all stdout pretty
+# make all stdout and errors pretty
 pretty.install()
+traceback.install()
