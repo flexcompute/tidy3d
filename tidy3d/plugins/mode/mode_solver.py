@@ -70,7 +70,8 @@ class ModeSolver:
         """gets information about the mode specification from mode solver"""
 
         # note discretizing, need to make consistent
-        eps_cross = np.squeeze(self.simulation.epsilon(self.plane, self.freq))
+        eps_cross = self.simulation.epsilon(self.plane, self.freq)
+        eps_cross = np.squeeze(np.mean(eps_cross, axis=0))
 
         Nx, Ny = eps_cross.shape
         if mode.symmetries[0] != 0:
