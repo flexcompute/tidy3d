@@ -20,6 +20,9 @@ TMP_DIR = "tests/tmp/"
 
 # decorator that clears the tmp/ diretory before test
 def clear_tmp(fn):
+    if not os.path.exists(TMP_DIR):
+        os.mkdir(TMP_DIR)
+
     def new_fn(*args, **kwargs):
         clear_dir(TMP_DIR)
         return fn(*args, **kwargs)
