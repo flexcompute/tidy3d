@@ -1,10 +1,5 @@
-import numpy as np
-
 from typing import Dict, Tuple
-
-import sys
-
-sys.path.append("../")
+import numpy as np
 
 from .solver import solve
 
