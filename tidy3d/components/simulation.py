@@ -22,7 +22,37 @@ from ..constants import inf
 
 
 class Simulation(Box):
-    """Contains all information about simulation"""
+    """Contains all information about simulation.
+
+    Parameters
+    ----------
+    center : Tuple[float, float, float], optional
+        Center of simulation domain in x,y,z, defualts to (0.0, 0.0, 0.0)
+    size : Tuple[float, float, float]
+        Size of simulation domain in x,y,z.
+    grid_size : Tuple[float, float, float]
+        Grid size in x,y,z direction.
+    run_time: float, optional
+        Maximum run time of simulation in seconds, defaults to 0.0.
+    medium : ``tidy3d.Medium``, optional
+        Background medium of simulation, defaults to air.
+    structures : List[``tidy3d.Structure``], optional
+        Structures in simulation, in case of overlap, prefernce goes to those later in list.
+    sources : Dict[str: ``Source``], optional
+        Names and sources in the simulation.
+    monitors :
+        Names and monitors in the simulation.
+    pml_layers: Tuple[``tidy3d.PMLLayer``, ``PMLLayer``, ``PMLLayer``], optional.
+        Specifies PML layers (aborbers) in x,y,z location, defaults to no PML
+    symmetry : Tuple[int], optional
+        Specifies symmetry in x,y,z with values 0, 1, -1 specifying no symmetry, even symmetry, and odd symmetry, respectively.
+    shutoff : float, optional
+        Simulation ends when field intensity gets below this value, defaults to 1e-5
+    courant : float, optional
+        Courant stability factor, controls time step to spatial step ratio, defaults to 0.9.
+    subpixel : bool, optional
+        Uses subpixel averaging of permittivity if True for much higher accuracy, defaults to True.
+    """
 
     grid_size: Tuple[GridSize, GridSize, GridSize]
     medium: MediumType = Medium()

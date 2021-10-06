@@ -40,7 +40,7 @@ master_doc = "index"
 # ones.
 extensions = [
     "sphinx.ext.autodoc",
-    "sphinxcontrib.autodoc_pydantic",
+    # "sphinxcontrib.autodoc_pydantic",
     "sphinx.ext.autosummary",
     "sphinx.ext.extlinks",
     "sphinx.ext.mathjax",
@@ -52,11 +52,11 @@ extensions = [
 
 autodoc_inherit_docstrings = True
 autosummary_generate = True
-autodoc_pydantic_model_show_json = True
+# autodoc_pydantic_model_show_json = True
 # autodoc_pydantic_settings_show_json = False
 # autodoc_pydantic_model_show_config_member = False
-autodoc_pydantic_model_show_config_summary = False
-autodoc_pydantic_model_show_validator_summary = False
+# autodoc_pydantic_model_show_config_summary = False
+# autodoc_pydantic_model_show_validator_summary = False
 
 extlinks = {}
 
