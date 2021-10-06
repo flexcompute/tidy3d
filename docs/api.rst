@@ -11,7 +11,8 @@ Components
 .. autosummary::
    :toctree: _autosummary/
 
-   Simulation
+   tidy3d.Simulation
+   tidy3d.PMLLayer
 
 Submitting Simulations
 ======================
