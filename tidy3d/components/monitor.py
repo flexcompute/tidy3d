@@ -86,39 +86,112 @@ class AbstractFluxMonitor(Monitor, ABC):
 
 
 class FieldMonitor(FreqMonitor, AbstractFieldMonitor):
-    """stores EM fields as a function of frequency"""
+    """stores EM fields in volume as a function of frequency.
+
+    Parameters
+    ----------
+    center: Tuple[float, float, float], optional.
+        Center of monitor ``Box``, defaults to (0, 0, 0)
+    size: Tuple[float, float, float], optional.
+        Size of monitor ``Box``, must have one element = 0.0 to define plane.
+    field: List[str], optional
+        Electromagnetic field(s) to measure (E, H), defaults to ``['E', 'H']``
+    component: List[str], optional
+        Directional component to measure in x,y,z, defaults to ``['x','y','z']``.
+    freqs: List[float]
+        Frequencies to measure fields at at.
+    """
 
     field: List[EMField] = ["E", "H"]
     type: Literal["FieldMonitor"] = "FieldMonitor"
 
 
 class FieldTimeMonitor(TimeMonitor, AbstractFieldMonitor):
-    """stores EM fields as a function of time"""
+    """stores EM fields as a function of time
+
+    Parameters
+    ----------
+    center: Tuple[float, float, float], optional.
+        Center of monitor ``Box``, defaults to (0, 0, 0)
+    size: Tuple[float, float, float], optional.
+        Size of monitor ``Box``, must have one element = 0.0 to define plane.
+    field: List[str], optional
+        Electromagnetic field(s) to measure (E, H), defaults to ``['E', 'H']``
+    component: List[str], optional
+        Directional component to measure in x,y,z, defaults to ``['x','y','z']``.
+    times: List[int]
+        Time steps to measure the fields at.
+    """
 
     field: List[EMField] = ["E", "H"]
     type: Literal["FieldTimeMonitor"] = "FieldTimeMonitor"
 
 
 class PermittivityMonitor(FreqMonitor, AbstractFieldMonitor):
-    """stores permittivity data as a function of frequency"""
+    """stores permittivity data as a function of frequency
 
+    Parameters
+    ----------
+    center: Tuple[float, float, float], optional.
+        Center of monitor ``Box``, defaults to (0, 0, 0)
+    size: Tuple[float, float, float], optional.
+        Size of monitor ``Box``, must have one element = 0.0 to define plane.
+    component: List[str], optional
+        Directional component to measure in x,y,z, defaults to ``['x','y','z']``.
+    freqs: List[float], optional.
+        Frequencies to measure permittivity at. If None, measure at infinite freq.
+    """
+
+    freqs: FreqSampler = None
     type: Literal["PermittivityMonitor"] = "PermittivityMonitor"
 
 
 class FluxMonitor(FreqMonitor, AbstractFluxMonitor):
-    """Stores flux through a plane as a function of frequency"""
+    """Stores power flux through a plane as a function of frequency.
+
+    Parameters
+    ----------
+    center: Tuple[float, float, float], optional.
+        Center of monitor ``Box``, defaults to (0, 0, 0)
+    size: Tuple[float, float, float], optional.
+        Size of monitor ``Box``, must have one element = 0.0 to define plane.
+    freqs: List[float]
+        Frequencies to measure flux at.
+    """
 
     type: Literal["FluxMonitor"] = "FluxMonitor"
 
 
 class FluxTimeMonitor(TimeMonitor, AbstractFluxMonitor):
-    """Stores flux through a plane as a function of time"""
+    """Stores power flux through a plane as a function of frequency.
+
+    Parameters
+    ----------
+    center: Tuple[float, float, float], optional.
+        Center of monitor ``Box``, defaults to (0, 0, 0)
+    size: Tuple[float, float, float], optional.
+        Size of monitor ``Box``, must have one element = 0.0 to define plane.
+    times: List[int]
+        Time steps to measure flux at.
+    """
 
     type: Literal["FluxTimeMonitor"] = "FluxTimeMonitor"
 
 
 class ModeMonitor(FreqMonitor):
-    """stores modal amplitudes associated with modes"""
+    """stores overlap amplitudes associated with modes.
+
+    Parameters
+    ----------
+    center: Tuple[float, float, float], optional.
+        Center of monitor ``Box``, defaults to (0, 0, 0)
+    size: Tuple[float, float, float], optional.
+        Size of monitor ``Box``, must have one element = 0.0 to define plane.
+    freqs: List[float]
+        Frequencies to measure flux at.
+    modes: List[``Mode``]
+        List of ``Mode`` objects specifying the modal profiles to measure amplitude overalap with.
+    """
 
     direction: List[Direction] = ["+", "-"]
     modes: List[Mode]
@@ -127,6 +200,7 @@ class ModeMonitor(FreqMonitor):
     _plane_validator = assert_plane()
 
 
+# maps monitor type name to monitor type
 monitor_type_map = {
     "FieldMonitor": FieldMonitor,
     "FieldTimeMonitor": FieldTimeMonitor,

@@ -125,6 +125,7 @@ def test_mon_data_serialize():
         mon_data = sim_data.monitor_data[mon_name]
         mon_data.json()
 
+
 @clear_tmp
 def test_sim_data():
     """Test that exporting and loading a SimulationData gives same results"""

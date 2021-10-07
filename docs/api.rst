@@ -16,6 +16,21 @@ Simulation Specification
    Simulation
    PMLLayer
 
+Monitors
+--------
+
+.. autosummary::
+   :toctree: _autosummary/
+
+   FieldMonitor
+   FieldTimeMonitor
+   PermittivityMonitor
+   FluxMonitor
+   FluxTimeMonitor
+   ModeMonitor
+   Mode
+
+
 Simulation Output Data
 ----------------------
 

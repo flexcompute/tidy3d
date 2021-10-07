@@ -49,6 +49,7 @@ Ax = Axes
 
 ArrayLike = Union[List[float], Numpy]
 
+
 class TypedArray(np.ndarray):
     @classmethod
     def __get_validators__(cls):
@@ -58,17 +59,21 @@ class TypedArray(np.ndarray):
     def validate_type(cls, val):
         return np.array(val, dtype=cls.inner_type)
 
+
 class ArrayMeta(type):
     def __getitem__(self, t):
-        return type('Array', (TypedArray,), {'inner_type': t})
+        return type("Array", (TypedArray,), {"inner_type": t})
+
 
 class Array(np.ndarray, metaclass=ArrayMeta):
-    """ Type of numpy array (Array[float], Array[complex]) """
+    """Type of numpy array (Array[float], Array[complex])"""
+
     pass
 
+
 def numpy_encoding(array):
-    """ json encoding of numpy array """
-    if np.array([1+1j]).dtype == 'complex':
-        return {'re': list(array.real), 'im': list(array.imag)}
+    """json encoding of numpy array"""
+    if np.array([1 + 1j]).dtype == "complex":
+        return {"re": list(array.real), "im": list(array.imag)}
     else:
         return list(array)
