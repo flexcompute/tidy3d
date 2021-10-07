@@ -7,7 +7,7 @@ import numpy as np
 sys.path.append("../")
 
 from tidy3d import Simulation
-from tidy3d.components.monitor import AbstractFieldMonitor, AbstractFluxMonitor
+from tidy3d.components.monitor import VectorFieldMonitor, AbstractFluxMonitor
 from tidy3d.components.monitor import ModeMonitor, FreqMonitor, TimeMonitor, PermittivityMonitor
 from tidy3d.components.types import GridSize, Tuple, Numpy
 
@@ -33,7 +33,7 @@ def solve(simulation: Simulation) -> SolverDataDict:
             sampler_values = np.array(monitor.times)
             sampler_label = "t"
             value_fn = np.real
-        if isinstance(monitor, AbstractFieldMonitor):
+        if isinstance(monitor, VectorFieldMonitor):
             x, y, z = discretize_monitor(simulation, monitor)
             data_array = make_fake_field_values(x, y, z, sampler_values)
             Nx, Ny, Nz = len(x), len(y), len(z)
@@ -87,7 +87,7 @@ def unpack_grid_size(grid_size: GridSize) -> Tuple[float, float, float]:
 
 
 def discretize_monitor(
-    simulation: Simulation, mon: AbstractFieldMonitor
+    simulation: Simulation, mon: VectorFieldMonitor
 ) -> Tuple[Numpy, Numpy, Numpy]:
     """Discretizes spatial extent of a monitor"""
     grid_size = simulation.grid_size

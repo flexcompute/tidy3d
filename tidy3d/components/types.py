@@ -12,68 +12,87 @@ import pydantic
 import numpy as np
 from matplotlib.axes._subplots import Axes
 
-# tuple containing three non-negative floats
-Size = Tuple[pydantic.NonNegativeFloat, pydantic.NonNegativeFloat, pydantic.NonNegativeFloat]
+from ..constants import inf
 
-# tuple containing three floats
+""" abstract """
+
+Inf = Literal[inf]
+
+""" geometric """
+
+Size1D = Union[pydantic.NonNegativeFloat, Inf]
+Size = Tuple[Size1D, Size1D, Size1D]
 Coordinate = Tuple[float, float, float]
 Coordinate2D = Tuple[float, float]
-
-# tuple containing min coordinate (in each x,y,z) and max coordinate
 Bound = Tuple[Coordinate, Coordinate]
-
-# grid size
 GridSize = Union[pydantic.PositiveFloat, List[pydantic.PositiveFloat]]
-
-# axis index
 Axis = Literal[0, 1, 2]
 Vertices = List[Coordinate2D]
 
-# pole-residue poles (each pole has two complex numbers)
+""" medium """
+
 Complex = Tuple[float, float]
 PoleAndResidue = Tuple[Complex, Complex]
+FreqBound = Union[float, Inf, Literal[-inf]]
 
-# sources
-Polarization = Literal["Jx", "Jy", "Jz", "Mx", "My", "Mz"]
-Direction = Literal["+", "-"]
-
-# monitors
-EMField = Literal["E", "H"]
-Component = Literal["x", "y", "z"]
-
-Numpy = np.ndarray
+""" symmetries """
 
 Symmetry = Literal[0, -1, 1]
 
+""" sources """
+
+Polarization = Literal["Jx", "Jy", "Jz", "Mx", "My", "Mz"]
+Direction = Literal["+", "-"]
+
+""" monitors """
+
+EMField = Literal["E", "H"]
+Component = Literal["x", "y", "z"]
+
+""" plotting """
+
 Ax = Axes
 
-ArrayLike = Union[List[float], Numpy]
+""" Numpy """
+
+# generic numpy array
+Numpy = np.ndarray
 
 
 class TypedArray(np.ndarray):
+    """A numpy array with a type given by cls.inner_type"""
+
     @classmethod
     def __get_validators__(cls):
+        """boilerplate"""
         yield cls.validate_type
 
     @classmethod
     def validate_type(cls, val):
-        return np.array(val, dtype=cls.inner_type)
+        """validator"""
+        return np.array(val, dtype=cls.inner_type)  # pylint: disable=no-member
 
 
 class ArrayMeta(type):
-    def __getitem__(self, t):
+    """metclass for Array, enables Array[type] -> TypedArray"""
+
+    def __getitem__(cls, t):
+        """Array[t] -> TypedArray"""
         return type("Array", (TypedArray,), {"inner_type": t})
 
 
 class Array(np.ndarray, metaclass=ArrayMeta):
-    """Type of numpy array (Array[float], Array[complex])"""
-
-    pass
+    """type of numpy array with annotated type (Array[float], Array[complex])"""
 
 
+# lists or np.ndarrays of certain type
+FloatArrayLike = Union[List[float], Array[float]]
+IntArrayLike = Union[List[int], Array[int]]
+ComplexArrayLike = Union[List[complex], Array[complex]]
+
+# encoding for JSON in pydantic models
 def numpy_encoding(array):
     """json encoding of numpy array"""
-    if np.array([1 + 1j]).dtype == "complex":
+    if array.dtype == "complex":
         return {"re": list(array.real), "im": list(array.imag)}
-    else:
-        return list(array)
+    return list(array)

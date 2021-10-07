@@ -13,9 +13,40 @@ from tidy3d.plugins.dispersion.fit import _poles_to_coeffs, _coeffs_to_poles
 from tidy3d.plugins.dispersion.fit import _pack_coeffs, _unpack_coeffs
 
 from tidy3d.plugins import ModeSolver
+from tidy3d.plugins import Near2Far
+from tidy3d import FieldData, FieldMonitor
+
+
+def test_near2far():
+    """make sure mode solver runs"""
+
+    field_mon = FieldMonitor(
+        size=(10, 10, 0),
+        freqs=[1],
+    )
+
+    field_data = FieldData(
+        monitor_name="nearfield_monitor",
+        monitor=field_mon,
+        field=["E", "H"],
+        component=["x", "z", "z"],
+        x=np.ones((2, 3, 1)) * np.linspace(-1, 1, 10),
+        y=np.ones((2, 3, 1)) * np.linspace(-1, 1, 10),
+        z=np.ones((2, 3, 1)) * np.array([0.0]),
+        f=np.array([1.0]),
+        values=np.random.random((2, 3, 10, 10, 1, 1)),
+    )
+
+    n2f = Near2Far(field_data)
+    n2f.radar_cross_section(1, 1)
+    n2f.power_spherical(1, 1, 1)
+    n2f.power_cartesian(1, 1, 1)
+    n2f.fields_spherical(1, 1, 1)
+    n2f.fields_cartesian(1, 1, 1)
 
 
 def test_mode_solver():
+    """make sure mode solver runs"""
     waveguide = td.Structure(
         geometry=td.Box(size=(td.inf, 0.5, 0.5)), medium=td.Medium(permittivity=4.0)
     )
@@ -26,6 +57,7 @@ def test_mode_solver():
 
 
 def test_coeffs():
+    """make sure pack_coeffs and unpack_coeffs are reciprocal"""
     num_poles = 10
     coeffs = np.random.random(4 * num_poles)
     a, c = _unpack_coeffs(coeffs)
@@ -37,6 +69,7 @@ def test_coeffs():
 
 
 def test_pole_coeffs():
+    """make sure coeffs_to_poles and poles_to_coeffs are reciprocal"""
     num_poles = 10
     coeffs = np.random.random(4 * num_poles)
     poles = _coeffs_to_poles(coeffs)
@@ -46,21 +79,24 @@ def test_pole_coeffs():
 
 
 def test_dispersion():
+    """performs a fit on some random data"""
     num_data = 10
     n_data = np.random.random(num_data)
     wvls = np.linspace(1, 2, num_data)
     fitter = DispersionFitter(wvls, n_data)
     medium, rms = fitter.fit_single()
-    medium, rms = fitter.fit(num_tries=2, verbose=False)
+    medium, rms = fitter.fit(num_tries=2)
     medium.export("tests/tmp/medium_fit.json")
 
 
 def test_dispersion_load():
+    """loads dispersion model from nk data file"""
     fitter = DispersionFitter.load("tests/data/nk_data.csv", skiprows=1, delimiter=",")
-    medium, rms = fitter.fit(num_tries=20, verbose=False)
+    medium, rms = fitter.fit(num_tries=20)
 
 
 def test_dispersion_plot():
+    """plots a medium fit from file"""
     fitter = DispersionFitter.load("tests/data/nk_data.csv", skiprows=1, delimiter=",")
-    medium, rms = fitter.fit(num_tries=20, verbose=False)
+    medium, rms = fitter.fit(num_tries=20)
     fitter.plot(medium)

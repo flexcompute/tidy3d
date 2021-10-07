@@ -5,6 +5,7 @@ import json
 import rich
 import pydantic
 import yaml
+import numpy as np
 
 # default indentation (# spaces) in files
 INDENT = 4
@@ -20,6 +21,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         extra = "forbid"  # forbid extra kwargs not specified in model
         validate_assignment = True  # validate when attributes are set after initialization
         allow_population_by_field_name = True
+        json_encoders = {np.ndarray: lambda x: list(x)}  # pylint: disable=unnecessary-lambda
 
     def help(self, methods: bool = False) -> None:
         """get help for this object"""

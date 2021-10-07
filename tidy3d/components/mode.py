@@ -1,5 +1,4 @@
-"""Defines specification for mode solver 
-"""
+"""Defines specification for mode solver."""
 
 from typing import Tuple
 

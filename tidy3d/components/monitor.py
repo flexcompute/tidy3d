@@ -4,32 +4,29 @@ from typing import List, Union
 
 import numpy as np
 
-from .types import Literal, Ax, Direction, EMField, Component
+from .types import Literal, Ax, Direction, EMField, Component, FloatArrayLike, IntArrayLike
 from .geometry import Box
 from .validators import assert_plane
 from .mode import Mode
 from .viz import add_ax_if_none, MonitorParams
 
 
-""" Samplers """
-
-FreqSampler = List[float]
-TimeSampler = List[int]
+""" Create times or freqs """
 
 
-def _uniform_arange(start: int, stop: int, step: int) -> TimeSampler:
+def _uniform_arange(start: int, stop: int, step: int) -> IntArrayLike:
     """uniform spacing from start to stop with spacing of step."""
     assert start <= stop, "start must not be greater than stop"
     return list(np.arange(start, stop, step))
 
 
-def _uniform_linspace(start: float, stop: float, num: int) -> FreqSampler:
+def _uniform_linspace(start: float, stop: float, num: int) -> FloatArrayLike:
     """uniform spacing from start to stop with num elements."""
     assert start <= stop, "start must not be greater than stop"
     return list(np.linspace(start, stop, num))
 
 
-def uniform_time_sampler(t_start: int, t_stop: int, t_step: int = 1) -> TimeSampler:
+def uniform_time_sampler(t_start: int, t_stop: int, t_step: int = 1) -> IntArrayLike:
     """create times at evenly spaced steps."""
     assert isinstance(t_start, int), "`t_start` must be integer for time sampler"
     assert isinstance(t_stop, int), "`t_stop` must be integer for time sampler"
@@ -38,7 +35,7 @@ def uniform_time_sampler(t_start: int, t_stop: int, t_step: int = 1) -> TimeSamp
     return times
 
 
-def uniform_freq_sampler(f_start, f_stop, num_freqs) -> FreqSampler:
+def uniform_freq_sampler(f_start: float, f_stop: float, num_freqs: int) -> FloatArrayLike:
     """create frequencies at evenly spaced points."""
     freqs = _uniform_linspace(f_start, f_stop, num_freqs)
     return freqs
@@ -61,19 +58,25 @@ class Monitor(Box, ABC):
 class FreqMonitor(Monitor, ABC):
     """stores data in frequency domain"""
 
-    freqs: FreqSampler
+    freqs: FloatArrayLike
 
 
 class TimeMonitor(Monitor, ABC):
     """stores data in time domain"""
 
-    times: TimeSampler
+    times: IntArrayLike
 
 
-class AbstractFieldMonitor(Monitor, ABC):
+class VectorFieldMonitor(Monitor, ABC):
     """stores data as a function of x,y,z"""
 
     component: List[Component] = ["x", "y", "z"]
+
+
+class EMFieldMonitor(VectorFieldMonitor, ABC):
+    """stores electromagnetic fields."""
+
+    field: List[EMField] = ["E", "H"]
 
 
 class AbstractFluxMonitor(Monitor, ABC):
@@ -85,7 +88,7 @@ class AbstractFluxMonitor(Monitor, ABC):
 """ usable """
 
 
-class FieldMonitor(FreqMonitor, AbstractFieldMonitor):
+class FieldMonitor(FreqMonitor, EMFieldMonitor):
     """stores EM fields in volume as a function of frequency.
 
     Parameters
@@ -102,11 +105,10 @@ class FieldMonitor(FreqMonitor, AbstractFieldMonitor):
         Frequencies to measure fields at at.
     """
 
-    field: List[EMField] = ["E", "H"]
     type: Literal["FieldMonitor"] = "FieldMonitor"
 
 
-class FieldTimeMonitor(TimeMonitor, AbstractFieldMonitor):
+class FieldTimeMonitor(TimeMonitor, EMFieldMonitor):
     """stores EM fields as a function of time
 
     Parameters
@@ -123,11 +125,10 @@ class FieldTimeMonitor(TimeMonitor, AbstractFieldMonitor):
         Time steps to measure the fields at.
     """
 
-    field: List[EMField] = ["E", "H"]
     type: Literal["FieldTimeMonitor"] = "FieldTimeMonitor"
 
 
-class PermittivityMonitor(FreqMonitor, AbstractFieldMonitor):
+class PermittivityMonitor(FreqMonitor, VectorFieldMonitor):
     """stores permittivity data as a function of frequency
 
     Parameters
@@ -142,7 +143,7 @@ class PermittivityMonitor(FreqMonitor, AbstractFieldMonitor):
         Frequencies to measure permittivity at. If None, measure at infinite freq.
     """
 
-    freqs: FreqSampler = None
+    freqs: FloatArrayLike = None
     type: Literal["PermittivityMonitor"] = "PermittivityMonitor"
 
 
