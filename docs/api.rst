@@ -1,18 +1,35 @@
-.. currentmodule:: tidy3d
-
 *************
 API Reference
 *************
 
+.. currentmodule:: tidy3d
 
 Components
 ==========
 
+Simulation Specification
+------------------------
+
 .. autosummary::
    :toctree: _autosummary/
 
-   tidy3d.Simulation
-   tidy3d.PMLLayer
+   Simulation
+   PMLLayer
+
+Simulation Output Data
+----------------------
+
+.. autosummary::
+   :toctree: _autosummary/
+
+   SimulationData
+   FieldData
+   FieldTimeData
+   PermittivityData
+   FluxData
+   FluxTimeData
+   ModeData
+
 
 Submitting Simulations
 ======================
@@ -64,6 +81,17 @@ Batch Processing
    web.Batch.load_results
    web.Batch.delete
 
+Info Containers
+---------------
+
+.. autosummary::
+   :toctree: _autosummary/
+
+   web.task.Task
+   web.task.TaskInfo
+   web.task.TaskStatus
+
+
 Plugins
 =======
 
@@ -86,6 +114,7 @@ Mode Solver
 
    plugins.ModeSolver
    plugins.ModeSolver.solve
+   plugins.mode.mode_solver.ModeInfo
 
 Near Field to Far Field Transformation
 --------------------------------------
