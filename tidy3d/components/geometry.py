@@ -5,7 +5,8 @@ from typing import List, Tuple, Union
 
 import pydantic
 import numpy as np
-import holoviews as hv
+
+# import holoviews as hv
 import matplotlib as mpl
 
 from .base import Tidy3dBaseModel
@@ -139,28 +140,24 @@ class Geometry(Tidy3dBaseModel, ABC):
         ax.set_title(f"cross section at {'xyz'[axis]}={position:.2f}")
         return ax
 
-    def visualize(self, axis: Axis):
-        """make interactive plot"""
-
-        hv.extension("bokeh")
-
-        xlabel, ylabel = self._get_plot_labels(axis=axis)
-        extents = self._get_plot_extents(axis=axis)
-
-        def poly_fn(position=0):
-            """returns hv.polygons as function of sliding bar position"""
-            vertices_list = self._get_crosssection_polygons(position, axis=axis)
-            polygons = []
-            for vertices in vertices_list:
-                xs = [x for (x, _) in vertices]
-                ys = [y for (_, y) in vertices]
-                polygons.append({"x": xs, "y": ys})
-            poly = hv.Polygons(polygons, extents=extents)
-            return poly
-
-        pos_dim = hv.Dimension("position", range=(-3.0, 3.0), step=0.0001)
-        dmap = hv.DynamicMap(poly_fn, kdims=[pos_dim])
-        return dmap.opts(xlabel=xlabel, ylabel=ylabel)
+    # def visualize(self, axis: Axis):
+    #     """make interactive plot"""
+    #     hv.extension("bokeh")
+    #     xlabel, ylabel = self._get_plot_labels(axis=axis)
+    #     extents = self._get_plot_extents(axis=axis)
+    #     def poly_fn(position=0):
+    #         """returns hv.polygons as function of sliding bar position"""
+    #         vertices_list = self._get_crosssection_polygons(position, axis=axis)
+    #         polygons = []
+    #         for vertices in vertices_list:
+    #             xs = [x for (x, _) in vertices]
+    #             ys = [y for (_, y) in vertices]
+    #             polygons.append({"x": xs, "y": ys})
+    #         poly = hv.Polygons(polygons, extents=extents)
+    #         return poly
+    #     pos_dim = hv.Dimension("position", range=(-3.0, 3.0), step=0.0001)
+    #     dmap = hv.DynamicMap(poly_fn, kdims=[pos_dim])
+    #     return dmap.opts(xlabel=xlabel, ylabel=ylabel)
 
 
 """ geometry subclasses """
