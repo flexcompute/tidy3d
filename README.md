@@ -165,6 +165,9 @@
 - [ ] Migrate notebooks into static tests.
 - [ ] Interactive visualization?
 - [ ] Add PEC PMC.
+- [ ] Get rid of pydantic?
+- [ ] Replace tqdm with rich?
+- [ ] Use shapely for geometry ops / plotting?  `Geometry.geo(x=0) -> shapely representation`
 ---
 
 ### Stage 3: Refining

@@ -1,4 +1,10 @@
-""" Classes for Storing Monitor and Simulation Data """
+"""Classes for Storing Monitor and Simulation Data 
+
+Attributes
+----------
+monitor_data_map : TYPE
+Description
+"""
 
 from abc import ABC
 from typing import Dict, List, Union
@@ -15,11 +21,11 @@ from .monitor import FreqMonitor, TimeMonitor
 
 from .monitor import monitor_type_map
 from .base import Tidy3dBaseModel
-from .types import Numpy, EMField, Component, Direction
+from .types import Numpy, EMField, Component, Direction, Array, numpy_encoding
 
 
 class Tidy3dData(Tidy3dBaseModel):
-    """base class for data associated with a specific task."""
+    """base class for data associated with a simulation."""
 
     class Config:  # pylint: disable=too-few-public-methods
         """sets config for all Tidy3dBaseModel objects"""
@@ -28,14 +34,25 @@ class Tidy3dData(Tidy3dBaseModel):
         extra = "allow"  # allow extra kwargs not specified in model (like dir=['+', '-'])
         validate_assignment = True  # validate when attributes are set after initialization
         arbitrary_types_allowed = True
-
+        json_encoders = {
+            np.ndarray: numpy_encoding,
+            np.int64: lambda x: int(x),
+            xr.Dataset: lambda x: None,
+            xr.DataArray: lambda x: None,
+        }
 
 class MonitorData(Tidy3dData, ABC):
-    """Stores data from a Monitor"""
+    """Stores data for a Monitor
+    
+    Attributes
+    ----------
+    data : ``Union[xr.DataArray, xr.Dataset]``
+    ``xarray`` representation of the underlying data.
+    """
 
     monitor_name: str
     monitor: Monitor
-    values: Numpy
+    values: Union[Array[float], Array[complex]]
 
     # dims stores the keys (strings) of the coordinates of each MonitorData subclass
     # they are in order corresponding to their index into `values`.
@@ -49,23 +66,52 @@ class MonitorData(Tidy3dData, ABC):
         self.data = self._make_xarray()
 
     def _make_xarray(self) -> Union[xr.DataArray, xr.Dataset]:
-        """make xarray representation of data, either DataArray or Dataset (fields)"""
+        """make xarray representation of data
+        
+        Returns
+        -------
+        Union[xr.DataArray, xr.Dataset]
+            ``xarray`` representation of the underlying data.
+        """
         data_dict = self.dict()
         coords = {dim: data_dict[dim] for dim in self._dims}
         return xr.DataArray(self.values, coords=coords, name=self.monitor_name)
 
-    def __eq__(self, other):
-        """check equality against another MonitorData instance"""
+    def __eq__(self, other) -> bool:
+        """check equality against another MonitorData instance
+        
+        Parameters
+        ----------
+        other : ``MonitorData``
+            Other MonitorData to equate to.
+        
+        Returns
+        -------
+        bool
+            Whether two ``MonitorData`` instances have equal data.
+        """
         assert isinstance(other, MonitorData), "can only check eqality on two monitor data objects"
         return np.all(self.values == self.values)
 
     @property
     def geometry(self):
-        """return Box representation of monitor's geometry."""
+        """Return ``Box`` representation of monitor's geometry.
+        
+        Returns
+        -------
+        ``Box``
+            ``Box`` represention of shape of originl monitor.
+        """
         return self.monitor.geometry
 
     def export(self, fname: str) -> None:
-        """Export MonitorData to hdf5 file"""
+        """Export MonitorData to hdf5 file.
+        
+        Parameters
+        ----------
+        fname : str
+            Path to data file (including filename).
+        """
 
         with h5py.File(fname, "a") as f_handle:
 
@@ -83,7 +129,18 @@ class MonitorData(Tidy3dData, ABC):
 
     @classmethod
     def load(cls, fname: str):
-        """Load MonitorData from .hdf5 file"""
+        """Load MonitorData from .hdf5 file
+        
+        Parameters
+        ----------
+        fname : str
+            Path to data file (including filename).
+        
+        Returns
+        -------
+        ``MonitorData``
+            A ``MonitorData`` instance.
+        """
 
         with h5py.File(fname, "r") as f_handle:
 
@@ -99,7 +156,20 @@ class MonitorData(Tidy3dData, ABC):
 
     @staticmethod
     def load_from_data(monitor: Monitor, monitor_data: Dict[str, Numpy]):
-        """load the solver data for a monitor into a MonitorData instance"""
+        """load the solver data dict for a specific monitor into a MonitorData instance
+        
+        Parameters
+        ----------
+        monitor : ``Monitor``
+            Original monitor that specified how data was stored.
+        monitor_data : Dict[str, Numpy]
+            Mapping from data value name to numpy array holding data.
+        
+        Returns
+        -------
+        ``MonitorData``
+            A ``MonitorData`` instance.
+        """
 
         # kwargs that gets passed to MonitorData.__init__() to make new MonitorData
         kwargs = {}
@@ -130,40 +200,48 @@ class MonitorData(Tidy3dData, ABC):
         return monitor_data_instance
 
 
-""" Differentiates between frequency and time domain data """
+""" Differentiate between frequency and time domain data """
 
 
 class FreqData(MonitorData, ABC):
-    """stores data in frequency domain"""
+    """Stores any data in the frequency domain."""
 
-    f: Numpy
+    values: Array[complex]
+    f: Array[float]
 
 
 class TimeData(MonitorData, ABC):
-    """stores data in time domain"""
+    """Stores any data in the time domain."""
 
-    t: Numpy
+    values: Array[float]
+    t: Array[float]
 
 
-""" Differentiates between types of field data """
+""" Differentiate between types of field data """
 
 
 class VectorFieldData(MonitorData, ABC):
     """stores general vector field data as a function of {component, x, y, z}"""
 
     component: List[Component] = ["x", "y", "z"]
-    x: Numpy
-    y: Numpy
-    z: Numpy
+    x: Array[float]
+    y: Array[float]
+    z: Array[float]
 
 
 class AbstractEMFieldData(VectorFieldData, ABC):
-    """stores collections of electromagnetic fields"""
+    """Stores collections of electromagnetic field."""
 
     field: List[EMField] = ["E", "H"]
 
     def _make_xarray(self):
-        """reutrn dataset"""
+        """make xarray representation of data
+        
+        Returns
+        -------
+        xr.Dataset
+            ``xarray`` representation of the underlying data.
+        """
         data_dict = self.dict()
         data_arrays = {}
         for field_index, field_name in enumerate(self.field):
@@ -181,31 +259,101 @@ class AbstractEMFieldData(VectorFieldData, ABC):
 
 
 class AbstractFluxData(MonitorData, ABC):
-    """stores flux data through a surface"""
+    """stores flux data through a surface."""
 
 
 """ usable monitors """
 
 
 class FieldData(AbstractEMFieldData, FreqData):
-    """Stores Electric and Magnetic fields from a FieldMonitor"""
+    """Stores Electric and Magnetic fields from a FieldMonitor.
+
+    Parameters
+    ----------
+    monitor : ``Monitor``
+        Original monitor object corresponding to data.
+    monitor_name : str
+        Name of original monitor in its Simulation object.
+    field : List[Literal['E', 'H']]
+        List of field names to store (eg. ``field=['E', 'H']``)
+    component: List[Literal['x', 'y', 'z']]
+        List of directional components to store (eg. ``component=['x', 'z']``)
+    x : np.ndarray
+        x locations of each field and component. ``x.shape=(len(field), len(component), num_x)``.
+    y : np.ndarray
+        y locations of each field and component. ``y.shape=(len(field), len(component), num_y)``.
+    z : np.ndarray
+        z locations of each field and component. ``z.shape=(len(field), len(component), num_z)``.
+    f : np.ndarray
+        Frequencies of the data (Hz).
+    values : np.ndarray
+        Complex-valued array of data values. ``values.shape=(len(field), len(component), num_x, num_y, num_z, len(f))``
+    """
 
     _dims = ("field", "component", "x", "y", "z", "f")
 
 
 class FieldTimeData(AbstractEMFieldData, TimeData):
-    """Stores Electric and Magnetic fields from a FieldTimeMonitor"""
+    """Stores Electric and Magnetic fields from a FieldTimeMonitor.
+
+    Parameters
+    ----------
+    monitor : ``Monitor``
+        Original monitor object corresponding to data.
+    monitor_name : str
+        Name of original monitor in its Simulation object.
+    field : List[Literal['E', 'H']]
+        List of field names to store (eg. ``field=['E', 'H']``)
+    component: List[Literal['x', 'y', 'z']]
+        List of directional components to store (eg. ``component=['x', 'z']``)
+    x : np.ndarray
+        x locations of each field and component. ``x.shape=(len(field), len(component), num_x)``.
+    y : np.ndarray
+        y locations of each field and component. ``y.shape=(len(field), len(component), num_y)``.
+    z : np.ndarray
+        z locations of each field and component. ``z.shape=(len(field), len(component), num_z)``.
+    t : np.ndarray
+        Time of the data (sec).
+    values : np.ndarray
+        Real-valued array of data values. ``values.shape=(len(field), len(component), num_x, num_y, num_z, len(t))``
+    """
 
     _dims = ("field", "component", "x", "y", "z", "t")
 
 
 class PermittivityData(VectorFieldData, FreqData):
-    """Stores Reltive Permittivity from a FieldMonitor"""
+    """Stores Reltive Permittivity from a FieldMonitor.
+
+    Parameters
+    ----------
+    monitor : ``Monitor``
+        Original monitor object corresponding to data.
+    monitor_name : str
+        Name of original monitor in its Simulation object.
+    component: List[Literal['x', 'y', 'z']]
+        List of directional components to store (eg. ``component=['x', 'z']``)
+    x : np.ndarray
+        x locations of each field and component. ``x.shape=(len(component), num_x)``.
+    y : np.ndarray
+        y locations of each field and component. ``y.shape=(len(component), num_y)``.
+    z : np.ndarray
+        z locations of each field and component. ``z.shape=(len(component), num_z)``.
+    f : np.ndarray
+        Frequencies of the data (Hz).
+    values : np.ndarray
+        Complex-valued array of data values. ``values.shape=(len(component), num_x, num_y, num_z, len(f))``
+    """
 
     _dims = ("component", "x", "y", "z", "f")
 
     def _make_xarray(self):
-        """reutrn dataset"""
+        """make xarray representation of data
+        
+        Returns
+        -------
+        xr.Dataset
+            ``xarray`` representation of the underlying data.
+        """
         data_dict = self.dict()
         data_arrays = {}
         for component_index, component in enumerate(self.component):
@@ -221,22 +369,62 @@ class PermittivityData(VectorFieldData, FreqData):
 
 
 class FluxData(AbstractFluxData, FreqData):
-    """Stores power flux data through a planar FluxMonitor"""
+    """Stores power flux data through a planar ``FluxMonitor``
+
+    Parameters
+    ----------
+    monitor : ``Monitor``
+        Original monitor object corresponding to data.
+    monitor_name : str
+        Name of original monitor in its Simulation object.
+    f : np.ndarray
+        Frequencies of the data (Hz).
+    values : np.ndarray
+        Complex-valued array of data values. ``values.shape=(len(f),)``
+    """
 
     _dims = ("f",)
 
 
 class FluxTimeData(AbstractFluxData, TimeData):
-    """Stores power flux data through a planar FluxMonitor"""
+    """Stores power flux data through a planar ``FluxTimeMonitor``
+
+    Parameters
+    ----------
+    monitor : ``Monitor``
+        Original monitor object corresponding to data.
+    monitor_name : str
+        Name of original monitor in its Simulation object.
+    t : np.ndarray
+        Times of the data (sec).
+    values : np.ndarray
+        Complex-valued array of data values. ``values.shape=(len(t),)``
+    """
 
     _dims = ("t",)
 
 
 class ModeData(FreqData):
-    """Stores modal amplitdudes from a ModeMonitor"""
+    """Stores modal amplitdudes from a ModeMonitor
+
+    Parameters
+    ----------
+    monitor : ``Monitor``
+        Original monitor object corresponding to data.
+    monitor_name : str
+        Name of original monitor in its Simulation object.
+    direction : List[Literal["+", "-"]]
+        Direction in which the modes are propagating (normal to monitor plane).
+    mode_index : np.ndarray
+        Array of integers into ``ModeMonitor.modes`` specifying the mode corresponding to this index.
+    f : np.ndarray
+        Frequencies of the data (Hz).
+    values : np.ndarray
+        Complex-valued array of data values. ``values.shape=(len(direction), len(mode_index), len(f))``
+    """
 
     direction: List[Direction] = ["+", "-"]
-    mode_index: Numpy
+    mode_index: Array[int]
 
     _dims = ("direction", "mode_index", "f")
 
@@ -257,13 +445,27 @@ monitor_data_map = {
 
 
 class SimulationData(Tidy3dData):
-    """holds simulation and its monitors' data."""
+    """holds simulation and its monitors' data.
+
+    Parameters
+    ----------
+    simulation : ``Simulation``
+        Original Simulation.
+    monitor_data : Dict[str, ``MonitorData``]
+        Mapping of monitor name to ``MonitorData`` intance.
+    """
 
     simulation: Simulation
     monitor_data: Dict[str, MonitorData]
 
     def export(self, fname: str) -> None:
-        """Export all data to an hdf5"""
+        """Export ``SimulationData`` to hdf5 file.
+        
+        Parameters
+        ----------
+        fname : str
+            Path to data file (including filename).
+        """
 
         with h5py.File(fname, "a") as f_handle:
 
@@ -290,7 +492,18 @@ class SimulationData(Tidy3dData):
 
     @classmethod
     def load(cls, fname: str):
-        """Load SimulationData from files"""
+        """Load ``SimulationData`` from .hdf5 file
+        
+        Parameters
+        ----------
+        fname : str
+            Path to data file (including filename).
+
+        Returns
+        -------
+        ``SimulationData``
+            A ``SimulationData`` instance.
+        """
 
         # read from file at fname
         with h5py.File(fname, "r") as f_handle:
@@ -312,11 +525,33 @@ class SimulationData(Tidy3dData):
         return cls(simulation=sim, monitor_data=monitor_data_dict)
 
     def __getitem__(self, monitor_name: str) -> MonitorData:
-        """get the monitor xarray directly by name"""
+        """get the monitor xarray directly by name (sim_data[monitor_name])
+        
+        Parameters
+        ----------
+        monitor_name : str
+            Name of monitor to grab data for.
+        
+        Returns
+        -------
+        Union[xarray.DataArray, xarray.Dataset]
+            The xarray representation of the data.
+        """
         return self.monitor_data[monitor_name].data
 
     def __eq__(self, other):
-        """check equality against another SimulationData instance"""
+        """check equality against another SimulationData instance
+        
+        Parameters
+        ----------
+        other : SimulationData
+            ``SimulationData`` instance to equate with self.
+        
+        Returns
+        -------
+        bool
+            Whether two ``SimulationData`` instances have equal data.
+        """
 
         if self.simulation != other.simulation:
             return False

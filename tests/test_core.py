@@ -114,6 +114,18 @@ def test_mon_data():
 
 
 @clear_tmp
+def test_mon_data_serialize():
+    """Test that exporting and loading a MonitorData gives same results"""
+
+    # make data
+    sim_data = _solve_sim(SIM)
+
+    # make sure all monitor data are same when exported and loaded
+    for mon_name, mon in SIM.monitors.items():
+        mon_data = sim_data.monitor_data[mon_name]
+        mon_data.json()
+
+@clear_tmp
 def test_sim_data():
     """Test that exporting and loading a SimulationData gives same results"""
 

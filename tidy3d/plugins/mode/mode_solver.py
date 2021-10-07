@@ -47,7 +47,19 @@ src = ModeSource.load('data/my_source.json')  # and loaded in our script
 
 
 class ModeInfo(BaseModel):
-    """stores information about a (solved) mode."""
+    """stores information about a (solved) mode.
+    
+    Attributes
+    ----------
+    field_Data: FieldData
+        Contains information about the fields of the modal profile.
+    mode: Mode
+        Specifications of the mode.
+    n_eff: float
+        Real part of the effective refractive index of mode.
+    k_eff: float
+        Imaginary part of the effective refractive index of mode.        
+    """
 
     field_data: FieldData
     mode: Mode
@@ -56,20 +68,10 @@ class ModeInfo(BaseModel):
 
 
 class ModeSolver:
-    """Interface for creating ``Mode`` objects.
-
-    Attributes
-    ----------
-    freq : TYPE
-        Description
-    plane : TYPE
-        Description
-    simulation : TYPE
-        Description
-    """
+    """Interface for creating ``Mode`` objects."""
 
     def __init__(self, simulation: Simulation, plane: Box, freq: float):
-        """Create a ``ModeSolver`` instance
+        """Create a ``ModeSolver`` instance.
 
         Parameters
         ----------

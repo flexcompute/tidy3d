@@ -18,6 +18,7 @@ from .components import ModeMonitor, PermittivityMonitor
 from .components import Mode
 from .components import Simulation
 from .components import SimulationData, FieldData, FluxData, ModeData, FieldTimeData, FluxTimeData
+from .components import PermittivityData
 from .components import monitor_data_map
 
 # constants imported as `C_0 = td.C_0` or `td.constants.C_0`
