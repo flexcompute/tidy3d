@@ -6,7 +6,6 @@ nlopt
 # required for running tidy3d, may try to remove later
 pydantic
 PyYAML
-tqdm
 
 # may add later
 shapely

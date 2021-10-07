@@ -1,10 +1,4 @@
-"""Classes for Storing Monitor and Simulation Data 
-
-Attributes
-----------
-monitor_data_map : TYPE
-Description
-"""
+"""Classes for Storing Monitor and Simulation Data."""
 
 from abc import ABC
 from typing import Dict, List, Union
@@ -16,8 +10,8 @@ import h5py
 
 from .simulation import Simulation
 from .monitor import FluxMonitor, FluxTimeMonitor, FieldMonitor, FieldTimeMonitor, ModeMonitor
-from .monitor import PermittivityMonitor, Monitor, AbstractFluxMonitor, AbstractFieldMonitor
-from .monitor import FreqMonitor, TimeMonitor
+from .monitor import PermittivityMonitor, Monitor, AbstractFluxMonitor, VectorFieldMonitor
+from .monitor import EMFieldMonitor, FreqMonitor, TimeMonitor
 
 from .monitor import monitor_type_map
 from .base import Tidy3dBaseModel
@@ -36,7 +30,7 @@ class Tidy3dData(Tidy3dBaseModel):
         arbitrary_types_allowed = True
         json_encoders = {
             np.ndarray: numpy_encoding,
-            np.int64: lambda x: int(x),
+            np.int64: lambda x: int(x),  # pylint: disable=unnecessary-lambda
             xr.Dataset: lambda x: None,
             xr.DataArray: lambda x: None,
         }
@@ -230,7 +224,7 @@ class VectorFieldData(MonitorData, ABC):
     z: Array[float]
 
 
-class AbstractEMFieldData(VectorFieldData, ABC):
+class EMFieldData(VectorFieldData, ABC):
     """Stores collections of electromagnetic field."""
 
     field: List[EMField] = ["E", "H"]
@@ -266,7 +260,7 @@ class AbstractFluxData(MonitorData, ABC):
 """ usable monitors """
 
 
-class FieldData(AbstractEMFieldData, FreqData):
+class FieldData(EMFieldData, FreqData):
     """Stores Electric and Magnetic fields from a FieldMonitor.
 
     Parameters
@@ -288,13 +282,14 @@ class FieldData(AbstractEMFieldData, FreqData):
     f : np.ndarray
         Frequencies of the data (Hz).
     values : np.ndarray
-        Complex-valued array of data values. ``values.shape=(len(field), len(component), num_x, num_y, num_z, len(f))``
+        Complex-valued array of data values. ``values.shape=(len(field), len(component), num_x,
+        num_y, num_z, len(f))``
     """
 
     _dims = ("field", "component", "x", "y", "z", "f")
 
 
-class FieldTimeData(AbstractEMFieldData, TimeData):
+class FieldTimeData(EMFieldData, TimeData):
     """Stores Electric and Magnetic fields from a FieldTimeMonitor.
 
     Parameters
@@ -316,7 +311,8 @@ class FieldTimeData(AbstractEMFieldData, TimeData):
     t : np.ndarray
         Time of the data (sec).
     values : np.ndarray
-        Real-valued array of data values. ``values.shape=(len(field), len(component), num_x, num_y, num_z, len(t))``
+        Real-valued array of data values. ``values.shape=(len(field), len(component), num_x, num_y,
+        num_z, len(t))``
     """
 
     _dims = ("field", "component", "x", "y", "z", "t")
@@ -342,7 +338,8 @@ class PermittivityData(VectorFieldData, FreqData):
     f : np.ndarray
         Frequencies of the data (Hz).
     values : np.ndarray
-        Complex-valued array of data values. ``values.shape=(len(component), num_x, num_y, num_z, len(f))``
+        Complex-valued array of data values. ``values.shape=(len(component), num_x, num_y, num_z,
+        len(f))``
     """
 
     _dims = ("component", "x", "y", "z", "f")
@@ -417,11 +414,13 @@ class ModeData(FreqData):
     direction : List[Literal["+", "-"]]
         Direction in which the modes are propagating (normal to monitor plane).
     mode_index : np.ndarray
-        Array of integers into ``ModeMonitor.modes`` specifying the mode corresponding to this index.
+        Array of integers into ``ModeMonitor.modes`` specifying the mode corresponding to this
+        index.
     f : np.ndarray
         Frequencies of the data (Hz).
     values : np.ndarray
-        Complex-valued array of data values. ``values.shape=(len(direction), len(mode_index), len(f))``
+        Complex-valued array of data values. ``values.shape=(len(direction), len(mode_index),
+        len(f))``
     """
 
     direction: List[Direction] = ["+", "-"]
@@ -438,7 +437,8 @@ monitor_data_map = {
     FluxMonitor: FluxData,
     FluxTimeMonitor: FluxTimeData,
     ModeMonitor: ModeData,
-    AbstractFieldMonitor: VectorFieldData,
+    EMFieldMonitor: EMFieldData,
+    VectorFieldMonitor: VectorFieldData,
     AbstractFluxMonitor: AbstractFluxData,
     FreqMonitor: FreqData,
     TimeMonitor: TimeData,

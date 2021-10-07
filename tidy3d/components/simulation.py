@@ -45,7 +45,8 @@ class Simulation(Box):
     pml_layers: Tuple[``tidy3d.PMLLayer``, ``PMLLayer``, ``PMLLayer``], optional.
         Specifies PML layers (aborbers) in x,y,z location, defaults to no PML
     symmetry : Tuple[int], optional
-        Specifies symmetry in x,y,z with values 0, 1, -1 specifying no symmetry, even symmetry, and odd symmetry, respectively.
+        Specifies symmetry in x,y,z with values 0, 1, -1 specifying no symmetry, even symmetry, and
+        odd symmetry, respectively.
     shutoff : float, optional
         Simulation ends when field intensity gets below this value, defaults to 1e-5
     courant : float, optional

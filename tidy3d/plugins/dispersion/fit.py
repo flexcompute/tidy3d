@@ -3,14 +3,15 @@
 
 from typing import Tuple
 
-from tqdm import tqdm
 import nlopt
 import numpy as np
+from rich.progress import Progress
 
 from ...components import PoleResidue, nk_to_eps_complex, eps_complex_to_nk
 from ...constants import C_0, HBAR
 from ...components.viz import add_ax_if_none
 from ...components.types import Ax, Numpy
+from ...log import log
 
 
 def _unpack_complex(complex_num):
@@ -184,7 +185,6 @@ class DispersionFitter:
         num_poles: int = 3,
         num_tries: int = 100,
         tolerance_rms: float = 0.0,
-        verbose: bool = True,
     ) -> Tuple[PoleResidue, float]:
         """Fits data a number of times and returns best results.
 
@@ -196,8 +196,6 @@ class DispersionFitter:
             Number of optimizations to run with random initial guess.
         tolerance_rms : float, optional
             RMS error below which the fit is successful and the result is returned.
-        verbose : bool, optional
-            Whether to print out information about fit.
 
         Returns
         -------
@@ -208,32 +206,37 @@ class DispersionFitter:
         # Run it a number of times.
         best_medium = None
         best_rms = np.inf
-        pbar = tqdm(range(num_tries)) if verbose else range(num_tries)
-        for _ in pbar:
-            medium, rms_error = self.fit_single(num_poles=num_poles)
 
-            # if improvement, set the best RMS and coeffs
-            if rms_error < best_rms:
-                best_rms = rms_error
-                best_medium = medium
+        with Progress() as progress:
 
-            # update status
-            if verbose:
-                pbar.set_description(f"best RMS error so far: {best_rms:.2e}")
+            task = progress.add_task(
+                f"Fitting with {num_poles} to RMS of {tolerance_rms}...", total=num_tries
+            )
 
-            # if below tolerance, return
-            if best_rms < tolerance_rms:
-                if verbose:
-                    print(f"\tfound optimal fit with RMS error = {best_rms:.2e}, returning")
-                return best_medium, best_rms
+            while not progress.finished:
+
+                medium, rms_error = self.fit_single(num_poles=num_poles)
+
+                # if improvement, set the best RMS and coeffs
+                if rms_error < best_rms:
+                    best_rms = rms_error
+                    best_medium = medium
+
+                progress.update(
+                    task, advance=1, description=f"best RMS error so far: {best_rms:.2e}"
+                )
+
+                # if below tolerance, return
+                if best_rms < tolerance_rms:
+                    log.info(f"\tfound optimal fit with RMS error = {best_rms:.2e}, returning")
+                    return best_medium, best_rms
 
         # if exited loop, did not reach tolerance (warn)
-        if verbose:
-            print(
-                f"\twarning: did not find fit"
-                f"with RMS error under tolerance_rms of {tolerance_rms:.2e}"
-            )
-            print(f"\treturning best fit with RMS error {best_rms:.2e}")
+        log.warning(
+            f"\twarning: did not find fit "
+            f"with RMS error under tolerance_rms of {tolerance_rms:.2e}"
+        )
+        log.info(f"\treturning best fit with RMS error {best_rms:.2e}")
         return best_medium, best_rms
 
     def _make_medium(self, coeffs):

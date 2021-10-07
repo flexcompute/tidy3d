@@ -156,19 +156,25 @@
 
 #### "Tidying" Up
 - [x] clean up data.plot arguments. <- using xarray.
-- [ ] Refactor material library.
-- [ ] Fix MyPy warnings
-- [ ] Add Logging.
+- [x] Replace tqdm with rich
+- [x] Add tests for near2far.
+- [x] Allow numpy for non-data inputs.
+- [ ] **Get rid of pydantic**?
+	- [ ] Need custom validators?
+	- [ ] JSON load export
+	- [ ] Docs
+	- [ ] Input arguments validated?
+	- [ ] Numpy support?
+- [ ] Use shapely for geometry ops / plotting?  `Geometry.geo(x=0) -> shapely representation`
 - [ ] Fix overlapping structure plotting.
-- [ ] Make Uniform Samplers separate classes? (dont evaluate / store freqs, times)?
+- [ ] Refactor material library.
+- [ ] Fix MyPy warnings.
+- [ ] Add Logging.
 - [ ] Simplify plotting kwargs.
 - [ ] Migrate notebooks into static tests.
 - [ ] Interactive visualization?
 - [ ] Add PEC PMC.
-- [ ] Get rid of pydantic?
-- [ ] Replace tqdm with rich?
-- [ ] Use shapely for geometry ops / plotting?  `Geometry.geo(x=0) -> shapely representation`
-- [ ] Allow numpy for non-data inputs.
+- [ ] Make Uniform Samplers separate classes? (dont evaluate / store freqs, times)?
 ---
 
 ### Stage 3: Refining

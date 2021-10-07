@@ -7,7 +7,7 @@ import pydantic
 import numpy as np
 
 from .base import Tidy3dBaseModel
-from .types import Direction, Polarization, Ax, ArrayLike
+from .types import Direction, Polarization, Ax
 from .validators import assert_plane
 from .geometry import Box
 from .mode import Mode
@@ -29,11 +29,11 @@ class SourceTime(ABC, Tidy3dBaseModel):
         """
 
     @add_ax_if_none
-    def plot(self, times: ArrayLike, ax: Ax = None) -> Ax:
+    def plot(self, times: float, ax: Ax = None) -> Ax:
         """plot the time series
 
         Args:
-            times (ArrayLike): Description
+            times (float): Description
             ax (Ax, optional): Description
 
         Returns:

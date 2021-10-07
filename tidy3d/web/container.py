@@ -1,10 +1,4 @@
-"""higher level wrappers for webapi functions for individual (Job) and batch (Batch) tasks. 
-
-Attributes
-----------
-TaskName : TYPE
-    Description
-"""
+"""higher level wrappers for webapi functions for individual (Job) and batch (Batch) tasks."""
 
 import os
 from abc import ABC
@@ -78,7 +72,8 @@ class Job(WebContainer):
         web.download(task_id=self.task_id, path=path)
 
     def load_results(self, path: str) -> SimulationData:
-        """Download results from simulation (if not already) and load them into ``SimulationData`` object.
+        """Download results from simulation (if not already) and load them into ``SimulationData``
+        object.
 
         Parameters
         ----------
@@ -120,7 +115,8 @@ class Batch(WebContainer):
         ----------
         **kwargs
             Description
-        simulations (Dict[str, Simulation] : dictionary of task name and ``Simulation`` for each job.
+        simulations (Dict[str, Simulation] : dictionary of task name and ``Simulation`` for each
+        job.
         """
         jobs = kwargs.get("jobs")
         if jobs is None:

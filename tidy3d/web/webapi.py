@@ -1,16 +1,4 @@
-"""Provides lowest level, user-facing interface to server 
-
-Attributes
-----------
-CLIENT_DIR : str
-    Description
-MONITOR_MESSAGE : TYPE
-    Description
-SERVER_DIR : str
-    Description
-TASKS : dict
-    Description
-"""
+"""Provides lowest level, user-facing interface to server."""
 
 import os
 import sys
