@@ -48,7 +48,7 @@ src = ModeSource.load('data/my_source.json')  # and loaded in our script
 
 class ModeInfo(BaseModel):
     """stores information about a (solved) mode.
-    
+
     Attributes
     ----------
     field_Data: FieldData
@@ -58,7 +58,7 @@ class ModeInfo(BaseModel):
     n_eff: float
         Real part of the effective refractive index of mode.
     k_eff: float
-        Imaginary part of the effective refractive index of mode.        
+        Imaginary part of the effective refractive index of mode.
     """
 
     field_data: FieldData

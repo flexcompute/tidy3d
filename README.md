@@ -168,6 +168,7 @@
 - [ ] Get rid of pydantic?
 - [ ] Replace tqdm with rich?
 - [ ] Use shapely for geometry ops / plotting?  `Geometry.geo(x=0) -> shapely representation`
+- [ ] Allow numpy for non-data inputs.
 ---
 
 ### Stage 3: Refining

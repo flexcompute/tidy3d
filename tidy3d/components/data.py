@@ -41,9 +41,10 @@ class Tidy3dData(Tidy3dBaseModel):
             xr.DataArray: lambda x: None,
         }
 
+
 class MonitorData(Tidy3dData, ABC):
     """Stores data for a Monitor
-    
+
     Attributes
     ----------
     data : ``Union[xr.DataArray, xr.Dataset]``
@@ -67,7 +68,7 @@ class MonitorData(Tidy3dData, ABC):
 
     def _make_xarray(self) -> Union[xr.DataArray, xr.Dataset]:
         """make xarray representation of data
-        
+
         Returns
         -------
         Union[xr.DataArray, xr.Dataset]
@@ -79,12 +80,12 @@ class MonitorData(Tidy3dData, ABC):
 
     def __eq__(self, other) -> bool:
         """check equality against another MonitorData instance
-        
+
         Parameters
         ----------
         other : ``MonitorData``
             Other MonitorData to equate to.
-        
+
         Returns
         -------
         bool
@@ -96,7 +97,7 @@ class MonitorData(Tidy3dData, ABC):
     @property
     def geometry(self):
         """Return ``Box`` representation of monitor's geometry.
-        
+
         Returns
         -------
         ``Box``
@@ -106,7 +107,7 @@ class MonitorData(Tidy3dData, ABC):
 
     def export(self, fname: str) -> None:
         """Export MonitorData to hdf5 file.
-        
+
         Parameters
         ----------
         fname : str
@@ -130,12 +131,12 @@ class MonitorData(Tidy3dData, ABC):
     @classmethod
     def load(cls, fname: str):
         """Load MonitorData from .hdf5 file
-        
+
         Parameters
         ----------
         fname : str
             Path to data file (including filename).
-        
+
         Returns
         -------
         ``MonitorData``
@@ -157,14 +158,14 @@ class MonitorData(Tidy3dData, ABC):
     @staticmethod
     def load_from_data(monitor: Monitor, monitor_data: Dict[str, Numpy]):
         """load the solver data dict for a specific monitor into a MonitorData instance
-        
+
         Parameters
         ----------
         monitor : ``Monitor``
             Original monitor that specified how data was stored.
         monitor_data : Dict[str, Numpy]
             Mapping from data value name to numpy array holding data.
-        
+
         Returns
         -------
         ``MonitorData``
@@ -236,7 +237,7 @@ class AbstractEMFieldData(VectorFieldData, ABC):
 
     def _make_xarray(self):
         """make xarray representation of data
-        
+
         Returns
         -------
         xr.Dataset
@@ -348,7 +349,7 @@ class PermittivityData(VectorFieldData, FreqData):
 
     def _make_xarray(self):
         """make xarray representation of data
-        
+
         Returns
         -------
         xr.Dataset
@@ -460,7 +461,7 @@ class SimulationData(Tidy3dData):
 
     def export(self, fname: str) -> None:
         """Export ``SimulationData`` to hdf5 file.
-        
+
         Parameters
         ----------
         fname : str
@@ -493,7 +494,7 @@ class SimulationData(Tidy3dData):
     @classmethod
     def load(cls, fname: str):
         """Load ``SimulationData`` from .hdf5 file
-        
+
         Parameters
         ----------
         fname : str
@@ -526,12 +527,12 @@ class SimulationData(Tidy3dData):
 
     def __getitem__(self, monitor_name: str) -> MonitorData:
         """get the monitor xarray directly by name (sim_data[monitor_name])
-        
+
         Parameters
         ----------
         monitor_name : str
             Name of monitor to grab data for.
-        
+
         Returns
         -------
         Union[xarray.DataArray, xarray.Dataset]
@@ -541,12 +542,12 @@ class SimulationData(Tidy3dData):
 
     def __eq__(self, other):
         """check equality against another SimulationData instance
-        
+
         Parameters
         ----------
         other : SimulationData
             ``SimulationData`` instance to equate with self.
-        
+
         Returns
         -------
         bool
