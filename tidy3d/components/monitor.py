@@ -67,7 +67,7 @@ class TimeMonitor(Monitor, ABC):
     times: IntArrayLike
 
 
-class VectorFieldMonitor(Monitor, ABC):
+class ScalarFieldMonitor(Monitor, ABC):
     """stores data as a function of x,y,z"""
 
     fields: List[EMField] = ["Ex", "Ey", "Ez", "Hx", "Hy", "Hz"]
@@ -82,7 +82,7 @@ class PlanarMonitor(Monitor, ABC):
 """ usable """
 
 
-class FieldMonitor(VectorFieldMonitor, FreqMonitor):
+class FieldMonitor(ScalarFieldMonitor, FreqMonitor):
     """Stores EM fields or permittivity as a function of frequency.
 
     Parameters
@@ -103,7 +103,7 @@ class FieldMonitor(VectorFieldMonitor, FreqMonitor):
     type: Literal["FieldMonitor"] = "FieldMonitor"
 
 
-class FieldTimeMonitor(VectorFieldMonitor, TimeMonitor):
+class FieldTimeMonitor(ScalarFieldMonitor, TimeMonitor):
     """Stores EM fields as a function of time.
 
     Parameters

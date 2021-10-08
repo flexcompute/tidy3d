@@ -10,7 +10,7 @@ import h5py
 
 from .simulation import Simulation
 from .monitor import FluxMonitor, FluxTimeMonitor, FieldMonitor, FieldTimeMonitor, ModeMonitor
-from .monitor import Monitor, PlanarMonitor, VectorFieldMonitor, FreqMonitor, TimeMonitor
+from .monitor import Monitor, PlanarMonitor, ScalarFieldMonitor, FreqMonitor, TimeMonitor
 from .monitor import monitor_type_map
 from .base import Tidy3dBaseModel
 from .types import Numpy, EMField, FieldType, Direction, Array, numpy_encoding
@@ -178,7 +178,7 @@ class MonitorData(Tidy3dData, ABC):
             return list_of_str
 
         # handle data stored as np.array() of bytes instead of strings
-        for str_kwarg in ("component", "field", "direction"):
+        for str_kwarg in ("field", "direction"):
             if kwargs.get(str_kwarg) is not None:
                 kwargs[str_kwarg] = _process_string_kwarg(kwargs[str_kwarg])
 
@@ -213,8 +213,8 @@ class TimeData(MonitorData, ABC):
 """ Differentiate between types of field data """
 
 
-class VectorFieldData(MonitorData, ABC):
-    """stores general vector field data as a function of {component, x, y, z}"""
+class ScalarFieldData(MonitorData, ABC):
+    """stores general vector field data as a function of x, y, z"""
 
     field: List[EMField] = ["Ex", "Ey", "Ez", "Hx", "Hy", "Hz"]
     x: Array[float]
@@ -237,8 +237,6 @@ class VectorFieldData(MonitorData, ABC):
             coords.pop("field")
             for dimension in "xyz":
                 coords[dimension] = coords[dimension][field_index]
-            # print(coords)
-            # print(values.shape)
             data_array = xr.DataArray(values, coords=coords, name=self.monitor_name)
             data_arrays[field_name] = data_array
         return xr.Dataset(data_arrays)
@@ -251,7 +249,7 @@ class PlanarData(MonitorData, ABC):
 """ usable monitors """
 
 
-class FieldData(FreqData, VectorFieldData):
+class FieldData(FreqData, ScalarFieldData):
     """Stores Electric and Magnetic fields from a FieldMonitor.
 
     Parameters
@@ -281,7 +279,7 @@ class FieldData(FreqData, VectorFieldData):
     _dims = ("field", "x", "y", "z", "f")
 
 
-class FieldTimeData(VectorFieldData, TimeData):
+class FieldTimeData(ScalarFieldData, TimeData):
     """Stores Electric and Magnetic fields from a FieldTimeMonitor.
 
     Parameters
@@ -378,7 +376,7 @@ monitor_data_map = {
     FluxMonitor: FluxData,
     FluxTimeMonitor: FluxTimeData,
     ModeMonitor: ModeData,
-    VectorFieldMonitor: VectorFieldData,
+    ScalarFieldMonitor: ScalarFieldData,
     PlanarMonitor: PlanarData,
     FreqMonitor: FreqData,
     TimeMonitor: TimeData,
