@@ -31,7 +31,7 @@ from . import plugins
 from . import web
 
 # material library dict imported as `from tidy3d import material_library`
-# specific material imported as `from tidy3d.material_library import SiC_xxx`
+# get material `mat` and variant `var` as `material_library[mat][var]`
 from .material_library import material_library
 
 from .log import log
