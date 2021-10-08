@@ -27,6 +27,9 @@ class TaskBase(Tidy3dBaseModel, ABC):
 # type of the task_id
 TaskId = str
 
+# type of task_name
+TaskName = str
+
 
 class TaskInfo(TaskBase):
     """general information about task"""

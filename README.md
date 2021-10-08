@@ -162,12 +162,12 @@
 - [ ] **Get rid of pydantic**?
 	- [ ] Need custom validators?
 	- [ ] JSON load export
-	- [ ] Docs
+	- [ ] Autodocs?
 	- [ ] Input arguments validated?
 	- [ ] Numpy support?
 - [ ] Use shapely for geometry ops / plotting?  `Geometry.geo(x=0) -> shapely representation`
 - [ ] Fix overlapping structure plotting.
-- [ ] Refactor material library.
+- [x] Refactor material library.
 - [ ] Fix MyPy warnings.
 - [ ] Add Logging.
 - [ ] Simplify plotting kwargs.
@@ -187,13 +187,14 @@ https://github.com/crusaderky/python_project_template
 - [ ] Finalize writing of internal documentation (1 week)
 	- [ ] Add and edit docstrings to all.
 - [ ] Set up documentation (1 week)
-	- [ ] Make pydantic autosummaries more pretty.
+	- [x] Make pydantic autosummaries more pretty.
 	- [ ] Move Docs into repo.
 	- [ ] write tutorial notebooks for
-		- [ ] Visualizing simulation.
-		- [ ] Loading data.
-		- [ ] Visualizing data.
+		- [x] Visualizing simulation.
+		- [x] Loading data.
+		- [x] Visualizing data.
 		- [ ] Batch simulation.
+	- [ ] How to include material library explanation?
 	- [ ] Move tidy3d notebooks into repo, make them work with new code.
 	- [ ] test binder links.
 ---

@@ -2,10 +2,10 @@
 
 import os
 from abc import ABC
-from typing import Dict, Tuple
+from typing import Dict, Generator
 
 from . import webapi as web
-from .task import TaskId, TaskInfo, RunInfo
+from .task import TaskId, TaskInfo, RunInfo, TaskName
 from ..components.simulation import Simulation
 from ..components.data import SimulationData
 from ..components.base import Tidy3dBaseModel
@@ -13,10 +13,6 @@ from ..components.base import Tidy3dBaseModel
 
 class WebContainer(Tidy3dBaseModel, ABC):
     """base class for job and batch, technically not used"""
-
-
-# type of task_name
-TaskName = str
 
 
 class Job(WebContainer):
@@ -238,7 +234,7 @@ class Batch(WebContainer):
         """
         self.export(fname=fname)
 
-    def items(self, path_dir: str) -> Tuple[TaskName, SimulationData]:
+    def items(self, path_dir: str) -> Generator:
         """simple iterator, `for task_name, sim_data in batch: `do something`
 
         Parameters
