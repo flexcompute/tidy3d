@@ -4,7 +4,7 @@ from typing import List, Union
 
 import numpy as np
 
-from .types import Literal, Ax, Direction, EMField, Component, FloatArrayLike, IntArrayLike
+from .types import Literal, Ax, Direction, FieldType, FloatArrayLike, IntArrayLike, EMField
 from .geometry import Box
 from .validators import assert_plane
 from .mode import Mode
@@ -70,17 +70,11 @@ class TimeMonitor(Monitor, ABC):
 class VectorFieldMonitor(Monitor, ABC):
     """stores data as a function of x,y,z"""
 
-    component: List[Component] = ["x", "y", "z"]
+    fields: List[EMField] = ["Ex", "Ey", "Ez", "Hx", "Hy", "Hz"]
 
 
-class EMFieldMonitor(VectorFieldMonitor, ABC):
-    """stores electromagnetic fields."""
-
-    field: List[EMField] = ["E", "H"]
-
-
-class AbstractFluxMonitor(Monitor, ABC):
-    """stores flux data through a surface"""
+class PlanarMonitor(Monitor, ABC):
+    """stores quantities on a plane"""
 
     _plane_validator = assert_plane()
 
@@ -88,39 +82,39 @@ class AbstractFluxMonitor(Monitor, ABC):
 """ usable """
 
 
-class FieldMonitor(FreqMonitor, EMFieldMonitor):
-    """stores EM fields in volume as a function of frequency.
+class FieldMonitor(VectorFieldMonitor, FreqMonitor):
+    """Stores EM fields or permittivity as a function of frequency.
 
     Parameters
     ----------
     center: Tuple[float, float, float], optional.
         Center of monitor ``Box``, defaults to (0, 0, 0)
-    size: Tuple[float, float, float], optional.
+    size: Tuple[float, float, float].
         Size of monitor ``Box``, must have one element = 0.0 to define plane.
-    field: List[str], optional
-        Electromagnetic field(s) to measure (E, H), defaults to ``['E', 'H']``
-    component: List[str], optional
-        Directional component to measure in x,y,z, defaults to ``['x','y','z']``.
+    fields: List[str], optional
+        Electromagnetic field(s) to measure (E, H), defaults to ``['Ex', 'Ey', 'Ez', 'Hx', 'Hy',
+        'Hz']``, also accepts diagonal components of permittivity tensor as ``'eps_xx', 'eps_yy',
+        'eps_zz'``.
     freqs: List[float]
         Frequencies to measure fields at at.
     """
 
+    fields: List[FieldType] = ["Ex", "Ey", "Ez", "Hx", "Hy", "Hz"]
     type: Literal["FieldMonitor"] = "FieldMonitor"
 
 
-class FieldTimeMonitor(TimeMonitor, EMFieldMonitor):
-    """stores EM fields as a function of time
+class FieldTimeMonitor(VectorFieldMonitor, TimeMonitor):
+    """Stores EM fields as a function of time.
 
     Parameters
     ----------
     center: Tuple[float, float, float], optional.
         Center of monitor ``Box``, defaults to (0, 0, 0)
-    size: Tuple[float, float, float], optional.
+    size: Tuple[float, float, float].
         Size of monitor ``Box``, must have one element = 0.0 to define plane.
-    field: List[str], optional
-        Electromagnetic field(s) to measure (E, H), defaults to ``['E', 'H']``
-    component: List[str], optional
-        Directional component to measure in x,y,z, defaults to ``['x','y','z']``.
+    fields: List[str], optional
+        Electromagnetic field(s) to measure (E, H), defaults to ``['Ex', 'Ey', 'Ez', 'Hx', 'Hy',
+        'Hz']``.
     times: List[int]
         Time steps to measure the fields at.
     """
@@ -128,33 +122,14 @@ class FieldTimeMonitor(TimeMonitor, EMFieldMonitor):
     type: Literal["FieldTimeMonitor"] = "FieldTimeMonitor"
 
 
-class PermittivityMonitor(FreqMonitor, VectorFieldMonitor):
-    """stores permittivity data as a function of frequency
-
-    Parameters
-    ----------
-    center: Tuple[float, float, float], optional.
-        Center of monitor ``Box``, defaults to (0, 0, 0)
-    size: Tuple[float, float, float], optional.
-        Size of monitor ``Box``, must have one element = 0.0 to define plane.
-    component: List[str], optional
-        Directional component to measure in x,y,z, defaults to ``['x','y','z']``.
-    freqs: List[float], optional.
-        Frequencies to measure permittivity at. If None, measure at infinite freq.
-    """
-
-    freqs: FloatArrayLike = None
-    type: Literal["PermittivityMonitor"] = "PermittivityMonitor"
-
-
-class FluxMonitor(FreqMonitor, AbstractFluxMonitor):
+class FluxMonitor(PlanarMonitor, FreqMonitor):
     """Stores power flux through a plane as a function of frequency.
 
     Parameters
     ----------
     center: Tuple[float, float, float], optional.
         Center of monitor ``Box``, defaults to (0, 0, 0)
-    size: Tuple[float, float, float], optional.
+    size: Tuple[float, float, float].
         Size of monitor ``Box``, must have one element = 0.0 to define plane.
     freqs: List[float]
         Frequencies to measure flux at.
@@ -163,14 +138,14 @@ class FluxMonitor(FreqMonitor, AbstractFluxMonitor):
     type: Literal["FluxMonitor"] = "FluxMonitor"
 
 
-class FluxTimeMonitor(TimeMonitor, AbstractFluxMonitor):
+class FluxTimeMonitor(PlanarMonitor, TimeMonitor):
     """Stores power flux through a plane as a function of frequency.
 
     Parameters
     ----------
     center: Tuple[float, float, float], optional.
         Center of monitor ``Box``, defaults to (0, 0, 0)
-    size: Tuple[float, float, float], optional.
+    size: Tuple[float, float, float].
         Size of monitor ``Box``, must have one element = 0.0 to define plane.
     times: List[int]
         Time steps to measure flux at.
@@ -179,14 +154,14 @@ class FluxTimeMonitor(TimeMonitor, AbstractFluxMonitor):
     type: Literal["FluxTimeMonitor"] = "FluxTimeMonitor"
 
 
-class ModeMonitor(FreqMonitor):
+class ModeMonitor(PlanarMonitor, FreqMonitor):
     """stores overlap amplitudes associated with modes.
 
     Parameters
     ----------
     center: Tuple[float, float, float], optional.
         Center of monitor ``Box``, defaults to (0, 0, 0)
-    size: Tuple[float, float, float], optional.
+    size: Tuple[float, float, float].
         Size of monitor ``Box``, must have one element = 0.0 to define plane.
     freqs: List[float]
         Frequencies to measure flux at.
@@ -198,14 +173,11 @@ class ModeMonitor(FreqMonitor):
     modes: List[Mode]
     type: Literal["ModeMonitor"] = "ModeMonitor"
 
-    _plane_validator = assert_plane()
-
 
 # maps monitor type name to monitor type
 monitor_type_map = {
     "FieldMonitor": FieldMonitor,
     "FieldTimeMonitor": FieldTimeMonitor,
-    "PermittivityMonitor": PermittivityMonitor,
     "FluxMonitor": FluxMonitor,
     "FluxTimeMonitor": FluxTimeMonitor,
     "ModeMonitor": ModeMonitor,

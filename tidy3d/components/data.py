@@ -10,12 +10,10 @@ import h5py
 
 from .simulation import Simulation
 from .monitor import FluxMonitor, FluxTimeMonitor, FieldMonitor, FieldTimeMonitor, ModeMonitor
-from .monitor import PermittivityMonitor, Monitor, AbstractFluxMonitor, VectorFieldMonitor
-from .monitor import EMFieldMonitor, FreqMonitor, TimeMonitor
-
+from .monitor import Monitor, PlanarMonitor, VectorFieldMonitor, FreqMonitor, TimeMonitor
 from .monitor import monitor_type_map
 from .base import Tidy3dBaseModel
-from .types import Numpy, EMField, Component, Direction, Array, numpy_encoding
+from .types import Numpy, EMField, FieldType, Direction, Array, numpy_encoding
 
 
 class Tidy3dData(Tidy3dBaseModel):
@@ -218,19 +216,13 @@ class TimeData(MonitorData, ABC):
 class VectorFieldData(MonitorData, ABC):
     """stores general vector field data as a function of {component, x, y, z}"""
 
-    component: List[Component] = ["x", "y", "z"]
+    field: List[EMField] = ["Ex", "Ey", "Ez", "Hx", "Hy", "Hz"]
     x: Array[float]
     y: Array[float]
     z: Array[float]
 
-
-class EMFieldData(VectorFieldData, ABC):
-    """Stores collections of electromagnetic field."""
-
-    field: List[EMField] = ["E", "H"]
-
     def _make_xarray(self):
-        """make xarray representation of data
+        """make xarray dataset representation of data, one data array per field
 
         Returns
         -------
@@ -240,27 +232,26 @@ class EMFieldData(VectorFieldData, ABC):
         data_dict = self.dict()
         data_arrays = {}
         for field_index, field_name in enumerate(self.field):
-            for component_index, component in enumerate(self.component):
-                name = field_name + component  # Ex, Hy, etc.
-                coords = {dim: data_dict[dim] for dim in self._dims}
-                values = self.values[field_index, component_index]
-                coords.pop("component")
-                coords.pop("field")
-                for dimension in "xyz":
-                    coords[dimension] = coords[dimension][field_index, component_index]
-                data_array = xr.DataArray(values, coords=coords, name=self.monitor_name)
-                data_arrays[name] = data_array
+            coords = {dim: data_dict[dim] for dim in self._dims}
+            values = self.values[field_index]
+            coords.pop("field")
+            for dimension in "xyz":
+                coords[dimension] = coords[dimension][field_index]
+            # print(coords)
+            # print(values.shape)
+            data_array = xr.DataArray(values, coords=coords, name=self.monitor_name)
+            data_arrays[field_name] = data_array
         return xr.Dataset(data_arrays)
 
 
-class AbstractFluxData(MonitorData, ABC):
+class PlanarData(MonitorData, ABC):
     """stores flux data through a surface."""
 
 
 """ usable monitors """
 
 
-class FieldData(EMFieldData, FreqData):
+class FieldData(FreqData, VectorFieldData):
     """Stores Electric and Magnetic fields from a FieldMonitor.
 
     Parameters
@@ -269,16 +260,16 @@ class FieldData(EMFieldData, FreqData):
         Original monitor object corresponding to data.
     monitor_name : str
         Name of original monitor in its Simulation object.
-    field : List[Literal['E', 'H']]
-        List of field names to store (eg. ``field=['E', 'H']``)
-    component: List[Literal['x', 'y', 'z']]
-        List of directional components to store (eg. ``component=['x', 'z']``)
+    field: List[str], optional
+        Electromagnetic fields (E, H) in dtaset defaults to ``['Ex', 'Ey', 'Ez', 'Hx', 'Hy',
+        'Hz']``, may also store diagonal components of permittivity tensor as ``'eps_xx', 'eps_yy',
+        'eps_zz'``.
     x : np.ndarray
-        x locations of each field and component. ``x.shape=(len(field), len(component), num_x)``.
+        x locations of each field and component. ``x.shape=(len(fields), num_x)``.
     y : np.ndarray
-        y locations of each field and component. ``y.shape=(len(field), len(component), num_y)``.
+        y locations of each field and component. ``y.shape=(len(fields), num_y)``.
     z : np.ndarray
-        z locations of each field and component. ``z.shape=(len(field), len(component), num_z)``.
+        z locations of each field and component. ``z.shape=(len(fields), num_z)``.
     f : np.ndarray
         Frequencies of the data (Hz).
     values : np.ndarray
@@ -286,10 +277,11 @@ class FieldData(EMFieldData, FreqData):
         num_y, num_z, len(f))``
     """
 
-    _dims = ("field", "component", "x", "y", "z", "f")
+    field: List[FieldType] = ["Ex", "Ey", "Ez", "Hx", "Hy", "Hz"]
+    _dims = ("field", "x", "y", "z", "f")
 
 
-class FieldTimeData(EMFieldData, TimeData):
+class FieldTimeData(VectorFieldData, TimeData):
     """Stores Electric and Magnetic fields from a FieldTimeMonitor.
 
     Parameters
@@ -298,75 +290,25 @@ class FieldTimeData(EMFieldData, TimeData):
         Original monitor object corresponding to data.
     monitor_name : str
         Name of original monitor in its Simulation object.
-    field : List[Literal['E', 'H']]
-        List of field names to store (eg. ``field=['E', 'H']``)
-    component: List[Literal['x', 'y', 'z']]
-        List of directional components to store (eg. ``component=['x', 'z']``)
+    field : List[str], optional
+        Electromagnetic fields (E, H) in dtaset defaults to ``['Ex', 'Ey', 'Ez', 'Hx', 'Hy',
+        'Hz']``.
     x : np.ndarray
-        x locations of each field and component. ``x.shape=(len(field), len(component), num_x)``.
+        x locations of each field. ``x.shape=(len(fields), num_x)``.
     y : np.ndarray
-        y locations of each field and component. ``y.shape=(len(field), len(component), num_y)``.
+        y locations of each field. ``y.shape=(len(fields), num_y)``.
     z : np.ndarray
-        z locations of each field and component. ``z.shape=(len(field), len(component), num_z)``.
+        z locations of each field. ``z.shape=(len(fields), num_z)``.
     t : np.ndarray
         Time of the data (sec).
     values : np.ndarray
-        Real-valued array of data values. ``values.shape=(len(field), len(component), num_x, num_y,
-        num_z, len(t))``
+        Real-valued array of data values. ``values.shape=(len(field), num_x, num_y, num_z, len(t))``
     """
 
-    _dims = ("field", "component", "x", "y", "z", "t")
+    _dims = ("field", "x", "y", "z", "t")
 
 
-class PermittivityData(VectorFieldData, FreqData):
-    """Stores Reltive Permittivity from a FieldMonitor.
-
-    Parameters
-    ----------
-    monitor : ``Monitor``
-        Original monitor object corresponding to data.
-    monitor_name : str
-        Name of original monitor in its Simulation object.
-    component: List[Literal['x', 'y', 'z']]
-        List of directional components to store (eg. ``component=['x', 'z']``)
-    x : np.ndarray
-        x locations of each field and component. ``x.shape=(len(component), num_x)``.
-    y : np.ndarray
-        y locations of each field and component. ``y.shape=(len(component), num_y)``.
-    z : np.ndarray
-        z locations of each field and component. ``z.shape=(len(component), num_z)``.
-    f : np.ndarray
-        Frequencies of the data (Hz).
-    values : np.ndarray
-        Complex-valued array of data values. ``values.shape=(len(component), num_x, num_y, num_z,
-        len(f))``
-    """
-
-    _dims = ("component", "x", "y", "z", "f")
-
-    def _make_xarray(self):
-        """make xarray representation of data
-
-        Returns
-        -------
-        xr.Dataset
-            ``xarray`` representation of the underlying data.
-        """
-        data_dict = self.dict()
-        data_arrays = {}
-        for component_index, component in enumerate(self.component):
-            name = component + component  # xx, yy, zz
-            coords = {dim: data_dict[dim] for dim in self._dims}
-            values = self.values[component_index]
-            coords.pop("component")
-            for dimension in "xyz":
-                coords[dimension] = coords[dimension][component_index]
-            data_array = xr.DataArray(values, coords=coords, name=self.monitor_name)
-            data_arrays[name] = data_array
-        return xr.Dataset(data_arrays)
-
-
-class FluxData(AbstractFluxData, FreqData):
+class FluxData(PlanarData, FreqData):
     """Stores power flux data through a planar ``FluxMonitor``
 
     Parameters
@@ -384,7 +326,7 @@ class FluxData(AbstractFluxData, FreqData):
     _dims = ("f",)
 
 
-class FluxTimeData(AbstractFluxData, TimeData):
+class FluxTimeData(PlanarData, TimeData):
     """Stores power flux data through a planar ``FluxTimeMonitor``
 
     Parameters
@@ -402,7 +344,7 @@ class FluxTimeData(AbstractFluxData, TimeData):
     _dims = ("t",)
 
 
-class ModeData(FreqData):
+class ModeData(PlanarData, FreqData):
     """Stores modal amplitdudes from a ModeMonitor
 
     Parameters
@@ -433,13 +375,11 @@ class ModeData(FreqData):
 monitor_data_map = {
     FieldMonitor: FieldData,
     FieldTimeMonitor: FieldTimeData,
-    PermittivityMonitor: PermittivityData,
     FluxMonitor: FluxData,
     FluxTimeMonitor: FluxTimeData,
     ModeMonitor: ModeData,
-    EMFieldMonitor: EMFieldData,
     VectorFieldMonitor: VectorFieldData,
-    AbstractFluxMonitor: AbstractFluxData,
+    PlanarMonitor: PlanarData,
     FreqMonitor: FreqData,
     TimeMonitor: TimeData,
 }
