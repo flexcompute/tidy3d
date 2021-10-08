@@ -160,10 +160,9 @@
 - [x] Add tests for near2far.
 - [x] Allow numpy for non-data inputs.
 - [x] Refactor material library.
-- [ ] **Refactor Monitor / MonitorData**
-	- [ ] Combine fields components (Ex, Ey, Ez, ...)
-	- [ ] Put permittivity monitor into freq-domain field data.
-	- [ ] Put reference to MonitorData as attribute of Monitor?  (no more maps?)
+- [x] **Refactor Monitor / MonitorData**
+	- [x] Combine fields components (Ex, Ey, Ez, ...)
+	- [x] Put permittivity monitor into freq-domain field data.
 - [ ] **Get rid of pydantic**?
 	- [ ] Need custom validators?
 	- [ ] JSON load export
@@ -173,6 +172,7 @@
 - [ ] Use shapely for geometry ops / plotting?  `Geometry.geo(x=0)` -> shapely representation.
 - [ ] Handle kwargs better for geometry plotting ``(x: float = None, y : float = None, ...)`
 - [ ] Fix overlapping structure plotting.
+- [ ] Way to get rid of monitor maps and monitor data maps without circular imports?
 - [ ] Fix MyPy warnings. <- too many stupid ones? ..
 - [ ] Add Logging.
 - [ ] Migrate notebooks into static tests.
