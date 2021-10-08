@@ -24,7 +24,6 @@ Monitors
 
    FieldMonitor
    FieldTimeMonitor
-   PermittivityMonitor
    FluxMonitor
    FluxTimeMonitor
    ModeMonitor
@@ -40,7 +39,6 @@ Simulation Output Data
    SimulationData
    FieldData
    FieldTimeData
-   PermittivityData
    FluxData
    FluxTimeData
    ModeData

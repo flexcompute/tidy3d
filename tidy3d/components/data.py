@@ -48,11 +48,11 @@ class MonitorData(Tidy3dData, ABC):
 
     """ explanation of values
         ``values`` is a numpy array that stores the raw data associated with each ``MonitorData``.
-        It can be complex-valued or real valued, depending on whether data is in the frequency or 
+        It can be complex-valued or real valued, depending on whether data is in the frequency or
         time domain, respectively.
-        Each axis in ``values`` corresponds to a specific dimension in the ``MonitorData``, which 
+        Each axis in ``values`` corresponds to a specific dimension in the ``MonitorData``, which
         are supplied as arguments to the ``MonitorData`` subclasses.
-        The order of the dimensions is specified in the ``_dims`` attribute of each ``MonitorData`` 
+        The order of the dimensions is specified in the ``_dims`` attribute of each ``MonitorData``
         subclass
     """
 
@@ -303,8 +303,8 @@ class FieldData(FreqData, ScalarFieldData):
     f : np.ndarray
         Frequencies of the data (Hz).
     values : np.ndarray
-        Complex-valued array of data values. ``values.shape=(len(field), len(component), num_x,
-        num_y, num_z, len(f))``
+        Complex-valued array of data values. ``values.shape=(len(field), num_x, num_y, num_z,
+        len(f))``
     """
 
     monitor: FieldMonitor

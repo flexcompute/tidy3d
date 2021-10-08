@@ -1,11 +1,13 @@
 # required for running tidy3d (note xarray)
 xarray
-dask
 scipy
 h5py
 rich
 nlopt
 matplotlib
+
+# required to get xarray to not complain
+dask
 
 # required for running tidy3d, may try to remove later
 pydantic
@@ -14,7 +16,7 @@ PyYAML
 # may add later
 shapely
 
-# required for code quality
+# required for code quality checking
 black
 pylint
 
@@ -22,3 +24,9 @@ pylint
 pytest
 jupyter
 nbconvert
+
+# for docs only
+sphinx_rtd_theme
+nbsphinx
+ipython
+autodoc_pydantic
