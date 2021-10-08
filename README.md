@@ -159,18 +159,22 @@
 - [x] Replace tqdm with rich
 - [x] Add tests for near2far.
 - [x] Allow numpy for non-data inputs.
+- [x] Refactor material library.
+- [ ] **Refactor Monitor / MonitorData**
+	- [ ] Combine fields components (Ex, Ey, Ez, ...)
+	- [ ] Put permittivity monitor into freq-domain field data.
+	- [ ] Put reference to MonitorData as attribute of Monitor?  (no more maps?)
 - [ ] **Get rid of pydantic**?
 	- [ ] Need custom validators?
 	- [ ] JSON load export
 	- [ ] Autodocs?
 	- [ ] Input arguments validated?
 	- [ ] Numpy support?
-- [ ] Use shapely for geometry ops / plotting?  `Geometry.geo(x=0) -> shapely representation`
+- [ ] Use shapely for geometry ops / plotting?  `Geometry.geo(x=0)` -> shapely representation.
+- [ ] Handle kwargs better for geometry plotting ``(x: float = None, y : float = None, ...)`
 - [ ] Fix overlapping structure plotting.
-- [x] Refactor material library.
-- [ ] Fix MyPy warnings.
+- [ ] Fix MyPy warnings. <- too many stupid ones? ..
 - [ ] Add Logging.
-- [ ] Simplify plotting kwargs.
 - [ ] Migrate notebooks into static tests.
 - [ ] Interactive visualization?
 - [ ] Add PEC PMC.

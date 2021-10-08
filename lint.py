@@ -1,3 +1,4 @@
+""" python lint.py -p path -t t lints files at `path` with passing threshold of `t` (0-10) """
 import argparse
 import logging
 from pylint.lint import Run
