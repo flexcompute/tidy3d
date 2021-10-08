@@ -28,13 +28,11 @@ def test_near2far():
     field_data = FieldData(
         monitor_name="nearfield_monitor",
         monitor=field_mon,
-        field=["E", "H"],
-        component=["x", "z", "z"],
-        x=np.ones((2, 3, 1)) * np.linspace(-1, 1, 10),
-        y=np.ones((2, 3, 1)) * np.linspace(-1, 1, 10),
-        z=np.ones((2, 3, 1)) * np.array([0.0]),
+        x=np.ones((6, 1)) * np.linspace(-1, 1, 10),
+        y=np.ones((6, 1)) * np.linspace(-1, 1, 10),
+        z=np.ones((6, 1)) * np.array([0.0]),
         f=np.array([1.0]),
-        values=np.random.random((2, 3, 10, 10, 1, 1)),
+        values=np.random.random((6, 10, 10, 1, 1)),
     )
 
     n2f = Near2Far(field_data)

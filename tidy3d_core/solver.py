@@ -7,8 +7,8 @@ import numpy as np
 sys.path.append("../")
 
 from tidy3d import Simulation
-from tidy3d.components.monitor import VectorFieldMonitor, AbstractFluxMonitor
-from tidy3d.components.monitor import ModeMonitor, FreqMonitor, TimeMonitor, PermittivityMonitor
+from tidy3d.components.monitor import VectorFieldMonitor, FluxTimeMonitor, FluxMonitor
+from tidy3d.components.monitor import ModeMonitor, FreqMonitor, TimeMonitor
 from tidy3d.components.types import GridSize, Tuple, Numpy
 
 """ Creates fake data for the simulation and returns a monitor data dict containing all fields """
@@ -35,32 +35,30 @@ def solve(simulation: Simulation) -> SolverDataDict:
             value_fn = np.real
         if isinstance(monitor, VectorFieldMonitor):
             x, y, z = discretize_monitor(simulation, monitor)
-            data_array = make_fake_field_values(x, y, z, sampler_values)
-            Nx, Ny, Nz = len(x), len(y), len(z)
+            field_data_dict = make_fake_field_values(x, y, z, sampler_values)
+            data_array_list = []
+            for field_name in monitor.fields:
+                field_component = field_data_dict[field_name]
+                data_array_list.append(field_component)
+            data_array = np.stack(data_array_list, axis=0)
+            data_array = value_fn(data_array)
 
+            Nx, Ny, Nz = len(x), len(y), len(z)
             num_fields = data_array.shape[0]
-            num_components = data_array.shape[1]
-            x_expanded = x * np.ones((num_fields, num_components, Nx))
-            y_expanded = y * np.ones((num_fields, num_components, Ny))
-            z_expanded = z * np.ones((num_fields, num_components, Nz))
+            x_expanded = x * np.ones((num_fields, Nx))
+            y_expanded = y * np.ones((num_fields, Ny))
+            z_expanded = z * np.ones((num_fields, Nz))
             data_dict[name] = {
+                "field": monitor.fields,
                 "x": x_expanded,
                 "y": y_expanded,
                 "z": z_expanded,
-                "values": data_array,
-                sampler_label: value_fn(sampler_values),
+                "values": value_fn(data_array),
+                sampler_label: sampler_values,
             }
-            if isinstance(monitor, PermittivityMonitor):
-                data_dict[name]["values"] = data_dict[name]["values"].sum(axis=0)
-                x_expanded = x * np.ones((num_components, Nx))
-                y_expanded = y * np.ones((num_components, Ny))
-                z_expanded = z * np.ones((num_components, Nz))
-                data_dict[name]["x"] = x_expanded
-                data_dict[name]["y"] = y_expanded
-                data_dict[name]["z"] = z_expanded
-        elif isinstance(monitor, AbstractFluxMonitor):
+        elif isinstance(monitor, (FluxMonitor, FluxTimeMonitor)):
             data_array = make_fake_flux_values(sampler_values)
-            data_dict[name] = {"values": data_array, sampler_label: value_fn(sampler_values)}
+            data_dict[name] = {"values": value_fn(data_array), sampler_label: sampler_values}
         elif isinstance(monitor, ModeMonitor):
             num_modes = len(monitor.modes)
             data_array = make_fake_mode_values(sampler_values, num_modes)
@@ -127,7 +125,20 @@ def make_fake_field_values(x, y, z, sample_values) -> Numpy:
     scalar_z = zz[..., None] * scalar
     E = np.stack((scalar_x, scalar_y, scalar_z))
     H = np.stack((scalar_z - scalar_y, scalar_x - scalar_z, scalar_y - scalar_x))
-    return np.stack((E, H))
+    eps = np.abs(E[0]) + np.abs(H[0])
+    Ex, Ey, Ez = E
+    Hx, Hy, Hz = H
+    return {
+        "Ex": Ex,
+        "Ey": Ey,
+        "Ez": Ez,
+        "Hx": Hx,
+        "Hy": Hy,
+        "Hz": Hz,
+        "eps_xx": eps,
+        "eps_yy": eps,
+        "eps_zz": eps,
+    }
 
 
 def make_fake_mode_values(freqs: Numpy, num_modes: int) -> Numpy:

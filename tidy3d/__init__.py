@@ -14,11 +14,10 @@ from .components import GaussianPulse
 from .components import VolumeSource, PlaneWave, ModeSource, GaussianBeam
 from .components import uniform_freq_sampler, uniform_time_sampler
 from .components import FieldMonitor, FieldTimeMonitor, FluxMonitor, FluxTimeMonitor
-from .components import ModeMonitor, PermittivityMonitor
+from .components import ModeMonitor
 from .components import Mode
 from .components import Simulation
 from .components import SimulationData, FieldData, FluxData, ModeData, FieldTimeData, FluxTimeData
-from .components import PermittivityData
 from .components import monitor_data_map
 
 # constants imported as `C_0 = td.C_0` or `td.constants.C_0`
