@@ -230,4 +230,4 @@ For this, the `Sampler()` object is supplied to each `Monitor()`, which can eith
 - `TimeSampler(times)` (defines the time steps to sample the data at)
 - `FreqSampler(freqs)` (defines the frequencies to sample the data at using running time discrete Fourier tranform).
 Note that `ModeMonitors()` can only accept `FreqSamplers()` as the modes are only defined at a specific frequency.
-The functions `uniform_time_sampler()` and `uniform_freq_sampler()` allow one to easily make evenly spaced samplers.
+The functions `uniform_times()` and `uniform_freqs()` allow one to easily make evenly spaced samplers.

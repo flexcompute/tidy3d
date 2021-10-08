@@ -1,15 +1,15 @@
-import pytest
-import nbconvert
-import nbformat
-from nbconvert.preprocessors import CellExecutionError
-
 import os
 import sys
 
-sys.path.append("./")
+import pytest
 
-# load the notebook executor
+# note: these libraries throw Deprecation warnings in python 3.9, so they are ignored in pytest.ini
+import nbconvert
+import nbformat
+from nbconvert.preprocessors import CellExecutionError
 from nbconvert.preprocessors import ExecutePreprocessor
+
+sys.path.append("./")
 
 ep = ExecutePreprocessor(timeout=1000)
 

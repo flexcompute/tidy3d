@@ -179,6 +179,7 @@
 - [ ] Interactive visualization?
 - [ ] Add PEC PMC.
 - [ ] Make Uniform Samplers separate classes? (dont evaluate / store freqs, times)?
+- [ ] setup.cfg for installing packages with more granularity (base, docs, tests)
 ---
 
 ### Stage 3: Refining

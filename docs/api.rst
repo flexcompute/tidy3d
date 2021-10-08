@@ -244,8 +244,8 @@ Near Field to Far Field Transformation
 ..    TimeSampler
 ..    FreqSampler
 
-..    uniform_time_sampler
-..    uniform_freq_sampler
+..    uniform_times
+..    uniform_freqs
 
 
 .. Modes

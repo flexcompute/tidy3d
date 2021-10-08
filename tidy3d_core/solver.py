@@ -7,7 +7,7 @@ import numpy as np
 sys.path.append("../")
 
 from tidy3d import Simulation
-from tidy3d.components.monitor import ScalarFieldMonitor, FluxTimeMonitor, FluxMonitor
+from tidy3d.components.monitor import ScalarFieldMonitor, AbstractFluxMonitor
 from tidy3d.components.monitor import ModeMonitor, FreqMonitor, TimeMonitor
 from tidy3d.components.types import GridSize, Tuple, Numpy
 
@@ -56,7 +56,7 @@ def solve(simulation: Simulation) -> SolverDataDict:
                 "values": value_fn(data_array),
                 sampler_label: sampler_values,
             }
-        elif isinstance(monitor, (FluxMonitor, FluxTimeMonitor)):
+        elif isinstance(monitor, AbstractFluxMonitor):
             data_array = make_fake_flux_values(sampler_values)
             data_dict[name] = {"values": value_fn(data_array), sampler_label: sampler_values}
         elif isinstance(monitor, ModeMonitor):
@@ -64,10 +64,11 @@ def solve(simulation: Simulation) -> SolverDataDict:
             data_array = make_fake_mode_values(sampler_values, num_modes)
             data_dict[name] = {
                 "mode_index": np.arange(num_modes),
-                "values": data_array,
-                sampler_label: value_fn(sampler_values),
+                "values": value_fn(data_array),
+                sampler_label: sampler_values,
             }
         data_dict[name]["monitor_name"] = name
+        print(monitor.type, np.mean(data_dict[name]["values"]))
     return data_dict
 
 
