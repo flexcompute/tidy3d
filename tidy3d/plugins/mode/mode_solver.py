@@ -140,14 +140,16 @@ class ModeSolver:
             H_tmp = H[:, :, 1:, ...]
             E = np.concatenate((+E_tmp[:, :, ::-1, ...], E_tmp), axis=2)
             H = np.concatenate((-H_tmp[:, :, ::-1, ...], H_tmp), axis=2)
-        field_values = np.stack((E, H), axis=0)
+        Ex, Ey, Ez = E
+        Hx, Hy, Hz = H
+        field_values = np.stack((Ex, Ey, Ez, Hx, Hy, Hz), axis=0)
 
         # note: re-discretizing, need to make consistent.
-        (_, _, Nx, Ny, _) = field_values.shape
+        (_, Nx, Ny, _) = field_values.shape
         (xmin, ymin, zmin), (xmax, ymax, zmax) = self.plane.get_bounds()
-        xs = np.ones((2, 3, 1)) * np.linspace(xmin, xmax, Nx)
-        ys = np.ones((2, 3, 1)) * np.linspace(ymin, ymax, Ny)
-        zs = np.ones((2, 3, 1)) * np.linspace(zmin, zmax, 1)
+        xs = np.ones((6, 1)) * np.linspace(xmin, xmax, Nx)
+        ys = np.ones((6, 1)) * np.linspace(ymin, ymax, Ny)
+        zs = np.ones((6, 1)) * np.linspace(zmin, zmax, 1)
 
         n_eff_complex = n_eff_complex[mode.mode_index]
 

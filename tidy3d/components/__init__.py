@@ -14,10 +14,9 @@ from .source import VolumeSource, PlaneWave, ModeSource, GaussianBeam
 
 from .monitor import uniform_freq_sampler, uniform_time_sampler
 from .monitor import FieldMonitor, FieldTimeMonitor, FluxMonitor, FluxTimeMonitor
-from .monitor import ModeMonitor, PermittivityMonitor
+from .monitor import ModeMonitor
 
 from .mode import Mode
 
 from .data import SimulationData, FieldData, FluxData, ModeData, FieldTimeData, FluxTimeData
-from .data import PermittivityData
 from .data import monitor_data_map

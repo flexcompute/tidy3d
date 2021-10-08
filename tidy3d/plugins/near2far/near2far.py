@@ -23,9 +23,9 @@ class Near2Far:
         self.k0 = 2 * np.pi * self.f / C_0
 
         # get normal axis (ignore components)
-        xs = field_data.x[0, 0]
-        ys = field_data.y[0, 0]
-        zs = field_data.z[0, 0]
+        xs = field_data.x[0]
+        ys = field_data.y[0]
+        zs = field_data.z[0]
         mon_size = [xs.shape[-1], ys.shape[-1], zs.shape[-1]]
         self.axis = mon_size.index(1)
         assert self.axis == 2, "Currently only works for z normal."
@@ -40,9 +40,13 @@ class Near2Far:
         self.dy = np.mean(np.diff(ys))
 
         # get tangential near fields
-        assert field_data.values.shape[0] == 2, "Monitor must have E and H components"
-        E = np.squeeze(field_data.values[0])
-        H = np.squeeze(field_data.values[1])
+        for em_field in "EH":
+            for component in "xyz":
+                field_name = em_field + component
+                assert field_name in field_data.field, f"missing field: {field_name}"
+        Ex, Ey, Ez, Hx, Hy, Hz = np.squeeze(field_data.values)
+        E = (Ex, Ey, Ez)
+        H = (Hx, Hy, Hz)
         _, (self.Ex, self.Ey) = field_data.geometry.pop_axis(E, axis=self.axis)
         _, (self.Hx, self.Hy) = field_data.geometry.pop_axis(H, axis=self.axis)
 

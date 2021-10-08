@@ -54,8 +54,9 @@ def test_simulation_preserve_types():
         },
         monitors={
             "field": FieldMonitor(size=(1, 1, 1), freqs=[1, 2, 3]),
-            "eps": PermittivityMonitor(size=(1, 1, 1), freqs=[1, 2, 3]),
+            "fieldtime": FieldTimeMonitor(size=(1, 1, 1), times=[1, 2, 3]),
             "flux": FluxMonitor(size=(1, 0, 1), freqs=[1, 2, 3]),
+            "fluxtime": FluxTimeMonitor(size=(1, 0, 1), times=[1, 2, 3]),
             "mode": ModeMonitor(size=(1, 0, 1), freqs=[1, 2, 3], modes=[Mode(mode_index=1)]),
         },
     )
@@ -78,7 +79,7 @@ def test_simulation_preserve_types():
         assert S in S_types
 
     M_types = [type(m) for m in sim_2.monitors.values()]
-    for M in (FieldMonitor, PermittivityMonitor, ModeMonitor, FluxMonitor):
+    for M in (FieldMonitor, FieldTimeMonitor, ModeMonitor, FluxMonitor, FluxTimeMonitor):
         assert M in M_types
 
 

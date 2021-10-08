@@ -36,7 +36,6 @@ SIM_MONITORS = Simulation(
     monitors={
         "field_freq": FieldMonitor(size=(1, 1, 1), center=(0, 1, 0), freqs=[1, 2, 5, 7, 8]),
         "field_time": FieldTimeMonitor(size=(1, 1, 0), center=(1, 0, 0), times=[1]),
-        "eps_freq": PermittivityMonitor(size=(1, 1, 1), center=(0, 1, 0), freqs=[1, 2, 5, 7, 8]),
         "flux_freq": FluxMonitor(size=(1, 1, 0), center=(0, 0, 0), freqs=[1, 2, 5, 9]),
         "flux_time": FluxTimeMonitor(size=(1, 1, 0), center=(0, 0, 0), times=[1, 2, 3]),
         "mode": ModeMonitor(
