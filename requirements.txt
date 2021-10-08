@@ -1,7 +1,11 @@
 # required for running tidy3d (note xarray)
-xarray[complete]
+xarray
+dask
+scipy
+h5py
 rich
 nlopt
+matplotlib
 
 # required for running tidy3d, may try to remove later
 pydantic

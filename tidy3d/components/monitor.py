@@ -11,36 +11,6 @@ from .mode import Mode
 from .viz import add_ax_if_none, MonitorParams
 
 
-""" Create times or freqs """
-
-
-def _uniform_arange(start: int, stop: int, step: int) -> IntArrayLike:
-    """uniform spacing from start to stop with spacing of step."""
-    assert start <= stop, "start must not be greater than stop"
-    return list(np.arange(start, stop, step))
-
-
-def _uniform_linspace(start: float, stop: float, num: int) -> FloatArrayLike:
-    """uniform spacing from start to stop with num elements."""
-    assert start <= stop, "start must not be greater than stop"
-    return list(np.linspace(start, stop, num))
-
-
-def uniform_time_sampler(t_start: int, t_stop: int, t_step: int = 1) -> IntArrayLike:
-    """create times at evenly spaced steps."""
-    assert isinstance(t_start, int), "`t_start` must be integer for time sampler"
-    assert isinstance(t_stop, int), "`t_stop` must be integer for time sampler"
-    assert isinstance(t_step, int), "`t_step` must be integer for time sampler"
-    times = _uniform_arange(t_start, t_stop, t_step)
-    return times
-
-
-def uniform_freq_sampler(f_start: float, f_stop: float, num_freqs: int) -> FloatArrayLike:
-    """create frequencies at evenly spaced points."""
-    freqs = _uniform_linspace(f_start, f_stop, num_freqs)
-    return freqs
-
-
 """ Monitors """
 
 
@@ -77,6 +47,10 @@ class PlanarMonitor(Monitor, ABC):
     """stores quantities on a plane"""
 
     _plane_validator = assert_plane()
+
+
+class AbstractFluxMonitor(PlanarMonitor, ABC):
+    """stores flux through a plane"""
 
 
 """ usable """
@@ -122,7 +96,7 @@ class FieldTimeMonitor(ScalarFieldMonitor, TimeMonitor):
     type: Literal["FieldTimeMonitor"] = "FieldTimeMonitor"
 
 
-class FluxMonitor(PlanarMonitor, FreqMonitor):
+class FluxMonitor(AbstractFluxMonitor, FreqMonitor):
     """Stores power flux through a plane as a function of frequency.
 
     Parameters
@@ -138,7 +112,7 @@ class FluxMonitor(PlanarMonitor, FreqMonitor):
     type: Literal["FluxMonitor"] = "FluxMonitor"
 
 
-class FluxTimeMonitor(PlanarMonitor, TimeMonitor):
+class FluxTimeMonitor(AbstractFluxMonitor, TimeMonitor):
     """Stores power flux through a plane as a function of frequency.
 
     Parameters
@@ -174,7 +148,16 @@ class ModeMonitor(PlanarMonitor, FreqMonitor):
     type: Literal["ModeMonitor"] = "ModeMonitor"
 
 
-# maps monitor type name to monitor type
+""" explanation of monitor_type_map:
+    When we load monitor data from file, we need some way to know what type of ``Monitor`` created 
+    the data.
+    The ``Monitor``'s' ``type`` itself is not serilizable, so we can't store that directly in json.
+    However, the ``Montior.type`` attribute stores a string representation of the ``MonitorType``, 
+    so we can use that.
+    This map allows one to recover the ``Monitor`` type from the ``.type`` attribute in the json 
+    object and therefore load the correct monitor.
+"""
+
 monitor_type_map = {
     "FieldMonitor": FieldMonitor,
     "FieldTimeMonitor": FieldTimeMonitor,
@@ -184,3 +167,36 @@ monitor_type_map = {
 }
 
 MonitorType = Union[tuple(monitor_type_map.values())]
+
+
+""" Convenience methods to create evenly spaced times or frequencies
+    note: later on, might want these to hold (start, stop, step) or equivalent and be stored in
+    `freqs` and `times` instead of List to reduce clutter in json.
+"""
+
+
+def _uniform_arange(start: int, stop: int, step: int) -> IntArrayLike:
+    """uniform spacing from start to stop with spacing of step."""
+    assert start <= stop, "start must not be greater than stop"
+    return list(np.arange(start, stop, step))
+
+
+def _uniform_linspace(start: float, stop: float, num: int) -> FloatArrayLike:
+    """uniform spacing from start to stop with num elements."""
+    assert start <= stop, "start must not be greater than stop"
+    return list(np.linspace(start, stop, num))
+
+
+def uniform_times(t_start: int, t_stop: int, t_step: int = 1) -> IntArrayLike:
+    """create times at evenly spaced steps."""
+    assert isinstance(t_start, int), "`t_start` must be integer for time sampler"
+    assert isinstance(t_stop, int), "`t_stop` must be integer for time sampler"
+    assert isinstance(t_step, int), "`t_step` must be integer for time sampler"
+    times = _uniform_arange(t_start, t_stop, t_step)
+    return times
+
+
+def uniform_freqs(f_start: float, f_stop: float, num_freqs: int) -> FloatArrayLike:
+    """create frequencies at evenly spaced points."""
+    freqs = _uniform_linspace(f_start, f_stop, num_freqs)
+    return freqs
