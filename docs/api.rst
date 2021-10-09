@@ -16,6 +16,9 @@ Simulation Specification
    Simulation
    PMLLayer
 
+**ndarray methods**:
+:py:attr:`~Simulation.plot`
+
 Monitors
 --------
 

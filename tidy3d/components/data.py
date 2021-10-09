@@ -305,6 +305,18 @@ class FieldData(FreqData, ScalarFieldData):
     values : np.ndarray
         Complex-valued array of data values. ``values.shape=(len(field), num_x, num_y, num_z,
         len(f))``
+
+    Example
+    -------
+
+    >>> f = np.linspace(2e14, 3e14, 1001)
+    >>> monitor = FieldMonitor(fields=['Ex'], size=(2, 4, 0), freqs=f)
+    >>> xs = np.linspace(-1, 1, 10)[None, :] # add first dimension for field
+    >>> ys = np.linspace(-2, 2, 20)[None, :] # add first dimension for field
+    >>> zs = np.linspace(0, 0, 1)[None, :]   # add first dimension for field
+    >>> values = np.random.random((1, 10, 20, 1, 1001))
+    >>> data = FieldData(monitor=monitor, monitor_name='ex', values=values, field=['Ex'], x=x, y=y,
+    z=z, f=f)
     """
 
     monitor: FieldMonitor
@@ -336,6 +348,19 @@ class FieldTimeData(ScalarFieldData, TimeData):
         Time of the data (sec).
     values : np.ndarray
         Real-valued array of data values. ``values.shape=(len(field), num_x, num_y, num_z, len(t))``
+
+    Example
+    -------
+
+    >>> times = np.arange(0, 1000, 101)
+    >>> monitor = FieldTimeMonitor(fields=['Hy'], size=(2, 4, 0), times=times)
+    >>> xs = np.linspace(-1, 1, 10)[None, :] # add first dimension for field
+    >>> ys = np.linspace(-2, 2, 20)[None, :] # add first dimension for field
+    >>> zs = np.linspace(0, 0, 1)[None, :]   # add first dimension for field
+    >>> t = times * simulation.dt
+    >>> values = np.random.random((1, 10, 20, 1, 101))
+    >>> data = FieldTimeData(monitor=monitor, monitor_name='hy', values=values, field=['Hy'], x=x,
+    y=y, z=z, t=t)
     """
 
     monitor: FieldTimeMonitor
@@ -357,6 +382,17 @@ class FluxData(AbstractFluxData, FreqData):
         Frequencies of the data (Hz).
     values : np.ndarray
         Complex-valued array of data values. ``values.shape=(len(f),)``
+
+    Example
+    -------
+
+    >>> f = np.linspace(2e14, 3e14, 1001)
+    >>> monitor = FluxMonitor(size=(2, 4, 0), freqs=f)
+    >>> xs = np.linspace(-1, 1, 10)[None, :] # add first dimension for field
+    >>> ys = np.linspace(-2, 2, 20)[None, :] # add first dimension for field
+    >>> zs = np.linspace(0, 0, 1)[None, :]   # add first dimension for field
+    >>> values = np.random.random((1001,))
+    >>> data = FluxData(monitor=monitor, monitor_name='flux', values=values, f=f)
     """
 
     monitor: FluxMonitor
@@ -378,6 +414,15 @@ class FluxTimeData(AbstractFluxData, TimeData):
         Times of the data (sec).
     values : np.ndarray
         Complex-valued array of data values. ``values.shape=(len(t),)``
+
+    Example
+    -------
+
+    >>> times = np.arange(0, 1000, 51)
+    >>> monitor = FieldTimeMonitor(fields=['Hy'], size=(2, 4, 0), times=times)
+    >>> t = times * simulation.dt
+    >>> values = (1+1j) * np.random.random((51,))
+    >>> data = FluxTimeData(monitor=monitor, monitor_name='flux', values=values, t=t)
     """
 
     monitor: FluxTimeMonitor
@@ -405,6 +450,16 @@ class ModeData(PlanarData, FreqData):
     values : np.ndarray
         Complex-valued array of data values. ``values.shape=(len(direction), len(mode_index),
         len(f))``
+
+    Example
+    -------
+
+    >>> f = np.linspace(2e14, 3e14, 1001)
+    >>> modes = [Mode(mode_index=0), Mode(mode_index=1)]
+    >>> monitor = ModeMonitor(direction=['+'], size=(2, 4, 0), modes)
+    >>> values = (1+1j) * np.random.random((1, 2, 1001))
+    >>> data = ModeData(monitor=monitor, monitor_name='mode', values=values, direction=['+'],
+    mode_index=np.arange(1, 3), f=f)
     """
 
     monitor: ModeMonitor
