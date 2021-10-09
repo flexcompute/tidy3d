@@ -48,7 +48,10 @@ extensions = [
     "IPython.sphinxext.ipython_directive",
     "IPython.sphinxext.ipython_console_highlighting",
     "nbsphinx",
+    "m2r2",
 ]
+
+source_suffix = [".rst", ".md"]
 
 autodoc_inherit_docstrings = True
 autosummary_generate = True
