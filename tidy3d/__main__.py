@@ -1,8 +1,7 @@
-""" command-line interface for instructions run `python tidy3d.py --help` """
-
+""" command-line interface. For instructions run `python -m tidy3d --help` """
+import sys
 import argparse
 import pyfiglet
-from pprint import pprint
 
 from tidy3d import Simulation
 from tidy3d.web import Job
@@ -77,7 +76,7 @@ if inspect_sim:
     looks_good = input("Do you want to continue to submit? [y]/[n]")
     if looks_good.lower() != "y":
         print(" - exiting")
-        exit(0)
+        sys.exit()
 
 # upload to server
 job = Job(simulation=simulation, task_name=task_name)
@@ -94,7 +93,7 @@ if inspect_credits:
     looks_good = input("Do you want to continue to submit? [y]/[n]")
     if looks_good.lower() != "y":
         print(" - exiting")
-        exit(0)
+        sys.exit()
 
 # run the simulation and load results
 job.run()

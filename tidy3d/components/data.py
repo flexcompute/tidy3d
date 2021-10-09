@@ -153,7 +153,7 @@ class MonitorData(Tidy3dData, ABC):
 
         with h5py.File(fname, "r") as f_handle:
 
-            # construct the original monitor from the json string
+            # construct the original ``Monitor``from the json string
             mon_json = f_handle.attrs["mon_json"]
             monitor_type_str = json.loads(mon_json)["type"]
             monitor_type = monitor_type_map[monitor_type_str]
@@ -170,7 +170,7 @@ class MonitorData(Tidy3dData, ABC):
         Parameters
         ----------
         monitor : ``Monitor``
-            Original monitor that specified how data was stored.
+            original ``Monitor``that specified how data was stored.
         monitor_data : Dict[str, Numpy]
             Mapping from data value name to numpy array holding data.
 
@@ -288,28 +288,27 @@ class FieldData(FreqData, ScalarFieldData):
     Parameters
     ----------
     monitor : ``FieldMonitor``
-        Original monitor object corresponding to data.
+        original ``Monitor`` object corresponding to data.
     monitor_name : str
-        Name of original monitor in its Simulation object.
+        Name of original ``monitor`` in the original ``Simulation.monitors`` dictionary..
     field: List[str], optional
         Electromagnetic fields (E, H) in dtaset defaults to ``['Ex', 'Ey', 'Ez', 'Hx', 'Hy',
         'Hz']``, may also store diagonal components of permittivity tensor as ``'eps_xx', 'eps_yy',
         'eps_zz'``.
-    x : np.ndarray
+    x : ``np.ndarray``
         x locations of each field and component. ``x.shape=(len(fields), num_x)``.
-    y : np.ndarray
+    y : ``np.ndarray``
         y locations of each field and component. ``y.shape=(len(fields), num_y)``.
-    z : np.ndarray
+    z : ``np.ndarray``
         z locations of each field and component. ``z.shape=(len(fields), num_z)``.
-    f : np.ndarray
+    f : ``np.ndarray``
         Frequencies of the data (Hz).
-    values : np.ndarray
+    values : ``np.ndarray``
         Complex-valued array of data values. ``values.shape=(len(field), num_x, num_y, num_z,
         len(f))``
 
     Example
     -------
-
     >>> f = np.linspace(2e14, 3e14, 1001)
     >>> monitor = FieldMonitor(fields=['Ex'], size=(2, 4, 0), freqs=f)
     >>> x = np.linspace(-1, 1, 10)[None, :] # add first dimension for field
@@ -325,6 +324,7 @@ class FieldData(FreqData, ScalarFieldData):
     ...     y=y,
     ...     z=z,
     ...     f=f)
+
     """
 
     monitor: FieldMonitor
@@ -340,21 +340,21 @@ class FieldTimeData(ScalarFieldData, TimeData):
     Parameters
     ----------
     monitor : ``FieldTimeMonitor``
-        Original monitor object corresponding to data.
+        original ``monitor`` object corresponding to data.
     monitor_name : str
-        Name of original monitor in its Simulation object.
+        Name of original ``monitor`` in the original ``Simulation.monitors`` dictionary.
     field : List[str], optional
         Electromagnetic fields (E, H) in dtaset defaults to ``['Ex', 'Ey', 'Ez', 'Hx', 'Hy',
         'Hz']``.
-    x : np.ndarray
+    x : ``np.ndarray``
         x locations of each field. ``x.shape=(len(fields), num_x)``.
-    y : np.ndarray
+    y : ``np.ndarray``
         y locations of each field. ``y.shape=(len(fields), num_y)``.
-    z : np.ndarray
+    z : ``np.ndarray``
         z locations of each field. ``z.shape=(len(fields), num_z)``.
-    t : np.ndarray
+    t : ``np.ndarray``
         Time of the data (sec).
-    values : np.ndarray
+    values : ``np.ndarray``
         Real-valued array of data values. ``values.shape=(len(field), num_x, num_y, num_z, len(t))``
 
     Example
@@ -391,12 +391,12 @@ class FluxData(AbstractFluxData, FreqData):
     Parameters
     ----------
     monitor : ``FluxMonitor``
-        Original monitor object corresponding to data.
+        original ``monitor`` object corresponding to data.
     monitor_name : str
-        Name of original monitor in its Simulation object.
-    f : np.ndarray
+        Name of original ``monitor`` in the original ``Simulation.monitors`` dictionary..
+    f : ``np.ndarray``
         Frequencies of the data (Hz).
-    values : np.ndarray
+    values : ``np.ndarray``
         Complex-valued array of data values. ``values.shape=(len(f),)``
 
     Example
@@ -420,12 +420,12 @@ class FluxTimeData(AbstractFluxData, TimeData):
     Parameters
     ----------
     monitor : ``FluxTimeMonitor``
-        Original monitor object corresponding to data.
-    monitor_name : str
-        Name of original monitor in its Simulation object.
-    t : np.ndarray
+        Original ``Monitor`` object corresponding to data.
+    monitor_name : ``str``
+        Name of original ``Monitor`` in the original ``Simulation.monitors`` dictionary.
+    t : ``np.ndarray``
         Times of the data (sec).
-    values : np.ndarray
+    values : ``np.ndarray``
         Real-valued array of data values. ``values.shape=(len(t),)``
 
     Example
@@ -451,17 +451,17 @@ class ModeData(PlanarData, FreqData):
     Parameters
     ----------
     monitor : ``ModeMonitor``
-        Original monitor object corresponding to data.
-    monitor_name : str
-        Name of original monitor in its Simulation object.
-    direction : List[Literal["+", "-"]]
+        original ``monitor`` object corresponding to data.
+    monitor_name : ``str``
+        Name of original ``Monitor`` in the original ``Simulation.monitors`` dictionary.
+    direction : ``List[Literal["+", "-"]]``
         Direction in which the modes are propagating (normal to monitor plane).
-    mode_index : np.ndarray
+    mode_index : ``np.ndarray``
         Array of integers into ``ModeMonitor.modes`` specifying the mode corresponding to this
         index.
-    f : np.ndarray
+    f : ``np.ndarray``
         Frequencies of the data (Hz).
-    values : np.ndarray
+    values : ``np.ndarray``
         Complex-valued array of data values. ``values.shape=(len(direction), len(mode_index),
         len(f))``
 
@@ -514,8 +514,21 @@ class SimulationData(Tidy3dData):
     ----------
     simulation : ``Simulation``
         Original Simulation.
-    monitor_data : Dict[str, ``MonitorData``]
+    monitor_data : ``Dict[str, MonitorData]``
         Mapping of monitor name to ``MonitorData`` intance.
+
+    Example
+    -------
+
+    >>> f = np.linspace(2e14, 3e14, 1001)
+    >>> flux_monitor = FluxMonitor(size=(2, 4, 0), freqs=f)
+    >>> simulation = Simulation(
+    ...     size=(4,4,4),
+    ...     grid_size=(0.1, 0.1, 0.1),
+    ...     monitors={'flux': flux_monitor})
+    >>> values = np.random.random((1001,))
+    >>> flux_data = FluxData(monitor=flux_monitor, monitor_name='flux', values=values, f=f)
+    >>> sim_data = SimulationData(simulation=simulation, monitor_data={'flux_data': flux_data})
     """
 
     simulation: Simulation

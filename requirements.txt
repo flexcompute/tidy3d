@@ -5,6 +5,7 @@ h5py
 rich
 nlopt
 matplotlib
+pyfiglet
 
 # required to get xarray to not complain
 dask
@@ -30,3 +31,4 @@ sphinx_rtd_theme
 nbsphinx
 ipython
 autodoc_pydantic
+sphinx-copybutton

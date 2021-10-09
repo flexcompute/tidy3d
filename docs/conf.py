@@ -47,6 +47,7 @@ extensions = [
     "sphinx.ext.napoleon",
     "IPython.sphinxext.ipython_directive",
     "IPython.sphinxext.ipython_console_highlighting",
+    "sphinx_copybutton",
     "nbsphinx",
     "m2r2",
 ]

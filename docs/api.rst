@@ -14,10 +14,8 @@ Simulation Specification
    :toctree: _autosummary/
 
    Simulation
+   Simulation.plot
    PMLLayer
-
-**ndarray methods**:
-:py:attr:`~Simulation.plot`
 
 Monitors
 --------
