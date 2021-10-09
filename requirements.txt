@@ -5,7 +5,6 @@ h5py
 rich
 nlopt
 matplotlib
-pyfiglet
 
 # required to get xarray to not complain
 dask
