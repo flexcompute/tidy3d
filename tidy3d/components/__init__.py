@@ -19,4 +19,4 @@ from .monitor import ModeMonitor
 from .mode import Mode
 
 from .data import SimulationData, FieldData, FluxData, ModeData, FieldTimeData, FluxTimeData
-from .data import monitor_data_map
+from .data import MonitorData, monitor_data_map
