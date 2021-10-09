@@ -25,6 +25,21 @@ class Monitor(Box, ABC):
         return ax
 
 
+""" The following are abstract classes that separate the ``Monitor`` instances into different
+    types depending on what they store. 
+    They can be useful for keeping argument types and validations separated.
+    For example, monitors that should always be defined on planar geometries can have an 
+    ``_assert_plane()`` validation in the abstract base class ``PlanarMonitor``.
+    This way, ``_assert_plane()`` will always be used if we add more ``PlanarMonitor`` objects in
+    the future.
+    This organization is also useful when doing conditions based on monitor / data type.
+    For example, instead of 
+    ``if isinstance(mon_data, (FieldMonitor, FieldTimeMonitor)):`` we can simply do 
+    ``if isinstance(mon_data, ScalarFieldMonitor)`` and this will generalize if we add more
+    ``ScalarFieldMonitor`` objects in the future.
+"""
+
+
 class FreqMonitor(Monitor, ABC):
     """stores data in frequency domain"""
 

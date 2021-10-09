@@ -14,8 +14,9 @@ Simulation Specification
    :toctree: _autosummary/
 
    Simulation
-   Simulation.plot
+   Simulation
    PMLLayer
+
 
 Monitors
 --------
@@ -38,6 +39,12 @@ Simulation Output Data
    :toctree: _autosummary/
 
    SimulationData
+   SimulationData.export
+   SimulationData.load
+   MonitorData
+   MonitorData.export
+   MonitorData.load
+   MonitorData.geometry
    FieldData
    FieldTimeData
    FluxData
