@@ -1,15 +1,11 @@
 """ command-line interface. For instructions run `python -m tidy3d --help` """
 import sys
 import argparse
-import pyfiglet
 
 from tidy3d import Simulation
 from tidy3d.web import Job
 
-ascii_banner = pyfiglet.figlet_format("Tidy3D")
-print(ascii_banner)
-
-parser = argparse.ArgumentParser(description=ascii_banner)
+parser = argparse.ArgumentParser(description="Tidy3D")
 
 parser.add_argument("simulation", help="path to the .json or .yaml file containing the simulation")
 
@@ -71,8 +67,6 @@ else:
 
 # inspect the simulation
 if inspect_sim:
-    ascii_banner = pyfiglet.figlet_format("Simulation Plot")
-    print(ascii_banner)
     looks_good = input("Do you want to continue to submit? [y]/[n]")
     if looks_good.lower() != "y":
         print(" - exiting")
@@ -102,5 +96,4 @@ sim_data = job.load_results(path=out_file)
 
 # visualize results
 if viz_results:
-    ascii_banner = pyfiglet.figlet_format("Simulation Data")
-    print(ascii_banner)
+    pass
