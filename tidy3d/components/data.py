@@ -40,21 +40,22 @@ class MonitorData(Tidy3dData, ABC):
 
     Attributes
     ----------
-    data : ``Union[`` `xarray.DataArray <http://xarray.pydata.org/en/stable/generated/xarray.DataArray.html>`__, `xarray.Dataset <http://xarray.pydata.org/en/stable/generated/xarray.Dataset.html>`__``]``
-    representation of the underlying data using ``xarray``.
+    data : ``Union[xarray.DataArray xarray.Dataset]``
+        Representation of the data as an xarray object.
     """
 
     monitor_name: str
     monitor: Monitor
 
     """ explanation of values
-        `values` is a numpy array that stores the raw data associated with each :class:`MonitorData`.
+        `values` is a numpy array that stores the raw data associated with each
+        :class:`MonitorData`.
         It can be complex-valued or real valued, depending on whether data is in the frequency or
         time domain, respectively.
-        Each axis in ``values`` corresponds to a specific dimension in the :class:`MonitorData`, which
-        are supplied as arguments to the :class:`MonitorData` subclasses.
-        The order of the dimensions is specified in the ``_dims`` attribute of each :class:`MonitorData`
-        subclass
+        Each axis in ``values`` corresponds to a specific dimension in the :class:`MonitorData`,
+        which are supplied as arguments to the :class:`MonitorData` subclasses.
+        The order of the dimensions is specified in the ``_dims`` attribute of each
+        :class:`MonitorData` subclass
     """
 
     values: Union[Array[float], Array[complex]]
@@ -79,7 +80,7 @@ class MonitorData(Tidy3dData, ABC):
 
         Returns
         -------
-        ``Union[`xarray.DataArray <http://xarray.pydata.org/en/stable/generated/xarray.DataArray.html>`__, `xarray.Dataset <http://xarray.pydata.org/en/stable/generated/xarray.Dataset.html>`__]``
+        ``Union[xarray.DataArray xarray.Dataset]``
             Representation of the underlying data using xarray.
         """
         data_dict = self.dict()
@@ -209,8 +210,8 @@ class MonitorData(Tidy3dData, ABC):
         return monitor_data_instance
 
 
-""" The following are abstract classes that separate the :class:`MonitorData` instances into different
-    types depending on what they store. 
+""" The following are abstract classes that separate the :class:`MonitorData` instances into
+    different types depending on what they store. 
     They can be useful for keeping argument types and validations separated.
     For example, monitors that should always be defined on planar geometries can have an 
     ``_assert_plane()`` validation in the abstract base class ``PlanarData``.
@@ -615,11 +616,11 @@ class SimulationData(Tidy3dData):
         Parameters
         ----------
         monitor_name : str
-            Name of monitor to get data for.
+            Name of :class:`Monitor` to get data for.
 
         Returns
         -------
-        Union[``xarray.DataArray``, ``xarray.Dataset``]
+        ``Union[xarray.DataArray``, xarray.Dataset]``
             The ``xarray`` representation of the data.
         """
         return self.monitor_data[monitor_name].data
