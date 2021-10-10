@@ -9,4 +9,5 @@ The Python API can be used to build simulation models, submit jobs, and analyze 
    :caption: User Guide
 
    quickstart
+   howdoi
    api
