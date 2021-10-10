@@ -62,7 +62,7 @@ Work with Monitor Data
      - ``mon_data.monitor`` returns a copy of the :class:`Monitor` and ``mon_data.monitor_name`` gives its name in the :attr:`Simulation.monitors` dictionary.
    * - Access the xarray representation of the data from a raw :class:`MonitorData` instance?
      - if ``isinstance(mon_data, MonitorData)``, then ``mon_data.data`` provides the interface for all of the functionality described above.  (Eg. ``mon_data.data.isel(x=0)``).
-   * Get the raw data values as a ``numpy`` array?
+   * - Get the raw data values as a ``numpy`` array?
      - ``mon_data.values``
 
 
