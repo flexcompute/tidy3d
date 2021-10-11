@@ -211,6 +211,11 @@ class MonitorData(Tidy3dData, ABC):
         # get MontiorData type and initialize using kwargs
         mon_type = type(monitor)
         mon_data_type = monitor_data_map[mon_type]
+
+        # convert values to list of arrays, one per field
+        if mon_data_type in (FieldData, FieldTimeData):
+            kwargs["values"] = list(kwargs["values"])
+
         monitor_data_instance = mon_data_type(**kwargs)
         return monitor_data_instance
 
@@ -252,6 +257,7 @@ class ScalarFieldData(MonitorData, ABC):
     x: List[Array[float]]
     y: List[Array[float]]
     z: List[Array[float]]
+    values: List[Union[Array[float], Array[complex]]]
 
     def _make_xarray(self):
         """For field quantities, store a single xarray DataArray for each ``field``.
@@ -313,16 +319,17 @@ class FieldData(FreqData, ScalarFieldData):
         'Hz']``, may also store diagonal components of permittivity tensor as ``'eps_xx', 'eps_yy',
         'eps_zz'``.
     x : ``List[numpy.ndarray]``
-        x locations of each field. ``len(x) == len(fields)``, ``len(x[0]) == num_x``.
+        x locations of each field. ``len(x) == len(fields)``, ``len(x[i]) == num_x``.
     y : ``List[numpy.ndarray]``
-        y locations of each field. ``len(y) == len(fields)``, ``len(y[0]) == num_y``.
+        y locations of each field. ``len(y) == len(fields)``, ``len(y[i]) == num_y``.
     z : ``List[numpy.ndarray]``
-        z locations of each field. ``len(z) == len(fields)``, ``len(z[0]) == num_z``.
+        z locations of each field. ``len(z) == len(fields)``, ``len(z[i]) == num_z``.
     f : ``numpy.ndarray``
         Frequencies of the data (Hz).
-    values : ``numpy.ndarray``
-        Complex-valued array of data values. ``values.shape=(len(field), num_x, num_y, num_z,
-        len(f))``
+    values : ``List[numpy.ndarray]``
+        List of Complex-valued array of data values for each field.
+        ``len(values) == len(fields)``.
+        ``values[i].shape == (x[i], y[i], z[i], len(t))``
 
     Example
     -------
@@ -331,7 +338,7 @@ class FieldData(FreqData, ScalarFieldData):
     >>> x = [np.linspace(-1, 1, 10)]
     >>> y = [np.linspace(-2, 2, 20)]
     >>> z = [np.linspace(0, 0, 1)]
-    >>> values = np.random.random((1, 10, 20, 1, len(f)))
+    >>> values = [np.random.random((10, 20, 1, len(f)))]
     >>> data = FieldData(
     ...     monitor=monitor,
     ...     monitor_name='ex',
@@ -346,7 +353,7 @@ class FieldData(FreqData, ScalarFieldData):
 
     monitor: FieldMonitor
     field: List[FieldType] = ["Ex", "Ey", "Ez", "Hx", "Hy", "Hz"]
-    values: Array[complex]
+    values: List[Array[complex]]
 
     _dims = ("field", "x", "y", "z", "f")
 
@@ -364,15 +371,17 @@ class FieldTimeData(ScalarFieldData, TimeData):
         Electromagnetic fields (E, H) in dtaset defaults to ``['Ex', 'Ey', 'Ez', 'Hx', 'Hy',
         'Hz']``.
     x : ``List[numpy.ndarray]``
-        x locations of each field. ``len(x) == len(fields)``, ``len(x[0]) == num_x``.
+        x locations of each field. ``len(x) == len(fields)``, ``len(x[i]) == num_x``.
     y : ``List[numpy.ndarray]``
-        y locations of each field. ``len(y) == len(fields)``, ``len(y[0]) == num_y``.
+        y locations of each field. ``len(y) == len(fields)``, ``len(y[i]) == num_y``.
     z : ``List[numpy.ndarray]``
-        z locations of each field. ``len(z) == len(fields)``, ``len(z[0]) == num_z``.
+        z locations of each field. ``len(z) == len(fields)``, ``len(z[i]) == num_z``.
     t : ``numpy.ndarray``
         Time of the data (sec).
-    values : ``numpy.ndarray``
-        Real-valued array of data values. ``values.shape=(len(field), num_x, num_y, num_z, len(t))``
+    values : ``List[numpy.ndarray]``
+        List of Real-valued array of data values for each field.
+        ``len(values) == len(fields)``.
+        ``values[i].shape == (x[i], y[i], z[i], len(t))``
 
     Example
     -------
@@ -384,7 +393,7 @@ class FieldTimeData(ScalarFieldData, TimeData):
     >>> z = [np.linspace(0, 0, 1)]
     >>> dt = 1e-13
     >>> t = times * dt
-    >>> values = np.random.random((1, 10, 20, 1, len(t)))
+    >>> values = [np.random.random((10, 20, 1, len(t)))]
     >>> data = FieldTimeData(
     ...     monitor=monitor,
     ...     monitor_name='hy',
@@ -397,7 +406,7 @@ class FieldTimeData(ScalarFieldData, TimeData):
     """
 
     monitor: FieldTimeMonitor
-    values: Array[float]
+    values: List[Array[float]]
 
     _dims = ("field", "x", "y", "z", "t")
 

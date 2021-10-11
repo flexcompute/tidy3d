@@ -44,7 +44,9 @@ class Near2Far:
             for component in "xyz":
                 field_name = em_field + component
                 assert field_name in field_data.field, f"missing field: {field_name}"
-        Ex, Ey, Ez, Hx, Hy, Hz = np.squeeze(field_data.values)
+        field_values = [np.squeeze(fldv) for fldv in field_data.values]
+        Ex, Ey, Ez, Hx, Hy, Hz = field_values
+        Ex
         E = (Ex, Ey, Ez)
         H = (Hx, Hy, Hz)
         _, (self.Ex, self.Ey) = field_data.geometry.pop_axis(E, axis=self.axis)
