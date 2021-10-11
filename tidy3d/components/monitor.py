@@ -18,10 +18,12 @@ class Monitor(Box, ABC):
     """base class for monitors, which all have Box shape"""
 
     @add_ax_if_none
-    def plot(self, ax: Ax = None, **kwargs) -> Ax:
+    def plot(
+        self, x: float = None, y: float = None, z: float = None, ax: Ax = None, **kwargs
+    ) -> Ax:
         """plot monitor geometry"""
         kwargs = MonitorParams().update_params(**kwargs)
-        ax = self.geometry.plot(ax=ax, **kwargs)
+        ax = self.geometry.plot(x=x, y=y, z=z, ax=ax, **kwargs)
         return ax
 
 

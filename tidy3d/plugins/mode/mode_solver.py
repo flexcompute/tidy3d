@@ -151,7 +151,7 @@ class ModeSolver:
         for field in field_values:
             Nx = field.shape[0]
             Ny = field.shape[1]
-            (xmin, ymin, zmin), (xmax, ymax, zmax) = self.plane.get_bounds()
+            (xmin, ymin, zmin), (xmax, ymax, zmax) = self.plane.bounds
             xs.append(np.linspace(xmin, xmax, Nx))
             ys.append(np.linspace(ymin, ymax, Ny))
             zs.append(np.linspace(zmin, zmax, 1))

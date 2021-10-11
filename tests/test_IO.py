@@ -33,10 +33,11 @@ def test_simulation_preserve_types():
             Structure(geometry=Box(size=(1, 1, 1)), medium=Medium()),
             Structure(geometry=Sphere(radius=1), medium=PoleResidue(eps_inf=1, poles=[])),
             Structure(
-                geometry=Cylinder(radius=1, length=1), medium=Lorentz(eps_inf=1.0, coeffs=[])
+                geometry=Cylinder(radius=1, height=1, axis=2),
+                medium=Lorentz(eps_inf=1.0, coeffs=[]),
             ),
             Structure(
-                geometry=PolySlab(vertices=[[0, 0], [2, 3], [4, 3]], slab_bounds=(-1, 1)),
+                geometry=Polyslab(vertices=[[0, 0], [2, 3], [4, 3]], slab_bounds=(-1, 1), axis=2),
                 medium=Sellmeier(coeffs=[]),
             ),
             Structure(geometry=Sphere(radius=1), medium=Debye(eps_inf=1.0, coeffs=[])),
@@ -71,7 +72,7 @@ def test_simulation_preserve_types():
         assert M in M_types
 
     G_types = [type(s.geometry) for s in sim_2.structures]
-    for G in (Box, Sphere, Cylinder, PolySlab):
+    for G in (Box, Sphere, Cylinder, Polyslab):
         assert G in G_types
 
     S_types = [type(s) for s in sim_2.sources.values()]

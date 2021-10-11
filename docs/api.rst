@@ -4,18 +4,44 @@ API Reference
 
 .. currentmodule:: tidy3d
 
-Components
-==========
+Defining Simulations
+====================
 
-Simulation Specification
-------------------------
+Base Simulation Definition
+--------------------------
 
 .. autosummary::
    :toctree: _autosummary/
 
    Simulation
-   Simulation
    PMLLayer
+
+
+Geometry
+--------
+
+.. autosummary::
+   :toctree: _autosummary/
+
+   Box
+   Sphere
+   Cylinder
+   Polyslab
+
+Physical Objects
+----------------
+
+.. autosummary::
+   :toctree: _autosummary/
+
+   Structure
+   Medium
+   PoleResidue
+   Sellmeier
+   Debye
+   Lorentz
+   plugins.DispersionFitter
+   .. material_library
 
 
 Monitors
@@ -170,7 +196,7 @@ Near Field to Far Field Transformation
 ..    Box
 ..    Sphere
 ..    Cylinder
-..    PolySlab
+..    Polyslab
 
 
 .. Medium
