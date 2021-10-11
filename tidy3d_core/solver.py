@@ -45,9 +45,9 @@ def solve(simulation: Simulation) -> SolverDataDict:
 
             Nx, Ny, Nz = len(x), len(y), len(z)
             num_fields = data_array.shape[0]
-            x_expanded = x * np.ones((num_fields, Nx))
-            y_expanded = y * np.ones((num_fields, Ny))
-            z_expanded = z * np.ones((num_fields, Nz))
+            x_expanded = num_fields * [x]
+            y_expanded = num_fields * [y]
+            z_expanded = num_fields * [z]
             data_dict[name] = {
                 "field": monitor.fields,
                 "x": x_expanded,
@@ -68,7 +68,7 @@ def solve(simulation: Simulation) -> SolverDataDict:
                 sampler_label: sampler_values,
             }
         data_dict[name]["monitor_name"] = name
-        print(monitor.type, np.mean(data_dict[name]["values"]))
+
     return data_dict
 
 
