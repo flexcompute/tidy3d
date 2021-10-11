@@ -147,9 +147,9 @@ class ModeSolver:
         # note: re-discretizing, need to make consistent.
         (_, Nx, Ny, _) = field_values.shape
         (xmin, ymin, zmin), (xmax, ymax, zmax) = self.plane.get_bounds()
-        xs = np.ones((6, 1)) * np.linspace(xmin, xmax, Nx)
-        ys = np.ones((6, 1)) * np.linspace(ymin, ymax, Ny)
-        zs = np.ones((6, 1)) * np.linspace(zmin, zmax, 1)
+        xs = 6 * [np.linspace(xmin, xmax, Nx)]
+        ys = 6 * [np.linspace(ymin, ymax, Ny)]
+        zs = 6 * [np.linspace(zmin, zmax, 1)]
 
         n_eff_complex = n_eff_complex[mode.mode_index]
 

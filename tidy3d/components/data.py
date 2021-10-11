@@ -199,6 +199,11 @@ class MonitorData(Tidy3dData, ABC):
             if kwargs.get(str_kwarg) is not None:
                 kwargs[str_kwarg] = _process_string_kwarg(kwargs[str_kwarg])
 
+        # handle data stored as np.array() of bytes instead of strings
+        for str_kwarg in ("x", "y", "z"):
+            if kwargs.get(str_kwarg) is not None:
+                kwargs[str_kwarg] = kwargs[str_kwarg].tolist()
+
         # convert name to string and add monitor to kwargs
         kwargs["monitor_name"] = str(kwargs["monitor_name"])
         kwargs["monitor"] = monitor
@@ -244,9 +249,9 @@ class ScalarFieldData(MonitorData, ABC):
 
     monitor: ScalarFieldMonitor
     field: List[EMField] = ["Ex", "Ey", "Ez", "Hx", "Hy", "Hz"]
-    x: Array[float]
-    y: Array[float]
-    z: Array[float]
+    x: List[Array[float]]
+    y: List[Array[float]]
+    z: List[Array[float]]
 
     def _make_xarray(self):
         """For field quantities, store a single xarray DataArray for each ``field``.
@@ -307,15 +312,15 @@ class FieldData(FreqData, ScalarFieldData):
         Electromagnetic fields (E, H) in dtaset defaults to ``['Ex', 'Ey', 'Ez', 'Hx', 'Hy',
         'Hz']``, may also store diagonal components of permittivity tensor as ``'eps_xx', 'eps_yy',
         'eps_zz'``.
-    x : `np.ndarray <https://numpy.org/doc/stable/reference/generated/numpy.ndarray.html>`__
-        x locations of each field and component. ``x.shape=(len(fields), num_x)``.
-    y : `np.ndarray <https://numpy.org/doc/stable/reference/generated/numpy.ndarray.html>`__
-        y locations of each field and component. ``y.shape=(len(fields), num_y)``.
-    z : `np.ndarray <https://numpy.org/doc/stable/reference/generated/numpy.ndarray.html>`__
-        z locations of each field and component. ``z.shape=(len(fields), num_z)``.
-    f : `np.ndarray <https://numpy.org/doc/stable/reference/generated/numpy.ndarray.html>`__
+    x : ``List[numpy.ndarray]``
+        x locations of each field. ``len(x) == len(fields)``, ``len(x[0]) == num_x``.
+    y : ``List[numpy.ndarray]``
+        y locations of each field. ``len(y) == len(fields)``, ``len(y[0]) == num_y``.
+    z : ``List[numpy.ndarray]``
+        z locations of each field. ``len(z) == len(fields)``, ``len(z[0]) == num_z``.
+    f : ``numpy.ndarray``
         Frequencies of the data (Hz).
-    values : `np.ndarray <https://numpy.org/doc/stable/reference/generated/numpy.ndarray.html>`__
+    values : ``numpy.ndarray``
         Complex-valued array of data values. ``values.shape=(len(field), num_x, num_y, num_z,
         len(f))``
 
@@ -323,9 +328,9 @@ class FieldData(FreqData, ScalarFieldData):
     -------
     >>> f = np.linspace(2e14, 3e14, 1001)
     >>> monitor = FieldMonitor(fields=['Ex'], size=(2, 4, 0), freqs=f)
-    >>> x = np.linspace(-1, 1, 10)[None, :] # add first dimension for field
-    >>> y = np.linspace(-2, 2, 20)[None, :] # add first dimension for field
-    >>> z = np.linspace(0, 0, 1)[None, :]   # add first dimension for field
+    >>> x = [np.linspace(-1, 1, 10)]
+    >>> y = [np.linspace(-2, 2, 20)]
+    >>> z = [np.linspace(0, 0, 1)]
     >>> values = np.random.random((1, 10, 20, 1, len(f)))
     >>> data = FieldData(
     ...     monitor=monitor,
@@ -358,15 +363,15 @@ class FieldTimeData(ScalarFieldData, TimeData):
     field : List[str], optional
         Electromagnetic fields (E, H) in dtaset defaults to ``['Ex', 'Ey', 'Ez', 'Hx', 'Hy',
         'Hz']``.
-    x : `np.ndarray <https://numpy.org/doc/stable/reference/generated/numpy.ndarray.html>`__
-        x locations of each field. ``x.shape=(len(fields), num_x)``.
-    y : `np.ndarray <https://numpy.org/doc/stable/reference/generated/numpy.ndarray.html>`__
-        y locations of each field. ``y.shape=(len(fields), num_y)``.
-    z : `np.ndarray <https://numpy.org/doc/stable/reference/generated/numpy.ndarray.html>`__
-        z locations of each field. ``z.shape=(len(fields), num_z)``.
-    t : `np.ndarray <https://numpy.org/doc/stable/reference/generated/numpy.ndarray.html>`__
+    x : ``List[numpy.ndarray]``
+        x locations of each field. ``len(x) == len(fields)``, ``len(x[0]) == num_x``.
+    y : ``List[numpy.ndarray]``
+        y locations of each field. ``len(y) == len(fields)``, ``len(y[0]) == num_y``.
+    z : ``List[numpy.ndarray]``
+        z locations of each field. ``len(z) == len(fields)``, ``len(z[0]) == num_z``.
+    t : ``numpy.ndarray``
         Time of the data (sec).
-    values : `np.ndarray <https://numpy.org/doc/stable/reference/generated/numpy.ndarray.html>`__
+    values : ``numpy.ndarray``
         Real-valued array of data values. ``values.shape=(len(field), num_x, num_y, num_z, len(t))``
 
     Example
@@ -374,9 +379,9 @@ class FieldTimeData(ScalarFieldData, TimeData):
 
     >>> times = np.arange(0, 1000, 101)
     >>> monitor = FieldTimeMonitor(fields=['Hy'], size=(2, 4, 0), times=times)
-    >>> x = np.linspace(-1, 1, 10)[None, :] # add first dimension for field
-    >>> y = np.linspace(-2, 2, 20)[None, :] # add first dimension for field
-    >>> z = np.linspace(0, 0, 1)[None, :]   # add first dimension for field
+    >>> x = [np.linspace(-1, 1, 10)]
+    >>> y = [np.linspace(-2, 2, 20)]
+    >>> z = [np.linspace(0, 0, 1)]
     >>> dt = 1e-13
     >>> t = times * dt
     >>> values = np.random.random((1, 10, 20, 1, len(t)))
@@ -406,9 +411,9 @@ class FluxData(AbstractFluxData, FreqData):
         original :class:`Monitor` object corresponding to data.
     monitor_name : str
         Name of original :class:`Monitor` in the original :attr:`Simulation.monitors` dictionary..
-    f : `np.ndarray <https://numpy.org/doc/stable/reference/generated/numpy.ndarray.html>`__
+    f : ``numpy.ndarray``
         Frequencies of the data (Hz).
-    values : `np.ndarray <https://numpy.org/doc/stable/reference/generated/numpy.ndarray.html>`__
+    values : ``numpy.ndarray``
         Complex-valued array of data values. ``values.shape=(len(f),)``
 
     Example
@@ -435,9 +440,9 @@ class FluxTimeData(AbstractFluxData, TimeData):
         Original :class:`Monitor` object corresponding to data.
     monitor_name : ``str``
         Name of original :class:`Monitor` in the original :attr:`Simulation.monitors` dictionary.
-    t : `np.ndarray <https://numpy.org/doc/stable/reference/generated/numpy.ndarray.html>`__
+    t : ``numpy.ndarray``
         Times of the data (sec).
-    values : `np.ndarray <https://numpy.org/doc/stable/reference/generated/numpy.ndarray.html>`__
+    values : ``numpy.ndarray``
         Real-valued array of data values. ``values.shape=(len(t),)``
 
     Example
@@ -468,12 +473,12 @@ class ModeData(PlanarData, FreqData):
         Name of original :class:`Monitor` in the original :attr:`Simulation.monitors` dictionary.
     direction : ``List[Literal["+", "-"]]``
         Direction in which the modes are propagating (normal to monitor plane).
-    mode_index : `np.ndarray <https://numpy.org/doc/stable/reference/generated/numpy.ndarray.html>`__
+    mode_index : ``numpy.ndarray``
         Array of integers into :attr:`ModeMonitor.modes` specifying the mode corresponding to this
         index.
-    f : `np.ndarray <https://numpy.org/doc/stable/reference/generated/numpy.ndarray.html>`__
+    f : ``numpy.ndarray``
         Frequencies of the data (Hz).
-    values : `np.ndarray <https://numpy.org/doc/stable/reference/generated/numpy.ndarray.html>`__
+    values : ``numpy.ndarray``
         Complex-valued array of data values. ``values.shape=(len(direction), len(mode_index),
         len(f))``
 
@@ -520,7 +525,7 @@ monitor_data_map = {
 
 
 class SimulationData(Tidy3dData):
-    """Holds simulation and its :class:`Monitor`\s' data.
+    """Holds simulation and its :class:`Monitor` data.
 
     Parameters
     ----------
