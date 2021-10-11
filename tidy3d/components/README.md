@@ -91,7 +91,7 @@ pydantic.BaseModel
 
 The `Geometry` component is used to define the layout of objects with a spatial component.
 
-Each `Geometry` subclass implements a `._get_bounds(self)` method, which returns the min and max coordinates of a bounding box around the structure.
+Each `Geometry` subclass implements a `._bounds(self)` method, which returns the min and max coordinates of a bounding box around the structure.
 
 The base class also implements a `._instersects(self, other)` method, which returns True if the bounding boxes of `self` and `other` intersect.
 This is useful for error checking of the simulation.
@@ -100,7 +100,7 @@ The following subclasses of `Geometry` are importable and often subclassed in th
 - `Box(center, size)`
 - `Sphere(center, radius)`
 - `Cylinder(center, radius, length, axis)`
-- `PolySlab(vertices, slab_bounds, axis)`
+- `Polyslab(vertices, slab_bounds, axis)`
 
 ### Simulation
 

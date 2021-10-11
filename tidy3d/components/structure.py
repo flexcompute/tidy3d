@@ -14,6 +14,8 @@ class Structure(Tidy3dBaseModel):
     medium: MediumType
 
     @add_ax_if_none
-    def plot(self, ax=None, **kwargs) -> Ax:
+    def plot(
+        self, x: float = None, y: float = None, z: float = None, ax: Ax = None, **kwargs
+    ) -> Ax:
         """plot geometry"""
-        return self.geometry.plot(ax=ax, **kwargs)
+        return self.geometry.plot(ax=ax, x=x, y=y, z=z, **kwargs)
