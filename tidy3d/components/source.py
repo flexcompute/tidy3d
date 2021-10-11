@@ -120,10 +120,12 @@ class Source(Box, ABC):
     source_time: SourceTimeType
 
     @add_ax_if_none
-    def plot(self, ax: Ax = None, **kwargs) -> Ax:
+    def plot(
+        self, x: float = None, y: float = None, z: float = None, ax: Ax = None, **kwargs
+    ) -> Ax:
         """plot source geometry"""
         kwargs = SourceParams().update_params(**kwargs)
-        ax = self.geometry.plot(ax=ax, **kwargs)
+        ax = self.geometry.plot(x=x, y=y, z=z, ax=ax, **kwargs)
         return ax
 
 

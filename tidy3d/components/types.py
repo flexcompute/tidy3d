@@ -11,6 +11,7 @@ except ImportError:
 import pydantic
 import numpy as np
 from matplotlib.axes._subplots import Axes
+from shapely.geometry.base import BaseGeometry
 
 from ..constants import inf
 
@@ -28,6 +29,7 @@ Bound = Tuple[Coordinate, Coordinate]
 GridSize = Union[pydantic.PositiveFloat, List[pydantic.PositiveFloat]]
 Axis = Literal[0, 1, 2]
 Vertices = List[Coordinate2D]
+Shapely = BaseGeometry
 
 """ medium """
 

@@ -163,17 +163,25 @@
 - [x] **Refactor Monitor / MonitorData**
 	- [x] Combine fields components (Ex, Ey, Ez, ...)
 	- [x] Put permittivity monitor into freq-domain field data.
-- [ ] **Get rid of pydantic**?
-	- [ ] Need custom validators?
-	- [ ] JSON load export
-	- [ ] Autodocs?
-	- [ ] Input arguments validated?
-	- [ ] Numpy support?
+- [x] Get rid of pydantic? <- Not doing it
+- [ ] Simplify MonitorData
+    - [ ] remove MonitorData.monitor  and MonitorData.monitor_name attributes.
+    - [ ] remove MonitorData.load() and MonitorData.export()
+    - [ ] assert all SimulationData.monitor_data.keys() are in SimulationData.simulation.monitor.keys()
+    - [ ] provide optional args to SimulationData.export() to only export some MonitorData by key
+    - [ ] Move any interfaces in MonitorData to SimulationData (geometry, plotting, etc).
+    - [ ] Remove unneeded data or monitor maps.
+    - [ ] Make monitordata.load_from_data aware of lists
 - [ ] Use shapely for geometry ops / plotting?  `Geometry.geo(x=0)` -> shapely representation.
-- [ ] Handle kwargs better for geometry plotting ``(x: float = None, y : float = None, ...)`
-- [ ] Fix overlapping structure plotting.
-- [ ] Way to get rid of monitor maps and monitor data maps without circular imports?
-- [ ] Fix MyPy warnings. <- too many stupid ones? ..
+	- [x] Fix all tests.
+	- [x] Integrate shapely plotting / kwargs.
+	- [x] Catch edge case where new shape intersects with **two** shapes of the same medium.
+	- [x] Integrate overlapping shape plotting using intersection.
+	- [x] Clean up arguments to polyslab.
+	- [ ] Clean up pylint and org issues.
+	- [x] use xmin, ymin, ... = `Geometry.intersections(axis).bounds` to ``get_bounds()``
+	- [ ] Integrate shapely ops into bounds checking / intersection checking.
+- [x] Fix MyPy warnings. <- too many stupid ones? ..
 - [ ] Add Logging.
 - [ ] Migrate notebooks into static tests.
 - [ ] Interactive visualization?
@@ -239,14 +247,19 @@ https://github.com/crusaderky/python_project_template
 - [ ] Release publicly! :partying_face:
 ---
 
-### Entensions
-- [ ] Simple gui?  https://github.com/hoffstadt/DearPyGui
-- [ ] 3 panel lumerical style plot `Simulation.visualize()`
-- [ ] 3D structure plotting (matplotlib?)
-- [ ] S matrix plugin
-- [ ] Optimizer plugin
-- [ ] More advanced plotting
-- [ ] Angled sources
-- [ ] Angled Sidewalls
-- [ ] Simple yaml editor? flask app
-- [ ] Output Simulation as blender file
+### Extensions
+- [ ] Geometry
+	- [ ] Erosion / Dilation of polyslabs
+	- [ ] Vectorize / automatic `inside` based on `intersections`
+	- [ ] Rotations of shapes (x=None, y=None, z=None -> ax+by+cz=0)
+	- [ ] Angled sidewalls.
+	- [ ] Angled sources, monitors.
+- [ ] Visualization
+	- [ ] Simple gui?  https://github.com/hoffstadt/DearPyGui
+	- [ ] 3 panel lumerical style plot `Simulation.visualize()`
+	- [ ] 3D structure plotting (matplotlib?)
+	- [ ] Output Simulation as blender file
+- [ ] Plugins
+	- [ ] S matrix plugin
+	- [ ] Optimizer plugin
+	- [ ] Simple yaml editor? flask app
