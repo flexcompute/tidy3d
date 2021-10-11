@@ -140,16 +140,21 @@ class ModeSolver:
             H_tmp = H[:, :, 1:, ...]
             E = np.concatenate((+E_tmp[:, :, ::-1, ...], E_tmp), axis=2)
             H = np.concatenate((-H_tmp[:, :, ::-1, ...], H_tmp), axis=2)
-        Ex, Ey, Ez = E
-        Hx, Hy, Hz = H
-        field_values = np.stack((Ex, Ey, Ez, Hx, Hy, Hz), axis=0)
+        Ex, Ey, Ez = E[..., None]
+        Hx, Hy, Hz = H[..., None]
+        field_values = [Ex, Ey, Ez, Hx, Hy, Hz]
 
         # note: re-discretizing, need to make consistent.
-        (_, Nx, Ny, _) = field_values.shape
-        (xmin, ymin, zmin), (xmax, ymax, zmax) = self.plane.get_bounds()
-        xs = 6 * [np.linspace(xmin, xmax, Nx)]
-        ys = 6 * [np.linspace(ymin, ymax, Ny)]
-        zs = 6 * [np.linspace(zmin, zmax, 1)]
+        xs = []
+        ys = []
+        zs = []
+        for field in field_values:
+            Nx = field.shape[0]
+            Ny = field.shape[1]
+            (xmin, ymin, zmin), (xmax, ymax, zmax) = self.plane.get_bounds()
+            xs.append(np.linspace(xmin, xmax, Nx))
+            ys.append(np.linspace(ymin, ymax, Ny))
+            zs.append(np.linspace(zmin, zmax, 1))
 
         n_eff_complex = n_eff_complex[mode.mode_index]
 
@@ -160,7 +165,7 @@ class ModeSolver:
         field_data = FieldData(
             monitor=field_monitor,
             monitor_name="mode_solver_plane_fields",
-            values=field_values[..., None],
+            values=field_values,
             x=xs,
             y=ys,
             z=zs,

@@ -32,7 +32,7 @@ def test_near2far():
         y=6 * [np.linspace(-1, 1, 10)],
         z=6 * [np.array([0.0])],
         f=np.array([1.0]),
-        values=np.random.random((6, 10, 10, 1, 1)),
+        values=6 * [np.random.random((10, 10, 1, 1))],
     )
 
     n2f = Near2Far(field_data)

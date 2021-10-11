@@ -39,12 +39,8 @@ def solve(simulation: Simulation) -> SolverDataDict:
             data_array_list = []
             for field_name in monitor.fields:
                 field_component = field_data_dict[field_name]
-                data_array_list.append(field_component)
-            data_array = np.stack(data_array_list, axis=0)
-            data_array = value_fn(data_array)
-
-            Nx, Ny, Nz = len(x), len(y), len(z)
-            num_fields = data_array.shape[0]
+                data_array_list.append(value_fn(field_component))
+            num_fields = len(monitor.fields)
             x_expanded = num_fields * [x]
             y_expanded = num_fields * [y]
             z_expanded = num_fields * [z]
@@ -53,7 +49,7 @@ def solve(simulation: Simulation) -> SolverDataDict:
                 "x": x_expanded,
                 "y": y_expanded,
                 "z": z_expanded,
-                "values": value_fn(data_array),
+                "values": data_array_list,
                 sampler_label: sampler_values,
             }
         elif isinstance(monitor, AbstractFluxMonitor):
