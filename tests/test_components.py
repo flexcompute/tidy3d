@@ -26,7 +26,7 @@ def test_sim():
             ),
             Structure(geometry=Sphere(radius=1.4, center=(1.0, 0.0, 1.0)), medium=Medium()),
             Structure(
-                geometry=Cylinder(radius=1.4, height=2.0, center=(1.0, 0.0, -1.0), axis=1),
+                geometry=Cylinder(radius=1.4, length=2.0, center=(1.0, 0.0, -1.0), axis=1),
                 medium=Medium(),
             ),
         ],
@@ -133,26 +133,26 @@ def test_geometry():
 
     b = Box(size=(1, 1, 1), center=(0, 0, 0))
     s = Sphere(radius=1, center=(0, 0, 0))
-    s = Cylinder(radius=1, center=(0, 0, 0), axis=1, height=1)
-    s = Polyslab(vertices=((1, 2), (3, 4), (5, 4)), slab_bounds=(-1, 1), axis=1)
+    s = Cylinder(radius=1, center=(0, 0, 0), axis=1, length=1)
+    s = PolySlab(vertices=((1, 2), (3, 4), (5, 4)), slab_bounds=(-1, 1), axis=1)
 
     # make sure wrong axis arguments error
     with pytest.raises(pydantic.ValidationError) as e_info:
-        s = Cylinder(radius=1, center=(0, 0, 0), axis=-1, height=1)
+        s = Cylinder(radius=1, center=(0, 0, 0), axis=-1, length=1)
     with pytest.raises(pydantic.ValidationError) as e_info:
-        s = Polyslab(radius=1, center=(0, 0, 0), axis=-1, slab_bounds=(-0.5, 0.5))
+        s = PolySlab(radius=1, center=(0, 0, 0), axis=-1, slab_bounds=(-0.5, 0.5))
     with pytest.raises(pydantic.ValidationError) as e_info:
-        s = Cylinder(radius=1, center=(0, 0, 0), axis=3, height=1)
+        s = Cylinder(radius=1, center=(0, 0, 0), axis=3, length=1)
     with pytest.raises(pydantic.ValidationError) as e_info:
-        s = Polyslab(radius=1, center=(0, 0, 0), axis=3, slab_bounds=(-0.5, 0.5))
+        s = PolySlab(radius=1, center=(0, 0, 0), axis=3, slab_bounds=(-0.5, 0.5))
 
     # make sure negative values error
     with pytest.raises(pydantic.ValidationError) as e_info:
         s = Sphere(radius=-1, center=(0, 0, 0))
     with pytest.raises(pydantic.ValidationError) as e_info:
-        s = Cylinder(radius=-1, center=(0, 0, 0), axis=3, height=1)
+        s = Cylinder(radius=-1, center=(0, 0, 0), axis=3, length=1)
     with pytest.raises(pydantic.ValidationError) as e_info:
-        s = Cylinder(radius=1, center=(0, 0, 0), axis=3, height=-1)
+        s = Cylinder(radius=1, center=(0, 0, 0), axis=3, length=-1)
 
 
 def test_geometry_sizes():

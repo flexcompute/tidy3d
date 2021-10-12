@@ -753,7 +753,7 @@ class Cylinder(Circular, Planar):
         return (tuple(coord_min), tuple(coord_max))
 
 
-class Polyslab(Planar):
+class PolySlab(Planar):
     """Polygon with constant thickness along 3rd axis.
 
     Parameters
@@ -767,13 +767,13 @@ class Polyslab(Planar):
 
     Example
     -------
-    >>> p = Polyslab(vertices=[(0,0), (1,0), (1,1)], axis=2, slab_bounds=(-1, 1))
+    >>> p = PolySlab(vertices=[(0,0), (1,0), (1,1)], axis=2, slab_bounds=(-1, 1))
     """
 
     length: pydantic.NonNegativeFloat = None
     slab_bounds: Tuple[float, float]
     vertices: Vertices
-    type: Literal["Polyslab"] = "Polyslab"
+    type: Literal["PolySlab"] = "PolySlab"
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -955,5 +955,5 @@ class Polyslab(Planar):
         return (tuple(coords_min), tuple(coords_max))
 
 
-GeometryFields = (Box, Sphere, Cylinder, Polyslab)
+GeometryFields = (Box, Sphere, Cylinder, PolySlab)
 GeometryType = Union[GeometryFields]
