@@ -3,7 +3,7 @@
 from .simulation import Simulation
 
 from .pml import PMLLayer
-from .geometry import Box, Sphere, Cylinder, Polyslab
+from .geometry import Box, Sphere, Cylinder, PolySlab
 from .geometry import Geometry
 from .structure import Structure
 from .medium import Medium, PoleResidue, Sellmeier, Debye, Lorentz
