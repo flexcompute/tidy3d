@@ -138,8 +138,8 @@ def old_json_structures(sim: Simulation) -> Tuple[List[Dict], List[Dict]]:
                     "vertices": geom.vertices,
                     "z_cent": (geom.slab_bounds[0] + geom.slab_bounds[1]) / 2,
                     "z_size": geom.slab_bounds[1] - geom.slab_bounds[0],
-                    "slant_angle": geom.sidewall_angle_rad,
-                    "dilation": geom.dilation,
+                    # "slant_angle": geom.sidewall_angle_rad,
+                    # "dilation": geom.dilation,
                 }
             )
             struct_list.append(struct)

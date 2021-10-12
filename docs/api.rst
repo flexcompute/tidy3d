@@ -26,7 +26,7 @@ Geometry
    Box
    Sphere
    Cylinder
-   Polyslab
+   PolySlab
 
 Physical Objects
 ----------------
@@ -196,7 +196,7 @@ Near Field to Far Field Transformation
 ..    Box
 ..    Sphere
 ..    Cylinder
-..    Polyslab
+..    PolySlab
 
 
 .. Medium

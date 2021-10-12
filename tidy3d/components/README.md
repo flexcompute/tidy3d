@@ -68,7 +68,7 @@ pydantic.BaseModel
 					ModeMonitor
 			Sphere
 			Cylinder
-			Polyslab
+			PolySlab
 		PMLLayer
 		AbstractMedium
 			Medium
@@ -100,7 +100,7 @@ The following subclasses of `Geometry` are importable and often subclassed in th
 - `Box(center, size)`
 - `Sphere(center, radius)`
 - `Cylinder(center, radius, length, axis)`
-- `Polyslab(vertices, slab_bounds, axis)`
+- `PolySlab(vertices, slab_bounds, axis)`
 
 ### Simulation
 
