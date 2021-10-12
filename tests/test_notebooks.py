@@ -11,7 +11,7 @@ from nbconvert.preprocessors import ExecutePreprocessor
 
 sys.path.append("./")
 
-ep = ExecutePreprocessor(timeout=1000)
+ep = ExecutePreprocessor(timeout=1000, kernel_name="python3")
 
 # get all notebook files
 notebook_directory = "notebooks/"
