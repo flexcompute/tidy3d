@@ -140,11 +140,17 @@
 ---
 
 #### Web Integration (requires solver integration)
-- [ ] refactor webapi using conversion.
-- [ ] add http / authentication etc.
-- [ ] Nice web api plotting / progressbars using `rich`.
-- [ ] Set up so that daemon recgonizes new json files.
-- [ ] Test test test.
+- [ ] Get webAPI working with conversion
+	- [ ] refactor webapi internals.
+	- [ ] add http / authentication etc.
+	- [ ] hook webapi to conversion.
+	- [ ] Test with simple run.
+	- [ ] Add some example notebooks using supported sources / monitors.
+	- [ ] Include Nice web api plotting / progressbars using `rich`.
+- [ ] Get webAPI working without conversion.
+	- [ ] Use native `Simulation.export()` or `Simulation.json()` for ``upload()`.
+	- [ ] Use native `SimulationData.load()` for `load()`.
+- [ ] Test test test and then test more.
 ---
 
 #### Finishing Integration
@@ -186,8 +192,31 @@
 - [ ] Add Logging.
 - [ ] Migrate notebooks into static tests.
 - [ ] Add PEC PMC.
+- [ ] Handle Inf as it's own keyword that depends on simulation bounds.
 - [ ] Make Uniform Samplers separate classes? (dont evaluate / store freqs, times)?
 - [ ] setup.cfg for installing packages with more granularity (base, docs, tests)
+---
+
+#### Momchil's To Do Notes
+- [ ] Front end
+	- [ ] More discussion in Simulation docs.
+	- [ ] Courant 0.99 stable? Adjust range of acceptable values.
+	- [ ] Support nonuniform coordinates.
+	- [ ] Support Medium names eventually.
+	- [ ] Support diagonal anisotropy.
+	- [ ] GDS slab import (+shapely import).
+	- [ ] If using "polarization" kwarg, specify 'J' or 'E' in source?.
+- [ ] Conversion
+	- [ ] Find proper way to link tidy3d and tidy3d core. (core imports local copy of Simulation always updated and on main branch by default?).
+	- [ ] Convert dispersive models to PoleResidue.
+	- [ ] Support plane wave, gaussian beam, modesource in JSON conversion.
+	- [ ] Support mode monitor, permittivity monitor in JSON conversion.	
+- [ ] Data
+	- [ ] Provide optional args to only export the `MonitorData` of selected `Monitor`s.
+	- [ ] Wrap string conversion in MonitorLoad in helper function.
+	- [ ] Assert SimulationData's monitor names exist in original Simulation.
+	- [ ] Solver field data evaluated at yee cell locations, sufficient to interpolate values anywhere in monitor volume.
+	- [ ] Eliminate need for storing `monitor_name` in `MonitorData`.
 ---
 
 ### Stage 3: Refining
@@ -199,6 +228,7 @@ https://github.com/crusaderky/python_project_template
 
 - [ ] Finalize writing of internal documentation (1 week)
 	- [ ] Add and edit docstrings to all.
+	- [ ] Add example code snippets to everything.
 - [ ] Set up documentation (1 week)
 	- [x] Make pydantic autosummaries more pretty.
 	- [ ] Move Docs into repo.
@@ -207,9 +237,11 @@ https://github.com/crusaderky/python_project_template
 		- [x] Loading data.
 		- [x] Visualizing data.
 		- [ ] Batch simulation.
-	- [ ] How to include material library explanation?
+	- [ ] Include material library.
+	- [ ] make docs pretty,
 	- [ ] Move tidy3d notebooks into repo, make them work with new code.
-	- [ ] test binder links.
+	- [ ] set up and test binder links.
+	- [ ] Separate notebooks / docs into its own repo?
 ---
 
 #### Testing
@@ -218,7 +250,7 @@ https://github.com/crusaderky/python_project_template
 	- [x] Test simulation.json validation / error catching.
 	- [x] Test plugins.
 	- [x] Test notebooks.
-	- [ ] Test submitting jobs if possible.
+	- [ ] Test submitting jobs if possible <- do this on tidy3dcore tests?
 	- [ ] Import and integrate tests from existing solvers.
 ---
 
@@ -243,6 +275,7 @@ https://github.com/crusaderky/python_project_template
 
 #### Final
 - [ ] Finding bugs and fixing things, testing (2 weeks)
+- [ ] White paper on arxiv?
 - [ ] Release publicly! :partying_face:
 ---
 

@@ -334,7 +334,7 @@ class FieldData(FreqData, ScalarFieldData):
     Example
     -------
     >>> f = np.linspace(2e14, 3e14, 1001)
-    >>> monitor = FieldMonitor(fields=['Ex'], size=(2, 4, 0), freqs=f)
+    >>> monitor = FieldMonitor(fields=['Ex'], size=(2, 4, 0), freqs=list(f))
     >>> x = [np.linspace(-1, 1, 10)]
     >>> y = [np.linspace(-2, 2, 20)]
     >>> z = [np.linspace(0, 0, 1)]
@@ -387,7 +387,7 @@ class FieldTimeData(ScalarFieldData, TimeData):
     -------
 
     >>> times = np.arange(0, 1000, 101)
-    >>> monitor = FieldTimeMonitor(fields=['Hy'], size=(2, 4, 0), times=times)
+    >>> monitor = FieldTimeMonitor(fields=['Hy'], size=(2, 4, 0), times=list(times))
     >>> x = [np.linspace(-1, 1, 10)]
     >>> y = [np.linspace(-2, 2, 20)]
     >>> z = [np.linspace(0, 0, 1)]
@@ -429,7 +429,7 @@ class FluxData(AbstractFluxData, FreqData):
     -------
 
     >>> f = np.linspace(2e14, 3e14, 1001)
-    >>> monitor = FluxMonitor(size=(2, 4, 0), freqs=f)
+    >>> monitor = FluxMonitor(size=(2, 4, 0), freqs=list(f))
     >>> values = np.random.random((1001,))
     >>> data = FluxData(monitor=monitor, monitor_name='flux', values=values, f=f)
     """
@@ -458,7 +458,7 @@ class FluxTimeData(AbstractFluxData, TimeData):
     -------
 
     >>> times = np.arange(0, 1000, 51)
-    >>> monitor = FluxTimeMonitor(size=(2, 4, 0), times=times)
+    >>> monitor = FluxTimeMonitor(size=(2, 4, 0), times=list(times))
     >>> dt = 1e-13
     >>> t = times * dt
     >>> values = np.random.random(times.shape)
@@ -496,7 +496,7 @@ class ModeData(PlanarData, FreqData):
 
     >>> f = np.linspace(2e14, 3e14, 1001)
     >>> modes = [Mode(mode_index=0), Mode(mode_index=1)]
-    >>> monitor = ModeMonitor(direction=['+'], size=(2, 4, 0), modes=modes, freqs=f)
+    >>> monitor = ModeMonitor(direction=['+'], size=(2, 4, 0), modes=modes, freqs=list(f))
     >>> values = (1+1j) * np.random.random((1, 2, 1001))
     >>> data = ModeData(
     ...     monitor=monitor,
@@ -549,7 +549,7 @@ class SimulationData(Tidy3dData):
 
     >>> f = np.linspace(2e14, 3e14, 1001)
     >>> mnt_name = 'flux'
-    >>> flux_monitor = FluxMonitor(size=(2, 4, 0), freqs=f)
+    >>> flux_monitor = FluxMonitor(size=(2, 4, 0), freqs=list(f))
     >>> simulation = Simulation(
     ...     size=(4,4,4),
     ...     grid_size=(0.1, 0.1, 0.1),

@@ -4,7 +4,7 @@ from typing import List, Union
 
 import numpy as np
 
-from .types import Literal, Ax, Direction, FieldType, FloatArrayLike, IntArrayLike, EMField
+from .types import Literal, Ax, Direction, FieldType, EMField
 from .geometry import Box
 from .validators import assert_plane
 from .mode import Mode
@@ -45,13 +45,13 @@ class Monitor(Box, ABC):
 class FreqMonitor(Monitor, ABC):
     """stores data in frequency domain"""
 
-    freqs: FloatArrayLike
+    freqs: List[float]
 
 
 class TimeMonitor(Monitor, ABC):
     """stores data in time domain"""
 
-    times: IntArrayLike
+    times: List[int]
 
 
 class ScalarFieldMonitor(Monitor, ABC):
@@ -192,19 +192,19 @@ MonitorType = Union[tuple(monitor_type_map.values())]
 """
 
 
-def _uniform_arange(start: int, stop: int, step: int) -> IntArrayLike:
+def _uniform_arange(start: int, stop: int, step: int) -> List[int]:
     """uniform spacing from start to stop with spacing of step."""
     assert start <= stop, "start must not be greater than stop"
     return list(np.arange(start, stop, step))
 
 
-def _uniform_linspace(start: float, stop: float, num: int) -> FloatArrayLike:
+def _uniform_linspace(start: float, stop: float, num: int) -> List[float]:
     """uniform spacing from start to stop with num elements."""
     assert start <= stop, "start must not be greater than stop"
     return list(np.linspace(start, stop, num))
 
 
-def uniform_times(t_start: int, t_stop: int, t_step: int = 1) -> IntArrayLike:
+def uniform_times(t_start: int, t_stop: int, t_step: int = 1) -> List[int]:
     """create times at evenly spaced steps."""
     assert isinstance(t_start, int), "`t_start` must be integer for time sampler"
     assert isinstance(t_stop, int), "`t_stop` must be integer for time sampler"
@@ -213,7 +213,7 @@ def uniform_times(t_start: int, t_stop: int, t_step: int = 1) -> IntArrayLike:
     return times
 
 
-def uniform_freqs(f_start: float, f_stop: float, num_freqs: int) -> FloatArrayLike:
+def uniform_freqs(f_start: float, f_stop: float, num_freqs: int) -> List[float]:
     """create frequencies at evenly spaced points."""
     freqs = _uniform_linspace(f_start, f_stop, num_freqs)
     return freqs
