@@ -110,33 +110,6 @@
 	- [x] command line interface to submit yaml or json.
 ---
 
-#### Solver Integration
-
-- [x] Add version to simulation.json
-- [ ] **Make tidy3d_core functional with existing (or slightly modified) solver.**
-	- [x] Load simulation.json into `tidy3d.Simulation`.
-	- [x] IO SimulationData
-	- [ ] Process Simulation to solver inputs. (momchil)
-	- [ ] Write solver outputs to SimulationData. (momchil)
-- [ ] Convert to old .json conversion to use old solver code?
-- [ ] Test test test.
----
-
-#### Web Integration (requires solver integration)
-- [ ] refactor webapi <- can do without integration?
-- [ ] add http / authentication etc.
-- [ ] set up so that daemon recgonizes new json files.
-- [ ] Test test test.
----
-
-#### Finishing Integration
-- [x] Separate FieldData into different xr.DataArrays with different xs, ys, zs at positions in yee lattice
-- [ ] ModeSolver uses Permittivity Monitor for discretization / eps_cross.
-- [ ] Support for Nonuniform Mesh
-- [ ] Handling symmetries properly
-- [ ] Handling client-side discretization properly.
----
-
 #### Visualization
 - [x] write all visuaization routines
 	- [x] MonitorData
@@ -152,6 +125,34 @@
 		- [x] sampler
 	- [x] Overlay structures onto fields.
 	- [x] add .plot method to `SimulationData`
+---
+
+#### Solver Integration
+
+- [x] Add version to simulation.json
+- [ ] **Make tidy3d_core functional with existing (or slightly modified) solver.**
+	- [x] Load simulation.json into `tidy3d.Simulation`.
+	- [x] IO SimulationData
+	- [ ] Process Simulation to solver inputs. (momchil)
+	- [ ] Write solver outputs to SimulationData. (momchil)
+- [x] Convert to old .json conversion to use old solver code?
+- [ ] Test test test.
+---
+
+#### Web Integration (requires solver integration)
+- [ ] refactor webapi using conversion.
+- [ ] add http / authentication etc.
+- [ ] Nice web api plotting / progressbars using `rich`.
+- [ ] Set up so that daemon recgonizes new json files.
+- [ ] Test test test.
+---
+
+#### Finishing Integration
+- [x] Separate FieldData into different xr.DataArrays with different xs, ys, zs at positions in yee lattice
+- [ ] ModeSolver uses Permittivity Monitor for discretization / eps_cross.
+- [ ] Support for Nonuniform Mesh
+- [ ] Handling symmetries properly
+- [ ] Handling client-side discretization properly.
 ---
 
 #### "Tidying" Up
@@ -172,19 +173,18 @@
     - [ ] Move any interfaces in MonitorData to SimulationData (geometry, plotting, etc).
     - [ ] Remove unneeded data or monitor maps.
     - [ ] Make monitordata.load_from_data aware of lists
-- [ ] Use shapely for geometry ops / plotting?  `Geometry.geo(x=0)` -> shapely representation.
+- [x] Use shapely for geometry ops / plotting?  `Geometry.geo(x=0)` -> shapely representation.
 	- [x] Fix all tests.
 	- [x] Integrate shapely plotting / kwargs.
 	- [x] Catch edge case where new shape intersects with **two** shapes of the same medium.
 	- [x] Integrate overlapping shape plotting using intersection.
 	- [x] Clean up arguments to polyslab.
-	- [ ] Clean up pylint and org issues.
+	- [x] Clean up pylint and org issues.
 	- [x] use xmin, ymin, ... = `Geometry.intersections(axis).bounds` to ``get_bounds()``
-	- [ ] Integrate shapely ops into bounds checking / intersection checking.
+	- [x] Integrate shapely ops into bounds checking / intersection checking.
 - [x] Fix MyPy warnings. <- too many stupid ones? ..
 - [ ] Add Logging.
 - [ ] Migrate notebooks into static tests.
-- [ ] Interactive visualization?
 - [ ] Add PEC PMC.
 - [ ] Make Uniform Samplers separate classes? (dont evaluate / store freqs, times)?
 - [ ] setup.cfg for installing packages with more granularity (base, docs, tests)
@@ -239,7 +239,6 @@ https://github.com/crusaderky/python_project_template
 	- [ ] Releases, PyPI setup (.5 days)
 	- [ ] Wipe commit history
 	- [ ] decide how to manage branches
-	- [ ] Nice web api plotting / progressbars using `rich`
 ---
 
 #### Final
@@ -259,6 +258,8 @@ https://github.com/crusaderky/python_project_template
 	- [ ] 3 panel lumerical style plot `Simulation.visualize()`
 	- [ ] 3D structure plotting (matplotlib?)
 	- [ ] Output Simulation as blender file
+	- [ ] Interactive visualization.
+	- [ ] html export plots.
 - [ ] Plugins
 	- [ ] S matrix plugin
 	- [ ] Optimizer plugin
