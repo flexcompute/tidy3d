@@ -202,6 +202,7 @@
 	- [ ] More discussion in Simulation docs.
 	- [ ] Courant 0.99 stable? Adjust range of acceptable values.
 	- [ ] Support nonuniform coordinates.
+	- [ ] specifying `times` directly probably not very useful, need some conveneience functions.
 	- [ ] Support Medium names eventually.
 	- [ ] Support diagonal anisotropy.
 	- [ ] GDS slab import (+shapely import).
