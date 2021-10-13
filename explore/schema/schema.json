@@ -1,26 +1,8 @@
 {
   "title": "Simulation",
-  "description": "Contains all information about simulation ",
+  "description": "Contains all information about simulation.\n\nParameters\n----------\ncenter : Tuple[float, float, float], optional\n    Center of simulation domain in x,y,z, defualts to (0.0, 0.0, 0.0)\nsize : Tuple[float, float, float]\n    Size of simulation domain in x,y,z.\ngrid_size : Tuple[float, float, float]\n    Grid size in x,y,z direction.\nrun_time: float, optional\n    Maximum run time of simulation in seconds, defaults to 0.0.\nmedium : ``tidy3d.Medium``, optional\n    Background medium of simulation, defaults to air.\nstructures : List[``tidy3d.Structure``], optional\n    Structures in simulation, in case of overlap, prefernce goes to those later in list.\nsources : Dict[str: ``Source``], optional\n    Names and sources in the simulation.\nmonitors :\n    Names and monitors in the simulation.\npml_layers: Tuple[``tidy3d.PMLLayer``, ``PMLLayer``, ``PMLLayer``], optional.\n    Specifies PML layers (aborbers) in x,y,z location, defaults to no PML\nsymmetry : Tuple[int], optional\n    Specifies symmetry in x,y,z with values 0, 1, -1 specifying no symmetry, even symmetry, and\n    odd symmetry, respectively.\nshutoff : float, optional\n    Simulation ends when field intensity gets below this value, defaults to 1e-5\ncourant : float, optional\n    Courant stability factor, controls time step to spatial step ratio, defaults to 0.9.\nsubpixel : bool, optional\n    Uses subpixel averaging of permittivity if True for much higher accuracy, defaults to True.",
   "type": "object",
   "properties": {
-    "size": {
-      "title": "Size",
-      "type": "array",
-      "items": [
-        {
-          "type": "number",
-          "minimum": 0
-        },
-        {
-          "type": "number",
-          "minimum": 0
-        },
-        {
-          "type": "number",
-          "minimum": 0
-        }
-      ]
-    },
     "center": {
       "title": "Center",
       "default": [
@@ -41,60 +23,100 @@
         }
       ]
     },
-    "grid_size": {
-      "title": "Grid Size",
-      "anyOf": [
+    "size": {
+      "title": "Size",
+      "type": "array",
+      "items": [
         {
-          "type": "number",
-          "exclusiveMinimum": 0
+          "anyOf": [
+            {
+              "type": "number",
+              "minimum": 0
+            },
+            {
+              "enum": [
+                10000000000.0
+              ],
+              "type": "number"
+            }
+          ]
         },
         {
-          "type": "array",
-          "items": [
+          "anyOf": [
             {
-              "anyOf": [
-                {
-                  "type": "number",
-                  "exclusiveMinimum": 0
-                },
-                {
-                  "type": "array",
-                  "items": {
-                    "type": "number",
-                    "exclusiveMinimum": 0
-                  }
-                }
-              ]
+              "type": "number",
+              "minimum": 0
             },
             {
-              "anyOf": [
-                {
-                  "type": "number",
-                  "exclusiveMinimum": 0
-                },
-                {
-                  "type": "array",
-                  "items": {
-                    "type": "number",
-                    "exclusiveMinimum": 0
-                  }
-                }
-              ]
+              "enum": [
+                10000000000.0
+              ],
+              "type": "number"
+            }
+          ]
+        },
+        {
+          "anyOf": [
+            {
+              "type": "number",
+              "minimum": 0
             },
             {
-              "anyOf": [
-                {
-                  "type": "number",
-                  "exclusiveMinimum": 0
-                },
-                {
-                  "type": "array",
-                  "items": {
-                    "type": "number",
-                    "exclusiveMinimum": 0
-                  }
-                }
-              ]
+              "enum": [
+                10000000000.0
+              ],
+              "type": "number"
+            }
+          ]
+        }
+      ]
+    },
+    "grid_size": {
+      "title": "Grid Size",
+      "type": "array",
+      "items": [
+        {
+          "anyOf": [
+            {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": "number",
+                "exclusiveMinimum": 0
+              }
+            }
+          ]
+        },
+        {
+          "anyOf": [
+            {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": "number",
+                "exclusiveMinimum": 0
+              }
+            }
+          ]
+        },
+        {
+          "anyOf": [
+            {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": "number",
+                "exclusiveMinimum": 0
+              }
             }
           ]
         }
@@ -104,15 +126,28 @@
       "title": "Medium",
       "default": {
         "frequency_range": [
-          -1e+20,
-          1e+20
+          -10000000000.0,
+          10000000000.0
         ],
         "permittivity": 1.0,
-        "conductivity": 0.0
+        "conductivity": 0.0,
+        "type": "Medium"
       },
-      "allOf": [
+      "anyOf": [
         {
           "$ref": "#/definitions/Medium"
+        },
+        {
+          "$ref": "#/definitions/PoleResidue"
+        },
+        {
+          "$ref": "#/definitions/Sellmeier"
+        },
+        {
+          "$ref": "#/definitions/Lorentz"
+        },
+        {
+          "$ref": "#/definitions/Debye"
         }
       ]
     },
@@ -124,9 +159,9 @@
     },
     "structures": {
       "title": "Structures",
-      "default": {},
-      "type": "object",
-      "additionalProperties": {
+      "default": [],
+      "type": "array",
+      "items": {
         "$ref": "#/definitions/Structure"
       }
     },
@@ -135,7 +170,20 @@
       "default": {},
       "type": "object",
       "additionalProperties": {
-        "$ref": "#/definitions/Source"
+        "anyOf": [
+          {
+            "$ref": "#/definitions/VolumeSource"
+          },
+          {
+            "$ref": "#/definitions/PlaneWave"
+          },
+          {
+            "$ref": "#/definitions/ModeSource"
+          },
+          {
+            "$ref": "#/definitions/GaussianBeam"
+          }
+        ]
       }
     },
     "monitors": {
@@ -143,7 +191,23 @@
       "default": {},
       "type": "object",
       "additionalProperties": {
-        "$ref": "#/definitions/Monitor"
+        "anyOf": [
+          {
+            "$ref": "#/definitions/FieldMonitor"
+          },
+          {
+            "$ref": "#/definitions/FieldTimeMonitor"
+          },
+          {
+            "$ref": "#/definitions/FluxMonitor"
+          },
+          {
+            "$ref": "#/definitions/FluxTimeMonitor"
+          },
+          {
+            "$ref": "#/definitions/ModeMonitor"
+          }
+        ]
       }
     },
     "pml_layers": {
@@ -243,16 +307,48 @@
         "frequency_range": {
           "title": "Frequency Range",
           "default": [
-            -1e+20,
-            1e+20
+            -10000000000.0,
+            10000000000.0
           ],
           "type": "array",
           "items": [
             {
-              "type": "number"
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "enum": [
+                    10000000000.0
+                  ],
+                  "type": "number"
+                },
+                {
+                  "enum": [
+                    -10000000000.0
+                  ],
+                  "type": "number"
+                }
+              ]
             },
             {
-              "type": "number"
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "enum": [
+                    10000000000.0
+                  ],
+                  "type": "number"
+                },
+                {
+                  "enum": [
+                    -10000000000.0
+                  ],
+                  "type": "number"
+                }
+              ]
             }
           ]
         },
@@ -267,15 +363,643 @@
           "default": 0.0,
           "minimum": 0.0,
           "type": "number"
+        },
+        "type": {
+          "title": "Type",
+          "default": "Medium",
+          "enum": [
+            "Medium"
+          ],
+          "type": "string"
         }
       },
       "additionalProperties": false
     },
-    "Geometry": {
-      "title": "Geometry",
-      "description": "abstract base class, defines where something exists in space",
+    "PoleResidue": {
+      "title": "PoleResidue",
+      "description": "defines a dispersion model",
       "type": "object",
-      "properties": {},
+      "properties": {
+        "frequency_range": {
+          "title": "Frequency Range",
+          "default": [
+            -10000000000.0,
+            10000000000.0
+          ],
+          "type": "array",
+          "items": [
+            {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "enum": [
+                    10000000000.0
+                  ],
+                  "type": "number"
+                },
+                {
+                  "enum": [
+                    -10000000000.0
+                  ],
+                  "type": "number"
+                }
+              ]
+            },
+            {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "enum": [
+                    10000000000.0
+                  ],
+                  "type": "number"
+                },
+                {
+                  "enum": [
+                    -10000000000.0
+                  ],
+                  "type": "number"
+                }
+              ]
+            }
+          ]
+        },
+        "eps_inf": {
+          "title": "Eps Inf",
+          "default": 1.0,
+          "type": "number"
+        },
+        "poles": {
+          "title": "Poles",
+          "type": "array",
+          "items": {
+            "type": "array",
+            "items": [
+              {
+                "type": "array",
+                "items": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  }
+                ]
+              },
+              {
+                "type": "array",
+                "items": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        "type": {
+          "title": "Type",
+          "default": "PoleResidue",
+          "enum": [
+            "PoleResidue"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "poles"
+      ],
+      "additionalProperties": false
+    },
+    "Sellmeier": {
+      "title": "Sellmeier",
+      "description": "Sellmeier model for dispersion",
+      "type": "object",
+      "properties": {
+        "frequency_range": {
+          "title": "Frequency Range",
+          "default": [
+            -10000000000.0,
+            10000000000.0
+          ],
+          "type": "array",
+          "items": [
+            {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "enum": [
+                    10000000000.0
+                  ],
+                  "type": "number"
+                },
+                {
+                  "enum": [
+                    -10000000000.0
+                  ],
+                  "type": "number"
+                }
+              ]
+            },
+            {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "enum": [
+                    10000000000.0
+                  ],
+                  "type": "number"
+                },
+                {
+                  "enum": [
+                    -10000000000.0
+                  ],
+                  "type": "number"
+                }
+              ]
+            }
+          ]
+        },
+        "coeffs": {
+          "title": "Coeffs",
+          "type": "array",
+          "items": {
+            "type": "array",
+            "items": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "number"
+              }
+            ]
+          }
+        },
+        "type": {
+          "title": "Type",
+          "default": "Sellmeier",
+          "enum": [
+            "Sellmeier"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "coeffs"
+      ],
+      "additionalProperties": false
+    },
+    "Lorentz": {
+      "title": "Lorentz",
+      "description": "Lorentz model for dispersion",
+      "type": "object",
+      "properties": {
+        "frequency_range": {
+          "title": "Frequency Range",
+          "default": [
+            -10000000000.0,
+            10000000000.0
+          ],
+          "type": "array",
+          "items": [
+            {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "enum": [
+                    10000000000.0
+                  ],
+                  "type": "number"
+                },
+                {
+                  "enum": [
+                    -10000000000.0
+                  ],
+                  "type": "number"
+                }
+              ]
+            },
+            {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "enum": [
+                    10000000000.0
+                  ],
+                  "type": "number"
+                },
+                {
+                  "enum": [
+                    -10000000000.0
+                  ],
+                  "type": "number"
+                }
+              ]
+            }
+          ]
+        },
+        "eps_inf": {
+          "title": "Eps Inf",
+          "default": 1.0,
+          "type": "number"
+        },
+        "coeffs": {
+          "title": "Coeffs",
+          "type": "array",
+          "items": {
+            "type": "array",
+            "items": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "number"
+              }
+            ]
+          }
+        },
+        "type": {
+          "title": "Type",
+          "default": "Lorentz",
+          "enum": [
+            "Lorentz"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "coeffs"
+      ],
+      "additionalProperties": false
+    },
+    "Debye": {
+      "title": "Debye",
+      "description": "Debye model for dispersion",
+      "type": "object",
+      "properties": {
+        "frequency_range": {
+          "title": "Frequency Range",
+          "default": [
+            -10000000000.0,
+            10000000000.0
+          ],
+          "type": "array",
+          "items": [
+            {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "enum": [
+                    10000000000.0
+                  ],
+                  "type": "number"
+                },
+                {
+                  "enum": [
+                    -10000000000.0
+                  ],
+                  "type": "number"
+                }
+              ]
+            },
+            {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "enum": [
+                    10000000000.0
+                  ],
+                  "type": "number"
+                },
+                {
+                  "enum": [
+                    -10000000000.0
+                  ],
+                  "type": "number"
+                }
+              ]
+            }
+          ]
+        },
+        "eps_inf": {
+          "title": "Eps Inf",
+          "default": 1.0,
+          "type": "number"
+        },
+        "coeffs": {
+          "title": "Coeffs",
+          "type": "array",
+          "items": {
+            "type": "array",
+            "items": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "number"
+              }
+            ]
+          }
+        },
+        "type": {
+          "title": "Type",
+          "default": "Debye",
+          "enum": [
+            "Debye"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "coeffs"
+      ],
+      "additionalProperties": false
+    },
+    "Box": {
+      "title": "Box",
+      "description": "Rectangular prism.\n   Also base class for :class:`Simulation`, :class:`Monitor`, and :class:`Source`.\n\nParameters\n----------\ncenter : ``(float, float, float)``\n    center of box in x,y,z.  Defaults to ``(0,0,0)``.\nsize : ``(float, float, float)``\n    Size of box in x,y,z.\n\nExample\n-------\n>>> b = Box(center=(1,2,3), size=(2,2,2))",
+      "type": "object",
+      "properties": {
+        "center": {
+          "title": "Center",
+          "default": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "type": "array",
+          "items": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            }
+          ]
+        },
+        "size": {
+          "title": "Size",
+          "type": "array",
+          "items": [
+            {
+              "anyOf": [
+                {
+                  "type": "number",
+                  "minimum": 0
+                },
+                {
+                  "enum": [
+                    10000000000.0
+                  ],
+                  "type": "number"
+                }
+              ]
+            },
+            {
+              "anyOf": [
+                {
+                  "type": "number",
+                  "minimum": 0
+                },
+                {
+                  "enum": [
+                    10000000000.0
+                  ],
+                  "type": "number"
+                }
+              ]
+            },
+            {
+              "anyOf": [
+                {
+                  "type": "number",
+                  "minimum": 0
+                },
+                {
+                  "enum": [
+                    10000000000.0
+                  ],
+                  "type": "number"
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "required": [
+        "size"
+      ],
+      "additionalProperties": false
+    },
+    "Sphere": {
+      "title": "Sphere",
+      "description": "Sphere geometry.\n\nParameters\n----------\ncenter : ``(float, float, float)``\n    center of sphere in x,y,z.  Defaults to ``(0,0,0)``.\nradius : ``float``\n    Radius of sphere.\n\nExample\n-------\n>>> b = Sphere(center=(1,2,3), radius=2)",
+      "type": "object",
+      "properties": {
+        "center": {
+          "title": "Center",
+          "default": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "type": "array",
+          "items": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            }
+          ]
+        },
+        "radius": {
+          "title": "Radius",
+          "minimum": 0,
+          "type": "number"
+        },
+        "type": {
+          "title": "Type",
+          "default": "Sphere",
+          "enum": [
+            "Sphere"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "radius"
+      ],
+      "additionalProperties": false
+    },
+    "Cylinder": {
+      "title": "Cylinder",
+      "description": "Cylinder geometry.\n\nParameters\n----------\ncenter : ``(float, float, float)``\n    center of cylinder in x,y,z.  Defaults to ``(0,0,0)``.\nradius : ``float``\n    Radius of cylinder.\nlength : ``float``\n    Length of sphere along axis.\naxis : ``int``\n    Integer index into the cylinder's ``length`` axis (0,1,2) -> (x,y,z)\n\nExample\n-------\n>>> c = Cylinder(center=(1,2,3), radius=2, length=5, axis=2)",
+      "type": "object",
+      "properties": {
+        "center": {
+          "title": "Center",
+          "default": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "type": "array",
+          "items": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            }
+          ]
+        },
+        "axis": {
+          "title": "Axis",
+          "default": 2,
+          "enum": [
+            0,
+            1,
+            2
+          ],
+          "type": "integer"
+        },
+        "length": {
+          "title": "Length",
+          "minimum": 0,
+          "type": "number"
+        },
+        "radius": {
+          "title": "Radius",
+          "minimum": 0,
+          "type": "number"
+        },
+        "type": {
+          "title": "Type",
+          "default": "Cylinder",
+          "enum": [
+            "Cylinder"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "length",
+        "radius"
+      ],
+      "additionalProperties": false
+    },
+    "PolySlab": {
+      "title": "PolySlab",
+      "description": "Polygon with constant thickness along 3rd axis.\n\nParameters\n----------\nvertices : ``[(float, float)]``\n    List of (x,y) vertices defining the polygon face.\naxis : ``int``\n    Integer index into the polygon's slab axis. (0,1,2) -> (x,y,z)\nslab_bounds: ``(float, float)``\n    Minimum and maximum position in slab axis.\n\nExample\n-------\n>>> p = PolySlab(vertices=[(0,0), (1,0), (1,1)], axis=2, slab_bounds=(-1, 1))",
+      "type": "object",
+      "properties": {
+        "center": {
+          "title": "Center",
+          "default": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "type": "array",
+          "items": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            }
+          ]
+        },
+        "axis": {
+          "title": "Axis",
+          "default": 2,
+          "enum": [
+            0,
+            1,
+            2
+          ],
+          "type": "integer"
+        },
+        "length": {
+          "title": "Length",
+          "minimum": 0,
+          "type": "number"
+        },
+        "slab_bounds": {
+          "title": "Slab Bounds",
+          "type": "array",
+          "items": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            }
+          ]
+        },
+        "vertices": {
+          "title": "Vertices",
+          "type": "array",
+          "items": {
+            "type": "array",
+            "items": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "number"
+              }
+            ]
+          }
+        },
+        "type": {
+          "title": "Type",
+          "default": "PolySlab",
+          "enum": [
+            "PolySlab"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "slab_bounds",
+        "vertices"
+      ],
       "additionalProperties": false
     },
     "Structure": {
@@ -284,10 +1008,41 @@
       "type": "object",
       "properties": {
         "geometry": {
-          "$ref": "#/definitions/Geometry"
+          "title": "Geometry",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/Box"
+            },
+            {
+              "$ref": "#/definitions/Sphere"
+            },
+            {
+              "$ref": "#/definitions/Cylinder"
+            },
+            {
+              "$ref": "#/definitions/PolySlab"
+            }
+          ]
         },
         "medium": {
-          "$ref": "#/definitions/Medium"
+          "title": "Medium",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/Medium"
+            },
+            {
+              "$ref": "#/definitions/PoleResidue"
+            },
+            {
+              "$ref": "#/definitions/Sellmeier"
+            },
+            {
+              "$ref": "#/definitions/Lorentz"
+            },
+            {
+              "$ref": "#/definitions/Debye"
+            }
+          ]
         }
       },
       "required": [
@@ -296,9 +1051,9 @@
       ],
       "additionalProperties": false
     },
-    "SourceTime": {
-      "title": "SourceTime",
-      "description": "Base class describing the time dependence of a source",
+    "GaussianPulse": {
+      "title": "GaussianPulse",
+      "description": "A gaussian pulse time dependence",
       "type": "object",
       "properties": {
         "amplitude": {
@@ -311,33 +1066,74 @@
           "title": "Phase",
           "default": 0.0,
           "type": "number"
+        },
+        "freq0": {
+          "title": "Freq0",
+          "exclusiveMinimum": 0,
+          "type": "number"
+        },
+        "fwidth": {
+          "title": "Fwidth",
+          "exclusiveMinimum": 0,
+          "type": "number"
+        },
+        "offset": {
+          "title": "Offset",
+          "default": 5.0,
+          "minimum": 2.5,
+          "type": "number"
         }
       },
+      "required": [
+        "freq0",
+        "fwidth"
+      ],
       "additionalProperties": false
     },
-    "Source": {
-      "title": "Source",
-      "description": "Template for all sources, all have Box geometry ",
+    "CW": {
+      "title": "CW",
+      "description": "ramping up and holding steady",
       "type": "object",
       "properties": {
-        "size": {
-          "title": "Size",
-          "type": "array",
-          "items": [
-            {
-              "type": "number",
-              "minimum": 0
-            },
-            {
-              "type": "number",
-              "minimum": 0
-            },
-            {
-              "type": "number",
-              "minimum": 0
-            }
-          ]
+        "amplitude": {
+          "title": "Amplitude",
+          "default": 1.0,
+          "minimum": 0,
+          "type": "number"
         },
+        "phase": {
+          "title": "Phase",
+          "default": 0.0,
+          "type": "number"
+        },
+        "freq0": {
+          "title": "Freq0",
+          "exclusiveMinimum": 0,
+          "type": "number"
+        },
+        "fwidth": {
+          "title": "Fwidth",
+          "exclusiveMinimum": 0,
+          "type": "number"
+        },
+        "offset": {
+          "title": "Offset",
+          "default": 5.0,
+          "minimum": 2.5,
+          "type": "number"
+        }
+      },
+      "required": [
+        "freq0",
+        "fwidth"
+      ],
+      "additionalProperties": false
+    },
+    "VolumeSource": {
+      "title": "VolumeSource",
+      "description": "Volume Source with time dependence and polarization",
+      "type": "object",
+      "properties": {
         "center": {
           "title": "Center",
           "default": [
@@ -355,42 +1151,101 @@
             },
             {
               "type": "number"
+            }
+          ]
+        },
+        "size": {
+          "title": "Size",
+          "type": "array",
+          "items": [
+            {
+              "anyOf": [
+                {
+                  "type": "number",
+                  "minimum": 0
+                },
+                {
+                  "enum": [
+                    10000000000.0
+                  ],
+                  "type": "number"
+                }
+              ]
+            },
+            {
+              "anyOf": [
+                {
+                  "type": "number",
+                  "minimum": 0
+                },
+                {
+                  "enum": [
+                    10000000000.0
+                  ],
+                  "type": "number"
+                }
+              ]
+            },
+            {
+              "anyOf": [
+                {
+                  "type": "number",
+                  "minimum": 0
+                },
+                {
+                  "enum": [
+                    10000000000.0
+                  ],
+                  "type": "number"
+                }
+              ]
             }
           ]
         },
         "source_time": {
-          "$ref": "#/definitions/SourceTime"
+          "title": "Source Time",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/GaussianPulse"
+            },
+            {
+              "$ref": "#/definitions/CW"
+            }
+          ]
+        },
+        "polarization": {
+          "title": "Polarization",
+          "enum": [
+            "Jx",
+            "Jy",
+            "Jz",
+            "Mx",
+            "My",
+            "Mz"
+          ],
+          "type": "string"
+        },
+        "type": {
+          "title": "Type",
+          "default": "VolumeSource",
+          "enum": [
+            "VolumeSource"
+          ],
+          "type": "string"
         }
       },
       "required": [
         "size",
-        "source_time"
+        "source_time",
+        "polarization"
       ],
       "additionalProperties": false
     },
-    "Monitor": {
-      "title": "Monitor",
-      "description": "base class for monitors, which all have Box shape ",
+    "PlaneWave": {
+      "title": "PlaneWave",
+      "description": "uniform distribution on infinite extent plane",
       "type": "object",
       "properties": {
-        "size": {
-          "title": "Size",
-          "type": "array",
-          "items": [
-            {
-              "type": "number",
-              "minimum": 0
-            },
-            {
-              "type": "number",
-              "minimum": 0
-            },
-            {
-              "type": "number",
-              "minimum": 0
-            }
-          ]
-        },
         "center": {
           "title": "Center",
           "default": [
@@ -410,16 +1265,965 @@
               "type": "number"
             }
           ]
+        },
+        "size": {
+          "title": "Size",
+          "type": "array",
+          "items": [
+            {
+              "anyOf": [
+                {
+                  "type": "number",
+                  "minimum": 0
+                },
+                {
+                  "enum": [
+                    10000000000.0
+                  ],
+                  "type": "number"
+                }
+              ]
+            },
+            {
+              "anyOf": [
+                {
+                  "type": "number",
+                  "minimum": 0
+                },
+                {
+                  "enum": [
+                    10000000000.0
+                  ],
+                  "type": "number"
+                }
+              ]
+            },
+            {
+              "anyOf": [
+                {
+                  "type": "number",
+                  "minimum": 0
+                },
+                {
+                  "enum": [
+                    10000000000.0
+                  ],
+                  "type": "number"
+                }
+              ]
+            }
+          ]
+        },
+        "source_time": {
+          "title": "Source Time",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/GaussianPulse"
+            },
+            {
+              "$ref": "#/definitions/CW"
+            }
+          ]
+        },
+        "direction": {
+          "title": "Direction",
+          "enum": [
+            "+",
+            "-"
+          ],
+          "type": "string"
+        },
+        "polarization": {
+          "title": "Polarization",
+          "enum": [
+            "Jx",
+            "Jy",
+            "Jz",
+            "Mx",
+            "My",
+            "Mz"
+          ],
+          "type": "string"
+        },
+        "type": {
+          "title": "Type",
+          "default": "PlaneWave",
+          "enum": [
+            "PlaneWave"
+          ],
+          "type": "string"
         }
       },
       "required": [
-        "size"
+        "size",
+        "source_time",
+        "direction",
+        "polarization"
+      ],
+      "additionalProperties": false
+    },
+    "Mode": {
+      "title": "Mode",
+      "description": "Stores Specifications of a Mode to input into mode solver.\n\nParameters\n----------\nmode_index : int\n    Return the mode solver output at ``mode_index``.\ntarget_neff : float, optional\n    Guess for effective index of mode.\nsymmetries : Tuple[int, int], optional\n    Symmetries (0,1,-1) = (none, even, odd) in (x,y) of mode plane, default = (0, 0).\nnum_pml: Tuple[int, int], optional\n    number of pml layers to add in (x,y) of mode plane, default = (0, 0)",
+      "type": "object",
+      "properties": {
+        "mode_index": {
+          "title": "Mode Index",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "target_neff": {
+          "title": "Target Neff",
+          "type": "number"
+        },
+        "symmetries": {
+          "title": "Symmetries",
+          "default": [
+            0,
+            0
+          ],
+          "type": "array",
+          "items": [
+            {
+              "enum": [
+                0,
+                -1,
+                1
+              ],
+              "type": "integer"
+            },
+            {
+              "enum": [
+                0,
+                -1,
+                1
+              ],
+              "type": "integer"
+            }
+          ]
+        },
+        "num_pml": {
+          "title": "Num Pml",
+          "default": [
+            0,
+            0
+          ],
+          "type": "array",
+          "items": [
+            {
+              "type": "integer",
+              "minimum": 0
+            },
+            {
+              "type": "integer",
+              "minimum": 0
+            }
+          ]
+        }
+      },
+      "required": [
+        "mode_index"
+      ],
+      "additionalProperties": false
+    },
+    "ModeSource": {
+      "title": "ModeSource",
+      "description": "Modal profile on finite extent plane",
+      "type": "object",
+      "properties": {
+        "center": {
+          "title": "Center",
+          "default": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "type": "array",
+          "items": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            }
+          ]
+        },
+        "size": {
+          "title": "Size",
+          "type": "array",
+          "items": [
+            {
+              "anyOf": [
+                {
+                  "type": "number",
+                  "minimum": 0
+                },
+                {
+                  "enum": [
+                    10000000000.0
+                  ],
+                  "type": "number"
+                }
+              ]
+            },
+            {
+              "anyOf": [
+                {
+                  "type": "number",
+                  "minimum": 0
+                },
+                {
+                  "enum": [
+                    10000000000.0
+                  ],
+                  "type": "number"
+                }
+              ]
+            },
+            {
+              "anyOf": [
+                {
+                  "type": "number",
+                  "minimum": 0
+                },
+                {
+                  "enum": [
+                    10000000000.0
+                  ],
+                  "type": "number"
+                }
+              ]
+            }
+          ]
+        },
+        "source_time": {
+          "title": "Source Time",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/GaussianPulse"
+            },
+            {
+              "$ref": "#/definitions/CW"
+            }
+          ]
+        },
+        "direction": {
+          "title": "Direction",
+          "enum": [
+            "+",
+            "-"
+          ],
+          "type": "string"
+        },
+        "mode": {
+          "$ref": "#/definitions/Mode"
+        },
+        "type": {
+          "title": "Type",
+          "default": "ModeSource",
+          "enum": [
+            "ModeSource"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "size",
+        "source_time",
+        "direction",
+        "mode"
+      ],
+      "additionalProperties": false
+    },
+    "GaussianBeam": {
+      "title": "GaussianBeam",
+      "description": "guassian distribution on finite extent plane",
+      "type": "object",
+      "properties": {
+        "center": {
+          "title": "Center",
+          "default": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "type": "array",
+          "items": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            }
+          ]
+        },
+        "size": {
+          "title": "Size",
+          "type": "array",
+          "items": [
+            {
+              "anyOf": [
+                {
+                  "type": "number",
+                  "minimum": 0
+                },
+                {
+                  "enum": [
+                    10000000000.0
+                  ],
+                  "type": "number"
+                }
+              ]
+            },
+            {
+              "anyOf": [
+                {
+                  "type": "number",
+                  "minimum": 0
+                },
+                {
+                  "enum": [
+                    10000000000.0
+                  ],
+                  "type": "number"
+                }
+              ]
+            },
+            {
+              "anyOf": [
+                {
+                  "type": "number",
+                  "minimum": 0
+                },
+                {
+                  "enum": [
+                    10000000000.0
+                  ],
+                  "type": "number"
+                }
+              ]
+            }
+          ]
+        },
+        "source_time": {
+          "title": "Source Time",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/GaussianPulse"
+            },
+            {
+              "$ref": "#/definitions/CW"
+            }
+          ]
+        },
+        "direction": {
+          "title": "Direction",
+          "enum": [
+            "+",
+            "-"
+          ],
+          "type": "string"
+        },
+        "polarization": {
+          "title": "Polarization",
+          "enum": [
+            "Jx",
+            "Jy",
+            "Jz",
+            "Mx",
+            "My",
+            "Mz"
+          ],
+          "type": "string"
+        },
+        "waist_size": {
+          "title": "Waist Size",
+          "type": "array",
+          "items": [
+            {
+              "type": "number",
+              "minimum": 0
+            },
+            {
+              "type": "number",
+              "minimum": 0
+            }
+          ]
+        },
+        "type": {
+          "title": "Type",
+          "default": "GaussianBeam",
+          "enum": [
+            "GaussianBeam"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "size",
+        "source_time",
+        "direction",
+        "polarization",
+        "waist_size"
+      ],
+      "additionalProperties": false
+    },
+    "FieldMonitor": {
+      "title": "FieldMonitor",
+      "description": "Stores EM fields or permittivity as a function of frequency.\n\nParameters\n----------\ncenter: Tuple[float, float, float], optional.\n    Center of monitor ``Box``, defaults to (0, 0, 0)\nsize: Tuple[float, float, float].\n    Size of monitor ``Box``, must have one element = 0.0 to define plane.\nfields: List[str], optional\n    Electromagnetic field(s) to measure (E, H), defaults to ``['Ex', 'Ey', 'Ez', 'Hx', 'Hy',\n    'Hz']``, also accepts diagonal components of permittivity tensor as ``'eps_xx', 'eps_yy',\n    'eps_zz'``.\nfreqs: List[float]\n    Frequencies to measure fields at at.",
+      "type": "object",
+      "properties": {
+        "center": {
+          "title": "Center",
+          "default": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "type": "array",
+          "items": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            }
+          ]
+        },
+        "size": {
+          "title": "Size",
+          "type": "array",
+          "items": [
+            {
+              "anyOf": [
+                {
+                  "type": "number",
+                  "minimum": 0
+                },
+                {
+                  "enum": [
+                    10000000000.0
+                  ],
+                  "type": "number"
+                }
+              ]
+            },
+            {
+              "anyOf": [
+                {
+                  "type": "number",
+                  "minimum": 0
+                },
+                {
+                  "enum": [
+                    10000000000.0
+                  ],
+                  "type": "number"
+                }
+              ]
+            },
+            {
+              "anyOf": [
+                {
+                  "type": "number",
+                  "minimum": 0
+                },
+                {
+                  "enum": [
+                    10000000000.0
+                  ],
+                  "type": "number"
+                }
+              ]
+            }
+          ]
+        },
+        "freqs": {
+          "title": "Freqs",
+          "type": "array",
+          "items": {
+            "type": "number"
+          }
+        },
+        "fields": {
+          "title": "Fields",
+          "default": [
+            "Ex",
+            "Ey",
+            "Ez",
+            "Hx",
+            "Hy",
+            "Hz"
+          ],
+          "type": "array",
+          "items": {
+            "enum": [
+              "Ex",
+              "Ey",
+              "Ez",
+              "Hx",
+              "Hy",
+              "Hz",
+              "eps_xx",
+              "eps_yy",
+              "eps_zz"
+            ],
+            "type": "string"
+          }
+        },
+        "type": {
+          "title": "Type",
+          "default": "FieldMonitor",
+          "enum": [
+            "FieldMonitor"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "size",
+        "freqs"
+      ],
+      "additionalProperties": false
+    },
+    "FieldTimeMonitor": {
+      "title": "FieldTimeMonitor",
+      "description": "Stores EM fields as a function of time.\n\nParameters\n----------\ncenter: Tuple[float, float, float], optional.\n    Center of monitor ``Box``, defaults to (0, 0, 0)\nsize: Tuple[float, float, float].\n    Size of monitor ``Box``, must have one element = 0.0 to define plane.\nfields: List[str], optional\n    Electromagnetic field(s) to measure (E, H), defaults to ``['Ex', 'Ey', 'Ez', 'Hx', 'Hy',\n    'Hz']``.\ntimes: List[int]\n    Time steps to measure the fields at.",
+      "type": "object",
+      "properties": {
+        "center": {
+          "title": "Center",
+          "default": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "type": "array",
+          "items": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            }
+          ]
+        },
+        "size": {
+          "title": "Size",
+          "type": "array",
+          "items": [
+            {
+              "anyOf": [
+                {
+                  "type": "number",
+                  "minimum": 0
+                },
+                {
+                  "enum": [
+                    10000000000.0
+                  ],
+                  "type": "number"
+                }
+              ]
+            },
+            {
+              "anyOf": [
+                {
+                  "type": "number",
+                  "minimum": 0
+                },
+                {
+                  "enum": [
+                    10000000000.0
+                  ],
+                  "type": "number"
+                }
+              ]
+            },
+            {
+              "anyOf": [
+                {
+                  "type": "number",
+                  "minimum": 0
+                },
+                {
+                  "enum": [
+                    10000000000.0
+                  ],
+                  "type": "number"
+                }
+              ]
+            }
+          ]
+        },
+        "times": {
+          "title": "Times",
+          "type": "array",
+          "items": {
+            "type": "integer"
+          }
+        },
+        "fields": {
+          "title": "Fields",
+          "default": [
+            "Ex",
+            "Ey",
+            "Ez",
+            "Hx",
+            "Hy",
+            "Hz"
+          ],
+          "type": "array",
+          "items": {
+            "enum": [
+              "Ex",
+              "Ey",
+              "Ez",
+              "Hx",
+              "Hy",
+              "Hz"
+            ],
+            "type": "string"
+          }
+        },
+        "type": {
+          "title": "Type",
+          "default": "FieldTimeMonitor",
+          "enum": [
+            "FieldTimeMonitor"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "size",
+        "times"
+      ],
+      "additionalProperties": false
+    },
+    "FluxMonitor": {
+      "title": "FluxMonitor",
+      "description": "Stores power flux through a plane as a function of frequency.\n\nParameters\n----------\ncenter: Tuple[float, float, float], optional.\n    Center of monitor ``Box``, defaults to (0, 0, 0)\nsize: Tuple[float, float, float].\n    Size of monitor ``Box``, must have one element = 0.0 to define plane.\nfreqs: List[float]\n    Frequencies to measure flux at.",
+      "type": "object",
+      "properties": {
+        "center": {
+          "title": "Center",
+          "default": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "type": "array",
+          "items": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            }
+          ]
+        },
+        "size": {
+          "title": "Size",
+          "type": "array",
+          "items": [
+            {
+              "anyOf": [
+                {
+                  "type": "number",
+                  "minimum": 0
+                },
+                {
+                  "enum": [
+                    10000000000.0
+                  ],
+                  "type": "number"
+                }
+              ]
+            },
+            {
+              "anyOf": [
+                {
+                  "type": "number",
+                  "minimum": 0
+                },
+                {
+                  "enum": [
+                    10000000000.0
+                  ],
+                  "type": "number"
+                }
+              ]
+            },
+            {
+              "anyOf": [
+                {
+                  "type": "number",
+                  "minimum": 0
+                },
+                {
+                  "enum": [
+                    10000000000.0
+                  ],
+                  "type": "number"
+                }
+              ]
+            }
+          ]
+        },
+        "freqs": {
+          "title": "Freqs",
+          "type": "array",
+          "items": {
+            "type": "number"
+          }
+        },
+        "type": {
+          "title": "Type",
+          "default": "FluxMonitor",
+          "enum": [
+            "FluxMonitor"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "size",
+        "freqs"
+      ],
+      "additionalProperties": false
+    },
+    "FluxTimeMonitor": {
+      "title": "FluxTimeMonitor",
+      "description": "Stores power flux through a plane as a function of frequency.\n\nParameters\n----------\ncenter: Tuple[float, float, float], optional.\n    Center of monitor ``Box``, defaults to (0, 0, 0)\nsize: Tuple[float, float, float].\n    Size of monitor ``Box``, must have one element = 0.0 to define plane.\ntimes: List[int]\n    Time steps to measure flux at.",
+      "type": "object",
+      "properties": {
+        "center": {
+          "title": "Center",
+          "default": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "type": "array",
+          "items": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            }
+          ]
+        },
+        "size": {
+          "title": "Size",
+          "type": "array",
+          "items": [
+            {
+              "anyOf": [
+                {
+                  "type": "number",
+                  "minimum": 0
+                },
+                {
+                  "enum": [
+                    10000000000.0
+                  ],
+                  "type": "number"
+                }
+              ]
+            },
+            {
+              "anyOf": [
+                {
+                  "type": "number",
+                  "minimum": 0
+                },
+                {
+                  "enum": [
+                    10000000000.0
+                  ],
+                  "type": "number"
+                }
+              ]
+            },
+            {
+              "anyOf": [
+                {
+                  "type": "number",
+                  "minimum": 0
+                },
+                {
+                  "enum": [
+                    10000000000.0
+                  ],
+                  "type": "number"
+                }
+              ]
+            }
+          ]
+        },
+        "times": {
+          "title": "Times",
+          "type": "array",
+          "items": {
+            "type": "integer"
+          }
+        },
+        "type": {
+          "title": "Type",
+          "default": "FluxTimeMonitor",
+          "enum": [
+            "FluxTimeMonitor"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "size",
+        "times"
+      ],
+      "additionalProperties": false
+    },
+    "ModeMonitor": {
+      "title": "ModeMonitor",
+      "description": "stores overlap amplitudes associated with modes.\n\nParameters\n----------\ncenter: Tuple[float, float, float], optional.\n    Center of monitor ``Box``, defaults to (0, 0, 0)\nsize: Tuple[float, float, float].\n    Size of monitor ``Box``, must have one element = 0.0 to define plane.\nfreqs: List[float]\n    Frequencies to measure flux at.\nmodes: List[``Mode``]\n    List of ``Mode`` objects specifying the modal profiles to measure amplitude overalap with.",
+      "type": "object",
+      "properties": {
+        "center": {
+          "title": "Center",
+          "default": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "type": "array",
+          "items": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            }
+          ]
+        },
+        "size": {
+          "title": "Size",
+          "type": "array",
+          "items": [
+            {
+              "anyOf": [
+                {
+                  "type": "number",
+                  "minimum": 0
+                },
+                {
+                  "enum": [
+                    10000000000.0
+                  ],
+                  "type": "number"
+                }
+              ]
+            },
+            {
+              "anyOf": [
+                {
+                  "type": "number",
+                  "minimum": 0
+                },
+                {
+                  "enum": [
+                    10000000000.0
+                  ],
+                  "type": "number"
+                }
+              ]
+            },
+            {
+              "anyOf": [
+                {
+                  "type": "number",
+                  "minimum": 0
+                },
+                {
+                  "enum": [
+                    10000000000.0
+                  ],
+                  "type": "number"
+                }
+              ]
+            }
+          ]
+        },
+        "freqs": {
+          "title": "Freqs",
+          "type": "array",
+          "items": {
+            "type": "number"
+          }
+        },
+        "direction": {
+          "title": "Direction",
+          "default": [
+            "+",
+            "-"
+          ],
+          "type": "array",
+          "items": {
+            "enum": [
+              "+",
+              "-"
+            ],
+            "type": "string"
+          }
+        },
+        "modes": {
+          "title": "Modes",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/Mode"
+          }
+        },
+        "type": {
+          "title": "Type",
+          "default": "ModeMonitor",
+          "enum": [
+            "ModeMonitor"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "size",
+        "freqs",
+        "modes"
       ],
       "additionalProperties": false
     },
     "PMLLayer": {
       "title": "PMLLayer",
-      "description": "single layer of a PML (profile and num layers)",
+      "description": "single layer of a PML (profile and num layers)\n\nParameters\n----------\nprofile : str, optional\n    Specifies type of PML, one of ``'standard'``, ``'stable'``, ``'absorber'``, defaults to\n    ``'standard'``\nnum_layers : int, default\n    Number of layers added to + and - boundaries, defaults to 0 (no PML)",
       "type": "object",
       "properties": {
         "profile": {
