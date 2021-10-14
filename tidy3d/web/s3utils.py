@@ -39,18 +39,19 @@ class UploadProgress:
 class DownloadProgress:
     """stores and print the download status"""
 
-    def __init__(self, client, bucket, key):
-        """initialize with size of file"""
+    def __init__(self, client, bucket, key, progress):
+        """initialize with size of file
+        note: ``progress`` is a ``rich.progress.Progress`` object
+        ``from rich.progress import Progress``
+        ``with Progress() as progress:``
+            ``dlp = DownloadProgress(progress)``
+        """
         head_object = client.head_object(Bucket=bucket, Key=key)
         self.size = head_object["ContentLength"]
         self.downloaded_so_far = 0.0
+        self.progress = progress
+        self.dl_task = self.progress.add_task("[red]Downloading results...", total=self.size)
 
     def report(self, bytes_in_chunk):
         """update and report status"""
-        self.downloaded_so_far += bytes_in_chunk
-        perc_done = 100.0 * float(self.downloaded_so_far) / self.size
-
-        # do we relly want to print to stdout? how bout call this to get %?
-        message = f"file download progress: {perc_done:2.2f} %"
-        sys.stdout.write(message)
-        sys.stdout.flush()
+        self.progress.update(self.dl_task, advance=bytes_in_chunk)

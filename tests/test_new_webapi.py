@@ -1,88 +1,69 @@
-import json
-import unittest
+""" tests converted webapi """
+import pytest
 
-# note: run from `integration_test/`
-import sys
+import tidy3d as td
+import tidy3d.web as web
+from .utils import SIM_CONVERT as sim_original
+from .utils import clear_tmp
 
-sys.path.append("../../../")
-
-from tidy3d.web import webapi
-from tidy3d import Simulation, TimeMonitor, GaussianPulse, PlaneWave
-
-FDTD_JSON = "fdtd/fdtd3d_large_test.json"
-
-
-class TestFDTDAPI(unittest.TestCase):
-    task_id = ""
-
-    def test_run(self):
-
-        freq0 = 200e12
-        freqw = freq0 / 100
-        gaussian = GaussianPulse(freq0, freqw)
-
-        # plane wave source
-        s = PlaneWave(source_time=gaussian, injection_axis="-z", position=0, polarization="x")
-
-        # Simulation run time.  Note you need to run a long time to calculate high Q resonances.
-        run_time = 10.0 / freqw
-
-        m = TimeMonitor(center=[0, 0, 0], size=[0, 0, 0])
-
-        sim = Simulation(
-            size=[1, 1, 1], resolution=10, sources=[s], monitors=[m], run_time=run_time
-        )
-        task_id = webapi.run(sim, task_name="test_webapi_run", target_folder="out")
-        project = webapi.get_project(task_id)
-        print(project)
-        assert len(project) > 0
-        data = sim.data(m)
-
-    def test_load(self):
-        sim = Simulation(size=[1, 1, 1], resolution=20, run_time=1e-15)
-        task_id = webapi.run(sim, task_name="test_webapi_load", target_folder="out")
-        sim = webapi.load(task_id, simulation=sim)
-        assert sim is not None
-        sim = webapi.load(task_id)
-        assert sim is not None
-
-    def _test_get_projects(self):
-        projects = webapi.get_projects()
-        print(projects)
-
-    def _test_list_projects(self):
-        projects = webapi.list_projects()
-        print(projects)
-
-    # below tests are failing, need to be revisited.
-    def _test_new_project(self):
-        with open(FDTD_JSON) as f:
-            project = webapi.new_project(json.load(f))
-            print(project["task_id"])
-            webapi.download_project_json(project["task_id"])
-
-    def _test_download_project_json(self):
-        with open(FDTD_JSON) as f:
-            project = webapi.new_project(json.load(f))
-            print(project["task_id"])
-            webapi.download_project_json(project["task_id"])
-
-    def _test_new_project_with_name(self):
-        with open(FDTD_JSON) as f:
-            project = webapi.new_project(json.load(f), task_name="my new test")
-            print(project["task_id"])
-
-    def _test_get_project(self):
-        project = webapi.get_project("60bf3ac6-a5ae-4123-a094-47d97c4b899b")
-        print(project)
-
-    def _test_delete_project(self):
-        project = webapi.delete_project("60bf3ac6-a5ae-4123-a094-47d97c4b899b")
-        print(project)
-
-    def _test_download_results_file(self):
-        webapi.download_results_file("563264cd-eeb6-4beb-9dc6-51bf487b116a", "em_solver.out")
+PATH_JSON = "tests/tmp/simulation.json"
+PATH_SIM_DATA = "tests/tmp/sim_data.hdf5"
+# each tests works on same 'task'
+# store the task id in this list so it can be modified by tests
+task_id_global = []
 
 
-if __name__ == "__main__":
-    unittest.main()
+def _get_gloabl_task_id():
+    """returns the task id from the list"""
+    return task_id_global[0]
+
+
+def test_1_upload():
+    """test that task uploads ok"""
+    task_id = web.upload(simulation=sim_original, task_name="test_webapi")
+    task_id_global.append(task_id)
+
+
+def test_2_get_info():
+    """test that we can grab information about task"""
+    task_id = _get_gloabl_task_id()
+    task_info = web.get_info(task_id)
+
+
+def test_3_run():
+    """test that we can start running task"""
+    task_id = _get_gloabl_task_id()
+    web.run(task_id)
+
+
+def test_4_monitor():
+    """test that we can monitor task"""
+    task_id = _get_gloabl_task_id()
+    web.monitor(task_id)
+
+
+@clear_tmp
+def test_5_download():
+    """download the simulation data"""
+    task_id = _get_gloabl_task_id()
+    web.download(task_id, simulation=sim_original, path=PATH_SIM_DATA)
+
+
+@clear_tmp
+def test_6_load():
+    """load the results into sim_data"""
+    task_id = _get_gloabl_task_id()
+    sim_data = web.load(task_id, simulation=sim_original, path=PATH_SIM_DATA)
+    first_monitor_name = list(sim_original.monitors.keys())[0]
+    mon_data = sim_data[first_monitor_name]
+
+
+def _test_7_delete():
+    """test that we can monitor task"""
+    task_id = _get_gloabl_task_id()
+    web.delete(task_id)
+    try:
+        task_info = web.get_info(task_id)
+        assert task_info.status in ("deleted", "deleting")
+    except Exception as e:
+        pass

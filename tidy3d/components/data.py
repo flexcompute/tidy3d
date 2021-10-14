@@ -257,7 +257,7 @@ class ScalarFieldData(MonitorData, ABC):
     x: List[Array[float]]
     y: List[Array[float]]
     z: List[Array[float]]
-    values: List[Union[Array[float], Array[complex]]]
+    values: List[Union[Array[complex], Array[float]]]
 
     def _make_xarray(self):
         """For field quantities, store a single xarray DataArray for each ``field``.

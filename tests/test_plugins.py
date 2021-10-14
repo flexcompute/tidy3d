@@ -2,10 +2,6 @@ import pytest
 import numpy as np
 import pydantic
 
-import sys
-
-sys.path.append("./")
-
 import tidy3d as td
 
 from tidy3d.plugins import DispersionFitter

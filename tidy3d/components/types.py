@@ -72,6 +72,7 @@ class TypedArray(np.ndarray):
     @classmethod
     def validate_type(cls, val):
         """validator"""
+        # need to fix, doesnt work for simulationdata_export and load?
         return np.array(val, dtype=cls.inner_type)  # pylint: disable=no-member
 
 
