@@ -1,5 +1,4 @@
 """higher level wrappers for webapi functions for individual (Job) and batch (Batch) tasks."""
-
 import os
 from abc import ABC
 from typing import Dict, Generator
