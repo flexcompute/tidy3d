@@ -1,7 +1,3 @@
-import sys
-
-sys.path.append(".")
-
 import tidy3d.web as web
 from tidy3d import *
 from tidy3d.web.task import TaskStatus

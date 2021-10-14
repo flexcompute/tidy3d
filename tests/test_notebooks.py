@@ -1,5 +1,4 @@
 import os
-import sys
 
 import pytest
 
@@ -8,8 +7,6 @@ import nbconvert
 import nbformat
 from nbconvert.preprocessors import CellExecutionError
 from nbconvert.preprocessors import ExecutePreprocessor
-
-sys.path.append("./")
 
 ep = ExecutePreprocessor(timeout=1000, kernel_name="python3")
 

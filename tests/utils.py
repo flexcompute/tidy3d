@@ -1,9 +1,7 @@
 import os
 
-import sys
-
-sys.path.append("./")
 from tidy3d import *
+import tidy3d as td
 
 """ utilities shared between all tests """
 
@@ -46,8 +44,8 @@ SIM_MONITORS = Simulation(
 
 SIM_FULL = Simulation(
     size=(2.0, 2.0, 2.0),
-    grid_size=(0.1, 0.2, 0.15),
-    run_time=1e-12,
+    grid_size=(0.1, 0.1, 0.1),
+    run_time=40e-11,
     structures=[
         Structure(
             geometry=Box(size=(1, 1, 1), center=(-1, 0, 0)),
@@ -95,4 +93,32 @@ SIM_FULL = Simulation(
     shutoff=1e-6,
     courant=0.8,
     subpixel=False,
+)
+
+
+# Initialize simulation
+SIM_CONVERT = td.Simulation(
+    size=[4, 4, 4],
+    grid_size=(0.1, 0.1, 0.1),
+    structures=[
+        td.Structure(
+            geometry=td.Box(center=[0, 0, 0], size=[1.5, 1.5, 1.5]),
+            medium=td.nk_to_medium(n=2, k=0, freq=3e14),
+        )
+    ],
+    sources={
+        "point_source": td.VolumeSource(
+            center=(0, -1.5, 0),
+            size=(0.4, 0.4, 0.4),
+            source_time=td.GaussianPulse(freq0=3e14, fwidth=1e13),
+            polarization="Jx",
+        )
+    },
+    monitors={
+        "field_monitor": td.FieldMonitor(
+            fields=["Ex", "Hy"], center=(0, 0, 0), size=(4, 0, 4), freqs=[3e14]
+        )
+    },
+    run_time=2 / 1e13,
+    pml_layers=3 * [td.PMLLayer(profile="standard", num_layers=10)],
 )
