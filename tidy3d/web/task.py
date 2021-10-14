@@ -34,10 +34,40 @@ TaskName = str
 class TaskInfo(TaskBase):
     """general information about task"""
 
-    task_id: TaskId
-    status: TaskStatus
-    size_bytes: int
-    credits: pydantic.confloat(ge=0.0)
+    execCount: int
+    s3Storage: float
+    userEmail: str = None
+    coreDuration: float
+    coreStartTime: str = None
+    rankCount: int
+    submitTime: str
+    updateTime: str = None
+    status: str
+    taskParam: str = None
+    objectId: str
+    folderId: str
+    solverVersion: str
+    worker: str = None
+    userId: str
+    taskType: str
+    objectType: str
+    taskName: str
+    errorMessages: str = None
+    nodeSize: int
+    timeSteps: int
+    computeWeight: float
+    solverStartTime: str = None
+    solverEndTime: str = None
+    taskId: str
+    workerGroup: str = None
+    realCost: float
+    cloudInstanceSize: int
+    flow360InstanceSize: int
+    estCostMin: float
+    estCostMax: float
+    running: bool
+    objectRefId: str = None
+    metdataProcessed: bool
 
 
 class RunInfo(TaskBase):

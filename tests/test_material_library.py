@@ -1,10 +1,6 @@
 import pytest
 import numpy as np
 
-import sys
-
-sys.path.append("./")
-
 from tidy3d.material_library import material_library
 
 

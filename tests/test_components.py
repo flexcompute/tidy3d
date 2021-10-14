@@ -2,9 +2,6 @@ import pytest
 import numpy as np
 import pydantic
 
-import sys
-
-sys.path.append("./")
 from tidy3d import *
 
 

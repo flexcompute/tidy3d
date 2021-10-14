@@ -19,11 +19,14 @@ class Job(WebContainer):
 
     simulation: Simulation
     task_name: TaskName
+    folder_name: str = None
     task_id: TaskId = None
 
     def upload(self) -> None:
         """Upload simulation to server without running."""
-        task_id = web.upload(simulation=self.simulation)
+        task_id = web.upload(
+            simulation=self.simulation, task_name=self.task_name, folder_name=self.folder_name
+        )
         self.task_id = task_id
 
     def get_info(self) -> TaskInfo:
@@ -41,7 +44,7 @@ class Job(WebContainer):
         """start running a task"""
         web.run(self.task_id)
 
-    def get_run_info(self) -> RunInfo:
+    def get_run_progress(self) -> RunInfo:
         """Return information about the running ``Job``.
 
         Returns
@@ -49,7 +52,7 @@ class Job(WebContainer):
         RunInfo
             Task run information.
         """
-        run_info = web.get_run_info(task_id=self.task_id)
+        run_info = web.get_run_progress(task_id=self.task_id)
         return run_info
 
     def monitor(self) -> None:

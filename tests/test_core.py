@@ -3,9 +3,6 @@ import numpy as np
 import pydantic
 import os
 import json
-import sys
-
-sys.path.append("./")
 
 from tidy3d import *
 import tidy3d_core as tdcore

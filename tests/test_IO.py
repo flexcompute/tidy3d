@@ -3,10 +3,6 @@ import numpy as np
 import os
 from time import time
 
-import sys
-
-sys.path.append("./")
-
 from tidy3d import *
 from .utils import SIM_FULL as SIM
 from .utils import SIM_MONITORS as SIM2
