@@ -4,88 +4,121 @@ import os
 import sys
 import time
 from shutil import copyfile
-import json
 
 import numpy as np
-import requests
 
-from .config import DEFAULT_CONFIG as Config
-from .httpuils import post, put, get, delete
-from .s3utils import get_s3_client
 from .task import TaskId, Task, TaskInfo, RunInfo, TaskStatus
-
+from .httputils import *
 from ..components.simulation import Simulation
 from ..components.data import SimulationData
-from ..log import log
+
+""" filesystem emulation for tests """
+
+SERVER_DIR = "tests/tmp/server"
+
+
+def server_path(fname):
+    """gets path to fname in server dir"""
+    return os.path.join(SERVER_DIR, fname)
+
+
+CLIENT_DIR = "tests/tmp/client"
+
+
+def client_path(fname):
+    """gets path to fname in client dir"""
+    return os.path.join(CLIENT_DIR, fname)
+
+
+def make_fake_task_id(num_letters=4):
+    """constructs a fake task_id with `num_letters` letters"""
+    alphabet = list("abcdefghijklmnopqrstuvwxyz")
+    task_str_list = [np.random.choice(alphabet) for _ in range(num_letters)]
+    task_str = "".join(task_str_list)
+    return f"task_{task_str}"
+
+
+def make_fake_task() -> Task:
+    """make a fake task"""
+    task_id = make_fake_task_id()
+    task_info = make_fake_info()
+    return Task(id=task_id, info=task_info)
+
+
+def make_fake_info() -> TaskInfo:
+    """make fake task info"""
+    return TaskInfo(
+        task_id=make_fake_task_id(),
+        status=TaskStatus.INIT,
+        size_bytes=1e4 * np.random.random(),
+        credits=100 * np.random.random(),
+    )
+
+
+def make_fake_run_info(task_id: TaskId) -> RunInfo:
+    """make fake run info"""
+    print(task_id)
+    return RunInfo(
+        perc_done=100 * np.random.random(),
+        field_decay=1 * np.random.random(),
+    )
+
+
+# global variable maps TaskID -> Task
+TASKS = {}
+
+
+def get_task_by_id(task_id: TaskId) -> Task:
+    """look up Task by task_id in TASKS"""
+    task = TASKS.get(task_id)
+    assert task is not None, f"task_id {task_id} not found"
+    return task
+
+
+def _get_sim_path(task_id: TaskId):
+    """get path to simulation file on server"""
+    return server_path(f"sim_{task_id}.json")
+
+
+def _get_data_path_server(task_id: TaskId):
+    """get path to data file on server"""
+    return server_path(f"sim_{task_id}.hdf5")
+
+
+def _get_data_path_client(task_id: TaskId):
+    """get path to data file on client"""
+    return client_path(f"sim_{task_id}.hdf5")
+
 
 """ webapi functions """
 
 
-def _upload(
-    simulation: Simulation,
-    task_name: str,
-    folder_name: str = "default",
-    solver_version: str = Config.solver_version,
-    worker_group: str = Config.worker_group,
-) -> TaskId:
-    """upload with all kwargs exposed"""
-
-    method = os.path.join("fdtd/model", folder_name, "task")
-    data = {
-        "status": "draft",
-        "solverVersion": solver_version,
-        "taskName": task_name,
-        "nodeSize": 10,  # need to do these
-        "timeSteps": 10,  # need to do these
-        "computeWeight": 0.5,  # need to compute thse from simulation
-        "workerGroup": worker_group,
-    }
-
-    try:
-        task = post(method=method, data=data)
-
-    except requests.exceptions.HTTPError as e:
-        error_json = json.loads(e.response.text)
-        log.error(error_json["error"])
-
-    task_id = task["iaskId"]
-
-    # upload the file to s3
-    log.info("Uploading the json file...")
-
-    json_string = simulation.json(indent=4)
-
-    key = os.path.join("users", Config.user["UserId"], task_id, "simulation.json")
-
-    # CONVERSION HERE
-
-    client = get_s3_client()
-    client.put_object(
-        Body=json_string,
-        Bucket=Config.studio_bucket,
-        Key=key,
-    )
-
-    return task_id
-
-
-def _upload(simulation: Simulation, task_name: str, folder_name: str = "default") -> TaskId:
+def upload(simulation: Simulation) -> TaskId:
     """upload simulation to server (as draft, dont run).
 
     Parameters
     ----------
-    simulation : :class:`Simulation`
+    simulation : Simulation
         Simulation to upload to server.
-    task_name : ``str``
-        name of task
-
 
     Returns
     -------
     TaskId
         Unique identifier of task on server.
     """
-    return _upload(simulation=simulation, task_name=task_name, folder_name=folder_name)
+
+    # create the task
+    task = make_fake_task()
+    task.info.status = TaskStatus.INIT
+    task_id = task.id
+
+    # export simulation json
+    sim_path = _get_sim_path(task_id)
+    simulation.export(sim_path)
+
+    # add task to 'server' and return id
+    TASKS[task_id] = task
+    return task_id
 
 
 def get_info(task_id: TaskId) -> TaskInfo:
@@ -101,8 +134,9 @@ def get_info(task_id: TaskId) -> TaskInfo:
     TaskInfo
         Object containing information about status, size, credits of task.
     """
-    method = os.path.join('fdtd/task', task_id)
-    return get(method)
+    task = get_task_by_id(task_id)
+    # call server
+    return task.info
 
 
 def get_run_info(task_id: TaskId) -> RunInfo:
@@ -120,7 +154,7 @@ def get_run_info(task_id: TaskId) -> RunInfo:
     """
     # task = get_task_by_id(task_id)
     # call server
-    # return make_fake_run_info(task_id)
+    return make_fake_run_info(task_id)
 
 
 def run(task_id: TaskId) -> None:
@@ -131,11 +165,28 @@ def run(task_id: TaskId) -> None:
     task_id : TaskId
         Unique identifier of task on server.
     """
-    task = get_info(task_id)
-    folder_name = task['folder_name']
-    method = os.path.join('fdtd/model', folder_name, 'task', task_id)
-    put(method, data=task)
+    task = get_task_by_id(task_id)
+    task.info.status = TaskStatus.RUN
 
+    # load json file
+    sim_path = _get_sim_path(task_id)
+    sim_core = Simulation.load(sim_path)
+
+    # import tidy3d core to emulate solve
+    sys.path.append("../../")
+    import tidy3d_core as tdcore  # pylint: disable=import-outside-toplevel
+
+    # get raw results in dict of dict of Numpy
+    solver_data_dict = tdcore.solve(sim_core)
+
+    # load these results as SimulationData server side if you want
+    # sim_data_core = tdcore.load_solver_results(sim_core, solver_data_dict)
+
+    # or, download these results to hdf5 file
+    data_path = _get_data_path_server(task_id)
+    tdcore.save_solver_results(data_path, sim_core, solver_data_dict)
+
+    task.info.status = TaskStatus.SUCCESS
 
 
 MONITOR_MESSAGE = {

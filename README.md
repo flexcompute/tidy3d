@@ -2,7 +2,16 @@
 
 [![Binder](https://mybinder.org/badge_logo.svg)](https://mybinder.org/v2/gh/flexcompute/Tidy3D-client-revamp/HEAD?filepath=notebooks)
 
+
+## Developer
+
+### Useful Reading
+
+https://www.atlassian.com/git/tutorials/comparing-workflows/gitflow-workflow
+https://www.atlassian.com/git/tutorials/merging-vs-rebasing
+
 ## Flow
+
 
 ### Client (Pre)
 
