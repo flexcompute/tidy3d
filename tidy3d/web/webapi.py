@@ -23,7 +23,36 @@ sys.path.append("../../")
 from tidy3d_core.convert import export_old_json, load_old_monitor_data
 from tidy3d_core.postprocess import load_solver_results
 
+
+TOTAL_DOTS = 3
+
 """ webapi functions """
+
+def run(simulation: Simulation, task_name: str, folder_name: str = "default", refresh_time: float = 0.3, path: str = "simulation_data.hdf5") -> SimulationData:
+    """submits simulation to server, starts running, monitors progress, downloads and loads resultse.
+
+    Parameters
+    ----------
+    simulation : :class:`Simulation`
+        Simulation to upload to server.
+    task_name : ``str``
+        Name of task
+    path : ``str``
+        Path to download results file (.hdf5), including filename.
+    folder_name : ``str``
+        Name of folder to store task on web UI
+    refresh_time : ``float``
+        seconds between updating progress monitor
+
+    Returns
+    -------
+    :class:`SimulationData`
+        Object containing solver results for the supplied :class:`Simulation`.
+    """
+    task_id = upload(simulation=simulation, task_name=task_name, folder_name=folder_name)
+    start(task_id)
+    monitor(task_id, refresh_time=refresh_time)
+    return load(task_id=task_id, simulation=Simulation, path=path)
 
 
 def upload(simulation: Simulation, task_name: str, folder_name: str = "default") -> TaskId:
@@ -35,6 +64,8 @@ def upload(simulation: Simulation, task_name: str, folder_name: str = "default")
         Simulation to upload to server.
     task_name : ``str``
         name of task
+    folder_name : ``str``
+        name of folder to store task on web UI
 
 
     Returns
@@ -63,7 +94,7 @@ def get_info(task_id: TaskId) -> TaskInfo:
     return TaskInfo(**info_dict)
 
 
-def run(task_id: TaskId) -> None:
+def start(task_id: TaskId) -> None:
     """Start running the simulation associated with task.
 
     Parameters
@@ -102,7 +133,7 @@ def get_run_info(task_id: TaskId):
     return float(perc_done), float(field_decay)
 
 
-def monitor(task_id: TaskId, refresh_time: float = 0.3, total_dots: int = 3) -> None:
+def monitor(task_id: TaskId, refresh_time: float = 0.3) -> None:
     """Print the real time task progress until completion.
 
     Parameters
@@ -111,8 +142,6 @@ def monitor(task_id: TaskId, refresh_time: float = 0.3, total_dots: int = 3) -> 
         Unique identifier of task on server.
     refresh_time : ``float``
         seconds between updating monitor
-    total_dots : ``int``
-        number of cyling dots to display on progressbar description
     """
 
     task_info = get_info(task_id)
@@ -126,7 +155,7 @@ def monitor(task_id: TaskId, refresh_time: float = 0.3, total_dots: int = 3) -> 
 
         def get_description(status: str, num_dots=0) -> str:
             """ gets the progressbar description as a function of status """
-            dot_string = ''.join([' ' if i >= num_dots else '.' for i in range(total_dots)])
+            dot_string = ''.join([' ' if i >= num_dots else '.' for i in range(TOTAL_DOTS)])
             base = f"[purple]Monitoring task{dot_string}  "
             if status:
                 return base + f"status='{status}'"
@@ -142,7 +171,7 @@ def monitor(task_id: TaskId, refresh_time: float = 0.3, total_dots: int = 3) -> 
                 progress.update(pbar, description=get_description(new_status, num_dots))
                 status = new_status
             time.sleep(refresh_time)
-            num_dots = (num_dots + 1) % (total_dots + 1)
+            num_dots = (num_dots + 1) % (TOTAL_DOTS + 1)
             progress.update(pbar, description=get_description(status, num_dots))
 
             if new_status in ("running", ):
@@ -215,19 +244,19 @@ def download(task_id: TaskId, simulation: Simulation, path: str = "simulation_da
     _rm_file(log_file)
 
 
-def load(task_id: TaskId, simulation: Simulation, path: str) -> SimulationData:
+def load(task_id: TaskId, simulation: Simulation, path: str = "simulation_data.hdf5") -> SimulationData:
     """Download and Load simultion results into ``SimulationData`` object.
 
     Parameters
     ----------
-    task_id : TaskId
+    task_id : ``TaskId``
         Unique identifier of task on server.
-    path : str
+    path : ``str``
         Download path to .hdf5 data file (including filename).
 
     Returns
     -------
-    SimulationData
+    :class:`SimulationData`
         Object containing simulation data.
     """
     if not os.path.exists(path):
