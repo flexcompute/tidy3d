@@ -1,6 +1,4 @@
 """ handles filesystem, storage """
-import sys
-
 import boto3
 
 from .config import DEFAULT_CONFIG as Config
@@ -16,42 +14,34 @@ def get_s3_client():
         region_name=Config.s3_region,
     )
 
+def get_s3_user():
+    """ gets all information relevant to user's Config for s3 """
+    client = get_s3_client()
+    bucket = Config.studio_bucket
+    user_id = Config.user["UserId"]
+    return client, bucket, user_id
+
 
 class UploadProgress:
-    """stores and prints the upload status"""
+    """updates progressbar for the upload status"""
 
-    def __init__(self, size):
-        """initialize with size of file"""
-        self.size = size
-        self.uploaded_so_far = 0.0
+    def __init__(self, size_bytes, progress):
+        """ initialize with the size of file and rich.progress.Progress() instance """
+        self.progress = progress
+        self.ul_task = self.progress.add_task("[red]Uploading...", total=size_bytes)
 
     def report(self, bytes_in_chunk):
-        """update and report status"""
-        self.uploaded_so_far += bytes_in_chunk
-        perc_done = 100.0 * float(self.uploaded_so_far) / self.size
-        message = f"file upload progress: {perc_done:2.2f} %"
-
-        # do we relly want to print to stdout? how bout call this to get %?
-        sys.stdout.write(message)
-        sys.stdout.flush()
-
+        """the progressbar with recent chunk"""
+        self.progress.update(self.ul_task, advance=bytes_in_chunk)
 
 class DownloadProgress:
-    """stores and print the download status"""
+    """updates progressbar for the download status"""
 
-    def __init__(self, client, bucket, key, progress):
-        """initialize with size of file
-        note: ``progress`` is a ``rich.progress.Progress`` object
-        ``from rich.progress import Progress``
-        ``with Progress() as progress:``
-            ``dlp = DownloadProgress(progress)``
-        """
-        head_object = client.head_object(Bucket=bucket, Key=key)
-        self.size = head_object["ContentLength"]
-        self.downloaded_so_far = 0.0
+    def __init__(self, size_bytes, progress):
+        """ initialize with the size of file and rich.progress.Progress() instance """
         self.progress = progress
-        self.dl_task = self.progress.add_task("[red]Downloading results...", total=self.size)
+        self.dl_task = self.progress.add_task("[red]Downloading...", total=size_bytes)
 
     def report(self, bytes_in_chunk):
-        """update and report status"""
+        """the progressbar with recent chunk"""
         self.progress.update(self.dl_task, advance=bytes_in_chunk)
