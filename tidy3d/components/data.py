@@ -543,6 +543,10 @@ class SimulationData(Tidy3dData):
     monitor_data : ``Dict[str, :class:`MonitorData`]``
         Mapping of monitor name to :class:`MonitorData` intance. The dictionary keys must
         exist in ``simulation.monitors.keys()``.
+    task_info : ``dict``, optional
+        metadata about task that generated this SimulationData at the time it was downloaded.
+    log_string : ``str``, optional
+        string containing the log from server.
 
     Example
     -------
@@ -561,6 +565,18 @@ class SimulationData(Tidy3dData):
 
     simulation: Simulation
     monitor_data: Dict[str, MonitorData]
+    task_info: dict = None
+    log_string: str = None
+
+    @property
+    def log(self):
+        """ prints the server-side log
+            TODO: store log metadata inside of SimulationData.info or something (credits billed, time)
+        """
+        if self.log_string:
+            print(self.log_string)
+        else:
+            print('no log stored.')
 
     def export(self, fname: str) -> None:
         """Export :class:`SimulationData` to single hdf5 file including monitor data.
@@ -577,10 +593,20 @@ class SimulationData(Tidy3dData):
 
             # save json string as an attribute
             sim_json = self.simulation.json()
+
             # TODO: wrap this in a small helper function?
             str_type = h5py.special_dtype(vlen=str)
+
             f_handle.create_dataset("sim_json", (1,), dtype=str_type)
             f_handle["sim_json"][0] = sim_json
+
+            if self.log_string:
+                f_handle.create_dataset("log_string", (1,), dtype=str_type)
+                f_handle["log_string"][0] = self.log_string
+
+            if self.task_info:
+                f_handle.create_dataset("task_info", (1,), dtype=str_type)
+                f_handle["task_info"][0] = json.dumps(self.task_info)
 
             # make a group for monitor_data
             mon_data_grp = f_handle.create_group("monitor_data")
@@ -617,7 +643,17 @@ class SimulationData(Tidy3dData):
 
             # construct the original simulation from the json string
             sim_json = f_handle["sim_json"][0]
-            sim = Simulation.parse_raw(sim_json)
+            simulation = Simulation.parse_raw(sim_json)
+
+            # get the log if exists
+            log_string = f_handle.get('log_string')
+            if log_string:
+                log_string = log_string[0]
+
+            # get the task_info if exists
+            task_info = f_handle.get('task_info')
+            if task_info:
+                task_info = json.loads(task_info[0])
 
             # loop through monitor dataset and create all MonitorData instances
             monitor_data = f_handle["monitor_data"]
@@ -625,11 +661,11 @@ class SimulationData(Tidy3dData):
             for monitor_name, monitor_data in monitor_data.items():
 
                 # load this MonitorData instance, add to monitor_data dict
-                monitor = sim.monitors.get(monitor_name)
+                monitor = simulation.monitors.get(monitor_name)
                 monitor_data_instance = MonitorData.load_from_data(monitor, monitor_data)
                 monitor_data_dict[monitor_name] = monitor_data_instance
 
-        return cls(simulation=sim, monitor_data=monitor_data_dict)
+        return cls(simulation=simulation, monitor_data=monitor_data_dict, task_info=task_info, log_string=log_string)
 
     def __getitem__(self, monitor_name: str) -> MonitorData:
         """get the :class:`MonitorData` xarray representation by name (``sim_data[monitor_name]``).
