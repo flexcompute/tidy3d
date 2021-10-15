@@ -154,10 +154,10 @@ https://www.atlassian.com/git/tutorials/merging-vs-rebasing
 	- [x] hook webapi to conversion.
 	- [x] Test with simple run.
 	- [x] Fix issue with converting to complex.
-	- [ ] **Refactor some webapi internals.**
+	- [x] **Refactor some webapi internals.**
 	- [ ] **Add conversions for rest of objects.**
-	- [ ] **Containers (job batch).**
-	- [ ] Rich progressbars.
+	- [x] **Containers (job batch).**
+	- [ ] **Better handling for runtime status using rich.**
 	- [ ] **Add example notebooks and make consistent.**
 	- [ ] **Comments / documentations**
 - [ ] Get webAPI working without conversion.
@@ -295,7 +295,9 @@ https://github.com/crusaderky/python_project_template
 ---
 
 ### Extensions
-- [ ] Store server-side log metadata inside SimulationData (credits billed etc)
+- [ ] Web
+	- [ ] Nail down propper status messages.
+	- [ ] Store server-side log metadata inside SimulationData (credits billed etc)
 - [ ] Geometry
 	- [ ] Erosion / Dilation of polyslabs
 	- [ ] Vectorize / automatic `inside` based on `intersections`
