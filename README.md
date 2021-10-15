@@ -150,14 +150,19 @@ https://www.atlassian.com/git/tutorials/merging-vs-rebasing
 
 #### Web Integration (requires solver integration)
 - [ ] Get webAPI working with conversion
-	- [ ] refactor webapi internals.
-	- [ ] add http / authentication etc.
-	- [ ] hook webapi to conversion.
-	- [ ] Test with simple run.
-	- [ ] Add some example notebooks using supported sources / monitors.
-	- [ ] Include Nice web api plotting / progressbars using `rich`.
+	- [x] add http / authentication etc.
+	- [x] hook webapi to conversion.
+	- [x] Test with simple run.
+	- [x] Fix issue with converting to complex.
+	- [ ] **Refactor some webapi internals.**
+	- [ ] **Add conversions for rest of objects.**
+	- [ ] **Containers (job batch).**
+	- [ ] Rich progressbars.
+	- [ ] **Add example notebooks and make consistent.**
+	- [ ] **Comments / documentations**
 - [ ] Get webAPI working without conversion.
-	- [ ] Use native `Simulation.export()` or `Simulation.json()` for ``upload()`.
+	- [ ] Use native `Simulation.export()` or `Simulation.json()` for `upload()`.
+	- [ ] Put the tidy3d log inside SimulationData on postprocess.
 	- [ ] Use native `SimulationData.load()` for `load()`.
 - [ ] Test test test and then test more.
 ---
@@ -290,6 +295,7 @@ https://github.com/crusaderky/python_project_template
 ---
 
 ### Extensions
+- [ ] Store server-side log metadata inside SimulationData (credits billed etc)
 - [ ] Geometry
 	- [ ] Erosion / Dilation of polyslabs
 	- [ ] Vectorize / automatic `inside` based on `intersections`
