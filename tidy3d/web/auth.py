@@ -1,6 +1,5 @@
 """ Allows users to log in and be authenticated."""
 import os
-import functools
 import getpass
 import hashlib
 import json
@@ -51,7 +50,7 @@ def get_credentials() -> None:
             set_authentication_config(email, password)
             return
 
-        except Exception as e:
+        except Exception as e:  # pylint:disable=broad-except
             # why just pass here?  shouldnt we be raising?
             print("Error: Failed to log in with saved credentials: ", email)
             print(f"error = {e}")
@@ -70,7 +69,7 @@ def get_credentials() -> None:
             set_authentication_config(email, password)
             return
 
-        except Exception as e:
+        except Exception as e:  # pylint:disable=broad-except
             print("Error: Failed to log in with new username and password.")
             print(f"error = {e}")
 

@@ -61,13 +61,16 @@ class TaskInfo(TaskBase):
     taskId: str
     workerGroup: str = None
     realCost: float
-    cloudInstanceSize: int
-    flow360InstanceSize: int
+    cloudInstanceSize: int = None
+    flow360InstanceSize: int = None
     estCostMin: float
     estCostMax: float
     running: bool
     objectRefId: str = None
     metdataProcessed: bool
+    optSolverUnit: float = None
+    minSolverUnit: float = None
+    maxSolverUnit: float = None
 
 
 class RunInfo(TaskBase):

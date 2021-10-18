@@ -157,9 +157,9 @@ https://www.atlassian.com/git/tutorials/merging-vs-rebasing
 	- [x] **Refactor some webapi internals.**
 	- [ ] **Add conversions for rest of objects.**
 	- [x] **Containers (job batch).**
-	- [ ] **Better handling for runtime status using rich.**
+	- [x] **Better handling for runtime status using rich.**
 	- [ ] **Add example notebooks and make consistent.**
-	- [ ] **Comments / documentations**
+	- [x] **Comments / documentations**
 - [ ] Get webAPI working without conversion.
 	- [ ] Use native `Simulation.export()` or `Simulation.json()` for `upload()`.
 	- [ ] Put the tidy3d log inside SimulationData on postprocess.
