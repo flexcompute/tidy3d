@@ -1,35 +1,37 @@
 """Provides lowest level, user-facing interface to server."""
 
 import os
-import sys
 import time
-from shutil import copyfile
 import json
 
-import numpy as np
 import requests
 from rich.console import Console
 from rich.progress import Progress
+from tidy3d_core.convert import export_old_json, load_old_monitor_data
+from tidy3d_core.postprocess import load_solver_results
 
 from .config import DEFAULT_CONFIG as Config
-from .s3utils import get_s3_user, DownloadProgress, UploadProgress
-from .task import TaskId, Task, TaskInfo, RunInfo, TaskStatus
+from .s3utils import get_s3_user, DownloadProgress
+from .task import TaskId, TaskInfo
 from . import httputils as http
 from ..components.simulation import Simulation
 from ..components.data import SimulationData
 from ..log import log
 
-sys.path.append("../../")
-from tidy3d_core.convert import export_old_json, load_old_monitor_data
-from tidy3d_core.postprocess import load_solver_results
 
-
+REFRESH_TIME = 0.3
 TOTAL_DOTS = 3
 
 """ webapi functions """
 
-def run(simulation: Simulation, task_name: str, folder_name: str = "default", refresh_time: float = 0.3, path: str = "simulation_data.hdf5") -> SimulationData:
-    """submits simulation to server, starts running, monitors progress, downloads and loads resultse.
+
+def run(
+    simulation: Simulation,
+    task_name: str,
+    folder_name: str = "default",
+    path: str = "simulation_data.hdf5",
+) -> SimulationData:
+    """submits simulation to server, starts running, monitors progress, downloads and loads results.
 
     Parameters
     ----------
@@ -41,8 +43,6 @@ def run(simulation: Simulation, task_name: str, folder_name: str = "default", re
         Path to download results file (.hdf5), including filename.
     folder_name : ``str``
         Name of folder to store task on web UI
-    refresh_time : ``float``
-        seconds between updating progress monitor
 
     Returns
     -------
@@ -51,8 +51,8 @@ def run(simulation: Simulation, task_name: str, folder_name: str = "default", re
     """
     task_id = upload(simulation=simulation, task_name=task_name, folder_name=folder_name)
     start(task_id)
-    monitor(task_id, refresh_time=refresh_time)
-    return load(task_id=task_id, simulation=Simulation, path=path)
+    monitor(task_id)
+    return load_data(task_id=task_id, simulation=simulation, path=path)
 
 
 def upload(simulation: Simulation, task_name: str, folder_name: str = "default") -> TaskId:
@@ -133,62 +133,66 @@ def get_run_info(task_id: TaskId):
     return float(perc_done), float(field_decay)
 
 
-def monitor(task_id: TaskId, refresh_time: float = 0.3) -> None:
+def monitor(task_id: TaskId) -> None:
     """Print the real time task progress until completion.
 
     Parameters
     ----------
     task_id : ``TaskId``
         Unique identifier of task on server.
-    refresh_time : ``float``
-        seconds between updating monitor
     """
 
     task_info = get_info(task_id)
     task_name = task_info.taskName
-    perc_done = 0.0
-    field_decay = 1.0
-    status = ""
+    status = task_info.status
 
-    # to do: toggle console / display on or off, might want off for Job / Batch to override
-    with Progress() as progress:
+    console = Console()
 
-        def get_description(status: str, num_dots=0) -> str:
-            """ gets the progressbar description as a function of status """
-            dot_string = ''.join([' ' if i >= num_dots else '.' for i in range(TOTAL_DOTS)])
-            base = f"[purple]Monitoring task{dot_string}  "
-            if status:
-                return base + f"status='{status}'"
-            return base
-
-        pbar = progress.add_task(f"[purple]Working on task: '{task_name}'", total=100.0)
-        num_dots = 0
+    with console.status(f"[bold green]Working on '{task_name}'...") as status:
 
         while status not in ("success", "error", "diverged", "deleted", "draft"):
-
             new_status = get_info(task_id).status
             if new_status != status:
-                progress.update(pbar, description=get_description(new_status, num_dots))
+                console.log(f"status = {new_status}")
                 status = new_status
-            time.sleep(refresh_time)
-            num_dots = (num_dots + 1) % (TOTAL_DOTS + 1)
-            progress.update(pbar, description=get_description(status, num_dots))
+            time.sleep(REFRESH_TIME)
 
-            if new_status in ("running", ):
-
-                # try getting new percentage, if not available, just make some up
-                try:
-                    perc_done_new, field_decay_new = get_run_info(task_id)
-
-                # TODO: get the perc right away so we dont have to handle this.
-                except Exception as e:
-                    perc_done_new = perc_done
-                    field_decay_new = field_decay
-
-                # advance the progressbar
-                progress.update(pbar, description=get_description(new_status, num_dots), advance=perc_done_new - perc_done)
-                perc_done = perc_done_new
-                field_decay = field_decay_new
+    # below is the "running" progressbar, needs some work on backend before it's ready.
+    # # to do: toggle console / display on or off, might want off for Job / Batch to override
+    # perc_done = 0.0
+    # field_decay = 1.0
+    # status = ""
+    # with Progress() as progress:
+    #     def get_description(status: str, num_dots=0) -> str:
+    #         """ gets the progressbar description as a function of status """
+    #         dot_string = ''.join([' ' if i >= num_dots else '.' for i in range(TOTAL_DOTS)])
+    #         base = f"[purple]Monitoring task{dot_string}  "
+    #         if status:
+    #             return base + f"status='{status}'"
+    #         return base
+    #     pbar = progress.add_task(f"[purple]Working on task: '{task_name}'", total=100.0)
+    #     num_dots = 0
+    #     while status not in ("success", "error", "diverged", "deleted", "draft"):
+    #         new_status = get_info(task_id).status
+    #         if new_status != status:
+    #             progress.update(pbar, description=get_description(new_status, num_dots))
+    #             status = new_status
+    #         time.sleep(REFRESH_TIME)
+    #         num_dots = (num_dots + 1) % (TOTAL_DOTS + 1)
+    #         progress.update(pbar, description=get_description(status, num_dots))
+    #         if new_status in ("running", ):
+    #             # try getting new percentage, if not available, just make some up
+    #             try:
+    #                 perc_done_new, field_decay_new = get_run_info(task_id)
+    #             # TODO: get the perc right away so we dont have to handle this.
+    #             except Exception as e:
+    #                 perc_done_new = perc_done
+    #                 field_decay_new = field_decay
+    #             # advance the progressbar
+    #             progress.update(pbar, description=get_description(new_status, num_dots),
+    #                  advance=perc_done_new - perc_done)
+    #             perc_done = perc_done_new
+    #             field_decay = field_decay_new
 
 
 def download(task_id: TaskId, simulation: Simulation, path: str = "simulation_data.hdf5") -> None:
@@ -212,7 +216,7 @@ def download(task_id: TaskId, simulation: Simulation, path: str = "simulation_da
     mon_file = os.path.join(directory, "monitor_data.hdf5")
     log_file = os.path.join(directory, "tidy3d.log")
 
-    log.info('clearing existing files before downloading')
+    log.info("clearing existing files before downloading")
     for _path in (sim_file, mon_file, path):
         _rm_file(_path)
 
@@ -221,30 +225,36 @@ def download(task_id: TaskId, simulation: Simulation, path: str = "simulation_da
     _download_file(task_id, fname="monitor_data.hdf5", path=mon_file)
 
     # TODO: do this stuff server-side
-    log.info('getting log string')
+    log.info("getting log string")
     _download_file(task_id, fname="tidy3d.log", path=log_file)
-    with open(log_file, "r") as f:
+    with open(log_file, "r", encoding="utf-8") as f:
         log_string = f.read()
 
-
-    log.info('loading old monitor data to data dict')
+    log.info("loading old monitor data to data dict")
     # TODO: we cant convert old simulation file to new, so we'll ask for original as input instead.
     # simulation = Simulation.load(sim_file)
     mon_data_dict = load_old_monitor_data(simulation=simulation, data_file=mon_file)
 
-    log.info('creating SimulationData from monitor data dict')
-    sim_data = load_solver_results(simulation=simulation, solver_data_dict=mon_data_dict, log_string=log_string, task_info=task_info)
+    log.info("creating SimulationData from monitor data dict")
+    sim_data = load_solver_results(
+        simulation=simulation,
+        solver_data_dict=mon_data_dict,
+        log_string=log_string,
+        task_info=task_info,
+    )
 
-    log.info(f'exporting SimulationData to {path}')
+    log.info(f"exporting SimulationData to {path}")
     sim_data.export(path)
 
-    log.info('clearing extraneous files')
+    log.info("clearing extraneous files")
     _rm_file(sim_file)
     _rm_file(mon_file)
     _rm_file(log_file)
 
 
-def load(task_id: TaskId, simulation: Simulation, path: str = "simulation_data.hdf5") -> SimulationData:
+def load_data(
+    task_id: TaskId, simulation: Simulation, path: str = "simulation_data.hdf5"
+) -> SimulationData:
     """Download and Load simultion results into ``SimulationData`` object.
 
     Parameters
@@ -262,7 +272,7 @@ def load(task_id: TaskId, simulation: Simulation, path: str = "simulation_data.h
     if not os.path.exists(path):
         download(task_id=task_id, simulation=simulation, path=path)
 
-    log.info(f'loading SimulationData from {path}')
+    log.info(f"loading SimulationData from {path}")
     return SimulationData.load(path)
 
 
@@ -282,6 +292,7 @@ def delete(task_id: TaskId) -> TaskInfo:
 
     method = os.path.join("fdtd", "task", str(task_id))
     return http.delete(method)
+
 
 def _upload_task(
     simulation: Simulation,
@@ -309,7 +320,7 @@ def _upload_task(
 
     method = os.path.join("fdtd/model", folder_name, "task")
 
-    log.info(f"Creating task.")
+    log.info("Creating task.")
     try:
         task = http.post(method=method, data=data)
         task_id = task["taskId"]
@@ -320,7 +331,6 @@ def _upload_task(
     # upload the file to s3
     log.info("Uploading the json file")
 
-
     client, bucket, user_id = get_s3_user()
 
     key = os.path.join("users", user_id, task_id, "simulation.json")
@@ -328,7 +338,7 @@ def _upload_task(
     # size_bytes = len(json_string.encode('utf-8'))
     # TODO: add progressbar, with put_object, no callback, so no real need.
     # with Progress() as progress:
-        # upload_progress = UploadProgress(size_bytes, progress)
+    # upload_progress = UploadProgress(size_bytes, progress)
     client.put_object(
         Body=json_string,
         Bucket=bucket,
@@ -337,6 +347,7 @@ def _upload_task(
     )
 
     return task_id
+
 
 def _download_file(task_id: TaskId, fname: str, path: str) -> None:
     """Download a specific file ``fname`` to ``path``.
@@ -368,7 +379,7 @@ def _download_file(task_id: TaskId, fname: str, path: str) -> None:
                 Bucket=bucket, Filename=path, Key=key, Callback=download_progress.report
             )
 
-    except Exception as e:
+    except Exception as e:  # pylint:disable=broad-except
         task_info = get_info(task_id)
         log.warning(e)
         log.error(
@@ -381,5 +392,5 @@ def _download_file(task_id: TaskId, fname: str, path: str) -> None:
 def _rm_file(path: str):
     """clear path if it exists"""
     if os.path.exists(path) and not os.path.isdir(path):
-        log.info(f'removing file {path}')
+        log.info(f"removing file {path}")
         os.remove(path)

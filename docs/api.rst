@@ -81,6 +81,8 @@ Simulation Output Data
 Submitting Simulations
 ======================
 
+.. currentmodule:: tidy3d
+
 Web API
 -------
 
@@ -93,7 +95,7 @@ Web API
    web.run
    web.monitor
    web.download
-   web.load_results
+   web.load_data
    web.delete
 
 Job Interface
@@ -103,14 +105,6 @@ Job Interface
    :toctree: _autosummary/
 
    web.Job
-   web.Job.upload
-   web.Job.get_info
-   web.Job.get_run_info
-   web.Job.run
-   web.Job.monitor
-   web.Job.download
-   web.Job.load_results
-   web.Job.delete   
 
 Batch Processing
 ----------------
@@ -119,14 +113,6 @@ Batch Processing
    :toctree: _autosummary/
 
    web.Batch
-   web.Batch.upload
-   web.Batch.get_info
-   web.Batch.get_run_info
-   web.Batch.run
-   web.Batch.monitor
-   web.Batch.download
-   web.Batch.load_results
-   web.Batch.delete
 
 Info Containers
 ---------------

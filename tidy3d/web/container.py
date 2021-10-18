@@ -2,6 +2,10 @@
 import os
 from abc import ABC
 from typing import Dict, Generator
+import time
+
+from rich.console import Console
+from rich.progress import Progress
 
 from . import webapi as web
 from .task import TaskId, TaskInfo, RunInfo, TaskName
@@ -10,8 +14,8 @@ from ..components.data import SimulationData
 from ..components.base import Tidy3dBaseModel
 
 
-DEFAULT_DATA_PATH = 'simulation_data.hdf5'
-DEFAULT_DATA_DIR = '.'
+DEFAULT_DATA_PATH = "simulation_data.hdf5"
+DEFAULT_DATA_DIR = "."
 
 
 class WebContainer(Tidy3dBaseModel, ABC):
@@ -19,18 +23,30 @@ class WebContainer(Tidy3dBaseModel, ABC):
 
 
 class Job(WebContainer):
-    """Interface for managing the running of a ``Simulation`` on server."""
+    """Interface for managing the running of a :class:`Simulation` on server."""
 
     simulation: Simulation
     task_name: TaskName
-    folder_name: str = 'default'
+    folder_name: str = "default"
     task_id: TaskId = None
 
-    def run(self, path: str = DEFAULT_DATA_PATH, refresh_time: float = 0.3) -> SimulationData:
-        """ run all steps. """
+    def run(self, path: str = DEFAULT_DATA_PATH) -> SimulationData:
+        """run :class:`Job` all the way through and return data.
+
+        Parameters
+        ----------
+        path_dir : str
+            Base directory where data will be downloaded, by default current working directory.
+
+        Returns
+        -------
+        ``{TaskName: SimulationData}``
+            Dictionary mapping task name to :class:`SimulationData` for :class:`Job`.
+        """
+
         self.upload()
         self.start()
-        self.monitor(refresh_time=refresh_time)
+        self.monitor()
         return self.load_data(path=path)
 
     def upload(self) -> None:
@@ -41,15 +57,20 @@ class Job(WebContainer):
         self.task_id = task_id
 
     def get_info(self) -> TaskInfo:
-        """Return information about a Job.
+        """Return information about a :class:`Job`.
 
         Returns
         -------
-        TaskInfo
-            Object containing information about status, size, credits of task.
+        ``TaskInfo``
+            :class:`TaskInfo` object containing info about status, size, credits of task and others.
         """
         task_info = web.get_info(task_id=self.task_id)
         return task_info
+
+    @property
+    def status(self):
+        """return current status"""
+        return self.get_info().status
 
     def start(self) -> None:
         """start running a task"""
@@ -66,17 +87,28 @@ class Job(WebContainer):
         run_info = web.get_run_info(task_id=self.task_id)
         return run_info
 
-    def monitor(self, refresh_time: float = 0.3) -> None:
+    def monitor(self) -> None:
         """monitor progress of running ``Job``."""
-        web.monitor(task_id=self.task_id, refresh_time=refresh_time)
+
+        status = self.status
+        console = Console()
+
+        with console.status(f"[bold green]Working on '{self.task_name}'...") as _:
+
+            while status not in ("success", "error", "diverged", "deleted", "draft"):
+                new_status = self.status
+                if new_status != status:
+                    console.log(f"status = {new_status}")
+                    status = new_status
+                time.sleep(web.REFRESH_TIME)
 
     def download(self, path: str = DEFAULT_DATA_PATH) -> None:
         """Download results of simulation.
 
         Parameters
         ----------
-        path : str
-            Download path to .hdf5 data file (including filename).
+        path : ``str``
+            Path to download data as ``.hdf5`` file (including filename).
         """
         web.download(task_id=self.task_id, simulation=self.simulation, path=path)
 
@@ -87,23 +119,23 @@ class Job(WebContainer):
         Parameters
         ----------
         path : str
-            Download path to .hdf5 data file (including filename).
+            Path to download data as ``.hdf5`` file (including filename).
 
         Returns
         -------
-        SimulationData
+        :class:`SimulationData`
             Object containing data about simulation.
         """
-        return web.load(task_id=self.task_id, simulation=self.simulation, path=path)
+        return web.load_data(task_id=self.task_id, simulation=self.simulation, path=path)
 
     def delete(self):
-        """Delete server-side data associated with Job."""
+        """Delete server-side data associated with :class:`Job`."""
         web.delete(self.task_id)
         self.task_id = None
 
 
 class Batch(WebContainer):
-    """Interface for submitting several ``Simulation`` objects to sever.
+    """Interface for submitting several :class:`Simulation` objects to sever.
 
     Parameters
     ----------
@@ -115,13 +147,25 @@ class Batch(WebContainer):
 
     simulations: Dict[TaskName, Simulation]
     jobs: Dict[TaskName, Job] = None
-    folder_name: str = 'default'
+    folder_name: str = "default"
 
-    def run(self, path_dir : str = DEFAULT_DATA_DIR, refresh_time: float = 0.3):
-        """ run all steps for each batch """
+    def run(self, path_dir: str = DEFAULT_DATA_DIR):
+        """Run each :class:`Job` in :class:`Batch` all the way through and return iterator for data.
+
+        Parameters
+        ----------
+        path_dir : ``str``
+            Base directory where data will be downloaded, by default current working directory.
+
+        Yields
+        ------
+        ``(TaskName, SimulationData)``
+            Task name and Simulation data, returned one by one if iterated over.
+        """
+
         self.upload()
         self.start()
-        self.monitor(refresh_time=refresh_time)
+        self.monitor()
         self.download(path_dir=path_dir)
         return self.items()
 
@@ -166,43 +210,73 @@ class Batch(WebContainer):
             run_info_dict[task_name] = run_info
         return run_info_dict
 
-    def monitor(self, refresh_time: float = 0.3) -> None:
+    def monitor(self) -> None:
         """monitor progress of each of the running tasks in batch."""
-        for task_name, job in self.jobs.items():
-            print(f"\nmonitoring task: {task_name}")
-            job.monitor(refresh_time=refresh_time)
+
+        def pbar_description(task_name: str, status: str) -> str:
+            return f"{task_name}: status = {status}"
+
+        run_statuses = ["queued", "preprocess", "running", "postprocess", "visualize", "success"]
+        end_statuses = ("success", "error", "diverged", "deleted", "draft")
+
+        pbar_tasks = {}
+        with Progress() as progress:
+            for task_name, job in self.jobs.items():
+                status = job.status
+                description = pbar_description(task_name, status)
+                pbar = progress.add_task(description, total=len(run_statuses) - 1)
+                pbar_tasks[task_name] = pbar
+
+            statuses = [job.status for _, job in self.jobs.items()]
+            while any(s not in end_statuses for s in statuses):
+                for status_index, (task_name, job) in enumerate(self.jobs.items()):
+                    current_status = statuses[status_index]
+                    new_status = job.status
+                    if new_status != current_status:
+                        completed = run_statuses.index(new_status)
+                        pbar = pbar_tasks[task_name]
+                        description = pbar_description(task_name, new_status)
+                        progress.update(pbar, description=description, completed=completed)
+                        statuses[status_index] = new_status
+                statuses = [job.status for _, job in self.jobs.items()]
+                time.sleep(web.REFRESH_TIME)
+
+            for task_name, job in self.jobs.items():
+                pbar = pbar_tasks[task_name]
+                description = pbar_description(task_name, job.status)
+                progress.update(pbar, description=description, completed=len(run_statuses))
 
     @staticmethod
-    def _job_data_path(task_id: TaskId, path_dir : str = DEFAULT_DATA_DIR):
+    def _job_data_path(task_id: TaskId, path_dir: str = DEFAULT_DATA_DIR):
         """Default path to data of a single Job in Batch
 
         Parameters
         ----------
-        task_id : TaskId
-            task_id corresponding to a job
-        path_dir : str = DEFAULT_DATA_DIR
+        task_id : ``TaskId``
+            task_id corresponding to a :class:`Job`
+        path_dir : ``str``, optional
             Base directory where data will be downloaded, by default current working directory.
 
         Returns
         -------
-        TYPE
-            Description
+        str
+            path of the data file
         """
         return os.path.join(path_dir, f"{str(task_id)}.hdf5")
 
-    def download(self, path_dir : str = DEFAULT_DATA_DIR) -> None:
+    def download(self, path_dir: str = DEFAULT_DATA_DIR) -> None:
         """download results.
 
         Parameters
         ----------
-        path_dir : str
+        path_dir : ``str``
             Base directory where data will be downloaded, by default current working directory.
         """
         for task_name, job in self.jobs.items():
             job_path = self._job_data_path(task_name, path_dir)
             job.download(path=job_path)
 
-    def load_data(self, path_dir : str = DEFAULT_DATA_DIR) -> Dict[TaskName, SimulationData]:
+    def load_data(self, path_dir: str = DEFAULT_DATA_DIR) -> Dict[TaskName, SimulationData]:
         """download results and load them into SimulationData object.
         Note: this will return a dictionary of :class:`SimulationData` objects, each of which can
         hold a large amount of data.
@@ -216,14 +290,14 @@ class Batch(WebContainer):
 
         Returns
         -------
-        Dict[TaskName, SimulationData]
-            Description
+        ``{TaskName: SimulationData}``
+            Dictionary mapping task name to :class:`SimulationData` for :class:`Job`.
         """
         sim_data_dir = {}
         self.download(path_dir=path_dir)
         for task_name, job in self.jobs.items():
             job_path = self._job_data_path(task_id=job.task_id, path_dir=path_dir)
-            sim_data = job.load_results(path=job_path)
+            sim_data = job.load_data(path=job_path)
             sim_data_dir[task_name] = sim_data
         return sim_data_dir
 
@@ -233,20 +307,20 @@ class Batch(WebContainer):
             job.delete()
             self.jobs = None
 
-    def items(self, path_dir : str = DEFAULT_DATA_DIR) -> Generator:
+    def items(self, path_dir: str = DEFAULT_DATA_DIR) -> Generator:
         """simple iterator, ``for task_name, sim_data in batch.items(): do something``
 
         Parameters
         ----------
-        path_dir : str
+        path_dir : ``str``
             Base directory where data will be downloaded, by default current working directory.
 
         Yields
         ------
-        Tuple[TaskName, SimulationData]
+        ``(TaskName, SimulationData)``
             Task name and Simulation data, returned one by one if iterated over.
         """
         for task_name, job in self.jobs.items():
             job_path = self._job_data_path(task_id=job.task_id, path_dir=path_dir)
-            sim_data = job.load_results(path=job_path)
+            sim_data = job.load_data(path=job_path)
             yield task_name, sim_data
