@@ -119,6 +119,6 @@ SIM_CONVERT = td.Simulation(
             fields=["Ex", "Hy"], center=(0, 0, 0), size=(4, 0, 4), freqs=[3e14]
         )
     },
-    run_time=2 / 1e13,
+    run_time=1 / 1e12,
     pml_layers=3 * [td.PMLLayer(profile="standard", num_layers=10)],
 )

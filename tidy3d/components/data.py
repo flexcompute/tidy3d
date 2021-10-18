@@ -105,12 +105,12 @@ class MonitorData(Tidy3dData, ABC):
 
     @property
     def geometry(self):
-        """Return ``Box`` representation of monitor's geometry.
+        """Return :class:`Box` representation of monitor's geometry.
 
         Returns
         -------
-        ``Box``
-            ``Box`` represention of shape of originl monitor.
+        :class:`Box`
+            :class:`Box` represention of shape of originl monitor.
         """
         return self.monitor.geometry
 
@@ -570,13 +570,13 @@ class SimulationData(Tidy3dData):
 
     @property
     def log(self):
-        """ prints the server-side log
-            TODO: store log metadata inside of SimulationData.info or something (credits billed, time)
+        """prints the server-side log
+        TODO: store log metadata inside of SimulationData.info or something (credits billed, time)
         """
         if self.log_string:
             print(self.log_string)
         else:
-            print('no log stored.')
+            print("no log stored.")
 
     def export(self, fname: str) -> None:
         """Export :class:`SimulationData` to single hdf5 file including monitor data.
@@ -646,12 +646,12 @@ class SimulationData(Tidy3dData):
             simulation = Simulation.parse_raw(sim_json)
 
             # get the log if exists
-            log_string = f_handle.get('log_string')
+            log_string = f_handle.get("log_string")
             if log_string:
                 log_string = log_string[0]
 
             # get the task_info if exists
-            task_info = f_handle.get('task_info')
+            task_info = f_handle.get("task_info")
             if task_info:
                 task_info = json.loads(task_info[0])
 
@@ -665,7 +665,12 @@ class SimulationData(Tidy3dData):
                 monitor_data_instance = MonitorData.load_from_data(monitor, monitor_data)
                 monitor_data_dict[monitor_name] = monitor_data_instance
 
-        return cls(simulation=simulation, monitor_data=monitor_data_dict, task_info=task_info, log_string=log_string)
+        return cls(
+            simulation=simulation,
+            monitor_data=monitor_data_dict,
+            task_info=task_info,
+            log_string=log_string,
+        )
 
     def __getitem__(self, monitor_name: str) -> MonitorData:
         """get the :class:`MonitorData` xarray representation by name (``sim_data[monitor_name]``).

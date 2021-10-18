@@ -14,8 +14,9 @@ def get_s3_client():
         region_name=Config.s3_region,
     )
 
+
 def get_s3_user():
-    """ gets all information relevant to user's Config for s3 """
+    """gets all information relevant to user's Config for s3"""
     client = get_s3_client()
     bucket = Config.studio_bucket
     user_id = Config.user["UserId"]
@@ -26,7 +27,7 @@ class UploadProgress:
     """updates progressbar for the upload status"""
 
     def __init__(self, size_bytes, progress):
-        """ initialize with the size of file and rich.progress.Progress() instance """
+        """initialize with the size of file and rich.progress.Progress() instance"""
         self.progress = progress
         self.ul_task = self.progress.add_task("[red]Uploading...", total=size_bytes)
 
@@ -34,11 +35,12 @@ class UploadProgress:
         """the progressbar with recent chunk"""
         self.progress.update(self.ul_task, advance=bytes_in_chunk)
 
+
 class DownloadProgress:
     """updates progressbar for the download status"""
 
     def __init__(self, size_bytes, progress):
-        """ initialize with the size of file and rich.progress.Progress() instance """
+        """initialize with the size of file and rich.progress.Progress() instance"""
         self.progress = progress
         self.dl_task = self.progress.add_task("[red]Downloading...", total=size_bytes)
 

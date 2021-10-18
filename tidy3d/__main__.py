@@ -81,8 +81,8 @@ if inspect_credits:
     info = job.get_info()
     print(
         f'task "{task_name}" estimated to use '
-        f"\n\t{info.credits:.2f} credits and "
-        f"\n\t{info.size_bytes:.2e} bytes of storage."
+        f"\n\t{info.optSolverUnit:.2f} credits and "
+        f"\n\t{info.s3Storage:.2e} bytes of storage."
     )
     looks_good = input("Do you want to continue to submit? [y]/[n]")
     if looks_good.lower() != "y":
@@ -90,9 +90,9 @@ if inspect_credits:
         sys.exit()
 
 # run the simulation and load results
-job.run()
+job.start()
 job.monitor()
-sim_data = job.load_results(path=out_file)
+sim_data = job.load_data(path=out_file)
 
 # visualize results
 if viz_results:

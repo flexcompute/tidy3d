@@ -97,3 +97,29 @@ Plot Data
      - ``mon_data.plot()`` if data is 2D, otherwise one can use ``mon_data.plot.pcolormesh(x='x', y='y')`` to specify the ``x`` and ``y`` coordinates explicitly.
    * - Plot the simulation structure on top of my field plot?
      - ``sim_data.simulation.plot_structures_eps(z=0.0, ax=ax, alpha=.5, cbar=False, lw=0)`` will plot the ``z=0`` cross-section, where ``ax`` is the axis where your fields are plotted on.
+
+Submit Jobs to Server
+---------------------
+
+.. list-table::
+   :header-rows: 1
+   :widths: 40 60
+
+   * - How do I...
+     - Solution
+   * - Submit my simulations to run on Flexcompute's servers?
+     - The simplest way is to create a :class:`Job` object from your :class:`Simulation` object and call the ``.run()`` method, which does all steps.  For example:  ``job = Job(simulation=simulation, task_name='my_sim');  job.run()``.
+   * - Upload a job to the web without running it so I can inspect it first?
+     - Once you've created a :class:`Job`, you can upload it to our servers with ``job.upload()`` and it will not run until you excplicitly tell it to with ``job.start()``.
+   * - Monitor the progress of a simulation?
+     - ``web.monitor(task_id)``, ``Job.monitor()``, or ``Batch.monitor()`` will display the progress of your simulation(s).
+   * - Load the results of a simulation?
+     - ``sim_data = job.load_results(path)`` will download the results to ``path`` and load them as :class:`SimulationData` object.
+   * - See information about my :class:`Job`, such as how many credits it will take?
+     - After uploading your job with ``job.upload()`` you can get a host of information about it through ``task_info = job.get_info()``.
+   * - Submit multiple simulations?
+     - The :class:`Batch` interface was created to manage multiple :class:`Job` instances and gives a similar interface with large number of jobs in mind.
+   * - Loop through :class:`Batch` data without loading all of the data into memory?
+     - ``for task_name, sim_data in batch.items():`` will ``yield`` the :class:`SimulationData` for each :class:`Job` in the batch one by one, so you can perform your postprocessing in the loop body without loading each of the simulations' data into memory at once.
+   * - Save or load a :class:`Job` or :class:`Batch` so I can work with it later?
+     - Like most other tidy3d objects, :class:`Job` and :class:`Batch` instances have ``.export(path)`` and ``.load()`` methods that will export and load thier metadata as .json files.  This is especially useful for loading batches for analysis long after they have run.

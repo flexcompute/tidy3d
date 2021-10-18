@@ -14,7 +14,12 @@ from tidy3d.components.data import FieldData, FluxData, ModeData
 """ Loads solver raw data dictionary into forms to use later """
 
 
-def load_solver_results(simulation: Simulation, solver_data_dict: SolverDataDict, task_info : dict = None, log_string : str = None) -> SimulationData:
+def load_solver_results(
+    simulation: Simulation,
+    solver_data_dict: SolverDataDict,
+    task_info: dict = None,
+    log_string: str = None,
+) -> SimulationData:
     """load the solver_data_dict and simulation into SimulationData"""
 
     # constuct monitor_data dictionary
@@ -29,7 +34,9 @@ def load_solver_results(simulation: Simulation, solver_data_dict: SolverDataDict
         monitor_data_dict["monitor"] = monitor
         monitor_data[name] = monitor_data_type(**monitor_data_dict)
 
-    return SimulationData(simulation=simulation, monitor_data=monitor_data, task_info=task_info, log_string=log_string)
+    return SimulationData(
+        simulation=simulation, monitor_data=monitor_data, task_info=task_info, log_string=log_string
+    )
 
 
 def save_solver_results(path: str, sim: Simulation, solver_dict: SolverDataDict) -> None:

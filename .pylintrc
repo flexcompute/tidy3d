@@ -10,4 +10,4 @@ max-line-length=100
 
 [pre-commit-hook]
 command=custom_pylint
-disable=pointless-string-statement, too-many-ancestors, too-few-public-methods, fixme, logging-not-lazy
+disable=pointless-string-statement, too-many-ancestors, too-few-public-methods, fixme, logging-not-lazy, logging-fstring-interpolation
