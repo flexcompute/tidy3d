@@ -210,7 +210,7 @@ class Batch(WebContainer):
             run_info_dict[task_name] = run_info
         return run_info_dict
 
-    def monitor(self) -> None:
+    def monitor(self) -> None:  # pylint:disable=too-many-locals
         """monitor progress of each of the running tasks in batch."""
 
         def pbar_description(task_name: str, status: str) -> str:

@@ -10,7 +10,6 @@ from .validators import assert_plane
 from .mode import Mode
 from .viz import add_ax_if_none, MonitorParams
 
-
 """ Monitors """
 
 
@@ -54,7 +53,7 @@ class TimeMonitor(Monitor, ABC):
     times: List[int]
 
 
-class ScalarFieldMonitor(Monitor, ABC):
+class AbstractFieldMonitor(Monitor, ABC):
     """stores data as a function of x,y,z"""
 
     fields: List[EMField] = ["Ex", "Ey", "Ez", "Hx", "Hy", "Hz"]
@@ -73,7 +72,7 @@ class AbstractFluxMonitor(PlanarMonitor, ABC):
 """ usable """
 
 
-class FieldMonitor(ScalarFieldMonitor, FreqMonitor):
+class FieldMonitor(AbstractFieldMonitor, FreqMonitor):
     """Stores EM fields or permittivity as a function of frequency.
 
     Parameters
@@ -92,9 +91,10 @@ class FieldMonitor(ScalarFieldMonitor, FreqMonitor):
 
     fields: List[FieldType] = ["Ex", "Ey", "Ez", "Hx", "Hy", "Hz"]
     type: Literal["FieldMonitor"] = "FieldMonitor"
+    data_type: Literal["ScalarFieldData"] = "ScalarFieldData"
 
 
-class FieldTimeMonitor(ScalarFieldMonitor, TimeMonitor):
+class FieldTimeMonitor(AbstractFieldMonitor, TimeMonitor):
     """Stores EM fields as a function of time.
 
     Parameters
@@ -111,6 +111,7 @@ class FieldTimeMonitor(ScalarFieldMonitor, TimeMonitor):
     """
 
     type: Literal["FieldTimeMonitor"] = "FieldTimeMonitor"
+    data_type: Literal["ScalarFieldTimeData"] = "ScalarFieldTimeData"
 
 
 class FluxMonitor(AbstractFluxMonitor, FreqMonitor):
@@ -127,6 +128,7 @@ class FluxMonitor(AbstractFluxMonitor, FreqMonitor):
     """
 
     type: Literal["FluxMonitor"] = "FluxMonitor"
+    data_type: Literal["FluxData"] = "FluxData"
 
 
 class FluxTimeMonitor(AbstractFluxMonitor, TimeMonitor):
@@ -143,6 +145,7 @@ class FluxTimeMonitor(AbstractFluxMonitor, TimeMonitor):
     """
 
     type: Literal["FluxTimeMonitor"] = "FluxTimeMonitor"
+    data_type: Literal["FluxTimeData"] = "FluxTimeData"
 
 
 class ModeMonitor(PlanarMonitor, FreqMonitor):
@@ -163,6 +166,7 @@ class ModeMonitor(PlanarMonitor, FreqMonitor):
     direction: List[Direction] = ["+", "-"]
     modes: List[Mode]
     type: Literal["ModeMonitor"] = "ModeMonitor"
+    data_type: Literal["ModeData"] = "ModeData"
 
 
 """ explanation of monitor_type_map:
@@ -175,15 +179,7 @@ class ModeMonitor(PlanarMonitor, FreqMonitor):
     object and therefore load the correct monitor.
 """
 
-monitor_type_map = {
-    "FieldMonitor": FieldMonitor,
-    "FieldTimeMonitor": FieldTimeMonitor,
-    "FluxMonitor": FluxMonitor,
-    "FluxTimeMonitor": FluxTimeMonitor,
-    "ModeMonitor": ModeMonitor,
-}
-
-MonitorType = Union[tuple(monitor_type_map.values())]
+MonitorType = Union[FieldMonitor, FieldTimeMonitor, FluxMonitor, FluxTimeMonitor, ModeMonitor]
 
 
 """ Convenience methods to create evenly spaced times or frequencies

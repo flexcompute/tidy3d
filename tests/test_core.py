@@ -89,39 +89,39 @@ def test_flow():
     _assert_same_sim_data(sim_data_client, sim_data_core, sim_reference=SIM)
 
 
-@clear_tmp
-def test_mon_data():
-    """Test that exporting and loading a MonitorData gives same results"""
+# @clear_tmp
+# def test_mon_data():
+#     """Test that exporting and loading a MonitorData gives same results"""
 
-    # make data
-    sim_data = _solve_sim(SIM)
+#     # make data
+#     sim_data = _solve_sim(SIM)
 
-    # make sure all monitor data are same when exported and loaded
-    for mon_name, mon in SIM.monitors.items():
-        mon_data = sim_data.monitor_data[mon_name]
+#     # make sure all monitor data are same when exported and loaded
+#     for mon_name, mon in SIM.monitors.items():
+#         mon_data = sim_data.monitor_data[mon_name]
 
-        # export MonitorData
-        mon_path = prepend_tmp(f"monitor_{mon_name}.hdf5")
-        mon_data.export(mon_path)
+#         # export MonitorData
+#         mon_path = prepend_tmp(f"monitor_{mon_name}.hdf5")
+#         mon_data.export(mon_path)
 
-        # load with the correct MonitorData
-        mon_data_type = monitor_data_map[type(mon)]
-        _mon_data = mon_data_type.load(mon_path)
+#         # load with the correct MonitorData
+#         mon_data_type = monitor_data_map[type(mon)]
+#         _mon_data = mon_data_type.load(mon_path)
 
-        assert mon_data == _mon_data
+#         assert mon_data == _mon_data
 
 
-@clear_tmp
-def test_mon_data_serialize():
-    """Test that exporting and loading a MonitorData gives same results"""
+# @clear_tmp
+# def test_mon_data_serialize():
+#     """Test that exporting and loading a MonitorData gives same results"""
 
-    # make data
-    sim_data = _solve_sim(SIM)
+#     # make data
+#     sim_data = _solve_sim(SIM)
 
-    # make sure all monitor data are same when exported and loaded
-    for mon_name, mon in SIM.monitors.items():
-        mon_data = sim_data.monitor_data[mon_name]
-        mon_data.json()
+#     # make sure all monitor data are same when exported and loaded
+#     for mon_name, mon in SIM.monitors.items():
+#         mon_data = sim_data.monitor_data[mon_name]
+#         mon_data.json()
 
 
 @clear_tmp

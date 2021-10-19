@@ -1,16 +1,16 @@
 """ Generates data"""
-from typing import Dict, Tuple
+from typing import Dict, Tuple, Union
 import numpy as np
 
 from tidy3d import Simulation
-from tidy3d.components.monitor import ScalarFieldMonitor, AbstractFluxMonitor
+from tidy3d.components.monitor import AbstractFieldMonitor, AbstractFluxMonitor
 from tidy3d.components.monitor import ModeMonitor, FreqMonitor, TimeMonitor
 from tidy3d.components.types import GridSize, Tuple, Numpy
 
 """ Creates fake data for the simulation and returns a monitor data dict containing all fields """
 
 # maps monitor name to dictionary mapping data label to data value
-MonitorDataDict = Dict[str, Numpy]
+MonitorDataDict = Dict[str, Union[Numpy, Dict[str, Numpy]]]
 SolverDataDict = Dict[str, MonitorDataDict]
 
 # note: "values" is a special key in the Monitor data dict, corresponds to the raw data, not coords
@@ -29,25 +29,19 @@ def solve(simulation: Simulation) -> SolverDataDict:
             sampler_values = np.array(monitor.times)
             sampler_label = "t"
             value_fn = np.real
-        if isinstance(monitor, ScalarFieldMonitor):
+        if isinstance(monitor, AbstractFieldMonitor):
             x, y, z = discretize_monitor(simulation, monitor)
             field_data_dict = make_fake_field_values(x, y, z, sampler_values)
-            data_array_list = []
+            data_dict[name] = {}
             for field_name in monitor.fields:
-                field_component = field_data_dict[field_name]
-                data_array_list.append(value_fn(field_component))
-            num_fields = len(monitor.fields)
-            x_expanded = num_fields * [x]
-            y_expanded = num_fields * [y]
-            z_expanded = num_fields * [z]
-            data_dict[name] = {
-                "field": monitor.fields,
-                "x": x_expanded,
-                "y": y_expanded,
-                "z": z_expanded,
-                "values": data_array_list,
-                sampler_label: sampler_values,
-            }
+                values = field_data_dict[field_name]
+                data_dict[name][field_name] = {
+                    "values": value_fn(values),
+                    "x": x,
+                    "y": y,
+                    "z": z,
+                    sampler_label: sampler_values,
+                }
         elif isinstance(monitor, AbstractFluxMonitor):
             data_array = make_fake_flux_values(sampler_values)
             data_dict[name] = {"values": value_fn(data_array), sampler_label: sampler_values}
@@ -59,7 +53,6 @@ def solve(simulation: Simulation) -> SolverDataDict:
                 "values": value_fn(data_array),
                 sampler_label: sampler_values,
             }
-        data_dict[name]["monitor_name"] = name
 
     return data_dict
 
@@ -78,7 +71,7 @@ def unpack_grid_size(grid_size: GridSize) -> Tuple[float, float, float]:
 
 
 def discretize_monitor(
-    simulation: Simulation, mon: ScalarFieldMonitor
+    simulation: Simulation, mon: AbstractFieldMonitor
 ) -> Tuple[Numpy, Numpy, Numpy]:
     """Discretizes spatial extent of a monitor"""
     grid_size = simulation.grid_size

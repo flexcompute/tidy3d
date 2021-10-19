@@ -240,7 +240,6 @@ def download(task_id: TaskId, simulation: Simulation, path: str = "simulation_da
         simulation=simulation,
         solver_data_dict=mon_data_dict,
         log_string=log_string,
-        task_info=task_info,
     )
 
     log.info(f"exporting SimulationData to {path}")
@@ -294,7 +293,7 @@ def delete(task_id: TaskId) -> TaskInfo:
     return http.delete(method)
 
 
-def _upload_task(
+def _upload_task(  # pylint:disable=too-many-locals
     simulation: Simulation,
     task_name: str,
     folder_name: str = "default",

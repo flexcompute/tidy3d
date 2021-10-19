@@ -6,3 +6,4 @@ chmod +x .git/hooks/pre-commit
 
 # make test_all script executable
 chmod +x test_all.sh
+chmod +x test_local.sh
