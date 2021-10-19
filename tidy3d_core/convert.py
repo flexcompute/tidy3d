@@ -9,7 +9,7 @@ from tidy3d import Medium  # , DispersiveMedium
 from tidy3d import VolumeSource
 from tidy3d import GaussianPulse
 from tidy3d import FieldMonitor, FieldTimeMonitor, FluxMonitor, FluxTimeMonitor
-from tidy3d.components.monitor import ScalarFieldMonitor, AbstractFluxMonitor
+from tidy3d.components.monitor import AbstractFieldMonitor, AbstractFluxMonitor
 from tidy3d.components.monitor import FreqMonitor, TimeMonitor
 from .solver import SolverDataDict
 
@@ -375,9 +375,9 @@ def export_old_json(sim: Simulation) -> Dict:
 """ Discretize monitors with values """
 
 
-def discretize_monitor(values, mon: ScalarFieldMonitor):
+def discretize_monitor(values, mon: AbstractFieldMonitor):
     """Discretizes spatial extent of a monitor"""
-    Nx, Ny, Nz = values[0].shape[:3]
+    Nx, Ny, Nz = values.shape[:3]
     center = mon.center
     size = mon.size
     x, y, z = make_coordinates_3d(center, size, (Nx, Ny, Nz))
@@ -414,33 +414,21 @@ def load_old_monitor_data(simulation: Simulation, data_file: str) -> SolverDataD
                 sampler_values = np.array(monitor.times)
                 sampler_label = "t"
 
-            if isinstance(monitor, ScalarFieldMonitor):
-                values = []
-                for field in monitor.fields:
-                    comp = ["x", "y", "z"].index(field[1])
-                    field_vals = np.array(f_handle[name][field[0]][comp, ...])
-                    values.append(field_vals)
-                x, y, z = discretize_monitor(values, monitor)
-
-                num_fields = len(monitor.fields)
-                x_expanded = num_fields * [x]
-                y_expanded = num_fields * [y]
-                z_expanded = num_fields * [z]
-                data_dict[name] = {
-                    "monitor": monitor,
-                    "field": monitor.fields,
-                    "x": x_expanded,
-                    "y": y_expanded,
-                    "z": z_expanded,
-                    "values": values,
-                    sampler_label: sampler_values,
-                }
+            if isinstance(monitor, AbstractFieldMonitor):
+                data_dict[name] = {}
+                for field_name in monitor.fields:
+                    comp = ["x", "y", "z"].index(field_name[1])
+                    field_vals = np.array(f_handle[name][field_name[0]][comp, ...])
+                    x, y, z = discretize_monitor(field_vals, monitor)
+                    data_dict[name][field_name] = {
+                        "x": x,
+                        "y": y,
+                        "z": z,
+                        "values": field_vals,
+                        sampler_label: sampler_values,
+                    }
             elif isinstance(monitor, AbstractFluxMonitor):
                 values = np.array(f_handle[name]["flux"]).ravel()
                 data_dict[name] = {"values": values, sampler_label: sampler_values}
-
-            # TODO: This should not be needed.
-            data_dict[name]["monitor_name"] = name
-            data_dict[name]["monitor"] = monitor
 
     return data_dict

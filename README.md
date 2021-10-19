@@ -155,10 +155,10 @@ https://www.atlassian.com/git/tutorials/merging-vs-rebasing
 	- [x] Test with simple run.
 	- [x] Fix issue with converting to complex.
 	- [x] **Refactor some webapi internals.**
-	- [ ] **Add conversions for rest of objects.**
+	- [x] **Add conversions for rest of objects.**
 	- [x] **Containers (job batch).**
 	- [x] **Better handling for runtime status using rich.**
-	- [ ] **Add example notebooks and make consistent.**
+	- [x] **Add example notebooks and make consistent.**
 	- [x] **Comments / documentations**
 - [ ] Get webAPI working without conversion.
 	- [ ] Use native `Simulation.export()` or `Simulation.json()` for `upload()`.
@@ -185,14 +185,13 @@ https://www.atlassian.com/git/tutorials/merging-vs-rebasing
 	- [x] Combine fields components (Ex, Ey, Ez, ...)
 	- [x] Put permittivity monitor into freq-domain field data.
 - [x] Get rid of pydantic? <- Not doing it
-- [ ] Simplify MonitorData
-    - [ ] remove MonitorData.monitor  and MonitorData.monitor_name attributes.
-    - [ ] remove MonitorData.load() and MonitorData.export()
-    - [ ] assert all SimulationData.monitor_data.keys() are in SimulationData.simulation.monitor.keys()
-    - [ ] provide optional args to SimulationData.export() to only export some MonitorData by key
+- [x] Simplify MonitorData
+    - [x] remove MonitorData.monitor  and MonitorData.monitor_name attributes.
+    - [x] remove MonitorData.load() and MonitorData.export()
+    - [ ] assert all SimulationData.monitor_data.keys() are in SimulationData.simulation.monitor.keys() <- not necessry.
+    - [ ] provide optional args to SimulationData.export() to only export some MonitorData by key <- not necessary?
     - [ ] Move any interfaces in MonitorData to SimulationData (geometry, plotting, etc).
-    - [ ] Remove unneeded data or monitor maps.
-    - [ ] Make monitordata.load_from_data aware of lists
+    - [x] Make monitordata.load_from_group aware of lists
 - [x] Use shapely for geometry ops / plotting?  `Geometry.geo(x=0)` -> shapely representation.
 	- [x] Fix all tests.
 	- [x] Integrate shapely plotting / kwargs.
