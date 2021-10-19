@@ -10,26 +10,24 @@ from tidy3d.plugins.dispersion.fit import _pack_coeffs, _unpack_coeffs
 
 from tidy3d.plugins import ModeSolver
 from tidy3d.plugins import Near2Far
-from tidy3d import FieldData, FieldMonitor
+from tidy3d import FieldData, ScalarFieldData, FieldMonitor
 
 
 def test_near2far():
     """make sure mode solver runs"""
 
-    field_mon = FieldMonitor(
-        size=(10, 10, 0),
-        freqs=[1],
-    )
+    def rand_data():
+        return ScalarFieldData(
+            x=np.linspace(-1, 1, 10),
+            y=np.linspace(-1, 1, 10),
+            z=np.array([0.0]),
+            f=np.array([1.0]),
+            values=np.random.random((10, 10, 1, 1)),
+        )
 
-    field_data = FieldData(
-        monitor_name="nearfield_monitor",
-        monitor=field_mon,
-        x=6 * [np.linspace(-1, 1, 10)],
-        y=6 * [np.linspace(-1, 1, 10)],
-        z=6 * [np.array([0.0])],
-        f=np.array([1.0]),
-        values=6 * [np.random.random((10, 10, 1, 1))],
-    )
+    fields = ["Ex", "Ey", "Ez", "Hx", "Hy", "Hz"]
+    data_dict = {field: rand_data() for field in fields}
+    field_data = FieldData(data_dict=data_dict)
 
     n2f = Near2Far(field_data)
     n2f.radar_cross_section(1, 1)

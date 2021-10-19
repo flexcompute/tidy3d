@@ -19,19 +19,19 @@ class Near2Far:
         """
 
         # get frequency info
-        self.f = field_data.f
+        self.f = float(field_data.data.Ez.f[0].values)
         self.k0 = 2 * np.pi * self.f / C_0
 
         # get normal axis (ignore components)
-        xs = field_data.x[0]
-        ys = field_data.y[0]
-        zs = field_data.z[0]
+        xs = field_data.data.Ez.x.values
+        ys = field_data.data.Ez.y.values
+        zs = field_data.data.Ez.z.values
         mon_size = [xs.shape[-1], ys.shape[-1], zs.shape[-1]]
         self.axis = mon_size.index(1)
         assert self.axis == 2, "Currently only works for z normal."
 
         # get normal and planar coordinates
-        zs, (xs, ys) = field_data.geometry.pop_axis((xs, ys, zs), axis=self.axis)
+        # zs, (xs, ys) = field_data.geometry.pop_axis((xs, ys, zs), axis=self.axis)
         self.z0 = zs[0]
         self.xs = xs
         self.ys = ys
@@ -40,17 +40,20 @@ class Near2Far:
         self.dy = np.mean(np.diff(ys))
 
         # get tangential near fields
-        for em_field in "EH":
-            for component in "xyz":
-                field_name = em_field + component
-                assert field_name in field_data.field, f"missing field: {field_name}"
-        field_values = [np.squeeze(fldv) for fldv in field_data.values]
-        Ex, Ey, Ez, Hx, Hy, Hz = field_values
-        Ex
-        E = (Ex, Ey, Ez)
-        H = (Hx, Hy, Hz)
-        _, (self.Ex, self.Ey) = field_data.geometry.pop_axis(E, axis=self.axis)
-        _, (self.Hx, self.Hy) = field_data.geometry.pop_axis(H, axis=self.axis)
+        # for em_field in "EH":
+        #     for component in "xyz":
+        #         field_name = em_field + component
+        #         assert field_name in field_data.field, f"missing field: {field_name}"
+
+        self.Ex = field_data.data.Ex.values
+        self.Ey = field_data.data.Ey.values
+        self.Ez = field_data.data.Ez.values
+        self.Hx = field_data.data.Hx.values
+        self.Hy = field_data.data.Hy.values
+        self.Hz = field_data.data.Hz.values
+
+        # _, (self.Ex, self.Ey) = field_data.geometry.pop_axis(E, axis=self.axis)
+        # _, (self.Hx, self.Hy) = field_data.geometry.pop_axis(H, axis=self.axis)
 
         # compute equivalent sources
         self.Jx = -self.Hy
@@ -142,13 +145,13 @@ class Near2Far:
         """
         N_theta, N_phi, L_theta, L_phi = self._radiation_vectors(theta, phi)
         scalar_proj_r = 1j * self.k0 * np.exp(-1j * self.k0 * r) / (4 * np.pi * r)
-        E_r = np.zeros(1, dtype=complex)
         E_theta = -scalar_proj_r * (L_phi + ETA_0 * N_theta)
         E_phi = scalar_proj_r * (L_theta - ETA_0 * N_phi)
+        E_r = np.zeros_like(E_phi)
         E = np.stack((E_r, E_theta, E_phi))
-        H_r = np.zeros(1, dtype=complex)
         H_theta = -E_phi / ETA_0
         H_phi = E_theta / ETA_0
+        H_r = np.zeros_like(H_phi)
         H = np.stack((H_r, H_theta, H_phi))
         return E, H
 

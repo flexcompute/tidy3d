@@ -9,7 +9,7 @@ from pydantic import BaseModel
 from ...components import Box
 from ...components import Simulation
 from ...components import Mode
-from ...components import FieldData
+from ...components import FieldData, ScalarFieldData
 from ...components import ModeMonitor, FieldMonitor
 from ...components import ModeSource, GaussianPulse
 from ...components import eps_complex_to_nk
@@ -142,35 +142,28 @@ class ModeSolver:
             H = np.concatenate((-H_tmp[:, :, ::-1, ...], H_tmp), axis=2)
         Ex, Ey, Ez = E[..., None]
         Hx, Hy, Hz = H[..., None]
-        field_values = [Ex, Ey, Ez, Hx, Hy, Hz]
+        fields = {"Ex": Ex, "Ey": Ey, "Ez": Ez, "Hx": Hx, "Hy": Hy, "Hz": Hz}
 
         # note: re-discretizing, need to make consistent.
-        xs = []
-        ys = []
-        zs = []
-        for field in field_values:
+        data_dict = {}
+        for field_name, field in fields.items():
             Nx = field.shape[0]
             Ny = field.shape[1]
             (xmin, ymin, zmin), (xmax, ymax, zmax) = self.plane.bounds
-            xs.append(np.linspace(xmin, xmax, Nx))
-            ys.append(np.linspace(ymin, ymax, Ny))
-            zs.append(np.linspace(zmin, zmax, 1))
+            x = np.linspace(xmin, xmax, Nx)
+            y = np.linspace(ymin, ymax, Ny)
+            z = np.linspace(zmin, zmax, 1)
+            data_dict[field_name] = ScalarFieldData(
+                x=x,
+                y=y,
+                z=z,
+                f=np.array([self.freq]),
+                values=field,
+            )
 
         n_eff_complex = n_eff_complex[mode.mode_index]
 
-        field_monitor = FieldMonitor(
-            center=self.plane.center, size=self.plane.size, freqs=[self.freq]
-        )
-
-        field_data = FieldData(
-            monitor=field_monitor,
-            monitor_name="mode_solver_plane_fields",
-            values=field_values,
-            x=xs,
-            y=ys,
-            z=zs,
-            f=np.array([self.freq]),
-        )
+        field_data = FieldData(data_dict=data_dict)
 
         return ModeInfo(
             field_data=field_data,

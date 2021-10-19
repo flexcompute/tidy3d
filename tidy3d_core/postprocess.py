@@ -1,23 +1,12 @@
-import numpy as np
+""" Loads solver results into SimulationData"""
+from tidy3d import Simulation, SimulationData, FieldData, data_type_map
 
-from typing import Dict, Tuple
-import os
-import h5py
-import xarray as xr
-
-from .solver import solve, SolverDataDict
-
-from tidy3d import Simulation
-from tidy3d.components.data import SimulationData, monitor_data_map
-from tidy3d.components.data import FieldData, FluxData, ModeData
-
-""" Loads solver raw data dictionary into forms to use later """
+from .solver import SolverDataDict
 
 
 def load_solver_results(
     simulation: Simulation,
     solver_data_dict: SolverDataDict,
-    task_info: dict = None,
     log_string: str = None,
 ) -> SimulationData:
     """load the solver_data_dict and simulation into SimulationData"""
@@ -25,18 +14,16 @@ def load_solver_results(
     # constuct monitor_data dictionary
     monitor_data = {}
     for name, monitor in simulation.monitors.items():
-
-        # get the type of the MonitorData
-        monitor_data_type = monitor_data_map[type(monitor)]
-
-        # separate coordinates and data from the SolverDataDict
         monitor_data_dict = solver_data_dict[name]
-        monitor_data_dict["monitor"] = monitor
-        monitor_data[name] = monitor_data_type(**monitor_data_dict)
-
-    return SimulationData(
-        simulation=simulation, monitor_data=monitor_data, task_info=task_info, log_string=log_string
-    )
+        monitor_data_type = data_type_map[monitor.data_type]
+        if monitor.type in ("FieldMonitor", "FieldTimeMonitor"):
+            field_data = {}
+            for field_name, data_dict in monitor_data_dict.items():
+                field_data[field_name] = monitor_data_type(**data_dict)
+            monitor_data[name] = FieldData(data_dict=field_data)
+        else:
+            monitor_data[name] = monitor_data_type(**monitor_data_dict)
+    return SimulationData(simulation=simulation, monitor_data=monitor_data, log_string=log_string)
 
 
 def save_solver_results(path: str, sim: Simulation, solver_dict: SolverDataDict) -> None:
