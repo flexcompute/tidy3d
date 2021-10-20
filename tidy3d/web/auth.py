@@ -13,7 +13,6 @@ from .config import DEFAULT_CONFIG as Config
 CREDENTIAL_FILE = "~/.tidy3d"
 credential_path = os.path.expanduser(CREDENTIAL_FILE)
 
-# should this be set by the config?
 boto3.setup_default_session(region_name=Config.s3_region)
 
 

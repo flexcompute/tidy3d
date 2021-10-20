@@ -213,7 +213,7 @@ https://www.atlassian.com/git/tutorials/merging-vs-rebasing
 #### Requires some focused time
 - [ ] Nail down simulationData interfaces for plotting.
 - [ ] Figue out webAPI running progress issues. (can we get separate status for time-stepping?)
-- [ ] Conversion for mode monitors / mode sources.
+- [ ] **Conversion for mode monitors / mode sources.**
 - [ ] Get near2far working correctly.
 - [ ] Use mode solver for the relevant example notebooks.
 - [ ] Document everything fully.
