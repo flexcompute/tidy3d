@@ -2,9 +2,10 @@
 """
 
 from typing import List
+from dataclasses import dataclass
 
 import numpy as np
-from pydantic import BaseModel
+import xarray as xr
 
 from ...components import Box
 from ...components import Simulation
@@ -46,7 +47,8 @@ src = ModeSource.load('data/my_source.json')  # and loaded in our script
 """
 
 
-class ModeInfo(BaseModel):
+@dataclass
+class ModeInfo:
     """stores information about a (solved) mode.
 
     Attributes
@@ -61,7 +63,7 @@ class ModeInfo(BaseModel):
         Imaginary part of the effective refractive index of mode.
     """
 
-    field_data: FieldData
+    field_data: xr.Dataset
     mode: Mode
     n_eff: float
     k_eff: float
@@ -109,9 +111,18 @@ class ModeSolver:
 
         Nx, Ny = eps_cross.shape
         if mode.symmetries[0] != 0:
-            eps_cross = eps_cross[Nx // 2 :, :]
+            eps_cross = eps_cross[
+                Nx // 2 :,
+            ]
         if mode.symmetries[1] != 0:
-            eps_cross = eps_cross[:, Ny // 2 :]
+            eps_cross = eps_cross[:, Ny // 2]
+
+        num_modes = mode.num_modes if mode.num_modes else mode.mode_index + 1
+        if num_modes <= mode.mode_index:
+            log.error(
+                f"mode index = {mode.mode_index} "
+                f"is out of bounds for the number of modes specified = {mode.um_modes}."
+            )
 
         # note, internally discretizing, need to make consistent.
         field, n_eff_complex = compute_modes(
@@ -119,7 +130,7 @@ class ModeSolver:
             freq=self.freq,
             grid_size=self.simulation.grid_size,
             pml_layers=mode.num_pml,
-            num_modes=mode.mode_index + 1,
+            num_modes=num_modes,
             target_neff=mode.target_neff,
             symmetries=mode.symmetries,
             coords=None,
@@ -142,6 +153,12 @@ class ModeSolver:
             H = np.concatenate((-H_tmp[:, :, ::-1, ...], H_tmp), axis=2)
         Ex, Ey, Ez = E[..., None]
         Hx, Hy, Hz = H[..., None]
+
+        # # return the fields in the correct
+        # normal_axis = [p == 0 for p in self.plane.size].index(True)
+        # Ex, Ey, Ez = self.simulation.unpop_axis(Ez, (Ex, Ey), axis=normal_axis)
+        # Hx, Hy, Hz = self.simulation.unpop_axis(Hz, (Hx, Hy), axis=normal_axis)
+
         fields = {"Ex": Ex, "Ey": Ey, "Ez": Ez, "Hx": Hx, "Hy": Hy, "Hz": Hz}
 
         # note: re-discretizing, need to make consistent.
@@ -166,7 +183,7 @@ class ModeSolver:
         field_data = FieldData(data_dict=data_dict)
 
         return ModeInfo(
-            field_data=field_data,
+            field_data=field_data.data,
             mode=mode,
             n_eff=n_eff_complex.real,
             k_eff=n_eff_complex.imag,

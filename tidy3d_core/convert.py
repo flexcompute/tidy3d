@@ -6,7 +6,7 @@ import h5py
 from tidy3d import Simulation
 from tidy3d import Box, Sphere, Cylinder, PolySlab
 from tidy3d import Medium  # , DispersiveMedium
-from tidy3d import VolumeSource
+from tidy3d import VolumeSource, ModeSource, PlaneWave
 from tidy3d import GaussianPulse
 from tidy3d import FieldMonitor, FieldTimeMonitor, FluxMonitor, FluxTimeMonitor
 from tidy3d.components.monitor import AbstractFieldMonitor, AbstractFluxMonitor
@@ -38,6 +38,9 @@ def old_json_parameters(sim: Simulation) -> Dict:
         "courant": sim.courant,
         "shutoff": sim.shutoff,
         "subpixel": sim.subpixel,
+        "time_steps": 100,
+        "nodes": 100,
+        "compute_weight": 1.0,
     }
 
     """ TODO: Support nonuniform coordinates """
@@ -171,6 +174,7 @@ def old_json_sources(sim: Simulation) -> List[Dict]:
     src_list = []
     for name, source in sim.sources.items():
         # Get source_time
+
         if isinstance(source.source_time, GaussianPulse):
             src_time = {
                 "type": "GaussianPulse",
@@ -180,21 +184,64 @@ def old_json_sources(sim: Simulation) -> List[Dict]:
                 "phase": source.source_time.phase,
             }
 
+        src = {}
+
         if isinstance(source, VolumeSource):
             """TODO: Is polarization the right word if we're talking about J and M?
             Check Lumerical notation."""
             component = "E" if source.polarization[0] == "J" else "H"
             component += source.polarization[1]
+            if all(s == 0 for s in source.size):
+                src = {
+                    "name": name,
+                    "type": "PointDipole",
+                    "source_time": src_time,
+                    "center": source.center,
+                    "component": component,
+                    "amplitude": source.source_time.amplitude,
+                }
+            else:
+                src = {
+                    "name": name,
+                    "type": "VolumeSource",
+                    "source_time": src_time,
+                    "center": source.center,
+                    "size": source.size,
+                    "component": component,
+                    "amplitude": source.source_time.amplitude,
+                }
+        elif isinstance(source, ModeSource):
+            mode_ind = source.mode.mode_index
+            direction = "forward" if source.direction == "+" else "backward"
             src = {
                 "name": name,
-                "type": "VolumeSource",
+                "type": "ModeSource",
                 "source_time": src_time,
-                "center": source.center,
-                "size": source.size,
-                "component": component,
+                "center": list(source.center),
+                "size": list(source.size),
+                "direction": direction,
+                "amplitude": source.source_time.amplitude,
+                "mode_ind": mode_ind,
+                "target_neff": source.mode.target_neff,
+                "Nmodes": source.mode.num_modes,
+            }
+        elif isinstance(source, PlaneWave):
+            normal_index = [s == 0 for s in source.size].index(True)
+            injection_axis = source.direction + "xyz"[normal_index]
+            position = source.center[normal_index]
+            src = {
+                "name": name,
+                "type": "PlaneWave",
+                "source_time": src_time,
+                "injection_axis": injection_axis,
+                "position": position,
+                "polarization": source.polarization[1],
                 "amplitude": source.source_time.amplitude,
             }
-        """ TODO: Support PointDipole as a subclass of VolumeSource """
+        if src:
+            src_list.append(src)
+
+        # """ TODO: Support PointDipole as a subclass of VolumeSource """
         # elif isinstance(source, PointDipole):
         #     src = {
         #         "name": src_data.name,
@@ -205,18 +252,8 @@ def old_json_sources(sim: Simulation) -> List[Dict]:
         #         "component": source.component,
         #         "amplitude": float(source.amplitude),
         #         }
-        """ TODO: Support PlaneWave """
-        # elif isinstance(source, PlaneWave):
-        #     src = {
-        #         "name": src_data.name,
-        #         "type": "PlaneWave",
-        #         "source_time": src_time,
-        #         "injection_axis": source.injection_axis,
-        #         "position": source.position,
-        #         "polarization": source.polarization,
-        #         "amplitude": float(source.amplitude)
-        #         }
-        """ TODO: Support GaussianBeam """
+        # """ TODO: Support PlaneWave """
+        # """ TODO: Support GaussianBeam """
         # elif isinstance(source, GaussianBeam):
         #     src = {
         #         "name": src_data.name,
@@ -232,31 +269,6 @@ def old_json_sources(sim: Simulation) -> List[Dict]:
         #         "pol_angle": float(source.pol_angle),
         #         "amplitude": float(source.amplitude)
         #         }
-        """ TODO: Support ModeSource """
-        # elif isinstance(source, ModeSource):
-        #     mode_ind = src_data.mode_ind
-        #     if mode_ind is None:
-        #         log_and_raise(
-        #             f"Mode index of source {src_data.name} not yet set, "
-        #             "use Simulation.set_mode().",
-        #             RuntimeError
-        #         )
-        #     target_neff = src_data.target_neff
-        #     if target_neff is not None:
-        #         target_neff = float(target_neff)
-        #     src = {
-        #         "name": src_data.name,
-        #         "type": "ModeSource",
-        #         "source_time": src_time,
-        #         "center": source.center.tolist(),
-        #         "size": source.size.tolist(),
-        #         "direction": source.direction,
-        #         "amplitude": float(source.amplitude),
-        #         "mode_ind": int(mode_ind),
-        #         "target_neff": target_neff,
-        #         "Nmodes": int(src_data.Nmodes)
-        #         }
-        src_list.append(src)
 
     return src_list
 

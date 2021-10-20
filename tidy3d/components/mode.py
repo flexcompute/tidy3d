@@ -6,6 +6,7 @@ import pydantic as pd
 
 from .base import Tidy3dBaseModel
 from .types import Symmetry
+from ..log import log
 
 
 class Mode(Tidy3dBaseModel):
@@ -24,6 +25,7 @@ class Mode(Tidy3dBaseModel):
     """
 
     mode_index: pd.NonNegativeInt
+    num_modes: pd.PositiveInt = None
     target_neff: float = None
     symmetries: Tuple[Symmetry, Symmetry] = (0, 0)
     num_pml: Tuple[pd.NonNegativeInt, pd.NonNegativeInt] = (0, 0)

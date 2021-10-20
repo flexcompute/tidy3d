@@ -4,6 +4,7 @@ import os
 import time
 import json
 
+import numpy as np
 import requests
 from rich.console import Console
 from rich.progress import Progress
@@ -148,7 +149,7 @@ def monitor(task_id: TaskId) -> None:
 
     console = Console()
 
-    with console.status(f"[bold green]Working on '{task_name}'...") as status:
+    with console.status(f"[bold green]Working on '{task_name}'...", spinner="runner") as status:
 
         while status not in ("success", "error", "diverged", "deleted", "draft"):
             new_status = get_info(task_id).status
@@ -304,14 +305,15 @@ def _upload_task(  # pylint:disable=too-many-locals
 
     # convert to old json and get string version
     sim_dict = export_old_json(simulation)
-    json_string = json.dumps(sim_dict)
+    json_string = json.dumps(sim_dict, indent=4)
 
     # TODO: remove node size, time steps, compute weight, worker group
+    node_size = int(np.prod([L / dl for L, dl in zip(simulation.size, simulation.grid_size)]))
     data = {
         "status": "draft",
         "solverVersion": solver_version,
         "taskName": task_name,
-        "nodeSize": 10,  # int(sim_dict["parameters"]["nodes"]),
+        "nodeSize": node_size,  # int(sim_dict["parameters"]["nodes"]),
         "timeSteps": 80,  # int(sim_dict["parameters"]["time_steps"]),
         "computeWeight": 1,  # float(sim_dict["parameters"]["compute_weight"]),
         "workerGroup": worker_group,
@@ -338,6 +340,7 @@ def _upload_task(  # pylint:disable=too-many-locals
     # TODO: add progressbar, with put_object, no callback, so no real need.
     # with Progress() as progress:
     # upload_progress = UploadProgress(size_bytes, progress)
+    log.debug(f"json = {json_string}")
     client.put_object(
         Body=json_string,
         Bucket=bucket,
