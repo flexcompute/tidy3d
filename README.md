@@ -201,13 +201,25 @@ https://www.atlassian.com/git/tutorials/merging-vs-rebasing
 	- [x] Clean up pylint and org issues.
 	- [x] use xmin, ymin, ... = `Geometry.intersections(axis).bounds` to ``get_bounds()``
 	- [x] Integrate shapely ops into bounds checking / intersection checking.
-- [x] Fix MyPy warnings. <- too many stupid ones? ..
+- [x] Fix MyPy warnings. <- too many stupid ones?
 - [ ] Add Logging.
 - [ ] Migrate notebooks into static tests.
 - [ ] Add PEC PMC.
 - [ ] Handle Inf as it's own keyword that depends on simulation bounds.
 - [ ] Make Uniform Samplers separate classes? (dont evaluate / store freqs, times)?
 - [ ] setup.cfg for installing packages with more granularity (base, docs, tests)
+
+
+#### Requires some focused time
+- [ ] Nail down simulationData interfaces for plotting.
+- [ ] Figue out webAPI running progress issues. (can we get separate status for time-stepping?)
+- [ ] Conversion for mode monitors / mode sources.
+- [ ] Get near2far working correctly.
+- [ ] Use mode solver for the relevant example notebooks.
+- [ ] Document everything fully.
+- [ ] Diagram code structure / developer notes.
+- [ ] Discretization scheme given Box within Simulation.
+
 ---
 
 #### Momchil's To Do Notes
@@ -226,11 +238,11 @@ https://www.atlassian.com/git/tutorials/merging-vs-rebasing
 	- [ ] Support plane wave, gaussian beam, modesource in JSON conversion.
 	- [ ] Support mode monitor, permittivity monitor in JSON conversion.	
 - [ ] Data
-	- [ ] Provide optional args to only export the `MonitorData` of selected `Monitor`s.
-	- [ ] Wrap string conversion in MonitorLoad in helper function.
-	- [ ] Assert SimulationData's monitor names exist in original Simulation.
+	- [x] Provide optional args to only export the `MonitorData` of selected `Monitor`s.
+	- [x] Wrap string conversion in MonitorLoad in helper function.
+	- [x] Assert SimulationData's monitor names exist in original Simulation <- done by default..
 	- [ ] Solver field data evaluated at yee cell locations, sufficient to interpolate values anywhere in monitor volume.
-	- [ ] Eliminate need for storing `monitor_name` in `MonitorData`.
+	- [x] Eliminate need for storing `monitor_name` in `MonitorData`.
 ---
 
 ### Stage 3: Refining
