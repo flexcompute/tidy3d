@@ -4,7 +4,7 @@ from typing import Any
 from dataclasses import dataclass
 
 # automate this later?
-SOLVER_VERSION = "release-21.3.1.6"
+SOLVER_VERSION = "release-21.4.0"
 
 
 @dataclass
@@ -18,6 +18,7 @@ class WebConfig:  # pylint:disable=too-many-instance-attributes
     worker_group: Any = None
     auth: str = None
     user: str = None
+    auth_retry: int = 1
 
 
 # development config

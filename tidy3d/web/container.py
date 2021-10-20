@@ -93,7 +93,7 @@ class Job(WebContainer):
         status = self.status
         console = Console()
 
-        with console.status(f"[bold green]Working on '{self.task_name}'...") as _:
+        with console.status(f"[bold green]Working on '{self.task_name}'...", spinner="runner") as _:
 
             while status not in ("success", "error", "diverged", "deleted", "draft"):
                 new_status = self.status
