@@ -6,7 +6,6 @@ import pydantic as pd
 
 from .base import Tidy3dBaseModel
 from .types import Symmetry
-from ..log import log
 
 
 class Mode(Tidy3dBaseModel):
