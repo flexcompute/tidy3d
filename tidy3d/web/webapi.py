@@ -253,7 +253,10 @@ def download(task_id: TaskId, simulation: Simulation, path: str = "simulation_da
 
 
 def load_data(
-    task_id: TaskId, simulation: Simulation, path: str = "simulation_data.hdf5"
+    task_id: TaskId,
+    simulation: Simulation,
+    path: str = "simulation_data.hdf5",
+    replace_existing=True,
 ) -> SimulationData:
     """Download and Load simultion results into ``SimulationData`` object.
 
@@ -263,13 +266,15 @@ def load_data(
         Unique identifier of task on server.
     path : ``str``
         Download path to .hdf5 data file (including filename).
+    replace_existing: ``bool``
+        Downloads even if file exists (overwriting).
 
     Returns
     -------
     :class:`SimulationData`
         Object containing simulation data.
     """
-    if not os.path.exists(path):
+    if not os.path.exists(path) or replace_existing:
         download(task_id=task_id, simulation=simulation, path=path)
 
     log.info(f"loading SimulationData from {path}")

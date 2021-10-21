@@ -188,9 +188,6 @@ https://www.atlassian.com/git/tutorials/merging-vs-rebasing
 - [x] Simplify MonitorData
     - [x] remove MonitorData.monitor  and MonitorData.monitor_name attributes.
     - [x] remove MonitorData.load() and MonitorData.export()
-    - [ ] assert all SimulationData.monitor_data.keys() are in SimulationData.simulation.monitor.keys() <- not necessry.
-    - [ ] provide optional args to SimulationData.export() to only export some MonitorData by key <- not necessary?
-    - [ ] Move any interfaces in MonitorData to SimulationData (geometry, plotting, etc).
     - [x] Make monitordata.load_from_group aware of lists
 - [x] Use shapely for geometry ops / plotting?  `Geometry.geo(x=0)` -> shapely representation.
 	- [x] Fix all tests.
@@ -208,12 +205,13 @@ https://www.atlassian.com/git/tutorials/merging-vs-rebasing
 - [ ] Handle Inf as it's own keyword that depends on simulation bounds.
 - [ ] Make Uniform Samplers separate classes? (dont evaluate / store freqs, times)?
 - [ ] setup.cfg for installing packages with more granularity (base, docs, tests)
+- [ ] Move any interfaces in MonitorData to SimulationData (geometry, plotting, etc).
 
 
 #### Requires some focused time
 - [ ] Nail down simulationData interfaces for plotting.
 - [ ] Figue out webAPI running progress issues. (can we get separate status for time-stepping?)
-- [ ] **Conversion for mode monitors / mode sources.**
+- [x] Conversion for mode monitors / mode sources.
 - [ ] Get near2far working correctly.
 - [ ] Use mode solver for the relevant example notebooks.
 - [ ] Document everything fully.

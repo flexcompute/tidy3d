@@ -9,7 +9,7 @@ from tidy3d import Medium  # , DispersiveMedium
 from tidy3d import VolumeSource, ModeSource, PlaneWave
 from tidy3d import GaussianPulse
 from tidy3d import FieldMonitor, FieldTimeMonitor, FluxMonitor, FluxTimeMonitor
-from tidy3d.components.monitor import AbstractFieldMonitor, AbstractFluxMonitor
+from tidy3d.components.monitor import AbstractFieldMonitor, AbstractFluxMonitor, ModeMonitor
 from tidy3d.components.monitor import FreqMonitor, TimeMonitor
 from .solver import SolverDataDict
 
@@ -241,18 +241,6 @@ def old_json_sources(sim: Simulation) -> List[Dict]:
         if src:
             src_list.append(src)
 
-        # """ TODO: Support PointDipole as a subclass of VolumeSource """
-        # elif isinstance(source, PointDipole):
-        #     src = {
-        #         "name": src_data.name,
-        #         "type": "PointDipole",
-        #         "source_time": src_time,
-        #         "center": source.center.tolist(),
-        #         "size": source.size.tolist(),
-        #         "component": source.component,
-        #         "amplitude": float(source.amplitude),
-        #         }
-        # """ TODO: Support PlaneWave """
         # """ TODO: Support GaussianBeam """
         # elif isinstance(source, GaussianBeam):
         #     src = {
@@ -303,65 +291,63 @@ def old_json_monitors(sim: Simulation) -> Dict:
         For that, and more generally, it seems that currently the Simulation doesn't have a
         TimeGrid or somethng like it? This is also needed e.g. to plot the source dependence, etc.
         """
-        if isinstance(monitor, FieldTimeMonitor):
+        if isinstance(monitor, AbstractFieldMonitor):
             store = []
             if np.any([field[0] == "E" for field in monitor.fields]):
                 store.append("E")
             if np.any([field[0] == "H" for field in monitor.fields]):
                 store.append("H")
+            if isinstance(monitor, FieldMonitor):
+                mnt.update(
+                    {
+                        "type": "FrequencyMonitor",
+                        "frequency": [f * 1e-12 for f in monitor.freqs],
+                        "store": store,
+                        "interpolate": True,
+                    }
+                )
+            elif isinstance(monitor, FieldTimeMonitor):
+                mnt.update(
+                    {
+                        "type": "TimeMonitor",
+                        "t_start": 0,
+                        "t_stop": sim.run_time,
+                        "t_step": None,
+                        "store": store,
+                    }
+                )
+        elif isinstance(monitor, AbstractFluxMonitor):
+            if isinstance(monitor, FluxTimeMonitor):
+                mnt.update(
+                    {
+                        "type": "TimeMonitor",
+                        "t_start": 0,
+                        "t_stop": sim.run_time,
+                        "t_step": None,
+                        "store": ["flux"],
+                    }
+                )
+            elif isinstance(monitor, FluxMonitor):
+                mnt.update(
+                    {
+                        "type": "FrequencyMonitor",
+                        "frequency": [f * 1e-12 for f in monitor.freqs],
+                        "store": ["flux"],
+                        "interpolate": True,
+                    }
+                )
+        elif isinstance(monitor, ModeMonitor):
+            num_modes = max([m.mode_index for m in monitor.modes]) + 1
             mnt.update(
                 {
-                    "type": "TimeMonitor",
-                    "t_start": 0,
-                    "t_stop": sim.run_time,
-                    "t_step": None,
-                    "store": store,
-                }
-            )
-        elif isinstance(monitor, FluxTimeMonitor):
-            mnt.update(
-                {
-                    "type": "TimeMonitor",
-                    "t_start": 0,
-                    "t_stop": sim.run_time,
-                    "t_step": None,
-                    "store": ["flux"],
-                }
-            )
-        elif isinstance(monitor, FieldMonitor):
-            store = []
-            if np.any([field[0] == "E" for field in monitor.fields]):
-                store.append("E")
-            if np.any([field[0] == "H" for field in monitor.fields]):
-                store.append("H")
-            mnt.update(
-                {
-                    "type": "FrequencyMonitor",
+                    "type": "ModeMonitor",
                     "frequency": [f * 1e-12 for f in monitor.freqs],
-                    "store": store,
-                    "interpolate": True,
+                    "Nmodes": num_modes,
+                    "target_neff": None,
+                    "store": ["mode_amps"],
                 }
             )
-        elif isinstance(monitor, FluxMonitor):
-            mnt.update(
-                {
-                    "type": "FrequencyMonitor",
-                    "frequency": [f * 1e-12 for f in monitor.freqs],
-                    "store": ["flux"],
-                    "interpolate": True,
-                }
-            )
-        """ TODO: support ModeMonitor """
-        # elif isinstance(monitor, ModeMonitor):
-        #     mnt.update(
-        #         {
-        #             "type": "ModeMonitor",
-        #             "frequency": [f * 1e-12 for f in monitor.freqs],
-        #             "Nmodes": mnt_data.Nmodes,
-        #             "target_neff": mnt_data.target_neff,
-        #         }
-        #     )
-        #
+
         """ TODO: Support PermittivityMonitor """
         #
 
@@ -439,8 +425,20 @@ def load_old_monitor_data(simulation: Simulation, data_file: str) -> SolverDataD
                         "values": field_vals,
                         sampler_label: sampler_values,
                     }
+
             elif isinstance(monitor, AbstractFluxMonitor):
                 values = np.array(f_handle[name]["flux"]).ravel()
                 data_dict[name] = {"values": values, sampler_label: sampler_values}
+
+            elif isinstance(monitor, ModeMonitor):
+                values = np.array(f_handle[name]["mode_amps"])
+                values = np.swapaxes(values, 1, 2)  # put frequency at last axis
+                mode_index = np.arange(values.shape[1])
+                data_dict[name] = {
+                    "values": values,
+                    "direction": ["+", "-"],
+                    "mode_index": mode_index,
+                    sampler_label: sampler_values,
+                }
 
     return data_dict
