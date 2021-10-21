@@ -167,9 +167,9 @@ class MonitorData(Tidy3dData, ABC):
             kwargs[data_name] = np.array(data_value)
 
         # handle data stored as np.array() of bytes instead of strings
-        # for str_kwarg in ("field", "direction"):
-        #     if kwargs.get(str_kwarg) is not None:
-        #         kwargs[str_kwarg] = decode_bytes_array(kwargs[str_kwarg])
+        for str_kwarg in ("direction",):
+            if kwargs.get(str_kwarg) is not None:
+                kwargs[str_kwarg] = decode_bytes_array(kwargs[str_kwarg])
 
         # handle data stored as np.array() of bytes instead of strings
         # for str_kwarg in ("x", "y", "z"):
