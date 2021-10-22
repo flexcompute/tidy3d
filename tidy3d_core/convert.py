@@ -21,6 +21,10 @@ def old_json_parameters(sim: Simulation) -> Dict:
     size = sim.size
     pml_layers = [{"profile": pml.profile, "Nlayers": pml.num_layers} for pml in sim.pml_layers]
 
+    mesh_step_x = np.mean(np.diff(sim.coords.x))
+    mesh_step_y = np.mean(np.diff(sim.coords.y))
+    mesh_step_z = np.mean(np.diff(sim.coords.z))
+
     parameters = {
         "unit_length": "um",
         "unit_frequency": "THz",
@@ -31,7 +35,7 @@ def old_json_parameters(sim: Simulation) -> Dict:
         "x_span": size[0],
         "y_span": size[1],
         "z_span": size[2],
-        "mesh_step": sim.grid_size,
+        "mesh_step": (mesh_step_x, mesh_step_y, mesh_step_z),
         "symmetries": sim.symmetry,
         "pml_layers": pml_layers,
         "run_time": sim.run_time * 1e12,

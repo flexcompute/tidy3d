@@ -3,6 +3,8 @@
 from .simulation import Simulation
 
 from .pml import PMLLayer
+from .grid import GridSpec, GridSpec1DSize, GridSpec1DCoords, GridSpec1DResolution, GridSpec1DAuto
+
 from .geometry import Box, Sphere, Cylinder, PolySlab
 from .geometry import Geometry
 from .structure import Structure
