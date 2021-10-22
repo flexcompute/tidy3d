@@ -5,10 +5,34 @@
 
 ## Developer
 
-### Useful Reading
+### Git Notes
 
 https://www.atlassian.com/git/tutorials/comparing-workflows/gitflow-workflow
 https://www.atlassian.com/git/tutorials/merging-vs-rebasing
+
+### New feature
+
+```
+git checkout develop
+git checkout -b feature
+# develop and make some commits
+git rebase -i develop
+# squash, edit, commits
+# submit PR on github.
+# when ready, rebase and merge feature into develop
+git checkout develop
+git pull -or- git reset --hard origin/develop
+```
+
+### Release
+```
+git checkout main
+git merge develop
+git tag x.x.x
+git push origin x.x.x
+```
+
+
 
 ## Flow
 

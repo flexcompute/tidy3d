@@ -5,6 +5,13 @@ from rich import pretty, traceback
 
 # import component as `from tidy3d import Simulation` or `td.Simulation`
 from .components import PMLLayer
+from .components import (
+    GridSpec,
+    GridSpec1DSize,
+    GridSpec1DCoords,
+    GridSpec1DResolution,
+    GridSpec1DAuto,
+)
 from .components import Box, Sphere, Cylinder, PolySlab
 from .components import Geometry
 from .components import Structure

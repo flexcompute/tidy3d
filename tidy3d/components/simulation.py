@@ -8,15 +8,16 @@ import matplotlib as mpl
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from descartes import PolygonPatch
 
-from .types import GridSize, Symmetry, Ax, Numpy, Shapely
+from .types import Symmetry, Ax, Numpy, Shapely, Array, FreqBound
 from .geometry import Box
-from .medium import Medium, MediumType
+from .grid import GridSpec, Coords
+from .medium import Medium, MediumType, eps_complex_to_nk
 from .structure import Structure
 from .source import SourceType
 from .monitor import MonitorType
 from .pml import PMLLayer
 from .viz import StructMediumParams, StructEpsParams, PMLParams, SymParams, add_ax_if_none
-from ..constants import inf
+from ..constants import inf, C_0
 
 # technically this is creating a circular import issue because it calls tidy3d/__init__.py
 # from .. import __version__ as version_number
@@ -31,8 +32,8 @@ class Simulation(Box):
         Center of simulation domain in x,y,z, defualts to (0.0, 0.0, 0.0)
     size : Tuple[float, float, float]
         Size of simulation domain in x,y,z.
-    grid_size : Tuple[float, float, float]
-        Grid size in x,y,z direction.
+    grid : :class:`Grid`
+        Grid specification.
     run_time: float, optional
         Maximum run time of simulation in seconds, defaults to 0.0.
     medium : ``tidy3d.Medium``, optional
@@ -62,7 +63,7 @@ class Simulation(Box):
     well (or a link to the document section where it's discussed in more detail).
     """
 
-    grid_size: Tuple[GridSize, GridSize, GridSize]
+    grid: GridSpec
     medium: MediumType = Medium()
     run_time: pydantic.NonNegativeFloat = 0.0
     structures: List[Structure] = []
@@ -75,9 +76,6 @@ class Simulation(Box):
     )
     symmetry: Tuple[Symmetry, Symmetry, Symmetry] = (0, 0, 0)
     shutoff: pydantic.NonNegativeFloat = 1e-5
-    # TODO: We should see if we can safely increase courant to 0.99
-    courant: pydantic.confloat(ge=0.0, le=1.0) = 0.9
-    subpixel: bool = True
     # version: str = str(version_number)
 
     def __init__(self, **kwargs):
@@ -253,21 +251,34 @@ class Simulation(Box):
         ax = self.set_plot_bounds(ax=ax, x=x, y=y, z=z)
         return ax
 
+    @property
+    def pml_thicknesses(
+        self,
+    ) -> List[Tuple[float, float]]:
+        """thicknesses (um) of PML in all three axis and directions (+, -)"""
+        grid_sizes = self.coords.sizes
+        pml_thicknesses = []
+        for pml_axis, pml_layer in enumerate(self.pml_layers):
+            dl_axis = grid_sizes[pml_axis]
+            num_layers = pml_layer.num_layers
+            pml_thicknesses.append((num_layers * dl_axis[0], num_layers * dl_axis[-1]))
+        return pml_thicknesses
+
     @add_ax_if_none
     def plot_pml(
         self, x: float = None, y: float = None, z: float = None, ax: Ax = None, **kwargs
     ) -> Ax:
         """plots each of simulation's PML regions"""
         kwargs = PMLParams().update_params(**kwargs)
+        pml_thicks = self.pml_thicknesses
         for pml_axis, pml_layer in enumerate(self.pml_layers):
             if pml_layer.num_layers == 0:
                 continue
-            pml_height = self.grid_size[pml_axis] * pml_layer.num_layers
-            pml_size = [inf, inf, inf]
-            pml_size[pml_axis] = pml_height
-            pml_offset_center = (self.size[pml_axis] + pml_height) / 2.0
-            for sign in (-1, 1):
+            for sign, pml_height in zip((-1, 1), pml_thicks[pml_axis]):
+                pml_size = [inf, inf, inf]
+                pml_size[pml_axis] = pml_height
                 pml_center = list(self.center)
+                pml_offset_center = (self.size[pml_axis] + pml_height) / 2.0
                 pml_center[pml_axis] += sign * pml_offset_center
                 pml_box = Box(center=pml_center, size=pml_size)
                 if pml_box.intersects_plane(x=x, y=y, z=z):
@@ -280,13 +291,10 @@ class Simulation(Box):
 
         axis, _ = self._parse_xyz_kwargs(x=x, y=y, z=z)
         _, ((xmin, ymin), (xmax, ymax)) = self._pop_bounds(axis=axis)
+        _, (pml_thick_x, pml_thick_y) = self.pop_axis(self.pml_thicknesses, axis=axis)
 
-        pml_heightes = [dl * pml.num_layers for (dl, pml) in zip(self.grid_size, self.pml_layers)]
-
-        _, (pml_thick_x, pml_thick_y) = self.pop_axis(pml_heightes, axis=axis)
-
-        ax.set_xlim(xmin - pml_thick_x, xmax + pml_thick_x)
-        ax.set_ylim(ymin - pml_thick_y, ymax + pml_thick_y)
+        ax.set_xlim(xmin - pml_thick_x[0], xmax + pml_thick_x[1])
+        ax.set_ylim(ymin - pml_thick_y[0], ymax + pml_thick_y[1])
         return ax
 
     def _filter_plot_structures(
@@ -346,29 +354,55 @@ class Simulation(Box):
         # filter out any remaining None or empty shapes (shapes with area completely removed)
         return [(medium, shape) for (medium, shape) in background_shapes if shape]
 
+    @property
+    def frequency_range(self) -> FreqBound:
+        """range of frequencies spanning all sources' frequency dependence"""
+        freq_min = min(source.frequency_range[0] for source in self.sources)
+        freq_max = max(source.frequency_range[1] for source in self.sources)
+        return (freq_min, freq_max)
+
     """ Discretization """
 
-    def _discretize(self, box: Box) -> Numpy:  # pylint: disable=too-many-locals
-        """get x,y,z positions of box using self.grid_size"""
+    @property
+    def dt(self) -> float:
+        """compute time step (distance)"""
+        dl_mins = [np.min(np.diff(c)) for c in self.coords]
+        dl_sum_inv_sq = [1 / dl ** 2 for dl in dl_mins]
+        dl_avg = 1 / np.sqrt(dl_sum_inv_sq)
+        return self.grid.courant * dl_avg / C_0
 
-        (xmin, ymin, zmin), (xmax, ymax, zmax) = box.bounds
-        dlx, dly, dlz = self.grid_size
-        x_centers = np.arange(xmin, xmax + dlx / 2, dlx)
-        y_centers = np.arange(ymin, ymax + dly / 2, dly)
-        z_centers = np.arange(zmin, zmax + dlz / 2, dlz)
-        x, y, z = np.meshgrid(x_centers, y_centers, z_centers, indexing="ij")
-        x_x = (x + dlx / 2.0, y, z)
-        y_y = (x, y + dly / 2.0, z)
-        z_z = (x, y, z + dlz / 2.0)
-        # magnetic field locations?
-        # x_yz = (x, y + dly / 2.0, z + dlz / 2.0)
-        # y_xz = (x + dlx / 2.0, y, z + dlz / 2.0)
-        # z_xy = (x + dlx / 2.0, y + dly / 2.0, z)
-        return np.stack((x_x, y_y, z_z), axis=0)
+    @property
+    def tmesh(self) -> Array[float]:
+        """compute time steps"""
+        dt = self.dt
+        return np.arange(0.0, self.run_time + dt, dt)
 
-    def epsilon(self, box: Box, freq: float) -> Numpy:
-        """get permittivity at volume specified by box and freq"""
-        xyz_pts = self._discretize(box)
+    @property
+    def wvl_mat_min(self) -> float:
+        """minimum wavelength in the material"""
+        freq_max = max(source.source_time.freq0 for source in self.sources)
+        wvl_min = C_0 / min(freq_max)
+        eps_max = max(abs(structure.medium.get_eps(freq_max)) for structure in self.structures)
+        n_max, _ = eps_complex_to_nk(eps_max)
+        return wvl_min / n_max
+
+    @property
+    def coords(self) -> Coords:
+        """coordinates of the boundaries between the points in the simulation grid"""
+        x_grid, y_grid, z_grid = self.grid.specs
+        x0, y0, z0 = self.center
+        Lx, Ly, Lz = self.size
+        x_coords = x_grid.get_coords(center=x0, size=Lx, wvl_mat_min=self.wvl_mat_min)
+        y_coords = y_grid.get_coords(center=y0, size=Ly, wvl_mat_min=self.wvl_mat_min)
+        z_coords = z_grid.get_coords(center=z0, size=Lz, wvl_mat_min=self.wvl_mat_min)
+        return Coords(x=x_coords, y=y_coords, z=z_coords)
+
+    def discretize(self, box: Box) -> Coords:
+        return NotImplemented
+
+    def epsilon(self, box: Box, freq: float = None) -> Numpy:
+        """TODO: get permittivity at volume specified by box and freq"""
+        coords = self.discretize(box)
         eps_background = self.medium.eps_model(freq)
         eps_array = eps_background * np.ones(xyz_pts.shape[1:], dtype=complex)
         for structure in self.structures:
