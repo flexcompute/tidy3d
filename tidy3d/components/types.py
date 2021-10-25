@@ -31,6 +31,9 @@ Axis = Literal[0, 1, 2]
 Vertices = List[Coordinate2D]
 Shapely = BaseGeometry
 
+""" grid """
+
+
 """ medium """
 
 Complex = Tuple[float, float]
