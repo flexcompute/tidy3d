@@ -11,7 +11,7 @@ from .types import Numpy, Direction, Array, numpy_encoding, Literal
 from .base import Tidy3dBaseModel
 from .simulation import Simulation
 from .mode import Mode  # pylint: disable=unused-import
-from ..log import log
+from ..log import log, DataError
 
 """ Helper functions """
 
@@ -583,7 +583,7 @@ class SimulationData(Tidy3dBaseModel):
         """
         monitor_data = self.monitor_data.get(monitor_name)
         if not monitor_data:
-            log.error(f"monitor {monitor_name} not found")
+            raise DataError(f"monitor {monitor_name} not found")
         return monitor_data.data
 
     def __eq__(self, other):
