@@ -21,9 +21,10 @@ def old_json_parameters(sim: Simulation) -> Dict:
     size = sim.size
     pml_layers = [{"profile": pml.profile, "Nlayers": pml.num_layers} for pml in sim.pml_layers]
 
-    mesh_step_x = np.mean(np.diff(sim.coords.x))
-    mesh_step_y = np.mean(np.diff(sim.coords.y))
-    mesh_step_z = np.mean(np.diff(sim.coords.z))
+    sizes = sim.grid.cell_sizes
+    mesh_step_x = np.mean(sizes.x)
+    mesh_step_y = np.mean(sizes.y)
+    mesh_step_z = np.mean(sizes.z)
 
     parameters = {
         "unit_length": "um",

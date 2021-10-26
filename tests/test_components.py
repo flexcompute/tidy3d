@@ -114,13 +114,6 @@ def test_sim_grid_size():
 
     size = (1, 1, 1)
     s = Simulation(size=size, grid_size=(1.0, 1.0, 1.0))
-    s = Simulation(size=size, grid_size=((1.0, 2.0), 1.0, 1.0))
-    s = Simulation(size=size, grid_size=(1.0, (1.0, 2.0), 1.0))
-    s = Simulation(size=size, grid_size=(1.0, 1.0, (1.0, 2.0)))
-    s = Simulation(size=size, grid_size=(1.0, (1.0, 2.0), (1.0, 2.0)))
-    s = Simulation(size=size, grid_size=((1.0, 2.0), 1.0, (1.0, 2.0)))
-    s = Simulation(size=size, grid_size=((1.0, 2.0), (1.0, 2.0), 1.0))
-    s = Simulation(size=size, grid_size=((1.0, 2.0), (1.0, 2.0), (1.0, 2.0)))
 
 
 """ geometry """
