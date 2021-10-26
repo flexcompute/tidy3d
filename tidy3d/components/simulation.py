@@ -9,9 +9,9 @@ import matplotlib as mpl
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from descartes import PolygonPatch
 
-from .types import Symmetry, Ax, Numpy, Shapely, Array, FreqBound
+from .types import Symmetry, Ax, Numpy, Shapely, FreqBound
 from .geometry import Box
-from .grid import GridSpecType, Coords1D, Grid, Coords
+from .grid import Coords1D, Grid, Coords
 from .medium import Medium, MediumType, eps_complex_to_nk
 from .structure import Structure
 from .source import SourceType
@@ -34,8 +34,8 @@ class Simulation(Box):
         Center of simulation domain in x,y,z, defualts to (0.0, 0.0, 0.0)
     size : Tuple[float, float, float]
         Size of simulation domain in x,y,z.
-    grid_specs : :class:`GridSpec` or ``float``.
-        Grid specifications along x,y,z.  If ``float``, sets grid size explicitly.
+    grid_size : ``float``.
+        Grid size along x,y,z.
     run_time: float, optional
         Maximum run time of simulation in seconds, defaults to 0.0.
     medium : ``tidy3d.Medium``, optional
@@ -65,7 +65,7 @@ class Simulation(Box):
     well (or a link to the document section where it's discussed in more detail).
     """
 
-    grid_specs: Tuple[GridSpecType, GridSpecType, GridSpecType]
+    grid_size: Tuple[pydantic.PositiveFloat, pydantic.PositiveFloat, pydantic.PositiveFloat]
     medium: MediumType = Medium()
     run_time: pydantic.NonNegativeFloat = 0.0
     structures: List[Structure] = []
@@ -101,14 +101,17 @@ class Simulation(Box):
         for position_index, structure in enumerate(self.structures):
             if not self.intersects(structure.geometry):
                 log.error(f"Structure #{position_index} '{structure}' is outside simulation.")
+                assert False
 
         for name, source in self.sources.items():
             if not self.intersects(source):
                 log.error(f"Source '{name}' is completely outside simulation.")
+                assert False
 
         for name, monitor in self.monitors.items():
             if not self.intersects(monitor):
                 log.error(f"Monitor '{name}' is completely outside simulation.")
+                assert False
 
     """ Accounting """
 
@@ -388,19 +391,35 @@ class Simulation(Box):
     def grid(self) -> Grid:
         """:class:`Grid` interface to the spatial locations in Simulation"""
         cell_boundary_dict = {}
-        for key, grid_spec, center, size in zip("xyz", self.grid_specs, self.center, self.size):
-            if isinstance(grid_spec, float):
-                size_snapped = grid_spec * np.floor(size / grid_spec)
-                if size_snapped != size:
-                    log.warning(f"dl = {grid_spec} not commensurate with simulation size = {size}")
-                bound_coords = center + np.linspace(-size_snapped / 2, size_snapped / 2, grid_spec)
-            else:
-                dl = self.wvl_mat_min / grid_spec.pts_per_wvl
-                dl_commensurate = size / np.ceil(size / dl)
-                bound_coords = center + np.linspace(-size / 2, size / 2, dl_commensurate)
+        for key, dl, center, size in zip("xyz", self.grid_size, self.center, self.size):
+            num_cells = int(np.floor(size / dl))
+            size_snapped = dl * num_cells
+            if size_snapped != size:
+                log.warning(f"dl = {dl} not commensurate with simulation size = {size}")
+            bound_coords = center + np.linspace(-size_snapped / 2, size_snapped / 2, num_cells + 1)
             cell_boundary_dict[key] = bound_coords
-        cell_boundaries = Coords(**cell_boundary_dict)
-        return Grid(cell_boundaries=cell_boundaries)
+        boundaries = Coords(**cell_boundary_dict)
+        return Grid(boundaries=boundaries)
+
+    # the old grid property
+    # @property
+    # def grid(self) -> Grid:
+    #     """:class:`Grid` interface to the spatial locations in Simulation"""
+    #     cell_boundary_dict = {}
+    #     for key, grid_spec, center, size in zip("xyz", self.grid_specs, self.center, self.size):
+    #         if isinstance(grid_spec, float):
+    #             num_cells = int(np.floor(size / grid_spec))
+    #             size_snapped = grid_spec * num_cells
+    #             if size_snapped != size:
+    #                log.warning(f"dl = {grid_spec} not commensurate with simulation size = {size}")
+    #            bound_coords = center + np.linspace(-size_snapped / 2, size_snapped / 2, num_cells)
+    #         else:
+    #             dl = self.wvl_mat_min / grid_spec.pts_per_wvl
+    #             num_cells = int(np.ceil(size / dl))
+    #             bound_coords = center + np.linspace(-size / 2, size / 2, num_cells)
+    #         cell_boundary_dict[key] = bound_coords
+    #     boundaries = Coords(**cell_boundary_dict)
+    #     return Grid(boundaries=boundaries)
 
     @property
     def wvl_mat_min(self) -> float:
@@ -415,19 +434,34 @@ class Simulation(Box):
         """returns subgrid containing only cells that intersect with Box"""
         if not self.intersects(box):
             log.error(f"Box {box} is outside simulation, cannot discretize")
-        pts_min, pts_max = box.bounds
-        cell_boundaries = self.grid.cell_boundaries
-        sub_cell_boundary_dict = {}
-        for label, pt_min, pt_max, bound_coords in zip("xyz", pts_min, pts_max, cell_boundaries):
-            outer_coords_min = np.where(bound_coords <= pt_min)
-            outer_coords_max = np.where(bound_coords >= pt_max)
-            ind_min = outer_coords_min[0][0] if outer_coords_min else 0
-            ind_max = outer_coords_max[0][-1] if outer_coords_max else len(bound_coords) - 1
-            sub_cell_boundary_dict[label] = cell_boundaries[ind_min : ind_max + 1]
-        sub_cell_boundaries = Coords(**sub_cell_boundary_dict)
-        return Grid(cell_boundaries=sub_cell_boundaries)
 
-    def epsilon(self, box: Box, freq: float = None) -> xr.Dataset:
+        pts_min, pts_max = box.bounds
+        boundaries = self.grid.boundaries
+
+        # stores coords for subgrid
+        sub_cell_boundary_dict = {}
+
+        # for each dimension
+        for axis_label, pt_min, pt_max in zip("xyz", pts_min, pts_max):
+            bound_coords = boundaries.dict()[axis_label]
+            assert pt_min <= pt_max, "min point was greater than max point"
+
+            # index of smallest coord greater than than pt_max
+            inds_gt_pt_max = np.where(bound_coords > pt_max)[0]
+            ind_max = len(bound_coords) - 1 if len(inds_gt_pt_max) == 0 else inds_gt_pt_max[0]
+
+            # index of largest coord less than or equal to pt_min
+            inds_leq_pt_min = np.where(bound_coords <= pt_min)[0]
+            ind_min = 0 if len(inds_leq_pt_min) == 0 else inds_leq_pt_min[-1]
+
+            # copy orginal bound coords into subgrid coords
+            sub_cell_boundary_dict[axis_label] = bound_coords[ind_min : ind_max + 1]
+
+        # construct sub grid
+        sub_boundaries = Coords(**sub_cell_boundary_dict)
+        return Grid(boundaries=sub_boundaries)
+
+    def epsilon(self, box: Box, freq: float = None) -> Dict[str, xr.DataArray]:
         """get data of permittivity at volume specified by box and freq"""
 
         sub_grid = self.discretize(box)
@@ -446,8 +480,8 @@ class Simulation(Box):
 
         # combine all data into dataset
         data_arrays = {
-            "centers": make_eps_data(sub_grid.cell_centers),
-            "boundaries": make_eps_data(sub_grid.cell_boundaries),
+            "centers": make_eps_data(sub_grid.centers),
+            "boundaries": make_eps_data(sub_grid.boundaries),
             "Ex": make_eps_data(sub_grid.yee.E.x),
             "Ey": make_eps_data(sub_grid.yee.E.y),
             "Ez": make_eps_data(sub_grid.yee.E.z),
@@ -456,4 +490,4 @@ class Simulation(Box):
             "Hz": make_eps_data(sub_grid.yee.H.z),
         }
 
-        return xr.Dataset(data_arrays)
+        return data_arrays

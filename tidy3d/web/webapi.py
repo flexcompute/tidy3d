@@ -313,7 +313,7 @@ def _upload_task(  # pylint:disable=too-many-locals
     json_string = json.dumps(sim_dict, indent=4)
 
     # TODO: remove node size, time steps, compute weight, worker group
-    node_size = int(np.prod([L / dl for L, dl in zip(simulation.size, simulation.grid_size)]))
+    node_size = int(np.prod([len(sizes) for sizes in simulation.grid.cell_sizes.dict().values()]))
     data = {
         "status": "draft",
         "solverVersion": solver_version,
