@@ -3,21 +3,23 @@ from typing import Dict, Tuple, List
 
 import pydantic
 import numpy as np
+import xarray as xr
 import matplotlib.pylab as plt
 import matplotlib as mpl
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from descartes import PolygonPatch
 
-from .types import GridSize, Symmetry, Ax, Numpy, Shapely
+from .types import Symmetry, Ax, Numpy, Shapely, FreqBound
 from .geometry import Box
-from .medium import Medium, MediumType
+from .grid import Coords1D, Grid, Coords
+from .medium import Medium, MediumType, eps_complex_to_nk
 from .structure import Structure
 from .source import SourceType
 from .monitor import MonitorType
 from .pml import PMLLayer
 from .viz import StructMediumParams, StructEpsParams, PMLParams, SymParams, add_ax_if_none
-from ..constants import inf
-from ..log import SetupError
+from ..constants import inf, C_0
+from ..log import log, SetupError
 
 # technically this is creating a circular import issue because it calls tidy3d/__init__.py
 # from .. import __version__ as version_number
@@ -32,8 +34,8 @@ class Simulation(Box):
         Center of simulation domain in x,y,z, defualts to (0.0, 0.0, 0.0)
     size : Tuple[float, float, float]
         Size of simulation domain in x,y,z.
-    grid_size : Tuple[float, float, float]
-        Grid size in x,y,z direction.
+    grid_size : ``float``.
+        Grid size along x,y,z.
     run_time: float, optional
         Maximum run time of simulation in seconds, defaults to 0.0.
     medium : ``tidy3d.Medium``, optional
@@ -51,10 +53,10 @@ class Simulation(Box):
         odd symmetry, respectively.
     shutoff : float, optional
         Simulation ends when field intensity gets below this value, defaults to 1e-5
-    courant : float, optional
-        Courant stability factor, controls time step to spatial step ratio, defaults to 0.9.
     subpixel : bool, optional
         Uses subpixel averaging of permittivity if True for much higher accuracy, defaults to True.
+    courant : float, optional
+        Courant stability factor, controls time step to spatial step ratio, defaults to 0.9.
     """
 
     """TODO: Some parameters (e.g. pml_layers, courant, shutoff) contain more information in the
@@ -63,7 +65,7 @@ class Simulation(Box):
     well (or a link to the document section where it's discussed in more detail).
     """
 
-    grid_size: Tuple[GridSize, GridSize, GridSize]
+    grid_size: Tuple[pydantic.PositiveFloat, pydantic.PositiveFloat, pydantic.PositiveFloat]
     medium: MediumType = Medium()
     run_time: pydantic.NonNegativeFloat = 0.0
     structures: List[Structure] = []
@@ -76,15 +78,14 @@ class Simulation(Box):
     )
     symmetry: Tuple[Symmetry, Symmetry, Symmetry] = (0, 0, 0)
     shutoff: pydantic.NonNegativeFloat = 1e-5
-    # TODO: We should see if we can safely increase courant to 0.99
-    courant: pydantic.confloat(ge=0.0, le=1.0) = 0.9
     subpixel: bool = True
+    courant: pydantic.confloat(gt=0.0, le=1.0) = 0.9
     # version: str = str(version_number)
 
     def __init__(self, **kwargs):
         """initialize sim and then do validations"""
         super().__init__(**kwargs)
-        self._check_geo_objs_in_bounds()
+        self._check_objects_in_bounds()
         # to do:
         # - check sources in medium freq range
         # - check PW in homogeneous medium
@@ -92,7 +93,7 @@ class Simulation(Box):
 
     """ Post-Init Validation """
 
-    def _check_geo_objs_in_bounds(self):
+    def _check_objects_in_bounds(self):
         """For each geometry-containing object in simulation, make sure it intersects simulation
         bounding box.
         """
@@ -103,11 +104,14 @@ class Simulation(Box):
                     f"Structure '{structure}' "
                     f"(at `structures[{position_index}]`) is outside simulation"
                 )
+              
+        for name, source in self.sources.items():
+            if not self.intersects(source):
+                raise SetupError(f"Source '{name}' is completely outside simulation.")
 
-        for geo_obj_dict in (self.sources, self.monitors):
-            for name, geo_obj in geo_obj_dict.items():
-                if not self.intersects(geo_obj):
-                    raise SetupError(f"object '{name}' is completely outside simulation")
+        for name, monitor in self.monitors.items():
+            if not self.intersects(monitor):
+                raise SetupError(f"Monitor '{name}' is completely outside simulation.")
 
     """ Accounting """
 
@@ -257,21 +261,34 @@ class Simulation(Box):
         ax = self.set_plot_bounds(ax=ax, x=x, y=y, z=z)
         return ax
 
+    @property
+    def pml_thicknesses(
+        self,
+    ) -> List[Tuple[float, float]]:
+        """thicknesses (um) of PML in all three axis and directions (+, -)"""
+        grid_sizes = self.grid.cell_sizes
+        pml_thicknesses = []
+        for pml_axis, pml_layer in enumerate(self.pml_layers):
+            sizes_axis = grid_sizes.dict()["xyz"[pml_axis]]
+            num_layers = pml_layer.num_layers
+            pml_thicknesses.append((num_layers * sizes_axis[0], num_layers * sizes_axis[-1]))
+        return pml_thicknesses
+
     @add_ax_if_none
     def plot_pml(
         self, x: float = None, y: float = None, z: float = None, ax: Ax = None, **kwargs
     ) -> Ax:
         """plots each of simulation's PML regions"""
         kwargs = PMLParams().update_params(**kwargs)
+        pml_thicks = self.pml_thicknesses
         for pml_axis, pml_layer in enumerate(self.pml_layers):
             if pml_layer.num_layers == 0:
                 continue
-            pml_height = self.grid_size[pml_axis] * pml_layer.num_layers
-            pml_size = [inf, inf, inf]
-            pml_size[pml_axis] = pml_height
-            pml_offset_center = (self.size[pml_axis] + pml_height) / 2.0
-            for sign in (-1, 1):
+            for sign, pml_height in zip((-1, 1), pml_thicks[pml_axis]):
+                pml_size = [inf, inf, inf]
+                pml_size[pml_axis] = pml_height
                 pml_center = list(self.center)
+                pml_offset_center = (self.size[pml_axis] + pml_height) / 2.0
                 pml_center[pml_axis] += sign * pml_offset_center
                 pml_box = Box(center=pml_center, size=pml_size)
                 if pml_box.intersects_plane(x=x, y=y, z=z):
@@ -284,13 +301,10 @@ class Simulation(Box):
 
         axis, _ = self._parse_xyz_kwargs(x=x, y=y, z=z)
         _, ((xmin, ymin), (xmax, ymax)) = self._pop_bounds(axis=axis)
+        _, (pml_thick_x, pml_thick_y) = self.pop_axis(self.pml_thicknesses, axis=axis)
 
-        pml_heightes = [dl * pml.num_layers for (dl, pml) in zip(self.grid_size, self.pml_layers)]
-
-        _, (pml_thick_x, pml_thick_y) = self.pop_axis(pml_heightes, axis=axis)
-
-        ax.set_xlim(xmin - pml_thick_x, xmax + pml_thick_x)
-        ax.set_ylim(ymin - pml_thick_y, ymax + pml_thick_y)
+        ax.set_xlim(xmin - pml_thick_x[0], xmax + pml_thick_x[1])
+        ax.set_ylim(ymin - pml_thick_y[0], ymax + pml_thick_y[1])
         return ax
 
     def _filter_plot_structures(
@@ -350,38 +364,130 @@ class Simulation(Box):
         # filter out any remaining None or empty shapes (shapes with area completely removed)
         return [(medium, shape) for (medium, shape) in background_shapes if shape]
 
+    @property
+    def frequency_range(self) -> FreqBound:
+        """range of frequencies spanning all sources' frequency dependence"""
+        freq_min = min(source.frequency_range[0] for source in self.sources)
+        freq_max = max(source.frequency_range[1] for source in self.sources)
+        return (freq_min, freq_max)
+
     """ Discretization """
 
-    def _discretize(self, box: Box) -> Numpy:  # pylint: disable=too-many-locals
-        """get x,y,z positions of box using self.grid_size"""
+    @property
+    def dt(self) -> float:
+        """compute time step (distance)"""
+        dl_mins = [np.min(sizes) for sizes in self.grid.cell_sizes]
+        dl_sum_inv_sq = [1 / dl ** 2 for dl in dl_mins]
+        dl_avg = 1 / np.sqrt(dl_sum_inv_sq)
+        return self.courant * dl_avg / C_0
 
-        (xmin, ymin, zmin), (xmax, ymax, zmax) = box.bounds
-        dlx, dly, dlz = self.grid_size
-        x_centers = np.arange(xmin, xmax + dlx / 2, dlx)
-        y_centers = np.arange(ymin, ymax + dly / 2, dly)
-        z_centers = np.arange(zmin, zmax + dlz / 2, dlz)
-        x, y, z = np.meshgrid(x_centers, y_centers, z_centers, indexing="ij")
-        x_x = (x + dlx / 2.0, y, z)
-        y_y = (x, y + dly / 2.0, z)
-        z_z = (x, y, z + dlz / 2.0)
-        # magnetic field locations?
-        # x_yz = (x, y + dly / 2.0, z + dlz / 2.0)
-        # y_xz = (x + dlx / 2.0, y, z + dlz / 2.0)
-        # z_xy = (x + dlx / 2.0, y + dly / 2.0, z)
-        return np.stack((x_x, y_y, z_z), axis=0)
+    @property
+    def tmesh(self) -> Coords1D:
+        """compute time steps"""
+        dt = self.dt
+        return np.arange(0.0, self.run_time + dt, dt)
 
-    def epsilon(self, box: Box, freq: float) -> Numpy:
-        """get permittivity at volume specified by box and freq"""
-        xyz_pts = self._discretize(box)
+    @property
+    def grid(self) -> Grid:
+        """:class:`Grid` interface to the spatial locations in Simulation"""
+        cell_boundary_dict = {}
+        for key, dl, center, size in zip("xyz", self.grid_size, self.center, self.size):
+            num_cells = int(np.floor(size / dl))
+            size_snapped = dl * num_cells
+            if size_snapped != size:
+                log.warning(f"dl = {dl} not commensurate with simulation size = {size}")
+            bound_coords = center + np.linspace(-size_snapped / 2, size_snapped / 2, num_cells + 1)
+            cell_boundary_dict[key] = bound_coords
+        boundaries = Coords(**cell_boundary_dict)
+        return Grid(boundaries=boundaries)
+
+    # the old grid property
+    # @property
+    # def grid(self) -> Grid:
+    #     """:class:`Grid` interface to the spatial locations in Simulation"""
+    #     cell_boundary_dict = {}
+    #     for key, grid_spec, center, size in zip("xyz", self.grid_specs, self.center, self.size):
+    #         if isinstance(grid_spec, float):
+    #             num_cells = int(np.floor(size / grid_spec))
+    #             size_snapped = grid_spec * num_cells
+    #             if size_snapped != size:
+    #                log.warning(f"dl = {grid_spec} not commensurate with simulation size = {size}")
+    #            bound_coords = center + np.linspace(-size_snapped / 2, size_snapped / 2, num_cells)
+    #         else:
+    #             dl = self.wvl_mat_min / grid_spec.pts_per_wvl
+    #             num_cells = int(np.ceil(size / dl))
+    #             bound_coords = center + np.linspace(-size / 2, size / 2, num_cells)
+    #         cell_boundary_dict[key] = bound_coords
+    #     boundaries = Coords(**cell_boundary_dict)
+    #     return Grid(boundaries=boundaries)
+
+    @property
+    def wvl_mat_min(self) -> float:
+        """minimum wavelength in the material"""
+        freq_max = max(source.source_time.freq0 for source in self.sources)
+        wvl_min = C_0 / min(freq_max)
+        eps_max = max(abs(structure.medium.get_eps(freq_max)) for structure in self.structures)
+        n_max, _ = eps_complex_to_nk(eps_max)
+        return wvl_min / n_max
+
+    def discretize(self, box: Box) -> Grid:
+        """returns subgrid containing only cells that intersect with Box"""
+        if not self.intersects(box):
+            log.error(f"Box {box} is outside simulation, cannot discretize")
+
+        pts_min, pts_max = box.bounds
+        boundaries = self.grid.boundaries
+
+        # stores coords for subgrid
+        sub_cell_boundary_dict = {}
+
+        # for each dimension
+        for axis_label, pt_min, pt_max in zip("xyz", pts_min, pts_max):
+            bound_coords = boundaries.dict()[axis_label]
+            assert pt_min <= pt_max, "min point was greater than max point"
+
+            # index of smallest coord greater than than pt_max
+            inds_gt_pt_max = np.where(bound_coords > pt_max)[0]
+            ind_max = len(bound_coords) - 1 if len(inds_gt_pt_max) == 0 else inds_gt_pt_max[0]
+
+            # index of largest coord less than or equal to pt_min
+            inds_leq_pt_min = np.where(bound_coords <= pt_min)[0]
+            ind_min = 0 if len(inds_leq_pt_min) == 0 else inds_leq_pt_min[-1]
+
+            # copy orginal bound coords into subgrid coords
+            sub_cell_boundary_dict[axis_label] = bound_coords[ind_min : ind_max + 1]
+
+        # construct sub grid
+        sub_boundaries = Coords(**sub_cell_boundary_dict)
+        return Grid(boundaries=sub_boundaries)
+
+    def epsilon(self, box: Box, freq: float = None) -> Dict[str, xr.DataArray]:
+        """get data of permittivity at volume specified by box and freq"""
+
+        sub_grid = self.discretize(box)
         eps_background = self.medium.eps_model(freq)
-        eps_array = eps_background * np.ones(xyz_pts.shape[1:], dtype=complex)
-        for structure in self.structures:
-            geo = structure.geometry
-            if not geo.intersects(box):
-                continue
-            eps_structure = structure.medium.eps_model(freq)
-            for component_index, pts in enumerate(xyz_pts):
-                x, y, z = pts
-                structure_map = geo.inside(x, y, z)
-                eps_array[component_index, structure_map] = eps_structure
-        return eps_array
+
+        def make_eps_data(coords: Coords):
+            """returns epsilon data on grid of points defined by coords"""
+            xs, ys, zs = coords.x, coords.y, coords.z
+            x, y, z = np.meshgrid(xs, ys, zs, indexing="ij")
+            eps_array = eps_background * np.ones(x.shape, dtype=complex)
+            for structure in self.structures:
+                eps_structure = structure.medium.eps_model(freq)
+                is_inside = structure.geometry.inside(x, y, z)
+                eps_array[np.where(is_inside)] = eps_structure
+            return xr.DataArray(eps_array, coords={"x": xs, "y": ys, "z": zs})
+
+        # combine all data into dataset
+        data_arrays = {
+            "centers": make_eps_data(sub_grid.centers),
+            "boundaries": make_eps_data(sub_grid.boundaries),
+            "Ex": make_eps_data(sub_grid.yee.E.x),
+            "Ey": make_eps_data(sub_grid.yee.E.y),
+            "Ez": make_eps_data(sub_grid.yee.E.z),
+            "Hx": make_eps_data(sub_grid.yee.H.x),
+            "Hy": make_eps_data(sub_grid.yee.H.y),
+            "Hz": make_eps_data(sub_grid.yee.H.z),
+        }
+
+        return data_arrays
