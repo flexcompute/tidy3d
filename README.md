@@ -33,7 +33,6 @@ git push origin x.x.x
 ```
 
 
-
 ## Flow
 
 
@@ -42,7 +41,7 @@ git push origin x.x.x
 - Make `tidy3d.components` to define simulation.
 	- Using builtin `tidy3d` imports (`td.PlaneWave`, `td.ModeMonitor`, etc.)
 	- Using `tidy3d.plugins` to construct more specialized components (mode solver, dispersion fitter, etc.).
-- Create a `td.Simulation` object containing all simulation parameters (pydantic will automaticall validate all components).
+- Create a `td.Simulation` object containing all simulation parameters (pydantic will automatically validate all components).
 - Upload `Simulation` to server using `tidy3d.web`.
 	- Export `Simulation` to a .json file format with `Simulation.json()`
 	- Save as .json file.
@@ -52,28 +51,11 @@ git push origin x.x.x
 	- Run task explicitly (if draft).
 	- Monitor progress.
 	- Cancel / delete task.
+- load results into `td.SimulationData` object, containing simulation and data for all of its monitors.
+	- Look at log through `sim_data.log`.
+	- Plot data.
+	- Manipulate, interpolte, resample data.
 
-### Core
-
-- Validate received .json file using `Simulation` schema file from our local copy of client.
-- Load `.json` into `Simulation` object using local copy of client.
-- Preprocess `Simulation` into files needed for core solver (need momchil's help).
-- Run solver, export solver data files (need momchil's help).
-- Postprocess solver data files into `SimulationData` containing `MonitorData` using definitions from local copy of client (need momchil's help).
-- Export data file visualizations as .html to display on browser.
-- Store data objects as .hdf5 files on server for download.
-
-### Client (Post)
-
-- Monitor solver progress, manage tasks.
-- Load results into `SimulationData` and `MonitorData` objects locally.
-	- Download .hdf5 files locally.
-	- Open .hdf5 files as `SimulationData` and `MonitorData`.
-- Visualize / post process results
-	- data management using `xarray.DataArray` operations like `.sel()`, `.iterpolate()`.
-	- simple plots with `MonitorData.plot()`
-	- interactive plots with `MonitorData.visualize()` 
-	- plugins for `near2far`, spectral analysis.
 
 ## Roadmap (113.5 days = 16.2 weeks = 3.7 months ~ jan 1)
 
@@ -116,7 +98,7 @@ git push origin x.x.x
 	- [x] Simple batch / job interface.
 ---
 
-### Stage 2: Integration
+### Stage 2: Basics
 
 #### Monitor Data
 - [x] Define monitor data.
@@ -160,20 +142,17 @@ git push origin x.x.x
 	- [x] add .plot method to `SimulationData`
 ---
 
-#### Solver Integration
+#### Solver Conversion
 
 - [x] Add version to simulation.json
 - [ ] **Make tidy3d_core functional with existing (or slightly modified) solver.**
 	- [x] Load simulation.json into `tidy3d.Simulation`.
 	- [x] IO SimulationData
-	- [ ] Process Simulation to solver inputs. (momchil)
-	- [ ] Write solver outputs to SimulationData. (momchil)
 - [x] Convert to old .json conversion to use old solver code?
-- [ ] Test test test.
 ---
 
 #### Web Integration (requires solver integration)
-- [ ] Get webAPI working with conversion
+- [x] Get webAPI working with conversion
 	- [x] add http / authentication etc.
 	- [x] hook webapi to conversion.
 	- [x] Test with simple run.
@@ -184,19 +163,7 @@ git push origin x.x.x
 	- [x] **Better handling for runtime status using rich.**
 	- [x] **Add example notebooks and make consistent.**
 	- [x] **Comments / documentations**
-- [ ] Get webAPI working without conversion.
-	- [ ] Use native `Simulation.export()` or `Simulation.json()` for `upload()`.
-	- [ ] Put the tidy3d log inside SimulationData on postprocess.
-	- [ ] Use native `SimulationData.load()` for `load()`.
-- [ ] Test test test and then test more.
----
 
-#### Finishing Integration
-- [x] Separate FieldData into different xr.DataArrays with different xs, ys, zs at positions in yee lattice
-- [ ] ModeSolver uses Permittivity Monitor for discretization / eps_cross.
-- [ ] Support for Nonuniform Mesh
-- [ ] Handling symmetries properly
-- [ ] Handling client-side discretization properly.
 ---
 
 #### "Tidying" Up
@@ -223,87 +190,89 @@ git push origin x.x.x
 	- [x] use xmin, ymin, ... = `Geometry.intersections(axis).bounds` to ``get_bounds()``
 	- [x] Integrate shapely ops into bounds checking / intersection checking.
 - [x] Fix MyPy warnings. <- too many stupid ones?
-- [ ] Add Logging.
-- [ ] Migrate notebooks into static tests.
-- [ ] Add PEC PMC.
-- [ ] Handle Inf as it's own keyword that depends on simulation bounds.
-- [ ] Make Uniform Samplers separate classes? (dont evaluate / store freqs, times)?
-- [ ] setup.cfg for installing packages with more granularity (base, docs, tests)
-- [ ] Move any interfaces in MonitorData to SimulationData (geometry, plotting, etc).
 
+### Stage 3: Details (starting on 10/27)
 
-#### Requires some focused time
-- [ ] Nail down simulationData interfaces for plotting.
-- [ ] Figue out webAPI running progress issues. (can we get separate status for time-stepping?)
-- [x] Conversion for mode monitors / mode sources.
-- [ ] Get near2far working correctly.
-- [ ] Use mode solver for the relevant example notebooks.
-- [ ] Document everything fully.
-- [ ] Diagram code structure / developer notes.
-- [ ] Discretization scheme given Box within Simulation.
+#### Getting package to usable status (18 days)
+- [ ] Finishing main features (1 week)
+ 	- [ ] `SimulationData` interface.  Any new methods to add? (plotting, etc?) (1 day)
+	- [ ] Near2far with new API (3 days)
+	- [ ] Mode Monitor consistent with new .epsilon() (1 day)
+- [ ] API changes (discuss first, implementation in 1 day)
+	- [ ] Freqs and times store start, end, stop / number instead of raw values.
+	- [ ] Change source polarization to E instead of J.
+	- [ ] named Meidums?
+	- [ ] Symmetry, PML, grid spec.  Less clunky interface? 
+- [ ] Covering features of existing code (1 day)
+	- [ ] support diagonal anisotropy (permittivity as 3-tuple)
+	- [ ] gds slab / gds importing.
+	- [ ] Conversion of dispersive materials into pole-residue.
+	- [ ] gaussian beam.
+	- [ ] option to display cell boundaries in plot.
+	- [ ] Add PEC medium
+- [ ] Documentation (1 week)
+	- [ ] Add more discussion into Simulation docs.
+	- [ ] Write docstrings and examples for all callables.
+	- [ ] How Do I?
+	- [ ] Developer guide
+	- [ ] Package structure guide / explanation.
+	- [ ] Make all notebooks work with new version.
+	- [ ] Material library.
+- [ ] Improvement (2 days)
+	- [ ] Add more info / debug logging and more comprehensive error handling (file IO, etc).
+	- [ ] Add more intelligent 'inf' handling.
+	- [ ] setup.cfg for installing dependencies for different parts of the code (base, docs, tests)
+	- [ ] web.monitor using running status for progress updates.
 
 ---
 
-#### Momchil's To Do Notes
-- [ ] Front end
-	- [ ] More discussion in Simulation docs.
-	- [ ] Courant 0.99 stable? Adjust range of acceptable values.
-	- [ ] Support nonuniform coordinates.
-	- [ ] specifying `times` directly probably not very useful, need some conveneience functions.
-	- [ ] Support Medium names eventually.
-	- [ ] Support diagonal anisotropy.
-	- [ ] GDS slab import (+shapely import).
-	- [ ] If using "polarization" kwarg, specify 'J' or 'E' in source?.
-- [ ] Conversion
-	- [ ] Find proper way to link tidy3d and tidy3d core. (core imports local copy of Simulation always updated and on main branch by default?).
-	- [ ] Convert dispersive models to PoleResidue.
-	- [ ] Support plane wave, gaussian beam, modesource in JSON conversion.
-	- [ ] Support mode monitor, permittivity monitor in JSON conversion.	
-- [ ] Data
-	- [x] Provide optional args to only export the `MonitorData` of selected `Monitor`s.
-	- [x] Wrap string conversion in MonitorLoad in helper function.
-	- [x] Assert SimulationData's monitor names exist in original Simulation <- done by default..
-	- [ ] Solver field data evaluated at yee cell locations, sufficient to interpolate values anywhere in monitor volume.
-	- [x] Eliminate need for storing `monitor_name` in `MonitorData`.
+#### Integration (in parallel to above) (18 days?)
+- [ ] Momchil will work on integration in tidy3d core while I do above.
+
 ---
 
-### Stage 3: Refining
+#### Integration of integration (8 days)
+After integration is complete, need to flesh out details and make them compatible with the main package.
+
+- [ ] Make webAPI work without conversion (1 hour)
+	- [ ] Use native `Simulation.export()` or `Simulation.json()` for `upload()`.
+	- [ ] Use native `SimulationData.load()` for `load()`.
+- [ ] Flesh out Mode solver details (discussion, then implemeent in 1 hour)
+	- [ ] Change API?
+- [ ] Flesh out Symmetry details (3 days?)
+- [ ] Nonuniform mesh, make compatible with front end (few hours?)
+- [ ] Add Permittivity monitor (2 days?)
+- [ ] Organize tests into core and tidy3d tests (few hours?)
+
+---
+
+### Stage 4: Polishing for Release (21 days)
 
 A good template:
 https://github.com/crusaderky/python_project_template
 
 #### Documentation
 
-- [ ] Finalize writing of internal documentation (1 week)
-	- [ ] Add and edit docstrings to all.
-	- [ ] Add example code snippets to everything.
-- [ ] Set up documentation (1 week)
-	- [x] Make pydantic autosummaries more pretty.
-	- [ ] Move Docs into repo.
-	- [ ] write tutorial notebooks for
-		- [x] Visualizing simulation.
-		- [x] Loading data.
-		- [x] Visualizing data.
-		- [ ] Batch simulation.
-	- [ ] Include material library.
+- [ ] Refine documentation (1 week)
+	- [ ] Make pydantic autosummaries more pretty.
+	- [ ] Move Docs and notebooks into their own repos?
+	- [ ] write as many tutorial notebooks as we can.
 	- [ ] make docs pretty,
-	- [ ] Move tidy3d notebooks into repo, make them work with new code.
 	- [ ] set up and test binder links.
-	- [ ] Separate notebooks / docs into its own repo?
 ---
 
 #### Testing
 
-- [ ] Add extensive amount of tests (2 weeks)
+- [ ] Add extensive amount of tests (1 week)
 	- [x] Test simulation.json validation / error catching.
 	- [x] Test plugins.
 	- [x] Test notebooks.
-	- [ ] Test submitting jobs if possible <- do this on tidy3dcore tests?
+	- [x] Test submitting jobs if possible <- do this on tidy3dcore tests?
 	- [ ] Import and integrate tests from existing solvers.
 ---
 
 #### Github Integration
-- [ ] Automate everything using GitHub extensions (2 weeks)
+- [ ] Automate everything using GitHub extensions (1 week)
 	- [ ] CI / tests.
 	- [ ] Version / releases.
 	- [ ] changelog
@@ -321,9 +290,9 @@ https://github.com/crusaderky/python_project_template
 	- [ ] decide how to manage branches
 ---
 
-#### Final
+#### Final (28 days)
 - [ ] Finding bugs and fixing things, testing (2 weeks)
-- [ ] White paper on arxiv?
+- [ ] White paper on arxiv? (2 weeks)
 - [ ] Release publicly! :partying_face:
 ---
 
@@ -348,3 +317,6 @@ https://github.com/crusaderky/python_project_template
 	- [ ] S matrix plugin
 	- [ ] Optimizer plugin
 	- [ ] Simple yaml editor? flask app
+- [ ] Other
+	- [ ] Courant 0.99 stable? Adjust range of acceptable values. <- weiliang.
+
