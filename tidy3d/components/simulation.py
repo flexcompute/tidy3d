@@ -19,7 +19,7 @@ from .monitor import MonitorType
 from .pml import PMLLayer
 from .viz import StructMediumParams, StructEpsParams, PMLParams, SymParams, add_ax_if_none
 from ..constants import inf, C_0
-from ..log import log
+from ..log import log, SetupError
 
 # technically this is creating a circular import issue because it calls tidy3d/__init__.py
 # from .. import __version__ as version_number
@@ -100,18 +100,18 @@ class Simulation(Box):
 
         for position_index, structure in enumerate(self.structures):
             if not self.intersects(structure.geometry):
-                log.error(f"Structure #{position_index} '{structure}' is outside simulation.")
-                assert False
-
+                raise SetupError(
+                    f"Structure '{structure}' "
+                    f"(at `structures[{position_index}]`) is outside simulation"
+                )
+              
         for name, source in self.sources.items():
             if not self.intersects(source):
-                log.error(f"Source '{name}' is completely outside simulation.")
-                assert False
+                raise SetupError(f"Source '{name}' is completely outside simulation.")
 
         for name, monitor in self.monitors.items():
             if not self.intersects(monitor):
-                log.error(f"Monitor '{name}' is completely outside simulation.")
-                assert False
+                raise SetupError(f"Monitor '{name}' is completely outside simulation.")
 
     """ Accounting """
 

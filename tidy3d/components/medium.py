@@ -2,7 +2,7 @@
 """ Defines properties of the medium / materials """
 
 from abc import ABC, abstractmethod
-from typing import List, Tuple, Union
+from typing import List, Tuple, Union, Callable
 import pydantic
 import numpy as np
 
@@ -11,7 +11,7 @@ from .types import PoleAndResidue, Literal, Ax, FreqBound
 from .viz import add_ax_if_none
 
 from ..constants import C_0, inf
-
+from ..log import log
 
 """ Medium Definitions """
 
@@ -42,6 +42,22 @@ class AbstractMedium(ABC, Tidy3dBaseModel):
         return ax
 
 
+def ensure_freq_in_range(eps_model: Callable[float, complex]) -> Callable[float, complex]:
+    """decorate eps_model to log warning if frequency supplied is out of bounds"""
+
+    def _eps_model(self, frequency: float) -> complex:
+        """new eps_model function"""
+        fmin, fmax = self.frequency_range
+        if np.any(frequency < fmin) or np.any(frequency > fmax):
+            log.warning(
+                "frequency passed to `Medium.eps_model()`"
+                f"is outside of `Medium.frequency_range` = {self.frequency_range}"
+            )
+        return eps_model(self, frequency)
+
+    return _eps_model
+
+
 """ Dispersionless Medium """
 
 
@@ -52,6 +68,7 @@ class Medium(AbstractMedium):
     conductivity: pydantic.confloat(ge=0.0) = 0.0
     type: Literal["Medium"] = "Medium"
 
+    @ensure_freq_in_range
     def eps_model(self, frequency: float) -> complex:
         """complex permittivity as a function of frequency"""
         return eps_sigma_to_eps_complex(self.permittivity, self.conductivity, frequency)
@@ -80,6 +97,7 @@ class PoleResidue(DispersiveMedium):
     poles: List[PoleAndResidue]
     type: Literal["PoleResidue"] = "PoleResidue"
 
+    @ensure_freq_in_range
     def eps_model(self, frequency: float) -> complex:
         """complex permittivity as a function of frequency"""
         omega = 2 * np.pi * frequency
@@ -118,6 +136,7 @@ class Sellmeier(DispersiveMedium):
             n_squared += B * wvl2 / (wvl2 - C)
         return np.sqrt(n_squared)
 
+    @ensure_freq_in_range
     def eps_model(self, frequency: float) -> complex:
         """complex permittivity as a function of frequency"""
         n = self._n_model(frequency)
@@ -131,6 +150,7 @@ class Lorentz(DispersiveMedium):
     coeffs: List[Tuple[float, float, float]]
     type: Literal["Lorentz"] = "Lorentz"
 
+    @ensure_freq_in_range
     def eps_model(self, frequency: float) -> complex:
         """complex permittivity as a function of frequency"""
         eps = self.eps_inf + 0.0j
@@ -146,6 +166,7 @@ class Debye(DispersiveMedium):
     coeffs: List[Tuple[float, float]]
     type: Literal["Debye"] = "Debye"
 
+    @ensure_freq_in_range
     def eps_model(self, frequency: float) -> complex:
         """complex permittivity as a function of frequency"""
         eps = self.eps_inf + 0.0j
