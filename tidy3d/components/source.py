@@ -12,6 +12,7 @@ from .validators import assert_plane
 from .geometry import Box
 from .mode import Mode
 from .viz import add_ax_if_none, SourceParams
+from ..log import ValidationError
 
 
 class SourceTime(ABC, Tidy3dBaseModel):
@@ -175,11 +176,11 @@ class DirectionalSource(Source, ABC):
         normal_axis_index = size.index(0.0)
         normal_axis = "xyz"[normal_axis_index]
         polarization_axis = polarization[-1]
-        assert (
-            normal_axis != polarization_axis
-        ), f"Directional source '{cls.__name__}' "  # pylint: disable=no-member
-        " can not have polarization component ({polarization_axis})"
-        "parallel to plane's normal direction ({normal_axis})"
+        if normal_axis == polarization_axis:
+            raise ValidationError(
+                "Directional source must have polarization component orthogonal "
+                "to the normal direction of the plane."
+            )
         return values
 
 

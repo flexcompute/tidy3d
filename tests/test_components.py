@@ -3,6 +3,7 @@ import numpy as np
 import pydantic
 
 from tidy3d import *
+from tidy3d.log import ValidationError, SetupError
 
 
 def test_sim():
@@ -106,7 +107,7 @@ def test_sim_bounds():
             center = 2 * amp * sign
             if np.sum(center) < 1e-12:
                 continue
-            with pytest.raises(AssertionError) as e_info:
+            with pytest.raises(SetupError) as e_info:
                 place_box(tuple(center))
 
 
@@ -252,11 +253,11 @@ def test_VolumeSource_directional():
     # s = GaussianBeam(size=(0,1,1), source_time=g, polarization='Jz', direction='+', waist_size=(1., 2.))
 
     # test that non-planar geometry crashes plane wave
-    with pytest.raises(pydantic.ValidationError) as e_info:
+    with pytest.raises(ValidationError) as e_info:
         s = PlaneWave(size=(1, 1, 1), source_time=g, polarization="Jz", direction="+")
 
     # test that non-planar geometry crashes plane wave and gaussian beam
-    with pytest.raises(pydantic.ValidationError) as e_info:
+    with pytest.raises(ValidationError) as e_info:
         s = PlaneWave(size=(1, 1, 0), source_time=g, polarization="Jz", direction="+")
     # with pytest.raises(pydantic.ValidationError) as e_info:
     # s = GaussianBeam(size=(1,1,1), source_time=g, polarization='Jz', direction='+', waist_size=(1., 2.))
@@ -285,7 +286,7 @@ def test_monitor_plane():
 
     # make sure flux and mode monitors fail with non planar geometries
     for size in ((0, 0, 0), (1, 0, 0), (1, 1, 1)):
-        with pytest.raises(pydantic.ValidationError) as e_info:
+        with pytest.raises(ValidationError) as e_info:
             ModeMonitor(size=size, freqs=freqs, modes=[])
-        with pytest.raises(pydantic.ValidationError) as e_info:
+        with pytest.raises(ValidationError) as e_info:
             FluxMonitor(size=size, freqs=freqs, modes=[])

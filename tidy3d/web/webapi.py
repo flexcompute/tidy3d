@@ -17,7 +17,7 @@ from .task import TaskId, TaskInfo
 from . import httputils as http
 from ..components.simulation import Simulation
 from ..components.data import SimulationData
-from ..log import log
+from ..log import log, WebError
 
 
 REFRESH_TIME = 0.3
@@ -92,6 +92,8 @@ def get_info(task_id: TaskId) -> TaskInfo:
     """
     method = os.path.join("fdtd/task", task_id)
     info_dict = http.get(method)
+    if info_dict is None:
+        raise WebError(f"task {task_id} not found, unable to load info.")
     return TaskInfo(**info_dict)
 
 
@@ -209,8 +211,7 @@ def download(task_id: TaskId, simulation: Simulation, path: str = "simulation_da
 
     task_info = get_info(task_id)
     if task_info.status in ("error", "diverged", "deleted", "draft"):
-        log.error(f"can't download task '{task_id}', status = '{task_info.status}'")
-        raise RuntimeError
+        raise WebError(f"can't download task '{task_id}', status = '{task_info.status}'")
 
     directory, _ = os.path.split(path)
     sim_file = os.path.join(directory, "simulation.json")
@@ -332,7 +333,7 @@ def _upload_task(  # pylint:disable=too-many-locals
         task_id = task["taskId"]
     except requests.exceptions.HTTPError as e:
         error_json = json.loads(e.response.text)
-        log.error(error_json["error"])
+        raise WebError(error_json["error"])
 
     # upload the file to s3
     log.info("Uploading the json file")
