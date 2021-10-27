@@ -106,16 +106,17 @@ class ModeSolver:
         """
 
         # note discretizing, need to make consistent
-        eps_cross = self.simulation.epsilon(self.plane, self.freq)
-        eps_cross = np.squeeze(np.mean(eps_cross, axis=0))
+        eps_data = self.simulation.epsilon(self.plane, self.freq)
+        eps_cross_xx = np.squeeze(eps_data["Ex"].values)
+        eps_cross_yy = np.squeeze(eps_data["Ey"].values)
+        eps_cross_zz = np.squeeze(eps_data["Ez"].values)
+        eps_cross = np.stack((eps_cross_xx, eps_cross_yy, eps_cross_zz))
 
-        Nx, Ny = eps_cross.shape
+        Nx, Ny = eps_cross_xx.shape
         if mode.symmetries[0] != 0:
-            eps_cross = eps_cross[
-                Nx // 2 :,
-            ]
+            eps_cross = np.stack(tuple(e[Nx // 2, :] for e in eps_cross))
         if mode.symmetries[1] != 0:
-            eps_cross = eps_cross[:, Ny // 2]
+            eps_cross = np.stack(tuple(e[:, Ny // 2] for e in eps_cross))
 
         num_modes = mode.num_modes if mode.num_modes else mode.mode_index + 1
         if num_modes <= mode.mode_index:

@@ -75,7 +75,7 @@ def compute_modes(
 
     try:
         if isinstance(eps_cross, Numpy):
-            eps_xx, eps_yy, eps_zz = [np.copy(eps_cross)] * 3
+            eps_xx, eps_yy, eps_zz = eps_cross
         elif len(eps_cross) == 3:
             eps_xx, eps_yy, eps_zz = [np.copy(e) for e in eps_cross]
         else:

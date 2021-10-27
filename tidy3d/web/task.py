@@ -60,17 +60,26 @@ class TaskInfo(TaskBase):
     solverEndTime: str = None
     taskId: str
     workerGroup: str = None
-    realCost: float
+    realCost: float = None
     cloudInstanceSize: int = None
     flow360InstanceSize: int = None
     estCostMin: float
     estCostMax: float
     running: bool
     objectRefId: str = None
-    metdataProcessed: bool
+    metdataProcessed: bool = None
     optSolverUnit: float = None
     minSolverUnit: float = None
     maxSolverUnit: float = None
+    coreStartTimeAsLong: float = None
+    id: str = None
+    metadataProcessed: bool = None
+    parentId: str = None
+    realWorkUnit: float = None
+    refId: str = None
+    solverEndTimeAsLong: float = None
+    solverStartTimeAsLong: float = None
+    submitTimeAsLong: float = None
 
 
 class RunInfo(TaskBase):

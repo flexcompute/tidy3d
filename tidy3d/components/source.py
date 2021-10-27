@@ -7,7 +7,7 @@ import pydantic
 import numpy as np
 
 from .base import Tidy3dBaseModel
-from .types import Direction, Polarization, Ax
+from .types import Direction, Polarization, Ax, FreqBound
 from .validators import assert_plane
 from .geometry import Box
 from .mode import Mode
@@ -53,6 +53,11 @@ class SourceTime(ABC, Tidy3dBaseModel):
         ax.set_aspect("auto")
         return ax
 
+    @property
+    @abstractmethod
+    def frequency_range(self) -> FreqBound:
+        """frequency range for a source time"""
+
 
 class Pulse(SourceTime, ABC):
     """Source ramps up and oscillates with freq0"""
@@ -60,6 +65,12 @@ class Pulse(SourceTime, ABC):
     freq0: pydantic.PositiveFloat
     fwidth: pydantic.PositiveFloat  # currently standard deviation
     offset: pydantic.confloat(ge=2.5) = 5.0
+
+    @property
+    def frequency_range(self) -> FreqBound:
+        """frequency range for a source time"""
+        width_std = 5
+        return (self.freq0 - width_std * self.fwidth, self.freq0 + width_std * self.fwidth)
 
 
 class GaussianPulse(Pulse):
