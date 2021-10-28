@@ -104,7 +104,7 @@ class Simulation(Box):
                     f"Structure '{structure}' "
                     f"(at `structures[{position_index}]`) is outside simulation"
                 )
-              
+
         for name, source in self.sources.items():
             if not self.intersects(source):
                 raise SetupError(f"Source '{name}' is completely outside simulation.")

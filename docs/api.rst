@@ -67,12 +67,7 @@ Simulation Output Data
    SimulationData
    SimulationData.export
    SimulationData.load
-   MonitorData
-   MonitorData.export
-   MonitorData.load
-   MonitorData.geometry
    FieldData
-   FieldTimeData
    FluxData
    FluxTimeData
    ModeData
