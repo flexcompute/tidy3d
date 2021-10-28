@@ -6,11 +6,13 @@ from typing import Dict, List, Union
 import xarray as xr
 import numpy as np
 import h5py
+import pydantic
 
-from .types import Numpy, Direction, Array, numpy_encoding, Literal
+from .types import Numpy, Direction, Array, numpy_encoding, Literal, Ax
 from .base import Tidy3dBaseModel
 from .simulation import Simulation
 from .mode import Mode  # pylint: disable=unused-import
+from .viz import add_ax_if_none
 from ..log import log, DataError
 
 """ Helper functions """
@@ -116,12 +118,12 @@ class MonitorData(Tidy3dData, ABC):
     """
     _dims = ()
 
-    def _make_xarray(self) -> Union[xr.DataArray, xr.Dataset]:
+    def _make_xarray(self) -> xr.DataArray:
         """make xarray representation of data
 
         Returns
         -------
-        ``Union[xarray.DataArray xarray.Dataset]``
+        ``xarray.DataArray``
             Representation of the underlying data using xarray.
         """
         data_dict = self.dict()
@@ -298,12 +300,20 @@ class AbstractFluxData(PlanarData, ABC):
 
 
 class ScalarFieldData(AbstractScalarFieldData, FreqData):
-    """stores a single scalar field in frequency domain
+    """stores a single scalar field in frequency-domain
 
     Parameters
     ----------
-    data_dict : ``{str : :class:`ScalarFieldData`}
-        mapping of field name to corresponding :class:`ScalarFieldData`.
+    x : ``numpy.ndarray``
+        Data coordinates in x direction (um).
+    y : ``numpy.ndarray``
+        Data coordinates in y direction (um).
+    z : ``numpy.ndarray``
+        Data coordinates in z direction (um).
+    f : ``numpy.ndarray``
+        Frequency coordinates (Hz).
+    values : ``numpy.ndarray``
+        Complex-valued array of shape ``(len(x), len(y), len(z), len(f))`` storing field values.
 
     Example
     -------
@@ -326,8 +336,16 @@ class ScalarFieldTimeData(AbstractScalarFieldData, TimeData):
 
     Parameters
     ----------
-    data_dict : ``{str : :class:`ScalarFieldTimeData`}
-        mapping of field name to corresponding :class:`ScalarFieldTimeData`.
+    x : ``numpy.ndarray``
+        Data coordinates in x direction (um).
+    y : ``numpy.ndarray``
+        Data coordinates in y direction (um).
+    z : ``numpy.ndarray``
+        Data coordinates in z direction (um).
+    t : ``numpy.ndarray``
+        Time coordinates (sec).
+    values : ``numpy.ndarray``
+        Real-valued array of shape ``(len(x), len(y), len(z), len(t))`` storing field values.
 
     Example
     -------
@@ -350,8 +368,8 @@ class FieldData(CollectionData):
 
     Parameters
     ----------
-    data_dict : ``{str : :class:`ScalarFieldTimeData`}
-        mapping of field name to corresponding :class:`ScalarFieldTimeData`.
+    data_dict : ``{str : Union[:class:`ScalarFieldData`, :class:`ScalarFieldTimeData`]}
+        Mapping of field name to its scalar field data.
 
     Example
     -------
@@ -360,7 +378,7 @@ class FieldData(CollectionData):
     >>> x = np.linspace(-1, 1, 10)
     >>> y = np.linspace(-2, 2, 20)
     >>> z = np.linspace(0, 0, 1)
-    >>> values_f = np.random.random((len(x), len(y), len(z), len(f)))
+    >>> values_f = (1+1j) * np.random.random((len(x), len(y), len(z), len(f)))
     >>> values_t = np.random.random((len(x), len(y), len(z), len(t)))
     >>> field_f = ScalarFieldData(values=values_f, x=x, y=y, z=z, f=f)
     >>> field_t = ScalarFieldTimeData(values=values_t, x=x, y=y, z=z, t=t)
@@ -377,20 +395,16 @@ class FluxData(AbstractFluxData, FreqData):
 
     Parameters
     ----------
-    monitor : :class:`FluxMonitor`
-        original :class:`Monitor` object corresponding to data.
-    monitor_name : str
-        Name of original :class:`Monitor` in the original :attr:`Simulation.monitors` dictionary..
     f : ``numpy.ndarray``
-        Frequencies of the data (Hz).
+        Frequency coordinates (Hz).
     values : ``numpy.ndarray``
-        Complex-valued array of data values. ``values.shape=(len(f),)``
+        Complex-valued array of shape ``(len(f),)`` storing field values.
 
     Example
     -------
 
     >>> f = np.linspace(2e14, 3e14, 1001)
-    >>> values = np.random.random((len(f),))
+    >>> values = (1+1j) * np.random.random((len(f),))
     >>> data = FluxData(values=values, f=f)
     """
 
@@ -405,14 +419,10 @@ class FluxTimeData(AbstractFluxData, TimeData):
 
     Parameters
     ----------
-    monitor : :class:`FluxTimeMonitor`
-        Original :class:`Monitor` object corresponding to data.
-    monitor_name : ``str``
-        Name of original :class:`Monitor` in the original :attr:`Simulation.monitors` dictionary.
     t : ``numpy.ndarray``
-        Times of the data (sec).
+        Time coordinates (sec).
     values : ``numpy.ndarray``
-        Real-valued array of data values. ``values.shape=(len(t),)``
+        Real-valued array of shape ``(len(t),)`` storing field values.
 
     Example
     -------
@@ -433,20 +443,15 @@ class ModeData(PlanarData, FreqData):
 
     Parameters
     ----------
-    monitor : :class:`ModeMonitor`
-        original :class:`Monitor` object corresponding to data.
-    monitor_name : ``str``
-        Name of original :class:`Monitor` in the original :attr:`Simulation.monitors` dictionary.
-    direction : ``List[Literal["+", "-"]]``
-        Direction in which the modes are propagating (normal to monitor plane).
+    direction : ``[Literal["+", "-"]]``
+        List of strings corresponding to the mode propagation direction.
     mode_index : ``numpy.ndarray``
-        Array of integers into :attr:`ModeMonitor.modes` specifying the mode corresponding to this
-        index.
+        Array of integer indices into the original monitor's :attr:`ModeMonitor.modes`.
     f : ``numpy.ndarray``
-        Frequencies of the data (Hz).
+        Frequency coordinates (Hz).
     values : ``numpy.ndarray``
-        Complex-valued array of data values. ``values.shape=(len(direction), len(mode_index),
-        len(f))``
+        Complex-valued array of mode amplitude values
+        with shape``values.shape=(len(direction), len(mode_index), len(f))``
 
     Example
     -------
@@ -484,8 +489,7 @@ class SimulationData(Tidy3dBaseModel):
     simulation : :class:`Simulation`
         Original :class:`Simulation`.
     monitor_data : ``Dict[str, :class:`Tidy3dData`]``
-        Mapping of monitor name to :class:`Tidy3dData` intance. The dictionary keys must
-        exist in ``simulation.monitors.keys()``.
+        Mapping of monitor name to :class:`Tidy3dData` intance.
     log_string : ``str``, optional
         string containing the log from server.
     """
@@ -496,10 +500,96 @@ class SimulationData(Tidy3dBaseModel):
 
     @property
     def log(self):
-        """prints the server-side log
-        TODO: store log metadata inside of SimulationData.info or something (credits billed, time)
-        """
+        """prints the server-side log."""
         print(self.log_string if self.log_string else "no log stored")
+
+    def __getitem__(self, monitor_name: str) -> Union[xr.DataArray, xr.Dataset]:
+        """get the :class:`MonitorData` xarray representation by name (``sim_data[monitor_name]``).
+
+        Parameters
+        ----------
+        monitor_name : ``str``
+            Name of :class:`Monitor` to return data for.
+
+        Returns
+        -------
+        ``Union[xarray.DataArray``, xarray.Dataset]``
+            The ``xarray`` representation of the data.
+        """
+        monitor_data = self.monitor_data.get(monitor_name)
+        if not monitor_data:
+            raise DataError(f"monitor {monitor_name} not found")
+        return monitor_data.data
+
+    @add_ax_if_none
+    def plot_field(
+        self,
+        field_monitor_name: str,
+        field_name: str,
+        x: float = None,
+        y: float = None,
+        z: float = None,
+        freq: float = None,
+        time: float = None,
+        eps_alpha: pydantic.confloat(ge=0.0, le=1.0) = 0.5,
+        ax: Ax = None,
+        **kwargs,
+    ) -> Ax:
+        """Plot the field data for a monitor with simulation plot overlayed.
+
+        Parameters
+        ----------
+        field_monitor_name : ``str``
+            Name of :class:`FieldMonitor` or :class:`FieldTimeData` to plot.
+        field_name : ``str``
+            Name of `field` in monitor to plot (eg. 'Ex').
+        x : ``float``, optional
+            Position of plane in x direction.
+        y : ``float``, optional
+            Position of plane in y direction.
+        z : ``float``, optional
+            Position of plane in z direction.
+        freq: ``float``, optional
+            if monitor is a :class:`FieldMonitor`, specifies the frequency (Hz) to plot the field.
+        time: ``float``, optional
+            if monitor is a :class:`FieldTimeMonitor`, specifies the time (sec) to plot the field.
+        cbar: `bool``, optional
+            if True (default), will include colorbar
+        ax : ``matplotlib.axes._subplots.Axes``, optional
+            matplotlib axes to plot on, if not specified, one is created.
+        **patch_kwargs
+            Optional keyword arguments passed to ``add_artist(patch, **patch_kwargs)``.
+
+        Returns
+        -------
+        ``matplotlib.axes._subplots.Axes``
+            The supplied or created matplotlib axes.
+
+        TODO: fully test and finalize arguments.
+        """
+
+        if field_monitor_name not in self.monitor_data:
+            raise DataError(f"field_monitor_name {field_monitor_name} not found in SimulationData.")
+
+        monitor_data = self.monitor_data.get(field_monitor_name)
+
+        if not isinstance(monitor_data, FieldData):
+            raise DataError(f"field_monitor_name {field_monitor_name} not a FieldData instance.")
+
+        if field_name not in monitor_data.data_dict:
+            raise DataError(f"field_name {field_name} not found in {field_monitor_name}.")
+
+        xr_data = monitor_data.data_dict.get(field_name)
+        if isinstance(monitor_data, FieldData):
+            field_data = xr_data.sel(f=freq)
+        else:
+            field_data = xr_data.sel(t=time)
+
+        ax = field_data.sel(x=x, y=y, z=z).real.plot.pcolormesh(ax=ax)
+        ax = self.simulation.plot_structures_eps(
+            freq=freq, cbar=False, x=x, y=y, z=z, alpha=eps_alpha, ax=ax
+        )
+        return ax
 
     def export(self, fname: str) -> None:
         """Export :class:`SimulationData` to single hdf5 file including monitor data.
@@ -509,8 +599,6 @@ class SimulationData(Tidy3dBaseModel):
         fname : ``str``
             Path to data file (including filename).
         """
-
-        """ TODO: Provide optional args to only export the MonitorData of selected monitors. """
 
         with h5py.File(fname, "a") as f_handle:
 
@@ -530,7 +618,7 @@ class SimulationData(Tidy3dBaseModel):
 
     @classmethod
     def load(cls, fname: str):
-        """Load :class:`SimulationData` from .hdf5 file
+        """Load :class:`SimulationData` from .hdf5 file.
 
         Parameters
         ----------
@@ -568,24 +656,6 @@ class SimulationData(Tidy3dBaseModel):
             log_string=log_string,
         )
 
-    def __getitem__(self, monitor_name: str) -> MonitorData:
-        """get the :class:`MonitorData` xarray representation by name (``sim_data[monitor_name]``).
-
-        Parameters
-        ----------
-        monitor_name : str
-            Name of :class:`Monitor` to get data for.
-
-        Returns
-        -------
-        ``Union[xarray.DataArray``, xarray.Dataset]``
-            The ``xarray`` representation of the data.
-        """
-        monitor_data = self.monitor_data.get(monitor_name)
-        if not monitor_data:
-            raise DataError(f"monitor {monitor_name} not found")
-        return monitor_data.data
-
     def __eq__(self, other):
         """check equality against another SimulationData instance
 
@@ -614,14 +684,3 @@ class SimulationData(Tidy3dBaseModel):
 
         # if never returned False, they are equal
         return True
-
-
-""" TODO:
- - assert all SimulationData.monitor_data.keys() are in SimulationData.simulation.monitor.keys()
- - remove MonitorData.monitor and MonitorData.monitor_name attributes - actually, can keep
- - remove MonitorData.load() and MonitorData.export() - can keep but should not be unused, so
-   maybe remove
- - provide optional args to SimulationData.export() and SimulationData.load() to only export/load
-   a subset of all possible MonitorData objects
- - change data dictionary structure to ['monitor_name']['Ex']['values'], etc.
-"""

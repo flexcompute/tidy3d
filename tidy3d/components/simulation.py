@@ -9,7 +9,7 @@ import matplotlib as mpl
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from descartes import PolygonPatch
 
-from .types import Symmetry, Ax, Numpy, Shapely, FreqBound
+from .types import Symmetry, Ax, Shapely, FreqBound
 from .geometry import Box
 from .grid import Coords1D, Grid, Coords
 from .medium import Medium, MediumType, eps_complex_to_nk
@@ -86,7 +86,7 @@ class Simulation(Box):
         """initialize sim and then do validations"""
         super().__init__(**kwargs)
         self._check_objects_in_bounds()
-        # to do:
+        # TODO:
         # - check sources in medium freq range
         # - check PW in homogeneous medium
         # - check nonuniform grid covers the whole simulation domain
@@ -104,7 +104,7 @@ class Simulation(Box):
                     f"Structure '{structure}' "
                     f"(at `structures[{position_index}]`) is outside simulation"
                 )
-              
+
         for name, source in self.sources.items():
             if not self.intersects(source):
                 raise SetupError(f"Source '{name}' is completely outside simulation.")
