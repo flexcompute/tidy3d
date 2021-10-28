@@ -348,7 +348,7 @@ class Planar(Geometry, ABC):
     """Geometry with one ``axis`` that is slab-like with thickness ``height``."""
 
     axis: Axis = 2
-    length: pydantic.NonNegativeFloat
+    length: pydantic.NonNegativeFloat = None
 
     def intersections(self, x: float = None, y: float = None, z: float = None):
         """returns shapely geometry at plane specified by one non None value of x,y,z
@@ -668,6 +668,7 @@ class Cylinder(Circular, Planar):
     >>> c = Cylinder(center=(1,2,3), radius=2, length=5, axis=2)
     """
 
+    length: pydantic.NonNegativeFloat
     type: Literal["Cylinder"] = "Cylinder"
 
     def _intersections_normal(self):
@@ -770,23 +771,26 @@ class PolySlab(Planar):
     >>> p = PolySlab(vertices=[(0,0), (1,0), (1,1)], axis=2, slab_bounds=(-1, 1))
     """
 
-    length: pydantic.NonNegativeFloat = None
     slab_bounds: Tuple[float, float]
     vertices: Vertices
     type: Literal["PolySlab"] = "PolySlab"
 
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        self._set_height_center()
+    @pydantic.validator("slab_bounds", always=True)
+    def set_length(cls, val, values):
+        """sets the .length field using zmin, zmax"""
+        zmin, zmax = val
+        values["length"] = zmax - zmin
+        return val
 
-    def _set_height_center(self):
-        """Set height and center from slab_bounds after init."""
-        zmin, zmax = self.slab_bounds
-        self.length = zmax - zmin
+    @pydantic.validator("vertices", always=True)
+    def set_center(cls, val, values):
+        """sets the .center field using zmin, zmax, and polygon vertices"""
+        polygon_face = Polygon(val)
+        zmin, zmax = values.get("slab_bounds")
         z0 = (zmin + zmax) / 2.0
-        polygon_face = Polygon(self.vertices)
         [(x0, y0)] = list(polygon_face.centroid.coords)
-        self.center = self.unpop_axis(z0, (x0, y0), axis=self.axis)
+        values["center"] = cls.unpop_axis(z0, (x0, y0), axis=values.get("axis"))
+        return val
 
     def inside(self, x, y, z) -> bool:  # pylint:disable=too-many-locals
         """Returns true if point ``(x,y,z)`` inside volume of geometry.

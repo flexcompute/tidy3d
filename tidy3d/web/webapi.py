@@ -333,7 +333,7 @@ def _upload_task(  # pylint:disable=too-many-locals
         task_id = task["taskId"]
     except requests.exceptions.HTTPError as e:
         error_json = json.loads(e.response.text)
-        raise WebError(error_json["error"])
+        raise WebError(error_json["error"]) from e
 
     # upload the file to s3
     log.info("Uploading the json file")

@@ -34,5 +34,9 @@ class WebError(Tidy3dError):
     """error with the webAPI"""
 
 
+class AuthenticationError(Tidy3dError):
+    """error authenticating a user through webapi webAPI"""
+
+
 class DataError(Tidy3dError):
     """error accessing data"""

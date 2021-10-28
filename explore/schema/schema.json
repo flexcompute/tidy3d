@@ -1216,12 +1216,12 @@
         "polarization": {
           "title": "Polarization",
           "enum": [
-            "Jx",
-            "Jy",
-            "Jz",
-            "Mx",
-            "My",
-            "Mz"
+            "Ex",
+            "Ey",
+            "Ez",
+            "Hx",
+            "Hy",
+            "Hz"
           ],
           "type": "string"
         },
@@ -1336,12 +1336,12 @@
         "polarization": {
           "title": "Polarization",
           "enum": [
-            "Jx",
-            "Jy",
-            "Jz",
-            "Mx",
-            "My",
-            "Mz"
+            "Ex",
+            "Ey",
+            "Ez",
+            "Hx",
+            "Hy",
+            "Hz"
           ],
           "type": "string"
         },
@@ -1633,12 +1633,12 @@
         "polarization": {
           "title": "Polarization",
           "enum": [
-            "Jx",
-            "Jy",
-            "Jz",
-            "Mx",
-            "My",
-            "Mz"
+            "Ex",
+            "Ey",
+            "Ez",
+            "Hx",
+            "Hy",
+            "Hz"
           ],
           "type": "string"
         },

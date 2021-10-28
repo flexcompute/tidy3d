@@ -16,7 +16,7 @@ import tidy3d.web as web
 
 # set up parameters of simulation
 dl = 0.01
-pml = td.PMLLayer(profile="standard", num_layers=10)
+pml = td.PML(profile="standard", num_layers=10)
 sim_size = [4, 4, 4]
 freq0 = 3e14
 fwidth = 1e13
@@ -31,7 +31,7 @@ source = td.VolumeSource(
     center=(-1.5, 0, 0),
     size=(0, 0.4, 0.4),
     source_time=td.GaussianPulse(freq0=freq0, fwidth=fwidth),
-    polarization="Jx",
+    polarization="Ex",
 )
 
 # create monitor

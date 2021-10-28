@@ -12,8 +12,8 @@ from .types import Numpy, Direction, Array, numpy_encoding, Literal, Ax
 from .base import Tidy3dBaseModel
 from .simulation import Simulation
 from .mode import Mode  # pylint: disable=unused-import
-from .viz import add_ax_if_none
-from ..log import log, DataError
+from ..log import DataError
+
 
 """ Helper functions """
 
@@ -65,17 +65,6 @@ class Tidy3dData(Tidy3dBaseModel):
             xr.Dataset: lambda x: None,  # dont write
         }
 
-    type: str = None
-
-    def __init__(self, **kwargs):
-        """compute xarray representation and add to ``self.data`` after init"""
-        super().__init__(**kwargs)
-        self.data = self._make_xarray()
-
-    @abstractmethod
-    def _make_xarray(self):
-        """make xarray representation of stored data."""
-
     @abstractmethod
     def add_to_group(self, hdf5_grp):
         """add data contents to an hdf5 group"""
@@ -107,6 +96,7 @@ class MonitorData(Tidy3dData, ABC):
     """
 
     values: Union[Array[float], Array[complex]]
+    type: str = None
 
     """ explanation of``_dims``
         `_dims` is an attribute of all `MonitorData` objects.
@@ -118,7 +108,8 @@ class MonitorData(Tidy3dData, ABC):
     """
     _dims = ()
 
-    def _make_xarray(self) -> xr.DataArray:
+    @property
+    def data(self) -> xr.DataArray:
         """make xarray representation of data
 
         Returns
@@ -194,8 +185,10 @@ class CollectionData(Tidy3dData):
     """
 
     data_dict: Dict[str, MonitorData]
+    type: str = None
 
-    def _make_xarray(self):
+    @property
+    def data(self) -> xr.Dataset:
         """For field quantities, store a single xarray DataArray for each ``field``.
         These all go in a single xarray Dataset, which keeps track of the shared coords.
 

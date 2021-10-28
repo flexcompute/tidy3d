@@ -39,13 +39,13 @@ def test_simulation_preserve_types():
             Structure(geometry=Sphere(radius=1), medium=Debye(eps_inf=1.0, coeffs=[])),
         ],
         sources={
-            "point": VolumeSource(size=(0, 0, 0), source_time=st, polarization="Jx"),
-            "PW": PlaneWave(size=(inf, inf, 0), source_time=st, direction="+", polarization="Jx"),
+            "point": VolumeSource(size=(0, 0, 0), source_time=st, polarization="Ex"),
+            "PW": PlaneWave(size=(inf, inf, 0), source_time=st, direction="+", polarization="Ex"),
             "Gaussian": GaussianBeam(
                 size=(inf, inf, 0),
                 source_time=st,
                 direction="+",
-                polarization="Jx",
+                polarization="Ex",
                 waist_size=(1, 1),
             ),
         },
