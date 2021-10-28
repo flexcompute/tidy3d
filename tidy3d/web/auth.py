@@ -8,10 +8,14 @@ import boto3
 import requests
 
 from .config import DEFAULT_CONFIG as Config
+from ..log import AuthenticationError
 
 # where we store the credentials locally
 CREDENTIAL_FILE = "~/.tidy3d/auth.json"
 credential_path = os.path.expanduser(CREDENTIAL_FILE)
+credential_dir = os.path.split(credential_path)[0]
+if not os.path.exists(credential_dir):
+    os.mkdir(credential_dir)
 
 boto3.setup_default_session(region_name=Config.s3_region)
 
@@ -50,9 +54,7 @@ def get_credentials() -> None:
             return
 
         except Exception as e:  # pylint:disable=broad-except
-            # why just pass here?  shouldnt we be raising?
-            print("Error: Failed to log in with saved credentials.")
-            # print(f"error = {e}")
+            raise AuthenticationError("Error: Failed to log in with saved credentials.") from e
 
     # keep trying to log in
     while True:
@@ -69,8 +71,9 @@ def get_credentials() -> None:
             break
 
         except Exception as e:  # pylint:disable=broad-except
-            print("Error: Failed to log in with new username and password.")
-            # print(f"error = {e}")
+            raise AuthenticationError(
+                "Error: Failed to log in with new username and password."
+            ) from e
 
     # ask to stay logged in
     while True:

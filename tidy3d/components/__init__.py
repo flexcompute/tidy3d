@@ -2,7 +2,7 @@
 
 from .simulation import Simulation
 
-from .pml import PMLLayer
+from .pml import PML, StablePML, Absorber
 from .grid import Grid, Coords
 
 from .geometry import Box, Sphere, Cylinder, PolySlab

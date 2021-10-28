@@ -11,6 +11,7 @@ from tidy3d.plugins.dispersion.fit import _pack_coeffs, _unpack_coeffs
 from tidy3d.plugins import ModeSolver
 from tidy3d.plugins import Near2Far
 from tidy3d import FieldData, ScalarFieldData, FieldMonitor
+from .utils import clear_tmp
 
 
 def test_near2far():
@@ -70,6 +71,7 @@ def test_pole_coeffs():
     assert np.allclose(coeffs, coeffs_)
 
 
+@clear_tmp
 def test_dispersion():
     """performs a fit on some random data"""
     num_data = 10

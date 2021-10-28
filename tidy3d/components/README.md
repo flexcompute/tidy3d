@@ -112,7 +112,7 @@ It also accepts many arguments related to the global configuration of the simula
 - `grid_size` (defines the discretization).
 - `medium` (the background medium).
 - `run_time`
-- `pml_layers` (a list of three `PMLLayer(profile, num_layers)` objects specifying the PML, defined in `pml.py`).
+- `pml_layers` (a list of three `PML(profile, num_layers)` objects specifying the PML, defined in `pml.py`).
 - `symmetry`
 - `courant`
 - `shutoff`
