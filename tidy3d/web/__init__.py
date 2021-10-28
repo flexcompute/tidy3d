@@ -3,6 +3,3 @@ import sys
 
 from .webapi import run, upload, get_info, start, monitor, delete, download, load_data
 from .container import Job, Batch
-
-# for importing tidy3d_core
-sys.path.append("../../")
