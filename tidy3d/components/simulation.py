@@ -80,6 +80,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
     # TODO: add version to json
     # version: str = str(version_number)
 
+
     """ Validating setup """
 
     @pydantic.validator("pml_layers", always=True)
