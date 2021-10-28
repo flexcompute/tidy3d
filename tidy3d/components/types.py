@@ -46,7 +46,7 @@ Symmetry = Literal[0, -1, 1]
 
 """ sources """
 
-Polarization = Literal["Jx", "Jy", "Jz", "Mx", "My", "Mz"]
+Polarization = Literal["Ex", "Ey", "Ez", "Hx", "Hy", "Hz"]
 Direction = Literal["+", "-"]
 
 """ monitors """

@@ -16,7 +16,7 @@ from .medium import Medium, MediumType, eps_complex_to_nk
 from .structure import Structure
 from .source import SourceType
 from .monitor import MonitorType
-from .pml import PMLLayer
+from .pml import PMLTypes, PML
 from .viz import StructMediumParams, StructEpsParams, PMLParams, SymParams, add_ax_if_none
 from ..constants import inf, C_0
 from ..log import log, SetupError
@@ -25,7 +25,7 @@ from ..log import log, SetupError
 # from .. import __version__ as version_number
 
 
-class Simulation(Box):
+class Simulation(Box):  # pylint:disable=too-many-public-methods
     """Contains all information about simulation.
 
     Parameters
@@ -71,47 +71,57 @@ class Simulation(Box):
     structures: List[Structure] = []
     sources: Dict[str, SourceType] = {}
     monitors: Dict[str, MonitorType] = {}
-    pml_layers: Tuple[PMLLayer, PMLLayer, PMLLayer] = (
-        PMLLayer(),
-        PMLLayer(),
-        PMLLayer(),
-    )
+    pml_layers: Tuple[PMLTypes, PMLTypes, PMLTypes] = (None, None, None)
     symmetry: Tuple[Symmetry, Symmetry, Symmetry] = (0, 0, 0)
     shutoff: pydantic.NonNegativeFloat = 1e-5
     subpixel: bool = True
     courant: pydantic.confloat(gt=0.0, le=1.0) = 0.9
+
+    # TODO: add version to json
     # version: str = str(version_number)
 
-    def __init__(self, **kwargs):
-        """initialize sim and then do validations"""
-        super().__init__(**kwargs)
-        self._check_objects_in_bounds()
-        # TODO:
-        # - check sources in medium freq range
-        # - check PW in homogeneous medium
-        # - check nonuniform grid covers the whole simulation domain
 
-    """ Post-Init Validation """
+    """ Validating setup """
 
-    def _check_objects_in_bounds(self):
-        """For each geometry-containing object in simulation, make sure it intersects simulation
-        bounding box.
-        """
+    @pydantic.validator("pml_layers", always=True)
+    def set_none_to_zero_layers(cls, val):
+        """if any PML layer is None, set it to an empty :class:`PML`."""
+        return tuple(PML(num_layers=0) if pml is None else pml for pml in val)
 
-        for position_index, structure in enumerate(self.structures):
-            if not self.intersects(structure.geometry):
+    @pydantic.validator("structures", always=True)
+    def structures_in_sim_bounds(cls, val, values):
+        """check for intersection of each structure with simulation bounds."""
+        sim_bounds = Box(size=values.get("size"), center=values.get("center"))
+        for position_index, structure in enumerate(val):
+            if not sim_bounds.intersects(structure.geometry):
                 raise SetupError(
                     f"Structure '{structure}' "
                     f"(at `structures[{position_index}]`) is outside simulation"
                 )
+        return val
 
-        for name, source in self.sources.items():
-            if not self.intersects(source):
+    @pydantic.validator("sources", always=True)
+    def sources_in_sim_bounds(cls, val, values):
+        """check for intersection of each structure with simulation bounds."""
+        sim_bounds = Box(size=values.get("size"), center=values.get("center"))
+        for name, source in val.items():
+            if not sim_bounds.intersects(source):
                 raise SetupError(f"Source '{name}' is completely outside simulation.")
+        return val
 
-        for name, monitor in self.monitors.items():
-            if not self.intersects(monitor):
+    @pydantic.validator("monitors", always=True)
+    def monitors_in_sim_bounds(cls, val, values):
+        """check for intersection of each structure with simulation bounds."""
+        sim_bounds = Box(size=values.get("size"), center=values.get("center"))
+        for name, monitor in val.items():
+            if not sim_bounds.intersects(monitor):
                 raise SetupError(f"Monitor '{name}' is completely outside simulation.")
+        return val
+
+    # TODO:
+    # - check sources in medium freq range
+    # - check PW in homogeneous medium
+    # - check nonuniform grid covers the whole simulation domain
 
     """ Accounting """
 
@@ -401,26 +411,6 @@ class Simulation(Box):
         boundaries = Coords(**cell_boundary_dict)
         return Grid(boundaries=boundaries)
 
-    # the old grid property
-    # @property
-    # def grid(self) -> Grid:
-    #     """:class:`Grid` interface to the spatial locations in Simulation"""
-    #     cell_boundary_dict = {}
-    #     for key, grid_spec, center, size in zip("xyz", self.grid_specs, self.center, self.size):
-    #         if isinstance(grid_spec, float):
-    #             num_cells = int(np.floor(size / grid_spec))
-    #             size_snapped = grid_spec * num_cells
-    #             if size_snapped != size:
-    #                log.warning(f"dl = {grid_spec} not commensurate with simulation size = {size}")
-    #            bound_coords = center + np.linspace(-size_snapped / 2, size_snapped / 2, num_cells)
-    #         else:
-    #             dl = self.wvl_mat_min / grid_spec.pts_per_wvl
-    #             num_cells = int(np.ceil(size / dl))
-    #             bound_coords = center + np.linspace(-size / 2, size / 2, num_cells)
-    #         cell_boundary_dict[key] = bound_coords
-    #     boundaries = Coords(**cell_boundary_dict)
-    #     return Grid(boundaries=boundaries)
-
     @property
     def wvl_mat_min(self) -> float:
         """minimum wavelength in the material"""
@@ -478,7 +468,7 @@ class Simulation(Box):
                 eps_array[np.where(is_inside)] = eps_structure
             return xr.DataArray(eps_array, coords={"x": xs, "y": ys, "z": zs})
 
-        # combine all data into dataset
+        # combine all data into dictionary
         data_arrays = {
             "centers": make_eps_data(sub_grid.centers),
             "boundaries": make_eps_data(sub_grid.boundaries),

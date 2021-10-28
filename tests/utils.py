@@ -73,7 +73,7 @@ SIM_FULL = Simulation(
         "my_dipole": VolumeSource(
             size=(0, 0, 0),
             center=(0, 0.5, 0),
-            polarization="Mx",
+            polarization="Hx",
             source_time=GaussianPulse(
                 freq0=2e14,
                 fwidth=4e13,
@@ -86,9 +86,9 @@ SIM_FULL = Simulation(
     },
     symmetry=(0, 0, 0),
     pml_layers=(
-        PMLLayer(profile="absorber", num_layers=20),
-        PMLLayer(profile="stable", num_layers=30),
-        PMLLayer(profile="standard"),
+        PML(num_layers=20),
+        PML(num_layers=30),
+        None,
     ),
     shutoff=1e-6,
     courant=0.8,
@@ -111,7 +111,7 @@ SIM_CONVERT = td.Simulation(
             center=(0, -1.5, 0),
             size=(0.4, 0.4, 0.4),
             source_time=td.GaussianPulse(freq0=3e14, fwidth=1e13),
-            polarization="Jx",
+            polarization="Ex",
         )
     },
     monitors={
@@ -120,5 +120,5 @@ SIM_CONVERT = td.Simulation(
         )
     },
     run_time=1 / 1e12,
-    pml_layers=3 * [td.PMLLayer(profile="standard", num_layers=10)],
+    pml_layers=3 * [PML()],
 )
