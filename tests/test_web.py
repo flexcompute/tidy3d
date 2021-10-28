@@ -160,7 +160,7 @@ def test_batch_0_run():
     sims = 2 * [sim_original]
     simulations = {f"task_{i}": sims[i] for i in range(len(sims))}
     batch = web.Batch(simulations=simulations)
-    batch.run()
+    batch.run(path_dir=PATH_DIR_SIM_DATA)
 
 
 def test_batch_1_upload():
