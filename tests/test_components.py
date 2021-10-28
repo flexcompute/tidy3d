@@ -32,7 +32,7 @@ def test_sim():
             "my_dipole": VolumeSource(
                 size=(0, 0, 0),
                 center=(0, -0.5, 0),
-                polarization="Mx",
+                polarization="Hx",
                 source_time=GaussianPulse(
                     freq0=1e14,
                     fwidth=1e12,
@@ -45,9 +45,9 @@ def test_sim():
         },
         symmetry=(0, -1, 1),
         pml_layers=(
-            PMLLayer(profile="absorber", num_layers=20),
-            PMLLayer(profile="stable", num_layers=30),
-            PMLLayer(profile="standard"),
+            PML(num_layers=20),
+            StablePML(num_layers=30),
+            Absorber(num_layers=100),
         ),
         shutoff=1e-6,
         courant=0.8,
@@ -227,7 +227,7 @@ def test_VolumeSource():
     g = GaussianPulse(freq0=1, fwidth=0.1)
 
     # test we can make generic VolumeSource
-    s = VolumeSource(size=(1, 1, 1), source_time=g, polarization="Jz")
+    s = VolumeSource(size=(1, 1, 1), source_time=g, polarization="Ez")
 
 
 def test_source_times():
@@ -247,18 +247,18 @@ def test_VolumeSource_directional():
     g = GaussianPulse(freq0=1, fwidth=0.1)
 
     # test we can make planewave
-    s = PlaneWave(size=(0, 1, 1), source_time=g, polarization="Jz", direction="+")
+    s = PlaneWave(size=(0, 1, 1), source_time=g, polarization="Ez", direction="+")
 
     # test we can make planewave
     # s = GaussianBeam(size=(0,1,1), source_time=g, polarization='Jz', direction='+', waist_size=(1., 2.))
 
     # test that non-planar geometry crashes plane wave
     with pytest.raises(ValidationError) as e_info:
-        s = PlaneWave(size=(1, 1, 1), source_time=g, polarization="Jz", direction="+")
+        s = PlaneWave(size=(1, 1, 1), source_time=g, polarization="Ez", direction="+")
 
     # test that non-planar geometry crashes plane wave and gaussian beam
     with pytest.raises(ValidationError) as e_info:
-        s = PlaneWave(size=(1, 1, 0), source_time=g, polarization="Jz", direction="+")
+        s = PlaneWave(size=(1, 1, 0), source_time=g, polarization="Ez", direction="+")
     # with pytest.raises(pydantic.ValidationError) as e_info:
     # s = GaussianBeam(size=(1,1,1), source_time=g, polarization='Jz', direction='+', waist_size=(1., 2.))
 

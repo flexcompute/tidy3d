@@ -8,6 +8,7 @@ from tidy3d import Box, Sphere, Cylinder, PolySlab
 from tidy3d import Medium  # , DispersiveMedium
 from tidy3d import VolumeSource, ModeSource, PlaneWave
 from tidy3d import GaussianPulse
+from tidy3d import PML, Absorber, StablePML
 from tidy3d import FieldMonitor, FieldTimeMonitor, FluxMonitor, FluxTimeMonitor
 from tidy3d.components.monitor import AbstractFieldMonitor, AbstractFluxMonitor, ModeMonitor
 from tidy3d.components.monitor import FreqMonitor, TimeMonitor
@@ -19,7 +20,18 @@ def old_json_parameters(sim: Simulation) -> Dict:
 
     cent = sim.center
     size = sim.size
-    pml_layers = [{"profile": pml.profile, "Nlayers": pml.num_layers} for pml in sim.pml_layers]
+
+    pml_layers = []
+    for pml in sim.pml_layers:
+        profile = "standard"
+        if not pml:
+            pml_layers.append({"profile": "standard", "Nlayers": 0})
+            continue
+        elif isinstance(pml, StablePML):
+            profile = "standard"
+        elif isinstance(pml, Absorber):
+            profile = "absorber"
+        pml_layers.append({"profile": profile, "Nlayers": pml.num_layers})
 
     sizes = sim.grid.cell_sizes
     mesh_step_x = np.mean(sizes.x)

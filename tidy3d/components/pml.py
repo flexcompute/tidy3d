@@ -1,22 +1,63 @@
 """ Defines profile of Perfectly-matched layers (absorber) """
+from typing import Union
 
 import pydantic
 
 from .base import Tidy3dBaseModel
-from .types import Literal
 
 
-class PMLLayer(Tidy3dBaseModel):
-    """single layer of a PML (profile and num layers)
+class AbsorberSpec(Tidy3dBaseModel):
+    """Specifies the absorber along a single dimension."""
+
+    num_layers: pydantic.NonNegativeInt
+
+
+class PML(AbsorberSpec):
+    """Specifies a standard PML along a single dimension.
 
     Parameters
     ----------
-    profile : str, optional
-        Specifies type of PML, one of ``'standard'``, ``'stable'``, ``'absorber'``, defaults to
-        ``'standard'``
-    num_layers : int, default
-        Number of layers added to + and - boundaries, defaults to 0 (no PML)
+    num_layers : ``int``, optional
+        Number of layers of PML to add to + and - boundaries, default = 12.
+
+    Example
+    -------
+    >>> pml = PML(num_layers=10)
     """
 
-    profile: Literal["standard", "stable", "absorber"] = "standard"
-    num_layers: pydantic.NonNegativeInt = 0
+    num_layers: pydantic.NonNegativeInt = 12
+
+
+class StablePML(AbsorberSpec):
+    """Specifies a 'stable' PML along a single dimension.
+
+    Parameters
+    ----------
+    num_layers : ``int``, optional
+        Number of layers of PML to add to + and - boundaries, default = 40.
+
+    Example
+    -------
+    >>> pml = StablePML(num_layers=100)
+    """
+
+    num_layers: pydantic.NonNegativeInt = 40
+
+
+class Absorber(AbsorberSpec):
+    """Specifies an adiab absorber along a single dimension.
+
+    Parameters
+    ----------
+    num_layers : ``int``, optional
+        Number of layers of PML to add to + and - boundaries, default = 40.
+
+    Example
+    -------
+    >>> pml = Absorber(num_layers=100)
+    """
+
+    num_layers: pydantic.NonNegativeInt = 40
+
+
+PMLTypes = Union[PML, StablePML, Absorber, None]

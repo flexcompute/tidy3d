@@ -77,16 +77,17 @@ class FieldMonitor(AbstractFieldMonitor, FreqMonitor):
 
     Parameters
     ----------
-    center: Tuple[float, float, float], optional.
+    center: ``(float, float, float)``, optional.
         Center of monitor ``Box``, defaults to (0, 0, 0)
-    size: Tuple[float, float, float].
+    size: ``(float, float, float)``
         Size of monitor ``Box``, must have one element = 0.0 to define plane.
-    fields: List[str], optional
+    fields: ``[str]``, optional
         Electromagnetic field(s) to measure (E, H), defaults to ``['Ex', 'Ey', 'Ez', 'Hx', 'Hy',
         'Hz']``, also accepts diagonal components of permittivity tensor as ``'eps_xx', 'eps_yy',
         'eps_zz'``.
-    freqs: List[float]
-        Frequencies to measure fields at at.
+    freqs: ``[float]``
+        Frequencies to measure fields at at (Hz),
+
     """
 
     fields: List[FieldType] = ["Ex", "Ey", "Ez", "Hx", "Hy", "Hz"]
