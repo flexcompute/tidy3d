@@ -91,7 +91,7 @@ def _get_gloabl_job():
 def test_job_0_run():
     """test complete run"""
     job = web.Job(simulation=sim_original, task_name="test_job")
-    job.run()
+    job.run(path=PATH_SIM_DATA)
 
 
 def test_job_1_upload():
