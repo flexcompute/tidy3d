@@ -13,6 +13,7 @@ from .base import Tidy3dBaseModel
 from .simulation import Simulation
 from .mode import Mode  # pylint: disable=unused-import
 from ..log import DataError
+from .viz import add_ax_if_none
 
 
 """ Helper functions """
