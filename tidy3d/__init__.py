@@ -28,9 +28,6 @@ from .constants import inf, C_0, ETA_0
 # plugins typically imported as `from tidy3d.plugins import DispersionFitter`
 from . import plugins
 
-# web API typically imported as `import tidy3d.web as web` or `from tidy3d.web import Job, Batch`
-from . import web
-
 # material library dict imported as `from tidy3d import material_library`
 # get material `mat` and variant `var` as `material_library[mat][var]`
 from .material_library import material_library

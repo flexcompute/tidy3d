@@ -8,8 +8,6 @@ import numpy as np
 import requests
 from rich.console import Console
 from rich.progress import Progress
-from tidy3d_core.convert import export_old_json, load_old_monitor_data
-from tidy3d_core.postprocess import load_solver_results
 
 from .config import DEFAULT_CONFIG as Config
 from .s3utils import get_s3_user, DownloadProgress
@@ -18,6 +16,7 @@ from . import httputils as http
 from ..components.simulation import Simulation
 from ..components.data import SimulationData
 from ..log import log, WebError
+from ..convert import export_old_json, load_old_monitor_data, load_solver_results
 
 
 REFRESH_TIME = 0.3

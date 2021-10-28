@@ -28,6 +28,11 @@ def clear_tmp(fn):
     return new_fn
 
 
+def prepend_tmp(path):
+    """prepents "TMP_DIR" to the path"""
+    return os.path.join(TMP_DIR, path)
+
+
 SIM_MONITORS = Simulation(
     size=(2.0, 2.0, 2.0),
     grid_size=(0.1, 0.1, 0.1),

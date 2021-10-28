@@ -1,9 +1,9 @@
 """ Tools to switch between new and old Tidy3D formats """
-from typing import Dict, Tuple, List
+from typing import Dict, Tuple, List, Union
 import numpy as np
 import h5py
 
-from tidy3d import Simulation
+from tidy3d import Simulation, SimulationData, FieldData, data_type_map
 from tidy3d import Box, Sphere, Cylinder, PolySlab
 from tidy3d import Medium  # , DispersiveMedium
 from tidy3d import VolumeSource, ModeSource, PlaneWave
@@ -12,7 +12,12 @@ from tidy3d import PML, Absorber, StablePML
 from tidy3d import FieldMonitor, FieldTimeMonitor, FluxMonitor, FluxTimeMonitor
 from tidy3d.components.monitor import AbstractFieldMonitor, AbstractFluxMonitor, ModeMonitor
 from tidy3d.components.monitor import FreqMonitor, TimeMonitor
-from .solver import SolverDataDict
+from tidy3d.components.types import Numpy
+
+
+# maps monitor name to dictionary mapping data label to data value
+MonitorDataDict = Dict[str, Union[Numpy, Dict[str, Numpy]]]
+SolverDataDict = Dict[str, MonitorDataDict]
 
 
 def old_json_parameters(sim: Simulation) -> Dict:
@@ -299,11 +304,11 @@ def old_json_monitors(sim: Simulation) -> Dict:
             "z_span": monitor.size[2],
         }
         """ TODO: Time monitors in the revamp work with a TimeSampler that's a sequence of ints,
-        presumably the indexes of the discrete time points at which to record. This is currently 
-        not supported by the solver, the most freedom there is to record every N steps. Also from a 
+        presumably the indexes of the discrete time points at which to record. This is currently
+        not supported by the solver, the most freedom there is to record every N steps. Also from a
         user perspective, the user will rarely want to specifically give the indexes of the
         time points at which to sample. Much more common would be to specify things in units of
-        simulation time. We need some convenience function(s). 
+        simulation time. We need some convenience function(s).
 
         For that, and more generally, it seems that currently the Simulation doesn't have a
         TimeGrid or somethng like it? This is also needed e.g. to plot the source dependence, etc.
@@ -410,6 +415,28 @@ def make_coordinates_3d(center, size, shape):
     rmax = np.array([c + s / 2.0 for (c, s) in zip(center, size)])
     x, y, z = [make_coordinates_1d(cmin, cmax, num) for (cmin, cmax, num) in zip(rmin, rmax, shape)]
     return x, y, z
+
+
+def load_solver_results(
+    simulation: Simulation,
+    solver_data_dict: SolverDataDict,
+    log_string: str = None,
+) -> SimulationData:
+    """load the solver_data_dict and simulation into SimulationData"""
+
+    # constuct monitor_data dictionary
+    monitor_data = {}
+    for name, monitor in simulation.monitors.items():
+        monitor_data_dict = solver_data_dict[name]
+        monitor_data_type = data_type_map[monitor.data_type]
+        if monitor.type in ("FieldMonitor", "FieldTimeMonitor"):
+            field_data = {}
+            for field_name, data_dict in monitor_data_dict.items():
+                field_data[field_name] = monitor_data_type(**data_dict)
+            monitor_data[name] = FieldData(data_dict=field_data)
+        else:
+            monitor_data[name] = monitor_data_type(**monitor_data_dict)
+    return SimulationData(simulation=simulation, monitor_data=monitor_data, log_string=log_string)
 
 
 def load_old_monitor_data(simulation: Simulation, data_file: str) -> SolverDataDict:
