@@ -42,7 +42,7 @@ class AbstractMedium(ABC, Tidy3dBaseModel):
         return ax
 
 
-def ensure_freq_in_range(eps_model: Callable[float, complex]) -> Callable[float, complex]:
+def ensure_freq_in_range(eps_model: Callable[[float], complex]) -> Callable[[float], complex]:
     """decorate eps_model to log warning if frequency supplied is out of bounds"""
 
     def _eps_model(self, frequency: float) -> complex:
