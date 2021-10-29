@@ -9,6 +9,7 @@ from .geometry import Box
 from .validators import assert_plane
 from .mode import Mode
 from .viz import add_ax_if_none, MonitorParams
+from ..log import SetupError
 
 """ Monitors """
 
@@ -50,9 +51,17 @@ class FreqMonitor(Monitor, ABC):
 class TimeMonitor(Monitor, ABC):
     """stores data in time domain"""
 
-    start: pydantic.NonNegativeFloat = 1.0
+    start: pydantic.NonNegativeFloat = 0.0
     stop: pydantic.NonNegativeFloat = None
     interval: pydantic.PositiveInt = 1
+
+    @pydantic.validator("stop", always=True)
+    def stop_greater_than_start(cls, val, values):
+        """ make sure stop is greater than or equal to start"""
+        start = values.get('start')
+        if val and val < start:
+            raise SetupError("Monitor start time is greater than stop time.")
+        return val
 
 
 class AbstractFieldMonitor(Monitor, ABC):

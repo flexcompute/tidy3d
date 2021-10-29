@@ -319,11 +319,16 @@ def old_json_monitors(sim: Simulation) -> Dict:
         if isinstance(monitor, FreqMonitor):
             mnt.update({"frequency": [f * 1e-12 for f in monitor.freqs]})
         elif isinstance(monitor, TimeMonitor):
+            # handle case where stop is None
+            stop = monitor.stop * 1e12 if monitor.stop else sim.run_time * 1e12
+            # handle case where stop > sim.run_time
+            stop = min(stop, sim.run_time * 1e12)
+
             mnt.update(
                 {
-                    "t_start": monitor.start,
-                    "t_stop": monitor.stop if monitor.stop else sim.run_time,
-                    "t_step": sim.dt * monitor.interval,
+                    "t_start": monitor.start * 1e12,
+                    "t_stop": stop,
+                    "t_step": 1e12 * sim.dt * monitor.interval,
                 }
             )
 
