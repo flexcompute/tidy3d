@@ -57,8 +57,8 @@ class TimeMonitor(Monitor, ABC):
 
     @pydantic.validator("stop", always=True)
     def stop_greater_than_start(cls, val, values):
-        """ make sure stop is greater than or equal to start"""
-        start = values.get('start')
+        """make sure stop is greater than or equal to start"""
+        start = values.get("start")
         if val and val < start:
             raise SetupError("Monitor start time is greater than stop time.")
         return val

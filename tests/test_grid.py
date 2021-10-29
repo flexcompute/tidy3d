@@ -54,6 +54,20 @@ def test_sim_grid():
         assert np.all(b == np.array([-2, -1, 0, 1, 2]))
 
 
+def test_sim_pml_grid():
+
+    sim = td.Simulation(
+        size=(4, 4, 4),
+        grid_size=(1, 1, 1),
+        pml_layers=(td.PML(num_layers=2), td.Absorber(num_layers=2), td.StablePML(num_layers=2)),
+    )
+
+    for c in sim.grid.centers.dict().values():
+        assert np.all(c == np.array([-3.5, -2.5, -1.5, -0.5, 0.5, 1.5, 2.5, 3.5]))
+    for b in sim.grid.boundaries.dict().values():
+        assert np.all(b == np.array([-4, -3, -2, -1, 0, 1, 2, 3, 4]))
+
+
 def test_sim_discretize_vol():
 
     sim = td.Simulation(
