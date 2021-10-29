@@ -385,8 +385,8 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
     @property
     def dt(self) -> float:
         """compute time step (distance)"""
-        dl_mins = [np.min(sizes) for sizes in self.grid.cell_sizes]
-        dl_sum_inv_sq = [1 / dl ** 2 for dl in dl_mins]
+        dl_mins = [np.min(sizes) for sizes in self.grid.cell_sizes.dict().values()]
+        dl_sum_inv_sq = sum([1 / dl ** 2 for dl in dl_mins])
         dl_avg = 1 / np.sqrt(dl_sum_inv_sq)
         return self.courant * dl_avg / C_0
 

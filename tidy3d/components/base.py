@@ -17,11 +17,12 @@ class Tidy3dBaseModel(pydantic.BaseModel):
     class Config:  # pylint: disable=too-few-public-methods
         """sets config for all Tidy3dBaseModel objects"""
 
+        arbitrary_types_allowed = True
         validate_all = True  # validate default values too
         extra = "forbid"  # forbid extra kwargs not specified in model
         validate_assignment = True  # validate when attributes are set after initialization
         allow_population_by_field_name = True
-        json_encoders = {np.ndarray: lambda x: list(x)}  # pylint: disable=unnecessary-lambda
+        json_encoders = {np.ndarray: lambda x: x.tolist()}  # pylint: disable=unnecessary-lambda
 
     def help(self, methods: bool = False) -> None:
         """get help for this object"""
