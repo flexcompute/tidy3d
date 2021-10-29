@@ -172,7 +172,14 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
 
     @property
     def medium_map(self) -> Dict[Medium, pydantic.NonNegativeInt]:
-        """medium_map[medium] returns unique global index of medium in siulation."""
+        """``medium_map[medium]`` returns unique global index of :class:`Medium` in simulation.
+        
+        Returns
+        -------
+        {:class:`Medium`, ``int``}
+            Mapping between a :class:`Medium` and it's index in the simulation.
+        """
+
         mediums = {structure.medium for structure in self.structures}
         return {medium: index for index, medium in enumerate(mediums)}
 
@@ -184,6 +191,19 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
     ) -> Ax:
         """Plot each of simulation's components on a plan defined by one nonzero x,y,z
         coordinate.
+        
+        Parameters
+        ----------
+        x : ``float``
+            Position of point in x direction.
+        y : ``float``
+            Position of point in y direction.
+        z : ``float``
+            Position of point in z direction.
+        ax : Ax, optional
+            Description
+        **kwargs
+            Description
         """
 
         ax = self.plot_structures(ax=ax, x=x, y=y, z=z, **kwargs)
