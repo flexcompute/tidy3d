@@ -20,6 +20,7 @@ class AbstractMedium(ABC, Tidy3dBaseModel):
     """A medium within which electromagnetic waves propagate"""
 
     frequency_range: Tuple[FreqBound, FreqBound] = (-inf, inf)
+    name: str = None
 
     @abstractmethod
     def eps_model(self, frequency: float) -> complex:

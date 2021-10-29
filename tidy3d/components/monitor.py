@@ -2,7 +2,7 @@
 from abc import ABC
 from typing import List, Union
 
-import numpy as np
+import pydantic
 
 from .types import Literal, Ax, Direction, FieldType, EMField
 from .geometry import Box
@@ -50,7 +50,9 @@ class FreqMonitor(Monitor, ABC):
 class TimeMonitor(Monitor, ABC):
     """stores data in time domain"""
 
-    times: List[int]
+    start: pydantic.NonNegativeFloat = 1.0
+    stop: pydantic.NonNegativeFloat = None
+    interval: pydantic.PositiveInt = 1
 
 
 class AbstractFieldMonitor(Monitor, ABC):
@@ -107,8 +109,12 @@ class FieldTimeMonitor(AbstractFieldMonitor, TimeMonitor):
     fields: List[str], optional
         Electromagnetic field(s) to measure (E, H), defaults to ``['Ex', 'Ey', 'Ez', 'Hx', 'Hy',
         'Hz']``.
-    times: List[int]
-        Time steps to measure the fields at.
+    start: ``float = 0.0``
+        (seconds) Time to start monitoring fields.
+    stop: ``float = None``
+        (seconds) Time to stop monitoring fields, end of simulation if not specified.
+    interval: ``int = 1``
+        Records data at every ``interval`` time steps in the simulation.
     """
 
     type: Literal["FieldTimeMonitor"] = "FieldTimeMonitor"
@@ -141,8 +147,12 @@ class FluxTimeMonitor(AbstractFluxMonitor, TimeMonitor):
         Center of monitor ``Box``, defaults to (0, 0, 0)
     size: Tuple[float, float, float].
         Size of monitor ``Box``, must have one element = 0.0 to define plane.
-    times: List[int]
-        Time steps to measure flux at.
+    start: ``float = 0.0``
+        (seconds) Time to start monitoring flux.
+    stop: ``float = None``
+        (seconds) Time to stop monitoring flux, end of simulation if not specified.
+    interval: ``int = 1``
+        Records data at every ``interval`` time steps in the simulation.
     """
 
     type: Literal["FluxTimeMonitor"] = "FluxTimeMonitor"
@@ -181,36 +191,3 @@ class ModeMonitor(PlanarMonitor, FreqMonitor):
 """
 
 MonitorType = Union[FieldMonitor, FieldTimeMonitor, FluxMonitor, FluxTimeMonitor, ModeMonitor]
-
-
-""" Convenience methods to create evenly spaced times or frequencies
-    note: later on, might want these to hold (start, stop, step) or equivalent and be stored in
-    `freqs` and `times` instead of List to reduce clutter in json.
-"""
-
-
-def _uniform_arange(start: int, stop: int, step: int) -> List[int]:
-    """uniform spacing from start to stop with spacing of step."""
-    assert start <= stop, "start must not be greater than stop"
-    return list(np.arange(start, stop, step))
-
-
-def _uniform_linspace(start: float, stop: float, num: int) -> List[float]:
-    """uniform spacing from start to stop with num elements."""
-    assert start <= stop, "start must not be greater than stop"
-    return list(np.linspace(start, stop, num))
-
-
-def uniform_times(t_start: int, t_stop: int, t_step: int = 1) -> List[int]:
-    """create times at evenly spaced steps."""
-    assert isinstance(t_start, int), "`t_start` must be integer for time sampler"
-    assert isinstance(t_stop, int), "`t_stop` must be integer for time sampler"
-    assert isinstance(t_step, int), "`t_step` must be integer for time sampler"
-    times = _uniform_arange(t_start, t_stop, t_step)
-    return times
-
-
-def uniform_freqs(f_start: float, f_stop: float, num_freqs: int) -> List[float]:
-    """create frequencies at evenly spaced points."""
-    freqs = _uniform_linspace(f_start, f_stop, num_freqs)
-    return freqs

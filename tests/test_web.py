@@ -25,7 +25,7 @@ def _get_gloabl_task_id():
 @clear_tmp
 def test_webapi_0_run():
     """test complete run"""
-    sim_data = web.run(simulation=sim_original, task_name="test_webapi")
+    sim_data = web.run(simulation=sim_original, task_name="test_webapi", path=PATH_SIM_DATA)
 
 
 def test_webapi_1_upload():
