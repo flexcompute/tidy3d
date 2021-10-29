@@ -1,6 +1,6 @@
 tests/tmp/*
 notebooks/tmp/*
-notebooks/data/*.hdf5
+*.hdf5
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
