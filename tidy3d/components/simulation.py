@@ -11,6 +11,8 @@ from descartes import PolygonPatch
 
 from .types import Symmetry, Ax, Shapely, FreqBound
 from .geometry import Box, PolySlab, Cylinder, Sphere  # pytest:disable=unused-imports
+from .types import Symmetry, Ax, Shapely, FreqBound, Numpy
+from .geometry import Box
 from .grid import Coords1D, Grid, Coords
 from .medium import Medium, MediumType, eps_complex_to_nk
 from .structure import Structure
@@ -317,16 +319,25 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         return ax
 
     @property
-    def pml_thicknesses(
-        self,
-    ) -> List[Tuple[float, float]]:
-        """thicknesses (um) of PML in all three axis and directions (+, -)"""
-        grid_sizes = self.grid.cell_sizes
-        pml_thicknesses = []
+    def num_pml_layers(self) -> List[Tuple[float, float]]:
+        """Number of PML layers in all three axes and directions (-, +)."""
+        num_layers = []
         for pml_axis, pml_layer in enumerate(self.pml_layers):
-            sizes_axis = grid_sizes.dict()["xyz"[pml_axis]]
-            num_layers = pml_layer.num_layers
-            pml_thicknesses.append((num_layers * sizes_axis[0], num_layers * sizes_axis[-1]))
+            if self.symmetry[pml_axis] != 0:
+                num_layers.append((0, pml_layer.num_layers))
+            else:
+                num_layers.append((pml_layer.num_layers, pml_layer.num_layers))
+        return num_layers
+
+    @property
+    def pml_thicknesses(self) -> List[Tuple[float, float]]:
+        """Thicknesses (um) of PML in all three axes and directions (-, +)"""
+        num_layers = self.num_pml_layers
+        pml_thicknesses = []
+        for boundaries in self.grid.boundaries.dict().values():
+            thick_l = boundaries[num_layers[0]] - boundaries[0]
+            thick_r = boundaries[-1] - boundaries[-1 - num_layers[1]]
+            pml_thicknesses.append((thick_l, thick_r))
         return pml_thicknesses
 
     @add_ax_if_none
@@ -446,15 +457,33 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
     def grid(self) -> Grid:
         """:class:`Grid` interface to the spatial locations in Simulation"""
         cell_boundary_dict = {}
-        for key, dl, center, size in zip("xyz", self.grid_size, self.center, self.size):
+        zipped_vals = zip("xyz", self.grid_size, self.center, self.size, self.num_pml_layers)
+        for key, dl, center, size, num_layers in zipped_vals:
             num_cells = int(np.floor(size / dl))
+            # Make sure there's at least one cell
+            num_cells = max(num_cells, 1)
             size_snapped = dl * num_cells
             if size_snapped != size:
                 log.warning(f"dl = {dl} not commensurate with simulation size = {size}")
             bound_coords = center + np.linspace(-size_snapped / 2, size_snapped / 2, num_cells + 1)
+            bound_coords = self.add_pml_to_bounds(num_layers, bound_coords)
             cell_boundary_dict[key] = bound_coords
         boundaries = Coords(**cell_boundary_dict)
         return Grid(boundaries=boundaries)
+
+    @staticmethod
+    def add_pml_to_bounds(num_layers: Tuple[int, int], bounds: Numpy):
+        """Append PML pixels at the beginning and end of bounds."""
+        if bounds.size < 2:
+            return bounds
+
+        first_step = bounds[1] - bounds[0]
+        last_step = bounds[-1] - bounds[-2]
+        add_left = bounds[0] - first_step * np.arange(num_layers[0], 0, -1)
+        add_right = bounds[-1] + last_step * np.arange(1, num_layers[1] + 1)
+        new_bounds = np.concatenate((add_left, bounds, add_right))
+
+        return new_bounds
 
     @property
     def wvl_mat_min(self) -> float:
