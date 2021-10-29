@@ -398,7 +398,7 @@ class FluxData(AbstractFluxData, FreqData):
     -------
 
     >>> f = np.linspace(2e14, 3e14, 1001)
-    >>> values = (1+1j) * np.random.random((len(f),))
+    >>> values = np.random.random((len(f),))
     >>> data = FluxData(values=values, f=f)
     """
 
@@ -515,75 +515,75 @@ class SimulationData(Tidy3dBaseModel):
             raise DataError(f"monitor {monitor_name} not found")
         return monitor_data.data
 
-    @add_ax_if_none
-    def plot_field(
-        self,
-        field_monitor_name: str,
-        field_name: str,
-        x: float = None,
-        y: float = None,
-        z: float = None,
-        freq: float = None,
-        time: float = None,
-        eps_alpha: pydantic.confloat(ge=0.0, le=1.0) = 0.5,
-        ax: Ax = None,
-        **kwargs,
-    ) -> Ax:
-        """Plot the field data for a monitor with simulation plot overlayed.
+    # @add_ax_if_none
+    # def plot_field(
+    #     self,
+    #     field_monitor_name: str,
+    #     field_name: str,
+    #     x: float = None,
+    #     y: float = None,
+    #     z: float = None,
+    #     freq: float = None,
+    #     time: float = None,
+    #     eps_alpha: pydantic.confloat(ge=0.0, le=1.0) = 0.5,
+    #     ax: Ax = None,
+    #     **kwargs,
+    # ) -> Ax:
+    #     """Plot the field data for a monitor with simulation plot overlayed.
 
-        Parameters
-        ----------
-        field_monitor_name : ``str``
-            Name of :class:`FieldMonitor` or :class:`FieldTimeData` to plot.
-        field_name : ``str``
-            Name of `field` in monitor to plot (eg. 'Ex').
-        x : ``float``, optional
-            Position of plane in x direction.
-        y : ``float``, optional
-            Position of plane in y direction.
-        z : ``float``, optional
-            Position of plane in z direction.
-        freq: ``float``, optional
-            if monitor is a :class:`FieldMonitor`, specifies the frequency (Hz) to plot the field.
-        time: ``float``, optional
-            if monitor is a :class:`FieldTimeMonitor`, specifies the time (sec) to plot the field.
-        cbar: `bool``, optional
-            if True (default), will include colorbar
-        ax : ``matplotlib.axes._subplots.Axes``, optional
-            matplotlib axes to plot on, if not specified, one is created.
-        **patch_kwargs
-            Optional keyword arguments passed to ``add_artist(patch, **patch_kwargs)``.
+    #     Parameters
+    #     ----------
+    #     field_monitor_name : ``str``
+    #         Name of :class:`FieldMonitor` or :class:`FieldTimeData` to plot.
+    #     field_name : ``str``
+    #         Name of `field` in monitor to plot (eg. 'Ex').
+    #     x : ``float``, optional
+    #         Position of plane in x direction.
+    #     y : ``float``, optional
+    #         Position of plane in y direction.
+    #     z : ``float``, optional
+    #         Position of plane in z direction.
+    #     freq: ``float``, optional
+    #         if monitor is a :class:`FieldMonitor`, specifies the frequency (Hz) to plot the field.
+    #     time: ``float``, optional
+    #         if monitor is a :class:`FieldTimeMonitor`, specifies the time (sec) to plot the field.
+    #     cbar: `bool``, optional
+    #         if True (default), will include colorbar
+    #     ax : ``matplotlib.axes._subplots.Axes``, optional
+    #         matplotlib axes to plot on, if not specified, one is created.
+    #     **patch_kwargs
+    #         Optional keyword arguments passed to ``add_artist(patch, **patch_kwargs)``.
 
-        Returns
-        -------
-        ``matplotlib.axes._subplots.Axes``
-            The supplied or created matplotlib axes.
+    #     Returns
+    #     -------
+    #     ``matplotlib.axes._subplots.Axes``
+    #         The supplied or created matplotlib axes.
 
-        TODO: fully test and finalize arguments.
-        """
+    #     TODO: fully test and finalize arguments.
+    #     """
 
-        if field_monitor_name not in self.monitor_data:
-            raise DataError(f"field_monitor_name {field_monitor_name} not found in SimulationData.")
+    #     if field_monitor_name not in self.monitor_data:
+    #         raise DataError(f"field_monitor_name {field_monitor_name} not found in SimulationData.")
 
-        monitor_data = self.monitor_data.get(field_monitor_name)
+    #     monitor_data = self.monitor_data.get(field_monitor_name)
 
-        if not isinstance(monitor_data, FieldData):
-            raise DataError(f"field_monitor_name {field_monitor_name} not a FieldData instance.")
+    #     if not isinstance(monitor_data, FieldData):
+    #         raise DataError(f"field_monitor_name {field_monitor_name} not a FieldData instance.")
 
-        if field_name not in monitor_data.data_dict:
-            raise DataError(f"field_name {field_name} not found in {field_monitor_name}.")
+    #     if field_name not in monitor_data.data_dict:
+    #         raise DataError(f"field_name {field_name} not found in {field_monitor_name}.")
 
-        xr_data = monitor_data.data_dict.get(field_name)
-        if isinstance(monitor_data, FieldData):
-            field_data = xr_data.sel(f=freq)
-        else:
-            field_data = xr_data.sel(t=time)
+    #     xr_data = monitor_data.data_dict.get(field_name)
+    #     if isinstance(monitor_data, FieldData):
+    #         field_data = xr_data.sel(f=freq)
+    #     else:
+    #         field_data = xr_data.sel(t=time)
 
-        ax = field_data.sel(x=x, y=y, z=z).real.plot.pcolormesh(ax=ax)
-        ax = self.simulation.plot_structures_eps(
-            freq=freq, cbar=False, x=x, y=y, z=z, alpha=eps_alpha, ax=ax
-        )
-        return ax
+    #     ax = field_data.sel(x=x, y=y, z=z).real.plot.pcolormesh(ax=ax)
+    #     ax = self.simulation.plot_structures_eps(
+    #         freq=freq, cbar=False, x=x, y=y, z=z, alpha=eps_alpha, ax=ax
+    #     )
+    #     return ax
 
     def export(self, fname: str) -> None:
         """Export :class:`SimulationData` to single hdf5 file including monitor data.

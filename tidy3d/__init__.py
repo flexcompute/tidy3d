@@ -14,7 +14,6 @@ from .components import nk_to_eps_complex, nk_to_eps_sigma, eps_complex_to_nk
 from .components import nk_to_medium, eps_sigma_to_eps_complex
 from .components import GaussianPulse
 from .components import VolumeSource, PlaneWave, ModeSource, GaussianBeam
-from .components import uniform_freqs, uniform_times
 from .components import FieldMonitor, FieldTimeMonitor, FluxMonitor, FluxTimeMonitor
 from .components import ModeMonitor
 from .components import Mode

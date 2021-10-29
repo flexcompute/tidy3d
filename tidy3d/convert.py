@@ -1,3 +1,4 @@
+# pylint: disable=too-many-locals
 """ Tools to switch between new and old Tidy3D formats """
 from typing import Dict, Tuple, List, Union
 import numpy as np
@@ -32,10 +33,12 @@ def old_json_parameters(sim: Simulation) -> Dict:
         if not pml:
             pml_layers.append({"profile": "standard", "Nlayers": 0})
             continue
-        elif isinstance(pml, StablePML):
+        if isinstance(pml, StablePML):
             profile = "standard"
         elif isinstance(pml, Absorber):
             profile = "absorber"
+        elif isinstance(pml, PML):
+            profile = "standard"
         pml_layers.append({"profile": profile, "Nlayers": pml.num_layers})
 
     sizes = sim.grid.cell_sizes
@@ -114,9 +117,9 @@ def old_json_structures(sim: Simulation) -> Tuple[List[Dict], List[Dict]]:
         medium_list.append(med)
 
     struct_list = []
-    for istruct, structure in enumerate(sim.structures):
+    for structure in sim.structures:
         """TODO: Shouldn't structures also have custom names?"""
-        struct = {"name": f"struct_{istruct}", "mat_index": medium_map[structure.medium]}
+        struct = {"name": structure.medium.name, "mat_index": medium_map[structure.medium]}
         geom = structure.geometry
         if isinstance(geom, Box):
             cent, size = geom.center, geom.size
@@ -313,17 +316,28 @@ def old_json_monitors(sim: Simulation) -> Dict:
         For that, and more generally, it seems that currently the Simulation doesn't have a
         TimeGrid or somethng like it? This is also needed e.g. to plot the source dependence, etc.
         """
+        if isinstance(monitor, FreqMonitor):
+            mnt.update({"frequency": [f * 1e-12 for f in monitor.freqs]})
+        elif isinstance(monitor, TimeMonitor):
+            mnt.update(
+                {
+                    "t_start": monitor.start,
+                    "t_stop": monitor.stop if monitor.stop else sim.run_time,
+                    "t_step": sim.dt * monitor.interval,
+                }
+            )
+
         if isinstance(monitor, AbstractFieldMonitor):
             store = []
             if np.any([field[0] == "E" for field in monitor.fields]):
                 store.append("E")
             if np.any([field[0] == "H" for field in monitor.fields]):
                 store.append("H")
+
             if isinstance(monitor, FieldMonitor):
                 mnt.update(
                     {
                         "type": "FrequencyMonitor",
-                        "frequency": [f * 1e-12 for f in monitor.freqs],
                         "store": store,
                         "interpolate": True,
                     }
@@ -332,9 +346,6 @@ def old_json_monitors(sim: Simulation) -> Dict:
                 mnt.update(
                     {
                         "type": "TimeMonitor",
-                        "t_start": 0,
-                        "t_stop": sim.run_time,
-                        "t_step": None,
                         "store": store,
                     }
                 )
@@ -343,9 +354,6 @@ def old_json_monitors(sim: Simulation) -> Dict:
                 mnt.update(
                     {
                         "type": "TimeMonitor",
-                        "t_start": 0,
-                        "t_stop": sim.run_time,
-                        "t_step": None,
                         "store": ["flux"],
                     }
                 )
@@ -353,7 +361,6 @@ def old_json_monitors(sim: Simulation) -> Dict:
                 mnt.update(
                     {
                         "type": "FrequencyMonitor",
-                        "frequency": [f * 1e-12 for f in monitor.freqs],
                         "store": ["flux"],
                         "interpolate": True,
                     }
@@ -363,7 +370,6 @@ def old_json_monitors(sim: Simulation) -> Dict:
             mnt.update(
                 {
                     "type": "ModeMonitor",
-                    "frequency": [f * 1e-12 for f in monitor.freqs],
                     "Nmodes": num_modes,
                     "target_neff": None,
                     "store": ["mode_amps"],

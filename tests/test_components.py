@@ -41,7 +41,7 @@ def test_sim():
         },
         monitors={
             "point": FieldMonitor(size=(0, 0, 0), center=(0, 0, 0), freqs=[1, 2]),
-            "plane": FluxTimeMonitor(size=(1, 1, 0), center=(0, 0, 0), times=[1, 2]),
+            "plane": FluxTimeMonitor(size=(1, 1, 0), center=(0, 0, 0), interval=10),
         },
         symmetry=(0, -1, 1),
         pml_layers=(

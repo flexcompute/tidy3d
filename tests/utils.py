@@ -38,9 +38,9 @@ SIM_MONITORS = Simulation(
     grid_size=(0.1, 0.1, 0.1),
     monitors={
         "field_freq": FieldMonitor(size=(1, 1, 1), center=(0, 1, 0), freqs=[1, 2, 5, 7, 8]),
-        "field_time": FieldTimeMonitor(size=(1, 1, 0), center=(1, 0, 0), times=[1]),
+        "field_time": FieldTimeMonitor(size=(1, 1, 0), center=(1, 0, 0), interval=10),
         "flux_freq": FluxMonitor(size=(1, 1, 0), center=(0, 0, 0), freqs=[1, 2, 5, 9]),
-        "flux_time": FluxTimeMonitor(size=(1, 1, 0), center=(0, 0, 0), times=[1, 2, 3]),
+        "flux_time": FluxTimeMonitor(size=(1, 1, 0), center=(0, 0, 0), start=1e-12),
         "mode": ModeMonitor(
             size=(1, 1, 0), center=(0, 0, 0), freqs=[1.90, 2.01, 2.2], modes=[Mode(mode_index=1)]
         ),
