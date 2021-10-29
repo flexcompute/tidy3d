@@ -1,0 +1,13 @@
+{
+    "mode_index": 0,
+    "num_modes": 1,
+    "target_neff": 2.0,
+    "symmetries": [
+        0,
+        0
+    ],
+    "num_pml": [
+        0,
+        0
+    ]
+}

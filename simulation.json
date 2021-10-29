@@ -1,0 +1,182 @@
+{
+    "parameters": {
+        "unit_length": "um",
+        "unit_frequency": "THz",
+        "unit_time": "ps",
+        "x_cent": 0.0,
+        "y_cent": 0.0,
+        "z_cent": 0.0,
+        "x_span": 5.0,
+        "y_span": 5.0,
+        "z_span": 5.0,
+        "mesh_step": [
+            0.1,
+            0.1,
+            0.1
+        ],
+        "symmetries": [
+            0,
+            0,
+            0
+        ],
+        "pml_layers": [
+            {
+                "profile": "standard",
+                "Nlayers": 0
+            },
+            {
+                "profile": "standard",
+                "Nlayers": 0
+            },
+            {
+                "profile": "standard",
+                "Nlayers": 0
+            }
+        ],
+        "run_time": 0.0,
+        "courant": 0.9,
+        "shutoff": 1e-05,
+        "subpixel": true,
+        "time_steps": 100,
+        "nodes": 100,
+        "compute_weight": 1.0
+    },
+    "materials": [
+        {
+            "name": "mat_0",
+            "type": "Medium",
+            "permittivity": [
+                2.0,
+                2.0,
+                2.0
+            ],
+            "conductivity": [
+                0.0,
+                0.0,
+                0.0
+            ],
+            "poles": []
+        }
+    ],
+    "structures": [
+        {
+            "name": null,
+            "mat_index": 0,
+            "type": "Box",
+            "x_cent": -1.0,
+            "y_cent": 0.0,
+            "z_cent": 0.0,
+            "x_span": 0.6,
+            "y_span": 0.6,
+            "z_span": 0.6
+        },
+        {
+            "name": null,
+            "mat_index": 0,
+            "type": "Box",
+            "x_cent": 1.0,
+            "y_cent": 0.0,
+            "z_cent": 0.0,
+            "x_span": 0.6,
+            "y_span": 0.6,
+            "z_span": 0.6
+        }
+    ],
+    "sources": [],
+    "monitors": [
+        {
+            "name": "field",
+            "x_cent": 0.0,
+            "y_cent": 0.0,
+            "z_cent": 0.0,
+            "x_span": 3.0,
+            "y_span": 3.0,
+            "z_span": 3.0,
+            "frequency": [
+                5e-12,
+                6e-12,
+                7e-12,
+                8e-12
+            ],
+            "type": "FrequencyMonitor",
+            "store": [
+                "E"
+            ],
+            "interpolate": true
+        },
+        {
+            "name": "field_time",
+            "x_cent": 0.0,
+            "y_cent": 0.0,
+            "z_cent": 0.0,
+            "x_span": 3.0,
+            "y_span": 3.0,
+            "z_span": 3.0,
+            "t_start": 1.0,
+            "t_stop": 0.0,
+            "t_step": 1.7332498780330735e-15,
+            "type": "TimeMonitor",
+            "store": [
+                "E",
+                "H"
+            ]
+        },
+        {
+            "name": "flux",
+            "x_cent": 0.0,
+            "y_cent": 0.0,
+            "z_cent": 0.0,
+            "x_span": 1.0,
+            "y_span": 1.0,
+            "z_span": 0.0,
+            "frequency": [
+                5e-12,
+                6e-12,
+                7e-12,
+                8e-12
+            ],
+            "type": "FrequencyMonitor",
+            "store": [
+                "flux"
+            ],
+            "interpolate": true
+        },
+        {
+            "name": "flux_time",
+            "x_cent": 0.0,
+            "y_cent": 0.0,
+            "z_cent": 0.0,
+            "x_span": 1.0,
+            "y_span": 1.0,
+            "z_span": 0.0,
+            "t_start": 1.0,
+            "t_stop": 0.0,
+            "t_step": 1.7332498780330735e-15,
+            "type": "TimeMonitor",
+            "store": [
+                "flux"
+            ]
+        },
+        {
+            "name": "mode",
+            "x_cent": 0.0,
+            "y_cent": 0.0,
+            "z_cent": 0.0,
+            "x_span": 1.0,
+            "y_span": 1.0,
+            "z_span": 0.0,
+            "frequency": [
+                5e-12,
+                6e-12,
+                7e-12,
+                8e-12
+            ],
+            "type": "ModeMonitor",
+            "Nmodes": 3,
+            "target_neff": null,
+            "store": [
+                "mode_amps"
+            ]
+        }
+    ]
+}
