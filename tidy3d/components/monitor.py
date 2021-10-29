@@ -4,7 +4,7 @@ from typing import List, Union
 
 import pydantic
 
-from .types import Literal, Ax, Direction, FieldType, EMField
+from .types import Literal, Ax, Direction, FieldType, EMField, Array
 from .geometry import Box
 from .validators import assert_plane
 from .mode import Mode
@@ -44,7 +44,7 @@ class Monitor(Box, ABC):
 class FreqMonitor(Monitor, ABC):
     """stores data in frequency domain"""
 
-    freqs: List[float]
+    freqs: Union[List[float], Array[float]]
 
 
 class TimeMonitor(Monitor, ABC):
@@ -85,8 +85,7 @@ class FieldMonitor(AbstractFieldMonitor, FreqMonitor):
         Size of monitor ``Box``, must have one element = 0.0 to define plane.
     fields: ``[str]``, optional
         Electromagnetic field(s) to measure (E, H), defaults to ``['Ex', 'Ey', 'Ez', 'Hx', 'Hy',
-        'Hz']``, also accepts diagonal components of permittivity tensor as ``'eps_xx', 'eps_yy',
-        'eps_zz'``.
+        'Hz']``.
     freqs: ``[float]``
         Frequencies to measure fields at at (Hz),
 

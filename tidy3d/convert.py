@@ -459,7 +459,9 @@ def load_old_monitor_data(simulation: Simulation, data_file: str) -> SolverDataD
                 sampler_label = "f"
 
             elif isinstance(monitor, TimeMonitor):
-                sampler_values = np.array(monitor.times)
+                stop = monitor.stop if monitor.stop else simulation.run_time
+                step = simulation.dt * monitor.interval
+                sampler_values = list(np.arange(monitor.start, stop, step))
                 sampler_label = "t"
 
             if isinstance(monitor, AbstractFieldMonitor):

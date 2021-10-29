@@ -52,7 +52,7 @@ Direction = Literal["+", "-"]
 """ monitors """
 
 EMField = Literal["Ex", "Ey", "Ez", "Hx", "Hy", "Hz"]
-FieldType = Literal["Ex", "Ey", "Ez", "Hx", "Hy", "Hz", "eps_xx", "eps_yy", "eps_zz"]
+FieldType = Literal["Ex", "Ey", "Ez", "Hx", "Hy", "Hz"]
 
 """ plotting """
 
