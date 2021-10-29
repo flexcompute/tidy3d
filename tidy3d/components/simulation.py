@@ -10,12 +10,12 @@ from mpl_toolkits.axes_grid1 import make_axes_locatable
 from descartes import PolygonPatch
 
 from .types import Symmetry, Ax, Shapely, FreqBound
-from .geometry import Box
+from .geometry import Box, PolySlab, Cylinder, Sphere  # pytest:disable=unused-imports
 from .grid import Coords1D, Grid, Coords
 from .medium import Medium, MediumType, eps_complex_to_nk
 from .structure import Structure
-from .source import SourceType
-from .monitor import MonitorType
+from .source import SourceType, VolumeSource, GaussianPulse  # pytest:disable=unused-imports
+from .monitor import MonitorType, FieldMonitor, FluxMonitor  # pytest:disable=unused-imports
 from .pml import PMLTypes, PML
 from .viz import StructMediumParams, StructEpsParams, PMLParams, SymParams, add_ax_if_none
 from ..constants import inf, C_0
@@ -36,7 +36,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         Size of simulation domain in x,y,z.
     grid_size : ``float``.
         Grid size along x,y,z.
-    run_time: float, optional
+    run_time : float, optional
         Maximum run time of simulation in seconds, defaults to 0.0.
     medium : ``tidy3d.Medium``, optional
         Background medium of simulation, defaults to air.
@@ -44,9 +44,9 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         Structures in simulation, in case of overlap, prefernce goes to those later in list.
     sources : Dict[str: ``Source``], optional
         Names and sources in the simulation.
-    monitors :
+    monitors
         Names and monitors in the simulation.
-    pml_layers: Tuple[``tidy3d.PMLLayer``, ``PMLLayer``, ``PMLLayer``], optional.
+    pml_layers : Tuple[``tidy3d.PMLLayer``, ``PMLLayer``, ``PMLLayer``], optional.
         Specifies PML layers (aborbers) in x,y,z location, defaults to no PML
     symmetry : Tuple[int], optional
         Specifies symmetry in x,y,z with values 0, 1, -1 specifying no symmetry, even symmetry, and
@@ -57,12 +57,58 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         Uses subpixel averaging of permittivity if True for much higher accuracy, defaults to True.
     courant : float, optional
         Courant stability factor, controls time step to spatial step ratio, defaults to 0.9.
-    """
-
-    """TODO: Some parameters (e.g. pml_layers, courant, shutoff) contain more information in the
-    current doc version. There should probably be a more extended discussion in the documents
-    proper, but we may want to keep the necessary informatino to understand the parameter here as
-    well (or a link to the document section where it's discussed in more detail).
+    Example
+    -------
+    >>> sim = Simulation(
+    ...     size=(2.0, 2.0, 2.0),
+    ...     grid_size=(0.1, 0.1, 0.1),
+    ...     run_time=40e-11,
+    ...     structures=[
+    ...         Structure(
+    ...             geometry=Box(size=(1, 1, 1), center=(-1, 0, 0)),
+    ...             medium=Medium(permittivity=2.0),
+    ...         ),
+    ...         Structure(
+    ...             geometry=Box(size=(1, 1, 1), center=(0, 0, 0)),
+    ...             medium=Medium(permittivity=1.0, conductivity=3.0),
+    ...         ),
+    ...         Structure(geometry=Sphere(radius=1.4, center=(1.0, 0.0, 1.0)), medium=Medium()),
+    ...         Structure(
+    ...             geometry=Cylinder(radius=1.4, length=2.0, center=(1.0, 0.0, -1.0), axis=1),
+    ...             medium=Medium(),
+    ...         ),
+    ...         Structure(
+    ...             geometry=PolySlab(
+    ...                 vertices=[(-1.5, -1.5), (-0.5, -1.5), (-0.5, -0.5)], slab_bounds=[-1, 1]
+    ...             ),
+    ...             medium=Medium(permittivity=3.0),
+    ...         ),
+    ...     ],
+    ...     sources={
+    ...         "my_dipole": VolumeSource(
+    ...             size=(0, 0, 0),
+    ...             center=(0, 0.5, 0),
+    ...             polarization="Hx",
+    ...             source_time=GaussianPulse(
+    ...                 freq0=2e14,
+    ...                 fwidth=4e13,
+    ...             ),
+    ...         )
+    ...     },
+    ...     monitors={
+    ...         "point": FieldMonitor(size=(0, 0, 0), center=(0, 0, 0), freqs=[1.5e14, 2e14]),
+    ...         "plane": FluxMonitor(size=(1, 1, 0), center=(0, 0, 0), freqs=[2e14, 2.5e14]),
+    ...     },
+    ...     symmetry=(0, 0, 0),
+    ...     pml_layers=(
+    ...         PML(num_layers=20),
+    ...         PML(num_layers=30),
+    ...         None,
+    ...     ),
+    ...     shutoff=1e-6,
+    ...     courant=0.8,
+    ...     subpixel=False,
+    ... )
     """
 
     grid_size: Tuple[pydantic.PositiveFloat, pydantic.PositiveFloat, pydantic.PositiveFloat]

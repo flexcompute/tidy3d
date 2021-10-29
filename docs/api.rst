@@ -14,7 +14,17 @@ Base Simulation Definition
    :toctree: _autosummary/
 
    Simulation
-   PMLLayer
+
+
+Absorbing Boundaries
+--------------------
+
+.. autosummary::
+   :toctree: _autosummary/
+
+   PML
+   StablePML
+   Absorber
 
 
 Geometry
@@ -27,6 +37,7 @@ Geometry
    Sphere
    Cylinder
    PolySlab
+
 
 Physical Objects
 ----------------
