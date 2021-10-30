@@ -1,11 +1,5 @@
 # pylint: disable=invalid-name
-"""Defines properties of the medium / materials 
-
-Attributes
-----------
-MediumType : TYPE
-    Description
-"""
+"""Defines properties of the medium / materials"""
 
 from abc import ABC, abstractmethod
 from typing import List, Tuple, Union, Callable
@@ -15,6 +9,7 @@ import numpy as np
 from .base import Tidy3dBaseModel
 from .types import PoleAndResidue, Literal, Ax, FreqBound
 from .viz import add_ax_if_none
+from .validators import validate_name_str
 
 from ..constants import C_0, inf
 from ..log import log
@@ -27,6 +22,8 @@ class AbstractMedium(ABC, Tidy3dBaseModel):
 
     name: str = None
     frequency_range: Tuple[FreqBound, FreqBound] = (-inf, inf)
+
+    _name_validator = validate_name_str()
 
     @abstractmethod
     def eps_model(self, frequency: float) -> complex:

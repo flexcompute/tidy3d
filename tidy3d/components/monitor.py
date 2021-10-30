@@ -6,7 +6,7 @@ import pydantic
 
 from .types import Literal, Ax, Direction, FieldType, EMField, Array
 from .geometry import Box
-from .validators import assert_plane
+from .validators import assert_plane, validate_name_str
 from .mode import Mode
 from .viz import add_ax_if_none, MonitorParams
 from ..log import SetupError
@@ -18,6 +18,8 @@ class Monitor(Box, ABC):
     """base class for monitors, which all have Box shape"""
 
     name: str
+
+    _name_validator = validate_name_str()
 
     @add_ax_if_none
     def plot(

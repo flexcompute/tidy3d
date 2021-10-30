@@ -1,6 +1,7 @@
 """ defines Geometric objects with Medium properties """
 
 from .base import Tidy3dBaseModel
+from .validators import validate_name_str
 from .geometry import GeometryType
 from .medium import MediumType
 from .types import Ax
@@ -13,6 +14,8 @@ class Structure(Tidy3dBaseModel):
     geometry: GeometryType
     medium: MediumType
     name: str = None
+
+    _name_validator = validate_name_str()
 
     @add_ax_if_none
     def plot(

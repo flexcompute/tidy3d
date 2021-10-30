@@ -10,7 +10,7 @@ from mpl_toolkits.axes_grid1 import make_axes_locatable
 from descartes import PolygonPatch
 
 from .types import Symmetry, Ax, Shapely, FreqBound
-from .validators import assert_unique_names, assert_objects_in_sim_bounds
+from .validators import assert_unique_names, assert_objects_in_sim_bounds, set_names
 from .geometry import Box, PolySlab, Cylinder, Sphere  # pytest:disable=unused-imports
 from .types import Symmetry, Ax, Shapely, FreqBound, Numpy
 from .geometry import Box
@@ -51,9 +51,9 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         Structures in simulation.  
         Structures defined later in this list override the simulation material properties in
         regions of spatial overlap.
-    sources : Dict[str, :class:`Source`] = ``{}``
+    sources : List[:class:`Source`] = ``[]``
         Named mapping of electric current sources in the simulation.
-    monitors : Dict[str, :class:`Monitor`] = ``{}``
+    monitors : List[:class:`Monitor`] = ``[]``
         Named mapping of field and data monitors in the simulation.
     pml_layers : Tuple[:class:`AbsorberSpec`, :class:`AbsorberSpec`, :class:`AbsorberSpec`] = ``(None, None, None)``
         Specifications for the absorbing layers on x, y, and z edges.
@@ -150,45 +150,37 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         """if any PML layer is None, set it to an empty :class:`PML`."""
         return tuple(PML(num_layers=0) if pml is None else pml for pml in val)
 
-    # @pydantic.validator("structures", always=True)
-    # def structures_in_sim_bounds(cls, val, values):
-    #     """check for intersection of each structure with simulation bounds."""
-    #     sim_bounds = Box(size=values.get("size"), center=values.get("center"))
-    #     for position_index, structure in enumerate(val):
-    #         if not sim_bounds.intersects(structure.geometry):
-    #             raise SetupError(
-    #                 f"Structure '{structure}' "
-    #                 f"(at `structures[{position_index}]`) is outside simulation"
-    #             )
-    #     return val
-
-    # @pydantic.validator("sources", always=True)
-    # def sources_in_sim_bounds(cls, val, values):
-    #     """check for intersection of each structure with simulation bounds."""
-    #     sim_bounds = Box(size=values.get("size"), center=values.get("center"))
-    #     for name, source in val.items():
-    #         if not sim_bounds.intersects(source):
-    #             raise SetupError(f"Source '{name}' is completely outside simulation.")
-    #     return val
-
-    # @pydantic.validator("monitors", always=True)
-    # def monitors_in_sim_bounds(cls, val, values):
-    #     """check for intersection of each structure with simulation bounds."""
-    #     sim_bounds = Box(size=values.get("size"), center=values.get("center"))
-    #     for name, monitor in val.items():
-    #         if not sim_bounds.intersects(monitor):
-    #             raise SetupError(f"Monitor '{name}' is completely outside simulation.")
-    #     return val
-
-
     _structures_in_bounds = assert_objects_in_sim_bounds("structures")
     _sources_in_bounds = assert_objects_in_sim_bounds("sources")
     _monitors_in_bounds = assert_objects_in_sim_bounds("monitors")
 
+    # assign names to unnamed structures, sources, and mediums
+    _structure_names = set_names("structures")
+    _source_names = set_names("sources")
+
+    # @pydantic.validator("structures", allow_reuse=True, always=True)
+    # def set_medium_names(cls, val, values):
+    #     """check for intersection of each structure with simulation bounds."""
+    #     background_medium = values.get("medium")
+    #     all_mediums = [background_medium] + [structure.medium for structure in val]
+    #     unnamed_mediums = [medium for medium in all_mediums if not medium.name]
+    #     unique_mediums = list(set(unnamed_mediums))
+    #     for index, medium in enumerate(unique_mediums):
+    #         print(index, medium.name)
+    #         print('->')
+    #         medium.name = f"mediums[{index}]"
+    #         # medium.name = 'poop'
+    #         print(index, medium.name)
+    #     for m in all_mediums:
+    #         print(m.name)
+    #     return val
+
+    # make sure all names are unique
     _unique_structure_names = assert_unique_names("structures")
     _unique_medium_names = assert_unique_names("structures", check_mediums=True)
     _unique_source_names = assert_unique_names("sources")
     _unique_monitor_names = assert_unique_names("monitors")
+
 
     # TODO:
     # - check sources in medium freq range

@@ -16,6 +16,17 @@ def assert_plane():
 
     return is_plane
 
+def validate_name_str():
+    """ make sure the name doesnt include [, ] (used for default names) """
+
+    @pydantic.validator("name", allow_reuse=True, always=True, pre=True)
+    def field_has_unique_names(cls, val):
+        """ raise exception if '[' or ']' in name """
+        # if val and ('[' in val or ']' in val):
+        #     raise SetupError(f"'[' or ']' not allowed in name: {val} (used for defaults)")
+        return val
+    return field_has_unique_names
+
 def assert_unique_names(field_name: str, check_mediums=False):
     """ makes sure all elements of a field have unique .name values """
 
@@ -48,3 +59,15 @@ def assert_objects_in_sim_bounds(field_name: str):
                 )
         return val
     return objects_in_sim_bounds
+
+def set_names(field_name: str):
+    """ set names """
+    @pydantic.validator(field_name, allow_reuse=True, always=True)
+    def set_unique_names(cls, val):
+        """check for intersection of each structure with simulation bounds."""
+        for position_index, geometric_object in enumerate(val):
+            if not geometric_object.name:
+                geometric_object.name = f'{field_name}[{position_index}]'
+        return val
+    return set_unique_names
+

@@ -8,7 +8,7 @@ import numpy as np
 
 from .base import Tidy3dBaseModel
 from .types import Direction, Polarization, Ax, FreqBound
-from .validators import assert_plane
+from .validators import assert_plane, validate_name_str
 from .geometry import Box
 from .mode import Mode
 from .viz import add_ax_if_none, SourceParams
@@ -131,6 +131,8 @@ class Source(Box, ABC):
 
     source_time: SourceTimeType
     name: str = None
+
+    _name_validator = validate_name_str()
 
     @add_ax_if_none
     def plot(
