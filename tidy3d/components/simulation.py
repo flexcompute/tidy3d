@@ -158,22 +158,16 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
     _structure_names = set_names("structures")
     _source_names = set_names("sources")
 
-    # @pydantic.validator("structures", allow_reuse=True, always=True)
-    # def set_medium_names(cls, val, values):
-    #     """check for intersection of each structure with simulation bounds."""
-    #     background_medium = values.get("medium")
-    #     all_mediums = [background_medium] + [structure.medium for structure in val]
-    #     unnamed_mediums = [medium for medium in all_mediums if not medium.name]
-    #     unique_mediums = list(set(unnamed_mediums))
-    #     for index, medium in enumerate(unique_mediums):
-    #         print(index, medium.name)
-    #         print('->')
-    #         medium.name = f"mediums[{index}]"
-    #         # medium.name = 'poop'
-    #         print(index, medium.name)
-    #     for m in all_mediums:
-    #         print(m.name)
-    #     return val
+    @pydantic.validator("structures", allow_reuse=True, always=True)
+    def set_medium_names(cls, val, values):
+        """check for intersection of each structure with simulation bounds."""
+        background_medium = values.get("medium")
+        all_mediums = [background_medium] + [structure.medium for structure in val]
+        _, unique_indices = np.unique(all_mediums, return_inverse=True)
+        for unique_index, medium in zip(unique_indices, all_mediums):
+            if not medium.name:
+                medium.name = f"mediums[{unique_index}]"
+        return val
 
     # make sure all names are unique
     _unique_structure_names = assert_unique_names("structures")

@@ -31,10 +31,12 @@ def assert_unique_names(field_name: str, check_mediums=False):
     """ makes sure all elements of a field have unique .name values """
 
     @pydantic.validator(field_name, allow_reuse=True, always=True)
-    def field_has_unique_names(cls, val):
+    def field_has_unique_names(cls, val, values):
         """check for intersection of each structure with simulation bounds."""
         if check_mediums:
-            field_names = [field.medium.name for field in val if field.medium.name]
+            background = values.get('medium')
+            field_names = [background] + [field.medium.name for field in val if field.medium.name]
+            field_names = [name for name in field_names if (']' not in name) or ('[' not in name)]
         else:
             field_names = [field.name for field in val if field.name]
         unique_names = set(field_names)
