@@ -16,157 +16,157 @@ Base Simulation Definition
    Simulation
 
 
-Absorbing Boundaries
---------------------
+.. Absorbing Boundaries
+.. --------------------
 
-.. autosummary::
-   :toctree: _autosummary/
+.. .. autosummary::
+..    :toctree: _autosummary/
 
-   PML
-   StablePML
-   Absorber
-
-
-Geometry
---------
-
-.. autosummary::
-   :toctree: _autosummary/
-
-   Box
-   Sphere
-   Cylinder
-   PolySlab
+..    PML
+..    StablePML
+..    Absorber
 
 
-Physical Objects
-----------------
+.. Geometry
+.. --------
 
-.. autosummary::
-   :toctree: _autosummary/
+.. .. autosummary::
+..    :toctree: _autosummary/
 
-   Structure
-   Medium
-   PoleResidue
-   Sellmeier
-   Debye
-   Lorentz
-   plugins.DispersionFitter
-   .. material_library
+..    Box
+..    Sphere
+..    Cylinder
+..    PolySlab
 
 
-Monitors
---------
+.. Physical Objects
+.. ----------------
 
-.. autosummary::
-   :toctree: _autosummary/
+.. .. autosummary::
+..    :toctree: _autosummary/
 
-   FieldMonitor
-   FieldTimeMonitor
-   FluxMonitor
-   FluxTimeMonitor
-   ModeMonitor
-   Mode
-
-
-Simulation Output Data
-----------------------
-
-.. autosummary::
-   :toctree: _autosummary/
-
-   SimulationData
-   SimulationData.export
-   SimulationData.load
-   FieldData
-   FluxData
-   FluxTimeData
-   ModeData
+..    Structure
+..    Medium
+..    PoleResidue
+..    Sellmeier
+..    Debye
+..    Lorentz
+..    plugins.DispersionFitter
+..    .. material_library
 
 
-Submitting Simulations
-======================
+.. Monitors
+.. --------
 
-.. currentmodule:: tidy3d
+.. .. autosummary::
+..    :toctree: _autosummary/
 
-Web API
--------
-
-.. autosummary::
-   :toctree: _autosummary/
-
-   web.upload
-   web.get_info
-   web.get_run_info
-   web.run
-   web.monitor
-   web.download
-   web.load_data
-   web.delete
-
-Job Interface
--------------
-
-.. autosummary::
-   :toctree: _autosummary/
-
-   web.Job
-
-Batch Processing
-----------------
-
-.. autosummary::
-   :toctree: _autosummary/
-
-   web.Batch
-
-Info Containers
----------------
-
-.. autosummary::
-   :toctree: _autosummary/
-
-   web.task.Task
-   web.task.TaskInfo
-   web.task.TaskStatus
+..    FieldMonitor
+..    FieldTimeMonitor
+..    FluxMonitor
+..    FluxTimeMonitor
+..    ModeMonitor
+..    Mode
 
 
-Plugins
-=======
+.. Simulation Output Data
+.. ----------------------
 
-Dispersive Model Fitting Tool
------------------------------
+.. .. autosummary::
+..    :toctree: _autosummary/
 
-.. autosummary::
-   :toctree: _autosummary/
+..    SimulationData
+..    SimulationData.export
+..    SimulationData.load
+..    FieldData
+..    FluxData
+..    FluxTimeData
+..    ModeData
 
-   plugins.DispersionFitter
-   plugins.DispersionFitter.load
-   plugins.DispersionFitter.fit
-   plugins.DispersionFitter.plot
 
-Mode Solver
------------
+.. Submitting Simulations
+.. ======================
 
-.. autosummary::
-   :toctree: _autosummary/
+.. .. currentmodule:: tidy3d
 
-   plugins.ModeSolver
-   plugins.ModeSolver.solve
-   plugins.mode.mode_solver.ModeInfo
+.. Web API
+.. -------
 
-Near Field to Far Field Transformation
---------------------------------------
+.. .. autosummary::
+..    :toctree: _autosummary/
 
-.. autosummary::
-   :toctree: _autosummary/
+..    web.upload
+..    web.get_info
+..    web.get_run_info
+..    web.run
+..    web.monitor
+..    web.download
+..    web.load_data
+..    web.delete
 
-   plugins.Near2Far
-   plugins.Near2Far.fields_cartesian
-   plugins.Near2Far.fields_spherical
-   plugins.Near2Far.power_cartesian
-   plugins.Near2Far.power_spherical
-   plugins.Near2Far.radar_cross_section
+.. Job Interface
+.. -------------
+
+.. .. autosummary::
+..    :toctree: _autosummary/
+
+..    web.Job
+
+.. Batch Processing
+.. ----------------
+
+.. .. autosummary::
+..    :toctree: _autosummary/
+
+..    web.Batch
+
+.. Info Containers
+.. ---------------
+
+.. .. autosummary::
+..    :toctree: _autosummary/
+
+..    web.task.Task
+..    web.task.TaskInfo
+..    web.task.TaskStatus
+
+
+.. Plugins
+.. =======
+
+.. Dispersive Model Fitting Tool
+.. -----------------------------
+
+.. .. autosummary::
+..    :toctree: _autosummary/
+
+..    plugins.DispersionFitter
+..    plugins.DispersionFitter.load
+..    plugins.DispersionFitter.fit
+..    plugins.DispersionFitter.plot
+
+.. Mode Solver
+.. -----------
+
+.. .. autosummary::
+..    :toctree: _autosummary/
+
+..    plugins.ModeSolver
+..    plugins.ModeSolver.solve
+..    plugins.mode.mode_solver.ModeInfo
+
+.. Near Field to Far Field Transformation
+.. --------------------------------------
+
+.. .. autosummary::
+..    :toctree: _autosummary/
+
+..    plugins.Near2Far
+..    plugins.Near2Far.fields_cartesian
+..    plugins.Near2Far.fields_spherical
+..    plugins.Near2Far.power_cartesian
+..    plugins.Near2Far.power_spherical
+..    plugins.Near2Far.radar_cross_section
 
 
 .. Simulation

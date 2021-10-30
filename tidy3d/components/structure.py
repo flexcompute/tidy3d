@@ -12,6 +12,7 @@ class Structure(Tidy3dBaseModel):
 
     geometry: GeometryType
     medium: MediumType
+    name: str = None
 
     @add_ax_if_none
     def plot(

@@ -130,6 +130,7 @@ class Source(Box, ABC):
     """Template for all sources, all have Box geometry"""
 
     source_time: SourceTimeType
+    name: str = None
 
     @add_ax_if_none
     def plot(
@@ -140,6 +141,10 @@ class Source(Box, ABC):
         ax = self.geometry.plot(x=x, y=y, z=z, ax=ax, **kwargs)
         return ax
 
+    @property
+    def geometry(self):
+        """ box representation of self"""
+        return Box(center=self.center, size=self.size)
 
 class VolumeSource(Source):
     """Volume Source with time dependence and polarization"""
