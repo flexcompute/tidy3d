@@ -9,7 +9,7 @@ logging.basicConfig(level="INFO", format=FORMAT, datefmt="[%X]", handlers=[RichH
 log = logging.getLogger("rich")
 
 
-class Tidy3dError(Exception):
+class Tidy3DError(Exception):
     """any error in tidy3d"""
 
     def __init__(self, message: str = None):
@@ -18,25 +18,25 @@ class Tidy3dError(Exception):
         super().__init__(self, message)
 
 
-class ValidationError(Tidy3dError):
+class ValidationError(Tidy3DError):
     """error when constructing tidy3d components"""
 
 
-class SetupError(Tidy3dError):
+class SetupError(Tidy3DError):
     """error regarding the setup of the components (outside of domains, etc)"""
 
 
-class FileError(Tidy3dError):
+class FileError(Tidy3DError):
     """error reading or writing to file"""
 
 
-class WebError(Tidy3dError):
+class WebError(Tidy3DError):
     """error with the webAPI"""
 
 
-class AuthenticationError(Tidy3dError):
+class AuthenticationError(Tidy3DError):
     """error authenticating a user through webapi webAPI"""
 
 
-class DataError(Tidy3dError):
+class DataError(Tidy3DError):
     """error accessing data"""
