@@ -8,7 +8,7 @@ import numpy as np
 
 from .base import Tidy3dBaseModel
 from .types import Direction, Polarization, Ax, FreqBound
-from .validators import assert_plane
+from .validators import assert_plane, validate_name_str
 from .geometry import Box
 from .mode import Mode
 from .viz import add_ax_if_none, SourceParams
@@ -130,6 +130,9 @@ class Source(Box, ABC):
     """Template for all sources, all have Box geometry"""
 
     source_time: SourceTimeType
+    name: str = None
+
+    _name_validator = validate_name_str()
 
     @add_ax_if_none
     def plot(
@@ -139,6 +142,11 @@ class Source(Box, ABC):
         kwargs = SourceParams().update_params(**kwargs)
         ax = self.geometry.plot(x=x, y=y, z=z, ax=ax, **kwargs)
         return ax
+
+    @property
+    def geometry(self):
+        """box representation of self"""
+        return Box(center=self.center, size=self.size)
 
 
 class VolumeSource(Source):

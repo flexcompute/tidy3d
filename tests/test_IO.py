@@ -38,24 +38,24 @@ def test_simulation_preserve_types():
             ),
             Structure(geometry=Sphere(radius=1), medium=Debye(eps_inf=1.0, coeffs=[])),
         ],
-        sources={
-            "point": VolumeSource(size=(0, 0, 0), source_time=st, polarization="Ex"),
-            "PW": PlaneWave(size=(inf, inf, 0), source_time=st, direction="+", polarization="Ex"),
-            "Gaussian": GaussianBeam(
+        sources=[
+            VolumeSource(size=(0, 0, 0), source_time=st, polarization="Ex"),
+            PlaneWave(size=(inf, inf, 0), source_time=st, direction="+", polarization="Ex"),
+            GaussianBeam(
                 size=(inf, inf, 0),
                 source_time=st,
                 direction="+",
                 polarization="Ex",
                 waist_size=(1, 1),
             ),
-        },
-        monitors={
-            "field": FieldMonitor(size=(1, 1, 1), freqs=[1, 2, 3]),
-            "fieldtime": FieldTimeMonitor(size=(1, 1, 1), start=1e-12, interval=3),
-            "flux": FluxMonitor(size=(1, 0, 1), freqs=[1, 2, 3]),
-            "fluxtime": FluxTimeMonitor(size=(1, 0, 1), start=1e-12, interval=3),
-            "mode": ModeMonitor(size=(1, 0, 1), freqs=[1, 2, 3], modes=[Mode(mode_index=1)]),
-        },
+        ],
+        monitors=[
+            FieldMonitor(size=(1, 1, 1), freqs=[1, 2, 3], name="field"),
+            FieldTimeMonitor(size=(1, 1, 1), start=1e-12, interval=3, name="fieldtime"),
+            FluxMonitor(size=(1, 0, 1), freqs=[1, 2, 3], name="flux"),
+            FluxTimeMonitor(size=(1, 0, 1), start=1e-12, interval=3, name="fluxtime"),
+            ModeMonitor(size=(1, 0, 1), freqs=[1, 2, 3], modes=[Mode(mode_index=1)], name="mode"),
+        ],
     )
 
     path = "tests/tmp/simulation.json"
@@ -71,11 +71,11 @@ def test_simulation_preserve_types():
     for G in (Box, Sphere, Cylinder, PolySlab):
         assert G in G_types
 
-    S_types = [type(s) for s in sim_2.sources.values()]
+    S_types = [type(s) for s in sim_2.sources]
     for S in (VolumeSource, PlaneWave, GaussianBeam):
         assert S in S_types
 
-    M_types = [type(m) for m in sim_2.monitors.values()]
+    M_types = [type(m) for m in sim_2.monitors]
     for M in (FieldMonitor, FieldTimeMonitor, ModeMonitor, FluxMonitor, FluxTimeMonitor):
         assert M in M_types
 

@@ -36,15 +36,19 @@ def prepend_tmp(path):
 SIM_MONITORS = Simulation(
     size=(2.0, 2.0, 2.0),
     grid_size=(0.1, 0.1, 0.1),
-    monitors={
-        "field_freq": FieldMonitor(size=(1, 1, 1), center=(0, 1, 0), freqs=[1, 2, 5, 7, 8]),
-        "field_time": FieldTimeMonitor(size=(1, 1, 0), center=(1, 0, 0), interval=10),
-        "flux_freq": FluxMonitor(size=(1, 1, 0), center=(0, 0, 0), freqs=[1, 2, 5, 9]),
-        "flux_time": FluxTimeMonitor(size=(1, 1, 0), center=(0, 0, 0), start=1e-12),
-        "mode": ModeMonitor(
-            size=(1, 1, 0), center=(0, 0, 0), freqs=[1.90, 2.01, 2.2], modes=[Mode(mode_index=1)]
+    monitors=[
+        FieldMonitor(size=(1, 1, 1), center=(0, 1, 0), freqs=[1, 2, 5, 7, 8], name="field_freq"),
+        FieldTimeMonitor(size=(1, 1, 0), center=(1, 0, 0), interval=10, name="field_time"),
+        FluxMonitor(size=(1, 1, 0), center=(0, 0, 0), freqs=[1, 2, 5, 9], name="flux_freq"),
+        FluxTimeMonitor(size=(1, 1, 0), center=(0, 0, 0), start=1e-12, name="flux_time"),
+        ModeMonitor(
+            size=(1, 1, 0),
+            center=(0, 0, 0),
+            freqs=[1.90, 2.01, 2.2],
+            modes=[Mode(mode_index=1)],
+            name="mode",
         ),
-    },
+    ],
 )
 
 SIM_FULL = Simulation(
@@ -74,8 +78,8 @@ SIM_FULL = Simulation(
             medium=Medium(permittivity=3.0),
         ),
     ],
-    sources={
-        "my_dipole": VolumeSource(
+    sources=[
+        VolumeSource(
             size=(0, 0, 0),
             center=(0, 0.5, 0),
             polarization="Hx",
@@ -84,10 +88,10 @@ SIM_FULL = Simulation(
                 fwidth=4e13,
             ),
         )
-    },
+    ],
     monitors={
-        "point": FieldMonitor(size=(0, 0, 0), center=(0, 0, 0), freqs=[1.5e14, 2e14]),
-        "plane": FluxMonitor(size=(1, 1, 0), center=(0, 0, 0), freqs=[2e14, 2.5e14]),
+        FieldMonitor(size=(0, 0, 0), center=(0, 0, 0), freqs=[1.5e14, 2e14], name="point"),
+        FluxMonitor(size=(1, 1, 0), center=(0, 0, 0), freqs=[2e14, 2.5e14], name="plane"),
     },
     symmetry=(0, 0, 0),
     pml_layers=(
@@ -111,19 +115,23 @@ SIM_CONVERT = td.Simulation(
             medium=td.nk_to_medium(n=2, k=0, freq=3e14),
         )
     ],
-    sources={
-        "point_source": td.VolumeSource(
+    sources=[
+        td.VolumeSource(
             center=(0, -1.5, 0),
             size=(0.4, 0.4, 0.4),
             source_time=td.GaussianPulse(freq0=3e14, fwidth=1e13),
             polarization="Ex",
+        ),
+    ],
+    monitors=[
+        td.FieldMonitor(
+            fields=["Ex", "Hy"],
+            center=(0, 0, 0),
+            size=(4, 0, 4),
+            freqs=[3e14],
+            name="field_monitor",
         )
-    },
-    monitors={
-        "field_monitor": td.FieldMonitor(
-            fields=["Ex", "Hy"], center=(0, 0, 0), size=(4, 0, 4), freqs=[3e14]
-        )
-    },
+    ],
     run_time=1 / 1e12,
     pml_layers=3 * [PML()],
 )

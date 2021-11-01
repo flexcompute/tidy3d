@@ -32,6 +32,10 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         """hash tidy3dBaseModel objects using their json strings"""
         return hash(self.json())
 
+    def __lt__(self, other):
+        """define < for getting unique indices"""
+        return hash(self) < hash(other)
+
     def _json_string(self, exclude_unset: bool = False) -> str:
         """returns string representation of self"""
         return self.json(indent=INDENT, exclude_unset=exclude_unset)

@@ -1,3 +1,4 @@
+# pylint: disable=unused-import
 """ Container holding all information about simulation and its components"""
 from typing import Dict, Tuple, List
 
@@ -9,13 +10,16 @@ import matplotlib as mpl
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from descartes import PolygonPatch
 
+from .types import Symmetry, Ax, Shapely, FreqBound
+from .validators import assert_unique_names, assert_objects_in_sim_bounds, set_names
+from .geometry import Box, PolySlab, Cylinder, Sphere
 from .types import Symmetry, Ax, Shapely, FreqBound, Numpy
 from .geometry import Box
 from .grid import Coords1D, Grid, Coords
 from .medium import Medium, MediumType, eps_complex_to_nk
 from .structure import Structure
-from .source import SourceType
-from .monitor import MonitorType
+from .source import SourceType, VolumeSource, GaussianPulse
+from .monitor import MonitorType, FieldMonitor, FluxMonitor
 from .pml import PMLTypes, PML
 from .viz import StructMediumParams, StructEpsParams, PMLParams, SymParams, add_ax_if_none
 from ..constants import inf, C_0
@@ -30,47 +34,108 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
 
     Parameters
     ----------
-    center : Tuple[float, float, float], optional
-        Center of simulation domain in x,y,z, defualts to (0.0, 0.0, 0.0)
+    center : Tuple[float, float, float] = ``(0.0, 0.0, 0.0)``
+        (microns) Center of simulation domain in x, y, and z.
     size : Tuple[float, float, float]
-        Size of simulation domain in x,y,z.
-    grid_size : ``float``.
-        Grid size along x,y,z.
-    run_time: float, optional
-        Maximum run time of simulation in seconds, defaults to 0.0.
-    medium : ``tidy3d.Medium``, optional
-        Background medium of simulation, defaults to air.
-    structures : List[``tidy3d.Structure``], optional
-        Structures in simulation, in case of overlap, prefernce goes to those later in list.
-    sources : Dict[str: ``Source``], optional
-        Names and sources in the simulation.
-    monitors :
-        Names and monitors in the simulation.
-    pml_layers: Tuple[``tidy3d.PMLLayer``, ``PMLLayer``, ``PMLLayer``], optional.
-        Specifies PML layers (aborbers) in x,y,z location, defaults to no PML
-    symmetry : Tuple[int], optional
-        Specifies symmetry in x,y,z with values 0, 1, -1 specifying no symmetry, even symmetry, and
+        (microns) Size of simulation domain in x, y, and z.
+        Each element must be non-negative.
+    grid_size : Tuple[float, float, float]
+        (microns) Grid size along x, y, and z.
+        Each element must be non-negative.
+    run_time : float = ``0.0``
+        (seconds) Maximum run time of simulation.
+        If ``shutoff`` specified, simulation will terminate early when shutoff condition met.
+        Must be non-negative.
+    medium : :class:`Medium` = ``Medium(permittivity=1.0)``
+        Background :class:`tidy3d.Medium` of simulation, defaults to air.
+    structures : List[:class:`Structure`] = ``{}``
+        Structures in simulation.
+        Structures defined later in this list override the simulation material properties in
+        regions of spatial overlap.
+    sources : List[:class:`Source`] = ``[]``
+        Named mapping of electric current sources in the simulation.
+    monitors : List[:class:`Monitor`] = ``[]``
+        Named mapping of field and data monitors in the simulation.
+    pml_layers : Tuple[:class:`AbsorberSpec`, :class:`AbsorberSpec`, :class:`AbsorberSpec`]
+        = ``(None, None, None)``
+        Specifications for the absorbing layers on x, y, and z edges.
+        Elements of ``None`` are assumed to have no absorber and use periodic boundary conditions.
+    symmetry : Tuple[int, int, int] = ``(0, 0, 0)``
+        Specifies symmetry in x, y, and z dimensions.
+        Only values of 0, 1, and -1 are accepted and specify no symmetry, even symmetry, and
         odd symmetry, respectively.
-    shutoff : float, optional
-        Simulation ends when field intensity gets below this value, defaults to 1e-5
-    subpixel : bool, optional
-        Uses subpixel averaging of permittivity if True for much higher accuracy, defaults to True.
-    courant : float, optional
-        Courant stability factor, controls time step to spatial step ratio, defaults to 0.9.
-    """
+    shutoff : float = ``1e-5``
+        Value of the average intensity in the simulation relative to the maximum at which the
+        simulation terminates.
+    subpixel : bool = ``True``
+        If ``True``, uses subpixel averaging of the permittivity based on structure definition,
+        resulting in much higher accuracy for a given grid size.
+    courant : float = ``0.9``
+        Courant stability factor, controls time step to spatial step ratio.
+        Lower values lead to more stable simulations for dispersive materials,
+        but result in longer simulation times.
+        Accepted values between 0 and 1, non-inclusive.
 
-    """TODO: Some parameters (e.g. pml_layers, courant, shutoff) contain more information in the
-    current doc version. There should probably be a more extended discussion in the documents
-    proper, but we may want to keep the necessary informatino to understand the parameter here as
-    well (or a link to the document section where it's discussed in more detail).
+    Example
+    -------
+    >>> sim = Simulation(
+    ...     size=(2.0, 2.0, 2.0),
+    ...     grid_size=(0.1, 0.1, 0.1),
+    ...     run_time=40e-11,
+    ...     structures=[
+    ...         Structure(
+    ...             geometry=Box(size=(1, 1, 1), center=(-1, 0, 0)),
+    ...             medium=Medium(permittivity=2.0),
+    ...         ),
+    ...         Structure(
+    ...             geometry=Box(size=(1, 1, 1), center=(0, 0, 0)),
+    ...             medium=Medium(permittivity=1.0, conductivity=3.0),
+    ...         ),
+    ...         Structure(geometry=Sphere(radius=1.4, center=(1.0, 0.0, 1.0)), medium=Medium()),
+    ...         Structure(
+    ...             geometry=Cylinder(radius=1.4, length=2.0, center=(1.0, 0.0, -1.0), axis=1),
+    ...             medium=Medium(),
+    ...         ),
+    ...         Structure(
+    ...             geometry=PolySlab(
+    ...                 vertices=[(-1.5, -1.5), (-0.5, -1.5), (-0.5, -0.5)], slab_bounds=[-1, 1]
+    ...             ),
+    ...             medium=Medium(permittivity=3.0),
+    ...         ),
+    ...     ],
+    ...     sources=[
+    ...         VolumeSource(
+    ...             size=(0, 0, 0),
+    ...             center=(0, 0.5, 0),
+    ...             polarization="Hx",
+    ...             source_time=GaussianPulse(
+    ...                 freq0=2e14,
+    ...                 fwidth=4e13,
+    ...             ),
+    ...         )
+    ...     ],
+    ...     monitors=[
+    ...         FieldMonitor(size=(0, 0, 0), center=(0, 0, 0), freqs=[1.5e14, 2e14], name='point'),
+    ...         FluxMonitor(size=(1, 1, 0), center=(0, 0, 0), freqs=[2e14, 2.5e14], name='flux'),
+    ...     ],
+    ...     symmetry=(0, 0, 0),
+    ...     pml_layers=(
+    ...         PML(num_layers=20),
+    ...         PML(num_layers=30),
+    ...         None,
+    ...     ),
+    ...     shutoff=1e-6,
+    ...     courant=0.8,
+    ...     subpixel=False,
+    ... )
     """
 
     grid_size: Tuple[pydantic.PositiveFloat, pydantic.PositiveFloat, pydantic.PositiveFloat]
     medium: MediumType = Medium()
     run_time: pydantic.NonNegativeFloat = 0.0
     structures: List[Structure] = []
-    sources: Dict[str, SourceType] = {}
-    monitors: Dict[str, MonitorType] = {}
+    sources: List[SourceType] = []
+    monitors: List[MonitorType] = []
     pml_layers: Tuple[PMLTypes, PMLTypes, PMLTypes] = (None, None, None)
     symmetry: Tuple[Symmetry, Symmetry, Symmetry] = (0, 0, 0)
     shutoff: pydantic.NonNegativeFloat = 1e-5
@@ -87,35 +152,30 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         """if any PML layer is None, set it to an empty :class:`PML`."""
         return tuple(PML(num_layers=0) if pml is None else pml for pml in val)
 
-    @pydantic.validator("structures", always=True)
-    def structures_in_sim_bounds(cls, val, values):
+    _structures_in_bounds = assert_objects_in_sim_bounds("structures")
+    _sources_in_bounds = assert_objects_in_sim_bounds("sources")
+    _monitors_in_bounds = assert_objects_in_sim_bounds("monitors")
+
+    # assign names to unnamed structures, sources, and mediums
+    _structure_names = set_names("structures")
+    _source_names = set_names("sources")
+
+    @pydantic.validator("structures", allow_reuse=True, always=True)
+    def set_medium_names(cls, val, values):
         """check for intersection of each structure with simulation bounds."""
-        sim_bounds = Box(size=values.get("size"), center=values.get("center"))
-        for position_index, structure in enumerate(val):
-            if not sim_bounds.intersects(structure.geometry):
-                raise SetupError(
-                    f"Structure '{structure}' "
-                    f"(at `structures[{position_index}]`) is outside simulation"
-                )
+        background_medium = values.get("medium")
+        all_mediums = [background_medium] + [structure.medium for structure in val]
+        _, unique_indices = np.unique(all_mediums, return_inverse=True)
+        for unique_index, medium in zip(unique_indices, all_mediums):
+            if not medium.name:
+                medium.name = f"mediums[{unique_index}]"
         return val
 
-    @pydantic.validator("sources", always=True)
-    def sources_in_sim_bounds(cls, val, values):
-        """check for intersection of each structure with simulation bounds."""
-        sim_bounds = Box(size=values.get("size"), center=values.get("center"))
-        for name, source in val.items():
-            if not sim_bounds.intersects(source):
-                raise SetupError(f"Source '{name}' is completely outside simulation.")
-        return val
-
-    @pydantic.validator("monitors", always=True)
-    def monitors_in_sim_bounds(cls, val, values):
-        """check for intersection of each structure with simulation bounds."""
-        sim_bounds = Box(size=values.get("size"), center=values.get("center"))
-        for name, monitor in val.items():
-            if not sim_bounds.intersects(monitor):
-                raise SetupError(f"Monitor '{name}' is completely outside simulation.")
-        return val
+    # make sure all names are unique
+    _unique_structure_names = assert_unique_names("structures")
+    _unique_medium_names = assert_unique_names("structures", check_mediums=True)
+    _unique_source_names = assert_unique_names("sources")
+    _unique_monitor_names = assert_unique_names("monitors")
 
     # TODO:
     # - check sources in medium freq range
@@ -126,7 +186,14 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
 
     @property
     def medium_map(self) -> Dict[Medium, pydantic.NonNegativeInt]:
-        """medium_map[medium] returns unique global index of medium in siulation."""
+        """``medium_map[medium]`` returns unique global index of :class:`Medium` in simulation.
+
+        Returns
+        -------
+        {:class:`Medium`, ``int``}
+            Mapping between a :class:`Medium` and it's index in the simulation.
+        """
+
         mediums = {structure.medium for structure in self.structures}
         return {medium: index for index, medium in enumerate(mediums)}
 
@@ -138,6 +205,19 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
     ) -> Ax:
         """Plot each of simulation's components on a plan defined by one nonzero x,y,z
         coordinate.
+
+        Parameters
+        ----------
+        x : ``float``
+            Position of point in x direction.
+        y : ``float``
+            Position of point in y direction.
+        z : ``float``
+            Position of point in z direction.
+        ax : Ax, optional
+            Description
+        **kwargs
+            Description
         """
 
         ax = self.plot_structures(ax=ax, x=x, y=y, z=z, **kwargs)
@@ -233,7 +313,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         self, x: float = None, y: float = None, z: float = None, ax: Ax = None, **kwargs
     ) -> Ax:
         """Plots each of simulation's sources on plane."""
-        for _, source in self.sources.items():
+        for source in self.sources:
             if source.intersects_plane(x=x, y=y, z=z):
                 ax = source.plot(ax=ax, x=x, y=y, z=z, **kwargs)
         ax = self.set_plot_bounds(ax=ax, x=x, y=y, z=z)
@@ -244,7 +324,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         self, x: float = None, y: float = None, z: float = None, ax: Ax = None, **kwargs
     ) -> Ax:
         """Plots each of simulation's monitors on plane."""
-        for _, monitor in self.monitors.items():
+        for monitor in self.monitors:
             if monitor.intersects_plane(x=x, y=y, z=z):
                 ax = monitor.plot(ax=ax, x=x, y=y, z=z, **kwargs)
         ax = self.set_plot_bounds(ax=ax, x=x, y=y, z=z)

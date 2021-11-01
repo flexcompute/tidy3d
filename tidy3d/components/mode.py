@@ -10,17 +10,16 @@ from .types import Symmetry
 
 class Mode(Tidy3dBaseModel):
     """Stores Specifications of a Mode to input into mode solver.
-
     Parameters
     ----------
-    mode_index : int
+    mode_index : ``int``
         Return the mode solver output at ``mode_index``.
-    target_neff : float, optional
+    target_neff : ``float = None``
         Guess for effective index of mode.
-    symmetries : Tuple[int, int], optional
-        Symmetries (0,1,-1) = (none, even, odd) in (x,y) of mode plane, default = (0, 0).
-    num_pml: Tuple[int, int], optional
-        number of pml layers to add in (x,y) of mode plane, default = (0, 0)
+    symmetries : ``(int, int) = (0,0)``
+        Symmetries (0, 1,-1) = (none, even, odd) in (x,y) of mode plane.
+    num_pml: ``(int, int) = (0,0)``
+        number of standard pml layers to add in (x,y) of mode plane.
     """
 
     mode_index: pd.NonNegativeInt

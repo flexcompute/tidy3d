@@ -28,8 +28,8 @@ def test_sim():
                 medium=Medium(),
             ),
         ],
-        sources={
-            "my_dipole": VolumeSource(
+        sources=[
+            VolumeSource(
                 size=(0, 0, 0),
                 center=(0, -0.5, 0),
                 polarization="Hx",
@@ -37,12 +37,13 @@ def test_sim():
                     freq0=1e14,
                     fwidth=1e12,
                 ),
+                name="my_dipole",
             )
-        },
-        monitors={
-            "point": FieldMonitor(size=(0, 0, 0), center=(0, 0, 0), freqs=[1, 2]),
-            "plane": FluxTimeMonitor(size=(1, 1, 0), center=(0, 0, 0), interval=10),
-        },
+        ],
+        monitors=[
+            FieldMonitor(size=(0, 0, 0), center=(0, 0, 0), freqs=[1, 2], name="point"),
+            FluxTimeMonitor(size=(1, 1, 0), center=(0, 0, 0), interval=10, name="plane"),
+        ],
         symmetry=(0, -1, 1),
         pml_layers=(
             PML(num_layers=20),
@@ -277,7 +278,7 @@ def test_monitor():
     size = (1, 2, 3)
     center = (1, 2, 3)
 
-    m = FieldMonitor(size=size, center=center, freqs=[1, 2, 3])
+    m = FieldMonitor(size=size, center=center, freqs=[1, 2, 3], name="test_monitor")
 
 
 def test_monitor_plane():
