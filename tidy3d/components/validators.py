@@ -1,9 +1,11 @@
+# pylint:disable=unused-argument
 """ Defines various validation functions that get used to ensure inputs are legit """
 
 import pydantic
 
 from ..log import ValidationError, SetupError
 from .geometry import Box
+
 
 def assert_plane():
     """makes sure a field's `size` attribute has exactly 1 zero"""
@@ -16,27 +18,30 @@ def assert_plane():
 
     return is_plane
 
+
 def validate_name_str():
-    """ make sure the name doesnt include [, ] (used for default names) """
+    """make sure the name doesnt include [, ] (used for default names)"""
 
     @pydantic.validator("name", allow_reuse=True, always=True, pre=True)
     def field_has_unique_names(cls, val):
-        """ raise exception if '[' or ']' in name """
+        """raise exception if '[' or ']' in name"""
         # if val and ('[' in val or ']' in val):
         #     raise SetupError(f"'[' or ']' not allowed in name: {val} (used for defaults)")
         return val
+
     return field_has_unique_names
 
+
 def assert_unique_names(field_name: str, check_mediums=False):
-    """ makes sure all elements of a field have unique .name values """
+    """makes sure all elements of a field have unique .name values"""
 
     @pydantic.validator(field_name, allow_reuse=True, always=True)
     def field_has_unique_names(cls, val, values):
         """check for intersection of each structure with simulation bounds."""
         if check_mediums:
-            background = values.get('medium')
+            background = values.get("medium")
             field_names = [background] + [field.medium.name for field in val if field.medium.name]
-            field_names = [name for name in field_names if (']' not in name) or ('[' not in name)]
+            field_names = [name for name in field_names if ("]" not in name) or ("[" not in name)]
         else:
             field_names = [field.name for field in val if field.name]
         unique_names = set(field_names)
@@ -46,8 +51,10 @@ def assert_unique_names(field_name: str, check_mediums=False):
 
     return field_has_unique_names
 
+
 def assert_objects_in_sim_bounds(field_name: str):
-    """ makes sure all objects in field are at least partially inside of simulation bounds/"""
+    """makes sure all objects in field are at least partially inside of simulation bounds/"""
+
     @pydantic.validator(field_name, allow_reuse=True, always=True)
     def objects_in_sim_bounds(cls, val, values):
         """check for intersection of each structure with simulation bounds."""
@@ -60,16 +67,19 @@ def assert_objects_in_sim_bounds(field_name: str):
                     "is completely outside of simulation domain"
                 )
         return val
+
     return objects_in_sim_bounds
 
+
 def set_names(field_name: str):
-    """ set names """
+    """set names"""
+
     @pydantic.validator(field_name, allow_reuse=True, always=True)
     def set_unique_names(cls, val):
         """check for intersection of each structure with simulation bounds."""
         for position_index, geometric_object in enumerate(val):
             if not geometric_object.name:
-                geometric_object.name = f'{field_name}[{position_index}]'
+                geometric_object.name = f"{field_name}[{position_index}]"
         return val
-    return set_unique_names
 
+    return set_unique_names

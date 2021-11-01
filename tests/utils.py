@@ -42,7 +42,11 @@ SIM_MONITORS = Simulation(
         FluxMonitor(size=(1, 1, 0), center=(0, 0, 0), freqs=[1, 2, 5, 9], name="flux_freq"),
         FluxTimeMonitor(size=(1, 1, 0), center=(0, 0, 0), start=1e-12, name="flux_time"),
         ModeMonitor(
-            size=(1, 1, 0), center=(0, 0, 0), freqs=[1.90, 2.01, 2.2], modes=[Mode(mode_index=1)], name="mode"
+            size=(1, 1, 0),
+            center=(0, 0, 0),
+            freqs=[1.90, 2.01, 2.2],
+            modes=[Mode(mode_index=1)],
+            name="mode",
         ),
     ],
 )
@@ -119,11 +123,15 @@ SIM_CONVERT = td.Simulation(
             polarization="Ex",
         ),
     ],
-    monitors={
+    monitors=[
         td.FieldMonitor(
-            fields=["Ex", "Hy"], center=(0, 0, 0), size=(4, 0, 4), freqs=[3e14], name="field_monitor"
+            fields=["Ex", "Hy"],
+            center=(0, 0, 0),
+            size=(4, 0, 4),
+            freqs=[3e14],
+            name="field_monitor",
         )
-    },
+    ],
     run_time=1 / 1e12,
     pml_layers=3 * [PML()],
 )

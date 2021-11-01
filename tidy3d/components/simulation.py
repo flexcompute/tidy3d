@@ -1,3 +1,4 @@
+# pylint: disable=unused-import
 """ Container holding all information about simulation and its components"""
 from typing import Dict, Tuple, List
 
@@ -11,14 +12,14 @@ from descartes import PolygonPatch
 
 from .types import Symmetry, Ax, Shapely, FreqBound
 from .validators import assert_unique_names, assert_objects_in_sim_bounds, set_names
-from .geometry import Box, PolySlab, Cylinder, Sphere  # pytest:disable=unused-imports
+from .geometry import Box, PolySlab, Cylinder, Sphere
 from .types import Symmetry, Ax, Shapely, FreqBound, Numpy
 from .geometry import Box
 from .grid import Coords1D, Grid, Coords
 from .medium import Medium, MediumType, eps_complex_to_nk
 from .structure import Structure
-from .source import SourceType, VolumeSource, GaussianPulse  # pytest:disable=unused-imports
-from .monitor import MonitorType, FieldMonitor, FluxMonitor  # pytest:disable=unused-imports
+from .source import SourceType, VolumeSource, GaussianPulse
+from .monitor import MonitorType, FieldMonitor, FluxMonitor
 from .pml import PMLTypes, PML
 from .viz import StructMediumParams, StructEpsParams, PMLParams, SymParams, add_ax_if_none
 from ..constants import inf, C_0
@@ -40,7 +41,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         Each element must be non-negative.
     grid_size : Tuple[float, float, float]
         (microns) Grid size along x, y, and z.
-        Each element must be non-negative.        
+        Each element must be non-negative.
     run_time : float = ``0.0``
         (seconds) Maximum run time of simulation.
         If ``shutoff`` specified, simulation will terminate early when shutoff condition met.
@@ -48,14 +49,15 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
     medium : :class:`Medium` = ``Medium(permittivity=1.0)``
         Background :class:`tidy3d.Medium` of simulation, defaults to air.
     structures : List[:class:`Structure`] = ``{}``
-        Structures in simulation.  
+        Structures in simulation.
         Structures defined later in this list override the simulation material properties in
         regions of spatial overlap.
     sources : List[:class:`Source`] = ``[]``
         Named mapping of electric current sources in the simulation.
     monitors : List[:class:`Monitor`] = ``[]``
         Named mapping of field and data monitors in the simulation.
-    pml_layers : Tuple[:class:`AbsorberSpec`, :class:`AbsorberSpec`, :class:`AbsorberSpec`] = ``(None, None, None)``
+    pml_layers : Tuple[:class:`AbsorberSpec`, :class:`AbsorberSpec`, :class:`AbsorberSpec`]
+        = ``(None, None, None)``
         Specifications for the absorbing layers on x, y, and z edges.
         Elements of ``None`` are assumed to have no absorber and use periodic boundary conditions.
     symmetry : Tuple[int, int, int] = ``(0, 0, 0)``
@@ -175,7 +177,6 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
     _unique_source_names = assert_unique_names("sources")
     _unique_monitor_names = assert_unique_names("monitors")
 
-
     # TODO:
     # - check sources in medium freq range
     # - check PW in homogeneous medium
@@ -186,7 +187,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
     @property
     def medium_map(self) -> Dict[Medium, pydantic.NonNegativeInt]:
         """``medium_map[medium]`` returns unique global index of :class:`Medium` in simulation.
-        
+
         Returns
         -------
         {:class:`Medium`, ``int``}
@@ -204,7 +205,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
     ) -> Ax:
         """Plot each of simulation's components on a plan defined by one nonzero x,y,z
         coordinate.
-        
+
         Parameters
         ----------
         x : ``float``
@@ -312,7 +313,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         self, x: float = None, y: float = None, z: float = None, ax: Ax = None, **kwargs
     ) -> Ax:
         """Plots each of simulation's sources on plane."""
-        for _, source in self.sources.items():
+        for source in self.sources:
             if source.intersects_plane(x=x, y=y, z=z):
                 ax = source.plot(ax=ax, x=x, y=y, z=z, **kwargs)
         ax = self.set_plot_bounds(ax=ax, x=x, y=y, z=z)
@@ -323,7 +324,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         self, x: float = None, y: float = None, z: float = None, ax: Ax = None, **kwargs
     ) -> Ax:
         """Plots each of simulation's monitors on plane."""
-        for _, monitor in self.monitors.items():
+        for monitor in self.monitors:
             if monitor.intersects_plane(x=x, y=y, z=z):
                 ax = monitor.plot(ax=ax, x=x, y=y, z=z, **kwargs)
         ax = self.set_plot_bounds(ax=ax, x=x, y=y, z=z)

@@ -1,3 +1,4 @@
+# pylint: disable=unused-import
 """Classes for Storing Monitor and Simulation Data."""
 
 from abc import ABC, abstractmethod
@@ -6,14 +7,13 @@ from typing import Dict, List, Union
 import xarray as xr
 import numpy as np
 import h5py
-import pydantic
 
 from .types import Numpy, Direction, Array, numpy_encoding, Literal, Ax
 from .base import Tidy3dBaseModel
 from .simulation import Simulation
-from .mode import Mode  # pylint: disable=unused-import
-from ..log import DataError
+from .mode import Mode
 from .viz import add_ax_if_none
+from ..log import DataError
 
 
 """ Helper functions """
@@ -563,7 +563,7 @@ class SimulationData(Tidy3dBaseModel):
     #     """
 
     #     if field_monitor_name not in self.monitor_data:
-    #         raise DataError(f"field_monitor_name {field_monitor_name} not found in SimulationData.")
+    #     raise DataError(f"field_monitor_name {field_monitor_name} not found in SimulationData.")
 
     #     monitor_data = self.monitor_data.get(field_monitor_name)
 

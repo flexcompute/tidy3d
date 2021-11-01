@@ -32,7 +32,7 @@ class Monitor(Box, ABC):
 
     @property
     def geometry(self):
-        """ box representation of self"""
+        """box representation of self"""
         return Box(center=self.center, size=self.size)
 
 

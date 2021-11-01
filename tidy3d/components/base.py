@@ -33,7 +33,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         return hash(self.json())
 
     def __lt__(self, other):
-        """ define < for getting unique indices """
+        """define < for getting unique indices"""
         return hash(self) < hash(other)
 
     def _json_string(self, exclude_unset: bool = False) -> str:

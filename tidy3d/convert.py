@@ -197,8 +197,9 @@ def old_json_sources(sim: Simulation) -> List[Dict]:
     """Export all sources in the Simulation."""
 
     src_list = []
-    for name, source in sim.sources.items():
+    for source in sim.sources:
         # Get source_time
+        name = source.name
 
         if isinstance(source.source_time, GaussianPulse):
             src_time = {
@@ -296,9 +297,9 @@ def old_json_monitors(sim: Simulation) -> Dict:
     """
 
     mnt_list = []
-    for name, monitor in sim.monitors.items():
+    for monitor in sim.monitors:
         mnt = {
-            "name": name,
+            "name": monitor.name,
             "x_cent": monitor.center[0],
             "y_cent": monitor.center[1],
             "z_cent": monitor.center[2],
@@ -437,7 +438,8 @@ def load_solver_results(
 
     # constuct monitor_data dictionary
     monitor_data = {}
-    for name, monitor in simulation.monitors.items():
+    for monitor in simulation.monitors:
+        name = monitor.name
         monitor_data_dict = solver_data_dict[name]
         monitor_data_type = data_type_map[monitor.data_type]
         if monitor.type in ("FieldMonitor", "FieldTimeMonitor"):
@@ -457,7 +459,8 @@ def load_old_monitor_data(simulation: Simulation, data_file: str) -> SolverDataD
 
     data_dict = {}
     with h5py.File(data_file, "r") as f_handle:
-        for name, monitor in simulation.monitors.items():
+        for monitor in simulation.monitors:
+            name = monitor.name
 
             if isinstance(monitor, FreqMonitor):
                 sampler_values = np.array(monitor.freqs)

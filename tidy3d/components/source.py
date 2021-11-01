@@ -145,8 +145,9 @@ class Source(Box, ABC):
 
     @property
     def geometry(self):
-        """ box representation of self"""
+        """box representation of self"""
         return Box(center=self.center, size=self.size)
+
 
 class VolumeSource(Source):
     """Volume Source with time dependence and polarization"""
