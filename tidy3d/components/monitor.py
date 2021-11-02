@@ -24,7 +24,7 @@ class Monitor(Box, ABC):
         self, x: float = None, y: float = None, z: float = None, ax: Ax = None, **kwargs
     ) -> Ax:
         """Plot the monitor geometry on a cross section plane.
-        
+
         Parameters
         ----------
         x : float = None
@@ -52,11 +52,11 @@ class Monitor(Box, ABC):
     @property
     def geometry(self):
         """:class:`Box` representation of monitor.
-        
+
         Returns
         -------
         :class:`Box`
-            Representation of the monitor geometry as a :Geometry:`class`.
+            Representation of the monitor geometry as a :class:`Box`.
         """
         return Box(center=self.center, size=self.size)
 
@@ -99,7 +99,6 @@ class AbstractFluxMonitor(PlanarMonitor, ABC):
     """stores flux through a plane"""
 
 
-
 class FieldMonitor(AbstractFieldMonitor, FreqMonitor):
     """Stores a collection of electromagnetic fields in the frequency domain.
 
@@ -122,6 +121,7 @@ class FieldMonitor(AbstractFieldMonitor, FreqMonitor):
     -------
     >>> monitor = FieldMonitor(size=(2,2,2), freqs=[200e12, 210e12], fields=['Ex', 'Ey', 'Hz'], name='freq_domain_fields')
     """
+
     fields: List[FieldType] = ["Ex", "Ey", "Ez", "Hx", "Hy", "Hz"]
     type: Literal["FieldMonitor"] = "FieldMonitor"
     data_type: Literal["ScalarFieldData"] = "ScalarFieldData"
@@ -157,6 +157,7 @@ class FieldTimeMonitor(AbstractFieldMonitor, TimeMonitor):
     -------
     >>> monitor = FieldTimeMonitor(size=(2,2,2), fields=['Hx'], start=1e-13, stop=5e-13, interval=2, name='movie_monitor')
     """
+
     type: Literal["FieldTimeMonitor"] = "FieldTimeMonitor"
     data_type: Literal["ScalarFieldTimeData"] = "ScalarFieldTimeData"
 
@@ -181,6 +182,7 @@ class FluxMonitor(AbstractFluxMonitor, FreqMonitor):
     -------
     >>> monitor = FluxMonitor(size=(2,2,0), freqs=[200e12, 210e12], name='flux_monitor')
     """
+
     type: Literal["FluxMonitor"] = "FluxMonitor"
     data_type: Literal["FluxData"] = "FluxData"
 
@@ -213,6 +215,7 @@ class FluxTimeMonitor(AbstractFluxMonitor, TimeMonitor):
     -------
     >>> monitor = FluxTimeMonitor(size=(2,2,0), start=1e-13, stop=5e-13, interval=2, name='flux_time')
     """
+
     type: Literal["FluxTimeMonitor"] = "FluxTimeMonitor"
     data_type: Literal["FluxTimeData"] = "FluxTimeData"
 
@@ -245,6 +248,7 @@ class ModeMonitor(PlanarMonitor, FreqMonitor):
     modes: List[Mode]
     type: Literal["ModeMonitor"] = "ModeMonitor"
     data_type: Literal["ModeData"] = "ModeData"
+
 
 # types of monitors that are accepted by simulation
 MonitorType = Union[FieldMonitor, FieldTimeMonitor, FluxMonitor, FluxTimeMonitor, ModeMonitor]

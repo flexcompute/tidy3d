@@ -64,7 +64,7 @@ autodoc_pydantic_model_show_config_summary = False
 autodoc_pydantic_model_show_validator_summary = False
 autodoc_pydantic_model_show_validator_members = False
 autodoc_pydantic_model_show_field_summary = False
-autodoc_pydantic_model_members = True
+autodoc_pydantic_model_members = False
 
 extlinks = {}
 

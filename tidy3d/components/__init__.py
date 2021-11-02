@@ -17,7 +17,7 @@ from .medium import Medium, PoleResidue, Sellmeier, Debye, Lorentz
 from .medium import nk_to_eps_complex, nk_to_eps_sigma, eps_complex_to_nk
 from .medium import nk_to_medium, eps_sigma_to_eps_complex
 
-#structure
+# structure
 from .structure import Structure
 
 # mode

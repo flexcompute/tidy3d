@@ -715,11 +715,11 @@ class Cylinder(Circular, Planar):
         Lx, Ly = self._order_by_axis(plane_val=intersect_dist, axis_val=self.length, axis=axis)
         _, (x0_plot_plane, y0_plot_plane) = self.pop_axis(self.center, axis=axis)
         int_box = box(
-                minx=x0_plot_plane - Lx / 2,
-                miny=y0_plot_plane - Ly / 2,
-                maxx=x0_plot_plane + Lx / 2,
-                maxy=y0_plot_plane + Ly / 2,
-            )
+            minx=x0_plot_plane - Lx / 2,
+            miny=y0_plot_plane - Ly / 2,
+            maxx=x0_plot_plane + Lx / 2,
+            maxy=y0_plot_plane + Ly / 2,
+        )
         return [int_box]
 
     def inside(self, x, y, z) -> bool:
@@ -972,6 +972,7 @@ class PolySlab(Planar):
         coords_min = self.unpop_axis(zmin, (xmin, ymin), axis=self.axis)
         coords_max = self.unpop_axis(zmax, (xmax, ymax), axis=self.axis)
         return (tuple(coords_min), tuple(coords_max))
+
 
 # geometries that can be used to define structures.
 GeometryFields = (Box, Sphere, Cylinder, PolySlab)

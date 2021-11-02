@@ -99,7 +99,7 @@ class Medium(AbstractMedium):
         Relative permittivity in dimensionless units.
         Must be greater than or equal to 1.
     conductivity : float = 0.0
-        Electric conductivity in dimensions of (S/micron) 
+        Electric conductivity in dimensions of (S/micron)
         Defined such that the imaginary part of the complex permittivity at angular frequency omega
         is given by conductivity/omega.
         Must be greater than or equal to 0.
@@ -113,7 +113,7 @@ class Medium(AbstractMedium):
     -------
     >>> dielectric = Medium(permittivity=4.0, name='my_medium')
     >>> eps = dielectric.eps_model(200e12)
-    """    
+    """
 
     permittivity: pydantic.confloat(ge=1.0) = 1.0
     conductivity: pydantic.confloat(ge=0.0) = 0.0
@@ -157,11 +157,11 @@ class PoleResidue(DispersiveMedium):
     The frequency-dependence of the complex-valued permittivity is described by:
 
     .. math::
-        
-        \\epsilon(\\omega) = \\epsilon_\\infty - \\sum_i 
+
+        \\epsilon(\\omega) = \\epsilon_\\infty - \\sum_i
         \\left[\\frac{c_i}{j \\omega + a_i} +
         \\frac{c_i^*}{j \\omega + a_i^*}\\right]
-        
+
     where :math:`a_i` is in Hz and :math:`c_i` is unitless.
 
     Parameters
@@ -228,7 +228,7 @@ class Sellmeier(DispersiveMedium):
     The frequency-dependence of the refractive index is described by:
 
     .. math::
-    
+
         n(\\lambda)^2 = 1 + \\sum_i \\frac{B_i \\lambda^2}{\\lambda^2 - C_i}
 
     where :math:`\\lambda` is in microns, :math:`B_i` is unitless and :math:`C_i` is in microns^2.
@@ -247,7 +247,7 @@ class Sellmeier(DispersiveMedium):
     -------
     >>> sellmeier_medium = Sellmeier(coeffs=[(1,2), (3,4)])
     >>> eps = sellmeier_medium.eps_model(200e12)
-    """    
+    """
 
     coeffs: List[Tuple[float, float]]
     type: Literal["Sellmeier"] = "Sellmeier"
@@ -284,7 +284,7 @@ class Lorentz(DispersiveMedium):
     The frequency-dependence of the complex-valued permittivity is described by:
 
     .. math::
-        \\epsilon(f) = \\epsilon_\\infty + \\sum_i 
+        \\epsilon(f) = \\epsilon_\\infty + \\sum_i
         \\frac{\\Delta\\epsilon_i f_i^2}{f_i^2 + 2jf\\delta_i - f^2}
 
     where :math:`f, f_i, \\delta_i` are in Hz.
@@ -306,7 +306,6 @@ class Lorentz(DispersiveMedium):
     >>> lorentz_medium = Lorentz(eps_inf=2.0, coeffs=[(1,2,3), (4,5,6)])
     >>> eps = lorentz_medium.eps_model(200e12)
     """
-
 
     eps_inf: float = 1.0
     coeffs: List[Tuple[float, float, float]]
@@ -335,13 +334,13 @@ class Lorentz(DispersiveMedium):
 class Debye(DispersiveMedium):
     """A dispersive medium described by the Debye model.
     The frequency-dependence of the complex-valued permittivity is described by:
-            
+
     .. math::
         \\epsilon(f) = \\epsilon_\\infty + \\sum_i
         \\frac{\\Delta\\epsilon_i}{1 + jf\\tau_i}
 
     where :math:`f` is in Hz, and :math:`\\tau_i` is in seconds.
-    
+
     Parameters
     ----------
     eps_inf : float = 1.0
@@ -382,6 +381,7 @@ class Debye(DispersiveMedium):
         for (de, tau) in self.coeffs:
             eps += de / (1 + 1j * frequency * tau)
         return eps
+
 
 # types of mediums that can be used in Simulation and Structures
 MediumType = Union[Medium, PoleResidue, Sellmeier, Lorentz, Debye]

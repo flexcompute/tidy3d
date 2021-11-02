@@ -101,7 +101,7 @@ def test_validation_speed():
 
     for n in num_structures:
         S = SIM.copy()
-        S.structures = n * [SIM.structures[0]]
+        S.structures = [SIM.structures[0] for _ in range(n)]
 
         S.export(path)
         time_start = time()

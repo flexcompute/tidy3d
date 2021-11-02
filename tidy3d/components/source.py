@@ -13,12 +13,13 @@ from .geometry import Box
 from .mode import Mode
 from .viz import add_ax_if_none, SourceParams
 from ..log import ValidationError
-from ..constants import inf # pylint:disable=unused-import
+from ..constants import inf  # pylint:disable=unused-import
 
 # TODO: change directional source to something signifying its intent is to create a specific field.
 
 # width of pulse frequency range defition in units of standard deviation.
 WIDTH_STD = 5
+
 
 class SourceTime(ABC, Tidy3dBaseModel):
     """Base class describing the time dependence of a source."""
@@ -27,9 +28,9 @@ class SourceTime(ABC, Tidy3dBaseModel):
     phase: float = 0.0
 
     @abstractmethod
-    def amp_time(self, time : float) -> complex:
+    def amp_time(self, time: float) -> complex:
         """Complex-valued source amplitude as a function of time.
-        
+
         Parameters
         ----------
         time : float
@@ -43,15 +44,15 @@ class SourceTime(ABC, Tidy3dBaseModel):
 
     @add_ax_if_none
     def plot(self, times: Array[float], ax: Ax = None) -> Ax:
-        """plot the time series
-        
+        """Plot the complex-valued amplitude of the source time-dependence.
+
         Parameters
         ----------
         times : np.ndarray
             Array of times to plot source at in seconds.
         ax : matplotlib.axes._subplots.Axes = None
             Matplotlib axes to plot on, if not specified, one is created.
-        
+
         Returns
         -------
         matplotlib.axes._subplots.Axes
@@ -86,7 +87,7 @@ class Pulse(SourceTime, ABC):
     @property
     def frequency_range(self) -> FreqBound:
         """Frequency range within 5 standard deviations of the central frequency.
-        
+
         Returns
         -------
         Tuple[float, float]
@@ -98,7 +99,7 @@ class Pulse(SourceTime, ABC):
 
 class GaussianPulse(Pulse):
     """Source time dependence that describes a Gaussian pulse.
-        
+
     Parameters
     ----------
         freq0 : float
@@ -116,10 +117,10 @@ class GaussianPulse(Pulse):
     -------
     >>> pulse = GaussianPulse(freq0=200e12, fwidth=20e12)
     """
-    
-    def amp_time(self, time : float) -> complex:
+
+    def amp_time(self, time: float) -> complex:
         """Complex-valued source amplitude as a function of time.
-        
+
         Parameters
         ----------
         time : float
@@ -164,9 +165,9 @@ class ContinuousWave(Pulse):
     >>> cw = ContinuousWave(freq0=200e12, fwidth=20e12)
     """
 
-    def amp_time(self, time : float) -> complex:
+    def amp_time(self, time: float) -> complex:
         """Complex-valued source amplitude as a function of time.
-        
+
         Parameters
         ----------
         time : float
@@ -203,7 +204,7 @@ class Source(Box, ABC):
         Center of source in x,y,z.
     size : Tuple[float, float, float]
         Size of source in x,y,z.
-        All elements must be non-negative.        
+        All elements must be non-negative.
     source_time : :class:`GaussianPulse` or :class:`ContinuousWave`
         Specification of time-dependence of source.
     name : str = None
@@ -220,7 +221,7 @@ class Source(Box, ABC):
         self, x: float = None, y: float = None, z: float = None, ax: Ax = None, **kwargs
     ) -> Ax:
         """Plot the source geometry on a cross section plane.
-        
+
         Parameters
         ----------
         x : float = None
@@ -248,17 +249,17 @@ class Source(Box, ABC):
     @property
     def geometry(self):
         """:class:`Box` representation of source.
-        
+
         Returns
         -------
         :class:`Box`
-            Representation of the source geometry as a :Geometry:`class`.
+            Representation of the source geometry as a :class:`Box`.
         """
         return Box(center=self.center, size=self.size)
 
 
 class VolumeSource(Source):
-    """Source spanning a regangular volume with uniform time dependence.
+    """Source spanning a rectangular volume with uniform time dependence.
 
     Parameters
     ----------

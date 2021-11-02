@@ -62,13 +62,13 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         Specifications for the absorbing layers on x, y, and z edges.
         Elements of ``None`` are assumed to have no absorber and use periodic boundary conditions.
     symmetry : Tuple[int, int, int] = (0, 0, 0)
-        Tuple of integers defining reflection symmetry across a 
-        plane bisecting the simulation domain normal to the x-, y-, and 
-        z-axis, respectively. Each element can be ``0`` (no symmetry), 
-        ``1`` (even, i.e. 'PMC' symmetry) or ``-1`` (odd, i.e. 'PEC' 
+        Tuple of integers defining reflection symmetry across a
+        plane bisecting the simulation domain normal to the x-, y-, and
+        z-axis, respectively. Each element can be ``0`` (no symmetry),
+        ``1`` (even, i.e. 'PMC' symmetry) or ``-1`` (odd, i.e. 'PEC'
         symmetry).
         Note that the vectorial nature of the fields must be taken into account to correctly
-        determine the symmetry value.        
+        determine the symmetry value.
     shutoff : float = 1e-5
         Ratio of the instantaneous integrated E-field intensity to the maximum value
         at which the simulation will automatically shut down.
@@ -193,7 +193,13 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
 
     @property
     def mediums(self) -> List[MediumType]:
-        """Returns set of distinct :class:`AbstractMedium` in simulation."""
+        """Returns set of distinct :class:`AbstractMedium` in simulation.
+
+        Returns
+        -------
+        Set[:class:`Medium` or :class:`PoleResidue` or :class:`Lorentz` or :class:`Sellmeier` or :class:`Debye`]
+            Set of distinct mediums in the simulation.
+        """
         return {structure.medium for structure in self.structures}
 
     @property
@@ -203,8 +209,8 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
 
         Returns
         -------
-        Dict[:class:`AbstractMedium`, int]
-            Mapping between a :class:`AbstractMedium` and it's index in the simulation.
+        Dict[:class:`Medium` or :class:`PoleResidue` or :class:`Lorentz` or :class:`Sellmeier` or :class:`Debye`, int]
+            Mapping between distinct mediums to index in simulation.
         """
 
         return {medium: index for index, medium in enumerate(self.mediums)}
@@ -215,21 +221,27 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
     def plot(
         self, x: float = None, y: float = None, z: float = None, ax: Ax = None, **kwargs
     ) -> Ax:
-        """Plot each of simulation's components on a plan defined by one nonzero x,y,z
-        coordinate.
+        """Plot each of simulation's components on a plane defined by one nonzero x,y,z coordinate.
 
         Parameters
         ----------
-        x : ``float``
-            Position of point in x direction.
-        y : ``float``
-            Position of point in y direction.
-        z : ``float``
-            Position of point in z direction.
-        ax : Ax, optional
-            Description
-        **kwargs
-            Description
+        x : float = None
+            Position of point in x direction, only one of x, y, z must be specified to define plane.
+        y : float = None
+            Position of point in y direction, only one of x, y, z must be specified to define plane.
+        z : float = None
+            Position of point in z direction, only one of x, y, z must be specified to define plane.
+        ax : matplotlib.axes._subplots.Axes = None
+            Matplotlib axes to plot on, if not specified, one is created.
+        **patch_kwargs
+            Optional keyword arguments passed to the matplotlib patch plotting of structure.
+            For details on accepted values, refer to
+            `Matplotlib's documentation <https://matplotlib.org/stable/api/_as_gen/matplotlib.patches.Patch.html#matplotlib.patches.Patch>`_.
+
+        Returns
+        -------
+        matplotlib.axes._subplots.Axes
+            The supplied or created matplotlib axes.
         """
 
         ax = self.plot_structures(ax=ax, x=x, y=y, z=z, **kwargs)
@@ -237,7 +249,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         ax = self.plot_monitors(ax=ax, x=x, y=y, z=z, **kwargs)
         ax = self.plot_symmetries(ax=ax, x=x, y=y, z=z, **kwargs)
         ax = self.plot_pml(ax=ax, x=x, y=y, z=z, **kwargs)
-        ax = self.set_plot_bounds(ax=ax, x=x, y=y, z=z)
+        ax = self._set_plot_bounds(ax=ax, x=x, y=y, z=z)
         return ax
 
     @add_ax_if_none
@@ -250,8 +262,31 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         ax: Ax = None,
         **kwargs,
     ) -> Ax:
-        """Plot each of simulation's components on a plane where structures permittivities are
-        plotted in grayscale.
+        """Plot each of simulation's components on a plane defined by one nonzero x,y,z coordinate.
+        The permittivity is plotted in grayscale based on its value at the specified frequency.
+
+        Parameters
+        ----------
+        x : float = None
+            Position of point in x direction, only one of x, y, z must be specified to define plane.
+        y : float = None
+            Position of point in y direction, only one of x, y, z must be specified to define plane.
+        z : float = None
+            Position of point in z direction, only one of x, y, z must be specified to define plane.
+        freq : float = None
+            Frequency to evaluate the relative permittivity of all mediums.
+            If not specified, evaluates at infinite frequency.
+        ax : matplotlib.axes._subplots.Axes = None
+            Matplotlib axes to plot on, if not specified, one is created.
+        **patch_kwargs
+            Optional keyword arguments passed to the matplotlib patch plotting of structure.
+            For details on accepted values, refer to
+            `Matplotlib's documentation <https://matplotlib.org/stable/api/_as_gen/matplotlib.patches.Patch.html#matplotlib.patches.Patch>`_.
+
+        Returns
+        -------
+        matplotlib.axes._subplots.Axes
+            The supplied or created matplotlib axes.
         """
 
         ax = self.plot_structures_eps(freq=freq, cbar=True, ax=ax, x=x, y=y, z=z, **kwargs)
@@ -259,14 +294,35 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         ax = self.plot_monitors(ax=ax, x=x, y=y, z=z, **kwargs)
         ax = self.plot_symmetries(ax=ax, x=x, y=y, z=z, **kwargs)
         ax = self.plot_pml(ax=ax, x=x, y=y, z=z, **kwargs)
-        ax = self.set_plot_bounds(ax=ax, x=x, y=y, z=z)
+        ax = self._set_plot_bounds(ax=ax, x=x, y=y, z=z)
         return ax
 
     @add_ax_if_none
     def plot_structures(
         self, x: float = None, y: float = None, z: float = None, ax: Ax = None, **kwargs
     ) -> Ax:
-        """plot all of simulation's structures as distinct materials."""
+        """Plot each of simulation's structures on a plane defined by one nonzero x,y,z coordinate.
+
+        Parameters
+        ----------
+        x : float = None
+            Position of point in x direction, only one of x, y, z must be specified to define plane.
+        y : float = None
+            Position of point in y direction, only one of x, y, z must be specified to define plane.
+        z : float = None
+            Position of point in z direction, only one of x, y, z must be specified to define plane.
+        ax : matplotlib.axes._subplots.Axes = None
+            Matplotlib axes to plot on, if not specified, one is created.
+        **patch_kwargs
+            Optional keyword arguments passed to the matplotlib patch plotting of structure.
+            For details on accepted values, refer to
+            `Matplotlib's documentation <https://matplotlib.org/stable/api/_as_gen/matplotlib.patches.Patch.html#matplotlib.patches.Patch>`_.
+
+        Returns
+        -------
+        matplotlib.axes._subplots.Axes
+            The supplied or created matplotlib axes.
+        """
         medium_map = self.medium_map
         medium_shapes = self._filter_plot_structures(x=x, y=y, z=z)
         for (medium, shape) in medium_shapes:
@@ -277,12 +333,12 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
                 kwargs_struct["facecolor"] = "white"
             patch = PolygonPatch(shape, **kwargs_struct)
             ax.add_artist(patch)
-        ax = self.set_plot_bounds(ax=ax, x=x, y=y, z=z)
+        ax = self._set_plot_bounds(ax=ax, x=x, y=y, z=z)
         return ax
 
     @staticmethod
     def _add_cbar(eps_min: float, eps_max: float, ax: Ax = None) -> None:
-        """add colorbar to eps plot"""
+        """Add a colorbar to eps plot."""
         norm = mpl.colors.Normalize(vmin=eps_min, vmax=eps_max)
         divider = make_axes_locatable(ax)
         cax = divider.append_axes("right", size="5%", pad=0.15)
@@ -300,7 +356,32 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         ax: Ax = None,
         **kwargs,
     ) -> Ax:
-        """Plots all of simulation's structures as permittivity grayscale."""
+        """Plot each of simulation's structures on a plane defined by one nonzero x,y,z coordinate.
+        The permittivity is plotted in grayscale based on its value at the specified frequency.
+
+        Parameters
+        ----------
+        x : float = None
+            Position of point in x direction, only one of x, y, z must be specified to define plane.
+        y : float = None
+            Position of point in y direction, only one of x, y, z must be specified to define plane.
+        z : float = None
+            Position of point in z direction, only one of x, y, z must be specified to define plane.
+        freq : float = None
+            Frequency to evaluate the relative permittivity of all mediums.
+            If not specified, evaluates at infinite frequency.
+        ax : matplotlib.axes._subplots.Axes = None
+            Matplotlib axes to plot on, if not specified, one is created.
+        **patch_kwargs
+            Optional keyword arguments passed to the matplotlib patch plotting of structure.
+            For details on accepted values, refer to
+            `Matplotlib's documentation <https://matplotlib.org/stable/api/_as_gen/matplotlib.patches.Patch.html#matplotlib.patches.Patch>`_.
+
+        Returns
+        -------
+        matplotlib.axes._subplots.Axes
+            The supplied or created matplotlib axes.
+        """
         if freq is None:
             freq = inf
         eps_list = [s.medium.eps_model(freq).real for s in self.structures]
@@ -317,36 +398,99 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
             ax.add_artist(patch)
         if cbar:
             self._add_cbar(eps_min=eps_min, eps_max=eps_max, ax=ax)
-        ax = self.set_plot_bounds(ax=ax, x=x, y=y, z=z)
+        ax = self._set_plot_bounds(ax=ax, x=x, y=y, z=z)
         return ax
 
     @add_ax_if_none
     def plot_sources(
         self, x: float = None, y: float = None, z: float = None, ax: Ax = None, **kwargs
     ) -> Ax:
-        """Plots each of simulation's sources on plane."""
+        """Plot each of simulation's sources on a plane defined by one nonzero x,y,z coordinate.
+
+        Parameters
+        ----------
+        x : float = None
+            Position of point in x direction, only one of x, y, z must be specified to define plane.
+        y : float = None
+            Position of point in y direction, only one of x, y, z must be specified to define plane.
+        z : float = None
+            Position of point in z direction, only one of x, y, z must be specified to define plane.
+        ax : matplotlib.axes._subplots.Axes = None
+            Matplotlib axes to plot on, if not specified, one is created.
+        **patch_kwargs
+            Optional keyword arguments passed to the matplotlib patch plotting of structure.
+            For details on accepted values, refer to
+            `Matplotlib's documentation <https://matplotlib.org/stable/api/_as_gen/matplotlib.patches.Patch.html#matplotlib.patches.Patch>`_.
+
+        Returns
+        -------
+        matplotlib.axes._subplots.Axes
+            The supplied or created matplotlib axes.
+        """
         for source in self.sources:
             if source.intersects_plane(x=x, y=y, z=z):
                 ax = source.plot(ax=ax, x=x, y=y, z=z, **kwargs)
-        ax = self.set_plot_bounds(ax=ax, x=x, y=y, z=z)
+        ax = self._set_plot_bounds(ax=ax, x=x, y=y, z=z)
         return ax
 
     @add_ax_if_none
     def plot_monitors(
         self, x: float = None, y: float = None, z: float = None, ax: Ax = None, **kwargs
     ) -> Ax:
-        """Plots each of simulation's monitors on plane."""
+        """Plot each of simulation's monitors on a plane defined by one nonzero x,y,z coordinate.
+
+        Parameters
+        ----------
+        x : float = None
+            Position of point in x direction, only one of x, y, z must be specified to define plane.
+        y : float = None
+            Position of point in y direction, only one of x, y, z must be specified to define plane.
+        z : float = None
+            Position of point in z direction, only one of x, y, z must be specified to define plane.
+        ax : matplotlib.axes._subplots.Axes = None
+            Matplotlib axes to plot on, if not specified, one is created.
+        **patch_kwargs
+            Optional keyword arguments passed to the matplotlib patch plotting of structure.
+            For details on accepted values, refer to
+            `Matplotlib's documentation <https://matplotlib.org/stable/api/_as_gen/matplotlib.patches.Patch.html#matplotlib.patches.Patch>`_.
+
+        Returns
+        -------
+        matplotlib.axes._subplots.Axes
+            The supplied or created matplotlib axes.
+        """
         for monitor in self.monitors:
             if monitor.intersects_plane(x=x, y=y, z=z):
                 ax = monitor.plot(ax=ax, x=x, y=y, z=z, **kwargs)
-        ax = self.set_plot_bounds(ax=ax, x=x, y=y, z=z)
+        ax = self._set_plot_bounds(ax=ax, x=x, y=y, z=z)
         return ax
 
     @add_ax_if_none
     def plot_symmetries(
         self, x: float = None, y: float = None, z: float = None, ax: Ax = None, **kwargs
     ) -> Ax:
-        """plots each of the non-zero symmetries"""
+        """Plot each of simulation's symmetries on a plane defined by one nonzero x,y,z coordinate.
+
+        Parameters
+        ----------
+        x : float = None
+            Position of point in x direction, only one of x, y, z must be specified to define plane.
+        y : float = None
+            Position of point in y direction, only one of x, y, z must be specified to define plane.
+        z : float = None
+            Position of point in z direction, only one of x, y, z must be specified to define plane.
+        ax : matplotlib.axes._subplots.Axes = None
+            Matplotlib axes to plot on, if not specified, one is created.
+        **patch_kwargs
+            Optional keyword arguments passed to the matplotlib patch plotting of structure.
+            For details on accepted values, refer to
+            `Matplotlib's documentation <https://matplotlib.org/stable/api/_as_gen/matplotlib.patches.Patch.html#matplotlib.patches.Patch>`_.
+
+        Returns
+        -------
+        matplotlib.axes._subplots.Axes
+            The supplied or created matplotlib axes.
+        """
         for sym_axis, sym_value in enumerate(self.symmetry):
             if sym_value == 0:
                 continue
@@ -358,13 +502,19 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
             if sym_box.intersects_plane(x=x, y=y, z=z):
                 new_kwargs = SymParams(sym_value=sym_value).update_params(**kwargs)
                 ax = sym_box.plot(ax=ax, x=x, y=y, z=z, **new_kwargs)
-        ax = self.set_plot_bounds(ax=ax, x=x, y=y, z=z)
-        ax = self.set_plot_bounds(ax=ax, x=x, y=y, z=z)
+        ax = self._set_plot_bounds(ax=ax, x=x, y=y, z=z)
+        ax = self._set_plot_bounds(ax=ax, x=x, y=y, z=z)
         return ax
 
     @property
     def num_pml_layers(self) -> List[Tuple[float, float]]:
-        """Number of PML layers in all three axes and directions (-, +)."""
+        """Number of absorbing layers in all three axes and directions (-, +).
+
+        Returns
+        -------
+        List[Tuple[float, float]]
+            List containing the number of absorber layers in - and + boundaries.
+        """
         num_layers = []
         for pml_axis, pml_layer in enumerate(self.pml_layers):
             if self.symmetry[pml_axis] != 0:
@@ -375,7 +525,13 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
 
     @property
     def pml_thicknesses(self) -> List[Tuple[float, float]]:
-        """Thicknesses (um) of PML in all three axes and directions (-, +)"""
+        """Thicknesses (um) of absorbers in all three axes and directions (-, +)
+
+        Returns
+        -------
+        List[Tuple[float, float]]
+            List containing the absorber thickness (micron) in - and + boundaries.
+        """
         num_layers = self.num_pml_layers
         pml_thicknesses = []
         for boundaries in self.grid.boundaries.dict().values():
@@ -388,7 +544,29 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
     def plot_pml(
         self, x: float = None, y: float = None, z: float = None, ax: Ax = None, **kwargs
     ) -> Ax:
-        """plots each of simulation's PML regions"""
+        """Plot each of simulation's absorbing boundaries
+        on a plane defined by one nonzero x,y,z coordinate.
+
+        Parameters
+        ----------
+        x : float = None
+            Position of point in x direction, only one of x, y, z must be specified to define plane.
+        y : float = None
+            Position of point in y direction, only one of x, y, z must be specified to define plane.
+        z : float = None
+            Position of point in z direction, only one of x, y, z must be specified to define plane.
+        ax : matplotlib.axes._subplots.Axes = None
+            Matplotlib axes to plot on, if not specified, one is created.
+        **patch_kwargs
+            Optional keyword arguments passed to the matplotlib patch plotting of structure.
+            For details on accepted values, refer to
+            `Matplotlib's documentation <https://matplotlib.org/stable/api/_as_gen/matplotlib.patches.Patch.html#matplotlib.patches.Patch>`_.
+
+        Returns
+        -------
+        matplotlib.axes._subplots.Axes
+            The supplied or created matplotlib axes.
+        """
         kwargs = PMLParams().update_params(**kwargs)
         pml_thicks = self.pml_thicknesses
         for pml_axis, pml_layer in enumerate(self.pml_layers):
@@ -403,11 +581,28 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
                 pml_box = Box(center=pml_center, size=pml_size)
                 if pml_box.intersects_plane(x=x, y=y, z=z):
                     ax = pml_box.plot(ax=ax, x=x, y=y, z=z, **kwargs)
-        ax = self.set_plot_bounds(ax=ax, x=x, y=y, z=z)
+        ax = self._set_plot_bounds(ax=ax, x=x, y=y, z=z)
         return ax
 
-    def set_plot_bounds(self, ax: Ax, x: float = None, y: float = None, z: float = None) -> Ax:
-        """sets the xy limits of the simulation, useful after plotting"""
+    def _set_plot_bounds(self, ax: Ax, x: float = None, y: float = None, z: float = None) -> Ax:
+        """Sets the xy limits of the simulation at a plane, useful after plotting.
+        
+        Parameters
+        ----------
+        ax : matplotlib.axes._subplots.Axes
+            Matplotlib axes to set bounds on.
+        x : float = None
+            Position of point in x direction, only one of x, y, z must be specified to define plane.
+        y : float = None
+            Position of point in y direction, only one of x, y, z must be specified to define plane.
+        z : float = None
+            Position of point in z direction, only one of x, y, z must be specified to define plane.                
+
+        Returns
+        -------
+        matplotlib.axes._subplots.Axes
+            The axes after setting the boundaries.        
+        """
 
         axis, _ = self._parse_xyz_kwargs(x=x, y=y, z=z)
         _, ((xmin, ymin), (xmax, ymax)) = self._pop_bounds(axis=axis)
@@ -420,8 +615,22 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
     def _filter_plot_structures(
         self, x: float = None, y: float = None, z: float = None
     ) -> List[Tuple[Medium, Shapely]]:
-        """Compute list of (medium, shapely) to plot on plane specified by {x,y,z}.
+        """Compute list of shapes to plot on plane specified by {x,y,z}.
         Overlaps are removed or merged depending on medium.
+    
+        Parameters
+        ----------
+        x : float = None
+            Position of point in x direction, only one of x, y, z must be specified to define plane.
+        y : float = None
+            Position of point in y direction, only one of x, y, z must be specified to define plane.
+        z : float = None
+            Position of point in z direction, only one of x, y, z must be specified to define plane.                
+
+        Returns
+        -------
+        List[Tuple[:class:`Medium` or :class:`PoleResidue` or :class:`Lorentz` or :class:`Sellmeier` or :class:`Debye`, shapely.geometry.base.BaseGeometry]]
+            List of shapes and mediums on the plane after merging.
         """
 
         shapes = []
@@ -443,8 +652,18 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
 
     @staticmethod
     def _merge_shapes(shapes: List[Tuple[Medium, Shapely]]) -> List[Tuple[Medium, Shapely]]:
-        """Merge list of (Medium, Shapely) by intersection with same medium
-        edit background shapes to remove volume by intersection.
+        """Merge list of shapes and mediums on plae by intersection with same medium.
+        Edit background shapes to remove volume by intersection.
+
+        Parameters
+        ----------
+        shapes : List[Tuple[:class:`Medium` or :class:`PoleResidue` or :class:`Lorentz` or :class:`Sellmeier` or :class:`Debye`, shapely.geometry.base.BaseGeometry]]
+            Ordered list of shapes and their mediums on a plane.
+
+        Returns
+        -------
+        List[Tuple[:class:`Medium` or :class:`PoleResidue` or :class:`Lorentz` or :class:`Sellmeier` or :class:`Debye`, shapely.geometry.base.BaseGeometry]]
+            Shapes and their mediums on a plane after merging and removing intersections with background.
         """
         background_shapes = []
         for medium, shape in shapes:
@@ -476,7 +695,14 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
 
     @property
     def frequency_range(self) -> FreqBound:
-        """range of frequencies spanning all sources' frequency dependence"""
+        """Range of frequencies spanning all sources' frequency dependence.
+        
+        Returns
+        -------
+        Tuple[float, float]
+            Minumum and maximum frequencies of the power spectrum of the sources
+            at 5 standard deviations.
+        """
         freq_min = min(source.frequency_range[0] for source in self.sources)
         freq_max = max(source.frequency_range[1] for source in self.sources)
         return (freq_min, freq_max)
@@ -485,7 +711,13 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
 
     @property
     def dt(self) -> float:
-        """compute time step (distance)"""
+        """Simulation time step (distance).
+
+        Returns
+        -------
+        float
+            Time step (seconds).
+        """
         dl_mins = [np.min(sizes) for sizes in self.grid.sizes.dict().values()]
         dl_sum_inv_sq = sum([1 / dl ** 2 for dl in dl_mins])
         dl_avg = 1 / np.sqrt(dl_sum_inv_sq)
@@ -493,13 +725,25 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
 
     @property
     def tmesh(self) -> Coords1D:
-        """compute time steps"""
+        """FDTD time stepping points.
+
+        Returns
+        -------
+        np.ndarray
+            Times (seconds) that the simulation time steps through.
+        """
         dt = self.dt
         return np.arange(0.0, self.run_time + dt, dt)
 
     @property
     def grid(self) -> Grid:
-        """:class:`Grid` interface to the spatial locations in Simulation"""
+        """FDTD grid spatial locations and information.
+
+        Returns
+        -------
+        :class:`Grid`
+            :class:`Grid` storing the spatial locations relevant to the simulation.
+        """
         cell_boundary_dict = {}
         zipped_vals = zip("xyz", self.grid_size, self.center, self.size, self.num_pml_layers)
         for key, dl, center, size, num_layers in zipped_vals:
@@ -510,14 +754,28 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
             if size_snapped != size:
                 log.warning(f"dl = {dl} not commensurate with simulation size = {size}")
             bound_coords = center + np.linspace(-size_snapped / 2, size_snapped / 2, num_cells + 1)
-            bound_coords = self.add_pml_to_bounds(num_layers, bound_coords)
+            bound_coords = self._add_pml_to_bounds(num_layers, bound_coords)
             cell_boundary_dict[key] = bound_coords
         boundaries = Coords(**cell_boundary_dict)
         return Grid(boundaries=boundaries)
 
     @staticmethod
-    def add_pml_to_bounds(num_layers: Tuple[int, int], bounds: Numpy):
-        """Append PML pixels at the beginning and end of bounds."""
+    def _add_pml_to_bounds(num_layers: Tuple[int, int], bounds: Coords1D):
+        """Append absorber layers to the beginning and end of the simulation bounds
+        along one dimension.
+        
+        Parameters
+        ----------
+        num_layers : Tuple[int, int]
+            number of layers in the absorber + and - direction along one dimension.
+        bound_coords : np.ndarray
+            coordinates specifying boundaries between cells along one dimension.
+
+        Returns
+        -------
+        np.ndarray
+            New bound coordinates along dimension taking abosrber into account.
+        """
         if bounds.size < 2:
             return bounds
 
@@ -531,7 +789,13 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
 
     @property
     def wvl_mat_min(self) -> float:
-        """minimum wavelength in the material"""
+        """Minimum wavelength in the material.
+
+        Returns
+        -------
+        float
+            Minimum wavelength in the material (microns).
+        """
         freq_max = max(source.source_time.freq0 for source in self.sources)
         wvl_min = C_0 / min(freq_max)
         eps_max = max(abs(structure.medium.get_eps(freq_max)) for structure in self.structures)
@@ -539,7 +803,18 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         return wvl_min / n_max
 
     def discretize(self, box: Box) -> Grid:
-        """returns subgrid containing only cells that intersect with Box"""
+        """Grid containing only cells that intersect with a :class:`Box`.
+        
+        Parameters
+        ----------
+        box : :class:`Box`
+            Rectangular geometry within simulation to discretize.
+        
+        Returns
+        -------
+        :class:`Grid`
+            The FDTD subgrid containing simulation points that intersect with ``box``.
+        """
         if not self.intersects(box):
             log.error(f"Box {box} is outside simulation, cannot discretize")
 
@@ -570,7 +845,27 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         return Grid(boundaries=sub_boundaries)
 
     def epsilon(self, box: Box, freq: float = None) -> Dict[str, xr.DataArray]:
-        """get data of permittivity at volume specified by box and freq"""
+        """Get array of permittivity at volume specified by box and freq
+        
+        Parameters
+        ----------
+        box : :class:`Box`
+            Rectangular geometry specifying where to measure the permittivity.
+        freq : float = None
+            The frequency to evaluate the mediums at.
+            If not specified, evaluates at infinite frequency.
+
+        Returns
+        -------
+        Dict[str, xarray.DataArray]
+            Mapping of coordinate type to xarray DataArray containing permittivity data.
+            keys of dict are ``{'centers', 'boundaries', 'Ex', 'Ey', 'Ez', 'Hx', 'Hy', 'Hz'}``.
+            ``'centers'`` contains the permittivity at the yee cell centers.
+            `'boundaries'`` contains the permittivity at the corner intersections between yee cells.
+            ``'Ex'`` and other field keys contain the permittivity
+            at the corresponding field position in the yee lattice.
+            For details on xarray datasets, refer to `xarray's Documentaton <http://xarray.pydata.org/en/stable/generated/xarray.DataArray.html>`_.
+        """
 
         sub_grid = self.discretize(box)
         eps_background = self.medium.eps_model(freq)

@@ -2,16 +2,16 @@
 
 from .base import Tidy3dBaseModel
 from .validators import validate_name_str
-from .geometry import GeometryType, Box # pylint: disable=unused-import
-from .medium import MediumType, Medium # pylint: disable=unused-import
+from .geometry import GeometryType, Box  # pylint: disable=unused-import
+from .medium import MediumType, Medium  # pylint: disable=unused-import
 from .types import Ax
 from .viz import add_ax_if_none
 
 
 class Structure(Tidy3dBaseModel):
     """Defines a physical object that interacts with the electromagnetic fields.
-       A :class:`Structure` is a combination of a material property (:class:`AbstractMedium`)
-       and a :class:`Geometry`.
+    A :class:`Structure` is a combination of a material property (:class:`AbstractMedium`)
+    and a :class:`Geometry`.
 
     Parameters
     ----------
@@ -40,7 +40,7 @@ class Structure(Tidy3dBaseModel):
         self, x: float = None, y: float = None, z: float = None, ax: Ax = None, **patch_kwargs
     ) -> Ax:
         """Plot structure geometry cross section.
-            Note: only one of x, y, or z must be specified to define cross section.
+        Note: only one of x, y, or z must be specified to define cross section.
 
         Parameters
         ----------
