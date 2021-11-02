@@ -1,4 +1,4 @@
-"""Defines current sources."""
+"""Defines electric current sources for injecting light into simulation."""
 
 from abc import ABC, abstractmethod
 from typing import Tuple, Union, Literal
@@ -7,38 +7,55 @@ import pydantic
 import numpy as np
 
 from .base import Tidy3dBaseModel
-from .types import Direction, Polarization, Ax, FreqBound
+from .types import Direction, Polarization, Ax, FreqBound, Array
 from .validators import assert_plane, validate_name_str
 from .geometry import Box
 from .mode import Mode
 from .viz import add_ax_if_none, SourceParams
 from ..log import ValidationError
+from ..constants import inf # pylint:disable=unused-import
 
+# TODO: change directional source to something signifying its intent is to create a specific field.
+
+# width of pulse frequency range defition in units of standard deviation.
+WIDTH_STD = 5
 
 class SourceTime(ABC, Tidy3dBaseModel):
-    """Base class describing the time dependence of a source"""
+    """Base class describing the time dependence of a source."""
 
     amplitude: pydantic.NonNegativeFloat = 1.0
     phase: float = 0.0
 
     @abstractmethod
-    def amp_time(self, time):
+    def amp_time(self, time : float) -> complex:
         """Complex-valued source amplitude as a function of time.
+        
+        Parameters
+        ----------
+        time : float
+            Time in seconds.
 
-        Args:
-            time (float): time in seconds.
+        Returns
+        -------
+        complex
+            Complex-valued source amplitude at that time..
         """
 
     @add_ax_if_none
-    def plot(self, times: float, ax: Ax = None) -> Ax:
+    def plot(self, times: Array[float], ax: Ax = None) -> Ax:
         """plot the time series
-
-        Args:
-            times (float): Description
-            ax (Ax, optional): Description
-
-        Returns:
-            Ax: Description
+        
+        Parameters
+        ----------
+        times : np.ndarray
+            Array of times to plot source at in seconds.
+        ax : matplotlib.axes._subplots.Axes = None
+            Matplotlib axes to plot on, if not specified, one is created.
+        
+        Returns
+        -------
+        matplotlib.axes._subplots.Axes
+            The supplied or created matplotlib axes.
         """
         times = np.array(times)
         amp_complex = self.amp_time(times)
@@ -56,11 +73,11 @@ class SourceTime(ABC, Tidy3dBaseModel):
     @property
     @abstractmethod
     def frequency_range(self) -> FreqBound:
-        """frequency range for a source time"""
+        """Frequency range within 5 standard deviations of the central frequency."""
 
 
 class Pulse(SourceTime, ABC):
-    """Source ramps up and oscillates with freq0"""
+    """A source time that ramps up with some ``fwidth`` and oscillates at ``freq0``."""
 
     freq0: pydantic.PositiveFloat
     fwidth: pydantic.PositiveFloat  # currently standard deviation
@@ -68,23 +85,52 @@ class Pulse(SourceTime, ABC):
 
     @property
     def frequency_range(self) -> FreqBound:
-        """frequency range for a source time"""
-        width_std = 5
-        return (self.freq0 - width_std * self.fwidth, self.freq0 + width_std * self.fwidth)
+        """Frequency range within 5 standard deviations of the central frequency.
+        
+        Returns
+        -------
+        Tuple[float, float]
+            Minimum and maximum frequencies of the :class:`GaussianPulse` or :class:`ContinuousWave` power
+            within 5 standard deviations.
+        """
+        return (self.freq0 - WIDTH_STD * self.fwidth, self.freq0 + WIDTH_STD * self.fwidth)
 
 
 class GaussianPulse(Pulse):
-    """A gaussian pulse time dependence"""
+    """Source time dependence that describes a Gaussian pulse.
+        
+    Parameters
+    ----------
+        freq0 : float
+            Central oscillating frequency in Hz.
+            Must be positive.
+        fwidth : float
+            Standard deviation width of the Gaussian pulse in Hz.
+            Must be positive.
+        offset : float = 5.0
+            Time of the maximum value of the pulse
+            in units of 1/fwidth.
+            Must be greater than 2.5.
 
-    def amp_time(self, time):
-        """complex amplitude as a function of time
+    Example
+    -------
+    >>> pulse = GaussianPulse(freq0=200e12, fwidth=20e12)
+    """
+    
+    def amp_time(self, time : float) -> complex:
+        """Complex-valued source amplitude as a function of time.
+        
+        Parameters
+        ----------
+        time : float
+            Time in seconds.
 
-        Args:
-            time (TYPE): Description
-
-        Returns:
-            TYPE: Description
+        Returns
+        -------
+        complex
+            Complex-valued source amplitude at supplied time.
         """
+
         twidth = 1.0 / (2 * np.pi * self.fwidth)
         omega0 = 2 * np.pi * self.freq0
         time_shifted = time - self.offset * twidth
@@ -97,17 +143,39 @@ class GaussianPulse(Pulse):
         return const * offset * oscillation * amp
 
 
-class CW(Pulse):
-    """ramping up and holding steady"""
+class ContinuousWave(Pulse):
+    """Source time dependence that ramps up to continueous oscillation and holds until end of simulation.
 
-    def amp_time(self, time):
-        """complex amplitude as a function of time
+    Parameters
+    ----------
+        freq0 : float
+            Central oscillating frequency in Hz.
+            Must be positive.
+        fwidth : float
+            Standard deviation width of the Gaussian pulse in Hz.
+            Must be positive.
+        offset : float = 5.0
+            Time of the maximum value of the pulse
+            in units of 1/fwidth.
+            Must be greater than 2.5.
 
-        Args:
-            time (TYPE): Description
+    Example
+    -------
+    >>> cw = ContinuousWave(freq0=200e12, fwidth=20e12)
+    """
 
-        Returns:
-            TYPE: Description
+    def amp_time(self, time : float) -> complex:
+        """Complex-valued source amplitude as a function of time.
+        
+        Parameters
+        ----------
+        time : float
+            Time in seconds.
+
+        Returns
+        -------
+        complex
+            Complex-valued source amplitude at supplied time.
         """
         twidth = 1.0 / (2 * np.pi * self.fwidth)
         omega0 = 2 * np.pi * self.freq0
@@ -121,13 +189,26 @@ class CW(Pulse):
         return const * offset * oscillation * amp
 
 
-SourceTimeType = Union[GaussianPulse, CW]
+SourceTimeType = Union[GaussianPulse, ContinuousWave]
 
 """ Source objects """
 
 
 class Source(Box, ABC):
-    """Template for all sources, all have Box geometry"""
+    """Abstract base class for all sources.
+
+    Parameters
+    ----------
+    center : Tuple[float, float, float] = (0.0, 0.0, 0.0)
+        Center of source in x,y,z.
+    size : Tuple[float, float, float]
+        Size of source in x,y,z.
+        All elements must be non-negative.        
+    source_time : :class:`GaussianPulse` or :class:`ContinuousWave`
+        Specification of time-dependence of source.
+    name : str = None
+        Optional name for source.
+    """
 
     source_time: SourceTimeType
     name: str = None
@@ -138,26 +219,101 @@ class Source(Box, ABC):
     def plot(
         self, x: float = None, y: float = None, z: float = None, ax: Ax = None, **kwargs
     ) -> Ax:
-        """plot source geometry"""
+        """Plot the source geometry on a cross section plane.
+        
+        Parameters
+        ----------
+        x : float = None
+            Position of plane in x direction, only one of x,y,z can be specified to define plane.
+        y : float = None
+            Position of plane in y direction, only one of x,y,z can be specified to define plane.
+        z : float = None
+            Position of plane in z direction, only one of x,y,z can be specified to define plane.
+        ax : matplotlib.axes._subplots.Axes = None
+            Matplotlib axes to plot on, if not specified, one is created.
+        **patch_kwargs
+            Optional keyword arguments passed to the matplotlib patch plotting of structure.
+            For details on accepted values, refer to
+            `Matplotlib's documentation <https://matplotlib.org/stable/api/_as_gen/matplotlib.patches.Patch.html#matplotlib.patches.Patch>`_.
+
+        Returns
+        -------
+        matplotlib.axes._subplots.Axes
+            The supplied or created matplotlib axes.
+        """
         kwargs = SourceParams().update_params(**kwargs)
         ax = self.geometry.plot(x=x, y=y, z=z, ax=ax, **kwargs)
         return ax
 
     @property
     def geometry(self):
-        """box representation of self"""
+        """:class:`Box` representation of source.
+        
+        Returns
+        -------
+        :class:`Box`
+            Representation of the source geometry as a :Geometry:`class`.
+        """
         return Box(center=self.center, size=self.size)
 
 
 class VolumeSource(Source):
-    """Volume Source with time dependence and polarization"""
+    """Source spanning a regangular volume with uniform time dependence.
+
+    Parameters
+    ----------
+    center : Tuple[float, float, float] = (0.0, 0.0, 0.0)
+        Center of source in x,y,z.
+    size : Tuple[float, float, float]
+        Size of source in x,y,z.
+        All elements must be non-negative.
+    source_time : :class:`GaussianPulse` or :class:`ContinuousWave`
+        Specification of time-dependence of source.
+    polarization : str
+        Specifies the direction and type of current component.
+        Must be in ``{'Ex', 'Ey', 'Ez', 'Hx', 'Hy', 'Hz'}``.
+        For example, ``'Ez'`` specifies electric current source polarized along the z-axis.
+    name : str = None
+        Optional name for source.
+
+    Example
+    -------
+    >>> pulse = GaussianPulse(freq0=200e12, fwidth=20e12)
+    >>> pt_source = VolumeSource(size=(0,0,0), source_time=pulse, polarization='Ex')
+    """
 
     polarization: Polarization
     type: Literal["VolumeSource"] = "VolumeSource"
 
 
 class ModeSource(Source):
-    """Modal profile on finite extent plane"""
+    """Modal profile on finite extent plane
+
+    Parameters
+    ----------
+    center : Tuple[float, float, float] = (0.0, 0.0, 0.0)
+        Center of source in x,y,z.
+    size : Tuple[float, float, float]
+        Size of source in x,y,z.
+        One component must be 0.0 to define plane.
+        All elements must be non-negative.
+    source_time : :class:`GaussianPulse` or :class:`ContinuousWave`
+        Specification of time-dependence of source.
+    direction : str
+        Specifies the sign of propagation.
+        Must be in ``{'+', '-'}``.
+        Note: propagation occurs along dimension normal to plane.
+    mode : :class:`Mode`
+        Specification of the mode being injected by source.
+    name : str = None
+        Optional name for source.
+
+    Example
+    -------
+    >>> pulse = GaussianPulse(freq0=200e12, fwidth=20e12)
+    >>> mode = Mode(mode_index=1, num_modes=3)
+    >>> mode_source = ModeSource(size=(10,10,0), source_time=pulse, mode=mode, direction='-')
+    """
 
     direction: Direction
     mode: Mode
@@ -166,7 +322,7 @@ class ModeSource(Source):
 
 
 class DirectionalSource(Source, ABC):
-    """A Planar Source with uni-directional propagation"""
+    """A Planar Source with uni-directional propagation."""
 
     direction: Direction
     polarization: Polarization
@@ -175,7 +331,7 @@ class DirectionalSource(Source, ABC):
 
     @pydantic.root_validator(allow_reuse=True)
     def polarization_is_orthogonal(cls, values):
-        """ensure we dont allow a polarization parallel to the propagation direction"""
+        """Ensure the polarization is orthogonal to the propagation direction."""
         size = values.get("size")
         polarization = values.get("polarization")
         assert size is not None
@@ -193,15 +349,74 @@ class DirectionalSource(Source, ABC):
 
 
 class PlaneWave(DirectionalSource):
-    """uniform distribution on infinite extent plane"""
+    """Uniform distribution on infinite extent plane.
+
+    Parameters
+    ----------
+    center : Tuple[float, float, float] = (0.0, 0.0, 0.0)
+        Center of source in x,y,z.
+    size : Tuple[float, float, float]
+        Size of source in x,y,z.
+        One component must be 0.0 to define plane.
+        All elements must be non-negative.
+    source_time : :class:`GaussianPulse` or :class:`ContinuousWave`
+        Specification of time-dependence of source.
+    polarization : str
+        Specifies the direction and type of current component.
+        Must be in ``{'Ex', 'Ey', 'Ez', 'Hx', 'Hy', 'Hz'}``.
+        For example, ``'Ez'`` specifies electric current source polarized along the z-axis.
+    direction : str
+        Specifies the sign of propagation.
+        Must be in ``{'+', '-'}``.
+        Note: propagation occurs along dimension normal to plane.
+    mode : :class:`Mode`
+        Specification of the mode being injected by source.
+    name : str = None
+        Optional name for source.
+
+    Example
+    -------
+    >>> pulse = GaussianPulse(freq0=200e12, fwidth=20e12)
+    >>> pw_source = PlaneWave(size=(inf,0,inf), source_time=pulse, polarization='Ex', direction='+')
+    """
 
     type: Literal["PlaneWave"] = "PlaneWave"
 
 
 class GaussianBeam(DirectionalSource):
-    """guassian distribution on finite extent plane"""
+    """guassian distribution on finite extent plane
 
-    waist_size: Tuple[pydantic.NonNegativeFloat, pydantic.NonNegativeFloat]
+    Parameters
+    ----------
+    center : Tuple[float, float, float] = (0.0, 0.0, 0.0)
+        Center of source in x,y,z.
+    size : Tuple[float, float, float]
+        Size of source in x,y,z.
+        One component must be 0.0 to define plane.
+        All elements must be non-negative.
+    source_time : :class:`GaussianPulse` or :class:`ContinuousWave`
+        Specification of time-dependence of source.
+    polarization : str
+        Specifies the direction and type of current component.
+        Must be in ``{'Ex', 'Ey', 'Ez', 'Hx', 'Hy', 'Hz'}``.
+        For example, ``'Ez'`` specifies electric current source polarized along the z-axis.
+    direction : str
+        Specifies the sign of propagation.
+        Must be in ``{'+', '-'}``.
+        Note: propagation occurs along dimension normal to plane.
+    waist_size : Tuple[float, float]
+        Size of beam waist in two dimensions parallel to propagation.
+        Must be greater than zero,
+    name : str = None
+        Optional name for source.
+
+    Example
+    -------
+    >>> pulse = GaussianPulse(freq0=200e12, fwidth=20e12)
+    >>> gauss = GaussianBeam(size=(0,3,3), source_time=pulse, polarization='Hy', direction='+', waist_size=(1,0.5))
+    """
+
+    waist_size: Tuple[pydantic.PositiveFloat, pydantic.PositiveFloat]
     type: Literal["GaussianBeam"] = "GaussianBeam"
 
 

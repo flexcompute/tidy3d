@@ -1,4 +1,4 @@
-""" defines Geometric objects with Medium properties """
+"""Defines Geometric objects with Medium properties."""
 
 from .base import Tidy3dBaseModel
 from .validators import validate_name_str

@@ -11,13 +11,36 @@ Defining Simulations
 Simulation Definition
 ---------------------
 
-.. currentmodule:: tidy3d
-
 .. autosummary::
    :toctree: _autosummary/
 
    Simulation
-   simulation.grid
+
+
+Geometry
+--------
+
+.. autosummary::
+   :toctree: _autosummary/
+
+   Geometry
+   Box
+   Sphere
+   Cylinder
+   PolySlab
+
+Mediums
+-------
+
+.. autosummary::
+   :toctree: _autosummary/
+
+   Medium
+   PoleResidue
+   Sellmeier
+   Debye
+   Lorentz
+
 
 Structures
 ----------
@@ -41,6 +64,7 @@ Absorbing Boundaries
    AbsorberParams
    PMLParams
 
+
 Mode Specification
 ------------------
 
@@ -49,6 +73,47 @@ Mode Specification
 
    Mode
 
+
+Current Sources
+---------------
+
+.. autosummary::
+   :toctree: _autosummary/
+
+   Source
+   SourceTime
+   GaussianPulse
+   ContinuousWave
+   VolumeSource
+   PlaneWave
+   ModeSource
+
+
+Field Monitors
+--------------
+
+.. autosummary::
+   :toctree: _autosummary/
+
+   Monitor
+   FieldMonitor
+   FieldTimeMonitor
+   FluxMonitor
+   FluxTimeMonitor
+   ModeMonitor
+
+
+Output Data
+-----------
+
+.. autosummary::
+   :toctree: _autosummary/
+
+   SimulationData
+   FieldData
+   FluxData
+   FluxTimeData
+   ModeData
 
 Core Components
 ===============
@@ -83,73 +148,6 @@ FDTD Grid
    Grid.sizes
    Grid.yee
 
-
-.. Absorbing Boundaries
-.. --------------------
-
-.. .. autosummary::
-..    :toctree: _autosummary/
-
-..    PML
-..    StablePML
-..    Absorber
-
-
-.. Geometry
-.. --------
-
-.. .. autosummary::
-..    :toctree: _autosummary/
-
-..    Box
-..    Sphere
-..    Cylinder
-..    PolySlab
-
-
-.. Physical Objects
-.. ----------------
-
-.. .. autosummary::
-..    :toctree: _autosummary/
-
-..    Structure
-..    Medium
-..    PoleResidue
-..    Sellmeier
-..    Debye
-..    Lorentz
-..    plugins.DispersionFitter
-..    .. material_library
-
-
-.. Monitors
-.. --------
-
-.. .. autosummary::
-..    :toctree: _autosummary/
-
-..    FieldMonitor
-..    FieldTimeMonitor
-..    FluxMonitor
-..    FluxTimeMonitor
-..    ModeMonitor
-..    Mode
-
-
-.. Simulation Output Data
-.. ----------------------
-
-.. .. autosummary::
-..    :toctree: _autosummary/
-
-..    SimulationData
-..    SimulationData.export
-..    SimulationData.load
-..    FieldData
-..    FluxData
-..    FluxTimeData
-..    ModeData
 
 
 .. Submitting Simulations
