@@ -21,7 +21,7 @@ class AbsorberParams(Tidy3dBaseModel):
     sigma_min : float = 0.0
         Minimum value of the absorber conductivity.
         Units of 2*EPSILON_0/dt.
-        Must be non non-negative.        
+        Must be non non-negative.
     sigma_max : float = 1.5
         Maximum value of the absorber conductivity.
         Units of 2*EPSILON_0/dt.
@@ -48,7 +48,7 @@ class PMLParams(AbsorberParams):
     sigma_min : float = 0.0
         Minimum value of the absorber conductivity.
         Units of 2*EPSILON_0/dt.
-        Must be non-negative.        
+        Must be non-negative.
     sigma_max : float = 1.5
         Maximum value of the absorber conductivity.
         Units of 2*EPSILON_0/dt.
@@ -59,7 +59,7 @@ class PMLParams(AbsorberParams):
     kappa_min : float = 0.0
         Minimum value of the PML kappa.
         Dimensionless.
-        Must be non-negative.        
+        Must be non-negative.
     kappa_max : float = 1.5
         Maximum value of the PML kappa.
         Dimensionless.
@@ -70,7 +70,7 @@ class PMLParams(AbsorberParams):
     alpha_min : float = 0.0
         Minimum value of the PML alpha.
         Units of 2*EPSILON_0/dt.
-        Must be non-negative.        
+        Must be non-negative.
     alpha_max : float = 1.5
         Maximum value of the PML alpha.
         Units of 2*EPSILON_0/dt.
@@ -87,6 +87,7 @@ class PMLParams(AbsorberParams):
     alpha_order: pydantic.NonNegativeInt = 3
     alpha_min: pydantic.NonNegativeFloat = 0.0
     alpha_max: pydantic.NonNegativeFloat = 1.5
+
 
 """ Default parameters """
 
@@ -116,6 +117,7 @@ DefaultStablePMLParameters = PMLParams(
 
 """ PML specifications """
 
+
 class AbsorberSpec(Tidy3dBaseModel, ABC):
     """Abstract base class.
        Specifies the generic absorber properties along a single dimension.
@@ -135,7 +137,7 @@ class AbsorberSpec(Tidy3dBaseModel, ABC):
 
 class PML(AbsorberSpec):
     """Specifies a standard PML along a single dimension.
-    
+
     Parameters
     ----------
     num_layers : int = 12
@@ -143,7 +145,7 @@ class PML(AbsorberSpec):
         Must be non-negative.
     parameters : :class:`PMLParams` = DefaultPMLParameters
         Parameters of the complex frequency-shifted absorption poles.
-    
+
     Example
     -------
     >>> pml = PML(num_layers=10)
@@ -156,7 +158,7 @@ class PML(AbsorberSpec):
 class StablePML(AbsorberSpec):
     """Specifies a 'stable' PML along a single dimension.
     This PML deals handles possbly divergent simulations better, but at the expense of more layers.
-    
+
     Parameters
     ----------
     num_layers : int = 40
@@ -178,7 +180,7 @@ class Absorber(AbsorberSpec):
     """Specifies an adiabatic absorber along a single dimension.
     This absorber is well-suited for dispersive materials
     intersecting with absorbing edges of the simulation at the expense of more layers.
-    
+
     Parameters
     ----------
     num_layers : int = 40

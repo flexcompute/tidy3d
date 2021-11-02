@@ -15,7 +15,6 @@ from .components import Grid, Coords
 
 # geometry
 from .components import Box, Sphere, Cylinder, PolySlab
-from .components import Geometry
 
 # medium
 from .components import Medium, PoleResidue, Sellmeier, Debye, Lorentz
@@ -58,3 +57,11 @@ from .log import log
 # make all stdout and errors pretty
 pretty.install()
 traceback.install()
+
+# for docs
+from .components.medium import AbstractMedium
+from .components.geometry import Geometry
+from .components.source import Source, SourceTime
+from .components.monitor import Monitor
+from .components.grid import YeeGrid, FieldGrid, Coords1D
+
