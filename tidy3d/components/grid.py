@@ -1,10 +1,9 @@
-""" defines the FDTD grid """
+"""Defines the FDTD grid."""
 import numpy as np
 
 from .base import Tidy3dBaseModel
 from .types import Array, Axis
 
-""" Grid data """
 
 # data type of one dimensional coordinate array.
 Coords1D = Array[float]

@@ -1,4 +1,4 @@
-"""defines objects in space"""
+"""Defines spatial extent of objects."""
 
 from abc import ABC, abstractmethod
 from typing import List, Tuple, Union, Any
@@ -14,7 +14,11 @@ from .types import Literal, Bound, Size, Coordinate, Axis, Coordinate2D
 from .types import Vertices, Ax, Shapely
 from .viz import add_ax_if_none
 
-PLOT_BUFFER = 0.3  # add this around extents of .visualize()
+# add this around extents of plots
+PLOT_BUFFER = 0.3
+
+
+# TODO: GDS file importing.
 
 
 class Geometry(Tidy3dBaseModel, ABC):
@@ -22,24 +26,22 @@ class Geometry(Tidy3dBaseModel, ABC):
 
     center: Coordinate = (0.0, 0.0, 0.0)
 
-    """ volume and intersections """
-
     def inside(self, x, y, z) -> bool:
-        """Returns true if point ``(x,y,z)`` inside volume of geometry.
+        """Returns ``True`` if point ``(x,y,z)`` is inside volume of :class:`Geometry`.
 
         Parameters
         ----------
-        x : ``float``
+        x : float
             Position of point in x direction.
-        y : ``float``
+        y : float
             Position of point in y direction.
-        z : ``float``
+        z : float
             Position of point in z direction.
 
         Returns
         -------
-        ``bool``
-            Whether point ``(x,y,z)`` is inside geometry.
+        bool
+            True if point ``(x,y,z)`` is inside geometry.
         """
         shapes_intersect = self.intersections(z=z)
         loc = Point(x, y)
@@ -47,25 +49,26 @@ class Geometry(Tidy3dBaseModel, ABC):
 
     @abstractmethod
     def intersections(self, x: float = None, y: float = None, z: float = None) -> List[Shapely]:
-        """Returns list of shapely geoemtries at plane specified by one non-None value of x,y,z
+        """Returns list of shapely geoemtries at plane specified by one non-None value of x,y,z.
 
         Parameters
         ----------
-        x : ``float``, optional
-            Position of plane in x direction.
-        y : ``float``, optional
-            Position of plane in y direction.
-        z : ``float``, optional
-            Position of plane in z direction.
+        x : float = None
+            Position of plane in x direction, only one of x,y,z can be specified to define plane.
+        y : float = None
+            Position of plane in y direction, only one of x,y,z can be specified to define plane.
+        z : float = None
+            Position of plane in z direction, only one of x,y,z can be specified to define plane.
 
         Returns
         -------
-        ``[shapely.geometry.base.BaseGeometry]``
+        List[shapely.geometry.base.BaseGeometry]
             List of 2D shapes that intersect plane.
+            For more details refer to `Shapely's Documentaton <https://shapely.readthedocs.io/en/stable/project.html>`_.
         """
 
     def intersects(self, other) -> bool:
-        """Determines whether two :class:`Geometry` have intersecting `.bounds`.
+        """Returns ``True`` if two :class:`Geometry` have intersecting `.bounds`.
 
         Parameters
         ----------
@@ -74,7 +77,7 @@ class Geometry(Tidy3dBaseModel, ABC):
 
         Returns
         -------
-        ``bool``
+        bool
             Whether the rectangular bounding boxes of the two geometries intersect.
         """
 
@@ -95,30 +98,28 @@ class Geometry(Tidy3dBaseModel, ABC):
 
         Parameters
         ----------
-        x : ``float``, optional
-            Position of plane in x direction.
-        y : ``float``, optional
-            Position of plane in y direction.
-        z : ``float``, optional
-            Position of plane in z direction.
+        x : float = None
+            Position of plane in x direction, only one of x,y,z can be specified to define plane.
+        y : float = None
+            Position of plane in y direction, only one of x,y,z can be specified to define plane.
+        z : float = None
+            Position of plane in z direction, only one of x,y,z can be specified to define plane.
 
         Returns
         -------
-        ``bool``
-            Whether this geometry intersects the plane
+        bool
+            Whether this geometry intersects the plane.
         """
         intersections = self.intersections(x=x, y=y, z=z)
         return bool(intersections)
 
-    """ Bounding boxes """
-
     @property
     def bounds(self) -> Bound:  # pylint:disable=too-many-locals
-        """Returns bounding box for geometry.
+        """Returns bounding box min and max coordinates..
 
         Returns
         -------
-        ``(float, float, float), (float, float float)``
+        Tuple[float, float, float], Tuple[float, float float]
             Min and max bounds packaged as ``(minx, miny, minz), (maxx, maxy, maxz)``.
         """
 
@@ -139,7 +140,7 @@ class Geometry(Tidy3dBaseModel, ABC):
 
     @property
     def bounding_box(self):
-        """Returns :class:`Box` representation of ``self.bounds``.
+        """Returns :class:`Box` representation of the bounding box of a :class:`Geometry`.
 
         Returns
         -------
@@ -156,25 +157,23 @@ class Geometry(Tidy3dBaseModel, ABC):
         return Box(center=(x0, y0, z0), size=(Lx, Ly, Lz))
 
     def _pop_bounds(self, axis: Axis) -> Tuple[Coordinate2D, Tuple[Coordinate2D, Coordinate2D]]:
-        """Returns min and max bounds in plane normal to and tangential to `axis`
+        """Returns min and max bounds in plane normal to and tangential to ``axis``.
 
         Parameters
         ----------
-        axis : ``int``
+        axis : int
             Integer index into 'xyz' (0,1,2).
 
         Returns
         -------
-        ``(float, float), ((float, float), (float, float))``
+        Tuple[float, float], Tuple[Tuple[float, float], Tuple[float, float]]
             Bounds along axis and a tuple of bounds in the ordered planar coordinates.
-            Packed as ``(zmin, zmax), ((xmin, ymin), (xmax, ymax))``
+            Packed as ``(zmin, zmax), ((xmin, ymin), (xmax, ymax))``.
         """
         b_min, b_max = self.bounds
         zmin, (xmin, ymin) = self.pop_axis(b_min, axis=axis)
         zmax, (xmax, ymax) = self.pop_axis(b_max, axis=axis)
         return (zmin, zmax), ((xmin, ymin), (xmax, ymax))
-
-    """ Plotting """
 
     @add_ax_if_none
     def plot(
@@ -184,43 +183,51 @@ class Geometry(Tidy3dBaseModel, ABC):
 
         Parameters
         ----------
-        x : ``float``, optional
-            Position of plane in x direction.
-        y : ``float``, optional
-            Position of plane in y direction.
-        z : ``float``, optional
-            Position of plane in z direction.
-        ax : ``matplotlib.axes._subplots.Axes``, optional
-            matplotlib axes to plot on, if not specified, one is created.
+        x : float = None
+            Position of plane in x direction, only one of x,y,z can be specified to define plane.
+        y : float = None
+            Position of plane in y direction, only one of x,y,z can be specified to define plane.
+        z : float = None
+            Position of plane in z direction, only one of x,y,z can be specified to define plane.
+        ax : matplotlib.axes._subplots.Axes = None
+            Matplotlib axes to plot on, if not specified, one is created.
         **patch_kwargs
-            Optional keyword arguments passed to ``add_artist(patch, **patch_kwargs)``.
+            Optional keyword arguments passed to the matplotlib patch plotting of structure.
+            For details on accepted values, refer to
+            `Matplotlib's documentation <https://matplotlib.org/stable/api/_as_gen/matplotlib.patches.Patch.html#matplotlib.patches.Patch>`_.
 
         Returns
         -------
-        ``matplotlib.axes._subplots.Axes``
+        matplotlib.axes._subplots.Axes
             The supplied or created matplotlib axes.
         """
+
+        # find shapes that intersect self at plane
         axis, position = self._parse_xyz_kwargs(x=x, y=y, z=z)
         shapes_intersect = self.intersections(x=x, y=y, z=z)
+
+        # for each intersection, plot the shape
         for shape in shapes_intersect:
             patch = PolygonPatch(shape, **patch_kwargs)
             ax.add_artist(patch)
+
+        # clean up the axis display
         ax = self.add_ax_labels_lims(axis=axis, ax=ax)
         ax.set_aspect("equal")
         ax.set_title(f"cross section at {'xyz'[axis]}={position:.2f}")
         return ax
 
     def _get_plot_labels(self, axis: Axis) -> Tuple[str, str]:
-        """returns correct x and y axis labels for cross section plots
+        """Returns planar coordinate x and y axis labels for cross section plots.
 
         Parameters
         ----------
-        axis : ``int``
+        axis : int
             Integer index into 'xyz' (0,1,2).
 
         Returns
         -------
-        ``(str, str)``
+        str, str
             Labels of plot, packaged as ``(xlabel, ylabel)``.
         """
         _, (xlabel, ylabel) = self.pop_axis("xyz", axis=axis)
@@ -229,18 +236,18 @@ class Geometry(Tidy3dBaseModel, ABC):
     def _get_plot_limits(
         self, axis: Axis, buffer: float = PLOT_BUFFER
     ) -> Tuple[Coordinate2D, Coordinate2D]:
-        """gets (xmin, ymin, xmax, ymax) limits for cross section plots
+        """Gets planar coordinate limits for cross section plots.
 
         Parameters
         ----------
-        axis : ``int``
+        axis : int
             Integer index into 'xyz' (0,1,2).
-        buffer : ``float``, optional
-            Amount of space to place around the limits
+        buffer : float = 0.3
+            Amount of space to add around the limits on the + and - sides.
 
         Returns
         -------
-            ``(float, float), (float, float)``
+            Tuple[float, float], Tuple[float, float]
         The x and y plot limits, packed as ``(xmin, xmax), (ymin, ymax)``.
         """
         _, ((xmin, ymin), (xmax, ymax)) = self._pop_bounds(axis=axis)
@@ -251,16 +258,16 @@ class Geometry(Tidy3dBaseModel, ABC):
 
         Parameters
         ----------
-        axis : ``int``
+        axis : int
             Integer index into 'xyz' (0,1,2).
-        ax : ``matplotlib.axes._subplots.Axes``
-            matplotlib axes to add labels and limits on.
-        buffer : ``float``, optional
-            Amount of space to place around the limits
+        ax : matplotlib.axes._subplots.Axes
+            Matplotlib axes to add labels and limits on.
+        buffer : float = 0.3
+            Amount of space to place around the limits on the + and - sides.
 
         Returns
         -------
-        ``matplotlib.axes._subplots.Axes``
+        matplotlib.axes._subplots.Axes
             The supplied or created matplotlib axes.
         """
         xlabel, ylabel = self._get_plot_labels(axis=axis)
@@ -271,24 +278,23 @@ class Geometry(Tidy3dBaseModel, ABC):
         ax.set_ylabel(ylabel)
         return ax
 
-    """ Utility """
-
     @staticmethod
     def pop_axis(coord: Tuple[Any, Any, Any], axis: int) -> Tuple[Any, Tuple[Any, Any]]:
         """Separates coordinate at ``axis`` index from coordinates on the plane tangent to ``axis``.
 
         Parameters
         ----------
-        coord : ``(Any, Any, Any)``
+        coord : Tuple[Any, Any, Any]
             Tuple of three values in original coordinate system.
-        axis : ``int``
+        axis : int
             Integer index into 'xyz' (0,1,2).
 
         Returns
         -------
-        ``Any, (Any, Any)``
-            The coordinates separated into that in the axis and those in the planar dimensions.
-            Packaged as ``axis_coord, (planar_coord1, planar_coord2)``.
+        Any, Tuple[Any, Any]
+            The input coordinates are separated into the one along the axis provided
+            and the two on the planar coordinates,
+            like ``axis_coord, (planar_coord1, planar_coord2)``.
         """
         plane_vals = list(coord)
         axis_val = plane_vals.pop(axis)
@@ -296,21 +302,21 @@ class Geometry(Tidy3dBaseModel, ABC):
 
     @staticmethod
     def unpop_axis(ax_coord: Any, plane_coords: Tuple[Any, Any], axis: int) -> Tuple[Any, Any, Any]:
-        """Combine coordinate from `axis` index with coordinates on the plane tangent to `axis`.
+        """Combine coordinate along axis with coordinates on the plane tangent to the axis.
 
         Parameters
         ----------
-        ax_coord : ``Any``
-            Value along ``axis`` direction.
-        plane_coords : ``(Any, Any)``
+        ax_coord : Any
+            Value along axis direction.
+        plane_coords : Tuple[Any, Any]
             Values along ordered planar directions.
-        axis : ``int``
+        axis : int
             Integer index into 'xyz' (0,1,2).
 
         Returns
         -------
-        ``(Any, Any, Any)``
-            The three values in original coordinate system.
+        Tuple[Any, Any, Any]
+            The three values in the xyz coordinate system.
         """
         coords = list(plane_coords)
         coords.insert(axis, ax_coord)
@@ -318,21 +324,21 @@ class Geometry(Tidy3dBaseModel, ABC):
 
     @staticmethod
     def _parse_xyz_kwargs(**xyz) -> Tuple[Axis, float]:
-        """Turns x,y,z kwargs into plane axis and position.
+        """Turns x,y,z kwargs into index of the normal axis and position along that axis.
 
         Parameters
         ----------
-        x : ``float``
-            Position of point in x direction.
-        y : ``float``
-            Position of point in y direction.
-        z : ``float``
-            Position of point in z direction.
+        x : float = None
+            Position of plane in x direction, only one of x,y,z can be specified to define plane.
+        y : float = None
+            Position of plane in y direction, only one of x,y,z can be specified to define plane.
+        z : float = None
+            Position of plane in z direction, only one of x,y,z can be specified to define plane.
 
         Returns
         -------
-        ``(int, float)``
-            Index into xyz axis (0,1,2) and position along axis.
+        int, float
+            Index into xyz axis (0,1,2) and position along that axis.
         """
         xyz_filtered = {k: v for k, v in xyz.items() if v is not None}
         assert len(xyz_filtered) == 1, "exatly one kwarg in [x,y,z] must be specified."
@@ -341,7 +347,7 @@ class Geometry(Tidy3dBaseModel, ABC):
         return axis, position
 
 
-""" abstract subclasses """
+""" Abstract subclasses """
 
 
 class Planar(Geometry, ABC):
@@ -351,21 +357,22 @@ class Planar(Geometry, ABC):
     length: pydantic.NonNegativeFloat = None
 
     def intersections(self, x: float = None, y: float = None, z: float = None):
-        """returns shapely geometry at plane specified by one non None value of x,y,z
+        """Returns shapely geometry at plane specified by one non None value of x,y,z.
 
         Parameters
         ----------
-        x : ``float``
-            Position of point in x direction.
-        y : ``float``
-            Position of point in y direction.
-        z : ``float``
-            Position of point in z direction.
+        x : float
+            Position of plane in x direction, only one of x,y,z can be specified to define plane.
+        y : float
+            Position of plane in y direction, only one of x,y,z can be specified to define plane.
+        z : float
+            Position of plane in z direction, only one of x,y,z can be specified to define plane.
 
         Returns
         -------
-        ``[shapely.geometry.base.BaseGeometry]``
+        List[shapely.geometry.base.BaseGeometry]
             List of 2D shapes that intersect plane.
+            For more details refer to `Shapely's Documentaton <https://shapely.readthedocs.io/en/stable/project.html>`_.
         """
         axis, position = self._parse_xyz_kwargs(x=x, y=y, z=z)
         if axis == self.axis:
@@ -377,31 +384,31 @@ class Planar(Geometry, ABC):
 
     @abstractmethod
     def _intersections_normal(self) -> list:
-        """Find shapely geometries intersecting planar geometry with axis normal to slab
+        """Find shapely geometries intersecting planar geometry with axis normal to slab.
 
         Returns
         -------
-        ``list[shapely.geometry.base.BaseGeometries]``
-            List containing the shapely representation of the normal cross section of the planar
-            geometry.
+        List[shapely.geometry.base.BaseGeometry]
+            List of 2D shapes that intersect plane.
+            For more details refer to `Shapely's Documentaton <https://shapely.readthedocs.io/en/stable/project.html>`_.
         """
 
     @abstractmethod
     def _intersections_side(self, position: float, axis: Axis) -> list:
-        """Find shapely geometries intersecting planar geometry with axis orthogonal to plane
+        """Find shapely geometries intersecting planar geometry with axis orthogonal to plane.
 
         Parameters
         ----------
-        position : ``float``
-            Position along ``axis``
-        axis : ``int``
+        position : float
+            Position along axis.
+        axis : int
             Integer index into 'xyz' (0,1,2).
 
         Returns
         -------
-        ``list[shapely.geometry.base.BaseGeometries]``
-            List of 2D geometries intersecting with planar geometry at ``position`` along side
-            ``axis``.
+        List[shapely.geometry.base.BaseGeometry]
+            List of 2D shapes that intersect plane.
+            For more details refer to `Shapely's Documentaton <https://shapely.readthedocs.io/en/stable/project.html>`_.
         """
 
     @property
@@ -410,7 +417,7 @@ class Planar(Geometry, ABC):
 
         Returns
         -------
-        ``(float, float, float), (float, float float)``
+        Tuple[float, float, float], Tuple[float, float float]
             Min and max bounds packaged as ``(minx, miny, minz), (maxx, maxy, maxz)``.
         """
         z0, _ = self.pop_axis(self.center, axis=self.axis)
@@ -430,11 +437,11 @@ class Planar(Geometry, ABC):
 
         Parameters
         ----------
-        plane_val : ``Any``
+        plane_val : Any
             The value in the planar coordinate.
-        axis_val : ``Any``
+        axis_val : Any
             The value in the ``axis`` coordinate.
-        axis : ``int``
+        axis : int
             Integer index into the structure's planar axis.
 
         Returns
@@ -454,19 +461,19 @@ class Circular(Geometry):
     radius: pydantic.NonNegativeFloat
 
     def _intersect_dist(self, position, z0) -> float:
-        """distance between points on circle at z=position where center of circle at z=z0
+        """Distance between points on circle at z=position where center of circle at z=z0.
 
         Parameters
         ----------
-        position : ``float``
+        position : float
             position along z.
-        z0 : ``float``
+        z0 : float
             center of circle in z.
 
         Returns
         -------
-        ``float``
-            distance between points on the circle intersecting z=z, if no points, ``None``.
+        float
+            Distance between points on the circle intersecting z=z, if no points, ``None``.
         """
         dz = np.abs(z0 - position)
         if dz > self.radius:
@@ -483,9 +490,9 @@ class Box(Geometry):
 
     Parameters
     ----------
-    center : ``(float, float, float)``
-        center of box in x,y,z.  Defaults to ``(0,0,0)``.
-    size : ``(float, float, float)``
+    center : Tuple[float, float, float] = (0.0, 0.0, 0.0)
+        Center of box in x,y,z.
+    size : Tuple[float, float, float]
         Size of box in x,y,z.
 
     Example
@@ -496,21 +503,22 @@ class Box(Geometry):
     size: Size
 
     def intersections(self, x: float = None, y: float = None, z: float = None):
-        """returns shapely geoemtry at plane specified by one non None value of x,y,z
+        """Returns shapely geometry at plane specified by one non None value of x,y,z.
 
         Parameters
         ----------
-        x : ``float``
-            Position of point in x direction.
-        y : ``float``
-            Position of point in y direction.
-        z : ``float``
-            Position of point in z direction.
+        x : float = None
+            Position of plane in x direction, only one of x,y,z can be specified to define plane.
+        y : float = None
+            Position of plane in y direction, only one of x,y,z can be specified to define plane.
+        z : float = None
+            Position of plane in z direction, only one of x,y,z can be specified to define plane.
 
         Returns
         -------
-        ``[shapely.geometry.base.BaseGeometry]``
+        List[shapely.geometry.base.BaseGeometry]
             List of 2D shapes that intersect plane.
+            For more details refer to `Shapely's Documentaton <https://shapely.readthedocs.io/en/stable/project.html>`_.
         """
         axis, position = self._parse_xyz_kwargs(x=x, y=y, z=z)
         z0, (x0, y0) = self.pop_axis(self.center, axis=axis)
@@ -521,20 +529,20 @@ class Box(Geometry):
         return [box(minx=x0 - Lx / 2, miny=y0 - Ly / 2, maxx=x0 + Lx / 2, maxy=y0 + Ly / 2)]
 
     def inside(self, x, y, z) -> bool:
-        """Returns true if point ``(x,y,z)`` inside volume of geometry.
+        """Returns ``True`` if point ``(x,y,z)`` inside volume of geometry.
 
         Parameters
         ----------
-        x : ``float``
+        x : float
             Position of point in x direction.
-        y : ``float``
+        y : float
             Position of point in y direction.
-        z : ``float``
+        z : float
             Position of point in z direction.
 
         Returns
         -------
-        ``bool``
+        bool
             Whether point ``(x,y,z)`` is inside geometry.
         """
         x0, y0, z0 = self.center
@@ -546,11 +554,11 @@ class Box(Geometry):
 
     @property
     def bounds(self) -> Bound:
-        """Returns bounding box for geometry
+        """Returns bounding box min and max coordinates.
 
         Returns
         -------
-        ``(float, float, float), (float, float float)``
+        Tuple[float, float, float], Tuple[float, float float]
             Min and max bounds packaged as ``(minx, miny, minz), (maxx, maxy, maxz)``.
         """
         size = self.size
@@ -561,7 +569,7 @@ class Box(Geometry):
 
     @property
     def geometry(self):
-        """:class:`Box` representation of self (used for subclasses of Box)
+        """:class:`Box` representation of self (used for subclasses of Box).
 
         Returns
         -------
@@ -572,13 +580,13 @@ class Box(Geometry):
 
 
 class Sphere(Circular):
-    """Sphere geometry.
+    """Spherical geometry.
 
     Parameters
     ----------
-    center : ``(float, float, float)``
-        center of sphere in x,y,z.  Defaults to ``(0,0,0)``.
-    radius : ``float``
+    center : Tuple[float, float, float] = 0.0, 0.0, 0.0
+        Center of sphere in x,y,z.
+    radius : float
         Radius of sphere.
 
     Example
@@ -589,15 +597,15 @@ class Sphere(Circular):
     type: Literal["Sphere"] = "Sphere"
 
     def inside(self, x, y, z) -> bool:
-        """Returns true if point ``(x,y,z)`` inside volume of geometry.
+        """Returns True if point ``(x,y,z)`` inside volume of geometry.
 
         Parameters
         ----------
-        x : ``float``
+        x : float
             Position of point in x direction.
-        y : ``float``
+        y : float
             Position of point in y direction.
-        z : ``float``
+        z : float
             Position of point in z direction.
 
         Returns
@@ -612,21 +620,22 @@ class Sphere(Circular):
         return (dist_x ** 2 + dist_y ** 2 + dist_z ** 2) <= (self.radius ** 2)
 
     def intersections(self, x: float = None, y: float = None, z: float = None):
-        """returns shapely geoemtry at plane specified by one non None value of x,y,z
+        """Returns shapely geometry at plane specified by one non None value of x,y,z.
 
         Parameters
         ----------
-        x : ``float``, optional
-            Description
-        y : ``float``, optional
-            Description
-        z : ``float``, optional
-            Description
+        x : float = None
+            Position of plane in x direction, only one of x,y,z can be specified to define plane.
+        y : float = None
+            Position of plane in x direction, only one of x,y,z can be specified to define plane.
+        z : float = None
+            Position of plane in x direction, only one of x,y,z can be specified to define plane.
 
         Returns
         -------
-        ``[shapely.geometry.base.BaseGeometry]``
+        List[shapely.geometry.base.BaseGeometry]
             List of 2D shapes that intersect plane.
+            For more details refer to `Shapely's Documentaton <https://shapely.readthedocs.io/en/stable/project.html>`_.
         """
         axis, position = self._parse_xyz_kwargs(x=x, y=y, z=z)
         z0, (x0, y0) = self.pop_axis(self.center, axis=axis)
@@ -637,11 +646,11 @@ class Sphere(Circular):
 
     @property
     def bounds(self):
-        """Returns bounding box for geometry
+        """Returns bounding box min and max coordinates.
 
         Returns
         -------
-        ``(float, float, float), (float, float float)``
+        Tuple[float, float, float], Tuple[float, float, float]
             Min and max bounds packaged as ``(minx, miny, minz), (maxx, maxy, maxz)``.
         """
         coord_min = tuple(c - self.radius for c in self.center)
@@ -650,18 +659,18 @@ class Sphere(Circular):
 
 
 class Cylinder(Circular, Planar):
-    """Cylinder geometry.
+    """Cylindrical geometry.
 
     Parameters
     ----------
-    center : ``(float, float, float)``
-        center of cylinder in x,y,z.  Defaults to ``(0,0,0)``.
-    radius : ``float``
+    center : Tuple[float, float, float] = (0.0, 0.0, 0.0)
+        center of cylinder in x,y,z.
+    radius : float
         Radius of cylinder.
-    length : ``float``
-        Length of sphere along axis.
-    axis : ``int``
-        Integer index into the cylinder's ``length`` axis (0,1,2) -> (x,y,z)
+    length : float
+        Length of cylinder along axis.
+    axis : int
+        Cylinder's length axis index (0, 1, 2) -> (x, y, z)
 
     Example
     -------
@@ -672,31 +681,32 @@ class Cylinder(Circular, Planar):
     type: Literal["Cylinder"] = "Cylinder"
 
     def _intersections_normal(self):
-        """Find shapely geometries intersecting cylindrical geometry with axis normal to slab
+        """Find shapely geometries intersecting cylindrical geometry with axis normal to slab.
 
         Returns
         -------
-        ``list[shapely.geometry.base.BaseGeometries]``
-            List containing the shapely representation of the polygon.
+        List[shapely.geometry.base.BaseGeometry]
+            List of 2D shapes that intersect plane.
+            For more details refer to `Shapely's Documentaton <https://shapely.readthedocs.io/en/stable/project.html>`_.
         """
         _, (x0, y0) = self.pop_axis(self.center, axis=self.axis)
         return [Point(x0, y0).buffer(self.radius)]
 
     def _intersections_side(self, position, axis):
-        """Find shapely geometries intersecting cylindrical geometry with axis orthogonal to length
+        """Find shapely geometries intersecting cylindrical geometry with axis orthogonal to length.
 
         Parameters
         ----------
-        position : ``float``
-            Position along ``axis``
-        axis : ``int``
-            Integer index into 'xyz' (0,1,2).
+        position : float
+            Position along axis direction.
+        axis : int
+            Integer index into 'xyz' (0, 1, 2).
 
         Returns
         -------
-        ``list[shapely.geometry.base.BaseGeometries]``
-            List of 2D geometries intersecting with cylinder geometry at ``position`` along side
-            ``axis``.
+        List[shapely.geometry.base.BaseGeometry]
+            List of 2D shapes that intersect plane.
+            For more details refer to `Shapely's Documentaton <https://shapely.readthedocs.io/en/stable/project.html>`_.
         """
         z0_axis, _ = self.pop_axis(self.center, axis=self.axis)
         intersect_dist = self._intersect_dist(position, z0_axis)
@@ -704,30 +714,29 @@ class Cylinder(Circular, Planar):
             return []
         Lx, Ly = self._order_by_axis(plane_val=intersect_dist, axis_val=self.length, axis=axis)
         _, (x0_plot_plane, y0_plot_plane) = self.pop_axis(self.center, axis=axis)
-        return [
-            box(
+        int_box = box(
                 minx=x0_plot_plane - Lx / 2,
                 miny=y0_plot_plane - Ly / 2,
                 maxx=x0_plot_plane + Lx / 2,
                 maxy=y0_plot_plane + Ly / 2,
             )
-        ]
+        return [int_box]
 
     def inside(self, x, y, z) -> bool:
-        """Returns true if point ``(x,y,z)`` inside volume of geometry.
+        """Returns True if point ``(x,y,z)`` inside volume of geometry.
 
         Parameters
         ----------
-        x : ``float``
+        x : float
             Position of point in x direction.
-        y : ``float``
+        y : float
             Position of point in y direction.
-        z : ``float``
+        z : float
             Position of point in z direction.
 
         Returns
         -------
-        ``bool``
+        bool
             Whether point ``(x,y,z)`` is inside geometry.
         """
         z0, (x0, y0) = self.pop_axis(self.center, axis=self.axis)
@@ -740,11 +749,11 @@ class Cylinder(Circular, Planar):
 
     @property
     def _bounds(self):
-        """Returns bounding box for geometry
+        """Returns bounding box min and max coordinates.
 
         Returns
         -------
-        ``(float, float, float), (float, float float)``
+        Tuple[float, float, float], Tuple[float, float, float]
             Min and max bounds packaged as ``(minx, miny, minz), (maxx, maxy, maxz)``.
         """
         coord_min = list(c - self.radius for c in self.center)
@@ -755,16 +764,16 @@ class Cylinder(Circular, Planar):
 
 
 class PolySlab(Planar):
-    """Polygon with constant thickness along 3rd axis.
+    """Polygon with constant thickness (slab) along axis direction.
 
     Parameters
     ----------
-    vertices : ``[(float, float)]``
-        List of (x,y) vertices defining the polygon face.
-    axis : ``int``
+    vertices : List[Tuple[float, float]]
+        List of vertices defining the polygon face along dimensions parallel to slab normal axis.
+    axis : int
         Integer index into the polygon's slab axis. (0,1,2) -> (x,y,z)
-    slab_bounds: ``(float, float)``
-        Minimum and maximum position in slab axis.
+    slab_bounds: Tuple[float, float]
+        Minimum and maximum positions of the slab along axis.
 
     Example
     -------
@@ -793,20 +802,20 @@ class PolySlab(Planar):
         return val
 
     def inside(self, x, y, z) -> bool:  # pylint:disable=too-many-locals
-        """Returns true if point ``(x,y,z)`` inside volume of geometry.
+        """Returns True if point ``(x,y,z)`` inside volume of geometry.
 
         Parameters
         ----------
-        x : ``float``
+        x : float
             Position of point in x direction.
-        y : ``float``
+        y : float
             Position of point in y direction.
-        z : ``float``
+        z : float
             Position of point in z direction.
 
         Returns
         -------
-        ``bool``
+        bool
             Whether point ``(x,y,z)`` is inside geometry.
         """
         z0, _ = self.pop_axis(self.center, axis=self.axis)
@@ -836,8 +845,9 @@ class PolySlab(Planar):
 
         Returns
         -------
-        ``list[shapely.geometry.base.BaseGeometries]``
-            List containing the shapely representation of the polygon.
+        List[shapely.geometry.base.BaseGeometry]
+            List of 2D shapes that intersect plane.
+            For more details refer to `Shapely's Documentaton <https://shapely.readthedocs.io/en/stable/project.html>`_.
         """
         return [Polygon(self.vertices)]
 
@@ -846,16 +856,16 @@ class PolySlab(Planar):
 
         Parameters
         ----------
-        position : ``float``
+        position : float
             Position along ``axis``
-        axis : ``int``
+        axis : int
             Integer index into 'xyz' (0,1,2).
 
         Returns
         -------
-        ``list[shapely.geometry.base.BaseGeometries]``
-            List of 2D geometries intersecting with planar geometry at ``position`` along side
-            ``axis``.
+        List[shapely.geometry.base.BaseGeometry]
+            List of 2D shapes that intersect plane.
+            For more details refer to `Shapely's Documentaton <https://shapely.readthedocs.io/en/stable/project.html>`_.
         """
 
         z0, _ = self.pop_axis(self.center, axis=self.axis)
@@ -878,17 +888,17 @@ class PolySlab(Planar):
         self, position: float, axis: int
     ) -> Tuple[np.ndarray, np.ndarray]:
         """Finds pairs of forward and backwards vertices where polygon intersects position at axis.
-           Assumed xy plane.
+           Assumes axis is handles so this function works on xy plane.
 
         Parameters
         ----------
-        position : ``float``
+        position : float
             position along axis
-        axis : ``int``
+        axis : int
             Integer index into 'xyz' (0,1,2).
 
         Returns
-        ``(np.ndarray, np.ndarray)``
+        np.ndarray, np.ndarray
             Backward (xy) vertices and forward (xy) vertices.
         """
 
@@ -914,16 +924,21 @@ class PolySlab(Planar):
     def _find_intersecting_ys(
         iverts_b: np.ndarray, iverts_f: np.ndarray, position: float
     ) -> List[float]:
-        """For each intersecting segment, find intersection point (in y) assuming straight line
+        """For each intersecting segment, find intersection point (in y) assuming straight line.
 
         Parameters
         ----------
-        iverts_b : ``np.ndarray``
-            backward (x,y) vertices
-        iverts_f : ``np.ndarray``
-            forward (x,y) vertices
-        position : ``float``
-            position along coordinate x
+        iverts_b : np.ndarray
+            Backward (x,y) vertices.
+        iverts_f : np.ndarray
+            Forward (x,y) vertices.
+        position : float
+            Position along coordinate x.
+
+        Returns
+        -------
+        List[float]
+            List of intersection points along y direction.
         """
 
         ints_y = []
@@ -938,11 +953,11 @@ class PolySlab(Planar):
 
     @property
     def _bounds(self):
-        """Returns bounding box for geometry
+        """Returns bounding box min and max coordinates.
 
         Returns
         -------
-        ``(float, float, float), (float, float float)``
+        Tuple[float, float, float], Tuple[float, float, float]
             Min and max bounds packaged as ``(minx, miny, minz), (maxx, maxy, maxz)``.
         """
 
@@ -958,6 +973,6 @@ class PolySlab(Planar):
         coords_max = self.unpop_axis(zmax, (xmax, ymax), axis=self.axis)
         return (tuple(coords_min), tuple(coords_max))
 
-
+# geometries that can be used to define structures.
 GeometryFields = (Box, Sphere, Cylinder, PolySlab)
 GeometryType = Union[GeometryFields]

@@ -1,16 +1,4 @@
-"""Defines profile of Perfectly-matched layers (absorber) 
-
-Attributes
-----------
-AbsorberPs : TYPE
-    Description
-PMLTypes : TYPE
-    Description
-StablePs : TYPE
-    Description
-StandardPs : TYPE
-    Description
-"""
+"""Defines profile of Perfectly-matched layers (absorber)"""
 from typing import Union, Literal
 from abc import ABC
 
@@ -19,7 +7,7 @@ import pydantic
 from .base import Tidy3dBaseModel
 
 
-"""TODO: better docstrings."""
+# TODO: More explanation on parameters, when to use various PMLs.
 
 
 class AbsorberParams(Tidy3dBaseModel):
@@ -44,9 +32,9 @@ class AbsorberParams(Tidy3dBaseModel):
     >>> params = AbsorberParams(sigma_order=3, sigma_min=0.0, sigma_max=1.5)
     """
 
-    sigma_order: pydantic.NonNegativeInt
-    sigma_min: pydantic.NonNegativeFloat
-    sigma_max: pydantic.NonNegativeFloat
+    sigma_order: pydantic.NonNegativeInt = 3
+    sigma_min: pydantic.NonNegativeFloat = 0.0
+    sigma_max: pydantic.NonNegativeFloat = 1.5
 
 
 class PMLParams(AbsorberParams):
@@ -93,12 +81,12 @@ class PMLParams(AbsorberParams):
     >>> params = PMLParams(sigma_order=3, sigma_min=0.0, sigma_max=1.5, kappa_min=0.0)
     """
 
-    kappa_order: pydantic.NonNegativeInt
-    kappa_min: pydantic.NonNegativeFloat
-    kappa_max: pydantic.NonNegativeFloat
-    alpha_order: pydantic.NonNegativeInt
-    alpha_min: pydantic.NonNegativeFloat
-    alpha_max: pydantic.NonNegativeFloat
+    kappa_order: pydantic.NonNegativeInt = 3
+    kappa_min: pydantic.NonNegativeFloat = 0.0
+    kappa_max: pydantic.NonNegativeFloat = 1.5
+    alpha_order: pydantic.NonNegativeInt = 3
+    alpha_min: pydantic.NonNegativeFloat = 0.0
+    alpha_max: pydantic.NonNegativeFloat = 1.5
 
 """ Default parameters """
 

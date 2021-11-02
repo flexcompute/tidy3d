@@ -11,8 +11,8 @@ from ..log import SetupError
 
 class Mode(Tidy3dBaseModel):
     """Stores specifications for the mode solver to find an electromagntic mode.
-        Note, the planar axes are found by popping the propagation axis from {x,y,z}.
-        For example, if propagation axis is y, the planar axes are ordered {x,z}.
+    Note, the planar axes are found by popping the propagation axis from {x,y,z}.
+    For example, if propagation axis is y, the planar axes are ordered {x,z}.
 
     Parameters
     ----------
@@ -47,7 +47,6 @@ class Mode(Tidy3dBaseModel):
         """Make sure num_modes is > mode_index or None"""
         if val is not None:
             mode_index = values.get("mode_index")
-            print(mode_index, val)
             if not val > mode_index:
                 raise SetupError(
                     "`num_modes` must be greater than `mode_index`"

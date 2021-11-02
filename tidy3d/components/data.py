@@ -20,19 +20,19 @@ from ..log import DataError
 
 
 def save_string(hdf5_grp, string_key: str, string_value: str) -> None:
-    """save a string to an hdf5 group"""
+    """Save a string to an hdf5 group."""
     str_type = h5py.special_dtype(vlen=str)
     hdf5_grp.create_dataset(string_key, (1,), dtype=str_type)
     hdf5_grp[string_key][0] = string_value
 
 
 def decode_bytes(bytes_dataset) -> str:
-    """decode an hdf5 dataset containing bytes to a string"""
+    """Decode an hdf5 dataset containing bytes to a string."""
     return bytes_dataset[0].decode("utf-8")
 
 
 def load_string(hdf5_grp, string_key: str) -> str:
-    """load a string from an hdf5 group"""
+    """Load a string from an hdf5 group."""
     string_value_bytes = hdf5_grp.get(string_key)
     if not string_value_bytes:
         return None
@@ -40,7 +40,7 @@ def load_string(hdf5_grp, string_key: str) -> str:
 
 
 def decode_bytes_array(array_of_bytes: Numpy) -> List[str]:
-    """convert numpy array containing bytes to list of strings"""
+    """Convert numpy array containing bytes to list of strings."""
     list_of_bytes = array_of_bytes.tolist()
     list_of_str = [v.decode("utf-8") for v in list_of_bytes]
     return list_of_str
@@ -50,10 +50,10 @@ def decode_bytes_array(array_of_bytes: Numpy) -> List[str]:
 
 
 class Tidy3dData(Tidy3dBaseModel):
-    """base class for data associated with a simulation."""
+    """Base class for data associated with a simulation."""
 
     class Config:  # pylint: disable=too-few-public-methods
-        """sets config for all Tidy3dBaseModel objects"""
+        """Configuration for all Tidy3dData objects."""
 
         validate_all = True  # validate default values too
         extra = "allow"  # allow extra kwargs not specified in model (like dir=['+', '-'])
@@ -68,22 +68,19 @@ class Tidy3dData(Tidy3dBaseModel):
 
     @abstractmethod
     def add_to_group(self, hdf5_grp):
-        """add data contents to an hdf5 group"""
+        """Add data contents to an hdf5 group."""
 
     @classmethod
     @abstractmethod
     def load_from_group(cls, hdf5_grp):
-        """add data contents to an hdf5 group"""
+        """Load data contents from an hdf5 group."""
 
 
 class MonitorData(Tidy3dData, ABC):
-    """Abstract base class.  Stores data.
+    """Abstract base class for objects storing individual data from simulation."""
 
-    Attributes
-    ----------
-    data : ``Union[xarray.DataArray xarray.Dataset]``
-        Representation of the data as an xarray object.
-    """
+    values: Union[Array[float], Array[complex]]
+    type: str = None
 
     """ explanation of values
         `values` is a numpy array that stores the raw data associated with each
@@ -96,8 +93,7 @@ class MonitorData(Tidy3dData, ABC):
         :class:`MonitorData` subclass
     """
 
-    values: Union[Array[float], Array[complex]]
-    type: str = None
+    _dims = ()
 
     """ explanation of``_dims``
         `_dims` is an attribute of all `MonitorData` objects.
@@ -107,23 +103,24 @@ class MonitorData(Tidy3dData, ABC):
         The dims are used to construct xarray objects as it tells the _make_xarray method what
         attribute to use for the keys in the `coords` coordinate dictionary.
     """
-    _dims = ()
 
     @property
     def data(self) -> xr.DataArray:
-        """make xarray representation of data
+        """Returns an xarray representation of the montitor data.
 
         Returns
         -------
-        ``xarray.DataArray``
-            Representation of the underlying data using xarray.
+        xarray.DataArray
+            Representation of the monitor data using xarray.
+            For more details refer to `xarray's Documentaton <http://xarray.pydata.org/en/stable/generated/xarray.DataArray.html>`_.
         """
+
         data_dict = self.dict()
         coords = {dim: data_dict[dim] for dim in self._dims}
         return xr.DataArray(self.values, coords=coords)
 
     def __eq__(self, other) -> bool:
-        """check equality against another MonitorData instance
+        """Check equality against another MonitorData instance.
 
         Parameters
         ----------
@@ -132,14 +129,14 @@ class MonitorData(Tidy3dData, ABC):
 
         Returns
         -------
-        ``bool``
+        bool
             Whether the other :class:`MonitorData` instance has the same data.
         """
         assert isinstance(other, MonitorData), "can only check eqality on two monitor data objects"
         return np.all(self.values == self.values)
 
     def add_to_group(self, hdf5_grp) -> None:
-        """add data contents to an hdf5 group"""
+        """Add data contents to an hdf5 group."""
 
         # save the type information of MonitorData to the group
         save_string(hdf5_grp, "type", self.type)
@@ -151,7 +148,7 @@ class MonitorData(Tidy3dData, ABC):
 
     @classmethod
     def load_from_group(cls, hdf5_grp):
-        """load the solver data dict for a specific monitor into a MonitorData instance"""
+        """Load Monitor data instance from an hdf5 group."""
 
         # kwargs that gets passed to MonitorData.__init__() to make new MonitorData
         kwargs = {}
@@ -177,12 +174,12 @@ class MonitorData(Tidy3dData, ABC):
 
 
 class CollectionData(Tidy3dData):
-    """Abstract base class.  Stores collection of data with similar dimensions.
+    """Abstract base class.  Stores a collection of data with same dimension types (such as field).
 
     Parameters
     ----------
-    data_dict : ``{str : :class:`MonitorData`}
-        mapping of field name to corresponding :class:`MonitorData`.
+    data_dict : Dict[str, :class:`MonitorData`]
+        Mapping of collection member name to corresponding :class:`MonitorData`.
     """
 
     data_dict: Dict[str, MonitorData]
@@ -195,8 +192,9 @@ class CollectionData(Tidy3dData):
 
         Returns
         -------
-        ```xarray.Dataset <http://xarray.pydata.org/en/stable/generated/xarray.Dataset.html>`__``
+        xarray.Dataset
             Representation of the underlying data using xarray.
+            For more details refer to `xarray's Documentaton <http://xarray.pydata.org/en/stable/generated/xarray.Dataset.html>`_.
         """
         data_arrays = {name: arr.data for name, arr in self.data_dict.items()}
 
@@ -204,7 +202,7 @@ class CollectionData(Tidy3dData):
         return xr.Dataset(data_arrays)
 
     def __eq__(self, other):
-        """check for equality against other :class:`CollectionData` object."""
+        """Check for equality against other :class:`CollectionData` object."""
 
         # same keys?
         if not all(k in other.data_dict.keys() for k in self.data_dict.keys()):
@@ -218,7 +216,7 @@ class CollectionData(Tidy3dData):
         return True
 
     def add_to_group(self, hdf5_grp) -> None:
-        """add data from a :class:`CollectionData` to an hdf5 group ."""
+        """Add data from a :class:`CollectionData` to an hdf5 group ."""
 
         # put collection's type information into the group
         save_string(hdf5_grp, "type", self.type)
@@ -230,7 +228,7 @@ class CollectionData(Tidy3dData):
 
     @classmethod
     def load_from_group(cls, hdf5_grp):
-        """load a :class:`CollectionData` from hdf5 group containing data."""
+        """Load a :class:`CollectionData` from hdf5 group containing data."""
         data_dict = {}
         for data_name, data_value in hdf5_grp.items():
 
@@ -245,68 +243,55 @@ class CollectionData(Tidy3dData):
         return cls(data_dict=data_dict)
 
 
-""" The following
-are abstract classes that separate the :class:`MonitorData` instances into
-    different types depending on what they store. 
-    They can be useful for keeping argument types and validations separated.
-    For example, monitors that should always be defined on planar geometries can have an 
-    ``_assert_plane()`` validation in the abstract base class ``PlanarData``.
-    This way, ``_assert_plane()`` will always be used if we add more ``PlanarData`` objects in
-    the future.
-    This organization is also useful when doing conditions based on monitor / data type.
-    For example, instead of 
-    ``if isinstance(mon_data, (FieldData, FieldTimeData)):`` we can simply do 
-    ``if isinstance(mon_data, AbstractFieldData)`` and this will generalize if we add more
-    ``AbstractFieldData`` objects in the future.
-"""
+""" Classes of Monitor Data """
 
 
 class FreqData(MonitorData, ABC):
-    """Stores frequency-domain data using an ``f`` attribute for frequency (Hz)."""
+    """Stores frequency-domain data using an ``f`` dimension for frequency in Hz."""
 
     f: Array[float]
 
 
 class TimeData(MonitorData, ABC):
-    """Stores time-domain data using a ``t`` attribute for time (sec)."""
+    """Stores time-domain data using a ``t`` attribute for time in seconds."""
 
     t: Array[float]
 
 
 class AbstractScalarFieldData(MonitorData, ABC):
-    """Stores a single field as a functio of x,y,z and sampler"""
+    """Stores a single, scalar field as a function of spatial coordinates x,y,z."""
 
     x: Array[float]
     y: Array[float]
     z: Array[float]
-    values: Union[Array[complex], Array[float]]
+    # values: Union[Array[complex], Array[float]]
 
 
 class PlanarData(MonitorData, ABC):
-    """Stores data that is constrained to the plane."""
+    """Stores data that must be found via a planar monitor."""
 
 
 class AbstractFluxData(PlanarData, ABC):
-    """Stores electromagnetic flux through a planar :class:`Monitor`"""
+    """Stores electromagnetic flux through a plane."""
 
 
 """ usable monitors """
 
 
 class ScalarFieldData(AbstractScalarFieldData, FreqData):
-    """stores a single scalar field in frequency-domain
+    """Stores a single scalar field in frequency-domain.
 
     Parameters
     ----------
-    x : ``numpy.ndarray``
+    x : numpy.ndarray
         Data coordinates in x direction (um).
-    y : ``numpy.ndarray``
+    y : numpy.ndarray
         Data coordinates in y direction (um).
-    z : ``numpy.ndarray``
+    z : numpy.ndarray
         Data coordinates in z direction (um).
-    f : ``numpy.ndarray``
+    f : numpy.ndarray
         Frequency coordinates (Hz).
-    values : ``numpy.ndarray``
+    values : numpy.ndarray
         Complex-valued array of shape ``(len(x), len(y), len(z), len(f))`` storing field values.
 
     Example
@@ -330,15 +315,15 @@ class ScalarFieldTimeData(AbstractScalarFieldData, TimeData):
 
     Parameters
     ----------
-    x : ``numpy.ndarray``
+    x : numpy.ndarray
         Data coordinates in x direction (um).
-    y : ``numpy.ndarray``
+    y : numpy.ndarray
         Data coordinates in y direction (um).
-    z : ``numpy.ndarray``
+    z : numpy.ndarray
         Data coordinates in z direction (um).
-    t : ``numpy.ndarray``
+    t : numpy.ndarray
         Time coordinates (sec).
-    values : ``numpy.ndarray``
+    values : numpy.ndarray
         Real-valued array of shape ``(len(x), len(y), len(z), len(t))`` storing field values.
 
     Example
@@ -358,11 +343,12 @@ class ScalarFieldTimeData(AbstractScalarFieldData, TimeData):
 
 
 class FieldData(CollectionData):
-    """Stores a collectio of scalar field quantities as a function of x, y, and z.
+    """Stores a collection of scalar fields
+    from a :class:`FieldMonitor` or :class:`FieldTimeMonitor`.
 
     Parameters
     ----------
-    data_dict : ``{str : Union[:class:`ScalarFieldData`, :class:`ScalarFieldTimeData`]}
+    data_dict : Dict[str, :class:`ScalarFieldData`] or Dict[str, :class:`ScalarFieldTimeData`]
         Mapping of field name to its scalar field data.
 
     Example
@@ -380,18 +366,18 @@ class FieldData(CollectionData):
     >>> data_t = FieldData(data_dict={'Ex': field_t, 'Ey': field_t})
     """
 
-    data_dict: Dict[str, Union[ScalarFieldData, ScalarFieldTimeData]]
+    data_dict: Union[Dict[str, ScalarFieldData], Dict[str, ScalarFieldTimeData]]
     type: Literal["FieldData"] = "FieldData"
 
 
 class FluxData(AbstractFluxData, FreqData):
-    """Stores power flux data through a planar :class:`FluxMonitor`.
+    """Stores frequency-domain power flux data from a :class:`FluxMonitor`.
 
     Parameters
     ----------
-    f : ``numpy.ndarray``
+    f : numpy.ndarray
         Frequency coordinates (Hz).
-    values : ``numpy.ndarray``
+    values : numpy.ndarray
         Complex-valued array of shape ``(len(f),)`` storing field values.
 
     Example
@@ -409,13 +395,13 @@ class FluxData(AbstractFluxData, FreqData):
 
 
 class FluxTimeData(AbstractFluxData, TimeData):
-    """Stores power flux data through a planar :class:`FluxTimeMonitor`
+    """Stores time-domain power flux data from a :class:`FluxTimeMonitor`.
 
     Parameters
     ----------
-    t : ``numpy.ndarray``
+    t : numpy.ndarray
         Time coordinates (sec).
-    values : ``numpy.ndarray``
+    values : numpy.ndarray
         Real-valued array of shape ``(len(t),)`` storing field values.
 
     Example
@@ -437,15 +423,16 @@ class ModeData(PlanarData, FreqData):
 
     Parameters
     ----------
-    direction : ``[Literal["+", "-"]]``
+    direction : List[str]
         List of strings corresponding to the mode propagation direction.
-    mode_index : ``numpy.ndarray``
+        Allowed elements are ``'+'`` and ``'-'``.
+    mode_index : numpy.ndarray
         Array of integer indices into the original monitor's :attr:`ModeMonitor.modes`.
-    f : ``numpy.ndarray``
+    f : numpy.ndarray
         Frequency coordinates (Hz).
-    values : ``numpy.ndarray``
+    values : numpy.ndarray
         Complex-valued array of mode amplitude values
-        with shape``values.shape=(len(direction), len(mode_index), len(f))``
+        with shape ``values.shape=(len(direction), len(mode_index), len(f))``.
 
     Example
     -------
@@ -481,11 +468,11 @@ class SimulationData(Tidy3dBaseModel):
     Parameters
     ----------
     simulation : :class:`Simulation`
-        Original :class:`Simulation`.
-    monitor_data : ``Dict[str, :class:`Tidy3dData`]``
+        Original :class:`Simulation` that was run to create data.
+    monitor_data : Dict[str, :class:`Tidy3dData`]
         Mapping of monitor name to :class:`Tidy3dData` intance.
-    log_string : ``str``, optional
-        string containing the log from server.
+    log_string : str = None
+        A string containing the log information from the simulation run.
     """
 
     simulation: Simulation
@@ -494,21 +481,21 @@ class SimulationData(Tidy3dBaseModel):
 
     @property
     def log(self):
-        """prints the server-side log."""
+        """Prints the server-side log."""
         print(self.log_string if self.log_string else "no log stored")
 
     def __getitem__(self, monitor_name: str) -> Union[xr.DataArray, xr.Dataset]:
-        """get the :class:`MonitorData` xarray representation by name (``sim_data[monitor_name]``).
+        """Get the :class:`MonitorData` xarray representation by name (``sim_data[monitor_name]``).
 
         Parameters
         ----------
         monitor_name : ``str``
-            Name of :class:`Monitor` to return data for.
+            Name of the :class:`Monitor` to return data for.
 
         Returns
         -------
-        ``Union[xarray.DataArray``, xarray.Dataset]``
-            The ``xarray`` representation of the data.
+        xarray.DataArray or xarray.Dataset
+            The xarray representation of the data.
         """
         monitor_data = self.monitor_data.get(monitor_name)
         if not monitor_data:
@@ -590,8 +577,8 @@ class SimulationData(Tidy3dBaseModel):
 
         Parameters
         ----------
-        fname : ``str``
-            Path to data file (including filename).
+        fname : str
+            Path to .hdf5 data file (including filename).
         """
 
         with h5py.File(fname, "a") as f_handle:
@@ -616,8 +603,8 @@ class SimulationData(Tidy3dBaseModel):
 
         Parameters
         ----------
-        fname : ``str``
-            Path to data file (including filename).
+        fname : str
+            Path to .hdf5 data file (including filename).
 
         Returns
         -------
@@ -651,7 +638,7 @@ class SimulationData(Tidy3dBaseModel):
         )
 
     def __eq__(self, other):
-        """check equality against another SimulationData instance
+        """Check equality against another :class:`SimulationData` instance.
 
         Parameters
         ----------

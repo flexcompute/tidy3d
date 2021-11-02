@@ -29,7 +29,7 @@ from .components import Structure
 from .components import Mode
 
 # sources
-from .components import GaussianPulse
+from .components import GaussianPulse, ContinuousWave
 from .components import VolumeSource, PlaneWave, ModeSource, GaussianBeam
 
 # monitors

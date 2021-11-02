@@ -30,11 +30,11 @@ from ..log import log, SetupError
 
 
 class Simulation(Box):  # pylint:disable=too-many-public-methods
-    """Contains all information about simulation.
+    """Contains all information about Tidy3d simulation.
 
     Parameters
     ----------
-    center : Tuple[float, float, float] = ``(0.0, 0.0, 0.0)``
+    center : Tuple[float, float, float] = (0.0, 0.0, 0.0)
         (microns) Center of simulation domain in x, y, and z.
     size : Tuple[float, float, float]
         (microns) Size of simulation domain in x, y, and z.
@@ -42,35 +42,42 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
     grid_size : Tuple[float, float, float]
         (microns) Grid size along x, y, and z.
         Each element must be non-negative.
-    run_time : float = ``0.0``
-        (seconds) Maximum run time of simulation.
-        If ``shutoff`` specified, simulation will terminate early when shutoff condition met.
+    run_time : float = 0.0
+        Total electromagnetic evolution time in seconds.
+        Note: If ``shutoff`` specified, simulation will terminate early when shutoff condition met.
         Must be non-negative.
-    medium : :class:`Medium` = ``Medium(permittivity=1.0)``
+    medium : :class:`Medium` or :class:`PoleResidue` or :class:`Lorentz` or :class:`Sellmeier` or :class:`Debye` = ``Medium(permittivity=1.0)``
         Background :class:`tidy3d.Medium` of simulation, defaults to air.
-    structures : List[:class:`Structure`] = ``{}``
-        Structures in simulation.
-        Structures defined later in this list override the simulation material properties in
+    structures : List[:class:`Structure`] = []
+        List of structures in simulation.
+        Note: Structures defined later in this list override the simulation material properties in
         regions of spatial overlap.
-    sources : List[:class:`Source`] = ``[]``
-        Named mapping of electric current sources in the simulation.
-    monitors : List[:class:`Monitor`] = ``[]``
-        Named mapping of field and data monitors in the simulation.
+    sources : List[:class:`VolumeSource` or :class:`PlaneWave` or :class:`ModeSource`] = []
+        List of electric current sources injecting fields into the simulation.
+    monitors : List[:class:`FieldMonitor` or :class:`FieldTimeMonitor` or :class:`FluxMonitor` or :class:`FluxTimeMonitor` or :class:`ModeMonitor`] = []
+        List of monitors in the simulation.
+        Note: names stored in ``monitor.name`` are used to access data after simulation is run.
     pml_layers : Tuple[:class:`AbsorberSpec`, :class:`AbsorberSpec`, :class:`AbsorberSpec`]
         = ``(None, None, None)``
         Specifications for the absorbing layers on x, y, and z edges.
         Elements of ``None`` are assumed to have no absorber and use periodic boundary conditions.
-    symmetry : Tuple[int, int, int] = ``(0, 0, 0)``
-        Specifies symmetry in x, y, and z dimensions.
-        Only values of 0, 1, and -1 are accepted and specify no symmetry, even symmetry, and
-        odd symmetry, respectively.
-    shutoff : float = ``1e-5``
-        Value of the average intensity in the simulation relative to the maximum at which the
-        simulation terminates.
-    subpixel : bool = ``True``
+    symmetry : Tuple[int, int, int] = (0, 0, 0)
+        Tuple of integers defining reflection symmetry across a 
+        plane bisecting the simulation domain normal to the x-, y-, and 
+        z-axis, respectively. Each element can be ``0`` (no symmetry), 
+        ``1`` (even, i.e. 'PMC' symmetry) or ``-1`` (odd, i.e. 'PEC' 
+        symmetry).
+        Note that the vectorial nature of the fields must be taken into account to correctly
+        determine the symmetry value.        
+    shutoff : float = 1e-5
+        Ratio of the instantaneous integrated E-field intensity to the maximum value
+        at which the simulation will automatically shut down.
+        Used to prevent extraneous run time of simulations with fully decayed fields.
+        Set to ``0`` to disable this feature.
+    subpixel : bool = True
         If ``True``, uses subpixel averaging of the permittivity based on structure definition,
         resulting in much higher accuracy for a given grid size.
-    courant : float = ``0.9``
+    courant : float = 0.9
         Courant stability factor, controls time step to spatial step ratio.
         Lower values lead to more stable simulations for dispersive materials,
         but result in longer simulation times.
