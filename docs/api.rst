@@ -7,13 +7,81 @@ API Reference
 Defining Simulations
 ====================
 
-Base Simulation Definition
---------------------------
+
+Simulation Definition
+---------------------
+
+.. currentmodule:: tidy3d
 
 .. autosummary::
    :toctree: _autosummary/
 
    Simulation
+   simulation.grid
+
+Structures
+----------
+
+.. autosummary::
+   :toctree: _autosummary/
+
+   Structure
+   Structure.plot
+
+
+Absorbing Boundaries
+--------------------
+
+.. autosummary::
+   :toctree: _autosummary/
+
+   PML
+   StablePML
+   Absorber
+   AbsorberParams
+   PMLParams
+
+Mode Specification
+------------------
+
+.. autosummary::
+   :toctree: _autosummary/
+
+   Mode
+
+
+Core Components
+===============
+
+
+Tidy3d Base Model
+-----------------
+
+.. currentmodule:: tidy3d.components.base
+
+.. autosummary::
+   :toctree: _autosummary/
+
+   Tidy3dBaseModel
+   Tidy3dBaseModel.export
+   Tidy3dBaseModel.load
+   Tidy3dBaseModel.help
+
+FDTD Grid
+---------
+
+.. currentmodule:: tidy3d.components.grid
+
+.. autosummary::
+   :toctree: _autosummary/
+
+   Coords
+   FieldGrid
+   YeeGrid
+   Grid
+   Grid.centers
+   Grid.sizes
+   Grid.yee
 
 
 .. Absorbing Boundaries

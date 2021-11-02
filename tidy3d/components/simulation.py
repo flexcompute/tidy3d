@@ -173,9 +173,9 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
 
     # make sure all names are unique
     _unique_structure_names = assert_unique_names("structures")
-    _unique_medium_names = assert_unique_names("structures", check_mediums=True)
     _unique_source_names = assert_unique_names("sources")
     _unique_monitor_names = assert_unique_names("monitors")
+    # _unique_medium_names = assert_unique_names("structures", check_mediums=True)
 
     # TODO:
     # - check sources in medium freq range
@@ -185,17 +185,22 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
     """ Accounting """
 
     @property
-    def medium_map(self) -> Dict[Medium, pydantic.NonNegativeInt]:
-        """``medium_map[medium]`` returns unique global index of :class:`Medium` in simulation.
+    def mediums(self) -> List[MediumType]:
+        """Returns set of distinct :class:`AbstractMedium` in simulation."""
+        return {structure.medium for structure in self.structures}
+
+    @property
+    def medium_map(self) -> Dict[MediumType, pydantic.NonNegativeInt]:
+        """Returns dict mapping medium to index in material.
+        ``medium_map[medium]`` returns unique global index of :class:`AbstractMedium` in simulation.
 
         Returns
         -------
-        {:class:`Medium`, ``int``}
-            Mapping between a :class:`Medium` and it's index in the simulation.
+        Dict[:class:`AbstractMedium`, int]
+            Mapping between a :class:`AbstractMedium` and it's index in the simulation.
         """
 
-        mediums = {structure.medium for structure in self.structures}
-        return {medium: index for index, medium in enumerate(mediums)}
+        return {medium: index for index, medium in enumerate(self.mediums)}
 
     """ Plotting """
 
@@ -474,7 +479,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
     @property
     def dt(self) -> float:
         """compute time step (distance)"""
-        dl_mins = [np.min(sizes) for sizes in self.grid.cell_sizes.dict().values()]
+        dl_mins = [np.min(sizes) for sizes in self.grid.sizes.dict().values()]
         dl_sum_inv_sq = sum([1 / dl ** 2 for dl in dl_mins])
         dl_avg = 1 / np.sqrt(dl_sum_inv_sq)
         return self.courant * dl_avg / C_0

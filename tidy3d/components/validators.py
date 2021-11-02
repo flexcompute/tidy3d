@@ -7,6 +7,39 @@ from ..log import ValidationError, SetupError
 from .geometry import Box
 
 
+""" Explanation of pydantic validators:
+    
+    Validators are class methods that are added to the models to validate their fields (kwargs).
+    The functions on this page return validators based on config arguments
+    and are generally in multiple components of tidy3d.
+    The inner functions (validators) are decorated with @pydantic.validator, which is configured.
+    First argument is the string of the field being validated in the model.
+    ``allow_reuse`` lets us use the validator in more than one model.
+    ``always`` makes sure if the model is changed, the validator gets called again.
+
+    The function being decorated by @pydantic.validator generally takes
+    ``cls`` the class that the validator is added to.
+    ``val`` the value of the field being validated.
+    ``values`` a dictionary containing all of the other fields of the model.
+    It is important to note that the validator only has access to fields that are defined
+    before the field being validated.
+    Fields defined under the validated field will not be in ``values``.
+
+    All validators generally should throw an exception if the validation fails
+    and return val if it passes.
+    Sometimes, we can use validators to change ``val`` or ``values``,
+    but this should be done with caution as it can be hard to reason about.
+
+    To add a validator from this file to the pydantic model,
+    put it in the model's main body and assign it to a variable (class method).
+    For example ``_plane_validator = assert_plane()``.
+    Note, if the assigned name ``_plane_validator`` is used later on for another validator, say,
+    the original validator will be overwritten so be aware of this.
+
+    For more details: `Pydantic Validators <https://pydantic-docs.helpmanual.io/usage/validators/>`_
+"""
+
+
 def assert_plane():
     """makes sure a field's `size` attribute has exactly 1 zero"""
 

@@ -220,6 +220,162 @@ def test_medium_dispersion():
         eps_c = medium.eps_model(freqs)
 
 
+""" modes """
+
+def test_modes():
+
+    m = Mode(mode_index=0)    
+    m = Mode(mode_index=0, num_modes=1)
+
+    # not enough modes
+    with pytest.raises(SetupError) as e:
+        m = Mode(mode_index=1, num_modes=1)
+
+
+""" names """
+
+def test_names_default():
+    """ makes sure default names are set """
+
+    sim = Simulation(
+        size=(2.0, 2.0, 2.0),
+        grid_size=(0.01, 0.01, 0.01),
+        run_time=1e-12,
+        structures=[
+            Structure(
+                geometry=Box(size=(1, 1, 1), center=(-1, 0, 0)),
+                medium=Medium(permittivity=2.0),
+            ),
+            Structure(
+                geometry=Box(size=(1, 1, 1), center=(0, 0, 0)),
+                medium=Medium(permittivity=2.0),
+            ),
+            Structure(geometry=Sphere(radius=1.4, center=(1.0, 0.0, 1.0)), medium=Medium()),
+            Structure(
+                geometry=Cylinder(radius=1.4, length=2.0, center=(1.0, 0.0, -1.0), axis=1),
+                medium=Medium(),
+            ),
+        ],
+        sources=[
+            VolumeSource(
+                size=(0, 0, 0),
+                center=(0, -0.5, 0),
+                polarization="Hx",
+                source_time=GaussianPulse(freq0=1e14, fwidth=1e12),
+            ),
+            VolumeSource(
+                size=(0, 0, 0),
+                center=(0, -0.5, 0),
+                polarization="Ex",
+                source_time=GaussianPulse(freq0=1e14, fwidth=1e12),
+            ),
+            VolumeSource(
+                size=(0, 0, 0),
+                center=(0, -0.5, 0),
+                polarization="Ey",
+                source_time=GaussianPulse(freq0=1e14, fwidth=1e12),
+            ),            
+        ],
+        monitors=[
+            FluxMonitor(
+                size=(1, 1, 0),
+                center=(0, -0.5, 0),
+                freqs=[1],
+                name='mon1'
+            ),
+            FluxMonitor(
+                size=(0, 1, 1),
+                center=(0, -0.5, 0),
+                freqs=[1],
+                name='mon2'
+            ),
+            FluxMonitor(
+                size=(1, 0, 1),
+                center=(0, -0.5, 0),
+                freqs=[1],
+                name='mon3'
+            ),            
+        ],
+    )
+
+    for i, structure in enumerate(sim.structures):
+        assert structure.name == f'structures[{i}]'
+
+    for i, source in enumerate(sim.sources):
+        assert source.name == f'sources[{i}]'
+
+    distinct_mediums = [f'mediums[{i}]' for i in range(len(sim.mediums))]
+    for i, medium in enumerate(sim.mediums):
+        assert medium.name in distinct_mediums
+        distinct_mediums.pop(distinct_mediums.index(medium.name))
+
+def test_names_unique():
+
+    with pytest.raises(SetupError) as e:
+        sim = Simulation(
+            size=(2.0, 2.0, 2.0),
+            grid_size=(0.01, 0.01, 0.01),
+            run_time=1e-12,
+            structures=[
+                Structure(
+                    geometry=Box(size=(1, 1, 1), center=(-1, 0, 0)),
+                    medium=Medium(permittivity=2.0),
+                    name='struct1'
+                ),
+                Structure(
+                    geometry=Box(size=(1, 1, 1), center=(0, 0, 0)),
+                    medium=Medium(permittivity=2.0),
+                    name='struct1'
+                ),
+            ]
+        )
+
+    with pytest.raises(SetupError) as e:
+        sim = Simulation(
+            size=(2.0, 2.0, 2.0),
+            grid_size=(0.01, 0.01, 0.01),
+            run_time=1e-12,
+            sources = [
+                VolumeSource(
+                    size=(0, 0, 0),
+                    center=(0, -0.5, 0),
+                    polarization="Hx",
+                    source_time=GaussianPulse(freq0=1e14, fwidth=1e12),
+                    name='source1'
+                ),
+                VolumeSource(
+                    size=(0, 0, 0),
+                    center=(0, -0.5, 0),
+                    polarization="Ex",
+                    source_time=GaussianPulse(freq0=1e14, fwidth=1e12),
+                    name='source1'
+                ),
+            ]
+        )
+
+
+    with pytest.raises(SetupError) as e:
+        sim = Simulation(
+            size=(2.0, 2.0, 2.0),
+            grid_size=(0.01, 0.01, 0.01),
+            run_time=1e-12,
+            monitors=[
+                FluxMonitor(
+                    size=(1, 1, 0),
+                    center=(0, -0.5, 0),
+                    freqs=[1],
+                    name='mon1'
+                ),
+                FluxMonitor(
+                    size=(0, 1, 1),
+                    center=(0, -0.5, 0),
+                    freqs=[1],
+                    name='mon1'
+                ),   
+            ],
+        )
+
+
 """ VolumeSources """
 
 
