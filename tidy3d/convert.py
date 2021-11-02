@@ -41,7 +41,7 @@ def old_json_parameters(sim: Simulation) -> Dict:
             profile = "standard"
         pml_layers.append({"profile": profile, "Nlayers": pml.num_layers})
 
-    sizes = sim.grid.cell_sizes
+    sizes = sim.grid.sizes
     mesh_step_x = np.mean(sizes.x)
     mesh_step_y = np.mean(sizes.y)
     mesh_step_z = np.mean(sizes.z)

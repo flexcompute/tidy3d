@@ -6,20 +6,20 @@ from .types import Array, Axis
 
 """ Grid data """
 
-# type of one dimensional coordinate array
+# data type of one dimensional coordinate array.
 Coords1D = Array[float]
 
 
 class Coords(Tidy3dBaseModel):
-    """Holds data about a set of x,y,z positions on a grid
+    """Holds data about a set of x,y,z positions on a grid.
 
     Parameters
     ----------
-    x : ``np.ndarray``
+    x : np.ndarray
         Positions of coordinates along x direction.
-    y : ``np.ndarray``
+    y : np.ndarray
         Positions of coordinates along y direction.
-    z : ``np.ndarray``
+    z : np.ndarray
         Positions of coordinates along z direction.
 
     Example
@@ -79,6 +79,7 @@ class YeeGrid(Tidy3dBaseModel):
     >>> coords = Coords(x=x, y=y, z=z)
     >>> field_grid = FieldGrid(x=coords, y=coords, z=coords)
     >>> yee_grid = YeeGrid(E=field_grid, H=field_grid)
+    >>> Ex_coords = yee_grid.E.x
     """
 
     E: FieldGrid
@@ -86,7 +87,7 @@ class YeeGrid(Tidy3dBaseModel):
 
 
 class Grid(Tidy3dBaseModel):
-    """contains all information about the spatial positions of the FDTD grid
+    """Contains all information about the spatial positions of the FDTD grid.
 
     Parameters
     ----------
@@ -100,51 +101,104 @@ class Grid(Tidy3dBaseModel):
     >>> z = np.linspace(-1, 1, 12)
     >>> coords = Coords(x=x, y=y, z=z)
     >>> grid = Grid(boundaries=coords)
+    >>> centers = grid.centers
+    >>> sizes = grid.sizes
+    >>> yee_grid = grid.yee
     """
 
     boundaries: Coords
 
     @staticmethod
     def _avg(coords1d: Coords1D):
-        """average an array of 1D coordinates"""
+        """Return average positions of an array of 1D coordinates."""
         return (coords1d[1:] + coords1d[:-1]) / 2.0
 
     @staticmethod
     def _min(coords1d: Coords1D):
-        """get minus positions of 1D coordinates"""
+        """Return minus positions of 1D coordinates."""
         return coords1d[:-1]
 
     @property
     def centers(self) -> Coords:
-        """get centers of the cells in the :class:`Grid`.
+        """Return centers of the cells in the :class:`Grid`.
 
         Returns
         -------
         :class:`Coords`
             centers of the FDTD cells in x,y,z stored as :class:`Coords` object.
+
+        Example
+        -------
+        >>> x = np.linspace(-1, 1, 10)
+        >>> y = np.linspace(-1, 1, 11)
+        >>> z = np.linspace(-1, 1, 12)
+        >>> coords = Coords(x=x, y=y, z=z)
+        >>> grid = Grid(boundaries=coords)
+        >>> centers = grid.centers
         """
         return Coords(**{key: self._avg(val) for key, val in self.boundaries.dict().items()})
 
     @property
-    def cell_sizes(self) -> Coords:
-        """get sizes of the cells in the :class:`Grid`.
+    def sizes(self) -> Coords:
+        """Return sizes of the cells in the :class:`Grid`.
 
         Returns
         -------
         :class:`Coords`
             Sizes of the FDTD cells in x,y,z stored as :class:`Coords` object.
+
+        Example
+        -------
+        >>> x = np.linspace(-1, 1, 10)
+        >>> y = np.linspace(-1, 1, 11)
+        >>> z = np.linspace(-1, 1, 12)
+        >>> coords = Coords(x=x, y=y, z=z)
+        >>> grid = Grid(boundaries=coords)
+        >>> sizes = grid.sizes
         """
         return Coords(**{key: np.diff(val) for key, val in self.boundaries.dict().items()})
 
     @property
+    def _primal_steps(self) -> Coords:
+        """Return primal steps of the cells in the :class:`Grid`.
+
+        Returns
+        -------
+        :class:`Coords`
+            Distances between each of the cell boundaries along each dimension.
+        """
+        return self.sizes
+
+    @property
+    def _dual_steps(self) -> Coords:
+        """Return dual steps of the cells in the :class:`Grid`.
+
+        Returns
+        -------
+        :class:`Coords`
+            Distances between each of the cell centers along each dimension.
+        """
+        return Coords(**{key: np.diff(val) for key, val in self.centers.dict().items()})
+
+    @property
     def yee(self) -> YeeGrid:
-        """return the :class:`YeeGrid` defining the yee cell locations for this :class:`Grid`.
+        """Return the :class:`YeeGrid` defining the yee cell locations for this :class:`Grid`.
 
 
         Returns
         -------
         :class:`YeeGrid`
-            Coordinates of all of the components on the yee lattice.
+            Stores coordinates of all of the components on the yee lattice.
+
+        Example
+        -------
+        >>> x = np.linspace(-1, 1, 10)
+        >>> y = np.linspace(-1, 1, 11)
+        >>> z = np.linspace(-1, 1, 12)
+        >>> coords = Coords(x=x, y=y, z=z)
+        >>> grid = Grid(boundaries=coords)
+        >>> yee_cells = grid.yee
+        >>> Ex_positions = yee_cells.E.x
         """
         yee_e_kwargs = {key: self._yee_e(axis=axis) for axis, key in enumerate("xyz")}
         yee_h_kwargs = {key: self._yee_h(axis=axis) for axis, key in enumerate("xyz")}
@@ -153,8 +207,8 @@ class Grid(Tidy3dBaseModel):
         yee_h = FieldGrid(**yee_h_kwargs)
         return YeeGrid(E=yee_e, H=yee_h)
 
-    def _yee_e(self, axis: Axis):  #
-        """E field yee lattice sites for axis"""
+    def _yee_e(self, axis: Axis):
+        """E field yee lattice sites for axis."""
 
         boundary_coords = self.boundaries.dict()
 
@@ -168,7 +222,7 @@ class Grid(Tidy3dBaseModel):
         return Coords(**yee_coords)
 
     def _yee_h(self, axis: Axis):
-        """E field yee lattice sites for axis"""
+        """E field yee lattice sites for axis."""
 
         boundary_coords = self.boundaries.dict()
 

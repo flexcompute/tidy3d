@@ -33,7 +33,7 @@ def test_grid():
     assert np.all(g.centers.y == np.array([-1.5, -0.5, 0.5, 1.5]))
     assert np.all(g.centers.z == np.array([-2.5, -1.5, -0.5, 0.5, 1.5, 2.5]))
 
-    for s in g.cell_sizes.dict().values():
+    for s in g.sizes.dict().values():
         assert np.all(s == 1.0)
 
     assert np.all(g.yee.E.x.x == np.array([-0.5, 0.5]))

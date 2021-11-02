@@ -8,4 +8,6 @@ pytest -rA tests/test_material_library.py
 pytest -rA tests/test_core.py
 pytest -rA tests/test_plugins.py
 
-pytest --doctest-modules tidy3d --ignore=tidy3d/__main__.py
+pytest --doctest-modules tidy3d \
+--ignore=tidy3d/__main__.py \
+--ignore=tidy3d/components/base.py

@@ -31,9 +31,6 @@ Axis = Literal[0, 1, 2]
 Vertices = List[Coordinate2D]
 Shapely = BaseGeometry
 
-""" grid """
-
-
 """ medium """
 
 Complex = Tuple[float, float]
@@ -91,14 +88,20 @@ class Array(np.ndarray, metaclass=ArrayMeta):
     """type of numpy array with annotated type (Array[float], Array[complex])"""
 
 
+""" note:
+    ^ this is the best way to declare numpy types if you know dtype.
+    for example: ``field_amps: Array[float] = np.random.random(5)``.
+"""
+
 # lists or np.ndarrays of certain type
 FloatArrayLike = Union[List[float], Array[float]]
 IntArrayLike = Union[List[int], Array[int]]
 ComplexArrayLike = Union[List[complex], Array[complex]]
 
-# encoding for JSON in pydantic models
+# encoding for JSON in tidy3d data
+# technically not used yet since the tidy3d data has separate load and export methods.
 def numpy_encoding(array):
-    """json encoding of numpy array"""
+    """json encoding of a (maybe complex-valued) numpy array."""
     if array.dtype == "complex":
         return {"re": list(array.real), "im": list(array.imag)}
     return list(array)
