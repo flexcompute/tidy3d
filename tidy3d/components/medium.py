@@ -12,12 +12,8 @@ from .viz import add_ax_if_none
 from .validators import validate_name_str
 
 from ..constants import C_0, inf
-from ..log import log, Tidy3dKeyError
+from ..log import log
 
-
-# TODO: make pole residue support complex values instead of tuples of real and imaginary.
-# TODO: double check all units.
-# TODO: convert all to pole-residue.
 
 """ Medium Definitions """
 
@@ -270,10 +266,8 @@ class PoleResidue(DispersiveMedium):
     ----------
     eps_inf : float = 1.0
         Relative permittivity at infinite frequency (:math:`\\epsilon_\\infty`).
-    poles : List[Tuple[Tuple[float, float], Tuple[float, float]]]
-        List of (:math:`a_i, c_i`) poles for the model.
-        Note that :math:`a_i` and :math:`c_i` are complex-valued and therefore must each
-        be specified as a tuple containing the real and imaginary parts.
+    poles : List[Tuple[complex, complex]]
+        List of complex-valued (:math:`a_i, c_i`) poles for the model.
     frequeuncy_range : Tuple[float, float] = (-inf, inf)
         Range of validity for the medium in Hz.
         If simulation or plotting functions use frequency out of this range, a warning is thrown.
@@ -282,7 +276,7 @@ class PoleResidue(DispersiveMedium):
 
     Example
     -------
-    >>> pole_res = PoleResidue(eps_inf=2.0, poles=[((1,2),(3,4)), ((5,6),(7,8))])
+    >>> pole_res = PoleResidue(eps_inf=2.0, poles=[(1+2j, 3+4j), (5+6j, 7+8j)])
     >>> eps = pole_res.eps_model(200e12)
     """
 
@@ -306,10 +300,7 @@ class PoleResidue(DispersiveMedium):
         """
         omega = 2 * np.pi * frequency
         eps = self.eps_inf + 0.0j
-        for p in self.poles:
-            (ar, ai), (cr, ci) = p
-            a = ar + 1j * ai
-            c = cr + 1j * ci
+        for (a, c) in self.poles:
             a_cc = np.conj(a)
             c_cc = np.conj(c)
             eps -= c / (1j * omega + a)
@@ -396,10 +387,10 @@ class Sellmeier(DispersiveMedium):
 
         poles = []
         for (B, C) in self.coeffs:
-            beta = 2 * np.pi * C_0 / np.sqrt(C)  # This has units of rad/s
+            beta = 2 * np.pi * C_0 / np.sqrt(C)
             alpha = -0.5 * beta * B
-            a = (0, beta)
-            c = (0, alpha)
+            a = 1j * beta
+            c = 1j * alpha
             poles.append((a, c))
 
         return PoleResidue(
@@ -476,11 +467,8 @@ class Lorentz(DispersiveMedium):
             else:
                 r = np.sqrt(w * w - d * d)
 
-            a_complex = d - 1j * r
-            c_complex = 1j * de * w ** 2 / 2 / r
-
-            a = (np.real(a_complex), np.imag(a_complex))
-            c = (np.real(c_complex), np.imag(c_complex))
+            a = d - 1j * r
+            c = 1j * de * w ** 2 / 2 / r
 
             poles.append((a, c))
 
@@ -549,9 +537,8 @@ class Debye(DispersiveMedium):
 
         poles = []
         for (de, tau) in self.coeffs:
-            a_real = 2 * np.pi / tau  # note: was sign error
-            a = (a_real, 0)
-            c = (-0.5 * de * a_real, 0)
+            a = 2 * np.pi / tau + 0j
+            c = -0.5 * de * a
             poles.append((a, c))
 
         return PoleResidue(

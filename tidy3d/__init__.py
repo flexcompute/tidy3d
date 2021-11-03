@@ -52,11 +52,8 @@ from . import plugins
 # get material `mat` and variant `var` as `material_library[mat][var]`
 from .material_library import material_library
 
-from .log import log
-
-# make all stdout and errors pretty
-pretty.install()
-traceback.install()
+# logging
+from .log import log, logging_level
 
 # for docs
 from .components.medium import AbstractMedium
@@ -64,3 +61,7 @@ from .components.geometry import Geometry
 from .components.source import Source, SourceTime
 from .components.monitor import Monitor
 from .components.grid import YeeGrid, FieldGrid, Coords1D
+
+# make all stdout and errors pretty
+pretty.install()
+traceback.install()

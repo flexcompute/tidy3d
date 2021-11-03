@@ -205,10 +205,10 @@ git push origin x.x.x
 	- [x] Symmetry, PML, grid spec.  Less clunky interface? 
 - [ ] Covering features of existing code (1 day)
 	- [x] support diagonal anisotropy (permittivity as 3-tuple)
-	- [ ] gds slab / gds importing.
 	- [x] Conversion of dispersive materials into pole-residue.
 	- [x] gaussian beam.
-	- [ ] option to display cell boundaries in plot.
+	- [x] option to display cell boundaries in plot.
+	- [ ] gds slab / gds importing.
 	- [ ] Add PEC medium
 - [ ] Documentation (1 week)
 	- [x] Add more discussion into Simulation docs.
@@ -222,7 +222,7 @@ git push origin x.x.x
 	- [ ] Add more info / debug logging and more comprehensive error handling (file IO, etc).
 	- [ ] Add more intelligent 'inf' handling.
 	- [ ] setup.cfg for installing dependencies for different parts of the code (base, docs, tests)
-	- [ ] web.monitor using running status for progress updates.
+	- [ ] web.monitor using running status for progress updates <- waiting on victor.
 
 ---
 

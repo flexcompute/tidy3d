@@ -24,8 +24,6 @@ def find_version(*file_paths):
     raise RuntimeError("Unable to find version string.")
 
 
-#
-
 # -- Project information -----------------------------------------------------
 
 project = "Tidy3d"

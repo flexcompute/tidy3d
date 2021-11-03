@@ -253,8 +253,7 @@ class DispersionFitter:
             Dispersive medium corresponding to this set of ``coeffs``.
         """
         poles_complex = _coeffs_to_poles(coeffs)
-        poles_re_im = [(_unpack_complex(a), _unpack_complex(c)) for (a, c) in poles_complex]
-        return PoleResidue(poles=poles_re_im, frequency_range=self.frequency_range)
+        return PoleResidue(poles=poles_complex, frequency_range=self.frequency_range)
 
     def fit_single(
         self,
