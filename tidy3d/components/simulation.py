@@ -219,21 +219,29 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
 
     @add_ax_if_none
     def plot(
-        self, x: float = None, y: float = None, z: float = None, ax: Ax = None, **kwargs
+        self,
+        x: float = None,
+        y: float = None,
+        z: float = None,
+        grid_lines: bool = False,
+        ax: Ax = None,
+        **kwargs,
     ) -> Ax:
         """Plot each of simulation's components on a plane defined by one nonzero x,y,z coordinate.
 
         Parameters
         ----------
         x : float = None
-            Position of point in x direction, only one of x, y, z must be specified to define plane.
+            position of plane in x direction, only one of x, y, z must be specified to define plane.
         y : float = None
-            Position of point in y direction, only one of x, y, z must be specified to define plane.
+            position of plane in y direction, only one of x, y, z must be specified to define plane.
         z : float = None
-            Position of point in z direction, only one of x, y, z must be specified to define plane.
+            position of plane in z direction, only one of x, y, z must be specified to define plane.
+        grid_lines : bool = False
+            If true, displays FDTD cell boundaries on plot.
         ax : matplotlib.axes._subplots.Axes = None
             Matplotlib axes to plot on, if not specified, one is created.
-        **patch_kwargs
+        **kwargs
             Optional keyword arguments passed to the matplotlib patch plotting of structure.
             For details on accepted values, refer to
             `Matplotlib's documentation <https://matplotlib.org/stable/api/_as_gen/matplotlib.patches.Patch.html#matplotlib.patches.Patch>`_.
@@ -249,6 +257,8 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         ax = self.plot_monitors(ax=ax, x=x, y=y, z=z, **kwargs)
         ax = self.plot_symmetries(ax=ax, x=x, y=y, z=z, **kwargs)
         ax = self.plot_pml(ax=ax, x=x, y=y, z=z, **kwargs)
+        if grid_lines:
+            ax = self.plot_cells(ax=ax, x=x, y=y, z=z)
         ax = self._set_plot_bounds(ax=ax, x=x, y=y, z=z)
         return ax
 
@@ -259,6 +269,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         y: float = None,
         z: float = None,
         freq: float = None,
+        grid_lines: bool = False,
         ax: Ax = None,
         **kwargs,
     ) -> Ax:
@@ -268,17 +279,19 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         Parameters
         ----------
         x : float = None
-            Position of point in x direction, only one of x, y, z must be specified to define plane.
+            position of plane in x direction, only one of x, y, z must be specified to define plane.
         y : float = None
-            Position of point in y direction, only one of x, y, z must be specified to define plane.
+            position of plane in y direction, only one of x, y, z must be specified to define plane.
         z : float = None
-            Position of point in z direction, only one of x, y, z must be specified to define plane.
+            position of plane in z direction, only one of x, y, z must be specified to define plane.
         freq : float = None
             Frequency to evaluate the relative permittivity of all mediums.
             If not specified, evaluates at infinite frequency.
+        grid_lines : bool = False
+            If true, displays FDTD cell boundaries on plot.
         ax : matplotlib.axes._subplots.Axes = None
             Matplotlib axes to plot on, if not specified, one is created.
-        **patch_kwargs
+        **kwargs
             Optional keyword arguments passed to the matplotlib patch plotting of structure.
             For details on accepted values, refer to
             `Matplotlib's documentation <https://matplotlib.org/stable/api/_as_gen/matplotlib.patches.Patch.html#matplotlib.patches.Patch>`_.
@@ -294,6 +307,8 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         ax = self.plot_monitors(ax=ax, x=x, y=y, z=z, **kwargs)
         ax = self.plot_symmetries(ax=ax, x=x, y=y, z=z, **kwargs)
         ax = self.plot_pml(ax=ax, x=x, y=y, z=z, **kwargs)
+        if grid_lines:
+            ax = self.plot_cells(ax=ax, x=x, y=y, z=z)
         ax = self._set_plot_bounds(ax=ax, x=x, y=y, z=z)
         return ax
 
@@ -306,14 +321,14 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         Parameters
         ----------
         x : float = None
-            Position of point in x direction, only one of x, y, z must be specified to define plane.
+            position of plane in x direction, only one of x, y, z must be specified to define plane.
         y : float = None
-            Position of point in y direction, only one of x, y, z must be specified to define plane.
+            position of plane in y direction, only one of x, y, z must be specified to define plane.
         z : float = None
-            Position of point in z direction, only one of x, y, z must be specified to define plane.
+            position of plane in z direction, only one of x, y, z must be specified to define plane.
         ax : matplotlib.axes._subplots.Axes = None
             Matplotlib axes to plot on, if not specified, one is created.
-        **patch_kwargs
+        **kwargs
             Optional keyword arguments passed to the matplotlib patch plotting of structure.
             For details on accepted values, refer to
             `Matplotlib's documentation <https://matplotlib.org/stable/api/_as_gen/matplotlib.patches.Patch.html#matplotlib.patches.Patch>`_.
@@ -362,17 +377,17 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         Parameters
         ----------
         x : float = None
-            Position of point in x direction, only one of x, y, z must be specified to define plane.
+            position of plane in x direction, only one of x, y, z must be specified to define plane.
         y : float = None
-            Position of point in y direction, only one of x, y, z must be specified to define plane.
+            position of plane in y direction, only one of x, y, z must be specified to define plane.
         z : float = None
-            Position of point in z direction, only one of x, y, z must be specified to define plane.
+            position of plane in z direction, only one of x, y, z must be specified to define plane.
         freq : float = None
             Frequency to evaluate the relative permittivity of all mediums.
             If not specified, evaluates at infinite frequency.
         ax : matplotlib.axes._subplots.Axes = None
             Matplotlib axes to plot on, if not specified, one is created.
-        **patch_kwargs
+        **kwargs
             Optional keyword arguments passed to the matplotlib patch plotting of structure.
             For details on accepted values, refer to
             `Matplotlib's documentation <https://matplotlib.org/stable/api/_as_gen/matplotlib.patches.Patch.html#matplotlib.patches.Patch>`_.
@@ -410,14 +425,14 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         Parameters
         ----------
         x : float = None
-            Position of point in x direction, only one of x, y, z must be specified to define plane.
+            position of plane in x direction, only one of x, y, z must be specified to define plane.
         y : float = None
-            Position of point in y direction, only one of x, y, z must be specified to define plane.
+            position of plane in y direction, only one of x, y, z must be specified to define plane.
         z : float = None
-            Position of point in z direction, only one of x, y, z must be specified to define plane.
+            position of plane in z direction, only one of x, y, z must be specified to define plane.
         ax : matplotlib.axes._subplots.Axes = None
             Matplotlib axes to plot on, if not specified, one is created.
-        **patch_kwargs
+        **kwargs
             Optional keyword arguments passed to the matplotlib patch plotting of structure.
             For details on accepted values, refer to
             `Matplotlib's documentation <https://matplotlib.org/stable/api/_as_gen/matplotlib.patches.Patch.html#matplotlib.patches.Patch>`_.
@@ -442,14 +457,14 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         Parameters
         ----------
         x : float = None
-            Position of point in x direction, only one of x, y, z must be specified to define plane.
+            position of plane in x direction, only one of x, y, z must be specified to define plane.
         y : float = None
-            Position of point in y direction, only one of x, y, z must be specified to define plane.
+            position of plane in y direction, only one of x, y, z must be specified to define plane.
         z : float = None
-            Position of point in z direction, only one of x, y, z must be specified to define plane.
+            position of plane in z direction, only one of x, y, z must be specified to define plane.
         ax : matplotlib.axes._subplots.Axes = None
             Matplotlib axes to plot on, if not specified, one is created.
-        **patch_kwargs
+        **kwargs
             Optional keyword arguments passed to the matplotlib patch plotting of structure.
             For details on accepted values, refer to
             `Matplotlib's documentation <https://matplotlib.org/stable/api/_as_gen/matplotlib.patches.Patch.html#matplotlib.patches.Patch>`_.
@@ -474,14 +489,14 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         Parameters
         ----------
         x : float = None
-            Position of point in x direction, only one of x, y, z must be specified to define plane.
+            position of plane in x direction, only one of x, y, z must be specified to define plane.
         y : float = None
-            Position of point in y direction, only one of x, y, z must be specified to define plane.
+            position of plane in y direction, only one of x, y, z must be specified to define plane.
         z : float = None
-            Position of point in z direction, only one of x, y, z must be specified to define plane.
+            position of plane in z direction, only one of x, y, z must be specified to define plane.
         ax : matplotlib.axes._subplots.Axes = None
             Matplotlib axes to plot on, if not specified, one is created.
-        **patch_kwargs
+        **kwargs
             Optional keyword arguments passed to the matplotlib patch plotting of structure.
             For details on accepted values, refer to
             `Matplotlib's documentation <https://matplotlib.org/stable/api/_as_gen/matplotlib.patches.Patch.html#matplotlib.patches.Patch>`_.
@@ -534,9 +549,9 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         """
         num_layers = self.num_pml_layers
         pml_thicknesses = []
-        for boundaries in self.grid.boundaries.dict().values():
-            thick_l = boundaries[num_layers[0]] - boundaries[0]
-            thick_r = boundaries[-1] - boundaries[-1 - num_layers[1]]
+        for num_layer, boundaries in zip(num_layers, self.grid.boundaries.dict().values()):
+            thick_l = boundaries[num_layer[0]] - boundaries[0]
+            thick_r = boundaries[-1] - boundaries[-1 - num_layer[1]]
             pml_thicknesses.append((thick_l, thick_r))
         return pml_thicknesses
 
@@ -550,14 +565,14 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         Parameters
         ----------
         x : float = None
-            Position of point in x direction, only one of x, y, z must be specified to define plane.
+            position of plane in x direction, only one of x, y, z must be specified to define plane.
         y : float = None
-            Position of point in y direction, only one of x, y, z must be specified to define plane.
+            position of plane in y direction, only one of x, y, z must be specified to define plane.
         z : float = None
-            Position of point in z direction, only one of x, y, z must be specified to define plane.
+            position of plane in z direction, only one of x, y, z must be specified to define plane.
         ax : matplotlib.axes._subplots.Axes = None
             Matplotlib axes to plot on, if not specified, one is created.
-        **patch_kwargs
+        **kwargs
             Optional keyword arguments passed to the matplotlib patch plotting of structure.
             For details on accepted values, refer to
             `Matplotlib's documentation <https://matplotlib.org/stable/api/_as_gen/matplotlib.patches.Patch.html#matplotlib.patches.Patch>`_.
@@ -584,6 +599,37 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         ax = self._set_plot_bounds(ax=ax, x=x, y=y, z=z)
         return ax
 
+    @add_ax_if_none
+    def plot_cells(self, x: float = None, y: float = None, z: float = None, ax: Ax = None) -> Ax:
+        """Plot the cell boundaries as lines on a plane defined by one nonzero x,y,z coordinate.
+
+        Parameters
+        ----------
+        x : float = None
+            position of plane in x direction, only one of x, y, z must be specified to define plane.
+        y : float = None
+            position of plane in y direction, only one of x, y, z must be specified to define plane.
+        z : float = None
+            position of plane in z direction, only one of x, y, z must be specified to define plane.
+        ax : matplotlib.axes._subplots.Axes = None
+            Matplotlib axes to plot on, if not specified, one is created.
+
+        Returns
+        -------
+        matplotlib.axes._subplots.Axes
+            The supplied or created matplotlib axes.
+        """
+        cell_boundaries = self.grid.boundaries
+        axis, _ = self._parse_xyz_kwargs(x=x, y=y, z=z)
+        _, (axis_x, axis_y) = self.pop_axis([0, 1, 2], axis=axis)
+        boundaries_x = cell_boundaries.dict()["xyz"[axis_x]]
+        boundaries_y = cell_boundaries.dict()["xyz"[axis_y]]
+        for x_pos in boundaries_x:
+            ax.axvline(x=x_pos, linestyle="-", color="black", linewidth=0.2)
+        for y_pos in boundaries_y:
+            ax.axhline(y=y_pos, linestyle="-", color="black", linewidth=0.2)
+        return ax
+
     def _set_plot_bounds(self, ax: Ax, x: float = None, y: float = None, z: float = None) -> Ax:
         """Sets the xy limits of the simulation at a plane, useful after plotting.
 
@@ -592,11 +638,11 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         ax : matplotlib.axes._subplots.Axes
             Matplotlib axes to set bounds on.
         x : float = None
-            Position of point in x direction, only one of x, y, z must be specified to define plane.
+            position of plane in x direction, only one of x, y, z must be specified to define plane.
         y : float = None
-            Position of point in y direction, only one of x, y, z must be specified to define plane.
+            position of plane in y direction, only one of x, y, z must be specified to define plane.
         z : float = None
-            Position of point in z direction, only one of x, y, z must be specified to define plane.
+            position of plane in z direction, only one of x, y, z must be specified to define plane.
 
         Returns
         -------
@@ -621,11 +667,11 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         Parameters
         ----------
         x : float = None
-            Position of point in x direction, only one of x, y, z must be specified to define plane.
+            position of plane in x direction, only one of x, y, z must be specified to define plane.
         y : float = None
-            Position of point in y direction, only one of x, y, z must be specified to define plane.
+            position of plane in y direction, only one of x, y, z must be specified to define plane.
         z : float = None
-            Position of point in z direction, only one of x, y, z must be specified to define plane.
+            position of plane in z direction, only one of x, y, z must be specified to define plane.
 
         Returns
         -------

@@ -71,7 +71,7 @@ class GeoParams(PatchParamSwitcher):
 
     def get_plot_params(self) -> PatchParams:
         """Returns :class:`PatchParams` based on user-supplied args."""
-        return PatchParams(edgecolor="black", facecolor="cornflowerblue")
+        return PatchParams(edgecolor=None, facecolor="cornflowerblue")
 
 
 class SourceParams(PatchParamSwitcher):
@@ -101,7 +101,7 @@ class StructMediumParams(PatchParamSwitcher):
         mat_index = self.medium_map[self.medium]
         mat_cmap = cm.Set2  # pylint: disable=no-name-in-module, no-member
         facecolor = mat_cmap(mat_index % len(mat_cmap.colors))
-        return PatchParams(facecolor=facecolor)
+        return PatchParams(facecolor=facecolor, edgecolor=facecolor, lw=0)
 
 
 class StructEpsParams(PatchParamSwitcher):
@@ -115,7 +115,7 @@ class StructEpsParams(PatchParamSwitcher):
         chi = self.eps - 1.0
         chi_max = self.eps_max - 1.0
         color = 1 - chi / chi_max
-        return PatchParams(facecolor=str(color))
+        return PatchParams(facecolor=str(color), edgecolor=str(color), lw=0)
 
 
 class PMLParams(PatchParamSwitcher):
@@ -141,7 +141,7 @@ class SymParams(PatchParamSwitcher):
 
 
 class SimDataGeoParams(PatchParamSwitcher):
-    """Patch plotting parameters for `td.Simulation.symmetry`."""
+    """Patch plotting parameters for `td.SimulationData`."""
 
     def get_plot_params(self) -> PatchParams:
         """Returns :class:`PatchParams` based on user-supplied args."""

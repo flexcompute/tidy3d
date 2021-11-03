@@ -36,7 +36,7 @@ def test_simulation_preserve_types():
                 geometry=PolySlab(vertices=[[0, 0], [2, 3], [4, 3]], slab_bounds=(-1, 1), axis=2),
                 medium=Sellmeier(coeffs=[]),
             ),
-            Structure(geometry=Sphere(radius=1), medium=Debye(eps_inf=1.0, coeffs=[])),
+            Structure(geometry=Sphere(radius=1), medium=Debye(eps_inf=1.0, coeffs=[]), name="t2"),
         ],
         sources=[
             VolumeSource(size=(0, 0, 0), source_time=st, polarization="Ex"),
@@ -46,7 +46,7 @@ def test_simulation_preserve_types():
                 source_time=st,
                 direction="+",
                 polarization="Ex",
-                waist_size=(1, 1),
+                waist_radius=1,
             ),
         ],
         monitors=[
@@ -103,7 +103,7 @@ def test_validation_speed():
         S = SIM.copy()
         new_structures = []
         for i in range(n):
-            new_structure = SIM.structures[0]
+            new_structure = SIM.structures[0].copy()
             new_structure.name = str(i)
             new_structures.append(new_structure)
         S.structures = new_structures
