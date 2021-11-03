@@ -6,7 +6,7 @@ import h5py
 
 from tidy3d import Simulation, SimulationData, FieldData, data_type_map
 from tidy3d import Box, Sphere, Cylinder, PolySlab
-from tidy3d import Medium  # , DispersiveMedium
+from tidy3d import Medium, DispersiveMedium, AnisotropicMedium
 from tidy3d import VolumeSource, ModeSource, PlaneWave
 from tidy3d import GaussianPulse
 from tidy3d import PML, Absorber, StablePML
@@ -96,20 +96,28 @@ def old_json_structures(sim: Simulation) -> Tuple[List[Dict], List[Dict]]:
                 }
             )
 
-        """ TODO: Dispersive mediums need to eventually be defined as pole residue pairs for the
-        solver. Seems like this will have to be done on the server side in the revamp. """
-        # elif isinstance(medium, DispersiveMedium):
-        #     poles = []
-        #     for pole in medium.poles:
-        #         poles.append([pole[0].real, pole[0].imag, pole[1].real, pole[1].imag])
-        #     med.update(
-        #         {
-        #             "type": "Medium",
-        #             "permittivity": [medium.eps_inf] * 3,
-        #             "conductivity": [0, 0, 0],
-        #             "poles": poles,
-        #         }
-        #     )
+        elif isinstance(medium, AnisotropicMedium):
+            """TODO: support diagonal anisotropy in non-dispersive media"""
+            med.update(
+                {
+                    "type": "Medium",
+                    "permittivity": [medium.xx.permittivity, medium.yy.permittivity, medium.zz.permittivity],
+                    "conductivity": [medium.xx.conductivity, medium.yy.conductivity, medium.zz.conductivity],
+                    "poles": [],
+                }
+            )
+        elif isinstance(medium, DispersiveMedium):
+            poles = []
+            for (a, c) in medium.pole_residue.poles:
+                poles.append([a[0], a[1], c[0], c[1]])
+            med.update(
+                {
+                    "type": "PoleResidue",
+                    "permittivity": [medium.pole_residue.eps_inf] * 3,
+                    "conductivity": [0, 0, 0],
+                    "poles": poles,
+                }
+            )
 
         """ TODO: support PEC. Note that PMC is probably not needed (not supported currently)."""
         # elif isinstance(medium, PEC):
