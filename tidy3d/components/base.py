@@ -7,6 +7,7 @@ import pydantic
 import yaml
 import numpy as np
 
+from .types import ComplexNumber
 from ..log import FileError
 
 # default indentation (# spaces) in files
@@ -45,7 +46,11 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         extra = "forbid"
         validate_assignment = True
         allow_population_by_field_name = True
-        json_encoders = {np.ndarray: lambda x: x.tolist()}
+        json_encoders = {
+            np.ndarray: lambda x: x.tolist(),
+            complex: lambda x: ComplexNumber(real=np.real(x), imag=np.imag(x)),
+        }
+        json_decoders = {ComplexNumber: lambda x: x.real + 1j * x.imag}
 
     def help(self, methods: bool = False) -> None:
         """Prints message describing the fields and methods of a :class:`Tidy3dBaseModel`.

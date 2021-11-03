@@ -6,7 +6,8 @@ import h5py
 
 from tidy3d import Simulation, SimulationData, FieldData, data_type_map
 from tidy3d import Box, Sphere, Cylinder, PolySlab
-from tidy3d import Medium, DispersiveMedium, AnisotropicMedium
+from tidy3d import Medium, AnisotropicMedium
+from tidy3d.components.medium import DispersiveMedium
 from tidy3d import VolumeSource, ModeSource, PlaneWave
 from tidy3d import GaussianPulse
 from tidy3d import PML, Absorber, StablePML
@@ -101,8 +102,16 @@ def old_json_structures(sim: Simulation) -> Tuple[List[Dict], List[Dict]]:
             med.update(
                 {
                     "type": "Medium",
-                    "permittivity": [medium.xx.permittivity, medium.yy.permittivity, medium.zz.permittivity],
-                    "conductivity": [medium.xx.conductivity, medium.yy.conductivity, medium.zz.conductivity],
+                    "permittivity": [
+                        medium.xx.permittivity,
+                        medium.yy.permittivity,
+                        medium.zz.permittivity,
+                    ],
+                    "conductivity": [
+                        medium.xx.conductivity,
+                        medium.yy.conductivity,
+                        medium.zz.conductivity,
+                    ],
                     "poles": [],
                 }
             )

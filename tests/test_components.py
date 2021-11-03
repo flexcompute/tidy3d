@@ -210,7 +210,7 @@ def test_medium_conversions():
 def test_medium_dispersion():
 
     # construct media
-    m_PR = PoleResidue(eps_inf=1.0, poles=[((1, 2), (1, 3)), ((2, 4), (1, 5))])
+    m_PR = PoleResidue(eps_inf=1.0, poles=[(1 + 2j, 1 + 3j), (2 + 4j, 1 + 5j)])
     m_SM = Sellmeier(coeffs=[(2, 3), (2, 4)])
     m_LZ = Lorentz(eps_inf=1.0, coeffs=[(1, 3, 2), (2, 4, 1)])
     m_DB = Debye(eps_inf=1.0, coeffs=[(1, 3), (2, 4)])
@@ -222,7 +222,7 @@ def test_medium_dispersion():
 
 def test_medium_dispersion_conversion():
 
-    m_PR = PoleResidue(eps_inf=1.0, poles=[((1, 2), (1, 3)), ((2, 4), (1, 5))])
+    m_PR = PoleResidue(eps_inf=1.0, poles=[((1 + 2j), (1 + 3j)), ((2 + 4j), (1 + 5j))])
     m_SM = Sellmeier(coeffs=[(2, 3), (2, 4)])
     m_LZ = Lorentz(eps_inf=1.0, coeffs=[(1, 3, 2), (2, 4, 1)])
     m_DB = Debye(eps_inf=1.0, coeffs=[(1, 3), (2, 4)])

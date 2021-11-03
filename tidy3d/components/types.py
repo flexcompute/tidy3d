@@ -33,8 +33,15 @@ Shapely = BaseGeometry
 
 """ medium """
 
-Complex = Tuple[float, float]
-PoleAndResidue = Tuple[Complex, Complex]
+
+class ComplexNumber(pydantic.BaseModel):
+    """holds real and imaginary parts"""
+
+    real: float
+    imag: float
+
+
+PoleAndResidue = Tuple[complex, complex]
 FreqBound = Union[float, Inf, Literal[-inf]]
 
 """ symmetries """

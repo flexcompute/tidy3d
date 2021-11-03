@@ -188,6 +188,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
     # - check sources in medium freq range
     # - check PW in homogeneous medium
     # - check nonuniform grid covers the whole simulation domain
+    # - check any structures close to PML (in lambda) without intersecting.
 
     """ Accounting """
 
