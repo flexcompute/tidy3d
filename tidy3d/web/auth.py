@@ -39,9 +39,9 @@ def set_authentication_config(email: str, password: str) -> None:
 
 
 def get_credentials() -> None:
-    """what"""
+    """Tries to log user in from file, if not working, prompts user for login info and saves."""
 
-    # if we find both email and password in the credential path
+    # if we find something in the credential path
     if os.path.exists(credential_path):
 
         # try to authenticate them

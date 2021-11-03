@@ -1,5 +1,15 @@
 # pylint: disable=invalid-name
-""" defines constants used elsewhere in the package"""
+"""Defines importable constants.
+
+Attributes:
+    inf (float): Tidy3d representation of infinity.
+    C_0 (float): Speed of light in vacuum [um/s]
+    EPSILON_0 (float): Vacuum permittivity [F/um]
+    MU_0 (float): Vacuum permeability [H/um]
+    ETA_0 (float): Vacuum impedance
+    HBAR (float): reduced Planck constant [eV*s]
+    Q_e (float): funamental charge [C]
+"""
 
 import numpy as np
 

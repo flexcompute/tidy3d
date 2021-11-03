@@ -19,11 +19,11 @@ from ..log import log, WebError
 from ..convert import export_old_json, load_old_monitor_data, load_solver_results
 
 
+# TODO: Original simulation still needed in download functions because we don't convert
+#       old json files to new ones.
+
 REFRESH_TIME = 0.3
 TOTAL_DOTS = 3
-
-""" webapi functions """
-
 
 def run(
     simulation: Simulation,
@@ -31,23 +31,24 @@ def run(
     folder_name: str = "default",
     path: str = "simulation_data.hdf5",
 ) -> SimulationData:
-    """submits simulation to server, starts running, monitors progress, downloads and loads results.
+    """Submits a :class:`.Simulation` to server, starts running, monitors progress, downloads,
+    and loads results as a :class:`.SimulationData` object.
 
     Parameters
     ----------
-    simulation : :class:`Simulation`
+    simulation : :class:`.Simulation`
         Simulation to upload to server.
-    task_name : ``str``
-        Name of task
-    path : ``str``
+    task_name : str
+        Name of task.
+    path : str = "simulation_data.hdf5"
         Path to download results file (.hdf5), including filename.
-    folder_name : ``str``
-        Name of folder to store task on web UI
+    folder_name : str = "default"
+        Name of folder to store task on web UI.
 
     Returns
     -------
-    :class:`SimulationData`
-        Object containing solver results for the supplied :class:`Simulation`.
+    :class:`.SimulationData`
+        Object containing solver results for the supplied :class:`.Simulation`.
     """
     task_id = upload(simulation=simulation, task_name=task_name, folder_name=folder_name)
     start(task_id)
@@ -56,22 +57,25 @@ def run(
 
 
 def upload(simulation: Simulation, task_name: str, folder_name: str = "default") -> TaskId:
-    """upload simulation to server (as draft, dont run).
+    """Upload simulation to server, but do not start running :class:`.Simulation`.
 
     Parameters
     ----------
-    simulation : :class:`Simulation`
+    simulation : :class:`.Simulation`
         Simulation to upload to server.
-    task_name : ``str``
-        name of task
-    folder_name : ``str``
-        name of folder to store task on web UI
-
+    task_name : str
+        Name of task.
+    folder_name : str
+        Name of folder to store task on web UI
 
     Returns
     -------
     TaskId
         Unique identifier of task on server.
+
+    Note
+    ----
+    To start the simulation running, must call :meth:`start` after uploaded.
     """
     return _upload_task(simulation=simulation, task_name=task_name, folder_name=folder_name)
 
@@ -81,12 +85,12 @@ def get_info(task_id: TaskId) -> TaskInfo:
 
     Parameters
     ----------
-    task_id : TaskId
-        Unique identifier of task on server.
+    task_id : str
+        Unique identifier of task on server.  Returned by :meth:`upload`.
 
     Returns
     -------
-    TaskInfo
+    :class:`TaskInfo`
         Object containing information about status, size, credits of task.
     """
     method = os.path.join("fdtd/task", task_id)
@@ -101,8 +105,12 @@ def start(task_id: TaskId) -> None:
 
     Parameters
     ----------
-    task_id : TaskId
-        Unique identifier of task on server.
+    task_id : str
+        Unique identifier of task on server.  Returned by :meth:`upload`.
+
+    Note
+    ----
+    To monitor progress, can call :meth:`monitor` after starting simulation.
     """
     task = get_info(task_id)
     folder_name = task.folderId
@@ -112,12 +120,12 @@ def start(task_id: TaskId) -> None:
 
 
 def get_run_info(task_id: TaskId):
-    """gets the % done and field_decay for a running task
+    """Gets the % done and field_decay for a running task.
 
     Parameters
     ----------
-    task_id : TaskId
-        Unique identifier of task on server.
+    task_id : str
+        Unique identifier of task on server.  Returned by :meth:`upload`.
 
     Returns
     -------
@@ -140,8 +148,12 @@ def monitor(task_id: TaskId) -> None:
 
     Parameters
     ----------
-    task_id : ``TaskId``
-        Unique identifier of task on server.
+    task_id : str
+        Unique identifier of task on server.  Returned by :meth:`upload`.
+
+    Note
+    ----
+    To load results when finished, may call :meth:`load_data`.
     """
 
     task_info = get_info(task_id)
@@ -198,13 +210,15 @@ def monitor(task_id: TaskId) -> None:
 
 
 def download(task_id: TaskId, simulation: Simulation, path: str = "simulation_data.hdf5") -> None:
-    """Fownload results of task and log to file.
+    """Download results of task and log to file.
 
     Parameters
     ----------
-    task_id : TaskId
-        Unique identifier of task on server.
-    path : str
+    task_id : str
+        Unique identifier of task on server.  Returned by :meth:`upload`.
+    simulation : :class:`.Simulation`
+        Original simulation.
+    path : str = "simulation_data.hdf5"
         Download path to .hdf5 data file (including filename).
     """
 
@@ -258,20 +272,22 @@ def load_data(
     path: str = "simulation_data.hdf5",
     replace_existing=True,
 ) -> SimulationData:
-    """Download and Load simultion results into ``SimulationData`` object.
+    """Download and Load simultion results into :class:`.SimulationData` object.
 
     Parameters
     ----------
-    task_id : ``TaskId``
-        Unique identifier of task on server.
-    path : ``str``
+    task_id : str
+        Unique identifier of task on server.  Returned by :meth:`upload`.
+    simulation : :class:`.Simulation`
+        Original simulation.
+    path : str
         Download path to .hdf5 data file (including filename).
-    replace_existing: ``bool``
-        Downloads even if file exists (overwriting).
+    replace_existing: bool = True
+        Downloads even if file exists (overwriting the existing).
 
     Returns
     -------
-    :class:`SimulationData`
+    :class:`.SimulationData`
         Object containing simulation data.
     """
     if not os.path.exists(path) or replace_existing:
@@ -286,8 +302,8 @@ def delete(task_id: TaskId) -> TaskInfo:
 
     Parameters
     ----------
-    task_id : TaskId
-        Unique identifier of task on server.
+    task_id : str
+        Unique identifier of task on server.  Returned by :meth:`upload`.
 
     Returns
     -------
@@ -357,15 +373,15 @@ def _upload_task(  # pylint:disable=too-many-locals
 
 
 def _download_file(task_id: TaskId, fname: str, path: str) -> None:
-    """Download a specific file ``fname`` to ``path``.
+    """Download a specific file from server.
 
     Parameters
     ----------
-    task_id : ``TaskId``
-        Unique identifier of task on server.
-    fname : ``str``
+    task_id : str
+        Unique identifier of task on server.  Returned by :meth:`upload`.
+    fname : str
         Name of the file on server (eg. ``monitor_data.hdf5``, ``tidy3d.log``, ``simulation.json``)
-    path : ``str``
+    path : str
         Path where the file will be downloaded to (including filename).
     """
     log.info(f'downloading file "{fname}" to "{path}"')
@@ -397,7 +413,7 @@ def _download_file(task_id: TaskId, fname: str, path: str) -> None:
 
 
 def _rm_file(path: str):
-    """clear path if it exists"""
+    """Clear path if it exists."""
     if os.path.exists(path) and not os.path.isdir(path):
         log.info(f"removing file {path}")
         os.remove(path)
