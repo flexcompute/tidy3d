@@ -182,7 +182,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
     _unique_structure_names = assert_unique_names("structures")
     _unique_source_names = assert_unique_names("sources")
     _unique_monitor_names = assert_unique_names("monitors")
-    _unique_medium_names = assert_unique_names("structures", check_mediums=True)
+    # _unique_medium_names = assert_unique_names("structures", check_mediums=True)
 
     # TODO:
     # - check sources in medium freq range

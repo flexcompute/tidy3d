@@ -12,7 +12,7 @@ from .viz import add_ax_if_none
 from .validators import validate_name_str
 
 from ..constants import C_0, inf
-from ..log import log
+from ..log import log, Tidy3dKeyError
 
 
 # TODO: make pole residue support complex values instead of tuples of real and imaginary.
@@ -56,7 +56,21 @@ class AbstractMedium(ABC, Tidy3dBaseModel):
 
     @add_ax_if_none
     def plot(self, freqs: float, ax: Ax = None) -> Ax:  # pylint: disable=invalid-name
-        """plot n, k of medium as a function of frequencies."""
+        """Plot n, k of a :class:`Medium` as a function of frequency.
+
+        Parameters
+        ----------
+        freqs: float
+            Frequencies (Hz) to evaluate the medium properties at.
+        ax : matplotlib.axes._subplots.Axes = None
+            Matplotlib axes to plot on, if not specified, one is created.
+
+        Returns
+        -------
+        matplotlib.axes._subplots.Axes
+            The supplied or created matplotlib axes.
+        """
+
         freqs = np.array(freqs)
         eps_complex = self.eps_model(freqs)
         n, k = eps_complex_to_nk(eps_complex)
@@ -145,11 +159,99 @@ class Medium(AbstractMedium):
         )
 
 
+class AnisotropicMedium(AbstractMedium):
+    """Diagonally anisotripic medium.
+
+    Parameters
+    ----------
+    xx : :class:`Medium`
+        :class:`Medium` describing the :math:`\\epsilon_{xx}`-component of the permittivity tensor.
+    yy : :class:`Medium`
+        :class:`Medium` describing the :math:`\\epsilon_{yy}`-component of the permittivity tensor.
+    zz : :class:`Medium`
+        :class:`Medium` describing the :math:`\\epsilon_{zz}`-component of the permittivity tensor.
+    name : str = None
+        Optional name for the medium.
+
+    Note
+    ----
+    Only diagonal anisotropy and non-dispersive components are currently supported.
+
+    Example
+    -------
+    >>> medium_xx = Medium(permittivity=4.0)
+    >>> medium_yy = Medium(permittivity=4.1)
+    >>> medium_zz = Medium(permittivity=3.9)
+    >>> anisotropic_dielectric = AnisotropicMedium(xx=medium_xx, yy=medium_yy, zz=medium_zz)
+    """
+
+    xx: Medium
+    yy: Medium
+    zz: Medium
+
+    @ensure_freq_in_range
+    def eps_model(self, frequency: float) -> complex:
+        """Complex-valued permittivity as a function of frequency.
+
+        Parameters
+        ----------
+        frequency : float
+            Frequency to evaluate permittivity at (Hz).
+
+        Returns
+        -------
+        Tuple[complex, complex, complex]
+            Complex-valued relative permittivity for each component evaluated at ``frequency``.
+        """
+        eps_xx = self.xx.eps_model(frequency)
+        eps_yy = self.yy.eps_model(frequency)
+        eps_zz = self.zz.eps_model(frequency)
+        return (eps_xx, eps_yy, eps_zz)
+
+    @add_ax_if_none
+    def plot(self, freqs: float, ax: Ax = None) -> Ax:
+        """Plot n, k of a :class:`Medium` as a function of frequency.
+
+        Parameters
+        ----------
+        freqs: float
+            Frequencies (Hz) to evaluate the medium properties at.
+        ax : matplotlib.axes._subplots.Axes = None
+            Matplotlib axes to plot on, if not specified, one is created.
+
+        Returns
+        -------
+        matplotlib.axes._subplots.Axes
+            The supplied or created matplotlib axes.
+        """
+
+        freqs = np.array(freqs)
+        freqs_thz = freqs / 1e12
+
+        for label, medium_component in zip(("xx", "yy", "zz"), (self.xx, self.yy, self.zz)):
+
+            eps_complex = medium_component.eps_model(freqs)
+            n, k = eps_complex_to_nk(eps_complex)
+            ax.plot(freqs_thz, n, label=f"n, eps_{label}")
+            ax.plot(freqs_thz, k, label=f"k, eps_{label}")
+
+        ax.set_xlabel("frequency (THz)")
+        ax.set_title("medium dispersion")
+        ax.legend()
+        ax.set_aspect("auto")
+        return ax
+
+
 """ Dispersive Media """
 
 
 class DispersiveMedium(AbstractMedium, ABC):
     """A Medium with dispersion (propagation characteristics depend on frequency)"""
+
+    @property
+    @abstractmethod
+    def pole_residue(self):
+        """Representation of Medium as a pole-residue model."""
 
 
 class PoleResidue(DispersiveMedium):
@@ -213,6 +315,16 @@ class PoleResidue(DispersiveMedium):
             eps -= c / (1j * omega + a)
             eps -= c_cc / (1j * omega + a_cc)
         return eps
+
+    @property
+    def pole_residue(self):
+        """Representation of Medium as a pole-residue model."""
+        return PoleResidue(
+            eps_inf=self.eps_inf,
+            poles=self.poles,
+            frequency_range=self.frequency_range,
+            name=self.name,
+        )
 
     def __str__(self):
         """string representation"""
@@ -278,6 +390,25 @@ class Sellmeier(DispersiveMedium):
         n = self._n_model(frequency)
         return nk_to_eps_complex(n)
 
+    @property
+    def pole_residue(self):
+        """Representation of Medium as a pole-residue model."""
+
+        poles = []
+        for (B, C) in self.coeffs:
+            beta = 2 * np.pi * C_0 / np.sqrt(C)  # This has units of rad/s
+            alpha = -0.5 * beta * B
+            a = (0, beta)
+            c = (0, alpha)
+            poles.append((a, c))
+
+        return PoleResidue(
+            eps_inf=1,
+            poles=poles,
+            frequency_range=self.frequency_range,
+            name=self.name,
+        )
+
 
 class Lorentz(DispersiveMedium):
     """A dispersive medium described by the Lorentz model.
@@ -327,8 +458,38 @@ class Lorentz(DispersiveMedium):
         """
         eps = self.eps_inf + 0.0j
         for (de, f, delta) in self.coeffs:
-            eps += (de * f ** 2) / (f ** 2 + 2j * f * delta - frequency ** 2)
+            eps += (de * f ** 2) / (f ** 2 + 2j * frequency * delta - frequency ** 2)
         return eps
+
+    @property
+    def pole_residue(self):
+        """Representation of Medium as a pole-residue model."""
+
+        poles = []
+        for (de, f, delta) in self.coeffs:
+
+            w = 2 * np.pi * f
+            d = 2 * np.pi * delta
+
+            if d > w:
+                r = 1j * np.sqrt(d * d - w * w)
+            else:
+                r = np.sqrt(w * w - d * d)
+
+            a_complex = d - 1j * r
+            c_complex = 1j * de * w ** 2 / 2 / r
+
+            a = (np.real(a_complex), np.imag(a_complex))
+            c = (np.real(c_complex), np.imag(c_complex))
+
+            poles.append((a, c))
+
+        return PoleResidue(
+            eps_inf=self.eps_inf,
+            poles=poles,
+            frequency_range=self.frequency_range,
+            name=self.name,
+        )
 
 
 class Debye(DispersiveMedium):
@@ -381,6 +542,24 @@ class Debye(DispersiveMedium):
         for (de, tau) in self.coeffs:
             eps += de / (1 + 1j * frequency * tau)
         return eps
+
+    @property
+    def pole_residue(self):
+        """Representation of Medium as a pole-residue model."""
+
+        poles = []
+        for (de, tau) in self.coeffs:
+            a_real = 2 * np.pi / tau  # note: was sign error
+            a = (a_real, 0)
+            c = (-0.5 * de * a_real, 0)
+            poles.append((a, c))
+
+        return PoleResidue(
+            eps_inf=self.eps_inf,
+            poles=poles,
+            frequency_range=self.frequency_range,
+            name=self.name,
+        )
 
 
 # types of mediums that can be used in Simulation and Structures

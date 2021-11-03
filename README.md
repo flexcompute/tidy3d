@@ -199,20 +199,20 @@ git push origin x.x.x
 	- [ ] Near2far with new API (3 days)
 	- [ ] Mode Monitor consistent with new .epsilon() (1 day)
 - [ ] API changes (discuss first, implementation in 1 day)
-	- [ ] Freqs and times store start, end, stop / number instead of raw values.
-	- [ ] Change source polarization to E instead of J.
-	- [ ] named Meidums?
-	- [ ] Symmetry, PML, grid spec.  Less clunky interface? 
+	- [x] Freqs and times store start, end, stop / number instead of raw values.
+	- [x] Change source polarization to E instead of J.
+	- [x] named Meidums?
+	- [x] Symmetry, PML, grid spec.  Less clunky interface? 
 - [ ] Covering features of existing code (1 day)
-	- [ ] support diagonal anisotropy (permittivity as 3-tuple)
+	- [x] support diagonal anisotropy (permittivity as 3-tuple)
 	- [ ] gds slab / gds importing.
-	- [ ] Conversion of dispersive materials into pole-residue.
-	- [ ] gaussian beam.
+	- [x] Conversion of dispersive materials into pole-residue.
+	- [x] gaussian beam.
 	- [ ] option to display cell boundaries in plot.
 	- [ ] Add PEC medium
 - [ ] Documentation (1 week)
-	- [ ] Add more discussion into Simulation docs.
-	- [ ] Write docstrings and examples for all callables.
+	- [x] Add more discussion into Simulation docs.
+	- [x] Write docstrings and examples for all callables.
 	- [ ] How Do I?
 	- [ ] Developer guide
 	- [ ] Package structure guide / explanation.

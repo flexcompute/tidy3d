@@ -31,6 +31,10 @@ class ConfigError(Tidy3DError):
     """Error when configuring Tidy3d."""
 
 
+class Tidy3dKeyError(Tidy3DError):
+    """Could not find a key in a Tidy3d dictionary."""
+
+
 class ValidationError(Tidy3DError):
     """eError when constructing Tidy3d components."""
 
