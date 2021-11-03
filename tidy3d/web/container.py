@@ -55,7 +55,7 @@ class Job(WebContainer):
         Note
         ----
         To start the simulation running, call :meth:`Job.start` after uploaded.
-        """        
+        """
         task_id = web.upload(
             simulation=self.simulation, task_name=self.task_name, folder_name=self.folder_name
         )
@@ -105,7 +105,7 @@ class Job(WebContainer):
         ----
         To load the output of completed simulation into :class:`.SimulationData`objets,
         call :meth:`Job.load_data`.
-        """        
+        """
 
         status = self.status
         console = Console()
@@ -192,7 +192,7 @@ class Batch(WebContainer):
         >>> batch_results = batch.run()
         >>> for task_name, sim_data in batch_results:
         ...     # do something with data.
-    
+
         Note that because ``batch_results`` is a generator, only the current iteration of
         :class:`.SimulationData` is stored in memory at a time.
         """

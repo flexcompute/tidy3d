@@ -232,11 +232,9 @@ Output Data
    FluxTimeData
    ModeData
 
-Extra
-=====
 
 Tidy3dBaseModel
----------------
+===============
 
 .. autosummary::
    :toctree: _autosummary/
@@ -246,13 +244,20 @@ Tidy3dBaseModel
    components.base.Tidy3dBaseModel.load
    components.base.Tidy3dBaseModel.help
 
-Constants
----------
+.. Constants
+.. =========
+.. .. autosummary::
+..    :toctree: _autosummary/
+..    constants
+
+Log
+===
 
 .. autosummary::
    :toctree: _autosummary/
 
-   constants
+   logging_level
+
 
 
 Submitting Simulations
