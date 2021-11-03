@@ -405,19 +405,28 @@ class GaussianBeam(DirectionalSource):
         Specifies the sign of propagation.
         Must be in ``{'+', '-'}``.
         Note: propagation occurs along dimension normal to plane.
-    waist_size : Tuple[float, float]
-        Size of beam waist in two dimensions parallel to propagation.
-        Must be greater than zero,
+    waist_radius: float
+        Radius of the beam at the waist (um).
+        Must be positive.
+    angle_theta: float = 0.0
+        Angle of propagation of the beam with respect to the normal axis (rad).
+    angle_phi: float = 0.0
+        Angle of propagation of the beam with respect to parallel axis (rad).
+    pol_angle: float = 0.0
+        Angle of the polarization with respect to the parallel axis (rad).
     name : str = None
         Optional name for source.
 
     Example
     -------
     >>> pulse = GaussianPulse(freq0=200e12, fwidth=20e12)
-    >>> gauss = GaussianBeam(size=(0,3,3), source_time=pulse, polarization='Hy', direction='+', waist_size=(1,0.5))
+    >>> gauss = GaussianBeam(size=(0,3,3), source_time=pulse, polarization='Hy', direction='+', waist_radius=1.0)
     """
 
-    waist_size: Tuple[pydantic.PositiveFloat, pydantic.PositiveFloat]
+    waist_radius: pydantic.PositiveFloat
+    angle_theta: float = 0.0
+    angle_phi: float = 0.0
+    pol_angle: float = 0.0
     type: Literal["GaussianBeam"] = "GaussianBeam"
 
 
