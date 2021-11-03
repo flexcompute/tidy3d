@@ -182,7 +182,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
     _unique_structure_names = assert_unique_names("structures")
     _unique_source_names = assert_unique_names("sources")
     _unique_monitor_names = assert_unique_names("monitors")
-    # _unique_medium_names = assert_unique_names("structures", check_mediums=True)
+    _unique_medium_names = assert_unique_names("structures", check_mediums=True)
 
     # TODO:
     # - check sources in medium freq range
@@ -586,7 +586,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
 
     def _set_plot_bounds(self, ax: Ax, x: float = None, y: float = None, z: float = None) -> Ax:
         """Sets the xy limits of the simulation at a plane, useful after plotting.
-        
+
         Parameters
         ----------
         ax : matplotlib.axes._subplots.Axes
@@ -596,12 +596,12 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         y : float = None
             Position of point in y direction, only one of x, y, z must be specified to define plane.
         z : float = None
-            Position of point in z direction, only one of x, y, z must be specified to define plane.                
+            Position of point in z direction, only one of x, y, z must be specified to define plane.
 
         Returns
         -------
         matplotlib.axes._subplots.Axes
-            The axes after setting the boundaries.        
+            The axes after setting the boundaries.
         """
 
         axis, _ = self._parse_xyz_kwargs(x=x, y=y, z=z)
@@ -617,7 +617,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
     ) -> List[Tuple[Medium, Shapely]]:
         """Compute list of shapes to plot on plane specified by {x,y,z}.
         Overlaps are removed or merged depending on medium.
-    
+
         Parameters
         ----------
         x : float = None
@@ -625,7 +625,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         y : float = None
             Position of point in y direction, only one of x, y, z must be specified to define plane.
         z : float = None
-            Position of point in z direction, only one of x, y, z must be specified to define plane.                
+            Position of point in z direction, only one of x, y, z must be specified to define plane.
 
         Returns
         -------
@@ -696,7 +696,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
     @property
     def frequency_range(self) -> FreqBound:
         """Range of frequencies spanning all sources' frequency dependence.
-        
+
         Returns
         -------
         Tuple[float, float]
@@ -763,7 +763,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
     def _add_pml_to_bounds(num_layers: Tuple[int, int], bounds: Coords1D):
         """Append absorber layers to the beginning and end of the simulation bounds
         along one dimension.
-        
+
         Parameters
         ----------
         num_layers : Tuple[int, int]
@@ -804,12 +804,12 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
 
     def discretize(self, box: Box) -> Grid:
         """Grid containing only cells that intersect with a :class:`Box`.
-        
+
         Parameters
         ----------
         box : :class:`Box`
             Rectangular geometry within simulation to discretize.
-        
+
         Returns
         -------
         :class:`Grid`
@@ -846,7 +846,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
 
     def epsilon(self, box: Box, freq: float = None) -> Dict[str, xr.DataArray]:
         """Get array of permittivity at volume specified by box and freq
-        
+
         Parameters
         ----------
         box : :class:`Box`

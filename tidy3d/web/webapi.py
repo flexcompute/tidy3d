@@ -25,6 +25,7 @@ from ..convert import export_old_json, load_old_monitor_data, load_solver_result
 REFRESH_TIME = 0.3
 TOTAL_DOTS = 3
 
+
 def run(
     simulation: Simulation,
     task_name: str,

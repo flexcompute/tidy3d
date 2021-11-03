@@ -64,4 +64,3 @@ from .components.geometry import Geometry
 from .components.source import Source, SourceTime
 from .components.monitor import Monitor
 from .components.grid import YeeGrid, FieldGrid, Coords1D
-
