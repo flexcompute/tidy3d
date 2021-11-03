@@ -158,6 +158,7 @@ Sources
    VolumeSource
    PlaneWave
    ModeSource
+   GaussianPulse
 
 Methods
 -------
