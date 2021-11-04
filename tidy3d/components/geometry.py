@@ -803,35 +803,37 @@ class PolySlab(Planar):
         return val
 
     @classmethod
-    def from_gdspy( #pylint:disable=too-many-arguments
+    def from_gdspy(  # pylint:disable=too-many-arguments
         cls,
         gds_cell,
-        gds_layer: int,
-        gds_dtype: int,
-        polygon_index: int,
         axis: Axis,
         slab_bounds: Tuple[float, float],
-        gds_scale: float = 1.0,
+        gds_layer: int,
+        gds_dtype: int,
+        polygon_index: pydantic.NonNegativeInt = 1,
+        gds_scale: pydantic.PositiveFloat = 1.0,
     ):
-        """Import :class:`PolySlab` from a gdspy Cell.
+        """Import :class:`PolySlab` from a ``gdspy.Cell``.
 
         Parameters
         ----------
         gds_cell : gdspy.Cell
-            gdspy.Cell containing 2D geometric data.
-        gds_layer : int
-            List of layer index.
-        gds_dtype : int
-            Data type index.
-        polygon_index : int = 0
-            Index into the list of polygons at given gds_layer and gds_dtype.
+            ``gdspy.Cell`` containing 2D geometric data.
         axis : int
-            Integer index into the polygon's slab axis. (0,1,2) -> (x,y,z)
+            Integer index into the polygon's slab axis. (0,1,2) -> (x,y,z).
         slab_bounds: Tuple[float, float]
-            Minimum and maximum positions of the slab along axis.
+            Minimum and maximum positions of the slab along ``axis``.
+        gds_layer : int
+            Layer index in the ``gds_cell``.
+        gds_dtype : int
+            Data type index in the ``gds_cell``.
+        polygon_index : int = 0
+            Index into the list of polygons at given ``gds_layer`` and ``gds_dtype``.
+            Must be non-negative.
         gds_scale : float = 1.0
             Length scale used in GDS file in units of micron.
             For example, if gds file uses nanometers, set ``gds_scale=1e-3``.
+            Must be positive.
 
         Returns
         -------
@@ -853,9 +855,10 @@ class PolySlab(Planar):
         try:
             vertices = list_of_vertices[polygon_index]
         except Exception as e:
-            raise Tidy3dError(f"no polygon vertices found at index {polygon_index}.  "
-                              f"{len(list_of_vertices)} polygons returned at "
-                              f"gds_layer={gds_layer} and gds_dtype={gds_dtype}."
+            raise Tidy3dKeyError(
+                f"no polygon vertices found at index {polygon_index}.  "
+                f"{len(list_of_vertices)} polygons returned at "
+                f"gds_layer={gds_layer} and gds_dtype={gds_dtype}."
             ) from e
 
         vertices *= gds_scale
