@@ -1,4 +1,3 @@
-# pylint: disable=unused-import
 """ Container holding all information about simulation and its components"""
 from typing import Dict, Tuple, List
 
@@ -10,20 +9,23 @@ import matplotlib as mpl
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from descartes import PolygonPatch
 
-from .types import Symmetry, Ax, Shapely, FreqBound
 from .validators import assert_unique_names, assert_objects_in_sim_bounds, set_names
-from .geometry import Box, PolySlab, Cylinder, Sphere
-from .types import Symmetry, Ax, Shapely, FreqBound, Numpy
 from .geometry import Box
+from .types import Symmetry, Ax, Shapely, FreqBound
 from .grid import Coords1D, Grid, Coords
 from .medium import Medium, MediumType, eps_complex_to_nk
 from .structure import Structure
-from .source import SourceType, VolumeSource, GaussianPulse
-from .monitor import MonitorType, FieldMonitor, FluxMonitor
+from .source import SourceType
+from .monitor import MonitorType
 from .pml import PMLTypes, PML
 from .viz import StructMediumParams, StructEpsParams, PMLParams, SymParams, add_ax_if_none
 from ..constants import inf, C_0
-from ..log import log, SetupError
+from ..log import log
+
+# for docstring examples
+from .geometry import Sphere, Cylinder, PolySlab  # pylint:disable=unused-import
+from .source import VolumeSource, GaussianPulse  # pylint:disable=unused-import
+from .monitor import FieldMonitor, FluxMonitor  # pylint:disable=unused-import
 
 # technically this is creating a circular import issue because it calls tidy3d/__init__.py
 # from .. import __version__ as version_number
@@ -219,7 +221,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
     """ Plotting """
 
     @add_ax_if_none
-    def plot(
+    def plot(  # pylint:disable=too-many-arguments
         self,
         x: float = None,
         y: float = None,
@@ -710,7 +712,8 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         Returns
         -------
         List[Tuple[:class:`Medium` or :class:`PoleResidue` or :class:`Lorentz` or :class:`Sellmeier` or :class:`Debye`, shapely.geometry.base.BaseGeometry]]
-            Shapes and their mediums on a plane after merging and removing intersections with background.
+            Shapes and their mediums on a plane
+            after merging and removing intersections with background.
         """
         background_shapes = []
         for medium, shape in shapes:

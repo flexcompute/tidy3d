@@ -8,7 +8,7 @@ from .geometry import Box
 
 
 """ Explanation of pydantic validators:
-    
+
     Validators are class methods that are added to the models to validate their fields (kwargs).
     The functions on this page return validators based on config arguments
     and are generally in multiple components of tidy3d.

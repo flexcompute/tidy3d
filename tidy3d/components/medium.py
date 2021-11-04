@@ -11,7 +11,7 @@ from .types import PoleAndResidue, Literal, Ax, FreqBound
 from .viz import add_ax_if_none
 from .validators import validate_name_str
 
-from ..constants import C_0, inf
+from ..constants import C_0, inf, pec_val
 from ..log import log
 
 
@@ -98,6 +98,37 @@ def ensure_freq_in_range(eps_model: Callable[[float], complex]) -> Callable[[flo
 
 
 """ Dispersionless Medium """
+
+# PEC keyword
+class PECMedium(AbstractMedium):
+    """Perfect electrical conductor class.
+
+    Note
+    ----
+    To avoid confusion from duplicate PECs,
+    use the pre-defined instance ``PEC`` rather than creating your own :class:`PECMedium` instance.
+    """
+
+    def eps_model(self, frequency: float) -> complex:
+        """Complex-valued permittivity as a function of frequency.
+
+        Parameters
+        ----------
+        frequency : float
+            Frequency to evaluate permittivity at (Hz).
+
+        Returns
+        -------
+        complex
+            Complex-valued relative permittivity evaluated at ``frequency``.
+        """
+
+        # return something like frequency with value of pec_val + 0j
+        return 0j * frequency + pec_val
+
+
+# PEC instance (usable)
+PEC = PECMedium(name="PEC")
 
 
 class Medium(AbstractMedium):
@@ -550,7 +581,7 @@ class Debye(DispersiveMedium):
 
 
 # types of mediums that can be used in Simulation and Structures
-MediumType = Union[Medium, PoleResidue, Sellmeier, Lorentz, Debye]
+MediumType = Union[Literal[PEC], Medium, AnisotropicMedium, PoleResidue, Sellmeier, Lorentz, Debye]
 
 """ Conversion helper functions """
 
