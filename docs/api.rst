@@ -27,6 +27,7 @@ Methods
    Simulation.plot_monitors
    Simulation.plot_symmetries
    Simulation.plot_pml
+   Simulation.plot_grid
    Simulation.grid
    Simulation.dt
    Simulation.tmesh
@@ -84,6 +85,7 @@ Geometry
    Sphere
    Cylinder
    PolySlab
+   PolySlab.from_gdspy
 
 Methods
 -------
@@ -259,7 +261,9 @@ Log
 .. autosummary::
    :toctree: _autosummary/
 
-   logging_level
+   log
+   set_logging_level
+   set_logging_file
 
 
 Submitting Simulations
