@@ -5,16 +5,13 @@ h5py
 rich
 nlopt
 matplotlib
-
-# required to get xarray to not complain
-dask
-
-# required for running tidy3d, may try to remove later
+shapely
+descartes
 pydantic
 PyYAML
 
-# may add later
-shapely
+# required to get xarray to not complain
+dask
 
 # required for code quality checking
 black
@@ -32,3 +29,6 @@ ipython
 autodoc_pydantic
 sphinx-copybutton
 m2r2
+
+# required for web
+boto3
