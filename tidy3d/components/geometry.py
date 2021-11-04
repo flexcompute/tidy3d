@@ -13,6 +13,7 @@ from .base import Tidy3dBaseModel
 from .types import Literal, Bound, Size, Coordinate, Axis, Coordinate2D
 from .types import Vertices, Ax, Shapely
 from .viz import add_ax_if_none
+from ..log import Tidy3dKeyError
 
 # add this around extents of plots
 PLOT_BUFFER = 0.3
@@ -800,6 +801,67 @@ class PolySlab(Planar):
         [(x0, y0)] = list(polygon_face.centroid.coords)
         values["center"] = cls.unpop_axis(z0, (x0, y0), axis=values.get("axis"))
         return val
+
+    @classmethod
+    def from_gdspy( #pylint:disable=too-many-arguments
+        cls,
+        gds_cell,
+        gds_layer: int,
+        gds_dtype: int,
+        polygon_index: int,
+        axis: Axis,
+        slab_bounds: Tuple[float, float],
+        gds_scale: float = 1.0,
+    ):
+        """Import :class:`PolySlab` from a gdspy Cell.
+
+        Parameters
+        ----------
+        gds_cell : gdspy.Cell
+            gdspy.Cell containing 2D geometric data.
+        gds_layer : int
+            List of layer index.
+        gds_dtype : int
+            Data type index.
+        polygon_index : int = 0
+            Index into the list of polygons at given gds_layer and gds_dtype.
+        axis : int
+            Integer index into the polygon's slab axis. (0,1,2) -> (x,y,z)
+        slab_bounds: Tuple[float, float]
+            Minimum and maximum positions of the slab along axis.
+        gds_scale : float = 1.0
+            Length scale used in GDS file in units of micron.
+            For example, if gds file uses nanometers, set ``gds_scale=1e-3``.
+
+        Returns
+        -------
+        :class:`PolySlab`
+            Geometry with slab along ``axis`` and geometry defined by gds cell in plane.
+        """
+
+        vert_dict = gds_cell.get_polygons(by_spec=True)
+        try:
+            key = (gds_layer, gds_dtype)
+            list_of_vertices = vert_dict[key]
+        except Exception as e:
+            raise Tidy3dKeyError(
+                f"Can't load gds_cell, gds_layer={gds_layer} and gds_dtype={gds_dtype} not found.  "
+                f"Found (layer, dtype) list of {list(vert_dict.keys())} in cell."
+            ) from e
+
+        # select polygon index
+        try:
+            vertices = list_of_vertices[polygon_index]
+        except Exception as e:
+            raise Tidy3dError(f"no polygon vertices found at index {polygon_index}.  "
+                              f"{len(list_of_vertices)} polygons returned at "
+                              f"gds_layer={gds_layer} and gds_dtype={gds_dtype}."
+            ) from e
+
+        vertices *= gds_scale
+        vertices = vertices.tolist()
+
+        return cls(vertices=vertices, axis=axis, slab_bounds=slab_bounds)
 
     def inside(self, x, y, z) -> bool:  # pylint:disable=too-many-locals
         """Returns True if point ``(x,y,z)`` inside volume of geometry.
