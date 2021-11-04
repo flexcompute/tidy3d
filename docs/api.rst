@@ -109,6 +109,8 @@ Mediums
    :toctree: _autosummary/
 
    Medium
+   AnisotropicMedium
+   PEC
    PoleResidue
    Sellmeier
    Debye

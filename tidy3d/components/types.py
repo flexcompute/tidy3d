@@ -35,7 +35,7 @@ Shapely = BaseGeometry
 
 
 class ComplexNumber(pydantic.BaseModel):
-    """holds real and imaginary parts"""
+    """Holds real and imaginary parts of a complex number."""
 
     real: float
     imag: float

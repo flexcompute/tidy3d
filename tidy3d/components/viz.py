@@ -9,6 +9,7 @@ from matplotlib import cm
 from pydantic import BaseModel
 
 from .types import Ax
+from ..constants import pec_val
 
 
 def make_ax() -> Ax:
@@ -45,6 +46,7 @@ class PatchParams(BaseModel):
     edgecolor: Any = None
     facecolor: Any = None
     fill: bool = True
+    hatch: str = None
 
 
 class PatchParamSwitcher(BaseModel):
@@ -101,6 +103,8 @@ class StructMediumParams(PatchParamSwitcher):
         mat_index = self.medium_map[self.medium]
         mat_cmap = cm.Set2  # pylint: disable=no-name-in-module, no-member
         facecolor = mat_cmap(mat_index % len(mat_cmap.colors))
+        if self.medium.name == "PEC":
+            return PatchParams(facecolor="black", edgecolor="black", lw=0)
         return PatchParams(facecolor=facecolor, edgecolor=facecolor, lw=0)
 
 
@@ -115,6 +119,8 @@ class StructEpsParams(PatchParamSwitcher):
         chi = self.eps - 1.0
         chi_max = self.eps_max - 1.0
         color = 1 - chi / chi_max
+        if self.eps == pec_val:
+            return PatchParams(facecolor="gold", edgecolor="k", lw=1)
         return PatchParams(facecolor=str(color), edgecolor=str(color), lw=0)
 
 

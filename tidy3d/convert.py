@@ -7,7 +7,7 @@ import h5py
 from tidy3d import Simulation, SimulationData, FieldData, data_type_map
 from tidy3d import Box, Sphere, Cylinder, PolySlab
 from tidy3d import Medium, AnisotropicMedium
-from tidy3d.components.medium import DispersiveMedium
+from tidy3d.components.medium import DispersiveMedium, PECMedium
 from tidy3d import VolumeSource, ModeSource, PlaneWave
 from tidy3d import GaussianPulse
 from tidy3d import PML, Absorber, StablePML
@@ -127,15 +127,12 @@ def old_json_structures(sim: Simulation) -> Tuple[List[Dict], List[Dict]]:
                     "poles": poles,
                 }
             )
-
-        """ TODO: support PEC. Note that PMC is probably not needed (not supported currently)."""
-        # elif isinstance(medium, PEC):
-        #     med.update({"type": "PEC"})
+        elif isinstance(medium, PECMedium):
+            med.update({"type": "PEC"})
         medium_list.append(med)
 
     struct_list = []
     for structure in sim.structures:
-        """TODO: Shouldn't structures also have custom names?"""
         struct = {"name": structure.medium.name, "mat_index": medium_map[structure.medium]}
         geom = structure.geometry
         if isinstance(geom, Box):

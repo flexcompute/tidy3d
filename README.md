@@ -209,7 +209,7 @@ git push origin x.x.x
 	- [x] gaussian beam.
 	- [x] option to display cell boundaries in plot.
 	- [ ] gds slab / gds importing.
-	- [ ] Add PEC medium
+	- [x] Add PEC medium
 - [ ] Documentation (1 week)
 	- [x] Add more discussion into Simulation docs.
 	- [x] Write docstrings and examples for all callables.

@@ -207,6 +207,11 @@ def test_medium_conversions():
     assert np.isclose(k, k_)
 
 
+def test_PEC():
+
+    struct = Structure(geometry=Box(size=(1, 1, 1)), medium=PEC)
+
+
 def test_medium_dispersion():
 
     # construct media

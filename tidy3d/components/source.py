@@ -1,7 +1,7 @@
 """Defines electric current sources for injecting light into simulation."""
 
 from abc import ABC, abstractmethod
-from typing import Tuple, Union, Literal
+from typing import Union, Literal
 
 import pydantic
 import numpy as np
@@ -91,7 +91,8 @@ class Pulse(SourceTime, ABC):
         Returns
         -------
         Tuple[float, float]
-            Minimum and maximum frequencies of the :class:`GaussianPulse` or :class:`ContinuousWave` power
+            Minimum and maximum frequencies of the
+            :class:`GaussianPulse` or :class:`ContinuousWave` power
             within 5 standard deviations.
         """
         return (self.freq0 - WIDTH_STD * self.fwidth, self.freq0 + WIDTH_STD * self.fwidth)
@@ -145,7 +146,8 @@ class GaussianPulse(Pulse):
 
 
 class ContinuousWave(Pulse):
-    """Source time dependence that ramps up to continueous oscillation and holds until end of simulation.
+    """Source time dependence that ramps up to continuous oscillation
+    and holds until end of simulation.
 
     Parameters
     ----------
@@ -235,7 +237,7 @@ class Source(Box, ABC):
         **patch_kwargs
             Optional keyword arguments passed to the matplotlib patch plotting of structure.
             For details on accepted values, refer to
-            `Matplotlib's documentation <https://matplotlib.org/stable/api/_as_gen/matplotlib.patches.Patch.html#matplotlib.patches.Patch>`_.
+            `Matplotlib's documentation <https://matplotlib.org/stable/api/_as_gen/matplotlib.patches.Patch.html#matplotlib.patches.Patch>`_. #pylint:disable=line-too-long
 
         Returns
         -------
@@ -420,7 +422,12 @@ class GaussianBeam(DirectionalSource):
     Example
     -------
     >>> pulse = GaussianPulse(freq0=200e12, fwidth=20e12)
-    >>> gauss = GaussianBeam(size=(0,3,3), source_time=pulse, polarization='Hy', direction='+', waist_radius=1.0)
+    >>> gauss = GaussianBeam(
+    ...     size=(0,3,3),
+    ...     source_time=pulse,
+    ...     polarization='Hy',
+    ...     direction='+',
+    ...     waist_radius=1.0)
     """
 
     waist_radius: pydantic.PositiveFloat
@@ -430,5 +437,5 @@ class GaussianBeam(DirectionalSource):
     type: Literal["GaussianBeam"] = "GaussianBeam"
 
 
-# allowable sources to use in Simulation.sources
+# sources allowed in Simulation.sources
 SourceType = Union[VolumeSource, PlaneWave, ModeSource, GaussianBeam]

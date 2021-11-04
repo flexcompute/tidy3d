@@ -20,7 +20,7 @@ class Monitor(Box, ABC):
     _name_validator = validate_name_str()
 
     @add_ax_if_none
-    def plot(
+    def plot( #pylint:disable=duplicate-code
         self, x: float = None, y: float = None, z: float = None, ax: Ax = None, **kwargs
     ) -> Ax:
         """Plot the monitor geometry on a cross section plane.
@@ -38,7 +38,7 @@ class Monitor(Box, ABC):
         **patch_kwargs
             Optional keyword arguments passed to the matplotlib patch plotting of structure.
             For details on accepted values, refer to
-            `Matplotlib's documentation <https://matplotlib.org/stable/api/_as_gen/matplotlib.patches.Patch.html#matplotlib.patches.Patch>`_.
+            `Matplotlib's documentation <https://matplotlib.org/stable/api/_as_gen/matplotlib.patches.Patch.html#matplotlib.patches.Patch>`_. #pylint:disable=line-too-long  # pylint: disable=line-too-long
 
         Returns
         -------
@@ -119,7 +119,11 @@ class FieldMonitor(AbstractFieldMonitor, FreqMonitor):
 
     Example
     -------
-    >>> monitor = FieldMonitor(size=(2,2,2), freqs=[200e12, 210e12], fields=['Ex', 'Ey', 'Hz'], name='freq_domain_fields')
+    >>> monitor = FieldMonitor(
+    ...     size=(2,2,2),
+    ...     freqs=[200e12, 210e12],
+    ...     fields=['Ex', 'Ey', 'Hz'],
+    ...     name='freq_domain_fields')
     """
 
     fields: List[FieldType] = ["Ex", "Ey", "Ez", "Hx", "Hy", "Hz"]
@@ -155,7 +159,13 @@ class FieldTimeMonitor(AbstractFieldMonitor, TimeMonitor):
 
     Example
     -------
-    >>> monitor = FieldTimeMonitor(size=(2,2,2), fields=['Hx'], start=1e-13, stop=5e-13, interval=2, name='movie_monitor')
+    >>> monitor = FieldTimeMonitor(
+    ...     size=(2,2,2),
+    ...     fields=['Hx'],
+    ...     start=1e-13,
+    ...     stop=5e-13,
+    ...     interval=2,
+    ...     name='movie_monitor')
     """
 
     type: Literal["FieldTimeMonitor"] = "FieldTimeMonitor"
@@ -213,7 +223,12 @@ class FluxTimeMonitor(AbstractFluxMonitor, TimeMonitor):
 
     Example
     -------
-    >>> monitor = FluxTimeMonitor(size=(2,2,0), start=1e-13, stop=5e-13, interval=2, name='flux_time')
+    >>> monitor = FluxTimeMonitor(
+    ...     size=(2,2,0),
+    ...     start=1e-13,
+    ...     stop=5e-13,
+    ...     interval=2,
+    ...     name='flux_time')
     """
 
     type: Literal["FluxTimeMonitor"] = "FluxTimeMonitor"
@@ -241,7 +256,11 @@ class ModeMonitor(PlanarMonitor, FreqMonitor):
     Example
     -------
     >>> modes = [Mode(mode_index=0), Mode(mode_index=1)]
-    >>> monitor = ModeMonitor(size=(2,2,0), freqs=[200e12, 210e12], modes=modes, name='mode_monitor')
+    >>> monitor = ModeMonitor(
+    ...     size=(2,2,0),
+    ...     freqs=[200e12, 210e12],
+    ...     modes=modes,
+    ...     name='mode_monitor')
     """
 
     direction: List[Direction] = ["+", "-"]
