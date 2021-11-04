@@ -32,6 +32,7 @@ from .monitor import FieldMonitor, FluxMonitor  # pylint:disable=unused-import
 
 
 class Simulation(Box):  # pylint:disable=too-many-public-methods
+    # pylint:disable=line-too-long
     """Contains all information about Tidy3d simulation.
 
     Parameters
@@ -48,7 +49,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         Total electromagnetic evolution time in seconds.
         Note: If ``shutoff`` specified, simulation will terminate early when shutoff condition met.
         Must be non-negative.
-    medium : :class:`Medium` or :class:`PoleResidue` or :class:`Lorentz` or :class:`Sellmeier` or :class:`Debye` = ``Medium(permittivity=1.0)``
+    medium : :class:`Medium` or :class:`AnisotropicMedium` or :class:`PoleResidue` or :class:`Lorentz` or :class:`Sellmeier` or :class:`Debye` = ``Medium(permittivity=1.0)``
         Background :class:`tidy3d.Medium` of simulation, defaults to air.
     structures : List[:class:`Structure`] = []
         List of structures in simulation.
@@ -59,8 +60,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
     monitors : List[:class:`FieldMonitor` or :class:`FieldTimeMonitor` or :class:`FluxMonitor` or :class:`FluxTimeMonitor` or :class:`ModeMonitor`] = []
         List of monitors in the simulation.
         Note: names stored in ``monitor.name`` are used to access data after simulation is run.
-    pml_layers : Tuple[:class:`AbsorberSpec`, :class:`AbsorberSpec`, :class:`AbsorberSpec`]
-        = ``(None, None, None)``
+    pml_layers : Tuple[:class:`AbsorberSpec`, :class:`AbsorberSpec`, :class:`AbsorberSpec`] = ``(None, None, None)``
         Specifications for the absorbing layers on x, y, and z edges.
         Elements of ``None`` are assumed to have no absorber and use periodic boundary conditions.
     symmetry : Tuple[int, int, int] = (0, 0, 0)
@@ -138,6 +138,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
     ...     subpixel=False,
     ... )
     """
+    # pylint:enable=line-too-long
 
     grid_size: Tuple[pydantic.PositiveFloat, pydantic.PositiveFloat, pydantic.PositiveFloat]
     medium: MediumType = Medium()
@@ -196,6 +197,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
 
     @property
     def mediums(self) -> List[MediumType]:
+        # pylint:disable=line-too-long
         """Returns set of distinct :class:`AbstractMedium` in simulation.
 
         Returns
@@ -204,9 +206,11 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
             Set of distinct mediums in the simulation.
         """
         return {structure.medium for structure in self.structures}
+        # pylint:enable=line-too-long
 
     @property
     def medium_map(self) -> Dict[MediumType, pydantic.NonNegativeInt]:
+        # pylint:disable=line-too-long
         """Returns dict mapping medium to index in material.
         ``medium_map[medium]`` returns unique global index of :class:`AbstractMedium` in simulation.
 
@@ -215,6 +219,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         Dict[:class:`Medium` or :class:`PoleResidue` or :class:`Lorentz` or :class:`Sellmeier` or :class:`Debye`, int]
             Mapping between distinct mediums to index in simulation.
         """
+        # pylint:enable=line-too-long
 
         return {medium: index for index, medium in enumerate(self.mediums)}
 
@@ -226,10 +231,10 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         x: float = None,
         y: float = None,
         z: float = None,
-        grid_lines: bool = False,
         ax: Ax = None,
         **kwargs,
     ) -> Ax:
+        # pylint:disable=line-too-long
         """Plot each of simulation's components on a plane defined by one nonzero x,y,z coordinate.
 
         Parameters
@@ -240,8 +245,6 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
             position of plane in y direction, only one of x, y, z must be specified to define plane.
         z : float = None
             position of plane in z direction, only one of x, y, z must be specified to define plane.
-        grid_lines : bool = False
-            If true, displays FDTD cell boundaries on plot.
         ax : matplotlib.axes._subplots.Axes = None
             Matplotlib axes to plot on, if not specified, one is created.
         **kwargs
@@ -254,14 +257,13 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         matplotlib.axes._subplots.Axes
             The supplied or created matplotlib axes.
         """
+        # pylint:enable=line-too-long
 
         ax = self.plot_structures(ax=ax, x=x, y=y, z=z, **kwargs)
         ax = self.plot_sources(ax=ax, x=x, y=y, z=z, **kwargs)
         ax = self.plot_monitors(ax=ax, x=x, y=y, z=z, **kwargs)
         ax = self.plot_symmetries(ax=ax, x=x, y=y, z=z, **kwargs)
         ax = self.plot_pml(ax=ax, x=x, y=y, z=z, **kwargs)
-        if grid_lines:
-            ax = self.plot_cells(ax=ax, x=x, y=y, z=z)
         ax = self._set_plot_bounds(ax=ax, x=x, y=y, z=z)
         return ax
 
@@ -272,10 +274,10 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         y: float = None,
         z: float = None,
         freq: float = None,
-        grid_lines: bool = False,
         ax: Ax = None,
         **kwargs,
     ) -> Ax:
+        # pylint:disable=line-too-long
         """Plot each of simulation's components on a plane defined by one nonzero x,y,z coordinate.
         The permittivity is plotted in grayscale based on its value at the specified frequency.
 
@@ -290,8 +292,6 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         freq : float = None
             Frequency to evaluate the relative permittivity of all mediums.
             If not specified, evaluates at infinite frequency.
-        grid_lines : bool = False
-            If true, displays FDTD cell boundaries on plot.
         ax : matplotlib.axes._subplots.Axes = None
             Matplotlib axes to plot on, if not specified, one is created.
         **kwargs
@@ -304,14 +304,13 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         matplotlib.axes._subplots.Axes
             The supplied or created matplotlib axes.
         """
+        # pylint:enable=line-too-long
 
         ax = self.plot_structures_eps(freq=freq, cbar=True, ax=ax, x=x, y=y, z=z, **kwargs)
         ax = self.plot_sources(ax=ax, x=x, y=y, z=z, **kwargs)
         ax = self.plot_monitors(ax=ax, x=x, y=y, z=z, **kwargs)
         ax = self.plot_symmetries(ax=ax, x=x, y=y, z=z, **kwargs)
         ax = self.plot_pml(ax=ax, x=x, y=y, z=z, **kwargs)
-        if grid_lines:
-            ax = self.plot_cells(ax=ax, x=x, y=y, z=z)
         ax = self._set_plot_bounds(ax=ax, x=x, y=y, z=z)
         return ax
 
@@ -319,6 +318,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
     def plot_structures(
         self, x: float = None, y: float = None, z: float = None, ax: Ax = None, **kwargs
     ) -> Ax:
+        # pylint:disable=line-too-long
         """Plot each of simulation's structures on a plane defined by one nonzero x,y,z coordinate.
 
         Parameters
@@ -341,6 +341,8 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         matplotlib.axes._subplots.Axes
             The supplied or created matplotlib axes.
         """
+        # pylint:enable=line-too-long
+
         medium_map = self.medium_map
         medium_shapes = self._filter_plot_structures(x=x, y=y, z=z)
         for (medium, shape) in medium_shapes:
@@ -374,6 +376,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         ax: Ax = None,
         **kwargs,
     ) -> Ax:
+        # pylint:disable=line-too-long
         """Plot each of simulation's structures on a plane defined by one nonzero x,y,z coordinate.
         The permittivity is plotted in grayscale based on its value at the specified frequency.
 
@@ -400,6 +403,8 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         matplotlib.axes._subplots.Axes
             The supplied or created matplotlib axes.
         """
+        # pylint:enable=line-too-long
+
         if freq is None:
             freq = inf
         eps_list = [s.medium.eps_model(freq).real for s in self.structures]
@@ -423,6 +428,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
     def plot_sources(
         self, x: float = None, y: float = None, z: float = None, ax: Ax = None, **kwargs
     ) -> Ax:
+        # pylint:disable=line-too-long
         """Plot each of simulation's sources on a plane defined by one nonzero x,y,z coordinate.
 
         Parameters
@@ -445,6 +451,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         matplotlib.axes._subplots.Axes
             The supplied or created matplotlib axes.
         """
+        # pylint:enable=line-too-long
         for source in self.sources:
             if source.intersects_plane(x=x, y=y, z=z):
                 ax = source.plot(ax=ax, x=x, y=y, z=z, **kwargs)
@@ -455,6 +462,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
     def plot_monitors(
         self, x: float = None, y: float = None, z: float = None, ax: Ax = None, **kwargs
     ) -> Ax:
+        # pylint:disable=line-too-long
         """Plot each of simulation's monitors on a plane defined by one nonzero x,y,z coordinate.
 
         Parameters
@@ -477,6 +485,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         matplotlib.axes._subplots.Axes
             The supplied or created matplotlib axes.
         """
+        # pylint:enable=line-too-long
         for monitor in self.monitors:
             if monitor.intersects_plane(x=x, y=y, z=z):
                 ax = monitor.plot(ax=ax, x=x, y=y, z=z, **kwargs)
@@ -487,6 +496,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
     def plot_symmetries(
         self, x: float = None, y: float = None, z: float = None, ax: Ax = None, **kwargs
     ) -> Ax:
+        # pylint:disable=line-too-long
         """Plot each of simulation's symmetries on a plane defined by one nonzero x,y,z coordinate.
 
         Parameters
@@ -509,6 +519,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         matplotlib.axes._subplots.Axes
             The supplied or created matplotlib axes.
         """
+        # pylint:enable=line-too-long
         for sym_axis, sym_value in enumerate(self.symmetry):
             if sym_value == 0:
                 continue
@@ -562,6 +573,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
     def plot_pml(
         self, x: float = None, y: float = None, z: float = None, ax: Ax = None, **kwargs
     ) -> Ax:
+        # pylint:disable=line-too-long
         """Plot each of simulation's absorbing boundaries
         on a plane defined by one nonzero x,y,z coordinate.
 
@@ -585,6 +597,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         matplotlib.axes._subplots.Axes
             The supplied or created matplotlib axes.
         """
+        # pylint:enable=line-too-long
         kwargs = PMLParams().update_params(**kwargs)
         pml_thicks = self.pml_thicknesses
         for pml_axis, pml_layer in enumerate(self.pml_layers):
@@ -603,7 +616,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         return ax
 
     @add_ax_if_none
-    def plot_cells(self, x: float = None, y: float = None, z: float = None, ax: Ax = None) -> Ax:
+    def plot_grid(self, x: float = None, y: float = None, z: float = None, ax: Ax = None) -> Ax:
         """Plot the cell boundaries as lines on a plane defined by one nonzero x,y,z coordinate.
 
         Parameters
@@ -631,6 +644,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
             ax.axvline(x=x_pos, linestyle="-", color="black", linewidth=0.2)
         for y_pos in boundaries_y:
             ax.axhline(y=y_pos, linestyle="-", color="black", linewidth=0.2)
+        ax = self._set_plot_bounds(ax=ax, x=x, y=y, z=z)
         return ax
 
     def _set_plot_bounds(self, ax: Ax, x: float = None, y: float = None, z: float = None) -> Ax:
@@ -664,6 +678,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
     def _filter_plot_structures(
         self, x: float = None, y: float = None, z: float = None
     ) -> List[Tuple[Medium, Shapely]]:
+        # pylint:disable=line-too-long
         """Compute list of shapes to plot on plane specified by {x,y,z}.
         Overlaps are removed or merged depending on medium.
 
@@ -681,6 +696,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         List[Tuple[:class:`Medium` or :class:`PoleResidue` or :class:`Lorentz` or :class:`Sellmeier` or :class:`Debye`, shapely.geometry.base.BaseGeometry]]
             List of shapes and mediums on the plane after merging.
         """
+        # pylint:enable=line-too-long
 
         shapes = []
         for struct in self.structures:
@@ -701,6 +717,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
 
     @staticmethod
     def _merge_shapes(shapes: List[Tuple[Medium, Shapely]]) -> List[Tuple[Medium, Shapely]]:
+        # pylint:disable=line-too-long
         """Merge list of shapes and mediums on plae by intersection with same medium.
         Edit background shapes to remove volume by intersection.
 
@@ -715,6 +732,8 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
             Shapes and their mediums on a plane
             after merging and removing intersections with background.
         """
+        # pylint:enable=line-too-long
+
         background_shapes = []
         for medium, shape in shapes:
 
@@ -895,6 +914,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         return Grid(boundaries=sub_boundaries)
 
     def epsilon(self, box: Box, freq: float = None) -> Dict[str, xr.DataArray]:
+        # pylint:disable=line-too-long
         """Get array of permittivity at volume specified by box and freq
 
         Parameters
@@ -916,6 +936,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
             at the corresponding field position in the yee lattice.
             For details on xarray datasets, refer to `xarray's Documentaton <http://xarray.pydata.org/en/stable/generated/xarray.DataArray.html>`_.
         """
+        # pylint:enable=line-too-long
 
         sub_grid = self.discretize(box)
         eps_background = self.medium.eps_model(freq)

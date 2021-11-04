@@ -106,6 +106,7 @@ class MonitorData(Tidy3dData, ABC):
 
     @property
     def data(self) -> xr.DataArray:
+        # pylint:disable=line-too-long
         """Returns an xarray representation of the montitor data.
 
         Returns
@@ -114,6 +115,7 @@ class MonitorData(Tidy3dData, ABC):
             Representation of the monitor data using xarray.
             For more details refer to `xarray's Documentaton <http://xarray.pydata.org/en/stable/generated/xarray.DataArray.html>`_.
         """
+        # pylint:enable=line-too-long
 
         data_dict = self.dict()
         coords = {dim: data_dict[dim] for dim in self._dims}
@@ -187,6 +189,7 @@ class CollectionData(Tidy3dData):
 
     @property
     def data(self) -> xr.Dataset:
+        # pylint:disable=line-too-long
         """For field quantities, store a single xarray DataArray for each ``field``.
         These all go in a single xarray Dataset, which keeps track of the shared coords.
 
@@ -196,6 +199,7 @@ class CollectionData(Tidy3dData):
             Representation of the underlying data using xarray.
             For more details refer to `xarray's Documentaton <http://xarray.pydata.org/en/stable/generated/xarray.Dataset.html>`_.
         """
+        # pylint:enable=line-too-long
         data_arrays = {name: arr.data for name, arr in self.data_dict.items()}
 
         # make an xarray dataset

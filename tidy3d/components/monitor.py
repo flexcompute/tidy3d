@@ -20,7 +20,7 @@ class Monitor(Box, ABC):
     _name_validator = validate_name_str()
 
     @add_ax_if_none
-    def plot( #pylint:disable=duplicate-code
+    def plot(  # pylint:disable=duplicate-code
         self, x: float = None, y: float = None, z: float = None, ax: Ax = None, **kwargs
     ) -> Ax:
         """Plot the monitor geometry on a cross section plane.

@@ -53,7 +53,7 @@ from . import plugins
 from .material_library import material_library
 
 # logging
-from .log import log, logging_level
+from .log import log, set_logging_level, set_logging_file
 
 # for docs
 from .components.medium import AbstractMedium

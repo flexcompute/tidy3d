@@ -1,3 +1,4 @@
+# pylint:disable=too-many-lines
 """Defines spatial extent of objects."""
 
 from abc import ABC, abstractmethod
@@ -65,7 +66,8 @@ class Geometry(Tidy3dBaseModel, ABC):
         -------
         List[shapely.geometry.base.BaseGeometry]
             List of 2D shapes that intersect plane.
-            For more details refer to `Shapely's Documentaton <https://shapely.readthedocs.io/en/stable/project.html>`_.
+            For more details refer to
+            `Shapely's Documentaton <https://shapely.readthedocs.io/en/stable/project.html>`_.
         """
 
     def intersects(self, other) -> bool:
@@ -180,6 +182,7 @@ class Geometry(Tidy3dBaseModel, ABC):
     def plot(
         self, x: float = None, y: float = None, z: float = None, ax: Ax = None, **patch_kwargs
     ) -> Ax:
+        # pylint:disable=line-too-long
         """Plot geometry cross section at single (x,y,z) coordinate.
 
         Parameters
@@ -202,6 +205,7 @@ class Geometry(Tidy3dBaseModel, ABC):
         matplotlib.axes._subplots.Axes
             The supplied or created matplotlib axes.
         """
+        # pylint:disable=line-too-long
 
         # find shapes that intersect self at plane
         axis, position = self._parse_xyz_kwargs(x=x, y=y, z=z)
@@ -373,7 +377,8 @@ class Planar(Geometry, ABC):
         -------
         List[shapely.geometry.base.BaseGeometry]
             List of 2D shapes that intersect plane.
-            For more details refer to `Shapely's Documentaton <https://shapely.readthedocs.io/en/stable/project.html>`_.
+            For more details refer to
+        `Shapely's Documentaton <https://shapely.readthedocs.io/en/stable/project.html>`_.
         """
         axis, position = self._parse_xyz_kwargs(x=x, y=y, z=z)
         if axis == self.axis:
@@ -391,7 +396,8 @@ class Planar(Geometry, ABC):
         -------
         List[shapely.geometry.base.BaseGeometry]
             List of 2D shapes that intersect plane.
-            For more details refer to `Shapely's Documentaton <https://shapely.readthedocs.io/en/stable/project.html>`_.
+            For more details refer to
+            `Shapely's Documentaton <https://shapely.readthedocs.io/en/stable/project.html>`_.
         """
 
     @abstractmethod
@@ -409,7 +415,8 @@ class Planar(Geometry, ABC):
         -------
         List[shapely.geometry.base.BaseGeometry]
             List of 2D shapes that intersect plane.
-            For more details refer to `Shapely's Documentaton <https://shapely.readthedocs.io/en/stable/project.html>`_.
+            For more details refer to
+            `Shapely's Documentaton <https://shapely.readthedocs.io/en/stable/project.html>`_.
         """
 
     @property
@@ -519,7 +526,8 @@ class Box(Geometry):
         -------
         List[shapely.geometry.base.BaseGeometry]
             List of 2D shapes that intersect plane.
-            For more details refer to `Shapely's Documentaton <https://shapely.readthedocs.io/en/stable/project.html>`_.
+            For more details refer to
+            `Shapely's Documentaton <https://shapely.readthedocs.io/en/stable/project.html>`_.
         """
         axis, position = self._parse_xyz_kwargs(x=x, y=y, z=z)
         z0, (x0, y0) = self.pop_axis(self.center, axis=axis)
@@ -636,7 +644,8 @@ class Sphere(Circular):
         -------
         List[shapely.geometry.base.BaseGeometry]
             List of 2D shapes that intersect plane.
-            For more details refer to `Shapely's Documentaton <https://shapely.readthedocs.io/en/stable/project.html>`_.
+            For more details refer to
+            `Shapely's Documentaton <https://shapely.readthedocs.io/en/stable/project.html>`_.
         """
         axis, position = self._parse_xyz_kwargs(x=x, y=y, z=z)
         z0, (x0, y0) = self.pop_axis(self.center, axis=axis)
@@ -688,7 +697,8 @@ class Cylinder(Circular, Planar):
         -------
         List[shapely.geometry.base.BaseGeometry]
             List of 2D shapes that intersect plane.
-            For more details refer to `Shapely's Documentaton <https://shapely.readthedocs.io/en/stable/project.html>`_.
+            For more details refer to
+            `Shapely's Documentaton <https://shapely.readthedocs.io/en/stable/project.html>`_.
         """
         _, (x0, y0) = self.pop_axis(self.center, axis=self.axis)
         return [Point(x0, y0).buffer(self.radius)]
@@ -707,7 +717,8 @@ class Cylinder(Circular, Planar):
         -------
         List[shapely.geometry.base.BaseGeometry]
             List of 2D shapes that intersect plane.
-            For more details refer to `Shapely's Documentaton <https://shapely.readthedocs.io/en/stable/project.html>`_.
+            For more details refer to
+            `Shapely's Documentaton <https://shapely.readthedocs.io/en/stable/project.html>`_.
         """
         z0_axis, _ = self.pop_axis(self.center, axis=self.axis)
         intersect_dist = self._intersect_dist(position, z0_axis)
@@ -912,7 +923,8 @@ class PolySlab(Planar):
         -------
         List[shapely.geometry.base.BaseGeometry]
             List of 2D shapes that intersect plane.
-            For more details refer to `Shapely's Documentaton <https://shapely.readthedocs.io/en/stable/project.html>`_.
+            For more details refer to
+            `Shapely's Documentaton <https://shapely.readthedocs.io/en/stable/project.html>`_.
         """
         return [Polygon(self.vertices)]
 
@@ -930,7 +942,8 @@ class PolySlab(Planar):
         -------
         List[shapely.geometry.base.BaseGeometry]
             List of 2D shapes that intersect plane.
-            For more details refer to `Shapely's Documentaton <https://shapely.readthedocs.io/en/stable/project.html>`_.
+            For more details refer to
+            `Shapely's Documentaton <https://shapely.readthedocs.io/en/stable/project.html>`_.
         """
 
         z0, _ = self.pop_axis(self.center, axis=self.axis)
