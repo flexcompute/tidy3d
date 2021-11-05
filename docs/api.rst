@@ -117,6 +117,7 @@ Mediums
    Sellmeier
    Debye
    Lorentz
+   Drude
 
 Methods
 -------

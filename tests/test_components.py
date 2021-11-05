@@ -218,10 +218,11 @@ def test_medium_dispersion():
     m_PR = PoleResidue(eps_inf=1.0, poles=[(1 + 2j, 1 + 3j), (2 + 4j, 1 + 5j)])
     m_SM = Sellmeier(coeffs=[(2, 3), (2, 4)])
     m_LZ = Lorentz(eps_inf=1.0, coeffs=[(1, 3, 2), (2, 4, 1)])
+    m_DR = Drude(eps_inf=1.0, coeffs=[(1, 3), (2, 4)])
     m_DB = Debye(eps_inf=1.0, coeffs=[(1, 3), (2, 4)])
 
     freqs = np.linspace(0.01, 1, 1001)
-    for medium in [m_PR, m_SM, m_LZ, m_DB]:
+    for medium in [m_PR, m_SM, m_LZ, m_DR, m_DB]:
         eps_c = medium.eps_model(freqs)
 
 
@@ -230,13 +231,26 @@ def test_medium_dispersion_conversion():
     m_PR = PoleResidue(eps_inf=1.0, poles=[((1 + 2j), (1 + 3j)), ((2 + 4j), (1 + 5j))])
     m_SM = Sellmeier(coeffs=[(2, 3), (2, 4)])
     m_LZ = Lorentz(eps_inf=1.0, coeffs=[(1, 3, 2), (2, 4, 1)])
+    m_DR = Drude(eps_inf=1.0, coeffs=[(1, 3), (2, 4)])
     m_DB = Debye(eps_inf=1.0, coeffs=[(1, 3), (2, 4)])
 
     freqs = np.linspace(0.01, 1, 1001)
-    for medium in [m_PR, m_SM, m_DB, m_LZ]:  # , m_DB]:
+    for medium in [m_PR, m_SM, m_DB, m_LZ, m_DR]:  # , m_DB]:
         eps_model = medium.eps_model(freqs)
         eps_pr = medium.pole_residue.eps_model(freqs)
         np.testing.assert_allclose(eps_model, eps_pr)
+
+
+def test_medium_dispersion_create():
+
+    m_PR = PoleResidue(eps_inf=1.0, poles=[((1 + 2j), (1 + 3j)), ((2 + 4j), (1 + 5j))])
+    m_SM = Sellmeier(coeffs=[(2, 3), (2, 4)])
+    m_LZ = Lorentz(eps_inf=1.0, coeffs=[(1, 3, 2), (2, 4, 1)])
+    m_DR = Drude(eps_inf=1.0, coeffs=[(1, 3), (2, 4)])
+    m_DB = Debye(eps_inf=1.0, coeffs=[(1, 3), (2, 4)])
+
+    for medium in [m_PR, m_SM, m_DB, m_LZ, m_DR]:
+        struct = Structure(geometry=Box(size=(1, 1, 1)), medium=medium)
 
 
 """ modes """
