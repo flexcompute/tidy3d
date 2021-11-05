@@ -2,10 +2,9 @@
 
 from enum import Enum
 from abc import ABC
+from typing import Any
 
 import pydantic
-
-from ..components.base import Tidy3dBaseModel
 
 
 class TaskStatus(Enum):
@@ -20,8 +19,13 @@ class TaskStatus(Enum):
     ERROR = "error"
 
 
-class TaskBase(Tidy3dBaseModel, ABC):
+class TaskBase(pydantic.BaseModel, ABC):
     """base config for all task objects"""
+
+    class Config:
+        """configure class"""
+
+        arbitrary_types_allowed = True
 
 
 # type of the task_id
@@ -80,6 +84,11 @@ class TaskInfo(TaskBase):
     solverEndTimeAsLong: float = None
     solverStartTimeAsLong: float = None
     submitTimeAsLong: float = None
+    credential: Any = None
+    loopSolverTime: Any = None
+    shutoffNt: Any = None
+    startSolverTime: Any = None
+    totalSolverTime: Any = None
 
 
 class RunInfo(TaskBase):

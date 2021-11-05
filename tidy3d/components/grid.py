@@ -3,7 +3,7 @@ import numpy as np
 
 from .base import Tidy3dBaseModel
 from .types import Array, Axis
-
+from ..log import SetupError
 
 # data type of one dimensional coordinate array.
 Coords1D = Array[float]
@@ -205,6 +205,25 @@ class Grid(Tidy3dBaseModel):
         yee_e = FieldGrid(**yee_e_kwargs)
         yee_h = FieldGrid(**yee_h_kwargs)
         return YeeGrid(E=yee_e, H=yee_h)
+
+    def __getitem__(self, coord_key: str) -> Coords:
+        """quickly get the grid element by grid[key]."""
+
+        coord_dict = {
+            "centers": self.centers,
+            "sizes": self.sizes,
+            "boundaries": self.boundaries,
+            "Ex": self.yee.E.x,
+            "Ey": self.yee.E.y,
+            "Ez": self.yee.E.z,
+            "Hx": self.yee.H.x,
+            "Hy": self.yee.H.y,
+            "Hz": self.yee.H.z,
+        }
+        if coord_key not in coord_dict:
+            raise SetupError(f"key {coord_key} not found in grid with {list(coord_dict.keys())} ")
+
+        return coord_dict.get(coord_key)
 
     def _yee_e(self, axis: Axis):
         """E field yee lattice sites for axis."""

@@ -192,6 +192,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
     # - check PW in homogeneous medium
     # - check nonuniform grid covers the whole simulation domain
     # - check any structures close to PML (in lambda) without intersecting.
+    # - check any structures.bounds == simulation.bounds -> warn
 
     """ Accounting """
 
@@ -913,7 +914,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         sub_boundaries = Coords(**sub_cell_boundary_dict)
         return Grid(boundaries=sub_boundaries)
 
-    def epsilon(self, box: Box, freq: float = None) -> Dict[str, xr.DataArray]:
+    def epsilon(self, box: Box, coord_key: str, freq: float = None) -> Dict[str, xr.DataArray]:
         # pylint:disable=line-too-long
         """Get array of permittivity at volume specified by box and freq
 
@@ -921,6 +922,11 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         ----------
         box : :class:`Box`
             Rectangular geometry specifying where to measure the permittivity.
+        coord_key : str
+            Specifies at what part of the grid to return the permittivity at.
+            Accepted values are ``{'centers', 'boundaries', 'Ex', 'Ey', 'Ez', 'Hx', 'Hy', 'Hz'}``.
+            The field values (eg. 'Ex')
+            correspond to the correponding field locations on the yee lattice.
         freq : float = None
             The frequency to evaluate the mediums at.
             If not specified, evaluates at infinite frequency.
@@ -953,15 +959,5 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
             return xr.DataArray(eps_array, coords={"x": xs, "y": ys, "z": zs})
 
         # combine all data into dictionary
-        data_arrays = {
-            "centers": make_eps_data(sub_grid.centers),
-            "boundaries": make_eps_data(sub_grid.boundaries),
-            "Ex": make_eps_data(sub_grid.yee.E.x),
-            "Ey": make_eps_data(sub_grid.yee.E.y),
-            "Ez": make_eps_data(sub_grid.yee.E.z),
-            "Hx": make_eps_data(sub_grid.yee.H.x),
-            "Hy": make_eps_data(sub_grid.yee.H.y),
-            "Hz": make_eps_data(sub_grid.yee.H.z),
-        }
-
-        return data_arrays
+        coords = sub_grid[coord_key]
+        return make_eps_data(coords)

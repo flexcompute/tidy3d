@@ -15,6 +15,7 @@ from .mode import Mode
 from .viz import add_ax_if_none
 from ..log import DataError
 
+# TODO: add warning if fields didnt fully decay
 
 """ Helper functions """
 
@@ -203,7 +204,8 @@ class CollectionData(Tidy3dData):
         data_arrays = {name: arr.data for name, arr in self.data_dict.items()}
 
         # make an xarray dataset
-        return xr.Dataset(data_arrays)
+        # return xr.Dataset(data_arrays) # datasets are annoying
+        return data_arrays
 
     def __eq__(self, other):
         """Check for equality against other :class:`CollectionData` object."""

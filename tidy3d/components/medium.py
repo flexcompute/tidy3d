@@ -86,6 +86,11 @@ def ensure_freq_in_range(eps_model: Callable[[float], complex]) -> Callable[[flo
 
     def _eps_model(self, frequency: float) -> complex:
         """New eps_model function."""
+
+        # if frequency is none, don't check, return original function
+        if frequency is None:
+            return eps_model(self, frequency)
+
         fmin, fmax = self.frequency_range
         if np.any(frequency < fmin) or np.any(frequency > fmax):
             log.warning(
@@ -759,11 +764,14 @@ def eps_sigma_to_eps_complex(eps_real: float, sigma: float, freq: float) -> comp
         Conductivity.
     freq : float
         Frequency to evaluate permittivity at (Hz).
+        If not supplied, returns real part of permittivity (limit as frequency -> infinity.)
 
     Returns
     -------
     complex
         Complex-valued relative permittivity.
     """
+    if not freq:
+        return eps_real
     omega = 2 * np.pi * freq
     return eps_real + 1j * sigma / omega
