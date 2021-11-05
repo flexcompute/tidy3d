@@ -11,10 +11,10 @@ from ...components import Box
 from ...components import Simulation
 from ...components import Mode
 from ...components import FieldData, ScalarFieldData
-from ...components import ModeMonitor, FieldMonitor
+from ...components import ModeMonitor
 from ...components import ModeSource, GaussianPulse
-from ...components import eps_complex_to_nk
 from ...components.types import Direction
+from ...log import SetupError
 
 from .solver import compute_modes
 
@@ -106,13 +106,22 @@ class ModeSolver:
         """
 
         # note discretizing, need to make consistent
-        eps_data = self.simulation.epsilon(self.plane, self.freq)
-        eps_cross_xx = np.squeeze(eps_data["Ex"].values)
-        eps_cross_yy = np.squeeze(eps_data["Ey"].values)
-        eps_cross_zz = np.squeeze(eps_data["Ez"].values)
-        eps_cross = np.stack((eps_cross_xx, eps_cross_yy, eps_cross_zz))
+        eps_xx = np.squeeze(self.simulation.epsilon(self.plane, "Ex", self.freq).values)
+        eps_yy = np.squeeze(self.simulation.epsilon(self.plane, "Ey", self.freq).values)
+        eps_zz = np.squeeze(self.simulation.epsilon(self.plane, "Ez", self.freq).values)
 
-        Nx, Ny = eps_cross_xx.shape
+        # swap axes to waveguide coordinates (propagating in z)
+        normal_axis = self.plane.size.index(0.0)
+        eps_wg_zz, (eps_wg_xx, eps_wg_yy) = self.plane.pop_axis(
+            (eps_xx, eps_yy, eps_zz), axis=normal_axis
+        )
+
+        # note: from this point on, in waveguide coordinates (propagating in z)
+
+        # construct eps_cross section to feed to mode solver
+        eps_cross = np.stack((eps_wg_xx, eps_wg_yy, eps_wg_zz))
+
+        Nx, Ny = eps_cross.shape[1:]
         if mode.symmetries[0] != 0:
             eps_cross = np.stack(tuple(e[Nx // 2, :] for e in eps_cross))
         if mode.symmetries[1] != 0:
@@ -120,9 +129,10 @@ class ModeSolver:
 
         num_modes = mode.num_modes if mode.num_modes else mode.mode_index + 1
         if num_modes <= mode.mode_index:
-            log.error(
-                f"mode index = {mode.mode_index} "
-                f"is out of bounds for the number of modes specified = {mode.um_modes}."
+
+            raise SetupError(
+                f"Mode.mode_index = {mode.mode_index} "
+                f"is out of bounds for the number of modes given: Mode.num_modes={mode.um_modes}."
             )
 
         # note, internally discretizing, need to make consistent.
@@ -137,44 +147,60 @@ class ModeSolver:
             coords=None,
         )
 
-        # field.shape = (2, 3, Nx, Ny, 1, Nmodes)
+        # Get fields at the Mode.mode_index
         field_values = field[..., mode.mode_index]
         E, H = field_values
 
-        # note: need to handle signs correctly and refactor symmetry
+        # Handle symmetries
         if mode.symmetries[0] != 0:
-            E_tmp = E[:, 1:, ...]
-            H_tmp = H[:, 1:, ...]
-            E = np.concatenate((+E_tmp[:, ::-1, ...], E_tmp), axis=1)
-            H = np.concatenate((-H_tmp[:, ::-1, ...], H_tmp), axis=1)
+            E_half = E[:, 1:, ...]
+            H_half = H[:, 1:, ...]
+            E = np.concatenate((+E_half[:, ::-1, ...], E_half), axis=1)
+            H = np.concatenate((-H_half[:, ::-1, ...], H_half), axis=1)
         if mode.symmetries[1] != 0:
-            E_tmp = E[:, :, 1:, ...]
-            H_tmp = H[:, :, 1:, ...]
-            E = np.concatenate((+E_tmp[:, :, ::-1, ...], E_tmp), axis=2)
-            H = np.concatenate((-H_tmp[:, :, ::-1, ...], H_tmp), axis=2)
+            E_half = E[:, :, 1:, ...]
+            H_half = H[:, :, 1:, ...]
+            E = np.concatenate((+E_half[:, :, ::-1, ...], E_half), axis=2)
+            H = np.concatenate((-H_half[:, :, ::-1, ...], H_half), axis=2)
         Ex, Ey, Ez = E[..., None]
         Hx, Hy, Hz = H[..., None]
 
-        # # return the fields in the correct
-        # normal_axis = [p == 0 for p in self.plane.size].index(True)
-        # Ex, Ey, Ez = self.simulation.unpop_axis(Ez, (Ex, Ey), axis=normal_axis)
-        # Hx, Hy, Hz = self.simulation.unpop_axis(Hz, (Hx, Hy), axis=normal_axis)
+        # add in the normal coordinate for each of the fields
+        def rotate_field_coords(field_array):
+            """move the propagation axis=z to the proper order in the array"""
+            return np.moveaxis(field_array, source=2, destination=normal_axis)
+
+        Ex = rotate_field_coords(Ex)
+        Ey = rotate_field_coords(Ey)
+        Ez = rotate_field_coords(Ez)
+        Hx = rotate_field_coords(Hx)
+        Hy = rotate_field_coords(Hy)
+        Hz = rotate_field_coords(Hz)
+
+        # return the fields and coordinates in the original coordinate system
+        Ex, Ey, Ez = self.simulation.unpop_axis(Ez, (Ex, Ey), axis=normal_axis)
+        Hx, Hy, Hz = self.simulation.unpop_axis(Hz, (Hx, Hy), axis=normal_axis)
+
+        # apply -1 to H fields if needed, due to how they transform under reflections
+        if normal_axis == 1:
+            Hx *= -1
+            Hy *= -1
+            Hz *= -1
+
+        # note: from this point on, back in original coordinates
 
         fields = {"Ex": Ex, "Ey": Ey, "Ez": Ez, "Hx": Hx, "Hy": Hy, "Hz": Hz}
 
         # note: re-discretizing, need to make consistent.
         data_dict = {}
         for field_name, field in fields.items():
-            Nx = field.shape[0]
-            Ny = field.shape[1]
-            (xmin, ymin, zmin), (xmax, ymax, zmax) = self.plane.bounds
-            x = np.linspace(xmin, xmax, Nx)
-            y = np.linspace(ymin, ymax, Ny)
-            z = np.linspace(zmin, zmax, 1)
+            plane_grid = self.simulation.discretize(self.plane)
+            plane_coords = plane_grid[field_name]
+
             data_dict[field_name] = ScalarFieldData(
-                x=x,
-                y=y,
-                z=z,
+                x=plane_coords.x,
+                y=plane_coords.y,
+                z=plane_coords.z,
                 f=np.array([self.freq]),
                 values=field,
             )
@@ -214,7 +240,7 @@ class ModeSolver:
             center=center, size=size, source_time=source_time, mode=mode, direction=direction
         )
 
-    def make_monitor(self, mode: Mode, freqs: List[float]) -> ModeMonitor:
+    def make_monitor(self, mode: Mode, freqs: List[float], name: str) -> ModeMonitor:
         """Creates ``ModeMonitor`` from a Mode + additional specifications.
 
         Parameters
@@ -223,7 +249,8 @@ class ModeSolver:
             ``Mode`` object containing specifications of mode.
         freqs : List[float]
             Frequencies to include in Monitor (Hz).
-
+        name : str
+            Required name of monitor.
         Returns
         -------
         ModeMonitor
@@ -231,4 +258,4 @@ class ModeSolver:
         """
         center = self.plane.center
         size = self.plane.size
-        return ModeMonitor(center=center, size=size, freqs=freqs, modes=[mode])
+        return ModeMonitor(center=center, size=size, freqs=freqs, modes=[mode], name=name)

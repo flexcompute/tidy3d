@@ -14,7 +14,7 @@ from tidy3d import FieldData, ScalarFieldData, FieldMonitor
 from .utils import clear_tmp
 
 
-def test_near2far():
+def _test_near2far():
     """make sure mode solver runs"""
 
     def rand_data():
