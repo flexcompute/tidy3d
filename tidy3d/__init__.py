@@ -17,7 +17,8 @@ from .components import Grid, Coords
 from .components import Box, Sphere, Cylinder, PolySlab
 
 # medium
-from .components import Medium, PoleResidue, Sellmeier, Debye, Lorentz, AnisotropicMedium, PEC
+from .components import Medium, PoleResidue, AnisotropicMedium, PEC
+from .components import Sellmeier, Debye, Drude, Lorentz
 from .components import nk_to_eps_complex, nk_to_eps_sigma, eps_complex_to_nk
 from .components import nk_to_medium, eps_sigma_to_eps_complex
 

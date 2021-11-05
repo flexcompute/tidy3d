@@ -511,6 +511,84 @@ class Lorentz(DispersiveMedium):
         )
 
 
+class Drude(DispersiveMedium):
+    """A dispersive medium described by the Drude model.
+    The frequency-dependence of the complex-valued permittivity is described by:
+
+    .. math::
+        \\epsilon(f) = \\epsilon_\\infty - \\sum_i
+        \\frac{ f_i^2}{f^2 - jf\\delta_i}
+
+    where :math:`f, f_i, \\delta_i` are in Hz.
+
+    Parameters
+    ----------
+    eps_inf : float = 1.0
+        Relative permittivity at infinite frequency (:math:`\\epsilon_\\infty`).
+    coeffs : List[Tuple[float, float]]
+        List of (:math:`f_i, \\delta_i`) values for model.
+    frequeuncy_range : Tuple[float, float] = (-inf, inf)
+        Range of validity for the medium in Hz.
+        If simulation or plotting functions use frequency out of this range, a warning is thrown.
+    name : str = None
+        Optional name for the medium.
+
+    Example
+    -------
+    >>> drude_medium = Drude(eps_inf=2.0, coeffs=[(1,2), (3,4)])
+    >>> eps = drude_medium.eps_model(200e12)
+    """
+
+    eps_inf: float = 1.0
+    coeffs: List[Tuple[float, float]]
+    type: Literal["Drude"] = "Drude"
+
+    @ensure_freq_in_range
+    def eps_model(self, frequency: float) -> complex:
+        """Complex-valued permittivity as a function of frequency.
+
+        Parameters
+        ----------
+        frequency : float
+            Frequency to evaluate permittivity at (Hz).
+
+        Returns
+        -------
+        complex
+            Complex-valued relative permittivity evaluated at the frequency.
+        """
+        eps = self.eps_inf + 0.0j
+        for (f, delta) in self.coeffs:
+            eps -= (f ** 2) / (frequency ** 2 - 1j * frequency * delta)
+        return eps
+
+    @property
+    def pole_residue(self):
+        """Representation of Medium as a pole-residue model."""
+
+        poles = []
+        for (f, delta) in self.coeffs:
+
+            w = 2 * np.pi * f
+            d = 2 * np.pi * delta
+
+            c0 = -(w ** 2) / 2 / d + 0j
+            a0 = 0j
+
+            c1 = w ** 2 / 2 / d + 0j
+            a1 = d + 0j
+
+            poles.append((a0, c0))
+            poles.append((a1, c1))
+
+        return PoleResidue(
+            eps_inf=self.eps_inf,
+            poles=poles,
+            frequency_range=self.frequency_range,
+            name=self.name,
+        )
+
+
 class Debye(DispersiveMedium):
     """A dispersive medium described by the Debye model.
     The frequency-dependence of the complex-valued permittivity is described by:
@@ -581,7 +659,9 @@ class Debye(DispersiveMedium):
 
 
 # types of mediums that can be used in Simulation and Structures
-MediumType = Union[Literal[PEC], Medium, AnisotropicMedium, PoleResidue, Sellmeier, Lorentz, Debye]
+MediumType = Union[
+    Literal[PEC], Medium, AnisotropicMedium, PoleResidue, Sellmeier, Lorentz, Debye, Drude
+]
 
 """ Conversion helper functions """
 
