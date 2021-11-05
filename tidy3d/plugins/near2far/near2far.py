@@ -4,12 +4,13 @@ import numpy as np
 
 from ...constants import C_0, ETA_0
 from ...components.data import FieldData
+from ...log import SetupError
 
 
 class Near2Far:
     """Near field to far field transformation tool."""
 
-    def __init__(self, field_data: FieldData):
+    def __init__(self, field_data: FieldData, frequency : float):
         """Constructs near field to far field transformation object from monitor data.
 
         Parameters
@@ -19,41 +20,19 @@ class Near2Far:
         """
 
         # get frequency info
-        self.f = float(field_data.data.Ez.f[0].values)
-        self.k0 = 2 * np.pi * self.f / C_0
+        self.k0 = 2 * np.pi * frequency / C_0
 
-        # get normal axis (ignore components)
-        xs = field_data.data.Ez.x.values
-        ys = field_data.data.Ez.y.values
-        zs = field_data.data.Ez.z.values
-        mon_size = [xs.shape[-1], ys.shape[-1], zs.shape[-1]]
-        self.axis = mon_size.index(1)
-        assert self.axis == 2, "Currently only works for z normal."
+        self.xx, self.yy = np.meshgrid(xs, ys, indexing="ij")
 
-        # get normal and planar coordinates
-        # zs, (xs, ys) = field_data.geometry.pop_axis((xs, ys, zs), axis=self.axis)
-        self.z0 = zs[0]
-        self.xs = xs
-        self.ys = ys
-        self.xx, self.yy = np.meshgrid(self.xs, self.ys, indexing="ij")
-        self.dx = np.mean(np.diff(xs))
-        self.dy = np.mean(np.diff(ys))
+        self.Ex = field_data.data['Ex']
+        self.Ey = field_data.data['Ey']
+        self.Ez = field_data.data['Ez']
+        self.Hx = field_data.data['Hx']
+        self.Hy = field_data.data['Hy']
+        self.Hz = field_data.data['Hz']
 
-        # get tangential near fields
-        # for em_field in "EH":
-        #     for component in "xyz":
-        #         field_name = em_field + component
-        #         assert field_name in field_data.field, f"missing field: {field_name}"
-
-        self.Ex = field_data.data.Ex.values
-        self.Ey = field_data.data.Ey.values
-        self.Ez = field_data.data.Ez.values
-        self.Hx = field_data.data.Hx.values
-        self.Hy = field_data.data.Hy.values
-        self.Hz = field_data.data.Hz.values
-
-        # _, (self.Ex, self.Ey) = field_data.geometry.pop_axis(E, axis=self.axis)
-        # _, (self.Hx, self.Hy) = field_data.geometry.pop_axis(H, axis=self.axis)
+        self.dxs = np.diff(self.Hz.xs.values)
+        self.dys = np.diff(self.Hz.ys.values)
 
         # compute equivalent sources
         self.Jx = -self.Hy
