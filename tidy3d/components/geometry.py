@@ -821,7 +821,7 @@ class PolySlab(Planar):
         slab_bounds: Tuple[float, float],
         gds_layer: int,
         gds_dtype: int,
-        polygon_index: pydantic.NonNegativeInt = 1,
+        polygon_index: pydantic.NonNegativeInt = 0,
         gds_scale: pydantic.PositiveFloat = 1.0,
     ):
         """Import :class:`PolySlab` from a ``gdspy.Cell``.
@@ -867,8 +867,8 @@ class PolySlab(Planar):
             vertices = list_of_vertices[polygon_index]
         except Exception as e:
             raise Tidy3dKeyError(
-                f"no polygon vertices found at index {polygon_index}.  "
-                f"{len(list_of_vertices)} polygons returned at "
+                f"No polygons found at polygon_index={polygon_index}.  "
+                f"{len(list_of_vertices)} polygons found at "
                 f"gds_layer={gds_layer} and gds_dtype={gds_dtype}."
             ) from e
 
