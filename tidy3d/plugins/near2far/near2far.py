@@ -3,14 +3,16 @@
 import numpy as np
 
 from ...constants import C_0, ETA_0
-from ...components.data import FieldData, SimulationData
+from ...components.data import SimulationData
 from ...log import SetupError
+
+# TODO: implement new version with simulation.discretize
 
 
 class Near2Far:
     """Near field to far field transformation tool."""
 
-    def __init__(self, sim_data : SimulationData, mon_name: str, frequency : float):
+    def __init__(self, sim_data: SimulationData, mon_name: str, frequency: float):
         """Constructs near field to far field transformation object from monitor data.
 
         Parameters
@@ -23,44 +25,50 @@ class Near2Far:
         frequency : float
             Frequency to select from the :class:`.FieldMonitor` to use for projection.
             Must be a frequency stored in the :class:`FieldMonitor`.
-
-            
         """
 
         try:
             field_data = sim_data[mon_name]
         except Exception as e:
-            raise SetupError(f"No data for monitor named '{mon_name}' found in supplied sim_data.") from e
+            raise SetupError(
+                f"No data for monitor named '{mon_name}' " "found in supplied sim_data."
+            ) from e
 
-        if any(field_name not in field_data for field_name in ('Ex', 'Ey', 'Ez', 'Hx', 'Hy', 'Hz')):
+        if any(field_name not in field_data for field_name in ("Ex", "Ey", "Hx", "Hy", "Ez")):
             raise SetupError(f"Monitor named '{mon_name}' doesn't store all field values")
 
         try:
-            self.Ex = field_data['Ex'].sel(f=frequency)
-            self.Ey = field_data['Ey'].sel(f=frequency)
-            self.Ez = field_data['Ez'].sel(f=frequency)
-            self.Hx = field_data['Hx'].sel(f=frequency)
-            self.Hy = field_data['Hy'].sel(f=frequency)
-            self.Hz = field_data['Hz'].sel(f=frequency)
+            Ex = field_data["Ex"].sel(f=frequency)
+            Ey = field_data["Ey"].sel(f=frequency)
+            # self.Ez = field_data['Ez'].sel(f=frequency)
+            Hx = field_data["Hx"].sel(f=frequency)
+            Hy = field_data["Hy"].sel(f=frequency)
+            Hz = field_data["Hz"].sel(f=frequency)
         except Exception as e:
-            raise SetupError(f"Frequency {frequency} not found in all fields from monitor '{mon_name}'.") from e
+            raise SetupError(
+                f"Frequency {frequency} not found in all fields " f"from monitor '{mon_name}'."
+            ) from e
 
         self.k0 = 2 * np.pi * frequency / C_0
 
-        # note: assuming uniform grid
-        self.dx = np.mean(np.diff(self.Hz.x.values))
-        self.dy = np.mean(np.diff(self.Hz.y.values))
+        # grid sizes
+        self.dx = np.mean(np.diff(Hz.x.values))
+        self.dy = np.mean(np.diff(Hz.y.values))
 
-        self.xx_Jx, self.yy_Jx = np.meshgrid(self.Hy.x.values, self.Hy.y.values, indexing="ij")
-        self.xx_Jy, self.yy_Jy = np.meshgrid(self.Hx.x.values, self.Hx.y.values, indexing="ij")
-        self.xx_Mx, self.yy_Mx = np.meshgrid(self.Ey.x.values, self.Ey.y.values, indexing="ij")
-        self.xx_My, self.yy_My = np.meshgrid(self.Ex.x.values, self.Ex.y.values, indexing="ij")
+        # interpolate to centers
+        x_centers = Hz.x.values
+        y_centers = Hz.y.values
+        Ex = Ex.interp(x=x_centers, y=y_centers)
+        Ey = Ey.interp(x=x_centers, y=y_centers)
+        Hx = Hx.interp(x=x_centers, y=y_centers)
+        Hy = Hy.interp(x=x_centers, y=y_centers)
+        self.xx, self.yy = np.meshgrid(x_centers, y_centers, indexing="ij")
 
         # compute equivalent sources
-        self.Jx = -np.squeeze(self.Hy.values)
-        self.Jy = np.squeeze(self.Hx.values)
-        self.Mx = np.squeeze(self.Ey.values)
-        self.My = -np.squeeze(self.Ex.values)
+        self.Jx = -np.squeeze(Hy.values)
+        self.Jy = np.squeeze(Hx.values)
+        self.Mx = np.squeeze(Ey.values)
+        self.My = -np.squeeze(Ex.values)
 
     def _radiation_vectors(self, theta, phi):
         """Compute radiation vectors at an angle in spherical coordinates
@@ -79,59 +87,32 @@ class Near2Far:
         """
 
         # precompute trig functions and add extra dimensions
-        theta = np.array(theta)
-        phi = np.array(phi)
-        sin_theta = np.sin(theta).reshape((-1, 1, 1))
-        cos_theta = np.cos(theta).reshape((-1, 1, 1))
-        sin_phi = np.sin(phi).reshape((-1, 1, 1))
-        cos_phi = np.cos(phi).reshape((-1, 1, 1))
+        sin_theta = np.sin(theta)
+        cos_theta = np.cos(theta)
+        sin_phi = np.sin(phi)
+        cos_phi = np.cos(phi)
 
         # precompute fourier transform phase term {dx dy e^(ikrcos(psi))}
-        FT_phase_x_Jx = np.exp(1j * self.k0 * self.xx_Jx * sin_theta * cos_phi)
-        FT_phase_y_Jx = np.exp(1j * self.k0 * self.yy_Jx * sin_theta * sin_phi)
-        FT_phase_Jx = self.dx * self.dy * FT_phase_x_Jx * FT_phase_y_Jx
-        Jx_integrated = np.sum(self.Jx * FT_phase_Jx, axis=(-2, -1))
+        phase_x = np.exp(1j * self.k0 * self.xx * sin_theta * cos_phi)
+        phase_y = np.exp(1j * self.k0 * self.yy * sin_theta * cos_phi)
+        phase = self.dx * self.dy * phase_x * phase_y
 
-        FT_phase_x_Jy = np.exp(1j * self.k0 * self.xx_Jy * sin_theta * cos_phi)
-        FT_phase_y_Jy = np.exp(1j * self.k0 * self.yy_Jy * sin_theta * sin_phi)
-        FT_phase_Jy = self.dx * self.dy * FT_phase_x_Jy * FT_phase_y_Jy
-        Jy_integrated = np.sum(self.Jy * FT_phase_Jy, axis=(-2, -1))
-
-        FT_phase_x_Mx = np.exp(1j * self.k0 * self.xx_Mx * sin_theta * cos_phi)
-        FT_phase_y_Mx = np.exp(1j * self.k0 * self.yy_Mx * sin_theta * sin_phi)
-        FT_phase_Mx = self.dx * self.dy * FT_phase_x_Mx * FT_phase_y_Mx
-        Mx_integrated = np.sum(self.Mx * FT_phase_Mx, axis=(-2, -1))
-
-        FT_phase_x_My = np.exp(1j * self.k0 * self.xx_My * sin_theta * cos_phi)
-        FT_phase_y_My = np.exp(1j * self.k0 * self.yy_My * sin_theta * sin_phi)
-        FT_phase_My = self.dx * self.dy * FT_phase_x_My * FT_phase_y_My
-        My_integrated = np.sum(self.My * FT_phase_My, axis=(-2, -1))
-
-        # get rid of extra dimensions
-        cos_phi = np.squeeze(cos_phi)
-        sin_phi = np.squeeze(sin_phi)
-        cos_theta = np.squeeze(cos_theta)
-        sin_theta = np.squeeze(sin_theta)
+        Jx_k = np.sum(self.Jx * phase)
+        Jy_k = np.sum(self.Jy * phase)
+        Mx_k = np.sum(self.Mx * phase)
+        My_k = np.sum(self.My * phase)
 
         # N_theta (8.33a)
-        contrib_x = +Jx_integrated * cos_theta * cos_phi
-        contrib_y = +Jy_integrated * cos_theta * sin_phi
-        N_theta = contrib_x + contrib_y
+        N_theta = Jx_k * cos_theta * cos_phi + Jy_k * cos_theta * sin_phi
 
         # N_phi (8.33b)
-        contrib_x = -Jx_integrated * sin_phi
-        contrib_y = +Jy_integrated * cos_phi
-        N_phi = contrib_x + contrib_y
+        N_phi = -Jx_k * sin_phi + Jy_k * cos_phi
 
         # L_theta  (8.34a)
-        contrib_x = +Mx_integrated * cos_theta * cos_phi
-        contrib_y = +My_integrated * cos_theta * sin_phi
-        L_theta = contrib_x + contrib_y
+        L_theta = Mx_k * cos_theta * cos_phi + My_k * cos_theta * sin_phi
 
         # L_phi  (8.34b)
-        contrib_x = -Mx_integrated * sin_phi
-        contrib_y = +My_integrated * cos_phi
-        L_phi = contrib_x + contrib_y
+        L_phi = -Mx_k * sin_phi + My_k * cos_phi
 
         return N_theta, N_phi, L_theta, L_phi
 
@@ -154,16 +135,23 @@ class Near2Far:
             (Er, Etheta, Ephi), (Hr, Htheta, Hphi), fields in polar
             coordinates.
         """
+
+        # project radiation vectors to distance r away for given angles
         N_theta, N_phi, L_theta, L_phi = self._radiation_vectors(theta, phi)
         scalar_proj_r = 1j * self.k0 * np.exp(-1j * self.k0 * r) / (4 * np.pi * r)
+
+        # assemble E felds
         E_theta = -scalar_proj_r * (L_phi + ETA_0 * N_theta)
         E_phi = scalar_proj_r * (L_theta - ETA_0 * N_phi)
         E_r = np.zeros_like(E_phi)
         E = np.stack((E_r, E_theta, E_phi))
+
+        # assemble H fields
         H_theta = -E_phi / ETA_0
         H_phi = E_theta / ETA_0
         H_r = np.zeros_like(H_phi)
         H = np.stack((H_r, H_theta, H_phi))
+
         return E, H
 
     def fields_cartesian(self, x, y, z):

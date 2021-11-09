@@ -359,7 +359,7 @@ def old_json_monitors(sim: Simulation) -> Dict:
                     {
                         "type": "FrequencyMonitor",
                         "store": store,
-                        "interpolate": True,
+                        "interpolate": False,
                     }
                 )
             elif isinstance(monitor, FieldTimeMonitor):
