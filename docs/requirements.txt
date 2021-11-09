@@ -1,0 +1,8 @@
+jupyter
+nbconvert
+sphinx_rtd_theme
+nbsphinx
+ipython
+autodoc_pydantic
+sphinx-copybutton
+m2r2
