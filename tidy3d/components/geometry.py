@@ -11,10 +11,10 @@ from shapely.geometry import Point, Polygon, box
 from descartes import PolygonPatch
 
 from .base import Tidy3dBaseModel
-from .types import Literal, Bound, Size, Coordinate, Axis, Coordinate2D
+from .types import Literal, Bound, Size, Coordinate, Axis, Coordinate2D, Array
 from .types import Vertices, Ax, Shapely
 from .viz import add_ax_if_none
-from ..log import Tidy3dKeyError
+from ..log import Tidy3dKeyError, SetupError
 
 # add this around extents of plots
 PLOT_BUFFER = 0.3
@@ -780,8 +780,9 @@ class PolySlab(Planar):
 
     Parameters
     ----------
-    vertices : List[Tuple[float, float]]
+    vertices : List[Tuple[float, float]] or np.ndarray
         List of vertices defining the polygon face along dimensions parallel to slab normal axis.
+        If numpy.ndarray, must have shape (N, 2) for N vertices.
     axis : int
         Integer index into the polygon's slab axis. (0,1,2) -> (x,y,z)
     slab_bounds: Tuple[float, float]
@@ -793,7 +794,7 @@ class PolySlab(Planar):
     """
 
     slab_bounds: Tuple[float, float]
-    vertices: Vertices
+    vertices: Union[Vertices, Array[float]]
     type: Literal["PolySlab"] = "PolySlab"
 
     @pydantic.validator("slab_bounds", always=True)
@@ -801,6 +802,18 @@ class PolySlab(Planar):
         """sets the .length field using zmin, zmax"""
         zmin, zmax = val
         values["length"] = zmax - zmin
+        return val
+
+    @pydantic.validator("vertices", always=True)
+    def correct_shape(cls, val):
+        """makes sure vertices is correct shape if numpy array"""
+        if isinstance(val, np.ndarray):
+            shape = val.shape
+            if len(shape) != 2 or shape[1] != 2:
+                raise SetupError(
+                    "PolySlab.vertices must be a 2 dimensional array shaped (N, 2).  "
+                    f"Given array with shape of {shape}."
+                )
         return val
 
     @pydantic.validator("vertices", always=True)

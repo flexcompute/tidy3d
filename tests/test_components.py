@@ -127,6 +127,8 @@ def test_geometry():
     s = Sphere(radius=1, center=(0, 0, 0))
     s = Cylinder(radius=1, center=(0, 0, 0), axis=1, length=1)
     s = PolySlab(vertices=((1, 2), (3, 4), (5, 4)), slab_bounds=(-1, 1), axis=1)
+    vertices_np = np.array(s.vertices)
+    s_np = PolySlab(vertices=vertices_np, slab_bounds=(-1, 1), axis=1)
 
     # make sure wrong axis arguments error
     with pytest.raises(pydantic.ValidationError) as e_info:
