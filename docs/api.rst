@@ -127,6 +127,13 @@ Methods
 
    AbstractMedium.eps_model
 
+Material Library
+----------------
+
+.. toctree::
+
+   material_library
+
 
 Structures
 ==========
@@ -252,9 +259,8 @@ Tidy3dBaseModel
 
 .. Constants
 .. =========
-.. .. autosummary::
-..    :toctree: _autosummary/
-..    constants
+.. .. automodule:: tidy3d.constants
+..    :members:
 
 Log
 ===
