@@ -296,7 +296,7 @@ class PoleResidue(DispersiveMedium):
         \\left[\\frac{c_i}{j \\omega + a_i} +
         \\frac{c_i^*}{j \\omega + a_i^*}\\right]
 
-    where :math:`a_i` is in Hz and :math:`c_i` is unitless.
+    where :math:`a_i` and :math:`c_i` are in units of rad/s.
 
     Parameters
     ----------
