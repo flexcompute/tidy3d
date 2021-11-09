@@ -9,26 +9,7 @@ shapely
 descartes
 pydantic
 PyYAML
+boto3
 
 # required to get xarray to not complain
 dask
-
-# required for code quality checking
-black
-pylint
-
-# required for testing only
-pytest
-jupyter
-nbconvert
-
-# for docs only
-sphinx_rtd_theme
-nbsphinx
-ipython
-autodoc_pydantic
-sphinx-copybutton
-m2r2
-
-# required for web
-boto3

@@ -1,0 +1,4 @@
+# required for development
+black
+pylint
+pytest
