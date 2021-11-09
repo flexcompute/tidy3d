@@ -194,21 +194,21 @@ git push origin x.x.x
 ### Stage 3: Details (starting on 10/27)
 
 #### Getting package to usable status (18 days)
-- [ ] Finishing main features (1 week)
- 	- [ ] `SimulationData` interface.  Any new methods to add? (plotting, etc?) (1 day)
-	- [ ] Near2far with new API (3 days)
-	- [ ] Mode Monitor consistent with new .epsilon() (1 day)
-- [ ] API changes (discuss first, implementation in 1 day)
+- [x] Finishing main features (1 week)
+ 	- [x] `SimulationData` interface.  Any new methods to add? (plotting, etc?) (1 day)
+	- [x] Near2far with new API (3 days)
+	- [x] Mode Monitor consistent with new .epsilon() (1 day)
+- [x] API changes (discuss first, implementation in 1 day)
 	- [x] Freqs and times store start, end, stop / number instead of raw values.
 	- [x] Change source polarization to E instead of J.
 	- [x] named Meidums?
 	- [x] Symmetry, PML, grid spec.  Less clunky interface? 
-- [ ] Covering features of existing code (1 day)
+- [x] Covering features of existing code (1 day)
 	- [x] support diagonal anisotropy (permittivity as 3-tuple)
 	- [x] Conversion of dispersive materials into pole-residue.
 	- [x] gaussian beam.
 	- [x] option to display cell boundaries in plot.
-	- [ ] gds slab / gds importing.
+	- [x] gds slab / gds importing.
 	- [x] Add PEC medium
 - [ ] Documentation (1 week)
 	- [x] Add more discussion into Simulation docs.
@@ -219,7 +219,7 @@ git push origin x.x.x
 	- [ ] Make all notebooks work with new version.
 	- [ ] Material library.
 - [ ] Improvement (2 days)
-	- [ ] Add more info / debug logging and more comprehensive error handling (file IO, etc).
+	- [x] Add more info / debug logging and more comprehensive error handling (file IO, etc).
 	- [ ] Add more intelligent 'inf' handling.
 	- [ ] setup.cfg for installing dependencies for different parts of the code (base, docs, tests)
 	- [ ] web.monitor using running status for progress updates <- waiting on victor.
@@ -255,7 +255,7 @@ https://github.com/crusaderky/python_project_template
 
 - [ ] Refine documentation (1 week)
 	- [ ] Make pydantic autosummaries more pretty.
-	- [ ] Move Docs and notebooks into their own repos?
+	- [x] Move Docs and notebooks into their own repos?
 	- [ ] write as many tutorial notebooks as we can.
 	- [ ] make docs pretty,
 	- [ ] set up and test binder links.
