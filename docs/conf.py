@@ -6,8 +6,8 @@ import codecs
 import sys
 
 here = os.path.abspath(os.path.dirname(__file__))
-sys.path.append(os.path.abspath("../"))
-sys.path.append(os.path.abspath("../tidy3d/components"))
+sys.path.append(os.path.abspath("../tidy3d/"))
+sys.path.append(os.path.abspath("../tidy3d/tidy3d/components"))
 print(sys.path)
 
 

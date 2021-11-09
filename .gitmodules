@@ -1,0 +1,3 @@
+[submodule "tidy3d"]
+	path = tidy3d
+	url = git@github.com:flexcompute/Tidy3D-client-revamp.git
