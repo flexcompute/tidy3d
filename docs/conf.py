@@ -8,6 +8,8 @@ import sys
 here = os.path.abspath(os.path.dirname(__file__))
 sys.path.append(os.path.abspath("../tidy3d/"))
 sys.path.append(os.path.abspath("../tidy3d/tidy3d/components"))
+sys.path.append(os.path.abspath("../notebooks"))
+sys.path.append(os.path.abspath(".."))
 print(sys.path)
 
 
@@ -38,6 +40,7 @@ master_doc = "index"
 # extensions coming with Sphinx (named 'sphinx.ext.*') or your custom
 # ones.
 extensions = [
+    "nbsphinx",
     "sphinx.ext.autodoc",
     "sphinxcontrib.autodoc_pydantic",
     "sphinx.ext.autosummary",
@@ -47,8 +50,6 @@ extensions = [
     "IPython.sphinxext.ipython_directive",
     "IPython.sphinxext.ipython_console_highlighting",
     "sphinx_copybutton",
-    "nbsphinx",
-    "m2r2",
 ]
 
 source_suffix = [".rst", ".md"]

@@ -1,6 +1,6 @@
 # Tidy3D Documentation
 
-[![Binder](https://mybinder.org/badge_logo.svg)](https://mybinder.org/v2/gh/flexcompute/Tidy3D-docs/notebooks/HEAD?filepath=notebooks)
+[![Binder](https://mybinder.org/badge_logo.svg)](https://mybinder.org/v2/gh/flexcompute/Tidy3D-docs/HEAD?filepath=docs/notebooks/)
 
 ## Setup
 
@@ -24,7 +24,7 @@ open _build/index.html
 
 ## Notebooks
 
-To run the notebooks from browser, click [this link](https://mybinder.org/v2/gh/flexcompute/Tidy3D-docs/notebooks/HEAD?filepath=notebooks) or the "Binder" tag at the top of this README.
+To run the notebooks from browser, click [this link](https://mybinder.org/v2/gh/flexcompute/Tidy3D-docs/HEAD?filepath=docs/notebooks/) or the "Binder" tag at the top of this README.
 
 ## Tests
 

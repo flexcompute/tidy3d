@@ -5,4 +5,3 @@ nbsphinx
 ipython
 autodoc_pydantic
 sphinx-copybutton
-m2r2
