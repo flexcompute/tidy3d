@@ -2,6 +2,8 @@
 
 <!-- [![Binder](https://mybinder.org/badge_logo.svg)](https://mybinder.org/v2/gh/flexcompute/Tidy3D-client-revamp/HEAD?filepath=notebooks) -->
 
+<img src="snippet.png">
+
 
 ## Developer
 
