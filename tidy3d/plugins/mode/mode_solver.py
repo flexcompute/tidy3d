@@ -105,13 +105,19 @@ class ModeSolver:
             Object containing mode profile and effective index data.
         """
 
+        normal_axis = self.plane.size.index(0.0)
+
         # note discretizing, need to make consistent
-        eps_xx = np.squeeze(self.simulation.epsilon(self.plane, "Ex", self.freq).values)
-        eps_yy = np.squeeze(self.simulation.epsilon(self.plane, "Ey", self.freq).values)
-        eps_zz = np.squeeze(self.simulation.epsilon(self.plane, "Ez", self.freq).values)
+        eps_xx = self.simulation.epsilon(self.plane, "Ex", self.freq)
+        eps_yy = self.simulation.epsilon(self.plane, "Ey", self.freq)
+        eps_zz = self.simulation.epsilon(self.plane, "Ez", self.freq)
+
+        # make numpy array and get rid of normal axis
+        eps_xx = np.squeeze(eps_xx.values, axis=normal_axis)
+        eps_yy = np.squeeze(eps_yy.values, axis=normal_axis)
+        eps_zz = np.squeeze(eps_zz.values, axis=normal_axis)
 
         # swap axes to waveguide coordinates (propagating in z)
-        normal_axis = self.plane.size.index(0.0)
         eps_wg_zz, (eps_wg_xx, eps_wg_yy) = self.plane.pop_axis(
             (eps_xx, eps_yy, eps_zz), axis=normal_axis
         )

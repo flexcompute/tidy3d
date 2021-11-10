@@ -232,7 +232,7 @@ def download(task_id: TaskId, simulation: Simulation, path: str = "simulation_da
     mon_file = os.path.join(directory, "monitor_data.hdf5")
     log_file = os.path.join(directory, "tidy3d.log")
 
-    log.info("clearing existing files before downloading")
+    log.debug("clearing existing files before downloading")
     for _path in (sim_file, mon_file, path):
         _rm_file(_path)
 
@@ -241,17 +241,17 @@ def download(task_id: TaskId, simulation: Simulation, path: str = "simulation_da
     _download_file(task_id, fname="monitor_data.hdf5", path=mon_file)
 
     # TODO: do this stuff server-side
-    log.info("getting log string")
+    log.debug("getting log string")
     _download_file(task_id, fname="tidy3d.log", path=log_file)
     with open(log_file, "r", encoding="utf-8") as f:
         log_string = f.read()
 
-    log.info("loading old monitor data to data dict")
+    log.debug("loading old monitor data to data dict")
     # TODO: we cant convert old simulation file to new, so we'll ask for original as input instead.
     # simulation = Simulation.load(sim_file)
     mon_data_dict = load_old_monitor_data(simulation=simulation, data_file=mon_file)
 
-    log.info("creating SimulationData from monitor data dict")
+    log.debug("creating SimulationData from monitor data dict")
     sim_data = load_solver_results(
         simulation=simulation,
         solver_data_dict=mon_data_dict,
@@ -261,7 +261,7 @@ def download(task_id: TaskId, simulation: Simulation, path: str = "simulation_da
     log.info(f"exporting SimulationData to {path}")
     sim_data.export(path)
 
-    log.info("clearing extraneous files")
+    log.debug("clearing extraneous files")
     _rm_file(sim_file)
     _rm_file(mon_file)
     _rm_file(log_file)
@@ -343,7 +343,7 @@ def _upload_task(  # pylint:disable=too-many-locals
 
     method = os.path.join("fdtd/model", folder_name, "task")
 
-    log.info("Creating task.")
+    log.debug("Creating task.")
     try:
         task = http.post(method=method, data=data)
         task_id = task["taskId"]
@@ -352,7 +352,7 @@ def _upload_task(  # pylint:disable=too-many-locals
         raise WebError(error_json["error"]) from e
 
     # upload the file to s3
-    log.info("Uploading the json file")
+    log.debug("Uploading the json file")
 
     client, bucket, user_id = get_s3_user()
 
@@ -416,5 +416,5 @@ def _download_file(task_id: TaskId, fname: str, path: str) -> None:
 def _rm_file(path: str):
     """Clear path if it exists."""
     if os.path.exists(path) and not os.path.isdir(path):
-        log.info(f"removing file {path}")
+        log.debug(f"removing file {path}")
         os.remove(path)

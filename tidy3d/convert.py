@@ -252,6 +252,7 @@ def old_json_sources(sim: Simulation) -> List[Dict]:
                 }
         elif isinstance(source, ModeSource):
             mode_ind = source.mode.mode_index
+            num_modes = source.mode.num_modes if source.mode.num_modes else mode_ind + 1
             direction = "forward" if source.direction == "+" else "backward"
             src = {
                 "name": name,
@@ -263,7 +264,7 @@ def old_json_sources(sim: Simulation) -> List[Dict]:
                 "amplitude": source.source_time.amplitude,
                 "mode_ind": mode_ind,
                 "target_neff": source.mode.target_neff,
-                "Nmodes": source.mode.num_modes,
+                "Nmodes": num_modes,
             }
         elif isinstance(source, PlaneWave):
             normal_index = [s == 0 for s in source.size].index(True)
