@@ -22,7 +22,7 @@ Q_e = 1.602176634e-19
 HBAR = 6.582119569e-16
 
 # infinity (very large)
-inf = 1e20
+inf = 1e10
 
 # floating point precisions
 dp_eps = np.finfo(np.float64).eps

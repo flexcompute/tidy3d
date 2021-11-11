@@ -208,7 +208,7 @@ class Geometry(Tidy3dBaseModel, ABC):
         # pylint:disable=line-too-long
 
         # find shapes that intersect self at plane
-        axis, position = self._parse_xyz_kwargs(x=x, y=y, z=z)
+        axis, position = self.parse_xyz_kwargs(x=x, y=y, z=z)
         shapes_intersect = self.intersections(x=x, y=y, z=z)
 
         # for each intersection, plot the shape
@@ -328,7 +328,7 @@ class Geometry(Tidy3dBaseModel, ABC):
         return tuple(coords)
 
     @staticmethod
-    def _parse_xyz_kwargs(**xyz) -> Tuple[Axis, float]:
+    def parse_xyz_kwargs(**xyz) -> Tuple[Axis, float]:
         """Turns x,y,z kwargs into index of the normal axis and position along that axis.
 
         Parameters
@@ -380,7 +380,7 @@ class Planar(Geometry, ABC):
             For more details refer to
         `Shapely's Documentaton <https://shapely.readthedocs.io/en/stable/project.html>`_.
         """
-        axis, position = self._parse_xyz_kwargs(x=x, y=y, z=z)
+        axis, position = self.parse_xyz_kwargs(x=x, y=y, z=z)
         if axis == self.axis:
             z0, _ = self.pop_axis(self.center, axis=self.axis)
             if (position < z0 - self.length / 2) or (position > z0 + self.length / 2):
@@ -529,7 +529,7 @@ class Box(Geometry):
             For more details refer to
             `Shapely's Documentaton <https://shapely.readthedocs.io/en/stable/project.html>`_.
         """
-        axis, position = self._parse_xyz_kwargs(x=x, y=y, z=z)
+        axis, position = self.parse_xyz_kwargs(x=x, y=y, z=z)
         z0, (x0, y0) = self.pop_axis(self.center, axis=axis)
         Lz, (Lx, Ly) = self.pop_axis(self.size, axis=axis)
         dz = np.abs(z0 - position)
@@ -647,7 +647,7 @@ class Sphere(Circular):
             For more details refer to
             `Shapely's Documentaton <https://shapely.readthedocs.io/en/stable/project.html>`_.
         """
-        axis, position = self._parse_xyz_kwargs(x=x, y=y, z=z)
+        axis, position = self.parse_xyz_kwargs(x=x, y=y, z=z)
         z0, (x0, y0) = self.pop_axis(self.center, axis=axis)
         intersect_dist = self._intersect_dist(position, z0)
         if not intersect_dist:

@@ -11,7 +11,7 @@ from .types import PoleAndResidue, Literal, Ax, FreqBound
 from .viz import add_ax_if_none
 from .validators import validate_name_str
 
-from ..constants import C_0, inf, pec_val
+from ..constants import C_0, pec_val
 from ..log import log
 
 
@@ -23,15 +23,16 @@ class AbstractMedium(ABC, Tidy3dBaseModel):
 
     Parameters
     ----------
-    frequeuncy_range : Tuple[float, float] = (-inf, inf)
+    frequeuncy_range : Tuple[float, float] = None
         Range of validity for the medium in Hz.
+        If None, then all frequencies are valid.
         If simulation or plotting functions use frequency out of this range, a warning is thrown.
     name : str = None
         Optional name for the medium.
     """
 
     name: str = None
-    frequency_range: Tuple[FreqBound, FreqBound] = (-inf, inf)
+    frequency_range: Tuple[FreqBound, FreqBound] = None
 
     _name_validator = validate_name_str()
 
@@ -88,7 +89,7 @@ def ensure_freq_in_range(eps_model: Callable[[float], complex]) -> Callable[[flo
         """New eps_model function."""
 
         # if frequency is none, don't check, return original function
-        if frequency is None:
+        if frequency is None or self.frequency_range is None:
             return eps_model(self, frequency)
 
         fmin, fmax = self.frequency_range

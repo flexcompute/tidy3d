@@ -336,15 +336,15 @@ def old_json_monitors(sim: Simulation) -> Dict:
             mnt.update({"frequency": [f * 1e-12 for f in monitor.freqs]})
         elif isinstance(monitor, TimeMonitor):
             # handle case where stop is None
-            stop = monitor.stop * 1e12 if monitor.stop else sim.run_time * 1e12
+            stop = monitor.stop if monitor.stop else sim.run_time
             # handle case where stop > sim.run_time
-            stop = min(stop, sim.run_time * 1e12)
+            stop = min(stop, sim.run_time)
 
             mnt.update(
                 {
-                    "t_start": monitor.start * 1e12,
+                    "t_start": monitor.start,
                     "t_stop": stop,
-                    "t_step": 1e12 * sim.dt * monitor.interval,
+                    "t_step": sim.dt * monitor.interval,
                 }
             )
 
@@ -482,9 +482,7 @@ def load_old_monitor_data(simulation: Simulation, data_file: str) -> SolverDataD
                 sampler_label = "f"
 
             elif isinstance(monitor, TimeMonitor):
-                stop = monitor.stop if monitor.stop else simulation.run_time
-                step = simulation.dt * monitor.interval
-                sampler_values = list(np.arange(monitor.start, stop, step))
+                sampler_values = np.array(f_handle[name]["tmesh"]).ravel()
                 sampler_label = "t"
 
             if isinstance(monitor, AbstractFieldMonitor):

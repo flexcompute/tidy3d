@@ -47,7 +47,21 @@ def decode_bytes_array(array_of_bytes: Numpy) -> List[str]:
     return list_of_str
 
 
-""" Base Classes """
+""" xarray subclasses """
+
+
+class Tidy3dDataArray(xr.DataArray):
+    """Subclass of xarray's DataArray that implements some custom functions."""
+
+    __slots__ = ()
+
+    @property
+    def abs(self):
+        """Absolute value of complex-valued data."""
+        return abs(self)
+
+
+""" Base data classes """
 
 
 class Tidy3dData(Tidy3dBaseModel):
@@ -63,7 +77,7 @@ class Tidy3dData(Tidy3dBaseModel):
         json_encoders = {  # how to write certain types to json files
             np.ndarray: numpy_encoding,  # use custom encoding defined in .types
             np.int64: lambda x: int(x),  # pylint: disable=unnecessary-lambda
-            xr.DataArray: lambda x: None,  # dont write
+            Tidy3dDataArray: lambda x: None,  # dont write
             xr.Dataset: lambda x: None,  # dont write
         }
 
@@ -106,7 +120,7 @@ class MonitorData(Tidy3dData, ABC):
     """
 
     @property
-    def data(self) -> xr.DataArray:
+    def data(self) -> Tidy3dDataArray:
         # pylint:disable=line-too-long
         """Returns an xarray representation of the montitor data.
 
@@ -120,7 +134,7 @@ class MonitorData(Tidy3dData, ABC):
 
         data_dict = self.dict()
         coords = {dim: data_dict[dim] for dim in self._dims}
-        return xr.DataArray(self.values, coords=coords)
+        return Tidy3dDataArray(self.values, coords=coords)
 
     def __eq__(self, other) -> bool:
         """Check equality against another MonitorData instance.
@@ -204,8 +218,8 @@ class CollectionData(Tidy3dData):
         data_arrays = {name: arr.data for name, arr in self.data_dict.items()}
 
         # make an xarray dataset
-        # return xr.Dataset(data_arrays) # datasets are annoying
-        return data_arrays
+        return xr.Dataset(data_arrays)  # datasets are annoying
+        # return data_arrays
 
     def __eq__(self, other):
         """Check for equality against other :class:`CollectionData` object."""
@@ -488,9 +502,11 @@ class SimulationData(Tidy3dBaseModel):
     @property
     def log(self):
         """Prints the server-side log."""
-        print(self.log_string if self.log_string else "no log stored")
+        if not self.log_string:
+            raise DataError("No log stored in SimulationData.")
+        return self.log_string
 
-    def __getitem__(self, monitor_name: str) -> Union[xr.DataArray, xr.Dataset]:
+    def __getitem__(self, monitor_name: str) -> Union[Tidy3dDataArray, xr.Dataset]:
         """Get the :class:`MonitorData` xarray representation by name (``sim_data[monitor_name]``).
 
         Parameters
@@ -508,75 +524,111 @@ class SimulationData(Tidy3dBaseModel):
             raise DataError(f"monitor {monitor_name} not found")
         return monitor_data.data
 
-    # @add_ax_if_none
-    # def plot_field(
-    #     self,
-    #     field_monitor_name: str,
-    #     field_name: str,
-    #     x: float = None,
-    #     y: float = None,
-    #     z: float = None,
-    #     freq: float = None,
-    #     time: float = None,
-    #     eps_alpha: pydantic.confloat(ge=0.0, le=1.0) = 0.5,
-    #     ax: Ax = None,
-    #     **kwargs,
-    # ) -> Ax:
-    #     """Plot the field data for a monitor with simulation plot overlayed.
+    @add_ax_if_none
+    def plot_field(
+        self,
+        field_monitor_name: str,
+        field_name: str,
+        x: float = None,
+        y: float = None,
+        z: float = None,
+        val: Literal["real", "imag", "abs"] = "real",
+        freq: float = None,
+        time: float = None,
+        cbar: bool = None,
+        eps_alpha: float = 0.2,
+        ax: Ax = None,
+        **kwargs,
+    ) -> Ax:
+        """Plot the field data for a monitor with simulation plot overlayed.
 
-    #     Parameters
-    #     ----------
-    #     field_monitor_name : ``str``
-    #         Name of :class:`FieldMonitor` or :class:`FieldTimeData` to plot.
-    #     field_name : ``str``
-    #         Name of `field` in monitor to plot (eg. 'Ex').
-    #     x : ``float``, optional
-    #         Position of plane in x direction.
-    #     y : ``float``, optional
-    #         Position of plane in y direction.
-    #     z : ``float``, optional
-    #         Position of plane in z direction.
-    #     freq: ``float``, optional
-    #         if monitor is a :class:`FieldMonitor`, specifies the frequency (Hz) to plot the field.
-    #     time: ``float``, optional
-    #         if monitor is a :class:`FieldTimeMonitor`, specifies the time (sec) to plot the field.
-    #     cbar: `bool``, optional
-    #         if True (default), will include colorbar
-    #     ax : ``matplotlib.axes._subplots.Axes``, optional
-    #         matplotlib axes to plot on, if not specified, one is created.
-    #     **patch_kwargs
-    #         Optional keyword arguments passed to ``add_artist(patch, **patch_kwargs)``.
+        Parameters
+        ----------
+        field_monitor_name : str
+            Name of :class:`FieldMonitor` or :class:`FieldTimeData` to plot.
+        field_name : str
+            Name of `field` in monitor to plot (eg. 'Ex').
+        x : float = None
+            Position of plane in x direction.
+        y : float = None
+            Position of plane in y direction.
+        z : float = None
+            Position of plane in z direction.
+        val : Literal['real', 'imag', 'abs'] = 'real'
+            What part of the field to plot (in )
+        freq: float = None
+            If monitor is a :class:`FieldMonitor`, specifies the frequency (Hz) to plot the field.
+        time: float = None
+            if monitor is a :class:`FieldTimeMonitor`, specifies the time (sec) to plot the field.
+        cbar: bool = True
+            if True (default), will include colorbar
+        eps_alpha : float = 0.2
+            Opacity of the structure permittivity.
+            Must be between 0 and 1 (inclusive).
+        ax : matplotlib.axes._subplots.Axes = None
+            matplotlib axes to plot on, if not specified, one is created.
+        **patch_kwargs
+            Optional keyword arguments passed to ``add_artist(patch, **patch_kwargs)``.
 
-    #     Returns
-    #     -------
-    #     ``matplotlib.axes._subplots.Axes``
-    #         The supplied or created matplotlib axes.
+        Returns
+        -------
+        matplotlib.axes._subplots.Axes
+            The supplied or created matplotlib axes.
+        """
 
-    #     TODO: fully test and finalize arguments.
-    #     """
+        # get the monitor data
+        if field_monitor_name not in self.monitor_data:
+            raise DataError(f"Monitor named '{field_monitor_name}' not found.")
+        monitor_data = self.monitor_data.get(field_monitor_name)
+        if not isinstance(monitor_data, FieldData):
+            raise DataError(f"field_monitor_name '{field_monitor_name}' not a FieldData instance.")
 
-    #     if field_monitor_name not in self.monitor_data:
-    #     raise DataError(f"field_monitor_name {field_monitor_name} not found in SimulationData.")
+        # get the field data component
+        if field_name not in monitor_data.data_dict:
+            raise DataError(f"field_name {field_name} not found in {field_monitor_name}.")
+        xr_data = monitor_data.data_dict.get(field_name).data
 
-    #     monitor_data = self.monitor_data.get(field_monitor_name)
+        # select the frequency or time value
+        if "f" in monitor_data.coords:
+            if freq is None:
+                raise DataError("'freq' must be supplied to plot a FieldMonitor.")
+            field_data = xr_data.interp(f=freq)
+        elif "t" in monitor_data.coords:
+            if time is None:
+                raise DataError("'time' must be supplied to plot a FieldMonitor.")
+            field_data = xr_data.interp(t=time)
+        else:
+            raise DataError("Field data has neither time nor frequency data, something went wrong.")
 
-    #     if not isinstance(monitor_data, FieldData):
-    #         raise DataError(f"field_monitor_name {field_monitor_name} not a FieldData instance.")
+        # select the cross section data
+        axis, pos = self.simulation.parse_xyz_kwargs(x=x, y=y, z=z)
+        axis_label = "xyz"[axis]
+        sel_kwarg = {axis_label: pos}
+        try:
+            field_data = field_data.sel(**sel_kwarg)
+        except Exception as e:
+            raise DataError(f"Could not select data at {axis_label}={pos}.") from e
 
-    #     if field_name not in monitor_data.data_dict:
-    #         raise DataError(f"field_name {field_name} not found in {field_monitor_name}.")
+        # select the field value
+        if val not in ("real", "imag", "abs"):
+            raise DataError(f"'val' must be one of ``{'real', 'imag', 'abs'}``, given {val}")
+        if val == "real":
+            field_data = field_data.real
+        elif val == "imag":
+            field_data = field_data.imag
+        elif val == "real":
+            field_data = abs(field_data)
 
-    #     xr_data = monitor_data.data_dict.get(field_name)
-    #     if isinstance(monitor_data, FieldData):
-    #         field_data = xr_data.sel(f=freq)
-    #     else:
-    #         field_data = xr_data.sel(t=time)
+        # plot the field
+        xy_coords = list("xyz")
+        xy_coords.pop(axis)
+        field_data.plot(ax=ax, x=xy_coords[0], y=xy_coords[1])
 
-    #     ax = field_data.sel(x=x, y=y, z=z).real.plot.pcolormesh(ax=ax)
-    #     ax = self.simulation.plot_structures_eps(
-    #         freq=freq, cbar=False, x=x, y=y, z=z, alpha=eps_alpha, ax=ax
-    #     )
-    #     return ax
+        # plot the simulation epsilon
+        ax = self.simulation.plot_structures_eps(
+            freq=freq, cbar=cbar, x=x, y=y, z=z, alpha=eps_alpha, ax=ax
+        )
+        return ax
 
     def export(self, fname: str) -> None:
         """Export :class:`SimulationData` to single hdf5 file including monitor data.

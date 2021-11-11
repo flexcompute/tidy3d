@@ -637,7 +637,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
             The supplied or created matplotlib axes.
         """
         cell_boundaries = self.grid.boundaries
-        axis, _ = self._parse_xyz_kwargs(x=x, y=y, z=z)
+        axis, _ = self.parse_xyz_kwargs(x=x, y=y, z=z)
         _, (axis_x, axis_y) = self.pop_axis([0, 1, 2], axis=axis)
         boundaries_x = cell_boundaries.dict()["xyz"[axis_x]]
         boundaries_y = cell_boundaries.dict()["xyz"[axis_y]]
@@ -668,7 +668,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
             The axes after setting the boundaries.
         """
 
-        axis, _ = self._parse_xyz_kwargs(x=x, y=y, z=z)
+        axis, _ = self.parse_xyz_kwargs(x=x, y=y, z=z)
         _, ((xmin, ymin), (xmax, ymax)) = self._pop_bounds(axis=axis)
         _, (pml_thick_x, pml_thick_y) = self.pop_axis(self.pml_thicknesses, axis=axis)
 
