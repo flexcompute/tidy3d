@@ -81,7 +81,7 @@ class SourceParams(PatchParamSwitcher):
 
     def get_plot_params(self) -> PatchParams:
         """Returns :class:`PatchParams` based on user-supplied args."""
-        return PatchParams(alpha=0.7, facecolor="blueviolet", edgecolor="blueviolet")
+        return PatchParams(alpha=0.4, facecolor="blueviolet", edgecolor="blueviolet")
 
 
 class MonitorParams(PatchParamSwitcher):
@@ -89,7 +89,7 @@ class MonitorParams(PatchParamSwitcher):
 
     def get_plot_params(self) -> PatchParams:
         """Returns :class:`PatchParams` based on user-supplied args."""
-        return PatchParams(alpha=0.7, facecolor="crimson", edgecolor="crimson")
+        return PatchParams(alpha=0.4, facecolor="crimson", edgecolor="crimson")
 
 
 class StructMediumParams(PatchParamSwitcher):
@@ -140,9 +140,9 @@ class SymParams(PatchParamSwitcher):
     def get_plot_params(self) -> PatchParams:
         """Returns :class:`PatchParams` based on user-supplied args."""
         if self.sym_value == 1:
-            return PatchParams(alpha=0.5, facecolor="lightsteelblue", edgecolor="lightsteelblue")
+            return PatchParams(alpha=0.3, facecolor="lightsteelblue", edgecolor="lightsteelblue")
         if self.sym_value == -1:
-            return PatchParams(alpha=0.5, facecolor="lightgreen", edgecolor="lightgreen")
+            return PatchParams(alpha=0.3, facecolor="lightgreen", edgecolor="lightgreen")
         return PatchParams()
 
 
