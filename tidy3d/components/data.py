@@ -535,7 +535,6 @@ class SimulationData(Tidy3dBaseModel):
         val: Literal["real", "imag", "abs"] = "real",
         freq: float = None,
         time: float = None,
-        cbar: bool = None,
         eps_alpha: float = 0.2,
         ax: Ax = None,
         **kwargs,
@@ -558,10 +557,10 @@ class SimulationData(Tidy3dBaseModel):
             What part of the field to plot (in )
         freq: float = None
             If monitor is a :class:`FieldMonitor`, specifies the frequency (Hz) to plot the field.
+            Also sets the frequency at which the permittivity is evaluated at (if dispersive).
+            By default, chooses permittivity as frequency goes to infinity.
         time: float = None
             if monitor is a :class:`FieldTimeMonitor`, specifies the time (sec) to plot the field.
-        cbar: bool = True
-            if True (default), will include colorbar
         eps_alpha : float = 0.2
             Opacity of the structure permittivity.
             Must be between 0 and 1 (inclusive).
@@ -589,11 +588,11 @@ class SimulationData(Tidy3dBaseModel):
         xr_data = monitor_data.data_dict.get(field_name).data
 
         # select the frequency or time value
-        if "f" in monitor_data.coords:
+        if "f" in xr_data.coords:
             if freq is None:
                 raise DataError("'freq' must be supplied to plot a FieldMonitor.")
             field_data = xr_data.interp(f=freq)
-        elif "t" in monitor_data.coords:
+        elif "t" in xr_data.coords:
             if time is None:
                 raise DataError("'time' must be supplied to plot a FieldMonitor.")
             field_data = xr_data.interp(t=time)
@@ -620,14 +619,22 @@ class SimulationData(Tidy3dBaseModel):
             field_data = abs(field_data)
 
         # plot the field
-        xy_coords = list("xyz")
-        xy_coords.pop(axis)
-        field_data.plot(ax=ax, x=xy_coords[0], y=xy_coords[1])
+        xy_coord_labels = list("xyz")
+        xy_coord_labels.pop(axis)
+        x_coord_label, y_coord_label = xy_coord_labels
+        field_data.plot(ax=ax, x=x_coord_label, y=y_coord_label)
 
         # plot the simulation epsilon
         ax = self.simulation.plot_structures_eps(
-            freq=freq, cbar=cbar, x=x, y=y, z=z, alpha=eps_alpha, ax=ax
+            freq=freq, cbar=False, x=x, y=y, z=z, alpha=eps_alpha, ax=ax
         )
+
+        # set the limits based on the xarray coordinates min and max
+        x_coord_values = field_data.coords[x_coord_label]
+        y_coord_values = field_data.coords[y_coord_label]
+        ax.set_xlim(min(x_coord_values), max(x_coord_values))
+        ax.set_ylim(min(y_coord_values), max(y_coord_values))
+
         return ax
 
     def export(self, fname: str) -> None:
