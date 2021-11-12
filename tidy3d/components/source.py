@@ -42,6 +42,30 @@ class SourceTime(ABC, Tidy3dBaseModel):
             Complex-valued source amplitude at that time..
         """
 
+    def spectrum(self, times: Array[float], freqs: Array[float], dt: float) -> complex:
+        """Complex-valued source spectrum as a function of frequency
+
+        Parameters
+        ----------
+        times : np.ndarray
+            Times to use to evaluate spectrum Fourier transform.
+            (Typically the simulation time mesh).
+        freqs : np.ndarray
+            Frequencies in Hz to evaluate spectrum at.
+        dt : float or np.ndarray
+            Time step to weight FT integral with.
+            If array, use to weigh each of the time intervals in ``times``.
+
+        Returns
+        -------
+        np.ndarray
+            Complex-valued array (of len(freqs)) containing spectrum at those frequencies.
+        """
+
+        # (Nf, Nt) matrix that gives DFT when matrix multiplied with signal
+        dft_matrix = np.exp(2j * np.pi * freqs[:, None] * times) / (2 * np.pi)
+        return dt * dft_matrix @ self.amp_time(times)
+
     @add_ax_if_none
     def plot(self, times: Array[float], ax: Ax = None) -> Ax:
         """Plot the complex-valued amplitude of the source time-dependence.
