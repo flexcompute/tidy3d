@@ -47,8 +47,21 @@ def decode_bytes_array(array_of_bytes: Numpy) -> List[str]:
     return list_of_str
 
 
+# mapping of data coordinates to units for assigning .attrs to the xarray objects
+DIM_UNITS = {
+    'x': 'um',
+    'y': 'um',    
+    'z': 'um',
+    'f': 'um',
+    't': 'um',
+    'direction': None,
+    'mode_index': None,
+}
+
+
 """ xarray subclasses """
 
+# TODO: make this work for Dataset items, which get converted to xr.DataArray
 
 class Tidy3dDataArray(xr.DataArray):
     """Subclass of xarray's DataArray that implements some custom functions."""
@@ -94,8 +107,9 @@ class Tidy3dData(Tidy3dBaseModel):
 class MonitorData(Tidy3dData, ABC):
     """Abstract base class for objects storing individual data from simulation."""
 
-    values: Union[Array[float], Array[complex]]
-    type: str = None
+    values : Union[Array[float], Array[complex]]
+    val_units : str = None
+    type : str = None
 
     """ explanation of values
         `values` is a numpy array that stores the raw data associated with each
@@ -132,9 +146,18 @@ class MonitorData(Tidy3dData, ABC):
         """
         # pylint:enable=line-too-long
 
+        # make DataArray
         data_dict = self.dict()
         coords = {dim: data_dict[dim] for dim in self._dims}
-        return Tidy3dDataArray(self.values, coords=coords)
+        data_array = Tidy3dDataArray(self.values, coords=coords)
+
+        # assign units
+        data_array.attrs = {'units': self.val_units}
+        for name, coord in data_array.coords.items():
+            coord_units = DIM_UNITS.get(name)
+            coord[name].attrs = {'units': coord_units}
+
+        return data_array
 
     def __eq__(self, other) -> bool:
         """Check equality against another MonitorData instance.
@@ -218,7 +241,7 @@ class CollectionData(Tidy3dData):
         data_arrays = {name: arr.data for name, arr in self.data_dict.items()}
 
         # make an xarray dataset
-        return xr.Dataset(data_arrays)  # datasets are annoying
+        return xr.Dataset(data_arrays)
         # return data_arrays
 
     def __eq__(self, other):
@@ -325,6 +348,7 @@ class ScalarFieldData(AbstractScalarFieldData, FreqData):
     """
 
     values: Array[complex]
+    val_units : str = '[E] = V/um, [H] = A/um'
     type: Literal["ScalarFieldData"] = "ScalarFieldData"
 
     _dims = ("x", "y", "z", "f")
@@ -357,6 +381,7 @@ class ScalarFieldTimeData(AbstractScalarFieldData, TimeData):
     """
 
     values: Array[float]
+    val_units : str = '[E] = V/um, [H] = A/um'
     type: Literal["ScalarFieldTimeData"] = "ScalarFieldTimeData"
 
     _dims = ("x", "y", "z", "t")
@@ -409,6 +434,7 @@ class FluxData(AbstractFluxData, FreqData):
     """
 
     values: Array[float]
+    val_units : str = 'W'
     type: Literal["FluxData"] = "FluxData"
 
     _dims = ("f",)
@@ -433,6 +459,7 @@ class FluxTimeData(AbstractFluxData, TimeData):
     """
 
     values: Array[float]
+    val_units: str = 'W'
     type: Literal["FluxTimeData"] = "FluxTimeData"
 
     _dims = ("t",)
@@ -466,6 +493,7 @@ class ModeData(PlanarData, FreqData):
     direction: List[Direction] = ["+", "-"]
     mode_index: Array[int]
     values: Array[complex]
+    val_units : str = 'V*m'
     type: Literal["ModeData"] = "ModeData"
 
     _dims = ("direction", "mode_index", "f")

@@ -78,7 +78,12 @@ def upload(simulation: Simulation, task_name: str, folder_name: str = "default")
     ----
     To start the simulation running, must call :meth:`start` after uploaded.
     """
-    return _upload_task(simulation=simulation, task_name=task_name, folder_name=folder_name)
+    task_id = _upload_task(simulation=simulation, task_name=task_name, folder_name=folder_name)
+
+    # log the task_id so users can copy and paste it from STDOUT / file if the need it later.
+    log.info(f"Uploaded task '{task_name}' with task_id '{task_id}'.")
+
+    return task_id
 
 
 def get_info(task_id: TaskId) -> TaskInfo:
