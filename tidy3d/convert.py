@@ -490,11 +490,13 @@ def load_old_monitor_data(simulation: Simulation, data_file: str) -> SolverDataD
                 for field_name in monitor.fields:
                     comp = ["x", "y", "z"].index(field_name[1])
                     field_vals = np.array(f_handle[name][field_name[0]][comp, ...])
-                    x, y, z = discretize_monitor(field_vals, monitor)
+                    # x, y, z = discretize_monitor(field_vals, monitor)
+                    subgrid = simulation.discretize(monitor.geometry)
+                    yee_locs = subgrid[field_name]
                     data_dict[name][field_name] = {
-                        "x": x,
-                        "y": y,
-                        "z": z,
+                        "x": yee_locs.x,
+                        "y": yee_locs.y,
+                        "z": yee_locs.z,
                         "values": field_vals,
                         sampler_label: sampler_values,
                     }
