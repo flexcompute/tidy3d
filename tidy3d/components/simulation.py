@@ -1,5 +1,5 @@
 """ Container holding all information about simulation and its components"""
-from typing import Dict, Tuple, List
+from typing import Dict, Tuple, List, Set
 
 import pydantic
 import numpy as np
@@ -49,7 +49,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         Total electromagnetic evolution time in seconds.
         Note: If ``shutoff`` specified, simulation will terminate early when shutoff condition met.
         Must be non-negative.
-    medium : :class:`Medium` or :class:`AnisotropicMedium` or :class:`PoleResidue` or :class:`Lorentz` or :class:`Sellmeier` or :class:`Debye` = ``Medium(permittivity=1.0)``
+    medium : :class:`AbstractMedium` = ``Medium(permittivity=1.0)``
         Background :class:`tidy3d.Medium` of simulation, defaults to air.
     structures : List[:class:`Structure`] = []
         List of structures in simulation.
@@ -57,7 +57,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         regions of spatial overlap.
     sources : List[:class:`VolumeSource` or :class:`PlaneWave` or :class:`ModeSource`] = []
         List of electric current sources injecting fields into the simulation.
-    monitors : List[:class:`FieldMonitor` or :class:`FieldTimeMonitor` or :class:`FluxMonitor` or :class:`FluxTimeMonitor` or :class:`ModeMonitor`] = []
+    monitors : List[:class:`AbstractMonitor`] = []
         List of monitors in the simulation.
         Note: names stored in ``monitor.name`` are used to access data after simulation is run.
     pml_layers : Tuple[:class:`AbsorberSpec`, :class:`AbsorberSpec`, :class:`AbsorberSpec`] = ``(None, None, None)``
@@ -197,30 +197,26 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
     """ Accounting """
 
     @property
-    def mediums(self) -> List[MediumType]:
-        # pylint:disable=line-too-long
+    def mediums(self) -> Set[MediumType]:
         """Returns set of distinct :class:`AbstractMedium` in simulation.
 
         Returns
         -------
-        Set[:class:`Medium` or :class:`PoleResidue` or :class:`Lorentz` or :class:`Sellmeier` or :class:`Debye`]
+        Set[:class:`AbstractMedium`]
             Set of distinct mediums in the simulation.
         """
         return {structure.medium for structure in self.structures}
-        # pylint:enable=line-too-long
 
     @property
     def medium_map(self) -> Dict[MediumType, pydantic.NonNegativeInt]:
-        # pylint:disable=line-too-long
         """Returns dict mapping medium to index in material.
         ``medium_map[medium]`` returns unique global index of :class:`AbstractMedium` in simulation.
 
         Returns
         -------
-        Dict[:class:`Medium` or :class:`PoleResidue` or :class:`Lorentz` or :class:`Sellmeier` or :class:`Debye`, int]
+        Dict[:class:`AbstractMedium`, int]
             Mapping between distinct mediums to index in simulation.
         """
-        # pylint:enable=line-too-long
 
         return {medium: index for index, medium in enumerate(self.mediums)}
 
@@ -242,7 +238,6 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         ax: Ax = None,
         **kwargs,
     ) -> Ax:
-        # pylint:disable=line-too-long
         """Plot each of simulation's components on a plane defined by one nonzero x,y,z coordinate.
 
         Parameters
@@ -258,14 +253,13 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         **kwargs
             Optional keyword arguments passed to the matplotlib patch plotting of structure.
             For details on accepted values, refer to
-            `Matplotlib's documentation <https://matplotlib.org/stable/api/_as_gen/matplotlib.patches.Patch.html#matplotlib.patches.Patch>`_.
+            `Matplotlib's documentation <https://tinyurl.com/2nf5c2fk>`_.
 
         Returns
         -------
         matplotlib.axes._subplots.Axes
             The supplied or created matplotlib axes.
         """
-        # pylint:enable=line-too-long
 
         ax = self.plot_structures(ax=ax, x=x, y=y, z=z, **kwargs)
         ax = self.plot_sources(ax=ax, x=x, y=y, z=z, **kwargs)
@@ -285,7 +279,6 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         ax: Ax = None,
         **kwargs,
     ) -> Ax:
-        # pylint:disable=line-too-long
         """Plot each of simulation's components on a plane defined by one nonzero x,y,z coordinate.
         The permittivity is plotted in grayscale based on its value at the specified frequency.
 
@@ -305,14 +298,13 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         **kwargs
             Optional keyword arguments passed to the matplotlib patch plotting of structure.
             For details on accepted values, refer to
-            `Matplotlib's documentation <https://matplotlib.org/stable/api/_as_gen/matplotlib.patches.Patch.html#matplotlib.patches.Patch>`_.
+            `Matplotlib's documentation <https://tinyurl.com/2nf5c2fk>`_.
 
         Returns
         -------
         matplotlib.axes._subplots.Axes
             The supplied or created matplotlib axes.
         """
-        # pylint:enable=line-too-long
 
         ax = self.plot_structures_eps(freq=freq, cbar=True, ax=ax, x=x, y=y, z=z, **kwargs)
         ax = self.plot_sources(ax=ax, x=x, y=y, z=z, **kwargs)
@@ -326,7 +318,6 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
     def plot_structures(
         self, x: float = None, y: float = None, z: float = None, ax: Ax = None, **kwargs
     ) -> Ax:
-        # pylint:disable=line-too-long
         """Plot each of simulation's structures on a plane defined by one nonzero x,y,z coordinate.
 
         Parameters
@@ -342,14 +333,13 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         **kwargs
             Optional keyword arguments passed to the matplotlib patch plotting of structure.
             For details on accepted values, refer to
-            `Matplotlib's documentation <https://matplotlib.org/stable/api/_as_gen/matplotlib.patches.Patch.html#matplotlib.patches.Patch>`_.
+            `Matplotlib's documentation <https://tinyurl.com/2nf5c2fk>`_.
 
         Returns
         -------
         matplotlib.axes._subplots.Axes
             The supplied or created matplotlib axes.
         """
-        # pylint:enable=line-too-long
 
         medium_map = self.medium_map
         medium_shapes = self._filter_plot_structures(x=x, y=y, z=z)
@@ -404,7 +394,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         **kwargs
             Optional keyword arguments passed to the matplotlib patch plotting of structure.
             For details on accepted values, refer to
-            `Matplotlib's documentation <https://matplotlib.org/stable/api/_as_gen/matplotlib.patches.Patch.html#matplotlib.patches.Patch>`_.
+            `Matplotlib's documentation <https://tinyurl.com/2nf5c2fk>`_.
 
         Returns
         -------
@@ -452,7 +442,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         **kwargs
             Optional keyword arguments passed to the matplotlib patch plotting of structure.
             For details on accepted values, refer to
-            `Matplotlib's documentation <https://matplotlib.org/stable/api/_as_gen/matplotlib.patches.Patch.html#matplotlib.patches.Patch>`_.
+            `Matplotlib's documentation <https://tinyurl.com/2nf5c2fk>`_.
 
         Returns
         -------
@@ -486,7 +476,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         **kwargs
             Optional keyword arguments passed to the matplotlib patch plotting of structure.
             For details on accepted values, refer to
-            `Matplotlib's documentation <https://matplotlib.org/stable/api/_as_gen/matplotlib.patches.Patch.html#matplotlib.patches.Patch>`_.
+            `Matplotlib's documentation <https://tinyurl.com/2nf5c2fk>`_.
 
         Returns
         -------
@@ -520,7 +510,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         **kwargs
             Optional keyword arguments passed to the matplotlib patch plotting of structure.
             For details on accepted values, refer to
-            `Matplotlib's documentation <https://matplotlib.org/stable/api/_as_gen/matplotlib.patches.Patch.html#matplotlib.patches.Patch>`_.
+            `Matplotlib's documentation <https://tinyurl.com/2nf5c2fk>`_.
 
         Returns
         -------
@@ -581,7 +571,6 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
     def plot_pml(
         self, x: float = None, y: float = None, z: float = None, ax: Ax = None, **kwargs
     ) -> Ax:
-        # pylint:disable=line-too-long
         """Plot each of simulation's absorbing boundaries
         on a plane defined by one nonzero x,y,z coordinate.
 
@@ -598,14 +587,13 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         **kwargs
             Optional keyword arguments passed to the matplotlib patch plotting of structure.
             For details on accepted values, refer to
-            `Matplotlib's documentation <https://matplotlib.org/stable/api/_as_gen/matplotlib.patches.Patch.html#matplotlib.patches.Patch>`_.
+            `Matplotlib's documentation <https://tinyurl.com/2nf5c2fk>`_.
 
         Returns
         -------
         matplotlib.axes._subplots.Axes
             The supplied or created matplotlib axes.
         """
-        # pylint:enable=line-too-long
         kwargs = PMLParams().update_params(**kwargs)
         pml_thicks = self.pml_thicknesses
         for pml_axis, pml_layer in enumerate(self.pml_layers):
@@ -686,7 +674,6 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
     def _filter_plot_structures(
         self, x: float = None, y: float = None, z: float = None
     ) -> List[Tuple[Medium, Shapely]]:
-        # pylint:disable=line-too-long
         """Compute list of shapes to plot on plane specified by {x,y,z}.
         Overlaps are removed or merged depending on medium.
 
@@ -701,10 +688,9 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
 
         Returns
         -------
-        List[Tuple[:class:`Medium` or :class:`PoleResidue` or :class:`Lorentz` or :class:`Sellmeier` or :class:`Debye`, shapely.geometry.base.BaseGeometry]]
+        List[Tuple[:class:`AbstractMedium`, shapely.geometry.base.BaseGeometry]]
             List of shapes and mediums on the plane after merging.
         """
-        # pylint:enable=line-too-long
 
         shapes = []
         for struct in self.structures:
@@ -736,7 +722,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
 
         Returns
         -------
-        List[Tuple[:class:`Medium` or :class:`PoleResidue` or :class:`Lorentz` or :class:`Sellmeier` or :class:`Debye`, shapely.geometry.base.BaseGeometry]]
+        List[Tuple[:AbstractMedium`, shapely.geometry.base.BaseGeometry]]
             Shapes and their mediums on a plane
             after merging and removing intersections with background.
         """
@@ -922,7 +908,6 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         return Grid(boundaries=sub_boundaries)
 
     def epsilon(self, box: Box, coord_key: str, freq: float = None) -> Dict[str, xr.DataArray]:
-        # pylint:disable=line-too-long
         """Get array of permittivity at volume specified by box and freq
 
         Parameters
@@ -947,9 +932,9 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
             `'boundaries'`` contains the permittivity at the corner intersections between yee cells.
             ``'Ex'`` and other field keys contain the permittivity
             at the corresponding field position in the yee lattice.
-            For details on xarray datasets, refer to `xarray's Documentaton <http://xarray.pydata.org/en/stable/generated/xarray.DataArray.html>`_.
+            For details on xarray datasets,
+            refer to `xarray's Documentaton <https://tinyurl.com/2zrzsp7b>`_.
         """
-        # pylint:enable=line-too-long
 
         sub_grid = self.discretize(box)
         eps_background = self.medium.eps_model(freq)

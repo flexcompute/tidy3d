@@ -704,7 +704,7 @@ class SimulationData(Tidy3dBaseModel):
         return field_dataset
 
     @add_ax_if_none
-    def plot_field( #pylint:disable=too-many-arguments, too-many-locals
+    def plot_field(  # pylint:disable=too-many-arguments, too-many-locals
         self,
         field_monitor_name: str,
         field_name: str,
