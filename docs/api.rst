@@ -82,10 +82,11 @@ Geometry
    :toctree: _autosummary/
 
    Box
+   Box.from_bounds
    Sphere
    Cylinder
    PolySlab
-   PolySlab.from_gdspy
+   PolySlab.from_gds
 
 Methods
 -------
@@ -111,6 +112,7 @@ Mediums
    :toctree: _autosummary/
 
    Medium
+   Medium.from_nk
    AnisotropicMedium
    PEC
    PoleResidue
@@ -125,7 +127,13 @@ Methods
 .. autosummary::
    :toctree: _autosummary/
 
+   AbstractMedium.plot
    AbstractMedium.eps_model
+   AbstractMedium.nk_to_eps_sigma
+   AbstractMedium.nk_to_eps_complex
+   AbstractMedium.eps_sigma_to_eps_complex
+   AbstractMedium.eps_complex_to_nk
+
 
 Material Library
 ----------------
@@ -245,6 +253,22 @@ Output Data
    FluxTimeData
    ModeData
 
+Methods
+-------
+
+.. autosummary::
+   :toctree: _autosummary/
+
+   SimulationData.plot_field
+   Monitor.plot
+   Monitor.inside
+   Monitor.intersections
+   Monitor.intersects
+   Monitor.intersects_plane
+   Monitor.bounds
+   Monitor.bounding_box
+   Monitor.pop_axis
+   Monitor.unpop_axis
 
 Tidy3dBaseModel
 ===============
@@ -253,8 +277,8 @@ Tidy3dBaseModel
    :toctree: _autosummary/
 
    components.base.Tidy3dBaseModel
-   components.base.Tidy3dBaseModel.export
-   components.base.Tidy3dBaseModel.load
+   components.base.Tidy3dBaseModel.to_file
+   components.base.Tidy3dBaseModel.from_file
    components.base.Tidy3dBaseModel.help
 
 .. Constants
@@ -288,7 +312,7 @@ Web API
    web.start
    web.monitor
    web.download
-   web.load_data
+   web.load
    web.delete
 
 Job Interface
@@ -304,7 +328,7 @@ Job Interface
    web.Job.start
    web.Job.monitor
    web.Job.download
-   web.Job.load_data
+   web.Job.load
    web.Job.delete   
 
 Batch Processing
@@ -320,7 +344,7 @@ Batch Processing
    web.Batch.start
    web.Batch.monitor
    web.Batch.download
-   web.Batch.load_data
+   web.Batch.load
    web.Batch.delete
 
 Info Containers

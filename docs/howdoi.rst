@@ -18,7 +18,7 @@ Work with Tidy3d Components
    * - Get help related to any Tidy3d component?
      - ``obj.help()`` will print a useful message.  ``obj.help(methods=True)`` will list out more information about the object's methods.
    * - Save and load any Tidy3d object?
-     - If the object ``obj`` is an instance of ``ObjClass``, you can export and load to & from json through ``obj.export(path='path/to/file.json')`` and ``obj = ObjClass.load(path='path/to/file.hdf5')``.
+     - If the object ``obj`` is an instance of ``ObjClass``, you can export and load to & from json through ``obj.to_file(path='path/to/file.json')`` and ``obj = ObjClass.from_file(path='path/to/file.hdf5')``.
 
 
 Work with Simulation Data
@@ -33,7 +33,7 @@ Work with Simulation Data
    * - Get the data for a specific :class:`Monitor`?
      - ``sim_data[monitor_name]`` or ``sim_data.monitor_data[monitor_name].data`` returns the xarray data object and ``sim_data.monitor_data[monitor_name]`` returns the :class:`MonitorData` container.
    * - Save and load the :class:`SimulationData` object?
-     - ``sim_data.export(path='path/to/file.hdf5')`` to save and ``sim_data = SimulationData.load(path='path/to/file.hdf5')`` to load.
+     - ``sim_data.to_file(path='path/to/file.hdf5')`` to save and ``sim_data = SimulationData.from_file(path='path/to/file.hdf5')`` to load.
    * - Access the original :class:`Simulation` that created the data?
      - ``sim_data.simulation`` returns a copy of the original :class:`Simulation`.
 
@@ -122,4 +122,4 @@ Submit Jobs to Server
    * - Loop through :class:`Batch` data without loading all of the data into memory?
      - ``for task_name, sim_data in batch.items():`` will ``yield`` the :class:`SimulationData` for each :class:`Job` in the batch one by one, so you can perform your postprocessing in the loop body without loading each of the simulations' data into memory at once.
    * - Save or load a :class:`Job` or :class:`Batch` so I can work with it later?
-     - Like most other tidy3d objects, :class:`Job` and :class:`Batch` instances have ``.export(path)`` and ``.load()`` methods that will export and load thier metadata as .json files.  This is especially useful for loading batches for analysis long after they have run.
+     - Like most other tidy3d objects, :class:`Job` and :class:`Batch` instances have ``.to_file(path)`` and ``.from_file()`` methods that will export and load thier metadata as .json files.  This is especially useful for loading batches for analysis long after they have run.
