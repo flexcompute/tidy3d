@@ -23,7 +23,7 @@ DIM_ATTRS = {
     "x": {"units": "um", "long_name": "x position"},
     "y": {"units": "um", "long_name": "y position"},
     "z": {"units": "um", "long_name": "z position"},
-    "f": {"units": "Hz", "long_name": "frequeny"},
+    "f": {"units": "Hz", "long_name": "frequency"},
     "t": {"units": "sec", "long_name": "time"},
     "direction": {"units": None, "long_name": "propagation direction"},
     "mode_index": {"units": None, "long_name": "mode index"},
