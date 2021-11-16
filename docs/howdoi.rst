@@ -78,7 +78,7 @@ Plot Tidy3D Components
    * - Plot an object with some spatial definition?  (:class:`Simulation`, :class:`Structure`, etc.)
      - ``obj.plot(x=0)`` will plot the object on the ``x=0`` plane with ``y`` and ``z`` also accepted to specify other planar axes.  If ``ax`` argument is supplied, will plot to an existing axis, ie. ``obj.plot(y=0, ax=ax)``.
    * - Change the plot characteristics (facecolor, edgecolor, etc).
-     - Plotting keyword arguments can be supplied to ``plot()``, for example ``obj.plot(x=0, edgecolor='blue', fill=False)``.  These keyword arguments correspond to those fed to `Matplotlib Patches <https://matplotlib.org/stable/api/_as_gen/matplotlib.patches.Patch.html#matplotlib.patches.Patch>`__.
+     - Plotting keyword arguments can be supplied to ``plot()``, for example ``obj.plot(x=0, edgecolor='blue', fill=False)``.  These keyword arguments correspond to those fed to `Matplotlib Patches <https://tinyurl.com/2nf5c2fk>`__.
 
 
 Plot Data
