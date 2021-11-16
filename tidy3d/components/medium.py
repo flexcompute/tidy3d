@@ -70,7 +70,7 @@ class AbstractMedium(ABC, Tidy3dBaseModel):
 
         freqs = np.array(freqs)
         eps_complex = self.eps_model(freqs)
-        n, k = eps_complex_to_nk(eps_complex)
+        n, k = AbstractMedium.eps_complex_to_nk(eps_complex)
 
         freqs_thz = freqs / 1e12
         ax.plot(freqs_thz, n, label="n")
@@ -80,6 +80,93 @@ class AbstractMedium(ABC, Tidy3dBaseModel):
         ax.legend()
         ax.set_aspect("auto")
         return ax
+
+    """ Conversion helper functions """
+
+    @staticmethod
+    def nk_to_eps_complex(n: float, k: float = 0.0) -> complex:
+        """Convert n, k to complex permittivity.
+
+        Parameters
+        ----------
+        n : float
+            Real part of refractive index.
+        k : float = 0.0
+            Imaginary part of refrative index.
+
+        Returns
+        -------
+        complex
+            Complex-valued relative permittivty.
+        """
+        eps_real = n ** 2 - k ** 2
+        eps_imag = 2 * n * k
+        return eps_real + 1j * eps_imag
+
+    @staticmethod
+    def eps_complex_to_nk(eps_c: complex) -> Tuple[float, float]:
+        """Convert complex permittivity to n, k values.
+
+        Parameters
+        ----------
+        eps_c : complex
+            Complex-valued relative permittivity.
+
+        Returns
+        -------
+        Tuple[float, float]
+            Real and imaginary parts of refractive index (n & k).
+        """
+        ref_index = np.sqrt(eps_c)
+        return ref_index.real, ref_index.imag
+
+    @staticmethod
+    def nk_to_eps_sigma(n: float, k: float, freq: float) -> Tuple[float, float]:
+        """Convert ``n``, ``k`` at frequency ``freq`` to permittivity and conductivity values.
+
+        Parameters
+        ----------
+        n : float
+            Real part of refractive index.
+        k : float = 0.0
+            Imaginary part of refrative index.
+        frequency : float
+            Frequency to evaluate permittivity at (Hz).
+
+        Returns
+        -------
+        Tuple[float, float]
+            Real part of relative permittivity & electric conductivity.
+        """
+        eps_complex = AbstractMedium.nk_to_eps_complex(n, k)
+        eps_real, eps_imag = eps_complex.real, eps_complex.imag
+        omega = 2 * np.pi * freq
+        sigma = omega * eps_imag
+        return eps_real, sigma
+
+    @staticmethod
+    def eps_sigma_to_eps_complex(eps_real: float, sigma: float, freq: float) -> complex:
+        """convert permittivity and conductivity to complex permittivity at freq
+
+        Parameters
+        ----------
+        eps_real : float
+            Real-valued relative permittivity.
+        sigma : float
+            Conductivity.
+        freq : float
+            Frequency to evaluate permittivity at (Hz).
+            If not supplied, returns real part of permittivity (limit as frequency -> infinity.)
+
+        Returns
+        -------
+        complex
+            Complex-valued relative permittivity.
+        """
+        if not freq:
+            return eps_real
+        omega = 2 * np.pi * freq
+        return eps_real + 1j * sigma / omega
 
 
 def ensure_freq_in_range(eps_model: Callable[[float], complex]) -> Callable[[float], complex]:
@@ -180,16 +267,30 @@ class Medium(AbstractMedium):
         complex
             Complex-valued relative permittivity evaluated at ``frequency``.
         """
-        return eps_sigma_to_eps_complex(self.permittivity, self.conductivity, frequency)
-
-    def __str__(self) -> str:
-        """string representation."""
-        return (
-            f"td.Medium("
-            f"permittivity={self.permittivity},"
-            f"conductivity={self.conductivity},"
-            f"frequency_range={self.frequency_range})"
+        return AbstractMedium.eps_sigma_to_eps_complex(
+            self.permittivity, self.conductivity, frequency
         )
+
+    @classmethod
+    def from_nk(cls, n: float, k: float, freq: float):
+        """Convert ``n`` and ``k`` values at frequency ``freq`` to :class:`Medium`.
+
+        Parameters
+        ----------
+        n : float
+            Real part of refractive index.
+        k : float = 0
+            Imaginary part of refrative index.
+        frequency : float
+            Frequency to evaluate permittivity at (Hz).
+
+        Returns
+        -------
+        :class:`Medium`
+            medium containing the corresponding ``permittivity`` and ``conductivity``.
+        """
+        eps, sigma = AbstractMedium.nk_to_eps_sigma(n, k, freq)
+        return cls(permittivity=eps, conductivity=sigma)
 
 
 class AnisotropicMedium(AbstractMedium):
@@ -264,7 +365,7 @@ class AnisotropicMedium(AbstractMedium):
         for label, medium_component in zip(("xx", "yy", "zz"), (self.xx, self.yy, self.zz)):
 
             eps_complex = medium_component.eps_model(freqs)
-            n, k = eps_complex_to_nk(eps_complex)
+            n, k = AbstractMedium.eps_complex_to_nk(eps_complex)
             ax.plot(freqs_thz, n, label=f"n, eps_{label}")
             ax.plot(freqs_thz, k, label=f"k, eps_{label}")
 
@@ -416,7 +517,7 @@ class Sellmeier(DispersiveMedium):
             Complex-valued relative permittivity evaluated at the frequency.
         """
         n = self._n_model(frequency)
-        return nk_to_eps_complex(n)
+        return AbstractMedium.nk_to_eps_complex(n)
 
     @property
     def pole_residue(self):
@@ -668,111 +769,3 @@ class Debye(DispersiveMedium):
 MediumType = Union[
     Literal[PEC], Medium, AnisotropicMedium, PoleResidue, Sellmeier, Lorentz, Debye, Drude
 ]
-
-""" Conversion helper functions """
-
-
-def nk_to_eps_complex(n: float, k: float = 0.0) -> complex:
-    """Convert n, k to complex permittivity.
-
-    Parameters
-    ----------
-    n : float
-        Real part of refractive index.
-    k : float = 0.0
-        Imaginary part of refrative index.
-
-    Returns
-    -------
-    complex
-        Complex-valued relative permittivty.
-    """
-    eps_real = n ** 2 - k ** 2
-    eps_imag = 2 * n * k
-    return eps_real + 1j * eps_imag
-
-
-def eps_complex_to_nk(eps_c: complex) -> Tuple[float, float]:
-    """Convert complex permittivity to n, k values.
-
-    Parameters
-    ----------
-    eps_c : complex
-        Complex-valued relative permittivity.
-
-    Returns
-    -------
-    Tuple[float, float]
-        Real and imaginary parts of refractive index (n & k).
-    """
-    ref_index = np.sqrt(eps_c)
-    return ref_index.real, ref_index.imag
-
-
-def nk_to_eps_sigma(n: float, k: float, freq: float) -> Tuple[float, float]:
-    """Convert ``n``, ``k`` at frequency ``freq`` to permittivity and conductivity values.
-
-    Parameters
-    ----------
-    n : float
-        Real part of refractive index.
-    k : float = 0.0
-        Imaginary part of refrative index.
-    frequency : float
-        Frequency to evaluate permittivity at (Hz).
-
-    Returns
-    -------
-    Tuple[float, float]
-        Real part of relative permittivity & electric conductivity.
-    """
-    eps_complex = nk_to_eps_complex(n, k)
-    eps_real, eps_imag = eps_complex.real, eps_complex.imag
-    omega = 2 * np.pi * freq
-    sigma = omega * eps_imag
-    return eps_real, sigma
-
-
-def nk_to_medium(n: float, k: float, freq: float) -> Medium:
-    """Convert ``n`` and ``k`` values at frequency ``freq`` to :class:`Medium`.
-
-    Parameters
-    ----------
-    n : float
-        Real part of refractive index.
-    k : float = 0
-        Imaginary part of refrative index.
-    frequency : float
-        Frequency to evaluate permittivity at (Hz).
-
-    Returns
-    -------
-    :class:`Medium`
-        medium containing the corresponding ``permittivity`` and ``conductivity``.
-    """
-    eps, sigma = nk_to_eps_sigma(n, k, freq)
-    return Medium(permittivity=eps, conductivity=sigma)
-
-
-def eps_sigma_to_eps_complex(eps_real: float, sigma: float, freq: float) -> complex:
-    """convert permittivity and conductivity to complex permittivity at freq
-
-    Parameters
-    ----------
-    eps_real : float
-        Real-valued relative permittivity.
-    sigma : float
-        Conductivity.
-    freq : float
-        Frequency to evaluate permittivity at (Hz).
-        If not supplied, returns real part of permittivity (limit as frequency -> infinity.)
-
-    Returns
-    -------
-    complex
-        Complex-valued relative permittivity.
-    """
-    if not freq:
-        return eps_real
-    omega = 2 * np.pi * freq
-    return eps_real + 1j * sigma / omega

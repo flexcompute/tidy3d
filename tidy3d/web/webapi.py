@@ -54,7 +54,7 @@ def run(
     task_id = upload(simulation=simulation, task_name=task_name, folder_name=folder_name)
     start(task_id)
     monitor(task_id)
-    return load_data(task_id=task_id, simulation=simulation, path=path)
+    return load(task_id=task_id, simulation=simulation, path=path)
 
 
 def upload(simulation: Simulation, task_name: str, folder_name: str = "default") -> TaskId:
@@ -159,7 +159,7 @@ def monitor(task_id: TaskId) -> None:
 
     Note
     ----
-    To load results when finished, may call :meth:`load_data`.
+    To load results when finished, may call :meth:`load`.
     """
 
     task_info = get_info(task_id)
@@ -253,7 +253,7 @@ def download(task_id: TaskId, simulation: Simulation, path: str = "simulation_da
 
     log.debug("loading old monitor data to data dict")
     # TODO: we cant convert old simulation file to new, so we'll ask for original as input instead.
-    # simulation = Simulation.load(sim_file)
+    # simulation = Simulation.from_file(sim_file)
     mon_data_dict = load_old_monitor_data(simulation=simulation, data_file=mon_file)
 
     log.debug("creating SimulationData from monitor data dict")
@@ -264,7 +264,7 @@ def download(task_id: TaskId, simulation: Simulation, path: str = "simulation_da
     )
 
     log.info(f"exporting SimulationData to {path}")
-    sim_data.export(path)
+    sim_data.to_file(path)
 
     log.debug("clearing extraneous files")
     _rm_file(sim_file)
@@ -272,7 +272,7 @@ def download(task_id: TaskId, simulation: Simulation, path: str = "simulation_da
     _rm_file(log_file)
 
 
-def load_data(
+def load(
     task_id: TaskId,
     simulation: Simulation,
     path: str = "simulation_data.hdf5",
@@ -300,7 +300,7 @@ def load_data(
         download(task_id=task_id, simulation=simulation, path=path)
 
     log.info(f"loading SimulationData from {path}")
-    return SimulationData.load(path)
+    return SimulationData.from_file(path)
 
 
 def delete(task_id: TaskId) -> TaskInfo:

@@ -22,7 +22,7 @@ from .solver import compute_modes
 """
 Stage:                Simulation     Mode Specs    Outputs       Viz           Export
                       ----------  +  ---------- -> ----------- -> ---------- -> ----------
-Method:                        __init__()          .solve()       .plot()       .export()
+Method:                        __init__()          .solve()       .plot()       .to_file()
 
 td Objects:     Simulation     Mode    ->    FieldData   ->  image     -> ModeSource
                 Plane           ^                             |           ModeMonitor
@@ -42,8 +42,8 @@ field.plot()                           # inspect fields, do they look ok?
 mon = ms.export_monitor(mode=mode)             # if we're happy with results, return td.ModeMonitor
 src = ms.export_src(mode=mode, src_time=...)   # or as a td.ModeSource
 
-src.export('data/my_source.json')             # this source /monitor can be saved to file
-src = ModeSource.load('data/my_source.json')  # and loaded in our script
+src.to_file('data/my_source.json')             # this source /monitor can be saved to file
+src = ModeSource.from_file('data/my_source.json')  # and loaded in our script
 """
 
 

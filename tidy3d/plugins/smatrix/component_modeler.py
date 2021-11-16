@@ -55,7 +55,7 @@
 # 		self.batch.monitor()
 
 # 	def load(self):
-# 		self.batch.load()
+# 		self.batch.from_file()
 
 # 	def compute_S_matrix(self):
 # 		""" compute S-matrix from the batch results (to-do) """

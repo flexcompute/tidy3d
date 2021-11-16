@@ -182,7 +182,7 @@ git push origin x.x.x
 - [x] Get rid of pydantic? <- Not doing it
 - [x] Simplify MonitorData
     - [x] remove MonitorData.monitor  and MonitorData.monitor_name attributes.
-    - [x] remove MonitorData.load() and MonitorData.export()
+    - [x] remove MonitorData.from_file() and MonitorData.to_file()
     - [x] Make monitordata.load_from_group aware of lists
 - [x] Use shapely for geometry ops / plotting?  `Geometry.geo(x=0)` -> shapely representation.
 	- [x] Fix all tests.
@@ -239,8 +239,8 @@ git push origin x.x.x
 After integration is complete, need to flesh out details and make them compatible with the main package.
 
 - [ ] Make webAPI work without conversion (1 hour)
-	- [ ] Use native `Simulation.export()` or `Simulation.json()` for `upload()`.
-	- [ ] Use native `SimulationData.load()` for `load()`.
+	- [ ] Use native `Simulation.to_file()` or `Simulation.json()` for `upload()`.
+	- [ ] Use native `SimulationData.from_file()` for `load()`.
 - [ ] Flesh out Mode solver details (discussion, then implemeent in 1 hour)
 	- [ ] Change API?
 - [ ] Flesh out Symmetry details (3 days?)

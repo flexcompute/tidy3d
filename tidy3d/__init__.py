@@ -19,8 +19,6 @@ from .components import Box, Sphere, Cylinder, PolySlab
 # medium
 from .components import Medium, PoleResidue, AnisotropicMedium, PEC
 from .components import Sellmeier, Debye, Drude, Lorentz
-from .components import nk_to_eps_complex, nk_to_eps_sigma, eps_complex_to_nk
-from .components import nk_to_medium, eps_sigma_to_eps_complex
 
 # structures
 from .components import Structure
@@ -41,7 +39,7 @@ from .components import Simulation
 
 # data
 from .components import SimulationData, FieldData, FluxData, ModeData, FluxTimeData
-from .components import data_type_map, ScalarFieldData, ScalarFieldTimeData
+from .components import DATA_TYPE_MAP, ScalarFieldData, ScalarFieldTimeData
 
 # constants imported as `C_0 = td.C_0` or `td.constants.C_0`
 from .constants import inf, C_0, ETA_0

@@ -17,35 +17,6 @@ from ..log import DataError
 
 # TODO: add warning if fields didnt fully decay
 
-""" Helper functions """
-
-
-def save_string(hdf5_grp, string_key: str, string_value: str) -> None:
-    """Save a string to an hdf5 group."""
-    str_type = h5py.special_dtype(vlen=str)
-    hdf5_grp.create_dataset(string_key, (1,), dtype=str_type)
-    hdf5_grp[string_key][0] = string_value
-
-
-def decode_bytes(bytes_dataset) -> str:
-    """Decode an hdf5 dataset containing bytes to a string."""
-    return bytes_dataset[0].decode("utf-8")
-
-
-def load_string(hdf5_grp, string_key: str) -> str:
-    """Load a string from an hdf5 group."""
-    string_value_bytes = hdf5_grp.get(string_key)
-    if not string_value_bytes:
-        return None
-    return decode_bytes(string_value_bytes)
-
-
-def decode_bytes_array(array_of_bytes: Numpy) -> List[str]:
-    """Convert numpy array containing bytes to list of strings."""
-    list_of_bytes = array_of_bytes.tolist()
-    list_of_str = [v.decode("utf-8") for v in list_of_bytes]
-    return list_of_str
-
 
 # mapping of data coordinates to units for assigning .attrs to the xarray objects
 DIM_ATTRS = {
@@ -104,6 +75,33 @@ class Tidy3dData(Tidy3dBaseModel):
     def load_from_group(cls, hdf5_grp):
         """Load data contents from an hdf5 group."""
 
+    @staticmethod
+    def save_string(hdf5_grp, string_key: str, string_value: str) -> None:
+        """Save a string to an hdf5 group."""
+        str_type = h5py.special_dtype(vlen=str)
+        hdf5_grp.create_dataset(string_key, (1,), dtype=str_type)
+        hdf5_grp[string_key][0] = string_value
+
+    @staticmethod
+    def decode_bytes(bytes_dataset) -> str:
+        """Decode an hdf5 dataset containing bytes to a string."""
+        return bytes_dataset[0].decode("utf-8")
+
+    @staticmethod
+    def load_string(hdf5_grp, string_key: str) -> str:
+        """Load a string from an hdf5 group."""
+        string_value_bytes = hdf5_grp.get(string_key)
+        if not string_value_bytes:
+            return None
+        return Tidy3dData.decode_bytes(string_value_bytes)
+
+    @staticmethod
+    def decode_bytes_array(array_of_bytes: Numpy) -> List[str]:
+        """Convert numpy array containing bytes to list of strings."""
+        list_of_bytes = array_of_bytes.tolist()
+        list_of_str = [v.decode("utf-8") for v in list_of_bytes]
+        return list_of_str
+
 
 class MonitorData(Tidy3dData, ABC):
     """Abstract base class for objects storing individual data from simulation."""
@@ -136,16 +134,14 @@ class MonitorData(Tidy3dData, ABC):
 
     @property
     def data(self) -> Tidy3dDataArray:
-        # pylint:disable=line-too-long
         """Returns an xarray representation of the montitor data.
 
         Returns
         -------
         xarray.DataArray
             Representation of the monitor data using xarray.
-            For more details refer to `xarray's Documentaton <http://xarray.pydata.org/en/stable/generated/xarray.DataArray.html>`_.
+            For more details refer to `xarray's Documentaton <https://tinyurl.com/2zrzsp7b>`_.
         """
-        # pylint:enable=line-too-long
 
         # make DataArray
         data_dict = self.dict()
@@ -180,7 +176,7 @@ class MonitorData(Tidy3dData, ABC):
         """Add data contents to an hdf5 group."""
 
         # save the type information of MonitorData to the group
-        save_string(hdf5_grp, "type", self.type)
+        Tidy3dData.save_string(hdf5_grp, "type", self.type)
         for data_name, data_value in self.dict().items():
 
             # for each data member in self._dims (+ values), add to group.
@@ -201,12 +197,7 @@ class MonitorData(Tidy3dData, ABC):
         # handle data stored as np.array() of bytes instead of strings
         for str_kwarg in ("direction",):
             if kwargs.get(str_kwarg) is not None:
-                kwargs[str_kwarg] = decode_bytes_array(kwargs[str_kwarg])
-
-        # handle data stored as np.array() of bytes instead of strings
-        # for str_kwarg in ("x", "y", "z"):
-        #     if kwargs.get(str_kwarg) is not None:
-        #         kwargs[str_kwarg] = kwargs[str_kwarg].tolist()
+                kwargs[str_kwarg] = Tidy3dData.decode_bytes_array(kwargs[str_kwarg])
 
         # ignore the "type" dataset as it's used for finding type for loading
         kwargs.pop("type")
@@ -215,7 +206,8 @@ class MonitorData(Tidy3dData, ABC):
 
 
 class CollectionData(Tidy3dData):
-    """Abstract base class.  Stores a collection of data with same dimension types (such as field).
+    """Abstract base class.
+    Stores a collection of data with same dimension types (such as a field with many components).
 
     Parameters
     ----------
@@ -227,26 +219,22 @@ class CollectionData(Tidy3dData):
     type: str = None
 
     @property
-    def data(self) -> xr.Dataset:
-        # pylint:disable=line-too-long
+    def data(self) -> Dict[str, xr.DataArray]:
         """For field quantities, store a single xarray DataArray for each ``field``.
         These all go in a single xarray Dataset, which keeps track of the shared coords.
 
         Returns
         -------
-        xarray.Dataset
-            Representation of the underlying data using xarray.
-            For more details refer to `xarray's Documentaton <http://xarray.pydata.org/en/stable/generated/xarray.Dataset.html>`_.
+        Dict[str, xarray.DataArray]
+            Mapping of data dict keys to corresponding DataArray from .data property.
+            For more details refer to `xarray's Documentaton <https://tinyurl.com/2zrzsp7b>`_.
         """
-        # pylint:enable=line-too-long
-        data_arrays = {name: arr.data for name, arr in self.data_dict.items()}
 
-        # make an xarray dataset
-        return xr.Dataset(data_arrays)
-        # return data_arrays
+        data_arrays = {name: arr.data for name, arr in self.data_dict.items()}
+        return data_arrays
 
     def __eq__(self, other):
-        """Check for equality against other :class:`CollectionData` object."""
+        """Check for equality against other :class:`AbstractFieldData` object."""
 
         # same keys?
         if not all(k in other.data_dict.keys() for k in self.data_dict.keys()):
@@ -260,10 +248,10 @@ class CollectionData(Tidy3dData):
         return True
 
     def add_to_group(self, hdf5_grp) -> None:
-        """Add data from a :class:`CollectionData` to an hdf5 group ."""
+        """Add data from a :class:`AbstractFieldData` to an hdf5 group ."""
 
         # put collection's type information into the group
-        save_string(hdf5_grp, "type", self.type)
+        Tidy3dData.save_string(hdf5_grp, "type", self.type)
         for data_name, data_value in self.data_dict.items():
 
             # create a new group for each member of collection and add its data
@@ -272,7 +260,7 @@ class CollectionData(Tidy3dData):
 
     @classmethod
     def load_from_group(cls, hdf5_grp):
-        """Load a :class:`CollectionData` from hdf5 group containing data."""
+        """Load a :class:`AbstractFieldData` from hdf5 group containing data."""
         data_dict = {}
         for data_name, data_value in hdf5_grp.items():
 
@@ -281,13 +269,112 @@ class CollectionData(Tidy3dData):
                 continue
 
             # get the type from MonitorData.type and add instance to dict
-            data_type = data_type_map[load_string(data_value, "type")]
+            data_type = DATA_TYPE_MAP[Tidy3dData.load_string(data_value, "type")]
             data_dict[data_name] = data_type.load_from_group(data_value)
 
         return cls(data_dict=data_dict)
 
+    def ensure_member_exists(self, member_name: str):
+        """make sure a member of collection is present in data"""
+        if member_name not in self.data_dict:
+            raise DataError(f"member_name '{member_name}' not found.")
 
-""" Classes of Monitor Data """
+
+""" Subclasses of MonitorData and CollectionData """
+
+
+class AbstractFieldData(CollectionData, ABC):
+    """Sores a collection of EM fields either in freq or time domain."""
+
+    """ Get the standard EM components from the dict using convenient "dot" syntax."""
+
+    @property
+    def Ex(self):
+        """Get Ex component of field using '.Ex' syntax."""
+        scalar_data = self.data_dict.get("Ex")
+        if scalar_data:
+            return scalar_data.data
+        return None
+
+    @property
+    def Ey(self):
+        """Get Ey component of field using '.Ey' syntax."""
+        scalar_data = self.data_dict.get("Ey")
+        if scalar_data:
+            return scalar_data.data
+        return None
+
+    @property
+    def Ez(self):
+        """Get Ez component of field using '.Ez' syntax."""
+        scalar_data = self.data_dict.get("Ez")
+        if scalar_data:
+            return scalar_data.data
+        return None
+
+    @property
+    def Hx(self):
+        """Get Hx component of field using '.Hx' syntax."""
+        scalar_data = self.data_dict.get("Hx")
+        if scalar_data:
+            return scalar_data.data
+        return None
+
+    @property
+    def Hy(self):
+        """Get Hy component of field using '.Hy' syntax."""
+        scalar_data = self.data_dict.get("Hy")
+        if scalar_data:
+            return scalar_data.data
+        return None
+
+    @property
+    def Hz(self):
+        """Get Hz component of field using '.Hz' syntax."""
+        scalar_data = self.data_dict.get("Hz")
+        if scalar_data:
+            return scalar_data.data
+        return None
+
+    def colocate(self, x, y, z) -> xr.Dataset:
+        """colocate all of the data at a set of x, y, z coordinates.
+
+        Parameters
+        ----------
+        x : np.array
+            x coordinates of locations.
+            y coordinates of locations.
+            z coordinates of locations.
+
+        Returns
+        -------
+        xr.Dataset
+            Dataset containing all fields at the same spatial locations.
+            For more details refer to `xarray's Documentaton <https://tinyurl.com/cyca3krz>`_.
+
+        Note
+        ----
+        For many operations (such as flux calculations and plotting),
+        it is important that the fields are colocated at the same spatial locations.
+        Be sure to apply this method to your field data in those cases.
+        """
+        coord_val_map = {"x": x, "y": y, "z": z}
+        centered_data_dict = {}
+        for field_name, field_data in self.data_dict.items():
+            centered_data_array = field_data.data
+            for coord_name in "xyz":
+                if len(centered_data_array.coords[coord_name]) <= 1:
+                    # centered_data_array = centered_data_array.isel(**{coord_name:0})
+                    coord_val = coord_val_map[coord_name]
+                    coord_kwargs = {coord_name: coord_val}
+                    centered_data_array = centered_data_array.assign_coords(**coord_kwargs)
+                    centered_data_array = centered_data_array.isel(**{coord_name: 0})
+                else:
+                    coord_vals = coord_val_map[coord_name]
+                    centered_data_array = centered_data_array.interp(**{coord_name: coord_vals})
+            centered_data_dict[field_name] = centered_data_array
+        # import pdb; pdb.set_trace()
+        return xr.Dataset(centered_data_dict)
 
 
 class FreqData(MonitorData, ABC):
@@ -308,7 +395,6 @@ class AbstractScalarFieldData(MonitorData, ABC):
     x: Array[float]
     y: Array[float]
     z: Array[float]
-    # values: Union[Array[complex], Array[float]]
 
 
 class PlanarData(MonitorData, ABC):
@@ -388,32 +474,50 @@ class ScalarFieldTimeData(AbstractScalarFieldData, TimeData):
     _dims = ("x", "y", "z", "t")
 
 
-class FieldData(CollectionData):
-    """Stores a collection of scalar fields
-    from a :class:`FieldMonitor` or :class:`FieldTimeMonitor`.
+class FieldData(AbstractFieldData):
+    """Stores a collection of scalar fields in the frequency domain from a :class:`FieldMonitor`.
 
     Parameters
     ----------
-    data_dict : Dict[str, :class:`ScalarFieldData`] or Dict[str, :class:`ScalarFieldTimeData`]
-        Mapping of field name to its scalar field data.
+    data_dict : Dict[str, :class:`ScalarFieldData`]
+        Mapping of field name (eg. 'Ex') to its scalar field data.
 
     Example
     -------
     >>> f = np.linspace(1e14, 2e14, 1001)
+    >>> x = np.linspace(-1, 1, 10)
+    >>> y = np.linspace(-2, 2, 20)
+    >>> z = np.linspace(0, 0, 1)
+    >>> values = (1+1j) * np.random.random((len(x), len(y), len(z), len(f)))
+    >>> field = ScalarFieldData(values=values, x=x, y=y, z=z, f=f)
+    >>> data = FieldData(data_dict={'Ex': field, 'Ey': field})
+    """
+
+    data_dict: Dict[str, ScalarFieldData]
+    type: Literal["FieldData"] = "FieldData"
+
+
+class FieldTimeData(AbstractFieldData):
+    """Stores a collection of scalar fields in the time domain from a :class:`FieldTimeMonitor`.
+
+    Parameters
+    ----------
+    data_dict : Dict[str, :class:`ScalarFieldTimeData`]
+        Mapping of field name to its scalar field data.
+
+    Example
+    -------
     >>> t = np.linspace(0, 1e-12, 1001)
     >>> x = np.linspace(-1, 1, 10)
     >>> y = np.linspace(-2, 2, 20)
     >>> z = np.linspace(0, 0, 1)
-    >>> values_f = (1+1j) * np.random.random((len(x), len(y), len(z), len(f)))
-    >>> values_t = np.random.random((len(x), len(y), len(z), len(t)))
-    >>> field_f = ScalarFieldData(values=values_f, x=x, y=y, z=z, f=f)
-    >>> field_t = ScalarFieldTimeData(values=values_t, x=x, y=y, z=z, t=t)
-    >>> data_f = FieldData(data_dict={'Ex': field_f, 'Ey': field_f})
-    >>> data_t = FieldData(data_dict={'Ex': field_t, 'Ey': field_t})
+    >>> values = np.random.random((len(x), len(y), len(z), len(t)))
+    >>> field = ScalarFieldTimeData(values=values, x=x, y=y, z=z, t=t)
+    >>> data = FieldTimeData(data_dict={'Ex': field, 'Ey': field})
     """
 
-    data_dict: Union[Dict[str, ScalarFieldData], Dict[str, ScalarFieldTimeData]]
-    type: Literal["FieldData"] = "FieldData"
+    data_dict: Dict[str, ScalarFieldTimeData]
+    type: Literal["FieldTimeData"] = "FieldTimeData"
 
 
 class FluxData(AbstractFluxData, FreqData):
@@ -500,11 +604,12 @@ class ModeData(PlanarData, FreqData):
     _dims = ("direction", "mode_index", "f")
 
 
-# maps MonitorData.type string to the actual type, for MonitorData.load()
-data_type_map = {
+# maps MonitorData.type string to the actual type, for MonitorData.from_file()
+DATA_TYPE_MAP = {
     "ScalarFieldData": ScalarFieldData,
     "ScalarFieldTimeData": ScalarFieldTimeData,
     "FieldData": FieldData,
+    "FieldTimeData": FieldTimeData,
     "FluxData": FluxData,
     "FluxTimeData": FluxTimeData,
     "ModeData": ModeData,
@@ -525,7 +630,7 @@ class SimulationData(Tidy3dBaseModel):
     """
 
     simulation: Simulation
-    monitor_data: Dict[str, Union[MonitorData, FieldData]]
+    monitor_data: Dict[str, Tidy3dData]
     log_string: str = None
 
     @property
@@ -545,13 +650,58 @@ class SimulationData(Tidy3dBaseModel):
 
         Returns
         -------
-        xarray.DataArray or xarray.Dataset
-            The xarray representation of the data.
+        xarray.DataArray or CollectionData
+            Data from the supplied monitor.
+            If the monitor corresponds to collection-like data (such as fields),
+            a collection data instance is returned.
+            Otherwise, if it is a MonitorData instance, the xarray representation is returned.
         """
         monitor_data = self.monitor_data.get(monitor_name)
         if not monitor_data:
             raise DataError(f"monitor {monitor_name} not found")
-        return monitor_data.data
+        if isinstance(monitor_data, MonitorData):
+            return monitor_data.data
+        return monitor_data
+
+    def ensure_monitor_exists(self, monitor_name: str) -> None:
+        """Raise exception if monitor isn't in the simulation data"""
+        if monitor_name not in self.monitor_data:
+            raise DataError(f"Data for monitor '{monitor_name}' not found in simulation data.")
+
+    def ensure_field_monitor(self, data_obj: Tidy3dData) -> None:
+        """Raise exception if monitor isn't a field monitor."""
+        if not isinstance(data_obj, (FieldData, FieldTimeData)):
+            raise DataError(f"data_obj '{data_obj}' " "not a FieldData or FieldTimeData instance.")
+
+    def at_centers(self, field_monitor_name: str) -> xr.Dataset:
+        """return xarray.Dataset representation of field monitor data
+        co-located at Yee cell centers.
+
+        Parameters
+        ----------
+        field_monitor_name : str
+            Name of field monitor used in the original :class:`Simulation`.
+
+        Returns
+        -------
+        xarray.Dataset
+            Dataset containing all of the fields in the data
+            interpolated to center locations on Yee grid.
+        """
+
+        # get the data
+        self.ensure_monitor_exists(field_monitor_name)
+        field_monitor_data = self.monitor_data.get(field_monitor_name)
+        self.ensure_field_monitor(field_monitor_data)
+
+        # get the monitor, discretize, and get center locations
+        monitor = self.simulation.get_monitor_by_name(field_monitor_name)
+        sub_grid = self.simulation.discretize(monitor)
+        centers = sub_grid.centers
+
+        # colocate each of the field components at centers
+        field_dataset = field_monitor_data.colocate(x=centers.x, y=centers.y, z=centers.z)
+        return field_dataset
 
     @add_ax_if_none
     def plot_field(
@@ -605,15 +755,12 @@ class SimulationData(Tidy3dBaseModel):
         """
 
         # get the monitor data
-        if field_monitor_name not in self.monitor_data:
-            raise DataError(f"Monitor named '{field_monitor_name}' not found.")
+        self.ensure_monitor_exists(field_monitor_name)
         monitor_data = self.monitor_data.get(field_monitor_name)
-        if not isinstance(monitor_data, FieldData):
-            raise DataError(f"field_monitor_name '{field_monitor_name}' not a FieldData instance.")
+        self.ensure_field_monitor(monitor_data)
 
         # get the field data component
-        if field_name not in monitor_data.data_dict:
-            raise DataError(f"field_name {field_name} not found in {field_monitor_name}.")
+        monitor_data.ensure_member_exists(field_name)
         xr_data = monitor_data.data_dict.get(field_name).data
 
         # select the frequency or time value
@@ -650,12 +797,12 @@ class SimulationData(Tidy3dBaseModel):
         # plot the field
         xy_coord_labels = list("xyz")
         xy_coord_labels.pop(axis)
-        x_coord_label, y_coord_label = xy_coord_labels
+        x_coord_label, y_coord_label = xy_coord_labels  # pylint:disable=unbalanced-tuple-unpacking
         field_data.plot(ax=ax, x=x_coord_label, y=y_coord_label)
 
         # plot the simulation epsilon
         ax = self.simulation.plot_structures_eps(
-            freq=freq, cbar=False, x=x, y=y, z=z, alpha=eps_alpha, ax=ax
+            freq=freq, cbar=False, x=x, y=y, z=z, alpha=eps_alpha, ax=ax, **kwargs
         )
 
         # set the limits based on the xarray coordinates min and max
@@ -666,7 +813,7 @@ class SimulationData(Tidy3dBaseModel):
 
         return ax
 
-    def export(self, fname: str) -> None:
+    def to_file(self, fname: str) -> None:
         """Export :class:`SimulationData` to single hdf5 file including monitor data.
 
         Parameters
@@ -678,10 +825,10 @@ class SimulationData(Tidy3dBaseModel):
         with h5py.File(fname, "a") as f_handle:
 
             # save json string as an attribute
-            save_string(f_handle, "sim_json", self.simulation.json())
+            Tidy3dData.save_string(f_handle, "sim_json", self.simulation.json())
 
             if self.log_string:
-                save_string(f_handle, "log_string", self.log_string)
+                Tidy3dData.save_string(f_handle, "log_string", self.log_string)
 
             # make a group for monitor_data
             mon_data_grp = f_handle.create_group("monitor_data")
@@ -692,7 +839,7 @@ class SimulationData(Tidy3dBaseModel):
                 mon_data.add_to_group(mon_grp)
 
     @classmethod
-    def load(cls, fname: str):
+    def from_file(cls, fname: str):
         """Load :class:`SimulationData` from .hdf5 file.
 
         Parameters
@@ -710,18 +857,18 @@ class SimulationData(Tidy3dBaseModel):
         with h5py.File(fname, "r") as f_handle:
 
             # construct the original simulation from the json string
-            sim_json = load_string(f_handle, "sim_json")
+            sim_json = Tidy3dData.load_string(f_handle, "sim_json")
             simulation = Simulation.parse_raw(sim_json)
 
             # get the log if exists
-            log_string = load_string(f_handle, "log_string")
+            log_string = Tidy3dData.load_string(f_handle, "log_string")
 
             # loop through monitor dataset and create all MonitorData instances
             monitor_data_dict = {}
             for monitor_name, monitor_data in f_handle["monitor_data"].items():
 
                 # load this MonitorData instance, add to monitor_data dict
-                data_type = data_type_map[load_string(monitor_data, "type")]
+                data_type = DATA_TYPE_MAP[Tidy3dData.load_string(monitor_data, "type")]
                 monitor_data_instance = data_type.load_from_group(monitor_data)
                 monitor_data_dict[monitor_name] = monitor_data_instance
 

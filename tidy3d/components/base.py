@@ -67,7 +67,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         rich.inspect(self, methods=methods)
 
     @classmethod
-    def load(cls, fname: str):
+    def from_file(cls, fname: str):
         """Loads a :class:`Tidy3dBaseModel` from .yaml or .json file.
 
         Parameters
@@ -82,15 +82,15 @@ class Tidy3dBaseModel(pydantic.BaseModel):
 
         Example
         -------
-        >>> simulation = Simulation.load(fname='folder/sim.json')
+        >>> simulation = Simulation.from_file(fname='folder/sim.json')
         """
         if ".json" in fname:
-            return cls.load_json(fname=fname)
+            return cls.from_json(fname=fname)
         if ".yaml" in fname:
-            return cls.load_yaml(fname=fname)
+            return cls.from_yaml(fname=fname)
         raise FileError(f"File must be .json or .yaml, given {fname}")
 
-    def export(self, fname: str) -> None:
+    def to_file(self, fname: str) -> None:
         """Exports :class:`Tidy3dBaseModel` instance to .yaml or .json file
 
         Parameters
@@ -100,16 +100,16 @@ class Tidy3dBaseModel(pydantic.BaseModel):
 
         Example
         -------
-        >>> simulation.export(fname='folder/sim.json')
+        >>> simulation.to_file(fname='folder/sim.json')
         """
         if ".json" in fname:
-            return self.export_json(fname=fname)
+            return self.to_json(fname=fname)
         if ".yaml" in fname:
-            return self.export_yaml(fname=fname)
+            return self.to_yaml(fname=fname)
         raise FileError(f"File must be .json or .yaml, given {fname}")
 
     @classmethod
-    def load_json(cls, fname: str):
+    def from_json(cls, fname: str):
         """Load a :class:`Tidy3dBaseModel` from .json file.
 
         Parameters
@@ -124,11 +124,11 @@ class Tidy3dBaseModel(pydantic.BaseModel):
 
         Example
         -------
-        >>> simulation = Simulation.load_json(fname='folder/sim.json')
+        >>> simulation = Simulation.from_json(fname='folder/sim.json')
         """
         return cls.parse_file(fname)
 
-    def export_json(self, fname: str) -> None:
+    def to_json(self, fname: str) -> None:
         """Exports :class:`Tidy3dBaseModel` instance to .json file
 
         Parameters
@@ -138,14 +138,14 @@ class Tidy3dBaseModel(pydantic.BaseModel):
 
         Example
         -------
-        >>> simulation.export_json(fname='folder/sim.json')
+        >>> simulation.to_json(fname='folder/sim.json')
         """
         json_string = self._json_string()
         with open(fname, "w", encoding="utf-8") as file_handle:
             file_handle.write(json_string)
 
     @classmethod
-    def load_yaml(cls, fname: str):
+    def from_yaml(cls, fname: str):
         """Loads :class:`Tidy3dBaseModel` from .yaml file.
 
         Parameters
@@ -156,18 +156,18 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         Returns
         -------
         :class:`Tidy3dBaseModel`
-            An instance of the component class calling `load_yaml`.
+            An instance of the component class calling `from_yaml`.
 
         Example
         -------
-        >>> simulation = Simulation.load_yaml(fname='folder/sim.yaml')
+        >>> simulation = Simulation.from_yaml(fname='folder/sim.yaml')
         """
         with open(fname, "r", encoding="utf-8") as yaml_in:
             json_dict = yaml.safe_load(yaml_in)
         json_raw = json.dumps(json_dict, indent=INDENT)
         return cls.parse_raw(json_raw)
 
-    def export_yaml(self, fname: str) -> None:
+    def to_yaml(self, fname: str) -> None:
         """Exports :class:`Tidy3dBaseModel` instance to .yaml file.
 
         Parameters
@@ -177,7 +177,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
 
         Example
         -------
-        >>> simulation.export_yaml(fname='folder/sim.yaml')
+        >>> simulation.to_yaml(fname='folder/sim.yaml')
         """
         json_string = self._json_string()
         json_dict = json.loads(json_string)
