@@ -47,7 +47,7 @@ class Job(WebContainer):
         self.upload()
         self.start()
         self.monitor()
-        return self.load_data(path=path)
+        return self.load(path=path)
 
     def upload(self) -> None:
         """Upload simulation to server without running.
@@ -104,7 +104,7 @@ class Job(WebContainer):
         Note
         ----
         To load the output of completed simulation into :class:`.SimulationData`objets,
-        call :meth:`Job.load_data`.
+        call :meth:`Job.load`.
         """
 
         status = self.status
@@ -129,11 +129,11 @@ class Job(WebContainer):
 
         Note
         ----
-        To load the data into :class:`.SimulationData`objets, can call :meth:`Job.load_data`.
+        To load the data into :class:`.SimulationData`objets, can call :meth:`Job.load`.
         """
         web.download(task_id=self.task_id, simulation=self.simulation, path=path)
 
-    def load_data(self, path: str = DEFAULT_DATA_PATH) -> SimulationData:
+    def load(self, path: str = DEFAULT_DATA_PATH) -> SimulationData:
         """Download results from simulation (if not already) and load them into ``SimulationData``
         object.
 
@@ -147,7 +147,7 @@ class Job(WebContainer):
         :class:`.SimulationData`
             Object containing data about simulation.
         """
-        return web.load_data(task_id=self.task_id, simulation=self.simulation, path=path)
+        return web.load(task_id=self.task_id, simulation=self.simulation, path=path)
 
     def delete(self):
         """Delete server-side data associated with :class:`Job`."""
@@ -333,7 +333,7 @@ class Batch(WebContainer):
             job_path = self._job_data_path(task_name, path_dir)
             job.download(path=job_path)
 
-    def load_data(self, path_dir: str = DEFAULT_DATA_DIR) -> Dict[TaskName, SimulationData]:
+    def load(self, path_dir: str = DEFAULT_DATA_DIR) -> Dict[TaskName, SimulationData]:
         """Download results and load them into :class:`.SimulationData` object.
 
         Parameters
@@ -359,7 +359,7 @@ class Batch(WebContainer):
         self.download(path_dir=path_dir)
         for task_name, job in self.jobs.items():
             job_path = self._job_data_path(task_id=job.task_id, path_dir=path_dir)
-            sim_data = job.load_data(path=job_path)
+            sim_data = job.load(path=job_path)
             sim_data_dir[task_name] = sim_data
         return sim_data_dir
 
@@ -386,5 +386,5 @@ class Batch(WebContainer):
         """
         for task_name, job in self.jobs.items():
             job_path = self._job_data_path(task_id=job.task_id, path_dir=path_dir)
-            sim_data = job.load_data(path=job_path)
+            sim_data = job.load(path=job_path)
             yield task_name, sim_data

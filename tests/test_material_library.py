@@ -1,4 +1,3 @@
-import pytest
 import numpy as np
 
 from tidy3d.material_library import material_library

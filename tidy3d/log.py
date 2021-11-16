@@ -10,14 +10,19 @@ DEFAULT_LEVEL = "INFO"
 
 logging.basicConfig(level=DEFAULT_LEVEL, format=FORMAT, datefmt="[%X]", handlers=[RichHandler()])
 
-log = logging.getLogger("rich")
-
-level_map = {
+# maps level string to level integer for python logging package
+LEVEL_MAP = {
     "error": 40,
     "warning": 30,
     "info": 20,
     "debug": 10,
 }
+
+# importable logger
+log = logging.getLogger("rich")
+
+
+""" Tidy3d custom exceptions """
 
 
 class Tidy3DError(Exception):
@@ -61,14 +66,17 @@ class DataError(Tidy3DError):
     """Error accessing data."""
 
 
+""" Logging functions """
+
+
 def _get_level_int(level: str) -> int:
     """Get the integer corresponding to the level string."""
     level = level.lower()
-    if level not in level_map:
+    if level not in LEVEL_MAP:
         raise ConfigError(
-            f"logging level {level} not supported, " f"must be in {list(level_map.keys())}."
+            f"logging level {level} not supported, " f"must be in {list(LEVEL_MAP.keys())}."
         )
-    return level_map[level]
+    return LEVEL_MAP[level]
 
 
 def set_logging_level(level: str = DEFAULT_LEVEL.lower()) -> None:

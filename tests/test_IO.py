@@ -12,8 +12,8 @@ from .utils import clear_tmp
 @clear_tmp
 def test_simulation_load_export():
     path = "tests/tmp/simulation.json"
-    SIM.export(path)
-    SIM2 = Simulation.load(path)
+    SIM.to_file(path)
+    SIM2 = Simulation.from_file(path)
     assert SIM == SIM2, "original and loaded simulations are not the same"
 
 
@@ -59,8 +59,8 @@ def test_simulation_preserve_types():
     )
 
     path = "tests/tmp/simulation.json"
-    sim_all.export(path)
-    sim_2 = Simulation.load(path)
+    sim_all.to_file(path)
+    sim_2 = Simulation.from_file(path)
     assert sim_all == sim_2
 
     M_types = [type(s.medium) for s in sim_2.structures]
@@ -82,8 +82,8 @@ def test_simulation_preserve_types():
 
 def test_1a_simulation_load_export2():
     path = "tests/tmp/simulation.json"
-    SIM2.export(path)
-    SIM3 = Simulation.load(path)
+    SIM2.to_file(path)
+    SIM3 = Simulation.from_file(path)
     assert SIM2 == SIM3, "original and loaded simulations are not the same"
 
 
@@ -108,9 +108,9 @@ def test_validation_speed():
             new_structures.append(new_structure)
         S.structures = new_structures
 
-        S.export(path)
+        S.to_file(path)
         time_start = time()
-        _S = Simulation.load(path)
+        _S = Simulation.from_file(path)
         time_validate = time() - time_start
         times_sec.append(time_validate)
         assert S == _S
@@ -124,9 +124,9 @@ def test_validation_speed():
 @clear_tmp
 def test_yaml():
     path = "tests/tmp/simulation.json"
-    SIM.export(path)
-    sim = Simulation.load(path)
+    SIM.to_file(path)
+    sim = Simulation.from_file(path)
     path1 = "tests/tmp/simulation.yaml"
-    sim.export_yaml(path1)
-    sim1 = Simulation.load_yaml(path1)
+    sim.to_yaml(path1)
+    sim1 = Simulation.from_yaml(path1)
     assert sim1 == sim

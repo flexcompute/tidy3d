@@ -64,7 +64,7 @@ def _test_version():
         grid_size=(0.1, 0.1, 0.1),
     )
     path = "tests/tmp/simulation.json"
-    sim.export("tests/tmp/simulation.json")
+    sim.to_file("tests/tmp/simulation.json")
     with open(path, "r") as f:
         s = f.read()
         assert '"version": ' in s
@@ -196,15 +196,15 @@ def test_medium_conversions():
     freq = 3.0
 
     # test medium creation
-    medium = nk_to_medium(n, k, freq)
+    medium = Medium.from_nk(n, k, freq)
 
     # test consistency
-    eps_z = nk_to_eps_complex(n, k)
-    eps, sig = nk_to_eps_sigma(n, k, freq)
-    eps_z_ = eps_sigma_to_eps_complex(eps, sig, freq)
+    eps_z = AbstractMedium.nk_to_eps_complex(n, k)
+    eps, sig = AbstractMedium.nk_to_eps_sigma(n, k, freq)
+    eps_z_ = AbstractMedium.eps_sigma_to_eps_complex(eps, sig, freq)
     assert np.isclose(eps_z, eps_z_)
 
-    n_, k_ = eps_complex_to_nk(eps_z)
+    n_, k_ = AbstractMedium.eps_complex_to_nk(eps_z)
     assert np.isclose(n, n_)
     assert np.isclose(k, k_)
 

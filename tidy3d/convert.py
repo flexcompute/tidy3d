@@ -4,7 +4,7 @@ from typing import Dict, Tuple, List, Union
 import numpy as np
 import h5py
 
-from tidy3d import Simulation, SimulationData, FieldData, data_type_map
+from tidy3d import Simulation, SimulationData, DATA_TYPE_MAP
 from tidy3d import Box, Sphere, Cylinder, PolySlab
 from tidy3d import Medium, AnisotropicMedium
 from tidy3d.components.medium import DispersiveMedium, PECMedium
@@ -15,7 +15,7 @@ from tidy3d import FieldMonitor, FieldTimeMonitor, FluxMonitor, FluxTimeMonitor
 from tidy3d.components.monitor import AbstractFieldMonitor, AbstractFluxMonitor, ModeMonitor
 from tidy3d.components.monitor import FreqMonitor, TimeMonitor
 from tidy3d.components.types import Numpy
-
+from tidy3d.components.data import FieldData, FieldTimeData
 
 # maps monitor name to dictionary mapping data label to data value
 MonitorDataDict = Dict[str, Union[Numpy, Dict[str, Numpy]]]
@@ -456,12 +456,13 @@ def load_solver_results(
     for monitor in simulation.monitors:
         name = monitor.name
         monitor_data_dict = solver_data_dict[name]
-        monitor_data_type = data_type_map[monitor.data_type]
+        monitor_data_type = DATA_TYPE_MAP[monitor.data_type]
         if monitor.type in ("FieldMonitor", "FieldTimeMonitor"):
             field_data = {}
             for field_name, data_dict in monitor_data_dict.items():
                 field_data[field_name] = monitor_data_type(**data_dict)
-            monitor_data[name] = FieldData(data_dict=field_data)
+            field_data_type = FieldData if monitor.type == "FieldMonitor" else FieldTimeData
+            monitor_data[name] = field_data_type(data_dict=field_data)
         else:
             monitor_data[name] = monitor_data_type(**monitor_data_dict)
     return SimulationData(simulation=simulation, monitor_data=monitor_data, log_string=log_string)

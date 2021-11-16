@@ -510,6 +510,25 @@ class Box(Geometry):
 
     size: Size
 
+    @classmethod
+    def from_bounds(cls, rmin: Coordinate, rmax: Coordinate):
+        """Constructs a :class:`Box` from minimum and maximum coordinate bounds
+
+        Parameters
+        ----------
+        rmin : Tuple[float, float, float]
+            (x, y, z) coordinate of the minimum values.
+        rmax : Tuple[float, float, float]
+            (x, y, z) coordinate of the maximum values.
+
+        Example
+        -------
+        >>> b = Box.from_bounds(rmin=(-1, -2, -3), rmax=(3, 2, 1))
+        """
+        center = tuple((pt_min + pt_max / 2.0) for pt_min, pt_max in zip(rmin, rmax))
+        size = tuple((pt_max - pt_max) for pt_min, pt_max in zip(rmin, rmax))
+        return cls(center=center, size=size)
+
     def intersections(self, x: float = None, y: float = None, z: float = None):
         """Returns shapely geometry at plane specified by one non None value of x,y,z.
 
@@ -827,7 +846,7 @@ class PolySlab(Planar):
         return val
 
     @classmethod
-    def from_gdspy(  # pylint:disable=too-many-arguments
+    def from_gds(  # pylint:disable=too-many-arguments
         cls,
         gds_cell,
         axis: Axis,

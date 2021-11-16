@@ -14,8 +14,7 @@ from .geometry import Geometry
 
 # medium
 from .medium import Medium, PoleResidue, Sellmeier, Debye, Drude, Lorentz, AnisotropicMedium, PEC
-from .medium import nk_to_eps_complex, nk_to_eps_sigma, eps_complex_to_nk
-from .medium import nk_to_medium, eps_sigma_to_eps_complex
+from .medium import AbstractMedium
 
 # structure
 from .structure import Structure
@@ -36,4 +35,4 @@ from .simulation import Simulation
 
 # data
 from .data import SimulationData, FieldData, FluxData, ModeData, FluxTimeData
-from .data import ScalarFieldData, ScalarFieldTimeData, data_type_map
+from .data import ScalarFieldData, ScalarFieldTimeData, DATA_TYPE_MAP

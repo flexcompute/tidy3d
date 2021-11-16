@@ -7,7 +7,7 @@ import nlopt
 import numpy as np
 from rich.progress import Progress
 
-from ...components import PoleResidue, nk_to_eps_complex, eps_complex_to_nk
+from ...components import PoleResidue, AbstractMedium
 from ...constants import C_0, HBAR
 from ...components.viz import add_ax_if_none
 from ...components.types import Ax, Numpy
@@ -159,7 +159,7 @@ class DispersionFitter:
         if k_data is None:
             self.k_data = np.zeros_like(n_data)
             self.lossy = False
-        self.eps_data = nk_to_eps_complex(n=self.n_data, k=self.k_data)
+        self.eps_data = AbstractMedium.nk_to_eps_complex(n=self.n_data, k=self.k_data)
         self.freqs = C_0 / wvl_um
         self.frequency_range = (np.min(self.freqs), np.max(self.freqs))
 
@@ -405,7 +405,7 @@ class DispersionFitter:
 
         freqs = C_0 / wvl_um
         eps_model = medium.eps_model(freqs)
-        n_model, k_model = eps_complex_to_nk(eps_model)
+        n_model, k_model = AbstractMedium.eps_complex_to_nk(eps_model)
 
         dot_sizes = 25
         linewidth = 3
@@ -424,7 +424,7 @@ class DispersionFitter:
         return ax
 
     @classmethod
-    def load(cls, fname, **loadtxt_kwargs):
+    def from_file(cls, fname, **loadtxt_kwargs):
         """Loads ``DispersionFitter`` from file contining wavelength, n, k data.
 
         Parameters

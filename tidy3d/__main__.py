@@ -61,9 +61,9 @@ print("visualize results: ", viz_results)
 
 # load the simulation
 if ".yaml" in sim_file or ".yml" in sim_file:
-    simulation = Simulation.load_yaml(sim_file)
+    simulation = Simulation.from_yaml(sim_file)
 else:
-    simulation = Simulation.load(sim_file)
+    simulation = Simulation.from_file(sim_file)
 
 # inspect the simulation
 if inspect_sim:
@@ -92,7 +92,7 @@ if inspect_credits:
 # run the simulation and load results
 job.start()
 job.monitor()
-sim_data = job.load_data(path=out_file)
+sim_data = job.load(path=out_file)
 
 # visualize results
 if viz_results:

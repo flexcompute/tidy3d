@@ -112,7 +112,7 @@ SIM_CONVERT = td.Simulation(
     structures=[
         td.Structure(
             geometry=td.Box(center=[0, 0, 0], size=[1.5, 1.5, 1.5]),
-            medium=td.nk_to_medium(n=2, k=0, freq=3e14),
+            medium=td.Medium.from_nk(n=2, k=0, freq=3e14),
         )
     ],
     sources=[

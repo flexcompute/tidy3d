@@ -13,19 +13,19 @@ from .validators import assert_unique_names, assert_objects_in_sim_bounds, set_n
 from .geometry import Box
 from .types import Symmetry, Ax, Shapely, FreqBound
 from .grid import Coords1D, Grid, Coords
-from .medium import Medium, MediumType, eps_complex_to_nk
+from .medium import Medium, MediumType, AbstractMedium
 from .structure import Structure
 from .source import SourceType
 from .monitor import MonitorType
 from .pml import PMLTypes, PML
 from .viz import StructMediumParams, StructEpsParams, PMLParams, SymParams, add_ax_if_none
 from ..constants import inf, C_0
-from ..log import log
+from ..log import log, Tidy3dKeyError
 
 # for docstring examples
 from .geometry import Sphere, Cylinder, PolySlab  # pylint:disable=unused-import
 from .source import VolumeSource, GaussianPulse  # pylint:disable=unused-import
-from .monitor import FieldMonitor, FluxMonitor  # pylint:disable=unused-import
+from .monitor import FieldMonitor, FluxMonitor, Monitor  # pylint:disable=unused-import
 
 # technically this is creating a circular import issue because it calls tidy3d/__init__.py
 # from .. import __version__ as version_number
@@ -223,6 +223,13 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         # pylint:enable=line-too-long
 
         return {medium: index for index, medium in enumerate(self.mediums)}
+
+    def get_monitor_by_name(self, name: str) -> Monitor:
+        """Return monitor named 'name'."""
+        for monitor in self.monitors:
+            if monitor.name == name:
+                return monitor
+        raise Tidy3dKeyError(f"No monitor named '{name}'")
 
     """ Plotting """
 
@@ -869,7 +876,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         freq_max = max(source.source_time.freq0 for source in self.sources)
         wvl_min = C_0 / min(freq_max)
         eps_max = max(abs(structure.medium.get_eps(freq_max)) for structure in self.structures)
-        n_max, _ = eps_complex_to_nk(eps_max)
+        n_max, _ = AbstractMedium.eps_complex_to_nk(eps_max)
         return wvl_min / n_max
 
     def discretize(self, box: Box) -> Grid:

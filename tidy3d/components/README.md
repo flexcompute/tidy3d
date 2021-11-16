@@ -150,10 +150,10 @@ The `AbstractMedium()` base class define the properties of the medium of which t
 A Dispersionless medium is created with `Medium(permittivity, conductivity)`.
 
 The following functions are useful for defining a dispersionless medium using other possible inputs:
-- `nk_to_eps_sigma` (convert refractive index parameters (n, k) to permittivity and conductivity).
-- `nk_to_medium` (convert refractive index parameters (n, k) to a `Medium()` directly).
-- `nk_to_eps_complex` (convert refractive index parameters (n, k) to a complex-valued permittivity).
-- `eps_sigma_to_eps_complex` (convert permittivity and conductivity to complex-valued permittiviy)
+- `AbstractMedium.nk_to_eps_sigma` (convert refractive index parameters (n, k) to permittivity and conductivity).
+- `Medium.from_nk` (convert refractive index parameters (n, k) to a `Medium()` directly).
+- `AbstractMedium.nk_to_eps_complex` (convert refractive index parameters (n, k) to a complex-valued permittivity).
+- `AbstractMedium.eps_sigma_to_eps_complex` (convert permittivity and conductivity to complex-valued permittiviy)
 
 ### Dispersive Media
 
