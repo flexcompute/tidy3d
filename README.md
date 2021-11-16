@@ -6,61 +6,6 @@ Hardware-accelerated FDTD solver by Flexcompute.
 
 <img src="snippet.png">
 
-
-## Developer
-
-### Git Notes
-
-https://www.atlassian.com/git/tutorials/comparing-workflows/gitflow-workflow
-https://www.atlassian.com/git/tutorials/merging-vs-rebasing
-
-### New feature
-
-```
-git checkout develop
-git checkout -b feature
-# develop and make some commits
-git rebase -i develop
-# squash, edit, commits
-# submit PR on github.
-# when ready, rebase and merge feature into develop
-git checkout develop
-git pull -or- git reset --hard origin/develop
-```
-
-### Release
-```
-git checkout main
-git merge develop
-git tag x.x.x
-git push origin x.x.x
-```
-
-
-## Flow
-
-
-### Client (Pre)
-
-- Make `tidy3d.components` to define simulation.
-	- Using builtin `tidy3d` imports (`td.PlaneWave`, `td.ModeMonitor`, etc.)
-	- Using `tidy3d.plugins` to construct more specialized components (mode solver, dispersion fitter, etc.).
-- Create a `td.Simulation` object containing all simulation parameters (pydantic will automatically validate all components).
-- Upload `Simulation` to server using `tidy3d.web`.
-	- Export `Simulation` to a .json file format with `Simulation.json()`
-	- Save as .json file.
-	- Upload to server using http request, authenticate, etc.
-	- Use `plugins.batch_processor` to submit batches of simulations.
-- Manage task with `tidy3d.web`
-	- Run task explicitly (if draft).
-	- Monitor progress.
-	- Cancel / delete task.
-- load results into `td.SimulationData` object, containing simulation and data for all of its monitors.
-	- Look at log through `sim_data.log`.
-	- Plot data.
-	- Manipulate, interpolte, resample data.
-
-
 ## Roadmap (113.5 days = 16.2 weeks = 3.7 months ~ jan 1)
 
 **Bold** = in progress this week-ish.
