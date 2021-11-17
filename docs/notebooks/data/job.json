@@ -1,0 +1,155 @@
+{
+    "simulation": {
+        "center": [
+            0.0,
+            0.0,
+            0.0
+        ],
+        "size": [
+            4.0,
+            4.0,
+            4.0
+        ],
+        "grid_size": [
+            0.05,
+            0.05,
+            0.05
+        ],
+        "medium": {
+            "name": "mediums[1]",
+            "frequency_range": null,
+            "permittivity": 1.0,
+            "conductivity": 0.0,
+            "type": "Medium"
+        },
+        "run_time": 1e-13,
+        "structures": [
+            {
+                "geometry": {
+                    "center": [
+                        0.0,
+                        0.0,
+                        0.0
+                    ],
+                    "size": [
+                        1.5,
+                        1.5,
+                        1.5
+                    ]
+                },
+                "medium": {
+                    "name": "mediums[0]",
+                    "frequency_range": null,
+                    "permittivity": 4.0,
+                    "conductivity": 0.0,
+                    "type": "Medium"
+                },
+                "name": "structures[0]"
+            }
+        ],
+        "sources": [
+            {
+                "center": [
+                    -1.5,
+                    0.0,
+                    0.0
+                ],
+                "size": [
+                    0.0,
+                    0.4,
+                    0.4
+                ],
+                "source_time": {
+                    "amplitude": 1.0,
+                    "phase": 0.0,
+                    "freq0": 300000000000000.0,
+                    "fwidth": 10000000000000.0,
+                    "offset": 5.0
+                },
+                "name": "sources[0]",
+                "polarization": "Ex",
+                "type": "VolumeSource"
+            }
+        ],
+        "monitors": [
+            {
+                "center": [
+                    0.0,
+                    0.0,
+                    0.0
+                ],
+                "size": [
+                    10000000000.0,
+                    10000000000.0,
+                    0.0
+                ],
+                "name": "field",
+                "freqs": [
+                    300000000000000.0
+                ],
+                "fields": [
+                    "Ex",
+                    "Ey",
+                    "Ez"
+                ],
+                "type": "FieldMonitor",
+                "data_type": "ScalarFieldData"
+            }
+        ],
+        "pml_layers": [
+            {
+                "num_layers": 12,
+                "parameters": {
+                    "sigma_order": 3,
+                    "sigma_min": 0.0,
+                    "sigma_max": 1.5,
+                    "kappa_order": 3,
+                    "kappa_min": 1.0,
+                    "kappa_max": 3.0,
+                    "alpha_order": 1,
+                    "alpha_min": 0.0,
+                    "alpha_max": 0.0
+                }
+            },
+            {
+                "num_layers": 12,
+                "parameters": {
+                    "sigma_order": 3,
+                    "sigma_min": 0.0,
+                    "sigma_max": 1.5,
+                    "kappa_order": 3,
+                    "kappa_min": 1.0,
+                    "kappa_max": 3.0,
+                    "alpha_order": 1,
+                    "alpha_min": 0.0,
+                    "alpha_max": 0.0
+                }
+            },
+            {
+                "num_layers": 12,
+                "parameters": {
+                    "sigma_order": 3,
+                    "sigma_min": 0.0,
+                    "sigma_max": 1.5,
+                    "kappa_order": 3,
+                    "kappa_min": 1.0,
+                    "kappa_max": 3.0,
+                    "alpha_order": 1,
+                    "alpha_min": 0.0,
+                    "alpha_max": 0.0
+                }
+            }
+        ],
+        "symmetry": [
+            0,
+            0,
+            0
+        ],
+        "shutoff": 1e-05,
+        "subpixel": true,
+        "courant": 0.9
+    },
+    "task_name": "job",
+    "folder_name": "default",
+    "task_id": "4902fb08-2c88-48a4-8b0d-2cb0bff1fe80"
+}
