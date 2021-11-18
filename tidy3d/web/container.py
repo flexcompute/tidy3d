@@ -265,7 +265,15 @@ class Batch(WebContainer):
         def pbar_description(task_name: str, status: str) -> str:
             return f"{task_name}: status = {status}"
 
-        run_statuses = ["queued", "preprocess", "queued_solver", "running", "postprocess", "visualize", "success"]
+        run_statuses = [
+            "queued",
+            "preprocess",
+            "queued_solver",
+            "running",
+            "postprocess",
+            "visualize",
+            "success",
+        ]
         end_statuses = ("success", "error", "diverged", "deleted", "draft")
 
         pbar_tasks = {}

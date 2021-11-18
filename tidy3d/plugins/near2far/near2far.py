@@ -67,7 +67,7 @@ class Near2Far:
         self.Mx = np.squeeze(Ey.values)
         self.My = -np.squeeze(Ex.values)
 
-    def _radiation_vectors(self, theta : float, phi : float):
+    def _radiation_vectors(self, theta: float, phi: float):
         """Compute radiation vectors at an angle in spherical coordinates
 
         Parameters

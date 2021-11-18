@@ -908,7 +908,9 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         sub_boundaries = Coords(**sub_cell_boundary_dict)
         return Grid(boundaries=sub_boundaries)
 
-    def epsilon(self, box: Box, coord_key: str = 'centers', freq: float = None) -> Dict[str, xr.DataArray]:
+    def epsilon(
+        self, box: Box, coord_key: str = "centers", freq: float = None
+    ) -> Dict[str, xr.DataArray]:
         """Get array of permittivity at volume specified by box and freq
 
         Parameters
