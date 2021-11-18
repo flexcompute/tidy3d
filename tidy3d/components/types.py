@@ -41,7 +41,8 @@ class ComplexNumber(pydantic.BaseModel):
     imag: float
 
 
-PoleAndResidue = Tuple[complex, complex]
+Complex = Union[complex, ComplexNumber]
+PoleAndResidue = Tuple[Complex, Complex]
 FreqBound = Union[float, Inf, Literal[-inf]]
 
 """ symmetries """

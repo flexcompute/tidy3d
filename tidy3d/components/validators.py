@@ -6,7 +6,6 @@ import pydantic
 from ..log import ValidationError, SetupError
 from .geometry import Box
 
-
 """ Explanation of pydantic validators:
 
     Validators are class methods that are added to the models to validate their fields (kwargs).

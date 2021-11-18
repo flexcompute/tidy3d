@@ -813,7 +813,7 @@ class PolySlab(Planar):
     """
 
     slab_bounds: Tuple[float, float]
-    vertices: Vertices #Union[Vertices, Array[float]]
+    vertices: Union[Vertices, Array[float]]
     type: Literal["PolySlab"] = "PolySlab"
 
     @pydantic.validator("slab_bounds", always=True)

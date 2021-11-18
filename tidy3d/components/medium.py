@@ -7,7 +7,7 @@ import pydantic
 import numpy as np
 
 from .base import Tidy3dBaseModel
-from .types import PoleAndResidue, Literal, Ax, FreqBound
+from .types import PoleAndResidue, Literal, Ax, FreqBound, ComplexNumber
 from .viz import add_ax_if_none
 from .validators import validate_name_str
 
@@ -421,6 +421,18 @@ class PoleResidue(DispersiveMedium):
     eps_inf: float = 1.0
     poles: List[PoleAndResidue] = []
     type: Literal["PoleResidue"] = "PoleResidue"
+
+    @pydantic.validator("poles", always=True)
+    def convert_complex(cls, val):
+        """convert list of poles to complex"""
+        poles_complex = []
+        for (a, c) in val:
+            if isinstance(a, ComplexNumber):
+                a = a.real + 1j * a.imag
+            if isinstance(c, ComplexNumber):
+                c = c.real + 1j * c.imag
+            poles_complex.append((a, c))
+        return poles_complex
 
     @ensure_freq_in_range
     def eps_model(self, frequency: float) -> complex:
