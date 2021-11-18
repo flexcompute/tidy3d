@@ -163,7 +163,7 @@ class AbstractMedium(ABC, Tidy3dBaseModel):
         complex
             Complex-valued relative permittivity.
         """
-        if not freq:
+        if freq is None:
             return eps_real
         omega = 2 * np.pi * freq
         return eps_real + 1j * sigma / omega
