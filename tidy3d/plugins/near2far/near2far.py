@@ -28,22 +28,23 @@ class Near2Far:
         """
 
         try:
-            field_data = sim_data[mon_name]
+            # fill nans with 0, not sure where nans come from..
+            field_data = sim_data.at_centers(mon_name).fillna(0)
         except Exception as e:
             raise SetupError(
                 f"No data for monitor named '{mon_name}' " "found in supplied sim_data."
             ) from e
 
-        if any(field_name not in field_data for field_name in ("Ex", "Ey", "Hx", "Hy", "Ez")):
+        monitor_fields = list(field_data.keys())
+        if any(field_name not in monitor_fields for field_name in ("Ex", "Ey", "Hx", "Hy", "Hz")):
             raise SetupError(f"Monitor named '{mon_name}' doesn't store all field values")
 
         try:
-            Ex = field_data["Ex"].sel(f=frequency)
-            Ey = field_data["Ey"].sel(f=frequency)
+            Ex = field_data.Ex.sel(f=frequency)
+            Ey = field_data.Ey.sel(f=frequency)
             # self.Ez = field_data['Ez'].sel(f=frequency)
-            Hx = field_data["Hx"].sel(f=frequency)
-            Hy = field_data["Hy"].sel(f=frequency)
-            Hz = field_data["Hz"].sel(f=frequency)
+            Hx = field_data.Hx.sel(f=frequency)
+            Hy = field_data.Hy.sel(f=frequency)
         except Exception as e:
             raise SetupError(
                 f"Frequency {frequency} not found in all fields " f"from monitor '{mon_name}'."
@@ -52,16 +53,12 @@ class Near2Far:
         self.k0 = 2 * np.pi * frequency / C_0
 
         # grid sizes
-        self.dx = np.mean(np.diff(Hz.x.values))
-        self.dy = np.mean(np.diff(Hz.y.values))
+        self.dx = sim_data.simulation.grid_size[0]
+        self.dy = sim_data.simulation.grid_size[1]
 
-        # interpolate to centers
-        x_centers = Hz.x.values
-        y_centers = Hz.y.values
-        Ex = Ex.interp(x=x_centers, y=y_centers)
-        Ey = Ey.interp(x=x_centers, y=y_centers)
-        Hx = Hx.interp(x=x_centers, y=y_centers)
-        Hy = Hy.interp(x=x_centers, y=y_centers)
+        # get coordinate at centers
+        x_centers = field_data.x.values
+        y_centers = field_data.y.values
         self.xx, self.yy = np.meshgrid(x_centers, y_centers, indexing="ij")
 
         # compute equivalent sources
@@ -70,7 +67,7 @@ class Near2Far:
         self.Mx = np.squeeze(Ey.values)
         self.My = -np.squeeze(Ex.values)
 
-    def _radiation_vectors(self, theta, phi):
+    def _radiation_vectors(self, theta : float, phi : float):
         """Compute radiation vectors at an angle in spherical coordinates
 
         Parameters
@@ -82,7 +79,7 @@ class Near2Far:
 
         Returns
         -------
-        tuple
+        tuple[float, float, float, float]
             ``N_theta``, ``N_phi``, ``L_theta``, ``L_phi`` radiation vectors.
         """
 
@@ -94,7 +91,7 @@ class Near2Far:
 
         # precompute fourier transform phase term {dx dy e^(ikrcos(psi))}
         phase_x = np.exp(1j * self.k0 * self.xx * sin_theta * cos_phi)
-        phase_y = np.exp(1j * self.k0 * self.yy * sin_theta * cos_phi)
+        phase_y = np.exp(1j * self.k0 * self.yy * sin_theta * sin_phi)
         phase = self.dx * self.dy * phase_x * phase_y
 
         Jx_k = np.sum(self.Jx * phase)

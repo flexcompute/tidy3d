@@ -767,11 +767,17 @@ class SimulationData(Tidy3dBaseModel):
         if "f" in xr_data.coords:
             if freq is None:
                 raise DataError("'freq' must be supplied to plot a FieldMonitor.")
-            field_data = xr_data.interp(f=freq)
+            # if len(xr_data.f) == 1:
+            #     field_data = xr_data.isel(f=0)
+            # else:
+            field_data = xr_data.sel(f=freq, method="nearest")
         elif "t" in xr_data.coords:
             if time is None:
                 raise DataError("'time' must be supplied to plot a FieldMonitor.")
-            field_data = xr_data.interp(t=time)
+            # if len(xr_data.t) == 1:
+            #     field_data = xr_data.isel(t=0)
+            # else:
+            field_data = xr_data.sel(t=time, method="nearest")
         else:
             raise DataError("Field data has neither time nor frequency data, something went wrong.")
 
@@ -780,7 +786,8 @@ class SimulationData(Tidy3dBaseModel):
         axis_label = "xyz"[axis]
         sel_kwarg = {axis_label: pos}
         try:
-            field_data = field_data.sel(**sel_kwarg)
+            field_data = field_data.sel(**sel_kwarg, method="nearest")
+
         except Exception as e:
             raise DataError(f"Could not select data at {axis_label}={pos}.") from e
 
@@ -791,7 +798,7 @@ class SimulationData(Tidy3dBaseModel):
             field_data = field_data.real
         elif val == "imag":
             field_data = field_data.imag
-        elif val == "real":
+        elif val == "abs":
             field_data = abs(field_data)
 
         # plot the field

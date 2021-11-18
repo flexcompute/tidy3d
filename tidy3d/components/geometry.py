@@ -813,7 +813,7 @@ class PolySlab(Planar):
     """
 
     slab_bounds: Tuple[float, float]
-    vertices: Union[Vertices, Array[float]]
+    vertices: Vertices #Union[Vertices, Array[float]]
     type: Literal["PolySlab"] = "PolySlab"
 
     @pydantic.validator("slab_bounds", always=True)
@@ -929,6 +929,12 @@ class PolySlab(Planar):
         z0, _ = self.pop_axis(self.center, axis=self.axis)
         dist_z = np.abs(z - z0)
         inside_height = dist_z < (self.length / 2)
+
+        # avoid going into face checking if no points are inside slab bounds
+        if not np.any(inside_height):
+            return inside_height
+
+        # check what points are inside polygon cross section (face)
         face_polygon = Polygon(self.vertices)
         if isinstance(x, np.ndarray):
             inside_polygon = np.zeros_like(inside_height)

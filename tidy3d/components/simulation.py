@@ -406,6 +406,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         if freq is None:
             freq = inf
         eps_list = [s.medium.eps_model(freq).real for s in self.structures]
+        eps_list.append(self.medium.eps_model(freq).real)
         eps_max = max(eps_list)
         eps_min = min(eps_list)
         medium_shapes = self._filter_plot_structures(x=x, y=y, z=z)
@@ -814,8 +815,8 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
             # Make sure there's at least one cell
             num_cells = max(num_cells, 1)
             size_snapped = dl * num_cells
-            if size_snapped != size:
-                log.warning(f"dl = {dl} not commensurate with simulation size = {size}")
+            # if size_snapped != size:
+            #     log.warning(f"dl = {dl} not commensurate with simulation size = {size}")
             bound_coords = center + np.linspace(-size_snapped / 2, size_snapped / 2, num_cells + 1)
             bound_coords = self._add_pml_to_bounds(num_layers, bound_coords)
             cell_boundary_dict[key] = bound_coords
@@ -907,14 +908,14 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         sub_boundaries = Coords(**sub_cell_boundary_dict)
         return Grid(boundaries=sub_boundaries)
 
-    def epsilon(self, box: Box, coord_key: str, freq: float = None) -> Dict[str, xr.DataArray]:
+    def epsilon(self, box: Box, coord_key: str = 'centers', freq: float = None) -> Dict[str, xr.DataArray]:
         """Get array of permittivity at volume specified by box and freq
 
         Parameters
         ----------
         box : :class:`Box`
             Rectangular geometry specifying where to measure the permittivity.
-        coord_key : str
+        coord_key : str = 'centers'
             Specifies at what part of the grid to return the permittivity at.
             Accepted values are ``{'centers', 'boundaries', 'Ex', 'Ey', 'Ez', 'Hx', 'Hy', 'Hz'}``.
             The field values (eg. 'Ex')
