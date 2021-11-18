@@ -6,6 +6,7 @@ Examples
 
     notebooks/StartHere
     notebooks/Simulation
+    notebooks/WhatsNew
 
 Tutorials
 ---------

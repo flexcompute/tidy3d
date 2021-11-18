@@ -2,14 +2,13 @@
 # coding: utf-8
 
 # # Start Here
+# 
+# This is a basic Tidy3D script showing the FDTD simulation of a delectric cube in the presence of a point dipole.
 
 get_ipython().run_line_magic('load_ext', 'autoreload')
 get_ipython().run_line_magic('autoreload', '2')
 
 import matplotlib.pylab as plt
-
-import sys
-sys.path.append('..')
 
 import tidy3d as td
 import tidy3d.web as web
@@ -19,9 +18,10 @@ import tidy3d.web as web
 dl=0.01
 pml = td.PML(num_layers=10)
 sim_size = [4, 4, 4]
-freq0 = 3e14
-fwidth = 1e13
-run_time = 10/fwidth
+lambda0 = 1.0
+freq0 = td.C_0 / lambda0
+fwidth = freq0 / 10.0
+run_time = 10.0 / fwidth
 
 # create structure
 dielectric = td.Medium.from_nk(n=2, k=0, freq=freq0)
@@ -36,40 +36,33 @@ source = td.VolumeSource(
     source_time = td.GaussianPulse(
         freq0=freq0,
         fwidth=fwidth),
-    polarization='Ex')
+    polarization='Ey')
 
 # create monitor
 monitor = td.FieldMonitor(
-    fields=['Ex', 'Hy'],
+    fields=['Ex', 'Ey', 'Hz'],
     center=(0, 0, 0),
-    size=(4, 4, 0),
-    freqs=[freq0])
+    size=(td.inf, td.inf, 0),
+    freqs=[freq0],
+    name='field')
 
 # Initialize simulation
 sim = td.Simulation(size=sim_size,
                     grid_size=(dl, dl, dl),
                     structures=[square],
-                    sources={'source': source},
-                    monitors={'monitor': monitor},
+                    sources=[source],
+                    monitors=[monitor],
                     run_time=run_time,
                     pml_layers=(pml, pml, pml))
 
 
-task_id = web.upload(sim, task_name='quickstart')
-web.start(task_id)
-web.monitor(task_id)
+data = web.run(sim, task_name='quickstart', path='data/data.hdf5')
 
 
-web.download(task_id, simulation=sim, path='data/sim_data.hdf5')
+print(data.log)
 
 
-sim_data = web.load(task_id, simulation=sim, path='data/sim_data.hdf5')
-ax = sim_data['monitor'].Ex.isel(f=0, z=0).imag.plot.pcolormesh(x='x', y='y', vmin=-5e-13, vmax=5e-13, cmap='RdBu')
-
-plt.show()
-
-
-sim_data.log
+ax = data['field'].Ey.real.plot(x='x', y='y')
 
 
 
