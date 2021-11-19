@@ -767,8 +767,9 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
             Minumum and maximum frequencies of the power spectrum of the sources
             at 5 standard deviations.
         """
-        freq_min = min(source.frequency_range[0] for source in self.sources)
-        freq_max = max(source.frequency_range[1] for source in self.sources)
+        source_ranges = [source.source_time.frequency_range for source in self.sources]
+        freq_min = min(freq_range[0] for freq_range in source_ranges)
+        freq_max = max(freq_range[1] for freq_range in source_ranges)
         return (freq_min, freq_max)
 
     """ Discretization """
@@ -866,8 +867,8 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         n_max, _ = AbstractMedium.eps_complex_to_nk(eps_max)
         return wvl_min / n_max
 
-    def discretize(self, box: Box) -> Grid:
-        """Grid containing only cells that intersect with a :class:`Box`.
+    def discretize_inds(self, box: Box) -> List[Tuple[int, int]]:
+        """Start and stopping indexes for the cells that intersect with a :class:`Box`.
 
         Parameters
         ----------
@@ -876,17 +877,18 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
 
         Returns
         -------
-        :class:`Grid`
-            The FDTD subgrid containing simulation points that intersect with ``box``.
+        List[Tuple[int, int]]
+            The (start, stop) indexes of the cells that intersect with ``box`` in each of the three
+            dimensions.
         """
+
         if not self.intersects(box):
             log.error(f"Box {box} is outside simulation, cannot discretize")
 
         pts_min, pts_max = box.bounds
         boundaries = self.grid.boundaries
 
-        # stores coords for subgrid
-        sub_cell_boundary_dict = {}
+        inds_list = []
 
         # for each dimension
         for axis_label, pt_min, pt_max in zip("xyz", pts_min, pts_max):
@@ -901,8 +903,31 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
             inds_leq_pt_min = np.where(bound_coords <= pt_min)[0]
             ind_min = 0 if len(inds_leq_pt_min) == 0 else inds_leq_pt_min[-1]
 
+            # store indexes
+            inds_list.append((ind_min, ind_max + 1))
+
+        return inds_list
+
+    def discretize(self, box: Box) -> Grid:
+        """Grid containing only cells that intersect with a :class:`Box`.
+
+        Parameters
+        ----------
+        box : :class:`Box`
+            Rectangular geometry within simulation to discretize.
+
+        Returns
+        -------
+        :class:`Grid`
+            The FDTD subgrid containing simulation points that intersect with ``box``.
+        """
+
+        disc_inds = self.discretize_inds(box)
+        sub_cell_boundary_dict = {}
+        for axis_label, axis_inds in zip("xyz", disc_inds):
             # copy orginal bound coords into subgrid coords
-            sub_cell_boundary_dict[axis_label] = bound_coords[ind_min : ind_max + 1]
+            bound_coords = self.grid.boundaries.dict()[axis_label]
+            sub_cell_boundary_dict[axis_label] = bound_coords[axis_inds[0] : axis_inds[1]]
 
         # construct sub grid
         sub_boundaries = Coords(**sub_cell_boundary_dict)
