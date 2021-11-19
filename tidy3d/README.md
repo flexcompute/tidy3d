@@ -37,8 +37,7 @@ Because it is not always straightforward to come up with the parameters for many
 Some examples include:
 - Mode solver.
 - Dispersive material fitting tool.
-- S-matrix calculator.
-- Data analyzer.
+- Near field to far field transformation tool.
 
 These plugins will import and export tidy3d components, but the `tidy3d` components should never depend on them.
 In this sense, one can think of them as additional wrappers that use `tidy3d`'s core components library to do various useful things.
@@ -46,7 +45,7 @@ We should consider encouraging open source developers to contribute various plug
 
 ### Web API
 
-The webAPI as defined in `web/` is used to talk to the server and provides a set of API calls for managing jobs.
+The webAPI as defined in `web/` is used to talk to the server and provides a set of API calls and convenience objects for managing jobs.
 
 ### Constants
 
@@ -54,5 +53,5 @@ Several physical constants are defined in `constants.py` as well as the default 
 
 ### Miscellaneous
 
-The `viz` module provides methods for visualizing various components and output data.
+The `log` module provides methods for error handling and logging information.
 The `material_library` module provides a list of material models from published data.
