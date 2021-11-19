@@ -171,14 +171,14 @@ ASCII diagrams coming soon
 	- [x] option to display cell boundaries in plot.
 	- [x] gds slab / gds importing.
 	- [x] Add PEC medium
-- [ ] Documentation (1 week)
+- [x] Documentation (1 week)
 	- [x] Add more discussion into Simulation docs.
 	- [x] Write docstrings and examples for all callables.
-	- [ ] How Do I?
-	- [ ] Developer guide
-	- [ ] Package structure guide / explanation.
-	- [ ] Make all notebooks work with new version.
-	- [ ] Material library.
+	- [x] How Do I?
+	- [x] Developer guide
+	- [x] Package structure guide / explanation.
+	- [x] Make all notebooks work with new version.
+	- [x] Material library.
 - [ ] Improvement (2 days)
 	- [x] Add more info / debug logging and more comprehensive error handling (file IO, etc).
 	- [ ] Add more intelligent 'inf' handling.
