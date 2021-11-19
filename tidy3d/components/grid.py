@@ -1,5 +1,6 @@
 """Defines the FDTD grid."""
 import numpy as np
+from typing import List
 
 from .base import Tidy3dBaseModel
 from .types import Array, Axis
@@ -156,6 +157,10 @@ class Grid(Tidy3dBaseModel):
         >>> sizes = grid.sizes
         """
         return Coords(**{key: np.diff(val) for key, val in self.boundaries.dict().items()})
+
+    @property
+    def num_cells(self) -> List[int]:
+        return [coords1d.size - 1 for coords1d in self.boundaries.dict().values()]
 
     @property
     def _primal_steps(self) -> Coords:

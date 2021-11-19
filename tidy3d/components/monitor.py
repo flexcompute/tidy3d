@@ -9,7 +9,7 @@ from .geometry import Box
 from .validators import assert_plane, validate_name_str
 from .mode import Mode
 from .viz import add_ax_if_none, MonitorParams
-from ..log import SetupError
+from ..log import SetupError, ValidationError
 
 
 class Monitor(Box, ABC):
@@ -65,6 +65,13 @@ class FreqMonitor(Monitor, ABC):
     """Stores data in the frequency-domain."""
 
     freqs: Union[List[float], Array[float]]
+
+    @pydantic.validator("freqs", always=True)
+    def freqs_nonempty(cls, val):
+        """Ensure freqs has at least one element"""
+        if len(val) == 0:
+            raise ValidationError("Monitor 'freqs' should have at least one element.")
+        return val
 
 
 class TimeMonitor(Monitor, ABC):
