@@ -28,7 +28,7 @@ We leverage the [`pydantic`](https://pydantic-docs.helpmanual.io) package to def
 - Less boilerplate code, including pre-processing, writing `__init__` and other methods, the code is easier to read and edit.
 - `pydantic` provides methods for checking types validating arguments so we can catch incorrect .json files before trying to run them.
 - It is very simple to export json files and schema definitions, which makes life easy when we change anything in the code.
-- Probably many more advantages as described [here](https://pydantic-docs.helpmanual.io/#rationale)
+- Many more advantages as described [here](https://pydantic-docs.helpmanual.io/#rationale).
 
 
 ### Plugins
