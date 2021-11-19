@@ -15,6 +15,8 @@ As such, the goals of this package are simply:
   - visualize the simulation components.
   - load and analyze the data.
 
+<img src="../structure.png">
+
 ### Components
 
 The various components of `tidy3d` are designed to mirror the `.json` file structure almost exactly.
