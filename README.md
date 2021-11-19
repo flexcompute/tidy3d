@@ -4,18 +4,6 @@
 
 Hardware-accelerated FDTD solver by Flexcompute.
 
-```
-ASCII diagrams coming soon
-           ┌────────┐
-┌────┐     │ thing1 │
-│Test│     ├┬──────┬┤
-│    ├────►├│thing2││
-│    │     ││      ││
-└────┘     ││      ││
-           │┼──────┼│
-           └────────┘
-```
-
 <img src="snippet.png">
 
 ## Roadmap (113.5 days = 16.2 weeks = 3.7 months ~ jan 1)
