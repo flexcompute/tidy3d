@@ -119,7 +119,10 @@ class Pulse(SourceTime, ABC):
             :class:`GaussianPulse` or :class:`ContinuousWave` power
             within 5 standard deviations.
         """
-        return (self.freq0 - WIDTH_STD * self.fwidth, self.freq0 + WIDTH_STD * self.fwidth)
+        width_std = 5
+        freq_min = max(0, self.freq0 - width_std * self.fwidth)
+        freq_max = self.freq0 + width_std * self.fwidth
+        return (freq_min, freq_max)
 
 
 class GaussianPulse(Pulse):
