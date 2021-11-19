@@ -368,7 +368,7 @@ Dispersive Model Fitting Tool
    :toctree: _autosummary/
 
    plugins.DispersionFitter
-   plugins.DispersionFitter.load
+   plugins.DispersionFitter.from_file
    plugins.DispersionFitter.fit
    plugins.DispersionFitter.plot
 

@@ -7,27 +7,10 @@ How do I run a simulation and access the results?
 Submitting and monitoring jobs, and donwloading the results, is all done 
 through our `web API <api.html#web-api>`_. After a successful run, 
 all data for all monitors can be downloaded in a single file 
-``monitor_data.hdf5`` using :meth:`tidy3d.web.download_results`, and the 
-raw data can be loaded and analyzed directly e.g. using `h5py <https://docs.h5py.org/en/stable/>`_. The data 
-for each monitor is stored in a separate group, with the following datasets:
+``monitor_data.hdf5`` using :meth:`tidy3d.web.load()`, and the 
+raw data can be loaded into a :class:`tidy3d.SimultionData` object.
 
-- ``E``: E-field, if requested upon monitor initialization (default).
-- ``H``: H-field, if requested upon monitor initialization (default). 
-- ``xmesh``: Mesh along ``x`` over which the fields were stored.
-- ``ymesh``: Mesh along ``y`` over which the fields were stored.
-- ``zmesh``: Mesh along ``z`` over which the fields were stored.
-- (for a :class:`.TimeMonitor`) ``tmesh``: Mesh in time over which the fields were stored.
-- (for a :class:`.FreqMonitor`) ``freqs``: List of frequencies over which the DFT was computed.
-
-Each of ``E`` and ``H`` that was requested has the shape ``(3, Nx, Ny, Nz, Np)``, 
-where ``Np`` is either the number of time steps or the number of frequencies. Note 
-that the fields are interpolated to the center of the Yee grid cell.
-
-The data file can also be loaded into the corresponding :class:`.Simulation` 
-object that was used for the run using :meth:`.Simulation.load_results`. The Simulation 
-object stores a list of all included monitors as :attr:`.Simulation.monitors`, and the data 
-can be queried using :meth:`.Simulation.data`. Loading the results in this way also allows 
-you to use our in-built `visualization <api.html#plotting-tools>`_ functions.
+From the :class:`tidy3d.SimultionData` object, one can grab and plot the data for each monitor with square bracket indexing, inspect the originl :class:`Simulation` object, and view the log from the solver run.  For more details, see the tutorial ``VizData``.
 
 How is using Tidy3D billed?
 ---------------------------
@@ -52,14 +35,15 @@ We assume the following physical units:
 
 Thus, the user should be careful, for example to use the speed of light 
 in μm/s when converting between wavelength and frequency. The built-in 
-speed of light ``td.constants.C_0`` has a unit of μm/s. 
+speed of light ``td.C_0`` has a unit of μm/s. 
 
 For example:
 
 .. code-block:: python
 
-    freq_Hz = td.constants.C_0 / wavelength_um
-    wavelength_um = td.constants.C_0 / freq_Hz
+    wavelength_um = 1.55
+    freq_Hz = td.C_0 / wavelength_um
+    wavelength_um = td.C_0 / freq_Hz
 
 Currently, only linear evolution is supported, and so the output fields have an 
 arbitrary normalization proportional to the amplitude of the current sources, 
@@ -72,18 +56,19 @@ How do I add PML absorbing boundaries to my simulation?
 
 Upon initializing a simulation, the user can provide an optional argument ``pml_layers``, 
 an array of three elements defining the PML boundaries along x, y, and z. The 
-easiest way to define PML is to use e.g. ``pml_layers=(None, None, 'standard')`` 
+easiest way to define PML is to use e.g. ``pml_layers=(None, None, td.PML())`` 
 to define PML in the z-direction only (in x and y, the default periodic boundaries will 
 be used). It is also possible to customize the PML further as explained in the 
 `documentation <generated/tidy3d.Simulation.html>`_ and below.
 
 Tidy3D uses a complex frequency-shifted formulation of the perfectly-matched layers (CPML), 
 for which it is more natural to define the thickness as number of layers rather than as 
-physical size. We provide two pre-set PML profiles, ``'standard'`` (default) and ``'stable'``. 
+physical size. We provide two pre-set PML profiles, 'standard' (``td.PML()``) and 'stable' (``td.StablePML()``).
 The standard profile has 12 layers by default and should be sufficient in many situations. In the 
 case of a diverging simulation, or when the fields do not appear to be fully absorbed in the PML, 
-the user can increase the number of layers in the ``'standard'`` profile, or try the ``'stable'`` 
+the user can increase the number of layers in the 'standard' profile (``td.PML(num_layers=20)``, or try the 'stable'
 profile, which requires more layers (default is 40) but should generally work better. 
+Adiabatic absorbing boundaries can be used as well through ``td.Absorber()``, which may improve stability over both PML types in certain situations.
 
 **NB**: The PML layers extend **beyond** the simulation domain. This makes it easier not to worry 
 about PMLs intruding into parts of your simulation where you don't want them to be. The one thing 
@@ -99,25 +84,31 @@ dielectric slab.
     import matplotlib.pyplot as plt
 
     sim_size = [4., 4., 3.]
-    pml_layers = [15, 15, 15]
+    pml_layers = [td.PML(), td.PML(), td.PML()]
 
     # Correct way: extend slab beyond simulation domain
-    slab_right = td.Box(
-        center=[0, 0, 0],
-        size=[td.inf, td.inf, .5],
-        material=td.Medium(epsilon=5))
+    slab_right = td.Structure(
+        geometry=td.Box(
+            center=[0, 0, 0],
+            size=[td.inf, td.inf, .5],
+        ),
+        medium=td.Medium(epsilon=5)
+    )
 
     sim_right = td.Simulation(
         size=sim_size,
-        resolution=20,
+        grid_size=0.05,
         structures=[slab_right],
         pml_layers=pml_layers)
 
     # Wrong: use simulation domain size when using PML
-    slab_wrong = td.Box(
-        center=[0, 0, 0],
-        size=[sim_size[0], sim_size[1], .5],
-        material=td.Medium(epsilon=5))
+    slab_wrong = td.Structure(
+        geometry=td.Box(
+            center=[0, 0, 0],
+            size=[sim_size[0], sim_size[1], .5],
+        ),
+        medium=td.Medium(epsilon=5)
+    )
 
     sim_wrong = td.Simulation(
         size=sim_size,
@@ -126,8 +117,8 @@ dielectric slab.
         pml_layers=pml_layers)
 
     fig, ax = plt.subplots(1, 2, figsize=(11, 4))
-    sim_right.viz_eps_2D(normal='y', ax=ax[0])
-    sim_wrong.viz_eps_2D(normal='y', ax=ax[1])
+    sim_right.plot_eps(y=0, ax=ax[0])
+    sim_wrong.plot_eps(y=0, ax=ax[1])
     ax[0].set_title('Right: extend through PML')
     ax[1].set_title('Wrong: use simulation domain size')
     plt.show()
