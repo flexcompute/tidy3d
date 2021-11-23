@@ -1,11 +1,11 @@
 """Defines profile of Perfectly-matched layers (absorber)"""
-from typing import Union, Literal
+from typing import Union
 from abc import ABC
 
 import pydantic
 
 from .base import Tidy3dBaseModel
-
+from .types import Literal
 
 # TODO: More explanation on parameters, when to use various PMLs.
 

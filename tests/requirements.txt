@@ -1,4 +1,5 @@
 # required for development
 black
 pylint
+tox
 pytest

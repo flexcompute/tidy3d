@@ -1,13 +1,13 @@
 """Defines electric current sources for injecting light into simulation."""
 
 from abc import ABC, abstractmethod
-from typing import Union, Literal
+from typing import Union
 
 import pydantic
 import numpy as np
 
 from .base import Tidy3dBaseModel
-from .types import Direction, Polarization, Ax, FreqBound, Array
+from .types import Direction, Polarization, Ax, FreqBound, Array, Literal
 from .validators import assert_plane, validate_name_str
 from .geometry import Box
 from .mode import Mode

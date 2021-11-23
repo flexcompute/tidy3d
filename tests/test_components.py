@@ -326,10 +326,10 @@ def test_names_default():
     for i, source in enumerate(sim.sources):
         assert source.name == f"sources[{i}]"
 
-    distinct_mediums = [f"mediums[{i}]" for i in range(len(sim.mediums))]
-    for i, medium in enumerate(sim.mediums):
-        assert medium.name in distinct_mediums
-        distinct_mediums.pop(distinct_mediums.index(medium.name))
+    # distinct_mediums = [f"mediums[{i}]" for i in range(len(sim.mediums))]
+    # for i, medium in enumerate(sim.mediums):
+    #     assert medium.name in distinct_mediums
+    #     distinct_mediums.pop(distinct_mediums.index(medium.name))
 
 
 def test_names_unique():
