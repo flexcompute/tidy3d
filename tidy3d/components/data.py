@@ -767,16 +767,10 @@ class SimulationData(Tidy3dBaseModel):
         if "f" in xr_data.coords:
             if freq is None:
                 raise DataError("'freq' must be supplied to plot a FieldMonitor.")
-            # if len(xr_data.f) == 1:
-            #     field_data = xr_data.isel(f=0)
-            # else:
             field_data = xr_data.sel(f=freq, method="nearest")
         elif "t" in xr_data.coords:
             if time is None:
                 raise DataError("'time' must be supplied to plot a FieldMonitor.")
-            # if len(xr_data.t) == 1:
-            #     field_data = xr_data.isel(t=0)
-            # else:
             field_data = xr_data.sel(t=time, method="nearest")
         else:
             raise DataError("Field data has neither time nor frequency data, something went wrong.")
