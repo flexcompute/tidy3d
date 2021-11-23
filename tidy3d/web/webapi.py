@@ -226,6 +226,10 @@ def download(task_id: TaskId, simulation: Simulation, path: str = "simulation_da
         Original simulation.
     path : str = "simulation_data.hdf5"
         Download path to .hdf5 data file (including filename).
+
+    Note
+    ----
+    To load downloaded results into data, call :meth:`load` with option `replace_existing=False`.
     """
 
     task_info = get_info(task_id)
@@ -233,6 +237,9 @@ def download(task_id: TaskId, simulation: Simulation, path: str = "simulation_da
         raise WebError(f"can't download task '{task_id}', status = '{task_info.status}'")
 
     directory, _ = os.path.split(path)
+    if directory and not os.path.exists(directory):
+        raise WebError(f"Can't download to path '{path}', directory {directory} doesn't exist.")
+
     sim_file = os.path.join(directory, "simulation.json")
     mon_file = os.path.join(directory, "monitor_data.hdf5")
     log_file = os.path.join(directory, "tidy3d.log")
@@ -276,7 +283,7 @@ def load(
     task_id: TaskId,
     simulation: Simulation,
     path: str = "simulation_data.hdf5",
-    replace_existing=True,
+    replace_existing : bool = True,
 ) -> SimulationData:
     """Download and Load simultion results into :class:`.SimulationData` object.
 
@@ -289,7 +296,7 @@ def load(
     path : str
         Download path to .hdf5 data file (including filename).
     replace_existing: bool = True
-        Downloads even if file exists (overwriting the existing).
+        Downloads the data even if path exists (overwriting the existing).
 
     Returns
     -------

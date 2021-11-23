@@ -477,13 +477,14 @@ def load_old_monitor_data(simulation: Simulation, data_file: str) -> SolverDataD
     with h5py.File(data_file, "r") as f_handle:
         for monitor in simulation.monitors:
             name = monitor.name
+            data_group = f_handle[name]
 
             if isinstance(monitor, FreqMonitor):
                 sampler_values = np.array(monitor.freqs)
                 sampler_label = "f"
 
             elif isinstance(monitor, TimeMonitor):
-                sampler_values = np.array(f_handle[name]["tmesh"]).ravel()
+                sampler_values = np.array(data_group["tmesh"]).ravel()
                 sampler_label = "t"
 
             if isinstance(monitor, AbstractFieldMonitor):
@@ -503,11 +504,11 @@ def load_old_monitor_data(simulation: Simulation, data_file: str) -> SolverDataD
                     }
 
             elif isinstance(monitor, AbstractFluxMonitor):
-                values = np.array(f_handle[name]["flux"]).ravel()
+                values = np.array(data_group["flux"]).ravel()
                 data_dict[name] = {"values": values, sampler_label: sampler_values}
 
             elif isinstance(monitor, ModeMonitor):
-                values = np.array(f_handle[name]["mode_amps"])
+                values = np.array(data_group["mode_amps"])
                 values = np.swapaxes(values, 1, 2)  # put frequency at last axis
                 mode_index = np.arange(values.shape[1])
                 data_dict[name] = {
