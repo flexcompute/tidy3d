@@ -10,6 +10,7 @@ descartes
 pydantic
 PyYAML
 boto3
+requests
 
 # required to get xarray to not complain
 dask
