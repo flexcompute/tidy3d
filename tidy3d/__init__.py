@@ -1,10 +1,9 @@
 """ Tidy3d package imports"""
 __version__ = "0.0.0"
 
-from rich import pretty, traceback
 from concurrent.futures import ProcessPoolExecutor
 
-# import component as `from tidy3d import Simulation` or `td.Simulation`
+from rich import pretty, traceback
 
 # pml
 from .components import PML, StablePML, Absorber

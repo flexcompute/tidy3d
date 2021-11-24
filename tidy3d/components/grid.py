@@ -1,6 +1,7 @@
 """Defines the FDTD grid."""
-import numpy as np
-from typing import List
+from typing import Tuple
+
+import numpy as np  # pylint:disable=unused-import
 
 from .base import Tidy3dBaseModel
 from .types import Array, Axis
@@ -159,7 +160,23 @@ class Grid(Tidy3dBaseModel):
         return Coords(**{key: np.diff(val) for key, val in self.boundaries.dict().items()})
 
     @property
-    def num_cells(self) -> List[int]:
+    def num_cells(self) -> Tuple[int, int, int]:
+        """Return sizes of the cells in the :class:`Grid`.
+
+        Returns
+        -------
+        tuple[int, int, int]
+            Number of cells in the grid in the x, y, z direction.
+
+        Example
+        -------
+        >>> x = np.linspace(-1, 1, 10)
+        >>> y = np.linspace(-1, 1, 11)
+        >>> z = np.linspace(-1, 1, 12)
+        >>> coords = Coords(x=x, y=y, z=z)
+        >>> grid = Grid(boundaries=coords)
+        >>> Nx, Ny, Nz = grid.num_cells
+        """
         return [coords1d.size - 1 for coords1d in self.boundaries.dict().values()]
 
     @property

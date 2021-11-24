@@ -99,7 +99,7 @@ def get_info(task_id: TaskId) -> TaskInfo:
     :class:`TaskInfo`
         Object containing information about status, size, credits of task.
     """
-    method = os.path.join("fdtd/task", task_id)
+    method = f"fdtd/task/{task_id}"
     info_dict = http.get(method)
     if info_dict is None:
         raise WebError(f"task {task_id} not found, unable to load info.")
@@ -120,7 +120,7 @@ def start(task_id: TaskId) -> None:
     """
     task = get_info(task_id)
     folder_name = task.folderId
-    method = os.path.join("fdtd/model", folder_name, "task", task_id)
+    method = f"fdtd/model/{folder_name}/task/{task_id}"
     task.status = "queued"
     http.put(method, data=task.dict())
 
@@ -142,7 +142,7 @@ def get_run_info(task_id: TaskId):
     """
 
     client, bucket, user_id = get_s3_user()
-    key = os.path.join("users", user_id, task_id, "output", "solver_progress.csv")
+    key = f"users/{user_id}/{task_id}/output/solver_progress.csv"
     progress = client.get_object(Bucket=bucket, Key=key)["Body"]
     progress_string = progress.read().split(b"\n")
     perc_done, field_decay = progress_string[-2].split(b",")
@@ -283,7 +283,7 @@ def load(
     task_id: TaskId,
     simulation: Simulation,
     path: str = "simulation_data.hdf5",
-    replace_existing : bool = True,
+    replace_existing: bool = True,
 ) -> SimulationData:
     """Download and Load simultion results into :class:`.SimulationData` object.
 
@@ -324,7 +324,7 @@ def delete(task_id: TaskId) -> TaskInfo:
         Object containing information about status, size, credits of task.
     """
 
-    method = os.path.join("fdtd", "task", str(task_id))
+    method = f"fdtd/task/{str(task_id)}"
     return http.delete(method)
 
 
@@ -353,7 +353,7 @@ def _upload_task(  # pylint:disable=too-many-locals
         "workerGroup": worker_group,
     }
 
-    method = os.path.join("fdtd/model", folder_name, "task")
+    method = f"fdtd/model/{folder_name}/task"
 
     log.debug("Creating task.")
     try:
@@ -368,7 +368,7 @@ def _upload_task(  # pylint:disable=too-many-locals
 
     client, bucket, user_id = get_s3_user()
 
-    key = os.path.join("users", user_id, task_id, "simulation.json")
+    key = f"users/{user_id}/{task_id}/simulation.json"
 
     # size_bytes = len(json_string.encode('utf-8'))
     # TODO: add progressbar, with put_object, no callback, so no real need.
@@ -403,9 +403,9 @@ def _download_file(task_id: TaskId, fname: str, path: str) -> None:
         client, bucket, user_id = get_s3_user()
 
         if fname in ("monitor_data.hdf5", "tidy3d.log"):
-            key = os.path.join("users", user_id, task_id, "output", fname)
+            key = f"users/{user_id}/{task_id}/output/{fname}"
         else:
-            key = os.path.join("users", user_id, task_id, fname)
+            key = f"users/{user_id}/{task_id}/{fname}"
 
         head_object = client.head_object(Bucket=bucket, Key=key)
         size_bytes = head_object["ContentLength"]

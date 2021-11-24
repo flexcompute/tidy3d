@@ -64,7 +64,7 @@ def test_webapi_6_load():
     """load the results into sim_data"""
     task_id = _get_gloabl_task_id()
     sim_data = web.load(task_id, simulation=sim_original, path=PATH_SIM_DATA)
-    first_monitor_name = list(sim_original.monitors.keys())[0]
+    first_monitor_name = sim_original.monitors[0].name
     _ = sim_data[first_monitor_name]
 
 
@@ -131,7 +131,7 @@ def test_job_6_load():
     """load the results into sim_data"""
     job = _get_gloabl_job()
     sim_data = job.load(path=PATH_SIM_DATA)
-    first_monitor_name = list(sim_original.monitors.keys())[0]
+    first_monitor_name = sim_original.monitors[0].name
     _ = sim_data[first_monitor_name]
 
 
@@ -202,7 +202,7 @@ def test_batch_6_load():
     """load the results into sim_data"""
     batch = _get_gloabl_batch()
     sim_data_dict = batch.load(path_dir=PATH_DIR_SIM_DATA)
-    first_monitor_name = list(sim_original.monitors.keys())[0]
+    first_monitor_name = sim_original.monitors[0].name
     for _, sim_data in sim_data_dict.items():
         _ = sim_data[first_monitor_name]
 

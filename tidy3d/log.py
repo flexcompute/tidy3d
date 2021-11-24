@@ -116,7 +116,7 @@ def set_logging_file(fname: str, filemode="w", level=DEFAULT_LEVEL.lower()):
 
     Example
     -------
-    >>> set_logging_file('tidy3d_log.log)
+    >>> set_logging_file('tidy3d_log.log')
     >>> log.warning('this warning will appear in the tidy3d_log.log')
     """
 
