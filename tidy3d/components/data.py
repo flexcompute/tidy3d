@@ -3,6 +3,7 @@
 
 from abc import ABC, abstractmethod
 from typing import Dict, List, Union
+import logging
 
 import xarray as xr
 import numpy as np
@@ -627,11 +628,14 @@ class SimulationData(Tidy3dBaseModel):
         Mapping of monitor name to :class:`Tidy3dData` intance.
     log_string : str = None
         A string containing the log information from the simulation run.
+    diverged : bool = False
+        A boolean flag denoting if the simulation run diverged.
     """
 
     simulation: Simulation
     monitor_data: Dict[str, Tidy3dData]
     log_string: str = None
+    diverged: bool = False
 
     @property
     def log(self):
@@ -825,11 +829,15 @@ class SimulationData(Tidy3dBaseModel):
 
         with h5py.File(fname, "a") as f_handle:
 
-            # save json string as an attribute
+            # save json string as a dataset
             Tidy3dData.save_string(f_handle, "sim_json", self.simulation.json())
 
+            # save log string as a dataset
             if self.log_string:
                 Tidy3dData.save_string(f_handle, "log_string", self.log_string)
+
+            # save diverged flag as an attribute
+            f_handle.attrs["diverged"] = self.diverged
 
             # make a group for monitor_data
             mon_data_grp = f_handle.create_group("monitor_data")
@@ -864,6 +872,12 @@ class SimulationData(Tidy3dBaseModel):
             # get the log if exists
             log_string = Tidy3dData.load_string(f_handle, "log_string")
 
+            # set the diverged flag
+            # TODO: add link to documentation discussing divergence
+            diverged = f_handle.attrs["diverged"]
+            if diverged:
+                logging.warning("Simulation run has diverged!")
+
             # loop through monitor dataset and create all MonitorData instances
             monitor_data_dict = {}
             for monitor_name, monitor_data in f_handle["monitor_data"].items():
@@ -877,6 +891,7 @@ class SimulationData(Tidy3dBaseModel):
             simulation=simulation,
             monitor_data=monitor_data_dict,
             log_string=log_string,
+            diverged=diverged,
         )
 
     def __eq__(self, other):

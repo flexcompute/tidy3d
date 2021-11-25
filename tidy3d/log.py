@@ -25,7 +25,7 @@ log = logging.getLogger("rich")
 """ Tidy3d custom exceptions """
 
 
-class Tidy3DError(Exception):
+class Tidy3dError(Exception):
     """Any error in tidy3d"""
 
     def __init__(self, message: str = None):
@@ -34,35 +34,35 @@ class Tidy3DError(Exception):
         super().__init__(self, message)
 
 
-class ConfigError(Tidy3DError):
+class ConfigError(Tidy3dError):
     """Error when configuring Tidy3d."""
 
 
-class Tidy3dKeyError(Tidy3DError):
+class Tidy3dKeyError(Tidy3dError):
     """Could not find a key in a Tidy3d dictionary."""
 
 
-class ValidationError(Tidy3DError):
+class ValidationError(Tidy3dError):
     """eError when constructing Tidy3d components."""
 
 
-class SetupError(Tidy3DError):
+class SetupError(Tidy3dError):
     """Error regarding the setup of the components (outside of domains, etc)."""
 
 
-class FileError(Tidy3DError):
+class FileError(Tidy3dError):
     """Error reading or writing to file."""
 
 
-class WebError(Tidy3DError):
+class WebError(Tidy3dError):
     """Error with the webAPI."""
 
 
-class AuthenticationError(Tidy3DError):
+class AuthenticationError(Tidy3dError):
     """Error authenticating a user through webapi webAPI."""
 
 
-class DataError(Tidy3DError):
+class DataError(Tidy3dError):
     """Error accessing data."""
 
 
