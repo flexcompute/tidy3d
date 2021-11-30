@@ -1,0 +1,21 @@
+name: Tidy3dTests
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ develop ]
+  pull_request:
+    branches: [ develop ]
+
+jobs:
+  build:
+    runs-on: [self-hosted]
+
+    steps:
+    - uses: actions/checkout@v2
+
+    - name: Install tox
+      run: pip install tox
+
+    - name: Run tox
+      run: tox
