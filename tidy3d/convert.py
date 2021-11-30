@@ -118,7 +118,7 @@ def old_json_structures(sim: Simulation) -> Tuple[List[Dict], List[Dict]]:
         elif isinstance(medium, DispersiveMedium):
             poles = []
             for (a, c) in medium.pole_residue.poles:
-                poles.append([a[0], a[1], c[0], c[1]])
+                poles.append([a.real, a.imag, c.real, c.imag])
             med.update(
                 {
                     "type": "PoleResidue",
@@ -295,8 +295,8 @@ def old_json_sources(sim: Simulation) -> List[Dict]:
                 "waist_radius": float(source.waist_radius),
                 "waist_distance": float(source.waist_distance),
                 "pol_angle": float(source.pol_angle),
-                "amplitude": source.source_time.amplitude
-                }
+                "amplitude": source.source_time.amplitude,
+            }
 
         if src:
             src_list.append(src)

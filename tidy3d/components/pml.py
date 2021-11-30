@@ -151,6 +151,7 @@ class PML(AbsorberSpec):
     >>> pml = PML(num_layers=10)
     """
 
+    type: Literal["PML"] = "PML"
     num_layers: pydantic.NonNegativeInt = 12
     parameters: PMLParams = DefaultPMLParameters
 
@@ -172,8 +173,9 @@ class StablePML(AbsorberSpec):
     >>> pml = StablePML(num_layers=40)
     """
 
+    type: Literal["StablePML"] = "StablePML"
     num_layers: pydantic.NonNegativeInt = 40
-    parameters: Literal[DefaultStablePMLParameters] = DefaultStablePMLParameters
+    parameters: PMLParams = DefaultStablePMLParameters
 
 
 class Absorber(AbsorberSpec):
@@ -193,6 +195,7 @@ class Absorber(AbsorberSpec):
     >>> pml = Absorber(num_layers=40)
     """
 
+    type: Literal["Absorber"] = "Absorber"
     num_layers: pydantic.NonNegativeInt = 40
     parameters: AbsorberParams = DefaultAbsorberParameters
 

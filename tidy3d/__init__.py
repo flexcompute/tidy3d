@@ -1,7 +1,7 @@
 """ Tidy3d package imports"""
 __version__ = "0.0.0"
 
-from concurrent.futures import ProcessPoolExecutor
+from concurrent.futures import ProcessPoolExecutor, process
 
 from rich import pretty, traceback
 
@@ -63,4 +63,4 @@ from .components.grid import YeeGrid, FieldGrid, Coords1D
 
 # make all stdout and errors pretty
 pretty.install()
-# traceback.install(suppress=[ProcessPoolExecutor])
+# traceback.install()

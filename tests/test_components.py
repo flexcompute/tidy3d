@@ -419,7 +419,7 @@ def test_VolumeSource_directional():
     s = PlaneWave(size=(0, 1, 1), source_time=g, polarization="Ez", direction="+")
 
     # test we can make planewave
-    s = GaussianBeam(size=(0,1,1), source_time=g, polarization='Ez', direction='+')
+    s = GaussianBeam(size=(0, 1, 1), source_time=g, polarization="Ez", direction="+")
 
     # test that non-planar geometry crashes plane wave
     with pytest.raises(ValidationError) as e_info:
@@ -429,7 +429,7 @@ def test_VolumeSource_directional():
     with pytest.raises(ValidationError) as e_info:
         s = PlaneWave(size=(1, 1, 0), source_time=g, polarization="Ez", direction="+")
     with pytest.raises(ValidationError) as e_info:
-        s = GaussianBeam(size=(1,1,1), source_time=g, polarization='Ez', direction='+')
+        s = GaussianBeam(size=(1, 1, 1), source_time=g, polarization="Ez", direction="+")
 
 
 def test_VolumeSource_modal():
