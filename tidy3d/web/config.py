@@ -4,7 +4,7 @@ from typing import Any
 from dataclasses import dataclass
 
 # automate this later?
-SOLVER_VERSION = "release-21.4.0"
+SOLVER_VERSION = "release-21.4.2"
 
 
 @dataclass

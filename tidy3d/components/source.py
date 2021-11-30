@@ -434,9 +434,12 @@ class GaussianBeam(DirectionalSource):
         Specifies the sign of propagation.
         Must be in ``{'+', '-'}``.
         Note: propagation occurs along dimension normal to plane.
-    waist_radius: float
+    waist_radius: float = 1.0
         Radius of the beam at the waist (um).
         Must be positive.
+    waist_distance: float = 0.0
+        Distance (um) from the beam waist along the propagation direction.
+        Must be non-negative.
     angle_theta: float = 0.0
         Angle of propagation of the beam with respect to the normal axis (rad).
     angle_phi: float = 0.0
@@ -457,7 +460,8 @@ class GaussianBeam(DirectionalSource):
     ...     waist_radius=1.0)
     """
 
-    waist_radius: pydantic.PositiveFloat
+    waist_radius: pydantic.PositiveFloat = 1.0
+    waist_distance: pydantic.NonNegativeFloat = 0.0
     angle_theta: float = 0.0
     angle_phi: float = 0.0
     pol_angle: float = 0.0

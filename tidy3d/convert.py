@@ -8,7 +8,7 @@ from tidy3d import Simulation, SimulationData, DATA_TYPE_MAP
 from tidy3d import Box, Sphere, Cylinder, PolySlab
 from tidy3d import Medium, AnisotropicMedium
 from tidy3d.components.medium import DispersiveMedium, PECMedium
-from tidy3d import VolumeSource, ModeSource, PlaneWave
+from tidy3d import VolumeSource, ModeSource, PlaneWave, GaussianBeam
 from tidy3d import GaussianPulse
 from tidy3d import PML, Absorber, StablePML
 from tidy3d import FieldMonitor, FieldTimeMonitor, FluxMonitor, FluxTimeMonitor
@@ -279,25 +279,27 @@ def old_json_sources(sim: Simulation) -> List[Dict]:
                 "polarization": source.polarization[1],
                 "amplitude": source.source_time.amplitude,
             }
+        elif isinstance(source, GaussianBeam):
+            normal_index = [s == 0 for s in source.size].index(True)
+            injection_axis = source.direction + "xyz"[normal_index]
+            direction = "forward" if source.direction == "+" else "backward"
+            src = {
+                "name": name,
+                "type": "GaussianBeam",
+                "source_time": src_time,
+                "center": list(source.center),
+                "normal": "xyz"[normal_index],
+                "direction": direction,
+                "angle_theta": float(source.angle_theta),
+                "angle_phi": float(source.angle_phi),
+                "waist_radius": float(source.waist_radius),
+                "waist_distance": float(source.waist_distance),
+                "pol_angle": float(source.pol_angle),
+                "amplitude": source.source_time.amplitude
+                }
+
         if src:
             src_list.append(src)
-
-        # """ TODO: Support GaussianBeam """
-        # elif isinstance(source, GaussianBeam):
-        #     src = {
-        #         "name": src_data.name,
-        #         "type": "GaussianBeam",
-        #         "source_time": src_time,
-        #         "position": source.position,
-        #         "normal": source.normal,
-        #         "direction": source.direction,
-        #         "angle_theta": float(source.angle_theta),
-        #         "angle_phi": float(source.angle_phi),
-        #         "waist_radius": float(source.waist_radius),
-        #         "waist_distance": float(source.waist_distance),
-        #         "pol_angle": float(source.pol_angle),
-        #         "amplitude": float(source.amplitude)
-        #         }
 
     return src_list
 
