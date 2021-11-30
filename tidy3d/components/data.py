@@ -658,7 +658,7 @@ class SimulationData(Tidy3dBaseModel):
         """
         monitor_data = self.monitor_data.get(monitor_name)
         if not monitor_data:
-            raise DataError(f"monitor {monitor_name} not found")
+            raise DataError(f"monitor '{monitor_name}' not found")
         if isinstance(monitor_data, MonitorData):
             return monitor_data.data
         return monitor_data

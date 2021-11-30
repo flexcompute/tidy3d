@@ -63,4 +63,4 @@ from .components.grid import YeeGrid, FieldGrid, Coords1D
 
 # make all stdout and errors pretty
 pretty.install()
-traceback.install(suppress=[ProcessPoolExecutor])
+# traceback.install(suppress=[ProcessPoolExecutor])
