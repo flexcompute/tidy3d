@@ -14,8 +14,9 @@ jobs:
     steps:
     - uses: actions/checkout@v2
 
-    - name: Install tox
-      run: pip install tox
-
-    - name: Run tox
-      run: tox
+   - name: Setup python
+        uses: actions/setup-python@v2
+        with:
+          python-version: 3.9
+      - run: pip install tox
+      - run: tox
