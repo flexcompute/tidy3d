@@ -227,10 +227,7 @@ def old_json_sources(sim: Simulation) -> List[Dict]:
         src = {}
 
         if isinstance(source, VolumeSource):
-            """TODO: Is polarization the right word if we're talking about J and M?
-            Check Lumerical notation."""
-            component = "E" if source.polarization[0] == "J" else "H"
-            component += source.polarization[1]
+            component = source.polarization
             if all(s == 0 for s in source.size):
                 src = {
                     "name": name,
