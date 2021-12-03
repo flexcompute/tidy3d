@@ -562,7 +562,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         """
         num_layers = self.num_pml_layers
         pml_thicknesses = []
-        for num_layer, boundaries in zip(num_layers, self.grid.boundaries.dict().values()):
+        for num_layer, boundaries in zip(num_layers, self.grid.boundaries.to_list):
             thick_l = boundaries[num_layer[0]] - boundaries[0]
             thick_r = boundaries[-1] - boundaries[-1 - num_layer[1]]
             pml_thicknesses.append((thick_l, thick_r))
@@ -768,8 +768,8 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
             at 5 standard deviations.
         """
         source_ranges = [source.source_time.frequency_range for source in self.sources]
-        freq_min = min(freq_range[0] for freq_range in source_ranges)
-        freq_max = max(freq_range[1] for freq_range in source_ranges)
+        freq_min = min([freq_range[0] for freq_range in source_ranges], default=0.0)
+        freq_max = max([freq_range[1] for freq_range in source_ranges], default=0.0)
         return (freq_min, freq_max)
 
     """ Discretization """
@@ -783,7 +783,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         float
             Time step (seconds).
         """
-        dl_mins = [np.min(sizes) for sizes in self.grid.sizes.dict().values()]
+        dl_mins = [np.min(sizes) for sizes in self.grid.sizes.to_list]
         dl_sum_inv_sq = sum([1 / dl ** 2 for dl in dl_mins])
         dl_avg = 1 / np.sqrt(dl_sum_inv_sq)
         return self.courant * dl_avg / C_0
@@ -904,7 +904,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
             ind_min = 0 if len(inds_leq_pt_min) == 0 else inds_leq_pt_min[-1]
 
             # store indexes
-            inds_list.append((ind_min, ind_max + 1))
+            inds_list.append((ind_min, ind_max))
 
         return inds_list
 
@@ -927,7 +927,8 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         for axis_label, axis_inds in zip("xyz", disc_inds):
             # copy orginal bound coords into subgrid coords
             bound_coords = self.grid.boundaries.dict()[axis_label]
-            sub_cell_boundary_dict[axis_label] = bound_coords[axis_inds[0] : axis_inds[1]]
+            # axis_inds[1] + 1 because we are selecting cell boundaries not cells
+            sub_cell_boundary_dict[axis_label] = bound_coords[axis_inds[0] : axis_inds[1] + 1]
 
         # construct sub grid
         sub_boundaries = Coords(**sub_cell_boundary_dict)

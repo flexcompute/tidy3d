@@ -28,7 +28,7 @@ from .source import VolumeSource, PlaneWave, ModeSource, GaussianBeam
 
 # monitor
 from .monitor import AbstractFieldMonitor, FreqMonitor, TimeMonitor, FieldMonitor, FieldTimeMonitor
-from .monitor import AbstractFluxMonitor, FluxMonitor, FluxTimeMonitor, ModeMonitor
+from .monitor import Monitor, AbstractFluxMonitor, FluxMonitor, FluxTimeMonitor, ModeMonitor
 
 # simulation
 from .simulation import Simulation

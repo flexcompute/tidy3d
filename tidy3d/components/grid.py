@@ -35,6 +35,11 @@ class Coords(Tidy3dBaseModel):
     y: Coords1D
     z: Coords1D
 
+    @property
+    def to_list(self):
+        """Return a list of the three Coord1D objects."""
+        return list(self.dict().values())
+
 
 class FieldGrid(Tidy3dBaseModel):
     """Holds the grid data for a single field.
