@@ -42,7 +42,7 @@ from .components import SimulationData, FieldData, FluxData, ModeData, FluxTimeD
 from .components import DATA_TYPE_MAP, ScalarFieldData, ScalarFieldTimeData
 
 # constants imported as `C_0 = td.C_0` or `td.constants.C_0`
-from .constants import inf, C_0, ETA_0
+from .constants import inf, C_0, ETA_0, HBAR
 
 # plugins typically imported as `from tidy3d.plugins import DispersionFitter`
 from . import plugins

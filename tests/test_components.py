@@ -1,3 +1,4 @@
+from typing import Dict
 import pytest
 import numpy as np
 import pydantic
@@ -253,6 +254,61 @@ def test_medium_dispersion_create():
 
     for medium in [m_PR, m_SM, m_DB, m_LZ, m_DR]:
         struct = Structure(geometry=Box(size=(1, 1, 1)), medium=medium)
+
+
+def eps_compare(medium: Medium, expected: Dict, tol: float = 1e-5):
+
+    for freq, val in expected.items():
+        # print(f"Expected: {medium.eps_model(freq)}, got: {val}")
+        assert np.abs(medium.eps_model(freq) - val) < tol
+
+
+def test_epsilon_eval():
+    """Compare epsilon evaluated from a dispersive model to expected."""
+
+    # Dispersive silver model
+    poles_silver = [
+        (a / HBAR, c / HBAR)
+        for (a, c) in [
+            (-2.502e-2 - 8.626e-3j, 5.987e-1 + 4.195e3j),
+            (-2.021e-1 - 9.407e-1j, -2.211e-1 + 2.680e-1j),
+            (-1.467e1 - 1.338e0j, -4.240e0 + 7.324e2j),
+            (-2.997e-1 - 4.034e0j, 6.391e-1 - 7.186e-2j),
+            (-1.896e0 - 4.808e0j, 1.806e0 + 4.563e0j),
+            (-9.396e0 - 6.477e0j, 1.443e0 - 8.219e1j),
+        ]
+    ]
+
+    material = PoleResidue(poles=poles_silver)
+    expected = {
+        2e14: (-102.18389652032306 + 9.22771912188222j),
+        5e14: (-13.517709933590542 + 0.9384819052893092j),
+    }
+    eps_compare(material, expected)
+
+    # Constant and eps, zero sigma
+    material = Medium(permittivity=1.5 ** 2)
+    expected = {
+        2e14: 2.25,
+        5e14: 2.25,
+    }
+    eps_compare(material, expected)
+
+    # Constant eps and sigma
+    material = Medium(permittivity=1.5 ** 2, conductivity=0.1)
+    expected = {
+        2e14: 2.25 + 8.987552009401353j,
+        5e14: 2.25 + 3.5950208037605416j,
+    }
+    eps_compare(material, expected)
+
+    # Constant n and k at a given frequency
+    material = Medium.from_nk(n=1.5, k=0.1, freq=C_0 / 0.8)
+    expected = {
+        2e14: 2.24 + 0.5621108598392753j,
+        5e14: 2.24 + 0.22484434393571015j,
+    }
+    eps_compare(material, expected)
 
 
 """ modes """
