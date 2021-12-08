@@ -11,7 +11,7 @@ from .types import PoleAndResidue, Literal, Ax, FreqBound, ComplexNumber
 from .viz import add_ax_if_none
 from .validators import validate_name_str
 
-from ..constants import C_0, pec_val
+from ..constants import C_0, pec_val, EPSILON_0
 from ..log import log
 
 
@@ -141,7 +141,7 @@ class AbstractMedium(ABC, Tidy3dBaseModel):
         eps_complex = AbstractMedium.nk_to_eps_complex(n, k)
         eps_real, eps_imag = eps_complex.real, eps_complex.imag
         omega = 2 * np.pi * freq
-        sigma = omega * eps_imag
+        sigma = omega * eps_imag * EPSILON_0
         return eps_real, sigma
 
     @staticmethod
@@ -166,7 +166,8 @@ class AbstractMedium(ABC, Tidy3dBaseModel):
         if freq is None:
             return eps_real
         omega = 2 * np.pi * freq
-        return eps_real + 1j * sigma / omega
+
+        return eps_real + 1j * sigma / omega / EPSILON_0
 
 
 def ensure_freq_in_range(eps_model: Callable[[float], complex]) -> Callable[[float], complex]:
