@@ -399,8 +399,6 @@ class PlaneWave(DirectionalSource):
         Specifies the sign of propagation.
         Must be in ``{'+', '-'}``.
         Note: propagation occurs along dimension normal to plane.
-    mode : :class:`Mode`
-        Specification of the mode being injected by source.
     name : str = None
         Optional name for source.
 
