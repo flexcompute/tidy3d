@@ -10,7 +10,7 @@
 
 # def dot_product(sim: Simulation, plane: Box, mode1: ModeInfo, mode2: ModeInfo) -> float:
 #     """Dot product between two modes.
-    
+
 #     Parameters
 #     ----------
 #     sim : Simulation
@@ -21,7 +21,7 @@
 #         Data structure of the first mode.
 #     mode2 : ModeInfo
 #         Data structure of the second mode.
-    
+
 #     Returns
 #     -------
 #     float

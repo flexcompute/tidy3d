@@ -989,9 +989,11 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
             Rectangular geometry specifying where to measure the permittivity.
         coord_key : str = 'centers'
             Specifies at what part of the grid to return the permittivity at.
-            Accepted values are ``{'centers', 'boundaries', 'Ex', 'Ey', 'Ez', 'Hx', 'Hy', 'Hz'}``.
-            The field values (eg. 'Ex')
-            correspond to the correponding field locations on the yee lattice.
+            Accepted values are ``{'centers', 'boundaries', 'Ex', 'Ey', 'Ez'}``.
+            The field values (eg. 'Ex') correspond to the correponding field locations on the yee
+            lattice. If field values are selected, the corresponding epsilon component from the
+            main diagonal of the epsilon tensor is returned. Otherwise, the average of the diagonal
+            values is returned.
         freq : float = None
             The frequency to evaluate the mediums at.
             If not specified, evaluates at infinite frequency.
@@ -1010,7 +1012,17 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         """
 
         sub_grid = self.discretize(box)
-        eps_background = self.medium.eps_model(freq)
+
+        def get_eps(medium: Medium, freq: float):
+            """Select the correct epsilon component if field locations are requested."""
+            if coord_key[0] == "E":
+                component = ["x", "y", "z"].index(coord_key[1])
+                eps = medium.eps_diagonal(freq)[component]
+            else:
+                eps = medium.eps_model(freq)
+            return eps
+
+        eps_background = get_eps(self.medium, freq)
 
         def make_eps_data(coords: Coords):
             """returns epsilon data on grid of points defined by coords"""
@@ -1018,7 +1030,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
             x, y, z = np.meshgrid(xs, ys, zs, indexing="ij")
             eps_array = eps_background * np.ones(x.shape, dtype=complex)
             for structure in self.structures:
-                eps_structure = structure.medium.eps_model(freq)
+                eps_structure = get_eps(structure.medium, freq)
                 is_inside = structure.geometry.inside(x, y, z)
                 eps_array[np.where(is_inside)] = eps_structure
             return xr.DataArray(eps_array, coords={"x": xs, "y": ys, "z": zs})
