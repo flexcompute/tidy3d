@@ -121,7 +121,7 @@ def old_json_structures(sim: Simulation) -> Tuple[List[Dict], List[Dict]]:
                 poles.append([a.real, a.imag, c.real, c.imag])
             med.update(
                 {
-                    "type": "PoleResidue",
+                    "type": "Medium",
                     "permittivity": [medium.pole_residue.eps_inf] * 3,
                     "conductivity": [0, 0, 0],
                     "poles": poles,
