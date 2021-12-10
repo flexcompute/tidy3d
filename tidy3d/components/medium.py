@@ -15,6 +15,27 @@ from ..constants import C_0, pec_val, EPSILON_0
 from ..log import log
 
 
+def ensure_freq_in_range(eps_model: Callable[[float], complex]) -> Callable[[float], complex]:
+    """Decorate ``eps_model`` to log warning if frequency supplied is out of bounds."""
+
+    def _eps_model(self, frequency: float) -> complex:
+        """New eps_model function."""
+
+        # if frequency is none, don't check, return original function
+        if frequency is None or self.frequency_range is None:
+            return eps_model(self, frequency)
+
+        fmin, fmax = self.frequency_range
+        if np.any(frequency < fmin) or np.any(frequency > fmax):
+            log.warning(
+                "frequency passed to `Medium.eps_model()`"
+                f"is outside of `Medium.frequency_range` = {self.frequency_range}"
+            )
+        return eps_model(self, frequency)
+
+    return _eps_model
+
+
 """ Medium Definitions """
 
 
@@ -50,6 +71,25 @@ class AbstractMedium(ABC, Tidy3dBaseModel):
         complex
             Complex-valued relative permittivity evaluated at ``frequency``.
         """
+
+    @ensure_freq_in_range
+    def eps_diagonal(self, frequency: float) -> Tuple[complex, complex, complex]:
+        """Main diagonal of the complex-valued permittivity tensor as a function of frequency.
+
+        Parameters
+        ----------
+        frequency : float
+            Frequency to evaluate permittivity at (Hz).
+
+        Returns
+        -------
+        complex
+            The diagonal elements of the relative permittivity tensor evaluated at ``frequency``.
+        """
+
+        # This only needs to be overwritten for anisotropic materials
+        eps = self.eps_model(frequency)
+        return (eps, eps, eps)
 
     @add_ax_if_none
     def plot(self, freqs: float, ax: Ax = None) -> Ax:  # pylint: disable=invalid-name
@@ -168,27 +208,6 @@ class AbstractMedium(ABC, Tidy3dBaseModel):
         omega = 2 * np.pi * freq
 
         return eps_real + 1j * sigma / omega / EPSILON_0
-
-
-def ensure_freq_in_range(eps_model: Callable[[float], complex]) -> Callable[[float], complex]:
-    """Decorate ``eps_model`` to log warning if frequency supplied is out of bounds."""
-
-    def _eps_model(self, frequency: float) -> complex:
-        """New eps_model function."""
-
-        # if frequency is none, don't check, return original function
-        if frequency is None or self.frequency_range is None:
-            return eps_model(self, frequency)
-
-        fmin, fmax = self.frequency_range
-        if np.any(frequency < fmin) or np.any(frequency > fmax):
-            log.warning(
-                "frequency passed to `Medium.eps_model()`"
-                f"is outside of `Medium.frequency_range` = {self.frequency_range}"
-            )
-        return eps_model(self, frequency)
-
-    return _eps_model
 
 
 """ Dispersionless Medium """
@@ -338,6 +357,26 @@ class AnisotropicMedium(AbstractMedium):
         Tuple[complex, complex, complex]
             Complex-valued relative permittivity for each component evaluated at ``frequency``.
         """
+        eps_xx = self.xx.eps_model(frequency)
+        eps_yy = self.yy.eps_model(frequency)
+        eps_zz = self.zz.eps_model(frequency)
+        return np.mean((eps_xx, eps_yy, eps_zz))
+
+    @ensure_freq_in_range
+    def eps_diagonal(self, frequency: float) -> Tuple[complex, complex, complex]:
+        """Main diagonal of the complex-valued permittivity tensor as a function of frequency.
+
+        Parameters
+        ----------
+        frequency : float
+            Frequency to evaluate permittivity at (Hz).
+
+        Returns
+        -------
+        complex
+            The diagonal elements of the relative permittivity tensor evaluated at ``frequency``.
+        """
+
         eps_xx = self.xx.eps_model(frequency)
         eps_yy = self.yy.eps_model(frequency)
         eps_zz = self.zz.eps_model(frequency)
