@@ -264,7 +264,7 @@ def eps_compare(medium: Medium, expected: Dict, tol: float = 1e-5):
 
 
 def test_epsilon_eval():
-    """Compare epsilon evaluated from a dispersive model to expected."""
+    """Compare epsilon evaluated from a dispersive various models to expected."""
 
     # Dispersive silver model
     poles_silver = [
@@ -308,6 +308,19 @@ def test_epsilon_eval():
         2e14: 2.24 + 0.5621108598392753j,
         5e14: 2.24 + 0.22484434393571015j,
     }
+    eps_compare(material, expected)
+
+    # Anisotropic material
+    eps = (1.5, 2.0, 2.3)
+    sig = (0.01, 0.03, 0.015)
+    mediums = [Medium(permittivity=eps[i], conductivity=sig[i]) for i in range(3)]
+    material = AnisotropicMedium(xx=mediums[0], yy=mediums[1], zz=mediums[2])
+
+    eps_diag_2 = material.eps_diagonal(2e14)
+    eps_diag_5 = material.eps_diagonal(5e14)
+    assert np.all(np.array(eps_diag_2) == np.array([medium.eps_model(2e14) for medium in mediums]))
+
+    expected = {2e14: np.mean(eps_diag_2), 5e14: np.mean(eps_diag_5)}
     eps_compare(material, expected)
 
 
