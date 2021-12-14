@@ -11,7 +11,7 @@ from descartes import PolygonPatch
 
 from .validators import assert_unique_names, assert_objects_in_sim_bounds, set_names
 from .geometry import Box
-from .types import Symmetry, Ax, Shapely, FreqBound
+from .types import Symmetry, Ax, Shapely, FreqBound, GridSize
 from .grid import Coords1D, Grid, Coords
 from .medium import Medium, MediumType, AbstractMedium
 from .structure import Structure
@@ -42,8 +42,10 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
     size : Tuple[float, float, float]
         (microns) Size of simulation domain in x, y, and z.
         Each element must be non-negative.
-    grid_size : Tuple[float, float, float]
-        (microns) Grid size along x, y, and z.
+    grid_size : Tuple[Union[float, List[float]], Union[float, List[float]], Union[float, List[float]]]
+        (microns) If components are float, uniform grid size along x, y, and z.
+        If components are array like, defines an array of nonuniform grid sizes centered at ``simulation.center``.
+        Note: if supplied sizes do not cover ``simulation.size``, the first and last sizes are repeated to cover size.
         Each element must be non-negative.
     run_time : float = 0.0
         Total electromagnetic evolution time in seconds.
@@ -140,7 +142,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
     """
     # pylint:enable=line-too-long
 
-    grid_size: Tuple[pydantic.PositiveFloat, pydantic.PositiveFloat, pydantic.PositiveFloat]
+    grid_size: Tuple[GridSize, GridSize, GridSize]
     medium: MediumType = Medium()
     run_time: pydantic.NonNegativeFloat = 0.0
     structures: List[Structure] = []
@@ -800,6 +802,52 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         dt = self.dt
         return np.arange(0.0, self.run_time + dt, dt)
 
+    def _make_bound_coords_uniform(self, dl, center, size, num_layers):
+        """creates coordinate boundaries with uniform mesh (dl is float)"""
+
+        num_cells = int(np.floor(size / dl))
+
+        # Make sure there's at least one cell
+        num_cells = max(num_cells, 1)
+
+        # snap to grid, recenter, and add PML
+        size_snapped = dl * num_cells
+        bound_coords = center + np.linspace(-size_snapped / 2, size_snapped / 2, num_cells + 1)
+        bound_coords = self._add_pml_to_bounds(num_layers, bound_coords)
+        return bound_coords
+
+    @staticmethod
+    def _make_bound_coords_nonuniform(dl, center, size, num_layers):
+        """creates coordinate boundaries with non-uniform mesh (dl is arraylike)"""
+
+        # get bounding coordinates
+        dl = np.array(dl)
+        bound_coords = np.array([np.sum(dl[:i]) for i in range(len(dl) + 1)])
+
+        # shift coords to center at center of simulation along dimension
+        bound_coords = bound_coords - np.sum(dl)/2 + center
+
+        # chop off any coords outside of simulation bounds
+        bound_min = center - size/2
+        bound_max = center + size/2
+        bound_coords = bound_coords[bound_coords <= bound_max]
+        bound_coords = bound_coords[bound_coords >= bound_min]
+
+        # if not extending to simulation bounds, repeat beginning and end
+        dl_min = dl[0]
+        dl_max = dl[-1]
+        while bound_coords[0] - dl_min >= bound_min:
+            bound_coords = np.insert(bound_coords, 0, bound_coords[0] - dl_min)
+        while bound_coords[-1] + dl_max <= bound_max:
+            bound_coords = np.append(bound_coords, bound_coords[-1] + dl_max)
+
+        # add PML layers in using dl on edges
+        for _ in range(num_layers[0]):
+            bound_coords = np.insert(bound_coords, 0, bound_coords[0] - dl_min)
+        for _ in range(num_layers[1]):
+            bound_coords = np.append(bound_coords, bound_coords[-1] + dl_max)
+        return bound_coords
+
     @property
     def grid(self) -> Grid:
         """FDTD grid spatial locations and information.
@@ -812,14 +860,10 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         cell_boundary_dict = {}
         zipped_vals = zip("xyz", self.grid_size, self.center, self.size, self.num_pml_layers)
         for key, dl, center, size, num_layers in zipped_vals:
-            num_cells = int(np.floor(size / dl))
-            # Make sure there's at least one cell
-            num_cells = max(num_cells, 1)
-            size_snapped = dl * num_cells
-            # if size_snapped != size:
-            #     log.warning(f"dl = {dl} not commensurate with simulation size = {size}")
-            bound_coords = center + np.linspace(-size_snapped / 2, size_snapped / 2, num_cells + 1)
-            bound_coords = self._add_pml_to_bounds(num_layers, bound_coords)
+            if isinstance(dl, float):
+                bound_coords = self._make_bound_coords_uniform(dl, center, size, num_layers)
+            else:
+                bound_coords = self._make_bound_coords_nonuniform(dl, center, size, num_layers)
             cell_boundary_dict[key] = bound_coords
         boundaries = Coords(**cell_boundary_dict)
         return Grid(boundaries=boundaries)

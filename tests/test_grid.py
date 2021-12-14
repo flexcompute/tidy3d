@@ -20,7 +20,6 @@ def test_field_grid():
     c = Coords(x=x, y=y, z=z)
     f = FieldGrid(x=c, y=c, z=c)
 
-
 def test_grid():
 
     boundaries_x = np.arange(-1, 2, 1)
@@ -40,6 +39,20 @@ def test_grid():
     assert np.all(g.yee.E.x.y == np.array([-2, -1, 0, 1]))
     assert np.all(g.yee.E.x.z == np.array([-3, -2, -1, 0, 1, 2]))
 
+
+def test_sim_nonuniform():
+    size_x = 18
+    num_layers_pml_x = 2
+    sim = td.Simulation(
+        center=(1, 0, 0),
+        size=(size_x, 4, 4), 
+        grid_size=([2, 1, 3], 1, 1),
+        pml_layers=[td.PML(num_layers=num_layers_pml_x), None, None]
+    )
+
+    bound_coords = sim.grid.boundaries.x
+    assert np.all(bound_coords == np.array([-12,-10,-8,-6,-4,-2,0,1,4,7,10,13,16]))
+    print(sim.grid.boundaries.x)
 
 def test_sim_grid():
 
