@@ -5,7 +5,33 @@ import pydantic
 
 from tidy3d import *
 from tidy3d.log import ValidationError, SetupError
-from .utils import assert_log_level
+
+
+def assert_log_level(caplog, log_level_expected):
+    """ensure something got logged if log_level is not None.
+    note: I put this here rather than utils.py because if we import from utils.py,
+    it will validate the sims there and those get included in log.
+    """
+
+    # get log output
+    logs = caplog.record_tuples
+
+    # there's a log but the log level is not None (problem)
+    if logs and not log_level_expected:
+        raise Exception
+
+    # we expect a log but none is given (problem)
+    if log_level_expected and not logs:
+        raise Exception
+
+    # both expected and got log, check the log levels match
+    if logs and log_level_expected:
+        for log in logs:
+            log_level = log[1]
+            if log_level == log_level_expected:
+                # log level was triggered, exit
+                return
+        raise Exception
 
 
 def test_sim():
@@ -153,6 +179,26 @@ def test_sim_grid_size(caplog, grid_size, log_level):
     assert_log_level(caplog, log_level)
 
 
+@pytest.mark.parametrize("box_size,log_level", [(0.001, None), (9.9, 30), (20, None)])
+def test_sim_structure_gap(caplog, box_size, log_level):
+    """Make sure the gap between a structure and PML is not too small compared to lambda0."""
+    medium = Medium(permittivity=2)
+    box = Structure(geometry=Box(size=(box_size, box_size, box_size)), medium=medium)
+    src = VolumeSource(
+        source_time=GaussianPulse(freq0=3e14, fwidth=1e13),
+        size=(0, 0, 0),
+        polarization="Ex",
+    )
+    sim = Simulation(
+        size=(10, 10, 10),
+        grid_size=(0.1, 0.1, 0.1),
+        structures=[box],
+        sources=[src],
+        pml_layers=[PML(num_layers=5), PML(num_layers=5), PML(num_layers=5)],
+    )
+    assert_log_level(caplog, log_level)
+
+
 def test_sim_plane_wave_error():
     """ "Make sure we error if plane wave is not intersecting homogeneous region of simulation."""
 
@@ -209,12 +255,14 @@ def test_num_mediums():
 
     structures = []
     for i in range(200):
-        structures.append(Structure(geometry=Box(size=(1, 1, 1)), medium=Medium(permittivity=i+1)))
+        structures.append(
+            Structure(geometry=Box(size=(1, 1, 1)), medium=Medium(permittivity=i + 1))
+        )
     sim = Simulation(size=(1, 1, 1), grid_size=(0.1, 0.1, 0.1), structures=structures)
 
     with pytest.raises(SetupError):
         structures.append(
-            Structure(geometry=Box(size=(1, 1, 1)), medium=Medium(permittivity=i+2))
+            Structure(geometry=Box(size=(1, 1, 1)), medium=Medium(permittivity=i + 2))
         )
         sim = Simulation(size=(1, 1, 1), grid_size=(0.1, 0.1, 0.1), structures=structures)
 

@@ -33,32 +33,8 @@ def prepend_tmp(path):
     return os.path.join(TMP_DIR, path)
 
 
-def assert_log_level(caplog, log_level_expected):
-    """ensure something got logged if log_level is not None"""
-
-    # get log output
-    logs = caplog.record_tuples
-
-    # there's a log but the log level is not None (problem)
-    if logs and not log_level_expected:
-        raise Exception
-
-    # we expect a log but none is given (problem)
-    if log_level_expected and not logs:
-        raise Exception
-
-    # both expected and got log, check the log levels match
-    if logs and log_level_expected:
-        for log in logs:
-            log_level = log[1]
-            if log_level == log_level_expected:
-                # log level was triggered, exit
-                return
-        raise Exception
-
-
 SIM_MONITORS = Simulation(
-    size=(2.0, 2.0, 2.0),
+    size=(10.0, 10.0, 10.0),
     grid_size=(0.1, 0.1, 0.1),
     monitors=[
         FieldMonitor(size=(1, 1, 1), center=(0, 1, 0), freqs=[1, 2, 5, 7, 8], name="field_freq"),
@@ -76,7 +52,7 @@ SIM_MONITORS = Simulation(
 )
 
 SIM_FULL = Simulation(
-    size=(2.0, 2.0, 2.0),
+    size=(10.0, 10.0, 10.0),
     grid_size=(0.1, 0.1, 0.1),
     run_time=40e-11,
     structures=[
