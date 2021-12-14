@@ -5,6 +5,7 @@ import pydantic
 
 from tidy3d import *
 from tidy3d.log import ValidationError, SetupError
+from .utils import assert_log_level
 
 
 def test_sim():
@@ -119,30 +120,6 @@ def test_sim_grid_size():
     _ = Simulation(size=size, grid_size=(1.0, 1.0, 1.0))
 
 
-def assert_log_level(caplog, log_level_expected):
-    """ensure something got logged if log_level is not None"""
-
-    # get log output
-    logs = caplog.record_tuples
-
-    # there's a log but the log level is not None (problem)
-    if logs and not log_level_expected:
-        raise Exception
-
-    # we expect a log but none is given (problem)
-    if log_level_expected and not logs:
-        raise Exception
-
-    # both expected and got log, check the log levels match
-    if logs and log_level_expected:
-        for log in logs:
-            log_level = log[1]
-            if log_level == log_level_expected:
-                # log level was triggered, exit
-                return
-        raise Exception
-
-
 @pytest.mark.parametrize("fwidth,log_level", [(0.001, None), (3, 30)])
 def test_sim_frequency_range(caplog, fwidth, log_level):
     # small fwidth should be inside range, large one should throw warning
@@ -177,7 +154,7 @@ def test_sim_grid_size(caplog, grid_size, log_level):
 
 
 def test_sim_plane_wave_error():
-    # small fwidth should be inside range, large one should throw warning
+    """ "Make sure we error if plane wave is not intersecting homogeneous region of simulation."""
 
     medium_bg = Medium(permittivity=2)
     medium_air = Medium(permittivity=1)
@@ -212,6 +189,35 @@ def test_sim_plane_wave_error():
             structures=[box_transparent, box],
             sources=[src],
         )
+
+
+@pytest.mark.parametrize(
+    "box_size,log_level",
+    [((0.1, 0.1, 0.1), None), ((1, 0.1, 0.1), 30), ((0.1, 1, 0.1), 30), ((0.1, 0.1, 1), 30)],
+)
+def test_sim_structure_extent(caplog, box_size, log_level):
+    """Make sure we warn if structure extends exactly to simulation edges."""
+
+    box = Structure(geometry=Box(size=box_size), medium=Medium(permittivity=2))
+    sim = Simulation(size=(1, 1, 1), grid_size=(0.1, 0.1, 0.1), structures=[box])
+
+    assert_log_level(caplog, log_level)
+
+
+def test_num_mediums():
+    """Make sure we error if too many mediums supplied."""
+
+    structures = []
+    for i in range(200):
+        structures.append(Structure(geometry=Box(size=(1, 1, 1)), medium=Medium(permittivity=i+1)))
+    sim = Simulation(size=(1, 1, 1), grid_size=(0.1, 0.1, 0.1), structures=structures)
+
+    with pytest.raises(SetupError):
+        structures.append(
+            Structure(geometry=Box(size=(1, 1, 1)), medium=Medium(permittivity=i+2))
+        )
+        sim = Simulation(size=(1, 1, 1), grid_size=(0.1, 0.1, 0.1), structures=structures)
+
 
 """ geometry """
 
@@ -353,7 +359,6 @@ def test_medium_dispersion_create():
 def eps_compare(medium: Medium, expected: Dict, tol: float = 1e-5):
 
     for freq, val in expected.items():
-        # print(f"Expected: {medium.eps_model(freq)}, got: {val}")
         assert np.abs(medium.eps_model(freq) - val) < tol
 
 
