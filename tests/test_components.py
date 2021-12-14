@@ -118,8 +118,9 @@ def test_sim_grid_size():
     size = (1, 1, 1)
     _ = Simulation(size=size, grid_size=(1.0, 1.0, 1.0))
 
+
 def assert_log_level(caplog, log_level_expected):
-    """ ensure something got logged if log_level is not None"""
+    """ensure something got logged if log_level is not None"""
 
     # get log output
     logs = caplog.record_tuples
@@ -142,27 +143,20 @@ def assert_log_level(caplog, log_level_expected):
         raise Exception
 
 
-
 @pytest.mark.parametrize("fwidth,log_level", [(0.001, None), (3, 30)])
 def test_sim_frequency_range(caplog, fwidth, log_level):
     # small fwidth should be inside range, large one should throw warning
 
     size = (1, 1, 1)
     medium = Medium(frequency_range=(2, 3))
-    box = Structure(
-        geometry=Box(size=(.1, .1, .1)),
-        medium=medium)
+    box = Structure(geometry=Box(size=(0.1, 0.1, 0.1)), medium=medium)
     src = VolumeSource(
         source_time=GaussianPulse(freq0=2.4, fwidth=fwidth),
-        size=(0,0,0),
-        polarization='Ex',
+        size=(0, 0, 0),
+        polarization="Ex",
     )
-    _ = Simulation(
-        size=(1, 1, 1),
-        grid_size=(.1, .1, .1),
-        structures=[box],
-        sources=[src])
-    
+    _ = Simulation(size=(1, 1, 1), grid_size=(0.1, 0.1, 0.1), structures=[box], sources=[src])
+
     assert_log_level(caplog, log_level)
 
 
@@ -170,25 +164,54 @@ def test_sim_frequency_range(caplog, fwidth, log_level):
 def test_sim_grid_size(caplog, grid_size, log_level):
     # small fwidth should be inside range, large one should throw warning
 
-    size = (1, 1, 1)
     medium = Medium(permittivity=2, frequency_range=(2e14, 3e14))
-    box = Structure(
-        geometry=Box(size=(.1, .1, .1)),
-        medium=medium)
+    box = Structure(geometry=Box(size=(0.1, 0.1, 0.1)), medium=medium)
     src = VolumeSource(
         source_time=GaussianPulse(freq0=2.5e14, fwidth=1e13),
-        size=(0,0,0),
-        polarization='Ex',
+        size=(0, 0, 0),
+        polarization="Ex",
     )
-    _ = Simulation(
-        size=(1, 1, 1),
-        grid_size=(.1, .1, grid_size),
-        structures=[box],
-        sources=[src])
+    _ = Simulation(size=(1, 1, 1), grid_size=(0.1, 0.1, grid_size), structures=[box], sources=[src])
 
     assert_log_level(caplog, log_level)
 
 
+def test_sim_plane_wave_error():
+    # small fwidth should be inside range, large one should throw warning
+
+    medium_bg = Medium(permittivity=2)
+    medium_air = Medium(permittivity=1)
+
+    box = Structure(geometry=Box(size=(0.1, 0.1, 0.1)), medium=medium_air)
+
+    box_transparent = Structure(geometry=Box(size=(0.1, 0.1, 0.1)), medium=medium_bg)
+
+    src = PlaneWave(
+        source_time=GaussianPulse(freq0=2.5e14, fwidth=1e13),
+        center=(0, 0, 0),
+        size=(inf, inf, 0),
+        direction="+",
+        polarization="Ex",
+    )
+
+    # with transparent box continue
+    _ = Simulation(
+        size=(1, 1, 1),
+        grid_size=(0.1, 0.1, 0.1),
+        medium=medium_bg,
+        structures=[box_transparent],
+        sources=[src],
+    )
+
+    # with non-transparent box, raise
+    with pytest.raises(SetupError):
+        _ = Simulation(
+            size=(1, 1, 1),
+            grid_size=(0.1, 0.1, 0.1),
+            medium=medium_bg,
+            structures=[box_transparent, box],
+            sources=[src],
+        )
 
 """ geometry """
 
@@ -411,7 +434,7 @@ def test_modes():
 """ names """
 
 
-def test_names_default():
+def _test_names_default():
     """makes sure default names are set"""
 
     sim = Simulation(
