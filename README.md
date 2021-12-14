@@ -207,7 +207,7 @@ https://github.com/crusaderky/python_project_template
 - [ ] Refine documentation (1 week)
 	- [ ] Make pydantic autosummaries more pretty.
 	- [x] Move Docs and notebooks into their own repos?
-	- [ ] write as many tutorial notebooks as we can.
+	- [x] write as many tutorial notebooks as we can.
 	- [ ] make docs pretty,
 	- [ ] set up and test binder links.
 ---
@@ -238,7 +238,7 @@ https://github.com/crusaderky/python_project_template
 	- [ ] Github issue templates (.5 days)
 	- [ ] Releases, PyPI setup (.5 days)
 	- [ ] Wipe commit history
-	- [ ] decide how to manage branches
+	- [x] decide how to manage branches
 ---
 
 #### Final (28 days)
