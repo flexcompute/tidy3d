@@ -40,7 +40,7 @@ from .geometry import Box
 
 
 def assert_plane():
-    """makes sure a field's `size` attribute has exactly 1 zero"""
+    """Makes sure a field's `size` attribute has exactly 1 zero."""
 
     @pydantic.validator("size", allow_reuse=True, always=True)
     def is_plane(cls, val):
@@ -52,7 +52,7 @@ def assert_plane():
 
 
 def validate_name_str():
-    """make sure the name doesnt include [, ] (used for default names)"""
+    """Make sure the name doesnt include [, ] (used for default names)."""
 
     @pydantic.validator("name", allow_reuse=True, always=True, pre=True)
     def field_has_unique_names(cls, val):
@@ -65,7 +65,7 @@ def validate_name_str():
 
 
 def assert_unique_names(field_name: str, check_mediums=False):
-    """makes sure all elements of a field have unique .name values"""
+    """Makes sure all elements of a field have unique .name values."""
 
     @pydantic.validator(field_name, allow_reuse=True, always=True)
     def field_has_unique_names(cls, val, values):
@@ -85,7 +85,7 @@ def assert_unique_names(field_name: str, check_mediums=False):
 
 
 def assert_objects_in_sim_bounds(field_name: str):
-    """makes sure all objects in field are at least partially inside of simulation bounds/"""
+    """Makes sure all objects in field are at least partially inside of simulation bounds."""
 
     @pydantic.validator(field_name, allow_reuse=True, always=True)
     def objects_in_sim_bounds(cls, val, values):
@@ -104,7 +104,7 @@ def assert_objects_in_sim_bounds(field_name: str):
 
 
 def set_names(field_name: str):
-    """set names"""
+    """Set names."""
 
     @pydantic.validator(field_name, allow_reuse=True, always=True)
     def set_unique_names(cls, val):

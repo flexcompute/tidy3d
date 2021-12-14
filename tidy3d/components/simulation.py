@@ -30,6 +30,9 @@ from .monitor import FieldMonitor, FluxMonitor, Monitor  # pylint:disable=unused
 # technically this is creating a circular import issue because it calls tidy3d/__init__.py
 # from .. import __version__ as version_number
 
+# minimum number of grid points allowed per central wavelength in a medium
+MIN_GRIDS_PER_WVL = 6.0
+
 
 class Simulation(Box):  # pylint:disable=too-many-public-methods
     # pylint:disable=line-too-long
@@ -169,9 +172,8 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
     _monitors_in_bounds = assert_objects_in_sim_bounds("monitors")
 
     # assign names to unnamed structures, sources, and mediums
-    _structure_names = set_names("structures")
-    _source_names = set_names("sources")
-
+    # _structure_names = set_names("structures")
+    # _source_names = set_names("sources")
     # @pydantic.validator("structures", allow_reuse=True, always=True)
     # def set_medium_names(cls, val, values):
     #     """check for intersection of each structure with simulation bounds."""
@@ -189,12 +191,62 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
     _unique_monitor_names = assert_unique_names("monitors")
     # _unique_medium_names = assert_unique_names("structures", check_mediums=True)
 
-    # TODO:
-    # - check sources in medium freq range
-    # - check PW in homogeneous medium
-    # - check nonuniform grid covers the whole simulation domain
-    # - check any structures close to PML (in lambda) without intersecting.
-    # - check any structures.bounds == simulation.bounds -> warn
+    @pydantic.validator("sources", always=True)
+    def _warn_sources_mediums_frequency_range(cls, val, values):
+        """Warn user if any sources have frequency range outside of medium frequency range."""
+        structures = values.get("structures")
+        medium_bg = values.get("medium")
+        mediums = [medium_bg] + [structure.medium for structure in structures]
+
+        for source in val:
+            fmin_src, fmax_src = source.source_time.frequency_range
+            for medium in mediums:
+
+                # skip mediums that have no freq range (all freqs valid)
+                if medium.frequency_range is None:
+                    continue
+
+                # make sure medium frequency range includes the source frequency range
+                fmin_med, fmax_med = medium.frequency_range
+                if fmin_med > fmin_src or fmax_med < fmax_src:
+                    log.warning(f"A medium in the simulation:\n\n({medium})\n\nhas a frequency "
+                                "range that does not fully cover the spetrum of a source:"
+                                f"\n\n({source})\n\nThis can cause innacuracies in the "
+                                "simulation results.")
+        return val
+
+    @pydantic.validator("sources", always=True)
+    def _warn_grid_size_too_small(cls, val, values):
+        """Warn user if any sources have frequency range outside of medium frequency range."""
+        structures = values.get("structures")
+        medium_bg = values.get("medium")
+        grid_size = values.get("grid_size")
+        mediums = [medium_bg] + [structure.medium for structure in structures]
+
+        for source in val:
+            fmin_src, fmax_src = source.source_time.frequency_range
+            f_average = (fmin_src + fmax_src) / 2.0
+
+            for medium in mediums:
+
+                eps_material = medium.eps_model(f_average)
+                n_material, _ = medium.eps_complex_to_nk(eps_material)
+                lambda_min = C_0 / f_average / n_material
+
+                for dl in grid_size:
+                    if isinstance(dl, float):
+                        if dl > lambda_min / MIN_GRIDS_PER_WVL:
+                            log.warning(f"One of the grid sizes with a value of {dl:.4f} (um) "
+                                        "was detected as being too large when compared to the "
+                                        "central wavelength of a source within one of the "
+                                        f"simulation mediums {lambda_min:.4f} (um).  "
+                                        "To avoid inaccuracies, it is reccomended the grid size is "
+                                        "reduced."
+                )
+
+        return val
+
+
 
     """ Accounting """
 

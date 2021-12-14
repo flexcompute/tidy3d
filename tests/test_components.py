@@ -116,7 +116,78 @@ def test_sim_bounds():
 def test_sim_grid_size():
 
     size = (1, 1, 1)
-    s = Simulation(size=size, grid_size=(1.0, 1.0, 1.0))
+    _ = Simulation(size=size, grid_size=(1.0, 1.0, 1.0))
+
+def assert_log_level(caplog, log_level_expected):
+    """ ensure something got logged if log_level is not None"""
+
+    # get log output
+    logs = caplog.record_tuples
+
+    # there's a log but the log level is not None (problem)
+    if logs and not log_level_expected:
+        raise Exception
+
+    # we expect a log but none is given (problem)
+    if log_level_expected and not logs:
+        raise Exception
+
+    # both expected and got log, check the log levels match
+    if logs and log_level_expected:
+        for log in logs:
+            log_level = log[1]
+            if log_level == log_level_expected:
+                # log level was triggered, exit
+                return
+        raise Exception
+
+
+
+@pytest.mark.parametrize("fwidth,log_level", [(0.001, None), (3, 30)])
+def test_sim_frequency_range(caplog, fwidth, log_level):
+    # small fwidth should be inside range, large one should throw warning
+
+    size = (1, 1, 1)
+    medium = Medium(frequency_range=(2, 3))
+    box = Structure(
+        geometry=Box(size=(.1, .1, .1)),
+        medium=medium)
+    src = VolumeSource(
+        source_time=GaussianPulse(freq0=2.4, fwidth=fwidth),
+        size=(0,0,0),
+        polarization='Ex',
+    )
+    _ = Simulation(
+        size=(1, 1, 1),
+        grid_size=(.1, .1, .1),
+        structures=[box],
+        sources=[src])
+    
+    assert_log_level(caplog, log_level)
+
+
+@pytest.mark.parametrize("grid_size,log_level", [(0.001, None), (3, 30)])
+def test_sim_grid_size(caplog, grid_size, log_level):
+    # small fwidth should be inside range, large one should throw warning
+
+    size = (1, 1, 1)
+    medium = Medium(permittivity=2, frequency_range=(2e14, 3e14))
+    box = Structure(
+        geometry=Box(size=(.1, .1, .1)),
+        medium=medium)
+    src = VolumeSource(
+        source_time=GaussianPulse(freq0=2.5e14, fwidth=1e13),
+        size=(0,0,0),
+        polarization='Ex',
+    )
+    _ = Simulation(
+        size=(1, 1, 1),
+        grid_size=(.1, .1, grid_size),
+        structures=[box],
+        sources=[src])
+
+    assert_log_level(caplog, log_level)
+
 
 
 """ geometry """
