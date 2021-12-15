@@ -4,7 +4,8 @@ from typing import Any
 from dataclasses import dataclass
 
 # automate this later?
-SOLVER_VERSION = "release-21.4.2"
+# SOLVER_VERSION = "release-21.4.3"
+SOLVER_VERSION = "revamp-22.1.1"
 
 
 @dataclass
@@ -38,4 +39,4 @@ ConfigProd = WebConfig(
 
 
 # default one to import
-DEFAULT_CONFIG = ConfigProd
+DEFAULT_CONFIG = ConfigDev

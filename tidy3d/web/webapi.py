@@ -3,7 +3,11 @@
 import os
 import time
 import json
+from typing import List, Dict, Literal
+from datetime import datetime
+import logging
 
+import h5py
 import numpy as np
 import requests
 from rich.console import Console
@@ -18,10 +22,6 @@ from ..components.data import SimulationData
 from ..log import log, WebError
 from ..convert import export_old_json, load_old_monitor_data, load_solver_results
 
-
-# TODO: Original simulation still needed in download functions because we don't convert
-#       old json files to new ones.
-
 REFRESH_TIME = 0.3
 TOTAL_DOTS = 3
 
@@ -31,6 +31,7 @@ def run(
     task_name: str,
     folder_name: str = "default",
     path: str = "simulation_data.hdf5",
+    callback_url: str = None,
 ) -> SimulationData:
     """Submits a :class:`.Simulation` to server, starts running, monitors progress, downloads,
     and loads results as a :class:`.SimulationData` object.
@@ -45,19 +46,29 @@ def run(
         Path to download results file (.hdf5), including filename.
     folder_name : str = "default"
         Name of folder to store task on web UI.
+    callback_url : str, optional
+        Http PUT url to receive simulation finish event. The body content is a json file with
+        fields ``{'id', 'status', 'name', 'workUnit', 'solverVersion'}``.
 
     Returns
     -------
     :class:`.SimulationData`
         Object containing solver results for the supplied :class:`.Simulation`.
     """
-    task_id = upload(simulation=simulation, task_name=task_name, folder_name=folder_name)
+    task_id = upload(
+        simulation=simulation,
+        task_name=task_name,
+        folder_name=folder_name,
+        callback_url=callback_url,
+    )
     start(task_id)
     monitor(task_id)
     return load(task_id=task_id, simulation=simulation, path=path)
 
 
-def upload(simulation: Simulation, task_name: str, folder_name: str = "default") -> TaskId:
+def upload(
+    simulation: Simulation, task_name: str, folder_name: str = "default", callback_url: str = None
+) -> TaskId:
     """Upload simulation to server, but do not start running :class:`.Simulation`.
 
     Parameters
@@ -68,6 +79,9 @@ def upload(simulation: Simulation, task_name: str, folder_name: str = "default")
         Name of task.
     folder_name : str
         Name of folder to store task on web UI
+    callback_url : str, optional
+        Http PUT url to receive simulation finish event. The body content is a json file with
+        fields ``{'id', 'status', 'name', 'workUnit', 'solverVersion'}``.
 
     Returns
     -------
@@ -78,7 +92,13 @@ def upload(simulation: Simulation, task_name: str, folder_name: str = "default")
     ----
     To start the simulation running, must call :meth:`start` after uploaded.
     """
-    task_id = _upload_task(simulation=simulation, task_name=task_name, folder_name=folder_name)
+
+    task_id = _upload_task(
+        simulation=simulation,
+        task_name=task_name,
+        folder_name=folder_name,
+        callback_url=callback_url,
+    )
 
     # log the task_id so users can copy and paste it from STDOUT / file if the need it later.
     log.info(f"Uploaded task '{task_name}' with task_id '{task_id}'.")
@@ -232,51 +252,56 @@ def download(task_id: TaskId, simulation: Simulation, path: str = "simulation_da
     To load downloaded results into data, call :meth:`load` with option `replace_existing=False`.
     """
 
+    # TODO: it should be possible to load "diverged" simulations
     task_info = get_info(task_id)
     if task_info.status in ("error", "diverged", "deleted", "draft"):
         raise WebError(f"can't download task '{task_id}', status = '{task_info.status}'")
 
     directory, _ = os.path.split(path)
-    if directory and not os.path.exists(directory):
-        raise WebError(f"Can't download to path '{path}', directory {directory} doesn't exist.")
+    if directory != "":
+        os.makedirs(directory, exist_ok=True)
 
-    sim_file = os.path.join(directory, "simulation.json")
-    mon_file = os.path.join(directory, "monitor_data.hdf5")
-    log_file = os.path.join(directory, "tidy3d.log")
+    _download_file(task_id, fname="monitor_data.hdf5", path=path)
 
-    log.debug("clearing existing files before downloading")
-    for _path in (sim_file, mon_file, path):
-        _rm_file(_path)
+    # Temporary workaround if file was created using the old workflow
+    # TODO: Once this is removed, we can remove simulation from argument list.
+    data_file = h5py.File(path, "r")
 
-    # TODO: load these server side using the new specifictaions
-    _download_file(task_id, fname="simulation.json", path=sim_file)
-    _download_file(task_id, fname="monitor_data.hdf5", path=mon_file)
+    if "sim_json" not in data_file.keys():
+        # ``path`` will be overwritten in the end with the proper SimulationData export
+        # We don't need the file anymore so we close it so that it can be overwritten later.
+        data_file.close()
 
-    # TODO: do this stuff server-side
-    log.debug("getting log string")
-    _download_file(task_id, fname="tidy3d.log", path=log_file)
-    with open(log_file, "r", encoding="utf-8") as f:
-        log_string = f.read()
+        sim_file = os.path.join(directory, "simulation.json")
+        log_file = os.path.join(directory, "tidy3d.log")
 
-    log.debug("loading old monitor data to data dict")
-    # TODO: we cant convert old simulation file to new, so we'll ask for original as input instead.
-    # simulation = Simulation.from_file(sim_file)
-    mon_data_dict = load_old_monitor_data(simulation=simulation, data_file=mon_file)
+        # TODO: load these server side using the new specifictaions
+        _download_file(task_id, fname="simulation.json", path=sim_file)
 
-    log.debug("creating SimulationData from monitor data dict")
-    sim_data = load_solver_results(
-        simulation=simulation,
-        solver_data_dict=mon_data_dict,
-        log_string=log_string,
-    )
+        # TODO: do this stuff server-side
+        log.debug("getting log string")
+        _download_file(task_id, fname="tidy3d.log", path=log_file)
+        with open(log_file, "r", encoding="utf-8") as f:
+            log_string = f.read()
 
-    log.info(f"exporting SimulationData to {path}")
-    sim_data.to_file(path)
+        log.debug("loading old monitor data to data dict")
+        # TODO: we cant convert old simulation file to new, so we'll ask for original as input.
+        # simulation = Simulation.from_file(sim_file)
+        mon_data_dict = load_old_monitor_data(simulation=simulation, data_file=path)
 
-    log.debug("clearing extraneous files")
-    _rm_file(sim_file)
-    _rm_file(mon_file)
-    _rm_file(log_file)
+        log.debug("creating SimulationData from monitor data dict")
+        sim_data = load_solver_results(
+            simulation=simulation,
+            solver_data_dict=mon_data_dict,
+            log_string=log_string,
+        )
+
+        log.info(f"exporting SimulationData to {path}")
+        sim_data.to_file(path)
+
+        log.debug("clearing extraneous files")
+        _rm_file(sim_file)
+        _rm_file(log_file)
 
 
 def load(
@@ -328,29 +353,107 @@ def delete(task_id: TaskId) -> TaskInfo:
     return http.delete(method)
 
 
-def _upload_task(  # pylint:disable=too-many-locals
+def delete_old(days_old: int = 100, folder: str = None):
+    """Delete all tasks older than a given amount of days.
+
+    Parameters
+    ----------
+    days_old : int, optional
+        Minimum number of days since the task creation.
+    folder : str or None, optional
+        If None, all folders are purged.
+
+    Returns
+    -------
+    int
+        Total number of tasks deleted.
+    """
+
+    tasks = http.get("fdtd/models")
+    count = 0
+    for pfolder in tasks:
+        if pfolder["name"] == folder or folder is None:
+            for task in pfolder["children"]:
+                if task["status"] == "deleted":
+                    continue
+                stime_str = task["submitTime"]
+                stime = datetime.strptime(stime_str, "%Y:%m:%d:%H:%M:%S")
+                days_elapsed = (datetime.utcnow() - stime).days
+                if days_elapsed >= days_old:
+                    delete(task["taskId"])
+                    count += 1
+
+    return count
+
+
+def get_tasks(num_tasks: int = None, order: Literal["new", "old"] = "new") -> List[Dict]:
+    """Get a list with the metadata of the last ``num_tasks`` tasks.
+
+    Parameters
+    ----------
+    num_tasks : int, optional
+        The number of tasks to return, or, if ``None``, return all.
+    order : Literal["new", "old"], optional
+        Return the tasks in order of newest-first or oldest-first.
+
+    """
+
+    tasks = http.get("fdtd/models")
+    store_dict = {
+        "submit_time": [],
+        "status": [],
+        "task_name": [],
+        "task_id": [],
+    }
+    for pfolder in tasks:
+        for task in pfolder["children"]:
+            try:
+                store_dict["submit_time"].append(task["submitTime"])
+                store_dict["status"].append(task["status"])
+                store_dict["task_name"].append(task["taskName"])
+                store_dict["task_id"].append(task["taskId"])
+            except KeyError:
+                logging.warning(f"Error with task {task['taskId']}, skipping.")
+
+    sort_inds = sorted(
+        range(len(store_dict["submit_time"])),
+        key=store_dict["submit_time"].__getitem__,
+        reverse=order == "new",
+    )
+
+    if num_tasks is None or num_tasks > len(sort_inds):
+        num_tasks = len(sort_inds)
+
+    out_dict = []
+    for ipr in range(num_tasks):
+        out_dict.append({key: item[sort_inds[ipr]] for (key, item) in store_dict.items()})
+
+    return out_dict
+
+
+def _upload_task(  # pylint:disable=too-many-locals,too-many-arguments
     simulation: Simulation,
     task_name: str,
     folder_name: str = "default",
     solver_version: str = Config.solver_version,
     worker_group: str = Config.worker_group,
+    callback_url: str = None,
 ) -> TaskId:
     """upload with all kwargs exposed"""
 
-    # convert to old json and get string version
-    sim_dict = export_old_json(simulation)
-    json_string = json.dumps(sim_dict, indent=4)
+    if solver_version[:6] == "revamp":
+        json_string = simulation.json()
+    else:
+        # convert to old json and get string version
+        sim_dict = export_old_json(simulation)
+        json_string = json.dumps(sim_dict, indent=4)
 
-    # TODO: remove node size, time steps, compute weight, worker group
-    node_size = int(np.prod([len(sizes) for sizes in simulation.grid.sizes.dict().values()]))
     data = {
-        "status": "draft",
+        "status": "uploading",
         "solverVersion": solver_version,
         "taskName": task_name,
-        "nodeSize": node_size,  # int(sim_dict["parameters"]["nodes"]),
-        "timeSteps": 80,  # int(sim_dict["parameters"]["time_steps"]),
-        "computeWeight": 1,  # float(sim_dict["parameters"]["compute_weight"]),
         "workerGroup": worker_group,
+        "callbackUrl": callback_url,
     }
 
     method = f"fdtd/model/{folder_name}/task"
@@ -381,6 +484,9 @@ def _upload_task(  # pylint:disable=too-many-locals
         Key=key,
         # Callback=upload_progress.report
     )
+
+    task["status"] = "draft"
+    http.put(f"{method}/{task_id}", data=task)
 
     return task_id
 
@@ -420,8 +526,8 @@ def _download_file(task_id: TaskId, fname: str, path: str) -> None:
         log.warning(e)
         log.error(
             "Cannot retrieve requested file, check the file name and "
-            "make sure the project has run correctly. Current "
-            f"project status is '{task_info.status}.",
+            "make sure the task has run correctly. Current "
+            f"task status is '{task_info.status}.",
         )
 
 

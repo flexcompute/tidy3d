@@ -54,7 +54,7 @@ def get_credentials() -> None:
             return
 
         except Exception as e:  # pylint:disable=broad-except
-            raise AuthenticationError("Error: Failed to log in with saved credentials.") from e
+            print("Error: Failed to log in with saved credentials.")
 
     # keep trying to log in
     while True:

@@ -23,12 +23,26 @@ class WebContainer(Tidy3dBaseModel, ABC):
 
 
 class Job(WebContainer):
-    """Interface for managing the running of a :class:`.Simulation` on server."""
+    """Interface for managing the running of a :class:`.Simulation` on server.
+
+    Parameters
+    ----------
+        simulation : :class:`.Simulation`
+            Simulation to upload to server.
+        task_name : str
+            Name of task.
+        folder_name : str = "default"
+            Name of folder to store task on web UI.
+        callback_url : str, optional
+            Http PUT url to receive simulation finish event. The body content is a json file with
+            fields ``{'id', 'status', 'name', 'workUnit', 'solverVersion'}``.
+    """
 
     simulation: Simulation
     task_name: TaskName
     folder_name: str = "default"
     task_id: TaskId = None
+    callback_url: str = None
 
     def run(self, path: str = DEFAULT_DATA_PATH) -> SimulationData:
         """run :class:`Job` all the way through and return data.
@@ -57,7 +71,10 @@ class Job(WebContainer):
         To start the simulation running, call :meth:`Job.start` after uploaded.
         """
         task_id = web.upload(
-            simulation=self.simulation, task_name=self.task_name, folder_name=self.folder_name
+            simulation=self.simulation,
+            task_name=self.task_name,
+            folder_name=self.folder_name,
+            callback_url=self.callback_url,
         )
         self.task_id = task_id
 
