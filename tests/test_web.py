@@ -1,4 +1,6 @@
 """ tests converted webapi """
+from datetime import datetime
+
 import pytest
 
 import tidy3d as td
@@ -10,6 +12,7 @@ from .utils import clear_tmp
 PATH_JSON = "tests/tmp/simulation.json"
 PATH_SIM_DATA = "tests/tmp/sim_data.hdf5"
 PATH_DIR_SIM_DATA = "tests/tmp/"
+CALLBACK_URL = "https://callbackurl"  # dummy
 
 
 """ core webapi """
@@ -30,7 +33,10 @@ def test_webapi_0_run():
 
 def test_webapi_1_upload():
     """test that task uploads ok"""
-    task_id = web.upload(simulation=sim_original, task_name="test_webapi")
+
+    task_id = web.upload(
+        simulation=sim_original, task_name="test_webapi", callback_url=CALLBACK_URL
+    )
     task_id_global.append(task_id)
 
 
@@ -76,6 +82,14 @@ def _test_webapi_7_delete():
     assert task_info.status in ("deleted", "deleting")
 
 
+def test_webapi_8_get_tasks():
+    """test that we can get tasks orderd chronologically"""
+    tasks = web.get_tasks(num_tasks=5)
+    times = [datetime.strptime(task["submit_time"], "%Y:%m:%d:%H:%M:%S") for task in tasks]
+    for i in range(4):
+        assert times[i] > times[i + 1]
+
+
 """ Jobs """
 
 
@@ -90,7 +104,7 @@ def _get_gloabl_job():
 @clear_tmp
 def test_job_0_run():
     """test complete run"""
-    job = web.Job(simulation=sim_original, task_name="test_job")
+    job = web.Job(simulation=sim_original, task_name="test_job", callback_url=CALLBACK_URL)
     job.run(path=PATH_SIM_DATA)
 
 
