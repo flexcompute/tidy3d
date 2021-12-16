@@ -45,7 +45,6 @@ def test_simulation_preserve_types():
                 size=(inf, inf, 0),
                 source_time=st,
                 direction="+",
-                polarization="Ex",
                 waist_radius=1,
             ),
         ],

@@ -526,8 +526,8 @@ class Box(Geometry):
         -------
         >>> b = Box.from_bounds(rmin=(-1, -2, -3), rmax=(3, 2, 1))
         """
-        center = tuple((pt_min + pt_max / 2.0) for pt_min, pt_max in zip(rmin, rmax))
-        size = tuple((pt_max - pt_max) for pt_min, pt_max in zip(rmin, rmax))
+        center = tuple((pt_min + pt_max) / 2.0 for pt_min, pt_max in zip(rmin, rmax))
+        size = tuple((pt_max - pt_min) for pt_min, pt_max in zip(rmin, rmax))
         return cls(center=center, size=size)
 
     def intersections(self, x: float = None, y: float = None, z: float = None):

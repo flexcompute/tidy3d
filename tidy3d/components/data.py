@@ -344,7 +344,9 @@ class AbstractFieldData(CollectionData, ABC):
         ----------
         x : np.array
             x coordinates of locations.
+        y : np.array
             y coordinates of locations.
+        z : np.array
             z coordinates of locations.
 
         Returns
