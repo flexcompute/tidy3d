@@ -481,30 +481,26 @@ def test_source_times():
     # c.amp_time(ts)
 
 
-def test_VolumeSource_directional():
+def test_FieldSource():
     g = GaussianPulse(freq0=1, fwidth=0.1)
+    mode = Mode(mode_index=0)
 
     # test we can make planewave
-    s = PlaneWave(size=(0, 1, 1), source_time=g, polarization="Ez", direction="+")
+    s = PlaneWave(size=(0, 1, 1), source_time=g, pol_angle=np.pi / 2, direction="+")
 
-    # test we can make planewave
-    s = GaussianBeam(size=(0, 1, 1), source_time=g, polarization="Ez", direction="+")
+    # test we can make gaussian beam
+    s = GaussianBeam(size=(0, 1, 1), source_time=g, pol_angle=np.pi / 2, direction="+")
 
-    # test that non-planar geometry crashes plane wave
-    with pytest.raises(ValidationError) as e_info:
-        s = PlaneWave(size=(1, 1, 1), source_time=g, polarization="Ez", direction="+")
+    # test we can make mode source
+    s = ModeSource(size=(0, 1, 1), direction="+", source_time=g, mode=mode)
 
     # test that non-planar geometry crashes plane wave and gaussian beam
     with pytest.raises(ValidationError) as e_info:
-        s = PlaneWave(size=(1, 1, 0), source_time=g, polarization="Ez", direction="+")
+        s = PlaneWave(size=(1, 1, 1), source_time=g, pol_angle=np.pi / 2, direction="+")
     with pytest.raises(ValidationError) as e_info:
-        s = GaussianBeam(size=(1, 1, 1), source_time=g, polarization="Ez", direction="+")
-
-
-def test_VolumeSource_modal():
-    g = GaussianPulse(freq0=1, fwidth=0.1)
-    mode = Mode(mode_index=0)
-    m = ModeSource(size=(0, 1, 1), direction="+", source_time=g, mode=mode)
+        s = GaussianBeam(size=(1, 1, 1), source_time=g, pol_angle=np.pi / 2, direction="+")
+    with pytest.raises(ValidationError) as e_info:
+        s = ModeSource(size=(1, 1, 1), direction="+", source_time=g, mode=mode)
 
 
 """ monitors """

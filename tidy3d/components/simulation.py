@@ -142,7 +142,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
     """
     # pylint:enable=line-too-long
 
-    version: str = '0.2.0' # will make this more automated later
+    version: str = "0.2.0"  # will make this more automated later
     grid_size: Tuple[GridSize, GridSize, GridSize]
     medium: MediumType = Medium()
     run_time: pydantic.NonNegativeFloat = 0.0
@@ -825,11 +825,11 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         bound_coords = np.array([np.sum(dl[:i]) for i in range(len(dl) + 1)])
 
         # shift coords to center at center of simulation along dimension
-        bound_coords = bound_coords - np.sum(dl)/2 + center
+        bound_coords = bound_coords - np.sum(dl) / 2 + center
 
         # chop off any coords outside of simulation bounds
-        bound_min = center - size/2
-        bound_max = center + size/2
+        bound_min = center - size / 2
+        bound_max = center + size / 2
         bound_coords = bound_coords[bound_coords <= bound_max]
         bound_coords = bound_coords[bound_coords >= bound_min]
 

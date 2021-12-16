@@ -12,7 +12,6 @@ from .validators import assert_plane, validate_name_str
 from .geometry import Box
 from .mode import Mode
 from .viz import add_ax_if_none, SourceParams
-from ..log import ValidationError
 from ..constants import inf  # pylint:disable=unused-import
 
 # TODO: change directional source to something signifying its intent is to create a specific field.
@@ -316,7 +315,15 @@ class VolumeSource(Source):
     type: Literal["VolumeSource"] = "VolumeSource"
 
 
-class ModeSource(Source):
+class FieldSource(Source, ABC):
+    """A planar Source defined by the desired E and H fields at a plane. The sources are created
+    such that the propagation is uni-directional."""
+
+    direction: Direction
+    _plane_validator = assert_plane()
+
+
+class ModeSource(FieldSource):
     """Modal profile on finite extent plane
 
     Parameters
@@ -330,9 +337,8 @@ class ModeSource(Source):
     source_time : :class:`GaussianPulse` or :class:`ContinuousWave`
         Specification of time-dependence of source.
     direction : str
-        Specifies the sign of propagation.
-        Must be in ``{'+', '-'}``.
-        Note: propagation occurs along dimension normal to plane.
+        Specifies propagation in the positive or negative direction of the normal axis. Must be in
+        ``{'+', '-'}``.
     mode : :class:`Mode`
         Specification of the mode being injected by source.
     name : str = None
@@ -345,40 +351,11 @@ class ModeSource(Source):
     >>> mode_source = ModeSource(size=(10,10,0), source_time=pulse, mode=mode, direction='-')
     """
 
-    direction: Direction
-    mode: Mode
     type: Literal["ModeSource"] = "ModeSource"
-    _plane_validator = assert_plane()
+    mode: Mode
 
 
-class DirectionalSource(Source, ABC):
-    """A Planar Source with uni-directional propagation."""
-
-    direction: Direction
-    polarization: Polarization
-
-    _plane_validator = assert_plane()
-
-    @pydantic.root_validator(allow_reuse=True)
-    def polarization_is_orthogonal(cls, values):
-        """Ensure the polarization is orthogonal to the propagation direction."""
-        size = values.get("size")
-        polarization = values.get("polarization")
-        assert size is not None
-        assert polarization is not None
-
-        normal_axis_index = size.index(0.0)
-        normal_axis = "xyz"[normal_axis_index]
-        polarization_axis = polarization[-1]
-        if normal_axis == polarization_axis:
-            raise ValidationError(
-                "Directional source must have polarization component orthogonal "
-                "to the normal direction of the plane."
-            )
-        return values
-
-
-class PlaneWave(DirectionalSource):
+class PlaneWave(FieldSource):
     """Uniform distribution on infinite extent plane.
 
     Parameters
@@ -391,14 +368,17 @@ class PlaneWave(DirectionalSource):
         All elements must be non-negative.
     source_time : :class:`GaussianPulse` or :class:`ContinuousWave`
         Specification of time-dependence of source.
-    polarization : str
-        Specifies the direction and type of current component.
-        Must be in ``{'Ex', 'Ey', 'Ez', 'Hx', 'Hy', 'Hz'}``.
-        For example, ``'Ez'`` specifies electric current source polarized along the z-axis.
+    pol_angle : float, optional
+        Specifies the angle between the electric field polarization of the source and the plane
+        defined by the normal axis and the propagation axis (rad). ``pol_angle=0`` (default)
+        specifies P polarization, while ``pol_angle=np.pi/2`` specifies S polarization. At normal
+        incidence when S and P are undefined, ``pol_angle=0`` defines, respectively:
+         - ``Ey`` polarization for propagation along ``x``.
+         - ``Ex`` polarization for propagation along ``y``.
+         - ``Ex`` polarization for propagation along ``z``.
     direction : str
-        Specifies the sign of propagation.
-        Must be in ``{'+', '-'}``.
-        Note: propagation occurs along dimension normal to plane.
+        Specifies propagation in the positive or negative direction of the normal axis. Must be in
+        ``{'+', '-'}``.
     name : str = None
         Optional name for source.
 
@@ -409,9 +389,12 @@ class PlaneWave(DirectionalSource):
     """
 
     type: Literal["PlaneWave"] = "PlaneWave"
+    pol_angle: float = 0
+    # TODO: this is only needed so that the convert path still works. Remove eventually.
+    polarization: Polarization = "Ex"
 
 
-class GaussianBeam(DirectionalSource):
+class GaussianBeam(FieldSource):
     """guassian distribution on finite extent plane
 
     Parameters
@@ -424,26 +407,27 @@ class GaussianBeam(DirectionalSource):
         All elements must be non-negative.
     source_time : :class:`GaussianPulse` or :class:`ContinuousWave`
         Specification of time-dependence of source.
-    polarization : str
-        Specifies the direction and type of current component.
-        Must be in ``{'Ex', 'Ey', 'Ez', 'Hx', 'Hy', 'Hz'}``.
-        For example, ``'Ez'`` specifies electric current source polarized along the z-axis.
     direction : str
-        Specifies the sign of propagation.
-        Must be in ``{'+', '-'}``.
-        Note: propagation occurs along dimension normal to plane.
+        Specifies propagation in the positive or negative direction of the normal axis. Must be in
+        ``{'+', '-'}``.
     waist_radius: float = 1.0
         Radius of the beam at the waist (um).
         Must be positive.
     waist_distance: float = 0.0
         Distance (um) from the beam waist along the propagation direction.
         Must be non-negative.
-    angle_theta: float = 0.0
-        Angle of propagation of the beam with respect to the normal axis (rad).
-    angle_phi: float = 0.0
-        Angle of propagation of the beam with respect to parallel axis (rad).
-    pol_angle: float = 0.0
-        Angle of the polarization with respect to the parallel axis (rad).
+    angle_theta : float, optional
+        Polar angle from the normal axis (rad).
+    angle_phi : float, optional
+        Azimuth angle in the plane orthogonal to the normal axis (rad).
+    pol_angle : float, optional
+        Specifies the angle between the electric field polarization of the source and the plane
+        defined by the normal axis and the propagation axis (rad). ``pol_angle=0`` (default)
+        specifies P polarization, while ``pol_angle=np.pi/2`` specifies S polarization. At normal
+        incidence when S and P are undefined, ``pol_angle=0`` defines, respectively:
+         - ``Ey`` polarization for propagation along ``x``.
+         - ``Ex`` polarization for propagation along ``y``.
+         - ``Ex`` polarization for propagation along ``z``.
     name : str = None
         Optional name for source.
 
@@ -453,7 +437,7 @@ class GaussianBeam(DirectionalSource):
     >>> gauss = GaussianBeam(
     ...     size=(0,3,3),
     ...     source_time=pulse,
-    ...     polarization='Hy',
+    ...     pol_angle=np.pi / 2,
     ...     direction='+',
     ...     waist_radius=1.0)
     """
