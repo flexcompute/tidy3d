@@ -41,9 +41,21 @@ def set_authentication_config(email: str, password: str) -> None:
 def get_credentials() -> None:
     """Tries to log user in from file, if not working, prompts user for login info and saves."""
 
+    # if we find credentials in environment variables
+    if "TIDY3D_USER" in os.environ and "TIDY3D_PASS" in os.environ:
+        print("Using Tidy3D credentials from enviornment")
+        email = os.environ["TIDY3D_USER"]
+        password = os.environ["TIDY3D_PASS"]
+        try:
+            set_authentication_config(email, password)
+            return
+
+        except: # pylint:disable=broad-except
+            print("Error: Failed to log in with existing user:", email)
+
     # if we find something in the credential path
     if os.path.exists(credential_path):
-
+        print("Using Tidy3D credentials from stored file")
         # try to authenticate them
         try:
             with open(credential_path, "r", encoding="utf-8") as fp:
@@ -53,7 +65,7 @@ def get_credentials() -> None:
             set_authentication_config(email, password)
             return
 
-        except Exception as e:  # pylint:disable=broad-except
+        except Exception:  # pylint:disable=broad-except
             print("Error: Failed to log in with saved credentials.")
 
     # keep trying to log in

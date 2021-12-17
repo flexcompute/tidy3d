@@ -8,7 +8,6 @@ from datetime import datetime
 import logging
 
 import h5py
-import numpy as np
 import requests
 from rich.console import Console
 from rich.progress import Progress

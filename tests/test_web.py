@@ -1,10 +1,13 @@
 """ tests converted webapi """
+import os
 from datetime import datetime
+from unittest import TestCase, mock
 
 import pytest
 
 import tidy3d as td
 import tidy3d.web as web
+from tidy3d.web.auth import get_credentials
 
 from .utils import SIM_CONVERT as sim_original
 from .utils import clear_tmp
@@ -12,7 +15,8 @@ from .utils import clear_tmp
 PATH_JSON = "tests/tmp/simulation.json"
 PATH_SIM_DATA = "tests/tmp/sim_data.hdf5"
 PATH_DIR_SIM_DATA = "tests/tmp/"
-CALLBACK_URL = "https://callbackurl"  # dummy
+CALLBACK_URL = "https://flow360-studio-v1.s3.amazonaws.com/test/aaa222333.json?AWSAccessKeyId="
+"AKIAU77I6BZ2WTSISV3C&Signature=hrmsEZMY4bdymcVGjrKH3NpU9IA%3D&Expires=1639167172"
 
 
 """ core webapi """
@@ -23,6 +27,17 @@ task_id_global = []
 def _get_gloabl_task_id():
     """returns the task id from the list"""
     return task_id_global[0]
+
+
+class Test(TestCase):
+    """Use unittest.mock to check that authentication with environment variables works."""
+
+    @mock.patch("tidy3d.web.auth.set_authentication_config")
+    def test_get_email_passwd_auth_key_ok(self, set_authentication_config):
+        os.environ["TIDY3D_USER"] = "mytestuser"
+        os.environ["TIDY3D_PASS"] = "mytestpass"
+        get_credentials()
+        set_authentication_config.assert_called_with("mytestuser", "mytestpass")
 
 
 @clear_tmp
