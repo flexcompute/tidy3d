@@ -1,3 +1,4 @@
+# pylint:disable=too-many-lines
 """ Container holding all information about simulation and its components"""
 from typing import Dict, Tuple, List, Set
 
@@ -9,7 +10,7 @@ import matplotlib as mpl
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from descartes import PolygonPatch
 
-from .validators import assert_unique_names, assert_objects_in_sim_bounds, set_names
+from .validators import assert_unique_names, assert_objects_in_sim_bounds
 from .geometry import Box
 from .types import Symmetry, Ax, Shapely, FreqBound, GridSize
 from .grid import Coords1D, Grid, Coords
@@ -27,8 +28,6 @@ from .geometry import Sphere, Cylinder, PolySlab  # pylint:disable=unused-import
 from .source import VolumeSource, GaussianPulse  # pylint:disable=unused-import
 from .monitor import FieldMonitor, FluxMonitor, Monitor  # pylint:disable=unused-import
 
-# technically this is creating a circular import issue because it calls tidy3d/__init__.py
-# from .. import __version__ as version_number
 
 # minimum number of grid points allowed per central wavelength in a medium
 MIN_GRIDS_PER_WVL = 6.0
@@ -245,7 +244,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         return val
 
     @pydantic.validator("pml_layers", always=True)
-    def _structures_not_close_pml(cls, val, values):
+    def _structures_not_close_pml(cls, val, values):  # pylint:disable=too-many-locals
         """Warn if any structures lie at the simulation boundaries."""
 
         if val is None:
@@ -259,6 +258,15 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         if (not structures) or (not sources):
             return val
 
+        def warn(structure):
+            """Warning message for a structure too close to PML."""
+            log.warning(
+                f"a structure\n\n{structure}\n\nwas detected as being less "
+                "than half of a central wavelength from a PML on - side"
+                "To avoid inaccurate results, please increase gap between "
+                "any structures and PML or fully extend structure through the pml."
+            )
+
         for structure in structures:
             struct_bound_min, struct_bound_max = structure.geometry.bounds
 
@@ -270,22 +278,12 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
                 for sim_val, struct_val, pml in zip(sim_bound_min, struct_bound_min, val):
                     if pml.num_layers > 0 and struct_val > sim_val:
                         if abs(sim_val - struct_val) < lambda0 / 2:
-                            log.warning(
-                                f"a structure\n\n{structure}\n\nwas detected as being less "
-                                "than half of a central wavelength from a PML on - side"
-                                "To avoid inaccurate results, please increase gap between "
-                                "any structures and PML."
-                            )
+                            warn(structure)
 
                 for sim_val, struct_val, pml in zip(sim_bound_max, struct_bound_max, val):
                     if pml.num_layers > 0 and struct_val < sim_val:
                         if abs(sim_val - struct_val) < lambda0 / 2:
-                            log.warning(
-                                f"a structure\n\n{structure}\n\nwas detected as being less "
-                                "than half of a central wavelength from a PML on + side"
-                                "To avoid inaccurate results, please increase gap between "
-                                "any structures and PML."
-                            )
+                            warn(structure)
 
         return val
 
@@ -321,7 +319,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         return val
 
     @pydantic.validator("sources", always=True)
-    def _warn_grid_size_too_small(cls, val, values):
+    def _warn_grid_size_too_small(cls, val, values):  # pylint:disable=too-many-locals
         """Warn user if any grid size is too large compared to minimum wavelength in material."""
 
         if val is None:
@@ -354,6 +352,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
                                 "To avoid inaccuracies, it is reccomended the grid size is "
                                 "reduced."
                             )
+                    # TODO: nonuniform grid
 
         return val
 
