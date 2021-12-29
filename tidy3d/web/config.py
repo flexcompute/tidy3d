@@ -39,4 +39,4 @@ ConfigProd = WebConfig(
 
 
 # default one to import
-DEFAULT_CONFIG = ConfigDev
+DEFAULT_CONFIG = ConfigProd

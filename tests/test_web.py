@@ -15,9 +15,7 @@ from .utils import clear_tmp
 PATH_JSON = "tests/tmp/simulation.json"
 PATH_SIM_DATA = "tests/tmp/sim_data.hdf5"
 PATH_DIR_SIM_DATA = "tests/tmp/"
-CALLBACK_URL = "https://flow360-studio-v1.s3.amazonaws.com/test/aaa222333.json?AWSAccessKeyId="
-"AKIAU77I6BZ2WTSISV3C&Signature=hrmsEZMY4bdymcVGjrKH3NpU9IA%3D&Expires=1639167172"
-
+CALLBACK_URL = "https://callbackurl"
 
 """ core webapi """
 
