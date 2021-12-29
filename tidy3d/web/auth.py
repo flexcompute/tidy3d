@@ -39,19 +39,22 @@ def set_authentication_config(email: str, password: str) -> None:
 
 
 def get_credentials() -> None:
-    """Tries to log user in from file, if not working, prompts user for login info and saves."""
+    """Tries to log user in from environment variables, then from file, if not working, prompts
+    user for login info and saves to file."""
+    salt = "5ac0e45f46654d70bda109477f10c299"  # TODO: salt should be added server-side
 
     # if we find credentials in environment variables
     if "TIDY3D_USER" in os.environ and "TIDY3D_PASS" in os.environ:
         print("Using Tidy3D credentials from enviornment")
         email = os.environ["TIDY3D_USER"]
         password = os.environ["TIDY3D_PASS"]
+        password = hashlib.sha512(password.encode("utf-8") + salt.encode("utf-8")).hexdigest()
         try:
             set_authentication_config(email, password)
             return
 
-        except: # pylint:disable=broad-except
-            print("Error: Failed to log in with existing user:", email)
+        except Exception:  # pylint:disable=broad-except
+            print("Error: Failed to log in with environment credentials.")
 
     # if we find something in the credential path
     if os.path.exists(credential_path):
@@ -73,9 +76,7 @@ def get_credentials() -> None:
 
         email = input("enter your email registered at tidy3d: ")
         password = getpass.getpass("enter your password: ")
-
-        # encrypt password?
-        salt = "5ac0e45f46654d70bda109477f10c299"  # what is this?
+        # encrypt
         password = hashlib.sha512(password.encode("utf-8") + salt.encode("utf-8")).hexdigest()
 
         try:

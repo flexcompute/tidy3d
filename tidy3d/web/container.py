@@ -33,7 +33,7 @@ class Job(WebContainer):
             Name of task.
         folder_name : str = "default"
             Name of folder to store task on web UI.
-        callback_url : str, optional
+        callback_url : str = None
             Http PUT url to receive simulation finish event. The body content is a json file with
             fields ``{'id', 'status', 'name', 'workUnit', 'solverVersion'}``.
     """

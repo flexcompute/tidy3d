@@ -45,7 +45,7 @@ def run(
         Path to download results file (.hdf5), including filename.
     folder_name : str = "default"
         Name of folder to store task on web UI.
-    callback_url : str, optional
+    callback_url : str = None
         Http PUT url to receive simulation finish event. The body content is a json file with
         fields ``{'id', 'status', 'name', 'workUnit', 'solverVersion'}``.
 
@@ -78,7 +78,7 @@ def upload(
         Name of task.
     folder_name : str
         Name of folder to store task on web UI
-    callback_url : str, optional
+    callback_url : str = None
         Http PUT url to receive simulation finish event. The body content is a json file with
         fields ``{'id', 'status', 'name', 'workUnit', 'solverVersion'}``.
 
@@ -262,45 +262,45 @@ def download(task_id: TaskId, simulation: Simulation, path: str = "simulation_da
 
     _download_file(task_id, fname="monitor_data.hdf5", path=path)
 
-    # Temporary workaround if file was created using the old workflow
+    # For now we need to check if the data file was created by the new or the old solver
     # TODO: Once this is removed, we can remove simulation from argument list.
-    data_file = h5py.File(path, "r")
+    with h5py.File(path, "r") as data_file:
+        if "sim_json" in data_file.keys():
+            return
 
-    if "sim_json" not in data_file.keys():
-        # ``path`` will be overwritten in the end with the proper SimulationData export
-        # We don't need the file anymore so we close it so that it can be overwritten later.
-        data_file.close()
+    # Temporary workaround if file was created using the old workflow
+    # ``path`` will be overwritten in the end with the proper SimulationData export
 
-        sim_file = os.path.join(directory, "simulation.json")
-        log_file = os.path.join(directory, "tidy3d.log")
+    sim_file = os.path.join(directory, "simulation.json")
+    log_file = os.path.join(directory, "tidy3d.log")
 
-        # TODO: load these server side using the new specifictaions
-        _download_file(task_id, fname="simulation.json", path=sim_file)
+    # TODO: load these server side using the new specifictaions
+    _download_file(task_id, fname="simulation.json", path=sim_file)
 
-        # TODO: do this stuff server-side
-        log.debug("getting log string")
-        _download_file(task_id, fname="tidy3d.log", path=log_file)
-        with open(log_file, "r", encoding="utf-8") as f:
-            log_string = f.read()
+    # TODO: do this stuff server-side
+    log.debug("getting log string")
+    _download_file(task_id, fname="tidy3d.log", path=log_file)
+    with open(log_file, "r", encoding="utf-8") as f:
+        log_string = f.read()
 
-        log.debug("loading old monitor data to data dict")
-        # TODO: we cant convert old simulation file to new, so we'll ask for original as input.
-        # simulation = Simulation.from_file(sim_file)
-        mon_data_dict = load_old_monitor_data(simulation=simulation, data_file=path)
+    log.debug("loading old monitor data to data dict")
+    # TODO: we cant convert old simulation file to new, so we'll ask for original as input.
+    # simulation = Simulation.from_file(sim_file)
+    mon_data_dict = load_old_monitor_data(simulation=simulation, data_file=path)
 
-        log.debug("creating SimulationData from monitor data dict")
-        sim_data = load_solver_results(
-            simulation=simulation,
-            solver_data_dict=mon_data_dict,
-            log_string=log_string,
-        )
+    log.debug("creating SimulationData from monitor data dict")
+    sim_data = load_solver_results(
+        simulation=simulation,
+        solver_data_dict=mon_data_dict,
+        log_string=log_string,
+    )
 
-        log.info(f"exporting SimulationData to {path}")
-        sim_data.to_file(path)
+    log.info(f"exporting SimulationData to {path}")
+    sim_data.to_file(path)
 
-        log.debug("clearing extraneous files")
-        _rm_file(sim_file)
-        _rm_file(log_file)
+    log.debug("clearing extraneous files")
+    _rm_file(sim_file)
+    _rm_file(log_file)
 
 
 def load(
@@ -352,14 +352,14 @@ def delete(task_id: TaskId) -> TaskInfo:
     return http.delete(method)
 
 
-def delete_old(days_old: int = 100, folder: str = None):
+def delete_old(days_old: int = 100, folder: str = None) -> int:
     """Delete all tasks older than a given amount of days.
 
     Parameters
     ----------
-    days_old : int, optional
+    days_old : int = 100
         Minimum number of days since the task creation.
-    folder : str or None, optional
+    folder : str = None
         If None, all folders are purged.
 
     Returns
@@ -390,11 +390,10 @@ def get_tasks(num_tasks: int = None, order: Literal["new", "old"] = "new") -> Li
 
     Parameters
     ----------
-    num_tasks : int, optional
+    num_tasks : int = None
         The number of tasks to return, or, if ``None``, return all.
-    order : Literal["new", "old"], optional
+    order : Literal["new", "old"] = "new"
         Return the tasks in order of newest-first or oldest-first.
-
     """
 
     tasks = http.get("fdtd/models")
