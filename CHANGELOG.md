@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Web authentication using environment variables `TIDY3D_USER` and `TIDY3D_PASS`.
+- `callback_url` in web API to put job metadata when a job is finished.
 - Support for non uniform grid size definition.
 - Gaussian beam source.
 - Automated testing through tox and github actions.
