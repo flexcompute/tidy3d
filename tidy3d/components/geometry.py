@@ -509,6 +509,7 @@ class Box(Geometry):
     """
 
     size: Size
+    type: Literal["Box"] = "Box"
 
     @classmethod
     def from_bounds(cls, rmin: Coordinate, rmax: Coordinate):
