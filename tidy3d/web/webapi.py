@@ -3,7 +3,7 @@
 import os
 import time
 import json
-from typing import List, Dict, Literal
+from typing import List, Dict
 from datetime import datetime
 import logging
 
@@ -18,6 +18,7 @@ from .task import TaskId, TaskInfo
 from . import httputils as http
 from ..components.simulation import Simulation
 from ..components.data import SimulationData
+from ..components.types import Literal
 from ..log import log, WebError
 from ..convert import export_old_json, load_old_monitor_data, load_solver_results
 
