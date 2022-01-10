@@ -1,7 +1,7 @@
 """higher level wrappers for webapi functions for individual (Job) and batch (Batch) tasks."""
 import os
 from abc import ABC
-from typing import Dict, Generator
+from typing import Dict, Generator, Optional
 import time
 
 from rich.console import Console
@@ -150,7 +150,9 @@ class Job(WebContainer):
         """
         web.download(task_id=self.task_id, simulation=self.simulation, path=path)
 
-    def load(self, path: str = DEFAULT_DATA_PATH) -> SimulationData:
+    def load(
+        self, path: str = DEFAULT_DATA_PATH, normalize_index: Optional[int] = 0
+    ) -> SimulationData:
         """Download results from simulation (if not already) and load them into ``SimulationData``
         object.
 
@@ -164,7 +166,12 @@ class Job(WebContainer):
         :class:`.SimulationData`
             Object containing data about simulation.
         """
-        return web.load(task_id=self.task_id, simulation=self.simulation, path=path)
+        return web.load(
+            task_id=self.task_id,
+            simulation=self.simulation,
+            path=path,
+            normalize_index=normalize_index,
+        )
 
     def delete(self):
         """Delete server-side data associated with :class:`Job`."""
@@ -358,7 +365,9 @@ class Batch(WebContainer):
             job_path = self._job_data_path(task_name, path_dir)
             job.download(path=job_path)
 
-    def load(self, path_dir: str = DEFAULT_DATA_DIR) -> Dict[TaskName, SimulationData]:
+    def load(
+        self, path_dir: str = DEFAULT_DATA_DIR, normalize_index: Optional[int] = 0
+    ) -> Dict[TaskName, SimulationData]:
         """Download results and load them into :class:`.SimulationData` object.
 
         Parameters
@@ -384,7 +393,7 @@ class Batch(WebContainer):
         self.download(path_dir=path_dir)
         for task_name, job in self.jobs.items():
             job_path = self._job_data_path(task_id=job.task_id, path_dir=path_dir)
-            sim_data = job.load(path=job_path)
+            sim_data = job.load(path=job_path, normalize_index=normalize_index)
             sim_data_dir[task_name] = sim_data
         return sim_data_dir
 

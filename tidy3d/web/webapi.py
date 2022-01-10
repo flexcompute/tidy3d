@@ -3,7 +3,7 @@
 import os
 import time
 import json
-from typing import List, Dict
+from typing import List, Dict, Optional
 from datetime import datetime
 import logging
 
@@ -17,7 +17,7 @@ from .s3utils import get_s3_user, DownloadProgress
 from .task import TaskId, TaskInfo
 from . import httputils as http
 from ..components.simulation import Simulation
-from ..components.data import SimulationData
+from ..components.data import SimulationData, FreqData, ModeData, FluxData
 from ..components.types import Literal
 from ..log import log, WebError
 from ..convert import export_old_json, load_old_monitor_data, load_solver_results
@@ -32,6 +32,7 @@ def run(
     folder_name: str = "default",
     path: str = "simulation_data.hdf5",
     callback_url: str = None,
+    normalize_index: Optional[int] = 0,
 ) -> SimulationData:
     """Submits a :class:`.Simulation` to server, starts running, monitors progress, downloads,
     and loads results as a :class:`.SimulationData` object.
@@ -49,6 +50,11 @@ def run(
     callback_url : str = None
         Http PUT url to receive simulation finish event. The body content is a json file with
         fields ``{'id', 'status', 'name', 'workUnit', 'solverVersion'}``.
+    normalize_index : int = 0
+        If specified, normalizes the frequency-domain data by the amplitude spectrum of the source
+        corresponding to ``simulation.sources[normalize_index]``.
+        This occurs when the data is loaded into a :class:`SimulationData` object.
+        To turn off normalization, set ``normalize_index`` to ``None``.
 
     Returns
     -------
@@ -63,7 +69,7 @@ def run(
     )
     start(task_id)
     monitor(task_id)
-    return load(task_id=task_id, simulation=simulation, path=path)
+    return load(task_id=task_id, simulation=simulation, path=path, normalize_index=normalize_index)
 
 
 def upload(
@@ -309,6 +315,7 @@ def load(
     simulation: Simulation,
     path: str = "simulation_data.hdf5",
     replace_existing: bool = True,
+    normalize_index: Optional[int] = 0,
 ) -> SimulationData:
     """Download and Load simultion results into :class:`.SimulationData` object.
 
@@ -322,17 +329,79 @@ def load(
         Download path to .hdf5 data file (including filename).
     replace_existing: bool = True
         Downloads the data even if path exists (overwriting the existing).
+    normalize_index : int = 0
+        If specified, normalizes the frequency-domain data by the amplitude spectrum of the source
+        corresponding to ``simulation.sources[normalize_index]``.
+        This occurs when the data is loaded into a :class:`SimulationData` object.
+        To turn off normalization, set ``normalize_index`` to ``None``.
 
     Returns
     -------
     :class:`.SimulationData`
         Object containing simulation data.
     """
+
     if not os.path.exists(path) or replace_existing:
         download(task_id=task_id, simulation=simulation, path=path)
 
     log.info(f"loading SimulationData from {path}")
-    return SimulationData.from_file(path)
+    sim_data = SimulationData.from_file(path)
+    if normalize_index is not None:
+        sim_data.normalize(normalize_index=normalize_index)
+    
+    return sim_data
+
+def _normalize(sim_data : SimulationData, normalize_index: Optional[int] = 0):
+    """Normalize the simulaton data object by a source spectrum.
+
+    Parameters
+    ----------
+    :class:`.SimulationData`
+        Original simulation data.
+    normalize_index : int = 0
+        If specified, normalizes the frequency-domain data by the amplitude spectrum of the source
+        corresponding to ``simulation.sources[normalize_index]``.
+        This occurs when the data is loaded into a :class:`SimulationData` object.
+        To turn off normalization, set ``normalize_index`` to ``None``.
+
+    Returns
+    -------
+    :class:`.SimulationData`
+        Normalized simulation data.
+
+    """
+
+    if normalize_index is None:
+        return sim_data
+
+    try:
+        source = sim_data.simulation.sources[normalize_index]
+        source_time = source.source_time
+    except:
+        raise WebError(f"Could not locate source at normalize_index={normalize_index}.")
+
+    source_time = source.source_time
+    sim_data_norm = sim_data.copy(deep=True)
+    for monitor_name, monitor_data in sim_data_norm.monitor_data.items():
+
+        if isinstance(monitor_data, FreqData):
+
+            freqs = monitor_data.f
+            source_freq_data = source_time.dft_spectrum(freqs)
+            source_freq = xr.DataArray(source_freq_data, coords={'f', freqs})
+
+            if isinstance(monitor_data, FieldData):
+                for field_name, field_data in monitor_data.data_dict.items():
+                    field_data /= (1j * source_freq)
+            if isinstance(monitor_data, ModeData):
+                monitor_data /= (1j * source_freq)
+            elif isinstance(monitor_data, FluxData):
+                monitor_data /= abs(source_freq)**2
+            else:
+                raise DataError(f"Dont know how to handle monitor {monitor_name}.")
+
+    return sim_data_norm
+
 
 
 def delete(task_id: TaskId) -> TaskInfo:
