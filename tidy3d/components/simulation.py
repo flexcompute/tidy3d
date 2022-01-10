@@ -142,6 +142,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
     """
     # pylint:enable=line-too-long
 
+    version: str = '0.2.0' # will make this more automated later
     grid_size: Tuple[GridSize, GridSize, GridSize]
     medium: MediumType = Medium()
     run_time: pydantic.NonNegativeFloat = 0.0
@@ -154,8 +155,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
     subpixel: bool = True
     courant: pydantic.confloat(gt=0.0, le=1.0) = 0.9
 
-    # TODO: add version to json
-    # version: str = str(version_number)
+    # TODO: clean up version
 
     """ Validating setup """
 
