@@ -15,7 +15,7 @@ As such, the goals of this package are simply:
   - visualize the simulation components.
   - load and analyze the data.
 
-<img src="../structure.png">
+<img src="../img/structure.png">
 
 ### Components
 
