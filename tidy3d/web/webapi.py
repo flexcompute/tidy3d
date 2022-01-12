@@ -347,7 +347,7 @@ def load(
     log.info(f"loading SimulationData from {path}")
     sim_data = SimulationData.from_file(path)
     if normalize_index is not None:
-        sim_data.normalize(normalize_index=normalize_index)
+        sim_data = _normalize(sim_data, normalize_index=normalize_index)
     
     return sim_data
 
@@ -387,7 +387,7 @@ def _normalize(sim_data : SimulationData, normalize_index: Optional[int] = 0):
         if isinstance(monitor_data, FreqData):
 
             freqs = monitor_data.f
-            source_freq_data = source_time.dft_spectrum(freqs)
+            source_freq_data = source_time.spectrum(times, freqs, dt)
             source_freq = xr.DataArray(source_freq_data, coords={'f', freqs})
 
             if isinstance(monitor_data, FieldData):
