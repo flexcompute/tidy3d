@@ -63,7 +63,7 @@ class SourceTime(ABC, Tidy3dBaseModel):
 
         # (Nf, Nt) matrix that gives DFT when matrix multiplied with signal
         dft_matrix = np.exp(2j * np.pi * freqs[:, None] * times) / np.sqrt(2 * np.pi)
-        return dt * dft_matrix @ self.amp_time(times)
+        return dt * dft_matrix @ np.real(self.amp_time(times))
 
     @add_ax_if_none
     def plot(self, times: Array[float], ax: Ax = None) -> Ax:

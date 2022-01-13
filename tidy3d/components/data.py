@@ -385,6 +385,9 @@ class FreqData(MonitorData, ABC):
 
     f: Array[float]
 
+    @abstractmethod
+    def normalize(self, source_freq_amps : Array[complex]) -> None:
+        """ Normalize values of frequency-domain data by source amplitude spectrum."""
 
 class TimeData(MonitorData, ABC):
     """Stores time-domain data using a ``t`` attribute for time in seconds."""
@@ -442,6 +445,10 @@ class ScalarFieldData(AbstractScalarFieldData, FreqData):
     type: Literal["ScalarFieldData"] = "ScalarFieldData"
 
     _dims = ("x", "y", "z", "f")
+
+    def normalize(self, source_freq_amps : Array[complex]) -> None:
+        """ normalize the values by the amplitude of the source."""
+        self.values /= (1j * source_freq_amps)
 
 
 class ScalarFieldTimeData(AbstractScalarFieldData, TimeData):
@@ -547,6 +554,9 @@ class FluxData(AbstractFluxData, FreqData):
 
     _dims = ("f",)
 
+    def normalize(self, source_freq_amps : Array[complex]) -> None:
+        """ normalize the values by the amplitude of the source."""
+        self.values /= abs(source_freq_amps)**2
 
 class FluxTimeData(AbstractFluxData, TimeData):
     """Stores time-domain power flux data from a :class:`FluxTimeMonitor`.
@@ -606,6 +616,10 @@ class ModeData(PlanarData, FreqData):
 
     _dims = ("direction", "mode_index", "f")
 
+    @abstractmethod
+    def normalize(self, source_freq_amps : Array[complex]) -> None:
+        """ normalize the values by the amplitude of the source."""
+        self.values /= (1j * source_freq_amps)
 
 # maps MonitorData.type string to the actual type, for MonitorData.from_file()
 DATA_TYPE_MAP = {
@@ -854,26 +868,25 @@ class SimulationData(Tidy3dBaseModel):
         times = self.simulation.tmesh
         dt = self.simulation.dt
 
+        def normalize_data(monitor_data):
+            """ normalize a monitor data instance using the source time parameters."""
+            freqs = monitor_data.f
+            source_freq_amps = source_time.spectrum(times, freqs, dt)            
+            monitor_data.normalize(source_freq_amps)
+
         for monitor_name, monitor_data in sim_data_norm.monitor_data.items():
 
-            if isinstance(monitor_data, FreqData):
-
-                freqs = monitor_data.f
-                source_freq_data = source_time.spectrum(times, freqs, dt)
-                source_freq_amps = xr.DataArray(source_freq_data, coords={'f': freqs})
+            if isinstance(monitor_data, (FieldData, FluxData, ModeData)):
 
                 if isinstance(monitor_data, FieldData):
-                    for field_name, scalar_field_data in monitor_data.data_dict.items():
-                        scalar_field_data.values /= (1j * source_freq_amps)
-                if isinstance(monitor_data, ModeData):
-                    monitor_data.values /= (1j * source_freq_amps)
-                elif isinstance(monitor_data, FluxData):
-                    monitor_data.values /= abs(source_freq_amps)**2
+                    for scalar_field_data in monitor_data.data_dict.values():
+                        normalize_data(scalar_field_data)
+
                 else:
-                    raise DataError(f"Dont know how to handle monitor {monitor_name}.")
+                    normalize_data(monitor_data)
 
+        sim_data_norm.normalized = True
         return sim_data_norm
-
 
     def to_file(self, fname: str) -> None:
         """Export :class:`SimulationData` to single hdf5 file including monitor data.
