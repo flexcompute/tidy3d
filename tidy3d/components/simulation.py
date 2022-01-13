@@ -1,3 +1,4 @@
+# pylint: disable=too-many-lines
 """ Container holding all information about simulation and its components"""
 from typing import Dict, Tuple, List, Set
 

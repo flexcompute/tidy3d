@@ -44,13 +44,20 @@ class Job(WebContainer):
     task_id: TaskId = None
     callback_url: str = None
 
-    def run(self, path: str = DEFAULT_DATA_PATH) -> SimulationData:
+    def run(
+        self, path: str = DEFAULT_DATA_PATH, normalize_index: Optional[int] = 0
+    ) -> SimulationData:
         """run :class:`Job` all the way through and return data.
 
         Parameters
         ----------
         path_dir : str = "./simulation_data.hdf5"
             Base directory where data will be downloaded, by default current working directory.
+        normalize_index : int = 0
+            If specified, normalizes the frequency-domain data by the amplitude spectrum of the
+            source corresponding to ``simulation.sources[normalize_index]``.
+            This occurs when the data is loaded into a :class:`SimulationData` object.
+            To turn off normalization, set ``normalize_index`` to ``None``.
 
         Returns
         -------
@@ -61,7 +68,7 @@ class Job(WebContainer):
         self.upload()
         self.start()
         self.monitor()
-        return self.load(path=path)
+        return self.load(path=path, normalize_index=normalize_index)
 
     def upload(self) -> None:
         """Upload simulation to server without running.
@@ -160,6 +167,11 @@ class Job(WebContainer):
         ----------
         path : str = "./simulation_data.hdf5"
             Path to download data as ``.hdf5`` file (including filename).
+        normalize_index : int = 0
+            If specified, normalizes the frequency-domain data by the amplitude spectrum of the
+            source corresponding to ``simulation.sources[normalize_index]``.
+            This occurs when the data is loaded into a :class:`SimulationData` object.
+            To turn off normalization, set ``normalize_index`` to ``None``.
 
         Returns
         -------

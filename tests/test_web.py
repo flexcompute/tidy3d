@@ -106,8 +106,12 @@ def test_webapi_8_get_tasks():
 @clear_tmp
 def test_source_norm():
     """test complete run"""
-    sim_data_raw = web.run(simulation=sim_original, task_name="test_webapi", path=PATH_SIM_DATA, normalize_index=None)
-    sim_data_norm = web.run(simulation=sim_original, task_name="test_webapi", path=PATH_SIM_DATA, normalize_index=1)
+    sim_data_raw = web.run(
+        simulation=sim_original, task_name="test_webapi", path=PATH_SIM_DATA, normalize_index=None
+    )
+    sim_data_norm = web.run(
+        simulation=sim_original, task_name="test_webapi", path=PATH_SIM_DATA, normalize_index=1
+    )
 
 
 """ Jobs """
