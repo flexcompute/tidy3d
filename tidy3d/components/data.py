@@ -632,12 +632,15 @@ class SimulationData(Tidy3dBaseModel):
         A string containing the log information from the simulation run.
     diverged : bool = False
         A boolean flag denoting if the simulation run diverged.
+    normalized : bool = Fale
+        A boolean flag denoting whether the data has been normalized by the spectrum of a source.
     """
 
     simulation: Simulation
     monitor_data: Dict[str, Tidy3dData]
     log_string: str = None
     diverged: bool = False
+    normalized: bool = False
 
     @property
     def log(self):
@@ -819,6 +822,58 @@ class SimulationData(Tidy3dBaseModel):
         ax.set_ylim(min(y_coord_values), max(y_coord_values))
 
         return ax
+
+    def normalize(self, normalize_index: int = 0):
+        """Return a copy of the :class:`.SimulationData` object with data normalized by source spectrum.
+
+        Parameters
+        ----------
+        normalize_index : int = 0
+            If specified, normalizes the frequency-domain data by the amplitude spectrum of the source
+            corresponding to ``simulation.sources[normalize_index]``.
+            This occurs when the data is loaded into a :class:`SimulationData` object.
+
+        Returns
+        -------
+        :class:`.SimulationData`
+            A copy of the :class:`.SimulationData` with the data normalized by source spectrum.
+        """
+
+        if self.normalized:
+            raise DataError("This SimulationData object has already been normalized"
+                            "and can't be normalized again.")
+
+        try:
+            source = self.simulation.sources[normalize_index]
+            source_time = source.source_time
+        except:
+            raise WebError(f"Could not locate source at normalize_index={normalize_index}.")
+
+        source_time = source.source_time
+        sim_data_norm = self.copy(deep=True)
+        times = self.simulation.tmesh
+        dt = self.simulation.dt
+
+        for monitor_name, monitor_data in sim_data_norm.monitor_data.items():
+
+            if isinstance(monitor_data, FreqData):
+
+                freqs = monitor_data.f
+                source_freq_data = source_time.spectrum(times, freqs, dt)
+                source_freq_amps = xr.DataArray(source_freq_data, coords={'f': freqs})
+
+                if isinstance(monitor_data, FieldData):
+                    for field_name, scalar_field_data in monitor_data.data_dict.items():
+                        scalar_field_data.values /= (1j * source_freq_amps)
+                if isinstance(monitor_data, ModeData):
+                    monitor_data.values /= (1j * source_freq_amps)
+                elif isinstance(monitor_data, FluxData):
+                    monitor_data.values /= abs(source_freq_amps)**2
+                else:
+                    raise DataError(f"Dont know how to handle monitor {monitor_name}.")
+
+        return sim_data_norm
+
 
     def to_file(self, fname: str) -> None:
         """Export :class:`SimulationData` to single hdf5 file including monitor data.
