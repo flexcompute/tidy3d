@@ -337,8 +337,8 @@ class ModeSource(FieldSource):
     source_time : :class:`GaussianPulse` or :class:`ContinuousWave`
         Specification of time-dependence of source.
     direction : str
-        Specifies propagation in the positive or negative direction of the normal axis. Must be in
-        ``{'+', '-'}``.
+        Specifies propagation in the positive or negative direction of the normal axis.
+        Must be in ``{'+', '-'}``.
     mode_spec :class:`ModeSpec`
         Specification for the mode solver to find the mode injected by the source.
     mode_index : int
@@ -387,8 +387,8 @@ class PlaneWave(FieldSource):
          - ``Ex`` polarization for propagation along ``y``.
          - ``Ex`` polarization for propagation along ``z``.
     direction : str
-        Specifies propagation in the positive or negative direction of the normal axis. Must be in
-        ``{'+', '-'}``.
+        Specifies propagation in the positive or negative direction of the normal axis.
+        Must be in ``{'+', '-'}``.
     name : str = None
         Optional name for source.
 
@@ -418,14 +418,13 @@ class GaussianBeam(FieldSource):
     source_time : :class:`GaussianPulse` or :class:`ContinuousWave`
         Specification of time-dependence of source.
     direction : str
-        Specifies propagation in the positive or negative direction of the normal axis. Must be in
-        ``{'+', '-'}``.
+        Specifies propagation in the positive or negative direction of the normal axis.
+        Must be in ``{'+', '-'}``.
     waist_radius: float = 1.0
         Radius of the beam at the waist (um).
         Must be positive.
     waist_distance: float = 0.0
         Distance (um) from the beam waist along the propagation direction.
-        Must be non-negative.
     angle_theta : float, optional
         Polar angle from the normal axis (rad).
     angle_phi : float, optional
@@ -453,7 +452,7 @@ class GaussianBeam(FieldSource):
     """
 
     waist_radius: pydantic.PositiveFloat = 1.0
-    waist_distance: pydantic.NonNegativeFloat = 0.0
+    waist_distance: float = 0.0
     angle_theta: float = 0.0
     angle_phi: float = 0.0
     pol_angle: float = 0.0
