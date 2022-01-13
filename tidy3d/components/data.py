@@ -1,8 +1,8 @@
-# pylint: disable=unused-import
+# pylint: disable=unused-import, too-many-lines
 """Classes for Storing Monitor and Simulation Data."""
 
 from abc import ABC, abstractmethod
-from typing import Dict, List, Union
+from typing import Dict, List, Union, Optional
 import logging
 
 import xarray as xr
@@ -386,8 +386,9 @@ class FreqData(MonitorData, ABC):
     f: Array[float]
 
     @abstractmethod
-    def normalize(self, source_freq_amps : Array[complex]) -> None:
-        """ Normalize values of frequency-domain data by source amplitude spectrum."""
+    def normalize(self, source_freq_amps: Array[complex]) -> None:
+        """Normalize values of frequency-domain data by source amplitude spectrum."""
+
 
 class TimeData(MonitorData, ABC):
     """Stores time-domain data using a ``t`` attribute for time in seconds."""
@@ -446,9 +447,9 @@ class ScalarFieldData(AbstractScalarFieldData, FreqData):
 
     _dims = ("x", "y", "z", "f")
 
-    def normalize(self, source_freq_amps : Array[complex]) -> None:
-        """ normalize the values by the amplitude of the source."""
-        self.values /= (1j * source_freq_amps)
+    def normalize(self, source_freq_amps: Array[complex]) -> None:
+        """normalize the values by the amplitude of the source."""
+        self.values /= 1j * source_freq_amps  # pylint: disable=no-member
 
 
 class ScalarFieldTimeData(AbstractScalarFieldData, TimeData):
@@ -554,9 +555,10 @@ class FluxData(AbstractFluxData, FreqData):
 
     _dims = ("f",)
 
-    def normalize(self, source_freq_amps : Array[complex]) -> None:
-        """ normalize the values by the amplitude of the source."""
-        self.values /= abs(source_freq_amps)**2
+    def normalize(self, source_freq_amps: Array[complex]) -> None:
+        """normalize the values by the amplitude of the source."""
+        self.values /= abs(source_freq_amps) ** 2  # pylint: disable=no-member
+
 
 class FluxTimeData(AbstractFluxData, TimeData):
     """Stores time-domain power flux data from a :class:`FluxTimeMonitor`.
@@ -617,9 +619,10 @@ class ModeData(PlanarData, FreqData):
     _dims = ("direction", "mode_index", "f")
 
     @abstractmethod
-    def normalize(self, source_freq_amps : Array[complex]) -> None:
-        """ normalize the values by the amplitude of the source."""
-        self.values /= (1j * source_freq_amps)
+    def normalize(self, source_freq_amps: Array[complex]) -> None:
+        """normalize the values by the amplitude of the source."""
+        self.values /= 1j * source_freq_amps  # pylint: disable=no-member
+
 
 # maps MonitorData.type string to the actual type, for MonitorData.from_file()
 DATA_TYPE_MAP = {
@@ -838,13 +841,13 @@ class SimulationData(Tidy3dBaseModel):
         return ax
 
     def normalize(self, normalize_index: int = 0):
-        """Return a copy of the :class:`.SimulationData` object with data normalized by source spectrum.
+        """Return a copy of the :class:`.SimulationData` object with data normalized by source.
 
         Parameters
         ----------
         normalize_index : int = 0
-            If specified, normalizes the frequency-domain data by the amplitude spectrum of the source
-            corresponding to ``simulation.sources[normalize_index]``.
+            If specified, normalizes the frequency-domain data by the amplitude spectrum of the
+            source corresponding to ``simulation.sources[normalize_index]``.
             This occurs when the data is loaded into a :class:`SimulationData` object.
 
         Returns
@@ -854,14 +857,16 @@ class SimulationData(Tidy3dBaseModel):
         """
 
         if self.normalized:
-            raise DataError("This SimulationData object has already been normalized"
-                            "and can't be normalized again.")
+            raise DataError(
+                "This SimulationData object has already been normalized"
+                "and can't be normalized again."
+            )
 
         try:
             source = self.simulation.sources[normalize_index]
             source_time = source.source_time
-        except:
-            raise WebError(f"Could not locate source at normalize_index={normalize_index}.")
+        except Exception as e:
+            raise DataError(f"Could not locate source at normalize_index={normalize_index}.") from e
 
         source_time = source.source_time
         sim_data_norm = self.copy(deep=True)
@@ -869,12 +874,12 @@ class SimulationData(Tidy3dBaseModel):
         dt = self.simulation.dt
 
         def normalize_data(monitor_data):
-            """ normalize a monitor data instance using the source time parameters."""
+            """normalize a monitor data instance using the source time parameters."""
             freqs = monitor_data.f
-            source_freq_amps = source_time.spectrum(times, freqs, dt)            
+            source_freq_amps = source_time.spectrum(times, freqs, dt)
             monitor_data.normalize(source_freq_amps)
 
-        for monitor_name, monitor_data in sim_data_norm.monitor_data.items():
+        for monitor_data in sim_data_norm.monitor_data.values():
 
             if isinstance(monitor_data, (FieldData, FluxData, ModeData)):
 
@@ -957,12 +962,14 @@ class SimulationData(Tidy3dBaseModel):
                 monitor_data_instance = data_type.load_from_group(monitor_data)
                 monitor_data_dict[monitor_name] = monitor_data_instance
 
-        return cls(
+        sim_data = cls(
             simulation=simulation,
             monitor_data=monitor_data_dict,
             log_string=log_string,
             diverged=diverged,
         )
+
+        return sim_data
 
     def __eq__(self, other):
         """Check equality against another :class:`SimulationData` instance.

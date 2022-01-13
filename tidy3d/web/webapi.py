@@ -6,7 +6,6 @@ import json
 from typing import List, Dict, Optional
 from datetime import datetime
 import logging
-import xarray as xr
 
 import h5py
 import requests
@@ -27,7 +26,7 @@ REFRESH_TIME = 0.3
 TOTAL_DOTS = 3
 
 
-def run(
+def run(  # pylint:disable=too-many-arguments
     simulation: Simulation,
     task_name: str,
     folder_name: str = "default",
@@ -350,7 +349,7 @@ def load(
 
     if normalize_index is not None:
         return sim_data.normalize(normalize_index=normalize_index)
-    
+
     return sim_data
 
 
