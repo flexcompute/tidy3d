@@ -6,6 +6,7 @@ import json
 from typing import List, Dict, Optional
 from datetime import datetime
 import logging
+import xarray as xr
 
 import h5py
 import requests
@@ -17,7 +18,7 @@ from .s3utils import get_s3_user, DownloadProgress
 from .task import TaskId, TaskInfo
 from . import httputils as http
 from ..components.simulation import Simulation
-from ..components.data import SimulationData, FreqData, ModeData, FluxData
+from ..components.data import SimulationData, FreqData, ModeData, FluxData, FieldData
 from ..components.types import Literal
 from ..log import log, WebError
 from ..convert import export_old_json, load_old_monitor_data, load_solver_results
@@ -382,21 +383,24 @@ def _normalize(sim_data : SimulationData, normalize_index: Optional[int] = 0):
 
     source_time = source.source_time
     sim_data_norm = sim_data.copy(deep=True)
+    times = sim_data.simulation.tmesh
+    dt = sim_data.simulation.dt
+
     for monitor_name, monitor_data in sim_data_norm.monitor_data.items():
 
         if isinstance(monitor_data, FreqData):
 
             freqs = monitor_data.f
             source_freq_data = source_time.spectrum(times, freqs, dt)
-            source_freq = xr.DataArray(source_freq_data, coords={'f', freqs})
+            source_freq = xr.DataArray(source_freq_data, coords={'f': freqs})
 
             if isinstance(monitor_data, FieldData):
-                for field_name, field_data in monitor_data.data_dict.items():
-                    field_data /= (1j * source_freq)
+                for field_name, scalar_field_data in monitor_data.data_dict.items():
+                    scalar_field_data.values /= (1j * source_freq)
             if isinstance(monitor_data, ModeData):
-                monitor_data /= (1j * source_freq)
+                monitor_data.values /= (1j * source_freq)
             elif isinstance(monitor_data, FluxData):
-                monitor_data /= abs(source_freq)**2
+                monitor_data.values /= abs(source_freq)**2
             else:
                 raise DataError(f"Dont know how to handle monitor {monitor_name}.")
 
