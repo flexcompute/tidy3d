@@ -6,8 +6,9 @@ from unittest import TestCase, mock
 import pytest
 
 import tidy3d as td
+from tidy3d.log import DataError
 import tidy3d.web as web
-from tidy3d.web.auth import get_credentials
+from tidy3d.web.auth import get_credentials, encode_password
 
 from .utils import SIM_CONVERT as sim_original
 from .utils import clear_tmp
@@ -35,7 +36,7 @@ class Test(TestCase):
         os.environ["TIDY3D_USER"] = "mytestuser"
         os.environ["TIDY3D_PASS"] = "mytestpass"
         get_credentials()
-        set_authentication_config.assert_called_with("mytestuser", "mytestpass")
+        set_authentication_config.assert_called_with("mytestuser", encode_password("mytestpass"))
 
 
 @clear_tmp
@@ -109,9 +110,6 @@ def test_source_norm():
     sim_data_raw = web.run(
         simulation=sim_original, task_name="test_webapi", path=PATH_SIM_DATA, normalize_index=None
     )
-    sim_data_norm = web.run(
-        simulation=sim_original, task_name="test_webapi", path=PATH_SIM_DATA, normalize_index=1
-    )
 
 
 """ Jobs """
@@ -179,6 +177,14 @@ def _test_job_7_delete():
     job.delete()
     task_info = job.get_info()
     assert task_info.status in ("deleted", "deleting")
+
+
+def test_job_source_norm():
+    """test complete run"""
+    job = web.Job(simulation=sim_original, task_name="test_job", callback_url=CALLBACK_URL)
+    sim_data_norm = job.run(path=PATH_SIM_DATA, normalize_index=0)
+    with pytest.raises(DataError):
+        sim_data_norm = web.load(task_id=job.task_id, simulation=sim_original, normalize_index=1)
 
 
 """ Batches """
