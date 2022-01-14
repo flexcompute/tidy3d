@@ -204,7 +204,15 @@ class Grid(Tidy3dBaseModel):
         :class:`Coords`
             Distances between each of the cell centers along each dimension.
         """
-        return Coords(**{key: np.diff(val) for key, val in self.centers.dict().items()})
+
+        # We need the dual steps to be same size as grid.centers, so we pad with periodicity applied
+        grid_size = [(bounds[1] - bounds[0]) for bounds in self.boundaries.to_list]
+        dsteps = {}
+        for dim, (key, centers) in enumerate(self.centers.dict().items()):
+            centers_pad = np.concatenate(([centers[-1] - grid_size[dim]], centers))
+            dsteps[key] = np.diff(centers_pad)
+
+        return Coords(**dsteps)
 
     @property
     def yee(self) -> YeeGrid:

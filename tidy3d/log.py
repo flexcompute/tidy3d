@@ -74,7 +74,7 @@ def _get_level_int(level: str) -> int:
     level = level.lower()
     if level not in LEVEL_MAP:
         raise ConfigError(
-            f"logging level {level} not supported, " f"must be in {list(LEVEL_MAP.keys())}."
+            f"logging level {level} not supported, must be in {list(LEVEL_MAP.keys())}."
         )
     return LEVEL_MAP[level]
 

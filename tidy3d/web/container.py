@@ -1,7 +1,7 @@
 """higher level wrappers for webapi functions for individual (Job) and batch (Batch) tasks."""
 import os
 from abc import ABC
-from typing import Dict, Generator
+from typing import Dict, Generator, Optional
 import time
 
 from rich.console import Console
@@ -23,20 +23,41 @@ class WebContainer(Tidy3dBaseModel, ABC):
 
 
 class Job(WebContainer):
-    """Interface for managing the running of a :class:`.Simulation` on server."""
+    """Interface for managing the running of a :class:`.Simulation` on server.
+
+    Parameters
+    ----------
+        simulation : :class:`.Simulation`
+            Simulation to upload to server.
+        task_name : str
+            Name of task.
+        folder_name : str = "default"
+            Name of folder to store task on web UI.
+        callback_url : str = None
+            Http PUT url to receive simulation finish event. The body content is a json file with
+            fields ``{'id', 'status', 'name', 'workUnit', 'solverVersion'}``.
+    """
 
     simulation: Simulation
     task_name: TaskName
     folder_name: str = "default"
     task_id: TaskId = None
+    callback_url: str = None
 
-    def run(self, path: str = DEFAULT_DATA_PATH) -> SimulationData:
+    def run(
+        self, path: str = DEFAULT_DATA_PATH, normalize_index: Optional[int] = 0
+    ) -> SimulationData:
         """run :class:`Job` all the way through and return data.
 
         Parameters
         ----------
         path_dir : str = "./simulation_data.hdf5"
             Base directory where data will be downloaded, by default current working directory.
+        normalize_index : int = 0
+            If specified, normalizes the frequency-domain data by the amplitude spectrum of the
+            source corresponding to ``simulation.sources[normalize_index]``.
+            This occurs when the data is loaded into a :class:`SimulationData` object.
+            To turn off normalization, set ``normalize_index`` to ``None``.
 
         Returns
         -------
@@ -47,7 +68,7 @@ class Job(WebContainer):
         self.upload()
         self.start()
         self.monitor()
-        return self.load(path=path)
+        return self.load(path=path, normalize_index=normalize_index)
 
     def upload(self) -> None:
         """Upload simulation to server without running.
@@ -57,7 +78,10 @@ class Job(WebContainer):
         To start the simulation running, call :meth:`Job.start` after uploaded.
         """
         task_id = web.upload(
-            simulation=self.simulation, task_name=self.task_name, folder_name=self.folder_name
+            simulation=self.simulation,
+            task_name=self.task_name,
+            folder_name=self.folder_name,
+            callback_url=self.callback_url,
         )
         self.task_id = task_id
 
@@ -133,7 +157,9 @@ class Job(WebContainer):
         """
         web.download(task_id=self.task_id, simulation=self.simulation, path=path)
 
-    def load(self, path: str = DEFAULT_DATA_PATH) -> SimulationData:
+    def load(
+        self, path: str = DEFAULT_DATA_PATH, normalize_index: Optional[int] = 0
+    ) -> SimulationData:
         """Download results from simulation (if not already) and load them into ``SimulationData``
         object.
 
@@ -141,13 +167,23 @@ class Job(WebContainer):
         ----------
         path : str = "./simulation_data.hdf5"
             Path to download data as ``.hdf5`` file (including filename).
+        normalize_index : int = 0
+            If specified, normalizes the frequency-domain data by the amplitude spectrum of the
+            source corresponding to ``simulation.sources[normalize_index]``.
+            This occurs when the data is loaded into a :class:`SimulationData` object.
+            To turn off normalization, set ``normalize_index`` to ``None``.
 
         Returns
         -------
         :class:`.SimulationData`
             Object containing data about simulation.
         """
-        return web.load(task_id=self.task_id, simulation=self.simulation, path=path)
+        return web.load(
+            task_id=self.task_id,
+            simulation=self.simulation,
+            path=path,
+            normalize_index=normalize_index,
+        )
 
     def delete(self):
         """Delete server-side data associated with :class:`Job`."""
@@ -341,7 +377,9 @@ class Batch(WebContainer):
             job_path = self._job_data_path(task_name, path_dir)
             job.download(path=job_path)
 
-    def load(self, path_dir: str = DEFAULT_DATA_DIR) -> Dict[TaskName, SimulationData]:
+    def load(
+        self, path_dir: str = DEFAULT_DATA_DIR, normalize_index: Optional[int] = 0
+    ) -> Dict[TaskName, SimulationData]:
         """Download results and load them into :class:`.SimulationData` object.
 
         Parameters
@@ -367,7 +405,7 @@ class Batch(WebContainer):
         self.download(path_dir=path_dir)
         for task_name, job in self.jobs.items():
             job_path = self._job_data_path(task_id=job.task_id, path_dir=path_dir)
-            sim_data = job.load(path=job_path)
+            sim_data = job.load(path=job_path, normalize_index=normalize_index)
             sim_data_dir[task_name] = sim_data
         return sim_data_dir
 

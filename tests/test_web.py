@@ -1,8 +1,13 @@
 """ tests converted webapi """
+import os
+from datetime import datetime
+from unittest import TestCase, mock
+
 import pytest
 
 import tidy3d as td
 import tidy3d.web as web
+from tidy3d.web.auth import get_credentials
 
 from .utils import SIM_CONVERT as sim_original
 from .utils import clear_tmp
@@ -10,7 +15,7 @@ from .utils import clear_tmp
 PATH_JSON = "tests/tmp/simulation.json"
 PATH_SIM_DATA = "tests/tmp/sim_data.hdf5"
 PATH_DIR_SIM_DATA = "tests/tmp/"
-
+CALLBACK_URL = "https://callbackurl"
 
 """ core webapi """
 
@@ -22,6 +27,17 @@ def _get_gloabl_task_id():
     return task_id_global[0]
 
 
+class Test(TestCase):
+    """Use unittest.mock to check that authentication with environment variables works."""
+
+    @mock.patch("tidy3d.web.auth.set_authentication_config")
+    def test_get_email_passwd_auth_key_ok(self, set_authentication_config):
+        os.environ["TIDY3D_USER"] = "mytestuser"
+        os.environ["TIDY3D_PASS"] = "mytestpass"
+        get_credentials()
+        set_authentication_config.assert_called_with("mytestuser", "mytestpass")
+
+
 @clear_tmp
 def test_webapi_0_run():
     """test complete run"""
@@ -30,7 +46,10 @@ def test_webapi_0_run():
 
 def test_webapi_1_upload():
     """test that task uploads ok"""
-    task_id = web.upload(simulation=sim_original, task_name="test_webapi")
+
+    task_id = web.upload(
+        simulation=sim_original, task_name="test_webapi", callback_url=CALLBACK_URL
+    )
     task_id_global.append(task_id)
 
 
@@ -76,6 +95,25 @@ def _test_webapi_7_delete():
     assert task_info.status in ("deleted", "deleting")
 
 
+def test_webapi_8_get_tasks():
+    """test that we can get tasks orderd chronologically"""
+    tasks = web.get_tasks(num_tasks=5)
+    times = [datetime.strptime(task["submit_time"], "%Y:%m:%d:%H:%M:%S") for task in tasks]
+    for i in range(4):
+        assert times[i] > times[i + 1]
+
+
+@clear_tmp
+def test_source_norm():
+    """test complete run"""
+    sim_data_raw = web.run(
+        simulation=sim_original, task_name="test_webapi", path=PATH_SIM_DATA, normalize_index=None
+    )
+    sim_data_norm = web.run(
+        simulation=sim_original, task_name="test_webapi", path=PATH_SIM_DATA, normalize_index=1
+    )
+
+
 """ Jobs """
 
 
@@ -90,7 +128,7 @@ def _get_gloabl_job():
 @clear_tmp
 def test_job_0_run():
     """test complete run"""
-    job = web.Job(simulation=sim_original, task_name="test_job")
+    job = web.Job(simulation=sim_original, task_name="test_job", callback_url=CALLBACK_URL)
     job.run(path=PATH_SIM_DATA)
 
 

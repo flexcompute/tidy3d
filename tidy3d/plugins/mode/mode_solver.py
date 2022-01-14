@@ -10,7 +10,6 @@ import xarray as xr
 from ...components import Box
 from ...components import Simulation
 from ...components import Mode
-from ...components import FieldData, ScalarFieldData
 from ...components import ModeMonitor
 from ...components import ModeSource, GaussianPulse
 from ...components.types import Direction
@@ -50,10 +49,9 @@ src = ModeSource.from_file('data/my_source.json')  # and loaded in our script
 @dataclass
 class ModeInfo:
     """stores information about a (solved) mode.
-
     Attributes
     ----------
-    field_Data: FieldData
+    field_data: xr.Dataset
         Contains information about the fields of the modal profile.
     mode: Mode
         Specifications of the mode.
@@ -202,25 +200,24 @@ class ModeSolver:
         for field_name, field in fields.items():
             plane_grid = self.simulation.discretize(self.plane)
             plane_coords = plane_grid[field_name]
-
-            data_dict[field_name] = ScalarFieldData(
-                x=plane_coords.x,
-                y=plane_coords.y,
-                z=plane_coords.z,
-                f=np.array([self.freq]),
-                values=field,
-            )
+            coords = {
+                "x": plane_coords.x,
+                "y": plane_coords.y,
+                "z": plane_coords.z,
+                "f": np.array([self.freq]),
+            }
+            data_dict[field_name] = xr.DataArray(field, coords=coords)
 
         n_eff_complex = n_eff_complex[mode.mode_index]
 
-        field_data = FieldData(data_dict=data_dict)
-
-        return ModeInfo(
-            field_data=field_data.data,
+        mode_info = ModeInfo(
+            field_data=xr.Dataset(data_dict),
             mode=mode,
             n_eff=n_eff_complex.real,
             k_eff=n_eff_complex.imag,
         )
+
+        return mode_info
 
     def make_source(self, mode: Mode, fwidth: float, direction: Direction) -> ModeSource:
         """Creates ``ModeSource`` from a Mode + additional specifications.
