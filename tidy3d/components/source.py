@@ -10,7 +10,7 @@ from .base import Tidy3dBaseModel
 from .types import Direction, Polarization, Ax, FreqBound, Array, Literal
 from .validators import assert_plane, validate_name_str
 from .geometry import Box
-from .mode import Mode
+from .mode import ModeSpec
 from .viz import add_ax_if_none, SourceParams
 from ..constants import inf  # pylint:disable=unused-import
 
@@ -339,20 +339,30 @@ class ModeSource(FieldSource):
     direction : str
         Specifies propagation in the positive or negative direction of the normal axis. Must be in
         ``{'+', '-'}``.
-    mode : :class:`Mode`
-        Specification of the mode being injected by source.
+    mode_spec :class:`ModeSpec`
+        Specification for the mode solver to find the mode injected by the source.
+    mode_index : int
+        Index of the mode to inject in the collection of modes returned by the solver. If larger
+        than ``mode_spec.num_modes``, ``num_modes`` in the solver will be set to ``mode_index + 1``.
+        Must be >= 0.
     name : str = None
         Optional name for source.
 
     Example
     -------
     >>> pulse = GaussianPulse(freq0=200e12, fwidth=20e12)
-    >>> mode = Mode(mode_index=1, num_modes=3)
-    >>> mode_source = ModeSource(size=(10,10,0), source_time=pulse, mode=mode, direction='-')
+    >>> mode_spec = ModeSpec(target_neff=2.)
+    >>> mode_source = ModeSource(
+    ...     size=(10,10,0),
+    ...     source_time=pulse,
+    ...     mode_spec=mode_spec,
+    ...     mode_index=1,
+    ...     direction='-')
     """
 
     type: Literal["ModeSource"] = "ModeSource"
-    mode: Mode
+    mode_spec: ModeSpec = ModeSpec()
+    mode_index: pydantic.NonNegativeInt = 0
 
 
 class PlaneWave(FieldSource):
