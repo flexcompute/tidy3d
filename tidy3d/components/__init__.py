@@ -20,7 +20,7 @@ from .medium import AbstractMedium, DispersiveMedium
 from .structure import Structure
 
 # mode
-from .mode import Mode
+from .mode import ModeSpec
 
 # source
 from .source import GaussianPulse, ContinuousWave

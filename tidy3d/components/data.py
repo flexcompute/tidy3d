@@ -12,7 +12,7 @@ import h5py
 from .types import Numpy, Direction, Array, numpy_encoding, Literal, Ax
 from .base import Tidy3dBaseModel
 from .simulation import Simulation
-from .mode import Mode
+from .mode import ModeSpec
 from .viz import add_ax_if_none
 from ..log import DataError
 
@@ -605,7 +605,6 @@ class ModeData(PlanarData, FreqData):
     -------
 
     >>> f = np.linspace(2e14, 3e14, 1001)
-    >>> modes = [Mode(mode_index=0), Mode(mode_index=1)]
     >>> values = (1+1j) * np.random.random((1, 2, len(f)))
     >>> data = ModeData(values=values, direction=['+'], mode_index=np.arange(1, 3), f=f)
     """
@@ -618,7 +617,6 @@ class ModeData(PlanarData, FreqData):
 
     _dims = ("direction", "mode_index", "f")
 
-    @abstractmethod
     def normalize(self, source_freq_amps: Array[complex]) -> None:
         """normalize the values by the amplitude of the source."""
         self.values /= 1j * source_freq_amps  # pylint: disable=no-member

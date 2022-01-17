@@ -7,7 +7,7 @@ import pydantic
 from .types import Literal, Ax, Direction, FieldType, EMField, Array
 from .geometry import Box
 from .validators import assert_plane, validate_name_str
-from .mode import Mode
+from .mode import ModeSpec
 from .viz import add_ax_if_none, MonitorParams
 from ..log import SetupError, ValidationError
 
@@ -262,16 +262,16 @@ class ModeMonitor(PlanarMonitor, FreqMonitor):
 
     Example
     -------
-    >>> modes = [Mode(mode_index=0), Mode(mode_index=1)]
+    >>> mode_spec = ModeSpec(num_modes=3)
     >>> monitor = ModeMonitor(
     ...     size=(2,2,0),
     ...     freqs=[200e12, 210e12],
-    ...     modes=modes,
+    ...     mode_spec=mode_spec,
     ...     name='mode_monitor')
     """
 
     direction: List[Direction] = ["+", "-"]
-    modes: List[Mode]
+    mode_spec: ModeSpec
     type: Literal["ModeMonitor"] = "ModeMonitor"
     data_type: Literal["ModeData"] = "ModeData"
 

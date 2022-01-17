@@ -6,22 +6,18 @@ import pydantic as pd
 
 from .base import Tidy3dBaseModel
 from .types import Symmetry
-from ..log import SetupError
 
 
-class Mode(Tidy3dBaseModel):
+class ModeSpec(Tidy3dBaseModel):
     """Stores specifications for the mode solver to find an electromagntic mode.
     Note, the planar axes are found by popping the propagation axis from {x,y,z}.
     For example, if propagation axis is y, the planar axes are ordered {x,z}.
 
     Parameters
     ----------
-    mode_index : int
-        Return the mode solver output at ``mode_index``.
-        Must be >= 0.
-    num_modes : int = None
-        Number of modes returned by mode solver before selecting mode at ``mode_index``.
-        Must be > ``mode_index`` to accomodate ``mode_index``-th mode.
+
+    num_modes : int = 1
+        Number of modes returned by mode solver.
     target_neff : float = None
         Guess for effective index of mode.
         Must be > 0.
@@ -33,23 +29,10 @@ class Mode(Tidy3dBaseModel):
 
     Example
     -------
-    >>> mode = Mode(mode_index=1, num_modes=3, target_neff=1.5, symmetries=(1,-1))
+    >>> mode_spec = ModeSpec(num_modes=3, target_neff=1.5, symmetries=(1,-1))
     """
 
-    mode_index: pd.NonNegativeInt
-    num_modes: pd.PositiveInt = None
+    num_modes: pd.PositiveInt = 1
     target_neff: pd.PositiveFloat = None
     symmetries: Tuple[Symmetry, Symmetry] = (0, 0)
     num_pml: Tuple[pd.NonNegativeInt, pd.NonNegativeInt] = (0, 0)
-
-    @pd.validator("num_modes", always=True)
-    def check_num_modes(cls, val, values):
-        """Make sure num_modes is > mode_index or None"""
-        if val is not None:
-            mode_index = values.get("mode_index")
-            if not val > mode_index:
-                raise SetupError(
-                    "`num_modes` must be greater than `mode_index`"
-                    f"given {val} and {mode_index}, respectively"
-                )
-        return val
