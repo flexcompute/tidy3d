@@ -53,7 +53,7 @@ def test_simulation_preserve_types():
             FieldTimeMonitor(size=(1, 1, 1), start=1e-12, interval=3, name="fieldtime"),
             FluxMonitor(size=(1, 0, 1), freqs=[1, 2, 3], name="flux"),
             FluxTimeMonitor(size=(1, 0, 1), start=1e-12, interval=3, name="fluxtime"),
-            ModeMonitor(size=(1, 0, 1), freqs=[1, 2, 3], modes=[Mode(mode_index=1)], name="mode"),
+            ModeMonitor(size=(1, 0, 1), freqs=[1, 2], mode_spec=ModeSpec(num_modes=3), name="mode"),
         ],
     )
 

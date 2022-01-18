@@ -248,8 +248,8 @@ def old_json_sources(sim: Simulation) -> List[Dict]:
                     "amplitude": source.source_time.amplitude,
                 }
         elif isinstance(source, ModeSource):
-            mode_ind = source.mode.mode_index
-            num_modes = source.mode.num_modes if source.mode.num_modes else mode_ind + 1
+            mode_ind = source.mode_index
+            num_modes = max(source.mode_spec.num_modes, mode_ind + 1)
             direction = "forward" if source.direction == "+" else "backward"
             src = {
                 "name": name,
@@ -260,7 +260,7 @@ def old_json_sources(sim: Simulation) -> List[Dict]:
                 "direction": direction,
                 "amplitude": source.source_time.amplitude,
                 "mode_ind": mode_ind,
-                "target_neff": source.mode.target_neff,
+                "target_neff": source.mode_spec.target_neff,
                 "Nmodes": num_modes,
             }
         elif isinstance(source, PlaneWave):
@@ -386,12 +386,11 @@ def old_json_monitors(sim: Simulation) -> Dict:
                     }
                 )
         elif isinstance(monitor, ModeMonitor):
-            num_modes = max([m.mode_index for m in monitor.modes]) + 1
             mnt.update(
                 {
                     "type": "ModeMonitor",
-                    "Nmodes": num_modes,
-                    "target_neff": None,
+                    "Nmodes": monitor.mode_spec.num_modes,
+                    "target_neff": monitor.mode_spec.target_neff,
                     "store": ["mode_amps"],
                 }
             )

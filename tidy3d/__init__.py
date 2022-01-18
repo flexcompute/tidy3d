@@ -24,7 +24,7 @@ from .components import Sellmeier, Debye, Drude, Lorentz
 from .components import Structure
 
 # modes
-from .components import Mode
+from .components import ModeSpec
 
 # sources
 from .components import GaussianPulse, ContinuousWave

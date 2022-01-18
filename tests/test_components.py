@@ -329,12 +329,8 @@ def test_epsilon_eval():
 
 def test_modes():
 
-    m = Mode(mode_index=0)
-    m = Mode(mode_index=0, num_modes=1)
-
-    # not enough modes
-    with pytest.raises(SetupError) as e:
-        m = Mode(mode_index=1, num_modes=1)
+    m = ModeSpec(num_modes=2)
+    m = ModeSpec(num_modes=1, target_neff=1.0)
 
 
 """ names """
@@ -483,7 +479,7 @@ def test_source_times():
 
 def test_FieldSource():
     g = GaussianPulse(freq0=1, fwidth=0.1)
-    mode = Mode(mode_index=0)
+    mode_spec = ModeSpec(num_modes=2)
 
     # test we can make planewave
     s = PlaneWave(size=(0, 1, 1), source_time=g, pol_angle=np.pi / 2, direction="+")
@@ -492,7 +488,7 @@ def test_FieldSource():
     s = GaussianBeam(size=(0, 1, 1), source_time=g, pol_angle=np.pi / 2, direction="+")
 
     # test we can make mode source
-    s = ModeSource(size=(0, 1, 1), direction="+", source_time=g, mode=mode)
+    s = ModeSource(size=(0, 1, 1), direction="+", source_time=g, mode_spec=mode_spec, mode_index=0)
 
     # test that non-planar geometry crashes plane wave and gaussian beam
     with pytest.raises(ValidationError) as e_info:
@@ -500,7 +496,7 @@ def test_FieldSource():
     with pytest.raises(ValidationError) as e_info:
         s = GaussianBeam(size=(1, 1, 1), source_time=g, pol_angle=np.pi / 2, direction="+")
     with pytest.raises(ValidationError) as e_info:
-        s = ModeSource(size=(1, 1, 1), direction="+", source_time=g, mode=mode)
+        s = ModeSource(size=(1, 1, 1), source_time=g, mode_spec=mode_spec)
 
 
 """ monitors """

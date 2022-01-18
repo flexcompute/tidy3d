@@ -45,7 +45,7 @@ SIM_MONITORS = Simulation(
             size=(1, 1, 0),
             center=(0, 0, 0),
             freqs=[1.90, 2.01, 2.2],
-            modes=[Mode(mode_index=1)],
+            mode_spec=ModeSpec(num_modes=3),
             name="mode",
         ),
     ],
