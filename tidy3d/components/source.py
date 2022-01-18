@@ -373,9 +373,9 @@ class PlaneWave(FieldSource):
         defined by the normal axis and the propagation axis (rad). ``pol_angle=0`` (default)
         specifies P polarization, while ``pol_angle=np.pi/2`` specifies S polarization. At normal
         incidence when S and P are undefined, ``pol_angle=0`` defines, respectively:
-         - ``Ey`` polarization for propagation along ``x``.
-         - ``Ex`` polarization for propagation along ``y``.
-         - ``Ex`` polarization for propagation along ``z``.
+        - ``Ey`` polarization for propagation along ``x``.
+        - ``Ex`` polarization for propagation along ``y``.
+        - ``Ex`` polarization for propagation along ``z``.
     direction : str
         Specifies propagation in the positive or negative direction of the normal axis. Must be in
         ``{'+', '-'}``.
