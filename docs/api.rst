@@ -36,7 +36,7 @@ Methods
    Simulation.pml_thicknesses
    Simulation.num_pml_layers
    Simulation.discretize
-   Simulation.epsilon   
+   Simulation.epsilon
 
 
 Grid
