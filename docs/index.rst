@@ -8,9 +8,9 @@ The Python API can be used to build simulation models, submit jobs, and analyze 
    :maxdepth: 1
    :caption: User Guide
 
-   quickstart
-   examples
-   faq
-   howdoi
+   .. quickstart
+   .. examples
+   .. faq
+   .. howdoi
    api
-   changelog
+   .. changelog

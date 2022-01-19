@@ -78,61 +78,81 @@ Absorber Parameters
 Geometry
 ========
 
-.. autosummary::
-   :toctree: _autosummary/
+Box
+---
 
-   Box
-   Box.from_bounds
-   Sphere
-   Cylinder
-   PolySlab
-   PolySlab.from_gds
+.. autopydantic_model:: Box
+   :inherited-members: Tidy3dBaseModel
 
-Methods
--------
+Sphere
+------
 
-.. autosummary::
-   :toctree: _autosummary/
+.. autopydantic_model:: Sphere
+   :inherited-members: Tidy3dBaseModel
 
-   Geometry.plot
-   Geometry.inside
-   Geometry.intersections
-   Geometry.intersects
-   Geometry.intersects_plane
-   Geometry.bounds
-   Geometry.bounding_box
-   Geometry.pop_axis
-   Geometry.unpop_axis
+Cylinder
+--------
 
+.. autopydantic_model:: Cylinder
+   :inherited-members: Tidy3dBaseModel
+
+PolySlab
+--------
+
+.. autopydantic_model:: PolySlab
+   :inherited-members: Tidy3dBaseModel
 
 Mediums
 =======
 
-.. autosummary::
-   :toctree: _autosummary/
+Medium
+------
 
-   Medium
-   Medium.from_nk
-   AnisotropicMedium
-   PEC
-   PoleResidue
-   Sellmeier
-   Debye
-   Lorentz
-   Drude
+.. autopydantic_model:: Medium
+   :inherited-members: Tidy3dBaseModel
 
-Methods
--------
+Anisotropic Medium
+------------------
 
-.. autosummary::
-   :toctree: _autosummary/
+.. autopydantic_model:: AnisotropicMedium
+   :inherited-members: Tidy3dBaseModel
 
-   AbstractMedium.plot
-   AbstractMedium.eps_model
-   AbstractMedium.nk_to_eps_sigma
-   AbstractMedium.nk_to_eps_complex
-   AbstractMedium.eps_sigma_to_eps_complex
-   AbstractMedium.eps_complex_to_nk
+Perfect Electrical Conductor (PEC)
+----------------------------------
+
+.. autopydantic_model:: PECMedium
+   :inherited-members: Tidy3dBaseModel
+
+Dispersive Pole Residue Medium
+------------------------------
+
+.. autopydantic_model:: PoleResidue
+   :inherited-members: Tidy3dBaseModel
+
+Dispersive Lorentz Medium
+-------------------------
+
+.. autopydantic_model:: Lorentz
+   :inherited-members: Tidy3dBaseModel
+
+Dispersive Sellmeier Medium
+---------------------------
+
+.. autopydantic_model:: Sellmeier
+   :inherited-members: Tidy3dBaseModel
+
+
+Dispersive Drude Medium
+-----------------------
+
+.. autopydantic_model:: Drude
+   :inherited-members: Tidy3dBaseModel
+
+Dispersive Debye Medium
+-----------------------
+
+.. autopydantic_model:: Debye
+   :inherited-members: Tidy3dBaseModel
 
 
 Material Library
@@ -146,103 +166,108 @@ Material Library
 Structures
 ==========
 
-.. autosummary::
-   :toctree: _autosummary/
+Structure
+---------
 
-   Structure
-
-Methods
--------
-
-.. autosummary::
-   :toctree: _autosummary/
-
-   Structure.plot
-
-
-Modes
-=====
-
-.. autosummary::
-   :toctree: _autosummary/
-
-   Mode
+.. autopydantic_model:: Structure
+   :inherited-members: Tidy3dBaseModel
 
 
 Sources
 =======
 
-.. autosummary::
-   :toctree: _autosummary/
 
-   VolumeSource
-   PlaneWave
-   ModeSource
-   GaussianPulse
+Volume Source
+-------------
 
-Methods
--------
+.. autopydantic_model:: VolumeSource
+   :inherited-members: Tidy3dBaseModel
 
-.. autosummary::
-   :toctree: _autosummary/
 
-   Source.geometry
-   Source.plot
-   Source.inside
-   Source.intersections
-   Source.intersects
-   Source.intersects_plane
-   Source.bounds
-   Source.bounding_box
-   Source.pop_axis
-   Source.unpop_axis
+Plane Wave
+----------
+
+.. autopydantic_model:: PlaneWave
+   :inherited-members: Tidy3dBaseModel
+
+
+Gaussian Beam
+-------------
+
+.. autopydantic_model:: GaussianBeam
+   :inherited-members: Tidy3dBaseModel
+
+
+ModeSource 
+----------
+
+.. autopydantic_model:: ModeSource
+   :inherited-members: Tidy3dBaseModel
+
 
 Source Time Dependence
-----------------------
+======================
 
-.. autosummary::
-   :toctree: _autosummary/
+Gaussian Pulse
+--------------
 
-   GaussianPulse
-   ContinuousWave
-   SourceTime.amp_time
-   SourceTime.plot
-   SourceTime.frequency_range
+.. autopydantic_model:: GaussianPulse
+   :inherited-members: Tidy3dBaseModel
+
+Continuous Wave (CW)
+--------------------
+
+.. autopydantic_model:: ContinuousWave
+   :inherited-members: Tidy3dBaseModel
 
 
 Monitors
 ========
 
-.. autosummary::
-   :toctree: _autosummary/
+FieldMonitor
+------------
 
-   FieldMonitor
-   FieldTimeMonitor
-   FluxMonitor
-   FluxTimeMonitor
-   ModeMonitor
+.. autopydantic_model:: FieldMonitor
+   :inherited-members: Tidy3dBaseModel
 
-Methods
--------
+FieldTimeMonitor
+----------------
 
-.. autosummary::
-   :toctree: _autosummary/
+.. autopydantic_model:: FieldTimeMonitor
+   :inherited-members: Tidy3dBaseModel
 
-   Monitor.geometry
-   Monitor.plot
-   Monitor.inside
-   Monitor.intersections
-   Monitor.intersects
-   Monitor.intersects_plane
-   Monitor.bounds
-   Monitor.bounding_box
-   Monitor.pop_axis
-   Monitor.unpop_axis
+FluxMonitor
+-----------
 
+.. autopydantic_model:: FluxMonitor
+   :inherited-members: Tidy3dBaseModel
+
+FluxTimeMonitor
+---------------
+
+.. autopydantic_model:: FluxTimeMonitor
+   :inherited-members: Tidy3dBaseModel
+
+ModeMonitor
+-----------
+
+.. autopydantic_model:: ModeMonitor
+   :inherited-members: Tidy3dBaseModel
+
+
+Modes
+=====
+
+Mode Specification
+------------------
+
+.. autopydantic_model:: ModeSpec
+   :inherited-members: Tidy3dBaseModel
 
 
 Output Data
 ===========
+
 
 .. autosummary::
    :toctree: _autosummary/
@@ -269,17 +294,6 @@ Methods
    Monitor.bounding_box
    Monitor.pop_axis
    Monitor.unpop_axis
-
-Tidy3dBaseModel
-===============
-
-.. autosummary::
-   :toctree: _autosummary/
-
-   components.base.Tidy3dBaseModel
-   components.base.Tidy3dBaseModel.to_file
-   components.base.Tidy3dBaseModel.from_file
-   components.base.Tidy3dBaseModel.help
 
 .. Constants
 .. =========
@@ -394,4 +408,32 @@ Near Field to Far Field Transformation
    plugins.Near2Far.power_cartesian
    plugins.Near2Far.power_spherical
    plugins.Near2Far.radar_cross_section
+
+Abstract Models
+===============
+
+Tidy3D Base Model
+-----------------
+
+.. autopydantic_model:: Tidy3dBaseModel
+   :inherited-members: Tidy3dBaseModel
+
+Source Time
+-----------
+
+.. autopydantic_model:: SourceTime
+   :inherited-members: Tidy3dBaseModel
+
+Abstract Medium
+---------------
+
+.. autopydantic_model:: AbstractMedium
+   :inherited-members: Tidy3dBaseModel
+
+
+Monitor
+-------
+
+.. autopydantic_model:: Monitor
+   :inherited-members: Tidy3dBaseModel
 

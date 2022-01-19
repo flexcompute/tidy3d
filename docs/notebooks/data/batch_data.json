@@ -1222,7 +1222,7 @@
                         "Hz"
                     ],
                     "type": "FieldMonitor",
-                    "data_type": "ScalarFieldData"
+                    "_data_type": "ScalarFieldData"
                 },
                 {
                     "center": [
@@ -1258,7 +1258,7 @@
                         }
                     ],
                     "type": "ModeMonitor",
-                    "data_type": "ModeData"
+                    "_data_type": "ModeData"
                 },
                 {
                     "center": [
@@ -1294,7 +1294,7 @@
                         }
                     ],
                     "type": "ModeMonitor",
-                    "data_type": "ModeData"
+                    "_data_type": "ModeData"
                 },
                 {
                     "center": [
@@ -1330,7 +1330,7 @@
                         }
                     ],
                     "type": "ModeMonitor",
-                    "data_type": "ModeData"
+                    "_data_type": "ModeData"
                 },
                 {
                     "center": [
@@ -1366,7 +1366,7 @@
                         }
                     ],
                     "type": "ModeMonitor",
-                    "data_type": "ModeData"
+                    "_data_type": "ModeData"
                 },
                 {
                     "center": [
@@ -1402,7 +1402,7 @@
                         }
                     ],
                     "type": "ModeMonitor",
-                    "data_type": "ModeData"
+                    "_data_type": "ModeData"
                 }
             ],
             "pml_layers": [
@@ -2680,7 +2680,7 @@
                         "Hz"
                     ],
                     "type": "FieldMonitor",
-                    "data_type": "ScalarFieldData"
+                    "_data_type": "ScalarFieldData"
                 },
                 {
                     "center": [
@@ -2716,7 +2716,7 @@
                         }
                     ],
                     "type": "ModeMonitor",
-                    "data_type": "ModeData"
+                    "_data_type": "ModeData"
                 },
                 {
                     "center": [
@@ -2752,7 +2752,7 @@
                         }
                     ],
                     "type": "ModeMonitor",
-                    "data_type": "ModeData"
+                    "_data_type": "ModeData"
                 },
                 {
                     "center": [
@@ -2788,7 +2788,7 @@
                         }
                     ],
                     "type": "ModeMonitor",
-                    "data_type": "ModeData"
+                    "_data_type": "ModeData"
                 },
                 {
                     "center": [
@@ -2824,7 +2824,7 @@
                         }
                     ],
                     "type": "ModeMonitor",
-                    "data_type": "ModeData"
+                    "_data_type": "ModeData"
                 },
                 {
                     "center": [
@@ -2860,7 +2860,7 @@
                         }
                     ],
                     "type": "ModeMonitor",
-                    "data_type": "ModeData"
+                    "_data_type": "ModeData"
                 }
             ],
             "pml_layers": [
@@ -4138,7 +4138,7 @@
                         "Hz"
                     ],
                     "type": "FieldMonitor",
-                    "data_type": "ScalarFieldData"
+                    "_data_type": "ScalarFieldData"
                 },
                 {
                     "center": [
@@ -4174,7 +4174,7 @@
                         }
                     ],
                     "type": "ModeMonitor",
-                    "data_type": "ModeData"
+                    "_data_type": "ModeData"
                 },
                 {
                     "center": [
@@ -4210,7 +4210,7 @@
                         }
                     ],
                     "type": "ModeMonitor",
-                    "data_type": "ModeData"
+                    "_data_type": "ModeData"
                 },
                 {
                     "center": [
@@ -4246,7 +4246,7 @@
                         }
                     ],
                     "type": "ModeMonitor",
-                    "data_type": "ModeData"
+                    "_data_type": "ModeData"
                 },
                 {
                     "center": [
@@ -4282,7 +4282,7 @@
                         }
                     ],
                     "type": "ModeMonitor",
-                    "data_type": "ModeData"
+                    "_data_type": "ModeData"
                 },
                 {
                     "center": [
@@ -4318,7 +4318,7 @@
                         }
                     ],
                     "type": "ModeMonitor",
-                    "data_type": "ModeData"
+                    "_data_type": "ModeData"
                 }
             ],
             "pml_layers": [
@@ -5596,7 +5596,7 @@
                         "Hz"
                     ],
                     "type": "FieldMonitor",
-                    "data_type": "ScalarFieldData"
+                    "_data_type": "ScalarFieldData"
                 },
                 {
                     "center": [
@@ -5632,7 +5632,7 @@
                         }
                     ],
                     "type": "ModeMonitor",
-                    "data_type": "ModeData"
+                    "_data_type": "ModeData"
                 },
                 {
                     "center": [
@@ -5668,7 +5668,7 @@
                         }
                     ],
                     "type": "ModeMonitor",
-                    "data_type": "ModeData"
+                    "_data_type": "ModeData"
                 },
                 {
                     "center": [
@@ -5704,7 +5704,7 @@
                         }
                     ],
                     "type": "ModeMonitor",
-                    "data_type": "ModeData"
+                    "_data_type": "ModeData"
                 },
                 {
                     "center": [
@@ -5740,7 +5740,7 @@
                         }
                     ],
                     "type": "ModeMonitor",
-                    "data_type": "ModeData"
+                    "_data_type": "ModeData"
                 },
                 {
                     "center": [
@@ -5776,7 +5776,7 @@
                         }
                     ],
                     "type": "ModeMonitor",
-                    "data_type": "ModeData"
+                    "_data_type": "ModeData"
                 }
             ],
             "pml_layers": [
@@ -7054,7 +7054,7 @@
                         "Hz"
                     ],
                     "type": "FieldMonitor",
-                    "data_type": "ScalarFieldData"
+                    "_data_type": "ScalarFieldData"
                 },
                 {
                     "center": [
@@ -7090,7 +7090,7 @@
                         }
                     ],
                     "type": "ModeMonitor",
-                    "data_type": "ModeData"
+                    "_data_type": "ModeData"
                 },
                 {
                     "center": [
@@ -7126,7 +7126,7 @@
                         }
                     ],
                     "type": "ModeMonitor",
-                    "data_type": "ModeData"
+                    "_data_type": "ModeData"
                 },
                 {
                     "center": [
@@ -7162,7 +7162,7 @@
                         }
                     ],
                     "type": "ModeMonitor",
-                    "data_type": "ModeData"
+                    "_data_type": "ModeData"
                 },
                 {
                     "center": [
@@ -7198,7 +7198,7 @@
                         }
                     ],
                     "type": "ModeMonitor",
-                    "data_type": "ModeData"
+                    "_data_type": "ModeData"
                 },
                 {
                     "center": [
@@ -7234,7 +7234,7 @@
                         }
                     ],
                     "type": "ModeMonitor",
-                    "data_type": "ModeData"
+                    "_data_type": "ModeData"
                 }
             ],
             "pml_layers": [
@@ -8512,7 +8512,7 @@
                         "Hz"
                     ],
                     "type": "FieldMonitor",
-                    "data_type": "ScalarFieldData"
+                    "_data_type": "ScalarFieldData"
                 },
                 {
                     "center": [
@@ -8548,7 +8548,7 @@
                         }
                     ],
                     "type": "ModeMonitor",
-                    "data_type": "ModeData"
+                    "_data_type": "ModeData"
                 },
                 {
                     "center": [
@@ -8584,7 +8584,7 @@
                         }
                     ],
                     "type": "ModeMonitor",
-                    "data_type": "ModeData"
+                    "_data_type": "ModeData"
                 },
                 {
                     "center": [
@@ -8620,7 +8620,7 @@
                         }
                     ],
                     "type": "ModeMonitor",
-                    "data_type": "ModeData"
+                    "_data_type": "ModeData"
                 },
                 {
                     "center": [
@@ -8656,7 +8656,7 @@
                         }
                     ],
                     "type": "ModeMonitor",
-                    "data_type": "ModeData"
+                    "_data_type": "ModeData"
                 },
                 {
                     "center": [
@@ -8692,7 +8692,7 @@
                         }
                     ],
                     "type": "ModeMonitor",
-                    "data_type": "ModeData"
+                    "_data_type": "ModeData"
                 }
             ],
             "pml_layers": [
@@ -9970,7 +9970,7 @@
                         "Hz"
                     ],
                     "type": "FieldMonitor",
-                    "data_type": "ScalarFieldData"
+                    "_data_type": "ScalarFieldData"
                 },
                 {
                     "center": [
@@ -10006,7 +10006,7 @@
                         }
                     ],
                     "type": "ModeMonitor",
-                    "data_type": "ModeData"
+                    "_data_type": "ModeData"
                 },
                 {
                     "center": [
@@ -10042,7 +10042,7 @@
                         }
                     ],
                     "type": "ModeMonitor",
-                    "data_type": "ModeData"
+                    "_data_type": "ModeData"
                 },
                 {
                     "center": [
@@ -10078,7 +10078,7 @@
                         }
                     ],
                     "type": "ModeMonitor",
-                    "data_type": "ModeData"
+                    "_data_type": "ModeData"
                 },
                 {
                     "center": [
@@ -10114,7 +10114,7 @@
                         }
                     ],
                     "type": "ModeMonitor",
-                    "data_type": "ModeData"
+                    "_data_type": "ModeData"
                 },
                 {
                     "center": [
@@ -10150,7 +10150,7 @@
                         }
                     ],
                     "type": "ModeMonitor",
-                    "data_type": "ModeData"
+                    "_data_type": "ModeData"
                 }
             ],
             "pml_layers": [
@@ -11428,7 +11428,7 @@
                         "Hz"
                     ],
                     "type": "FieldMonitor",
-                    "data_type": "ScalarFieldData"
+                    "_data_type": "ScalarFieldData"
                 },
                 {
                     "center": [
@@ -11464,7 +11464,7 @@
                         }
                     ],
                     "type": "ModeMonitor",
-                    "data_type": "ModeData"
+                    "_data_type": "ModeData"
                 },
                 {
                     "center": [
@@ -11500,7 +11500,7 @@
                         }
                     ],
                     "type": "ModeMonitor",
-                    "data_type": "ModeData"
+                    "_data_type": "ModeData"
                 },
                 {
                     "center": [
@@ -11536,7 +11536,7 @@
                         }
                     ],
                     "type": "ModeMonitor",
-                    "data_type": "ModeData"
+                    "_data_type": "ModeData"
                 },
                 {
                     "center": [
@@ -11572,7 +11572,7 @@
                         }
                     ],
                     "type": "ModeMonitor",
-                    "data_type": "ModeData"
+                    "_data_type": "ModeData"
                 },
                 {
                     "center": [
@@ -11608,7 +11608,7 @@
                         }
                     ],
                     "type": "ModeMonitor",
-                    "data_type": "ModeData"
+                    "_data_type": "ModeData"
                 }
             ],
             "pml_layers": [
@@ -12886,7 +12886,7 @@
                         "Hz"
                     ],
                     "type": "FieldMonitor",
-                    "data_type": "ScalarFieldData"
+                    "_data_type": "ScalarFieldData"
                 },
                 {
                     "center": [
@@ -12922,7 +12922,7 @@
                         }
                     ],
                     "type": "ModeMonitor",
-                    "data_type": "ModeData"
+                    "_data_type": "ModeData"
                 },
                 {
                     "center": [
@@ -12958,7 +12958,7 @@
                         }
                     ],
                     "type": "ModeMonitor",
-                    "data_type": "ModeData"
+                    "_data_type": "ModeData"
                 },
                 {
                     "center": [
@@ -12994,7 +12994,7 @@
                         }
                     ],
                     "type": "ModeMonitor",
-                    "data_type": "ModeData"
+                    "_data_type": "ModeData"
                 },
                 {
                     "center": [
@@ -13030,7 +13030,7 @@
                         }
                     ],
                     "type": "ModeMonitor",
-                    "data_type": "ModeData"
+                    "_data_type": "ModeData"
                 },
                 {
                     "center": [
@@ -13066,7 +13066,7 @@
                         }
                     ],
                     "type": "ModeMonitor",
-                    "data_type": "ModeData"
+                    "_data_type": "ModeData"
                 }
             ],
             "pml_layers": [
@@ -14344,7 +14344,7 @@
                         "Hz"
                     ],
                     "type": "FieldMonitor",
-                    "data_type": "ScalarFieldData"
+                    "_data_type": "ScalarFieldData"
                 },
                 {
                     "center": [
@@ -14380,7 +14380,7 @@
                         }
                     ],
                     "type": "ModeMonitor",
-                    "data_type": "ModeData"
+                    "_data_type": "ModeData"
                 },
                 {
                     "center": [
@@ -14416,7 +14416,7 @@
                         }
                     ],
                     "type": "ModeMonitor",
-                    "data_type": "ModeData"
+                    "_data_type": "ModeData"
                 },
                 {
                     "center": [
@@ -14452,7 +14452,7 @@
                         }
                     ],
                     "type": "ModeMonitor",
-                    "data_type": "ModeData"
+                    "_data_type": "ModeData"
                 },
                 {
                     "center": [
@@ -14488,7 +14488,7 @@
                         }
                     ],
                     "type": "ModeMonitor",
-                    "data_type": "ModeData"
+                    "_data_type": "ModeData"
                 },
                 {
                     "center": [
@@ -14524,7 +14524,7 @@
                         }
                     ],
                     "type": "ModeMonitor",
-                    "data_type": "ModeData"
+                    "_data_type": "ModeData"
                 }
             ],
             "pml_layers": [
@@ -15802,7 +15802,7 @@
                         "Hz"
                     ],
                     "type": "FieldMonitor",
-                    "data_type": "ScalarFieldData"
+                    "_data_type": "ScalarFieldData"
                 },
                 {
                     "center": [
@@ -15838,7 +15838,7 @@
                         }
                     ],
                     "type": "ModeMonitor",
-                    "data_type": "ModeData"
+                    "_data_type": "ModeData"
                 },
                 {
                     "center": [
@@ -15874,7 +15874,7 @@
                         }
                     ],
                     "type": "ModeMonitor",
-                    "data_type": "ModeData"
+                    "_data_type": "ModeData"
                 },
                 {
                     "center": [
@@ -15910,7 +15910,7 @@
                         }
                     ],
                     "type": "ModeMonitor",
-                    "data_type": "ModeData"
+                    "_data_type": "ModeData"
                 },
                 {
                     "center": [
@@ -15946,7 +15946,7 @@
                         }
                     ],
                     "type": "ModeMonitor",
-                    "data_type": "ModeData"
+                    "_data_type": "ModeData"
                 },
                 {
                     "center": [
@@ -15982,7 +15982,7 @@
                         }
                     ],
                     "type": "ModeMonitor",
-                    "data_type": "ModeData"
+                    "_data_type": "ModeData"
                 }
             ],
             "pml_layers": [
@@ -17263,7 +17263,7 @@
                             "Hz"
                         ],
                         "type": "FieldMonitor",
-                        "data_type": "ScalarFieldData"
+                        "_data_type": "ScalarFieldData"
                     },
                     {
                         "center": [
@@ -17299,7 +17299,7 @@
                             }
                         ],
                         "type": "ModeMonitor",
-                        "data_type": "ModeData"
+                        "_data_type": "ModeData"
                     },
                     {
                         "center": [
@@ -17335,7 +17335,7 @@
                             }
                         ],
                         "type": "ModeMonitor",
-                        "data_type": "ModeData"
+                        "_data_type": "ModeData"
                     },
                     {
                         "center": [
@@ -17371,7 +17371,7 @@
                             }
                         ],
                         "type": "ModeMonitor",
-                        "data_type": "ModeData"
+                        "_data_type": "ModeData"
                     },
                     {
                         "center": [
@@ -17407,7 +17407,7 @@
                             }
                         ],
                         "type": "ModeMonitor",
-                        "data_type": "ModeData"
+                        "_data_type": "ModeData"
                     },
                     {
                         "center": [
@@ -17443,7 +17443,7 @@
                             }
                         ],
                         "type": "ModeMonitor",
-                        "data_type": "ModeData"
+                        "_data_type": "ModeData"
                     }
                 ],
                 "pml_layers": [
@@ -18726,7 +18726,7 @@
                             "Hz"
                         ],
                         "type": "FieldMonitor",
-                        "data_type": "ScalarFieldData"
+                        "_data_type": "ScalarFieldData"
                     },
                     {
                         "center": [
@@ -18762,7 +18762,7 @@
                             }
                         ],
                         "type": "ModeMonitor",
-                        "data_type": "ModeData"
+                        "_data_type": "ModeData"
                     },
                     {
                         "center": [
@@ -18798,7 +18798,7 @@
                             }
                         ],
                         "type": "ModeMonitor",
-                        "data_type": "ModeData"
+                        "_data_type": "ModeData"
                     },
                     {
                         "center": [
@@ -18834,7 +18834,7 @@
                             }
                         ],
                         "type": "ModeMonitor",
-                        "data_type": "ModeData"
+                        "_data_type": "ModeData"
                     },
                     {
                         "center": [
@@ -18870,7 +18870,7 @@
                             }
                         ],
                         "type": "ModeMonitor",
-                        "data_type": "ModeData"
+                        "_data_type": "ModeData"
                     },
                     {
                         "center": [
@@ -18906,7 +18906,7 @@
                             }
                         ],
                         "type": "ModeMonitor",
-                        "data_type": "ModeData"
+                        "_data_type": "ModeData"
                     }
                 ],
                 "pml_layers": [
@@ -20189,7 +20189,7 @@
                             "Hz"
                         ],
                         "type": "FieldMonitor",
-                        "data_type": "ScalarFieldData"
+                        "_data_type": "ScalarFieldData"
                     },
                     {
                         "center": [
@@ -20225,7 +20225,7 @@
                             }
                         ],
                         "type": "ModeMonitor",
-                        "data_type": "ModeData"
+                        "_data_type": "ModeData"
                     },
                     {
                         "center": [
@@ -20261,7 +20261,7 @@
                             }
                         ],
                         "type": "ModeMonitor",
-                        "data_type": "ModeData"
+                        "_data_type": "ModeData"
                     },
                     {
                         "center": [
@@ -20297,7 +20297,7 @@
                             }
                         ],
                         "type": "ModeMonitor",
-                        "data_type": "ModeData"
+                        "_data_type": "ModeData"
                     },
                     {
                         "center": [
@@ -20333,7 +20333,7 @@
                             }
                         ],
                         "type": "ModeMonitor",
-                        "data_type": "ModeData"
+                        "_data_type": "ModeData"
                     },
                     {
                         "center": [
@@ -20369,7 +20369,7 @@
                             }
                         ],
                         "type": "ModeMonitor",
-                        "data_type": "ModeData"
+                        "_data_type": "ModeData"
                     }
                 ],
                 "pml_layers": [
@@ -21652,7 +21652,7 @@
                             "Hz"
                         ],
                         "type": "FieldMonitor",
-                        "data_type": "ScalarFieldData"
+                        "_data_type": "ScalarFieldData"
                     },
                     {
                         "center": [
@@ -21688,7 +21688,7 @@
                             }
                         ],
                         "type": "ModeMonitor",
-                        "data_type": "ModeData"
+                        "_data_type": "ModeData"
                     },
                     {
                         "center": [
@@ -21724,7 +21724,7 @@
                             }
                         ],
                         "type": "ModeMonitor",
-                        "data_type": "ModeData"
+                        "_data_type": "ModeData"
                     },
                     {
                         "center": [
@@ -21760,7 +21760,7 @@
                             }
                         ],
                         "type": "ModeMonitor",
-                        "data_type": "ModeData"
+                        "_data_type": "ModeData"
                     },
                     {
                         "center": [
@@ -21796,7 +21796,7 @@
                             }
                         ],
                         "type": "ModeMonitor",
-                        "data_type": "ModeData"
+                        "_data_type": "ModeData"
                     },
                     {
                         "center": [
@@ -21832,7 +21832,7 @@
                             }
                         ],
                         "type": "ModeMonitor",
-                        "data_type": "ModeData"
+                        "_data_type": "ModeData"
                     }
                 ],
                 "pml_layers": [
@@ -23115,7 +23115,7 @@
                             "Hz"
                         ],
                         "type": "FieldMonitor",
-                        "data_type": "ScalarFieldData"
+                        "_data_type": "ScalarFieldData"
                     },
                     {
                         "center": [
@@ -23151,7 +23151,7 @@
                             }
                         ],
                         "type": "ModeMonitor",
-                        "data_type": "ModeData"
+                        "_data_type": "ModeData"
                     },
                     {
                         "center": [
@@ -23187,7 +23187,7 @@
                             }
                         ],
                         "type": "ModeMonitor",
-                        "data_type": "ModeData"
+                        "_data_type": "ModeData"
                     },
                     {
                         "center": [
@@ -23223,7 +23223,7 @@
                             }
                         ],
                         "type": "ModeMonitor",
-                        "data_type": "ModeData"
+                        "_data_type": "ModeData"
                     },
                     {
                         "center": [
@@ -23259,7 +23259,7 @@
                             }
                         ],
                         "type": "ModeMonitor",
-                        "data_type": "ModeData"
+                        "_data_type": "ModeData"
                     },
                     {
                         "center": [
@@ -23295,7 +23295,7 @@
                             }
                         ],
                         "type": "ModeMonitor",
-                        "data_type": "ModeData"
+                        "_data_type": "ModeData"
                     }
                 ],
                 "pml_layers": [
@@ -24578,7 +24578,7 @@
                             "Hz"
                         ],
                         "type": "FieldMonitor",
-                        "data_type": "ScalarFieldData"
+                        "_data_type": "ScalarFieldData"
                     },
                     {
                         "center": [
@@ -24614,7 +24614,7 @@
                             }
                         ],
                         "type": "ModeMonitor",
-                        "data_type": "ModeData"
+                        "_data_type": "ModeData"
                     },
                     {
                         "center": [
@@ -24650,7 +24650,7 @@
                             }
                         ],
                         "type": "ModeMonitor",
-                        "data_type": "ModeData"
+                        "_data_type": "ModeData"
                     },
                     {
                         "center": [
@@ -24686,7 +24686,7 @@
                             }
                         ],
                         "type": "ModeMonitor",
-                        "data_type": "ModeData"
+                        "_data_type": "ModeData"
                     },
                     {
                         "center": [
@@ -24722,7 +24722,7 @@
                             }
                         ],
                         "type": "ModeMonitor",
-                        "data_type": "ModeData"
+                        "_data_type": "ModeData"
                     },
                     {
                         "center": [
@@ -24758,7 +24758,7 @@
                             }
                         ],
                         "type": "ModeMonitor",
-                        "data_type": "ModeData"
+                        "_data_type": "ModeData"
                     }
                 ],
                 "pml_layers": [
@@ -26041,7 +26041,7 @@
                             "Hz"
                         ],
                         "type": "FieldMonitor",
-                        "data_type": "ScalarFieldData"
+                        "_data_type": "ScalarFieldData"
                     },
                     {
                         "center": [
@@ -26077,7 +26077,7 @@
                             }
                         ],
                         "type": "ModeMonitor",
-                        "data_type": "ModeData"
+                        "_data_type": "ModeData"
                     },
                     {
                         "center": [
@@ -26113,7 +26113,7 @@
                             }
                         ],
                         "type": "ModeMonitor",
-                        "data_type": "ModeData"
+                        "_data_type": "ModeData"
                     },
                     {
                         "center": [
@@ -26149,7 +26149,7 @@
                             }
                         ],
                         "type": "ModeMonitor",
-                        "data_type": "ModeData"
+                        "_data_type": "ModeData"
                     },
                     {
                         "center": [
@@ -26185,7 +26185,7 @@
                             }
                         ],
                         "type": "ModeMonitor",
-                        "data_type": "ModeData"
+                        "_data_type": "ModeData"
                     },
                     {
                         "center": [
@@ -26221,7 +26221,7 @@
                             }
                         ],
                         "type": "ModeMonitor",
-                        "data_type": "ModeData"
+                        "_data_type": "ModeData"
                     }
                 ],
                 "pml_layers": [
@@ -27504,7 +27504,7 @@
                             "Hz"
                         ],
                         "type": "FieldMonitor",
-                        "data_type": "ScalarFieldData"
+                        "_data_type": "ScalarFieldData"
                     },
                     {
                         "center": [
@@ -27540,7 +27540,7 @@
                             }
                         ],
                         "type": "ModeMonitor",
-                        "data_type": "ModeData"
+                        "_data_type": "ModeData"
                     },
                     {
                         "center": [
@@ -27576,7 +27576,7 @@
                             }
                         ],
                         "type": "ModeMonitor",
-                        "data_type": "ModeData"
+                        "_data_type": "ModeData"
                     },
                     {
                         "center": [
@@ -27612,7 +27612,7 @@
                             }
                         ],
                         "type": "ModeMonitor",
-                        "data_type": "ModeData"
+                        "_data_type": "ModeData"
                     },
                     {
                         "center": [
@@ -27648,7 +27648,7 @@
                             }
                         ],
                         "type": "ModeMonitor",
-                        "data_type": "ModeData"
+                        "_data_type": "ModeData"
                     },
                     {
                         "center": [
@@ -27684,7 +27684,7 @@
                             }
                         ],
                         "type": "ModeMonitor",
-                        "data_type": "ModeData"
+                        "_data_type": "ModeData"
                     }
                 ],
                 "pml_layers": [
@@ -28967,7 +28967,7 @@
                             "Hz"
                         ],
                         "type": "FieldMonitor",
-                        "data_type": "ScalarFieldData"
+                        "_data_type": "ScalarFieldData"
                     },
                     {
                         "center": [
@@ -29003,7 +29003,7 @@
                             }
                         ],
                         "type": "ModeMonitor",
-                        "data_type": "ModeData"
+                        "_data_type": "ModeData"
                     },
                     {
                         "center": [
@@ -29039,7 +29039,7 @@
                             }
                         ],
                         "type": "ModeMonitor",
-                        "data_type": "ModeData"
+                        "_data_type": "ModeData"
                     },
                     {
                         "center": [
@@ -29075,7 +29075,7 @@
                             }
                         ],
                         "type": "ModeMonitor",
-                        "data_type": "ModeData"
+                        "_data_type": "ModeData"
                     },
                     {
                         "center": [
@@ -29111,7 +29111,7 @@
                             }
                         ],
                         "type": "ModeMonitor",
-                        "data_type": "ModeData"
+                        "_data_type": "ModeData"
                     },
                     {
                         "center": [
@@ -29147,7 +29147,7 @@
                             }
                         ],
                         "type": "ModeMonitor",
-                        "data_type": "ModeData"
+                        "_data_type": "ModeData"
                     }
                 ],
                 "pml_layers": [
@@ -30430,7 +30430,7 @@
                             "Hz"
                         ],
                         "type": "FieldMonitor",
-                        "data_type": "ScalarFieldData"
+                        "_data_type": "ScalarFieldData"
                     },
                     {
                         "center": [
@@ -30466,7 +30466,7 @@
                             }
                         ],
                         "type": "ModeMonitor",
-                        "data_type": "ModeData"
+                        "_data_type": "ModeData"
                     },
                     {
                         "center": [
@@ -30502,7 +30502,7 @@
                             }
                         ],
                         "type": "ModeMonitor",
-                        "data_type": "ModeData"
+                        "_data_type": "ModeData"
                     },
                     {
                         "center": [
@@ -30538,7 +30538,7 @@
                             }
                         ],
                         "type": "ModeMonitor",
-                        "data_type": "ModeData"
+                        "_data_type": "ModeData"
                     },
                     {
                         "center": [
@@ -30574,7 +30574,7 @@
                             }
                         ],
                         "type": "ModeMonitor",
-                        "data_type": "ModeData"
+                        "_data_type": "ModeData"
                     },
                     {
                         "center": [
@@ -30610,7 +30610,7 @@
                             }
                         ],
                         "type": "ModeMonitor",
-                        "data_type": "ModeData"
+                        "_data_type": "ModeData"
                     }
                 ],
                 "pml_layers": [
@@ -31893,7 +31893,7 @@
                             "Hz"
                         ],
                         "type": "FieldMonitor",
-                        "data_type": "ScalarFieldData"
+                        "_data_type": "ScalarFieldData"
                     },
                     {
                         "center": [
@@ -31929,7 +31929,7 @@
                             }
                         ],
                         "type": "ModeMonitor",
-                        "data_type": "ModeData"
+                        "_data_type": "ModeData"
                     },
                     {
                         "center": [
@@ -31965,7 +31965,7 @@
                             }
                         ],
                         "type": "ModeMonitor",
-                        "data_type": "ModeData"
+                        "_data_type": "ModeData"
                     },
                     {
                         "center": [
@@ -32001,7 +32001,7 @@
                             }
                         ],
                         "type": "ModeMonitor",
-                        "data_type": "ModeData"
+                        "_data_type": "ModeData"
                     },
                     {
                         "center": [
@@ -32037,7 +32037,7 @@
                             }
                         ],
                         "type": "ModeMonitor",
-                        "data_type": "ModeData"
+                        "_data_type": "ModeData"
                     },
                     {
                         "center": [
@@ -32073,7 +32073,7 @@
                             }
                         ],
                         "type": "ModeMonitor",
-                        "data_type": "ModeData"
+                        "_data_type": "ModeData"
                     }
                 ],
                 "pml_layers": [

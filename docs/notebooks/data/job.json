@@ -93,7 +93,7 @@
                     "Ez"
                 ],
                 "type": "FieldMonitor",
-                "data_type": "ScalarFieldData"
+                "_data_type": "ScalarFieldData"
             }
         ],
         "pml_layers": [
