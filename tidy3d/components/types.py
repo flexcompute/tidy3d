@@ -42,6 +42,7 @@ class ComplexNumber(pydantic.BaseModel):
 
 
 Complex = Union[complex, ComplexNumber]
+Complex = Union[ComplexNumber]
 PoleAndResidue = Tuple[Complex, Complex]
 FreqBound = Union[float, Inf, Literal[-inf]]
 

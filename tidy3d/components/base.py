@@ -6,8 +6,9 @@ import rich
 import pydantic
 import yaml
 import numpy as np
+from pydantic.fields import ModelField
 
-from .types import ComplexNumber
+from .types import ComplexNumber, Literal
 from ..log import FileError
 
 # default indentation (# spaces) in files
@@ -21,6 +22,21 @@ class Tidy3dBaseModel(pydantic.BaseModel):
     For more details on pydantic base models, see:
     `Pydantic Models <https://pydantic-docs.helpmanual.io/usage/models/>`_
     """
+
+    def __init_subclass__(cls, **kwargs):
+        """Automatically place "type" field with model name in the json."""
+        name = "type"
+        value = cls.__name__
+        annotation = Literal[value]
+
+        tag_field = ModelField.infer(
+            name=name,
+            value=value,
+            annotation=annotation,
+            class_validators=None,
+            config=cls.__config__,
+        )
+        cls.__fields__[name] = tag_field
 
     class Config:  # pylint: disable=too-few-public-methods
         """Sets config for all :class:`Tidy3dBaseModel` objects.

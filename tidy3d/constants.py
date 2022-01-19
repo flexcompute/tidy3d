@@ -30,3 +30,15 @@ fp_eps = np.finfo(np.float32).eps
 
 # values of PEC for mode solver
 pec_val = -1e8
+
+# unit labels
+HERTZ = "Hz"
+TERAHERTZ = "THz"
+SECOND = "sec"
+PICOSECOND = "ps"
+METER = "m"
+MICROMETER = "um"
+NANOMETER = "nm"
+RADIAN = "rad"
+CONDUCTIVITY = "S/m"
+PERMITTIVITY = "None (relative permittivity)"

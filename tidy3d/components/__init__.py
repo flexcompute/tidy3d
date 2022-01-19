@@ -35,4 +35,4 @@ from .simulation import Simulation
 
 # data
 from .data import SimulationData, FieldData, FluxData, ModeData, FluxTimeData
-from .data import ScalarFieldData, ScalarFieldTimeData, DATA_TYPE_MAP
+from .data import ScalarFieldData, ScalarFieldTimeData, _data_type_MAP

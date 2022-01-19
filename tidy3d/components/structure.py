@@ -1,4 +1,5 @@
 """Defines Geometric objects with Medium properties."""
+import pydantic
 
 from .base import Tidy3dBaseModel
 from .validators import validate_name_str
@@ -13,15 +14,6 @@ class Structure(Tidy3dBaseModel):
     A :class:`Structure` is a combination of a material property (:class:`AbstractMedium`)
     and a :class:`Geometry`.
 
-    Parameters
-    ----------
-    geometry : :class:`Geometry`
-        Defines spatial extent of the :class:`Structure`.
-    medium : :class:`AbstractMedium`
-        Defines the electromagnetic properties of the structure material.
-    name : str = None
-        Optional name for the structure, used for plotting and logging.
-
     Example
     -------
     >>> box = Box(center=(0,0,1), size=(2, 2, 2))
@@ -29,9 +21,23 @@ class Structure(Tidy3dBaseModel):
     >>> struct = Structure(geometry=box, medium=glass, name='glass_box')
     """
 
-    geometry: GeometryType
-    medium: MediumType
-    name: str = None
+    geometry: GeometryType = pydantic.Field(
+        ...,
+        title="Geometry",
+        description="Defines spatial extent of the structure."
+    )
+
+    medium: MediumType = pydantic.Field(
+        ...,
+        title="Medium",
+        description="Defines the electromagnetic properties of the structure material."
+    )
+
+    name: str = pydantic.Field(
+        None,
+        title="Name",
+        description="Optional name for the structure."
+    )
 
     _name_validator = validate_name_str()
 
@@ -39,27 +45,6 @@ class Structure(Tidy3dBaseModel):
     def plot(
         self, x: float = None, y: float = None, z: float = None, ax: Ax = None, **patch_kwargs
     ) -> Ax:
-        """Plot structure geometry cross section.
-        Note: only one of x, y, or z must be specified to define cross section.
+        """Plot structure geometry cross section."""
 
-        Parameters
-        ----------
-        x : float = None
-            Position of plane in x direction.
-        y : float = None
-            Position of plane in y direction.
-        z : float = None
-            Position of plane in z direction.
-        ax : matplotlib.axes._subplots.Axes = None
-            matplotlib axes to plot on, if not specified, one is created.
-        **patch_kwargs
-            Optional keyword arguments passed to the matplotlib patch plotting of structure.
-            For details on accepted values, refer to
-            `Matplotlib's documentation <https://tinyurl.com/2nf5c2fk>`_.
-
-        Returns
-        -------
-        matplotlib.axes._subplots.Axes
-            The supplied or created matplotlib axes.
-        """
         return self.geometry.plot(x=x, y=y, z=z, ax=ax, **patch_kwargs)

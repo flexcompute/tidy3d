@@ -11,7 +11,7 @@ from .types import PoleAndResidue, Literal, Ax, FreqBound, ComplexNumber
 from .viz import add_ax_if_none
 from .validators import validate_name_str
 
-from ..constants import C_0, pec_val, EPSILON_0
+from ..constants import C_0, pec_val, EPSILON_0, HERTZ, CONDUCTIVITY, PERMITTIVITY
 from ..log import log
 
 
@@ -40,20 +40,20 @@ def ensure_freq_in_range(eps_model: Callable[[float], complex]) -> Callable[[flo
 
 
 class AbstractMedium(ABC, Tidy3dBaseModel):
-    """A medium within which electromagnetic waves propagate.
+    """A medium within which electromagnetic waves propagate."""
 
-    Parameters
-    ----------
-    frequeuncy_range : Tuple[float, float] = None
-        Range of validity for the medium in Hz.
-        If None, then all frequencies are valid.
-        If simulation or plotting functions use frequency out of this range, a warning is thrown.
-    name : str = None
-        Optional name for the medium.
-    """
+    name: str = pydantic.Field(
+        None,
+        title="Name",
+        description="Optional unique name for medium."
+    )
 
-    name: str = None
-    frequency_range: Tuple[FreqBound, FreqBound] = None
+    frequency_range: Tuple[FreqBound, FreqBound] = pydantic.Field(
+        None,
+        title="Frequency Range",
+        description="Optional range of validity for the medium.",
+        units=HERTZ
+    )
 
     _name_validator = validate_name_str()
 
@@ -218,8 +218,7 @@ class PECMedium(AbstractMedium):
 
     Note
     ----
-    To avoid confusion from duplicate PECs,
-    use the pre-defined instance ``PEC`` rather than creating your own :class:`PECMedium` instance.
+    To avoid confusion from duplicate PECs, should import ``tidy3d.PEC`` instance directly.
     """
 
     def eps_model(self, frequency: float) -> complex:
@@ -247,31 +246,29 @@ PEC = PECMedium(name="PEC")
 class Medium(AbstractMedium):
     """Dispersionless medium.
 
-    Parameters
-    ----------
-    permittivity : float = 1.0
-        Relative permittivity in dimensionless units.
-        Must be greater than or equal to 1.
-    conductivity : float = 0.0
-        Electric conductivity in dimensions of (S/micron)
-        Defined such that the imaginary part of the complex permittivity at angular frequency omega
-        is given by conductivity/omega.
-        Must be greater than or equal to 0.
-    frequeuncy_range : Tuple[float, float] = (-inf, inf)
-        Range of validity for the medium in Hz.
-        If simulation or plotting functions use frequency out of this range, a warning is thrown.
-    name : str = None
-        Optional name for the medium.
-
     Example
     -------
     >>> dielectric = Medium(permittivity=4.0, name='my_medium')
     >>> eps = dielectric.eps_model(200e12)
     """
 
-    permittivity: pydantic.confloat(ge=1.0) = 1.0
-    conductivity: pydantic.confloat(ge=0.0) = 0.0
-    type: Literal["Medium"] = "Medium"
+    permittivity: float = pydantic.Field(
+        1.0,
+        ge=1.0,
+        title="Permittivity",
+        description="Relative permittivity.",
+        units=PERMITTIVITY
+    )
+
+    conductivity: float = pydantic.Field(
+        0.0,
+        ge=0.0,
+        title="Conductivity",
+        description="Electric conductivity.  Defined such that the imaginary part of the complex "\
+            "permittivity at angular frequency omega is given by conductivity/omega.",
+        units=CONDUCTIVITY
+    )
+
 
     @ensure_freq_in_range
     def eps_model(self, frequency: float) -> complex:
@@ -316,17 +313,6 @@ class Medium(AbstractMedium):
 class AnisotropicMedium(AbstractMedium):
     """Diagonally anisotripic medium.
 
-    Parameters
-    ----------
-    xx : :class:`Medium`
-        :class:`Medium` describing the :math:`\\epsilon_{xx}`-component of the permittivity tensor.
-    yy : :class:`Medium`
-        :class:`Medium` describing the :math:`\\epsilon_{yy}`-component of the permittivity tensor.
-    zz : :class:`Medium`
-        :class:`Medium` describing the :math:`\\epsilon_{zz}`-component of the permittivity tensor.
-    name : str = None
-        Optional name for the medium.
-
     Note
     ----
     Only diagonal anisotropy and non-dispersive components are currently supported.
@@ -339,9 +325,23 @@ class AnisotropicMedium(AbstractMedium):
     >>> anisotropic_dielectric = AnisotropicMedium(xx=medium_xx, yy=medium_yy, zz=medium_zz)
     """
 
-    xx: Medium
-    yy: Medium
-    zz: Medium
+    xx: Medium = pydantic.Field(
+        ...,
+        title="XX Component",
+        description="Medium describing the xx-component of the diagonal permittivity tensor."
+    )
+
+    yy: Medium = pydantic.Field(
+        ...,
+        title="YY Component",
+        description="Medium describing the yy-component of the diagonal permittivity tensor."
+    )
+
+    zz: Medium = pydantic.Field(
+        ...,
+        title="ZZ Component",
+        description="Medium describing the zz-component of the diagonal permittivity tensor."
+    )
 
     @ensure_freq_in_range
     def eps_model(self, frequency: float) -> complex:
@@ -458,9 +458,18 @@ class PoleResidue(DispersiveMedium):
     >>> eps = pole_res.eps_model(200e12)
     """
 
-    eps_inf: float = 1.0
-    poles: List[PoleAndResidue] = []
-    type: Literal["PoleResidue"] = "PoleResidue"
+    eps_inf: float = pydantic.Field(
+        1.0,
+        title="Epsilon at Infinity",
+        description="Relative permittivity at infinite frequency (:math:`\\epsilon_\\infty`).",
+    )
+
+    poles: List[PoleAndResidue] = pydantic.Field(
+        [],
+        title="Poles",
+        description="List of complex-valued (:math:`a_i, c_i`) poles for the model.",
+        units=HERTZ
+    )
 
     @pydantic.validator("poles", always=True)
     def convert_complex(cls, val):
@@ -542,8 +551,10 @@ class Sellmeier(DispersiveMedium):
     >>> eps = sellmeier_medium.eps_model(200e12)
     """
 
-    coeffs: List[Tuple[float, float]]
-    type: Literal["Sellmeier"] = "Sellmeier"
+    coeffs: List[Tuple[float, float]] = pydantic.Field(
+        title="Coefficients",
+        description="List of Sellmeier (:math:`B_i, C_i`) coefficients."
+    )
 
     def _n_model(self, frequency: float) -> complex:
         """Complex-valued refractive index as a function of frequency."""
@@ -619,9 +630,18 @@ class Lorentz(DispersiveMedium):
     >>> eps = lorentz_medium.eps_model(200e12)
     """
 
-    eps_inf: float = 1.0
-    coeffs: List[Tuple[float, float, float]]
-    type: Literal["Lorentz"] = "Lorentz"
+    eps_inf: float = pydantic.Field(
+        1.0,
+        title="Epsilon at Infinity",
+        description="Relative permittivity at infinite frequency (:math:`\\epsilon_\\infty`).",
+    )
+        
+
+    coeffs: List[Tuple[float, float, float]] = pydantic.Field(
+        ...,
+        title="Epsilon at Infinity",
+        description="List of (:math:`\\Delta\\epsilon_i, f_i, \\delta_i`) values for model."
+    )
 
     @ensure_freq_in_range
     def eps_model(self, frequency: float) -> complex:
@@ -698,9 +718,17 @@ class Drude(DispersiveMedium):
     >>> eps = drude_medium.eps_model(200e12)
     """
 
-    eps_inf: float = 1.0
-    coeffs: List[Tuple[float, float]]
-    type: Literal["Drude"] = "Drude"
+    eps_inf: float = pydantic.Field(
+        1.0,
+        title="Epsilon at Infinity",
+        description="Relative permittivity at infinite frequency (:math:`\\epsilon_\\infty`).",
+    )
+
+    coeffs: List[Tuple[float, float]] = pydantic.Field(
+        ...,
+        title="Coefficients", 
+        description="List of (:math:`f_i, \\delta_i`) values for model."
+    )
 
     @ensure_freq_in_range
     def eps_model(self, frequency: float) -> complex:
@@ -776,9 +804,17 @@ class Debye(DispersiveMedium):
     >>> eps = debye_medium.eps_model(200e12)
     """
 
-    eps_inf: float = 1.0
-    coeffs: List[Tuple[float, float]]
-    type: Literal["Debye"] = "Debye"
+    eps_inf: float = pydantic.Field(
+        1.0,
+        title="Epsilon at Infinity",
+        description="Relative permittivity at infinite frequency (:math:`\\epsilon_\\infty`).",
+    )
+
+    coeffs: List[Tuple[float, float]] = pydantic.Field(
+        ...,
+        title="Coefficients",
+        description="List of (:math:`\\Delta\\epsilon_i, \\tau_i`) values for model."
+    )
 
     @ensure_freq_in_range
     def eps_model(self, frequency: float) -> complex:
@@ -818,6 +854,7 @@ class Debye(DispersiveMedium):
 
 
 # types of mediums that can be used in Simulation and Structures
+
 MediumType = Union[
-    Literal[PEC], Medium, AnisotropicMedium, PoleResidue, Sellmeier, Lorentz, Debye, Drude
+    Medium, AnisotropicMedium, PECMedium, PoleResidue, Sellmeier, Lorentz, Debye, Drude
 ]
