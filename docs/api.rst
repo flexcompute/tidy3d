@@ -8,71 +8,65 @@ API Reference
 Simulation
 ==========
 
-.. autosummary::
-   :toctree: _autosummary/
+Simulation
+----------
 
-   Simulation
+.. autopydantic_model:: Simulation
+   :inherited-members: Tidy3dBaseModel
 
-Methods
--------
+Size
+----
 
-.. autosummary::
-   :toctree: _autosummary/
-
-   Simulation.plot
-   Simulation.plot_eps
-   Simulation.plot_structures
-   Simulation.plot_structures_eps
-   Simulation.plot_sources
-   Simulation.plot_monitors
-   Simulation.plot_symmetries
-   Simulation.plot_pml
-   Simulation.plot_grid
-   Simulation.grid
-   Simulation.dt
-   Simulation.tmesh
-   Simulation.wvl_mat_min
-   Simulation.frequency_range
-   Simulation.pml_thicknesses
-   Simulation.num_pml_layers
-   Simulation.discretize
-   Simulation.epsilon
-
+.. autopydantic_field:: components.types.Size
 
 Grid
 ====
 
-.. autosummary::
-   :toctree: _autosummary/
+3D Coordinates
+--------------
 
-   Coords
-   FieldGrid
-   YeeGrid
-   Coords1D
-   Grid
-   Grid.centers
-   Grid.sizes
-   Grid.yee
+.. autopydantic_model:: Coords
+   :inherited-members: Tidy3dBaseModel
+
+Field Grid
+----------
+
+.. autopydantic_model:: FieldGrid
+   :inherited-members: Tidy3dBaseModel
+
+Yee Lattice Grid
+----------------
+
+.. autopydantic_model:: YeeGrid
+   :inherited-members: Tidy3dBaseModel
+
+Simulation Grid
+---------------
+
+.. autopydantic_model:: Grid
+   :inherited-members: Tidy3dBaseModel
 
 
 Absorbing Boundaries
 ====================
 
-.. autosummary::
-   :toctree: _autosummary/
+Perfectly Matched Layer (PML)
+-----------------------------
 
-   PML
-   StablePML
-   Absorber
+.. autopydantic_model:: PML
+   :inherited-members: Tidy3dBaseModel
 
-Absorber Parameters
--------------------
+Stable PML
+----------
 
-.. autosummary::
-   :toctree: _autosummary/
+.. autopydantic_model:: StablePML
+   :inherited-members: Tidy3dBaseModel
 
-   AbsorberParams
-   PMLParams
+Adiabatic Absorber
+------------------
+
+.. autopydantic_model:: Absorber
+   :inherited-members: Tidy3dBaseModel
 
 
 Geometry
@@ -278,22 +272,53 @@ Output Data
    FluxTimeData
    ModeData
 
-Methods
--------
+.. Output Data
+.. ===========
 
-.. autosummary::
-   :toctree: _autosummary/
+.. Simulation Data
+.. ---------------
 
-   SimulationData.plot_field
-   Monitor.plot
-   Monitor.inside
-   Monitor.intersections
-   Monitor.intersects
-   Monitor.intersects_plane
-   Monitor.bounds
-   Monitor.bounding_box
-   Monitor.pop_axis
-   Monitor.unpop_axis
+.. .. autopydantic_model:: SimulationData
+..    :inherited-members: Tidy3dBaseModel
+
+.. Vector Field Data
+.. -----------------
+
+.. .. autopydantic_model:: FieldData
+..    :inherited-members: Tidy3dBaseModel
+
+.. Scalar Field Data
+.. -----------------
+
+
+.. .. autopydantic_model:: ScalarFieldData
+..    :inherited-members: Tidy3dBaseModel
+
+.. Scalar Field Data (Time Domain)
+.. -------------------------------
+
+.. .. autopydantic_model:: ScalarFieldTimeData
+..    :inherited-members: Tidy3dBaseModel
+
+
+.. Flux Data
+.. ---------
+
+.. .. autopydantic_model:: FluxData
+..    :inherited-members: Tidy3dBaseModel
+
+.. Flux Data (Time Domain)
+.. -----------------------
+
+.. .. autopydantic_model:: FluxTimeData
+..    :inherited-members: Tidy3dBaseModel
+
+.. Mode Data
+.. ---------
+
+.. .. autopydantic_model:: ModeData
+..    :inherited-members: Tidy3dBaseModel
+
 
 .. Constants
 .. =========
@@ -412,17 +437,26 @@ Near Field to Far Field Transformation
 Abstract Models
 ===============
 
+.. currentmodule:: tidy3d.components.base
+
+
 Tidy3D Base Model
 -----------------
 
 .. autopydantic_model:: Tidy3dBaseModel
    :inherited-members: Tidy3dBaseModel
 
-Source Time
------------
 
-.. autopydantic_model:: SourceTime
+.. currentmodule:: tidy3d.components.pml
+
+Absorber Specification
+----------------------
+
+.. autopydantic_model:: AbsorberSpec
    :inherited-members: Tidy3dBaseModel
+
+.. currentmodule:: tidy3d.components.medium
+
 
 Abstract Medium
 ---------------
@@ -430,10 +464,31 @@ Abstract Medium
 .. autopydantic_model:: AbstractMedium
    :inherited-members: Tidy3dBaseModel
 
+.. currentmodule:: tidy3d.components.source
+
+
+Source Time
+-----------
+
+.. autopydantic_model:: SourceTime
+   :inherited-members: Tidy3dBaseModel
+
+.. currentmodule:: tidy3d.components.monitor
 
 Monitor
 -------
 
 .. autopydantic_model:: Monitor
    :inherited-members: Tidy3dBaseModel
+
+.. currentmodule:: tidy3d
+
+Types
+-----
+
+.. autosummary::
+   :toctree: _autosummary/
+
+   components.types.Size
+   components.types.Coords
 
