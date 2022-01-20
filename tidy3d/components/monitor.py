@@ -121,7 +121,7 @@ class FieldMonitor(AbstractFieldMonitor, FreqMonitor):
     ...     center=(1,2,3),
     ...     size=(2,2,2),
     ...     fields=['Hx'],
-    ...     freqs=[250e12]
+    ...     freqs=[250e12],
     ...     name='steady_state_monitor')
     """
 

@@ -12,7 +12,7 @@ from descartes import PolygonPatch
 
 from .validators import assert_unique_names, assert_objects_in_sim_bounds, set_names
 from .geometry import Box
-from .types import Symmetry, Ax, Shapely, FreqBound, GridSize
+from .types import Symmetry, Ax, Shapely, FreqBound, GridSize, inf
 from .grid import Coords1D, Grid, Coords
 from .medium import Medium, MediumType, AbstractMedium
 from .structure import Structure
@@ -20,7 +20,7 @@ from .source import SourceType
 from .monitor import MonitorType
 from .pml import PMLTypes, PML
 from .viz import StructMediumParams, StructEpsParams, PMLParams, SymParams, add_ax_if_none
-from ..constants import inf, C_0, MICROMETER, SECOND
+from ..constants import C_0, MICROMETER, SECOND
 from ..log import log, Tidy3dKeyError
 
 # for docstring examples
@@ -33,7 +33,6 @@ from .monitor import FieldMonitor, FluxMonitor, Monitor  # pylint:disable=unused
 
 
 class Simulation(Box):  # pylint:disable=too-many-public-methods
-    # pylint:disable=line-too-long
     """Contains all information about Tidy3d simulation.
 
     Example
@@ -46,21 +45,6 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
     ...         Structure(
     ...             geometry=Box(size=(1, 1, 1), center=(-1, 0, 0)),
     ...             medium=Medium(permittivity=2.0),
-    ...         ),
-    ...         Structure(
-    ...             geometry=Box(size=(1, 1, 1), center=(0, 0, 0)),
-    ...             medium=Medium(permittivity=1.0, conductivity=3.0),
-    ...         ),
-    ...         Structure(geometry=Sphere(radius=1.4, center=(1.0, 0.0, 1.0)), medium=Medium()),
-    ...         Structure(
-    ...             geometry=Cylinder(radius=1.4, length=2.0, center=(1.0, 0.0, -1.0), axis=1),
-    ...             medium=Medium(),
-    ...         ),
-    ...         Structure(
-    ...             geometry=PolySlab(
-    ...                 vertices=[(-1.5, -1.5), (-0.5, -1.5), (-0.5, -0.5)], slab_bounds=[-1, 1]
-    ...             ),
-    ...             medium=Medium(permittivity=3.0),
     ...         ),
     ...     ],
     ...     sources=[
@@ -89,106 +73,104 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
     ...     subpixel=False,
     ... )
     """
-    # pylint:enable=line-too-long
 
-    version: str = pydantic.Field(
+    _version: str = pydantic.Field(
         "0.2.0",
         title="Version",
-        description="String specifying the front end version, only change for development purposes."
+        description="String specifying the front end version, only change for development purposes.",
     )
 
     grid_size: Tuple[GridSize, GridSize, GridSize] = pydantic.Field(
         ...,
         title="Grid Size",
-        description="If components are float, uniform grid size along x, y, and z. "\
-            "If components are array like, defines an array of nonuniform grid sizes centered at "\
-            "the simulation center ."\
-            " Note: if supplied sizes do not cover the simulation size, the first and last sizes "\
-            "are repeated to cover size. ",
-        units=MICROMETER
+        description="If components are float, uniform grid size along x, y, and z. "
+        "If components are array like, defines an array of nonuniform grid sizes centered at "
+        "the simulation center ."
+        " Note: if supplied sizes do not cover the simulation size, the first and last sizes "
+        "are repeated to cover size. ",
+        units=MICROMETER,
     )
 
     medium: MediumType = pydantic.Field(
         Medium(),
         title="Background Medium",
-        description="Background medium of simulation, defaults to vacuum if not specified."
+        description="Background medium of simulation, defaults to vacuum if not specified.",
     )
 
     run_time: pydantic.NonNegativeFloat = pydantic.Field(
         0.0,
         title="Run Time",
-        description="Total electromagnetic evolution time in seconds. "\
-            "Note: If simulation 'shutoff' is specified, "\
-            "simulation will terminate early when shutoff condition met.",
-        units=SECOND
+        description="Total electromagnetic evolution time in seconds. "
+        "Note: If simulation 'shutoff' is specified, "
+        "simulation will terminate early when shutoff condition met.",
+        units=SECOND,
     )
 
     structures: List[Structure] = pydantic.Field(
         [],
         title="Structures",
-        description="List of structures present in simulation. "\
-            "Note: Structures defined later in this list override the "\
-            "simulation material properties in regions of spatial overlap."
+        description="List of structures present in simulation. "
+        "Note: Structures defined later in this list override the "
+        "simulation material properties in regions of spatial overlap.",
     )
 
     sources: List[SourceType] = pydantic.Field(
         [],
         title="Sources",
-        description="List of electric current sources injecting fields into the simulation."
+        description="List of electric current sources injecting fields into the simulation.",
     )
 
     monitors: List[MonitorType] = pydantic.Field(
         [],
         title="Monitors",
-        description="List of monitors in the simulation."\
-            "NoNote: monitor names are used to access data after simulation is run."
+        description="List of monitors in the simulation. "
+        "Note: monitor names are used to access data after simulation is run.",
     )
 
     pml_layers: Tuple[PMLTypes, PMLTypes, PMLTypes] = pydantic.Field(
         (None, None, None),
         title="Absorbing Layers",
-        description="Specifications for the absorbing layers on x, y, and z edges. "\
-            "If `None`, no absorber will be added on that dimension "\
-            "and periodic boundary conditions will be used."
+        description="Specifications for the absorbing layers on x, y, and z edges. "
+        "If ``None``, no absorber will be added on that dimension "
+        "and periodic boundary conditions will be used.",
     )
 
     symmetry: Tuple[Symmetry, Symmetry, Symmetry] = pydantic.Field(
         (0, 0, 0),
         title="Symmetries",
         description="Tuple of integers defining reflection symmetry across a plane "
-            "bisecting the simulation domain normal to the x-, y-, and z-axis, respectvely. "
-            "Each element can be '0' (no symmetry), '1' (even, i.e. 'PMC' symmetry) or "\
-            "'-1' (odd, i.e. 'PEC' symmetry). "\
-            "Note that the vectorial nature of the fields must be taken into account to correctly "\
-            "determine the symmetry value."
+        "bisecting the simulation domain normal to the x-, y-, and z-axis, respectvely. "
+        "Each element can be ``0`` (no symmetry), ``1`` (even, i.e. 'PMC' symmetry) or "
+        "``-1`` (odd, i.e. 'PEC' symmetry). "
+        "Note that the vectorial nature of the fields must be taken into account to correctly "
+        "determine the symmetry value.",
     )
 
     shutoff: pydantic.NonNegativeFloat = pydantic.Field(
         1e-5,
         title="Shutoff Condition",
-        description="Ratio of the instantaneous integrated E-field intensity to the maximum value "\
-            "at which the simulation will automatically terminate time stepping. "\
-            "Used to prevent extraneous run time of simulations with fully decayed fields. "\
-            "Set to '0' to disable this feature."
+        description="Ratio of the instantaneous integrated E-field intensity to the maximum value "
+        "at which the simulation will automatically terminate time stepping. "
+        "Used to prevent extraneous run time of simulations with fully decayed fields. "
+        "Set to ``0`` to disable this feature.",
     )
 
     subpixel: bool = pydantic.Field(
         True,
         title="Subpixel Averaging",
-        description="If 'True', uses subpixel averaging of the permittivity "\
-        "based on structure definition, resulting in much higher accuracy for a given grid size."
+        description="If ``True``, uses subpixel averaging of the permittivity "
+        "based on structure definition, resulting in much higher accuracy for a given grid size.",
     )
 
     courant: float = pydantic.Field(
         0.9,
         title="Courant Factor",
-        description="Courant stability factor, controls time step to spatial step ratio. "\
-            "Lower values lead to more stable simulations for dispersive materials, "\
-            "but result in longer simulation times.",
+        description="Courant stability factor, controls time step to spatial step ratio. "
+        "Lower values lead to more stable simulations for dispersive materials, "
+        "but result in longer simulation times.",
         gt=0.0,
-        le=1.0
+        le=1.0,
     )
-
 
     # TODO: clean up version
 
@@ -206,17 +188,6 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
     # assign names to unnamed structures, sources, and mediums
     _structure_names = set_names("structures")
     _source_names = set_names("sources")
-
-    # @pydantic.validator("structures", allow_reuse=True, always=True)
-    # def set_medium_names(cls, val, values):
-    #     """check for intersection of each structure with simulation bounds."""
-    #     background_medium = values.get("medium")
-    #     all_mediums = [background_medium] + [structure.medium for structure in val]
-    #     _, unique_indices = np.unique(all_mediums, return_inverse=True)
-    #     for unique_index, medium in zip(unique_indices, all_mediums):
-    #         if not medium.name:
-    #             medium.name = f"mediums[{unique_index}]"
-    #     return val
 
     # make sure all names are unique
     _unique_structure_names = assert_unique_names("structures")
@@ -275,28 +246,6 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         ax: Ax = None,
         **kwargs,
     ) -> Ax:
-        """Plot each of simulation's components on a plane defined by one nonzero x,y,z coordinate.
-
-        Parameters
-        ----------
-        x : float = None
-            position of plane in x direction, only one of x, y, z must be specified to define plane.
-        y : float = None
-            position of plane in y direction, only one of x, y, z must be specified to define plane.
-        z : float = None
-            position of plane in z direction, only one of x, y, z must be specified to define plane.
-        ax : matplotlib.axes._subplots.Axes = None
-            Matplotlib axes to plot on, if not specified, one is created.
-        **kwargs
-            Optional keyword arguments passed to the matplotlib patch plotting of structure.
-            For details on accepted values, refer to
-            `Matplotlib's documentation <https://tinyurl.com/2nf5c2fk>`_.
-
-        Returns
-        -------
-        matplotlib.axes._subplots.Axes
-            The supplied or created matplotlib axes.
-        """
 
         ax = self.plot_structures(ax=ax, x=x, y=y, z=z, **kwargs)
         ax = self.plot_sources(ax=ax, x=x, y=y, z=z, **kwargs)

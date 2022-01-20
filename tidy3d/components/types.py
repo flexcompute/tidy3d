@@ -13,11 +13,28 @@ import numpy as np
 from matplotlib.axes._subplots import Axes
 from shapely.geometry.base import BaseGeometry
 
-from ..constants import inf
+""" infinity """
 
-""" abstract """
 
-Inf = Literal[inf]
+class Inf(pydantic.BaseModel):
+    """Infinity.  Can use built-in instance: ``tidy3d.inf``."""
+
+    def __neg__(self):
+        """Negative Infinity"""
+        return NegInf()
+
+
+class NegInf(pydantic.BaseModel):
+    """Negative infinity.  Can use built-in instance as: ``-tidy3d.inf``."""
+
+    def __neg__(self):
+        """Positive Infinity"""
+        return Inf()
+
+
+# built in instance of Inf
+inf = Inf()
+# inf = 1e5
 
 """ geometric """
 
@@ -44,7 +61,11 @@ class ComplexNumber(pydantic.BaseModel):
 Complex = Union[complex, ComplexNumber]
 Complex = Union[ComplexNumber]
 PoleAndResidue = Tuple[Complex, Complex]
-FreqBound = Union[float, Inf, Literal[-inf]]
+
+PoleAndResidue = Tuple[Tuple[float, float], Tuple[float, float]]
+FreqBoundMax = Union[float, Inf]
+FreqBoundMin = Union[float, NegInf]
+FreqBound = Tuple[FreqBoundMin, FreqBoundMax]
 
 """ symmetries """
 

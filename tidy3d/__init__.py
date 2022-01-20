@@ -17,7 +17,7 @@ from .components import Grid, Coords
 from .components import Box, Sphere, Cylinder, PolySlab
 
 # medium
-from .components import Medium, PoleResidue, AnisotropicMedium, PEC
+from .components import Medium, PoleResidue, AnisotropicMedium, PEC, PECMedium
 from .components import Sellmeier, Debye, Drude, Lorentz
 
 # structures
@@ -42,7 +42,10 @@ from .components import SimulationData, FieldData, FluxData, ModeData, FluxTimeD
 from .components import _data_type_MAP, ScalarFieldData, ScalarFieldTimeData
 
 # constants imported as `C_0 = td.C_0` or `td.constants.C_0`
-from .constants import inf, C_0, ETA_0, HBAR
+from .constants import C_0, ETA_0, HBAR
+
+# types
+from .components import inf
 
 # plugins typically imported as `from tidy3d.plugins import DispersionFitter`
 from . import plugins

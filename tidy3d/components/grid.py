@@ -24,23 +24,16 @@ class Coords(Tidy3dBaseModel):
     """
 
     x: Coords1D = pydantic.Field(
-        ...,
-        title="X Coordinates",
-        description="1-dimensional array of x coordinates."
+        ..., title="X Coordinates", description="1-dimensional array of x coordinates."
     )
 
     y: Coords1D = pydantic.Field(
-        ...,
-        title="Y Coordinates",
-        description="1-dimensional array of y coordinates."
+        ..., title="Y Coordinates", description="1-dimensional array of y coordinates."
     )
 
     z: Coords1D = pydantic.Field(
-        ...,
-        title="Z Coordinates",
-        description="1-dimensional array of z coordinates."
+        ..., title="Z Coordinates", description="1-dimensional array of z coordinates."
     )
-
 
     @property
     def to_list(self):
@@ -63,19 +56,19 @@ class FieldGrid(Tidy3dBaseModel):
     x: Coords = pydantic.Field(
         ...,
         title="X Positions",
-        description="x,y,z coordinates of the locations of the x-component of a vector field."
+        description="x,y,z coordinates of the locations of the x-component of a vector field.",
     )
 
     y: Coords = pydantic.Field(
         ...,
         title="Y Positions",
-        description="x,y,z coordinates of the locations of the y-component of a vector field."
+        description="x,y,z coordinates of the locations of the y-component of a vector field.",
     )
 
     z: Coords = pydantic.Field(
         ...,
         title="Z Positions",
-        description="x,y,z coordinates of the locations of the z-component of a vector field."
+        description="x,y,z coordinates of the locations of the z-component of a vector field.",
     )
 
 
@@ -96,13 +89,13 @@ class YeeGrid(Tidy3dBaseModel):
     E: FieldGrid = pydantic.Field(
         ...,
         title="Electric Field Grid",
-        descrition="Coordinates of the locations of all three components of the electric field."
+        descrition="Coordinates of the locations of all three components of the electric field.",
     )
 
     H: FieldGrid = pydantic.Field(
         ...,
         title="Electric Field Grid",
-        descrition="Coordinates of the locations of all three components of the magnetic field."
+        descrition="Coordinates of the locations of all three components of the magnetic field.",
     )
 
 
@@ -124,7 +117,7 @@ class Grid(Tidy3dBaseModel):
     boundaries: Coords = pydantic.Field(
         ...,
         title="Boundary Coordinates",
-        description="x,y,z coordinates of the boundaries between cells, defining the FDTD grid."
+        description="x,y,z coordinates of the boundaries between cells, defining the FDTD grid.",
     )
 
     @staticmethod

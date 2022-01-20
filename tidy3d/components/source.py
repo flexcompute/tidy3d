@@ -7,12 +7,13 @@ import pydantic
 import numpy as np
 
 from .base import Tidy3dBaseModel
-from .types import Direction, Polarization, Ax, FreqBound, Array, Literal
+from .types import Direction, Polarization, Ax, FreqBound, Array
+from .types import inf  # pylint:disable=unused-import
 from .validators import assert_plane, validate_name_str
 from .geometry import Box
 from .mode import ModeSpec
 from .viz import add_ax_if_none, SourceParams
-from ..constants import inf, RADIAN, HERTZ, MICROMETER  # pylint:disable=unused-import
+from ..constants import RADIAN, HERTZ, MICROMETER
 
 # TODO: change directional source to something signifying its intent is to create a specific field.
 
@@ -24,16 +25,11 @@ class SourceTime(ABC, Tidy3dBaseModel):
     """Base class describing the time dependence of a source."""
 
     amplitude: pydantic.NonNegativeFloat = pydantic.Field(
-        1.0,
-        title="Amplitude",
-        description="Real-valued maximum amplitude of the time dependence."
+        1.0, title="Amplitude", description="Real-valued maximum amplitude of the time dependence."
     )
 
     phase: float = pydantic.Field(
-        0.0,
-        title="Phase",
-        description="Phase shift of the time dependence.",
-        units=RADIAN
+        0.0, title="Phase", description="Phase shift of the time dependence.", units=RADIAN
     )
 
     @abstractmethod
@@ -114,23 +110,20 @@ class Pulse(SourceTime, ABC):
     """A source time that ramps up with some ``fwidth`` and oscillates at ``freq0``."""
 
     freq0: pydantic.PositiveFloat = pydantic.Field(
-        ...,
-        title="Central Frequency",
-        description="Central frequency of the pulse.",
-        units=HERTZ
+        ..., title="Central Frequency", description="Central frequency of the pulse.", units=HERTZ
     )
     fwidth: pydantic.PositiveFloat = pydantic.Field(
         ...,
         title="",
         description="Standard deviation of the frequency content of the pulse.",
-        units=HERTZ
+        units=HERTZ,
     )
 
     offset: float = pydantic.Field(
         5.0,
         title="Offset",
         description="Time delay of the maximum value of the pulse in units of 1 / ``fwidth``.",
-        ge=2.5
+        ge=2.5,
     )
 
     @property
@@ -159,18 +152,7 @@ class GaussianPulse(Pulse):
     """
 
     def amp_time(self, time: float) -> complex:
-        """Complex-valued source amplitude as a function of time.
-
-        Parameters
-        ----------
-        time : float
-            Time in seconds.
-
-        Returns
-        -------
-        complex
-            Complex-valued source amplitude at supplied time.
-        """
+        """Complex-valued source amplitude as a function of time."""
 
         twidth = 1.0 / (2 * np.pi * self.fwidth)
         omega0 = 2 * np.pi * self.freq0
@@ -194,18 +176,8 @@ class ContinuousWave(Pulse):
     """
 
     def amp_time(self, time: float) -> complex:
-        """Complex-valued source amplitude as a function of time.
+        """Complex-valued source amplitude as a function of time."""
 
-        Parameters
-        ----------
-        time : float
-            Time in seconds.
-
-        Returns
-        -------
-        complex
-            Complex-valued source amplitude at supplied time.
-        """
         twidth = 1.0 / (2 * np.pi * self.fwidth)
         omega0 = 2 * np.pi * self.freq0
         time_shifted = time - self.offset * twidth
@@ -227,16 +199,10 @@ class Source(Box, ABC):
     """Abstract base class for all sources."""
 
     source_time: SourceTimeType = pydantic.Field(
-        ...,
-        title="Source Time",
-        description="Specification of the source time-dependence."
+        ..., title="Source Time", description="Specification of the source time-dependence."
     )
 
-    name: str = pydantic.Field(
-        None,
-        title="Name",
-        description="Optional name for the source."
-    )
+    name: str = pydantic.Field(None, title="Name", description="Optional name for the source.")
 
     _name_validator = validate_name_str()
 
@@ -244,7 +210,6 @@ class Source(Box, ABC):
     def plot(
         self, x: float = None, y: float = None, z: float = None, ax: Ax = None, **kwargs
     ) -> Ax:
-        """Plot the source geometry on a cross section plane."""
 
         kwargs = SourceParams().update_params(**kwargs)
         ax = self.geometry.plot(x=x, y=y, z=z, ax=ax, **kwargs)
@@ -252,13 +217,8 @@ class Source(Box, ABC):
 
     @property
     def geometry(self):
-        """:class:`Box` representation of source.
+        """:class:`Box` representation of source."""
 
-        Returns
-        -------
-        :class:`Box`
-            Representation of the source geometry as a :class:`Box`.
-        """
         return Box(center=self.center, size=self.size)
 
 
@@ -274,7 +234,7 @@ class VolumeSource(Source):
     polarization: Polarization = pydantic.Field(
         ...,
         title="Polarization",
-        description="Specifies the direction and type of current component."
+        description="Specifies the direction and type of current component.",
     )
 
 
@@ -282,11 +242,11 @@ class FieldSource(Source, ABC):
     """A planar Source defined by the desired E and H fields at a plane. The sources are created
     such that the propagation is uni-directional."""
 
-    polarization: Direction = pydantic.Field(
+    direction: Direction = pydantic.Field(
         ...,
         title="Direction",
-        description="Specifies propagation in positive or negative direction of the normal axis."
-    )    
+        description="Specifies propagation in positive or negative direction of the normal axis.",
+    )
 
     _plane_validator = assert_plane()
 
@@ -315,11 +275,12 @@ class ModeSource(FieldSource):
     mode_index: pydantic.NonNegativeInt = pydantic.Field(
         0,
         title="Mode Index",
-        description="Index into the collection of modes returned by mode solver. " \
-        " Specifies which mode to inject using this source. "\
-        "If larger than ``mode_spec.num_modes``, "\
-        "``num_modes`` in the solver will be set to ``mode_index + 1``."
+        description="Index into the collection of modes returned by mode solver. "
+        " Specifies which mode to inject using this source. "
+        "If larger than ``mode_spec.num_modes``, "
+        "``num_modes`` in the solver will be set to ``mode_index + 1``.",
     )
+
 
 class AngledFieldSource(FieldSource):
     """Field Source with a polarization angle."""
@@ -327,16 +288,17 @@ class AngledFieldSource(FieldSource):
     pol_angle: float = pydantic.Field(
         0,
         title="Polarization Angle",
-        description="Specifies the angle between the electric field polarization of the "\
-            "source and the plane defined by the normal axis and the propagation axis (rad). "\
-            "``pol_angle=0`` (default) specifies P polarization, "\
-            "while ``pol_angle=np.pi/2`` specifies S polarization. "\
-            "At normal incidence when S and P are undefined, ``pol_angle=0`` defines: "\
-            "- ``Ey`` polarization for propagation along ``x``."\
-            "- ``Ex`` polarization for propagation along ``y``."\
-            "- ``Ex`` polarization for propagation along ``z``.",
-        units=RADIAN
+        description="Specifies the angle between the electric field polarization of the "
+        "source and the plane defined by the normal axis and the propagation axis (rad). "
+        "``pol_angle=0`` (default) specifies P polarization, "
+        "while ``pol_angle=np.pi/2`` specifies S polarization. "
+        "At normal incidence when S and P are undefined, ``pol_angle=0`` defines: "
+        "- ``Ey`` polarization for propagation along ``x``."
+        "- ``Ex`` polarization for propagation along ``y``."
+        "- ``Ex`` polarization for propagation along ``z``.",
+        units=RADIAN,
     )
+
 
 class PlaneWave(AngledFieldSource):
     """Uniform current distribution on an infinite extent plane.
@@ -348,7 +310,7 @@ class PlaneWave(AngledFieldSource):
     """
 
     # TODO: this is only needed so that the convert path still works. Remove eventually.
-    # polarization: Polarization = "Ex"
+    polarization: Polarization = "Ex"
 
 
 class GaussianBeam(AngledFieldSource):

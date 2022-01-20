@@ -21,7 +21,7 @@ class AbsorberParams(Tidy3dBaseModel):
     sigma_order: pydantic.NonNegativeInt = pydantic.Field(
         3,
         title="Sigma Order",
-        description="Order of the polynomial describing the absorber profile (~dist^sigma_order)."
+        description="Order of the polynomial describing the absorber profile (~dist^sigma_order).",
     )
 
     sigma_min: pydantic.NonNegativeFloat = pydantic.Field(
@@ -39,7 +39,6 @@ class AbsorberParams(Tidy3dBaseModel):
     )
 
 
-
 class PMLParams(AbsorberParams):
     """Specifies full set of parameters needed for complex, frequency-shifted PML.
 
@@ -51,43 +50,32 @@ class PMLParams(AbsorberParams):
     kappa_order: pydantic.NonNegativeInt = pydantic.Field(
         3,
         title="Kappa Order",
-        description="Order of the polynomial describing the PML kappa profile "\
-            "(kappa~dist^kappa_order)."
+        description="Order of the polynomial describing the PML kappa profile "
+        "(kappa~dist^kappa_order).",
     )
 
     kappa_min: pydantic.NonNegativeFloat = pydantic.Field(
-        0.0,
-        title="Kappa Minimum",
-        description=""
+        0.0, title="Kappa Minimum", description=""
     )
 
     kappa_max: pydantic.NonNegativeFloat = pydantic.Field(
-        1.5,
-        title="Kappa Maximum",
-        description=""
+        1.5, title="Kappa Maximum", description=""
     )
 
     alpha_order: pydantic.NonNegativeInt = pydantic.Field(
         3,
         title="Alpha Order",
-        description="Order of the polynomial describing the PML alpha profile "\
-            "(alpha~dist^alpha_order)."
+        description="Order of the polynomial describing the PML alpha profile "
+        "(alpha~dist^alpha_order).",
     )
 
     alpha_min: pydantic.NonNegativeFloat = pydantic.Field(
-        0.0,
-        title="Alpha Minimum",
-        description="Minimum value of the PML alpha.",
-        units=PML_SIGMA
+        0.0, title="Alpha Minimum", description="Minimum value of the PML alpha.", units=PML_SIGMA
     )
 
     alpha_max: pydantic.NonNegativeFloat = pydantic.Field(
-        1.5,
-        title="Alpha Maximum",
-        description="Maximum value of the PML alpha.",
-        units=PML_SIGMA
+        1.5, title="Alpha Maximum", description="Maximum value of the PML alpha.", units=PML_SIGMA
     )
-
 
 
 """ Default parameters """
@@ -125,23 +113,17 @@ class AbsorberSpec(Tidy3dBaseModel, ABC):
     num_layers: pydantic.NonNegativeInt = pydantic.Field(
         ...,
         title="Number of Layers",
-        description="Number of layers of standard PML to add to + and - boundaries.")
+        description="Number of layers of standard PML to add to + and - boundaries.",
+    )
     parameters: AbsorberParams = pydantic.Field(
         ...,
         title="Absorber Parameters",
-        description="Parameters to fine tune the absorber profile and properties.")
+        description="Parameters to fine tune the absorber profile and properties.",
+    )
 
 
 class PML(AbsorberSpec):
     """Specifies a standard PML along a single dimension.
-
-    Parameters
-    ----------
-    num_layers : int = 12
-        Number of layers of standard PML to add to + and - boundaries.
-        Must be non-negative.
-    parameters : :class:`PMLParams` = DefaultPMLParameters
-        Parameters of the complex frequency-shifted absorption poles.
 
     Example
     -------
@@ -151,28 +133,19 @@ class PML(AbsorberSpec):
     num_layers: pydantic.NonNegativeInt = pydantic.Field(
         12,
         title="Number of Layers",
-        description="Number of layers of standard PML to add to + and - boundaries."
+        description="Number of layers of standard PML to add to + and - boundaries.",
     )
 
     parameters: PMLParams = pydantic.Field(
         DefaultPMLParameters,
         title="PML Parameters",
-        description="Parameters of the complex frequency-shifted absorption poles."
+        description="Parameters of the complex frequency-shifted absorption poles.",
     )
-
 
 
 class StablePML(AbsorberSpec):
     """Specifies a 'stable' PML along a single dimension.
     This PML deals handles possbly divergent simulations better, but at the expense of more layers.
-
-    Parameters
-    ----------
-    num_layers : int = 40
-        Number of layers of stable PML to add to + and - boundaries.
-        Must be non-negative.
-    parameters : Literal[DefaultStablePMLParameters] = DefaultStablePMLParameters
-        "Stable" parameters of the complex frequency-shifted absorption poles.
 
     Example
     -------
@@ -180,15 +153,13 @@ class StablePML(AbsorberSpec):
     """
 
     num_layers: pydantic.NonNegativeInt = pydantic.Field(
-        40,
-        title="Number of Layers",
-        description="Number of layers of 'stable' PML."
+        40, title="Number of Layers", description="Number of layers of 'stable' PML."
     )
 
     parameters: PMLParams = pydantic.Field(
         DefaultStablePMLParameters,
         title="Stable PML Parameters",
-        description="'Stable' parameters of the complex frequency-shifted absorption poles."
+        description="'Stable' parameters of the complex frequency-shifted absorption poles.",
     )
 
 
@@ -196,13 +167,6 @@ class Absorber(AbsorberSpec):
     """Specifies an adiabatic absorber along a single dimension.
     This absorber is well-suited for dispersive materials
     intersecting with absorbing edges of the simulation at the expense of more layers.
-
-    Parameters
-    ----------
-    num_layers : int = 40
-        Number of layers of absorber to add to + and - boundaries.
-    parameters : :class:`AbsorberParams` = DefaultAbsorberParameters
-        General absorber parameters.
 
     Example
     -------
@@ -212,13 +176,13 @@ class Absorber(AbsorberSpec):
     num_layers: pydantic.NonNegativeInt = pydantic.Field(
         40,
         title="Number of Layers",
-        description="Number of layers of absorber to add to + and - boundaries."
+        description="Number of layers of absorber to add to + and - boundaries.",
     )
 
     parameters: AbsorberParams = pydantic.Field(
         DefaultAbsorberParameters,
         title="Absorber Parameters",
-        description="Adiabatic absorber parameters."
+        description="Adiabatic absorber parameters.",
     )
 
 

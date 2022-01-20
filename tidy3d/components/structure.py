@@ -22,22 +22,16 @@ class Structure(Tidy3dBaseModel):
     """
 
     geometry: GeometryType = pydantic.Field(
-        ...,
-        title="Geometry",
-        description="Defines spatial extent of the structure."
+        ..., title="Geometry", description="Defines spatial extent of the structure."
     )
 
     medium: MediumType = pydantic.Field(
         ...,
         title="Medium",
-        description="Defines the electromagnetic properties of the structure material."
+        description="Defines the electromagnetic properties of the structure material.",
     )
 
-    name: str = pydantic.Field(
-        None,
-        title="Name",
-        description="Optional name for the structure."
-    )
+    name: str = pydantic.Field(None, title="Name", description="Optional name for the structure.")
 
     _name_validator = validate_name_str()
 
@@ -45,6 +39,5 @@ class Structure(Tidy3dBaseModel):
     def plot(
         self, x: float = None, y: float = None, z: float = None, ax: Ax = None, **patch_kwargs
     ) -> Ax:
-        """Plot structure geometry cross section."""
 
         return self.geometry.plot(x=x, y=y, z=z, ax=ax, **patch_kwargs)

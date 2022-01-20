@@ -365,15 +365,13 @@ class Planar(Geometry, ABC):
     """Geometry with one ``axis`` that is slab-like with thickness ``height``."""
 
     axis: Axis = pydantic.Field(
-        2,
-        title="Axis",
-        description="Specifies dimension of the planar axis (0,1,2) -> (x,y,z)."
+        2, title="Axis", description="Specifies dimension of the planar axis (0,1,2) -> (x,y,z)."
     )
     length: pydantic.NonNegativeFloat = pydantic.Field(
         None,
         title="Length",
         description="Defines thickness of geometry along axis dimension.",
-        units=MICROMETER
+        units=MICROMETER,
     )
 
     def intersections(self, x: float = None, y: float = None, z: float = None):
@@ -482,10 +480,7 @@ class Circular(Geometry):
     """Geometry with circular characteristics (specified by a radius)."""
 
     radius: pydantic.NonNegativeFloat = pydantic.Field(
-        ...,
-        title="Radius",
-        description="Radius of geometry.",
-        units=MICROMETER
+        ..., title="Radius", description="Radius of geometry.", units=MICROMETER
     )
 
     def _intersect_dist(self, position, z0) -> float:
@@ -708,7 +703,7 @@ class Cylinder(Circular, Planar):
         ...,
         title="Length",
         description="Defines thickness of cylinder along axis dimension.",
-        units=MICROMETER
+        units=MICROMETER,
     )
 
     def _intersections_normal(self):
@@ -808,16 +803,16 @@ class PolySlab(Planar):
         ...,
         title="Slab Bounds",
         description="Minimum and maximum positions of the slab along axis dimension.",
-        units=MICROMETER
+        units=MICROMETER,
     )
 
     # vertices: Union[Vertices, Array[float]]
     vertices: Vertices = pydantic.Field(
         ...,
         title="Vertices",
-        description="List of (d1, d2) defining the 2 dimensional positions of the polygon "\
-            "face vertices along dimensions parallel to slab normal axis.",
-        units=MICROMETER
+        description="List of (d1, d2) defining the 2 dimensional positions of the polygon "
+        "face vertices along dimensions parallel to slab normal axis.",
+        units=MICROMETER,
     )
 
     @pydantic.validator("slab_bounds", always=True)
