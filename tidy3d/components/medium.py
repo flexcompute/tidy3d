@@ -597,7 +597,7 @@ class Lorentz(DispersiveMedium):
 
     .. math::
         \\epsilon(f) = \\epsilon_\\infty + \\sum_i
-        \\frac{\\Delta\\epsilon_i f_i^2}{f_i^2 + 2jf\\delta_i - f^2}
+        \\frac{\\Delta\\epsilon_i f_i^2}{f_i^2 - 2jf\\delta_i - f^2}
 
     where :math:`f, f_i, \\delta_i` are in Hz.
 
@@ -639,7 +639,7 @@ class Lorentz(DispersiveMedium):
         """
         eps = self.eps_inf + 0.0j
         for (de, f, delta) in self.coeffs:
-            eps += (de * f ** 2) / (f ** 2 + 2j * frequency * delta - frequency ** 2)
+            eps += (de * f ** 2) / (f ** 2 - 2j * frequency * delta - frequency ** 2)
         return eps
 
     @property
@@ -653,14 +653,18 @@ class Lorentz(DispersiveMedium):
             d = 2 * np.pi * delta
 
             if d > w:
-                r = 1j * np.sqrt(d * d - w * w)
+                r = np.sqrt(d * d - w * w) + 0j
+                a0 = -d + r
+                c0 = de * w ** 2 / 4 / r
+                a1 = -d - r
+                c1 = -c0
+                poles.append((a0, c0))
+                poles.append((a1, c1))
             else:
                 r = np.sqrt(w * w - d * d)
-
-            a = d - 1j * r
-            c = 1j * de * w ** 2 / 2 / r
-
-            poles.append((a, c))
+                a = -d - 1j * r
+                c = 1j * de * w ** 2 / 2 / r
+                poles.append((a, c))
 
         return PoleResidue(
             eps_inf=self.eps_inf,
@@ -676,7 +680,7 @@ class Drude(DispersiveMedium):
 
     .. math::
         \\epsilon(f) = \\epsilon_\\infty - \\sum_i
-        \\frac{ f_i^2}{f^2 - jf\\delta_i}
+        \\frac{ f_i^2}{f^2 + jf\\delta_i}
 
     where :math:`f, f_i, \\delta_i` are in Hz.
 
@@ -718,7 +722,7 @@ class Drude(DispersiveMedium):
         """
         eps = self.eps_inf + 0.0j
         for (f, delta) in self.coeffs:
-            eps -= (f ** 2) / (frequency ** 2 - 1j * frequency * delta)
+            eps -= (f ** 2) / (frequency ** 2 + 1j * frequency * delta)
         return eps
 
     @property
@@ -731,11 +735,11 @@ class Drude(DispersiveMedium):
             w = 2 * np.pi * f
             d = 2 * np.pi * delta
 
-            c0 = -(w ** 2) / 2 / d + 0j
+            c0 = (w ** 2) / 2 / d + 0j
             a0 = 0j
 
-            c1 = w ** 2 / 2 / d + 0j
-            a1 = d + 0j
+            c1 = -c0
+            a1 = -d + 0j
 
             poles.append((a0, c0))
             poles.append((a1, c1))
@@ -754,7 +758,7 @@ class Debye(DispersiveMedium):
 
     .. math::
         \\epsilon(f) = \\epsilon_\\infty + \\sum_i
-        \\frac{\\Delta\\epsilon_i}{1 + jf\\tau_i}
+        \\frac{\\Delta\\epsilon_i}{1 - jf\\tau_i}
 
     where :math:`f` is in Hz, and :math:`\\tau_i` is in seconds.
 
@@ -796,7 +800,7 @@ class Debye(DispersiveMedium):
         """
         eps = self.eps_inf + 0.0j
         for (de, tau) in self.coeffs:
-            eps += de / (1 + 1j * frequency * tau)
+            eps += de / (1 - 1j * frequency * tau)
         return eps
 
     @property
@@ -805,7 +809,7 @@ class Debye(DispersiveMedium):
 
         poles = []
         for (de, tau) in self.coeffs:
-            a = 2 * np.pi / tau + 0j
+            a = -2 * np.pi / tau + 0j
             c = -0.5 * de * a
             poles.append((a, c))
 
