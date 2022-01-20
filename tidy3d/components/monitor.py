@@ -1,6 +1,7 @@
 """Objects that define how data is recorded from simulation."""
 from abc import ABC
 from typing import List, Union
+from copy import deepcopy
 
 import pydantic
 
@@ -136,6 +137,62 @@ class FieldMonitor(AbstractFieldMonitor, FreqMonitor):
     fields: List[FieldType] = ["Ex", "Ey", "Ez", "Hx", "Hy", "Hz"]
     type: Literal["FieldMonitor"] = "FieldMonitor"
     data_type: Literal["ScalarFieldData"] = "ScalarFieldData"
+
+    def surfaces(self):
+        """Returns a list of 6 monitors corresponding to each surface of the box monitor.
+
+        Returns
+        -------
+        List[td.FieldMonitor]
+            List of 6 surface monitors for each side of the box monitor.
+        """
+
+        if any(s == 0.0 for s in self.size):
+            raise SetupError("Only applicable for box monitors. Given monitor has zero volume.")
+
+        self_bmin, self_bmax = self.bounds
+        center_x, center_y, center_z = self.center
+        size_x, size_y, size_z = self.size
+
+        # Set up geometry data and names for each surface:
+
+        surface_centers = (
+            (self_bmin[0], center_y, center_z), # x-
+            (self_bmax[0], center_y, center_z), # x+
+            (center_x, self_bmin[1], center_z), # y-
+            (center_x, self_bmax[1], center_z), # y+
+            (center_x, center_y, self_bmin[2]), # z-
+            (center_x, center_y, self_bmax[2])) # z+
+
+        surface_sizes = (
+            (0.0, size_y, size_z), # x-
+            (0.0, size_y, size_z), # x+
+            (size_x, 0.0, size_z), # y-
+            (size_x, 0.0, size_z), # y+
+            (size_x, size_y, 0.0), # z-
+            (size_x, size_y, 0.0)) # z+
+
+        surface_names = (
+            self.name + '_x-',
+            self.name + '_x+',
+            self.name + '_y-',
+            self.name + '_y+',
+            self.name + '_z-',
+            self.name + '_z+')
+
+        # Create surface monitors
+        monitors = []
+        for c, s, n in zip(surface_centers, surface_sizes, surface_names):
+            monitors.append(FieldMonitor(
+                fields=self.fields, 
+                center=c,
+                size=s,
+                freqs=self.freqs,
+                name=n,
+                type=self.type,
+                data_type=self.data_type))
+
+        return monitors
 
 
 class FieldTimeMonitor(AbstractFieldMonitor, TimeMonitor):
