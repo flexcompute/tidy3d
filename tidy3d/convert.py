@@ -64,9 +64,6 @@ def old_json_parameters(sim: Simulation) -> Dict:
         "courant": sim.courant,
         "shutoff": sim.shutoff,
         "subpixel": sim.subpixel,
-        "time_steps": 100,
-        "nodes": 100,
-        "compute_weight": 1.0,
     }
 
     """ TODO: Support nonuniform coordinates """
