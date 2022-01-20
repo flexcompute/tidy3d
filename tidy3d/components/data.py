@@ -585,7 +585,13 @@ class FluxTimeData(AbstractFluxData, TimeData):
     _dims = ("t",)
 
 
-class ModeData(PlanarData, FreqData):
+class AbstractModeData(PlanarData, FreqData, ABC):
+    """Abstract class for mode data as a function of frequency and mode index."""
+
+    mode_index: Array[int]
+
+
+class ModeAmpsData(AbstractModeData):
     """Stores modal amplitdudes from a :class:`ModeMonitor`.
 
     Parameters
@@ -606,20 +612,107 @@ class ModeData(PlanarData, FreqData):
 
     >>> f = np.linspace(2e14, 3e14, 1001)
     >>> values = (1+1j) * np.random.random((1, 2, len(f)))
-    >>> data = ModeData(values=values, direction=['+'], mode_index=np.arange(1, 3), f=f)
+    >>> data = ModeAmpsData(values=values, direction=['+'], mode_index=np.arange(1, 3), f=f)
     """
 
     direction: List[Direction] = ["+", "-"]
-    mode_index: Array[int]
     values: Array[complex]
     data_attrs: Dict[str, str] = {"units": "sqrt(W)", "long_name": "mode amplitudes"}
-    type: Literal["ModeData"] = "ModeData"
+    type: Literal["ModeAmpsData"] = "ModeAmpsData"
 
     _dims = ("direction", "mode_index", "f")
 
     def normalize(self, source_freq_amps: Array[complex]) -> None:
         """normalize the values by the amplitude of the source."""
         self.values /= 1j * source_freq_amps  # pylint: disable=no-member
+
+
+class ModeIndexData(AbstractModeData):
+    """Stores modal amplitdudes from a :class:`ModeMonitor`.
+
+    Parameters
+    ----------
+    mode_index : numpy.ndarray
+        Array of integer indices into the original monitor's :attr:`ModeMonitor.modes`.
+    f : numpy.ndarray
+        Frequency coordinates (Hz).
+    values : numpy.ndarray
+        Complex-valued array of mode amplitude values
+        with shape ``values.shape=(len(direction), len(mode_index), len(f))``.
+
+    Example
+    -------
+
+    >>> f = np.linspace(2e14, 3e14, 1001)
+    >>> values = (1+1j) * np.random.random((2, len(f)))
+    >>> data = ModeIndexData(values=values, mode_index=np.arange(1, 3), f=f)
+    """
+
+    values: Array[complex]
+    data_attrs: Dict[str, str] = {"units": "None", "long_name": "complex effective index"}
+    type: Literal["ModeIndexData"] = "ModeIndexData"
+
+    _dims = ("mode_index", "f")
+
+    def normalize(self, source_freq_amps: Array[complex]) -> None:
+        """normalize the values by the amplitude of the source."""
+        return
+
+
+class ModeData(CollectionData):
+    """Stores a collection of mode decomposition amplitudes and mode effective indexes for all
+    modes in a :class:`.ModeMonitor`.
+
+    Parameters
+    ----------
+    data_dict : Dict[str, :class:`ScalarFieldData`]
+        Mapping of field name (eg. 'Ex') to its scalar field data.
+
+    Example
+    -------
+    >>> f = np.linspace(1e14, 2e14, 1001)
+    >>> x = np.linspace(-1, 1, 10)
+    >>> y = np.linspace(-2, 2, 20)
+    >>> z = np.linspace(0, 0, 1)
+    >>> values = (1+1j) * np.random.random((len(x), len(y), len(z), len(f)))
+    >>> field = ScalarFieldData(values=values, x=x, y=y, z=z, f=f)
+    >>> data = FieldData(data_dict={'Ex': field, 'Ey': field})
+    """
+
+    data_dict: Dict[str, AbstractModeData]
+    type: Literal["ModeData"] = "ModeData"
+
+    @property
+    def amps(self):
+        """Get mode amplitudes."""
+        scalar_data = self.data_dict.get("amps")
+        if scalar_data:
+            return scalar_data.data
+        return None
+
+    @property
+    def n_complex(self):
+        """Get complex effective indexes."""
+        scalar_data = self.data_dict.get("n_complex")
+        if scalar_data:
+            return scalar_data.data
+        return None
+
+    @property
+    def n_eff(self):
+        """Get real part of effective index."""
+        scalar_data = self.data_dict.get("n_complex")
+        if scalar_data:
+            return scalar_data.data.real
+        return None
+
+    @property
+    def k_eff(self):
+        """Get imaginary part of effective index."""
+        scalar_data = self.data_dict.get("n_complex")
+        if scalar_data:
+            return scalar_data.data.imag
+        return None
 
 
 # maps MonitorData.type string to the actual type, for MonitorData.from_file()
@@ -630,6 +723,8 @@ DATA_TYPE_MAP = {
     "FieldTimeData": FieldTimeData,
     "FluxData": FluxData,
     "FluxTimeData": FluxTimeData,
+    "ModeAmpsData": ModeAmpsData,
+    "ModeIndexData": ModeIndexData,
     "ModeData": ModeData,
 }
 
@@ -863,8 +958,9 @@ class SimulationData(Tidy3dBaseModel):
         try:
             source = self.simulation.sources[normalize_index]
             source_time = source.source_time
-        except Exception as e:
-            raise DataError(f"Could not locate source at normalize_index={normalize_index}.") from e
+        except Exception: # pylint:disable=broad-except
+            logging.warning(f"Could not locate source at normalize_index={normalize_index}.")
+            return self
 
         source_time = source.source_time
         sim_data_norm = self.copy(deep=True)
@@ -881,9 +977,9 @@ class SimulationData(Tidy3dBaseModel):
 
             if isinstance(monitor_data, (FieldData, FluxData, ModeData)):
 
-                if isinstance(monitor_data, FieldData):
-                    for scalar_field_data in monitor_data.data_dict.values():
-                        normalize_data(scalar_field_data)
+                if isinstance(monitor_data, CollectionData):
+                    for attr_data in monitor_data.data_dict.values():
+                        normalize_data(attr_data)
 
                 else:
                     normalize_data(monitor_data)
