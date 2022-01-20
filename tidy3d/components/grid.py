@@ -2,6 +2,7 @@
 from typing import Tuple
 
 import numpy as np  # pylint:disable=unused-import
+import pydantic
 
 from .base import Tidy3dBaseModel
 from .types import Array, Axis
@@ -14,15 +15,6 @@ Coords1D = Array[float]
 class Coords(Tidy3dBaseModel):
     """Holds data about a set of x,y,z positions on a grid.
 
-    Parameters
-    ----------
-    x : np.ndarray
-        Positions of coordinates along x direction.
-    y : np.ndarray
-        Positions of coordinates along y direction.
-    z : np.ndarray
-        Positions of coordinates along z direction.
-
     Example
     -------
     >>> x = np.linspace(-1, 1, 10)
@@ -31,9 +23,24 @@ class Coords(Tidy3dBaseModel):
     >>> coords = Coords(x=x, y=y, z=z)
     """
 
-    x: Coords1D
-    y: Coords1D
-    z: Coords1D
+    x: Coords1D = pydantic.Field(
+        ...,
+        title="X Coordinates",
+        description="1-dimensional array of x coordinates."
+    )
+
+    y: Coords1D = pydantic.Field(
+        ...,
+        title="Y Coordinates",
+        description="1-dimensional array of y coordinates."
+    )
+
+    z: Coords1D = pydantic.Field(
+        ...,
+        title="Z Coordinates",
+        description="1-dimensional array of z coordinates."
+    )
+
 
     @property
     def to_list(self):
@@ -44,15 +51,6 @@ class Coords(Tidy3dBaseModel):
 class FieldGrid(Tidy3dBaseModel):
     """Holds the grid data for a single field.
 
-    Parameters
-    ----------
-    x : :class:`Coords`
-        x,y,z coordinates of the locations of the x-component of the field.
-    y : :class:`Coords`
-        x,y,z coordinates of the locations of the y-component of the field.
-    z : :class:`Coords`
-        x,y,z coordinates of the locations of the z-component of the field.
-
     Example
     -------
     >>> x = np.linspace(-1, 1, 10)
@@ -62,20 +60,27 @@ class FieldGrid(Tidy3dBaseModel):
     >>> field_grid = FieldGrid(x=coords, y=coords, z=coords)
     """
 
-    x: Coords
-    y: Coords
-    z: Coords
+    x: Coords = pydantic.Field(
+        ...,
+        title="X Positions",
+        description="x,y,z coordinates of the locations of the x-component of a vector field."
+    )
+
+    y: Coords = pydantic.Field(
+        ...,
+        title="Y Positions",
+        description="x,y,z coordinates of the locations of the y-component of a vector field."
+    )
+
+    z: Coords = pydantic.Field(
+        ...,
+        title="Z Positions",
+        description="x,y,z coordinates of the locations of the z-component of a vector field."
+    )
 
 
 class YeeGrid(Tidy3dBaseModel):
     """Holds the yee grid coordinates for each of the E and H positions.
-
-    Parameters
-    ----------
-    E : :class:`FieldGrid`
-        x,y,z coordinates of the locations of all three components of the electric field.
-    H : :class:`FieldGrid`
-        x,y,z coordinates of the locations of all three components of the magnetic field.
 
     Example
     -------
@@ -88,17 +93,21 @@ class YeeGrid(Tidy3dBaseModel):
     >>> Ex_coords = yee_grid.E.x
     """
 
-    E: FieldGrid
-    H: FieldGrid
+    E: FieldGrid = pydantic.Field(
+        ...,
+        title="Electric Field Grid",
+        descrition="Coordinates of the locations of all three components of the electric field."
+    )
+
+    H: FieldGrid = pydantic.Field(
+        ...,
+        title="Electric Field Grid",
+        descrition="Coordinates of the locations of all three components of the magnetic field."
+    )
 
 
 class Grid(Tidy3dBaseModel):
     """Contains all information about the spatial positions of the FDTD grid.
-
-    Parameters
-    ----------
-    boundaries : :class:`Coords`
-        x,y,z coordinates of the boundaries between cells, defining the FDTD grid.
 
     Example
     -------
@@ -112,7 +121,11 @@ class Grid(Tidy3dBaseModel):
     >>> yee_grid = grid.yee
     """
 
-    boundaries: Coords
+    boundaries: Coords = pydantic.Field(
+        ...,
+        title="Boundary Coordinates",
+        description="x,y,z coordinates of the boundaries between cells, defining the FDTD grid."
+    )
 
     @staticmethod
     def _avg(coords1d: Coords1D):

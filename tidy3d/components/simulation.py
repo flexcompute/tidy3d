@@ -20,7 +20,7 @@ from .source import SourceType
 from .monitor import MonitorType
 from .pml import PMLTypes, PML
 from .viz import StructMediumParams, StructEpsParams, PMLParams, SymParams, add_ax_if_none
-from ..constants import inf, C_0
+from ..constants import inf, C_0, MICROMETER, SECOND
 from ..log import log, Tidy3dKeyError
 
 # for docstring examples
@@ -35,58 +35,6 @@ from .monitor import FieldMonitor, FluxMonitor, Monitor  # pylint:disable=unused
 class Simulation(Box):  # pylint:disable=too-many-public-methods
     # pylint:disable=line-too-long
     """Contains all information about Tidy3d simulation.
-
-    Parameters
-    ----------
-    center : Tuple[float, float, float] = (0.0, 0.0, 0.0)
-        (microns) Center of simulation domain in x, y, and z.
-    size : Tuple[float, float, float]
-        (microns) Size of simulation domain in x, y, and z.
-        Each element must be non-negative.
-    grid_size : Tuple[Union[float, List[float]], Union[float, List[float]], Union[float, List[float]]]
-        (microns) If components are float, uniform grid size along x, y, and z.
-        If components are array like, defines an array of nonuniform grid sizes centered at ``simulation.center``.
-        Note: if supplied sizes do not cover ``simulation.size``, the first and last sizes are repeated to cover size.
-        Each element must be non-negative.
-    run_time : float = 0.0
-        Total electromagnetic evolution time in seconds.
-        Note: If ``shutoff`` specified, simulation will terminate early when shutoff condition met.
-        Must be non-negative.
-    medium : :class:`AbstractMedium` = ``Medium(permittivity=1.0)``
-        Background :class:`tidy3d.Medium` of simulation, defaults to air.
-    structures : List[:class:`Structure`] = []
-        List of structures in simulation.
-        Note: Structures defined later in this list override the simulation material properties in
-        regions of spatial overlap.
-    sources : List[:class:`VolumeSource` or :class:`PlaneWave` or :class:`ModeSource`] = []
-        List of electric current sources injecting fields into the simulation.
-    monitors : List[:class:`AbstractMonitor`] = []
-        List of monitors in the simulation.
-        Note: names stored in ``monitor.name`` are used to access data after simulation is run.
-    pml_layers : Tuple[:class:`AbsorberSpec`, :class:`AbsorberSpec`, :class:`AbsorberSpec`] = ``(None, None, None)``
-        Specifications for the absorbing layers on x, y, and z edges.
-        Elements of ``None`` are assumed to have no absorber and use periodic boundary conditions.
-    symmetry : Tuple[int, int, int] = (0, 0, 0)
-        Tuple of integers defining reflection symmetry across a
-        plane bisecting the simulation domain normal to the x-, y-, and
-        z-axis, respectively. Each element can be ``0`` (no symmetry),
-        ``1`` (even, i.e. 'PMC' symmetry) or ``-1`` (odd, i.e. 'PEC'
-        symmetry).
-        Note that the vectorial nature of the fields must be taken into account to correctly
-        determine the symmetry value.
-    shutoff : float = 1e-5
-        Ratio of the instantaneous integrated E-field intensity to the maximum value
-        at which the simulation will automatically shut down.
-        Used to prevent extraneous run time of simulations with fully decayed fields.
-        Set to ``0`` to disable this feature.
-    subpixel : bool = True
-        If ``True``, uses subpixel averaging of the permittivity based on structure definition,
-        resulting in much higher accuracy for a given grid size.
-    courant : float = 0.9
-        Courant stability factor, controls time step to spatial step ratio.
-        Lower values lead to more stable simulations for dispersive materials,
-        but result in longer simulation times.
-        Accepted values between 0 and 1, non-inclusive.
 
     Example
     -------
@@ -143,18 +91,104 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
     """
     # pylint:enable=line-too-long
 
-    version: str = "0.2.0"  # will make this more automated later
-    grid_size: Tuple[GridSize, GridSize, GridSize]
-    medium: MediumType = Medium()
-    run_time: pydantic.NonNegativeFloat = 0.0
-    structures: List[Structure] = []
-    sources: List[SourceType] = []
-    monitors: List[MonitorType] = []
-    pml_layers: Tuple[PMLTypes, PMLTypes, PMLTypes] = (None, None, None)
-    symmetry: Tuple[Symmetry, Symmetry, Symmetry] = (0, 0, 0)
-    shutoff: pydantic.NonNegativeFloat = 1e-5
-    subpixel: bool = True
-    courant: pydantic.confloat(gt=0.0, le=1.0) = 0.9
+    version: str = pydantic.Field(
+        "0.2.0",
+        title="Version",
+        description="String specifying the front end version, only change for development purposes."
+    )
+
+    grid_size: Tuple[GridSize, GridSize, GridSize] = pydantic.Field(
+        ...,
+        title="Grid Size",
+        description="If components are float, uniform grid size along x, y, and z. "\
+            "If components are array like, defines an array of nonuniform grid sizes centered at "\
+            "the simulation center ."\
+            " Note: if supplied sizes do not cover the simulation size, the first and last sizes "\
+            "are repeated to cover size. ",
+        units=MICROMETER
+    )
+
+    medium: MediumType = pydantic.Field(
+        Medium(),
+        title="Background Medium",
+        description="Background medium of simulation, defaults to vacuum if not specified."
+    )
+
+    run_time: pydantic.NonNegativeFloat = pydantic.Field(
+        0.0,
+        title="Run Time",
+        description="Total electromagnetic evolution time in seconds. "\
+            "Note: If simulation 'shutoff' is specified, "\
+            "simulation will terminate early when shutoff condition met.",
+        units=SECOND
+    )
+
+    structures: List[Structure] = pydantic.Field(
+        [],
+        title="Structures",
+        description="List of structures present in simulation. "\
+            "Note: Structures defined later in this list override the "\
+            "simulation material properties in regions of spatial overlap."
+    )
+
+    sources: List[SourceType] = pydantic.Field(
+        [],
+        title="Sources",
+        description="List of electric current sources injecting fields into the simulation."
+    )
+
+    monitors: List[MonitorType] = pydantic.Field(
+        [],
+        title="Monitors",
+        description="List of monitors in the simulation."\
+            "NoNote: monitor names are used to access data after simulation is run."
+    )
+
+    pml_layers: Tuple[PMLTypes, PMLTypes, PMLTypes] = pydantic.Field(
+        (None, None, None),
+        title="Absorbing Layers",
+        description="Specifications for the absorbing layers on x, y, and z edges. "\
+            "If `None`, no absorber will be added on that dimension "\
+            "and periodic boundary conditions will be used."
+    )
+
+    symmetry: Tuple[Symmetry, Symmetry, Symmetry] = pydantic.Field(
+        (0, 0, 0),
+        title="Symmetries",
+        description="Tuple of integers defining reflection symmetry across a plane "
+            "bisecting the simulation domain normal to the x-, y-, and z-axis, respectvely. "
+            "Each element can be '0' (no symmetry), '1' (even, i.e. 'PMC' symmetry) or "\
+            "'-1' (odd, i.e. 'PEC' symmetry). "\
+            "Note that the vectorial nature of the fields must be taken into account to correctly "\
+            "determine the symmetry value."
+    )
+
+    shutoff: pydantic.NonNegativeFloat = pydantic.Field(
+        1e-5,
+        title="Shutoff Condition",
+        description="Ratio of the instantaneous integrated E-field intensity to the maximum value "\
+            "at which the simulation will automatically terminate time stepping. "\
+            "Used to prevent extraneous run time of simulations with fully decayed fields. "\
+            "Set to '0' to disable this feature."
+    )
+
+    subpixel: bool = pydantic.Field(
+        True,
+        title="Subpixel Averaging",
+        description="If 'True', uses subpixel averaging of the permittivity "\
+        "based on structure definition, resulting in much higher accuracy for a given grid size."
+    )
+
+    courant: float = pydantic.Field(
+        0.9,
+        title="Courant Factor",
+        description="Courant stability factor, controls time step to spatial step ratio. "\
+            "Lower values lead to more stable simulations for dispersive materials, "\
+            "but result in longer simulation times.",
+        gt=0.0,
+        le=1.0
+    )
+
 
     # TODO: clean up version
 
