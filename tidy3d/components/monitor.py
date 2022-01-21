@@ -1,7 +1,6 @@
 """Objects that define how data is recorded from simulation."""
 from abc import ABC
 from typing import List, Union
-from copy import deepcopy
 
 import pydantic
 
