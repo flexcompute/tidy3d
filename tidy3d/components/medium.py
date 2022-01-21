@@ -11,7 +11,7 @@ from .types import PoleAndResidue, Literal, Ax, FreqBound, ComplexNumber
 from .viz import add_ax_if_none
 from .validators import validate_name_str
 
-from ..constants import C_0, pec_val, EPSILON_0, HERTZ, CONDUCTIVITY, PERMITTIVITY
+from ..constants import C_0, pec_val, EPSILON_0, HERTZ, CONDUCTIVITY, PERMITTIVITY, RADPERSEC
 from ..log import log
 
 
@@ -381,7 +381,6 @@ class PoleResidue(DispersiveMedium):
     The frequency-dependence of the complex-valued permittivity is described by:
 
     .. math::
-
         \\epsilon(\\omega) = \\epsilon_\\infty - \\sum_i
         \\left[\\frac{c_i}{j \\omega + a_i} +
         \\frac{c_i^*}{j \\omega + a_i^*}\\right]
@@ -404,7 +403,7 @@ class PoleResidue(DispersiveMedium):
         [],
         title="Poles",
         description="List of complex-valued (:math:`a_i, c_i`) poles for the model.",
-        units=HERTZ,
+        units=RADPERSEC,
     )
 
     # @pydantic.validator("poles", always=True)
