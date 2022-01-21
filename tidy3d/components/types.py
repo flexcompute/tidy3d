@@ -13,6 +13,8 @@ import numpy as np
 from matplotlib.axes._subplots import Axes
 from shapely.geometry.base import BaseGeometry
 
+from ..constants import LARGE_NUMBER
+
 """ infinity """
 
 
@@ -23,6 +25,10 @@ class Inf(pydantic.BaseModel):
         """Negative Infinity"""
         return NegInf()
 
+    def __truediv__(self, other):
+        """dividing by something equals a large number"""
+        return LARGE_NUMBER
+
 
 class NegInf(pydantic.BaseModel):
     """Negative infinity.  Can use built-in instance as: ``-tidy3d.inf``."""
@@ -30,6 +36,10 @@ class NegInf(pydantic.BaseModel):
     def __neg__(self):
         """Positive Infinity"""
         return Inf()
+
+    def __truediv__(self, other):
+        """dividing by something equals a very large negative number"""
+        return -LARGE_NUMBER
 
 
 # built in instance of Inf

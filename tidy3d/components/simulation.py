@@ -177,7 +177,6 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         le=1.0,
     )
 
-
     """ Validating setup """
 
     @pydantic.validator("pml_layers", always=True)

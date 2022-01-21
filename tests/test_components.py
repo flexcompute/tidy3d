@@ -636,7 +636,7 @@ def test_FieldSource():
     mode_spec = ModeSpec(num_modes=2)
 
     # test we can make planewave
-    s = PlaneWave(size=(0, 1, 1), source_time=g, pol_angle=np.pi / 2, direction="+")
+    s = PlaneWave(size=(0, inf, inf), source_time=g, pol_angle=np.pi / 2, direction="+")
 
     # test we can make gaussian beam
     s = GaussianBeam(size=(0, 1, 1), source_time=g, pol_angle=np.pi / 2, direction="+")

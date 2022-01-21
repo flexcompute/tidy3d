@@ -40,7 +40,13 @@ def test_simulation_preserve_types():
         ],
         sources=[
             VolumeSource(size=(0, 0, 0), source_time=st, polarization="Ex"),
-            PlaneWave(size=(1, 1, 0), source_time=st, direction="+", polarization="Ex"),
+            PlaneWave(
+                center=(0, 0, -4),
+                size=(inf, inf, 0),
+                source_time=st,
+                direction="+",
+                polarization="Ex",
+            ),
             GaussianBeam(
                 size=(1, 1, 0),
                 source_time=st,
