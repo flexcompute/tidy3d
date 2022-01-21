@@ -21,9 +21,6 @@ from ..constants import MICROMETER
 PLOT_BUFFER = 0.3
 
 
-# TODO: GDS file importing.
-
-
 class Geometry(Tidy3dBaseModel, ABC):
     """Abstract base class, defines where something exists in space."""
 

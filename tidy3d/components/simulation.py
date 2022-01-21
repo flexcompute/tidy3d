@@ -177,7 +177,6 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         le=1.0,
     )
 
-    # TODO: clean up version
 
     """ Validating setup """
 
@@ -359,7 +358,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
                                 "To avoid inaccuracies, it is reccomended the grid size is "
                                 "reduced."
                             )
-                    # TODO: nonuniform grid
+                    # TODO: warn about nonuniform grid
 
         return val
 
