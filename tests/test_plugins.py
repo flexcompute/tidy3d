@@ -41,7 +41,7 @@ def _test_near2far():
 def test_mode_solver():
     """make sure mode solver runs"""
     waveguide = td.Structure(
-        geometry=td.Box(size=(td.inf, 0.5, 0.5)), medium=td.Medium(permittivity=4.0)
+        geometry=td.Box(size=(100, 0.5, 0.5)), medium=td.Medium(permittivity=4.0)
     )
     simulation = td.Simulation(size=(2, 2, 2), grid_size=(0.1, 0.1, 0.1), structures=[waveguide])
     plane = td.Box(center=(0, 0, 0), size=(0, 1, 1))

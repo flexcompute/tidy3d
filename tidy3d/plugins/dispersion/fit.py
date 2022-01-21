@@ -111,7 +111,8 @@ def _coeffs_to_poles(coeffs):
     """
     coeffs_scaled = coeffs / HBAR
     poles_a, poles_c = _unpack_coeffs(coeffs_scaled)
-    poles = [(complex(a), complex(c)) for (a, c) in zip(poles_a, poles_c)]
+    # poles = [(complex(a), complex(c)) for (a, c) in zip(poles_a, poles_c)]
+    poles = [((a.real, a.imag), (c.real, c.imag)) for (a, c) in zip(poles_a, poles_c)]
     return poles
 
 
