@@ -526,3 +526,47 @@ def test_freqs_nonempty():
 
     with pytest.raises(ValidationError) as e_info:
         FieldMonitor(size=(1, 1, 1), freqs=[])
+
+
+def test_monitor_surfaces_from_volume():
+
+    center = (1, 2, 3)
+
+    # make sure that monitors with zero volume raise an error (adapted from test_monitor_plane())
+    for size in ((0, 0, 0), (1, 0, 0), (1, 1, 0)):
+        with pytest.raises(ValidationError) as e_info:
+            m = FieldMonitor(size=size, center=center, freqs=[1, 2, 3], name="test_monitor")
+            m_planes = m.surfaces()
+
+    # test that the surface monitors can be extracted from a volume monitor
+    size = (1, 2, 3)
+    m = FieldMonitor(size=size, center=center, freqs=[1, 2, 3], name="test_monitor")
+    m_planes = m.surfaces()
+
+    # test that the extracted surfaces are correct
+
+    # x- surface
+    assert m_planes[0].center == (center[0]-size[0]/2.0, center[1], center[2])
+    assert m_planes[0].size == (0.0, size[1], size[2])
+
+    # x+ surface
+    assert m_planes[1].center == (center[0]+size[0]/2.0, center[1], center[2])
+    assert m_planes[1].size == (0.0, size[1], size[2])
+
+    # y- surface
+    assert m_planes[2].center == (center[0], center[1]-size[1]/2.0, center[2])
+    assert m_planes[2].size == (size[0], 0.0, size[2])
+
+    # y+ surface
+    assert m_planes[3].center == (center[0], center[1]+size[1]/2.0, center[2])
+    assert m_planes[3].size == (size[0], 0.0, size[2])
+
+    # z- surface
+    assert m_planes[4].center == (center[0], center[1], center[2]-size[2]/2.0)
+    assert m_planes[4].size == (size[0], size[1], 0.0)
+
+    # z+ surface
+    assert m_planes[5].center == (center[0], center[1], center[2]+size[2]/2.0)
+    assert m_planes[5].size == (size[0], size[1], 0.0)
+
+

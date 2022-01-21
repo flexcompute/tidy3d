@@ -148,7 +148,7 @@ class FieldMonitor(AbstractFieldMonitor, FreqMonitor):
         """
 
         if any(s == 0.0 for s in self.size):
-            raise SetupError("Only applicable for box monitors. Given monitor has zero volume.")
+            raise ValidationError("Not applicable for the given monitor because it has zero volume.")
 
         self_bmin, self_bmax = self.bounds
         center_x, center_y, center_z = self.center
@@ -180,7 +180,7 @@ class FieldMonitor(AbstractFieldMonitor, FreqMonitor):
             self.name + '_z-',
             self.name + '_z+')
 
-        # Create surface monitors
+        # Create "surface" monitors
         monitors = []
         for c, s, n in zip(surface_centers, surface_sizes, surface_names):
             monitors.append(FieldMonitor(
