@@ -42,9 +42,9 @@ class NegInf(pydantic.BaseModel):
         return -LARGE_NUMBER
 
 
-# built in instance of Inf
+# built in instance of Inf ()
+inf = LARGE_NUMBER  # comment out to use Inf().
 inf = Inf()
-# inf = 1e5
 
 """ geometric """
 

@@ -1,9 +1,10 @@
 """ Tidy3d package imports"""
-__version__ = "0.0.0"
-
 from concurrent.futures import ProcessPoolExecutor, process
 
 from rich import pretty, traceback
+
+# version
+from .version import __version__
 
 # pml
 from .components import PML, StablePML, Absorber

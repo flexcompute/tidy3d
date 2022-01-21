@@ -21,6 +21,7 @@ from .monitor import MonitorType
 from .pml import PMLTypes, PML
 from .viz import StructMediumParams, StructEpsParams, PMLParams, SymParams, add_ax_if_none
 
+from ..version import __version__
 from ..constants import C_0, MICROMETER, SECOND
 from ..log import log, Tidy3dKeyError, SetupError
 
@@ -78,12 +79,6 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
     ...     subpixel=False,
     ... )
     """
-
-    _version: str = pydantic.Field(
-        "0.2.0",
-        title="Version",
-        description="String specifying the front end version, only change for development purposes.",
-    )
 
     grid_size: Tuple[GridSize, GridSize, GridSize] = pydantic.Field(
         ...,
@@ -175,6 +170,12 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         "but result in longer simulation times.",
         gt=0.0,
         le=1.0,
+    )
+
+    version: str = pydantic.Field(
+        __version__,
+        title="Version",
+        description="String specifying the front end version number.",
     )
 
     """ Validating setup """
