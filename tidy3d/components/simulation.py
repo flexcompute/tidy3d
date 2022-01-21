@@ -10,26 +10,32 @@ import matplotlib as mpl
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from descartes import PolygonPatch
 
-from .validators import assert_unique_names, assert_objects_in_sim_bounds, set_names
+from .validators import assert_unique_names, assert_objects_in_sim_bounds
 from .geometry import Box
 from .types import Symmetry, Ax, Shapely, FreqBound, GridSize, inf
 from .grid import Coords1D, Grid, Coords
 from .medium import Medium, MediumType, AbstractMedium
 from .structure import Structure
-from .source import SourceType
+from .source import SourceType, PlaneWave
 from .monitor import MonitorType
 from .pml import PMLTypes, PML
 from .viz import StructMediumParams, StructEpsParams, PMLParams, SymParams, add_ax_if_none
+
 from ..constants import C_0, MICROMETER, SECOND
-from ..log import log, Tidy3dKeyError
+from ..constants import inf, C_0, MICROMETER, SECOND
+from ..log import log, Tidy3dKeyError, SetupError
 
 # for docstring examples
 from .geometry import Sphere, Cylinder, PolySlab  # pylint:disable=unused-import
 from .source import VolumeSource, GaussianPulse  # pylint:disable=unused-import
 from .monitor import FieldMonitor, FluxMonitor, Monitor  # pylint:disable=unused-import
 
-# technically this is creating a circular import issue because it calls tidy3d/__init__.py
-# from .. import __version__ as version_number
+
+# minimum number of grid points allowed per central wavelength in a medium
+MIN_GRIDS_PER_WVL = 6.0
+
+# maximum number of mediums supported
+MAX_NUM_MEDIUMS = 200
 
 
 class Simulation(Box):  # pylint:disable=too-many-public-methods
@@ -186,8 +192,8 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
     _monitors_in_bounds = assert_objects_in_sim_bounds("monitors")
 
     # assign names to unnamed structures, sources, and mediums
-    _structure_names = set_names("structures")
-    _source_names = set_names("sources")
+    # _structure_names = set_names("structures")
+    # _source_names = set_names("sources")
 
     # make sure all names are unique
     _unique_structure_names = assert_unique_names("structures")
@@ -195,12 +201,209 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
     _unique_monitor_names = assert_unique_names("monitors")
     # _unique_medium_names = assert_unique_names("structures", check_mediums=True)
 
-    # TODO:
-    # - check sources in medium freq range
-    # - check PW in homogeneous medium
-    # - check nonuniform grid covers the whole simulation domain
-    # - check any structures close to PML (in lambda) without intersecting.
-    # - check any structures.bounds == simulation.bounds -> warn
+    # _few_enough_mediums = validate_num_mediums()
+    # _structures_not_at_edges = validate_structure_bounds_not_at_edges()
+    # _gap_size_ok = validate_pml_gap_size()
+    # _medium_freq_range_ok = validate_medium_frequency_range()
+    # _resolution_fine_enough = validate_resolution()
+    # _plane_waves_in_homo = validate_plane_wave_intersections()
+
+    @pydantic.validator("structures", always=True)
+    def _validate_num_mediums(cls, val):
+        """Error if too many mediums present."""
+
+        if val is None:
+            return val
+
+        mediums = {structure.medium for structure in val}
+        if len(mediums) > MAX_NUM_MEDIUMS:
+            raise SetupError(
+                f"Tidy3d only supports {MAX_NUM_MEDIUMS} distinct mediums."
+                f"{len(mediums)} were supplied."
+            )
+
+        return val
+
+    @pydantic.validator("structures", always=True)
+    def _structures_not_at_edges(cls, val, values):
+        """Warn if any structures lie at the simulation boundaries."""
+
+        if val is None:
+            return val
+
+        sim_box = Box(size=values.get("size"), center=values.get("center"))
+        sim_bound_min, sim_bound_max = sim_box.bounds
+        sim_bounds = list(sim_bound_min) + list(sim_bound_max)
+
+        for structure in val:
+            struct_bound_min, struct_bound_max = structure.geometry.bounds
+            struct_bounds = list(struct_bound_min) + list(struct_bound_max)
+
+            for sim_val, struct_val in zip(sim_bounds, struct_bounds):
+
+                if np.isclose(sim_val, struct_val):
+                    log.warning(
+                        f"structure\n\n{structure}\n\nbounds extend exactly to simulation "
+                        "edges. This can cause unexpected behavior. If intending to extend "
+                        "the structure to infinity along one dimension, use td.inf as a "
+                        "size variable instead to make this explicit."
+                    )
+
+        return val
+
+    @pydantic.validator("pml_layers", always=True)
+    def _structures_not_close_pml(cls, val, values):  # pylint:disable=too-many-locals
+        """Warn if any structures lie at the simulation boundaries."""
+
+        if val is None:
+            return val
+
+        sim_box = Box(size=values.get("size"), center=values.get("center"))
+        sim_bound_min, sim_bound_max = sim_box.bounds
+
+        structures = values.get("structures")
+        sources = values.get("sources")
+        if (not structures) or (not sources):
+            return val
+
+        def warn(structure):
+            """Warning message for a structure too close to PML."""
+            log.warning(
+                f"a structure\n\n{structure}\n\nwas detected as being less "
+                "than half of a central wavelength from a PML on - side"
+                "To avoid inaccurate results, please increase gap between "
+                "any structures and PML or fully extend structure through the pml."
+            )
+
+        for structure in structures:
+            struct_bound_min, struct_bound_max = structure.geometry.bounds
+
+            for source in sources:
+                fmin_src, fmax_src = source.source_time.frequency_range
+                f_average = (fmin_src + fmax_src) / 2.0
+                lambda0 = C_0 / f_average
+
+                for sim_val, struct_val, pml in zip(sim_bound_min, struct_bound_min, val):
+                    if pml.num_layers > 0 and struct_val > sim_val:
+                        if abs(sim_val - struct_val) < lambda0 / 2:
+                            warn(structure)
+
+                for sim_val, struct_val, pml in zip(sim_bound_max, struct_bound_max, val):
+                    if pml.num_layers > 0 and struct_val < sim_val:
+                        if abs(sim_val - struct_val) < lambda0 / 2:
+                            warn(structure)
+
+        return val
+
+    @pydantic.validator("sources", always=True)
+    def _warn_sources_mediums_frequency_range(cls, val, values):
+        """Warn user if any sources have frequency range outside of medium frequency range."""
+
+        if val is None:
+            return val
+
+        structures = values.get("structures")
+        structures = [] if not structures else structures
+        medium_bg = values.get("medium")
+        mediums = [medium_bg] + [structure.medium for structure in structures]
+
+        for source in val:
+            fmin_src, fmax_src = source.source_time.frequency_range
+            for medium in mediums:
+
+                # skip mediums that have no freq range (all freqs valid)
+                if medium.frequency_range is None:
+                    continue
+
+                # make sure medium frequency range includes the source frequency range
+                fmin_med, fmax_med = medium.frequency_range
+                if fmin_med > fmin_src or fmax_med < fmax_src:
+                    log.warning(
+                        f"A medium in the simulation:\n\n({medium})\n\nhas a frequency "
+                        "range that does not fully cover the spetrum of a source:"
+                        f"\n\n({source})\n\nThis can cause innacuracies in the "
+                        "simulation results."
+                    )
+        return val
+
+    @pydantic.validator("sources", always=True)
+    def _warn_grid_size_too_small(cls, val, values):  # pylint:disable=too-many-locals
+        """Warn user if any grid size is too large compared to minimum wavelength in material."""
+
+        if val is None:
+            return val
+
+        structures = values.get("structures")
+        structures = [] if not structures else structures
+        medium_bg = values.get("medium")
+        grid_size = values.get("grid_size")
+        mediums = [medium_bg] + [structure.medium for structure in structures]
+
+        for source in val:
+            fmin_src, fmax_src = source.source_time.frequency_range
+            f_average = (fmin_src + fmax_src) / 2.0
+
+            for medium in mediums:
+
+                eps_material = medium.eps_model(f_average)
+                n_material, _ = medium.eps_complex_to_nk(eps_material)
+                lambda_min = C_0 / f_average / n_material
+
+                for dl in grid_size:
+                    if isinstance(dl, float):
+                        if dl > lambda_min / MIN_GRIDS_PER_WVL:
+                            log.warning(
+                                f"One of the grid sizes with a value of {dl:.4f} (um) "
+                                "was detected as being too large when compared to the "
+                                "central wavelength of a source within one of the "
+                                f"simulation mediums {lambda_min:.4f} (um).  "
+                                "To avoid inaccuracies, it is reccomended the grid size is "
+                                "reduced."
+                            )
+                    # TODO: nonuniform grid
+
+        return val
+
+    @pydantic.validator("sources", always=True)
+    def _plane_wave_homogeneous(cls, val, values):
+        """Error if plane wave intersects"""
+
+        if val is None:
+            return val
+
+        # list of structures including background as a Box()
+        structure_bg = Structure(
+            geometry=Box(
+                size=values.get("size"),
+                center=values.get("center"),
+            ),
+            medium=values.get("medium"),
+        )
+
+        structures = values.get("structures")
+        structures = [] if not structures else structures
+        total_structures = [structure_bg] + structures
+
+        # for each plane wave in the sources list
+        for source in val:
+            if isinstance(source, PlaneWave):
+
+                # get all merged structures on the plane
+                normal_axis_index = source.size.index(0.0)
+                dim = "xyz"[normal_axis_index]
+                pos = source.center[normal_axis_index]
+                xyz_kwargs = {dim: pos}
+                structures_merged = cls._filter_structures_plane(total_structures, **xyz_kwargs)
+
+                # make sure there is no more than one medium in the returned list
+                mediums = {medium for medium, _ in structures_merged}
+                if len(mediums) > 1:
+                    raise SetupError(
+                        f"{len(mediums)} different mediums detected on plane "
+                        "intersecting a plane wave source.  Plane must be homogeneous."
+                    )
+
+        return val
 
     """ Accounting """
 
@@ -328,7 +531,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         """
 
         medium_map = self.medium_map
-        medium_shapes = self._filter_plot_structures(x=x, y=y, z=z)
+        medium_shapes = self._filter_structures_plane(self.structures, x=x, y=y, z=z)
         for (medium, shape) in medium_shapes:
             params_updater = StructMediumParams(medium=medium, medium_map=medium_map)
             kwargs_struct = params_updater.update_params(**kwargs)
@@ -395,7 +598,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         eps_list.append(self.medium.eps_model(freq).real)
         eps_max = max(eps_list)
         eps_min = min(eps_list)
-        medium_shapes = self._filter_plot_structures(x=x, y=y, z=z)
+        medium_shapes = self._filter_structures_plane(self.structures, x=x, y=y, z=z)
         for (medium, shape) in medium_shapes:
             eps = medium.eps_model(freq).real
             params_updater = StructEpsParams(eps=eps, eps_max=eps_max)
@@ -658,8 +861,9 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         ax.set_ylim(ymin - pml_thick_y[0], ymax + pml_thick_y[1])
         return ax
 
-    def _filter_plot_structures(
-        self, x: float = None, y: float = None, z: float = None
+    @staticmethod
+    def _filter_structures_plane(
+        structures: List[Structure], x: float = None, y: float = None, z: float = None
     ) -> List[Tuple[Medium, Shapely]]:
         """Compute list of shapes to plot on plane specified by {x,y,z}.
         Overlaps are removed or merged depending on medium.
@@ -680,40 +884,18 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         """
 
         shapes = []
-        for struct in self.structures:
+        for structure in structures:
 
             # dont bother with geometries that dont intersect plane
-            if not struct.geometry.intersects_plane(x=x, y=y, z=z):
+            if not structure.geometry.intersects_plane(x=x, y=y, z=z):
                 continue
 
             # get list of Shapely shapes that intersect at the plane
-            shapes_plane = struct.geometry.intersections(x=x, y=y, z=z)
+            shapes_plane = structure.geometry.intersections(x=x, y=y, z=z)
 
             # Append each of them and their medium information to the list of shapes
             for shape in shapes_plane:
-                shapes.append((struct.medium, shape))
-
-        # returned a merged list of mediums and shapes.
-        return self._merge_shapes(shapes)
-
-    @staticmethod
-    def _merge_shapes(shapes: List[Tuple[Medium, Shapely]]) -> List[Tuple[Medium, Shapely]]:
-        # pylint:disable=line-too-long
-        """Merge list of shapes and mediums on plae by intersection with same medium.
-        Edit background shapes to remove volume by intersection.
-
-        Parameters
-        ----------
-        shapes : List[Tuple[:class:`Medium` or :class:`PoleResidue` or :class:`Lorentz` or :class:`Sellmeier` or :class:`Debye`, shapely.geometry.base.BaseGeometry]]
-            Ordered list of shapes and their mediums on a plane.
-
-        Returns
-        -------
-        List[Tuple[:AbstractMedium`, shapely.geometry.base.BaseGeometry]]
-            Shapes and their mediums on a plane
-            after merging and removing intersections with background.
-        """
-        # pylint:enable=line-too-long
+                shapes.append((structure.medium, shape))
 
         background_shapes = []
         for medium, shape in shapes:

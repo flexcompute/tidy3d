@@ -23,7 +23,7 @@ def test_simulation_preserve_types():
     st = GaussianPulse(freq0=1.0, fwidth=1.0)
 
     sim_all = Simulation(
-        size=(1.0, 1.0, 1.0),
+        size=(10.0, 10.0, 10.0),
         grid_size=(1, 1, 1),
         structures=[
             Structure(geometry=Box(size=(1, 1, 1)), medium=Medium()),
