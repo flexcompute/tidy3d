@@ -5,15 +5,16 @@ API Reference
 .. currentmodule:: tidy3d
 
 
-
 Simulation
 ==========
 
 Simulation
 ----------
 
-.. autopydantic_model:: Simulation
-   :inherited-members: Box
+.. autosummary::
+   :toctree: _autosummary/
+
+   Simulation
 
 Grid
 ====
@@ -21,26 +22,35 @@ Grid
 3D Coordinates
 --------------
 
-.. autopydantic_model:: Coords
-   :inherited-members: Tidy3dBaseModel
+.. autosummary::
+   :toctree: _autosummary/
+
+   Coords
 
 Field Grid
 ----------
 
-.. autopydantic_model:: FieldGrid
-   :inherited-members: Tidy3dBaseModel
+.. autosummary::
+   :toctree: _autosummary/
+
+   FieldGrid
+
 
 Yee Lattice Grid
 ----------------
 
-.. autopydantic_model:: YeeGrid
-   :inherited-members: Tidy3dBaseModel
+.. autosummary::
+   :toctree: _autosummary/
+
+   YeeGrid
 
 Simulation Grid
 ---------------
 
-.. autopydantic_model:: Grid
-   :inherited-members: Tidy3dBaseModel
+.. autosummary::
+   :toctree: _autosummary/
+
+   Grid
 
 
 Absorbing Boundaries
@@ -49,20 +59,26 @@ Absorbing Boundaries
 Perfectly Matched Layer (PML)
 -----------------------------
 
-.. autopydantic_model:: PML
-   :inherited-members: Tidy3dBaseModel
+.. autosummary::
+   :toctree: _autosummary/
+
+   PML
 
 Stable PML
 ----------
 
-.. autopydantic_model:: StablePML
-   :inherited-members: Tidy3dBaseModel
+.. autosummary::
+   :toctree: _autosummary/
+
+   StablePML
 
 Adiabatic Absorber
 ------------------
 
-.. autopydantic_model:: Absorber
-   :inherited-members: Tidy3dBaseModel
+.. autosummary::
+   :toctree: _autosummary/
+
+   Absorber
 
 
 Geometry
@@ -71,26 +87,35 @@ Geometry
 Box
 ---
 
-.. autopydantic_model:: Box
-   :inherited-members: Tidy3dBaseModel
+.. autosummary::
+   :toctree: _autosummary/
+
+   Box
 
 Sphere
 ------
 
-.. autopydantic_model:: Sphere
-   :inherited-members: Tidy3dBaseModel
+.. autosummary::
+   :toctree: _autosummary/
+
+   Sphere
 
 Cylinder
 --------
 
-.. autopydantic_model:: Cylinder
-   :inherited-members: Tidy3dBaseModel
+.. autosummary::
+   :toctree: _autosummary/
+
+   Cylinder
 
 PolySlab
 --------
 
-.. autopydantic_model:: PolySlab
-   :inherited-members: Tidy3dBaseModel
+.. autosummary::
+   :toctree: _autosummary/
+
+   PolySlab
+
 
 Mediums
 =======
@@ -98,58 +123,73 @@ Mediums
 Medium
 ------
 
-.. autopydantic_model:: Medium
-   :inherited-members: Tidy3dBaseModel
+.. autosummary::
+   :toctree: _autosummary/
+
+   Medium
 
 Anisotropic Medium
 ------------------
 
-.. autopydantic_model:: AnisotropicMedium
-   :inherited-members: Tidy3dBaseModel
+.. autosummary::
+   :toctree: _autosummary/
+
+   AnisotropicMedium
 
 Perfect Electrical Conductor (PEC)
 ----------------------------------
 
-.. autopydantic_model:: PECMedium
-   :inherited-members: Tidy3dBaseModel
+.. autosummary::
+   :toctree: _autosummary/
+
+   PECMedium
 
 Dispersive Pole Residue Medium
 ------------------------------
 
-.. autopydantic_model:: PoleResidue
-   :inherited-members: Tidy3dBaseModel
+.. autosummary::
+   :toctree: _autosummary/
+
+   PoleResidue
 
 Dispersive Lorentz Medium
 -------------------------
 
-.. autopydantic_model:: Lorentz
-   :inherited-members: Tidy3dBaseModel
+.. autosummary::
+   :toctree: _autosummary/
+
+   Lorentz
 
 Dispersive Sellmeier Medium
 ---------------------------
 
-.. autopydantic_model:: Sellmeier
-   :inherited-members: Tidy3dBaseModel
+.. autosummary::
+   :toctree: _autosummary/
+
+   Sellmeier
 
 
 Dispersive Drude Medium
 -----------------------
 
-.. autopydantic_model:: Drude
-   :inherited-members: Tidy3dBaseModel
+.. autosummary::
+   :toctree: _autosummary/
+
+   Drude
 
 Dispersive Debye Medium
 -----------------------
 
-.. autopydantic_model:: Debye
-   :inherited-members: Tidy3dBaseModel
+.. autosummary::
+   :toctree: _autosummary/
+
+   Debye
 
 
 Material Library
 ----------------
 
 .. toctree::
-
    material_library
 
 
@@ -159,8 +199,10 @@ Structures
 Structure
 ---------
 
-.. autopydantic_model:: Structure
-   :inherited-members: Tidy3dBaseModel
+.. autosummary::
+   :toctree: _autosummary/
+
+   Structure
 
 
 Sources
@@ -170,29 +212,37 @@ Sources
 Volume Source
 -------------
 
-.. autopydantic_model:: VolumeSource
-   :inherited-members: Tidy3dBaseModel
+.. autosummary::
+   :toctree: _autosummary/
+
+   VolumeSource
 
 
 Plane Wave
 ----------
 
-.. autopydantic_model:: PlaneWave
-   :inherited-members: Tidy3dBaseModel
+.. autosummary::
+   :toctree: _autosummary/
+
+   PlaneWave
 
 
 Gaussian Beam
 -------------
 
-.. autopydantic_model:: GaussianBeam
-   :inherited-members: Tidy3dBaseModel
+.. autosummary::
+   :toctree: _autosummary/
+
+   GaussianBeam
 
 
 ModeSource 
 ----------
 
-.. autopydantic_model:: ModeSource
-   :inherited-members: Tidy3dBaseModel
+.. autosummary::
+   :toctree: _autosummary/
+
+   ModeSource
 
 
 Source Time Dependence
@@ -201,14 +251,18 @@ Source Time Dependence
 Gaussian Pulse
 --------------
 
-.. autopydantic_model:: GaussianPulse
-   :inherited-members: Tidy3dBaseModel
+.. autosummary::
+   :toctree: _autosummary/
+
+   GaussianPulse
 
 Continuous Wave (CW)
 --------------------
 
-.. autopydantic_model:: ContinuousWave
-   :inherited-members: Tidy3dBaseModel
+.. autosummary::
+   :toctree: _autosummary/
+
+   ContinuousWave
 
 
 Monitors
@@ -217,32 +271,42 @@ Monitors
 FieldMonitor
 ------------
 
-.. autopydantic_model:: FieldMonitor
-   :inherited-members: Tidy3dBaseModel
+.. autosummary::
+   :toctree: _autosummary/
+
+   FieldMonitor
 
 FieldTimeMonitor
 ----------------
 
-.. autopydantic_model:: FieldTimeMonitor
-   :inherited-members: Tidy3dBaseModel
+.. autosummary::
+   :toctree: _autosummary/
+
+   FieldTimeMonitor
 
 FluxMonitor
 -----------
 
-.. autopydantic_model:: FluxMonitor
-   :inherited-members: Tidy3dBaseModel
+.. autosummary::
+   :toctree: _autosummary/
+
+   FluxMonitor
 
 FluxTimeMonitor
 ---------------
 
-.. autopydantic_model:: FluxTimeMonitor
-   :inherited-members: Tidy3dBaseModel
+.. autosummary::
+   :toctree: _autosummary/
+
+   FluxTimeMonitor
 
 ModeMonitor
 -----------
 
-.. autopydantic_model:: ModeMonitor
-   :inherited-members: Tidy3dBaseModel
+.. autosummary::
+   :toctree: _autosummary/
+
+   ModeMonitor
 
 
 Modes
@@ -251,75 +315,68 @@ Modes
 Mode Specification
 ------------------
 
-.. autopydantic_model:: ModeSpec
-   :inherited-members: Tidy3dBaseModel
+.. autosummary::
+   :toctree: _autosummary/
+
+   ModeSpec
 
 
 Output Data
 ===========
 
-
+Simulation Data
+---------------
 .. autosummary::
    :toctree: _autosummary/
 
    SimulationData
+
+Vector Field Data
+-----------------
+
+.. autosummary::
+   :toctree: _autosummary/
+
    FieldData
+
+Scalar Field Data
+-----------------
+
+.. autosummary::
+   :toctree: _autosummary/
+
+   ScalarFieldData
+
+Scalar Field Data (Time-domain)
+-------------------------------
+
+.. autosummary::
+   :toctree: _autosummary/
+
+   ScalarFieldTimeData
+
+Flux Data
+---------
+
+.. autosummary::
+   :toctree: _autosummary/
+
    FluxData
+
+Flux Data (Time-domain)
+-----------------------
+
+.. autosummary::
+   :toctree: _autosummary/
+
    FluxTimeData
+
+Mode Amplitude Data
+-------------------
+
+.. autosummary::
+   :toctree: _autosummary/
    ModeData
-
-.. Output Data
-.. ===========
-
-.. Simulation Data
-.. ---------------
-
-.. .. autopydantic_model:: SimulationData
-..    :inherited-members: Tidy3dBaseModel
-
-.. Vector Field Data
-.. -----------------
-
-.. .. autopydantic_model:: FieldData
-..    :inherited-members: Tidy3dBaseModel
-
-.. Scalar Field Data
-.. -----------------
-
-
-.. .. autopydantic_model:: ScalarFieldData
-..    :inherited-members: Tidy3dBaseModel
-
-.. Scalar Field Data (Time Domain)
-.. -------------------------------
-
-.. .. autopydantic_model:: ScalarFieldTimeData
-..    :inherited-members: Tidy3dBaseModel
-
-
-.. Flux Data
-.. ---------
-
-.. .. autopydantic_model:: FluxData
-..    :inherited-members: Tidy3dBaseModel
-
-.. Flux Data (Time Domain)
-.. -----------------------
-
-.. .. autopydantic_model:: FluxTimeData
-..    :inherited-members: Tidy3dBaseModel
-
-.. Mode Data
-.. ---------
-
-.. .. autopydantic_model:: ModeData
-..    :inherited-members: Tidy3dBaseModel
-
-
-.. Constants
-.. =========
-.. .. automodule:: tidy3d.constants
-..    :members:
 
 Log
 ===
@@ -357,14 +414,14 @@ Job Interface
    :toctree: _autosummary/
 
    web.Job
-   web.Job.run
-   web.Job.upload
-   web.Job.get_info
-   web.Job.start
-   web.Job.monitor
-   web.Job.download
-   web.Job.load
-   web.Job.delete   
+   .. web.Job.run
+   .. web.Job.upload
+   .. web.Job.get_info
+   .. web.Job.start
+   .. web.Job.monitor
+   .. web.Job.download
+   .. web.Job.load
+   .. web.Job.delete   
 
 Batch Processing
 ----------------
@@ -373,14 +430,14 @@ Batch Processing
    :toctree: _autosummary/
 
    web.Batch
-   web.Batch.run
-   web.Batch.upload
-   web.Batch.get_info
-   web.Batch.start
-   web.Batch.monitor
-   web.Batch.download
-   web.Batch.load
-   web.Batch.delete
+   .. web.Batch.run
+   .. web.Batch.upload
+   .. web.Batch.get_info
+   .. web.Batch.start
+   .. web.Batch.monitor
+   .. web.Batch.download
+   .. web.Batch.load
+   .. web.Batch.delete
 
 Info Containers
 ---------------

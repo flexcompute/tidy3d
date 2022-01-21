@@ -106,8 +106,9 @@ copybutton_prompt_is_regexp = True
 # -- Options for HTML output -------------------------------------------------
 
 # The theme to use for HTML and HTML Help pages.
-html_theme_path = ["_themes"]
-html_theme = "sphinx_rtd_theme"
+# html_theme_path = ["_themes"]
+# html_theme = "sphinx_rtd_theme"
+# html_theme = "sphinx_book_theme"
 # pygments_style = 'monokai-dark'
 
 # import stanford_theme
@@ -117,12 +118,36 @@ html_theme = "sphinx_rtd_theme"
 # Add any paths that contain custom static files (such as style sheets) here,
 # relative to this directory. They are copied after the builtin static files,
 # so a file named "default.css" will overwrite the builtin "default.css".
-html_static_path = ["_static"]
+# html_static_path = ["_static"]
 
 html_theme_options = {"logo_only": True}
-# html_logo = "_static/logo.svg"
+
+html_static_path = ["_static"]
+
+html_theme = "sphinx_book_theme"
+html_title = "Tidy3D"
+html_logo = "_static/logo.svg"
 html_favicon = "_static/logo.svg"
+html_show_sourcelink = False
+html_theme_options = {
+    "path_to_docs": "docs",
+    "repository_url": "https://github.com/flexcompute/tidy3d",
+    "repository_branch": "master",
+    "launch_buttons": {
+        "binderhub_url": "https://mybinder.org",
+        "notebook_interface": "jupyterlab",
+        "colab_url": "https://colab.research.google.com/",
+    },
+    "use_edit_page_button": True,
+    "use_issues_button": True,
+    "use_repository_button": True,
+    "use_download_button": True,
+}
 
+# html_logo = "_static/logo.svg"
+# html_favicon = "_static/logo.svg"
 
-def setup(app):
-    app.add_css_file("css/custom.css")
+html_css_files = ["css/custom.css"]
+
+# def setup(app):
+    # app.add_css_file("css/custom.css")
