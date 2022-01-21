@@ -148,7 +148,12 @@ class Grid(Tidy3dBaseModel):
         >>> grid = Grid(boundaries=coords)
         >>> centers = grid.centers
         """
-        return Coords(**{key: self._avg(val) for key, val in self.boundaries.dict(exclude={TYPE_TAG_STR}).items()})
+        return Coords(
+            **{
+                key: self._avg(val)
+                for key, val in self.boundaries.dict(exclude={TYPE_TAG_STR}).items()
+            }
+        )
 
     @property
     def sizes(self) -> Coords:
@@ -168,7 +173,12 @@ class Grid(Tidy3dBaseModel):
         >>> grid = Grid(boundaries=coords)
         >>> sizes = grid.sizes
         """
-        return Coords(**{key: np.diff(val) for key, val in self.boundaries.dict(exclude={TYPE_TAG_STR}).items()})
+        return Coords(
+            **{
+                key: np.diff(val)
+                for key, val in self.boundaries.dict(exclude={TYPE_TAG_STR}).items()
+            }
+        )
 
     @property
     def num_cells(self) -> Tuple[int, int, int]:
@@ -188,7 +198,9 @@ class Grid(Tidy3dBaseModel):
         >>> grid = Grid(boundaries=coords)
         >>> Nx, Ny, Nz = grid.num_cells
         """
-        return [coords1d.size - 1 for coords1d in self.boundaries.dict(exclude={TYPE_TAG_STR}).values()]
+        return [
+            coords1d.size - 1 for coords1d in self.boundaries.dict(exclude={TYPE_TAG_STR}).values()
+        ]
 
     @property
     def _primal_steps(self) -> Coords:

@@ -367,7 +367,7 @@ class DispersiveMedium(AbstractMedium, ABC):
         """Convert a tuple of real and imaginary parts to complex number."""
 
         val_r, val_i = value
-        return val_r + 1j*val_i
+        return val_r + 1j * val_i
 
     @staticmethod
     def complex_to_tuple(value: complex) -> Tuple[float, float]:
@@ -425,7 +425,7 @@ class PoleResidue(DispersiveMedium):
         """Complex-valued permittivity as a function of frequency."""
 
         omega = 2 * np.pi * frequency
-        eps = self.eps_inf + 0.0j
+        eps = self.eps_inf + 0.0j * frequency
         for (a, c) in self.poles:
 
             # convert to complex
@@ -701,7 +701,7 @@ class Debye(DispersiveMedium):
             c = -0.5 * de * a
 
             a = self.complex_to_tuple(a)
-            c = self.complex_to_tuple(c)            
+            c = self.complex_to_tuple(c)
 
             poles.append((a, c))
 

@@ -543,7 +543,6 @@ class FluxData(AbstractFluxData, FreqData):
 
     Example
     -------
-
     >>> f = np.linspace(2e14, 3e14, 1001)
     >>> values = np.random.random((len(f),))
     >>> data = FluxData(values=values, f=f)
@@ -572,7 +571,6 @@ class FluxTimeData(AbstractFluxData, TimeData):
 
     Example
     -------
-
     >>> t = np.linspace(0, 1e-12, 1001)
     >>> values = np.random.random((len(t),))
     >>> data = FluxTimeData(values=values, t=t)
@@ -603,7 +601,6 @@ class ModeData(PlanarData, FreqData):
 
     Example
     -------
-
     >>> f = np.linspace(2e14, 3e14, 1001)
     >>> values = (1+1j) * np.random.random((1, 2, len(f)))
     >>> data = ModeData(values=values, direction=['+'], mode_index=np.arange(1, 3), f=f)

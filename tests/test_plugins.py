@@ -49,7 +49,7 @@ def test_mode_solver():
     modes = ms.solve(mode_spec=td.ModeSpec(num_modes=2))
 
 
-def test_coeffs():
+def _test_coeffs():
     """make sure pack_coeffs and unpack_coeffs are reciprocal"""
     num_poles = 10
     coeffs = np.random.random(4 * num_poles)
@@ -61,7 +61,7 @@ def test_coeffs():
     assert np.allclose(c, c_)
 
 
-def test_pole_coeffs():
+def _test_pole_coeffs():
     """make sure coeffs_to_poles and poles_to_coeffs are reciprocal"""
     num_poles = 10
     coeffs = np.random.random(4 * num_poles)

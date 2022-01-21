@@ -6,6 +6,7 @@ import tidy3d as td
 from tidy3d.components.grid import Coords, FieldGrid, YeeGrid, Grid
 from tidy3d.components.base import TYPE_TAG_STR
 
+
 def test_coords():
     x = np.linspace(-1, 1, 100)
     y = np.linspace(-1, 1, 100)
