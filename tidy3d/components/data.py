@@ -270,7 +270,7 @@ class CollectionData(Tidy3dData):
                 continue
 
             # get the type from MonitorData.type and add instance to dict
-            _data_type = _data_type_MAP[Tidy3dData.load_string(data_value, "type")]
+            _data_type = DATA_TYPE_MAP[Tidy3dData.load_string(data_value, "type")]
             data_dict[data_name] = _data_type.load_from_group(data_value)
 
         return cls(data_dict=data_dict)
@@ -623,7 +623,7 @@ class ModeData(PlanarData, FreqData):
 
 
 # maps MonitorData.type string to the actual type, for MonitorData.from_file()
-_data_type_MAP = {
+DATA_TYPE_MAP = {
     "ScalarFieldData": ScalarFieldData,
     "ScalarFieldTimeData": ScalarFieldTimeData,
     "FieldData": FieldData,
@@ -956,7 +956,7 @@ class SimulationData(Tidy3dBaseModel):
             for monitor_name, monitor_data in f_handle["monitor_data"].items():
 
                 # load this MonitorData instance, add to monitor_data dict
-                _data_type = _data_type_MAP[Tidy3dData.load_string(monitor_data, "type")]
+                _data_type = DATA_TYPE_MAP[Tidy3dData.load_string(monitor_data, "type")]
                 monitor_data_instance = _data_type.load_from_group(monitor_data)
                 monitor_data_dict[monitor_name] = monitor_data_instance
 

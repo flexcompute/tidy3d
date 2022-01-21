@@ -362,6 +362,19 @@ class DispersiveMedium(AbstractMedium, ABC):
     def pole_residue(self):
         """Representation of Medium as a pole-residue model."""
 
+    @staticmethod
+    def tuple_to_complex(value: Tuple[float, float]) -> complex:
+        """Convert a tuple of real and imaginary parts to complex number."""
+
+        val_r, val_i = value
+        return val_r + 1j*val_i
+
+    @staticmethod
+    def complex_to_tuple(value: complex) -> Tuple[float, float]:
+        """Convert a complex number to a tuple of real and imaginary parts."""
+
+        return (value.real, value.imag)
+
 
 class PoleResidue(DispersiveMedium):
     """A dispersive medium described by the pole-residue pair model.
@@ -394,18 +407,18 @@ class PoleResidue(DispersiveMedium):
         units=HERTZ,
     )
 
-    @pydantic.validator("poles", always=True)
-    def convert_complex(cls, val):
-        """convert list of poles to complex"""
+    # @pydantic.validator("poles", always=True)
+    # def convert_complex(cls, val):
+    #     """convert list of poles to complex"""
 
-        poles_complex = []
-        for (a, c) in val:
-            if isinstance(a, ComplexNumber):
-                a = a.real + 1j * a.imag
-            if isinstance(c, ComplexNumber):
-                c = c.real + 1j * c.imag
-            poles_complex.append((a, c))
-        return poles_complex
+    #     poles_complex = []
+    #     for (a, c) in val:
+    #         if isinstance(a, ComplexNumber):
+    #             a = a.real + 1j * a.imag
+    #         if isinstance(c, ComplexNumber):
+    #             c = c.real + 1j * c.imag
+    #         poles_complex.append((a, c))
+    #     return poles_complex
 
     @ensure_freq_in_range
     def eps_model(self, frequency: float) -> complex:
@@ -414,6 +427,11 @@ class PoleResidue(DispersiveMedium):
         omega = 2 * np.pi * frequency
         eps = self.eps_inf + 0.0j
         for (a, c) in self.poles:
+
+            # convert to complex
+            a = self.tuple_to_complex(a)
+            c = self.tuple_to_complex(c)
+
             a_cc = np.conj(a)
             c_cc = np.conj(c)
             eps -= c / (1j * omega + a)
@@ -487,6 +505,10 @@ class Sellmeier(DispersiveMedium):
             alpha = -0.5 * beta * B
             a = 1j * beta
             c = 1j * alpha
+
+            a = self.complex_to_tuple(a)
+            c = self.complex_to_tuple(c)
+
             poles.append((a, c))
 
         return PoleResidue(
@@ -552,6 +574,9 @@ class Lorentz(DispersiveMedium):
             a = d - 1j * r
             c = 1j * de * w ** 2 / 2 / r
 
+            a = self.complex_to_tuple(a)
+            c = self.complex_to_tuple(c)
+
             poles.append((a, c))
 
         return PoleResidue(
@@ -613,6 +638,11 @@ class Drude(DispersiveMedium):
             c1 = w ** 2 / 2 / d + 0j
             a1 = d + 0j
 
+            a0 = self.complex_to_tuple(a0)
+            c0 = self.complex_to_tuple(c0)
+            a1 = self.complex_to_tuple(a1)
+            c1 = self.complex_to_tuple(c1)
+
             poles.append((a0, c0))
             poles.append((a1, c1))
 
@@ -669,6 +699,10 @@ class Debye(DispersiveMedium):
         for (de, tau) in self.coeffs:
             a = 2 * np.pi / tau + 0j
             c = -0.5 * de * a
+
+            a = self.complex_to_tuple(a)
+            c = self.complex_to_tuple(c)            
+
             poles.append((a, c))
 
         return PoleResidue(

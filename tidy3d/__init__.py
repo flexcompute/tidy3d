@@ -39,7 +39,7 @@ from .components import Simulation
 
 # data
 from .components import SimulationData, FieldData, FluxData, ModeData, FluxTimeData
-from .components import _data_type_MAP, ScalarFieldData, ScalarFieldTimeData
+from .components import DATA_TYPE_MAP, ScalarFieldData, ScalarFieldTimeData
 
 # constants imported as `C_0 = td.C_0` or `td.constants.C_0`
 from .constants import C_0, ETA_0, HBAR

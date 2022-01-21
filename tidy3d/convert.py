@@ -4,7 +4,7 @@ from typing import Dict, Tuple, List, Union
 import numpy as np
 import h5py
 
-from tidy3d import Simulation, SimulationData, _data_type_MAP
+from tidy3d import Simulation, SimulationData, DATA_TYPE_MAP
 from tidy3d import Box, Sphere, Cylinder, PolySlab
 from tidy3d import Medium, AnisotropicMedium
 from tidy3d.components.medium import DispersiveMedium, PECMedium
@@ -454,7 +454,7 @@ def load_solver_results(
     for monitor in simulation.monitors:
         name = monitor.name
         monitor_data_dict = solver_data_dict[name]
-        monitor_data_type = _data_type_MAP[monitor._data_type]
+        monitor_data_type = DATA_TYPE_MAP[monitor._data_type.default]
         if monitor.type in ("FieldMonitor", "FieldTimeMonitor"):
             field_data = {}
             for field_name, data_dict in monitor_data_dict.items():

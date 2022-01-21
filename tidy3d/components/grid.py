@@ -4,7 +4,7 @@ from typing import Tuple
 import numpy as np  # pylint:disable=unused-import
 import pydantic
 
-from .base import Tidy3dBaseModel
+from .base import Tidy3dBaseModel, TYPE_TAG_STR
 from .types import Array, Axis
 from ..log import SetupError
 
@@ -38,7 +38,7 @@ class Coords(Tidy3dBaseModel):
     @property
     def to_list(self):
         """Return a list of the three Coord1D objects."""
-        return list(self.dict().values())
+        return list(self.dict(exclude={TYPE_TAG_STR}).values())
 
 
 class FieldGrid(Tidy3dBaseModel):
@@ -148,7 +148,7 @@ class Grid(Tidy3dBaseModel):
         >>> grid = Grid(boundaries=coords)
         >>> centers = grid.centers
         """
-        return Coords(**{key: self._avg(val) for key, val in self.boundaries.dict().items()})
+        return Coords(**{key: self._avg(val) for key, val in self.boundaries.dict(exclude={TYPE_TAG_STR}).items()})
 
     @property
     def sizes(self) -> Coords:
@@ -168,7 +168,7 @@ class Grid(Tidy3dBaseModel):
         >>> grid = Grid(boundaries=coords)
         >>> sizes = grid.sizes
         """
-        return Coords(**{key: np.diff(val) for key, val in self.boundaries.dict().items()})
+        return Coords(**{key: np.diff(val) for key, val in self.boundaries.dict(exclude={TYPE_TAG_STR}).items()})
 
     @property
     def num_cells(self) -> Tuple[int, int, int]:
@@ -188,7 +188,7 @@ class Grid(Tidy3dBaseModel):
         >>> grid = Grid(boundaries=coords)
         >>> Nx, Ny, Nz = grid.num_cells
         """
-        return [coords1d.size - 1 for coords1d in self.boundaries.dict().values()]
+        return [coords1d.size - 1 for coords1d in self.boundaries.dict(exclude={TYPE_TAG_STR}).values()]
 
     @property
     def _primal_steps(self) -> Coords:
@@ -214,7 +214,7 @@ class Grid(Tidy3dBaseModel):
         # We need the dual steps to be same size as grid.centers, so we pad with periodicity applied
         grid_size = [(bounds[1] - bounds[0]) for bounds in self.boundaries.to_list]
         dsteps = {}
-        for dim, (key, centers) in enumerate(self.centers.dict().items()):
+        for dim, (key, centers) in enumerate(self.centers.dict(exclude={TYPE_TAG_STR}).items()):
             centers_pad = np.concatenate(([centers[-1] - grid_size[dim]], centers))
             dsteps[key] = np.diff(centers_pad)
 
@@ -269,7 +269,7 @@ class Grid(Tidy3dBaseModel):
     def _yee_e(self, axis: Axis):
         """E field yee lattice sites for axis."""
 
-        boundary_coords = self.boundaries.dict()
+        boundary_coords = self.boundaries.dict(exclude={TYPE_TAG_STR})
 
         # initially set all to the minus bounds
         yee_coords = {key: self._min(val) for key, val in boundary_coords.items()}
@@ -283,7 +283,7 @@ class Grid(Tidy3dBaseModel):
     def _yee_h(self, axis: Axis):
         """E field yee lattice sites for axis."""
 
-        boundary_coords = self.boundaries.dict()
+        boundary_coords = self.boundaries.dict(exclude={TYPE_TAG_STR})
 
         # initially set all to the minus bounds
         yee_coords = {key: self._avg(val) for key, val in boundary_coords.items()}
