@@ -58,20 +58,22 @@ extensions = [
 source_suffix = [".rst", ".md"]
 
 autodoc_inherit_docstrings = True
-autosummary_generate = True
+# autosummary_generate = True
 
 # autodoc_pydantic_model_show_json = True
 # autodoc_pydantic_settings_show_json = False
-# autodoc_pydantic_model_show_config_member = False
-# autodoc_pydantic_model_show_config_summary = False
-# autodoc_pydantic_model_show_validator_summary = False
-# autodoc_pydantic_model_show_validator_members = False
-# autodoc_pydantic_model_show_field_summary = True
-# autodoc_pydantic_model_members = True
+autodoc_pydantic_model_signature_prefix = 'class'
+autodoc_pydantic_field_signature_prefix = 'attribute'
+autodoc_pydantic_model_show_config_member = False
+autodoc_pydantic_model_show_config_summary = False
+autodoc_pydantic_model_show_validator_summary = False
+autodoc_pydantic_model_show_validator_members = False
+# autodoc_pydantic_model_show_field_summary = False
+# autodoc_pydantic_model_members = False
 # autodoc_pydantic_field_list_validators = False
 # autodoc_pydantic_settings_summary_list_order = 'bysource'
 # autodoc_pydantic_model_undoc_members = False
-
+# autoclass_content = "class"
 extlinks = {}
 
 # Add any paths that contain templates here, relative to this directory.
@@ -83,7 +85,7 @@ templates_path = ["_templates"]
 exclude_patterns = ["_build", "Thumbs.db", ".DS_Store", "**.ipynb_checkpoints"]
 
 autosummary_generate = True
-autodoc_typehints = "none"
+# autodoc_typehints = "none"
 
 napoleon_google_docstring = False
 napoleon_numpy_docstring = True

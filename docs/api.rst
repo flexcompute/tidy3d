@@ -5,6 +5,7 @@ API Reference
 .. currentmodule:: tidy3d
 
 
+
 Simulation
 ==========
 
@@ -12,12 +13,7 @@ Simulation
 ----------
 
 .. autopydantic_model:: Simulation
-   :inherited-members: Tidy3dBaseModel
-
-Size
-----
-
-.. autopydantic_field:: components.types.Size
+   :inherited-members: Box
 
 Grid
 ====
@@ -490,5 +486,7 @@ Types
    :toctree: _autosummary/
 
    components.types.Size
-   components.types.Coords
+   components.types.Coordinate
+   components.types.Inf
+   components.types.NegInf
 
