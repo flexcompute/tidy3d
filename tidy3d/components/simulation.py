@@ -22,7 +22,6 @@ from .pml import PMLTypes, PML
 from .viz import StructMediumParams, StructEpsParams, PMLParams, SymParams, add_ax_if_none
 
 from ..constants import C_0, MICROMETER, SECOND
-from ..constants import inf, C_0, MICROMETER, SECOND
 from ..log import log, Tidy3dKeyError, SetupError
 
 # for docstring examples

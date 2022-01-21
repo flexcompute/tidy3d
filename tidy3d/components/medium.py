@@ -573,9 +573,9 @@ class Lorentz(DispersiveMedium):
                 a1 = -d - r
                 c1 = -c0
                 a0 = self.complex_to_tuple(a0)
-                c0 = self.complex_to_tuple(c0)    
+                c0 = self.complex_to_tuple(c0)
                 a1 = self.complex_to_tuple(a1)
-                c1 = self.complex_to_tuple(c1)                    
+                c1 = self.complex_to_tuple(c1)
                 poles.append((a0, c0))
                 poles.append((a1, c1))
             else:
@@ -583,7 +583,7 @@ class Lorentz(DispersiveMedium):
                 a = -d - 1j * r
                 c = 1j * de * w ** 2 / 2 / r
                 a = self.complex_to_tuple(a)
-                c = self.complex_to_tuple(c)    
+                c = self.complex_to_tuple(c)
                 poles.append((a, c))
 
         return PoleResidue(
