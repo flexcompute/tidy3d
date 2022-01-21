@@ -137,17 +137,30 @@ class FieldMonitor(AbstractFieldMonitor, FreqMonitor):
     type: Literal["FieldMonitor"] = "FieldMonitor"
     data_type: Literal["ScalarFieldData"] = "ScalarFieldData"
 
-    def surfaces(self):
+    def surfaces(self) -> List["FieldMonitor"]:
         """Returns a list of 6 monitors corresponding to each surface of the box monitor.
+        The output monitors are stored in the order [x-, x+, y-, y+, z-, z+], where x, y, and z denote
+        which axis is perpendicular to that surface, while "-" and "+" denote the direction of the
+        normal vector of that surface. Each output monitor will have the same frequencies as the calling
+        object. Its name will be that of the calling object appended with the above symbols.
+        E.g., if the calling object's name is "field", the x+ monitor's name will be "field_x+".
+        Does not work when the calling monitor has zero volume.
 
         Returns
         -------
-        List[td.FieldMonitor]
+        List[:class:FieldMonitor]
             List of 6 surface monitors for each side of the box monitor.
+
+        Example
+        -------
+        >>> lambda0 = 1.0
+        >>> freq0 = td.C_0 / lambda0
+        >>> volume_monitor = td.FieldMonitor(center=(0,0,0), size=(1,2,3), freqs=[freq0], name='field')
+        >>> surface_monitors = volume_monitor.surfaces()
         """
 
         if any(s == 0.0 for s in self.size):
-            raise ValidationError("Not applicable for the given monitor because it has zero volume.")
+            raise SetupError("Can't generate surfaces for the given monitor because it has zero volume.")
 
         self_bmin, self_bmax = self.bounds
         center_x, center_y, center_z = self.center
@@ -181,15 +194,13 @@ class FieldMonitor(AbstractFieldMonitor, FreqMonitor):
 
         # Create "surface" monitors
         monitors = []
-        for c, s, n in zip(surface_centers, surface_sizes, surface_names):
+        for center, size, name in zip(surface_centers, surface_sizes, surface_names):
             monitors.append(FieldMonitor(
                 fields=self.fields, 
-                center=c,
-                size=s,
+                center=center,
+                size=size,
                 freqs=self.freqs,
-                name=n,
-                type=self.type,
-                data_type=self.data_type))
+                name=name))
 
         return monitors
 
