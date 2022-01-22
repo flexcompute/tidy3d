@@ -451,7 +451,7 @@ def load_solver_results(
     for monitor in simulation.monitors:
         name = monitor.name
         monitor_data_dict = solver_data_dict[name]
-        monitor_data_type = DATA_TYPE_MAP[monitor.data_type]
+        monitor_data_type = DATA_TYPE_MAP[monitor._data_type.default]
         if monitor.type in ("FieldMonitor", "FieldTimeMonitor"):
             field_data = {}
             for field_name, data_dict in monitor_data_dict.items():

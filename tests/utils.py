@@ -127,7 +127,7 @@ SIM_CONVERT = td.Simulation(
         td.FieldMonitor(
             fields=["Ex", "Hy"],
             center=(0, 0, 0),
-            size=(4, 0, 4),
+            size=(td.inf, 0, td.inf),
             freqs=[3e14],
             name="field_monitor",
         )

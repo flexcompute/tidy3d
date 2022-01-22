@@ -4,6 +4,7 @@ import numpy as np
 
 import tidy3d as td
 from tidy3d.components.grid import Coords, FieldGrid, YeeGrid, Grid
+from tidy3d.components.base import TYPE_TAG_STR
 
 
 def test_coords():
@@ -33,7 +34,7 @@ def test_grid():
     assert np.all(g.centers.y == np.array([-1.5, -0.5, 0.5, 1.5]))
     assert np.all(g.centers.z == np.array([-2.5, -1.5, -0.5, 0.5, 1.5, 2.5]))
 
-    for s in g.sizes.dict().values():
+    for s in g.sizes.dict(exclude={TYPE_TAG_STR}).values():
         assert np.all(s == 1.0)
 
     assert np.all(g.yee.E.x.x == np.array([-0.5, 0.5]))
@@ -136,9 +137,9 @@ def test_sim_grid():
         grid_size=(1, 1, 1),
     )
 
-    for c in sim.grid.centers.dict().values():
+    for c in sim.grid.centers.dict(exclude={TYPE_TAG_STR}).values():
         assert np.all(c == np.array([-1.5, -0.5, 0.5, 1.5]))
-    for b in sim.grid.boundaries.dict().values():
+    for b in sim.grid.boundaries.dict(exclude={TYPE_TAG_STR}).values():
         assert np.all(b == np.array([-2, -1, 0, 1, 2]))
 
 
@@ -150,9 +151,9 @@ def test_sim_pml_grid():
         pml_layers=(td.PML(num_layers=2), td.Absorber(num_layers=2), td.StablePML(num_layers=2)),
     )
 
-    for c in sim.grid.centers.dict().values():
+    for c in sim.grid.centers.dict(exclude={TYPE_TAG_STR}).values():
         assert np.all(c == np.array([-3.5, -2.5, -1.5, -0.5, 0.5, 1.5, 2.5, 3.5]))
-    for b in sim.grid.boundaries.dict().values():
+    for b in sim.grid.boundaries.dict(exclude={TYPE_TAG_STR}).values():
         assert np.all(b == np.array([-4, -3, -2, -1, 0, 1, 2, 3, 4]))
 
 
@@ -167,10 +168,10 @@ def test_sim_discretize_vol():
 
     subgrid = sim.discretize(vol)
 
-    for b in subgrid.boundaries.dict().values():
+    for b in subgrid.boundaries.dict(exclude={TYPE_TAG_STR}).values():
         assert np.all(b == np.array([-1, 0, 1]))
 
-    for c in subgrid.centers.dict().values():
+    for c in subgrid.centers.dict(exclude={TYPE_TAG_STR}).values():
         assert np.all(c == np.array([-0.5, 0.5]))
 
     plane = td.Box(size=(6, 6, 0))

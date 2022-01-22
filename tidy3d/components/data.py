@@ -270,8 +270,8 @@ class CollectionData(Tidy3dData):
                 continue
 
             # get the type from MonitorData.type and add instance to dict
-            data_type = DATA_TYPE_MAP[Tidy3dData.load_string(data_value, "type")]
-            data_dict[data_name] = data_type.load_from_group(data_value)
+            _data_type = DATA_TYPE_MAP[Tidy3dData.load_string(data_value, "type")]
+            data_dict[data_name] = _data_type.load_from_group(data_value)
 
         return cls(data_dict=data_dict)
 
@@ -543,7 +543,6 @@ class FluxData(AbstractFluxData, FreqData):
 
     Example
     -------
-
     >>> f = np.linspace(2e14, 3e14, 1001)
     >>> values = np.random.random((len(f),))
     >>> data = FluxData(values=values, f=f)
@@ -572,7 +571,6 @@ class FluxTimeData(AbstractFluxData, TimeData):
 
     Example
     -------
-
     >>> t = np.linspace(0, 1e-12, 1001)
     >>> values = np.random.random((len(t),))
     >>> data = FluxTimeData(values=values, t=t)
@@ -609,7 +607,6 @@ class ModeAmpsData(AbstractModeData):
 
     Example
     -------
-
     >>> f = np.linspace(2e14, 3e14, 1001)
     >>> values = (1+1j) * np.random.random((1, 2, len(f)))
     >>> data = ModeAmpsData(values=values, direction=['+'], mode_index=np.arange(1, 3), f=f)
@@ -930,6 +927,7 @@ class SimulationData(Tidy3dBaseModel):
         y_coord_values = field_data.coords[y_coord_label]
         ax.set_xlim(min(x_coord_values), max(x_coord_values))
         ax.set_ylim(min(y_coord_values), max(y_coord_values))
+        ax.set_aspect("equal")
 
         return ax
 
@@ -1052,8 +1050,8 @@ class SimulationData(Tidy3dBaseModel):
             for monitor_name, monitor_data in f_handle["monitor_data"].items():
 
                 # load this MonitorData instance, add to monitor_data dict
-                data_type = DATA_TYPE_MAP[Tidy3dData.load_string(monitor_data, "type")]
-                monitor_data_instance = data_type.load_from_group(monitor_data)
+                _data_type = DATA_TYPE_MAP[Tidy3dData.load_string(monitor_data, "type")]
+                monitor_data_instance = _data_type.load_from_group(monitor_data)
                 monitor_data_dict[monitor_name] = monitor_data_instance
 
         sim_data = cls(

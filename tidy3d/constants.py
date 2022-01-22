@@ -21,12 +21,26 @@ ETA_0 = np.sqrt(MU_0 / EPSILON_0)
 Q_e = 1.602176634e-19
 HBAR = 6.582119569e-16
 
-# infinity (very large)
-inf = 1e10
-
 # floating point precisions
 dp_eps = np.finfo(np.float64).eps
 fp_eps = np.finfo(np.float32).eps
 
 # values of PEC for mode solver
 pec_val = -1e8
+
+# unit labels
+HERTZ = "Hz"
+TERAHERTZ = "THz"
+SECOND = "sec"
+PICOSECOND = "ps"
+METER = "m"
+MICROMETER = "um"
+NANOMETER = "nm"
+RADIAN = "rad"
+CONDUCTIVITY = "S/m"
+PERMITTIVITY = "None (relative permittivity)"
+PML_SIGMA = "2*EPSILON_0/dt"
+RADPERSEC = "rad/sec"
+
+# large number used for comparing infinity
+LARGE_NUMBER = 1e12

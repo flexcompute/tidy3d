@@ -14,7 +14,7 @@ from .geometry import Geometry
 
 # medium
 from .medium import Medium, PoleResidue, Sellmeier, Debye, Drude, Lorentz, AnisotropicMedium, PEC
-from .medium import AbstractMedium, DispersiveMedium
+from .medium import AbstractMedium, DispersiveMedium, PECMedium
 
 # structure
 from .structure import Structure
@@ -36,3 +36,6 @@ from .simulation import Simulation
 # data
 from .data import SimulationData, FieldData, FluxData, ModeData, FluxTimeData
 from .data import ScalarFieldData, ScalarFieldTimeData, DATA_TYPE_MAP
+
+# types
+from .types import inf
