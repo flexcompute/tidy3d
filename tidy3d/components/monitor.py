@@ -49,7 +49,7 @@ class Monitor(Box, ABC):
 class FreqMonitor(Monitor, ABC):
     """:class:`Monitor` that records data in the frequency-domain."""
 
-    freqs: List[float] = pydantic.Field(
+    freqs: Union[List[float], ArrayLike] = pydantic.Field(
         ...,
         title="Frequencies",
         description="Array or list of frequencies stored by the field monitor.",

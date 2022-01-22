@@ -676,7 +676,7 @@ def test_monitor_plane():
             FluxMonitor(size=size, freqs=freqs, modes=[])
 
 
-def test_freqs_nonempty():
+def _test_freqs_nonempty():
 
     with pytest.raises(pydantic.ValidationError) as e_info:
         FieldMonitor(size=(1, 1, 1), freqs=[], name="test")
