@@ -459,7 +459,7 @@ def _upload_task(  # pylint:disable=too-many-locals,too-many-arguments
     """upload with all kwargs exposed"""
 
     if solver_version[:6] == "revamp":
-        json_string = simulation._json_string() # pylint:disable=protected-access
+        json_string = simulation._json_string()  # pylint:disable=protected-access
     else:
         # convert to old json and get string version
         sim_dict = export_old_json(simulation)

@@ -1213,7 +1213,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
                 eps_structure = get_eps(structure.medium, freq)
                 is_inside = structure.geometry.inside(x, y, z)
                 eps_array[np.where(is_inside)] = eps_structure
-            return xr.DataArray(eps_array, coords={"x": xs, "y": ys, "z": zs})
+            return xr.DataArray(eps_array, coords={"x": xs, "y": ys, "z": zs}, dims=("x", "y", "z"))
 
         # combine all data into dictionary
         coords = sub_grid[coord_key]
