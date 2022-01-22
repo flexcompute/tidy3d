@@ -46,6 +46,40 @@ class NegInf(pydantic.BaseModel):
 inf = LARGE_NUMBER  # comment out to use Inf().
 inf = Inf()
 
+
+""" Complex Values """
+
+
+class ComplexNumber(pydantic.BaseModel):
+    real: float
+    imag: float
+
+    @property
+    def z(self):
+        return self.real + 1j * self.imag
+
+
+class tidycomplex(complex):
+    @classmethod
+    def __get_validators__(cls):
+        yield cls.validate
+
+    @classmethod
+    def validate(cls, value, field):
+
+        if isinstance(value, ComplexNumber):
+            return value.z
+        elif isinstance(value, dict):
+            c = ComplexNumber(**value)
+            return c.z
+        else:
+            return cls(value)
+
+    @classmethod
+    def __modify_schema__(cls, field_schema):
+        field_schema.update(ComplexNumber.schema())
+
+
 """ geometric """
 
 Size1D = Union[pydantic.NonNegativeFloat, Inf]
@@ -60,19 +94,11 @@ Shapely = BaseGeometry
 
 """ medium """
 
-
-class ComplexNumber(pydantic.BaseModel):
-    """Holds real and imaginary parts of a complex number."""
-
-    real: float
-    imag: float
-
-
-Complex = Union[complex, ComplexNumber]
-Complex = Union[ComplexNumber]
+# Complex = Union[complex, ComplexNumber]
+Complex = Union[tidycomplex, ComplexNumber]
 PoleAndResidue = Tuple[Complex, Complex]
 
-PoleAndResidue = Tuple[Tuple[float, float], Tuple[float, float]]
+# PoleAndResidue = Tuple[Tuple[float, float], Tuple[float, float]]
 FreqBoundMax = Union[float, Inf]
 FreqBoundMin = Union[float, NegInf]
 FreqBound = Tuple[FreqBoundMin, FreqBoundMax]
@@ -128,10 +154,43 @@ class Array(np.ndarray, metaclass=ArrayMeta):
     """type of numpy array with annotated type (Array[float], Array[complex])"""
 
 
+class NumpyArray(pydantic.BaseModel):
+    data_list: List
+
+    @property
+    def arr(self):
+        return np.array(self.data_list)
+
+
+class tidynumpy(np.ndarray):
+    @classmethod
+    def __get_validators__(cls):
+        yield cls.validate
+
+    @classmethod
+    def validate(cls, value, field):
+        if isinstance(value, NumpyArray):
+            return value.arr
+        elif isinstance(value, dict):
+            n = NumpyArray(**value)
+            return n.arr
+        elif isinstance(value, list):
+            return value
+        else:
+            return np.array(value)
+
+    @classmethod
+    def __modify_schema__(cls, field_schema):
+        field_schema.update(NumpyArray.schema())
+
+
 """ note:
     ^ this is the best way to declare numpy types if you know dtype.
     for example: ``field_amps: Array[float] = np.random.random(5)``.
 """
+
+ArrayLike = Union[tidynumpy, NumpyArray, List]
+
 
 # lists or np.ndarrays of certain type
 FloatArrayLike = Union[List[float], Array[float]]

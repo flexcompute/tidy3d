@@ -4,8 +4,9 @@ from abc import ABC
 from typing import List, Union
 
 import pydantic
+import numpy as np
 
-from .types import Literal, Ax, Direction, EMField, Array, FieldType
+from .types import Literal, Ax, Direction, EMField, ArrayLike, FieldType
 from .geometry import Box
 from .validators import assert_plane, validate_name_str
 from .mode import ModeSpec
@@ -48,14 +49,20 @@ class Monitor(Box, ABC):
 class FreqMonitor(Monitor, ABC):
     """:class:`Monitor` that records data in the frequency-domain."""
 
-    # freqs: Union[List[float], Array[float]] = pydantic.Field(
     freqs: List[float] = pydantic.Field(
         ...,
         title="Frequencies",
-        description="List of frequencies stored by the field monitor.",
+        description="Array or list of frequencies stored by the field monitor.",
         units=HERTZ,
         min_items=1,
     )
+
+    # @pydantic.validator("freqs", always=True)
+    # def freqs_nonempty(cls, val):
+    #     """Ensure freqs has at least one element"""
+    #     if len(val) == 0:
+    #         raise ValidationError("Monitor 'freqs' should have at least one element.")
+    #     return
 
 
 class TimeMonitor(Monitor, ABC):
@@ -121,7 +128,7 @@ class FieldMonitor(AbstractFieldMonitor, FreqMonitor):
     ...     center=(1,2,3),
     ...     size=(2,2,2),
     ...     fields=['Hx'],
-    ...     freqs=[250e12],
+    ...     freqs=[250e12, 300e12],
     ...     name='steady_state_monitor')
     """
 

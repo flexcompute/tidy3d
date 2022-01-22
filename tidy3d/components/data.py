@@ -832,7 +832,7 @@ class SimulationData(Tidy3dBaseModel):
         y_coord_values = field_data.coords[y_coord_label]
         ax.set_xlim(min(x_coord_values), max(x_coord_values))
         ax.set_ylim(min(y_coord_values), max(y_coord_values))
-        ax.set_aspect('equal')
+        ax.set_aspect("equal")
 
         return ax
 

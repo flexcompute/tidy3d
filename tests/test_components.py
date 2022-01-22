@@ -366,7 +366,7 @@ def test_PEC():
 def test_medium_dispersion():
 
     # construct media
-    m_PR = PoleResidue(eps_inf=1.0, poles=[((1, 2), (1, 3)), ((2, 4), (1, 5))])
+    m_PR = PoleResidue(eps_inf=1.0, poles=[((1 + 2j), (1 + 3j)), ((2 + 4j), (1 + 5j))])
     m_SM = Sellmeier(coeffs=[(2, 3), (2, 4)])
     m_LZ = Lorentz(eps_inf=1.0, coeffs=[(1, 3, 2), (2, 4, 1)])
     m_LZ2 = Lorentz(eps_inf=1.0, coeffs=[(1, 2, 3), (2, 1, 4)])
@@ -384,7 +384,7 @@ def test_medium_dispersion():
 
 def test_medium_dispersion_conversion():
 
-    m_PR = PoleResidue(eps_inf=1.0, poles=[((1, 2), (1, 3)), ((2, 4), (1, 5))])
+    m_PR = PoleResidue(eps_inf=1.0, poles=[((1 + 2j), (1 + 3j)), ((2 + 4j), (1 + 5j))])
     m_SM = Sellmeier(coeffs=[(2, 3), (2, 4)])
     m_LZ = Lorentz(eps_inf=1.0, coeffs=[(1, 3, 2), (2, 4, 1)])
     m_LZ2 = Lorentz(eps_inf=1.0, coeffs=[(1, 2, 3), (2, 1, 4)])
@@ -400,7 +400,7 @@ def test_medium_dispersion_conversion():
 
 def test_medium_dispersion_create():
 
-    m_PR = PoleResidue(eps_inf=1.0, poles=[((1, 2), (1, 3)), ((2, 4), (1, 5))])
+    m_PR = PoleResidue(eps_inf=1.0, poles=[((1 + 2j), (1 + 3j)), ((2 + 4j), (1 + 5j))])
     m_SM = Sellmeier(coeffs=[(2, 3), (2, 4)])
     m_LZ = Lorentz(eps_inf=1.0, coeffs=[(1, 3, 2), (2, 4, 1)])
     m_LZ2 = Lorentz(eps_inf=1.0, coeffs=[(1, 2, 3), (2, 1, 4)])
@@ -422,14 +422,14 @@ def test_epsilon_eval():
 
     # Dispersive silver model
     poles_silver = [
-        ((ar / HBAR, ai / HBAR), (cr / HBAR, ci / HBAR))
-        for ((ar, ai), (cr, ci)) in [
-            ((-2.502e-2, -8.626e-3), (5.987e-1, +4.195e3)),
-            ((-2.021e-1, -9.407e-1), (-2.211e-1, +2.680e-1)),
-            ((-1.467e1, -1.338e0), (-4.240e0, +7.324e2)),
-            ((-2.997e-1, -4.034e0), (6.391e-1, -7.186e-2)),
-            ((-1.896e0, -4.808e0), (1.806e0, +4.563e0)),
-            ((-9.396e0, -6.477e0), (1.443e0, -8.219e1)),
+        (a / HBAR, c / HBAR)
+        for (a, c) in [
+            ((-2.502e-2 - 8.626e-3j), (5.987e-1 + 4.195e3j)),
+            ((-2.021e-1 - 9.407e-1j), (-2.211e-1 + 2.680e-1j)),
+            ((-1.467e1 - 1.338e0j), (-4.240e0 + 7.324e2j)),
+            ((-2.997e-1 - 4.034e0j), (6.391e-1 - 7.186e-2j)),
+            ((-1.896e0 - 4.808e0j), (1.806e0 + 4.563e0j)),
+            ((-9.396e0 - 6.477e0j), (1.443e0 - 8.219e1j)),
         ]
     ]
 

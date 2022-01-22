@@ -11,7 +11,7 @@ from shapely.geometry import Point, Polygon, box
 from descartes import PolygonPatch
 
 from .base import Tidy3dBaseModel
-from .types import Literal, Bound, Size, Coordinate, Axis, Coordinate2D, Array
+from .types import Literal, Bound, Size, Coordinate, Axis, Coordinate2D, ArrayLike
 from .types import Vertices, Ax, Shapely
 from .viz import add_ax_if_none
 from ..log import Tidy3dKeyError, SetupError
@@ -793,7 +793,8 @@ class PolySlab(Planar):
 
     Example
     -------
-    >>> p = PolySlab(vertices=[(0,0), (1,0), (1,1)], axis=2, slab_bounds=(-1, 1))
+    >>> vertices = np.array([(0,0), (1,0), (1,1)])
+    >>> p = PolySlab(vertices=vertices, axis=2, slab_bounds=(-1, 1))
     """
 
     slab_bounds: Tuple[float, float] = pydantic.Field(
@@ -803,8 +804,7 @@ class PolySlab(Planar):
         units=MICROMETER,
     )
 
-    # vertices: Union[Vertices, Array[float]]
-    vertices: Vertices = pydantic.Field(
+    vertices: Union[Vertices, ArrayLike] = pydantic.Field(
         ...,
         title="Vertices",
         description="List of (d1, d2) defining the 2 dimensional positions of the polygon "

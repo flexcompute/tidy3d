@@ -389,7 +389,7 @@ class PoleResidue(DispersiveMedium):
 
     Example
     -------
-    >>> pole_res = PoleResidue(eps_inf=2.0, poles=[((1,2), (3,4)), ((5,6), (7,8))])
+    >>> pole_res = PoleResidue(eps_inf=2.0, poles=[((1+2j), (3+4j)), ((5+6j), (7+8j))])
     >>> eps = pole_res.eps_model(200e12)
     """
 
@@ -428,8 +428,8 @@ class PoleResidue(DispersiveMedium):
         for (a, c) in self.poles:
 
             # convert to complex
-            a = self.tuple_to_complex(a)
-            c = self.tuple_to_complex(c)
+            # a = self.tuple_to_complex(a)
+            # c = self.tuple_to_complex(c)
 
             a_cc = np.conj(a)
             c_cc = np.conj(c)
@@ -505,8 +505,8 @@ class Sellmeier(DispersiveMedium):
             a = 1j * beta
             c = 1j * alpha
 
-            a = self.complex_to_tuple(a)
-            c = self.complex_to_tuple(c)
+            # a = self.complex_to_tuple(a)
+            # c = self.complex_to_tuple(c)
 
             poles.append((a, c))
 
@@ -571,18 +571,18 @@ class Lorentz(DispersiveMedium):
                 c0 = de * w ** 2 / 4 / r
                 a1 = -d - r
                 c1 = -c0
-                a0 = self.complex_to_tuple(a0)
-                c0 = self.complex_to_tuple(c0)
-                a1 = self.complex_to_tuple(a1)
-                c1 = self.complex_to_tuple(c1)
+                # a0 = self.complex_to_tuple(a0)
+                # c0 = self.complex_to_tuple(c0)
+                # a1 = self.complex_to_tuple(a1)
+                # c1 = self.complex_to_tuple(c1)
                 poles.append((a0, c0))
                 poles.append((a1, c1))
             else:
                 r = np.sqrt(w * w - d * d)
                 a = -d - 1j * r
                 c = 1j * de * w ** 2 / 2 / r
-                a = self.complex_to_tuple(a)
-                c = self.complex_to_tuple(c)
+                # a = self.complex_to_tuple(a)
+                # c = self.complex_to_tuple(c)
                 poles.append((a, c))
 
         return PoleResidue(
@@ -644,10 +644,10 @@ class Drude(DispersiveMedium):
             c1 = -c0
             a1 = -d + 0j
 
-            a0 = self.complex_to_tuple(a0)
-            c0 = self.complex_to_tuple(c0)
-            a1 = self.complex_to_tuple(a1)
-            c1 = self.complex_to_tuple(c1)
+            # a0 = self.complex_to_tuple(a0)
+            # c0 = self.complex_to_tuple(c0)
+            # a1 = self.complex_to_tuple(a1)
+            # c1 = self.complex_to_tuple(c1)
 
             poles.append((a0, c0))
             poles.append((a1, c1))
@@ -706,8 +706,8 @@ class Debye(DispersiveMedium):
             a = -2 * np.pi / tau + 0j
             c = -0.5 * de * a
 
-            a = self.complex_to_tuple(a)
-            c = self.complex_to_tuple(c)
+            # a = self.complex_to_tuple(a)
+            # c = self.complex_to_tuple(c)
 
             poles.append((a, c))
 

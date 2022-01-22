@@ -1,0 +1,287 @@
+{
+    "center": [
+        0.0,
+        0.0,
+        0.0
+    ],
+    "type": "Simulation",
+    "size": [
+        10.0,
+        10.0,
+        10.0
+    ],
+    "grid_size": [
+        0.1,
+        0.1,
+        0.1
+    ],
+    "medium": {
+        "name": null,
+        "frequency_range": null,
+        "type": "Medium",
+        "permittivity": 1.0,
+        "conductivity": 0.0
+    },
+    "run_time": 4e-10,
+    "structures": [
+        {
+            "geometry": {
+                "center": [
+                    -1.0,
+                    0.0,
+                    0.0
+                ],
+                "type": "Box",
+                "size": [
+                    1.0,
+                    1.0,
+                    1.0
+                ]
+            },
+            "medium": {
+                "name": null,
+                "frequency_range": null,
+                "type": "Medium",
+                "permittivity": 2.0,
+                "conductivity": 0.0
+            },
+            "name": null,
+            "type": "Structure"
+        },
+        {
+            "geometry": {
+                "center": [
+                    0.0,
+                    0.0,
+                    0.0
+                ],
+                "type": "Box",
+                "size": [
+                    1.0,
+                    1.0,
+                    1.0
+                ]
+            },
+            "medium": {
+                "name": null,
+                "frequency_range": null,
+                "type": "Medium",
+                "permittivity": 1.0,
+                "conductivity": 3.0
+            },
+            "name": null,
+            "type": "Structure"
+        },
+        {
+            "geometry": {
+                "center": [
+                    1.0,
+                    0.0,
+                    1.0
+                ],
+                "type": "Sphere",
+                "radius": 1.4
+            },
+            "medium": {
+                "name": null,
+                "frequency_range": null,
+                "type": "Medium",
+                "permittivity": 1.0,
+                "conductivity": 0.0
+            },
+            "name": null,
+            "type": "Structure"
+        },
+        {
+            "geometry": {
+                "center": [
+                    1.0,
+                    0.0,
+                    -1.0
+                ],
+                "type": "Cylinder",
+                "axis": 1,
+                "length": 2.0,
+                "radius": 1.4
+            },
+            "medium": {
+                "name": null,
+                "frequency_range": null,
+                "type": "Medium",
+                "permittivity": 1.0,
+                "conductivity": 0.0
+            },
+            "name": null,
+            "type": "Structure"
+        },
+        {
+            "geometry": {
+                "center": [
+                    -0.8333333333333334,
+                    -1.1666666666666667,
+                    0.0
+                ],
+                "type": "PolySlab",
+                "axis": 2,
+                "length": 2.0,
+                "slab_bounds": [
+                    -1.0,
+                    1.0
+                ],
+                "vertices": [
+                    [
+                        -1.5,
+                        -1.5
+                    ],
+                    [
+                        -0.5,
+                        -1.5
+                    ],
+                    [
+                        -0.5,
+                        -0.5
+                    ]
+                ]
+            },
+            "medium": {
+                "name": null,
+                "frequency_range": null,
+                "type": "Medium",
+                "permittivity": 3.0,
+                "conductivity": 0.0
+            },
+            "name": null,
+            "type": "Structure"
+        }
+    ],
+    "sources": [
+        {
+            "center": [
+                0.0,
+                0.5,
+                0.0
+            ],
+            "type": "VolumeSource",
+            "size": [
+                0.0,
+                0.0,
+                0.0
+            ],
+            "source_time": {
+                "amplitude": 1.0,
+                "phase": 0.0,
+                "type": "GaussianPulse",
+                "freq0": 200000000000000.0,
+                "fwidth": 40000000000000.0,
+                "offset": 5.0
+            },
+            "name": null,
+            "polarization": "Hx"
+        }
+    ],
+    "monitors": [
+        {
+            "center": [
+                0.0,
+                0.0,
+                0.0
+            ],
+            "type": "FluxMonitor",
+            "size": [
+                1.0,
+                1.0,
+                0.0
+            ],
+            "name": "plane",
+            "freqs": [
+                200000000000000.0,
+                250000000000000.0
+            ]
+        },
+        {
+            "center": [
+                0.0,
+                0.0,
+                0.0
+            ],
+            "type": "FieldMonitor",
+            "size": [
+                0.0,
+                0.0,
+                0.0
+            ],
+            "name": "point",
+            "freqs": [
+                150000000000000.0,
+                200000000000000.0
+            ],
+            "fields": [
+                "Ex",
+                "Ey",
+                "Ez",
+                "Hx",
+                "Hy",
+                "Hz"
+            ]
+        }
+    ],
+    "pml_layers": [
+        {
+            "num_layers": 20,
+            "parameters": {
+                "sigma_order": 3,
+                "sigma_min": 0.0,
+                "sigma_max": 1.5,
+                "type": "PMLParams",
+                "kappa_order": 3,
+                "kappa_min": 1.0,
+                "kappa_max": 3.0,
+                "alpha_order": 1,
+                "alpha_min": 0.0,
+                "alpha_max": 0.0
+            },
+            "type": "PML"
+        },
+        {
+            "num_layers": 30,
+            "parameters": {
+                "sigma_order": 3,
+                "sigma_min": 0.0,
+                "sigma_max": 1.5,
+                "type": "PMLParams",
+                "kappa_order": 3,
+                "kappa_min": 1.0,
+                "kappa_max": 3.0,
+                "alpha_order": 1,
+                "alpha_min": 0.0,
+                "alpha_max": 0.0
+            },
+            "type": "PML"
+        },
+        {
+            "num_layers": 0,
+            "parameters": {
+                "sigma_order": 3,
+                "sigma_min": 0.0,
+                "sigma_max": 1.5,
+                "type": "PMLParams",
+                "kappa_order": 3,
+                "kappa_min": 1.0,
+                "kappa_max": 3.0,
+                "alpha_order": 1,
+                "alpha_min": 0.0,
+                "alpha_max": 0.0
+            },
+            "type": "PML"
+        }
+    ],
+    "symmetry": [
+        0,
+        0,
+        0
+    ],
+    "shutoff": 1e-06,
+    "subpixel": false,
+    "courant": 0.8,
+    "version": "0.2.0"
+}
