@@ -147,7 +147,7 @@ class MonitorData(Tidy3dData, ABC):
         # make DataArray
         data_dict = self.dict()
         coords = {dim: data_dict[dim] for dim in self._dims}
-        data_array = Tidy3dDataArray(self.values, coords=coords)
+        data_array = Tidy3dDataArray(self.values, coords=coords, dims=self._dims)
 
         # assign attrs for xarray
         if self.data_attrs:
@@ -958,7 +958,7 @@ class SimulationData(Tidy3dBaseModel):
         try:
             source = self.simulation.sources[normalize_index]
             source_time = source.source_time
-        except Exception: # pylint:disable=broad-except
+        except Exception:  # pylint:disable=broad-except
             logging.warning(f"Could not locate source at normalize_index={normalize_index}.")
             return self
 
