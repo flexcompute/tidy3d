@@ -44,7 +44,7 @@ class NegInf(pydantic.BaseModel):
 
 # built in instance of Inf ()
 inf = LARGE_NUMBER  # comment out to use Inf().
-inf = Inf()
+# inf = Inf()
 
 
 """ Complex Values """
