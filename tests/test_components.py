@@ -702,10 +702,10 @@ def test_monitor_surfaces_from_volume():
     mon_freq = FieldMonitor(size=size, center=center, freqs=[1, 2, 3], name="test_monitor_freq")
     mon_time = FieldTimeMonitor(size=size, center=center, start=1, stop=2, interval=1, name="test_monitor_time")
 
-    test_monitor_helper(center, size, mon_freq)
-    test_monitor_helper(center, size, mon_time)
+    surface_monitor_helper(center, size, mon_freq)
+    surface_monitor_helper(center, size, mon_time)
 
-def test_monitor_helper(center, size, monitor_test):
+def surface_monitor_helper(center, size, monitor_test):
     # helper to test that the list of surfaces extracted from the given test monitor are correct
 
     monitor_surfaces = monitor_test.surfaces()
