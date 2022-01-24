@@ -95,60 +95,18 @@ class AbstractFieldMonitor(Monitor, ABC):
 
     fields: List[EMField] = ["Ex", "Ey", "Ez", "Hx", "Hy", "Hz"]
 
-
-class PlanarMonitor(Monitor, ABC):
-    """Monitors that must have planar geometry."""
-
-    _plane_validator = assert_plane()
-
-
-class AbstractFluxMonitor(PlanarMonitor, ABC):
-    """stores flux through a plane"""
-
-
-class FieldMonitor(AbstractFieldMonitor, FreqMonitor):
-    """Stores a collection of electromagnetic fields in the frequency domain.
-
-    Parameters
-    ----------
-    center: Tuple[float, float, float] = (0.0, 0.0, 0.0)
-        Center of monitor.
-    size: Tuple[float, float, float]
-        Size of monitor.
-        All elements must be non-negative.
-    fields: List[str] = ['Ex', 'Ey', 'Ez', 'Hx', 'Hy', 'Hz']
-        Specifies the electromagnetic field components to record.
-        If wanting to conserve data, can specify fewer components.
-    freqs: List[float] or np.ndarray
-        List of frequencies in Hertz to store fields at.
-    name : str
-        (Required) name used to access data after simulation is finished.
-
-    Example
-    -------
-    >>> monitor = FieldMonitor(
-    ...     size=(2,2,2),
-    ...     freqs=[200e12, 210e12],
-    ...     fields=['Ex', 'Ey', 'Hz'],
-    ...     name='freq_domain_fields')
-    """
-
-    fields: List[FieldType] = ["Ex", "Ey", "Ez", "Hx", "Hy", "Hz"]
-    type: Literal["FieldMonitor"] = "FieldMonitor"
-    data_type: Literal["ScalarFieldData"] = "ScalarFieldData"
-
-    def surfaces(self) -> List["FieldMonitor"]:
+    def surfaces(self) -> List["AbstractFieldMonitor"]:
         """Returns a list of 6 monitors corresponding to each surface of the box monitor.
         The output monitors are stored in the order [x-, x+, y-, y+, z-, z+], where x, y, and z denote
         which axis is perpendicular to that surface, while "-" and "+" denote the direction of the
-        normal vector of that surface. Each output monitor will have the same frequencies as the calling
+        normal vector of that surface. Each output monitor will have the same frequency/time data as the calling
         object. Its name will be that of the calling object appended with the above symbols.
         E.g., if the calling object's name is "field", the x+ monitor's name will be "field_x+".
         Does not work when the calling monitor has zero volume.
 
         Returns
         -------
-        List[:class:FieldMonitor]
+        List[:class:`AbstractFieldMonitor`]
             List of 6 surface monitors for each side of the box monitor.
 
         Example
@@ -195,14 +153,54 @@ class FieldMonitor(AbstractFieldMonitor, FreqMonitor):
         # Create "surface" monitors
         monitors = []
         for center, size, name in zip(surface_centers, surface_sizes, surface_names):
-            monitors.append(FieldMonitor(
-                fields=self.fields, 
-                center=center,
-                size=size,
-                freqs=self.freqs,
-                name=name))
+            monitors.append(self.copy(deep=True))
+            monitors[-1].center = center
+            monitors[-1].size = size
+            monitors[-1].name = name
 
         return monitors
+
+
+class PlanarMonitor(Monitor, ABC):
+    """Monitors that must have planar geometry."""
+
+    _plane_validator = assert_plane()
+
+
+class AbstractFluxMonitor(PlanarMonitor, ABC):
+    """stores flux through a plane"""
+
+
+class FieldMonitor(AbstractFieldMonitor, FreqMonitor):
+    """Stores a collection of electromagnetic fields in the frequency domain.
+
+    Parameters
+    ----------
+    center: Tuple[float, float, float] = (0.0, 0.0, 0.0)
+        Center of monitor.
+    size: Tuple[float, float, float]
+        Size of monitor.
+        All elements must be non-negative.
+    fields: List[str] = ['Ex', 'Ey', 'Ez', 'Hx', 'Hy', 'Hz']
+        Specifies the electromagnetic field components to record.
+        If wanting to conserve data, can specify fewer components.
+    freqs: List[float] or np.ndarray
+        List of frequencies in Hertz to store fields at.
+    name : str
+        (Required) name used to access data after simulation is finished.
+
+    Example
+    -------
+    >>> monitor = FieldMonitor(
+    ...     size=(2,2,2),
+    ...     freqs=[200e12, 210e12],
+    ...     fields=['Ex', 'Ey', 'Hz'],
+    ...     name='freq_domain_fields')
+    """
+
+    fields: List[FieldType] = ["Ex", "Ey", "Ez", "Hx", "Hy", "Hz"]
+    type: Literal["FieldMonitor"] = "FieldMonitor"
+    data_type: Literal["ScalarFieldData"] = "ScalarFieldData"
 
 
 class FieldTimeMonitor(AbstractFieldMonitor, TimeMonitor):
