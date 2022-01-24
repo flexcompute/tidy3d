@@ -96,7 +96,7 @@ class AbstractFieldMonitor(Monitor, ABC):
     fields: List[EMField] = ["Ex", "Ey", "Ez", "Hx", "Hy", "Hz"]
 
     def surfaces(self) -> List["AbstractFieldMonitor"]:
-        """Returns a list of 6 monitors corresponding to each surface of the box monitor.
+        """Returns a list of 6 monitors corresponding to each surface of the field monitor.
         The output monitors are stored in the order [x-, x+, y-, y+, z-, z+], where x, y, and z denote
         which axis is perpendicular to that surface, while "-" and "+" denote the direction of the
         normal vector of that surface. Each output monitor will have the same frequency/time data as the calling
@@ -107,7 +107,7 @@ class AbstractFieldMonitor(Monitor, ABC):
         Returns
         -------
         List[:class:`AbstractFieldMonitor`]
-            List of 6 surface monitors for each side of the box monitor.
+            List of 6 surface monitors for each side of the field monitor.
 
         Example
         -------
@@ -153,10 +153,11 @@ class AbstractFieldMonitor(Monitor, ABC):
         # Create "surface" monitors
         monitors = []
         for center, size, name in zip(surface_centers, surface_sizes, surface_names):
-            monitors.append(self.copy(deep=True))
-            monitors[-1].center = center
-            monitors[-1].size = size
-            monitors[-1].name = name
+            mon_new = self.copy(deep=True)
+            mon_new.center = center
+            mon_new.size = size
+            mon_new.name = name
+            monitors.append(mon_new)
 
         return monitors
 
