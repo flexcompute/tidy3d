@@ -639,7 +639,6 @@ class ModeIndexData(AbstractModeData):
 
     Example
     -------
-
     >>> f = np.linspace(2e14, 3e14, 1001)
     >>> values = (1+1j) * np.random.random((2, len(f)))
     >>> data = ModeIndexData(values=values, mode_index=np.arange(1, 3), f=f)

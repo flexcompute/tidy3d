@@ -121,9 +121,7 @@ class AbstractFieldMonitor(Monitor, ABC):
 
         Example
         -------
-        >>> lambda0 = 1.0
-        >>> freq0 = td.C_0 / lambda0
-        >>> volume_monitor = td.FieldMonitor(center=(0,0,0), size=(1,2,3), freqs=[freq0], name='field')
+        >>> volume_monitor = FieldMonitor(center=(0,0,0), size=(1,2,3), freqs=[2e14], name='field')
         >>> surface_monitors = volume_monitor.surfaces()
         """
 
