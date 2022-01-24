@@ -306,11 +306,11 @@ class PlaneWave(AngledFieldSource):
     Example
     -------
     >>> pulse = GaussianPulse(freq0=200e12, fwidth=20e12)
-    >>> pw_source = PlaneWave(size=(inf,0,inf), source_time=pulse, polarization='Ex', direction='+')
+    >>> pw_source = PlaneWave(size=(inf,0,inf), source_time=pulse, pol_angle=0.1, direction='+')
     """
 
-    # TODO: this is only needed so that the convert path still works. Remove eventually.
-    polarization: Polarization = "Ex"
+    # Note: this is replaced by `pol_angle`
+    # polarization: Polarization = "Ex"
 
 
 class GaussianBeam(AngledFieldSource):
