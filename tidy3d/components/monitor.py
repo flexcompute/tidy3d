@@ -108,6 +108,72 @@ class AbstractFieldMonitor(Monitor, ABC):
         min_items=1,
     )
 
+    def surfaces(self) -> List["AbstractFieldMonitor"]:
+        """Returns a list of 6 monitors corresponding to each surface of the field monitor.
+        The output monitors are stored in the order [x-, x+, y-, y+, z-, z+], where x, y, and z denote
+        which axis is perpendicular to that surface, while "-" and "+" denote the direction of the
+        normal vector of that surface. Each output monitor will have the same frequency/time data as the calling
+        object. Its name will be that of the calling object appended with the above symbols.
+        E.g., if the calling object's name is "field", the x+ monitor's name will be "field_x+".
+        Does not work when the calling monitor has zero volume.
+
+        Returns
+        -------
+        List[:class:`AbstractFieldMonitor`]
+            List of 6 surface monitors for each side of the field monitor.
+
+        Example
+        -------
+        >>> lambda0 = 1.0
+        >>> freq0 = td.C_0 / lambda0
+        >>> volume_monitor = td.FieldMonitor(center=(0,0,0), size=(1,2,3), freqs=[freq0], name='field')
+        >>> surface_monitors = volume_monitor.surfaces()
+        """
+
+        if any(s == 0.0 for s in self.size):
+            raise SetupError("Can't generate surfaces for the given monitor because it has zero volume.")
+
+        self_bmin, self_bmax = self.bounds
+        center_x, center_y, center_z = self.center
+        size_x, size_y, size_z = self.size
+
+        # Set up geometry data and names for each surface:
+
+        surface_centers = (
+            (self_bmin[0], center_y, center_z), # x-
+            (self_bmax[0], center_y, center_z), # x+
+            (center_x, self_bmin[1], center_z), # y-
+            (center_x, self_bmax[1], center_z), # y+
+            (center_x, center_y, self_bmin[2]), # z-
+            (center_x, center_y, self_bmax[2])) # z+
+
+        surface_sizes = (
+            (0.0, size_y, size_z), # x-
+            (0.0, size_y, size_z), # x+
+            (size_x, 0.0, size_z), # y-
+            (size_x, 0.0, size_z), # y+
+            (size_x, size_y, 0.0), # z-
+            (size_x, size_y, 0.0)) # z+
+
+        surface_names = (
+            self.name + '_x-',
+            self.name + '_x+',
+            self.name + '_y-',
+            self.name + '_y+',
+            self.name + '_z-',
+            self.name + '_z+')
+
+        # Create "surface" monitors
+        monitors = []
+        for center, size, name in zip(surface_centers, surface_sizes, surface_names):
+            mon_new = self.copy(deep=True)
+            mon_new.center = center
+            mon_new.size = size
+            mon_new.name = name
+            monitors.append(mon_new)
+
+        return monitors
+
 
 class PlanarMonitor(Monitor, ABC):
     """:class:`Monitor` that has a planar geometry."""

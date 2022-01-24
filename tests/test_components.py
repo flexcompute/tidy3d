@@ -677,6 +677,60 @@ def test_monitor_plane():
 
 
 def _test_freqs_nonempty():
+    with pytest.raises(ValidationError) as e_info:
+        FieldMonitor(size=(1, 1, 1), freqs=[])
 
-    with pytest.raises(pydantic.ValidationError) as e_info:
-        FieldMonitor(size=(1, 1, 1), freqs=[], name="test")
+
+def test_monitor_surfaces_from_volume():
+
+    center = (1, 2, 3)
+
+    # make sure that monitors with zero volume raise an error (adapted from test_monitor_plane())
+    for size in ((0, 0, 0), (1, 0, 0), (1, 1, 0)):
+        with pytest.raises(SetupError) as e_info:
+            mon_freq = FieldMonitor(size=size, center=center, freqs=[1, 2, 3], name="test_monitor_freq")
+            mon_freq_surfaces = mon_freq.surfaces()
+
+    # repeat for time domain
+    for size in ((0, 0, 0), (1, 0, 0), (1, 1, 0)):
+        with pytest.raises(SetupError) as e_info:
+            mon_time = FieldTimeMonitor(size=size, center=center, start=1, stop=2, interval=1, name="test_monitor_time")
+            mon_time_surfaces = mon_time.surfaces()
+
+    # test that the surface monitors can be extracted from a volume monitor for both frequency and time domain
+    size = (1, 2, 3)
+    mon_freq = FieldMonitor(size=size, center=center, freqs=[1, 2, 3], name="test_monitor_freq")
+    mon_time = FieldTimeMonitor(size=size, center=center, start=1, stop=2, interval=1, name="test_monitor_time")
+
+    surface_monitor_helper(center, size, mon_freq)
+    surface_monitor_helper(center, size, mon_time)
+
+def surface_monitor_helper(center, size, monitor_test):
+    # helper to test that the list of surfaces extracted from the given test monitor are correct
+
+    monitor_surfaces = monitor_test.surfaces()
+
+    # x- surface
+    assert monitor_surfaces[0].center == (center[0]-size[0]/2.0, center[1], center[2])
+    assert monitor_surfaces[0].size == (0.0, size[1], size[2])
+
+    # x+ surface
+    assert monitor_surfaces[1].center == (center[0]+size[0]/2.0, center[1], center[2])
+    assert monitor_surfaces[1].size == (0.0, size[1], size[2])
+
+    # y- surface
+    assert monitor_surfaces[2].center == (center[0], center[1]-size[1]/2.0, center[2])
+    assert monitor_surfaces[2].size == (size[0], 0.0, size[2])
+
+    # y+ surface
+    assert monitor_surfaces[3].center == (center[0], center[1]+size[1]/2.0, center[2])
+    assert monitor_surfaces[3].size == (size[0], 0.0, size[2])
+
+    # z- surface
+    assert monitor_surfaces[4].center == (center[0], center[1], center[2]-size[2]/2.0)
+    assert monitor_surfaces[4].size == (size[0], size[1], 0.0)
+
+    # z+ surface
+    assert monitor_surfaces[5].center == (center[0], center[1], center[2]+size[2]/2.0)
+    assert monitor_surfaces[5].size == (size[0], size[1], 0.0)
+
