@@ -1,9 +1,10 @@
 """ Tidy3d package imports"""
-__version__ = "0.0.0"
-
 from concurrent.futures import ProcessPoolExecutor, process
 
 from rich import pretty, traceback
+
+# version
+from .version import __version__
 
 # pml
 from .components import PML, StablePML, Absorber
@@ -17,7 +18,7 @@ from .components import Grid, Coords
 from .components import Box, Sphere, Cylinder, PolySlab
 
 # medium
-from .components import Medium, PoleResidue, AnisotropicMedium, PEC
+from .components import Medium, PoleResidue, AnisotropicMedium, PEC, PECMedium
 from .components import Sellmeier, Debye, Drude, Lorentz
 
 # structures
@@ -42,14 +43,17 @@ from .components import SimulationData, FieldData, FluxData, ModeData, FluxTimeD
 from .components import DATA_TYPE_MAP, ScalarFieldData, ScalarFieldTimeData
 
 # constants imported as `C_0 = td.C_0` or `td.constants.C_0`
-from .constants import inf, C_0, ETA_0, HBAR
+from .constants import C_0, ETA_0, HBAR
+
+# types
+from .components import inf
 
 # plugins typically imported as `from tidy3d.plugins import DispersionFitter`
 from . import plugins
 
 # material library dict imported as `from tidy3d import material_library`
 # get material `mat` and variant `var` as `material_library[mat][var]`
-from .material_library import material_library
+# from .material_library import material_library
 
 # logging
 from .log import log, set_logging_level, set_logging_file

@@ -7,12 +7,13 @@ import pydantic
 import numpy as np
 
 from .base import Tidy3dBaseModel
-from .types import Direction, Polarization, Ax, FreqBound, Array, Literal
+from .types import Direction, Polarization, Ax, FreqBound, Array
+from .types import inf  # pylint:disable=unused-import
 from .validators import assert_plane, validate_name_str
 from .geometry import Box
 from .mode import ModeSpec
 from .viz import add_ax_if_none, SourceParams
-from ..constants import inf  # pylint:disable=unused-import
+from ..constants import RADIAN, HERTZ, MICROMETER
 
 # TODO: change directional source to something signifying its intent is to create a specific field.
 
@@ -23,8 +24,13 @@ WIDTH_STD = 5
 class SourceTime(ABC, Tidy3dBaseModel):
     """Base class describing the time dependence of a source."""
 
-    amplitude: pydantic.NonNegativeFloat = 1.0
-    phase: float = 0.0
+    amplitude: pydantic.NonNegativeFloat = pydantic.Field(
+        1.0, title="Amplitude", description="Real-valued maximum amplitude of the time dependence."
+    )
+
+    phase: float = pydantic.Field(
+        0.0, title="Phase", description="Phase shift of the time dependence.", units=RADIAN
+    )
 
     @abstractmethod
     def amp_time(self, time: float) -> complex:
@@ -103,9 +109,22 @@ class SourceTime(ABC, Tidy3dBaseModel):
 class Pulse(SourceTime, ABC):
     """A source time that ramps up with some ``fwidth`` and oscillates at ``freq0``."""
 
-    freq0: pydantic.PositiveFloat
-    fwidth: pydantic.PositiveFloat  # currently standard deviation
-    offset: pydantic.confloat(ge=2.5) = 5.0
+    freq0: pydantic.PositiveFloat = pydantic.Field(
+        ..., title="Central Frequency", description="Central frequency of the pulse.", units=HERTZ
+    )
+    fwidth: pydantic.PositiveFloat = pydantic.Field(
+        ...,
+        title="",
+        description="Standard deviation of the frequency content of the pulse.",
+        units=HERTZ,
+    )
+
+    offset: float = pydantic.Field(
+        5.0,
+        title="Offset",
+        description="Time delay of the maximum value of the pulse in units of 1 / ``fwidth``.",
+        ge=2.5,
+    )
 
     @property
     def frequency_range(self) -> FreqBound:
@@ -127,37 +146,13 @@ class Pulse(SourceTime, ABC):
 class GaussianPulse(Pulse):
     """Source time dependence that describes a Gaussian pulse.
 
-    Parameters
-    ----------
-        freq0 : float
-            Central oscillating frequency in Hz.
-            Must be positive.
-        fwidth : float
-            Standard deviation width of the Gaussian pulse in Hz.
-            Must be positive.
-        offset : float = 5.0
-            Time of the maximum value of the pulse
-            in units of 1/fwidth.
-            Must be greater than 2.5.
-
     Example
     -------
     >>> pulse = GaussianPulse(freq0=200e12, fwidth=20e12)
     """
 
     def amp_time(self, time: float) -> complex:
-        """Complex-valued source amplitude as a function of time.
-
-        Parameters
-        ----------
-        time : float
-            Time in seconds.
-
-        Returns
-        -------
-        complex
-            Complex-valued source amplitude at supplied time.
-        """
+        """Complex-valued source amplitude as a function of time."""
 
         twidth = 1.0 / (2 * np.pi * self.fwidth)
         omega0 = 2 * np.pi * self.freq0
@@ -175,37 +170,14 @@ class ContinuousWave(Pulse):
     """Source time dependence that ramps up to continuous oscillation
     and holds until end of simulation.
 
-    Parameters
-    ----------
-        freq0 : float
-            Central oscillating frequency in Hz.
-            Must be positive.
-        fwidth : float
-            Standard deviation width of the Gaussian pulse in Hz.
-            Must be positive.
-        offset : float = 5.0
-            Time of the maximum value of the pulse
-            in units of 1/fwidth.
-            Must be greater than 2.5.
-
     Example
     -------
     >>> cw = ContinuousWave(freq0=200e12, fwidth=20e12)
     """
 
     def amp_time(self, time: float) -> complex:
-        """Complex-valued source amplitude as a function of time.
+        """Complex-valued source amplitude as a function of time."""
 
-        Parameters
-        ----------
-        time : float
-            Time in seconds.
-
-        Returns
-        -------
-        complex
-            Complex-valued source amplitude at supplied time.
-        """
         twidth = 1.0 / (2 * np.pi * self.fwidth)
         omega0 = 2 * np.pi * self.freq0
         time_shifted = time - self.offset * twidth
@@ -224,23 +196,13 @@ SourceTimeType = Union[GaussianPulse, ContinuousWave]
 
 
 class Source(Box, ABC):
-    """Abstract base class for all sources.
+    """Abstract base class for all sources."""
 
-    Parameters
-    ----------
-    center : Tuple[float, float, float] = (0.0, 0.0, 0.0)
-        Center of source in x,y,z.
-    size : Tuple[float, float, float]
-        Size of source in x,y,z.
-        All elements must be non-negative.
-    source_time : :class:`GaussianPulse` or :class:`ContinuousWave`
-        Specification of time-dependence of source.
-    name : str = None
-        Optional name for source.
-    """
+    source_time: SourceTimeType = pydantic.Field(
+        ..., title="Source Time", description="Specification of the source time-dependence."
+    )
 
-    source_time: SourceTimeType
-    name: str = None
+    name: str = pydantic.Field(None, title="Name", description="Optional name for the source.")
 
     _name_validator = validate_name_str()
 
@@ -248,62 +210,20 @@ class Source(Box, ABC):
     def plot(
         self, x: float = None, y: float = None, z: float = None, ax: Ax = None, **kwargs
     ) -> Ax:
-        """Plot the source geometry on a cross section plane.
 
-        Parameters
-        ----------
-        x : float = None
-            Position of plane in x direction, only one of x,y,z can be specified to define plane.
-        y : float = None
-            Position of plane in y direction, only one of x,y,z can be specified to define plane.
-        z : float = None
-            Position of plane in z direction, only one of x,y,z can be specified to define plane.
-        ax : matplotlib.axes._subplots.Axes = None
-            Matplotlib axes to plot on, if not specified, one is created.
-        **patch_kwargs
-            Optional keyword arguments passed to the matplotlib patch plotting of structure.
-            For details on accepted values, refer to
-            `Matplotlib's documentation <https://tinyurl.com/2nf5c2fk>`_.
-
-        Returns
-        -------
-        matplotlib.axes._subplots.Axes
-            The supplied or created matplotlib axes.
-        """
         kwargs = SourceParams().update_params(**kwargs)
         ax = self.geometry.plot(x=x, y=y, z=z, ax=ax, **kwargs)
         return ax
 
     @property
     def geometry(self):
-        """:class:`Box` representation of source.
+        """:class:`Box` representation of source."""
 
-        Returns
-        -------
-        :class:`Box`
-            Representation of the source geometry as a :class:`Box`.
-        """
         return Box(center=self.center, size=self.size)
 
 
 class VolumeSource(Source):
     """Source spanning a rectangular volume with uniform time dependence.
-
-    Parameters
-    ----------
-    center : Tuple[float, float, float] = (0.0, 0.0, 0.0)
-        Center of source in x,y,z.
-    size : Tuple[float, float, float]
-        Size of source in x,y,z.
-        All elements must be non-negative.
-    source_time : :class:`GaussianPulse` or :class:`ContinuousWave`
-        Specification of time-dependence of source.
-    polarization : str
-        Specifies the direction and type of current component.
-        Must be in ``{'Ex', 'Ey', 'Ez', 'Hx', 'Hy', 'Hz'}``.
-        For example, ``'Ez'`` specifies electric current source polarized along the z-axis.
-    name : str = None
-        Optional name for source.
 
     Example
     -------
@@ -311,42 +231,28 @@ class VolumeSource(Source):
     >>> pt_source = VolumeSource(size=(0,0,0), source_time=pulse, polarization='Ex')
     """
 
-    polarization: Polarization
-    type: Literal["VolumeSource"] = "VolumeSource"
+    polarization: Polarization = pydantic.Field(
+        ...,
+        title="Polarization",
+        description="Specifies the direction and type of current component.",
+    )
 
 
 class FieldSource(Source, ABC):
     """A planar Source defined by the desired E and H fields at a plane. The sources are created
     such that the propagation is uni-directional."""
 
-    direction: Direction
+    direction: Direction = pydantic.Field(
+        ...,
+        title="Direction",
+        description="Specifies propagation in positive or negative direction of the normal axis.",
+    )
+
     _plane_validator = assert_plane()
 
 
 class ModeSource(FieldSource):
-    """Modal profile on finite extent plane
-
-    Parameters
-    ----------
-    center : Tuple[float, float, float] = (0.0, 0.0, 0.0)
-        Center of source in x,y,z.
-    size : Tuple[float, float, float]
-        Size of source in x,y,z.
-        One component must be 0.0 to define plane.
-        All elements must be non-negative.
-    source_time : :class:`GaussianPulse` or :class:`ContinuousWave`
-        Specification of time-dependence of source.
-    direction : str
-        Specifies propagation in the positive or negative direction of the normal axis.
-        Must be in ``{'+', '-'}``.
-    mode_spec :class:`ModeSpec`
-        Specification for the mode solver to find the mode injected by the source.
-    mode_index : int
-        Index of the mode to inject in the collection of modes returned by the solver. If larger
-        than ``mode_spec.num_modes``, ``num_modes`` in the solver will be set to ``mode_index + 1``.
-        Must be >= 0.
-    name : str = None
-        Optional name for source.
+    """Injects current source to excite modal profile on finite extent plane.
 
     Example
     -------
@@ -360,37 +266,42 @@ class ModeSource(FieldSource):
     ...     direction='-')
     """
 
-    type: Literal["ModeSource"] = "ModeSource"
-    mode_spec: ModeSpec = ModeSpec()
-    mode_index: pydantic.NonNegativeInt = 0
+    mode_spec: ModeSpec = pydantic.Field(
+        ModeSpec(),
+        title="Mode Specification",
+        description="Parameters to feed to mode solver which determine modes measured by monitor.",
+    )
+
+    mode_index: pydantic.NonNegativeInt = pydantic.Field(
+        0,
+        title="Mode Index",
+        description="Index into the collection of modes returned by mode solver. "
+        " Specifies which mode to inject using this source. "
+        "If larger than ``mode_spec.num_modes``, "
+        "``num_modes`` in the solver will be set to ``mode_index + 1``.",
+    )
 
 
-class PlaneWave(FieldSource):
-    """Uniform distribution on infinite extent plane.
+class AngledFieldSource(FieldSource):
+    """Field Source with a polarization angle."""
 
-    Parameters
-    ----------
-    center : Tuple[float, float, float] = (0.0, 0.0, 0.0)
-        Center of source in x,y,z.
-    size : Tuple[float, float, float]
-        Size of source in x,y,z.
-        One component must be 0.0 to define plane.
-        All elements must be non-negative.
-    source_time : :class:`GaussianPulse` or :class:`ContinuousWave`
-        Specification of time-dependence of source.
-    pol_angle : float, optional
-        Specifies the angle between the electric field polarization of the source and the plane
-        defined by the normal axis and the propagation axis (rad). ``pol_angle=0`` (default)
-        specifies P polarization, while ``pol_angle=np.pi/2`` specifies S polarization. At normal
-        incidence when S and P are undefined, ``pol_angle=0`` defines, respectively:
-         - ``Ey`` polarization for propagation along ``x``.
-         - ``Ex`` polarization for propagation along ``y``.
-         - ``Ex`` polarization for propagation along ``z``.
-    direction : str
-        Specifies propagation in the positive or negative direction of the normal axis.
-        Must be in ``{'+', '-'}``.
-    name : str = None
-        Optional name for source.
+    pol_angle: float = pydantic.Field(
+        0,
+        title="Polarization Angle",
+        description="Specifies the angle between the electric field polarization of the "
+        "source and the plane defined by the normal axis and the propagation axis (rad). "
+        "``pol_angle=0`` (default) specifies P polarization, "
+        "while ``pol_angle=np.pi/2`` specifies S polarization. "
+        "At normal incidence when S and P are undefined, ``pol_angle=0`` defines: "
+        "- ``Ey`` polarization for propagation along ``x``."
+        "- ``Ex`` polarization for propagation along ``y``."
+        "- ``Ex`` polarization for propagation along ``z``.",
+        units=RADIAN,
+    )
+
+
+class PlaneWave(AngledFieldSource):
+    """Uniform current distribution on an infinite extent plane.
 
     Example
     -------
@@ -398,47 +309,12 @@ class PlaneWave(FieldSource):
     >>> pw_source = PlaneWave(size=(inf,0,inf), source_time=pulse, polarization='Ex', direction='+')
     """
 
-    type: Literal["PlaneWave"] = "PlaneWave"
-    pol_angle: float = 0
     # TODO: this is only needed so that the convert path still works. Remove eventually.
     polarization: Polarization = "Ex"
 
 
-class GaussianBeam(FieldSource):
-    """guassian distribution on finite extent plane
-
-    Parameters
-    ----------
-    center : Tuple[float, float, float] = (0.0, 0.0, 0.0)
-        Center of source in x,y,z.
-    size : Tuple[float, float, float]
-        Size of source in x,y,z.
-        One component must be 0.0 to define plane.
-        All elements must be non-negative.
-    source_time : :class:`GaussianPulse` or :class:`ContinuousWave`
-        Specification of time-dependence of source.
-    direction : str
-        Specifies propagation in the positive or negative direction of the normal axis.
-        Must be in ``{'+', '-'}``.
-    waist_radius: float = 1.0
-        Radius of the beam at the waist (um).
-        Must be positive.
-    waist_distance: float = 0.0
-        Distance (um) from the beam waist along the propagation direction.
-    angle_theta : float, optional
-        Polar angle from the normal axis (rad).
-    angle_phi : float, optional
-        Azimuth angle in the plane orthogonal to the normal axis (rad).
-    pol_angle : float, optional
-        Specifies the angle between the electric field polarization of the source and the plane
-        defined by the normal axis and the propagation axis (rad). ``pol_angle=0`` (default)
-        specifies P polarization, while ``pol_angle=np.pi/2`` specifies S polarization. At normal
-        incidence when S and P are undefined, ``pol_angle=0`` defines, respectively:
-         - ``Ey`` polarization for propagation along ``x``.
-         - ``Ex`` polarization for propagation along ``y``.
-         - ``Ex`` polarization for propagation along ``z``.
-    name : str = None
-        Optional name for source.
+class GaussianBeam(AngledFieldSource):
+    """Guassian distribution on finite extent plane.
 
     Example
     -------
@@ -451,12 +327,33 @@ class GaussianBeam(FieldSource):
     ...     waist_radius=1.0)
     """
 
-    waist_radius: pydantic.PositiveFloat = 1.0
-    waist_distance: float = 0.0
-    angle_theta: float = 0.0
-    angle_phi: float = 0.0
-    pol_angle: float = 0.0
-    type: Literal["GaussianBeam"] = "GaussianBeam"
+    waist_radius: pydantic.PositiveFloat = pydantic.Field(
+        1.0,
+        title="Waist Radius",
+        description="Radius of the beam at the waist.",
+        units=MICROMETER,
+    )
+
+    waist_distance: float = pydantic.Field(
+        0.0,
+        title="Waist Distance",
+        description="Distance from the beam waist along the propagation direction.",
+        units=MICROMETER,
+    )
+
+    angle_theta: float = pydantic.Field(
+        0.0,
+        title="Polar Angle",
+        description="Polar angle from the normal axis.",
+        units=RADIAN,
+    )
+
+    angle_phi: float = pydantic.Field(
+        0.0,
+        title="Azimuth Angle",
+        description="Azimuth angle in the plane orthogonal to the normal axis.",
+        units=RADIAN,
+    )
 
 
 # sources allowed in Simulation.sources

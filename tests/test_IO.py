@@ -23,7 +23,7 @@ def test_simulation_preserve_types():
     st = GaussianPulse(freq0=1.0, fwidth=1.0)
 
     sim_all = Simulation(
-        size=(1.0, 1.0, 1.0),
+        size=(10.0, 10.0, 10.0),
         grid_size=(1, 1, 1),
         structures=[
             Structure(geometry=Box(size=(1, 1, 1)), medium=Medium()),
@@ -40,9 +40,15 @@ def test_simulation_preserve_types():
         ],
         sources=[
             VolumeSource(size=(0, 0, 0), source_time=st, polarization="Ex"),
-            PlaneWave(size=(inf, inf, 0), source_time=st, direction="+", polarization="Ex"),
-            GaussianBeam(
+            PlaneWave(
+                center=(0, 0, -4),
                 size=(inf, inf, 0),
+                source_time=st,
+                direction="+",
+                polarization="Ex",
+            ),
+            GaussianBeam(
+                size=(1, 1, 0),
                 source_time=st,
                 direction="+",
                 waist_radius=1,

@@ -7,6 +7,33 @@ from tidy3d import *
 from tidy3d.log import ValidationError, SetupError
 
 
+def assert_log_level(caplog, log_level_expected):
+    """ensure something got logged if log_level is not None.
+    note: I put this here rather than utils.py because if we import from utils.py,
+    it will validate the sims there and those get included in log.
+    """
+
+    # get log output
+    logs = caplog.record_tuples
+
+    # there's a log but the log level is not None (problem)
+    if logs and not log_level_expected:
+        raise Exception
+
+    # we expect a log but none is given (problem)
+    if log_level_expected and not logs:
+        raise Exception
+
+    # both expected and got log, check the log levels match
+    if logs and log_level_expected:
+        for log in logs:
+            log_level = log[1]
+            if log_level == log_level_expected:
+                # log level was triggered, exit
+                return
+        raise Exception
+
+
 def test_sim():
     """make sure a simulation can be initialized"""
 
@@ -116,7 +143,128 @@ def test_sim_bounds():
 def test_sim_grid_size():
 
     size = (1, 1, 1)
-    s = Simulation(size=size, grid_size=(1.0, 1.0, 1.0))
+    _ = Simulation(size=size, grid_size=(1.0, 1.0, 1.0))
+
+
+@pytest.mark.parametrize("fwidth,log_level", [(0.001, None), (3, 30)])
+def test_sim_frequency_range(caplog, fwidth, log_level):
+    # small fwidth should be inside range, large one should throw warning
+
+    size = (1, 1, 1)
+    medium = Medium(frequency_range=(2, 3))
+    box = Structure(geometry=Box(size=(0.1, 0.1, 0.1)), medium=medium)
+    src = VolumeSource(
+        source_time=GaussianPulse(freq0=2.4, fwidth=fwidth),
+        size=(0, 0, 0),
+        polarization="Ex",
+    )
+    _ = Simulation(size=(1, 1, 1), grid_size=(0.1, 0.1, 0.1), structures=[box], sources=[src])
+
+    assert_log_level(caplog, log_level)
+
+
+@pytest.mark.parametrize("grid_size,log_level", [(0.001, None), (3, 30)])
+def test_sim_grid_size(caplog, grid_size, log_level):
+    # small fwidth should be inside range, large one should throw warning
+
+    medium = Medium(permittivity=2, frequency_range=(2e14, 3e14))
+    box = Structure(geometry=Box(size=(0.1, 0.1, 0.1)), medium=medium)
+    src = VolumeSource(
+        source_time=GaussianPulse(freq0=2.5e14, fwidth=1e13),
+        size=(0, 0, 0),
+        polarization="Ex",
+    )
+    _ = Simulation(size=(1, 1, 1), grid_size=(0.1, 0.1, grid_size), structures=[box], sources=[src])
+
+    assert_log_level(caplog, log_level)
+
+
+@pytest.mark.parametrize("box_size,log_level", [(0.001, None), (9.9, 30), (20, None)])
+def test_sim_structure_gap(caplog, box_size, log_level):
+    """Make sure the gap between a structure and PML is not too small compared to lambda0."""
+    medium = Medium(permittivity=2)
+    box = Structure(geometry=Box(size=(box_size, box_size, box_size)), medium=medium)
+    src = VolumeSource(
+        source_time=GaussianPulse(freq0=3e14, fwidth=1e13),
+        size=(0, 0, 0),
+        polarization="Ex",
+    )
+    sim = Simulation(
+        size=(10, 10, 10),
+        grid_size=(0.1, 0.1, 0.1),
+        structures=[box],
+        sources=[src],
+        pml_layers=[PML(num_layers=5), PML(num_layers=5), PML(num_layers=5)],
+    )
+    assert_log_level(caplog, log_level)
+
+
+def test_sim_plane_wave_error():
+    """ "Make sure we error if plane wave is not intersecting homogeneous region of simulation."""
+
+    medium_bg = Medium(permittivity=2)
+    medium_air = Medium(permittivity=1)
+
+    box = Structure(geometry=Box(size=(0.1, 0.1, 0.1)), medium=medium_air)
+
+    box_transparent = Structure(geometry=Box(size=(0.1, 0.1, 0.1)), medium=medium_bg)
+
+    src = PlaneWave(
+        source_time=GaussianPulse(freq0=2.5e14, fwidth=1e13),
+        center=(0, 0, 0),
+        size=(inf, inf, 0),
+        direction="+",
+        polarization="Ex",
+    )
+
+    # with transparent box continue
+    _ = Simulation(
+        size=(1, 1, 1),
+        grid_size=(0.1, 0.1, 0.1),
+        medium=medium_bg,
+        structures=[box_transparent],
+        sources=[src],
+    )
+
+    # with non-transparent box, raise
+    with pytest.raises(SetupError):
+        _ = Simulation(
+            size=(1, 1, 1),
+            grid_size=(0.1, 0.1, 0.1),
+            medium=medium_bg,
+            structures=[box_transparent, box],
+            sources=[src],
+        )
+
+
+@pytest.mark.parametrize(
+    "box_size,log_level",
+    [((0.1, 0.1, 0.1), None), ((1, 0.1, 0.1), 30), ((0.1, 1, 0.1), 30), ((0.1, 0.1, 1), 30)],
+)
+def test_sim_structure_extent(caplog, box_size, log_level):
+    """Make sure we warn if structure extends exactly to simulation edges."""
+
+    box = Structure(geometry=Box(size=box_size), medium=Medium(permittivity=2))
+    sim = Simulation(size=(1, 1, 1), grid_size=(0.1, 0.1, 0.1), structures=[box])
+
+    assert_log_level(caplog, log_level)
+
+
+def test_num_mediums():
+    """Make sure we error if too many mediums supplied."""
+
+    structures = []
+    for i in range(200):
+        structures.append(
+            Structure(geometry=Box(size=(1, 1, 1)), medium=Medium(permittivity=i + 1))
+        )
+    sim = Simulation(size=(1, 1, 1), grid_size=(0.1, 0.1, 0.1), structures=structures)
+
+    with pytest.raises(SetupError):
+        structures.append(
+            Structure(geometry=Box(size=(1, 1, 1)), medium=Medium(permittivity=i + 2))
+        )
+        sim = Simulation(size=(1, 1, 1), grid_size=(0.1, 0.1, 0.1), structures=structures)
 
 
 """ geometry """
@@ -128,8 +276,8 @@ def test_geometry():
     s = Sphere(radius=1, center=(0, 0, 0))
     s = Cylinder(radius=1, center=(0, 0, 0), axis=1, length=1)
     s = PolySlab(vertices=((1, 2), (3, 4), (5, 4)), slab_bounds=(-1, 1), axis=1)
-    vertices_np = np.array(s.vertices)
-    s_np = PolySlab(vertices=vertices_np, slab_bounds=(-1, 1), axis=1)
+    # vertices_np = np.array(s.vertices)
+    # s_np = PolySlab(vertices=vertices_np, slab_bounds=(-1, 1), axis=1)
 
     # make sure wrong axis arguments error
     with pytest.raises(pydantic.ValidationError) as e_info:
@@ -218,15 +366,20 @@ def test_PEC():
 def test_medium_dispersion():
 
     # construct media
-    m_PR = PoleResidue(eps_inf=1.0, poles=[(1 + 2j, 1 + 3j), (2 + 4j, 1 + 5j)])
+    m_PR = PoleResidue(eps_inf=1.0, poles=[((1 + 2j), (1 + 3j)), ((2 + 4j), (1 + 5j))])
     m_SM = Sellmeier(coeffs=[(2, 3), (2, 4)])
     m_LZ = Lorentz(eps_inf=1.0, coeffs=[(1, 3, 2), (2, 4, 1)])
+    m_LZ2 = Lorentz(eps_inf=1.0, coeffs=[(1, 2, 3), (2, 1, 4)])
     m_DR = Drude(eps_inf=1.0, coeffs=[(1, 3), (2, 4)])
     m_DB = Debye(eps_inf=1.0, coeffs=[(1, 3), (2, 4)])
 
     freqs = np.linspace(0.01, 1, 1001)
-    for medium in [m_PR, m_SM, m_LZ, m_DR, m_DB]:
+    for medium in [m_PR, m_SM, m_LZ, m_LZ2, m_DR, m_DB]:
         eps_c = medium.eps_model(freqs)
+
+    for medium in [m_SM, m_LZ, m_LZ2, m_DR, m_DB]:
+        eps_c = medium.eps_model(freqs)
+        assert np.all(eps_c.imag >= 0)
 
 
 def test_medium_dispersion_conversion():
@@ -234,11 +387,12 @@ def test_medium_dispersion_conversion():
     m_PR = PoleResidue(eps_inf=1.0, poles=[((1 + 2j), (1 + 3j)), ((2 + 4j), (1 + 5j))])
     m_SM = Sellmeier(coeffs=[(2, 3), (2, 4)])
     m_LZ = Lorentz(eps_inf=1.0, coeffs=[(1, 3, 2), (2, 4, 1)])
+    m_LZ2 = Lorentz(eps_inf=1.0, coeffs=[(1, 2, 3), (2, 1, 4)])
     m_DR = Drude(eps_inf=1.0, coeffs=[(1, 3), (2, 4)])
     m_DB = Debye(eps_inf=1.0, coeffs=[(1, 3), (2, 4)])
 
     freqs = np.linspace(0.01, 1, 1001)
-    for medium in [m_PR, m_SM, m_DB, m_LZ, m_DR]:  # , m_DB]:
+    for medium in [m_PR, m_SM, m_DB, m_LZ, m_DR, m_LZ2]:  # , m_DB]:
         eps_model = medium.eps_model(freqs)
         eps_pr = medium.pole_residue.eps_model(freqs)
         np.testing.assert_allclose(eps_model, eps_pr)
@@ -249,17 +403,17 @@ def test_medium_dispersion_create():
     m_PR = PoleResidue(eps_inf=1.0, poles=[((1 + 2j), (1 + 3j)), ((2 + 4j), (1 + 5j))])
     m_SM = Sellmeier(coeffs=[(2, 3), (2, 4)])
     m_LZ = Lorentz(eps_inf=1.0, coeffs=[(1, 3, 2), (2, 4, 1)])
+    m_LZ2 = Lorentz(eps_inf=1.0, coeffs=[(1, 2, 3), (2, 1, 4)])
     m_DR = Drude(eps_inf=1.0, coeffs=[(1, 3), (2, 4)])
     m_DB = Debye(eps_inf=1.0, coeffs=[(1, 3), (2, 4)])
 
-    for medium in [m_PR, m_SM, m_DB, m_LZ, m_DR]:
+    for medium in [m_PR, m_SM, m_DB, m_LZ, m_DR, m_LZ2]:
         struct = Structure(geometry=Box(size=(1, 1, 1)), medium=medium)
 
 
 def eps_compare(medium: Medium, expected: Dict, tol: float = 1e-5):
 
     for freq, val in expected.items():
-        # print(f"Expected: {medium.eps_model(freq)}, got: {val}")
         assert np.abs(medium.eps_model(freq) - val) < tol
 
 
@@ -270,12 +424,12 @@ def test_epsilon_eval():
     poles_silver = [
         (a / HBAR, c / HBAR)
         for (a, c) in [
-            (-2.502e-2 - 8.626e-3j, 5.987e-1 + 4.195e3j),
-            (-2.021e-1 - 9.407e-1j, -2.211e-1 + 2.680e-1j),
-            (-1.467e1 - 1.338e0j, -4.240e0 + 7.324e2j),
-            (-2.997e-1 - 4.034e0j, 6.391e-1 - 7.186e-2j),
-            (-1.896e0 - 4.808e0j, 1.806e0 + 4.563e0j),
-            (-9.396e0 - 6.477e0j, 1.443e0 - 8.219e1j),
+            ((-2.502e-2 - 8.626e-3j), (5.987e-1 + 4.195e3j)),
+            ((-2.021e-1 - 9.407e-1j), (-2.211e-1 + 2.680e-1j)),
+            ((-1.467e1 - 1.338e0j), (-4.240e0 + 7.324e2j)),
+            ((-2.997e-1 - 4.034e0j), (6.391e-1 - 7.186e-2j)),
+            ((-1.896e0 - 4.808e0j), (1.806e0 + 4.563e0j)),
+            ((-9.396e0 - 6.477e0j), (1.443e0 - 8.219e1j)),
         ]
     ]
 
@@ -336,7 +490,7 @@ def test_modes():
 """ names """
 
 
-def test_names_default():
+def _test_names_default():
     """makes sure default names are set"""
 
     sim = Simulation(
@@ -482,7 +636,7 @@ def test_FieldSource():
     mode_spec = ModeSpec(num_modes=2)
 
     # test we can make planewave
-    s = PlaneWave(size=(0, 1, 1), source_time=g, pol_angle=np.pi / 2, direction="+")
+    s = PlaneWave(size=(0, inf, inf), source_time=g, pol_angle=np.pi / 2, direction="+")
 
     # test we can make gaussian beam
     s = GaussianBeam(size=(0, 1, 1), source_time=g, pol_angle=np.pi / 2, direction="+")
@@ -522,8 +676,7 @@ def test_monitor_plane():
             FluxMonitor(size=size, freqs=freqs, modes=[])
 
 
-def test_freqs_nonempty():
-
+def _test_freqs_nonempty():
     with pytest.raises(ValidationError) as e_info:
         FieldMonitor(size=(1, 1, 1), freqs=[])
 
@@ -580,6 +733,4 @@ def test_monitor_helper(center, size, monitor_test):
     # z+ surface
     assert monitor_surfaces[5].center == (center[0], center[1], center[2]+size[2]/2.0)
     assert monitor_surfaces[5].size == (size[0], size[1], 0.0)
-
-
 

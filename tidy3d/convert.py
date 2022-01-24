@@ -64,9 +64,6 @@ def old_json_parameters(sim: Simulation) -> Dict:
         "courant": sim.courant,
         "shutoff": sim.shutoff,
         "subpixel": sim.subpixel,
-        "time_steps": 100,
-        "nodes": 100,
-        "compute_weight": 1.0,
     }
 
     """ TODO: Support nonuniform coordinates """
@@ -454,7 +451,7 @@ def load_solver_results(
     for monitor in simulation.monitors:
         name = monitor.name
         monitor_data_dict = solver_data_dict[name]
-        monitor_data_type = DATA_TYPE_MAP[monitor.data_type]
+        monitor_data_type = DATA_TYPE_MAP[monitor._data_type.default]
         if monitor.type in ("FieldMonitor", "FieldTimeMonitor"):
             field_data = {}
             for field_name, data_dict in monitor_data_dict.items():

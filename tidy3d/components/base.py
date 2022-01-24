@@ -6,12 +6,16 @@ import rich
 import pydantic
 import yaml
 import numpy as np
+from pydantic.fields import ModelField
 
-from .types import ComplexNumber
+from .types import ComplexNumber, NumpyArray, Literal
 from ..log import FileError
 
 # default indentation (# spaces) in files
 INDENT = 4
+
+# type tag default name
+TYPE_TAG_STR = "type"
 
 
 class Tidy3dBaseModel(pydantic.BaseModel):
@@ -21,6 +25,12 @@ class Tidy3dBaseModel(pydantic.BaseModel):
     For more details on pydantic base models, see:
     `Pydantic Models <https://pydantic-docs.helpmanual.io/usage/models/>`_
     """
+
+    def __init_subclass__(cls):
+        """Things that are done to each of the models."""
+
+        add_type_field(cls)
+        cls.__doc__ = generate_docstring(cls)
 
     class Config:  # pylint: disable=too-few-public-methods
         """Sets config for all :class:`Tidy3dBaseModel` objects.
@@ -47,10 +57,9 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         validate_assignment = True
         allow_population_by_field_name = True
         json_encoders = {
-            np.ndarray: lambda x: x.tolist(),
-            complex: lambda x: ComplexNumber(real=np.real(x), imag=np.imag(x)),
+            np.ndarray: lambda x: NumpyArray(data_list=x.tolist()),
+            complex: lambda x: ComplexNumber(real=x.real, imag=x.imag),
         }
-        json_decoders = {ComplexNumber: lambda x: x.real + 1j * x.imag}
 
     def help(self, methods: bool = False) -> None:
         """Prints message describing the fields and methods of a :class:`Tidy3dBaseModel`.
@@ -217,3 +226,79 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         """
         exclude_unset = not include_unset
         return self.json(indent=INDENT, exclude_unset=exclude_unset)
+
+
+def add_type_field(cls):
+    """Automatically place "type" field with model name in the model field dictionary."""
+
+    value = cls.__name__
+    annotation = Literal[value]
+
+    tag_field = ModelField.infer(
+        name=TYPE_TAG_STR,
+        value=value,
+        annotation=annotation,
+        class_validators=None,
+        config=cls.__config__,
+    )
+    cls.__fields__[TYPE_TAG_STR] = tag_field
+
+
+def generate_docstring(cls) -> str:
+    """Generates a docstring for a Tidy3D model."""
+
+    # store the docstring in here
+    doc = ""
+
+    # if the model already has a docstring, get the first lines and save the rest
+    original_docstrings = []
+    if cls.__doc__:
+        original_docstrings = cls.__doc__.split("\n\n")
+        class_description = original_docstrings.pop(0)
+        doc += class_description
+
+    # create the list of parameters (arguments) for the model
+    doc += "\n\n\tParameters\n\t----------\n"
+    for field_name, field in cls.__fields__.items():
+
+        # ignore the type tag
+        if field_name == TYPE_TAG_STR:
+            continue
+
+        # get data type
+        data_type = field._type_display()  # pylint:disable=protected-access
+
+        # get default values
+        default_val = field.get_default()
+        if "=" in str(default_val):
+            # handle cases where default values are pydantic models
+            default_val = f"{default_val.__class__.__name__}({default_val})"
+            default_val = (", ").join(default_val.split(" "))
+
+        # make first line: name : type = default
+        default_str = f" = {default_val}" if default_val != ... else ""
+        doc += f"\t{field_name} : {data_type}{default_str}\n"
+
+        # get field metadata
+        field_info = field.field_info
+        doc += "\t\t"
+
+        # add units (if present)
+        units = field_info.extra.get("units")
+        if units is not None:
+            doc += f"[units = {units}].  "
+
+        # add description
+        description_str = field_info.description
+        doc += f"{description_str}\n"
+
+    # add in remaining things in the docs
+    doc += "\n\n"
+    if original_docstrings:
+        remaining_docstring = "".join(original_docstrings)
+
+        doc += remaining_docstring.replace("    ", "\t")
+
+    doc += "\n"
+
+    return doc

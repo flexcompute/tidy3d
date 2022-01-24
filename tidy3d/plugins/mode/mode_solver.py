@@ -1,20 +1,22 @@
 """Turn Mode Specifications into Mode profiles 
 """
 
-from typing import List
+from typing import List, Dict
 from dataclasses import dataclass
 
 import numpy as np
 import xarray as xr
 
+from ...components.base import Tidy3dBaseModel
 from ...components import Box
 from ...components import Simulation
 from ...components import ModeSpec
 from ...components import ModeMonitor
 from ...components import ModeSource, GaussianPulse
 from ...components.types import Direction
-from ...components.data import ScalarFieldData, FieldData
+from ...components.data import ScalarFieldData, FieldData, Tidy3dData
 from ...log import SetupError
+from ...constants import C_0
 
 from .solver import compute_modes
 
@@ -50,8 +52,7 @@ src = ModeSource.from_file('data/my_source.json')  # and loaded in our script
 """
 
 
-@dataclass
-class ModeInfo:
+class ModeInfo(Tidy3dBaseModel):
     """stores information about a (solved) mode.
     Attributes
     ----------
@@ -110,15 +111,13 @@ class ModeSolver:
 
         normal_axis = self.plane.size.index(0.0)
 
-        # note discretizing, need to make consistent
-        eps_xx = self.simulation.epsilon(self.plane, "Ex", self.freq)
-        eps_yy = self.simulation.epsilon(self.plane, "Ey", self.freq)
-        eps_zz = self.simulation.epsilon(self.plane, "Ez", self.freq)
+        # Get diagonal epsilon components in the plane
+        (eps_xx, eps_yy, eps_zz) = self.get_epsilon()
 
-        # make numpy array and get rid of normal axis
-        eps_xx = np.squeeze(eps_xx.values, axis=normal_axis)
-        eps_yy = np.squeeze(eps_yy.values, axis=normal_axis)
-        eps_zz = np.squeeze(eps_zz.values, axis=normal_axis)
+        # get rid of normal axis
+        eps_xx = np.squeeze(eps_xx, axis=normal_axis)
+        eps_yy = np.squeeze(eps_yy, axis=normal_axis)
+        eps_zz = np.squeeze(eps_zz, axis=normal_axis)
 
         # swap axes to waveguide coordinates (propagating in z)
         eps_wg_zz, (eps_wg_xx, eps_wg_yy) = self.plane.pop_axis(
@@ -162,6 +161,12 @@ class ModeSolver:
             # Get E and H fields at the current mode_index
             E, H = mode_fields[..., mode_index]
 
+            # Set gauge to highest-amplitude in-plane E being real and positive
+            ind_max = np.argmax(np.abs(E[:2]))
+            phi = np.angle(E[:2].ravel()[ind_max])
+            E *= np.exp(-1j * phi)
+            H *= np.exp(-1j * phi)
+
             # # Handle symmetries
             # if mode.symmetries[0] != 0:
             #     E_half = E[:, 1:, ...]
@@ -202,7 +207,7 @@ class ModeSolver:
                 )
 
             mode_info = ModeInfo(
-                field_data=FieldData(data_dict=data_dict).data,
+                field_data=FieldData(data_dict=data_dict),
                 mode_spec=mode_spec,
                 mode_index=mode_index,
                 n_eff=n_eff_complex[mode_index].real,
@@ -212,6 +217,15 @@ class ModeSolver:
             modes.append(mode_info)
 
         return modes
+
+    def get_epsilon(self):
+        """Compute the diagonal components of the epsilon tensor in the plane."""
+
+        eps_xx = self.simulation.epsilon(self.plane, "Ex", self.freq)
+        eps_yy = self.simulation.epsilon(self.plane, "Ey", self.freq)
+        eps_zz = self.simulation.epsilon(self.plane, "Ez", self.freq)
+
+        return np.stack((eps_xx, eps_yy, eps_zz), axis=0)
 
     # def make_source(self, mode_spec: ModeSpec, fwidth: float, direction: Direction) -> ModeSource:
     #     """Creates ``ModeSource`` from a Mode + additional specifications.

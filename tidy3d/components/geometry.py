@@ -11,22 +11,25 @@ from shapely.geometry import Point, Polygon, box
 from descartes import PolygonPatch
 
 from .base import Tidy3dBaseModel
-from .types import Literal, Bound, Size, Coordinate, Axis, Coordinate2D, Array
+from .types import Literal, Bound, Size, Coordinate, Axis, Coordinate2D, ArrayLike
 from .types import Vertices, Ax, Shapely
 from .viz import add_ax_if_none
 from ..log import Tidy3dKeyError, SetupError
+from ..constants import MICROMETER
 
 # add this around extents of plots
 PLOT_BUFFER = 0.3
 
 
-# TODO: GDS file importing.
-
-
 class Geometry(Tidy3dBaseModel, ABC):
     """Abstract base class, defines where something exists in space."""
 
-    center: Coordinate = (0.0, 0.0, 0.0)
+    center: Coordinate = pydantic.Field(
+        (0.0, 0.0, 0.0),
+        title="Center",
+        description="Center of object in x, y, and z.",
+        units=MICROMETER,
+    )
 
     def inside(self, x, y, z) -> bool:
         """Returns ``True`` if point ``(x,y,z)`` is inside volume of :class:`Geometry`.
@@ -358,8 +361,15 @@ class Geometry(Tidy3dBaseModel, ABC):
 class Planar(Geometry, ABC):
     """Geometry with one ``axis`` that is slab-like with thickness ``height``."""
 
-    axis: Axis = 2
-    length: pydantic.NonNegativeFloat = None
+    axis: Axis = pydantic.Field(
+        2, title="Axis", description="Specifies dimension of the planar axis (0,1,2) -> (x,y,z)."
+    )
+    length: pydantic.NonNegativeFloat = pydantic.Field(
+        None,
+        title="Length",
+        description="Defines thickness of geometry along axis dimension.",
+        units=MICROMETER,
+    )
 
     def intersections(self, x: float = None, y: float = None, z: float = None):
         """Returns shapely geometry at plane specified by one non None value of x,y,z.
@@ -466,7 +476,9 @@ class Planar(Geometry, ABC):
 class Circular(Geometry):
     """Geometry with circular characteristics (specified by a radius)."""
 
-    radius: pydantic.NonNegativeFloat
+    radius: pydantic.NonNegativeFloat = pydantic.Field(
+        ..., title="Radius", description="Radius of geometry.", units=MICROMETER
+    )
 
     def _intersect_dist(self, position, z0) -> float:
         """Distance between points on circle at z=position where center of circle at z=z0.
@@ -496,20 +508,17 @@ class Box(Geometry):
     """Rectangular prism.
        Also base class for :class:`Simulation`, :class:`Monitor`, and :class:`Source`.
 
-    Parameters
-    ----------
-    center : Tuple[float, float, float] = (0.0, 0.0, 0.0)
-        Center of box in x,y,z.
-    size : Tuple[float, float, float]
-        Size of box in x,y,z.
-
     Example
     -------
     >>> b = Box(center=(1,2,3), size=(2,2,2))
     """
 
-    size: Size
-    type: Literal["Box"] = "Box"
+    size: Size = pydantic.Field(
+        ...,
+        title="Size",
+        description="Size in x, y, and z directions.",
+        units=MICROMETER,
+    )
 
     @classmethod
     def from_bounds(cls, rmin: Coordinate, rmax: Coordinate):
@@ -611,19 +620,10 @@ class Box(Geometry):
 class Sphere(Circular):
     """Spherical geometry.
 
-    Parameters
-    ----------
-    center : Tuple[float, float, float] = 0.0, 0.0, 0.0
-        Center of sphere in x,y,z.
-    radius : float
-        Radius of sphere.
-
     Example
     -------
     >>> b = Sphere(center=(1,2,3), radius=2)
     """
-
-    type: Literal["Sphere"] = "Sphere"
 
     def inside(self, x, y, z) -> bool:
         """Returns True if point ``(x,y,z)`` inside volume of geometry.
@@ -691,24 +691,17 @@ class Sphere(Circular):
 class Cylinder(Circular, Planar):
     """Cylindrical geometry.
 
-    Parameters
-    ----------
-    center : Tuple[float, float, float] = (0.0, 0.0, 0.0)
-        center of cylinder in x,y,z.
-    radius : float
-        Radius of cylinder.
-    length : float
-        Length of cylinder along axis.
-    axis : int
-        Cylinder's length axis index (0, 1, 2) -> (x, y, z)
-
     Example
     -------
     >>> c = Cylinder(center=(1,2,3), radius=2, length=5, axis=2)
     """
 
-    length: pydantic.NonNegativeFloat
-    type: Literal["Cylinder"] = "Cylinder"
+    length: pydantic.NonNegativeFloat = pydantic.Field(
+        ...,
+        title="Length",
+        description="Defines thickness of cylinder along axis dimension.",
+        units=MICROMETER,
+    )
 
     def _intersections_normal(self):
         """Find shapely geometries intersecting cylindrical geometry with axis normal to slab.
@@ -798,24 +791,26 @@ class Cylinder(Circular, Planar):
 class PolySlab(Planar):
     """Polygon with constant thickness (slab) along axis direction.
 
-    Parameters
-    ----------
-    vertices : List[Tuple[float, float]] or np.ndarray
-        List of vertices defining the polygon face along dimensions parallel to slab normal axis.
-        If numpy.ndarray, must have shape (N, 2) for N vertices.
-    axis : int
-        Integer index into the polygon's slab axis. (0,1,2) -> (x,y,z)
-    slab_bounds: Tuple[float, float]
-        Minimum and maximum positions of the slab along axis.
-
     Example
     -------
-    >>> p = PolySlab(vertices=[(0,0), (1,0), (1,1)], axis=2, slab_bounds=(-1, 1))
+    >>> vertices = np.array([(0,0), (1,0), (1,1)])
+    >>> p = PolySlab(vertices=vertices, axis=2, slab_bounds=(-1, 1))
     """
 
-    slab_bounds: Tuple[float, float]
-    vertices: Union[Vertices, Array[float]]
-    type: Literal["PolySlab"] = "PolySlab"
+    slab_bounds: Tuple[float, float] = pydantic.Field(
+        ...,
+        title="Slab Bounds",
+        description="Minimum and maximum positions of the slab along axis dimension.",
+        units=MICROMETER,
+    )
+
+    vertices: Union[Vertices, ArrayLike] = pydantic.Field(
+        ...,
+        title="Vertices",
+        description="List of (d1, d2) defining the 2 dimensional positions of the polygon "
+        "face vertices along dimensions parallel to slab normal axis.",
+        units=MICROMETER,
+    )
 
     @pydantic.validator("slab_bounds", always=True)
     def set_length(cls, val, values):
@@ -875,7 +870,7 @@ class PolySlab(Planar):
             Index into the list of polygons at given ``gds_layer`` and ``gds_dtype``.
             Must be non-negative.
         gds_scale : float = 1.0
-            Length scale used in GDS file in units of micron.
+            Length scale used in GDS file in units of MICROMETER.
             For example, if gds file uses nanometers, set ``gds_scale=1e-3``.
             Must be positive.
 
@@ -1070,13 +1065,6 @@ class PolySlab(Planar):
 
     @property
     def _bounds(self):
-        """Returns bounding box min and max coordinates.
-
-        Returns
-        -------
-        Tuple[float, float, float], Tuple[float, float, float]
-            Min and max bounds packaged as ``(minx, miny, minz), (maxx, maxy, maxz)``.
-        """
 
         # get the min and max points in polygon plane
         xpoints = tuple(c[0] for c in self.vertices)
