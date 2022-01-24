@@ -18,13 +18,13 @@ Tutorials
     notebooks/VizData
     notebooks/ModeSolver
     notebooks/Modal_sources_monitors
+    notebooks/Modes_bent_angled
     notebooks/GDS_import
     notebooks/ParameterScan
     notebooks/Dispersion
     notebooks/Fitting
     notebooks/Near2Far
     notebooks/WebAPI
-    notebooks/Viz3D
 
 Case studies
 ------------
