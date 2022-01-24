@@ -20,7 +20,6 @@ from ..components.simulation import Simulation
 from ..components.data import SimulationData
 from ..components.types import Literal
 from ..log import log, WebError
-from ..convert import export_old_json, load_old_monitor_data, load_solver_results
 
 REFRESH_TIME = 0.3
 TOTAL_DOTS = 3
@@ -203,8 +202,8 @@ def monitor(task_id: TaskId) -> None:
                 status = new_status
             time.sleep(REFRESH_TIME)
 
-    # below is the "running" progressbar, needs some work on backend before it's ready.
-    # # to do: toggle console / display on or off, might want off for Job / Batch to override
+    # # below is the "running" progressbar, needs some work on backend before it's ready.
+    # # TODO: toggle console / display on or off, might want off for Job / Batch to override
     # perc_done = 0.0
     # field_decay = 1.0
     # status = ""
@@ -260,7 +259,7 @@ def download(task_id: TaskId, simulation: Simulation, path: str = "simulation_da
 
     # TODO: it should be possible to load "diverged" simulations
     task_info = get_info(task_id)
-    if task_info.status in ("error", "diverged", "deleted", "draft"):
+    if task_info.status in ("error", "deleted", "draft"):
         raise WebError(f"can't download task '{task_id}', status = '{task_info.status}'")
 
     directory, _ = os.path.split(path)
@@ -268,46 +267,6 @@ def download(task_id: TaskId, simulation: Simulation, path: str = "simulation_da
         os.makedirs(directory, exist_ok=True)
 
     _download_file(task_id, fname="monitor_data.hdf5", path=path)
-
-    # For now we need to check if the data file was created by the new or the old solver
-    # TODO: Once this is removed, we can remove simulation from argument list.
-    with h5py.File(path, "r") as data_file:
-        if "sim_json" in data_file.keys():
-            return
-
-    # Temporary workaround if file was created using the old workflow
-    # ``path`` will be overwritten in the end with the proper SimulationData export
-
-    sim_file = os.path.join(directory, "simulation.json")
-    log_file = os.path.join(directory, "tidy3d.log")
-
-    # TODO: load these server side using the new specifictaions
-    _download_file(task_id, fname="simulation.json", path=sim_file)
-
-    # TODO: do this stuff server-side
-    log.debug("getting log string")
-    _download_file(task_id, fname="tidy3d.log", path=log_file)
-    with open(log_file, "r", encoding="utf-8") as f:
-        log_string = f.read()
-
-    log.debug("loading old monitor data to data dict")
-    # TODO: we cant convert old simulation file to new, so we'll ask for original as input.
-    # simulation = Simulation.from_file(sim_file)
-    mon_data_dict = load_old_monitor_data(simulation=simulation, data_file=path)
-
-    log.debug("creating SimulationData from monitor data dict")
-    sim_data = load_solver_results(
-        simulation=simulation,
-        solver_data_dict=mon_data_dict,
-        log_string=log_string,
-    )
-
-    log.info(f"exporting SimulationData to {path}")
-    sim_data.to_file(path)
-
-    log.debug("clearing extraneous files")
-    _rm_file(sim_file)
-    _rm_file(log_file)
 
 
 def load(
@@ -458,13 +417,7 @@ def _upload_task(  # pylint:disable=too-many-locals,too-many-arguments
 ) -> TaskId:
     """upload with all kwargs exposed"""
 
-    if solver_version[:6] == "revamp":
-        json_string = simulation._json_string()  # pylint:disable=protected-access
-    else:
-        # convert to old json and get string version
-        sim_dict = export_old_json(simulation)
-        json_string = json.dumps(sim_dict, indent=4)
-
+    json_string = simulation._json_string()  # pylint:disable=protected-access
     data = {
         "status": "uploading",
         "solverVersion": solver_version,

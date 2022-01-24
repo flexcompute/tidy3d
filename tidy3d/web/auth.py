@@ -91,7 +91,7 @@ def get_credentials() -> None:
         except Exception as e:  # pylint:disable=broad-except
             raise AuthenticationError(
                 "Error: Failed to log in with new username and password."
-            ) from e
+            ) from None
 
     # ask to stay logged in
     while True:

@@ -1,5 +1,4 @@
 """Objects that define how data is recorded from simulation."""
-from __future__ import annotations
 from abc import ABC
 from typing import List, Union
 
@@ -54,7 +53,6 @@ class FreqMonitor(Monitor, ABC):
         title="Frequencies",
         description="Array or list of frequencies stored by the field monitor.",
         units=HERTZ,
-        min_items=1,
     )
 
     # @pydantic.validator("freqs", always=True)
@@ -105,7 +103,6 @@ class AbstractFieldMonitor(Monitor, ABC):
         ["Ex", "Ey", "Ez", "Hx", "Hy", "Hz"],
         title="Field Components",
         description="Collection of field components to store in the monitor.",
-        min_items=1,
     )
 
     def surfaces(self) -> List["AbstractFieldMonitor"]:
