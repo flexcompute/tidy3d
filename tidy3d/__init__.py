@@ -53,7 +53,7 @@ from . import plugins
 
 # material library dict imported as `from tidy3d import material_library`
 # get material `mat` and variant `var` as `material_library[mat][var]`
-# from .material_library import material_library
+from .material_library import material_library
 
 # logging
 from .log import log, set_logging_level, set_logging_file

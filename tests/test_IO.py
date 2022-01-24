@@ -45,7 +45,7 @@ def test_simulation_preserve_types():
                 size=(inf, inf, 0),
                 source_time=st,
                 direction="+",
-                polarization="Ex",
+                pol_angle=2.0,
             ),
             GaussianBeam(
                 size=(1, 1, 0),

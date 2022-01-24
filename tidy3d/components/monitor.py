@@ -126,7 +126,9 @@ class AbstractFieldMonitor(Monitor, ABC):
         """
 
         if any(s == 0.0 for s in self.size):
-            raise SetupError("Can't generate surfaces for the given monitor because it has zero volume.")
+            raise SetupError(
+                "Can't generate surfaces for the given monitor because it has zero volume."
+            )
 
         self_bmin, self_bmax = self.bounds
         center_x, center_y, center_z = self.center
@@ -135,28 +137,31 @@ class AbstractFieldMonitor(Monitor, ABC):
         # Set up geometry data and names for each surface:
 
         surface_centers = (
-            (self_bmin[0], center_y, center_z), # x-
-            (self_bmax[0], center_y, center_z), # x+
-            (center_x, self_bmin[1], center_z), # y-
-            (center_x, self_bmax[1], center_z), # y+
-            (center_x, center_y, self_bmin[2]), # z-
-            (center_x, center_y, self_bmax[2])) # z+
+            (self_bmin[0], center_y, center_z),  # x-
+            (self_bmax[0], center_y, center_z),  # x+
+            (center_x, self_bmin[1], center_z),  # y-
+            (center_x, self_bmax[1], center_z),  # y+
+            (center_x, center_y, self_bmin[2]),  # z-
+            (center_x, center_y, self_bmax[2]),
+        )  # z+
 
         surface_sizes = (
-            (0.0, size_y, size_z), # x-
-            (0.0, size_y, size_z), # x+
-            (size_x, 0.0, size_z), # y-
-            (size_x, 0.0, size_z), # y+
-            (size_x, size_y, 0.0), # z-
-            (size_x, size_y, 0.0)) # z+
+            (0.0, size_y, size_z),  # x-
+            (0.0, size_y, size_z),  # x+
+            (size_x, 0.0, size_z),  # y-
+            (size_x, 0.0, size_z),  # y+
+            (size_x, size_y, 0.0),  # z-
+            (size_x, size_y, 0.0),
+        )  # z+
 
         surface_names = (
-            self.name + '_x-',
-            self.name + '_x+',
-            self.name + '_y-',
-            self.name + '_y+',
-            self.name + '_z-',
-            self.name + '_z+')
+            self.name + "_x-",
+            self.name + "_x+",
+            self.name + "_y-",
+            self.name + "_y+",
+            self.name + "_z-",
+            self.name + "_z+",
+        )
 
         # Create "surface" monitors
         monitors = []
