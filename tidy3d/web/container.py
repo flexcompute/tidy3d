@@ -155,7 +155,7 @@ class Job(WebContainer):
         ----
         To load the data into :class:`.SimulationData`objets, can call :meth:`Job.load`.
         """
-        web.download(task_id=self.task_id, simulation=self.simulation, path=path)
+        web.download(task_id=self.task_id, path=path)
 
     def load(
         self, path: str = DEFAULT_DATA_PATH, normalize_index: Optional[int] = 0
@@ -180,7 +180,6 @@ class Job(WebContainer):
         """
         return web.load(
             task_id=self.task_id,
-            simulation=self.simulation,
             path=path,
             normalize_index=normalize_index,
         )

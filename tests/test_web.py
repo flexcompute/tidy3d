@@ -76,14 +76,14 @@ def test_webapi_4_monitor():
 def test_webapi_5_download():
     """download the simulation data"""
     task_id = _get_gloabl_task_id()
-    web.download(task_id, simulation=sim_original, path=PATH_SIM_DATA)
+    web.download(task_id, path=PATH_SIM_DATA)
 
 
 @clear_tmp
 def test_webapi_6_load():
     """load the results into sim_data"""
     task_id = _get_gloabl_task_id()
-    sim_data = web.load(task_id, simulation=sim_original, path=PATH_SIM_DATA)
+    sim_data = web.load(task_id, path=PATH_SIM_DATA)
     first_monitor_name = sim_original.monitors[0].name
     _ = sim_data[first_monitor_name]
 
@@ -184,7 +184,7 @@ def test_job_source_norm():
     job = web.Job(simulation=sim_original, task_name="test_job", callback_url=CALLBACK_URL)
     sim_data_norm = job.run(path=PATH_SIM_DATA, normalize_index=0)
     with pytest.raises(DataError):
-        sim_data_norm = web.load(task_id=job.task_id, simulation=sim_original, normalize_index=1)
+        sim_data_norm = web.load(task_id=job.task_id, normalize_index=1)
 
 
 """ Batches """

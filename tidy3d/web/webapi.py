@@ -68,7 +68,7 @@ def run(  # pylint:disable=too-many-arguments
     )
     start(task_id)
     monitor(task_id)
-    return load(task_id=task_id, simulation=simulation, path=path, normalize_index=normalize_index)
+    return load(task_id=task_id, path=path, normalize_index=normalize_index)
 
 
 def upload(
@@ -240,15 +240,13 @@ def monitor(task_id: TaskId) -> None:
     #             field_decay = field_decay_new
 
 
-def download(task_id: TaskId, simulation: Simulation, path: str = "simulation_data.hdf5") -> None:
+def download(task_id: TaskId, path: str = "simulation_data.hdf5") -> None:
     """Download results of task and log to file.
 
     Parameters
     ----------
     task_id : str
         Unique identifier of task on server.  Returned by :meth:`upload`.
-    simulation : :class:`.Simulation`
-        Original simulation.
     path : str = "simulation_data.hdf5"
         Download path to .hdf5 data file (including filename).
 
@@ -271,7 +269,6 @@ def download(task_id: TaskId, simulation: Simulation, path: str = "simulation_da
 
 def load(
     task_id: TaskId,
-    simulation: Simulation,
     path: str = "simulation_data.hdf5",
     replace_existing: bool = True,
     normalize_index: Optional[int] = 0,
@@ -282,8 +279,6 @@ def load(
     ----------
     task_id : str
         Unique identifier of task on server.  Returned by :meth:`upload`.
-    simulation : :class:`.Simulation`
-        Original simulation.
     path : str
         Download path to .hdf5 data file (including filename).
     replace_existing: bool = True
@@ -301,7 +296,7 @@ def load(
     """
 
     if not os.path.exists(path) or replace_existing:
-        download(task_id=task_id, simulation=simulation, path=path)
+        download(task_id=task_id, path=path)
 
     log.info(f"loading SimulationData from {path}")
     sim_data = SimulationData.from_file(path)
