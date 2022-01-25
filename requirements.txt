@@ -5,7 +5,7 @@ h5py
 rich
 nlopt
 matplotlib
-shapely
+shapely==1.7.1
 descartes
 pydantic
 PyYAML
