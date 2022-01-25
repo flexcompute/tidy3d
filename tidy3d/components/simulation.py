@@ -318,7 +318,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
                 if fmin_med > fmin_src or fmax_med < fmax_src:
                     log.warning(
                         f"A medium in the simulation:\n\n({medium})\n\nhas a frequency "
-                        "range that does not fully cover the spetrum of a source:"
+                        "range that does not fully cover the spectrum of a source:"
                         f"\n\n({source})\n\nThis can cause innacuracies in the "
                         "simulation results."
                     )
