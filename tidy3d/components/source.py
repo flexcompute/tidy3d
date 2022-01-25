@@ -79,7 +79,9 @@ class SourceTime(ABC, Tidy3dBaseModel):
         Parameters
         ----------
         times : np.ndarray
-            Array of times to plot source at in seconds.
+            Array of times (seconds) to plot source at.
+            To see source time amplitude for a specific :class:`Simulation`,
+            pass ``simulation.tmesh``.
         ax : matplotlib.axes._subplots.Axes = None
             Matplotlib axes to plot on, if not specified, one is created.
 
@@ -91,12 +93,51 @@ class SourceTime(ABC, Tidy3dBaseModel):
         times = np.array(times)
         amp_complex = self.amp_time(times)
 
-        times_ps = times / 1e-12
-        ax.plot(times_ps, amp_complex.real, color="blueviolet", label="real")
-        ax.plot(times_ps, amp_complex.imag, color="crimson", label="imag")
-        ax.plot(times_ps, np.abs(amp_complex), color="k", label="abs")
-        ax.set_xlabel("time (ps)")
+        ax.plot(times, amp_complex.real, color="blueviolet", label="real")
+        ax.plot(times, amp_complex.imag, color="crimson", label="imag")
+        ax.plot(times, np.abs(amp_complex), color="k", label="abs")
+        ax.set_xlabel("time (s)")
         ax.set_title("source amplitude")
+        ax.legend()
+        ax.set_aspect("auto")
+        return ax
+
+    @add_ax_if_none
+    def plot_spectrum(self, times: Array[float], freqs: Array[float], ax: Ax = None) -> Ax:
+        """Plot the complex-valued amplitude of the source time-dependence.
+
+        Parameters
+        ----------
+        times : np.ndarray
+            Array of evenly-spaced times (seconds) to evaluate source time-dependence at.
+            The spectrum is computed from this value and the source time frequency content.
+            To see source spectrum for a specific :class:`Simulation`,
+            pass ``simulation.tmesh``.
+        freqs: np.ndarray
+            Array of frequencies (Hertz) to evaluate the source time at.
+        ax : matplotlib.axes._subplots.Axes = None
+            Matplotlib axes to plot on, if not specified, one is created.
+
+        Returns
+        -------
+        matplotlib.axes._subplots.Axes
+            The supplied or created matplotlib axes.
+        """
+        times = np.array(times)
+
+        dts = np.diff(times)
+        if not np.allclose(dts, dts[0]*np.ones_like(dts)):
+            raise SetupError("Supplied times not evenly spaced.")
+
+        dt = np.mean(dts)
+
+        spectrum = self.spectrum(times=times, dt=dt, freqs=freqs)
+
+        ax.plot(freqs, spectrum.real, color="blueviolet", label="real")
+        ax.plot(freqs, spectrum.imag, color="crimson", label="imag")
+        ax.plot(freqs, np.abs(spectrum), color="k", label="abs")
+        ax.set_xlabel("frequency (Hz)")
+        ax.set_title("source spectrum")
         ax.legend()
         ax.set_aspect("auto")
         return ax
