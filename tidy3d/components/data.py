@@ -893,12 +893,12 @@ class SimulationData(Tidy3dBaseModel):
         # select the cross section data
         axis, pos = self.simulation.parse_xyz_kwargs(x=x, y=y, z=z)
         axis_label = "xyz"[axis]
-        sel_kwarg = {axis_label: pos}
+        interp_kwarg = {axis_label: pos}
         try:
-            field_data = field_data.sel(**sel_kwarg, method="nearest")
+            field_data = field_data.interp(**interp_kwarg)
 
         except Exception as e:
-            raise DataError(f"Could not select data at {axis_label}={pos}.") from e
+            raise DataError(f"Could not interpolate data at {axis_label}={pos}.") from e
 
         # select the field value
         if val not in ("real", "imag", "abs"):
