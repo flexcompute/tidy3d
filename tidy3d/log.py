@@ -101,7 +101,7 @@ def set_logging_level(level: str = DEFAULT_LEVEL.lower()) -> None:
 
 def set_logging_file(fname: str, filemode="w", level=DEFAULT_LEVEL.lower()):
     """Set a file to write log to, independently from the stdout and stderr
-    output chosen using :meth:`logging_level`.
+    output chosen using :meth:`set_logging_level`.
 
     Parameters
     ----------
@@ -112,7 +112,7 @@ def set_logging_file(fname: str, filemode="w", level=DEFAULT_LEVEL.lower()):
     level : str = 'info'
         One of 'debug', 'info', 'warning', 'error', 'critical'. This is
         set for the file independently of the console output level set by
-        :meth:`logging_level`.
+        :meth:`set_logging_level`.
 
     Example
     -------
