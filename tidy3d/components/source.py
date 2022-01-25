@@ -103,7 +103,7 @@ class SourceTime(ABC, Tidy3dBaseModel):
         return ax
 
     @add_ax_if_none
-    def plot_spectrum(self, times: Array[float], freqs: Array[float], ax: Ax = None) -> Ax:
+    def plot_spectrum(self, times: Array[float], num_freqs: int = 101, ax: Ax = None) -> Ax:
         """Plot the complex-valued amplitude of the source time-dependence.
 
         Parameters
@@ -113,8 +113,8 @@ class SourceTime(ABC, Tidy3dBaseModel):
             The spectrum is computed from this value and the source time frequency content.
             To see source spectrum for a specific :class:`Simulation`,
             pass ``simulation.tmesh``.
-        freqs: np.ndarray
-            Array of frequencies (Hertz) to evaluate the source time at.
+        num_freqs : int = 101
+            Number of frequencies to plot within the SourceTime.frequency_range.
         ax : matplotlib.axes._subplots.Axes = None
             Matplotlib axes to plot on, if not specified, one is created.
 
@@ -130,6 +130,9 @@ class SourceTime(ABC, Tidy3dBaseModel):
             raise SetupError("Supplied times not evenly spaced.")
 
         dt = np.mean(dts)
+
+        fmin, fmax = self.frequency_range
+        freqs = np.linspace(fmin, fmax, num_freqs)
 
         spectrum = self.spectrum(times=times, dt=dt, freqs=freqs)
 
@@ -177,11 +180,12 @@ class Pulse(SourceTime, ABC):
         Tuple[float, float]
             Minimum and maximum frequencies of the
             :class:`GaussianPulse` or :class:`ContinuousWave` power
-            within 5 standard deviations.
+            within 6 standard deviations.
         """
-        width_std = 5
-        freq_min = max(0, self.freq0 - width_std * self.fwidth)
-        freq_max = self.freq0 + width_std * self.fwidth
+        width_std = 6
+        freq_width_range = width_std * self.fwidth
+        freq_min = max(0, self.freq0 - freq_width_range)
+        freq_max = self.freq0 + freq_width_range
         return (freq_min, freq_max)
 
 
