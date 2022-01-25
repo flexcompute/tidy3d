@@ -14,7 +14,7 @@ from .base import Tidy3dBaseModel
 from .types import Literal, Bound, Size, Coordinate, Axis, Coordinate2D, ArrayLike
 from .types import Vertices, Ax, Shapely
 from .viz import add_ax_if_none
-from ..log import Tidy3dKeyError, SetupError
+from ..log import Tidy3dKeyError, SetupError, ValidationError
 from ..constants import MICROMETER
 
 # add this around extents of plots
@@ -811,6 +811,14 @@ class PolySlab(Planar):
         "face vertices along dimensions parallel to slab normal axis.",
         units=MICROMETER,
     )
+
+    @pydantic.validator("axis", always=True)
+    def supports_z_axis_only(cls, val):
+        """PolySlab can only be oriented in z right now."""
+        if val != 2:
+            raise ValidationError("PolySlab can only support axis=2 in this version of Tidy3D."\
+                "Support for slabs oriented in other axes will be available in future releases.")
+        return val
 
     @pydantic.validator("slab_bounds", always=True)
     def set_length(cls, val, values):
