@@ -14,7 +14,7 @@ from .base import Tidy3dBaseModel
 from .simulation import Simulation
 from .mode import ModeSpec
 from .viz import add_ax_if_none
-from ..log import DataError
+from ..log import log, DataError
 
 # TODO: add warning if fields didnt fully decay
 
@@ -749,11 +749,22 @@ class SimulationData(Tidy3dBaseModel):
     normalized: bool = False
 
     @property
-    def log(self):
-        """Prints the server-side log."""
+    def log(self) -> str:
+        """Returns the server-side log as a string."""
         if not self.log_string:
             raise DataError("No log stored in SimulationData.")
         return self.log_string
+
+    @property
+    def final_decay_value(self) -> float:
+        """Returns value of the field decay at the final time step."""
+        log_str = self.log
+        lines = log_str.split('\n')
+        decay_lines = [l for l in lines if 'field decay' in l]
+        final_decay_line = decay_lines[-1]
+        final_decay = float(final_decay_line.split('field decay: ')[-1])
+        return final_decay
+
 
     def __getitem__(self, monitor_name: str) -> Union[Tidy3dDataArray, xr.Dataset]:
         """Get the :class:`MonitorData` xarray representation by name (``sim_data[monitor_name]``).
