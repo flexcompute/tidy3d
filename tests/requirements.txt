@@ -1,3 +1,4 @@
 pytest
 pylint
 black
+nbconvert

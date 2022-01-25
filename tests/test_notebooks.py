@@ -11,17 +11,17 @@ from nbconvert.preprocessors import ExecutePreprocessor
 ep = ExecutePreprocessor(timeout=1000, kernel_name="python3")
 
 # get all notebook files
-notebook_directory = "notebooks/"
+NOTEBOOK_DIR = "docs/notebooks/"
 notebook_filenames = [
-    notebook_directory + f
-    for f in os.listdir(notebook_directory)
+    NOTEBOOK_DIR + f
+    for f in os.listdir(NOTEBOOK_DIR)
     if ".ipynb" in f and f != ".ipynb_checkpoints"
 ]
 
 # if you want to run only some notebooks, put here, if empty, run all
-run_only = ("StartHere", "VizData", "VizSimulation", "Fitting", "ModeSolver", "Near2Far")
+run_only = ("StartHere",)# "VizData", "VizSimulation", "Fitting", "ModeSolver", "Near2Far")
 if len(run_only):
-    notebook_filenames = [notebook_directory + base + ".ipynb" for base in run_only]
+    notebook_filenames = [NOTEBOOK_DIR + base + ".ipynb" for base in run_only]
 
 
 @pytest.mark.parametrize("fname", notebook_filenames)
@@ -39,7 +39,7 @@ def _run_notebook(notebook_fname):
         # try running the notebook
         try:
             # run from the `notebooks/` directory
-            out = ep.preprocess(nb, {"metadata": {"path": "./notebooks"}})
+            out = ep.preprocess(nb, {"metadata": {"path": f"{NOTEBOOK_DIR}"}})
 
         # if there is an error, print message and fail test
         except CellExecutionError as e:

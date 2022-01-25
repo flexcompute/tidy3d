@@ -1,10 +1,12 @@
 {
+    "type": "Job",
     "simulation": {
         "center": [
             0.0,
             0.0,
             0.0
         ],
+        "type": "Simulation",
         "size": [
             4.0,
             4.0,
@@ -16,11 +18,11 @@
             0.05
         ],
         "medium": {
-            "name": "mediums[1]",
+            "name": null,
             "frequency_range": null,
+            "type": "Medium",
             "permittivity": 1.0,
-            "conductivity": 0.0,
-            "type": "Medium"
+            "conductivity": 0.0
         },
         "run_time": 1e-13,
         "structures": [
@@ -31,6 +33,7 @@
                         0.0,
                         0.0
                     ],
+                    "type": "Box",
                     "size": [
                         1.5,
                         1.5,
@@ -38,13 +41,14 @@
                     ]
                 },
                 "medium": {
-                    "name": "mediums[0]",
+                    "name": null,
                     "frequency_range": null,
+                    "type": "Medium",
                     "permittivity": 4.0,
-                    "conductivity": 0.0,
-                    "type": "Medium"
+                    "conductivity": 0.0
                 },
-                "name": "structures[0]"
+                "name": null,
+                "type": "Structure"
             }
         ],
         "sources": [
@@ -54,6 +58,7 @@
                     0.0,
                     0.0
                 ],
+                "type": "VolumeSource",
                 "size": [
                     0.0,
                     0.4,
@@ -62,13 +67,13 @@
                 "source_time": {
                     "amplitude": 1.0,
                     "phase": 0.0,
+                    "type": "GaussianPulse",
                     "freq0": 300000000000000.0,
                     "fwidth": 10000000000000.0,
                     "offset": 5.0
                 },
-                "name": "sources[0]",
-                "polarization": "Ex",
-                "type": "VolumeSource"
+                "name": null,
+                "polarization": "Ex"
             }
         ],
         "monitors": [
@@ -78,9 +83,10 @@
                     0.0,
                     0.0
                 ],
+                "type": "FieldMonitor",
                 "size": [
-                    10000000000.0,
-                    10000000000.0,
+                    1000000000000.0,
+                    1000000000000.0,
                     0.0
                 ],
                 "name": "field",
@@ -91,9 +97,7 @@
                     "Ex",
                     "Ey",
                     "Ez"
-                ],
-                "type": "FieldMonitor",
-                "_data_type": "ScalarFieldData"
+                ]
             }
         ],
         "pml_layers": [
@@ -103,13 +107,15 @@
                     "sigma_order": 3,
                     "sigma_min": 0.0,
                     "sigma_max": 1.5,
+                    "type": "PMLParams",
                     "kappa_order": 3,
                     "kappa_min": 1.0,
                     "kappa_max": 3.0,
                     "alpha_order": 1,
                     "alpha_min": 0.0,
                     "alpha_max": 0.0
-                }
+                },
+                "type": "PML"
             },
             {
                 "num_layers": 12,
@@ -117,13 +123,15 @@
                     "sigma_order": 3,
                     "sigma_min": 0.0,
                     "sigma_max": 1.5,
+                    "type": "PMLParams",
                     "kappa_order": 3,
                     "kappa_min": 1.0,
                     "kappa_max": 3.0,
                     "alpha_order": 1,
                     "alpha_min": 0.0,
                     "alpha_max": 0.0
-                }
+                },
+                "type": "PML"
             },
             {
                 "num_layers": 12,
@@ -131,13 +139,15 @@
                     "sigma_order": 3,
                     "sigma_min": 0.0,
                     "sigma_max": 1.5,
+                    "type": "PMLParams",
                     "kappa_order": 3,
                     "kappa_min": 1.0,
                     "kappa_max": 3.0,
                     "alpha_order": 1,
                     "alpha_min": 0.0,
                     "alpha_max": 0.0
-                }
+                },
+                "type": "PML"
             }
         ],
         "symmetry": [
@@ -147,9 +157,11 @@
         ],
         "shutoff": 1e-05,
         "subpixel": true,
-        "courant": 0.9
+        "courant": 0.9,
+        "version": "0.2.0"
     },
     "task_name": "job",
     "folder_name": "default",
-    "task_id": "4902fb08-2c88-48a4-8b0d-2cb0bff1fe80"
+    "task_id": "8ee0c16a-c616-4b85-8008-a44c98173aa9",
+    "callback_url": null
 }
