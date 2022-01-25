@@ -599,7 +599,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         medium_shapes = self._filter_structures_plane(self.structures, x=x, y=y, z=z)
         for (medium, shape) in medium_shapes:
             eps = medium.eps_model(freq).real
-            params_updater = StructEpsParams(eps=eps, eps_max=eps_max)
+            params_updater = StructEpsParams(eps=eps, eps_min=eps_min, eps_max=eps_max)
             kwargs_struct = params_updater.update_params(**kwargs)
             if medium == self.medium:
                 kwargs_struct["edgecolor"] = "white"
