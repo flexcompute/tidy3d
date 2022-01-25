@@ -14,6 +14,7 @@ from .geometry import Box
 from .mode import ModeSpec
 from .viz import add_ax_if_none, SourceParams
 from ..constants import RADIAN, HERTZ, MICROMETER
+from ..log import SetupError
 
 # TODO: change directional source to something signifying its intent is to create a specific field.
 
@@ -280,6 +281,20 @@ class ModeSource(FieldSource):
         "If larger than ``mode_spec.num_modes``, "
         "``num_modes`` in the solver will be set to ``mode_index + 1``.",
     )
+
+    @pydantic.validator("mode_index", always=True)
+    def mode_index_in_bounds(cls, val, values):
+        """Ensures number of modes in mode spec can support mode index."""
+        mode_spec = values.get("mode_spec")
+        if mode_spec is None:
+            raise SetupError("ModeSpec not found.")
+        num_modes = mode_spec.num_modes
+        if num_modes <= val:
+            raise SetupError(
+                f"ModeSpec contains {num_modes} modes, but mode index is {val}. "
+                "Either increase number of modes in the specifications or decrease mode index."
+            )
+        return val
 
 
 class AngledFieldSource(FieldSource):

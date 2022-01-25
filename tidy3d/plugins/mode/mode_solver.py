@@ -227,46 +227,56 @@ class ModeSolver:
 
         return np.stack((eps_xx, eps_yy, eps_zz), axis=0)
 
-    # def make_source(self, mode_spec: ModeSpec, fwidth: float, direction: Direction) -> ModeSource:
-    #     """Creates ``ModeSource`` from a Mode + additional specifications.
+    def to_source(
+        self, mode_spec: ModeSpec, fwidth: float, direction: Direction, mode_index: int = 0
+    ) -> ModeSource:
+        """Creates ``ModeSource`` from a Mode + additional specifications.
 
-    #     Parameters
-    #     ----------
-    #     mode : Mode
-    #         ``Mode`` object containing specifications of mode.
-    #     fwidth : float
-    #         Standard deviation of ``GaussianPulse`` of source (Hz).
-    #     direction : Direction
-    #         Whether source will inject in ``"+"`` or ``"-"`` direction relative to plane normal.
+        Parameters
+        ----------
+        mode_spec : ModeSpec
+            :class:`ModeSpec` object containing specifications of mode.
+        fwidth : float
+            Standard deviation of ``GaussianPulse`` of source (Hz).
+        direction : Direction
+            Whether source will inject in ``"+"`` or ``"-"`` direction relative to plane normal.
+        mode_index : int = 0
+            Index into the list of modes returned by mode solver to use in source.
 
-    #     Returns
-    #     -------
-    #     ModeSource
-    #         Modal source containing specification in ``mode``.
-    #     """
-    #     center = self.plane.center
-    #     size = self.plane.size
-    #     source_time = GaussianPulse(freq0=self.freq, fwidth=fwidth)
-    #     return ModeSource(
-    #         center=center, size=size, source_time=source_time, mode=mode, direction=direction
-    #     )
+        Returns
+        -------
+        ModeSource
+            Modal source containing specification in ``mode``.
+        """
 
-    # def make_monitor(self, mode: Mode, freqs: List[float], name: str) -> ModeMonitor:
-    #     """Creates ``ModeMonitor`` from a Mode + additional specifications.
+        center = self.plane.center
+        size = self.plane.size
+        source_time = GaussianPulse(freq0=self.freq, fwidth=fwidth)
+        return ModeSource(
+            center=center,
+            size=size,
+            source_time=source_time,
+            mode_spec=mode_spec,
+            mode_index=mode_index,
+            direction=direction,
+        )
 
-    #     Parameters
-    #     ----------
-    #     mode : Mode
-    #         ``Mode`` object containing specifications of mode.
-    #     freqs : List[float]
-    #         Frequencies to include in Monitor (Hz).
-    #     name : str
-    #         Required name of monitor.
-    #     Returns
-    #     -------
-    #     ModeMonitor
-    #         Monitor that measures ``Mode`` on ``plane`` at ``freqs``.
-    #     """
-    #     center = self.plane.center
-    #     size = self.plane.size
-    #     return ModeMonitor(center=center, size=size, freqs=freqs, modes=[mode], name=name)
+    def to_monitor(self, mode_spec: ModeSpec, freqs: List[float], name: str) -> ModeMonitor:
+        """Creates ``ModeMonitor`` from a Mode + additional specifications.
+
+        Parameters
+        ----------
+        mode_spec : ModeSpec
+            :class:`ModeSpec` object containing specifications of mode.
+        freqs : List[float]
+            Frequencies to include in Monitor (Hz).
+        name : str
+            Required name of monitor.
+        Returns
+        -------
+        ModeMonitor
+            Monitor that measures modes specified by ``mode_spec`` on ``plane`` at ``freqs``.
+        """
+        center = self.plane.center
+        size = self.plane.size
+        return ModeMonitor(center=center, size=size, freqs=freqs, mode_spec=mode_spec, name=name)
