@@ -759,12 +759,11 @@ class SimulationData(Tidy3dBaseModel):
     def final_decay_value(self) -> float:
         """Returns value of the field decay at the final time step."""
         log_str = self.log
-        lines = log_str.split('\n')
-        decay_lines = [l for l in lines if 'field decay' in l]
+        lines = log_str.split("\n")
+        decay_lines = [l for l in lines if "field decay" in l]
         final_decay_line = decay_lines[-1]
-        final_decay = float(final_decay_line.split('field decay: ')[-1])
+        final_decay = float(final_decay_line.split("field decay: ")[-1])
         return final_decay
-
 
     def __getitem__(self, monitor_name: str) -> Union[Tidy3dDataArray, xr.Dataset]:
         """Get the :class:`MonitorData` xarray representation by name (``sim_data[monitor_name]``).

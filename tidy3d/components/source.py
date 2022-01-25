@@ -126,7 +126,7 @@ class SourceTime(ABC, Tidy3dBaseModel):
         times = np.array(times)
 
         dts = np.diff(times)
-        if not np.allclose(dts, dts[0]*np.ones_like(dts)):
+        if not np.allclose(dts, dts[0] * np.ones_like(dts)):
             raise SetupError("Supplied times not evenly spaced.")
 
         dt = np.mean(dts)

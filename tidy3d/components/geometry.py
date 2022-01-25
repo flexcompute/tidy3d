@@ -816,8 +816,10 @@ class PolySlab(Planar):
     def supports_z_axis_only(cls, val):
         """PolySlab can only be oriented in z right now."""
         if val != 2:
-            raise ValidationError("PolySlab can only support axis=2 in this version of Tidy3D."\
-                "Support for slabs oriented in other axes will be available in future releases.")
+            raise ValidationError(
+                "PolySlab can only support axis=2 in this version of Tidy3D."
+                "Support for slabs oriented in other axes will be available in future releases."
+            )
         return val
 
     @pydantic.validator("slab_bounds", always=True)

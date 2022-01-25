@@ -304,8 +304,9 @@ def load(
     final_decay_value = sim_data.final_decay_value
     shutoff_value = sim_data.simulation.shutoff
     if (shutoff_value != 0) and (final_decay_value > shutoff_value):
-        log.warning(f"Simulation final field decay value of {final_decay_value} "\
-            f"is greater than the simulation shutoff threshold of {shutoff_value}. "\
+        log.warning(
+            f"Simulation final field decay value of {final_decay_value} "
+            f"is greater than the simulation shutoff threshold of {shutoff_value}. "
             "Consider simulation again with large run_time duration for more accurate results."
         )
 
