@@ -170,11 +170,11 @@ def test_sim_grid_size(caplog, grid_size, log_level):
     medium = Medium(permittivity=2, frequency_range=(2e14, 3e14))
     box = Structure(geometry=Box(size=(0.1, 0.1, 0.1)), medium=medium)
     src = VolumeSource(
-        source_time=GaussianPulse(freq0=2.5e14, fwidth=1e13),
+        source_time=GaussianPulse(freq0=2.5e14, fwidth=1e12),
         size=(0, 0, 0),
         polarization="Ex",
     )
-    _ = Simulation(size=(1, 1, 1), grid_size=(0.1, 0.1, grid_size), structures=[box], sources=[src])
+    _ = Simulation(size=(1, 1, 1), grid_size=(0.01, 0.01, grid_size), structures=[box], sources=[src])
 
     assert_log_level(caplog, log_level)
 
