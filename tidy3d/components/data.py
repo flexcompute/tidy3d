@@ -315,7 +315,8 @@ class AbstractFieldData(CollectionData, ABC):
 
     @property
     def intensity(self):
-        """Get eletric intensity if all electric fields present syntax."""
+        """Get eletric intensity if all electric fields present."""
+
         Ex = self.Ex
         Ey = self.Ey
         Ez = self.Ez
