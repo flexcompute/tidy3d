@@ -3,8 +3,8 @@ from distutils.util import convert_path
 
 
 PACKAGE_NAME = 'tidy3d'
-PIP_NAME = 'tidy3dbeta'
-REPO_NAME = 'tidy3d-beta'
+PIP_NAME = 'tidy3d-beta'
+REPO_NAME = 'tidy3d'
 
 version = {}
 version_path = convert_path(f'{PACKAGE_NAME}/version.py')
