@@ -13,7 +13,7 @@ from .types import Numpy, Direction, Array, numpy_encoding, Literal, Ax
 from .base import Tidy3dBaseModel
 from .simulation import Simulation
 from .mode import ModeSpec
-from .viz import add_ax_if_none
+from .viz import add_ax_if_none, equal_aspect
 from ..log import log, DataError
 
 # TODO: add warning if fields didnt fully decay
@@ -828,6 +828,7 @@ class SimulationData(Tidy3dBaseModel):
         field_dataset = field_monitor_data.colocate(x=centers.x, y=centers.y, z=centers.z)
         return field_dataset
 
+    @equal_aspect
     @add_ax_if_none
     def plot_field(  # pylint:disable=too-many-arguments, too-many-locals
         self,
@@ -940,7 +941,6 @@ class SimulationData(Tidy3dBaseModel):
         y_coord_values = field_data.coords[y_coord_label]
         ax.set_xlim(min(x_coord_values), max(x_coord_values))
         ax.set_ylim(min(y_coord_values), max(y_coord_values))
-        ax.set_aspect("equal")
 
         return ax
 

@@ -12,7 +12,7 @@ from .types import inf  # pylint:disable=unused-import
 from .validators import assert_plane, validate_name_str
 from .geometry import Box
 from .mode import ModeSpec
-from .viz import add_ax_if_none, SourceParams
+from .viz import add_ax_if_none, SourceParams, equal_aspect
 from ..constants import RADIAN, HERTZ, MICROMETER
 from ..log import SetupError
 
@@ -252,6 +252,7 @@ class Source(Box, ABC):
 
     _name_validator = validate_name_str()
 
+    @equal_aspect
     @add_ax_if_none
     def plot(
         self, x: float = None, y: float = None, z: float = None, ax: Ax = None, **kwargs

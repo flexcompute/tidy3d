@@ -19,7 +19,8 @@ from .structure import Structure
 from .source import SourceType, PlaneWave
 from .monitor import MonitorType
 from .pml import PMLTypes, PML
-from .viz import StructMediumParams, StructEpsParams, PMLParams, SymParams, add_ax_if_none
+from .viz import StructMediumParams, StructEpsParams, PMLParams, SymParams
+from .viz import add_ax_if_none, equal_aspect
 
 from ..version import __version__
 from ..constants import C_0, MICROMETER, SECOND
@@ -438,6 +439,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
 
     """ Plotting """
 
+    @equal_aspect
     @add_ax_if_none
     def plot(  # pylint:disable=too-many-arguments
         self,
@@ -456,6 +458,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         ax = self._set_plot_bounds(ax=ax, x=x, y=y, z=z)
         return ax
 
+    @equal_aspect
     @add_ax_if_none
     def plot_eps(  # pylint: disable=too-many-arguments
         self,
@@ -501,6 +504,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         ax = self._set_plot_bounds(ax=ax, x=x, y=y, z=z)
         return ax
 
+    @equal_aspect
     @add_ax_if_none
     def plot_structures(
         self, x: float = None, y: float = None, z: float = None, ax: Ax = None, **kwargs
@@ -550,6 +554,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         mappable = mpl.cm.ScalarMappable(norm=norm, cmap="gist_yarg")
         plt.colorbar(mappable, cax=cax, label=r"$\epsilon_r$")
 
+    @equal_aspect
     @add_ax_if_none
     def plot_structures_eps(  # pylint: disable=too-many-arguments,too-many-locals
         self,
@@ -610,6 +615,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         ax = self._set_plot_bounds(ax=ax, x=x, y=y, z=z)
         return ax
 
+    @equal_aspect
     @add_ax_if_none
     def plot_sources(
         self, x: float = None, y: float = None, z: float = None, ax: Ax = None, **kwargs
@@ -644,6 +650,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         ax = self._set_plot_bounds(ax=ax, x=x, y=y, z=z)
         return ax
 
+    @equal_aspect
     @add_ax_if_none
     def plot_monitors(
         self, x: float = None, y: float = None, z: float = None, ax: Ax = None, **kwargs
@@ -678,6 +685,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         ax = self._set_plot_bounds(ax=ax, x=x, y=y, z=z)
         return ax
 
+    @equal_aspect
     @add_ax_if_none
     def plot_symmetries(
         self, x: float = None, y: float = None, z: float = None, ax: Ax = None, **kwargs
@@ -755,6 +763,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
             pml_thicknesses.append((thick_l, thick_r))
         return pml_thicknesses
 
+    @equal_aspect
     @add_ax_if_none
     def plot_pml(
         self, x: float = None, y: float = None, z: float = None, ax: Ax = None, **kwargs

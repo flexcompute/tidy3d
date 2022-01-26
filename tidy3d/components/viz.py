@@ -34,6 +34,23 @@ def add_ax_if_none(plot):
     return _plot
 
 
+def equal_aspect(plot):
+    """Decorates a plotting function returning a matplotlib axes.
+    Ensures the aspect ratio of the returned axes is set to equal.
+    Useful for 2D plots, like sim.plot() or sim_data.plot_fields()
+    """
+
+    @wraps(plot)
+    def _plot(*args, **kwargs) -> Ax:
+        """New plot function with equal aspect ratio axes returned."""
+        ax = plot(*args, **kwargs)
+        ax.set_aspect('equal')
+        return ax
+
+    return _plot
+
+
+
 """ Utilities for default plotting parameters."""
 
 
