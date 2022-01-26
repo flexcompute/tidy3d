@@ -1,20 +1,43 @@
-#!/usr/bin/env python
+import setuptools
+from distutils.util import convert_path
 
-from distutils.core import setup
 
-# with open('./requirements.txt') as f:
-#     required = f.read().splitlines()
+PACKAGE_NAME = 'tidy3d'
+PIP_NAME = 'tidy3dbeta'
+REPO_NAME = 'tidy3d-beta'
 
-# with open('tests/requirements.txt') as f:
-#     required += f.read().splitlines()
+version = {}
+version_path = convert_path(f'{PACKAGE_NAME}/version.py')
+with open(version_path) as version_file:
+    exec(version_file.read(), version)
 
-setup(
-    name="Tidy3D",
-    version="0.1.1",
-    description="Front end for Tidy3D.",
-    author="Flexcompute inc.",
+print(version['__version__'])
+
+with open("README.md", "r", encoding="utf-8") as fh:
+    long_description = fh.read()
+
+with open('requirements.txt') as f:
+    required = f.read().splitlines()
+
+setuptools.setup(
+    name=PIP_NAME,
+    version=version['__version__'],
+    author="Tyler Hughes",
     author_email="tyler@flexcompute.com",
-    url="flexcompute.com",
-    # install_requires=required,
-    packages=["tidy3d"],
+    description="A fast FDTD solver",
+    long_description=long_description,
+    long_description_content_type="text/markdown",
+    url=f"https://github.com/flexcompute/{REPO_NAME}",
+    project_urls={
+        "Bug Tracker": f"https://github.com/flexcompute/{REPO_NAME}/issues",
+    },
+    classifiers=[
+        "Programming Language :: Python :: 3",
+        "License :: OSI Approved :: MIT License",
+        "Operating System :: OS Independent",
+    ],
+    # package_dir={"": ""},
+    packages=[PACKAGE_NAME],
+    python_requires=">=3.6",
+    install_requires=required
 )
