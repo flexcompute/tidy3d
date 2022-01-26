@@ -1,6 +1,6 @@
 # Tidy3D (Beta)
 
-<img src="img/logo.svg">
+<img src="img/Tidy3D-logo.svg">
 
 
 ![tests](https://github.com/flexcompute/Tidy3D-client-revamp/actions/workflows//run_tests.yml/badge.svg)
