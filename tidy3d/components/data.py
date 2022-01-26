@@ -314,19 +314,6 @@ class AbstractFieldData(CollectionData, ABC):
         return None
 
     @property
-    def intensity(self):
-        """Get eletric intensity if all electric fields present."""
-
-        Ex = self.Ex
-        Ey = self.Ey
-        Ez = self.Ez
-
-        if any(field is None for field in (Ex, Ey, Ez)):
-            raise DataError("Can't construct intensity without all E field components present.")
-
-        return abs(Ex)**2 + abs(Ey)**2 + abs(Ez)**2
-
-    @property
     def Hx(self):
         """Get Hx component of field using '.Hx' syntax."""
         scalar_data = self.data_dict.get("Hx")
