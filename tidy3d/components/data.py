@@ -840,6 +840,7 @@ class SimulationData(Tidy3dBaseModel):
         freq: float = None,
         time: float = None,
         eps_alpha: float = 0.2,
+        robust : bool = True,
         ax: Ax = None,
         **kwargs,
     ) -> Ax:
@@ -868,6 +869,9 @@ class SimulationData(Tidy3dBaseModel):
         eps_alpha : float = 0.2
             Opacity of the structure permittivity.
             Must be between 0 and 1 (inclusive).
+        robust : bool = True
+            If specified, uses the 2nd and 98th percentiles of the data to compute the color limits.
+            This helps in visualizing the field patterns especially in the presence of a source.
         ax : matplotlib.axes._subplots.Axes = None
             matplotlib axes to plot on, if not specified, one is created.
         **patch_kwargs
@@ -924,7 +928,7 @@ class SimulationData(Tidy3dBaseModel):
         xy_coord_labels = list("xyz")
         xy_coord_labels.pop(axis)
         x_coord_label, y_coord_label = xy_coord_labels  # pylint:disable=unbalanced-tuple-unpacking
-        field_data.plot(ax=ax, x=x_coord_label, y=y_coord_label)
+        field_data.plot(ax=ax, x=x_coord_label, y=y_coord_label, robust=robust)
 
         # plot the simulation epsilon
         ax = self.simulation.plot_structures_eps(
