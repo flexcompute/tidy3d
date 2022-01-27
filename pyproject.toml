@@ -1,4 +1,4 @@
 [project]
-name = "Tidy3DDocumenttion"
+name = "tidy3d-docs"
 authors = [{name = "Flexcompute Inc.", email = "support@flexcompute.com"}]
 dynamic = ["version", "description"]
