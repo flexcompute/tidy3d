@@ -7,7 +7,6 @@ from typing import List, Dict, Optional
 from datetime import datetime
 import logging
 
-import h5py
 import requests
 from rich.console import Console
 from rich.progress import Progress

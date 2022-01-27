@@ -36,7 +36,7 @@ class Structure(Tidy3dBaseModel):
     _name_validator = validate_name_str()
 
     @add_ax_if_none
-    def plot(
+    def plot(  # pylint:disable=missing-function-docstring
         self, x: float = None, y: float = None, z: float = None, ax: Ax = None, **patch_kwargs
     ) -> Ax:
 

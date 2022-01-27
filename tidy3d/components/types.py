@@ -43,7 +43,8 @@ class NegInf(pydantic.BaseModel):
 
 
 # built in instance of Inf ()
-inf = LARGE_NUMBER  # comment out to use Inf().
+inf = LARGE_NUMBER  # pylint:disable=invalid-name
+# TODO: use inf as a reserved quantity for plotting, etc.
 # inf = Inf()
 
 
@@ -51,32 +52,39 @@ inf = LARGE_NUMBER  # comment out to use Inf().
 
 
 class ComplexNumber(pydantic.BaseModel):
+    """Complex number with a well defined schema."""
+
     real: float
     imag: float
 
     @property
-    def z(self):
+    def as_complex(self):
+        """return complex representation of ComplexNumber."""
         return self.real + 1j * self.imag
 
 
-class tidycomplex(complex):
+class tidycomplex(complex):  # pylint: disable=invalid-name
+    """complex type that we can use in our models."""
+
     @classmethod
     def __get_validators__(cls):
+        """Defines which validator function to use for NumpyArray."""
         yield cls.validate
 
     @classmethod
-    def validate(cls, value, field):
+    def validate(cls, value):
+        """What gets called when you construct a tidycomplex."""
 
         if isinstance(value, ComplexNumber):
-            return value.z
-        elif isinstance(value, dict):
+            return value.as_complex
+        if isinstance(value, dict):
             c = ComplexNumber(**value)
-            return c.z
-        else:
-            return cls(value)
+            return c.as_complex
+        return cls(value)
 
     @classmethod
     def __modify_schema__(cls, field_schema):
+        """Sets the schema of NumpyArray."""
         field_schema.update(ComplexNumber.schema())
 
 
@@ -154,40 +162,48 @@ class Array(np.ndarray, metaclass=ArrayMeta):
     """type of numpy array with annotated type (Array[float], Array[complex])"""
 
 
-class NumpyArray(pydantic.BaseModel):
-    data_list: List
-
-    @property
-    def arr(self):
-        return np.array(self.data_list)
-
-
-class tidynumpy(np.ndarray):
-    @classmethod
-    def __get_validators__(cls):
-        yield cls.validate
-
-    @classmethod
-    def validate(cls, value, field):
-        if isinstance(value, NumpyArray):
-            return value.arr
-        elif isinstance(value, dict):
-            n = NumpyArray(**value)
-            return n.arr
-        elif isinstance(value, list):
-            return value
-        else:
-            return np.array(value)
-
-    @classmethod
-    def __modify_schema__(cls, field_schema):
-        field_schema.update(NumpyArray.schema())
-
-
 """ note:
     ^ this is the best way to declare numpy types if you know dtype.
     for example: ``field_amps: Array[float] = np.random.random(5)``.
 """
+
+
+class NumpyArray(pydantic.BaseModel):
+    """Wrapper around numpy arrays that has a well defined json schema."""
+
+    data_list: List
+
+    @property
+    def arr(self):
+        """Contructs a numpy array representation of the NumpyArray."""
+        return np.array(self.data_list)
+
+
+class tidynumpy(np.ndarray):  # pylint: disable=invalid-name
+    """Numpy array type that we can use in place of np.ndarray."""
+
+    @classmethod
+    def __get_validators__(cls):
+        """Defines which validator function to use for NumpyArray."""
+        yield cls.validate
+
+    @classmethod
+    def validate(cls, value):
+        """What gets called when you construct a tidynumpy."""
+        if isinstance(value, NumpyArray):
+            return value.arr
+        if isinstance(value, dict):
+            numpy_array = NumpyArray(**value)
+            return numpy_array.arr
+        if isinstance(value, list):
+            return value
+        return np.array(value)
+
+    @classmethod
+    def __modify_schema__(cls, field_schema):
+        """Sets the schema of NumpyArray."""
+        field_schema.update(NumpyArray.schema())
+
 
 ArrayLike = Union[tidynumpy, NumpyArray, List]
 

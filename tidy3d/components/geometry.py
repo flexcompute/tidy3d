@@ -11,7 +11,7 @@ from shapely.geometry import Point, Polygon, box
 from descartes import PolygonPatch
 
 from .base import Tidy3dBaseModel
-from .types import Literal, Bound, Size, Coordinate, Axis, Coordinate2D, ArrayLike
+from .types import Bound, Size, Coordinate, Axis, Coordinate2D, ArrayLike
 from .types import Vertices, Ax, Shapely
 from .viz import add_ax_if_none
 from ..log import Tidy3dKeyError, SetupError, ValidationError
