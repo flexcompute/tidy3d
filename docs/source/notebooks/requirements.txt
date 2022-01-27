@@ -1,4 +1,4 @@
-tidy3d
+numpy
 tmm
 nlopt
 tqdm
