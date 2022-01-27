@@ -6,12 +6,14 @@ import codecs
 import sys
 
 here = os.path.abspath(os.path.dirname(__file__))
-# sys.path.append(os.path.abspath("../tidy3d/"))
-# sys.path.append(os.path.abspath("../tidy3d/tidy3d/components"))
-sys.path.insert(0, "../notebooks")
-sys.path.insert(0, "../tidy3d/tidy3d/components")
-sys.path.insert(0, "../tidy3d/tidy3d")
-sys.path.insert(0, "../tidy3d")
+sys.path.insert(0, os.path.abspath("../notebooks"))
+sys.path.insert(0, os.path.abspath("../../tidy3d"))
+sys.path.insert(0, os.path.abspath("../../tidy3d/tidy3d"))
+sys.path.insert(0, os.path.abspath("../../tidy3d/tidy3d/components"))
+# sys.path.insert(0, "../notebooks")
+# sys.path.insert(0, "../tidy3d/tidy3d/components")
+# sys.path.insert(0, "../tidy3d/tidy3d")
+# sys.path.insert(0, "../tidy3d")
 
 print(sys.path)
 
