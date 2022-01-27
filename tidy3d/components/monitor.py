@@ -3,14 +3,13 @@ from abc import ABC
 from typing import List, Union
 
 import pydantic
-import numpy as np
 
-from .types import Literal, Ax, Direction, EMField, ArrayLike, FieldType
+from .types import Literal, Ax, Direction, EMField, ArrayLike
 from .geometry import Box
-from .validators import assert_plane, validate_name_str
+from .validators import assert_plane
 from .mode import ModeSpec
 from .viz import add_ax_if_none, MonitorParams
-from ..log import SetupError, ValidationError
+from ..log import SetupError
 from ..constants import HERTZ, SECOND
 
 
@@ -99,20 +98,20 @@ class TimeMonitor(Monitor, ABC):
 class AbstractFieldMonitor(Monitor, ABC):
     """:class:`Monitor` that records electromagnetic field data as a function of x,y,z."""
 
-    fields: List = pydantic.Field(
+    fields: List[EMField] = pydantic.Field(
         ["Ex", "Ey", "Ez", "Hx", "Hy", "Hz"],
         title="Field Components",
         description="Collection of field components to store in the monitor.",
     )
 
-    def surfaces(self) -> List["AbstractFieldMonitor"]:
+    def surfaces(self) -> List["AbstractFieldMonitor"]: #pylint: disable=too-many-locals
         """Returns a list of 6 monitors corresponding to each surface of the field monitor.
-        The output monitors are stored in the order [x-, x+, y-, y+, z-, z+], where x, y, and z denote
-        which axis is perpendicular to that surface, while "-" and "+" denote the direction of the
-        normal vector of that surface. Each output monitor will have the same frequency/time data as the calling
-        object. Its name will be that of the calling object appended with the above symbols.
-        E.g., if the calling object's name is "field", the x+ monitor's name will be "field_x+".
-        Does not work when the calling monitor has zero volume.
+        The output monitors are stored in the order [x-, x+, y-, y+, z-, z+], where x, y, and z
+        denote which axis is perpendicular to that surface, while "-" and "+" denote the direction
+        of the normal vector of that surface. Each output monitor will have the same frequency/time
+        data as the calling object. Its name will be that of the calling object appended with the
+        above symbols. E.g., if the calling object's name is "field", the x+ monitor's name will be
+        "field_x+". Does not work when the calling monitor has zero volume.
 
         Returns
         -------
@@ -142,8 +141,8 @@ class AbstractFieldMonitor(Monitor, ABC):
             (center_x, self_bmin[1], center_z),  # y-
             (center_x, self_bmax[1], center_z),  # y+
             (center_x, center_y, self_bmin[2]),  # z-
-            (center_x, center_y, self_bmax[2]),
-        )  # z+
+            (center_x, center_y, self_bmax[2]),  # z+
+        )
 
         surface_sizes = (
             (0.0, size_y, size_z),  # x-
@@ -151,8 +150,8 @@ class AbstractFieldMonitor(Monitor, ABC):
             (size_x, 0.0, size_z),  # y-
             (size_x, 0.0, size_z),  # y+
             (size_x, size_y, 0.0),  # z-
-            (size_x, size_y, 0.0),
-        )  # z+
+            (size_x, size_y, 0.0),  # z+
+        )
 
         surface_names = (
             self.name + "_x-",

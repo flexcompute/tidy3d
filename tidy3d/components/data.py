@@ -840,7 +840,7 @@ class SimulationData(Tidy3dBaseModel):
         freq: float = None,
         time: float = None,
         eps_alpha: float = 0.2,
-        robust : bool = True,
+        robust: bool = True,
         ax: Ax = None,
         **kwargs,
     ) -> Ax:

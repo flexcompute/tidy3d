@@ -88,7 +88,7 @@ def get_credentials() -> None:
             set_authentication_config(email, password)
             break
 
-        except Exception as e:  # pylint:disable=broad-except
+        except Exception:  # pylint:disable=broad-except
             raise AuthenticationError(
                 "Error: Failed to log in with new username and password."
             ) from None

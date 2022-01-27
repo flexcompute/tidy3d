@@ -2,26 +2,26 @@ import setuptools
 from distutils.util import convert_path
 
 
-PACKAGE_NAME = 'tidy3d'
-PIP_NAME = 'tidy3d-beta'
-REPO_NAME = 'tidy3d'
+PACKAGE_NAME = "tidy3d"
+PIP_NAME = "tidy3d-beta"
+REPO_NAME = "tidy3d"
 
 version = {}
-version_path = convert_path(f'{PACKAGE_NAME}/version.py')
+version_path = convert_path(f"{PACKAGE_NAME}/version.py")
 with open(version_path) as version_file:
     exec(version_file.read(), version)
 
-print(version['__version__'])
+print(version["__version__"])
 
 with open("README.md", "r", encoding="utf-8") as fh:
     long_description = fh.read()
 
-with open('requirements.txt') as f:
+with open("requirements.txt") as f:
     required = f.read().splitlines()
 
 setuptools.setup(
     name=PIP_NAME,
-    version=version['__version__'],
+    version=version["__version__"],
     author="Tyler Hughes",
     author_email="tyler@flexcompute.com",
     description="A fast FDTD solver",
@@ -39,5 +39,5 @@ setuptools.setup(
     # package_dir={"": ""},
     packages=[PACKAGE_NAME],
     python_requires=">=3.6",
-    install_requires=required
+    install_requires=required,
 )
