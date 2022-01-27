@@ -153,3 +153,10 @@ html_css_files = ["css/custom.css"]
 
 # def setup(app):
     # app.add_css_file("css/custom.css")
+    
+
+# -- Latex fixes? ------------------------------------------
+
+latex_elements = {
+    'preamble': r'''\renewcommand{\hyperref}[2][]{#2}'''
+}
