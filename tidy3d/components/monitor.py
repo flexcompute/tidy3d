@@ -105,7 +105,7 @@ class AbstractFieldMonitor(Monitor, ABC):
         description="Collection of field components to store in the monitor.",
     )
 
-    def surfaces(self) -> List["AbstractFieldMonitor"]: #pylint: disable=too-many-locals
+    def surfaces(self) -> List["AbstractFieldMonitor"]:  # pylint: disable=too-many-locals
         """Returns a list of 6 monitors corresponding to each surface of the field monitor.
         The output monitors are stored in the order [x-, x+, y-, y+, z-, z+], where x, y, and z
         denote which axis is perpendicular to that surface, while "-" and "+" denote the direction
