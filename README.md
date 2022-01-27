@@ -1,6 +1,6 @@
 # Tidy3D (Beta release)
 
-[![Notebooks](https://mybinder.org/badge_logo.svg)](https://mybinder.org/v2/gh/flexcompute-readthedocs/Tidy3DDocumentation/HEAD?filepath=docs/source/notebooks/)
+[![Notebooks](https://mybinder.org/badge_logo.svg)](https://mybinder.org/v2/gh/flexcompute-readthedocs/tidy3d-docs/HEAD?filepath=docs/source/notebooks/)
 ![tests](https://github.com/flexcompute/Tidy3D-client-revamp/actions/workflows//run_tests.yml/badge.svg)
 [![Documentation Status](https://readthedocs.com/projects/flexcompute-tidy3ddocumentation/badge/?version=latest)](https://flexcompute-tidy3ddocumentation.readthedocs-hosted.com/en/latest/?badge=latest)
 
