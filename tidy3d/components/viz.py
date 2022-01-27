@@ -7,6 +7,7 @@ from functools import wraps
 import matplotlib.pylab as plt
 from matplotlib import cm
 from pydantic import BaseModel
+import numpy as np
 
 from .types import Ax
 from ..constants import pec_val
@@ -34,6 +35,22 @@ def add_ax_if_none(plot):
     return _plot
 
 
+def equal_aspect(plot):
+    """Decorates a plotting function returning a matplotlib axes.
+    Ensures the aspect ratio of the returned axes is set to equal.
+    Useful for 2D plots, like sim.plot() or sim_data.plot_fields()
+    """
+
+    @wraps(plot)
+    def _plot(*args, **kwargs) -> Ax:
+        """New plot function with equal aspect ratio axes returned."""
+        ax = plot(*args, **kwargs)
+        ax.set_aspect("equal")
+        return ax
+
+    return _plot
+
+
 """ Utilities for default plotting parameters."""
 
 
@@ -47,6 +64,7 @@ class PatchParams(BaseModel):
     facecolor: Any = None
     fill: bool = True
     hatch: str = None
+    lw: int = 1
 
 
 class PatchParamSwitcher(BaseModel):
@@ -81,7 +99,7 @@ class SourceParams(PatchParamSwitcher):
 
     def get_plot_params(self) -> PatchParams:
         """Returns :class:`PatchParams` based on user-supplied args."""
-        return PatchParams(alpha=0.4, facecolor="blueviolet", edgecolor="blueviolet")
+        return PatchParams(alpha=0.3, facecolor="blueviolet", edgecolor="blueviolet", lw=3)
 
 
 class MonitorParams(PatchParamSwitcher):
@@ -89,7 +107,7 @@ class MonitorParams(PatchParamSwitcher):
 
     def get_plot_params(self) -> PatchParams:
         """Returns :class:`PatchParams` based on user-supplied args."""
-        return PatchParams(alpha=0.4, facecolor="crimson", edgecolor="crimson")
+        return PatchParams(alpha=0.3, facecolor="crimson", edgecolor="crimson", lw=3)
 
 
 class StructMediumParams(PatchParamSwitcher):
@@ -102,7 +120,14 @@ class StructMediumParams(PatchParamSwitcher):
         """Returns :class:`PatchParams` based on user-supplied args."""
         mat_index = self.medium_map[self.medium]
         mat_cmap = cm.Set2  # pylint: disable=no-name-in-module, no-member
-        facecolor = mat_cmap(mat_index % len(mat_cmap.colors))
+        m0 = cm.tab20(range(20))  # pylint: disable=no-name-in-module, no-member
+        m1 = cm.tab20b(range(20))  # pylint: disable=no-name-in-module, no-member
+        m2 = cm.Set2(range(8))  # pylint: disable=no-name-in-module, no-member
+        mc = np.vstack((m0, m1, m2))
+        pick_c = [20, 6, 4, 18, 45, 0, 40, 44, 16, 10, 14, 15]
+        mat_cmap = mc[pick_c, :]
+
+        facecolor = mat_cmap[mat_index % len(pick_c), :]
         if self.medium.name == "PEC":
             return PatchParams(facecolor="black", edgecolor="black", lw=0)
         return PatchParams(facecolor=facecolor, edgecolor=facecolor, lw=0)

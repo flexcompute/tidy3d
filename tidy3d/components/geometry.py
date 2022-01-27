@@ -13,7 +13,7 @@ from descartes import PolygonPatch
 from .base import Tidy3dBaseModel
 from .types import Bound, Size, Coordinate, Axis, Coordinate2D, ArrayLike
 from .types import Vertices, Ax, Shapely
-from .viz import add_ax_if_none
+from .viz import add_ax_if_none, equal_aspect
 from ..log import Tidy3dKeyError, SetupError, ValidationError
 from ..constants import MICROMETER
 
@@ -181,6 +181,7 @@ class Geometry(Tidy3dBaseModel, ABC):
         zmax, (xmax, ymax) = self.pop_axis(b_max, axis=axis)
         return (zmin, zmax), ((xmin, ymin), (xmax, ymax))
 
+    @equal_aspect
     @add_ax_if_none
     def plot(
         self, x: float = None, y: float = None, z: float = None, ax: Ax = None, **patch_kwargs
