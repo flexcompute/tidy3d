@@ -62,7 +62,7 @@ data = web.run(sim, task_name='quickstart', path='data/data.hdf5')
 print(data.log)
 
 
-data.plot_field('field', 'Ey', freq=freq0, z=0)
+ax = data['field'].Ey.real.plot(x='x', y='y')
 
 
 

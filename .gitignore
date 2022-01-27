@@ -1,5 +1,5 @@
 tests/tmp/*
-notebooks/tmp/*
+docs/source/notebooks/tmp/*
 *.hdf5
 
 # Byte-compiled / optimized / DLL files
@@ -75,6 +75,8 @@ instance/
 # Sphinx documentation
 docs/_build/
 docs/_autosummary/
+docs/source/_build/
+docs/source/_autosummary/
 
 # PyBuilder
 target/
