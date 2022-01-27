@@ -19,6 +19,7 @@ python:
     - method: pip
       path: .
     - requirements: docs/requirements.txt
+    - requirements: tidy3d/requirements.txt
 
 formats:
   - pdf
