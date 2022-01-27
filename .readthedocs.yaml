@@ -1,5 +1,10 @@
 version: 2
 
+submodules:
+  include:
+    - tidy3d
+  recursive: true
+
 build:
   os: "ubuntu-20.04"
   tools:
