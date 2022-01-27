@@ -157,6 +157,7 @@ html_css_files = ["css/custom.css"]
 
 # -- Latex fixes? ------------------------------------------
 
-latex_elements = {
-    'preamble': r'''\renewcommand{\hyperref}[2][]{#2}'''
-}
+# latex_elements = {
+#     'preamble': r'''\renewcommand{\hyperref}[2][]{#2}'''
+# }
+latex_engine = 'xelatex'
