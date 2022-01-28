@@ -35,7 +35,10 @@ def main():
 
     results = Run([path], do_exit=False)
 
-    final_score = results.linter.stats.global_note
+    try:
+        final_score = results.linter.stats.global_note
+    except AttributeError:
+        final_score = results.linter.stats["global_note"]
 
     if final_score < threshold:
 

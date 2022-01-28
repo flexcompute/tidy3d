@@ -4,7 +4,7 @@ from typing import List, Union
 
 import pydantic
 
-from .types import Literal, Ax, Direction, EMField, ArrayLike
+from .types import Literal, Ax, EMField, ArrayLike
 from .geometry import Box
 from .validators import assert_plane
 from .mode import ModeSpec
@@ -264,12 +264,6 @@ class ModeMonitor(PlanarMonitor, FreqMonitor):
     ...     mode_spec=mode_spec,
     ...     name='mode_monitor')
     """
-
-    direction: List[Direction] = pydantic.Field(
-        ["+", "-"],
-        title="Direction",
-        description="Specifies which direction(s) of mode propagation for the monitor to measure.",
-    )
 
     mode_spec: ModeSpec = pydantic.Field(
         ...,

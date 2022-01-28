@@ -97,6 +97,7 @@ Coordinate2D = Tuple[float, float]
 Bound = Tuple[Coordinate, Coordinate]
 GridSize = Union[pydantic.PositiveFloat, List[pydantic.PositiveFloat]]
 Axis = Literal[0, 1, 2]
+Axis2D = Literal[0, 1]
 Vertices = List[Coordinate2D]
 Shapely = BaseGeometry
 

@@ -14,9 +14,7 @@ from ...components import ModeSpec
 from ...components import ModeMonitor
 from ...components import ModeSource, GaussianPulse
 from ...components.types import Direction
-from ...components.data import ScalarFieldData, FieldData, Tidy3dData
-from ...log import SetupError
-from ...constants import C_0
+from ...components.data import ScalarFieldData, FieldData
 
 from .solver import compute_modes
 
@@ -56,9 +54,9 @@ class ModeInfo(Tidy3dBaseModel):
     """stores information about a (solved) mode.
     Attributes
     ----------
-    field_data: xr.Dataset
+    field_data: FieldData
         Contains information about the fields of the modal profile.
-    mode: Mode
+    mode_spec: ModeSpec
         Specifications of the mode.
     n_eff: float
         Real part of the effective refractive index of mode.
@@ -100,13 +98,13 @@ class ModeSolver:
 
         Parameters
         ----------
-        mode : Mode
-            ``Mode`` object containing specifications of mode.
+        mode_spec : ModeSpec
+            ``ModeSpec`` object containing specifications of the mode solver.
 
         Returns
         -------
-        ModeInfo
-            Object containing mode profile and effective index data.
+        List[ModeInfo]
+            A list of ``ModeInfo`` objects for each mode.
         """
 
         normal_axis = self.plane.size.index(0.0)
@@ -124,6 +122,10 @@ class ModeSolver:
             (eps_xx, eps_yy, eps_zz), axis=normal_axis
         )
 
+        # get the in-plane grid coordinates on which eps and the mode fields live
+        plane_grid = self.simulation.discretize(self.plane)
+        _, plane_coords = self.plane.pop_axis(plane_grid.boundaries.to_list, axis=normal_axis)
+
         # note: from this point on, in waveguide coordinates (propagating in z)
 
         # construct eps_cross section to feed to mode solver
@@ -135,16 +137,11 @@ class ModeSolver:
         # if mode_spec.symmetries[1] != 0:
         #     eps_cross = np.stack(tuple(e[:, Ny // 2] for e in eps_cross))
 
-        # note, internally discretizing, need to make consistent.
         mode_fields, n_eff_complex = compute_modes(
             eps_cross=eps_cross,
+            coords=plane_coords,
             freq=self.freq,
-            grid_size=self.simulation.grid_size,
-            pml_layers=mode_spec.num_pml,
-            num_modes=mode_spec.num_modes,
-            target_neff=mode_spec.target_neff,
-            symmetries=mode_spec.symmetries,
-            coords=None,
+            mode_spec=mode_spec,
         )
 
         def rotate_field_coords(e_field, h_field):
