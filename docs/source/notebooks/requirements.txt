@@ -1,5 +1,0 @@
-numpy
-tmm
-nlopt
-tqdm
-gdspy
