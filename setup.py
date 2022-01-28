@@ -8,5 +8,12 @@ with open("docs/source/notebooks/requirements.txt") as f:
     
 setup(
     packages=find_packages(),
-    install_requires=required,
+    install_requires=[
+        numpy,
+        matplotlib,
+        tmm,
+        nlopt
+        tqdm,
+        gdspy,
+    ],
 )
