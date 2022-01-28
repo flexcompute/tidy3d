@@ -1,12 +1,7 @@
-Release history
-===============
+Changelog
+=========
 
-0.1.1
------
-
- - Did some other stuff
-
-0.1.0
------
-
- - Did some stuff
+.. changelog::
+    :changelog-url: https://flexcompute-tidy3ddocumentation.readthedocs-hosted.com/en/latest/#changelog
+    :github: https://github.com/flexcompute/tidy3d/releases/
+    :pypi: https://pypi.org/tidy3d/tidy3d/

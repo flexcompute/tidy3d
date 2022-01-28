@@ -55,6 +55,7 @@ extensions = [
     "IPython.sphinxext.ipython_directive",
     "IPython.sphinxext.ipython_console_highlighting",
     "sphinx_copybutton",
+    "sphinx_github_changelog",
 ]
 
 source_suffix = [".rst", ".md"]
@@ -150,6 +151,8 @@ html_theme_options = {
 # html_favicon = "_static/logo.svg"
 
 html_css_files = ["css/custom.css"]
+
+sphinx_github_changelog_token = "..."
 
 # def setup(app):
     # app.add_css_file("css/custom.css")
