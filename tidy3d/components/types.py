@@ -150,6 +150,10 @@ class TypedArray(np.ndarray):
         # need to fix, doesnt work for simulationdata_export and load?
         return np.array(val, dtype=cls.inner_type)  # pylint: disable=no-member
 
+    @classmethod
+    def __modify_schema__(cls, field_schema):
+        """Sets the schema of NumpyArray."""
+        field_schema.update(NumpyArray.schema())
 
 class ArrayMeta(type):
     """metclass for Array, enables Array[type] -> TypedArray"""

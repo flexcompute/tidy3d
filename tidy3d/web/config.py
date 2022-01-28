@@ -3,7 +3,7 @@ from typing import Any
 
 from dataclasses import dataclass
 
-SOLVER_VERSION = "revamp-22.1.2"
+SOLVER_VERSION = "revamp-22.1.3"
 
 
 @dataclass
@@ -37,4 +37,4 @@ ConfigProd = WebConfig(
 
 
 # default one to import
-DEFAULT_CONFIG = ConfigDev
+DEFAULT_CONFIG = ConfigProd
