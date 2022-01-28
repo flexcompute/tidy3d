@@ -16,173 +16,64 @@ Simulation
 
    Simulation
 
-Grid
-====
-
-3D Coordinates
---------------
-
-.. autosummary::
-   :toctree: _autosummary/
-
-   Coords
-
-Field Grid
-----------
-
-.. autosummary::
-   :toctree: _autosummary/
-
-   FieldGrid
-
-
-Yee Lattice Grid
-----------------
-
-.. autosummary::
-   :toctree: _autosummary/
-
-   YeeGrid
-
-Simulation Grid
----------------
-
-.. autosummary::
-   :toctree: _autosummary/
-
-   Grid
-
 
 Absorbing Boundaries
 ====================
 
-Perfectly Matched Layer (PML)
------------------------------
+
+Types of Absorbers
+------------------
 
 .. autosummary::
    :toctree: _autosummary/
 
    PML
-
-Stable PML
-----------
-
-.. autosummary::
-   :toctree: _autosummary/
-
    StablePML
-
-Adiabatic Absorber
-------------------
-
-.. autosummary::
-   :toctree: _autosummary/
-
    Absorber
 
+Absorber Parameters
+-------------------
+
+.. autosummary::
+   :toctree: _autosummary/
+
+   AbsorberParams
+   PMLParams
 
 Geometry
 ========
-
-Box
----
 
 .. autosummary::
    :toctree: _autosummary/
 
    Box
-
-Sphere
-------
-
-.. autosummary::
-   :toctree: _autosummary/
-
    Sphere
-
-Cylinder
---------
-
-.. autosummary::
-   :toctree: _autosummary/
-
    Cylinder
-
-PolySlab
---------
-
-.. autosummary::
-   :toctree: _autosummary/
-
    PolySlab
-
 
 Mediums
 =======
 
-Medium
-------
+Non-Dispersive Medium
+---------------------
 
 .. autosummary::
    :toctree: _autosummary/
 
    Medium
+   AnisotropicMedium
+   PECMedium
 
-Anisotropic Medium
+Dispersive Mediums
 ------------------
 
 .. autosummary::
    :toctree: _autosummary/
 
-   AnisotropicMedium
-
-Perfect Electrical Conductor (PEC)
-----------------------------------
-
-.. autosummary::
-   :toctree: _autosummary/
-
-   PECMedium
-
-Dispersive Pole Residue Medium
-------------------------------
-
-.. autosummary::
-   :toctree: _autosummary/
-
    PoleResidue
-
-Dispersive Lorentz Medium
--------------------------
-
-.. autosummary::
-   :toctree: _autosummary/
-
    Lorentz
-
-Dispersive Sellmeier Medium
----------------------------
-
-.. autosummary::
-   :toctree: _autosummary/
-
    Sellmeier
-
-
-Dispersive Drude Medium
------------------------
-
-.. autosummary::
-   :toctree: _autosummary/
-
    Drude
-
-Dispersive Debye Medium
------------------------
-
-.. autosummary::
-   :toctree: _autosummary/
-
    Debye
 
 
@@ -196,9 +87,6 @@ Material Library
 Structures
 ==========
 
-Structure
----------
-
 .. autosummary::
    :toctree: _autosummary/
 
@@ -209,177 +97,96 @@ Sources
 =======
 
 
-Volume Source
--------------
-
-.. autosummary::
-   :toctree: _autosummary/
-
-   VolumeSource
-
-
-Plane Wave
-----------
-
-.. autosummary::
-   :toctree: _autosummary/
-
-   PlaneWave
-
-
-Gaussian Beam
--------------
-
-.. autosummary::
-   :toctree: _autosummary/
-
-   GaussianBeam
-
-
-ModeSource 
-----------
-
-.. autosummary::
-   :toctree: _autosummary/
-
-   ModeSource
-
-
-Source Time Dependence
-======================
-
-Gaussian Pulse
---------------
-
-.. autosummary::
-   :toctree: _autosummary/
-
-   GaussianPulse
-
-Continuous Wave (CW)
---------------------
-
-.. autosummary::
-   :toctree: _autosummary/
-
-   ContinuousWave
-
-
-Monitors
-========
-
-FieldMonitor
-------------
-
-.. autosummary::
-   :toctree: _autosummary/
-
-   FieldMonitor
-
-FieldTimeMonitor
+Types of Sources
 ----------------
 
 .. autosummary::
    :toctree: _autosummary/
 
+   VolumeSource
+   PlaneWave
+   GaussianBeam
+   ModeSource
+
+
+Source Time Dependence
+----------------------
+
+.. autosummary::
+   :toctree: _autosummary/
+
+   GaussianPulse
+   .. ContinuousWave
+
+
+Monitors
+========
+
+.. autosummary::
+   :toctree: _autosummary/
+
+   FieldMonitor
    FieldTimeMonitor
-
-FluxMonitor
------------
-
-.. autosummary::
-   :toctree: _autosummary/
-
    FluxMonitor
-
-FluxTimeMonitor
----------------
-
-.. autosummary::
-   :toctree: _autosummary/
-
    FluxTimeMonitor
-
-ModeMonitor
------------
-
-.. autosummary::
-   :toctree: _autosummary/
-
    ModeMonitor
 
 
-Modes
-=====
-
-Mode Specification
-------------------
+Mode Specifications
+===================
 
 .. autosummary::
    :toctree: _autosummary/
 
    ModeSpec
 
+Discretization
+==============
+
+.. autosummary::
+   :toctree: _autosummary/
+
+   Coords
+   FieldGrid
+   YeeGrid
+   Grid
+
 
 Output Data
 ===========
 
-Simulation Data
----------------
+All Data for a Simulation
+-------------------------
+
 .. autosummary::
    :toctree: _autosummary/
 
    SimulationData
 
-Vector Field Data
------------------
+Collections of Data from single monitor
+---------------------------------------
 
 .. autosummary::
    :toctree: _autosummary/
 
    FieldData
+   ModeData
 
-Scalar Field Data
------------------
+Individual Dataset
+------------------
 
 .. autosummary::
    :toctree: _autosummary/
 
    ScalarFieldData
-
-Scalar Field Data (Time-domain)
--------------------------------
-
-.. autosummary::
-   :toctree: _autosummary/
-
    ScalarFieldTimeData
-
-Flux Data
----------
-
-.. autosummary::
-   :toctree: _autosummary/
-
    FluxData
-
-Flux Data (Time-domain)
------------------------
-
-.. autosummary::
-   :toctree: _autosummary/
-
    FluxTimeData
+   ModeAmpsData
+   ModeIndexData
 
-Mode Amplitude Data
--------------------
-
-.. autosummary::
-   :toctree: _autosummary/
-   ModeData
-
-Log
-===
+Logging
+=======
 
 .. autosummary::
    :toctree: _autosummary/
@@ -392,8 +199,8 @@ Log
 Submitting Simulations
 ======================
 
-Web API
--------
+Through python API
+------------------
 
 .. autosummary::
    :toctree: _autosummary/
@@ -407,40 +214,17 @@ Web API
    web.load
    web.delete
 
-Job Interface
--------------
+Convenience for Single and Batch
+--------------------------------
 
 .. autosummary::
    :toctree: _autosummary/
 
    web.Job
-   .. web.Job.run
-   .. web.Job.upload
-   .. web.Job.get_info
-   .. web.Job.start
-   .. web.Job.monitor
-   .. web.Job.download
-   .. web.Job.load
-   .. web.Job.delete   
-
-Batch Processing
-----------------
-
-.. autosummary::
-   :toctree: _autosummary/
-
    web.Batch
-   .. web.Batch.run
-   .. web.Batch.upload
-   .. web.Batch.get_info
-   .. web.Batch.start
-   .. web.Batch.monitor
-   .. web.Batch.download
-   .. web.Batch.load
-   .. web.Batch.delete
 
-Info Containers
----------------
+Information Containers
+----------------------
 
 .. autosummary::
    :toctree: _autosummary/
@@ -453,97 +237,177 @@ Info Containers
 Plugins
 =======
 
-Dispersive Model Fitting Tool
------------------------------
+.. Dispersive Model Fitting Tool
+.. -----------------------------
 
 .. autosummary::
    :toctree: _autosummary/
 
    plugins.DispersionFitter
-   plugins.DispersionFitter.from_file
-   plugins.DispersionFitter.fit
-   plugins.DispersionFitter.plot
-
-Mode Solver
------------
-
-.. autosummary::
-   :toctree: _autosummary/
-
    plugins.ModeSolver
-   plugins.ModeSolver.solve
-   plugins.mode.mode_solver.ModeInfo
+   plugins.Near2Far
+   .. plugins.DispersionFitter.from_file
+   .. plugins.DispersionFitter.fit
+   .. plugins.DispersionFitter.plot
 
-Near Field to Far Field Transformation
---------------------------------------
+.. Mode Solver
+.. -----------
+
+.. .. autosummary::
+..    :toctree: _autosummary/
+
+..    plugins.ModeSolver
+..    .. plugins.ModeSolver.solve
+..    .. plugins.mode.mode_solver.ModeInfo
+
+.. Near Field to Far Field Transformation
+.. --------------------------------------
+
+.. .. autosummary::
+..    :toctree: _autosummary/
+
+..    plugins.Near2Far
+..    plugins.Near2Far.fields_cartesian
+..    plugins.Near2Far.fields_spherical
+..    plugins.Near2Far.power_cartesian
+..    plugins.Near2Far.power_spherical
+..    plugins.Near2Far.radar_cross_section
+
+Constants
+=========
+
+Physical Constants
+------------------
 
 .. autosummary::
    :toctree: _autosummary/
 
-   plugins.Near2Far
-   plugins.Near2Far.fields_cartesian
-   plugins.Near2Far.fields_spherical
-   plugins.Near2Far.power_cartesian
-   plugins.Near2Far.power_spherical
-   plugins.Near2Far.radar_cross_section
+   tidy3d.C_0
+   tidy3d.HBAR
+   tidy3d.Q_e
+   tidy3d.ETA_0
+   tidy3d.EPSILON_0
+   tidy3d.MU_0
+
+
+Tidy3D Special Constants
+------------------------
+
+.. autosummary::
+   :toctree: _autosummary/
+
+   tidy3d.inf
+   tidy3d.PEC
+
+Default Absorber Parameters
+---------------------------
+
+.. autosummary::
+   :toctree: _autosummary/
+
+   tidy3d.DefaultPMLParameters
+   tidy3d.DefaultStablePMLParameters
+   tidy3d.DefaultAbsorberParameters
 
 Abstract Models
 ===============
 
-.. currentmodule:: tidy3d.components.base
+These are classes that are used to organize the tidy3d components, but aren't to be used directly in the code.  Documented here mainly for reference.
 
-
-Tidy3D Base Model
------------------
-
-.. autopydantic_model:: Tidy3dBaseModel
-   :inherited-members: Tidy3dBaseModel
-
-
-.. currentmodule:: tidy3d.components.pml
-
-Absorber Specification
-----------------------
-
-.. autopydantic_model:: AbsorberSpec
-   :inherited-members: Tidy3dBaseModel
-
-.. currentmodule:: tidy3d.components.medium
-
-
-Abstract Medium
----------------
-
-.. autopydantic_model:: AbstractMedium
-   :inherited-members: Tidy3dBaseModel
-
-.. currentmodule:: tidy3d.components.source
-
-
-Source Time
------------
-
-.. autopydantic_model:: SourceTime
-   :inherited-members: Tidy3dBaseModel
-
-.. currentmodule:: tidy3d.components.monitor
-
-Monitor
--------
-
-.. autopydantic_model:: Monitor
-   :inherited-members: Tidy3dBaseModel
-
-.. currentmodule:: tidy3d
-
-Types
------
 
 .. autosummary::
    :toctree: _autosummary/
 
-   components.types.Size
-   components.types.Coordinate
-   components.types.Inf
-   components.types.NegInf
+   tidy3d.components.base.Tidy3dBaseModel
+   tidy3d.components.pml.AbsorberSpec
+   tidy3d.components.medium.AbstractMedium
+   tidy3d.components.medium.DispersiveMedium
+   tidy3d.components.geometry.Geometry
+   tidy3d.components.geometry.Planar
+   tidy3d.components.geometry.Circular
+   tidy3d.components.source.SourceTime
+   tidy3d.components.source.Source
+   tidy3d.components.source.FieldSource
+   tidy3d.components.source.AngledFieldSource
+   tidy3d.components.monitor.Monitor
+   tidy3d.components.data.Tidy3dData
+   tidy3d.components.data.CollectionData
+   tidy3d.components.data.AbstractFieldData
+   tidy3d.components.data.MonitorData
+   tidy3d.components.data.FreqData
+   tidy3d.components.data.TimeData
+   tidy3d.components.data.PlanarData
+   tidy3d.components.data.AbstractFluxData
+   tidy3d.components.data.AbstractScalarFieldData
+
+
+   .. tidy3d.components.base.SourceTime
+   .. tidy3d.components.base.SourceTime
+   .. tidy3d.components.base.SourceTime
+   .. tidy3d.components.base.SourceTime
+   .. tidy3d.components.base.SourceTime
+   .. tidy3d.components.base.SourceTime
+   .. tidy3d.components.base.SourceTime
+   .. tidy3d.components.base.SourceTime
+
+
+
+
+.. Tidy3D Base Model
+.. -----------------
+
+.. .. autosummary::
+..    :toctree: _autosummary/
+
+..    plugins.DispersionFitter
+..    plugins.ModeSolver
+..    plugins.Near2Far
+
+
+.. .. currentmodule:: tidy3d.components.pml
+
+.. Absorber Specification
+.. ----------------------
+
+.. .. autopydantic_model:: AbsorberSpec
+..    :inherited-members: Tidy3dBaseModel
+
+.. .. currentmodule:: tidy3d.components.medium
+
+
+.. Mediums
+.. -------
+
+.. .. autopydantic_model:: AbstractMedium
+..    :inherited-members: Tidy3dBaseModel
+
+.. .. currentmodule:: tidy3d.components.source
+
+
+.. Source Time
+.. -----------
+
+.. .. autopydantic_model:: SourceTime
+..    :inherited-members: Tidy3dBaseModel
+
+.. .. currentmodule:: tidy3d.components.monitor
+
+.. Monitor
+.. -------
+
+.. .. autopydantic_model:: Monitor
+..    :inherited-members: Tidy3dBaseModel
+
+.. .. currentmodule:: tidy3d
+
+.. Types
+.. -----
+
+.. .. autosummary::
+..    :toctree: _autosummary/
+
+..    components.types.Size
+..    components.types.Coordinate
+..    components.types.Inf
+..    components.types.NegInf
 

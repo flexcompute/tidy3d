@@ -8,7 +8,9 @@
 
 First time you want to use the docs, install all packages and make the docs building script executable.
 
+
 ```bash
+git submodule --init tidy3d
 pip install -r docs/requirements.txt
 pip install -r tests/requirements.txt
 chmod +x docs/build_docs.sh

@@ -2,15 +2,25 @@
 Material Library
 ****************
 
-To import a material "mat" with variant "var" as a tidy3d Medium:
+The material library is a dictionary containing various dispersive models from real world materials.
 
->>> td.material_library['mat']['var']
+>>> from tidy3d import material_library
 
-For example
+The first key of the dictionary is the material name, the second key is the "variant" name, for example which reference the data came from.
 
->>> silver = td.material_library['Ag']['Rakic1998']
+To import a material "mat" with variant "var" as a tidy3d medium:
+
+>>> medium = material_library['mat']['var']
+
+For example, for silver as measured by A. D. Rakic et al. (1998), one can load the medium as:
+
+>>> silver = material_library['Ag']['Rakic1998']
 
 In the materials below, the material name is in parentheses in the header and the variant names are in the table.
+
+Note: it is often very useful to see the list of variants for a given medium, which can be done as:
+
+>>> print(material_library['Ag'].keys())
 
 
 Silver ("Ag") 
@@ -24,8 +34,7 @@ Silver ("Ag")
 | ``'JohnsonChristy1972'``    | 0.64-6.6eV      | Yes    | 4 poles    |
 +-----------------------------+-----------------+--------+------------+
 
-References
-----------
+
 
 *  A. D. Rakic et al., Applied Optics, 37, 5271-5283 (1998).
 *  P. B. Johnson and R. W. Christy. Optical constants of the noble metals, Phys. Rev. B 6, 4370-4379 (1972).
@@ -40,8 +49,7 @@ Aluminum ("Al")
 | ``'Rakic1998'`` (default)   | 0.1-10eV        | Yes    | 5 poles    |
 +-----------------------------+-----------------+--------+------------+
 
-References
-----------
+
 
 *  A. D. Rakic. Algorithm for the determination of intrinsic optical constants of metal films: application to aluminum, Appl. Opt. 34, 4755-4767 (1995).
 
@@ -55,8 +63,7 @@ Alumina ("Al2O3")
 | ``'Horiba'`` (default)  | 0.6-6eV    | Yes    | 1 pole     |
 +-------------------------+------------+--------+------------+
 
-References
-----------
+
 
 *  Horiba Technical Note 08: Lorentz Dispersion Model `[pdf] <http://www.horiba.com/fileadmin/uploads/Scientific/Downloads/OpticalSchool_CN/TN/ellipsometer/Lorentz_Dispersion_Model.pdf>`_.
 
@@ -72,8 +79,7 @@ Aluminum arsenide ("AlAs")
 | ``'FernOnton1971'``     | 0.56-2.2um | No     | 2 poles    |
 +-------------------------+------------+--------+------------+
 
-References
-----------
+
 
 *  R.E. Fern and A. Onton, J. Applied Physics, 42, 3499-500 (1971).
 *  Horiba Technical Note 08: Lorentz Dispersion Model `[pdf] <http://www.horiba.com/fileadmin/uploads/Scientific/Downloads/OpticalSchool_CN/TN/ellipsometer/Lorentz_Dispersion_Model.pdf>`_.
@@ -88,8 +94,7 @@ Aluminum gallium nitride ("AlGaN")
     | ``'Horiba'`` (default)  | 0.6-4eV    | Yes    | 1 pole     |
     +-------------------------+------------+--------+------------+
 
-References
-----------
+
 
 *  Horiba Technical Note 08: Lorentz Dispersion Model `[pdf] <http://www.horiba.com/fileadmin/uploads/Scientific/Downloads/OpticalSchool_CN/TN/ellipsometer/Lorentz_Dispersion_Model.pdf>`_.
 
@@ -105,8 +110,7 @@ Aluminum nitride ("AlN")
     | ``'Horiba'`` (default)  | 0.75-4.75eV | Yes    | 1 pole     |
     +-------------------------+-------------+--------+------------+
 
-References
-----------
+
 
 *  Horiba Technical Note 08: Lorentz Dispersion Model `[pdf] <http://www.horiba.com/fileadmin/uploads/Scientific/Downloads/OpticalSchool_CN/TN/ellipsometer/Lorentz_Dispersion_Model.pdf>`_.
 
@@ -122,8 +126,7 @@ Aluminum oxide ("AlxOy")
     | ``'Horiba'`` (default)  | 0.6-6eV    | Yes    | 1 pole     |
     +-------------------------+------------+--------+------------+
 
-References
-----------
+
 
 *  Horiba Technical Note 08: Lorentz Dispersion Model `[pdf] <http://www.horiba.com/fileadmin/uploads/Scientific/Downloads/OpticalSchool_CN/TN/ellipsometer/Lorentz_Dispersion_Model.pdf>`_.
 
@@ -139,8 +142,7 @@ Amino acid ("Aminoacid")
     | ``'Horiba'`` (default)  | 1.5-5eV    | Yes    | 1 pole     |
     +-------------------------+------------+--------+------------+
 
-References
-----------
+
 
 *  Horiba Technical Note 08: Lorentz Dispersion Model `[pdf] <http://www.horiba.com/fileadmin/uploads/Scientific/Downloads/OpticalSchool_CN/TN/ellipsometer/Lorentz_Dispersion_Model.pdf>`_.
 
@@ -156,8 +158,7 @@ Gold ("Au")
     | ``'JohnsonChristy1972'`` (default)   | 0.64-6.6eV      | Yes    | 6 poles    |
     +--------------------------------------+-----------------+--------+------------+
 
-References
-----------
+
 
 *  P. B. Johnson and R. W. Christy. Optical constants of the noble metals, Phys. Rev. B 6, 4370-4379 (1972).
 
@@ -185,8 +186,7 @@ Beryllium ("Be")
     | ``'Rakic1998'`` (default)   | 0.02-5eV        | Yes    | 4 poles    |
     +-----------------------------+-----------------+--------+------------+
 
-References
-----------
+
 
 *  A. D. Rakic. Algorithm for the determination of intrinsic optical constants of metal films: application to aluminum, Appl. Opt. 34, 4755-4767 (1995).
 
@@ -202,8 +202,7 @@ Calcium fluoride ("CaF2")
     | ``'Horiba'`` (default)  | 0.75-4.75eV    | Yes    | 1 pole     |
     +-------------------------+----------------+--------+------------+
 
-References
-----------
+
 
 *  Horiba Technical Note 08: Lorentz Dispersion Model `[pdf] <http://www.horiba.com/fileadmin/uploads/Scientific/Downloads/OpticalSchool_CN/TN/ellipsometer/Lorentz_Dispersion_Model.pdf>`_.
 
@@ -219,8 +218,7 @@ Cellulose. ("Cellulose")
     | ``'Sultanova2009'`` (default)  | 0.44-1.1um       | No     | 1 pole     |
     +--------------------------------+------------------+--------+------------+
 
-References
-----------
+
 
 *  N. Sultanova, S. Kasarova and I. Nikolov. Dispersion properties of optical polymers, Acta Physica Polonica A 116, 585-587 (2009).
 
@@ -236,8 +234,7 @@ Chromium ("Cr")
     | ``'Rakic1998'`` (default)   | 0.1-10eV        | Yes    | 4 poles    |
     +-----------------------------+-----------------+--------+------------+
 
-References
-----------
+
 
 *  A. D. Rakic. Algorithm for the determination of intrinsic optical constants of metal films: application to aluminum, Appl. Opt. 34, 4755-4767 (1995).
 
@@ -253,8 +250,7 @@ Copper ("Cu")
     | ``'JohnsonChristy1972'`` (default)   | 0.64-6.6eV      | Yes    | 5 poles    |
     +--------------------------------------+-----------------+--------+------------+
 
-References
-----------
+
 
 *  P. B. Johnson and R. W. Christy. Optical constants of the noble metals, Phys. Rev. B 6, 4370-4379 (1972)
 
@@ -270,8 +266,7 @@ Fused silica ("FusedSilica")
     | ``'Zemax'`` (default)   | 0.21-6.7um      | No     | 3 poles    |
     +-------------------------+-----------------+--------+------------+
 
-References
-----------
+
 
 *  I. H. Malitson. Interspecimen comparison of the refractive index of fused silica, J. Opt. Soc. Am. 55, 1205-1208 (1965).
 *  C. Z. Tan. Determination of refractive index of silica glass for infrared wavelengths by IR spectroscopy, J. Non-Cryst. Solids 223, 158-163 (1998).
@@ -288,8 +283,7 @@ Gallium arsenide ("GaAs")
     | ``'Skauli2003'`` (default)  | 0.97-17um       | No     | 3 poles    |
     +-----------------------------+-----------------+--------+------------+
 
-References
-----------
+
 
 *  T. Skauli, P. S. Kuo, K. L. Vodopyanov, T. J. Pinguet, O. Levi, L. A. Eyres, J. S. Harris, M. M. Fejer, B. Gerard, L. Becouarn, and E. Lallier. Improved dispersion relations for GaAs and applications to nonlinear optics, J. Appl. Phys. + 946447-6455 (2003).
 
@@ -305,8 +299,7 @@ Germanium ("Ge")
     | ``'Icenogle1976'`` (default)         | 2.5-12um        | No     | 2 poles    |
     +--------------------------------------+-----------------+--------+------------+
 
-References
-----------
+
 
 *  Icenogle et al.. Refractive indexes and temperature coefficients of germanium and silicon Appl. Opt. 15 2348-2351 (1976).
 *  N. P. Barnes and M. S. Piltch. Temperature-dependent Sellmeier coefficients and nonlinear optics average power limit for germanium J. Opt. Soc. Am. 69 178-180 (1979).
@@ -323,8 +316,7 @@ Germanium oxide ("GeOx")
     | ``'Horiba'`` (default)  | 0.6-4eV        | Yes    | 1 pole     |
     +-------------------------+----------------+--------+------------+
 
-References
-----------
+
 
 *  Horiba Technical Note 08: Lorentz Dispersion Model `[pdf] <http://www.horiba.com/fileadmin/uploads/Scientific/Downloads/OpticalSchool_CN/TN/ellipsometer/Lorentz_Dispersion_Model.pdf>`_.
 
@@ -340,8 +332,7 @@ Water ("H2O")
     | ``'Horiba'`` (default)  | 1.5-6eV        | Yes    | 1 pole     |
     +-------------------------+----------------+--------+------------+
 
-References
-----------
+
 
 *  Horiba Technical Note 08: Lorentz Dispersion Model `[pdf] <http://www.horiba.com/fileadmin/uploads/Scientific/Downloads/OpticalSchool_CN/TN/ellipsometer/Lorentz_Dispersion_Model.pdf>`_.
 
@@ -357,8 +348,7 @@ Hexamethyldisilazane, or Bis(trimethylsilyl)amine ("HMDS")
     | ``'Horiba'`` (default)  | 1.5-6.5eV      | Yes    | 1 pole     |
     +-------------------------+----------------+--------+------------+
 
-References
-----------
+
 
 *  Horiba Technical Note 08: Lorentz Dispersion Model `[pdf] <http://www.horiba.com/fileadmin/uploads/Scientific/Downloads/OpticalSchool_CN/TN/ellipsometer/Lorentz_Dispersion_Model.pdf>`_.
 
@@ -373,8 +363,7 @@ Hafnium oxide ("HfO2")
     | ``'Horiba'`` (default)  | 1.5-6eV        | Yes    | 1 pole     |
     +-------------------------+----------------+--------+------------+
 
-References
-----------
+
 
 *  Horiba Technical Note 08: Lorentz Dispersion Model `[pdf] <http://www.horiba.com/fileadmin/uploads/Scientific/Downloads/OpticalSchool_CN/TN/ellipsometer/Lorentz_Dispersion_Model.pdf>`_.
 
@@ -390,8 +379,7 @@ Indium tin oxide ("ITO")
     | ``'Horiba'`` (default)  | 1.5-6eV        | Yes    | 1 pole     |
     +-------------------------+----------------+--------+------------+
 
-References
-----------
+
 
 *  Horiba Technical Note 08: Lorentz Dispersion Model `[pdf] <http://www.horiba.com/fileadmin/uploads/Scientific/Downloads/OpticalSchool_CN/TN/ellipsometer/Lorentz_Dispersion_Model.pdf>`_.
 
@@ -407,8 +395,7 @@ Indium Phosphide ("InP")
     | ``'Pettit1965'`` (default)           | 0.95-10um       | No     | 2 poles    |
     +--------------------------------------+-----------------+--------+------------+
 
-References
-----------
+
 
 *  Handbook of Optics, 2nd edition, Vol. 2. McGraw-Hill 1994.
 *  G. D. Pettit and W. J. Turner. Refractive index of InP, J. Appl. Phys. 36, 2081 (1965).
@@ -426,8 +413,7 @@ Magnesium fluoride ("MgF2")
     | ``'Horiba'`` (default)  | 0.8-3.8eV      | Yes    | 1 pole     |
     +-------------------------+----------------+--------+------------+
 
-References
-----------
+
 
 *  Horiba Technical Note 08: Lorentz Dispersion Model `[pdf] <http://www.horiba.com/fileadmin/uploads/Scientific/Downloads/OpticalSchool_CN/TN/ellipsometer/Lorentz_Dispersion_Model.pdf>`_.
 
@@ -443,8 +429,7 @@ Magnesium oxide ("MgO")
     | ``'StephensMalitson1952'`` (default)  | 0.36um-5.4um   | Yes    | 3 poles    |
     +---------------------------------------+----------------+--------+------------+
 
-References
-----------
+
 
 *  R. E. Stephens and I. H. Malitson. Index of refraction of magnesium oxide, J. Res. Natl. Bur. Stand. 49 249-252 (1952).
 
@@ -460,8 +445,7 @@ Nickel ("Ni")
     | ``'JohnsonChristy1972'`` (default)   | 0.64-6.6eV      | Yes    | 5 poles    |
     +--------------------------------------+-----------------+--------+------------+
 
-References
-----------
+
 
 *  P. B. Johnson and R. W. Christy. Optical constants of the noble metals, Phys. Rev. B 6, 4370-4379 (1972).
 
@@ -477,8 +461,7 @@ Polyetherimide ("PEI")
     | ``'Horiba'`` (default)  | 0.75-4.75eV    | Yes    | 1 pole     |
     +-------------------------+----------------+--------+------------+
 
-References
-----------
+
 
 *  Horiba Technical Note 08: Lorentz Dispersion Model `[pdf] <http://www.horiba.com/fileadmin/uploads/Scientific/Downloads/OpticalSchool_CN/TN/ellipsometer/Lorentz_Dispersion_Model.pdf>`_.
 
@@ -510,8 +493,7 @@ Polyethylene terephthalate ("PET")
     | ``'Horiba'`` (default)  | (not specified) | Yes    | 1 pole     |
     +-------------------------+-----------------+--------+------------+
 
-References
-----------
+
 *  Horiba Technical Note 08: Lorentz Dispersion Model `[pdf] <http://www.horiba.com/fileadmin/uploads/Scientific/Downloads/OpticalSchool_CN/TN/ellipsometer/Lorentz_Dispersion_Model.pdf>`_.
 
 
@@ -528,8 +510,7 @@ Poly(methyl methacrylate) ("PMMA")
     | ``'Sultanova2009'`` (default)  | 0.44-1.1um       | No     | 1 pole     |
     +--------------------------------+------------------+--------+------------+
 
-References
-----------
+
 *  Horiba Technical Note 08: Lorentz Dispersion Model `[pdf] <http://www.horiba.com/fileadmin/uploads/Scientific/Downloads/OpticalSchool_CN/TN/ellipsometer/Lorentz_Dispersion_Model.pdf>`_.
 *  N. Sultanova, S. Kasarova and I. Nikolov. Dispersion properties of optical polymers, Acta Physica Polonica A 116, 585-587 (2009).
 
@@ -545,8 +526,7 @@ Polytetrafluoroethylene, or Teflon ("PTFE")
     | ``'Horiba'`` (default)  | 1.5-6.5eV       | Yes    | 1 pole     |
     +-------------------------+-----------------+--------+------------+
 
-References
-----------
+
 
 *  Horiba Technical Note 08: Lorentz Dispersion Model `[pdf] <http://www.horiba.com/fileadmin/uploads/Scientific/Downloads/OpticalSchool_CN/TN/ellipsometer/Lorentz_Dispersion_Model.pdf>`_.
 
@@ -562,8 +542,7 @@ Polyvinyl chloride ("PVC")
     | ``'Horiba'`` (default)  | 1.5-4.75eV      | Yes    | 1 pole     |
     +-------------------------+-----------------+--------+------------+
 
-References
-----------
+
 
 *  Horiba Technical Note 08: Lorentz Dispersion Model `[pdf] <http://www.horiba.com/fileadmin/uploads/Scientific/Downloads/OpticalSchool_CN/TN/ellipsometer/Lorentz_Dispersion_Model.pdf>`_.
 
@@ -579,8 +558,7 @@ Palladium ("Pd")
     | ``'JohnsonChristy1972'`` (default)   | 0.64-6.6eV      | Yes    | 5 poles    |
     +--------------------------------------+-----------------+--------+------------+
 
-References
-----------
+
 
 *  P. B. Johnson and R. W. Christy. Optical constants of the noble metals, Phys. Rev. B 6, 4370-4379 (1972).
 
@@ -598,8 +576,7 @@ Polycarbonate. ("Polycarbonate")
     | ``'Sultanova2009'`` (default)  | 0.44-1.1um       | No     | 1 pole     |
     +--------------------------------+------------------+--------+------------+
 
-References
-----------
+
 
 *  Horiba Technical Note 08: Lorentz Dispersion Model `[pdf] <http://www.horiba.com/fileadmin/uploads/Scientific/Downloads/OpticalSchool_CN/TN/ellipsometer/Lorentz_Dispersion_Model.pdf>`_.
 *  N. Sultanova, S. Kasarova and I. Nikolov. Dispersion properties of optical polymers, Acta Physica Polonica A 116, 585-587 (2009).
@@ -616,8 +593,7 @@ Polystyrene. ("Polystyrene")
     | ``'Sultanova2009'`` (default)  | 0.44-1.1um       | No     | 1 pole     |
     +--------------------------------+------------------+--------+------------+
 
-References
-----------
+
 
 *  N. Sultanova, S. Kasarova and I. Nikolov.  Dispersion properties of optical polymers, Acta Physica Polonica A 116, 585-587 (2009).
 
@@ -633,8 +609,7 @@ Platinum ("Pt")
     | ``'Werner2009'`` (default)           | 0.1-2.48um      | Yes    | 5 poles    |
     +--------------------------------------+-----------------+--------+------------+
 
-References
-----------
+
 
 *  W. S. M. Werner, K. Glantschnig, C. Ambrosch-Draxl.  Optical constants and inelastic electron-scattering data for 17 elemental metals, J. Phys Chem Ref. Data 38, 1013-1092 (2009).
 
@@ -650,8 +625,7 @@ Sapphire. ("Sapphire")
     | ``'Horiba'`` (default)  | 1.5-5.5eV       | Yes    | 1 pole     |
     +-------------------------+-----------------+--------+------------+
 
-References
-----------
+
 
 *  Horiba Technical Note 08: Lorentz Dispersion Model `[pdf] <http://www.horiba.com/fileadmin/uploads/Scientific/Downloads/OpticalSchool_CN/TN/ellipsometer/Lorentz_Dispersion_Model.pdf>`_.
 
@@ -671,8 +645,7 @@ Silicon nitride ("Si3N4")
     | ``'Philipp1973'``       | 0.207-1.24um    | No     | 1 pole     |
     +-------------------------+-----------------+--------+------------+
 
-References
-----------
+
 
 *  T. Baak. Silicon oxynitride; a material for GRIN optics, Appl. Optics 21, 1069-1072 (1982).
 *  Horiba Technical Note 08: Lorentz Dispersion Model `[pdf] <http://www.horiba.com/fileadmin/uploads/Scientific/Downloads/OpticalSchool_CN/TN/ellipsometer/Lorentz_Dispersion_Model.pdf>`_.
@@ -691,8 +664,7 @@ Silicon carbide ("SiC")
     | ``'Horiba'`` (default)  | 0.6-4eV         | Yes    | 1 pole     |
     +-------------------------+-----------------+--------+------------+
 
-References
-----------
+
 
 *  Horiba Technical Note 08: Lorentz Dispersion Model `[pdf] <http://www.horiba.com/fileadmin/uploads/Scientific/Downloads/OpticalSchool_CN/TN/ellipsometer/Lorentz_Dispersion_Model.pdf>`_.
 
@@ -708,8 +680,7 @@ Silicon mononitride ("SiN")
     | ``'Horiba'`` (default)  | 0.6-6eV         | Yes    | 1 pole     |
     +-------------------------+-----------------+--------+------------+
 
-References
-----------
+
 
 *  Horiba Technical Note 08: Lorentz Dispersion Model `[pdf] <http://www.horiba.com/fileadmin/uploads/Scientific/Downloads/OpticalSchool_CN/TN/ellipsometer/Lorentz_Dispersion_Model.pdf>`_.
 
@@ -725,8 +696,7 @@ Silicon dioxide ("SiO2")
     | ``'Horiba'`` (default)  | 0.7-5eV         | Yes    | 1 pole     |
     +-------------------------+-----------------+--------+------------+
 
-References
-----------
+
 
 *  Horiba Technical Note 08: Lorentz Dispersion Model `[pdf] <http://www.horiba.com/fileadmin/uploads/Scientific/Downloads/OpticalSchool_CN/TN/ellipsometer/Lorentz_Dispersion_Model.pdf>`_.
 
@@ -734,8 +704,6 @@ References
 Silicon oxynitride ("SiON")
 ===========================
 
-Parameters
-----------
 
     +-------------------------+-----------------+--------+------------+
     | Variant                 | Valid for:      | Lossy? | Complexity |
@@ -743,8 +711,7 @@ Parameters
     | ``'Horiba'`` (default)  | 0.75-3eV        | Yes    | 1 pole     |
     +-------------------------+-----------------+--------+------------+
 
-References
-----------
+
 
 *  Horiba Technical Note 08: Lorentz Dispersion Model `[pdf] <http://www.horiba.com/fileadmin/uploads/Scientific/Downloads/OpticalSchool_CN/TN/ellipsometer/Lorentz_Dispersion_Model.pdf>`_.
 
@@ -760,8 +727,7 @@ Tantalum pentoxide ("Ta2O5")
     | ``'Horiba'`` (default)  | 0.75-4eV        | Yes    | 1 pole     |
     +-------------------------+-----------------+--------+------------+
 
-References
-----------
+
 
 *  Horiba Technical Note 08: Lorentz Dispersion Model `[pdf] <http://www.horiba.com/fileadmin/uploads/Scientific/Downloads/OpticalSchool_CN/TN/ellipsometer/Lorentz_Dispersion_Model.pdf>`_.
 
@@ -777,8 +743,7 @@ Titanium ("Ti")
     | ``'Werner2009'`` (default)           | 0.1-2.48um      | Yes    | 5 poles    |
     +--------------------------------------+-----------------+--------+------------+
 
-References
-----------
+
 
 *  W. S. M. Werner, K. Glantschnig, C. Ambrosch-Draxl. Optical constants and inelastic electron-scattering data for 17 elemental metals, J. Phys Chem Ref. Data 38, 1013-1092 (2009).
 
@@ -794,8 +759,7 @@ Titanium oxide ("TiOx")
     | ``'Horiba'`` (default)  | 0.6-3eV         | No     | 1 pole     |
     +-------------------------+-----------------+--------+------------+
 
-References
-----------
+
 
 *  Horiba Technical Note 08: Lorentz Dispersion Model `[pdf] <http://www.horiba.com/fileadmin/uploads/Scientific/Downloads/OpticalSchool_CN/TN/ellipsometer/Lorentz_Dispersion_Model.pdf>`_.
 
@@ -811,8 +775,7 @@ Tungsten ("W")
     | ``'Werner2009'`` (default)           | 0.1-2.48um      | Yes    | 5 poles    |
     +--------------------------------------+-----------------+--------+------------+
 
-References
-----------
+
 
 *  W. S. M. Werner, K. Glantschnig, C. Ambrosch-Draxl. Optical constants and inelastic electron-scattering data for 17 elemental metals, J. Phys Chem Ref. Data 38, 1013-1092 (2009).
 
@@ -830,8 +793,7 @@ Yttrium oxide ("Y2O3")
     | ``'Nigara1968'``        | 0.25-9.6um      | No     | 2 poles    |
     +-------------------------+-----------------+--------+------------+
 
-References
-----------
+
 
 *  Horiba Technical Note 08: Lorentz Dispersion Model `[pdf] <http://www.horiba.com/fileadmin/uploads/Scientific/Downloads/OpticalSchool_CN/TN/ellipsometer/Lorentz_Dispersion_Model.pdf>`_.
 *  Y. Nigara. Measurement of the optical constants of yttrium oxide, Jpn. J. Appl. Phys. 7, 404-408 (1968).
@@ -848,8 +810,7 @@ Yttrium aluminium garnet ("YAG")
     | ``'Zelmon1998'`` (default)           | 0.4-5um         | No     | 2 poles    |
     +--------------------------------------+-----------------+--------+------------+
 
-References
-----------
+
 
 *  D. E. Zelmon, D. L. Small and R. Page. Refractive-index measurements of undoped yttrium aluminum garnet from 0.4 to 5.0 um, Appl. Opt. 37, 4933-4935 (1998).
 
@@ -865,8 +826,7 @@ Zirconium oxide ("ZrO2")
     | ``'Horiba'`` (default)  | 1.5-3eV         | Yes    | 1 pole     |
     +-------------------------+-----------------+--------+------------+
 
-References
-----------
+
 
 *  Horiba Technical Note 08: Lorentz Dispersion Model `[pdf] <http://www.horiba.com/fileadmin/uploads/Scientific/Downloads/OpticalSchool_CN/TN/ellipsometer/Lorentz_Dispersion_Model.pdf>`_.
 
@@ -882,8 +842,7 @@ Amorphous silicon ("aSi")
     | ``'Horiba'`` (default)  | 1.5-6eV    | Yes    | 1 pole     |
     +-------------------------+------------+--------+------------+
 
-References
-----------
+
 
 *  Horiba Technical Note 08: Lorentz Dispersion Model `[pdf] <http://www.horiba.com/fileadmin/uploads/Scientific/Downloads/OpticalSchool_CN/TN/ellipsometer/Lorentz_Dispersion_Model.pdf>`_.
 
@@ -901,8 +860,7 @@ Crystalline silicon. ("cSi")
     | ``'Green2008'``                   | 0.25-1.45um | Yes    | 4 poles    |
     +-----------------------------------+-------------+--------+------------+
 
-References
-----------
+
 
 *  M. A. Green. Self-consistent optical parameters of intrinsic silicon at 300K including temperature coefficients, Sol. Energ. Mat. Sol. Cells 92, 1305–1310 (2008).
 *  M. A. Green and M. Keevers, Optical properties of intrinsic silicon at 300 K, Progress in Photovoltaics, 3, 189-92 (1995).
