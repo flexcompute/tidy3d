@@ -181,6 +181,30 @@ class DispersionFitter:
         if k_data is not None:
             assert wvl_um.shape == k_data.shape
 
+    @staticmethod
+    def eV_to_Hz(f_eV: float):
+        """convert frequency in unit of eV to Hz
+
+        Parameters
+        ----------
+        f_eV : float
+            Frequency in unit of eV
+        """
+
+        return f_eV / HBAR / 2 / np.pi
+
+    @staticmethod
+    def Hz_to_eV(f_Hz: float):
+        """convert frequency in unit of Hz to eV
+
+        Parameters
+        ----------
+        f_Hz : float
+            Frequency in unit of Hz
+        """
+
+        return f_Hz * HBAR * 2 * np.pi
+
     def fit(
         self,
         num_poles: int = 3,
