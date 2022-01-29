@@ -114,4 +114,4 @@ def get_credentials() -> None:
         print(f"Unknown response: {keep_logged_in}")
 
 
-get_credentials()
+# get_credentials()
