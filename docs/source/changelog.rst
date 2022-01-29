@@ -1,4 +1,4 @@
 Changelog
 =========
 
-.. include:: ../../../tidy3d/CHANGELOG.md
+.. include:: ../../tidy3d/CHANGELOG.md
