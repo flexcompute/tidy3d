@@ -199,22 +199,20 @@ Logging
 Submitting Simulations
 ======================
 
-.. currentmodule:: tidy3d.web
-
 Through python API
 ------------------
 
 .. autosummary::
    :toctree: _autosummary/
 
-   run
-   upload
-   get_info
-   start
-   monitor
-   download
-   load
-   delete
+   tidy3d.web.webapi.run
+   tidy3d.web.webapi.upload
+   tidy3d.web.webapi.get_info
+   tidy3d.web.webapi.start
+   tidy3d.web.webapi.monitor
+   tidy3d.web.webapi.download
+   tidy3d.web.webapi.load
+   tidy3d.web.webapi.delete
 
 Convenience for Single and Batch
 --------------------------------
@@ -222,10 +220,8 @@ Convenience for Single and Batch
 .. autosummary::
    :toctree: _autosummary/
 
-   Job
-   Batch
-
-.. currentmodule:: tidy3d
+   tidy3d.web.containers.Job
+   tidy3d.web.containers.Batch
 
 Information Containers
 ----------------------
