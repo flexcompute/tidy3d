@@ -6,3 +6,4 @@ ipython
 autodoc_pydantic
 sphinx-copybutton
 sphinx-book-theme
+sphinx_github_changelog
