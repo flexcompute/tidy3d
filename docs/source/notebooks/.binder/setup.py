@@ -6,7 +6,10 @@ from setuptools import setup, find_packages
 with open("requirements.txt") as f:
     required = f.read().splitlines()
     
+import os
+print(os.getcwd())
+
 setup(
-    packages=find_packages(exclude=('tests',)),
+    packages=['../../../../tidy3d'],
     install_requires = required
 )
