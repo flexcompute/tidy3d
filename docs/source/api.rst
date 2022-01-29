@@ -220,8 +220,8 @@ Convenience for Single and Batch
 .. autosummary::
    :toctree: _autosummary/
 
-   tidy3d.web.containers.Job
-   tidy3d.web.containers.Batch
+   tidy3d.web.container.Job
+   tidy3d.web.container.Batch
 
 Information Containers
 ----------------------
