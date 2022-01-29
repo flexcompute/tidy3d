@@ -5,6 +5,7 @@ from abc import ABC, abstractmethod
 from typing import List, Tuple, Union, Callable
 import pydantic
 import numpy as np
+from pydantic import PositiveFloat
 
 from .base import Tidy3dBaseModel
 from .types import PoleAndResidue, Ax, FreqBound
@@ -473,7 +474,7 @@ class Sellmeier(DispersiveMedium):
     >>> eps = sellmeier_medium.eps_model(200e12)
     """
 
-    coeffs: List[Tuple[float, float]] = pydantic.Field(
+    coeffs: List[Tuple[float, PositiveFloat]] = pydantic.Field(
         title="Coefficients", description="List of Sellmeier (:math:`B_i, C_i`) coefficients."
     )
 
@@ -615,7 +616,7 @@ class Drude(DispersiveMedium):
         description="Relative permittivity at infinite frequency (:math:`\\epsilon_\\infty`).",
     )
 
-    coeffs: List[Tuple[float, float]] = pydantic.Field(
+    coeffs: List[Tuple[float, PositiveFloat]] = pydantic.Field(
         ..., title="Coefficients", description="List of (:math:`f_i, \\delta_i`) values for model."
     )
 
@@ -682,7 +683,7 @@ class Debye(DispersiveMedium):
         description="Relative permittivity at infinite frequency (:math:`\\epsilon_\\infty`).",
     )
 
-    coeffs: List[Tuple[float, float]] = pydantic.Field(
+    coeffs: List[Tuple[float, PositiveFloat]] = pydantic.Field(
         ...,
         title="Coefficients",
         description="List of (:math:`\\Delta\\epsilon_i, \\tau_i`) values for model.",

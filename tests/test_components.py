@@ -375,6 +375,15 @@ def test_medium_dispersion():
     m_DR = Drude(eps_inf=1.0, coeffs=[(1, 3), (2, 4)])
     m_DB = Debye(eps_inf=1.0, coeffs=[(1, 3), (2, 4)])
 
+    with pytest.raises(pydantic.ValidationError) as e_info:
+        mf_SM = Sellmeier(coeffs=[(2, 0), (2, 4)])
+
+    with pytest.raises(pydantic.ValidationError) as e_info:
+        mf_DR = Drude(eps_inf=1.0, coeffs=[(1, 0), (2, 4)])
+
+    with pytest.raises(pydantic.ValidationError) as e_info:
+        mf_DB = Debye(eps_inf=1.0, coeffs=[(1, 0), (2, 4)])
+
     freqs = np.linspace(0.01, 1, 1001)
     for medium in [m_PR, m_SM, m_LZ, m_LZ2, m_DR, m_DB]:
         eps_c = medium.eps_model(freqs)

@@ -155,6 +155,7 @@ class TypedArray(np.ndarray):
         """Sets the schema of NumpyArray."""
         field_schema.update(NumpyArray.schema())
 
+
 class ArrayMeta(type):
     """metclass for Array, enables Array[type] -> TypedArray"""
 
