@@ -1,4 +1,4 @@
 Changelog
 =========
 
-.. mdinclude:: tidy3d/CHANGELOG.md
+.. mdinclude:: ../../tidy3d/CHANGELOG.md
