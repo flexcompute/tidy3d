@@ -205,14 +205,14 @@ Through python API
 .. autosummary::
    :toctree: _autosummary/
 
-   web.run
-   web.upload
-   web.get_info
-   web.start
-   web.monitor
-   web.download
-   web.load
-   web.delete
+   tidy3d.web.run
+   tidy3d.web.upload
+   tidy3d.web.get_info
+   tidy3d.web.start
+   tidy3d.web.monitor
+   tidy3d.web.download
+   tidy3d.web.load
+   tidy3d.web.delete
 
 Convenience for Single and Batch
 --------------------------------
@@ -220,8 +220,8 @@ Convenience for Single and Batch
 .. autosummary::
    :toctree: _autosummary/
 
-   web.Job
-   web.Batch
+   tidy3d.web.Job
+   tidy3d.web.Batch
 
 Information Containers
 ----------------------
@@ -229,9 +229,9 @@ Information Containers
 .. autosummary::
    :toctree: _autosummary/
 
-   web.task.Task
-   web.task.TaskInfo
-   web.task.TaskStatus
+   tidy3d.web.task.Task
+   tidy3d.web.task.TaskInfo
+   tidy3d.web.task.TaskStatus
 
 
 Plugins
