@@ -420,6 +420,8 @@ def _upload_task(  # pylint:disable=too-many-locals,too-many-arguments
 ) -> TaskId:
     """upload with all kwargs exposed"""
 
+    simulation._validate_size()
+
     json_string = simulation._json_string()  # pylint:disable=protected-access
     data = {
         "status": "uploading",
