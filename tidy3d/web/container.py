@@ -401,7 +401,7 @@ class Batch(WebContainer):
         current iteration in memory.
         """
         sim_data_dir = {}
-        self.download(path_dir=path_dir)
+        # self.download(path_dir=path_dir)
         for task_name, job in self.jobs.items():
             job_path = self._job_data_path(task_id=job.task_id, path_dir=path_dir)
             sim_data = job.load(path=job_path, normalize_index=normalize_index)
