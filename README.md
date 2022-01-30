@@ -4,17 +4,20 @@
 ![tests](https://github.com/flexcompute/Tidy3D-client-revamp/actions/workflows//run_tests.yml/badge.svg)
 [![Documentation Status](https://readthedocs.com/projects/flexcompute-tidy3ddocumentation/badge/?version=latest)](https://flexcompute-tidy3ddocumentation.readthedocs-hosted.com/en/latest/?badge=latest)
 
-<img src="img/Tidy3D-logo.svg">
 
-<!-- [![Binder](https://mybinder.org/badge_logo.svg)](https://mybinder.org/v2/gh/flexcompute/Tidy3D-client-revamp/HEAD?filepath=notebooks) -->
+![](https://raw.githubusercontent.com/flexcompute/tidy3d/main/img/Tidy3D-logo.svg)
 
-Beta release of the FDTD solver by Flexcompute.
-
-<img src="img/snippet.png">
+![](https://raw.githubusercontent.com/flexcompute/tidy3d/main/img/snippet.png)
 
 ## Installation
 
-For now:
+### Using pip
+
+```
+pip install tidy3d-beta
+```
+
+### From source
 
 ```
 git clone https://github.com/flexcompute/tidy3d.git
@@ -28,20 +31,13 @@ Can verify it worked by running
 python -c "import tidy3d as td; print(td.__version__)"
 ```
 
-and it should print out 
+and it should print out the version number, for example:
 
 ```
 0.2.0
 ```
 
-After we put on pyPI, it will be installable via
+## Documentation
 
-```
-pip install tidy3d-beta
-```
-
-but the package will still be imported in python as 
-
-```python
-import tidy3d as td
-```
+View our documentation [here](https://flexcompute-tidy3ddocumentation.readthedocs-hosted.com/en/latest/).
+And see the source code (if you wish) [here](https://github.com/flexcompute-readthedocs/tidy3d-docs).
