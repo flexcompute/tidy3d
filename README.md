@@ -41,3 +41,11 @@ and it should print out the version number, for example:
 
 View our documentation [here](https://flexcompute-tidy3ddocumentation.readthedocs-hosted.com/en/latest/).
 And see the source code (if you wish) [here](https://github.com/flexcompute-readthedocs/tidy3d-docs).
+
+## Issues / Feedback / Bug Reporting
+
+This is a beta release and your feedback helps us immensely!
+
+If you find bugs, file an [Issue](https://github.com/flexcompute/tidy3d/issues).
+For more general discussions, questions, comments, anything else, open a topic in the [Discussions Tab](https://github.com/flexcompute/tidy3d/discussions).
+
