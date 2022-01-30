@@ -97,6 +97,7 @@ Coordinate2D = Tuple[float, float]
 Bound = Tuple[Coordinate, Coordinate]
 GridSize = Union[pydantic.PositiveFloat, List[pydantic.PositiveFloat]]
 Axis = Literal[0, 1, 2]
+Axis2D = Literal[0, 1]
 Vertices = List[Coordinate2D]
 Shapely = BaseGeometry
 
@@ -148,6 +149,11 @@ class TypedArray(np.ndarray):
         """validator"""
         # need to fix, doesnt work for simulationdata_export and load?
         return np.array(val, dtype=cls.inner_type)  # pylint: disable=no-member
+
+    @classmethod
+    def __modify_schema__(cls, field_schema):
+        """Sets the schema of NumpyArray."""
+        field_schema.update(NumpyArray.schema())
 
 
 class ArrayMeta(type):

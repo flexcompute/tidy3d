@@ -265,16 +265,16 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         if (not structures) or (not sources):
             return val
 
-        def warn(structure):
+        def warn(istruct, side):
             """Warning message for a structure too close to PML."""
             log.warning(
-                f"a structure\n\n{structure}\n\nwas detected as being less "
-                "than half of a central wavelength from a PML on - side"
+                f"Structure at structures[{istruct}] was detected as being less "
+                f"than half of a central wavelength from a PML on side {side}. "
                 "To avoid inaccurate results, please increase gap between "
                 "any structures and PML or fully extend structure through the pml."
             )
 
-        for structure in structures:
+        for istruct, structure in enumerate(structures):
             struct_bound_min, struct_bound_max = structure.geometry.bounds
 
             for source in sources:
@@ -282,15 +282,17 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
                 f_average = (fmin_src + fmax_src) / 2.0
                 lambda0 = C_0 / f_average
 
-                for sim_val, struct_val, pml in zip(sim_bound_min, struct_bound_min, val):
+                zipped = zip(["x", "y", "z"], sim_bound_min, struct_bound_min, val)
+                for axis, sim_val, struct_val, pml in zipped:
                     if pml.num_layers > 0 and struct_val > sim_val:
                         if abs(sim_val - struct_val) < lambda0 / 2:
-                            warn(structure)
+                            warn(istruct, axis + "-min")
 
-                for sim_val, struct_val, pml in zip(sim_bound_max, struct_bound_max, val):
+                zipped = zip(["x", "y", "z"], sim_bound_max, struct_bound_max, val)
+                for axis, sim_val, struct_val, pml in zipped:
                     if pml.num_layers > 0 and struct_val < sim_val:
                         if abs(sim_val - struct_val) < lambda0 / 2:
-                            warn(structure)
+                            warn(istruct, axis + "-max")
 
         return val
 

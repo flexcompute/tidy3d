@@ -734,7 +734,7 @@ class Cylinder(Circular, Planar):
             For more details refer to
             `Shapely's Documentaton <https://shapely.readthedocs.io/en/stable/project.html>`_.
         """
-        z0_axis, _ = self.pop_axis(self.center, axis=self.axis)
+        z0_axis, _ = self.pop_axis(self.center, axis=axis)
         intersect_dist = self._intersect_dist(position, z0_axis)
         if not intersect_dist:
             return []

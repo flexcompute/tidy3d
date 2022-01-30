@@ -290,7 +290,8 @@ def generate_docstring(cls) -> str:
 
         # add description
         description_str = field_info.description
-        doc += f"{description_str}\n"
+        if description_str is not None:
+            doc += f"{description_str}\n"
 
     # add in remaining things in the docs
     doc += "\n\n"

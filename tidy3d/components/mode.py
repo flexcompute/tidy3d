@@ -4,8 +4,10 @@ from typing import Tuple
 
 import pydantic as pd
 
+from ..constants import MICROMETER
 from .base import Tidy3dBaseModel
-from .types import Symmetry
+from .types import Symmetry, Axis2D
+from ..log import SetupError
 
 
 class ModeSpec(Tidy3dBaseModel):
@@ -38,3 +40,26 @@ class ModeSpec(Tidy3dBaseModel):
         title="Number of PML layers",
         description="Number of standard pml layers to add in the first two non-propagation axes.",
     )
+
+    bend_radius: float = pd.Field(
+        None,
+        title="Bend radius",
+        description="A curvature radius for simulation of waveguide bends. Can be negative, in "
+        "which case the mode plane center has a smaller value than the curvature center along the "
+        "axis that is perpendicular to both the normal axis and the bend axis.",
+        units=MICROMETER,
+    )
+
+    bend_axis: Axis2D = pd.Field(
+        None,
+        title="Bend axis",
+        description="Index into the first two non-propagating axes defining the normal to the "
+        "plane in which the bend lies. This must be provided if ``bend_radius`` is not ``None``.",
+    )
+
+    @pd.validator("bend_axis", always=True)
+    def bend_axis_given(cls, val, values):
+        """check that ``bend_axis`` is provided if ``bend_radius`` is not ``None``"""
+        if val is None and values.get("bend_radius") is not None:
+            raise SetupError("bend_axis must also be defined if bend_radius is defined.")
+        return val
