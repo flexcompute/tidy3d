@@ -181,6 +181,16 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
 
     """ Validating setup """
 
+    @pydantic.validator("symmetry", always=True)
+    def not_supported_yet(cls, val):
+        """Log an error if non 0 value supplied."""
+        if any(sym_val != 0 for sym_val in val):
+            raise SetupError("Symmetry not supported in this version of tidy3d, "
+                             "but will be included in coming release."
+                             "For now, if symmetry is required, use the originl tidy3d."
+                            )
+        return val
+
     @pydantic.validator("pml_layers", always=True)
     def set_none_to_zero_layers(cls, val):
         """if any PML layer is None, set it to an empty :class:`PML`."""
