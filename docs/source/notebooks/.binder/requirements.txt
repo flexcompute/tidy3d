@@ -1,3 +1,4 @@
+tidy3d-beta
 tmm
 nlopt
 tqdm
