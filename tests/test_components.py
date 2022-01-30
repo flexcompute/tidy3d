@@ -72,7 +72,7 @@ def test_sim():
             FieldMonitor(size=(0, 0, 0), center=(0, 0, 0), freqs=[1, 2], name="point"),
             FluxTimeMonitor(size=(1, 1, 0), center=(0, 0, 0), interval=10, name="plane"),
         ],
-        symmetry=(0, -1, 1),
+        symmetry=(0, 0, 0),
         pml_layers=(
             PML(num_layers=20),
             StablePML(num_layers=30),
