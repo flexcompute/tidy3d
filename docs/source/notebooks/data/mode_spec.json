@@ -9,5 +9,7 @@
         0,
         0
     ],
+    "bend_radius": null,
+    "bend_axis": null,
     "type": "ModeSpec"
 }
