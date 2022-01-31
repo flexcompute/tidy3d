@@ -43,7 +43,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - Web API implemented by converting simulations to old tidy3D
 
-[Unreleased]: https://github.com/flexcompute/Tidy3D-client-revamp/compare/0.2.0...develop
-[0.2.0]: https://github.com/flexcompute/Tidy3D-client-revamp/compare/0.1.1...0.2.0
+[Unreleased]: https://github.com/flexcompute/Tidy3D-client-revamp/compare/v0.2.0...develop
+[0.2.0]: https://github.com/flexcompute/Tidy3D-client-revamp/compare/0.1.1...v0.2.0
 [0.1.1]: https://github.com/flexcompute/Tidy3D-client-revamp/compare/0.1.0...0.1.1
 [0.1.0]: https://github.com/flexcompute/Tidy3D-client-revamp/releases/tag/0.1.0
