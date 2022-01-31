@@ -56,7 +56,7 @@ class ModeSpec(Tidy3dBaseModel):
         description="Index into the first two non-propagating axes defining the normal to the "
         "plane in which the bend lies. This must be provided if ``bend_radius`` is not ``None``. "
         "For example, for a ring in the global xy-plane, and a mode plane in either the xz or the "
-        "yz plane, the ``bend_axis`` is always 1 (the global z axis)."
+        "yz plane, the ``bend_axis`` is always 1 (the global z axis).",
     )
 
     @pd.validator("bend_axis", always=True)

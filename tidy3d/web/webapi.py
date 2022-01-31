@@ -196,6 +196,8 @@ def monitor(task_id: TaskId) -> None:
 
         while status not in ("success", "error", "diverged", "deleted", "draft"):
             new_status = get_info(task_id).status
+            if new_status == "visualize":
+                new_status = "success"
             if new_status != status:
                 console.log(f"status = {new_status}")
                 status = new_status

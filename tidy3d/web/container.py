@@ -138,6 +138,8 @@ class Job(WebContainer):
 
             while status not in ("success", "error", "diverged", "deleted", "draft"):
                 new_status = self.status
+                if new_status == "visualize":
+                    new_status = "success"
                 if new_status != status:
                     console.log(f"status = {new_status}")
                     status = new_status
@@ -324,6 +326,8 @@ class Batch(WebContainer):
                 for status_index, (task_name, job) in enumerate(self.jobs.items()):
                     current_status = statuses[status_index]
                     new_status = job.status
+                    if new_status == "visualize":
+                        new_status = "success"
                     if new_status != current_status:
                         completed = run_statuses.index(new_status)
                         pbar = pbar_tasks[task_name]
