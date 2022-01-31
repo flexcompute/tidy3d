@@ -1,10 +1,11 @@
 """Objects that define how data is recorded from simulation."""
 from abc import ABC, abstractmethod
-from typing import List, Union
+from typing import List, Union, Tuple
 
 import pydantic
+import numpy as np
 
-from .types import Literal, Ax, EMField, ArrayLike
+from .types import Literal, Ax, EMField, ArrayLike, Array
 from .geometry import Box
 from .validators import assert_plane
 from .mode import ModeSpec
@@ -49,15 +50,15 @@ class Monitor(Box, ABC):
         return Box(center=self.center, size=self.size)
 
     @abstractmethod
-    def storage_size(self, num_cells: int, num_steps: int) -> int:
+    def storage_size(self, num_cells: int, tmesh: Array) -> int:
         """Size of monitor storage given the number of points after discretization.
 
         Parameters
         ----------
         num_cells : int
             Number of grid cells within the monitor after discretization by a :class:`Simulation`.
-        num_steps : int
-            Number of time steps in the discretized :class:`Simulation`.
+        tmesh : Array
+            The discretized time mesh of a :class:`Simulation`.
 
         Returns
         -------
@@ -115,6 +116,42 @@ class TimeMonitor(Monitor, ABC):
         if val and val < start:
             raise SetupError("Monitor start time is greater than stop time.")
         return val
+
+    def time_inds(self, tmesh: Array) -> Tuple[int, int]:
+        """Compute the starting and stopping index of the monitor in a given discrete time mesh."""
+
+        tind_beg, tind_end = (0, 0)
+
+        if tmesh.size == 0:
+            return (tind_beg, tind_end)
+
+        # If monitor.stop is None, record until the end
+        t_stop = self.stop
+        if t_stop is None:
+            tind_end = int(tmesh.size)
+            t_stop = tmesh[-1]
+        else:
+            tend = np.nonzero(tmesh <= t_stop)[0]
+            if tend.size > 0:
+                tind_end = int(tend[-1] + 1)
+
+        # Step to compare to in order to handle t_start = t_stop
+        if np.array(tmesh).size < 2:
+            dt = 1e-20
+        else:
+            dt = tmesh[1] - tmesh[0]
+
+        # If equal start and stopping time, record one time step
+        if np.abs(self.start - t_stop) < dt:
+            tind_beg = max(tind_end - 1, 0)
+        else:
+            tbeg = np.nonzero(tmesh[0:tind_end] >= self.start)[0]
+            if tbeg.size > 0:
+                tind_beg = tbeg[0]
+            else:
+                tind_beg = tind_end
+
+        return (tind_beg, tind_end)
 
 
 class AbstractFieldMonitor(Monitor, ABC):
@@ -221,7 +258,7 @@ class FieldMonitor(AbstractFieldMonitor, FreqMonitor):
 
     _data_type: Literal["ScalarFieldData"] = pydantic.Field("ScalarFieldData")
 
-    def storage_size(self, num_cells: int, num_steps: int) -> int:
+    def storage_size(self, num_cells: int, tmesh: Array) -> int:
         # stores 1 complex number per grid cell, per frequency, per field
         return BYTES_COMPLEX * num_cells * len(self.freqs) * len(self.fields)
 
@@ -243,9 +280,11 @@ class FieldTimeMonitor(AbstractFieldMonitor, TimeMonitor):
 
     _data_type: Literal["ScalarFieldTimeData"] = pydantic.Field("ScalarFieldTimeData")
 
-    def storage_size(self, num_cells: int, num_steps: int) -> int:
+    def storage_size(self, num_cells: int, tmesh: Array) -> int:
         # stores 1 real number per grid cell, per time step, per field
-        return BYTES_REAL * num_cells * num_steps * len(self.fields)
+        time_inds = self.time_inds(tmesh)
+        num_steps = time_inds[1] - time_inds[0]
+        return BYTES_REAL * num_steps * num_cells * len(self.fields)
 
 
 class FluxMonitor(AbstractFluxMonitor, FreqMonitor):
@@ -262,7 +301,7 @@ class FluxMonitor(AbstractFluxMonitor, FreqMonitor):
 
     _data_type: Literal["FluxData"] = pydantic.Field("FluxData")
 
-    def storage_size(self, num_cells: int, num_steps: int) -> int:
+    def storage_size(self, num_cells: int, tmesh: Array) -> int:
         # stores 6 complex numbers per grid cell, per frequency
         return 6 * BYTES_REAL * num_cells * len(self.freqs)
 
@@ -283,8 +322,10 @@ class FluxTimeMonitor(AbstractFluxMonitor, TimeMonitor):
 
     _data_type: Literal["FluxTimeData"] = pydantic.Field("FluxTimeData")
 
-    def storage_size(self, num_cells: int, num_steps: int) -> int:
+    def storage_size(self, num_cells: int, tmesh: Array) -> int:
         # stores 1 real number per time tep
+        time_inds = self.time_inds(tmesh)
+        num_steps = time_inds[1] - time_inds[0]
         return BYTES_REAL * num_steps
 
 
@@ -310,7 +351,7 @@ class ModeMonitor(PlanarMonitor, FreqMonitor):
 
     _data_type: Literal["ModeData"] = pydantic.Field("ModeData")
 
-    def storage_size(self, num_cells: int, num_steps: int) -> int:
+    def storage_size(self, num_cells: int, tmesh: int) -> int:
         # stores 3 complex numbers per grid cell, per frequency, per mode.
         return 3 * BYTES_COMPLEX * num_cells * len(self.freqs) * self.mode_spec.num_modes
 
