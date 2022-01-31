@@ -38,8 +38,12 @@ open _build/html/index.html
 
 ## Tests
 
-To run the tests
+There is one test, which runs all of the notebooks and fails if there are any errors.
+
+To run the test:
 
 ```bash
 pytest -rA tests
 ```
+
+
