@@ -861,7 +861,7 @@ class SimulationData(Tidy3dBaseModel):
         eps_alpha: float = 0.2,
         robust: bool = True,
         ax: Ax = None,
-        **kwargs,
+        **patch_kwargs,
     ) -> Ax:
         """Plot the field data for a monitor with simulation plot overlayed.
 
@@ -956,15 +956,20 @@ class SimulationData(Tidy3dBaseModel):
             elif val == "abs":
                 field_data = abs(field_data)
 
+        if val=="abs" or field_name=="int":
+            cmap = "magma"
+        else:
+            cmap = "RdBu"
+
         # plot the field
         xy_coord_labels = list("xyz")
         xy_coord_labels.pop(axis)
         x_coord_label, y_coord_label = xy_coord_labels  # pylint:disable=unbalanced-tuple-unpacking
-        field_data.plot(ax=ax, x=x_coord_label, y=y_coord_label, robust=robust)
+        field_data.plot(ax=ax, x=x_coord_label, y=y_coord_label, robust=robust, cmap=cmap)
 
         # plot the simulation epsilon
         ax = self.simulation.plot_structures_eps(
-            freq=freq, cbar=False, x=x, y=y, z=z, alpha=eps_alpha, ax=ax, **kwargs
+            freq=freq, cbar=False, x=x, y=y, z=z, alpha=eps_alpha, ax=ax, **patch_kwargs
         )
 
         # set the limits based on the xarray coordinates min and max
