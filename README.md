@@ -2,11 +2,13 @@
 
 [![Notebooks](https://mybinder.org/badge_logo.svg)](https://mybinder.org/v2/gh/flexcompute-readthedocs/tidy3d-docs/readthedocs?labpath=docs%2Fsource%2Fnotebooks)
 [![Documentation Status](https://readthedocs.com/projects/flexcompute-tidy3ddocumentation/badge/?version=latest)](https://flexcompute-tidy3ddocumentation.readthedocs-hosted.com/en/latest/?badge=latest)
-![tests](https://github.com/flexcompute/Tidy3D-client-revamp/actions/workflows//run_tests.yml/badge.svg)
+![tests](https://github.com/flexcompute/tidy3d/actions/workflows//run_tests.yml/badge.svg)
 
 ## Website
 
 The website can be found [here](https://flexcompute-tidy3ddocumentation.readthedocs-hosted.com/en/latest/).
+
+It is hosted by readthedocs, the admin site can be found [here](https://readthedocs.com/dashboard/).
 
 ## Notebooks
 
@@ -38,8 +40,12 @@ open _build/html/index.html
 
 ## Tests
 
-To run the tests
+There is one test, which runs all of the notebooks and fails if there are any errors.
+
+To run the test:
 
 ```bash
 pytest -rA tests
 ```
+
+
