@@ -1,7 +1,7 @@
 jupyter
 nbconvert
 sphinx_rtd_theme
-nbsphinx
+nbsphinx==0.8.7
 ipython
 autodoc_pydantic
 sphinx-copybutton
