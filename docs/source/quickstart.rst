@@ -12,7 +12,7 @@ This page will get you set up with Tidy3D and running a simple example.
 Code Repositories
 -----------------
 
-We host several examples and tutorials at our `documentation repository <https://github.com/flexcompute-readthedocs/tidy3d-docs/tree/readthedocs/docs/source/notebooks>`_ and its `notebook section <https://github.com/flexcompute-readthedocs/tidy3d-docs/tree/readthedocs/docs/source/notebooks>`_.
+We host several examples and tutorials at our `documentation repository <https://github.com/flexcompute-readthedocs/tidy3d-docs>`_ and its `notebook section <https://github.com/flexcompute-readthedocs/tidy3d-docs/tree/readthedocs/docs/source/notebooks>`_.
 
 You can find our front end python code in its entirety at `this github repository <https://github.com/flexcompute/tidy3d>`_.  This is also a good place to ask questions or request features through the "Discussions" tab.
 
@@ -28,7 +28,7 @@ Quick Start (Colab Notebook)
 
 Once there, to run the full example, select "Run -> Run All Cells".  Or you can click through the code blocks by pressing the "play" icon.
 
-You will first be prompted to log in using the email and passord you used for your user account.
+You will first be prompted to log in using the email and password you used for your user account.
 
 Then the notebook will create a simulation and upload it to our server, where it will run for a few minutes before downloading the results and plotting the field patterns.
 
@@ -54,7 +54,7 @@ To test whether the installation was successful you can run
 
     $ python -c "import tidy3d as td; print(td.__verion__)"
 
-or download and run an example script from `here <https://github.com/flexcompute-readthedocs/tidy3d-docs/blob/readthedocs/docs/source/StartHere.py>`_.
+or download and run an example script from `here <https://github.com/flexcompute-readthedocs/tidy3d-docs/blob/readthedocs/docs/StartHere.py>`_.
 
 Next Steps
 ==========
