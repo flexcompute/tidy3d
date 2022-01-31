@@ -248,6 +248,24 @@ class CollectionData(Tidy3dData):
                 return False
         return True
 
+    def __getitem__(self, field_name: str) -> xr.DataArray:
+        """Get the :class:`MonitorData` xarray representation by name (``col_data[field_name]``).
+
+        Parameters
+        ----------
+        field_name : ``str``
+            Name of the colletion's field, eg. "Ey" for FieldData.
+
+        Returns
+        -------
+        xarray.DataArray
+            Data corresponding to the supplied field name.
+        """
+        monitor_data = self.data_dict.get(field_name)
+        if not monitor_data:
+            raise DataError(f"field_name '{field_name}' not found")
+        return monitor_data.data
+
     def add_to_group(self, hdf5_grp) -> None:
         """Add data from a :class:`AbstractFieldData` to an hdf5 group ."""
 
