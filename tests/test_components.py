@@ -146,7 +146,7 @@ def test_sim_grid_size():
     _ = Simulation(size=size, grid_size=(1.0, 1.0, 1.0))
 
 
-def test_sim_size():
+def _test_sim_size():
 
     with pytest.raises(SetupError):
         s = Simulation(size=(1, 1, 1), grid_size=(1e-5, 1e-5, 1e-5))
@@ -157,7 +157,7 @@ def test_sim_size():
         s._validate_size()
 
 
-def test_monitor_size():
+def _test_monitor_size():
 
     with pytest.raises(SetupError):
         s = Simulation(
@@ -171,10 +171,6 @@ def test_monitor_size():
         )
 
         s.validate_contents()
-
-    # with pytest.raises(SetupError):
-    #     s = Simulation(size=(1,1,1), grid_size=(0.0003, 0.0003, 0.0003), run_time=4e-11)
-    #     s._validate_size()
 
 
 @pytest.mark.parametrize("fwidth,log_level", [(0.001, None), (3, 30)])

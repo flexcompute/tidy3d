@@ -853,6 +853,7 @@ class SimulationData(Tidy3dBaseModel):
             Name of :class:`FieldMonitor` or :class:`FieldTimeData` to plot.
         field_name : str
             Name of `field` in monitor to plot (eg. 'Ex').
+            Also accepts `'int'` to plot intensity.
         x : float = None
             Position of plane in x direction.
         y : float = None
@@ -860,7 +861,8 @@ class SimulationData(Tidy3dBaseModel):
         z : float = None
             Position of plane in z direction.
         val : Literal['real', 'imag', 'abs'] = 'real'
-            What part of the field to plot (in )
+            Which part of the field to plot.
+            If ``field_name='int'``, this has no effect.
         freq: float = None
             If monitor is a :class:`FieldMonitor`, specifies the frequency (Hz) to plot the field.
             Also sets the frequency at which the permittivity is evaluated at (if dispersive).
@@ -890,8 +892,15 @@ class SimulationData(Tidy3dBaseModel):
         self.ensure_field_monitor(monitor_data)
 
         # get the field data component
-        monitor_data.ensure_member_exists(field_name)
-        xr_data = monitor_data.data_dict.get(field_name).data
+        if field_name == "int":
+            monitor_data = self.at_centers(field_monitor_name)
+            xr_data = 0.0
+            for field_name in ("Ex", "Ey", "Ez"):
+                field_data = monitor_data[field_name]
+                xr_data += abs(field_data)**2
+        else:
+            monitor_data.ensure_member_exists(field_name)
+            xr_data = monitor_data.data_dict.get(field_name).data
 
         # select the frequency or time value
         if "f" in xr_data.coords:
@@ -909,21 +918,25 @@ class SimulationData(Tidy3dBaseModel):
         axis, pos = self.simulation.parse_xyz_kwargs(x=x, y=y, z=z)
         axis_label = "xyz"[axis]
         interp_kwarg = {axis_label: pos}
-        try:
-            field_data = field_data.interp(**interp_kwarg)
 
-        except Exception as e:
-            raise DataError(f"Could not interpolate data at {axis_label}={pos}.") from e
+        if len(field_data.coords[axis_label]) > 1:
+            try:
+                field_data = field_data.interp(**interp_kwarg)
+
+            except Exception as e:
+                raise DataError(f"Could not interpolate data at {axis_label}={pos}.") from e
 
         # select the field value
         if val not in ("real", "imag", "abs"):
             raise DataError(f"'val' must be one of ``{'real', 'imag', 'abs'}``, given {val}")
-        if val == "real":
-            field_data = field_data.real
-        elif val == "imag":
-            field_data = field_data.imag
-        elif val == "abs":
-            field_data = abs(field_data)
+
+        if field_name != "int":
+            if val == "real":
+                field_data = field_data.real
+            elif val == "imag":
+                field_data = field_data.imag
+            elif val == "abs":
+                field_data = abs(field_data)
 
         # plot the field
         xy_coord_labels = list("xyz")
