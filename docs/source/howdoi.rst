@@ -15,10 +15,10 @@ Work with Tidy3d Components
 
    * - How do I...
      - Solution
-   * - Get help related to any Tidy3d object?
+   * - Get help related to a Tidy3d object (``obj``)?
      - ``obj.help()``.
    * - Save and load any Tidy3d object?
-     - If the object ``obj`` is an instance of ``ObjClass``, save and load with ``obj.to_file(path='path/to/file.json')`` and ``obj = ObjClass.from_file(path='path/to/file.hdf5')``, respectively.
+     - If the object ``obj`` is an instance of ``ObjClass``, save and load with ``obj.to_file(path='path/to/file.json')`` and ``obj = ObjClass.from_file(path='path/to/file.json')``, respectively.
    * - Get all data in a Tidy3d object as a dictionary.
      - ``obj.dict()``.
 
@@ -32,9 +32,11 @@ Plot Tidy3D Components
    * - How do I...
      - Solution
    * - Plot an object with a spatial definition?  (:class:`Simulation`, :class:`Structure`, etc.)
-     - ``obj.plot(x=0)`` will plot the object on the ``x=0`` plane with ``y`` and ``z`` alternatively accepted to specify other planar axes.  If ``ax`` argument is supplied, will plot to an existing axis, ie. ``obj.plot(y=0, ax=ax)``.
-   * - Change the plot characteristics (facecolor, edgecolor, etc).
+     - ``obj.plot(x=0)`` will plot the object on the ``x=0`` plane, but ``y`` and ``z`` are alternatively accepted to specify other planar axes.  If ``ax`` argument will plot to an existing axis, ie. ``obj.plot(y=0, ax=ax)``.
+   * - Change the object plotting characteristics (facecolor, edgecolor, etc).
      - Plotting keyword arguments can be supplied to ``plot()``, for example ``obj.plot(x=0, edgecolor='blue', fill=False)``.  These keyword arguments correspond to those fed to `Matplotlib Patches <https://tinyurl.com/2nf5c2fk>`__.
+   * - Change the global plot characteristics (title, size, etc).
+     - The plotting function return a matplotlib ``Axes``, wihch can be manipulated, for example ``ax = obj.plot(x=0);  ax.set_title('my_title')``.
 
 Create Geometries
 -----------------
@@ -46,10 +48,10 @@ Create Geometries
    * - How do I...
      - Solution
    * - Load a structure from GDS format?
-     - From a cell in the  ``gdspy`` package, the ``td.PolySlab.from_gds(gds_cell, ...)`` method will load the geometry into a ``td.PolySlab``.
+     - From a cell in the  ``gdspy`` package, the ``ps = td.PolySlab.from_gds(gds_cell, ...)`` method will load the geometry into a ``td.PolySlab``.
    * - Create a complex geometry, such as a ring?
-     - While many complex geometries can be created using ``td.PolySlab``, simple geometries, such as rings, can be constructed by overlaying two structures with ``td.Cylinder()`` geomety with the inner cylinder defined with medium of air.  Note that structures later in the ``structures`` list will override previous structures.
-       
+     - While many complex geometries can be created by supplying the vertices to ``td.PolySlab``, simple geometries, such as rings, can be constructed by overlaying two structures with ``td.Cylinder()`` geomety with the inner cylinder defined with medium of air.  Note that structures later in the ``structures`` list will override previous structures, which can be leveraged to make more complex geometries.
+
 Materials
 ---------
 
@@ -59,7 +61,7 @@ Materials
 
    * - How do I...
      - Solution
-   * - Create a lossy material?
+   * - Create a lossy material (with a conductivity)?
      - ``td.Medium(permittivity=2.0, conductivity=1.0)``
    * - Create a material from n, k values at a given frequency?
      - ``td.Medium.from_nk(n=2.0, k=1.0, freq=200e12)``
@@ -112,7 +114,7 @@ Work with Monitor Data
    * - Get the raw data values as a ``numpy`` array?
      - ``mon_data.values``.
    * - Get a specific field component (eg. ``Hy``) for a :class:`FieldMonitor` or :class:`FieldTimeMonitor`?
-     - ``component_data = sim_data[monitor_name].Hy``. 
+     - ``component_data = sim_data[monitor_name].Hy``.  To access by string: ``component_data = sim_data[monitor_name].data_dict['Hy'].data``.
 
 Plot Data
 ---------

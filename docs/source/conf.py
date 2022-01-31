@@ -57,8 +57,7 @@ extensions = [
     "IPython.sphinxext.ipython_directive",
     "IPython.sphinxext.ipython_console_highlighting",
     "sphinx_copybutton",
-    "m2r2"
-    # "sphinx_github_changelog",
+    "m2r2",
 ]
 
 source_suffix = [".rst", ".md"]
@@ -138,12 +137,12 @@ html_show_sourcelink = False
 html_theme_options = {
     "path_to_docs": "docs",
     "repository_url": "https://github.com/flexcompute/tidy3d",
-    "repository_branch": "master",
+    "repository_branch": "main",
     "launch_buttons": {
-        "binderhub_url": "https://mybinder.org",
+        "binderhub_url": "https://mybinder.org/v2/gh/flexcompute-readthedocs/tidy3d-docs/readthedocs?labpath=docs%2Fsource%2Fnotebooks",
         "notebook_interface": "jupyterlab",
-        "colab_url": "https://colab.research.google.com/",
     },
+
     "use_edit_page_button": True,
     "use_issues_button": True,
     "use_repository_button": True,
