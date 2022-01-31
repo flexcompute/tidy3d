@@ -386,8 +386,6 @@ class PoleResidue(DispersiveMedium):
         \\left[\\frac{c_i}{j \\omega + a_i} +
         \\frac{c_i^*}{j \\omega + a_i^*}\\right]
 
-    where :math:`a_i` and :math:`c_i` are in units of rad/s.
-
     Example
     -------
     >>> pole_res = PoleResidue(eps_inf=2.0, poles=[((1+2j), (3+4j)), ((5+6j), (7+8j))])
@@ -406,19 +404,6 @@ class PoleResidue(DispersiveMedium):
         description="List of complex-valued (:math:`a_i, c_i`) poles for the model.",
         units=RADPERSEC,
     )
-
-    # @pydantic.validator("poles", always=True)
-    # def convert_complex(cls, val):
-    #     """convert list of poles to complex"""
-
-    #     poles_complex = []
-    #     for (a, c) in val:
-    #         if isinstance(a, ComplexNumber):
-    #             a = a.real + 1j * a.imag
-    #         if isinstance(c, ComplexNumber):
-    #             c = c.real + 1j * c.imag
-    #         poles_complex.append((a, c))
-    #     return poles_complex
 
     @ensure_freq_in_range
     def eps_model(self, frequency: float) -> complex:
@@ -466,8 +451,6 @@ class Sellmeier(DispersiveMedium):
 
         n(\\lambda)^2 = 1 + \\sum_i \\frac{B_i \\lambda^2}{\\lambda^2 - C_i}
 
-    where :math:`\\lambda` is in microns, :math:`B_i` is unitless and :math:`C_i` is in microns^2.
-
     Example
     -------
     >>> sellmeier_medium = Sellmeier(coeffs=[(1,2), (3,4)])
@@ -475,7 +458,8 @@ class Sellmeier(DispersiveMedium):
     """
 
     coeffs: List[Tuple[float, PositiveFloat]] = pydantic.Field(
-        title="Coefficients", description="List of Sellmeier (:math:`B_i, C_i`) coefficients."
+        title="Coefficients",
+        description="List of Sellmeier (:math:`B_i, C_i`) coefficients (unitless, microns^2).",
     )
 
     def _n_model(self, frequency: float) -> complex:
@@ -527,8 +511,6 @@ class Lorentz(DispersiveMedium):
         \\epsilon(f) = \\epsilon_\\infty + \\sum_i
         \\frac{\\Delta\\epsilon_i f_i^2}{f_i^2 - 2jf\\delta_i - f^2}
 
-    where :math:`f, f_i, \\delta_i` are in Hz.
-
     Example
     -------
     >>> lorentz_medium = Lorentz(eps_inf=2.0, coeffs=[(1,2,3), (4,5,6)])
@@ -544,7 +526,7 @@ class Lorentz(DispersiveMedium):
     coeffs: List[Tuple[float, float, float]] = pydantic.Field(
         ...,
         title="Epsilon at Infinity",
-        description="List of (:math:`\\Delta\\epsilon_i, f_i, \\delta_i`) values for model.",
+        description="List of (:math:`\\Delta\\epsilon_i, f_i, \\delta_i`) values for model (Hz).",
     )
 
     @ensure_freq_in_range
@@ -572,18 +554,12 @@ class Lorentz(DispersiveMedium):
                 c0 = de * w ** 2 / 4 / r
                 a1 = -d - r
                 c1 = -c0
-                # a0 = self.complex_to_tuple(a0)
-                # c0 = self.complex_to_tuple(c0)
-                # a1 = self.complex_to_tuple(a1)
-                # c1 = self.complex_to_tuple(c1)
                 poles.append((a0, c0))
                 poles.append((a1, c1))
             else:
                 r = np.sqrt(w * w - d * d)
                 a = -d - 1j * r
                 c = 1j * de * w ** 2 / 2 / r
-                # a = self.complex_to_tuple(a)
-                # c = self.complex_to_tuple(c)
                 poles.append((a, c))
 
         return PoleResidue(
@@ -602,8 +578,6 @@ class Drude(DispersiveMedium):
         \\epsilon(f) = \\epsilon_\\infty - \\sum_i
         \\frac{ f_i^2}{f^2 + jf\\delta_i}
 
-    where :math:`f, f_i, \\delta_i` are in Hz.
-
     Example
     -------
     >>> drude_medium = Drude(eps_inf=2.0, coeffs=[(1,2), (3,4)])
@@ -617,7 +591,9 @@ class Drude(DispersiveMedium):
     )
 
     coeffs: List[Tuple[float, PositiveFloat]] = pydantic.Field(
-        ..., title="Coefficients", description="List of (:math:`f_i, \\delta_i`) values for model."
+        ...,
+        title="Coefficients",
+        description="List of (:math:`f_i, \\delta_i`) values for model (Hz).",
     )
 
     @ensure_freq_in_range
@@ -645,11 +621,6 @@ class Drude(DispersiveMedium):
             c1 = -c0
             a1 = -d + 0j
 
-            # a0 = self.complex_to_tuple(a0)
-            # c0 = self.complex_to_tuple(c0)
-            # a1 = self.complex_to_tuple(a1)
-            # c1 = self.complex_to_tuple(c1)
-
             poles.append((a0, c0))
             poles.append((a1, c1))
 
@@ -669,8 +640,6 @@ class Debye(DispersiveMedium):
         \\epsilon(f) = \\epsilon_\\infty + \\sum_i
         \\frac{\\Delta\\epsilon_i}{1 - jf\\tau_i}
 
-    where :math:`f` is in Hz, and :math:`\\tau_i` is in seconds.
-
     Example
     -------
     >>> debye_medium = Debye(eps_inf=2.0, coeffs=[(1,2),(3,4)])
@@ -686,7 +655,7 @@ class Debye(DispersiveMedium):
     coeffs: List[Tuple[float, PositiveFloat]] = pydantic.Field(
         ...,
         title="Coefficients",
-        description="List of (:math:`\\Delta\\epsilon_i, \\tau_i`) values for model.",
+        description="List of (:math:`\\Delta\\epsilon_i, \\tau_i`) values for model (Hz, sec).",
     )
 
     @ensure_freq_in_range

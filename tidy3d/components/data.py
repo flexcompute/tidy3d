@@ -897,7 +897,7 @@ class SimulationData(Tidy3dBaseModel):
             xr_data = 0.0
             for field_name in ("Ex", "Ey", "Ez"):
                 field_data = monitor_data[field_name]
-                xr_data += abs(field_data)**2
+                xr_data += abs(field_data) ** 2
         else:
             monitor_data.ensure_member_exists(field_name)
             xr_data = monitor_data.data_dict.get(field_name).data
