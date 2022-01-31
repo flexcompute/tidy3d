@@ -11,7 +11,7 @@ from nbconvert.preprocessors import ExecutePreprocessor
 ep = ExecutePreprocessor(timeout=1000, kernel_name="python3")
 
 # get all notebook files
-NOTEBOOK_DIR = "docs/notebooks/"
+NOTEBOOK_DIR = "docs/source/notebooks/"
 notebook_filenames = [
     NOTEBOOK_DIR + f
     for f in os.listdir(NOTEBOOK_DIR)
@@ -19,7 +19,7 @@ notebook_filenames = [
 ]
 
 # if you want to run only some notebooks, put here, if empty, run all
-run_only = ("StartHere",)# "VizData", "VizSimulation", "Fitting", "ModeSolver", "Near2Far")
+run_only = []#["StartHere" "VizData", "VizSimulation", "Fitting", "ModeSolver", "Near2Far"]
 if len(run_only):
     notebook_filenames = [NOTEBOOK_DIR + base + ".ipynb" for base in run_only]
 
