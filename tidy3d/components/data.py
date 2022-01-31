@@ -756,7 +756,7 @@ class SimulationData(Tidy3dBaseModel):
         A string containing the log information from the simulation run.
     diverged : bool = False
         A boolean flag denoting if the simulation run diverged.
-    normalized : bool = Fale
+    normalized : bool = False
         A boolean flag denoting whether the data has been normalized by the spectrum of a source.
     """
 
