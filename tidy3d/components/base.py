@@ -253,7 +253,6 @@ def generate_docstring(cls) -> str:
     # if the model already has a docstring, get the first lines and save the rest
     original_docstrings = []
     if cls.__doc__:
-        original_docstring = cls.__doc__.replace("    ", "\t")
         original_docstrings = cls.__doc__.split("\n\n")
         class_description = original_docstrings.pop(0)
         doc += class_description

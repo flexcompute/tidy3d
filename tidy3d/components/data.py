@@ -848,7 +848,7 @@ class SimulationData(Tidy3dBaseModel):
 
     @equal_aspect
     @add_ax_if_none
-    def plot_field(  # pylint:disable=too-many-arguments, too-many-locals
+    def plot_field(  # pylint:disable=too-many-arguments, too-many-locals, too-many-branches
         self,
         field_monitor_name: str,
         field_name: str,
@@ -913,8 +913,8 @@ class SimulationData(Tidy3dBaseModel):
         if field_name == "int":
             monitor_data = self.at_centers(field_monitor_name)
             xr_data = 0.0
-            for field_name in ("Ex", "Ey", "Ez"):
-                field_data = monitor_data[field_name]
+            for field in ("Ex", "Ey", "Ez"):
+                field_data = monitor_data[field]
                 xr_data += abs(field_data) ** 2
         else:
             monitor_data.ensure_member_exists(field_name)

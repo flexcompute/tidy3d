@@ -484,10 +484,11 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
 
         Returns
         -------
-        Set[:class:`AbstractMedium`]
+        List[:class:`AbstractMedium`]
             Set of distinct mediums in the simulation.
         """
-        return {structure.medium for structure in self.structures}
+        medium_dict = {structure.medium: None for structure in self.structures}
+        return list(medium_dict.keys())
 
     @property
     def medium_map(self) -> Dict[MediumType, pydantic.NonNegativeInt]:
