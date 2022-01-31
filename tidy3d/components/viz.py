@@ -4,8 +4,11 @@ from typing import Any
 from abc import abstractmethod
 from functools import wraps
 
-import matplotlib.pylab as plt
-from matplotlib import cm
+try:
+    import matplotlib.pylab as plt
+    from matplotlib import cm
+except Exception: # pylint: disable=broad-except
+    print("Could not import matplotlib!")
 from pydantic import BaseModel
 import numpy as np
 
