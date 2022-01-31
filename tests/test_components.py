@@ -72,7 +72,7 @@ def test_sim():
             FieldMonitor(size=(0, 0, 0), center=(0, 0, 0), freqs=[1, 2], name="point"),
             FluxTimeMonitor(size=(1, 1, 0), center=(0, 0, 0), interval=10, name="plane"),
         ],
-        symmetry=(0, -1, 1),
+        symmetry=(0, 0, 0),
         pml_layers=(
             PML(num_layers=20),
             StablePML(num_layers=30),
@@ -144,6 +144,33 @@ def test_sim_grid_size():
 
     size = (1, 1, 1)
     _ = Simulation(size=size, grid_size=(1.0, 1.0, 1.0))
+
+
+def _test_sim_size():
+
+    with pytest.raises(SetupError):
+        s = Simulation(size=(1, 1, 1), grid_size=(1e-5, 1e-5, 1e-5))
+        s._validate_size()
+
+    with pytest.raises(SetupError):
+        s = Simulation(size=(1, 1, 1), grid_size=(0.1, 0.1, 0.1), run_time=1e-7)
+        s._validate_size()
+
+
+def _test_monitor_size():
+
+    with pytest.raises(SetupError):
+        s = Simulation(
+            size=(1, 1, 1),
+            grid_size=(1e-3, 1e-3, 1e-3),
+            monitors=[
+                FieldMonitor(
+                    size=(inf, inf, inf), freqs=np.linspace(0, 200e12, 10000001), name="test"
+                )
+            ],
+        )
+
+        s.validate_contents()
 
 
 @pytest.mark.parametrize("fwidth,log_level", [(0.001, None), (3, 30)])

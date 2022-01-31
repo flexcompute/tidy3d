@@ -38,6 +38,12 @@ MIN_GRIDS_PER_WVL = 6.0
 # maximum number of mediums supported
 MAX_NUM_MEDIUMS = 200
 
+# maximum numbers of simulation parameters
+MAX_TIME_STEPS = 1e8
+MAX_GRID_CELLS = 20e9
+MAX_CELLS_TIMES_STEPS = 1e17
+MAX_MONITOR_DATA_SIZE_BYTES = 10e9
+
 
 class Simulation(Box):  # pylint:disable=too-many-public-methods
     """Contains all information about Tidy3d simulation.
@@ -181,6 +187,17 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
 
     """ Validating setup """
 
+    @pydantic.validator("symmetry", always=True)
+    def not_supported_yet(cls, val):
+        """Log an error if non 0 value supplied."""
+        if any(sym_val != 0 for sym_val in val):
+            raise SetupError(
+                "Symmetry not supported in this version of tidy3d, "
+                "but will be included in coming release."
+                "For now, if symmetry is required, use the originl tidy3d."
+            )
+        return val
+
     @pydantic.validator("pml_layers", always=True)
     def set_none_to_zero_layers(cls, val):
         """if any PML layer is None, set it to an empty :class:`PML`."""
@@ -238,14 +255,14 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
             struct_bound_min, struct_bound_max = structure.geometry.bounds
             struct_bounds = list(struct_bound_min) + list(struct_bound_max)
 
-            for sim_val, struct_val in zip(sim_bounds, struct_bounds):
+            for istruct, (sim_val, struct_val) in enumerate(zip(sim_bounds, struct_bounds)):
 
                 if np.isclose(sim_val, struct_val):
                     log.warning(
-                        f"structure\n\n{structure}\n\nbounds extend exactly to simulation "
-                        "edges. This can cause unexpected behavior. If intending to extend "
-                        "the structure to infinity along one dimension, use td.inf as a "
-                        "size variable instead to make this explicit."
+                        f"Structure at structures[{istruct}] has bounds that extend exactly to "
+                        "simulation edges. This can cause unexpected behavior. "
+                        "If intending to extend the structure to infinity along one dimension, "
+                        "use td.inf as a size variable instead to make this explicit."
                     )
 
         return val
@@ -405,6 +422,56 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
                     )
 
         return val
+
+    """ Pre submit validation (before web.upload()) """
+
+    def validate_contents(self) -> None:
+        """Validate the fully initialized simulation is within allowed limits."""
+        self._validate_size()
+        self._validate_monitor_size()
+
+    def _validate_size(self) -> None:
+        """Ensures the simulation is within size limits before simulation is uploaded."""
+
+        num_cells = self.num_cells
+        if num_cells > MAX_GRID_CELLS:
+            raise SetupError(
+                f"Simulation has {num_cells:.2e} computational cells, "
+                f"a maximum of {MAX_GRID_CELLS:.2e} are allowed."
+            )
+
+        num_time_steps = self.num_time_steps
+        if num_time_steps > MAX_TIME_STEPS:
+            raise SetupError(
+                f"Simulation has {num_time_steps:.2e} time steps, "
+                f"a maximum of {MAX_TIME_STEPS:.2e} are allowed."
+            )
+
+        num_cells_times_steps = num_time_steps * num_cells
+        if num_cells_times_steps > MAX_CELLS_TIMES_STEPS:
+            raise SetupError(
+                f"Simulation has {num_cells_times_steps:.2e} grid cells * time steps, "
+                f"a maximum of {MAX_CELLS_TIMES_STEPS:.2e} are allowed."
+            )
+
+    def _validate_monitor_size(self) -> None:
+        """Ensures the monitors arent storing too much data before simulation is uploaded."""
+
+        num_time_steps = self.num_time_steps
+
+        total_size_bytes = 0
+        for monitor in self.monitors:
+            monitor_grid = self.discretize(monitor)
+            num_cells = np.prod(monitor_grid.num_cells)
+            monitor_size = monitor.storage_size(num_cells=num_cells, num_steps=num_time_steps)
+
+            total_size_bytes += monitor_size
+
+        if total_size_bytes > MAX_MONITOR_DATA_SIZE_BYTES:
+            raise SetupError(
+                f"Simulation's monitors have {total_size_bytes:.2e} bytes of estimated storage, "
+                f"a maximum of {MAX_MONITOR_DATA_SIZE_BYTES:.2e} are allowed."
+            )
 
     """ Accounting """
 
@@ -977,6 +1044,12 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         dt = self.dt
         return np.arange(0.0, self.run_time + dt, dt)
 
+    @property
+    def num_time_steps(self) -> int:
+        """Number of time steps in simulation."""
+
+        return len(self.tmesh)
+
     def _make_bound_coords_uniform(self, dl, center, size, num_layers):
         """creates coordinate boundaries with uniform mesh (dl is float)"""
 
@@ -1042,6 +1115,18 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
             cell_boundary_dict[key] = bound_coords
         boundaries = Coords(**cell_boundary_dict)
         return Grid(boundaries=boundaries)
+
+    @property
+    def num_cells(self) -> int:
+        """Number of cells in the simulation.
+
+        Returns
+        -------
+        int
+            Number of yee cells in the simulation.
+        """
+
+        return np.prod(self.grid.num_cells)
 
     @staticmethod
     def _add_pml_to_bounds(num_layers: Tuple[int, int], bounds: Coords1D):
