@@ -6,16 +6,16 @@ How do I run a simulation and access the results?
 
 Submitting and monitoring jobs, and donwloading the results, is all done 
 through our `web API <api.html#web-api>`_. After a successful run, 
-all data for all monitors can be downloaded in a single file 
-``monitor_data.hdf5`` using :meth:`tidy3d.web.load()`, and the 
-raw data can be loaded into a :class:`tidy3d.SimultionData` object.
+all data for all monitors can be downloaded in a single ``.hdf5`` file 
+using :meth:`tidy3d.web.webapi.load`, and the
+raw data can be loaded into a :class:`.SimulationData` object.
 
-From the :class:`tidy3d.SimultionData` object, one can grab and plot the data for each monitor with square bracket indexing, inspect the originl :class:`Simulation` object, and view the log from the solver run.  For more details, see the tutorial ``VizData``.
+From the :class:`.SimulationData` object, one can grab and plot the data for each monitor with square bracket indexing, inspect the original :class:`.Simulation` object, and view the log from the solver run.  For more details, see `this tutorial <notebooks/VizSimulation.html>`_.
 
 How is using Tidy3D billed?
 ---------------------------
 
-The `Tidy3D client <https://pypi.org/project/tidy3d/>`_ that is used for designing 
+The `Tidy3D client <https://pypi.org/project/tidy3d-beta/>`_ that is used for designing 
 simulations and analyzing the results is free and 
 open source. We only bill the run time of the solver on our server, taking only the compute 
 time into account (as opposed to overhead e.g. during uploading). In the online user interface, 
@@ -59,16 +59,16 @@ an array of three elements defining the PML boundaries along x, y, and z. The
 easiest way to define PML is to use e.g. ``pml_layers=(None, None, td.PML())`` 
 to define PML in the z-direction only (in x and y, the default periodic boundaries will 
 be used). It is also possible to customize the PML further as explained in the 
-`documentation <generated/tidy3d.Simulation.html>`_ and below.
+`documentation <https://docs.simulation.cloud/en/latest/>`_ and below.
 
 Tidy3D uses a complex frequency-shifted formulation of the perfectly-matched layers (CPML), 
 for which it is more natural to define the thickness as number of layers rather than as 
-physical size. We provide two pre-set PML profiles, 'standard' (``td.PML()``) and 'stable' (``td.StablePML()``).
+physical size. We provide two pre-set PML profiles, 'standard' (:class:`.PML`) and 'stable' (:class:`.StablePML`.
 The standard profile has 12 layers by default and should be sufficient in many situations. In the 
 case of a diverging simulation, or when the fields do not appear to be fully absorbed in the PML, 
-the user can increase the number of layers in the 'standard' profile (``td.PML(num_layers=20)``, or try the 'stable'
+the user can increase the number of layers in the 'standard' profile (``PML(num_layers=20)``, or try the 'stable'
 profile, which requires more layers (default is 40) but should generally work better. 
-Adiabatic absorbing boundaries can be used as well through ``td.Absorber()``, which may improve stability over both PML types in certain situations.
+Adiabatic absorbing boundaries can be used as well through :class:`.Absorber`, which may improve stability over both PML types in certain situations.
 
 **NB**: The PML layers extend **beyond** the simulation domain. This makes it easier not to worry 
 about PMLs intruding into parts of your simulation where you don't want them to be. The one thing 
@@ -150,8 +150,8 @@ How do I include material dispersion?
 -------------------------------------
 
 Dispersive materials are supported in Tidy3D and we provide an extensive 
-`material library <generated/tidy3d.material_library.html>`_ with pre-defined materials. 
-Standard `dispersive material models <api.html#dispersive-models>`_ can also be defined. 
+`material library <api.html#material-library>`_ with pre-defined materials. 
+Standard `dispersive material models <api.html#dispersive-mediums>`_ can also be defined. 
 If you need help inputting a custom material, let us know!
 
 It is important to keep in mind that dispersive materials are inevitably slower to 
