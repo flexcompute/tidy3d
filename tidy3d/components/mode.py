@@ -17,7 +17,7 @@ class ModeSpec(Tidy3dBaseModel):
 
     Example
     -------
-    >>> mode_spec = ModeSpec(num_modes=3, target_neff=1.5, symmetries=(1,-1))
+    >>> mode_spec = ModeSpec(num_modes=3, target_neff=1.5, symmetries=(1, -1))
     """
 
     num_modes: pd.PositiveInt = pd.Field(
@@ -31,14 +31,14 @@ class ModeSpec(Tidy3dBaseModel):
     symmetries: Tuple[Symmetry, Symmetry] = pd.Field(
         (0, 0),
         title="Tangential symmetries",
-        description="Symmetries to apply to mode solver for first two non-propagation axes.  "
+        description="Symmetries to apply to the modes in the two tangential axes. "
         "Values of (0, 1,-1) correspond to (none, even, odd) symmetries, respectvely.",
     )
 
     num_pml: Tuple[pd.NonNegativeInt, pd.NonNegativeInt] = pd.Field(
         (0, 0),
         title="Number of PML layers",
-        description="Number of standard pml layers to add in the first two non-propagation axes.",
+        description="Number of standard pml layers to add in the two tangential axes.",
     )
 
     bend_radius: float = pd.Field(
@@ -46,7 +46,7 @@ class ModeSpec(Tidy3dBaseModel):
         title="Bend radius",
         description="A curvature radius for simulation of waveguide bends. Can be negative, in "
         "which case the mode plane center has a smaller value than the curvature center along the "
-        "axis that is perpendicular to both the normal axis and the bend axis.",
+        "tangential axis perpendicular to the bend axis.",
         units=MICROMETER,
     )
 
@@ -54,7 +54,9 @@ class ModeSpec(Tidy3dBaseModel):
         None,
         title="Bend axis",
         description="Index into the first two non-propagating axes defining the normal to the "
-        "plane in which the bend lies. This must be provided if ``bend_radius`` is not ``None``.",
+        "plane in which the bend lies. This must be provided if ``bend_radius`` is not ``None``. "
+        "For example, for a ring in the global xy-plane, and a mode plane in either the xz or the "
+        "yz plane, the ``bend_axis`` is always 1 (the global z axis)."
     )
 
     @pd.validator("bend_axis", always=True)
