@@ -8,6 +8,8 @@
 
 The website can be found [here](https://flexcompute-tidy3ddocumentation.readthedocs-hosted.com/en/latest/).
 
+It is hosted by readthedocs, the admin site can be found [here](https://readthedocs.com/dashboard/).
+
 ## Notebooks
 
 The notebooks are in `docs/source/notebooks`.
