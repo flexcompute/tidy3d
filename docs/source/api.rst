@@ -244,11 +244,15 @@ Plugins
    :toctree: _autosummary/
 
    plugins.DispersionFitter
+   plugins.StableDispersionFitter
    plugins.ModeSolver
    plugins.Near2Far
    .. plugins.DispersionFitter.from_file
    .. plugins.DispersionFitter.fit
    .. plugins.DispersionFitter.plot
+   .. plugins.StableDispersionFitter.from_file
+   .. plugins.StableDispersionFitter.fit
+   .. plugins.StableDispersionFitter.plot
 
 .. Mode Solver
 .. -----------
@@ -360,6 +364,7 @@ These are classes that are used to organize the tidy3d components, but aren't to
 ..    :toctree: _autosummary/
 
 ..    plugins.DispersionFitter
+..    plugins.StableDispersionFitter
 ..    plugins.ModeSolver
 ..    plugins.Near2Far
 
