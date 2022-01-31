@@ -381,7 +381,10 @@ class PoleResidue(DispersiveMedium):
     """A dispersive medium described by the pole-residue pair model.
     The frequency-dependence of the complex-valued permittivity is described by:
 
+    Note
+    ----
     .. math::
+
         \\epsilon(\\omega) = \\epsilon_\\infty - \\sum_i
         \\left[\\frac{c_i}{j \\omega + a_i} +
         \\frac{c_i^*}{j \\omega + a_i^*}\\right]
@@ -447,6 +450,8 @@ class Sellmeier(DispersiveMedium):
     """A dispersive medium described by the Sellmeier model.
     The frequency-dependence of the refractive index is described by:
 
+    Note
+    ----
     .. math::
 
         n(\\lambda)^2 = 1 + \\sum_i \\frac{B_i \\lambda^2}{\\lambda^2 - C_i}
@@ -507,7 +512,10 @@ class Lorentz(DispersiveMedium):
     """A dispersive medium described by the Lorentz model.
     The frequency-dependence of the complex-valued permittivity is described by:
 
+    Note
+    ----
     .. math::
+
         \\epsilon(f) = \\epsilon_\\infty + \\sum_i
         \\frac{\\Delta\\epsilon_i f_i^2}{f_i^2 - 2jf\\delta_i - f^2}
 
@@ -574,7 +582,10 @@ class Drude(DispersiveMedium):
     """A dispersive medium described by the Drude model.
     The frequency-dependence of the complex-valued permittivity is described by:
 
+    Note
+    ----
     .. math::
+
         \\epsilon(f) = \\epsilon_\\infty - \\sum_i
         \\frac{ f_i^2}{f^2 + jf\\delta_i}
 
@@ -636,7 +647,10 @@ class Debye(DispersiveMedium):
     """A dispersive medium described by the Debye model.
     The frequency-dependence of the complex-valued permittivity is described by:
 
+    Note
+    ----
     .. math::
+
         \\epsilon(f) = \\epsilon_\\infty + \\sum_i
         \\frac{\\Delta\\epsilon_i}{1 - jf\\tau_i}
 
