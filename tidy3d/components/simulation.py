@@ -42,6 +42,7 @@ MAX_NUM_MEDIUMS = 200
 MAX_TIME_STEPS = 1e8
 MAX_GRID_CELLS = 20e9
 MAX_CELLS_TIMES_STEPS = 1e17
+MAX_MONITOR_DATA_SIZE_BYTES = 10e9
 
 
 class Simulation(Box):  # pylint:disable=too-many-public-methods
@@ -422,8 +423,15 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
 
         return val
 
+    """ Pre submit validation (before web.upload()) """
+
+    def validate_contents(self) -> None:
+        """Validate the fully initialized simulation is within allowed limits."""
+        self._validate_size()
+        self._validate_monitor_size()
+
     def _validate_size(self) -> None:
-        """Ensures the simulation is within size limits. Called before simulation is uploaded."""
+        """Ensures the simulation is within size limits before simulation is uploaded."""
 
         num_cells = self.num_cells
         if num_cells > MAX_GRID_CELLS:
@@ -432,7 +440,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
                 f"a maximum of {MAX_GRID_CELLS:.2e} are allowed."
             )
 
-        num_time_steps = len(self.tmesh)
+        num_time_steps = self.num_time_steps
         if num_time_steps > MAX_TIME_STEPS:
             raise SetupError(
                 f"Simulation has {num_time_steps:.2e} time steps, "
@@ -444,6 +452,25 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
             raise SetupError(
                 f"Simulation has {num_cells_times_steps:.2e} grid cells * time steps, "
                 f"a maximum of {MAX_CELLS_TIMES_STEPS:.2e} are allowed."
+            )
+
+    def _validate_monitor_size(self) -> None:
+        """Ensures the monitors arent storing too much data before simulation is uploaded."""
+
+        num_time_steps = self.num_time_steps
+
+        total_size_bytes = 0
+        for monitor in self.monitors:
+            monitor_grid = self.discretize(monitor)
+            num_cells = np.prod(monitor_grid.num_cells)
+            monitor_size = monitor.storage_size(num_cells=num_cells, num_steps=num_time_steps)
+
+            total_size_bytes += monitor_size
+
+        if total_size_bytes > MAX_MONITOR_DATA_SIZE_BYTES:
+            raise SetupError(
+                f"Simulation's monitors have {total_size_bytes:.2e} bytes of estimated storage, "
+                f"a maximum of {MAX_MONITOR_DATA_SIZE_BYTES:.2e} are allowed."
             )
 
     """ Accounting """
@@ -1016,6 +1043,12 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         """
         dt = self.dt
         return np.arange(0.0, self.run_time + dt, dt)
+
+    @property
+    def num_time_steps(self) -> int:
+        """Number of time steps in simulation."""
+
+        return len(self.tmesh)
 
     def _make_bound_coords_uniform(self, dl, center, size, num_layers):
         """creates coordinate boundaries with uniform mesh (dl is float)"""

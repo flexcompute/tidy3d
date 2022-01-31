@@ -1,5 +1,5 @@
 """Objects that define how data is recorded from simulation."""
-from abc import ABC
+from abc import ABC, abstractmethod
 from typing import List, Union
 
 import pydantic
@@ -11,6 +11,10 @@ from .mode import ModeSpec
 from .viz import add_ax_if_none, equal_aspect, MonitorParams
 from ..log import SetupError
 from ..constants import HERTZ, SECOND
+
+
+BYTES_REAL = 4
+BYTES_COMPLEX = 8
 
 
 class Monitor(Box, ABC):
@@ -43,6 +47,23 @@ class Monitor(Box, ABC):
             Representation of the monitor geometry as a :class:`Box`.
         """
         return Box(center=self.center, size=self.size)
+
+    @abstractmethod
+    def storage_size(self, num_cells: int, num_steps: int) -> int:
+        """Size of monitor storage given the number of points after discretization.
+
+        Parameters
+        ----------
+        num_cells : int
+            Number of grid cells within the monitor after discretization by a :class:`Simulation`.
+        num_steps : int
+            Number of time steps in the discretized :class:`Simulation`.
+
+        Returns
+        -------
+        int
+            Number of bytes to be stored in monitor.
+        """
 
 
 class FreqMonitor(Monitor, ABC):
@@ -200,6 +221,10 @@ class FieldMonitor(AbstractFieldMonitor, FreqMonitor):
 
     _data_type: Literal["ScalarFieldData"] = pydantic.Field("ScalarFieldData")
 
+    def storage_size(self, num_cells: int, num_steps: int) -> int:
+        # stores 1 complex number per grid cell, per frequency, per field
+        return BYTES_COMPLEX * num_cells * len(self.freqs) * len(self.fields)
+
 
 class FieldTimeMonitor(AbstractFieldMonitor, TimeMonitor):
     """:class:`Monitor` that records electromagnetic fields in the time domain.
@@ -218,6 +243,10 @@ class FieldTimeMonitor(AbstractFieldMonitor, TimeMonitor):
 
     _data_type: Literal["ScalarFieldTimeData"] = pydantic.Field("ScalarFieldTimeData")
 
+    def storage_size(self, num_cells: int, num_steps: int) -> int:
+        # stores 1 real number per grid cell, per time step, per field
+        return BYTES_REAL * num_cells * num_steps * len(self.fields)
+
 
 class FluxMonitor(AbstractFluxMonitor, FreqMonitor):
     """:class:`Monitor` that records power flux through a plane in the frequency domain.
@@ -232,6 +261,10 @@ class FluxMonitor(AbstractFluxMonitor, FreqMonitor):
     """
 
     _data_type: Literal["FluxData"] = pydantic.Field("FluxData")
+
+    def storage_size(self, num_cells: int, num_steps: int) -> int:
+        # stores 6 complex numbers per grid cell, per frequency
+        return 6 * BYTES_REAL * num_cells * len(self.freqs)
 
 
 class FluxTimeMonitor(AbstractFluxMonitor, TimeMonitor):
@@ -249,6 +282,10 @@ class FluxTimeMonitor(AbstractFluxMonitor, TimeMonitor):
     """
 
     _data_type: Literal["FluxTimeData"] = pydantic.Field("FluxTimeData")
+
+    def storage_size(self, num_cells: int, num_steps: int) -> int:
+        # stores 1 real number per time tep
+        return BYTES_REAL * num_steps
 
 
 class ModeMonitor(PlanarMonitor, FreqMonitor):
@@ -272,6 +309,10 @@ class ModeMonitor(PlanarMonitor, FreqMonitor):
     )
 
     _data_type: Literal["ModeData"] = pydantic.Field("ModeData")
+
+    def storage_size(self, num_cells: int, num_steps: int) -> int:
+        # stores 3 complex numbers per grid cell, per frequency, per mode.
+        return 3 * BYTES_COMPLEX * num_cells * len(self.freqs) * self.mode_spec.num_modes
 
 
 # types of monitors that are accepted by simulation

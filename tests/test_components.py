@@ -145,19 +145,37 @@ def test_sim_grid_size():
     size = (1, 1, 1)
     _ = Simulation(size=size, grid_size=(1.0, 1.0, 1.0))
 
+
 def test_sim_size():
 
     with pytest.raises(SetupError):
-        s = Simulation(size=(1,1,1), grid_size=(1e-5, 1e-5, 1e-5))
+        s = Simulation(size=(1, 1, 1), grid_size=(1e-5, 1e-5, 1e-5))
         s._validate_size()
 
     with pytest.raises(SetupError):
-        s = Simulation(size=(1,1,1), grid_size=(.1, .1, .1), run_time=1e-7)
+        s = Simulation(size=(1, 1, 1), grid_size=(0.1, 0.1, 0.1), run_time=1e-7)
         s._validate_size()
+
+
+def test_monitor_size():
+
+    with pytest.raises(SetupError):
+        s = Simulation(
+            size=(1, 1, 1),
+            grid_size=(1e-3, 1e-3, 1e-3),
+            monitors=[
+                FieldMonitor(
+                    size=(inf, inf, inf), freqs=np.linspace(0, 200e12, 10000001), name="test"
+                )
+            ],
+        )
+
+        s.validate_contents()
 
     # with pytest.raises(SetupError):
     #     s = Simulation(size=(1,1,1), grid_size=(0.0003, 0.0003, 0.0003), run_time=4e-11)
     #     s._validate_size()
+
 
 @pytest.mark.parametrize("fwidth,log_level", [(0.001, None), (3, 30)])
 def test_sim_frequency_range(caplog, fwidth, log_level):
