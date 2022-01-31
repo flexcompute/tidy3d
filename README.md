@@ -8,12 +8,10 @@
 
 First time you want to use the docs, install all packages and make the docs building script executable.
 
-
 ```bash
 git submodule --init tidy3d
 pip install -r docs/requirements.txt
 pip install -r tests/requirements.txt
-chmod +x docs/build_docs.sh
 ```
 
 ## Docs
@@ -21,9 +19,11 @@ chmod +x docs/build_docs.sh
 To compile the docs:
 
 ```bash
-cd docs
-bash build_docs.sh
-open _build/index.html
+cd docs/source
+rm -rf _build
+rm -rf _autosummary
+python -m sphinx -T -b html -d _build/doctrees -D language=en . _build/html
+open _build/html/index.html
 ```
 
 ## Notebooks
