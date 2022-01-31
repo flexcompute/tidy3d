@@ -91,6 +91,7 @@ class StableDispersionFitter(DispersionFitter):
             Service environment to pick from
         """
 
+        _env = config_env
         if config_env == "default":
             from ...web.config import DEFAULT_CONFIG  # pylint:disable=import-outside-toplevel
 
