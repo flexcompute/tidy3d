@@ -48,9 +48,9 @@ Create Geometries
    * - How do I...
      - Solution
    * - Load a structure from GDS format?
-     - From a cell in the  ``gdspy`` package, the ``ps = td.PolySlab.from_gds(gds_cell, ...)`` method will load the geometry into a ``td.PolySlab``.
+     - From a cell in the  ``gdspy`` package, the ``ps = td.PolySlab.from_gds(gds_cell, ...)`` method will load the geometry into a :class:`PolySlab`.
    * - Create a complex geometry, such as a ring?
-     - While many complex geometries can be created by supplying the vertices to ``td.PolySlab``, simple geometries, such as rings, can be constructed by overlaying two structures with ``td.Cylinder()`` geomety with the inner cylinder defined with medium of air.  Note that structures later in the ``structures`` list will override previous structures, which can be leveraged to make more complex geometries.
+     - While many complex geometries can be created by supplying the vertices to :class:`PolySlab`, simple geometries, such as rings, can be constructed by overlaying two structures with :class:`Cylinder` geomety with the inner cylinder defined with medium of air.  Note that structures later in the ``structures`` list will override previous structures, which can be leveraged to make more complex geometries.
 
 Materials
 ---------
@@ -68,7 +68,7 @@ Materials
    * - Create an anisotropic material?
      - ``td.AnisotropicMedium(xx=medium_xx, yy=medium_yy, zz=medium_zz)`` for three ``td.Medium`` objects defining the diagonal elements of the permittivity tensor.
    * - Create a dispersive material from model parameters?
-     - Call one of the dispersive models with your parameters, for example ``debye_medium = Debye(eps_inf=2.0, coeffs=[(1,2),(3,4)])``.
+     - Call one of the dispersive models with your parameters, for example ``debye_medium = td.Debye(eps_inf=2.0, coeffs=[(1,2),(3,4)])``.
    * - Load a commonly-used dispersive material?
      - Import one of several material models from our ``td.material_library``.
 
@@ -81,6 +81,8 @@ Work with Simulation Data
 
    * - How do I...
      - Solution
+   * - Load the data from a simulation task id `task_id` into the python client?
+     - Using the web API ``import tidy3d.web as web``, you can load into a :class:`SimulationData` object through ``sim_data = web.load(task_id, path='path/to/file.hdf5')``.
    * - Access the original :class:`Simulation` that created the data?
      - ``sim_data.simulation`` returns a copy of the original :class:`Simulation`.
    * - Print the log file of the task?
@@ -113,8 +115,8 @@ Work with Monitor Data
      - ``mon_data.real``, ``mon_data.imag``, ``abs(mon_data)``, respectively.
    * - Get the raw data values as a ``numpy`` array?
      - ``mon_data.values``.
-   * - Get a specific field component (eg. ``Hy``) for a :class:`FieldMonitor` or :class:`FieldTimeMonitor`?
-     - ``component_data = sim_data[monitor_name].Hy``.  To access by string: ``component_data = sim_data[monitor_name].data_dict['Hy'].data``.
+   * - Get a specific field component (eg. ``'Hy'``) for a :class:`FieldMonitor` or :class:`FieldTimeMonitor`?
+     - ``component_data = sim_data[monitor_name].Hy`` or, to access by string: ``component_data = sim_data[monitor_name]['Hy']``.
 
 Plot Data
 ---------
@@ -145,19 +147,19 @@ Submit Jobs to Server
    * - Submit my simulation to run on Flexcompute's servers?
      - ``sim_data = web.run(simulation, task_name='my_task', path='out/data.hdf5')`` or ``job = web.Job(simulation, task_name='my_task'); job.run(path='out/data.hdf5')``.
    * - Upload a job to the web without running it so I can inspect it first?
-     - Once you've created a :class:`Job`, you can upload it to our servers with ``job.upload()`` and it will not run until you excplicitly tell it to with ``job.start()``.
+     - Once you've created a :class:`tidy3d.web.container.Job`, you can upload it to our servers with ``job.upload()`` and it will not run until you excplicitly tell it to with ``job.start()``.
    * - Monitor the progress of a simulation?
      - ``web.monitor(task_id)``, ``job.monitor()``, or ``batch.monitor()`` will display the progress of your simulation(s).
    * - Load the results of a simulation?
      - ``sim_data = job.load(path)`` will download the results to ``path`` and load them as :class:`SimulationData` object.
-   * - See information about my :class:`Job`, such as how many credits it will take?
+   * - See information about my :class:`tidy3d.web.container.Job`, such as how many credits it will take?
      - After uploading your job with ``job.upload()`` you can get a host of information about it through ``task_info = job.get_info()``.
    * - Submit multiple simulations?
-     - The :class:`Batch` interface was created to manage multiple :class:`Job` instances and gives a similar interface with large number of jobs in mind.
-   * - Loop through :class:`Batch` data without loading all of the data into memory?
-     - ``for task_name, sim_data in batch.items():`` will ``yield`` the :class:`SimulationData` for each :class:`Job` in the batch one by one, so you can perform your postprocessing in the loop body without loading each of the simulations' data into memory at once.
-   * - Save or load a :class:`Job` or :class:`Batch` so I can work with it later?
-     - Like most other tidy3d objects, :class:`Job` and :class:`Batch` instances have ``.to_file(path)`` and ``.from_file()`` methods that will export and load thier metadata as .json files.  This is especially useful for loading batches for analysis long after they have run.
+     - The :class:`tidy3d.web.container.Batch` interface was created to manage multiple :class:`tidy3d.web.container.Job` instances and gives a similar interface with large number of jobs in mind.
+   * - Loop through :class:`tidy3d.web.container.Batch` data without loading all of the data into memory?
+     - ``for task_name, sim_data in batch.items():`` will ``yield`` the :class:`SimulationData` for each :class:`tidy3d.web.container.Job` in the batch one by one, so you can perform your postprocessing in the loop body without loading each of the simulations' data into memory at once.
+   * - Save or load a :class:`tidy3d.web.container.Job` or :class:`tidy3d.web.container.Batch` so I can work with it later?
+     - Like most other tidy3d objects, :class:`tidy3d.web.container.Job` and :class:`tidy3d.web.container.Batch` instances have ``.to_file(path)`` and ``.from_file(path)`` methods that will export and load thier metadata as .json files.  This is especially useful for loading batches for analysis long after they have run.
 
 Extensions
 ----------

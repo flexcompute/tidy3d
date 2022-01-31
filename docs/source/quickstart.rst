@@ -61,8 +61,8 @@ Next Steps
 
 That should get you started!  
 
-To see some other examples of Tidy3D being used in large scale photonics simulations, see `Examples <./examples.html>`_
+To see some other examples of Tidy3D being used in large scale photonics simulations, see `Examples <./examples.html>`_.
 
-To learn more about the many features of Tidy3D, check out our `Feature Walkthrough <./examples/Simulation.html>`_
+To learn more about the many features of Tidy3D, check out our `Feature Walkthrough <./examples/Simulation.html>`_.
 
-Or, if you're interested in the API documentation, see `API Reference <./api.html>`_
+Or, if you're interested in the API documentation, see `API Reference <./api.html>`_.
