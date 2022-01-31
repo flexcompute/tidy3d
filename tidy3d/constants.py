@@ -45,4 +45,4 @@ PML_SIGMA = "2*EPSILON_0/dt"
 RADPERSEC = "rad/sec"
 
 # large number used for comparing infinity
-LARGE_NUMBER = 1e12
+LARGE_NUMBER = np.float32(1e20)
