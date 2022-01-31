@@ -6,10 +6,11 @@ import pydantic
 import numpy as np
 import xarray as xr
 import matplotlib.pylab as plt
+
 try:
     import matplotlib as mpl
     from mpl_toolkits.axes_grid1 import make_axes_locatable
-except Exception: # pylint: disable=broad-except
+except Exception:  # pylint: disable=broad-except
     print("Could not import matplotlib!")
 from descartes import PolygonPatch
 

@@ -848,7 +848,8 @@ class SimulationData(Tidy3dBaseModel):
 
     @equal_aspect
     @add_ax_if_none
-    def plot_field(  # pylint:disable=too-many-arguments, too-many-locals, too-many-branches
+    # pylint:disable=too-many-arguments, too-many-locals, too-many-branches, too-many-statements
+    def plot_field(
         self,
         field_monitor_name: str,
         field_name: str,
@@ -956,7 +957,7 @@ class SimulationData(Tidy3dBaseModel):
             elif val == "abs":
                 field_data = abs(field_data)
 
-        if val=="abs" or field_name=="int":
+        if val == "abs" or field_name == "int":
             cmap = "magma"
         else:
             cmap = "RdBu"
