@@ -488,7 +488,8 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         List[:class:`AbstractMedium`]
             Set of distinct mediums in the simulation.
         """
-        medium_dict = {structure.medium: None for structure in self.structures}
+        medium_dict = {self.medium: None}
+        medium_dict.update({structure.medium: None for structure in self.structures})
         return list(medium_dict.keys())
 
     @property

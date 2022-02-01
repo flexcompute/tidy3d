@@ -6,11 +6,10 @@ from functools import wraps
 
 try:
     import matplotlib.pylab as plt
-    from matplotlib import cm
+    from matplotlib import colors
 except Exception:  # pylint: disable=broad-except
     print("Could not import matplotlib!")
 from pydantic import BaseModel
-import numpy as np
 
 from .types import Ax
 from ..constants import pec_val
@@ -102,7 +101,7 @@ class SourceParams(PatchParamSwitcher):
 
     def get_plot_params(self) -> PatchParams:
         """Returns :class:`PatchParams` based on user-supplied args."""
-        return PatchParams(alpha=0.3, facecolor="blueviolet", edgecolor="blueviolet", lw=3)
+        return PatchParams(alpha=0.4, facecolor="limegreen", edgecolor="limegreen", lw=3)
 
 
 class MonitorParams(PatchParamSwitcher):
@@ -110,7 +109,7 @@ class MonitorParams(PatchParamSwitcher):
 
     def get_plot_params(self) -> PatchParams:
         """Returns :class:`PatchParams` based on user-supplied args."""
-        return PatchParams(alpha=0.3, facecolor="crimson", edgecolor="crimson", lw=3)
+        return PatchParams(alpha=0.4, facecolor="orange", edgecolor="orange", lw=3)
 
 
 class StructMediumParams(PatchParamSwitcher):
@@ -122,15 +121,22 @@ class StructMediumParams(PatchParamSwitcher):
     def get_plot_params(self) -> PatchParams:
         """Returns :class:`PatchParams` based on user-supplied args."""
         mat_index = self.medium_map[self.medium]
-        m0 = cm.tab20(range(20))  # pylint: disable=no-name-in-module, no-member
-        m1 = cm.tab20b(range(20))  # pylint: disable=no-name-in-module, no-member
-        m2 = cm.Set2(range(8))  # pylint: disable=no-name-in-module, no-member
-        mc = np.vstack((m0, m1, m2))
-        # pick_c = [20, 40, 0, 34, 44, 45, 14, 4, 15, 11, 16, 18]
-        pick_c = np.arange(40, 48)
-        mat_cmap = mc[pick_c, :]
+        pick_c = [
+            "midnightblue",
+            "maroon",
+            "darkmagenta",
+            "dodgerblue",
+            "steelblue",
+            "indigo",
+            "firebrick",
+            "skyblue",
+        ]
+        mat_cmap = [colors.CSS4_COLORS[c] for c in pick_c]
 
-        facecolor = mat_cmap[mat_index % len(pick_c), :]
+        if mat_index == 0:
+            facecolor = "white"
+        else:
+            facecolor = mat_cmap[(mat_index - 1) % len(pick_c)]
         if self.medium.name == "PEC":
             return PatchParams(facecolor="black", edgecolor="black", lw=0)
         return PatchParams(facecolor=facecolor, edgecolor=facecolor, lw=0)
@@ -160,7 +166,7 @@ class PMLParams(PatchParamSwitcher):
 
     def get_plot_params(self) -> PatchParams:
         """Returns :class:`PatchParams` based on user-supplied args."""
-        return PatchParams(alpha=0.7, facecolor="sandybrown", edgecolor="sandybrown")
+        return PatchParams(alpha=0.7, facecolor="gray", edgecolor="gray", hatch="x")
 
 
 class SymParams(PatchParamSwitcher):
