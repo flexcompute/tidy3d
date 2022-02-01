@@ -19,7 +19,9 @@ You can find our front end python code in its entirety at `this github repositor
 Getting Started
 ===============
 
-Before using Tidy3D, you must first `sign up <https://client.simulation.cloud/login>`_ for a user account.
+Before using Tidy3D, you must first `sign up <https://client.simulation.cloud/register-waiting>`_ for a user account.
+
+Signing up also grants you access to our browser-based `interface <https://client.simulation.cloud/account>`_ for managing simulations.
 
 Quick Start (Colab Notebook)
 ----------------------------
