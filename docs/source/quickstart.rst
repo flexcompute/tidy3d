@@ -23,8 +23,8 @@ Before using Tidy3D, you must first `sign up <https://client.simulation.cloud/re
 
 Signing up also grants you access to our browser-based `interface <https://tidy3d.simulation.cloud/account>`_ for managing simulations.
 
-Quick Start (Colab Notebook)
-----------------------------
+Quick Start (Binder Notebook)
+-----------------------------
 
 `Click this text to get started running a Tidy3D simulation right away without any installation or software setup. <https://mybinder.org/v2/gh/flexcompute-readthedocs/tidy3d-docs/readthedocs?labpath=docs%2Fsource%2Fnotebooks%2FStartHere.ipynb>`_
 
