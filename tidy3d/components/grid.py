@@ -89,13 +89,13 @@ class YeeGrid(Tidy3dBaseModel):
     E: FieldGrid = pydantic.Field(
         ...,
         title="Electric Field Grid",
-        descrition="Coordinates of the locations of all three components of the electric field.",
+        description="Coordinates of the locations of all three components of the electric field.",
     )
 
     H: FieldGrid = pydantic.Field(
         ...,
         title="Electric Field Grid",
-        descrition="Coordinates of the locations of all three components of the magnetic field.",
+        description="Coordinates of the locations of all three components of the magnetic field.",
     )
 
 
