@@ -8,7 +8,6 @@ import boto3
 import requests
 
 from .config import DEFAULT_CONFIG as Config
-from ..log import AuthenticationError
 
 # where we store the credentials locally
 CREDENTIAL_FILE = "~/.tidy3d/auth.json"
@@ -89,9 +88,7 @@ def get_credentials() -> None:
             break
 
         except Exception:  # pylint:disable=broad-except
-            raise AuthenticationError(
-                "Error: Failed to log in with new username and password."
-            ) from None
+            print("Error: Failed to log in with new username and password.")
 
     # ask to stay logged in
     while True:

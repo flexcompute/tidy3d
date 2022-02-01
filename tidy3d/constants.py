@@ -17,6 +17,8 @@ import numpy as np
 EPSILON_0 = np.float32(8.85418782e-18)
 MU_0 = np.float32(1.25663706e-12)
 C_0 = 1 / np.sqrt(EPSILON_0 * MU_0)
+
+#: Free space impedance
 ETA_0 = np.sqrt(MU_0 / EPSILON_0)
 Q_e = 1.602176634e-19
 HBAR = 6.582119569e-16
@@ -43,4 +45,4 @@ PML_SIGMA = "2*EPSILON_0/dt"
 RADPERSEC = "rad/sec"
 
 # large number used for comparing infinity
-LARGE_NUMBER = 1e12
+LARGE_NUMBER = np.float32(1e20)

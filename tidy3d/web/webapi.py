@@ -196,6 +196,8 @@ def monitor(task_id: TaskId) -> None:
 
         while status not in ("success", "error", "diverged", "deleted", "draft"):
             new_status = get_info(task_id).status
+            if new_status == "visualize":
+                new_status = "success"
             if new_status != status:
                 console.log(f"status = {new_status}")
                 status = new_status
@@ -419,6 +421,8 @@ def _upload_task(  # pylint:disable=too-many-locals,too-many-arguments
     callback_url: str = None,
 ) -> TaskId:
     """upload with all kwargs exposed"""
+
+    simulation.validate_contents()
 
     json_string = simulation._json_string()  # pylint:disable=protected-access
     data = {

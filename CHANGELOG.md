@@ -6,6 +6,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Stable dispersive material fits via webservice.
+- Validates simulation based on discretized size.
+
+### Changed
+- Refined and updated documentation.
+- New color schemes for plots.
+
+## [0.2.0] - 2021-1-29
+
+### Added
 
 - `FieldMonitor.surface()` to split volume monitors into their surfaces.
 - Units and annotation to data.
@@ -35,6 +45,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - Web API implemented by converting simulations to old tidy3D
 
-[Unreleased]: https://github.com/flexcompute/Tidy3D-client-revamp/compare/0.1.1...develop
+[Unreleased]: https://github.com/flexcompute/Tidy3D-client-revamp/compare/v0.2.0...develop
+[0.2.0]: https://github.com/flexcompute/Tidy3D-client-revamp/compare/0.1.1...v0.2.0
 [0.1.1]: https://github.com/flexcompute/Tidy3D-client-revamp/compare/0.1.0...0.1.1
 [0.1.0]: https://github.com/flexcompute/Tidy3D-client-revamp/releases/tag/0.1.0

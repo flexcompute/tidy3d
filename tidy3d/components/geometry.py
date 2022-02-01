@@ -774,7 +774,7 @@ class Cylinder(Circular, Planar):
         return inside_radius * inside_height
 
     @property
-    def _bounds(self):
+    def bounds(self):
         """Returns bounding box min and max coordinates.
 
         Returns

@@ -248,6 +248,24 @@ class CollectionData(Tidy3dData):
                 return False
         return True
 
+    def __getitem__(self, field_name: str) -> xr.DataArray:
+        """Get the :class:`MonitorData` xarray representation by name (``col_data[field_name]``).
+
+        Parameters
+        ----------
+        field_name : ``str``
+            Name of the colletion's field, eg. "Ey" for FieldData.
+
+        Returns
+        -------
+        xarray.DataArray
+            Data corresponding to the supplied field name.
+        """
+        monitor_data = self.data_dict.get(field_name)
+        if not monitor_data:
+            raise DataError(f"field_name '{field_name}' not found")
+        return monitor_data.data
+
     def add_to_group(self, hdf5_grp) -> None:
         """Add data from a :class:`AbstractFieldData` to an hdf5 group ."""
 
@@ -738,7 +756,7 @@ class SimulationData(Tidy3dBaseModel):
         A string containing the log information from the simulation run.
     diverged : bool = False
         A boolean flag denoting if the simulation run diverged.
-    normalized : bool = Fale
+    normalized : bool = False
         A boolean flag denoting whether the data has been normalized by the spectrum of a source.
     """
 
@@ -830,7 +848,8 @@ class SimulationData(Tidy3dBaseModel):
 
     @equal_aspect
     @add_ax_if_none
-    def plot_field(  # pylint:disable=too-many-arguments, too-many-locals
+    # pylint:disable=too-many-arguments, too-many-locals, too-many-branches, too-many-statements
+    def plot_field(
         self,
         field_monitor_name: str,
         field_name: str,
@@ -843,7 +862,7 @@ class SimulationData(Tidy3dBaseModel):
         eps_alpha: float = 0.2,
         robust: bool = True,
         ax: Ax = None,
-        **kwargs,
+        **patch_kwargs,
     ) -> Ax:
         """Plot the field data for a monitor with simulation plot overlayed.
 
@@ -853,6 +872,7 @@ class SimulationData(Tidy3dBaseModel):
             Name of :class:`FieldMonitor` or :class:`FieldTimeData` to plot.
         field_name : str
             Name of `field` in monitor to plot (eg. 'Ex').
+            Also accepts `'int'` to plot intensity.
         x : float = None
             Position of plane in x direction.
         y : float = None
@@ -860,7 +880,8 @@ class SimulationData(Tidy3dBaseModel):
         z : float = None
             Position of plane in z direction.
         val : Literal['real', 'imag', 'abs'] = 'real'
-            What part of the field to plot (in )
+            Which part of the field to plot.
+            If ``field_name='int'``, this has no effect.
         freq: float = None
             If monitor is a :class:`FieldMonitor`, specifies the frequency (Hz) to plot the field.
             Also sets the frequency at which the permittivity is evaluated at (if dispersive).
@@ -890,8 +911,15 @@ class SimulationData(Tidy3dBaseModel):
         self.ensure_field_monitor(monitor_data)
 
         # get the field data component
-        monitor_data.ensure_member_exists(field_name)
-        xr_data = monitor_data.data_dict.get(field_name).data
+        if field_name == "int":
+            monitor_data = self.at_centers(field_monitor_name)
+            xr_data = 0.0
+            for field in ("Ex", "Ey", "Ez"):
+                field_data = monitor_data[field]
+                xr_data += abs(field_data) ** 2
+        else:
+            monitor_data.ensure_member_exists(field_name)
+            xr_data = monitor_data.data_dict.get(field_name).data
 
         # select the frequency or time value
         if "f" in xr_data.coords:
@@ -909,31 +937,40 @@ class SimulationData(Tidy3dBaseModel):
         axis, pos = self.simulation.parse_xyz_kwargs(x=x, y=y, z=z)
         axis_label = "xyz"[axis]
         interp_kwarg = {axis_label: pos}
-        try:
-            field_data = field_data.interp(**interp_kwarg)
 
-        except Exception as e:
-            raise DataError(f"Could not interpolate data at {axis_label}={pos}.") from e
+        if len(field_data.coords[axis_label]) > 1:
+            try:
+                field_data = field_data.interp(**interp_kwarg)
+
+            except Exception as e:
+                raise DataError(f"Could not interpolate data at {axis_label}={pos}.") from e
 
         # select the field value
         if val not in ("real", "imag", "abs"):
             raise DataError(f"'val' must be one of ``{'real', 'imag', 'abs'}``, given {val}")
-        if val == "real":
-            field_data = field_data.real
-        elif val == "imag":
-            field_data = field_data.imag
-        elif val == "abs":
-            field_data = abs(field_data)
+
+        if field_name != "int":
+            if val == "real":
+                field_data = field_data.real
+            elif val == "imag":
+                field_data = field_data.imag
+            elif val == "abs":
+                field_data = abs(field_data)
+
+        if val == "abs" or field_name == "int":
+            cmap = "magma"
+        else:
+            cmap = "RdBu"
 
         # plot the field
         xy_coord_labels = list("xyz")
         xy_coord_labels.pop(axis)
         x_coord_label, y_coord_label = xy_coord_labels  # pylint:disable=unbalanced-tuple-unpacking
-        field_data.plot(ax=ax, x=x_coord_label, y=y_coord_label, robust=robust)
+        field_data.plot(ax=ax, x=x_coord_label, y=y_coord_label, robust=robust, cmap=cmap)
 
         # plot the simulation epsilon
         ax = self.simulation.plot_structures_eps(
-            freq=freq, cbar=False, x=x, y=y, z=z, alpha=eps_alpha, ax=ax, **kwargs
+            freq=freq, cbar=False, x=x, y=y, z=z, alpha=eps_alpha, ax=ax, **patch_kwargs
         )
 
         # set the limits based on the xarray coordinates min and max

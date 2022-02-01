@@ -4,8 +4,11 @@ from typing import Any
 from abc import abstractmethod
 from functools import wraps
 
-import matplotlib.pylab as plt
-from matplotlib import cm
+try:
+    import matplotlib.pylab as plt
+    from matplotlib import cm
+except Exception:  # pylint: disable=broad-except
+    print("Could not import matplotlib!")
 from pydantic import BaseModel
 import numpy as np
 
@@ -119,12 +122,12 @@ class StructMediumParams(PatchParamSwitcher):
     def get_plot_params(self) -> PatchParams:
         """Returns :class:`PatchParams` based on user-supplied args."""
         mat_index = self.medium_map[self.medium]
-        mat_cmap = cm.Set2  # pylint: disable=no-name-in-module, no-member
         m0 = cm.tab20(range(20))  # pylint: disable=no-name-in-module, no-member
         m1 = cm.tab20b(range(20))  # pylint: disable=no-name-in-module, no-member
         m2 = cm.Set2(range(8))  # pylint: disable=no-name-in-module, no-member
         mc = np.vstack((m0, m1, m2))
-        pick_c = [20, 6, 4, 18, 45, 0, 40, 44, 16, 10, 14, 15]
+        # pick_c = [20, 40, 0, 34, 44, 45, 14, 4, 15, 11, 16, 18]
+        pick_c = np.arange(40, 48)
         mat_cmap = mc[pick_c, :]
 
         facecolor = mat_cmap[mat_index % len(pick_c), :]

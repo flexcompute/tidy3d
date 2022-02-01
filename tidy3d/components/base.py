@@ -256,9 +256,10 @@ def generate_docstring(cls) -> str:
         original_docstrings = cls.__doc__.split("\n\n")
         class_description = original_docstrings.pop(0)
         doc += class_description
+    original_docstrings = "\n\n".join(original_docstrings)
 
     # create the list of parameters (arguments) for the model
-    doc += "\n\n\tParameters\n\t----------\n"
+    doc += "\n\n    Parameters\n    ----------\n"
     for field_name, field in cls.__fields__.items():
 
         # ignore the type tag
@@ -277,11 +278,11 @@ def generate_docstring(cls) -> str:
 
         # make first line: name : type = default
         default_str = f" = {default_val}" if default_val != ... else ""
-        doc += f"\t{field_name} : {data_type}{default_str}\n"
+        doc += f"    {field_name} : {data_type}{default_str}\n"
 
         # get field metadata
         field_info = field.field_info
-        doc += "\t\t"
+        doc += "        "
 
         # add units (if present)
         units = field_info.extra.get("units")
@@ -294,11 +295,9 @@ def generate_docstring(cls) -> str:
             doc += f"{description_str}\n"
 
     # add in remaining things in the docs
-    doc += "\n\n"
     if original_docstrings:
-        remaining_docstring = "".join(original_docstrings)
-
-        doc += remaining_docstring.replace("    ", "\t")
+        doc += "\n"
+        doc += original_docstrings
 
     doc += "\n"
 
