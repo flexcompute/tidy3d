@@ -6,10 +6,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- Put your additions here.
+- Stable dispersive material fits via webservice.
+- Validates simulation based on discretized size.
 
 ### Changed
-- Put your changes here.
+- Refined and updated documentation.
+- New color schemes for plots.
 
 ## [0.2.0] - 2021-1-29
 
