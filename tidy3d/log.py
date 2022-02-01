@@ -43,7 +43,7 @@ class Tidy3dKeyError(Tidy3dError):
 
 
 class ValidationError(Tidy3dError):
-    """eError when constructing Tidy3d components."""
+    """Error when constructing Tidy3d components."""
 
 
 class SetupError(Tidy3dError):

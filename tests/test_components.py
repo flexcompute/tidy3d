@@ -449,6 +449,25 @@ def test_medium_dispersion_create():
         struct = Structure(geometry=Box(size=(1, 1, 1)), medium=medium)
 
 
+def test_sellmeier_from_dispersion():
+    n = 3.5
+    wvl = 0.5
+    freq = C_0 / wvl
+    dn_dwvl = -0.1
+    with pytest.raises(ValidationError) as e:
+        # Check that postivie dispersion raises an error
+        medium = Sellmeier.from_dispersion(n=n, freq=freq, dn_dwvl=-dn_dwvl)
+
+    # Check that medium properties are as epected
+    medium = Sellmeier.from_dispersion(n=n, freq=freq, dn_dwvl=dn_dwvl)
+    epses = [medium.eps_model(f) for f in [0.99 * freq, freq, 1.01 * freq]]
+    ns = np.sqrt(epses)
+    dn_df = (ns[2] - ns[0]) / 0.02 / freq
+
+    assert np.allclose(ns[1], n)
+    assert np.allclose(-dn_df * C_0 / wvl ** 2, dn_dwvl)
+
+
 def eps_compare(medium: Medium, expected: Dict, tol: float = 1e-5):
 
     for freq, val in expected.items():
