@@ -13,7 +13,7 @@ from .viz import add_ax_if_none
 from .validators import validate_name_str
 
 from ..constants import C_0, pec_val, EPSILON_0, HERTZ, CONDUCTIVITY, PERMITTIVITY, RADPERSEC
-from ..log import log
+from ..log import log, ValidationError
 
 
 def ensure_freq_in_range(eps_model: Callable[[float], complex]) -> Callable[[float], complex]:
@@ -268,7 +268,7 @@ class Medium(AbstractMedium):
             Real part of refractive index.
         k : float = 0
             Imaginary part of refrative index.
-        frequency : float
+        freq : float
             Frequency to evaluate permittivity at (Hz).
 
         Returns
@@ -506,6 +506,39 @@ class Sellmeier(DispersiveMedium):
             frequency_range=self.frequency_range,
             name=self.name,
         )
+
+    @classmethod
+    def from_dispersion(cls, n: float, freq: float, dn_dwvl: float = 0):
+        """Convert ``n`` and wavelength dispersion ``dn_dwvl`` values at frequency ``freq`` to
+        a single-pole :class:`Sellmeier` medium.
+
+        Parameters
+        ----------
+        n : float
+            Real part of refractive index. Must be larger than or equal to one.
+        dn_dwvl : float = 0
+            Derivative of the refractive index with wavelength (1/um). Must be negative.
+        frequency : float
+            Frequency to evaluate permittivity at (Hz).
+
+        Returns
+        -------
+        :class:`Medium`
+            medium containing the corresponding ``permittivity`` and ``conductivity``.
+        """
+
+        if dn_dwvl >= 0:
+            raise ValidationError("Dispersion ``dn_dwvl`` must be smaller than zero.")
+        if n < 1:
+            raise ValidationError("Refractive index ``n`` cannot be smaller than one.")
+
+        wvl = C_0 / freq
+        nsqm1 = n ** 2 - 1
+        c_coeff = -(wvl ** 3) * n * dn_dwvl / (nsqm1 - wvl * n * dn_dwvl)
+        b_coeff = (wvl ** 2 - c_coeff) / wvl ** 2 * nsqm1
+        coeffs = [(b_coeff, c_coeff)]
+
+        return cls(coeffs=coeffs)
 
 
 class Lorentz(DispersiveMedium):
