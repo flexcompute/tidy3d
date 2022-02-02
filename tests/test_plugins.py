@@ -5,8 +5,6 @@ import pydantic
 import tidy3d as td
 
 from tidy3d.plugins import DispersionFitter
-from tidy3d.plugins.dispersion.fit import _poles_to_coeffs, _coeffs_to_poles
-from tidy3d.plugins.dispersion.fit import _pack_coeffs, _unpack_coeffs
 
 from tidy3d.plugins import ModeSolver
 from tidy3d.plugins import Near2Far
@@ -84,10 +82,13 @@ def test_dispersion():
     num_data = 10
     n_data = np.random.random(num_data)
     wvls = np.linspace(1, 2, num_data)
-    fitter = DispersionFitter(wvls, n_data)
-    medium, rms = fitter.fit_single()
+    fitter = DispersionFitter(wvl_um=wvls, n_data=n_data)
+    medium, rms = fitter._fit_single()
     medium, rms = fitter.fit(num_tries=2)
     medium.to_file("tests/tmp/medium_fit.json")
+
+    k_data = np.random.random(num_data)
+    fitter = DispersionFitter(wvl_um=wvls, n_data=n_data, k_data=k_data)
 
 
 def test_dispersion_load():
@@ -101,3 +102,17 @@ def test_dispersion_plot():
     fitter = DispersionFitter.from_file("tests/data/nk_data.csv", skiprows=1, delimiter=",")
     medium, rms = fitter.fit(num_tries=20)
     fitter.plot(medium)
+
+
+def test_dispersion_set_wvg_range():
+    """set wavelength range function"""
+    num_data = 50
+    n_data = np.random.random(num_data)
+    wvls = np.linspace(1, 2, num_data)
+    fitter = DispersionFitter(wvl_um=wvls, n_data=n_data)
+
+    wvl_min = np.random.random(1)[0] * 0.5 + 1
+    wvl_max = wvl_min + 0.5
+    fitter.wvl_range = [wvl_min, wvl_max]
+    assert len(fitter.freqs) < num_data
+    medium, rms = fitter.fit(num_tries=2)
