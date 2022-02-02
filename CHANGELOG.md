@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - ``Selmeier.from_dispersion()`` method to quickly make a single-pole fit for lossless weakly dispersive materials.
+- Stable dispersive material fits via webservice.
+- Allow to load dispersive data directly by providing URL to txt or csv file
 - Validates simulation based on discretized size.
 
 ### Changed
