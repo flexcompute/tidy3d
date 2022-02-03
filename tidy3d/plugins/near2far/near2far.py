@@ -1,73 +1,163 @@
 """Near field to far field transformation plugin
 """
+from typing import List, Tuple
+from dataclasses import dataclass
+import xarray as xr
 import numpy as np
 
 from ...constants import C_0, ETA_0
 from ...components.data import SimulationData
+from ...components.monitor import FieldMonitor
+from ...components.types import Numpy, Axis
 from ...log import SetupError
 
 # TODO: implement new version with simulation.discretize
 
+@dataclass
+class Near2FarData:
+    """Data structure to store field and grid data for a surface monitor."""
+
+    grid_sizes: List[float]
+    grid_points: Tuple[Numpy, Numpy]
+    pos_along_axis: float
+    J: xr.Dataset
+    M: xr.Dataset
+    mon_axis: Axis = 2
 
 class Near2Far:
     """Near field to far field transformation tool."""
 
-    def __init__(self, sim_data: SimulationData, mon_name: str, frequency: float):
+    def __init__(self, sim_data: SimulationData, mons: List["FieldMonitor"], frequency: float):
         """Constructs near field to far field transformation object from monitor data.
 
         Parameters
         ----------
         sim_data : :class:`.SimulationData`
-            Container for simulation data containing a near field monitor.
+            Container for simulation data containing the near field monitors.
+        mons : List[:class:`FieldMonitor`]
+            List of each :class:`.FieldMonitor` to use as source of near field.
+            Must be a list of :class:`.FieldMonitor` and stored in ``sim_data``.
+        frequency : float
+            Frequency to select from each :class:`.FieldMonitor` to use for projection.
+            Must be a frequency stored in each :class:`FieldMonitor`.
+        """
+
+        self.frequency = frequency
+        self.k0 = 2 * np.pi * frequency / C_0
+
+        # extract and package together the relevant field and grid data for each monitor
+        self.data = []
+        self.origin = [0, 0, 0]
+        for mon in mons:
+            data = self._get_data_from_monitor(sim_data, mon)
+            self.data.append(data)
+
+            # compute the centroid of all monitors, which will be used as the coordinate origin
+            self.origin = [sum(x) for x in zip(self.origin, mon.center/len(mons))]
+
+    def _get_data_from_monitor(self, sim_data: SimulationData, mon: FieldMonitor) -> Near2FarData:
+        """Get field and coordinate data associated with a given monitor.
+
+        Parameters
+        ----------
+        sim_data : :class:`.SimulationData`
+            Container for simulation data containing the near field monitor.
         mon_name : str
-            Name of the :class:`.FieldMonitor` to use as source of near field.
-            Must be a :class:`.FieldMonitor` and stored in ``sim_data``.
+            The :class:`.FieldMonitor` to use as source of near field.
+            Must be an object of :class:`.FieldMonitor` and stored in ``sim_data``.
         frequency : float
             Frequency to select from the :class:`.FieldMonitor` to use for projection.
             Must be a frequency stored in the :class:`FieldMonitor`.
         """
 
+        # make sure the monitor is a surface, i.e., exactly one of its dimensions should be zero
+        if sum(bool(size) for size in mon.size) != 2:
+            raise SetupError(
+                f"Can't compute far fields for the monitor {mon.name} because it is not a surface."
+            )
+
+        # figure out the orientation of the monitor
+        # corresponds to the dimension along which the monitor has "zero" size
+        mon_axis = np.where(mon.size == 0)[0]
+
         try:
-            # fill nans with 0, not sure where nans come from..
-            field_data = sim_data.at_centers(mon_name).fillna(0)
+            # field_data = sim_data[mon.name]
+            field_data = sim_data.at_centers(mon.name)
         except Exception as e:
             raise SetupError(
-                f"No data for monitor named '{mon_name}' " "found in supplied sim_data."
+                f"No data for monitor named '{mon.name}' " "found in supplied sim_data."
             ) from e
+
+        # pick the locations where fields are to be colocated
+        centers = sim_data.simulation.discretize(mon).centers.to_list
+
+        # figure out which field components are tangential to the monitor, and therefore required
+        # also extract the grid parameters relevant to the monitors and keep track of J, M signs
+        if mon_axis == 0:
+
+            required_fields = ("y", "z")
+            grid_sizes = (sim_data.simulation.grid_size[1], sim_data.simulation.grid_size[2])
+            grid_points = np.meshgrid(centers[1], centers[2], indexing="ij")
+            pos_along_axis = np.squeeze(field_data.x)
+            signs = [-1.0, 1.0]
+
+        elif mon_axis == 1:
+
+            required_fields = ("x", "z")
+            grid_sizes = (sim_data.simulation.grid_size[0], sim_data.simulation.grid_size[2])
+            grid_points = np.meshgrid(centers[0], centers[2], indexing="ij")
+            pos_along_axis = np.squeeze(field_data.y)
+            signs = [1.0, -1.0]
+
+        else:
+
+            required_fields = ("x", "y")
+            grid_sizes = (sim_data.simulation.grid_size[0], sim_data.simulation.grid_size[1])
+            grid_points = np.meshgrid(centers[0], centers[1], indexing="ij")
+            pos_along_axis = np.squeeze(field_data.z)
+            signs = [-1.0, +1.0]
+
+        # take into account the normal vector direction associated with the monitor
+        if mon.normal_dir == '-':
+            signs = [-1.0 * i for i in signs]
+
 
         monitor_fields = list(field_data.keys())
-        if any(field_name not in monitor_fields for field_name in ("Ex", "Ey", "Hx", "Hy", "Hz")):
-            raise SetupError(f"Monitor named '{mon_name}' doesn't store all field values")
+        
+        if any("E"+field_name not in monitor_fields for field_name in required_fields):
+            raise SetupError(f"Monitor named '{mon.name}' doesn't store required E field values")
+
+        if any("H"+field_name not in monitor_fields for field_name in required_fields):
+            raise SetupError(f"Monitor named '{mon.name}' doesn't store required H field values")
 
         try:
-            Ex = field_data.Ex.sel(f=frequency)
-            Ey = field_data.Ey.sel(f=frequency)
-            # self.Ez = field_data['Ez'].sel(f=frequency)
-            Hx = field_data.Hx.sel(f=frequency)
-            Hy = field_data.Hy.sel(f=frequency)
+            # get whatever tangential fields are required for this monitor
+            Eu = field_data.data_dict.get("E"+required_fields[0]).sel(f=self.frequency)
+            Ev = field_data.data_dict.get("E"+required_fields[1]).sel(f=self.frequency)
+
+            Hu = field_data.data_dict.get("H"+required_fields[0]).sel(f=self.frequency)
+            Hv = field_data.data_dict.get("H"+required_fields[1]).sel(f=self.frequency)
         except Exception as e:
             raise SetupError(
-                f"Frequency {frequency} not found in all fields " f"from monitor '{mon_name}'."
+                f"Frequency {self.frequency} not found in all fields " f"from monitor '{mon.name}'."
             ) from e
 
-        self.k0 = 2 * np.pi * frequency / C_0
-
-        # grid sizes
-        self.dx = sim_data.simulation.grid_size[0]
-        self.dy = sim_data.simulation.grid_size[1]
-
-        # get coordinate at centers
-        x_centers = field_data.x.values
-        y_centers = field_data.y.values
-        self.xx, self.yy = np.meshgrid(x_centers, y_centers, indexing="ij")
-
         # compute equivalent sources
-        self.Jx = -np.squeeze(Hy.values)
-        self.Jy = np.squeeze(Hx.values)
-        self.Mx = np.squeeze(Ey.values)
-        self.My = -np.squeeze(Ex.values)
+        J = (signs[0] * np.squeeze(Hv.values), signs[1] * np.squeeze(Hu.values))
+        M = (signs[1] * np.squeeze(Ev.values), signs[0] * np.squeeze(Eu.values))
 
-    def _radiation_vectors(self, theta: float, phi: float):
+        data = Near2FarData(
+            mon_axis=mon_axis,
+            grid_sizes=grid_sizes,
+            grid_points=grid_points,
+            pos_along_axis=pos_along_axis,
+            J=J,
+            M=M
+            )
+
+        return data
+
+    def _radiation_vectors(self, theta: float, phi: float, data: Near2FarData):
         """Compute radiation vectors at an angle in spherical coordinates
 
         Parameters
@@ -90,14 +180,14 @@ class Near2Far:
         cos_phi = np.cos(phi)
 
         # precompute fourier transform phase term {dx dy e^(ikrcos(psi))}
-        phase_x = np.exp(1j * self.k0 * self.xx * sin_theta * cos_phi)
-        phase_y = np.exp(1j * self.k0 * self.yy * sin_theta * sin_phi)
-        phase = self.dx * self.dy * phase_x * phase_y
+        phase_u = np.exp(1j * self.k0 * data.grid_points[0] * sin_theta * cos_phi)
+        phase_v = np.exp(1j * self.k0 * data.grid_points[1] * sin_theta * sin_phi)
+        phase = data.grid_sizes[0] * data.grid_sizes[1] * phase_u * phase_v
 
-        Jx_k = np.sum(self.Jx * phase)
-        Jy_k = np.sum(self.Jy * phase)
-        Mx_k = np.sum(self.Mx * phase)
-        My_k = np.sum(self.My * phase)
+        Jx_k = np.sum(data.J[0] * phase)
+        Jy_k = np.sum(data.J[1] * phase)
+        Mx_k = np.sum(data.M[0] * phase)
+        My_k = np.sum(data.M[1] * phase)
 
         # N_theta (8.33a)
         N_theta = Jx_k * cos_theta * cos_phi + Jy_k * cos_theta * sin_phi
@@ -134,7 +224,10 @@ class Near2Far:
         """
 
         # project radiation vectors to distance r away for given angles
-        N_theta, N_phi, L_theta, L_phi = self._radiation_vectors(theta, phi)
+        for data in self.data:
+            N_theta, N_phi, L_theta, L_phi = self._radiation_vectors(theta, phi, data)
+        # N_theta, N_phi, L_theta, L_phi = self._radiation_vectors(theta, phi)
+
         scalar_proj_r = 1j * self.k0 * np.exp(-1j * self.k0 * r) / (4 * np.pi * r)
 
         # assemble E felds
