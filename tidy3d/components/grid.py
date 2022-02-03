@@ -220,15 +220,14 @@ class Grid(Tidy3dBaseModel):
         Returns
         -------
         :class:`Coords`
-            Distances between each of the cell centers along each dimension.
+            Distances between each of the cell centers along each dimension, with periodicity
+            applied.
         """
 
-        # We need the dual steps to be same size as grid.centers, so we pad with periodicity applied
-        grid_size = [(bounds[1] - bounds[0]) for bounds in self.boundaries.to_list]
+        primal_steps = self._primal_steps.dict(exclude={TYPE_TAG_STR})
         dsteps = {}
-        for dim, (key, centers) in enumerate(self.centers.dict(exclude={TYPE_TAG_STR}).items()):
-            centers_pad = np.concatenate(([centers[-1] - grid_size[dim]], centers))
-            dsteps[key] = np.diff(centers_pad)
+        for dim, (key, psteps) in enumerate(primal_steps.items()):
+            dsteps[key] = (psteps + np.roll(psteps, -1)) / 2
 
         return Coords(**dsteps)
 
