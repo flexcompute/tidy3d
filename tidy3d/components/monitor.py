@@ -5,7 +5,7 @@ from typing import List, Union, Tuple
 import pydantic
 import numpy as np
 
-from .types import Literal, Ax, EMField, ArrayLike, Array
+from .types import Literal, Ax, EMField, ArrayLike, Array, Direction
 from .geometry import Box
 from .validators import assert_plane
 from .mode import ModeSpec
@@ -163,7 +163,44 @@ class AbstractFieldMonitor(Monitor, ABC):
         description="Collection of field components to store in the monitor.",
     )
 
-    def surfaces(self) -> List["AbstractFieldMonitor"]:  # pylint: disable=too-many-locals
+
+class PlanarMonitor(Monitor, ABC):
+    """:class:`Monitor` that has a planar geometry."""
+
+    _plane_validator = assert_plane()
+
+
+class AbstractFluxMonitor(PlanarMonitor, ABC):
+    """:class:`Monitor` that records flux through a plane"""
+
+
+class FieldMonitor(AbstractFieldMonitor, FreqMonitor):
+    """:class:`Monitor` that records electromagnetic fields in the frequency domain.
+
+    Example
+    -------
+    >>> monitor = FieldMonitor(
+    ...     center=(1,2,3),
+    ...     size=(2,2,2),
+    ...     fields=['Hx'],
+    ...     freqs=[250e12, 300e12],
+    ...     name='steady_state_monitor')
+    """
+
+    _data_type: Literal["ScalarFieldData"] = pydantic.Field("ScalarFieldData")
+
+    normal_dir: Direction = pydantic.Field(
+        '+',
+        title="Direction",
+        description="Specifies orientation in positive or negative direction of the normal axis.\
+        Relevant for surface monitors only.",
+    )
+
+    def storage_size(self, num_cells: int, tmesh: Array) -> int:
+        # stores 1 complex number per grid cell, per frequency, per field
+        return BYTES_COMPLEX * num_cells * len(self.freqs) * len(self.fields)
+
+    def surfaces(self) -> List["FieldMonitor"]:  # pylint: disable=too-many-locals
         """Returns a list of 6 monitors corresponding to each surface of the field monitor.
         The output monitors are stored in the order [x-, x+, y-, y+, z-, z+], where x, y, and z
         denote which axis is perpendicular to that surface, while "-" and "+" denote the direction
@@ -174,7 +211,7 @@ class AbstractFieldMonitor(Monitor, ABC):
 
         Returns
         -------
-        List[:class:`AbstractFieldMonitor`]
+        List[:class:`FieldMonitor`]
             List of 6 surface monitors for each side of the field monitor.
 
         Example
@@ -221,46 +258,19 @@ class AbstractFieldMonitor(Monitor, ABC):
             self.name + "_z+",
         )
 
+        dirns = ('-', '+', '-', '+', '-', '+')
+
         # Create "surface" monitors
         monitors = []
-        for center, size, name in zip(surface_centers, surface_sizes, surface_names):
+        for center, size, name, dirn in zip(surface_centers, surface_sizes, surface_names, dirns):
             mon_new = self.copy(deep=True)
             mon_new.center = center
             mon_new.size = size
             mon_new.name = name
+            mon_new.normal_dir = dirn
             monitors.append(mon_new)
 
         return monitors
-
-
-class PlanarMonitor(Monitor, ABC):
-    """:class:`Monitor` that has a planar geometry."""
-
-    _plane_validator = assert_plane()
-
-
-class AbstractFluxMonitor(PlanarMonitor, ABC):
-    """:class:`Monitor` that records flux through a plane"""
-
-
-class FieldMonitor(AbstractFieldMonitor, FreqMonitor):
-    """:class:`Monitor` that records electromagnetic fields in the frequency domain.
-
-    Example
-    -------
-    >>> monitor = FieldMonitor(
-    ...     center=(1,2,3),
-    ...     size=(2,2,2),
-    ...     fields=['Hx'],
-    ...     freqs=[250e12, 300e12],
-    ...     name='steady_state_monitor')
-    """
-
-    _data_type: Literal["ScalarFieldData"] = pydantic.Field("ScalarFieldData")
-
-    def storage_size(self, num_cells: int, tmesh: Array) -> int:
-        # stores 1 complex number per grid cell, per frequency, per field
-        return BYTES_COMPLEX * num_cells * len(self.freqs) * len(self.fields)
 
 
 class FieldTimeMonitor(AbstractFieldMonitor, TimeMonitor):
