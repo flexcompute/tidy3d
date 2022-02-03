@@ -180,9 +180,9 @@ class Pulse(SourceTime, ABC):
         Tuple[float, float]
             Minimum and maximum frequencies of the
             :class:`GaussianPulse` or :class:`ContinuousWave` power
-            within 6 standard deviations.
+            within 4 standard deviations.
         """
-        width_std = 6
+        width_std = 4
         freq_width_range = width_std * self.fwidth
         freq_min = max(0, self.freq0 - freq_width_range)
         freq_max = self.freq0 + freq_width_range

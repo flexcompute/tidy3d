@@ -6,12 +6,8 @@ import pydantic
 import numpy as np
 import xarray as xr
 import matplotlib.pylab as plt
-
-try:
-    import matplotlib as mpl
-    from mpl_toolkits.axes_grid1 import make_axes_locatable
-except Exception:  # pylint: disable=broad-except
-    print("Could not import matplotlib!")
+import matplotlib as mpl
+from mpl_toolkits.axes_grid1 import make_axes_locatable
 from descartes import PolygonPatch
 
 from .validators import assert_unique_names, assert_objects_in_sim_bounds
@@ -33,7 +29,7 @@ from ..log import log, Tidy3dKeyError, SetupError
 # for docstring examples
 from .geometry import Sphere, Cylinder, PolySlab  # pylint:disable=unused-import
 from .source import VolumeSource, GaussianPulse  # pylint:disable=unused-import
-from .monitor import FieldMonitor, FluxMonitor, Monitor  # pylint:disable=unused-import
+from .monitor import FieldMonitor, FluxMonitor, Monitor, FreqMonitor  # pylint:disable=unused-import
 
 
 # minimum number of grid points allowed per central wavelength in a medium
@@ -317,9 +313,9 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
 
         return val
 
-    @pydantic.validator("sources", always=True)
-    def _warn_sources_mediums_frequency_range(cls, val, values):
-        """Warn user if any sources have frequency range outside of medium frequency range."""
+    @pydantic.validator("monitors", always=True)
+    def _warn_monitor_mediums_frequency_range(cls, val, values):
+        """Warn user if any DFT monitors have frequencies outside of medium frequency range."""
 
         if val is None:
             return val
@@ -329,23 +325,54 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         medium_bg = values.get("medium")
         mediums = [medium_bg] + [structure.medium for structure in structures]
 
-        for source in val:
-            fmin_src, fmax_src = source.source_time.frequency_range
+        for monitor in val:
+            if not isinstance(monitor, FreqMonitor):
+                continue
+
+            freqs = np.array(monitor.freqs)
             for medium in mediums:
 
                 # skip mediums that have no freq range (all freqs valid)
                 if medium.frequency_range is None:
                     continue
 
-                # make sure medium frequency range includes the source frequency range
+                # make sure medium frequency range includes all monitor frequencies
                 fmin_med, fmax_med = medium.frequency_range
-                if fmin_med > fmin_src or fmax_med < fmax_src:
+                if np.any(freqs < fmin_med) or np.any(freqs > fmax_med):
                     log.warning(
                         f"A medium in the simulation:\n\n({medium})\n\nhas a frequency "
-                        "range that does not fully cover the spectrum of a source:"
-                        f"\n\n({source})\n\nThis can cause innacuracies in the "
-                        "simulation results."
+                        "range that does not fully cover the frequencies of a monitor:"
+                        f"\n\n({monitor})\n\nThis can cause innacuracies in the "
+                        "recorded results."
                     )
+        return val
+
+    @pydantic.validator("monitors", always=True)
+    def _warn_monitor_simulation_frequency_range(cls, val, values):
+        """Warn if any DFT monitors have frequencies outside of the simulation frequency range."""
+
+        if val is None:
+            return val
+
+        # Get simulation frequency range
+        source_ranges = [source.source_time.frequency_range for source in values["sources"]]
+        if len(source_ranges) == 0:
+            log.warning("No sources in simulation.")
+            return val
+
+        freq_min = min([freq_range[0] for freq_range in source_ranges], default=0.0)
+        freq_max = max([freq_range[1] for freq_range in source_ranges], default=0.0)
+
+        for monitor in val:
+            if not isinstance(monitor, FreqMonitor):
+                continue
+
+            freqs = np.array(monitor.freqs)
+            if np.any(freqs < freq_min) or np.any(freqs > freq_max):
+                log.warning(
+                    f"A monitor in the simulation:\n\n({monitor})\n\nhas frequencies "
+                    "outside of the simulation frequency range as defined by the sources."
+                )
         return val
 
     @pydantic.validator("sources", always=True)
@@ -801,7 +828,6 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
                 new_kwargs = SymParams(sym_value=sym_value).update_params(**kwargs)
                 ax = sym_box.plot(ax=ax, x=x, y=y, z=z, **new_kwargs)
         ax = self._set_plot_bounds(ax=ax, x=x, y=y, z=z)
-        ax = self._set_plot_bounds(ax=ax, x=x, y=y, z=z)
         return ax
 
     @property
@@ -1014,8 +1040,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         Returns
         -------
         Tuple[float, float]
-            Minumum and maximum frequencies of the power spectrum of the sources
-            at 5 standard deviations.
+            Minumum and maximum frequencies of the power spectrum of the sources.
         """
         source_ranges = [source.source_time.frequency_range for source in self.sources]
         freq_min = min([freq_range[0] for freq_range in source_ranges], default=0.0)

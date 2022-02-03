@@ -4,11 +4,8 @@ from typing import Any
 from abc import abstractmethod
 from functools import wraps
 
-try:
-    import matplotlib.pylab as plt
-    from matplotlib import colors
-except Exception:  # pylint: disable=broad-except
-    print("Could not import matplotlib!")
+import matplotlib.pylab as plt
+from matplotlib import colors
 from pydantic import BaseModel
 
 from .types import Ax

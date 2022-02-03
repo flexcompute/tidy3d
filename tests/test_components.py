@@ -173,20 +173,37 @@ def _test_monitor_size():
         s.validate_contents()
 
 
-@pytest.mark.parametrize("fwidth,log_level", [(0.001, None), (3, 30)])
-def test_sim_frequency_range(caplog, fwidth, log_level):
-    # small fwidth should be inside range, large one should throw warning
+@pytest.mark.parametrize("freq, log_level", [(1.5, 30), (2.5, None), (3.5, 30)])
+def test_monitor_medium_frequency_range(caplog, freq, log_level):
+    # monitor frequency above or below a given medium's range should throw a warning
 
     size = (1, 1, 1)
     medium = Medium(frequency_range=(2, 3))
     box = Structure(geometry=Box(size=(0.1, 0.1, 0.1)), medium=medium)
+    mnt = FieldMonitor(size=(0, 0, 0), name="freq", freqs=[freq])
     src = VolumeSource(
-        source_time=GaussianPulse(freq0=2.4, fwidth=fwidth),
+        source_time=GaussianPulse(freq0=2.5, fwidth=0.5),
         size=(0, 0, 0),
         polarization="Ex",
     )
-    _ = Simulation(size=(1, 1, 1), grid_size=(0.1, 0.1, 0.1), structures=[box], sources=[src])
+    sim = Simulation(
+        size=(1, 1, 1), grid_size=(0.1, 0.1, 0.1), structures=[box], monitors=[mnt], sources=[src]
+    )
+    assert_log_level(caplog, log_level)
 
+
+@pytest.mark.parametrize("fwidth, log_level", [(0.1, 30), (2, None)])
+def test_monitor_simulation_frequency_range(caplog, fwidth, log_level):
+    # monitor frequency outside of the simulation's frequency range should throw a warning
+
+    size = (1, 1, 1)
+    src = VolumeSource(
+        source_time=GaussianPulse(freq0=2.0, fwidth=fwidth),
+        size=(0, 0, 0),
+        polarization="Ex",
+    )
+    mnt = FieldMonitor(size=(0, 0, 0), name="freq", freqs=[1.5])
+    sim = Simulation(size=(1, 1, 1), grid_size=(0.1, 0.1, 0.1), monitors=[mnt], sources=[src])
     assert_log_level(caplog, log_level)
 
 
@@ -273,8 +290,13 @@ def test_sim_plane_wave_error():
 def test_sim_structure_extent(caplog, box_size, log_level):
     """Make sure we warn if structure extends exactly to simulation edges."""
 
+    src = VolumeSource(
+        source_time=GaussianPulse(freq0=3e14, fwidth=1e13),
+        size=(0, 0, 0),
+        polarization="Ex",
+    )
     box = Structure(geometry=Box(size=box_size), medium=Medium(permittivity=2))
-    sim = Simulation(size=(1, 1, 1), grid_size=(0.1, 0.1, 0.1), structures=[box])
+    sim = Simulation(size=(1, 1, 1), grid_size=(0.1, 0.1, 0.1), structures=[box], sources=[src])
 
     assert_log_level(caplog, log_level)
 
