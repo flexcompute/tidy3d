@@ -20,6 +20,7 @@ class Near2FarData:
     grid_sizes: List[float]
     grid_points: Tuple[Numpy, Numpy]
     pos_along_axis: float
+    yee_center: List[float]
     J: xr.Dataset
     M: xr.Dataset
     mon_axis: Axis = 2
@@ -47,13 +48,15 @@ class Near2Far:
 
         # extract and package together the relevant field and grid data for each monitor
         self.data = []
-        self.origin = [0, 0, 0]
         for mon in mons:
             data = self._get_data_from_monitor(sim_data, mon)
             self.data.append(data)
 
-            # compute the centroid of all monitors, which will be used as the coordinate origin
-            self.origin = [sum(x) for x in zip(self.origin, mon.center/len(mons))]
+        # compute the centroid of all monitors, which will be used as the coordinate origin
+        self.origin = [0, 0, 0]
+        for data in self.data:
+            self.origin = [sum(x) for x in zip(self.origin, data.yee_center)]
+        self.origin = tuple(x/len(self.data) for x in self.origin)
 
     def _get_data_from_monitor(self, sim_data: SimulationData, mon: FieldMonitor) -> Near2FarData:
         """Get field and coordinate data associated with a given monitor.
@@ -78,7 +81,8 @@ class Near2Far:
 
         # figure out the orientation of the monitor
         # corresponds to the dimension along which the monitor has "zero" size
-        mon_axis = np.where(mon.size == 0)[0]
+        # mon_axis = np.where(mon.size == 0.0)
+        mon_axis = np.argmin(mon.size)
 
         try:
             # field_data = sim_data[mon.name]
@@ -98,7 +102,8 @@ class Near2Far:
             required_fields = ("y", "z")
             grid_sizes = (sim_data.simulation.grid_size[1], sim_data.simulation.grid_size[2])
             grid_points = np.meshgrid(centers[1], centers[2], indexing="ij")
-            pos_along_axis = np.squeeze(field_data.x)
+            pos_along_axis = field_data.x.values[0]
+            yee_center = [pos_along_axis, mon.center[1], mon.center[2]]
             signs = [-1.0, 1.0]
 
         elif mon_axis == 1:
@@ -106,7 +111,8 @@ class Near2Far:
             required_fields = ("x", "z")
             grid_sizes = (sim_data.simulation.grid_size[0], sim_data.simulation.grid_size[2])
             grid_points = np.meshgrid(centers[0], centers[2], indexing="ij")
-            pos_along_axis = np.squeeze(field_data.y)
+            pos_along_axis = field_data.y.values[0]
+            yee_center = [mon.center[0], pos_along_axis, mon.center[2]]
             signs = [1.0, -1.0]
 
         else:
@@ -114,13 +120,17 @@ class Near2Far:
             required_fields = ("x", "y")
             grid_sizes = (sim_data.simulation.grid_size[0], sim_data.simulation.grid_size[1])
             grid_points = np.meshgrid(centers[0], centers[1], indexing="ij")
-            pos_along_axis = np.squeeze(field_data.z)
+            pos_along_axis = field_data.z.values[0]
+            yee_center = [mon.center[0], mon.center[1], pos_along_axis]
             signs = [-1.0, +1.0]
 
         # take into account the normal vector direction associated with the monitor
-        if mon.normal_dir == '-':
-            signs = [-1.0 * i for i in signs]
+        # if mon.normal_dir == '-':
+        #     signs = [-1.0 * i for i in signs]
 
+        # TEMP
+        if "-" in mon.name:
+            signs = [-1.0 * i for i in signs]
 
         monitor_fields = list(field_data.keys())
         
@@ -132,11 +142,11 @@ class Near2Far:
 
         try:
             # get whatever tangential fields are required for this monitor
-            Eu = field_data.data_dict.get("E"+required_fields[0]).sel(f=self.frequency)
-            Ev = field_data.data_dict.get("E"+required_fields[1]).sel(f=self.frequency)
+            Eu = field_data.get("E"+required_fields[0]).sel(f=self.frequency)
+            Ev = field_data.get("E"+required_fields[1]).sel(f=self.frequency)
 
-            Hu = field_data.data_dict.get("H"+required_fields[0]).sel(f=self.frequency)
-            Hv = field_data.data_dict.get("H"+required_fields[1]).sel(f=self.frequency)
+            Hu = field_data.get("H"+required_fields[0]).sel(f=self.frequency)
+            Hv = field_data.get("H"+required_fields[1]).sel(f=self.frequency)
         except Exception as e:
             raise SetupError(
                 f"Frequency {self.frequency} not found in all fields " f"from monitor '{mon.name}'."
@@ -151,6 +161,7 @@ class Near2Far:
             grid_sizes=grid_sizes,
             grid_points=grid_points,
             pos_along_axis=pos_along_axis,
+            yee_center=yee_center,
             J=J,
             M=M
             )
@@ -180,9 +191,11 @@ class Near2Far:
         cos_phi = np.cos(phi)
 
         # precompute fourier transform phase term {dx dy e^(ikrcos(psi))}
+        w0 = (data.yee_center[data.mon_axis] - self.origin[data.mon_axis])
         phase_u = np.exp(1j * self.k0 * data.grid_points[0] * sin_theta * cos_phi)
         phase_v = np.exp(1j * self.k0 * data.grid_points[1] * sin_theta * sin_phi)
-        phase = data.grid_sizes[0] * data.grid_sizes[1] * phase_u * phase_v
+        phase_w = np.exp(1j * self.k0 * w0 * cos_theta)
+        phase = data.grid_sizes[0] * data.grid_sizes[1] * phase_u * phase_v * phase_w
 
         Jx_k = np.sum(data.J[0] * phase)
         Jy_k = np.sum(data.J[1] * phase)
@@ -224,8 +237,13 @@ class Near2Far:
         """
 
         # project radiation vectors to distance r away for given angles
+        N_theta, N_phi, L_theta, L_phi = 0.0, 0.0, 0.0, 0.0
         for data in self.data:
-            N_theta, N_phi, L_theta, L_phi = self._radiation_vectors(theta, phi, data)
+            _N_theta, _N_phi, _L_theta, _L_phi = self._radiation_vectors(theta, phi, data)
+            N_theta += _N_theta
+            N_phi += _N_phi
+            L_theta += _L_theta
+            L_phi += _L_phi
         # N_theta, N_phi, L_theta, L_phi = self._radiation_vectors(theta, phi)
 
         scalar_proj_r = 1j * self.k0 * np.exp(-1j * self.k0 * r) / (4 * np.pi * r)
@@ -251,18 +269,18 @@ class Near2Far:
         Parameters
         ----------
         x : float
-            (micron) x distance from center of monitor.
+            (micron) x position in the global coordinate system.
         y : float
-            (micron) y distance from center of monitor.
+            (micron) y position in the global coordinate system.
         z : float
-            (micron) z distance from center of monitor.
+            (micron) z position in the global coordinate system.
 
         Returns
         -------
         tuple
             (Ex, Ey, Ez), (Hx, Hy, Hz), fields in cartesian coordinates.
         """
-        r, theta, phi = self._car_2_sph(x, y, z)
+        r, theta, phi = self._car_2_sph(x-self.origin[0], y-self.origin[1], z-self.origin[2])
         E, H = self.fields_spherical(r, theta, phi)
         Er, Etheta, Ephi = E
         Hr, Htheta, Hphi = H
