@@ -15,6 +15,7 @@ from ...components import ModeMonitor
 from ...components import ModeSource, GaussianPulse
 from ...components.types import Direction
 from ...components.data import ScalarFieldData, FieldData
+from ...log import SetupError
 
 from .solver import compute_modes
 
@@ -126,20 +127,28 @@ class ModeSolver:
         plane_grid = self.simulation.discretize(self.plane)
         _, plane_coords = self.plane.pop_axis(plane_grid.boundaries.to_list, axis=normal_axis)
 
-        # note: from this point on, in waveguide coordinates (propagating in z)
-
         # construct eps_cross section to feed to mode solver
         eps_cross = np.stack((eps_wg_xx, eps_wg_yy, eps_wg_zz))
 
-        # Nx, Ny = eps_cross.shape[1:]
-        # if mode_spec.symmetries[0] != 0:
-        #     eps_cross = np.stack(tuple(e[Nx // 2, :] for e in eps_cross))
-        # if mode_spec.symmetries[1] != 0:
-        #     eps_cross = np.stack(tuple(e[:, Ny // 2] for e in eps_cross))
+        # Truncate according to symmetries
+        solver_coords = [coords.copy() for coords in plane_coords]
+        plane_shape = list(eps_wg_xx.shape)
+        for ic, coords in enumerate(solver_coords):
+            if mode_spec.symmetries[ic] != 0:
+                if plane_shape[ic] % 2 != 0:
+                    raise SetupError(
+                        "Requested symmetry does not match the specified plane size "
+                        "and simulation grid."
+                    )
+                slices = [slice(None), slice(None)]
+                slices[ic] = slice(plane_shape[ic] // 2, None)
+                eps_cross = eps_cross[:, slices[0], slices[1]]
+                solver_coords[ic] = solver_coords[ic][slices[ic]]
 
+        # Compute the modes
         mode_fields, n_eff_complex = compute_modes(
             eps_cross=eps_cross,
-            coords=plane_coords,
+            coords=solver_coords,
             freq=self.freq,
             mode_spec=mode_spec,
         )
@@ -164,20 +173,36 @@ class ModeSolver:
             E *= np.exp(-1j * phi)
             H *= np.exp(-1j * phi)
 
-            # # Handle symmetries
-            # if mode.symmetries[0] != 0:
-            #     E_half = E[:, 1:, ...]
-            #     H_half = H[:, 1:, ...]
-            #     E = np.concatenate((+E_half[:, ::-1, ...], E_half), axis=1)
-            #     H = np.concatenate((-H_half[:, ::-1, ...], H_half), axis=1)
-            # if mode.symmetries[1] != 0:
-            #     E_half = E[:, :, 1:, ...]
-            #     H_half = H[:, :, 1:, ...]
-            #     E = np.concatenate((+E_half[:, :, ::-1, ...], E_half), axis=2)
-            #     H = np.concatenate((-H_half[:, :, ::-1, ...], H_half), axis=2)
+            # Expand symmetries
+            e_full = np.zeros([3] + plane_shape + [1], dtype=np.complex128)
+            h_full = np.zeros([3] + plane_shape + [1], dtype=np.complex128)
+            nx_solver, ny_solver = E.shape[1:3]
+            e_full[:, -nx_solver:, -ny_solver:, :] = E
+            h_full[:, -nx_solver:, -ny_solver:, :] = H
+            Nx, Ny = plane_shape
+            if mode_spec.symmetries[0] != 0:
+                sym_val = mode_spec.symmetries[0]
+                # Pad symmetry-tangential E fields
+                e_full[[1, 2], 1:Nx//2, :, :] = sym_val * e_full[[1, 2], :Nx//2:-1, :, :]
+                # Pad symmetry-normal E field
+                e_full[0, :Nx//2, :, :] = - sym_val * e_full[0, :Nx//2-1:-1, :, :]
+                # Pad symmetry-tangential H fields
+                h_full[[1, 2], :Nx//2, :, :] = - sym_val * h_full[[1, 2], :Nx//2-1:-1, :, :]
+                # Pad symmetry-normal H field
+                h_full[0, 1:Nx//2, :, :] = sym_val * h_full[0, :Nx//2:-1, :, :]
+            if mode_spec.symmetries[1] != 0:
+                sym_val = mode_spec.symmetries[1]
+                # Pad symmetry-tangential E fields
+                e_full[[0, 2], :, 1:Ny//2, :] = sym_val * e_full[[0, 2], :, :Ny//2:-1, :]
+                # Pad symmetry-normal E field
+                e_full[1, :, :Ny//2, :] = - sym_val * e_full[1, :, :Ny//2-1:-1, :]
+                # Pad symmetry-tangential H fields
+                h_full[[0, 2], :, :Ny//2, :] = - sym_val * h_full[[0, 2], :, :Ny//2-1:-1, :]
+                # Pad symmetry-normal H field
+                h_full[1, :, 1:Ny//2, :] = sym_val * h_full[1, :, :Ny//2:-1, :]
 
             # Rotate back to original coordinates
-            (Ex, Ey, Ez), (Hx, Hy, Hz) = rotate_field_coords(E, H)
+            (Ex, Ey, Ez), (Hx, Hy, Hz) = rotate_field_coords(e_full, h_full)
 
             # apply -1 to H fields if a reflection was involved in the rotation
             if normal_axis == 1:
