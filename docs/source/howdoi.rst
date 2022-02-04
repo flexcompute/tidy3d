@@ -104,7 +104,7 @@ Work with Monitor Data
    * - How do I...
      - Solution
    * - Get my monitor's data from a :class:`SimulationData` object?
-     - ``mon_data = sim_data[monitor_name]`` where ``monitor_name`` was the ``.name`` of the original :class:`Monitor`.
+     - ``mon_data = sim_data[monitor_name]`` where ``monitor_name`` was the ``.name`` of the original monitor.
    * - Select the data at a certain coordinate value (ie. ``x=0.0``, ``f=200e12``?
      - ``mon_data.sel(z=0, f=200e12)``.
    * - Get the data at certin index into a coordinate (ie ``t=3`` for the 4th measured time step)?
@@ -171,9 +171,9 @@ Extensions
    * - How do I...
      - Solution
    * - Create a material from optical n,k data?
-     - Refer to the tutorial on the ``DispersionFitter`` plugin.
+     - Refer to the `tutorial <https://docs.simulation.cloud/projects/tidy3d/en/latest/notebooks/Fitting.html>`_ on the :class:`tidy3d.plugins.DispersionFitter` plugin.
    * - Specify the modes for a :class:`ModeMonitor` or :class:`SourceMonitor`?
-     - Refer to the tutorial on the ``ModeSolver`` plugin.
+     - Refer to the `tutorial <https://docs.simulation.cloud/projects/tidy3d/en/latest/notebooks/ModeSolver.html>`_ on the :class:`tidy3d.plugins.ModeSolver` plugin.
    * - Projet electromagnetic near field data to the far field?
-     - Refer to the tutorial on the ``Near2Far`` plugin.
+     - Refer to the `tutorial <https://docs.simulation.cloud/projects/tidy3d/en/latest/notebooks/Near2Far.html>`_ on the :class:`tidy3d.plugins.Near2Far` plugin.
 
