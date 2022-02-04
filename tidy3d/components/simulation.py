@@ -18,7 +18,7 @@ from .medium import Medium, MediumType, AbstractMedium
 from .structure import Structure
 from .source import SourceType, PlaneWave
 from .monitor import MonitorType
-from .pml import PMLTypes, PML
+from .pml import PMLTypes, PML, Absorber
 from .viz import StructMediumParams, StructEpsParams, PMLParams, SymParams
 from .viz import add_ax_if_none, equal_aspect
 
@@ -295,19 +295,27 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
             struct_bound_min, struct_bound_max = structure.geometry.bounds
 
             for source in sources:
-                fmin_src, fmax_src = source.source_time.frequency_range
+                fmin_src, fmax_src = source.source_time.frequency_range()
                 f_average = (fmin_src + fmax_src) / 2.0
                 lambda0 = C_0 / f_average
 
                 zipped = zip(["x", "y", "z"], sim_bound_min, struct_bound_min, val)
                 for axis, sim_val, struct_val, pml in zipped:
-                    if pml.num_layers > 0 and struct_val > sim_val:
+                    if (
+                        pml.num_layers > 0
+                        and struct_val > sim_val
+                        and not isinstance(pml, Absorber)
+                    ):
                         if abs(sim_val - struct_val) < lambda0 / 2:
                             warn(istruct, axis + "-min")
 
                 zipped = zip(["x", "y", "z"], sim_bound_max, struct_bound_max, val)
                 for axis, sim_val, struct_val, pml in zipped:
-                    if pml.num_layers > 0 and struct_val < sim_val:
+                    if (
+                        pml.num_layers > 0
+                        and struct_val < sim_val
+                        and not isinstance(pml, Absorber)
+                    ):
                         if abs(sim_val - struct_val) < lambda0 / 2:
                             warn(istruct, axis + "-max")
 
@@ -355,7 +363,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
             return val
 
         # Get simulation frequency range
-        source_ranges = [source.source_time.frequency_range for source in values["sources"]]
+        source_ranges = [source.source_time.frequency_range() for source in values["sources"]]
         if len(source_ranges) == 0:
             log.warning("No sources in simulation.")
             return val
@@ -389,7 +397,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         mediums = [medium_bg] + [structure.medium for structure in structures]
 
         for source in val:
-            fmin_src, fmax_src = source.source_time.frequency_range
+            fmin_src, fmax_src = source.source_time.frequency_range()
             f_average = (fmin_src + fmax_src) / 2.0
 
             for medium in mediums:
@@ -1042,7 +1050,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         Tuple[float, float]
             Minumum and maximum frequencies of the power spectrum of the sources.
         """
-        source_ranges = [source.source_time.frequency_range for source in self.sources]
+        source_ranges = [source.source_time.frequency_range() for source in self.sources]
         freq_min = min([freq_range[0] for freq_range in source_ranges], default=0.0)
         freq_max = max([freq_range[1] for freq_range in source_ranges], default=0.0)
         return (freq_min, freq_max)

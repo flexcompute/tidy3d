@@ -192,7 +192,8 @@ def monitor(task_id: TaskId) -> None:
 
     console = Console()
 
-    with console.status(f"[bold green]Working on '{task_name}'...", spinner="runner") as status:
+    with console.status(f"[bold green]Working on '{task_name}'...", spinner="runner"):
+        console.log(f"status = {status}")
 
         while status not in ("success", "error", "diverged", "deleted", "draft"):
             new_status = get_info(task_id).status
