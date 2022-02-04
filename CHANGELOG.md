@@ -11,6 +11,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Validates simulation based on discretized size.
 
 ### Changed
+- Warning about structure close to PML disabled if Absorber type.
+- Source dft now ignores insignificant time amplitudes for speed.
 - Refined and updated documentation.
 - New color schemes for plots.
 
