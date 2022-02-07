@@ -4,6 +4,7 @@ from typing import List, Tuple
 from dataclasses import dataclass
 import xarray as xr
 import numpy as np
+import copy
 
 from ...constants import C_0, ETA_0
 from ...components.data import SimulationData
@@ -79,9 +80,10 @@ class Near2Far:
                 f"Can't compute far fields for the monitor {mon.name} because it is not a surface."
             )
 
-        # figure out the orientation of the monitor
-        # corresponds to the dimension along which the monitor has "zero" size
+        # monitor's axis is in the direction where the monitor has "zero" size
         # mon_axis = np.where(mon.size == 0.0)
+
+        # assume that the monitor's axis is in the direction where the monitor is thinnest
         mon_axis = np.argmin(mon.size)
 
         try:
@@ -152,7 +154,7 @@ class Near2Far:
                 f"Frequency {self.frequency} not found in all fields " f"from monitor '{mon.name}'."
             ) from e
 
-        # compute equivalent sources
+        # compute equivalent sources with non-zero components based on the monitor orientation
         J = (signs[0] * np.squeeze(Hv.values), signs[1] * np.squeeze(Hu.values))
         M = (signs[1] * np.squeeze(Ev.values), signs[0] * np.squeeze(Eu.values))
 
@@ -192,27 +194,63 @@ class Near2Far:
 
         # precompute fourier transform phase term {dx dy e^(ikrcos(psi))}
         w0 = (data.yee_center[data.mon_axis] - self.origin[data.mon_axis])
-        phase_u = np.exp(1j * self.k0 * data.grid_points[0] * sin_theta * cos_phi)
-        phase_v = np.exp(1j * self.k0 * data.grid_points[1] * sin_theta * sin_phi)
-        phase_w = np.exp(1j * self.k0 * w0 * cos_theta)
-        phase = data.grid_sizes[0] * data.grid_sizes[1] * phase_u * phase_v * phase_w
 
-        Jx_k = np.sum(data.J[0] * phase)
-        Jy_k = np.sum(data.J[1] * phase)
-        Mx_k = np.sum(data.M[0] * phase)
-        My_k = np.sum(data.M[1] * phase)
+        if data.mon_axis == 0:
+
+            phase_u = np.exp(1j * self.k0 * w0 * sin_theta * cos_phi)
+            phase_v = np.exp(1j * self.k0 * data.grid_points[0] * sin_theta * sin_phi)
+            phase_w = np.exp(1j * self.k0 * data.grid_points[1] * cos_theta)
+            phase = data.grid_sizes[0] * data.grid_sizes[1] * phase_u * phase_v * phase_w
+
+            Jx = 0
+            Jy = np.sum(data.J[0] * phase)
+            Jz = np.sum(data.J[1] * phase)
+
+            Mx = 0
+            My = np.sum(data.M[0] * phase)
+            Mz = np.sum(data.M[1] * phase)
+
+        elif data.mon_axis == 1:
+
+            phase_u = np.exp(1j * self.k0 * data.grid_points[0] * sin_theta * cos_phi)
+            phase_v = np.exp(1j * self.k0 * w0 * sin_theta * sin_phi)
+            phase_w = np.exp(1j * self.k0 * data.grid_points[1] * cos_theta)
+            phase = data.grid_sizes[0] * data.grid_sizes[1] * phase_u * phase_v * phase_w
+
+            Jx = np.sum(data.J[0] * phase)
+            Jy = 0
+            Jz = np.sum(data.J[1] * phase)
+
+            Mx = np.sum(data.M[0] * phase)
+            My = 0
+            Mz = np.sum(data.M[1] * phase)
+
+        else:
+
+            phase_u = np.exp(1j * self.k0 * data.grid_points[0] * sin_theta * cos_phi)
+            phase_v = np.exp(1j * self.k0 * data.grid_points[1] * sin_theta * sin_phi)
+            phase_w = np.exp(1j * self.k0 * w0 * cos_theta)
+            phase = data.grid_sizes[0] * data.grid_sizes[1] * phase_u * phase_v * phase_w
+
+            Jx = np.sum(data.J[0] * phase)
+            Jy = np.sum(data.J[1] * phase)
+            Jz = 0
+
+            Mx = np.sum(data.M[0] * phase)
+            My = np.sum(data.M[1] * phase)
+            Mz = 0
 
         # N_theta (8.33a)
-        N_theta = Jx_k * cos_theta * cos_phi + Jy_k * cos_theta * sin_phi
+        N_theta = Jx * cos_theta * cos_phi + Jy * cos_theta * sin_phi - Jz * sin_theta
 
         # N_phi (8.33b)
-        N_phi = -Jx_k * sin_phi + Jy_k * cos_phi
+        N_phi = -Jx * sin_phi + Jy * cos_phi
 
         # L_theta  (8.34a)
-        L_theta = Mx_k * cos_theta * cos_phi + My_k * cos_theta * sin_phi
+        L_theta = Mx * cos_theta * cos_phi + My * cos_theta * sin_phi - Mz * sin_theta
 
         # L_phi  (8.34b)
-        L_phi = -Mx_k * sin_phi + My_k * cos_phi
+        L_phi = -Mx * sin_phi + My * cos_phi
 
         return N_theta, N_phi, L_theta, L_phi
 
@@ -236,6 +274,10 @@ class Near2Far:
             coordinates.
         """
 
+        # compute the observation angles in terms of the local coordinate system
+        x, y, z = self._sph_2_car(r, theta, phi)
+        r, theta, phi = self._car_2_sph(x-self.origin[0], y-self.origin[1], z-self.origin[2])
+
         # project radiation vectors to distance r away for given angles
         N_theta, N_phi, L_theta, L_phi = 0.0, 0.0, 0.0, 0.0
         for data in self.data:
@@ -244,7 +286,6 @@ class Near2Far:
             N_phi += _N_phi
             L_theta += _L_theta
             L_phi += _L_phi
-        # N_theta, N_phi, L_theta, L_phi = self._radiation_vectors(theta, phi)
 
         scalar_proj_r = 1j * self.k0 * np.exp(-1j * self.k0 * r) / (4 * np.pi * r)
 
