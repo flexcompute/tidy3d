@@ -150,7 +150,7 @@ class StructEpsParams(PatchParamSwitcher):
         """Returns :class:`PatchParams` based on user-supplied args."""
         eps_min = min(self.eps_min, 1)
         delta_eps = self.eps - eps_min
-        delta_eps_max = self.eps_max - eps_min
+        delta_eps_max = self.eps_max - eps_min + 1e-5
         eps_fraction = delta_eps / delta_eps_max
         color = 1 - eps_fraction
         if self.eps == pec_val:
