@@ -23,7 +23,7 @@ from .viz import StructMediumParams, StructEpsParams, PMLParams, SymParams
 from .viz import add_ax_if_none, equal_aspect
 
 from ..version import __version__
-from ..constants import C_0, MICROMETER, SECOND
+from ..constants import C_0, MICROMETER, SECOND, pec_val
 from ..log import log, Tidy3dKeyError, SetupError
 
 # for docstring examples
@@ -709,6 +709,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
             freq = inf
         eps_list = [s.medium.eps_model(freq).real for s in self.structures]
         eps_list.append(self.medium.eps_model(freq).real)
+        eps_list = [eps for eps in eps_list if eps != pec_val]
         eps_max = max(eps_list)
         eps_min = min(eps_list)
         medium_shapes = self._filter_structures_plane(self.structures, x=x, y=y, z=z)

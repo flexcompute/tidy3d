@@ -135,7 +135,7 @@ class StructMediumParams(PatchParamSwitcher):
         else:
             facecolor = mat_cmap[(mat_index - 1) % len(pick_c)]
         if self.medium.name == "PEC":
-            return PatchParams(facecolor="black", edgecolor="black", lw=0)
+            return PatchParams(facecolor="gold", edgecolor="k", lw=1)
         return PatchParams(facecolor=facecolor, edgecolor=facecolor, lw=0)
 
 
