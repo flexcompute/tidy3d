@@ -7,14 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - ``Selmeier.from_dispersion()`` method to quickly make a single-pole fit for lossless weakly dispersive materials.
-- Stable dispersive material fits via webservice.
 - Validates simulation based on discretized size.
 
 ### Changed
 - Warning about structure close to PML disabled if Absorber type.
 - Source dft now ignores insignificant time amplitudes for speed.
-- Refined and updated documentation.
 - New color schemes for plots.
+
+## [1.0.0] - 2021-1-31
+
+### Added
+- Stable dispersive material fits via webservice.
+
+### Changed
+- Refined and updated documentation.
 
 ## [0.2.0] - 2021-1-29
 
@@ -138,7 +144,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Job and Batch classes for better simulation handling (eventually to fully replace webapi functions).
 - A large number of small improvements and bug fixes.
 
-[Unreleased]: https://github.com/flexcompute/Tidy3D-client-revamp/compare/v0.2.0...develop
+[Unreleased]: https://github.com/flexcompute/Tidy3D-client-revamp/compare/v1.0.0...develop
+[1.0.0]: https://github.com/flexcompute/Tidy3D-client-revamp/compare/v0.2.0...v1.0.0
 [0.2.0]: https://github.com/flexcompute/Tidy3D-client-revamp/compare/0.1.1...v0.2.0
 [0.1.1]: https://github.com/flexcompute/Tidy3D-client-revamp/compare/0.1.0...0.1.1
 [0.1.0]: https://github.com/flexcompute/Tidy3D-client-revamp/releases/tag/0.1.0
