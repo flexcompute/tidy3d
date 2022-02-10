@@ -3,6 +3,8 @@ import argparse
 import logging
 from pylint.lint import Run
 
+# wont pass until score (out of 10.0) is greater than this
+DEFAULT_THRESHOLD = 10.0
 
 def main():
     logging.getLogger().setLevel(logging.INFO)
@@ -23,7 +25,7 @@ def main():
         "-t",
         "--threshold",
         help="score threshold to fail pylint runner | " "Default: %(default)s | " "Type: %(type)s ",
-        default=9.0,
+        default=DEFAULT_THRESHOLD,
         type=float,
     )
 
