@@ -7,6 +7,9 @@ from functools import wraps
 import matplotlib.pylab as plt
 from matplotlib import colors
 from pydantic import BaseModel
+import chart_studio.plotly as py
+import plotly.graph_objects as go
+import numpy as np
 
 from .types import Ax
 from ..constants import pec_val
@@ -186,3 +189,159 @@ class SimDataGeoParams(PatchParamSwitcher):
     def get_plot_params(self) -> PatchParams:
         """Returns :class:`PatchParams` based on user-supplied args."""
         return PatchParams(alpha=0.4, edgecolor="black")
+
+
+def plotly_sim(sim, x=None, y=None, z=None):
+    """Make a plotly plot."""
+
+    fig = go.Figure()
+    axis, pos = sim.parse_xyz_kwargs(x=x, y=y, z=z)
+    rmin, rmax = sim.bounds
+    rmin = np.array(rmin)
+    rmax = np.array(rmax)
+
+    for struct in sim.structures:
+        geo = struct.geometry
+        shapes = geo.intersections(x=x, y=y, z=z)
+        mat_index = sim.medium_map[struct.medium]
+
+        params = StructMediumParams(medium=struct.medium, medium_map=sim.medium_map)
+        color = params.get_plot_params().facecolor
+
+        for shape in shapes:
+            xs, ys = shape.exterior.coords.xy
+            xs = xs.tolist()
+            ys = ys.tolist()
+
+            plotly_trace = go.Scatter(
+                x=xs,
+                y=ys,
+                fill="toself",
+                fillcolor=color,
+                line=dict(width=0),
+                marker=dict(size=0.0001, line=dict(width=0)),
+                name=struct.medium.name if struct.medium.name else f"medium[{mat_index}]",
+            )
+            fig.add_trace(plotly_trace)
+
+    for i, source in enumerate(sim.sources):
+        geo = source.geometry
+        shapes = geo.intersections(x=x, y=y, z=z)
+        params = SourceParams()
+        color = params.get_plot_params().facecolor
+        opacity = params.get_plot_params().alpha
+
+        for shape in shapes:
+            xs, ys = shape.exterior.coords.xy
+            xs = xs.tolist()
+            ys = ys.tolist()
+
+            plotly_trace = go.Scatter(
+                x=xs,
+                y=ys,
+                fill="toself",
+                fillcolor=color,
+                line=dict(width=4, color=color),
+                marker=dict(size=0.0001, line=dict(width=0)),
+                name=source.name if source.name else f"sources[{i}]",
+                opacity=opacity,
+            )
+            fig.add_trace(plotly_trace)
+
+    for monitor in sim.monitors:
+        geo = monitor.geometry
+        shapes = geo.intersections(x=x, y=y, z=z)
+        params = MonitorParams()
+        color = params.get_plot_params().facecolor
+        opacity = params.get_plot_params().alpha
+
+        for shape in shapes:
+            xs, ys = shape.exterior.coords.xy
+            xs = xs.tolist()
+            ys = ys.tolist()
+
+            plotly_trace = go.Scatter(
+                x=xs,
+                y=ys,
+                fill="toself",
+                fillcolor=color,
+                line=dict(width=4, color=color),
+                marker=dict(size=0.0001, line=dict(width=0)),
+                name=f'monitor: "{monitor.name}"',
+                opacity=opacity,
+            )
+            fig.add_trace(plotly_trace)
+
+    for dir_index, (pml, dl) in enumerate(zip(sim.pml_layers, sim.grid_size)):
+        if pml is None:
+            continue
+        if isinstance(dl, float):
+            dl_min = dl_max = dl
+        else:
+            dl_min = dl[0]
+            dl_max = dl[-1]
+        for sign, dl_edge in zip((-1, 1), (dl_min, dl_max)):
+            pml_thick = pml.num_layers * dl_edge
+            pml_size = 2 * np.array(sim.size)
+            pml_size[dir_index] = pml_thick
+            rmin[i] += sign * pml_thick
+            rmax[i] += sign * pml_thick
+            pml_center = np.array(sim.center) + sign * np.array(sim.size) / 2
+            pml_center[dir_index] + sign * pml_size / 2
+            pml_box = sim.geometry
+            pml_box.center = pml_center.tolist()
+            pml_box.size = pml_size.tolist()
+            shapes = pml_box.intersections(x=x, y=y, z=z)
+            params = PMLParams()
+            color = params.get_plot_params().facecolor
+            opacity = params.get_plot_params().alpha
+
+            for shape in shapes:
+                xs, ys = shape.exterior.coords.xy
+                xs = xs.tolist()
+                ys = ys.tolist()
+
+                plotly_trace = go.Scatter(
+                    x=xs,
+                    y=ys,
+                    fill="toself",
+                    fillcolor=color,
+                    line=dict(width=1, color=color),
+                    marker=dict(size=0.0001, line=dict(width=0)),
+                    name="PML",
+                    opacity=opacity,
+                )
+                fig.add_trace(plotly_trace)
+
+    _, (xmin, ymin) = sim.pop_axis(rmin, axis=axis)
+    _, (xmax, ymax) = sim.pop_axis(rmax, axis=axis)
+
+    fig.update_xaxes(range=[xmin, xmax])
+    fig.update_yaxes(range=[ymin, ymax])
+    width = xmax - xmin
+    height = ymax - ymin
+    min_dim = min(width, height)
+    DESIRED_SIZE_PIXELS = 500.0
+    if min_dim < DESIRED_SIZE_PIXELS:
+        scale = DESIRED_SIZE_PIXELS / min_dim + 0.01
+        width *= scale
+        height *= scale
+    fig.update_layout(width=width, height=height)
+
+    _, (xlabel, ylabel) = sim.pop_axis("xyz", axis=axis)
+    fig.update_layout(
+        title=f'{"xyz"[axis]} = {pos:.2f}',
+        xaxis_title=f"{xlabel} (um)",
+        yaxis_title=f"{ylabel} (um)",
+        legend_title="Contents",
+    )
+
+    seen = []
+    for trace in fig["data"]:
+        name = trace["name"]
+        if name not in seen:
+            seen.append(name)
+        else:
+            trace["showlegend"] = False
+
+    return fig
