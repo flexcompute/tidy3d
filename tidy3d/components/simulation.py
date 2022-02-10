@@ -21,6 +21,7 @@ from .monitor import MonitorType
 from .pml import PMLTypes, PML, Absorber
 from .viz import StructMediumParams, StructEpsParams, PMLParams, SymParams
 from .viz import add_ax_if_none, equal_aspect
+from .viz import plotly_sim
 
 from ..version import __version__
 from ..constants import C_0, MICROMETER, SECOND, pec_val, inf
@@ -1041,6 +1042,27 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
 
         # filter out any remaining None or empty shapes (shapes with area completely removed)
         return [(medium, shape) for (medium, shape) in background_shapes if shape]
+
+    def plotly(
+        self, x: float = None, y: float = None, z: float = None
+    ) -> "plotly.graph_objects.Figure":
+        """Plot the geometry cross section at single (x,y,z) coordinate using plotly.
+
+        Parameters
+        ----------
+        x : float = None
+            Position of plane in x direction, only one of x,y,z can be specified to define plane.
+        y : float = None
+            Position of plane in y direction, only one of x,y,z can be specified to define plane.
+        z : float = None
+            Position of plane in z direction, only one of x,y,z can be specified to define plane.
+
+        Returns
+        -------
+        plotly.graph_objects.Figure
+            A plotly figure.
+        """
+        return plotly_sim(self, x=x, y=y, z=z)
 
     @property
     def frequency_range(self) -> FreqBound:
