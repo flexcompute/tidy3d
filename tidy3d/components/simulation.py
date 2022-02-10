@@ -1067,7 +1067,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
             Time step (seconds).
         """
         dl_mins = [np.min(sizes) for sizes in self.grid.sizes.to_list]
-        dl_sum_inv_sq = sum([1 / dl ** 2 for dl in dl_mins])
+        dl_sum_inv_sq = sum([1 / dl**2 for dl in dl_mins])
         dl_avg = 1 / np.sqrt(dl_sum_inv_sq)
         return self.courant * dl_avg / C_0
 

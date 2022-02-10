@@ -499,7 +499,7 @@ class Circular(Geometry):
         dz = np.abs(z0 - position)
         if dz > self.radius:
             return None
-        return 2 * np.sqrt(self.radius ** 2 - dz ** 2)
+        return 2 * np.sqrt(self.radius**2 - dz**2)
 
 
 """ importable geometries """
@@ -647,7 +647,7 @@ class Sphere(Circular):
         dist_x = np.abs(x - x0)
         dist_y = np.abs(y - y0)
         dist_z = np.abs(z - z0)
-        return (dist_x ** 2 + dist_y ** 2 + dist_z ** 2) <= (self.radius ** 2)
+        return (dist_x**2 + dist_y**2 + dist_z**2) <= (self.radius**2)
 
     def intersections(self, x: float = None, y: float = None, z: float = None):
         """Returns shapely geometry at plane specified by one non None value of x,y,z.
@@ -769,7 +769,7 @@ class Cylinder(Circular, Planar):
         dist_x = np.abs(x - x0)
         dist_y = np.abs(y - y0)
         dist_z = np.abs(z - z0)
-        inside_radius = (dist_x ** 2 + dist_y ** 2) <= (self.radius ** 2)
+        inside_radius = (dist_x**2 + dist_y**2) <= (self.radius**2)
         inside_height = dist_z < (self.length / 2)
         return inside_radius * inside_height
 

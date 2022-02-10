@@ -211,10 +211,10 @@ class GaussianPulse(Pulse):
         omega0 = 2 * np.pi * self.freq0
         time_shifted = time - self.offset * twidth
 
-        const = 1j + time_shifted / twidth ** 2 / omega0
+        const = 1j + time_shifted / twidth**2 / omega0
         offset = np.exp(1j * self.phase)
         oscillation = np.exp(-1j * omega0 * time)
-        amp = np.exp(-(time_shifted ** 2) / 2 / twidth ** 2)
+        amp = np.exp(-(time_shifted**2) / 2 / twidth**2)
 
         return const * offset * oscillation * amp
 
