@@ -6,6 +6,7 @@ from pylint.lint import Run
 # wont pass until score (out of 10.0) is greater than this
 DEFAULT_THRESHOLD = 10.0
 
+
 def main():
     logging.getLogger().setLevel(logging.INFO)
 
