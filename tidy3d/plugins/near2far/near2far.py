@@ -20,7 +20,6 @@ class Near2FarData:
 
     grid_sizes: List[float]
     grid_points: Tuple[Numpy, Numpy]
-    pos_along_axis: float
     yee_center: List[float]
     J: xr.Dataset
     M: xr.Dataset
@@ -54,10 +53,15 @@ class Near2Far:
             self.data.append(data)
 
         # compute the centroid of all monitors, which will be used as the coordinate origin
-        self.origin = [0, 0, 0]
-        for data in self.data:
-            self.origin = [sum(x) for x in zip(self.origin, data.yee_center)]
-        self.origin = tuple(x/len(self.data) for x in self.origin)
+        self.origin = [
+        (self.data[0].yee_center[0] + self.data[1].yee_center[0]) / 2,
+        (self.data[2].yee_center[1] + self.data[3].yee_center[1]) / 2,
+        (self.data[4].yee_center[2] + self.data[5].yee_center[2]) / 2]
+
+        # self.origin = [0, 0, 0]
+        # for data in self.data:
+        #     self.origin = [sum(x) for x in zip(self.origin, data.yee_center)]
+        # self.origin = tuple(x/len(self.data) for x in self.origin)
 
     def _get_data_from_monitor(self, sim_data: SimulationData, mon: FieldMonitor) -> Near2FarData:
         """Get field and coordinate data associated with a given monitor.
@@ -97,6 +101,12 @@ class Near2Far:
         # pick the locations where fields are to be colocated
         centers = sim_data.simulation.discretize(mon).centers.to_list
 
+        # temp
+        # field_data = sim_data[mon.name]
+        # centers = sim_data.simulation.discretize(mon).centers.to_list
+        # centers[mon_axis] = [mon.geometry.center[mon_axis]]
+        # field_data = field_data.colocate(*centers)
+
         # figure out which field components are tangential to the monitor, and therefore required
         # also extract the grid parameters relevant to the monitors and keep track of J, M signs
         if mon_axis == 0:
@@ -124,7 +134,7 @@ class Near2Far:
             grid_points = np.meshgrid(centers[0], centers[1], indexing="ij")
             pos_along_axis = field_data.z.values[0]
             yee_center = [mon.center[0], mon.center[1], pos_along_axis]
-            signs = [-1.0, +1.0]
+            signs = [-1.0, 1.0]
 
         # take into account the normal vector direction associated with the monitor
         # if mon.normal_dir == '-':
@@ -162,7 +172,6 @@ class Near2Far:
             mon_axis=mon_axis,
             grid_sizes=grid_sizes,
             grid_points=grid_points,
-            pos_along_axis=pos_along_axis,
             yee_center=yee_center,
             J=J,
             M=M
@@ -170,8 +179,9 @@ class Near2Far:
 
         return data
 
-    def _radiation_vectors(self, theta: float, phi: float, data: Near2FarData):
-        """Compute radiation vectors at an angle in spherical coordinates
+    def _radiation_vectors_per_monitor(self, theta: float, phi: float, data: Near2FarData):
+        """Compute radiation vectors at an angle in spherical coordinates for data corresponding
+        to a single monitor
 
         Parameters
         ----------
@@ -179,6 +189,8 @@ class Near2Far:
             Polar angle (rad) downward from x=y=0 line.
         phi : float
             Azimuthal (rad) angle from x=z=0 line.
+        data : :class:`Near2FarData`
+            Data set corresponding to a single monitor.
 
         Returns
         -------
@@ -196,61 +208,131 @@ class Near2Far:
         w0 = (data.yee_center[data.mon_axis] - self.origin[data.mon_axis])
 
         if data.mon_axis == 0:
-
-            phase_u = np.exp(1j * self.k0 * w0 * sin_theta * cos_phi)
-            phase_v = np.exp(1j * self.k0 * data.grid_points[0] * sin_theta * sin_phi)
-            phase_w = np.exp(1j * self.k0 * data.grid_points[1] * cos_theta)
-            phase = data.grid_sizes[0] * data.grid_sizes[1] * phase_u * phase_v * phase_w
-
-            Jx = 0
-            Jy = np.sum(data.J[0] * phase)
-            Jz = np.sum(data.J[1] * phase)
-
-            Mx = 0
-            My = np.sum(data.M[0] * phase)
-            Mz = np.sum(data.M[1] * phase)
-
+            xp = w0
+            yp = data.grid_points[0]
+            zp = data.grid_points[1]
+            source_indices = [1,2]
         elif data.mon_axis == 1:
-
-            phase_u = np.exp(1j * self.k0 * data.grid_points[0] * sin_theta * cos_phi)
-            phase_v = np.exp(1j * self.k0 * w0 * sin_theta * sin_phi)
-            phase_w = np.exp(1j * self.k0 * data.grid_points[1] * cos_theta)
-            phase = data.grid_sizes[0] * data.grid_sizes[1] * phase_u * phase_v * phase_w
-
-            Jx = np.sum(data.J[0] * phase)
-            Jy = 0
-            Jz = np.sum(data.J[1] * phase)
-
-            Mx = np.sum(data.M[0] * phase)
-            My = 0
-            Mz = np.sum(data.M[1] * phase)
-
+            xp = data.grid_points[0]
+            yp = w0
+            zp = data.grid_points[1]
+            source_indices = [0,2]
         else:
+            xp = data.grid_points[0]
+            yp = data.grid_points[1]
+            zp = w0
+            source_indices = [0,1]
 
-            phase_u = np.exp(1j * self.k0 * data.grid_points[0] * sin_theta * cos_phi)
-            phase_v = np.exp(1j * self.k0 * data.grid_points[1] * sin_theta * sin_phi)
-            phase_w = np.exp(1j * self.k0 * w0 * cos_theta)
-            phase = data.grid_sizes[0] * data.grid_sizes[1] * phase_u * phase_v * phase_w
+        phase_x = np.exp(1j * self.k0 * xp * sin_theta * cos_phi)
+        phase_y = np.exp(1j * self.k0 * yp * sin_theta * sin_phi)
+        phase_z = np.exp(1j * self.k0 * zp * cos_theta)
+        phase = data.grid_sizes[0] * data.grid_sizes[1] * phase_x * phase_y * phase_z
 
-            Jx = np.sum(data.J[0] * phase)
-            Jy = np.sum(data.J[1] * phase)
-            Jz = 0
+        J = [0, 0, 0]
+        M = [0, 0, 0]
 
-            Mx = np.sum(data.M[0] * phase)
-            My = np.sum(data.M[1] * phase)
-            Mz = 0
+        J[source_indices[0]] = np.sum(data.J[0] * phase)
+        J[source_indices[1]] = np.sum(data.J[1] * phase)
+
+        M[source_indices[0]] = np.sum(data.M[0] * phase)
+        M[source_indices[1]] = np.sum(data.M[1] * phase)
 
         # N_theta (8.33a)
-        N_theta = Jx * cos_theta * cos_phi + Jy * cos_theta * sin_phi - Jz * sin_theta
+        N_theta = J[0] * cos_theta * cos_phi + J[1] * cos_theta * sin_phi - J[2] * sin_theta
 
         # N_phi (8.33b)
-        N_phi = -Jx * sin_phi + Jy * cos_phi
+        N_phi = -J[0] * sin_phi + J[1] * cos_phi
 
         # L_theta  (8.34a)
-        L_theta = Mx * cos_theta * cos_phi + My * cos_theta * sin_phi - Mz * sin_theta
+        L_theta = M[0] * cos_theta * cos_phi + M[1] * cos_theta * sin_phi - M[2] * sin_theta
 
         # L_phi  (8.34b)
-        L_phi = -Mx * sin_phi + My * cos_phi
+        L_phi = -M[0] * sin_phi + M[1] * cos_phi
+
+        # if data.mon_axis == 0:
+
+        #     phase_u = np.exp(1j * self.k0 * w0 * sin_theta * cos_phi)
+        #     phase_v = np.exp(1j * self.k0 * data.grid_points[0] * sin_theta * sin_phi)
+        #     phase_w = np.exp(1j * self.k0 * data.grid_points[1] * cos_theta)
+        #     phase = data.grid_sizes[0] * data.grid_sizes[1] * phase_u * phase_v * phase_w
+
+        #     Jx = 0
+        #     Jy = np.sum(data.J[0] * phase)
+        #     Jz = np.sum(data.J[1] * phase)
+
+        #     Mx = 0
+        #     My = np.sum(data.M[0] * phase)
+        #     Mz = np.sum(data.M[1] * phase)
+
+        # elif data.mon_axis == 1:
+
+        #     phase_u = np.exp(1j * self.k0 * data.grid_points[0] * sin_theta * cos_phi)
+        #     phase_v = np.exp(1j * self.k0 * w0 * sin_theta * sin_phi)
+        #     phase_w = np.exp(1j * self.k0 * data.grid_points[1] * cos_theta)
+        #     phase = data.grid_sizes[0] * data.grid_sizes[1] * phase_u * phase_v * phase_w
+
+        #     Jx = np.sum(data.J[0] * phase)
+        #     Jy = 0
+        #     Jz = np.sum(data.J[1] * phase)
+
+        #     Mx = np.sum(data.M[0] * phase)
+        #     My = 0
+        #     Mz = np.sum(data.M[1] * phase)
+
+        # else:
+
+        #     phase_u = np.exp(1j * self.k0 * data.grid_points[0] * sin_theta * cos_phi)
+        #     phase_v = np.exp(1j * self.k0 * data.grid_points[1] * sin_theta * sin_phi)
+        #     phase_w = np.exp(1j * self.k0 * w0 * cos_theta)
+        #     phase = data.grid_sizes[0] * data.grid_sizes[1] * phase_u * phase_v * phase_w
+
+        #     Jx = np.sum(data.J[0] * phase)
+        #     Jy = np.sum(data.J[1] * phase)
+        #     Jz = 0
+
+        #     Mx = np.sum(data.M[0] * phase)
+        #     My = np.sum(data.M[1] * phase)
+        #     Mz = 0
+
+        # # N_theta (8.33a)
+        # N_theta = Jx * cos_theta * cos_phi + Jy * cos_theta * sin_phi - Jz * sin_theta
+
+        # # N_phi (8.33b)
+        # N_phi = -Jx * sin_phi + Jy * cos_phi
+
+        # # L_theta  (8.34a)
+        # L_theta = Mx * cos_theta * cos_phi + My * cos_theta * sin_phi - Mz * sin_theta
+
+        # # L_phi  (8.34b)
+        # L_phi = -Mx * sin_phi + My * cos_phi
+
+        return N_theta, N_phi, L_theta, L_phi
+
+    def _radiation_vectors(self, theta: float, phi: float):
+        """Compute radiation vectors at an angle in spherical coordinates
+
+        Parameters
+        ----------
+        theta : float
+            Polar angle (rad) downward from x=y=0 line.
+        phi : float
+            Azimuthal (rad) angle from x=z=0 line.
+
+        Returns
+        -------
+        tuple[float, float, float, float]
+            ``N_theta``, ``N_phi``, ``L_theta``, ``L_phi`` radiation vectors.
+        """
+
+        # compute radiation vectors for the dataset associated with each monitor
+        N_theta, N_phi, L_theta, L_phi = 0.0, 0.0, 0.0, 0.0
+        for data in self.data:
+            _N_th, _N_ph, _L_th, _L_ph = self._radiation_vectors_per_monitor(theta, phi, data)
+            N_theta += _N_th
+            N_phi += _N_ph
+            L_theta += _L_th
+            L_phi += _L_ph
+            # print(_N_th)
 
         return N_theta, N_phi, L_theta, L_phi
 
@@ -279,13 +361,7 @@ class Near2Far:
         r, theta, phi = self._car_2_sph(x-self.origin[0], y-self.origin[1], z-self.origin[2])
 
         # project radiation vectors to distance r away for given angles
-        N_theta, N_phi, L_theta, L_phi = 0.0, 0.0, 0.0, 0.0
-        for data in self.data:
-            _N_theta, _N_phi, _L_theta, _L_phi = self._radiation_vectors(theta, phi, data)
-            N_theta += _N_theta
-            N_phi += _N_phi
-            L_theta += _L_theta
-            L_phi += _L_phi
+        N_theta, N_phi, L_theta, L_phi = self._radiation_vectors(theta, phi)
 
         scalar_proj_r = 1j * self.k0 * np.exp(-1j * self.k0 * r) / (4 * np.pi * r)
 
