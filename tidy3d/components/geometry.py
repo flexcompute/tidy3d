@@ -859,10 +859,9 @@ class PolySlab(Planar):
         axis: Axis,
         slab_bounds: Tuple[float, float],
         gds_layer: int,
-        gds_dtype: int,
-        polygon_index: pydantic.NonNegativeInt = 0,
+        gds_dtype: int = None,
         gds_scale: pydantic.PositiveFloat = 1.0,
-    ):
+    ) -> List['PolySlab']:
         """Import :class:`PolySlab` from a ``gdspy.Cell``.
 
         Parameters
@@ -875,11 +874,9 @@ class PolySlab(Planar):
             Minimum and maximum positions of the slab along ``axis``.
         gds_layer : int
             Layer index in the ``gds_cell``.
-        gds_dtype : int
-            Data type index in the ``gds_cell``.
-        polygon_index : int = 0
-            Index into the list of polygons at given ``gds_layer`` and ``gds_dtype``.
-            Must be non-negative.
+        gds_dtype : int = None
+            Data-type index in the ``gds_cell``.
+            If ``None``, imports all data for this layer into the returned list.
         gds_scale : float = 1.0
             Length scale used in GDS file in units of MICROMETER.
             For example, if gds file uses nanometers, set ``gds_scale=1e-3``.
@@ -887,34 +884,31 @@ class PolySlab(Planar):
 
         Returns
         -------
-        :class:`PolySlab`
-            Geometry with slab along ``axis`` and geometry defined by gds cell in plane.
+        List[:class:`PolySlab`]
+            List of :class:`PolySlab` objects sharing ``axis`` and  slab bound properties.
         """
 
+        # load the polygon vertices
         vert_dict = gds_cell.get_polygons(by_spec=True)
-        try:
-            key = (gds_layer, gds_dtype)
-            list_of_vertices = vert_dict[key]
-        except Exception as e:
+        all_vertices = []
+        for (gds_layer_file, gds_dtype_file), vertices in vert_dict.items():
+            if gds_layer_file == gds_layer:
+                if gds_dtype is None or gds_dtype == gds_dtype_file:
+                    for shape_vertices in vertices:
+                        all_vertices.append(shape_vertices)
+
+        # make sure something got loaded, otherwise error
+        if len(all_vertices) == 0:
             raise Tidy3dKeyError(
-                f"Can't load gds_cell, gds_layer={gds_layer} and gds_dtype={gds_dtype} not found.  "
-                f"Found (layer, dtype) list of {list(vert_dict.keys())} in cell."
-            ) from e
+                f"Couldn't load gds_cell, no vertices found at gds_layer={gds_layer} "
+                f"with specified gds_dtype={gds_dtype}."
+            )
 
-        # select polygon index
-        try:
-            vertices = list_of_vertices[polygon_index]
-        except Exception as e:
-            raise Tidy3dKeyError(
-                f"No polygons found at polygon_index={polygon_index}.  "
-                f"{len(list_of_vertices)} polygons found at "
-                f"gds_layer={gds_layer} and gds_dtype={gds_dtype}."
-            ) from e
+        # apply scaling and convert vertices into polyslabs
+        all_vertices = [vertices * gds_scale for vertices in all_vertices]
+        all_vertices = [vertices.tolist() for vertices in all_vertices]
+        return [cls(vertices=verts, axis=axis, slab_bounds=slab_bounds) for verts in all_vertices]
 
-        vertices *= gds_scale
-        vertices = vertices.tolist()
-
-        return cls(vertices=vertices, axis=axis, slab_bounds=slab_bounds)
 
     def inside(self, x, y, z) -> bool:  # pylint:disable=too-many-locals
         """Returns True if point ``(x,y,z)`` inside volume of geometry.
