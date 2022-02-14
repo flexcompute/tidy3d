@@ -157,7 +157,7 @@ class TimeMonitor(Monitor, ABC):
         """Compute number of time steps for a time monitor."""
 
         tind_beg, tind_end = self.time_inds(tmesh)
-        number_of_steps = int((tind_beg - tind_beg) / self.interval)
+        number_of_steps = int((tind_end - tind_beg) / self.interval)
         return number_of_steps
 
 
