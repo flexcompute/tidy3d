@@ -14,6 +14,9 @@ from ...log import SetupError
 
 # TODO: implement new version with simulation.discretize
 
+# TEMP:
+spacetime_sign = 1
+
 @dataclass
 class Near2FarData:
     """Data structure to store field and grid data for a surface monitor."""
@@ -57,11 +60,6 @@ class Near2Far:
         (self.data[0].yee_center[0] + self.data[1].yee_center[0]) / 2,
         (self.data[2].yee_center[1] + self.data[3].yee_center[1]) / 2,
         (self.data[4].yee_center[2] + self.data[5].yee_center[2]) / 2]
-
-        # self.origin = [0, 0, 0]
-        # for data in self.data:
-        #     self.origin = [sum(x) for x in zip(self.origin, data.yee_center)]
-        # self.origin = tuple(x/len(self.data) for x in self.origin)
 
     def _get_data_from_monitor(self, sim_data: SimulationData, mon: FieldMonitor) -> Near2FarData:
         """Get field and coordinate data associated with a given monitor.
@@ -223,9 +221,9 @@ class Near2Far:
             zp = w0
             source_indices = [0,1]
 
-        phase_x = np.exp(1j * self.k0 * xp * sin_theta * cos_phi)
-        phase_y = np.exp(1j * self.k0 * yp * sin_theta * sin_phi)
-        phase_z = np.exp(1j * self.k0 * zp * cos_theta)
+        phase_x = np.exp(-spacetime_sign * 1j * self.k0 * xp * sin_theta * cos_phi)
+        phase_y = np.exp(-spacetime_sign * 1j * self.k0 * yp * sin_theta * sin_phi)
+        phase_z = np.exp(-spacetime_sign * 1j * self.k0 * zp * cos_theta)
         phase = data.grid_sizes[0] * data.grid_sizes[1] * phase_x * phase_y * phase_z
 
         J = [0, 0, 0]
@@ -248,63 +246,6 @@ class Near2Far:
 
         # L_phi  (8.34b)
         L_phi = -M[0] * sin_phi + M[1] * cos_phi
-
-        # if data.mon_axis == 0:
-
-        #     phase_u = np.exp(1j * self.k0 * w0 * sin_theta * cos_phi)
-        #     phase_v = np.exp(1j * self.k0 * data.grid_points[0] * sin_theta * sin_phi)
-        #     phase_w = np.exp(1j * self.k0 * data.grid_points[1] * cos_theta)
-        #     phase = data.grid_sizes[0] * data.grid_sizes[1] * phase_u * phase_v * phase_w
-
-        #     Jx = 0
-        #     Jy = np.sum(data.J[0] * phase)
-        #     Jz = np.sum(data.J[1] * phase)
-
-        #     Mx = 0
-        #     My = np.sum(data.M[0] * phase)
-        #     Mz = np.sum(data.M[1] * phase)
-
-        # elif data.mon_axis == 1:
-
-        #     phase_u = np.exp(1j * self.k0 * data.grid_points[0] * sin_theta * cos_phi)
-        #     phase_v = np.exp(1j * self.k0 * w0 * sin_theta * sin_phi)
-        #     phase_w = np.exp(1j * self.k0 * data.grid_points[1] * cos_theta)
-        #     phase = data.grid_sizes[0] * data.grid_sizes[1] * phase_u * phase_v * phase_w
-
-        #     Jx = np.sum(data.J[0] * phase)
-        #     Jy = 0
-        #     Jz = np.sum(data.J[1] * phase)
-
-        #     Mx = np.sum(data.M[0] * phase)
-        #     My = 0
-        #     Mz = np.sum(data.M[1] * phase)
-
-        # else:
-
-        #     phase_u = np.exp(1j * self.k0 * data.grid_points[0] * sin_theta * cos_phi)
-        #     phase_v = np.exp(1j * self.k0 * data.grid_points[1] * sin_theta * sin_phi)
-        #     phase_w = np.exp(1j * self.k0 * w0 * cos_theta)
-        #     phase = data.grid_sizes[0] * data.grid_sizes[1] * phase_u * phase_v * phase_w
-
-        #     Jx = np.sum(data.J[0] * phase)
-        #     Jy = np.sum(data.J[1] * phase)
-        #     Jz = 0
-
-        #     Mx = np.sum(data.M[0] * phase)
-        #     My = np.sum(data.M[1] * phase)
-        #     Mz = 0
-
-        # # N_theta (8.33a)
-        # N_theta = Jx * cos_theta * cos_phi + Jy * cos_theta * sin_phi - Jz * sin_theta
-
-        # # N_phi (8.33b)
-        # N_phi = -Jx * sin_phi + Jy * cos_phi
-
-        # # L_theta  (8.34a)
-        # L_theta = Mx * cos_theta * cos_phi + My * cos_theta * sin_phi - Mz * sin_theta
-
-        # # L_phi  (8.34b)
-        # L_phi = -Mx * sin_phi + My * cos_phi
 
         return N_theta, N_phi, L_theta, L_phi
 
@@ -363,7 +304,7 @@ class Near2Far:
         # project radiation vectors to distance r away for given angles
         N_theta, N_phi, L_theta, L_phi = self._radiation_vectors(theta, phi)
 
-        scalar_proj_r = 1j * self.k0 * np.exp(-1j * self.k0 * r) / (4 * np.pi * r)
+        scalar_proj_r = -spacetime_sign * 1j * self.k0 * np.exp(spacetime_sign * 1j * self.k0 * r) / (4 * np.pi * r)
 
         # assemble E felds
         E_theta = -scalar_proj_r * (L_phi + ETA_0 * N_theta)
