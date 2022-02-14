@@ -240,7 +240,7 @@ class Near2Far:
             Radar cross section at angles relative to monitor normal vector.
         """
         N_theta, N_phi, L_theta, L_phi = self._radiation_vectors(theta, phi)
-        constant = self.k0 ** 2 / (8 * np.pi * ETA_0)
+        constant = self.k0**2 / (8 * np.pi * ETA_0)
         term1 = np.abs(L_phi + ETA_0 * N_theta) ** 2
         term2 = np.abs(L_theta - ETA_0 * N_phi) ** 2
         return constant * (term1 + term2)
@@ -262,7 +262,7 @@ class Near2Far:
         tuple
             r, theta, and phi in spherical coordinates
         """
-        r = np.sqrt(x ** 2 + y ** 2 + z ** 2)
+        r = np.sqrt(x**2 + y**2 + z**2)
         theta = np.arccos(z / r)
         phi = np.arctan2(y, x)
         return r, theta, phi

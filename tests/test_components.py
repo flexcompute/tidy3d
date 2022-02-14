@@ -487,7 +487,7 @@ def test_sellmeier_from_dispersion():
     dn_df = (ns[2] - ns[0]) / 0.02 / freq
 
     assert np.allclose(ns[1], n)
-    assert np.allclose(-dn_df * C_0 / wvl ** 2, dn_dwvl)
+    assert np.allclose(-dn_df * C_0 / wvl**2, dn_dwvl)
 
 
 def eps_compare(medium: Medium, expected: Dict, tol: float = 1e-5):
@@ -520,7 +520,7 @@ def test_epsilon_eval():
     eps_compare(material, expected)
 
     # Constant and eps, zero sigma
-    material = Medium(permittivity=1.5 ** 2)
+    material = Medium(permittivity=1.5**2)
     expected = {
         2e14: 2.25,
         5e14: 2.25,
@@ -528,7 +528,7 @@ def test_epsilon_eval():
     eps_compare(material, expected)
 
     # Constant eps and sigma
-    material = Medium(permittivity=1.5 ** 2, conductivity=0.1)
+    material = Medium(permittivity=1.5**2, conductivity=0.1)
     expected = {
         2e14: 2.25 + 8.987552009401353j,
         5e14: 2.25 + 3.5950208037605416j,
