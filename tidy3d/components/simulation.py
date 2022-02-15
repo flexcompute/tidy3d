@@ -188,17 +188,6 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
 
     """ Validating setup """
 
-    @pydantic.validator("symmetry", always=True)
-    def not_supported_yet(cls, val):
-        """Log an error if non 0 value supplied."""
-        if any(sym_val != 0 for sym_val in val):
-            raise SetupError(
-                "Symmetry not supported in this version of tidy3d, "
-                "but will be included in coming release."
-                "For now, if symmetry is required, use the originl tidy3d."
-            )
-        return val
-
     @pydantic.validator("pml_layers", always=True)
     def set_none_to_zero_layers(cls, val):
         """if any PML layer is None, set it to an empty :class:`PML`."""
@@ -849,13 +838,8 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         List[Tuple[float, float]]
             List containing the number of absorber layers in - and + boundaries.
         """
-        num_layers = []
-        for pml_axis, pml_layer in enumerate(self.pml_layers):
-            if self.symmetry[pml_axis] != 0:
-                num_layers.append((0, pml_layer.num_layers))
-            else:
-                num_layers.append((pml_layer.num_layers, pml_layer.num_layers))
-        return num_layers
+
+        return [(pml.num_layers, pml.num_layers) for pml in self.pml_layers]
 
     @property
     def pml_thicknesses(self) -> List[Tuple[float, float]]:
@@ -1112,7 +1096,8 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
 
         return len(self.tmesh)
 
-    def _make_bound_coords_uniform(self, dl, center, size, num_layers):
+    @staticmethod
+    def _make_bound_coords_uniform(dl, center, size):
         """creates coordinate boundaries with uniform mesh (dl is float)"""
 
         num_cells = int(np.floor(size / dl))
@@ -1120,22 +1105,21 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         # Make sure there's at least one cell
         num_cells = max(num_cells, 1)
 
-        # snap to grid, recenter, and add PML
+        # snap to grid, recenter
         size_snapped = dl * num_cells
         bound_coords = center + np.linspace(-size_snapped / 2, size_snapped / 2, num_cells + 1)
-        bound_coords = self._add_pml_to_bounds(num_layers, bound_coords)
         return bound_coords
 
     @staticmethod
-    def _make_bound_coords_nonuniform(dl, center, size, num_layers):
+    def _make_bound_coords_nonuniform(dl, center, size):
         """creates coordinate boundaries with non-uniform mesh (dl is arraylike)"""
 
         # get bounding coordinates
         dl = np.array(dl)
         bound_coords = np.array([np.sum(dl[:i]) for i in range(len(dl) + 1)])
 
-        # shift coords to center at center of simulation along dimension
-        bound_coords = bound_coords - np.sum(dl) / 2 + center
+        # place the middle boundary at the center of the simulation along dimension
+        bound_coords += center - bound_coords[bound_coords.size // 2]
 
         # chop off any coords outside of simulation bounds
         bound_min = center - size / 2
@@ -1151,11 +1135,29 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         while bound_coords[-1] + dl_max <= bound_max:
             bound_coords = np.append(bound_coords, bound_coords[-1] + dl_max)
 
-        # add PML layers in using dl on edges
-        for _ in range(num_layers[0]):
-            bound_coords = np.insert(bound_coords, 0, bound_coords[0] - dl_min)
-        for _ in range(num_layers[1]):
-            bound_coords = np.append(bound_coords, bound_coords[-1] + dl_max)
+        return bound_coords
+
+    def _make_bound_coords(self, dim):
+        """Creates coordinate boundaries along dimension ``dim`` and handle PML and symmetries"""
+
+        dl = self.grid_size[dim]
+        center = self.center[dim]
+
+        # Make uniform or nonuniform boundaries depending on dl input
+        if isinstance(dl, float):
+            bound_coords = self._make_bound_coords_uniform(dl, center, self.size[dim])
+        else:
+            bound_coords = self._make_bound_coords_nonuniform(dl, center, self.size[dim])
+
+        # Add PML layers in using dl on edges
+        bound_coords = self._add_pml_to_bounds(self.num_pml_layers[dim], bound_coords)
+
+        # Enforce a symmetric grid by taking only the coordinates to the right of the center.
+        # Note that there's always a boundary at the simulation center.
+        if self.symmetry[dim] != 0:
+            bound_coords = bound_coords[bound_coords >= center]
+            bound_coords = np.append(2 * center - bound_coords[:0:-1], bound_coords)
+
         return bound_coords
 
     @property
@@ -1168,13 +1170,8 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
             :class:`Grid` storing the spatial locations relevant to the simulation.
         """
         cell_boundary_dict = {}
-        zipped_vals = zip("xyz", self.grid_size, self.center, self.size, self.num_pml_layers)
-        for key, dl, center, size, num_layers in zipped_vals:
-            if isinstance(dl, float):
-                bound_coords = self._make_bound_coords_uniform(dl, center, size, num_layers)
-            else:
-                bound_coords = self._make_bound_coords_nonuniform(dl, center, size, num_layers)
-            cell_boundary_dict[key] = bound_coords
+        for dim, key in enumerate("xyz"):
+            cell_boundary_dict[key] = self._make_bound_coords(dim)
         boundaries = Coords(**cell_boundary_dict)
         return Grid(boundaries=boundaries)
 

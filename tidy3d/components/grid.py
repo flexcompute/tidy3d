@@ -98,6 +98,17 @@ class YeeGrid(Tidy3dBaseModel):
         description="Coordinates of the locations of all three components of the magnetic field.",
     )
 
+    @property
+    def grid_dict(self):
+        yee_grid_dict = {
+            "Ex": self.E.x,
+            "Ey": self.E.y,
+            "Ez": self.E.z,
+            "Hx": self.H.x,
+            "Hy": self.H.y,
+            "Hz": self.H.z,
+        }
+        return yee_grid_dict
 
 class Grid(Tidy3dBaseModel):
     """Contains all information about the spatial positions of the FDTD grid.
@@ -292,14 +303,14 @@ class Grid(Tidy3dBaseModel):
         return Coords(**yee_coords)
 
     def _yee_h(self, axis: Axis):
-        """E field yee lattice sites for axis."""
+        """H field yee lattice sites for axis."""
 
         boundary_coords = self.boundaries.dict(exclude={TYPE_TAG_STR})
 
-        # initially set all to the minus bounds
+        # initially set all to centers
         yee_coords = {key: self._avg(val) for key, val in boundary_coords.items()}
 
-        # average the axis index between the cell boundaries
+        # set the axis index to the minus bounds
         key = "xyz"[axis]
         yee_coords[key] = self._min(boundary_coords[key])
 

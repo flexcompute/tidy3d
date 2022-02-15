@@ -28,13 +28,6 @@ class ModeSpec(Tidy3dBaseModel):
         None, title="Target effective index", description="Guess for effective index of the mode."
     )
 
-    symmetries: Tuple[Symmetry, Symmetry] = pd.Field(
-        (0, 0),
-        title="Tangential symmetries",
-        description="Symmetries to apply to the modes in the two tangential axes. "
-        "Values of (0, 1,-1) correspond to (none, even, odd) symmetries, respectvely.",
-    )
-
     num_pml: Tuple[pd.NonNegativeInt, pd.NonNegativeInt] = pd.Field(
         (0, 0),
         title="Number of PML layers",

@@ -59,7 +59,7 @@ def test_sim():
         sources=[
             VolumeSource(
                 size=(0, 0, 0),
-                center=(0, -0.5, 0),
+                center=(0, -50.5, 0),
                 polarization="Hx",
                 source_time=GaussianPulse(
                     freq0=1e14,
