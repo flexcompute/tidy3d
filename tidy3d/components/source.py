@@ -1,7 +1,7 @@
 """Defines electric current sources for injecting light into simulation."""
 
 from abc import ABC, abstractmethod
-from typing import Union
+from typing import Union, Tuple
 
 import pydantic
 import numpy as np
@@ -18,6 +18,14 @@ from ..log import SetupError
 
 # in spectrum computation, discard amplitudes with relative magnitude smaller than cutoff
 DFT_CUTOFF = 1e-8
+
+ARROW_COLOR = "green"
+
+# this times the min of axis height and width gives the arrow length
+ARROW_LENGTH_FACTOR = 0.25
+
+# this times ARROW_LENGTH gives width
+ARROW_THICK_FACTOR = 1
 
 
 class SourceTime(ABC, Tidy3dBaseModel):
@@ -267,6 +275,7 @@ class Source(Box, ABC):
 
         kwargs = SourceParams().update_params(**kwargs)
         ax = self.geometry.plot(x=x, y=y, z=z, ax=ax, **kwargs)
+        ax = self._plot_arrow(x=x, y=y, z=z, ax=ax)
         return ax
 
     @property
@@ -274,6 +283,20 @@ class Source(Box, ABC):
         """:class:`Box` representation of source."""
 
         return Box(center=self.center, size=self.size)
+
+    def _plot_arrow(
+        self, x: float = None, y: float = None, z: float = None, ax: Ax = None # pylint:disable=unused-argument
+    ) -> Ax:
+        """Adds an arrow to the axis if applicable to the source."""
+        return ax
+
+    def _arrow_length(self, ax: Ax) -> float:
+        """Calculate size of arrow based on axis."""
+        xmin, xmax = ax.get_xlim()
+        ymin, ymax = ax.get_ylim()
+        ax_width = xmax - xmin
+        ax_height = ymax - ymin
+        return ARROW_LENGTH_FACTOR * min(ax_width, ax_height)
 
 
 class VolumeSource(Source):
@@ -303,6 +326,30 @@ class FieldSource(Source, ABC):
     )
 
     _plane_validator = assert_plane()
+
+    @property
+    def _dir_arrow(self) -> Tuple[float, float, float]:
+        """Source direction normal vector in cartesian coordinates."""
+        normal = [0.0, 0.0, 0.0]
+        normal_axis = self.size.index(0.0)
+        normal[normal_axis] = 1.0 if self.direction == "+" else -1.0
+        return tuple(normal)
+
+    def _plot_arrow(self, x: float = None, y: float = None, z: float = None, ax: Ax = None) -> Ax:
+        """Adds an arrow to the axis if applicable to the source."""
+        plot_axis, _ = self.parse_xyz_kwargs(x=x, y=y, z=z)
+        normal_axis = self.size.index(0.0)
+        arrow_length = self._arrow_length(ax)
+
+        # only add arrow if the plotting plane is perpendicular to the source
+        if plot_axis != normal_axis:
+            _, (x0, y0) = self.pop_axis(self.center, axis=plot_axis)
+            _, (dx, dy) = self.pop_axis(self._dir_arrow, axis=plot_axis)
+            ax.arrow(
+                x=x0, y=y0, dx=dx, dy=dy, width=ARROW_THICK_FACTOR * arrow_length, color=ARROW_COLOR
+            )
+
+        return ax
 
 
 class ModeSource(FieldSource):
@@ -334,20 +381,6 @@ class ModeSource(FieldSource):
         "If larger than ``mode_spec.num_modes``, "
         "``num_modes`` in the solver will be set to ``mode_index + 1``.",
     )
-
-    # @pydantic.validator("mode_index", always=True)
-    # def mode_index_in_bounds(cls, val, values):
-    #     """Ensures number of modes in mode spec can support mode index."""
-    #     mode_spec = values.get("mode_spec")
-    #     if mode_spec is None:
-    #         raise SetupError("ModeSpec not found.")
-    #     num_modes = mode_spec.num_modes
-    #     if num_modes <= val:
-    #         raise SetupError(
-    #             f"ModeSpec contains {num_modes} modes, but mode index is {val}. "
-    #             "Either increase number of modes in the specifications or decrease mode index."
-    #         )
-    #     return val
 
 
 class AngledFieldSource(FieldSource):
@@ -422,6 +455,16 @@ class GaussianBeam(AngledFieldSource):
         description="Azimuth angle in the plane orthogonal to the normal axis.",
         units=RADIAN,
     )
+
+    @property
+    def _dir_arrow(self) -> Tuple[float, float, float]:
+        """Source direction normal vector in cartesian coordinates."""
+        radius = 1.0 if self.direction == "+" else -1.0
+        dx = radius * np.cos(self.angle_phi) * np.sin(self.angle_theta)
+        dy = radius * np.sin(self.angle_phi) * np.sin(self.angle_theta)
+        dz = radius * np.cos(self.angle_theta)
+        normal_axis = self.size.index(0.0)
+        return self.unpop_axis(dz, (dx, dy), axis=normal_axis)
 
 
 # sources allowed in Simulation.sources
