@@ -6,12 +6,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- ``Selmeier.from_dispersion()`` method to quickly make a single-pole fit for lossless weakly dispersive materials.
+- `Selmeier.from_dispersion()` method to quickly make a single-pole fit for lossless weakly dispersive materials.
 - Stable dispersive material fits via webservice.
 - Allow to load dispersive data directly by providing URL to txt or csv file
 - Validates simulation based on discretized size.
 
 ### Changed
+- `Polyslab.from_gds` returns a list of `PolySlab` objects imported from all polygons in given layer and dtype, can optionally specify single dtype.
 - Warning about structure close to PML disabled if Absorber type.
 - Source dft now ignores insignificant time amplitudes for speed.
 - New color schemes for plots.
