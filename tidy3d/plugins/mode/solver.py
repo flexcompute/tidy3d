@@ -17,6 +17,7 @@ def compute_modes(
     coords,
     freq,
     mode_spec,
+    symmetry=(0, 0),
     angle_theta=0.0,
     angle_phi=0.0,
 ) -> Tuple[Numpy, Numpy]:
@@ -117,7 +118,7 @@ def compute_modes(
     those positions, unless a PMC symmetry is specifically requested. The PMC symmetry is
     imposed by modifying the backward derivative matrices."""
     dmin_pmc = [False, False]
-    if mode_spec.symmetries[0] != 1:
+    if symmetry[0] != 1:
         # PEC at the xmin edge
         eps_tensor[1, 1, :Ny] = pec_val
         eps_tensor[2, 2, :Ny] = pec_val
@@ -126,7 +127,7 @@ def compute_modes(
         dmin_pmc[0] = True
 
     if Ny > 1:
-        if mode_spec.symmetries[1] != 1:
+        if symmetry[1] != 1:
             # PEC at the ymin edge
             eps_tensor[0, 0, ::Ny] = pec_val
             eps_tensor[2, 2, ::Ny] = pec_val
@@ -144,7 +145,7 @@ def compute_modes(
     Dmats = D_mats((Nx, Ny), dLf, dLb, dmin_pmc)
 
     # PML matrices; do not impose PML on the bottom when symmetry present
-    dmin_pml = np.array(mode_spec.symmetries) == 0
+    dmin_pml = np.array(symmetry) == 0
     Smats = S_mats(omega, (Nx, Ny), mode_spec.num_pml, dLf, dLb, dmin_pml)
 
     # Add the PML on top of the derivatives; normalize by k0 to match the EM-possible notation

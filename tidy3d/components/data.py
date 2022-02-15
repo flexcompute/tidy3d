@@ -9,9 +9,10 @@ import xarray as xr
 import numpy as np
 import h5py
 
-from .types import Numpy, Direction, Array, numpy_encoding, Literal, Ax
+from .types import Numpy, Direction, Array, numpy_encoding, Literal, Ax, Coordinate, Symmetry
 from .base import Tidy3dBaseModel
 from .simulation import Simulation
+from .grid import YeeGrid
 from .mode import ModeSpec
 from .viz import add_ax_if_none, equal_aspect
 from ..log import log, DataError
@@ -301,103 +302,6 @@ class CollectionData(Tidy3dData):
 
 """ Subclasses of MonitorData and CollectionData """
 
-
-class AbstractFieldData(CollectionData, ABC):
-    """Sores a collection of EM fields either in freq or time domain."""
-
-    """ Get the standard EM components from the dict using convenient "dot" syntax."""
-
-    @property
-    def Ex(self):
-        """Get Ex component of field using '.Ex' syntax."""
-        scalar_data = self.data_dict.get("Ex")
-        if scalar_data:
-            return scalar_data.data
-        return None
-
-    @property
-    def Ey(self):
-        """Get Ey component of field using '.Ey' syntax."""
-        scalar_data = self.data_dict.get("Ey")
-        if scalar_data:
-            return scalar_data.data
-        return None
-
-    @property
-    def Ez(self):
-        """Get Ez component of field using '.Ez' syntax."""
-        scalar_data = self.data_dict.get("Ez")
-        if scalar_data:
-            return scalar_data.data
-        return None
-
-    @property
-    def Hx(self):
-        """Get Hx component of field using '.Hx' syntax."""
-        scalar_data = self.data_dict.get("Hx")
-        if scalar_data:
-            return scalar_data.data
-        return None
-
-    @property
-    def Hy(self):
-        """Get Hy component of field using '.Hy' syntax."""
-        scalar_data = self.data_dict.get("Hy")
-        if scalar_data:
-            return scalar_data.data
-        return None
-
-    @property
-    def Hz(self):
-        """Get Hz component of field using '.Hz' syntax."""
-        scalar_data = self.data_dict.get("Hz")
-        if scalar_data:
-            return scalar_data.data
-        return None
-
-    def colocate(self, x, y, z) -> xr.Dataset:
-        """colocate all of the data at a set of x, y, z coordinates.
-
-        Parameters
-        ----------
-        x : np.array
-            x coordinates of locations.
-        y : np.array
-            y coordinates of locations.
-        z : np.array
-            z coordinates of locations.
-
-        Returns
-        -------
-        xr.Dataset
-            Dataset containing all fields at the same spatial locations.
-            For more details refer to `xarray's Documentaton <https://tinyurl.com/cyca3krz>`_.
-
-        Note
-        ----
-        For many operations (such as flux calculations and plotting),
-        it is important that the fields are colocated at the same spatial locations.
-        Be sure to apply this method to your field data in those cases.
-        """
-        coord_val_map = {"x": x, "y": y, "z": z}
-        centered_data_dict = {}
-        for field_name, field_data in self.data_dict.items():
-            centered_data_array = field_data.data
-            for coord_name in "xyz":
-                if len(centered_data_array.coords[coord_name]) <= 1:
-                    # centered_data_array = centered_data_array.isel(**{coord_name:0})
-                    coord_val = coord_val_map[coord_name]
-                    coord_kwargs = {coord_name: coord_val}
-                    centered_data_array = centered_data_array.assign_coords(**coord_kwargs)
-                    centered_data_array = centered_data_array.isel(**{coord_name: 0})
-                else:
-                    coord_vals = coord_val_map[coord_name]
-                    centered_data_array = centered_data_array.interp(**{coord_name: coord_vals})
-            centered_data_dict[field_name] = centered_data_array
-        # import pdb; pdb.set_trace()
-        return xr.Dataset(centered_data_dict)
-
-
 class FreqData(MonitorData, ABC):
     """Stores frequency-domain data using an ``f`` dimension for frequency in Hz."""
 
@@ -501,6 +405,148 @@ class ScalarFieldTimeData(AbstractScalarFieldData, TimeData):
     type: Literal["ScalarFieldTimeData"] = "ScalarFieldTimeData"
 
     _dims = ("x", "y", "z", "t")
+
+
+class AbstractFieldData(CollectionData, ABC):
+    """Sores a collection of EM fields either in freq or time domain."""
+
+    """ Get the standard EM components from the dict using convenient "dot" syntax."""
+
+    @property
+    def Ex(self):
+        """Get Ex component of field using '.Ex' syntax."""
+        scalar_data = self.data_dict.get("Ex")
+        if scalar_data:
+            return scalar_data.data
+        return None
+
+    @property
+    def Ey(self):
+        """Get Ey component of field using '.Ey' syntax."""
+        scalar_data = self.data_dict.get("Ey")
+        if scalar_data:
+            return scalar_data.data
+        return None
+
+    @property
+    def Ez(self):
+        """Get Ez component of field using '.Ez' syntax."""
+        scalar_data = self.data_dict.get("Ez")
+        if scalar_data:
+            return scalar_data.data
+        return None
+
+    @property
+    def Hx(self):
+        """Get Hx component of field using '.Hx' syntax."""
+        scalar_data = self.data_dict.get("Hx")
+        if scalar_data:
+            return scalar_data.data
+        return None
+
+    @property
+    def Hy(self):
+        """Get Hy component of field using '.Hy' syntax."""
+        scalar_data = self.data_dict.get("Hy")
+        if scalar_data:
+            return scalar_data.data
+        return None
+
+    @property
+    def Hz(self):
+        """Get Hz component of field using '.Hz' syntax."""
+        scalar_data = self.data_dict.get("Hz")
+        if scalar_data:
+            return scalar_data.data
+        return None
+
+    def colocate(self, x, y, z) -> xr.Dataset:
+        """colocate all of the data at a set of x, y, z coordinates.
+
+        Parameters
+        ----------
+        x : np.array
+            x coordinates of locations.
+        y : np.array
+            y coordinates of locations.
+        z : np.array
+            z coordinates of locations.
+
+        Returns
+        -------
+        xr.Dataset
+            Dataset containing all fields at the same spatial locations.
+            For more details refer to `xarray's Documentaton <https://tinyurl.com/cyca3krz>`_.
+
+        Note
+        ----
+        For many operations (such as flux calculations and plotting),
+        it is important that the fields are colocated at the same spatial locations.
+        Be sure to apply this method to your field data in those cases.
+        """
+        coord_val_map = {"x": x, "y": y, "z": z}
+        centered_data_dict = {}
+        for field_name, field_data in self.data_dict.items():
+            centered_data_array = field_data.data
+            for coord_name in "xyz":
+                if len(centered_data_array.coords[coord_name]) <= 1:
+                    # centered_data_array = centered_data_array.isel(**{coord_name:0})
+                    coord_val = coord_val_map[coord_name]
+                    coord_kwargs = {coord_name: coord_val}
+                    centered_data_array = centered_data_array.assign_coords(**coord_kwargs)
+                    centered_data_array = centered_data_array.isel(**{coord_name: 0})
+                else:
+                    coord_vals = coord_val_map[coord_name]
+                    centered_data_array = centered_data_array.interp(**{coord_name: coord_vals})
+            centered_data_dict[field_name] = centered_data_array
+        # import pdb; pdb.set_trace()
+        return xr.Dataset(centered_data_dict)
+
+    def apply_syms(self, new_grid: YeeGrid, sym_center: Coordinate, symmetry: Symmetry):
+        """Create a new AbstractFieldData subclass by interpolating on the supplied ``new_grid``,
+        using symmetries as defined by ``sym_center`` and ``symmetry``."""
+
+        new_data_dict = {}
+        yee_grid_dict = new_grid.yee.grid_dict
+        # Defines how field components are affected by a positive symmetry along each of the axes
+        component_sym_dict = {
+            "Ex": [-1, 1, 1],
+            "Ey": [1, -1, 1],
+            "Ez": [1, 1, -1],
+            "Hx": [1, -1, -1],
+            "Hy": [-1, 1, -1],
+            "Hz": [-1, -1, 1],
+        }
+
+        for field, scalar_data in self.data_dict.items():
+            new_data = scalar_data.data
+                
+            # Get new grid locations
+            yee_coords = yee_grid_dict[field].to_list
+
+            # Apply symmetries
+            zipped = zip("xyz", yee_coords, sym_center, symmetry)
+            for dim, (dim_name, coords, center, sym) in enumerate(zipped):
+                # There shouldn't be anything to do if there's no symmetry on this axis
+                if sym == 0:
+                    continue
+
+                # Get indexes of coords that lie on the left of the symmetry center
+                flip_inds = np.where(coords < center)[0]
+
+                # Get the symmetric coordinates on the right
+                coords[flip_inds] = 2 * center - coords[flip_inds]
+
+                # Interpolate. There generally shouldn't be values out of bounds except potentially
+                # when handling modes, in which case we set such values to zero.
+                new_data = new_data.interp({dim_name: coords}, kwargs={"fill_value": 0.0})
+
+                # Apply the correct +/-1 for the field component
+                new_data[{dim_name: flip_inds}] *= sym * component_sym_dict[field][dim]
+
+            new_data_dict[field] = ScalarFieldData(values=new_data.values, **new_data.coords)
+
+        return type(self)(data_dict=new_data_dict)
 
 
 class FieldData(AbstractFieldData):

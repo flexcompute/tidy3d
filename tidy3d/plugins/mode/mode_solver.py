@@ -110,8 +110,22 @@ class ModeSolver:
 
         normal_axis = self.plane.size.index(0.0)
 
+        # get the in-plane grid coordinates on which eps and the mode fields live
+        plane_grid = self.simulation.discretize(self.plane)
+
+        # restrict to a smaller plane if symmetries present in the simulation
+        center_sym, size_sym = list(self.plane.center), list(self.plane.size)
+        for dim in range(3):
+            if self.simulation.symmetry[dim] != 0 and center_sym[dim] == self.simulation.center:
+                center_sym[dim] += size_sym[dim] / 4
+                size_sym[dim] /= 2
+        plane_sym = Box(center=center_sym, size=size_sym)
+        plane_grid_sym = self.simulation.discretize(plane_sym)
+        _, solver_coords = self.plane.pop_axis(plane_grid_sym.boundaries.to_list, axis=normal_axis)
+        _, plane_symmetry = self.plane.pop_axis(self.simulation.symmetry, axis=normal_axis)
+
         # Get diagonal epsilon components in the plane
-        (eps_xx, eps_yy, eps_zz) = self.get_epsilon()
+        (eps_xx, eps_yy, eps_zz) = self.get_epsilon(plane_sym)
 
         # get rid of normal axis
         eps_xx = np.squeeze(eps_xx, axis=normal_axis)
@@ -123,27 +137,8 @@ class ModeSolver:
             (eps_xx, eps_yy, eps_zz), axis=normal_axis
         )
 
-        # get the in-plane grid coordinates on which eps and the mode fields live
-        plane_grid = self.simulation.discretize(self.plane)
-        _, plane_coords = self.plane.pop_axis(plane_grid.boundaries.to_list, axis=normal_axis)
-
         # construct eps_cross section to feed to mode solver
         eps_cross = np.stack((eps_wg_xx, eps_wg_yy, eps_wg_zz))
-
-        # Truncate according to symmetries
-        solver_coords = [coords.copy() for coords in plane_coords]
-        plane_shape = list(eps_wg_xx.shape)
-        for ic, coords in enumerate(solver_coords):
-            if mode_spec.symmetries[ic] != 0:
-                if plane_shape[ic] % 2 != 0:
-                    raise SetupError(
-                        "Requested symmetry does not match the specified plane size "
-                        "and simulation grid."
-                    )
-                slices = [slice(None), slice(None)]
-                slices[ic] = slice(plane_shape[ic] // 2, None)
-                eps_cross = eps_cross[:, slices[0], slices[1]]
-                solver_coords[ic] = solver_coords[ic][slices[ic]]
 
         # Compute the modes
         mode_fields, n_eff_complex = compute_modes(
@@ -151,15 +146,14 @@ class ModeSolver:
             coords=solver_coords,
             freq=self.freq,
             mode_spec=mode_spec,
+            symmetry=plane_symmetry,
         )
 
-        def rotate_field_coords(e_field, h_field):
+        def rotate_field_coords(field):
             """move the propagation axis=z to the proper order in the array"""
-            Ex, Ey, Ez = np.moveaxis(e_field, source=3, destination=1 + normal_axis)
-            e_rot = np.stack(self.simulation.unpop_axis(Ez, (Ex, Ey), axis=normal_axis), axis=0)
-            Hx, Hy, Hz = np.moveaxis(h_field, source=3, destination=1 + normal_axis)
-            h_rot = np.stack(self.simulation.unpop_axis(Hz, (Hx, Hy), axis=normal_axis), axis=0)
-            return (e_rot, h_rot)
+            f_x, f_y, f_z = np.moveaxis(field, source=3, destination=1 + normal_axis)
+            f_rot = np.stack(self.simulation.unpop_axis(f_z, (f_x, f_y), axis=normal_axis), axis=0)
+            return f_rot
 
         modes = []
         for mode_index in range(mode_spec.num_modes):
@@ -173,36 +167,9 @@ class ModeSolver:
             E *= np.exp(-1j * phi)
             H *= np.exp(-1j * phi)
 
-            # Expand symmetries
-            e_full = np.zeros([3] + plane_shape + [1], dtype=np.complex128)
-            h_full = np.zeros([3] + plane_shape + [1], dtype=np.complex128)
-            nx_solver, ny_solver = E.shape[1:3]
-            e_full[:, -nx_solver:, -ny_solver:, :] = E
-            h_full[:, -nx_solver:, -ny_solver:, :] = H
-            Nx, Ny = plane_shape
-            if mode_spec.symmetries[0] != 0:
-                sym_val = mode_spec.symmetries[0]
-                # Pad symmetry-tangential E fields
-                e_full[[1, 2], 1:Nx//2, :, :] = sym_val * e_full[[1, 2], :Nx//2:-1, :, :]
-                # Pad symmetry-normal E field
-                e_full[0, :Nx//2, :, :] = - sym_val * e_full[0, :Nx//2-1:-1, :, :]
-                # Pad symmetry-tangential H fields
-                h_full[[1, 2], :Nx//2, :, :] = - sym_val * h_full[[1, 2], :Nx//2-1:-1, :, :]
-                # Pad symmetry-normal H field
-                h_full[0, 1:Nx//2, :, :] = sym_val * h_full[0, :Nx//2:-1, :, :]
-            if mode_spec.symmetries[1] != 0:
-                sym_val = mode_spec.symmetries[1]
-                # Pad symmetry-tangential E fields
-                e_full[[0, 2], :, 1:Ny//2, :] = sym_val * e_full[[0, 2], :, :Ny//2:-1, :]
-                # Pad symmetry-normal E field
-                e_full[1, :, :Ny//2, :] = - sym_val * e_full[1, :, :Ny//2-1:-1, :]
-                # Pad symmetry-tangential H fields
-                h_full[[0, 2], :, :Ny//2, :] = - sym_val * h_full[[0, 2], :, :Ny//2-1:-1, :]
-                # Pad symmetry-normal H field
-                h_full[1, :, 1:Ny//2, :] = sym_val * h_full[1, :, :Ny//2:-1, :]
-
             # Rotate back to original coordinates
-            (Ex, Ey, Ez), (Hx, Hy, Hz) = rotate_field_coords(e_full, h_full)
+            (Ex, Ey, Ez) = rotate_field_coords(E)
+            (Hx, Hy, Hz) = rotate_field_coords(H)
 
             # apply -1 to H fields if a reflection was involved in the rotation
             if normal_axis == 1:
@@ -216,9 +183,7 @@ class ModeSolver:
             # note: re-discretizing, need to make consistent.
             data_dict = {}
             for field_name, field in fields.items():
-                plane_grid = self.simulation.discretize(self.plane)
-                plane_coords = plane_grid[field_name]
-                xyz_coords = [plane_coords.x, plane_coords.y, plane_coords.z]
+                xyz_coords = plane_grid_sym[field_name].to_list
                 xyz_coords[normal_axis] = [self.plane.center[normal_axis]]
                 data_dict[field_name] = ScalarFieldData(
                     x=xyz_coords[0],
@@ -228,8 +193,11 @@ class ModeSolver:
                     values=field[..., None],
                 )
 
+            field_data = FieldData(data_dict=data_dict).apply_syms(
+                plane_grid, self.simulation.center, self.simulation.symmetry
+            )
             mode_info = ModeInfo(
-                field_data=FieldData(data_dict=data_dict),
+                field_data=field_data,
                 mode_spec=mode_spec,
                 mode_index=mode_index,
                 n_eff=n_eff_complex[mode_index].real,
@@ -240,12 +208,12 @@ class ModeSolver:
 
         return modes
 
-    def get_epsilon(self):
+    def get_epsilon(self, plane):
         """Compute the diagonal components of the epsilon tensor in the plane."""
 
-        eps_xx = self.simulation.epsilon(self.plane, "Ex", self.freq)
-        eps_yy = self.simulation.epsilon(self.plane, "Ey", self.freq)
-        eps_zz = self.simulation.epsilon(self.plane, "Ez", self.freq)
+        eps_xx = self.simulation.epsilon(plane, "Ex", self.freq)
+        eps_yy = self.simulation.epsilon(plane, "Ey", self.freq)
+        eps_zz = self.simulation.epsilon(plane, "Ez", self.freq)
 
         return np.stack((eps_xx, eps_yy, eps_zz), axis=0)
 

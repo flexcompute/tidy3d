@@ -102,8 +102,8 @@ def test_sim_nonuniform_large():
     bound_coords = sim.grid.boundaries.x
     dls = np.diff(bound_coords)
 
-    dl_min = grid_size_x[0]
-    dl_max = grid_size_x[-1]
+    dl_min = dls[0]
+    dl_max = dls[-1]
 
     # checks the bounds were adjusted correctly
     # (smaller than sim size as is, but larger than sim size with one dl added on each edge)
@@ -115,19 +115,12 @@ def test_sim_nonuniform_large():
 
     # tests that PMLs were added correctly
     for i in range(num_layers_pml_x):
-        assert np.diff(bound_coords[i : i + 2]) == grid_size_x[0]
-        assert np.diff(bound_coords[-2 - i : len(bound_coords) - i]) == grid_size_x[-1]
-
-    # tests that all the grid sizes are in there
-    for size in grid_size_x:
-        assert size in dls
+        assert np.diff(bound_coords[i : i + 2]) == dls[0]
+        assert np.diff(bound_coords[-2 - i : len(bound_coords) - i]) == dls[-1]
 
     # tests that nothing but the grid sizes are in there
     for dl in dls:
         assert dl in grid_size_x
-
-    # tests that it gives exactly what we expect
-    # assert np.all(bound_coords == np.array([-12,-10,-8,-6,-4,-2,0,1,4,7,10,13,16]))
 
 
 def test_sim_grid():
@@ -141,6 +134,36 @@ def test_sim_grid():
         assert np.all(c == np.array([-1.5, -0.5, 0.5, 1.5]))
     for b in sim.grid.boundaries.dict(exclude={TYPE_TAG_STR}).values():
         assert np.all(b == np.array([-2, -1, 0, 1, 2]))
+
+
+def test_sim_symmetry_grid():
+    """tests that a grid symmetric w.r.t. the simulation center is created in presence of
+    symmetries."""
+
+    grid_size = [2, 1, 3, 2]
+    sim = td.Simulation(
+        center=(1, 1, 1),
+        size=(10, 10, 10),
+        grid_size=(grid_size, grid_size, grid_size),
+        pml_layers=[
+            td.PML(num_layers=2),
+        ]
+        * 3,
+        symmetry=(0, 1, -1),
+    )
+
+    coords_x, coords_y, coords_z = sim.grid.boundaries.to_list
+
+    # Assert coords size is even for the non-symmetry axis but odd otherwise
+    assert coords_x.size % 2 == 0
+    assert coords_y.size % 2 != 0
+    assert coords_z.size % 2 != 0
+
+    # Assert the dls along the symmetric axes are symmetric
+    dls_y = np.diff(coords_y)
+    dls_z = np.diff(coords_z)
+    assert np.all(dls_y[dls_y.size // 2 - 1 :: -1] == dls_y[dls_y.size // 2 :])
+    assert np.all(dls_z[dls_z.size // 2 - 1 :: -1] == dls_z[dls_z.size // 2 :])
 
 
 def test_sim_pml_grid():
