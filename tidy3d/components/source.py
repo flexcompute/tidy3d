@@ -284,8 +284,12 @@ class Source(Box, ABC):
 
         return Box(center=self.center, size=self.size)
 
-    def _plot_arrow(
-        self, x: float = None, y: float = None, z: float = None, ax: Ax = None # pylint:disable=unused-argument
+    def _plot_arrow(  # pylint:disable=unused-argument
+        self,
+        x: float = None,
+        y: float = None,
+        z: float = None,
+        ax: Ax = None,
     ) -> Ax:
         """Adds an arrow to the axis if applicable to the source."""
         return ax
