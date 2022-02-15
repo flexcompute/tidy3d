@@ -11,6 +11,26 @@ from pydantic import BaseModel
 from .types import Ax
 from ..constants import pec_val
 
+""" Constants """
+
+# add this around extents of plots
+PLOT_BUFFER = 0.3
+
+ARROW_COLOR_MONITOR = "orange"
+ARROW_COLOR_SOURCE = "green"
+ARROW_COLOR_POLARIZATION = "brown"
+ARROW_ALPHA = 0.8
+
+
+# this times the min of axis height and width gives the arrow length
+ARROW_LENGTH_FACTOR = 0.7
+
+# this times ARROW_LENGTH gives width
+ARROW_WIDTH_FACTOR = 0.7
+
+
+""" Decorators """
+
 
 def make_ax() -> Ax:
     """makes an empty `ax`."""
@@ -186,11 +206,3 @@ class SimDataGeoParams(PatchParamSwitcher):
     def get_plot_params(self) -> PatchParams:
         """Returns :class:`PatchParams` based on user-supplied args."""
         return PatchParams(alpha=0.4, edgecolor="black")
-
-
-""" Arrows """
-
-ARROW_COLOR_MONITOR = "orange"
-ARROW_COLOR_SOURCE = "green"
-ARROW_COLOR_POLARIZATION = "brown"
-ARROW_ALPHA = 0.8

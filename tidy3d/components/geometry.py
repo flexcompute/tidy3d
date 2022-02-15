@@ -14,17 +14,9 @@ from .base import Tidy3dBaseModel
 from .types import Bound, Size, Coordinate, Axis, Coordinate2D, ArrayLike
 from .types import Vertices, Ax, Shapely
 from .viz import add_ax_if_none, equal_aspect
+from .viz import PLOT_BUFFER, ARROW_LENGTH_FACTOR, ARROW_WIDTH_FACTOR
 from ..log import Tidy3dKeyError, SetupError, ValidationError
 from ..constants import MICROMETER
-
-# add this around extents of plots
-PLOT_BUFFER = 0.3
-
-# this times the min of axis height and width gives the arrow length
-ARROW_LENGTH_FACTOR = 0.7
-
-# this times ARROW_LENGTH gives width
-ARROW_WIDTH_FACTOR = 0.7
 
 
 class Geometry(Tidy3dBaseModel, ABC):
@@ -636,7 +628,35 @@ class Box(Geometry):
         both_dirs: bool = False,
         ax: Ax = None,
     ) -> Ax:
-        """Adds an arrow to the axis if applicable to the source."""
+        """Adds an arrow to the axis if with options if certain conditions met.
+
+        Parameters
+        ----------
+        direction: Tuple[float, float, float]
+            Normalized vector describing the arrow direction.
+        x : float = None
+            Position of plotting plane in x direction.
+        y : float = None
+            Position of plotting plane in y direction.
+        z : float = None
+            Position of plotting plane in z direction.
+        color : str = None
+            Color of the arrow.
+        alpha : float = None
+            Opacity of the arrow (0, 1)
+        length_factor : float = None
+            How long the (3D, unprojected) arrow is compared to the min(height, width) of the axes.
+        width_factor : float = None
+            How wide the (3D, unprojected) arrow is compared to the min(height, width) of the axes.
+        both_dirs : bool = False
+            If True, plots an arrow ponting in direction and one in -direction.
+
+        Returns
+        -------
+        matplotlib.axes._subplots.Axes
+            The matplotlib axes with the arrow added.
+        """
+
         plot_axis, _ = self.parse_xyz_kwargs(x=x, y=y, z=z)
         arrow_axis = [component == 0 for component in direction]
         arrow_length = self._arrow_length(ax, length_factor)
@@ -645,33 +665,35 @@ class Box(Geometry):
         if arrow_axis.count(0.0) > 1 or arrow_axis.index(0.0) != plot_axis:
             _, (x0, y0) = self.pop_axis(self.center, axis=plot_axis)
             _, (dx, dy) = self.pop_axis(direction, axis=plot_axis)
-            ax.arrow(
-                x=x0,
-                y=y0,
-                dx=arrow_length * dx,
-                dy=arrow_length * dy,
-                width=width_factor * arrow_length,
-                color=color,
-                alpha=alpha,
-            )
-            if both_dirs:
+
+            def add_arrow(sign=1.0):
+                """Add an arrow to the axes and include a sign to direction."""
                 ax.arrow(
                     x=x0,
                     y=y0,
-                    dx=-arrow_length * dx,
-                    dy=-arrow_length * dy,
+                    dx=sign * arrow_length * dx,
+                    dy=sign * arrow_length * dy,
                     width=width_factor * arrow_length,
                     color=color,
                     alpha=alpha,
                 )
+
+            add_arrow(sign=1.0)
+            if both_dirs:
+                add_arrow(sign=-1.0)
+
         return ax
 
     def _arrow_length(self, ax: Ax, length_factor: float = ARROW_LENGTH_FACTOR) -> float:
         """Length of arrow is the minimum size of the axes times the length factor."""
+
+        # get the sizes of the matplotlib axes
         xmin, xmax = ax.get_xlim()
         ymin, ymax = ax.get_ylim()
         ax_width = xmax - xmin
         ax_height = ymax - ymin
+
+        # apply length factor to the minimum size to get arrow width
         return length_factor * min(ax_width, ax_height)
 
 

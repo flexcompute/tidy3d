@@ -308,7 +308,11 @@ class FieldSource(Source, ABC):
     def plot(
         self, x: float = None, y: float = None, z: float = None, ax: Ax = None, **kwargs
     ) -> Ax:
+
+        # call the `Source.plot()` function first.
         ax = super().plot(x=x, y=y, z=z, ax=ax, **kwargs)
+
+        # then add the arrow based on the propagation direction
         ax = self._plot_arrow(
             x=x,
             y=y,
@@ -381,7 +385,11 @@ class AngledFieldSource(FieldSource):
     def plot(
         self, x: float = None, y: float = None, z: float = None, ax: Ax = None, **kwargs
     ) -> Ax:
+
+        # call the `FieldSource.plot()` function first (including dir arrow)
         ax = super().plot(x=x, y=y, z=z, ax=ax, **kwargs)
+
+        # then add another arrow based on the polarization direction
         ax = self._plot_arrow(
             x=x,
             y=y,

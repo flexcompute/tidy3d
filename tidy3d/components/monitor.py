@@ -77,13 +77,6 @@ class FreqMonitor(Monitor, ABC):
         units=HERTZ,
     )
 
-    # @pydantic.validator("freqs", always=True)
-    # def freqs_nonempty(cls, val):
-    #     """Ensure freqs has at least one element"""
-    #     if len(val) == 0:
-    #         raise ValidationError("Monitor 'freqs' should have at least one element.")
-    #     return
-
 
 class TimeMonitor(Monitor, ABC):
     """:class:`Monitor` that records data in the time-domain."""
@@ -363,7 +356,11 @@ class ModeMonitor(PlanarMonitor, FreqMonitor):
     def plot(
         self, x: float = None, y: float = None, z: float = None, ax: Ax = None, **kwargs
     ) -> Ax:
+
+        # call the monitor.plot() function first
         ax = super().plot(x=x, y=y, z=z, ax=ax, **kwargs)
+
+        # and then add an arrow using the direction comuputed from `_dir_arrow`.
         ax = self._plot_arrow(
             x=x,
             y=y,
