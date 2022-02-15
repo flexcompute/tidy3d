@@ -9,7 +9,7 @@ from .types import Literal, Ax, EMField, ArrayLike, Array
 from .geometry import Box
 from .validators import assert_plane
 from .mode import ModeSpec
-from .viz import add_ax_if_none, equal_aspect, MonitorParams
+from .viz import add_ax_if_none, equal_aspect, MonitorParams, ARROW_COLOR_MONITOR, ARROW_ALPHA
 from ..log import SetupError
 from ..constants import HERTZ, SECOND
 
@@ -359,6 +359,30 @@ class ModeMonitor(PlanarMonitor, FreqMonitor):
     def storage_size(self, num_cells: int, tmesh: int) -> int:
         # stores 3 complex numbers per grid cell, per frequency, per mode.
         return 3 * BYTES_COMPLEX * num_cells * len(self.freqs) * self.mode_spec.num_modes
+
+    def plot(
+        self, x: float = None, y: float = None, z: float = None, ax: Ax = None, **kwargs
+    ) -> Ax:
+        ax = super().plot(x=x, y=y, z=z, ax=ax, **kwargs)
+        ax = self._plot_arrow(
+            x=x,
+            y=y,
+            z=z,
+            ax=ax,
+            direction=self._dir_arrow,
+            color=ARROW_COLOR_MONITOR,
+            alpha=ARROW_ALPHA,
+            both_dirs=True,
+        )
+        return ax
+
+    @property
+    def _dir_arrow(self) -> Tuple[float, float, float]:
+        """Source direction normal vector in cartesian coordinates."""
+        normal = [0.0, 0.0, 0.0]
+        normal_axis = self.size.index(0.0)
+        normal[normal_axis] = 1.0
+        return tuple(normal)
 
 
 # types of monitors that are accepted by simulation
