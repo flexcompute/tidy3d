@@ -13,19 +13,12 @@ from .validators import assert_plane, validate_name_str
 from .geometry import Box
 from .mode import ModeSpec
 from .viz import add_ax_if_none, SourceParams, equal_aspect
+from .viz import ARROW_COLOR_SOURCE, ARROW_ALPHA, ARROW_COLOR_POLARIZATION
 from ..constants import RADIAN, HERTZ, MICROMETER
 from ..log import SetupError
 
 # in spectrum computation, discard amplitudes with relative magnitude smaller than cutoff
 DFT_CUTOFF = 1e-8
-
-ARROW_COLOR = "green"
-
-# this times the min of axis height and width gives the arrow length
-ARROW_LENGTH_FACTOR = 0.25
-
-# this times ARROW_LENGTH gives width
-ARROW_THICK_FACTOR = 1
 
 
 class SourceTime(ABC, Tidy3dBaseModel):
@@ -275,7 +268,6 @@ class Source(Box, ABC):
 
         kwargs = SourceParams().update_params(**kwargs)
         ax = self.geometry.plot(x=x, y=y, z=z, ax=ax, **kwargs)
-        ax = self._plot_arrow(x=x, y=y, z=z, ax=ax)
         return ax
 
     @property
@@ -283,24 +275,6 @@ class Source(Box, ABC):
         """:class:`Box` representation of source."""
 
         return Box(center=self.center, size=self.size)
-
-    def _plot_arrow(  # pylint:disable=unused-argument
-        self,
-        x: float = None,
-        y: float = None,
-        z: float = None,
-        ax: Ax = None,
-    ) -> Ax:
-        """Adds an arrow to the axis if applicable to the source."""
-        return ax
-
-    def _arrow_length(self, ax: Ax) -> float:
-        """Calculate size of arrow based on axis."""
-        xmin, xmax = ax.get_xlim()
-        ymin, ymax = ax.get_ylim()
-        ax_width = xmax - xmin
-        ax_height = ymax - ymin
-        return ARROW_LENGTH_FACTOR * min(ax_width, ax_height)
 
 
 class VolumeSource(Source):
@@ -331,6 +305,22 @@ class FieldSource(Source, ABC):
 
     _plane_validator = assert_plane()
 
+    def plot(
+        self, x: float = None, y: float = None, z: float = None, ax: Ax = None, **kwargs
+    ) -> Ax:
+        ax = super().plot(x=x, y=y, z=z, ax=ax, **kwargs)
+        ax = self._plot_arrow(
+            x=x,
+            y=y,
+            z=z,
+            ax=ax,
+            direction=self._dir_arrow,
+            color=ARROW_COLOR_SOURCE,
+            alpha=ARROW_ALPHA,
+            both_dirs=False,
+        )
+        return ax
+
     @property
     def _dir_arrow(self) -> Tuple[float, float, float]:
         """Source direction normal vector in cartesian coordinates."""
@@ -338,22 +328,6 @@ class FieldSource(Source, ABC):
         normal_axis = self.size.index(0.0)
         normal[normal_axis] = 1.0 if self.direction == "+" else -1.0
         return tuple(normal)
-
-    def _plot_arrow(self, x: float = None, y: float = None, z: float = None, ax: Ax = None) -> Ax:
-        """Adds an arrow to the axis if applicable to the source."""
-        plot_axis, _ = self.parse_xyz_kwargs(x=x, y=y, z=z)
-        normal_axis = self.size.index(0.0)
-        arrow_length = self._arrow_length(ax)
-
-        # only add arrow if the plotting plane is perpendicular to the source
-        if plot_axis != normal_axis:
-            _, (x0, y0) = self.pop_axis(self.center, axis=plot_axis)
-            _, (dx, dy) = self.pop_axis(self._dir_arrow, axis=plot_axis)
-            ax.arrow(
-                x=x0, y=y0, dx=dx, dy=dy, width=ARROW_THICK_FACTOR * arrow_length, color=ARROW_COLOR
-            )
-
-        return ax
 
 
 class ModeSource(FieldSource):
@@ -403,6 +377,60 @@ class AngledFieldSource(FieldSource):
         "- ``Ex`` polarization for propagation along ``z``.",
         units=RADIAN,
     )
+
+    def plot(
+        self, x: float = None, y: float = None, z: float = None, ax: Ax = None, **kwargs
+    ) -> Ax:
+        ax = super().plot(x=x, y=y, z=z, ax=ax, **kwargs)
+        ax = self._plot_arrow(
+            x=x,
+            y=y,
+            z=z,
+            ax=ax,
+            direction=self._pol_arrow,
+            color=ARROW_COLOR_POLARIZATION,
+            alpha=ARROW_ALPHA,
+            both_dirs=False,
+        )
+        return ax
+
+    @staticmethod
+    def rotate(
+        vector: Tuple[float, float, float], axis: Tuple[float, float, float], angle: float
+    ) -> Array:
+        """Rotate a ``vector`` about a given ``axis`` vector by a given ``angle``."""
+
+        # Normalized axis vector components
+        (ux, uy, uz) = axis / np.linalg.norm(axis)
+
+        # General rotation matrix
+        rot_mat = np.zeros((3, 3))
+        cos = np.cos(angle)
+        sin = np.sin(angle)
+        rot_mat[0, 0] = cos + ux**2 * (1 - cos)
+        rot_mat[0, 1] = ux * uy * (1 - cos) - uz * sin
+        rot_mat[0, 2] = ux * uz * (1 - cos) + uy * sin
+        rot_mat[1, 0] = uy * ux * (1 - cos) + uz * sin
+        rot_mat[1, 1] = cos + uy**2 * (1 - cos)
+        rot_mat[1, 2] = uy * uz * (1 - cos) - ux * sin
+        rot_mat[2, 0] = uz * ux * (1 - cos) - uy * sin
+        rot_mat[2, 1] = uz * uy * (1 - cos) + ux * sin
+        rot_mat[2, 2] = cos + uz**2 * (1 - cos)
+
+        return rot_mat @ vector
+
+    @property
+    def _pol_arrow(self) -> Tuple[float, float, float]:
+        """Source polarization normal vector in cartesian coordinates."""
+        normal_plane = [0.0, 0.0, 0.0]
+        normal_axis = self.size.index(0.0)
+        normal_plane[normal_axis] = 1.0
+        normal_prop = list(self._dir_arrow)
+        pol_vector = np.cross(normal_plane, normal_prop)
+        if np.all(pol_vector == 0.0):
+            pol_vector = np.array((0, 1, 0)) if normal_axis == "x" else np.array((1, 0, 0))
+
+        return self.rotate(pol_vector, normal_prop, angle=self.pol_angle)
 
 
 class PlaneWave(AngledFieldSource):

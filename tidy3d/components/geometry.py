@@ -20,6 +20,12 @@ from ..constants import MICROMETER
 # add this around extents of plots
 PLOT_BUFFER = 0.3
 
+# this times the min of axis height and width gives the arrow length
+ARROW_LENGTH_FACTOR = 0.7
+
+# this times ARROW_LENGTH gives width
+ARROW_WIDTH_FACTOR = 0.7
+
 
 class Geometry(Tidy3dBaseModel, ABC):
     """Abstract base class, defines where something exists in space."""
@@ -616,6 +622,57 @@ class Box(Geometry):
             Instance of :class:`Box` representing self's geometry.
         """
         return Box(center=self.center, size=self.size)
+
+    def _plot_arrow(  # pylint:disable=too-many-arguments, too-many-locals
+        self,
+        direction: Tuple[float, float, float],
+        x: float = None,
+        y: float = None,
+        z: float = None,
+        color: str = None,
+        alpha: float = None,
+        length_factor: float = ARROW_LENGTH_FACTOR,
+        width_factor: float = ARROW_WIDTH_FACTOR,
+        both_dirs: bool = False,
+        ax: Ax = None,
+    ) -> Ax:
+        """Adds an arrow to the axis if applicable to the source."""
+        plot_axis, _ = self.parse_xyz_kwargs(x=x, y=y, z=z)
+        arrow_axis = [component == 0 for component in direction]
+        arrow_length = self._arrow_length(ax, length_factor)
+
+        # only add arrow if the plotting plane is perpendicular to the source
+        if arrow_axis.count(0.0) > 1 or arrow_axis.index(0.0) != plot_axis:
+            _, (x0, y0) = self.pop_axis(self.center, axis=plot_axis)
+            _, (dx, dy) = self.pop_axis(direction, axis=plot_axis)
+            ax.arrow(
+                x=x0,
+                y=y0,
+                dx=arrow_length * dx,
+                dy=arrow_length * dy,
+                width=width_factor * arrow_length,
+                color=color,
+                alpha=alpha,
+            )
+            if both_dirs:
+                ax.arrow(
+                    x=x0,
+                    y=y0,
+                    dx=-arrow_length * dx,
+                    dy=-arrow_length * dy,
+                    width=width_factor * arrow_length,
+                    color=color,
+                    alpha=alpha,
+                )
+        return ax
+
+    def _arrow_length(self, ax: Ax, length_factor: float = ARROW_LENGTH_FACTOR) -> float:
+        """Length of arrow is the minimum size of the axes times the length factor."""
+        xmin, xmax = ax.get_xlim()
+        ymin, ymax = ax.get_ylim()
+        ax_width = xmax - xmin
+        ax_height = ymax - ymin
+        return length_factor * min(ax_width, ax_height)
 
 
 class Sphere(Circular):

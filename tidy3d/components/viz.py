@@ -186,3 +186,11 @@ class SimDataGeoParams(PatchParamSwitcher):
     def get_plot_params(self) -> PatchParams:
         """Returns :class:`PatchParams` based on user-supplied args."""
         return PatchParams(alpha=0.4, edgecolor="black")
+
+
+""" Arrows """
+
+ARROW_COLOR_MONITOR = "orange"
+ARROW_COLOR_SOURCE = "green"
+ARROW_COLOR_POLARIZATION = "brown"
+ARROW_ALPHA = 0.8
