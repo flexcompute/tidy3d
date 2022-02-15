@@ -377,7 +377,7 @@ class DispersionFitter(BaseModel):
 
         Returns
         -------
-        ``PoleResidue``
+        :class:`PoleResidue`
             Dispersive medium corresponding to this set of ``coeffs``.
         """
         poles_complex = DispersionFitter._coeffs_to_poles(coeffs)
@@ -391,12 +391,12 @@ class DispersionFitter(BaseModel):
 
         Parameters
         ----------
-        num_poles : int, optional
+        num_poles : int = 3
             Number of poles in the model.
 
         Returns
         -------
-        Tuple[:class:``PoleResidue``, float]
+        Tuple[:class:`PoleResidue`, float]
             Results of single fit: (dispersive medium, RMS error).
         """
 
@@ -515,11 +515,11 @@ class DispersionFitter(BaseModel):
 
         Parameters
         ----------
-        medium : PoleResidue, optional
+        medium : PoleResidue = None
             medium containing model to plot against data
-        wvl_um : Numpy, optional
+        wvl_um : Numpy = None
             Wavelengths to evaluate model at for plot in micrometers.
-        ax : Ax, optional
+        ax : Ax = None
             Axes to plot the data on, if None, a new one is created.
 
         Returns
@@ -605,7 +605,7 @@ class DispersionFitter(BaseModel):
 
     @classmethod
     def from_url(cls, url_file: str, delimiter: str = ","):
-        """loads ``DispersionFitter`` from url linked to a csv/txt file that
+        """loads :class:`DispersionFitter` from url linked to a csv/txt file that
         contains wavelength (micron), n, and optionally k data. Preferred from
         refractiveindex.info.
 
@@ -646,8 +646,8 @@ class DispersionFitter(BaseModel):
 
         Returns
         -------
-        DispersionFitter
-            A ``DispersionFitter`` instance.
+        :class`DispersionFitter`
+            A :class`DispersionFitter` instance.
         """
 
         resp = requests.get(url_file)
@@ -695,7 +695,7 @@ class DispersionFitter(BaseModel):
 
     @classmethod
     def from_file(cls, fname: str, **loadtxt_kwargs):
-        """Loads ``DispersionFitter`` from file containing wavelength, n, k data.
+        """Loads :class`DispersionFitter` from file containing wavelength, n, k data.
 
         Parameters
         ----------
@@ -706,8 +706,8 @@ class DispersionFitter(BaseModel):
 
         Returns
         -------
-        DispersionFitter
-            A ``DispersionFitter`` instance.
+        :class`DispersionFitter`
+            A :class`DispersionFitter` instance.
         """
         data = np.loadtxt(fname, **loadtxt_kwargs)
         assert len(data.shape) == 2, "data must contain [wavelength, ndata, kdata] in columns"
