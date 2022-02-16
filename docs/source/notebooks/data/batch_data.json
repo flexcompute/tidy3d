@@ -1215,8 +1215,8 @@
                     ],
                     "type": "FieldMonitor",
                     "size": [
-                        1000000000000.0,
-                        1000000000000.0,
+                        1.0000000200408773e+20,
+                        1.0000000200408773e+20,
                         0.0
                     ],
                     "name": "field",
@@ -1451,7 +1451,7 @@
             "shutoff": 1e-05,
             "subpixel": true,
             "courant": 0.9,
-            "version": "0.2.3"
+            "version": "1.0.0"
         },
         "l=5.70": {
             "center": [
@@ -2667,8 +2667,8 @@
                     ],
                     "type": "FieldMonitor",
                     "size": [
-                        1000000000000.0,
-                        1000000000000.0,
+                        1.0000000200408773e+20,
+                        1.0000000200408773e+20,
                         0.0
                     ],
                     "name": "field",
@@ -2903,7 +2903,7 @@
             "shutoff": 1e-05,
             "subpixel": true,
             "courant": 0.9,
-            "version": "0.2.3"
+            "version": "1.0.0"
         },
         "l=6.40": {
             "center": [
@@ -4119,8 +4119,8 @@
                     ],
                     "type": "FieldMonitor",
                     "size": [
-                        1000000000000.0,
-                        1000000000000.0,
+                        1.0000000200408773e+20,
+                        1.0000000200408773e+20,
                         0.0
                     ],
                     "name": "field",
@@ -4355,7 +4355,7 @@
             "shutoff": 1e-05,
             "subpixel": true,
             "courant": 0.9,
-            "version": "0.2.3"
+            "version": "1.0.0"
         },
         "l=7.10": {
             "center": [
@@ -5571,8 +5571,8 @@
                     ],
                     "type": "FieldMonitor",
                     "size": [
-                        1000000000000.0,
-                        1000000000000.0,
+                        1.0000000200408773e+20,
+                        1.0000000200408773e+20,
                         0.0
                     ],
                     "name": "field",
@@ -5807,7 +5807,7 @@
             "shutoff": 1e-05,
             "subpixel": true,
             "courant": 0.9,
-            "version": "0.2.3"
+            "version": "1.0.0"
         },
         "l=7.80": {
             "center": [
@@ -7023,8 +7023,8 @@
                     ],
                     "type": "FieldMonitor",
                     "size": [
-                        1000000000000.0,
-                        1000000000000.0,
+                        1.0000000200408773e+20,
+                        1.0000000200408773e+20,
                         0.0
                     ],
                     "name": "field",
@@ -7259,7 +7259,7 @@
             "shutoff": 1e-05,
             "subpixel": true,
             "courant": 0.9,
-            "version": "0.2.3"
+            "version": "1.0.0"
         },
         "l=8.50": {
             "center": [
@@ -8475,8 +8475,8 @@
                     ],
                     "type": "FieldMonitor",
                     "size": [
-                        1000000000000.0,
-                        1000000000000.0,
+                        1.0000000200408773e+20,
+                        1.0000000200408773e+20,
                         0.0
                     ],
                     "name": "field",
@@ -8711,7 +8711,7 @@
             "shutoff": 1e-05,
             "subpixel": true,
             "courant": 0.9,
-            "version": "0.2.3"
+            "version": "1.0.0"
         },
         "l=9.20": {
             "center": [
@@ -9927,8 +9927,8 @@
                     ],
                     "type": "FieldMonitor",
                     "size": [
-                        1000000000000.0,
-                        1000000000000.0,
+                        1.0000000200408773e+20,
+                        1.0000000200408773e+20,
                         0.0
                     ],
                     "name": "field",
@@ -10163,7 +10163,7 @@
             "shutoff": 1e-05,
             "subpixel": true,
             "courant": 0.9,
-            "version": "0.2.3"
+            "version": "1.0.0"
         },
         "l=9.90": {
             "center": [
@@ -11379,8 +11379,8 @@
                     ],
                     "type": "FieldMonitor",
                     "size": [
-                        1000000000000.0,
-                        1000000000000.0,
+                        1.0000000200408773e+20,
+                        1.0000000200408773e+20,
                         0.0
                     ],
                     "name": "field",
@@ -11615,7 +11615,7 @@
             "shutoff": 1e-05,
             "subpixel": true,
             "courant": 0.9,
-            "version": "0.2.3"
+            "version": "1.0.0"
         },
         "l=10.60": {
             "center": [
@@ -12831,8 +12831,8 @@
                     ],
                     "type": "FieldMonitor",
                     "size": [
-                        1000000000000.0,
-                        1000000000000.0,
+                        1.0000000200408773e+20,
+                        1.0000000200408773e+20,
                         0.0
                     ],
                     "name": "field",
@@ -13067,7 +13067,7 @@
             "shutoff": 1e-05,
             "subpixel": true,
             "courant": 0.9,
-            "version": "0.2.3"
+            "version": "1.0.0"
         },
         "l=11.30": {
             "center": [
@@ -14283,8 +14283,8 @@
                     ],
                     "type": "FieldMonitor",
                     "size": [
-                        1000000000000.0,
-                        1000000000000.0,
+                        1.0000000200408773e+20,
+                        1.0000000200408773e+20,
                         0.0
                     ],
                     "name": "field",
@@ -14519,7 +14519,7 @@
             "shutoff": 1e-05,
             "subpixel": true,
             "courant": 0.9,
-            "version": "0.2.3"
+            "version": "1.0.0"
         },
         "l=12.00": {
             "center": [
@@ -15735,8 +15735,8 @@
                     ],
                     "type": "FieldMonitor",
                     "size": [
-                        1000000000000.0,
-                        1000000000000.0,
+                        1.0000000200408773e+20,
+                        1.0000000200408773e+20,
                         0.0
                     ],
                     "name": "field",
@@ -15971,7 +15971,7 @@
             "shutoff": 1e-05,
             "subpixel": true,
             "courant": 0.9,
-            "version": "0.2.3"
+            "version": "1.0.0"
         }
     },
     "jobs": {
@@ -17191,8 +17191,8 @@
                         ],
                         "type": "FieldMonitor",
                         "size": [
-                            1000000000000.0,
-                            1000000000000.0,
+                            1.0000000200408773e+20,
+                            1.0000000200408773e+20,
                             0.0
                         ],
                         "name": "field",
@@ -17427,11 +17427,11 @@
                 "shutoff": 1e-05,
                 "subpixel": true,
                 "courant": 0.9,
-                "version": "0.2.3"
+                "version": "1.0.0"
             },
             "task_name": "l=5.00",
             "folder_name": "default",
-            "task_id": "3959caa2-69ff-4aa3-88e2-cf5607ff51d2",
+            "task_id": "82ec8003-5811-4cf6-a166-1dab9c33f8b4",
             "callback_url": null
         },
         "l=5.70": {
@@ -18650,8 +18650,8 @@
                         ],
                         "type": "FieldMonitor",
                         "size": [
-                            1000000000000.0,
-                            1000000000000.0,
+                            1.0000000200408773e+20,
+                            1.0000000200408773e+20,
                             0.0
                         ],
                         "name": "field",
@@ -18886,11 +18886,11 @@
                 "shutoff": 1e-05,
                 "subpixel": true,
                 "courant": 0.9,
-                "version": "0.2.3"
+                "version": "1.0.0"
             },
             "task_name": "l=5.70",
             "folder_name": "default",
-            "task_id": "c60cfda7-4e83-4efa-b9f4-59eba9b47ef9",
+            "task_id": "5bdf7b44-d431-4b94-bdde-49d60a35d582",
             "callback_url": null
         },
         "l=6.40": {
@@ -20109,8 +20109,8 @@
                         ],
                         "type": "FieldMonitor",
                         "size": [
-                            1000000000000.0,
-                            1000000000000.0,
+                            1.0000000200408773e+20,
+                            1.0000000200408773e+20,
                             0.0
                         ],
                         "name": "field",
@@ -20345,11 +20345,11 @@
                 "shutoff": 1e-05,
                 "subpixel": true,
                 "courant": 0.9,
-                "version": "0.2.3"
+                "version": "1.0.0"
             },
             "task_name": "l=6.40",
             "folder_name": "default",
-            "task_id": "377af695-743d-4d74-ab3b-37df4a64b6ea",
+            "task_id": "709098d4-af70-4d49-b586-4532aeffcad6",
             "callback_url": null
         },
         "l=7.10": {
@@ -21568,8 +21568,8 @@
                         ],
                         "type": "FieldMonitor",
                         "size": [
-                            1000000000000.0,
-                            1000000000000.0,
+                            1.0000000200408773e+20,
+                            1.0000000200408773e+20,
                             0.0
                         ],
                         "name": "field",
@@ -21804,11 +21804,11 @@
                 "shutoff": 1e-05,
                 "subpixel": true,
                 "courant": 0.9,
-                "version": "0.2.3"
+                "version": "1.0.0"
             },
             "task_name": "l=7.10",
             "folder_name": "default",
-            "task_id": "451beda3-b40a-4ef3-b9fa-0fe36df1e974",
+            "task_id": "60b4d04e-8eda-4c30-98c0-20c09a4041fd",
             "callback_url": null
         },
         "l=7.80": {
@@ -23027,8 +23027,8 @@
                         ],
                         "type": "FieldMonitor",
                         "size": [
-                            1000000000000.0,
-                            1000000000000.0,
+                            1.0000000200408773e+20,
+                            1.0000000200408773e+20,
                             0.0
                         ],
                         "name": "field",
@@ -23263,11 +23263,11 @@
                 "shutoff": 1e-05,
                 "subpixel": true,
                 "courant": 0.9,
-                "version": "0.2.3"
+                "version": "1.0.0"
             },
             "task_name": "l=7.80",
             "folder_name": "default",
-            "task_id": "30ae4a36-cf4a-442b-9dc2-96e6f662df2d",
+            "task_id": "b55a9163-307c-4216-aa8f-cead20499302",
             "callback_url": null
         },
         "l=8.50": {
@@ -24486,8 +24486,8 @@
                         ],
                         "type": "FieldMonitor",
                         "size": [
-                            1000000000000.0,
-                            1000000000000.0,
+                            1.0000000200408773e+20,
+                            1.0000000200408773e+20,
                             0.0
                         ],
                         "name": "field",
@@ -24722,11 +24722,11 @@
                 "shutoff": 1e-05,
                 "subpixel": true,
                 "courant": 0.9,
-                "version": "0.2.3"
+                "version": "1.0.0"
             },
             "task_name": "l=8.50",
             "folder_name": "default",
-            "task_id": "98edf23b-2f58-4aaf-a0af-6343797ea43d",
+            "task_id": "96af5a2c-3407-42d2-9dd3-c37983fd1fd7",
             "callback_url": null
         },
         "l=9.20": {
@@ -25945,8 +25945,8 @@
                         ],
                         "type": "FieldMonitor",
                         "size": [
-                            1000000000000.0,
-                            1000000000000.0,
+                            1.0000000200408773e+20,
+                            1.0000000200408773e+20,
                             0.0
                         ],
                         "name": "field",
@@ -26181,11 +26181,11 @@
                 "shutoff": 1e-05,
                 "subpixel": true,
                 "courant": 0.9,
-                "version": "0.2.3"
+                "version": "1.0.0"
             },
             "task_name": "l=9.20",
             "folder_name": "default",
-            "task_id": "d8ad6aa5-79a6-4e7d-a073-298346c41adf",
+            "task_id": "84c72786-b7fb-4873-8ade-ed737718f3b6",
             "callback_url": null
         },
         "l=9.90": {
@@ -27404,8 +27404,8 @@
                         ],
                         "type": "FieldMonitor",
                         "size": [
-                            1000000000000.0,
-                            1000000000000.0,
+                            1.0000000200408773e+20,
+                            1.0000000200408773e+20,
                             0.0
                         ],
                         "name": "field",
@@ -27640,11 +27640,11 @@
                 "shutoff": 1e-05,
                 "subpixel": true,
                 "courant": 0.9,
-                "version": "0.2.3"
+                "version": "1.0.0"
             },
             "task_name": "l=9.90",
             "folder_name": "default",
-            "task_id": "fa29f083-d395-46b3-b744-1caf2c5b3fa9",
+            "task_id": "45be5db3-0650-44f1-b608-a760fc276455",
             "callback_url": null
         },
         "l=10.60": {
@@ -28863,8 +28863,8 @@
                         ],
                         "type": "FieldMonitor",
                         "size": [
-                            1000000000000.0,
-                            1000000000000.0,
+                            1.0000000200408773e+20,
+                            1.0000000200408773e+20,
                             0.0
                         ],
                         "name": "field",
@@ -29099,11 +29099,11 @@
                 "shutoff": 1e-05,
                 "subpixel": true,
                 "courant": 0.9,
-                "version": "0.2.3"
+                "version": "1.0.0"
             },
             "task_name": "l=10.60",
             "folder_name": "default",
-            "task_id": "69ebe3e5-620e-4116-b064-781347ebddd0",
+            "task_id": "3bd9e66b-051c-42cf-84fc-23202bbad801",
             "callback_url": null
         },
         "l=11.30": {
@@ -30322,8 +30322,8 @@
                         ],
                         "type": "FieldMonitor",
                         "size": [
-                            1000000000000.0,
-                            1000000000000.0,
+                            1.0000000200408773e+20,
+                            1.0000000200408773e+20,
                             0.0
                         ],
                         "name": "field",
@@ -30558,11 +30558,11 @@
                 "shutoff": 1e-05,
                 "subpixel": true,
                 "courant": 0.9,
-                "version": "0.2.3"
+                "version": "1.0.0"
             },
             "task_name": "l=11.30",
             "folder_name": "default",
-            "task_id": "98e1a57a-c3bd-4538-9ff8-ebf72720954b",
+            "task_id": "c7151c64-ae8e-4e86-b5fc-909529630569",
             "callback_url": null
         },
         "l=12.00": {
@@ -31781,8 +31781,8 @@
                         ],
                         "type": "FieldMonitor",
                         "size": [
-                            1000000000000.0,
-                            1000000000000.0,
+                            1.0000000200408773e+20,
+                            1.0000000200408773e+20,
                             0.0
                         ],
                         "name": "field",
@@ -32017,11 +32017,11 @@
                 "shutoff": 1e-05,
                 "subpixel": true,
                 "courant": 0.9,
-                "version": "0.2.3"
+                "version": "1.0.0"
             },
             "task_name": "l=12.00",
             "folder_name": "default",
-            "task_id": "f337a440-67b1-4d6c-9f4d-cc26d548a3d8",
+            "task_id": "40f34697-24ed-4422-a305-fab6b78d6a92",
             "callback_url": null
         }
     },

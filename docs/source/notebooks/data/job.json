@@ -85,8 +85,8 @@
                 ],
                 "type": "FieldMonitor",
                 "size": [
-                    1000000000000.0,
-                    1000000000000.0,
+                    1.0000000200408773e+20,
+                    1.0000000200408773e+20,
                     0.0
                 ],
                 "name": "field",
@@ -158,10 +158,10 @@
         "shutoff": 1e-05,
         "subpixel": true,
         "courant": 0.9,
-        "version": "0.2.3"
+        "version": "1.0.0"
     },
     "task_name": "job",
     "folder_name": "default",
-    "task_id": "4cc18284-e78e-487d-b019-3622673d795a",
+    "task_id": "07c1d142-8f4b-4f7c-ae8e-cf4aa9d3799e",
     "callback_url": null
 }
