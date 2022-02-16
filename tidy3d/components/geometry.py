@@ -15,7 +15,7 @@ from .types import Bound, Size, Coordinate, Axis, Coordinate2D, ArrayLike
 from .types import Vertices, Ax, Shapely
 from .viz import add_ax_if_none, equal_aspect
 from ..log import Tidy3dKeyError, SetupError, ValidationError
-from ..constants import MICROMETER
+from ..constants import MICROMETER, LARGE_NUMBER
 
 # add this around extents of plots
 PLOT_BUFFER = 0.3
@@ -281,11 +281,20 @@ class Geometry(Tidy3dBaseModel, ABC):
         """
         xlabel, ylabel = self._get_plot_labels(axis=axis)
         (xmin, xmax), (ymin, ymax) = self._get_plot_limits(axis=axis, buffer=buffer)
+
+        # note: axes limits dont like inf values, so we need to evaluate them first if present
+        xmin, xmax, ymin, ymax = self._evaluate_infs(xmin, xmax, ymin, ymax)
+
         ax.set_xlim(xmin, xmax)
         ax.set_ylim(ymin, ymax)
         ax.set_xlabel(xlabel)
         ax.set_ylabel(ylabel)
         return ax
+
+    @staticmethod
+    def _evaluate_infs(*values):
+        """Processes values and evaluates any infs into large (signed) numbers."""
+        return map(lambda v: v if not np.isinf(v) else np.sign(v) * LARGE_NUMBER, values)
 
     @staticmethod
     def pop_axis(coord: Tuple[Any, Any, Any], axis: int) -> Tuple[Any, Tuple[Any, Any]]:

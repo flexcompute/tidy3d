@@ -44,6 +44,7 @@ class NegInf(pydantic.BaseModel):
 
 # built in instance of Inf ()
 inf = LARGE_NUMBER  # pylint:disable=invalid-name
+inf = np.inf
 # TODO: use inf as a reserved quantity for plotting, etc.
 # inf = Inf()
 
