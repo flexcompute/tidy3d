@@ -17,34 +17,34 @@ from ..constants import LARGE_NUMBER
 
 """ infinity """
 
+inf = np.inf
 
-class Inf(pydantic.BaseModel):
-    """Infinity.  Can use built-in instance: ``tidy3d.inf``."""
+# class Inf(pydantic.BaseModel):
+#     """Infinity.  Can use built-in instance: ``tidy3d.inf``."""
 
-    def __neg__(self):
-        """Negative Infinity"""
-        return NegInf()
+#     def __neg__(self):
+#         """Negative Infinity"""
+#         return NegInf()
 
-    def __truediv__(self, other):
-        """dividing by something equals a large number"""
-        return LARGE_NUMBER
+#     def __truediv__(self, other):
+#         """dividing by something equals a large number"""
+#         return LARGE_NUMBER
 
 
-class NegInf(pydantic.BaseModel):
-    """Negative infinity.  Can use built-in instance as: ``-tidy3d.inf``."""
+# class NegInf(pydantic.BaseModel):
+#     """Negative infinity.  Can use built-in instance as: ``-tidy3d.inf``."""
 
-    def __neg__(self):
-        """Positive Infinity"""
-        return Inf()
+#     def __neg__(self):
+#         """Positive Infinity"""
+#         return Inf()
 
-    def __truediv__(self, other):
-        """dividing by something equals a very large negative number"""
-        return -LARGE_NUMBER
+#     def __truediv__(self, other):
+#         """dividing by something equals a very large negative number"""
+#         return -LARGE_NUMBER
 
 
 # built in instance of Inf ()
-inf = LARGE_NUMBER  # pylint:disable=invalid-name
-inf = np.inf
+# inf = LARGE_NUMBER  # pylint:disable=invalid-name
 # TODO: use inf as a reserved quantity for plotting, etc.
 # inf = Inf()
 
