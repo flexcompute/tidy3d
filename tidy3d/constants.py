@@ -46,3 +46,5 @@ RADPERSEC = "rad/sec"
 
 # large number used for comparing infinity
 LARGE_NUMBER = np.float32(1e20)
+
+inf = np.inf
