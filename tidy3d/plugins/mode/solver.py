@@ -244,7 +244,7 @@ def solver_diagonal(eps, mu, SDmats, num_modes, neff_guess):
     A = Pmat.dot(Qmat)
 
     # Call the eigensolver. The eigenvalues are -(neff + 1j * keff)**2
-    vals, vecs = solver_eigs(A, num_modes, guess_value=-(neff_guess ** 2))
+    vals, vecs = solver_eigs(A, num_modes, guess_value=-(neff_guess**2))
     if vals.size == 0:
         raise RuntimeError("Could not find any eigenmodes for this waveguide")
     vre, vim = -np.real(vals), -np.imag(vals)
@@ -256,7 +256,7 @@ def solver_diagonal(eps, mu, SDmats, num_modes, neff_guess):
     vecs = vecs[:, sort_inds]
 
     # Real and imaginary part of the effective index
-    neff = np.sqrt(vre / 2 + np.sqrt(vre ** 2 + vim ** 2) / 2)
+    neff = np.sqrt(vre / 2 + np.sqrt(vre**2 + vim**2) / 2)
     keff = vim / 2 / (neff + 1e-10)
 
     # Field components from eigenvectors

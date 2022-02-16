@@ -1,188 +1,291 @@
 """Fit PoleResidue Dispersion models to optical NK data
 """
 
-from typing import Tuple
+from typing import Tuple, List
+import csv
+import codecs
+import requests
 
 import nlopt
 import numpy as np
 from rich.progress import Progress
+from pydantic import BaseModel, Field, validator
 
 from ...components import PoleResidue, AbstractMedium
-from ...constants import C_0, HBAR
+from ...constants import C_0, HBAR, MICROMETER
 from ...components.viz import add_ax_if_none
-from ...components.types import Ax, Numpy
-from ...log import log
+from ...components.types import Ax, Numpy, NumpyArray, ArrayLike
+from ...log import log, ValidationError, WebError, SetupError
 
 
-def _unpack_complex(complex_num):
-    """Returns real and imaginary parts from complex number.
-
-    Parameters
-    ----------
-    complex_num : complex
-        Complex number.
-
-    Returns
-    -------
-    Tuple[float, float]
-        Real and imaginary parts of the complex number.
-    """
-    return complex_num.real, complex_num.imag
-
-
-def _pack_complex(real_part, imag_part):
-    """Returns complex number from real and imaginary parts.
-
-    Parameters
-    ----------
-    real_part : float
-        Real part of the complex number.
-    imag_part : float
-        Imaginary part of the complex number.
-
-    Returns
-    -------
-    complex
-        The complex number.
-    """
-    return real_part + 1j * imag_part
-
-
-def _unpack_coeffs(coeffs):
-    """Unpacks coefficient vector into complex pole parameters.
-
-    Parameters
-    ----------
-    coeffs : np.ndarray[real]
-        Array of real coefficients for the pole residue fit.
-
-    Returns
-    -------
-    Tuple[np.ndarray[complex], np.ndarray[complex]]
-        "a" and "c" poles for the PoleResidue model.
-    """
-    assert len(coeffs) % 4 == 0, "len(coeffs) must be multiple of 4."
-    num_poles = len(coeffs) // 4
-    indices = 4 * np.arange(num_poles)
-
-    a_real = coeffs[indices + 0]
-    a_imag = coeffs[indices + 1]
-    c_real = coeffs[indices + 2]
-    c_imag = coeffs[indices + 3]
-
-    poles_a = _pack_complex(a_real, a_imag)
-    poles_c = _pack_complex(c_real, c_imag)
-    return poles_a, poles_c
-
-
-def _pack_coeffs(pole_a, pole_c):
-    """Packs complex a and c pole parameters into coefficient array.
-
-    Parameters
-    ----------
-    pole_a : np.ndarray[complex]
-        Array of complex "a" poles for the PoleResidue dispersive model.
-    pole_c : np.ndarray[complex]
-        Array of complex "c" poles for the PoleResidue dispersive model.
-
-    Returns
-    -------
-    np.ndarray[float]
-        Array of real coefficients for the pole residue fit.
-    """
-    a_real, a_imag = _unpack_complex(pole_a)
-    c_real, c_imag = _unpack_complex(pole_c)
-    stacked_coeffs = np.stack((a_real, a_imag, c_real, c_imag), axis=1)
-    return stacked_coeffs.flatten()
-
-
-def _coeffs_to_poles(coeffs):
-    """Converts model coefficients to poles.
-
-    Parameters
-    ----------
-    coeffs : np.ndarray[float]
-        Array of real coefficients for the pole residue fit.
-
-    Returns
-    -------
-    List[Tuple[complex, complex]]
-        List of complex poles (a, c)
-    """
-    coeffs_scaled = coeffs / HBAR
-    poles_a, poles_c = _unpack_coeffs(coeffs_scaled)
-    poles = [(complex(a), complex(c)) for (a, c) in zip(poles_a, poles_c)]
-    # poles = [((a.real, a.imag), (c.real, c.imag)) for (a, c) in zip(poles_a, poles_c)]
-    return poles
-
-
-def _poles_to_coeffs(poles):
-    """Converts poles to model coefficients.
-
-    Parameters
-    ----------
-    poles : List[Tuple[complex, complex]]
-        List of complex poles (a, c)
-
-    Returns
-    -------
-    np.ndarray[float]
-        Array of real coefficients for the pole residue fit.
-    """
-    poles_a, poles_c = np.array([[a, c] for (a, c) in poles]).T
-    coeffs = _pack_coeffs(poles_a, poles_c)
-    return coeffs * HBAR
-
-
-class DispersionFitter:
+class DispersionFitter(BaseModel):
     """Tool for fitting refractive index data to get a dispersive ``Medium``."""
 
-    def __init__(self, wvl_um: Numpy, n_data: Numpy, k_data: Numpy = None):
-        """Make a ``DispersionFitter`` with raw wavelength-nk data.
+    wvl_um: ArrayLike = Field(
+        ...,
+        title="Wavelength data",
+        description="Wavelength data in micrometers.",
+        unit=MICROMETER,
+    )
+
+    n_data: ArrayLike = Field(
+        ...,
+        title="Index of refraction data",
+        description="Real part of the complex index of refraction.",
+    )
+
+    k_data: ArrayLike = Field(
+        None,
+        title="Extinction coefficient data",
+        description="Imaginary part of the complex index of refraction.",
+    )
+
+    wvl_range: Tuple[float, float] = Field(
+        [None, None],
+        title="Wavelength range [wvl_min,wvl_max] for fitting",
+        description="Truncate the wavelength-nk data to wavelength range "
+        "[wvl_min,wvl_max] for fitting",
+        unit=MICROMETER,
+    )
+
+    @validator("wvl_um", always=True)
+    def _setup_wvl(cls, val):
+        """Convert wvl_um to a numpy array"""
+        if len(val) < 1:
+            raise ValidationError("The length of data cannot be empty.")
+        return np.array(val)
+
+    @validator("n_data", always=True)
+    def _ndata_length_match_wvl(cls, val, values):
+        """Validate n_data"""
+        _val = np.array(val)
+        if _val.shape != values["wvl_um"].shape:
+            raise ValidationError("The length of n_data doesn't match wvl_um.")
+        return _val
+
+    @validator("k_data", always=True)
+    def _kdata_setup_and_length_match(cls, val, values):
+        """
+        validate the length of k_data, or setup k if it's None
+        """
+        if val is None:
+            return np.zeros_like(values["wvl_um"])
+        _val = np.array(val)
+        if _val.shape != values["wvl_um"].shape:
+            raise ValidationError("The length of k_data doesn't match wvl_um.")
+        return _val
+
+    def _filter_wvl_range(
+        self, wvl_min: float = None, wvl_max: float = None
+    ) -> Tuple[NumpyArray, NumpyArray, NumpyArray]:
+        """
+        Filter the wavelength-nk data to wavelength range [wvl_min,wvl_max]
+        for fitting.
 
         Parameters
         ----------
-        wvl_um : Numpy
-            Wavelength data in micrometers.
-        n_data : Numpy
-            Real part of refractive index in micrometers.
-        k_data : Numpy, optional
-            Imaginary part of refractive index in micrometers.
+        wvl_min : float, optional
+            The beginning of wavelength range. Unit: micron
+        wvl_max : float, optional
+            The end of wavelength range. Unit: micron
+
+        Returns
+        -------
+        Tuple[NumpyArray,NumpyArray,NumpyArray]
+            Filtered wvl_um, n_data, k_data
+
         """
 
-        self._validate_data(wvl_um, n_data, k_data)
-        self.wvl_um = wvl_um
-        self.n_data = n_data
-        self.k_data = k_data
-        self.lossy = True
+        ind_select = np.ones(self.wvl_um.shape, dtype=bool)
+        if wvl_min is not None:
+            ind_select = np.logical_and(self.wvl_um >= wvl_min, ind_select)
 
-        # handle lossless case
+        if wvl_max is not None:
+            ind_select = np.logical_and(self.wvl_um <= wvl_max, ind_select)
+
+        if not np.any(ind_select):
+            raise SetupError("No data within [wvl_min,wvl_max]")
+
+        return self.wvl_um[ind_select], self.n_data[ind_select], self.k_data[ind_select]
+
+    @property
+    def lossy(self) -> bool:
+        """Find out if the medium is lossy or lossless
+        based on the filtered input data.
+
+        Returns
+        -------
+        bool
+            True for lossy medium; False for lossless medium
+        """
+        _, _, k_data = self._filter_wvl_range(wvl_min=self.wvl_range[0], wvl_max=self.wvl_range[1])
         if k_data is None:
-            self.k_data = np.zeros_like(n_data)
-            self.lossy = False
-        self.eps_data = AbstractMedium.nk_to_eps_complex(n=self.n_data, k=self.k_data)
-        self.freqs = C_0 / wvl_um
-        self.frequency_range = (np.min(self.freqs), np.max(self.freqs))
+            return False
+        if not np.any(k_data):
+            return False
+        return True
+
+    @property
+    def eps_data(self) -> complex:
+        """Convert filtered input n(k) data into complex permittivity.
+
+        Returns
+        -------
+        complex
+            Complex-valued relative permittivty.
+        """
+        _, n_data, k_data = self._filter_wvl_range(
+            wvl_min=self.wvl_range[0], wvl_max=self.wvl_range[1]
+        )
+        return AbstractMedium.nk_to_eps_complex(n=n_data, k=k_data)
+
+    @property
+    def freqs(self) -> NumpyArray:
+        """Convert filtered input wavelength data to frequency.
+
+        Returns
+        -------
+        NumpyArray
+            Frequency array converted from filtered input wavelength data
+        """
+
+        wvl_um, _, _ = self._filter_wvl_range(wvl_min=self.wvl_range[0], wvl_max=self.wvl_range[1])
+        return C_0 / wvl_um
+
+    @property
+    def frequency_range(self) -> Tuple[float, float]:
+        """Frequency range of filtered input data
+
+        Returns
+        -------
+        Tuple[float, float]
+            The minimal frequency and the maximal frequency
+        """
+
+        return (np.min(self.freqs), np.max(self.freqs))
 
     @staticmethod
-    def _validate_data(wvl_um: Numpy, n_data: Numpy, k_data: Numpy = None):
-        """make sure raw data is correctly shaped.
+    def _unpack_complex(complex_num):
+        """Returns real and imaginary parts from complex number.
 
         Parameters
         ----------
-        wvl_um : Numpy
-            Wavelength data in micrometers.
-        n_data : Numpy
-            Real part of refractive index in micrometers.
-        k_data : Numpy, optional
-            Imaginary part of refractive index in micrometers.
+        complex_num : complex
+            Complex number.
+
+        Returns
+        -------
+        Tuple[float, float]
+            Real and imaginary parts of the complex number.
         """
-        assert wvl_um.shape == n_data.shape
-        if k_data is not None:
-            assert wvl_um.shape == k_data.shape
+        return complex_num.real, complex_num.imag
 
     @staticmethod
-    def eV_to_Hz(f_eV: float):
+    def _pack_complex(real_part, imag_part):
+        """Returns complex number from real and imaginary parts.
+
+        Parameters
+        ----------
+        real_part : float
+            Real part of the complex number.
+        imag_part : float
+            Imaginary part of the complex number.
+
+        Returns
+        -------
+        complex
+            The complex number.
+        """
+        return real_part + 1j * imag_part
+
+    @staticmethod
+    def _unpack_coeffs(coeffs):
+        """Unpacks coefficient vector into complex pole parameters.
+
+        Parameters
+        ----------
+        coeffs : np.ndarray[real]
+            Array of real coefficients for the pole residue fit.
+
+        Returns
+        -------
+        Tuple[np.ndarray[complex], np.ndarray[complex]]
+            "a" and "c" poles for the PoleResidue model.
+        """
+        assert len(coeffs) % 4 == 0, "len(coeffs) must be multiple of 4."
+        num_poles = len(coeffs) // 4
+        indices = 4 * np.arange(num_poles)
+
+        a_real = coeffs[indices + 0]
+        a_imag = coeffs[indices + 1]
+        c_real = coeffs[indices + 2]
+        c_imag = coeffs[indices + 3]
+
+        poles_a = DispersionFitter._pack_complex(a_real, a_imag)
+        poles_c = DispersionFitter._pack_complex(c_real, c_imag)
+        return poles_a, poles_c
+
+    @staticmethod
+    def _pack_coeffs(pole_a, pole_c):
+        """Packs complex a and c pole parameters into coefficient array.
+
+        Parameters
+        ----------
+        pole_a : np.ndarray[complex]
+            Array of complex "a" poles for the PoleResidue dispersive model.
+        pole_c : np.ndarray[complex]
+            Array of complex "c" poles for the PoleResidue dispersive model.
+
+        Returns
+        -------
+        np.ndarray[float]
+            Array of real coefficients for the pole residue fit.
+        """
+        a_real, a_imag = DispersionFitter._unpack_complex(pole_a)
+        c_real, c_imag = DispersionFitter._unpack_complex(pole_c)
+        stacked_coeffs = np.stack((a_real, a_imag, c_real, c_imag), axis=1)
+        return stacked_coeffs.flatten()
+
+    @staticmethod
+    def _coeffs_to_poles(coeffs):
+        """Converts model coefficients to poles.
+
+        Parameters
+        ----------
+        coeffs : np.ndarray[float]
+            Array of real coefficients for the pole residue fit.
+
+        Returns
+        -------
+        List[Tuple[complex, complex]]
+            List of complex poles (a, c)
+        """
+        coeffs_scaled = coeffs / HBAR
+        poles_a, poles_c = DispersionFitter._unpack_coeffs(coeffs_scaled)
+        poles = [(complex(a), complex(c)) for (a, c) in zip(poles_a, poles_c)]
+        # poles = [((a.real, a.imag), (c.real, c.imag)) for (a, c) in zip(poles_a, poles_c)]
+        return poles
+
+    @staticmethod
+    def _poles_to_coeffs(poles):
+        """Converts poles to model coefficients.
+
+        Parameters
+        ----------
+        poles : List[Tuple[complex, complex]]
+            List of complex poles (a, c)
+
+        Returns
+        -------
+        np.ndarray[float]
+            Array of real coefficients for the pole residue fit.
+        """
+        poles_a, poles_c = np.array([[a, c] for (a, c) in poles]).T
+        coeffs = DispersionFitter._pack_coeffs(poles_a, poles_c)
+        return coeffs * HBAR
+
+    @staticmethod
+    def _eV_to_Hz(f_eV: float):  # pylint:disable=invalid-name
         """convert frequency in unit of eV to Hz
 
         Parameters
@@ -194,7 +297,7 @@ class DispersionFitter:
         return f_eV / HBAR / 2 / np.pi
 
     @staticmethod
-    def Hz_to_eV(f_Hz: float):
+    def _Hz_to_eV(f_Hz: float):  # pylint:disable=invalid-name
         """convert frequency in unit of Hz to eV
 
         Parameters
@@ -207,9 +310,9 @@ class DispersionFitter:
 
     def fit(
         self,
-        num_poles: int = 3,
-        num_tries: int = 100,
-        tolerance_rms: float = 0.0,
+        num_poles: int = 1,
+        num_tries: int = 50,
+        tolerance_rms: float = 1e-2,
     ) -> Tuple[PoleResidue, float]:
         """Fits data a number of times and returns best results.
 
@@ -224,7 +327,7 @@ class DispersionFitter:
 
         Returns
         -------
-        Tuple[``PoleResidue``, float]
+        Tuple[:class:``PoleResidue``, float]
             Best results of multiple fits: (dispersive medium, RMS error).
         """
 
@@ -240,7 +343,7 @@ class DispersionFitter:
 
             while not progress.finished:
 
-                medium, rms_error = self.fit_single(num_poles=num_poles)
+                medium, rms_error = self._fit_single(num_poles=num_poles)
 
                 # if improvement, set the best RMS and coeffs
                 if rms_error < best_rms:
@@ -274,13 +377,13 @@ class DispersionFitter:
 
         Returns
         -------
-        ``PoleResidue``
+        :class:`PoleResidue`
             Dispersive medium corresponding to this set of ``coeffs``.
         """
-        poles_complex = _coeffs_to_poles(coeffs)
+        poles_complex = DispersionFitter._coeffs_to_poles(coeffs)
         return PoleResidue(poles=poles_complex, frequency_range=self.frequency_range)
 
-    def fit_single(
+    def _fit_single(
         self,
         num_poles: int = 3,
     ) -> Tuple[PoleResidue, float]:
@@ -288,12 +391,12 @@ class DispersionFitter:
 
         Parameters
         ----------
-        num_poles : int, optional
+        num_poles : int = 3
             Number of poles in the model.
 
         Returns
         -------
-        Tuple[``PoleResidue``, float]
+        Tuple[:class:`PoleResidue`, float]
             Results of single fit: (dispersive medium, RMS error).
         """
 
@@ -316,9 +419,9 @@ class DispersionFitter:
             float
                 Value of constraint.
             """
-            poles_a, poles_c = _unpack_coeffs(coeffs)
-            a_real, a_imag = _unpack_complex(poles_a)
-            c_real, c_imag = _unpack_complex(poles_c)
+            poles_a, poles_c = DispersionFitter._unpack_coeffs(coeffs)
+            a_real, a_imag = DispersionFitter._unpack_complex(poles_a)
+            c_real, c_imag = DispersionFitter._unpack_complex(poles_c)
             prstar = a_real * c_real + a_imag * c_imag
             res = 2 * prstar * a_real - c_real * (a_real * a_real + a_imag * a_imag)
             res[res >= 0] = 0
@@ -412,11 +515,11 @@ class DispersionFitter:
 
         Parameters
         ----------
-        medium : PoleResidue, optional
+        medium : PoleResidue = None
             medium containing model to plot against data
-        wvl_um : Numpy, optional
+        wvl_um : Numpy = None
             Wavelengths to evaluate model at for plot in micrometers.
-        ax : Ax, optional
+        ax : Ax = None
             Axes to plot the data on, if None, a new one is created.
 
         Returns
@@ -426,7 +529,7 @@ class DispersionFitter:
         """
 
         if wvl_um is None:
-            wvl_um = self.wvl_um
+            wvl_um = C_0 / self.freqs
 
         freqs = C_0 / wvl_um
         eps_model = medium.eps_model(freqs)
@@ -448,9 +551,151 @@ class DispersionFitter:
 
         return ax
 
+    @staticmethod
+    def _validate_url_load(data_load: List):
+        """Validate if the loaded data from URL is valid
+            The data list should be in this format:
+                [["wl",     "n"],
+                 [float,  float],
+                  .        .
+                  .        .
+                  .        .
+            (if lossy)
+                 ["wl",     "k"],
+                 [float,  float],
+                  .        .
+                  .        .
+                  .        .]]
+
+        Parameters
+        ----------
+        data_load : List
+            Loaded data from URL
+
+        Raises
+        ------
+        ValidationError
+            Or other exceptions
+        """
+        has_k = 0
+
+        if data_load[0][0] != "wl" or data_load[0][1] != "n":
+            raise ValidationError(
+                "Invalid URL. The file should begin with ['wl','n']. "
+                "Or make sure that you have supplied an appropriate delimiter."
+            )
+
+        for row in data_load[1:]:
+            if row[0] == "wl":
+                if row[1] == "k":
+                    has_k += 1
+                else:
+                    raise ValidationError(
+                        "Invalid URL. The file is not well formatted for ['wl', 'k'] data."
+                    )
+            else:
+                # make sure the rest is float type
+                try:
+                    nk_tmp = [float(x) for x in row]  # pylint:disable=unused-variable
+                except Exception as e:
+                    raise ValidationError("Invalid URL. Float data cannot be recognized.") from e
+
+        if has_k > 1:
+            raise ValidationError("Invalid URL. Too many k labels.")
+
     @classmethod
-    def from_file(cls, fname, **loadtxt_kwargs):
-        """Loads ``DispersionFitter`` from file contining wavelength, n, k data.
+    def from_url(cls, url_file: str, delimiter: str = ","):
+        """loads :class:`DispersionFitter` from url linked to a csv/txt file that
+        contains wavelength (micron), n, and optionally k data. Preferred from
+        refractiveindex.info.
+
+        Hint
+        ----
+        The data file from url should be in this format (delimiter not displayed
+        here, and note that the strings such as "wl", "n" need to be included
+        in the file):
+
+        * For lossless media::
+
+            wl       n
+            [float] [float]
+            .       .
+            .       .
+            .       .
+
+        * For lossy media::
+
+            wl       n
+            [float] [float]
+            .       .
+            .       .
+            .       .
+            wl       k
+            [float] [float]
+            .       .
+            .       .
+            .       .
+
+        Parameters
+        ----------
+        url_file : str
+            Url link to the data file.
+            e.g. "https://refractiveindex.info/data_csv.php?datafile=data/main/Ag/Johnson.yml"
+        delimiter : str = ","
+            E.g. in refractiveindex.info, it'll be "," for csv file, and "\\\\t" for txt file.
+
+        Returns
+        -------
+        :class`DispersionFitter`
+            A :class`DispersionFitter` instance.
+        """
+
+        resp = requests.get(url_file)
+
+        try:
+            resp.raise_for_status()
+        except Exception as e:  # pylint:disable=broad-except
+            raise WebError("Connection to the website failed. Please provide a valid URL.") from e
+
+        data_url = list(
+            csv.reader(codecs.iterdecode(resp.iter_lines(), "utf-8"), delimiter=delimiter)
+        )
+        data_url = list(data_url)
+
+        # first validate data
+        cls._validate_url_load(data_url)
+
+        # parsing the data
+        n_lam = []
+        k_lam = []  # the two variables contain [wvl_um, n(k)]
+        has_k = 0  # whether k is in the data
+
+        for row in data_url[1:]:
+            if has_k == 1:
+                k_lam.append([float(x) for x in row])
+            else:
+                if row[0] == "wl":
+                    has_k += 1
+                else:
+                    n_lam.append([float(x) for x in row])
+
+        n_lam = np.array(n_lam)
+        k_lam = np.array(k_lam)
+
+        # for data containing k
+        if has_k == 1:
+            # now let's make sure wvl_um in n_lam and k_lam match
+            if not np.allclose(n_lam[:, 0], k_lam[:, 0]):
+                raise ValidationError(
+                    "Invalid URL. Both n and k should be provided at each wavelength."
+                )
+
+            return cls(wvl_um=n_lam[:, 0], n_data=n_lam[:, 1], k_data=k_lam[:, 1])
+        return cls(wvl_um=n_lam[:, 0], n_data=n_lam[:, 1])
+
+    @classmethod
+    def from_file(cls, fname: str, **loadtxt_kwargs):
+        """Loads :class`DispersionFitter` from file containing wavelength, n, k data.
 
         Parameters
         ----------
@@ -461,8 +706,8 @@ class DispersionFitter:
 
         Returns
         -------
-        DispersionFitter
-            A ``DispersionFitter`` instance.
+        :class`DispersionFitter`
+            A :class`DispersionFitter` instance.
         """
         data = np.loadtxt(fname, **loadtxt_kwargs)
         assert len(data.shape) == 2, "data must contain [wavelength, ndata, kdata] in columns"

@@ -16,10 +16,8 @@ from .viz import add_ax_if_none, SourceParams, equal_aspect
 from ..constants import RADIAN, HERTZ, MICROMETER
 from ..log import SetupError
 
-# TODO: change directional source to something signifying its intent is to create a specific field.
-
-# width of pulse frequency range defition in units of standard deviation.
-WIDTH_STD = 5
+# in spectrum computation, discard amplitudes with relative magnitude smaller than cutoff
+DFT_CUTOFF = 1e-8
 
 
 class SourceTime(ABC, Tidy3dBaseModel):
@@ -68,9 +66,16 @@ class SourceTime(ABC, Tidy3dBaseModel):
             Complex-valued array (of len(freqs)) containing spectrum at those frequencies.
         """
 
-        # (Nf, Nt) matrix that gives DFT when matrix multiplied with signal
-        dft_matrix = np.exp(2j * np.pi * freqs[:, None] * times) / np.sqrt(2 * np.pi)
-        return dt * dft_matrix @ np.real(self.amp_time(times))
+        time_amps = np.real(self.amp_time(times))
+
+        # Cut to only relevant times
+        count_times = np.where(np.abs(time_amps) / np.amax(np.abs(time_amps)) > DFT_CUTOFF)
+        time_amps = time_amps[count_times]
+        times_cut = times[count_times]
+
+        # (Nf, Nt_cut) matrix that gives DFT when matrix multiplied with signal
+        dft_matrix = np.exp(2j * np.pi * freqs[:, None] * times_cut) / np.sqrt(2 * np.pi)
+        return dt * dft_matrix @ time_amps
 
     @add_ax_if_none
     def plot(self, times: Array[float], ax: Ax = None) -> Ax:
@@ -131,7 +136,7 @@ class SourceTime(ABC, Tidy3dBaseModel):
 
         dt = np.mean(dts)
 
-        fmin, fmax = self.frequency_range
+        fmin, fmax = self.frequency_range()
         freqs = np.linspace(fmin, fmax, num_freqs)
 
         spectrum = self.spectrum(times=times, dt=dt, freqs=freqs)
@@ -145,10 +150,9 @@ class SourceTime(ABC, Tidy3dBaseModel):
         ax.set_aspect("auto")
         return ax
 
-    @property
     @abstractmethod
-    def frequency_range(self) -> FreqBound:
-        """Frequency range within 5 standard deviations of the central frequency."""
+    def frequency_range(self, num_fwidth: float = 4.0) -> FreqBound:
+        """Frequency range within plus/minus ``num_fwidth * fwidth`` of the central frequency."""
 
 
 class Pulse(SourceTime, ABC):
@@ -171,19 +175,22 @@ class Pulse(SourceTime, ABC):
         ge=2.5,
     )
 
-    @property
-    def frequency_range(self) -> FreqBound:
+    def frequency_range(self, num_fwidth: float = 4.0) -> FreqBound:
         """Frequency range within 5 standard deviations of the central frequency.
+
+        Parameters
+        ----------
+        num_fwidth : float = 4.
+            Frequency range defined as plus/minus ``num_fwidth * self.fwdith``.
 
         Returns
         -------
         Tuple[float, float]
-            Minimum and maximum frequencies of the
-            :class:`GaussianPulse` or :class:`ContinuousWave` power
-            within 6 standard deviations.
+            Minimum and maximum frequencies of the :class:`GaussianPulse` or :class:`ContinuousWave`
+            power.
         """
-        width_std = 6
-        freq_width_range = width_std * self.fwidth
+
+        freq_width_range = num_fwidth * self.fwidth
         freq_min = max(0, self.freq0 - freq_width_range)
         freq_max = self.freq0 + freq_width_range
         return (freq_min, freq_max)
@@ -204,10 +211,10 @@ class GaussianPulse(Pulse):
         omega0 = 2 * np.pi * self.freq0
         time_shifted = time - self.offset * twidth
 
-        const = 1j + time_shifted / twidth ** 2 / omega0
+        const = 1j + time_shifted / twidth**2 / omega0
         offset = np.exp(1j * self.phase)
         oscillation = np.exp(-1j * omega0 * time)
-        amp = np.exp(-(time_shifted ** 2) / 2 / twidth ** 2)
+        amp = np.exp(-(time_shifted**2) / 2 / twidth**2)
 
         return const * offset * oscillation * amp
 

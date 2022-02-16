@@ -153,6 +153,13 @@ class TimeMonitor(Monitor, ABC):
 
         return (tind_beg, tind_end)
 
+    def num_steps(self, tmesh: Array) -> int:
+        """Compute number of time steps for a time monitor."""
+
+        tind_beg, tind_end = self.time_inds(tmesh)
+        number_of_steps = int((tind_end - tind_beg) / self.interval)
+        return number_of_steps
+
 
 class AbstractFieldMonitor(Monitor, ABC):
     """:class:`Monitor` that records electromagnetic field data as a function of x,y,z."""
@@ -282,8 +289,7 @@ class FieldTimeMonitor(AbstractFieldMonitor, TimeMonitor):
 
     def storage_size(self, num_cells: int, tmesh: Array) -> int:
         # stores 1 real number per grid cell, per time step, per field
-        time_inds = self.time_inds(tmesh)
-        num_steps = time_inds[1] - time_inds[0]
+        num_steps = self.num_steps(tmesh)
         return BYTES_REAL * num_steps * num_cells * len(self.fields)
 
 
@@ -324,8 +330,7 @@ class FluxTimeMonitor(AbstractFluxMonitor, TimeMonitor):
 
     def storage_size(self, num_cells: int, tmesh: Array) -> int:
         # stores 1 real number per time tep
-        time_inds = self.time_inds(tmesh)
-        num_steps = time_inds[1] - time_inds[0]
+        num_steps = self.num_steps(tmesh)
         return BYTES_REAL * num_steps
 
 

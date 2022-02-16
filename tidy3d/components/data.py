@@ -152,7 +152,7 @@ class MonitorData(Tidy3dData, ABC):
         # assign attrs for xarray
         if self.data_attrs:
             data_array.attrs = self.data_attrs
-        for name, coord in data_array.coords.items():
+        for name, coord in data_array.coords.items():  # pylint:disable=no-member
             coord[name].attrs = DIM_ATTRS.get(name)
 
         return data_array

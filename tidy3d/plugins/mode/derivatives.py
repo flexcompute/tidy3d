@@ -153,7 +153,7 @@ def create_sfactor_b(omega, dLs, N, N_pml, dmin_pml):
 def sig_w(dL, step, sorder=3):
     """Fictional conductivity, note that these values might need tuning"""
     sig_max = 0.8 * (sorder + 1) / (ETA_0 * dL)
-    return sig_max * step ** sorder
+    return sig_max * step**sorder
 
 
 def s_value(dL, step, omega):

@@ -13,7 +13,7 @@ from .viz import add_ax_if_none
 from .validators import validate_name_str
 
 from ..constants import C_0, pec_val, EPSILON_0, HERTZ, CONDUCTIVITY, PERMITTIVITY, RADPERSEC
-from ..log import log
+from ..log import log, ValidationError
 
 
 def ensure_freq_in_range(eps_model: Callable[[float], complex]) -> Callable[[float], complex]:
@@ -136,7 +136,7 @@ class AbstractMedium(ABC, Tidy3dBaseModel):
         complex
             Complex-valued relative permittivty.
         """
-        eps_real = n ** 2 - k ** 2
+        eps_real = n**2 - k**2
         eps_imag = 2 * n * k
         return eps_real + 1j * eps_imag
 
@@ -268,7 +268,7 @@ class Medium(AbstractMedium):
             Real part of refractive index.
         k : float = 0
             Imaginary part of refrative index.
-        frequency : float
+        freq : float
             Frequency to evaluate permittivity at (Hz).
 
         Returns
@@ -471,7 +471,7 @@ class Sellmeier(DispersiveMedium):
         """Complex-valued refractive index as a function of frequency."""
 
         wvl = C_0 / frequency
-        wvl2 = wvl ** 2
+        wvl2 = wvl**2
         n_squared = 1.0
         for (B, C) in self.coeffs:
             n_squared += B * wvl2 / (wvl2 - C)
@@ -506,6 +506,39 @@ class Sellmeier(DispersiveMedium):
             frequency_range=self.frequency_range,
             name=self.name,
         )
+
+    @classmethod
+    def from_dispersion(cls, n: float, freq: float, dn_dwvl: float = 0):
+        """Convert ``n`` and wavelength dispersion ``dn_dwvl`` values at frequency ``freq`` to
+        a single-pole :class:`Sellmeier` medium.
+
+        Parameters
+        ----------
+        n : float
+            Real part of refractive index. Must be larger than or equal to one.
+        dn_dwvl : float = 0
+            Derivative of the refractive index with wavelength (1/um). Must be negative.
+        frequency : float
+            Frequency to evaluate permittivity at (Hz).
+
+        Returns
+        -------
+        :class:`Medium`
+            medium containing the corresponding ``permittivity`` and ``conductivity``.
+        """
+
+        if dn_dwvl >= 0:
+            raise ValidationError("Dispersion ``dn_dwvl`` must be smaller than zero.")
+        if n < 1:
+            raise ValidationError("Refractive index ``n`` cannot be smaller than one.")
+
+        wvl = C_0 / freq
+        nsqm1 = n**2 - 1
+        c_coeff = -(wvl**3) * n * dn_dwvl / (nsqm1 - wvl * n * dn_dwvl)
+        b_coeff = (wvl**2 - c_coeff) / wvl**2 * nsqm1
+        coeffs = [(b_coeff, c_coeff)]
+
+        return cls(coeffs=coeffs)
 
 
 class Lorentz(DispersiveMedium):
@@ -543,7 +576,7 @@ class Lorentz(DispersiveMedium):
 
         eps = self.eps_inf + 0.0j
         for (de, f, delta) in self.coeffs:
-            eps += (de * f ** 2) / (f ** 2 - 2j * frequency * delta - frequency ** 2)
+            eps += (de * f**2) / (f**2 - 2j * frequency * delta - frequency**2)
         return eps
 
     @property
@@ -559,7 +592,7 @@ class Lorentz(DispersiveMedium):
             if d > w:
                 r = np.sqrt(d * d - w * w) + 0j
                 a0 = -d + r
-                c0 = de * w ** 2 / 4 / r
+                c0 = de * w**2 / 4 / r
                 a1 = -d - r
                 c1 = -c0
                 poles.append((a0, c0))
@@ -567,7 +600,7 @@ class Lorentz(DispersiveMedium):
             else:
                 r = np.sqrt(w * w - d * d)
                 a = -d - 1j * r
-                c = 1j * de * w ** 2 / 2 / r
+                c = 1j * de * w**2 / 2 / r
                 poles.append((a, c))
 
         return PoleResidue(
@@ -613,7 +646,7 @@ class Drude(DispersiveMedium):
 
         eps = self.eps_inf + 0.0j
         for (f, delta) in self.coeffs:
-            eps -= (f ** 2) / (frequency ** 2 + 1j * frequency * delta)
+            eps -= (f**2) / (frequency**2 + 1j * frequency * delta)
         return eps
 
     @property
@@ -626,7 +659,7 @@ class Drude(DispersiveMedium):
             w = 2 * np.pi * f
             d = 2 * np.pi * delta
 
-            c0 = (w ** 2) / 2 / d + 0j
+            c0 = (w**2) / 2 / d + 0j
             a0 = 0j
 
             c1 = -c0

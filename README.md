@@ -39,7 +39,7 @@ The easiest way to install this beta version of tidy3d is through [pip](https://
 pip install tidy3d-beta
 ```
 
-Note that whikle our old version is still currently pip installable as `tidy3d`, both versions are imoprted in python as `tidy3d`, eg. `import tidy3d as td`.
+Note that while our old version is still currently pip installable as `tidy3d`, both versions are imoprted in python as `tidy3d`, eg. `import tidy3d as td`.
 
 ### (Alternativelty) installing from source
 

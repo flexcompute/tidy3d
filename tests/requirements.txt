@@ -1,5 +1,5 @@
 # required for development
-black
+black==22.1.0
 pylint
 tox
 pytest
