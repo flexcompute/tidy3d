@@ -13,41 +13,11 @@ import numpy as np
 from matplotlib.axes._subplots import Axes
 from shapely.geometry.base import BaseGeometry
 
-from ..constants import LARGE_NUMBER
-
 """ infinity """
 
 inf = np.inf
-
-# class Inf(pydantic.BaseModel):
-#     """Infinity.  Can use built-in instance: ``tidy3d.inf``."""
-
-#     def __neg__(self):
-#         """Negative Infinity"""
-#         return NegInf()
-
-#     def __truediv__(self, other):
-#         """dividing by something equals a large number"""
-#         return LARGE_NUMBER
-
-
-# class NegInf(pydantic.BaseModel):
-#     """Negative infinity.  Can use built-in instance as: ``-tidy3d.inf``."""
-
-#     def __neg__(self):
-#         """Positive Infinity"""
-#         return Inf()
-
-#     def __truediv__(self, other):
-#         """dividing by something equals a very large negative number"""
-#         return -LARGE_NUMBER
-
-
-# built in instance of Inf ()
+# from ..constants import LARGE_NUMBER
 # inf = LARGE_NUMBER  # pylint:disable=invalid-name
-# TODO: use inf as a reserved quantity for plotting, etc.
-# inf = Inf()
-
 
 """ Complex Values """
 
@@ -91,7 +61,7 @@ class tidycomplex(complex):  # pylint: disable=invalid-name
 
 """ geometric """
 
-Size1D = Union[pydantic.NonNegativeFloat, Inf]
+Size1D = pydantic.NonNegativeFloat
 Size = Tuple[Size1D, Size1D, Size1D]
 Coordinate = Tuple[float, float, float]
 Coordinate2D = Tuple[float, float]
@@ -109,8 +79,8 @@ Complex = Union[tidycomplex, ComplexNumber]
 PoleAndResidue = Tuple[Complex, Complex]
 
 # PoleAndResidue = Tuple[Tuple[float, float], Tuple[float, float]]
-FreqBoundMax = Union[float, Inf]
-FreqBoundMin = Union[float, NegInf]
+FreqBoundMax = float
+FreqBoundMin = float
 FreqBound = Tuple[FreqBoundMin, FreqBoundMax]
 
 """ symmetries """
