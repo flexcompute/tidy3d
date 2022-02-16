@@ -5,7 +5,6 @@ from abc import abstractmethod
 from functools import wraps
 
 import matplotlib.pylab as plt
-from matplotlib import colors
 from pydantic import BaseModel
 
 from .types import Ax
@@ -118,22 +117,21 @@ class StructMediumParams(PatchParamSwitcher):
     def get_plot_params(self) -> PatchParams:
         """Returns :class:`PatchParams` based on user-supplied args."""
         mat_index = self.medium_map[self.medium]
-        pick_c = [
-            "midnightblue",
-            "maroon",
-            "darkmagenta",
-            "dodgerblue",
-            "steelblue",
-            "indigo",
-            "firebrick",
-            "skyblue",
+        mat_cmap = [
+            "#689DBC",
+            "#D0698E",
+            "#5E6EAD",
+            "#C6224E",
+            "#BDB3E2",
+            "#9EC3E0",
+            "#616161",
+            "#877EBC",
         ]
-        mat_cmap = [colors.CSS4_COLORS[c] for c in pick_c]
 
         if mat_index == 0:
             facecolor = "white"
         else:
-            facecolor = mat_cmap[(mat_index - 1) % len(pick_c)]
+            facecolor = mat_cmap[(mat_index - 1) % len(mat_cmap)]
         if self.medium.name == "PEC":
             return PatchParams(facecolor="gold", edgecolor="k", lw=1)
         return PatchParams(facecolor=facecolor, edgecolor=facecolor, lw=0)
