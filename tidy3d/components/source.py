@@ -8,12 +8,12 @@ import numpy as np
 
 from .base import Tidy3dBaseModel
 from .types import Direction, Polarization, Ax, FreqBound, Array
-from .types import inf  # pylint:disable=unused-import
 from .validators import assert_plane, validate_name_str
 from .geometry import Box
 from .mode import ModeSpec
 from .viz import add_ax_if_none, SourceParams, equal_aspect
 from ..constants import RADIAN, HERTZ, MICROMETER
+from ..constants import inf  # pylint:disable=unused-import
 from ..log import SetupError
 
 # in spectrum computation, discard amplitudes with relative magnitude smaller than cutoff

@@ -13,11 +13,6 @@ import numpy as np
 from matplotlib.axes._subplots import Axes
 from shapely.geometry.base import BaseGeometry
 
-""" infinity """
-
-inf = np.inf
-# from ..constants import LARGE_NUMBER
-# inf = LARGE_NUMBER  # pylint:disable=invalid-name
 
 """ Complex Values """
 

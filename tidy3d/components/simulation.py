@@ -12,7 +12,7 @@ from descartes import PolygonPatch
 
 from .validators import assert_unique_names, assert_objects_in_sim_bounds
 from .geometry import Box
-from .types import Symmetry, Ax, Shapely, FreqBound, GridSize, inf
+from .types import Symmetry, Ax, Shapely, FreqBound, GridSize
 from .grid import Coords1D, Grid, Coords
 from .medium import Medium, MediumType, AbstractMedium
 from .structure import Structure
@@ -23,7 +23,7 @@ from .viz import StructMediumParams, StructEpsParams, PMLParams, SymParams
 from .viz import add_ax_if_none, equal_aspect
 
 from ..version import __version__
-from ..constants import C_0, MICROMETER, SECOND, pec_val
+from ..constants import C_0, MICROMETER, SECOND, pec_val, inf
 from ..log import log, Tidy3dKeyError, SetupError
 
 # for docstring examples
