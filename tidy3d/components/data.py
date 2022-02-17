@@ -515,7 +515,7 @@ class ScalarFieldData(AbstractScalarFieldData, FreqData):
 
     def normalize(self, source_freq_amps: Array[complex]) -> None:
         """normalize the values by the amplitude of the source."""
-        self.values /= 1j * source_freq_amps  # pylint: disable=no-member
+        self.values /= 1 * source_freq_amps  # pylint: disable=no-member
 
 
 class ScalarFieldTimeData(AbstractScalarFieldData, TimeData):
@@ -687,7 +687,7 @@ class ModeAmpsData(AbstractModeData):
 
     def normalize(self, source_freq_amps: Array[complex]) -> None:
         """normalize the values by the amplitude of the source."""
-        self.values /= 1j * source_freq_amps  # pylint: disable=no-member
+        self.values /= 1 * source_freq_amps  # pylint: disable=no-member
 
 
 class ModeIndexData(AbstractModeData):

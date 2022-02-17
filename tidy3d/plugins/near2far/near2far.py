@@ -4,7 +4,6 @@ from typing import List, Tuple
 from dataclasses import dataclass
 import xarray as xr
 import numpy as np
-import copy
 
 from ...constants import C_0, ETA_0
 from ...components.data import SimulationData
@@ -14,24 +13,26 @@ from ...log import SetupError
 
 # TODO: implement new version with simulation.discretize
 
-# TEMP:
-spacetime_sign = 1
-
-@dataclass
-class Near2FarData:
-    """Data structure to store field and grid data for a surface monitor."""
-
-    grid_sizes: List[float]
-    grid_points: Tuple[Numpy, Numpy]
-    yee_center: List[float]
-    J: xr.Dataset
-    M: xr.Dataset
-    mon_axis: Axis = 2
-
 class Near2Far:
     """Near field to far field transformation tool."""
 
-    def __init__(self, sim_data: SimulationData, mons: List["FieldMonitor"], frequency: float):
+    @dataclass
+    class Near2FarData:
+        """Data structure to store field and grid data for a surface monitor."""
+
+        grid_points: Tuple[Numpy, Numpy]
+        center: List[float]
+        J: xr.Dataset
+        M: xr.Dataset
+        mon_axis: Axis
+
+    def __init__(
+        self,
+        sim_data: SimulationData,
+        mons: List["FieldMonitor"],
+        frequency: float,
+        pts_per_wavelength: int = 10
+        ):
         """Constructs near field to far field transformation object from monitor data.
 
         Parameters
@@ -44,10 +45,16 @@ class Near2Far:
         frequency : float
             Frequency to select from each :class:`.FieldMonitor` to use for projection.
             Must be a frequency stored in each :class:`FieldMonitor`.
+        pts_per_wavelength : int
+            Number of points per wavelength with which to discretize the
+            surface monitors for the projection.
         """
+
+        self.spacetime_sign = 1  # 1 => exp(jkr), -1 => exp(-jkr)
 
         self.frequency = frequency
         self.k0 = 2 * np.pi * frequency / C_0
+        self.pts_per_wavelength = pts_per_wavelength
 
         # extract and package together the relevant field and grid data for each monitor
         self.data = []
@@ -56,10 +63,10 @@ class Near2Far:
             self.data.append(data)
 
         # compute the centroid of all monitors, which will be used as the coordinate origin
-        self.origin = [
-        (self.data[0].yee_center[0] + self.data[1].yee_center[0]) / 2,
-        (self.data[2].yee_center[1] + self.data[3].yee_center[1]) / 2,
-        (self.data[4].yee_center[2] + self.data[5].yee_center[2]) / 2]
+        self.origin = [0, 0, 0]
+        for data in self.data:
+            self.origin = [sum(x) for x in zip(self.origin , data.center)]
+        self.origin[:] = [x / len(self.data) for x in self.origin]
 
     def _get_data_from_monitor(self, sim_data: SimulationData, mon: FieldMonitor) -> Near2FarData:
         """Get field and coordinate data associated with a given monitor.
@@ -89,50 +96,52 @@ class Near2Far:
         mon_axis = np.argmin(mon.size)
 
         try:
-            # field_data = sim_data[mon.name]
-            field_data = sim_data.at_centers(mon.name)
+            field_data = sim_data[mon.name]
         except Exception as e:
             raise SetupError(
                 f"No data for monitor named '{mon.name}' " "found in supplied sim_data."
             ) from e
 
-        # pick the locations where fields are to be colocated
-        centers = sim_data.simulation.discretize(mon).centers.to_list
-
-        # temp
-        # field_data = sim_data[mon.name]
-        # centers = sim_data.simulation.discretize(mon).centers.to_list
-        # centers[mon_axis] = [mon.geometry.center[mon_axis]]
-        # field_data = field_data.colocate(*centers)
-
         # figure out which field components are tangential to the monitor, and therefore required
-        # also extract the grid parameters relevant to the monitors and keep track of J, M signs
+        # u and v represent a local 2D coordinate system in the monitor's plane 
         if mon_axis == 0:
 
             required_fields = ("y", "z")
-            grid_sizes = (sim_data.simulation.grid_size[1], sim_data.simulation.grid_size[2])
-            grid_points = np.meshgrid(centers[1], centers[2], indexing="ij")
-            pos_along_axis = field_data.x.values[0]
-            yee_center = [pos_along_axis, mon.center[1], mon.center[2]]
+            idx_uv = [1, 2]
             signs = [-1.0, 1.0]
 
         elif mon_axis == 1:
 
             required_fields = ("x", "z")
-            grid_sizes = (sim_data.simulation.grid_size[0], sim_data.simulation.grid_size[2])
-            grid_points = np.meshgrid(centers[0], centers[2], indexing="ij")
-            pos_along_axis = field_data.y.values[0]
-            yee_center = [mon.center[0], pos_along_axis, mon.center[2]]
+            idx_uv = [0, 2]
             signs = [1.0, -1.0]
 
         else:
 
             required_fields = ("x", "y")
-            grid_sizes = (sim_data.simulation.grid_size[0], sim_data.simulation.grid_size[1])
-            grid_points = np.meshgrid(centers[0], centers[1], indexing="ij")
-            pos_along_axis = field_data.z.values[0]
-            yee_center = [mon.center[0], mon.center[1], pos_along_axis]
+            idx_uv = [0, 1]
             signs = [-1.0, 1.0]
+
+        # fields will be computed and colocated on a regular grid of points on the monitor
+        wavelength = np.real(2.0 * np.pi / self.k0)
+
+        uv_points = []
+        colocation_points = [None] * 3
+        colocation_points[mon_axis] = mon.center[mon_axis]
+
+        for idx in idx_uv:
+
+            num_pts = int(np.ceil(self.pts_per_wavelength * mon.size[idx] / wavelength))
+            start = mon.center[idx] - mon.size[idx] / 2.0
+            stop = mon.center[idx] + mon.size[idx] / 2.0
+            points = np.linspace(start, stop, num_pts)
+            uv_points.append(points)
+            colocation_points[idx] = points
+
+        grid_points = np.meshgrid(uv_points[0], uv_points[1], indexing="ij")
+        field_data = field_data.colocate(*colocation_points)
+
+        # print(len(uv_points[0]), len(uv_points[1]))
 
         # take into account the normal vector direction associated with the monitor
         # if mon.normal_dir == '-':
@@ -166,11 +175,10 @@ class Near2Far:
         J = (signs[0] * np.squeeze(Hv.values), signs[1] * np.squeeze(Hu.values))
         M = (signs[1] * np.squeeze(Ev.values), signs[0] * np.squeeze(Eu.values))
 
-        data = Near2FarData(
+        data = self.Near2FarData(
             mon_axis=mon_axis,
-            grid_sizes=grid_sizes,
             grid_points=grid_points,
-            yee_center=yee_center,
+            center=mon.center,
             J=J,
             M=M
             )
@@ -203,37 +211,41 @@ class Near2Far:
         cos_phi = np.cos(phi)
 
         # precompute fourier transform phase term {dx dy e^(ikrcos(psi))}
-        w0 = (data.yee_center[data.mon_axis] - self.origin[data.mon_axis])
+        w0 = (data.center[data.mon_axis] - self.origin[data.mon_axis])
 
         if data.mon_axis == 0:
             xp = w0
-            yp = data.grid_points[0]
-            zp = data.grid_points[1]
+            yp = data.grid_points[0] - self.origin[1]
+            zp = data.grid_points[1] - self.origin[2]
             source_indices = [1,2]
         elif data.mon_axis == 1:
-            xp = data.grid_points[0]
+            xp = data.grid_points[0] - self.origin[0]
             yp = w0
-            zp = data.grid_points[1]
+            zp = data.grid_points[1] - self.origin[2]
             source_indices = [0,2]
         else:
-            xp = data.grid_points[0]
-            yp = data.grid_points[1]
+            xp = data.grid_points[0] - self.origin[0]
+            yp = data.grid_points[1] - self.origin[1]
             zp = w0
             source_indices = [0,1]
 
-        phase_x = np.exp(-spacetime_sign * 1j * self.k0 * xp * sin_theta * cos_phi)
-        phase_y = np.exp(-spacetime_sign * 1j * self.k0 * yp * sin_theta * sin_phi)
-        phase_z = np.exp(-spacetime_sign * 1j * self.k0 * zp * cos_theta)
-        phase = data.grid_sizes[0] * data.grid_sizes[1] * phase_x * phase_y * phase_z
+        phase_x = np.exp(-self.spacetime_sign * 1j * self.k0 * xp * sin_theta * cos_phi)
+        phase_y = np.exp(-self.spacetime_sign * 1j * self.k0 * yp * sin_theta * sin_phi)
+        phase_z = np.exp(-self.spacetime_sign * 1j * self.k0 * zp * cos_theta)
+        phase = phase_x * phase_y * phase_z
 
         J = [0, 0, 0]
         M = [0, 0, 0]
 
-        J[source_indices[0]] = np.sum(data.J[0] * phase)
-        J[source_indices[1]] = np.sum(data.J[1] * phase)
+        J[source_indices[0]] = np.trapz(np.trapz(
+            data.J[0] * phase, data.grid_points[0][:,0], axis=0), data.grid_points[1][0,:], axis=0)
+        J[source_indices[1]] = np.trapz(np.trapz(
+            data.J[1] * phase, data.grid_points[0][:,0], axis=0), data.grid_points[1][0,:], axis=0)
 
-        M[source_indices[0]] = np.sum(data.M[0] * phase)
-        M[source_indices[1]] = np.sum(data.M[1] * phase)
+        M[source_indices[0]] = np.trapz(np.trapz(
+            data.M[0] * phase, data.grid_points[0][:,0], axis=0), data.grid_points[1][0,:], axis=0)
+        M[source_indices[1]] = np.trapz(np.trapz(
+            data.M[1] * phase, data.grid_points[0][:,0], axis=0), data.grid_points[1][0,:], axis=0)
 
         # N_theta (8.33a)
         N_theta = J[0] * cos_theta * cos_phi + J[1] * cos_theta * sin_phi - J[2] * sin_theta
@@ -273,7 +285,6 @@ class Near2Far:
             N_phi += _N_ph
             L_theta += _L_th
             L_phi += _L_ph
-            # print(_N_th)
 
         return N_theta, N_phi, L_theta, L_phi
 
@@ -304,7 +315,8 @@ class Near2Far:
         # project radiation vectors to distance r away for given angles
         N_theta, N_phi, L_theta, L_phi = self._radiation_vectors(theta, phi)
 
-        scalar_proj_r = -spacetime_sign * 1j * self.k0 * np.exp(spacetime_sign * 1j * self.k0 * r) / (4 * np.pi * r)
+        scalar_proj_r = -self.spacetime_sign * 1j * self.k0 * \
+            np.exp(self.spacetime_sign * 1j * self.k0 * r) / (4 * np.pi * r)
 
         # assemble E felds
         E_theta = -scalar_proj_r * (L_phi + ETA_0 * N_theta)
@@ -392,12 +404,14 @@ class Near2Far:
         r, theta, phi = self._car_2_sph(x, y, z)
         return self.power_spherical(r, theta, phi)
 
-    def radar_cross_section(self, theta, phi):
+    def radar_cross_section(self, r, theta, phi):
         """Get radar cross section at a point relative to monitor center in
         units of incident power.
 
         Parameters
         ----------
+        r : float
+            (micron) radial distance.
         theta : float
             (radian) polar angle downward from x=y=0 line
         phi : float
@@ -408,6 +422,10 @@ class Near2Far:
         RCS : float
             Radar cross section at angles relative to monitor normal vector.
         """
+        # compute the observation angles in terms of the local coordinate system
+        x, y, z = self._sph_2_car(r, theta, phi)
+        r, theta, phi = self._car_2_sph(x-self.origin[0], y-self.origin[1], z-self.origin[2])
+
         N_theta, N_phi, L_theta, L_phi = self._radiation_vectors(theta, phi)
         constant = self.k0**2 / (8 * np.pi * ETA_0)
         term1 = np.abs(L_phi + ETA_0 * N_theta) ** 2
