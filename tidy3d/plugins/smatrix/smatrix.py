@@ -6,9 +6,10 @@ import os
 import pydantic as pd
 import numpy as np
 
-from ... import Simulation, Box, ModeSpec, ModeMonitor, ModeSource, GaussianPulse
+from ... import Simulation, Box, ModeSpec, ModeMonitor, ModeSource, GaussianPulse, SimulationData
+from ...constants import HERTZ, C_0
 from ...components.types import Direction, Ax
-from ...constants import HERTZ
+from ...components.viz import add_ax_if_none, equal_aspect
 from ...web.container import Batch, DEFAULT_DATA_DIR
 
 # fwidth of gaussian pulse in units of central frequency
@@ -116,29 +117,38 @@ class ComponentModeler(pd.BaseModel):
             for mode_index in port.mode_indices
         ]
 
-    def plot_sim(self, x: float = None, y: float = None, z: float = None) -> Ax:
+    @equal_aspect
+    @add_ax_if_none
+    def plot_sim(self, x: float = None, y: float = None, z: float = None, ax : Ax = None) -> Ax:
         """Plot a :class:`Simulation` with all sources added for each port, for troubleshooting."""
 
         sim_plot = self.simulation.copy(deep=True)
         for port_source in self.ports:
             mode_source_0 = self._to_sources(port_source)[0]
             sim_plot.sources.append(mode_source_0)
-        return sim_plot.plot(x=x, y=y, z=z)
+        return sim_plot.plot(x=x, y=y, z=z, ax=ax)
 
-    def _shift_port(self, port: Port) -> Port:
-        """Generate a new port shifted by one grid cell in normal direction."""
-
+    def _shift_value(self, port : Port) -> float:
+        """How far (signed) to shift the monitor from the source."""
         normal_index = port.size.index(0.0)
         dl = self.simulation.grid_size[normal_index]
         if not isinstance(dl, float):
             raise NotImplementedError("doesn't support nonuniform. How many grid cells to shift?")
-        shift_value = dl if port.direction == "+" else -1 * dl
+        return dl if port.direction == "+" else -1 * dl
 
+    def _shift_port(self, port: Port) -> Port:
+        """Generate a new port shifted by one grid cell in normal direction."""
+
+        shift_value = self._shift_value(port)
         center_shifted = list(port.center)
-        center_shifted[normal_index] += shift_value
+        center_shifted[port.size.index(0.0)] += shift_value
         port_shifted = port.copy(deep=True)
         port_shifted.center = center_shifted
         return port_shifted
+
+    def _task_name(self, port_source : Port, mode_index : int) -> str:
+        """The name of a task, determined by the port of the source and mode index."""
+        return f"smatrix_port{port_source.name}_mode{mode_index}"
 
     def _make_sims(self) -> Dict[str, Simulation]:
         """Generate all the :class:`Simulation` objects for the S matrix calculation."""
@@ -152,7 +162,7 @@ class ComponentModeler(pd.BaseModel):
                         port_monitor = self._shift_port(port_source)
                     mode_monitor = self._to_monitor(port_monitor)
                     sim_copy.monitors.append(mode_monitor)
-                    task_name = f"smatrix_port{port_source.name}_mode{mode_source.mode_index}"
+                    task_name = self._task_name(port_source, mode_source.mode_index)
                     sim_dict[task_name] = sim_copy
         return sim_dict
 
@@ -168,23 +178,63 @@ class ComponentModeler(pd.BaseModel):
         batch.monitor()
         return batch
 
+    def _normalization_factor(self, port_source : Port, sim_data : SimulationData) -> complex:
+        """Compute the normalization amplitude based on the measured input mode amplitude."""
+
+        port_monitor_data = sim_data[port_source.name]
+        mode_index = sim_data.simulation.sources[0].mode_index
+
+        normalize_amp = port_monitor_data.amps.sel(
+            f=self.freq,
+            direction=port_source.direction,
+            mode_index=mode_index,
+        ).values
+
+        normalize_n_eff = port_monitor_data.n_eff.sel(f=self.freq, mode_index=mode_index).values
+
+        k0 = 2 * np.pi * C_0 / self.freq
+        k_eff = k0 * normalize_n_eff
+        shift_value = self._shift_value(port_source)
+        return normalize_amp * np.exp(1j * k_eff * shift_value)
+
+
+
     def _construct_smatrix(self, batch: Batch, path_dir: str) -> SMatrixType:
         """Post process batch to generate scattering matrix."""
 
+        # load all data
+        sim_data_dict = batch.load(path_dir=path_dir)
         s_matrix_dict = {}
-        for port_source, (task_name, sim_data) in zip(self.ports, batch.items(path_dir=path_dir)):
-            port_monitor_data = sim_data[port_source.name]
-            normalize_amp = port_monitor_data.amps.sel(
-                f=self.freq,
-                direction=port_source.direction,
-                mode_index=sim_data.simulation.sources[0].mode_index,
-            ).values
-            s_matrix_col = {}
-            for monitor in sim_data.simulation.monitors:
-                dir_out = "-" if port_source.direction == "+" else "+"
-                mode_data = sim_data[monitor.name].amps.sel(f=self.freq, direction=dir_out)
-                s_matrix_col[monitor.name] = np.array(mode_data.values) / normalize_amp
-            s_matrix_dict[port_source.name] = s_matrix_col
+
+        # loop through source ports
+        for port_source in self.ports:
+
+            source_name = port_source.name
+            s_matrix_dict[source_name] = {}
+
+            # loop through all monitors
+            for port_monitor in self.ports:
+
+                monitor_name = port_monitor.name
+                mode_matrix = []
+
+                # loop through all source injection indices
+                for mode_index in port_source.mode_indices:
+
+                    # get the data for this source and compute normalization by injection
+                    task_name = self._task_name(port_source, mode_index)
+                    sim_data = sim_data_dict[task_name]
+                    norm_factor = self._normalization_factor(port_source, sim_data)
+
+                    # compute the mode amplitude data
+                    dir_out = "-" if port_monitor.direction == "+" else "+"
+                    mode_data = sim_data[monitor_name].amps.sel(f=self.freq, direction=dir_out)
+                    amps_normalized = np.array(mode_data.values) / norm_factor
+                    mode_matrix.append(amps_normalized)
+
+                # convert to an array
+                s_matrix_dict[source_name][monitor_name] = np.array(mode_matrix)
+
         return s_matrix_dict
 
     def solve(self, folder_name: str = "default", path_dir: str = DEFAULT_DATA_DIR) -> SMatrixType:
