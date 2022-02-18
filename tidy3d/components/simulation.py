@@ -1020,7 +1020,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
             # loop through background_shapes (note: all background are non-intersecting or merged)
             for index, (_medium, _shape) in enumerate(background_shapes):
 
-                # if not intersetion, move onto next background shape
+                # if not intersection, move onto next background shape
                 if not shape & _shape:
                     continue
 
