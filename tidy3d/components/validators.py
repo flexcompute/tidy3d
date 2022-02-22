@@ -85,19 +85,39 @@ def assert_unique_names(field_name: str, check_mediums=False):
 
 
 def assert_objects_in_sim_bounds(field_name: str):
-    """makes sure all objects in field are at least partially inside of simulation bounds/"""
+    """Makes sure all objects in field are at least partially inside of simulation bounds.
+    If a Mode object, this checks that the object is fully in the main quadrant in the presence
+    of symmetry along a given axis, or else centered on the symmetry center."""
 
     @pydantic.validator(field_name, allow_reuse=True, always=True)
     def objects_in_sim_bounds(cls, val, values):
         """check for intersection of each structure with simulation bounds."""
-        sim_bounds = Box(size=values.get("size"), center=values.get("center"))
+        sim_center = values.get("center")
+        sim_box = Box(size=values.get("size"), center=sim_center)
+
         for position_index, geometric_object in enumerate(val):
-            if not sim_bounds.intersects(geometric_object.geometry):
+            if not sim_box.intersects(geometric_object.geometry):
                 raise SetupError(
                     f"'{geometric_object}' "
-                    f"(at `simulation.{field_name}[{position_index}]`)"
-                    "is completely outside of simulation domain"
+                    f"(at `simulation.{field_name}[{position_index}]`) "
+                    "is completely outside of simulation domain."
                 )
+
+            if geometric_object.type in ["ModeSource", "ModeMonitor"]:
+                bounds_min, _ = geometric_object.bounds
+                for dim, sym in enumerate(values.get("symmetry")):
+                    if (
+                        sym != 0
+                        and bounds_min[dim] < sim_center[dim]
+                        and geometric_object.center[dim] != sim_center[dim]
+                    ):
+                        raise SetupError(
+                            f"Mode object '{geometric_object}' "
+                            f"(at `simulation.{field_name}[{position_index}]`) "
+                            "in presence of symmetries must be in the main quadrant, "
+                            "or centered on the symmetry axis."
+                        )
+
         return val
 
     return objects_in_sim_bounds

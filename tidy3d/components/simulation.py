@@ -114,6 +114,17 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         units=SECOND,
     )
 
+    symmetry: Tuple[Symmetry, Symmetry, Symmetry] = pydantic.Field(
+        (0, 0, 0),
+        title="Symmetries",
+        description="Tuple of integers defining reflection symmetry across a plane "
+        "bisecting the simulation domain normal to the x-, y-, and z-axis, respectvely. "
+        "Each element can be ``0`` (no symmetry), ``1`` (even, i.e. 'PMC' symmetry) or "
+        "``-1`` (odd, i.e. 'PEC' symmetry). "
+        "Note that the vectorial nature of the fields must be taken into account to correctly "
+        "determine the symmetry value.",
+    )
+
     structures: List[Structure] = pydantic.Field(
         [],
         title="Structures",
@@ -141,17 +152,6 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         description="Specifications for the absorbing layers on x, y, and z edges. "
         "If ``None``, no absorber will be added on that dimension "
         "and periodic boundary conditions will be used.",
-    )
-
-    symmetry: Tuple[Symmetry, Symmetry, Symmetry] = pydantic.Field(
-        (0, 0, 0),
-        title="Symmetries",
-        description="Tuple of integers defining reflection symmetry across a plane "
-        "bisecting the simulation domain normal to the x-, y-, and z-axis, respectvely. "
-        "Each element can be ``0`` (no symmetry), ``1`` (even, i.e. 'PMC' symmetry) or "
-        "``-1`` (odd, i.e. 'PEC' symmetry). "
-        "Note that the vectorial nature of the fields must be taken into account to correctly "
-        "determine the symmetry value.",
     )
 
     shutoff: pydantic.NonNegativeFloat = pydantic.Field(
@@ -1229,6 +1229,40 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         eps_max = max(abs(structure.medium.get_eps(freq_max)) for structure in self.structures)
         n_max, _ = AbstractMedium.eps_complex_to_nk(eps_max)
         return wvl_min / n_max
+
+    def min_sym_box(self, box: Box) -> Box:
+        """Compute the smallest Box restricted to the first quadrant in the presence of symmetries
+        that fully covers the original Box when symmetries are applied.
+
+        Parameters
+        ----------
+        box : :class:`Box`
+            Rectangular geometry.
+
+        Returns
+        -------
+        new_box : :class:`Box`
+            The smallest Box such that any point in ``box`` is either in ``new_box`` or can be
+            mapped from ``new_box`` using the simulation symmetries.
+        """
+
+        bounds_min, bounds_max = box.bounds
+        bmin_new, bmax_new = [], []
+
+        for (center, sym, bmin, bmax) in zip(self.center, self.symmetry, bounds_min, bounds_max):
+            if sym == 0 or center < bmin:
+                bmin_new.append(bmin)
+                bmax_new.append(bmax)
+            else:
+                if bmax < center:
+                    bmin_new.append(2 * center - bmax)
+                    bmax_new.append(2 * center - bmin)
+                else:
+                    # bmin <= center <= bmax
+                    bmin_new.append(center)
+                    bmax_new.append(max(bmax, 2 * center - bmin))
+
+        return Box.from_bounds(bmin_new, bmax_new)
 
     def discretize_inds(self, box: Box) -> List[Tuple[int, int]]:
         """Start and stopping indexes for the cells that intersect with a :class:`Box`.

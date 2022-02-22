@@ -6,7 +6,7 @@ import pydantic as pd
 
 from ..constants import MICROMETER
 from .base import Tidy3dBaseModel
-from .types import Symmetry, Axis2D
+from .types import Axis2D
 from ..log import SetupError
 
 
@@ -17,7 +17,7 @@ class ModeSpec(Tidy3dBaseModel):
 
     Example
     -------
-    >>> mode_spec = ModeSpec(num_modes=3, target_neff=1.5, symmetries=(1, -1))
+    >>> mode_spec = ModeSpec(num_modes=3, target_neff=1.5)
     """
 
     num_modes: pd.PositiveInt = pd.Field(
