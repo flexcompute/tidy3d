@@ -114,15 +114,16 @@ class ModeSolver:
         plane_grid = self.simulation.discretize(self.plane)
 
         # restrict to a smaller plane if symmetries present in the simulation
-        center_sym, size_sym = list(self.plane.center), list(self.plane.size)
-        for dim in range(3):
-            if self.simulation.symmetry[dim] != 0 and center_sym[dim] == self.simulation.center:
-                center_sym[dim] += size_sym[dim] / 4
-                size_sym[dim] /= 2
-        plane_sym = Box(center=center_sym, size=size_sym)
+        plane_sym = self.simulation.min_sym_box(self.plane)
         plane_grid_sym = self.simulation.discretize(plane_sym)
-        _, solver_coords = self.plane.pop_axis(plane_grid_sym.boundaries.to_list, axis=normal_axis)
-        _, plane_symmetry = self.plane.pop_axis(self.simulation.symmetry, axis=normal_axis)
+
+        # Coords and symmetry arguments to the solver (restricted to in-plane)
+        _, solver_coords = self.plane.pop_axis(plane_grid_sym.boundaries.to_list)
+        mode_symmetry = list(self.simulation.symmetry)
+        for dim in range(3):
+            if self.simulation.center[dim] != self.plane.center[dim]:
+                mode_symmetry[dim] = 0
+        _, solver_symmetry = self.plane.pop_axis(mode_symmetry)
 
         # Get diagonal epsilon components in the plane
         (eps_xx, eps_yy, eps_zz) = self.get_epsilon(plane_sym)
@@ -133,9 +134,7 @@ class ModeSolver:
         eps_zz = np.squeeze(eps_zz, axis=normal_axis)
 
         # swap axes to waveguide coordinates (propagating in z)
-        eps_wg_zz, (eps_wg_xx, eps_wg_yy) = self.plane.pop_axis(
-            (eps_xx, eps_yy, eps_zz), axis=normal_axis
-        )
+        eps_wg_zz, (eps_wg_xx, eps_wg_yy) = self.plane.pop_axis((eps_xx, eps_yy, eps_zz))
 
         # construct eps_cross section to feed to mode solver
         eps_cross = np.stack((eps_wg_xx, eps_wg_yy, eps_wg_zz))
@@ -146,13 +145,13 @@ class ModeSolver:
             coords=solver_coords,
             freq=self.freq,
             mode_spec=mode_spec,
-            symmetry=plane_symmetry,
+            symmetry=solver_symmetry,
         )
 
         def rotate_field_coords(field):
             """move the propagation axis=z to the proper order in the array"""
             f_x, f_y, f_z = np.moveaxis(field, source=3, destination=1 + normal_axis)
-            f_rot = np.stack(self.simulation.unpop_axis(f_z, (f_x, f_y), axis=normal_axis), axis=0)
+            f_rot = np.stack(self.plane.unpop_axis(f_z, (f_x, f_y)), axis=0)
             return f_rot
 
         modes = []

@@ -100,6 +100,7 @@ class YeeGrid(Tidy3dBaseModel):
 
     @property
     def grid_dict(self):
+        """The Yee grid coordinates associated to various field components as a dictionary."""
         yee_grid_dict = {
             "Ex": self.E.x,
             "Ey": self.E.y,
@@ -109,6 +110,7 @@ class YeeGrid(Tidy3dBaseModel):
             "Hz": self.H.z,
         }
         return yee_grid_dict
+
 
 class Grid(Tidy3dBaseModel):
     """Contains all information about the spatial positions of the FDTD grid.

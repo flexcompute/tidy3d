@@ -59,7 +59,7 @@ def test_sim():
         sources=[
             VolumeSource(
                 size=(0, 0, 0),
-                center=(0, -50.5, 0),
+                center=(0, -0.5, 0),
                 polarization="Hx",
                 source_time=GaussianPulse(
                     freq0=1e14,
@@ -819,3 +819,57 @@ def surface_monitor_helper(center, size, monitor_test):
     # z+ surface
     assert monitor_surfaces[5].center == (center[0], center[1], center[2] + size[2] / 2.0)
     assert monitor_surfaces[5].size == (size[0], size[1], 0.0)
+
+
+""" modes """
+
+
+def test_mode_object_syms():
+    """Test that errors are raised if a mode object is not placed right in the presence of syms."""
+    g = GaussianPulse(freq0=1, fwidth=0.1)
+
+    # wrong mode source
+    with pytest.raises(SetupError) as e_info:
+        sim = Simulation(
+            center=(1.0, -1.0, 0.5),
+            size=(2.0, 2.0, 2.0),
+            grid_size=(0.01, 0.01, 0.01),
+            run_time=1e-12,
+            symmetry=(1, -1, 0),
+            sources=[ModeSource(size=(2, 2, 0), direction="+", source_time=g)],
+        )
+
+    # wrong mode monitor
+    with pytest.raises(SetupError) as e_info:
+        sim = Simulation(
+            center=(1.0, -1.0, 0.5),
+            size=(2.0, 2.0, 2.0),
+            grid_size=(0.01, 0.01, 0.01),
+            run_time=1e-12,
+            symmetry=(1, -1, 0),
+            monitors=[ModeMonitor(size=(2, 2, 0), name="mnt", freqs=[2], mode_spec=ModeSpec())],
+        )
+
+    # right mode source (centered on the symmetry)
+    sim = Simulation(
+        center=(1.0, -1.0, 0.5),
+        size=(2.0, 2.0, 2.0),
+        grid_size=(0.01, 0.01, 0.01),
+        run_time=1e-12,
+        symmetry=(1, -1, 0),
+        sources=[ModeSource(center=(1, -1, 1), size=(2, 2, 0), direction="+", source_time=g)],
+    )
+
+    # right mode monitor (entirely in the main quadrant)
+    sim = Simulation(
+        center=(1.0, -1.0, 0.5),
+        size=(2.0, 2.0, 2.0),
+        grid_size=(0.01, 0.01, 0.01),
+        run_time=1e-12,
+        symmetry=(1, -1, 0),
+        monitors=[
+            ModeMonitor(
+                center=(2, 0, 1), size=(2, 2, 0), name="mnt", freqs=[2], mode_spec=ModeSpec()
+            )
+        ],
+    )
