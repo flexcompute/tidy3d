@@ -6,6 +6,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+ - Clarified license terms to not include scripts written using the tidy3d python API.
 
 ### Changed
 
