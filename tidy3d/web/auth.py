@@ -21,7 +21,7 @@ boto3.setup_default_session(region_name=Config.s3_region)
 
 def set_authentication_config(email: str, password: str) -> None:
     """Sets the authorization and keys in the config for a for user."""
-    url = os.path.join(Config.web_api_endpoint, "auth")
+    url = "/".join([Config.auth_api_endpoint, "auth"])
     headers = {"Application": "TIDY3D"}
     resp = requests.get(url, headers=headers, auth=(email, password))
     access = resp.json()["data"]
