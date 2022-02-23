@@ -177,7 +177,8 @@ class tidynumpy(np.ndarray):  # pylint: disable=invalid-name
         field_schema.update(NumpyArray.schema())
 
 
-ArrayLike = Union[tidynumpy, NumpyArray, List]
+# ArrayLike = Union[tidynumpy, NumpyArray, List]
+ArrayLike = tidynumpy
 
 
 # lists or np.ndarrays of certain type

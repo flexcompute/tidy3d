@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 ### Changed
+- Fixed a bug in python 3.6 where polyslab vertices loaded as List of List.
 
 ## [1.0.1] - 2021-2-16
 
