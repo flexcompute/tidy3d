@@ -34,7 +34,3 @@ def test_dispersion_load_url():
     url_txt = "https://refractiveindex.info/data_txt.php?datafile=data/main/N2/Peck-0C.yml"
     fitter = DispersionFitter.from_url(url_csv, delimiter=",")
     fitter_txt = DispersionFitter.from_url(url_txt, delimiter="\t")
-
-
-if __name__ == "__main__":
-    test_dispersion_load_url()
