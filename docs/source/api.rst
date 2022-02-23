@@ -245,6 +245,7 @@ Plugins
 
    plugins.DispersionFitter
    plugins.StableDispersionFitter
+   plugins.AdvancedFitterParam
    plugins.ModeSolver
    plugins.Near2Far
    .. plugins.DispersionFitter.from_file
