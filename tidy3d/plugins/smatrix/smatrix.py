@@ -119,7 +119,7 @@ class ComponentModeler(pd.BaseModel):
 
     @equal_aspect
     @add_ax_if_none
-    def plot_sim(self, x: float = None, y: float = None, z: float = None, ax : Ax = None) -> Ax:
+    def plot_sim(self, x: float = None, y: float = None, z: float = None, ax: Ax = None) -> Ax:
         """Plot a :class:`Simulation` with all sources added for each port, for troubleshooting."""
 
         sim_plot = self.simulation.copy(deep=True)
@@ -128,7 +128,7 @@ class ComponentModeler(pd.BaseModel):
             sim_plot.sources.append(mode_source_0)
         return sim_plot.plot(x=x, y=y, z=z, ax=ax)
 
-    def _shift_value(self, port : Port) -> float:
+    def _shift_value(self, port: Port) -> float:
         """How far (signed) to shift the monitor from the source."""
         normal_index = port.size.index(0.0)
         dl = self.simulation.grid_size[normal_index]
@@ -146,7 +146,7 @@ class ComponentModeler(pd.BaseModel):
         port_shifted.center = center_shifted
         return port_shifted
 
-    def _task_name(self, port_source : Port, mode_index : int) -> str:
+    def _task_name(self, port_source: Port, mode_index: int) -> str:
         """The name of a task, determined by the port of the source and mode index."""
         return f"smatrix_port{port_source.name}_mode{mode_index}"
 
@@ -178,7 +178,7 @@ class ComponentModeler(pd.BaseModel):
         batch.monitor()
         return batch
 
-    def _normalization_factor(self, port_source : Port, sim_data : SimulationData) -> complex:
+    def _normalization_factor(self, port_source: Port, sim_data: SimulationData) -> complex:
         """Compute the normalization amplitude based on the measured input mode amplitude."""
 
         port_monitor_data = sim_data[port_source.name]
@@ -196,8 +196,6 @@ class ComponentModeler(pd.BaseModel):
         k_eff = k0 * normalize_n_eff
         shift_value = self._shift_value(port_source)
         return normalize_amp * np.exp(1j * k_eff * shift_value)
-
-
 
     def _construct_smatrix(self, batch: Batch, path_dir: str) -> SMatrixType:
         """Post process batch to generate scattering matrix."""

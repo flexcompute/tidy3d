@@ -25,6 +25,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
  - Validator that mode objects with symmetries are either entirely in the main quadrant, or lie on the symmetry axis.
 - `Simulation.plotly()` makes a plotly figure of the cross section.
 - Dispersion fitter can parse urls from refractiveindex.info
+- `tidy3d.plugins.ComponentModeler` tool for scattering matrix calculations.
 
 ### Changed
 - Fixed a bug in python 3.6 where polyslab vertices loaded differently from file.

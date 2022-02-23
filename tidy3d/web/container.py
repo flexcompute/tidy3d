@@ -7,7 +7,7 @@ import time
 from rich.console import Console
 from rich.progress import Progress
 
-from . import webapi as web
+from .webapi import upload, get_info, start, get_run_info, download, load, delete, REFRESH_TIME
 from .task import TaskId, TaskInfo, RunInfo, TaskName
 from ..components.simulation import Simulation
 from ..components.data import SimulationData
@@ -77,7 +77,7 @@ class Job(WebContainer):
         ----
         To start the simulation running, call :meth:`Job.start` after uploaded.
         """
-        task_id = web.upload(
+        task_id = upload(
             simulation=self.simulation,
             task_name=self.task_name,
             folder_name=self.folder_name,
@@ -94,7 +94,7 @@ class Job(WebContainer):
             :class:`TaskInfo` object containing info about status, size, credits of task and others.
         """
 
-        task_info = web.get_info(task_id=self.task_id)
+        task_info = get_info(task_id=self.task_id)
         return task_info
 
     @property
@@ -109,7 +109,7 @@ class Job(WebContainer):
         ----
         To monitor progress of the :class:`Job`, call :meth:`Job.monitor` after started.
         """
-        web.start(self.task_id)
+        start(self.task_id)
 
     def get_run_info(self) -> RunInfo:
         """Return information about the running :class:`Job`.
@@ -119,7 +119,7 @@ class Job(WebContainer):
         :class:`RunInfo`
             Task run information.
         """
-        run_info = web.get_run_info(task_id=self.task_id)
+        run_info = get_run_info(task_id=self.task_id)
         return run_info
 
     def monitor(self) -> None:
@@ -143,7 +143,7 @@ class Job(WebContainer):
                 if new_status != status:
                     console.log(f"status = {new_status}")
                     status = new_status
-                time.sleep(web.REFRESH_TIME)
+                time.sleep(REFRESH_TIME)
 
     def download(self, path: str = DEFAULT_DATA_PATH) -> None:
         """Download results of simulation.
@@ -157,7 +157,7 @@ class Job(WebContainer):
         ----
         To load the data into :class:`.SimulationData`objets, can call :meth:`Job.load`.
         """
-        web.download(task_id=self.task_id, path=path)
+        download(task_id=self.task_id, path=path)
 
     def load(
         self, path: str = DEFAULT_DATA_PATH, normalize_index: Optional[int] = 0
@@ -180,7 +180,7 @@ class Job(WebContainer):
         :class:`.SimulationData`
             Object containing data about simulation.
         """
-        return web.load(
+        return load(
             task_id=self.task_id,
             path=path,
             normalize_index=normalize_index,
@@ -188,7 +188,7 @@ class Job(WebContainer):
 
     def delete(self):
         """Delete server-side data associated with :class:`Job`."""
-        web.delete(self.task_id)
+        delete(self.task_id)
         self.task_id = None
 
 
@@ -335,7 +335,7 @@ class Batch(WebContainer):
                         progress.update(pbar, description=description, completed=completed)
                         statuses[status_index] = new_status
                 statuses = [job.status for _, job in self.jobs.items()]
-                time.sleep(web.REFRESH_TIME)
+                time.sleep(REFRESH_TIME)
 
             for task_name, job in self.jobs.items():
                 pbar = pbar_tasks[task_name]
