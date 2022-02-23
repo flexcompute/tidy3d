@@ -1300,14 +1300,9 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
 
         Returns
         -------
-        Dict[str, xarray.DataArray]
-            Mapping of coordinate type to xarray DataArray containing permittivity data.
-            keys of dict are ``{'centers', 'boundaries', 'Ex', 'Ey', 'Ez', 'Hx', 'Hy', 'Hz'}``.
-            ``'centers'`` contains the permittivity at the yee cell centers.
-            `'boundaries'`` contains the permittivity at the corner intersections between yee cells.
-            ``'Ex'`` and other field keys contain the permittivity
-            at the corresponding field position in the yee lattice.
-            For details on xarray datasets,
+        xarray.DataArray
+            Datastructure containing the relative permittivity values and location coordinates.
+            For details on xarray DataArray objects,
             refer to `xarray's Documentaton <https://tinyurl.com/2zrzsp7b>`_.
         """
 
