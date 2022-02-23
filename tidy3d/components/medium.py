@@ -415,11 +415,6 @@ class PoleResidue(DispersiveMedium):
         omega = 2 * np.pi * frequency
         eps = self.eps_inf + 0.0j * frequency
         for (a, c) in self.poles:
-
-            # convert to complex
-            # a = self.tuple_to_complex(a)
-            # c = self.tuple_to_complex(c)
-
             a_cc = np.conj(a)
             c_cc = np.conj(c)
             eps -= c / (1j * omega + a)
@@ -494,10 +489,6 @@ class Sellmeier(DispersiveMedium):
             alpha = -0.5 * beta * B
             a = 1j * beta
             c = 1j * alpha
-
-            # a = self.complex_to_tuple(a)
-            # c = self.complex_to_tuple(c)
-
             poles.append((a, c))
 
         return PoleResidue(
@@ -722,9 +713,6 @@ class Debye(DispersiveMedium):
         for (de, tau) in self.coeffs:
             a = -2 * np.pi / tau + 0j
             c = -0.5 * de * a
-
-            # a = self.complex_to_tuple(a)
-            # c = self.complex_to_tuple(c)
 
             poles.append((a, c))
 
