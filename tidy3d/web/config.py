@@ -12,6 +12,7 @@ class WebConfig:  # pylint:disable=too-many-instance-attributes
 
     s3_region: str
     studio_bucket: str
+    auth_api_endpoint: str
     web_api_endpoint: str
     solver_version: str = SOLVER_VERSION
     worker_group: Any = None
@@ -24,7 +25,8 @@ class WebConfig:  # pylint:disable=too-many-instance-attributes
 ConfigDev = WebConfig(
     s3_region="us-east-1",
     studio_bucket="flow360-studio-v1",
-    web_api_endpoint="https://webapi-dev.flexcompute.com",
+    auth_api_endpoint="https://portal-api.dev-simulation.cloud",
+    web_api_endpoint="https://tidy3d-api.dev-simulation.cloud",
 )
 
 
@@ -32,7 +34,8 @@ ConfigDev = WebConfig(
 ConfigProd = WebConfig(
     s3_region="us-gov-west-1",
     studio_bucket="flow360studio",
-    web_api_endpoint="https://webapi.flexcompute.com",
+    auth_api_endpoint="https://portal-api.simulation.cloud",
+    web_api_endpoint="https://tidy3d-api.simulation.cloud",
 )
 
 
