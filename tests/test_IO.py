@@ -10,7 +10,7 @@ from .utils import clear_tmp
 
 
 @clear_tmp
-def _test_simulation_load_export():
+def test_simulation_load_export():
     path = "tests/tmp/simulation.json"
     SIM.to_file(path)
     SIM2 = Simulation.from_file(path)
@@ -33,7 +33,7 @@ def test_simulation_preserve_types():
                 medium=Lorentz(eps_inf=1.0, coeffs=[]),
             ),
             Structure(
-                geometry=PolySlab(vertices=[[0, 0], [2, 3], [4, 3]], slab_bounds=(-1, 1), axis=2),
+                geometry=PolySlab(vertices=[(0, 0), (2, 3), (4, 3)], slab_bounds=(-1, 1), axis=2),
                 medium=Sellmeier(coeffs=[]),
             ),
             Structure(geometry=Sphere(radius=1), medium=Debye(eps_inf=1.0, coeffs=[]), name="t2"),
