@@ -6,14 +6,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+
+### Changed
+
+## [1.0.2] - 2022-2-24
+
+### Added
  - Clarified license terms to not include scripts written using the tidy3d python API.
  - Simulation symmetries are now enabled but currently only affect the mode solver, if the mode plane lies on the simulation center and there's a symmetry.
  - Validator that mode objects with symmetries are either entirely in the main quadrant, or lie on the symmetry axis.
+- `Simulation.plotly()` makes a plotly figure of the cross section.
+- Dispersion fitter can parse urls from refractiveindex.info
 
 ### Changed
-- Fixed a bug in python 3.6 where polyslab vertices loaded as List of List.
+- Fixed a bug in python 3.6 where polyslab vertices loaded differently from file.
 
-## [1.0.1] - 2021-2-16
+## [1.0.1] - 2022-2-16
 
 ### Added
 - `Selmeier.from_dispersion()` method to quickly make a single-pole fit for lossless weakly dispersive materials.
@@ -27,7 +35,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Source dft now ignores insignificant time amplitudes for speed.
 - New color schemes for plots.
 
-## [1.0.0] - 2021-1-31
+## [1.0.0] - 2022-1-31
 
 ### Added
 - Stable dispersive material fits via webservice.
@@ -35,7 +43,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - Refined and updated documentation.
 
-## [0.2.0] - 2021-1-29
+## [0.2.0] - 2022-1-29
 
 ### Added
 
@@ -157,9 +165,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Job and Batch classes for better simulation handling (eventually to fully replace webapi functions).
 - A large number of small improvements and bug fixes.
 
-[Unreleased]: https://github.com/flexcompute/Tidy3D-client-revamp/compare/v1.0.1...develop
-[1.0.1]: https://github.com/flexcompute/Tidy3D-client-revamp/compare/v1.0.0...v1.0.1
-[1.0.0]: https://github.com/flexcompute/Tidy3D-client-revamp/compare/v0.2.0...v1.0.0
-[0.2.0]: https://github.com/flexcompute/Tidy3D-client-revamp/compare/0.1.1...v0.2.0
-[0.1.1]: https://github.com/flexcompute/Tidy3D-client-revamp/compare/0.1.0...0.1.1
-[0.1.0]: https://github.com/flexcompute/Tidy3D-client-revamp/releases/tag/0.1.0
+[Unreleased]: https://github.com/flexcompute/tidy3d/compare/v1.0.2...develop
+[1.0.2]: https://github.com/flexcompute/tidy3d/compare/v1.0.1...v1.0.2
+[1.0.1]: https://github.com/flexcompute/tidy3d/compare/v1.0.0...v1.0.1
+[1.0.0]: https://github.com/flexcompute/tidy3d/compare/v0.2.0...v1.0.0
+[0.2.0]: https://github.com/flexcompute/tidy3d/compare/0.1.1...v0.2.0
+[0.1.1]: https://github.com/flexcompute/tidy3d/compare/0.1.0...0.1.1
+[0.1.0]: https://github.com/flexcompute/tidy3d/releases/tag/0.1.0

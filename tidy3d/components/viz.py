@@ -24,10 +24,10 @@ ARROW_ALPHA = 0.8
 
 
 # this times the min of axis height and width gives the arrow length
-ARROW_LENGTH_FACTOR = 0.7
+ARROW_LENGTH_FACTOR = 0.4
 
 # this times ARROW_LENGTH gives width
-ARROW_WIDTH_FACTOR = 0.7
+ARROW_WIDTH_FACTOR = 0.4
 
 
 """ Decorators """
