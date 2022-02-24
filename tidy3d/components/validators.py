@@ -64,6 +64,37 @@ def validate_name_str():
     return field_has_unique_names
 
 
+def validate_mode_objects_symmetry(field_name: str):
+    """If a Mode object, this checks that the object is fully in the main quadrant in the presence
+    of symmetry along a given axis, or else centered on the symmetry center."""
+
+    obj_type = "ModeSource" if field_name == "sources" else "ModeMonitor"
+
+    @pydantic.validator(field_name, allow_reuse=True, always=True)
+    def check_symmetry(cls, val, values):
+        """check for intersection of each structure with simulation bounds."""
+        sim_center = values.get("center")
+        for position_index, geometric_object in enumerate(val):
+            if geometric_object.type == obj_type:
+                bounds_min, _ = geometric_object.bounds
+                for dim, sym in enumerate(values.get("symmetry")):
+                    if (
+                        sym != 0
+                        and bounds_min[dim] < sim_center[dim]
+                        and geometric_object.center[dim] != sim_center[dim]
+                    ):
+                        raise SetupError(
+                            f"Mode object '{geometric_object}' "
+                            f"(at `simulation.{field_name}[{position_index}]`) "
+                            "in presence of symmetries must be in the main quadrant, "
+                            "or centered on the symmetry axis."
+                        )
+
+        return val
+
+    return check_symmetry
+
+
 def assert_unique_names(field_name: str, check_mediums=False):
     """makes sure all elements of a field have unique .name values"""
 
@@ -85,9 +116,7 @@ def assert_unique_names(field_name: str, check_mediums=False):
 
 
 def assert_objects_in_sim_bounds(field_name: str):
-    """Makes sure all objects in field are at least partially inside of simulation bounds.
-    If a Mode object, this checks that the object is fully in the main quadrant in the presence
-    of symmetry along a given axis, or else centered on the symmetry center."""
+    """Makes sure all objects in field are at least partially inside of simulation bounds."""
 
     @pydantic.validator(field_name, allow_reuse=True, always=True)
     def objects_in_sim_bounds(cls, val, values):
@@ -102,21 +131,6 @@ def assert_objects_in_sim_bounds(field_name: str):
                     f"(at `simulation.{field_name}[{position_index}]`) "
                     "is completely outside of simulation domain."
                 )
-
-            if geometric_object.type in ["ModeSource", "ModeMonitor"]:
-                bounds_min, _ = geometric_object.bounds
-                for dim, sym in enumerate(values.get("symmetry")):
-                    if (
-                        sym != 0
-                        and bounds_min[dim] < sim_center[dim]
-                        and geometric_object.center[dim] != sim_center[dim]
-                    ):
-                        raise SetupError(
-                            f"Mode object '{geometric_object}' "
-                            f"(at `simulation.{field_name}[{position_index}]`) "
-                            "in presence of symmetries must be in the main quadrant, "
-                            "or centered on the symmetry axis."
-                        )
 
         return val
 

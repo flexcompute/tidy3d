@@ -11,6 +11,7 @@ from mpl_toolkits.axes_grid1 import make_axes_locatable
 from descartes import PolygonPatch
 
 from .validators import assert_unique_names, assert_objects_in_sim_bounds
+from .validators import validate_mode_objects_symmetry
 from .geometry import Box
 from .types import Symmetry, Ax, Shapely, FreqBound, GridSize
 from .grid import Coords1D, Grid, Coords
@@ -196,6 +197,8 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
     _structures_in_bounds = assert_objects_in_sim_bounds("structures")
     _sources_in_bounds = assert_objects_in_sim_bounds("sources")
     _monitors_in_bounds = assert_objects_in_sim_bounds("monitors")
+    _mode_sources_symmetries = validate_mode_objects_symmetry("sources")
+    _mode_monitors_symmetries = validate_mode_objects_symmetry("monitors")
 
     # assign names to unnamed structures, sources, and mediums
     # _structure_names = set_names("structures")
