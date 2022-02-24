@@ -6,7 +6,6 @@ from functools import wraps
 
 import matplotlib.pylab as plt
 from pydantic import BaseModel
-import chart_studio.plotly as py
 import plotly.graph_objects as go
 import numpy as np
 
@@ -208,7 +207,7 @@ class SimDataGeoParams(PatchParamSwitcher):
         """Returns :class:`PatchParams` based on user-supplied args."""
         return PatchParams(alpha=0.4, edgecolor="black")
 
-
+# pylint:disable=too-many-locals, too-many-branches, too-many-statements
 def plotly_sim(sim, x=None, y=None, z=None):
     """Make a plotly plot."""
 
@@ -302,10 +301,10 @@ def plotly_sim(sim, x=None, y=None, z=None):
             pml_thick = pml.num_layers * dl_edge
             pml_size = 2 * np.array(sim.size)
             pml_size[dir_index] = pml_thick
-            rmin[i] += sign * pml_thick
-            rmax[i] += sign * pml_thick
+            rmin[dir_index] -= sign * pml_thick
+            rmax[dir_index] += sign * pml_thick
             pml_center = np.array(sim.center) + sign * np.array(sim.size) / 2
-            pml_center[dir_index] + sign * pml_size / 2
+            pml_center[dir_index] += sign * pml_size / 2
             pml_box = sim.geometry
             pml_box.center = pml_center.tolist()
             pml_box.size = pml_size.tolist()
