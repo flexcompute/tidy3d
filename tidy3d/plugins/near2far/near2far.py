@@ -1,251 +1,330 @@
 """Near field to far field transformation plugin
 """
-from typing import List, Tuple
-from dataclasses import dataclass
-import xarray as xr
+from typing import List
 import numpy as np
+import xarray as xr
+import pydantic
 
 from ...constants import C_0, ETA_0
 from ...components.data import SimulationData
 from ...components.monitor import FieldMonitor
-from ...components.types import Numpy, Axis
+from ...components.types import Direction, Axis
+from ...components.base import Tidy3dBaseModel
+from ...components.medium import Medium
 from ...log import SetupError
 
-# TODO: implement new version with simulation.discretize
 
-class Near2Far:
-    """Near field to far field transformation tool."""
+class Near2FarSurface(Tidy3dBaseModel):
+    """Data structure to store surface monitor data with associated surface current densities.
 
-    @dataclass
-    class Near2FarData:
-        """Data structure to store field and grid data for a surface monitor."""
+    Parameters
+    ----------
+    sim_data : :class:`.SimulationData`
+        Container for simulation data containing the near field monitors.
+    mon : :class:`.FieldMonitor`
+        Object of :class:`.FieldMonitor` on which near fields will be sampled and integrated.
+    normal_dir : :class:`.Direction`
+        :class:`.Direction` of the surface monitor's normal vector w.r.t. to the positive x, y or z
+        unit vectors. Must be one of '+' or '-'.
+    """
 
-        grid_points: Tuple[Numpy, Numpy]
-        center: List[float]
-        J: xr.Dataset
-        M: xr.Dataset
-        mon_axis: Axis
+    sim_data: SimulationData
+    mon: FieldMonitor
+    normal_dir: Direction = '+'
 
-    def __init__(
-        self,
-        sim_data: SimulationData,
-        mons: List["FieldMonitor"],
+    currents: xr.Dataset = pydantic.Field(
+        None,
+        title="Surface current densities",
+        description="List of colocated surface current densities associated with the monitor",
+    )
+
+    @property
+    def axis(self) -> Axis:
+        """Returns the :class:`.Axis` normal to this surface"""
+        # assume that the monitor's axis is in the direction where the monitor is thinnest
+        return np.argmin(self.mon.size)
+
+    # pylint:disable=too-many-locals
+    def compute_surface_currents(self,
         frequency: float,
-        pts_per_wavelength: int = 10
-        ):
-        """Constructs near field to far field transformation object from monitor data.
+        wavelength: float,
+        pts_per_wavelength: int = 10):
+        """Returns the surface current densities associated with the surface monitor
+        Parameters
+        ----------
+        frequency : float
+            Frequency to select from each :class:`.FieldMonitor` to use for projection.
+            Must be a frequency stored in each :class:`FieldMonitor`.
+        wavelength : float
+            Wavelength in the background medium used to calculate the number of colocation points.
+        pts_per_wavelength : int
+            Number of points per wavelength with which to discretize the
+            surface monitors for the projection. Default: 10.
+        """
+
+        # make sure the monitor is a surface, i.e., exactly one of its dimensions should be zero
+        if sum(bool(size) for size in self.mon.size) != 2:
+            raise SetupError(
+                f"Can't compute far fields for the monitor {self.mon.name}; it is not a surface."
+            )
+
+        try:
+            field_data = self.sim_data[self.mon.name]
+        except Exception as e:
+            raise SetupError(
+                f"No data for monitor named '{self.mon.name}' " "found in supplied sim_data."
+            ) from e
+
+        # figure out which field components are tangential or normal to the monitor
+        if self.axis == 0:
+
+            idx_uv = [1, 2]
+            tangent_fields = ['y', 'z']
+            normal_field = 'x'
+            signs = [-1.0, 1.0]
+
+        elif self.axis == 1:
+
+            idx_uv = [0, 2]
+            tangent_fields = ['x', 'z']
+            normal_field = 'y'
+            signs = [1.0, -1.0]
+
+        else:
+
+            idx_uv = [0, 1]
+            tangent_fields = ['x', 'y']
+            normal_field = 'z'
+            signs = [-1.0, 1.0]
+
+        if self.normal_dir == '-':
+            signs = [-1.0 * i for i in signs]
+
+        # compute surface current densities and delete unneeded field components
+        currents = field_data.copy(deep=True)
+
+        currents.data_dict['J'+tangent_fields[1]] = currents.data_dict.pop('H'+tangent_fields[0])
+        currents.data_dict['J'+tangent_fields[0]] = currents.data_dict.pop('H'+tangent_fields[1])
+        del currents.data_dict['H'+normal_field]
+
+        currents.data_dict['M'+tangent_fields[1]] = currents.data_dict.pop('E'+tangent_fields[0])
+        currents.data_dict['M'+tangent_fields[0]] = currents.data_dict.pop('E'+tangent_fields[1])
+        del currents.data_dict['E'+normal_field]
+
+        currents.data_dict['J'+tangent_fields[0]].values *= signs[0]
+        currents.data_dict['J'+tangent_fields[1]].values *= signs[1]
+
+        currents.data_dict['M'+tangent_fields[0]].values *= signs[1]
+        currents.data_dict['M'+tangent_fields[1]].values *= signs[0]
+
+        # colocate surface currents on a regular grid of points on the monitor based on wavelength
+        colocation_points = [None] * 3
+        colocation_points[self.axis] = self.mon.center[self.axis]
+
+        for idx in idx_uv:
+
+            # pick sample points on the monitor and handle the possibility of an "infinite" monitor
+            start = np.maximum(
+                self.mon.center[idx] - self.mon.size[idx] / 2.0,
+                self.mon.center[idx] - self.sim_data.simulation.size[idx] / 2.0
+                )
+            stop = np.minimum(
+                self.mon.center[idx] + self.mon.size[idx] / 2.0,
+                self.mon.center[idx] + self.sim_data.simulation.size[idx] / 2.0
+                )
+            size = stop - start
+
+            num_pts = int(np.ceil(pts_per_wavelength * size / wavelength))
+            points = np.linspace(start, stop, num_pts)
+            colocation_points[idx] = points
+
+        try:
+            self.currents = currents.colocate(*colocation_points).sel(f=frequency)
+        except Exception as e:
+            raise SetupError(
+                f"Frequency {self.frequency} not found in fields for monitor '{self.mon.name}'."
+            ) from e
+
+class Near2Far(Tidy3dBaseModel):
+    """Near field to far field transformation tool.
+
+    Parameters
+    ----------
+    sim_data : :class:`.SimulationData`
+        Container for simulation data containing the near field monitors.
+    surfaces : List[:class:`Near2FarSurface`]
+        List of each :class:`.Near2FarSurface` to use as source of near field.
+    frequency : float
+        Frequency to select from each :class:`.FieldMonitor` to use for projection.
+        Must be a frequency stored in each :class:`FieldMonitor`.
+    pts_per_wavelength : int
+        Number of points per wavelength with which to discretize the
+        surface monitors for the projection. Default: 10.
+    medium : :class:`.Medium`
+        Background medium in which to radiate near fields to far fields.
+        Default: same as the :class:`.Simulation` background medium.
+    """
+
+    sim_data: SimulationData
+    surfaces: List["Near2FarSurface"]
+    frequency: float
+    pts_per_wavelength: int = 10
+    medium: Medium = None
+
+    origin: List[float] = [0, 0, 0]
+    phasor_sign: float = 1  # 1 => exp(jkr), -1 => exp(-jkr)
+    initialized: bool = False
+
+    @property
+    def k_m(self) -> float:
+        """Returns the wave number associated with the background medium"""
+        if self.medium is None:
+            return 2 * np.pi * self.frequency / C_0
+        return np.sqrt(self.medium.permittivity) * 2 * np.pi * self.frequency / C_0
+
+    @property
+    def eta(self) -> float:
+        """Returns the wave impedance associated with the background medium"""
+        if self.medium is None:
+            return ETA_0
+        return ETA_0 / np.sqrt(self.medium.permittivity)
+
+    @classmethod
+    # pylint:disable=too-many-arguments
+    def from_surface_monitors(cls,
+        sim_data: SimulationData,
+        mons: List['FieldMonitor'],
+        normal_dirs: List[Direction],
+        frequency: float,
+        pts_per_wavelength: int = 10,
+        medium: Medium = None):
+        """Constructs :class:`Near2Far` from a list of surface monitors and their directions
 
         Parameters
         ----------
         sim_data : :class:`.SimulationData`
             Container for simulation data containing the near field monitors.
-        mons : List[:class:`FieldMonitor`]
-            List of each :class:`.FieldMonitor` to use as source of near field.
-            Must be a list of :class:`.FieldMonitor` and stored in ``sim_data``.
+        mons : List[:class:`.FieldMonitor`]
+            List of :class:`.FieldMonitor` objects on which near fields will be sampled.
+        normal_dirs : List[:class:`.Direction`]
+            List containing the :class:`.Direction` of the normal to each surface monitor 
+            w.r.t. to the positive x, y or z unit vectors. Must have the same length as mons.
         frequency : float
             Frequency to select from each :class:`.FieldMonitor` to use for projection.
             Must be a frequency stored in each :class:`FieldMonitor`.
         pts_per_wavelength : int
             Number of points per wavelength with which to discretize the
-            surface monitors for the projection.
+            surface monitors for the projection. Default: 10.
+        medium : :class:`.Medium`
+            Background medium in which to radiate near fields to far fields.
+            Default: same as the :class:`.Simulation` background medium.
         """
 
-        self.spacetime_sign = 1  # 1 => exp(jkr), -1 => exp(-jkr)
+        if len(mons) != len(normal_dirs):
+            raise SetupError("Number of monitors does not equal the number of directions.")
 
-        self.frequency = frequency
-        self.k0 = 2 * np.pi * frequency / C_0
-        self.pts_per_wavelength = pts_per_wavelength
+        surfaces = []
+        for mon, normal_dir in zip(mons, normal_dirs):
+            surfaces.append(Near2FarSurface(sim_data=sim_data, mon=mon, normal_dir=normal_dir))
 
-        # extract and package together the relevant field and grid data for each monitor
-        self.data = []
-        for mon in mons:
-            data = self._get_data_from_monitor(sim_data, mon)
-            self.data.append(data)
+        return cls(
+            sim_data=sim_data,
+            surfaces=surfaces,
+            frequency=frequency,
+            pts_per_wavelength=pts_per_wavelength,
+            medium=medium
+            )
 
-        # compute the centroid of all monitors, which will be used as the coordinate origin
+    def initialize(self):
+        """Precomputes surface currents and other data in preparation for a near-to-far projection.
+            Will be called automatically the first time any far field computation is performed.
+        """
+
+        if self.medium is None:
+            self.medium = self.sim_data.simulation.medium
+
+        wavelength = C_0 / self.frequency / self.medium.permittivity
+
+        # compute surface currents and grid data for each monitor
+        # and set the local origin as the centroid of all monitors
         self.origin = [0, 0, 0]
-        for data in self.data:
-            self.origin = [sum(x) for x in zip(self.origin , data.center)]
-        self.origin[:] = [x / len(self.data) for x in self.origin]
 
-    def _get_data_from_monitor(self, sim_data: SimulationData, mon: FieldMonitor) -> Near2FarData:
-        """Get field and coordinate data associated with a given monitor.
+        for surface in self.surfaces:
+            surface.compute_surface_currents(
+                frequency=self.frequency,
+                wavelength=wavelength,
+                pts_per_wavelength=self.pts_per_wavelength
+                )
+            self.origin = [sum(x) for x in zip(self.origin, surface.mon.center)]
 
-        Parameters
-        ----------
-        sim_data : :class:`.SimulationData`
-            Container for simulation data containing the near field monitor.
-        mon_name : str
-            The :class:`.FieldMonitor` to use as source of near field.
-            Must be an object of :class:`.FieldMonitor` and stored in ``sim_data``.
-        frequency : float
-            Frequency to select from the :class:`.FieldMonitor` to use for projection.
-            Must be a frequency stored in the :class:`FieldMonitor`.
-        """
+        self.origin[:] = [x / len(self.surfaces) for x in self.origin]
+        self.initialized = True
 
-        # make sure the monitor is a surface, i.e., exactly one of its dimensions should be zero
-        if sum(bool(size) for size in mon.size) != 2:
-            raise SetupError(
-                f"Can't compute far fields for the monitor {mon.name} because it is not a surface."
-            )
-
-        # monitor's axis is in the direction where the monitor has "zero" size
-        # mon_axis = np.where(mon.size == 0.0)
-
-        # assume that the monitor's axis is in the direction where the monitor is thinnest
-        mon_axis = np.argmin(mon.size)
-
-        try:
-            field_data = sim_data[mon.name]
-        except Exception as e:
-            raise SetupError(
-                f"No data for monitor named '{mon.name}' " "found in supplied sim_data."
-            ) from e
-
-        # figure out which field components are tangential to the monitor, and therefore required
-        # u and v represent a local 2D coordinate system in the monitor's plane 
-        if mon_axis == 0:
-
-            required_fields = ("y", "z")
-            idx_uv = [1, 2]
-            signs = [-1.0, 1.0]
-
-        elif mon_axis == 1:
-
-            required_fields = ("x", "z")
-            idx_uv = [0, 2]
-            signs = [1.0, -1.0]
-
-        else:
-
-            required_fields = ("x", "y")
-            idx_uv = [0, 1]
-            signs = [-1.0, 1.0]
-
-        # fields will be computed and colocated on a regular grid of points on the monitor
-        wavelength = np.real(2.0 * np.pi / self.k0)
-
-        uv_points = []
-        colocation_points = [None] * 3
-        colocation_points[mon_axis] = mon.center[mon_axis]
-
-        for idx in idx_uv:
-
-            num_pts = int(np.ceil(self.pts_per_wavelength * mon.size[idx] / wavelength))
-            start = mon.center[idx] - mon.size[idx] / 2.0
-            stop = mon.center[idx] + mon.size[idx] / 2.0
-            points = np.linspace(start, stop, num_pts)
-            uv_points.append(points)
-            colocation_points[idx] = points
-
-        grid_points = np.meshgrid(uv_points[0], uv_points[1], indexing="ij")
-        field_data = field_data.colocate(*colocation_points)
-
-        # print(len(uv_points[0]), len(uv_points[1]))
-
-        # take into account the normal vector direction associated with the monitor
-        # if mon.normal_dir == '-':
-        #     signs = [-1.0 * i for i in signs]
-
-        # TEMP
-        if "-" in mon.name:
-            signs = [-1.0 * i for i in signs]
-
-        monitor_fields = list(field_data.keys())
-        
-        if any("E"+field_name not in monitor_fields for field_name in required_fields):
-            raise SetupError(f"Monitor named '{mon.name}' doesn't store required E field values")
-
-        if any("H"+field_name not in monitor_fields for field_name in required_fields):
-            raise SetupError(f"Monitor named '{mon.name}' doesn't store required H field values")
-
-        try:
-            # get whatever tangential fields are required for this monitor
-            Eu = field_data.get("E"+required_fields[0]).sel(f=self.frequency)
-            Ev = field_data.get("E"+required_fields[1]).sel(f=self.frequency)
-
-            Hu = field_data.get("H"+required_fields[0]).sel(f=self.frequency)
-            Hv = field_data.get("H"+required_fields[1]).sel(f=self.frequency)
-        except Exception as e:
-            raise SetupError(
-                f"Frequency {self.frequency} not found in all fields " f"from monitor '{mon.name}'."
-            ) from e
-
-        # compute equivalent sources with non-zero components based on the monitor orientation
-        J = (signs[0] * np.squeeze(Hv.values), signs[1] * np.squeeze(Hu.values))
-        M = (signs[1] * np.squeeze(Ev.values), signs[0] * np.squeeze(Eu.values))
-
-        data = self.Near2FarData(
-            mon_axis=mon_axis,
-            grid_points=grid_points,
-            center=mon.center,
-            J=J,
-            M=M
-            )
-
-        return data
-
-    def _radiation_vectors_per_monitor(self, theta: float, phi: float, data: Near2FarData):
-        """Compute radiation vectors at an angle in spherical coordinates for data corresponding
-        to a single monitor
+    # pylint:disable=too-many-locals
+    def _radiation_vectors_for_surface(self, theta: float, phi: float, data: Near2FarSurface):
+        """Compute radiation vectors at an angle in spherical coordinates 
+        for a given :class:`Near2FarSurface` and observation angles
 
         Parameters
         ----------
         theta : float
-            Polar angle (rad) downward from x=y=0 line.
+            Polar angle (rad) downward from x=y=0 line relative to monitor center.
         phi : float
-            Azimuthal (rad) angle from x=z=0 line.
-        data : :class:`Near2FarData`
-            Data set corresponding to a single monitor.
+            Azimuthal (rad) angle from y=z=0 line relative to monitor center.
+        data : :class:`Near2FarSurface`
+            Data set corresponding to a single surface monitor.
 
         Returns
         -------
         tuple[float, float, float, float]
-            ``N_theta``, ``N_phi``, ``L_theta``, ``L_phi`` radiation vectors.
+            ``N_theta``, ``N_phi``, ``L_theta``, ``L_phi`` radiation vectors for the given surface.
         """
 
-        # precompute trig functions and add extra dimensions
+        # precompute trig functions
         sin_theta = np.sin(theta)
         cos_theta = np.cos(theta)
         sin_phi = np.sin(phi)
         cos_phi = np.cos(phi)
 
-        # precompute fourier transform phase term {dx dy e^(ikrcos(psi))}
-        w0 = (data.center[data.mon_axis] - self.origin[data.mon_axis])
+        k_m = self.k_m
 
-        if data.mon_axis == 0:
-            xp = w0
-            yp = data.grid_points[0] - self.origin[1]
-            zp = data.grid_points[1] - self.origin[2]
+        if data.axis == 0:
             source_indices = [1,2]
-        elif data.mon_axis == 1:
-            xp = data.grid_points[0] - self.origin[0]
-            yp = w0
-            zp = data.grid_points[1] - self.origin[2]
+            source_names = ['y', 'z']
+        elif data.axis == 1:
             source_indices = [0,2]
+            source_names = ['x', 'z']
         else:
-            xp = data.grid_points[0] - self.origin[0]
-            yp = data.grid_points[1] - self.origin[1]
-            zp = w0
             source_indices = [0,1]
+            source_names = ['x', 'y']
 
-        phase_x = np.exp(-self.spacetime_sign * 1j * self.k0 * xp * sin_theta * cos_phi)
-        phase_y = np.exp(-self.spacetime_sign * 1j * self.k0 * yp * sin_theta * sin_phi)
-        phase_z = np.exp(-self.spacetime_sign * 1j * self.k0 * zp * cos_theta)
+        # make sure that observation points are interpreted w.r.t. the monitors' centroid
+        pts = [None] * 3
+        pts[0] = data.currents['x'] - self.origin[0]
+        pts[1] = data.currents['y'] - self.origin[1]
+        pts[2] = data.currents['z'] - self.origin[2]
+
+        phase_x = np.exp(-self.phasor_sign * 1j * k_m * pts[0] * sin_theta * cos_phi)
+        phase_y = np.exp(-self.phasor_sign * 1j * k_m * pts[1] * sin_theta * sin_phi)
+        phase_z = np.exp(-self.phasor_sign * 1j * k_m * pts[2] * cos_theta)
         phase = phase_x * phase_y * phase_z
 
         J = [0, 0, 0]
         M = [0, 0, 0]
 
         J[source_indices[0]] = np.trapz(np.trapz(
-            data.J[0] * phase, data.grid_points[0][:,0], axis=0), data.grid_points[1][0,:], axis=0)
+            data.currents['J' + source_names[0]] * phase, pts[source_indices[0]], axis=0),
+            pts[source_indices[1]], axis=0)
         J[source_indices[1]] = np.trapz(np.trapz(
-            data.J[1] * phase, data.grid_points[0][:,0], axis=0), data.grid_points[1][0,:], axis=0)
+            data.currents['J' + source_names[1]] * phase, pts[source_indices[0]], axis=0),
+            pts[source_indices[1]], axis=0)
 
         M[source_indices[0]] = np.trapz(np.trapz(
-            data.M[0] * phase, data.grid_points[0][:,0], axis=0), data.grid_points[1][0,:], axis=0)
+            data.currents['M' + source_names[0]] * phase, pts[source_indices[0]], axis=0),
+            pts[source_indices[1]], axis=0)
         M[source_indices[1]] = np.trapz(np.trapz(
-            data.M[1] * phase, data.grid_points[0][:,0], axis=0), data.grid_points[1][0,:], axis=0)
+            data.currents['M' + source_names[1]] * phase, pts[source_indices[0]], axis=0),
+            pts[source_indices[1]], axis=0)
 
         # N_theta (8.33a)
         N_theta = J[0] * cos_theta * cos_phi + J[1] * cos_theta * sin_phi - J[2] * sin_theta
@@ -267,9 +346,9 @@ class Near2Far:
         Parameters
         ----------
         theta : float
-            Polar angle (rad) downward from x=y=0 line.
+            Polar angle (rad) downward from x=y=0 line relative to monitor center.
         phi : float
-            Azimuthal (rad) angle from x=z=0 line.
+            Azimuthal (rad) angle from y=z=0 line relative to monitor center.
 
         Returns
         -------
@@ -277,10 +356,13 @@ class Near2Far:
             ``N_theta``, ``N_phi``, ``L_theta``, ``L_phi`` radiation vectors.
         """
 
+        if not self.initialized:
+            self.initialize()
+
         # compute radiation vectors for the dataset associated with each monitor
         N_theta, N_phi, L_theta, L_phi = 0.0, 0.0, 0.0, 0.0
-        for data in self.data:
-            _N_th, _N_ph, _L_th, _L_ph = self._radiation_vectors_per_monitor(theta, phi, data)
+        for data in self.surfaces:
+            _N_th, _N_ph, _L_th, _L_ph = self._radiation_vectors_for_surface(theta, phi, data)
             N_theta += _N_th
             N_phi += _N_ph
             L_theta += _L_th
@@ -295,11 +377,11 @@ class Near2Far:
         Parameters
         ----------
         r : float
-            (micron) radial distance.
+            (micron) radial distance relative to monitor center.
         theta : float
-            (radian) polar angle downward from x=y=0 line.
+            (radian) polar angle downward from x=y=0 line relative to monitor center.
         phi : float
-            (radian) azimuthal angle from x=z=0 line.
+            (radian) azimuthal angle from y=z=0 line relative to monitor center.
 
         Returns
         -------
@@ -308,25 +390,24 @@ class Near2Far:
             coordinates.
         """
 
-        # compute the observation angles in terms of the local coordinate system
-        x, y, z = self._sph_2_car(r, theta, phi)
-        r, theta, phi = self._car_2_sph(x-self.origin[0], y-self.origin[1], z-self.origin[2])
-
         # project radiation vectors to distance r away for given angles
         N_theta, N_phi, L_theta, L_phi = self._radiation_vectors(theta, phi)
 
-        scalar_proj_r = -self.spacetime_sign * 1j * self.k0 * \
-            np.exp(self.spacetime_sign * 1j * self.k0 * r) / (4 * np.pi * r)
+        k_m = self.k_m
+        eta = self.eta
+
+        scalar_proj_r = -self.phasor_sign * 1j * k_m * \
+            np.exp(self.phasor_sign * 1j * k_m * r) / (4 * np.pi * r)
 
         # assemble E felds
-        E_theta = -scalar_proj_r * (L_phi + ETA_0 * N_theta)
-        E_phi = scalar_proj_r * (L_theta - ETA_0 * N_phi)
+        E_theta = -scalar_proj_r * (L_phi + eta * N_theta)
+        E_phi = scalar_proj_r * (L_theta - eta * N_phi)
         E_r = np.zeros_like(E_phi)
         E = np.stack((E_r, E_theta, E_phi))
 
         # assemble H fields
-        H_theta = -E_phi / ETA_0
-        H_phi = E_theta / ETA_0
+        H_theta = -E_phi / eta
+        H_phi = E_theta / eta
         H_r = np.zeros_like(H_phi)
         H = np.stack((H_r, H_theta, H_phi))
 
@@ -339,18 +420,18 @@ class Near2Far:
         Parameters
         ----------
         x : float
-            (micron) x position in the global coordinate system.
+            (micron) x position relative to monitor center.
         y : float
-            (micron) y position in the global coordinate system.
+            (micron) y position relative to monitor center.
         z : float
-            (micron) z position in the global coordinate system.
+            (micron) z position relative to monitor center.
 
         Returns
         -------
         tuple
             (Ex, Ey, Ez), (Hx, Hy, Hz), fields in cartesian coordinates.
         """
-        r, theta, phi = self._car_2_sph(x-self.origin[0], y-self.origin[1], z-self.origin[2])
+        r, theta, phi = self._car_2_sph(x, y, z)
         E, H = self.fields_spherical(r, theta, phi)
         Er, Etheta, Ephi = E
         Hr, Htheta, Hphi = H
@@ -365,11 +446,11 @@ class Near2Far:
         Parameters
         ----------
         r : float
-            (micron) radial distance.
+            (micron) radial distance relative to monitor center.
         theta : float
-            (radian) polar angle downward from x=y=0 line.
+            (radian) polar angle downward from x=y=0 line relative to monitor center.
         phi : float
-            (radian) azimuthal angle from x=z=0 line.
+            (radian) azimuthal angle from y=z=0 line relative to monitor center.
 
         Returns
         -------
@@ -390,11 +471,11 @@ class Near2Far:
         Parameters
         ----------
         x : float
-            (micron) x distance from center of monitor.
+            (micron) x distance relative to monitor center.
         y : float
-            (micron) y distance from center of monitor.
+            (micron) y distance relative to monitor center.
         z : float
-            (micron) z distance from center of monitor.
+            (micron) z distance relative to monitor center.
 
         Returns
         -------
@@ -404,32 +485,30 @@ class Near2Far:
         r, theta, phi = self._car_2_sph(x, y, z)
         return self.power_spherical(r, theta, phi)
 
-    def radar_cross_section(self, r, theta, phi):
+    def radar_cross_section(self, theta, phi):
         """Get radar cross section at a point relative to monitor center in
         units of incident power.
 
         Parameters
         ----------
-        r : float
-            (micron) radial distance.
         theta : float
-            (radian) polar angle downward from x=y=0 line
+            (radian) polar angle downward from x=y=0 line relative to monitor center.
         phi : float
-            (radian) azimuthal angle from x=z=0 line
+            (radian) azimuthal angle from y=z=0 line relative to monitor center.
 
         Returns
         -------
         RCS : float
             Radar cross section at angles relative to monitor normal vector.
         """
-        # compute the observation angles in terms of the local coordinate system
-        x, y, z = self._sph_2_car(r, theta, phi)
-        r, theta, phi = self._car_2_sph(x-self.origin[0], y-self.origin[1], z-self.origin[2])
-
+        # set observation angles relative to monitor center
         N_theta, N_phi, L_theta, L_phi = self._radiation_vectors(theta, phi)
-        constant = self.k0**2 / (8 * np.pi * ETA_0)
-        term1 = np.abs(L_phi + ETA_0 * N_theta) ** 2
-        term2 = np.abs(L_theta - ETA_0 * N_phi) ** 2
+
+        eta = self.eta
+
+        constant = self.k_m ** 2 / (8 * np.pi * eta)
+        term1 = np.abs(L_phi + eta * N_theta) ** 2
+        term2 = np.abs(L_theta - eta * N_phi) ** 2
         return constant * (term1 + term2)
 
     @staticmethod
@@ -449,7 +528,7 @@ class Near2Far:
         tuple
             r, theta, and phi in spherical coordinates
         """
-        r = np.sqrt(x**2 + y**2 + z**2)
+        r = np.sqrt(x ** 2 + y ** 2 + z ** 2)
         theta = np.arccos(z / r)
         phi = np.arctan2(y, x)
         return r, theta, phi
@@ -465,7 +544,7 @@ class Near2Far:
         theta : float
             polar angle (rad) downward from x=y=0 line
         phi : float
-            azimuthal (rad) angle from x=z=0 line
+            azimuthal (rad) angle from y=z=0 line
 
         Returns
         -------

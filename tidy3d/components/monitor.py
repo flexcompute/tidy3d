@@ -189,13 +189,6 @@ class FieldMonitor(AbstractFieldMonitor, FreqMonitor):
 
     _data_type: Literal["ScalarFieldData"] = pydantic.Field("ScalarFieldData")
 
-    # normal_dir: Direction = pydantic.Field(
-    #     '+',
-    #     title="Direction",
-    #     description="Specifies orientation in positive or negative direction of the normal axis.\
-    #     Relevant for surface monitors only.",
-    # )
-
     def storage_size(self, num_cells: int, tmesh: Array) -> int:
         # stores 1 complex number per grid cell, per frequency, per field
         return BYTES_COMPLEX * num_cells * len(self.freqs) * len(self.fields)
