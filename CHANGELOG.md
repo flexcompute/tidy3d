@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
  - Clarified license terms to not include scripts written using the tidy3d python API.
+ - Simulation symmetries are now enabled but currently only affect the mode solver, if the mode plane lies on the simulation center and there's a symmetry.
+ - Validator that mode objects with symmetries are either entirely in the main quadrant, or lie on the symmetry axis.
 
 ### Changed
 - Fixed a bug in python 3.6 where polyslab vertices loaded as List of List.

@@ -118,12 +118,12 @@ class ModeSolver:
         plane_grid_sym = self.simulation.discretize(plane_sym)
 
         # Coords and symmetry arguments to the solver (restricted to in-plane)
-        _, solver_coords = self.plane.pop_axis(plane_grid_sym.boundaries.to_list)
+        _, solver_coords = self.plane.pop_axis(plane_grid_sym.boundaries.to_list, axis=normal_axis)
         mode_symmetry = list(self.simulation.symmetry)
         for dim in range(3):
             if self.simulation.center[dim] != self.plane.center[dim]:
                 mode_symmetry[dim] = 0
-        _, solver_symmetry = self.plane.pop_axis(mode_symmetry)
+        _, solver_symmetry = self.plane.pop_axis(mode_symmetry, axis=normal_axis)
 
         # Get diagonal epsilon components in the plane
         (eps_xx, eps_yy, eps_zz) = self.get_epsilon(plane_sym)
@@ -134,7 +134,9 @@ class ModeSolver:
         eps_zz = np.squeeze(eps_zz, axis=normal_axis)
 
         # swap axes to waveguide coordinates (propagating in z)
-        eps_wg_zz, (eps_wg_xx, eps_wg_yy) = self.plane.pop_axis((eps_xx, eps_yy, eps_zz))
+        eps_wg_zz, (eps_wg_xx, eps_wg_yy) = self.plane.pop_axis(
+            (eps_xx, eps_yy, eps_zz), axis=normal_axis
+        )
 
         # construct eps_cross section to feed to mode solver
         eps_cross = np.stack((eps_wg_xx, eps_wg_yy, eps_wg_zz))
@@ -151,7 +153,7 @@ class ModeSolver:
         def rotate_field_coords(field):
             """move the propagation axis=z to the proper order in the array"""
             f_x, f_y, f_z = np.moveaxis(field, source=3, destination=1 + normal_axis)
-            f_rot = np.stack(self.plane.unpop_axis(f_z, (f_x, f_y)), axis=0)
+            f_rot = np.stack(self.plane.unpop_axis(f_z, (f_x, f_y), axis=normal_axis), axis=0)
             return f_rot
 
         modes = []

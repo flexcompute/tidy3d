@@ -705,7 +705,6 @@ class Box(Geometry):
         # apply length factor to the minimum size to get arrow width
         return length_factor * min(ax_width, ax_height)
 
-
 class Sphere(Circular):
     """Spherical geometry.
 
