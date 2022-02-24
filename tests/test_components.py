@@ -767,34 +767,16 @@ def test_monitor_surfaces_from_volume():
     # make sure that monitors with zero volume raise an error (adapted from test_monitor_plane())
     for size in ((0, 0, 0), (1, 0, 0), (1, 1, 0)):
         with pytest.raises(SetupError) as e_info:
-            mon_freq = FieldMonitor(
-                size=size, center=center, freqs=[1, 2, 3], name="test_monitor_freq"
+            mon = FieldMonitor(
+                size=size, center=center, freqs=[1, 2, 3], name="test_monitor"
             )
-            mon_freq_surfaces = mon_freq.surfaces()
+            mon_surfaces = mon.surfaces()
 
-    # repeat for time domain
-    for size in ((0, 0, 0), (1, 0, 0), (1, 1, 0)):
-        with pytest.raises(SetupError) as e_info:
-            mon_time = FieldTimeMonitor(
-                size=size, center=center, start=1, stop=2, interval=1, name="test_monitor_time"
-            )
-            mon_time_surfaces = mon_time.surfaces()
-
-    # test that the surface monitors can be extracted from a volume monitor for both frequency and time domain
+    # test that the surface monitors can be extracted from a volume monitor 
     size = (1, 2, 3)
-    mon_freq = FieldMonitor(size=size, center=center, freqs=[1, 2, 3], name="test_monitor_freq")
-    mon_time = FieldTimeMonitor(
-        size=size, center=center, start=1, stop=2, interval=1, name="test_monitor_time"
-    )
+    mon = FieldMonitor(size=size, center=center, freqs=[1, 2, 3], name="test_monitor")
 
-    surface_monitor_helper(center, size, mon_freq)
-    surface_monitor_helper(center, size, mon_time)
-
-
-def surface_monitor_helper(center, size, monitor_test):
-    # helper to test that the list of surfaces extracted from the given test monitor are correct
-
-    monitor_surfaces = monitor_test.surfaces()
+    monitor_surfaces = mon.surfaces()
 
     # x- surface
     assert monitor_surfaces[0].center == (center[0] - size[0] / 2.0, center[1], center[2])
