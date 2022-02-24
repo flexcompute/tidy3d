@@ -12,7 +12,6 @@ PyYAML
 boto3
 requests
 plotly==5.5.0
-chart-studio==1.1.0
 
 # required to get xarray to not complain
 dask
