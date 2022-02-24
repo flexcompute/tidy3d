@@ -432,11 +432,13 @@ class AbstractFieldData(CollectionData, ABC):
                 flip_inds = np.where(coords < center)[0]
 
                 # Get the symmetric coordinates on the right
-                coords[flip_inds] = 2 * center - coords[flip_inds]
+                coords_interp = np.copy(coords)
+                coords_interp[flip_inds] = 2 * center - coords[flip_inds]
 
                 # Interpolate. There generally shouldn't be values out of bounds except potentially
                 # when handling modes, in which case we set such values to zero.
-                new_data = new_data.interp({dim_name: coords}, kwargs={"fill_value": 0.0})
+                new_data = new_data.interp({dim_name: coords_interp}, kwargs={"fill_value": 0.0})
+                new_data = new_data.assign_coords({dim_name: coords})
 
                 # Apply the correct +/-1 for the field component
                 new_data[{dim_name: flip_inds}] *= sym * component_sym_dict[field][dim]
