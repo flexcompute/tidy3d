@@ -10,10 +10,10 @@ from ... import Simulation, Box, ModeSpec, ModeMonitor, ModeSource, GaussianPuls
 from ...constants import HERTZ, C_0
 from ...components.types import Direction, Ax
 from ...components.viz import add_ax_if_none, equal_aspect
-from ...web.container import Batch, DEFAULT_DATA_DIR
 
 # fwidth of gaussian pulse in units of central frequency
 FWIDTH_FRAC = 1.0 / 10
+DEFAULT_DATA_DIR = "data"
 
 
 class Port(Box):
@@ -83,6 +83,14 @@ class ComponentModeler(pd.BaseModel):
         "smatrix_batch.json",
         title="Path to Batch",
         description="Path to the file where the Batch object will be saved.",
+    )
+
+    from ...web.container import Batch
+
+    batch: Batch = pd.Field(
+        None,
+        title="Batch",
+        description="Batch of simulations used to compute S matrix. Set internally.",
     )
 
     @pd.validator("simulation", always=True)
@@ -166,9 +174,19 @@ class ComponentModeler(pd.BaseModel):
                     sim_dict[task_name] = sim_copy
         return sim_dict
 
-    def _run_sims(self, sim_dict: Dict[str, Simulation], folder_name: str, path_dir: str) -> Batch:
+    def _run_sims(
+        self, sim_dict: Dict[str, Simulation], folder_name: str, path_dir: str
+    ) -> "Batch":
         """Run :class:`Simulations` for each port and return the batch after saving."""
+
+        # do it here as to not trigger web auth when importing the plugin
+        from ...web.container import Batch
+
         batch = Batch(simulations=sim_dict, folder_name=folder_name)
+
+        # save to self, for reference later
+        self.batch = batch
+
         batch.upload()
 
         # save after upload so that the jobs are saved too for later
@@ -197,7 +215,7 @@ class ComponentModeler(pd.BaseModel):
         shift_value = self._shift_value(port_source)
         return normalize_amp * np.exp(1j * k_eff * shift_value)
 
-    def _construct_smatrix(self, batch: Batch, path_dir: str) -> SMatrixType:
+    def _construct_smatrix(self, batch: "Batch", path_dir: str) -> SMatrixType:
         """Post process batch to generate scattering matrix."""
 
         # load all data
@@ -244,5 +262,8 @@ class ComponentModeler(pd.BaseModel):
 
     def load(self, path_dir: str = DEFAULT_DATA_DIR) -> SMatrixType:
         """Load an Smatrix from a saved batch."""
+
+        from ...web.container import Batch
+
         batch = Batch.from_file(self.batch_path)
         return self._construct_smatrix(batch=batch, path_dir=path_dir)
