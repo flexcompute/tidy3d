@@ -12,23 +12,39 @@ from tidy3d import FieldData, ScalarFieldData, FieldMonitor
 from .utils import clear_tmp
 
 
-def _test_near2far():
-    """make sure mode solver runs"""
+def test_near2far():
+    """make sure Near2Far runs"""
+
+    center = (0, 0, 0)
+    size = (2, 2, 2)
+    f0 = 1
+    mons = FieldMonitor(size=size, center=center, freqs=[f0], name="surface_monitor").surfaces()
+
+    sim_size = (5, 5, 5)
+    dl = 0.1
+    sim = td.Simulation(size=sim_size, grid_size=[dl, dl, dl], monitors=mons, run_time=10)
 
     def rand_data():
         return ScalarFieldData(
             x=np.linspace(-1, 1, 10),
             y=np.linspace(-1, 1, 10),
-            z=np.array([0.0]),
-            f=np.array([1.0]),
-            values=np.random.random((10, 10, 1, 1)),
+            z=np.linspace(-1, 1, 10),
+            f=[f0],
+            values=np.random.random((10, 10, 10, 1)),
         )
 
     fields = ["Ex", "Ey", "Ez", "Hx", "Hy", "Hz"]
     data_dict = {field: rand_data() for field in fields}
     field_data = FieldData(data_dict=data_dict)
 
-    n2f = Near2Far(field_data)
+    data_dict_mon = {mon.name: field_data for mon in mons}
+    sim_data = td.SimulationData(simulation=sim, monitor_data=data_dict_mon)
+
+    n2f = Near2Far.from_surface_monitors(
+        sim_data=sim_data, 
+        mons=mons, 
+        normal_dirs=['-','+','-','+','-','+'], 
+        frequency=f0)
     n2f.radar_cross_section(1, 1)
     n2f.power_spherical(1, 1, 1)
     n2f.power_cartesian(1, 1, 1)

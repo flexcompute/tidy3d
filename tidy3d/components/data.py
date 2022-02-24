@@ -799,7 +799,7 @@ class SimulationData(Tidy3dBaseModel):
     simulation : :class:`Simulation`
         Original :class:`Simulation` that was run to create data.
     monitor_data : Dict[str, :class:`Tidy3dData`]
-        Mapping of monitor name to :class:`Tidy3dData` intance.
+        Mapping of monitor name to :class:`Tidy3dData` instance.
     log_string : str = None
         A string containing the log information from the simulation run.
     diverged : bool = False

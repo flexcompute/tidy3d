@@ -138,11 +138,12 @@ class Near2FarSurface(Tidy3dBaseModel):
             points = np.linspace(start, stop, num_pts)
             colocation_points[idx] = points
 
+        currents = currents.colocate(*colocation_points)
         try:
-            self.currents = currents.colocate(*colocation_points).sel(f=frequency)
+            self.currents = currents.sel(f=frequency)
         except Exception as e:
             raise SetupError(
-                f"Frequency {self.frequency} not found in fields for monitor '{self.mon.name}'."
+                f"Frequency {frequency} not found in fields for monitor '{self.mon.name}'."
             ) from e
 
 class Near2Far(Tidy3dBaseModel):
