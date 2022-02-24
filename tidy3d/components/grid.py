@@ -1,11 +1,12 @@
 """Defines the FDTD grid."""
-from typing import Tuple
+from typing import Tuple, List
 
 import numpy as np  # pylint:disable=unused-import
 import pydantic
 
 from .base import Tidy3dBaseModel, TYPE_TAG_STR
 from .types import Array, Axis
+from .geometry import Box
 from ..log import SetupError
 
 # data type of one dimensional coordinate array.
@@ -317,3 +318,41 @@ class Grid(Tidy3dBaseModel):
         yee_coords[key] = self._min(boundary_coords[key])
 
         return Coords(**yee_coords)
+
+    def discretize_inds(self, box: Box) -> List[Tuple[int, int]]:
+        """Start and stopping indexes for the cells that intersect with a :class:`Box`.
+
+        Parameters
+        ----------
+        box : :class:`Box`
+            Rectangular geometry within simulation to discretize.
+
+        Returns
+        -------
+        List[Tuple[int, int]]
+            The (start, stop) indexes of the cells that intersect with ``box`` in each of the three
+            dimensions.
+        """
+
+        pts_min, pts_max = box.bounds
+        boundaries = self.boundaries
+
+        inds_list = []
+
+        # for each dimension
+        for axis_label, pt_min, pt_max in zip("xyz", pts_min, pts_max):
+            bound_coords = boundaries.dict()[axis_label]
+            assert pt_min <= pt_max, "min point was greater than max point"
+
+            # index of smallest coord greater than than pt_max
+            inds_gt_pt_max = np.where(bound_coords > pt_max)[0]
+            ind_max = len(bound_coords) - 1 if len(inds_gt_pt_max) == 0 else inds_gt_pt_max[0]
+
+            # index of largest coord less than or equal to pt_min
+            inds_leq_pt_min = np.where(bound_coords <= pt_min)[0]
+            ind_min = 0 if len(inds_leq_pt_min) == 0 else inds_leq_pt_min[-1]
+
+            # store indexes
+            inds_list.append((ind_min, ind_max))
+
+        return inds_list

@@ -1110,7 +1110,9 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
 
         # snap to grid, recenter
         size_snapped = dl * num_cells
-        bound_coords = center + np.linspace(-size_snapped / 2, size_snapped / 2, num_cells + 1)
+        bound_coords = np.linspace(-size_snapped / 2, size_snapped / 2, num_cells + 1)
+        bound_coords += center - bound_coords[bound_coords.size // 2]
+
         return bound_coords
 
     @staticmethod
@@ -1267,47 +1269,6 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
 
         return Box.from_bounds(bmin_new, bmax_new)
 
-    def discretize_inds(self, box: Box) -> List[Tuple[int, int]]:
-        """Start and stopping indexes for the cells that intersect with a :class:`Box`.
-
-        Parameters
-        ----------
-        box : :class:`Box`
-            Rectangular geometry within simulation to discretize.
-
-        Returns
-        -------
-        List[Tuple[int, int]]
-            The (start, stop) indexes of the cells that intersect with ``box`` in each of the three
-            dimensions.
-        """
-
-        if not self.intersects(box):
-            log.error(f"Box {box} is outside simulation, cannot discretize")
-
-        pts_min, pts_max = box.bounds
-        boundaries = self.grid.boundaries
-
-        inds_list = []
-
-        # for each dimension
-        for axis_label, pt_min, pt_max in zip("xyz", pts_min, pts_max):
-            bound_coords = boundaries.dict()[axis_label]
-            assert pt_min <= pt_max, "min point was greater than max point"
-
-            # index of smallest coord greater than than pt_max
-            inds_gt_pt_max = np.where(bound_coords > pt_max)[0]
-            ind_max = len(bound_coords) - 1 if len(inds_gt_pt_max) == 0 else inds_gt_pt_max[0]
-
-            # index of largest coord less than or equal to pt_min
-            inds_leq_pt_min = np.where(bound_coords <= pt_min)[0]
-            ind_min = 0 if len(inds_leq_pt_min) == 0 else inds_leq_pt_min[-1]
-
-            # store indexes
-            inds_list.append((ind_min, ind_max))
-
-        return inds_list
-
     def discretize(self, box: Box) -> Grid:
         """Grid containing only cells that intersect with a :class:`Box`.
 
@@ -1322,7 +1283,10 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
             The FDTD subgrid containing simulation points that intersect with ``box``.
         """
 
-        disc_inds = self.discretize_inds(box)
+        if not self.intersects(box):
+            log.error(f"Box {box} is outside simulation, cannot discretize")
+
+        disc_inds = self.grid.discretize_inds(box)
         sub_cell_boundary_dict = {}
         for axis_label, axis_inds in zip("xyz", disc_inds):
             # copy orginal bound coords into subgrid coords

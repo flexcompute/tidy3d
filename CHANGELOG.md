@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Simulation symmetries now fully functional.
 - Ability to perform near-to-far transformations from multiple surface monitors oriented along the x, y or z directions.
 - ``Near2Far.from_surface_monitors()`` method to construct a ``Near2Far`` object with a set of surface monitors and associated unit normal vector directions.
 
