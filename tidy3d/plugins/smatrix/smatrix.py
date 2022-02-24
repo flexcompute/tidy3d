@@ -1,6 +1,6 @@
 """Tools for generating an S matrix automatically from tidy3d simulation and port definitions."""
 
-from typing import List, Tuple, Dict
+from typing import List, Tuple, Dict, Any
 import os
 
 import pydantic as pd
@@ -85,9 +85,7 @@ class ComponentModeler(pd.BaseModel):
         description="Path to the file where the Batch object will be saved.",
     )
 
-    from ...web.container import Batch
-
-    batch: Batch = pd.Field(
+    batch: Any = pd.Field(
         None,
         title="Batch",
         description="Batch of simulations used to compute S matrix. Set internally.",
