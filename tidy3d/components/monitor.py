@@ -5,7 +5,7 @@ from typing import List, Union, Tuple
 import pydantic
 import numpy as np
 
-from .types import Literal, Ax, EMField, ArrayLike, Array, Direction
+from .types import Literal, Ax, EMField, ArrayLike, Array
 from .geometry import Box
 from .validators import assert_plane
 from .mode import ModeSpec
@@ -251,16 +251,13 @@ class FieldMonitor(AbstractFieldMonitor, FreqMonitor):
             self.name + "_z+",
         )
 
-        dirns = ('-', '+', '-', '+', '-', '+')
-
         # Create "surface" monitors
         monitors = []
-        for center, size, name, dirn in zip(surface_centers, surface_sizes, surface_names, dirns):
+        for center, size, name in zip(surface_centers, surface_sizes, surface_names):
             mon_new = self.copy(deep=True)
             mon_new.center = center
             mon_new.size = size
             mon_new.name = name
-            # mon_new.normal_dir = dirn
             monitors.append(mon_new)
 
         return monitors
