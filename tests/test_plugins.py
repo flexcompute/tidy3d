@@ -18,11 +18,11 @@ def test_near2far():
     center = (0, 0, 0)
     size = (2, 2, 2)
     f0 = 1
-    mons = FieldMonitor(size=size, center=center, freqs=[f0], name="surface_monitor").surfaces()
+    monitors = FieldMonitor(size=size, center=center, freqs=[f0], name="near_field").surfaces()
 
     sim_size = (5, 5, 5)
     dl = 0.1
-    sim = td.Simulation(size=sim_size, grid_size=[dl, dl, dl], monitors=mons, run_time=10)
+    sim = td.Simulation(size=sim_size, grid_size=[dl, dl, dl], monitors=monitors, run_time=10)
 
     def rand_data():
         return ScalarFieldData(
@@ -37,12 +37,12 @@ def test_near2far():
     data_dict = {field: rand_data() for field in fields}
     field_data = FieldData(data_dict=data_dict)
 
-    data_dict_mon = {mon.name: field_data for mon in mons}
+    data_dict_mon = {mon.name: field_data for mon in monitors}
     sim_data = td.SimulationData(simulation=sim, monitor_data=data_dict_mon)
 
     n2f = Near2Far.from_surface_monitors(
         sim_data=sim_data, 
-        mons=mons, 
+        monitors=monitors, 
         normal_dirs=['-','+','-','+','-','+'], 
         frequency=f0)
     n2f.radar_cross_section(1, 1)
