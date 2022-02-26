@@ -767,12 +767,10 @@ def test_monitor_surfaces_from_volume():
     # make sure that monitors with zero volume raise an error (adapted from test_monitor_plane())
     for size in ((0, 0, 0), (1, 0, 0), (1, 1, 0)):
         with pytest.raises(SetupError) as e_info:
-            mon = FieldMonitor(
-                size=size, center=center, freqs=[1, 2, 3], name="test_monitor"
-            )
+            mon = FieldMonitor(size=size, center=center, freqs=[1, 2, 3], name="test_monitor")
             mon_surfaces = mon.surfaces()
 
-    # test that the surface monitors can be extracted from a volume monitor 
+    # test that the surface monitors can be extracted from a volume monitor
     size = (1, 2, 3)
     mon = FieldMonitor(size=size, center=center, freqs=[1, 2, 3], name="test_monitor")
 

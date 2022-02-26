@@ -41,10 +41,11 @@ def test_near2far():
     sim_data = td.SimulationData(simulation=sim, monitor_data=data_dict_mon)
 
     n2f = Near2Far.from_surface_monitors(
-        sim_data=sim_data, 
-        monitors=monitors, 
-        normal_dirs=['-','+','-','+','-','+'], 
-        frequency=f0)
+        sim_data=sim_data,
+        monitors=monitors,
+        normal_dirs=["-", "+", "-", "+", "-", "+"],
+        frequency=f0,
+    )
     n2f.radar_cross_section(1, 1)
     n2f.power_spherical(1, 1, 1)
     n2f.power_cartesian(1, 1, 1)

@@ -7,7 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Ability to perform near-to-far transformations from multiple surface monitors oriented along the x, y or z directions.
+- ``Near2Far.from_surface_monitors()`` method to construct a ``Near2Far`` object with a set of surface monitors and associated unit normal vector directions.
+
 ### Changed
+
+- Incorporated ``pydantic`` into ``near2far.py``.
+- Surface current densities in ``Near2Far`` are now represented as ``FieldData`` and eventually as an ``xarray.Dataset`` after colocation.
+- ``Near2Far`` now samples fields at locations precisely on the monitor rather than a nearby Yee center, with the option to sample fields with a given number of points per wavelength.
+- ``Near2Far`` now uses trapezoidal integration instead of Riemann sums.
 
 ## [1.0.2] - 2022-2-24
 
@@ -28,18 +36,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Stable dispersive material fits via webservice.
 - Allow to load dispersive data directly by providing URL to txt or csv file
 - Validates simulation based on discretized size.
-- Ability to perform near-to-far transformations from multiple surface monitors oriented along the x, y or z directions.
-- ``Near2Far.from_surface_monitors()`` method to construct a ``Near2Far`` object with a set of surface monitors and associated unit normal vector directions.
 
 ### Changed
 - `Polyslab.from_gds` returns a list of `PolySlab` objects imported from all polygons in given layer and dtype, can optionally specify single dtype.
 - Warning about structure close to PML disabled if Absorber type.
 - Source dft now ignores insignificant time amplitudes for speed.
 - New color schemes for plots.
-- Incorporated ``pydantic`` into ``near2far.py``.
-- Surface current densities in ``Near2Far`` are now represented as ``FieldData`` and eventually as an ``xarray.Dataset`` after colocation.
-- ``Near2Far`` now samples fields at locations precisely on the monitor rather than a nearby Yee center, with the option to sample fields with a given number of points per wavelength.
-- ``Near2Far`` now uses trapezoidal integration instead of Riemann sums.
 
 ## [1.0.0] - 2022-1-31
 
