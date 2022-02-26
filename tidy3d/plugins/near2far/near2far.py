@@ -5,13 +5,15 @@ import numpy as np
 import xarray as xr
 import pydantic
 
-from ...constants import C_0, ETA_0, MICROMETER
+from ...constants import C_0, ETA_0, HERTZ, MICROMETER
 from ...components.data import SimulationData, FieldData
 from ...components.monitor import FieldMonitor
-from ...components.types import Direction, Axis, Size
+from ...components.types import Direction, Axis, Coordinate
 from ...components.medium import Medium
-from ...components.validators import assert_plane
-from ...log import SetupError
+from ...log import SetupError, ValidationError
+
+# Default number of points per wavelength in the background medium to use for resampling fields.
+PTS_PER_WVL = 10
 
 
 class Near2FarSurface(pydantic.BaseModel):
@@ -20,38 +22,29 @@ class Near2FarSurface(pydantic.BaseModel):
     monitor: FieldMonitor = pydantic.Field(
         ...,
         title="Field monitor",
-        description=
-        "Object of :class:`.FieldMonitor` on which near fields will be sampled and integrated.",
+        description="Object of :class:`.FieldMonitor` on which near fields will be sampled and integrated.",
     )
 
     normal_dir: Direction = pydantic.Field(
-        '+',
+        ...,
         title="Normal vector orientation",
-        description=
-        ":class:`.Direction` of the surface monitor's normal vector w.r.t.\
+        description=":class:`.Direction` of the surface monitor's normal vector w.r.t.\
  the positive x, y or z unit vectors. Must be one of '+' or '-'.",
-    )
-
-    size: Size = pydantic.Field(
-        None,
-        title="Size",
-        description="Size in x, y, and z directions.",
-        units=MICROMETER,
     )
 
     @property
     def axis(self) -> Axis:
         """Returns the :class:`.Axis` normal to this surface."""
         # assume that the monitor's axis is in the direction where the monitor is thinnest
-        return np.argmin(self.monitor.size)
+        return self.monitor.size.index(0.0)
 
-    @pydantic.validator("size", always=True)
-    def set_size(cls, val, values):
-        """Sets the .size field using the size of the :class:`.FieldMonitor`."""
-        val = values.get("monitor").size
+    @pydantic.validator("monitor", always=True)
+    def is_plane(cls, val):
+        """Ensures that the monitor is a plane, i.e., its `size` attribute has exactly 1 zero"""
+        size = val.size
+        if size.count(0.0) != 1:
+            raise ValidationError(f"'{cls.__name__}' object must be planar, given size={val}")
         return val
-
-    _plane_validator = assert_plane()
 
 
 class Near2Far(pydantic.BaseModel):
@@ -65,7 +58,7 @@ class Near2Far(pydantic.BaseModel):
         arbitrary_types_allowed : bool = True
             Allow types like numpy arrays.
         """
-        
+
         arbitrary_types_allowed = True
 
     sim_data: SimulationData = pydantic.Field(
@@ -84,39 +77,53 @@ class Near2Far(pydantic.BaseModel):
         ...,
         title="Frequency",
         description="Frequency to select from each :class:`.Near2FarSurface` for projection.",
+        units=HERTZ,
     )
 
     pts_per_wavelength: int = pydantic.Field(
-        10,
+        PTS_PER_WVL,
         title="Points per wavelength",
         description="Number of points per wavelength in the background medium with which \
-to discretize the surface monitors for the projection. Default: 10.",
+to discretize the surface monitors for the projection.",
     )
 
     medium: Medium = pydantic.Field(
         None,
         title="Background medium",
         description="Background medium in which to radiate near fields to far fields. \
-Default: same as the :class:`.Simulation` background medium.",
+If None, uses the :class:.Simulation background medium.",
     )
 
-    phasor_sign: float = pydantic.Field(
-        1,
-        title="Phasor convention",
-        description="1 => exp(jkr), -1 => exp(-jkr).",
+    origin: Coordinate = pydantic.Field(
+        None,
+        title="Local origin",
+        description="Local origin used for defining observation points. If None, uses the \
+average of the centers of all surface monitors.",
+        units=MICROMETER,
     )
 
     currents: Dict[str, xr.Dataset] = pydantic.Field(
         None,
         title="Surface current densities",
-        description="Dictionary of colocated surface current densities for each monitor.",
+        description="Dictionary mapping monitor name to a dataset storing \
+the surface current densities.",
     )
 
-    @property
-    def origin(self):
-        """Average of centers of all surface monitors to use as a local origin."""
-        centers = np.array([surface.monitor.center for surface in self.surfaces])
-        return tuple(np.mean(centers, axis=0))
+    phasor_sign: float = pydantic.Field(
+        1,
+        title="Phasor convention",
+        description="Fields evolve as exp(jkr) if set to 1, and exp(-jkr) if set to -1. \
+Should not be changed except in special circumstatnces where the exp(-jkr) convention is used.",
+    )
+
+    @pydantic.validator("origin", always=True)
+    def set_origin(cls, val, values):
+        """Sets .origin as the average of centers of all surface monitors if not provided."""
+        if val is None:
+            surfaces = values.get("surfaces")
+            val = np.array([surface.monitor.center for surface in surfaces])
+            return tuple(np.mean(val, axis=0))
+        return val
 
     @pydantic.validator("medium", always=True)
     def set_medium(cls, val, values):
@@ -145,13 +152,16 @@ Default: same as the :class:`.Simulation` background medium.",
 
     @classmethod
     # pylint:disable=too-many-arguments
-    def from_surface_monitors(cls,
+    def from_surface_monitors(
+        cls,
         sim_data: SimulationData,
         monitors: List[FieldMonitor],
         normal_dirs: List[Direction],
         frequency: float,
-        pts_per_wavelength: int = 10,
-        medium: Medium = None):
+        pts_per_wavelength: int = PTS_PER_WVL,
+        medium: Medium = None,
+        origin: Coordinate = None,
+    ):
         """Constructs :class:`Near2Far` from a list of surface monitors and their directions.
 
         Parameters
@@ -161,35 +171,40 @@ Default: same as the :class:`.Simulation` background medium.",
         monitors : List[:class:`.FieldMonitor`]
             List of :class:`.FieldMonitor` objects on which near fields will be sampled.
         normal_dirs : List[:class:`.Direction`]
-            List containing the :class:`.Direction` of the normal to each surface monitor 
+            List containing the :class:`.Direction` of the normal to each surface monitor
             w.r.t. to the positive x, y or z unit vectors. Must have the same length as monitors.
         frequency : float
             Frequency to select from each :class:`.FieldMonitor` to use for projection.
             Must be a frequency stored in each :class:`FieldMonitor`.
-        pts_per_wavelength : int
+        pts_per_wavelength : int = 10
             Number of points per wavelength with which to discretize the
-            surface monitors for the projection. Default: 10.
+            surface monitors for the projection.
         medium : :class:`.Medium`
             Background medium in which to radiate near fields to far fields.
             Default: same as the :class:`.Simulation` background medium.
+        origin : :class:`.Coordinate`
+            Local origin used for defining observation points. If None, uses the
+            average of the centers of all surface monitors.
         """
 
         if len(monitors) != len(normal_dirs):
-            raise SetupError("Number of monitors does not equal the number of directions.")
+            raise SetupError(
+                f"Number of monitors ({len(monitors)}) does not equal \
+the number of directions ({len(normal_dirs)})."
+            )
 
         surfaces = []
         for monitor, normal_dir in zip(monitors, normal_dirs):
-            surfaces.append(
-                Near2FarSurface(monitor=monitor, normal_dir=normal_dir)
-                )
+            surfaces.append(Near2FarSurface(monitor=monitor, normal_dir=normal_dir))
 
         return cls(
             sim_data=sim_data,
             surfaces=surfaces,
             frequency=frequency,
             pts_per_wavelength=pts_per_wavelength,
-            medium=medium
-            )
+            medium=medium,
+            origin=origin,
+        )
 
     @pydantic.validator("currents", always=True)
     def set_currents(cls, val, values):
@@ -200,9 +215,15 @@ Default: same as the :class:`.Simulation` background medium.",
         frequency = values.get("frequency")
         medium = values.get("medium")
         eps_complex = medium.eps_model(frequency)
-        n, _= medium.eps_complex_to_nk(eps_complex)
-        val = {surface.monitor.name: cls.compute_surface_currents(
-            sim_data, surface, frequency, n, pts_per_wavelength) for surface in surfaces}
+        n, _ = medium.eps_complex_to_nk(eps_complex)
+
+        val = {}
+        for surface in surfaces:
+            current_data = cls.compute_surface_currents(
+                sim_data, surface, frequency, n, pts_per_wavelength
+            )
+            val[surface.monitor.name] = current_data
+
         return val
 
     @staticmethod
@@ -211,7 +232,8 @@ Default: same as the :class:`.Simulation` background medium.",
         surface: Near2FarSurface,
         frequency: float,
         n: float,
-        pts_per_wavelength: int = 10) -> xr.Dataset:
+        pts_per_wavelength: int = PTS_PER_WVL,
+    ) -> xr.Dataset:
         """Returns resampled surface current densities associated with the surface monitor.
 
         Parameters
@@ -225,9 +247,9 @@ Default: same as the :class:`.Simulation` background medium.",
             Must be a frequency stored in each :class:`FieldMonitor`.
         n : float
             Real part of the refractive index associated with the background medium.
-        pts_per_wavelength : int
+        pts_per_wavelength : int = 10
             Number of points per wavelength with which to discretize the
-            surface monitors for the projection. Default: 10.
+            surface monitors for the projection.
 
         Returns
         -------
@@ -239,20 +261,18 @@ Default: same as the :class:`.Simulation` background medium.",
             field_data = sim_data[surface.monitor.name]
         except Exception as e:
             raise SetupError(
-                f"No data for monitor named '{surface.monitor.name}' " "found in sim_data."
+                f"No data for monitor named '{surface.monitor.name}' found in sim_data."
             ) from e
 
         currents = Near2Far._fields_to_currents(field_data, surface)
         currents = Near2Far._resample_surface_currents(
             currents, sim_data, surface, frequency, n, pts_per_wavelength
-            )
+        )
 
         return currents
 
     @staticmethod
-    def _fields_to_currents(
-        field_data: FieldData,
-        surface: Near2FarSurface) -> FieldData:
+    def _fields_to_currents(field_data: FieldData, surface: Near2FarSurface) -> FieldData:
         """Returns surface current densities associated with a given :class:`.FieldData` object.
 
         Parameters
@@ -269,31 +289,31 @@ Default: same as the :class:`.Simulation` background medium.",
         """
 
         # figure out which field components are tangential or normal to the monitor
-        normal_field, tangent_fields = surface.monitor.pop_axis(('x', 'y', 'z'), axis=surface.axis)
+        normal_field, tangent_fields = surface.monitor.pop_axis(("x", "y", "z"), axis=surface.axis)
 
-        signs = np.array([-1, 1]) 
+        signs = np.array([-1, 1])
         if surface.axis % 2 != 0:
             signs *= -1
-        if surface.normal_dir == '-':
+        if surface.normal_dir == "-":
             signs *= -1
 
         # compute surface current densities and delete unneeded field components
         currents = field_data.copy(deep=True)
         cmp_1, cmp_2 = tangent_fields
 
-        currents.data_dict['J'+cmp_2] = currents.data_dict.pop('H'+cmp_1)
-        currents.data_dict['J'+cmp_1] = currents.data_dict.pop('H'+cmp_2)
-        del currents.data_dict['H'+normal_field]
+        currents.data_dict["J" + cmp_2] = currents.data_dict.pop("H" + cmp_1)
+        currents.data_dict["J" + cmp_1] = currents.data_dict.pop("H" + cmp_2)
+        del currents.data_dict["H" + normal_field]
 
-        currents.data_dict['M'+cmp_2] = currents.data_dict.pop('E'+cmp_1)
-        currents.data_dict['M'+cmp_1] = currents.data_dict.pop('E'+cmp_2)
-        del currents.data_dict['E'+normal_field]
+        currents.data_dict["M" + cmp_2] = currents.data_dict.pop("E" + cmp_1)
+        currents.data_dict["M" + cmp_1] = currents.data_dict.pop("E" + cmp_2)
+        del currents.data_dict["E" + normal_field]
 
-        currents.data_dict['J'+cmp_1].values *= signs[0]
-        currents.data_dict['J'+cmp_2].values *= signs[1]
+        currents.data_dict["J" + cmp_1].values *= signs[0]
+        currents.data_dict["J" + cmp_2].values *= signs[1]
 
-        currents.data_dict['M'+cmp_1].values *= signs[1]
-        currents.data_dict['M'+cmp_2].values *= signs[0]
+        currents.data_dict["M" + cmp_1].values *= signs[1]
+        currents.data_dict["M" + cmp_2].values *= signs[0]
 
         return currents
 
@@ -305,7 +325,8 @@ Default: same as the :class:`.Simulation` background medium.",
         surface: Near2FarSurface,
         frequency: float,
         n: float,
-        pts_per_wavelength: int = 10) -> xr.Dataset:
+        pts_per_wavelength: int = PTS_PER_WVL,
+    ) -> xr.Dataset:
         """Returns the surface current densities associated with the surface monitor.
 
         Parameters
@@ -321,9 +342,9 @@ Default: same as the :class:`.Simulation` background medium.",
             Must be a frequency stored in each :class:`FieldMonitor`.
         n : float
             Real part of the refractive index associated with the background medium.
-        pts_per_wavelength : int
+        pts_per_wavelength : int = 10
             Number of points per wavelength with which to discretize the
-            surface monitors for the projection. Default: 10.
+            surface monitors for the projection.
 
         Returns
         -------
@@ -344,12 +365,12 @@ Default: same as the :class:`.Simulation` background medium.",
             # pick sample points on the monitor and handle the possibility of an "infinite" monitor
             start = np.maximum(
                 surface.monitor.center[idx] - surface.monitor.size[idx] / 2.0,
-                surface.monitor.center[idx] - sim_data.simulation.size[idx] / 2.0
-                )
+                surface.monitor.center[idx] - sim_data.simulation.size[idx] / 2.0,
+            )
             stop = np.minimum(
                 surface.monitor.center[idx] + surface.monitor.size[idx] / 2.0,
-                surface.monitor.center[idx] + sim_data.simulation.size[idx] / 2.0
-                )
+                surface.monitor.center[idx] + sim_data.simulation.size[idx] / 2.0,
+            )
             size = stop - start
 
             num_pts = int(np.ceil(pts_per_wavelength * size / wavelength))
@@ -367,17 +388,18 @@ Default: same as the :class:`.Simulation` background medium.",
         return currents
 
     # pylint:disable=too-many-locals
-    def _radiation_vectors_for_surface(self,
-        theta: float, phi: float, surface: Near2FarSurface, currents: xr.Dataset):
-        """Compute radiation vectors at an angle in spherical coordinates 
+    def _radiation_vectors_for_surface(
+        self, theta: float, phi: float, surface: Near2FarSurface, currents: xr.Dataset
+    ):
+        """Compute radiation vectors at an angle in spherical coordinates
         for a given set of surface currents and observation angles.
 
         Parameters
         ----------
         theta : float
-            Polar angle (rad) downward from x=y=0 line relative to the average of monitor centers.
+            Polar angle (rad) downward from x=y=0 line relative to the local origin.
         phi : float
-            Azimuthal (rad) angle from y=z=0 line relative to the average of monitor centers.
+            Azimuthal (rad) angle from y=z=0 line relative to the local origin.
         surface: :class:`Near2FarSurface`
             :class:`Near2FarSurface` object to use as source of near field.
         currents : xarray.Dataset
@@ -395,9 +417,8 @@ Default: same as the :class:`.Simulation` background medium.",
         sin_phi = np.sin(phi)
         cos_phi = np.cos(phi)
 
-
         # make sure that observation points are interpreted w.r.t. the local origin
-        pts = [currents[name] - origin for name, origin in zip(['x', 'y', 'z'], self.origin)]
+        pts = [currents[name] - origin for name, origin in zip(["x", "y", "z"], self.origin)]
 
         k = self.k
 
@@ -407,7 +428,7 @@ Default: same as the :class:`.Simulation` background medium.",
         phase = phase_x * phase_y * phase_z
 
         _, idx_uv = surface.monitor.pop_axis((0, 1, 2), axis=surface.axis)
-        _, source_names = surface.monitor.pop_axis(('x', 'y', 'z'), axis=surface.axis)
+        _, source_names = surface.monitor.pop_axis(("x", "y", "z"), axis=surface.axis)
 
         idx_u, idx_v = idx_uv
         cmp_1, cmp_2 = source_names
@@ -419,11 +440,11 @@ Default: same as the :class:`.Simulation` background medium.",
             """Trapezoidal integration in two dimensions."""
             return np.trapz(np.trapz(function, pts_u, axis=0), pts_v, axis=0)
 
-        J[idx_u] = integrate_2D(currents['J'+cmp_1] * phase, pts[idx_u], pts[idx_v])
-        J[idx_v] = integrate_2D(currents['J'+cmp_2] * phase, pts[idx_u], pts[idx_v])
+        J[idx_u] = integrate_2D(currents["J" + cmp_1] * phase, pts[idx_u], pts[idx_v])
+        J[idx_v] = integrate_2D(currents["J" + cmp_2] * phase, pts[idx_u], pts[idx_v])
 
-        M[idx_u] = integrate_2D(currents['M'+cmp_1] * phase, pts[idx_u], pts[idx_v])
-        M[idx_v] = integrate_2D(currents['M'+cmp_2] * phase, pts[idx_u], pts[idx_v])
+        M[idx_u] = integrate_2D(currents["M" + cmp_1] * phase, pts[idx_u], pts[idx_v])
+        M[idx_v] = integrate_2D(currents["M" + cmp_2] * phase, pts[idx_u], pts[idx_v])
 
         # N_theta (8.33a)
         N_theta = J[0] * cos_theta * cos_phi + J[1] * cos_theta * sin_phi - J[2] * sin_theta
@@ -445,9 +466,9 @@ Default: same as the :class:`.Simulation` background medium.",
         Parameters
         ----------
         theta : float
-            Polar angle (rad) downward from x=y=0 line relative to the average of monitor centers.
+            Polar angle (rad) downward from x=y=0 line relative to the local origin.
         phi : float
-            Azimuthal (rad) angle from y=z=0 line relative to the average of monitor centers.
+            Azimuthal (rad) angle from y=z=0 line relative to the local origin.
 
         Returns
         -------
@@ -459,7 +480,8 @@ Default: same as the :class:`.Simulation` background medium.",
         N_theta, N_phi, L_theta, L_phi = 0.0, 0.0, 0.0, 0.0
         for surface in self.surfaces:
             _N_th, _N_ph, _L_th, _L_ph = self._radiation_vectors_for_surface(
-                theta, phi, surface, self.currents[surface.monitor.name])
+                theta, phi, surface, self.currents[surface.monitor.name]
+            )
             N_theta += _N_th
             N_phi += _N_ph
             L_theta += _L_th
@@ -475,15 +497,14 @@ Default: same as the :class:`.Simulation` background medium.",
         r : float
             (micron) radial distance relative to monitor center.
         theta : float
-            (radian) polar angle downward from x=y=0 relative to the average of monitor centers.
+            (radian) polar angle downward from x=y=0 relative to the local origin.
         phi : float
-            (radian) azimuthal angle from y=z=0 line relative to the average of monitor centers.
+            (radian) azimuthal angle from y=z=0 line relative to the local origin.
 
         Returns
         -------
         tuple
-            (Er, Etheta, Ephi), (Hr, Htheta, Hphi), fields in polar
-            coordinates.
+            (Er, Etheta, Ephi), (Hr, Htheta, Hphi), fields in polar coordinates.
         """
 
         # project radiation vectors to distance r away for given angles
@@ -492,8 +513,9 @@ Default: same as the :class:`.Simulation` background medium.",
         k = self.k
         eta = self.eta
 
-        scalar_proj_r = -self.phasor_sign * 1j * k * \
-            np.exp(self.phasor_sign * 1j * k * r) / (4 * np.pi * r)
+        scalar_proj_r = (
+            -self.phasor_sign * 1j * k * np.exp(self.phasor_sign * 1j * k * r) / (4 * np.pi * r)
+        )
 
         # assemble E felds
         E_theta = -scalar_proj_r * (L_phi + eta * N_theta)
@@ -515,11 +537,11 @@ Default: same as the :class:`.Simulation` background medium.",
         Parameters
         ----------
         x : float
-            (micron) x position relative to the average of monitor centers.
+            (micron) x position relative to the local origin.
         y : float
-            (micron) y position relative to the average of monitor centers.
+            (micron) y position relative to the local origin.
         z : float
-            (micron) z position relative to the average of monitor centers.
+            (micron) z position relative to the local origin.
 
         Returns
         -------
@@ -535,21 +557,21 @@ Default: same as the :class:`.Simulation` background medium.",
         return E, H
 
     def power_spherical(self, r, theta, phi):
-        """Get power scattered to a point relative to monitor center in spherical coordinates.
+        """Get power scattered to a point relative to the local origin in spherical coordinates.
 
         Parameters
         ----------
         r : float
-            (micron) radial distance relative to the average of monitor centers.
+            (micron) radial distance relative to the local origin.
         theta : float
-            (radian) polar angle downward from x=y=0 relative to the average of monitor centers.
+            (radian) polar angle downward from x=y=0 relative to the local origin.
         phi : float
-            (radian) azimuthal angle from y=z=0 line relative to the average of monitor centers.
+            (radian) azimuthal angle from y=z=0 line relative to the local origin.
 
         Returns
         -------
         float
-            Power at point relative to the average of monitor centers.
+            Power at point relative to the local origin.
         """
         E, H = self.fields_spherical(r, theta, phi)
         _, E_theta, E_phi = E
@@ -559,47 +581,47 @@ Default: same as the :class:`.Simulation` background medium.",
         return power_theta + power_phi
 
     def power_cartesian(self, x, y, z):
-        """Get power scattered to a point relative to monitor center in cartesian coordinates.
+        """Get power scattered to a point relative to the local origin in cartesian coordinates.
 
         Parameters
         ----------
         x : float
-            (micron) x distance relative to the average of monitor centers.
+            (micron) x distance relative to the local origin.
         y : float
-            (micron) y distance relative to the average of monitor centers.
+            (micron) y distance relative to the local origin.
         z : float
-            (micron) z distance relative to the average of monitor centers.
+            (micron) z distance relative to the local origin.
 
         Returns
         -------
         float
-            Power at point relative to the average of monitor centers.
+            Power at point relative to the local origin.
         """
         r, theta, phi = self._car_2_sph(x, y, z)
         return self.power_spherical(r, theta, phi)
 
     def radar_cross_section(self, theta, phi):
-        """Get radar cross section at a point relative to the average of monitor centers in
+        """Get radar cross section at a point relative to the local origin in
         units of incident power.
 
         Parameters
         ----------
         theta : float
-            (radian) polar angle downward from x=y=0 relative to the average of monitor centers.
+            (radian) polar angle downward from x=y=0 relative to the local origin.
         phi : float
-            (radian) azimuthal angle from y=z=0 line relative to the average of monitor centers.
+            (radian) azimuthal angle from y=z=0 line relative to the local origin.
 
         Returns
         -------
         RCS : float
-            Radar cross section at angles relative to the average of monitor centers.
+            Radar cross section at angles relative to the local origin.
         """
-        # set observation angles relative to the average of monitor centers
+        # set observation angles relative to the local origin
         N_theta, N_phi, L_theta, L_phi = self._radiation_vectors(theta, phi)
 
         eta = self.eta
 
-        constant = self.k ** 2 / (8 * np.pi * eta)
+        constant = self.k**2 / (8 * np.pi * eta)
         term1 = np.abs(L_phi + eta * N_theta) ** 2
         term2 = np.abs(L_theta - eta * N_phi) ** 2
         return constant * (term1 + term2)
@@ -621,7 +643,7 @@ Default: same as the :class:`.Simulation` background medium.",
         tuple
             r, theta, and phi in spherical coordinates.
         """
-        r = np.sqrt(x ** 2 + y ** 2 + z ** 2)
+        r = np.sqrt(x**2 + y**2 + z**2)
         theta = np.arccos(z / r)
         phi = np.arctan2(y, x)
         return r, theta, phi
