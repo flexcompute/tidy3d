@@ -19,12 +19,13 @@ Tutorials
     notebooks/ModeSolver
     notebooks/Modal_sources_monitors
     notebooks/Modes_bent_angled
+    notebooks/WebAPI
     notebooks/GDS_import
     notebooks/ParameterScan
     notebooks/Dispersion
     notebooks/Fitting
     notebooks/Near2Far
-    notebooks/WebAPI
+    notebooks/SMatrix
 
 Case studies
 ------------
