@@ -25,6 +25,11 @@
             "conductivity": 0.0
         },
         "run_time": 1e-13,
+        "symmetry": [
+            0,
+            0,
+            0
+        ],
         "structures": [
             {
                 "geometry": {
@@ -150,18 +155,13 @@
                 "type": "PML"
             }
         ],
-        "symmetry": [
-            0,
-            0,
-            0
-        ],
         "shutoff": 1e-05,
         "subpixel": true,
         "courant": 0.9,
-        "version": "1.0.0"
+        "version": "1.0.2"
     },
     "task_name": "job",
     "folder_name": "default",
-    "task_id": "07c1d142-8f4b-4f7c-ae8e-cf4aa9d3799e",
+    "task_id": "7460aae4-256d-4c1d-a74f-3c0ed2e8c23f",
     "callback_url": null
 }

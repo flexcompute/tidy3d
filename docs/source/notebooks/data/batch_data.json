@@ -26,6 +26,11 @@
                 "conductivity": 0.0
             },
             "run_time": 1.0340486931104608e-12,
+            "symmetry": [
+                0,
+                0,
+                0
+            ],
             "structures": [
                 {
                     "geometry": {
@@ -1191,10 +1196,6 @@
                     "mode_spec": {
                         "num_modes": 1,
                         "target_neff": null,
-                        "symmetries": [
-                            0,
-                            0
-                        ],
                         "num_pml": [
                             0,
                             0
@@ -1251,10 +1252,6 @@
                     "mode_spec": {
                         "num_modes": 1,
                         "target_neff": null,
-                        "symmetries": [
-                            0,
-                            0
-                        ],
                         "num_pml": [
                             0,
                             0
@@ -1283,10 +1280,6 @@
                     "mode_spec": {
                         "num_modes": 1,
                         "target_neff": null,
-                        "symmetries": [
-                            0,
-                            0
-                        ],
                         "num_pml": [
                             0,
                             0
@@ -1315,10 +1308,6 @@
                     "mode_spec": {
                         "num_modes": 1,
                         "target_neff": null,
-                        "symmetries": [
-                            0,
-                            0
-                        ],
                         "num_pml": [
                             0,
                             0
@@ -1347,10 +1336,6 @@
                     "mode_spec": {
                         "num_modes": 1,
                         "target_neff": null,
-                        "symmetries": [
-                            0,
-                            0
-                        ],
                         "num_pml": [
                             0,
                             0
@@ -1379,10 +1364,6 @@
                     "mode_spec": {
                         "num_modes": 1,
                         "target_neff": null,
-                        "symmetries": [
-                            0,
-                            0
-                        ],
                         "num_pml": [
                             0,
                             0
@@ -1443,15 +1424,10 @@
                     "type": "PML"
                 }
             ],
-            "symmetry": [
-                0,
-                0,
-                0
-            ],
             "shutoff": 1e-05,
             "subpixel": true,
             "courant": 0.9,
-            "version": "1.0.0"
+            "version": "1.0.2"
         },
         "l=5.70": {
             "center": [
@@ -1478,6 +1454,11 @@
                 "conductivity": 0.0
             },
             "run_time": 1.0340486931104608e-12,
+            "symmetry": [
+                0,
+                0,
+                0
+            ],
             "structures": [
                 {
                     "geometry": {
@@ -2643,10 +2624,6 @@
                     "mode_spec": {
                         "num_modes": 1,
                         "target_neff": null,
-                        "symmetries": [
-                            0,
-                            0
-                        ],
                         "num_pml": [
                             0,
                             0
@@ -2703,10 +2680,6 @@
                     "mode_spec": {
                         "num_modes": 1,
                         "target_neff": null,
-                        "symmetries": [
-                            0,
-                            0
-                        ],
                         "num_pml": [
                             0,
                             0
@@ -2735,10 +2708,6 @@
                     "mode_spec": {
                         "num_modes": 1,
                         "target_neff": null,
-                        "symmetries": [
-                            0,
-                            0
-                        ],
                         "num_pml": [
                             0,
                             0
@@ -2767,10 +2736,6 @@
                     "mode_spec": {
                         "num_modes": 1,
                         "target_neff": null,
-                        "symmetries": [
-                            0,
-                            0
-                        ],
                         "num_pml": [
                             0,
                             0
@@ -2799,10 +2764,6 @@
                     "mode_spec": {
                         "num_modes": 1,
                         "target_neff": null,
-                        "symmetries": [
-                            0,
-                            0
-                        ],
                         "num_pml": [
                             0,
                             0
@@ -2831,10 +2792,6 @@
                     "mode_spec": {
                         "num_modes": 1,
                         "target_neff": null,
-                        "symmetries": [
-                            0,
-                            0
-                        ],
                         "num_pml": [
                             0,
                             0
@@ -2895,15 +2852,10 @@
                     "type": "PML"
                 }
             ],
-            "symmetry": [
-                0,
-                0,
-                0
-            ],
             "shutoff": 1e-05,
             "subpixel": true,
             "courant": 0.9,
-            "version": "1.0.0"
+            "version": "1.0.2"
         },
         "l=6.40": {
             "center": [
@@ -2930,6 +2882,11 @@
                 "conductivity": 0.0
             },
             "run_time": 1.0340486931104608e-12,
+            "symmetry": [
+                0,
+                0,
+                0
+            ],
             "structures": [
                 {
                     "geometry": {
@@ -4095,10 +4052,6 @@
                     "mode_spec": {
                         "num_modes": 1,
                         "target_neff": null,
-                        "symmetries": [
-                            0,
-                            0
-                        ],
                         "num_pml": [
                             0,
                             0
@@ -4155,10 +4108,6 @@
                     "mode_spec": {
                         "num_modes": 1,
                         "target_neff": null,
-                        "symmetries": [
-                            0,
-                            0
-                        ],
                         "num_pml": [
                             0,
                             0
@@ -4187,10 +4136,6 @@
                     "mode_spec": {
                         "num_modes": 1,
                         "target_neff": null,
-                        "symmetries": [
-                            0,
-                            0
-                        ],
                         "num_pml": [
                             0,
                             0
@@ -4219,10 +4164,6 @@
                     "mode_spec": {
                         "num_modes": 1,
                         "target_neff": null,
-                        "symmetries": [
-                            0,
-                            0
-                        ],
                         "num_pml": [
                             0,
                             0
@@ -4251,10 +4192,6 @@
                     "mode_spec": {
                         "num_modes": 1,
                         "target_neff": null,
-                        "symmetries": [
-                            0,
-                            0
-                        ],
                         "num_pml": [
                             0,
                             0
@@ -4283,10 +4220,6 @@
                     "mode_spec": {
                         "num_modes": 1,
                         "target_neff": null,
-                        "symmetries": [
-                            0,
-                            0
-                        ],
                         "num_pml": [
                             0,
                             0
@@ -4347,15 +4280,10 @@
                     "type": "PML"
                 }
             ],
-            "symmetry": [
-                0,
-                0,
-                0
-            ],
             "shutoff": 1e-05,
             "subpixel": true,
             "courant": 0.9,
-            "version": "1.0.0"
+            "version": "1.0.2"
         },
         "l=7.10": {
             "center": [
@@ -4382,6 +4310,11 @@
                 "conductivity": 0.0
             },
             "run_time": 1.0340486931104608e-12,
+            "symmetry": [
+                0,
+                0,
+                0
+            ],
             "structures": [
                 {
                     "geometry": {
@@ -5547,10 +5480,6 @@
                     "mode_spec": {
                         "num_modes": 1,
                         "target_neff": null,
-                        "symmetries": [
-                            0,
-                            0
-                        ],
                         "num_pml": [
                             0,
                             0
@@ -5607,10 +5536,6 @@
                     "mode_spec": {
                         "num_modes": 1,
                         "target_neff": null,
-                        "symmetries": [
-                            0,
-                            0
-                        ],
                         "num_pml": [
                             0,
                             0
@@ -5639,10 +5564,6 @@
                     "mode_spec": {
                         "num_modes": 1,
                         "target_neff": null,
-                        "symmetries": [
-                            0,
-                            0
-                        ],
                         "num_pml": [
                             0,
                             0
@@ -5671,10 +5592,6 @@
                     "mode_spec": {
                         "num_modes": 1,
                         "target_neff": null,
-                        "symmetries": [
-                            0,
-                            0
-                        ],
                         "num_pml": [
                             0,
                             0
@@ -5703,10 +5620,6 @@
                     "mode_spec": {
                         "num_modes": 1,
                         "target_neff": null,
-                        "symmetries": [
-                            0,
-                            0
-                        ],
                         "num_pml": [
                             0,
                             0
@@ -5735,10 +5648,6 @@
                     "mode_spec": {
                         "num_modes": 1,
                         "target_neff": null,
-                        "symmetries": [
-                            0,
-                            0
-                        ],
                         "num_pml": [
                             0,
                             0
@@ -5799,15 +5708,10 @@
                     "type": "PML"
                 }
             ],
-            "symmetry": [
-                0,
-                0,
-                0
-            ],
             "shutoff": 1e-05,
             "subpixel": true,
             "courant": 0.9,
-            "version": "1.0.0"
+            "version": "1.0.2"
         },
         "l=7.80": {
             "center": [
@@ -5834,6 +5738,11 @@
                 "conductivity": 0.0
             },
             "run_time": 1.0340486931104608e-12,
+            "symmetry": [
+                0,
+                0,
+                0
+            ],
             "structures": [
                 {
                     "geometry": {
@@ -6999,10 +6908,6 @@
                     "mode_spec": {
                         "num_modes": 1,
                         "target_neff": null,
-                        "symmetries": [
-                            0,
-                            0
-                        ],
                         "num_pml": [
                             0,
                             0
@@ -7059,10 +6964,6 @@
                     "mode_spec": {
                         "num_modes": 1,
                         "target_neff": null,
-                        "symmetries": [
-                            0,
-                            0
-                        ],
                         "num_pml": [
                             0,
                             0
@@ -7091,10 +6992,6 @@
                     "mode_spec": {
                         "num_modes": 1,
                         "target_neff": null,
-                        "symmetries": [
-                            0,
-                            0
-                        ],
                         "num_pml": [
                             0,
                             0
@@ -7123,10 +7020,6 @@
                     "mode_spec": {
                         "num_modes": 1,
                         "target_neff": null,
-                        "symmetries": [
-                            0,
-                            0
-                        ],
                         "num_pml": [
                             0,
                             0
@@ -7155,10 +7048,6 @@
                     "mode_spec": {
                         "num_modes": 1,
                         "target_neff": null,
-                        "symmetries": [
-                            0,
-                            0
-                        ],
                         "num_pml": [
                             0,
                             0
@@ -7187,10 +7076,6 @@
                     "mode_spec": {
                         "num_modes": 1,
                         "target_neff": null,
-                        "symmetries": [
-                            0,
-                            0
-                        ],
                         "num_pml": [
                             0,
                             0
@@ -7251,15 +7136,10 @@
                     "type": "PML"
                 }
             ],
-            "symmetry": [
-                0,
-                0,
-                0
-            ],
             "shutoff": 1e-05,
             "subpixel": true,
             "courant": 0.9,
-            "version": "1.0.0"
+            "version": "1.0.2"
         },
         "l=8.50": {
             "center": [
@@ -7286,6 +7166,11 @@
                 "conductivity": 0.0
             },
             "run_time": 1.0340486931104608e-12,
+            "symmetry": [
+                0,
+                0,
+                0
+            ],
             "structures": [
                 {
                     "geometry": {
@@ -8451,10 +8336,6 @@
                     "mode_spec": {
                         "num_modes": 1,
                         "target_neff": null,
-                        "symmetries": [
-                            0,
-                            0
-                        ],
                         "num_pml": [
                             0,
                             0
@@ -8511,10 +8392,6 @@
                     "mode_spec": {
                         "num_modes": 1,
                         "target_neff": null,
-                        "symmetries": [
-                            0,
-                            0
-                        ],
                         "num_pml": [
                             0,
                             0
@@ -8543,10 +8420,6 @@
                     "mode_spec": {
                         "num_modes": 1,
                         "target_neff": null,
-                        "symmetries": [
-                            0,
-                            0
-                        ],
                         "num_pml": [
                             0,
                             0
@@ -8575,10 +8448,6 @@
                     "mode_spec": {
                         "num_modes": 1,
                         "target_neff": null,
-                        "symmetries": [
-                            0,
-                            0
-                        ],
                         "num_pml": [
                             0,
                             0
@@ -8607,10 +8476,6 @@
                     "mode_spec": {
                         "num_modes": 1,
                         "target_neff": null,
-                        "symmetries": [
-                            0,
-                            0
-                        ],
                         "num_pml": [
                             0,
                             0
@@ -8639,10 +8504,6 @@
                     "mode_spec": {
                         "num_modes": 1,
                         "target_neff": null,
-                        "symmetries": [
-                            0,
-                            0
-                        ],
                         "num_pml": [
                             0,
                             0
@@ -8703,15 +8564,10 @@
                     "type": "PML"
                 }
             ],
-            "symmetry": [
-                0,
-                0,
-                0
-            ],
             "shutoff": 1e-05,
             "subpixel": true,
             "courant": 0.9,
-            "version": "1.0.0"
+            "version": "1.0.2"
         },
         "l=9.20": {
             "center": [
@@ -8738,6 +8594,11 @@
                 "conductivity": 0.0
             },
             "run_time": 1.0340486931104608e-12,
+            "symmetry": [
+                0,
+                0,
+                0
+            ],
             "structures": [
                 {
                     "geometry": {
@@ -9903,10 +9764,6 @@
                     "mode_spec": {
                         "num_modes": 1,
                         "target_neff": null,
-                        "symmetries": [
-                            0,
-                            0
-                        ],
                         "num_pml": [
                             0,
                             0
@@ -9963,10 +9820,6 @@
                     "mode_spec": {
                         "num_modes": 1,
                         "target_neff": null,
-                        "symmetries": [
-                            0,
-                            0
-                        ],
                         "num_pml": [
                             0,
                             0
@@ -9995,10 +9848,6 @@
                     "mode_spec": {
                         "num_modes": 1,
                         "target_neff": null,
-                        "symmetries": [
-                            0,
-                            0
-                        ],
                         "num_pml": [
                             0,
                             0
@@ -10027,10 +9876,6 @@
                     "mode_spec": {
                         "num_modes": 1,
                         "target_neff": null,
-                        "symmetries": [
-                            0,
-                            0
-                        ],
                         "num_pml": [
                             0,
                             0
@@ -10059,10 +9904,6 @@
                     "mode_spec": {
                         "num_modes": 1,
                         "target_neff": null,
-                        "symmetries": [
-                            0,
-                            0
-                        ],
                         "num_pml": [
                             0,
                             0
@@ -10091,10 +9932,6 @@
                     "mode_spec": {
                         "num_modes": 1,
                         "target_neff": null,
-                        "symmetries": [
-                            0,
-                            0
-                        ],
                         "num_pml": [
                             0,
                             0
@@ -10155,15 +9992,10 @@
                     "type": "PML"
                 }
             ],
-            "symmetry": [
-                0,
-                0,
-                0
-            ],
             "shutoff": 1e-05,
             "subpixel": true,
             "courant": 0.9,
-            "version": "1.0.0"
+            "version": "1.0.2"
         },
         "l=9.90": {
             "center": [
@@ -10190,6 +10022,11 @@
                 "conductivity": 0.0
             },
             "run_time": 1.0340486931104608e-12,
+            "symmetry": [
+                0,
+                0,
+                0
+            ],
             "structures": [
                 {
                     "geometry": {
@@ -11355,10 +11192,6 @@
                     "mode_spec": {
                         "num_modes": 1,
                         "target_neff": null,
-                        "symmetries": [
-                            0,
-                            0
-                        ],
                         "num_pml": [
                             0,
                             0
@@ -11415,10 +11248,6 @@
                     "mode_spec": {
                         "num_modes": 1,
                         "target_neff": null,
-                        "symmetries": [
-                            0,
-                            0
-                        ],
                         "num_pml": [
                             0,
                             0
@@ -11447,10 +11276,6 @@
                     "mode_spec": {
                         "num_modes": 1,
                         "target_neff": null,
-                        "symmetries": [
-                            0,
-                            0
-                        ],
                         "num_pml": [
                             0,
                             0
@@ -11479,10 +11304,6 @@
                     "mode_spec": {
                         "num_modes": 1,
                         "target_neff": null,
-                        "symmetries": [
-                            0,
-                            0
-                        ],
                         "num_pml": [
                             0,
                             0
@@ -11511,10 +11332,6 @@
                     "mode_spec": {
                         "num_modes": 1,
                         "target_neff": null,
-                        "symmetries": [
-                            0,
-                            0
-                        ],
                         "num_pml": [
                             0,
                             0
@@ -11543,10 +11360,6 @@
                     "mode_spec": {
                         "num_modes": 1,
                         "target_neff": null,
-                        "symmetries": [
-                            0,
-                            0
-                        ],
                         "num_pml": [
                             0,
                             0
@@ -11607,15 +11420,10 @@
                     "type": "PML"
                 }
             ],
-            "symmetry": [
-                0,
-                0,
-                0
-            ],
             "shutoff": 1e-05,
             "subpixel": true,
             "courant": 0.9,
-            "version": "1.0.0"
+            "version": "1.0.2"
         },
         "l=10.60": {
             "center": [
@@ -11642,6 +11450,11 @@
                 "conductivity": 0.0
             },
             "run_time": 1.0340486931104608e-12,
+            "symmetry": [
+                0,
+                0,
+                0
+            ],
             "structures": [
                 {
                     "geometry": {
@@ -12807,10 +12620,6 @@
                     "mode_spec": {
                         "num_modes": 1,
                         "target_neff": null,
-                        "symmetries": [
-                            0,
-                            0
-                        ],
                         "num_pml": [
                             0,
                             0
@@ -12867,10 +12676,6 @@
                     "mode_spec": {
                         "num_modes": 1,
                         "target_neff": null,
-                        "symmetries": [
-                            0,
-                            0
-                        ],
                         "num_pml": [
                             0,
                             0
@@ -12899,10 +12704,6 @@
                     "mode_spec": {
                         "num_modes": 1,
                         "target_neff": null,
-                        "symmetries": [
-                            0,
-                            0
-                        ],
                         "num_pml": [
                             0,
                             0
@@ -12931,10 +12732,6 @@
                     "mode_spec": {
                         "num_modes": 1,
                         "target_neff": null,
-                        "symmetries": [
-                            0,
-                            0
-                        ],
                         "num_pml": [
                             0,
                             0
@@ -12963,10 +12760,6 @@
                     "mode_spec": {
                         "num_modes": 1,
                         "target_neff": null,
-                        "symmetries": [
-                            0,
-                            0
-                        ],
                         "num_pml": [
                             0,
                             0
@@ -12995,10 +12788,6 @@
                     "mode_spec": {
                         "num_modes": 1,
                         "target_neff": null,
-                        "symmetries": [
-                            0,
-                            0
-                        ],
                         "num_pml": [
                             0,
                             0
@@ -13059,15 +12848,10 @@
                     "type": "PML"
                 }
             ],
-            "symmetry": [
-                0,
-                0,
-                0
-            ],
             "shutoff": 1e-05,
             "subpixel": true,
             "courant": 0.9,
-            "version": "1.0.0"
+            "version": "1.0.2"
         },
         "l=11.30": {
             "center": [
@@ -13094,6 +12878,11 @@
                 "conductivity": 0.0
             },
             "run_time": 1.0340486931104608e-12,
+            "symmetry": [
+                0,
+                0,
+                0
+            ],
             "structures": [
                 {
                     "geometry": {
@@ -14259,10 +14048,6 @@
                     "mode_spec": {
                         "num_modes": 1,
                         "target_neff": null,
-                        "symmetries": [
-                            0,
-                            0
-                        ],
                         "num_pml": [
                             0,
                             0
@@ -14319,10 +14104,6 @@
                     "mode_spec": {
                         "num_modes": 1,
                         "target_neff": null,
-                        "symmetries": [
-                            0,
-                            0
-                        ],
                         "num_pml": [
                             0,
                             0
@@ -14351,10 +14132,6 @@
                     "mode_spec": {
                         "num_modes": 1,
                         "target_neff": null,
-                        "symmetries": [
-                            0,
-                            0
-                        ],
                         "num_pml": [
                             0,
                             0
@@ -14383,10 +14160,6 @@
                     "mode_spec": {
                         "num_modes": 1,
                         "target_neff": null,
-                        "symmetries": [
-                            0,
-                            0
-                        ],
                         "num_pml": [
                             0,
                             0
@@ -14415,10 +14188,6 @@
                     "mode_spec": {
                         "num_modes": 1,
                         "target_neff": null,
-                        "symmetries": [
-                            0,
-                            0
-                        ],
                         "num_pml": [
                             0,
                             0
@@ -14447,10 +14216,6 @@
                     "mode_spec": {
                         "num_modes": 1,
                         "target_neff": null,
-                        "symmetries": [
-                            0,
-                            0
-                        ],
                         "num_pml": [
                             0,
                             0
@@ -14511,15 +14276,10 @@
                     "type": "PML"
                 }
             ],
-            "symmetry": [
-                0,
-                0,
-                0
-            ],
             "shutoff": 1e-05,
             "subpixel": true,
             "courant": 0.9,
-            "version": "1.0.0"
+            "version": "1.0.2"
         },
         "l=12.00": {
             "center": [
@@ -14546,6 +14306,11 @@
                 "conductivity": 0.0
             },
             "run_time": 1.0340486931104608e-12,
+            "symmetry": [
+                0,
+                0,
+                0
+            ],
             "structures": [
                 {
                     "geometry": {
@@ -15711,10 +15476,6 @@
                     "mode_spec": {
                         "num_modes": 1,
                         "target_neff": null,
-                        "symmetries": [
-                            0,
-                            0
-                        ],
                         "num_pml": [
                             0,
                             0
@@ -15771,10 +15532,6 @@
                     "mode_spec": {
                         "num_modes": 1,
                         "target_neff": null,
-                        "symmetries": [
-                            0,
-                            0
-                        ],
                         "num_pml": [
                             0,
                             0
@@ -15803,10 +15560,6 @@
                     "mode_spec": {
                         "num_modes": 1,
                         "target_neff": null,
-                        "symmetries": [
-                            0,
-                            0
-                        ],
                         "num_pml": [
                             0,
                             0
@@ -15835,10 +15588,6 @@
                     "mode_spec": {
                         "num_modes": 1,
                         "target_neff": null,
-                        "symmetries": [
-                            0,
-                            0
-                        ],
                         "num_pml": [
                             0,
                             0
@@ -15867,10 +15616,6 @@
                     "mode_spec": {
                         "num_modes": 1,
                         "target_neff": null,
-                        "symmetries": [
-                            0,
-                            0
-                        ],
                         "num_pml": [
                             0,
                             0
@@ -15899,10 +15644,6 @@
                     "mode_spec": {
                         "num_modes": 1,
                         "target_neff": null,
-                        "symmetries": [
-                            0,
-                            0
-                        ],
                         "num_pml": [
                             0,
                             0
@@ -15963,15 +15704,10 @@
                     "type": "PML"
                 }
             ],
-            "symmetry": [
-                0,
-                0,
-                0
-            ],
             "shutoff": 1e-05,
             "subpixel": true,
             "courant": 0.9,
-            "version": "1.0.0"
+            "version": "1.0.2"
         }
     },
     "jobs": {
@@ -16002,6 +15738,11 @@
                     "conductivity": 0.0
                 },
                 "run_time": 1.0340486931104608e-12,
+                "symmetry": [
+                    0,
+                    0,
+                    0
+                ],
                 "structures": [
                     {
                         "geometry": {
@@ -17167,10 +16908,6 @@
                         "mode_spec": {
                             "num_modes": 1,
                             "target_neff": null,
-                            "symmetries": [
-                                0,
-                                0
-                            ],
                             "num_pml": [
                                 0,
                                 0
@@ -17227,10 +16964,6 @@
                         "mode_spec": {
                             "num_modes": 1,
                             "target_neff": null,
-                            "symmetries": [
-                                0,
-                                0
-                            ],
                             "num_pml": [
                                 0,
                                 0
@@ -17259,10 +16992,6 @@
                         "mode_spec": {
                             "num_modes": 1,
                             "target_neff": null,
-                            "symmetries": [
-                                0,
-                                0
-                            ],
                             "num_pml": [
                                 0,
                                 0
@@ -17291,10 +17020,6 @@
                         "mode_spec": {
                             "num_modes": 1,
                             "target_neff": null,
-                            "symmetries": [
-                                0,
-                                0
-                            ],
                             "num_pml": [
                                 0,
                                 0
@@ -17323,10 +17048,6 @@
                         "mode_spec": {
                             "num_modes": 1,
                             "target_neff": null,
-                            "symmetries": [
-                                0,
-                                0
-                            ],
                             "num_pml": [
                                 0,
                                 0
@@ -17355,10 +17076,6 @@
                         "mode_spec": {
                             "num_modes": 1,
                             "target_neff": null,
-                            "symmetries": [
-                                0,
-                                0
-                            ],
                             "num_pml": [
                                 0,
                                 0
@@ -17419,19 +17136,14 @@
                         "type": "PML"
                     }
                 ],
-                "symmetry": [
-                    0,
-                    0,
-                    0
-                ],
                 "shutoff": 1e-05,
                 "subpixel": true,
                 "courant": 0.9,
-                "version": "1.0.0"
+                "version": "1.0.2"
             },
             "task_name": "l=5.00",
             "folder_name": "default",
-            "task_id": "82ec8003-5811-4cf6-a166-1dab9c33f8b4",
+            "task_id": "6d3bc436-a5cb-4383-9d8d-e7770be46fb7",
             "callback_url": null
         },
         "l=5.70": {
@@ -17461,6 +17173,11 @@
                     "conductivity": 0.0
                 },
                 "run_time": 1.0340486931104608e-12,
+                "symmetry": [
+                    0,
+                    0,
+                    0
+                ],
                 "structures": [
                     {
                         "geometry": {
@@ -18626,10 +18343,6 @@
                         "mode_spec": {
                             "num_modes": 1,
                             "target_neff": null,
-                            "symmetries": [
-                                0,
-                                0
-                            ],
                             "num_pml": [
                                 0,
                                 0
@@ -18686,10 +18399,6 @@
                         "mode_spec": {
                             "num_modes": 1,
                             "target_neff": null,
-                            "symmetries": [
-                                0,
-                                0
-                            ],
                             "num_pml": [
                                 0,
                                 0
@@ -18718,10 +18427,6 @@
                         "mode_spec": {
                             "num_modes": 1,
                             "target_neff": null,
-                            "symmetries": [
-                                0,
-                                0
-                            ],
                             "num_pml": [
                                 0,
                                 0
@@ -18750,10 +18455,6 @@
                         "mode_spec": {
                             "num_modes": 1,
                             "target_neff": null,
-                            "symmetries": [
-                                0,
-                                0
-                            ],
                             "num_pml": [
                                 0,
                                 0
@@ -18782,10 +18483,6 @@
                         "mode_spec": {
                             "num_modes": 1,
                             "target_neff": null,
-                            "symmetries": [
-                                0,
-                                0
-                            ],
                             "num_pml": [
                                 0,
                                 0
@@ -18814,10 +18511,6 @@
                         "mode_spec": {
                             "num_modes": 1,
                             "target_neff": null,
-                            "symmetries": [
-                                0,
-                                0
-                            ],
                             "num_pml": [
                                 0,
                                 0
@@ -18878,19 +18571,14 @@
                         "type": "PML"
                     }
                 ],
-                "symmetry": [
-                    0,
-                    0,
-                    0
-                ],
                 "shutoff": 1e-05,
                 "subpixel": true,
                 "courant": 0.9,
-                "version": "1.0.0"
+                "version": "1.0.2"
             },
             "task_name": "l=5.70",
             "folder_name": "default",
-            "task_id": "5bdf7b44-d431-4b94-bdde-49d60a35d582",
+            "task_id": "26c0a0cf-ade9-458e-b073-2f5d9f05923f",
             "callback_url": null
         },
         "l=6.40": {
@@ -18920,6 +18608,11 @@
                     "conductivity": 0.0
                 },
                 "run_time": 1.0340486931104608e-12,
+                "symmetry": [
+                    0,
+                    0,
+                    0
+                ],
                 "structures": [
                     {
                         "geometry": {
@@ -20085,10 +19778,6 @@
                         "mode_spec": {
                             "num_modes": 1,
                             "target_neff": null,
-                            "symmetries": [
-                                0,
-                                0
-                            ],
                             "num_pml": [
                                 0,
                                 0
@@ -20145,10 +19834,6 @@
                         "mode_spec": {
                             "num_modes": 1,
                             "target_neff": null,
-                            "symmetries": [
-                                0,
-                                0
-                            ],
                             "num_pml": [
                                 0,
                                 0
@@ -20177,10 +19862,6 @@
                         "mode_spec": {
                             "num_modes": 1,
                             "target_neff": null,
-                            "symmetries": [
-                                0,
-                                0
-                            ],
                             "num_pml": [
                                 0,
                                 0
@@ -20209,10 +19890,6 @@
                         "mode_spec": {
                             "num_modes": 1,
                             "target_neff": null,
-                            "symmetries": [
-                                0,
-                                0
-                            ],
                             "num_pml": [
                                 0,
                                 0
@@ -20241,10 +19918,6 @@
                         "mode_spec": {
                             "num_modes": 1,
                             "target_neff": null,
-                            "symmetries": [
-                                0,
-                                0
-                            ],
                             "num_pml": [
                                 0,
                                 0
@@ -20273,10 +19946,6 @@
                         "mode_spec": {
                             "num_modes": 1,
                             "target_neff": null,
-                            "symmetries": [
-                                0,
-                                0
-                            ],
                             "num_pml": [
                                 0,
                                 0
@@ -20337,19 +20006,14 @@
                         "type": "PML"
                     }
                 ],
-                "symmetry": [
-                    0,
-                    0,
-                    0
-                ],
                 "shutoff": 1e-05,
                 "subpixel": true,
                 "courant": 0.9,
-                "version": "1.0.0"
+                "version": "1.0.2"
             },
             "task_name": "l=6.40",
             "folder_name": "default",
-            "task_id": "709098d4-af70-4d49-b586-4532aeffcad6",
+            "task_id": "48be2a92-7806-4a46-af89-fa2ad6c26058",
             "callback_url": null
         },
         "l=7.10": {
@@ -20379,6 +20043,11 @@
                     "conductivity": 0.0
                 },
                 "run_time": 1.0340486931104608e-12,
+                "symmetry": [
+                    0,
+                    0,
+                    0
+                ],
                 "structures": [
                     {
                         "geometry": {
@@ -21544,10 +21213,6 @@
                         "mode_spec": {
                             "num_modes": 1,
                             "target_neff": null,
-                            "symmetries": [
-                                0,
-                                0
-                            ],
                             "num_pml": [
                                 0,
                                 0
@@ -21604,10 +21269,6 @@
                         "mode_spec": {
                             "num_modes": 1,
                             "target_neff": null,
-                            "symmetries": [
-                                0,
-                                0
-                            ],
                             "num_pml": [
                                 0,
                                 0
@@ -21636,10 +21297,6 @@
                         "mode_spec": {
                             "num_modes": 1,
                             "target_neff": null,
-                            "symmetries": [
-                                0,
-                                0
-                            ],
                             "num_pml": [
                                 0,
                                 0
@@ -21668,10 +21325,6 @@
                         "mode_spec": {
                             "num_modes": 1,
                             "target_neff": null,
-                            "symmetries": [
-                                0,
-                                0
-                            ],
                             "num_pml": [
                                 0,
                                 0
@@ -21700,10 +21353,6 @@
                         "mode_spec": {
                             "num_modes": 1,
                             "target_neff": null,
-                            "symmetries": [
-                                0,
-                                0
-                            ],
                             "num_pml": [
                                 0,
                                 0
@@ -21732,10 +21381,6 @@
                         "mode_spec": {
                             "num_modes": 1,
                             "target_neff": null,
-                            "symmetries": [
-                                0,
-                                0
-                            ],
                             "num_pml": [
                                 0,
                                 0
@@ -21796,19 +21441,14 @@
                         "type": "PML"
                     }
                 ],
-                "symmetry": [
-                    0,
-                    0,
-                    0
-                ],
                 "shutoff": 1e-05,
                 "subpixel": true,
                 "courant": 0.9,
-                "version": "1.0.0"
+                "version": "1.0.2"
             },
             "task_name": "l=7.10",
             "folder_name": "default",
-            "task_id": "60b4d04e-8eda-4c30-98c0-20c09a4041fd",
+            "task_id": "7d514aa6-525b-435a-885c-dd800c44755f",
             "callback_url": null
         },
         "l=7.80": {
@@ -21838,6 +21478,11 @@
                     "conductivity": 0.0
                 },
                 "run_time": 1.0340486931104608e-12,
+                "symmetry": [
+                    0,
+                    0,
+                    0
+                ],
                 "structures": [
                     {
                         "geometry": {
@@ -23003,10 +22648,6 @@
                         "mode_spec": {
                             "num_modes": 1,
                             "target_neff": null,
-                            "symmetries": [
-                                0,
-                                0
-                            ],
                             "num_pml": [
                                 0,
                                 0
@@ -23063,10 +22704,6 @@
                         "mode_spec": {
                             "num_modes": 1,
                             "target_neff": null,
-                            "symmetries": [
-                                0,
-                                0
-                            ],
                             "num_pml": [
                                 0,
                                 0
@@ -23095,10 +22732,6 @@
                         "mode_spec": {
                             "num_modes": 1,
                             "target_neff": null,
-                            "symmetries": [
-                                0,
-                                0
-                            ],
                             "num_pml": [
                                 0,
                                 0
@@ -23127,10 +22760,6 @@
                         "mode_spec": {
                             "num_modes": 1,
                             "target_neff": null,
-                            "symmetries": [
-                                0,
-                                0
-                            ],
                             "num_pml": [
                                 0,
                                 0
@@ -23159,10 +22788,6 @@
                         "mode_spec": {
                             "num_modes": 1,
                             "target_neff": null,
-                            "symmetries": [
-                                0,
-                                0
-                            ],
                             "num_pml": [
                                 0,
                                 0
@@ -23191,10 +22816,6 @@
                         "mode_spec": {
                             "num_modes": 1,
                             "target_neff": null,
-                            "symmetries": [
-                                0,
-                                0
-                            ],
                             "num_pml": [
                                 0,
                                 0
@@ -23255,19 +22876,14 @@
                         "type": "PML"
                     }
                 ],
-                "symmetry": [
-                    0,
-                    0,
-                    0
-                ],
                 "shutoff": 1e-05,
                 "subpixel": true,
                 "courant": 0.9,
-                "version": "1.0.0"
+                "version": "1.0.2"
             },
             "task_name": "l=7.80",
             "folder_name": "default",
-            "task_id": "b55a9163-307c-4216-aa8f-cead20499302",
+            "task_id": "9499e6cf-5782-4529-a75e-622778a2dc46",
             "callback_url": null
         },
         "l=8.50": {
@@ -23297,6 +22913,11 @@
                     "conductivity": 0.0
                 },
                 "run_time": 1.0340486931104608e-12,
+                "symmetry": [
+                    0,
+                    0,
+                    0
+                ],
                 "structures": [
                     {
                         "geometry": {
@@ -24462,10 +24083,6 @@
                         "mode_spec": {
                             "num_modes": 1,
                             "target_neff": null,
-                            "symmetries": [
-                                0,
-                                0
-                            ],
                             "num_pml": [
                                 0,
                                 0
@@ -24522,10 +24139,6 @@
                         "mode_spec": {
                             "num_modes": 1,
                             "target_neff": null,
-                            "symmetries": [
-                                0,
-                                0
-                            ],
                             "num_pml": [
                                 0,
                                 0
@@ -24554,10 +24167,6 @@
                         "mode_spec": {
                             "num_modes": 1,
                             "target_neff": null,
-                            "symmetries": [
-                                0,
-                                0
-                            ],
                             "num_pml": [
                                 0,
                                 0
@@ -24586,10 +24195,6 @@
                         "mode_spec": {
                             "num_modes": 1,
                             "target_neff": null,
-                            "symmetries": [
-                                0,
-                                0
-                            ],
                             "num_pml": [
                                 0,
                                 0
@@ -24618,10 +24223,6 @@
                         "mode_spec": {
                             "num_modes": 1,
                             "target_neff": null,
-                            "symmetries": [
-                                0,
-                                0
-                            ],
                             "num_pml": [
                                 0,
                                 0
@@ -24650,10 +24251,6 @@
                         "mode_spec": {
                             "num_modes": 1,
                             "target_neff": null,
-                            "symmetries": [
-                                0,
-                                0
-                            ],
                             "num_pml": [
                                 0,
                                 0
@@ -24714,19 +24311,14 @@
                         "type": "PML"
                     }
                 ],
-                "symmetry": [
-                    0,
-                    0,
-                    0
-                ],
                 "shutoff": 1e-05,
                 "subpixel": true,
                 "courant": 0.9,
-                "version": "1.0.0"
+                "version": "1.0.2"
             },
             "task_name": "l=8.50",
             "folder_name": "default",
-            "task_id": "96af5a2c-3407-42d2-9dd3-c37983fd1fd7",
+            "task_id": "7bb51fb1-0a3e-4e89-81cd-2caa517d30c0",
             "callback_url": null
         },
         "l=9.20": {
@@ -24756,6 +24348,11 @@
                     "conductivity": 0.0
                 },
                 "run_time": 1.0340486931104608e-12,
+                "symmetry": [
+                    0,
+                    0,
+                    0
+                ],
                 "structures": [
                     {
                         "geometry": {
@@ -25921,10 +25518,6 @@
                         "mode_spec": {
                             "num_modes": 1,
                             "target_neff": null,
-                            "symmetries": [
-                                0,
-                                0
-                            ],
                             "num_pml": [
                                 0,
                                 0
@@ -25981,10 +25574,6 @@
                         "mode_spec": {
                             "num_modes": 1,
                             "target_neff": null,
-                            "symmetries": [
-                                0,
-                                0
-                            ],
                             "num_pml": [
                                 0,
                                 0
@@ -26013,10 +25602,6 @@
                         "mode_spec": {
                             "num_modes": 1,
                             "target_neff": null,
-                            "symmetries": [
-                                0,
-                                0
-                            ],
                             "num_pml": [
                                 0,
                                 0
@@ -26045,10 +25630,6 @@
                         "mode_spec": {
                             "num_modes": 1,
                             "target_neff": null,
-                            "symmetries": [
-                                0,
-                                0
-                            ],
                             "num_pml": [
                                 0,
                                 0
@@ -26077,10 +25658,6 @@
                         "mode_spec": {
                             "num_modes": 1,
                             "target_neff": null,
-                            "symmetries": [
-                                0,
-                                0
-                            ],
                             "num_pml": [
                                 0,
                                 0
@@ -26109,10 +25686,6 @@
                         "mode_spec": {
                             "num_modes": 1,
                             "target_neff": null,
-                            "symmetries": [
-                                0,
-                                0
-                            ],
                             "num_pml": [
                                 0,
                                 0
@@ -26173,19 +25746,14 @@
                         "type": "PML"
                     }
                 ],
-                "symmetry": [
-                    0,
-                    0,
-                    0
-                ],
                 "shutoff": 1e-05,
                 "subpixel": true,
                 "courant": 0.9,
-                "version": "1.0.0"
+                "version": "1.0.2"
             },
             "task_name": "l=9.20",
             "folder_name": "default",
-            "task_id": "84c72786-b7fb-4873-8ade-ed737718f3b6",
+            "task_id": "90352ee9-9073-46e6-a3f7-8375c6d3164d",
             "callback_url": null
         },
         "l=9.90": {
@@ -26215,6 +25783,11 @@
                     "conductivity": 0.0
                 },
                 "run_time": 1.0340486931104608e-12,
+                "symmetry": [
+                    0,
+                    0,
+                    0
+                ],
                 "structures": [
                     {
                         "geometry": {
@@ -27380,10 +26953,6 @@
                         "mode_spec": {
                             "num_modes": 1,
                             "target_neff": null,
-                            "symmetries": [
-                                0,
-                                0
-                            ],
                             "num_pml": [
                                 0,
                                 0
@@ -27440,10 +27009,6 @@
                         "mode_spec": {
                             "num_modes": 1,
                             "target_neff": null,
-                            "symmetries": [
-                                0,
-                                0
-                            ],
                             "num_pml": [
                                 0,
                                 0
@@ -27472,10 +27037,6 @@
                         "mode_spec": {
                             "num_modes": 1,
                             "target_neff": null,
-                            "symmetries": [
-                                0,
-                                0
-                            ],
                             "num_pml": [
                                 0,
                                 0
@@ -27504,10 +27065,6 @@
                         "mode_spec": {
                             "num_modes": 1,
                             "target_neff": null,
-                            "symmetries": [
-                                0,
-                                0
-                            ],
                             "num_pml": [
                                 0,
                                 0
@@ -27536,10 +27093,6 @@
                         "mode_spec": {
                             "num_modes": 1,
                             "target_neff": null,
-                            "symmetries": [
-                                0,
-                                0
-                            ],
                             "num_pml": [
                                 0,
                                 0
@@ -27568,10 +27121,6 @@
                         "mode_spec": {
                             "num_modes": 1,
                             "target_neff": null,
-                            "symmetries": [
-                                0,
-                                0
-                            ],
                             "num_pml": [
                                 0,
                                 0
@@ -27632,19 +27181,14 @@
                         "type": "PML"
                     }
                 ],
-                "symmetry": [
-                    0,
-                    0,
-                    0
-                ],
                 "shutoff": 1e-05,
                 "subpixel": true,
                 "courant": 0.9,
-                "version": "1.0.0"
+                "version": "1.0.2"
             },
             "task_name": "l=9.90",
             "folder_name": "default",
-            "task_id": "45be5db3-0650-44f1-b608-a760fc276455",
+            "task_id": "2109f373-9790-4db1-a0fc-c99be5b51afc",
             "callback_url": null
         },
         "l=10.60": {
@@ -27674,6 +27218,11 @@
                     "conductivity": 0.0
                 },
                 "run_time": 1.0340486931104608e-12,
+                "symmetry": [
+                    0,
+                    0,
+                    0
+                ],
                 "structures": [
                     {
                         "geometry": {
@@ -28839,10 +28388,6 @@
                         "mode_spec": {
                             "num_modes": 1,
                             "target_neff": null,
-                            "symmetries": [
-                                0,
-                                0
-                            ],
                             "num_pml": [
                                 0,
                                 0
@@ -28899,10 +28444,6 @@
                         "mode_spec": {
                             "num_modes": 1,
                             "target_neff": null,
-                            "symmetries": [
-                                0,
-                                0
-                            ],
                             "num_pml": [
                                 0,
                                 0
@@ -28931,10 +28472,6 @@
                         "mode_spec": {
                             "num_modes": 1,
                             "target_neff": null,
-                            "symmetries": [
-                                0,
-                                0
-                            ],
                             "num_pml": [
                                 0,
                                 0
@@ -28963,10 +28500,6 @@
                         "mode_spec": {
                             "num_modes": 1,
                             "target_neff": null,
-                            "symmetries": [
-                                0,
-                                0
-                            ],
                             "num_pml": [
                                 0,
                                 0
@@ -28995,10 +28528,6 @@
                         "mode_spec": {
                             "num_modes": 1,
                             "target_neff": null,
-                            "symmetries": [
-                                0,
-                                0
-                            ],
                             "num_pml": [
                                 0,
                                 0
@@ -29027,10 +28556,6 @@
                         "mode_spec": {
                             "num_modes": 1,
                             "target_neff": null,
-                            "symmetries": [
-                                0,
-                                0
-                            ],
                             "num_pml": [
                                 0,
                                 0
@@ -29091,19 +28616,14 @@
                         "type": "PML"
                     }
                 ],
-                "symmetry": [
-                    0,
-                    0,
-                    0
-                ],
                 "shutoff": 1e-05,
                 "subpixel": true,
                 "courant": 0.9,
-                "version": "1.0.0"
+                "version": "1.0.2"
             },
             "task_name": "l=10.60",
             "folder_name": "default",
-            "task_id": "3bd9e66b-051c-42cf-84fc-23202bbad801",
+            "task_id": "5b872950-c73e-4ffc-9e7b-91d81c61987d",
             "callback_url": null
         },
         "l=11.30": {
@@ -29133,6 +28653,11 @@
                     "conductivity": 0.0
                 },
                 "run_time": 1.0340486931104608e-12,
+                "symmetry": [
+                    0,
+                    0,
+                    0
+                ],
                 "structures": [
                     {
                         "geometry": {
@@ -30298,10 +29823,6 @@
                         "mode_spec": {
                             "num_modes": 1,
                             "target_neff": null,
-                            "symmetries": [
-                                0,
-                                0
-                            ],
                             "num_pml": [
                                 0,
                                 0
@@ -30358,10 +29879,6 @@
                         "mode_spec": {
                             "num_modes": 1,
                             "target_neff": null,
-                            "symmetries": [
-                                0,
-                                0
-                            ],
                             "num_pml": [
                                 0,
                                 0
@@ -30390,10 +29907,6 @@
                         "mode_spec": {
                             "num_modes": 1,
                             "target_neff": null,
-                            "symmetries": [
-                                0,
-                                0
-                            ],
                             "num_pml": [
                                 0,
                                 0
@@ -30422,10 +29935,6 @@
                         "mode_spec": {
                             "num_modes": 1,
                             "target_neff": null,
-                            "symmetries": [
-                                0,
-                                0
-                            ],
                             "num_pml": [
                                 0,
                                 0
@@ -30454,10 +29963,6 @@
                         "mode_spec": {
                             "num_modes": 1,
                             "target_neff": null,
-                            "symmetries": [
-                                0,
-                                0
-                            ],
                             "num_pml": [
                                 0,
                                 0
@@ -30486,10 +29991,6 @@
                         "mode_spec": {
                             "num_modes": 1,
                             "target_neff": null,
-                            "symmetries": [
-                                0,
-                                0
-                            ],
                             "num_pml": [
                                 0,
                                 0
@@ -30550,19 +30051,14 @@
                         "type": "PML"
                     }
                 ],
-                "symmetry": [
-                    0,
-                    0,
-                    0
-                ],
                 "shutoff": 1e-05,
                 "subpixel": true,
                 "courant": 0.9,
-                "version": "1.0.0"
+                "version": "1.0.2"
             },
             "task_name": "l=11.30",
             "folder_name": "default",
-            "task_id": "c7151c64-ae8e-4e86-b5fc-909529630569",
+            "task_id": "d6607fde-b5f9-4261-b7d2-0476f37b9c6e",
             "callback_url": null
         },
         "l=12.00": {
@@ -30592,6 +30088,11 @@
                     "conductivity": 0.0
                 },
                 "run_time": 1.0340486931104608e-12,
+                "symmetry": [
+                    0,
+                    0,
+                    0
+                ],
                 "structures": [
                     {
                         "geometry": {
@@ -31757,10 +31258,6 @@
                         "mode_spec": {
                             "num_modes": 1,
                             "target_neff": null,
-                            "symmetries": [
-                                0,
-                                0
-                            ],
                             "num_pml": [
                                 0,
                                 0
@@ -31817,10 +31314,6 @@
                         "mode_spec": {
                             "num_modes": 1,
                             "target_neff": null,
-                            "symmetries": [
-                                0,
-                                0
-                            ],
                             "num_pml": [
                                 0,
                                 0
@@ -31849,10 +31342,6 @@
                         "mode_spec": {
                             "num_modes": 1,
                             "target_neff": null,
-                            "symmetries": [
-                                0,
-                                0
-                            ],
                             "num_pml": [
                                 0,
                                 0
@@ -31881,10 +31370,6 @@
                         "mode_spec": {
                             "num_modes": 1,
                             "target_neff": null,
-                            "symmetries": [
-                                0,
-                                0
-                            ],
                             "num_pml": [
                                 0,
                                 0
@@ -31913,10 +31398,6 @@
                         "mode_spec": {
                             "num_modes": 1,
                             "target_neff": null,
-                            "symmetries": [
-                                0,
-                                0
-                            ],
                             "num_pml": [
                                 0,
                                 0
@@ -31945,10 +31426,6 @@
                         "mode_spec": {
                             "num_modes": 1,
                             "target_neff": null,
-                            "symmetries": [
-                                0,
-                                0
-                            ],
                             "num_pml": [
                                 0,
                                 0
@@ -32009,19 +31486,14 @@
                         "type": "PML"
                     }
                 ],
-                "symmetry": [
-                    0,
-                    0,
-                    0
-                ],
                 "shutoff": 1e-05,
                 "subpixel": true,
                 "courant": 0.9,
-                "version": "1.0.0"
+                "version": "1.0.2"
             },
             "task_name": "l=12.00",
             "folder_name": "default",
-            "task_id": "40f34697-24ed-4422-a305-fab6b78d6a92",
+            "task_id": "c74a55cb-4627-4cb3-8e88-b101b92a79a6",
             "callback_url": null
         }
     },
