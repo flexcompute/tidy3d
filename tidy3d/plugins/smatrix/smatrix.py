@@ -32,7 +32,7 @@ class Port(Box):
     mode_indices: Tuple[pd.NonNegativeInt] = pd.Field(
         None,
         title="Mode Indices.",
-        description="Indices into modes returned to mode solver to use in the port. "
+        description="Indices into modes returned by the mode solver to use in the port. "
         "If ``None``, all modes returned by the mode solver are used in the scattering matrix. "
         "Otherwise, the scattering matrix will include elements for each supplied mode index.",
     )
@@ -71,7 +71,7 @@ class ComponentModeler(pd.BaseModel):
         [],
         title="Ports",
         description="Collection of ports describing the scattering matrix elements. "
-        "For each port, one siulation will be run with a modal source.",
+        "For each port, one simulation will be run with a modal source.",
     )
     freq: float = pd.Field(
         ...,
