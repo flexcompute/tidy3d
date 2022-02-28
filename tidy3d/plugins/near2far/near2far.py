@@ -141,14 +141,14 @@ Should not be changed except in special circumstatnces where the exp(-jkr) conve
     @property
     def k(self) -> complex:
         """Returns the complex wave number associated with the background medium."""
-        n, k = self.nk
-        return (2 * np.pi * self.frequency / C_0) * (n + 1j * k)
+        index_n, index_k = self.nk
+        return (2 * np.pi * self.frequency / C_0) * (index_n + 1j * index_k)
 
     @property
     def eta(self) -> complex:
         """Returns the complex wave impedance associated with the background medium."""
-        n, k = self.nk
-        return ETA_0 / (n + 1j * k)
+        index_n, index_k = self.nk
+        return ETA_0 / (index_n + 1j * index_k)
 
     @classmethod
     # pylint:disable=too-many-arguments
@@ -215,12 +215,12 @@ the number of directions ({len(normal_dirs)})."
         frequency = values.get("frequency")
         medium = values.get("medium")
         eps_complex = medium.eps_model(frequency)
-        n, _ = medium.eps_complex_to_nk(eps_complex)
+        index_n, _ = medium.eps_complex_to_nk(eps_complex)
 
         val = {}
         for surface in surfaces:
             current_data = cls.compute_surface_currents(
-                sim_data, surface, frequency, n, pts_per_wavelength
+                sim_data, surface, frequency, index_n, pts_per_wavelength
             )
             val[surface.monitor.name] = current_data
 
@@ -231,7 +231,7 @@ the number of directions ({len(normal_dirs)})."
         sim_data: SimulationData,
         surface: Near2FarSurface,
         frequency: float,
-        n: float,
+        index_n: float,
         pts_per_wavelength: int = PTS_PER_WVL,
     ) -> xr.Dataset:
         """Returns resampled surface current densities associated with the surface monitor.
@@ -245,7 +245,7 @@ the number of directions ({len(normal_dirs)})."
         frequency : float
             Frequency to select from each :class:`.FieldMonitor` to use for projection.
             Must be a frequency stored in each :class:`FieldMonitor`.
-        n : float
+        index_n : float
             Real part of the refractive index associated with the background medium.
         pts_per_wavelength : int = 10
             Number of points per wavelength with which to discretize the
@@ -266,7 +266,7 @@ the number of directions ({len(normal_dirs)})."
 
         currents = Near2Far._fields_to_currents(field_data, surface)
         currents = Near2Far._resample_surface_currents(
-            currents, sim_data, surface, frequency, n, pts_per_wavelength
+            currents, sim_data, surface, frequency, index_n, pts_per_wavelength
         )
 
         return currents
@@ -324,7 +324,7 @@ the number of directions ({len(normal_dirs)})."
         sim_data: SimulationData,
         surface: Near2FarSurface,
         frequency: float,
-        n: float,
+        index_n: float,
         pts_per_wavelength: int = PTS_PER_WVL,
     ) -> xr.Dataset:
         """Returns the surface current densities associated with the surface monitor.
@@ -340,7 +340,7 @@ the number of directions ({len(normal_dirs)})."
         frequency : float
             Frequency to select from each :class:`.FieldMonitor` to use for projection.
             Must be a frequency stored in each :class:`FieldMonitor`.
-        n : float
+        index_n : float
             Real part of the refractive index associated with the background medium.
         pts_per_wavelength : int = 10
             Number of points per wavelength with which to discretize the
@@ -356,7 +356,7 @@ the number of directions ({len(normal_dirs)})."
         colocation_points = [None] * 3
         colocation_points[surface.axis] = surface.monitor.center[surface.axis]
 
-        wavelength = C_0 / frequency / n
+        wavelength = C_0 / frequency / index_n
 
         _, idx_uv = surface.monitor.pop_axis((0, 1, 2), axis=surface.axis)
 
@@ -616,12 +616,19 @@ the number of directions ({len(normal_dirs)})."
         RCS : float
             Radar cross section at angles relative to the local origin.
         """
+
+        _, index_k = self.nk
+        if index_k != 0.0:
+            raise SetupError("Can't compute RCS for a lossy background medium.")
+
         # set observation angles relative to the local origin
         N_theta, N_phi, L_theta, L_phi = self._radiation_vectors(theta, phi)
 
-        eta = self.eta
+        # wave number and wave impedance must be real since index_k is forced to be 0
+        eta = np.real(self.eta)
+        k = np.real(self.k)
 
-        constant = self.k**2 / (8 * np.pi * eta)
+        constant = k**2 / (8 * np.pi * eta)
         term1 = np.abs(L_phi + eta * N_theta) ** 2
         term2 = np.abs(L_theta - eta * N_phi) ** 2
         return constant * (term1 + term2)
