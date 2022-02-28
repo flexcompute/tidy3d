@@ -249,6 +249,8 @@ Plugins
    plugins.ModeSolver
    plugins.Near2Far
    plugins.Near2FarSurface
+   plugins.ComponentModeler
+   plugins.Plane
 
 
 Constants
