@@ -248,35 +248,8 @@ Plugins
    plugins.AdvancedFitterParam
    plugins.ModeSolver
    plugins.Near2Far
-   .. plugins.DispersionFitter.from_file
-   .. plugins.DispersionFitter.fit
-   .. plugins.DispersionFitter.plot
-   .. plugins.StableDispersionFitter.from_file
-   .. plugins.StableDispersionFitter.fit
-   .. plugins.StableDispersionFitter.plot
+   plugins.Near2FarSurface
 
-.. Mode Solver
-.. -----------
-
-.. .. autosummary::
-..    :toctree: _autosummary/
-
-..    plugins.ModeSolver
-..    .. plugins.ModeSolver.solve
-..    .. plugins.mode.mode_solver.ModeInfo
-
-.. Near Field to Far Field Transformation
-.. --------------------------------------
-
-.. .. autosummary::
-..    :toctree: _autosummary/
-
-..    plugins.Near2Far
-..    plugins.Near2Far.fields_cartesian
-..    plugins.Near2Far.fields_spherical
-..    plugins.Near2Far.power_cartesian
-..    plugins.Near2Far.power_spherical
-..    plugins.Near2Far.radar_cross_section
 
 Constants
 =========
@@ -344,76 +317,4 @@ These are classes that are used to organize the tidy3d components, but aren't to
    tidy3d.components.data.PlanarData
    tidy3d.components.data.AbstractFluxData
    tidy3d.components.data.AbstractScalarFieldData
-
-
-   .. tidy3d.components.base.SourceTime
-   .. tidy3d.components.base.SourceTime
-   .. tidy3d.components.base.SourceTime
-   .. tidy3d.components.base.SourceTime
-   .. tidy3d.components.base.SourceTime
-   .. tidy3d.components.base.SourceTime
-   .. tidy3d.components.base.SourceTime
-   .. tidy3d.components.base.SourceTime
-
-
-
-
-.. Tidy3D Base Model
-.. -----------------
-
-.. .. autosummary::
-..    :toctree: _autosummary/
-
-..    plugins.DispersionFitter
-..    plugins.StableDispersionFitter
-..    plugins.ModeSolver
-..    plugins.Near2Far
-
-
-.. .. currentmodule:: tidy3d.components.pml
-
-.. Absorber Specification
-.. ----------------------
-
-.. .. autopydantic_model:: AbsorberSpec
-..    :inherited-members: Tidy3dBaseModel
-
-.. .. currentmodule:: tidy3d.components.medium
-
-
-.. Mediums
-.. -------
-
-.. .. autopydantic_model:: AbstractMedium
-..    :inherited-members: Tidy3dBaseModel
-
-.. .. currentmodule:: tidy3d.components.source
-
-
-.. Source Time
-.. -----------
-
-.. .. autopydantic_model:: SourceTime
-..    :inherited-members: Tidy3dBaseModel
-
-.. .. currentmodule:: tidy3d.components.monitor
-
-.. Monitor
-.. -------
-
-.. .. autopydantic_model:: Monitor
-..    :inherited-members: Tidy3dBaseModel
-
-.. .. currentmodule:: tidy3d
-
-.. Types
-.. -----
-
-.. .. autosummary::
-..    :toctree: _autosummary/
-
-..    components.types.Size
-..    components.types.Coordinate
-..    components.types.Inf
-..    components.types.NegInf
 

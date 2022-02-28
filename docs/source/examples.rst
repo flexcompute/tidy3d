@@ -38,3 +38,4 @@ Case studies
     notebooks/Metalens
     notebooks/HighQ_Si
     notebooks/HighQ_Ge
+    notebooks/Near2FarSphereRCS
