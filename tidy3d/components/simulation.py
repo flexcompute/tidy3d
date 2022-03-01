@@ -821,8 +821,8 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         for sym_axis, sym_value in enumerate(self.symmetry):
             if sym_value == 0:
                 continue
-            sym_size = [inf, inf, inf]
-            sym_size[sym_axis] = inf / 2
+            sym_size = [1000 * size_dim for size_dim in self.size]
+            sym_size[sym_axis] /= 2
             sym_center = list(self.center)
             sym_center[sym_axis] += sym_size[sym_axis] / 2
             sym_box = Box(center=sym_center, size=sym_size)

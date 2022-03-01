@@ -196,7 +196,7 @@ class SymParams(PatchParamSwitcher):
         if self.sym_value == 1:
             return PatchParams(alpha=0.3, facecolor="lightsteelblue", edgecolor="lightsteelblue")
         if self.sym_value == -1:
-            return PatchParams(alpha=0.3, facecolor="lightgreen", edgecolor="lightgreen")
+            return PatchParams(alpha=0.3, facecolor="lightcoral", edgecolor="lightcoral")
         return PatchParams()
 
 
