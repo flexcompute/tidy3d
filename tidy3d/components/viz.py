@@ -194,9 +194,9 @@ class SymParams(PatchParamSwitcher):
     def get_plot_params(self) -> PatchParams:
         """Returns :class:`PatchParams` based on user-supplied args."""
         if self.sym_value == 1:
-            return PatchParams(alpha=0.3, facecolor="lightsteelblue", edgecolor="lightsteelblue")
+            return PatchParams(alpha=0.6, facecolor="lightskyblue", edgecolor="lightskyblue")
         if self.sym_value == -1:
-            return PatchParams(alpha=0.3, facecolor="lightcoral", edgecolor="lightcoral")
+            return PatchParams(alpha=0.6, facecolor="lightcoral", edgecolor="lightcoral")
         return PatchParams()
 
 
