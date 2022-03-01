@@ -7,16 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Simulation symmetries now fully functional.
-- Ability to perform near-to-far transformations from multiple surface monitors oriented along the x, y or z directions.
-- ``Near2Far.from_surface_monitors()`` method to construct a ``Near2Far`` object with a set of surface monitors and associated unit normal vector directions.
+### Changed
+
+## [1.1.0] - 2022-3-1
+
+### Added
+
+- `Simulation` symmetries now fully functional.
+- Ability to perform near-to-far transformations from multiple surface monitors oriented along the x, y or z directions using `tidy3d.plugins.Near2Far`.
+- `tidy3d.plugins.ComponentModeler` tool for scattering matrix calculations.
 
 ### Changed
 
-- Incorporated ``pydantic`` into ``near2far.py``.
-- Surface current densities in ``Near2Far`` are now represented as ``FieldData`` and eventually as an ``xarray.Dataset`` after colocation.
-- ``Near2Far`` now samples fields at locations precisely on the monitor rather than a nearby Yee center, with the option to sample fields with a given number of points per wavelength.
-- ``Near2Far`` now uses trapezoidal integration instead of Riemann sums.
+- Major enhancements to near field to far field transformation tool: multiple monitors supported with arbitrary configuration, user control over sampling point density.
+- Fixed visualization bug in symmetry.
 
 ## [1.0.2] - 2022-2-24
 
@@ -26,7 +30,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
  - Validator that mode objects with symmetries are either entirely in the main quadrant, or lie on the symmetry axis.
 - `Simulation.plotly()` makes a plotly figure of the cross section.
 - Dispersion fitter can parse urls from refractiveindex.info
-- `tidy3d.plugins.ComponentModeler` tool for scattering matrix calculations.
  - Clarified license terms to not include scripts written using the tidy3d python API.
 
 ### Changed
@@ -177,6 +180,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A large number of small improvements and bug fixes.
 
 [Unreleased]: https://github.com/flexcompute/tidy3d/compare/v1.0.2...develop
+[1.1.0]: https://github.com/flexcompute/tidy3d/compare/v1.0.2...v1.1.0
 [1.0.2]: https://github.com/flexcompute/tidy3d/compare/v1.0.1...v1.0.2
 [1.0.1]: https://github.com/flexcompute/tidy3d/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/flexcompute/tidy3d/compare/v0.2.0...v1.0.0
