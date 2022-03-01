@@ -794,7 +794,6 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
     def plot_symmetries(
         self, x: float = None, y: float = None, z: float = None, ax: Ax = None, **kwargs
     ) -> Ax:
-        # pylint:disable=line-too-long
         """Plot each of simulation's symmetries on a plane defined by one nonzero x,y,z coordinate.
 
         Parameters
@@ -817,9 +816,10 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         matplotlib.axes._subplots.Axes
             The supplied or created matplotlib axes.
         """
-        # pylint:enable=line-too-long
+
+        normal_axis, _ = self.parse_xyz_kwargs(x=x, y=y, z=z)
         for sym_axis, sym_value in enumerate(self.symmetry):
-            if sym_value == 0:
+            if sym_value == 0 or sym_axis == normal_axis:
                 continue
             sym_size = [1000 * size_dim for size_dim in self.size]
             sym_size[sym_axis] /= 2
