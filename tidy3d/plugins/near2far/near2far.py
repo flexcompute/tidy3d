@@ -364,12 +364,12 @@ the number of directions ({len(normal_dirs)})."
 
             # pick sample points on the monitor and handle the possibility of an "infinite" monitor
             start = np.maximum(
-                surface.monitor.center[idx] - surface.monitor.size[idx] / 2.0,
-                surface.monitor.center[idx] - sim_data.simulation.size[idx] / 2.0,
+                    surface.monitor.center[idx] - surface.monitor.size[idx] / 2.0,
+                    sim_data.simulation.center[idx] - sim_data.simulation.size[idx] / 2.0,
             )
             stop = np.minimum(
-                surface.monitor.center[idx] + surface.monitor.size[idx] / 2.0,
-                surface.monitor.center[idx] + sim_data.simulation.size[idx] / 2.0,
+                    surface.monitor.center[idx] + surface.monitor.size[idx] / 2.0,
+                    sim_data.simulation.center[idx] + sim_data.simulation.size[idx] / 2.0,
             )
             size = stop - start
 
