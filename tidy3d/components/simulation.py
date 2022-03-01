@@ -1110,8 +1110,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
 
         # snap to grid, recenter
         size_snapped = dl * num_cells
-        bound_coords = np.linspace(-size_snapped / 2, size_snapped / 2, num_cells + 1)
-        bound_coords += center - bound_coords[bound_coords.size // 2]
+        bound_coords = center + np.linspace(-size_snapped / 2, size_snapped / 2, num_cells + 1)
 
         return bound_coords
 
@@ -1157,9 +1156,10 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         # Add PML layers in using dl on edges
         bound_coords = self._add_pml_to_bounds(self.num_pml_layers[dim], bound_coords)
 
-        # Enforce a symmetric grid by taking only the coordinates to the right of the center.
-        # Note that there's always a boundary at the simulation center.
+        # Enforce a symmetric grid by placing a boundary at the simulation center and
+        # reflecting the boundaries on the other side.
         if self.symmetry[dim] != 0:
+            bound_coords += center - bound_coords[bound_coords.size // 2]
             bound_coords = bound_coords[bound_coords >= center]
             bound_coords = np.append(2 * center - bound_coords[:0:-1], bound_coords)
 
