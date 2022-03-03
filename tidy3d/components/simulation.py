@@ -361,7 +361,6 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
             return val
 
         # Get simulation frequency range
-        import pdb; pdb.set_trace()
         source_ranges = [source.source_time.frequency_range() for source in values["sources"]]
         if len(source_ranges) == 0:
             log.warning("No sources in simulation.")
