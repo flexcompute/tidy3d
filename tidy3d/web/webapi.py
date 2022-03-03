@@ -160,9 +160,11 @@ def get_run_info(task_id: TaskId):
     Returns
     -------
     perc_done : float
-        Percentage of run done (in terms of max number of time steps)
+        Percentage of run done (in terms of max number of time steps).
+        Is ``None`` if run info not available.
     field_decay : float
         Average field intensity normlized to max value (1.0).
+        Is ``None`` if run info not available.
     """
     try:
         client, bucket, user_id = get_s3_user()
