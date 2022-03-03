@@ -377,7 +377,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
             if np.any(freqs < freq_min) or np.any(freqs > freq_max):
                 log.warning(
                     f"monitors[{monitor_index}] contains frequencies "
-                    f"outside of the simulation frequency range ({fmin_med:2e}, {fmax_med:2e})"
+                    f"outside of the simulation frequency range ({freq_min:2e}, {freq_max:2e})"
                     "(Hz) as defined by the sources."
                 )
         return val
@@ -395,7 +395,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         grid_size = values.get("grid_size")
         mediums = [medium_bg] + [structure.medium for structure in structures]
 
-        for source in val:
+        for source_index, source in enumerate(val):
             fmin_src, fmax_src = source.source_time.frequency_range()
             f_average = (fmin_src + fmax_src) / 2.0
 
