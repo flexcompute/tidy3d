@@ -218,8 +218,9 @@ def monitor(task_id: TaskId) -> None:
         pbar_pd = progress.add_task("% done", total=100)
         perc_done, _ = get_run_info(task_id)
         while perc_done is not None and perc_done < 100 and get_info(task_id).status == "running":
-            perc_done, _ = get_run_info(task_id)
-            progress.update(pbar_pd, completed=perc_done)
+            perc_done, field_decay = get_run_info(task_id)
+            new_description=f'% done (field decay = {field_decay:.2e})'
+            progress.update(pbar_pd, completed=perc_done, description=new_description)
             time.sleep(1.0)
         if not get_info(task_id).status == "running":
             if perc_done < 100:
