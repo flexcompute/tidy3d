@@ -172,7 +172,7 @@ def get_run_info(task_id: TaskId):
         perc_done, field_decay = progress_string[-2].split(b",")
         return float(perc_done), float(field_decay)
     except Exception: #pylint:disable=broad-except
-        return 0.0, None
+        return None, None
 
 
 def monitor(task_id: TaskId) -> None:
@@ -205,11 +205,10 @@ def monitor(task_id: TaskId) -> None:
                     console.log(f"status = {status}")
             time.sleep(REFRESH_TIME)
 
-    # startup phase where running hasn't started
+    # startup phase where run info is not available
     console.log("starting up solver")
-    perc_done = 0.0
-    while perc_done <= 0.0:
-        perc_done, _ = get_run_info(task_id)
+    while get_run_info(task_id)[0] is not None:
+        time.sleep(REFRESH_TIME)
 
     # phase where run % info is available
     console.log("running solver")
