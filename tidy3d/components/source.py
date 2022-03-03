@@ -278,7 +278,7 @@ class Source(Box, ABC):
 
 
 class VolumeSource(Source):
-    """Source spanning a rectangular volume with uniform time dependence.
+    """Source in a rectangular volume with uniform time dependence. size=(0,0,0) gives point source.
 
     Example
     -------
@@ -442,7 +442,7 @@ class AngledFieldSource(FieldSource):
 
 
 class PlaneWave(AngledFieldSource):
-    """Uniform current distribution on an infinite extent plane.
+    """Uniform current distribution on an infinite extent plane.  One element of size must be zero.
 
     Example
     -------
