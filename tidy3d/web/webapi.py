@@ -209,17 +209,22 @@ def monitor(task_id: TaskId) -> None:
 
     # startup phase where run info is not available
     console.log("starting up solver")
-    while get_run_info(task_id)[0] is not None:
+    while get_run_info(task_id)[0] is None and get_info(task_id).status == "running":
         time.sleep(REFRESH_TIME)
 
     # phase where run % info is available
     console.log("running solver")
     with Progress(console=console) as progress:
         pbar_pd = progress.add_task("% done", total=100)
-        while perc_done < 100 and get_info(task_id).status == "running":
+        perc_done, _ = get_run_info(task_id)
+        while perc_done is not None and perc_done < 100 and get_info(task_id).status == "running":
             perc_done, _ = get_run_info(task_id)
             progress.update(pbar_pd, completed=perc_done)
-            time.sleep(REFRESH_TIME)
+            time.sleep(1.0)
+        if not get_info(task_id).status == "running":
+            if perc_done < 100:
+                console.log('early shutoff detected, exiting.')
+            progress.update(pbar_pd, completed=100)
 
     # preprocessing
     with console.status(f"[bold green]Finishing '{task_name}'...", spinner="runner"):
