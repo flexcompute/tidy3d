@@ -326,12 +326,12 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         medium_bg = values.get("medium")
         mediums = [medium_bg] + [structure.medium for structure in structures]
 
-        for monitor in val:
+        for monitor_index, monitor in enumerate(val):
             if not isinstance(monitor, FreqMonitor):
                 continue
 
             freqs = np.array(monitor.freqs)
-            for medium in mediums:
+            for medium_index, medium in enumerate(mediums):
 
                 # skip mediums that have no freq range (all freqs valid)
                 if medium.frequency_range is None:
@@ -340,11 +340,16 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
                 # make sure medium frequency range includes all monitor frequencies
                 fmin_med, fmax_med = medium.frequency_range
                 if np.any(freqs < fmin_med) or np.any(freqs > fmax_med):
+                    if medium_index == 0:
+                        medium_str = "The simulation background medium"
+                    else:
+                        medium_str = f"The medium associated with structures[{medium_index-1}]"
+
                     log.warning(
-                        f"A medium in the simulation:\n\n({medium})\n\nhas a frequency "
-                        "range that does not fully cover the frequencies of a monitor:"
-                        f"\n\n({monitor})\n\nThis can cause innacuracies in the "
-                        "recorded results."
+                        medium_str + f"has a frequency range: ({fmin_med:2e}, {fmax_med:2e}) (Hz)"
+                        "that does not fully cover the frequencies contained in "
+                        f"monitors[{monitor_index}]. "
+                        "This can cause innacuracies in the recorded results."
                     )
         return val
 
@@ -364,15 +369,16 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         freq_min = min([freq_range[0] for freq_range in source_ranges], default=0.0)
         freq_max = max([freq_range[1] for freq_range in source_ranges], default=0.0)
 
-        for monitor in val:
+        for monitor_index, monitor in enumerate(val):
             if not isinstance(monitor, FreqMonitor):
                 continue
 
             freqs = np.array(monitor.freqs)
             if np.any(freqs < freq_min) or np.any(freqs > freq_max):
                 log.warning(
-                    f"A monitor in the simulation:\n\n({monitor})\n\nhas frequencies "
-                    "outside of the simulation frequency range as defined by the sources."
+                    f"monitors[{monitor_index}] contains frequencies "
+                    f"outside of the simulation frequency range ({fmin_med:2e}, {fmax_med:2e})"
+                    "(Hz) as defined by the sources."
                 )
         return val
 
@@ -393,22 +399,23 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
             fmin_src, fmax_src = source.source_time.frequency_range()
             f_average = (fmin_src + fmax_src) / 2.0
 
-            for medium in mediums:
+            for medium_index, medium in enumerate(mediums):
 
                 eps_material = medium.eps_model(f_average)
                 n_material, _ = medium.eps_complex_to_nk(eps_material)
                 lambda_min = C_0 / f_average / n_material
 
-                for dl in grid_size:
+                for grid_index, dl in enumerate(grid_size):
                     if isinstance(dl, float):
                         if dl > lambda_min / MIN_GRIDS_PER_WVL:
                             log.warning(
-                                f"One of the grid sizes with a value of {dl:.4f} (um) "
-                                "was detected as being too large when compared to the "
-                                "central wavelength of a source within one of the "
-                                f"simulation mediums {lambda_min:.4f} (um).  "
-                                "To avoid inaccuracies, it is reccomended the grid size is "
-                                "reduced."
+                                f"The grid step in {'xyz'[grid_index]} has a value of {dl:.4f} (um)"
+                                ", which was detected as being large when compared to the "
+                                f"central wavelength of sources[{source_index}] "
+                                f"within the simulation medium "
+                                f"associated with structures[{medium_index + 1}], given by "
+                                f"{lambda_min:.4f} (um). "
+                                "To avoid inaccuracies, it is reccomended the grid size is reduced."
                             )
                     # TODO: warn about nonuniform grid
 
