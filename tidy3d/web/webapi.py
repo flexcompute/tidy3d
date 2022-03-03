@@ -173,7 +173,7 @@ def get_run_info(task_id: TaskId):
         progress_string = progress.read().split(b"\n")
         perc_done, field_decay = progress_string[-2].split(b",")
         return float(perc_done), float(field_decay)
-    except Exception: #pylint:disable=broad-except
+    except Exception:  # pylint:disable=broad-except
         return None, None
 
 
@@ -219,12 +219,12 @@ def monitor(task_id: TaskId) -> None:
         perc_done, _ = get_run_info(task_id)
         while perc_done is not None and perc_done < 100 and get_info(task_id).status == "running":
             perc_done, field_decay = get_run_info(task_id)
-            new_description=f'% done (field decay = {field_decay:.2e})'
+            new_description = f"% done (field decay = {field_decay:.2e})"
             progress.update(pbar_pd, completed=perc_done, description=new_description)
             time.sleep(1.0)
-        if not get_info(task_id).status == "running":
+        if get_info(task_id).status != "running":
             if perc_done < 100:
-                console.log('early shutoff detected, exiting.')
+                console.log("early shutoff detected, exiting.")
             progress.update(pbar_pd, completed=100)
 
     # preprocessing
