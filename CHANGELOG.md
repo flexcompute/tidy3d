@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+## [1.1.1] - 2022-3-2
+
+### Added
+
+### Changed
+
+- Fixed issue where smatrix was not uploaded to pyPI.
+
 ## [1.1.0] - 2022-3-1
 
 ### Added
@@ -179,7 +187,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Job and Batch classes for better simulation handling (eventually to fully replace webapi functions).
 - A large number of small improvements and bug fixes.
 
-[Unreleased]: https://github.com/flexcompute/tidy3d/compare/v1.0.2...develop
+[Unreleased]: https://github.com/flexcompute/tidy3d/compare/v1.1.1...develop
+[1.1.1]: https://github.com/flexcompute/tidy3d/compare/v1.1.0...v1.1.1
 [1.1.0]: https://github.com/flexcompute/tidy3d/compare/v1.0.2...v1.1.0
 [1.0.2]: https://github.com/flexcompute/tidy3d/compare/v1.0.1...v1.0.2
 [1.0.1]: https://github.com/flexcompute/tidy3d/compare/v1.0.0...v1.0.1
