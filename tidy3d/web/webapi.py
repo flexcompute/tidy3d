@@ -164,13 +164,15 @@ def get_run_info(task_id: TaskId):
     field_decay : float
         Average field intensity normlized to max value (1.0).
     """
-
-    client, bucket, user_id = get_s3_user()
-    key = f"users/{user_id}/{task_id}/output/solver_progress.csv"
-    progress = client.get_object(Bucket=bucket, Key=key)["Body"]
-    progress_string = progress.read().split(b"\n")
-    perc_done, field_decay = progress_string[-2].split(b",")
-    return float(perc_done), float(field_decay)
+    try:
+        client, bucket, user_id = get_s3_user()
+        key = f"users/{user_id}/{task_id}/output/solver_progress.csv"
+        progress = client.get_object(Bucket=bucket, Key=key)["Body"]
+        progress_string = progress.read().split(b"\n")
+        perc_done, field_decay = progress_string[-2].split(b",")
+        return float(perc_done), float(field_decay)
+    except Exception: #pylint:disable=broad-except
+        return 0.0, None
 
 
 def monitor(task_id: TaskId) -> None:
@@ -188,58 +190,46 @@ def monitor(task_id: TaskId) -> None:
 
     task_info = get_info(task_id)
     task_name = task_info.taskName
-    status = task_info.status
 
+    status = None
+
+    break_statuses = ("running", "success", "error", "diverged", "deleted", "draft")
+
+    # preprocessing
     console = Console()
-
-    with console.status(f"[bold green]Working on '{task_name}'...", spinner="runner"):
-        console.log(f"status = {status}")
-
-        while status not in ("success", "error", "diverged", "deleted", "draft"):
-            new_status = get_info(task_id).status
-            if new_status == "visualize":
-                new_status = "success"
-            if new_status != status:
-                console.log(f"status = {new_status}")
-                status = new_status
+    with console.status(f"[bold green]Starting '{task_name}'...", spinner="runner"):
+        while get_info(task_id).status not in break_statuses:
+            if status != get_info(task_id).status:
+                status = get_info(task_id).status
+                if status != "running":
+                    console.log(f"status = {status}")
             time.sleep(REFRESH_TIME)
 
-    # # below is the "running" progressbar, needs some work on backend before it's ready.
-    # # TODO: toggle console / display on or off, might want off for Job / Batch to override
-    # perc_done = 0.0
-    # field_decay = 1.0
-    # status = ""
-    # with Progress() as progress:
-    #     def get_description(status: str, num_dots=0) -> str:
-    #         """ gets the progressbar description as a function of status """
-    #         dot_string = ''.join([' ' if i >= num_dots else '.' for i in range(TOTAL_DOTS)])
-    #         base = f"[purple]Monitoring task{dot_string}  "
-    #         if status:
-    #             return base + f"status='{status}'"
-    #         return base
-    #     pbar = progress.add_task(f"[purple]Working on task: '{task_name}'", total=100.0)
-    #     num_dots = 0
-    #     while status not in ("success", "error", "diverged", "deleted", "draft"):
-    #         new_status = get_info(task_id).status
-    #         if new_status != status:
-    #             progress.update(pbar, description=get_description(new_status, num_dots))
-    #             status = new_status
-    #         time.sleep(REFRESH_TIME)
-    #         num_dots = (num_dots + 1) % (TOTAL_DOTS + 1)
-    #         progress.update(pbar, description=get_description(status, num_dots))
-    #         if new_status in ("running", ):
-    #             # try getting new percentage, if not available, just make some up
-    #             try:
-    #                 perc_done_new, field_decay_new = get_run_info(task_id)
-    #             # TODO: get the perc right away so we dont have to handle this.
-    #             except Exception as e:
-    #                 perc_done_new = perc_done
-    #                 field_decay_new = field_decay
-    #             # advance the progressbar
-    #             progress.update(pbar, description=get_description(new_status, num_dots),
-    #                  advance=perc_done_new - perc_done)
-    #             perc_done = perc_done_new
-    #             field_decay = field_decay_new
+    # startup phase where running hasn't started
+    console.log("starting up solver")
+    perc_done = 0.0
+    while perc_done <= 0.0:
+        perc_done, _ = get_run_info(task_id)
+
+    # phase where run % info is available
+    console.log("running solver")
+    with Progress(console=console) as progress:
+        pbar_pd = progress.add_task("% done", total=100)
+        while perc_done < 100 and get_info(task_id).status == "running":
+            perc_done, _ = get_run_info(task_id)
+            progress.update(pbar_pd, completed=perc_done)
+            time.sleep(REFRESH_TIME)
+
+    # preprocessing
+    with console.status(f"[bold green]Finishing '{task_name}'...", spinner="runner"):
+        while get_info(task_id).status not in break_statuses:
+            if status != get_info(task_id).status:
+                status = get_info(task_id).status
+                console.log(f"status = {status}")
+            time.sleep(REFRESH_TIME)
+
+    # final status
+    console.log(f"status = {get_info(task_id).status}")
 
 
 def download(task_id: TaskId, path: str = "simulation_data.hdf5") -> None:

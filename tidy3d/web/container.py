@@ -4,7 +4,6 @@ from abc import ABC
 from typing import Dict, Generator, Optional
 import time
 
-from rich.console import Console
 from rich.progress import Progress
 
 from . import webapi as web
@@ -130,20 +129,7 @@ class Job(WebContainer):
         To load the output of completed simulation into :class:`.SimulationData`objets,
         call :meth:`Job.load`.
         """
-
-        status = self.status
-        console = Console()
-
-        with console.status(f"[bold green]Working on '{self.task_name}'...", spinner="runner") as _:
-
-            while status not in ("success", "error", "diverged", "deleted", "draft"):
-                new_status = self.status
-                if new_status == "visualize":
-                    new_status = "success"
-                if new_status != status:
-                    console.log(f"status = {new_status}")
-                    status = new_status
-                time.sleep(web.REFRESH_TIME)
+        web.monitor(self.task_id)
 
     def download(self, path: str = DEFAULT_DATA_PATH) -> None:
         """Download results of simulation.
