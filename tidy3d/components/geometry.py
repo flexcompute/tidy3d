@@ -294,6 +294,15 @@ class Geometry(Tidy3dBaseModel, ABC):
         """Processes values and evaluates any infs into large (signed) numbers."""
         return map(lambda v: v if not np.isinf(v) else np.sign(v) * LARGE_NUMBER, values)
 
+    def evaluate_polygon(self, polygon: Polygon) -> Polygon:
+        """Returns a copy of polygon with inf vertices replaced by large numbers."""
+
+        coords = polygon.exterior.coords[:]
+        for i, coord in enumerate(coords):
+            new_coord = self._evaluate_infs(**coord)
+            coords[i] = new_coord
+        return Polygon(coords)
+
     @staticmethod
     def pop_axis(coord: Tuple[Any, Any, Any], axis: int) -> Tuple[Any, Tuple[Any, Any]]:
         """Separates coordinate at ``axis`` index from coordinates on the plane tangent to ``axis``.

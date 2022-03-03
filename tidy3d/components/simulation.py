@@ -361,6 +361,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
             return val
 
         # Get simulation frequency range
+        import pdb; pdb.set_trace()
         source_ranges = [source.source_time.frequency_range() for source in values["sources"]]
         if len(source_ranges) == 0:
             log.warning("No sources in simulation.")
@@ -1012,8 +1013,12 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         background_shapes = []
         for medium, shape in shapes:
 
+            shape = structure.geometry.evaluate_polygon(shape)
+
             # loop through background_shapes (note: all background are non-intersecting or merged)
             for index, (_medium, _shape) in enumerate(background_shapes):
+
+                _shape = structure.geometry.evaluate_polygon(_shape)
 
                 # if not intersection, move onto next background shape
                 if not shape & _shape:
