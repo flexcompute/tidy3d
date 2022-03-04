@@ -517,7 +517,7 @@ class ScalarFieldData(AbstractScalarFieldData, FreqData):
 
     def normalize(self, source_freq_amps: Array[complex]) -> None:
         """normalize the values by the amplitude of the source."""
-        self.values /= 1 * source_freq_amps  # pylint: disable=no-member
+        self.values /= source_freq_amps  # pylint: disable=no-member
 
 
 class ScalarFieldTimeData(AbstractScalarFieldData, TimeData):
@@ -689,7 +689,7 @@ class ModeAmpsData(AbstractModeData):
 
     def normalize(self, source_freq_amps: Array[complex]) -> None:
         """normalize the values by the amplitude of the source."""
-        self.values /= 1 * source_freq_amps  # pylint: disable=no-member
+        self.values /= source_freq_amps  # pylint: disable=no-member
 
 
 class ModeIndexData(AbstractModeData):
@@ -1069,6 +1069,10 @@ class SimulationData(Tidy3dBaseModel):
             """normalize a monitor data instance using the source time parameters."""
             freqs = monitor_data.f
             source_freq_amps = source_time.spectrum(times, freqs, dt)
+            # We remove the user-defined phase from the normalization. Otherwise, with a single
+            # source, we would get the exact same fields regardless of the source_time phase.
+            # Instead we would like the field phase to be determined by the source_time phase.
+            source_freq_amps *= np.exp(-1j * source_time.phase)
             monitor_data.normalize(source_freq_amps)
 
         for monitor_data in sim_data_norm.monitor_data.values():
