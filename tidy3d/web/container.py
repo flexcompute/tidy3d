@@ -1,10 +1,11 @@
 """higher level wrappers for webapi functions for individual (Job) and batch (Batch) tasks."""
 import os
 from abc import ABC
-from typing import Dict, Generator, Optional
+from typing import Dict, Generator, Optional, Tuple
 import time
 
 from rich.progress import Progress
+import pydantic as pd
 
 from . import webapi as web
 from .task import TaskId, TaskInfo, RunInfo, TaskName
@@ -14,7 +15,7 @@ from ..components.base import Tidy3dBaseModel
 
 
 DEFAULT_DATA_PATH = "simulation_data.hdf5"
-DEFAULT_DATA_DIR = "."
+DEFAULT_DATA_DIR = "batch"
 
 
 class WebContainer(Tidy3dBaseModel, ABC):
@@ -178,6 +179,30 @@ class Job(WebContainer):
         self.task_id = None
 
 
+class BatchData(pd.BaseModel):
+    """Holds a collection of :class:`SimulationData` returned by :class:`Batch`."""
+
+    task_paths: Dict[TaskName, str] = pd.Field(
+        ...,
+        title="Data Paths",
+        descrption="Mapping of task_name to path to corresponding data for each task in batch."
+    )
+
+    def load_sim_data(self, task_name: str) -> SimulationData:
+        """Load a :class:`SimulationData` from file by task name."""
+        task_data_path = self.task_paths[task_name]
+        return SimulationData.from_file(task_data_path)
+
+    def items(self) -> Tuple[TaskName, SimulationData]:
+        """Iterate through the :class:`SimulationData` for each task_name."""
+        for task_name, _ in self.batch.jobs.items():
+            yield self.load_sim_data(task_name)
+
+    def __getitem__(self, task_name: TaskName) -> SimulationData:
+        """Get the :class:`SimulationData` for a given ``task_name``."""
+        return self.load_sim_data(task_name)
+
+
 class Batch(WebContainer):
     """Interface for submitting several :class:`.Simulation` objects to sever.
 
@@ -202,22 +227,22 @@ class Batch(WebContainer):
         path_dir : str
             Base directory where data will be downloaded, by default current working directory.
 
-        Yields
+        Returns
         ------
-        str, :class:`.SimulationData`
-            Yields the name of task
-            and its corresponding :class:`.SimulationData` at each iteration.
+        :class:`BatchData`
+            Contains the :class:`.SimulationData` of each :class:`Simulation` in :class:`Batch`.
 
         Note
         ----
         A typical usage might look like:
 
-        >>> batch_results = batch.run()
-        >>> for task_name, sim_data in batch_results:
+        >>> batch_data = batch.run()
+        >>> for task_name, sim_data in batch_data.items():
         ...     # do something with data.
 
-        Note that because ``batch_results`` is a generator, only the current iteration of
-        :class:`.SimulationData` is stored in memory at a time.
+        ``bach_data`` does not store all of the :class:`SimulationData` objects in memory,
+        rather it iterates over the task names
+        and loads the corresponding :class:`SimulationData` from file.
         """
 
         self.upload()
@@ -368,7 +393,7 @@ class Batch(WebContainer):
 
     def load(
         self, path_dir: str = DEFAULT_DATA_DIR, normalize_index: Optional[int] = 0
-    ) -> Dict[TaskName, SimulationData]:
+    ) -> BatchData:
         """Download results and load them into :class:`.SimulationData` object.
 
         Parameters
@@ -377,49 +402,18 @@ class Batch(WebContainer):
             Base directory where data will be downloaded, by default current working directory.
 
         Returns
-        -------
-        Dict[str, :class:`.SimulationData`]
-            Dictionary mapping task names to :class:`.SimulationData` for :class:`Batch`.
-
-        Note
-        ----
-        This will return a dictionary of :class:`.SimulationData` objects,
-        each of which can hold a large amount of data.
-        If many simulations or large amounts of data,
-        use ``for task_name, sim_data in Batch.items():``
-        to instead loop through :class:`.SimulationData` objects and only store
-        current iteration in memory.
+        ------
+        :class:`BatchData`
+            Contains the :class:`.SimulationData` of each :class:`Simulation` in :class:`Batch`.
         """
-        sim_data_dir = {}
-        # self.download(path_dir=path_dir)
+        task_paths = {}
         for task_name, job in self.jobs.items():
-            job_path = self._job_data_path(task_id=job.task_id, path_dir=path_dir)
-            sim_data = job.load(path=job_path, normalize_index=normalize_index)
-            sim_data_dir[task_name] = sim_data
-        return sim_data_dir
+            task_paths[task_name] = self._job_data_path(task_name, path_dir)
+
+        return BatchData(task_paths=task_paths, path_dir=path_dir)
 
     def delete(self):
         """Delete server-side data associated with each task in the batch."""
         for _, job in self.jobs.items():
             job.delete()
             self.jobs = None
-
-    def items(self, path_dir: str = DEFAULT_DATA_DIR) -> Generator:
-        """Generates :class:`.SimulationData` for batch.
-        Used like: ``for task_name, sim_data in batch.items(): do something``.
-
-        Parameters
-        ----------
-        path_dir : str = './'
-            Base directory where data will be downloaded, by default current working directory.
-
-        Yields
-        ------
-        str, :class:`.SimulationData`
-            Yields the name of task
-            and its corresponding :class:`.SimulationData` at each iteration.
-        """
-        for task_name, job in self.jobs.items():
-            job_path = self._job_data_path(task_id=job.task_id, path_dir=path_dir)
-            sim_data = job.load(path=job_path)
-            yield task_name, sim_data
