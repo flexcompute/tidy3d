@@ -294,13 +294,17 @@ class Geometry(Tidy3dBaseModel, ABC):
         """Processes values and evaluates any infs into large (signed) numbers."""
         return map(lambda v: v if not np.isinf(v) else np.sign(v) * LARGE_NUMBER, values)
 
-    def evaluate_polygon(self, polygon: Polygon) -> Polygon:
-        """Returns a copy of polygon with inf vertices replaced by large numbers."""
+    @classmethod
+    def evaluate_inf_shape(cls, shape: "shapely.Geometry") -> "shapely.Geometry":
+        """Returns a copy of shape with inf vertices replaced by large numbers if polygon."""
 
-        coords = polygon.exterior.coords[:]
-        for i, coord in enumerate(coords):
-            new_coord = self._evaluate_infs(**coord)
-            coords[i] = new_coord
+        if not isinstance(shape, Polygon):
+            return shape
+
+        coords = shape.exterior.coords[:]
+        for coord_index, (coord_x, coord_y) in enumerate(coords):
+            new_coord = tuple(cls._evaluate_infs(coord_x, coord_y))
+            coords[coord_index] = new_coord
         return Polygon(coords)
 
     @staticmethod
@@ -496,6 +500,16 @@ class Circular(Geometry):
     radius: pydantic.NonNegativeFloat = pydantic.Field(
         ..., title="Radius", description="Radius of geometry.", units=MICROMETER
     )
+
+    @pydantic.validator("radius", always=True)
+    def _check_inf(cls, val):
+        """Make sure radius isn't inf because shapely cant handle it."""
+        if np.isinf(val):
+            raise SetupError(
+                "Can't set infinite radius because it isn't handled by shapely. "
+                "Use a very large number or infinite sized Box instead."
+            )
+        return val
 
     def _intersect_dist(self, position, z0) -> float:
         """Distance between points on circle at z=position where center of circle at z=z0.
