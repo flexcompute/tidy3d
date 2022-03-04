@@ -15,7 +15,7 @@ from .validators import validate_mode_objects_symmetry
 from .geometry import Box
 from .types import Symmetry, Ax, Shapely, FreqBound, GridSize
 from .grid import Coords1D, Grid, Coords
-from .medium import Medium, MediumType, AbstractMedium
+from .medium import Medium, MediumType, AbstractMedium, PECMedium
 from .structure import Structure
 from .source import SourceType, PlaneWave
 from .monitor import MonitorType
@@ -244,11 +244,11 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         sim_bound_min, sim_bound_max = sim_box.bounds
         sim_bounds = list(sim_bound_min) + list(sim_bound_max)
 
-        for structure in val:
+        for istruct, structure in enumerate(val):
             struct_bound_min, struct_bound_max = structure.geometry.bounds
             struct_bounds = list(struct_bound_min) + list(struct_bound_max)
 
-            for istruct, (sim_val, struct_val) in enumerate(zip(sim_bounds, struct_bounds)):
+            for sim_val, struct_val in zip(sim_bounds, struct_bounds):
 
                 if np.isclose(sim_val, struct_val):
                     log.warning(
@@ -400,6 +400,10 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
             f_average = (fmin_src + fmax_src) / 2.0
 
             for medium_index, medium in enumerate(mediums):
+
+                # min wavelength in PEC is meaningless and we'll get divide by inf errors
+                if isinstance(medium, PECMedium):
+                    continue
 
                 eps_material = medium.eps_model(f_average)
                 n_material, _ = medium.eps_complex_to_nk(eps_material)
@@ -1012,12 +1016,12 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         background_shapes = []
         for medium, shape in shapes:
 
-            shape = structure.geometry.evaluate_polygon(shape)
+            shape = Box.evaluate_inf_shape(shape)
 
             # loop through background_shapes (note: all background are non-intersecting or merged)
             for index, (_medium, _shape) in enumerate(background_shapes):
 
-                _shape = structure.geometry.evaluate_polygon(_shape)
+                _shape = Box.evaluate_inf_shape(_shape)
 
                 # if not intersection, move onto next background shape
                 if not shape & _shape:
