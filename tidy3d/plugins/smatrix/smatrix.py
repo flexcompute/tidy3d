@@ -10,6 +10,7 @@ from ... import Simulation, Box, ModeSpec, ModeMonitor, ModeSource, GaussianPuls
 from ...constants import HERTZ, C_0
 from ...components.types import Direction, Ax
 from ...components.viz import add_ax_if_none, equal_aspect
+from ...log import SetupError, log
 
 # fwidth of gaussian pulse in units of central frequency
 FWIDTH_FRAC = 1.0 / 10
@@ -79,16 +80,11 @@ class ComponentModeler(pd.BaseModel):
         description="Frequency at which to evaluate the scattering matrix.",
         units=HERTZ,
     )
-    batch_path: str = pd.Field(
-        "smatrix_batch.json",
-        title="Path to Batch",
-        description="Path to the file where the Batch object will be saved.",
-    )
 
-    batch: Any = pd.Field(
+    batch_data: Any = pd.Field(
         None,
-        title="Batch",
-        description="Batch of simulations used to compute S matrix. Set internally.",
+        title="Batch Data",
+        description="Batch Data of task used to compute S matrix. Set internally.",
     )
 
     @pd.validator("simulation", always=True)
@@ -174,7 +170,7 @@ class ComponentModeler(pd.BaseModel):
 
     def _run_sims(
         self, sim_dict: Dict[str, Simulation], folder_name: str, path_dir: str
-    ) -> "Batch":
+    ) -> "BatchData":
         """Run :class:`Simulations` for each port and return the batch after saving."""
 
         # do it here as to not trigger web auth when importing the plugin
@@ -182,17 +178,12 @@ class ComponentModeler(pd.BaseModel):
 
         batch = Batch(simulations=sim_dict, folder_name=folder_name)
 
-        # save to self, for reference later
-        self.batch = batch
-
         batch.upload()
-
-        # save after upload so that the jobs are saved too for later
-        batch.to_file(self.batch_path)
-
         batch.start()
         batch.monitor()
-        return batch
+        batch_data = batch.load(path_dir=path_dir)
+        self.batch_data = batch_data
+        return batch_data
 
     def _normalization_factor(self, port_source: Port, sim_data: SimulationData) -> complex:
         """Compute the normalization amplitude based on the measured input mode amplitude."""
@@ -213,41 +204,44 @@ class ComponentModeler(pd.BaseModel):
         shift_value = self._shift_value(port_source)
         return normalize_amp * np.exp(1j * k_eff * shift_value)
 
-    def _construct_smatrix(self, batch: "Batch", path_dir: str) -> SMatrixType:
+    def _construct_smatrix(self, batch_data: "BatchData") -> SMatrixType:
         """Post process batch to generate scattering matrix."""
 
         # load all data
-        sim_data_dict = batch.load(path_dir=path_dir)
-        s_matrix_dict = {}
+        s_matrix_dict = {
+            port_source.name: {port_monitor.name: [] for port_monitor in self.ports}
+            for port_source in self.ports
+        }
 
         # loop through source ports
         for port_source in self.ports:
 
             source_name = port_source.name
-            s_matrix_dict[source_name] = {}
 
-            # loop through all monitors
-            for port_monitor in self.ports:
+            # loop through all source injection indices
+            for mode_index in port_source.mode_indices:
 
-                monitor_name = port_monitor.name
-                mode_matrix = []
+                # get the data for this source and compute normalization by injection
+                task_name = self._task_name(port_source, mode_index)
+                sim_data = batch_data[task_name]
+                norm_factor = self._normalization_factor(port_source, sim_data)
 
-                # loop through all source injection indices
-                for mode_index in port_source.mode_indices:
+                # loop through all monitors
+                for port_monitor in self.ports:
 
-                    # get the data for this source and compute normalization by injection
-                    task_name = self._task_name(port_source, mode_index)
-                    sim_data = sim_data_dict[task_name]
-                    norm_factor = self._normalization_factor(port_source, sim_data)
+                    monitor_name = port_monitor.name
 
                     # compute the mode amplitude data
                     dir_out = "-" if port_monitor.direction == "+" else "+"
                     mode_data = sim_data[monitor_name].amps.sel(f=self.freq, direction=dir_out)
                     amps_normalized = np.array(mode_data.values) / norm_factor
-                    mode_matrix.append(amps_normalized)
+                    s_matrix_dict[source_name][monitor_name].append(amps_normalized)
 
-                # convert to an array
-                s_matrix_dict[source_name][monitor_name] = np.array(mode_matrix)
+            # convert to an array
+            for port_monitor in self.ports:
+                monitor_name = port_monitor.name
+                mode_matrix = np.array(s_matrix_dict[source_name][monitor_name])
+                s_matrix_dict[source_name][monitor_name] = mode_matrix
 
         return s_matrix_dict
 
@@ -255,13 +249,12 @@ class ComponentModeler(pd.BaseModel):
         """Solves for the scattering matrix of the system."""
 
         sim_dict = self._make_sims()
-        batch = self._run_sims(sim_dict=sim_dict, folder_name=folder_name, path_dir=path_dir)
-        return self._construct_smatrix(batch=batch, path_dir=path_dir)
+        batch_data = self._run_sims(sim_dict=sim_dict, folder_name=folder_name, path_dir=path_dir)
+        return self._construct_smatrix(batch_data=batch_data)
 
-    def load(self, path_dir: str = DEFAULT_DATA_DIR) -> SMatrixType:
-        """Load an Smatrix from a saved batch."""
+    def load(self) -> SMatrixType:
+        """Load an Smatrix from saved BatchData object."""
 
-        from ...web.container import Batch
-
-        batch = Batch.from_file(self.batch_path)
-        return self._construct_smatrix(batch=batch, path_dir=path_dir)
+        if self.batch_data is None:
+            raise SetupError(f"Component modeler has no batch saved. Run .solve() to generate.")
+        return self._construct_smatrix(batch_data=self.batch_data)
