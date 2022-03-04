@@ -2,7 +2,7 @@
 
 import json
 from tidy3d import Simulation
-
+import tidy3d
 FNAME = "tidy3d/schema.json"
 
 # https://pydantic-docs.helpmanual.io/usage/schema/
