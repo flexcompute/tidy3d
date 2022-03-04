@@ -872,6 +872,16 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
             pml_thicknesses.append((thick_l, thick_r))
         return pml_thicknesses
 
+    @property
+    def bounds_pml(self) -> Tuple[Tuple[float, float, float], Tuple[float, float, float]]:
+        """Simulation bounds including the PML regions."""
+        pml_thick = self.pml_thicknesses
+        bounds_in = self.bounds
+        bounds_min = tuple([bmin - pml[0] for bmin, pml in zip(bounds_in[0], pml_thick)])
+        bounds_max = tuple([bmax + pml[1] for bmax, pml in zip(bounds_in[1], pml_thick)])
+
+        return (bounds_min, bounds_max)
+
     @equal_aspect
     @add_ax_if_none
     def plot_pml(
@@ -970,11 +980,11 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         """
 
         axis, _ = self.parse_xyz_kwargs(x=x, y=y, z=z)
-        _, ((xmin, ymin), (xmax, ymax)) = self._pop_bounds(axis=axis)
-        _, (pml_thick_x, pml_thick_y) = self.pop_axis(self.pml_thicknesses, axis=axis)
+        _, (xmin, ymin) = self.pop_axis(self.bounds_pml[0], axis=axis)
+        _, (xmax, ymax) = self.pop_axis(self.bounds_pml[1], axis=axis)
 
-        ax.set_xlim(xmin - pml_thick_x[0], xmax + pml_thick_x[1])
-        ax.set_ylim(ymin - pml_thick_y[0], ymax + pml_thick_y[1])
+        ax.set_xlim(xmin, xmax)
+        ax.set_ylim(ymin, ymax)
         return ax
 
     @staticmethod
@@ -1267,20 +1277,26 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         """
 
         bounds_min, bounds_max = box.bounds
+        sim_bs_min, sim_bs_max = self.bounds_pml
         bmin_new, bmax_new = [], []
 
-        for (center, sym, bmin, bmax) in zip(self.center, self.symmetry, bounds_min, bounds_max):
+        zipped = zip(self.center, self.symmetry, bounds_min, bounds_max, sim_bs_min, sim_bs_max)
+        for (center, sym, bmin, bmax, sim_bmin, sim_bmax) in zipped:
             if sym == 0 or center < bmin:
-                bmin_new.append(bmin)
-                bmax_new.append(bmax)
+                bmin_tmp, bmax_tmp = bmin, bmax
             else:
                 if bmax < center:
-                    bmin_new.append(2 * center - bmax)
-                    bmax_new.append(2 * center - bmin)
+                    bmin_tmp = 2 * center - bmax
+                    bmax_tmp = 2 * center - bmin
                 else:
                     # bmin <= center <= bmax
-                    bmin_new.append(center)
-                    bmax_new.append(max(bmax, 2 * center - bmin))
+                    bmin_tmp = center
+                    bmax_tmp = max(bmax, 2 * center - bmin)
+            # Extend well past the simulation domain if needed, but truncate if original box
+            # is too large, specifically to avoid issues with inf.
+            sim_size = sim_bmax - sim_bmin
+            bmin_new.append(max(bmin_tmp, sim_bmin - sim_size))
+            bmax_new.append(min(bmax_tmp, sim_bmax + sim_size))
 
         return Box.from_bounds(bmin_new, bmax_new)
 
