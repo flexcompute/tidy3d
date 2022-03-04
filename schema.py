@@ -1,7 +1,7 @@
 """Generates schema for Simulation, saves it to file."""
 
 import json
-from tidy3d import Simulation
+import tidy3d
 
 FNAME = "tidy3d/schema.json"
 
