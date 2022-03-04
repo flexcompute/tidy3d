@@ -571,10 +571,6 @@ class Box(Geometry):
             """Returns center point based on bounds along dimension."""
             if np.isneginf(pt_min) and np.isposinf(pt_max):
                 return 0.0
-            if np.isneginf(pt_min):
-                return pt_min
-            if np.isposinf(pt_max):
-                return pt_max
             return (pt_min + pt_max) / 2.0
 
         center = tuple(get_center(pt_min, pt_max) for pt_min, pt_max in zip(rmin, rmax))
@@ -969,7 +965,10 @@ class PolySlab(Planar):
         """sets the .center field using zmin, zmax, and polygon vertices"""
         polygon_face = Polygon(val)
         zmin, zmax = values.get("slab_bounds")
-        z0 = (zmin + zmax) / 2.0
+        if np.isneginf(zmin) and np.isposinf(zmax):
+            z0 = 0.0
+        else:
+            z0 = (zmin + zmax) / 2.0
         [(x0, y0)] = list(polygon_face.centroid.coords)
         values["center"] = cls.unpop_axis(z0, (x0, y0), axis=values.get("axis"))
         return val
