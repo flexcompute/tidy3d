@@ -1,7 +1,7 @@
 """higher level wrappers for webapi functions for individual (Job) and batch (Batch) tasks."""
 import os
 from abc import ABC
-from typing import Dict, Generator, Optional, Tuple
+from typing import Dict, Optional, Tuple
 import time
 
 from rich.progress import Progress
@@ -15,7 +15,7 @@ from ..components.base import Tidy3dBaseModel
 
 
 DEFAULT_DATA_PATH = "simulation_data.hdf5"
-DEFAULT_DATA_DIR = "batch"
+DEFAULT_DATA_DIR = "."
 
 
 class WebContainer(Tidy3dBaseModel, ABC):
@@ -185,18 +185,36 @@ class BatchData(pd.BaseModel):
     task_paths: Dict[TaskName, str] = pd.Field(
         ...,
         title="Data Paths",
-        descrption="Mapping of task_name to path to corresponding data for each task in batch."
+        descrption="Mapping of task_name to path to corresponding data for each task in batch.",
+    )
+
+    task_ids: Dict[TaskName, str] = pd.Field(
+        ..., title="Task IDs", descrption="Mapping of task_name to task_id for each task in batch."
+    )
+
+    normalize_index: Optional[int] = pd.Field(
+        0,
+        title="Source Normalization Index",
+        description="If specified, normalizes the frequency-domain data by the amplitude "
+        "spectrum of the source corresponding to ``simulation.sources[normalize_index]``. "
+        "If ``None``, does not normalize.",
     )
 
     def load_sim_data(self, task_name: str) -> SimulationData:
         """Load a :class:`SimulationData` from file by task name."""
         task_data_path = self.task_paths[task_name]
-        return SimulationData.from_file(task_data_path)
+        task_id = self.task_ids[task_name]
+        return web.load(
+            task_id=task_id,
+            path=task_data_path,
+            normalize_index=self.normalize_index,
+            replace_existing=False,
+        )
 
     def items(self) -> Tuple[TaskName, SimulationData]:
         """Iterate through the :class:`SimulationData` for each task_name."""
-        for task_name, _ in self.batch.jobs.items():
-            yield self.load_sim_data(task_name)
+        for task_name in self.task_paths.keys():
+            yield task_name, self.load_sim_data(task_name)
 
     def __getitem__(self, task_name: TaskName) -> SimulationData:
         """Get the :class:`SimulationData` for a given ``task_name``."""
@@ -218,7 +236,9 @@ class Batch(WebContainer):
     jobs: Dict[TaskName, Job] = None
     folder_name: str = "default"
 
-    def run(self, path_dir: str = DEFAULT_DATA_DIR):
+    def run(
+        self, path_dir: str = DEFAULT_DATA_DIR, normalize_index: Optional[int] = 0
+    ) -> BatchData:
         """Upload and run each simulation in :class:`Batch`.
         Returns generator that can be used to loop through data results.
 
@@ -248,8 +268,7 @@ class Batch(WebContainer):
         self.upload()
         self.start()
         self.monitor()
-        self.download(path_dir=path_dir)
-        return self.items()
+        return self.load(path_dir=path_dir, normalize_index=normalize_index)
 
     def upload(self) -> None:
         """Create a series of tasks in the :class:`Batch` and upload them to server.
@@ -324,34 +343,29 @@ class Batch(WebContainer):
         ]
         end_statuses = ("success", "error", "diverged", "deleted", "draft")
 
-        pbar_tasks = {}
-        with Progress() as progress:
+        console = Console()
+        console.log("Started working on Batch.")
+
+        with Progress(console=console) as progress:
+
+            # create progressbars
+            pbar_tasks = {}
             for task_name, job in self.jobs.items():
                 status = job.status
                 description = pbar_description(task_name, status)
                 pbar = progress.add_task(description, total=len(run_statuses) - 1)
                 pbar_tasks[task_name] = pbar
 
-            statuses = [job.status for _, job in self.jobs.items()]
-            while any(s not in end_statuses for s in statuses):
-                for status_index, (task_name, job) in enumerate(self.jobs.items()):
-                    current_status = statuses[status_index]
-                    new_status = job.status
-                    if new_status == "visualize":
-                        new_status = "success"
-                    if new_status != current_status:
-                        completed = run_statuses.index(new_status)
-                        pbar = pbar_tasks[task_name]
-                        description = pbar_description(task_name, new_status)
-                        progress.update(pbar, description=description, completed=completed)
-                        statuses[status_index] = new_status
-                statuses = [job.status for _, job in self.jobs.items()]
+            while any(job.status not in end_statuses for job in self.jobs.values()):
+                for task_name, job in self.jobs.items():
+                    pbar = pbar_tasks[task_name]
+                    status = job.status
+                    description = pbar_description(task_name, status)
+                    completed = run_statuses.index(status)
+                    progress.update(pbar, description=description, completed=completed)
                 time.sleep(web.REFRESH_TIME)
 
-            for task_name, job in self.jobs.items():
-                pbar = pbar_tasks[task_name]
-                description = pbar_description(task_name, job.status)
-                progress.update(pbar, description=description, completed=len(run_statuses))
+        console.log("Batch complete.")
 
     @staticmethod
     def _job_data_path(task_id: TaskId, path_dir: str = DEFAULT_DATA_DIR):
@@ -387,8 +401,8 @@ class Batch(WebContainer):
 
         """
 
-        for task_name, job in self.jobs.items():
-            job_path = self._job_data_path(task_name, path_dir)
+        for job in self.jobs.values():
+            job_path = self._job_data_path(task_id=job.task_id, path_dir=path_dir)
             job.download(path=job_path)
 
     def load(
@@ -407,10 +421,12 @@ class Batch(WebContainer):
             Contains the :class:`.SimulationData` of each :class:`Simulation` in :class:`Batch`.
         """
         task_paths = {}
+        task_ids = {}
         for task_name, job in self.jobs.items():
-            task_paths[task_name] = self._job_data_path(task_name, path_dir)
+            task_paths[task_name] = self._job_data_path(task_id=job.task_id, path_dir=path_dir)
+            task_ids[task_name] = self.jobs[task_name].task_id
 
-        return BatchData(task_paths=task_paths, path_dir=path_dir)
+        return BatchData(task_paths=task_paths, task_ids=task_ids, normalize_index=normalize_index)
 
     def delete(self):
         """Delete server-side data associated with each task in the batch."""
