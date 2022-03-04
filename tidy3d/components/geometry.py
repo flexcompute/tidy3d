@@ -15,6 +15,7 @@ from .types import Bound, Size, Coordinate, Axis, Coordinate2D, tidynumpy
 from .types import Vertices, Ax, Shapely
 from .viz import add_ax_if_none, equal_aspect
 from .viz import PLOT_BUFFER, ARROW_LENGTH_FACTOR, ARROW_WIDTH_FACTOR
+from .validators import is_not_inf
 from ..log import Tidy3dKeyError, SetupError, ValidationError
 from ..constants import MICROMETER, LARGE_NUMBER
 
@@ -28,6 +29,8 @@ class Geometry(Tidy3dBaseModel, ABC):
         description="Center of object in x, y, and z.",
         units=MICROMETER,
     )
+
+    _center_not_inf = is_not_inf("center")
 
     def inside(self, x, y, z) -> bool:
         """Returns ``True`` if point ``(x,y,z)`` is inside volume of :class:`Geometry`.
@@ -501,15 +504,7 @@ class Circular(Geometry):
         ..., title="Radius", description="Radius of geometry.", units=MICROMETER
     )
 
-    @pydantic.validator("radius", always=True)
-    def _check_inf(cls, val):
-        """Make sure radius isn't inf because shapely cant handle it."""
-        if np.isinf(val):
-            raise SetupError(
-                "Can't set infinite radius because it isn't handled by shapely. "
-                "Use a very large number or infinite sized Box instead."
-            )
-        return val
+    _radius_not_inf = is_not_inf("radius")
 
     def _intersect_dist(self, position, z0) -> float:
         """Distance between points on circle at z=position where center of circle at z=z0.
