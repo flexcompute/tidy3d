@@ -566,7 +566,18 @@ class Box(Geometry):
         -------
         >>> b = Box.from_bounds(rmin=(-1, -2, -3), rmax=(3, 2, 1))
         """
-        center = tuple((pt_min + pt_max) / 2.0 for pt_min, pt_max in zip(rmin, rmax))
+
+        def get_center(pt_min: float, pt_max: float) -> float:
+            """Returns center point based on bounds along dimension."""
+            if np.isneginf(pt_min) and np.isposinf(pt_max):
+                return 0.0
+            if np.isneginf(pt_min):
+                return pt_min
+            if np.isposinf(pt_max):
+                return pt_max
+            return (pt_min + pt_max) / 2.0
+
+        center = tuple(get_center(pt_min, pt_max) for pt_min, pt_max in zip(rmin, rmax))
         size = tuple((pt_max - pt_min) for pt_min, pt_max in zip(rmin, rmax))
         return cls(center=center, size=size)
 
