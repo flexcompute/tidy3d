@@ -117,6 +117,8 @@ the surface current densities.",
 Should not be changed except in special circumstatnces where the exp(-jkr) convention is used.",
     )
 
+    method: int = pydantic.Field(0)
+
     @pydantic.validator("origin", always=True)
     def set_origin(cls, val, values):
         """Sets .origin as the average of centers of all surface monitors if not provided."""
@@ -162,6 +164,7 @@ Should not be changed except in special circumstatnces where the exp(-jkr) conve
         pts_per_wavelength: int = PTS_PER_WVL,
         medium: Medium = None,
         origin: Coordinate = None,
+        method: int = 0
     ):
         """Constructs :class:`Near2Far` from a list of surface monitors and their directions.
 
@@ -205,6 +208,7 @@ the number of directions ({len(normal_dirs)})."
             pts_per_wavelength=pts_per_wavelength,
             medium=medium,
             origin=origin,
+            method=method
         )
 
     @pydantic.validator("currents", always=True)
@@ -389,7 +393,7 @@ the number of directions ({len(normal_dirs)})."
         return currents
 
     # pylint:disable=too-many-locals
-    def _radiation_vectors_for_surface_old(
+    def _radiation_vectors_for_surface_feb_release(
         self, theta: float, phi: float, surface: Near2FarSurface, currents: xr.Dataset
     ):
         """Compute radiation vectors at an angle in spherical coordinates
@@ -439,7 +443,7 @@ the number of directions ({len(normal_dirs)})."
 
         def integrate_2D(function, pts_u, pts_v):
             """Trapezoidal integration in two dimensions."""
-            return np.trapz(np.trapz(function, pts_u, axis=0), pts_v, axis=0)
+            return np.trapz(np.trapz(function, pts_u.values, axis=0), pts_v.values, axis=0)
 
         J[idx_u] = integrate_2D(currents["J" + cmp_1] * phase, pts[idx_u], pts[idx_v])
         J[idx_v] = integrate_2D(currents["J" + cmp_2] * phase, pts[idx_u], pts[idx_v])
@@ -458,6 +462,221 @@ the number of directions ({len(normal_dirs)})."
 
         # L_phi  (8.34b)
         L_phi = -M[0] * sin_phi + M[1] * cos_phi
+
+        return N_theta, N_phi, L_theta, L_phi
+
+    # pylint:disable=too-many-locals
+    def _radiation_vectors_for_surface_vect_numpy(
+        self, theta: Numpy, phi: Numpy, surface: Near2FarSurface, currents: xr.Dataset
+    ):
+        """Compute radiation vectors at an angle in spherical coordinates
+        for a given set of surface currents and observation angles.
+
+        Parameters
+        ----------
+        theta : float
+            Polar angle (rad) downward from x=y=0 line relative to the local origin.
+        phi : float
+            Azimuthal (rad) angle from y=z=0 line relative to the local origin.
+        surface: :class:`Near2FarSurface`
+            :class:`Near2FarSurface` object to use as source of near field.
+        currents : xarray.Dataset
+            xarray Dataset containing surface currents associated with the surface monitor.
+
+        Returns
+        -------
+        tuple[float, float, float, float]
+            ``N_theta``, ``N_phi``, ``L_theta``, ``L_phi`` radiation vectors for the given surface.
+        """
+
+        k = self.k
+
+        # make sure that observation points are interpreted w.r.t. the local origin
+        pts = [currents[name].values - origin for name, origin in zip(["x", "y", "z"], self.origin)]
+
+        _, idx_uv = surface.monitor.pop_axis((0, 1, 2), axis=surface.axis)
+        _, source_names = surface.monitor.pop_axis(("x", "y", "z"), axis=surface.axis)
+
+        idx_u, idx_v = idx_uv
+        cmp_1, cmp_2 = source_names
+
+        sin_theta = np.sin(np.atleast_1d(theta))
+        cos_theta = np.cos(np.atleast_1d(theta))
+        sin_phi = np.sin(np.atleast_1d(phi))
+        cos_phi = np.cos(np.atleast_1d(phi))
+
+        term1 = np.atleast_1d(pts[0])[:, np.newaxis, np.newaxis] * np.outer(sin_theta, cos_phi)
+        term2 = np.atleast_1d(pts[1])[:, np.newaxis, np.newaxis] * np.outer(sin_theta, sin_phi)
+        term3 = (np.atleast_1d(pts[2])[:, np.newaxis] * cos_theta)[:, :, np.newaxis]
+
+        phase_x = (np.exp(-self.phasor_sign * 1j * k * term1))
+        phase_y = (np.exp(-self.phasor_sign * 1j * k * term2))
+        phase_z = (np.exp(-self.phasor_sign * 1j * k * term3))
+
+        phase = np.squeeze(phase_x[:, np.newaxis, np.newaxis] * phase_y[np.newaxis, :, np.newaxis] * phase_z[np.newaxis, np.newaxis, :])
+        dims = len(phase.shape) - 2
+
+        J = [0, 0, 0]
+        M = [0, 0, 0]
+
+        def integrate_2D(function, phase, pts_u, pts_v):
+            """Trapezoidal integration in two dimensions."""
+            return np.trapz(np.trapz(function.values[(..., *([np.newaxis] * dims))] * phase, pts_u, axis=0), pts_v, axis=0)
+
+        # def integrate_2D(function, phase, pts_u, pts_v):
+        #     """Midpoint integration in two dimensions."""
+        #     du = pts_u[1]-pts_u[0]
+        #     dv = pts_v[1]-pts_v[0]
+        #     return np.sum(np.sum(function.values[(..., *([np.newaxis] * dims))] * phase, axis=0), axis=0) * du * dv
+
+        J[idx_u] = integrate_2D(currents["J" + cmp_1], phase, pts[idx_u], pts[idx_v])
+        J[idx_v] = integrate_2D(currents["J" + cmp_2], phase, pts[idx_u], pts[idx_v])
+
+        M[idx_u] = integrate_2D(currents["M" + cmp_1], phase, pts[idx_u], pts[idx_v])
+        M[idx_v] = integrate_2D(currents["M" + cmp_2], phase, pts[idx_u], pts[idx_v])
+
+        cos_theta_cos_phi = np.outer(cos_theta, cos_phi)
+        cos_theta_sin_phi = np.outer(cos_theta, sin_phi)
+
+        # N_theta (8.33a)
+        N_theta = J[0] * cos_theta_cos_phi + J[1] * cos_theta_sin_phi - J[2] * sin_theta[:, np.newaxis]
+
+        # N_phi (8.33b)
+        N_phi = -J[0] * sin_phi[np.newaxis, :] + J[1] * cos_phi[np.newaxis, :]
+
+        # L_theta  (8.34a)
+        L_theta = M[0] * cos_theta_cos_phi + M[1] * cos_theta_sin_phi - M[2] * sin_theta[:, np.newaxis]
+
+        # L_phi  (8.34b)
+        L_phi = -M[0] * sin_phi[np.newaxis, :] + M[1] * cos_phi[np.newaxis, :]
+
+        return N_theta, N_phi, L_theta, L_phi
+
+    # pylint:disable=too-many-locals
+    def _radiation_vectors_for_surface_vect_dask(
+        self, theta: Numpy, phi: Numpy, surface: Near2FarSurface, currents: xr.Dataset
+    ):
+        """Compute radiation vectors at an angle in spherical coordinates
+        for a given set of surface currents and observation angles.
+
+        Parameters
+        ----------
+        theta : float
+            Polar angle (rad) downward from x=y=0 line relative to the local origin.
+        phi : float
+            Azimuthal (rad) angle from y=z=0 line relative to the local origin.
+        surface: :class:`Near2FarSurface`
+            :class:`Near2FarSurface` object to use as source of near field.
+        currents : xarray.Dataset
+            xarray Dataset containing surface currents associated with the surface monitor.
+
+        Returns
+        -------
+        tuple[float, float, float, float]
+            ``N_theta``, ``N_phi``, ``L_theta``, ``L_phi`` radiation vectors for the given surface.
+        """
+
+        k = self.k
+
+        # make sure that observation points are interpreted w.r.t. the local origin
+        pts = [currents[name].values - origin for name, origin in zip(["x", "y", "z"], self.origin)]
+
+        _, idx_uv = surface.monitor.pop_axis((0, 1, 2), axis=surface.axis)
+        _, source_names = surface.monitor.pop_axis(("x", "y", "z"), axis=surface.axis)
+
+        idx_u, idx_v = idx_uv
+        cmp_1, cmp_2 = source_names
+
+        sin_theta = np.sin(np.atleast_1d(theta))
+        cos_theta = np.cos(np.atleast_1d(theta))
+        sin_phi = np.sin(np.atleast_1d(phi))
+        cos_phi = np.cos(np.atleast_1d(phi))
+
+        term1 = np.atleast_1d(pts[0])[:, np.newaxis, np.newaxis] * np.outer(sin_theta, cos_phi)
+        term2 = np.atleast_1d(pts[1])[:, np.newaxis, np.newaxis] * np.outer(sin_theta, sin_phi)
+        term3 = (np.atleast_1d(pts[2])[:, np.newaxis] * cos_theta)[:, :, np.newaxis]
+
+        phase_x = (np.exp(-self.phasor_sign * 1j * k * term1))
+        phase_y = (np.exp(-self.phasor_sign * 1j * k * term2))
+        phase_z = (np.exp(-self.phasor_sign * 1j * k * term3))
+
+        phase = np.squeeze(phase_x[:, np.newaxis, np.newaxis] * phase_y[np.newaxis, :, np.newaxis] * phase_z[np.newaxis, np.newaxis, :])
+        dims = len(phase.shape) - 2
+
+        # currents = currents.chunk(chunks='auto')
+
+        J = [0, 0, 0]
+        M = [0, 0, 0]
+
+        # def integrate_2D(function, dim_u: str, dim_v: str):
+        #     """Trapezoidal integration in two dimensions for an xarray dataset."""
+        #     outer_integrand = function.integrate(dim_u)
+        #     return outer_integrand.integrate(dim_v)
+
+        # J[idx_u] = integrate_2D(currents["J" + cmp_1].values[(..., *([np.newaxis] * dims))] * phase, cmp_1, cmp_2)
+        # J[idx_v] = integrate_2D(currents["J" + cmp_2].values[(..., *([np.newaxis] * dims))] * phase, cmp_1, cmp_2)
+
+        # M[idx_u] = integrate_2D(currents["M" + cmp_1].values[(..., *([np.newaxis] * dims))] * phase, cmp_1, cmp_2)
+        # M[idx_v] = integrate_2D(currents["M" + cmp_2].values[(..., *([np.newaxis] * dims))] * phase, cmp_1, cmp_2)
+
+
+
+        # def integrate_2D(function, pts_u, pts_v):
+        #     """Trapezoidal integration in two dimensions."""
+        #     return np.trapz(np.trapz(function, pts_u, axis=0), pts_v, axis=0)
+
+        # # from scipy import integrate
+        # # def integrate_2D(function, pts_u, pts_v):
+        # #     """Trapezoidal integration in two dimensions."""
+        # #     return integrate.trapezoid(integrate.trapezoid(function, pts_u, axis=0), pts_v, axis=0)
+
+        # Ju = xr.DataArray(currents["J" + cmp_1].values[(..., *([np.newaxis] * dims))])
+        # Jv = xr.DataArray(currents["J" + cmp_2].values[(..., *([np.newaxis] * dims))])
+
+        # Mu = xr.DataArray(currents["M" + cmp_1].values[(..., *([np.newaxis] * dims))])
+        # Mv = xr.DataArray(currents["M" + cmp_2].values[(..., *([np.newaxis] * dims))])
+
+        # J[idx_u] = integrate_2D(Ju * phase, pts[idx_u], pts[idx_v])
+        # J[idx_v] = integrate_2D(Jv * phase, pts[idx_u], pts[idx_v])
+
+        # M[idx_u] = integrate_2D(Mu * phase, pts[idx_u], pts[idx_v])
+        # M[idx_v] = integrate_2D(Mv * phase, pts[idx_u], pts[idx_v])
+
+        def da_trapz(function, pts, axis):
+            da.map_blocks(np.trapz, pts, axis, dtype=Numpy)
+
+        def integrate_2D(function, phase, pts_u, pts_v):
+            """Trapezoidal integration in two dimensions."""
+            integrand = da.from_array(function.values[(..., *([np.newaxis] * dims))], chunks='auto')
+            phase_term = da.from_array(phase, chunks='auto')
+            # print(integrand.shape, phase_term.shape)
+            du = pts_u[1]-pts_u[0]
+            dv = pts_v[1]-pts_v[0]
+            output = da.sum(da.sum(integrand * phase_term, axis=0), axis=0) * du * dv
+            return output.compute()
+
+        J[idx_u] = integrate_2D(currents["J" + cmp_1], phase, pts[idx_u], pts[idx_v])
+        J[idx_v] = integrate_2D(currents["J" + cmp_2], phase, pts[idx_u], pts[idx_v])
+
+        M[idx_u] = integrate_2D(currents["M" + cmp_1], phase, pts[idx_u], pts[idx_v])
+        M[idx_v] = integrate_2D(currents["M" + cmp_2], phase, pts[idx_u], pts[idx_v])
+
+
+
+        cos_theta_cos_phi = np.outer(cos_theta, cos_phi)
+        cos_theta_sin_phi = np.outer(cos_theta, sin_phi)
+
+        # N_theta (8.33a)
+        N_theta = J[0] * cos_theta_cos_phi + J[1] * cos_theta_sin_phi - J[2] * sin_theta[:, np.newaxis]
+
+        # N_phi (8.33b)
+        N_phi = -J[0] * sin_phi[np.newaxis, :] + J[1] * cos_phi[np.newaxis, :]
+
+        # L_theta  (8.34a)
+        L_theta = M[0] * cos_theta_cos_phi + M[1] * cos_theta_sin_phi - M[2] * sin_theta[:, np.newaxis]
+
+        # L_phi  (8.34b)
+        L_phi = -M[0] * sin_phi[np.newaxis, :] + M[1] * cos_phi[np.newaxis, :]
 
         return N_theta, N_phi, L_theta, L_phi
 
@@ -485,63 +704,76 @@ the number of directions ({len(normal_dirs)})."
             ``N_theta``, ``N_phi``, ``L_theta``, ``L_phi`` radiation vectors for the given surface.
         """
 
-        da = np
+        if self.method == 1:
+            return self._radiation_vectors_for_surface_feb_release(theta, phi, surface, currents)
+        elif self.method == 2:
+            return self._radiation_vectors_for_surface_vect_numpy(theta, phi, surface, currents)
+        elif self.method == 3:
+            return self._radiation_vectors_for_surface_vect_dask(theta, phi, surface, currents)
 
         k = self.k
 
         # make sure that observation points are interpreted w.r.t. the local origin
-        pts = [currents[name] - origin for name, origin in zip(["x", "y", "z"], self.origin)]
+        pts = [currents[name].values - origin for name, origin in zip(["x", "y", "z"], self.origin)]
 
-        _, idx_uv = surface.monitor.pop_axis((0, 1, 2), axis=surface.axis)
+        idx_w, idx_uv = surface.monitor.pop_axis((0, 1, 2), axis=surface.axis)
         _, source_names = surface.monitor.pop_axis(("x", "y", "z"), axis=surface.axis)
 
         idx_u, idx_v = idx_uv
         cmp_1, cmp_2 = source_names
 
-        # currents = currents.chunk(chunks='auto')
+        theta = np.atleast_1d(theta)
+        phi = np.atleast_1d(phi)
 
-        sin_theta = da.sin(np.atleast_1d(theta))
-        cos_theta = da.cos(np.atleast_1d(theta))
-        sin_phi = da.sin(np.atleast_1d(phi))
-        cos_phi = da.cos(np.atleast_1d(phi))
+        sin_theta = np.sin(theta)
+        cos_theta = np.cos(theta)
+        sin_phi = np.sin(phi)
+        cos_phi = np.cos(phi)
 
-        term1 = np.atleast_1d(pts[0])[:, np.newaxis, np.newaxis] * da.outer(sin_theta, cos_phi)
-        term2 = np.atleast_1d(pts[1])[:, np.newaxis, np.newaxis] * da.outer(sin_theta, sin_phi)
-        term3 = (np.atleast_1d(pts[2])[:, np.newaxis] * cos_theta)[:, :, np.newaxis]
+        # term1 = np.atleast_1d(pts[0])[:, np.newaxis, np.newaxis] * np.outer(sin_theta, cos_phi)
+        # term2 = np.atleast_1d(pts[1])[:, np.newaxis, np.newaxis] * np.outer(sin_theta, sin_phi)
+        # term3 = (np.atleast_1d(pts[2])[:, np.newaxis] * cos_theta)[:, :, np.newaxis]
 
-        phase_x = (da.exp(-self.phasor_sign * 1j * k * term1))
-        phase_y = (da.exp(-self.phasor_sign * 1j * k * term2))
-        phase_z = (da.exp(-self.phasor_sign * 1j * k * term3))
+        # phase_x = (np.exp(-self.phasor_sign * 1j * k * term1))
+        # phase_y = (np.exp(-self.phasor_sign * 1j * k * term2))
+        # phase_z = (np.exp(-self.phasor_sign * 1j * k * term3))
 
-        phase = da.squeeze(phase_x[:, np.newaxis, np.newaxis] * phase_y[np.newaxis, :, np.newaxis] * phase_z[np.newaxis, np.newaxis, :])
-        dims = len(phase.shape) - 2
+        # phase = np.squeeze(phase_x[:, np.newaxis, np.newaxis] * phase_y[np.newaxis, :, np.newaxis] * phase_z[np.newaxis, np.newaxis, :])
+        # dims = 4 - len(phase.shape)
+        # phase = phase[(*([np.newaxis] * dims), ...)]
 
-        J = [0, 0, 0]
-        M = [0, 0, 0]
-
-        # def integrate_2D(function, dim_u: str, dim_v: str):
-        #     """Trapezoidal integration in two dimensions for an xarray dataset."""
-        #     outer_integrand = function.integrate(dim_u)
-        #     return outer_integrand.integrate(dim_v)
-
-        # J[idx_u] = integrate_2D(currents["J" + cmp_1].values[(..., *([np.newaxis] * dims))] * phase, cmp_1, cmp_2)
-        # J[idx_v] = integrate_2D(currents["J" + cmp_2].values[(..., *([np.newaxis] * dims))] * phase, cmp_1, cmp_2)
-
-        # M[idx_u] = integrate_2D(currents["M" + cmp_1].values[(..., *([np.newaxis] * dims))] * phase, cmp_1, cmp_2)
-        # M[idx_v] = integrate_2D(currents["M" + cmp_2].values[(..., *([np.newaxis] * dims))] * phase, cmp_1, cmp_2)
+        J = np.zeros((3, len(theta), len(phi)), dtype=complex)
+        M = np.zeros_like(J)
 
         def integrate_2D(function, pts_u, pts_v):
             """Trapezoidal integration in two dimensions."""
             return np.trapz(np.trapz(function, pts_u, axis=0), pts_v, axis=0)
 
-        J[idx_u] = integrate_2D(currents["J" + cmp_1].values[(..., *([np.newaxis] * dims))] * phase, pts[idx_u], pts[idx_v])
-        J[idx_v] = integrate_2D(currents["J" + cmp_2].values[(..., *([np.newaxis] * dims))] * phase, pts[idx_u], pts[idx_v])
+        phase = [None] * 3
 
-        M[idx_u] = integrate_2D(currents["M" + cmp_1].values[(..., *([np.newaxis] * dims))] * phase, pts[idx_u], pts[idx_v])
-        M[idx_v] = integrate_2D(currents["M" + cmp_2].values[(..., *([np.newaxis] * dims))] * phase, pts[idx_u], pts[idx_v])
+        for i in np.arange(len(theta)):
+            for j in np.arange(len(phi)):
 
-        cos_theta_cos_phi = da.outer(cos_theta, cos_phi)
-        cos_theta_sin_phi = da.outer(cos_theta, sin_phi)
+                # phase_ij = phase[:,:,i,j]
+
+                phase[0] = np.exp(-self.phasor_sign * 1j * k * pts[0] * sin_theta[i] * cos_phi[j])
+                phase[1] = np.exp(-self.phasor_sign * 1j * k * pts[1] * sin_theta[i] * sin_phi[j])
+                phase[2] = np.exp(-self.phasor_sign * 1j * k * pts[2] * cos_theta[i])
+
+                phase_ij = phase[idx_u][:, np.newaxis] * phase[idx_v][np.newaxis, :] * phase[idx_w]
+
+                J[idx_u,i,j] = integrate_2D(
+                    currents["J" + cmp_1].values * phase_ij, pts[idx_u], pts[idx_v])
+                J[idx_v,i,j] = integrate_2D(
+                    currents["J" + cmp_2].values * phase_ij, pts[idx_u], pts[idx_v])
+
+                M[idx_u,i,j] = integrate_2D(
+                    currents["M" + cmp_1].values * phase_ij, pts[idx_u], pts[idx_v])
+                M[idx_v,i,j] = integrate_2D(
+                    currents["M" + cmp_2].values * phase_ij, pts[idx_u], pts[idx_v])
+
+        cos_theta_cos_phi = cos_theta[:, np.newaxis] * cos_phi[np.newaxis, :]
+        cos_theta_sin_phi = cos_theta[:, np.newaxis] * sin_phi[np.newaxis, :]
 
         # N_theta (8.33a)
         N_theta = J[0] * cos_theta_cos_phi + J[1] * cos_theta_sin_phi - J[2] * sin_theta[:, np.newaxis]
@@ -657,7 +889,7 @@ the number of directions ({len(normal_dirs)})."
         H = Hx, Hy, Hz = self._sph_2_car_field(Hr, Htheta, Hphi, theta, phi)
         return E, H
 
-    def power_spherical(self, r, theta, phi):
+    def power_spherical(self, r: float, theta: Numpy, phi: Numpy):
         """Get power scattered to a point relative to the local origin in spherical coordinates.
 
         Parameters
