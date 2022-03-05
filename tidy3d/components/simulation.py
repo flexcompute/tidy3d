@@ -877,8 +877,8 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         """Simulation bounds including the PML regions."""
         pml_thick = self.pml_thicknesses
         bounds_in = self.bounds
-        bounds_min = tuple([bmin - pml[0] for bmin, pml in zip(bounds_in[0], pml_thick)])
-        bounds_max = tuple([bmax + pml[1] for bmax, pml in zip(bounds_in[1], pml_thick)])
+        bounds_min = tuple((bmin - pml[0] for bmin, pml in zip(bounds_in[0], pml_thick)))
+        bounds_max = tuple((bmax + pml[1] for bmax, pml in zip(bounds_in[1], pml_thick)))
 
         return (bounds_min, bounds_max)
 
@@ -1260,7 +1260,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         n_max, _ = AbstractMedium.eps_complex_to_nk(eps_max)
         return wvl_min / n_max
 
-    def min_sym_box(self, box: Box) -> Box:
+    def min_sym_box(self, box: Box) -> Box:  # pylint:disable=too-many-locals
         """Compute the smallest Box restricted to the first quadrant in the presence of symmetries
         that fully covers the original Box when symmetries are applied.
 
