@@ -218,7 +218,8 @@ class Geometry(Tidy3dBaseModel, ABC):
 
         # for each intersection, plot the shape
         for shape in shapes_intersect:
-            patch = PolygonPatch(shape, **patch_kwargs)
+            _shape = self.evaluate_inf_shape(shape)
+            patch = PolygonPatch(_shape, **patch_kwargs)
             ax.add_artist(patch)
 
         # clean up the axis display
@@ -305,10 +306,11 @@ class Geometry(Tidy3dBaseModel, ABC):
             return shape
 
         coords = shape.exterior.coords[:]
-        for coord_index, (coord_x, coord_y) in enumerate(coords):
+        new_coords = []
+        for (coord_x, coord_y) in coords:
             new_coord = tuple(cls._evaluate_infs(coord_x, coord_y))
-            coords[coord_index] = new_coord
-        return Polygon(coords)
+            new_coords.append(new_coord)
+        return Polygon(new_coords)
 
     @staticmethod
     def pop_axis(coord: Tuple[Any, Any, Any], axis: int) -> Tuple[Any, Tuple[Any, Any]]:
