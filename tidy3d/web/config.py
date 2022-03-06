@@ -3,7 +3,7 @@ from typing import Any
 
 from dataclasses import dataclass
 
-SOLVER_VERSION = "release-22.1.5"
+SOLVER_VERSION = "release-22.1.6"
 
 
 @dataclass
