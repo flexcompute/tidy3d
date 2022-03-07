@@ -13,7 +13,6 @@ import numpy as np
 from matplotlib.axes._subplots import Axes
 from shapely.geometry.base import BaseGeometry
 
-
 """ Complex Values """
 
 

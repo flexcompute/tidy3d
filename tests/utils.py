@@ -65,10 +65,12 @@ SIM_FULL = Simulation(
             geometry=Box(size=(1, 1, 1), center=(0, 0, 0)),
             medium=Medium(permittivity=1.0, conductivity=3.0),
         ),
-        Structure(geometry=Sphere(radius=1.4, center=(1.0, 0.0, 1.0)), medium=Medium()),
+        Structure(
+            geometry=Sphere(radius=1.4, center=(1.0, 0.0, 1.0)), medium=Medium(permittivity=6.0)
+        ),
         Structure(
             geometry=Cylinder(radius=1.4, length=2.0, center=(1.0, 0.0, -1.0), axis=1),
-            medium=Medium(),
+            medium=Medium(permittivity=5.0),
         ),
         Structure(
             geometry=PolySlab(
