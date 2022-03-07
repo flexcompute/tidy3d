@@ -71,6 +71,29 @@ def equal_aspect(plot):
     return _plot
 
 
+""" plot parameters """
+
+class PlotParams(BaseModel):
+
+    alpha: Any = None
+    edgecolor: Any = None
+    facecolor: Any = None
+    fill: bool = True
+    hatch: str = None
+    lw: int = 1    
+
+MEDIUM_CMAP = [
+    "#689DBC",
+    "#D0698E",
+    "#5E6EAD",
+    "#C6224E",
+    "#BDB3E2",
+    "#9EC3E0",
+    "#616161",
+    "#877EBC",
+]
+
+
 """ Utilities for default plotting parameters."""
 
 

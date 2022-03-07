@@ -9,6 +9,7 @@ import matplotlib.pylab as plt
 import matplotlib as mpl
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from descartes import PolygonPatch
+from shapely.geometry.base import BaseGeometry as ShapelyGeo
 
 from .validators import assert_unique_names, assert_objects_in_sim_bounds
 from .validators import validate_mode_objects_symmetry
@@ -23,6 +24,7 @@ from .pml import PMLTypes, PML, Absorber
 from .viz import StructMediumParams, StructEpsParams, PMLParams, SymParams
 from .viz import add_ax_if_none, equal_aspect
 from .viz import plotly_sim
+from .viz import MEDIUM_CMAP, PlotParams
 
 from ..version import __version__
 from ..constants import C_0, MICROMETER, SECOND, pec_val, inf
@@ -561,14 +563,13 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         y: float = None,
         z: float = None,
         ax: Ax = None,
-        **kwargs,
     ) -> Ax:
 
-        ax = self.plot_structures(ax=ax, x=x, y=y, z=z, **kwargs)
-        ax = self.plot_sources(ax=ax, x=x, y=y, z=z, **kwargs)
-        ax = self.plot_monitors(ax=ax, x=x, y=y, z=z, **kwargs)
-        ax = self.plot_symmetries(ax=ax, x=x, y=y, z=z, **kwargs)
-        ax = self.plot_pml(ax=ax, x=x, y=y, z=z, **kwargs)
+        ax = self.plot_structures(ax=ax, x=x, y=y, z=z)
+        ax = self.plot_sources(ax=ax, x=x, y=y, z=z)
+        ax = self.plot_monitors(ax=ax, x=x, y=y, z=z)
+        ax = self.plot_symmetries(ax=ax, x=x, y=y, z=z)
+        ax = self.plot_pml(ax=ax, x=x, y=y, z=z)
         ax = self._set_plot_bounds(ax=ax, x=x, y=y, z=z)
         return ax
 
@@ -581,7 +582,6 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         z: float = None,
         freq: float = None,
         ax: Ax = None,
-        **kwargs,
     ) -> Ax:
         """Plot each of simulation's components on a plane defined by one nonzero x,y,z coordinate.
         The permittivity is plotted in grayscale based on its value at the specified frequency.
@@ -610,18 +610,18 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
             The supplied or created matplotlib axes.
         """
 
-        ax = self.plot_structures_eps(freq=freq, cbar=True, ax=ax, x=x, y=y, z=z, **kwargs)
-        ax = self.plot_sources(ax=ax, x=x, y=y, z=z, **kwargs)
-        ax = self.plot_monitors(ax=ax, x=x, y=y, z=z, **kwargs)
-        ax = self.plot_symmetries(ax=ax, x=x, y=y, z=z, **kwargs)
-        ax = self.plot_pml(ax=ax, x=x, y=y, z=z, **kwargs)
+        ax = self.plot_structures_eps(freq=freq, cbar=True, ax=ax, x=x, y=y, z=z)
+        ax = self.plot_sources(ax=ax, x=x, y=y, z=z)
+        ax = self.plot_monitors(ax=ax, x=x, y=y, z=z)
+        ax = self.plot_symmetries(ax=ax, x=x, y=y, z=z)
+        ax = self.plot_pml(ax=ax, x=x, y=y, z=z)
         ax = self._set_plot_bounds(ax=ax, x=x, y=y, z=z)
         return ax
 
     @equal_aspect
     @add_ax_if_none
     def plot_structures(
-        self, x: float = None, y: float = None, z: float = None, ax: Ax = None, **kwargs
+        self, x: float = None, y: float = None, z: float = None, ax: Ax = None
     ) -> Ax:
         """Plot each of simulation's structures on a plane defined by one nonzero x,y,z coordinate.
 
@@ -649,15 +649,33 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         medium_map = self.medium_map
         medium_shapes = self._filter_structures_plane(self.structures, x=x, y=y, z=z)
         for (medium, shape) in medium_shapes:
-            params_updater = StructMediumParams(medium=medium, medium_map=medium_map)
-            kwargs_struct = params_updater.update_params(**kwargs)
-            if medium == self.medium:
-                kwargs_struct["edgecolor"] = "white"
-                kwargs_struct["facecolor"] = "white"
-            patch = PolygonPatch(shape, **kwargs_struct)
-            ax.add_artist(patch)
+            ax = self.plot_shape_structure(medium=medium, shape=shape, ax=ax)
         ax = self._set_plot_bounds(ax=ax, x=x, y=y, z=z)
         return ax
+
+    def plot_shape_structure(self, medium:Medium, shape:ShapelyGeo, ax:Ax) -> Ax:
+
+        plot_params = PlotParams()
+
+        mat_index = self.medium_map[medium]
+
+        if mat_index == 0 or medium == self.medium:
+            # background medium
+            plot_params.facecolor = "white"
+            plot_params.edgecolor = "white"
+        elif isinstance(structure.medium, PECMedium):
+            # perfect electrical conductor
+            plot_params.facecolor = "gold"
+            plot_params.edgecolor = "k"
+            plot_params.lw = 1
+        else:
+            # regular medium
+            facecolor = mat_cmap[(mat_index - 1) % len(mat_cmap)]
+            plot_params.facecolor = mfacecolor
+        patch = PolygonPatch(shape, plot_params.dict())
+        ax.add_artist(patch)
+        return ax
+
 
     @staticmethod
     def _add_cbar(eps_min: float, eps_max: float, ax: Ax = None) -> None:
