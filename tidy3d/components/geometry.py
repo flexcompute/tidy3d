@@ -1,4 +1,4 @@
-# pylint:disable=too-many-lines
+# pylint:disable=too-many-lines, too-many-arguments
 """Defines spatial extent of objects."""
 
 from abc import ABC, abstractmethod
@@ -7,7 +7,7 @@ from typing import List, Tuple, Union, Any
 import pydantic
 import numpy as np
 
-from shapely.geometry import Point, Polygon, box
+from shapely.geometry import Point, Polygon, box, MultiPolygon
 from descartes import PolygonPatch
 
 from .base import Tidy3dBaseModel
@@ -15,6 +15,8 @@ from .types import Bound, Size, Coordinate, Axis, Coordinate2D, tidynumpy, Array
 from .types import Vertices, Ax, Shapely
 from .viz import add_ax_if_none, equal_aspect
 from .viz import PLOT_BUFFER, ARROW_LENGTH_FACTOR, ARROW_WIDTH_FACTOR, MAX_ARROW_WIDTH_FACTOR
+from .viz import PlotParams, plot_params_geometry
+from .validators import is_not_inf
 from ..log import Tidy3dKeyError, SetupError, ValidationError
 from ..constants import MICROMETER, LARGE_NUMBER, RADIAN
 
@@ -25,6 +27,11 @@ _N_SAMPLE_POLYGON_INTERSECT = 100
 
 class Geometry(Tidy3dBaseModel, ABC):
     """Abstract base class, defines where something exists in space."""
+
+    @property
+    def plot_params(self):
+        """Default parameters for plotting a Geometry object."""
+        return plot_params_geometry
 
     center: Coordinate = pydantic.Field(
         (0.0, 0.0, 0.0),
@@ -195,7 +202,6 @@ class Geometry(Tidy3dBaseModel, ABC):
     def plot(
         self, x: float = None, y: float = None, z: float = None, ax: Ax = None, **patch_kwargs
     ) -> Ax:
-        # pylint:disable=line-too-long
         """Plot geometry cross section at single (x,y,z) coordinate.
 
         Parameters
@@ -218,23 +224,59 @@ class Geometry(Tidy3dBaseModel, ABC):
         matplotlib.axes._subplots.Axes
             The supplied or created matplotlib axes.
         """
-        # pylint:disable=line-too-long
 
         # find shapes that intersect self at plane
         axis, position = self.parse_xyz_kwargs(x=x, y=y, z=z)
         shapes_intersect = self.intersections(x=x, y=y, z=z)
 
+        plot_params = self.plot_params.include_kwargs(**patch_kwargs)
+
         # for each intersection, plot the shape
         for shape in shapes_intersect:
-            _shape = self.evaluate_inf_shape(shape)
-            patch = PolygonPatch(_shape, **patch_kwargs)
-            ax.add_artist(patch)
+            ax = self.plot_shape(shape, plot_params=plot_params, ax=ax)
 
         # clean up the axis display
         ax = self.add_ax_labels_lims(axis=axis, ax=ax)
         ax.set_aspect("equal")
         ax.set_title(f"cross section at {'xyz'[axis]}={position:.2f}")
         return ax
+
+    def plot_shape(self, shape: Shapely, plot_params: PlotParams, ax: Ax) -> Ax:
+        """Defines how a shape is plotted on a matplotlib axes."""
+        _shape = self.evaluate_inf_shape(shape)
+        patch = PolygonPatch(_shape, **plot_params.to_kwargs())
+        ax.add_artist(patch)
+        return ax
+
+    @staticmethod
+    def _get_shape_coords(shape: Shapely) -> Tuple[float, float]:
+        """Return xs, ys for given shapely shape."""
+
+        def strip_xy(shape):
+            """get lists of xs and ys coordinates for a single polygon."""
+            xs, ys = shape.exterior.coords.xy
+            xs = xs.tolist()
+            ys = ys.tolist()
+            xs = [-LARGE_NUMBER / 1e5 if np.isneginf(x) else x for x in xs]
+            xs = [LARGE_NUMBER / 1e5 if np.isposinf(x) else x for x in xs]
+            ys = [-LARGE_NUMBER / 1e5 if np.isneginf(y) else y for y in ys]
+            ys = [LARGE_NUMBER / 1e5 if np.isposinf(y) else y for y in ys]
+            return xs, ys
+
+        if isinstance(shape, MultiPolygon):
+            shapes = list(shape.geoms)
+        else:
+            shapes = [shape]
+
+        xs = []
+        ys = []
+
+        for _shape in shapes:
+            _xs, _ys = strip_xy(_shape)
+            xs += _xs
+            ys += _ys
+
+        return xs, ys
 
     def _get_plot_labels(self, axis: Axis) -> Tuple[str, str]:
         """Returns planar coordinate x and y axis labels for cross section plots.
@@ -307,7 +349,7 @@ class Geometry(Tidy3dBaseModel, ABC):
         return map(lambda v: v if not np.isinf(v) else np.sign(v) * LARGE_NUMBER, values)
 
     @classmethod
-    def evaluate_inf_shape(cls, shape: "shapely.Geometry") -> "shapely.Geometry":
+    def evaluate_inf_shape(cls, shape: Shapely) -> Shapely:
         """Returns a copy of shape with inf vertices replaced by large numbers if polygon."""
 
         if not isinstance(shape, Polygon):

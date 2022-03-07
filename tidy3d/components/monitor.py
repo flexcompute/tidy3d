@@ -9,7 +9,7 @@ from .types import Literal, Ax, EMField, ArrayLike, Array
 from .geometry import Box
 from .validators import assert_plane
 from .mode import ModeSpec
-from .viz import add_ax_if_none, equal_aspect, MonitorParams, ARROW_COLOR_MONITOR, ARROW_ALPHA
+from .viz import PlotParams, plot_params_monitor, ARROW_COLOR_MONITOR, ARROW_ALPHA
 from ..log import SetupError
 from ..constants import HERTZ, SECOND
 
@@ -28,18 +28,13 @@ class Monitor(Box, ABC):
         min_length=1,
     )
 
-    @equal_aspect
-    @add_ax_if_none
-    def plot(  # pylint:disable=duplicate-code
-        self, x: float = None, y: float = None, z: float = None, ax: Ax = None, **kwargs
-    ) -> Ax:
-
-        kwargs = MonitorParams().update_params(**kwargs)
-        ax = self.geometry.plot(x=x, y=y, z=z, ax=ax, **kwargs)
-        return ax
+    @property
+    def plot_params(self) -> PlotParams:
+        """Default parameters for plotting a Monitor object."""
+        return plot_params_monitor
 
     @property
-    def geometry(self):
+    def geometry(self) -> Box:
         """:class:`Box` representation of monitor.
 
         Returns

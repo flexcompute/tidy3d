@@ -861,7 +861,6 @@ class AbstractSimulationData(Tidy3dBaseModel, ABC):
         eps_alpha: float = 0.2,
         robust: bool = True,
         ax: Ax = None,
-        **patch_kwargs,
     ) -> Ax:
         """Plot the field data for a monitor with simulation plot overlayed.
 
@@ -886,8 +885,6 @@ class AbstractSimulationData(Tidy3dBaseModel, ABC):
             This helps in visualizing the field patterns especially in the presence of a source.
         ax : matplotlib.axes._subplots.Axes = None
             matplotlib axes to plot on, if not specified, one is created.
-        **patch_kwargs
-            Optional keyword arguments passed to ``add_artist(patch, **patch_kwargs)``.
 
         Returns
         -------
@@ -938,7 +935,6 @@ class AbstractSimulationData(Tidy3dBaseModel, ABC):
             reverse=eps_reverse,
             ax=ax,
             **{axis_label: position},
-            **patch_kwargs,
         )
 
         # set the limits based on the xarray coordinates min and max
@@ -1067,7 +1063,6 @@ class SimulationData(AbstractSimulationData):
         eps_alpha: float = 0.2,
         robust: bool = True,
         ax: Ax = None,
-        **patch_kwargs,
     ) -> Ax:
         """Plot the field data for a monitor with simulation plot overlayed.
 
@@ -1103,8 +1098,6 @@ class SimulationData(AbstractSimulationData):
             This helps in visualizing the field patterns especially in the presence of a source.
         ax : matplotlib.axes._subplots.Axes = None
             matplotlib axes to plot on, if not specified, one is created.
-        **patch_kwargs
-            Optional keyword arguments passed to ``add_artist(patch, **patch_kwargs)``.
 
         Returns
         -------
