@@ -11,7 +11,7 @@ from .types import Direction, Polarization, Ax, FreqBound, Array
 from .validators import assert_plane, validate_name_str
 from .geometry import Box
 from .mode import ModeSpec
-from .viz import add_ax_if_none, PlotParams, equal_aspect
+from .viz import add_ax_if_none, PlotParams
 from .viz import ARROW_COLOR_SOURCE, ARROW_ALPHA, ARROW_COLOR_POLARIZATION
 from ..constants import RADIAN, HERTZ, MICROMETER
 from ..constants import inf  # pylint:disable=unused-import

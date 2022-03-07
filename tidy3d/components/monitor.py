@@ -9,7 +9,7 @@ from .types import Literal, Ax, EMField, ArrayLike, Array
 from .geometry import Box
 from .validators import assert_plane
 from .mode import ModeSpec
-from .viz import add_ax_if_none, equal_aspect, PlotParams, ARROW_COLOR_MONITOR, ARROW_ALPHA
+from .viz import PlotParams, ARROW_COLOR_MONITOR, ARROW_ALPHA
 from ..log import SetupError
 from ..constants import HERTZ, SECOND
 

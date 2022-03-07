@@ -75,6 +75,7 @@ def equal_aspect(plot):
 
 
 class PlotParams(BaseModel):
+    """Stores plotting parameters / specifications for a given model."""
 
     alpha: Any = None
     edgecolor: Any = None
@@ -84,6 +85,7 @@ class PlotParams(BaseModel):
     lw: int = 1
 
 
+# stores color of simulation.structures for given index in simulation.medium_map
 MEDIUM_CMAP = [
     "#689DBC",
     "#D0698E",
@@ -235,6 +237,9 @@ class SimDataGeoParams(PatchParamSwitcher):
     def get_plot_params(self) -> PatchParams:
         """Returns :class:`PatchParams` based on user-supplied args."""
         return PatchParams(alpha=0.4, edgecolor="black")
+
+
+""" Plotly. """
 
 
 # pylint:disable=too-many-locals, too-many-branches, too-many-statements
