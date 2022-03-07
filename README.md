@@ -74,7 +74,4 @@ For more general discussions, questions, comments, anything else, open a topic i
 
 ## License
 
-[GNU AGPL](https://github.com/flexcompute/tidy3d/blob/main/LICENSE)
-
-Flexcompute operates under the interpretation of the AGPL license that scripts which use the Tidy3D python API but which do **not** modify the Tidy3D code do not count as derived work
-and do not fall under the terms of the AGPL license. Such scripts constitute an exception to the Tidy3D license and can be shared freely under any license, AGPL or not.
+[GNU LGPL](https://github.com/flexcompute/tidy3d/blob/main/LICENSE)
