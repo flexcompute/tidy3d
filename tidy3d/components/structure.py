@@ -37,9 +37,7 @@ class Structure(Tidy3dBaseModel):
 
     @equal_aspect
     @add_ax_if_none
-    def plot(
-        self, x: float = None, y: float = None, z: float = None, ax: Ax = None
-    ) -> Ax:
+    def plot(self, x: float = None, y: float = None, z: float = None, ax: Ax = None) -> Ax:
         """Plot structure's geometric cross section at single (x,y,z) coordinate.
 
         Parameters

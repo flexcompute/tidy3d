@@ -14,14 +14,13 @@ from shapely.geometry.base import BaseGeometry as ShapelyGeo
 from .validators import assert_unique_names, assert_objects_in_sim_bounds
 from .validators import validate_mode_objects_symmetry
 from .geometry import Box
-from .types import Symmetry, Ax, Shapely, FreqBound, GridSize
+from .types import Symmetry, Ax, Shapely, FreqBound, GridSize, Axis
 from .grid import Coords1D, Grid, Coords
 from .medium import Medium, MediumType, AbstractMedium, PECMedium
 from .structure import Structure
 from .source import SourceType, PlaneWave
 from .monitor import MonitorType
 from .pml import PMLTypes, PML, Absorber
-from .viz import StructMediumParams, StructEpsParams, PMLParams, SymParams
 from .viz import add_ax_if_none, equal_aspect
 from .viz import plotly_sim
 from .viz import MEDIUM_CMAP, PlotParams
@@ -557,7 +556,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
 
     @equal_aspect
     @add_ax_if_none
-    def plot(  # pylint:disable=too-many-arguments
+    def plot(
         self,
         x: float = None,
         y: float = None,
@@ -575,7 +574,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
 
     @equal_aspect
     @add_ax_if_none
-    def plot_eps(  # pylint: disable=too-many-arguments
+    def plot_eps(
         self,
         x: float = None,
         y: float = None,
@@ -599,10 +598,6 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
             If not specified, evaluates at infinite frequency.
         ax : matplotlib.axes._subplots.Axes = None
             Matplotlib axes to plot on, if not specified, one is created.
-        **kwargs
-            Optional keyword arguments passed to the matplotlib patch plotting of structure.
-            For details on accepted values, refer to
-            `Matplotlib's documentation <https://tinyurl.com/2nf5c2fk>`_.
 
         Returns
         -------
@@ -635,10 +630,6 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
             position of plane in z direction, only one of x, y, z must be specified to define plane.
         ax : matplotlib.axes._subplots.Axes = None
             Matplotlib axes to plot on, if not specified, one is created.
-        **kwargs
-            Optional keyword arguments passed to the matplotlib patch plotting of structure.
-            For details on accepted values, refer to
-            `Matplotlib's documentation <https://tinyurl.com/2nf5c2fk>`_.
 
         Returns
         -------
@@ -653,9 +644,9 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         ax = self._set_plot_bounds(ax=ax, x=x, y=y, z=z)
         return ax
 
-    def plot_shape_structure(self, medium:Medium, shape:ShapelyGeo, ax:Ax) -> Ax:
+    def plot_shape_structure(self, medium: Medium, shape: ShapelyGeo, ax: Ax) -> Ax:
 
-        plot_params = PlotParams()
+        plot_params = PlotParams(lw=0)
 
         mat_index = self.medium_map[medium]
 
@@ -663,19 +654,18 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
             # background medium
             plot_params.facecolor = "white"
             plot_params.edgecolor = "white"
-        elif isinstance(structure.medium, PECMedium):
+        elif isinstance(medium, PECMedium):
             # perfect electrical conductor
             plot_params.facecolor = "gold"
             plot_params.edgecolor = "k"
             plot_params.lw = 1
         else:
             # regular medium
-            facecolor = mat_cmap[(mat_index - 1) % len(mat_cmap)]
-            plot_params.facecolor = mfacecolor
-        patch = PolygonPatch(shape, plot_params.dict())
-        ax.add_artist(patch)
-        return ax
+            facecolor = MEDIUM_CMAP[(mat_index - 1) % len(MEDIUM_CMAP)]
+            plot_params.facecolor = facecolor
 
+        ax = self.plot_shape(shape=shape, plot_params=plot_params, ax=ax)
+        return ax
 
     @staticmethod
     def _add_cbar(eps_min: float, eps_max: float, ax: Ax = None) -> None:
@@ -698,7 +688,6 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         ax: Ax = None,
         **kwargs,
     ) -> Ax:
-        # pylint:disable=line-too-long
         """Plot each of simulation's structures on a plane defined by one nonzero x,y,z coordinate.
         The permittivity is plotted in grayscale based on its value at the specified frequency.
 
@@ -715,45 +704,64 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
             If not specified, evaluates at infinite frequency.
         ax : matplotlib.axes._subplots.Axes = None
             Matplotlib axes to plot on, if not specified, one is created.
-        **kwargs
-            Optional keyword arguments passed to the matplotlib patch plotting of structure.
-            For details on accepted values, refer to
-            `Matplotlib's documentation <https://tinyurl.com/2nf5c2fk>`_.
 
         Returns
         -------
         matplotlib.axes._subplots.Axes
             The supplied or created matplotlib axes.
         """
-        # pylint:enable=line-too-long
 
-        if freq is None:
-            freq = inf
-        eps_list = [s.medium.eps_model(freq).real for s in self.structures]
-        eps_list.append(self.medium.eps_model(freq).real)
-        eps_list = [eps for eps in eps_list if eps != pec_val]
-        eps_max = max(eps_list)
-        eps_min = min(eps_list)
+        eps_min, eps_max = self.eps_bounds(freq=freq)
         medium_shapes = self._filter_structures_plane(self.structures, x=x, y=y, z=z)
         for (medium, shape) in medium_shapes:
-            eps = medium.eps_model(freq).real
-            params_updater = StructEpsParams(eps=eps, eps_min=eps_min, eps_max=eps_max)
-            kwargs_struct = params_updater.update_params(**kwargs)
-            if medium == self.medium:
-                kwargs_struct["edgecolor"] = "white"
-            patch = PolygonPatch(shape, **kwargs_struct)
-            ax.add_artist(patch)
+            ax = self.plot_shape_structure_eps(freq=freq, medium=medium, shape=shape, ax=ax)
+
         if cbar:
             self._add_cbar(eps_min=eps_min, eps_max=eps_max, ax=ax)
         ax = self._set_plot_bounds(ax=ax, x=x, y=y, z=z)
         return ax
 
+    def eps_bounds(self, freq: float = None) -> Tuple[float, float]:
+        """Range of permittivity present in the simulation at frequency "freq"."""
+        medium_list = [self.medium] + [structure.medium for structure in self.structures]
+        medium_list = [medium for medium in medium_list if not isinstance(medium, PECMedium)]
+        eps_list = [medium.eps_model(freq).real for medium in medium_list]
+        eps_min = min(1, min(eps_list))
+        eps_max = max(1, max(eps_list))
+        return eps_min, eps_max
+
+    def plot_shape_structure_eps(
+        self, freq: float, medium: Medium, shape: ShapelyGeo, ax: Ax
+    ) -> Ax:
+
+        plot_params = PlotParams(lw=0)
+
+        if medium == self.medium:
+            # background medium
+            plot_params.facecolor = "white"
+            plot_params.edgecolor = "white"
+        elif isinstance(medium, PECMedium):
+            # perfect electrical conductor
+            plot_params.facecolor = "gold"
+            plot_params.edgecolor = "k"
+            plot_params.lw = 1
+        else:
+            # regular medium
+            eps_min, eps_max = self.eps_bounds(freq=freq)
+            eps_medium = medium.eps_model(frequency=freq).real
+
+            delta_eps = eps_medium - eps_min
+            delta_eps_max = eps_max - eps_min + 1e-5
+            eps_fraction = delta_eps / delta_eps_max
+            color = 1 - eps_fraction
+            plot_params.facecolor = str(color)
+
+        ax = self.plot_shape(shape=shape, plot_params=plot_params, ax=ax)
+        return ax
+
     @equal_aspect
     @add_ax_if_none
-    def plot_sources(
-        self, x: float = None, y: float = None, z: float = None, ax: Ax = None, **kwargs
-    ) -> Ax:
-        # pylint:disable=line-too-long
+    def plot_sources(self, x: float = None, y: float = None, z: float = None, ax: Ax = None) -> Ax:
         """Plot each of simulation's sources on a plane defined by one nonzero x,y,z coordinate.
 
         Parameters
@@ -766,20 +774,14 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
             position of plane in z direction, only one of x, y, z must be specified to define plane.
         ax : matplotlib.axes._subplots.Axes = None
             Matplotlib axes to plot on, if not specified, one is created.
-        **kwargs
-            Optional keyword arguments passed to the matplotlib patch plotting of structure.
-            For details on accepted values, refer to
-            `Matplotlib's documentation <https://tinyurl.com/2nf5c2fk>`_.
 
         Returns
         -------
         matplotlib.axes._subplots.Axes
             The supplied or created matplotlib axes.
         """
-        # pylint:enable=line-too-long
         for source in self.sources:
-            if source.intersects_plane(x=x, y=y, z=z):
-                ax = source.plot(ax=ax, x=x, y=y, z=z, **kwargs)
+            ax = source.plot(x=x, y=y, z=z, ax=ax)
         ax = self._set_plot_bounds(ax=ax, x=x, y=y, z=z)
         return ax
 
@@ -788,7 +790,6 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
     def plot_monitors(
         self, x: float = None, y: float = None, z: float = None, ax: Ax = None, **kwargs
     ) -> Ax:
-        # pylint:disable=line-too-long
         """Plot each of simulation's monitors on a plane defined by one nonzero x,y,z coordinate.
 
         Parameters
@@ -811,17 +812,15 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         matplotlib.axes._subplots.Axes
             The supplied or created matplotlib axes.
         """
-        # pylint:enable=line-too-long
         for monitor in self.monitors:
-            if monitor.intersects_plane(x=x, y=y, z=z):
-                ax = monitor.plot(ax=ax, x=x, y=y, z=z, **kwargs)
+            ax = monitor.plot(x=x, y=y, z=z, ax=ax)
         ax = self._set_plot_bounds(ax=ax, x=x, y=y, z=z)
         return ax
 
     @equal_aspect
     @add_ax_if_none
     def plot_symmetries(
-        self, x: float = None, y: float = None, z: float = None, ax: Ax = None, **kwargs
+        self, x: float = None, y: float = None, z: float = None, ax: Ax = None
     ) -> Ax:
         """Plot each of simulation's symmetries on a plane defined by one nonzero x,y,z coordinate.
 
@@ -835,10 +834,6 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
             position of plane in z direction, only one of x, y, z must be specified to define plane.
         ax : matplotlib.axes._subplots.Axes = None
             Matplotlib axes to plot on, if not specified, one is created.
-        **kwargs
-            Optional keyword arguments passed to the matplotlib patch plotting of structure.
-            For details on accepted values, refer to
-            `Matplotlib's documentation <https://tinyurl.com/2nf5c2fk>`_.
 
         Returns
         -------
@@ -850,16 +845,29 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         for sym_axis, sym_value in enumerate(self.symmetry):
             if sym_value == 0 or sym_axis == normal_axis:
                 continue
-            sym_size = [1000 * size_dim for size_dim in self.size]
-            sym_size[sym_axis] /= 2
-            sym_center = list(self.center)
-            sym_center[sym_axis] -= sym_size[sym_axis] / 2
-            sym_box = Box(center=sym_center, size=sym_size)
-            if sym_box.intersects_plane(x=x, y=y, z=z):
-                new_kwargs = SymParams(sym_value=sym_value).update_params(**kwargs)
-                ax = sym_box.plot(ax=ax, x=x, y=y, z=z, **new_kwargs)
+            sym_box = self.make_symmetry_box(sym_axis=sym_axis, sym_value=sym_value)
+            ax = sym_box.plot(x=x, y=y, z=z, ax=ax)
         ax = self._set_plot_bounds(ax=ax, x=x, y=y, z=z)
         return ax
+
+    def make_symmetry_box(self, sym_axis: Axis, sym_value: Symmetry) -> Ax:
+        """Construct  a Box to visually represent the symmetry."""
+
+        plot_params = PlotParams(alpha=0.6)
+
+        if sym_value == 1:
+            plot_params.facecolor = "lightsteelblue"
+            plot_params.hatch = "++"
+        elif sym_value == -1:
+            plot_params.facecolor = "rosybrown"
+            plot_params.hatch = "--"
+
+        sym_size = [1000 * size_dim for size_dim in self.size]
+        sym_size[sym_axis] /= 2
+        sym_center = list(self.center)
+        sym_center[sym_axis] -= sym_size[sym_axis] / 2
+
+        return Box(center=sym_center, size=sym_size, plot_params=plot_params)
 
     @property
     def num_pml_layers(self) -> List[Tuple[float, float]]:
@@ -903,7 +911,11 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
     @equal_aspect
     @add_ax_if_none
     def plot_pml(
-        self, x: float = None, y: float = None, z: float = None, ax: Ax = None, **kwargs
+        self,
+        x: float = None,
+        y: float = None,
+        z: float = None,
+        ax: Ax = None,
     ) -> Ax:
         """Plot each of simulation's absorbing boundaries
         on a plane defined by one nonzero x,y,z coordinate.
@@ -918,32 +930,31 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
             position of plane in z direction, only one of x, y, z must be specified to define plane.
         ax : matplotlib.axes._subplots.Axes = None
             Matplotlib axes to plot on, if not specified, one is created.
-        **kwargs
-            Optional keyword arguments passed to the matplotlib patch plotting of structure.
-            For details on accepted values, refer to
-            `Matplotlib's documentation <https://tinyurl.com/2nf5c2fk>`_.
 
         Returns
         -------
         matplotlib.axes._subplots.Axes
             The supplied or created matplotlib axes.
         """
-        kwargs = PMLParams().update_params(**kwargs)
+        normal_axis, _ = self.parse_xyz_kwargs(x=x, y=y, z=z)
         pml_thicks = self.pml_thicknesses
         for pml_axis, pml_layer in enumerate(self.pml_layers):
-            if pml_layer.num_layers == 0:
+            if pml_layer is None or pml_layer.num_layers == 0 or pml_axis == normal_axis:
                 continue
             for sign, pml_height in zip((-1, 1), pml_thicks[pml_axis]):
-                pml_size = [inf, inf, inf]
-                pml_size[pml_axis] = pml_height
-                pml_center = list(self.center)
-                pml_offset_center = (self.size[pml_axis] + pml_height) / 2.0
-                pml_center[pml_axis] += sign * pml_offset_center
-                pml_box = Box(center=pml_center, size=pml_size)
-                if pml_box.intersects_plane(x=x, y=y, z=z):
-                    ax = pml_box.plot(ax=ax, x=x, y=y, z=z, **kwargs)
+                pml_box = self.make_pml_box(pml_axis=pml_axis, pml_height=pml_height, sign=sign)
+                ax = pml_box.plot(x=x, y=y, z=z, ax=ax)
         ax = self._set_plot_bounds(ax=ax, x=x, y=y, z=z)
         return ax
+
+    def make_pml_box(self, pml_axis: Axis, pml_height: float, sign: int) -> Box:
+        plot_params = PlotParams(alpha=0.7, facecolor="gray", edgecolor="gray", hatch="x")
+        pml_size = [inf, inf, inf]
+        pml_size[pml_axis] = pml_height
+        pml_center = list(self.center)
+        pml_offset_center = (self.size[pml_axis] + pml_height) / 2.0
+        pml_center[pml_axis] += sign * pml_offset_center
+        return Box(center=pml_center, size=pml_size, plot_params=plot_params)
 
     @add_ax_if_none
     def plot_grid(self, x: float = None, y: float = None, z: float = None, ax: Ax = None) -> Ax:

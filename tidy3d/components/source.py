@@ -11,7 +11,7 @@ from .types import Direction, Polarization, Ax, FreqBound, Array
 from .validators import assert_plane, validate_name_str
 from .geometry import Box
 from .mode import ModeSpec
-from .viz import add_ax_if_none, SourceParams, equal_aspect
+from .viz import add_ax_if_none, PlotParams, equal_aspect
 from .viz import ARROW_COLOR_SOURCE, ARROW_ALPHA, ARROW_COLOR_POLARIZATION
 from ..constants import RADIAN, HERTZ, MICROMETER
 from ..constants import inf  # pylint:disable=unused-import
@@ -258,17 +258,9 @@ class Source(Box, ABC):
 
     name: str = pydantic.Field(None, title="Name", description="Optional name for the source.")
 
+    plot_params = PlotParams(alpha=0.4, facecolor="limegreen", edgecolor="limegreen", lw=3)
+
     _name_validator = validate_name_str()
-
-    @equal_aspect
-    @add_ax_if_none
-    def plot(
-        self, x: float = None, y: float = None, z: float = None, ax: Ax = None, **kwargs
-    ) -> Ax:
-
-        kwargs = SourceParams().update_params(**kwargs)
-        ax = self.geometry.plot(x=x, y=y, z=z, ax=ax, **kwargs)
-        return ax
 
     @property
     def geometry(self):

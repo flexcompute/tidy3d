@@ -28,7 +28,7 @@ class Geometry(Tidy3dBaseModel, ABC):
     plot_params: PlotParams = pydantic.Field(
         PlotParams(),
         title="Plot Parameters",
-        description="Specifications used to plot instances of this class."
+        description="Specifications used to plot instances of this class.",
     )
 
     center: Coordinate = pydantic.Field(
@@ -192,9 +192,7 @@ class Geometry(Tidy3dBaseModel, ABC):
 
     @equal_aspect
     @add_ax_if_none
-    def plot(
-        self, x: float = None, y: float = None, z: float = None, ax: Ax = None
-    ) -> Ax:
+    def plot(self, x: float = None, y: float = None, z: float = None, ax: Ax = None) -> Ax:
         """Plot geometry cross section at single (x,y,z) coordinate.
 
         Parameters
@@ -220,7 +218,7 @@ class Geometry(Tidy3dBaseModel, ABC):
 
         # for each intersection, plot the shape
         for shape in shapes_intersect:
-            self.plot_shape(shape, ax=ax)
+            ax = self.plot_shape(shape, plot_params=self.plot_params, ax=ax)
 
         # clean up the axis display
         ax = self.add_ax_labels_lims(axis=axis, ax=ax)
@@ -228,11 +226,12 @@ class Geometry(Tidy3dBaseModel, ABC):
         ax.set_title(f"cross section at {'xyz'[axis]}={position:.2f}")
         return ax
 
-    def plot_shape(self, shape:ShapelyGeo, ax:Ax) -> Ax:
+    def plot_shape(self, shape: ShapelyGeo, plot_params: PlotParams, ax: Ax) -> Ax:
         """Defines how a shape is plotted on a matplotlib axes."""
         _shape = self.evaluate_inf_shape(shape)
-        patch = PolygonPatch(_shape, **self.plot_params.dict())
+        patch = PolygonPatch(_shape, **plot_params.dict())
         ax.add_artist(patch)
+        return ax
 
     def _get_plot_labels(self, axis: Axis) -> Tuple[str, str]:
         """Returns planar coordinate x and y axis labels for cross section plots.
