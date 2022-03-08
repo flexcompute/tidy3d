@@ -22,18 +22,23 @@ class Structure(Tidy3dBaseModel):
     """
 
     geometry: GeometryType = pydantic.Field(
-        ..., title="Geometry", description="Defines spatial extent of the structure."
+        ..., title="Geometry", description="Defines geometric properties of the structure."
     )
 
     medium: MediumType = pydantic.Field(
         ...,
         title="Medium",
-        description="Defines the electromagnetic properties of the structure material.",
+        description="Defines the electromagnetic properties of the structure's medium.",
     )
 
     name: str = pydantic.Field(None, title="Name", description="Optional name for the structure.")
 
     _name_validator = validate_name_str()
+
+    @property
+    def plot_params(self):
+        """Uses self.geometry plot parameters."""
+        return self.geometry.plot_params
 
     @equal_aspect
     @add_ax_if_none
