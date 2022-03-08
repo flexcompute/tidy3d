@@ -101,195 +101,186 @@ MEDIUM_CMAP = [
 # buffer beyond sim.bounds_pml for plotting infinite shapes.
 BUFFER = 100
 
-# pylint:disable=too-many-locals, too-many-branches, too-many-statements
-def plotly_sim(sim, x=None, y=None, z=None):
-    """Make a plotly plot."""
 
-    fig = go.Figure()
-    axis, pos = sim.parse_xyz_kwargs(x=x, y=y, z=z)
+def plotly_bounds(sim, normal_axis):
+    """get X, Y limits for plotly figure."""
     rmin, rmax = sim.bounds_pml
     rmin = np.array(rmin)
     rmax = np.array(rmax)
-    _, (xmin, ymin) = sim.pop_axis(rmin, axis=axis)
-    _, (xmax, ymax) = sim.pop_axis(rmax, axis=axis)
+    _, (xmin, ymin) = sim.pop_axis(rmin, axis=normal_axis)
+    _, (xmax, ymax) = sim.pop_axis(rmax, axis=normal_axis)
+    return (xmin, xmax), (ymin, ymax)
 
+
+def process_shape(shape, sim, normal_axis):
+    """Return xs, ys for given shapely shape."""
+    xs, ys = shape.exterior.coords.xy
+    xs = xs.tolist()
+    ys = ys.tolist()
+    (xmin, xmax), (ymin, ymax) = plotly_bounds(sim=sim, normal_axis=normal_axis)
+    xs = [xmin - BUFFER if np.isneginf(x) else x for x in xs]
+    xs = [xmax + BUFFER if np.isposinf(x) else x for x in xs]
+    ys = [ymin - BUFFER if np.isneginf(y) else y for y in ys]
+    ys = [ymax + BUFFER if np.isposinf(y) else y for y in ys]
+    return xs, ys
+
+
+def plotly_shape(
+    fig, shape, sim, normal_axis, plot_params, name=""
+):  # pylint:disable=too-many-arguments
+    """Plot a shape to a figure."""
+    xs, ys = process_shape(shape=shape, sim=sim, normal_axis=normal_axis)
+    plotly_trace = go.Scatter(
+        x=xs,
+        y=ys,
+        fill="toself",
+        fillcolor=plot_params.facecolor,
+        line=dict(width=plot_params.lw, color=plot_params.facecolor),
+        marker=dict(size=0.0001, line=dict(width=0)),
+        name=name,
+        opacity=plot_params.alpha,
+    )
+    fig.add_trace(plotly_trace)
+    return fig
+
+
+def plotly_structures(fig, sim, x=None, y=None, z=None):
+    """Plot all structures in simulation on plotly fig."""
+
+    normal_axis, _ = sim.parse_xyz_kwargs(x=x, y=y, z=z)
     for struct in sim.structures:
-        geo = struct.geometry
-        shapes = geo.intersections(x=x, y=y, z=z)
+
+        shapes = struct.geometry.intersections(x=x, y=y, z=z)
         mat_index = sim.medium_map[struct.medium]
+        structure_name = struct.medium.name if struct.medium.name else f"medium[{mat_index}]"
 
         plot_params = sim.get_structure_plot_params(medium=struct.medium)
-        color = plot_params.facecolor
+        plot_params.lw = 4
 
         for shape in shapes:
-            xs, ys = shape.exterior.coords.xy
-            xs = xs.tolist()
-            ys = ys.tolist()
-            xs = [xmin - BUFFER if np.isneginf(x) else x for x in xs]
-            xs = [xmax + BUFFER if np.isposinf(x) else x for x in xs]
-            ys = [ymin - BUFFER if np.isneginf(y) else y for y in ys]
-            ys = [ymax + BUFFER if np.isposinf(y) else y for y in ys]
-            plotly_trace = go.Scatter(
-                x=xs,
-                y=ys,
-                fill="toself",
-                fillcolor=color,
-                line=dict(width=0),
-                marker=dict(size=0.0001, line=dict(width=0)),
-                name=struct.medium.name if struct.medium.name else f"medium[{mat_index}]",
+            fig = plotly_shape(
+                fig=fig,
+                shape=shape,
+                sim=sim,
+                normal_axis=normal_axis,
+                plot_params=plot_params,
+                name=structure_name,
             )
-            fig.add_trace(plotly_trace)
 
-    for i, source in enumerate(sim.sources):
-        geo = source.geometry
-        shapes = geo.intersections(x=x, y=y, z=z)
-        plot_params = source.plot_params
-        color = plot_params.facecolor
-        opacity = plot_params.alpha
+    return fig
 
-        for shape in shapes:
-            xs, ys = shape.exterior.coords.xy
-            xs = xs.tolist()
-            ys = ys.tolist()
 
-            xs = [xmin - BUFFER if np.isneginf(x) else x for x in xs]
-            xs = [xmax + BUFFER if np.isposinf(x) else x for x in xs]
-            ys = [ymin - BUFFER if np.isneginf(y) else y for y in ys]
-            ys = [ymax + BUFFER if np.isposinf(y) else y for y in ys]
+def plotly_sources(fig, sim, x=None, y=None, z=None):  # pylint:disable=too-many-locals
+    """Plot all sources in simulation on plotly fig."""
 
-            plotly_trace = go.Scatter(
-                x=xs,
-                y=ys,
-                fill="toself",
-                fillcolor=color,
-                line=dict(width=4, color=color),
-                marker=dict(size=0.0001, line=dict(width=0)),
-                name=source.name if source.name else f"sources[{i}]",
-                opacity=opacity,
+    normal_axis, _ = sim.parse_xyz_kwargs(x=x, y=y, z=z)
+    for source_index, source in enumerate(sim.sources):
+
+        for shape in source.geometry.intersections(x=x, y=y, z=z):
+            fig = plotly_shape(
+                fig=fig,
+                shape=shape,
+                sim=sim,
+                normal_axis=normal_axis,
+                plot_params=source.plot_params,
+                name=source.name if source.name else f"sources[{source_index}]",
             )
-            fig.add_trace(plotly_trace)
 
+    return fig
+
+
+def plotly_monitors(fig, sim, x=None, y=None, z=None):
+    """Plot all monitors in simulation on plotly fig."""
+
+    normal_axis, _ = sim.parse_xyz_kwargs(x=x, y=y, z=z)
     for monitor in sim.monitors:
-        geo = monitor.geometry
-        shapes = geo.intersections(x=x, y=y, z=z)
-        plot_params = monitor.plot_params
-        color = plot_params.facecolor
-        opacity = plot_params.alpha
 
-        for shape in shapes:
-            xs, ys = shape.exterior.coords.xy
-            xs = xs.tolist()
-            ys = ys.tolist()
-
-            xs = [xmin - BUFFER if np.isneginf(x) else x for x in xs]
-            xs = [xmax + BUFFER if np.isposinf(x) else x for x in xs]
-            ys = [ymin - BUFFER if np.isneginf(y) else y for y in ys]
-            ys = [ymax + BUFFER if np.isposinf(y) else y for y in ys]
-
-            plotly_trace = go.Scatter(
-                x=xs,
-                y=ys,
-                fill="toself",
-                fillcolor=color,
-                line=dict(width=4, color=color),
-                marker=dict(size=0.0001, line=dict(width=0)),
+        for shape in monitor.geometry.intersections(x=x, y=y, z=z):
+            fig = plotly_shape(
+                fig=fig,
+                shape=shape,
+                sim=sim,
+                normal_axis=normal_axis,
+                plot_params=monitor.plot_params,
                 name=f'monitor: "{monitor.name}"',
-                opacity=opacity,
             )
-            fig.add_trace(plotly_trace)
+
+    return fig
+
+
+def plotly_pml(fig, sim, x=None, y=None, z=None):
+    """Plot all pml layers in simulation on plotly fig."""
 
     normal_axis, _ = sim.parse_xyz_kwargs(x=x, y=y, z=z)
     for pml_axis, (pml, dl) in enumerate(zip(sim.pml_layers, sim.grid_size)):
+
         if pml is None or pml.num_layers == 0 or pml_axis == normal_axis:
             continue
+
         if isinstance(dl, float):
-            dl_min = dl_max = dl
+            dl_min_max = (dl, dl)
         else:
-            dl_min = dl[0]
-            dl_max = dl[-1]
+            dl_min_max = (dl[0], dl[-1])
 
-        for sign, dl_edge in zip((-1, 1), (dl_min, dl_max)):
-            pml_height = pml.num_layers * dl_edge
-            pml_box = sim.make_pml_box(pml_axis=pml_axis, pml_height=pml_height, sign=sign)
-            shapes = pml_box.intersections(x=x, y=y, z=z)
-            color = pml_box.plot_params.facecolor
-            opacity = pml_box.plot_params.alpha
+        for sign, dl_edge in zip((-1, 1), dl_min_max):
 
-            for shape in shapes:
-                xs, ys = shape.exterior.coords.xy
-                xs = xs.tolist()
-                ys = ys.tolist()
+            pml_box = sim.make_pml_box(
+                pml_axis=pml_axis, pml_height=pml.num_layers * dl_edge, sign=sign
+            )
 
-                xs = [xmin - BUFFER if np.isneginf(x) else x for x in xs]
-                xs = [xmax + BUFFER if np.isposinf(x) else x for x in xs]
-                ys = [ymin - BUFFER if np.isneginf(y) else y for y in ys]
-                ys = [ymax + BUFFER if np.isposinf(y) else y for y in ys]
+            for shape in pml_box.intersections(x=x, y=y, z=z):
 
-                plotly_trace = go.Scatter(
-                    x=xs,
-                    y=ys,
-                    fill="toself",
-                    fillcolor=color,
-                    line=dict(width=1, color=color),
-                    marker=dict(size=0.0001, line=dict(width=0)),
+                fig = plotly_shape(
+                    fig=fig,
+                    shape=shape,
+                    sim=sim,
+                    normal_axis=normal_axis,
+                    plot_params=pml_box.plot_params,
                     name="PML",
-                    opacity=opacity,
                 )
-                fig.add_trace(plotly_trace)
 
+    return fig
+
+
+def plotly_symmetry(fig, sim, x=None, y=None, z=None):
+    """Plot all symmertries in simulation on plotly fig."""
+
+    normal_axis, _ = sim.parse_xyz_kwargs(x=x, y=y, z=z)
     for sym_axis, sym_value in enumerate(sim.symmetry):
+
         if sym_value == 0 or sym_axis == normal_axis:
             continue
+
         sym_box = sim.make_symmetry_box(sym_axis=sym_axis, sym_value=sym_value)
-        shapes = sym_box.intersections(x=x, y=y, z=z)
-        color = sym_box.plot_params.facecolor
-        opacity = pml_box.plot_params.alpha
-
-        for shape in shapes:
-
-            xs, ys = shape.exterior.coords.xy
-            xs = xs.tolist()
-            ys = ys.tolist()
-
-            xs = [xmin - BUFFER if np.isneginf(x) else x for x in xs]
-            xs = [xmax + BUFFER if np.isposinf(x) else x for x in xs]
-            ys = [ymin - BUFFER if np.isneginf(y) else y for y in ys]
-            ys = [ymax + BUFFER if np.isposinf(y) else y for y in ys]
-
-            sym_sign = '+' if sym_value > 0 else '-'
-
-            plotly_trace = go.Scatter(
-                x=xs,
-                y=ys,
-                fill="toself",
-                fillcolor=color,
-                line=dict(width=1, color=color),
-                marker=dict(size=0.0001, line=dict(width=0)),
-                name=f"{'xyz'[sym_axis]}-axis symmetry ({sym_sign}1)",
-                opacity=opacity,
+        for shape in sym_box.intersections(x=x, y=y, z=z):
+            fig = plotly_shape(
+                fig=fig,
+                shape=shape,
+                sim=sim,
+                normal_axis=normal_axis,
+                plot_params=sym_box.plot_params,
+                name=f"{'xyz'[sym_axis]}-axis symmetry ({('+' if sym_value > 0 else '-')}1)",
             )
-            fig.add_trace(plotly_trace)
+
+    return fig
+
+
+def plotly_resize(fig, sim, normal_axis, width_pixels=500):
+    """Set the lmits and make equal aspect."""
+    (xmin, xmax), (ymin, ymax) = plotly_bounds(sim=sim, normal_axis=normal_axis)
 
     fig.update_xaxes(range=[xmin, xmax])
     fig.update_yaxes(range=[ymin, ymax])
+
     width = xmax - xmin
     height = ymax - ymin
-    min_dim = min(width, height)
-    DESIRED_SIZE_PIXELS = 500.0
-    if min_dim < DESIRED_SIZE_PIXELS:
-        scale = DESIRED_SIZE_PIXELS / min_dim + 0.01
-        width *= scale
-        height *= scale
-    fig.update_layout(width=width, height=height)
 
-    _, (xlabel, ylabel) = sim.pop_axis("xyz", axis=axis)
-    fig.update_layout(
-        title=f'{"xyz"[axis]} = {pos:.2f}',
-        xaxis_title=f"{xlabel} (um)",
-        yaxis_title=f"{ylabel} (um)",
-        legend_title="Contents",
-    )
+    fig.update_layout(width=float(width_pixels), height=float(width_pixels) * height / width)
+    return fig
 
+
+def remove_redundant_labels(fig):
+    """Remove label entries that show up more than once."""
     seen = []
     for trace in fig["data"]:
         name = trace["name"]
@@ -297,5 +288,39 @@ def plotly_sim(sim, x=None, y=None, z=None):
             seen.append(name)
         else:
             trace["showlegend"] = False
+    return fig
+
+
+def plotly_cleanup(fig, sim, x=None, y=None, z=None):
+    """Finish plotting simulation cross section using plotly."""
+
+    normal_axis, pos = sim.parse_xyz_kwargs(x=x, y=y, z=z)
+
+    fig = plotly_resize(fig=fig, sim=sim, normal_axis=normal_axis)
+    _, (xlabel, ylabel) = sim.pop_axis("xyz", axis=normal_axis)
+
+    fig.update_layout(
+        title=f'{"xyz"[normal_axis]} = {pos:.2f}',
+        xaxis_title=f"{xlabel} (um)",
+        yaxis_title=f"{ylabel} (um)",
+        legend_title="Contents",
+    )
+
+    fig = remove_redundant_labels(fig=fig)
+
+    return fig
+
+
+def plotly_sim(sim, x=None, y=None, z=None):
+    """Make a plotly plot."""
+
+    fig = go.Figure()
+
+    fig = plotly_structures(fig=fig, sim=sim, x=x, y=y, z=z)
+    fig = plotly_sources(fig=fig, sim=sim, x=x, y=y, z=z)
+    fig = plotly_monitors(fig=fig, sim=sim, x=x, y=y, z=z)
+    fig = plotly_pml(fig=fig, sim=sim, x=x, y=y, z=z)
+    fig = plotly_symmetry(fig=fig, sim=sim, x=x, y=y, z=z)
+    fig = plotly_cleanup(fig=fig, sim=sim, x=x, y=y, z=z)
 
     return fig
