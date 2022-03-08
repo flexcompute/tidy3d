@@ -644,6 +644,12 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
 
     def plot_shape_structure(self, medium: Medium, shape: ShapelyGeo, ax: Ax) -> Ax:
         """Plot a structure's cross section shape for a given medium."""
+        plot_params_struct = self.get_structure_plot_params(medium=medium)
+        ax = self.plot_shape(shape=shape, plot_params=plot_params_struct, ax=ax)
+        return ax
+
+    def get_structure_plot_params(self, medium: Medium) -> PlotParams:
+        """Constructs the plot parameters for a given medium in simulation.plot()."""
 
         plot_params = PlotParams(lw=0)
 
@@ -663,8 +669,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
             facecolor = MEDIUM_CMAP[(mat_index - 1) % len(MEDIUM_CMAP)]
             plot_params.facecolor = facecolor
 
-        ax = self.plot_shape(shape=shape, plot_params=plot_params, ax=ax)
-        return ax
+        return plot_params
 
     @staticmethod
     def _add_cbar(eps_min: float, eps_max: float, ax: Ax = None) -> None:

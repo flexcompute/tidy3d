@@ -1,7 +1,6 @@
 # pylint: disable=invalid-name
 """ utilities for plotting """
 from typing import Any
-from abc import abstractmethod
 from functools import wraps
 
 import matplotlib.pylab as plt
@@ -10,7 +9,6 @@ import plotly.graph_objects as go
 import numpy as np
 
 from .types import Ax
-from ..constants import pec_val
 
 """ Constants """
 
@@ -98,149 +96,10 @@ MEDIUM_CMAP = [
 ]
 
 
-""" Utilities for default plotting parameters."""
-
-
-class PatchParams(BaseModel):
-    """Datastructure holding default parameters for plotting matplotlib.patches.
-    See https://matplotlib.org/stable/api/_as_gen/matplotlib.patches.Patch.html for explanation.
-    """
-
-    alpha: Any = None
-    edgecolor: Any = None
-    facecolor: Any = None
-    fill: bool = True
-    hatch: str = None
-    lw: int = 1
-
-
-class PatchParamSwitcher(BaseModel):
-    """Class used for updating plot kwargs based on :class:`PatchParams` values."""
-
-    def update_params(self, **plot_params):
-        """return dictionary of plot params updated with fields user supplied **plot_params dict."""
-
-        # update self's plot params with the the supplied plot parameters and return non none ones.
-        default_plot_params = self.get_plot_params()
-        default_plot_params_dict = default_plot_params.dict().copy()
-        default_plot_params_dict.update(plot_params)
-
-        # get rid of pairs with value of None as they will mess up plots down the line.
-        return {key: val for key, val in default_plot_params_dict.items() if val is not None}
-
-    @abstractmethod
-    def get_plot_params(self) -> PatchParams:
-        """Returns :class:`PatchParams` based on user-supplied args.  Implement in subclasses."""
-
-
-class GeoParams(PatchParamSwitcher):
-    """Patch plotting parameters for :class:`Geometry`."""
-
-    def get_plot_params(self) -> PatchParams:
-        """Returns :class:`PatchParams` based on user-supplied args."""
-        return PatchParams(edgecolor=None, facecolor="cornflowerblue")
-
-
-class SourceParams(PatchParamSwitcher):
-    """Patch plotting parameters for :class:`Source`."""
-
-    def get_plot_params(self) -> PatchParams:
-        """Returns :class:`PatchParams` based on user-supplied args."""
-        return PatchParams(alpha=0.4, facecolor="limegreen", edgecolor="limegreen", lw=3)
-
-
-class MonitorParams(PatchParamSwitcher):
-    """Patch plotting parameters for :class:`Monitor`."""
-
-    def get_plot_params(self) -> PatchParams:
-        """Returns :class:`PatchParams` based on user-supplied args."""
-        return PatchParams(alpha=0.4, facecolor="orange", edgecolor="orange", lw=3)
-
-
-class StructMediumParams(PatchParamSwitcher):
-    """Patch plotting parameters for :class:`Structures` in ``Simulation.plot_structures``."""
-
-    medium: Any
-    medium_map: dict
-
-    def get_plot_params(self) -> PatchParams:
-        """Returns :class:`PatchParams` based on user-supplied args."""
-        mat_index = self.medium_map[self.medium]
-        mat_cmap = [
-            "#689DBC",
-            "#D0698E",
-            "#5E6EAD",
-            "#C6224E",
-            "#BDB3E2",
-            "#9EC3E0",
-            "#616161",
-            "#877EBC",
-        ]
-
-        if mat_index == 0:
-            facecolor = "white"
-        else:
-            facecolor = mat_cmap[(mat_index - 1) % len(mat_cmap)]
-        if self.medium.name == "PEC":
-            return PatchParams(facecolor="gold", edgecolor="k", lw=1)
-        return PatchParams(facecolor=facecolor, edgecolor=facecolor, lw=0)
-
-
-class StructEpsParams(PatchParamSwitcher):
-    """Patch plotting parameters for :class:`Structures` in `td.Simulation.plot_structures_eps`."""
-
-    eps: float
-    eps_max: float
-    eps_min: float
-
-    def get_plot_params(self) -> PatchParams:
-        """Returns :class:`PatchParams` based on user-supplied args."""
-        eps_min = min(self.eps_min, 1)
-        delta_eps = self.eps - eps_min
-        delta_eps_max = self.eps_max - eps_min + 1e-5
-        eps_fraction = delta_eps / delta_eps_max
-        color = 1 - eps_fraction
-        if self.eps == pec_val:
-            return PatchParams(facecolor="gold", edgecolor="k", lw=1)
-        return PatchParams(facecolor=str(color), edgecolor=str(color), lw=0)
-
-
-class PMLParams(PatchParamSwitcher):
-    """Patch plotting parameters for :class:`AbsorberSpec` (PML)."""
-
-    def get_plot_params(self) -> PatchParams:
-        """Returns :class:`PatchParams` based on user-supplied args."""
-        return PatchParams(alpha=0.7, facecolor="gray", edgecolor="gray", hatch="x")
-
-
-class SymParams(PatchParamSwitcher):
-    """Patch plotting parameters for `td.Simulation.symmetry`."""
-
-    sym_value: int
-
-    def get_plot_params(self) -> PatchParams:
-        """Returns :class:`PatchParams` based on user-supplied args."""
-        sym_color = "grey"
-
-        if self.sym_value == 1:
-            sym_color = "lightsteelblue"
-            return PatchParams(alpha=0.6, facecolor=sym_color, edgecolor=sym_color, hatch="++")
-        if self.sym_value == -1:
-            sym_color = "rosybrown"
-            return PatchParams(alpha=0.6, facecolor=sym_color, edgecolor=sym_color, hatch="--")
-        return PatchParams()
-
-
-class SimDataGeoParams(PatchParamSwitcher):
-    """Patch plotting parameters for `td.SimulationData`."""
-
-    def get_plot_params(self) -> PatchParams:
-        """Returns :class:`PatchParams` based on user-supplied args."""
-        return PatchParams(alpha=0.4, edgecolor="black")
-
-
 """ Plotly. """
 
+# buffer beyond sim.bounds_pml for plotting infinite shapes.
+BUFFER = 100
 
 # pylint:disable=too-many-locals, too-many-branches, too-many-statements
 def plotly_sim(sim, x=None, y=None, z=None):
@@ -248,23 +107,28 @@ def plotly_sim(sim, x=None, y=None, z=None):
 
     fig = go.Figure()
     axis, pos = sim.parse_xyz_kwargs(x=x, y=y, z=z)
-    rmin, rmax = sim.bounds
+    rmin, rmax = sim.bounds_pml
     rmin = np.array(rmin)
     rmax = np.array(rmax)
+    _, (xmin, ymin) = sim.pop_axis(rmin, axis=axis)
+    _, (xmax, ymax) = sim.pop_axis(rmax, axis=axis)
 
     for struct in sim.structures:
         geo = struct.geometry
         shapes = geo.intersections(x=x, y=y, z=z)
         mat_index = sim.medium_map[struct.medium]
 
-        params = StructMediumParams(medium=struct.medium, medium_map=sim.medium_map)
-        color = params.get_plot_params().facecolor
+        plot_params = sim.get_structure_plot_params(medium=struct.medium)
+        color = plot_params.facecolor
 
         for shape in shapes:
             xs, ys = shape.exterior.coords.xy
             xs = xs.tolist()
             ys = ys.tolist()
-
+            xs = [xmin - BUFFER if np.isneginf(x) else x for x in xs]
+            xs = [xmax + BUFFER if np.isposinf(x) else x for x in xs]
+            ys = [ymin - BUFFER if np.isneginf(y) else y for y in ys]
+            ys = [ymax + BUFFER if np.isposinf(y) else y for y in ys]
             plotly_trace = go.Scatter(
                 x=xs,
                 y=ys,
@@ -279,14 +143,19 @@ def plotly_sim(sim, x=None, y=None, z=None):
     for i, source in enumerate(sim.sources):
         geo = source.geometry
         shapes = geo.intersections(x=x, y=y, z=z)
-        params = SourceParams()
-        color = params.get_plot_params().facecolor
-        opacity = params.get_plot_params().alpha
+        plot_params = source.plot_params
+        color = plot_params.facecolor
+        opacity = plot_params.alpha
 
         for shape in shapes:
             xs, ys = shape.exterior.coords.xy
             xs = xs.tolist()
             ys = ys.tolist()
+
+            xs = [xmin - BUFFER if np.isneginf(x) else x for x in xs]
+            xs = [xmax + BUFFER if np.isposinf(x) else x for x in xs]
+            ys = [ymin - BUFFER if np.isneginf(y) else y for y in ys]
+            ys = [ymax + BUFFER if np.isposinf(y) else y for y in ys]
 
             plotly_trace = go.Scatter(
                 x=xs,
@@ -303,14 +172,19 @@ def plotly_sim(sim, x=None, y=None, z=None):
     for monitor in sim.monitors:
         geo = monitor.geometry
         shapes = geo.intersections(x=x, y=y, z=z)
-        params = MonitorParams()
-        color = params.get_plot_params().facecolor
-        opacity = params.get_plot_params().alpha
+        plot_params = monitor.plot_params
+        color = plot_params.facecolor
+        opacity = plot_params.alpha
 
         for shape in shapes:
             xs, ys = shape.exterior.coords.xy
             xs = xs.tolist()
             ys = ys.tolist()
+
+            xs = [xmin - BUFFER if np.isneginf(x) else x for x in xs]
+            xs = [xmax + BUFFER if np.isposinf(x) else x for x in xs]
+            ys = [ymin - BUFFER if np.isneginf(y) else y for y in ys]
+            ys = [ymax + BUFFER if np.isposinf(y) else y for y in ys]
 
             plotly_trace = go.Scatter(
                 x=xs,
@@ -324,36 +198,32 @@ def plotly_sim(sim, x=None, y=None, z=None):
             )
             fig.add_trace(plotly_trace)
 
-    for dir_index, (pml, dl) in enumerate(zip(sim.pml_layers, sim.grid_size)):
-        if pml is None:
+    normal_axis, _ = sim.parse_xyz_kwargs(x=x, y=y, z=z)
+    for pml_axis, (pml, dl) in enumerate(zip(sim.pml_layers, sim.grid_size)):
+        if pml is None or pml.num_layers == 0 or pml_axis == normal_axis:
             continue
         if isinstance(dl, float):
             dl_min = dl_max = dl
         else:
             dl_min = dl[0]
             dl_max = dl[-1]
+
         for sign, dl_edge in zip((-1, 1), (dl_min, dl_max)):
-            pml_thick = pml.num_layers * dl_edge
-            pml_size = 2 * np.array(sim.size)
-            pml_size[dir_index] = pml_thick
-            if sign == 1:
-                rmax[dir_index] += pml_thick
-            else:
-                rmin[dir_index] -= pml_thick
-            pml_center = np.array(sim.center) + sign * np.array(sim.size) / 2
-            pml_center[dir_index] += sign * pml_thick / 2
-            pml_box = sim.geometry
-            pml_box.center = pml_center.tolist()
-            pml_box.size = pml_size.tolist()
+            pml_height = pml.num_layers * dl_edge
+            pml_box = sim.make_pml_box(pml_axis=pml_axis, pml_height=pml_height, sign=sign)
             shapes = pml_box.intersections(x=x, y=y, z=z)
-            params = PMLParams()
-            color = params.get_plot_params().facecolor
-            opacity = params.get_plot_params().alpha
+            color = pml_box.plot_params.facecolor
+            opacity = pml_box.plot_params.alpha
 
             for shape in shapes:
                 xs, ys = shape.exterior.coords.xy
                 xs = xs.tolist()
                 ys = ys.tolist()
+
+                xs = [xmin - BUFFER if np.isneginf(x) else x for x in xs]
+                xs = [xmax + BUFFER if np.isposinf(x) else x for x in xs]
+                ys = [ymin - BUFFER if np.isneginf(y) else y for y in ys]
+                ys = [ymax + BUFFER if np.isposinf(y) else y for y in ys]
 
                 plotly_trace = go.Scatter(
                     x=xs,
@@ -367,8 +237,38 @@ def plotly_sim(sim, x=None, y=None, z=None):
                 )
                 fig.add_trace(plotly_trace)
 
-    _, (xmin, ymin) = sim.pop_axis(rmin, axis=axis)
-    _, (xmax, ymax) = sim.pop_axis(rmax, axis=axis)
+    for sym_axis, sym_value in enumerate(sim.symmetry):
+        if sym_value == 0 or sym_axis == normal_axis:
+            continue
+        sym_box = sim.make_symmetry_box(sym_axis=sym_axis, sym_value=sym_value)
+        shapes = sym_box.intersections(x=x, y=y, z=z)
+        color = sym_box.plot_params.facecolor
+        opacity = pml_box.plot_params.alpha
+
+        for shape in shapes:
+
+            xs, ys = shape.exterior.coords.xy
+            xs = xs.tolist()
+            ys = ys.tolist()
+
+            xs = [xmin - BUFFER if np.isneginf(x) else x for x in xs]
+            xs = [xmax + BUFFER if np.isposinf(x) else x for x in xs]
+            ys = [ymin - BUFFER if np.isneginf(y) else y for y in ys]
+            ys = [ymax + BUFFER if np.isposinf(y) else y for y in ys]
+
+            sym_sign = '+' if sym_value > 0 else '-'
+
+            plotly_trace = go.Scatter(
+                x=xs,
+                y=ys,
+                fill="toself",
+                fillcolor=color,
+                line=dict(width=1, color=color),
+                marker=dict(size=0.0001, line=dict(width=0)),
+                name=f"{'xyz'[sym_axis]}-axis symmetry ({sym_sign}1)",
+                opacity=opacity,
+            )
+            fig.add_trace(plotly_trace)
 
     fig.update_xaxes(range=[xmin, xmax])
     fig.update_yaxes(range=[ymin, ymax])
