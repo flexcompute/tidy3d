@@ -7,14 +7,15 @@ from typing import List, Tuple, Union, Any
 import pydantic
 import numpy as np
 
-from shapely.geometry import Point, Polygon, box
+from shapely.geometry import Point, Polygon, box, MultiPolygon
 from shapely.geometry.base import BaseGeometry as ShapelyGeo
 from descartes import PolygonPatch
+import plotly.graph_objects as go
 
 from .base import Tidy3dBaseModel
 from .types import Bound, Size, Coordinate, Axis, Coordinate2D, tidynumpy
-from .types import Vertices, Ax, Shapely
-from .viz import add_ax_if_none, equal_aspect
+from .types import Vertices, Ax, Shapely, PlotlyFig
+from .viz import add_ax_if_none, equal_aspect, add_fig_if_none
 from .viz import PLOT_BUFFER, ARROW_LENGTH_FACTOR, ARROW_WIDTH_FACTOR
 from .viz import PlotParams
 from .validators import is_not_inf
@@ -232,6 +233,54 @@ class Geometry(Tidy3dBaseModel, ABC):
         patch = PolygonPatch(_shape, **plot_params.dict())
         ax.add_artist(patch)
         return ax
+
+    @add_fig_if_none
+    def plotly(
+        self, x: float = None, y: float = None, z: float = None, fig: PlotlyFig = None
+    ) -> PlotlyFig:
+        """Plot cross sections on plane using plotly."""
+
+        if fig is None:
+            fig = go.Figure()
+
+        # for each intersection, plot the shape
+        for shape in self.intersections(x=x, y=y, z=z):
+            fig = self.plotly_shape(shape=shape, plot_params=self.plot_params, fig=fig)
+
+        return fig
+
+    def plotly_shape(
+        self, shape: ShapelyGeo, plot_params: PlotParams, fig: PlotlyFig, name: str = ""
+    ) -> PlotlyFig:
+        """Plot a shape to a figure."""
+        _shape = self.evaluate_inf_shape(shape)
+        xs, ys = self._get_shape_coords(shape=shape)
+        plotly_trace = go.Scatter(
+            x=xs,
+            y=ys,
+            fill="toself",
+            fillcolor=plot_params.facecolor,
+            line=dict(width=plot_params.lw, color=plot_params.facecolor),
+            marker=dict(size=0.0001, line=dict(width=0)),
+            name=name,
+            opacity=plot_params.alpha,
+        )
+        fig.add_trace(plotly_trace)
+        return fig
+
+    @staticmethod
+    def _get_shape_coords(shape: ShapelyGeo) -> Tuple[float, float]:
+        """Return xs, ys for given shapely shape."""
+        if isinstance(shape, MultiPolygon):
+            raise NotImplementedError
+        xs, ys = shape.exterior.coords.xy
+        xs = xs.tolist()
+        ys = ys.tolist()
+        xs = [-LARGE_NUMBER / 1e5 if np.isneginf(x) else x for x in xs]
+        xs = [LARGE_NUMBER / 1e5 if np.isposinf(x) else x for x in xs]
+        ys = [-LARGE_NUMBER / 1e5 if np.isneginf(y) else y for y in ys]
+        ys = [LARGE_NUMBER / 1e5 if np.isposinf(y) else y for y in ys]
+        return xs, ys
 
     def _get_plot_labels(self, axis: Axis) -> Tuple[str, str]:
         """Returns planar coordinate x and y axis labels for cross section plots.

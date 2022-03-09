@@ -5,8 +5,8 @@ from .base import Tidy3dBaseModel
 from .validators import validate_name_str
 from .geometry import GeometryType, Box  # pylint: disable=unused-import
 from .medium import MediumType, Medium  # pylint: disable=unused-import
-from .types import Ax
-from .viz import add_ax_if_none, equal_aspect
+from .types import Ax, PlotlyFig
+from .viz import add_ax_if_none, equal_aspect, add_fig_if_none
 
 
 class Structure(Tidy3dBaseModel):
@@ -62,3 +62,10 @@ class Structure(Tidy3dBaseModel):
             The supplied or created matplotlib axes.
         """
         return self.geometry.plot(x=x, y=y, z=z, ax=ax)
+
+    @add_fig_if_none
+    def plotly(
+        self, x: float = None, y: float = None, z: float = None, fig: PlotlyFig = None
+    ) -> PlotlyFig:
+        """Use plotly to plot structure's geometric cross section at single (x,y,z) coordinate."""
+        return self.geometry.plotly(x=x, y=y, z=z, fig=fig)

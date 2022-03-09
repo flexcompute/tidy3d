@@ -12,7 +12,7 @@ import pydantic
 import numpy as np
 from matplotlib.axes._subplots import Axes
 from shapely.geometry.base import BaseGeometry
-
+import plotly.graph_objects as go
 
 """ Complex Values """
 
@@ -95,6 +95,7 @@ FieldType = Literal["Ex", "Ey", "Ez", "Hx", "Hy", "Hz"]
 """ plotting """
 
 Ax = Axes
+PlotlyFig = go.Figure
 
 """ Numpy """
 

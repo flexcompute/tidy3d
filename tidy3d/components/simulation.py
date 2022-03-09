@@ -9,19 +9,21 @@ import matplotlib.pylab as plt
 import matplotlib as mpl
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from shapely.geometry.base import BaseGeometry as ShapelyGeo
+import plotly.graph_objects as go
 
 from .validators import assert_unique_names, assert_objects_in_sim_bounds
 from .validators import validate_mode_objects_symmetry
 from .geometry import Box
-from .types import Symmetry, Ax, Shapely, FreqBound, GridSize, Axis
+from .types import Symmetry, Ax, Shapely, FreqBound, GridSize, Axis, PlotlyFig
 from .grid import Coords1D, Grid, Coords
 from .medium import Medium, MediumType, AbstractMedium, PECMedium
 from .structure import Structure
 from .source import SourceType, PlaneWave
 from .monitor import MonitorType
 from .pml import PMLTypes, PML, Absorber
-from .viz import add_ax_if_none, equal_aspect
-from .viz import plotly_sim
+from .viz import add_ax_if_none, equal_aspect, add_fig_if_none
+
+# from .viz import plotly_sim
 from .viz import MEDIUM_CMAP, PlotParams
 
 from ..version import __version__
@@ -612,6 +614,26 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         ax = self._set_plot_bounds(ax=ax, x=x, y=y, z=z)
         return ax
 
+    def plotly(
+        self,
+        x: float = None,
+        y: float = None,
+        z: float = None,
+        fig: PlotlyFig = None,
+    ) -> PlotlyFig:
+
+        if fig is None:
+            fig = go.Figure()
+
+        fig = self.plotly_structures(fig=fig, x=x, y=y, z=z)
+        fig = self.plotly_sources(fig=fig, x=x, y=y, z=z)
+        fig = self.plotly_monitors(fig=fig, x=x, y=y, z=z)
+        fig = self.plotly_symmetries(fig=fig, x=x, y=y, z=z)
+        fig = self.plotly_pml(fig=fig, x=x, y=y, z=z)
+        fig = self._plotly_cleanup(fig=fig, x=x, y=y, z=z)
+
+        return fig
+
     @equal_aspect
     @add_ax_if_none
     def plot_structures(
@@ -647,6 +669,27 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         plot_params_struct = self.get_structure_plot_params(medium=medium)
         ax = self.plot_shape(shape=shape, plot_params=plot_params_struct, ax=ax)
         return ax
+
+    @add_fig_if_none
+    def plotly_structures(
+        self, x: float = None, y: float = None, z: float = None, fig: PlotlyFig = None
+    ) -> PlotlyFig:
+        """Plot each of simulation's structures on a plane defined by one nonzero x,y,z ."""
+
+        medium_shapes = self._filter_structures_plane(self.structures, x=x, y=y, z=z)
+        for (medium, shape) in medium_shapes:
+            fig = self.plotly_shape_structure(medium=medium, shape=shape, fig=fig)
+        return fig
+
+    def plotly_shape_structure(
+        self, medium: Medium, shape: ShapelyGeo, fig: PlotlyFig
+    ) -> PlotlyFig:
+        """Plot a structure's cross section shape for a given medium."""
+        plot_params_struct = self.get_structure_plot_params(medium=medium)
+        mat_index = self.medium_map[medium]
+        name = medium.name if medium.name else f"medium[{mat_index}]"
+        fig = self.plotly_shape(shape=shape, plot_params=plot_params_struct, fig=fig, name=name)
+        return fig
 
     def get_structure_plot_params(self, medium: Medium) -> PlotParams:
         """Constructs the plot parameters for a given medium in simulation.plot()."""
@@ -790,6 +833,15 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         ax = self._set_plot_bounds(ax=ax, x=x, y=y, z=z)
         return ax
 
+    @add_fig_if_none
+    def plotly_sources(
+        self, x: float = None, y: float = None, z: float = None, fig: PlotlyFig = None
+    ) -> PlotlyFig:
+        """Plot each of"""
+        for source in self.sources:
+            fig = source.plotly(x=x, y=y, z=z, fig=fig)
+        return fig
+
     @equal_aspect
     @add_ax_if_none
     def plot_monitors(self, x: float = None, y: float = None, z: float = None, ax: Ax = None) -> Ax:
@@ -816,6 +868,15 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         ax = self._set_plot_bounds(ax=ax, x=x, y=y, z=z)
         return ax
 
+    @add_fig_if_none
+    def plotly_monitors(
+        self, x: float = None, y: float = None, z: float = None, fig: PlotlyFig = None
+    ) -> PlotlyFig:
+        """Plot each of simulation's monitors on a plane defined by one nonzero x,y,z coordinate."""
+        for monitor in self.monitors:
+            fig = monitor.plotly(x=x, y=y, z=z, fig=fig)
+        return fig
+
     @equal_aspect
     @add_ax_if_none
     def plot_symmetries(
@@ -841,15 +902,36 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         """
 
         normal_axis, _ = self.parse_xyz_kwargs(x=x, y=y, z=z)
-        for sym_axis, sym_value in enumerate(self.symmetry):
-            if sym_value == 0 or sym_axis == normal_axis:
-                continue
-            sym_box = self.make_symmetry_box(sym_axis=sym_axis, sym_value=sym_value)
+        sym_boxes = self.make_symmetry_boxes(normal_axis=normal_axis)
+        for sym_box in sym_boxes:
             ax = sym_box.plot(x=x, y=y, z=z, ax=ax)
         ax = self._set_plot_bounds(ax=ax, x=x, y=y, z=z)
         return ax
 
-    def make_symmetry_box(self, sym_axis: Axis, sym_value: Symmetry) -> Ax:
+    @add_fig_if_none
+    def plotly_symmetries(
+        self, x: float = None, y: float = None, z: float = None, fig: PlotlyFig = None
+    ) -> PlotlyFig:
+        """P"""
+
+        normal_axis, _ = self.parse_xyz_kwargs(x=x, y=y, z=z)
+        sym_boxes = self.make_symmetry_boxes(normal_axis=normal_axis)
+        for sym_box in sym_boxes:
+            fig = sym_box.plotly(x=x, y=y, z=z, ax=fig)
+        return fig
+
+    def make_symmetry_boxes(self, normal_axis: Axis) -> List[Box]:
+        """Construct a list of :class:`Box` objects representing the symmetries to be plotted."""
+
+        sym_boxes = []
+        for sym_axis, sym_value in enumerate(self.symmetry):
+            if sym_value == 0 or sym_axis == normal_axis:
+                continue
+            sym_box = self.make_symmetry_box(sym_axis=sym_axis, sym_value=sym_value)
+            sym_boxes.append(sym_box)
+        return sym_boxes
+
+    def make_symmetry_box(self, sym_axis: Axis, sym_value: Symmetry) -> Box:
         """Construct a :class:`Box` representing the symmetry to be plotted."""
 
         plot_params = PlotParams(alpha=0.6)
@@ -936,15 +1018,38 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
             The supplied or created matplotlib axes.
         """
         normal_axis, _ = self.parse_xyz_kwargs(x=x, y=y, z=z)
+        pml_boxes = self.make_pml_boxes(normal_axis=normal_axis)
+        for pml_box in pml_boxes:
+            pml_box.plot(x=x, y=y, z=z, ax=ax)
+        ax = self._set_plot_bounds(ax=ax, x=x, y=y, z=z)
+        return ax
+
+    @add_fig_if_none
+    def plotly_pml(
+        self,
+        x: float = None,
+        y: float = None,
+        z: float = None,
+        fig: PlotlyFig = None,
+    ) -> PlotlyFig:
+        """:"""
+        normal_axis, _ = self.parse_xyz_kwargs(x=x, y=y, z=z)
+        pml_boxes = self.make_pml_boxes(normal_axis=normal_axis)
+        for pml_box in pml_boxes:
+            fig = pml_box.plotly(x=x, y=y, z=z, fig=fig)
+        return fig
+
+    def make_pml_boxes(self, normal_axis: Axis) -> List[Box]:
+        """make a list of Box objects representing the pml to plot on plane."""
+        pml_boxes = []
         pml_thicks = self.pml_thicknesses
         for pml_axis, pml_layer in enumerate(self.pml_layers):
             if pml_layer is None or pml_layer.num_layers == 0 or pml_axis == normal_axis:
                 continue
             for sign, pml_height in zip((-1, 1), pml_thicks[pml_axis]):
                 pml_box = self.make_pml_box(pml_axis=pml_axis, pml_height=pml_height, sign=sign)
-                ax = pml_box.plot(x=x, y=y, z=z, ax=ax)
-        ax = self._set_plot_bounds(ax=ax, x=x, y=y, z=z)
-        return ax
+                pml_boxes.append(pml_box)
+        return pml_boxes
 
     def make_pml_box(self, pml_axis: Axis, pml_height: float, sign: int) -> Box:
         """Construct a :class:`Box` representing an arborbing boundary to be plotted."""
@@ -1017,6 +1122,65 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         ax.set_ylim(ymin, ymax)
         return ax
 
+    def _plotly_cleanup(
+        self, fig: PlotlyFig, x: float = None, y: float = None, z: float = None
+    ) -> PlotlyFig:
+        """Finish plotting simulation cross section using plotly."""
+
+        normal_axis, pos = self.parse_xyz_kwargs(x=x, y=y, z=z)
+
+        fig = self._plotly_resize(fig=fig, normal_axis=normal_axis)
+        _, (xlabel, ylabel) = self.pop_axis("xyz", axis=normal_axis)
+
+        fig.update_layout(
+            title=f'{"xyz"[normal_axis]} = {pos:.2f}',
+            xaxis_title=f"{xlabel} (um)",
+            yaxis_title=f"{ylabel} (um)",
+            legend_title="Contents",
+        )
+
+        fig = self._plotly_clean_labels(fig=fig)
+
+        return fig
+
+    def _plotly_bounds(self, normal_axis: Axis) -> Tuple[Tuple[float, float], Tuple[float, float]]:
+        """get X, Y limits for plotly figure."""
+
+        rmin, rmax = self.bounds_pml
+        rmin = np.array(rmin)
+        rmax = np.array(rmax)
+        _, (xmin, ymin) = self.pop_axis(rmin, axis=normal_axis)
+        _, (xmax, ymax) = self.pop_axis(rmax, axis=normal_axis)
+        return (xmin, xmax), (ymin, ymax)
+
+    def _plotly_resize(
+        self, fig: PlotlyFig, normal_axis: Axis, width_pixels: float = 500
+    ) -> PlotlyFig:
+        """Set the lmits and make equal aspect."""
+
+        (xmin, xmax), (ymin, ymax) = self._plotly_bounds(normal_axis=normal_axis)
+
+        fig.update_xaxes(range=[xmin, xmax])
+        fig.update_yaxes(range=[ymin, ymax])
+
+        width = xmax - xmin
+        height = ymax - ymin
+
+        fig.update_layout(width=float(width_pixels), height=float(width_pixels) * height / width)
+        return fig
+
+    @staticmethod
+    def _plotly_clean_labels(fig: PlotlyFig) -> PlotlyFig:
+        """Remove label entries that show up more than once."""
+        seen = []
+        for trace in fig["data"]:
+            name = trace["name"]
+            if name not in seen:
+                seen.append(name)
+            else:
+                trace["showlegend"] = False
+        return fig
+
     @staticmethod
     def _filter_structures_plane(
         structures: List[Structure], x: float = None, y: float = None, z: float = None
@@ -1085,26 +1249,26 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         # filter out any remaining None or empty shapes (shapes with area completely removed)
         return [(medium, shape) for (medium, shape) in background_shapes if shape]
 
-    def plotly(
-        self, x: float = None, y: float = None, z: float = None
-    ) -> "plotly.graph_objects.Figure":
-        """Plot the geometry cross section at single (x,y,z) coordinate using plotly.
+    # def plotly(
+    #     self, x: float = None, y: float = None, z: float = None
+    # ) -> "plotly.graph_objects.Figure":
+    #     """Plot the geometry cross section at single (x,y,z) coordinate using plotly.
 
-        Parameters
-        ----------
-        x : float = None
-            Position of plane in x direction, only one of x,y,z can be specified to define plane.
-        y : float = None
-            Position of plane in y direction, only one of x,y,z can be specified to define plane.
-        z : float = None
-            Position of plane in z direction, only one of x,y,z can be specified to define plane.
+    #     Parameters
+    #     ----------
+    #     x : float = None
+    #         Position of plane in x direction, only one of x,y,z can be specified to define plane.
+    #     y : float = None
+    #         Position of plane in y direction, only one of x,y,z can be specified to define plane.
+    #     z : float = None
+    #         Position of plane in z direction, only one of x,y,z can be specified to define plane.
 
-        Returns
-        -------
-        plotly.graph_objects.Figure
-            A plotly figure.
-        """
-        return plotly_sim(self, x=x, y=y, z=z)
+    #     Returns
+    #     -------
+    #     plotly.graph_objects.Figure
+    #         A plotly figure.
+    #     """
+    #     return plotly_sim(self, x=x, y=y, z=z)
 
     @property
     def frequency_range(self) -> FreqBound:
