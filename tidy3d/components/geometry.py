@@ -1,4 +1,4 @@
-# pylint:disable=too-many-lines
+# pylint:disable=too-many-lines, too-many-arguments
 """Defines spatial extent of objects."""
 
 from abc import ABC, abstractmethod
@@ -236,21 +236,32 @@ class Geometry(Tidy3dBaseModel, ABC):
 
     @add_fig_if_none
     def plotly(
-        self, x: float = None, y: float = None, z: float = None, fig: PlotlyFig = None
+        self,
+        x: float = None,
+        y: float = None,
+        z: float = None,
+        fig: PlotlyFig = None,
+        row: int = None,
+        col: int = None,
     ) -> PlotlyFig:
         """Plot cross sections on plane using plotly."""
 
-        if fig is None:
-            fig = go.Figure()
-
         # for each intersection, plot the shape
         for shape in self.intersections(x=x, y=y, z=z):
-            fig = self.plotly_shape(shape=shape, plot_params=self.plot_params, fig=fig)
+            fig = self.plotly_shape(
+                shape=shape, plot_params=self.plot_params, fig=fig, row=row, col=col
+            )
 
         return fig
 
     def plotly_shape(
-        self, shape: ShapelyGeo, plot_params: PlotParams, fig: PlotlyFig, name: str = ""
+        self,
+        shape: ShapelyGeo,
+        plot_params: PlotParams,
+        fig: PlotlyFig,
+        row: int = None,
+        col: int = None,
+        name: str = "",
     ) -> PlotlyFig:
         """Plot a shape to a figure."""
         _shape = self.evaluate_inf_shape(shape)
@@ -265,21 +276,37 @@ class Geometry(Tidy3dBaseModel, ABC):
             name=name,
             opacity=plot_params.alpha,
         )
-        fig.add_trace(plotly_trace)
+        fig.add_trace(plotly_trace, row=row, col=col)
         return fig
 
     @staticmethod
     def _get_shape_coords(shape: ShapelyGeo) -> Tuple[float, float]:
         """Return xs, ys for given shapely shape."""
+
+        def strip_xy(shape):
+            """get lists of xs and ys coordinates for a single polygon."""
+            xs, ys = shape.exterior.coords.xy
+            xs = xs.tolist()
+            ys = ys.tolist()
+            xs = [-LARGE_NUMBER / 1e5 if np.isneginf(x) else x for x in xs]
+            xs = [LARGE_NUMBER / 1e5 if np.isposinf(x) else x for x in xs]
+            ys = [-LARGE_NUMBER / 1e5 if np.isneginf(y) else y for y in ys]
+            ys = [LARGE_NUMBER / 1e5 if np.isposinf(y) else y for y in ys]
+            return xs, ys
+
         if isinstance(shape, MultiPolygon):
-            raise NotImplementedError
-        xs, ys = shape.exterior.coords.xy
-        xs = xs.tolist()
-        ys = ys.tolist()
-        xs = [-LARGE_NUMBER / 1e5 if np.isneginf(x) else x for x in xs]
-        xs = [LARGE_NUMBER / 1e5 if np.isposinf(x) else x for x in xs]
-        ys = [-LARGE_NUMBER / 1e5 if np.isneginf(y) else y for y in ys]
-        ys = [LARGE_NUMBER / 1e5 if np.isposinf(y) else y for y in ys]
+            shapes = list(shape.geoms)
+        else:
+            shapes = [shape]
+
+        xs = []
+        ys = []
+
+        for _shape in shapes:
+            _xs, _ys = strip_xy(_shape)
+            xs += _xs
+            ys += _ys
+
         return xs, ys
 
     def _get_plot_labels(self, axis: Axis) -> Tuple[str, str]:

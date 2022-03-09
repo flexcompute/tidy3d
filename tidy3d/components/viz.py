@@ -74,20 +74,20 @@ def make_fig() -> PlotlyFig:
     return fig
 
 
-def add_fig_if_none(plot):
+def add_fig_if_none(plotly):
     """Decorates `plot(*args, **kwargs, ax=None)` function.
     if fig=None in the function call, creates a plotly fig and feeds it to rest of function.
     """
 
-    @wraps(plot)
-    def _plot(*args, **kwargs) -> PlotlyFig:
+    @wraps(plotly)
+    def _plotly(*args, **kwargs) -> PlotlyFig:
         """New plot function using a generated ax if None."""
         if kwargs.get("fig") is None:
             fig = make_fig()
             kwargs["fig"] = fig
-        return plot(*args, **kwargs)
+        return plotly(*args, **kwargs)
 
-    return _plot
+    return _plotly
 
 
 """ plot parameters """

@@ -1,3 +1,4 @@
+# pylint:disable=too-many-arguments
 """Defines Geometric objects with Medium properties."""
 import pydantic
 
@@ -65,7 +66,13 @@ class Structure(Tidy3dBaseModel):
 
     @add_fig_if_none
     def plotly(
-        self, x: float = None, y: float = None, z: float = None, fig: PlotlyFig = None
+        self,
+        x: float = None,
+        y: float = None,
+        z: float = None,
+        fig: PlotlyFig = None,
+        row: int = None,
+        col: int = None,
     ) -> PlotlyFig:
         """Use plotly to plot structure's geometric cross section at single (x,y,z) coordinate."""
-        return self.geometry.plotly(x=x, y=y, z=z, fig=fig)
+        return self.geometry.plotly(x=x, y=y, z=z, fig=fig, row=row, col=col)
