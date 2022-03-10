@@ -36,6 +36,7 @@ def prepend_tmp(path):
 SIM_MONITORS = Simulation(
     size=(10.0, 10.0, 10.0),
     grid_size=(0.1, 0.1, 0.1),
+    run_time=1e-13,
     monitors=[
         FieldMonitor(size=(1, 1, 1), center=(0, 1, 0), freqs=[1, 2, 5, 7, 8], name="field_freq"),
         FieldTimeMonitor(size=(1, 1, 0), center=(1, 0, 0), interval=10, name="field_time"),
@@ -132,6 +133,6 @@ SIM_CONVERT = td.Simulation(
             name="field_monitor",
         )
     ],
-    run_time=1 / 1e12,
+    run_time=1e-12,
     pml_layers=3 * [PML()],
 )

@@ -100,19 +100,19 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         units=MICROMETER,
     )
 
-    medium: MediumType = pydantic.Field(
-        Medium(),
-        title="Background Medium",
-        description="Background medium of simulation, defaults to vacuum if not specified.",
-    )
-
-    run_time: pydantic.NonNegativeFloat = pydantic.Field(
-        0.0,
+    run_time: pydantic.PositiveFloat = pydantic.Field(
+        ...,
         title="Run Time",
         description="Total electromagnetic evolution time in seconds. "
         "Note: If simulation 'shutoff' is specified, "
         "simulation will terminate early when shutoff condition met.",
         units=SECOND,
+    )
+
+    medium: MediumType = pydantic.Field(
+        Medium(),
+        title="Background Medium",
+        description="Background medium of simulation, defaults to vacuum if not specified.",
     )
 
     symmetry: Tuple[Symmetry, Symmetry, Symmetry] = pydantic.Field(

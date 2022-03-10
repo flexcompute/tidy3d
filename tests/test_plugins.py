@@ -22,7 +22,7 @@ def test_near2far():
 
     sim_size = (5, 5, 5)
     dl = 0.1
-    sim = td.Simulation(size=sim_size, grid_size=[dl, dl, dl], monitors=monitors, run_time=10)
+    sim = td.Simulation(size=sim_size, grid_size=[dl, dl, dl], monitors=monitors, run_time=1e-12)
 
     def rand_data():
         return ScalarFieldData(
@@ -58,7 +58,9 @@ def test_mode_solver():
     waveguide = td.Structure(
         geometry=td.Box(size=(100, 0.5, 0.5)), medium=td.Medium(permittivity=4.0)
     )
-    simulation = td.Simulation(size=(2, 2, 2), grid_size=(0.1, 0.1, 0.1), structures=[waveguide])
+    simulation = td.Simulation(
+        size=(2, 2, 2), grid_size=(0.1, 0.1, 0.1), structures=[waveguide], run_time=1e-12
+    )
     plane = td.Box(center=(0, 0, 0), size=(0, 1, 1))
     ms = ModeSolver(simulation=simulation, plane=plane, freq=td.constants.C_0 / 1.5)
     mode_spec = td.ModeSpec(

@@ -61,6 +61,7 @@ def test_simulation_preserve_types():
             FluxTimeMonitor(size=(1, 0, 1), start=1e-12, interval=3, name="fluxtime"),
             ModeMonitor(size=(1, 0, 1), freqs=[1, 2], mode_spec=ModeSpec(num_modes=3), name="mode"),
         ],
+        run_time=1e-12,
     )
 
     path = "tests/tmp/simulation.json"
