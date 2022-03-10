@@ -53,6 +53,7 @@ def test_sim_nonuniform_small():
         size=(size_x, 4, 4),
         grid_size=(grid_size_x, 1, 1),
         pml_layers=[td.PML(num_layers=num_layers_pml_x), None, None],
+        run_time=1e-12,
     )
 
     bound_coords = sim.grid.boundaries.x
@@ -97,6 +98,7 @@ def test_sim_nonuniform_large():
         size=(size_x, 4, 4),
         grid_size=(grid_size_x, 1, 1),
         pml_layers=[td.PML(num_layers=num_layers_pml_x), None, None],
+        run_time=1e-12,
     )
 
     bound_coords = sim.grid.boundaries.x
@@ -125,10 +127,7 @@ def test_sim_nonuniform_large():
 
 def test_sim_grid():
 
-    sim = td.Simulation(
-        size=(4, 4, 4),
-        grid_size=(1, 1, 1),
-    )
+    sim = td.Simulation(size=(4, 4, 4), grid_size=(1, 1, 1), run_time=1e-12)
 
     for c in sim.grid.centers.dict(exclude={TYPE_TAG_STR}).values():
         assert np.all(c == np.array([-1.5, -0.5, 0.5, 1.5]))
@@ -150,6 +149,7 @@ def test_sim_symmetry_grid():
         ]
         * 3,
         symmetry=(0, 1, -1),
+        run_time=1e-12,
     )
 
     coords_x, coords_y, coords_z = sim.grid.boundaries.to_list
@@ -172,6 +172,7 @@ def test_sim_pml_grid():
         size=(4, 4, 4),
         grid_size=(1, 1, 1),
         pml_layers=(td.PML(num_layers=2), td.Absorber(num_layers=2), td.StablePML(num_layers=2)),
+        run_time=1e-12,
     )
 
     for c in sim.grid.centers.dict(exclude={TYPE_TAG_STR}).values():
@@ -182,10 +183,7 @@ def test_sim_pml_grid():
 
 def test_sim_discretize_vol():
 
-    sim = td.Simulation(
-        size=(4, 4, 4),
-        grid_size=(1, 1, 1),
-    )
+    sim = td.Simulation(size=(4, 4, 4), grid_size=(1, 1, 1), run_time=1e-12)
 
     vol = td.Box(size=(1.9, 1.9, 1.9))
 
@@ -202,10 +200,7 @@ def test_sim_discretize_vol():
 
 def test_sim_discretize_plane():
 
-    sim = td.Simulation(
-        size=(4, 4, 4),
-        grid_size=(1, 1, 1),
-    )
+    sim = td.Simulation(size=(4, 4, 4), grid_size=(1, 1, 1), run_time=1e-12)
 
     plane = td.Box(size=(6, 6, 0))
 

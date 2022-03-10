@@ -90,6 +90,7 @@ def _test_version():
     sim = Simulation(
         size=(1, 1, 1),
         grid_size=(0.1, 0.1, 0.1),
+        run_time=1e-12,
     )
     path = "tests/tmp/simulation.json"
     sim.to_file("tests/tmp/simulation.json")
@@ -143,13 +144,13 @@ def test_sim_bounds():
 def test_sim_grid_size():
 
     size = (1, 1, 1)
-    _ = Simulation(size=size, grid_size=(1.0, 1.0, 1.0))
+    _ = Simulation(size=size, grid_size=(1.0, 1.0, 1.0), run_time=1e-12)
 
 
 def _test_sim_size():
 
     with pytest.raises(SetupError):
-        s = Simulation(size=(1, 1, 1), grid_size=(1e-5, 1e-5, 1e-5))
+        s = Simulation(size=(1, 1, 1), grid_size=(1e-5, 1e-5, 1e-5), run_time=1e-12)
         s._validate_size()
 
     with pytest.raises(SetupError):
@@ -168,6 +169,7 @@ def _test_monitor_size():
                     size=(inf, inf, inf), freqs=np.linspace(0, 200e12, 10000001), name="test"
                 )
             ],
+            run_time=1e-12,
         )
 
         s.validate_contents()
@@ -187,7 +189,12 @@ def test_monitor_medium_frequency_range(caplog, freq, log_level):
         polarization="Ex",
     )
     sim = Simulation(
-        size=(1, 1, 1), grid_size=(0.1, 0.1, 0.1), structures=[box], monitors=[mnt], sources=[src]
+        size=(1, 1, 1),
+        grid_size=(0.1, 0.1, 0.1),
+        structures=[box],
+        monitors=[mnt],
+        sources=[src],
+        run_time=1e-12,
     )
     assert_log_level(caplog, log_level)
 
@@ -203,7 +210,9 @@ def test_monitor_simulation_frequency_range(caplog, fwidth, log_level):
         polarization="Ex",
     )
     mnt = FieldMonitor(size=(0, 0, 0), name="freq", freqs=[1.5])
-    sim = Simulation(size=(1, 1, 1), grid_size=(0.1, 0.1, 0.1), monitors=[mnt], sources=[src])
+    sim = Simulation(
+        size=(1, 1, 1), grid_size=(0.1, 0.1, 0.1), monitors=[mnt], sources=[src], run_time=1e-12
+    )
     assert_log_level(caplog, log_level)
 
 
@@ -219,7 +228,11 @@ def test_sim_grid_size(caplog, grid_size, log_level):
         polarization="Ex",
     )
     _ = Simulation(
-        size=(1, 1, 1), grid_size=(0.01, 0.01, grid_size), structures=[box], sources=[src]
+        size=(1, 1, 1),
+        grid_size=(0.01, 0.01, grid_size),
+        structures=[box],
+        sources=[src],
+        run_time=1e-12,
     )
 
     assert_log_level(caplog, log_level)
@@ -241,6 +254,7 @@ def test_sim_structure_gap(caplog, box_size, log_level):
         structures=[box],
         sources=[src],
         pml_layers=[PML(num_layers=5), PML(num_layers=5), PML(num_layers=5)],
+        run_time=1e-12,
     )
     assert_log_level(caplog, log_level)
 
@@ -270,6 +284,7 @@ def test_sim_plane_wave_error():
         medium=medium_bg,
         structures=[box_transparent],
         sources=[src],
+        run_time=1e-12,
     )
 
     # with non-transparent box, raise
@@ -296,7 +311,9 @@ def test_sim_structure_extent(caplog, box_size, log_level):
         polarization="Ex",
     )
     box = Structure(geometry=Box(size=box_size), medium=Medium(permittivity=2))
-    sim = Simulation(size=(1, 1, 1), grid_size=(0.1, 0.1, 0.1), structures=[box], sources=[src])
+    sim = Simulation(
+        size=(1, 1, 1), grid_size=(0.1, 0.1, 0.1), structures=[box], sources=[src], run_time=1e-12
+    )
 
     assert_log_level(caplog, log_level)
 
@@ -309,13 +326,17 @@ def test_num_mediums():
         structures.append(
             Structure(geometry=Box(size=(1, 1, 1)), medium=Medium(permittivity=i + 1))
         )
-    sim = Simulation(size=(1, 1, 1), grid_size=(0.1, 0.1, 0.1), structures=structures)
+    sim = Simulation(
+        size=(1, 1, 1), grid_size=(0.1, 0.1, 0.1), structures=structures, run_time=1e-12
+    )
 
     with pytest.raises(SetupError):
         structures.append(
             Structure(geometry=Box(size=(1, 1, 1)), medium=Medium(permittivity=i + 2))
         )
-        sim = Simulation(size=(1, 1, 1), grid_size=(0.1, 0.1, 0.1), structures=structures)
+        sim = Simulation(
+            size=(1, 1, 1), grid_size=(0.1, 0.1, 0.1), structures=structures, run_time=1e-12
+        )
 
 
 """ geometry """
@@ -356,13 +377,13 @@ def test_geometry_sizes():
         with pytest.raises(pydantic.ValidationError) as e_info:
             a = Box(size=size, center=(0, 0, 0))
         with pytest.raises(pydantic.ValidationError) as e_info:
-            s = Simulation(size=size, grid_size=(1.0, 1.0, 1.0))
+            s = Simulation(size=size, grid_size=(1.0, 1.0, 1.0), run_time=1e-12)
         with pytest.raises(pydantic.ValidationError) as e_info:
-            s = Simulation(size=(1, 1, 1), grid_size=size)
+            s = Simulation(size=(1, 1, 1), grid_size=size, run_time=1e-12)
 
     # negative grid sizes error?
     with pytest.raises(pydantic.ValidationError) as e_info:
-        s = Simulation(size=(1, 1, 1), grid_size=-1.0)
+        s = Simulation(size=(1, 1, 1), grid_size=-1.0, run_time=1e-12)
 
 
 def test_pop_axis():
@@ -623,11 +644,6 @@ def _test_names_default():
 
     for i, source in enumerate(sim.sources):
         assert source.name == f"sources[{i}]"
-
-    # distinct_mediums = [f"mediums[{i}]" for i in range(len(sim.mediums))]
-    # for i, medium in enumerate(sim.mediums):
-    #     assert medium.name in distinct_mediums
-    #     distinct_mediums.pop(distinct_mediums.index(medium.name))
 
 
 def test_names_unique():
