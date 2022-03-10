@@ -1,4 +1,5 @@
 """ sets configuration options for web interface """
+import os
 from typing import Any
 
 from dataclasses import dataclass
@@ -41,3 +42,6 @@ ConfigProd = WebConfig(
 
 # default one to import
 DEFAULT_CONFIG = ConfigProd
+
+if os.environ.get("TIDY3D_ENV") == "dev":
+    DEFAULT_CONFIG = ConfigDev
