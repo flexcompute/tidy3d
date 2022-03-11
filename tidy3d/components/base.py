@@ -10,6 +10,7 @@ from pydantic.fields import ModelField
 
 from .types import ComplexNumber, NumpyArray, Literal
 from ..log import FileError
+from ..constants import inf
 
 # default indentation (# spaces) in files
 INDENT = 4
@@ -59,6 +60,8 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         json_encoders = {
             np.ndarray: lambda x: NumpyArray(data_list=x.tolist()),
             complex: lambda x: ComplexNumber(real=x.real, imag=x.imag),
+            inf: lambda x: "Infinity",
+            -inf: lambda x: "-Infinity",
         }
 
     def help(self, methods: bool = False) -> None:
