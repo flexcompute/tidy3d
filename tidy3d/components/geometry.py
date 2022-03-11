@@ -15,9 +15,9 @@ import plotly.graph_objects as go
 from .base import Tidy3dBaseModel
 from .types import Bound, Size, Coordinate, Axis, Coordinate2D, tidynumpy
 from .types import Vertices, Ax, Shapely, PlotlyFig
-from .viz import add_ax_if_none, equal_aspect, add_fig_if_none
+from .viz import add_ax_if_none, equal_aspect, add_fig_if_none, equal_aspect_plotly
 from .viz import PLOT_BUFFER, ARROW_LENGTH_FACTOR, ARROW_WIDTH_FACTOR
-from .viz import PlotParams
+from .viz import PlotParams, plot_params_geometry
 from .validators import is_not_inf
 from ..log import Tidy3dKeyError, SetupError, ValidationError
 from ..constants import MICROMETER, LARGE_NUMBER
@@ -27,7 +27,7 @@ class Geometry(Tidy3dBaseModel, ABC):
     """Abstract base class, defines where something exists in space."""
 
     plot_params: PlotParams = pydantic.Field(
-        PlotParams(),
+        plot_params_geometry,
         title="Plot Parameters",
         description="Specifications used to plot instances of this class.",
     )
@@ -234,6 +234,7 @@ class Geometry(Tidy3dBaseModel, ABC):
         ax.add_artist(patch)
         return ax
 
+    @equal_aspect_plotly
     @add_fig_if_none
     def plotly(
         self,
@@ -243,13 +244,14 @@ class Geometry(Tidy3dBaseModel, ABC):
         fig: PlotlyFig = None,
         row: int = None,
         col: int = None,
+        name: str = None,
     ) -> PlotlyFig:
         """Plot cross sections on plane using plotly."""
 
         # for each intersection, plot the shape
         for shape in self.intersections(x=x, y=y, z=z):
             fig = self.plotly_shape(
-                shape=shape, plot_params=self.plot_params, fig=fig, row=row, col=col
+                shape=shape, plot_params=self.plot_params, fig=fig, row=row, col=col, name=name
             )
 
         return fig
@@ -261,7 +263,7 @@ class Geometry(Tidy3dBaseModel, ABC):
         fig: PlotlyFig,
         row: int = None,
         col: int = None,
-        name: str = "",
+        name: str = None,
     ) -> PlotlyFig:
         """Plot a shape to a figure."""
         _shape = self.evaluate_inf_shape(shape)
@@ -271,7 +273,7 @@ class Geometry(Tidy3dBaseModel, ABC):
             y=ys,
             fill="toself",
             fillcolor=plot_params.facecolor,
-            line=dict(width=plot_params.lw, color=plot_params.facecolor),
+            line=dict(width=plot_params.linewidth, color=plot_params.facecolor),
             marker=dict(size=0.0001, line=dict(width=0)),
             name=name,
             opacity=plot_params.alpha,

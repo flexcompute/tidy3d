@@ -9,7 +9,7 @@ from .types import Literal, Ax, EMField, ArrayLike, Array
 from .geometry import Box
 from .validators import assert_plane
 from .mode import ModeSpec
-from .viz import PlotParams, ARROW_COLOR_MONITOR, ARROW_ALPHA
+from .viz import PlotParams, plot_params_monitor, ARROW_COLOR_MONITOR, ARROW_ALPHA
 from ..log import SetupError
 from ..constants import HERTZ, SECOND
 
@@ -28,7 +28,7 @@ class Monitor(Box, ABC):
         min_length=1,
     )
 
-    plot_params = PlotParams(alpha=0.4, facecolor="orange", edgecolor="orange", lw=3)
+    plot_params : PlotParams = plot_params_monitor
 
     @property
     def geometry(self):

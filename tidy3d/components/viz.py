@@ -4,10 +4,11 @@ from typing import Any
 from functools import wraps
 
 import matplotlib.pylab as plt
-from pydantic import BaseModel
+import pydantic as pd
 import plotly.graph_objects as go
 
 from .types import Ax, PlotlyFig
+from .base import Tidy3dBaseModel
 
 """ Constants """
 
@@ -89,20 +90,46 @@ def add_fig_if_none(plotly):
 
     return _plotly
 
+def equal_aspect_plotly(plotly):
+    """Decorates a plotting function returning a matplotlib axes.
+    Ensures the aspect ratio of the returned axes is set to equal.
+    Useful for 2D plots, like sim.plotly()
+    """
+
+    @wraps(plotly)
+    def _plotly(*args, **kwargs) -> PlotlyFig:
+        """New plot function with equal aspect ratio axes returned."""
+        fig = plotly(*args, **kwargs)
+        fig.update_yaxes(
+            scaleanchor = "x",
+            scaleratio = 1,
+        )
+        fig.update_layout(plot_bgcolor='rgba(0,0,0,0)')
+        return fig
+
+    return _plotly
+
 
 """ plot parameters """
 
-
-class PlotParams(BaseModel):
+class PlotParams(Tidy3dBaseModel):
     """Stores plotting parameters / specifications for a given model."""
 
-    alpha: Any = None
-    edgecolor: Any = None
-    facecolor: Any = None
-    fill: bool = True
-    hatch: str = None
-    lw: int = 1
+    alpha: Any = pd.Field(None, title="Opacity")
+    edgecolor: Any = pd.Field(None, title="Edge Color", alias="ec")
+    facecolor: Any = pd.Field(None, title="Face Color", alias="fc")
+    fill: bool = pd.Field(True, title="Is Filled")
+    hatch: str = pd.Field(None, title="Hatch Style")
+    linewidth: pd.NonNegativeFloat = pd.Field(1, title="Line Width", alias="lw")
 
+# defaults for different tidy3d objects
+plot_params_geometry = PlotParams()
+plot_params_structure = PlotParams()
+plot_params_source = PlotParams(alpha=0.4, facecolor="limegreen", edgecolor="limegreen", lw=3)
+plot_params_monitor = PlotParams(alpha=0.4, facecolor="orange", edgecolor="orange", lw=3)
+plot_params_pml = PlotParams(alpha=0.7, facecolor="gray", edgecolor="gray", hatch="x")
+plot_params_symmetry = PlotParams(alpha=0.6)
+plot_params_sim_boundary = PlotParams(linewidth=0, facecolor='rgba(0,0,0,0.05)', edgecolor="black")
 
 # stores color of simulation.structures for given index in simulation.medium_map
 MEDIUM_CMAP = [
@@ -115,3 +142,14 @@ MEDIUM_CMAP = [
     "#616161",
     "#877EBC",
 ]
+
+""" Data viz backend """
+# import plotly.express as px
+# from .data import SimulationData
+
+# sim_data = SimulationData.from_file('data.hdf5')
+# ex = sim_data['fields'].Ex.real
+# fig = px.imshow(ex.sel(f=200e12).T, animation_frame=0, labels=dict(animation_frame="slice"));
+# fig.write_json(fig.json)
+# fig.show()
+

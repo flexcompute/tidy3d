@@ -20,10 +20,10 @@ from .structure import Structure
 from .source import SourceType, PlaneWave
 from .monitor import MonitorType
 from .pml import PMLTypes, PML, Absorber
-from .viz import add_ax_if_none, equal_aspect, add_fig_if_none
+from .viz import add_ax_if_none, equal_aspect, add_fig_if_none, equal_aspect_plotly
 
-# from .viz import plotly_sim
-from .viz import MEDIUM_CMAP, PlotParams
+from .viz import MEDIUM_CMAP, PlotParams, plot_params_symmetry, plot_params_sim_boundary
+from .viz import plot_params_structure, plot_params_source, plot_params_monitor, plot_params_pml
 
 from ..version import __version__
 from ..constants import C_0, MICROMETER, SECOND, inf
@@ -670,12 +670,15 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
             The supplied or created plotly ``Figure``.
         """
 
+        fig = self._plotly_bounding_box(x=x, y=y, z=z, fig=fig, row=row, col=col)
         fig = self.plotly_structures(x=x, y=y, z=z, fig=fig, row=row, col=col)
         fig = self.plotly_sources(x=x, y=y, z=z, fig=fig, row=row, col=col)
         fig = self.plotly_monitors(x=x, y=y, z=z, fig=fig, row=row, col=col)
         fig = self.plotly_symmetries(x=x, y=y, z=z, fig=fig, row=row, col=col)
         fig = self.plotly_pml(x=x, y=y, z=z, fig=fig, row=row, col=col)
-        fig = self._plotly_cleanup(x=x, y=y, z=z, fig=fig)
+        if row is None and col is None:
+            fig = self._plotly_cleanup(x=x, y=y, z=z, fig=fig)
+
 
         return fig
 
@@ -716,12 +719,14 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
             The supplied or created plotly ``Figure``.
         """
 
+        fig = self._plotly_bounding_box(x=x, y=y, z=z, fig=fig, row=row, col=col)
         fig = self.plotly_structures_eps(x=x, y=y, z=z, fig=fig, row=row, col=col)
         fig = self.plotly_sources(x=x, y=y, z=z, fig=fig, row=row, col=col)
         fig = self.plotly_monitors(x=x, y=y, z=z, fig=fig, row=row, col=col)
         fig = self.plotly_symmetries(x=x, y=y, z=z, fig=fig, row=row, col=col)
         fig = self.plotly_pml(x=x, y=y, z=z, fig=fig, row=row, col=col)
-        fig = self._plotly_cleanup(x=x, y=y, z=z, fig=fig)
+        if row is None and col is None:
+            fig = self._plotly_cleanup(x=x, y=y, z=z, fig=fig)
 
         return fig
 
@@ -755,6 +760,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         ax = self._set_plot_bounds(ax=ax, x=x, y=y, z=z)
         return ax
 
+    @equal_aspect_plotly
     @add_fig_if_none
     def plotly_structures(
         self,
@@ -816,7 +822,8 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
     def _get_structure_plot_params(self, medium: Medium) -> PlotParams:
         """Constructs the plot parameters for a given medium in simulation.plot()."""
 
-        plot_params = PlotParams(lw=0)
+        plot_params = plot_params_structure
+        plot_params.linewidth = 0
 
         mat_index = self.medium_map[medium]
 
@@ -828,7 +835,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
             # perfect electrical conductor
             plot_params.facecolor = "gold"
             plot_params.edgecolor = "k"
-            plot_params.lw = 1
+            plot_params.linewidth = 1
         else:
             # regular medium
             facecolor = MEDIUM_CMAP[(mat_index - 1) % len(MEDIUM_CMAP)]
@@ -889,6 +896,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         ax = self._set_plot_bounds(ax=ax, x=x, y=y, z=z)
         return ax
 
+    @equal_aspect_plotly
     @add_fig_if_none
     def plotly_structures_eps(
         self,
@@ -944,7 +952,8 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
     def _get_structure_eps_plot_params(self, medium: Medium, freq: float) -> PlotParams:
         """Constructs the plot parameters for a given medium in simulation.plot_eps()."""
 
-        plot_params = PlotParams(lw=0)
+        plot_params = plot_params_structure
+        plot_params.linewidth = 0
 
         if medium == self.medium:
             # background medium
@@ -954,7 +963,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
             # perfect electrical conductor
             plot_params.facecolor = "gold"
             plot_params.edgecolor = "k"
-            plot_params.lw = 1
+            plot_params.linewidth = 1
         else:
             # regular medium
             eps_min, eps_max = self.eps_bounds(freq=freq)
@@ -1050,7 +1059,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         """
 
         for source in self.sources:
-            fig = source.plotly(x=x, y=y, z=z, fig=fig, row=row, col=col)
+            fig = source.plotly(x=x, y=y, z=z, fig=fig, row=row, col=col, name='sources')
         return fig
 
     @equal_aspect
@@ -1113,7 +1122,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         """
 
         for monitor in self.monitors:
-            fig = monitor.plotly(x=x, y=y, z=z, fig=fig, row=row, col=col)
+            fig = monitor.plotly(x=x, y=y, z=z, fig=fig, row=row, col=col, name='monitors')
         return fig
 
     @property
@@ -1244,8 +1253,9 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
     def _make_pml_box(self, pml_axis: Axis, pml_height: float, sign: int) -> Box:
         """Construct a :class:`Box` representing an arborbing boundary to be plotted."""
 
-        plot_params = PlotParams(alpha=0.7, facecolor="gray", edgecolor="gray", hatch="x")
-        pml_size = [inf, inf, inf]
+        plot_params = plot_params_pml
+        rmin, rmax = self.bounds_pml
+        pml_size = [abs(dmax-dmin) for dmin, dmax in zip(rmin, rmax)]
         pml_size[pml_axis] = pml_height
         pml_center = list(self.center)
         pml_offset_center = (self.size[pml_axis] + pml_height) / 2.0
@@ -1336,7 +1346,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
     def _make_symmetry_box(self, sym_axis: Axis, sym_value: Symmetry) -> Box:
         """Construct a :class:`Box` representing the symmetry to be plotted."""
 
-        plot_params = PlotParams(alpha=0.6)
+        plot_params = plot_params_symmetry
 
         if sym_value == 1:
             plot_params.facecolor = "lightsteelblue"
@@ -1351,6 +1361,24 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         sym_center[sym_axis] -= sym_size[sym_axis] / 2
 
         return Box(center=sym_center, size=sym_size, plot_params=plot_params)
+
+    @add_fig_if_none
+    def _plotly_bounding_box(
+        self,
+        x: float = None,
+        y: float = None,
+        z: float = None,
+        fig: PlotlyFig = None,
+        row: int = None,
+        col: int = None,
+    ) -> PlotlyFig:
+        """Add simulation bounding box."""
+        rmin, rmax = self.bounds_pml
+        sim_box_pml = Box.from_bounds(rmin=rmin, rmax=rmax)
+        plot_params = plot_params_sim_boundary
+        fig = sim_box_pml.plotly(x=x, y=y, z=z, fig=fig, row=row, col=col)
+        return fig
+
 
     @add_ax_if_none
     def plot_grid(self, x: float = None, y: float = None, z: float = None, ax: Ax = None) -> Ax:
@@ -1428,8 +1456,8 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
 
         fig.update_layout(
             title=f'{"xyz"[normal_axis]} = {pos:.2f}',
-            xaxis_title=f"{xlabel} (um)",
-            yaxis_title=f"{ylabel} (um)",
+            xaxis_title=f"{xlabel} ($\mu m$)",
+            yaxis_title=f"{ylabel} ($\mu m$)",
             legend_title="Contents",
         )
 
@@ -1451,17 +1479,17 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         self,
         fig: PlotlyFig,
         normal_axis: Axis,
-        width_pixels: float = 500,
+        width_pixels: float = 700,
     ) -> PlotlyFig:
         """Set the lmits and make equal aspect."""
 
         (xmin, xmax), (ymin, ymax) = self._plotly_bounds(normal_axis=normal_axis)
 
-        fig.update_xaxes(range=[xmin, xmax])
-        fig.update_yaxes(range=[ymin, ymax])
-
         width = xmax - xmin
         height = ymax - ymin
+
+        fig.update_xaxes(range=[xmin - width/10, xmax + width/10])
+        fig.update_yaxes(range=[ymin - height/10, ymax + height/10])
 
         fig.update_layout(width=float(width_pixels), height=float(width_pixels) * height / width)
         return fig
