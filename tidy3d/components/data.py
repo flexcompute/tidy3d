@@ -685,11 +685,11 @@ class ModeAmpsData(AbstractModeData):
     data_attrs: Dict[str, str] = {"units": "sqrt(W)", "long_name": "mode amplitudes"}
     type: Literal["ModeAmpsData"] = "ModeAmpsData"
 
-    _dims = ("direction", "mode_index", "f")
+    _dims = ("direction", "f", "mode_index")
 
     def normalize(self, source_freq_amps: Array[complex]) -> None:
         """normalize the values by the amplitude of the source."""
-        self.values /= source_freq_amps  # pylint: disable=no-member
+        self.values /= source_freq_amps[None, :, None]  # pylint: disable=no-member
 
 
 class ModeIndexData(AbstractModeData):
@@ -716,11 +716,21 @@ class ModeIndexData(AbstractModeData):
     data_attrs: Dict[str, str] = {"units": "None", "long_name": "complex effective index"}
     type: Literal["ModeIndexData"] = "ModeIndexData"
 
-    _dims = ("mode_index", "f")
+    _dims = ("f", "mode_index")
 
     def normalize(self, source_freq_amps: Array[complex]) -> None:
         """normalize the values by the amplitude of the source."""
         return
+
+    @property
+    def n_eff(self):
+        """Get real part of effective index."""
+        return self.data.real
+
+    @property
+    def k_eff(self):
+        """Get imaginary part of effective index."""
+        return self.data.imag
 
 
 class ModeData(CollectionData):
@@ -767,7 +777,7 @@ class ModeData(CollectionData):
         """Get real part of effective index."""
         scalar_data = self.data_dict.get("n_complex")
         if scalar_data:
-            return scalar_data.data.real
+            return scalar_data.n_eff
         return None
 
     @property
@@ -775,8 +785,35 @@ class ModeData(CollectionData):
         """Get imaginary part of effective index."""
         scalar_data = self.data_dict.get("n_complex")
         if scalar_data:
-            return scalar_data.data.imag
+            return scalar_data.k_eff
         return None
+
+
+class ScalarModeFieldData(ScalarFieldData):
+    """Like ScalarFieldData but with extra dimension ``mode_index``."""
+
+    mode_index: Array[int]
+    type: Literal["ScalarModeFieldData"] = "ScalarModeFieldData"
+    _dims = ("x", "y", "z", "f", "mode_index")
+
+
+class ModeFieldData(AbstractFieldData):
+    """Like FieldData but with extra dimension ``mode_index``."""
+
+    data_dict: Dict[str, ScalarModeFieldData]
+    type: Literal["ModeFieldData"] = "ModeFieldData"
+
+    def isel_mode_index(self, mode_index):
+        """Return a FieldData at the selected mode index."""
+        data_dict = {}
+        for field_name, scalar_data in self.data_dict.items():
+            scalar_dict = scalar_data.dict()
+            scalar_dict.pop("mode_index")
+            scalar_dict.pop("type")
+            scalar_dict["values"] = scalar_data.data.isel(mode_index=mode_index).values
+            data_dict[field_name] = ScalarFieldData(**scalar_dict)
+
+        return FieldData(data_dict=data_dict)
 
 
 # maps MonitorData.type string to the actual type, for MonitorData.from_file()
@@ -790,6 +827,8 @@ DATA_TYPE_MAP = {
     "ModeAmpsData": ModeAmpsData,
     "ModeIndexData": ModeIndexData,
     "ModeData": ModeData,
+    "ModeFieldData": ModeFieldData,
+    "ScalarModeFieldData": ScalarModeFieldData,
 }
 
 
