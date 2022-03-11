@@ -3,7 +3,6 @@
 from typing import List, Dict, Tuple
 import numpy as np
 import xarray as xr
-import dask.array as da
 import pydantic
 
 from ...constants import C_0, ETA_0, HERTZ, MICROMETER
@@ -117,13 +116,6 @@ class Near2Far(pydantic.BaseModel):
         "Should not be changed except in special cases where the exp(-jkr) convention is used.",
     )
 
-    method: int = pydantic.Field(
-        0,
-        title="Vectorization strategy",
-        description="1 => no vectorization, 2 => Numpy-based vectorization, "
-        "3 => Dask-based vectorization, other values => hybrid vectorization with internal loops.",
-    )
-
     @pydantic.validator("origin", always=True)
     def set_origin(cls, val, values):
         """Sets .origin as the average of centers of all surface monitors if not provided."""
@@ -168,8 +160,7 @@ class Near2Far(pydantic.BaseModel):
         frequency: float,
         pts_per_wavelength: int = PTS_PER_WVL,
         medium: Medium = None,
-        origin: Coordinate = None,
-        method: int = 0
+        origin: Coordinate = None
     ):
         """Constructs :class:`Near2Far` from a list of surface monitors and their directions.
 
@@ -212,8 +203,7 @@ the number of directions ({len(normal_dirs)})."
             frequency=frequency,
             pts_per_wavelength=pts_per_wavelength,
             medium=medium,
-            origin=origin,
-            method=method
+            origin=origin
         )
 
     @pydantic.validator("currents", always=True)
@@ -398,258 +388,6 @@ the number of directions ({len(normal_dirs)})."
         return currents
 
     # pylint:disable=too-many-locals
-    def _radiation_vectors_for_surface_feb_release(
-        self, theta: float, phi: float, surface: Near2FarSurface, currents: xr.Dataset
-    ):
-        """Compute radiation vectors at an angle in spherical coordinates
-        for a given set of surface currents and observation angles.
-
-        Parameters
-        ----------
-        theta : float
-            Polar angle (rad) downward from x=y=0 line relative to the local origin.
-        phi : float
-            Azimuthal (rad) angle from y=z=0 line relative to the local origin.
-        surface: :class:`Near2FarSurface`
-            :class:`Near2FarSurface` object to use as source of near field.
-        currents : xarray.Dataset
-            xarray Dataset containing surface currents associated with the surface monitor.
-
-        Returns
-        -------
-        tuple[float, float, float, float]
-            ``N_theta``, ``N_phi``, ``L_theta``, ``L_phi`` radiation vectors for the given surface.
-        """
-
-        theta = np.squeeze(theta)
-        phi = np.squeeze(phi)
-
-        # precompute trig functions
-        sin_theta = np.sin(theta)
-        cos_theta = np.cos(theta)
-        sin_phi = np.sin(phi)
-        cos_phi = np.cos(phi)
-
-        # make sure that observation points are interpreted w.r.t. the local origin
-        pts = [currents[name] - origin for name, origin in zip(["x", "y", "z"], self.origin)]
-
-        _, idx_uv = surface.monitor.pop_axis((0, 1, 2), axis=surface.axis)
-        _, source_names = surface.monitor.pop_axis(("x", "y", "z"), axis=surface.axis)
-
-        idx_u, idx_v = idx_uv
-        cmp_1, cmp_2 = source_names
-
-        propagation_factor = -self.phasor_sign * 1j * self.k
-
-        phase_x = np.exp(propagation_factor * pts[0] * sin_theta * cos_phi)
-        phase_y = np.exp(propagation_factor * pts[1] * sin_theta * sin_phi)
-        phase_z = np.exp(propagation_factor * pts[2] * cos_theta)
-        phase = phase_x * phase_y * phase_z
-
-        J = [0, 0, 0]
-        M = [0, 0, 0]
-
-        def integrate_2D(function, pts_u, pts_v):
-            """Trapezoidal integration in two dimensions."""
-            return np.trapz(np.trapz(function, pts_u.values, axis=0), pts_v.values, axis=0)
-
-        J[idx_u] = integrate_2D(currents["J" + cmp_1] * phase, pts[idx_u], pts[idx_v])
-        J[idx_v] = integrate_2D(currents["J" + cmp_2] * phase, pts[idx_u], pts[idx_v])
-
-        M[idx_u] = integrate_2D(currents["M" + cmp_1] * phase, pts[idx_u], pts[idx_v])
-        M[idx_v] = integrate_2D(currents["M" + cmp_2] * phase, pts[idx_u], pts[idx_v])
-
-        # N_theta (8.33a)
-        N_theta = J[0] * cos_theta * cos_phi + J[1] * cos_theta * sin_phi - J[2] * sin_theta
-
-        # N_phi (8.33b)
-        N_phi = -J[0] * sin_phi + J[1] * cos_phi
-
-        # L_theta  (8.34a)
-        L_theta = M[0] * cos_theta * cos_phi + M[1] * cos_theta * sin_phi - M[2] * sin_theta
-
-        # L_phi  (8.34b)
-        L_phi = -M[0] * sin_phi + M[1] * cos_phi
-
-        return N_theta, N_phi, L_theta, L_phi
-
-    # pylint:disable=too-many-locals
-    def _radiation_vectors_for_surface_vect_numpy(
-        self, theta: Array[float], phi: Array[float], surface: Near2FarSurface, currents: xr.Dataset
-    ):
-        """Compute radiation vectors at an angle in spherical coordinates
-        for a given set of surface currents and observation angles.
-
-        Parameters
-        ----------
-        theta : float
-            Polar angle (rad) downward from x=y=0 line relative to the local origin.
-        phi : float
-            Azimuthal (rad) angle from y=z=0 line relative to the local origin.
-        surface: :class:`Near2FarSurface`
-            :class:`Near2FarSurface` object to use as source of near field.
-        currents : xarray.Dataset
-            xarray Dataset containing surface currents associated with the surface monitor.
-
-        Returns
-        -------
-        tuple[float, float, float, float]
-            ``N_theta``, ``N_phi``, ``L_theta``, ``L_phi`` radiation vectors for the given surface.
-        """
-
-        # make sure that observation points are interpreted w.r.t. the local origin
-        pts = [currents[name].values - origin for name, origin in zip(["x", "y", "z"], self.origin)]
-
-        _, idx_uv = surface.monitor.pop_axis((0, 1, 2), axis=surface.axis)
-        _, source_names = surface.monitor.pop_axis(("x", "y", "z"), axis=surface.axis)
-
-        idx_u, idx_v = idx_uv
-        cmp_1, cmp_2 = source_names
-
-        sin_theta = np.sin(np.atleast_1d(theta))
-        cos_theta = np.cos(np.atleast_1d(theta))
-        sin_phi = np.sin(np.atleast_1d(phi))
-        cos_phi = np.cos(np.atleast_1d(phi))
-
-        term1 = np.atleast_1d(pts[0])[:, None, None] * np.outer(sin_theta, cos_phi)
-        term2 = np.atleast_1d(pts[1])[:, None, None] * np.outer(sin_theta, sin_phi)
-        term3 = (np.atleast_1d(pts[2])[:, None] * cos_theta)[:, :, None]
-
-        propagation_factor = -self.phasor_sign * 1j * self.k
-
-        phase_x = np.exp(propagation_factor * term1)
-        phase_y = np.exp(propagation_factor * term2)
-        phase_z = np.exp(propagation_factor * term3)
-
-        phase = np.squeeze(phase_x[:, None, None] * phase_y[None, :, None] * phase_z[None, None, :])
-        dims = len(phase.shape) - 2
-
-        J = [0, 0, 0]
-        M = [0, 0, 0]
-
-        def integrate_2D(function, phase, pts_u, pts_v):
-            """Trapezoidal integration in two dimensions."""
-            return np.trapz(np.trapz(function.values[(..., *([None] * dims))] * phase, pts_u, axis=0), pts_v, axis=0)
-
-        # def integrate_2D(function, phase, pts_u, pts_v):
-        #     """Midpoint integration in two dimensions."""
-        #     du = pts_u[1]-pts_u[0]
-        #     dv = pts_v[1]-pts_v[0]
-        #     return np.sum(np.sum(function.values[(..., *([None] * dims))] * phase, axis=0), axis=0) * du * dv
-
-        J[idx_u] = integrate_2D(currents["J" + cmp_1], phase, pts[idx_u], pts[idx_v])
-        J[idx_v] = integrate_2D(currents["J" + cmp_2], phase, pts[idx_u], pts[idx_v])
-
-        M[idx_u] = integrate_2D(currents["M" + cmp_1], phase, pts[idx_u], pts[idx_v])
-        M[idx_v] = integrate_2D(currents["M" + cmp_2], phase, pts[idx_u], pts[idx_v])
-
-        cos_theta_cos_phi = np.outer(cos_theta, cos_phi)
-        cos_theta_sin_phi = np.outer(cos_theta, sin_phi)
-
-        # N_theta (8.33a)
-        N_theta = J[0] * cos_theta_cos_phi + J[1] * cos_theta_sin_phi - J[2] * sin_theta[:, None]
-
-        # N_phi (8.33b)
-        N_phi = -J[0] * sin_phi[None, :] + J[1] * cos_phi[None, :]
-
-        # L_theta  (8.34a)
-        L_theta = M[0] * cos_theta_cos_phi + M[1] * cos_theta_sin_phi - M[2] * sin_theta[:, None]
-
-        # L_phi  (8.34b)
-        L_phi = -M[0] * sin_phi[None, :] + M[1] * cos_phi[None, :]
-
-        return N_theta, N_phi, L_theta, L_phi
-
-    # pylint:disable=too-many-locals
-    def _radiation_vectors_for_surface_vect_dask(
-        self, theta: Array[float], phi: Array[float], surface: Near2FarSurface, currents: xr.Dataset
-    ):
-        """Compute radiation vectors at an angle in spherical coordinates
-        for a given set of surface currents and observation angles.
-
-        Parameters
-        ----------
-        theta : float
-            Polar angle (rad) downward from x=y=0 line relative to the local origin.
-        phi : float
-            Azimuthal (rad) angle from y=z=0 line relative to the local origin.
-        surface: :class:`Near2FarSurface`
-            :class:`Near2FarSurface` object to use as source of near field.
-        currents : xarray.Dataset
-            xarray Dataset containing surface currents associated with the surface monitor.
-
-        Returns
-        -------
-        tuple[float, float, float, float]
-            ``N_theta``, ``N_phi``, ``L_theta``, ``L_phi`` radiation vectors for the given surface.
-        """
-
-        # make sure that observation points are interpreted w.r.t. the local origin
-        pts = [currents[name].values - origin for name, origin in zip(["x", "y", "z"], self.origin)]
-
-        _, idx_uv = surface.monitor.pop_axis((0, 1, 2), axis=surface.axis)
-        _, source_names = surface.monitor.pop_axis(("x", "y", "z"), axis=surface.axis)
-
-        idx_u, idx_v = idx_uv
-        cmp_1, cmp_2 = source_names
-
-        sin_theta = np.sin(np.atleast_1d(theta))
-        cos_theta = np.cos(np.atleast_1d(theta))
-        sin_phi = np.sin(np.atleast_1d(phi))
-        cos_phi = np.cos(np.atleast_1d(phi))
-
-        term1 = np.atleast_1d(pts[0])[:, None, None] * np.outer(sin_theta, cos_phi)
-        term2 = np.atleast_1d(pts[1])[:, None, None] * np.outer(sin_theta, sin_phi)
-        term3 = (np.atleast_1d(pts[2])[:, None] * cos_theta)[:, :, None]
-
-        propagation_factor = -self.phasor_sign * 1j * self.k
-
-        phase_x = np.exp(propagation_factor * term1)
-        phase_y = np.exp(propagation_factor * term2)
-        phase_z = np.exp(propagation_factor * term3)
-
-        phase = np.squeeze(phase_x[:, None, None] * phase_y[None, :, None] * phase_z[None, None, :])
-        dims = len(phase.shape) - 2
-
-        # currents = currents.chunk(chunks='auto')
-
-        J = [0, 0, 0]
-        M = [0, 0, 0]
-
-        def integrate_2D(function, phase, pts_u, pts_v):
-            """Trapezoidal integration in two dimensions."""
-            integrand = da.from_array(function.values[(..., *([None] * dims))], chunks='auto')
-            phase_term = da.from_array(phase, chunks='auto')
-            # print(integrand.shape, phase_term.shape)
-            du = pts_u[1]-pts_u[0]
-            dv = pts_v[1]-pts_v[0]
-            output = da.sum(da.sum(integrand * phase_term, axis=0), axis=0) * du * dv
-            return output.compute()
-
-        J[idx_u] = integrate_2D(currents["J" + cmp_1], phase, pts[idx_u], pts[idx_v])
-        J[idx_v] = integrate_2D(currents["J" + cmp_2], phase, pts[idx_u], pts[idx_v])
-
-        M[idx_u] = integrate_2D(currents["M" + cmp_1], phase, pts[idx_u], pts[idx_v])
-        M[idx_v] = integrate_2D(currents["M" + cmp_2], phase, pts[idx_u], pts[idx_v])
-
-        cos_theta_cos_phi = np.outer(cos_theta, cos_phi)
-        cos_theta_sin_phi = np.outer(cos_theta, sin_phi)
-
-        # N_theta (8.33a)
-        N_theta = J[0] * cos_theta_cos_phi + J[1] * cos_theta_sin_phi - J[2] * sin_theta[:, None]
-
-        # N_phi (8.33b)
-        N_phi = -J[0] * sin_phi[None, :] + J[1] * cos_phi[None, :]
-
-        # L_theta  (8.34a)
-        L_theta = M[0] * cos_theta_cos_phi + M[1] * cos_theta_sin_phi - M[2] * sin_theta[:, None]
-
-        # L_phi  (8.34b)
-        L_phi = -M[0] * sin_phi[None, :] + M[1] * cos_phi[None, :]
-
-        return N_theta, N_phi, L_theta, L_phi
-
-    # pylint:disable=too-many-locals
     def _radiation_vectors_for_surface(
         self, theta: Array[float], phi: Array[float], surface: Near2FarSurface, currents: xr.Dataset
     ):
@@ -672,13 +410,6 @@ the number of directions ({len(normal_dirs)})."
         tuple(numpy.array[float], numpy.array[float], numpy.array[float], numpy.array[float])
             ``N_theta``, ``N_phi``, ``L_theta``, ``L_phi`` radiation vectors for the given surface.
         """
-
-        if self.method == 1:
-            return self._radiation_vectors_for_surface_feb_release(theta, phi, surface, currents)
-        elif self.method == 2:
-            return self._radiation_vectors_for_surface_vect_numpy(theta, phi, surface, currents)
-        elif self.method == 3:
-            return self._radiation_vectors_for_surface_vect_dask(theta, phi, surface, currents)
 
         # make sure that observation points are interpreted w.r.t. the local origin
         pts = [currents[name].values - origin for name, origin in zip(["x", "y", "z"], self.origin)]
@@ -709,8 +440,6 @@ the number of directions ({len(normal_dirs)})."
 
         for i in np.arange(len(theta)):
             for j in np.arange(len(phi)):
-
-                # phase_ij = phase[:,:,i,j]
 
                 phase[0] = np.exp(propagation_factor * pts[0] * sin_theta[i] * cos_phi[j])
                 phase[1] = np.exp(propagation_factor * pts[1] * sin_theta[i] * sin_phi[j])
@@ -792,8 +521,9 @@ the number of directions ({len(normal_dirs)})."
 
         Returns
         -------
-        tuple
-            (Er, Etheta, Ephi), (Hr, Htheta, Hphi), numpy arrays of fields in polar coordinates.
+        List[xarray.Dataset]
+            List of xarray datasets containing (Er, Etheta, Ephi), (Hr, Htheta, Hphi) 
+            in polar coordinates.
         """
 
         theta = np.atleast_1d(theta)
@@ -834,7 +564,8 @@ the number of directions ({len(normal_dirs)})."
 
         return E, H
 
-    def fields_cartesian(self, x: Array[float], y: Array[float], z: Array[float]) -> List[xr.Dataset]:
+    def fields_cartesian(self, 
+        x: Array[float], y: Array[float], z: Array[float]) -> List[xr.Dataset]:
         """Get fields at a point relative to monitor center in cartesian coordinates.
 
         Parameters
@@ -848,8 +579,8 @@ the number of directions ({len(normal_dirs)})."
 
         Returns
         -------
-        tuple
-            (Ex, Ey, Ez), (Hx, Hy, Hz), fields in cartesian coordinates.
+        List[xarray.Dataset]
+            List of xarray datasets containing (Ex, Ey, Ez), (Hx, Hy, Hz) in cartesian coordinates.
         """
         x, y, z = [t for t in [np.atleast_1d(x), np.atleast_1d(y), np.atleast_1d(z)]]
 
@@ -857,9 +588,9 @@ the number of directions ({len(normal_dirs)})."
         Ey_data = np.zeros_like(Ex_data)
         Ez_data = np.zeros_like(Ex_data)
 
-        Hx_data = np.zeros((len(x), len(y), len(z)), dtype=complex)
-        Hy_data = np.zeros_like(Hx_data)
-        Hz_data = np.zeros_like(Hx_data)
+        Hx_data = np.zeros_like(Ex_data)
+        Hy_data = np.zeros_like(Ex_data)
+        Hz_data = np.zeros_like(Ex_data)
 
         for i in np.arange(len(x)):
             _x = x[i]
@@ -910,8 +641,8 @@ the number of directions ({len(normal_dirs)})."
 
         Returns
         -------
-        numpy.array[float]
-            Power at point relative to the local origin.
+        power : xarray.DataArray
+            Power at points relative to the local origin.
         """
         theta = np.atleast_1d(theta)
         phi = np.atleast_1d(phi)
@@ -941,8 +672,8 @@ the number of directions ({len(normal_dirs)})."
 
         Returns
         -------
-        float
-            Power at point relative to the local origin.
+        power : xarray.DataArray
+            Power at points relative to the local origin.
         """
         x, y, z = [t for t in [np.atleast_1d(x), np.atleast_1d(y), np.atleast_1d(z)]]
 
@@ -975,7 +706,7 @@ the number of directions ({len(normal_dirs)})."
 
         Returns
         -------
-        RCS : numpy.array[float]
+        RCS : xarray.DataArray
             Radar cross section at angles relative to the local origin.
         """
 
