@@ -813,13 +813,11 @@ the number of directions ({len(normal_dirs)})."
         Et_array = -scalar_proj_r * (L_phi + eta * N_theta)
         Ep_array = scalar_proj_r * (L_theta - eta * N_phi)
         Er_array = np.zeros_like(Ep_array)
-        # E = np.stack((Er_array, Et_array, Ep_array))
 
         # assemble H fields
         Ht_array = -Ep_array / eta
         Hp_array = Et_array / eta
         Hr_array = np.zeros_like(Hp_array)
-        # H = np.stack((Hr_array, Ht_array, Hp_array))
 
         dims = ('r', 'theta', 'phi')
         coords = {'r':[r], 'theta':theta, 'phi':phi}
@@ -836,7 +834,7 @@ the number of directions ({len(normal_dirs)})."
 
         return E, H
 
-    def fields_cartesian(self, x: Array[float], y: Array[float], z: Array[float]):
+    def fields_cartesian(self, x: Array[float], y: Array[float], z: Array[float]) -> List[xr.Dataset]:
         """Get fields at a point relative to monitor center in cartesian coordinates.
 
         Parameters
@@ -898,7 +896,7 @@ the number of directions ({len(normal_dirs)})."
 
         return E, H
 
-    def power_spherical(self, r: float, theta: Array[float], phi: Array[float]) -> Array[float]:
+    def power_spherical(self, r: float, theta: Array[float], phi: Array[float]) -> xr.DataArray:
         """Get power scattered to a point relative to the local origin in spherical coordinates.
 
         Parameters
@@ -915,18 +913,21 @@ the number of directions ({len(normal_dirs)})."
         numpy.array[float]
             Power at point relative to the local origin.
         """
+        theta = np.atleast_1d(theta)
+        phi = np.atleast_1d(phi)
+
         E, H = self.fields_spherical(r, theta, phi)
-        _, E_theta, E_phi = [np.squeeze(E[comp].values) for comp in ['E_r', 'E_theta', 'E_phi']]
-        _, H_theta, H_phi = [np.squeeze(H[comp].values) for comp in ['H_r', 'H_theta', 'H_phi']]
+        _, E_theta, E_phi = [E[comp].values for comp in ['E_r', 'E_theta', 'E_phi']]
+        _, H_theta, H_phi = [H[comp].values for comp in ['H_r', 'H_theta', 'H_phi']]
         power_theta = 0.5 * np.real(E_theta * np.conj(H_phi))
         power_phi = 0.5 * np.real(-E_phi * np.conj(H_theta))
         power_data = power_theta + power_phi
 
         dims = ('r', 'theta', 'phi')
-        coords = {'r':[r], 'theta':[theta], 'phi':[phi]}
+        coords = {'r':[r], 'theta':theta, 'phi':phi}
         return xr.DataArray(data=power_data, coords=coords, dims=dims)
 
-    def power_cartesian(self, x: Array[float], y: Array[float], z: Array[float]):
+    def power_cartesian(self, x: Array[float], y: Array[float], z: Array[float]) -> xr.DataArray:
         """Get power scattered to a point relative to the local origin in cartesian coordinates.
 
         Parameters
@@ -945,7 +946,7 @@ the number of directions ({len(normal_dirs)})."
         """
         x, y, z = [t for t in [np.atleast_1d(x), np.atleast_1d(y), np.atleast_1d(z)]]
 
-        power_data = np.zeros((len(x), len(y), len(z)), dtype=complex)
+        power_data = np.zeros((len(x), len(y), len(z)))
 
         for i in np.arange(len(x)):
             _x = x[i]
