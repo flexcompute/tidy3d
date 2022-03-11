@@ -5,6 +5,8 @@ import numpy as np
 import xarray as xr
 import pydantic
 
+from rich.progress import track
+
 from ...constants import C_0, ETA_0, HERTZ, MICROMETER
 from ...components.data import SimulationData, FieldData
 from ...components.monitor import FieldMonitor
@@ -438,7 +440,9 @@ the number of directions ({len(normal_dirs)})."
         phase = [None] * 3
         propagation_factor = -self.phasor_sign * 1j * self.k
 
-        for i in np.arange(len(theta)):
+        def integrate_for_one_theta(i: int):
+            """Perform integration for a given theta angle index"""
+
             for j in np.arange(len(phi)):
 
                 phase[0] = np.exp(propagation_factor * pts[0] * sin_theta[i] * cos_phi[j])
@@ -456,6 +460,14 @@ the number of directions ({len(normal_dirs)})."
                     currents["M" + cmp_1].values * phase_ij, pts[idx_u], pts[idx_v])
                 M[idx_v,i,j] = integrate_2D(
                     currents["M" + cmp_2].values * phase_ij, pts[idx_u], pts[idx_v])
+
+        if len(theta) < 2:
+            integrate_for_one_theta(0)
+        else:
+            for i in track(
+                np.arange(len(theta)), 
+                description=f"Processing surface monitor '{surface.monitor.name}'..."):
+                integrate_for_one_theta(i)
 
         cos_th_cos_phi = cos_theta[:, None] * cos_phi[None, :]
         cos_th_sin_phi = cos_theta[:, None] * sin_phi[None, :]
@@ -582,7 +594,8 @@ the number of directions ({len(normal_dirs)})."
         List[xarray.Dataset]
             List of xarray datasets containing (Ex, Ey, Ez), (Hx, Hy, Hz) in cartesian coordinates.
         """
-        x, y, z = [t for t in [np.atleast_1d(x), np.atleast_1d(y), np.atleast_1d(z)]]
+
+        x, y, z = [np.atleast_1d(x), np.atleast_1d(y), np.atleast_1d(z)]
 
         Ex_data = np.zeros((len(x), len(y), len(z)), dtype=complex)
         Ey_data = np.zeros_like(Ex_data)
@@ -592,7 +605,7 @@ the number of directions ({len(normal_dirs)})."
         Hy_data = np.zeros_like(Ex_data)
         Hz_data = np.zeros_like(Ex_data)
 
-        for i in np.arange(len(x)):
+        for i in track(np.arange(len(x)), description='Computing far fields'):
             _x = x[i]
             for j in np.arange(len(y)):
                 _y = y[j]
@@ -644,6 +657,7 @@ the number of directions ({len(normal_dirs)})."
         power : xarray.DataArray
             Power at points relative to the local origin.
         """
+
         theta = np.atleast_1d(theta)
         phi = np.atleast_1d(phi)
 
@@ -656,6 +670,7 @@ the number of directions ({len(normal_dirs)})."
 
         dims = ('r', 'theta', 'phi')
         coords = {'r':[r], 'theta':theta, 'phi':phi}
+
         return xr.DataArray(data=power_data, coords=coords, dims=dims)
 
     def power_cartesian(self, x: Array[float], y: Array[float], z: Array[float]) -> xr.DataArray:
@@ -675,11 +690,12 @@ the number of directions ({len(normal_dirs)})."
         power : xarray.DataArray
             Power at points relative to the local origin.
         """
-        x, y, z = [t for t in [np.atleast_1d(x), np.atleast_1d(y), np.atleast_1d(z)]]
+
+        x, y, z = [np.atleast_1d(x), np.atleast_1d(y), np.atleast_1d(z)]
 
         power_data = np.zeros((len(x), len(y), len(z)))
 
-        for i in np.arange(len(x)):
+        for i in track(np.arange(len(x)), description='Computing far field power'):
             _x = x[i]
             for j in np.arange(len(y)):
                 _y = y[j]
@@ -691,6 +707,7 @@ the number of directions ({len(normal_dirs)})."
 
         dims = ('x', 'y', 'z')
         coords = {'x':x, 'y':y, 'z':z}
+
         return xr.DataArray(data=power_data, coords=coords, dims=dims)
 
     def radar_cross_section(self, theta: Array[float], phi: Array[float]) -> xr.DataArray:
@@ -731,6 +748,7 @@ the number of directions ({len(normal_dirs)})."
 
         dims = ('theta', 'phi')
         coords = {'theta':theta, 'phi':phi}
+
         return xr.DataArray(data=RCS_data, coords=coords, dims=dims)
 
     @staticmethod
