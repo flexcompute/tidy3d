@@ -2,10 +2,10 @@
 """
 
 from typing import List, Dict
-from dataclasses import dataclass
 
 import numpy as np
 import xarray as xr
+import pydantic
 
 from ...components.base import Tidy3dBaseModel
 from ...components import Box
@@ -13,9 +13,9 @@ from ...components import Simulation
 from ...components import ModeSpec
 from ...components import ModeMonitor
 from ...components import ModeSource, GaussianPulse
-from ...components.types import Direction
-from ...components.data import ScalarFieldData, FieldData
-from ...log import SetupError
+from ...components.types import Direction, Array, Literal
+from ...components.data import ModeIndexData, ModeFieldData, ScalarModeFieldData
+from ...log import ValidationError
 
 from .solver import compute_modes
 
@@ -50,7 +50,6 @@ src.to_file('data/my_source.json')                 # this source /monitor can be
 src = ModeSource.from_file('data/my_source.json')  # and loaded in our script
 """
 
-
 class ModeInfo(Tidy3dBaseModel):
     """stores information about a (solved) mode.
     Attributes
@@ -65,36 +64,43 @@ class ModeInfo(Tidy3dBaseModel):
         Imaginary part of the effective refractive index of mode.
     """
 
-    field_data: FieldData
+    # field_data: FieldData = pydantic.Field(
+    #     ...,
+    #     title="Field Data",
+    #     description="Contains information about the fields of the modal profile."
+    #    units=MICROMETER,)
+
     mode_spec: ModeSpec
-    mode_index: int
-    n_eff: float
-    k_eff: float
+    field_data: ModeFieldData
+    n_complex: ModeIndexData
 
 
-class ModeSolver:
-    """Interface for creating ``Mode`` objects."""
+class ModeSolver(Tidy3dBaseModel):
+    """Interface for solving electromagnetic eigenmodes in a 2D plane with translational
+    invariance in the third dimension.
 
-    def __init__(self, simulation: Simulation, plane: Box, freq: float):
-        """Create a ``ModeSolver`` instance.
+    Parameters
+    ----------
+    simulation : Simulation
+        ``Simulation`` the ``Mode`` will be inserted into.
+    plane : Box
+        Plane where the mode will be computed in ``Simulation``.
+    freq : float
+        Frequency of mode (Hz).
+    """
 
-        Parameters
-        ----------
-        simulation : Simulation
-            ``Simulation`` the ``Mode`` will be inserted into.
-        plane : Box
-            Plane where the mode will be computed in ``Simulation``.
-        freq : float
-            Frequency of mode (Hz).
-        """
+    simulation: Simulation
+    plane: Box
+    freq: pydantic.NonNegativeFloat
 
-        self.simulation = simulation
-        self.plane = plane
-        self.freq = freq
+    @pydantic.validator("plane", allow_reuse=True, always=True)
+    def is_plane(cls, val):
+        """Raise validation error if not planar."""
+        if val.size.count(0.0) != 1:
+            raise ValidationError(f"ModeSolver plane must be planar, given size={val}")
+        return val
 
-        assert 0.0 in plane.size, "plane must have at least one axis with size=0"
-
-    def solve(self, mode_spec: ModeSpec) -> List[ModeInfo]:
+    def solve(self, mode_spec: ModeSpec) -> ModeInfo:
         """Solves for modal profile and effective index of ``Mode`` object.
 
         Parameters
@@ -142,7 +148,7 @@ class ModeSolver:
         eps_cross = np.stack((eps_wg_xx, eps_wg_yy, eps_wg_zz))
 
         # Compute the modes
-        mode_fields, n_eff_complex = compute_modes(
+        mode_fields, n_complex = compute_modes(
             eps_cross=eps_cross,
             coords=solver_coords,
             freq=self.freq,
@@ -156,7 +162,7 @@ class ModeSolver:
             f_rot = np.stack(self.plane.unpop_axis(f_z, (f_x, f_y), axis=normal_axis), axis=0)
             return f_rot
 
-        modes = []
+        fields = {"Ex": [], "Ey": [], "Ez": [], "Hx": [], "Hy": [], "Hz": []}
         for mode_index in range(mode_spec.num_modes):
 
             # Get E and H fields at the current mode_index
@@ -179,35 +185,39 @@ class ModeSolver:
                 Hz *= -1
 
             # note: from this point on, back in original coordinates
-            fields = {"Ex": Ex, "Ey": Ey, "Ez": Ez, "Hx": Hx, "Hy": Hy, "Hz": Hz}
+            fields_tmp = {"Ex": Ex, "Ey": Ey, "Ez": Ez, "Hx": Hx, "Hy": Hy, "Hz": Hz}
+            for field_name, field in fields_tmp.items():
+                fields[field_name].append(np.copy(field))
 
-            # note: re-discretizing, need to make consistent.
-            data_dict = {}
-            for field_name, field in fields.items():
-                xyz_coords = plane_grid_sym[field_name].to_list
-                xyz_coords[normal_axis] = [self.plane.center[normal_axis]]
-                data_dict[field_name] = ScalarFieldData(
-                    x=xyz_coords[0],
-                    y=xyz_coords[1],
-                    z=xyz_coords[2],
-                    f=np.array([self.freq]),
-                    values=field[..., None],
-                )
-
-            field_data = FieldData(data_dict=data_dict).apply_syms(
-                plane_grid, self.simulation.center, self.simulation.symmetry
-            )
-            mode_info = ModeInfo(
-                field_data=field_data,
-                mode_spec=mode_spec,
-                mode_index=mode_index,
-                n_eff=n_eff_complex[mode_index].real,
-                k_eff=n_eff_complex[mode_index].imag,
+        # note: re-discretizing, need to make consistent.
+        data_dict = {}
+        for field_name, field in fields.items():
+            xyz_coords = plane_grid_sym[field_name].to_list
+            xyz_coords[normal_axis] = [self.plane.center[normal_axis]]
+            data_dict[field_name] = ScalarModeFieldData(
+                x=xyz_coords[0],
+                y=xyz_coords[1],
+                z=xyz_coords[2],
+                f=np.array([self.freq]),
+                mode_index=np.arange(mode_spec.num_modes),
+                values=np.stack(field, axis=-1)[..., None, :],
             )
 
-            modes.append(mode_info)
+        field_data = ModeFieldData(data_dict=data_dict).apply_syms(
+            plane_grid, self.simulation.center, self.simulation.symmetry
+        )
+        n_data = ModeIndexData(
+            f=np.array([self.freq]),
+            mode_index=np.arange(mode_spec.num_modes),
+            values=n_complex[None, ...],
+        )
+        mode_info = ModeInfo(
+            field_data=field_data,
+            mode_spec=mode_spec,
+            n_complex=n_data,
+        )
 
-        return modes
+        return mode_info
 
     def get_epsilon(self, plane):
         """Compute the diagonal components of the epsilon tensor in the plane."""
