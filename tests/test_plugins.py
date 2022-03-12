@@ -46,11 +46,23 @@ def test_near2far():
         normal_dirs=["-", "+", "-", "+", "-", "+"],
         frequency=f0,
     )
+
+    # single inputs
     n2f.radar_cross_section(1, 1)
     n2f.power_spherical(1, 1, 1)
     n2f.power_cartesian(1, 1, 1)
     n2f.fields_spherical(1, 1, 1)
     n2f.fields_cartesian(1, 1, 1)
+
+    # vectorized inputs
+    pts1 = [0,1]
+    pts2 = [0,1,2]
+    pts3 = [3,4,5]
+    n2f.radar_cross_section(pts1, pts2)
+    n2f.power_spherical(1, pts2, pts3)
+    n2f.power_cartesian(pts1, pts2, pts3)
+    n2f.fields_spherical(1, pts2, pts3)
+    n2f.fields_cartesian(pts1, pts2, pts3)
 
 
 def test_mode_solver():
