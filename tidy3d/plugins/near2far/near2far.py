@@ -1,6 +1,6 @@
 """Near field to far field transformation plugin
 """
-from typing import List, Dict, Tuple
+from typing import List, Dict, Tuple, Union
 import numpy as np
 import xarray as xr
 import pydantic
@@ -10,15 +10,19 @@ from rich.progress import track
 from ...constants import C_0, ETA_0, HERTZ, MICROMETER
 from ...components.data import SimulationData, FieldData
 from ...components.monitor import FieldMonitor
-from ...components.types import Direction, Axis, Coordinate, Array
+from ...components.types import Direction, Axis, Coordinate, ArrayLike
 from ...components.medium import Medium
+from ...components.base import Tidy3dBaseModel
 from ...log import SetupError, ValidationError
 
 # Default number of points per wavelength in the background medium to use for resampling fields.
 PTS_PER_WVL = 10
 
+# Numpy float array and related array types
+ArrayLikeN2F = Union[float, List[float], ArrayLike]
 
-class Near2FarSurface(pydantic.BaseModel):
+
+class Near2FarSurface(Tidy3dBaseModel):
     """Data structure to store surface monitor data with associated surface current densities."""
 
     monitor: FieldMonitor = pydantic.Field(
@@ -49,19 +53,8 @@ class Near2FarSurface(pydantic.BaseModel):
         return val
 
 
-class Near2Far(pydantic.BaseModel):
+class Near2Far(Tidy3dBaseModel):
     """Near field to far field transformation tool."""
-
-    class Config:
-        """Sets config for all :class:`Near2Far` objects.
-
-        Configuration Options
-        ---------------------
-        arbitrary_types_allowed : bool = True
-            Allow types like numpy arrays.
-        """
-
-        arbitrary_types_allowed = True
 
     sim_data: SimulationData = pydantic.Field(
         ...,
@@ -93,13 +86,13 @@ class Near2Far(pydantic.BaseModel):
         None,
         title="Background medium",
         description="Background medium in which to radiate near fields to far fields. "
-        "If None, uses the :class:.Simulation background medium.",
+        "If ``None``, uses the :class:.Simulation background medium.",
     )
 
     origin: Coordinate = pydantic.Field(
         None,
         title="Local origin",
-        description="Local origin used for defining observation points. If None, uses the "
+        description="Local origin used for defining observation points. If ``None``, uses the "
         "average of the centers of all surface monitors.",
         units=MICROMETER,
     )
@@ -107,11 +100,11 @@ class Near2Far(pydantic.BaseModel):
     currents: Dict[str, xr.Dataset] = pydantic.Field(
         None,
         title="Surface current densities",
-        description="Dictionary mapping monitor name to a dataset storing the "
+        description="Dictionary mapping monitor name to an ``xarray.Dataset`` storing the "
         "surface current densities.",
     )
 
-    phasor_sign: float = pydantic.Field(
+    phasor_positive_sign: bool = pydantic.Field(
         1,
         title="Phasor convention",
         description="Fields evolve as exp(jkr) if set to 1, and exp(-jkr) if set to -1. "
@@ -162,7 +155,7 @@ class Near2Far(pydantic.BaseModel):
         frequency: float,
         pts_per_wavelength: int = PTS_PER_WVL,
         medium: Medium = None,
-        origin: Coordinate = None
+        origin: Coordinate = None,
     ):
         """Constructs :class:`Near2Far` from a list of surface monitors and their directions.
 
@@ -185,7 +178,7 @@ class Near2Far(pydantic.BaseModel):
             Background medium in which to radiate near fields to far fields.
             Default: same as the :class:`.Simulation` background medium.
         origin : :class:`.Coordinate`
-            Local origin used for defining observation points. If None, uses the
+            Local origin used for defining observation points. If ``None``, uses the
             average of the centers of all surface monitors.
         """
 
@@ -205,7 +198,7 @@ the number of directions ({len(normal_dirs)})."
             frequency=frequency,
             pts_per_wavelength=pts_per_wavelength,
             medium=medium,
-            origin=origin
+            origin=origin,
         )
 
     @pydantic.validator("currents", always=True)
@@ -391,16 +384,16 @@ the number of directions ({len(normal_dirs)})."
 
     # pylint:disable=too-many-locals
     def _radiation_vectors_for_surface(
-        self, theta: Array[float], phi: Array[float], surface: Near2FarSurface, currents: xr.Dataset
+        self, theta: ArrayLikeN2F, phi: ArrayLikeN2F, surface: Near2FarSurface, currents: xr.Dataset
     ):
         """Compute radiation vectors at an angle in spherical coordinates
         for a given set of surface currents and observation angles.
 
         Parameters
         ----------
-        theta : numpy.array
+        theta : Union[float, List[float], np.ndarray]
             Polar angles (rad) downward from x=y=0 line relative to the local origin.
-        phi : numpy.array
+        phi : Union[float, List[float], np.ndarray]
             Azimuthal (rad) angles from y=z=0 line relative to the local origin.
         surface: :class:`Near2FarSurface`
             :class:`Near2FarSurface` object to use as source of near field.
@@ -409,7 +402,7 @@ the number of directions ({len(normal_dirs)})."
 
         Returns
         -------
-        tuple(numpy.array[float], numpy.array[float], numpy.array[float], numpy.array[float])
+        tuple(numpy.ndarray[float], numpy.ndarray[float], numpy.ndarray[float], numpy.ndarray[float])
             ``N_theta``, ``N_phi``, ``L_theta``, ``L_phi`` radiation vectors for the given surface.
         """
 
@@ -438,7 +431,7 @@ the number of directions ({len(normal_dirs)})."
             return np.trapz(np.trapz(function, pts_u, axis=0), pts_v, axis=0)
 
         phase = [None] * 3
-        propagation_factor = -self.phasor_sign * 1j * self.k
+        propagation_factor = -self.phasor_positive_sign * 1j * self.k
 
         def integrate_for_one_theta(i: int):
             """Perform integration for a given theta angle index"""
@@ -451,22 +444,27 @@ the number of directions ({len(normal_dirs)})."
 
                 phase_ij = phase[idx_u][:, None] * phase[idx_v][None, :] * phase[idx_w]
 
-                J[idx_u,i,j] = integrate_2D(
-                    currents["J" + cmp_1].values * phase_ij, pts[idx_u], pts[idx_v])
-                J[idx_v,i,j] = integrate_2D(
-                    currents["J" + cmp_2].values * phase_ij, pts[idx_u], pts[idx_v])
+                J[idx_u, i, j] = integrate_2D(
+                    currents["J" + cmp_1].values * phase_ij, pts[idx_u], pts[idx_v]
+                )
+                J[idx_v, i, j] = integrate_2D(
+                    currents["J" + cmp_2].values * phase_ij, pts[idx_u], pts[idx_v]
+                )
 
-                M[idx_u,i,j] = integrate_2D(
-                    currents["M" + cmp_1].values * phase_ij, pts[idx_u], pts[idx_v])
-                M[idx_v,i,j] = integrate_2D(
-                    currents["M" + cmp_2].values * phase_ij, pts[idx_u], pts[idx_v])
+                M[idx_u, i, j] = integrate_2D(
+                    currents["M" + cmp_1].values * phase_ij, pts[idx_u], pts[idx_v]
+                )
+                M[idx_v, i, j] = integrate_2D(
+                    currents["M" + cmp_2].values * phase_ij, pts[idx_u], pts[idx_v]
+                )
 
         if len(theta) < 2:
             integrate_for_one_theta(0)
         else:
             for i in track(
-                np.arange(len(theta)), 
-                description=f"Processing surface monitor '{surface.monitor.name}'..."):
+                np.arange(len(theta)),
+                description=f"Processing surface monitor '{surface.monitor.name}'...",
+            ):
                 integrate_for_one_theta(i)
 
         cos_th_cos_phi = cos_theta[:, None] * cos_phi[None, :]
@@ -486,19 +484,19 @@ the number of directions ({len(normal_dirs)})."
 
         return N_theta, N_phi, L_theta, L_phi
 
-    def _radiation_vectors(self, theta: Array[float], phi: Array[float]):
+    def _radiation_vectors(self, theta: ArrayLikeN2F, phi: ArrayLikeN2F):
         """Compute radiation vectors at an angle in spherical coordinates.
 
         Parameters
         ----------
-        theta : numpy.array[float]
+        theta : Union[float, List[float], np.ndarray]
             Polar angles (rad) downward from x=y=0 line relative to the local origin.
-        phi : numpy.array[float]
+        phi : Union[float, List[float], np.ndarray]
             Azimuthal (rad) angles from y=z=0 line relative to the local origin.
 
         Returns
         -------
-        tuple(numpy.array[float], numpy.array[float], numpy.array[float], numpy.arrayfloat])
+        tuple(numpy.ndarray[float], numpy.ndarray[float], numpy.ndarray[float], numpy.ndarray[float])
             ``N_theta``, ``N_phi``, ``L_theta``, ``L_phi`` radiation vectors.
         """
 
@@ -519,22 +517,23 @@ the number of directions ({len(normal_dirs)})."
 
         return N_theta, N_phi, L_theta, L_phi
 
-    def fields_spherical(self, r: float, theta: Array[float], phi: Array[float]) -> List[xr.Dataset]:
+    def fields_spherical(
+        self, r: float, theta: ArrayLikeN2F, phi: ArrayLikeN2F) -> xr.Dataset:
         """Get fields at a point relative to monitor center in spherical coordinates.
 
         Parameters
         ----------
         r : float
             (micron) radial distance relative to monitor center.
-        theta : numpy.array[float]
+        theta : Union[float, List[float], np.ndarray]
             (radian) polar angles downward from x=y=0 relative to the local origin.
-        phi : numpy.array[float]
+        phi : Union[float, List[float], np.ndarray]
             (radian) azimuthal angles from y=z=0 line relative to the local origin.
 
         Returns
         -------
-        List[xarray.Dataset]
-            List of xarray datasets containing (Er, Etheta, Ephi), (Hr, Htheta, Hphi) 
+        xarray.Dataset
+            xarray dataset containing (Er, Etheta, Ephi), (Hr, Htheta, Hphi)
             in polar coordinates.
         """
 
@@ -547,9 +546,8 @@ the number of directions ({len(normal_dirs)})."
         k = self.k
         eta = self.eta
 
-        scalar_proj_r = (
-            -self.phasor_sign * 1j * k * np.exp(self.phasor_sign * 1j * k * r) / (4 * np.pi * r)
-        )
+        scalar_proj_r = (-self.phasor_positive_sign * 1j * k * np.exp(
+            self.phasor_positive_sign * 1j * k * r) / (4 * np.pi * r))
 
         # assemble E felds
         Et_array = -scalar_proj_r * (L_phi + eta * N_theta)
@@ -561,38 +559,39 @@ the number of directions ({len(normal_dirs)})."
         Hp_array = Et_array / eta
         Hr_array = np.zeros_like(Hp_array)
 
-        dims = ('r', 'theta', 'phi')
-        coords = {'r':[r], 'theta':theta, 'phi':phi}
+        dims = ("r", "theta", "phi")
+        coords = {"r": [r], "theta": theta, "phi": phi}
 
         Er = xr.DataArray(data=Er_array[None, ...], coords=coords, dims=dims)
         Et = xr.DataArray(data=Et_array[None, ...], coords=coords, dims=dims)
         Ep = xr.DataArray(data=Ep_array[None, ...], coords=coords, dims=dims)
-        E = xr.Dataset({'E_r': Er, 'E_theta': Et, 'E_phi': Ep})
 
         Hr = xr.DataArray(data=Hr_array[None, ...], coords=coords, dims=dims)
         Ht = xr.DataArray(data=Ht_array[None, ...], coords=coords, dims=dims)
         Hp = xr.DataArray(data=Hp_array[None, ...], coords=coords, dims=dims)
-        H = xr.Dataset({'H_r': Hr, 'H_theta': Ht, 'H_phi': Hp})
 
-        return E, H
+        field_data = xr.Dataset(
+            {"E_r": Er, "E_theta": Et, "E_phi": Ep, "H_r": Hr, "H_theta": Ht, "H_phi": Hp})
 
-    def fields_cartesian(self, 
-        x: Array[float], y: Array[float], z: Array[float]) -> List[xr.Dataset]:
+        return field_data
+
+    def fields_cartesian(
+        self, x: ArrayLikeN2F, y: ArrayLikeN2F, z: ArrayLikeN2F) -> xr.Dataset:
         """Get fields at a point relative to monitor center in cartesian coordinates.
 
         Parameters
         ----------
-        x : numpy.array[float]
+        x : Union[float, List[float], np.ndarray]
             (micron) x positions relative to the local origin.
-        y : numpy.array[float]
+        y : Union[float, List[float], np.ndarray]
             (micron) y positions relative to the local origin.
-        z : numpy.array[float]
+        z : Union[float, List[float], np.ndarray]
             (micron) z positions relative to the local origin.
 
         Returns
         -------
-        List[xarray.Dataset]
-            List of xarray datasets containing (Ex, Ey, Ez), (Hx, Hy, Hz) in cartesian coordinates.
+        xarray.Dataset
+            xarray dataset containing (Ex, Ey, Ez), (Hx, Hy, Hz) in cartesian coordinates.
         """
 
         x, y, z = [np.atleast_1d(x), np.atleast_1d(y), np.atleast_1d(z)]
@@ -605,7 +604,7 @@ the number of directions ({len(normal_dirs)})."
         Hy_data = np.zeros_like(Ex_data)
         Hz_data = np.zeros_like(Ex_data)
 
-        for i in track(np.arange(len(x)), description='Computing far fields'):
+        for i in track(np.arange(len(x)), description="Computing far fields"):
             _x = x[i]
             for j in np.arange(len(y)):
                 _y = y[j]
@@ -613,43 +612,46 @@ the number of directions ({len(normal_dirs)})."
                     _z = z[k]
 
                     r, theta, phi = self._car_2_sph(_x, _y, _z)
-                    _E, _H = self.fields_spherical(r, theta, phi)
+                    _field_data = self.fields_spherical(r, theta, phi)
 
-                    Er, Etheta, Ephi = [_E[comp].values for comp in ['E_r', 'E_theta', 'E_phi']]
-                    Hr, Htheta, Hphi = [_H[comp].values for comp in ['H_r', 'H_theta', 'H_phi']]
+                    Er, Etheta, Ephi = [_field_data[comp].values \
+                        for comp in ["E_r", "E_theta", "E_phi"]]
+                    Hr, Htheta, Hphi = [_field_data[comp].values \
+                        for comp in ["H_r", "H_theta", "H_phi"]]
 
                     Ex_data[i, j, k], Ey_data[i, j, k], Ez_data[i, j, k] = self._sph_2_car_field(
                         Er, Etheta, Ephi, theta, phi
-                        )
+                    )
                     Hx_data[i, j, k], Hy_data[i, j, k], Hz_data[i, j, k] = self._sph_2_car_field(
                         Hr, Htheta, Hphi, theta, phi
-                        )
+                    )
 
-        dims = ('x', 'y', 'z')
-        coords = {'x':x, 'y':y, 'z':z}
+        dims = ("x", "y", "z")
+        coords = {"x": x, "y": y, "z": z}
 
         Ex = xr.DataArray(data=Ex_data, coords=coords, dims=dims)
         Ey = xr.DataArray(data=Ey_data, coords=coords, dims=dims)
         Ez = xr.DataArray(data=Ez_data, coords=coords, dims=dims)
-        E = xr.Dataset({'Ex': Ex, 'Ey': Ey, 'Ez': Ez})
 
         Hx = xr.DataArray(data=Hx_data, coords=coords, dims=dims)
         Hy = xr.DataArray(data=Hy_data, coords=coords, dims=dims)
         Hz = xr.DataArray(data=Hz_data, coords=coords, dims=dims)
-        H = xr.Dataset({'Hx': Hx, 'Hy': Hy, 'Hz': Hz})
 
-        return E, H
+        field_data = xr.Dataset(
+            {"Ex": Ex, "Ey": Ey, "Ez": Ez, "Hx": Hx, "Hy": Hy, "Hz": Hz})
 
-    def power_spherical(self, r: float, theta: Array[float], phi: Array[float]) -> xr.DataArray:
+        return field_data
+
+    def power_spherical(self, r: float, theta: ArrayLikeN2F, phi: ArrayLikeN2F) -> xr.DataArray:
         """Get power scattered to a point relative to the local origin in spherical coordinates.
 
         Parameters
         ----------
         r : float
             (micron) radial distance relative to the local origin.
-        theta : numpy.array[float]
+        theta : Union[float, List[float], np.ndarray]
             (radian) polar angles downward from x=y=0 relative to the local origin.
-        phi : numpy.array[float]
+        phi : Union[float, List[float], np.ndarray]
             (radian) azimuthal angles from y=z=0 line relative to the local origin.
 
         Returns
@@ -661,28 +663,28 @@ the number of directions ({len(normal_dirs)})."
         theta = np.atleast_1d(theta)
         phi = np.atleast_1d(phi)
 
-        E, H = self.fields_spherical(r, theta, phi)
-        _, E_theta, E_phi = [E[comp].values for comp in ['E_r', 'E_theta', 'E_phi']]
-        _, H_theta, H_phi = [H[comp].values for comp in ['H_r', 'H_theta', 'H_phi']]
+        field_data = self.fields_spherical(r, theta, phi)
+        E_theta, E_phi = [field_data[comp].values for comp in ["E_theta", "E_phi"]]
+        H_theta, H_phi = [field_data[comp].values for comp in ["H_theta", "H_phi"]]
         power_theta = 0.5 * np.real(E_theta * np.conj(H_phi))
         power_phi = 0.5 * np.real(-E_phi * np.conj(H_theta))
         power_data = power_theta + power_phi
 
-        dims = ('r', 'theta', 'phi')
-        coords = {'r':[r], 'theta':theta, 'phi':phi}
+        dims = ("r", "theta", "phi")
+        coords = {"r": [r], "theta": theta, "phi": phi}
 
         return xr.DataArray(data=power_data, coords=coords, dims=dims)
 
-    def power_cartesian(self, x: Array[float], y: Array[float], z: Array[float]) -> xr.DataArray:
+    def power_cartesian(self, x: ArrayLikeN2F, y: ArrayLikeN2F, z: ArrayLikeN2F) -> xr.DataArray:
         """Get power scattered to a point relative to the local origin in cartesian coordinates.
 
         Parameters
         ----------
-        x : numpy.array[float]
+        x : Union[float, List[float], np.ndarray]
             (micron) x distances relative to the local origin.
-        y : numpy.array[float]
+        y : Union[float, List[float], np.ndarray]
             (micron) y distances relative to the local origin.
-        z : numpy.array[float]
+        z : Union[float, List[float], np.ndarray]
             (micron) z distances relative to the local origin.
 
         Returns
@@ -695,7 +697,7 @@ the number of directions ({len(normal_dirs)})."
 
         power_data = np.zeros((len(x), len(y), len(z)))
 
-        for i in track(np.arange(len(x)), description='Computing far field power'):
+        for i in track(np.arange(len(x)), description="Computing far field power"):
             _x = x[i]
             for j in np.arange(len(y)):
                 _y = y[j]
@@ -705,20 +707,20 @@ the number of directions ({len(normal_dirs)})."
                     r, theta, phi = self._car_2_sph(_x, _y, _z)
                     power_data[i, j, k] = self.power_spherical(r, theta, phi).values
 
-        dims = ('x', 'y', 'z')
-        coords = {'x':x, 'y':y, 'z':z}
+        dims = ("x", "y", "z")
+        coords = {"x": x, "y": y, "z": z}
 
         return xr.DataArray(data=power_data, coords=coords, dims=dims)
 
-    def radar_cross_section(self, theta: Array[float], phi: Array[float]) -> xr.DataArray:
+    def radar_cross_section(self, theta: ArrayLikeN2F, phi: ArrayLikeN2F) -> xr.DataArray:
         """Get radar cross section at a point relative to the local origin in
         units of incident power.
 
         Parameters
         ----------
-        theta : numpy.array[float]
+        theta : Union[float, List[float], np.ndarray]
             (radian) polar angles downward from x=y=0 relative to the local origin.
-        phi : numpy.array[float]
+        phi : Union[float, List[float], np.ndarray]
             (radian) azimuthal angles from y=z=0 line relative to the local origin.
 
         Returns
@@ -746,8 +748,8 @@ the number of directions ({len(normal_dirs)})."
         term2 = np.abs(L_theta - eta * N_phi) ** 2
         RCS_data = constant * (term1 + term2)
 
-        dims = ('theta', 'phi')
-        coords = {'theta':theta, 'phi':phi}
+        dims = ("theta", "phi")
+        coords = {"theta": theta, "phi": phi}
 
         return xr.DataArray(data=RCS_data, coords=coords, dims=dims)
 
