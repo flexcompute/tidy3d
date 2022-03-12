@@ -1,10 +1,9 @@
 """Turn Mode Specifications into Mode profiles 
 """
 
-from typing import List, Dict
+from typing import List
 
 import numpy as np
-import xarray as xr
 import pydantic
 
 from ...components.base import Tidy3dBaseModel
@@ -12,8 +11,8 @@ from ...components import Box
 from ...components import Simulation
 from ...components import ModeSpec
 from ...components import ModeMonitor
-from ...components import ModeSource, GaussianPulse
-from ...components.types import Direction, Array, Literal
+from ...components.source import ModeSource, SourceTime
+from ...components.types import Direction, Array
 from ...components.data import ModeIndexData, ModeFieldData, ScalarModeFieldData
 from ...log import ValidationError
 
@@ -49,6 +48,7 @@ src = ms.export_src(mode_spec=mode_spec,       # or as a td.ModeSource
 src.to_file('data/my_source.json')                 # this source /monitor can be saved to file
 src = ModeSource.from_file('data/my_source.json')  # and loaded in our script
 """
+
 
 class ModeInfo(Tidy3dBaseModel):
     """stores information about a (solved) mode.
@@ -91,7 +91,6 @@ class ModeSolver(Tidy3dBaseModel):
 
     simulation: Simulation
     plane: Box
-    freq: pydantic.NonNegativeFloat
 
     @pydantic.validator("plane", allow_reuse=True, always=True)
     def is_plane(cls, val):
@@ -100,7 +99,17 @@ class ModeSolver(Tidy3dBaseModel):
             raise ValidationError(f"ModeSolver plane must be planar, given size={val}")
         return val
 
-    def solve(self, mode_spec: ModeSpec) -> ModeInfo:
+    @property
+    def normal_axis(self):
+        """Axis normal to the mode plane."""
+        return self.plane.size.index(0.0)
+
+    @property
+    def plane_sym(self):
+        """Potentially smaller plane if symmetries present in the simulation."""
+        return self.simulation.min_sym_box(self.plane)
+
+    def solve(self, mode_spec: ModeSpec, freqs: List[float]) -> ModeInfo:
         """Solves for modal profile and effective index of ``Mode`` object.
 
         Parameters
@@ -114,14 +123,13 @@ class ModeSolver(Tidy3dBaseModel):
             A list of ``ModeInfo`` objects for each mode.
         """
 
-        normal_axis = self.plane.size.index(0.0)
+        normal_axis = self.normal_axis
 
         # get the in-plane grid coordinates on which eps and the mode fields live
         plane_grid = self.simulation.discretize(self.plane)
 
         # restrict to a smaller plane if symmetries present in the simulation
-        plane_sym = self.simulation.min_sym_box(self.plane)
-        plane_grid_sym = self.simulation.discretize(plane_sym)
+        plane_grid_sym = self.simulation.discretize(self.plane_sym)
 
         # Coords and symmetry arguments to the solver (restricted to in-plane)
         _, solver_coords = self.plane.pop_axis(plane_grid_sym.boundaries.to_list, axis=normal_axis)
@@ -131,65 +139,50 @@ class ModeSolver(Tidy3dBaseModel):
                 mode_symmetry[dim] = 0
         _, solver_symmetry = self.plane.pop_axis(mode_symmetry, axis=normal_axis)
 
-        # Get diagonal epsilon components in the plane
-        (eps_xx, eps_yy, eps_zz) = self.get_epsilon(plane_sym)
-
-        # get rid of normal axis
-        eps_xx = np.squeeze(eps_xx, axis=normal_axis)
-        eps_yy = np.squeeze(eps_yy, axis=normal_axis)
-        eps_zz = np.squeeze(eps_zz, axis=normal_axis)
-
-        # swap axes to waveguide coordinates (propagating in z)
-        eps_wg_zz, (eps_wg_xx, eps_wg_yy) = self.plane.pop_axis(
-            (eps_xx, eps_yy, eps_zz), axis=normal_axis
-        )
-
-        # construct eps_cross section to feed to mode solver
-        eps_cross = np.stack((eps_wg_xx, eps_wg_yy, eps_wg_zz))
-
-        # Compute the modes
-        mode_fields, n_complex = compute_modes(
-            eps_cross=eps_cross,
-            coords=solver_coords,
-            freq=self.freq,
-            mode_spec=mode_spec,
-            symmetry=solver_symmetry,
-        )
-
-        def rotate_field_coords(field):
-            """move the propagation axis=z to the proper order in the array"""
-            f_x, f_y, f_z = np.moveaxis(field, source=3, destination=1 + normal_axis)
-            f_rot = np.stack(self.plane.unpop_axis(f_z, (f_x, f_y), axis=normal_axis), axis=0)
-            return f_rot
-
+        # Compute and store the modes at all frequencies
         fields = {"Ex": [], "Ey": [], "Ez": [], "Hx": [], "Hy": [], "Hz": []}
-        for mode_index in range(mode_spec.num_modes):
+        for freq in freqs:
 
-            # Get E and H fields at the current mode_index
-            E, H = mode_fields[..., mode_index]
+            # Compute the modes
+            mode_fields, n_complex = compute_modes(
+                eps_cross=self.solver_eps(freq),
+                coords=solver_coords,
+                freq=freq,
+                mode_spec=mode_spec,
+                symmetry=solver_symmetry,
+            )
 
-            # Set gauge to highest-amplitude in-plane E being real and positive
-            ind_max = np.argmax(np.abs(E[:2]))
-            phi = np.angle(E[:2].ravel()[ind_max])
-            E *= np.exp(-1j * phi)
-            H *= np.exp(-1j * phi)
+            fields_freq = {"Ex": [], "Ey": [], "Ez": [], "Hx": [], "Hy": [], "Hz": []}
+            for mode_index in range(mode_spec.num_modes):
 
-            # Rotate back to original coordinates
-            (Ex, Ey, Ez) = rotate_field_coords(E)
-            (Hx, Hy, Hz) = rotate_field_coords(H)
+                # Get E and H fields at the current mode_index
+                E, H = mode_fields[..., mode_index]
 
-            # apply -1 to H fields if a reflection was involved in the rotation
-            if normal_axis == 1:
-                Hx *= -1
-                Hy *= -1
-                Hz *= -1
+                # Set gauge to highest-amplitude in-plane E being real and positive
+                ind_max = np.argmax(np.abs(E[:2]))
+                phi = np.angle(E[:2].ravel()[ind_max])
+                E *= np.exp(-1j * phi)
+                H *= np.exp(-1j * phi)
 
-            # note: from this point on, back in original coordinates
-            fields_tmp = {"Ex": Ex, "Ey": Ey, "Ez": Ez, "Hx": Hx, "Hy": Hy, "Hz": Hz}
-            for field_name, field in fields_tmp.items():
-                fields[field_name].append(np.copy(field))
+                # Rotate back to original coordinates
+                (Ex, Ey, Ez) = self.rotate_field_coords(E)
+                (Hx, Hy, Hz) = self.rotate_field_coords(H)
 
-        # note: re-discretizing, need to make consistent.
+                # apply -1 to H fields if a reflection was involved in the rotation
+                if normal_axis == 1:
+                    Hx *= -1
+                    Hy *= -1
+                    Hz *= -1
+
+                # note: back in original coordinates
+                fields_mode = {"Ex": Ex, "Ey": Ey, "Ez": Ez, "Hx": Hx, "Hy": Hy, "Hz": Hz}
+                for field_name, field in fields_mode.items():
+                    fields_freq[field_name].append(np.copy(field))
+
+            for field_name, field in fields_freq.items():
+                fields[field_name].append(np.stack(field, axis=-1))
+
+        # Generate the dictionary of ScalarModeFieldData for every field
         data_dict = {}
         for field_name, field in fields.items():
             xyz_coords = plane_grid_sym[field_name].to_list
@@ -198,16 +191,16 @@ class ModeSolver(Tidy3dBaseModel):
                 x=xyz_coords[0],
                 y=xyz_coords[1],
                 z=xyz_coords[2],
-                f=np.array([self.freq]),
+                f=freqs,
                 mode_index=np.arange(mode_spec.num_modes),
-                values=np.stack(field, axis=-1)[..., None, :],
+                values=np.stack(field, axis=-2),
             )
 
         field_data = ModeFieldData(data_dict=data_dict).apply_syms(
             plane_grid, self.simulation.center, self.simulation.symmetry
         )
         n_data = ModeIndexData(
-            f=np.array([self.freq]),
+            f=freqs,
             mode_index=np.arange(mode_spec.num_modes),
             values=n_complex[None, ...],
         )
@@ -219,17 +212,46 @@ class ModeSolver(Tidy3dBaseModel):
 
         return mode_info
 
-    def get_epsilon(self, plane):
+    def get_epsilon(self, plane: Box, freq: float) -> Array[complex]:
         """Compute the diagonal components of the epsilon tensor in the plane."""
 
-        eps_xx = self.simulation.epsilon(plane, "Ex", self.freq)
-        eps_yy = self.simulation.epsilon(plane, "Ey", self.freq)
-        eps_zz = self.simulation.epsilon(plane, "Ez", self.freq)
+        eps_xx = self.simulation.epsilon(plane, "Ex", freq)
+        eps_yy = self.simulation.epsilon(plane, "Ey", freq)
+        eps_zz = self.simulation.epsilon(plane, "Ez", freq)
 
         return np.stack((eps_xx, eps_yy, eps_zz), axis=0)
 
+    def solver_eps(self, freq: float) -> Array[complex]:
+        """Get the diagonal permittivity as supplied to the sovler, with the nomral axis rotated to
+        z."""
+
+        # Get diagonal epsilon components in the plane
+        (eps_xx, eps_yy, eps_zz) = self.get_epsilon(self.plane_sym, freq)
+
+        # get rid of normal axis
+        eps_xx = np.squeeze(eps_xx, axis=self.normal_axis)
+        eps_yy = np.squeeze(eps_yy, axis=self.normal_axis)
+        eps_zz = np.squeeze(eps_zz, axis=self.normal_axis)
+
+        # swap axes to plane coordinates (normal_axis goes to z)
+        eps_sim_ax = (eps_xx, eps_yy, eps_zz)
+        eps_zz, (eps_xx, eps_yy) = self.plane.pop_axis(eps_sim_ax, axis=self.normal_axis)
+
+        # construct eps to feed to mode solver
+        return np.stack((eps_xx, eps_yy, eps_zz), axis=0)
+
+    def rotate_field_coords(self, field):
+        """move the propagation axis=z to the proper order in the array"""
+        f_x, f_y, f_z = np.moveaxis(field, source=3, destination=1 + self.normal_axis)
+        f_rot = np.stack(self.plane.unpop_axis(f_z, (f_x, f_y), axis=self.normal_axis), axis=0)
+        return f_rot
+
     def to_source(
-        self, mode_spec: ModeSpec, fwidth: float, direction: Direction, mode_index: int = 0
+        self,
+        mode_spec: ModeSpec,
+        source_time: SourceTime,
+        direction: Direction,
+        mode_index: int = 0,
     ) -> ModeSource:
         """Creates ``ModeSource`` from a Mode + additional specifications.
 
@@ -237,8 +259,8 @@ class ModeSolver(Tidy3dBaseModel):
         ----------
         mode_spec : ModeSpec
             :class:`ModeSpec` object containing specifications of mode.
-        fwidth : float
-            Standard deviation of ``GaussianPulse`` of source (Hz).
+        source_time: SourceTime
+            Specification of the source time-dependence.
         direction : Direction
             Whether source will inject in ``"+"`` or ``"-"`` direction relative to plane normal.
         mode_index : int = 0
@@ -252,7 +274,6 @@ class ModeSolver(Tidy3dBaseModel):
 
         center = self.plane.center
         size = self.plane.size
-        source_time = GaussianPulse(freq0=self.freq, fwidth=fwidth)
         return ModeSource(
             center=center,
             size=size,
