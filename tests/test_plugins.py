@@ -55,9 +55,9 @@ def test_near2far():
     n2f.fields_cartesian(1, 1, 1)
 
     # vectorized inputs
-    pts1 = [0,1]
-    pts2 = [0,1,2]
-    pts3 = [3,4,5]
+    pts1 = [0, 1]
+    pts2 = [0, 1, 2]
+    pts3 = [3, 4, 5]
     n2f.radar_cross_section(pts1, pts2)
     n2f.power_spherical(1, pts2, pts3)
     n2f.power_cartesian(pts1, pts2, pts3)
