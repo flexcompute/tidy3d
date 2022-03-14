@@ -723,6 +723,11 @@ class ModeIndexData(AbstractModeData):
         return
 
     @property
+    def n_complex(self):
+        """Complex effective index."""
+        return self.data
+
+    @property
     def n_eff(self):
         """Get real part of effective index."""
         return self.data.real
@@ -803,14 +808,14 @@ class ModeFieldData(AbstractFieldData):
     data_dict: Dict[str, ScalarModeFieldData]
     type: Literal["ModeFieldData"] = "ModeFieldData"
 
-    def isel_mode_index(self, mode_index):
+    def sel_mode_index(self, mode_index):
         """Return a FieldData at the selected mode index."""
         data_dict = {}
         for field_name, scalar_data in self.data_dict.items():
             scalar_dict = scalar_data.dict()
             scalar_dict.pop("mode_index")
             scalar_dict.pop("type")
-            scalar_dict["values"] = scalar_data.data.isel(mode_index=mode_index).values
+            scalar_dict["values"] = scalar_data.data.sel(mode_index=mode_index).values
             data_dict[field_name] = ScalarFieldData(**scalar_dict)
 
         return FieldData(data_dict=data_dict)
