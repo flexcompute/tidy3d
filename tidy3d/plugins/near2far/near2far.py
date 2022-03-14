@@ -517,8 +517,7 @@ the number of directions ({len(normal_dirs)})."
 
         return N_theta, N_phi, L_theta, L_phi
 
-    def fields_spherical(
-        self, r: float, theta: ArrayLikeN2F, phi: ArrayLikeN2F) -> xr.Dataset:
+    def fields_spherical(self, r: float, theta: ArrayLikeN2F, phi: ArrayLikeN2F) -> xr.Dataset:
         """Get fields at a point relative to monitor center in spherical coordinates.
 
         Parameters
@@ -546,8 +545,13 @@ the number of directions ({len(normal_dirs)})."
         k = self.k
         eta = self.eta
 
-        scalar_proj_r = (-self.phasor_positive_sign * 1j * k * np.exp(
-            self.phasor_positive_sign * 1j * k * r) / (4 * np.pi * r))
+        scalar_proj_r = (
+            -self.phasor_positive_sign
+            * 1j
+            * k
+            * np.exp(self.phasor_positive_sign * 1j * k * r)
+            / (4 * np.pi * r)
+        )
 
         # assemble E felds
         Et_array = -scalar_proj_r * (L_phi + eta * N_theta)
@@ -571,12 +575,12 @@ the number of directions ({len(normal_dirs)})."
         Hp = xr.DataArray(data=Hp_array[None, ...], coords=coords, dims=dims)
 
         field_data = xr.Dataset(
-            {"E_r": Er, "E_theta": Et, "E_phi": Ep, "H_r": Hr, "H_theta": Ht, "H_phi": Hp})
+            {"E_r": Er, "E_theta": Et, "E_phi": Ep, "H_r": Hr, "H_theta": Ht, "H_phi": Hp}
+        )
 
         return field_data
 
-    def fields_cartesian(
-        self, x: ArrayLikeN2F, y: ArrayLikeN2F, z: ArrayLikeN2F) -> xr.Dataset:
+    def fields_cartesian(self, x: ArrayLikeN2F, y: ArrayLikeN2F, z: ArrayLikeN2F) -> xr.Dataset:
         """Get fields at a point relative to monitor center in cartesian coordinates.
 
         Parameters
@@ -614,10 +618,12 @@ the number of directions ({len(normal_dirs)})."
                     r, theta, phi = self._car_2_sph(_x, _y, _z)
                     _field_data = self.fields_spherical(r, theta, phi)
 
-                    Er, Etheta, Ephi = [_field_data[comp].values \
-                        for comp in ["E_r", "E_theta", "E_phi"]]
-                    Hr, Htheta, Hphi = [_field_data[comp].values \
-                        for comp in ["H_r", "H_theta", "H_phi"]]
+                    Er, Etheta, Ephi = [
+                        _field_data[comp].values for comp in ["E_r", "E_theta", "E_phi"]
+                    ]
+                    Hr, Htheta, Hphi = [
+                        _field_data[comp].values for comp in ["H_r", "H_theta", "H_phi"]
+                    ]
 
                     Ex_data[i, j, k], Ey_data[i, j, k], Ez_data[i, j, k] = self._sph_2_car_field(
                         Er, Etheta, Ephi, theta, phi
@@ -637,8 +643,7 @@ the number of directions ({len(normal_dirs)})."
         Hy = xr.DataArray(data=Hy_data, coords=coords, dims=dims)
         Hz = xr.DataArray(data=Hz_data, coords=coords, dims=dims)
 
-        field_data = xr.Dataset(
-            {"Ex": Ex, "Ey": Ey, "Ez": Ez, "Hx": Hx, "Hy": Hy, "Hz": Hz})
+        field_data = xr.Dataset({"Ex": Ex, "Ey": Ey, "Ez": Ez, "Hx": Hx, "Hy": Hy, "Hz": Hz})
 
         return field_data
 
