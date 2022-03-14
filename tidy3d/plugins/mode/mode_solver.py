@@ -72,7 +72,22 @@ class ModeInfo(Tidy3dBaseModel):
 
     mode_spec: ModeSpec
     field_data: ModeFieldData
-    n_complex: ModeIndexData
+    index_data: ModeIndexData
+
+    @property
+    def n_complex(self):
+        """Complex effective index."""
+        return self.index_data.n_complex
+
+    @property
+    def n_eff(self):
+        """Get real part of effective index."""
+        return self.index_data.n_eff
+
+    @property
+    def k_eff(self):
+        """Get imaginary part of effective index."""
+        return self.index_data.k_eff
 
 
 class ModeSolver(Tidy3dBaseModel):
@@ -199,7 +214,7 @@ class ModeSolver(Tidy3dBaseModel):
         field_data = ModeFieldData(data_dict=data_dict).apply_syms(
             plane_grid, self.simulation.center, self.simulation.symmetry
         )
-        n_data = ModeIndexData(
+        index_data = ModeIndexData(
             f=freqs,
             mode_index=np.arange(mode_spec.num_modes),
             values=n_complex[None, ...],
@@ -207,7 +222,7 @@ class ModeSolver(Tidy3dBaseModel):
         mode_info = ModeInfo(
             field_data=field_data,
             mode_spec=mode_spec,
-            n_complex=n_data,
+            index_data=index_data,
         )
 
         return mode_info
