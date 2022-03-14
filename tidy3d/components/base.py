@@ -10,7 +10,6 @@ from pydantic.fields import ModelField
 
 from .types import ComplexNumber, NumpyArray, Literal
 from ..log import FileError
-from ..constants import inf
 
 # default indentation (# spaces) in files
 INDENT = 4
@@ -60,8 +59,6 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         json_encoders = {
             np.ndarray: lambda x: NumpyArray(data_list=x.tolist()),
             complex: lambda x: ComplexNumber(real=x.real, imag=x.imag),
-            inf: lambda x: "Infinity",
-            -inf: lambda x: "-Infinity",
         }
 
     def help(self, methods: bool = False) -> None:
@@ -228,7 +225,15 @@ class Tidy3dBaseModel(pydantic.BaseModel):
             Json-formatted string holding :class:`Tidy3dBaseModel` data.
         """
         exclude_unset = not include_unset
-        return self.json(indent=INDENT, exclude_unset=exclude_unset)
+
+        # put infinity and -infinity in quotes
+        tmp_string = "<<TEMPORARY_INFINITY_STRING>>"
+        json_string = self.json(indent=INDENT, exclude_unset=exclude_unset)
+        json_string = json_string.replace("-Infinity", tmp_string)
+        json_string = json_string.replace("Infinity", '"Infinity"')
+        json_string = json_string.replace(tmp_string, '"-Infinity"')
+
+        return json_string
 
 
 def add_type_field(cls):
