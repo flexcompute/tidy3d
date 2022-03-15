@@ -195,21 +195,28 @@ def monitor(task_id: TaskId) -> None:
 
     status = None
 
-    break_statuses = ("running", "success", "error", "diverged", "deleted", "draft")
+    break_statuses = ("running", "visualize", "success", "error", "diverged", "deleted", "draft")
+
+    def get_status():
+        """Get status for this task (called many times below, so put into function)."""
+        status = get_info(task_id).status
+        if status == "visualize":
+            return "success"
+        return status
 
     # preprocessing
     console = Console()
     with console.status(f"[bold green]Starting '{task_name}'...", spinner="runner"):
-        while get_info(task_id).status not in break_statuses:
-            if status != get_info(task_id).status:
-                status = get_info(task_id).status
+        while get_status() not in break_statuses:
+            if status != get_status():
+                status = get_status()
                 if status != "running":
                     console.log(f"status = {status}")
             time.sleep(REFRESH_TIME)
 
     # startup phase where run info is not available
     console.log("starting up solver")
-    while get_run_info(task_id)[0] is None and get_info(task_id).status == "running":
+    while get_run_info(task_id)[0] is None and get_status() == "running":
         time.sleep(REFRESH_TIME)
 
     # phase where run % info is available
@@ -217,28 +224,27 @@ def monitor(task_id: TaskId) -> None:
     with Progress(console=console) as progress:
         pbar_pd = progress.add_task("% done", total=100)
         perc_done, _ = get_run_info(task_id)
-        while perc_done is not None and perc_done < 100 and get_info(task_id).status == "running":
+        while perc_done is not None and perc_done < 100 and get_status() == "running":
             perc_done, field_decay = get_run_info(task_id)
             new_description = f"% done (field decay = {field_decay:.2e})"
             progress.update(pbar_pd, completed=perc_done, description=new_description)
             time.sleep(1.0)
-        if get_info(task_id).status != "running":
-            if perc_done < 100:
-                console.log("early shutoff detected, exiting.")
-            else:
-                progress.update(pbar_pd, completed=100)
+        if perc_done < 100:
+            console.log("early shutoff detected, exiting.")
+        else:
+            progress.update(pbar_pd, completed=100)
 
     # postprocessing
     with console.status(f"[bold green]Finishing '{task_name}'...", spinner="runner"):
-        while get_info(task_id).status not in break_statuses:
-            if status != get_info(task_id).status:
-                status = get_info(task_id).status
+        while get_status() not in break_statuses:
+            if status != get_status():
+                status = get_status()
                 console.log(f"status = {status}")
             time.sleep(REFRESH_TIME)
 
     # final status (if diffrent from the last printed status)
-    if status != get_info(task_id).status:
-        console.log(f"status = {get_info(task_id).status}")
+    if status != get_status():
+        console.log(f"status = {get_status()}")
 
 
 def download(task_id: TaskId, path: str = "simulation_data.hdf5") -> None:
