@@ -228,7 +228,7 @@ def monitor(task_id: TaskId) -> None:
             else:
                 progress.update(pbar_pd, completed=100)
 
-    # preprocessing
+    # postprocessing
     with console.status(f"[bold green]Finishing '{task_name}'...", spinner="runner"):
         while get_info(task_id).status not in break_statuses:
             if status != get_info(task_id).status:
@@ -236,8 +236,9 @@ def monitor(task_id: TaskId) -> None:
                 console.log(f"status = {status}")
             time.sleep(REFRESH_TIME)
 
-    # final status
-    console.log(f"status = {get_info(task_id).status}")
+    # final status (if diffrent from the last printed status)
+    if status != get_info(task_id).status:
+        console.log(f"status = {get_info(task_id).status}")
 
 
 def download(task_id: TaskId, path: str = "simulation_data.hdf5") -> None:
