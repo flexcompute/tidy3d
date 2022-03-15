@@ -1,7 +1,8 @@
 """Turn Mode Specifications into Mode profiles 
 """
 
-from typing import List
+from typing import List, Tuple
+import logging
 
 import numpy as np
 import pydantic
@@ -18,6 +19,9 @@ from ...log import ValidationError
 
 from .solver import compute_modes
 
+FIELD = Tuple[Array[complex], Array[complex], Array[complex]]
+FIELD_DECAY_CUTOFF = 1e-3
+
 
 class ModeSolver(Tidy3dBaseModel):
     """Interface for solving electromagnetic eigenmodes in a 2D plane with translational
@@ -29,8 +33,6 @@ class ModeSolver(Tidy3dBaseModel):
         ``Simulation`` the ``Mode`` will be inserted into.
     plane : Box
         Plane where the mode will be computed in ``Simulation``.
-    freq : float
-        Frequency of mode (Hz).
     """
 
     simulation: Simulation
@@ -88,8 +90,7 @@ class ModeSolver(Tidy3dBaseModel):
         # Compute and store the modes at all frequencies
         fields = {"Ex": [], "Ey": [], "Ez": [], "Hx": [], "Hy": [], "Hz": []}
         n_complex = []
-        for freq in freqs:
-
+        for ifreq, freq in enumerate(freqs):
             # Compute the modes
             mode_fields, n_comp = compute_modes(
                 eps_cross=self.solver_eps(freq),
@@ -102,25 +103,8 @@ class ModeSolver(Tidy3dBaseModel):
 
             fields_freq = {"Ex": [], "Ey": [], "Ez": [], "Hx": [], "Hy": [], "Hz": []}
             for mode_index in range(mode_spec.num_modes):
-
                 # Get E and H fields at the current mode_index
-                E, H = mode_fields[..., mode_index]
-
-                # Set gauge to highest-amplitude in-plane E being real and positive
-                ind_max = np.argmax(np.abs(E[:2]))
-                phi = np.angle(E[:2].ravel()[ind_max])
-                E *= np.exp(-1j * phi)
-                H *= np.exp(-1j * phi)
-
-                # Rotate back to original coordinates
-                (Ex, Ey, Ez) = self.rotate_field_coords(E)
-                (Hx, Hy, Hz) = self.rotate_field_coords(H)
-
-                # apply -1 to H fields if a reflection was involved in the rotation
-                if normal_axis == 1:
-                    Hx *= -1
-                    Hy *= -1
-                    Hz *= -1
+                ((Ex, Ey, Ez), (Hx, Hy, Hz)) = self.process_fields(mode_fields, ifreq, mode_index)
 
                 # note: back in original coordinates
                 fields_mode = {"Ex": Ex, "Ey": Ey, "Ez": Ez, "Hx": Hx, "Hy": Hy, "Hz": Hz}
@@ -189,6 +173,43 @@ class ModeSolver(Tidy3dBaseModel):
         f_x, f_y, f_z = np.moveaxis(field, source=3, destination=1 + self.normal_axis)
         f_rot = np.stack(self.plane.unpop_axis(f_z, (f_x, f_y), axis=self.normal_axis), axis=0)
         return f_rot
+
+    def process_fields(
+        self, mode_fields: Array[complex], freq_index: int, mode_index: int
+    ) -> Tuple[FIELD, FIELD]:
+        """transform solver fields to simulation axes, set gauge, and check decay at boundaries."""
+
+        # Separate E and H fields (in solver coordinates)
+        E, H = mode_fields[..., mode_index]
+
+        # Warn if not decayed at edges
+        e_edge = np.sum(np.abs(E[:, 0, :]) ** 2 + np.abs(E[:, -1, :]) ** 2)
+        e_edge += np.sum(np.abs(E[:, :, 0]) ** 2 + np.abs(E[:, :, -1]) ** 2)
+        e_norm = np.sum(np.abs(E) ** 2)
+
+        if e_edge / e_norm > FIELD_DECAY_CUTOFF:
+            logging.warning(
+                f"Mode field at frequency index {freq_index}, mode index {mode_index} does not "
+                "decay at the plane boundaries."
+            )
+
+        # Set gauge to highest-amplitude in-plane E being real and positive
+        ind_max = np.argmax(np.abs(E[:2]))
+        phi = np.angle(E[:2].ravel()[ind_max])
+        E *= np.exp(-1j * phi)
+        H *= np.exp(-1j * phi)
+
+        # Rotate back to original coordinates
+        (Ex, Ey, Ez) = self.rotate_field_coords(E)
+        (Hx, Hy, Hz) = self.rotate_field_coords(H)
+
+        # apply -1 to H fields if a reflection was involved in the rotation
+        if self.normal_axis == 1:
+            Hx *= -1
+            Hy *= -1
+            Hz *= -1
+
+        return ((Ex, Ey, Ez), (Hx, Hy, Hz))
 
     def to_source(
         self,
