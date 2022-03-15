@@ -90,6 +90,7 @@ def add_fig_if_none(plotly):
 
     return _plotly
 
+
 def equal_aspect_plotly(plotly):
     """Decorates a plotting function returning a matplotlib axes.
     Ensures the aspect ratio of the returned axes is set to equal.
@@ -101,16 +102,17 @@ def equal_aspect_plotly(plotly):
         """New plot function with equal aspect ratio axes returned."""
         fig = plotly(*args, **kwargs)
         fig.update_yaxes(
-            scaleanchor = "x",
-            scaleratio = 1,
+            scaleanchor="x",
+            scaleratio=1,
         )
-        fig.update_layout(plot_bgcolor='rgba(0,0,0,0)')
+        fig.update_layout(plot_bgcolor="rgba(0,0,0,0)")
         return fig
 
     return _plotly
 
 
 """ plot parameters """
+
 
 class PlotParams(Tidy3dBaseModel):
     """Stores plotting parameters / specifications for a given model."""
@@ -122,6 +124,7 @@ class PlotParams(Tidy3dBaseModel):
     hatch: str = pd.Field(None, title="Hatch Style")
     linewidth: pd.NonNegativeFloat = pd.Field(1, title="Line Width", alias="lw")
 
+
 # defaults for different tidy3d objects
 plot_params_geometry = PlotParams()
 plot_params_structure = PlotParams()
@@ -129,7 +132,7 @@ plot_params_source = PlotParams(alpha=0.4, facecolor="limegreen", edgecolor="lim
 plot_params_monitor = PlotParams(alpha=0.4, facecolor="orange", edgecolor="orange", lw=3)
 plot_params_pml = PlotParams(alpha=0.7, facecolor="gray", edgecolor="gray", hatch="x")
 plot_params_symmetry = PlotParams(alpha=0.6)
-plot_params_sim_boundary = PlotParams(linewidth=0, facecolor='rgba(0,0,0,0.05)', edgecolor="black")
+plot_params_sim_boundary = PlotParams(linewidth=0, facecolor="rgba(0,0,0,0.05)", edgecolor="black")
 
 # stores color of simulation.structures for given index in simulation.medium_map
 MEDIUM_CMAP = [
@@ -152,4 +155,3 @@ MEDIUM_CMAP = [
 # fig = px.imshow(ex.sel(f=200e12).T, animation_frame=0, labels=dict(animation_frame="slice"));
 # fig.write_json(fig.json)
 # fig.show()
-

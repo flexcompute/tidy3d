@@ -28,7 +28,7 @@ class Monitor(Box, ABC):
         min_length=1,
     )
 
-    plot_params : PlotParams = plot_params_monitor
+    plot_params: PlotParams = plot_params_monitor
 
     @property
     def geometry(self):

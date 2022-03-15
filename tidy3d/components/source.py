@@ -258,7 +258,7 @@ class Source(Box, ABC):
 
     name: str = pydantic.Field(None, title="Name", description="Optional name for the source.")
 
-    plot_params : PlotParams = plot_params_source
+    plot_params: PlotParams = plot_params_source
 
     _name_validator = validate_name_str()
 

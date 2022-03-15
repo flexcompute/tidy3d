@@ -10,12 +10,11 @@ import numpy as np
 from shapely.geometry import Point, Polygon, box, MultiPolygon
 from shapely.geometry.base import BaseGeometry as ShapelyGeo
 from descartes import PolygonPatch
-import plotly.graph_objects as go
 
 from .base import Tidy3dBaseModel
 from .types import Bound, Size, Coordinate, Axis, Coordinate2D, tidynumpy
-from .types import Vertices, Ax, Shapely, PlotlyFig
-from .viz import add_ax_if_none, equal_aspect, add_fig_if_none, equal_aspect_plotly
+from .types import Vertices, Ax, Shapely
+from .viz import add_ax_if_none, equal_aspect
 from .viz import PLOT_BUFFER, ARROW_LENGTH_FACTOR, ARROW_WIDTH_FACTOR
 from .viz import PlotParams, plot_params_geometry
 from .validators import is_not_inf
@@ -233,53 +232,6 @@ class Geometry(Tidy3dBaseModel, ABC):
         patch = PolygonPatch(_shape, **plot_params.dict())
         ax.add_artist(patch)
         return ax
-
-    @equal_aspect_plotly
-    @add_fig_if_none
-    def plotly(
-        self,
-        x: float = None,
-        y: float = None,
-        z: float = None,
-        fig: PlotlyFig = None,
-        row: int = None,
-        col: int = None,
-        name: str = None,
-    ) -> PlotlyFig:
-        """Plot cross sections on plane using plotly."""
-
-        # for each intersection, plot the shape
-        for shape in self.intersections(x=x, y=y, z=z):
-            fig = self.plotly_shape(
-                shape=shape, plot_params=self.plot_params, fig=fig, row=row, col=col, name=name
-            )
-
-        return fig
-
-    def plotly_shape(
-        self,
-        shape: ShapelyGeo,
-        plot_params: PlotParams,
-        fig: PlotlyFig,
-        row: int = None,
-        col: int = None,
-        name: str = None,
-    ) -> PlotlyFig:
-        """Plot a shape to a figure."""
-        _shape = self.evaluate_inf_shape(shape)
-        xs, ys = self._get_shape_coords(shape=shape)
-        plotly_trace = go.Scatter(
-            x=xs,
-            y=ys,
-            fill="toself",
-            fillcolor=plot_params.facecolor,
-            line=dict(width=plot_params.linewidth, color=plot_params.facecolor),
-            marker=dict(size=0.0001, line=dict(width=0)),
-            name=name,
-            opacity=plot_params.alpha,
-        )
-        fig.add_trace(plotly_trace, row=row, col=col)
-        return fig
 
     @staticmethod
     def _get_shape_coords(shape: ShapelyGeo) -> Tuple[float, float]:
