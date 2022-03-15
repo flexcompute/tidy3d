@@ -712,6 +712,7 @@ class Box(Geometry):
                     width=width_factor * arrow_length,
                     color=color,
                     alpha=alpha,
+                    zorder=np.inf,
                 )
 
             add_arrow(sign=1.0)

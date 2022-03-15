@@ -693,7 +693,7 @@ class ModeAmpsData(AbstractModeData):
 
 
 class ModeIndexData(AbstractModeData):
-    """Stores modal amplitdudes from a :class:`ModeMonitor`.
+    """Stores effective propagation index from a :class:`ModeMonitor`.
 
     Parameters
     ----------
@@ -702,8 +702,7 @@ class ModeIndexData(AbstractModeData):
     f : numpy.ndarray
         Frequency coordinates (Hz).
     values : numpy.ndarray
-        Complex-valued array of mode amplitude values
-        with shape ``values.shape=(len(direction), len(mode_index), len(f))``.
+        Complex-valued array of effective index.
 
     Example
     -------
@@ -713,7 +712,7 @@ class ModeIndexData(AbstractModeData):
     """
 
     values: Array[complex]
-    data_attrs: Dict[str, str] = {"units": "None", "long_name": "complex effective index"}
+    data_attrs: Dict[str, str] = {"units": "", "long_name": "effective index"}
     type: Literal["ModeIndexData"] = "ModeIndexData"
 
     _dims = ("f", "mode_index")
@@ -730,12 +729,16 @@ class ModeIndexData(AbstractModeData):
     @property
     def n_eff(self):
         """Get real part of effective index."""
-        return self.data.real
+        _n_eff = self.data.real
+        _n_eff.attrs["long_name"] = "effective n"
+        return _n_eff
 
     @property
     def k_eff(self):
         """Get imaginary part of effective index."""
-        return self.data.imag
+        _k_eff = self.data.imag
+        _k_eff.attrs["long_name"] = "effective k"
+        return _k_eff
 
 
 class ModeData(CollectionData):
@@ -744,18 +747,18 @@ class ModeData(CollectionData):
 
     Parameters
     ----------
-    data_dict : Dict[str, :class:`ScalarFieldData`]
-        Mapping of field name (eg. 'Ex') to its scalar field data.
+    data_dict : Dict[str, :class:`AbstractModeData`]
+        Mapping of "n_complex" to :class:`ModeIndexData`, and "amps" to :class:`ModeAmpsData`.
 
     Example
     -------
     >>> f = np.linspace(1e14, 2e14, 1001)
-    >>> x = np.linspace(-1, 1, 10)
-    >>> y = np.linspace(-2, 2, 20)
-    >>> z = np.linspace(0, 0, 1)
-    >>> values = (1+1j) * np.random.random((len(x), len(y), len(z), len(f)))
-    >>> field = ScalarFieldData(values=values, x=x, y=y, z=z, f=f)
-    >>> data = FieldData(data_dict={'Ex': field, 'Ey': field})
+    >>> mode_index = np.arange(2)
+    >>> n_complex = (1+1j) * np.random.random((len(f), len(mode_index)))
+    >>> index_data = ModeIndexData(values=n_complex, f=f, mode_index=mode_index)
+    >>> amps = (1+1j) * np.random.random((2, len(f), len(mode_index)))
+    >>> amps_data = ModeIndexData(values=amps, f=f, mode_index=mode_index)
+    >>> data = ModeData(data_dict={'n_complex': index_data, 'amps': amps_data})
     """
 
     data_dict: Dict[str, AbstractModeData]
@@ -794,10 +797,9 @@ class ModeData(CollectionData):
         return None
 
 
-class ScalarModeFieldData(ScalarFieldData):
+class ScalarModeFieldData(ScalarFieldData, AbstractModeData):
     """Like ScalarFieldData but with extra dimension ``mode_index``."""
 
-    mode_index: Array[int]
     type: Literal["ScalarModeFieldData"] = "ScalarModeFieldData"
     _dims = ("x", "y", "z", "f", "mode_index")
 

@@ -19,37 +19,6 @@ from ...log import ValidationError
 from .solver import compute_modes
 
 
-"""
-Stage:                Simulation     Mode Specs    Outputs       Viz           Export
-                      ----------  +  ---------- -> ----------- -> ---------- -> ----------
-Method:                        __init__()          .solve()       .plot()       .to_file()
-
-td Objects:     Simulation     Mode    ->    FieldData   ->  image     -> ModeSource
-                Plane           ^                             |           ModeMonitor
-                Frequency       |_____________________________|
-                                      iterative design
-
-
-simulation = td.Simulation(...)        # define PML, gridsize, structures
-plane = td.Box(...)                    # define plane that we solve modes on
-freqs = td.FreqSampler(freqs=[1, 2])   # frequencies we care about
-ms = ModeSolver(simulation, plane, freqs)
-
-mode_spec = td.Mode(num_modes=3)       # solve for a number of modes to find the one we want
-modes = ms.solve(mode_spec=mode_spec)  # list of ModeInfo objects for each mode
-mode_index = 1                         # initial guess for the mode index
-modes[mode_index].field_data.plot()    # inspect fields, do they look ok?
-
-mon = ms.export_monitor(mode_spec=mode_spec)   # if we're happy with results, return td.ModeMonitor
-src = ms.export_src(mode_spec=mode_spec,       # or as a td.ModeSource
-    mode_index=mode_index,
-    src_time=...)   
-
-src.to_file('data/my_source.json')                 # this source /monitor can be saved to file
-src = ModeSource.from_file('data/my_source.json')  # and loaded in our script
-"""
-
-
 class ModeInfo(Tidy3dBaseModel):
     """stores information about a (solved) mode.
     Attributes
@@ -64,15 +33,21 @@ class ModeInfo(Tidy3dBaseModel):
         Imaginary part of the effective refractive index of mode.
     """
 
-    # field_data: FieldData = pydantic.Field(
-    #     ...,
-    #     title="Field Data",
-    #     description="Contains information about the fields of the modal profile."
-    #    units=MICROMETER,)
-
-    mode_spec: ModeSpec
-    field_data: ModeFieldData
-    index_data: ModeIndexData
+    mode_spec: ModeSpec = pydantic.Field(
+        ...,
+        title="Mode Solver Specification",
+        description="Defines properties of the modes solved for by the mode solver.",
+    )
+    field_data: ModeFieldData = pydantic.Field(
+        ...,
+        title="Field Data",
+        description="Contains information about the modal profile fields of all modes.",
+    )
+    index_data: ModeIndexData = pydantic.Field(
+        ...,
+        title="Effective Index Data",
+        description="Contains information about the complex effective index of all modes.",
+    )
 
     @property
     def n_complex(self):
@@ -131,11 +106,13 @@ class ModeSolver(Tidy3dBaseModel):
         ----------
         mode_spec : ModeSpec
             ``ModeSpec`` object containing specifications of the mode solver.
+        freqs : List[float]
+            List of frequencies to solve at (Hz).
 
         Returns
         -------
-        List[ModeInfo]
-            A list of ``ModeInfo`` objects for each mode.
+        ModeInfo
+            ``ModeInfo`` object containing the effective index and mode fields for all modes.
         """
 
         normal_axis = self.normal_axis
@@ -156,16 +133,18 @@ class ModeSolver(Tidy3dBaseModel):
 
         # Compute and store the modes at all frequencies
         fields = {"Ex": [], "Ey": [], "Ez": [], "Hx": [], "Hy": [], "Hz": []}
+        n_complex = []
         for freq in freqs:
 
             # Compute the modes
-            mode_fields, n_complex = compute_modes(
+            mode_fields, n_comp = compute_modes(
                 eps_cross=self.solver_eps(freq),
                 coords=solver_coords,
                 freq=freq,
                 mode_spec=mode_spec,
                 symmetry=solver_symmetry,
             )
+            n_complex.append(n_comp)
 
             fields_freq = {"Ex": [], "Ey": [], "Ez": [], "Hx": [], "Hy": [], "Hz": []}
             for mode_index in range(mode_spec.num_modes):
@@ -217,7 +196,7 @@ class ModeSolver(Tidy3dBaseModel):
         index_data = ModeIndexData(
             f=freqs,
             mode_index=np.arange(mode_spec.num_modes),
-            values=n_complex[None, ...],
+            values=np.stack(n_complex, axis=0),
         )
         mode_info = ModeInfo(
             field_data=field_data,
