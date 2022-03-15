@@ -225,7 +225,8 @@ def monitor(task_id: TaskId) -> None:
         if get_info(task_id).status != "running":
             if perc_done < 100:
                 console.log("early shutoff detected, exiting.")
-            progress.update(pbar_pd, completed=100)
+            else:
+                progress.update(pbar_pd, completed=100)
 
     # preprocessing
     with console.status(f"[bold green]Finishing '{task_name}'...", spinner="runner"):
