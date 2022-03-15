@@ -812,6 +812,9 @@ class ModeFieldData(AbstractFieldData):
 
     def sel_mode_index(self, mode_index):
         """Return a FieldData at the selected mode index."""
+        if mode_index not in self.Ex.mode_index:
+            raise DataError("Requested 'mode_index' not stored in ModeFieldData.")
+
         data_dict = {}
         for field_name, scalar_data in self.data_dict.items():
             scalar_dict = scalar_data.dict()
@@ -952,8 +955,8 @@ class SimulationData(Tidy3dBaseModel):
 
     def ensure_field_monitor(self, data_obj: Tidy3dData) -> None:
         """Raise exception if monitor isn't a field monitor."""
-        if not isinstance(data_obj, (FieldData, FieldTimeData)):
-            raise DataError(f"data_obj '{data_obj}' " "not a FieldData or FieldTimeData instance.")
+        if not isinstance(data_obj, (FieldData, FieldTimeData, ModeFieldData)):
+            raise DataError(f"data_obj '{data_obj}' " "not an AbstractFieldData instance.")
 
     def at_centers(self, field_monitor_name: str) -> xr.Dataset:
         """return xarray.Dataset representation of field monitor data
@@ -974,6 +977,8 @@ class SimulationData(Tidy3dBaseModel):
         # get the data
         self.ensure_monitor_exists(field_monitor_name)
         field_monitor_data = self.monitor_data.get(field_monitor_name)
+        if isinstance(field_monitor_data, ModeSolverData):
+            field_monitor_data = field_monitor_data.fields
         self.ensure_field_monitor(field_monitor_data)
 
         # get the monitor, discretize, and get center locations
@@ -998,6 +1003,7 @@ class SimulationData(Tidy3dBaseModel):
         val: Literal["real", "imag", "abs"] = "real",
         freq: float = None,
         time: float = None,
+        mode_index: int = None,
         eps_alpha: float = 0.2,
         robust: bool = True,
         ax: Ax = None,
@@ -1027,6 +1033,8 @@ class SimulationData(Tidy3dBaseModel):
             By default, chooses permittivity as frequency goes to infinity.
         time: float = None
             if monitor is a :class:`FieldTimeMonitor`, specifies the time (sec) to plot the field.
+        mode_index: int = None
+            if monitor is a :class:`ModeSolverMonitor`, specifies which mode index to plot.
         eps_alpha : float = 0.2
             Opacity of the structure permittivity.
             Must be between 0 and 1 (inclusive).
@@ -1047,6 +1055,10 @@ class SimulationData(Tidy3dBaseModel):
         # get the monitor data
         self.ensure_monitor_exists(field_monitor_name)
         monitor_data = self.monitor_data.get(field_monitor_name)
+        if isinstance(monitor_data, ModeSolverData):
+            if mode_index is None:
+                raise DataError("'mode_index' must be supplied to plot a ModeSolverMonitor.")
+            monitor_data = monitor_data.fields.sel_mode_index(mode_index=mode_index)
         self.ensure_field_monitor(monitor_data)
 
         # get the field data component
@@ -1067,7 +1079,7 @@ class SimulationData(Tidy3dBaseModel):
             field_data = xr_data.sel(f=freq, method="nearest")
         elif "t" in xr_data.coords:
             if time is None:
-                raise DataError("'time' must be supplied to plot a FieldMonitor.")
+                raise DataError("'time' must be supplied to plot a FieldTimeMonitor.")
             field_data = xr_data.sel(t=time, method="nearest")
         else:
             raise DataError("Field data has neither time nor frequency data, something went wrong.")
