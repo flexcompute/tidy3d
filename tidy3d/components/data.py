@@ -823,6 +823,48 @@ class ModeFieldData(AbstractFieldData):
         return FieldData(data_dict=data_dict)
 
 
+class ModeSolverData(CollectionData):
+    """Stores a collection of mode field profiles and mode effective indexes from the mode solver.
+
+    Parameters
+    ----------
+    data_dict : Dict[str, :class:`AbstractModeData`]
+        Mapping of "n_complex" to :class:`ModeIndexData`, and "fields" to :class:`ModeFieldData`.
+    """
+
+    data_dict: Dict[str, Union[AbstractModeData, AbstractFieldData]]
+    type: Literal["ModeSolverData"] = "ModeSolverData"
+
+    @property
+    def fields(self):
+        """Get field data."""
+        return self.data_dict.get("fields")
+
+    @property
+    def n_complex(self):
+        """Get complex effective indexes."""
+        scalar_data = self.data_dict.get("n_complex")
+        if scalar_data:
+            return scalar_data.data
+        return None
+
+    @property
+    def n_eff(self):
+        """Get real part of effective index."""
+        scalar_data = self.data_dict.get("n_complex")
+        if scalar_data:
+            return scalar_data.n_eff
+        return None
+
+    @property
+    def k_eff(self):
+        """Get imaginary part of effective index."""
+        scalar_data = self.data_dict.get("n_complex")
+        if scalar_data:
+            return scalar_data.k_eff
+        return None
+
+
 # maps MonitorData.type string to the actual type, for MonitorData.from_file()
 DATA_TYPE_MAP = {
     "ScalarFieldData": ScalarFieldData,
@@ -836,6 +878,7 @@ DATA_TYPE_MAP = {
     "ModeData": ModeData,
     "ModeFieldData": ModeFieldData,
     "ScalarModeFieldData": ScalarModeFieldData,
+    "ModeSolverData": ModeSolverData,
 }
 
 

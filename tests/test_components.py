@@ -768,6 +768,8 @@ def test_monitor_plane():
         with pytest.raises(ValidationError) as e_info:
             ModeMonitor(size=size, freqs=freqs, modes=[])
         with pytest.raises(ValidationError) as e_info:
+            ModeSolverMonitor(size=size, freqs=freqs, modes=[])
+        with pytest.raises(ValidationError) as e_info:
             FluxMonitor(size=size, freqs=freqs, modes=[])
 
 

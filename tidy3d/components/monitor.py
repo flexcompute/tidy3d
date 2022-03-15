@@ -171,7 +171,17 @@ class PlanarMonitor(Monitor, ABC):
 
 
 class AbstractFluxMonitor(PlanarMonitor, ABC):
-    """:class:`Monitor` that records flux through a plane"""
+    """:class:`Monitor` that records flux through a plane."""
+
+
+class AbstractModeMonitor(PlanarMonitor, FreqMonitor):
+    """:class:`Monitor` that records mode-related data."""
+
+    mode_spec: ModeSpec = pydantic.Field(
+        ...,
+        title="Mode Specification",
+        description="Parameters to feed to mode solver which determine modes measured by monitor.",
+    )
 
 
 class FieldMonitor(AbstractFieldMonitor, FreqMonitor):
@@ -301,8 +311,8 @@ class FluxMonitor(AbstractFluxMonitor, FreqMonitor):
     _data_type: Literal["FluxData"] = pydantic.Field("FluxData")
 
     def storage_size(self, num_cells: int, tmesh: Array) -> int:
-        # stores 6 complex numbers per grid cell, per frequency
-        return 6 * BYTES_REAL * num_cells * len(self.freqs)
+        # stores 1 real number per frequency
+        return BYTES_REAL * len(self.freqs)
 
 
 class FluxTimeMonitor(AbstractFluxMonitor, TimeMonitor):
@@ -327,7 +337,7 @@ class FluxTimeMonitor(AbstractFluxMonitor, TimeMonitor):
         return BYTES_REAL * num_steps
 
 
-class ModeMonitor(PlanarMonitor, FreqMonitor):
+class ModeMonitor(AbstractModeMonitor):
     """:class:`Monitor` that records amplitudes from modal decomposition of fields on plane.
 
     Example
@@ -341,17 +351,11 @@ class ModeMonitor(PlanarMonitor, FreqMonitor):
     ...     name='mode_monitor')
     """
 
-    mode_spec: ModeSpec = pydantic.Field(
-        ...,
-        title="Mode Specification",
-        description="Parameters to feed to mode solver which determine modes measured by monitor.",
-    )
-
     _data_type: Literal["ModeData"] = pydantic.Field("ModeData")
 
     def storage_size(self, num_cells: int, tmesh: int) -> int:
-        # stores 3 complex numbers per grid cell, per frequency, per mode.
-        return 3 * BYTES_COMPLEX * num_cells * len(self.freqs) * self.mode_spec.num_modes
+        # stores 3 complex numbers per frequency, per mode.
+        return 3 * BYTES_COMPLEX * len(self.freqs) * self.mode_spec.num_modes
 
     def plot(
         self, x: float = None, y: float = None, z: float = None, ax: Ax = None, **kwargs
@@ -382,5 +386,32 @@ class ModeMonitor(PlanarMonitor, FreqMonitor):
         return tuple(normal)
 
 
+class ModeSolverMonitor(AbstractModeMonitor):
+    """:class:`Monitor` that stores the mode data (field profiles and effective index)
+    returned by the mode solver in the monitor plane.
+
+    Example
+    -------
+    >>> mode_spec = ModeSpec(num_modes=3)
+    >>> monitor = ModeSolverMonitor(
+    ...     center=(1,2,3),
+    ...     size=(2,2,0),
+    ...     freqs=[200e12, 210e12],
+    ...     mode_spec=mode_spec,
+    ...     name='mode_monitor')
+    """
+
+    _data_type: Literal["ModeSolverData"] = pydantic.Field("ModeSolverData")
+
+    def storage_size(self, num_cells: int, tmesh: int) -> int:
+        # fields store 6 complex numbers per grid cell, per frequency, per mode.
+        field_size = 6 * BYTES_COMPLEX * num_cells * len(self.freqs) * self.mode_spec.num_modes
+        # effective index stores 1 complex number per frequency per mode
+        neff_size = BYTES_COMPLEX * len(self.freqs) * self.mode_spec.num_modes
+        return field_size * neff_size
+
+
 # types of monitors that are accepted by simulation
-MonitorType = Union[FieldMonitor, FieldTimeMonitor, FluxMonitor, FluxTimeMonitor, ModeMonitor]
+MonitorType = Union[
+    FieldMonitor, FieldTimeMonitor, FluxMonitor, FluxTimeMonitor, ModeMonitor, ModeSolverMonitor
+]
