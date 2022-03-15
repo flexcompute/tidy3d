@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Allowed users to provide observation coordinates as vectors in `tidy3d.plugins.Near2Far` and optimized the routines therein for faster computation of far fields.
+
 ## [1.1.1] - 2022-3-2
 
 ### Added
@@ -16,7 +18,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - Fixed issue where smatrix was not uploaded to pyPI.
-- Allowed users to provide observation coordinates as vectors in `tidy3d.plugins.Near2Far` and optimized the routines therein for faster computation of far fields.
 
 ## [1.1.0] - 2022-3-1
 
