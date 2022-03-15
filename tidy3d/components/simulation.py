@@ -657,6 +657,12 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
             patch = PolygonPatch(shape, **kwargs_struct)
             ax.add_artist(patch)
         ax = self._set_plot_bounds(ax=ax, x=x, y=y, z=z)
+
+        # clean up the axis display
+        axis, position = self.parse_xyz_kwargs(x=x, y=y, z=z)
+        ax = self.add_ax_labels_lims(axis=axis, ax=ax)
+        ax.set_title(f"cross section at {'xyz'[axis]}={position:.2f}")
+
         return ax
 
     @staticmethod
@@ -728,6 +734,12 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         if cbar:
             self._add_cbar(eps_min=eps_min, eps_max=eps_max, ax=ax)
         ax = self._set_plot_bounds(ax=ax, x=x, y=y, z=z)
+
+        # clean up the axis display
+        axis, position = self.parse_xyz_kwargs(x=x, y=y, z=z)
+        ax = self.add_ax_labels_lims(axis=axis, ax=ax)
+        ax.set_title(f"cross section at {'xyz'[axis]}={position:.2f}")
+
         return ax
 
     @equal_aspect

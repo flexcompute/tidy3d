@@ -82,7 +82,7 @@ def test_mode_solver():
         bend_axis=0,
         num_pml=(10, 10),
     )
-    modes = ms.solve(mode_spec=mode_spec, freqs=[td.constants.C_0 / 1.])
+    modes = ms.solve(mode_spec=mode_spec, freqs=[td.constants.C_0 / 1.0])
 
 
 def _test_coeffs():
