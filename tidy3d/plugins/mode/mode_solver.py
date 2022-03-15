@@ -13,56 +13,10 @@ from ...components import ModeSpec
 from ...components import ModeMonitor
 from ...components.source import ModeSource, SourceTime
 from ...components.types import Direction, Array
-from ...components.data import ModeIndexData, ModeFieldData, ScalarModeFieldData
+from ...components.data import ModeIndexData, ModeFieldData, ScalarModeFieldData, ModeSolverData
 from ...log import ValidationError
 
 from .solver import compute_modes
-
-
-class ModeInfo(Tidy3dBaseModel):
-    """stores information about a (solved) mode.
-    Attributes
-    ----------
-    field_data: FieldData
-        Contains information about the fields of the modal profile.
-    mode_spec: ModeSpec
-        Specifications of the mode.
-    n_eff: float
-        Real part of the effective refractive index of mode.
-    k_eff: float
-        Imaginary part of the effective refractive index of mode.
-    """
-
-    mode_spec: ModeSpec = pydantic.Field(
-        ...,
-        title="Mode Solver Specification",
-        description="Defines properties of the modes solved for by the mode solver.",
-    )
-    field_data: ModeFieldData = pydantic.Field(
-        ...,
-        title="Field Data",
-        description="Contains information about the modal profile fields of all modes.",
-    )
-    index_data: ModeIndexData = pydantic.Field(
-        ...,
-        title="Effective Index Data",
-        description="Contains information about the complex effective index of all modes.",
-    )
-
-    @property
-    def n_complex(self):
-        """Complex effective index."""
-        return self.index_data.n_complex
-
-    @property
-    def n_eff(self):
-        """Get real part of effective index."""
-        return self.index_data.n_eff
-
-    @property
-    def k_eff(self):
-        """Get imaginary part of effective index."""
-        return self.index_data.k_eff
 
 
 class ModeSolver(Tidy3dBaseModel):
@@ -99,7 +53,7 @@ class ModeSolver(Tidy3dBaseModel):
         """Potentially smaller plane if symmetries present in the simulation."""
         return self.simulation.min_sym_box(self.plane)
 
-    def solve(self, mode_spec: ModeSpec, freqs: List[float]) -> ModeInfo:
+    def solve(self, mode_spec: ModeSpec, freqs: List[float]) -> ModeSolverData:
         """Solves for modal profile and effective index of ``Mode`` object.
 
         Parameters
@@ -111,8 +65,8 @@ class ModeSolver(Tidy3dBaseModel):
 
         Returns
         -------
-        ModeInfo
-            ``ModeInfo`` object containing the effective index and mode fields for all modes.
+        ModeSolverData
+            ``ModeSolverData`` object containing the effective index and mode fields for all modes.
         """
 
         normal_axis = self.normal_axis
@@ -198,11 +152,7 @@ class ModeSolver(Tidy3dBaseModel):
             mode_index=np.arange(mode_spec.num_modes),
             values=np.stack(n_complex, axis=0),
         )
-        mode_info = ModeInfo(
-            field_data=field_data,
-            mode_spec=mode_spec,
-            index_data=index_data,
-        )
+        mode_info = ModeSolverData(data_dict={"fields": field_data, "n_complex": index_data})
 
         return mode_info
 
