@@ -23,7 +23,7 @@ from .structure import Structure
 from .mode import ModeSpec
 
 # source
-from .source import GaussianPulse, ContinuousWave
+from .source import GaussianPulse, ContinuousWave, PointDipole
 from .source import VolumeSource, PlaneWave, ModeSource, GaussianBeam
 
 # monitor

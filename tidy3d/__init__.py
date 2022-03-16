@@ -28,7 +28,7 @@ from .components import Structure
 from .components import ModeSpec
 
 # sources
-from .components import GaussianPulse, ContinuousWave
+from .components import GaussianPulse, ContinuousWave, PointDipole
 from .components import VolumeSource, PlaneWave, ModeSource, GaussianBeam
 
 # monitors

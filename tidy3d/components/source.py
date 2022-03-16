@@ -7,7 +7,7 @@ import pydantic
 import numpy as np
 
 from .base import Tidy3dBaseModel
-from .types import Direction, Polarization, Ax, FreqBound, Array
+from .types import Direction, Polarization, Ax, FreqBound, Array, Size
 from .validators import assert_plane, validate_name_str
 from .geometry import Box
 from .mode import ModeSpec
@@ -291,6 +291,30 @@ class VolumeSource(Source):
         title="Polarization",
         description="Specifies the direction and type of current component.",
     )
+
+
+class PointDipole(VolumeSource):
+    """Point dipole source.
+
+    Example
+    -------
+    >>> pulse = GaussianPulse(freq0=200e12, fwidth=20e12)
+    >>> pt_source = PointDipole(source_time=pulse, polarization='Ex')
+    """
+
+    size: Size = pydantic.Field(
+        (0, 0, 0),
+        title="Size",
+        description="Dipole size in x, y, and z directions, must always be left (0,0,0)",
+        units=MICROMETER,
+    )
+
+    @pydantic.validator("size", always=True)
+    def _is_point(cls, val):
+        """Make sure the point dipole is a point."""
+        if val != (0.0, 0.0, 0.0):
+            raise SetupError(f"Point dipole must have size of (0.0, 0.0, 0.0), given {val}.")
+        return val
 
 
 class FieldSource(Source, ABC):
