@@ -7,10 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - Percent done monitoring of jobs running longer than 10 seconds.
+- Can use vectorized spherical coordinates in `tidy3d.plugins.Near2Far`.
 
 ### Changed
 
-- Allowed users to provide observation coordinates as vectors in `tidy3d.plugins.Near2Far` and optimized the routines therein for faster computation of far fields.
+- Significant speed improvement for `Near2Far` calculations.
 
 ## [1.1.1] - 2022-3-2
 
