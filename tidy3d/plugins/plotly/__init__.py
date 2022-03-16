@@ -1,2 +1,2 @@
-from .geo import SimulationPlotly
+from .geo import SimulationPlotly, GeometryPlotly, StructurePlotly
 from .data import *

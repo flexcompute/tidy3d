@@ -1,19 +1,42 @@
 """Plotly wrapper for tidy3d."""
-# pylint:disable=too-many-arguments
+# pylint:disable=too-many-arguments, protected-access
 from typing import Tuple
 
 import plotly.graph_objects as go
 from shapely.geometry.base import BaseGeometry as ShapelyGeo
 import numpy as np
 
-from ...components.types import PlotlyFig, Axis
+from .utils import PlotlyFig, add_fig_if_none, equal_aspect_plotly, plot_params_sim_boundary
+from ...components.types import Axis
 from ...components.simulation import Simulation
 from ...components.structure import Structure
 from ...components.geometry import Geometry, Box
 from ...components.medium import Medium
-from ...components.viz import add_fig_if_none, equal_aspect_plotly
-from ...components.viz import plot_params_sim_boundary, PlotParams
+from ...components.viz import PlotParams, plot_params_pml
 from ...components.base import Tidy3dBaseModel
+
+
+def plotly_shape(
+    shape: ShapelyGeo,
+    plot_params: PlotParams,
+    fig: PlotlyFig,
+    name: str = None,
+) -> PlotlyFig:
+    """Plot a shape to a figure."""
+    _shape = Geometry.evaluate_inf_shape(shape)
+    xs, ys = Geometry._get_shape_coords(shape=shape)
+    plotly_trace = go.Scatter(
+        x=xs,
+        y=ys,
+        fill="toself",
+        fillcolor=plot_params.facecolor,
+        line=dict(width=plot_params.linewidth, color=plot_params.facecolor),
+        marker=dict(size=0.0001, line=dict(width=0)),
+        name=name,
+        opacity=plot_params.alpha,
+    )
+    fig.add_trace(plotly_trace)
+    return fig
 
 
 class GeometryPlotly(Tidy3dBaseModel):
@@ -29,48 +52,23 @@ class GeometryPlotly(Tidy3dBaseModel):
         y: float = None,
         z: float = None,
         fig: PlotlyFig = None,
-        row: int = None,
-        col: int = None,
         name: str = None,
+        **patch_kwargs,
     ) -> PlotlyFig:
         """Plot cross sections on plane using plotly."""
 
+        plot_params = self.geometry.plot_params.copy(deep=True)
+        plot_params_struct = plot_params.include_kwargs(**patch_kwargs)
+
         # for each intersection, plot the shape
         for shape in self.geometry.intersections(x=x, y=y, z=z):
-            fig = self.plotly_shape(
+            fig = plotly_shape(
                 shape=shape,
-                plot_params=self.geometry.plot_params,
+                plot_params=plot_params_struct,
                 fig=fig,
-                row=row,
-                col=col,
                 name=name,
             )
 
-        return fig
-
-    def plotly_shape(
-        self,
-        shape: ShapelyGeo,
-        plot_params: PlotParams,
-        fig: PlotlyFig,
-        row: int = None,
-        col: int = None,
-        name: str = None,
-    ) -> PlotlyFig:
-        """Plot a shape to a figure."""
-        _shape = self.geometry.evaluate_inf_shape(shape)
-        xs, ys = self.geometry._get_shape_coords(shape=shape)
-        plotly_trace = go.Scatter(
-            x=xs,
-            y=ys,
-            fill="toself",
-            fillcolor=plot_params.facecolor,
-            line=dict(width=plot_params.linewidth, color=plot_params.facecolor),
-            marker=dict(size=0.0001, line=dict(width=0)),
-            name=name,
-            opacity=plot_params.alpha,
-        )
-        fig.add_trace(plotly_trace, row=row, col=col)
         return fig
 
 
@@ -86,13 +84,12 @@ class StructurePlotly(Tidy3dBaseModel):
         y: float = None,
         z: float = None,
         fig: PlotlyFig = None,
-        row: int = None,
-        col: int = None,
         name: str = None,
+        **patch_kwargs,
     ) -> PlotlyFig:
         """Use plotly to plot structure's geometric cross section at single (x,y,z) coordinate."""
-        geometry = GeometryPlotly(geometry=self.geometry)
-        return geometry.plotly(x=x, y=y, z=z, fig=fig, row=row, col=col)
+        geometry = GeometryPlotly(geometry=self.structure.geometry)
+        return geometry.plotly(x=x, y=y, z=z, fig=fig, name=name, **patch_kwargs)
 
 
 class SimulationPlotly(Tidy3dBaseModel):
@@ -108,8 +105,6 @@ class SimulationPlotly(Tidy3dBaseModel):
         y: float = None,
         z: float = None,
         fig: PlotlyFig = None,
-        row: int = None,
-        col: int = None,
     ) -> PlotlyFig:
         """Plot each of simulation's components on a plane defined by one nonzero x,y,z coordinate.
         Uses plotly.
@@ -127,10 +122,6 @@ class SimulationPlotly(Tidy3dBaseModel):
             If not specified, evaluates at infinite frequency.
         fig : plotly.graph_objects.Figure = None
             plotly ``Figure`` to plot on, if not specified, one is created.
-        row : int = None
-            Index (from 1) of the subplot row to plot on.
-        col : int = None
-            Index (from 1) of the subplot column to plot on.
 
         Returns
         -------
@@ -138,14 +129,13 @@ class SimulationPlotly(Tidy3dBaseModel):
             The supplied or created plotly ``Figure``.
         """
 
-        fig = self._plotly_bounding_box(x=x, y=y, z=z, fig=fig, row=row, col=col)
-        fig = self.plotly_structures(x=x, y=y, z=z, fig=fig, row=row, col=col)
-        fig = self.plotly_sources(x=x, y=y, z=z, fig=fig, row=row, col=col)
-        fig = self.plotly_monitors(x=x, y=y, z=z, fig=fig, row=row, col=col)
-        fig = self.plotly_symmetries(x=x, y=y, z=z, fig=fig, row=row, col=col)
-        fig = self.plotly_pml(x=x, y=y, z=z, fig=fig, row=row, col=col)
-        if row is None and col is None:
-            fig = self._plotly_cleanup(x=x, y=y, z=z, fig=fig)
+        fig = self._plotly_bounding_box(x=x, y=y, z=z, fig=fig)
+        fig = self.plotly_structures(x=x, y=y, z=z, fig=fig)
+        fig = self.plotly_sources(x=x, y=y, z=z, fig=fig)
+        fig = self.plotly_monitors(x=x, y=y, z=z, fig=fig)
+        fig = self.plotly_symmetries(x=x, y=y, z=z, fig=fig)
+        fig = self.plotly_pml(x=x, y=y, z=z, fig=fig)
+        fig = self._plotly_cleanup(x=x, y=y, z=z, fig=fig)
 
         return fig
 
@@ -157,8 +147,6 @@ class SimulationPlotly(Tidy3dBaseModel):
         y: float = None,
         z: float = None,
         fig: PlotlyFig = None,
-        row: int = None,
-        col: int = None,
     ) -> PlotlyFig:
         """Plot each of simulation's components on a plane defined by one nonzero x,y,z coordinate.
         The permittivity is plotted in grayscale based on its value at the specified frequency.
@@ -177,10 +165,7 @@ class SimulationPlotly(Tidy3dBaseModel):
             If not specified, evaluates at infinite frequency.
         fig : plotly.graph_objects.Figure = None
             plotly ``Figure`` to plot on, if not specified, one is created.
-        row : int = None
-            Index (from 1) of the subplot row to plot on.
-        col : int = None
-            Index (from 1) of the subplot column to plot on.
+
 
         Returns
         -------
@@ -188,14 +173,13 @@ class SimulationPlotly(Tidy3dBaseModel):
             The supplied or created plotly ``Figure``.
         """
 
-        fig = self._plotly_bounding_box(x=x, y=y, z=z, fig=fig, row=row, col=col)
-        fig = self.plotly_structures_eps(x=x, y=y, z=z, fig=fig, row=row, col=col)
-        fig = self.plotly_sources(x=x, y=y, z=z, fig=fig, row=row, col=col)
-        fig = self.plotly_monitors(x=x, y=y, z=z, fig=fig, row=row, col=col)
-        fig = self.plotly_symmetries(x=x, y=y, z=z, fig=fig, row=row, col=col)
-        fig = self.plotly_pml(x=x, y=y, z=z, fig=fig, row=row, col=col)
-        if row is None and col is None:
-            fig = self._plotly_cleanup(x=x, y=y, z=z, fig=fig)
+        fig = self._plotly_bounding_box(x=x, y=y, z=z, fig=fig)
+        fig = self.plotly_structures_eps(x=x, y=y, z=z, fig=fig)
+        fig = self.plotly_sources(x=x, y=y, z=z, fig=fig)
+        fig = self.plotly_monitors(x=x, y=y, z=z, fig=fig)
+        fig = self.plotly_symmetries(x=x, y=y, z=z, fig=fig)
+        fig = self.plotly_pml(x=x, y=y, z=z, fig=fig)
+        fig = self._plotly_cleanup(x=x, y=y, z=z, fig=fig)
 
         return fig
 
@@ -207,8 +191,6 @@ class SimulationPlotly(Tidy3dBaseModel):
         y: float = None,
         z: float = None,
         fig: PlotlyFig = None,
-        row: int = None,
-        col: int = None,
     ) -> PlotlyFig:
         """Plot each of simulation's structures on a plane defined by one nonzero x,y,z .
 
@@ -222,10 +204,6 @@ class SimulationPlotly(Tidy3dBaseModel):
             position of plane in z direction, only one of x, y, z must be specified to define plane.
         fig : plotly.graph_objects.Figure = None
             plotly ``Figure`` to plot on, if not specified, one is created.
-        row : int = None
-            Index (from 1) of the subplot row to plot on.
-        col : int = None
-            Index (from 1) of the subplot column to plot on.
 
         Returns
         -------
@@ -237,22 +215,17 @@ class SimulationPlotly(Tidy3dBaseModel):
             self.simulation.structures, x=x, y=y, z=z
         )
         for (medium, shape) in medium_shapes:
-            fig = self._plotly_shape_structure(
-                medium=medium, shape=shape, fig=fig, row=row, col=col
-            )
+            fig = self._plotly_shape_structure(medium=medium, shape=shape, fig=fig)
         return fig
 
     def _plotly_shape_structure(
-        self, medium: Medium, shape: ShapelyGeo, fig: PlotlyFig, row: int = None, col: int = None
+        self, medium: Medium, shape: ShapelyGeo, fig: PlotlyFig
     ) -> PlotlyFig:
         """Plot a structure's cross section shape for a given medium."""
         plot_params_struct = self.simulation._get_structure_plot_params(medium=medium)
         mat_index = self.simulation.medium_map[medium]
         name = medium.name if medium.name else f"medium[{mat_index}]"
-        geometry = GeometryPlotly(geometry=self.simulation.geometry)
-        fig = geometry.plotly_shape(
-            shape=shape, plot_params=plot_params_struct, fig=fig, row=row, col=col, name=name
-        )
+        fig = plotly_shape(shape=shape, plot_params=plot_params_struct, fig=fig, name=name)
         return fig
 
     @equal_aspect_plotly
@@ -264,8 +237,6 @@ class SimulationPlotly(Tidy3dBaseModel):
         z: float = None,
         freq: float = None,
         fig: PlotlyFig = None,
-        row: int = None,
-        col: int = None,
     ) -> PlotlyFig:
         """Plot each of simulation's structures on a plane defined by one nonzero x,y,z coordinate.
         The permittivity is plotted in grayscale based on its value at the specified frequency.
@@ -280,10 +251,6 @@ class SimulationPlotly(Tidy3dBaseModel):
             position of plane in z direction, only one of x, y, z must be specified to define plane.
         fig : plotly.graph_objects.Figure = None
             plotly ``Figure`` to plot on, if not specified, one is created.
-        row : int = None
-            Index (from 1) of the subplot row to plot on.
-        col : int = None
-            Index (from 1) of the subplot column to plot on.
 
         Returns
         -------
@@ -295,9 +262,7 @@ class SimulationPlotly(Tidy3dBaseModel):
             self.simulation.structures, x=x, y=y, z=z
         )
         for (medium, shape) in medium_shapes:
-            fig = self._plotly_shape_structure_eps(
-                freq=freq, medium=medium, shape=shape, fig=fig, row=row, col=col
-            )
+            fig = self._plotly_shape_structure_eps(freq=freq, medium=medium, shape=shape, fig=fig)
         return fig
 
     def _plotly_shape_structure_eps(
@@ -306,13 +271,11 @@ class SimulationPlotly(Tidy3dBaseModel):
         medium: Medium,
         shape: ShapelyGeo,
         fig: PlotlyFig,
-        row: int = None,
-        col: int = None,
     ) -> PlotlyFig:
         """Plot a structure's cross section shape for a given medium, grayscale for permittivity."""
         plot_params = self.simulation._get_structure_eps_plot_params(medium=medium, freq=freq)
         plot_params.facecolor = f"rgb{tuple(3*[float(plot_params.facecolor)*255])}"
-        fig = self.plotly_shape(shape=shape, plot_params=plot_params, fig=fig, row=row, col=col)
+        fig = plotly_shape(shape=shape, plot_params=plot_params, fig=fig)
         return fig
 
     @add_fig_if_none
@@ -322,8 +285,6 @@ class SimulationPlotly(Tidy3dBaseModel):
         y: float = None,
         z: float = None,
         fig: PlotlyFig = None,
-        row: int = None,
-        col: int = None,
     ) -> PlotlyFig:
         """Plot each of simulation's sources on a plane defined by one nonzero x,y,z coordinate.
 
@@ -337,10 +298,6 @@ class SimulationPlotly(Tidy3dBaseModel):
             position of plane in z direction, only one of x, y, z must be specified to define plane.
         fig : plotly.graph_objects.Figure = None
             plotly ``Figure`` to plot on, if not specified, one is created.
-        row : int = None
-            Index (from 1) of the subplot row to plot on.
-        col : int = None
-            Index (from 1) of the subplot column to plot on.
 
         Returns
         -------
@@ -350,7 +307,7 @@ class SimulationPlotly(Tidy3dBaseModel):
 
         for source in self.simulation.sources:
             source_plotly = GeometryPlotly(geometry=source)
-            fig = source_plotly.plotly(x=x, y=y, z=z, fig=fig, row=row, col=col, name="sources")
+            fig = source_plotly.plotly(x=x, y=y, z=z, fig=fig, name="sources")
         return fig
 
     @add_fig_if_none
@@ -360,8 +317,6 @@ class SimulationPlotly(Tidy3dBaseModel):
         y: float = None,
         z: float = None,
         fig: PlotlyFig = None,
-        row: int = None,
-        col: int = None,
     ) -> PlotlyFig:
         """Plot each of simulation's monitors on a plane defined by one nonzero x,y,z coordinate.
 
@@ -375,10 +330,6 @@ class SimulationPlotly(Tidy3dBaseModel):
             position of plane in z direction, only one of x, y, z must be specified to define plane.
         fig : plotly.graph_objects.Figure = None
             plotly ``Figure`` to plot on, if not specified, one is created.
-        row : int = None
-            Index (from 1) of the subplot row to plot on.
-        col : int = None
-            Index (from 1) of the subplot column to plot on.
 
         Returns
         -------
@@ -388,7 +339,7 @@ class SimulationPlotly(Tidy3dBaseModel):
 
         for monitor in self.simulation.monitors:
             monitor_plotly = GeometryPlotly(geometry=monitor)
-            fig = monitor_plotly.plotly(x=x, y=y, z=z, fig=fig, row=row, col=col, name="monitors")
+            fig = monitor_plotly.plotly(x=x, y=y, z=z, fig=fig, name="monitors")
         return fig
 
     @add_fig_if_none
@@ -398,8 +349,6 @@ class SimulationPlotly(Tidy3dBaseModel):
         y: float = None,
         z: float = None,
         fig: PlotlyFig = None,
-        row: int = None,
-        col: int = None,
     ) -> PlotlyFig:
         """Plot each of simulation's absorbing boundaries
         on a plane defined by one nonzero x,y,z coordinate.
@@ -414,10 +363,7 @@ class SimulationPlotly(Tidy3dBaseModel):
             position of plane in z direction, only one of x, y, z must be specified to define plane.
         fig : plotly.graph_objects.Figure = None
             plotly ``Figure`` to plot on, if not specified, one is created.
-        row : int = None
-            Index (from 1) of the subplot row to plot on.
-        col : int = None
-            Index (from 1) of the subplot column to plot on.
+
 
         Returns
         -------
@@ -428,7 +374,7 @@ class SimulationPlotly(Tidy3dBaseModel):
         pml_boxes = self.simulation._make_pml_boxes(normal_axis=normal_axis)
         for pml_box in pml_boxes:
             pml_box_plotly = GeometryPlotly(geometry=pml_box)
-            fig = pml_box_plotly.plotly(x=x, y=y, z=z, fig=fig, row=row, col=col)
+            fig = pml_box_plotly.plotly(x=x, y=y, z=z, fig=fig, **plot_params_pml.to_kwargs())
         return fig
 
     @add_fig_if_none
@@ -438,8 +384,6 @@ class SimulationPlotly(Tidy3dBaseModel):
         y: float = None,
         z: float = None,
         fig: PlotlyFig = None,
-        row: int = None,
-        col: int = None,
     ) -> PlotlyFig:
         """Plot each of simulation's symmetries on a plane defined by one nonzero x,y,z coordinate.
 
@@ -453,10 +397,7 @@ class SimulationPlotly(Tidy3dBaseModel):
             position of plane in z direction, only one of x, y, z must be specified to define plane.
         fig : plotly.graph_objects.Figure = None
             plotly ``Figure`` to plot on, if not specified, one is created.
-        row : int = None
-            Index (from 1) of the subplot row to plot on.
-        col : int = None
-            Index (from 1) of the subplot column to plot on.
+
 
         Returns
         -------
@@ -465,10 +406,15 @@ class SimulationPlotly(Tidy3dBaseModel):
         """
 
         normal_axis, _ = self.simulation.parse_xyz_kwargs(x=x, y=y, z=z)
-        sym_boxes = self.simulation._make_symmetry_boxes(normal_axis=normal_axis)
-        for sym_box in sym_boxes:
+
+        for sym_axis, sym_value in enumerate(self.simulation.symmetry):
+            if sym_value == 0 or sym_axis == normal_axis:
+                continue
+            sym_box = self.simulation._make_symmetry_box(sym_axis=sym_axis, sym_value=sym_value)
+            plot_params = self.simulation._make_symmetry_plot_params(sym_value=sym_value)
             sym_box_plotly = GeometryPlotly(geometry=sym_box)
-            fig = sym_box_plotly.plotly(x=x, y=y, z=z, fig=fig, row=row, col=col)
+            fig = sym_box_plotly.plotly(x=x, y=y, z=z, fig=fig, **plot_params.to_kwargs())
+
         return fig
 
     @add_fig_if_none
@@ -478,15 +424,14 @@ class SimulationPlotly(Tidy3dBaseModel):
         y: float = None,
         z: float = None,
         fig: PlotlyFig = None,
-        row: int = None,
-        col: int = None,
     ) -> PlotlyFig:
         """Add simulation bounding box."""
         rmin, rmax = self.simulation.bounds_pml
         sim_box_pml = Box.from_bounds(rmin=rmin, rmax=rmax)
-        sim_box_pml.plot_params = plot_params_sim_boundary
         sim_box_pml_plotly = GeometryPlotly(geometry=sim_box_pml)
-        fig = sim_box_pml_plotly.plotly(x=x, y=y, z=z, fig=fig, row=row, col=col)
+        fig = sim_box_pml_plotly.plotly(
+            x=x, y=y, z=z, fig=fig, **plot_params_sim_boundary.to_kwargs()
+        )
         return fig
 
     def _plotly_cleanup(
@@ -554,6 +499,3 @@ class SimulationPlotly(Tidy3dBaseModel):
             else:
                 trace["showlegend"] = False
         return fig
-
-
-# from tidy3d.plugins.plotly import SimulationPlotly;from tests.utils import SIM_FULL as sim; sim_plotly = SimulationPlotly(simulation=sim); fig = sim_plotly(x=0);fig.show()

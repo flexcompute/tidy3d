@@ -8,7 +8,6 @@ import pydantic
 import numpy as np
 
 from shapely.geometry import Point, Polygon, box, MultiPolygon
-from shapely.geometry.base import BaseGeometry as ShapelyGeo
 from descartes import PolygonPatch
 
 from .base import Tidy3dBaseModel
@@ -25,11 +24,10 @@ from ..constants import MICROMETER, LARGE_NUMBER
 class Geometry(Tidy3dBaseModel, ABC):
     """Abstract base class, defines where something exists in space."""
 
-    plot_params: PlotParams = pydantic.Field(
-        plot_params_geometry,
-        title="Plot Parameters",
-        description="Specifications used to plot instances of this class.",
-    )
+    @property
+    def plot_params(self):
+        """Default parameters for plotting a Geometry object."""
+        return plot_params_geometry
 
     center: Coordinate = pydantic.Field(
         (0.0, 0.0, 0.0),
@@ -192,7 +190,9 @@ class Geometry(Tidy3dBaseModel, ABC):
 
     @equal_aspect
     @add_ax_if_none
-    def plot(self, x: float = None, y: float = None, z: float = None, ax: Ax = None) -> Ax:
+    def plot(
+        self, x: float = None, y: float = None, z: float = None, ax: Ax = None, **patch_kwargs
+    ) -> Ax:
         """Plot geometry cross section at single (x,y,z) coordinate.
 
         Parameters
@@ -205,6 +205,10 @@ class Geometry(Tidy3dBaseModel, ABC):
             Position of plane in z direction, only one of x,y,z can be specified to define plane.
         ax : matplotlib.axes._subplots.Axes = None
             Matplotlib axes to plot on, if not specified, one is created.
+        **patch_kwargs
+            Optional keyword arguments passed to the matplotlib patch plotting of structure.
+            For details on accepted values, refer to
+            `Matplotlib's documentation <https://tinyurl.com/2nf5c2fk>`_.
 
         Returns
         -------
@@ -216,9 +220,11 @@ class Geometry(Tidy3dBaseModel, ABC):
         axis, position = self.parse_xyz_kwargs(x=x, y=y, z=z)
         shapes_intersect = self.intersections(x=x, y=y, z=z)
 
+        plot_params = self.plot_params.include_kwargs(**patch_kwargs)
+
         # for each intersection, plot the shape
         for shape in shapes_intersect:
-            ax = self.plot_shape(shape, plot_params=self.plot_params, ax=ax)
+            ax = self.plot_shape(shape, plot_params=plot_params, ax=ax)
 
         # clean up the axis display
         ax = self.add_ax_labels_lims(axis=axis, ax=ax)
@@ -226,15 +232,15 @@ class Geometry(Tidy3dBaseModel, ABC):
         ax.set_title(f"cross section at {'xyz'[axis]}={position:.2f}")
         return ax
 
-    def plot_shape(self, shape: ShapelyGeo, plot_params: PlotParams, ax: Ax) -> Ax:
+    def plot_shape(self, shape: Shapely, plot_params: PlotParams, ax: Ax) -> Ax:
         """Defines how a shape is plotted on a matplotlib axes."""
         _shape = self.evaluate_inf_shape(shape)
-        patch = PolygonPatch(_shape, **plot_params.dict())
+        patch = PolygonPatch(_shape, **plot_params.to_kwargs())
         ax.add_artist(patch)
         return ax
 
     @staticmethod
-    def _get_shape_coords(shape: ShapelyGeo) -> Tuple[float, float]:
+    def _get_shape_coords(shape: Shapely) -> Tuple[float, float]:
         """Return xs, ys for given shapely shape."""
 
         def strip_xy(shape):
@@ -334,7 +340,7 @@ class Geometry(Tidy3dBaseModel, ABC):
         return map(lambda v: v if not np.isinf(v) else np.sign(v) * LARGE_NUMBER, values)
 
     @classmethod
-    def evaluate_inf_shape(cls, shape: ShapelyGeo) -> ShapelyGeo:
+    def evaluate_inf_shape(cls, shape: Shapely) -> Shapely:
         """Returns a copy of shape with inf vertices replaced by large numbers if polygon."""
 
         if not isinstance(shape, Polygon):

@@ -28,10 +28,13 @@ class Monitor(Box, ABC):
         min_length=1,
     )
 
-    plot_params: PlotParams = plot_params_monitor
+    @property
+    def plot_params(self) -> PlotParams:
+        """Default parameters for plotting a Monitor object."""
+        return plot_params_monitor
 
     @property
-    def geometry(self):
+    def geometry(self) -> Box:
         """:class:`Box` representation of monitor.
 
         Returns

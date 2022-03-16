@@ -36,14 +36,11 @@ class Structure(Tidy3dBaseModel):
 
     _name_validator = validate_name_str()
 
-    @property
-    def plot_params(self):
-        """Uses self.geometry plot parameters."""
-        return self.geometry.plot_params
-
     @equal_aspect
     @add_ax_if_none
-    def plot(self, x: float = None, y: float = None, z: float = None, ax: Ax = None) -> Ax:
+    def plot(
+        self, x: float = None, y: float = None, z: float = None, ax: Ax = None, **patch_kwargs
+    ) -> Ax:
         """Plot structure's geometric cross section at single (x,y,z) coordinate.
 
         Parameters
@@ -56,10 +53,14 @@ class Structure(Tidy3dBaseModel):
             Position of plane in z direction, only one of x,y,z can be specified to define plane.
         ax : matplotlib.axes._subplots.Axes = None
             Matplotlib axes to plot on, if not specified, one is created.
+        **patch_kwargs
+            Optional keyword arguments passed to the matplotlib patch plotting of structure.
+            For details on accepted values, refer to
+            `Matplotlib's documentation <https://tinyurl.com/2nf5c2fk>`_.
 
         Returns
         -------
         matplotlib.axes._subplots.Axes
             The supplied or created matplotlib axes.
         """
-        return self.geometry.plot(x=x, y=y, z=z, ax=ax)
+        return self.geometry.plot(x=x, y=y, z=z, ax=ax, **patch_kwargs)

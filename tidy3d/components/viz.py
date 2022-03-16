@@ -5,9 +5,8 @@ from functools import wraps
 
 import matplotlib.pylab as plt
 import pydantic as pd
-import plotly.graph_objects as go
 
-from .types import Ax, PlotlyFig
+from .types import Ax
 from .base import Tidy3dBaseModel
 
 """ Constants """
@@ -69,48 +68,6 @@ def equal_aspect(plot):
     return _plot
 
 
-def make_fig() -> PlotlyFig:
-    """makes an empty `fig`."""
-    fig = go.Figure()
-    return fig
-
-
-def add_fig_if_none(plotly):
-    """Decorates `plot(*args, **kwargs, ax=None)` function.
-    if fig=None in the function call, creates a plotly fig and feeds it to rest of function.
-    """
-
-    @wraps(plotly)
-    def _plotly(*args, **kwargs) -> PlotlyFig:
-        """New plot function using a generated ax if None."""
-        if kwargs.get("fig") is None:
-            fig = make_fig()
-            kwargs["fig"] = fig
-        return plotly(*args, **kwargs)
-
-    return _plotly
-
-
-def equal_aspect_plotly(plotly):
-    """Decorates a plotting function returning a matplotlib axes.
-    Ensures the aspect ratio of the returned axes is set to equal.
-    Useful for 2D plots, like sim.plotly()
-    """
-
-    @wraps(plotly)
-    def _plotly(*args, **kwargs) -> PlotlyFig:
-        """New plot function with equal aspect ratio axes returned."""
-        fig = plotly(*args, **kwargs)
-        fig.update_yaxes(
-            scaleanchor="x",
-            scaleratio=1,
-        )
-        fig.update_layout(plot_bgcolor="rgba(0,0,0,0)")
-        return fig
-
-    return _plotly
-
-
 """ plot parameters """
 
 
@@ -124,6 +81,21 @@ class PlotParams(Tidy3dBaseModel):
     hatch: str = pd.Field(None, title="Hatch Style")
     linewidth: pd.NonNegativeFloat = pd.Field(1, title="Line Width", alias="lw")
 
+    def include_kwargs(self, **kwargs) -> "PlotParams":
+        """Update the plot params with supplied kwargs."""
+        new_plot_params = self.copy(deep=True)
+        for key, value in kwargs.items():
+            if key not in ("type",):
+                setattr(new_plot_params, key, value)
+        return new_plot_params
+
+    def to_kwargs(self) -> dict:
+        """Export the plot parameters as kwargs dict that can be supplied to plot function."""
+        kwarg_dict = self.dict()
+        for ignore_key in ("type",):
+            kwarg_dict.pop(ignore_key)
+        return kwarg_dict
+
 
 # defaults for different tidy3d objects
 plot_params_geometry = PlotParams()
@@ -131,8 +103,7 @@ plot_params_structure = PlotParams()
 plot_params_source = PlotParams(alpha=0.4, facecolor="limegreen", edgecolor="limegreen", lw=3)
 plot_params_monitor = PlotParams(alpha=0.4, facecolor="orange", edgecolor="orange", lw=3)
 plot_params_pml = PlotParams(alpha=0.7, facecolor="gray", edgecolor="gray", hatch="x")
-plot_params_symmetry = PlotParams(alpha=0.6)
-plot_params_sim_boundary = PlotParams(linewidth=0, facecolor="rgba(0,0,0,0.05)", edgecolor="black")
+plot_params_symmetry = PlotParams(edgecolor="gray", facecolor="gray", alpha=0.6)
 
 # stores color of simulation.structures for given index in simulation.medium_map
 MEDIUM_CMAP = [
