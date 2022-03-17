@@ -175,7 +175,7 @@ def compute_modes(
         E = E[..., sort_inds]
         H = H[..., sort_inds]
         neff = neff[..., sort_inds]
-        neff = neff[..., sort_inds]
+        keff = keff[..., sort_inds]
 
     # Transform back to original axes, E = J^T E'
     E = np.sum(jac_e[..., None] * E[:, None, ...], axis=0)

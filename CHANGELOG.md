@@ -8,10 +8,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - Percent done monitoring of jobs running longer than 10 seconds.
 - Can use vectorized spherical coordinates in `tidy3d.plugins.Near2Far`.
+- `ModeSolverMonitor` and `ModeSolverData` allow the results of a mode solve run server-side to be stored.
+- Plotting of `ModeSolverData` fields in `SimulationData.plot_field`.
+- Ordering of modes by polarization fraction can be specified in `ModeSpec`.
 
 ### Changed
-
 - Significant speed improvement for `Near2Far` calculations.
+- `freq` no longer passed to `ModeSolver` upon init, instead a list of `freqs` passed to `ModeSolver.solve`.
+- Mode solver now returns `ModeSolverData` object containing information about the mode fields and propagation constants as data arrays over frequency and mode index.
 
 ## [1.1.1] - 2022-3-2
 
