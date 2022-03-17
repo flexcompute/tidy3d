@@ -1215,7 +1215,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
             Number of yee cells in the simulation.
         """
 
-        return np.prod(self.grid.num_cells)
+        return np.prod(self.grid.num_cells, dtype=np.int64)
 
     @staticmethod
     def _add_pml_to_bounds(num_layers: Tuple[int, int], bounds: Coords1D):
