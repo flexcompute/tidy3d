@@ -6,7 +6,7 @@ import pydantic as pd
 
 from ..constants import MICROMETER
 from .base import Tidy3dBaseModel
-from .types import Axis2D
+from .types import Axis2D, Literal
 from ..log import SetupError
 
 
@@ -32,6 +32,16 @@ class ModeSpec(Tidy3dBaseModel):
         (0, 0),
         title="Number of PML layers",
         description="Number of standard pml layers to add in the two tangential axes.",
+    )
+
+    sort_by: Literal["largest_neff", "te_fraction", "tm_fraction"] = pd.Field(
+        "largest_neff",
+        title="Ordering of the returned modes",
+        description="The solver will always compute the ``num_modes`` modes closest to the "
+        "``target_neff``, but they can be reordered by the largest ``te_fraction``, defined "
+        "as the integral of the intensity of the E-field component parallel to the first plane "
+        "axis normalized to the total in-plane E-field intensity. Similarly, ``tm_fraction`` "
+        "uses the E field component parallel to the second plane axis.",
     )
 
     bend_radius: float = pd.Field(

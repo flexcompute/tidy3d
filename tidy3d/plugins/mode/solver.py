@@ -46,6 +46,7 @@ def compute_modes(
     num_modes = mode_spec.num_modes
     bend_radius = mode_spec.bend_radius
     bend_axis = mode_spec.bend_axis
+    sort_by = mode_spec.sort_by
     omega = 2 * np.pi * freq
     k0 = omega / C_0
 
@@ -163,6 +164,18 @@ def compute_modes(
 
     # Solve for the modes
     E, H, neff, keff = solver_em(eps_tensor, mu_tensor, SDmats, num_modes, target_neff_p)
+
+    # Reorder if needed
+    if sort_by != "largest_neff":
+        if sort_by == "te_fraction":
+            sort_int = np.sum(np.abs(E[0]) ** 2, axis=0) / np.sum(np.abs(E[:2]) ** 2, axis=(0, 1))
+        elif sort_by == "tm_fraction":
+            sort_int = np.sum(np.abs(E[1]) ** 2, axis=0) / np.sum(np.abs(E[:2]) ** 2, axis=(0, 1))
+        sort_inds = np.argsort(sort_int)[::-1]
+        E = E[..., sort_inds]
+        H = H[..., sort_inds]
+        neff = neff[..., sort_inds]
+        neff = neff[..., sort_inds]
 
     # Transform back to original axes, E = J^T E'
     E = np.sum(jac_e[..., None] * E[:, None, ...], axis=0)

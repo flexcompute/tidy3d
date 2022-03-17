@@ -20,23 +20,23 @@ from ...log import ValidationError
 from .solver import compute_modes
 
 FIELD = Tuple[Array[complex], Array[complex], Array[complex]]
-FIELD_DECAY_CUTOFF = 1e-3
+
+# Warning for field intensity at edges over total field intensity larger than this value
+FIELD_DECAY_CUTOFF = 1e-2
 
 
 class ModeSolver(Tidy3dBaseModel):
     """Interface for solving electromagnetic eigenmodes in a 2D plane with translational
     invariance in the third dimension.
-
-    Parameters
-    ----------
-    simulation : Simulation
-        ``Simulation`` the ``Mode`` will be inserted into.
-    plane : Box
-        Plane where the mode will be computed in ``Simulation``.
     """
 
-    simulation: Simulation
-    plane: Box
+    simulation: Simulation = pydantic.Field(
+        ..., title="Simulation", description="Simulation defining all structures and mediums."
+    )
+
+    plane: Box = pydantic.Field(
+        ..., title="Plane", description="Cross-sectional plane in which the mode will be computed."
+    )
 
     @pydantic.validator("plane", allow_reuse=True, always=True)
     def is_plane(cls, val):
