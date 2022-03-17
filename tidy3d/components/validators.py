@@ -1,9 +1,8 @@
 # pylint:disable=unused-argument
 """ Defines various validation functions that get used to ensure inputs are legit """
-
 import pydantic
-import numpy as np
 
+from .geometry import Box
 from ..log import ValidationError, SetupError
 
 """ Explanation of pydantic validators:
@@ -37,23 +36,6 @@ from ..log import ValidationError, SetupError
 
     For more details: `Pydantic Validators <https://pydantic-docs.helpmanual.io/usage/validators/>`_
 """
-
-
-def is_not_inf(field_name: str):
-    """Make sure a field does not accept values of type np.inf, td.inf."""
-
-    @pydantic.validator(field_name, allow_reuse=True, always=True)
-    def _isnt_inf(cls, val):
-        """Raise validation error if is inf."""
-        if isinstance(val, (tuple, list)):
-            for val_index, val_item in enumerate(val):
-                if np.isinf(val_item):
-                    raise ValidationError(f"Field '{field_name}[{val_index}]' can't be infinity.")
-        elif np.isinf(val):
-            raise ValidationError(f"Field '{field_name}' can't be infinity.")
-        return val
-
-    return _isnt_inf
 
 
 def assert_plane():
@@ -141,7 +123,7 @@ def assert_objects_in_sim_bounds(field_name: str):
         """check for intersection of each structure with simulation bounds."""
         sim_center = values.get("center")
         sim_size = values.get("size")
-        sim_box = cls.__bases__[0](size=sim_size, center=sim_center)
+        sim_box = Box(size=sim_size, center=sim_center)
 
         for position_index, geometric_object in enumerate(val):
             if not sim_box.intersects(geometric_object.geometry):
