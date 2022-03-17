@@ -183,8 +183,11 @@ class ModeSolver(Tidy3dBaseModel):
         E, H = mode_fields[..., mode_index]
 
         # Warn if not decayed at edges
-        e_edge = np.sum(np.abs(E[:, 0, :]) ** 2 + np.abs(E[:, -1, :]) ** 2)
-        e_edge += np.sum(np.abs(E[:, :, 0]) ** 2 + np.abs(E[:, :, -1]) ** 2)
+        e_edge = 0
+        if E.shape[1] > 1:
+            e_edge = np.sum(np.abs(E[:, 0, :]) ** 2 + np.abs(E[:, -1, :]) ** 2)
+        if E.shape[2] > 1:
+            e_edge += np.sum(np.abs(E[:, :, 0]) ** 2 + np.abs(E[:, :, -1]) ** 2)
         e_norm = np.sum(np.abs(E) ** 2)
 
         if e_edge / e_norm > FIELD_DECAY_CUTOFF:
