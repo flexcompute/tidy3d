@@ -2,12 +2,13 @@
 
 from abc import ABC, abstractmethod
 from typing import Union, Tuple
+import logging
 
 import pydantic
 import numpy as np
 
 from .base import Tidy3dBaseModel
-from .types import Direction, Polarization, Ax, FreqBound, Array
+from .types import Direction, Polarization, Ax, FreqBound, Array, Axis
 from .validators import assert_plane, validate_name_str
 from .geometry import Box
 from .mode import ModeSpec
@@ -19,6 +20,8 @@ from ..log import SetupError
 
 # in spectrum computation, discard amplitudes with relative magnitude smaller than cutoff
 DFT_CUTOFF = 1e-8
+# if |np.pi/2 - angle_theta| < GLANCING_CUTOFF in a DirectionalSource, print a warning
+GLANCING_CUTOFF = 0.1
 
 
 class SourceTime(ABC, Tidy3dBaseModel):
@@ -293,17 +296,69 @@ class VolumeSource(Source):
     )
 
 
+class PlanarSource(Source, ABC):
+    """A source defined on a 2D plane."""
+
+    _plane_validator = assert_plane()
+
+    @property
+    def injection_axis(self):
+        """Injection axis of the source."""
+        return self.size.index(0.0)
+
+    @injection_axis.setter
+    def injection_axis(self):
+        raise ValueError("PlanarSource injection axis is defined by the axis normal to the plane.")
+
+
 class FieldSource(Source, ABC):
-    """A planar Source defined by the desired E and H fields at a plane. The sources are created
-    such that the propagation is uni-directional."""
+    """A Source defined by the desired E and/or H fields."""
+
+
+class DirectionalSource(FieldSource, ABC):
+    """A FieldSource defined with a direction of propagation. The direction is defined by
+    the polar and azimuth angles w.r.t. an injection axis, as well as forward ``+`` or
+    backward ``-``."""
 
     direction: Direction = pydantic.Field(
         ...,
         title="Direction",
-        description="Specifies propagation in positive or negative direction of the normal axis.",
+        description="Specifies propagation in the positive or negative direction of the injection "
+        "axis.",
     )
 
-    _plane_validator = assert_plane()
+    injection_axis: Axis = pydantic.Field(
+        None,
+        title="Injection Axis",
+        description="Specifies injection axis. The popagation axis is defined with respect to "
+        "the injection axis by ``angle_theta`` and ``angle_phi``. Must be ``None`` for planar "
+        "directional sources, as it is taken automatically from the plane size.",
+    )
+
+    angle_theta: float = pydantic.Field(
+        0.0,
+        title="Polar Angle",
+        description="Polar angle of the propagation axis from the injection axis.",
+        units=RADIAN,
+    )
+
+    angle_phi: float = pydantic.Field(
+        0.0,
+        title="Azimuth Angle",
+        description="Azimuth angle of the propagation axis in the plane orthogonal to the "
+        "injection axis.",
+        units=RADIAN,
+    )
+
+    @pydantic.validator("angle_theta", allow_reuse=True, always=True)
+    def glancing_incidence(cls, val):
+        """Warn if close to glancing incidence."""
+        if np.abs(np.pi / 2 - val) < GLANCING_CUTOFF:
+            logging.warning(
+                "DirectionalSource propagation axis close to glancing angle. "
+                "For best results, switch the injection axis."
+            )
+        return val
 
     def plot(
         self, x: float = None, y: float = None, z: float = None, ax: Ax = None, **kwargs
@@ -328,13 +383,14 @@ class FieldSource(Source, ABC):
     @property
     def _dir_arrow(self) -> Tuple[float, float, float]:
         """Source direction normal vector in cartesian coordinates."""
-        normal = [0.0, 0.0, 0.0]
-        normal_axis = self.size.index(0.0)
-        normal[normal_axis] = 1.0 if self.direction == "+" else -1.0
-        return tuple(normal)
+        radius = 1.0 if self.direction == "+" else -1.0
+        dx = radius * np.cos(self.angle_phi) * np.sin(self.angle_theta)
+        dy = radius * np.sin(self.angle_phi) * np.sin(self.angle_theta)
+        dz = radius * np.cos(self.angle_theta)
+        return self.unpop_axis(dz, (dx, dy), axis=self.injection_axis)
 
 
-class ModeSource(FieldSource):
+class ModeSource(PlanarSource, DirectionalSource):
     """Injects current source to excite modal profile on finite extent plane.
 
     Example
@@ -364,15 +420,36 @@ class ModeSource(FieldSource):
         "``num_modes`` in the solver will be set to ``mode_index + 1``.",
     )
 
+    @pydantic.validator("angle_theta", always=True)
+    def theta_not_specified(cls, val):
+        """Make sure ``angle_theta`` is taken from the ``mode_spec``."""
+        if val > 0.0:
+            raise SetupError("``angle_theta`` for a ModeSource must be defined in ``mode_spec``.")
+        return val
 
-class AngledFieldSource(FieldSource):
-    """Field Source with a polarization angle."""
+    # @pydantic.validator("angle_phi", always=True)
+    # def phi_not_specified(cls, val):
+    #     """Make sure``angle_phi`` is taken from the ``mode_spec``."""
+    #     if val > 0.0:
+    #         raise SetupError("``angle_phi`` for a ModeSource must be defined in ``mode_spec``.")
+    #     return val
+
+    # @pydantic.validator("mode_spec", always=True)
+    # def set_phi_theta(cls, val, values):
+    #     """Set``angle_phi`` and ``angle_theta`` from ``mode_spec``."""
+    #     values["angle_theta"] = val.angle_theta
+    #     values["angle_phi"] = val.angle_phi
+    #     return val
+
+
+class PolarizedSource(DirectionalSource, ABC):
+    """DirectionalSource with a polarization angle."""
 
     pol_angle: float = pydantic.Field(
         0,
         title="Polarization Angle",
         description="Specifies the angle between the electric field polarization of the "
-        "source and the plane defined by the normal axis and the propagation axis (rad). "
+        "source and the plane defined by the injection axis and the propagation axis (rad). "
         "``pol_angle=0`` (default) specifies P polarization, "
         "while ``pol_angle=np.pi/2`` specifies S polarization. "
         "At normal incidence when S and P are undefined, ``pol_angle=0`` defines: "
@@ -386,7 +463,7 @@ class AngledFieldSource(FieldSource):
         self, x: float = None, y: float = None, z: float = None, ax: Ax = None, **kwargs
     ) -> Ax:
 
-        # call the `FieldSource.plot()` function first (including dir arrow)
+        # call the `DirectionalSource.plot()` function first (including dir arrow)
         ax = super().plot(x=x, y=y, z=z, ax=ax, **kwargs)
 
         # then add another arrow based on the polarization direction
@@ -402,46 +479,20 @@ class AngledFieldSource(FieldSource):
         )
         return ax
 
-    @staticmethod
-    def rotate(
-        vector: Tuple[float, float, float], axis: Tuple[float, float, float], angle: float
-    ) -> Array:
-        """Rotate a ``vector`` about a given ``axis`` vector by a given ``angle``."""
-
-        # Normalized axis vector components
-        (ux, uy, uz) = axis / np.linalg.norm(axis)
-
-        # General rotation matrix
-        rot_mat = np.zeros((3, 3))
-        cos = np.cos(angle)
-        sin = np.sin(angle)
-        rot_mat[0, 0] = cos + ux**2 * (1 - cos)
-        rot_mat[0, 1] = ux * uy * (1 - cos) - uz * sin
-        rot_mat[0, 2] = ux * uz * (1 - cos) + uy * sin
-        rot_mat[1, 0] = uy * ux * (1 - cos) + uz * sin
-        rot_mat[1, 1] = cos + uy**2 * (1 - cos)
-        rot_mat[1, 2] = uy * uz * (1 - cos) - ux * sin
-        rot_mat[2, 0] = uz * ux * (1 - cos) - uy * sin
-        rot_mat[2, 1] = uz * uy * (1 - cos) + ux * sin
-        rot_mat[2, 2] = cos + uz**2 * (1 - cos)
-
-        return rot_mat @ vector
-
     @property
     def _pol_arrow(self) -> Tuple[float, float, float]:
         """Source polarization normal vector in cartesian coordinates."""
-        normal_plane = [0.0, 0.0, 0.0]
-        normal_axis = self.size.index(0.0)
-        normal_plane[normal_axis] = 1.0
-        normal_prop = list(self._dir_arrow)
-        pol_vector = np.cross(normal_plane, normal_prop)
+        normal_dir = [0.0, 0.0, 0.0]
+        normal_dir[self.injection_axis] = 1.0
+        propagation_dir = list(self._dir_arrow)
+        pol_vector = np.cross(normal_dir, propagation_dir)
         if np.all(pol_vector == 0.0):
-            pol_vector = np.array((0, 1, 0)) if normal_axis == "x" else np.array((1, 0, 0))
+            pol_vector = np.array((0, 1, 0)) if self.injection_axis == 0 else np.array((1, 0, 0))
 
-        return self.rotate(pol_vector, normal_prop, angle=self.pol_angle)
+        return self.rotate_points(pol_vector, propagation_dir, angle=self.pol_angle)
 
 
-class PlaneWave(AngledFieldSource):
+class PlaneWave(PolarizedSource):
     """Uniform current distribution on an infinite extent plane.  One element of size must be zero.
 
     Example
@@ -450,11 +501,18 @@ class PlaneWave(AngledFieldSource):
     >>> pw_source = PlaneWave(size=(inf,0,inf), source_time=pulse, pol_angle=0.1, direction='+')
     """
 
-    # Note: this is replaced by `pol_angle`
-    # polarization: Polarization = "Ex"
+    # @pydantic.validator("angle_theta", always=True)
+    # def normal_incidence(cls, val):
+    #     """Raise not implemented error if not normal incidence."""
+    #     if val > 0.0:
+    #         raise NotImplementedError(
+    #             "Plane wave with off-normal incidence requires Bloch "
+    #             "boundary conditions, which are not yet implemented."
+    #         )
+    #     return val
 
 
-class GaussianBeam(AngledFieldSource):
+class GaussianBeam(PolarizedSource):
     """Guassian distribution on finite extent plane.
 
     Example
@@ -481,30 +539,6 @@ class GaussianBeam(AngledFieldSource):
         description="Distance from the beam waist along the propagation direction.",
         units=MICROMETER,
     )
-
-    angle_theta: float = pydantic.Field(
-        0.0,
-        title="Polar Angle",
-        description="Polar angle from the normal axis.",
-        units=RADIAN,
-    )
-
-    angle_phi: float = pydantic.Field(
-        0.0,
-        title="Azimuth Angle",
-        description="Azimuth angle in the plane orthogonal to the normal axis.",
-        units=RADIAN,
-    )
-
-    @property
-    def _dir_arrow(self) -> Tuple[float, float, float]:
-        """Source direction normal vector in cartesian coordinates."""
-        radius = 1.0 if self.direction == "+" else -1.0
-        dx = radius * np.cos(self.angle_phi) * np.sin(self.angle_theta)
-        dy = radius * np.sin(self.angle_phi) * np.sin(self.angle_theta)
-        dz = radius * np.cos(self.angle_theta)
-        normal_axis = self.size.index(0.0)
-        return self.unpop_axis(dz, (dx, dy), axis=normal_axis)
 
 
 # sources allowed in Simulation.sources

@@ -4,7 +4,7 @@ from typing import Tuple
 
 import pydantic as pd
 
-from ..constants import MICROMETER
+from ..constants import MICROMETER, RADIAN
 from .base import Tidy3dBaseModel
 from .types import Axis2D, Literal
 from ..log import SetupError
@@ -12,8 +12,8 @@ from ..log import SetupError
 
 class ModeSpec(Tidy3dBaseModel):
     """Stores specifications for the mode solver to find an electromagntic mode.
-    Note, the planar axes are found by popping the propagation axis from {x,y,z}.
-    For example, if propagation axis is y, the planar axes are ordered {x,z}.
+    Note, the planar axes are found by popping the injection axis from {x,y,z}.
+    For example, if injection axis is y, the planar axes are ordered {x,z}.
 
     Example
     -------
@@ -44,6 +44,21 @@ class ModeSpec(Tidy3dBaseModel):
         "uses the E field component parallel to the second plane axis.",
     )
 
+    angle_theta: float = pd.Field(
+        0.0,
+        title="Polar Angle",
+        description="Polar angle of the propagation axis from the injection axis.",
+        units=RADIAN,
+    )
+
+    angle_phi: float = pd.Field(
+        0.0,
+        title="Azimuth Angle",
+        description="Azimuth angle of the propagation axis in the plane orthogonal to the "
+        "injection axis.",
+        units=RADIAN,
+    )
+
     bend_radius: float = pd.Field(
         None,
         title="Bend radius",
@@ -56,7 +71,7 @@ class ModeSpec(Tidy3dBaseModel):
     bend_axis: Axis2D = pd.Field(
         None,
         title="Bend axis",
-        description="Index into the first two non-propagating axes defining the normal to the "
+        description="Index into the two tangential axes defining the normal to the "
         "plane in which the bend lies. This must be provided if ``bend_radius`` is not ``None``. "
         "For example, for a ring in the global xy-plane, and a mode plane in either the xz or the "
         "yz plane, the ``bend_axis`` is always 1 (the global z axis).",
