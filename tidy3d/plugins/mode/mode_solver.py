@@ -38,7 +38,7 @@ class ModeSolver(Tidy3dBaseModel):
         ..., title="Plane", description="Cross-sectional plane in which the mode will be computed."
     )
 
-    @pydantic.validator("plane", allow_reuse=True, always=True)
+    @pydantic.validator("plane", always=True)
     def is_plane(cls, val):
         """Raise validation error if not planar."""
         if val.size.count(0.0) != 1:
@@ -60,7 +60,7 @@ class ModeSolver(Tidy3dBaseModel):
 
         Parameters
         ----------
-        mode_spec : ModeSpec
+        mode_spec : :class:`ModeSpec`
             ``ModeSpec`` object containing specifications of the mode solver.
         freqs : List[float]
             List of frequencies to solve at (Hz).
@@ -150,7 +150,7 @@ class ModeSolver(Tidy3dBaseModel):
         return np.stack((eps_xx, eps_yy, eps_zz), axis=0)
 
     def solver_eps(self, freq: float) -> Array[complex]:
-        """Get the diagonal permittivity as supplied to the sovler, with the nomral axis rotated to
+        """Get the diagonal permittivity as supplied to the sovler, with the normal axis rotated to
         z."""
 
         # Get diagonal epsilon components in the plane
@@ -169,7 +169,7 @@ class ModeSolver(Tidy3dBaseModel):
         return np.stack((eps_xx, eps_yy, eps_zz), axis=0)
 
     def rotate_field_coords(self, field):
-        """move the propagation axis=z to the proper order in the array"""
+        """Move the propagation axis=z to the proper order in the array."""
         f_x, f_y, f_z = np.moveaxis(field, source=3, destination=1 + self.normal_axis)
         f_rot = np.stack(self.plane.unpop_axis(f_z, (f_x, f_y), axis=self.normal_axis), axis=0)
         return f_rot
@@ -177,7 +177,7 @@ class ModeSolver(Tidy3dBaseModel):
     def process_fields(
         self, mode_fields: Array[complex], freq_index: int, mode_index: int
     ) -> Tuple[FIELD, FIELD]:
-        """transform solver fields to simulation axes, set gauge, and check decay at boundaries."""
+        """Transform solver fields to simulation axes, set gauge, and check decay at boundaries."""
 
         # Separate E and H fields (in solver coordinates)
         E, H = mode_fields[..., mode_index]
@@ -221,13 +221,13 @@ class ModeSolver(Tidy3dBaseModel):
         direction: Direction,
         mode_index: int = 0,
     ) -> ModeSource:
-        """Creates ``ModeSource`` from a Mode + additional specifications.
+        """Creates :class:`ModeSource` from a ModeSolver instance + additional specifications.
 
         Parameters
         ----------
-        mode_spec : ModeSpec
+        mode_spec : :class:`ModeSpec`
             :class:`ModeSpec` object containing specifications of mode.
-        source_time: SourceTime
+        source_time: :class:`SourceTime`
             Specification of the source time-dependence.
         direction : Direction
             Whether source will inject in ``"+"`` or ``"-"`` direction relative to plane normal.
@@ -252,11 +252,11 @@ class ModeSolver(Tidy3dBaseModel):
         )
 
     def to_monitor(self, mode_spec: ModeSpec, freqs: List[float], name: str) -> ModeMonitor:
-        """Creates ``ModeMonitor`` from a Mode + additional specifications.
+        """Creates :class:`ModeMonitor` from a ModeSolver instance + additional specifications.
 
         Parameters
         ----------
-        mode_spec : ModeSpec
+        mode_spec : :class:`ModeSpec`
             :class:`ModeSpec` object containing specifications of mode.
         freqs : List[float]
             Frequencies to include in Monitor (Hz).
