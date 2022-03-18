@@ -11,7 +11,7 @@ from shapely.geometry import Point, Polygon, box
 from descartes import PolygonPatch
 
 from .base import Tidy3dBaseModel
-from .types import Bound, Size, Coordinate, Axis, Coordinate2D, tidynumpy
+from .types import Bound, Size, Coordinate, Axis, Coordinate2D, tidynumpy, Array
 from .types import Vertices, Ax, Shapely
 from .viz import add_ax_if_none, equal_aspect
 from .viz import PLOT_BUFFER, ARROW_LENGTH_FACTOR, ARROW_WIDTH_FACTOR
@@ -384,6 +384,88 @@ class Geometry(Tidy3dBaseModel, ABC):
         axis = "xyz".index(axis_label)
         return axis, position
 
+    @staticmethod
+    def rotate_points(points: Array[float], axis: Coordinate, angle: float) -> Array[float]:
+        """Rotate a set of points in 3D.
+
+        Parameters
+        ----------
+        points : Array[float]
+            Array of shape ``(3, ...)``.
+        axis : Coordinate
+            Axis of rotation
+        angle : float
+            Angle of rotation counter-clockwise around the axis (rad).
+        """
+
+        # Normalized axis vector components
+        (ux, uy, uz) = axis / np.linalg.norm(axis)
+
+        # General rotation matrix
+        rot_mat = np.zeros((3, 3))
+        cos = np.cos(angle)
+        sin = np.sin(angle)
+        rot_mat[0, 0] = cos + ux ** 2 * (1 - cos)
+        rot_mat[0, 1] = ux * uy * (1 - cos) - uz * sin
+        rot_mat[0, 2] = ux * uz * (1 - cos) + uy * sin
+        rot_mat[1, 0] = uy * ux * (1 - cos) + uz * sin
+        rot_mat[1, 1] = cos + uy ** 2 * (1 - cos)
+        rot_mat[1, 2] = uy * uz * (1 - cos) - ux * sin
+        rot_mat[2, 0] = uz * ux * (1 - cos) - uy * sin
+        rot_mat[2, 1] = uz * uy * (1 - cos) + ux * sin
+        rot_mat[2, 2] = cos + uz ** 2 * (1 - cos)
+
+        return np.einsum("ij,jp...->ip...", rot_mat, points)
+
+    def reflect_points(
+        self,
+        points: Array[float],
+        polar_axis: Axis,
+        angle_theta: float,
+        angle_phi: float,
+        plane_point: Coordinate,
+    ) -> Array[float]:
+        """Reflect a set of points in 3D at a plane defined by a point on the plane and an axis
+        normal to the plane.
+        all ``points``, array of shape (3, ...) at a plane passing through a given
+        ``plane_point``, normal to an axis defined in polar coordinates (theta, phi) w.r.t. the
+        ``polar_axis`` which can be 0, 1, or 2.
+        
+        Parameters
+        ----------
+        points : Array[float]
+            Array of shape ``(3, ...)``.
+        polar_axis : Axis
+            Cartesian axis w.r.t. which the normal axis angles are defined.
+        angle_theta : float
+            Polar angle w.r.t. the polar axis.
+        angle_phi : float
+            Azimuth angle around the polar axis.
+        plane_point : Coordinate
+            A point lying on the reflection plane.
+        """
+
+        # Offset coordinates such that ``plane_point`` is at the origin
+        points_new = points - plane_point
+
+        # Rotate such that the plane normal is along the polar_axis
+        axis_theta, axis_phi = [0, 0, 0], [0, 0, 0]
+        axis_phi[polar_axis] = 1
+        plane_axes = [0, 1, 2]
+        plane_axes.pop(polar_axis)
+        axis_theta[plane_axes[1]] = 1
+        points_new = self.rotate_points(points_new, axis_phi, -angle_phi)
+        points_new = self.rotate_points(points_new, axis_theta, -angle_theta)
+
+        # Flip the ``polar_axis`` coordinate of the points, which is now normal to the plane
+        points_new[polar_axis, :] *= -1
+
+        # Rotate back
+        points_new = self.rotate_points(points_new, axis_theta, angle_theta)
+        points_new = self.rotate_points(points_new, axis_phi, angle_phi)
+
+        return points_new
+
 
 """ Abstract subclasses """
 
@@ -535,7 +617,7 @@ class Circular(Geometry):
         dz = np.abs(z0 - position)
         if dz > self.radius:
             return None
-        return 2 * np.sqrt(self.radius**2 - dz**2)
+        return 2 * np.sqrt(self.radius ** 2 - dz ** 2)
 
 
 """ importable geometries """
@@ -772,7 +854,7 @@ class Sphere(Circular):
         dist_x = np.abs(x - x0)
         dist_y = np.abs(y - y0)
         dist_z = np.abs(z - z0)
-        return (dist_x**2 + dist_y**2 + dist_z**2) <= (self.radius**2)
+        return (dist_x ** 2 + dist_y ** 2 + dist_z ** 2) <= (self.radius ** 2)
 
     def intersections(self, x: float = None, y: float = None, z: float = None):
         """Returns shapely geometry at plane specified by one non None value of x,y,z.
@@ -894,7 +976,7 @@ class Cylinder(Circular, Planar):
         dist_x = np.abs(x - x0)
         dist_y = np.abs(y - y0)
         dist_z = np.abs(z - z0)
-        inside_radius = (dist_x**2 + dist_y**2) <= (self.radius**2)
+        inside_radius = (dist_x ** 2 + dist_y ** 2) <= (self.radius ** 2)
         inside_height = dist_z < (self.length / 2)
         return inside_radius * inside_height
 
