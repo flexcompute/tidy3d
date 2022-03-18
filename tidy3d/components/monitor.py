@@ -408,7 +408,7 @@ class ModeSolverMonitor(AbstractModeMonitor):
         field_size = 6 * BYTES_COMPLEX * num_cells * len(self.freqs) * self.mode_spec.num_modes
         # effective index stores 1 complex number per frequency per mode
         neff_size = BYTES_COMPLEX * len(self.freqs) * self.mode_spec.num_modes
-        return field_size * neff_size
+        return field_size + neff_size
 
 
 # types of monitors that are accepted by simulation
