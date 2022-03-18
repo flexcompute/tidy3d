@@ -30,6 +30,13 @@ ConfigDev = WebConfig(
     web_api_endpoint="https://tidy3d-api.dev-simulation.cloud",
 )
 
+# staging config
+ConfigUat = WebConfig(
+    s3_region="us-gov-west-1",
+    studio_bucket="flow360studio",
+    auth_api_endpoint="https://portal-api.simulation.cloud",
+    web_api_endpoint="https://uat-tidy3d-api.simulation.cloud",
+)
 
 # production config
 ConfigProd = WebConfig(
@@ -39,9 +46,10 @@ ConfigProd = WebConfig(
     web_api_endpoint="https://tidy3d-api.simulation.cloud",
 )
 
-
 # default one to import
 DEFAULT_CONFIG = ConfigProd
 
 if os.environ.get("TIDY3D_ENV") == "dev":
     DEFAULT_CONFIG = ConfigDev
+elif os.environ.get("TIDY3D_ENV") == "uat":
+    DEFAULT_CONFIG = ConfigUat
