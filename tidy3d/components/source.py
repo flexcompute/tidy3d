@@ -7,8 +7,8 @@ import logging
 import pydantic
 import numpy as np
 
-from .base import Tidy3dBaseModel
-from .types import Direction, Polarization, Ax, FreqBound, Array, Axis
+from .base import Tidy3dBaseModel, TYPE_TAG_STR
+from .types import Direction, Polarization, Ax, FreqBound, Array, Axis, Annotated
 from .validators import assert_plane, validate_name_str
 from .geometry import Box
 from .mode import ModeSpec
@@ -542,4 +542,4 @@ class GaussianBeam(PolarizedSource):
 
 
 # sources allowed in Simulation.sources
-SourceType = Union[VolumeSource, PlaneWave, ModeSource, GaussianBeam]
+SourceType = Annotated[Union[VolumeSource, ModeSource, PlaneWave, GaussianBeam], pydantic.Field(discriminator=TYPE_TAG_STR)]
