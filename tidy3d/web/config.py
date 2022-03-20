@@ -4,7 +4,7 @@ from typing import Any
 
 from dataclasses import dataclass
 
-SOLVER_VERSION = "release-22.1.6"
+SOLVER_VERSION = "multinode-22.1.6"
 
 
 @dataclass
@@ -47,9 +47,11 @@ ConfigProd = WebConfig(
 )
 
 # default one to import
-DEFAULT_CONFIG = ConfigProd
+DEFAULT_CONFIG = ConfigUat
 
 if os.environ.get("TIDY3D_ENV") == "dev":
     DEFAULT_CONFIG = ConfigDev
 elif os.environ.get("TIDY3D_ENV") == "uat":
     DEFAULT_CONFIG = ConfigUat
+elif os.environ.get("TIDY3D_ENV") == "prod":
+    DEFAULT_CONFIG = ConfigProd
