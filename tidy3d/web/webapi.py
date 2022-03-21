@@ -195,7 +195,7 @@ def monitor(task_id: TaskId) -> None:
 
     status = None
 
-    break_statuses = ("running", "visualize", "success", "error", "diverged", "deleted", "draft")
+    break_statuses = ("success", "error", "diverged", "deleted", "draft")
 
     def get_status():
         """Get status for this task (called many times below, so put into function)."""
@@ -207,7 +207,7 @@ def monitor(task_id: TaskId) -> None:
     # preprocessing
     console = Console()
     with console.status(f"[bold green]Starting '{task_name}'...", spinner="runner"):
-        while get_status() not in break_statuses:
+        while get_status() not in break_statuses and get_status() != "running":
             if status != get_status():
                 status = get_status()
                 if status != "running":
