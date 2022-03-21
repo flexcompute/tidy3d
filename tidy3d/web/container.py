@@ -4,6 +4,7 @@ from abc import ABC
 from typing import Dict, Optional, Tuple
 import time
 
+from rich.console import Console
 from rich.progress import Progress
 import pydantic as pd
 
