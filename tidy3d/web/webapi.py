@@ -11,15 +11,16 @@ import requests
 from rich.console import Console
 from rich.progress import Progress
 
-from .config import DEFAULT_CONFIG as Config
+from .config import DEFAULT_CONFIG
 from .s3utils import get_s3_user, DownloadProgress
 from .auth import requires_auth
-from .task import TaskId, TaskInfo
+from .task import TaskId, TaskInfo, Folder
 from . import httputils as http
 from ..components.simulation import Simulation
 from ..components.data import SimulationData
 from ..components.types import Literal
 from ..log import log, WebError
+from ..version import __version__
 
 REFRESH_TIME = 0.3
 TOTAL_DOTS = 3
@@ -125,7 +126,7 @@ def get_info(task_id: TaskId) -> TaskInfo:
     :class:`TaskInfo`
         Object containing information about status, size, credits of task.
     """
-    method = f"fdtd/task/{task_id}"
+    method = f"tidy3d/tasks/{task_id}/detail"
     info_dict = http.get(method)
     if info_dict is None:
         raise WebError(f"task {task_id} not found, unable to load info.")
@@ -138,18 +139,25 @@ def start(task_id: TaskId) -> None:
 
     Parameters
     ----------
+
     task_id : str
         Unique identifier of task on server.  Returned by :meth:`upload`.
-
+    solver_version : str
+        Supply or override a specific solver version to the task.
     Note
     ----
     To monitor progress, can call :meth:`monitor` after starting simulation.
     """
-    task = get_info(task_id)
-    folder_name = task.folderId
-    method = f"fdtd/model/{folder_name}/task/{task_id}"
-    task.status = "queued"
-    http.put(method, data=task.dict())
+    method = f"tidy3d/tasks/{task_id}/submit"
+    data = {}
+
+    # do not pass protocol version if mapping is missing or needs an override.
+    if DEFAULT_CONFIG.solver_version:
+        data["solverVersion"] = DEFAULT_CONFIG.solver_version
+    else:
+        data["protocolVersion"] = __version__
+
+    http.post(method, data=data)
 
 
 @requires_auth
@@ -240,7 +248,7 @@ def monitor(task_id: TaskId) -> None:
             new_description = f"% done (field decay = {field_decay:.2e})"
             progress.update(pbar_pd, completed=perc_done, description=new_description)
             time.sleep(1.0)
-        if perc_done is not None and perc_done < 100:
+        if perc_done < 100:
             console.log("early shutoff detected, exiting.")
         else:
             progress.update(pbar_pd, completed=100)
@@ -349,7 +357,7 @@ def delete(task_id: TaskId) -> TaskInfo:
         Object containing information about status, size, credits of task.
     """
 
-    method = f"fdtd/task/{str(task_id)}"
+    method = f"tidy3d/tasks/{str(task_id)}"
     return http.delete(method)
 
 
@@ -432,13 +440,23 @@ def get_tasks(num_tasks: int = None, order: Literal["new", "old"] = "new") -> Li
     return out_dict
 
 
+def _query_or_create_folder(folder_name) -> Folder:
+    log.debug("query folder")
+    method = f"tidy3d/project?projectName={folder_name}"
+    resp = http.get(method)
+    if not resp:
+        log.debug("folder not found, create one.")
+        method = "tidy3d/projects"
+        resp = http.post(method, data={"projectName": folder_name})
+
+    return Folder(**resp)
+
+
 @requires_auth
 def _upload_task(  # pylint:disable=too-many-locals,too-many-arguments
     simulation: Simulation,
     task_name: str,
     folder_name: str = "default",
-    solver_version: str = Config.solver_version,
-    worker_group: str = Config.worker_group,
     callback_url: str = None,
 ) -> TaskId:
     """upload with all kwargs exposed"""
@@ -447,14 +465,12 @@ def _upload_task(  # pylint:disable=too-many-locals,too-many-arguments
 
     json_string = simulation._json_string()  # pylint:disable=protected-access
     data = {
-        "status": "uploading",
-        "solverVersion": solver_version,
         "taskName": task_name,
-        "workerGroup": worker_group,
         "callbackUrl": callback_url,
     }
 
-    method = f"fdtd/model/{folder_name}/task"
+    folder = _query_or_create_folder(folder_name)
+    method = f"tidy3d/projects/{folder.projectId}/tasks"
 
     log.debug("Creating task.")
     try:
@@ -476,15 +492,18 @@ def _upload_task(  # pylint:disable=too-many-locals,too-many-arguments
     # with Progress() as progress:
     # upload_progress = UploadProgress(size_bytes, progress)
     log.debug(f"json = {json_string}")
-    client.put_object(
+    resp = client.put_object(
         Body=json_string,
         Bucket=bucket,
         Key=key,
         # Callback=upload_progress.report
     )
 
-    task["status"] = "draft"
-    http.put(f"{method}/{task_id}", data=task)
+    if resp.get("ResponseMetadata") and resp.get("ResponseMetadata").get("HTTPStatusCode") != 200:
+        raise WebError("Upload file to 3S failed, please check your network or try it later.")
+    print("\n")
+    print(f"{DEFAULT_CONFIG.website_endpoint}/folders/{folder.projectId}/tasks/{task_id}")
+    print("\n")
 
     return task_id
 

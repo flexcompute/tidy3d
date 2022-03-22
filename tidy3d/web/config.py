@@ -4,8 +4,6 @@ from typing import Any
 
 from dataclasses import dataclass
 
-SOLVER_VERSION = "release-22.1.6"
-
 
 @dataclass
 class WebConfig:  # pylint:disable=too-many-instance-attributes
@@ -15,7 +13,8 @@ class WebConfig:  # pylint:disable=too-many-instance-attributes
     studio_bucket: str
     auth_api_endpoint: str
     web_api_endpoint: str
-    solver_version: str = SOLVER_VERSION
+    website_endpoint: str
+    solver_version: str = None
     worker_group: Any = None
     auth: str = None
     user: str = None
@@ -28,6 +27,7 @@ ConfigDev = WebConfig(
     studio_bucket="flow360-studio-v1",
     auth_api_endpoint="https://portal-api.dev-simulation.cloud",
     web_api_endpoint="https://tidy3d-api.dev-simulation.cloud",
+    website_endpoint="https://dev-tidy3d.simulation.cloud",
 )
 
 # staging config
@@ -36,6 +36,7 @@ ConfigUat = WebConfig(
     studio_bucket="flow360studio",
     auth_api_endpoint="https://portal-api.simulation.cloud",
     web_api_endpoint="https://uat-tidy3d-api.simulation.cloud",
+    website_endpoint="https://uat-tidy3d.simulation.cloud",
 )
 
 # production config
@@ -44,6 +45,7 @@ ConfigProd = WebConfig(
     studio_bucket="flow360studio",
     auth_api_endpoint="https://portal-api.simulation.cloud",
     web_api_endpoint="https://tidy3d-api.simulation.cloud",
+    website_endpoint="https://tidy3d.simulation.cloud",
 )
 
 # default one to import
