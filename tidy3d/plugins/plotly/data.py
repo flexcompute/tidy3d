@@ -6,8 +6,14 @@ import numpy as np
 import plotly.graph_objects as go
 import plotly.express as px
 
-from ...components.data import FluxData, FluxTimeData, FieldData
-from ...components.base import Tidy3dBaseModel
+import sys;
+sys.path.append('../../../')
+
+from tidy3d.components.data import FluxData, FluxTimeData, FieldData
+from tidy3d.components.base import Tidy3dBaseModel
+from tidy3d.components.geometry import Geometry
+# from ...components.data import FluxData, FluxTimeData, FieldData
+# from ...components.base import Tidy3dBaseModel
 
 class DataPlotly(Tidy3dBaseModel):
 
@@ -37,29 +43,28 @@ class FluxTimeDataPlotly(DataPlotly):
 class FieldDataPlotly(DataPlotly):
     """Flux in frequency domain."""
     data : FieldData
-
-    def plotly(self, field:str, freq:float, val:Literal['real', 'imag', 'abs']):
+    
+    def plotly(self, field:str, freq:float, val:Literal['real', 'imag', 'abs'], x=None, y=None, z=None):
+        axis, position = Geometry.parse_xyz_kwargs(x=x, y=y, z=z)
         scalar_field_data = self.data.data_dict[field]
         sel_freq = scalar_field_data.data.sel(f=freq)
-        sel_val = self.sel_by_val(data=sel_freq, val=val)
-        x=sel_val.coords['x'],
-        y=sel_val.coords['y'],
-        z=sel_val.coords['z'],
-        xx, yy, zz = np.meshgrid(x, y, z, indexing='ij')
-        x = xx.flatten()
-        y = yy.flatten()
-        z = zz.flatten()
-        value=sel_val.values.flatten()
-        fig = go.Figure(data=go.Volume(
-            x=x,
-            y=y,
-            z=z,
-            value=value,
-            isomin=0.1,
-            isomax=0.8,
-            opacity=0.1, # needs to be small to see through all surfaces
-            surface_count=17, # needs to be a large number for good volume rendering
-        ))
+        xyz_labels = ['x', 'y', 'z']
+        xyz_kwargs = {xyz_labels.pop(axis): position}
+        sel_xyz = sel_freq.interp(**xyz_kwargs)
+        sel_val = self.sel_by_val(data=sel_xyz, val=val)
+        d1=sel_val.coords[xyz_labels[0]]
+        d2=sel_val.coords[xyz_labels[1]]
+        fig = go.Figure(
+            data=go.Heatmap(
+                x = d1,
+                y = d2,
+                z = sel_val.values,
+                transpose=True,
+                type='heatmap',
+                colorscale='magma' if val in 'abs' in val else 'RdBu'
+            )
+        )
+        fig.update_layout(title=f'{val}[{field}({"xyz"[axis]}={position:.2e}, f={freq:.2e})]')
         return fig
 
 
