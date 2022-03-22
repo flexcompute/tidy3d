@@ -14,7 +14,7 @@ from .base import Tidy3dBaseModel
 from .types import Bound, Size, Coordinate, Axis, Coordinate2D, tidynumpy, Array
 from .types import Vertices, Ax, Shapely
 from .viz import add_ax_if_none, equal_aspect
-from .viz import PLOT_BUFFER, ARROW_LENGTH_FACTOR, ARROW_WIDTH_FACTOR
+from .viz import PLOT_BUFFER, ARROW_LENGTH_FACTOR, ARROW_WIDTH_FACTOR, MAX_ARROW_WIDTH_FACTOR
 from ..log import Tidy3dKeyError, SetupError, ValidationError
 from ..constants import MICROMETER, LARGE_NUMBER
 
@@ -405,15 +405,18 @@ class Geometry(Tidy3dBaseModel, ABC):
         rot_mat = np.zeros((3, 3))
         cos = np.cos(angle)
         sin = np.sin(angle)
-        rot_mat[0, 0] = cos + ux ** 2 * (1 - cos)
+        rot_mat[0, 0] = cos + ux**2 * (1 - cos)
         rot_mat[0, 1] = ux * uy * (1 - cos) - uz * sin
         rot_mat[0, 2] = ux * uz * (1 - cos) + uy * sin
         rot_mat[1, 0] = uy * ux * (1 - cos) + uz * sin
-        rot_mat[1, 1] = cos + uy ** 2 * (1 - cos)
+        rot_mat[1, 1] = cos + uy**2 * (1 - cos)
         rot_mat[1, 2] = uy * uz * (1 - cos) - ux * sin
         rot_mat[2, 0] = uz * ux * (1 - cos) - uy * sin
         rot_mat[2, 1] = uz * uy * (1 - cos) + ux * sin
-        rot_mat[2, 2] = cos + uz ** 2 * (1 - cos)
+        rot_mat[2, 2] = cos + uz**2 * (1 - cos)
+
+        if len(points.shape) == 1:
+            return rot_mat @ points
 
         return np.einsum("ij,jp...->ip...", rot_mat, points)
 
@@ -423,14 +426,11 @@ class Geometry(Tidy3dBaseModel, ABC):
         polar_axis: Axis,
         angle_theta: float,
         angle_phi: float,
-        plane_point: Coordinate,
     ) -> Array[float]:
-        """Reflect a set of points in 3D at a plane defined by a point on the plane and an axis
-        normal to the plane.
-        all ``points``, array of shape (3, ...) at a plane passing through a given
-        ``plane_point``, normal to an axis defined in polar coordinates (theta, phi) w.r.t. the
+        """Reflect a set of points in 3D at a plane passing through the coordinate origin defined
+        and normal to a given axis defined in polar coordinates (theta, phi) w.r.t. the
         ``polar_axis`` which can be 0, 1, or 2.
-        
+
         Parameters
         ----------
         points : Array[float]
@@ -441,12 +441,7 @@ class Geometry(Tidy3dBaseModel, ABC):
             Polar angle w.r.t. the polar axis.
         angle_phi : float
             Azimuth angle around the polar axis.
-        plane_point : Coordinate
-            A point lying on the reflection plane.
         """
-
-        # Offset coordinates such that ``plane_point`` is at the origin
-        points_new = points - plane_point
 
         # Rotate such that the plane normal is along the polar_axis
         axis_theta, axis_phi = [0, 0, 0], [0, 0, 0]
@@ -454,7 +449,7 @@ class Geometry(Tidy3dBaseModel, ABC):
         plane_axes = [0, 1, 2]
         plane_axes.pop(polar_axis)
         axis_theta[plane_axes[1]] = 1
-        points_new = self.rotate_points(points_new, axis_phi, -angle_phi)
+        points_new = self.rotate_points(points, axis_phi, -angle_phi)
         points_new = self.rotate_points(points_new, axis_theta, -angle_theta)
 
         # Flip the ``polar_axis`` coordinate of the points, which is now normal to the plane
@@ -617,7 +612,7 @@ class Circular(Geometry):
         dz = np.abs(z0 - position)
         if dz > self.radius:
             return None
-        return 2 * np.sqrt(self.radius ** 2 - dz ** 2)
+        return 2 * np.sqrt(self.radius**2 - dz**2)
 
 
 """ importable geometries """
@@ -786,7 +781,7 @@ class Box(Geometry):
 
         plot_axis, _ = self.parse_xyz_kwargs(x=x, y=y, z=z)
         arrow_axis = [component == 0 for component in direction]
-        arrow_length = self._arrow_length(ax, length_factor)
+        arrow_length, arrow_width = self._arrow_dims(ax, length_factor, width_factor)
 
         # only add arrow if the plotting plane is perpendicular to the source
         if arrow_axis.count(0.0) > 1 or arrow_axis.index(0.0) != plot_axis:
@@ -800,7 +795,7 @@ class Box(Geometry):
                     y=y0,
                     dx=sign * arrow_length * dx,
                     dy=sign * arrow_length * dy,
-                    width=width_factor * arrow_length,
+                    width=arrow_width,
                     color=color,
                     alpha=alpha,
                     zorder=np.inf,
@@ -812,8 +807,13 @@ class Box(Geometry):
 
         return ax
 
-    def _arrow_length(self, ax: Ax, length_factor: float = ARROW_LENGTH_FACTOR) -> float:
-        """Length of arrow is the minimum size of the axes times the length factor."""
+    def _arrow_dims(
+        self,
+        ax: Ax,
+        length_factor: float = ARROW_LENGTH_FACTOR,
+        width_factor: float = ARROW_WIDTH_FACTOR,
+    ) -> Tuple[float, float]:
+        """Length and width of arrow based on axes size and length and width factors."""
 
         # get the sizes of the matplotlib axes
         xmin, xmax = ax.get_xlim()
@@ -821,8 +821,14 @@ class Box(Geometry):
         ax_width = xmax - xmin
         ax_height = ymax - ymin
 
-        # apply length factor to the minimum size to get arrow width
-        return length_factor * min(ax_width, ax_height)
+        # apply length factor to the minimum size to get arrow length
+        arrow_length = length_factor * min(ax_width, ax_height)
+
+        # constrain arrow width by the maximum size and the max arrow width factor
+        arrow_width = width_factor * arrow_length
+        arrow_width = min(arrow_width, MAX_ARROW_WIDTH_FACTOR * max(ax_width, ax_height))
+
+        return arrow_length, arrow_width
 
 
 class Sphere(Circular):
@@ -854,7 +860,7 @@ class Sphere(Circular):
         dist_x = np.abs(x - x0)
         dist_y = np.abs(y - y0)
         dist_z = np.abs(z - z0)
-        return (dist_x ** 2 + dist_y ** 2 + dist_z ** 2) <= (self.radius ** 2)
+        return (dist_x**2 + dist_y**2 + dist_z**2) <= (self.radius**2)
 
     def intersections(self, x: float = None, y: float = None, z: float = None):
         """Returns shapely geometry at plane specified by one non None value of x,y,z.
@@ -976,7 +982,7 @@ class Cylinder(Circular, Planar):
         dist_x = np.abs(x - x0)
         dist_y = np.abs(y - y0)
         dist_z = np.abs(z - z0)
-        inside_radius = (dist_x ** 2 + dist_y ** 2) <= (self.radius ** 2)
+        inside_radius = (dist_x**2 + dist_y**2) <= (self.radius**2)
         inside_height = dist_z < (self.length / 2)
         return inside_radius * inside_height
 

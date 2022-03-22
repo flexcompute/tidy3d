@@ -18,8 +18,6 @@ def compute_modes(
     freq,
     mode_spec,
     symmetry=(0, 0),
-    angle_theta=0.0,
-    angle_phi=0.0,
 ) -> Tuple[Numpy, Numpy]:
     """Solve for the modes of a waveguide cross section.
 
@@ -46,7 +44,8 @@ def compute_modes(
     num_modes = mode_spec.num_modes
     bend_radius = mode_spec.bend_radius
     bend_axis = mode_spec.bend_axis
-    sort_by = mode_spec.sort_by
+    angle_theta = mode_spec.angle_theta
+    angle_phi = mode_spec.angle_phi
     omega = 2 * np.pi * freq
     k0 = omega / C_0
 
@@ -166,10 +165,10 @@ def compute_modes(
     E, H, neff, keff = solver_em(eps_tensor, mu_tensor, SDmats, num_modes, target_neff_p)
 
     # Reorder if needed
-    if sort_by != "largest_neff":
-        if sort_by == "te_fraction":
+    if mode_spec.sort_by != "largest_neff":
+        if mode_spec.sort_by == "te_fraction":
             sort_int = np.sum(np.abs(E[0]) ** 2, axis=0) / np.sum(np.abs(E[:2]) ** 2, axis=(0, 1))
-        elif sort_by == "tm_fraction":
+        elif mode_spec.sort_by == "tm_fraction":
             sort_int = np.sum(np.abs(E[1]) ** 2, axis=0) / np.sum(np.abs(E[:2]) ** 2, axis=(0, 1))
         sort_inds = np.argsort(sort_int)[::-1]
         E = E[..., sort_inds]

@@ -48,3 +48,6 @@ RADPERSEC = "rad/sec"
 LARGE_NUMBER = np.float32(1e20)
 
 inf = np.inf
+
+# if |np.pi/2 - angle_theta| < GLANCING_CUTOFF in an angled source or in mode spec, raise warning
+GLANCING_CUTOFF = 0.1
