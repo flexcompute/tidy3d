@@ -11,11 +11,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `ModeSolverMonitor` and `ModeSolverData` allow the results of a mode solve run server-side to be stored.
 - Plotting of `ModeSolverData` fields in `SimulationData.plot_field`.
 - Ordering of modes by polarization fraction can be specified in `ModeSpec`.
+- Angled mode sources.
 
 ### Changed
 - Significant speed improvement for `Near2Far` calculations.
 - `freq` no longer passed to `ModeSolver` upon init, instead a list of `freqs` passed to `ModeSolver.solve`.
 - Mode solver now returns `ModeSolverData` object containing information about the mode fields and propagation constants as data arrays over frequency and mode index.
+- Reorganized some of the internal `Source` classes.
 
 ## [1.1.1] - 2022-3-2
 
