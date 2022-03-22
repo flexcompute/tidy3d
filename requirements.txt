@@ -7,7 +7,7 @@ nlopt
 matplotlib
 shapely==1.7.1
 descartes
-pydantic
+pydantic>=1.9.0
 PyYAML
 boto3
 requests

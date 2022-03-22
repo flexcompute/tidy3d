@@ -4,24 +4,23 @@ from abc import ABC, abstractmethod
 from typing import Union, Tuple
 import logging
 
+from typing_extensions import Annotated
 import pydantic
 import numpy as np
 
 from .base import Tidy3dBaseModel, TYPE_TAG_STR
-from .types import Direction, Polarization, Ax, FreqBound, Array, Axis, Annotated
+from .types import Direction, Polarization, Ax, FreqBound, Array, Axis
 from .validators import assert_plane, validate_name_str
 from .geometry import Box
 from .mode import ModeSpec
 from .viz import add_ax_if_none, SourceParams, equal_aspect
 from .viz import ARROW_COLOR_SOURCE, ARROW_ALPHA, ARROW_COLOR_POLARIZATION
-from ..constants import RADIAN, HERTZ, MICROMETER
+from ..constants import RADIAN, HERTZ, MICROMETER, GLANCING_CUTOFF
 from ..constants import inf  # pylint:disable=unused-import
 from ..log import SetupError
 
 # in spectrum computation, discard amplitudes with relative magnitude smaller than cutoff
 DFT_CUTOFF = 1e-8
-# if |np.pi/2 - angle_theta| < GLANCING_CUTOFF in a DirectionalSource, print a warning
-GLANCING_CUTOFF = 0.1
 
 
 class SourceTime(ABC, Tidy3dBaseModel):
@@ -318,7 +317,9 @@ class FieldSource(Source, ABC):
 class DirectionalSource(FieldSource, ABC):
     """A FieldSource defined with a direction of propagation. The direction is defined by
     the polar and azimuth angles w.r.t. an injection axis, as well as forward ``+`` or
-    backward ``-``."""
+    backward ``-``. This base class only defines the ``direction`` and ``injection_axis``
+    attributes, but it must be composed with a class that also defines ``angle_theta`` and
+    ``angle_phi``."""
 
     direction: Direction = pydantic.Field(
         ...,
@@ -334,31 +335,6 @@ class DirectionalSource(FieldSource, ABC):
         "the injection axis by ``angle_theta`` and ``angle_phi``. Must be ``None`` for planar "
         "directional sources, as it is taken automatically from the plane size.",
     )
-
-    angle_theta: float = pydantic.Field(
-        0.0,
-        title="Polar Angle",
-        description="Polar angle of the propagation axis from the injection axis.",
-        units=RADIAN,
-    )
-
-    angle_phi: float = pydantic.Field(
-        0.0,
-        title="Azimuth Angle",
-        description="Azimuth angle of the propagation axis in the plane orthogonal to the "
-        "injection axis.",
-        units=RADIAN,
-    )
-
-    @pydantic.validator("angle_theta", allow_reuse=True, always=True)
-    def glancing_incidence(cls, val):
-        """Warn if close to glancing incidence."""
-        if np.abs(np.pi / 2 - val) < GLANCING_CUTOFF:
-            logging.warning(
-                "DirectionalSource propagation axis close to glancing angle. "
-                "For best results, switch the injection axis."
-            )
-        return val
 
     def plot(
         self, x: float = None, y: float = None, z: float = None, ax: Ax = None, **kwargs
@@ -380,6 +356,7 @@ class DirectionalSource(FieldSource, ABC):
         )
         return ax
 
+    # pylint: disable=no-member
     @property
     def _dir_arrow(self) -> Tuple[float, float, float]:
         """Source direction normal vector in cartesian coordinates."""
@@ -420,30 +397,48 @@ class ModeSource(PlanarSource, DirectionalSource):
         "``num_modes`` in the solver will be set to ``mode_index + 1``.",
     )
 
-    @pydantic.validator("angle_theta", always=True)
-    def theta_not_specified(cls, val):
-        """Make sure ``angle_theta`` is taken from the ``mode_spec``."""
-        if val > 0.0:
-            raise SetupError("``angle_theta`` for a ModeSource must be defined in ``mode_spec``.")
+    @property
+    def angle_theta(self):
+        """Polar angle of propagation."""
+        return self.mode_spec.angle_theta
+
+    @property
+    def angle_phi(self):
+        """Azimuth angle of propagation."""
+        return self.mode_spec.angle_phi
+
+
+class AngledDirectionalSource(DirectionalSource, ABC):
+    """Directional source with explicitly defined ``angle_theta`` and ``angle_phi`` fields."""
+
+    angle_theta: float = pydantic.Field(
+        0.0,
+        title="Polar Angle",
+        description="Polar angle of the propagation axis from the injection axis.",
+        units=RADIAN,
+    )
+
+    angle_phi: float = pydantic.Field(
+        0.0,
+        title="Azimuth Angle",
+        description="Azimuth angle of the propagation axis in the plane orthogonal to the "
+        "injection axis.",
+        units=RADIAN,
+    )
+
+    @pydantic.validator("angle_theta", allow_reuse=True, always=True)
+    def glancing_incidence(cls, val):
+        """Warn if close to glancing incidence."""
+        if np.abs(np.pi / 2 - val) < GLANCING_CUTOFF:
+            logging.warning(
+                "Angled source propagation axis close to glancing angle. "
+                "For best results, switch the injection axis."
+            )
         return val
 
-    # @pydantic.validator("angle_phi", always=True)
-    # def phi_not_specified(cls, val):
-    #     """Make sure``angle_phi`` is taken from the ``mode_spec``."""
-    #     if val > 0.0:
-    #         raise SetupError("``angle_phi`` for a ModeSource must be defined in ``mode_spec``.")
-    #     return val
 
-    # @pydantic.validator("mode_spec", always=True)
-    # def set_phi_theta(cls, val, values):
-    #     """Set``angle_phi`` and ``angle_theta`` from ``mode_spec``."""
-    #     values["angle_theta"] = val.angle_theta
-    #     values["angle_phi"] = val.angle_phi
-    #     return val
-
-
-class PolarizedSource(DirectionalSource, ABC):
-    """DirectionalSource with a polarization angle."""
+class PolarizedSource(AngledDirectionalSource, ABC):
+    """AngledDirectionalSource with a polarization angle."""
 
     pol_angle: float = pydantic.Field(
         0,
@@ -488,11 +483,10 @@ class PolarizedSource(DirectionalSource, ABC):
         pol_vector = np.cross(normal_dir, propagation_dir)
         if np.all(pol_vector == 0.0):
             pol_vector = np.array((0, 1, 0)) if self.injection_axis == 0 else np.array((1, 0, 0))
-
         return self.rotate_points(pol_vector, propagation_dir, angle=self.pol_angle)
 
 
-class PlaneWave(PolarizedSource):
+class PlaneWave(PlanarSource, PolarizedSource):
     """Uniform current distribution on an infinite extent plane.  One element of size must be zero.
 
     Example
@@ -501,18 +495,18 @@ class PlaneWave(PolarizedSource):
     >>> pw_source = PlaneWave(size=(inf,0,inf), source_time=pulse, pol_angle=0.1, direction='+')
     """
 
-    # @pydantic.validator("angle_theta", always=True)
-    # def normal_incidence(cls, val):
-    #     """Raise not implemented error if not normal incidence."""
-    #     if val > 0.0:
-    #         raise NotImplementedError(
-    #             "Plane wave with off-normal incidence requires Bloch "
-    #             "boundary conditions, which are not yet implemented."
-    #         )
-    #     return val
+    @pydantic.validator("angle_theta", always=True)
+    def normal_incidence(cls, val):
+        """Raise not implemented error if not normal incidence."""
+        if val > 0.0:
+            raise NotImplementedError(
+                "Plane wave with off-normal incidence requires Bloch "
+                "boundary conditions, which are not yet implemented."
+            )
+        return val
 
 
-class GaussianBeam(PolarizedSource):
+class GaussianBeam(PlanarSource, PolarizedSource):
     """Guassian distribution on finite extent plane.
 
     Example
@@ -542,4 +536,7 @@ class GaussianBeam(PolarizedSource):
 
 
 # sources allowed in Simulation.sources
-SourceType = Annotated[Union[VolumeSource, ModeSource, PlaneWave, GaussianBeam], pydantic.Field(discriminator=TYPE_TAG_STR)]
+SourceType = Annotated[
+    Union[VolumeSource, GaussianBeam, ModeSource, PlaneWave],
+    pydantic.Field(discriminator=TYPE_TAG_STR),
+]

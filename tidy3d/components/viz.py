@@ -29,6 +29,9 @@ ARROW_LENGTH_FACTOR = 0.4
 # this times ARROW_LENGTH gives width
 ARROW_WIDTH_FACTOR = 0.4
 
+# arrow width cannot be larger than this factor times the max of axis height and width
+MAX_ARROW_WIDTH_FACTOR = 0.02
+
 
 """ Decorators """
 

@@ -183,6 +183,34 @@ class AbstractModeMonitor(PlanarMonitor, FreqMonitor):
         description="Parameters to feed to mode solver which determine modes measured by monitor.",
     )
 
+    def plot(
+        self, x: float = None, y: float = None, z: float = None, ax: Ax = None, **kwargs
+    ) -> Ax:
+
+        # call the monitor.plot() function first
+        ax = super().plot(x=x, y=y, z=z, ax=ax, **kwargs)
+
+        # and then add an arrow using the direction comuputed from `_dir_arrow`.
+        ax = self._plot_arrow(
+            x=x,
+            y=y,
+            z=z,
+            ax=ax,
+            direction=self._dir_arrow,
+            color=ARROW_COLOR_MONITOR,
+            alpha=ARROW_ALPHA,
+            both_dirs=True,
+        )
+        return ax
+
+    @property
+    def _dir_arrow(self) -> Tuple[float, float, float]:
+        """Source direction normal vector in cartesian coordinates."""
+        dx = np.cos(self.mode_spec.angle_phi) * np.sin(self.mode_spec.angle_theta)
+        dy = np.sin(self.mode_spec.angle_phi) * np.sin(self.mode_spec.angle_theta)
+        dz = np.cos(self.mode_spec.angle_theta)
+        return self.unpop_axis(dz, (dx, dy), axis=self.size.index(0.0))
+
 
 class FieldMonitor(AbstractFieldMonitor, FreqMonitor):
     """:class:`Monitor` that records electromagnetic fields in the frequency domain.
@@ -356,34 +384,6 @@ class ModeMonitor(AbstractModeMonitor):
     def storage_size(self, num_cells: int, tmesh: int) -> int:
         # stores 3 complex numbers per frequency, per mode.
         return 3 * BYTES_COMPLEX * len(self.freqs) * self.mode_spec.num_modes
-
-    def plot(
-        self, x: float = None, y: float = None, z: float = None, ax: Ax = None, **kwargs
-    ) -> Ax:
-
-        # call the monitor.plot() function first
-        ax = super().plot(x=x, y=y, z=z, ax=ax, **kwargs)
-
-        # and then add an arrow using the direction comuputed from `_dir_arrow`.
-        ax = self._plot_arrow(
-            x=x,
-            y=y,
-            z=z,
-            ax=ax,
-            direction=self._dir_arrow,
-            color=ARROW_COLOR_MONITOR,
-            alpha=ARROW_ALPHA,
-            both_dirs=True,
-        )
-        return ax
-
-    @property
-    def _dir_arrow(self) -> Tuple[float, float, float]:
-        """Source direction normal vector in cartesian coordinates."""
-        normal = [0.0, 0.0, 0.0]
-        normal_axis = self.size.index(0.0)
-        normal[normal_axis] = 1.0
-        return tuple(normal)
 
 
 class ModeSolverMonitor(AbstractModeMonitor):
