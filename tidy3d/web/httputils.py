@@ -39,8 +39,8 @@ def handle_response(func):
 
         # if it was successful, try returning data from the response
         try:
-            json_data = resp.json()["data"]
-            return json_data
+            json_str = resp.json()
+            return json_str["data"] if "data" in json_str else json_str
 
         # if that doesnt work, raise
         except Exception as e:

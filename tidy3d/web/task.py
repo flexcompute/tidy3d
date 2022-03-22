@@ -38,28 +38,28 @@ TaskName = str
 class TaskInfo(TaskBase):
     """general information about task"""
 
-    execCount: int
-    s3Storage: float
+    execCount: int = None
+    s3Storage: float = None
     userEmail: str = None
-    coreDuration: float
+    # coreDuration: float
     coreStartTime: str = None
-    rankCount: int
-    submitTime: str
+    # rankCount: int
+    # submitTime: str
     updateTime: str = None
-    status: str
+    status: str = None
     taskParam: str = None
-    objectId: str
-    folderId: str
-    solverVersion: str
+    # objectId: str
+    # folderId: str
+    solverVersion: str = None
     worker: str = None
-    userId: str
-    taskType: str
-    objectType: str
-    taskName: str
+    # userId: str
+    taskType: str = None
+    # objectType: str
+    taskName: str = None
     errorMessages: str = None
-    nodeSize: int
-    timeSteps: int
-    computeWeight: float
+    nodeSize: int = None
+    timeSteps: int = None
+    computeWeight: float = None
     solverStartTime: str = None
     solverEndTime: str = None
     taskId: str
@@ -67,9 +67,9 @@ class TaskInfo(TaskBase):
     realCost: float = None
     cloudInstanceSize: int = None
     flow360InstanceSize: int = None
-    estCostMin: float
-    estCostMax: float
-    running: bool
+    estCostMin: float = None
+    estCostMax: float = None
+    # running: bool
     objectRefId: str = None
     metdataProcessed: bool = None
     optSolverUnit: float = None
@@ -103,8 +103,15 @@ class RunInfo(TaskBase):
         print(f" - {self.field_decay:.2e} field decay from max")
 
 
-class Task(TaskBase):
-    """container for a task"""
+class Folder(pydantic.BaseModel):
+    """
+    Folder information of a task
+    """
 
-    id: TaskId
-    info: TaskInfo
+    projectName: str = None
+    projectId: str = None
+
+    class Config:
+        """configure class"""
+
+        arbitrary_types_allowed = True

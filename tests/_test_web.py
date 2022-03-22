@@ -4,12 +4,13 @@ from datetime import datetime
 from unittest import TestCase, mock
 
 import pytest
+from rich.console import Console
 
 import tidy3d as td
 from tidy3d.log import DataError
 import tidy3d.web as web
 from tidy3d.web.auth import get_credentials, encode_password
-
+from tidy3d.web.webapi import _query_or_create_folder
 from .utils import SIM_CONVERT as sim_original
 from .utils import clear_tmp
 
@@ -88,12 +89,12 @@ def test_webapi_6_load():
     _ = sim_data[first_monitor_name]
 
 
-def _test_webapi_7_delete():
+def test_webapi_7_delete():
     """test that we can monitor task"""
     task_id = _get_gloabl_task_id()
     web.delete(task_id)
-    task_info = web.get_info(task_id)
-    assert task_info.status in ("deleted", "deleting")
+    # task_info = web.get_info("9f953cc3-f0bd-49e7-b90d-3161b1ed1187")
+    # assert not task_info
 
 
 def test_webapi_8_get_tasks():
@@ -102,6 +103,10 @@ def test_webapi_8_get_tasks():
     times = [datetime.strptime(task["submit_time"], "%Y:%m:%d:%H:%M:%S") for task in tasks]
     for i in range(4):
         assert times[i] > times[i + 1]
+
+
+def test_query_folder_by_name():
+    _ = web.webapi._query_or_create_folder("default")
 
 
 @clear_tmp
@@ -113,7 +118,6 @@ def test_source_norm():
 
 
 """ Jobs """
-
 
 jobs_global = []
 
@@ -188,7 +192,6 @@ def test_job_source_norm(caplog):
 
 
 """ Batches """
-
 
 batches_global = []
 
