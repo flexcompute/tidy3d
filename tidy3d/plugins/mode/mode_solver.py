@@ -15,9 +15,10 @@ from ...components import Simulation
 from ...components import ModeSpec
 from ...components import ModeMonitor
 from ...components.source import ModeSource, SourceTime
-from ...components.types import Direction, Array
+from ...components.types import Direction, Array, Ax, Literal, ArrayLike
 from ...components.data import Tidy3dData, ModeIndexData, ModeFieldData, ScalarModeFieldData
-from ...log import ValidationError
+from ...components.data import AbstractSimulationData
+from ...log import ValidationError, DataError
 
 from .solver import compute_modes
 
@@ -27,18 +28,19 @@ FIELD = Tuple[Array[complex], Array[complex], Array[complex]]
 FIELD_DECAY_CUTOFF = 1e-2
 
 
-class ModeSolverData(Tidy3dBaseModel):
+class ModeSolverData(AbstractSimulationData):
     """Holds data associated with :class:`.ModeSolver`.
 
     Parameters
     ----------
-    mode_solver : :class:`.ModeSolver`
-        Original mode solver instance.
-    data_dict : Dict[str, :class:`.AbstractModeData`]
+    plane : :class:`.Box`
+        Cross-sectional plane in which the modes were be computed.
+    mode_spec : :class:`.ModeSpec`
+        Container with specifications about the modes.
+    data_dict : Dict[str, Union[ModeFieldData, ModeIndexData]]
         Mapping of "n_complex" to :class:`.ModeIndexData`, and "fields" to :class:`.ModeFieldData`.
     """
 
-    simulation: Simulation
     plane: Box
     mode_spec: ModeSpec
     data_dict: Dict[str, Union[ModeFieldData, ModeIndexData]]
@@ -156,6 +158,87 @@ class ModeSolverData(Tidy3dBaseModel):
 
         return mode_solver
 
+    # pylint:disable=too-many-arguments, too-many-locals, too-many-branches, too-many-statements
+    def plot_field(
+        self,
+        field_name: str,
+        val: Literal["real", "imag", "abs"] = "real",
+        freq: float = None,
+        mode_index: int = None,
+        eps_alpha: float = 0.2,
+        robust: bool = True,
+        ax: Ax = None,
+        **patch_kwargs,
+    ) -> Ax:
+        """Plot the field data for a monitor with simulation plot overlayed.
+
+        Parameters
+        ----------
+        field_name : str
+            Name of `field` to plot (eg. 'Ex').
+            Also accepts `'int'` to plot intensity.
+        val : Literal['real', 'imag', 'abs'] = 'real'
+            Which part of the field to plot.
+            If ``field_name='int'``, this has no effect.
+        freq: float = None
+            Specifies the frequency (Hz) to plot.
+            Also sets the frequency at which the permittivity is evaluated at (if dispersive).
+        mode_index: int = None
+            Specifies which mode index to plot.
+        eps_alpha : float = 0.2
+            Opacity of the structure permittivity.
+            Must be between 0 and 1 (inclusive).
+        robust : bool = True
+            If specified, uses the 2nd and 98th percentiles of the data to compute the color limits.
+            This helps in visualizing the field patterns especially in the presence of a source.
+        ax : matplotlib.axes._subplots.Axes = None
+            matplotlib axes to plot on, if not specified, one is created.
+        **patch_kwargs
+            Optional keyword arguments passed to ``add_artist(patch, **patch_kwargs)``.
+
+        Returns
+        -------
+        matplotlib.axes._subplots.Axes
+            The supplied or created matplotlib axes.
+        """
+
+        if mode_index >= self.mode_spec.num_modes:
+            raise DataError("``mode_index`` larger than ``mode_spec.num_modes``.")
+        mode_fields = self.fields.sel_mode_index(mode_index=mode_index)
+
+        # get the field data component
+        if field_name == "int":
+            xr_data = 0.0
+            for field in ("Ex", "Ey", "Ez"):
+                mode_fields = mode_fields[field]
+                xr_data += abs(mode_fields) ** 2
+            val = "abs"
+        else:
+            xr_data = mode_fields.data_dict.get(field_name).data
+
+        field_data = xr_data.sel(f=freq, method="nearest")
+
+        axis = self.plane.size.index(0.0)
+        position = self.plane.center[axis]
+
+        ax = self.plot_field_array(
+            field_data=field_data,
+            axis=axis,
+            position=position,
+            val=val,
+            freq=freq,
+            eps_alpha=eps_alpha,
+            robust=robust,
+            ax=ax,
+            **patch_kwargs,
+        )
+
+        n_eff = self.n_eff.isel(mode_index=mode_index).sel(f=freq, method="nearest")
+        title = f"f={float(field_data.f):1.2e}, n_eff={float(n_eff):1.4f}"
+        ax.set_title(title)
+
+        return ax
+
 
 class ModeSolver(Tidy3dBaseModel):
     """Interface for solving electromagnetic eigenmodes in a 2D plane with translational
@@ -176,7 +259,7 @@ class ModeSolver(Tidy3dBaseModel):
         description="Container with specifications about the modes to be solved for.",
     )
 
-    freqs: List[float] = pydantic.Field(
+    freqs: Union[List[float], ArrayLike] = pydantic.Field(
         ..., title="Frequencies", description="A list of frequencies at which to solve."
     )
 
@@ -361,7 +444,8 @@ class ModeSolver(Tidy3dBaseModel):
         direction: Direction,
         mode_index: int = 0,
     ) -> ModeSource:
-        """Creates :class:`.ModeSource` from a ModeSolver instance + additional specifications.
+        """Creates :class:`.ModeSource` from a :class:`.ModeSolver` instance plus additional
+        specifications.
 
         Parameters
         ----------
@@ -389,7 +473,8 @@ class ModeSolver(Tidy3dBaseModel):
         )
 
     def to_monitor(self, freqs: List[float], name: str) -> ModeMonitor:
-        """Creates :class:`ModeMonitor` from a ModeSolver instance + additional specifications.
+        """Creates :class:`ModeMonitor` from a :class:`.ModeSolver` instance plus additional
+        specifications.
 
         Parameters
         ----------
@@ -406,8 +491,8 @@ class ModeSolver(Tidy3dBaseModel):
         """
 
         return ModeMonitor(
-            center=self.plane.size,
-            size=self.plane.center,
+            center=self.plane.center,
+            size=self.plane.size,
             freqs=freqs,
             mode_spec=self.mode_spec,
             name=name,
