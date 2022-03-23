@@ -18,6 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `freq` no longer passed to `ModeSolver` upon init, instead a list of `freqs` passed to `ModeSolver.solve`.
 - Mode solver now returns `ModeSolverData` object containing information about the mode fields and propagation constants as data arrays over frequency and mode index.
 - Reorganized some of the internal `Source` classes.
+- Major improvements to `Batch` objects. `Batch.run()` returns a `BatchData` object that maps `tak_name` to `SimulationData`.
 
 ## [1.1.1] - 2022-3-2
 
