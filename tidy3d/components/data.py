@@ -826,48 +826,6 @@ class ModeFieldData(AbstractFieldData):
         return FieldData(data_dict=data_dict)
 
 
-class ModeSolverData(CollectionData):
-    """Stores a collection of mode field profiles and mode effective indexes from the mode solver.
-
-    Parameters
-    ----------
-    data_dict : Dict[str, :class:`AbstractModeData`]
-        Mapping of "n_complex" to :class:`ModeIndexData`, and "fields" to :class:`ModeFieldData`.
-    """
-
-    data_dict: Dict[str, Union[AbstractModeData, AbstractFieldData]]
-    type: Literal["ModeSolverData"] = "ModeSolverData"
-
-    @property
-    def fields(self):
-        """Get field data."""
-        return self.data_dict.get("fields")
-
-    @property
-    def n_complex(self):
-        """Get complex effective indexes."""
-        scalar_data = self.data_dict.get("n_complex")
-        if scalar_data:
-            return scalar_data.data
-        return None
-
-    @property
-    def n_eff(self):
-        """Get real part of effective index."""
-        scalar_data = self.data_dict.get("n_complex")
-        if scalar_data:
-            return scalar_data.n_eff
-        return None
-
-    @property
-    def k_eff(self):
-        """Get imaginary part of effective index."""
-        scalar_data = self.data_dict.get("n_complex")
-        if scalar_data:
-            return scalar_data.k_eff
-        return None
-
-
 # maps MonitorData.type string to the actual type, for MonitorData.from_file()
 DATA_TYPE_MAP = {
     "ScalarFieldData": ScalarFieldData,
@@ -881,7 +839,6 @@ DATA_TYPE_MAP = {
     "ModeData": ModeData,
     "ModeFieldData": ModeFieldData,
     "ScalarModeFieldData": ScalarModeFieldData,
-    "ModeSolverData": ModeSolverData,
 }
 
 
@@ -977,8 +934,6 @@ class SimulationData(Tidy3dBaseModel):
         # get the data
         self.ensure_monitor_exists(field_monitor_name)
         field_monitor_data = self.monitor_data.get(field_monitor_name)
-        if isinstance(field_monitor_data, ModeSolverData):
-            field_monitor_data = field_monitor_data.fields
         self.ensure_field_monitor(field_monitor_data)
 
         # get the monitor, discretize, and get center locations
@@ -1034,7 +989,7 @@ class SimulationData(Tidy3dBaseModel):
         time: float = None
             if monitor is a :class:`FieldTimeMonitor`, specifies the time (sec) to plot the field.
         mode_index: int = None
-            if monitor is a :class:`ModeSolverMonitor`, specifies which mode index to plot.
+            if monitor is a :class:`ModeFieldMonitor`, specifies which mode index to plot.
         eps_alpha : float = 0.2
             Opacity of the structure permittivity.
             Must be between 0 and 1 (inclusive).
@@ -1055,10 +1010,10 @@ class SimulationData(Tidy3dBaseModel):
         # get the monitor data
         self.ensure_monitor_exists(field_monitor_name)
         monitor_data = self.monitor_data.get(field_monitor_name)
-        if isinstance(monitor_data, ModeSolverData):
+        if isinstance(monitor_data, ModeFieldData):
             if mode_index is None:
-                raise DataError("'mode_index' must be supplied to plot a ModeSolverMonitor.")
-            monitor_data = monitor_data.fields.sel_mode_index(mode_index=mode_index)
+                raise DataError("'mode_index' must be supplied to plot a ModeFieldMonitor.")
+            monitor_data = monitor_data.sel_mode_index(mode_index=mode_index)
         self.ensure_field_monitor(monitor_data)
 
         # get the field data component

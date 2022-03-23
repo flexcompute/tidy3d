@@ -225,7 +225,7 @@ class FieldMonitor(AbstractFieldMonitor, FreqMonitor):
     ...     name='steady_state_monitor')
     """
 
-    _data_type: Literal["ScalarFieldData"] = pydantic.Field("ScalarFieldData")
+    _data_type: Literal["FieldData"] = pydantic.Field("FieldData")
 
     def storage_size(self, num_cells: int, tmesh: Array) -> int:
         # stores 1 complex number per grid cell, per frequency, per field
@@ -316,7 +316,7 @@ class FieldTimeMonitor(AbstractFieldMonitor, TimeMonitor):
     ...     name='movie_monitor')
     """
 
-    _data_type: Literal["ScalarFieldTimeData"] = pydantic.Field("ScalarFieldTimeData")
+    _data_type: Literal["FieldTimeData"] = pydantic.Field("FieldTimeData")
 
     def storage_size(self, num_cells: int, tmesh: Array) -> int:
         # stores 1 real number per grid cell, per time step, per field
@@ -386,14 +386,14 @@ class ModeMonitor(AbstractModeMonitor):
         return 3 * BYTES_COMPLEX * len(self.freqs) * self.mode_spec.num_modes
 
 
-class ModeSolverMonitor(AbstractModeMonitor):
-    """:class:`Monitor` that stores the mode data (field profiles and effective index)
-    returned by the mode solver in the monitor plane.
+class ModeFieldMonitor(AbstractModeMonitor):
+    """:class:`Monitor` that stores the mode field profiles returned by the mode solver in the
+    monitor plane.
 
     Example
     -------
     >>> mode_spec = ModeSpec(num_modes=3)
-    >>> monitor = ModeSolverMonitor(
+    >>> monitor = ModeFieldMonitor(
     ...     center=(1,2,3),
     ...     size=(2,2,0),
     ...     freqs=[200e12, 210e12],
@@ -401,17 +401,15 @@ class ModeSolverMonitor(AbstractModeMonitor):
     ...     name='mode_monitor')
     """
 
-    _data_type: Literal["ModeSolverData"] = pydantic.Field("ModeSolverData")
+    _data_type: Literal["ModeFieldData"] = pydantic.Field("ModeFieldData")
 
     def storage_size(self, num_cells: int, tmesh: int) -> int:
         # fields store 6 complex numbers per grid cell, per frequency, per mode.
         field_size = 6 * BYTES_COMPLEX * num_cells * len(self.freqs) * self.mode_spec.num_modes
-        # effective index stores 1 complex number per frequency per mode
-        neff_size = BYTES_COMPLEX * len(self.freqs) * self.mode_spec.num_modes
-        return field_size + neff_size
+        return field_size
 
 
 # types of monitors that are accepted by simulation
 MonitorType = Union[
-    FieldMonitor, FieldTimeMonitor, FluxMonitor, FluxTimeMonitor, ModeMonitor, ModeSolverMonitor
+    FieldMonitor, FieldTimeMonitor, FluxMonitor, FluxTimeMonitor, ModeMonitor, ModeFieldMonitor
 ]

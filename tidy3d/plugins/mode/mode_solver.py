@@ -1,9 +1,11 @@
-"""Turn Mode Specifications into Mode profiles 
+"""Solve for modes in a 2D cross-sectional plane in a simulation, assuming translational
+invariance along a given propagation axis.
 """
 
-from typing import List, Tuple
+from typing import List, Tuple, Union, Dict
 import logging
 
+import h5py
 import numpy as np
 import pydantic
 
@@ -14,7 +16,7 @@ from ...components import ModeSpec
 from ...components import ModeMonitor
 from ...components.source import ModeSource, SourceTime
 from ...components.types import Direction, Array
-from ...components.data import ModeIndexData, ModeFieldData, ScalarModeFieldData, ModeSolverData
+from ...components.data import Tidy3dData, ModeIndexData, ModeFieldData, ScalarModeFieldData
 from ...log import ValidationError
 
 from .solver import compute_modes
@@ -23,6 +25,136 @@ FIELD = Tuple[Array[complex], Array[complex], Array[complex]]
 
 # Warning for field intensity at edges over total field intensity larger than this value
 FIELD_DECAY_CUTOFF = 1e-2
+
+
+class ModeSolverData(Tidy3dBaseModel):
+    """Holds data associated with :class:`.ModeSolver`.
+
+    Parameters
+    ----------
+    mode_solver : :class:`.ModeSolver`
+        Original mode solver instance.
+    data_dict : Dict[str, :class:`.AbstractModeData`]
+        Mapping of "n_complex" to :class:`.ModeIndexData`, and "fields" to :class:`.ModeFieldData`.
+    """
+
+    simulation: Simulation
+    plane: Box
+    mode_spec: ModeSpec
+    data_dict: Dict[str, Union[ModeFieldData, ModeIndexData]]
+
+    @property
+    def fields(self):
+        """Get field data."""
+        return self.data_dict.get("fields")
+
+    @property
+    def n_complex(self):
+        """Get complex effective indexes."""
+        scalar_data = self.data_dict.get("n_complex")
+        if scalar_data:
+            return scalar_data.data
+        return None
+
+    @property
+    def n_eff(self):
+        """Get real part of effective index."""
+        scalar_data = self.data_dict.get("n_complex")
+        if scalar_data:
+            return scalar_data.n_eff
+        return None
+
+    @property
+    def k_eff(self):
+        """Get imaginary part of effective index."""
+        scalar_data = self.data_dict.get("n_complex")
+        if scalar_data:
+            return scalar_data.k_eff
+        return None
+
+    def add_to_handle(self, handle: Union[h5py.File, h5py.Group]):
+        """Export to an hdf5 handle, which can be a file or a group.
+
+        Parameters
+        ----------
+        handle : Union[hdf5.File, hdf5.Group]
+            Handle to write the ModeSolverData to.
+        """
+
+        # save pydantic models as string
+        json_dict = {
+            "simulation": self.simulation,
+            "plane": self.plane,
+            "mode_spec": self.mode_spec,
+        }
+        for name, obj in json_dict.items():
+            Tidy3dData.save_string(handle, name, obj.json())
+
+        # make groups for mode fields and index data
+        for name, data in self.data_dict.items():
+            data_grp = handle.create_group(name)
+            data.add_to_group(data_grp)
+
+    @classmethod
+    def load_from_handle(cls, handle: Union[h5py.File, h5py.Group]):
+        """Load from an hdf5 handle, which can be a file or a group.
+
+        Parameters
+        ----------
+        handle : Union[hdf5.File, hdf5.Group]
+            Handle to load the ModeSolverData from.
+        """
+
+        # construct pydantic models from string
+        json_dict = {
+            "simulation": Simulation,
+            "plane": Box,
+            "mode_spec": ModeSpec,
+        }
+        obj_dict = {}
+        for name, obj in json_dict.items():
+            json_string = Tidy3dData.load_string(handle, name)
+            obj_dict[name] = obj.parse_raw(json_string)
+
+        # load fields and effective index data
+        data_dict = {
+            "fields": ModeFieldData.load_from_group(handle["fields"]),
+            "n_complex": ModeIndexData.load_from_group(handle["n_complex"]),
+        }
+        return cls(data_dict=data_dict, **obj_dict)
+
+    def to_file(self, fname: str) -> None:
+        """Export :class:`.ModeSolverData` to single hdf5 file.
+
+        Parameters
+        ----------
+        fname : str
+            Path to .hdf5 data file (including filename).
+        """
+
+        with h5py.File(fname, "a") as f_handle:
+            self.add_to_handle(f_handle)
+
+    @classmethod
+    def from_file(cls, fname: str):
+        """Load :class:`.ModeSolverData` from .hdf5 file.
+
+        Parameters
+        ----------
+        fname : str
+            Path to .hdf5 data file (including filename).
+
+        Returns
+        -------
+        :class:`.ModeSolverData`
+            A :class:`.ModeSolverData` instance.
+        """
+
+        # read from file at fname
+        with h5py.File(fname, "r") as f_handle:
+            mode_solver = cls.load_from_handle(f_handle)
+
+        return mode_solver
 
 
 class ModeSolver(Tidy3dBaseModel):
@@ -36,6 +168,16 @@ class ModeSolver(Tidy3dBaseModel):
 
     plane: Box = pydantic.Field(
         ..., title="Plane", description="Cross-sectional plane in which the mode will be computed."
+    )
+
+    mode_spec: ModeSpec = pydantic.Field(
+        ...,
+        title="Mode specification",
+        description="Container with specifications about the modes to be solved for.",
+    )
+
+    freqs: List[float] = pydantic.Field(
+        ..., title="Frequencies", description="A list of frequencies at which to solve."
     )
 
     @pydantic.validator("plane", always=True)
@@ -55,20 +197,14 @@ class ModeSolver(Tidy3dBaseModel):
         """Potentially smaller plane if symmetries present in the simulation."""
         return self.simulation.min_sym_box(self.plane)
 
-    def solve(self, mode_spec: ModeSpec, freqs: List[float]) -> ModeSolverData:
-        """Solves for modal profile and effective index of ``Mode`` object.
-
-        Parameters
-        ----------
-        mode_spec : :class:`ModeSpec`
-            ``ModeSpec`` object containing specifications of the mode solver.
-        freqs : List[float]
-            List of frequencies to solve at (Hz).
+    def solve(self) -> ModeSolverData:
+        """Finds the modal profile and effective index of the modes.
 
         Returns
         -------
         ModeSolverData
-            ``ModeSolverData`` object containing the effective index and mode fields for all modes.
+            :class:`.ModeSolverData` object containing the effective index and mode fields for all
+            modes.
         """
 
         normal_axis = self.normal_axis
@@ -90,19 +226,19 @@ class ModeSolver(Tidy3dBaseModel):
         # Compute and store the modes at all frequencies
         fields = {"Ex": [], "Ey": [], "Ez": [], "Hx": [], "Hy": [], "Hz": []}
         n_complex = []
-        for ifreq, freq in enumerate(freqs):
+        for ifreq, freq in enumerate(self.freqs):
             # Compute the modes
             mode_fields, n_comp = compute_modes(
                 eps_cross=self.solver_eps(freq),
                 coords=solver_coords,
                 freq=freq,
-                mode_spec=mode_spec,
+                mode_spec=self.mode_spec,
                 symmetry=solver_symmetry,
             )
             n_complex.append(n_comp)
 
             fields_freq = {"Ex": [], "Ey": [], "Ez": [], "Hx": [], "Hy": [], "Hz": []}
-            for mode_index in range(mode_spec.num_modes):
+            for mode_index in range(self.mode_spec.num_modes):
                 # Get E and H fields at the current mode_index
                 ((Ex, Ey, Ez), (Hx, Hy, Hz)) = self.process_fields(mode_fields, ifreq, mode_index)
 
@@ -123,8 +259,8 @@ class ModeSolver(Tidy3dBaseModel):
                 x=xyz_coords[0],
                 y=xyz_coords[1],
                 z=xyz_coords[2],
-                f=freqs,
-                mode_index=np.arange(mode_spec.num_modes),
+                f=self.freqs,
+                mode_index=np.arange(self.mode_spec.num_modes),
                 values=np.stack(field, axis=-2),
             )
 
@@ -132,11 +268,16 @@ class ModeSolver(Tidy3dBaseModel):
             plane_grid, self.simulation.center, self.simulation.symmetry
         )
         index_data = ModeIndexData(
-            f=freqs,
-            mode_index=np.arange(mode_spec.num_modes),
+            f=self.freqs,
+            mode_index=np.arange(self.mode_spec.num_modes),
             values=np.stack(n_complex, axis=0),
         )
-        mode_info = ModeSolverData(data_dict={"fields": field_data, "n_complex": index_data})
+        mode_info = ModeSolverData(
+            simulation=self.simulation,
+            plane=self.plane,
+            mode_spec=self.mode_spec,
+            data_dict={"fields": field_data, "n_complex": index_data},
+        )
 
         return mode_info
 
@@ -216,18 +357,15 @@ class ModeSolver(Tidy3dBaseModel):
 
     def to_source(
         self,
-        mode_spec: ModeSpec,
         source_time: SourceTime,
         direction: Direction,
         mode_index: int = 0,
     ) -> ModeSource:
-        """Creates :class:`ModeSource` from a ModeSolver instance + additional specifications.
+        """Creates :class:`.ModeSource` from a ModeSolver instance + additional specifications.
 
         Parameters
         ----------
-        mode_spec : :class:`ModeSpec`
-            :class:`ModeSpec` object containing specifications of mode.
-        source_time: :class:`SourceTime`
+        source_time: :class:`.SourceTime`
             Specification of the source time-dependence.
         direction : Direction
             Whether source will inject in ``"+"`` or ``"-"`` direction relative to plane normal.
@@ -236,37 +374,41 @@ class ModeSolver(Tidy3dBaseModel):
 
         Returns
         -------
-        ModeSource
-            Modal source containing specification in ``mode``.
+        :class:`.ModeSource`
+            Mode source with specifications taken from the ModeSolver instance and the method
+            inputs.
         """
 
-        center = self.plane.center
-        size = self.plane.size
         return ModeSource(
-            center=center,
-            size=size,
+            center=self.plane.center,
+            size=self.plane.size,
             source_time=source_time,
-            mode_spec=mode_spec,
+            mode_spec=self.mode_spec,
             mode_index=mode_index,
             direction=direction,
         )
 
-    def to_monitor(self, mode_spec: ModeSpec, freqs: List[float], name: str) -> ModeMonitor:
+    def to_monitor(self, freqs: List[float], name: str) -> ModeMonitor:
         """Creates :class:`ModeMonitor` from a ModeSolver instance + additional specifications.
 
         Parameters
         ----------
-        mode_spec : :class:`ModeSpec`
-            :class:`ModeSpec` object containing specifications of mode.
         freqs : List[float]
             Frequencies to include in Monitor (Hz).
         name : str
             Required name of monitor.
+
         Returns
         -------
-        ModeMonitor
-            Monitor that measures modes specified by ``mode_spec`` on ``plane`` at ``freqs``.
+        :class:`.ModeMonitor`
+            Mode monitor with specifications taken from the ModeSolver instance and the method
+            inputs.
         """
-        center = self.plane.center
-        size = self.plane.size
-        return ModeMonitor(center=center, size=size, freqs=freqs, mode_spec=mode_spec, name=name)
+
+        return ModeMonitor(
+            center=self.plane.size,
+            size=self.plane.center,
+            freqs=freqs,
+            mode_spec=self.mode_spec,
+            name=name,
+        )

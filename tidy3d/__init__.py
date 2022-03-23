@@ -33,7 +33,7 @@ from .components import VolumeSource, PlaneWave, ModeSource, GaussianBeam
 
 # monitors
 from .components import FieldMonitor, FieldTimeMonitor, FluxMonitor, FluxTimeMonitor
-from .components import ModeMonitor, ModeSolverMonitor
+from .components import ModeMonitor, ModeFieldMonitor
 
 # simulation
 from .components import Simulation

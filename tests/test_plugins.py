@@ -74,7 +74,6 @@ def test_mode_solver():
         size=(2, 2, 2), grid_size=(0.1, 0.1, 0.1), structures=[waveguide], run_time=1e-12
     )
     plane = td.Box(center=(0, 0, 0), size=(0, 1, 1))
-    ms = ModeSolver(simulation=simulation, plane=plane)
     mode_spec = td.ModeSpec(
         num_modes=3,
         target_neff=2.0,
@@ -82,7 +81,10 @@ def test_mode_solver():
         bend_axis=0,
         num_pml=(10, 10),
     )
-    modes = ms.solve(mode_spec=mode_spec, freqs=[td.constants.C_0 / 1.0])
+    ms = ModeSolver(
+        simulation=simulation, plane=plane, mode_spec=mode_spec, freqs=[td.constants.C_0 / 1.0]
+    )
+    modes = ms.solve()
 
 
 def _test_coeffs():
