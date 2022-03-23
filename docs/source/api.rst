@@ -222,6 +222,7 @@ Convenience for Single and Batch
 
    tidy3d.web.container.Job
    tidy3d.web.container.Batch
+   tidy3d.web.container.BatchData
 
 Information Containers
 ----------------------
