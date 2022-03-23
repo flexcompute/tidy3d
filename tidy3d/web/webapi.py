@@ -229,7 +229,7 @@ def monitor(task_id: TaskId) -> None:
             new_description = f"% done (field decay = {field_decay:.2e})"
             progress.update(pbar_pd, completed=perc_done, description=new_description)
             time.sleep(1.0)
-        if perc_done < 100:
+        if perc_done is not None and perc_done < 100:
             console.log("early shutoff detected, exiting.")
         else:
             progress.update(pbar_pd, completed=100)
