@@ -19,6 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Mode solver now returns `ModeSolverData` object containing information about the mode fields and propagation constants as data arrays over frequency and mode index.
 - Reorganized some of the internal `Source` classes.
 - Major improvements to `Batch` objects. `Batch.run()` returns a `BatchData` object that maps `task_name` to `SimulationData`.
+- Infinity stored as `str` in json outputs, conforming to json file specifications.
 
 ## [1.1.1] - 2022-3-2
 
