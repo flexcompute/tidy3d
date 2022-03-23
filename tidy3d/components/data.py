@@ -14,7 +14,6 @@ from .base import Tidy3dBaseModel
 from .simulation import Simulation
 from .grid import YeeGrid
 from .mode import ModeSpec
-from .monitor import PlanarMonitor
 from .viz import add_ax_if_none, equal_aspect
 from ..log import log, DataError
 

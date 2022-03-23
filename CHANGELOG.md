@@ -8,8 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - Percent done monitoring of jobs running longer than 10 seconds.
 - Can use vectorized spherical coordinates in `tidy3d.plugins.Near2Far`.
-- `ModeSolverMonitor` and `ModeSolverData` allow the results of a mode solve run server-side to be stored.
-- Plotting of `ModeSolverData` fields in `SimulationData.plot_field`.
+- `ModeSolver` returns a `ModeSolverData` object similar to `SimulationData`, containing all the information about the modes.
+- `ModeFieldMonitor` and `ModeFieldData` allow the results of a mode solve run server-side to be stored.
+- Plotting of `ModeFieldData` fields in `SimulationData.plot_field` and `ModeSolverData.plot_field`.
 - Ordering of modes by polarization fraction can be specified in `ModeSpec`.
 - Angled mode sources.
 
@@ -20,6 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Reorganized some of the internal `Source` classes.
 - Major improvements to `Batch` objects. `Batch.run()` returns a `BatchData` object that maps `task_name` to `SimulationData`.
 - Infinity stored as `str` in json outputs, conforming to json file specifications.
+- No longer need to specify one of `x/y/z` in `SimulationData.plot_field` if the monitor has a zero-sized dimension.
 
 ## [1.1.1] - 2022-3-2
 
