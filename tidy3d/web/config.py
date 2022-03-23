@@ -4,7 +4,7 @@ from typing import Any
 
 from dataclasses import dataclass
 
-SOLVER_VERSION = "multinode-22.1.6"
+SOLVER_VERSION = "release-22.1.6"
 
 
 @dataclass
