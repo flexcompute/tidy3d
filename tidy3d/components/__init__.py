@@ -29,7 +29,7 @@ from .source import VolumeSource, PlaneWave, ModeSource, GaussianBeam
 # monitor
 from .monitor import FreqMonitor, TimeMonitor, FieldMonitor, FieldTimeMonitor
 from .monitor import Monitor, FluxMonitor, FluxTimeMonitor, ModeMonitor
-from .monitor import ModeSolverMonitor
+from .monitor import ModeFieldMonitor
 
 # simulation
 from .simulation import Simulation
