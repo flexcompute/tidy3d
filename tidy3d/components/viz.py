@@ -168,14 +168,16 @@ class StructEpsParams(PatchParamSwitcher):
     eps: float
     eps_max: float
     eps_min: float
+    reverse: bool = True
 
     def get_plot_params(self) -> PatchParams:
         """Returns :class:`PatchParams` based on user-supplied args."""
         eps_min = min(self.eps_min, 1)
         delta_eps = self.eps - eps_min
         delta_eps_max = self.eps_max - eps_min + 1e-5
-        eps_fraction = delta_eps / delta_eps_max
-        color = 1 - eps_fraction
+        color = delta_eps / delta_eps_max
+        if self.reverse:
+            color = 1 - color
         if self.eps == pec_val:
             return PatchParams(facecolor="gold", edgecolor="k", lw=1)
         return PatchParams(facecolor=str(color), edgecolor=str(color), lw=0)

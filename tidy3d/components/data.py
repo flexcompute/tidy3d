@@ -918,8 +918,10 @@ class AbstractSimulationData(Tidy3dBaseModel, ABC):
 
         if val == "abs":
             cmap = "magma"
+            eps_reverse = False
         else:
             cmap = "RdBu"
+            eps_reverse = True
 
         # plot the field
         xy_coord_labels = list("xyz")
@@ -929,7 +931,13 @@ class AbstractSimulationData(Tidy3dBaseModel, ABC):
 
         # plot the simulation epsilon
         ax = self.simulation.plot_structures_eps(
-            freq=freq, cbar=False, alpha=eps_alpha, ax=ax, **{axis_label: position}, **patch_kwargs
+            freq=freq,
+            cbar=False,
+            alpha=eps_alpha,
+            reverse=eps_reverse,
+            ax=ax,
+            **{axis_label: position},
+            **patch_kwargs,
         )
 
         # set the limits based on the xarray coordinates min and max
