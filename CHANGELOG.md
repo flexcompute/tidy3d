@@ -6,6 +6,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- `PolySlab` geometries support dilation and angled sidewalls.
 - Percent done monitoring of jobs running longer than 10 seconds.
 - Can use vectorized spherical coordinates in `tidy3d.plugins.Near2Far`.
 - `ModeSolver` returns a `ModeSolverData` object similar to `SimulationData`, containing all the information about the modes.
