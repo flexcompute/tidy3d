@@ -18,7 +18,7 @@ from .grid import Coords1D, Grid, Coords
 from .medium import Medium, MediumType, AbstractMedium, PECMedium
 from .structure import Structure
 from .source import SourceType, PlaneWave
-from .monitor import MonitorType
+from .monitor import MonitorType, Monitor, FreqMonitor
 from .pml import PMLTypes, PML, Absorber
 from .viz import StructMediumParams, StructEpsParams, PMLParams, SymParams
 from .viz import add_ax_if_none, equal_aspect
@@ -29,9 +29,9 @@ from ..constants import C_0, MICROMETER, SECOND, pec_val, inf
 from ..log import log, Tidy3dKeyError, SetupError
 
 # for docstring examples
-from .geometry import Sphere, Cylinder, PolySlab  # pylint:disable=unused-import
-from .source import VolumeSource, GaussianPulse  # pylint:disable=unused-import
-from .monitor import FieldMonitor, FluxMonitor, Monitor, FreqMonitor  # pylint:disable=unused-import
+# from .geometry import Sphere, Cylinder, PolySlab  # pylint:disable=unused-import
+# from .source import VolumeSource, GaussianPulse  # pylint:disable=unused-import
+# from .monitor import FieldMonitor, FluxMonitor, Monitor, FreqMonitor  # pylint:disable=unused-import
 
 
 # minimum number of grid points allowed per central wavelength in a medium
@@ -52,6 +52,9 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
 
     Example
     -------
+    >>> from tidy3d import Sphere, Cylinder, PolySlab
+    >>> from tidy3d import VolumeSource, GaussianPulse
+    >>> from tidy3d import FieldMonitor, FluxMonitor
     >>> sim = Simulation(
     ...     size=(2.0, 2.0, 2.0),
     ...     grid_size=(0.1, 0.1, 0.1),
@@ -190,7 +193,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
 
     """ Validating setup """
 
-    @pydantic.validator("pml_layers", always=True)
+    @pydantic.validator("pml_layers", always=True, allow_reuse=True)
     def set_none_to_zero_layers(cls, val):
         """if any PML layer is None, set it to an empty :class:`PML`."""
         return tuple(PML(num_layers=0) if pml is None else pml for pml in val)

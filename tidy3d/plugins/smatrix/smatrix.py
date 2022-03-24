@@ -1,7 +1,6 @@
 """Tools for generating an S matrix automatically from tidy3d simulation and port definitions."""
 
 from typing import List, Tuple, Dict, Any
-import os
 
 import pydantic as pd
 import numpy as np
@@ -10,7 +9,8 @@ from ... import Simulation, Box, ModeSpec, ModeMonitor, ModeSource, GaussianPuls
 from ...constants import HERTZ, C_0
 from ...components.types import Direction, Ax
 from ...components.viz import add_ax_if_none, equal_aspect
-from ...log import SetupError, log
+from ...components.base import Tidy3dBaseModel
+from ...log import SetupError
 
 # fwidth of gaussian pulse in units of central frequency
 FWIDTH_FRAC = 1.0 / 10
@@ -81,7 +81,7 @@ class ComponentModeler(pd.BaseModel):
         units=HERTZ,
     )
 
-    batch_data: Any = pd.Field(
+    batch_data: Tidy3dBaseModel = pd.Field(
         None,
         title="Batch Data",
         description="Batch Data of task used to compute S matrix. Set internally.",

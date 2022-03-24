@@ -596,7 +596,7 @@ class DispersionFitter(BaseModel):
             else:
                 # make sure the rest is float type
                 try:
-                    nk_tmp = [float(x) for x in row]  # pylint:disable=unused-variable
+                    _ = [float(x) for x in row]  # pylint:disable=unused-variable
                 except Exception as e:
                     raise ValidationError("Invalid URL. Float data cannot be recognized.") from e
 
