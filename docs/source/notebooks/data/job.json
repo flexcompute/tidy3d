@@ -17,6 +17,7 @@
             0.05,
             0.05
         ],
+        "run_time": 1e-13,
         "medium": {
             "name": null,
             "frequency_range": null,
@@ -24,7 +25,6 @@
             "permittivity": 1.0,
             "conductivity": 0.0
         },
-        "run_time": 1e-13,
         "symmetry": [
             0,
             0,
@@ -90,8 +90,8 @@
                 ],
                 "type": "FieldMonitor",
                 "size": [
-                    1.0000000200408773e+20,
-                    1.0000000200408773e+20,
+                    "Infinity",
+                    "Infinity",
                     0.0
                 ],
                 "name": "field",
@@ -158,10 +158,10 @@
         "shutoff": 1e-05,
         "subpixel": true,
         "courant": 0.9,
-        "version": "1.0.2"
+        "version": "1.1.2"
     },
     "task_name": "job",
     "folder_name": "default",
-    "task_id": "eaa3aaad-ea23-4ee9-95ec-33cb97f0f60f",
+    "task_id": "1757bdbf-4d4d-4a0d-b084-cc76a00124ff",
     "callback_url": null
 }
