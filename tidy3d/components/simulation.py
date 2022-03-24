@@ -100,12 +100,13 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         units=MICROMETER,
     )
 
-    run_time: pydantic.PositiveFloat = pydantic.Field(
-        ...,
+    run_time: pydantic.NonNegativeFloat = pydantic.Field(
+        0.0,
         title="Run Time",
         description="Total electromagnetic evolution time in seconds. "
         "Note: If simulation 'shutoff' is specified, "
-        "simulation will terminate early when shutoff condition met.",
+        "simulation will terminate early when shutoff condition met. "
+        "Must be set > 0 before running Simulation on our servers.",
         units=SECOND,
     )
 
@@ -468,10 +469,11 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
 
     """ Pre submit validation (before web.upload()) """
 
-    def validate_contents(self) -> None:
-        """Validate the fully initialized simulation is within allowed limits."""
+    def validate_pre_upload(self) -> None:
+        """Validate the fully initialized simulation is ok for upload to our servers."""
         self._validate_size()
         self._validate_monitor_size()
+        self._validate_run_time()
 
     def _validate_size(self) -> None:
         """Ensures the simulation is within size limits before simulation is uploaded."""
@@ -514,6 +516,15 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
             raise SetupError(
                 f"Simulation's monitors have {total_size_bytes:.2e} bytes of estimated storage, "
                 f"a maximum of {MAX_MONITOR_DATA_SIZE_BYTES:.2e} are allowed."
+            )
+
+    def _validate_run_time(self) -> None:
+        """Ensures that the simulation run time is > 0."""
+
+        if not self.run_time > 0:
+            raise SetupError(
+                "The `Simulation.run_time` parameter was left at its default value of 0.0. "
+                "For running a simulation on our servers it must be set to > 0.0."
             )
 
     """ Accounting """
