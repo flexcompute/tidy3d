@@ -3,9 +3,9 @@
 
 from abc import ABC, abstractmethod
 from typing import List, Tuple, Union, Callable
-import pydantic
+
+import pydantic as pd
 import numpy as np
-from pydantic import PositiveFloat
 
 from .base import Tidy3dBaseModel
 from .types import PoleAndResidue, Ax, FreqBound
@@ -43,9 +43,9 @@ def ensure_freq_in_range(eps_model: Callable[[float], complex]) -> Callable[[flo
 class AbstractMedium(ABC, Tidy3dBaseModel):
     """A medium within which electromagnetic waves propagate."""
 
-    name: str = pydantic.Field(None, title="Name", description="Optional unique name for medium.")
+    name: str = pd.Field(None, title="Name", description="Optional unique name for medium.")
 
-    frequency_range: FreqBound = pydantic.Field(
+    frequency_range: FreqBound = pd.Field(
         None,
         title="Frequency Range",
         description="Optional range of validity for the medium.",
@@ -237,11 +237,11 @@ class Medium(AbstractMedium):
     >>> eps = dielectric.eps_model(200e12)
     """
 
-    permittivity: float = pydantic.Field(
+    permittivity: float = pd.Field(
         1.0, ge=1.0, title="Permittivity", description="Relative permittivity.", units=PERMITTIVITY
     )
 
-    conductivity: float = pydantic.Field(
+    conductivity: float = pd.Field(
         0.0,
         ge=0.0,
         title="Conductivity",
@@ -295,19 +295,19 @@ class AnisotropicMedium(AbstractMedium):
     >>> anisotropic_dielectric = AnisotropicMedium(xx=medium_xx, yy=medium_yy, zz=medium_zz)
     """
 
-    xx: Medium = pydantic.Field(
+    xx: Medium = pd.Field(
         ...,
         title="XX Component",
         description="Medium describing the xx-component of the diagonal permittivity tensor.",
     )
 
-    yy: Medium = pydantic.Field(
+    yy: Medium = pd.Field(
         ...,
         title="YY Component",
         description="Medium describing the yy-component of the diagonal permittivity tensor.",
     )
 
-    zz: Medium = pydantic.Field(
+    zz: Medium = pd.Field(
         ...,
         title="ZZ Component",
         description="Medium describing the zz-component of the diagonal permittivity tensor.",
@@ -395,13 +395,13 @@ class PoleResidue(DispersiveMedium):
     >>> eps = pole_res.eps_model(200e12)
     """
 
-    eps_inf: float = pydantic.Field(
+    eps_inf: float = pd.Field(
         1.0,
         title="Epsilon at Infinity",
         description="Relative permittivity at infinite frequency (:math:`\\epsilon_\\infty`).",
     )
 
-    poles: List[PoleAndResidue] = pydantic.Field(
+    poles: List[PoleAndResidue] = pd.Field(
         [],
         title="Poles",
         description="List of complex-valued (:math:`a_i, c_i`) poles for the model.",
@@ -457,7 +457,7 @@ class Sellmeier(DispersiveMedium):
     >>> eps = sellmeier_medium.eps_model(200e12)
     """
 
-    coeffs: List[Tuple[float, PositiveFloat]] = pydantic.Field(
+    coeffs: List[Tuple[float, pd.PositiveFloat]] = pd.Field(
         title="Coefficients",
         description="List of Sellmeier (:math:`B_i, C_i`) coefficients (unitless, microns^2).",
     )
@@ -549,13 +549,13 @@ class Lorentz(DispersiveMedium):
     >>> eps = lorentz_medium.eps_model(200e12)
     """
 
-    eps_inf: float = pydantic.Field(
+    eps_inf: float = pd.Field(
         1.0,
         title="Epsilon at Infinity",
         description="Relative permittivity at infinite frequency (:math:`\\epsilon_\\infty`).",
     )
 
-    coeffs: List[Tuple[float, float, float]] = pydantic.Field(
+    coeffs: List[Tuple[float, float, float]] = pd.Field(
         ...,
         title="Epsilon at Infinity",
         description="List of (:math:`\\Delta\\epsilon_i, f_i, \\delta_i`) values for model (Hz).",
@@ -619,13 +619,13 @@ class Drude(DispersiveMedium):
     >>> eps = drude_medium.eps_model(200e12)
     """
 
-    eps_inf: float = pydantic.Field(
+    eps_inf: float = pd.Field(
         1.0,
         title="Epsilon at Infinity",
         description="Relative permittivity at infinite frequency (:math:`\\epsilon_\\infty`).",
     )
 
-    coeffs: List[Tuple[float, PositiveFloat]] = pydantic.Field(
+    coeffs: List[Tuple[float, pd.PositiveFloat]] = pd.Field(
         ...,
         title="Coefficients",
         description="List of (:math:`f_i, \\delta_i`) values for model (Hz).",
@@ -684,13 +684,13 @@ class Debye(DispersiveMedium):
     >>> eps = debye_medium.eps_model(200e12)
     """
 
-    eps_inf: float = pydantic.Field(
+    eps_inf: float = pd.Field(
         1.0,
         title="Epsilon at Infinity",
         description="Relative permittivity at infinite frequency (:math:`\\epsilon_\\infty`).",
     )
 
-    coeffs: List[Tuple[float, PositiveFloat]] = pydantic.Field(
+    coeffs: List[Tuple[float, pd.PositiveFloat]] = pd.Field(
         ...,
         title="Coefficients",
         description="List of (:math:`\\Delta\\epsilon_i, \\tau_i`) values for model (Hz, sec).",

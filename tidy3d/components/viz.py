@@ -198,7 +198,6 @@ class SymParams(PatchParamSwitcher):
 
     def get_plot_params(self) -> PatchParams:
         """Returns :class:`PatchParams` based on user-supplied args."""
-        sym_color = "grey"
 
         if self.sym_value == 1:
             sym_color = "lightsteelblue"
@@ -206,7 +205,7 @@ class SymParams(PatchParamSwitcher):
         if self.sym_value == -1:
             sym_color = "rosybrown"
             return PatchParams(alpha=0.6, facecolor=sym_color, edgecolor=sym_color, hatch="--")
-        return PatchParams()
+        raise ValueError(f"sym_value of {self.sym_value} not recognized, must be 1 or -1.")
 
 
 class SimDataGeoParams(PatchParamSwitcher):

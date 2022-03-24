@@ -180,7 +180,7 @@ class Job(WebContainer):
         self.task_id = None
 
 
-class BatchData(pd.BaseModel):
+class BatchData(Tidy3dBaseModel):
     """Holds a collection of :class:`SimulationData` returned by :class:`Batch`."""
 
     task_paths: Dict[TaskName, str] = pd.Field(

@@ -2,7 +2,7 @@
 """Classes for Storing Monitor and Simulation Data."""
 
 from abc import ABC, abstractmethod
-from typing import Dict, List, Union, Optional
+from typing import Dict, List, Union
 import logging
 
 import xarray as xr
@@ -13,9 +13,8 @@ from .types import Numpy, Direction, Array, numpy_encoding, Literal, Ax, Coordin
 from .base import Tidy3dBaseModel
 from .simulation import Simulation
 from .grid import YeeGrid
-from .mode import ModeSpec
 from .viz import add_ax_if_none, equal_aspect
-from ..log import log, DataError
+from ..log import DataError
 
 # TODO: add warning if fields didnt fully decay
 
@@ -172,7 +171,7 @@ class MonitorData(Tidy3dData, ABC):
             Whether the other :class:`MonitorData` instance has the same data.
         """
         assert isinstance(other, MonitorData), "can only check eqality on two monitor data objects"
-        return np.all(self.values == self.values)
+        return np.all(self.values == other.values)
 
     def add_to_group(self, hdf5_grp) -> None:
         """Add data contents to an hdf5 group."""
