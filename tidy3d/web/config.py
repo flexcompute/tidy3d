@@ -47,7 +47,7 @@ ConfigProd = WebConfig(
 )
 
 # default one to import
-DEFAULT_CONFIG = ConfigUat
+DEFAULT_CONFIG = ConfigProd
 
 if os.environ.get("TIDY3D_ENV") == "dev":
     DEFAULT_CONFIG = ConfigDev
