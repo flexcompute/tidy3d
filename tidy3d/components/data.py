@@ -95,6 +95,8 @@ class Tidy3dData(Tidy3dBaseModel):
         string_value_bytes = hdf5_grp.get(string_key)
         if not string_value_bytes:
             return None
+        if isinstance(string_value_bytes, str):
+            return string_value_bytes
         return Tidy3dData.decode_bytes(string_value_bytes)
 
     @staticmethod
