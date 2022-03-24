@@ -1,7 +1,7 @@
 # required for running tidy3d (note xarray)
 xarray
 scipy
-h5py
+h5py>=3.6.0
 rich
 nlopt
 matplotlib
