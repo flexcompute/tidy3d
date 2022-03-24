@@ -23,6 +23,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Major improvements to `Batch` objects. `Batch.run()` returns a `BatchData` object that maps `task_name` to `SimulationData`.
 - Infinity stored as `str` in json outputs, conforming to json file specifications.
 - No longer need to specify one of `x/y/z` in `SimulationData.plot_field` if the monitor has a zero-sized dimension.
+- `Simulation.run_time` but must be > 0 to upload to server.
 
 ## [1.1.1] - 2022-3-2
 
