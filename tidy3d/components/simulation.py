@@ -663,8 +663,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
             params_updater = StructMediumParams(medium=medium, medium_map=medium_map)
             kwargs_struct = params_updater.update_params(**kwargs)
             if medium == self.medium:
-                kwargs_struct["edgecolor"] = "white"
-                kwargs_struct["facecolor"] = "white"
+                continue
             patch = PolygonPatch(shape, **kwargs_struct)
             ax.add_artist(patch)
         ax = self._set_plot_bounds(ax=ax, x=x, y=y, z=z)
@@ -694,6 +693,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         z: float = None,
         freq: float = None,
         cbar: bool = True,
+        reverse: bool = True,
         ax: Ax = None,
         **kwargs,
     ) -> Ax:
@@ -712,6 +712,8 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         freq : float = None
             Frequency to evaluate the relative permittivity of all mediums.
             If not specified, evaluates at infinite frequency.
+        reverse : bool = True
+            If ``True``, the highest permittivity is plotted in black; if ``False``: white.
         ax : matplotlib.axes._subplots.Axes = None
             Matplotlib axes to plot on, if not specified, one is created.
         **kwargs
@@ -736,10 +738,12 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         medium_shapes = self._filter_structures_plane(self.structures, x=x, y=y, z=z)
         for (medium, shape) in medium_shapes:
             eps = medium.eps_model(freq).real
-            params_updater = StructEpsParams(eps=eps, eps_min=eps_min, eps_max=eps_max)
+            params_updater = StructEpsParams(
+                eps=eps, eps_min=eps_min, eps_max=eps_max, reverse=reverse
+            )
             kwargs_struct = params_updater.update_params(**kwargs)
             if medium == self.medium:
-                kwargs_struct["edgecolor"] = "white"
+                continue
             patch = PolygonPatch(shape, **kwargs_struct)
             ax.add_artist(patch)
         if cbar:
@@ -1053,8 +1057,6 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
 
             # loop through background_shapes (note: all background are non-intersecting or merged)
             for index, (_medium, _shape) in enumerate(background_shapes):
-
-                _shape = Box.evaluate_inf_shape(_shape)
 
                 # if not intersection, move onto next background shape
                 if not shape & _shape:
