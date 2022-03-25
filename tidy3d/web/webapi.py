@@ -210,7 +210,7 @@ def monitor(task_id: TaskId) -> None:
     if get_status() in break_statuses:
         console.log(f"status = {get_status()}")
         return
-    
+
     # preprocessing
     with console.status(f"[bold green]Starting '{task_name}'...", spinner="runner"):
         while get_status() not in break_statuses and get_status() != "running":
