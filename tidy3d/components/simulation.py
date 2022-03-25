@@ -103,13 +103,12 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         units=MICROMETER,
     )
 
-    run_time: pydantic.NonNegativeFloat = pydantic.Field(
-        0.0,
+    run_time: pydantic.PositiveFloat = pydantic.Field(
+        ...,
         title="Run Time",
         description="Total electromagnetic evolution time in seconds. "
         "Note: If simulation 'shutoff' is specified, "
-        "simulation will terminate early when shutoff condition met. "
-        "Must be set > 0 before running Simulation on our servers.",
+        "simulation will terminate early when shutoff condition met. ",
         units=SECOND,
     )
 
@@ -476,7 +475,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         """Validate the fully initialized simulation is ok for upload to our servers."""
         self._validate_size()
         self._validate_monitor_size()
-        self._validate_run_time()
+        # self._validate_run_time()
 
     def _validate_size(self) -> None:
         """Ensures the simulation is within size limits before simulation is uploaded."""
