@@ -334,6 +334,7 @@ class Batch(WebContainer):
             return f"{task_name}: status = {status}"
 
         run_statuses = [
+            "draft",
             "queued",
             "preprocess",
             "queued_solver",
