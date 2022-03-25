@@ -1,5 +1,5 @@
 jupyter
-nbconvert
+nbconvert==6.4.0
 sphinx_rtd_theme
 nbsphinx==0.8.7
 ipython
