@@ -207,8 +207,8 @@ def monitor(task_id: TaskId) -> None:
     console = Console()
 
     # already done
-    if get_statue() in break_statuses:
-        console.log(f"status = {status}")
+    if get_status() in break_statuses:
+        console.log(f"status = {get_status()}")
         return
     
     # preprocessing
