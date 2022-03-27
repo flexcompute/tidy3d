@@ -985,8 +985,10 @@ class SimulationData(AbstractSimulationData):
         log_str = self.log
         lines = log_str.split("\n")
         decay_lines = [l for l in lines if "field decay" in l]
-        final_decay_line = decay_lines[-1]
-        final_decay = float(final_decay_line.split("field decay: ")[-1])
+        final_decay = 1.0
+        if len(decay_lines) > 0:
+            final_decay_line = decay_lines[-1]
+            final_decay = float(final_decay_line.split("field decay: ")[-1])
         return final_decay
 
     def __getitem__(self, monitor_name: str) -> Union[Tidy3dDataArray, xr.Dataset]:
