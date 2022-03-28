@@ -1,6 +1,6 @@
 """Tools for generating an S matrix automatically from tidy3d simulation and port definitions."""
 
-from typing import List, Tuple, Dict, Any
+from typing import List, Tuple, Dict
 
 import pydantic as pd
 import numpy as np
@@ -60,7 +60,7 @@ relating the coupling amplitudes between the m and n mode orders in the two port
 SMatrixType = Dict[str, np.ndarray]
 
 
-class ComponentModeler(pd.BaseModel):
+class ComponentModeler(Tidy3dBaseModel):
     """Tool for modeling devices and computing scattering matrix elements."""
 
     simulation: Simulation = pd.Field(
