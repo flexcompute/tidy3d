@@ -116,7 +116,7 @@ Work with Monitor Data
    * - Get the raw data values as a ``numpy`` array?
      - ``mon_data.values``.
    * - Get a specific field component (eg. ``'Hy'``) for a :class:`FieldMonitor` or :class:`FieldTimeMonitor`?
-     - ``component_data = sim_data[monitor_name].Hy`` or, to access by string: ``component_data = sim_data[monitor_name]['Hy']``.
+     - ``component_data = sim_data[monitor_name].Hy`` or, to access by string: ``component_data = sim_data[monitor_name].data_dict['Hy']``.
 
 Plot Data
 ---------
@@ -156,8 +156,8 @@ Submit Jobs to Server
      - After uploading your job with ``job.upload()`` you can get a host of information about it through ``task_info = job.get_info()``.
    * - Submit multiple simulations?
      - The :class:`tidy3d.web.container.Batch` interface was created to manage multiple :class:`tidy3d.web.container.Job` instances and gives a similar interface with large number of jobs in mind.
-   * - Loop through :class:`tidy3d.web.container.Batch` data without loading all of the data into memory?
-     - ``for task_name, sim_data in batch.items():`` will ``yield`` the :class:`SimulationData` for each :class:`tidy3d.web.container.Job` in the batch one by one, so you can perform your postprocessing in the loop body without loading each of the simulations' data into memory at once.
+   * - Loop through :class:`tidy3d.web.container.BatchData` without loading all of the data into memory?
+     - ``for task_name, sim_data in batch_data.items():`` will give access to a :class:`SimulationData` instance for each :class:`tidy3d.web.container.Job` in the batch one by one, so you can perform your postprocessing in the loop body without loading each of the simulations' data into memory at once.
    * - Save or load a :class:`tidy3d.web.container.Job` or :class:`tidy3d.web.container.Batch` so I can work with it later?
      - Like most other tidy3d objects, :class:`tidy3d.web.container.Job` and :class:`tidy3d.web.container.Batch` instances have ``.to_file(path)`` and ``.from_file(path)`` methods that will export and load thier metadata as .json files.  This is especially useful for loading batches for analysis long after they have run.
 
