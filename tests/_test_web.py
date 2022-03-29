@@ -179,7 +179,7 @@ def _test_job_7_delete():
     assert task_info.status in ("deleted", "deleting")
 
 
-def test_job_source_norm():
+def test_job_source_norm(caplog):
     """test complete run"""
     job = web.Job(simulation=sim_original, task_name="test_job", callback_url=CALLBACK_URL)
     sim_data_norm = job.run(path=PATH_SIM_DATA, normalize_index=0)

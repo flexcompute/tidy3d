@@ -136,3 +136,30 @@ SIM_CONVERT = td.Simulation(
     run_time=1e-12,
     pml_layers=3 * [PML()],
 )
+
+
+def assert_log_level(caplog, log_level_expected):
+    """ensure something got logged if log_level is not None.
+    note: I put this here rather than utils.py because if we import from utils.py,
+    it will validate the sims there and those get included in log.
+    """
+
+    # get log output
+    logs = caplog.record_tuples
+
+    # there's a log but the log level is not None (problem)
+    if logs and not log_level_expected:
+        raise Exception
+
+    # we expect a log but none is given (problem)
+    if log_level_expected and not logs:
+        raise Exception
+
+    # both expected and got log, check the log levels match
+    if logs and log_level_expected:
+        for log in logs:
+            log_level = log[1]
+            if log_level == log_level_expected:
+                # log level was triggered, exit
+                return
+        raise Exception

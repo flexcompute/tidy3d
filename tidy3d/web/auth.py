@@ -3,6 +3,7 @@ import os
 import getpass
 import hashlib
 import json
+import logging
 
 import boto3
 import requests
@@ -22,6 +23,9 @@ boto3.setup_default_session(region_name=Config.s3_region)
 
 def set_authentication_config(email: str, password: str) -> None:
     """Sets the authorization and keys in the config for a for user."""
+    os.environ["TIDY3D_USER"] = email
+    os.environ["TIDY3D_PASS_HASH"] = password
+
     url = "/".join([Config.auth_api_endpoint, "auth"])
     headers = {"Application": "TIDY3D"}
     resp = requests.get(url, headers=headers, auth=(email, password))
@@ -47,29 +51,27 @@ def encode_password(password: str) -> str:
 
 def get_credentials() -> None:
     """Tries to log user in from environment variables, then from file, if not working, prompts
-    user for login info and saves to file.
-
-    If Config["auth" is already set, returns immediately.
-    """
-
-    if Config.auth is not None:
-        return
+    user for login info and saves to file."""
 
     # if we find credentials in environment variables
-    if "TIDY3D_USER" in os.environ and "TIDY3D_PASS" in os.environ:
-        print("Using Tidy3D credentials from enviornment")
+    if "TIDY3D_USER" in os.environ and (
+        "TIDY3D_PASS" in os.environ or "TIDY3D_PASS_HASH" in os.environ
+    ):
+        logging.info("Using Tidy3D credentials from enviornment")
         email = os.environ["TIDY3D_USER"]
-        password = os.environ["TIDY3D_PASS"]
+        password = os.environ.get("TIDY3D_PASS_HASH")
+        if password is None:
+            password = encode_password(os.environ.get("TIDY3D_PASS"))
         try:
-            set_authentication_config(email, encode_password(password))
+            set_authentication_config(email, password)
             return
 
         except Exception:  # pylint:disable=broad-except
-            print("Error: Failed to log in with environment credentials.")
+            logging.info("Error: Failed to log in with environment credentials.")
 
     # if we find something in the credential path
     if os.path.exists(credential_path):
-        print("Using Tidy3D credentials from stored file")
+        logging.info("Using Tidy3D credentials from stored file")
         # try to authenticate them
         try:
             with open(credential_path, "r", encoding="utf-8") as fp:
@@ -80,7 +82,7 @@ def get_credentials() -> None:
             return
 
         except Exception:  # pylint:disable=broad-except
-            print("Error: Failed to log in with saved credentials.")
+            logging.info("Error: Failed to log in with saved credentials.")
 
     # keep trying to log in
     attempts = 0
@@ -98,7 +100,7 @@ def get_credentials() -> None:
             break
 
         except Exception:  # pylint:disable=broad-except
-            print("Error: Failed to log in with new username and password.")
+            logging.info("Error: Failed to log in with new username and password.")
 
     # ask to stay logged in
     attempts = 0
@@ -121,7 +123,7 @@ def get_credentials() -> None:
                 return
 
             except Exception:  # pylint:disable=broad-except
-                print("Error: Failed to store credentials.")
+                logging.info("Error: Failed to store credentials.")
                 return
 
         # if doesn't want to keep logged in, just return without saving file
@@ -129,7 +131,7 @@ def get_credentials() -> None:
             return
 
         # otherwise, prompt again
-        print(f"Unknown response: {keep_logged_in}")
+        logging.info(f"Unknown response: {keep_logged_in}")
 
 
 def requires_auth(func):
