@@ -51,7 +51,7 @@ def run(  # pylint:disable=too-many-arguments
     normalize_index : int = 0
         If specified, normalizes the frequency-domain data by the amplitude spectrum of the source
         corresponding to ``simulation.sources[normalize_index]``.
-        This occurs when the data is loaded into a :class:`SimulationData` object.
+        This occurs when the data is loaded into a :class:`.SimulationData` object.
         To turn off normalization, set ``normalize_index`` to ``None``.
 
     Returns
@@ -299,7 +299,7 @@ def load(
     normalize_index : int = 0
         If specified, normalizes the frequency-domain data by the amplitude spectrum of the source
         corresponding to ``simulation.sources[normalize_index]``.
-        This occurs when the data is loaded into a :class:`SimulationData` object.
+        This occurs when the data is loaded into a :class:`.SimulationData` object.
         To turn off normalization, set ``normalize_index`` to ``None``.
 
     Returns

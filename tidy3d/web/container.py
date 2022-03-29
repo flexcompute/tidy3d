@@ -24,26 +24,31 @@ class WebContainer(Tidy3dBaseModel, ABC):
 
 
 class Job(WebContainer):
-    """Interface for managing the running of a :class:`.Simulation` on server.
+    """Interface for managing the running of a :class:`.Simulation` on server."""
 
-    Parameters
-    ----------
-        simulation : :class:`.Simulation`
-            Simulation to upload to server.
-        task_name : str
-            Name of task.
-        folder_name : str = "default"
-            Name of folder to store task on web UI.
-        callback_url : str = None
-            Http PUT url to receive simulation finish event. The body content is a json file with
-            fields ``{'id', 'status', 'name', 'workUnit', 'solverVersion'}``.
-    """
+    simulation: Simulation = pd.Field(
+        ..., title="Simulation", description="Simulation to run as a 'task'."
+    )
 
-    simulation: Simulation
-    task_name: TaskName
-    folder_name: str = "default"
-    task_id: TaskId = None
-    callback_url: str = None
+    task_name: TaskName = pd.Field(..., title="Task Name", description="Unique name of the task.")
+
+    folder_name: str = pd.Field(
+        "default", title="Folder Name", description="Name of folder to store task on web UI."
+    )
+
+    task_id: TaskId = pd.Field(
+        None,
+        title="Task Id",
+        description="Task ID number, set when the task is uploaded, leave as None.",
+    )
+
+    callback_url: str = pd.Field(
+        None,
+        title="Callback URL",
+        description="Http PUT url to receive simulation finish event. "
+        "The body content is a json file with fields "
+        "``{'id', 'status', 'name', 'workUnit', 'solverVersion'}``.",
+    )
 
     def run(
         self, path: str = DEFAULT_DATA_PATH, normalize_index: Optional[int] = 0
@@ -57,7 +62,7 @@ class Job(WebContainer):
         normalize_index : int = 0
             If specified, normalizes the frequency-domain data by the amplitude spectrum of the
             source corresponding to ``simulation.sources[normalize_index]``.
-            This occurs when the data is loaded into a :class:`SimulationData` object.
+            This occurs when the data is loaded into a :class:`.SimulationData` object.
             To turn off normalization, set ``normalize_index`` to ``None``.
 
         Returns
@@ -160,7 +165,7 @@ class Job(WebContainer):
         normalize_index : int = 0
             If specified, normalizes the frequency-domain data by the amplitude spectrum of the
             source corresponding to ``simulation.sources[normalize_index]``.
-            This occurs when the data is loaded into a :class:`SimulationData` object.
+            This occurs when the data is loaded into a :class:`.SimulationData` object.
             To turn off normalization, set ``normalize_index`` to ``None``.
 
         Returns
@@ -181,16 +186,16 @@ class Job(WebContainer):
 
 
 class BatchData(Tidy3dBaseModel):
-    """Holds a collection of :class:`SimulationData` returned by :class:`Batch`."""
+    """Holds a collection of :class:`.SimulationData` returned by :class:`.Batch`."""
 
     task_paths: Dict[TaskName, str] = pd.Field(
         ...,
         title="Data Paths",
-        descrption="Mapping of task_name to path to corresponding data for each task in batch.",
+        description="Mapping of task_name to path to corresponding data for each task in batch.",
     )
 
     task_ids: Dict[TaskName, str] = pd.Field(
-        ..., title="Task IDs", descrption="Mapping of task_name to task_id for each task in batch."
+        ..., title="Task IDs", description="Mapping of task_name to task_id for each task in batch."
     )
 
     normalize_index: Optional[int] = pd.Field(
@@ -202,7 +207,7 @@ class BatchData(Tidy3dBaseModel):
     )
 
     def load_sim_data(self, task_name: str) -> SimulationData:
-        """Load a :class:`SimulationData` from file by task name."""
+        """Load a :class:`.SimulationData` from file by task name."""
         task_data_path = self.task_paths[task_name]
         task_id = self.task_ids[task_name]
         return web.load(
@@ -213,35 +218,45 @@ class BatchData(Tidy3dBaseModel):
         )
 
     def items(self) -> Tuple[TaskName, SimulationData]:
-        """Iterate through the :class:`SimulationData` for each task_name."""
+        """Iterate through the :class:`.SimulationData` for each task_name."""
         for task_name in self.task_paths.keys():
             yield task_name, self.load_sim_data(task_name)
 
     def __getitem__(self, task_name: TaskName) -> SimulationData:
-        """Get the :class:`SimulationData` for a given ``task_name``."""
+        """Get the :class:`.SimulationData` for a given ``task_name``."""
         return self.load_sim_data(task_name)
 
 
 class Batch(WebContainer):
-    """Interface for submitting several :class:`.Simulation` objects to sever.
-
-    Parameters
-    ----------
-    simulations : Dict[str, :class:`.Simulation`]
-        Mapping of task name to :class:`.Simulation` objects.
-    folder_name : ``str`` = './'
-        Name of folder to store member of each batch on web UI.
-    """
+    """Interface for submitting several :class:`.Simulation` objects to sever."""
 
     simulations: Dict[TaskName, Simulation]
     jobs: Dict[TaskName, Job] = None
     folder_name: str = "default"
 
+    simulations: Dict[TaskName, Simulation] = pd.Field(
+        ...,
+        title="Simulations",
+        description="Mapping of task names to Simulations to run as a batch.",
+    )
+
+    jobs: Dict[TaskName, Job] = pd.Field(
+        ...,
+        title="Simulations",
+        description="Mapping of task names to individual Job object for each task in the batch. "
+        "Set by ``Batch.upload``, leave as None.",
+    )
+
+    folder_name: str = pd.Field(
+        "default",
+        title="Folder Name",
+        description="Name of folder to store member of each batch on web UI.",
+    )
+
     def run(
         self, path_dir: str = DEFAULT_DATA_DIR, normalize_index: Optional[int] = 0
     ) -> BatchData:
         """Upload and run each simulation in :class:`Batch`.
-        Returns generator that can be used to loop through data results.
 
         Parameters
         ----------
@@ -251,7 +266,7 @@ class Batch(WebContainer):
         Returns
         ------
         :class:`BatchData`
-            Contains the :class:`.SimulationData` of each :class:`Simulation` in :class:`Batch`.
+            Contains the :class:`.SimulationData` of each :class:`.Simulation` in :class:`Batch`.
 
         Note
         ----
@@ -261,9 +276,10 @@ class Batch(WebContainer):
         >>> for task_name, sim_data in batch_data.items():
         ...     # do something with data.
 
-        ``bach_data`` does not store all of the :class:`SimulationData` objects in memory,
+        ``bach_data`` does not store all of the :class:`.SimulationData` objects in memory,
         rather it iterates over the task names
-        and loads the corresponding :class:`SimulationData` from file.
+        and loads the corresponding :class:`.SimulationData` from file.
+        If no file exists for that task, it downloads it.
         """
 
         self.upload()
@@ -272,7 +288,7 @@ class Batch(WebContainer):
         return self.load(path_dir=path_dir, normalize_index=normalize_index)
 
     def upload(self) -> None:
-        """Create a series of tasks in the :class:`Batch` and upload them to server.
+        """Create a series of tasks in the :class:`.Batch` and upload them to server.
 
         Note
         ----
@@ -420,7 +436,7 @@ class Batch(WebContainer):
         Returns
         ------
         :class:`BatchData`
-            Contains the :class:`.SimulationData` of each :class:`Simulation` in :class:`Batch`.
+            Contains the :class:`.SimulationData` of each :class:`.Simulation` in :class:`Batch`.
         """
         task_paths = {}
         task_ids = {}
