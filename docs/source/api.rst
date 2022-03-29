@@ -309,7 +309,6 @@ These are classes that are used to organize the tidy3d components, but aren't to
    tidy3d.components.source.SourceTime
    tidy3d.components.source.Source
    tidy3d.components.source.FieldSource
-   tidy3d.components.source.AngledFieldSource
    tidy3d.components.monitor.Monitor
    tidy3d.components.data.Tidy3dData
    tidy3d.components.data.CollectionData
