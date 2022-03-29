@@ -13,7 +13,7 @@ sys.path.append("../../tidy3d")
 import tidy3d as td
 from tidy3d.components.base import Tidy3dBaseModel
 from .simulation import SimulationPlotly
-from .data import FieldDataPlotly
+from .data import DataPlotly
 
 APP_MODE = Literal["python", "jupyter", "jupyterlab"]
 DEFAULT_MODE = "jupyterlab"
@@ -82,35 +82,16 @@ class SimulationDataApp(App):
         layout = dcc.Tabs([])
 
         # Simulation Plot.
-        # >>> Wrap in something
         sim_plotly = SimulationPlotly(simulation=self.sim_data.simulation)
         layout.children += [
-            dcc.Tab([html.Div([dcc.Graph(figure=sim_plotly.plotly(x=0))])], label="Simulation")
+            sim_plotly.make_component(app)
         ]
-        # <<<
 
-        # Monitor Data
-        # >>> Wrap in something
+
         for monitor_name, monitor_data in self.sim_data.monitor_data.items():
-            label = f'monitor: "{monitor_name}"'
-            data_plotly = FieldDataPlotly(data=monitor_data)
-            layout.children += [
-                dcc.Tab(
-                    [
-                        html.Div(
-                            [
-                                dcc.Graph(
-                                    figure=data_plotly.plotly(
-                                        x=0, field="Ex", freq=float(monitor_data.Ex.f), val="abs"
-                                    )
-                                )
-                            ]
-                        )
-                    ],
-                    label=label,
-                )
-            ]
-        # <<<
+            data_plotly = DataPlotly.from_monitor_data(monitor_data=monitor_data, monitor_name=monitor_name)
+            component = data_plotly.make_component(app)
+            layout.children += [component]
 
         # log
         layout.children += [

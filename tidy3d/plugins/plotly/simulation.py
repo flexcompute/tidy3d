@@ -5,8 +5,10 @@ from typing import Tuple
 import plotly.graph_objects as go
 from shapely.geometry.base import BaseGeometry as ShapelyGeo
 import numpy as np
+from dash import dcc, html, Output, Input
 
 from .utils import PlotlyFig, add_fig_if_none, equal_aspect_plotly, plot_params_sim_boundary
+from .component import UIComponent
 from ...components.types import Axis
 from ...components.simulation import Simulation
 from ...components.structure import Structure
@@ -92,10 +94,83 @@ class StructurePlotly(Tidy3dBaseModel):
         return geometry.plotly(x=x, y=y, z=z, fig=fig, name=name, **patch_kwargs)
 
 
-class SimulationPlotly(Tidy3dBaseModel):
+class SimulationPlotly(UIComponent):
     """Simulation that adds plotly-based implementations of its standard plotting functions."""
 
     simulation: Simulation
+    cs_axis: Axis = 0
+    cs_val: float = None
+
+    def make_figure(self):
+        """ Generate plotly figure from the current state of self."""
+
+        xyz_string = 'xyz'[self.cs_axis]
+        if self.cs_val is None:
+            self.cs_val = self.simulation.center[self.cs_axis]
+        print(self.cs_val)
+        plotly_kwargs = {xyz_string:self.cs_val}
+        return self.plotly(**plotly_kwargs)
+
+    def make_component(self, app):
+        """Creates the dash component."""
+
+        xyz_slider = html.Div(
+            [
+                dcc.Dropdown(
+                    options=['x', 'y', 'z'],
+                    value='xyz'[self.cs_axis],
+                    id='simulation_cs_axis_dropdown',
+                ),
+                dcc.Slider(
+                    min=self.simulation.bounds[0][self.cs_axis],
+                    max=self.simulation.bounds[1][self.cs_axis],
+                    value=self.simulation.center[self.cs_axis],
+                    id='simulation_cs_slider',
+                ),
+            ], style={'padding': 50, 'flex': 1}
+        )
+
+        graph = html.Div(
+            [
+                dcc.Graph(figure=self.make_figure(), id='simulation_plot')
+            ], style={'padding': 10, 'flex': 1})
+
+        component = dcc.Tab(
+            [
+                html.Div([graph, xyz_slider], style={'display': 'flex', 'flex-direction': 'row'})
+            ], label="Simulation"
+        )
+
+
+        @app.callback(
+            Output('simulation_plot', 'figure'),
+            [
+                Input('simulation_cs_axis_dropdown', 'value'),
+                Input('simulation_cs_slider', 'value'),
+            ]
+        )
+        def set_xyz_sliderbar(cs_axis_string, cs_val):
+            self.cs_axis = ['x', 'y', 'z'].index(cs_axis_string)
+            self.cs_val = float(cs_val)
+            return self.make_figure()
+
+        @app.callback(
+            Output('simulation_cs_slider', 'min'),
+            Input('simulation_cs_axis_dropdown', 'value'),
+        )
+        def set_min(cs_axis_string):
+            self.cs_axis = ['x', 'y', 'z'].index(cs_axis_string)
+            return self.simulation.bounds[0][self.cs_axis]
+
+        @app.callback(
+            Output('simulation_cs_slider', 'max'),
+            Input('simulation_cs_axis_dropdown', 'value'),
+        )
+        def set_max(cs_axis_string):
+            self.cs_axis = ['x', 'y', 'z'].index(cs_axis_string)
+            return self.simulation.bounds[1][self.cs_axis]
+
+        return component
 
     @equal_aspect_plotly
     @add_fig_if_none
