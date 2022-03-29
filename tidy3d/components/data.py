@@ -1195,9 +1195,8 @@ class SimulationData(AbstractSimulationData):
         try:
             source = self.simulation.sources[normalize_index]
             source_time = source.source_time
-        except Exception:  # pylint:disable=broad-except
-            logging.warning(f"Could not locate source at normalize_index={normalize_index}.")
-            return self
+        except IndexError as e:
+            raise DataError(f"Could not locate source at normalize_index={normalize_index}.") from e
 
         source_time = source.source_time
         sim_data_norm = self.copy(deep=True)
