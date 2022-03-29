@@ -11,6 +11,7 @@ import requests
 from rich.console import Console
 from rich.progress import Progress
 
+from .auth import get_credentials
 from .config import DEFAULT_CONFIG as Config
 from .s3utils import get_s3_user, DownloadProgress
 from .task import TaskId, TaskInfo
@@ -525,3 +526,6 @@ def _rm_file(path: str):
     if os.path.exists(path) and not os.path.isdir(path):
         log.debug(f"removing file {path}")
         os.remove(path)
+
+
+get_credentials()

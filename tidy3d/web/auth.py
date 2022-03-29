@@ -110,5 +110,3 @@ def get_credentials() -> None:
         # otherwise, prompt again
         print(f"Unknown response: {keep_logged_in}")
 
-
-# get_credentials()
