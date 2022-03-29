@@ -1,8 +1,8 @@
 """Defines the FDTD grid."""
-from typing import Tuple, List
+from typing import Tuple, List, Union
 
 import numpy as np  # pylint:disable=unused-import
-import pydantic
+import pydantic as pd
 
 from .base import Tidy3dBaseModel, TYPE_TAG_STR
 from .types import Array, Axis
@@ -11,6 +11,116 @@ from ..log import SetupError
 
 # data type of one dimensional coordinate array.
 Coords1D = Array[float]
+
+
+class GridSpec(Tidy3dBaseModel):
+    """Specification for non-uniform grid along a given dimension.
+
+    Example
+    -------
+    >>> grid_spec = GridSpec(min_steps_per_wvl=16, max_scale=1.1)
+    """
+
+    min_steps_per_wvl: float = pd.Field(
+        10.0,
+        title="Minimum Steps Per Wavelength",
+        description="A nonuniform grid is generated with at least the minimum number of mesh steps "
+        "per wavelength in the materia in every structure.",
+    )
+
+    max_scale: float = pd.Field(
+        1.4,
+        title="Maximum Grid Size Scaling",
+        description="Sets the maximum ratio between any two consecutive grid steps.",
+    )
+
+
+# Allowed values for ``Simulation.grid_size``
+GridSize = Union[pd.PositiveFloat, List[pd.PositiveFloat], GridSpec]
+
+
+class Bounds1D(Coords1D):
+    """1D coords to be used as grid boundaries, with methods to generate automatically from
+    simulation parameters."""
+
+    # pylint:disable=too-many-arguments
+    @classmethod
+    def _make_bounds(cls, grid_size, center, size, symmetry, structures, wvl):
+        """Make uniform or nonuniform boundaries depending on grid_size input."""
+
+        if isinstance(grid_size, float):
+            bound_coords = cls._from_uniform_dl(grid_size, center, size, symmetry)
+        elif isinstance(grid_size, list):
+            bound_coords = cls._from_nonuinform_dl(grid_size, center, size)
+        elif isinstance(grid_size, GridSpec):
+            cent_nu, size_nu = center, size
+            if symmetry != 0:
+                # If symmetry present, only mesh starting from center
+                cent_nu += size / 4
+                size_nu /= 2
+            bound_coords = cls._from_min_steps(grid_size, cent_nu, size_nu, structures, wvl)
+
+        # Enforce a symmetric grid by reflecting the boundaries around center
+        if symmetry != 0:
+            bound_coords = bound_coords[bound_coords >= center]
+            bound_coords = np.append(2 * center - bound_coords[:0:-1], bound_coords)
+
+        return bound_coords
+
+    @classmethod
+    def _from_uniform_dl(cls, dl, center, size, symmetry):
+        """Creates coordinate boundaries with uniform mesh (dl is float).
+        Center if symmetry present."""
+
+        num_cells = int(np.floor(size / dl))
+
+        # Make sure there's at least one cell
+        num_cells = max(num_cells, 1)
+
+        # snap to grid, recenter
+        size_snapped = dl * num_cells
+        bound_coords = center + np.linspace(-size_snapped / 2, size_snapped / 2, num_cells + 1)
+
+        # Offset to center if symmetry present
+        if symmetry != 0:
+            bound_coords += center - bound_coords[bound_coords.size // 2]
+
+        return bound_coords
+
+    @classmethod
+    def _from_nonuinform_dl(cls, dl, center, size):
+        """Creates coordinate boundaries with non-uniform mesh (dl is arraylike).
+        These are always centered on the supplied center."""
+
+        # get bounding coordinates
+        dl = np.array(dl)
+        bound_coords = np.array([np.sum(dl[:i]) for i in range(len(dl) + 1)])
+
+        # place the middle boundary at the center of the simulation along dimension
+        bound_coords += center - bound_coords[bound_coords.size // 2]
+
+        # chop off any coords outside of simulation bounds
+        bound_min = center - size / 2
+        bound_max = center + size / 2
+        bound_coords = bound_coords[bound_coords <= bound_max]
+        bound_coords = bound_coords[bound_coords >= bound_min]
+
+        # if not extending to simulation bounds, repeat beginning and end
+        dl_min = dl[0]
+        dl_max = dl[-1]
+        while bound_coords[0] - dl_min >= bound_min:
+            bound_coords = np.insert(bound_coords, 0, bound_coords[0] - dl_min)
+        while bound_coords[-1] + dl_max <= bound_max:
+            bound_coords = np.append(bound_coords, bound_coords[-1] + dl_max)
+
+        return bound_coords
+
+    # pylint:disable=too-many-arguments,unused-argument
+    @classmethod
+    def _from_min_steps(cls, grid_spec, center, size, structures, wvl):
+        """Creates coordinate boundaries with non-uniform mesh based on required minimum steps
+        per wavelength."""
+        return
 
 
 class Coords(Tidy3dBaseModel):
@@ -24,15 +134,15 @@ class Coords(Tidy3dBaseModel):
     >>> coords = Coords(x=x, y=y, z=z)
     """
 
-    x: Coords1D = pydantic.Field(
+    x: Coords1D = pd.Field(
         ..., title="X Coordinates", description="1-dimensional array of x coordinates."
     )
 
-    y: Coords1D = pydantic.Field(
+    y: Coords1D = pd.Field(
         ..., title="Y Coordinates", description="1-dimensional array of y coordinates."
     )
 
-    z: Coords1D = pydantic.Field(
+    z: Coords1D = pd.Field(
         ..., title="Z Coordinates", description="1-dimensional array of z coordinates."
     )
 
@@ -54,19 +164,19 @@ class FieldGrid(Tidy3dBaseModel):
     >>> field_grid = FieldGrid(x=coords, y=coords, z=coords)
     """
 
-    x: Coords = pydantic.Field(
+    x: Coords = pd.Field(
         ...,
         title="X Positions",
         description="x,y,z coordinates of the locations of the x-component of a vector field.",
     )
 
-    y: Coords = pydantic.Field(
+    y: Coords = pd.Field(
         ...,
         title="Y Positions",
         description="x,y,z coordinates of the locations of the y-component of a vector field.",
     )
 
-    z: Coords = pydantic.Field(
+    z: Coords = pd.Field(
         ...,
         title="Z Positions",
         description="x,y,z coordinates of the locations of the z-component of a vector field.",
@@ -87,13 +197,13 @@ class YeeGrid(Tidy3dBaseModel):
     >>> Ex_coords = yee_grid.E.x
     """
 
-    E: FieldGrid = pydantic.Field(
+    E: FieldGrid = pd.Field(
         ...,
         title="Electric Field Grid",
         description="Coordinates of the locations of all three components of the electric field.",
     )
 
-    H: FieldGrid = pydantic.Field(
+    H: FieldGrid = pd.Field(
         ...,
         title="Electric Field Grid",
         description="Coordinates of the locations of all three components of the magnetic field.",
@@ -128,7 +238,7 @@ class Grid(Tidy3dBaseModel):
     >>> yee_grid = grid.yee
     """
 
-    boundaries: Coords = pydantic.Field(
+    boundaries: Coords = pd.Field(
         ...,
         title="Boundary Coordinates",
         description="x,y,z coordinates of the boundaries between cells, defining the FDTD grid.",
