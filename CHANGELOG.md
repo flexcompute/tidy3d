@@ -6,6 +6,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+
+### Changed
+
+## [1.2.0] - 2022-3-28
+
+### Added
 - `PolySlab` geometries support dilation and angled sidewalls.
 - Percent done monitoring of jobs running longer than 10 seconds.
 - Can use vectorized spherical coordinates in `tidy3d.plugins.Near2Far`.
@@ -203,7 +209,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Job and Batch classes for better simulation handling (eventually to fully replace webapi functions).
 - A large number of small improvements and bug fixes.
 
-[Unreleased]: https://github.com/flexcompute/tidy3d/compare/v1.1.1...develop
+[Unreleased]: https://github.com/flexcompute/tidy3d/compare/v1.2.0...develop
+[1.2.0]: https://github.com/flexcompute/tidy3d/compare/v1.1.1...v1.2.0
 [1.1.1]: https://github.com/flexcompute/tidy3d/compare/v1.1.0...v1.1.1
 [1.1.0]: https://github.com/flexcompute/tidy3d/compare/v1.0.2...v1.1.0
 [1.0.2]: https://github.com/flexcompute/tidy3d/compare/v1.0.1...v1.0.2
