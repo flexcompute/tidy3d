@@ -261,3 +261,11 @@ def _test_batch_7_delete():
     for job in batch:
         task_info = job.get_info()
         assert task_info.status in ("deleted", "deleting")
+
+
+def _test_delete_old():
+    web.delete_old("default", 0)
+
+
+def _test_get_tasks():
+    web.get_tasks(5, "new", "default")

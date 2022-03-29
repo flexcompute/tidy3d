@@ -1,23 +1,24 @@
 """Provides lowest level, user-facing interface to server."""
 
+import json
+import logging
 import os
 import time
-import json
+from datetime import datetime, timedelta
 from typing import List, Dict, Optional
-from datetime import datetime
-import logging
 
 import requests
+from dateutil import parser
 from rich.console import Console
 from rich.progress import Progress
 
+from . import httputils as http
 from .config import DEFAULT_CONFIG
 from .s3utils import get_s3_user, DownloadProgress
 from .auth import requires_auth
 from .task import TaskId, TaskInfo, Folder
-from . import httputils as http
-from ..components.simulation import Simulation
 from ..components.data import SimulationData
+from ..components.simulation import Simulation
 from ..components.types import Literal
 from ..log import log, WebError
 from ..version import __version__
@@ -156,6 +157,9 @@ def start(task_id: TaskId) -> None:
         data["solverVersion"] = DEFAULT_CONFIG.solver_version
     else:
         data["protocolVersion"] = __version__
+
+    if DEFAULT_CONFIG.worker_group:
+        data["workerGroup"] = DEFAULT_CONFIG.worker_group
 
     http.post(method, data=data)
 
@@ -362,15 +366,16 @@ def delete(task_id: TaskId) -> TaskInfo:
 
 
 @requires_auth
-def delete_old(days_old: int = 100, folder: str = None) -> int:
+def delete_old(folder: str, days_old: int = 100) -> int:
     """Delete all tasks older than a given amount of days.
 
     Parameters
     ----------
+    folder : str
+        Only allowed to pure one folder at a time.
+
     days_old : int = 100
         Minimum number of days since the task creation.
-    folder : str = None
-        If None, all folders are purged.
 
     Returns
     -------
@@ -378,25 +383,24 @@ def delete_old(days_old: int = 100, folder: str = None) -> int:
         Total number of tasks deleted.
     """
 
-    tasks = http.get("fdtd/models")
+    folder = _query_or_create_folder(folder)
+    tasks = http.get(f"tidy3d/projects/{folder.projectId}/tasks")
     count = 0
-    for pfolder in tasks:
-        if pfolder["name"] == folder or folder is None:
-            for task in pfolder["children"]:
-                if task["status"] == "deleted":
-                    continue
-                stime_str = task["submitTime"]
-                stime = datetime.strptime(stime_str, "%Y:%m:%d:%H:%M:%S")
-                days_elapsed = (datetime.utcnow() - stime).days
-                if days_elapsed >= days_old:
-                    delete(task["taskId"])
-                    count += 1
+    for task in tasks:
+        stime_str = task["createdAt"]
+        stime = parser.parse(stime_str)
+        cutoff_date = datetime.now(stime.tzinfo) - timedelta(days=days_old)
+        if stime < cutoff_date:
+            delete(task["taskId"])
+            count += 1
 
     return count
 
 
 @requires_auth
-def get_tasks(num_tasks: int = None, order: Literal["new", "old"] = "new") -> List[Dict]:
+def get_tasks(
+    num_tasks: int = None, order: Literal["new", "old"] = "new", folder: str = "default"
+) -> List[Dict]:
     """Get a list with the metadata of the last ``num_tasks`` tasks.
 
     Parameters
@@ -405,24 +409,25 @@ def get_tasks(num_tasks: int = None, order: Literal["new", "old"] = "new") -> Li
         The number of tasks to return, or, if ``None``, return all.
     order : Literal["new", "old"] = "new"
         Return the tasks in order of newest-first or oldest-first.
-    """
+    folder: str = "default"
 
-    tasks = http.get("fdtd/models")
+    """
+    folder = _query_or_create_folder(folder)
+    tasks = http.get(f"tidy3d/projects/{folder.projectId}/tasks")
     store_dict = {
         "submit_time": [],
         "status": [],
         "task_name": [],
         "task_id": [],
     }
-    for pfolder in tasks:
-        for task in pfolder["children"]:
-            try:
-                store_dict["submit_time"].append(task["submitTime"])
-                store_dict["status"].append(task["status"])
-                store_dict["task_name"].append(task["taskName"])
-                store_dict["task_id"].append(task["taskId"])
-            except KeyError:
-                logging.warning(f"Error with task {task['taskId']}, skipping.")
+    for task in tasks:
+        try:
+            store_dict["submit_time"].append(task["createdAt"])
+            store_dict["status"].append(task["status"])
+            store_dict["task_name"].append(task["taskName"])
+            store_dict["task_id"].append(task["taskId"])
+        except KeyError:
+            logging.warning(f"Error with task {task['taskId']}, skipping.")
 
     sort_inds = sorted(
         range(len(store_dict["submit_time"])),
