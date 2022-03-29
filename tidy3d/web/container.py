@@ -230,10 +230,6 @@ class BatchData(Tidy3dBaseModel):
 class Batch(WebContainer):
     """Interface for submitting several :class:`.Simulation` objects to sever."""
 
-    simulations: Dict[TaskName, Simulation]
-    jobs: Dict[TaskName, Job] = None
-    folder_name: str = "default"
-
     simulations: Dict[TaskName, Simulation] = pd.Field(
         ...,
         title="Simulations",
@@ -241,7 +237,7 @@ class Batch(WebContainer):
     )
 
     jobs: Dict[TaskName, Job] = pd.Field(
-        ...,
+        None,
         title="Simulations",
         description="Mapping of task names to individual Job object for each task in the batch. "
         "Set by ``Batch.upload``, leave as None.",
