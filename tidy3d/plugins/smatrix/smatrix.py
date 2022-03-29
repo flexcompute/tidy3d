@@ -11,6 +11,7 @@ from ...components.types import Direction, Ax
 from ...components.viz import add_ax_if_none, equal_aspect
 from ...components.base import Tidy3dBaseModel
 from ...log import SetupError
+from ...web.container import Batch
 
 # fwidth of gaussian pulse in units of central frequency
 FWIDTH_FRAC = 1.0 / 10
@@ -172,10 +173,6 @@ class ComponentModeler(Tidy3dBaseModel):
         self, sim_dict: Dict[str, Simulation], folder_name: str, path_dir: str
     ) -> "BatchData":
         """Run :class:`Simulations` for each port and return the batch after saving."""
-
-        # do it here as to not trigger web auth when importing the plugin
-        from ...web.container import Batch
-
         batch = Batch(simulations=sim_dict, folder_name=folder_name)
 
         batch.upload()
