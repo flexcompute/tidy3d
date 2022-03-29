@@ -13,8 +13,8 @@ from mpl_toolkits.axes_grid1 import make_axes_locatable
 from .validators import assert_unique_names, assert_objects_in_sim_bounds
 from .validators import validate_mode_objects_symmetry
 from .geometry import Box
-from .types import Symmetry, Ax, Shapely, FreqBound, GridSize, Axis
-from .grid import Coords1D, Grid, Coords
+from .types import Symmetry, Ax, Shapely, FreqBound, Axis
+from .grid import Coords1D, Grid, Coords, GridSize, Bounds1D
 from .medium import Medium, MediumType, AbstractMedium, PECMedium
 from .structure import Structure
 from .source import SourceType, PlaneWave
@@ -1327,73 +1327,8 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
 
         return len(self.tmesh)
 
-    @staticmethod
-    def _make_bound_coords_uniform(dl, center, size):
-        """creates coordinate boundaries with uniform mesh (dl is float)"""
-
-        num_cells = int(np.floor(size / dl))
-
-        # Make sure there's at least one cell
-        num_cells = max(num_cells, 1)
-
-        # snap to grid, recenter
-        size_snapped = dl * num_cells
-        bound_coords = center + np.linspace(-size_snapped / 2, size_snapped / 2, num_cells + 1)
-
-        return bound_coords
-
-    @staticmethod
-    def _make_bound_coords_nonuniform(dl, center, size):
-        """creates coordinate boundaries with non-uniform mesh (dl is arraylike)"""
-
-        # get bounding coordinates
-        dl = np.array(dl)
-        bound_coords = np.array([np.sum(dl[:i]) for i in range(len(dl) + 1)])
-
-        # place the middle of the bounds at the center of the simulation along dimension
-        bound_coords += center - bound_coords[-1] / 2
-
-        # chop off any coords outside of simulation bounds
-        bound_min = center - size / 2
-        bound_max = center + size / 2
-        bound_coords = bound_coords[bound_coords <= bound_max]
-        bound_coords = bound_coords[bound_coords >= bound_min]
-
-        # if not extending to simulation bounds, repeat beginning and end
-        dl_min = dl[0]
-        dl_max = dl[-1]
-        while bound_coords[0] - dl_min >= bound_min:
-            bound_coords = np.insert(bound_coords, 0, bound_coords[0] - dl_min)
-        while bound_coords[-1] + dl_max <= bound_max:
-            bound_coords = np.append(bound_coords, bound_coords[-1] + dl_max)
-
-        return bound_coords
-
-    def _make_bound_coords(self, dim):
-        """Creates coordinate boundaries along dimension ``dim`` and handle PML and symmetries"""
-
-        dl = self.grid_size[dim]
-        center = self.center[dim]
-
-        # Make uniform or nonuniform boundaries depending on dl input
-        if isinstance(dl, float):
-            bound_coords = self._make_bound_coords_uniform(dl, center, self.size[dim])
-        else:
-            bound_coords = self._make_bound_coords_nonuniform(dl, center, self.size[dim])
-
-        # Add PML layers in using dl on edges
-        bound_coords = self._add_pml_to_bounds(self.num_pml_layers[dim], bound_coords)
-
-        # Enforce a symmetric grid by placing a boundary at the simulation center and
-        # reflecting the boundaries on the other side.
-        if self.symmetry[dim] != 0:
-            bound_coords += center - bound_coords[bound_coords.size // 2]
-            bound_coords = bound_coords[bound_coords >= center]
-            bound_coords = np.append(2 * center - bound_coords[:0:-1], bound_coords)
-
-        return bound_coords
-
     @property
+    @lru_cache(maxsize=100)
     def grid(self) -> Grid:
         """FDTD grid spatial locations and information.
 
@@ -1404,7 +1339,21 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         """
         cell_boundary_dict = {}
         for dim, key in enumerate("xyz"):
-            cell_boundary_dict[key] = self._make_bound_coords(dim)
+            # Make boundaries inside simulation along dim
+            lambda0 = C_0 / (np.sum(self.frequency_range) / 2 + 1e-10)
+            # pylint:disable=protected-access
+            bound_coords = Bounds1D._make_bounds(
+                self.grid_size[dim],
+                self.center[dim],
+                self.size[dim],
+                self.symmetry[dim],
+                self.structures,
+                lambda0,
+            )
+            # Add PML layers in using dl on edges
+            bound_coords = self._add_pml_to_bounds(self.num_pml_layers[dim], bound_coords)
+            cell_boundary_dict[key] = bound_coords
+
         boundaries = Coords(**cell_boundary_dict)
         return Grid(boundaries=boundaries)
 
