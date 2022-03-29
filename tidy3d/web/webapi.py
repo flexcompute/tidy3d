@@ -13,6 +13,7 @@ from rich.progress import Progress
 
 from .config import DEFAULT_CONFIG as Config
 from .s3utils import get_s3_user, DownloadProgress
+from .auth import requires_auth
 from .task import TaskId, TaskInfo
 from . import httputils as http
 from ..components.simulation import Simulation
@@ -110,6 +111,7 @@ def upload(
     return task_id
 
 
+@requires_auth
 def get_info(task_id: TaskId) -> TaskInfo:
     """Return information about a task.
 
@@ -130,6 +132,7 @@ def get_info(task_id: TaskId) -> TaskInfo:
     return TaskInfo(**info_dict)
 
 
+@requires_auth
 def start(task_id: TaskId) -> None:
     """Start running the simulation associated with task.
 
@@ -149,6 +152,7 @@ def start(task_id: TaskId) -> None:
     http.put(method, data=task.dict())
 
 
+@requires_auth
 def get_run_info(task_id: TaskId):
     """Gets the % done and field_decay for a running task.
 
@@ -177,6 +181,7 @@ def get_run_info(task_id: TaskId):
         return None, None
 
 
+@requires_auth
 def monitor(task_id: TaskId) -> None:
     """Print the real time task progress until completion.
 
@@ -329,6 +334,7 @@ def load(
     return sim_data
 
 
+@requires_auth
 def delete(task_id: TaskId) -> TaskInfo:
     """Delete server-side data associated with task.
 
@@ -347,6 +353,7 @@ def delete(task_id: TaskId) -> TaskInfo:
     return http.delete(method)
 
 
+@requires_auth
 def delete_old(days_old: int = 100, folder: str = None) -> int:
     """Delete all tasks older than a given amount of days.
 
@@ -380,6 +387,7 @@ def delete_old(days_old: int = 100, folder: str = None) -> int:
     return count
 
 
+@requires_auth
 def get_tasks(num_tasks: int = None, order: Literal["new", "old"] = "new") -> List[Dict]:
     """Get a list with the metadata of the last ``num_tasks`` tasks.
 
@@ -424,6 +432,7 @@ def get_tasks(num_tasks: int = None, order: Literal["new", "old"] = "new") -> Li
     return out_dict
 
 
+@requires_auth
 def _upload_task(  # pylint:disable=too-many-locals,too-many-arguments
     simulation: Simulation,
     task_name: str,
@@ -480,6 +489,7 @@ def _upload_task(  # pylint:disable=too-many-locals,too-many-arguments
     return task_id
 
 
+@requires_auth
 def _download_file(task_id: TaskId, fname: str, path: str) -> None:
     """Download a specific file from server.
 
