@@ -735,7 +735,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         freq: float = None,
         alpha: float = None,
         cbar: bool = True,
-        reverse: bool = True,
+        reverse: bool = False,
         ax: Ax = None,
     ) -> Ax:
         """Plot each of simulation's structures on a plane defined by one nonzero x,y,z coordinate.
@@ -752,8 +752,9 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         freq : float = None
             Frequency to evaluate the relative permittivity of all mediums.
             If not specified, evaluates at infinite frequency.
-        reverse : bool = True
-            If ``True``, the highest permittivity is plotted in black; if ``False``: white.
+        reverse : bool = False
+            If ``False``, the highest permittivity is plotted in black.
+            If ``True``, it is plotteed in white (suitable for black backgrounds).
         cbar : bool = True
             Whether to plot a colorbar for the relative permittivity.
         alpha : float = None
@@ -772,7 +773,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         medium_shapes = self._filter_structures_plane(self.structures, x=x, y=y, z=z)
         for (medium, shape) in medium_shapes:
             ax = self._plot_shape_structure_eps(
-                freq=freq, alpha=alpha, medium=medium, shape=shape, ax=ax
+                freq=freq, alpha=alpha, medium=medium, reverse=reverse, shape=shape, ax=ax
             )
 
         if cbar:
@@ -797,7 +798,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         return eps_min, eps_max
 
     def _get_structure_eps_plot_params(
-        self, medium: Medium, freq: float, alpha: float = None
+        self, medium: Medium, freq: float, reverse: bool = False, alpha: float = None
     ) -> PlotParams:
         """Constructs the plot parameters for a given medium in simulation.plot_eps()."""
 
@@ -822,16 +823,24 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
             delta_eps = eps_medium - eps_min
             delta_eps_max = eps_max - eps_min + 1e-5
             eps_fraction = delta_eps / delta_eps_max
-            color = 1 - eps_fraction
+            color = eps_fraction if reverse else 1 - eps_fraction
             plot_params.facecolor = str(color)
 
         return plot_params
 
     def _plot_shape_structure_eps(
-        self, freq: float, medium: Medium, shape: Shapely, ax: Ax, alpha: float = None
+        self,
+        freq: float,
+        medium: Medium,
+        shape: Shapely,
+        ax: Ax,
+        reverse: bool = False,
+        alpha: float = None,
     ) -> Ax:
         """Plot a structure's cross section shape for a given medium, grayscale for permittivity."""
-        plot_params = self._get_structure_eps_plot_params(medium=medium, freq=freq, alpha=alpha)
+        plot_params = self._get_structure_eps_plot_params(
+            medium=medium, freq=freq, alpha=alpha, reverse=reverse
+        )
         ax = self.plot_shape(shape=shape, plot_params=plot_params, ax=ax)
         return ax
 

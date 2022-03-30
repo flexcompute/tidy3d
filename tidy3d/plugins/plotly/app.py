@@ -26,7 +26,7 @@ class App(Tidy3dBaseModel, ABC):
     mode: APP_MODE = pd.Field(
         DEFAULT_MODE,
         title="App Mode",
-        description='Run app differently based on `mode` in `"python"`, `"jupyter"`, `"jupyterlab"`'
+        description='Run app differently based on `mode` in `"python"`, `"jupyter"`, `"jupyterlab"`',
     )
 
     def _initialize_app(self) -> DASH_APP:
@@ -88,12 +88,17 @@ class SimulationDataApp(App):
 
         # monitors
         for monitor_name, monitor_data in self.sim_data.monitor_data.items():
-            data_plotly = DataPlotly.from_monitor_data(monitor_data=monitor_data, monitor_name=monitor_name)
+            data_plotly = DataPlotly.from_monitor_data(
+                monitor_data=monitor_data, monitor_name=monitor_name
+            )
             component = data_plotly.make_component(app)
             layout.children += [component]
 
         # log
-        component = dcc.Tab([html.Div([html.Code(self.sim_data.log, style={"whiteSpace": "pre-wrap"})])], label='log')
+        component = dcc.Tab(
+            [html.Div([html.Code(self.sim_data.log, style={"whiteSpace": "pre-wrap"})])],
+            label="log",
+        )
         layout.children += [component]
 
         return layout

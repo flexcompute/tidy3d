@@ -105,19 +105,19 @@ class SimulationPlotly(UIComponent):
     def xyz_label_bounds(self):
         """Get the plot normal axis label and the min and max bounds."""
 
-        xyz_label = 'xyz'[self.cs_axis]
+        xyz_label = "xyz"[self.cs_axis]
         bmin, bmax = self.simulation.bounds
         xyz_min = bmin[self.cs_axis]
         xyz_max = bmax[self.cs_axis]
         return xyz_label, (xyz_min, xyz_max)
 
     def make_figure(self):
-        """ Generate plotly figure from the current state of self."""
+        """Generate plotly figure from the current state of self."""
 
         xyz_label, (xyz_min, xyz_max) = self.xyz_label_bounds
         if self.cs_val is None:
             self.cs_val = (xyz_min + xyz_max) / 2.0
-        plotly_kwargs = {xyz_label:self.cs_val}
+        plotly_kwargs = {xyz_label: self.cs_val}
         return self.plotly(**plotly_kwargs)
 
     def make_component(self, app):
@@ -129,58 +129,56 @@ class SimulationPlotly(UIComponent):
         xyz_slider = html.Div(
             [
                 dcc.Dropdown(
-                    options=['x', 'y', 'z'],
+                    options=["x", "y", "z"],
                     value=xyz_label,
-                    id='simulation_cs_axis_dropdown',
+                    id="simulation_cs_axis_dropdown",
                 ),
                 dcc.Slider(
                     min=xyz_min,
                     max=xyz_max,
                     value=self.cs_val,
-                    id='simulation_cs_slider',
+                    id="simulation_cs_slider",
                 ),
-            ], style={'padding': 50, 'flex': 1}
+            ],
+            style={"padding": 50, "flex": 1},
         )
 
         graph = html.Div(
-            [
-                dcc.Graph(figure=figure, id='simulation_plot')
-            ], style={'padding': 10, 'flex': 1})
+            [dcc.Graph(figure=figure, id="simulation_plot")], style={"padding": 10, "flex": 1}
+        )
 
         component = dcc.Tab(
-            [
-                html.Div([graph, xyz_slider], style={'display': 'flex', 'flex-direction': 'row'})
-            ], label="Simulation"
+            [html.Div([graph, xyz_slider], style={"display": "flex", "flex-direction": "row"})],
+            label="Simulation",
         )
-
 
         @app.callback(
-            Output('simulation_plot', 'figure'),
+            Output("simulation_plot", "figure"),
             [
-                Input('simulation_cs_axis_dropdown', 'value'),
-                Input('simulation_cs_slider', 'value'),
-            ]
+                Input("simulation_cs_axis_dropdown", "value"),
+                Input("simulation_cs_slider", "value"),
+            ],
         )
         def set_xyz_sliderbar(cs_axis_string, cs_val):
-            self.cs_axis = ['x', 'y', 'z'].index(cs_axis_string)
+            self.cs_axis = ["x", "y", "z"].index(cs_axis_string)
             self.cs_val = float(cs_val)
             return self.make_figure()
 
         @app.callback(
-            Output('simulation_cs_slider', 'min'),
-            Input('simulation_cs_axis_dropdown', 'value'),
+            Output("simulation_cs_slider", "min"),
+            Input("simulation_cs_axis_dropdown", "value"),
         )
         def set_min(cs_axis_string):
-            self.cs_axis = ['x', 'y', 'z'].index(cs_axis_string)
+            self.cs_axis = ["x", "y", "z"].index(cs_axis_string)
             _, (xyz_min, _) = self.xyz_label_bounds
             return xyz_min
 
         @app.callback(
-            Output('simulation_cs_slider', 'max'),
-            Input('simulation_cs_axis_dropdown', 'value'),
+            Output("simulation_cs_slider", "max"),
+            Input("simulation_cs_axis_dropdown", "value"),
         )
         def set_max(cs_axis_string):
-            self.cs_axis = ['x', 'y', 'z'].index(cs_axis_string)
+            self.cs_axis = ["x", "y", "z"].index(cs_axis_string)
             _, (_, xyz_max) = self.xyz_label_bounds
             return xyz_max
 

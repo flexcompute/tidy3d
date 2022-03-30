@@ -916,10 +916,10 @@ class AbstractSimulationData(Tidy3dBaseModel, ABC):
 
         if val == "abs":
             cmap = "magma"
-            eps_reverse = False
+            eps_reverse = True
         else:
             cmap = "RdBu"
-            eps_reverse = True
+            eps_reverse = False
 
         # plot the field
         xy_coord_labels = list("xyz")
@@ -1160,7 +1160,6 @@ class SimulationData(AbstractSimulationData):
             eps_alpha=eps_alpha,
             robust=robust,
             ax=ax,
-            **patch_kwargs,
         )
 
     def normalize(self, normalize_index: int = 0):
