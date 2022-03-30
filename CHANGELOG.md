@@ -9,6 +9,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+## [1.2.1] - 2022-3-30
+
+### Added
+
+### Changed
+
+- `webapi` functions now only authenticate when needed.
+- Credentials storing folder only created when needed.
+- Added maximum number of attemtps in authentication.
+- Made plotly plotting faster.
+- Cached Simulation.medium and Simulation.medium_map computation.
+
 ## [1.2.0] - 2022-3-28
 
 ### Added
@@ -209,7 +221,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Job and Batch classes for better simulation handling (eventually to fully replace webapi functions).
 - A large number of small improvements and bug fixes.
 
-[Unreleased]: https://github.com/flexcompute/tidy3d/compare/v1.2.0...develop
+[Unreleased]: https://github.com/flexcompute/tidy3d/compare/v1.2.1...develop
+[1.2.1]: https://github.com/flexcompute/tidy3d/compare/v1.2.0...v1.2.1
 [1.2.0]: https://github.com/flexcompute/tidy3d/compare/v1.1.1...v1.2.0
 [1.1.1]: https://github.com/flexcompute/tidy3d/compare/v1.1.0...v1.1.1
 [1.1.0]: https://github.com/flexcompute/tidy3d/compare/v1.0.2...v1.1.0
