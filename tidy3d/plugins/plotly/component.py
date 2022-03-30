@@ -25,15 +25,14 @@ This will use the internal state to contruct kwargs for a call to `fig = self.pl
 
 
 class UIComponent(Tidy3dBaseModel):
-
     @abstractmethod
     def make_component(self, app) -> dcc.Tab:
         """Creates the dash component for this montor data."""
 
     @abstractmethod
-    def make_figure(self) -> 'Plotly.Figure':
+    def make_figure(self) -> "Plotly.Figure":
         """Creates the dash component for this montor data."""
 
     @abstractmethod
-    def plotly(self, **kwargs) -> 'Plotly.Figure':
+    def plotly(self, **kwargs) -> "Plotly.Figure":
         """Make a plotly figure using all of the optional kwargs."""

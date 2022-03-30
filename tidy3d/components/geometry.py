@@ -16,7 +16,6 @@ from .types import Vertices, Ax, Shapely
 from .viz import add_ax_if_none, equal_aspect
 from .viz import PLOT_BUFFER, ARROW_LENGTH_FACTOR, ARROW_WIDTH_FACTOR, MAX_ARROW_WIDTH_FACTOR
 from .viz import PlotParams, plot_params_geometry
-from .validators import is_not_inf
 from ..log import Tidy3dKeyError, SetupError, ValidationError
 from ..constants import MICROMETER, LARGE_NUMBER, RADIAN
 

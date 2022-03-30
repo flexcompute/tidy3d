@@ -70,6 +70,7 @@ def equal_aspect(plot):
 
     return _plot
 
+
 """ plot parameters """
 
 
