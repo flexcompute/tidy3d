@@ -366,14 +366,16 @@ def delete(task_id: TaskId) -> TaskInfo:
 
 
 @requires_auth
-def delete_old(folder: str, days_old: int = 100) -> int:
+def delete_old(
+    days_old: int = 100,
+    folder: str = "default",
+) -> int:
     """Delete all tasks older than a given amount of days.
 
     Parameters
     ----------
     folder : str
-        Only allowed to pure one folder at a time.
-
+        Only allowed to delete in one folder at a time.
     days_old : int = 100
         Minimum number of days since the task creation.
 
@@ -410,7 +412,7 @@ def get_tasks(
     order : Literal["new", "old"] = "new"
         Return the tasks in order of newest-first or oldest-first.
     folder: str = "default"
-
+        Folder from which to get the tasks.
     """
     folder = _query_or_create_folder(folder)
     tasks = http.get(f"tidy3d/projects/{folder.projectId}/tasks")
@@ -506,9 +508,8 @@ def _upload_task(  # pylint:disable=too-many-locals,too-many-arguments
 
     if resp.get("ResponseMetadata") and resp.get("ResponseMetadata").get("HTTPStatusCode") != 200:
         raise WebError("Upload file to 3S failed, please check your network or try it later.")
-    print("\n")
-    print(f"{DEFAULT_CONFIG.website_endpoint}/folders/{folder.projectId}/tasks/{task_id}")
-    print("\n")
+
+    log.info(f"{DEFAULT_CONFIG.website_endpoint}/folders/{folder.projectId}/tasks/{task_id}")
 
     return task_id
 
