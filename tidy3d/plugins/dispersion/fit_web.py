@@ -9,6 +9,9 @@ from ...components.types import Literal
 from ...components import PoleResidue
 from ...constants import MICROMETER, HERTZ
 from ...log import log, WebError, Tidy3dError
+from ...web.httputils import get_headers
+from ...web.auth import requires_auth
+
 from .fit import DispersionFitter
 
 BOUND_MAX_FACTOR = 10
@@ -143,6 +146,7 @@ class StableDispersionFitter(DispersionFitter):
         return URL_ENV[_env]
 
     @staticmethod
+    @requires_auth
     def _setup_server(url_server: str):
         """set up web server access
 
@@ -152,14 +156,6 @@ class StableDispersionFitter(DispersionFitter):
             URL for the server
         """
 
-        from ...web.auth import (  # pylint:disable=import-outside-toplevel, unused-import
-            get_credentials,
-        )
-        from ...web.httputils import (  # pylint:disable=import-outside-toplevel
-            get_headers,
-        )
-
-        # get_credentials()
         access_token = get_headers()
         headers = {"Authorization": access_token["Authorization"]}
 

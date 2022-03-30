@@ -4,6 +4,7 @@ import getpass
 import hashlib
 import json
 import logging
+import functools
 
 import boto3
 import requests
@@ -49,6 +50,7 @@ def encode_password(password: str) -> str:
     return hashlib.sha512(password.encode("utf-8") + salt.encode("utf-8")).hexdigest()
 
 
+# pylint:disable=too-many-branches
 def get_credentials() -> None:
     """Tries to log user in from environment variables, then from file, if not working, prompts
     user for login info and saves to file."""
@@ -57,11 +59,13 @@ def get_credentials() -> None:
     if "TIDY3D_USER" in os.environ and (
         "TIDY3D_PASS" in os.environ or "TIDY3D_PASS_HASH" in os.environ
     ):
-        logging.info("Using Tidy3D credentials from enviornment")
+        logging.debug("Using Tidy3D credentials from enviornment")
         email = os.environ["TIDY3D_USER"]
-        password = os.environ.get("TIDY3D_PASS_HASH")
+        password = os.environ.get("TIDY3D_PASS")
         if password is None:
-            password = encode_password(os.environ.get("TIDY3D_PASS"))
+            password = os.environ.get("TIDY3D_PASS_HASH")
+        else:
+            password = encode_password(password)
         try:
             set_authentication_config(email, password)
             return
@@ -137,6 +141,7 @@ def get_credentials() -> None:
 def requires_auth(func):
     """Decorator for functions that require the authentication step."""
 
+    @functools.wraps(func)
     def auth_before_call(*args, **kwargs):
         get_credentials()
         return func(*args, **kwargs)
