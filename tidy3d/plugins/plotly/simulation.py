@@ -101,30 +101,42 @@ class SimulationPlotly(UIComponent):
     cs_axis: Axis = 0
     cs_val: float = None
 
+    @property
+    def xyz_label_bounds(self):
+        """Get the plot normal axis label and the min and max bounds."""
+
+        xyz_label = 'xyz'[self.cs_axis]
+        bmin, bmax = self.simulation.bounds
+        xyz_min = bmin[self.cs_axis]
+        xyz_max = bmax[self.cs_axis]
+        return xyz_label, (xyz_min, xyz_max)
+
     def make_figure(self):
         """ Generate plotly figure from the current state of self."""
 
-        xyz_string = 'xyz'[self.cs_axis]
+        xyz_label, (xyz_min, xyz_max) = self.xyz_label_bounds
         if self.cs_val is None:
-            self.cs_val = self.simulation.center[self.cs_axis]
-        print(self.cs_val)
-        plotly_kwargs = {xyz_string:self.cs_val}
+            self.cs_val = (xyz_min + xyz_max) / 2.0
+        plotly_kwargs = {xyz_label:self.cs_val}
         return self.plotly(**plotly_kwargs)
 
     def make_component(self, app):
         """Creates the dash component."""
 
+        xyz_label, (xyz_min, xyz_max) = self.xyz_label_bounds
+        figure = self.make_figure()
+
         xyz_slider = html.Div(
             [
                 dcc.Dropdown(
                     options=['x', 'y', 'z'],
-                    value='xyz'[self.cs_axis],
+                    value=xyz_label,
                     id='simulation_cs_axis_dropdown',
                 ),
                 dcc.Slider(
-                    min=self.simulation.bounds[0][self.cs_axis],
-                    max=self.simulation.bounds[1][self.cs_axis],
-                    value=self.simulation.center[self.cs_axis],
+                    min=xyz_min,
+                    max=xyz_max,
+                    value=self.vs_val,
                     id='simulation_cs_slider',
                 ),
             ], style={'padding': 50, 'flex': 1}
@@ -132,7 +144,7 @@ class SimulationPlotly(UIComponent):
 
         graph = html.Div(
             [
-                dcc.Graph(figure=self.make_figure(), id='simulation_plot')
+                dcc.Graph(figure=figure, id='simulation_plot')
             ], style={'padding': 10, 'flex': 1})
 
         component = dcc.Tab(
@@ -160,7 +172,8 @@ class SimulationPlotly(UIComponent):
         )
         def set_min(cs_axis_string):
             self.cs_axis = ['x', 'y', 'z'].index(cs_axis_string)
-            return self.simulation.bounds[0][self.cs_axis]
+            _, (xyz_min, _) = self.xyz_label_bounds
+            return xyz_min
 
         @app.callback(
             Output('simulation_cs_slider', 'max'),
@@ -168,7 +181,8 @@ class SimulationPlotly(UIComponent):
         )
         def set_max(cs_axis_string):
             self.cs_axis = ['x', 'y', 'z'].index(cs_axis_string)
-            return self.simulation.bounds[1][self.cs_axis]
+            _, (_, xyz_max) = self.xyz_label_bounds
+            return xyz_max
 
         return component
 

@@ -21,12 +21,12 @@ DASH_APP = "Dash App"
 
 
 class App(Tidy3dBaseModel, ABC):
-    """Generic app."""
+    """Basic dash app template: initializes, makes layout, and fires up a server."""
 
     mode: APP_MODE = pd.Field(
         DEFAULT_MODE,
         title="App Mode",
-        description="If running in jupyter notebook, should be 'jupyter'.",
+        description='Run app differently based on `mode` in `"python"`, `"jupyter"`, `"jupyterlab"`'
     )
 
     def _initialize_app(self) -> DASH_APP:
@@ -81,22 +81,20 @@ class SimulationDataApp(App):
 
         layout = dcc.Tabs([])
 
-        # Simulation Plot.
+        # simulation
         sim_plotly = SimulationPlotly(simulation=self.sim_data.simulation)
-        layout.children += [
-            sim_plotly.make_component(app)
-        ]
+        component = sim_plotly.make_component(app)
+        layout.children += [component]
 
-
+        # monitors
         for monitor_name, monitor_data in self.sim_data.monitor_data.items():
             data_plotly = DataPlotly.from_monitor_data(monitor_data=monitor_data, monitor_name=monitor_name)
             component = data_plotly.make_component(app)
             layout.children += [component]
 
         # log
-        layout.children += [
-            dcc.Tab([html.Code(self.sim_data.log, style={"whiteSpace": "pre-wrap"})], label="log")
-        ]
+        component = dcc.Tab([html.Div([html.Code(self.sim_data.log, style={"whiteSpace": "pre-wrap"})])], label='log')
+        layout.children += [component]
 
         return layout
 
@@ -108,7 +106,7 @@ class SimulationDataApp(App):
 
 
 class SimulationApp(App):
-    """TODO: App for viewing and editing a Simulation."""
+    """TODO: App for viewing and editing a :class:`.Simulation`."""
 
     simulation: td.Simulation = pd.Field(
         ..., title="Simulation", description="A Simulation instance to view."
