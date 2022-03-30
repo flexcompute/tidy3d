@@ -571,9 +571,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
 
     @equal_aspect
     @add_ax_if_none
-    def plot(
-        self, x: float = None, y: float = None, z: float = None, ax: Ax = None, **patch_kwargs
-    ) -> Ax:
+    def plot(self, x: float = None, y: float = None, z: float = None, ax: Ax = None) -> Ax:
         """Plot each of simulation's components on a plane defined by one nonzero x,y,z coordinate.
 
         Parameters
@@ -584,9 +582,6 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
             position of plane in y direction, only one of x, y, z must be specified to define plane.
         z : float = None
             position of plane in z direction, only one of x, y, z must be specified to define plane.
-        freq : float = None
-            Frequency to evaluate the relative permittivity of all mediums.
-            If not specified, evaluates at infinite frequency.
         ax : matplotlib.axes._subplots.Axes = None
             Matplotlib axes to plot on, if not specified, one is created.
 
@@ -675,7 +670,8 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
 
         medium_shapes = self._filter_structures_plane(self.structures, x=x, y=y, z=z)
         for (medium, shape) in medium_shapes:
-            ax = self._plot_shape_structure(medium=medium, shape=shape, ax=ax)
+            if medium != self.medium:
+                ax = self._plot_shape_structure(medium=medium, shape=shape, ax=ax)
 
         ax = self._set_plot_bounds(ax=ax, x=x, y=y, z=z)
 
@@ -772,9 +768,10 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         eps_min, eps_max = self.eps_bounds(freq=freq)
         medium_shapes = self._filter_structures_plane(self.structures, x=x, y=y, z=z)
         for (medium, shape) in medium_shapes:
-            ax = self._plot_shape_structure_eps(
-                freq=freq, alpha=alpha, medium=medium, reverse=reverse, shape=shape, ax=ax
-            )
+            if medium != self.medium:
+                ax = self._plot_shape_structure_eps(
+                    freq=freq, alpha=alpha, medium=medium, reverse=reverse, shape=shape, ax=ax
+                )
 
         if cbar:
             self._add_cbar(eps_min=eps_min, eps_max=eps_max, ax=ax)
