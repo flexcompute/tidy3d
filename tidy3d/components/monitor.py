@@ -9,7 +9,7 @@ from .types import Literal, Ax, EMField, ArrayLike, Array
 from .geometry import Box
 from .validators import assert_plane
 from .mode import ModeSpec
-from .viz import add_ax_if_none, equal_aspect, MonitorParams, ARROW_COLOR_MONITOR, ARROW_ALPHA
+from .viz import PlotParams, plot_params_monitor, ARROW_COLOR_MONITOR, ARROW_ALPHA
 from ..log import SetupError
 from ..constants import HERTZ, SECOND
 
@@ -28,18 +28,13 @@ class Monitor(Box, ABC):
         min_length=1,
     )
 
-    @equal_aspect
-    @add_ax_if_none
-    def plot(  # pylint:disable=duplicate-code
-        self, x: float = None, y: float = None, z: float = None, ax: Ax = None, **kwargs
-    ) -> Ax:
-
-        kwargs = MonitorParams().update_params(**kwargs)
-        ax = self.geometry.plot(x=x, y=y, z=z, ax=ax, **kwargs)
-        return ax
+    @property
+    def plot_params(self) -> PlotParams:
+        """Default parameters for plotting a Monitor object."""
+        return plot_params_monitor
 
     @property
-    def geometry(self):
+    def geometry(self) -> Box:
         """:class:`Box` representation of monitor.
 
         Returns
@@ -171,45 +166,7 @@ class PlanarMonitor(Monitor, ABC):
 
 
 class AbstractFluxMonitor(PlanarMonitor, ABC):
-    """:class:`Monitor` that records flux through a plane."""
-
-
-class AbstractModeMonitor(PlanarMonitor, FreqMonitor):
-    """:class:`Monitor` that records mode-related data."""
-
-    mode_spec: ModeSpec = pydantic.Field(
-        ...,
-        title="Mode Specification",
-        description="Parameters to feed to mode solver which determine modes measured by monitor.",
-    )
-
-    def plot(
-        self, x: float = None, y: float = None, z: float = None, ax: Ax = None, **kwargs
-    ) -> Ax:
-
-        # call the monitor.plot() function first
-        ax = super().plot(x=x, y=y, z=z, ax=ax, **kwargs)
-
-        # and then add an arrow using the direction comuputed from `_dir_arrow`.
-        ax = self._plot_arrow(
-            x=x,
-            y=y,
-            z=z,
-            ax=ax,
-            direction=self._dir_arrow,
-            color=ARROW_COLOR_MONITOR,
-            alpha=ARROW_ALPHA,
-            both_dirs=True,
-        )
-        return ax
-
-    @property
-    def _dir_arrow(self) -> Tuple[float, float, float]:
-        """Source direction normal vector in cartesian coordinates."""
-        dx = np.cos(self.mode_spec.angle_phi) * np.sin(self.mode_spec.angle_theta)
-        dy = np.sin(self.mode_spec.angle_phi) * np.sin(self.mode_spec.angle_theta)
-        dz = np.cos(self.mode_spec.angle_theta)
-        return self.unpop_axis(dz, (dx, dy), axis=self.size.index(0.0))
+    """:class:`Monitor` that records flux through a plane"""
 
 
 class FieldMonitor(AbstractFieldMonitor, FreqMonitor):
@@ -225,7 +182,7 @@ class FieldMonitor(AbstractFieldMonitor, FreqMonitor):
     ...     name='steady_state_monitor')
     """
 
-    _data_type: Literal["FieldData"] = pydantic.Field("FieldData")
+    _data_type: Literal["ScalarFieldData"] = pydantic.Field("ScalarFieldData")
 
     def storage_size(self, num_cells: int, tmesh: Array) -> int:
         # stores 1 complex number per grid cell, per frequency, per field
@@ -316,7 +273,7 @@ class FieldTimeMonitor(AbstractFieldMonitor, TimeMonitor):
     ...     name='movie_monitor')
     """
 
-    _data_type: Literal["FieldTimeData"] = pydantic.Field("FieldTimeData")
+    _data_type: Literal["ScalarFieldTimeData"] = pydantic.Field("ScalarFieldTimeData")
 
     def storage_size(self, num_cells: int, tmesh: Array) -> int:
         # stores 1 real number per grid cell, per time step, per field
@@ -339,8 +296,8 @@ class FluxMonitor(AbstractFluxMonitor, FreqMonitor):
     _data_type: Literal["FluxData"] = pydantic.Field("FluxData")
 
     def storage_size(self, num_cells: int, tmesh: Array) -> int:
-        # stores 1 real number per frequency
-        return BYTES_REAL * len(self.freqs)
+        # stores 6 complex numbers per grid cell, per frequency
+        return 6 * BYTES_REAL * num_cells * len(self.freqs)
 
 
 class FluxTimeMonitor(AbstractFluxMonitor, TimeMonitor):
@@ -365,7 +322,7 @@ class FluxTimeMonitor(AbstractFluxMonitor, TimeMonitor):
         return BYTES_REAL * num_steps
 
 
-class ModeMonitor(AbstractModeMonitor):
+class ModeMonitor(PlanarMonitor, FreqMonitor):
     """:class:`Monitor` that records amplitudes from modal decomposition of fields on plane.
 
     Example
@@ -379,37 +336,46 @@ class ModeMonitor(AbstractModeMonitor):
     ...     name='mode_monitor')
     """
 
+    mode_spec: ModeSpec = pydantic.Field(
+        ...,
+        title="Mode Specification",
+        description="Parameters to feed to mode solver which determine modes measured by monitor.",
+    )
+
     _data_type: Literal["ModeData"] = pydantic.Field("ModeData")
 
     def storage_size(self, num_cells: int, tmesh: int) -> int:
-        # stores 3 complex numbers per frequency, per mode.
-        return 3 * BYTES_COMPLEX * len(self.freqs) * self.mode_spec.num_modes
+        # stores 3 complex numbers per grid cell, per frequency, per mode.
+        return 3 * BYTES_COMPLEX * num_cells * len(self.freqs) * self.mode_spec.num_modes
 
+    def plot(
+        self, x: float = None, y: float = None, z: float = None, ax: Ax = None, **kwargs
+    ) -> Ax:
 
-class ModeFieldMonitor(AbstractModeMonitor):
-    """:class:`Monitor` that stores the mode field profiles returned by the mode solver in the
-    monitor plane.
+        # call the monitor.plot() function first
+        ax = super().plot(x=x, y=y, z=z, ax=ax, **kwargs)
 
-    Example
-    -------
-    >>> mode_spec = ModeSpec(num_modes=3)
-    >>> monitor = ModeFieldMonitor(
-    ...     center=(1,2,3),
-    ...     size=(2,2,0),
-    ...     freqs=[200e12, 210e12],
-    ...     mode_spec=mode_spec,
-    ...     name='mode_monitor')
-    """
+        # and then add an arrow using the direction comuputed from `_dir_arrow`.
+        ax = self._plot_arrow(
+            x=x,
+            y=y,
+            z=z,
+            ax=ax,
+            direction=self._dir_arrow,
+            color=ARROW_COLOR_MONITOR,
+            alpha=ARROW_ALPHA,
+            both_dirs=True,
+        )
+        return ax
 
-    _data_type: Literal["ModeFieldData"] = pydantic.Field("ModeFieldData")
-
-    def storage_size(self, num_cells: int, tmesh: int) -> int:
-        # fields store 6 complex numbers per grid cell, per frequency, per mode.
-        field_size = 6 * BYTES_COMPLEX * num_cells * len(self.freqs) * self.mode_spec.num_modes
-        return field_size
+    @property
+    def _dir_arrow(self) -> Tuple[float, float, float]:
+        """Source direction normal vector in cartesian coordinates."""
+        normal = [0.0, 0.0, 0.0]
+        normal_axis = self.size.index(0.0)
+        normal[normal_axis] = 1.0
+        return tuple(normal)
 
 
 # types of monitors that are accepted by simulation
-MonitorType = Union[
-    FieldMonitor, FieldTimeMonitor, FluxMonitor, FluxTimeMonitor, ModeMonitor, ModeFieldMonitor
-]
+MonitorType = Union[FieldMonitor, FieldTimeMonitor, FluxMonitor, FluxTimeMonitor, ModeMonitor]
