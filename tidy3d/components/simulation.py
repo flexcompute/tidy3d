@@ -1,6 +1,7 @@
 # pylint: disable=too-many-lines
 """ Container holding all information about simulation and its components"""
 from typing import Dict, Tuple, List, Set
+from functools import lru_cache
 
 import pydantic
 import numpy as np
@@ -532,6 +533,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
     """ Accounting """
 
     @property
+    @lru_cache()
     def mediums(self) -> Set[MediumType]:
         """Returns set of distinct :class:`AbstractMedium` in simulation.
 
@@ -545,6 +547,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         return list(medium_dict.keys())
 
     @property
+    @lru_cache()
     def medium_map(self) -> Dict[MediumType, pydantic.NonNegativeInt]:
         """Returns dict mapping medium to index in material.
         ``medium_map[medium]`` returns unique global index of :class:`AbstractMedium` in simulation.
