@@ -136,7 +136,7 @@ class SimulationPlotly(UIComponent):
                 dcc.Slider(
                     min=xyz_min,
                     max=xyz_max,
-                    value=self.vs_val,
+                    value=self.cs_val,
                     id='simulation_cs_slider',
                 ),
             ], style={'padding': 50, 'flex': 1}
