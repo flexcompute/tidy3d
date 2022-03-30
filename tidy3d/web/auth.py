@@ -3,13 +3,13 @@ import os
 import getpass
 import hashlib
 import json
-import logging
 import functools
 
 import boto3
 import requests
 
 from .config import DEFAULT_CONFIG as Config
+from ..log import log
 
 # maximum attempts for credentials input
 MAX_ATTEMPTS = 3
@@ -59,7 +59,7 @@ def get_credentials() -> None:
     if "TIDY3D_USER" in os.environ and (
         "TIDY3D_PASS" in os.environ or "TIDY3D_PASS_HASH" in os.environ
     ):
-        logging.debug("Using Tidy3D credentials from enviornment")
+        log.debug("Using Tidy3D credentials from enviornment")
         email = os.environ["TIDY3D_USER"]
         password = os.environ.get("TIDY3D_PASS")
         if password is None:
@@ -71,11 +71,11 @@ def get_credentials() -> None:
             return
 
         except Exception:  # pylint:disable=broad-except
-            logging.info("Error: Failed to log in with environment credentials.")
+            log.info("Error: Failed to log in with environment credentials.")
 
     # if we find something in the credential path
     if os.path.exists(credential_path):
-        logging.info("Using Tidy3D credentials from stored file")
+        log.info("Using Tidy3D credentials from stored file")
         # try to authenticate them
         try:
             with open(credential_path, "r", encoding="utf-8") as fp:
@@ -86,13 +86,10 @@ def get_credentials() -> None:
             return
 
         except Exception:  # pylint:disable=broad-except
-            logging.info("Error: Failed to log in with saved credentials.")
+            log.info("Error: Failed to log in with saved credentials.")
 
     # keep trying to log in
-    attempts = 0
-    while attempts < MAX_ATTEMPTS:
-
-        attempts += 1
+    for _ in range(MAX_ATTEMPTS):
 
         email = input("enter your email registered at tidy3d: ")
         password = getpass.getpass("enter your password: ")
@@ -104,13 +101,10 @@ def get_credentials() -> None:
             break
 
         except Exception:  # pylint:disable=broad-except
-            logging.info("Error: Failed to log in with new username and password.")
+            log.info("Error: Failed to log in with new username and password.")
 
     # ask to stay logged in
-    attempts = 0
-    while attempts < MAX_ATTEMPTS:
-
-        attempts += 1
+    for _ in range(MAX_ATTEMPTS):
 
         keep_logged_in = input("Do you want to keep logged in on this machine? ([Y]es / [N]o) ")
 
@@ -127,7 +121,7 @@ def get_credentials() -> None:
                 return
 
             except Exception:  # pylint:disable=broad-except
-                logging.info("Error: Failed to store credentials.")
+                log.info("Error: Failed to store credentials.")
                 return
 
         # if doesn't want to keep logged in, just return without saving file
@@ -135,7 +129,7 @@ def get_credentials() -> None:
             return
 
         # otherwise, prompt again
-        logging.info(f"Unknown response: {keep_logged_in}")
+        log.info(f"Unknown response: {keep_logged_in}")
 
 
 def requires_auth(func):
