@@ -229,26 +229,27 @@ def plotly_sim(sim, x=None, y=None, z=None):
     for struct in sim.structures:
         geo = struct.geometry
         shapes = geo.intersections(x=x, y=y, z=z)
-        mat_index = sim.medium_map[struct.medium]
 
-        params = StructMediumParams(medium=struct.medium, medium_map=sim.medium_map)
-        color = params.get_plot_params().facecolor
+        if len(shapes) > 0:
+            mat_index = sim.medium_map[struct.medium]
+            params = StructMediumParams(medium=struct.medium, medium_map=sim.medium_map)
+            color = params.get_plot_params().facecolor
 
-        for shape in shapes:
-            xs, ys = shape.exterior.coords.xy
-            xs = xs.tolist()
-            ys = ys.tolist()
+            for shape in shapes:
+                xs, ys = shape.exterior.coords.xy
+                xs = xs.tolist()
+                ys = ys.tolist()
 
-            plotly_trace = go.Scatter(
-                x=xs,
-                y=ys,
-                fill="toself",
-                fillcolor=color,
-                line=dict(width=0),
-                marker=dict(size=0.0001, line=dict(width=0)),
-                name=struct.medium.name if struct.medium.name else f"medium[{mat_index}]",
-            )
-            fig.add_trace(plotly_trace)
+                plotly_trace = go.Scatter(
+                    x=xs,
+                    y=ys,
+                    fill="toself",
+                    fillcolor=color,
+                    line=dict(width=0),
+                    marker=dict(size=0.0001, line=dict(width=0)),
+                    name=struct.medium.name if struct.medium.name else f"medium[{mat_index}]",
+                )
+                fig.add_trace(plotly_trace)
 
     for i, source in enumerate(sim.sources):
         geo = source.geometry
