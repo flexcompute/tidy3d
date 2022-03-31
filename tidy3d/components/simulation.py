@@ -571,7 +571,9 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
 
     @equal_aspect
     @add_ax_if_none
-    def plot(self, x: float = None, y: float = None, z: float = None, ax: Ax = None) -> Ax:
+    def plot(
+        self, x: float = None, y: float = None, z: float = None, ax: Ax = None, **patch_kwargs
+    ) -> Ax:
         """Plot each of simulation's components on a plane defined by one nonzero x,y,z coordinate.
 
         Parameters
