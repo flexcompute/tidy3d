@@ -12,7 +12,7 @@ from .components import PMLParams, AbsorberParams
 from .components import DefaultPMLParameters, DefaultStablePMLParameters, DefaultAbsorberParameters
 
 # grid
-from .components import Grid, Coords
+from .components import Grid, Coords, GridSpec
 
 # geometry
 from .components import Box, Sphere, Cylinder, PolySlab

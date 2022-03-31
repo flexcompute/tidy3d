@@ -1268,20 +1268,22 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
             :class:`Grid` storing the spatial locations relevant to the simulation.
         """
         cell_boundary_dict = {}
-        for dim, key in enumerate("xyz"):
-            # Make boundaries inside simulation along dim
+        for axis, key in enumerate("xyz"):
+            # Make boundaries inside simulation along axis
             lambda0 = C_0 / (np.sum(self.frequency_range) / 2 + 1e-10)
+            # Add a simulation Box as the first structure
+            structures = [Structure(geometry=self.geometry, medium=self.medium)]
+            structures += self.structures
             # pylint:disable=protected-access
             bound_coords = Bounds1D._make_bounds(
-                self.grid_size[dim],
-                self.center[dim],
-                self.size[dim],
-                self.symmetry[dim],
-                self.structures,
+                axis,
+                structures,
+                self.grid_size[axis],
+                self.symmetry[axis],
                 lambda0,
             )
             # Add PML layers in using dl on edges
-            bound_coords = self._add_pml_to_bounds(self.num_pml_layers[dim], bound_coords)
+            bound_coords = self._add_pml_to_bounds(self.num_pml_layers[axis], bound_coords)
             cell_boundary_dict[key] = bound_coords
 
         boundaries = Coords(**cell_boundary_dict)
