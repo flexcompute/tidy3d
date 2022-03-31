@@ -8,6 +8,7 @@ from .base import Tidy3dBaseModel, TYPE_TAG_STR
 from .types import Array, Axis
 from .geometry import Box
 from ..log import SetupError
+from ..constants import C_0
 
 # data type of one dimensional coordinate array.
 Coords1D = Array[float]
@@ -45,20 +46,21 @@ class Bounds1D(Coords1D):
 
     # pylint:disable=too-many-arguments
     @classmethod
-    def _make_bounds(cls, grid_size, center, size, symmetry, structures, wvl):
-        """Make uniform or nonuniform boundaries depending on grid_size input."""
+    def _make_bounds(cls, axis, structures, grid_size, symmetry, wvl):
+        """Make uniform or nonuniform boundaries depending on grid_size input.
+        ``structures`` has the simulation geometry and background medium as first element."""
+
+        center, size = structures[0].geometry.center[axis], structures[0].geometry.size[axis]
 
         if isinstance(grid_size, float):
             bound_coords = cls._from_uniform_dl(grid_size, center, size, symmetry)
         elif isinstance(grid_size, list):
             bound_coords = cls._from_nonuinform_dl(grid_size, center, size)
         elif isinstance(grid_size, GridSpec):
-            cent_nu, size_nu = center, size
             if symmetry != 0:
-                # If symmetry present, only mesh starting from center
-                cent_nu += size / 4
-                size_nu /= 2
-            bound_coords = cls._from_min_steps(grid_size, cent_nu, size_nu, structures, wvl)
+                # If symmetry present, only mesh starting from simulation center
+                structures[0].geometry = Box(center=center + size / 4, size=size / 2)
+            bound_coords = cls._from_min_steps(axis, structures, grid_size, wvl)
 
         # Enforce a symmetric grid by reflecting the boundaries around center
         if symmetry != 0:
@@ -117,10 +119,155 @@ class Bounds1D(Coords1D):
 
     # pylint:disable=too-many-arguments,unused-argument
     @classmethod
-    def _from_min_steps(cls, grid_spec, center, size, structures, wvl):
+    def _from_min_steps(cls, axis, structures, grid_spec, wvl):
         """Creates coordinate boundaries with non-uniform mesh based on required minimum steps
         per wavelength."""
-        return
+
+        min_steps_per_wvl = grid_spec.min_steps_per_wvl
+        interval_coords, min_steps = cls.parse_structures(axis, structures, wvl, min_steps_per_wvl)
+        bound_coords = [float(interval_coords[0])]
+        for coord_ind, coord in enumerate(interval_coords[:-1]):
+            interval_size = interval_coords[coord_ind + 1] - coord
+            num_steps = np.ceil(interval_size / min_steps[coord_ind])
+            dl = interval_size / num_steps
+            coords = bound_coords[-1] + np.arange(1, num_steps + 1) * dl
+            bound_coords += coords.tolist()
+
+        return np.array(bound_coords)
+
+    # pylint:disable=too-many-statements,too-many-locals
+    @classmethod
+    def parse_structures(cls, axis, structures, wvl, min_steps_per_wvl):
+        """Calculate the positions of all bounding box interfaces along all three axes.
+        In most cases the complexity should be O(len(structures)**2), although the worst-case
+        complexity may approach O(len(structures)**3). However this should only happen in some
+        very contrived cases.
+
+        Returns
+        -------
+        interval_coords: array_like
+            An array of coordinates, where the first element is the simulation min boundary, the
+            last element is the simulation max boundary, and the intermediate coordinates are all
+            locations where a structure has a bounding box edge along the specified axis.
+        max_steps: array_like
+            An array of size ``interval_coords.size`` giving the maximum mesh step required in each
+            ``interval_coords[i]:interval_coords[i+1]`` interval, depending on the materials in that
+            interval, the supplied wavelength, and the minimum required step per wavelength.
+            Periodic boundary conditions are applied such that min_steps[0] = min_steps[-1].
+        """
+
+        # Simulation boundaries
+        sim_bmin, sim_bmax = structures[0].geometry.bounds
+        domain_bounds = np.array([sim_bmin[axis], sim_bmax[axis]])
+
+        # Required minimum steps in every material
+        medium_steps = []
+        for structure in structures:
+            n, k = structure.medium.eps_complex_to_nk(structure.medium.eps_model(C_0 / wvl))
+            index = max(abs(n), abs(k))
+            medium_steps.append(wvl / index / min_steps_per_wvl)
+        medium_steps = np.array(medium_steps)
+
+        # If empty simulation, return
+        if len(structures) == 1:
+            return (domain_bounds, medium_steps)
+
+        # Coordinates of all bounding boxes
+        interval_coords = np.array(domain_bounds)
+
+        # Bounding squares in the plane normal to axis (xmin, ymin, xmax, ymax)
+        _, pinds = structures[0].geometry.pop_axis([0, 1, 2], axis=axis)
+        sim_plane_bbox = [sim_bmin[pinds[0]], sim_bmin[pinds[1]]]
+        sim_plane_bbox += [sim_bmax[pinds[0]], sim_bmax[pinds[1]]]
+        plane_bbox = [np.array(sim_plane_bbox)]  # will have len equal to len(structures)
+
+        # list of indexes of structures which are contained in each interval
+        interval_structs = [[0]]  # will have len equal to len(interval_coords) - 1
+
+        # list of indexes of structures that are contained in 2D inside another structure
+        struct_contains = [[]]  # will have len equal to len(structures)
+
+        for struct_ind, structure in enumerate(structures[1:]):
+            # get 3D bounding box and write 2D bouding box
+            bmin, bmax = structure.geometry.bounds
+            bounds_2d = np.array([bmin[pinds[0]], bmin[pinds[1]], bmax[pinds[0]], bmax[pinds[1]]])
+            plane_bbox.append(bounds_2d)
+
+            # indexes of structures that are fully covered in 2D by the current structure
+            struct_contain_inds = []
+            for ind, plane_bounds in enumerate(plane_bbox[:-1]):
+                # faster to do the comparison this way than with e.g. np.all
+                if (
+                    bounds_2d[0] <= plane_bounds[0]
+                    and bounds_2d[1] <= plane_bounds[1]
+                    and bounds_2d[2] >= plane_bounds[2]
+                    and bounds_2d[3] >= plane_bounds[3]
+                ):
+                    struct_contain_inds.append(ind)
+            struct_contains.append(struct_contain_inds)
+
+            # figure out where to place the bounding box coordinates of current structure
+            coord_min, coord_max = bmin[axis], bmax[axis]
+            indsmin = np.argwhere(coord_min < interval_coords)
+            indsmax = np.argwhere(coord_max > interval_coords)
+
+            # Exit if structure is outside of domain bounds
+            if indsmin.size == 0 or indsmax.size == 0:
+                continue
+
+            # Add current structure bounding box coordinates
+            indmin = int(indsmin[0])
+            indmax = int(indsmax[-1]) + 2
+            interval_coords = np.insert(interval_coords, indmin, coord_min)
+            interval_coords = np.insert(interval_coords, indmax, coord_max)
+            # Copy the structure containment list to the newly created interval
+            structs_list_copy = interval_structs[max(0, indmin - 1)].copy()
+            interval_structs.insert(indmin, structs_list_copy)
+            structs_list_copy = interval_structs[min(indmax - 1, len(interval_structs) - 1)].copy()
+            interval_structs.insert(indmax, structs_list_copy)
+            for interval_ind in range(indmin, indmax):
+                interval_structs[interval_ind].append(struct_ind + 1)
+
+        # Truncate intervals to domain bounds
+        b_array = np.array(interval_coords)
+        in_domain = np.argwhere((b_array >= domain_bounds[0]) * (b_array <= domain_bounds[1]))
+        interval_coords = interval_coords[in_domain]
+        interval_structs = [interval_structs[int(i)] for i in in_domain if i < b_array.size - 1]
+
+        # Remove intervals that are smaller than the absolute smallest min_step
+        min_step = np.amin(medium_steps)
+        coords_filter = [interval_coords[0]]
+        structs_filter = []
+        for coord_ind, coord in enumerate(interval_coords[1:]):
+            if coord - coords_filter[-1] > min_step:
+                coords_filter.append(coord)
+                structs_filter.append(interval_structs[coord_ind])
+        interval_coords = np.array(coords_filter)
+        interval_structs = structs_filter
+
+        # Compute the maximum allowed step size in each interval
+        max_steps = []
+        for coord_ind, _ in enumerate(interval_coords[:-1]):
+            # Structure indexes inside current interval; reverse so first structure on top
+            struct_list = interval_structs[coord_ind][::-1]
+            # print(struct_list)
+            struct_list_filter = []
+            # Handle containment
+            for ind, struct_ind in enumerate(struct_list):
+                if ind >= len(struct_list):
+                    # This can happen because we modify struct_list in the loop
+                    break
+                # Add current structure to filtered list
+                struct_list_filter.append(struct_ind)
+                # Remove all structures that current structure overrides
+                contains = struct_contains[struct_ind]
+                struct_list = [ind for ind in struct_list if ind not in contains]
+
+            # Define the max step as the minimum over all medium steps of media in this interval
+            max_step = np.amin(medium_steps[struct_list_filter])
+            max_steps.append(float(max_step))
+
+        return interval_coords, max_steps
 
 
 class Coords(Tidy3dBaseModel):
