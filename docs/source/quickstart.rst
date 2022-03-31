@@ -54,7 +54,7 @@ To test whether the installation was successful you can run
 
 .. code-block:: bash
 
-    $ python -c "import tidy3d as td; print(td.__verion__)"
+    $ python -c "import tidy3d as td; print(td.__version__)"
 
 or download and run an example script from `here <https://github.com/flexcompute-readthedocs/tidy3d-docs/blob/readthedocs/docs/StartHere.py>`_.
 
