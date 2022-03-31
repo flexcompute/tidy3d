@@ -2,7 +2,7 @@
 """Defines spatial extent of objects."""
 
 from abc import ABC, abstractmethod
-from typing import List, Tuple, Union, Any
+from typing import List, Tuple, Union, Any, Callable
 
 import pydantic
 import numpy as np
@@ -247,35 +247,68 @@ class Geometry(Tidy3dBaseModel, ABC):
         ax.add_artist(patch)
         return ax
 
-    @staticmethod
-    def _get_shape_coords(shape: Shapely) -> Tuple[float, float]:
-        """Return xs, ys for given shapely shape."""
+    @classmethod
+    def strip_coords(
+        cls, shape: Shapely
+    ) -> Tuple[List[float], List[float], Tuple[List[float], List[float]]]:
+        """Get the exterior and list of interior xy coords for a shape.
 
-        def strip_xy(shape):
-            """get lists of xs and ys coordinates for a single polygon."""
-            xs, ys = shape.exterior.coords.xy
-            xs = xs.tolist()
-            ys = ys.tolist()
-            xs = [-LARGE_NUMBER / 1e5 if np.isneginf(x) else x for x in xs]
-            xs = [LARGE_NUMBER / 1e5 if np.isposinf(x) else x for x in xs]
-            ys = [-LARGE_NUMBER / 1e5 if np.isneginf(y) else y for y in ys]
-            ys = [LARGE_NUMBER / 1e5 if np.isposinf(y) else y for y in ys]
-            return xs, ys
+        Parameters
+        ----------
+        shape: shapely.geometry.base.BaseGeometry
+            The shape that you want to strip coordinates from.
 
-        if isinstance(shape, MultiPolygon):
-            shapes = list(shape.geoms)
-        else:
-            shapes = [shape]
+        Returns
+        -------
+        Tuple[List[float], List[float], Tuple[List[float], List[float]]]
+            List of exterior xy coordinates
+            and a list of lists of the interior xy coordinates of the "holes" in the shape.
+        """
 
-        xs = []
-        ys = []
+        if isinstance(shape, Polygon):
+            ext_coords = shape.exterior.coords[:]
+            list_int_coords = [interior.coords[:] for interior in shape.interiors]
+        elif isinstance(shape, MultiPolygon):
+            all_ext_coords = []
+            list_all_int_coords = []
+            for _shape in shape.geoms:
+                all_ext_coords.append(_shape.exterior.coords[:])
+                all_int_coords = [_interior.coords[:] for _interior in _shape.interiors]
+                list_all_int_coords.append(all_int_coords)
+            ext_coords = np.concatenate(all_ext_coords, axis=0)
+            list_int_coords = [
+                np.concatenate(all_int_coords, axis=0) for all_int_coords in list_all_int_coords
+            ]
+        return ext_coords, list_int_coords
 
-        for _shape in shapes:
-            _xs, _ys = strip_xy(_shape)
-            xs += _xs
-            ys += _ys
+    @classmethod
+    def map_to_coords(cls, func: Callable[[float], float], shape: Shapely) -> Shapely:
+        """Maps a function to each coordinate in shape.
 
-        return xs, ys
+        Parameters
+        ----------
+        func : Callable[[float], float]
+            Takes old coordinate and returns new coordinate.
+        shape: shapely.geometry.base.BaseGeometry
+            The shape to map this function to.
+
+        Returns
+        -------
+        shapely.geometry.base.BaseGeometry
+            A new copy of the input shape with the mapping applied to the coordinates.
+        """
+
+        if not isinstance(shape, (Polygon, MultiPolygon)):
+            return shape
+
+        def apply_func(coords):
+            return [(func(coord_x), func(coord_y)) for (coord_x, coord_y) in coords]
+
+        ext_coords, list_int_coords = cls.strip_coords(shape)
+        new_ext_coords = apply_func(ext_coords)
+        list_new_int_coords = [apply_func(int_coords) for int_coords in list_int_coords]
+
+        return Polygon(new_ext_coords, holes=list_new_int_coords)
 
     def _get_plot_labels(self, axis: Axis) -> Tuple[str, str]:
         """Returns planar coordinate x and y axis labels for cross section plots.
@@ -334,7 +367,7 @@ class Geometry(Tidy3dBaseModel, ABC):
         (xmin, xmax), (ymin, ymax) = self._get_plot_limits(axis=axis, buffer=buffer)
 
         # note: axes limits dont like inf values, so we need to evaluate them first if present
-        xmin, xmax, ymin, ymax = self._evaluate_infs(xmin, xmax, ymin, ymax)
+        xmin, xmax, ymin, ymax = (self._evaluate_inf(v) for v in (xmin, xmax, ymin, ymax))
 
         ax.set_xlim(xmin, xmax)
         ax.set_ylim(ymin, ymax)
@@ -343,9 +376,9 @@ class Geometry(Tidy3dBaseModel, ABC):
         return ax
 
     @staticmethod
-    def _evaluate_infs(*values):
+    def _evaluate_inf(v):
         """Processes values and evaluates any infs into large (signed) numbers."""
-        return map(lambda v: v if not np.isinf(v) else np.sign(v) * LARGE_NUMBER, values)
+        return v if not np.isinf(v) else np.sign(v) * LARGE_NUMBER / 2.0
 
     @classmethod
     def evaluate_inf_shape(cls, shape: Shapely) -> Shapely:
@@ -354,12 +387,7 @@ class Geometry(Tidy3dBaseModel, ABC):
         if not isinstance(shape, Polygon):
             return shape
 
-        coords = shape.exterior.coords[:]
-        new_coords = []
-        for (coord_x, coord_y) in coords:
-            new_coord = tuple(cls._evaluate_infs(coord_x, coord_y))
-            new_coords.append(new_coord)
-        return Polygon(new_coords)
+        return cls.map_to_coords(cls._evaluate_inf, shape)
 
     @staticmethod
     def pop_axis(coord: Tuple[Any, Any, Any], axis: int) -> Tuple[Any, Tuple[Any, Any]]:
@@ -833,8 +861,13 @@ class Box(Geometry):
         arrow_axis = [component == 0 for component in direction]
         arrow_length, arrow_width = self._arrow_dims(ax, length_factor, width_factor)
 
-        # only add arrow if the plotting plane is perpendicular to the source
-        if arrow_axis.count(0.0) > 1 or arrow_axis.index(0.0) != plot_axis:
+        # conditions to check to determine whether to plot arrow
+        arrow_intersecting_plane = len(self.intersections(x=x, y=y, z=z)) > 0
+        arrow_perp_to_screen = arrow_axis.index(0.0) != plot_axis
+        arrow_not_cartesian_axis = arrow_axis.count(0.0) > 1
+
+        # plot if arrow in plotting plane and some non-zero component can be displayed.
+        if arrow_intersecting_plane and (arrow_not_cartesian_axis or arrow_perp_to_screen):
             _, (x0, y0) = self.pop_axis(self.center, axis=plot_axis)
             _, (dx, dy) = self.pop_axis(direction, axis=plot_axis)
 

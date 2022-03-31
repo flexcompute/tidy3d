@@ -693,7 +693,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
     def _get_structure_plot_params(self, medium: Medium) -> PlotParams:
         """Constructs the plot parameters for a given medium in simulation.plot()."""
 
-        plot_params = plot_params_structure
+        plot_params = plot_params_structure.copy(deep=True)
         plot_params.linewidth = 0
 
         mat_index = self.medium_map[medium]
@@ -801,7 +801,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
     ) -> PlotParams:
         """Constructs the plot parameters for a given medium in simulation.plot_eps()."""
 
-        plot_params = plot_params_structure
+        plot_params = plot_params_structure.copy(deep=True)
         plot_params.linewidth = 0
         if alpha is not None:
             plot_params.alpha = alpha
