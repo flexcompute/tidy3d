@@ -77,7 +77,7 @@ def equal_aspect(plot):
 class PlotParams(Tidy3dBaseModel):
     """Stores plotting parameters / specifications for a given model."""
 
-    alpha: Any = pd.Field(None, title="Opacity")
+    alpha: Any = pd.Field(1.0, title="Opacity")
     edgecolor: Any = pd.Field(None, title="Edge Color", alias="ec")
     facecolor: Any = pd.Field(None, title="Face Color", alias="fc")
     fill: bool = pd.Field(True, title="Is Filled")
