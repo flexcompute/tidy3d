@@ -1079,11 +1079,17 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         _, (axis_x, axis_y) = self.pop_axis([0, 1, 2], axis=axis)
         boundaries_x = cell_boundaries.dict()["xyz"[axis_x]]
         boundaries_y = cell_boundaries.dict()["xyz"[axis_y]]
-        for x_pos in boundaries_x:
-            ax.axvline(x=x_pos, linestyle="-", color="black", linewidth=0.2)
-        for y_pos in boundaries_y:
-            ax.axhline(y=y_pos, linestyle="-", color="black", linewidth=0.2)
+        _, (xmin, ymin) = self.pop_axis(self.bounds_pml[0], axis=axis)
+        _, (xmax, ymax) = self.pop_axis(self.bounds_pml[1], axis=axis)
+        segs_x = [((bound, ymin), (bound, ymax)) for bound in boundaries_x]
+        line_segments_x = mpl.collections.LineCollection(segs_x, linewidths=0.2, colors='k')
+        segs_y = [((xmin, bound), (xmax, bound)) for bound in boundaries_y]
+        line_segments_y = mpl.collections.LineCollection(segs_y, linewidths=0.2, colors='k')
+        
+        ax.add_collection(line_segments_x)
+        ax.add_collection(line_segments_y)
         ax = self._set_plot_bounds(ax=ax, x=x, y=y, z=z)
+        
         return ax
 
     def _set_plot_bounds(self, ax: Ax, x: float = None, y: float = None, z: float = None) -> Ax:
