@@ -26,7 +26,7 @@ def plotly_shape(
 ) -> PlotlyFig:
     """Plot a shape to a figure."""
     _shape = Geometry.evaluate_inf_shape(shape)
-    xs, ys = Geometry._get_shape_coords(shape=shape)
+    (xs, ys), _ = Geometry.strip_coords(shape=_shape)
     plotly_trace = go.Scatter(
         x=xs,
         y=ys,
