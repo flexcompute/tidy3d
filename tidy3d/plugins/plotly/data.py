@@ -14,7 +14,7 @@ import sys
 sys.path.append("../../../")
 
 from tidy3d.components.data import FluxData, FluxTimeData, FieldData, Tidy3dData, FieldTimeData
-from tidy3d.components.data import ModeFieldData
+from tidy3d.components.data import ModeFieldData, ModeData
 from tidy3d.components.geometry import Geometry
 from tidy3d.components.types import Axis
 from tidy3d.log import Tidy3dKeyError
@@ -40,12 +40,14 @@ class DataPlotly(UIComponent):
 
     @staticmethod
     def sel_by_val(data, val):
-        if "re" in val.lower():
+        if val.lower() == "real":
             return data.real
-        if "im" in val.lower():
+        if val.lower() == "imag":
             return data.imag
-        if "abs" in val.lower():
+        if val.lower() == "abs":
             return abs(data)
+        if val.lower() == "abs^2":
+            return abs(data) ** 2
 
     def append_monitor_name(self, value):
         """makes the ids unique for this element."""
@@ -61,6 +63,7 @@ class DataPlotly(UIComponent):
             FieldData: FieldDataPlotly,
             FieldTimeData: FieldTimeDataPlotly,
             ModeFieldData: ModeFieldDataPlotly,
+            ModeData: ModeDataPlotly,
         }
 
         monitor_data_type = type(monitor_data)
@@ -151,6 +154,226 @@ class FluxTimeDataPlotly(AbstractFluxDataPlotly):
     """Flux in time domain."""
 
     data: FluxTimeData
+
+
+class ModeDataPlotly(DataPlotly):
+    """Flux data in frequency or time domain."""
+
+    data: ModeData
+
+    dir_val: str = None
+    mode_ind_val: int = None
+    val: str = "abs^2"
+    amps_or_neff: str = "amps"
+
+    @property
+    def mode_ind_coords(self):
+        """Get the mode indices."""
+        return self.data.amps.coords["mode_index"].values
+
+    @property
+    def direction_coords(self):
+        """Get the mode indices."""
+        return self.data.amps.coords["direction"].values
+
+    @property
+    def ft_label_coords_units(self):
+        """Get the `freq` or `time` label and coords."""
+
+        ft_label = "freq"
+        ft_coords = self.data.amps.coords["f"].values / TERAHERTZ
+        ft_units = "THz"
+        return ft_label, ft_coords, ft_units
+
+    @property
+    def dir_dropdown_hidden(self):
+        """Should the dropdown be hidden?"""
+        return False if self.amps_or_neff == "amps" else True
+
+    def make_figure(self):
+        """Generate plotly figure from the current state of self."""
+
+        if self.dir_val is None:
+            self.dir_val = self.direction_coords[0]
+
+        if self.mode_ind_val is None:
+            self.mode_ind_val = self.mode_ind_coords[0]
+
+        if self.amps_or_neff == "amps":
+            return self.plotly_amps(mode_index=self.mode_ind_val, dir_val=self.dir_val)
+        else:
+            return self.plotly_neff(mode_index=self.mode_ind_val)
+
+    def make_component(self, app) -> dcc.Tab:
+        """Creates the dash component for this montor data."""
+
+        # initital setup
+        fig = self.make_figure()
+
+        # individual components
+
+        # amplitude plot
+        amp_plot = html.Div(
+            [
+                dcc.Graph(
+                    id=self.append_monitor_name("figure"),
+                    figure=fig,
+                )
+            ],
+            style={"padding": 10, "flex": 1},
+        )
+
+        # select amps or neff
+        amps_or_neff_dropdown = dcc.Dropdown(
+            options=["amps", "neff"],
+            value=self.amps_or_neff,
+            id=self.append_monitor_name("amps_or_neff_dropdown"),
+        )
+
+        # select real, abs, imag, power
+        field_value_dropdown = dcc.Dropdown(
+            options=["real", "imag", "abs^2"],
+            value=self.val,
+            id=self.append_monitor_name("val_dropdown"),
+        )
+
+        # header for direction dropdown
+        dir_dropdown_header = html.Div(
+            [html.H2(f"Direction: forward (+) or backward (-).")],
+            hidden=self.dir_dropdown_hidden,
+            id=self.append_monitor_name("dir_dropdown_header"),
+        )
+
+        # select direction
+        dir_value_dropdown = html.Div(
+            [
+                dcc.Dropdown(
+                    options=list(self.direction_coords),
+                    value=self.dir_val,
+                    id=self.append_monitor_name("dir_dropdown"),
+                )
+            ],
+            hidden=self.dir_dropdown_hidden,
+            id=self.append_monitor_name("dir_dropdown_div"),
+        )
+
+        # mode index selector
+        mode_ind_dropdown = html.Div(
+            [
+                dcc.Dropdown(
+                    options=list(self.mode_ind_coords),
+                    value=self.mode_ind_val,
+                    id=self.append_monitor_name("mode_index_selector"),
+                ),
+            ]
+        )
+
+        # data control panel
+        panel_children = [
+            html.H2(f"Amplitude or effective index."),
+            amps_or_neff_dropdown,
+            html.H2(f"Value to plot."),
+            field_value_dropdown,
+            dir_dropdown_header,
+            dir_value_dropdown,
+            html.H2(f"Mode Index."),
+            mode_ind_dropdown,
+        ]
+
+        plot_selections = html.Div(panel_children, style={"padding": 10, "flex": 1})
+
+        # define layout
+        component = dcc.Tab(
+            [
+                html.H1(f"Viewing data for {type(self.data).__name__}: '{self.monitor_name}'"),
+                html.Div(
+                    [
+                        # left hand side
+                        amp_plot,
+                        # right hand side
+                        plot_selections,
+                    ],
+                    # make elements in above list stack row-wise
+                    style={"display": "flex", "flex-direction": "row"},
+                ),
+            ],
+            label=self.label,
+        )
+
+        # link what happens in the inputs to what gets displayed in the figure
+        @app.callback(
+            Output(self.append_monitor_name("figure"), "figure"),
+            [
+                Input(self.append_monitor_name("amps_or_neff_dropdown"), "value"),
+                Input(self.append_monitor_name("val_dropdown"), "value"),
+                Input(self.append_monitor_name("dir_dropdown"), "value"),
+                Input(self.append_monitor_name("mode_index_selector"), "value"),
+            ],
+        )
+        def set_field(value_amps_or_neff, value_val, value_dir, value_mode_ind):
+            self.amps_or_neff = str(value_amps_or_neff)
+            self.val = str(value_val)
+            self.dir_val = str(value_dir)
+
+            self.mode_ind_val = int(value_mode_ind) if value_mode_ind is not None else None
+            fig = self.make_figure()
+            return fig
+
+        @app.callback(
+            Output(self.append_monitor_name("dir_dropdown_header"), "hidden"),
+            [
+                Input(self.append_monitor_name("amps_or_neff_dropdown"), "value"),
+            ],
+        )
+        def set_dir_header_visibilty(value_amps_or_neff):
+            self.amps_or_neff = str(value_amps_or_neff)
+            return self.dir_dropdown_hidden
+
+        @app.callback(
+            Output(self.append_monitor_name("dir_dropdown_div"), "hidden"),
+            [
+                Input(self.append_monitor_name("amps_or_neff_dropdown"), "value"),
+            ],
+        )
+        def set_dir_dropdown_visibilty(value_amps_or_neff):
+            self.amps_or_neff = str(value_amps_or_neff)
+            return self.dir_dropdown_hidden
+
+        return component
+
+    def plotly_amps(self, mode_index, dir_val):
+
+        ft_label, ft_coords, ft_units = self.ft_label_coords_units
+        ft_units = "THz" if "f" in ft_label else "ps"
+
+        amp_val = self.sel_by_val(self.data.amps, val=self.val)
+        amp_val = amp_val.sel(direction=dir_val, mode_index=mode_index)
+        fig = go.Figure(go.Scatter(x=ft_coords, y=amp_val))
+
+        fig.update_layout(
+            title_text=f"amplitudes of mode w/ index {self.mode_ind_val} in {dir_val} direction.",
+            title_x=0.5,
+            xaxis_title=f"{ft_label} ({ft_units})",
+            yaxis_title=f"Amplitude (normalized)",
+        )
+        return fig
+
+    def plotly_neff(self, mode_index):
+
+        ft_label, ft_coords, ft_units = self.ft_label_coords_units
+        ft_units = "THz" if "f" in ft_label else "ps"
+
+        neff_val = self.sel_by_val(self.data.n_complex, val=self.val)
+        neff_val = neff_val.sel(mode_index=mode_index)
+        fig = go.Figure(go.Scatter(x=ft_coords, y=neff_val))
+
+        fig.update_layout(
+            title_text=f"effective index of mode w/ index {self.mode_ind_val}",
+            title_x=0.5,
+            xaxis_title=f"{ft_label} ({ft_units})",
+            yaxis_title=f"Effective index",
+        )
+        return fig
 
 
 class AbstractFieldDataPlotly(DataPlotly):
@@ -394,19 +617,33 @@ class AbstractFieldDataPlotly(DataPlotly):
     ):
         """Creates the plotly figure given some parameters."""
         axis, position = Geometry.parse_xyz_kwargs(x=x, y=y, z=z)
-        scalar_field_data = self.data.data_dict[field]
+
+        # grab by field name
+        scalar_field_data = self.scalar_field_data
+
+        # select mode_index, if given
+        if mode_index is not None:
+            scalar_field_data = scalar_field_data.sel(mode_index=mode_index)
+
+        # interpolate by frequency, if given
         if freq is not None:
             freq *= TERAHERTZ
             sel_ft = scalar_field_data.data.interp(f=freq)
-        elif time is not None:
+
+        # interpolate by time, if given
+        if time is not None:
             time *= PICOSECOND
             sel_ft = scalar_field_data.data.interp(t=time)
-        else:
-            raise ValueError(f"freq or time must be supplied.")
+
+        # select the cross sectional plane data
         xyz_labels = ["x", "y", "z"]
         xyz_kwargs = {xyz_labels.pop(axis): position}
         sel_xyz = sel_ft.interp(**xyz_kwargs)
+
+        # get the correct field value (real, imaginary, abs)
         sel_val = self.sel_by_val(data=sel_xyz, val=val)
+
+        # construct the field plot
         d1 = sel_val.coords[xyz_labels[0]]
         d2 = sel_val.coords[xyz_labels[1]]
         fig = go.Figure(
@@ -419,14 +656,13 @@ class AbstractFieldDataPlotly(DataPlotly):
                 colorscale="magma" if val in "abs" in val else "RdBu",
             )
         )
-        if freq is not None:
-            fig.update_layout(title=f'{val}[{field}({"xyz"[axis]}={position:.2e}, f={freq:.2e})]')
-        elif time is not None:
-            fig.update_layout(title=f'{val}[{field}({"xyz"[axis]}={position:.2e}, t={time:.2e})]')
 
+        # update title and x and y labels.
+        ft_text = f"f={freq:.2e}" if freq is not None else f"t={time:.2e}"
         _, (xlabel, ylabel) = Geometry.pop_axis("xyz", axis=axis)
-
         fig.update_layout(
+            title_text=f'{val}[{field}({"xyz"[axis]}={position:.2e}, {ft_text})]',
+            title_x=0.5,
             xaxis_title=f"{xlabel} (um)",
             yaxis_title=f"{ylabel} (um)",
         )

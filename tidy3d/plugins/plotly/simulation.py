@@ -127,29 +127,37 @@ class SimulationPlotly(UIComponent):
         xyz_label, (xyz_min, xyz_max) = self.xyz_label_bounds
         figure = self.make_figure()
 
-        xyz_slider = html.Div(
-            [
-                dcc.Dropdown(
-                    options=["x", "y", "z"],
-                    value=xyz_label,
-                    id="simulation_cs_axis_dropdown",
-                ),
-                dcc.Slider(
-                    min=xyz_min,
-                    max=xyz_max,
-                    value=self.cs_val,
-                    id="simulation_cs_slider",
-                ),
-            ],
-            style={"padding": 50, "flex": 1},
-        )
-
         graph = html.Div(
             [dcc.Graph(figure=figure, id="simulation_plot")], style={"padding": 10, "flex": 1}
         )
 
+        xyz_header = html.H2(f"Cross-section axis and position.")
+
+        xyz_dropdown = dcc.Dropdown(
+            options=["x", "y", "z"],
+            value=xyz_label,
+            id="simulation_cs_axis_dropdown",
+        )
+
+        xyz_slider = dcc.Slider(
+            min=xyz_min,
+            max=xyz_max,
+            value=self.cs_val,
+            id="simulation_cs_slider",
+        )
+
+        xyz_selection = html.Div(
+            [xyz_header, xyz_dropdown, xyz_slider],
+            style={"padding": 50, "flex": 1},
+        )
+
         component = dcc.Tab(
-            [html.Div([graph, xyz_slider], style={"display": "flex", "flex-direction": "row"})],
+            [
+                html.H1(f"Viewing Simulation."),
+                html.Div(
+                    [graph, xyz_selection], style={"display": "flex", "flex-direction": "row"}
+                ),
+            ],
             label="Simulation",
         )
 
@@ -539,7 +547,8 @@ class SimulationPlotly(UIComponent):
         _, (xlabel, ylabel) = self.simulation.pop_axis("xyz", axis=normal_axis)
 
         fig.update_layout(
-            title=f'{"xyz"[normal_axis]} = {pos:.2f}',
+            title_text=f'Simulation plotted on {"xyz"[normal_axis]} = {pos:.2f} cross-section',
+            title_x=0.5,
             xaxis_title=f"{xlabel} (um)",
             yaxis_title=f"{ylabel} (um)",
             legend_title="Contents",
