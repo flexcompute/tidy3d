@@ -26,7 +26,8 @@ def plotly_shape(
 ) -> PlotlyFig:
     """Plot a shape to a figure."""
     _shape = Geometry.evaluate_inf_shape(shape)
-    (xs, ys), _ = Geometry.strip_coords(shape=_shape)
+    exterior_coords, _ = Geometry.strip_coords(shape=_shape)
+    xs, ys = list(zip(*exterior_coords))
     plotly_trace = go.Scatter(
         x=xs,
         y=ys,
@@ -309,8 +310,10 @@ class SimulationPlotly(UIComponent):
         self, medium: Medium, shape: ShapelyGeo, fig: PlotlyFig
     ) -> PlotlyFig:
         """Plot a structure's cross section shape for a given medium."""
-        plot_params_struct = self.simulation._get_structure_plot_params(medium=medium)
         mat_index = self.simulation.medium_map[medium]
+        plot_params_struct = self.simulation._get_structure_plot_params(
+            medium=medium, mat_index=mat_index
+        )
         name = medium.name if medium.name else f"medium[{mat_index}]"
         fig = plotly_shape(shape=shape, plot_params=plot_params_struct, fig=fig, name=name)
         return fig
@@ -537,8 +540,8 @@ class SimulationPlotly(UIComponent):
 
         fig.update_layout(
             title=f'{"xyz"[normal_axis]} = {pos:.2f}',
-            xaxis_title=rf"{xlabel} ($\mu m$)",
-            yaxis_title=rf"{ylabel} ($\mu m$)",
+            xaxis_title=f"{xlabel} (um)",
+            yaxis_title=f"{ylabel} (um)",
             legend_title="Contents",
         )
 
@@ -581,7 +584,7 @@ class SimulationPlotly(UIComponent):
         seen = []
         for trace in fig["data"]:
             name = trace["name"]
-            if name not in seen:
+            if name is not None and name not in seen:
                 seen.append(name)
             else:
                 trace["showlegend"] = False

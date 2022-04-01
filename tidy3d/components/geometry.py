@@ -250,7 +250,7 @@ class Geometry(Tidy3dBaseModel, ABC):
     @classmethod
     def strip_coords(
         cls, shape: Shapely
-    ) -> Tuple[List[float], List[float], Tuple[List[float], List[float]]]:
+    ) -> Tuple[List[Coordinate2D], Tuple[List[Coordinate2D], List[Coordinate2D]]]:
         """Get the exterior and list of interior xy coords for a shape.
 
         Parameters
@@ -260,7 +260,7 @@ class Geometry(Tidy3dBaseModel, ABC):
 
         Returns
         -------
-        Tuple[List[float], List[float], Tuple[List[float], List[float]]]
+        Tuple[List[Coordinate2D], Tuple[List[Coordinate2D], List[Coordinate2D]]]
             List of exterior xy coordinates
             and a list of lists of the interior xy coordinates of the "holes" in the shape.
         """

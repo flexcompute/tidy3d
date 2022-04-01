@@ -91,12 +91,17 @@ class SimulationDataApp(App):
             data_plotly = DataPlotly.from_monitor_data(
                 monitor_data=monitor_data, monitor_name=monitor_name
             )
+            if data_plotly is None:
+                continue
             component = data_plotly.make_component(app)
             layout.children += [component]
 
         # log
         component = dcc.Tab(
-            [html.Div([html.Code(self.sim_data.log, style={"whiteSpace": "pre-wrap"})])],
+            [
+                html.Div([html.H1(f"Solver Log")]),
+                html.Div([html.Code(self.sim_data.log, style={"whiteSpace": "pre-wrap"})]),
+            ],
             label="log",
         )
         layout.children += [component]
@@ -107,7 +112,8 @@ class SimulationDataApp(App):
     def from_file(cls, path: str, mode: APP_MODE = DEFAULT_MODE):
         """Load the SimulationDataApp from a tidy3d data file in .hdf5 format."""
         sim_data = td.SimulationData.from_file(path)
-        return cls(sim_data=sim_data, mode=mode)
+        sim_data_normalized = sim_data.normalize()
+        return cls(sim_data=sim_data_normalized, mode=mode)
 
 
 class SimulationApp(App):

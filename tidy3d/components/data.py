@@ -396,7 +396,6 @@ class AbstractFieldData(CollectionData, ABC):
                     coord_vals = coord_val_map[coord_name]
                     centered_data_array = centered_data_array.interp(**{coord_name: coord_vals})
             centered_data_dict[field_name] = centered_data_array
-        # import pdb; pdb.set_trace()
         return xr.Dataset(centered_data_dict)
 
     # pylint:disable=too-many-locals
@@ -758,7 +757,7 @@ class ModeData(CollectionData):
     >>> n_complex = (1+1j) * np.random.random((len(f), len(mode_index)))
     >>> index_data = ModeIndexData(values=n_complex, f=f, mode_index=mode_index)
     >>> amps = (1+1j) * np.random.random((2, len(f), len(mode_index)))
-    >>> amps_data = ModeIndexData(values=amps, f=f, mode_index=mode_index)
+    >>> amps_data = ModeAmpsData(values=amps, f=f, mode_index=mode_index)
     >>> data = ModeData(data_dict={'n_complex': index_data, 'amps': amps_data})
     """
 

@@ -14,9 +14,13 @@ import sys
 sys.path.append("../../../")
 
 from tidy3d.components.data import FluxData, FluxTimeData, FieldData, Tidy3dData, FieldTimeData
+from tidy3d.components.data import ModeFieldData
 from tidy3d.components.geometry import Geometry
 from tidy3d.components.types import Axis
 from tidy3d.log import Tidy3dKeyError
+
+PICOSECOND = 1e-12
+TERAHERTZ = 1e12
 
 
 class DataPlotly(UIComponent):
@@ -27,7 +31,7 @@ class DataPlotly(UIComponent):
     @property
     def label(self) -> str:
         """Get tab label for component."""
-        return f"monitor: {self.monitor_name}"
+        return f"monitor: '{self.monitor_name}'"
 
     @property
     def id(self) -> str:
@@ -43,23 +47,6 @@ class DataPlotly(UIComponent):
         if "abs" in val.lower():
             return abs(data)
 
-    @property
-    def ft_label_coords(self):
-        """Get the `freq` or `time` label and coords."""
-
-        scalar_field_data = self.data.data_dict[self.field_val]
-
-        if "f" in self.scalar_field_data.data.coords:
-            ft_label = "freq"
-            ft_coords = scalar_field_data.data.coords["f"].values
-        elif "t" in self.scalar_field_data.data.coords:
-            ft_label = "time"
-            ft_coords = scalar_field_data.data.coords["t"].values
-        else:
-            raise Tidy3dKeyError(f"neither frequency nor time data found in this data object.")
-
-        return ft_label, ft_coords
-
     def append_monitor_name(self, value):
         """makes the ids unique for this element."""
         return f"{value}_{self.monitor_name}"
@@ -73,12 +60,14 @@ class DataPlotly(UIComponent):
             FluxTimeData: FluxTimeDataPlotly,
             FieldData: FieldDataPlotly,
             FieldTimeData: FieldTimeDataPlotly,
+            ModeFieldData: ModeFieldDataPlotly,
         }
 
         monitor_data_type = type(monitor_data)
 
         PlotlyDataType = DATA_PLOTLY_MAP.get(monitor_data_type)
         if not PlotlyDataType:
+            return None
             raise Tidy3dKeyError(f"could not find the monitor data type: {monitor_data_type}.")
 
         return PlotlyDataType(data=monitor_data, monitor_name=monitor_name)
@@ -89,6 +78,23 @@ class AbstractFluxDataPlotly(DataPlotly):
 
     data: Union[FluxData, FluxTimeData]
 
+    @property
+    def ft_label_coords_units(self):
+        """Get the `freq` or `time` label and coords."""
+
+        if "f" in self.data.data.coords:
+            ft_label = "freq"
+            ft_coords = self.data.data.coords["f"].values / TERAHERTZ
+            ft_units = "THz"
+        elif "t" in self.data.data.coords:
+            ft_label = "time"
+            ft_coords = self.data.data.coords["t"].values / PICOSECOND
+            ft_units = "ps"
+        else:
+            raise Tidy3dKeyError(f"neither frequency nor time data found in this data object.")
+
+        return ft_label, ft_coords, ft_units
+
     def make_figure(self):
         """Generate plotly figure from the current state of self."""
         return self.plotly()
@@ -96,24 +102,43 @@ class AbstractFluxDataPlotly(DataPlotly):
     def make_component(self, app) -> dcc.Tab:
         """Creates the dash component for this montor data."""
 
+        # initital setup
+        fig = self.make_figure()
+
+        # individual components
+        flux_plot = html.Div(
+            [
+                dcc.Graph(
+                    id=self.append_monitor_name("figure"),
+                    figure=fig,
+                )
+            ],
+            style={"padding": 10, "flex": 1},
+        )
+
+        # define layout
         component = dcc.Tab(
             [
-                html.Div(
-                    [
-                        dcc.Graph(
-                            id=self.append_monitor_name("figure"),
-                            figure=self.make_figure(),
-                        )
-                    ],
-                    style={"padding": 10, "flex": 1},
-                )
+                html.H1(f"Viewing data for {type(self.data).__name__}: '{self.monitor_name}'"),
+                flux_plot,
             ],
             label=self.label,
         )
 
+        return component
+
     def plotly(self):
-        ft_label, ft_coords = self.ft_label_coords
-        return px.line(x=ft_coords, y=self.data.data.values)
+
+        ft_label, ft_coords, ft_units = self.ft_label_coords_units
+        ft_units = "THz" if "f" in ft_label else "ps"
+
+        fig = go.Figure(go.Scatter(x=ft_coords, y=self.data.data.values))
+
+        fig.update_layout(
+            xaxis_title=f"{ft_label} ({ft_units})",
+            yaxis_title=f"Flux (normalized)",
+        )
+        return fig
 
 
 class FluxDataPlotly(AbstractFluxDataPlotly):
@@ -129,14 +154,34 @@ class FluxTimeDataPlotly(AbstractFluxDataPlotly):
 
 
 class AbstractFieldDataPlotly(DataPlotly):
-    """Field data in frequency or time domain."""
+    """Some kind of field-like data plotted in the app."""
 
     data: Union[FieldData, FieldTimeData]
     field_val: str = "Ex"
+    val: str = "abs"
     cs_axis: Axis = 0
     cs_val: float = None
-    val: str = "abs"
     ft_val: float = None
+    mode_ind_val: int = None
+
+    @property
+    def ft_label_coords_units(self):
+        """Get the `freq` or `time` label and coords."""
+
+        scalar_field_data = self.data.data_dict[self.field_val]
+
+        if "f" in self.scalar_field_data.data.coords:
+            ft_label = "freq"
+            ft_coords = scalar_field_data.data.coords["f"].values / TERAHERTZ
+            ft_units = "THz"
+        elif "t" in self.scalar_field_data.data.coords:
+            ft_label = "time"
+            ft_coords = scalar_field_data.data.coords["t"].values / PICOSECOND
+            ft_units = "ps"
+        else:
+            raise Tidy3dKeyError(f"neither frequency nor time data found in this data object.")
+
+        return ft_label, ft_coords, ft_units
 
     @property
     def scalar_field_data(self):
@@ -150,6 +195,11 @@ class AbstractFieldDataPlotly(DataPlotly):
         xyz_coords = self.scalar_field_data.data.coords[xyz_label].values
         return xyz_label, xyz_coords
 
+    @property
+    def mode_ind_coords(self):
+        """Get the mode indices."""
+        return self.scalar_field_data.coords["mode_index"].values
+
     def make_figure(self):
         """Generate plotly figure from the current state of self."""
 
@@ -157,8 +207,9 @@ class AbstractFieldDataPlotly(DataPlotly):
         if self.cs_val is None:
             self.cs_val = np.mean(xyz_coords)
 
-        ft_label, ft_coords = self.ft_label_coords
+        ft_label, ft_coords, _ = self.ft_label_coords_units
         if self.ft_val is None:
+
             self.ft_val = np.mean(ft_coords)
 
         plotly_kwargs = {
@@ -175,78 +226,140 @@ class AbstractFieldDataPlotly(DataPlotly):
 
         # initial setup
         xyz_label, xyz_coords = self.xyz_label_coords
+        ft_label, ft_coords, ft_units = self.ft_label_coords_units
+        fig = self.make_figure()
 
-        component = dcc.Tab(
+        # individual components
+
+        field_plot = html.Div(
             [
-                html.Div(
-                    [
-                        html.Div(
-                            [
-                                dcc.Graph(
-                                    id=self.append_monitor_name("figure"),
-                                    figure=self.make_figure(),
-                                )
-                            ],
-                            style={"padding": 10, "flex": 1},
-                        ),
-                        html.Div(
-                            [
-                                html.H1(f"Viewing data for FieldMonitor: {self.monitor_name}"),
-                                html.H2(f"Field component."),
-                                dcc.Dropdown(
-                                    options=list(self.data.data_dict.keys()),
-                                    value=self.field_val,
-                                    id=self.append_monitor_name("field_dropdown"),
-                                ),
-                                html.H2(f"Value to plot."),
-                                dcc.Dropdown(
-                                    options=["real", "imag", "abs"],
-                                    value=self.val,
-                                    id=self.append_monitor_name("val_dropdown"),
-                                ),
-                                html.Br(),
-                                html.Div(
-                                    [
-                                        dcc.Dropdown(
-                                            options=["x", "y", "z"],
-                                            value=xyz_label,
-                                            id=self.append_monitor_name("cs_axis_dropdown"),
-                                        ),
-                                        dcc.Slider(
-                                            min=xyz_coords[0],
-                                            max=xyz_coords[-1],
-                                            value=np.mean(xyz_coords),
-                                            id=self.append_monitor_name("cs_slider"),
-                                        ),
-                                    ],
-                                ),
-                            ],
-                            style={"padding": 10, "flex": 1},
-                        ),
-                    ],
-                    style={"display": "flex", "flex-direction": "row"},
+                dcc.Graph(
+                    id=self.append_monitor_name("figure"),
+                    figure=fig,
                 )
             ],
+            style={"padding": 10, "flex": 1},
+        )
+
+        field_dropdown = dcc.Dropdown(
+            options=list(self.data.data_dict.keys()),
+            value=self.field_val,
+            id=self.append_monitor_name("field_dropdown"),
+        )
+
+        field_value_dropdown = dcc.Dropdown(
+            options=["real", "imag", "abs"],
+            value=self.val,
+            id=self.append_monitor_name("val_dropdown"),
+        )
+
+        xyz_dropdown = dcc.Dropdown(
+            options=["x", "y", "z"],
+            value=xyz_label,
+            id=self.append_monitor_name("cs_axis_dropdown"),
+        )
+
+        xyz_slider = dcc.Slider(
+            min=xyz_coords[0],
+            max=xyz_coords[-1],
+            value=self.cs_val,
+            id=self.append_monitor_name("cs_slider"),
+        )
+
+        xyz_selection = html.Div([xyz_dropdown, xyz_slider])
+
+        freq_time_slider = html.Div(
+            [
+                dcc.Slider(
+                    min=ft_coords[0],
+                    max=ft_coords[-1],
+                    value=self.ft_val,
+                    id=self.append_monitor_name("ft_slider"),
+                ),
+            ]
+        )
+
+        # all the controls for adjusting plotted data
+        plot_selections = html.Div(
+            [
+                html.H2(f"Field component."),
+                field_dropdown,
+                html.H2(f"Value to plot."),
+                field_value_dropdown,
+                html.H2(f"Cross-section axis and position."),
+                xyz_selection,
+                html.H2(f"{ft_label} value ({ft_units})."),
+                freq_time_slider,
+            ],
+            style={"padding": 10, "flex": 1},
+        )
+
+        # add a mode index dropdown to right hand side, if applicable
+        if self.mode_ind_val is not None:
+
+            # make a mode index dropdown
+            mode_ind_dropdown = html.Div(
+                [
+                    dcc.Dropdown(
+                        options=list(self.mode_ind_coords),
+                        value=self.mode_ind_val,
+                        id=self.append_monitor_name("mode_index_selector"),
+                    ),
+                ]
+            )
+
+            # add this to the plot selections panel component
+            plot_selections.children.append(mode_ind_dropdown)
+
+        # full layout
+        component = dcc.Tab(
+            [
+                # title
+                html.H1(f"Viewing data for {type(self.data).__name__}: '{self.monitor_name}'"),
+                # below title
+                html.Div(
+                    [
+                        # left hand side
+                        field_plot,
+                        # right hand side
+                        plot_selections,
+                    ],
+                    # make elements in above list stack row-wise
+                    style={"display": "flex", "flex-direction": "row"},
+                ),
+            ],
+            # label for the tab
             label=self.label,
         )
 
-        @app.callback(
-            Output(self.append_monitor_name("figure"), "figure"),
-            [
-                Input(self.append_monitor_name("field_dropdown"), "value"),
-                Input(self.append_monitor_name("val_dropdown"), "value"),
-                Input(self.append_monitor_name("cs_axis_dropdown"), "value"),
-                Input(self.append_monitor_name("cs_slider"), "value"),
-            ],
-        )
-        def set_field(value_field, value_val, value_cs_axis, value_cs):
+        # these are the inputs to the callback function which links the buttons to the figure
+        app_inputs = [
+            Input(self.append_monitor_name("field_dropdown"), "value"),
+            Input(self.append_monitor_name("val_dropdown"), "value"),
+            Input(self.append_monitor_name("cs_axis_dropdown"), "value"),
+            Input(self.append_monitor_name("cs_slider"), "value"),
+            Input(self.append_monitor_name("ft_slider"), "value"),
+        ]
+
+        # add the mode index dropdown to the app inputs, if defined
+        if self.mode_ind_val is not None:
+            app_inputs.append(Input(self.append_monitor_name("mode_index_selector"), "value"))
+
+        # link what happens in the app_inputs to what gets displayed in the figure
+        @app.callback(Output(self.append_monitor_name("figure"), "figure"), app_inputs)
+        def set_field(
+            value_field, value_val, value_cs_axis, value_cs, value_ft, value_mode_ind=None
+        ):
             self.field_val = str(value_field)
             self.val = str(value_val)
             self.cs_axis = ["x", "y", "z"].index(value_cs_axis)
             self.cs_val = float(value_cs)
+            self.ft_val = float(value_ft)
+            self.mode_ind_val = int(value_mode_ind) if value_mode_ind is not None else None
             fig = self.make_figure()
             return fig
 
+        # set the minimum of the xyz sliderbar depending on the cross-section axis
         @app.callback(
             Output(self.append_monitor_name("cs_slider"), "min"),
             Input(self.append_monitor_name("cs_axis_dropdown"), "value"),
@@ -256,11 +369,12 @@ class AbstractFieldDataPlotly(DataPlotly):
             _, xyz_coords = self.xyz_label_coords
             return xyz_coords[0]
 
+        # set the maximum of the xyz sliderbar depending on the cross-section axis
         @app.callback(
             Output(self.append_monitor_name("cs_slider"), "max"),
             Input(self.append_monitor_name("cs_axis_dropdown"), "value"),
         )
-        def set_max(value_cs_axis):  # , value_f):
+        def set_max(value_cs_axis):
             self.cs_axis = ["x", "y", "z"].index(value_cs_axis)
             _, xyz_coords = self.xyz_label_coords
             return xyz_coords[-1]
@@ -268,16 +382,30 @@ class AbstractFieldDataPlotly(DataPlotly):
         return component
 
     def plotly(
-        self, field: str, freq: float, val: Literal["real", "imag", "abs"], x=None, y=None, z=None
+        self,
+        field: str,
+        val: Literal["real", "imag", "abs"],
+        freq: float = None,
+        time: float = None,
+        x: float = None,
+        y: float = None,
+        z: float = None,
+        mode_index: int = None,
     ):
         """Creates the plotly figure given some parameters."""
-
         axis, position = Geometry.parse_xyz_kwargs(x=x, y=y, z=z)
         scalar_field_data = self.data.data_dict[field]
-        sel_freq = scalar_field_data.data.sel(f=freq)
+        if freq is not None:
+            freq *= TERAHERTZ
+            sel_ft = scalar_field_data.data.interp(f=freq)
+        elif time is not None:
+            time *= PICOSECOND
+            sel_ft = scalar_field_data.data.interp(t=time)
+        else:
+            raise ValueError(f"freq or time must be supplied.")
         xyz_labels = ["x", "y", "z"]
         xyz_kwargs = {xyz_labels.pop(axis): position}
-        sel_xyz = sel_freq.interp(**xyz_kwargs)
+        sel_xyz = sel_ft.interp(**xyz_kwargs)
         sel_val = self.sel_by_val(data=sel_xyz, val=val)
         d1 = sel_val.coords[xyz_labels[0]]
         d2 = sel_val.coords[xyz_labels[1]]
@@ -291,7 +419,18 @@ class AbstractFieldDataPlotly(DataPlotly):
                 colorscale="magma" if val in "abs" in val else "RdBu",
             )
         )
-        fig.update_layout(title=f'{val}[{field}({"xyz"[axis]}={position:.2e}, f={freq:.2e})]')
+        if freq is not None:
+            fig.update_layout(title=f'{val}[{field}({"xyz"[axis]}={position:.2e}, f={freq:.2e})]')
+        elif time is not None:
+            fig.update_layout(title=f'{val}[{field}({"xyz"[axis]}={position:.2e}, t={time:.2e})]')
+
+        _, (xlabel, ylabel) = Geometry.pop_axis("xyz", axis=axis)
+
+        fig.update_layout(
+            xaxis_title=f"{xlabel} (um)",
+            yaxis_title=f"{ylabel} (um)",
+        )
+
         return fig
 
 
@@ -305,3 +444,9 @@ class FieldTimeDataPlotly(AbstractFieldDataPlotly):
     """Plot FieldTimeData in app."""
 
     data: FieldTimeData
+
+
+class ModeFieldDataPlotly(AbstractFieldDataPlotly):
+    """Plot ModeFieldData in app."""
+
+    data: ModeFieldData
