@@ -1,4 +1,4 @@
-"""Makes an app."""
+"""Makes an app to visualize SimulationData objects."""
 from abc import ABC, abstractmethod
 from typing import List, Union, Any
 from typing_extensions import Literal
@@ -7,13 +7,11 @@ from jupyter_dash import JupyterDash
 from dash import Dash, dcc, html
 import pydantic as pd
 
-import sys
-
-sys.path.append("../../tidy3d")
-import tidy3d as td
-from tidy3d.components.base import Tidy3dBaseModel
 from .simulation import SimulationPlotly
 from .data import DataPlotly
+from ...components.base import Tidy3dBaseModel
+from ...components.simulation import Simulation
+from ...components.data import SimulationData
 
 APP_MODE = Literal["python", "jupyter", "jupyterlab"]
 DEFAULT_MODE = "jupyterlab"
@@ -54,7 +52,7 @@ class App(Tidy3dBaseModel, ABC):
 
         app = self._make_app()
 
-        if self.mode == "jupyterlab":
+        if "jupyter" in self.mode:
             app.run_server(
                 mode="jupyterlab",
                 port=8090,
@@ -72,7 +70,7 @@ class App(Tidy3dBaseModel, ABC):
 class SimulationDataApp(App):
     """App for viewing contents of a :class:`.SimulationData` instance."""
 
-    sim_data: td.SimulationData = pd.Field(
+    sim_data: SimulationData = pd.Field(
         ..., title="Simulation data", description="A :class:`.SimulationData` instance to view."
     )
 
@@ -111,7 +109,7 @@ class SimulationDataApp(App):
     @classmethod
     def from_file(cls, path: str, mode: APP_MODE = DEFAULT_MODE):
         """Load the SimulationDataApp from a tidy3d data file in .hdf5 format."""
-        sim_data = td.SimulationData.from_file(path)
+        sim_data = SimulationData.from_file(path)
         sim_data_normalized = sim_data.normalize()
         return cls(sim_data=sim_data_normalized, mode=mode)
 
@@ -119,7 +117,7 @@ class SimulationDataApp(App):
 class SimulationApp(App):
     """TODO: App for viewing and editing a :class:`.Simulation`."""
 
-    simulation: td.Simulation = pd.Field(
+    simulation: Simulation = pd.Field(
         ..., title="Simulation", description="A Simulation instance to view."
     )
 
@@ -130,5 +128,5 @@ class SimulationApp(App):
     @classmethod
     def from_file(cls, path: str, mode: APP_MODE = DEFAULT_MODE):
         """Load the SimulationApp from a tidy3d Simulation file in .json or .yaml format."""
-        simulation = td.Simulation.from_file(path)
+        simulation = Simulation.from_file(path)
         return cls(simulation=simulation, mode=mode)

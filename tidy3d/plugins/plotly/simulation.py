@@ -1,4 +1,4 @@
-"""Plotly wrapper for tidy3d."""
+"""Simulation and Geometry plotting with plotly."""
 # pylint:disable=too-many-arguments, protected-access
 from typing import Tuple
 
@@ -9,6 +9,7 @@ from dash import dcc, html, Output, Input
 
 from .utils import PlotlyFig, add_fig_if_none, equal_aspect_plotly, plot_params_sim_boundary
 from .component import UIComponent
+
 from ...components.types import Axis
 from ...components.simulation import Simulation
 from ...components.structure import Structure
@@ -168,10 +169,21 @@ class SimulationPlotly(UIComponent):
                 Input("simulation_cs_slider", "value"),
             ],
         )
-        def set_xyz_sliderbar(cs_axis_string, cs_val):
+        def set_fig_from_xyz_sliderbar(cs_axis_string, cs_val):
             self.cs_axis = ["x", "y", "z"].index(cs_axis_string)
             self.cs_val = float(cs_val)
             return self.make_figure()
+
+        # set the xyz slider back to the average if the axis changes.
+        @app.callback(
+            Output("simulation_cs_slider", "value"),
+            Input("simulation_cs_axis_dropdown", "value"),
+        )
+        def reset_slider_position(value_cs_axis):
+            self.cs_axis = ["x", "y", "z"].index(value_cs_axis)
+            _, (xyz_min, xyz_max) = self.xyz_label_bounds
+            self.cs_val = float((xyz_min + xyz_max) / 2.0)
+            return self.cs_val
 
         @app.callback(
             Output("simulation_cs_slider", "min"),

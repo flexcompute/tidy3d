@@ -1,10 +1,8 @@
 from abc import ABC, abstractmethod
 from dash import dcc
-import sys
 
-sys.path.append("../../../")
-
-from tidy3d.components.base import Tidy3dBaseModel
+from .utils import PlotlyFig
+from ...components.base import Tidy3dBaseModel
 
 """
 How the components work.
@@ -30,5 +28,5 @@ class UIComponent(Tidy3dBaseModel):
         """Creates the dash component for this montor data."""
 
     @abstractmethod
-    def make_figure(self) -> "Plotly.Figure":
-        """Creates the dash component for this montor data."""
+    def make_figure(self) -> PlotlyFig:
+        """Creates a plotly figure for this component given its current state."""
