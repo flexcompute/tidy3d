@@ -1068,7 +1068,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
 
     @add_ax_if_none
     def plot_grid(  # pylint:disable=too-many-locals
-        self, x: float = None, y: float = None, z: float = None, ax: Ax = None
+        self, x: float = None, y: float = None, z: float = None, ax: Ax = None, **kwargs,
     ) -> Ax:
         """Plot the cell boundaries as lines on a plane defined by one nonzero x,y,z coordinate.
 
@@ -1082,12 +1082,18 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
             position of plane in z direction, only one of x, y, z must be specified to define plane.
         ax : matplotlib.axes._subplots.Axes = None
             Matplotlib axes to plot on, if not specified, one is created.
+        **kwargs
+            Optional keyword arguments passed to the matplotlib ``LineCollection``.
+            For details on accepted values, refer to
+            `Matplotlib's documentation <https://tinyurl.com/2p97z4cn>`_.
 
         Returns
         -------
         matplotlib.axes._subplots.Axes
             The supplied or created matplotlib axes.
         """
+        kwargs.setdefault("linewidth", 0.2)
+        kwargs.setdefault("colors", "black")
         cell_boundaries = self.grid.boundaries
         axis, _ = self.parse_xyz_kwargs(x=x, y=y, z=z)
         _, (axis_x, axis_y) = self.pop_axis([0, 1, 2], axis=axis)
@@ -1096,9 +1102,9 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         _, (xmin, ymin) = self.pop_axis(self.bounds_pml[0], axis=axis)
         _, (xmax, ymax) = self.pop_axis(self.bounds_pml[1], axis=axis)
         segs_x = [((bound, ymin), (bound, ymax)) for bound in boundaries_x]
-        line_segments_x = mpl.collections.LineCollection(segs_x, linewidths=0.2, colors="k")
+        line_segments_x = mpl.collections.LineCollection(segs_x, **kwargs)
         segs_y = [((xmin, bound), (xmax, bound)) for bound in boundaries_y]
-        line_segments_y = mpl.collections.LineCollection(segs_y, linewidths=0.2, colors="k")
+        line_segments_y = mpl.collections.LineCollection(segs_y, **kwargs)
 
         ax.add_collection(line_segments_x)
         ax.add_collection(line_segments_y)
