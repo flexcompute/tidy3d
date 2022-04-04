@@ -2,7 +2,7 @@
 """Classes for Storing Monitor and Simulation Data."""
 
 from abc import ABC, abstractmethod
-from typing import Dict, List, Union
+from typing import Dict, List, Union, Optional
 import logging
 
 import xarray as xr
@@ -1237,8 +1237,9 @@ class SimulationData(AbstractSimulationData):
             if self.log_string:
                 Tidy3dData.save_string(f_handle, "log_string", self.log_string)
 
-            # save diverged flag as an attribute
+            # save diverged and normalized flags as attributes
             f_handle.attrs["diverged"] = self.diverged
+            f_handle.attrs["normalized"] = self.normalized
 
             # make a group for monitor_data
             mon_data_grp = f_handle.create_group("monitor_data")
@@ -1249,7 +1250,7 @@ class SimulationData(AbstractSimulationData):
                 mon_data.add_to_group(mon_grp)
 
     @classmethod
-    def from_file(cls, fname: str):
+    def from_file(cls, fname: str, normalize_index: Optional[int] = 0): #pylint:disable=arguments-differ
         """Load :class:`SimulationData` from .hdf5 file.
 
         Parameters
@@ -1279,6 +1280,11 @@ class SimulationData(AbstractSimulationData):
             if diverged:
                 logging.warning("Simulation run has diverged!")
 
+            # get whether this data has been normalized
+            normalized = f_handle.attrs.get("normalized")
+            if normalized is None:
+                normalized = False
+
             # loop through monitor dataset and create all MonitorData instances
             monitor_data_dict = {}
             for monitor_name, monitor_data in f_handle["monitor_data"].items():
@@ -1288,12 +1294,23 @@ class SimulationData(AbstractSimulationData):
                 monitor_data_instance = _data_type.load_from_group(monitor_data)
                 monitor_data_dict[monitor_name] = monitor_data_instance
 
+        # create a SimulationData object
         sim_data = cls(
             simulation=simulation,
             monitor_data=monitor_data_dict,
             log_string=log_string,
             diverged=diverged,
+            normalized=normalized,
         )
+
+        # handle normalization
+        if normalize_index is not None:
+            if sim_data.normalized:
+                raise DataError(
+                    "Data from this file is already normalized. "
+                    "Instead, load `.from_file()` with `normalize_index=None."
+                )
+            sim_data = sim_data.normalize(normalize_index=normalize_index)
 
         return sim_data
 
