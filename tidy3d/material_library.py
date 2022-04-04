@@ -1,12 +1,11 @@
-""" Holds dispersive models for several commonly used optical materials."""
+"""Holds dispersive models for several commonly used optical materials."""
+import json
 
 from .components.medium import PoleResidue
 
 
 def export_matlib_to_file(fname: str = "matlib.json") -> None:
     """Write the material library to a .json file."""
-
-    import json
 
     mat_lib_dict = {}
     for mat_name, mat in material_library.items():
