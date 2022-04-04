@@ -225,7 +225,7 @@ def monitor(task_id: TaskId) -> None:
 
     # already done
     if get_status() in break_statuses:
-        console.log(f"status = {get_status()}")
+        log.info(f"status = {get_status()}")
         return
 
     # preprocessing
@@ -234,16 +234,16 @@ def monitor(task_id: TaskId) -> None:
             if status != get_status():
                 status = get_status()
                 if status != "running":
-                    console.log(f"status = {status}")
+                    log.info(f"status = {status}")
             time.sleep(REFRESH_TIME)
 
     # startup phase where run info is not available
-    console.log("starting up solver")
+    log.info("starting up solver")
     while get_run_info(task_id)[0] is None and get_status() == "running":
         time.sleep(REFRESH_TIME)
 
     # phase where run % info is available
-    console.log("running solver")
+    log.info("running solver")
     with Progress(console=console) as progress:
         pbar_pd = progress.add_task("% done", total=100)
         perc_done, _ = get_run_info(task_id)
@@ -253,7 +253,7 @@ def monitor(task_id: TaskId) -> None:
             progress.update(pbar_pd, completed=perc_done, description=new_description)
             time.sleep(1.0)
         if perc_done < 100:
-            console.log("early shutoff detected, exiting.")
+            log.info("early shutoff detected, exiting.")
         else:
             progress.update(pbar_pd, completed=100)
 
@@ -262,12 +262,12 @@ def monitor(task_id: TaskId) -> None:
         while get_status() not in break_statuses:
             if status != get_status():
                 status = get_status()
-                console.log(f"status = {status}")
+                log.info(f"status = {status}")
             time.sleep(REFRESH_TIME)
 
     # final status (if diffrent from the last printed status)
     if status != get_status():
-        console.log(f"status = {get_status()}")
+        log.info(f"status = {get_status()}")
 
 
 def download(task_id: TaskId, path: str = "simulation_data.hdf5") -> None:
