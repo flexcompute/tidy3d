@@ -10,7 +10,7 @@ from ...constants import HERTZ, C_0
 from ...components.types import Direction, Ax
 from ...components.viz import add_ax_if_none, equal_aspect
 from ...components.base import Tidy3dBaseModel
-from ...log import SetupError
+from ...log import SetupError, log
 from ...web.container import Batch
 
 # fwidth of gaussian pulse in units of central frequency
@@ -243,6 +243,14 @@ class ComponentModeler(Tidy3dBaseModel):
         return s_matrix_dict
 
     def solve(self, folder_name: str = "default", path_dir: str = DEFAULT_DATA_DIR) -> SMatrixType:
+        """Solves for the scattering matrix of the system."""
+        log.warning(
+            "`ComponentModeler.solve()` is renamed to `ComponentModeler.run()` "
+            "'and will be removed in a later version."
+        )
+        return self.run(folder_name=folder_name, path_dir=path_dir)
+
+    def run(self, folder_name: str = "default", path_dir: str = DEFAULT_DATA_DIR) -> SMatrixType:
         """Solves for the scattering matrix of the system."""
 
         sim_dict = self._make_sims()
