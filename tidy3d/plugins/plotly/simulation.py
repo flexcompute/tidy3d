@@ -322,15 +322,18 @@ class SimulationPlotly(UIComponent):
         medium_shapes = self.simulation._filter_structures_plane(
             self.simulation.structures, x=x, y=y, z=z
         )
+        medium_map = self.simulation.medium_map
         for (medium, shape) in medium_shapes:
-            fig = self._plotly_shape_structure(medium=medium, shape=shape, fig=fig)
+            mat_index = medium_map[medium]
+            fig = self._plotly_shape_structure(
+                medium=medium, mat_index=mat_index, shape=shape, fig=fig
+            )
         return fig
 
     def _plotly_shape_structure(
-        self, medium: Medium, shape: ShapelyGeo, fig: PlotlyFig
+        self, medium: Medium, mat_index: int, shape: ShapelyGeo, fig: PlotlyFig
     ) -> PlotlyFig:
         """Plot a structure's cross section shape for a given medium."""
-        mat_index = self.simulation.medium_map[medium]
         plot_params_struct = self.simulation._get_structure_plot_params(
             medium=medium, mat_index=mat_index
         )
