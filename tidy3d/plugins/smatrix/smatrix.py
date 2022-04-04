@@ -92,7 +92,7 @@ class ComponentModeler(Tidy3dBaseModel):
     def _sim_has_no_sources(cls, val):
         """Make sure simulation has no sources as they interfere with tool."""
         if len(val.sources) > 0:
-            raise SetupError(f"Simulation must not have sources.")
+            raise SetupError("Simulation must not have sources.")
         return val
 
     def _to_monitor(self, port: Port) -> ModeMonitor:
@@ -253,5 +253,5 @@ class ComponentModeler(Tidy3dBaseModel):
         """Load an Smatrix from saved BatchData object."""
 
         if self.batch_data is None:
-            raise SetupError(f"Component modeler has no batch saved. Run .solve() to generate.")
+            raise SetupError("Component modeler has no batch saved. Run .solve() to generate.")
         return self._construct_smatrix(batch_data=self.batch_data)

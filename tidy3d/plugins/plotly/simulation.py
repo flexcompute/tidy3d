@@ -122,7 +122,7 @@ class SimulationPlotly(UIComponent):
         plotly_kwargs = {xyz_label: self.cs_val}
         return self.plotly(**plotly_kwargs)
 
-    def make_component(self, app):
+    def make_component(self, app):  # pylint: disable=too-many-locals
         """Creates the dash component."""
 
         xyz_label, (xyz_min, xyz_max) = self.xyz_label_bounds
@@ -132,7 +132,7 @@ class SimulationPlotly(UIComponent):
             [dcc.Graph(figure=figure, id="simulation_plot")], style={"padding": 10, "flex": 1}
         )
 
-        xyz_header = html.H2(f"Cross-section axis and position.")
+        xyz_header = html.H2("Cross-section axis and position.")
 
         xyz_dropdown = dcc.Dropdown(
             options=["x", "y", "z"],
@@ -154,7 +154,7 @@ class SimulationPlotly(UIComponent):
 
         component = dcc.Tab(
             [
-                html.H1(f"Viewing Simulation."),
+                html.H1("Viewing Simulation."),
                 html.Div(
                     [graph, xyz_selection], style={"display": "flex", "flex-direction": "row"}
                 ),

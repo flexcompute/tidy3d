@@ -1,22 +1,21 @@
-"""Tidy3dData plotting with plotly."""
-from abc import ABC, abstractmethod
+"""Defines how the specific data objects render as UI components."""
+from abc import ABC
 from typing import Union, Tuple, List
 from typing_extensions import Literal
 
 import numpy as np
 import plotly.graph_objects as go
-import plotly.express as px
 from dash import dcc, html, Output, Input, Dash
 import pydantic as pd
 
 from .component import UIComponent
 from .utils import PlotlyFig
 
-from ...components.data import FluxData, FluxTimeData, FieldData, Tidy3dData, FieldTimeData
+from ...components.data import FluxData, FluxTimeData, FieldData, FieldTimeData
 from ...components.data import ModeFieldData, ModeData, AbstractScalarFieldData
 from ...components.geometry import Geometry
 from ...components.types import Axis, Direction
-from ...log import Tidy3dKeyError
+from ...log import Tidy3dKeyError, log
 
 # divide an SI unit by these to put in the unit in the name
 #    eg.  1e-12 (sec) / PICOSECOND = 1 (ps)
@@ -29,7 +28,7 @@ TERAHERTZ = 1e12
 Tidy3dDataType = Union[FluxData, FluxTimeData, FieldData, FieldTimeData, ModeData, ModeFieldData]
 
 
-class DataPlotly(UIComponent):
+class DataPlotly(UIComponent, ABC):
     """Base class for anything that generates dash components from tidy3d data objects."""
 
     monitor_name: str = pd.Field(..., tite="monitor name", description="Name of the monitor.")
@@ -42,13 +41,14 @@ class DataPlotly(UIComponent):
         """Get tab label for this component."""
         return f"monitor: '{self.monitor_name}'"
 
-    @property
-    def id(self) -> str:
-        """Get unique id for this component."""
-        return f"monitor_{self.monitor_name}"
+    # @property
+    # def unique_id(self) -> str:
+    #     """Get unique id for this component."""
+    #     return f"monitor_{self.monitor_name}"
 
     @staticmethod
     def sel_by_val(data, val: str) -> "data":
+        """Select the correct data type based on the `val` selection."""
         if val.lower() == "real":
             return data.real
         if val.lower() == "imag":
@@ -68,7 +68,7 @@ class DataPlotly(UIComponent):
         """Load a PlotlyData UI component from the monitor name and its data."""
 
         # maps the supplied ``monitor_data`` argument to the corresponding plotly wrapper.
-        DATA_PLOTLY_MAP = {
+        data_plotly_map = {
             FluxData: FluxDataPlotly,
             FluxTimeData: FluxTimeDataPlotly,
             FieldData: FieldDataPlotly,
@@ -81,8 +81,8 @@ class DataPlotly(UIComponent):
         monitor_data_type = type(monitor_data)
 
         # try to grab the right plotly wrapper and complain (or skip) if not found.
-        PlotlyDataType = DATA_PLOTLY_MAP.get(monitor_data_type)
-        if not PlotlyDataType:
+        plotly_data_type = data_plotly_map.get(monitor_data_type)
+        if not plotly_data_type:
             log.warning(
                 f"could not find a plotly wrapper for monitor {monitor_name}"
                 f"of type {monitor_data_type.__name__}"
@@ -90,10 +90,10 @@ class DataPlotly(UIComponent):
             return None
 
         # return the right component
-        return PlotlyDataType(data=monitor_data, monitor_name=monitor_name)
+        return plotly_data_type(data=monitor_data, monitor_name=monitor_name)
 
 
-class AbstractFluxDataPlotly(DataPlotly):
+class AbstractFluxDataPlotly(DataPlotly, ABC):
     """Flux data in frequency or time domain."""
 
     data: Union[FluxData, FluxTimeData] = pd.Field(
@@ -115,7 +115,7 @@ class AbstractFluxDataPlotly(DataPlotly):
             ft_coords = self.data.data.coords["t"].values / PICOSECOND
             ft_units = "ps"
         else:
-            raise Tidy3dKeyError(f"neither frequency nor time data found in this data object.")
+            raise Tidy3dKeyError("Neither frequency nor time data found in this data object.")
 
         return ft_label, ft_coords, ft_units
 
@@ -162,7 +162,7 @@ class AbstractFluxDataPlotly(DataPlotly):
 
         fig.update_layout(
             xaxis_title=f"{ft_label} ({ft_units})",
-            yaxis_title=f"Flux (normalized)",
+            yaxis_title="Flux (normalized)",
         )
         return fig
 
@@ -196,7 +196,7 @@ class ModeDataPlotly(DataPlotly):
         description="A mode amplitude data object",
     )
 
-    amps_or_neff: str = pd.Field(
+    amps_or_neff: Literal["amps", "neff"] = pd.Field(
         "amps",
         title="Amps or effective index value",
         description="The state of the component's 'amplitude or neff' value.",
@@ -208,7 +208,7 @@ class ModeDataPlotly(DataPlotly):
         description="The state of the component's plotting value value.",
     )
 
-    dir_val: str = pd.Field(
+    dir_val: Direction = pd.Field(
         None, title="Direction value", description="The state of the component's direction value."
     )
 
@@ -238,7 +238,7 @@ class ModeDataPlotly(DataPlotly):
     @property
     def dir_dropdown_hidden(self) -> bool:
         """Should the dropdown be hidden?"""
-        return False if self.amps_or_neff == "amps" else True
+        return self.amps_or_neff == "neff"
 
     def make_figure(self) -> PlotlyFig:
         """Generate plotly figure from the current state of self."""
@@ -251,8 +251,8 @@ class ModeDataPlotly(DataPlotly):
 
         if self.amps_or_neff == "amps":
             return self.plotly_amps(mode_index=self.mode_ind_val, dir_val=self.dir_val)
-        else:
-            return self.plotly_neff(mode_index=self.mode_ind_val)
+
+        return self.plotly_neff(mode_index=self.mode_ind_val)
 
     def make_component(self, app: Dash) -> dcc.Tab:
         """Creates the dash component for this montor data."""
@@ -289,7 +289,7 @@ class ModeDataPlotly(DataPlotly):
 
         # header for direction dropdown
         dir_dropdown_header = html.Div(
-            [html.H2(f"Direction: forward (+) or backward (-).")],
+            [html.H2("Direction: forward (+) or backward (-).")],
             hidden=self.dir_dropdown_hidden,
             id=self.append_monitor_name("dir_dropdown_header"),
         )
@@ -320,13 +320,13 @@ class ModeDataPlotly(DataPlotly):
 
         # data control panel
         panel_children = [
-            html.H2(f"Amplitude or effective index."),
+            html.H2("Amplitude or effective index."),
             amps_or_neff_dropdown,
-            html.H2(f"Value to plot."),
+            html.H2("Value to plot."),
             field_value_dropdown,
             dir_dropdown_header,
             dir_value_dropdown,
-            html.H2(f"Mode Index."),
+            html.H2("Mode Index."),
             mode_ind_dropdown,
         ]
 
@@ -391,7 +391,8 @@ class ModeDataPlotly(DataPlotly):
 
         return component
 
-    def plotly_amps(self, mode_index, dir_val):
+    def plotly_amps(self, mode_index: int, dir_val: str):
+        """Make a line chart for the mode amplitudes."""
 
         ft_label, ft_coords, ft_units = self.ft_label_coords_units
         ft_units = "THz" if "f" in ft_label else "ps"
@@ -404,11 +405,12 @@ class ModeDataPlotly(DataPlotly):
             title_text=f"amplitudes of mode w/ index {self.mode_ind_val} in {dir_val} direction.",
             title_x=0.5,
             xaxis_title=f"{ft_label} ({ft_units})",
-            yaxis_title=f"Amplitude (normalized)",
+            yaxis_title="Amplitude (normalized)",
         )
         return fig
 
-    def plotly_neff(self, mode_index):
+    def plotly_neff(self, mode_index: int):
+        """Make a line chart for the mode amplitudes."""
 
         ft_label, ft_coords, ft_units = self.ft_label_coords_units
         ft_units = "THz" if "f" in ft_label else "ps"
@@ -421,12 +423,12 @@ class ModeDataPlotly(DataPlotly):
             title_text=f"effective index of mode w/ index {self.mode_ind_val}",
             title_x=0.5,
             xaxis_title=f"{ft_label} ({ft_units})",
-            yaxis_title=f"Effective index",
+            yaxis_title="Effective index",
         )
         return fig
 
 
-class AbstractFieldDataPlotly(DataPlotly):
+class AbstractFieldDataPlotly(DataPlotly, ABC):
     """Some kind of field-like data plotted in the app."""
 
     data: Union[FieldData, FieldTimeData] = pd.Field(
@@ -476,7 +478,7 @@ class AbstractFieldDataPlotly(DataPlotly):
             ft_coords = scalar_field_data.data.coords["t"].values / PICOSECOND
             ft_units = "ps"
         else:
-            raise Tidy3dKeyError(f"neither frequency nor time data found in this data object.")
+            raise Tidy3dKeyError("neither frequency nor time data found in this data object.")
 
         return ft_label, ft_coords, ft_units
 
@@ -534,7 +536,7 @@ class AbstractFieldDataPlotly(DataPlotly):
 
         return self.plotly(**plotly_kwargs)
 
-    def make_component(self, app: Dash) -> dcc.Tab:
+    def make_component(self, app: Dash) -> dcc.Tab:  # pylint:disable=too-many-locals
         """Creates the dash component."""
 
         # initial setup
@@ -602,11 +604,11 @@ class AbstractFieldDataPlotly(DataPlotly):
         # all the controls for adjusting plotted data
         plot_selections = html.Div(
             [
-                html.H2(f"Field component."),
+                html.H2("Field component."),
                 field_dropdown,
-                html.H2(f"Value to plot."),
+                html.H2("Value to plot."),
                 field_value_dropdown,
-                html.H2(f"Cross-section axis and position."),
+                html.H2("Cross-section axis and position."),
                 xyz_selection,
                 html.H2(f"{ft_label} value ({ft_units})."),
                 freq_time_slider,
@@ -667,7 +669,7 @@ class AbstractFieldDataPlotly(DataPlotly):
 
         # link what happens in the app_inputs to what gets displayed in the figure
         @app.callback(Output(self.append_monitor_name("figure"), "figure"), app_inputs)
-        def set_field(
+        def set_field(  # pylint:disable=too-many-arguments
             value_field, value_val, value_cs_axis, value_cs, value_ft, value_mode_ind=None
         ):
             self.field_val = str(value_field)
@@ -712,7 +714,7 @@ class AbstractFieldDataPlotly(DataPlotly):
 
         return component
 
-    def plotly(
+    def plotly(  # pylint:disable=too-many-arguments, too-many-locals
         self,
         field: str,
         val: Literal["real", "imag", "abs"],
@@ -753,14 +755,14 @@ class AbstractFieldDataPlotly(DataPlotly):
         sel_val = self.sel_by_val(data=sel_xyz, val=val)
 
         # get the correct x and y labels
-        d1 = sel_val.coords[xyz_labels[0]]
-        d2 = sel_val.coords[xyz_labels[1]]
+        coords_plot_x = sel_val.coords[xyz_labels[0]]
+        coords_plot_y = sel_val.coords[xyz_labels[1]]
 
         # construct the field plot
         fig = go.Figure(
             data=go.Heatmap(
-                x=d1,
-                y=d2,
+                x=coords_plot_x,
+                y=coords_plot_y,
                 z=sel_val.values,
                 transpose=True,
                 type="heatmap",
