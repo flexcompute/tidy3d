@@ -12,6 +12,7 @@ PyYAML
 boto3
 requests
 plotly==5.5.0
+jupyter_dash
 
 # required to get xarray to not complain
 dask
