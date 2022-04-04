@@ -230,7 +230,6 @@ Information Containers
 .. autosummary::
    :toctree: _autosummary/
 
-   tidy3d.web.task.Task
    tidy3d.web.task.TaskInfo
    tidy3d.web.task.TaskStatus
 

@@ -130,8 +130,8 @@ html_theme_options = {"logo_only": True}
 html_static_path = ["_static"]
 
 html_theme = "sphinx_book_theme"
-html_title = "Tidy3D"
-html_logo = "_static/logo.svg"
+html_title = "Tidy3D Electromagnetic Solver"
+html_logo = "../../tidy3d/img/Tidy3D-logo.svg"
 html_favicon = "_static/logo.svg"
 html_show_sourcelink = False
 html_theme_options = {
