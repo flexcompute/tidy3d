@@ -1,3 +1,4 @@
+"""Utilities for plotly plotting."""
 from functools import wraps
 
 import plotly.graph_objects as go

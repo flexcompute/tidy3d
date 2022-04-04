@@ -1,10 +1,9 @@
+"""Defines the structure of the components displayed in the app tabs."""
 from abc import ABC, abstractmethod
 from dash import dcc
-import sys
 
-sys.path.append("../../../")
-
-from tidy3d.components.base import Tidy3dBaseModel
+from .utils import PlotlyFig
+from ...components.base import Tidy3dBaseModel
 
 """
 How the components work.
@@ -24,15 +23,13 @@ This will use the internal state to contruct kwargs for a call to `fig = self.pl
 """
 
 
-class UIComponent(Tidy3dBaseModel):
+class UIComponent(Tidy3dBaseModel, ABC):
+    """Base class for a UI component.  Individual data storage wrappers override this."""
+
     @abstractmethod
     def make_component(self, app) -> dcc.Tab:
         """Creates the dash component for this montor data."""
 
     @abstractmethod
-    def make_figure(self) -> "Plotly.Figure":
-        """Creates the dash component for this montor data."""
-
-    @abstractmethod
-    def plotly(self, **kwargs) -> "Plotly.Figure":
-        """Make a plotly figure using all of the optional kwargs."""
+    def make_figure(self) -> PlotlyFig:
+        """Creates a plotly figure for this component given its current state."""
