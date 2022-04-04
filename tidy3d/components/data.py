@@ -1250,7 +1250,9 @@ class SimulationData(AbstractSimulationData):
                 mon_data.add_to_group(mon_grp)
 
     @classmethod
-    def from_file(cls, fname: str, normalize_index: Optional[int] = 0): #pylint:disable=arguments-differ
+    def from_file(
+        cls, fname: str, normalize_index: Optional[int] = 0
+    ):  # pylint:disable=arguments-differ
         """Load :class:`SimulationData` from .hdf5 file.
 
         Parameters
