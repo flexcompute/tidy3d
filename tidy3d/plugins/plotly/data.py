@@ -736,20 +736,20 @@ class AbstractFieldDataPlotly(DataPlotly, ABC):
         if mode_index is not None:
             scalar_field_data = scalar_field_data.sel(mode_index=mode_index)
 
-        # interpolate by frequency, if given
+        # select by frequency, if given
         if freq is not None:
             freq *= TERAHERTZ
-            sel_ft = scalar_field_data.data.interp(f=freq)
+            sel_ft = scalar_field_data.data.sel(f=freq, method="nearest")
 
-        # interpolate by time, if given
+        # select by time, if given
         if time is not None:
             time *= PICOSECOND
-            sel_ft = scalar_field_data.data.interp(t=time)
+            sel_ft = scalar_field_data.data.sel(f=freq, method="nearest")
 
         # select the cross sectional plane data
         xyz_labels = ["x", "y", "z"]
         xyz_kwargs = {xyz_labels.pop(axis): position}
-        sel_xyz = sel_ft.interp(**xyz_kwargs)
+        sel_xyz = sel_ft.sel(**xyz_kwargs, method="nearest")
 
         # get the correct field value (real, imaginary, abs)
         sel_val = self.sel_by_val(data=sel_xyz, val=val)
