@@ -1,4 +1,4 @@
-"""Plotly wrapper for tidy3d."""
+"""Simulation and Geometry plotting with plotly."""
 # pylint:disable=too-many-arguments, protected-access
 from typing import Tuple
 
@@ -9,6 +9,7 @@ from dash import dcc, html, Output, Input
 
 from .utils import PlotlyFig, add_fig_if_none, equal_aspect_plotly, plot_params_sim_boundary
 from .component import UIComponent
+
 from ...components.types import Axis
 from ...components.simulation import Simulation
 from ...components.structure import Structure
@@ -26,7 +27,8 @@ def plotly_shape(
 ) -> PlotlyFig:
     """Plot a shape to a figure."""
     _shape = Geometry.evaluate_inf_shape(shape)
-    (xs, ys), _ = Geometry.strip_coords(shape=_shape)
+    exterior_coords, _ = Geometry.strip_coords(shape=_shape)
+    xs, ys = list(zip(*exterior_coords))
     plotly_trace = go.Scatter(
         x=xs,
         y=ys,
@@ -120,35 +122,43 @@ class SimulationPlotly(UIComponent):
         plotly_kwargs = {xyz_label: self.cs_val}
         return self.plotly(**plotly_kwargs)
 
-    def make_component(self, app):
+    def make_component(self, app):  # pylint: disable=too-many-locals
         """Creates the dash component."""
 
         xyz_label, (xyz_min, xyz_max) = self.xyz_label_bounds
         figure = self.make_figure()
 
-        xyz_slider = html.Div(
-            [
-                dcc.Dropdown(
-                    options=["x", "y", "z"],
-                    value=xyz_label,
-                    id="simulation_cs_axis_dropdown",
-                ),
-                dcc.Slider(
-                    min=xyz_min,
-                    max=xyz_max,
-                    value=self.cs_val,
-                    id="simulation_cs_slider",
-                ),
-            ],
-            style={"padding": 50, "flex": 1},
-        )
-
         graph = html.Div(
             [dcc.Graph(figure=figure, id="simulation_plot")], style={"padding": 10, "flex": 1}
         )
 
+        xyz_header = html.H2("Cross-section axis and position.")
+
+        xyz_dropdown = dcc.Dropdown(
+            options=["x", "y", "z"],
+            value=xyz_label,
+            id="simulation_cs_axis_dropdown",
+        )
+
+        xyz_slider = dcc.Slider(
+            min=xyz_min,
+            max=xyz_max,
+            value=self.cs_val,
+            id="simulation_cs_slider",
+        )
+
+        xyz_selection = html.Div(
+            [xyz_header, xyz_dropdown, xyz_slider],
+            style={"padding": 50, "flex": 1},
+        )
+
         component = dcc.Tab(
-            [html.Div([graph, xyz_slider], style={"display": "flex", "flex-direction": "row"})],
+            [
+                html.H1("Viewing Simulation."),
+                html.Div(
+                    [graph, xyz_selection], style={"display": "flex", "flex-direction": "row"}
+                ),
+            ],
             label="Simulation",
         )
 
@@ -159,10 +169,21 @@ class SimulationPlotly(UIComponent):
                 Input("simulation_cs_slider", "value"),
             ],
         )
-        def set_xyz_sliderbar(cs_axis_string, cs_val):
+        def set_fig_from_xyz_sliderbar(cs_axis_string, cs_val):
             self.cs_axis = ["x", "y", "z"].index(cs_axis_string)
             self.cs_val = float(cs_val)
             return self.make_figure()
+
+        # set the xyz slider back to the average if the axis changes.
+        @app.callback(
+            Output("simulation_cs_slider", "value"),
+            Input("simulation_cs_axis_dropdown", "value"),
+        )
+        def reset_slider_position(value_cs_axis):
+            self.cs_axis = ["x", "y", "z"].index(value_cs_axis)
+            _, (xyz_min, xyz_max) = self.xyz_label_bounds
+            self.cs_val = float((xyz_min + xyz_max) / 2.0)
+            return self.cs_val
 
         @app.callback(
             Output("simulation_cs_slider", "min"),
@@ -309,8 +330,10 @@ class SimulationPlotly(UIComponent):
         self, medium: Medium, shape: ShapelyGeo, fig: PlotlyFig
     ) -> PlotlyFig:
         """Plot a structure's cross section shape for a given medium."""
-        plot_params_struct = self.simulation._get_structure_plot_params(medium=medium)
         mat_index = self.simulation.medium_map[medium]
+        plot_params_struct = self.simulation._get_structure_plot_params(
+            medium=medium, mat_index=mat_index
+        )
         name = medium.name if medium.name else f"medium[{mat_index}]"
         fig = plotly_shape(shape=shape, plot_params=plot_params_struct, fig=fig, name=name)
         return fig
@@ -536,9 +559,10 @@ class SimulationPlotly(UIComponent):
         _, (xlabel, ylabel) = self.simulation.pop_axis("xyz", axis=normal_axis)
 
         fig.update_layout(
-            title=f'{"xyz"[normal_axis]} = {pos:.2f}',
-            xaxis_title=rf"{xlabel} ($\mu m$)",
-            yaxis_title=rf"{ylabel} ($\mu m$)",
+            title_text=f'Simulation plotted on {"xyz"[normal_axis]} = {pos:.2f} cross-section',
+            title_x=0.5,
+            xaxis_title=f"{xlabel} (um)",
+            yaxis_title=f"{ylabel} (um)",
             legend_title="Contents",
         )
 
@@ -581,7 +605,7 @@ class SimulationPlotly(UIComponent):
         seen = []
         for trace in fig["data"]:
             name = trace["name"]
-            if name not in seen:
+            if name is not None and name not in seen:
                 seen.append(name)
             else:
                 trace["showlegend"] = False

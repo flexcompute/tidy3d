@@ -1,4 +1,4 @@
-# import the specific classes / functions needed for the plugins
+"""External plugins that have tidy3d as dependency and add functionality."""
 
 from .dispersion.fit import DispersionFitter
 from .dispersion.fit_web import StableDispersionFitter, AdvancedFitterParam
