@@ -50,22 +50,26 @@ class Bounds1D(Coords1D):
         """Make uniform or nonuniform boundaries depending on grid_size input.
         ``structures`` has the simulation geometry and background medium as first element."""
 
-        center, size = structures[0].geometry.center[axis], structures[0].geometry.size[axis]
+        center, size = structures[0].geometry.center, structures[0].geometry.size
 
         if isinstance(grid_size, float):
-            bound_coords = cls._from_uniform_dl(grid_size, center, size, symmetry)
+            bound_coords = cls._from_uniform_dl(grid_size, center[axis], size[axis], symmetry[axis])
         elif isinstance(grid_size, list):
-            bound_coords = cls._from_nonuinform_dl(grid_size, center, size)
+            bound_coords = cls._from_nonuinform_dl(grid_size, center[axis], size[axis])
         elif isinstance(grid_size, GridSpec):
-            if symmetry != 0:
-                # If symmetry present, only mesh starting from simulation center
-                structures[0].geometry = Box(center=center + size / 4, size=size / 2)
+            # Take only the main simulation quadrant in case of symmetry
+            center_sym, size_sym = list(center), list(size)
+            for dim, sym_dim in enumerate(symmetry):
+                if sym_dim != 0:
+                    center_sym[dim] += size[dim] / 4
+                    size_sym[dim] /= 2
+            structures[0].geometry = Box(center=center_sym, size=size_sym)
             bound_coords = cls._from_min_steps(axis, structures, grid_size, wvl)
 
         # Enforce a symmetric grid by reflecting the boundaries around center
-        if symmetry != 0:
-            bound_coords = bound_coords[bound_coords >= center]
-            bound_coords = np.append(2 * center - bound_coords[:0:-1], bound_coords)
+        if symmetry[axis] != 0:
+            bound_coords = bound_coords[bound_coords >= center[axis]]
+            bound_coords = np.append(2 * center[axis] - bound_coords[:0:-1], bound_coords)
 
         return bound_coords
 
@@ -212,7 +216,12 @@ class Bounds1D(Coords1D):
             indsmax = np.argwhere(coord_max > interval_coords)
 
             # Exit if structure is outside of domain bounds
-            if indsmin.size == 0 or indsmax.size == 0:
+            if (
+                indsmin.size == 0
+                or indsmax.size == 0
+                or np.any(bounds_2d[:2] >= sim_plane_bbox[2:])
+                or np.any(bounds_2d[2:] <= sim_plane_bbox[:2])
+            ):
                 continue
 
             # Add current structure bounding box coordinates

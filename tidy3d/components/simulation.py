@@ -1285,7 +1285,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
                 axis,
                 structures,
                 self.grid_size[axis],
-                self.symmetry[axis],
+                self.symmetry,
                 lambda0,
             )
             # Add PML layers in using dl on edges
