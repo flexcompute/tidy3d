@@ -29,11 +29,6 @@ from ..version import __version__
 from ..constants import C_0, MICROMETER, SECOND
 from ..log import log, Tidy3dKeyError, SetupError
 
-# for docstring examples
-# from .geometry import Sphere, Cylinder, PolySlab  # pylint:disable=unused-import
-# from .source import VolumeSource, GaussianPulse  # pylint:disable=unused-import
-# from .monitor import FieldMonitor, FluxMonitor, Monitor, FreqMonitor  # pylint:disable=unused-import
-
 
 # minimum number of grid points allowed per central wavelength in a medium
 MIN_GRIDS_PER_WVL = 6.0
@@ -1140,7 +1135,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         return ax
 
     @staticmethod
-    def _filter_structures_plane(
+    def _filter_structures_plane(  # pylint:disable=too-many-locals
         structures: List[Structure], x: float = None, y: float = None, z: float = None
     ) -> List[Tuple[Medium, Shapely]]:
         """Compute list of shapes to plot on plane specified by {x,y,z}.
@@ -1173,37 +1168,46 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
 
             # Append each of them and their medium information to the list of shapes
             for shape in shapes_plane:
-                shapes.append((structure.medium, shape))
+                shape = Box.evaluate_inf_shape(shape)
+                shapes.append((structure.medium, shape, shape.bounds))
 
         background_shapes = []
-        for medium, shape in shapes:
+        for medium, shape, bounds in shapes:
 
-            shape = Box.evaluate_inf_shape(shape)
+            minx, miny, maxx, maxy = bounds
 
             # loop through background_shapes (note: all background are non-intersecting or merged)
-            for index, (_medium, _shape) in enumerate(background_shapes):
+            for index, (_medium, _shape, _bounds) in enumerate(background_shapes):
 
-                # if not intersection, move onto next background shape
-                if not shape & _shape:
+                _minx, _miny, _maxx, _maxy = _bounds
+
+                # do a bounding box check to see if any intersection to do anything about
+                if minx > _maxx or _minx > maxx or miny > _maxy or _miny > maxy:
                     continue
+
+                # look more closely to see if intersected.
+                if not shape.intersects(_shape):
+                    continue
+
+                diff_shape = _shape - shape
 
                 # different medium, remove intersection from background shape
                 if medium != _medium:
-                    background_shapes[index] = (_medium, _shape - shape)
+                    background_shapes[index] = (_medium, diff_shape, diff_shape.bounds)
 
-                # same medium, add background to this shape and mark background shape for removal
+                # same medium, add diff shape to this shape and mark background shape for removal
                 else:
-                    shape = shape | (_shape - shape)
+                    shape = shape | diff_shape
                     background_shapes[index] = None
 
             # after doing this with all background shapes, add this shape to the background
-            background_shapes.append((medium, shape))
+            background_shapes.append((medium, shape, shape.bounds))
 
             # remove any existing background shapes that have been marked as 'None'
             background_shapes = [b for b in background_shapes if b is not None]
 
         # filter out any remaining None or empty shapes (shapes with area completely removed)
-        return [(medium, shape) for (medium, shape) in background_shapes if shape]
+        return [(medium, shape) for (medium, shape, _) in background_shapes if shape]
 
     @property
     def frequency_range(self) -> FreqBound:
