@@ -49,7 +49,7 @@ class Near2FarSurface(Tidy3dBaseModel):
         """Ensures that the monitor is a plane, i.e., its `size` attribute has exactly 1 zero"""
         size = val.size
         if size.count(0.0) != 1:
-            raise ValidationError(f"'{cls.__name__}' object must be planar, given size={val}")
+            raise ValidationError(f"Monitor '{val.name}' must be planar, given size={size}")
         return val
 
 
@@ -402,7 +402,7 @@ the number of directions ({len(normal_dirs)})."
 
         Returns
         -------
-        tuple(numpy.ndarray[float], numpy.ndarray[float], numpy.ndarray[float], numpy.ndarray[float])
+        tuple(numpy.ndarray[float],numpy.ndarray[float],numpy.ndarray[float],numpy.ndarray[float])
             ``N_theta``, ``N_phi``, ``L_theta``, ``L_phi`` radiation vectors for the given surface.
         """
 
@@ -426,46 +426,46 @@ the number of directions ({len(normal_dirs)})."
         J = np.zeros((3, len(theta), len(phi)), dtype=complex)
         M = np.zeros_like(J)
 
-        def integrate_2D(function, pts_u, pts_v):
+        def integrate_2d(function, pts_u, pts_v):
             """Trapezoidal integration in two dimensions."""
             return np.trapz(np.trapz(function, pts_u, axis=0), pts_v, axis=0)
 
         phase = [None] * 3
         propagation_factor = -self.phasor_positive_sign * 1j * self.k
 
-        def integrate_for_one_theta(i: int):
+        def integrate_for_one_theta(i_th: int):
             """Perform integration for a given theta angle index"""
 
-            for j in np.arange(len(phi)):
+            for j_ph in np.arange(len(phi)):
 
-                phase[0] = np.exp(propagation_factor * pts[0] * sin_theta[i] * cos_phi[j])
-                phase[1] = np.exp(propagation_factor * pts[1] * sin_theta[i] * sin_phi[j])
-                phase[2] = np.exp(propagation_factor * pts[2] * cos_theta[i])
+                phase[0] = np.exp(propagation_factor * pts[0] * sin_theta[i_th] * cos_phi[j_ph])
+                phase[1] = np.exp(propagation_factor * pts[1] * sin_theta[i_th] * sin_phi[j_ph])
+                phase[2] = np.exp(propagation_factor * pts[2] * cos_theta[i_th])
 
                 phase_ij = phase[idx_u][:, None] * phase[idx_v][None, :] * phase[idx_w]
 
-                J[idx_u, i, j] = integrate_2D(
+                J[idx_u, i_th, j_ph] = integrate_2d(
                     currents["J" + cmp_1].values * phase_ij, pts[idx_u], pts[idx_v]
                 )
-                J[idx_v, i, j] = integrate_2D(
+                J[idx_v, i_th, j_ph] = integrate_2d(
                     currents["J" + cmp_2].values * phase_ij, pts[idx_u], pts[idx_v]
                 )
 
-                M[idx_u, i, j] = integrate_2D(
+                M[idx_u, i_th, j_ph] = integrate_2d(
                     currents["M" + cmp_1].values * phase_ij, pts[idx_u], pts[idx_v]
                 )
-                M[idx_v, i, j] = integrate_2D(
+                M[idx_v, i_th, j_ph] = integrate_2d(
                     currents["M" + cmp_2].values * phase_ij, pts[idx_u], pts[idx_v]
                 )
 
         if len(theta) < 2:
             integrate_for_one_theta(0)
         else:
-            for i in track(
+            for i_th in track(
                 np.arange(len(theta)),
                 description=f"Processing surface monitor '{surface.monitor.name}'...",
             ):
-                integrate_for_one_theta(i)
+                integrate_for_one_theta(i_th)
 
         cos_th_cos_phi = cos_theta[:, None] * cos_phi[None, :]
         cos_th_sin_phi = cos_theta[:, None] * sin_phi[None, :]
@@ -496,7 +496,7 @@ the number of directions ({len(normal_dirs)})."
 
         Returns
         -------
-        tuple(numpy.ndarray[float], numpy.ndarray[float], numpy.ndarray[float], numpy.ndarray[float])
+        tuple(numpy.ndarray[float],numpy.ndarray[float],numpy.ndarray[float],numpy.ndarray[float])
             ``N_theta``, ``N_phi``, ``L_theta``, ``L_phi`` radiation vectors.
         """
 
@@ -618,18 +618,14 @@ the number of directions ({len(normal_dirs)})."
                     r, theta, phi = self._car_2_sph(_x, _y, _z)
                     _field_data = self.fields_spherical(r, theta, phi)
 
-                    Er, Etheta, Ephi = [
-                        _field_data[comp].values for comp in ["E_r", "E_theta", "E_phi"]
-                    ]
-                    Hr, Htheta, Hphi = [
-                        _field_data[comp].values for comp in ["H_r", "H_theta", "H_phi"]
-                    ]
+                    Er, Et, Ep = [_field_data[comp].values for comp in ["E_r", "E_theta", "E_phi"]]
+                    Hr, Ht, Hp = [_field_data[comp].values for comp in ["H_r", "H_theta", "H_phi"]]
 
                     Ex_data[i, j, k], Ey_data[i, j, k], Ez_data[i, j, k] = self._sph_2_car_field(
-                        Er, Etheta, Ephi, theta, phi
+                        Er, Et, Ep, theta, phi
                     )
                     Hx_data[i, j, k], Hy_data[i, j, k], Hz_data[i, j, k] = self._sph_2_car_field(
-                        Hr, Htheta, Hphi, theta, phi
+                        Hr, Ht, Hp, theta, phi
                     )
 
         dims = ("x", "y", "z")
@@ -669,10 +665,10 @@ the number of directions ({len(normal_dirs)})."
         phi = np.atleast_1d(phi)
 
         field_data = self.fields_spherical(r, theta, phi)
-        E_theta, E_phi = [field_data[comp].values for comp in ["E_theta", "E_phi"]]
-        H_theta, H_phi = [field_data[comp].values for comp in ["H_theta", "H_phi"]]
-        power_theta = 0.5 * np.real(E_theta * np.conj(H_phi))
-        power_phi = 0.5 * np.real(-E_phi * np.conj(H_theta))
+        Et, Ep = [field_data[comp].values for comp in ["E_theta", "E_phi"]]
+        Ht, Hp = [field_data[comp].values for comp in ["H_theta", "H_phi"]]
+        power_theta = 0.5 * np.real(Et * np.conj(Hp))
+        power_phi = 0.5 * np.real(-Ep * np.conj(Ht))
         power_data = power_theta + power_phi
 
         dims = ("r", "theta", "phi")
@@ -751,12 +747,12 @@ the number of directions ({len(normal_dirs)})."
         constant = k**2 / (8 * np.pi * eta)
         term1 = np.abs(L_phi + eta * N_theta) ** 2
         term2 = np.abs(L_theta - eta * N_phi) ** 2
-        RCS_data = constant * (term1 + term2)
+        rcs_data = constant * (term1 + term2)
 
         dims = ("theta", "phi")
         coords = {"theta": theta, "phi": phi}
 
-        return xr.DataArray(data=RCS_data, coords=coords, dims=dims)
+        return xr.DataArray(data=rcs_data, coords=coords, dims=dims)
 
     @staticmethod
     def _car_2_sph(x, y, z):
