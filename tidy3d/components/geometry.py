@@ -378,7 +378,7 @@ class Geometry(Tidy3dBaseModel, ABC):
     @staticmethod
     def _evaluate_inf(v):
         """Processes values and evaluates any infs into large (signed) numbers."""
-        return v if not np.isinf(v) else np.sign(v) * LARGE_NUMBER / 2.0
+        return v if not np.isinf(v) else np.sign(v) * LARGE_NUMBER
 
     @classmethod
     def evaluate_inf_shape(cls, shape: Shapely) -> Shapely:
