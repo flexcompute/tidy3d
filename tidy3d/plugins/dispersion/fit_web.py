@@ -48,7 +48,7 @@ class AdvancedFitterParam(BaseModel):
         description="Stability constraint: 'hard' constraints are generally recommended since "
         "they are faster to compute per iteration, and they often require fewer iterations to "
         "converge since the search space is smaller. But sometimes the search space is "
-        "so restrictive that  all good solutions are missed, then please try the 'soft' constraints "
+        "so restrictive that all good solutions are missed, then please try the 'soft' constraints "
         "for larger search space. However, both constraints improve stability equally well.",
     )
     nlopt_maxeval: PositiveInt = Field(
@@ -175,7 +175,7 @@ class StableDispersionFitter(DispersionFitter):
 
         return headers
 
-    def fit(  # pylint:disable=arguments-differ
+    def fit(  # pylint:disable=arguments-differ, too-many-locals
         self,
         num_poles: PositiveInt = 1,
         num_tries: PositiveInt = 50,
