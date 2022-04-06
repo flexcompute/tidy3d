@@ -280,6 +280,7 @@ class ModeSolver(Tidy3dBaseModel):
         """Potentially smaller plane if symmetries present in the simulation."""
         return self.simulation.min_sym_box(self.plane)
 
+    # pylint:disable=too-many-locals
     def solve(self) -> ModeSolverData:
         """Finds the modal profile and effective index of the modes.
 
@@ -398,6 +399,7 @@ class ModeSolver(Tidy3dBaseModel):
         f_rot = np.stack(self.plane.unpop_axis(f_z, (f_x, f_y), axis=self.normal_axis), axis=0)
         return f_rot
 
+    # pylint:disable=too-many-locals
     def process_fields(
         self, mode_fields: Array[complex], freq_index: int, mode_index: int
     ) -> Tuple[FIELD, FIELD]:
