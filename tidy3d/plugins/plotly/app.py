@@ -1,5 +1,6 @@
 """Makes an app to visualize SimulationData objects."""
 from abc import ABC, abstractmethod
+from typing import Optional
 from typing_extensions import Literal
 
 from jupyter_dash import JupyterDash
@@ -105,11 +106,12 @@ class SimulationDataApp(App):
         return layout
 
     @classmethod
-    def from_file(cls, fname: str, mode: AppMode = DEFAULT_MODE):  # pylint:disable=arguments-differ
+    def from_file(
+        cls, fname: str, mode: AppMode = DEFAULT_MODE, normalize_index: Optional[int] = 0
+    ):  # pylint:disable=arguments-differ
         """Load the :class:`.SimulationDataApp` from a tidy3d data file in .hdf5 format."""
-        sim_data = SimulationData.from_file(fname)
-        sim_data_normalized = sim_data.normalize()
-        return cls(sim_data=sim_data_normalized, mode=mode)
+        sim_data = SimulationData.from_file(fname, normalize_index=normalize_index)
+        return cls(sim_data=sim_data, mode=mode)
 
 
 class SimulationApp(App):

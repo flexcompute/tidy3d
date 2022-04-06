@@ -744,7 +744,7 @@ class AbstractFieldDataPlotly(DataPlotly, ABC):
         # select by time, if given
         if time is not None:
             time *= PICOSECOND
-            sel_ft = scalar_field_data.data.sel(f=freq, method="nearest")
+            sel_ft = scalar_field_data.data.sel(t=time, method="nearest")
 
         # select the cross sectional plane data
         xyz_labels = ["x", "y", "z"]
