@@ -6,8 +6,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- App / GUI for visualizing contents of `SimulationData` in `tidy3d.plugings.plotly`.
 
 ### Changed
+- Faster plotting for matplotlib and plotly.
+- `SimulationData` normalization keeps track of source index and can be normalized when loading directly from .hdf5 file.
 
 ## [1.2.1] - 2022-3-30
 
