@@ -1173,7 +1173,7 @@ class SimulationData(AbstractSimulationData):
             ax=ax,
         )
 
-    def normalize(self, normalize_index: int = 0):
+    def normalize(self, normalize_index: Optional[int] = 0):
         """Return a copy of the :class:`.SimulationData` object with data normalized by source.
 
         Parameters
@@ -1189,6 +1189,13 @@ class SimulationData(AbstractSimulationData):
             A copy of the :class:`.SimulationData` with the data normalized by source spectrum.
         """
 
+        sim_data_norm = self.copy(deep=True)
+
+        # if no normalize index, just return the new copy right away.
+        if normalize_index is None:
+            return sim_data_norm
+
+        # if data alreadty normalized
         if self.normalized:
             raise DataError(
                 "This SimulationData object has already been normalized "
@@ -1196,13 +1203,13 @@ class SimulationData(AbstractSimulationData):
                 "and can't be normalized again."
             )
 
+        # try to get the source info
         try:
             source = self.simulation.sources[normalize_index]
             source_time = source.source_time
         except IndexError as e:
             raise DataError(f"Could not locate source at normalize_index={normalize_index}.") from e
 
-        sim_data_norm = self.copy(deep=True)
         times = self.simulation.tmesh
         dt = self.simulation.dt
 
@@ -1317,7 +1324,7 @@ class SimulationData(AbstractSimulationData):
         sim_data._normalize_index = normalize_index_file
 
         # if the data in the file has not been normalized, normalize with supplied index.
-        if normalize_index_file is None:
+        if normalize_index_file is None and normalize_index:
             return sim_data.normalize(normalize_index=normalize_index)
 
         # if normalize_index supplied and different from one in the file, raise.
