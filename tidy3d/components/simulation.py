@@ -1068,7 +1068,12 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
 
     @add_ax_if_none
     def plot_grid(  # pylint:disable=too-many-locals
-        self, x: float = None, y: float = None, z: float = None, ax: Ax = None, **kwargs,
+        self,
+        x: float = None,
+        y: float = None,
+        z: float = None,
+        ax: Ax = None,
+        **kwargs,
     ) -> Ax:
         """Plot the cell boundaries as lines on a plane defined by one nonzero x,y,z coordinate.
 
