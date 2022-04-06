@@ -7,11 +7,12 @@ import scipy.sparse.linalg as spl
 
 from ...components.types import Numpy
 from ...constants import ETA_0, C_0, fp_eps, pec_val
-from .derivatives import create_D_matrices as D_mats
-from .derivatives import create_S_matrices as S_mats
+from .derivatives import create_d_matrices as d_mats
+from .derivatives import create_s_matrices as s_mats
 from .transforms import radial_transform, angled_transform
 
 
+# pylint:disable=too-many-statements,too-many-branches,too-many-locals
 def compute_modes(
     eps_cross,
     coords,
@@ -136,20 +137,20 @@ def compute_modes(
             dmin_pmc[1] = True
 
     # Primal grid steps for E-field derivatives
-    dLf = [c[1:] - c[:-1] for c in new_coords]
+    dl_f = [new_cs[1:] - new_cs[:-1] for new_cs in new_coords]
     # Dual grid steps for H-field derivatives
-    dLtmp = [(dL[:-1] + dL[1:]) / 2 for dL in dLf]
-    dLb = [np.hstack((d1[0], d2)) for d1, d2 in zip(dLf, dLtmp)]
+    dl_tmp = [(dl[:-1] + dl[1:]) / 2 for dl in dl_f]
+    dl_b = [np.hstack((d1[0], d2)) for d1, d2 in zip(dl_f, dl_tmp)]
 
     # Derivative matrices with PEC boundaries at the far end and optional pmc at the near end
-    Dmats = D_mats((Nx, Ny), dLf, dLb, dmin_pmc)
+    der_mats_tmp = d_mats((Nx, Ny), dl_f, dl_b, dmin_pmc)
 
     # PML matrices; do not impose PML on the bottom when symmetry present
     dmin_pml = np.array(symmetry) == 0
-    Smats = S_mats(omega, (Nx, Ny), mode_spec.num_pml, dLf, dLb, dmin_pml)
+    pml_mats = s_mats(omega, (Nx, Ny), mode_spec.num_pml, dl_f, dl_b, dmin_pml)
 
     # Add the PML on top of the derivatives; normalize by k0 to match the EM-possible notation
-    SDmats = [Smat.dot(Dmat) / k0 for Smat, Dmat in zip(Smats, Dmats)]
+    der_mats = [Smat.dot(Dmat) / k0 for Smat, Dmat in zip(pml_mats, der_mats_tmp)]
 
     # Determine initial guess value for the solver in transformed coordinates
     if mode_spec.target_neff is None:
@@ -162,7 +163,7 @@ def compute_modes(
     target_neff_p = target / np.linalg.norm(kp_to_k)
 
     # Solve for the modes
-    E, H, neff, keff = solver_em(eps_tensor, mu_tensor, SDmats, num_modes, target_neff_p)
+    E, H, neff, keff = solver_em(eps_tensor, mu_tensor, der_mats, num_modes, target_neff_p)
 
     # Reorder if needed
     if mode_spec.sort_by != "largest_neff":
@@ -178,17 +179,17 @@ def compute_modes(
 
     # Transform back to original axes, E = J^T E'
     E = np.sum(jac_e[..., None] * E[:, None, ...], axis=0)
-    E = E.reshape(3, Nx, Ny, 1, num_modes)
+    E = E.reshape((3, Nx, Ny, 1, num_modes))
     H = np.sum(jac_h[..., None] * H[:, None, ...], axis=0)
-    H = H.reshape(3, Nx, Ny, 1, num_modes)
+    H = H.reshape((3, Nx, Ny, 1, num_modes))
     neff = neff * np.linalg.norm(kp_to_k)
 
-    F = np.stack((E, H), axis=0)
+    fields = np.stack((E, H), axis=0)
 
-    return F, neff + 1j * keff
+    return fields, neff + 1j * keff
 
 
-def solver_em(eps_tensor, mu_tensor, SDmats, num_modes, neff_guess):
+def solver_em(eps_tensor, mu_tensor, der_mats, num_modes, neff_guess):
     """Solve for the electromagnetic modes of a system defined by in-plane permittivity and
     permeability and assuming translational invariance in the normal direction.
 
@@ -198,8 +199,8 @@ def solver_em(eps_tensor, mu_tensor, SDmats, num_modes, neff_guess):
         Shape (3, 3, N), the permittivity tensor at every point in the plane.
     mu_tensor : np.ndarray
         Shape (3, 3, N), the permittivity tensor at every point in the plane.
-    SDmats : List[scipy.sparse.csr_matrix]
-        The sparce derivative matrices Dxf, Dxb, Dyf, Dyb, including the PML.
+    der_mats : List[scipy.sparse.csr_matrix]
+        The sparce derivative matrices dxf, dxb, dyf, dyb, including the PML.
     num_modes : int
         Number of modes to solve for.
     neff_guess : float
@@ -221,12 +222,12 @@ def solver_em(eps_tensor, mu_tensor, SDmats, num_modes, neff_guess):
     eps_offd = np.abs(eps_tensor[off_diagonals])
     mu_offd = np.abs(mu_tensor[off_diagonals])
     if np.any(eps_offd > 1e-6) or np.any(mu_offd > 1e-6):
-        return solver_tensorial(eps_tensor, mu_tensor, SDmats, num_modes, neff_guess)
-    else:
-        return solver_diagonal(eps_tensor, mu_tensor, SDmats, num_modes, neff_guess)
+        return solver_tensorial(eps_tensor, mu_tensor, der_mats, num_modes, neff_guess)
+
+    return solver_diagonal(eps_tensor, mu_tensor, der_mats, num_modes, neff_guess)
 
 
-def solver_diagonal(eps, mu, SDmats, num_modes, neff_guess):
+def solver_diagonal(eps, mu, der_mats, num_modes, neff_guess):
     """EM eigenmode solver assuming ``eps`` and ``mu`` are diagonal everywhere."""
 
     N = eps.shape[-1]
@@ -238,26 +239,26 @@ def solver_diagonal(eps, mu, SDmats, num_modes, neff_guess):
     mu_xx = mu[0, 0, :]
     mu_yy = mu[1, 1, :]
     mu_zz = mu[2, 2, :]
-    Dxf, Dxb, Dyf, Dyb = SDmats
+    dxf, dxb, dyf, dyb = der_mats
 
     # Compute the matrix for diagonalization
     inv_eps_zz = sp.spdiags(1 / eps_zz, [0], N, N)
     inv_mu_zz = sp.spdiags(1 / mu_zz, [0], N, N)
-    P11 = -Dxf.dot(inv_eps_zz).dot(Dyb)
-    P12 = Dxf.dot(inv_eps_zz).dot(Dxb) + sp.spdiags(mu_yy, [0], N, N)
-    P21 = -Dyf.dot(inv_eps_zz).dot(Dyb) - sp.spdiags(mu_xx, [0], N, N)
-    P22 = Dyf.dot(inv_eps_zz).dot(Dxb)
-    Q11 = -Dxb.dot(inv_mu_zz).dot(Dyf)
-    Q12 = Dxb.dot(inv_mu_zz).dot(Dxf) + sp.spdiags(eps_yy, [0], N, N)
-    Q21 = -Dyb.dot(inv_mu_zz).dot(Dyf) - sp.spdiags(eps_xx, [0], N, N)
-    Q22 = Dyb.dot(inv_mu_zz).dot(Dxf)
+    p11 = -dxf.dot(inv_eps_zz).dot(dyb)
+    p12 = dxf.dot(inv_eps_zz).dot(dxb) + sp.spdiags(mu_yy, [0], N, N)
+    p21 = -dyf.dot(inv_eps_zz).dot(dyb) - sp.spdiags(mu_xx, [0], N, N)
+    p22 = dyf.dot(inv_eps_zz).dot(dxb)
+    q11 = -dxb.dot(inv_mu_zz).dot(dyf)
+    q12 = dxb.dot(inv_mu_zz).dot(dxf) + sp.spdiags(eps_yy, [0], N, N)
+    q21 = -dyb.dot(inv_mu_zz).dot(dyf) - sp.spdiags(eps_xx, [0], N, N)
+    q22 = dyb.dot(inv_mu_zz).dot(dxf)
 
-    Pmat = sp.bmat([[P11, P12], [P21, P22]])
-    Qmat = sp.bmat([[Q11, Q12], [Q21, Q22]])
-    A = Pmat.dot(Qmat)
+    pmat = sp.bmat([[p11, p12], [p21, p22]])
+    qmat = sp.bmat([[q11, q12], [q21, q22]])
+    mat = pmat.dot(qmat)
 
     # Call the eigensolver. The eigenvalues are -(neff + 1j * keff)**2
-    vals, vecs = solver_eigs(A, num_modes, guess_value=-(neff_guess**2))
+    vals, vecs = solver_eigs(mat, num_modes, guess_value=-(neff_guess**2))
     if vals.size == 0:
         raise RuntimeError("Could not find any eigenmodes for this waveguide")
     vre, vim = -np.real(vals), -np.imag(vals)
@@ -277,11 +278,11 @@ def solver_diagonal(eps, mu, SDmats, num_modes, neff_guess):
     Ey = vecs[N:, :]
 
     # Get the other field components
-    Hs = Qmat.dot(vecs)
-    Hx = Hs[:N, :] / (1j * neff - keff)
-    Hy = Hs[N:, :] / (1j * neff - keff)
-    Hz = inv_mu_zz.dot((Dxf.dot(Ey) - Dyf.dot(Ex)))
-    Ez = inv_eps_zz.dot((Dxb.dot(Hy) - Dyb.dot(Hx)))
+    h_field = qmat.dot(vecs)
+    Hx = h_field[:N, :] / (1j * neff - keff)
+    Hy = h_field[N:, :] / (1j * neff - keff)
+    Hz = inv_mu_zz.dot((dxf.dot(Ey) - dyf.dot(Ex)))
+    Ez = inv_eps_zz.dot((dxb.dot(Hy) - dyb.dot(Hx)))
 
     # Bundle up
     E = np.stack((Ex, Ey, Ez), axis=0)
@@ -293,65 +294,65 @@ def solver_diagonal(eps, mu, SDmats, num_modes, neff_guess):
     return E, H, neff, keff
 
 
-def solver_tensorial(eps, mu, SDmats, num_modes, neff_guess):
+def solver_tensorial(eps, mu, der_mats, num_modes, neff_guess):
     """EM eigenmode solver assuming ``eps`` or ``mu`` have off-diagonal elements."""
 
     N = eps.shape[-1]
-    Dxf, Dxb, Dyf, Dyb = SDmats
+    dxf, dxb, dyf, dyb = der_mats
 
     # Compute all blocks of the matrix for diagonalization
     inv_eps_zz = sp.spdiags(1 / eps[2, 2, :], [0], N, N)
     inv_mu_zz = sp.spdiags(1 / mu[2, 2, :], [0], N, N)
-    axax = -Dxf.dot(sp.spdiags(eps[2, 0, :] / eps[2, 2, :], [0], N, N)) - sp.spdiags(
+    axax = -dxf.dot(sp.spdiags(eps[2, 0, :] / eps[2, 2, :], [0], N, N)) - sp.spdiags(
         mu[1, 2, :] / mu[2, 2, :], [0], N, N
-    ).dot(Dyf)
-    axay = -Dxf.dot(sp.spdiags(eps[2, 1, :] / eps[2, 2, :], [0], N, N)) + sp.spdiags(
+    ).dot(dyf)
+    axay = -dxf.dot(sp.spdiags(eps[2, 1, :] / eps[2, 2, :], [0], N, N)) + sp.spdiags(
         mu[1, 2, :] / mu[2, 2, :], [0], N, N
-    ).dot(Dxf)
-    axbx = -Dxf.dot(inv_eps_zz).dot(Dyb) + sp.spdiags(
+    ).dot(dxf)
+    axbx = -dxf.dot(inv_eps_zz).dot(dyb) + sp.spdiags(
         mu[1, 0, :] - mu[1, 2, :] * mu[2, 0, :] / mu[2, 2, :], [0], N, N
     )
-    axby = Dxf.dot(inv_eps_zz).dot(Dxb) + sp.spdiags(
+    axby = dxf.dot(inv_eps_zz).dot(dxb) + sp.spdiags(
         mu[1, 1, :] - mu[1, 2, :] * mu[2, 1, :] / mu[2, 2, :], [0], N, N
     )
-    ayax = -Dyf.dot(sp.spdiags(eps[2, 0, :] / eps[2, 2, :], [0], N, N)) + sp.spdiags(
+    ayax = -dyf.dot(sp.spdiags(eps[2, 0, :] / eps[2, 2, :], [0], N, N)) + sp.spdiags(
         mu[0, 2, :] / mu[2, 2, :], [0], N, N
-    ).dot(Dyf)
-    ayay = -Dyf.dot(sp.spdiags(eps[2, 1, :] / eps[2, 2, :], [0], N, N)) - sp.spdiags(
+    ).dot(dyf)
+    ayay = -dyf.dot(sp.spdiags(eps[2, 1, :] / eps[2, 2, :], [0], N, N)) - sp.spdiags(
         mu[0, 2, :] / mu[2, 2, :], [0], N, N
-    ).dot(Dxf)
-    aybx = -Dyf.dot(inv_eps_zz).dot(Dyb) + sp.spdiags(
+    ).dot(dxf)
+    aybx = -dyf.dot(inv_eps_zz).dot(dyb) + sp.spdiags(
         -mu[0, 0, :] + mu[0, 2, :] * mu[2, 0, :] / mu[2, 2, :], [0], N, N
     )
-    ayby = Dyf.dot(inv_eps_zz).dot(Dxb) + sp.spdiags(
+    ayby = dyf.dot(inv_eps_zz).dot(dxb) + sp.spdiags(
         -mu[0, 1, :] + mu[0, 2, :] * mu[2, 1, :] / mu[2, 2, :], [0], N, N
     )
-    bxbx = -Dxb.dot(sp.spdiags(mu[2, 0, :] / mu[2, 2, :], [0], N, N)) - sp.spdiags(
+    bxbx = -dxb.dot(sp.spdiags(mu[2, 0, :] / mu[2, 2, :], [0], N, N)) - sp.spdiags(
         eps[1, 2, :] / eps[2, 2, :], [0], N, N
-    ).dot(Dyb)
-    bxby = -Dxb.dot(sp.spdiags(mu[2, 1, :] / mu[2, 2, :], [0], N, N)) + sp.spdiags(
+    ).dot(dyb)
+    bxby = -dxb.dot(sp.spdiags(mu[2, 1, :] / mu[2, 2, :], [0], N, N)) + sp.spdiags(
         eps[1, 2, :] / eps[2, 2, :], [0], N, N
-    ).dot(Dxb)
-    bxax = -Dxb.dot(inv_mu_zz).dot(Dyf) + sp.spdiags(
+    ).dot(dxb)
+    bxax = -dxb.dot(inv_mu_zz).dot(dyf) + sp.spdiags(
         eps[1, 0, :] - eps[1, 2, :] * eps[2, 0, :] / eps[2, 2, :], [0], N, N
     )
-    bxay = Dxb.dot(inv_mu_zz).dot(Dxf) + sp.spdiags(
+    bxay = dxb.dot(inv_mu_zz).dot(dxf) + sp.spdiags(
         eps[1, 1, :] - eps[1, 2, :] * eps[2, 1, :] / eps[2, 2, :], [0], N, N
     )
-    bybx = -Dyb.dot(sp.spdiags(mu[2, 0, :] / mu[2, 2, :], [0], N, N)) + sp.spdiags(
+    bybx = -dyb.dot(sp.spdiags(mu[2, 0, :] / mu[2, 2, :], [0], N, N)) + sp.spdiags(
         eps[0, 2, :] / eps[2, 2, :], [0], N, N
-    ).dot(Dyb)
-    byby = -Dyb.dot(sp.spdiags(mu[2, 1, :] / mu[2, 2, :], [0], N, N)) - sp.spdiags(
+    ).dot(dyb)
+    byby = -dyb.dot(sp.spdiags(mu[2, 1, :] / mu[2, 2, :], [0], N, N)) - sp.spdiags(
         eps[0, 2, :] / eps[2, 2, :], [0], N, N
-    ).dot(Dxb)
-    byax = -Dyb.dot(inv_mu_zz).dot(Dyf) + sp.spdiags(
+    ).dot(dxb)
+    byax = -dyb.dot(inv_mu_zz).dot(dyf) + sp.spdiags(
         -eps[0, 0, :] + eps[0, 2, :] * eps[2, 0, :] / eps[2, 2, :], [0], N, N
     )
-    byay = Dyb.dot(inv_mu_zz).dot(Dxf) + sp.spdiags(
+    byay = dyb.dot(inv_mu_zz).dot(dxf) + sp.spdiags(
         -eps[0, 1, :] + eps[0, 2, :] * eps[2, 1, :] / eps[2, 2, :], [0], N, N
     )
 
-    A = sp.bmat(
+    mat = sp.bmat(
         [
             [axax, axay, axbx, axby],
             [ayax, ayay, aybx, ayby],
@@ -361,7 +362,7 @@ def solver_tensorial(eps, mu, SDmats, num_modes, neff_guess):
     )
 
     # Call the eigensolver. The eigenvalues are 1j * (neff + 1j * keff)
-    vals, vecs = solver_eigs(A, num_modes, guess_value=1j * neff_guess)
+    vals, vecs = solver_eigs(mat, num_modes, guess_value=1j * neff_guess)
     if vals.size == 0:
         raise RuntimeError("Could not find any eigenmodes for this waveguide")
     # Real and imaginary part of the effective index
@@ -381,9 +382,9 @@ def solver_tensorial(eps, mu, SDmats, num_modes, neff_guess):
 
     # Get the other field components
     hxy_term = (-mu[2, 0, :] * Hx.T - mu[2, 1, :] * Hy.T).T
-    Hz = inv_mu_zz.dot(Dxf.dot(Ey) - Dyf.dot(Ex) + hxy_term)
+    Hz = inv_mu_zz.dot(dxf.dot(Ey) - dyf.dot(Ex) + hxy_term)
     exy_term = (-eps[2, 0, :] * Ex.T - eps[2, 1, :] * Ey.T).T
-    Ez = inv_eps_zz.dot(Dxb.dot(Hy) - Dyb.dot(Hx) + exy_term)
+    Ez = inv_eps_zz.dot(dxb.dot(Hy) - dyb.dot(Hx) + exy_term)
 
     # Bundle up
     E = np.stack((Ex, Ey, Ez), axis=0)
@@ -396,17 +397,17 @@ def solver_tensorial(eps, mu, SDmats, num_modes, neff_guess):
     return E, H, neff, keff
 
 
-def solver_eigs(A, num_modes, guess_value=1.0):
-    """Find ``num_modes`` eigenmodes of ``A`` cloest to ``guess_value``.
+def solver_eigs(mat, num_modes, guess_value=1.0):
+    """Find ``num_modes`` eigenmodes of ``mat`` cloest to ``guess_value``.
 
     Parameters
     ----------
-    A : scipy.sparse matrix
+    mat : scipy.sparse matrix
         Square matrix for diagonalization.
     num_modes : int
         Number of eigenmodes to compute.
     guess_value : float, optional
     """
 
-    values, vectors = spl.eigs(A, k=num_modes, sigma=guess_value, tol=fp_eps)
+    values, vectors = spl.eigs(mat, k=num_modes, sigma=guess_value, tol=fp_eps)
     return values, vectors

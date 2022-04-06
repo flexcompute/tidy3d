@@ -53,7 +53,7 @@ def radial_transform(coords, radius, bend_axis):
     new_coords = (u, v)
 
     """The only nontrivial derivative is dwdz and it only depends on the coordinate in the
-    norm_axis direction (orthogonal to both bend_axis and z). We need to compute that derivative 
+    norm_axis direction (orthogonal to both bend_axis and z). We need to compute that derivative
     at the En and Hn positions.
     """
     dwdz_e = radius / new_coords[norm_axis][:-1]
