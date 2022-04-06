@@ -53,7 +53,7 @@ class Bounds1D(Coords1D):
         center, size = structures[0].geometry.center, structures[0].geometry.size
 
         if isinstance(grid_size, float):
-            bound_coords = cls._from_uniform_dl(grid_size, center[axis], size[axis], symmetry[axis])
+            bound_coords = cls._from_uniform_dl(grid_size, center[axis], size[axis])
         elif isinstance(grid_size, list):
             bound_coords = cls._from_nonuinform_dl(grid_size, center[axis], size[axis])
         elif isinstance(grid_size, GridSpec):
@@ -68,28 +68,29 @@ class Bounds1D(Coords1D):
 
         # Enforce a symmetric grid by reflecting the boundaries around center
         if symmetry[axis] != 0:
+            # Offset to center if symmetry present
+            center_ind = np.argmin(np.abs(center[axis] - bound_coords))
+            bound_coords += center[axis] - bound_coords[center_ind]
             bound_coords = bound_coords[bound_coords >= center[axis]]
             bound_coords = np.append(2 * center[axis] - bound_coords[:0:-1], bound_coords)
 
         return bound_coords
 
     @classmethod
-    def _from_uniform_dl(cls, dl, center, size, symmetry):
+    def _from_uniform_dl(cls, dl, center, size):
         """Creates coordinate boundaries with uniform mesh (dl is float).
         Center if symmetry present."""
 
-        num_cells = int(np.floor(size / dl))
+        num_cells = round(size / dl)
 
         # Make sure there's at least one cell
         num_cells = max(num_cells, 1)
 
-        # snap to grid, recenter
-        size_snapped = dl * num_cells
-        bound_coords = center + np.linspace(-size_snapped / 2, size_snapped / 2, num_cells + 1)
+        # Adjust step size to fit simulation size exactly
+        dl_snapped = size / num_cells if size > 0 else dl
 
-        # Offset to center if symmetry present
-        if symmetry != 0:
-            bound_coords += center - bound_coords[bound_coords.size // 2]
+        # Make bounds
+        bound_coords = center - size / 2 + np.arange(num_cells + 1) * dl_snapped
 
         return bound_coords
 
@@ -102,8 +103,8 @@ class Bounds1D(Coords1D):
         dl = np.array(dl)
         bound_coords = np.array([np.sum(dl[:i]) for i in range(len(dl) + 1)])
 
-        # place the middle boundary at the center of the simulation along dimension
-        bound_coords += center - bound_coords[bound_coords.size // 2]
+        # place the middle of the bounds at the center of the simulation along dimension
+        bound_coords += center - bound_coords[-1] / 2
 
         # chop off any coords outside of simulation bounds
         bound_min = center - size / 2

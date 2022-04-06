@@ -142,7 +142,7 @@ def test_sim_symmetry_grid():
     grid_size = [2, 1, 3, 2]
     sim = td.Simulation(
         center=(1, 1, 1),
-        size=(10, 10, 10),
+        size=(11, 11, 11),
         grid_size=(grid_size, grid_size, grid_size),
         pml_layers=[
             td.PML(num_layers=2),
@@ -153,9 +153,10 @@ def test_sim_symmetry_grid():
     )
 
     coords_x, coords_y, coords_z = sim.grid.boundaries.to_list
+    print(sim.grid.boundaries.to_list)
 
-    # Assert coords size is even for the non-symmetry axis but odd otherwise
-    assert coords_x.size % 2 == 0
+    # Assert coords size is even in all cases
+    assert coords_x.size % 2 != 0
     assert coords_y.size % 2 != 0
     assert coords_z.size % 2 != 0
 
