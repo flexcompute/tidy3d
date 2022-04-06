@@ -57,11 +57,11 @@ def get_query_url(method: str) -> str:
 
 def get_headers() -> Dict[str, str]:
     """get headers for http request"""
+    get_credentials()
     access_token = Config.auth["accessToken"]
     user_identity = Config.user["identityId"]
     return {
         "Authorization": f"Bearer {access_token}",
-        "FLOW360USER": user_identity,
         "Application": "TIDY3D",
     }
 

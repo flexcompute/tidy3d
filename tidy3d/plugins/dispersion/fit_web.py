@@ -10,7 +10,6 @@ from ...components import PoleResidue
 from ...constants import MICROMETER, HERTZ
 from ...log import log, WebError, Tidy3dError
 from ...web.httputils import get_headers
-from ...web.auth import requires_auth
 
 from .fit import DispersionFitter
 
@@ -146,7 +145,6 @@ class StableDispersionFitter(DispersionFitter):
         return URL_ENV[_env]
 
     @staticmethod
-    @requires_auth
     def _setup_server(url_server: str):
         """set up web server access
 

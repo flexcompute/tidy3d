@@ -3,9 +3,7 @@ import os
 import getpass
 import hashlib
 import json
-import functools
 
-import boto3
 import requests
 
 from .config import DEFAULT_CONFIG as Config
@@ -18,8 +16,6 @@ MAX_ATTEMPTS = 3
 CREDENTIAL_FILE = "~/.tidy3d/auth.json"
 credential_path = os.path.expanduser(CREDENTIAL_FILE)
 credential_dir = os.path.split(credential_path)[0]
-
-boto3.setup_default_session(region_name=Config.s3_region)
 
 
 def set_authentication_config(email: str, password: str) -> None:
@@ -130,14 +126,3 @@ def get_credentials() -> None:
 
         # otherwise, prompt again
         log.info(f"Unknown response: {keep_logged_in}")
-
-
-def requires_auth(func):
-    """Decorator for functions that require the authentication step."""
-
-    @functools.wraps(func)
-    def auth_before_call(*args, **kwargs):
-        get_credentials()
-        return func(*args, **kwargs)
-
-    return auth_before_call
