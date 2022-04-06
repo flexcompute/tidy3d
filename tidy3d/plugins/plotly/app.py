@@ -105,9 +105,9 @@ class SimulationDataApp(App):
         return layout
 
     @classmethod
-    def from_file(cls, path: str, mode: AppMode = DEFAULT_MODE):  # pylint:disable=arguments-differ
+    def from_file(cls, fname: str, mode: AppMode = DEFAULT_MODE):  # pylint:disable=arguments-differ
         """Load the :class:`.SimulationDataApp` from a tidy3d data file in .hdf5 format."""
-        sim_data = SimulationData.from_file(path)
+        sim_data = SimulationData.from_file(fname)
         sim_data_normalized = sim_data.normalize()
         return cls(sim_data=sim_data_normalized, mode=mode)
 
@@ -124,7 +124,7 @@ class SimulationApp(App):
         return dcc.Tabs([])
 
     @classmethod
-    def from_file(cls, path: str, mode: AppMode = DEFAULT_MODE):  # pylint:disable=arguments-differ
+    def from_file(cls, fname: str, mode: AppMode = DEFAULT_MODE):  # pylint:disable=arguments-differ
         """Load the SimulationApp from a tidy3d Simulation file in .json or .yaml format."""
-        simulation = Simulation.from_file(path)
+        simulation = Simulation.from_file(fname)
         return cls(simulation=simulation, mode=mode)
