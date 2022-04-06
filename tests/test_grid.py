@@ -142,7 +142,7 @@ def test_sim_symmetry_grid():
     grid_size = [2, 1, 3, 2]
     sim = td.Simulation(
         center=(1, 1, 1),
-        size=(10, 10, 10),
+        size=(11, 11, 11),
         grid_size=(grid_size, grid_size, grid_size),
         pml_layers=[
             td.PML(num_layers=2),
