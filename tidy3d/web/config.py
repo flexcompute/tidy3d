@@ -39,6 +39,14 @@ ConfigUat = WebConfig(
     website_endpoint="https://uat-tidy3d.simulation.cloud",
 )
 
+# pre-production config
+ConfigPreProd = WebConfig(
+    s3_region="us-gov-west-1",
+    studio_bucket="flow360studio",
+    auth_api_endpoint="https://preprod-portal-api.simulation.cloud",
+    web_api_endpoint="https://preprod-tidy3d-api.simulation.cloud",
+)
+
 # production config
 ConfigProd = WebConfig(
     s3_region="us-gov-west-1",
@@ -55,5 +63,7 @@ if os.environ.get("TIDY3D_ENV") == "dev":
     DEFAULT_CONFIG = ConfigDev
 elif os.environ.get("TIDY3D_ENV") == "uat":
     DEFAULT_CONFIG = ConfigUat
+elif os.environ.get("TIDY3D_ENV") == "preprod":
+    DEFAULT_CONFIG = ConfigPreProd
 elif os.environ.get("TIDY3D_ENV") == "prod":
     DEFAULT_CONFIG = ConfigProd
