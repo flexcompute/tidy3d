@@ -14,9 +14,12 @@ from ...components.simulation import Simulation
 from ...components.data import SimulationData
 
 AppMode = Literal["python", "jupyter", "jupyterlab"]
-DEFAULT_MODE = "jupyterlab"
-DASH_APP = "Dash App"
 
+# app config settings
+DEFAULT_MODE = "jupyterlab"
+PORT = 8090
+DEV_TOOLS_UI = False
+DEV_TOOLS_HOT_RELOAD = False
 
 class App(Tidy3dBaseModel, ABC):
     """Basic dash app template: initializes, makes layout, and fires up a server."""
@@ -27,7 +30,7 @@ class App(Tidy3dBaseModel, ABC):
         description='Run app in mode that is one of `"python"`, `"jupyter"`, `"jupyterlab"`.',
     )
 
-    def _initialize_app(self) -> DASH_APP:
+    def _initialize_app(self) -> Dash:
         """Creates an app based on specs."""
         if "jupyter" in self.mode.lower():
             return JupyterDash(__name__)
@@ -36,11 +39,11 @@ class App(Tidy3dBaseModel, ABC):
         raise NotImplementedError(f"App doesn't support mode='{self.mode}'.")
 
     @abstractmethod
-    def _make_layout(self, app: DASH_APP) -> dcc.Tabs:
+    def _make_layout(self, app: Dash) -> dcc.Tabs:
         """Creates the layout for the app."""
         raise NotImplementedError("Must implement in subclass.")
 
-    def _make_app(self) -> DASH_APP:
+    def _make_app(self) -> Dash:
         """Initialize everything and make the plotly app."""
         app = self._initialize_app()
         app.layout = self._make_layout(app)
@@ -51,17 +54,26 @@ class App(Tidy3dBaseModel, ABC):
 
         app = self._make_app()
 
-        if "jupyter" in self.mode.lower():
+        if self.mode.lower() == "jupyterlab":
             app.run_server(
                 mode="jupyterlab",
-                port=8090,
-                dev_tools_ui=True,
-                dev_tools_hot_reload=True,
+                port=PORT,
+                dev_tools_ui=DEV_TOOLS_UI,
+                dev_tools_hot_reload=DEV_TOOLS_HOT_RELOAD,
                 threaded=True,
                 debug=debug,
             )
-        elif "python" in self.mode.lower():
-            app.run_server(debug=debug, port=8090)
+        elif self.mode.lower() == "jupyter":
+            app.run_server(
+                mode="inline",
+                port=PORT,
+                dev_tools_ui=DEV_TOOLS_UI,
+                dev_tools_hot_reload=DEV_TOOLS_HOT_RELOAD,
+                threaded=True,
+                debug=debug,
+            )        
+        elif self.mode.lower() == "python":
+            app.run_server(debug=debug, port=PORT)
         else:
             raise NotImplementedError(f"App doesn't support mode='{self.mode}'.")
 
@@ -73,7 +85,7 @@ class SimulationDataApp(App):
         ..., title="Simulation data", description="A :class:`.SimulationData` instance to view."
     )
 
-    def _make_layout(self, app: DASH_APP) -> dcc.Tabs:
+    def _make_layout(self, app: Dash) -> dcc.Tabs:
         """Creates the layout for the app."""
 
         layout = dcc.Tabs([])

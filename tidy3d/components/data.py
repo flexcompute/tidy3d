@@ -15,7 +15,7 @@ from .base import Tidy3dBaseModel
 from .simulation import Simulation
 from .grid import YeeGrid
 from .viz import add_ax_if_none, equal_aspect
-from ..log import DataError
+from ..log import DataError, log
 
 # TODO: add warning if fields didnt fully decay
 
@@ -1210,6 +1210,14 @@ class SimulationData(AbstractSimulationData):
             return sim_data_norm
 
         # from here on, normalze_index is not None and the data has not been normalized
+
+        # no sources, just warn and return
+        if len(self.simulation.sources) == 0:
+            log.warning(
+                f'normalize_index={normalize_index} supplied but no sources found, '
+                'not normalizing.'
+            )
+            return sim_data_norm
 
         # try to get the source info
         try:
