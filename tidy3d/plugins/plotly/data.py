@@ -508,7 +508,9 @@ class AbstractFieldDataPlotly(DataPlotly, ABC):
     @property
     def mode_ind_coords(self) -> List[int]:
         """Get the mode indices."""
-        return self.scalar_field_data.coords["mode_index"].values
+        if "mode_index" in self.scalar_field_data.data.coords:
+            return self.scalar_field_data.data.coords["mode_index"].values
+        return None
 
     def make_figure(self) -> PlotlyFig:
         """Generate plotly figure from the current state of self."""
@@ -516,6 +518,11 @@ class AbstractFieldDataPlotly(DataPlotly, ABC):
         # if no field specified, use the first one in the fields list
         if self.field_val is None:
             self.field_val = self.inital_field_val
+
+        # if no mode_ind_val specified, use the first of the coords (or None)
+        if self.mode_ind_val is None:
+            mode_indices = self.mode_ind_coords
+            self.mode_ind_val = mode_indices[0] if mode_indices is not None else None
 
         # if cross section value, use the average of the coordinates of the current axis
         xyz_label, xyz_coords = self.xyz_label_coords
@@ -532,6 +539,7 @@ class AbstractFieldDataPlotly(DataPlotly, ABC):
             "field": self.field_val,
             ft_label: self.ft_val,
             "val": self.val,
+            "mode_index": self.mode_ind_val,
         }
 
         return self.plotly(**plotly_kwargs)
@@ -619,7 +627,8 @@ class AbstractFieldDataPlotly(DataPlotly, ABC):
         # add a mode index dropdown to right hand side, if applicable
         if self.mode_ind_val is not None:
 
-            # make a mode index dropdown
+            # make a mode index label and dropdown
+            mode_ind_label = html.H2("Mode Index component.")
             mode_ind_dropdown = html.Div(
                 [
                     dcc.Dropdown(
@@ -630,7 +639,8 @@ class AbstractFieldDataPlotly(DataPlotly, ABC):
                 ]
             )
 
-            # add this to the plot selections panel component
+            # add these to the plot selections panel component
+            plot_selections.children.append(mode_ind_label)
             plot_selections.children.append(mode_ind_dropdown)
 
         # full layout
@@ -730,21 +740,21 @@ class AbstractFieldDataPlotly(DataPlotly, ABC):
         axis, position = Geometry.parse_xyz_kwargs(x=x, y=y, z=z)
 
         # grab by field name
-        scalar_field_data = self.scalar_field_data
+        scalar_field_data = self.scalar_field_data.data
 
         # select mode_index, if given
-        if mode_index is not None:
+        if mode_index is not None and "mode_index" in scalar_field_data.coords:
             scalar_field_data = scalar_field_data.sel(mode_index=mode_index)
 
         # select by frequency, if given
         if freq is not None:
             freq *= TERAHERTZ
-            sel_ft = scalar_field_data.data.sel(f=freq, method="nearest")
+            sel_ft = scalar_field_data.sel(f=freq, method="nearest")
 
         # select by time, if given
         if time is not None:
             time *= PICOSECOND
-            sel_ft = scalar_field_data.data.sel(t=time, method="nearest")
+            sel_ft = scalar_field_data.sel(t=time, method="nearest")
 
         # select the cross sectional plane data
         xyz_labels = ["x", "y", "z"]

@@ -1203,6 +1203,8 @@ class SimulationData(AbstractSimulationData):
                 "and can't be normalized again."
             )
 
+        # from here on, normalze_index is not None and the data has not been normalized, continue
+
         # try to get the source info
         try:
             source = self.simulation.sources[normalize_index]
@@ -1323,21 +1325,27 @@ class SimulationData(AbstractSimulationData):
         # make sure to tag the SimulationData with the normalize_index stored from file
         sim_data._normalize_index = normalize_index_file
 
-        # if the data in the file has not been normalized, normalize with supplied index.
-        if normalize_index_file is None and normalize_index:
+        # if normalize_index supplied as None, just return the sim_data right away (norm or not)
+        if normalize_index is None:
+            return sim_data
+
+        # if the data in the file has not been normalized, normalize with supplied index
+        if normalize_index_file is None:
             return sim_data.normalize(normalize_index=normalize_index)
 
-        # if normalize_index supplied and different from one in the file, raise.
-        if normalize_index is not None and normalize_index != normalize_index_file:
-            raise DataError(
-                "Data from this file is already normalized with "
-                f"normalize_index={normalize_index_file}, can't normalize with supplied "
-                f"normalize_index={normalize_index} unless they are the same "
-                "or supplied normalize index is `None`."
-            )
+        # from here on, normalze_index and normalize_index_file are present
 
-        # otherwise, just return the sim_data as it came from the file.
-        return sim_data
+        # if they are the same, just return as normal
+        if normalize_index == normalize_index_file:
+            return sim_data
+
+        # if they aren't the same, throw an error
+        raise DataError(
+            "Data from this file is already normalized with "
+            f"normalize_index={normalize_index_file}, can't normalize with supplied "
+            f"normalize_index={normalize_index} unless they are the same "
+            "or supplied normalize index is `None`."
+        )
 
     def __eq__(self, other):
         """Check equality against another :class:`SimulationData` instance.

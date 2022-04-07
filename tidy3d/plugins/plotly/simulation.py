@@ -593,8 +593,8 @@ class SimulationPlotly(UIComponent):
         width = xmax - xmin
         height = ymax - ymin
 
-        fig.update_xaxes(range=[xmin - width, xmax + width])
-        fig.update_yaxes(range=[ymin - height, ymax + height])
+        fig.update_xaxes(range=[xmin, xmax])
+        fig.update_yaxes(range=[ymin, ymax])
 
         fig.update_layout(width=float(width_pixels), height=float(width_pixels) * height / width)
         return fig
