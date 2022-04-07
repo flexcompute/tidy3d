@@ -277,7 +277,9 @@ class Geometry(Tidy3dBaseModel, ABC):
                 list_all_int_coords.append(all_int_coords)
             ext_coords = np.concatenate(all_ext_coords, axis=0)
             list_int_coords = [
-                np.concatenate(all_int_coords, axis=0) for all_int_coords in list_all_int_coords
+                np.concatenate(all_int_coords, axis=0)
+                for all_int_coords in list_all_int_coords
+                if len(all_int_coords) > 0
             ]
         return ext_coords, list_int_coords
 
