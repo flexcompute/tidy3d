@@ -21,6 +21,7 @@ PORT = 8090
 DEV_TOOLS_UI = False
 DEV_TOOLS_HOT_RELOAD = False
 
+
 class App(Tidy3dBaseModel, ABC):
     """Basic dash app template: initializes, makes layout, and fires up a server."""
 
@@ -71,7 +72,7 @@ class App(Tidy3dBaseModel, ABC):
                 dev_tools_hot_reload=DEV_TOOLS_HOT_RELOAD,
                 threaded=True,
                 debug=debug,
-            )        
+            )
         elif self.mode.lower() == "python":
             app.run_server(debug=debug, port=PORT)
         else:
@@ -133,7 +134,7 @@ class SimulationApp(App):
         ..., title="Simulation", description="A :class:`.Simulation` instance to view."
     )
 
-    def _make_layout(self, app: DASH_APP) -> dcc.Tabs:
+    def _make_layout(self, app: Dash) -> dcc.Tabs:
         """Creates the layout for the app."""
         return dcc.Tabs([])
 

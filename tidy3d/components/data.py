@@ -1214,8 +1214,8 @@ class SimulationData(AbstractSimulationData):
         # no sources, just warn and return
         if len(self.simulation.sources) == 0:
             log.warning(
-                f'normalize_index={normalize_index} supplied but no sources found, '
-                'not normalizing.'
+                f"normalize_index={normalize_index} supplied but no sources found, "
+                "not normalizing."
             )
             return sim_data_norm
 
