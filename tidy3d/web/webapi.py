@@ -329,7 +329,7 @@ def load(
         download(task_id=task_id, path=path)
 
     log.info(f"loading SimulationData from {path}")
-    sim_data = SimulationData.from_file(path)
+    sim_data = SimulationData.from_file(path, normalize_index=normalize_index)
 
     final_decay_value = sim_data.final_decay_value
     shutoff_value = sim_data.simulation.shutoff
@@ -339,9 +339,6 @@ def load(
             f"is greater than the simulation shutoff threshold of {shutoff_value}. "
             "Consider simulation again with large run_time duration for more accurate results."
         )
-
-    if normalize_index is not None:
-        return sim_data.normalize(normalize_index=normalize_index)
 
     return sim_data
 

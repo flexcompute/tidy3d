@@ -1197,13 +1197,19 @@ class SimulationData(AbstractSimulationData):
 
         # if data alreadty normalized
         if self.normalized:
-            raise DataError(
-                "This SimulationData object has already been normalized "
-                f"with `normalize_index` of {self._normalize_index} "
-                "and can't be normalized again."
-            )
 
-        # from here on, normalze_index is not None and the data has not been normalized, continue
+            # if with a different normalize index, raise an error
+            if self._normalize_index != normalize_index:
+                raise DataError(
+                    "This SimulationData object has already been normalized "
+                    f"with `normalize_index` of {self._normalize_index} "
+                    f"and can't be normalized again with `normalize_index` of {normalize_index}."
+                )
+
+            # otherwise, just return the data
+            return sim_data_norm
+
+        # from here on, normalze_index is not None and the data has not been normalized
 
         # try to get the source info
         try:
