@@ -45,6 +45,7 @@ ConfigPreProd = WebConfig(
     studio_bucket="flow360studio",
     auth_api_endpoint="https://preprod-portal-api.simulation.cloud",
     web_api_endpoint="https://preprod-tidy3d-api.simulation.cloud",
+    website_endpoint="https://preprod-tidy3d.simulation.cloud",
 )
 
 # production config
