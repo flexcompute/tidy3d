@@ -59,9 +59,9 @@ class DataPlotly(UIComponent, ABC):
             return abs(data) ** 2
         raise ValueError(f"Could not find the right function to apply with {val}.")
 
-    def append_monitor_name(self, value: str) -> str:
+    def append_monitor_name(self, value: str) -> {}:
         """Adds the monitor name to a value, used to make the ids unique across all monitors."""
-        return f"{value}_{self.monitor_name}"
+        return {"type": f"{type(self.data).__name__}_{value}", "name": self.monitor_name}
 
     @classmethod
     def from_monitor_data(cls, monitor_name: str, monitor_data: Tidy3dDataType) -> "cls":
@@ -123,7 +123,7 @@ class AbstractFluxDataPlotly(DataPlotly, ABC):
         """Generate plotly figure from the current state of self."""
         return self.plotly()
 
-    def make_component(self, app: Dash) -> dcc.Tab:
+    def make_component(self) -> dcc.Tab:
         """Creates the dash component for this montor data."""
 
         # initital setup
@@ -254,7 +254,7 @@ class ModeDataPlotly(DataPlotly):
 
         return self.plotly_neff(mode_index=self.mode_ind_val)
 
-    def make_component(self, app: Dash) -> dcc.Tab:
+    def make_component(self) -> dcc.Tab:
         """Creates the dash component for this montor data."""
 
         # initital setup
@@ -349,45 +349,6 @@ class ModeDataPlotly(DataPlotly):
             ],
             label=self.label,
         )
-
-        # link what happens in the inputs to what gets displayed in the figure
-        @app.callback(
-            Output(self.append_monitor_name("figure"), "figure"),
-            [
-                Input(self.append_monitor_name("amps_or_neff_dropdown"), "value"),
-                Input(self.append_monitor_name("val_dropdown"), "value"),
-                Input(self.append_monitor_name("dir_dropdown"), "value"),
-                Input(self.append_monitor_name("mode_index_selector"), "value"),
-            ],
-        )
-        def set_field(value_amps_or_neff, value_val, value_dir, value_mode_ind):
-            self.amps_or_neff = str(value_amps_or_neff)
-            self.val = str(value_val)
-            self.dir_val = str(value_dir)
-
-            self.mode_ind_val = int(value_mode_ind) if value_mode_ind is not None else None
-            fig = self.make_figure()
-            return fig
-
-        @app.callback(
-            Output(self.append_monitor_name("dir_dropdown_header"), "hidden"),
-            [
-                Input(self.append_monitor_name("amps_or_neff_dropdown"), "value"),
-            ],
-        )
-        def set_dir_header_visibilty(value_amps_or_neff):
-            self.amps_or_neff = str(value_amps_or_neff)
-            return self.dir_dropdown_hidden
-
-        @app.callback(
-            Output(self.append_monitor_name("dir_dropdown_div"), "hidden"),
-            [
-                Input(self.append_monitor_name("amps_or_neff_dropdown"), "value"),
-            ],
-        )
-        def set_dir_dropdown_visibilty(value_amps_or_neff):
-            self.amps_or_neff = str(value_amps_or_neff)
-            return self.dir_dropdown_hidden
 
         return component
 
@@ -544,7 +505,7 @@ class AbstractFieldDataPlotly(DataPlotly, ABC):
 
         return self.plotly(**plotly_kwargs)
 
-    def make_component(self, app: Dash) -> dcc.Tab:  # pylint:disable=too-many-locals
+    def make_component(self) -> dcc.Tab:  # pylint:disable=too-many-locals
         """Creates the dash component."""
 
         # initial setup
@@ -626,7 +587,6 @@ class AbstractFieldDataPlotly(DataPlotly, ABC):
 
         # add a mode index dropdown to right hand side, if applicable
         if self.mode_ind_val is not None:
-
             # make a mode index label and dropdown
             mode_ind_label = html.H2("Mode Index component.")
             mode_ind_dropdown = html.Div(
@@ -657,7 +617,7 @@ class AbstractFieldDataPlotly(DataPlotly, ABC):
                         plot_selections,
                     ],
                     # make elements in above list stack row-wise
-                    style={"display": "flex", "flex-direction": "row"},
+                    style={"display": "flex", "flexDirection": "row"},
                 ),
             ],
             # label for the tab
@@ -678,49 +638,6 @@ class AbstractFieldDataPlotly(DataPlotly, ABC):
             app_inputs.append(Input(self.append_monitor_name("mode_index_selector"), "value"))
 
         # link what happens in the app_inputs to what gets displayed in the figure
-        @app.callback(Output(self.append_monitor_name("figure"), "figure"), app_inputs)
-        def set_field(  # pylint:disable=too-many-arguments
-            value_field, value_val, value_cs_axis, value_cs, value_ft, value_mode_ind=None
-        ):
-            self.field_val = str(value_field)
-            self.val = str(value_val)
-            self.cs_axis = ["x", "y", "z"].index(value_cs_axis)
-            self.cs_val = float(value_cs)
-            self.ft_val = float(value_ft)
-            self.mode_ind_val = int(value_mode_ind) if value_mode_ind is not None else None
-            fig = self.make_figure()
-            return fig
-
-        # set the minimum of the xyz sliderbar depending on the cross-section axis
-        @app.callback(
-            Output(self.append_monitor_name("cs_slider"), "min"),
-            Input(self.append_monitor_name("cs_axis_dropdown"), "value"),
-        )
-        def set_min(value_cs_axis):
-            self.cs_axis = ["x", "y", "z"].index(value_cs_axis)
-            _, xyz_coords = self.xyz_label_coords
-            return xyz_coords[0]
-
-        # set the xyz slider back to the average if the axis changes.
-        @app.callback(
-            Output(self.append_monitor_name("cs_slider"), "value"),
-            Input(self.append_monitor_name("cs_axis_dropdown"), "value"),
-        )
-        def reset_slider_position(value_cs_axis):
-            self.cs_axis = ["x", "y", "z"].index(value_cs_axis)
-            _, xyz_coords = self.xyz_label_coords
-            self.cs_val = float(np.mean(xyz_coords))
-            return self.cs_val
-
-        # set the maximum of the xyz sliderbar depending on the cross-section axis
-        @app.callback(
-            Output(self.append_monitor_name("cs_slider"), "max"),
-            Input(self.append_monitor_name("cs_axis_dropdown"), "value"),
-        )
-        def set_max(value_cs_axis):
-            self.cs_axis = ["x", "y", "z"].index(value_cs_axis)
-            _, xyz_coords = self.xyz_label_coords
-            return xyz_coords[-1]
 
         return component
 

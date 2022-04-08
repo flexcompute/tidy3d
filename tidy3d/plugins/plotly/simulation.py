@@ -2,21 +2,20 @@
 # pylint:disable=too-many-arguments, protected-access
 from typing import Tuple
 
-import plotly.graph_objects as go
-from shapely.geometry.base import BaseGeometry as ShapelyGeo
 import numpy as np
-from dash import dcc, html, Output, Input
+import plotly.graph_objects as go
+from dash import dcc, html
+from shapely.geometry.base import BaseGeometry as ShapelyGeo
 
-from .utils import PlotlyFig, add_fig_if_none, equal_aspect_plotly, plot_params_sim_boundary
 from .component import UIComponent
-
-from ...components.types import Axis
-from ...components.simulation import Simulation
-from ...components.structure import Structure
+from .utils import PlotlyFig, add_fig_if_none, equal_aspect_plotly, plot_params_sim_boundary
+from ...components.base import Tidy3dBaseModel
 from ...components.geometry import Geometry, Box
 from ...components.medium import Medium
+from ...components.simulation import Simulation
+from ...components.structure import Structure
+from ...components.types import Axis
 from ...components.viz import PlotParams, plot_params_pml
-from ...components.base import Tidy3dBaseModel
 
 
 def plotly_shape(
@@ -122,7 +121,7 @@ class SimulationPlotly(UIComponent):
         plotly_kwargs = {xyz_label: self.cs_val}
         return self.plotly(**plotly_kwargs)
 
-    def make_component(self, app):  # pylint: disable=too-many-locals
+    def make_component(self):  # pylint: disable=too-many-locals
         """Creates the dash component."""
 
         xyz_label, (xyz_min, xyz_max) = self.xyz_label_bounds
@@ -155,53 +154,10 @@ class SimulationPlotly(UIComponent):
         component = dcc.Tab(
             [
                 html.H1("Viewing Simulation."),
-                html.Div(
-                    [graph, xyz_selection], style={"display": "flex", "flex-direction": "row"}
-                ),
+                html.Div([graph, xyz_selection], style={"display": "flex", "flexDirection": "row"}),
             ],
             label="Simulation",
         )
-
-        @app.callback(
-            Output("simulation_plot", "figure"),
-            [
-                Input("simulation_cs_axis_dropdown", "value"),
-                Input("simulation_cs_slider", "value"),
-            ],
-        )
-        def set_fig_from_xyz_sliderbar(cs_axis_string, cs_val):
-            self.cs_axis = ["x", "y", "z"].index(cs_axis_string)
-            self.cs_val = float(cs_val)
-            return self.make_figure()
-
-        # set the xyz slider back to the average if the axis changes.
-        @app.callback(
-            Output("simulation_cs_slider", "value"),
-            Input("simulation_cs_axis_dropdown", "value"),
-        )
-        def reset_slider_position(value_cs_axis):
-            self.cs_axis = ["x", "y", "z"].index(value_cs_axis)
-            _, (xyz_min, xyz_max) = self.xyz_label_bounds
-            self.cs_val = float((xyz_min + xyz_max) / 2.0)
-            return self.cs_val
-
-        @app.callback(
-            Output("simulation_cs_slider", "min"),
-            Input("simulation_cs_axis_dropdown", "value"),
-        )
-        def set_min(cs_axis_string):
-            self.cs_axis = ["x", "y", "z"].index(cs_axis_string)
-            _, (xyz_min, _) = self.xyz_label_bounds
-            return xyz_min
-
-        @app.callback(
-            Output("simulation_cs_slider", "max"),
-            Input("simulation_cs_axis_dropdown", "value"),
-        )
-        def set_max(cs_axis_string):
-            self.cs_axis = ["x", "y", "z"].index(cs_axis_string)
-            _, (_, xyz_max) = self.xyz_label_bounds
-            return xyz_max
 
         return component
 
