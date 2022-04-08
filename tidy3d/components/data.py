@@ -1273,7 +1273,8 @@ class SimulationData(AbstractSimulationData):
 
             # save diverged and normalized flags as attributes
             f_handle.attrs["diverged"] = self.diverged
-            f_handle.attrs["normalize_index"] = self._normalize_index
+            if self._normalize_index:
+                f_handle.attrs["normalize_index"] = self._normalize_index
 
             # make a group for monitor_data
             mon_data_grp = f_handle.create_group("monitor_data")
