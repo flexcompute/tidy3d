@@ -11,7 +11,7 @@ from typing_extensions import Literal
 from .component import UIComponent
 from .utils import PlotlyFig
 from ...components.data import FluxData, FluxTimeData, FieldData, FieldTimeData
-from ...components.data import ModeFieldData, ModeData, AbstractScalarFieldData
+from ...components.data import ModeFieldData, ModeData, ScalarSpatialData
 from ...components.geometry import Geometry
 from ...components.types import Axis, Direction
 from ...log import Tidy3dKeyError, log
@@ -456,7 +456,7 @@ class AbstractFieldDataPlotly(DataPlotly, ABC):
         return field_vals[0]
 
     @property
-    def scalar_field_data(self) -> AbstractScalarFieldData:
+    def scalar_field_data(self) -> ScalarSpatialData:
         """The current scalar field monitor data."""
         if self.field_val is None:
             self.field_val = self.inital_field_val
