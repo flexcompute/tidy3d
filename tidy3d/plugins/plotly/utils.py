@@ -44,10 +44,10 @@ def equal_aspect_plotly(plotly):
     def _plotly(*args, **kwargs) -> PlotlyFig:
         """New plot function with equal aspect ratio axes returned."""
         fig = plotly(*args, **kwargs)
-        fig.update_yaxes(
-            scaleanchor="x",
-            scaleratio=1,
-        )
+        # fig.update_yaxes(
+        #     scaleanchor="x",
+        #     scaleratio=1,
+        # )
         fig.update_layout(plot_bgcolor="rgba(0,0,0,0)")
         return fig
 

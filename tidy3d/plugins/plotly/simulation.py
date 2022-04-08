@@ -540,7 +540,7 @@ class SimulationPlotly(UIComponent):
         self,
         fig: PlotlyFig,
         normal_axis: Axis,
-        width_pixels: float = 500,
+        width_pixels: float = 700,
     ) -> PlotlyFig:
         """Set the lmits and make equal aspect."""
 
@@ -548,12 +548,14 @@ class SimulationPlotly(UIComponent):
 
         width = xmax - xmin
         height = ymax - ymin
-        print(height)
-        print(ymin, ymax)
+        height_pixels = max(10, float(width_pixels*height/width))
 
-        fig.update_layout(width=float(width_pixels))
+        print(ymax, ymin, height_pixels)
+
         fig.update_xaxes(range=[xmin, xmax])
         fig.update_yaxes(range=[ymin, ymax])
+        # fig.update_layout(width=float(width_pixels))
+        # import pdb; pdb.set_trace()
         # fig.update_yaxes(range=[ymin, ymax])
 
         return fig
