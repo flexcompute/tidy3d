@@ -370,9 +370,24 @@ class Grid(Tidy3dBaseModel):
         return inds_list
 
     def periodic_subspace(self, axis: Axis, ind_beg: int = 0, ind_end: int = 0) -> Coords1D:
-        """Pick a subspace of 1D coords within ``range(ind_beg, ind_end)``. If any indexes lie
-        outside of the coords array, periodic padding is used, where the zeroth and last element
-        of coords are identified."""
+        """Pick a subspace of 1D boundaries within ``range(ind_beg, ind_end)``. If any indexes lie
+        outside of the grid boundaries array, periodic padding is used, where the zeroth and last
+        element of the boundaries are identified.
+
+        Parameters
+        ----------
+        axis : Axis
+            Axis along which to pick the subspace.
+        ind_beg : int, optional
+            Starting index for the subspace.
+        ind_end : int, optional
+            Ending index for the subspace.
+
+        Returns
+        -------
+        Coords1D
+            The subspace of the grid along ``axis``.
+        """
 
         coords = self.boundaries.to_list[axis]
         padded_coords = coords

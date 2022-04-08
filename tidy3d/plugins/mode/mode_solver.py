@@ -349,7 +349,7 @@ class ModeSolver(Tidy3dBaseModel):
             )
 
         field_data = ModeFieldData(data_dict=data_dict).apply_syms(
-            plane_grid, self.simulation.center, self.simulation.symmetry
+            plane_grid.yee.grid_dict, self.simulation.center, self.simulation.symmetry
         )
         index_data = ModeIndexData(
             f=self.freqs,
