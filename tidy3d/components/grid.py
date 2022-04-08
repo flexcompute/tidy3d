@@ -319,13 +319,16 @@ class Grid(Tidy3dBaseModel):
 
         return Coords(**yee_coords)
 
-    def discretize_inds(self, box: Box) -> List[Tuple[int, int]]:
+    def discretize_inds(self, box: Box, extend: bool = False) -> List[Tuple[int, int]]:
         """Start and stopping indexes for the cells that intersect with a :class:`Box`.
 
         Parameters
         ----------
         box : :class:`Box`
             Rectangular geometry within simulation to discretize.
+        extend : bool = False
+            If ``True``, ensure that the returned indexes extend sufficiently in very direction to
+            be able to interpolate any field component at any point within the Box.
 
         Returns
         -------
@@ -340,8 +343,8 @@ class Grid(Tidy3dBaseModel):
         inds_list = []
 
         # for each dimension
-        for axis_label, pt_min, pt_max in zip("xyz", pts_min, pts_max):
-            bound_coords = boundaries.dict()[axis_label]
+        for axis, (pt_min, pt_max) in enumerate(zip(pts_min, pts_max)):
+            bound_coords = boundaries.to_list[axis]
             assert pt_min <= pt_max, "min point was greater than max point"
 
             # index of smallest coord greater than than pt_max
@@ -352,7 +355,45 @@ class Grid(Tidy3dBaseModel):
             inds_leq_pt_min = np.where(bound_coords <= pt_min)[0]
             ind_min = 0 if len(inds_leq_pt_min) == 0 else inds_leq_pt_min[-1]
 
+            if extend:
+                # If the box bounds on the left side are to the left of the closest grid center,
+                # we need an extra pixel to be able to interpolate the center components.
+                if box.bounds[0][axis] < self.centers.to_list[axis][ind_min]:
+                    ind_min -= 1
+
+                # We always need an extra pixel on the right for the surface components.
+                ind_max += 1
+
             # store indexes
             inds_list.append((ind_min, ind_max))
 
         return inds_list
+
+    def periodic_subspace(self, axis: Axis, ind_beg: int = 0, ind_end: int = 0) -> Coords1D:
+        """Pick a subspace of 1D coords within ``range(ind_beg, ind_end)``. If any indexes lie
+        outside of the coords array, periodic padding is used, where the zeroth and last element
+        of coords are identified."""
+
+        coords = self.boundaries.to_list[axis]
+        padded_coords = coords
+        num_coords = coords.size
+        num_cells = num_coords - 1
+        coords_width = coords[-1] - coords[0]
+
+        # Pad on the left if needed
+        if ind_beg < 0:
+            num_pad = int(np.ceil(-ind_beg / num_cells))
+            coords_pad = coords[:-1, None] + (coords_width * np.arange(-num_pad, 0))[None, :]
+            coords_pad = coords_pad.T.ravel()
+            padded_coords = np.concatenate([coords_pad, padded_coords])
+            ind_beg += num_pad * num_cells
+            ind_end += num_pad * num_cells
+
+        # Pad on the right if needed
+        if ind_end >= padded_coords.size:
+            num_pad = int(np.ceil((ind_end - padded_coords.size) / num_cells))
+            coords_pad = coords[1:, None] + (coords_width * np.arange(1, num_pad + 1))[None, :]
+            coords_pad = coords_pad.T.ravel()
+            padded_coords = np.concatenate([padded_coords, coords_pad])
+
+        return padded_coords[ind_beg:ind_end]
