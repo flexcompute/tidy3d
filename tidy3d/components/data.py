@@ -13,7 +13,7 @@ import pydantic as pd
 from .types import Numpy, Direction, Array, numpy_encoding, Literal, Ax, Coordinate, Symmetry, Axis
 from .base import Tidy3dBaseModel
 from .simulation import Simulation
-from .grid import YeeGrid
+from .grid import Grid, Coords
 from .viz import add_ax_if_none, equal_aspect
 from ..log import DataError, log
 
@@ -401,7 +401,7 @@ class AbstractFieldData(CollectionData, ABC):
         return xr.Dataset(centered_data_dict)
 
     # pylint:disable=too-many-locals
-    def apply_syms(self, new_grid: YeeGrid, sym_center: Coordinate, symmetry: Symmetry):
+    def apply_syms(self, new_grid: Grid, sym_center: Coordinate, symmetry: Symmetry):
         """Create a new AbstractFieldData subclass by interpolating on the supplied ``new_grid``,
         using symmetries as defined by ``sym_center`` and ``symmetry``."""
 
@@ -1018,6 +1018,18 @@ class SimulationData(AbstractSimulationData):
         monitor_data = self.monitor_data.get(monitor_name)
         if isinstance(monitor_data, MonitorData):
             return monitor_data.data
+        if isinstance(monitor_data, AbstractFieldData):
+            # Unwrap symmetries
+            monitor = self.simulation.get_monitor_by_name(monitor_name)
+            sim = self.simulation
+            span_inds = sim.grid.discretize_inds(monitor.geometry, extend=True)
+            boundary_dict = {}
+            for idim, dim in enumerate(["x", "y", "z"]):
+                ind_beg, ind_end = span_inds[idim]
+                boundary_dict[dim] = sim.grid.periodic_subspace(idim, ind_beg, ind_end + 1)
+            mnt_grid = Grid(boundaries=Coords(**boundary_dict))
+            return monitor_data.apply_syms(mnt_grid, sim.center, sim.symmetry)
+
         return monitor_data
 
     def ensure_monitor_exists(self, monitor_name: str) -> None:
