@@ -319,6 +319,26 @@ class FieldTimeMonitor(AbstractFieldMonitor, TimeMonitor):
         return BYTES_REAL * num_steps * num_cells * len(self.fields)
 
 
+class PermittivityMonitor(FreqMonitor):
+    """:class:`Monitor` that records the diagonal components of the complex-valued relative
+    permittivity tensor in the frequency domain.
+
+    Example
+    -------
+    >>> monitor = PermittivityMonitor(
+    ...     center=(1,2,3),
+    ...     size=(2,2,2),
+    ...     freqs=[250e12, 300e12],
+    ...     name='eps_monitor')
+    """
+
+    _data_type: Literal["PermittivityData"] = pydantic.Field("PermittivityData")
+
+    def storage_size(self, num_cells: int, tmesh: Array) -> int:
+        # stores 3 complex number per grid cell, per frequency
+        return BYTES_COMPLEX * num_cells * len(self.freqs) * 3
+
+
 class FluxMonitor(AbstractFluxMonitor, FreqMonitor):
     """:class:`Monitor` that records power flux through a plane in the frequency domain.
 
@@ -406,5 +426,11 @@ class ModeFieldMonitor(AbstractModeMonitor):
 
 # types of monitors that are accepted by simulation
 MonitorType = Union[
-    FieldMonitor, FieldTimeMonitor, FluxMonitor, FluxTimeMonitor, ModeMonitor, ModeFieldMonitor
+    FieldMonitor,
+    FieldTimeMonitor,
+    PermittivityMonitor,
+    FluxMonitor,
+    FluxTimeMonitor,
+    ModeMonitor,
+    ModeFieldMonitor,
 ]

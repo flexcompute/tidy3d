@@ -946,6 +946,7 @@ DATA_TYPE_MAP = {
     "ScalarFieldTimeData": ScalarFieldTimeData,
     "FieldData": FieldData,
     "FieldTimeData": FieldTimeData,
+    "PermittivityData": PermittivityData,
     "FluxData": FluxData,
     "FluxTimeData": FluxTimeData,
     "ModeAmpsData": ModeAmpsData,
@@ -1130,7 +1131,7 @@ class SimulationData(AbstractSimulationData):
         monitor_data = self.monitor_data.get(monitor_name)
         if isinstance(monitor_data, MonitorData):
             return monitor_data.data
-        if isinstance(monitor_data, AbstractFieldData):
+        if isinstance(monitor_data, SpatialCollectionData):
             # Unwrap symmetries
             monitor = self.simulation.get_monitor_by_name(monitor_name)
             sim = self.simulation
@@ -1140,7 +1141,15 @@ class SimulationData(AbstractSimulationData):
                 ind_beg, ind_end = span_inds[idim]
                 boundary_dict[dim] = sim.grid.periodic_subspace(idim, ind_beg, ind_end + 1)
             mnt_grid = Grid(boundaries=Coords(**boundary_dict))
-            return monitor_data.apply_syms(mnt_grid, sim.center, sim.symmetry)
+            mnt_grid_dict = mnt_grid.yee.grid_dict
+            if isinstance(monitor_data, PermittivityData):
+                # Define monitor grid keys where the permittivity lives
+                mnt_grid_dict = {
+                    "eps_xx": mnt_grid_dict["Ex"],
+                    "eps_yy": mnt_grid_dict["Ey"],
+                    "eps_zz": mnt_grid_dict["Ez"],
+                }
+            return monitor_data.apply_syms(mnt_grid_dict, sim.center, sim.symmetry)
 
         return monitor_data
 
