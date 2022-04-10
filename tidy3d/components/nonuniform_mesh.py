@@ -1,0 +1,640 @@
+"""Nonuniform mesh generation."""
+
+from typing import Tuple, List
+import numpy as np
+from scipy.optimize import root_scalar
+from ..log import ValidationError, SetupError
+from ..constants import fp_eps
+
+# pylint:disable=too-many-locals
+def make_mesh_multiple_intervals(
+    max_dl_list: np.ndarray, len_interval_list: np.ndarray, max_scale: float, is_periodic: bool
+) -> List[np.ndarray]:
+    """Create mesh steps in multiple connecting intervals of length specified by
+    ``len_interval_list``. The maximal allowed step size in each interval is given by
+    ``max_dl_list``. The maximum ratio between neighboring steps is bounded by ``max_scale``.
+
+    Parameters
+    ----------
+    max_dl_list : np.ndarray
+        Maximal allowed step size of each interval.
+    len_interval_list : np.ndarray
+        A list of interval lengths
+    max_scale : float
+        Maximal ratio between consecutive steps.
+    is_periodic : bool
+        Apply periodic boundary condition or not.
+
+    Returns
+    -------
+    List[np.ndarray]
+        A list of of step sizes in each interval.
+    """
+
+    num_intervals = len(len_interval_list)
+    if len(max_dl_list) != num_intervals:
+        raise SetupError("Maximal step size list should have the same length as len_interval_list.")
+    if max_scale <= 1:
+        raise ValidationError("max_scale must be larger than 1.")
+
+    # initialize step size on the left and right boundary of each interval
+    # by assuming possible non-integar step number
+    left_dl_list, right_dl_list = mesh_multiple_interval_analy_refinement(
+        max_dl_list, len_interval_list, max_scale, is_periodic
+    )
+
+    # initialize mesh steps
+    dl_list = []
+    for interval_ind in range(num_intervals):
+        dl_list.append(
+            make_mesh_in_interval(
+                left_dl_list[interval_ind],
+                right_dl_list[interval_ind],
+                max_dl_list[interval_ind],
+                max_scale,
+                len_interval_list[interval_ind],
+            )
+        )
+
+    # refinement
+    refine_edge = 1
+
+    while refine_edge > 0:
+        refine_edge = 0
+        for interval_ind in range(num_intervals):
+            # the step size on the left and right boundary
+            left_dl = dl_list[interval_ind][0]
+            right_dl = dl_list[interval_ind][-1]
+            # the step size to the left and right boundary (neighbor interval)
+            left_neighbor_dl = dl_list[interval_ind - 1][-1]
+            right_neighbor_dl = dl_list[(interval_ind + 1) % num_intervals][0]
+
+            # for non-periodic case
+            if not is_periodic:
+                if interval_ind == 0:
+                    left_neighbor_dl = left_dl
+                if interval_ind == num_intervals - 1:
+                    right_neighbor_dl = right_dl
+
+            # compare to the neighbor
+            refine_local = 0
+            if left_dl / left_neighbor_dl > max_scale:
+                left_dl = left_neighbor_dl * (max_scale - fp_eps)
+                refine_edge += 1
+                refine_local += 1
+
+            if right_dl / right_neighbor_dl > max_scale:
+                right_dl = right_neighbor_dl * (max_scale - fp_eps)
+                refine_edge += 1
+                refine_local += 1
+
+            # update mesh steps in this interval if necessary
+            if refine_local > 0:
+                dl_list[interval_ind] = make_mesh_in_interval(
+                    left_dl,
+                    right_dl,
+                    max_dl_list[interval_ind],
+                    max_scale,
+                    len_interval_list[interval_ind],
+                )
+
+    # min_steps = np.minimum(left_dl_list, right_dl_list)
+    # for ind, x in enumerate(dl_list):
+    #     print(
+    #         f"Actual/possible min step size ratio in {ind}-th interval "
+    #         f"is {np.min(x)/min_steps[ind]}"
+    #     )
+    #     # print(ind,x)
+    return dl_list
+
+
+def mesh_multiple_interval_analy_refinement(
+    max_dl_list: np.ndarray, len_interval_list: np.ndarray, max_scale: float, is_periodic: bool
+) -> Tuple[np.ndarray, np.ndarray]:
+    """Analytical refinement for multiple intervals. "analytical" meaning we allow
+    non-integar step sizes, so that we don't consider snapping here.
+
+    Parameters
+    ----------
+    max_dl_list : np.ndarray
+        Maximal allowed step size of each interval.
+    len_interval_list : np.ndarray
+        A list of interval lengths
+    max_scale : float
+        Maximal ratio between consecutive steps.
+    is_periodic : bool
+        Apply periodic boundary condition or not.
+
+    Returns
+    -------
+    Tuple[np.ndarray, np.ndarray]
+        left and right step sizes of each interval.
+    """
+
+    if len(max_dl_list) != len(len_interval_list):
+        raise SetupError("Maximal step size list should have the same length as len_interval_list.")
+
+    # left and right step sizes based on maximal step size list
+    right_dl = np.roll(max_dl_list, shift=-1)
+    left_dl = np.roll(max_dl_list, shift=1)
+    # consideration for the first and last interval
+    if not is_periodic:
+        right_dl[-1] = max_dl_list[-1]
+        left_dl[0] = max_dl_list[0]
+
+    # Right and left step size that will be applied for each interval
+    right_dl = np.minimum(max_dl_list, right_dl)
+    left_dl = np.minimum(max_dl_list, left_dl)
+
+    # Update left and right neighbor step size considering the impact of neighbor intervals
+    refine_analy = 1
+
+    while refine_analy > 0:
+        refine_analy = 0
+        # from left to right, grow to fill up len_interval, minimal 1 step
+        tmp_step = 1 - len_interval_list / left_dl * (1 - max_scale)
+        num_step = np.maximum(np.log(tmp_step) / np.log(max_scale), 1)
+        left_to_right_dl = left_dl * max_scale ** (num_step - 1)
+        update_ind = left_to_right_dl < right_dl
+        right_dl[update_ind] = left_to_right_dl[update_ind]
+
+        if not is_periodic:
+            update_ind[-1] = False
+
+        if np.any(update_ind):
+            refine_analy = 1
+            left_dl[np.roll(update_ind, shift=1)] = left_to_right_dl[update_ind]
+
+        # from right to left, grow to fill up len_interval, minimal 1 step
+        tmp_step = 1 - len_interval_list / right_dl * (1 - max_scale)
+        num_step = np.maximum(np.log(tmp_step) / np.log(max_scale), 1)
+        right_to_left_dl = right_dl * max_scale ** (num_step - 1)
+        update_ind = right_to_left_dl < left_dl
+        left_dl[update_ind] = right_to_left_dl[update_ind]
+
+        if not is_periodic:
+            update_ind[0] = False
+
+        if np.any(update_ind):
+            refine_analy = 1
+            right_dl[np.roll(update_ind, shift=-1)] = right_to_left_dl[update_ind]
+
+    if not is_periodic:
+        left_dl[0] = max_dl_list[0]
+        right_dl[-1] = max_dl_list[-1]
+
+    return left_dl, right_dl
+
+
+def make_mesh_in_interval(  # pylint:disable=too-many-locals, too-many-return-statements
+    left_neighbor_dl: float,
+    right_neighbor_dl: float,
+    max_dl: float,
+    max_scale: float,
+    len_interval: float,
+) -> np.ndarray:
+    """Create a set of mesh steps in an interval of length ``len_interval``,
+    with first step no larger than ``max_scale * left_neighbor_dl`` and last step no larger than
+    ``max_scale * right_neighbor_dl``, with maximum ratio ``max_scale`` between neighboring steps.
+    All steps should be no larger than ``max_dl``.
+
+    Parameters
+    ----------
+    left_neighbor_dl : float
+        Step size to left boundary of the interval.
+    right_neighbor_dl : float
+        Step size to right boundary of the interval.
+    max_dl : float
+        Maximal step size within the interval.
+    max_scale : float
+        Maximal ratio between consecutive steps.
+    len_interval: float
+        Length of the interval.
+
+    Returns
+    -------
+    np.ndarray
+        A list of step sizes in the interval.
+    """
+
+    # some validations
+    if left_neighbor_dl <= 0 or right_neighbor_dl <= 0 or max_dl <= 0:
+        raise ValidationError("Step size needs to be positive.")
+    if len_interval <= 0:
+        raise ValidationError("The length of the interval must be larger than 0.")
+    if max_scale < 1:
+        raise ValidationError("max_scale cannot be smaller than 1.")
+
+    # first and last step size
+    left_dl = min(max_dl, left_neighbor_dl)
+    right_dl = min(max_dl, right_neighbor_dl)
+
+    # classifications:
+    mesh_type = mesh_type_in_interval(left_dl, right_dl, max_dl, max_scale, len_interval)
+
+    # single pixel
+    if mesh_type == -1:
+        return np.array([len_interval])
+
+    # uniform and multiple pixels
+    if mesh_type == 0:
+        even_dl = min(left_dl, right_dl)
+        num_cells = int(np.floor(len_interval / even_dl))
+
+        # Length of the interval assuming this num_cells.
+        # if it doesn't cover the interval, increase num_cells,
+        # which is equivalent of decreasing mesh step size.
+        size_snapped = num_cells * even_dl
+        if size_snapped < len_interval:
+            num_cells += 1
+        return np.array([len_interval / num_cells] * num_cells)
+
+    # mesh_type = 1
+    # We first set up mesh steps from small to large, and then flip
+    # their order if right_dl < left_dl
+    small_dl = min(left_dl, right_dl)
+    large_dl = max(left_dl, right_dl)
+    if mesh_type == 1:
+        # Can small_dl scale to large_dl under max_scale within interval?
+        # Compute the number of steps it takes to scale from small_dl to large_dl
+        # Check the remaining length in the interval
+        num_step = 1 + int(np.floor(np.log(large_dl / small_dl) / np.log(max_scale)))
+        len_scale = small_dl * (1 - max_scale**num_step) / (1 - max_scale)
+        len_remaining = len_interval - len_scale
+
+        # 1) interval length too small, cannot increase to large_dl, or barely can,
+        #    but the remaing part is less than large_dl
+        if len_remaining < large_dl:
+            dl_list = mesh_grow_in_interval(small_dl, max_scale, len_interval)
+            return dl_list if left_dl <= right_dl else np.flip(dl_list)
+
+        # 2) interval length sufficient, so it will plateau towards large_dl
+        dl_list = mesh_grow_plateau_in_interval(small_dl, large_dl, max_scale, len_interval)
+        return dl_list if left_dl <= right_dl else np.flip(dl_list)
+
+    # mesh_type = 2
+    if mesh_type == 2:
+        # Will it be able to plateau?
+        # Compute the number of steps it take for both sides to grow to max_it;
+        # then compare the length to len_interval
+        num_left_step = 1 + int(np.floor(np.log(max_dl / left_dl) / np.log(max_scale)))
+        num_right_step = 1 + int(np.floor(np.log(max_dl / right_dl) / np.log(max_scale)))
+        len_left = left_dl * (1 - max_scale**num_left_step) / (1 - max_scale)
+        len_right = right_dl * (1 - max_scale**num_right_step) / (1 - max_scale)
+
+        len_remaining = len_interval - len_left - len_right
+
+        # able to plateau
+        if len_remaining >= max_dl:
+            return mesh_grow_plateau_decrease_in_interval(
+                left_dl, right_dl, max_dl, max_scale, len_interval
+            )
+
+        # unable to plateau
+        return mesh_grow_decrease_in_interval(left_dl, right_dl, max_scale, len_interval)
+
+    # unlikely to reach here. For future implementation purpose.
+    raise ValidationError("Unimplemented mesh type.")
+
+
+def mesh_grow_plateau_decrease_in_interval(
+    left_dl: float,
+    right_dl: float,
+    max_dl: float,
+    max_scale: float,
+    len_interval: float,
+) -> np.ndarray:
+    """In an interval, mesh grows, plateau, and decrease, resembling Lambda letter but
+    with plateau in the connection part..
+
+    Parameters
+    ----------
+    left_dl : float
+        Step size at the left boundary.
+    right_dl : float
+        Step size at the right boundary.
+    max_dl : float
+        Maximal step size within the interval.
+    max_scale : float
+        Maximal ratio between consecutive steps.
+    len_interval : float
+        Length of the interval.
+    """
+
+    # Maximum number of steps for undershooting max_dl
+    num_left_step = 1 + int(np.floor(np.log(max_dl / left_dl) / np.log(max_scale)))
+    num_right_step = 1 + int(np.floor(np.log(max_dl / right_dl) / np.log(max_scale)))
+
+    # step list, in ascending order
+    dl_list_left = np.array([left_dl * max_scale**i for i in range(num_left_step)])
+    dl_list_right = np.array([right_dl * max_scale**i for i in range(num_right_step)])
+
+    # length
+    len_left = left_dl * (1 - max_scale**num_left_step) / (1 - max_scale)
+    len_right = right_dl * (1 - max_scale**num_right_step) / (1 - max_scale)
+
+    # remaining part for constant large_dl
+    num_const_step = int(np.floor((len_interval - len_left - len_right) / max_dl))
+    dl_list_const = np.array([max_dl] * num_const_step)
+    len_const = num_const_step * max_dl
+
+    # mismatch
+    len_mismatch = len_interval - len_left - len_right - len_const
+
+    # (1) happens to be the right length
+    if np.isclose(len_mismatch, 0):
+        return np.concatenate((dl_list_left, dl_list_const, np.flip(dl_list_right)))
+
+    # (2) sufficient remaining part, can be inserted to left or right
+    if len_mismatch >= left_dl:
+        index_mis = np.searchsorted(dl_list_left, len_mismatch)
+        dl_list_left = np.insert(dl_list_left, index_mis, len_mismatch)
+        return np.concatenate((dl_list_left, dl_list_const, np.flip(dl_list_right)))
+
+    if len_mismatch >= right_dl:
+        index_mis = np.searchsorted(dl_list_right, len_mismatch)
+        dl_list_right = np.insert(dl_list_right, index_mis, len_mismatch)
+        return np.concatenate((dl_list_left, dl_list_const, np.flip(dl_list_right)))
+
+    # nothing more we can do, let's just add smallest step size,
+    # and scale each pixel
+    if left_dl <= right_dl:
+        dl_list_left = np.append(left_dl, dl_list_left)
+    else:
+        dl_list_right = np.append(right_dl, dl_list_right)
+    dl_list = np.concatenate((dl_list_left, dl_list_const, np.flip(dl_list_right)))
+    dl_list *= len_interval / np.sum(dl_list)
+    return dl_list
+
+
+def mesh_grow_decrease_in_interval(
+    left_dl: float,
+    right_dl: float,
+    max_scale: float,
+    len_interval: float,
+) -> np.ndarray:
+    """In an interval, mesh grows, and decrease, resembling Lambda letter.
+
+    Parameters
+    ----------
+    left_dl : float
+        Step size at the left boundary.
+    right_dl : float
+        Step size at the right boundary.
+    max_scale : float
+        Maximal ratio between consecutive steps.
+    len_interval : float
+        Length of the interval.
+    """
+
+    # interval too small, it shouldn't happen if bounding box filter is properly handled
+    # just use uniform meshing with min(left_dl, right_dl)
+    if len_interval < left_dl + right_dl:
+        even_dl = min(left_dl, right_dl)
+        num_cells = int(np.floor(len_interval / even_dl))
+        size_snapped = num_cells * even_dl
+        if size_snapped < len_interval:
+            num_cells += 1
+        return np.array([len_interval / num_cells] * num_cells)
+
+    # The maximal number of steps for both sides to undershoot the interval,
+    # assuming the last step size from both sides grow to the same size before
+    # taking ``floor`` to take integar number of steps.
+
+    # The advantage is that even after taking integar number of steps cutoff,
+    # the last step size from the two side will not viloate max_scale.
+
+    tmp_num_l = ((left_dl + right_dl) - len_interval * (1 - max_scale)) / 2 / left_dl
+    tmp_num_r = ((left_dl + right_dl) - len_interval * (1 - max_scale)) / 2 / right_dl
+    num_left_step = max(int(np.floor(np.log(tmp_num_l) / np.log(max_scale))), 0)
+    num_right_step = max(int(np.floor(np.log(tmp_num_r) / np.log(max_scale))), 0)
+
+    # step list, in ascending order
+    dl_list_left = np.array([left_dl * max_scale**i for i in range(num_left_step)])
+    dl_list_right = np.array([right_dl * max_scale**i for i in range(num_right_step)])
+
+    # length
+    len_left = left_dl * (1 - max_scale**num_left_step) / (1 - max_scale)
+    len_right = right_dl * (1 - max_scale**num_right_step) / (1 - max_scale)
+
+    # mismatch
+    len_mismatch = len_interval - len_left - len_right
+
+    # (1) happens to be the right length
+    if np.isclose(len_mismatch, 0):
+        return np.append(dl_list_left, np.flip(dl_list_right))
+
+    # if len_mismatch is larger than the last step size, insert the last step
+    while len(dl_list_left) > 0 and len_mismatch >= dl_list_left[-1]:
+        dl_list_left = np.append(dl_list_left, dl_list_left[-1])
+        len_mismatch -= dl_list_left[-1]
+
+    while len(dl_list_right) > 0 and len_mismatch >= dl_list_right[-1]:
+        dl_list_right = np.append(dl_list_right, dl_list_right[-1])
+        len_mismatch -= dl_list_right[-1]
+
+    # (2) sufficient remaining part, can be inserted to dl_left or right
+    if len_mismatch >= left_dl:
+        index_mis = np.searchsorted(dl_list_left, len_mismatch)
+        dl_list_left = np.insert(dl_list_left, index_mis, len_mismatch)
+        return np.append(dl_list_left, np.flip(dl_list_right))
+
+    if len_mismatch >= right_dl:
+        index_mis = np.searchsorted(dl_list_right, len_mismatch)
+        dl_list_right = np.insert(dl_list_right, index_mis, len_mismatch)
+        return np.append(dl_list_left, np.flip(dl_list_right))
+
+    # nothing more we can do, let's just add smallest step size,
+    # and scale each pixel
+    if left_dl <= right_dl:
+        dl_list_left = np.append(left_dl, dl_list_left)
+    else:
+        dl_list_right = np.append(right_dl, dl_list_right)
+    dl_list = np.append(dl_list_left, np.flip(dl_list_right))
+    dl_list *= len_interval / np.sum(dl_list)
+    return dl_list
+
+
+def mesh_grow_plateau_in_interval(
+    small_dl: float,
+    large_dl: float,
+    max_scale: float,
+    len_interval: float,
+) -> np.ndarray:
+    """In an interval, mesh grows, then plateau.
+
+    Parameters
+    ----------
+    small_dl : float
+        The smaller one of step size at the left and right boundaries.
+    large_dl : float
+        The larger one of step size at the left and right boundaries.
+    max_scale : float
+        Maximal ratio between consecutive steps.
+    len_interval : float
+        Length of the interval.
+
+    Returns
+    -------
+    np.ndarray
+        A list of step sizes in the interval, in ascending order.
+    """
+    # steps for scaling
+    num_scale_step = 1 + int(np.floor(np.log(large_dl / small_dl) / np.log(max_scale)))
+    dl_list_scale = np.array([small_dl * max_scale**i for i in range(num_scale_step)])
+    len_scale = small_dl * (1 - max_scale**num_scale_step) / (1 - max_scale)
+
+    # remaining part for constant large_dl
+    num_const_step = int(np.floor((len_interval - len_scale) / large_dl))
+    dl_list_const = np.array([large_dl] * num_const_step)
+    len_const = large_dl * num_const_step
+
+    # mismatch
+    len_mismatch = len_interval - len_scale - len_const
+
+    # (1) happens to be the right length
+    if np.isclose(len_mismatch, 0):
+        return np.append(dl_list_scale, dl_list_const)
+
+    # (2) sufficient remaining part, can be inserted to dl_list_scale
+    if len_mismatch >= small_dl:
+        index_mis = np.searchsorted(dl_list_scale, len_mismatch)
+        dl_list_scale = np.insert(dl_list_scale, index_mis, len_mismatch)
+        return np.append(dl_list_scale, dl_list_const)
+
+    # nothing more we can do, let's just add smallest step size,
+    # and scale each pixel
+    dl_list_scale = np.append(small_dl, dl_list_scale)
+    dl_list = np.append(dl_list_scale, dl_list_const)
+    dl_list *= len_interval / np.sum(dl_list)
+    return dl_list
+
+
+def mesh_grow_in_interval(
+    small_dl: float,
+    max_scale: float,
+    len_interval: float,
+) -> np.ndarray:
+    """Mesh simply grows in an interval.
+
+    Parameters
+    ----------
+    small_dl : float
+        The smaller one of step size at the left and right boundaries.
+    max_scale : float
+        Maximal ratio between consecutive steps.
+    len_interval : float
+        Length of the interval.
+
+    Returns
+    -------
+    np.ndarray
+        A list of step sizes in the interval, in ascending order.
+    """
+
+    # Maximal number of steps for undershooting the interval.
+    tmp_step = 1 - len_interval / small_dl * (1 - max_scale)
+    num_step = int(np.floor(np.log(tmp_step) / np.log(max_scale)))
+
+    # assuming num_step grids and scaling = max_scale
+    dl_list = np.array([small_dl * max_scale**i for i in range(num_step)])
+    size_snapped = small_dl * (1 - max_scale**num_step) / (1 - max_scale)
+
+    # mismatch
+    len_mismatch = len_interval - size_snapped
+
+    # (1) happens to be the right length
+    if np.isclose(len_mismatch, 0):
+        return dl_list
+
+    # (2) sufficient remaining part, can be inserted
+    if len_mismatch >= small_dl:
+        index_mis = np.searchsorted(dl_list, len_mismatch)
+        dl_list = np.insert(dl_list, index_mis, len_mismatch)
+        return dl_list
+
+    # (3) remaining part not sufficient to insert, but will not
+    # violate max_scale by repearting 1st step, and the last step to include
+    # the mismatch part
+    if num_step >= 2 and len_mismatch >= small_dl - (1 - 1.0 / max_scale**2) * dl_list[-1]:
+        dl_list = np.append(small_dl, dl_list)
+        dl_list[-1] += len_mismatch - small_dl
+        return dl_list
+
+    # (4) let's see if we can squeeze something out of smaller scaling.
+    # For this case, duplicate the 1st step size.
+    len_mismatch_even = len_interval - num_step * small_dl
+    if np.isclose(len_mismatch_even, small_dl):
+        return np.array([small_dl] * (num_step + 1))
+
+    if len_mismatch_even > small_dl:
+
+        def fun_scale(new_scale):
+            if np.isclose(new_scale, 1.0):
+                return len_interval - small_dl * (1 + num_step)
+            return (
+                len_interval - small_dl * (1 - new_scale**num_step) / (1 - new_scale) - small_dl
+            )
+
+        # solve for new scaling factor
+        sol_scale = root_scalar(fun_scale, bracket=[1, max_scale])
+        # if not converged, let's use the last strategy
+        if sol_scale.converged:
+            new_scale = sol_scale.root
+            dl_list = np.array([small_dl * new_scale**i for i in range(num_step)])
+            dl_list = np.append(small_dl, dl_list)
+            return dl_list
+
+    # nothing more we can do, let's just add smallest step size,
+    # and scale each pixel
+    dl_list = np.append(small_dl, dl_list)
+    dl_list *= len_interval / np.sum(dl_list)
+    return dl_list
+
+
+def mesh_type_in_interval(
+    left_dl: float,
+    right_dl: float,
+    max_dl: float,
+    max_scale: float,
+    len_interval: float,
+) -> int:
+    """Mesh type check (in an interval).
+
+    Parameters
+    ----------
+    left_dl : float
+        Step size at left boundary of the interval.
+    right_dl : float
+        Step size at right boundary of the interval.
+    max_dl : float
+        Maximal step size within the interval.
+    max_scale : float
+        Maximal ratio between consecutive steps.
+    len_interval: float
+        Length of the interval.
+
+    Returns
+    -------
+    mesh_type : int
+        -1 for single pixel mesh
+        0 for uniform mesh
+        1 for small to large to optionally plateau mesh
+        2 for small to large to optionally plateau to small mesh
+    """
+
+    # uniform mesh if interval length is no larger than small_dl
+    if len_interval <= min(left_dl, right_dl, max_dl):
+        return -1
+    # uniform mesh if max_scale is too small
+    if np.isclose(max_scale, 1):
+        return 0
+    # uniform mesh if max_dl is the smallest
+    if max_dl <= left_dl and max_dl <= right_dl:
+        return 0
+
+    # type 1
+    if max_dl <= left_dl or max_dl <= right_dl:
+        return 1
+
+    return 2
