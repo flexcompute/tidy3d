@@ -7,6 +7,7 @@ from .pml import DefaultPMLParameters, DefaultStablePMLParameters, DefaultAbsorb
 
 # grid
 from .grid import Grid, Coords, GridSpec
+from .nonuniform_mesh import make_mesh_multiple_intervals, make_mesh_in_interval, mesh_multiple_interval_analy_refinement
 
 # geometry
 from .geometry import Box, Sphere, Cylinder, PolySlab
