@@ -7,6 +7,7 @@ import pydantic as pd
 from .base import Tidy3dBaseModel, TYPE_TAG_STR
 from .types import Array, Axis
 from .geometry import Box
+from .nonuniform_mesh import make_mesh_multiple_intervals
 from ..log import SetupError
 from ..constants import C_0
 
@@ -33,6 +34,8 @@ class GridSpec(Tidy3dBaseModel):
         1.4,
         title="Maximum Grid Size Scaling",
         description="Sets the maximum ratio between any two consecutive grid steps.",
+        ge = 1.2,
+        lt = 2.0,
     )
 
 
@@ -129,15 +132,30 @@ class Bounds1D(Coords1D):
         per wavelength."""
 
         min_steps_per_wvl = grid_spec.min_steps_per_wvl
-        interval_coords, min_steps = cls.parse_structures(axis, structures, wvl, min_steps_per_wvl)
-        bound_coords = [float(interval_coords[0])]
-        for coord_ind, coord in enumerate(interval_coords[:-1]):
-            interval_size = interval_coords[coord_ind + 1] - coord
-            num_steps = np.ceil(interval_size / min_steps[coord_ind])
-            dl = interval_size / num_steps
-            coords = bound_coords[-1] + np.arange(1, num_steps + 1) * dl
-            bound_coords += coords.tolist()
+        max_scale = grid_spec.max_scale
+        interval_coords, max_dl_list = cls.parse_structures(
+            axis, structures, wvl, min_steps_per_wvl
+        )
 
+        # [TODO] is it periodic along this axis?
+        is_periodic = False
+
+        interval_coords = np.array(interval_coords).flatten()
+        max_dl_list = np.array(max_dl_list).flatten()
+        len_interval_list = interval_coords[1:] - interval_coords[:-1]
+        dl_list = make_mesh_multiple_intervals(
+            max_dl_list, len_interval_list, max_scale, is_periodic
+        )
+
+        # for debug purpose
+        # for ind, x in enumerate(dl_list):
+        #     print(ind,x)
+        #     print(
+        #         f"Actual/supplied min step size ratio in {ind}-th interval "
+        #         f"is {np.min(x)/min_steps[ind]}"
+        #     )
+
+        bound_coords = interval_coords[0] + np.cumsum(np.concatenate(dl_list))
         return np.array(bound_coords)
 
     # pylint:disable=too-many-statements,too-many-locals
