@@ -328,7 +328,7 @@ class Grid(Tidy3dBaseModel):
             Rectangular geometry within simulation to discretize.
         extend : bool = False
             If ``True``, ensure that the returned indexes extend sufficiently in very direction to
-            be able to interpolate any field component at any point within the Box.
+            be able to interpolate any field component at any point within the ``box``.
 
         Returns
         -------
@@ -377,10 +377,10 @@ class Grid(Tidy3dBaseModel):
         Parameters
         ----------
         axis : Axis
-            Axis along which to pick the subspace.
-        ind_beg : int, optional
+            Axis index along which to pick the subspace.
+        ind_beg : int = 0
             Starting index for the subspace.
-        ind_end : int, optional
+        ind_end : int = 0
             Ending index for the subspace.
 
         Returns

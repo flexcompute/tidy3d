@@ -310,7 +310,7 @@ class ModeSolver(Tidy3dBaseModel):
         # Compute and store the modes at all frequencies
         fields = {"Ex": [], "Ey": [], "Ez": [], "Hx": [], "Hy": [], "Hz": []}
         n_complex = []
-        for ifreq, freq in enumerate(self.freqs):
+        for freq in self.freqs:
             # Compute the modes
             mode_fields, n_comp = compute_modes(
                 eps_cross=self.solver_eps(freq),
@@ -324,7 +324,7 @@ class ModeSolver(Tidy3dBaseModel):
             fields_freq = {"Ex": [], "Ey": [], "Ez": [], "Hx": [], "Hy": [], "Hz": []}
             for mode_index in range(self.mode_spec.num_modes):
                 # Get E and H fields at the current mode_index
-                ((Ex, Ey, Ez), (Hx, Hy, Hz)) = self.process_fields(mode_fields, ifreq, mode_index)
+                ((Ex, Ey, Ez), (Hx, Hy, Hz)) = self.process_fields(mode_fields, mode_index)
 
                 # note: back in original coordinates
                 fields_mode = {"Ex": Ex, "Ey": Ey, "Ez": Ez, "Hx": Hx, "Hy": Hy, "Hz": Hz}
@@ -347,10 +347,14 @@ class ModeSolver(Tidy3dBaseModel):
                 mode_index=np.arange(self.mode_spec.num_modes),
                 values=np.stack(field, axis=-2),
             )
-
-        field_data = ModeFieldData(data_dict=data_dict).apply_syms(
-            plane_grid.yee.grid_dict, self.simulation.center, self.simulation.symmetry
+        field_data = ModeFieldData(
+            data_dict=data_dict,
+            expanded_grid=plane_grid.yee.grid_dict,
+            symmetry_center=self.simulation.center,
+            symmetry=self.simulation.symmetry,
         )
+        field_data = field_data.expand_syms
+        self.field_decay_warning(field_data)
         index_data = ModeIndexData(
             f=self.freqs,
             mode_index=np.arange(self.mode_spec.num_modes),
@@ -399,28 +403,11 @@ class ModeSolver(Tidy3dBaseModel):
         f_rot = np.stack(self.plane.unpop_axis(f_z, (f_x, f_y), axis=self.normal_axis), axis=0)
         return f_rot
 
-    # pylint:disable=too-many-locals
-    def process_fields(
-        self, mode_fields: Array[complex], freq_index: int, mode_index: int
-    ) -> Tuple[FIELD, FIELD]:
+    def process_fields(self, mode_fields: Array[complex], mode_index: int) -> Tuple[FIELD, FIELD]:
         """Transform solver fields to simulation axes, set gauge, and check decay at boundaries."""
 
         # Separate E and H fields (in solver coordinates)
         E, H = mode_fields[..., mode_index]
-
-        # Warn if not decayed at edges
-        e_edge = 0
-        if E.shape[1] > 1:
-            e_edge = np.sum(np.abs(E[:, 0, :]) ** 2 + np.abs(E[:, -1, :]) ** 2)
-        if E.shape[2] > 1:
-            e_edge += np.sum(np.abs(E[:, :, 0]) ** 2 + np.abs(E[:, :, -1]) ** 2)
-        e_norm = np.sum(np.abs(E) ** 2)
-
-        if e_edge / e_norm > FIELD_DECAY_CUTOFF:
-            logging.warning(
-                f"Mode field at frequency index {freq_index}, mode index {mode_index} does not "
-                "decay at the plane boundaries."
-            )
 
         # Set gauge to highest-amplitude in-plane E being real and positive
         ind_max = np.argmax(np.abs(E[:2]))
@@ -439,6 +426,32 @@ class ModeSolver(Tidy3dBaseModel):
             Hz *= -1
 
         return ((Ex, Ey, Ez), (Hx, Hy, Hz))
+
+    def field_decay_warning(self, field_data):
+        """Warn if any of the modes do not decay at the edges."""
+        _, plane_dims = self.plane.pop_axis(["x", "y", "z"], axis=self.normal_axis)
+        field_sizes = field_data.Ex.sizes
+        for freq_index in range(field_sizes["f"]):
+            for mode_index in range(field_sizes["mode_index"]):
+                e_edge, e_norm = 0, 0
+                # Sum up the total field intensity
+                for E in (field_data.Ex, field_data.Ey, field_data.Ez):
+                    e_norm += np.sum(np.abs(E[{"f": freq_index, "mode_index": mode_index}]) ** 2)
+                # Sum up the field intensity at the edges
+                if field_sizes[plane_dims[0]] > 1:
+                    for E in (field_data.Ex, field_data.Ey, field_data.Ez):
+                        isel = {plane_dims[0]: [0, -1], "f": freq_index, "mode_index": mode_index}
+                        e_edge += np.sum(np.abs(E[isel]) ** 2)
+                if field_sizes[plane_dims[1]] > 1:
+                    for E in (field_data.Ex, field_data.Ey, field_data.Ez):
+                        isel = {plane_dims[1]: [0, -1], "f": freq_index, "mode_index": mode_index}
+                        e_edge += np.sum(np.abs(E[isel]) ** 2)
+                # Warn if needed
+                if e_edge / e_norm > FIELD_DECAY_CUTOFF:
+                    logging.warning(
+                        f"Mode field at frequency index {freq_index}, mode index {mode_index} does "
+                        "not decay at the plane boundaries."
+                    )
 
     def to_source(
         self,
