@@ -1,4 +1,4 @@
-from dash import callback, Output, Input, dcc
+from dash import callback, Output, Input, dcc, html
 
 from tidy3d.plugins.plotly import SimulationPlotly
 from tidy3d.plugins.plotly.data import DataPlotly
@@ -23,6 +23,14 @@ def display_simulation_data_app(store):
             continue
         component = data_plotly.make_component()
         layout.children += [component]
+
+    layout.children += [dcc.Tab(
+        [
+            html.Div([html.H1("Solver Log")]),
+            html.Div([html.Code(data_app.log, style={"whiteSpace": "pre-wrap"})]),
+        ],
+        label="log",
+    )]
     return layout
 
 
