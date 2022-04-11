@@ -2,7 +2,7 @@
 import numpy as np
 from dash import callback, Output, MATCH, Input, State
 
-from tidy3d.plugins.plotly.store import get_data_plotly_by_name
+from tidy3d.plugins.plotly.store import get_store
 
 
 @callback(
@@ -28,7 +28,7 @@ def set_field(  # pylint:disable=too-many-arguments
     store,
     id,
 ):
-    data_plotly = get_data_plotly_by_name(store, id["name"])
+    data_plotly = get_store().get_data_plotly_by_name(store, id["name"])
     data_plotly.field_val = str(value_field)
     data_plotly.val = str(value_val)
     data_plotly.cs_axis = ["x", "y", "z"].index(value_cs_axis)
@@ -48,7 +48,7 @@ def set_field(  # pylint:disable=too-many-arguments
     State({"type": "ModeFieldData_figure", "name": MATCH}, "id"),
 )
 def set_min(value_cs_axis, store, id):
-    data_plotly = get_data_plotly_by_name(store, id["name"])
+    data_plotly = get_store().get_data_plotly_by_name(store, id["name"])
     data_plotly.cs_axis = ["x", "y", "z"].index(value_cs_axis)
     _, xyz_coords = data_plotly.xyz_label_coords
     return xyz_coords[0]
@@ -62,7 +62,7 @@ def set_min(value_cs_axis, store, id):
     State({"type": "ModeFieldData_figure", "name": MATCH}, "id"),
 )
 def reset_slider_position(value_cs_axis, store, id):
-    data_plotly = get_data_plotly_by_name(store, id["name"])
+    data_plotly = get_store().get_data_plotly_by_name(store, id["name"])
     data_plotly.cs_axis = ["x", "y", "z"].index(value_cs_axis)
     _, xyz_coords = data_plotly.xyz_label_coords
     data_plotly.cs_val = float(np.mean(xyz_coords))
@@ -77,7 +77,7 @@ def reset_slider_position(value_cs_axis, store, id):
     State({"type": "ModeFieldData_figure", "name": MATCH}, "id"),
 )
 def set_max(value_cs_axis, store, id):
-    data_plotly = get_data_plotly_by_name(store, id["name"])
+    data_plotly = get_store().get_data_plotly_by_name(store, id["name"])
     data_plotly.cs_axis = ["x", "y", "z"].index(value_cs_axis)
     _, xyz_coords = data_plotly.xyz_label_coords
     return xyz_coords[-1]

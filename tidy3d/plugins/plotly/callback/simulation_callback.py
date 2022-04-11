@@ -2,7 +2,7 @@ from dash import callback, Output, Input, dcc, html
 
 from tidy3d.plugins.plotly import SimulationPlotly
 from tidy3d.plugins.plotly.data import DataPlotly
-from tidy3d.plugins.plotly.store import get_simulation_data, get_simulation_plotly
+from tidy3d.plugins.plotly.store import get_store
 
 
 @callback(
@@ -10,7 +10,7 @@ from tidy3d.plugins.plotly.store import get_simulation_data, get_simulation_plot
     [Input("store", "data")],
 )
 def display_simulation_data_app(store):
-    data_app = get_simulation_data(store)
+    data_app = get_store().get_simulation_data(store)
     layout = dcc.Tabs([])
     component = SimulationPlotly(simulation=data_app.simulation).make_component()
     layout.children += [component]
@@ -43,7 +43,7 @@ def display_simulation_data_app(store):
     ],
 )
 def set_fig_from_xyz_sliderbar(cs_axis_string, cs_val, store):
-    sim_plotly = get_simulation_plotly(store)
+    sim_plotly = get_store().get_simulation_plotly(store)
     sim_plotly.cs_axis = ["x", "y", "z"].index(cs_axis_string)
     sim_plotly.cs_val = float(cs_val)
 
@@ -57,7 +57,7 @@ def set_fig_from_xyz_sliderbar(cs_axis_string, cs_val, store):
     Input("store", "data"),
 )
 def reset_slider_position(value_cs_axis, store):
-    sim_plotly = get_simulation_plotly(store)
+    sim_plotly = get_store().get_simulation_plotly(store)
     sim_plotly.cs_axis = ["x", "y", "z"].index(value_cs_axis)
     _, (xyz_min, xyz_max) = sim_plotly.xyz_label_bounds
     sim_plotly.cs_val = float((xyz_min + xyz_max) / 2.0)
@@ -70,7 +70,7 @@ def reset_slider_position(value_cs_axis, store):
     Input("store", "data"),
 )
 def set_min(cs_axis_string, store):
-    sim_plotly = get_simulation_plotly(store)
+    sim_plotly = get_store().get_simulation_plotly(store)
     sim_plotly.cs_axis = ["x", "y", "z"].index(cs_axis_string)
     _, (xyz_min, _) = sim_plotly.xyz_label_bounds
     return xyz_min
@@ -82,7 +82,7 @@ def set_min(cs_axis_string, store):
     Input("store", "data"),
 )
 def set_max(cs_axis_string, store):
-    sim_plotly = get_simulation_plotly(store)
+    sim_plotly = get_store().get_simulation_plotly(store)
     sim_plotly.cs_axis = ["x", "y", "z"].index(cs_axis_string)
     _, (_, xyz_max) = sim_plotly.xyz_label_bounds
     return xyz_max
