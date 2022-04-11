@@ -344,7 +344,7 @@ class ModeDataPlotly(DataPlotly):
                         plot_selections,
                     ],
                     # make elements in above list stack row-wise
-                    style={"display": "flex", "flex-direction": "row"},
+                    style={"display": "flex", "flexDirection": "row"},
                 ),
             ],
             label=self.label,
