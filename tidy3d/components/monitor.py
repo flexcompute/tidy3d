@@ -321,7 +321,9 @@ class FieldTimeMonitor(AbstractFieldMonitor, TimeMonitor):
 
 class PermittivityMonitor(FreqMonitor):
     """:class:`Monitor` that records the diagonal components of the complex-valued relative
-    permittivity tensor in the frequency domain.
+    permittivity tensor in the frequency domain. The recorded data has the same shape as a
+    :class:`.FieldMonitor` of the same geometry: the permittivity values are saved at the
+    Yee grid locations, and can be interpolated to any point inside the monitor.
 
     Example
     -------
