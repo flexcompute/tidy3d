@@ -21,6 +21,10 @@ PORT = 8090
 DEV_TOOLS_UI = False
 DEV_TOOLS_HOT_RELOAD = False
 
+# external_stylesheets = ['https://codepen.io/chriddyp/pen/bWLwgP.css']
+
+# app = Dash(__name__, external_stylesheets=external_stylesheets)
+
 
 class App(Tidy3dBaseModel, ABC):
     """Basic dash app template: initializes, makes layout, and fires up a server."""
@@ -34,9 +38,9 @@ class App(Tidy3dBaseModel, ABC):
     def _initialize_app(self) -> Dash:
         """Creates an app based on specs."""
         if "jupyter" in self.mode.lower():
-            return JupyterDash(__name__)
+            return JupyterDash(__name__)  # , external_stylesheets=external_stylesheets)
         if "python" in self.mode.lower():
-            return Dash(__name__)
+            return Dash(__name__)  # external_stylesheets=external_stylesheets)
         raise NotImplementedError(f"App doesn't support mode='{self.mode}'.")
 
     @abstractmethod

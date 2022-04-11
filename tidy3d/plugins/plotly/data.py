@@ -164,6 +164,8 @@ class AbstractFluxDataPlotly(DataPlotly, ABC):
             xaxis_title=f"{ft_label} ({ft_units})",
             yaxis_title="Flux (normalized)",
         )
+
+        fig.update_layout(yaxis=dict(showexponent="all", exponentformat="e"))
         return fig
 
 
@@ -446,7 +448,9 @@ class AbstractFieldDataPlotly(DataPlotly, ABC):
     )
 
     cs_axis: Axis = pd.Field(
-        0, title="Cross section axis value", description="The component's cross section axis value."
+        None,
+        title="Cross section axis value",
+        description="The component's cross section axis value.",
     )
 
     cs_val: float = pd.Field(
@@ -499,8 +503,25 @@ class AbstractFieldDataPlotly(DataPlotly, ABC):
         return self.data.data_dict[self.field_val]
 
     @property
+    def inital_cs_axis(self) -> List[int]:
+        """Returns the cross section axis that plots the 2D view."""
+        coords = self.scalar_field_data.data.coords
+        coords_xyz = [coords[xyz_label].values for xyz_label in "xyz"]
+        has_volume = [len(coord) > 3 for coord in coords_xyz]
+
+        # if a 2D view
+        if sum(has_volume) == 2:
+            # initialize with the cross section axis set up to display the 2D plot
+            return has_volume.index(False)
+
+        # otherwise, just initialize with x as cross section axis.
+        return 0
+
+    @property
     def xyz_label_coords(self) -> Tuple[str, List[float]]:
         """Get the plane normal direction label and coords."""
+        if self.cs_axis is None:
+            self.cs_axis = self.inital_cs_axis
         xyz_label = "xyz"[self.cs_axis]
         xyz_coords = self.scalar_field_data.data.coords[xyz_label].values
         return xyz_label, xyz_coords
@@ -525,6 +546,9 @@ class AbstractFieldDataPlotly(DataPlotly, ABC):
             self.mode_ind_val = mode_indices[0] if mode_indices is not None else None
 
         # if cross section value, use the average of the coordinates of the current axis
+        if self.cs_axis is None:
+            self.cs_axis = self.inital_cs_axis
+
         xyz_label, xyz_coords = self.xyz_label_coords
         if self.cs_val is None:
             self.cs_val = np.mean(xyz_coords)
