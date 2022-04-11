@@ -2,9 +2,9 @@ import urllib
 
 from dash import callback, Output, Input, dcc, html
 
-from tidy3d.plugins.plotly.simulation import SimulationPlotly
-from tidy3d.plugins.plotly.data import DataPlotly
-from tidy3d.plugins.plotly.store import get_store
+from ..simulation import SimulationPlotly
+from ..data import DataPlotly
+from ..store import get_store
 
 
 @callback(
