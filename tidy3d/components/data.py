@@ -2,7 +2,7 @@
 """Classes for Storing Monitor and Simulation Data."""
 
 from abc import ABC, abstractmethod
-from typing import Dict, List, Union, Optional
+from typing import Dict, List, Union, Optional, Tuple
 import logging
 
 import xarray as xr
@@ -13,6 +13,7 @@ import pydantic as pd
 from .types import Numpy, Direction, Array, numpy_encoding, Literal, Ax, Coordinate, Symmetry, Axis
 from .base import Tidy3dBaseModel
 from .simulation import Simulation
+from .monitor import Monitor
 from .grid import Grid, Coords
 from .viz import add_ax_if_none, equal_aspect
 from ..log import DataError, log
@@ -71,6 +72,11 @@ class Tidy3dData(Tidy3dBaseModel):
     @abstractmethod
     def add_to_group(self, hdf5_grp):
         """Add data contents to an hdf5 group."""
+
+    @property
+    @abstractmethod
+    def sim_data_getitem(self):
+        """What gets returned by sim_data['monitor_data_name']"""
 
     @classmethod
     @abstractmethod
@@ -208,6 +214,11 @@ class MonitorData(Tidy3dData, ABC):
 
         return cls(**kwargs)
 
+    @property
+    def sim_data_getitem(self) -> Tidy3dDataArray:
+        """What gets returned by sim_data['monitor_data_name']"""
+        return self.data
+
 
 class CollectionData(Tidy3dData):
     """Abstract base class.
@@ -301,6 +312,11 @@ class CollectionData(Tidy3dData):
         if member_name not in self.data_dict:
             raise DataError(f"member_name '{member_name}' not found.")
 
+    @property
+    def sim_data_getitem(self) -> Tidy3dData:
+        """What gets returned by sim_data['monitor_data_name']"""
+        return self
+
 
 """ Abstract subclasses of MonitorData and CollectionData """
 
@@ -308,8 +324,24 @@ class CollectionData(Tidy3dData):
 class SpatialCollectionData(CollectionData, ABC):
     """Sores a collection of scalar data defined over x, y, z (among other) coords."""
 
-    # Defines how data components are affected by a positive symmetry along each of the axes
-    _sym_dict = {}
+    """ Attributes storing details about any symmetries that can be used to expand the data. """
+
+    # Position of the symmetry planes in x, y, and z.
+    symmetry_center: Coordinate = None
+    # Eigenvalues of the symmetry under reflection in x, y, and z.
+    symmetry: Tuple[Symmetry, Symmetry, Symmetry] = (0, 0, 0)
+
+    """Grid after the symmetries (if any) are expanded. The dictionary keys must correspond to
+    the data keys in the ``data_dict`` for the expanded grid to be invoked."""
+    expanded_grid: Dict[str, Coords] = {}
+
+    """Dictionary of the form ``{data_key: Symmetry}``, defining how data components are affected
+    by a positive symmetry along each of the axes. If the name of a given data in the ``data_dict``
+    is not in this dictionary, then in the presence of symmetry the data is just unwrapped with a
+    positive symmetry value in each direction. If the data name is in the dictionary, for each axis
+    the corresponding ``_sym_dict`` value times the ``self.symmetry`` eigenvalue is used.
+    """
+    _sym_dict: Dict[str, Symmetry] = {}
 
     def colocate(self, x, y, z) -> xr.Dataset:
         """colocate all of the data at a set of x, y, z coordinates.
@@ -352,26 +384,17 @@ class SpatialCollectionData(CollectionData, ABC):
             centered_data_dict[field_name] = centered_data_array
         return xr.Dataset(centered_data_dict)
 
-    # pylint:disable=too-many-locals
-    def apply_syms(self, grid_dict: Dict[str, Coords], sym_center: Coordinate, symmetry: Symmetry):
-        """Create a new SpatialCollectionData subclass by interpolating on the supplied
-        ``new_grid``, using symmetries as defined by ``sym_center`` and ``symmetry``.
-
-        Parameters
-        ----------
-        grid_dict : Dict[str, Coords]
-            Mapping of the data labels in the SpatialCollectionData to new coordinates on which
-            to be interpolated, using symmetries to expand beyond the stored domain.
-        sym_center : Coordinate
-            Position of the symmetry planes in x, y, and z.
-        symmetry : Symmetry
-            Eigenvalues of the symmetry operation in x, y, and z.
+    @property
+    def expand_syms(self) -> Tidy3dData:
+        """Create a new :class:`SpatialCollectionData` subclass by interpolating on the
+        stored ``expanded_grid` using the stored symmetry information.
 
         Returns
         -------
-        SpatialCollectionData
-            A new SpatialCollectionData with the expanded fields. For data labels that are not
-            keys in the grid_dict, the data is returned unmodified.
+        :class:`SpatialCollectionData`
+            A new data object with the expanded fields. The data is only modified for data keys
+            found in the ``self.expanded_grid`` dict, and along dimensions where ``self.symmetry``
+            is non-zero.
         """
 
         new_data_dict = {}
@@ -380,14 +403,14 @@ class SpatialCollectionData(CollectionData, ABC):
             new_data = scalar_data.data
 
             # Apply symmetries
-            zipped = zip("xyz", sym_center, symmetry)
+            zipped = zip("xyz", self.symmetry_center, self.symmetry)
             for dim, (dim_name, center, sym) in enumerate(zipped):
-                # Continue if no symmetry or the data key is not in the supplied grid_dict
-                if sym == 0 or not grid_dict.get(data_key):
+                # Continue if no symmetry or the data key is not in the expanded grid
+                if sym == 0 or self.expanded_grid.get(data_key) is None:
                     continue
 
                 # Get new grid locations
-                coords = grid_dict[data_key].to_list[dim]
+                coords = self.expanded_grid[data_key].to_list[dim]
 
                 # Get indexes of coords that lie on the left of the symmetry center
                 flip_inds = np.where(coords < center)[0]
@@ -402,13 +425,31 @@ class SpatialCollectionData(CollectionData, ABC):
                 new_data = new_data.assign_coords({dim_name: coords})
 
                 sym_eval = self._sym_dict.get(data_key)
-                if sym_eval:
+                if sym_eval is not None:
                     # Apply the correct +/-1 for the data_key component
                     new_data[{dim_name: flip_inds}] *= sym * sym_eval[dim]
 
             new_data_dict[data_key] = type(scalar_data)(values=new_data.values, **new_data.coords)
 
         return type(self)(data_dict=new_data_dict)
+
+    @property
+    def sim_data_getitem(self) -> Tidy3dData:
+        """What gets returned by sim_data['monitor_data_name']"""
+        return self.expand_syms
+
+    def set_symmetry_attrs(self, simulation: Simulation, monitor_name: str):
+        """Set the collection data attributes related to symmetries."""
+        monitor = simulation.get_monitor_by_name(monitor_name)
+        span_inds = simulation.grid.discretize_inds(monitor.geometry, extend=True)
+        boundary_dict = {}
+        for idim, dim in enumerate(["x", "y", "z"]):
+            ind_beg, ind_end = span_inds[idim]
+            boundary_dict[dim] = simulation.grid.periodic_subspace(idim, ind_beg, ind_end + 1)
+        mnt_grid = Grid(boundaries=Coords(**boundary_dict))
+        self.expanded_grid = mnt_grid.yee.grid_dict
+        self.symmetry = simulation.symmetry
+        self.symmetry_center = simulation.center
 
 
 class AbstractFieldData(SpatialCollectionData, ABC):
@@ -810,6 +851,16 @@ class PermittivityData(SpatialCollectionData):
             return scalar_data.data
         return None
 
+    def set_symmetry_attrs(self, simulation: Simulation, monitor_name: str):
+        """Set the collection data attributes related to symmetries."""
+        super().set_symmetry_attrs(simulation, monitor_name)
+        # Redefine the expanded grid for epsilon rather than for fields.
+        self.expanded_grid = {
+            "eps_xx": self.expanded_grid["Ex"],
+            "eps_yy": self.expanded_grid["Ey"],
+            "eps_zz": self.expanded_grid["Ez"],
+        }
+
 
 class FluxData(AbstractFluxData, FreqData):
     """Stores frequency-domain power flux data from a :class:`FluxMonitor`.
@@ -1131,29 +1182,9 @@ class SimulationData(AbstractSimulationData):
         """
         self.ensure_monitor_exists(monitor_name)
         monitor_data = self.monitor_data.get(monitor_name)
-        if isinstance(monitor_data, MonitorData):
-            return monitor_data.data
         if isinstance(monitor_data, SpatialCollectionData):
-            # Unwrap symmetries
-            monitor = self.simulation.get_monitor_by_name(monitor_name)
-            sim = self.simulation
-            span_inds = sim.grid.discretize_inds(monitor.geometry, extend=True)
-            boundary_dict = {}
-            for idim, dim in enumerate(["x", "y", "z"]):
-                ind_beg, ind_end = span_inds[idim]
-                boundary_dict[dim] = sim.grid.periodic_subspace(idim, ind_beg, ind_end + 1)
-            mnt_grid = Grid(boundaries=Coords(**boundary_dict))
-            mnt_grid_dict = mnt_grid.yee.grid_dict
-            if isinstance(monitor_data, PermittivityData):
-                # Define monitor grid keys where the permittivity lives
-                mnt_grid_dict = {
-                    "eps_xx": mnt_grid_dict["Ex"],
-                    "eps_yy": mnt_grid_dict["Ey"],
-                    "eps_zz": mnt_grid_dict["Ez"],
-                }
-            return monitor_data.apply_syms(mnt_grid_dict, sim.center, sim.symmetry)
-
-        return monitor_data
+            monitor_data.set_symmetry_attrs(self.simulation, monitor_name)
+        return monitor_data.sim_data_getitem
 
     def ensure_monitor_exists(self, monitor_name: str) -> None:
         """Raise exception if monitor isn't in the simulation data"""
