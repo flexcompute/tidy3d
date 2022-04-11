@@ -1,6 +1,6 @@
 from dash import callback, Output, Input
 
-from tidy3d.plugins.plotly.store import get_store
+from ..store import get_store
 
 
 @callback(

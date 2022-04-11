@@ -1,7 +1,7 @@
 import numpy as np
 from dash import callback, Output, Input, MATCH, State
 
-from tidy3d.plugins.plotly.store import get_store
+from ..store import get_store
 
 
 @callback(

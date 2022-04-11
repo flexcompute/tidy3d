@@ -1,7 +1,7 @@
 # link what happens in the inputs to what gets displayed in the figure
 from dash import callback, Output, MATCH, Input, State
 
-from tidy3d.plugins.plotly.store import get_store
+from ..store import get_store
 
 
 @callback(
