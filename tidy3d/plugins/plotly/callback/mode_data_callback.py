@@ -1,7 +1,7 @@
 # link what happens in the inputs to what gets displayed in the figure
 from dash import callback, Output, MATCH, Input, State
 
-from tidy3d.plugins.plotly.store import get_data_plotly_by_name
+from tidy3d.plugins.plotly.store import get_store
 
 
 @callback(
@@ -16,7 +16,7 @@ from tidy3d.plugins.plotly.store import get_data_plotly_by_name
     State({"type": "ModeData_figure", "name": MATCH}, "id"),
 )
 def set_field(value_amps_or_neff, value_val, value_dir, value_mode_ind, store, id):
-    data_plotly = get_data_plotly_by_name(store, id["name"])
+    data_plotly = get_store().get_data_plotly_by_name(store, id["name"])
     data_plotly.amps_or_neff = str(value_amps_or_neff)
     data_plotly.val = str(value_val)
     data_plotly.dir_val = str(value_dir)
@@ -36,7 +36,7 @@ def set_field(value_amps_or_neff, value_val, value_dir, value_mode_ind, store, i
     State({"type": "ModeData_figure", "name": MATCH}, "id"),
 )
 def set_dir_header_visibilty(value_amps_or_neff, store, id):
-    data_plotly = get_data_plotly_by_name(store, id["name"])
+    data_plotly = get_store().get_data_plotly_by_name(store, id["name"])
     data_plotly.amps_or_neff = str(value_amps_or_neff)
     return data_plotly.dir_dropdown_hidden
 
@@ -51,6 +51,6 @@ def set_dir_header_visibilty(value_amps_or_neff, store, id):
     State({"type": "ModeData_figure", "name": MATCH}, "id"),
 )
 def set_dir_dropdown_visibilty(value_amps_or_neff, store, id):
-    data_plotly = get_data_plotly_by_name(store, id["name"])
+    data_plotly = get_store().get_data_plotly_by_name(store, id["name"])
     data_plotly.amps_or_neff = str(value_amps_or_neff)
     return data_plotly.dir_dropdown_hidden

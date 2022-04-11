@@ -4,6 +4,7 @@ import dash
 from dash import dcc, html, callback
 from dash.dependencies import Input, Output
 from callback import *
+from tidy3d.plugins.plotly.store import FrontEndStore
 
 app = dash.Dash(__name__, suppress_callback_exceptions=True)
 VALID_USERNAME_PASSWORD_PAIRS = {"hello": "world!"}
