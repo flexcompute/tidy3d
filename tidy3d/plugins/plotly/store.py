@@ -7,7 +7,7 @@ def get_simulation_data(store: {}) -> SimulationData:
     if store and store.get("task_id") == "1":
         sim_data = SimulationDataApp.from_file("../../../data/monitor_data.hdf5")
     else:
-        sim_data = SimulationDataApp.from_file("../../../data/has_source.hdf5")
+        sim_data = SimulationDataApp.from_file("../../../data/no_source.hdf5")
     return sim_data.sim_data
 
 
