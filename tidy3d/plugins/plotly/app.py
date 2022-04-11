@@ -10,7 +10,7 @@ from .store import set_store, LocalStore
 from ...components.base import Tidy3dBaseModel
 from ...components.simulation import Simulation
 from ...components.data import SimulationData
-from .callback import * # pylint: disable=wildcard-import
+from .callback import *  # pylint: disable=wildcard-import
 
 AppMode = Literal["python", "jupyter", "jupyterlab"]
 
@@ -30,6 +30,8 @@ class App(Tidy3dBaseModel, ABC):
         description='Run app in mode that is one of `"python"`, `"jupyter"`, `"jupyterlab"`.',
     )
 
+    app: Optional[Dash] = None
+
     def _initialize_app(self) -> Dash:
         """Creates an app based on specs."""
         if "jupyter" in self.mode.lower():
@@ -48,16 +50,19 @@ class App(Tidy3dBaseModel, ABC):
             ]
         )
 
-    def _make_app(self) -> Dash:
+    def make_app(self) -> Dash:
         """Initialize everything and make the plotly app."""
-        app = self._initialize_app()
-        app.layout = self._make_layout()
-        return app
+        if self.app:
+            return self.app
+        else:
+            self.app = self._initialize_app()
+            self.app.layout = self._make_layout()
+        return self.app
 
     def run(self, debug: bool = False) -> None:
         """Starts running the app based on specs."""
 
-        app = self._make_app()
+        app = self.make_app()
 
         if self.mode.lower() == "jupyterlab":
             app.run_server(
