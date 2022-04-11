@@ -1,11 +1,10 @@
 from abc import ABC, abstractmethod
 
-from tidy3d import SimulationData
+from ...components import SimulationData
 from .simulation import SimulationPlotly
-from tidy3d.plugins.plotly.data import DataPlotly
+from .data import DataPlotly
 
 FrontEndStore = {}
-
 
 class Store(ABC):
     @abstractmethod
@@ -26,7 +25,6 @@ class Store(ABC):
 
 
 class LocalStore(Store):
-
     def __init__(self, fname: str):
         self.sim_data = SimulationData.from_file(fname)
 
@@ -34,17 +32,11 @@ class LocalStore(Store):
         return self.sim_data
 
 
-class S3Store(Store):
+class EmptyStore(Store):
+    def get_simulation_data(self, front_end_store: FrontEndStore):
+        pass
 
-    def get_simulation_data(self, front_end_store: FrontEndStore) -> SimulationData:
-        if front_end_store and front_end_store.get("task_id") == "1":
-            sim_data = SimulationData.from_file("../../../data/monitor_data.hdf5")
-        else:
-            sim_data = SimulationData.from_file("../../../data/has_source.hdf5")
-        return sim_data
-
-
-_DEFAULT_STORE = S3Store()
+_DEFAULT_STORE = EmptyStore()
 
 
 def set_store(store: Store):

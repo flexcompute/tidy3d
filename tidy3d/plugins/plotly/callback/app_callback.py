@@ -17,6 +17,8 @@ def get_task_id(search):
     store = {}
     if parsed_dict.get("task_id"):
         store["task_id"] = parsed_dict.get("task_id")[0]
+    if parsed_dict.get("pre_signed_url"):
+        store["pre_signed_url"] = parsed_dict.get("pre_signed_url")[0]
     return store
 
 
