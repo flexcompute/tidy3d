@@ -401,8 +401,10 @@ class SpatialCollectionData(CollectionData, ABC):
                 new_data = new_data.interp({dim_name: coords_interp}, kwargs={"fill_value": 0.0})
                 new_data = new_data.assign_coords({dim_name: coords})
 
-                # Apply the correct +/-1 for the data_key component
-                new_data[{dim_name: flip_inds}] *= sym * self._sym_dict[data_key][dim]
+                sym_eval = self._sym_dict.get(data_key)
+                if sym_eval:
+                    # Apply the correct +/-1 for the data_key component
+                    new_data[{dim_name: flip_inds}] *= sym * sym_eval[dim]
 
             new_data_dict[data_key] = type(scalar_data)(values=new_data.values, **new_data.coords)
 
@@ -781,7 +783,6 @@ class PermittivityData(SpatialCollectionData):
 
     data_dict: Dict[str, ScalarPermittivityData]
     type: Literal["PermittivityData"] = "PermittivityData"
-    _sym_dict = {"eps_xx": (1, 1, 1), "eps_yy": (1, 1, 1), "eps_zz": (1, 1, 1)}
 
     """ Get the permittivity components from the dict using convenient "dot" syntax."""
 
@@ -882,7 +883,7 @@ class ModeData(CollectionData):
     >>> data = ModeData(data_dict={'n_complex': index_data, 'amps': amps_data})
     """
 
-    data_dict: Dict[str, AbstractModeData]
+    data_dict: Dict[str, Union[ModeAmpsData, ModeIndexData]]
     type: Literal["ModeData"] = "ModeData"
 
     @property
@@ -944,6 +945,8 @@ class ModeFieldData(AbstractFieldData):
 DATA_TYPE_MAP = {
     "ScalarFieldData": ScalarFieldData,
     "ScalarFieldTimeData": ScalarFieldTimeData,
+    "ScalarPermittivityData": ScalarPermittivityData,
+    "ScalarModeFieldData": ScalarModeFieldData,
     "FieldData": FieldData,
     "FieldTimeData": FieldTimeData,
     "PermittivityData": PermittivityData,
@@ -953,7 +956,6 @@ DATA_TYPE_MAP = {
     "ModeIndexData": ModeIndexData,
     "ModeData": ModeData,
     "ModeFieldData": ModeFieldData,
-    "ScalarModeFieldData": ScalarModeFieldData,
 }
 
 
