@@ -1,6 +1,6 @@
 """Defines how the specific data objects render as UI components."""
 from abc import ABC
-from typing import Union, Tuple, List
+from typing import Union, Tuple, List, Dict
 
 import numpy as np
 import plotly.graph_objects as go
@@ -58,7 +58,7 @@ class DataPlotly(UIComponent, ABC):
             return abs(data) ** 2
         raise ValueError(f"Could not find the right function to apply with {val}.")
 
-    def append_monitor_name(self, value: str) -> {}:
+    def append_monitor_name(self, value: str) -> Dict[str, str]:
         """Adds the monitor name to a value, used to make the ids unique across all monitors."""
         return {"type": f"{type(self.data).__name__}_{value}", "name": self.monitor_name}
 
