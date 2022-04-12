@@ -1192,7 +1192,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
                 diff_shape = _shape - shape
 
                 # different medium, remove intersection from background shape
-                if medium != _medium:
+                if medium != _medium and len(diff_shape.bounds) > 0:
                     background_shapes[index] = (_medium, diff_shape, diff_shape.bounds)
 
                 # same medium, add diff shape to this shape and mark background shape for removal
