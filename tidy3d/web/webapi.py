@@ -72,7 +72,7 @@ def run(  # pylint:disable=too-many-arguments
     return load(task_id=task_id, path=path, normalize_index=normalize_index)
 
 
-def upload(
+def upload(  # pylint:disable=too-many-locals,too-many-arguments
     simulation: Simulation, task_name: str, folder_name: str = "default", callback_url: str = None
 ) -> TaskId:
     """Upload simulation to server, but do not start running :class:`.Simulation`.
@@ -99,15 +99,46 @@ def upload(
     To start the simulation running, must call :meth:`start` after uploaded.
     """
 
-    task_id = _upload_task(
-        simulation=simulation,
-        task_name=task_name,
-        folder_name=folder_name,
-        callback_url=callback_url,
-    )
+    simulation.validate_pre_upload()
 
+    json_string = simulation._json_string()  # pylint:disable=protected-access
+    data = {
+        "taskName": task_name,
+        "callbackUrl": callback_url,
+    }
+    folder = _query_or_create_folder(folder_name)
+    method = f"tidy3d/projects/{folder.projectId}/tasks"
+
+    log.debug("Creating task.")
+    try:
+        task = http.post(method=method, data=data)
+        task_id = task["taskId"]
+    except requests.exceptions.HTTPError as e:
+        error_json = json.loads(e.response.text)
+        raise WebError(error_json["error"]) from e
     # log the task_id so users can copy and paste it from STDOUT / file if the need it later.
     log.info(f"Uploaded task '{task_name}' with task_id '{task_id}'.")
+
+    # upload the file to s3
+    log.debug("Uploading the json file")
+    client, bucket, user_id = get_s3_user()
+    key = f"users/{user_id}/{task_id}/simulation.json"
+    log.debug(f"json = {json_string}")
+    resp = client.put_object(
+        Body=json_string,
+        Bucket=bucket,
+        Key=key,
+    )
+    if resp.get("ResponseMetadata") and resp.get("ResponseMetadata").get("HTTPStatusCode") != 200:
+        raise WebError("Upload file to 3S failed, please check your network or try it later.")
+
+    # log the url for the task in the web UI
+    log.info(f"{DEFAULT_CONFIG.website_endpoint}/folders/{folder.projectId}/tasks/{task_id}")
+
+    # log the maximum flex unit cost
+    max_cost = estimate_cost(task_id)
+    if max_cost is not None:
+        log.info(f"Maximum flex unit cost: {max_cost:1.2f}")
 
     return task_id
 
@@ -282,7 +313,7 @@ def download(task_id: TaskId, path: str = "simulation_data.hdf5") -> None:
 
     # TODO: it should be possible to load "diverged" simulations
     task_info = get_info(task_id)
-    if task_info.status in ("error", "deleted", "draft"):
+    if task_info.status in ("error", "deleted"):
         raise WebError(f"can't download task '{task_id}', status = '{task_info.status}'")
 
     directory, _ = os.path.split(path)
@@ -436,6 +467,25 @@ def get_tasks(
     return out_dict
 
 
+def estimate_cost(task_id: str) -> float:
+    """Compute the maximum flex unit charge for a given task, assuming the simulation runs for
+    the full ``run_time``. If early shut-off is triggered, the cost is adjusted proporionately.
+    """
+
+    method = f"tidy3d/tasks/{task_id}/metadata"
+    data = {}
+
+    # do not pass protocol version if mapping is missing or needs an override.
+    if DEFAULT_CONFIG.solver_version:
+        data["solverVersion"] = DEFAULT_CONFIG.solver_version
+    else:
+        data["protocolVersion"] = __version__
+
+    resp = http.post(method, data=data)
+
+    return resp.get("flex_unit")
+
+
 def _query_or_create_folder(folder_name) -> Folder:
     log.debug("query folder")
     method = f"tidy3d/project?projectName={folder_name}"
@@ -446,60 +496,6 @@ def _query_or_create_folder(folder_name) -> Folder:
         resp = http.post(method, data={"projectName": folder_name})
 
     return Folder(**resp)
-
-
-def _upload_task(  # pylint:disable=too-many-locals,too-many-arguments
-    simulation: Simulation,
-    task_name: str,
-    folder_name: str = "default",
-    callback_url: str = None,
-) -> TaskId:
-    """upload with all kwargs exposed"""
-
-    simulation.validate_pre_upload()
-
-    json_string = simulation._json_string()  # pylint:disable=protected-access
-    data = {
-        "taskName": task_name,
-        "callbackUrl": callback_url,
-    }
-
-    folder = _query_or_create_folder(folder_name)
-    method = f"tidy3d/projects/{folder.projectId}/tasks"
-
-    log.debug("Creating task.")
-    try:
-        task = http.post(method=method, data=data)
-        task_id = task["taskId"]
-    except requests.exceptions.HTTPError as e:
-        error_json = json.loads(e.response.text)
-        raise WebError(error_json["error"]) from e
-
-    # upload the file to s3
-    log.debug("Uploading the json file")
-
-    client, bucket, user_id = get_s3_user()
-
-    key = f"users/{user_id}/{task_id}/simulation.json"
-
-    # size_bytes = len(json_string.encode('utf-8'))
-    # TODO: add progressbar, with put_object, no callback, so no real need.
-    # with Progress() as progress:
-    # upload_progress = UploadProgress(size_bytes, progress)
-    log.debug(f"json = {json_string}")
-    resp = client.put_object(
-        Body=json_string,
-        Bucket=bucket,
-        Key=key,
-        # Callback=upload_progress.report
-    )
-
-    if resp.get("ResponseMetadata") and resp.get("ResponseMetadata").get("HTTPStatusCode") != 200:
-        raise WebError("Upload file to 3S failed, please check your network or try it later.")
-
-    log.info(f"{DEFAULT_CONFIG.website_endpoint}/folders/{folder.projectId}/tasks/{task_id}")
-
-    return task_id
 
 
 def _download_file(task_id: TaskId, fname: str, path: str) -> None:
