@@ -436,6 +436,32 @@ def get_tasks(
     return out_dict
 
 
+def get_metadata(task_id: TaskId) -> Dict:
+    """Get metadata for a task.
+
+    Parameters
+    ----------
+    task_id : str
+        Unique identifier of task on server.  Returned by :meth:`upload`.
+
+    Returns
+    -------
+    Dict
+        Dictionary with metadata about the task.
+    """
+
+    data = {}
+
+    # do not pass protocol version if mapping is missing or needs an override.
+    if DEFAULT_CONFIG.solver_version:
+        data["solverVersion"] = DEFAULT_CONFIG.solver_version
+    else:
+        data["protocolVersion"] = __version__
+
+    method = f"tidy3d/tasks/{str(task_id)}/metadata"
+    return http.post(method, data)
+
+
 def _query_or_create_folder(folder_name) -> Folder:
     log.debug("query folder")
     method = f"tidy3d/project?projectName={folder_name}"
