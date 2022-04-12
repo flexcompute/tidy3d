@@ -44,9 +44,11 @@ class App(Tidy3dBaseModel, ABC):
         """Creates the layout for the app."""
         return html.Div(
             [
+                dcc.Loading(
+                    id="loading", type="default", children=html.Div(id="container"), fullscreen=True
+                ),
                 dcc.Location(id="url"),
                 dcc.Store(id="store"),
-                html.Div(id="container"),
             ]
         )
 
