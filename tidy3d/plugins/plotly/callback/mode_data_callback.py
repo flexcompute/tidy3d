@@ -1,4 +1,4 @@
-# link what happens in the inputs to what gets displayed in the figure
+""" link what happens in the inputs to what gets displayed in the figure """
 from dash import callback, Output, MATCH, Input, State
 
 from ..store import get_store
@@ -15,8 +15,10 @@ from ..store import get_store
     ],
     State({"type": "ModeData_figure", "name": MATCH}, "id"),
 )
-def set_field(value_amps_or_neff, value_val, value_dir, value_mode_ind, store, id):
-    data_plotly = get_store().get_data_plotly_by_name(store, id["name"])
+def set_field(value_amps_or_neff, value_val, value_dir, value_mode_ind, store, state_id):
+    """set the field to plot"""
+    # pylint: disable=too-many-arguments
+    data_plotly = get_store().get_data_plotly_by_name(store, state_id["name"])
     data_plotly.amps_or_neff = str(value_amps_or_neff)
     data_plotly.val = str(value_val)
     data_plotly.dir_val = str(value_dir)
@@ -35,8 +37,9 @@ def set_field(value_amps_or_neff, value_val, value_dir, value_mode_ind, store, i
     ],
     State({"type": "ModeData_figure", "name": MATCH}, "id"),
 )
-def set_dir_header_visibilty(value_amps_or_neff, store, id):
-    data_plotly = get_store().get_data_plotly_by_name(store, id["name"])
+def set_dir_header_visibilty(value_amps_or_neff, store, state_id):
+    """set the visibility of the dropdown"""
+    data_plotly = get_store().get_data_plotly_by_name(store, state_id["name"])
     data_plotly.amps_or_neff = str(value_amps_or_neff)
     return data_plotly.dir_dropdown_hidden
 
@@ -50,7 +53,8 @@ def set_dir_header_visibilty(value_amps_or_neff, store, id):
     ],
     State({"type": "ModeData_figure", "name": MATCH}, "id"),
 )
-def set_dir_dropdown_visibilty(value_amps_or_neff, store, id):
-    data_plotly = get_store().get_data_plotly_by_name(store, id["name"])
+def set_dir_dropdown_visibilty(value_amps_or_neff, store, state_id):
+    """set the visibility of the dropdown"""
+    data_plotly = get_store().get_data_plotly_by_name(store, state_id["name"])
     data_plotly.amps_or_neff = str(value_amps_or_neff)
     return data_plotly.dir_dropdown_hidden

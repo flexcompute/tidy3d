@@ -1,3 +1,5 @@
+""" link what happens in the inputs to what gets displayed in the figure """
+
 import numpy as np
 from dash import callback, Output, Input, MATCH, State
 
@@ -23,10 +25,11 @@ def set_field(  # pylint:disable=too-many-arguments
     value_cs,
     value_ft,
     store,
-    id,
+    state_id,
     value_mode_ind=None,
 ):
-    data_plotly = get_store().get_data_plotly_by_name(store, id["name"])
+    """set the field to be displayed"""
+    data_plotly = get_store().get_data_plotly_by_name(store, state_id["name"])
     data_plotly.field_val = str(value_field)
     data_plotly.val = str(value_val)
     data_plotly.cs_axis = ["x", "y", "z"].index(value_cs_axis)
@@ -44,8 +47,9 @@ def set_field(  # pylint:disable=too-many-arguments
     Input("store", "data"),
     State({"type": "FieldData_figure", "name": MATCH}, "id"),
 )
-def set_min(value_cs_axis, store, id):
-    data_plotly = get_store().get_data_plotly_by_name(store, id["name"])
+def set_min(value_cs_axis, store, state_id):
+    """set the minimum of the sliderbar"""
+    data_plotly = get_store().get_data_plotly_by_name(store, state_id["name"])
     data_plotly.cs_axis = ["x", "y", "z"].index(value_cs_axis)
     _, xyz_coords = data_plotly.xyz_label_coords
     return xyz_coords[0]
@@ -58,8 +62,9 @@ def set_min(value_cs_axis, store, id):
     Input("store", "data"),
     State({"type": "FieldData_figure", "name": MATCH}, "id"),
 )
-def reset_slider_position(value_cs_axis, store, id):
-    data_plotly = get_store().get_data_plotly_by_name(store, id["name"])
+def reset_slider_position(value_cs_axis, store, state_id):
+    """reset the sliderbar position"""
+    data_plotly = get_store().get_data_plotly_by_name(store, state_id["name"])
     data_plotly.cs_axis = ["x", "y", "z"].index(value_cs_axis)
     _, xyz_coords = data_plotly.xyz_label_coords
     data_plotly.cs_val = float(np.mean(xyz_coords))
@@ -73,8 +78,9 @@ def reset_slider_position(value_cs_axis, store, id):
     Input("store", "data"),
     State({"type": "FieldData_figure", "name": MATCH}, "id"),
 )
-def set_max(value_cs_axis, store, id):
-    data_plotly = get_store().get_data_plotly_by_name(store, id["name"])
+def set_max(value_cs_axis, store, state_id):
+    """set the maximum of the sliderbar"""
+    data_plotly = get_store().get_data_plotly_by_name(store, state_id["name"])
     data_plotly.cs_axis = ["x", "y", "z"].index(value_cs_axis)
     _, xyz_coords = data_plotly.xyz_label_coords
     return xyz_coords[-1]

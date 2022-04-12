@@ -1,16 +1,15 @@
 """Defines how the specific data objects render as UI components."""
 from abc import ABC
 from typing import Union, Tuple, List
-from typing_extensions import Literal
 
 import numpy as np
 import plotly.graph_objects as go
-from dash import dcc, html, Output, Input, Dash
 import pydantic as pd
+from dash import dcc, html, Input
+from typing_extensions import Literal
 
 from .component import UIComponent
 from .utils import PlotlyFig
-
 from ...components.data import FluxData, FluxTimeData, FieldData, FieldTimeData
 from ...components.data import ModeFieldData, ModeData, AbstractScalarFieldData
 from ...components.geometry import Geometry

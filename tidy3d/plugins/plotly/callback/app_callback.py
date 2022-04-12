@@ -1,3 +1,5 @@
+""" link what happens in the inputs to what gets displayed in the figure """
+
 import urllib
 
 from dash import callback, Output, Input, dcc, html
@@ -12,6 +14,7 @@ from ..store import get_store
     [Input("url", "search")],
 )
 def get_task_id(search):
+    """get the task id from the url"""
     parsed = urllib.parse.urlparse(search)
     parsed_dict = urllib.parse.parse_qs(parsed.query)
     store = {}
@@ -27,6 +30,7 @@ def get_task_id(search):
     [Input("store", "data")],
 )
 def display_simulation_data_app(store) -> dcc.Tabs:
+    """display the simulation data in the app"""
     data_app = get_store().get_simulation_data(store)
     layout = dcc.Tabs([])
     component = SimulationPlotly(simulation=data_app.simulation).make_component()
@@ -41,11 +45,13 @@ def display_simulation_data_app(store) -> dcc.Tabs:
         component = data_plotly.make_component()
         layout.children += [component]
 
-    layout.children += [dcc.Tab(
-        [
-            html.Div([html.H1("Solver Log")]),
-            html.Div([html.Code(data_app.log, style={"whiteSpace": "pre-wrap"})]),
-        ],
-        label="log",
-    )]
+    layout.children += [
+        dcc.Tab(
+            [
+                html.Div([html.H1("Solver Log")]),
+                html.Div([html.Code(data_app.log, style={"whiteSpace": "pre-wrap"})]),
+            ],
+            label="log",
+        )
+    ]
     return layout
