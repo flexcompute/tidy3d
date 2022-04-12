@@ -27,6 +27,7 @@ def get_task_id(search):
 
 @callback(
     Output("container", "children"),
+    Output("loading", "children"),
     [Input("store", "data")],
 )
 def display_simulation_data_app(store) -> dcc.Tabs:
@@ -54,4 +55,4 @@ def display_simulation_data_app(store) -> dcc.Tabs:
             label="log",
         )
     ]
-    return layout
+    return layout, ""
