@@ -26,7 +26,7 @@ from .viz import MEDIUM_CMAP, PlotParams, plot_params_symmetry
 from .viz import plot_params_structure, plot_params_pml
 
 from ..version import __version__
-from ..constants import C_0, MICROMETER, SECOND
+from ..constants import C_0, MICROMETER, SECOND, inf
 from ..log import log, Tidy3dKeyError, SetupError
 
 
@@ -562,6 +562,12 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
                 return monitor
         raise Tidy3dKeyError(f"No monitor named '{name}'")
 
+    @property
+    def background_structure(self) -> Structure:
+        """Returns structure representing the background of the :class:`Simulation`."""
+        geometry = Box(size=(inf, inf, inf))
+        return Structure(geometry=geometry, medium=self.medium)
+
     """ Plotting """
 
     @equal_aspect
@@ -667,7 +673,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
 
         # TODO: if we want structure alpha, we will have to filter, otherwise just get overlapped
         # medium_shapes = self._filter_structures_plane(self.structures, x=x, y=y, z=z)
-        medium_shapes = self._get_structures_plane(x=x, y=y, z=z)
+        medium_shapes = self._get_structures_plane(structures=self.structures, x=x, y=y, z=z)
         medium_map = self.medium_map
 
         for (medium, shape) in medium_shapes:
@@ -767,34 +773,25 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
             The supplied or created matplotlib axes.
         """
 
-        eps_min, eps_max = self.eps_bounds(freq=freq)
+        structures = [self.background_structure] + self.structures
+
         if alpha is not None and alpha < 1:
-            medium_shapes = self._filter_structures_plane(self.structures, x=x, y=y, z=z)
-            for (medium, shape) in medium_shapes:
-                if medium != self.medium:
-                    ax = self._plot_shape_structure_eps(
-                        freq=freq,
-                        alpha=alpha,
-                        medium=medium,
-                        eps_min=eps_min,
-                        eps_max=eps_max,
-                        reverse=reverse,
-                        shape=shape,
-                        ax=ax,
-                    )
+            medium_shapes = self._filter_structures_plane(structures=structures, x=x, y=y, z=z)
         else:
-            medium_shapes = self._get_structures_plane(x=x, y=y, z=z)
-            for (medium, shape) in medium_shapes:
-                ax = self._plot_shape_structure_eps(
-                    freq=freq,
-                    alpha=alpha,
-                    medium=medium,
-                    eps_min=eps_min,
-                    eps_max=eps_max,
-                    reverse=reverse,
-                    shape=shape,
-                    ax=ax,
-                )
+            medium_shapes = self._get_structures_plane(structures=structures, x=x, y=y, z=z)
+
+        eps_min, eps_max = self.eps_bounds(freq=freq)
+        for (medium, shape) in medium_shapes:
+            ax = self._plot_shape_structure_eps(
+                freq=freq,
+                alpha=alpha,
+                medium=medium,
+                eps_min=eps_min,
+                eps_max=eps_max,
+                reverse=reverse,
+                shape=shape,
+                ax=ax,
+            )
 
         if cbar:
             self._add_cbar(eps_min=eps_min, eps_max=eps_max, ax=ax)
@@ -833,11 +830,11 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         if alpha is not None:
             plot_params.alpha = alpha
 
-        if medium == self.medium:
-            # background medium
-            plot_params.facecolor = "white"
-            plot_params.edgecolor = "white"
-        elif isinstance(medium, PECMedium):
+        # if medium == self.medium:
+        #     # background medium
+        #     plot_params.facecolor = "white"
+        #     plot_params.edgecolor = "white"
+        if isinstance(medium, PECMedium):
             # perfect electrical conductor
             plot_params.facecolor = "gold"
             plot_params.edgecolor = "k"
@@ -1150,13 +1147,16 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         ax.set_ylim(ymin, ymax)
         return ax
 
+    @staticmethod
     def _get_structures_plane(
-        self, x: float = None, y: float = None, z: float = None
+        structures: List[Structure], x: float = None, y: float = None, z: float = None
     ) -> List[Tuple[Medium, Shapely]]:
         """Compute list of shapes to plot on plane specified by {x,y,z}.
 
         Parameters
         ----------
+        structures : List[:class:`Structure`]
+            list of structures to filter on the plane.
         x : float = None
             position of plane in x direction, only one of x, y, z must be specified to define plane.
         y : float = None
@@ -1170,10 +1170,11 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
             List of shapes and mediums on the plane.
         """
         medium_shapes = []
-        for structure in self.structures:
+        for structure in structures:
             intersections = structure.geometry.intersections(x=x, y=y, z=z)
             if len(intersections) > 0:
                 for shape in intersections:
+                    shape = Box.evaluate_inf_shape(shape)
                     medium_shapes.append((structure.medium, shape))
         return medium_shapes
 
@@ -1186,6 +1187,8 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
 
         Parameters
         ----------
+        structures : List[:class:`Structure`]
+            list of structures to filter on the plane.
         x : float = None
             position of plane in x direction, only one of x, y, z must be specified to define plane.
         y : float = None
