@@ -37,8 +37,8 @@ def display_simulation_data_app(store) -> dcc.Tabs:
         data_app = get_store().get_simulation_data(store)
         component = SimulationPlotly(simulation=data_app.simulation).make_component()
         layout.children += [component]
-    except Exception as e:
-        return html.Div([html.H1("Fail to generate plot"), html.H2("Error: {}".format(e))])
+    except Exception as e:  # pylint:disable=broad-except
+        return html.Div([html.H1("Fail to generate plot"), html.H2(f"Error: {e}")])
 
     for monitor_name, monitor_data in data_app.monitor_data.items():
         data_plotly = DataPlotly.from_monitor_data(
