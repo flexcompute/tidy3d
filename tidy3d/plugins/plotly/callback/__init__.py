@@ -1,3 +1,4 @@
+""" loading all the plotly callbacks """
 from os.path import dirname, basename, isfile, join
 import glob
 

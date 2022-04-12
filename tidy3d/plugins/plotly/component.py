@@ -27,7 +27,7 @@ class UIComponent(Tidy3dBaseModel, ABC):
     """Base class for a UI component.  Individual data storage wrappers override this."""
 
     @abstractmethod
-    def make_component(self, app) -> dcc.Tab:
+    def make_component(self) -> dcc.Tab:
         """Creates the dash component for this montor data."""
 
     @abstractmethod

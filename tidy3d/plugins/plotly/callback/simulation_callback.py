@@ -1,3 +1,5 @@
+""" link what happens in the inputs to what gets displayed in the figure """
+
 from dash import callback, Output, Input
 
 from ..store import get_store
@@ -12,6 +14,7 @@ from ..store import get_store
     ],
 )
 def set_fig_from_xyz_sliderbar(cs_axis_string, cs_val, store):
+    """set the figure from the xyz slider bar"""
     sim_plotly = get_store().get_simulation_plotly(store)
     sim_plotly.cs_axis = ["x", "y", "z"].index(cs_axis_string)
     sim_plotly.cs_val = float(cs_val)
@@ -26,6 +29,7 @@ def set_fig_from_xyz_sliderbar(cs_axis_string, cs_val, store):
     Input("store", "data"),
 )
 def reset_slider_position(value_cs_axis, store):
+    """set the xyz slider back to the average if the axis changes."""
     sim_plotly = get_store().get_simulation_plotly(store)
     sim_plotly.cs_axis = ["x", "y", "z"].index(value_cs_axis)
     _, (xyz_min, xyz_max) = sim_plotly.xyz_label_bounds
@@ -39,6 +43,7 @@ def reset_slider_position(value_cs_axis, store):
     Input("store", "data"),
 )
 def set_min(cs_axis_string, store):
+    """set the min slider value"""
     sim_plotly = get_store().get_simulation_plotly(store)
     sim_plotly.cs_axis = ["x", "y", "z"].index(cs_axis_string)
     _, (xyz_min, _) = sim_plotly.xyz_label_bounds
@@ -51,6 +56,7 @@ def set_min(cs_axis_string, store):
     Input("store", "data"),
 )
 def set_max(cs_axis_string, store):
+    """set the max slider value"""
     sim_plotly = get_store().get_simulation_plotly(store)
     sim_plotly.cs_axis = ["x", "y", "z"].index(cs_axis_string)
     _, (_, xyz_max) = sim_plotly.xyz_label_bounds

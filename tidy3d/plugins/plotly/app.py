@@ -10,7 +10,7 @@ from .store import set_store, LocalStore
 from ...components.base import Tidy3dBaseModel
 from ...components.simulation import Simulation
 from ...components.data import SimulationData
-from .callback import *  # pylint: disable=wildcard-import
+from .callback import *  # pylint: disable=wildcard-import,unused-wildcard-import
 
 AppMode = Literal["python", "jupyter", "jupyterlab"]
 
@@ -52,9 +52,7 @@ class App(Tidy3dBaseModel, ABC):
 
     def make_app(self) -> Dash:
         """Initialize everything and make the plotly app."""
-        if self.app:
-            return self.app
-        else:
+        if not self.app:
             self.app = self._initialize_app()
             self.app.layout = self._make_layout()
         return self.app
@@ -97,7 +95,7 @@ class SimulationDataApp(App):
 
     @classmethod
     def from_file(
-            cls, fname: str, mode: AppMode = DEFAULT_MODE, normalize_index: Optional[int] = 0
+        cls, fname: str, mode: AppMode = DEFAULT_MODE, normalize_index: Optional[int] = 0
     ):  # pylint:disable=arguments-differ
         """Load the :class:`.SimulationDataApp` from a tidy3d data file in .hdf5 format."""
         sim_data = SimulationData.from_file(fname, normalize_index=normalize_index)
