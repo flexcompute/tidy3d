@@ -665,7 +665,9 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
             The supplied or created matplotlib axes.
         """
 
-        medium_shapes = self._filter_structures_plane(self.structures, x=x, y=y, z=z)
+        # TODO: if we want structure alpha, we will have to filter, otherwise just get overlapped
+        # medium_shapes = self._filter_structures_plane(self.structures, x=x, y=y, z=z)
+        medium_shapes = self._get_structures_plane(x=x, y=y, z=z)
         medium_map = self.medium_map
 
         for (medium, shape) in medium_shapes:
@@ -766,9 +768,23 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         """
 
         eps_min, eps_max = self.eps_bounds(freq=freq)
-        medium_shapes = self._filter_structures_plane(self.structures, x=x, y=y, z=z)
-        for (medium, shape) in medium_shapes:
-            if medium != self.medium:
+        if alpha is not None and alpha < 1:
+            medium_shapes = self._filter_structures_plane(self.structures, x=x, y=y, z=z)
+            for (medium, shape) in medium_shapes:
+                if medium != self.medium:
+                    ax = self._plot_shape_structure_eps(
+                        freq=freq,
+                        alpha=alpha,
+                        medium=medium,
+                        eps_min=eps_min,
+                        eps_max=eps_max,
+                        reverse=reverse,
+                        shape=shape,
+                        ax=ax,
+                    )
+        else:
+            medium_shapes = self._get_structures_plane(x=x, y=y, z=z)
+            for (medium, shape) in medium_shapes:
                 ax = self._plot_shape_structure_eps(
                     freq=freq,
                     alpha=alpha,
@@ -1133,6 +1149,33 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         ax.set_xlim(xmin, xmax)
         ax.set_ylim(ymin, ymax)
         return ax
+
+    def _get_structures_plane(
+        self, x: float = None, y: float = None, z: float = None
+    ) -> List[Tuple[Medium, Shapely]]:
+        """Compute list of shapes to plot on plane specified by {x,y,z}.
+
+        Parameters
+        ----------
+        x : float = None
+            position of plane in x direction, only one of x, y, z must be specified to define plane.
+        y : float = None
+            position of plane in y direction, only one of x, y, z must be specified to define plane.
+        z : float = None
+            position of plane in z direction, only one of x, y, z must be specified to define plane.
+
+        Returns
+        -------
+        List[Tuple[:class:`AbstractMedium`, shapely.geometry.base.BaseGeometry]]
+            List of shapes and mediums on the plane.
+        """
+        medium_shapes = []
+        for structure in self.structures:
+            intersections = structure.geometry.intersections(x=x, y=y, z=z)
+            if len(intersections) > 0:
+                for shape in intersections:
+                    medium_shapes.append((structure.medium, shape))
+        return medium_shapes
 
     @staticmethod
     def _filter_structures_plane(  # pylint:disable=too-many-locals
