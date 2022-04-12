@@ -32,10 +32,13 @@ def get_task_id(search):
 )
 def display_simulation_data_app(store) -> dcc.Tabs:
     """display the simulation data in the app"""
-    data_app = get_store().get_simulation_data(store)
     layout = dcc.Tabs([])
-    component = SimulationPlotly(simulation=data_app.simulation).make_component()
-    layout.children += [component]
+    try:
+        data_app = get_store().get_simulation_data(store)
+        component = SimulationPlotly(simulation=data_app.simulation).make_component()
+        layout.children += [component]
+    except Exception as e:
+        return html.Div([html.H1("Fail to generate plot"), html.H2("Error: {}".format(e))])
 
     for monitor_name, monitor_data in data_app.monitor_data.items():
         data_plotly = DataPlotly.from_monitor_data(
