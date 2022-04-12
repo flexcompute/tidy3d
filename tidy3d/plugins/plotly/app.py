@@ -45,10 +45,11 @@ class App(Tidy3dBaseModel, ABC):
         return html.Div(
             [
                 dcc.Loading(
-                    id="loading", type="default", children=html.Div(id="container"), fullscreen=True
+                    id="loading", type="default", children=html.Div(id="loading"), fullscreen=True
                 ),
                 dcc.Location(id="url"),
                 dcc.Store(id="store"),
+                html.Div(id="container"),
             ]
         )
 
