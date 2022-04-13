@@ -133,7 +133,7 @@ def upload(  # pylint:disable=too-many-locals,too-many-arguments
         raise WebError("Upload file to 3S failed, please check your network or try it later.")
 
     # log the url for the task in the web UI
-    log.info(f"{DEFAULT_CONFIG.website_endpoint}/folders/{folder.projectId}/tasks/{task_id}")
+    log.debug(f"{DEFAULT_CONFIG.website_endpoint}/folders/{folder.projectId}/tasks/{task_id}")
 
     # log the maximum flex unit cost
     max_cost = estimate_cost(task_id)
@@ -481,7 +481,11 @@ def estimate_cost(task_id: str) -> float:
     else:
         data["protocolVersion"] = __version__
 
-    resp = http.post(method, data=data)
+    try:
+        resp = http.post(method, data=data)
+    except Exception:  # pylint:disable=broad-except
+        log.warning("Could not get estimated cost!")
+        return None
 
     return resp.get("flex_unit")
 
@@ -489,13 +493,18 @@ def estimate_cost(task_id: str) -> float:
 def _query_or_create_folder(folder_name) -> Folder:
     log.debug("query folder")
     method = f"tidy3d/project?projectName={folder_name}"
-    resp = http.get(method)
-    if not resp:
-        log.debug("folder not found, create one.")
-        method = "tidy3d/projects"
-        resp = http.post(method, data={"projectName": folder_name})
 
-    return Folder(**resp)
+    try:
+        resp = http.get(method)
+        if resp is None:
+            log.debug("folder not found, create one.")
+            method = "tidy3d/projects"
+            resp = http.post(method, data={"projectName": folder_name})
+        folder = Folder(**resp)
+    except Exception as e:  # pylint:disable=broad-except
+        raise WebError("Could not create task folder") from e
+
+    return folder
 
 
 def _download_file(task_id: TaskId, fname: str, path: str) -> None:
