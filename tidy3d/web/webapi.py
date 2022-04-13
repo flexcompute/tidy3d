@@ -121,12 +121,9 @@ def upload(  # pylint:disable=too-many-locals,too-many-arguments
 
     # upload the file to s3
     log.debug("Uploading the json file")
-
-    _s3_grant(task_id)
     client, bucket, user_id = get_s3_user()
     key = f"users/{user_id}/{task_id}/simulation.json"
     log.debug(f"json = {json_string}")
-
     resp = client.put_object(
         Body=json_string,
         Bucket=bucket,
@@ -525,7 +522,6 @@ def _download_file(task_id: TaskId, fname: str, path: str) -> None:
     log.info(f'downloading file "{fname}" to "{path}"')
 
     try:
-        _s3_grant(task_id)
         client, bucket, user_id = get_s3_user()
 
         if fname in ("monitor_data.hdf5", "tidy3d.log"):
@@ -556,10 +552,3 @@ def _rm_file(path: str):
     if os.path.exists(path) and not os.path.isdir(path):
         log.debug(f"removing file {path}")
         os.remove(path)
-
-
-def _s3_grant(task_id: TaskId):
-    method = f"tidy3d/s3upload/grant?resourceId={task_id}"
-    resp = http.get(method)
-    credentials = resp["userCredentials"]
-    DEFAULT_CONFIG.user = {**DEFAULT_CONFIG.user, **credentials}

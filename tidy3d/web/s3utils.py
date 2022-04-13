@@ -9,9 +9,8 @@ def get_s3_client():
     keys = Config.user
     return boto3.client(
         "s3",
-        aws_access_key_id=keys["accessKeyId"],
-        aws_secret_access_key=keys["secretAccessKey"],
-        aws_session_token=keys["sessionToken"],
+        aws_access_key_id=keys["userAccessKey"],
+        aws_secret_access_key=keys["userSecretAccessKey"],
         region_name=Config.s3_region,
     )
 
