@@ -154,8 +154,8 @@ def test_sim_symmetry_grid():
 
     coords_x, coords_y, coords_z = sim.grid.boundaries.to_list
 
-    # Assert coords size is even for the non-symmetry axis but odd otherwise
-    assert coords_x.size % 2 == 0
+    # Assert coords size is odd
+    assert coords_x.size % 2 != 0
     assert coords_y.size % 2 != 0
     assert coords_z.size % 2 != 0
 
