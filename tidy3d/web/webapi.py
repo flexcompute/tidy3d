@@ -27,12 +27,12 @@ TOTAL_DOTS = 3
 
 
 def run(  # pylint:disable=too-many-arguments
-    simulation: Simulation,
-    task_name: str,
-    folder_name: str = "default",
-    path: str = "simulation_data.hdf5",
-    callback_url: str = None,
-    normalize_index: Optional[int] = 0,
+        simulation: Simulation,
+        task_name: str,
+        folder_name: str = "default",
+        path: str = "simulation_data.hdf5",
+        callback_url: str = None,
+        normalize_index: Optional[int] = 0,
 ) -> SimulationData:
     """Submits a :class:`.Simulation` to server, starts running, monitors progress, downloads,
     and loads results as a :class:`.SimulationData` object.
@@ -73,7 +73,7 @@ def run(  # pylint:disable=too-many-arguments
 
 
 def upload(  # pylint:disable=too-many-locals,too-many-arguments
-    simulation: Simulation, task_name: str, folder_name: str = "default", callback_url: str = None
+        simulation: Simulation, task_name: str, folder_name: str = "default", callback_url: str = None
 ) -> TaskId:
     """Upload simulation to server, but do not start running :class:`.Simulation`.
 
@@ -121,9 +121,12 @@ def upload(  # pylint:disable=too-many-locals,too-many-arguments
 
     # upload the file to s3
     log.debug("Uploading the json file")
+
+    _s3_grant(task_id)
     client, bucket, user_id = get_s3_user()
     key = f"users/{user_id}/{task_id}/simulation.json"
     log.debug(f"json = {json_string}")
+
     resp = client.put_object(
         Body=json_string,
         Bucket=bucket,
@@ -324,10 +327,10 @@ def download(task_id: TaskId, path: str = "simulation_data.hdf5") -> None:
 
 
 def load(
-    task_id: TaskId,
-    path: str = "simulation_data.hdf5",
-    replace_existing: bool = True,
-    normalize_index: Optional[int] = 0,
+        task_id: TaskId,
+        path: str = "simulation_data.hdf5",
+        replace_existing: bool = True,
+        normalize_index: Optional[int] = 0,
 ) -> SimulationData:
     """Download and Load simultion results into :class:`.SimulationData` object.
 
@@ -388,8 +391,8 @@ def delete(task_id: TaskId) -> TaskInfo:
 
 
 def delete_old(
-    days_old: int = 100,
-    folder: str = "default",
+        days_old: int = 100,
+        folder: str = "default",
 ) -> int:
     """Delete all tasks older than a given amount of days.
 
@@ -421,7 +424,7 @@ def delete_old(
 
 
 def get_tasks(
-    num_tasks: int = None, order: Literal["new", "old"] = "new", folder: str = "default"
+        num_tasks: int = None, order: Literal["new", "old"] = "new", folder: str = "default"
 ) -> List[Dict]:
     """Get a list with the metadata of the last ``num_tasks`` tasks.
 
@@ -522,6 +525,7 @@ def _download_file(task_id: TaskId, fname: str, path: str) -> None:
     log.info(f'downloading file "{fname}" to "{path}"')
 
     try:
+        _s3_grant(task_id)
         client, bucket, user_id = get_s3_user()
 
         if fname in ("monitor_data.hdf5", "tidy3d.log"):
@@ -552,3 +556,10 @@ def _rm_file(path: str):
     if os.path.exists(path) and not os.path.isdir(path):
         log.debug(f"removing file {path}")
         os.remove(path)
+
+
+def _s3_grant(task_id: TaskId):
+    method = f"tidy3d/s3upload/grant?resourceId={task_id}"
+    resp = http.get(method)
+    credentials = resp["userCredentials"]
+    DEFAULT_CONFIG.user = {** DEFAULT_CONFIG.user, ** credentials}
