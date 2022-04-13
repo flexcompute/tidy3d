@@ -44,7 +44,7 @@ def handle_response(func):
 
         # if that doesnt work, raise
         except Exception as e:
-            raise WebError(f"Could not decode response json: {resp.text})") from e
+            raise WebError(f"Could not decode response json: {resp.text}") from e
 
     return wrapper
 
