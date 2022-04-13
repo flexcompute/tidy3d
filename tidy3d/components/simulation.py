@@ -1326,8 +1326,8 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         dl = np.array(dl)
         bound_coords = np.array([np.sum(dl[:i]) for i in range(len(dl) + 1)])
 
-        # place the middle boundary at the center of the simulation along dimension
-        bound_coords += center - bound_coords[bound_coords.size // 2]
+        # place the middle of the bounds at the center of the simulation along dimension
+        bound_coords += center - bound_coords[-1] / 2
 
         # chop off any coords outside of simulation bounds
         bound_min = center - size / 2
