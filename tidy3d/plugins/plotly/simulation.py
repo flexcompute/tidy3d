@@ -476,7 +476,7 @@ class SimulationPlotly(UIComponent):
         for sym_axis, sym_value in enumerate(self.simulation.symmetry):
             if sym_value == 0 or sym_axis == normal_axis:
                 continue
-            sym_box = self.simulation._make_symmetry_box(sym_axis=sym_axis, sym_value=sym_value)
+            sym_box = self.simulation._make_symmetry_box(sym_axis=sym_axis)
             plot_params = self.simulation._make_symmetry_plot_params(sym_value=sym_value)
             sym_box_plotly = GeometryPlotly(geometry=sym_box)
             fig = sym_box_plotly.plotly(x=x, y=y, z=z, fig=fig, **plot_params.to_kwargs())
