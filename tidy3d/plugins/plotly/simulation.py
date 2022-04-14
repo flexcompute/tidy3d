@@ -205,50 +205,6 @@ class SimulationPlotly(UIComponent):
 
     @equal_aspect_plotly
     @add_fig_if_none
-    def plotly_eps(
-        self,
-        x: float = None,
-        y: float = None,
-        z: float = None,
-        fig: PlotlyFig = None,
-    ) -> PlotlyFig:
-        """Plot each of simulation's components on a plane defined by one nonzero x,y,z coordinate.
-        The permittivity is plotted in grayscale based on its value at the specified frequency.
-        Uses plotly.
-
-        Parameters
-        ----------
-        x : float = None
-            position of plane in x direction, only one of x, y, z must be specified to define plane.
-        y : float = None
-            position of plane in y direction, only one of x, y, z must be specified to define plane.
-        z : float = None
-            position of plane in z direction, only one of x, y, z must be specified to define plane.
-        freq : float = None
-            Frequency to evaluate the relative permittivity of all mediums.
-            If not specified, evaluates at infinite frequency.
-        fig : plotly.graph_objects.Figure = None
-            plotly ``Figure`` to plot on, if not specified, one is created.
-
-
-        Returns
-        -------
-        plotly.graph_objects.Figure
-            The supplied or created plotly ``Figure``.
-        """
-
-        fig = self._plotly_bounding_box(x=x, y=y, z=z, fig=fig)
-        fig = self.plotly_structures_eps(x=x, y=y, z=z, fig=fig)
-        fig = self.plotly_sources(x=x, y=y, z=z, fig=fig)
-        fig = self.plotly_monitors(x=x, y=y, z=z, fig=fig)
-        fig = self.plotly_symmetries(x=x, y=y, z=z, fig=fig)
-        fig = self.plotly_pml(x=x, y=y, z=z, fig=fig)
-        fig = self._plotly_cleanup(x=x, y=y, z=z, fig=fig)
-
-        return fig
-
-    @equal_aspect_plotly
-    @add_fig_if_none
     def plotly_structures(
         self,
         x: float = None,
@@ -275,9 +231,7 @@ class SimulationPlotly(UIComponent):
             The supplied or created plotly ``Figure``.
         """
 
-        medium_shapes = self.simulation._filter_structures_plane(
-            self.simulation.structures, x=x, y=y, z=z
-        )
+        medium_shapes = self._get_structures_plane(structures=self.structures, x=x, y=y, z=z)
         for (medium, shape) in medium_shapes:
             fig = self._plotly_shape_structure(medium=medium, shape=shape, fig=fig)
         return fig
@@ -292,56 +246,6 @@ class SimulationPlotly(UIComponent):
         )
         name = medium.name if medium.name else f"medium[{mat_index}]"
         fig = plotly_shape(shape=shape, plot_params=plot_params_struct, fig=fig, name=name)
-        return fig
-
-    @equal_aspect_plotly
-    @add_fig_if_none
-    def plotly_structures_eps(
-        self,
-        x: float = None,
-        y: float = None,
-        z: float = None,
-        freq: float = None,
-        fig: PlotlyFig = None,
-    ) -> PlotlyFig:
-        """Plot each of simulation's structures on a plane defined by one nonzero x,y,z coordinate.
-        The permittivity is plotted in grayscale based on its value at the specified frequency.
-
-        Parameters
-        ----------
-        x : float = None
-            position of plane in x direction, only one of x, y, z must be specified to define plane.
-        y : float = None
-            position of plane in y direction, only one of x, y, z must be specified to define plane.
-        z : float = None
-            position of plane in z direction, only one of x, y, z must be specified to define plane.
-        fig : plotly.graph_objects.Figure = None
-            plotly ``Figure`` to plot on, if not specified, one is created.
-
-        Returns
-        -------
-        plotly.graph_objects.Figure
-            The supplied or created plotly ``Figure``.
-        """
-
-        medium_shapes = self.simulation._filter_structures_plane(
-            self.simulation.structures, x=x, y=y, z=z
-        )
-        for (medium, shape) in medium_shapes:
-            fig = self._plotly_shape_structure_eps(freq=freq, medium=medium, shape=shape, fig=fig)
-        return fig
-
-    def _plotly_shape_structure_eps(
-        self,
-        freq: float,
-        medium: Medium,
-        shape: ShapelyGeo,
-        fig: PlotlyFig,
-    ) -> PlotlyFig:
-        """Plot a structure's cross section shape for a given medium, grayscale for permittivity."""
-        plot_params = self.simulation._get_structure_eps_plot_params(medium=medium, freq=freq)
-        plot_params.facecolor = f"rgb{tuple(3*[float(plot_params.facecolor)*255])}"
-        fig = plotly_shape(shape=shape, plot_params=plot_params, fig=fig)
         return fig
 
     @add_fig_if_none
