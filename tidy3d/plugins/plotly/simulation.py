@@ -231,7 +231,8 @@ class SimulationPlotly(UIComponent):
             The supplied or created plotly ``Figure``.
         """
 
-        medium_shapes = self._get_structures_plane(structures=self.structures, x=x, y=y, z=z)
+        structures = self.simulation.structures
+        medium_shapes = self.simulation._get_structures_plane(structures=structures, x=x, y=y, z=z)
         for (medium, shape) in medium_shapes:
             fig = self._plotly_shape_structure(medium=medium, shape=shape, fig=fig)
         return fig
