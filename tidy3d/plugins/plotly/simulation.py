@@ -193,7 +193,7 @@ class SimulationPlotly(UIComponent):
             The supplied or created plotly ``Figure``.
         """
 
-        fig = self._plotly_bounding_box(x=x, y=y, z=z, fig=fig)
+        # fig = self._plotly_bounding_box(x=x, y=y, z=z, fig=fig)
         fig = self.plotly_structures(x=x, y=y, z=z, fig=fig)
         fig = self.plotly_sources(x=x, y=y, z=z, fig=fig)
         fig = self.plotly_monitors(x=x, y=y, z=z, fig=fig)
