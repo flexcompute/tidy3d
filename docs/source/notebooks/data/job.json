@@ -158,10 +158,10 @@
         "shutoff": 1e-05,
         "subpixel": true,
         "courant": 0.9,
-        "version": "1.1.2"
+        "version": "1.2.2"
     },
     "task_name": "job",
     "folder_name": "default",
-    "task_id": "4841cd16-9a0d-4383-bd08-35fa6bc37057",
+    "task_id": "437312e8-cf1a-4896-a3db-da49ae6a8239",
     "callback_url": null
 }

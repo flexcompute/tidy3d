@@ -9,6 +9,8 @@ import nbformat
 from nbconvert.preprocessors import CellExecutionError
 from nbconvert.preprocessors import ExecutePreprocessor
 
+sys.path.append("tidy3d")
+
 ep = ExecutePreprocessor(timeout=1000, kernel_name="python3")
 
 # get all notebook files
@@ -20,7 +22,7 @@ notebook_filenames = [
 ]
 
 # if you want to run only some notebooks, put here, if empty, run all
-run_only = []#["StartHere" "VizData", "VizSimulation", "Fitting", "ModeSolver", "Near2Far"]
+run_only = []
 # run_only = ["HighQ_Si", "HighQ_Ge", "RingResonator"]
 if len(run_only):
     notebook_filenames = [NOTEBOOK_DIR + base + ".ipynb" for base in run_only]
