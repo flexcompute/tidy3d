@@ -18,10 +18,13 @@ How is using Tidy3D billed?
 The `Tidy3D client <https://pypi.org/project/tidy3d-beta/>`_ that is used for designing 
 simulations and analyzing the results is free and 
 open source. We only bill the run time of the solver on our server, taking only the compute 
-time into account (as opposed to overhead e.g. during uploading). In the online user interface, 
-we provide an estimate of the billed amount a simulation would incur, but the final value is 
-determined by timing the actual run. If you notice a significant difference between the estimate 
-and the final value, please let us know!
+time into account (as opposed to overhead e.g. during uploading).
+When a task is uploaded to our servers, we will print the maximum incurred cost in Flex units.
+This cost is also displayed in the online interface for that task.
+This value is determined by the cost associated with simulating the entire time stepping specified.
+If early shutoff is detected and the simulation completes before the full time stepping period, this
+cost will be pro-rated.
+For more questions or to purchase Flex units, please contact us at ``support@flexcompute.com``.
 
 What are the units used in the simulation?
 ------------------------------------------
