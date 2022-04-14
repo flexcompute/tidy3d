@@ -176,4 +176,5 @@ Extensions
      - Refer to the `tutorial <https://docs.simulation.cloud/projects/tidy3d/en/latest/notebooks/ModeSolver.html>`_ on the :class:`tidy3d.plugins.ModeSolver` plugin.
    * - Projet electromagnetic near field data to the far field?
      - Refer to the `tutorial <https://docs.simulation.cloud/projects/tidy3d/en/latest/notebooks/Near2Far.html>`_ on the :class:`tidy3d.plugins.Near2Far` plugin.
-
+   * - Compute scattering matrix parameters for modeling my device?
+     - Refer to the `tutorial <https://docs.simulation.cloud/projects/tidy3d/en/latest/notebooks/SMatrix.html>`_ on the :class:`tidy3d.plugins.ComponentModeler` plugin.
