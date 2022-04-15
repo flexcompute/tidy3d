@@ -100,21 +100,19 @@ class SimulationPlotly(UIComponent):
     """Simulation that adds plotly-based implementations of its standard plotting functions."""
 
     simulation: Simulation = pd.Field(
-        ...,
-        title='Simulation',
-        description='The Simulation instance to plot.'
+        ..., title="Simulation", description="The Simulation instance to plot."
     )
 
     cs_axis: Axis = pd.Field(
         0,
-        title='Cross-section axis',
-        description='The axis (0,1,2) representing the plotting plane normal direction.'
+        title="Cross-section axis",
+        description="The axis (0,1,2) representing the plotting plane normal direction.",
     )
 
     cs_val: float = pd.Field(
         None,
-        title='Cross-section value',
-        description='The position along the plotting plane axis normal.'
+        title="Cross-section value",
+        description="The position along the plotting plane axis normal.",
     )
 
     @property

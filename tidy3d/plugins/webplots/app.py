@@ -32,8 +32,8 @@ class App(Tidy3dBaseModel, ABC):
 
     app: Optional[Dash] = pd.Field(
         None,
-        title='Existing app.',
-        description="An existing app to use in place of the app, leave ``None`` in most cases."
+        title="Existing app.",
+        description="An existing app to use in place of the app, leave ``None`` in most cases.",
     )
 
     def _initialize_app(self) -> Dash:
