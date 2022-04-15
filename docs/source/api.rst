@@ -251,7 +251,8 @@ Plugins
    plugins.Near2FarSurface
    plugins.ComponentModeler
    plugins.Port
-
+   plugins.SimulationPlotly
+   plugins.SimulationDataApp
 
 Constants
 =========
@@ -317,5 +318,5 @@ These are classes that are used to organize the tidy3d components, but aren't to
    tidy3d.components.data.TimeData
    tidy3d.components.data.PlanarData
    tidy3d.components.data.AbstractFluxData
-   tidy3d.components.data.AbstractScalarFieldData
+   tidy3d.components.data.ScalarFieldData
 
