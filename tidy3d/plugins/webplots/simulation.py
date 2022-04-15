@@ -6,6 +6,7 @@ import numpy as np
 import plotly.graph_objects as go
 from dash import dcc, html
 from shapely.geometry.base import BaseGeometry as ShapelyGeo
+import pydantic as pd
 
 from .component import UIComponent
 from .utils import PlotlyFig, add_fig_if_none, equal_aspect_plotly, plot_params_sim_boundary
@@ -98,9 +99,23 @@ class StructurePlotly(Tidy3dBaseModel):
 class SimulationPlotly(UIComponent):
     """Simulation that adds plotly-based implementations of its standard plotting functions."""
 
-    simulation: Simulation
-    cs_axis: Axis = 0
-    cs_val: float = None
+    simulation: Simulation = pd.Field(
+        ...,
+        title='Simulation',
+        description='The Simulation instance to plot.'
+    )
+
+    cs_axis: Axis = pd.Field(
+        0,
+        title='Cross-section axis',
+        description='The axis (0,1,2) representing the plotting plane normal direction.'
+    )
+
+    cs_val: float = pd.Field(
+        None,
+        title='Cross-section value',
+        description='The position along the plotting plane axis normal.'
+    )
 
     @property
     def xyz_label_bounds(self):
