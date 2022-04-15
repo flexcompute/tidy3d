@@ -1213,7 +1213,7 @@ class SimulationData(AbstractSimulationData):
         """
 
         # get the data
-        field_monitor_data = self.monitor_data.get(field_monitor_name)
+        field_monitor_data = self[field_monitor_name]
         self.ensure_field_monitor(field_monitor_data)
 
         # get the monitor, discretize, and get center locations
@@ -1283,7 +1283,7 @@ class SimulationData(AbstractSimulationData):
         """
 
         # get the monitor data
-        monitor_data = self.monitor_data.get(field_monitor_name)
+        monitor_data = self[field_monitor_name]
         self.ensure_field_monitor(monitor_data)
         if isinstance(monitor_data, ModeFieldData):
             if mode_index is None:
