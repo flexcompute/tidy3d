@@ -12,7 +12,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [1.2.2] - 2022-4-16
 
 ### Added
-- App / GUI for visualizing contents of `SimulationData` in `tidy3d.plugings.plotly`.
+- `SimulationDataApp` GUI for visualizing contents of `SimulationData` in `tidy3d.plugings`.
+- `SimulationPlotly` interface for generating `Simulation.plot()` figures using `plotly` instead of `matplotlib`.
 - New `PermittivityMonitor` and `PermittivityData` to store the complex relative permittivity as used in the simulation.
 - The maximum credit cost for a simulation can now be queried using `web.estimate_cost`. It is also displayed by default during `web.upload`.
 
