@@ -14,7 +14,7 @@ from .validators import assert_unique_names, assert_objects_in_sim_bounds
 from .validators import validate_mode_objects_symmetry
 from .geometry import Box
 from .types import Symmetry, Ax, Shapely, FreqBound, Axis
-from .grid import Coords1D, Grid, Coords, GridSize, Bounds1D
+from .grid import Coords1D, Grid, Coords, MeshSpec
 from .medium import Medium, MediumType, AbstractMedium, PECMedium
 from .structure import Structure
 from .source import SourceType, PlaneWave
@@ -26,7 +26,7 @@ from .viz import MEDIUM_CMAP, PlotParams, plot_params_symmetry
 from .viz import plot_params_structure, plot_params_pml
 
 from ..version import __version__
-from ..constants import C_0, MICROMETER, SECOND, inf
+from ..constants import C_0, SECOND, inf
 from ..log import log, Tidy3dKeyError, SetupError
 
 
@@ -53,7 +53,11 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
     >>> from tidy3d import FieldMonitor, FluxMonitor
     >>> sim = Simulation(
     ...     size=(2.0, 2.0, 2.0),
-    ...     grid_size=(0.1, 0.1, 0.1),
+    ...     mesh_spec=td.MeshSpec(
+    ...         mesh_x = td.AutoMeshSpec(min_steps_per_wvl = 20),
+    ...         mesh_y = td.AutoMeshSpec(min_steps_per_wvl = 20),
+    ...         mesh_z = td.AutoMeshSpec(min_steps_per_wvl = 20)
+    ...     )
     ...     run_time=40e-11,
     ...     structures=[
     ...         Structure(
@@ -88,15 +92,11 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
     ... )
     """
 
-    grid_size: Tuple[GridSize, GridSize, GridSize] = pydantic.Field(
-        ...,
-        title="Grid Size",
-        description="If components are float, uniform grid size along x, y, and z. "
-        "If components are array like, defines an array of nonuniform grid sizes centered at "
-        "the simulation center ."
-        " Note: if supplied sizes do not cover the simulation size, the first and last sizes "
-        "are repeated to cover size. ",
-        units=MICROMETER,
+    mesh_spec: MeshSpec = pydantic.Field(
+        MeshSpec(),
+        title="Mesh Specifications",
+        description="Mesh Specifications for choosing and setting parameters "
+        "along each dimension in :class:``MeshSpec``.",
     )
 
     run_time: pydantic.PositiveFloat = pydantic.Field(
@@ -381,48 +381,48 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
                 )
         return val
 
-    @pydantic.validator("sources", always=True)
-    def _warn_grid_size_too_small(cls, val, values):  # pylint:disable=too-many-locals
-        """Warn user if any grid size is too large compared to minimum wavelength in material."""
+    # @pydantic.validator("sources", always=True)
+    # def _warn_grid_size_too_small(cls, val, values):  # pylint:disable=too-many-locals
+    #     """Warn user if any grid size is too large compared to minimum wavelength in material."""
 
-        if val is None:
-            return val
+    #     if val is None:
+    #         return val
 
-        structures = values.get("structures")
-        structures = [] if not structures else structures
-        medium_bg = values.get("medium")
-        grid_size = values.get("grid_size")
-        mediums = [medium_bg] + [structure.medium for structure in structures]
+    #     structures = values.get("structures")
+    #     structures = [] if not structures else structures
+    #     medium_bg = values.get("medium")
+    #     grid_size = values.get("grid_size")
+    #     mediums = [medium_bg] + [structure.medium for structure in structures]
 
-        for source_index, source in enumerate(val):
-            fmin_src, fmax_src = source.source_time.frequency_range()
-            f_average = (fmin_src + fmax_src) / 2.0
+    #     for source_index, source in enumerate(val):
+    #         fmin_src, fmax_src = source.source_time.frequency_range()
+    #         f_average = (fmin_src + fmax_src) / 2.0
 
-            for medium_index, medium in enumerate(mediums):
+    #         for medium_index, medium in enumerate(mediums):
 
-                # min wavelength in PEC is meaningless and we'll get divide by inf errors
-                if isinstance(medium, PECMedium):
-                    continue
+    #             # min wavelength in PEC is meaningless and we'll get divide by inf errors
+    #             if isinstance(medium, PECMedium):
+    #                 continue
 
-                eps_material = medium.eps_model(f_average)
-                n_material, _ = medium.eps_complex_to_nk(eps_material)
-                lambda_min = C_0 / f_average / n_material
+    #             eps_material = medium.eps_model(f_average)
+    #             n_material, _ = medium.eps_complex_to_nk(eps_material)
+    #             lambda_min = C_0 / f_average / n_material
 
-                for grid_index, dl in enumerate(grid_size):
-                    if isinstance(dl, float):
-                        if dl > lambda_min / MIN_GRIDS_PER_WVL:
-                            log.warning(
-                                f"The grid step in {'xyz'[grid_index]} has a value of {dl:.4f} (um)"
-                                ", which was detected as being large when compared to the "
-                                f"central wavelength of sources[{source_index}] "
-                                f"within the simulation medium "
-                                f"associated with structures[{medium_index + 1}], given by "
-                                f"{lambda_min:.4f} (um). "
-                                "To avoid inaccuracies, it is reccomended the grid size is reduced."
-                            )
-                    # TODO: warn about nonuniform grid
+    #             for grid_index, dl in enumerate(grid_size):
+    #                 if isinstance(dl, float):
+    #                     if dl > lambda_min / MIN_GRIDS_PER_WVL:
+    #                         log.warning(
+    #                             f"The grid step in {'xyz'[grid_index]} has a value of {dl:.4f} (um)"
+    #                             ", which was detected as being large when compared to the "
+    #                             f"central wavelength of sources[{source_index}] "
+    #                             f"within the simulation medium "
+    #                             f"associated with structures[{medium_index + 1}], given by "
+    #                             f"{lambda_min:.4f} (um). "
+    #                             "To avoid inaccuracies, it is reccomended the grid size is reduced."
+    #                         )
+    #                 # TODO: warn about nonuniform grid
 
-        return val
+    #     return val
 
     @pydantic.validator("sources", always=True)
     def _plane_wave_homogeneous(cls, val, values):
@@ -1348,27 +1348,17 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         :class:`Grid`
             :class:`Grid` storing the spatial locations relevant to the simulation.
         """
-        cell_boundary_dict = {}
-        for axis, key in enumerate("xyz"):
-            # Make boundaries inside simulation along axis
-            lambda0 = C_0 / (np.sum(self.frequency_range) / 2 + 1e-10)
-            # Add a simulation Box as the first structure
-            structures = [Structure(geometry=self.geometry, medium=self.medium)]
-            structures += self.structures
-            # pylint:disable=protected-access
-            bound_coords = Bounds1D._make_bounds(
-                axis,
-                structures,
-                self.grid_size[axis],
-                self.symmetry,
-                lambda0,
-            )
-            # Add PML layers in using dl on edges
-            bound_coords = self._add_pml_to_bounds(self.num_pml_layers[axis], bound_coords)
-            cell_boundary_dict[key] = bound_coords
 
-        boundaries = Coords(**cell_boundary_dict)
-        return Grid(boundaries=boundaries)
+        # Add a simulation Box as the first structure
+        structures = [Structure(geometry=self.geometry, medium=self.medium)]
+        structures += self.structures
+
+        return self.mesh_spec._make_grid(  # pylint:disable = protected-access
+            structures,
+            self.symmetry,
+            self.sources,
+            self.num_pml_layers,
+        )
 
     @property
     def num_cells(self) -> int:
@@ -1381,34 +1371,6 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         """
 
         return np.prod(self.grid.num_cells, dtype=np.int64)
-
-    @staticmethod
-    def _add_pml_to_bounds(num_layers: Tuple[int, int], bounds: Coords1D):
-        """Append absorber layers to the beginning and end of the simulation bounds
-        along one dimension.
-
-        Parameters
-        ----------
-        num_layers : Tuple[int, int]
-            number of layers in the absorber + and - direction along one dimension.
-        bound_coords : np.ndarray
-            coordinates specifying boundaries between cells along one dimension.
-
-        Returns
-        -------
-        np.ndarray
-            New bound coordinates along dimension taking abosrber into account.
-        """
-        if bounds.size < 2:
-            return bounds
-
-        first_step = bounds[1] - bounds[0]
-        last_step = bounds[-1] - bounds[-2]
-        add_left = bounds[0] - first_step * np.arange(num_layers[0], 0, -1)
-        add_right = bounds[-1] + last_step * np.arange(1, num_layers[1] + 1)
-        new_bounds = np.concatenate((add_left, bounds, add_right))
-
-        return new_bounds
 
     @property
     def wvl_mat_min(self) -> float:
