@@ -25,7 +25,7 @@ class MeshSpec1D(Tidy3dBaseModel, ABC):
 
     """Abstract base class, defines 1D mesh generation specifications."""
 
-    def _make_coords(  # pylint:disable = too-many-arguments
+    def make_coords(  # pylint:disable = too-many-arguments
         self,
         center: float,
         size: float,
@@ -466,7 +466,6 @@ class AutoMeshSpec(MeshSpec1D):
         for coord_ind, _ in enumerate(interval_coords[:-1]):
             # Structure indexes inside current interval; reverse so first structure on top
             struct_list = interval_structs[coord_ind][::-1]
-            # print(struct_list)
             struct_list_filter = []
             # Handle containment
             for ind, struct_ind in enumerate(struct_list):
@@ -485,9 +484,12 @@ class AutoMeshSpec(MeshSpec1D):
 
         return interval_coords, max_steps
 
-    @staticmethod
     def _make_mesh_multiple_intervals(  # pylint:disable=too-many-locals
-        max_dl_list: np.ndarray, len_interval_list: np.ndarray, max_scale: float, is_periodic: bool
+        self,
+        max_dl_list: np.ndarray,
+        len_interval_list: np.ndarray,
+        max_scale: float,
+        is_periodic: bool,
     ) -> List[np.ndarray]:
         """Create mesh steps in multiple connecting intervals of length specified by
         ``len_interval_list``. The maximal allowed step size in each interval is given by
@@ -518,7 +520,7 @@ class AutoMeshSpec(MeshSpec1D):
 
         # initialize step size on the left and right boundary of each interval
         # by assuming possible non-integar step number
-        left_dl_list, right_dl_list = AutoMeshSpec._mesh_multiple_interval_analy_refinement(
+        left_dl_list, right_dl_list = self._mesh_multiple_interval_analy_refinement(
             max_dl_list, len_interval_list, max_scale, is_periodic
         )
 
@@ -526,7 +528,7 @@ class AutoMeshSpec(MeshSpec1D):
         dl_list = []
         for interval_ind in range(num_intervals):
             dl_list.append(
-                AutoMeshSpec._make_mesh_in_interval(
+                self._make_mesh_in_interval(
                     left_dl_list[interval_ind],
                     right_dl_list[interval_ind],
                     max_dl_list[interval_ind],
@@ -569,7 +571,7 @@ class AutoMeshSpec(MeshSpec1D):
 
                 # update mesh steps in this interval if necessary
                 if refine_local > 0:
-                    dl_list[interval_ind] = AutoMeshSpec._make_mesh_in_interval(
+                    dl_list[interval_ind] = self._make_mesh_in_interval(
                         left_dl,
                         right_dl,
                         max_dl_list[interval_ind],
@@ -579,9 +581,12 @@ class AutoMeshSpec(MeshSpec1D):
 
         return dl_list
 
-    @staticmethod
     def _mesh_multiple_interval_analy_refinement(
-        max_dl_list: np.ndarray, len_interval_list: np.ndarray, max_scale: float, is_periodic: bool
+        self,
+        max_dl_list: np.ndarray,
+        len_interval_list: np.ndarray,
+        max_scale: float,
+        is_periodic: bool,
     ) -> Tuple[np.ndarray, np.ndarray]:
         """Analytical refinement for multiple intervals. "analytical" meaning we allow
         non-integar step sizes, so that we don't consider snapping here.
@@ -659,8 +664,9 @@ class AutoMeshSpec(MeshSpec1D):
 
         return left_dl, right_dl
 
-    @staticmethod
-    def _make_mesh_in_interval(  # pylint:disable=too-many-locals, too-many-return-statements
+    # pylint:disable=too-many-locals, too-many-return-statements, too-many-arguments
+    def _make_mesh_in_interval(
+        self,
         left_neighbor_dl: float,
         right_neighbor_dl: float,
         max_dl: float,
@@ -704,9 +710,7 @@ class AutoMeshSpec(MeshSpec1D):
         right_dl = min(max_dl, right_neighbor_dl)
 
         # classifications:
-        mesh_type = AutoMeshSpec._mesh_type_in_interval(
-            left_dl, right_dl, max_dl, max_scale, len_interval
-        )
+        mesh_type = self._mesh_type_in_interval(left_dl, right_dl, max_dl, max_scale, len_interval)
 
         # single pixel
         if mesh_type == -1:
@@ -741,11 +745,11 @@ class AutoMeshSpec(MeshSpec1D):
             # 1) interval length too small, cannot increase to large_dl, or barely can,
             #    but the remaing part is less than large_dl
             if len_remaining < large_dl:
-                dl_list = AutoMeshSpec._mesh_grow_in_interval(small_dl, max_scale, len_interval)
+                dl_list = self._mesh_grow_in_interval(small_dl, max_scale, len_interval)
                 return dl_list if left_dl <= right_dl else np.flip(dl_list)
 
             # 2) interval length sufficient, so it will plateau towards large_dl
-            dl_list = AutoMeshSpec._mesh_grow_plateau_in_interval(
+            dl_list = self._mesh_grow_plateau_in_interval(
                 small_dl, large_dl, max_scale, len_interval
             )
             return dl_list if left_dl <= right_dl else np.flip(dl_list)
@@ -764,20 +768,18 @@ class AutoMeshSpec(MeshSpec1D):
 
             # able to plateau
             if len_remaining >= max_dl:
-                return AutoMeshSpec._mesh_grow_plateau_decrease_in_interval(
+                return self._mesh_grow_plateau_decrease_in_interval(
                     left_dl, right_dl, max_dl, max_scale, len_interval
                 )
 
             # unable to plateau
-            return AutoMeshSpec._mesh_grow_decrease_in_interval(
-                left_dl, right_dl, max_scale, len_interval
-            )
+            return self._mesh_grow_decrease_in_interval(left_dl, right_dl, max_scale, len_interval)
 
         # unlikely to reach here. For future implementation purpose.
         raise ValidationError("Unimplemented mesh type.")
 
-    @staticmethod
-    def _mesh_grow_plateau_decrease_in_interval(
+    def _mesh_grow_plateau_decrease_in_interval(  # pylint:disable=too-many-arguments
+        self,
         left_dl: float,
         right_dl: float,
         max_dl: float,
@@ -846,8 +848,8 @@ class AutoMeshSpec(MeshSpec1D):
         dl_list *= len_interval / np.sum(dl_list)
         return dl_list
 
-    @staticmethod
     def _mesh_grow_decrease_in_interval(
+        self,
         left_dl: float,
         right_dl: float,
         max_scale: float,
@@ -934,8 +936,8 @@ class AutoMeshSpec(MeshSpec1D):
         dl_list *= len_interval / np.sum(dl_list)
         return dl_list
 
-    @staticmethod
     def _mesh_grow_plateau_in_interval(
+        self,
         small_dl: float,
         large_dl: float,
         max_scale: float,
@@ -989,8 +991,8 @@ class AutoMeshSpec(MeshSpec1D):
         dl_list *= len_interval / np.sum(dl_list)
         return dl_list
 
-    @staticmethod
     def _mesh_grow_in_interval(
+        self,
         small_dl: float,
         max_scale: float,
         len_interval: float,
@@ -1073,8 +1075,8 @@ class AutoMeshSpec(MeshSpec1D):
         dl_list *= len_interval / np.sum(dl_list)
         return dl_list
 
-    @staticmethod
-    def _mesh_type_in_interval(
+    def _mesh_type_in_interval(  # pylint:disable=too-many-arguments
+        self,
         left_dl: float,
         right_dl: float,
         max_dl: float,
@@ -1545,7 +1547,7 @@ class MeshSpec(Tidy3dBaseModel):
         description="Mesh specification along z-axis",
     )
 
-    def _make_grid(  # pylint:disable = too-many-arguments
+    def make_grid(  # pylint:disable = too-many-arguments
         self,
         structures: List[Structure],
         symmetry: Tuple[Symmetry, Symmetry, Symmetry],
@@ -1574,14 +1576,32 @@ class MeshSpec(Tidy3dBaseModel):
 
         center, size = structures[0].geometry.center, structures[0].geometry.size
 
-        coords_x = self.mesh_x._make_coords(  # pylint:disable = protected-access
-            center[0], size[0], 0, structures, symmetry[0], sources, num_pml_layers[0]
+        coords_x = self.mesh_x.make_coords(
+            center=center[0],
+            size=size[0],
+            axis=0,
+            structures=structures,
+            symmetry=symmetry[0],
+            sources=sources,
+            num_pml_layers=num_pml_layers[0],
         )
-        coords_y = self.mesh_y._make_coords(  # pylint:disable = protected-access
-            center[1], size[1], 1, structures, symmetry[1], sources, num_pml_layers[1]
+        coords_y = self.mesh_y.make_coords(
+            center=center[1],
+            size=size[1],
+            axis=1,
+            structures=structures,
+            symmetry=symmetry[1],
+            sources=sources,
+            num_pml_layers=num_pml_layers[1],
         )
-        coords_z = self.mesh_z._make_coords(  # pylint:disable = protected-access
-            center[2], size[2], 2, structures, symmetry[2], sources, num_pml_layers[2]
+        coords_z = self.mesh_z.make_coords(
+            center=center[2],
+            size=size[2],
+            axis=2,
+            structures=structures,
+            symmetry=symmetry[2],
+            sources=sources,
+            num_pml_layers=num_pml_layers[2],
         )
 
         coords = Coords(x=coords_x, y=coords_y, z=coords_z)
