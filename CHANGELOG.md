@@ -6,13 +6,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+
+### Changed
+
+## [1.2.2] - 2022-4-16
+
+### Added
 - App / GUI for visualizing contents of `SimulationData` in `tidy3d.plugings.plotly`.
 - New `PermittivityMonitor` and `PermittivityData` to store the complex relative permittivity as used in the simulation.
+- The maximum credit cost for a simulation can now be queried using `web.estimate_cost`. It is also displayed by default during `web.upload`.
 
 ### Changed
 - Faster plotting for matplotlib and plotly.
 - `SimulationData` normalization keeps track of source index and can be normalized when loading directly from .hdf5 file.
 - Monitor data with symmetries now store the minimum required data to file and expands the symmetries on the fly.
+- Significant speedup in plotting complicated simulations without patch transparency.
+- When a list of `dl` is provided as a `grid_size` along a given direction, the grid is placed such that the total size `np.sum(dl)` is centered at the simulation center.
+  Previously, a grid boundary was always placed at the simulation center.
 
 ## [1.2.1] - 2022-3-30
 
@@ -226,7 +236,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Job and Batch classes for better simulation handling (eventually to fully replace webapi functions).
 - A large number of small improvements and bug fixes.
 
-[Unreleased]: https://github.com/flexcompute/tidy3d/compare/v1.2.1...develop
+[Unreleased]: https://github.com/flexcompute/tidy3d/compare/v1.2.2...develop
+[1.2.2]: https://github.com/flexcompute/tidy3d/compare/v1.2.1...v1.2.2
 [1.2.1]: https://github.com/flexcompute/tidy3d/compare/v1.2.0...v1.2.1
 [1.2.0]: https://github.com/flexcompute/tidy3d/compare/v1.1.1...v1.2.0
 [1.1.1]: https://github.com/flexcompute/tidy3d/compare/v1.1.0...v1.1.1
