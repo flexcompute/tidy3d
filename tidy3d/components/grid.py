@@ -1,110 +1,230 @@
-"""Defines the FDTD grid."""
-from typing import Tuple, List, Union
+"""Defines the FDTD grid."""  # pylint:disable = too-many-lines
 
-import numpy as np  # pylint:disable=unused-import
+from abc import ABC, abstractmethod
+from typing import Tuple, List
+
+import numpy as np
+from scipy.optimize import root_scalar
 import pydantic as pd
 
 from .base import Tidy3dBaseModel, TYPE_TAG_STR
-from .types import Array, Axis
+from .types import Array, Axis, Symmetry
 from .geometry import Box
-from .nonuniform_mesh import make_mesh_multiple_intervals
-from ..log import SetupError
-from ..constants import C_0
+
+# from .medium import DispersiveMedium
+from .source import SourceType
+from .structure import Structure
+from ..log import SetupError, ValidationError
+from ..constants import C_0, MICROMETER, fp_eps
 
 # data type of one dimensional coordinate array.
 Coords1D = Array[float]
 
 
-class GridSpec(Tidy3dBaseModel):
-    """Specification for non-uniform grid along a given dimension.
+class MeshSpec1D(Tidy3dBaseModel, ABC):
 
-    Example
-    -------
-    >>> grid_spec = GridSpec(min_steps_per_wvl=16, max_scale=1.1)
-    """
+    """Abstract base class, defines 1D mesh generation specifications."""
 
-    min_steps_per_wvl: float = pd.Field(
-        10.0,
-        title="Minimum Steps Per Wavelength",
-        description="A nonuniform grid is generated with at least the minimum number of mesh steps "
-        "per wavelength in the materia in every structure.",
-    )
+    def _make_coords(  # pylint:disable = too-many-arguments
+        self,
+        center: float,
+        size: float,
+        axis: Axis,
+        structures: List[Structure],
+        symmetry: Symmetry,
+        sources: List[SourceType],
+        num_pml_layers: Tuple[int, int],
+    ) -> Coords1D:
+        """Generate 1D coords to be used as grid boundaries, based on simulation parameters.
+        Symmetry, and PML layers will be treated here.
 
-    max_scale: float = pd.Field(
-        1.4,
-        title="Maximum Grid Size Scaling",
-        description="Sets the maximum ratio between any two consecutive grid steps.",
-        ge = 1.2,
-        lt = 2.0,
-    )
+        Parameters
+        ----------
+        center : float
+            Center of simulation domain along a given axis.
+        size : float
+            Size of simulation domain along a given axis.
+        axis : Axis
+            Axis of this direction.
+        structures : List[Structure]
+            List of structures present in simulation.
+        symmetry : Symmetry
+            Reflection symmetry across a plane bisecting the simulation domain normal
+            to a given axis.
+        sources : List[SourceType]
+            List of sources.
+        num_pml_layers : Tuple[int, int]
+            number of layers in the absorber + and - direction along one dimension.
 
+        Returns
+        -------
+        Coords1D:
+            1D coords to be used as grid boundaries.
+        """
 
-# Allowed values for ``Simulation.grid_size``
-GridSize = Union[pd.PositiveFloat, List[pd.PositiveFloat], GridSpec]
+        # Determine if one should apply periodic boundary condition.
+        # This should only affect auto nonuniform mesh generation for now.
+        is_periodic = False
+        if num_pml_layers[0] == 0 and num_pml_layers[1] == 0:
+            is_periodic = True
 
+        # generate boundaries
+        bound_coords = self._make_coords_initial(
+            center, size, axis, structures, sources, is_periodic
+        )
 
-class Bounds1D(Coords1D):
-    """1D coords to be used as grid boundaries, with methods to generate automatically from
-    simulation parameters."""
-
-    # pylint:disable=too-many-arguments
-    @classmethod
-    def _make_bounds(cls, axis, structures, grid_size, symmetry, wvl):
-        """Make uniform or nonuniform boundaries depending on grid_size input.
-        ``structures`` has the simulation geometry and background medium as first element."""
-
-        center, size = structures[0].geometry.center, structures[0].geometry.size
-
-        if isinstance(grid_size, float):
-            bound_coords = cls._from_uniform_dl(grid_size, center[axis], size[axis])
-        elif isinstance(grid_size, list):
-            bound_coords = cls._from_nonuinform_dl(grid_size, center[axis], size[axis])
-        elif isinstance(grid_size, GridSpec):
-            # Take only the main simulation quadrant in case of symmetry
-            center_sym, size_sym = list(center), list(size)
-            for dim, sym_dim in enumerate(symmetry):
-                if sym_dim != 0:
-                    center_sym[dim] += size[dim] / 4
-                    size_sym[dim] /= 2
-            structures[0].geometry = Box(center=center_sym, size=size_sym)
-            bound_coords = cls._from_min_steps(axis, structures, grid_size, wvl)
-
-        # Enforce a symmetric grid by reflecting the boundaries around center
-        if symmetry[axis] != 0:
+        # incooperate symmetries
+        if symmetry != 0:
             # Offset to center if symmetry present
-            center_ind = np.argmin(np.abs(center[axis] - bound_coords))
-            bound_coords += center[axis] - bound_coords[center_ind]
-            bound_coords = bound_coords[bound_coords >= center[axis]]
-            bound_coords = np.append(2 * center[axis] - bound_coords[:0:-1], bound_coords)
+            center_ind = np.argmin(np.abs(center - bound_coords))
+            bound_coords += center - bound_coords[center_ind]
+            bound_coords = bound_coords[bound_coords >= center]
+            bound_coords = np.append(2 * center - bound_coords[:0:-1], bound_coords)
 
+        # Add PML layers in using dl on edges
+        bound_coords = self._add_pml_to_bounds(num_pml_layers, bound_coords)
         return bound_coords
 
-    @classmethod
-    def _from_uniform_dl(cls, dl, center, size):
-        """Creates coordinate boundaries with uniform mesh (dl is float).
-        Center if symmetry present."""
+    @abstractmethod
+    def _make_coords_initial(
+        self,
+        center: float,
+        size: float,
+        *args,
+    ) -> Coords1D:
+        """Generate 1D coords to be used as grid boundaries, based on simulation parameters.
+        Symmetry, PML etc. are not considered in this method.
 
-        num_cells = round(size / dl)
+        For auto nonuniform generation, it will take some more arguments.
+
+        Parameters
+        ----------
+        center : float
+            Center of simulation domain along a given axis.
+        size : float
+            Sie of simulation domain along a given axis.
+        *args
+            Other arguments
+
+        Returns
+        -------
+        Coords1D:
+            1D coords to be used as grid boundaries.
+        """
+
+    @staticmethod
+    def _add_pml_to_bounds(num_layers: Tuple[int, int], bounds: Coords1D):
+        """Append absorber layers to the beginning and end of the simulation bounds
+        along one dimension.
+
+        Parameters
+        ----------
+        num_layers : Tuple[int, int]
+            number of layers in the absorber + and - direction along one dimension.
+        bound_coords : np.ndarray
+            coordinates specifying boundaries between cells along one dimension.
+
+        Returns
+        -------
+        np.ndarray
+            New bound coordinates along dimension taking abosrber into account.
+        """
+        if bounds.size < 2:
+            return bounds
+
+        first_step = bounds[1] - bounds[0]
+        last_step = bounds[-1] - bounds[-2]
+        add_left = bounds[0] - first_step * np.arange(num_layers[0], 0, -1)
+        add_right = bounds[-1] + last_step * np.arange(1, num_layers[1] + 1)
+        new_bounds = np.concatenate((add_left, bounds, add_right))
+
+        return new_bounds
+
+
+class UniformMeshSpec(MeshSpec1D):
+
+    """Uniform 1D mesh generation"""
+
+    dl: pd.PositiveFloat = pd.Field(
+        ...,
+        title="Grid Size",
+        description="Grid size for uniform grid generation.",
+        units=MICROMETER,
+    )
+
+    def _make_coords_initial(
+        self,
+        center: float,
+        size: float,
+        *args,
+    ) -> Coords1D:
+        """Uniform 1D coords to be used as grid boundaries.
+
+        Parameters
+        ----------
+        center : float
+            Center of simulation domain along a given axis.
+        size : float
+            Size of simulation domain along a given axis.
+        *args:
+            Other arguments all go here.
+
+        Returns
+        -------
+        Coords1D:
+            1D coords to be used as grid boundaries.
+        """
+
+        num_cells = round(size / self.dl)
 
         # Make sure there's at least one cell
         num_cells = max(num_cells, 1)
 
         # Adjust step size to fit simulation size exactly
-        dl_snapped = size / num_cells if size > 0 else dl
+        dl_snapped = size / num_cells if size > 0 else self.dl
 
         # Make bounds
         bound_coords = center - size / 2 + np.arange(num_cells + 1) * dl_snapped
 
         return bound_coords
 
-    @classmethod
-    def _from_nonuinform_dl(cls, dl, center, size):
-        """Creates coordinate boundaries with non-uniform mesh (dl is arraylike).
-        These are always centered on the supplied center."""
+
+class CustomMeshSpec(MeshSpec1D):
+
+    """Customized 1D coords."""
+
+    dl: List[pd.PositiveFloat] = pd.Field(
+        ...,
+        title="Customized grid sizes.",
+        description="An array of customized grid sizes.",
+    )
+
+    def _make_coords_initial(
+        self,
+        center: float,
+        size: float,
+        *args,
+    ) -> Coords1D:
+        """Customized 1D coords to be used as grid boundaries.
+
+        Parameters
+        ----------
+        center : float
+            Center of simulation domain along a given axis.
+        size : float
+            Size of simulation domain along a given axis.
+        *args
+            Other arguments all go here.
+
+        Returns
+        -------
+        Coords1D:
+            1D coords to be used as grid boundaries.
+        """
 
         # get bounding coordinates
-        dl = np.array(dl)
-        bound_coords = np.array([np.sum(dl[:i]) for i in range(len(dl) + 1)])
+        dl = np.array(self.dl)
+        bound_coords = np.append(0.0, np.cumsum(dl))
 
         # place the middle of the bounds at the center of the simulation along dimension
         bound_coords += center - bound_coords[-1] / 2
@@ -125,42 +245,110 @@ class Bounds1D(Coords1D):
 
         return bound_coords
 
-    # pylint:disable=too-many-arguments,unused-argument
-    @classmethod
-    def _from_min_steps(cls, axis, structures, grid_spec, wvl):
-        """Creates coordinate boundaries with non-uniform mesh based on required minimum steps
-        per wavelength."""
 
-        min_steps_per_wvl = grid_spec.min_steps_per_wvl
-        max_scale = grid_spec.max_scale
-        interval_coords, max_dl_list = cls.parse_structures(
-            axis, structures, wvl, min_steps_per_wvl
+class AutoMeshSpec(MeshSpec1D):
+    """Specification for non-uniform grid along a given dimension.
+
+    Example
+    -------
+    >>> mesh_1d = AutoMeshSpec(min_steps_per_wvl=16, max_scale=1.4, wavelength = 1)
+    """
+
+    min_steps_per_wvl: pd.PositiveFloat = pd.Field(
+        15,
+        title="Minimal number of steps per wavelength",
+        description="Minimal number of steps per wavelength in each medium.",
+    )
+
+    max_scale: float = pd.Field(
+        1.4,
+        title="Maximum Grid Size Scaling",
+        description="Sets the maximum ratio between any two consecutive grid steps.",
+        ge=1.2,
+        lt=2.0,
+    )
+
+    wavelength: float = pd.Field(
+        None,
+        title="Wavelength for setting up nonuniform mesh",
+        description="Wavelength for setting up nonuniform mesh; It can be `None` "
+        "if there is at least one source object in the simulation, and the frequency will "
+        "be based on the source central frequency. ",
+    )
+
+    def _make_coords_initial(  # pylint:disable = arguments-differ, too-many-arguments
+        self,
+        center: float,
+        size: float,
+        axis: Axis,
+        structures: List[Structure],
+        sources: List[SourceType],
+        is_periodic: bool,
+    ) -> Coords1D:
+        """Customized 1D coords to be used as grid boundaries.
+
+        Parameters
+        ----------
+        center : float
+            Center of simulation domain along a given axis.
+        size : float
+            Size of simulation domain along a given axis.
+        axis : Axis
+            Axis of this direction.
+        structures : List[Structure]
+            List of structures present in simulation.
+        sources : List[SourceType]
+            List of sources.
+        is_periodic : bool
+            Apply periodic boundary condition or not.
+
+        Returns
+        -------
+        Coords1D:
+            1D coords to be used as grid boundaries.
+        """
+
+        # First, set up wavelength for mesh
+        wavelength = self.wavelength
+        # if None, use central frequency of the source
+        if wavelength is None:
+            source_ranges = [source.source_time.frequency_range() for source in sources]
+            f_center = np.array([np.sum(s_range) / 2 for s_range in source_ranges])
+            # lack of wavelength input
+            if len(f_center) == 0:
+                raise SetupError(
+                    "Automatic mesh generation requires the input of " "the wavelength, or sources."
+                )
+
+            # multiple sources of different central frequencies
+            if len(f_center) > 0 and not np.all(np.isclose(f_center, f_center[0])):
+                raise SetupError(
+                    "Sources of different central frequencies are supplied. "
+                    "Please supply the wavelength value for setting up mesh."
+                )
+            wavelength = C_0 / f_center[0]
+
+        # parse structures
+        interval_coords, max_dl_list = self._parse_structures(
+            axis, structures, wavelength, self.min_steps_per_wvl
         )
 
-        # [TODO] is it periodic along this axis?
-        is_periodic = False
-
+        # generate mesh steps
         interval_coords = np.array(interval_coords).flatten()
         max_dl_list = np.array(max_dl_list).flatten()
         len_interval_list = interval_coords[1:] - interval_coords[:-1]
-        dl_list = make_mesh_multiple_intervals(
-            max_dl_list, len_interval_list, max_scale, is_periodic
+        dl_list = self._make_mesh_multiple_intervals(
+            max_dl_list, len_interval_list, self.max_scale, is_periodic
         )
 
-        # for debug purpose
-        # for ind, x in enumerate(dl_list):
-        #     print(ind,x)
-        #     print(
-        #         f"Actual/supplied min step size ratio in {ind}-th interval "
-        #         f"is {np.min(x)/min_steps[ind]}"
-        #     )
-
-        bound_coords = interval_coords[0] + np.cumsum(np.concatenate(dl_list))
+        # generate boundaries
+        bound_coords = np.append(0.0, np.cumsum(np.concatenate(dl_list)))
+        bound_coords += interval_coords[0]
         return np.array(bound_coords)
 
     # pylint:disable=too-many-statements,too-many-locals
-    @classmethod
-    def parse_structures(cls, axis, structures, wvl, min_steps_per_wvl):
+    @staticmethod
+    def _parse_structures(axis, structures, wvl, min_steps_per_wvl):
         """Calculate the positions of all bounding box interfaces along all three axes.
         In most cases the complexity should be O(len(structures)**2), although the worst-case
         complexity may approach O(len(structures)**3). However this should only happen in some
@@ -296,6 +484,642 @@ class Bounds1D(Coords1D):
             max_steps.append(float(max_step))
 
         return interval_coords, max_steps
+
+    @staticmethod
+    def _make_mesh_multiple_intervals(  # pylint:disable=too-many-locals
+        max_dl_list: np.ndarray, len_interval_list: np.ndarray, max_scale: float, is_periodic: bool
+    ) -> List[np.ndarray]:
+        """Create mesh steps in multiple connecting intervals of length specified by
+        ``len_interval_list``. The maximal allowed step size in each interval is given by
+        ``max_dl_list``. The maximum ratio between neighboring steps is bounded by ``max_scale``.
+
+        Parameters
+        ----------
+        max_dl_list : np.ndarray
+            Maximal allowed step size of each interval.
+        len_interval_list : np.ndarray
+            A list of interval lengths
+        max_scale : float
+            Maximal ratio between consecutive steps.
+        is_periodic : bool
+            Apply periodic boundary condition or not.
+
+        Returns
+        -------
+        List[np.ndarray]
+            A list of of step sizes in each interval.
+        """
+
+        num_intervals = len(len_interval_list)
+        if len(max_dl_list) != num_intervals:
+            raise SetupError(
+                "Maximal step size list should have the same length as len_interval_list."
+            )
+
+        # initialize step size on the left and right boundary of each interval
+        # by assuming possible non-integar step number
+        left_dl_list, right_dl_list = AutoMeshSpec._mesh_multiple_interval_analy_refinement(
+            max_dl_list, len_interval_list, max_scale, is_periodic
+        )
+
+        # initialize mesh steps
+        dl_list = []
+        for interval_ind in range(num_intervals):
+            dl_list.append(
+                AutoMeshSpec._make_mesh_in_interval(
+                    left_dl_list[interval_ind],
+                    right_dl_list[interval_ind],
+                    max_dl_list[interval_ind],
+                    max_scale,
+                    len_interval_list[interval_ind],
+                )
+            )
+
+        # refinement
+        refine_edge = 1
+
+        while refine_edge > 0:
+            refine_edge = 0
+            for interval_ind in range(num_intervals):
+                # the step size on the left and right boundary
+                left_dl = dl_list[interval_ind][0]
+                right_dl = dl_list[interval_ind][-1]
+                # the step size to the left and right boundary (neighbor interval)
+                left_neighbor_dl = dl_list[interval_ind - 1][-1]
+                right_neighbor_dl = dl_list[(interval_ind + 1) % num_intervals][0]
+
+                # for non-periodic case
+                if not is_periodic:
+                    if interval_ind == 0:
+                        left_neighbor_dl = left_dl
+                    if interval_ind == num_intervals - 1:
+                        right_neighbor_dl = right_dl
+
+                # compare to the neighbor
+                refine_local = 0
+                if left_dl / left_neighbor_dl > max_scale:
+                    left_dl = left_neighbor_dl * (max_scale - fp_eps)
+                    refine_edge += 1
+                    refine_local += 1
+
+                if right_dl / right_neighbor_dl > max_scale:
+                    right_dl = right_neighbor_dl * (max_scale - fp_eps)
+                    refine_edge += 1
+                    refine_local += 1
+
+                # update mesh steps in this interval if necessary
+                if refine_local > 0:
+                    dl_list[interval_ind] = AutoMeshSpec._make_mesh_in_interval(
+                        left_dl,
+                        right_dl,
+                        max_dl_list[interval_ind],
+                        max_scale,
+                        len_interval_list[interval_ind],
+                    )
+
+        return dl_list
+
+    @staticmethod
+    def _mesh_multiple_interval_analy_refinement(
+        max_dl_list: np.ndarray, len_interval_list: np.ndarray, max_scale: float, is_periodic: bool
+    ) -> Tuple[np.ndarray, np.ndarray]:
+        """Analytical refinement for multiple intervals. "analytical" meaning we allow
+        non-integar step sizes, so that we don't consider snapping here.
+
+        Parameters
+        ----------
+        max_dl_list : np.ndarray
+            Maximal allowed step size of each interval.
+        len_interval_list : np.ndarray
+            A list of interval lengths
+        max_scale : float
+            Maximal ratio between consecutive steps.
+        is_periodic : bool
+            Apply periodic boundary condition or not.
+
+        Returns
+        -------
+        Tuple[np.ndarray, np.ndarray]
+            left and right step sizes of each interval.
+        """
+
+        if len(max_dl_list) != len(len_interval_list):
+            raise SetupError(
+                "Maximal step size list should have the same length as len_interval_list."
+            )
+
+        # left and right step sizes based on maximal step size list
+        right_dl = np.roll(max_dl_list, shift=-1)
+        left_dl = np.roll(max_dl_list, shift=1)
+        # consideration for the first and last interval
+        if not is_periodic:
+            right_dl[-1] = max_dl_list[-1]
+            left_dl[0] = max_dl_list[0]
+
+        # Right and left step size that will be applied for each interval
+        right_dl = np.minimum(max_dl_list, right_dl)
+        left_dl = np.minimum(max_dl_list, left_dl)
+
+        # Update left and right neighbor step size considering the impact of neighbor intervals
+        refine_analy = 1
+
+        while refine_analy > 0:
+            refine_analy = 0
+            # from left to right, grow to fill up len_interval, minimal 1 step
+            tmp_step = 1 - len_interval_list / left_dl * (1 - max_scale)
+            num_step = np.maximum(np.log(tmp_step) / np.log(max_scale), 1)
+            left_to_right_dl = left_dl * max_scale ** (num_step - 1)
+            update_ind = left_to_right_dl < right_dl
+            right_dl[update_ind] = left_to_right_dl[update_ind]
+
+            if not is_periodic:
+                update_ind[-1] = False
+
+            if np.any(update_ind):
+                refine_analy = 1
+                left_dl[np.roll(update_ind, shift=1)] = left_to_right_dl[update_ind]
+
+            # from right to left, grow to fill up len_interval, minimal 1 step
+            tmp_step = 1 - len_interval_list / right_dl * (1 - max_scale)
+            num_step = np.maximum(np.log(tmp_step) / np.log(max_scale), 1)
+            right_to_left_dl = right_dl * max_scale ** (num_step - 1)
+            update_ind = right_to_left_dl < left_dl
+            left_dl[update_ind] = right_to_left_dl[update_ind]
+
+            if not is_periodic:
+                update_ind[0] = False
+
+            if np.any(update_ind):
+                refine_analy = 1
+                right_dl[np.roll(update_ind, shift=-1)] = right_to_left_dl[update_ind]
+
+        if not is_periodic:
+            left_dl[0] = max_dl_list[0]
+            right_dl[-1] = max_dl_list[-1]
+
+        return left_dl, right_dl
+
+    @staticmethod
+    def _make_mesh_in_interval(  # pylint:disable=too-many-locals, too-many-return-statements
+        left_neighbor_dl: float,
+        right_neighbor_dl: float,
+        max_dl: float,
+        max_scale: float,
+        len_interval: float,
+    ) -> np.ndarray:
+        """Create a set of mesh steps in an interval of length ``len_interval``,
+        with first step no larger than ``max_scale * left_neighbor_dl`` and last step no larger than
+        ``max_scale * right_neighbor_dl``, with maximum ratio ``max_scale`` between
+        neighboring steps. All steps should be no larger than ``max_dl``.
+
+        Parameters
+        ----------
+        left_neighbor_dl : float
+            Step size to left boundary of the interval.
+        right_neighbor_dl : float
+            Step size to right boundary of the interval.
+        max_dl : float
+            Maximal step size within the interval.
+        max_scale : float
+            Maximal ratio between consecutive steps.
+        len_interval: float
+            Length of the interval.
+
+        Returns
+        -------
+        np.ndarray
+            A list of step sizes in the interval.
+        """
+
+        # some validations
+        if left_neighbor_dl <= 0 or right_neighbor_dl <= 0 or max_dl <= 0:
+            raise ValidationError("Step size needs to be positive.")
+        if len_interval <= 0:
+            raise ValidationError("The length of the interval must be larger than 0.")
+        if max_scale < 1:
+            raise ValidationError("max_scale cannot be smaller than 1.")
+
+        # first and last step size
+        left_dl = min(max_dl, left_neighbor_dl)
+        right_dl = min(max_dl, right_neighbor_dl)
+
+        # classifications:
+        mesh_type = AutoMeshSpec._mesh_type_in_interval(
+            left_dl, right_dl, max_dl, max_scale, len_interval
+        )
+
+        # single pixel
+        if mesh_type == -1:
+            return np.array([len_interval])
+
+        # uniform and multiple pixels
+        if mesh_type == 0:
+            even_dl = min(left_dl, right_dl)
+            num_cells = int(np.floor(len_interval / even_dl))
+
+            # Length of the interval assuming this num_cells.
+            # if it doesn't cover the interval, increase num_cells,
+            # which is equivalent of decreasing mesh step size.
+            size_snapped = num_cells * even_dl
+            if size_snapped < len_interval:
+                num_cells += 1
+            return np.array([len_interval / num_cells] * num_cells)
+
+        # mesh_type = 1
+        # We first set up mesh steps from small to large, and then flip
+        # their order if right_dl < left_dl
+        small_dl = min(left_dl, right_dl)
+        large_dl = max(left_dl, right_dl)
+        if mesh_type == 1:
+            # Can small_dl scale to large_dl under max_scale within interval?
+            # Compute the number of steps it takes to scale from small_dl to large_dl
+            # Check the remaining length in the interval
+            num_step = 1 + int(np.floor(np.log(large_dl / small_dl) / np.log(max_scale)))
+            len_scale = small_dl * (1 - max_scale**num_step) / (1 - max_scale)
+            len_remaining = len_interval - len_scale
+
+            # 1) interval length too small, cannot increase to large_dl, or barely can,
+            #    but the remaing part is less than large_dl
+            if len_remaining < large_dl:
+                dl_list = AutoMeshSpec._mesh_grow_in_interval(small_dl, max_scale, len_interval)
+                return dl_list if left_dl <= right_dl else np.flip(dl_list)
+
+            # 2) interval length sufficient, so it will plateau towards large_dl
+            dl_list = AutoMeshSpec._mesh_grow_plateau_in_interval(
+                small_dl, large_dl, max_scale, len_interval
+            )
+            return dl_list if left_dl <= right_dl else np.flip(dl_list)
+
+        # mesh_type = 2
+        if mesh_type == 2:
+            # Will it be able to plateau?
+            # Compute the number of steps it take for both sides to grow to max_it;
+            # then compare the length to len_interval
+            num_left_step = 1 + int(np.floor(np.log(max_dl / left_dl) / np.log(max_scale)))
+            num_right_step = 1 + int(np.floor(np.log(max_dl / right_dl) / np.log(max_scale)))
+            len_left = left_dl * (1 - max_scale**num_left_step) / (1 - max_scale)
+            len_right = right_dl * (1 - max_scale**num_right_step) / (1 - max_scale)
+
+            len_remaining = len_interval - len_left - len_right
+
+            # able to plateau
+            if len_remaining >= max_dl:
+                return AutoMeshSpec._mesh_grow_plateau_decrease_in_interval(
+                    left_dl, right_dl, max_dl, max_scale, len_interval
+                )
+
+            # unable to plateau
+            return AutoMeshSpec._mesh_grow_decrease_in_interval(
+                left_dl, right_dl, max_scale, len_interval
+            )
+
+        # unlikely to reach here. For future implementation purpose.
+        raise ValidationError("Unimplemented mesh type.")
+
+    @staticmethod
+    def _mesh_grow_plateau_decrease_in_interval(
+        left_dl: float,
+        right_dl: float,
+        max_dl: float,
+        max_scale: float,
+        len_interval: float,
+    ) -> np.ndarray:
+        """In an interval, mesh grows, plateau, and decrease, resembling Lambda letter but
+        with plateau in the connection part..
+
+        Parameters
+        ----------
+        left_dl : float
+            Step size at the left boundary.
+        right_dl : float
+            Step size at the right boundary.
+        max_dl : float
+            Maximal step size within the interval.
+        max_scale : float
+            Maximal ratio between consecutive steps.
+        len_interval : float
+            Length of the interval.
+        """
+
+        # Maximum number of steps for undershooting max_dl
+        num_left_step = 1 + int(np.floor(np.log(max_dl / left_dl) / np.log(max_scale)))
+        num_right_step = 1 + int(np.floor(np.log(max_dl / right_dl) / np.log(max_scale)))
+
+        # step list, in ascending order
+        dl_list_left = np.array([left_dl * max_scale**i for i in range(num_left_step)])
+        dl_list_right = np.array([right_dl * max_scale**i for i in range(num_right_step)])
+
+        # length
+        len_left = left_dl * (1 - max_scale**num_left_step) / (1 - max_scale)
+        len_right = right_dl * (1 - max_scale**num_right_step) / (1 - max_scale)
+
+        # remaining part for constant large_dl
+        num_const_step = int(np.floor((len_interval - len_left - len_right) / max_dl))
+        dl_list_const = np.array([max_dl] * num_const_step)
+        len_const = num_const_step * max_dl
+
+        # mismatch
+        len_mismatch = len_interval - len_left - len_right - len_const
+
+        # (1) happens to be the right length
+        if np.isclose(len_mismatch, 0):
+            return np.concatenate((dl_list_left, dl_list_const, np.flip(dl_list_right)))
+
+        # (2) sufficient remaining part, can be inserted to left or right
+        if len_mismatch >= left_dl:
+            index_mis = np.searchsorted(dl_list_left, len_mismatch)
+            dl_list_left = np.insert(dl_list_left, index_mis, len_mismatch)
+            return np.concatenate((dl_list_left, dl_list_const, np.flip(dl_list_right)))
+
+        if len_mismatch >= right_dl:
+            index_mis = np.searchsorted(dl_list_right, len_mismatch)
+            dl_list_right = np.insert(dl_list_right, index_mis, len_mismatch)
+            return np.concatenate((dl_list_left, dl_list_const, np.flip(dl_list_right)))
+
+        # nothing more we can do, let's just add smallest step size,
+        # and scale each pixel
+        if left_dl <= right_dl:
+            dl_list_left = np.append(left_dl, dl_list_left)
+        else:
+            dl_list_right = np.append(right_dl, dl_list_right)
+        dl_list = np.concatenate((dl_list_left, dl_list_const, np.flip(dl_list_right)))
+        dl_list *= len_interval / np.sum(dl_list)
+        return dl_list
+
+    @staticmethod
+    def _mesh_grow_decrease_in_interval(
+        left_dl: float,
+        right_dl: float,
+        max_scale: float,
+        len_interval: float,
+    ) -> np.ndarray:
+        """In an interval, mesh grows, and decrease, resembling Lambda letter.
+
+        Parameters
+        ----------
+        left_dl : float
+            Step size at the left boundary.
+        right_dl : float
+            Step size at the right boundary.
+        max_scale : float
+            Maximal ratio between consecutive steps.
+        len_interval : float
+            Length of the interval.
+        """
+
+        # interval too small, it shouldn't happen if bounding box filter is properly handled
+        # just use uniform meshing with min(left_dl, right_dl)
+        if len_interval < left_dl + right_dl:
+            even_dl = min(left_dl, right_dl)
+            num_cells = int(np.floor(len_interval / even_dl))
+            size_snapped = num_cells * even_dl
+            if size_snapped < len_interval:
+                num_cells += 1
+            return np.array([len_interval / num_cells] * num_cells)
+
+        # The maximal number of steps for both sides to undershoot the interval,
+        # assuming the last step size from both sides grow to the same size before
+        # taking ``floor`` to take integar number of steps.
+
+        # The advantage is that even after taking integar number of steps cutoff,
+        # the last step size from the two side will not viloate max_scale.
+
+        tmp_num_l = ((left_dl + right_dl) - len_interval * (1 - max_scale)) / 2 / left_dl
+        tmp_num_r = ((left_dl + right_dl) - len_interval * (1 - max_scale)) / 2 / right_dl
+        num_left_step = max(int(np.floor(np.log(tmp_num_l) / np.log(max_scale))), 0)
+        num_right_step = max(int(np.floor(np.log(tmp_num_r) / np.log(max_scale))), 0)
+
+        # step list, in ascending order
+        dl_list_left = np.array([left_dl * max_scale**i for i in range(num_left_step)])
+        dl_list_right = np.array([right_dl * max_scale**i for i in range(num_right_step)])
+
+        # length
+        len_left = left_dl * (1 - max_scale**num_left_step) / (1 - max_scale)
+        len_right = right_dl * (1 - max_scale**num_right_step) / (1 - max_scale)
+
+        # mismatch
+        len_mismatch = len_interval - len_left - len_right
+
+        # (1) happens to be the right length
+        if np.isclose(len_mismatch, 0):
+            return np.append(dl_list_left, np.flip(dl_list_right))
+
+        # if len_mismatch is larger than the last step size, insert the last step
+        while len(dl_list_left) > 0 and len_mismatch >= dl_list_left[-1]:
+            dl_list_left = np.append(dl_list_left, dl_list_left[-1])
+            len_mismatch -= dl_list_left[-1]
+
+        while len(dl_list_right) > 0 and len_mismatch >= dl_list_right[-1]:
+            dl_list_right = np.append(dl_list_right, dl_list_right[-1])
+            len_mismatch -= dl_list_right[-1]
+
+        # (2) sufficient remaining part, can be inserted to dl_left or right
+        if len_mismatch >= left_dl:
+            index_mis = np.searchsorted(dl_list_left, len_mismatch)
+            dl_list_left = np.insert(dl_list_left, index_mis, len_mismatch)
+            return np.append(dl_list_left, np.flip(dl_list_right))
+
+        if len_mismatch >= right_dl:
+            index_mis = np.searchsorted(dl_list_right, len_mismatch)
+            dl_list_right = np.insert(dl_list_right, index_mis, len_mismatch)
+            return np.append(dl_list_left, np.flip(dl_list_right))
+
+        # nothing more we can do, let's just add smallest step size,
+        # and scale each pixel
+        if left_dl <= right_dl:
+            dl_list_left = np.append(left_dl, dl_list_left)
+        else:
+            dl_list_right = np.append(right_dl, dl_list_right)
+        dl_list = np.append(dl_list_left, np.flip(dl_list_right))
+        dl_list *= len_interval / np.sum(dl_list)
+        return dl_list
+
+    @staticmethod
+    def _mesh_grow_plateau_in_interval(
+        small_dl: float,
+        large_dl: float,
+        max_scale: float,
+        len_interval: float,
+    ) -> np.ndarray:
+        """In an interval, mesh grows, then plateau.
+
+        Parameters
+        ----------
+        small_dl : float
+            The smaller one of step size at the left and right boundaries.
+        large_dl : float
+            The larger one of step size at the left and right boundaries.
+        max_scale : float
+            Maximal ratio between consecutive steps.
+        len_interval : float
+            Length of the interval.
+
+        Returns
+        -------
+        np.ndarray
+            A list of step sizes in the interval, in ascending order.
+        """
+        # steps for scaling
+        num_scale_step = 1 + int(np.floor(np.log(large_dl / small_dl) / np.log(max_scale)))
+        dl_list_scale = np.array([small_dl * max_scale**i for i in range(num_scale_step)])
+        len_scale = small_dl * (1 - max_scale**num_scale_step) / (1 - max_scale)
+
+        # remaining part for constant large_dl
+        num_const_step = int(np.floor((len_interval - len_scale) / large_dl))
+        dl_list_const = np.array([large_dl] * num_const_step)
+        len_const = large_dl * num_const_step
+
+        # mismatch
+        len_mismatch = len_interval - len_scale - len_const
+
+        # (1) happens to be the right length
+        if np.isclose(len_mismatch, 0):
+            return np.append(dl_list_scale, dl_list_const)
+
+        # (2) sufficient remaining part, can be inserted to dl_list_scale
+        if len_mismatch >= small_dl:
+            index_mis = np.searchsorted(dl_list_scale, len_mismatch)
+            dl_list_scale = np.insert(dl_list_scale, index_mis, len_mismatch)
+            return np.append(dl_list_scale, dl_list_const)
+
+        # nothing more we can do, let's just add smallest step size,
+        # and scale each pixel
+        dl_list_scale = np.append(small_dl, dl_list_scale)
+        dl_list = np.append(dl_list_scale, dl_list_const)
+        dl_list *= len_interval / np.sum(dl_list)
+        return dl_list
+
+    @staticmethod
+    def _mesh_grow_in_interval(
+        small_dl: float,
+        max_scale: float,
+        len_interval: float,
+    ) -> np.ndarray:
+        """Mesh simply grows in an interval.
+
+        Parameters
+        ----------
+        small_dl : float
+            The smaller one of step size at the left and right boundaries.
+        max_scale : float
+            Maximal ratio between consecutive steps.
+        len_interval : float
+            Length of the interval.
+
+        Returns
+        -------
+        np.ndarray
+            A list of step sizes in the interval, in ascending order.
+        """
+
+        # Maximal number of steps for undershooting the interval.
+        tmp_step = 1 - len_interval / small_dl * (1 - max_scale)
+        num_step = int(np.floor(np.log(tmp_step) / np.log(max_scale)))
+
+        # assuming num_step grids and scaling = max_scale
+        dl_list = np.array([small_dl * max_scale**i for i in range(num_step)])
+        size_snapped = small_dl * (1 - max_scale**num_step) / (1 - max_scale)
+
+        # mismatch
+        len_mismatch = len_interval - size_snapped
+
+        # (1) happens to be the right length
+        if np.isclose(len_mismatch, 0):
+            return dl_list
+
+        # (2) sufficient remaining part, can be inserted
+        if len_mismatch >= small_dl:
+            index_mis = np.searchsorted(dl_list, len_mismatch)
+            dl_list = np.insert(dl_list, index_mis, len_mismatch)
+            return dl_list
+
+        # (3) remaining part not sufficient to insert, but will not
+        # violate max_scale by repearting 1st step, and the last step to include
+        # the mismatch part
+        if num_step >= 2 and len_mismatch >= small_dl - (1 - 1.0 / max_scale**2) * dl_list[-1]:
+            dl_list = np.append(small_dl, dl_list)
+            dl_list[-1] += len_mismatch - small_dl
+            return dl_list
+
+        # (4) let's see if we can squeeze something out of smaller scaling.
+        # For this case, duplicate the 1st step size.
+        len_mismatch_even = len_interval - num_step * small_dl
+        if np.isclose(len_mismatch_even, small_dl):
+            return np.array([small_dl] * (num_step + 1))
+
+        if len_mismatch_even > small_dl:
+
+            def fun_scale(new_scale):
+                if np.isclose(new_scale, 1.0):
+                    return len_interval - small_dl * (1 + num_step)
+                return (
+                    len_interval
+                    - small_dl * (1 - new_scale**num_step) / (1 - new_scale)
+                    - small_dl
+                )
+
+            # solve for new scaling factor
+            sol_scale = root_scalar(fun_scale, bracket=[1, max_scale])
+            # if not converged, let's use the last strategy
+            if sol_scale.converged:
+                new_scale = sol_scale.root
+                dl_list = np.array([small_dl * new_scale**i for i in range(num_step)])
+                dl_list = np.append(small_dl, dl_list)
+                return dl_list
+
+        # nothing more we can do, let's just add smallest step size,
+        # and scale each pixel
+        dl_list = np.append(small_dl, dl_list)
+        dl_list *= len_interval / np.sum(dl_list)
+        return dl_list
+
+    @staticmethod
+    def _mesh_type_in_interval(
+        left_dl: float,
+        right_dl: float,
+        max_dl: float,
+        max_scale: float,
+        len_interval: float,
+    ) -> int:
+        """Mesh type check (in an interval).
+
+        Parameters
+        ----------
+        left_dl : float
+            Step size at left boundary of the interval.
+        right_dl : float
+            Step size at right boundary of the interval.
+        max_dl : float
+            Maximal step size within the interval.
+        max_scale : float
+            Maximal ratio between consecutive steps.
+        len_interval: float
+            Length of the interval.
+
+        Returns
+        -------
+        mesh_type : int
+            -1 for single pixel mesh
+            0 for uniform mesh
+            1 for small to large to optionally plateau mesh
+            2 for small to large to optionally plateau to small mesh
+        """
+
+        # uniform mesh if interval length is no larger than small_dl
+        if len_interval <= min(left_dl, right_dl, max_dl):
+            return -1
+        # uniform mesh if max_scale is too small
+        if np.isclose(max_scale, 1):
+            return 0
+        # uniform mesh if max_dl is the smallest
+        if max_dl <= left_dl and max_dl <= right_dl:
+            return 0
+
+        # type 1
+        if max_dl <= left_dl or max_dl <= right_dl:
+            return 1
+
+        return 2
 
 
 class Coords(Tidy3dBaseModel):
@@ -697,3 +1521,68 @@ class Grid(Tidy3dBaseModel):
             padded_coords = np.concatenate([padded_coords, coords_pad])
 
         return padded_coords[ind_beg:ind_end]
+
+
+class MeshSpec(Tidy3dBaseModel):
+
+    """Mesh specifications"""
+
+    mesh_x: MeshSpec1D = pd.Field(
+        AutoMeshSpec(),
+        title="Mesh specification along x-axis",
+        description="Mesh specification along x-axis",
+    )
+
+    mesh_y: MeshSpec1D = pd.Field(
+        AutoMeshSpec(),
+        title="Mesh specification along y-axis",
+        description="Mesh specification along y-axis",
+    )
+
+    mesh_z: MeshSpec1D = pd.Field(
+        AutoMeshSpec(),
+        title="Mesh specification along z-axis",
+        description="Mesh specification along z-axis",
+    )
+
+    def _make_grid(  # pylint:disable = too-many-arguments
+        self,
+        structures: List[Structure],
+        symmetry: Tuple[Symmetry, Symmetry, Symmetry],
+        sources: List[SourceType],
+        num_pml_layers: List[Tuple[float, float]],
+    ) -> Grid:
+        """Make the entire simulation grid based on some simulation parameters.
+
+        Parameters
+        ----------
+        structures : List[Structure]
+            List of structures present in simulation.
+        symmetry : Tuple[Symmetry, Symmetry, Symmetry]
+            Reflection symmetry across a plane bisecting the simulation domain
+            normal to the three axis.
+        sources : List[SourceType]
+            List of sources.
+        num_pml_layers : List[Tuple[float, float]]
+            List containing the number of absorber layers in - and + boundaries.
+
+        Returns
+        -------
+        Grid:
+            Entire simulation grid
+        """
+
+        center, size = structures[0].geometry.center, structures[0].geometry.size
+
+        coords_x = self.mesh_x._make_coords(  # pylint:disable = protected-access
+            center[0], size[0], 0, structures, symmetry[0], sources, num_pml_layers[0]
+        )
+        coords_y = self.mesh_y._make_coords(  # pylint:disable = protected-access
+            center[1], size[1], 1, structures, symmetry[1], sources, num_pml_layers[1]
+        )
+        coords_z = self.mesh_z._make_coords(  # pylint:disable = protected-access
+            center[2], size[2], 2, structures, symmetry[2], sources, num_pml_layers[2]
+        )
+
+        coords = Coords(x=coords_x, y=coords_y, z=coords_z)
+        return Grid(boundaries=coords)
