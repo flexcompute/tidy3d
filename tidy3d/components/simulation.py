@@ -1391,7 +1391,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         structures = [Structure(geometry=self.geometry, medium=self.medium)]
         structures += self.structures
 
-        return self.mesh_spec._make_grid(  # pylint:disable = protected-access
+        return self.mesh_spec.make_grid(
             structures,
             self.symmetry,
             self.sources,
