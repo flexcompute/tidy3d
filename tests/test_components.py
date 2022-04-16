@@ -172,7 +172,6 @@ def test_monitor_medium_frequency_range(caplog, freq, log_level):
     )
     sim = Simulation(
         size=(1, 1, 1),
-        grid_size=(0.1, 0.1, 0.1),
         structures=[box],
         monitors=[mnt],
         sources=[src],
@@ -192,32 +191,29 @@ def test_monitor_simulation_frequency_range(caplog, fwidth, log_level):
         polarization="Ex",
     )
     mnt = FieldMonitor(size=(0, 0, 0), name="freq", freqs=[1.5])
-    sim = Simulation(
-        size=(1, 1, 1), grid_size=(0.1, 0.1, 0.1), monitors=[mnt], sources=[src], run_time=1e-12
-    )
+    sim = Simulation(size=(1, 1, 1), monitors=[mnt], sources=[src], run_time=1e-12)
     assert_log_level(caplog, log_level)
 
 
-@pytest.mark.parametrize("grid_size,log_level", [(0.001, None), (3, 30)])
-def test_sim_grid_size(caplog, grid_size, log_level):
-    # small fwidth should be inside range, large one should throw warning
+# @pytest.mark.parametrize("grid_size,log_level", [(0.001, None), (3, 30)])
+# def test_sim_grid_size(caplog, grid_size, log_level):
+#     # small fwidth should be inside range, large one should throw warning
+#     medium = Medium(permittivity=2, frequency_range=(2e14, 3e14))
+#     box = Structure(geometry=Box(size=(0.1, 0.1, 0.1)), medium=medium)
+#     src = VolumeSource(
+#         source_time=GaussianPulse(freq0=2.5e14, fwidth=1e12),
+#         size=(0, 0, 0),
+#         polarization="Ex",
+#     )
+#     _ = Simulation(
+#         size=(1, 1, 1),
+#         grid_size=(0.01, 0.01, grid_size),
+#         structures=[box],
+#         sources=[src],
+#         run_time=1e-12,
+#     )
 
-    medium = Medium(permittivity=2, frequency_range=(2e14, 3e14))
-    box = Structure(geometry=Box(size=(0.1, 0.1, 0.1)), medium=medium)
-    src = UniformCurrentSource(
-        source_time=GaussianPulse(freq0=2.5e14, fwidth=1e12),
-        size=(0, 0, 0),
-        polarization="Ex",
-    )
-    _ = Simulation(
-        size=(1, 1, 1),
-        grid_size=(0.01, 0.01, grid_size),
-        structures=[box],
-        sources=[src],
-        run_time=1e-12,
-    )
-
-    assert_log_level(caplog, log_level)
+#     assert_log_level(caplog, log_level)
 
 
 @pytest.mark.parametrize("box_size,log_level", [(0.001, None), (9.9, 30), (20, None)])
@@ -232,7 +228,6 @@ def test_sim_structure_gap(caplog, box_size, log_level):
     )
     sim = Simulation(
         size=(10, 10, 10),
-        grid_size=(0.1, 0.1, 0.1),
         structures=[box],
         sources=[src],
         pml_layers=[PML(num_layers=5), PML(num_layers=5), PML(num_layers=5)],
@@ -293,9 +288,7 @@ def test_sim_structure_extent(caplog, box_size, log_level):
         polarization="Ex",
     )
     box = Structure(geometry=Box(size=box_size), medium=Medium(permittivity=2))
-    sim = Simulation(
-        size=(1, 1, 1), grid_size=(0.1, 0.1, 0.1), structures=[box], sources=[src], run_time=1e-12
-    )
+    sim = Simulation(size=(1, 1, 1), structures=[box], sources=[src], run_time=1e-12)
 
     assert_log_level(caplog, log_level)
 

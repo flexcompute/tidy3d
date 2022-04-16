@@ -13,8 +13,8 @@ from mpl_toolkits.axes_grid1 import make_axes_locatable
 from .validators import assert_unique_names, assert_objects_in_sim_bounds
 from .validators import validate_mode_objects_symmetry
 from .geometry import Box
-from .types import Symmetry, Ax, Shapely, FreqBound, Axis
-from .grid import Coords1D, Grid, Coords, MeshSpec
+from .types import Symmetry, Ax, Shapely, FreqBound, Axis, GridSize
+from .grid import Coords1D, Grid, Coords, MeshSpec, UniformMeshSpec, CustomMeshSpec
 from .medium import Medium, MediumType, AbstractMedium, PECMedium
 from .structure import Structure
 from .source import SourceType, PlaneWave
@@ -26,7 +26,7 @@ from .viz import MEDIUM_CMAP, PlotParams, plot_params_symmetry
 from .viz import plot_params_structure, plot_params_pml
 
 from ..version import __version__
-from ..constants import C_0, SECOND, inf
+from ..constants import C_0, MICROMETER, SECOND, inf
 from ..log import log, Tidy3dKeyError, SetupError
 
 
@@ -51,13 +51,14 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
     >>> from tidy3d import Sphere, Cylinder, PolySlab
     >>> from tidy3d import CurrentSource, GaussianPulse
     >>> from tidy3d import FieldMonitor, FluxMonitor
+    >>> from tidy3d import MeshSpec, AutoMeshSpec
     >>> sim = Simulation(
     ...     size=(2.0, 2.0, 2.0),
-    ...     mesh_spec=td.MeshSpec(
-    ...         mesh_x = td.AutoMeshSpec(min_steps_per_wvl = 20),
-    ...         mesh_y = td.AutoMeshSpec(min_steps_per_wvl = 20),
-    ...         mesh_z = td.AutoMeshSpec(min_steps_per_wvl = 20)
-    ...     )
+    ...     mesh_spec=MeshSpec(
+    ...         mesh_x = AutoMeshSpec(min_steps_per_wvl = 20),
+    ...         mesh_y = AutoMeshSpec(min_steps_per_wvl = 20),
+    ...         mesh_z = AutoMeshSpec(min_steps_per_wvl = 20)
+    ...     ),
     ...     run_time=40e-11,
     ...     structures=[
     ...         Structure(
@@ -92,13 +93,6 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
     ... )
     """
 
-    mesh_spec: MeshSpec = pydantic.Field(
-        MeshSpec(),
-        title="Mesh Specifications",
-        description="Mesh Specifications for choosing and setting parameters "
-        "along each dimension in :class:``MeshSpec``.",
-    )
-
     run_time: pydantic.PositiveFloat = pydantic.Field(
         ...,
         title="Run Time",
@@ -106,6 +100,26 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         "Note: If simulation 'shutoff' is specified, "
         "simulation will terminate early when shutoff condition met. ",
         units=SECOND,
+    )
+
+    mesh_spec: MeshSpec = pydantic.Field(
+        MeshSpec(),
+        title="Mesh Specifications",
+        description="Mesh Specifications for choosing and setting parameters "
+        "along each dimension in :class:``MeshSpec``.",
+    )
+
+    grid_size: Tuple[GridSize, GridSize, GridSize] = pydantic.Field(
+        None,
+        title="Grid Size",
+        description="DEPRECATED: the function of 'grid_size' has been replaced by 'mesh_spec'. "
+        "It will be removed in future versions! "
+        "If components are float, uniform grid size along x, y, and z. "
+        "If components are array like, defines an array of nonuniform grid sizes centered at "
+        "the simulation center ."
+        " Note: if supplied sizes do not cover the simulation size, the first and last sizes "
+        "are repeated to cover size. ",
+        units=MICROMETER,
     )
 
     medium: MediumType = pydantic.Field(
@@ -187,6 +201,30 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
     )
 
     """ Validating setup """
+
+    @pydantic.validator("grid_size", always=True)
+    def warn_use_grid_size(cls, val, values):
+        """If ``grid_size`` is provided, it is used to set ``mesh_spec``, but a warning is
+        printed."""
+        if val is None:
+            return val
+
+        log.warning(
+            "DEPRECATED: the function of 'grid_size' has been replaced by 'mesh_spec'. "
+            "It will be removed in future versions!"
+        )
+        log.warning("Setting the simulation grid using the provided 'grid_size'.")
+
+        mesh_spec_dict = {}
+        for key, dl in zip(("mesh_x", "mesh_y", "mesh_z"), val):
+            if isinstance(dl, float):
+                mesh_spec_dim = UniformMeshSpec(dl=dl)
+            else:
+                mesh_spec_dim = CustomMeshSpec(dl=dl)
+            mesh_spec_dict[key] = mesh_spec_dim
+        values["mesh_spec"] = MeshSpec(**mesh_spec_dict)
+
+        return val
 
     @pydantic.validator("pml_layers", always=True, allow_reuse=True)
     def set_none_to_zero_layers(cls, val):
