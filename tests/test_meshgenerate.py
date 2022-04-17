@@ -39,8 +39,7 @@ def validate_dl_multiple_interval(
     ratio_f = np.all(dl_list[1:] / dl_list[:-1] <= max_scale + fp_eps)
     ratio_b = np.all(dl_list[1:] / dl_list[:-1] >= 1 / (max_scale + fp_eps))
     assert (ratio_f and ratio_b) == True
-
-    # assert(np.min(dl_list)>=0.5*np.min(max_dl_list))
+    assert np.min(dl_list) >= 0.5 * np.min(max_dl_list)
 
 
 def validate_dl_in_interval(

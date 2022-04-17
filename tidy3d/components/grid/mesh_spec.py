@@ -12,7 +12,7 @@ from ..base import Tidy3dBaseModel
 from ..types import Axis, Symmetry
 from ..source import SourceType
 from ..structure import Structure
-from ...log import SetupError
+from ...log import SetupError, log
 from ...constants import C_0, MICROMETER
 
 
@@ -346,9 +346,26 @@ class MeshSpec(Tidy3dBaseModel):
     )
 
     @property
-    def mesh1d_list(self):
+    def auto_mesh_used(self):
         """A list of the MeshSpec1d-s along each axis."""
-        return [self.mesh_x, self.mesh_y, self.mesh_z]
+        mesh_list = [self.mesh_x, self.mesh_y, self.mesh_z]
+        return np.any([isinstance(mesh, AutoMesh) for mesh in mesh_list])
+
+    def wvl_from_sources(self, sources: List[SourceType]):
+        """Define a wavelength based on supplied sources."""
+        freqs = np.array([source.source_time.freq0 for source in sources])
+        # lack of wavelength input
+        if len(freqs) == 0:
+            raise SetupError(
+                "Automatic mesh generation requires the input of 'wavelength' or sources."
+            )
+        # multiple sources of different central frequencies
+        if len(freqs) > 0 and not np.all(np.isclose(freqs, freqs[0])):
+            raise SetupError(
+                "Sources of different central frequencies are supplied. "
+                "Please supply a 'wavelength' value for 'mesh_spec'."
+            )
+        return C_0 / freqs[0]
 
     def make_grid(  # pylint:disable = too-many-arguments
         self,
@@ -380,28 +397,11 @@ class MeshSpec(Tidy3dBaseModel):
         center, size = structures[0].geometry.center, structures[0].geometry.size
 
         # Set up wavelength for automatic mesh generation if needed.
-
-        # No need to do anything if automatic mesh is not used
-        auto_mesh_used = np.any([isinstance(mesh, AutoMesh) for mesh in self.mesh1d_list])
-
-        # If auto mesh used and wavelength is None, use central frequency of sources, if any
         wavelength = self.wavelength
-        if wavelength is None and auto_mesh_used:
-            source_ranges = [source.source_time.frequency_range() for source in sources]
-            f_center = np.array([np.sum(s_range) / 2 for s_range in source_ranges])
-            # lack of wavelength input
-            if len(f_center) == 0:
-                raise SetupError(
-                    "Automatic mesh generation requires the input of 'wavelength' or sources."
-                )
-
-            # multiple sources of different central frequencies
-            if len(f_center) > 0 and not np.all(np.isclose(f_center, f_center[0])):
-                raise SetupError(
-                    "Sources of different central frequencies are supplied. "
-                    "Please supply a wavelength value for 'mesh_spec'."
-                )
-            wavelength = C_0 / f_center[0]
+        # If auto mesh used and wavelength is None, use central frequency of sources, if any.
+        if wavelength is None and self.auto_mesh_used:
+            wavelength = self.wvl_from_sources(sources)
+            log.info(f"Auto meshing using wavelength {wavelength} defined from sources.")
 
         coords_x = self.mesh_x.make_coords(
             center=center[0],
