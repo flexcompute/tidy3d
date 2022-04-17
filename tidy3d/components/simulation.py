@@ -450,9 +450,11 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
                 n_material, _ = medium.eps_complex_to_nk(eps_material)
                 lambda_min = C_0 / freq0 / n_material
 
-                for key, mesh_spec in val.dict().items():
+                for key, mesh_spec in zip("xyz", (val.mesh_x, val.mesh_y, val.mesh_z)):
                     if isinstance(mesh_spec, UniformMesh):
+
                         if mesh_spec.dl > lambda_min / MIN_GRIDS_PER_WVL:
+
                             log.warning(
                                 f"The grid step in {key} has a value of {mesh_spec.dl:.4f} (um)"
                                 ", which was detected as being large when compared to the "

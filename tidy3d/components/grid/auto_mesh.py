@@ -376,14 +376,7 @@ def make_mesh_in_interval(
     # uniform and multiple pixels
     if mesh_type == 0:
         even_dl = min(left_dl, right_dl)
-        num_cells = int(np.floor(len_interval / even_dl))
-
-        # Length of the interval assuming this num_cells.
-        # if it doesn't cover the interval, increase num_cells,
-        # which is equivalent of decreasing mesh step size.
-        size_snapped = num_cells * even_dl
-        if size_snapped < len_interval:
-            num_cells += 1
+        num_cells = int(np.ceil(len_interval / even_dl))
         return np.array([len_interval / num_cells] * num_cells)
 
     # mesh_type = 1

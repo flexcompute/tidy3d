@@ -23,7 +23,7 @@ def test_near2far():
     sim_size = (5, 5, 5)
     sim = td.Simulation(
         size=sim_size,
-        mesh_spec=td.MeshSpec(wavelength=td.C_0 / f0),
+        mesh_spec=td.MeshSpec.auto(wavelength=td.C_0 / f0),
         monitors=monitors,
         run_time=1e-12,
     )
