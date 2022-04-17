@@ -92,6 +92,7 @@ def test_sim_bounds():
         sim = Simulation(
             size=(1, 1, 1),
             center=CENTER_SHIFT,
+            mesh_spec=MeshSpec(wavelength=1.0),
             run_time=1e-12,
             structures=[
                 Structure(geometry=Box(size=(1, 1, 1), center=shifted_center), medium=Medium())
@@ -296,17 +297,18 @@ def test_num_mediums():
     """Make sure we error if too many mediums supplied."""
 
     structures = []
+    mesh_spec = MeshSpec(wavelength=1.0)
     for i in range(200):
         structures.append(
             Structure(geometry=Box(size=(1, 1, 1)), medium=Medium(permittivity=i + 1))
         )
-    sim = Simulation(size=(1, 1, 1), structures=structures, run_time=1e-12)
+    sim = Simulation(size=(1, 1, 1), mesh_spec=mesh_spec, structures=structures, run_time=1e-12)
 
     with pytest.raises(SetupError):
         structures.append(
             Structure(geometry=Box(size=(1, 1, 1)), medium=Medium(permittivity=i + 2))
         )
-        sim = Simulation(size=(1, 1, 1), structures=structures, run_time=1e-12)
+        sim = Simulation(size=(1, 1, 1), mesh_spec=mesh_spec, structures=structures, run_time=1e-12)
 
 
 """ geometry """
@@ -347,11 +349,11 @@ def test_geometry_sizes():
         with pytest.raises(pydantic.ValidationError) as e_info:
             a = Box(size=size, center=(0, 0, 0))
         with pytest.raises(pydantic.ValidationError) as e_info:
-            s = Simulation(size=size, run_time=1e-12)
+            s = Simulation(size=size, run_time=1e-12, mesh_spec=MeshSpec(wavelength=1.0))
 
-    # negative grid sizes error?
-    with pytest.raises(pydantic.ValidationError) as e_info:
-        s = Simulation(size=(1, 1, 1), grid_size=-1.0, run_time=1e-12)
+    # # negative grid sizes error?
+    # with pytest.raises(pydantic.ValidationError) as e_info:
+    #     s = Simulation(size=(1, 1, 1), grid_size=(-1.0, -1.0, -1.0), run_time=1e-12)
 
 
 def test_pop_axis():
@@ -804,6 +806,7 @@ def test_mode_object_syms():
         sim = Simulation(
             center=(1.0, -1.0, 0.5),
             size=(2.0, 2.0, 2.0),
+            mesh_spec=MeshSpec(wavelength=C_0 / 1.0),
             run_time=1e-12,
             symmetry=(1, -1, 0),
             sources=[ModeSource(size=(2, 2, 0), direction="+", source_time=g)],
@@ -814,6 +817,7 @@ def test_mode_object_syms():
         sim = Simulation(
             center=(1.0, -1.0, 0.5),
             size=(2.0, 2.0, 2.0),
+            mesh_spec=MeshSpec(wavelength=C_0 / 1.0),
             run_time=1e-12,
             symmetry=(1, -1, 0),
             monitors=[ModeMonitor(size=(2, 2, 0), name="mnt", freqs=[2], mode_spec=ModeSpec())],
@@ -823,6 +827,7 @@ def test_mode_object_syms():
     sim = Simulation(
         center=(1.0, -1.0, 0.5),
         size=(2.0, 2.0, 2.0),
+        mesh_spec=MeshSpec(wavelength=C_0 / 1.0),
         run_time=1e-12,
         symmetry=(1, -1, 0),
         sources=[ModeSource(center=(1, -1, 1), size=(2, 2, 0), direction="+", source_time=g)],
@@ -832,6 +837,7 @@ def test_mode_object_syms():
     sim = Simulation(
         center=(1.0, -1.0, 0.5),
         size=(2.0, 2.0, 2.0),
+        mesh_spec=MeshSpec(wavelength=C_0 / 1.0),
         run_time=1e-12,
         symmetry=(1, -1, 0),
         monitors=[

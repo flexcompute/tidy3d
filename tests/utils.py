@@ -35,6 +35,7 @@ def prepend_tmp(path):
 
 SIM_MONITORS = Simulation(
     size=(10.0, 10.0, 10.0),
+    mesh_spec=MeshSpec(wavelength=1.0),
     run_time=1e-13,
     monitors=[
         FieldMonitor(size=(1, 1, 1), center=(0, 1, 0), freqs=[1, 2, 5, 7, 8], name="field_freq"),

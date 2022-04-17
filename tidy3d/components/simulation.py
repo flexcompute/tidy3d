@@ -203,7 +203,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
     """ Validating setup """
 
     @pydantic.validator("mesh_spec", always=True)
-    def warn_use_grid_size(cls, val, values):
+    def _warn_use_grid_size(cls, val, values):
         """If ``grid_size`` is provided, it is used to set ``mesh_spec``, but a warning is
         printed."""
         if values.get("grid_size") is None:
@@ -224,6 +224,15 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
             mesh_spec_dict[key] = mesh_spec_dim
 
         return MeshSpec(**mesh_spec_dict)
+
+    @pydantic.validator("mesh_spec", always=True)
+    def _validate_auto_mesh_wavelength(cls, val, values):
+        """If there is auto mesh spec with no wavelength, check that wavelength can be defined
+        from sources."""
+        if val.wavelength is None and val.auto_mesh_used:
+            _ = val.wvl_from_sources(sources=values.get("sources"))
+
+        return val
 
     @pydantic.validator("pml_layers", always=True, allow_reuse=True)
     def set_none_to_zero_layers(cls, val):
@@ -324,9 +333,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
             struct_bound_min, struct_bound_max = structure.geometry.bounds
 
             for source in sources:
-                fmin_src, fmax_src = source.source_time.frequency_range()
-                f_average = (fmin_src + fmax_src) / 2.0
-                lambda0 = C_0 / f_average
+                lambda0 = C_0 / source.source_time.freq0
 
                 zipped = zip(["x", "y", "z"], sim_bound_min, struct_bound_min, val)
                 for axis, sim_val, struct_val, pml in zipped:
@@ -418,48 +425,46 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
                 )
         return val
 
-    # @pydantic.validator("sources", always=True)
-    # def _warn_grid_size_too_small(cls, val, values):  # pylint:disable=too-many-locals
-    #     """Warn user if any grid size is too large compared to minimum wavelength in material."""
+    @pydantic.validator("mesh_spec", always=True)
+    def _warn_grid_size_too_small(cls, val, values):  # pylint:disable=too-many-locals
+        """Warn user if any grid size is too large compared to minimum wavelength in material."""
 
-    #     if val is None:
-    #         return val
+        if val is None:
+            return val
 
-    #     structures = values.get("structures")
-    #     structures = [] if not structures else structures
-    #     medium_bg = values.get("medium")
-    #     grid_size = values.get("grid_size")
-    #     mediums = [medium_bg] + [structure.medium for structure in structures]
+        structures = values.get("structures")
+        structures = [] if not structures else structures
+        medium_bg = values.get("medium")
+        mediums = [medium_bg] + [structure.medium for structure in structures]
 
-    #     for source_index, source in enumerate(val):
-    #         fmin_src, fmax_src = source.source_time.frequency_range()
-    #         f_average = (fmin_src + fmax_src) / 2.0
+        for source_index, source in enumerate(values.get("sources")):
+            freq0 = source.source_time.freq0
 
-    #         for medium_index, medium in enumerate(mediums):
+            for medium_index, medium in enumerate(mediums):
 
-    #             # min wavelength in PEC is meaningless and we'll get divide by inf errors
-    #             if isinstance(medium, PECMedium):
-    #                 continue
+                # min wavelength in PEC is meaningless and we'll get divide by inf errors
+                if isinstance(medium, PECMedium):
+                    continue
 
-    #             eps_material = medium.eps_model(f_average)
-    #             n_material, _ = medium.eps_complex_to_nk(eps_material)
-    #             lambda_min = C_0 / f_average / n_material
+                eps_material = medium.eps_model(freq0)
+                n_material, _ = medium.eps_complex_to_nk(eps_material)
+                lambda_min = C_0 / freq0 / n_material
 
-    #             for grid_index, dl in enumerate(grid_size):
-    #                 if isinstance(dl, float):
-    #                     if dl > lambda_min / MIN_GRIDS_PER_WVL:
-    #                         log.warning(
-    #                             f"The grid step in {'xyz'[grid_index]} has a value of {dl:.4f} (um)"
-    #                             ", which was detected as being large when compared to the "
-    #                             f"central wavelength of sources[{source_index}] "
-    #                             f"within the simulation medium "
-    #                             f"associated with structures[{medium_index + 1}], given by "
-    #                             f"{lambda_min:.4f} (um). "
-    #                             "To avoid inaccuracies, it is reccomended the grid size is reduced."
-    #                         )
-    #                 # TODO: warn about nonuniform grid
+                for key, mesh_spec in val.dict().items():
+                    if isinstance(mesh_spec, UniformMesh):
+                        if mesh_spec.dl > lambda_min / MIN_GRIDS_PER_WVL:
+                            log.warning(
+                                f"The grid step in {key} has a value of {mesh_spec.dl:.4f} (um)"
+                                ", which was detected as being large when compared to the "
+                                f"central wavelength of sources[{source_index}] "
+                                f"within the simulation medium "
+                                f"associated with structures[{medium_index + 1}], given by "
+                                f"{lambda_min:.4f} (um). "
+                                "To avoid inaccuracies, it is reccomended the grid size is reduced."
+                            )
+                    # TODO: warn about custom mesh spec
 
-    #     return val
+        return val
 
     @pydantic.validator("sources", always=True)
     def _plane_wave_homogeneous(cls, val, values):
