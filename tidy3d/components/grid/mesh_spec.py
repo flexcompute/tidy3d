@@ -170,7 +170,8 @@ class UniformMesh(MeshSpec1d):
             1D coords to be used as grid boundaries.
         """
 
-        num_cells = round(size / self.dl)
+        # Take a number of steps commensurate with the size; make dl a bit smaller if needed
+        num_cells = int(np.ceil(size / self.dl))
 
         # Make sure there's at least one cell
         num_cells = max(num_cells, 1)
@@ -367,7 +368,7 @@ class MeshSpec(Tidy3dBaseModel):
             )
         return C_0 / freqs[0]
 
-    def make_grid(  # pylint:disable = too-many-arguments
+    def make_grid(
         self,
         structures: List[Structure],
         symmetry: Tuple[Symmetry, Symmetry, Symmetry],
@@ -433,3 +434,47 @@ class MeshSpec(Tidy3dBaseModel):
 
         coords = Coords(x=coords_x, y=coords_y, z=coords_z)
         return Grid(boundaries=coords)
+
+    @classmethod
+    def auto(
+        cls, wavelength: float = None, min_steps_per_wvl: float = 10.0, max_scale: float = 1.4
+    ) -> "MeshSpec":
+        """Use the same :class:`AutoMesh` along each of the three directions.
+
+        Parameters
+        ----------
+        wavelength : float = None
+            Free-space wavelength for automatic nonuniform mesh. It can be 'None'
+            if there is at least one source in the simulation, in which case it is defined by
+            the source central frequency.
+        min_steps_per_wvl : float, optional
+            Minimal number of steps per wavelength in each medium.
+        max_scale : float, optional
+            Sets the maximum ratio between any two consecutive grid steps.
+
+        Returns
+        -------
+        MeshSpec
+            :class:`MeshSpec` with the same automatic nonuniform mesh settings in each direction.
+        """
+
+        mesh_1d = AutoMesh(min_steps_per_wvl=min_steps_per_wvl, max_scale=max_scale)
+        return cls(wavelength=wavelength, mesh_x=mesh_1d, mesh_y=mesh_1d, mesh_z=mesh_1d)
+
+    @classmethod
+    def uniform(cls, dl: float) -> "MeshSpec":
+        """Use the same :class:`UniformMesh` along each of the three directions.
+
+        Parameters
+        ----------
+        dl : float
+            Grid size for uniform grid generation.
+
+        Returns
+        -------
+        MeshSpec
+            :class:`MeshSpec` with the same uniform grid size in each direction.
+        """
+
+        mesh_1d = UniformMesh(dl=dl)
+        return cls(mesh_x=mesh_1d, mesh_y=mesh_1d, mesh_z=mesh_1d)
