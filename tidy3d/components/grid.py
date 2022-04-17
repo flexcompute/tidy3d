@@ -21,7 +21,7 @@ from ..constants import C_0, MICROMETER, fp_eps
 Coords1D = Array[float]
 
 
-class MeshSpec1D(Tidy3dBaseModel, ABC):
+class MeshSpec1d(Tidy3dBaseModel, ABC):
 
     """Abstract base class, defines 1D mesh generation specifications."""
 
@@ -32,7 +32,7 @@ class MeshSpec1D(Tidy3dBaseModel, ABC):
         axis: Axis,
         structures: List[Structure],
         symmetry: Symmetry,
-        sources: List[SourceType],
+        wavelength: float,
         num_pml_layers: Tuple[int, int],
     ) -> Coords1D:
         """Generate 1D coords to be used as grid boundaries, based on simulation parameters.
@@ -51,8 +51,8 @@ class MeshSpec1D(Tidy3dBaseModel, ABC):
         symmetry : Symmetry
             Reflection symmetry across a plane bisecting the simulation domain normal
             to a given axis.
-        sources : List[SourceType]
-            List of sources.
+        wavelength : float
+            Free-space wavelength.
         num_pml_layers : Tuple[int, int]
             number of layers in the absorber + and - direction along one dimension.
 
@@ -70,7 +70,7 @@ class MeshSpec1D(Tidy3dBaseModel, ABC):
 
         # generate boundaries
         bound_coords = self._make_coords_initial(
-            center, size, axis, structures, sources, is_periodic
+            center, size, axis, structures, wavelength, is_periodic
         )
 
         # incooperate symmetries
@@ -141,7 +141,7 @@ class MeshSpec1D(Tidy3dBaseModel, ABC):
         return new_bounds
 
 
-class UniformMeshSpec(MeshSpec1D):
+class UniformMeshSpec(MeshSpec1d):
 
     """Uniform 1D mesh generation"""
 
@@ -189,7 +189,7 @@ class UniformMeshSpec(MeshSpec1D):
         return bound_coords
 
 
-class CustomMeshSpec(MeshSpec1D):
+class CustomMeshSpec(MeshSpec1d):
 
     """Customized 1D coords."""
 
@@ -246,18 +246,19 @@ class CustomMeshSpec(MeshSpec1D):
         return bound_coords
 
 
-class AutoMeshSpec(MeshSpec1D):
+class AutoMeshSpec(MeshSpec1d):
     """Specification for non-uniform grid along a given dimension.
 
     Example
     -------
-    >>> mesh_1d = AutoMeshSpec(min_steps_per_wvl=16, max_scale=1.4, wavelength = 1)
+    >>> mesh_1d = AutoMeshSpec(min_steps_per_wvl=16, max_scale=1.4)
     """
 
-    min_steps_per_wvl: pd.PositiveFloat = pd.Field(
-        15,
+    min_steps_per_wvl: float = pd.Field(
+        10.0,
         title="Minimal number of steps per wavelength",
         description="Minimal number of steps per wavelength in each medium.",
+        ge=6.0,
     )
 
     max_scale: float = pd.Field(
@@ -268,21 +269,13 @@ class AutoMeshSpec(MeshSpec1D):
         lt=2.0,
     )
 
-    wavelength: float = pd.Field(
-        None,
-        title="Wavelength for setting up nonuniform mesh",
-        description="Wavelength for setting up nonuniform mesh; It can be `None` "
-        "if there is at least one source object in the simulation, and the frequency will "
-        "be based on the source central frequency. ",
-    )
-
     def _make_coords_initial(  # pylint:disable = arguments-differ, too-many-arguments
         self,
         center: float,
         size: float,
         axis: Axis,
         structures: List[Structure],
-        sources: List[SourceType],
+        wavelength: float,
         is_periodic: bool,
     ) -> Coords1D:
         """Customized 1D coords to be used as grid boundaries.
@@ -297,8 +290,8 @@ class AutoMeshSpec(MeshSpec1D):
             Axis of this direction.
         structures : List[Structure]
             List of structures present in simulation.
-        sources : List[SourceType]
-            List of sources.
+        wavelength : float
+            Free-space wavelength.
         is_periodic : bool
             Apply periodic boundary condition or not.
 
@@ -307,26 +300,6 @@ class AutoMeshSpec(MeshSpec1D):
         Coords1D:
             1D coords to be used as grid boundaries.
         """
-
-        # First, set up wavelength for mesh
-        wavelength = self.wavelength
-        # if None, use central frequency of the source
-        if wavelength is None:
-            source_ranges = [source.source_time.frequency_range() for source in sources]
-            f_center = np.array([np.sum(s_range) / 2 for s_range in source_ranges])
-            # lack of wavelength input
-            if len(f_center) == 0:
-                raise SetupError(
-                    "Automatic mesh generation requires the input of " "the wavelength, or sources."
-                )
-
-            # multiple sources of different central frequencies
-            if len(f_center) > 0 and not np.all(np.isclose(f_center, f_center[0])):
-                raise SetupError(
-                    "Sources of different central frequencies are supplied. "
-                    "Please supply the wavelength value for setting up mesh."
-                )
-            wavelength = C_0 / f_center[0]
 
         # parse structures
         interval_coords, max_dl_list = self._parse_structures(
@@ -1529,23 +1502,36 @@ class MeshSpec(Tidy3dBaseModel):
 
     """Mesh specifications"""
 
-    mesh_x: MeshSpec1D = pd.Field(
+    mesh_x: MeshSpec1d = pd.Field(
         AutoMeshSpec(),
         title="Mesh specification along x-axis",
         description="Mesh specification along x-axis",
     )
 
-    mesh_y: MeshSpec1D = pd.Field(
+    mesh_y: MeshSpec1d = pd.Field(
         AutoMeshSpec(),
         title="Mesh specification along y-axis",
         description="Mesh specification along y-axis",
     )
 
-    mesh_z: MeshSpec1D = pd.Field(
+    mesh_z: MeshSpec1d = pd.Field(
         AutoMeshSpec(),
         title="Mesh specification along z-axis",
         description="Mesh specification along z-axis",
     )
+
+    wavelength: float = pd.Field(
+        None,
+        title="Free-space wavelength",
+        description="Free-space wavelength for automatic nonuniform mesh. It can be 'None' "
+        "if there is at least one source in the simulation, in which case it is defined by "
+        "the source central frequency.",
+    )
+
+    @property
+    def mesh1d_list(self):
+        """A list of the MeshSpec1d-s along each axis."""
+        return [self.mesh_x, self.mesh_y, self.mesh_z]
 
     def make_grid(  # pylint:disable = too-many-arguments
         self,
@@ -1576,13 +1562,37 @@ class MeshSpec(Tidy3dBaseModel):
 
         center, size = structures[0].geometry.center, structures[0].geometry.size
 
+        # Set up wavelength for automatic mesh generation if needed.
+
+        # No need to do anything if automatic mesh is not used
+        auto_mesh_used = np.any([isinstance(mesh, AutoMeshSpec) for mesh in self.mesh1d_list])
+
+        # If auto mesh used and wavelength is None, use central frequency of sources, if any
+        wavelength = self.wavelength
+        if wavelength is None and auto_mesh_used:
+            source_ranges = [source.source_time.frequency_range() for source in sources]
+            f_center = np.array([np.sum(s_range) / 2 for s_range in source_ranges])
+            # lack of wavelength input
+            if len(f_center) == 0:
+                raise SetupError(
+                    "Automatic mesh generation requires the input of 'wavelength' or sources."
+                )
+
+            # multiple sources of different central frequencies
+            if len(f_center) > 0 and not np.all(np.isclose(f_center, f_center[0])):
+                raise SetupError(
+                    "Sources of different central frequencies are supplied. "
+                    "Please supply a wavelength value for 'mesh_spec'."
+                )
+            wavelength = C_0 / f_center[0]
+
         coords_x = self.mesh_x.make_coords(
             center=center[0],
             size=size[0],
             axis=0,
             structures=structures,
             symmetry=symmetry[0],
-            sources=sources,
+            wavelength=wavelength,
             num_pml_layers=num_pml_layers[0],
         )
         coords_y = self.mesh_y.make_coords(
@@ -1591,7 +1601,7 @@ class MeshSpec(Tidy3dBaseModel):
             axis=1,
             structures=structures,
             symmetry=symmetry[1],
-            sources=sources,
+            wavelength=wavelength,
             num_pml_layers=num_pml_layers[1],
         )
         coords_z = self.mesh_z.make_coords(
@@ -1600,7 +1610,7 @@ class MeshSpec(Tidy3dBaseModel):
             axis=2,
             structures=structures,
             symmetry=symmetry[2],
-            sources=sources,
+            wavelength=wavelength,
             num_pml_layers=num_pml_layers[2],
         )
 

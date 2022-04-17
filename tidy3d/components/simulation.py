@@ -102,13 +102,6 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         units=SECOND,
     )
 
-    mesh_spec: MeshSpec = pydantic.Field(
-        MeshSpec(),
-        title="Mesh Specifications",
-        description="Mesh Specifications for choosing and setting parameters "
-        "along each dimension in :class:``MeshSpec``.",
-    )
-
     grid_size: Tuple[GridSize, GridSize, GridSize] = pydantic.Field(
         None,
         title="Grid Size",
@@ -120,6 +113,13 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         " Note: if supplied sizes do not cover the simulation size, the first and last sizes "
         "are repeated to cover size. ",
         units=MICROMETER,
+    )
+
+    mesh_spec: MeshSpec = pydantic.Field(
+        MeshSpec(),
+        title="Mesh Specifications",
+        description="Mesh Specifications for choosing and setting parameters "
+        "along each dimension in :class:``MeshSpec``.",
     )
 
     medium: MediumType = pydantic.Field(
@@ -202,11 +202,11 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
 
     """ Validating setup """
 
-    @pydantic.validator("grid_size", always=True)
+    @pydantic.validator("mesh_spec", always=True)
     def warn_use_grid_size(cls, val, values):
         """If ``grid_size`` is provided, it is used to set ``mesh_spec``, but a warning is
         printed."""
-        if val is None:
+        if values.get("grid_size") is None:
             return val
 
         log.warning(
@@ -216,15 +216,14 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         log.warning("Setting the simulation grid using the provided 'grid_size'.")
 
         mesh_spec_dict = {}
-        for key, dl in zip(("mesh_x", "mesh_y", "mesh_z"), val):
+        for key, dl in zip(("mesh_x", "mesh_y", "mesh_z"), values["grid_size"]):
             if isinstance(dl, float):
                 mesh_spec_dim = UniformMeshSpec(dl=dl)
             else:
                 mesh_spec_dim = CustomMeshSpec(dl=dl)
             mesh_spec_dict[key] = mesh_spec_dim
-        values["mesh_spec"] = MeshSpec(**mesh_spec_dict)
 
-        return val
+        return MeshSpec(**mesh_spec_dict)
 
     @pydantic.validator("pml_layers", always=True, allow_reuse=True)
     def set_none_to_zero_layers(cls, val):
@@ -1391,6 +1390,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         structures = [Structure(geometry=self.geometry, medium=self.medium)]
         structures += self.structures
 
+        print(self.mesh_spec)
         return self.mesh_spec.make_grid(
             structures,
             self.symmetry,
