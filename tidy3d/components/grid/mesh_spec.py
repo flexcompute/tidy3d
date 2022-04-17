@@ -1,7 +1,7 @@
 """ Defines classes specifying meshing in 1D and a collective class for 3D """
 
 from abc import ABC, abstractmethod
-from typing import Tuple, List
+from typing import Tuple, List, Union
 
 import numpy as np
 import pydantic as pd
@@ -315,24 +315,25 @@ class AutoMesh(MeshSpec1d):
         bound_coords += interval_coords[0]
         return np.array(bound_coords)
 
+MeshType = Union[UniformMesh, CustomMesh, AutoMesh]
 
 class MeshSpec(Tidy3dBaseModel):
 
     """Mesh specifications"""
 
-    mesh_x: MeshSpec1d = pd.Field(
+    mesh_x: MeshType = pd.Field(
         AutoMesh(),
         title="Mesh specification along x-axis",
         description="Mesh specification along x-axis",
     )
 
-    mesh_y: MeshSpec1d = pd.Field(
+    mesh_y: MeshType = pd.Field(
         AutoMesh(),
         title="Mesh specification along y-axis",
         description="Mesh specification along y-axis",
     )
 
-    mesh_z: MeshSpec1d = pd.Field(
+    mesh_z: MeshType = pd.Field(
         AutoMesh(),
         title="Mesh specification along z-axis",
         description="Mesh specification along z-axis",

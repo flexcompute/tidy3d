@@ -7,7 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- New `mesh_spec` Field in `Simulation` that allows more flexibility in defining the mesh.
+- `MeshSpec1d` classes defining how the meshing along each dimension should be done, with sublcasses `UniformMesh` and `CustomMesh` that cover the functionality 
+  previously offered by supplying a float or a list of floats to `Simulation.grid_size`. New functionality offered by `AutoMesh` subclass, with the 
+  mesh automatically generated based on the minimum required steps per wavelength.
+
 ### Changed
+- `Simulation.grid_size` is now deprecated in favor of `Simulation.mesh_spec`. However, if supplied, `grid_size` overwrites `mesh_spec`. A warning is printed.
+- `Simulation.mesh_spec` uses the default `MeshSpec`, which has `AutoMesh(min_steps_per_wvl=10)` in each direction. To initialize a `Simulation` then it is no 
+  longer needed to provide gird information, if sources are added to the simulation. Otherwise an error will be raised to provide a wavelength for the auto mesh.
 
 ## [1.2.2] - 2022-4-16
 
