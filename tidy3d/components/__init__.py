@@ -6,7 +6,7 @@ from .pml import PMLParams, AbsorberParams
 from .pml import DefaultPMLParameters, DefaultStablePMLParameters, DefaultAbsorberParameters
 
 # grid
-from .grid import Grid, Coords, MeshSpec, UniformMeshSpec, CustomMeshSpec, AutoMeshSpec
+from .grid import Grid, Coords, MeshSpec, UniformMesh, CustomMesh, AutoMesh
 
 # geometry
 from .geometry import Box, Sphere, Cylinder, PolySlab

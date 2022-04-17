@@ -141,7 +141,7 @@ class MeshSpec1d(Tidy3dBaseModel, ABC):
         return new_bounds
 
 
-class UniformMeshSpec(MeshSpec1d):
+class UniformMesh(MeshSpec1d):
 
     """Uniform 1D mesh generation"""
 
@@ -189,7 +189,7 @@ class UniformMeshSpec(MeshSpec1d):
         return bound_coords
 
 
-class CustomMeshSpec(MeshSpec1d):
+class CustomMesh(MeshSpec1d):
 
     """Customized 1D coords."""
 
@@ -246,12 +246,12 @@ class CustomMeshSpec(MeshSpec1d):
         return bound_coords
 
 
-class AutoMeshSpec(MeshSpec1d):
+class AutoMesh(MeshSpec1d):
     """Specification for non-uniform grid along a given dimension.
 
     Example
     -------
-    >>> mesh_1d = AutoMeshSpec(min_steps_per_wvl=16, max_scale=1.4)
+    >>> mesh_1d = AutoMesh(min_steps_per_wvl=16, max_scale=1.4)
     """
 
     min_steps_per_wvl: float = pd.Field(
@@ -1503,19 +1503,19 @@ class MeshSpec(Tidy3dBaseModel):
     """Mesh specifications"""
 
     mesh_x: MeshSpec1d = pd.Field(
-        AutoMeshSpec(),
+        AutoMesh(),
         title="Mesh specification along x-axis",
         description="Mesh specification along x-axis",
     )
 
     mesh_y: MeshSpec1d = pd.Field(
-        AutoMeshSpec(),
+        AutoMesh(),
         title="Mesh specification along y-axis",
         description="Mesh specification along y-axis",
     )
 
     mesh_z: MeshSpec1d = pd.Field(
-        AutoMeshSpec(),
+        AutoMesh(),
         title="Mesh specification along z-axis",
         description="Mesh specification along z-axis",
     )
@@ -1565,7 +1565,7 @@ class MeshSpec(Tidy3dBaseModel):
         # Set up wavelength for automatic mesh generation if needed.
 
         # No need to do anything if automatic mesh is not used
-        auto_mesh_used = np.any([isinstance(mesh, AutoMeshSpec) for mesh in self.mesh1d_list])
+        auto_mesh_used = np.any([isinstance(mesh, AutoMesh) for mesh in self.mesh1d_list])
 
         # If auto mesh used and wavelength is None, use central frequency of sources, if any
         wavelength = self.wavelength

@@ -3,7 +3,7 @@ import numpy as np
 import tidy3d as td
 from tidy3d.constants import fp_eps
 
-from tidy3d.components import AutoMeshSpec as mesh
+from tidy3d.components import AutoMesh as mesh
 
 
 def validate_dl_multiple_interval(
