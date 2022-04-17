@@ -12,7 +12,7 @@ from .components import PMLParams, AbsorberParams
 from .components import DefaultPMLParameters, DefaultStablePMLParameters, DefaultAbsorberParameters
 
 # grid
-from .components import Grid, Coords, MeshSpec, UniformMeshSpec, CustomMeshSpec, AutoMeshSpec
+from .components import Grid, Coords, MeshSpec, UniformMesh, CustomMesh, AutoMesh
 
 # geometry
 from .components import Box, Sphere, Cylinder, PolySlab

@@ -14,7 +14,7 @@ from .validators import assert_unique_names, assert_objects_in_sim_bounds
 from .validators import validate_mode_objects_symmetry
 from .geometry import Box
 from .types import Symmetry, Ax, Shapely, FreqBound, Axis, GridSize
-from .grid import Coords1D, Grid, Coords, MeshSpec, UniformMeshSpec, CustomMeshSpec
+from .grid import Coords1D, Grid, Coords, MeshSpec, UniformMesh, CustomMesh
 from .medium import Medium, MediumType, AbstractMedium, PECMedium
 from .structure import Structure
 from .source import SourceType, PlaneWave
@@ -51,13 +51,13 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
     >>> from tidy3d import Sphere, Cylinder, PolySlab
     >>> from tidy3d import CurrentSource, GaussianPulse
     >>> from tidy3d import FieldMonitor, FluxMonitor
-    >>> from tidy3d import MeshSpec, AutoMeshSpec
+    >>> from tidy3d import MeshSpec, AutoMesh
     >>> sim = Simulation(
     ...     size=(2.0, 2.0, 2.0),
     ...     mesh_spec=MeshSpec(
-    ...         mesh_x = AutoMeshSpec(min_steps_per_wvl = 20),
-    ...         mesh_y = AutoMeshSpec(min_steps_per_wvl = 20),
-    ...         mesh_z = AutoMeshSpec(min_steps_per_wvl = 20)
+    ...         mesh_x = AutoMesh(min_steps_per_wvl = 20),
+    ...         mesh_y = AutoMesh(min_steps_per_wvl = 20),
+    ...         mesh_z = AutoMesh(min_steps_per_wvl = 20)
     ...     ),
     ...     run_time=40e-11,
     ...     structures=[
@@ -115,13 +115,6 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         units=MICROMETER,
     )
 
-    mesh_spec: MeshSpec = pydantic.Field(
-        MeshSpec(),
-        title="Mesh Specifications",
-        description="Mesh Specifications for choosing and setting parameters "
-        "along each dimension in :class:``MeshSpec``.",
-    )
-
     medium: MediumType = pydantic.Field(
         Medium(),
         title="Background Medium",
@@ -158,6 +151,13 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         title="Monitors",
         description="List of monitors in the simulation. "
         "Note: monitor names are used to access data after simulation is run.",
+    )
+
+    mesh_spec: MeshSpec = pydantic.Field(
+        MeshSpec(),
+        title="Mesh Specifications",
+        description="Mesh Specifications for choosing and setting parameters "
+        "along each dimension in :class:``MeshSpec``.",
     )
 
     pml_layers: Tuple[PMLTypes, PMLTypes, PMLTypes] = pydantic.Field(
@@ -218,9 +218,9 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         mesh_spec_dict = {}
         for key, dl in zip(("mesh_x", "mesh_y", "mesh_z"), values["grid_size"]):
             if isinstance(dl, float):
-                mesh_spec_dim = UniformMeshSpec(dl=dl)
+                mesh_spec_dim = UniformMesh(dl=dl)
             else:
-                mesh_spec_dim = CustomMeshSpec(dl=dl)
+                mesh_spec_dim = CustomMesh(dl=dl)
             mesh_spec_dict[key] = mesh_spec_dim
 
         return MeshSpec(**mesh_spec_dict)

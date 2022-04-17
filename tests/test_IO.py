@@ -24,7 +24,6 @@ def test_simulation_preserve_types():
 
     sim_all = Simulation(
         size=(10.0, 10.0, 10.0),
-        grid_size=(1, 1, 1),
         structures=[
             Structure(geometry=Box(size=(1, 1, 1)), medium=Medium()),
             Structure(geometry=Sphere(radius=1), medium=PoleResidue(eps_inf=1, poles=[])),

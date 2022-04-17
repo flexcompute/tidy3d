@@ -13,7 +13,6 @@ def test_sim():
 
     sim = Simulation(
         size=(2.0, 2.0, 2.0),
-        grid_size=(0.01, 0.01, 0.01),
         run_time=1e-12,
         structures=[
             Structure(
@@ -71,7 +70,6 @@ def _test_version():
 
     sim = Simulation(
         size=(1, 1, 1),
-        grid_size=(0.1, 0.1, 0.1),
         run_time=1e-12,
     )
     path = "tests/tmp/simulation.json"
@@ -94,7 +92,6 @@ def test_sim_bounds():
         sim = Simulation(
             size=(1, 1, 1),
             center=CENTER_SHIFT,
-            grid_size=(0.1, 0.1, 0.1),
             run_time=1e-12,
             structures=[
                 Structure(geometry=Box(size=(1, 1, 1), center=shifted_center), medium=Medium())
@@ -124,19 +121,23 @@ def test_sim_bounds():
 
 
 def test_sim_grid_size():
+    """Test that grid_size can still be used even though it's deprecated."""
 
     size = (1, 1, 1)
     _ = Simulation(size=size, grid_size=(1.0, 1.0, 1.0), run_time=1e-12)
 
 
-def _test_sim_size():
+def test_sim_size():
+
+    mesh1d = UniformMesh(dl=1e-5)
+    mesh_spec = MeshSpec(mesh_x=mesh1d, mesh_y=mesh1d, mesh_z=mesh1d)
 
     with pytest.raises(SetupError):
-        s = Simulation(size=(1, 1, 1), grid_size=(1e-5, 1e-5, 1e-5), run_time=1e-12)
+        s = Simulation(size=(1, 1, 1), mesh_spec=mesh_spec, run_time=1e-12)
         s._validate_size()
 
     with pytest.raises(SetupError):
-        s = Simulation(size=(1, 1, 1), grid_size=(0.1, 0.1, 0.1), run_time=1e-7)
+        s = Simulation(size=(1, 1, 1), run_time=1e-7)
         s._validate_size()
 
 
@@ -257,7 +258,6 @@ def test_sim_plane_wave_error():
     # with transparent box continue
     _ = Simulation(
         size=(1, 1, 1),
-        grid_size=(0.1, 0.1, 0.1),
         medium=medium_bg,
         structures=[box_transparent],
         sources=[src],
@@ -268,7 +268,6 @@ def test_sim_plane_wave_error():
     with pytest.raises(SetupError):
         _ = Simulation(
             size=(1, 1, 1),
-            grid_size=(0.1, 0.1, 0.1),
             medium=medium_bg,
             structures=[box_transparent, box],
             sources=[src],
@@ -301,17 +300,13 @@ def test_num_mediums():
         structures.append(
             Structure(geometry=Box(size=(1, 1, 1)), medium=Medium(permittivity=i + 1))
         )
-    sim = Simulation(
-        size=(1, 1, 1), grid_size=(0.1, 0.1, 0.1), structures=structures, run_time=1e-12
-    )
+    sim = Simulation(size=(1, 1, 1), structures=structures, run_time=1e-12)
 
     with pytest.raises(SetupError):
         structures.append(
             Structure(geometry=Box(size=(1, 1, 1)), medium=Medium(permittivity=i + 2))
         )
-        sim = Simulation(
-            size=(1, 1, 1), grid_size=(0.1, 0.1, 0.1), structures=structures, run_time=1e-12
-        )
+        sim = Simulation(size=(1, 1, 1), structures=structures, run_time=1e-12)
 
 
 """ geometry """
@@ -352,9 +347,7 @@ def test_geometry_sizes():
         with pytest.raises(pydantic.ValidationError) as e_info:
             a = Box(size=size, center=(0, 0, 0))
         with pytest.raises(pydantic.ValidationError) as e_info:
-            s = Simulation(size=size, grid_size=(1.0, 1.0, 1.0), run_time=1e-12)
-        with pytest.raises(pydantic.ValidationError) as e_info:
-            s = Simulation(size=(1, 1, 1), grid_size=size, run_time=1e-12)
+            s = Simulation(size=size, run_time=1e-12)
 
     # negative grid sizes error?
     with pytest.raises(pydantic.ValidationError) as e_info:
@@ -570,7 +563,6 @@ def _test_names_default():
 
     sim = Simulation(
         size=(2.0, 2.0, 2.0),
-        grid_size=(0.01, 0.01, 0.01),
         run_time=1e-12,
         structures=[
             Structure(
@@ -626,7 +618,6 @@ def test_names_unique():
     with pytest.raises(SetupError) as e:
         sim = Simulation(
             size=(2.0, 2.0, 2.0),
-            grid_size=(0.01, 0.01, 0.01),
             run_time=1e-12,
             structures=[
                 Structure(
@@ -645,7 +636,6 @@ def test_names_unique():
     with pytest.raises(SetupError) as e:
         sim = Simulation(
             size=(2.0, 2.0, 2.0),
-            grid_size=(0.01, 0.01, 0.01),
             run_time=1e-12,
             sources=[
                 UniformCurrentSource(
@@ -668,7 +658,6 @@ def test_names_unique():
     with pytest.raises(SetupError) as e:
         sim = Simulation(
             size=(2.0, 2.0, 2.0),
-            grid_size=(0.01, 0.01, 0.01),
             run_time=1e-12,
             monitors=[
                 FluxMonitor(size=(1, 1, 0), center=(0, -0.5, 0), freqs=[1], name="mon1"),
@@ -815,7 +804,6 @@ def test_mode_object_syms():
         sim = Simulation(
             center=(1.0, -1.0, 0.5),
             size=(2.0, 2.0, 2.0),
-            grid_size=(0.01, 0.01, 0.01),
             run_time=1e-12,
             symmetry=(1, -1, 0),
             sources=[ModeSource(size=(2, 2, 0), direction="+", source_time=g)],
@@ -826,7 +814,6 @@ def test_mode_object_syms():
         sim = Simulation(
             center=(1.0, -1.0, 0.5),
             size=(2.0, 2.0, 2.0),
-            grid_size=(0.01, 0.01, 0.01),
             run_time=1e-12,
             symmetry=(1, -1, 0),
             monitors=[ModeMonitor(size=(2, 2, 0), name="mnt", freqs=[2], mode_spec=ModeSpec())],
@@ -836,7 +823,6 @@ def test_mode_object_syms():
     sim = Simulation(
         center=(1.0, -1.0, 0.5),
         size=(2.0, 2.0, 2.0),
-        grid_size=(0.01, 0.01, 0.01),
         run_time=1e-12,
         symmetry=(1, -1, 0),
         sources=[ModeSource(center=(1, -1, 1), size=(2, 2, 0), direction="+", source_time=g)],
@@ -846,7 +832,6 @@ def test_mode_object_syms():
     sim = Simulation(
         center=(1.0, -1.0, 0.5),
         size=(2.0, 2.0, 2.0),
-        grid_size=(0.01, 0.01, 0.01),
         run_time=1e-12,
         symmetry=(1, -1, 0),
         monitors=[
