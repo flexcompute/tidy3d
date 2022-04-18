@@ -130,6 +130,8 @@ Monitors
    FluxMonitor
    FluxTimeMonitor
    ModeMonitor
+   ModeFieldMonitor
+   PermittivityMonitor
 
 
 Mode Specifications
@@ -171,6 +173,8 @@ Collections of Data from single monitor
 
    FieldData
    ModeData
+   ModeFieldData
+   PermittivityData
 
 Individual Dataset
 ------------------
@@ -247,6 +251,7 @@ Plugins
    plugins.StableDispersionFitter
    plugins.AdvancedFitterParam
    plugins.ModeSolver
+   plugins.ModeSolverData
    plugins.Near2Far
    plugins.Near2FarSurface
    plugins.ComponentModeler
