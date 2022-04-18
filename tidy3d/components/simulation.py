@@ -677,11 +677,8 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         medium_map = self.medium_map
 
         for (medium, shape) in medium_shapes:
-            if medium != self.medium:
-                mat_index = medium_map[medium]
-                ax = self._plot_shape_structure(
-                    medium=medium, mat_index=mat_index, shape=shape, ax=ax
-                )
+            mat_index = medium_map[medium]
+            ax = self._plot_shape_structure(medium=medium, mat_index=mat_index, shape=shape, ax=ax)
 
         ax = self._set_plot_bounds(ax=ax, x=x, y=y, z=z)
 
@@ -773,15 +770,19 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
             The supplied or created matplotlib axes.
         """
 
-        structures = [self.background_structure] + self.structures
+        structures = self.structures
+        alpha_used = alpha is not None and 0 < alpha < 1
 
-        if alpha is not None and alpha < 1:
+        if alpha_used:
             medium_shapes = self._filter_structures_plane(structures=structures, x=x, y=y, z=z)
         else:
+            structures = [self.background_structure] + structures
             medium_shapes = self._get_structures_plane(structures=structures, x=x, y=y, z=z)
 
         eps_min, eps_max = self.eps_bounds(freq=freq)
         for (medium, shape) in medium_shapes:
+            if medium == self.medium and alpha_used:
+                continue
             ax = self._plot_shape_structure_eps(
                 freq=freq,
                 alpha=alpha,
