@@ -211,6 +211,7 @@ Through python API
 
    tidy3d.web.webapi.run
    tidy3d.web.webapi.upload
+   tidy3d.web.webapi.estimate_cost
    tidy3d.web.webapi.get_info
    tidy3d.web.webapi.start
    tidy3d.web.webapi.monitor
