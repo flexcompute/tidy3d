@@ -12,7 +12,7 @@ from .types import PoleAndResidue, Ax, FreqBound
 from .viz import add_ax_if_none
 from .validators import validate_name_str
 
-from ..constants import C_0, pec_val, EPSILON_0, HERTZ, CONDUCTIVITY, PERMITTIVITY, RADPERSEC
+from ..constants import C_0, pec_val, EPSILON_0, HERTZ, CONDUCTIVITY, PERMITTIVITY, RADPERSEC, inf
 from ..log import log, ValidationError
 
 
@@ -22,8 +22,11 @@ def ensure_freq_in_range(eps_model: Callable[[float], complex]) -> Callable[[flo
     def _eps_model(self, frequency: float) -> complex:
         """New eps_model function."""
 
-        # if frequency is none, don't check, return original function
-        if frequency is None or self.frequency_range is None:
+        if frequency is None:
+            frequency = inf
+
+        # if frequency range not present just return original function
+        if self.frequency_range is None:
             return eps_model(self, frequency)
 
         fmin, fmax = self.frequency_range
@@ -413,7 +416,7 @@ class PoleResidue(DispersiveMedium):
         """Complex-valued permittivity as a function of frequency."""
 
         omega = 2 * np.pi * frequency
-        eps = self.eps_inf + 0.0j * frequency
+        eps = self.eps_inf + np.zeros_like(frequency) + 0.0j
         for (a, c) in self.poles:
             a_cc = np.conj(a)
             c_cc = np.conj(c)
