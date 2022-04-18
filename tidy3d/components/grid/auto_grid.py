@@ -1,4 +1,4 @@
-""" Collection of functions for automatically generating a nonuniform mesh. """
+""" Collection of functions for automatically generating a nonuniform grid. """
 
 from typing import Tuple, List
 
@@ -22,7 +22,7 @@ def parse_structures(axis, structures, wvl, min_steps_per_wvl):
         last element is the simulation max boundary, and the intermediate coordinates are all
         locations where a structure has a bounding box edge along the specified axis.
     max_steps: array_like
-        An array of size ``interval_coords.size`` giving the maximum mesh step required in each
+        An array of size ``interval_coords.size`` giving the maximum grid step required in each
         ``interval_coords[i]:interval_coords[i+1]`` interval, depending on the materials in that
         interval, the supplied wavelength, and the minimum required step per wavelength.
         Periodic boundary conditions are applied such that min_steps[0] = min_steps[-1].
@@ -146,13 +146,13 @@ def parse_structures(axis, structures, wvl, min_steps_per_wvl):
     return interval_coords, max_steps
 
 
-def make_mesh_multiple_intervals(  # pylint:disable=too-many-locals
+def make_grid_multiple_intervals(  # pylint:disable=too-many-locals
     max_dl_list: np.ndarray,
     len_interval_list: np.ndarray,
     max_scale: float,
     is_periodic: bool,
 ) -> List[np.ndarray]:
-    """Create mesh steps in multiple connecting intervals of length specified by
+    """Create grid steps in multiple connecting intervals of length specified by
     ``len_interval_list``. The maximal allowed step size in each interval is given by
     ``max_dl_list``. The maximum ratio between neighboring steps is bounded by ``max_scale``.
 
@@ -179,15 +179,15 @@ def make_mesh_multiple_intervals(  # pylint:disable=too-many-locals
 
     # initialize step size on the left and right boundary of each interval
     # by assuming possible non-integar step number
-    left_dl_list, right_dl_list = mesh_multiple_interval_analy_refinement(
+    left_dl_list, right_dl_list = grid_multiple_interval_analy_refinement(
         max_dl_list, len_interval_list, max_scale, is_periodic
     )
 
-    # initialize mesh steps
+    # initialize grid steps
     dl_list = []
     for interval_ind in range(num_intervals):
         dl_list.append(
-            make_mesh_in_interval(
+            make_grid_in_interval(
                 left_dl_list[interval_ind],
                 right_dl_list[interval_ind],
                 max_dl_list[interval_ind],
@@ -228,9 +228,9 @@ def make_mesh_multiple_intervals(  # pylint:disable=too-many-locals
                 refine_edge += 1
                 refine_local += 1
 
-            # update mesh steps in this interval if necessary
+            # update grid steps in this interval if necessary
             if refine_local > 0:
-                dl_list[interval_ind] = make_mesh_in_interval(
+                dl_list[interval_ind] = make_grid_in_interval(
                     left_dl,
                     right_dl,
                     max_dl_list[interval_ind],
@@ -241,7 +241,7 @@ def make_mesh_multiple_intervals(  # pylint:disable=too-many-locals
     return dl_list
 
 
-def mesh_multiple_interval_analy_refinement(
+def grid_multiple_interval_analy_refinement(
     max_dl_list: np.ndarray,
     len_interval_list: np.ndarray,
     max_scale: float,
@@ -323,14 +323,14 @@ def mesh_multiple_interval_analy_refinement(
 
 
 # pylint:disable=too-many-locals, too-many-return-statements, too-many-arguments
-def make_mesh_in_interval(
+def make_grid_in_interval(
     left_neighbor_dl: float,
     right_neighbor_dl: float,
     max_dl: float,
     max_scale: float,
     len_interval: float,
 ) -> np.ndarray:
-    """Create a set of mesh steps in an interval of length ``len_interval``,
+    """Create a set of grid steps in an interval of length ``len_interval``,
     with first step no larger than ``max_scale * left_neighbor_dl`` and last step no larger than
     ``max_scale * right_neighbor_dl``, with maximum ratio ``max_scale`` between
     neighboring steps. All steps should be no larger than ``max_dl``.
@@ -367,24 +367,24 @@ def make_mesh_in_interval(
     right_dl = min(max_dl, right_neighbor_dl)
 
     # classifications:
-    mesh_type = mesh_type_in_interval(left_dl, right_dl, max_dl, max_scale, len_interval)
+    grid_type = grid_type_in_interval(left_dl, right_dl, max_dl, max_scale, len_interval)
 
     # single pixel
-    if mesh_type == -1:
+    if grid_type == -1:
         return np.array([len_interval])
 
     # uniform and multiple pixels
-    if mesh_type == 0:
+    if grid_type == 0:
         even_dl = min(left_dl, right_dl)
         num_cells = int(np.ceil(len_interval / even_dl))
         return np.array([len_interval / num_cells] * num_cells)
 
-    # mesh_type = 1
-    # We first set up mesh steps from small to large, and then flip
+    # grid_type = 1
+    # We first set up grid steps from small to large, and then flip
     # their order if right_dl < left_dl
     small_dl = min(left_dl, right_dl)
     large_dl = max(left_dl, right_dl)
-    if mesh_type == 1:
+    if grid_type == 1:
         # Can small_dl scale to large_dl under max_scale within interval?
         # Compute the number of steps it takes to scale from small_dl to large_dl
         # Check the remaining length in the interval
@@ -395,15 +395,15 @@ def make_mesh_in_interval(
         # 1) interval length too small, cannot increase to large_dl, or barely can,
         #    but the remaing part is less than large_dl
         if len_remaining < large_dl:
-            dl_list = mesh_grow_in_interval(small_dl, max_scale, len_interval)
+            dl_list = grid_grow_in_interval(small_dl, max_scale, len_interval)
             return dl_list if left_dl <= right_dl else np.flip(dl_list)
 
         # 2) interval length sufficient, so it will plateau towards large_dl
-        dl_list = mesh_grow_plateau_in_interval(small_dl, large_dl, max_scale, len_interval)
+        dl_list = grid_grow_plateau_in_interval(small_dl, large_dl, max_scale, len_interval)
         return dl_list if left_dl <= right_dl else np.flip(dl_list)
 
-    # mesh_type = 2
-    if mesh_type == 2:
+    # grid_type = 2
+    if grid_type == 2:
         # Will it be able to plateau?
         # Compute the number of steps it take for both sides to grow to max_it;
         # then compare the length to len_interval
@@ -416,25 +416,25 @@ def make_mesh_in_interval(
 
         # able to plateau
         if len_remaining >= max_dl:
-            return mesh_grow_plateau_decrease_in_interval(
+            return grid_grow_plateau_decrease_in_interval(
                 left_dl, right_dl, max_dl, max_scale, len_interval
             )
 
         # unable to plateau
-        return mesh_grow_decrease_in_interval(left_dl, right_dl, max_scale, len_interval)
+        return grid_grow_decrease_in_interval(left_dl, right_dl, max_scale, len_interval)
 
     # unlikely to reach here. For future implementation purpose.
-    raise ValidationError("Unimplemented mesh type.")
+    raise ValidationError("Unimplemented grid type.")
 
 
-def mesh_grow_plateau_decrease_in_interval(
+def grid_grow_plateau_decrease_in_interval(
     left_dl: float,
     right_dl: float,
     max_dl: float,
     max_scale: float,
     len_interval: float,
 ) -> np.ndarray:
-    """In an interval, mesh grows, plateau, and decrease, resembling Lambda letter but
+    """In an interval, grid grows, plateau, and decrease, resembling Lambda letter but
     with plateau in the connection part..
 
     Parameters
@@ -497,13 +497,13 @@ def mesh_grow_plateau_decrease_in_interval(
     return dl_list
 
 
-def mesh_grow_decrease_in_interval(
+def grid_grow_decrease_in_interval(
     left_dl: float,
     right_dl: float,
     max_scale: float,
     len_interval: float,
 ) -> np.ndarray:
-    """In an interval, mesh grows, and decrease, resembling Lambda letter.
+    """In an interval, grid grows, and decrease, resembling Lambda letter.
 
     Parameters
     ----------
@@ -518,7 +518,7 @@ def mesh_grow_decrease_in_interval(
     """
 
     # interval too small, it shouldn't happen if bounding box filter is properly handled
-    # just use uniform meshing with min(left_dl, right_dl)
+    # just use uniform griding with min(left_dl, right_dl)
     if len_interval < left_dl + right_dl:
         even_dl = min(left_dl, right_dl)
         num_cells = int(np.floor(len_interval / even_dl))
@@ -585,13 +585,13 @@ def mesh_grow_decrease_in_interval(
     return dl_list
 
 
-def mesh_grow_plateau_in_interval(
+def grid_grow_plateau_in_interval(
     small_dl: float,
     large_dl: float,
     max_scale: float,
     len_interval: float,
 ) -> np.ndarray:
-    """In an interval, mesh grows, then plateau.
+    """In an interval, grid grows, then plateau.
 
     Parameters
     ----------
@@ -640,7 +640,7 @@ def mesh_grow_plateau_in_interval(
     return dl_list
 
 
-def mesh_grow_in_interval(
+def grid_grow_in_interval(
     small_dl: float,
     max_scale: float,
     len_interval: float,
@@ -722,7 +722,7 @@ def mesh_grow_in_interval(
     return dl_list
 
 
-def mesh_type_in_interval(
+def grid_type_in_interval(
     left_dl: float,
     right_dl: float,
     max_dl: float,
@@ -746,20 +746,20 @@ def mesh_type_in_interval(
 
     Returns
     -------
-    mesh_type : int
-        -1 for single pixel mesh
-        0 for uniform mesh
-        1 for small to large to optionally plateau mesh
-        2 for small to large to optionally plateau to small mesh
+    grid_type : int
+        -1 for single pixel grid
+        0 for uniform grid
+        1 for small to large to optionally plateau grid
+        2 for small to large to optionally plateau to small grid
     """
 
-    # uniform mesh if interval length is no larger than small_dl
+    # uniform grid if interval length is no larger than small_dl
     if len_interval <= min(left_dl, right_dl, max_dl):
         return -1
-    # uniform mesh if max_scale is too small
+    # uniform grid if max_scale is too small
     if np.isclose(max_scale, 1):
         return 0
-    # uniform mesh if max_dl is the smallest
+    # uniform grid if max_dl is the smallest
     if max_dl <= left_dl and max_dl <= right_dl:
         return 0
 

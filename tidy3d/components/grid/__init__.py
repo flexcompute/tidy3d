@@ -2,4 +2,4 @@
 
 # grid
 from .grid import Grid, Coords, Coords1D, YeeGrid, FieldGrid
-from .mesh_spec import MeshSpec, UniformMesh, CustomMesh, AutoMesh
+from .grid_spec import GridSpec, UniformGrid, CustomGrid, AutoGrid

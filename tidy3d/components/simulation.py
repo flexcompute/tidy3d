@@ -14,7 +14,7 @@ from .validators import assert_unique_names, assert_objects_in_sim_bounds
 from .validators import validate_mode_objects_symmetry
 from .geometry import Box
 from .types import Symmetry, Ax, Shapely, FreqBound, Axis, GridSize
-from .grid import Coords1D, Grid, Coords, MeshSpec, UniformMesh, CustomMesh
+from .grid import Coords1D, Grid, Coords, GridSpec, UniformGrid, CustomGrid
 from .medium import Medium, MediumType, AbstractMedium, PECMedium
 from .structure import Structure
 from .source import SourceType, PlaneWave
@@ -51,13 +51,13 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
     >>> from tidy3d import Sphere, Cylinder, PolySlab
     >>> from tidy3d import CurrentSource, GaussianPulse
     >>> from tidy3d import FieldMonitor, FluxMonitor
-    >>> from tidy3d import MeshSpec, AutoMesh
+    >>> from tidy3d import GridSpec, AutoGrid
     >>> sim = Simulation(
     ...     size=(2.0, 2.0, 2.0),
-    ...     mesh_spec=MeshSpec(
-    ...         mesh_x = AutoMesh(min_steps_per_wvl = 20),
-    ...         mesh_y = AutoMesh(min_steps_per_wvl = 20),
-    ...         mesh_z = AutoMesh(min_steps_per_wvl = 20)
+    ...     grid_spec=GridSpec(
+    ...         grid_x = AutoGrid(min_steps_per_wvl = 20),
+    ...         grid_y = AutoGrid(min_steps_per_wvl = 20),
+    ...         grid_z = AutoGrid(min_steps_per_wvl = 20)
     ...     ),
     ...     run_time=40e-11,
     ...     structures=[
@@ -105,7 +105,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
     grid_size: Tuple[GridSize, GridSize, GridSize] = pydantic.Field(
         None,
         title="Grid Size",
-        description="DEPRECATED: the function of 'grid_size' has been replaced by 'mesh_spec'. "
+        description="DEPRECATED: the function of 'grid_size' has been replaced by 'grid_spec'. "
         "It will be removed in future versions! "
         "If components are float, uniform grid size along x, y, and z. "
         "If components are array like, defines an array of nonuniform grid sizes centered at "
@@ -153,11 +153,11 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         "Note: monitor names are used to access data after simulation is run.",
     )
 
-    mesh_spec: MeshSpec = pydantic.Field(
-        MeshSpec(),
+    grid_spec: GridSpec = pydantic.Field(
+        GridSpec(),
         title="Mesh Specifications",
         description="Mesh Specifications for choosing and setting parameters "
-        "along each dimension in :class:``MeshSpec``.",
+        "along each dimension in :class:``GridSpec``.",
     )
 
     pml_layers: Tuple[PMLTypes, PMLTypes, PMLTypes] = pydantic.Field(
@@ -202,34 +202,34 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
 
     """ Validating setup """
 
-    @pydantic.validator("mesh_spec", always=True)
+    @pydantic.validator("grid_spec", always=True)
     def _warn_use_grid_size(cls, val, values):
-        """If ``grid_size`` is provided, it is used to set ``mesh_spec``, but a warning is
+        """If ``grid_size`` is provided, it is used to set ``grid_spec``, but a warning is
         printed."""
         if values.get("grid_size") is None:
             return val
 
         log.warning(
-            "DEPRECATED: the function of 'grid_size' has been replaced by 'mesh_spec'. "
+            "DEPRECATED: the function of 'grid_size' has been replaced by 'grid_spec'. "
             "It will be removed in future versions!"
         )
         log.warning("Setting the simulation grid using the provided 'grid_size'.")
 
-        mesh_spec_dict = {}
-        for key, dl in zip(("mesh_x", "mesh_y", "mesh_z"), values["grid_size"]):
+        grid_spec_dict = {}
+        for key, dl in zip(("grid_x", "grid_y", "grid_z"), values["grid_size"]):
             if isinstance(dl, float):
-                mesh_spec_dim = UniformMesh(dl=dl)
+                grid_spec_dim = UniformGrid(dl=dl)
             else:
-                mesh_spec_dim = CustomMesh(dl=dl)
-            mesh_spec_dict[key] = mesh_spec_dim
+                grid_spec_dim = CustomGrid(dl=dl)
+            grid_spec_dict[key] = grid_spec_dim
 
-        return MeshSpec(**mesh_spec_dict)
+        return GridSpec(**grid_spec_dict)
 
-    @pydantic.validator("mesh_spec", always=True)
-    def _validate_auto_mesh_wavelength(cls, val, values):
-        """If there is auto mesh spec with no wavelength, check that wavelength can be defined
+    @pydantic.validator("grid_spec", always=True)
+    def _validate_auto_grid_wavelength(cls, val, values):
+        """If there is auto grid spec with no wavelength, check that wavelength can be defined
         from sources."""
-        if val.wavelength is None and val.auto_mesh_used:
+        if val.wavelength is None and val.auto_grid_used:
             _ = val.wvl_from_sources(sources=values.get("sources"))
 
         return val
@@ -425,7 +425,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
                 )
         return val
 
-    @pydantic.validator("mesh_spec", always=True)
+    @pydantic.validator("grid_spec", always=True)
     def _warn_grid_size_too_small(cls, val, values):  # pylint:disable=too-many-locals
         """Warn user if any grid size is too large compared to minimum wavelength in material."""
 
@@ -450,13 +450,13 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
                 n_material, _ = medium.eps_complex_to_nk(eps_material)
                 lambda_min = C_0 / freq0 / n_material
 
-                for key, mesh_spec in zip("xyz", (val.mesh_x, val.mesh_y, val.mesh_z)):
-                    if isinstance(mesh_spec, UniformMesh):
+                for key, grid_spec in zip("xyz", (val.grid_x, val.grid_y, val.grid_z)):
+                    if isinstance(grid_spec, UniformGrid):
 
-                        if mesh_spec.dl > lambda_min / MIN_GRIDS_PER_WVL:
+                        if grid_spec.dl > lambda_min / MIN_GRIDS_PER_WVL:
 
                             log.warning(
-                                f"The grid step in {key} has a value of {mesh_spec.dl:.4f} (um)"
+                                f"The grid step in {key} has a value of {grid_spec.dl:.4f} (um)"
                                 ", which was detected as being large when compared to the "
                                 f"central wavelength of sources[{source_index}] "
                                 f"within the simulation medium "
@@ -464,7 +464,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
                                 f"{lambda_min:.4f} (um). "
                                 "To avoid inaccuracies, it is reccomended the grid size is reduced."
                             )
-                    # TODO: warn about custom mesh spec
+                    # TODO: warn about custom grid spec
 
         return val
 
@@ -1360,7 +1360,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
             Time step (seconds).
         """
         dl_mins = [np.min(sizes) for sizes in self.grid.sizes.to_list]
-        dl_sum_inv_sq = sum([1 / dl ** 2 for dl in dl_mins])
+        dl_sum_inv_sq = sum([1 / dl**2 for dl in dl_mins])
         dl_avg = 1 / np.sqrt(dl_sum_inv_sq)
         return self.courant * dl_avg / C_0
 
@@ -1397,7 +1397,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         structures = [Structure(geometry=self.geometry, medium=self.medium)]
         structures += self.structures
 
-        return self.mesh_spec.make_grid(
+        return self.grid_spec.make_grid(
             structures,
             self.symmetry,
             self.sources,

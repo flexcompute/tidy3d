@@ -23,7 +23,7 @@ def test_near2far():
     sim_size = (5, 5, 5)
     sim = td.Simulation(
         size=sim_size,
-        mesh_spec=td.MeshSpec.auto(wavelength=td.C_0 / f0),
+        grid_spec=td.GridSpec.auto(wavelength=td.C_0 / f0),
         monitors=monitors,
         run_time=1e-12,
     )
@@ -76,7 +76,7 @@ def test_mode_solver():
     )
     simulation = td.Simulation(
         size=(2, 2, 2),
-        mesh_spec=td.MeshSpec(wavelength=1.0),
+        grid_spec=td.GridSpec(wavelength=1.0),
         structures=[waveguide],
         run_time=1e-12,
     )
