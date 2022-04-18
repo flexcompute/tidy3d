@@ -11,14 +11,13 @@ import h5py
 import pydantic as pd
 
 from .types import Numpy, Direction, Array, numpy_encoding, Literal, Ax, Coordinate, Symmetry, Axis
-from .base import Tidy3dBaseModel
+from .base import Tidy3dBaseModel, TYPE_TAG_STR
 from .simulation import Simulation
 from .monitor import Monitor
 from .grid import Grid, Coords
 from .viz import add_ax_if_none, equal_aspect
 from ..log import DataError, log
-
-# TODO: add warning if fields didnt fully decay
+from ..constants import HERTZ, SECOND, MICROMETER
 
 
 # mapping of data coordinates to units for assigning .attrs to the xarray objects
@@ -34,8 +33,6 @@ DIM_ATTRS = {
 
 
 """ xarray subclasses """
-
-# TODO: make this work for Dataset items, which get converted to xr.DataArray
 
 
 class Tidy3dDataArray(xr.DataArray):
@@ -116,9 +113,15 @@ class Tidy3dData(Tidy3dBaseModel):
 class MonitorData(Tidy3dData, ABC):
     """Abstract base class for objects storing individual data from simulation."""
 
-    values: Union[Array[float], Array[complex]]
-    data_attrs: Dict[str, str] = None
-    type: str = None
+    values: Union[Array[float], Array[complex]] = pd.Field(
+        ..., title="Values", description="Values of the raw data being stored."
+    )
+
+    data_attrs: Dict[str, str] = pd.Field(
+        None,
+        title="Data Attributes",
+        description="Dictionary storing extra attributes associated with the monitor data.",
+    )
 
     """ explanation of values
         `values` is a numpy array that stores the raw data associated with each
@@ -186,7 +189,7 @@ class MonitorData(Tidy3dData, ABC):
         """Add data contents to an hdf5 group."""
 
         # save the type information of MonitorData to the group
-        Tidy3dData.save_string(hdf5_grp, "type", self.type)
+        Tidy3dData.save_string(hdf5_grp, TYPE_TAG_STR, self.type)  # pylint:disable=no-member
         for data_name, data_value in self.dict().items():
 
             # for each data member in self._dims (+ values), add to group.
@@ -209,8 +212,8 @@ class MonitorData(Tidy3dData, ABC):
             if kwargs.get(str_kwarg) is not None:
                 kwargs[str_kwarg] = Tidy3dData.decode_bytes_array(kwargs[str_kwarg])
 
-        # ignore the "type" dataset as it's used for finding type for loading
-        kwargs.pop("type")
+        # ignore the TYPE_TAG_STR dataset as it's used for finding type for loading
+        kwargs.pop(TYPE_TAG_STR)
 
         return cls(**kwargs)
 
@@ -223,15 +226,13 @@ class MonitorData(Tidy3dData, ABC):
 class CollectionData(Tidy3dData):
     """Abstract base class.
     Stores a collection of data with same dimension types (such as a field with many components).
-
-    Parameters
-    ----------
-    data_dict : Dict[str, :class:`MonitorData`]
-        Mapping of collection member name to corresponding :class:`MonitorData`.
     """
 
-    data_dict: Dict[str, MonitorData]
-    type: str = None
+    data_dict: Dict[str, MonitorData] = pd.Field(
+        ...,
+        title="Data Dictionary",
+        description="Mapping of name to each :class:`.MonitorData` in the collection.",
+    )
 
     @property
     def data(self) -> Dict[str, xr.DataArray]:
@@ -284,7 +285,7 @@ class CollectionData(Tidy3dData):
         """Add data from a :class:`AbstractFieldData` to an hdf5 group ."""
 
         # put collection's type information into the group
-        Tidy3dData.save_string(hdf5_grp, "type", self.type)
+        Tidy3dData.save_string(hdf5_grp, TYPE_TAG_STR, self.type)  # pylint:disable=no-member
         for data_name, data_value in self.data_dict.items():
 
             # create a new group for each member of collection and add its data
@@ -298,11 +299,11 @@ class CollectionData(Tidy3dData):
         for data_name, data_value in hdf5_grp.items():
 
             # hdf5 group contains `type` dataset, ignore it.
-            if data_name == "type":
+            if data_name == TYPE_TAG_STR:
                 continue
 
             # get the type from MonitorData.type and add instance to dict
-            _data_type = DATA_TYPE_MAP[Tidy3dData.load_string(data_value, "type")]
+            _data_type = DATA_TYPE_MAP[Tidy3dData.load_string(data_value, TYPE_TAG_STR)]
             data_dict[data_name] = _data_type.load_from_group(data_value)
 
         return cls(data_dict=data_dict)
@@ -326,22 +327,35 @@ class SpatialCollectionData(CollectionData, ABC):
 
     """ Attributes storing details about any symmetries that can be used to expand the data. """
 
-    # Position of the symmetry planes in x, y, and z.
-    symmetry_center: Coordinate = None
-    # Eigenvalues of the symmetry under reflection in x, y, and z.
-    symmetry: Tuple[Symmetry, Symmetry, Symmetry] = (0, 0, 0)
+    symmetry_center: Coordinate = pd.Field(
+        None, title="Symmetry Center", description="Position of the symmetry planes in x, y, and z."
+    )
 
-    """Grid after the symmetries (if any) are expanded. The dictionary keys must correspond to
-    the data keys in the ``data_dict`` for the expanded grid to be invoked."""
-    expanded_grid: Dict[str, Coords] = {}
+    symmetry: Tuple[Symmetry, Symmetry, Symmetry] = pd.Field(
+        (0, 0, 0),
+        title="Symmetry Eigenvalues",
+        description="igenvalues of the symmetry under reflection in x, y, and z.",
+    )
 
-    """Dictionary of the form ``{data_key: Symmetry}``, defining how data components are affected
-    by a positive symmetry along each of the axes. If the name of a given data in the ``data_dict``
-    is not in this dictionary, then in the presence of symmetry the data is just unwrapped with a
-    positive symmetry value in each direction. If the data name is in the dictionary, for each axis
-    the corresponding ``_sym_dict`` value times the ``self.symmetry`` eigenvalue is used.
+    expanded_grid: Dict[str, Coords] = pd.Field(
+        {},
+        title="Expanded Grid",
+        description="Grid after the symmetries (if any) are expanded. "
+        "The dictionary keys must correspond to the data keys in the ``data_dict`` "
+        "for the expanded grid to be invoked.",
+    )
+
+    _sym_dict: Dict[str, Symmetry] = pd.PrivateAttr({})
     """
-    _sym_dict: Dict[str, Symmetry] = {}
+        title="Symmetry Dict",
+        description="Dictionary of the form ``{data_key: Symmetry}``, "
+        "defining how data components are affected by a positive symmetry along each of the axes. "
+        "If the name of a given data in the ``data_dict`` is not in this dictionary, "
+        "then in the presence of symmetry the data is just unwrapped "
+        "with a positive symmetry value in each direction. "
+        "If the data name is in the dictionary, for each axis, "
+        "the corresponding ``_sym_dict`` value times the ``self.symmetry`` eigenvalue is used.",
+    """
 
     def colocate(self, x, y, z) -> xr.Dataset:
         """colocate all of the data at a set of x, y, z coordinates.
@@ -518,7 +532,12 @@ class AbstractFieldData(SpatialCollectionData, ABC):
 class FreqData(MonitorData, ABC):
     """Stores frequency-domain data using an ``f`` dimension for frequency in Hz."""
 
-    f: Array[float]
+    f: Array[float] = pd.Field(
+        ...,
+        title="Frequencies",
+        description="Array of frequency values to use as coordintes.",
+        units=HERTZ,
+    )
 
     @abstractmethod
     def normalize(self, source_freq_amps: Array[complex]) -> None:
@@ -528,15 +547,37 @@ class FreqData(MonitorData, ABC):
 class TimeData(MonitorData, ABC):
     """Stores time-domain data using a ``t`` attribute for time in seconds."""
 
-    t: Array[float]
+    t: Array[float] = pd.Field(
+        ...,
+        title="Times",
+        description="Array of time values to use as coordintes.",
+        units=SECOND,
+    )
 
 
 class ScalarSpatialData(MonitorData, ABC):
     """Stores a single, scalar variable as a function of spatial coordinates x, y, z."""
 
-    x: Array[float]
-    y: Array[float]
-    z: Array[float]
+    x: Array[float] = pd.Field(
+        ...,
+        title="X Locations",
+        description="Array of x location values to use as coordintes.",
+        units=MICROMETER,
+    )
+
+    y: Array[float] = pd.Field(
+        ...,
+        title="Y Locations",
+        description="Array of y location values to use as coordintes.",
+        units=MICROMETER,
+    )
+
+    z: Array[float] = pd.Field(
+        ...,
+        title="Z Locations",
+        description="Array of z location values to use as coordintes.",
+        units=MICROMETER,
+    )
 
 
 class PlanarData(MonitorData, ABC):
@@ -546,7 +587,9 @@ class PlanarData(MonitorData, ABC):
 class AbstractModeData(PlanarData, FreqData, ABC):
     """Abstract class for mode data as a function of frequency and mode index."""
 
-    mode_index: Array[int]
+    mode_index: Array[int] = pd.Field(
+        ..., title="Mode Indices", description="Array of mode index values to use as coordintes."
+    )
 
 
 class AbstractFluxData(PlanarData, ABC):
@@ -559,19 +602,6 @@ class AbstractFluxData(PlanarData, ABC):
 class ScalarFieldData(ScalarSpatialData, FreqData):
     """Stores a single scalar field in frequency-domain.
 
-    Parameters
-    ----------
-    x : numpy.ndarray
-        Data coordinates in x direction (um).
-    y : numpy.ndarray
-        Data coordinates in y direction (um).
-    z : numpy.ndarray
-        Data coordinates in z direction (um).
-    f : numpy.ndarray
-        Frequency coordinates (Hz).
-    values : numpy.ndarray
-        Complex-valued array of shape ``(len(x), len(y), len(z), len(f))`` storing field values.
-
     Example
     -------
     >>> f = np.linspace(1e14, 2e14, 1001)
@@ -582,9 +612,11 @@ class ScalarFieldData(ScalarSpatialData, FreqData):
     >>> data = ScalarFieldData(values=values, x=x, y=y, z=z, f=f)
     """
 
-    values: Array[complex]
-    data_attrs: Dict[str, str] = None  # {'units': '[E] = V/um, [H] = A/um'}
-    type: Literal["ScalarFieldData"] = "ScalarFieldData"
+    values: Array[complex] = pd.Field(
+        ...,
+        title="Scalar Field Values",
+        description="Multi-dimensional array storing the raw scalar field values in freq. domain.",
+    )
 
     _dims = ("x", "y", "z", "f")
 
@@ -596,19 +628,6 @@ class ScalarFieldData(ScalarSpatialData, FreqData):
 class ScalarFieldTimeData(ScalarSpatialData, TimeData):
     """stores a single scalar field in time domain
 
-    Parameters
-    ----------
-    x : numpy.ndarray
-        Data coordinates in x direction (um).
-    y : numpy.ndarray
-        Data coordinates in y direction (um).
-    z : numpy.ndarray
-        Data coordinates in z direction (um).
-    t : numpy.ndarray
-        Time coordinates (sec).
-    values : numpy.ndarray
-        Real-valued array of shape ``(len(x), len(y), len(z), len(t))`` storing field values.
-
     Example
     -------
     >>> t = np.linspace(0, 1e-12, 1001)
@@ -619,28 +638,17 @@ class ScalarFieldTimeData(ScalarSpatialData, TimeData):
     >>> data = ScalarFieldTimeData(values=values, x=x, y=y, z=z, t=t)
     """
 
-    values: Array[float]
-    data_attrs: Dict[str, str] = None  # {'units': '[E] = V/m, [H] = A/m'}
-    type: Literal["ScalarFieldTimeData"] = "ScalarFieldTimeData"
+    values: Array[float] = pd.Field(
+        ...,
+        title="Scalar Field Values",
+        description="Multi-dimensional array storing the raw scalar field values in time domain.",
+    )
 
     _dims = ("x", "y", "z", "t")
 
 
 class ScalarPermittivityData(ScalarSpatialData, FreqData):
     """Stores a single scalar permittivity distribution in frequency-domain.
-
-    Parameters
-    ----------
-    x : numpy.ndarray
-        Data coordinates in x direction (um).
-    y : numpy.ndarray
-        Data coordinates in y direction (um).
-    z : numpy.ndarray
-        Data coordinates in z direction (um).
-    f : numpy.ndarray
-        Frequency coordinates (Hz).
-    values : numpy.ndarray
-        Complex-valued array of shape ``(len(x), len(y), len(z), len(f))`` storing eps values.
 
     Example
     -------
@@ -652,9 +660,11 @@ class ScalarPermittivityData(ScalarSpatialData, FreqData):
     >>> data = ScalarPermittivityData(values=values, x=x, y=y, z=z, f=f)
     """
 
-    values: Array[complex]
-    data_attrs: Dict[str, str] = None
-    type: Literal["ScalarPermittivityData"] = "ScalarPermittivityData"
+    values: Array[complex] = pd.Field(
+        ...,
+        title="Scalar Permittivity Values",
+        description="Multi-dimensional array storing the raw permittivity values in freq. domain.",
+    )
 
     _dims = ("x", "y", "z", "f")
 
@@ -663,27 +673,13 @@ class ScalarPermittivityData(ScalarSpatialData, FreqData):
 
 
 class ScalarModeFieldData(ScalarFieldData, AbstractModeData):
-    """Like ScalarFieldData but with extra dimension ``mode_index``."""
+    """Like :class:`.ScalarFieldData`, but with extra dimension ``mode_index``."""
 
-    type: Literal["ScalarModeFieldData"] = "ScalarModeFieldData"
     _dims = ("x", "y", "z", "f", "mode_index")
 
 
 class ModeAmpsData(AbstractModeData):
-    """Stores modal amplitdudes from a :class:`ModeMonitor`.
-
-    Parameters
-    ----------
-    direction : List[str]
-        List of strings corresponding to the mode propagation direction.
-        Allowed elements are ``'+'`` and ``'-'``.
-    mode_index : numpy.ndarray
-        Array of integer indices into the original monitor's :attr:`ModeMonitor.modes`.
-    f : numpy.ndarray
-        Frequency coordinates (Hz).
-    values : numpy.ndarray
-        Complex-valued array of mode amplitude values
-        with shape ``values.shape=(len(direction), len(mode_index), len(f))``.
+    """Stores modal amplitdudes from a :class:`.ModeMonitor`.
 
     Example
     -------
@@ -692,10 +688,23 @@ class ModeAmpsData(AbstractModeData):
     >>> data = ModeAmpsData(values=values, direction=['+'], mode_index=np.arange(1, 3), f=f)
     """
 
-    direction: List[Direction] = ["+", "-"]
-    values: Array[complex]
-    data_attrs: Dict[str, str] = {"units": "sqrt(W)", "long_name": "mode amplitudes"}
-    type: Literal["ModeAmpsData"] = "ModeAmpsData"
+    direction: List[Direction] = pd.Field(
+        ["+", "-"],
+        title="Direction Coordinates",
+        description="List of directions contained in the mode amplitude data.",
+    )
+
+    values: Array[complex] = pd.Field(
+        ...,
+        title="Mode Amplitude Values",
+        description="Multi-dimensional array storing the raw, complex mode amplitude values.",
+    )
+
+    data_attrs: Dict[str, str] = pd.Field(
+        {"units": "sqrt(W)", "long_name": "mode amplitudes"},
+        title="Data Attributes",
+        description="Dictionary storing extra attributes associated with the monitor data.",
+    )
 
     _dims = ("direction", "f", "mode_index")
 
@@ -705,16 +714,7 @@ class ModeAmpsData(AbstractModeData):
 
 
 class ModeIndexData(AbstractModeData):
-    """Stores effective propagation index from a :class:`ModeMonitor`.
-
-    Parameters
-    ----------
-    mode_index : numpy.ndarray
-        Array of integer indices into the original monitor's :attr:`ModeMonitor.modes`.
-    f : numpy.ndarray
-        Frequency coordinates (Hz).
-    values : numpy.ndarray
-        Complex-valued array of effective index.
+    """Stores effective propagation index from a :class:`.ModeMonitor`.
 
     Example
     -------
@@ -723,9 +723,15 @@ class ModeIndexData(AbstractModeData):
     >>> data = ModeIndexData(values=values, mode_index=np.arange(1, 3), f=f)
     """
 
-    values: Array[complex]
-    data_attrs: Dict[str, str] = {"units": "", "long_name": "effective index"}
-    type: Literal["ModeIndexData"] = "ModeIndexData"
+    values: Array[complex] = pd.Field(
+        ..., title="Values", description="Values of the mode's complex effective refractive index."
+    )
+
+    data_attrs: Dict[str, str] = pd.Field(
+        {"units": "", "long_name": "effective index"},
+        title="Data Attributes",
+        description="Dictionary storing extra attributes associated with the monitor data.",
+    )
 
     _dims = ("f", "mode_index")
 
@@ -757,12 +763,7 @@ class ModeIndexData(AbstractModeData):
 
 
 class FieldData(AbstractFieldData):
-    """Stores a collection of scalar fields in the frequency domain from a :class:`FieldMonitor`.
-
-    Parameters
-    ----------
-    data_dict : Dict[str, :class:`ScalarFieldData`]
-        Mapping of field name (eg. 'Ex') to its scalar field data.
+    """Stores a collection of scalar fields in the frequency domain from a :class:`.FieldMonitor`.
 
     Example
     -------
@@ -775,17 +776,15 @@ class FieldData(AbstractFieldData):
     >>> data = FieldData(data_dict={'Ex': field, 'Ey': field})
     """
 
-    data_dict: Dict[str, ScalarFieldData]
-    type: Literal["FieldData"] = "FieldData"
+    data_dict: Dict[str, ScalarFieldData] = pd.Field(
+        ...,
+        title="Data Dictionary",
+        description="Mapping of the field names to their corresponding :class:`.ScalarFieldData`.",
+    )
 
 
 class FieldTimeData(AbstractFieldData):
-    """Stores a collection of scalar fields in the time domain from a :class:`FieldTimeMonitor`.
-
-    Parameters
-    ----------
-    data_dict : Dict[str, :class:`ScalarFieldTimeData`]
-        Mapping of field name to its scalar field data.
+    """Stores a collection of scalar fields in the time domain from a :class:`.FieldTimeMonitor`.
 
     Example
     -------
@@ -798,18 +797,17 @@ class FieldTimeData(AbstractFieldData):
     >>> data = FieldTimeData(data_dict={'Ex': field, 'Ey': field})
     """
 
-    data_dict: Dict[str, ScalarFieldTimeData]
-    type: Literal["FieldTimeData"] = "FieldTimeData"
+    data_dict: Dict[str, ScalarFieldTimeData] = pd.Field(
+        ...,
+        title="Data Dictionary",
+        description="Mapping of the field names to their corresponding "
+        ":class:`.ScalarFieldTimeData`.",
+    )
 
 
 class PermittivityData(SpatialCollectionData):
     """Sores a collection of permittivity components over spatial coordinates and frequency
-    from a :class:`PermittivityMonitor`.
-
-    Parameters
-    ----------
-    data_dict : Dict[str, :class:`ScalarPermittivityData`]
-        Mapping of component name to its scalar data.
+    from a :class:`.PermittivityMonitor`.
 
     Example
     -------
@@ -822,8 +820,12 @@ class PermittivityData(SpatialCollectionData):
     >>> data = PermittivityData(data_dict={'eps_xx': eps, 'eps_yy': eps, 'eps_zz': eps})
     """
 
-    data_dict: Dict[str, ScalarPermittivityData]
-    type: Literal["PermittivityData"] = "PermittivityData"
+    data_dict: Dict[str, ScalarPermittivityData] = pd.Field(
+        ...,
+        title="Data Dictionary",
+        description="Mapping of the permittivity tensor names to their corresponding "
+        ":class:`.ScalarPermittivityData`.",
+    )
 
     """ Get the permittivity components from the dict using convenient "dot" syntax."""
 
@@ -863,14 +865,7 @@ class PermittivityData(SpatialCollectionData):
 
 
 class FluxData(AbstractFluxData, FreqData):
-    """Stores frequency-domain power flux data from a :class:`FluxMonitor`.
-
-    Parameters
-    ----------
-    f : numpy.ndarray
-        Frequency coordinates (Hz).
-    values : numpy.ndarray
-        Complex-valued array of shape ``(len(f),)`` storing field values.
+    """Stores frequency-domain power flux data from a :class:`.FluxMonitor`.
 
     Example
     -------
@@ -879,9 +874,14 @@ class FluxData(AbstractFluxData, FreqData):
     >>> data = FluxData(values=values, f=f)
     """
 
-    values: Array[float]
-    data_attrs: Dict[str, str] = {"units": "W", "long_name": "flux"}
-    type: Literal["FluxData"] = "FluxData"
+    values: Array[float] = pd.Field(
+        ..., title="Values", description="Values of the raw flux data in the frequency domain."
+    )
+    data_attrs: Dict[str, str] = pd.Field(
+        {"units": "W", "long_name": "flux"},
+        title="Data Attributes",
+        description="Dictionary storing extra attributes associated with the monitor data.",
+    )
 
     _dims = ("f",)
 
@@ -891,14 +891,7 @@ class FluxData(AbstractFluxData, FreqData):
 
 
 class FluxTimeData(AbstractFluxData, TimeData):
-    """Stores time-domain power flux data from a :class:`FluxTimeMonitor`.
-
-    Parameters
-    ----------
-    t : numpy.ndarray
-        Time coordinates (sec).
-    values : numpy.ndarray
-        Real-valued array of shape ``(len(t),)`` storing field values.
+    """Stores time-domain power flux data from a :class:`.FluxTimeMonitor`.
 
     Example
     -------
@@ -907,9 +900,14 @@ class FluxTimeData(AbstractFluxData, TimeData):
     >>> data = FluxTimeData(values=values, t=t)
     """
 
-    values: Array[float]
-    data_attrs: Dict[str, str] = {"units": "W", "long_name": "flux"}
-    type: Literal["FluxTimeData"] = "FluxTimeData"
+    values: Array[float] = pd.Field(
+        ..., title="Values", description="Values of the raw flux data in the time domain."
+    )
+    data_attrs: Dict[str, str] = pd.Field(
+        {"units": "W", "long_name": "flux"},
+        title="Data Attributes",
+        description="Dictionary storing extra attributes associated with the monitor data.",
+    )
 
     _dims = ("t",)
 
@@ -917,11 +915,6 @@ class FluxTimeData(AbstractFluxData, TimeData):
 class ModeData(CollectionData):
     """Stores a collection of mode decomposition amplitudes and mode effective indexes for all
     modes in a :class:`.ModeMonitor`.
-
-    Parameters
-    ----------
-    data_dict : Dict[str, :class:`AbstractModeData`]
-        Mapping of "n_complex" to :class:`ModeIndexData`, and "amps" to :class:`ModeAmpsData`.
 
     Example
     -------
@@ -934,8 +927,12 @@ class ModeData(CollectionData):
     >>> data = ModeData(data_dict={'n_complex': index_data, 'amps': amps_data})
     """
 
-    data_dict: Dict[str, Union[ModeAmpsData, ModeIndexData]]
-    type: Literal["ModeData"] = "ModeData"
+    data_dict: Dict[str, Union[ModeAmpsData, ModeIndexData]] = pd.Field(
+        ...,
+        title="Data Dictionary",
+        description="Mapping of 'amps' to :class:`.ModeAmpsData` "
+        "and 'n_complex' to :class:`.ModeIndexData` for the :class:`.ModeMonitor`.",
+    )
 
     @property
     def amps(self):
@@ -973,8 +970,11 @@ class ModeData(CollectionData):
 class ModeFieldData(AbstractFieldData):
     """Like FieldData but with extra dimension ``mode_index``."""
 
-    data_dict: Dict[str, ScalarModeFieldData]
-    type: Literal["ModeFieldData"] = "ModeFieldData"
+    data_dict: Dict[str, ScalarModeFieldData] = pd.Field(
+        ...,
+        title="Data Dictionary",
+        description="Mapping of field name to the corresponding :class:`.ScalarModeFieldData`.",
+    )
 
     def sel_mode_index(self, mode_index):
         """Return a FieldData at the selected mode index."""
@@ -985,7 +985,7 @@ class ModeFieldData(AbstractFieldData):
         for field_name, scalar_data in self.data_dict.items():
             scalar_dict = scalar_data.dict()
             scalar_dict.pop("mode_index")
-            scalar_dict.pop("type")
+            scalar_dict.pop(TYPE_TAG_STR)
             scalar_dict["values"] = scalar_data.data.sel(mode_index=mode_index).values
             data_dict[field_name] = ScalarFieldData(**scalar_dict)
 
@@ -1013,7 +1013,11 @@ DATA_TYPE_MAP = {
 class AbstractSimulationData(Tidy3dBaseModel, ABC):
     """Abstract class to store a simulation and some data associated with it."""
 
-    simulation: Simulation
+    simulation: Simulation = pd.Field(
+        ...,
+        title="Simulation",
+        description="Original :class:`.Simulation` associated with the data.",
+    )
 
     @equal_aspect
     @add_ax_if_none
@@ -1114,26 +1118,33 @@ class AbstractSimulationData(Tidy3dBaseModel, ABC):
 
 
 class SimulationData(AbstractSimulationData):
-    """Holds :class:`Monitor` data associated with :class:`Simulation`.
+    """Holds :class:`Monitor` data associated with :class:`Simulation`."""
 
-    Parameters
-    ----------
-    simulation : :class:`Simulation`
-        Original :class:`Simulation` that was run to create data.
-    monitor_data : Dict[str, :class:`Tidy3dData`]
-        Mapping of monitor name to :class:`Tidy3dData` instance.
-    log_string : str = None
-        A string containing the log information from the simulation run.
-    diverged : bool = False
-        A boolean flag denoting if the simulation run diverged.
-    """
+    monitor_data: Dict[str, Tidy3dData] = pd.Field(
+        ...,
+        title="Monitor Data",
+        description="Mapping of monitor name to :class:`Tidy3dData` instance.",
+    )
 
-    monitor_data: Dict[str, Tidy3dData]
-    log_string: str = None
-    diverged: bool = False
+    log_string: str = pd.Field(
+        None,
+        title="Log String",
+        description="A string containing the log information from the simulation run.",
+    )
+
+    diverged: bool = pd.Field(
+        False,
+        title="Diverged Flag",
+        description="A boolean flag denoting if the simulation run diverged.",
+    )
 
     # set internally by the normalize function
     _normalize_index: pd.NonNegativeInt = pd.PrivateAttr(None)
+    """
+        title="Normalization Index",
+        description="Index into the ``Simulation.sources`` "
+        "indicating which source normalized the data.",
+    """
 
     @property
     def normalized(self) -> bool:
@@ -1297,6 +1308,7 @@ class SimulationData(AbstractSimulationData):
             for field in ("Ex", "Ey", "Ez"):
                 field_data = monitor_data[field]
                 xr_data += abs(field_data) ** 2
+            xr_data.name = "intensity"
             val = "abs"
         else:
             monitor_data.ensure_member_exists(field_name)
@@ -1491,7 +1503,7 @@ class SimulationData(AbstractSimulationData):
             for monitor_name, monitor_data in f_handle["monitor_data"].items():
 
                 # load this MonitorData instance, add to monitor_data dict
-                _data_type = DATA_TYPE_MAP[Tidy3dData.load_string(monitor_data, "type")]
+                _data_type = DATA_TYPE_MAP[Tidy3dData.load_string(monitor_data, TYPE_TAG_STR)]
                 monitor_data_instance = _data_type.load_from_group(monitor_data)
                 monitor_data_dict[monitor_name] = monitor_data_instance
 
