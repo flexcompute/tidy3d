@@ -127,7 +127,7 @@ def test_sim_nonuniform_large():
 
 def test_sim_grid():
 
-    sim = td.Simulation(size=(4, 4, 4), mesh_spec=td.MeshSpec.uniform(1.0), run_time=1e-12)
+    sim = td.Simulation(size=(4, 4, 4), grid_spec=td.GridSpec.uniform(1.0), run_time=1e-12)
 
     for c in sim.grid.centers.dict(exclude={TYPE_TAG_STR}).values():
         assert np.all(c == np.array([-1.5, -0.5, 0.5, 1.5]))
@@ -139,11 +139,11 @@ def test_sim_symmetry_grid():
     """tests that a grid symmetric w.r.t. the simulation center is created in presence of
     symmetries."""
 
-    mesh_1d = td.CustomMesh(dl=[2, 1, 3, 2])
+    grid_1d = td.CustomGrid(dl=[2, 1, 3, 2])
     sim = td.Simulation(
         center=(1, 1, 1),
         size=(11, 11, 11),
-        mesh_spec=td.MeshSpec(mesh_x=mesh_1d, mesh_y=mesh_1d, mesh_z=mesh_1d),
+        grid_spec=td.GridSpec(grid_x=grid_1d, grid_y=grid_1d, grid_z=grid_1d),
         pml_layers=[
             td.PML(num_layers=2),
         ]
@@ -170,7 +170,7 @@ def test_sim_pml_grid():
 
     sim = td.Simulation(
         size=(4, 4, 4),
-        mesh_spec=td.MeshSpec.uniform(1.0),
+        grid_spec=td.GridSpec.uniform(1.0),
         pml_layers=(td.PML(num_layers=2), td.Absorber(num_layers=2), td.StablePML(num_layers=2)),
         run_time=1e-12,
     )
@@ -183,7 +183,7 @@ def test_sim_pml_grid():
 
 def test_sim_discretize_vol():
 
-    sim = td.Simulation(size=(4, 4, 4), mesh_spec=td.MeshSpec.uniform(1.0), run_time=1e-12)
+    sim = td.Simulation(size=(4, 4, 4), grid_spec=td.GridSpec.uniform(1.0), run_time=1e-12)
 
     vol = td.Box(size=(1.9, 1.9, 1.9))
 
@@ -200,7 +200,7 @@ def test_sim_discretize_vol():
 
 def test_sim_discretize_plane():
 
-    sim = td.Simulation(size=(4, 4, 4), mesh_spec=td.MeshSpec.uniform(1.0), run_time=1e-12)
+    sim = td.Simulation(size=(4, 4, 4), grid_spec=td.GridSpec.uniform(1.0), run_time=1e-12)
 
     plane = td.Box(size=(6, 6, 0))
 
@@ -215,19 +215,19 @@ def test_sim_discretize_plane():
     assert np.all(subgrid.centers.z == np.array([0.5]))
 
 
-def test_mesh_auto_uniform():
-    """Compare MeshSpec.auto and MeshSpec.uniform in a simulation without structures."""
+def test_grid_auto_uniform():
+    """Compare GridSpec.auto and GridSpec.uniform in a simulation without structures."""
 
     sim_uniform = td.Simulation(
         size=(4, 4, 4),
-        mesh_spec=td.MeshSpec.uniform(0.1),
+        grid_spec=td.GridSpec.uniform(0.1),
         run_time=1e-12,
         medium=td.Medium(permittivity=4),
     )
 
     sim_auto = td.Simulation(
         size=(4, 4, 4),
-        mesh_spec=td.MeshSpec.auto(wavelength=2.4, min_steps_per_wvl=12),
+        grid_spec=td.GridSpec.auto(wavelength=2.4, min_steps_per_wvl=12),
         run_time=1e-12,
         medium=td.Medium(permittivity=4),
     )

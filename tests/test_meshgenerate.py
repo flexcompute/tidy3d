@@ -3,10 +3,10 @@ import numpy as np
 import tidy3d as td
 from tidy3d.constants import fp_eps
 
-from tidy3d.components.grid.auto_mesh import (
-    make_mesh_in_interval,
-    mesh_multiple_interval_analy_refinement,
-    make_mesh_multiple_intervals,
+from tidy3d.components.grid.auto_grid import (
+    make_grid_in_interval,
+    grid_multiple_interval_analy_refinement,
+    make_grid_multiple_intervals,
 )
 
 
@@ -64,7 +64,7 @@ def validate_dl_in_interval(
     assert np.isclose(np.sum(dl_list), len_interval, rtol=fp_eps)
 
 
-def test_uniform_mesh_in_interval():
+def test_uniform_grid_in_interval():
     """Uniform mesh in an interval"""
 
     for i in range(100):
@@ -74,7 +74,7 @@ def test_uniform_mesh_in_interval():
         right_dl = np.random.random(1)[0]
         max_dl = np.random.random(1)[0]
         max_scale = 1
-        dl = make_mesh_in_interval(left_dl, right_dl, max_dl, max_scale, len_interval)
+        dl = make_grid_in_interval(left_dl, right_dl, max_dl, max_scale, len_interval)
         assert np.any(dl - dl[0]) == False
         validate_dl_in_interval(dl, max_scale, left_dl, right_dl, max_dl, len_interval)
 
@@ -83,7 +83,7 @@ def test_uniform_mesh_in_interval():
         right_dl = left_dl
         max_scale = 1 + np.random.random(1)[0]
         max_dl = left_dl
-        dl = make_mesh_in_interval(left_dl, right_dl, max_dl, max_scale, len_interval)
+        dl = make_grid_in_interval(left_dl, right_dl, max_dl, max_scale, len_interval)
         assert np.any(dl - dl[0]) == False
         validate_dl_in_interval(dl, max_scale, left_dl, right_dl, max_dl, len_interval)
 
@@ -92,12 +92,12 @@ def test_uniform_mesh_in_interval():
         right_dl = np.random.random(1)[0] + len_interval
         max_scale = 1 + np.random.random(1)[0]
         max_dl = left_dl
-        dl = make_mesh_in_interval(left_dl, right_dl, max_dl, max_scale, len_interval)
+        dl = make_grid_in_interval(left_dl, right_dl, max_dl, max_scale, len_interval)
         assert len(dl) == 1
         assert dl[0] == len_interval
 
 
-def test_asending_mesh_in_interval():
+def test_asending_grid_in_interval():
     """Nonuniform mesh in an interval from small to large"""
 
     # # sufficient remaining part, can be inserted
@@ -107,13 +107,13 @@ def test_asending_mesh_in_interval():
     right_dl = 1.0
     max_dl = right_dl
 
-    dl = make_mesh_in_interval(left_dl, right_dl, max_dl, max_scale, len_interval)
+    dl = make_grid_in_interval(left_dl, right_dl, max_dl, max_scale, len_interval)
     validate_dl_in_interval(dl, max_scale, left_dl, right_dl, max_dl, len_interval)
 
     # remaining part not sufficient to insert, but will not
     # violate max_scale by repearting 1st step
     len_interval = 1.0
-    dl = make_mesh_in_interval(left_dl, right_dl, max_dl, max_scale, len_interval)
+    dl = make_grid_in_interval(left_dl, right_dl, max_dl, max_scale, len_interval)
     validate_dl_in_interval(dl, max_scale, left_dl, right_dl, max_dl, len_interval)
 
     # scaling
@@ -122,7 +122,7 @@ def test_asending_mesh_in_interval():
     left_dl = 0.2
     right_dl = 1.0
     max_dl = right_dl
-    dl = make_mesh_in_interval(left_dl, right_dl, max_dl, max_scale, len_interval)
+    dl = make_grid_in_interval(left_dl, right_dl, max_dl, max_scale, len_interval)
     validate_dl_in_interval(dl, max_scale, left_dl, right_dl, max_dl, len_interval)
 
     # randoms
@@ -138,16 +138,16 @@ def test_asending_mesh_in_interval():
         len_interval = left_dl * max_scale * (1 - max_scale**N_step) / (1 - max_scale)
         len_interval *= np.random.random(1)[0]
 
-        dl = make_mesh_in_interval(left_dl, right_dl, max_dl, max_scale, len_interval)
+        dl = make_grid_in_interval(left_dl, right_dl, max_dl, max_scale, len_interval)
         validate_dl_in_interval(dl, max_scale, left_dl, right_dl, max_dl, len_interval)
 
         # opposite direction
         left_dl, right_dl = right_dl, left_dl
-        dl = make_mesh_in_interval(left_dl, right_dl, max_dl, max_scale, len_interval)
+        dl = make_grid_in_interval(left_dl, right_dl, max_dl, max_scale, len_interval)
         validate_dl_in_interval(dl, max_scale, left_dl, right_dl, max_dl, len_interval)
 
 
-def test_asending_plateau_mesh_in_interval():
+def test_asending_plateau_grid_in_interval():
     """Nonuniform mesh in an interval from small to large to plateau"""
 
     # # zero pixel for plateau, still asending
@@ -156,12 +156,12 @@ def test_asending_plateau_mesh_in_interval():
     left_dl = 0.3
     right_dl = 10
     max_dl = 0.6
-    dl = make_mesh_in_interval(left_dl, right_dl, max_dl, max_scale, len_interval)
+    dl = make_grid_in_interval(left_dl, right_dl, max_dl, max_scale, len_interval)
     validate_dl_in_interval(dl, max_scale, left_dl, right_dl, max_dl, len_interval)
 
     # # sufficient remaining part, can be inserted
     len_interval = 1.9
-    dl = make_mesh_in_interval(left_dl, right_dl, max_dl, max_scale, len_interval)
+    dl = make_grid_in_interval(left_dl, right_dl, max_dl, max_scale, len_interval)
     validate_dl_in_interval(dl, max_scale, left_dl, right_dl, max_dl, len_interval)
 
     # randoms
@@ -176,7 +176,7 @@ def test_asending_plateau_mesh_in_interval():
         len_interval = left_dl * max_scale * (1 - max_scale**N_step) / (1 - max_scale)
         len_interval += max_dl * np.random.randint(1, 100)
 
-        dl = make_mesh_in_interval(left_dl, right_dl, max_dl, max_scale, len_interval)
+        dl = make_grid_in_interval(left_dl, right_dl, max_dl, max_scale, len_interval)
         validate_dl_in_interval(dl, max_scale, left_dl, right_dl, max_dl, len_interval)
         # print(left_dl*max_scale)
         # print(max_dl)
@@ -184,11 +184,11 @@ def test_asending_plateau_mesh_in_interval():
 
         # opposite direction
         left_dl, right_dl = right_dl, left_dl
-        dl = make_mesh_in_interval(left_dl, right_dl, max_dl, max_scale, len_interval)
+        dl = make_grid_in_interval(left_dl, right_dl, max_dl, max_scale, len_interval)
         validate_dl_in_interval(dl, max_scale, left_dl, right_dl, max_dl, len_interval)
 
 
-def test_asending_plateau_desending_mesh_in_interval():
+def test_asending_plateau_desending_grid_in_interval():
     """Nonuniform mesh in an interval from small to plateau to small"""
 
     max_scale = 2
@@ -196,7 +196,7 @@ def test_asending_plateau_desending_mesh_in_interval():
     right_dl = 0.3
     max_dl = 0.5
     len_interval = 1.51
-    dl = make_mesh_in_interval(left_dl, right_dl, max_dl, max_scale, len_interval)
+    dl = make_grid_in_interval(left_dl, right_dl, max_dl, max_scale, len_interval)
     validate_dl_in_interval(dl, max_scale, left_dl, right_dl, max_dl, len_interval)
 
     # randoms
@@ -214,11 +214,11 @@ def test_asending_plateau_desending_mesh_in_interval():
         len_interval += right_dl * max_scale * (1 - max_scale**N_right_step) / (1 - max_scale)
         len_interval += max_dl * (1 + np.random.randint(1, 100))
 
-        dl = make_mesh_in_interval(left_dl, right_dl, max_dl, max_scale, len_interval)
+        dl = make_grid_in_interval(left_dl, right_dl, max_dl, max_scale, len_interval)
         validate_dl_in_interval(dl, max_scale, left_dl, right_dl, max_dl, len_interval)
 
 
-def test_asending_desending_mesh_in_interval():
+def test_asending_desending_grid_in_interval():
     """Nonuniform mesh in an interval from small to plateau to small"""
 
     max_scale = 2
@@ -226,7 +226,7 @@ def test_asending_desending_mesh_in_interval():
     right_dl = 0.3
     max_dl = 1
     len_interval = 3.2
-    dl = make_mesh_in_interval(left_dl, right_dl, max_dl, max_scale, len_interval)
+    dl = make_grid_in_interval(left_dl, right_dl, max_dl, max_scale, len_interval)
     validate_dl_in_interval(dl, max_scale, left_dl, right_dl, max_dl, len_interval)
 
     max_scale = 2
@@ -234,7 +234,7 @@ def test_asending_desending_mesh_in_interval():
     right_dl = 0.4
     max_dl = 1
     len_interval = 0.8
-    dl = make_mesh_in_interval(left_dl, right_dl, max_dl, max_scale, len_interval)
+    dl = make_grid_in_interval(left_dl, right_dl, max_dl, max_scale, len_interval)
     # print(dl)
 
     # randoms
@@ -253,11 +253,11 @@ def test_asending_desending_mesh_in_interval():
         len_interval -= max_dl
         len_interval *= np.random.random(1)[0]
 
-        dl = make_mesh_in_interval(left_dl, right_dl, max_dl, max_scale, len_interval)
+        dl = make_grid_in_interval(left_dl, right_dl, max_dl, max_scale, len_interval)
         validate_dl_in_interval(dl, max_scale, left_dl, right_dl, max_dl, len_interval)
 
 
-def test_mesh_in_interval():
+def test_grid_in_interval():
     """Nonuniform mesh in an interval"""
 
     # randoms
@@ -269,29 +269,29 @@ def test_mesh_in_interval():
 
         len_interval = np.random.randint(1, 100) * np.random.random(1)[0]
 
-        dl = make_mesh_in_interval(left_dl, right_dl, max_dl, max_scale, len_interval)
+        dl = make_grid_in_interval(left_dl, right_dl, max_dl, max_scale, len_interval)
         validate_dl_in_interval(dl, max_scale, left_dl, right_dl, max_dl, len_interval)
 
 
-def test_mesh_analytic_refinement():
+def test_grid_analytic_refinement():
 
     max_dl_list = np.array([0.5, 0.5, 0.4, 0.1, 0.4])
     len_interval_list = np.array([2.0, 0.5, 0.2, 0.1, 0.3])
     max_scale = 1.5
     periodic = True
-    left_dl, right_dl = mesh_multiple_interval_analy_refinement(
+    left_dl, right_dl = grid_multiple_interval_analy_refinement(
         max_dl_list, len_interval_list, max_scale, periodic
     )
     assert np.all(np.isclose(left_dl[1:], right_dl[:-1])) == True
 
 
-def test_mesh_refinement():
+def test_grid_refinement():
 
     max_dl_list = np.array([0.5, 0.4, 0.1, 0.4])
     len_interval_list = np.array([0.5, 1.2, 0.1, 1.3])
     max_scale = 1.5
     is_periodic = False
-    dl_list = make_mesh_multiple_intervals(max_dl_list, len_interval_list, max_scale, is_periodic)
+    dl_list = make_grid_multiple_intervals(max_dl_list, len_interval_list, max_scale, is_periodic)
     # print(np.min(np.concatenate(dl_list))/np.min(max_dl_list))
 
     validate_dl_multiple_interval(
@@ -311,7 +311,7 @@ def test_mesh_refinement():
         len_interval_list[too_short_ind] = max_dl_list[too_short_ind] * (1 + np.random.random(1)[0])
         max_scale = 1.1
         is_periodic = True
-        dl_list = make_mesh_multiple_intervals(
+        dl_list = make_grid_multiple_intervals(
             max_dl_list, len_interval_list, max_scale, is_periodic
         )
         shrink_local = np.min(np.concatenate(dl_list)) / np.min(max_dl_list)

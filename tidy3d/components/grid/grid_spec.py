@@ -7,7 +7,7 @@ import numpy as np
 import pydantic as pd
 
 from .grid import Coords1D, Coords, Grid
-from .auto_mesh import parse_structures, make_mesh_multiple_intervals
+from .auto_grid import parse_structures, make_grid_multiple_intervals
 from ..base import Tidy3dBaseModel
 from ..types import Axis, Symmetry
 from ..source import SourceType
@@ -16,9 +16,9 @@ from ...log import SetupError, log
 from ...constants import C_0, MICROMETER
 
 
-class MeshSpec1d(Tidy3dBaseModel, ABC):
+class GridSpec1d(Tidy3dBaseModel, ABC):
 
-    """Abstract base class, defines 1D mesh generation specifications."""
+    """Abstract base class, defines 1D grid generation specifications."""
 
     def make_coords(  # pylint:disable = too-many-arguments
         self,
@@ -136,9 +136,14 @@ class MeshSpec1d(Tidy3dBaseModel, ABC):
         return new_bounds
 
 
-class UniformMesh(MeshSpec1d):
+class UniformGrid(GridSpec1d):
 
-    """Uniform 1D mesh generation"""
+    """Uniform 1D grid.
+
+    Example
+    -------
+    >>> grid_1d = UniformGrid(dl=0.1)
+    """
 
     dl: pd.PositiveFloat = pd.Field(
         ...,
@@ -185,9 +190,14 @@ class UniformMesh(MeshSpec1d):
         return bound_coords
 
 
-class CustomMesh(MeshSpec1d):
+class CustomGrid(GridSpec1d):
 
-    """Customized 1D coords."""
+    """Custom 1D grid supplied as a list of grid cell sizes centered on the simulation center.
+
+    Example
+    -------
+    >>> grid_1d = CustomGrid(dl=[0.2, 0.2, 0.1, 0.1, 0.1, 0.2, 0.2])
+    """
 
     dl: List[pd.PositiveFloat] = pd.Field(
         ...,
@@ -242,12 +252,12 @@ class CustomMesh(MeshSpec1d):
         return bound_coords
 
 
-class AutoMesh(MeshSpec1d):
+class AutoGrid(GridSpec1d):
     """Specification for non-uniform grid along a given dimension.
 
     Example
     -------
-    >>> mesh_1d = AutoMesh(min_steps_per_wvl=16, max_scale=1.4)
+    >>> grid_1d = AutoGrid(min_steps_per_wvl=16, max_scale=1.4)
     """
 
     min_steps_per_wvl: float = pd.Field(
@@ -306,7 +316,7 @@ class AutoMesh(MeshSpec1d):
         interval_coords = np.array(interval_coords).flatten()
         max_dl_list = np.array(max_dl_list).flatten()
         len_interval_list = interval_coords[1:] - interval_coords[:-1]
-        dl_list = make_mesh_multiple_intervals(
+        dl_list = make_grid_multiple_intervals(
             max_dl_list, len_interval_list, self.max_scale, is_periodic
         )
 
@@ -315,43 +325,53 @@ class AutoMesh(MeshSpec1d):
         bound_coords += interval_coords[0]
         return np.array(bound_coords)
 
-MeshType = Union[UniformMesh, CustomMesh, AutoMesh]
 
-class MeshSpec(Tidy3dBaseModel):
+GridType = Union[UniformGrid, CustomGrid, AutoGrid]
 
-    """Mesh specifications"""
 
-    mesh_x: MeshType = pd.Field(
-        AutoMesh(),
-        title="Mesh specification along x-axis",
-        description="Mesh specification along x-axis",
+class GridSpec(Tidy3dBaseModel):
+
+    """Collective grid specification for all three dimensions.
+
+    Example
+    -------
+    >>> uniform = UniformGrid(dl=0.1)
+    >>> custom = CustomGrid(dl=[0.2, 0.2, 0.1, 0.1, 0.1, 0.2, 0.2])
+    >>> auto = AutoGrid(min_steps_per_wvl=12)
+    >>> grid_spec = GridSpec(grid_x=uniform, grid_y=custom, grid_z=auto, wavelength=1.5)
+    """
+
+    grid_x: GridType = pd.Field(
+        AutoGrid(),
+        title="Grid specification along x-axis",
+        description="Grid specification along x-axis",
     )
 
-    mesh_y: MeshType = pd.Field(
-        AutoMesh(),
-        title="Mesh specification along y-axis",
-        description="Mesh specification along y-axis",
+    grid_y: GridType = pd.Field(
+        AutoGrid(),
+        title="Grid specification along y-axis",
+        description="Grid specification along y-axis",
     )
 
-    mesh_z: MeshType = pd.Field(
-        AutoMesh(),
-        title="Mesh specification along z-axis",
-        description="Mesh specification along z-axis",
+    grid_z: GridType = pd.Field(
+        AutoGrid(),
+        title="Grid specification along z-axis",
+        description="Grid specification along z-axis",
     )
 
     wavelength: float = pd.Field(
         None,
         title="Free-space wavelength",
-        description="Free-space wavelength for automatic nonuniform mesh. It can be 'None' "
+        description="Free-space wavelength for automatic nonuniform grid. It can be 'None' "
         "if there is at least one source in the simulation, in which case it is defined by "
         "the source central frequency.",
     )
 
     @property
-    def auto_mesh_used(self):
-        """A list of the MeshSpec1d-s along each axis."""
-        mesh_list = [self.mesh_x, self.mesh_y, self.mesh_z]
-        return np.any([isinstance(mesh, AutoMesh) for mesh in mesh_list])
+    def auto_grid_used(self):
+        """A list of the GridSpec1d-s along each axis."""
+        grid_list = [self.grid_x, self.grid_y, self.grid_z]
+        return np.any([isinstance(mesh, AutoGrid) for mesh in grid_list])
 
     def wvl_from_sources(self, sources: List[SourceType]):
         """Define a wavelength based on supplied sources."""
@@ -359,13 +379,13 @@ class MeshSpec(Tidy3dBaseModel):
         # lack of wavelength input
         if len(freqs) == 0:
             raise SetupError(
-                "Automatic mesh generation requires the input of 'wavelength' or sources."
+                "Automatic grid generation requires the input of 'wavelength' or sources."
             )
         # multiple sources of different central frequencies
         if len(freqs) > 0 and not np.all(np.isclose(freqs, freqs[0])):
             raise SetupError(
                 "Sources of different central frequencies are supplied. "
-                "Please supply a 'wavelength' value for 'mesh_spec'."
+                "Please supply a 'wavelength' value for 'grid_spec'."
             )
         return C_0 / freqs[0]
 
@@ -401,11 +421,11 @@ class MeshSpec(Tidy3dBaseModel):
         # Set up wavelength for automatic mesh generation if needed.
         wavelength = self.wavelength
         # If auto mesh used and wavelength is None, use central frequency of sources, if any.
-        if wavelength is None and self.auto_mesh_used:
+        if wavelength is None and self.auto_grid_used:
             wavelength = self.wvl_from_sources(sources)
             log.info(f"Auto meshing using wavelength {wavelength} defined from sources.")
 
-        coords_x = self.mesh_x.make_coords(
+        coords_x = self.grid_x.make_coords(
             center=center[0],
             size=size[0],
             axis=0,
@@ -414,7 +434,7 @@ class MeshSpec(Tidy3dBaseModel):
             wavelength=wavelength,
             num_pml_layers=num_pml_layers[0],
         )
-        coords_y = self.mesh_y.make_coords(
+        coords_y = self.grid_y.make_coords(
             center=center[1],
             size=size[1],
             axis=1,
@@ -423,7 +443,7 @@ class MeshSpec(Tidy3dBaseModel):
             wavelength=wavelength,
             num_pml_layers=num_pml_layers[1],
         )
-        coords_z = self.mesh_z.make_coords(
+        coords_z = self.grid_z.make_coords(
             center=center[2],
             size=size[2],
             axis=2,
@@ -439,13 +459,13 @@ class MeshSpec(Tidy3dBaseModel):
     @classmethod
     def auto(
         cls, wavelength: float = None, min_steps_per_wvl: float = 10.0, max_scale: float = 1.4
-    ) -> "MeshSpec":
-        """Use the same :class:`AutoMesh` along each of the three directions.
+    ) -> "GridSpec":
+        """Use the same :class:`AutoGrid` along each of the three directions.
 
         Parameters
         ----------
         wavelength : float = None
-            Free-space wavelength for automatic nonuniform mesh. It can be 'None'
+            Free-space wavelength for automatic nonuniform grid. It can be 'None'
             if there is at least one source in the simulation, in which case it is defined by
             the source central frequency.
         min_steps_per_wvl : float, optional
@@ -455,16 +475,16 @@ class MeshSpec(Tidy3dBaseModel):
 
         Returns
         -------
-        MeshSpec
-            :class:`MeshSpec` with the same automatic nonuniform mesh settings in each direction.
+        GridSpec
+            :class:`GridSpec` with the same automatic nonuniform grid settings in each direction.
         """
 
-        mesh_1d = AutoMesh(min_steps_per_wvl=min_steps_per_wvl, max_scale=max_scale)
-        return cls(wavelength=wavelength, mesh_x=mesh_1d, mesh_y=mesh_1d, mesh_z=mesh_1d)
+        grid_1d = AutoGrid(min_steps_per_wvl=min_steps_per_wvl, max_scale=max_scale)
+        return cls(wavelength=wavelength, grid_x=grid_1d, grid_y=grid_1d, grid_z=grid_1d)
 
     @classmethod
-    def uniform(cls, dl: float) -> "MeshSpec":
-        """Use the same :class:`UniformMesh` along each of the three directions.
+    def uniform(cls, dl: float) -> "GridSpec":
+        """Use the same :class:`UniformGrid` along each of the three directions.
 
         Parameters
         ----------
@@ -473,9 +493,9 @@ class MeshSpec(Tidy3dBaseModel):
 
         Returns
         -------
-        MeshSpec
-            :class:`MeshSpec` with the same uniform grid size in each direction.
+        GridSpec
+            :class:`GridSpec` with the same uniform grid size in each direction.
         """
 
-        mesh_1d = UniformMesh(dl=dl)
-        return cls(mesh_x=mesh_1d, mesh_y=mesh_1d, mesh_z=mesh_1d)
+        grid_1d = UniformGrid(dl=dl)
+        return cls(grid_x=grid_1d, grid_y=grid_1d, grid_z=grid_1d)
