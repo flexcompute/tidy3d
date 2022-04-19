@@ -31,7 +31,7 @@ def convert_valid_polygon(vertices):
     """Given vertices that might have intersecting eduges, generate
     vertices of a valid polygon
     """
-    poly = Polygon(vertices).buffer(1e-3)  # make sure no intersecting edges
+    poly = Polygon(vertices).buffer(0)  # make sure no intersecting edges
     if type(poly) is not Polygon:
         poly = poly[0]
 
