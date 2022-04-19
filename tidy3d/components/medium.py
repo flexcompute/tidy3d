@@ -23,7 +23,7 @@ def ensure_freq_in_range(eps_model: Callable[[float], complex]) -> Callable[[flo
         """New eps_model function."""
 
         # evaluate infs and None as LARGE_NUMBER
-        if frequency is None:
+        if frequency is None or np.isinf(frequency):
             frequency = LARGE_NUMBER
 
         if isinstance(frequency, np.ndarray):
