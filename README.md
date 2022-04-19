@@ -6,7 +6,7 @@
 
 ## Website
 
-The website can be found [here](https://flexcompute-tidy3ddocumentation.readthedocs-hosted.com/en/latest/).
+The website can be found [here](https://flexcompute-tidy3ddocumentation.readthedocs-hosted.com/).
 
 It is hosted by readthedocs, the admin site can be found [here](https://readthedocs.com/dashboard/).
 
