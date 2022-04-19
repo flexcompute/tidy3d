@@ -66,6 +66,10 @@ class DataError(Tidy3dError):
     """Error accessing data."""
 
 
+class Tidy3dImportError(Tidy3dError):
+    """Error importing a package needed for tidy3d."""
+
+
 """ Logging functions """
 
 
