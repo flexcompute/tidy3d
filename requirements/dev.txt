@@ -1,3 +1,8 @@
+# core, plotly and tests
+
+-r common.txt
+-r plotly.txt
+
 # required for development
 click==8.0.3
 black==22.1.0
