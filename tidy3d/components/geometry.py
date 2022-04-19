@@ -1541,12 +1541,19 @@ class PolySlab(Planar):
         polys = []
 
         # looping through z_i to assemble the polygons
-        height = 0.0
         height_list = np.append(height_list, self.length)
-        for h_local in height_list:
-            dist = -height * self._tanq
+        h_base = 0.0
+        for h_top in height_list:
+            # length within between top and bottom
+            h_length = h_top - h_base
+
+            # coordinate of each subsection
+            z_min, z_max = z_base + h_base, z_base + h_top
+
+            # vertices for the base of each subsection
+            dist = -h_base * self._tanq
             vertices = self._shift_vertices(self.base_polygon, dist)[0]
-            z_min, z_max = z_base + height, z_base + height + h_local
+
             # for vertical sidewall, no need for complications
             if np.isclose(self.sidewall_angle, 0):
                 ints_y, ints_angle = self._find_intersecting_ys_angle_vertical(
@@ -1573,8 +1580,8 @@ class PolySlab(Planar):
                     angle_min = np.arctan(np.tan(self.sidewall_angle) / np.sin(angle_min))
                     angle_max = np.arctan(np.tan(self.sidewall_angle) / np.sin(angle_max))
 
-                    dy_min = h_local * np.tan(angle_min)
-                    dy_max = h_local * np.tan(angle_max)
+                    dy_min = h_length * np.tan(angle_min)
+                    dy_max = h_length * np.tan(angle_max)
 
                     x1, y1 = self._order_by_axis(plane_val=y_min, axis_val=z_min, axis=axis)
                     x2, y2 = self._order_by_axis(plane_val=y_max, axis_val=z_min, axis=axis)
@@ -1582,9 +1589,9 @@ class PolySlab(Planar):
                     if y_max - y_min <= dy_min + dy_max:
                         # intersect before reaching top of polygon
                         # make triangle
-                        h_mid = (y_max - y_min) / (dy_min + dy_max) * h_local
+                        h_mid = (y_max - y_min) / (dy_min + dy_max) * h_length
                         z_mid = z_min + h_mid
-                        y_mid = y_min + dy_min / h_local * h_mid
+                        y_mid = y_min + dy_min / h_length * h_mid
                         x3, y3 = self._order_by_axis(plane_val=y_mid, axis_val=z_mid, axis=axis)
                         vertices = ((x1, y1), (x2, y2), (x3, y3))
                         polys.append(Polygon(vertices))
@@ -1599,7 +1606,8 @@ class PolySlab(Planar):
                         vertices = ((x1, y1), (x2, y2), (x3, y3), (x4, y4))
                         polys.append(Polygon(vertices))
 
-            height += h_local
+            # update the base coordinate for the next subsection
+            h_base = h_top
 
         return polys
 
@@ -1642,7 +1650,7 @@ class PolySlab(Planar):
         return height
 
     def _find_intersecting_ys_angle_vertical(  # pylint:disable=too-many-locals
-        self, vertices: np.ndarray, position: float, axis: int
+        self, vertices: np.ndarray, position: float, axis: int, exclude_on_vertices: bool = False
     ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
         """Finds pairs of forward and backwards vertices where polygon intersects position at axis,
         Find intersection point (in y) assuming straight line,and intersecting angle between plane
@@ -1657,6 +1665,8 @@ class PolySlab(Planar):
             position along axis.
         axis : int
             Integer index into 'xyz' (0,1,2).
+        exclude_on_vertices : bool = False
+            Whehter to exclude those intersecting directly with the vertices.
 
         Returns
         -------
@@ -1673,13 +1683,23 @@ class PolySlab(Planar):
         # get the forward vertices
         vertices_f = np.roll(vertices_axis, shift=-1, axis=0)
 
+        # x coordinate of the two sets of vertices
+        x_vertices_f = vertices_f[:, 0]
+        x_vertices_axis = vertices_axis[:, 0]
+
         # find which segments intersect
-        intersects_b = np.logical_and(
-            (vertices_f[:, 0] <= position), (vertices_axis[:, 0] > position)
+        f_left_to_intersect = (
+            x_vertices_f < position if exclude_on_vertices else x_vertices_f <= position
         )
-        intersects_f = np.logical_and(
-            (vertices_axis[:, 0] <= position), (vertices_f[:, 0] > position)
+        orig_right_to_intersect = x_vertices_axis > position
+        intersects_b = np.logical_and(f_left_to_intersect, orig_right_to_intersect)
+
+        f_right_to_intersect = x_vertices_f > position
+        orig_left_to_intersect = (
+            x_vertices_axis < position if exclude_on_vertices else x_vertices_axis <= position
         )
+        intersects_f = np.logical_and(f_right_to_intersect, orig_left_to_intersect)
+
         intersects_segment = np.logical_or(intersects_b, intersects_f)
         iverts_b = vertices_axis[intersects_segment]
         iverts_f = vertices_f[intersects_segment]
@@ -1739,7 +1759,9 @@ class PolySlab(Planar):
         vertices_b = np.roll(vertices_axis, shift=1, axis=0)
 
         ## First part, plane intersects with edges, same as vertical
-        ints_y, ints_angle = self._find_intersecting_ys_angle_vertical(vertices, position, axis)
+        ints_y, ints_angle = self._find_intersecting_ys_angle_vertical(
+            vertices, position, axis, exclude_on_vertices=True
+        )
         ints_y = ints_y.tolist()
         ints_angle = ints_angle.tolist()
 
