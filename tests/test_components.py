@@ -121,13 +121,6 @@ def test_sim_bounds():
                 place_box(tuple(center))
 
 
-def test_sim_grid_size():
-    """Test that grid_size can still be used even though it's deprecated."""
-
-    size = (1, 1, 1)
-    _ = Simulation(size=size, grid_size=(1.0, 1.0, 1.0), run_time=1e-12)
-
-
 def test_sim_size():
 
     mesh1d = UniformGrid(dl=1e-5)
@@ -142,21 +135,18 @@ def test_sim_size():
         s._validate_size()
 
 
-def _test_monitor_size():
+def test_monitor_size():
 
     with pytest.raises(SetupError):
         s = Simulation(
             size=(1, 1, 1),
-            grid_size=(1e-3, 1e-3, 1e-3),
+            grid_spec=GridSpec.uniform(1e-3),
             monitors=[
-                FieldMonitor(
-                    size=(inf, inf, inf), freqs=np.linspace(0, 200e12, 10000001), name="test"
-                )
+                FieldMonitor(size=(inf, inf, inf), freqs=np.linspace(0, 200e12, 10001), name="test")
             ],
             run_time=1e-12,
         )
-
-        s.validate_contents()
+        s.validate_pre_upload()
 
 
 @pytest.mark.parametrize("freq, log_level", [(1.5, 30), (2.5, None), (3.5, 30)])

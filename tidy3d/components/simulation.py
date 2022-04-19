@@ -14,7 +14,7 @@ from .validators import assert_unique_names, assert_objects_in_sim_bounds
 from .validators import validate_mode_objects_symmetry
 from .geometry import Box
 from .types import Symmetry, Ax, Shapely, FreqBound, Axis, GridSize
-from .grid import Coords1D, Grid, Coords, GridSpec, UniformGrid, CustomGrid
+from .grid import Coords1D, Grid, Coords, GridSpec, UniformGrid
 from .medium import Medium, MediumType, AbstractMedium, PECMedium
 from .structure import Structure
 from .source import SourceType, PlaneWave
@@ -27,7 +27,7 @@ from .viz import plot_params_structure, plot_params_pml
 
 from ..version import __version__
 from ..constants import C_0, MICROMETER, SECOND, inf
-from ..log import log, Tidy3dKeyError, SetupError
+from ..log import log, Tidy3dKeyError, SetupError, ValidationError
 
 
 # minimum number of grid points allowed per central wavelength in a medium
@@ -105,13 +105,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
     grid_size: Tuple[GridSize, GridSize, GridSize] = pydantic.Field(
         None,
         title="Grid Size",
-        description="DEPRECATED: the function of 'grid_size' has been replaced by 'grid_spec'. "
-        "It will be removed in future versions! "
-        "If components are float, uniform grid size along x, y, and z. "
-        "If components are array like, defines an array of nonuniform grid sizes centered at "
-        "the simulation center ."
-        " Note: if supplied sizes do not cover the simulation size, the first and last sizes "
-        "are repeated to cover size. ",
+        description="NOTE: 'grid_size' has been replaced by 'grid_spec'.",
         units=MICROMETER,
     )
 
@@ -155,9 +149,8 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
 
     grid_spec: GridSpec = pydantic.Field(
         GridSpec(),
-        title="Mesh Specifications",
-        description="Mesh Specifications for choosing and setting parameters "
-        "along each dimension in :class:``GridSpec``.",
+        title="Grid Specification",
+        description="Specifications for the simulation grid along each of the three directions.",
     )
 
     pml_layers: Tuple[PMLTypes, PMLTypes, PMLTypes] = pydantic.Field(
@@ -202,28 +195,17 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
 
     """ Validating setup """
 
-    @pydantic.validator("grid_spec", always=True)
-    def _warn_use_grid_size(cls, val, values):
-        """If ``grid_size`` is provided, it is used to set ``grid_spec``, but a warning is
-        printed."""
-        if values.get("grid_size") is None:
-            return val
+    @pydantic.validator("grid_size", always=True)
+    def _error_use_grid_size(cls, val):
+        """If ``grid_size`` is provided, raise an error."""
 
-        log.warning(
-            "DEPRECATED: the function of 'grid_size' has been replaced by 'grid_spec'. "
-            "It will be removed in future versions!"
-        )
-        log.warning("Setting the simulation grid using the provided 'grid_size'.")
+        if val is not None:
+            raise ValidationError(
+                "'grid_size' has been replaced by 'grid_spec'. See the "
+                ":class:`.GridSpec` documentation for more information!"
+            )
 
-        grid_spec_dict = {}
-        for key, dl in zip(("grid_x", "grid_y", "grid_z"), values["grid_size"]):
-            if isinstance(dl, float):
-                grid_spec_dim = UniformGrid(dl=dl)
-            else:
-                grid_spec_dim = CustomGrid(dl=dl)
-            grid_spec_dict[key] = grid_spec_dim
-
-        return GridSpec(**grid_spec_dict)
+        return val
 
     @pydantic.validator("grid_spec", always=True)
     def _validate_auto_grid_wavelength(cls, val, values):
@@ -1383,7 +1365,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         return len(self.tmesh)
 
     @property
-    @lru_cache(maxsize=100)
+    @lru_cache()
     def grid(self) -> Grid:
         """FDTD grid spatial locations and information.
 
@@ -1398,10 +1380,10 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         structures += self.structures
 
         return self.grid_spec.make_grid(
-            structures,
-            self.symmetry,
-            self.sources,
-            self.num_pml_layers,
+            structures=structures,
+            symmetry=self.symmetry,
+            sources=self.sources,
+            num_pml_layers=self.num_pml_layers,
         )
 
     @property

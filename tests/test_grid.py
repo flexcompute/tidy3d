@@ -51,7 +51,11 @@ def test_sim_nonuniform_small():
     sim = td.Simulation(
         center=(1, 0, 0),
         size=(size_x, 4, 4),
-        grid_size=(grid_size_x, 1, 1),
+        grid_spec=td.GridSpec(
+            grid_x=td.CustomGrid(dl=grid_size_x),
+            grid_y=td.UniformGrid(dl=1.0),
+            grid_z=td.UniformGrid(dl=1.0),
+        ),
         pml_layers=[td.PML(num_layers=num_layers_pml_x), None, None],
         run_time=1e-12,
     )
@@ -96,7 +100,11 @@ def test_sim_nonuniform_large():
     sim = td.Simulation(
         center=(1, 0, 0),
         size=(size_x, 4, 4),
-        grid_size=(grid_size_x, 1, 1),
+        grid_spec=td.GridSpec(
+            grid_x=td.CustomGrid(dl=grid_size_x),
+            grid_y=td.UniformGrid(dl=1.0),
+            grid_z=td.UniformGrid(dl=1.0),
+        ),
         pml_layers=[td.PML(num_layers=num_layers_pml_x), None, None],
         run_time=1e-12,
     )
