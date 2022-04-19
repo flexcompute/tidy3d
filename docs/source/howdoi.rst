@@ -172,7 +172,7 @@ Extensions
      - Solution
    * - Create a material from optical n,k data?
      - Refer to the `Dispersion tutorial <https://docs.simulation.cloud/projects/tidy3d/en/latest/notebooks/Fitting.html>`_ on the :class:`tidy3d.plugins.DispersionFitter` plugin.
-   * - Specify the modes for a :class:`ModeMonitor` or :class:`SourceMonitor`?
+   * - Specify the modes for a :class:`ModeMonitor` or :class:`ModeSource`?
      - Refer to the `Mode Solver tutorial <https://docs.simulation.cloud/projects/tidy3d/en/latest/notebooks/ModeSolver.html>`_ on the :class:`tidy3d.plugins.ModeSolver` plugin.
    * - Projet electromagnetic near field data to the far field?
      - Refer to the `Near2Far tutorial <https://docs.simulation.cloud/projects/tidy3d/en/latest/notebooks/Near2Far.html>`_ on the :class:`tidy3d.plugins.Near2Far` plugin.
