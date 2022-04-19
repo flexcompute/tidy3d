@@ -1,1 +1,4 @@
 include requirements.txt
+include requirements/core.txt
+include requirements/plotly.txt
+include requirements/dev.txt
