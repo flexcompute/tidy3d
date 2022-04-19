@@ -88,7 +88,7 @@ class PlotParams(Tidy3dBaseModel):
         """Update the plot params with supplied kwargs."""
         new_plot_params = self.copy(deep=True)
         for key, value in kwargs.items():
-            if key not in ("type",):
+            if key not in ("type",) and value is not None:
                 setattr(new_plot_params, key, value)
         return new_plot_params
 
