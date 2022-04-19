@@ -27,8 +27,8 @@ class GridSpec1d(Tidy3dBaseModel, ABC):
         axis: Axis,
         structures: List[Structure],
         symmetry: Symmetry,
-        wavelength: float,
-        num_pml_layers: Tuple[int, int],
+        wavelength: pd.PositiveFloat,
+        num_pml_layers: Tuple[pd.NonNegativeInt, pd.NonNegativeInt],
     ) -> Coords1D:
         """Generate 1D coords to be used as grid boundaries, based on simulation parameters.
         Symmetry, and PML layers will be treated here.
@@ -84,7 +84,7 @@ class GridSpec1d(Tidy3dBaseModel, ABC):
     def _make_coords_initial(
         self,
         center: float,
-        size: float,
+        size: pd.NonNegativeFloat,
         *args,
     ) -> Coords1D:
         """Generate 1D coords to be used as grid boundaries, based on simulation parameters.
@@ -176,6 +176,7 @@ class UniformGrid(GridSpec1d):
         """
 
         # Take a number of steps commensurate with the size; make dl a bit smaller if needed
+        print(size, self.dl)
         num_cells = int(np.ceil(size / self.dl))
 
         # Make sure there's at least one cell
@@ -202,7 +203,11 @@ class CustomGrid(GridSpec1d):
     dl: List[pd.PositiveFloat] = pd.Field(
         ...,
         title="Customized grid sizes.",
-        description="An array of customized grid sizes.",
+        description="An array of custom nonuniform grid sizes. The resulting grid is centered on "
+        "the simulation center such that it spans the region "
+        "``(center - sum(dl)/2, center + sum(dl)/2)``. "
+        "Note: if supplied sizes do not cover the simulation size, the first and last sizes "
+        "are repeated to cover the simulation domain.",
     )
 
     def _make_coords_initial(
@@ -394,17 +399,18 @@ class GridSpec(Tidy3dBaseModel):
         structures: List[Structure],
         symmetry: Tuple[Symmetry, Symmetry, Symmetry],
         sources: List[SourceType],
-        num_pml_layers: List[Tuple[float, float]],
+        num_pml_layers: List[Tuple[pd.NonNegativeInt, pd.NonNegativeInt]],
     ) -> Grid:
         """Make the entire simulation grid based on some simulation parameters.
 
         Parameters
         ----------
         structures : List[Structure]
-            List of structures present in simulation.
+            List of structures present in the simulation. The first structure must be the
+            simulation geometry with the simulation background medium.
         symmetry : Tuple[Symmetry, Symmetry, Symmetry]
             Reflection symmetry across a plane bisecting the simulation domain
-            normal to the three axis.
+            normal to each of the three axes.
         sources : List[SourceType]
             List of sources.
         num_pml_layers : List[Tuple[float, float]]
@@ -413,7 +419,7 @@ class GridSpec(Tidy3dBaseModel):
         Returns
         -------
         Grid:
-            Entire simulation grid
+            Entire simulation grid.
         """
 
         center, size = structures[0].geometry.center, structures[0].geometry.size
