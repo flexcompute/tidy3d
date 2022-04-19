@@ -5,7 +5,7 @@ from typing import List, Tuple, Dict
 import pydantic as pd
 import numpy as np
 
-from ...constants import HERTZ, C_0
+from ...constants import HERTZ, C_0, MICROMETER
 from ...components.simulation import Simulation
 from ...components.geometry import Box
 from ...components.mode import ModeSpec
@@ -28,7 +28,7 @@ class Port(Box):
 
     direction: Direction = pd.Field(
         ...,
-        title="Direction",
+        title="SHIFT_VALUEDirection",
         description="'+' or '-', defining which direction is considered 'input'.",
     )
     mode_spec: ModeSpec = pd.Field(
@@ -93,6 +93,15 @@ class ComponentModeler(Tidy3dBaseModel):
         description="Batch Data of task used to compute S matrix. Set internally.",
     )
 
+    shift_value: pd.PositiveFloat = pd.Field(
+        0.1,
+        title="Shift Value",
+        description="Distance between the source and monitor of a given port. "
+        "Should be greater than one grid cell for best results, while being "
+        "small enough that the waveguide cross section does not change within the distance.",
+        units=MICROMETER,
+    )
+
     @pd.validator("simulation", always=True)
     def _sim_has_no_sources(cls, val):
         """Make sure simulation has no sources as they interfere with tool."""
@@ -136,18 +145,14 @@ class ComponentModeler(Tidy3dBaseModel):
             sim_plot.sources.append(mode_source_0)
         return sim_plot.plot(x=x, y=y, z=z, ax=ax)
 
-    def _shift_value(self, port: Port) -> float:
+    def _shift_value_signed(self, port: Port) -> float:
         """How far (signed) to shift the monitor from the source."""
-        normal_index = port.size.index(0.0)
-        dl = self.simulation.grid_size[normal_index]
-        if not isinstance(dl, float):
-            raise NotImplementedError("doesn't support nonuniform. How many grid cells to shift?")
-        return dl if port.direction == "+" else -1 * dl
+        return self.shift_value if port.direction == "+" else -1 * self.shift_value
 
     def _shift_port(self, port: Port) -> Port:
         """Generate a new port shifted by one grid cell in normal direction."""
 
-        shift_value = self._shift_value(port)
+        shift_value = self._shift_value_signed(port)
         center_shifted = list(port.center)
         center_shifted[port.size.index(0.0)] += shift_value
         port_shifted = port.copy(deep=True)
@@ -203,7 +208,7 @@ class ComponentModeler(Tidy3dBaseModel):
 
         k0 = 2 * np.pi * C_0 / self.freq
         k_eff = k0 * normalize_n_eff
-        shift_value = self._shift_value(port_source)
+        shift_value = self._shift_value_signed(port_source)
         return normalize_amp * np.exp(1j * k_eff * shift_value)
 
     def _construct_smatrix(self, batch_data: "BatchData") -> SMatrixType:
