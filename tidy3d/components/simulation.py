@@ -573,7 +573,14 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
     @equal_aspect
     @add_ax_if_none
     def plot(
-        self, x: float = None, y: float = None, z: float = None, ax: Ax = None, **patch_kwargs
+        self,
+        x: float = None,
+        y: float = None,
+        z: float = None,
+        ax: Ax = None,
+        source_alpha: float = None,
+        monitor_alpha: float = None,
+        **patch_kwargs,
     ) -> Ax:
         """Plot each of simulation's components on a plane defined by one nonzero x,y,z coordinate.
 
@@ -585,6 +592,10 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
             position of plane in y direction, only one of x, y, z must be specified to define plane.
         z : float = None
             position of plane in z direction, only one of x, y, z must be specified to define plane.
+        source_alpha : float = None
+            Opacity of the sources. If ``None``, uses to Tidy3d default.
+        monitor_alpha : float = None
+            Opacity of the monitors. If ``None``, uses to Tidy3d default.
         ax : matplotlib.axes._subplots.Axes = None
             Matplotlib axes to plot on, if not specified, one is created.
 
@@ -595,8 +606,8 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         """
 
         ax = self.plot_structures(ax=ax, x=x, y=y, z=z)
-        ax = self.plot_sources(ax=ax, x=x, y=y, z=z)
-        ax = self.plot_monitors(ax=ax, x=x, y=y, z=z)
+        ax = self.plot_sources(ax=ax, x=x, y=y, z=z, alpha=source_alpha)
+        ax = self.plot_monitors(ax=ax, x=x, y=y, z=z, alpha=monitor_alpha)
         ax = self.plot_symmetries(ax=ax, x=x, y=y, z=z)
         ax = self.plot_pml(ax=ax, x=x, y=y, z=z)
         ax = self._set_plot_bounds(ax=ax, x=x, y=y, z=z)
@@ -611,6 +622,8 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         z: float = None,
         freq: float = None,
         alpha: float = None,
+        source_alpha: float = None,
+        monitor_alpha: float = None,
         ax: Ax = None,
     ) -> Ax:
         """Plot each of simulation's components on a plane defined by one nonzero x,y,z coordinate.
@@ -630,6 +643,10 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         alpha : float = None
             Opacity of the structures being plotted.
             Defaults to the structure default alpha.
+        source_alpha : float = None
+            Opacity of the sources. If ``None``, uses to Tidy3d default.
+        monitor_alpha : float = None
+            Opacity of the monitors. If ``None``, uses to Tidy3d default.
         ax : matplotlib.axes._subplots.Axes = None
             Matplotlib axes to plot on, if not specified, one is created.
 
@@ -640,8 +657,8 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         """
 
         ax = self.plot_structures_eps(freq=freq, cbar=True, alpha=alpha, ax=ax, x=x, y=y, z=z)
-        ax = self.plot_sources(ax=ax, x=x, y=y, z=z)
-        ax = self.plot_monitors(ax=ax, x=x, y=y, z=z)
+        ax = self.plot_sources(ax=ax, x=x, y=y, z=z, alpha=source_alpha)
+        ax = self.plot_monitors(ax=ax, x=x, y=y, z=z, alpha=monitor_alpha)
         ax = self.plot_symmetries(ax=ax, x=x, y=y, z=z)
         ax = self.plot_pml(ax=ax, x=x, y=y, z=z)
         ax = self._set_plot_bounds(ax=ax, x=x, y=y, z=z)
@@ -871,7 +888,9 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
 
     @equal_aspect
     @add_ax_if_none
-    def plot_sources(self, x: float = None, y: float = None, z: float = None, ax: Ax = None) -> Ax:
+    def plot_sources(
+        self, x: float = None, y: float = None, z: float = None, alpha: float = None, ax: Ax = None
+    ) -> Ax:
         """Plot each of simulation's sources on a plane defined by one nonzero x,y,z coordinate.
 
         Parameters
@@ -882,6 +901,8 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
             position of plane in y direction, only one of x, y, z must be specified to define plane.
         z : float = None
             position of plane in z direction, only one of x, y, z must be specified to define plane.
+        alpha : float = None
+            Opacity of the sources, If ``None`` uses Tidy3d default.
         ax : matplotlib.axes._subplots.Axes = None
             Matplotlib axes to plot on, if not specified, one is created.
 
@@ -891,13 +912,15 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
             The supplied or created matplotlib axes.
         """
         for source in self.sources:
-            ax = source.plot(x=x, y=y, z=z, ax=ax)
+            ax = source.plot(x=x, y=y, z=z, alpha=alpha, ax=ax)
         ax = self._set_plot_bounds(ax=ax, x=x, y=y, z=z)
         return ax
 
     @equal_aspect
     @add_ax_if_none
-    def plot_monitors(self, x: float = None, y: float = None, z: float = None, ax: Ax = None) -> Ax:
+    def plot_monitors(
+        self, x: float = None, y: float = None, z: float = None, alpha: float = None, ax: Ax = None
+    ) -> Ax:
         """Plot each of simulation's monitors on a plane defined by one nonzero x,y,z coordinate.
 
         Parameters
@@ -908,6 +931,8 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
             position of plane in y direction, only one of x, y, z must be specified to define plane.
         z : float = None
             position of plane in z direction, only one of x, y, z must be specified to define plane.
+        alpha : float = None
+            Opacity of the sources, If ``None`` uses Tidy3d default.
         ax : matplotlib.axes._subplots.Axes = None
             Matplotlib axes to plot on, if not specified, one is created.
 
@@ -917,7 +942,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
             The supplied or created matplotlib axes.
         """
         for monitor in self.monitors:
-            ax = monitor.plot(x=x, y=y, z=z, ax=ax)
+            ax = monitor.plot(x=x, y=y, z=z, alpha=alpha, ax=ax)
         ax = self._set_plot_bounds(ax=ax, x=x, y=y, z=z)
         return ax
 
