@@ -53,15 +53,13 @@ class GridSpec1d(Tidy3dBaseModel, ABC):
 
         Returns
         -------
-        Coords1D:
+        :class:`.Coords1D`:
             1D coords to be used as grid boundaries.
         """
 
         # Determine if one should apply periodic boundary condition.
         # This should only affect auto nonuniform mesh generation for now.
-        is_periodic = False
-        if num_pml_layers[0] == 0 and num_pml_layers[1] == 0:
-            is_periodic = True
+        is_periodic = sum(num_pml_layers) == 0
 
         # generate boundaries
         bound_coords = self._make_coords_initial(
@@ -103,12 +101,12 @@ class GridSpec1d(Tidy3dBaseModel, ABC):
 
         Returns
         -------
-        Coords1D:
+        :class:`.Coords1D`:
             1D coords to be used as grid boundaries.
         """
 
     @staticmethod
-    def _add_pml_to_bounds(num_layers: Tuple[int, int], bounds: Coords1D):
+    def _add_pml_to_bounds(num_layers: Tuple[int, int], bounds: Coords1D) -> Coords1D:
         """Append absorber layers to the beginning and end of the simulation bounds
         along one dimension.
 
@@ -171,7 +169,7 @@ class UniformGrid(GridSpec1d):
 
         Returns
         -------
-        Coords1D:
+        :class:`.Coords1D`:
             1D coords to be used as grid boundaries.
         """
 
@@ -207,6 +205,7 @@ class CustomGrid(GridSpec1d):
         "``(center - sum(dl)/2, center + sum(dl)/2)``. "
         "Note: if supplied sizes do not cover the simulation size, the first and last sizes "
         "are repeated to cover the simulation domain.",
+        units=MICROMETER,
     )
 
     def _make_coords_initial(
@@ -228,7 +227,7 @@ class CustomGrid(GridSpec1d):
 
         Returns
         -------
-        Coords1D:
+        :class:`.Coords1D`:
             1D coords to be used as grid boundaries.
         """
 
@@ -313,7 +312,7 @@ class AutoGrid(GridSpec1d):
 
         Returns
         -------
-        Coords1D:
+        :class:`.Coords1D`:
             1D coords to be used as grid boundaries.
         """
 
@@ -375,18 +374,24 @@ class GridSpec(Tidy3dBaseModel):
         description="Free-space wavelength for automatic nonuniform grid. It can be 'None' "
         "if there is at least one source in the simulation, in which case it is defined by "
         "the source central frequency.",
+        units=MICROMETER,
     )
 
     @property
-    def auto_grid_used(self):
-        """A list of the GridSpec1d-s along each axis."""
+    def auto_grid_used(self) -> bool:
+        """True if any of the three dimensions uses :class:`.AutoGrid`."""
         grid_list = [self.grid_x, self.grid_y, self.grid_z]
         return np.any([isinstance(mesh, AutoGrid) for mesh in grid_list])
 
-    def wvl_from_sources(self, sources: List[SourceType]):
-        """Define a wavelength based on supplied sources."""
+    def get_wavelength(self, sources: List[SourceType]) -> pd.PositiveFloat:
+        """Define a wavelength based on attribute or supplied sources."""
+
+        if self.wavelength is not None or not self.auto_grid_used:
+            return self.wavelength
+
+        # If auto mesh used and wavelength is None, use central frequency of sources, if any.
         freqs = np.array([source.source_time.freq0 for source in sources])
-        # lack of wavelength input
+        # no sources
         if len(freqs) == 0:
             raise SetupError(
                 "Automatic grid generation requires the input of 'wavelength' or sources."
@@ -397,7 +402,10 @@ class GridSpec(Tidy3dBaseModel):
                 "Sources of different central frequencies are supplied. "
                 "Please supply a 'wavelength' value for 'grid_spec'."
             )
-        return C_0 / freqs[0]
+
+        wavelength = C_0 / freqs[0]
+        log.info(f"Auto meshing using wavelength {wavelength:1.4f} defined from sources.")
+        return wavelength
 
     def make_grid(
         self,
@@ -430,11 +438,7 @@ class GridSpec(Tidy3dBaseModel):
         center, size = structures[0].geometry.center, structures[0].geometry.size
 
         # Set up wavelength for automatic mesh generation if needed.
-        wavelength = self.wavelength
-        # If auto mesh used and wavelength is None, use central frequency of sources, if any.
-        if wavelength is None and self.auto_grid_used:
-            wavelength = self.wvl_from_sources(sources)
-            log.info(f"Auto meshing using wavelength {wavelength} defined from sources.")
+        wavelength = self.get_wavelength(sources)
 
         coords_x = self.grid_x.make_coords(
             center=center[0],
@@ -470,9 +474,9 @@ class GridSpec(Tidy3dBaseModel):
     @classmethod
     def auto(
         cls,
-        wavelength: float = None,
-        min_steps_per_wvl: float = 10.0,
-        max_scale: float = 1.4,
+        wavelength: pd.PositiveFloat = None,
+        min_steps_per_wvl: pd.PositiveFloat = 10.0,
+        max_scale: pd.PositiveFloat = 1.4,
         mesher: MesherType = GradedMesher(),
     ) -> "GridSpec":
         """Use the same :class:`AutoGrid` along each of the three directions.

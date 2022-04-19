@@ -202,18 +202,15 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         if val is not None:
             raise ValidationError(
                 "'grid_size' has been replaced by 'grid_spec'. See the "
-                ":class:`.GridSpec` documentation for more information!"
+                "'GridSpec' documentation for more information."
             )
 
         return val
 
     @pydantic.validator("grid_spec", always=True)
     def _validate_auto_grid_wavelength(cls, val, values):
-        """If there is auto grid spec with no wavelength, check that wavelength can be defined
-        from sources."""
-        if val.wavelength is None and val.auto_grid_used:
-            _ = val.wvl_from_sources(sources=values.get("sources"))
-
+        """Check that wavelength can be defined if there is auto grid spec."""
+        _ = val.get_wavelength(sources=values.get("sources"))
         return val
 
     @pydantic.validator("pml_layers", always=True, allow_reuse=True)
