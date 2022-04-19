@@ -1308,6 +1308,7 @@ class SimulationData(AbstractSimulationData):
             for field in ("Ex", "Ey", "Ez"):
                 field_data = monitor_data[field]
                 xr_data += abs(field_data) ** 2
+                xr_data.name = "Intensity"
             val = "abs"
         else:
             monitor_data.ensure_member_exists(field_name)
