@@ -11,8 +11,8 @@ from .base import Tidy3dBaseModel
 from .types import PoleAndResidue, Ax, FreqBound
 from .viz import add_ax_if_none
 from .validators import validate_name_str
-
-from ..constants import C_0, pec_val, EPSILON_0, HERTZ, CONDUCTIVITY, PERMITTIVITY, RADPERSEC, inf
+from ..constants import C_0, pec_val, EPSILON_0, HERTZ, CONDUCTIVITY, PERMITTIVITY, RADPERSEC
+from ..constants import LARGE_NUMBER
 from ..log import log, ValidationError
 
 
@@ -22,8 +22,12 @@ def ensure_freq_in_range(eps_model: Callable[[float], complex]) -> Callable[[flo
     def _eps_model(self, frequency: float) -> complex:
         """New eps_model function."""
 
+        # evaluate infs and None as LARGE_NUMBER
         if frequency is None:
-            frequency = inf
+            frequency = LARGE_NUMBER
+
+        if isinstance(frequency, np.ndarray):
+            frequency[np.where(np.isinf(frequency))] = LARGE_NUMBER
 
         # if frequency range not present just return original function
         if self.frequency_range is None:
