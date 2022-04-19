@@ -604,7 +604,7 @@ class DispersionFitter(BaseModel):
             raise ValidationError("Invalid URL. Too many k labels.")
 
     @classmethod
-    def from_url(cls, url_file: str, delimiter: str = ","):
+    def from_url(cls, url_file: str, delimiter: str = ",", **kwargs):
         """loads :class:`DispersionFitter` from url linked to a csv/txt file that
         contains wavelength (micron), n, and optionally k data. Preferred from
         refractiveindex.info.
@@ -690,8 +690,8 @@ class DispersionFitter(BaseModel):
                     "Invalid URL. Both n and k should be provided at each wavelength."
                 )
 
-            return cls(wvl_um=n_lam[:, 0], n_data=n_lam[:, 1], k_data=k_lam[:, 1])
-        return cls(wvl_um=n_lam[:, 0], n_data=n_lam[:, 1])
+            return cls(wvl_um=n_lam[:, 0], n_data=n_lam[:, 1], k_data=k_lam[:, 1], **kwargs)
+        return cls(wvl_um=n_lam[:, 0], n_data=n_lam[:, 1], **kwargs)
 
     @classmethod
     def from_file(cls, fname: str, **loadtxt_kwargs):

@@ -63,7 +63,7 @@ class DataPlotly(UIComponent, ABC):
         return {"type": f"{type(self.data).__name__}_{value}", "name": self.monitor_name}
 
     @classmethod
-    def from_monitor_data(cls, monitor_name: str, monitor_data: Tidy3dDataType) -> "cls":
+    def from_monitor_data(cls, monitor_name: str, monitor_data: Tidy3dDataType, **kwargs) -> "cls":
         """Load a PlotlyData UI component from the monitor name and its data."""
 
         # maps the supplied ``monitor_data`` argument to the corresponding plotly wrapper.
@@ -89,7 +89,7 @@ class DataPlotly(UIComponent, ABC):
             return None
 
         # return the right component
-        return plotly_data_type(data=monitor_data, monitor_name=monitor_name)
+        return plotly_data_type(data=monitor_data, monitor_name=monitor_name, **kwargs)
 
 
 class AbstractFluxDataPlotly(DataPlotly, ABC):

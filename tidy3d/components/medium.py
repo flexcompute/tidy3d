@@ -269,7 +269,7 @@ class Medium(AbstractMedium):
         )
 
     @classmethod
-    def from_nk(cls, n: float, k: float, freq: float):
+    def from_nk(cls, n: float, k: float, freq: float, **kwargs):
         """Convert ``n`` and ``k`` values at frequency ``freq`` to :class:`Medium`.
 
         Parameters
@@ -287,7 +287,7 @@ class Medium(AbstractMedium):
             medium containing the corresponding ``permittivity`` and ``conductivity``.
         """
         eps, sigma = AbstractMedium.nk_to_eps_sigma(n, k, freq)
-        return cls(permittivity=eps, conductivity=sigma)
+        return cls(permittivity=eps, conductivity=sigma, **kwargs)
 
 
 class AnisotropicMedium(AbstractMedium):
@@ -509,7 +509,7 @@ class Sellmeier(DispersiveMedium):
         )
 
     @classmethod
-    def from_dispersion(cls, n: float, freq: float, dn_dwvl: float = 0):
+    def from_dispersion(cls, n: float, freq: float, dn_dwvl: float = 0, **kwargs):
         """Convert ``n`` and wavelength dispersion ``dn_dwvl`` values at frequency ``freq`` to
         a single-pole :class:`Sellmeier` medium.
 
@@ -539,7 +539,7 @@ class Sellmeier(DispersiveMedium):
         b_coeff = (wvl**2 - c_coeff) / wvl**2 * nsqm1
         coeffs = [(b_coeff, c_coeff)]
 
-        return cls(coeffs=coeffs)
+        return cls(coeffs=coeffs, **kwargs)
 
 
 class Lorentz(DispersiveMedium):
