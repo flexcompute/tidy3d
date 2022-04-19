@@ -12,8 +12,10 @@ from .types import PoleAndResidue, Ax, FreqBound
 from .viz import add_ax_if_none
 from .validators import validate_name_str
 from ..constants import C_0, pec_val, EPSILON_0, HERTZ, CONDUCTIVITY, PERMITTIVITY, RADPERSEC
-from ..constants import LARGE_NUMBER
 from ..log import log, ValidationError
+
+# evaluate frequency as this number (Hz) if inf
+FREQ_EVAL_INF = 1e50
 
 
 def ensure_freq_in_range(eps_model: Callable[[float], complex]) -> Callable[[float], complex]:
@@ -22,12 +24,13 @@ def ensure_freq_in_range(eps_model: Callable[[float], complex]) -> Callable[[flo
     def _eps_model(self, frequency: float) -> complex:
         """New eps_model function."""
 
-        # evaluate infs and None as LARGE_NUMBER
-        if frequency is None or np.isinf(frequency):
-            frequency = LARGE_NUMBER
+        # evaluate infs and None as FREQ_EVAL_INF
+        is_inf_scalar = isinstance(frequency, float) and np.isinf(frequency)
+        if frequency is None or is_inf_scalar:
+            frequency = FREQ_EVAL_INF
 
         if isinstance(frequency, np.ndarray):
-            frequency[np.where(np.isinf(frequency))] = LARGE_NUMBER
+            frequency[np.where(np.isinf(frequency))] = FREQ_EVAL_INF
 
         # if frequency range not present just return original function
         if self.frequency_range is None:
