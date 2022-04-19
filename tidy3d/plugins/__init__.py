@@ -5,5 +5,3 @@ from .dispersion.fit_web import StableDispersionFitter, AdvancedFitterParam
 from .mode.mode_solver import ModeSolver, ModeSolverData
 from .near2far.near2far import Near2Far, Near2FarSurface
 from .smatrix.smatrix import ComponentModeler, Port
-from .webplots.app import SimulationDataApp
-from .webplots.simulation import SimulationPlotly
