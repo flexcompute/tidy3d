@@ -7,7 +7,7 @@ import numpy as np
 import pydantic as pd
 
 from .grid import Coords1D, Coords, Grid
-from .auto_grid import parse_structures, make_grid_multiple_intervals
+from .mesher import GradedMesher, MesherType
 from ..base import Tidy3dBaseModel
 from ..types import Axis, Symmetry
 from ..source import SourceType
@@ -176,7 +176,6 @@ class UniformGrid(GridSpec1d):
         """
 
         # Take a number of steps commensurate with the size; make dl a bit smaller if needed
-        print(size, self.dl)
         num_cells = int(np.ceil(size / self.dl))
 
         # Make sure there's at least one cell
@@ -280,6 +279,12 @@ class AutoGrid(GridSpec1d):
         lt=2.0,
     )
 
+    mesher: MesherType = pd.Field(
+        GradedMesher(),
+        title="Grid Construction Tool",
+        description="The type of mesher to use to generate the grid automatically.",
+    )
+
     def _make_coords_initial(  # pylint:disable = arguments-differ, too-many-arguments
         self,
         center: float,
@@ -313,7 +318,7 @@ class AutoGrid(GridSpec1d):
         """
 
         # parse structures
-        interval_coords, max_dl_list = parse_structures(
+        interval_coords, max_dl_list = self.mesher.parse_structures(
             axis, structures, wavelength, self.min_steps_per_wvl
         )
 
@@ -321,7 +326,7 @@ class AutoGrid(GridSpec1d):
         interval_coords = np.array(interval_coords).flatten()
         max_dl_list = np.array(max_dl_list).flatten()
         len_interval_list = interval_coords[1:] - interval_coords[:-1]
-        dl_list = make_grid_multiple_intervals(
+        dl_list = self.mesher.make_grid_multiple_intervals(
             max_dl_list, len_interval_list, self.max_scale, is_periodic
         )
 
@@ -464,7 +469,11 @@ class GridSpec(Tidy3dBaseModel):
 
     @classmethod
     def auto(
-        cls, wavelength: float = None, min_steps_per_wvl: float = 10.0, max_scale: float = 1.4
+        cls,
+        wavelength: float = None,
+        min_steps_per_wvl: float = 10.0,
+        max_scale: float = 1.4,
+        mesher: MesherType = GradedMesher(),
     ) -> "GridSpec":
         """Use the same :class:`AutoGrid` along each of the three directions.
 
@@ -485,7 +494,7 @@ class GridSpec(Tidy3dBaseModel):
             :class:`GridSpec` with the same automatic nonuniform grid settings in each direction.
         """
 
-        grid_1d = AutoGrid(min_steps_per_wvl=min_steps_per_wvl, max_scale=max_scale)
+        grid_1d = AutoGrid(min_steps_per_wvl=min_steps_per_wvl, max_scale=max_scale, mesher=mesher)
         return cls(wavelength=wavelength, grid_x=grid_1d, grid_y=grid_1d, grid_z=grid_1d)
 
     @classmethod
