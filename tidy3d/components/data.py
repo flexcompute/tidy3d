@@ -1452,7 +1452,7 @@ class SimulationData(AbstractSimulationData):
 
     @classmethod
     def from_file(
-        cls, fname: str, normalize_index: Optional[int] = 0
+        cls, fname: str, normalize_index: Optional[int] = 0, **kwargs
     ):  # pylint:disable=arguments-differ
         """Load :class:`SimulationData` from .hdf5 file.
 
@@ -1501,6 +1501,7 @@ class SimulationData(AbstractSimulationData):
             monitor_data=monitor_data_dict,
             log_string=log_string,
             diverged=diverged,
+            **kwargs,
         )
 
         # make sure to tag the SimulationData with the normalize_index stored from file

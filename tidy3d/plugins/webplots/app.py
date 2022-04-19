@@ -100,13 +100,13 @@ class SimulationDataApp(App):
 
     @classmethod
     def from_file(
-        cls, fname: str, mode: AppMode = DEFAULT_MODE, normalize_index: Optional[int] = 0
+        cls, fname: str, mode: AppMode = DEFAULT_MODE, normalize_index: Optional[int] = 0, **kwargs
     ):  # pylint:disable=arguments-differ
         """Load the :class:`.SimulationDataApp` from a tidy3d data file in .hdf5 format."""
         sim_data = SimulationData.from_file(fname, normalize_index=normalize_index)
 
         set_store(LocalStore(fname))
-        return cls(sim_data=sim_data, mode=mode)
+        return cls(sim_data=sim_data, mode=mode, **kwargs)
 
 
 class SimulationApp(App):
@@ -117,7 +117,9 @@ class SimulationApp(App):
     )
 
     @classmethod
-    def from_file(cls, fname: str, mode: AppMode = DEFAULT_MODE):  # pylint:disable=arguments-differ
+    def from_file(
+        cls, fname: str, mode: AppMode = DEFAULT_MODE, **kwargs
+    ):  # pylint:disable=arguments-differ
         """Load the SimulationApp from a tidy3d Simulation file in .json or .yaml format."""
         simulation = Simulation.from_file(fname)
-        return cls(simulation=simulation, mode=mode)
+        return cls(simulation=simulation, mode=mode, **kwargs)

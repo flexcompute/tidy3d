@@ -715,7 +715,7 @@ class Box(Geometry):
     )
 
     @classmethod
-    def from_bounds(cls, rmin: Coordinate, rmax: Coordinate):
+    def from_bounds(cls, rmin: Coordinate, rmax: Coordinate, **kwargs):
         """Constructs a :class:`Box` from minimum and maximum coordinate bounds
 
         Parameters
@@ -738,7 +738,7 @@ class Box(Geometry):
 
         center = tuple(get_center(pt_min, pt_max) for pt_min, pt_max in zip(rmin, rmax))
         size = tuple((pt_max - pt_min) for pt_min, pt_max in zip(rmin, rmax))
-        return cls(center=center, size=size)
+        return cls(center=center, size=size, **kwargs)
 
     def intersections(self, x: float = None, y: float = None, z: float = None):
         """Returns shapely geometry at plane specified by one non None value of x,y,z.
@@ -1290,7 +1290,7 @@ class PolySlab(Planar):
         return val
 
     @classmethod
-    def from_gds(  # pylint:disable=too-many-arguments
+    def from_gds(  # pylint:disable=too-many-arguments, too-many-locals
         cls,
         gds_cell,
         axis: Axis,
@@ -1300,6 +1300,7 @@ class PolySlab(Planar):
         gds_scale: pydantic.PositiveFloat = 1.0,
         dilation: float = 0.0,
         sidewall_angle: float = 0,
+        **kwargs,
     ) -> List["PolySlab"]:
         """Import :class:`PolySlab` from a ``gdspy.Cell``.
 
@@ -1361,6 +1362,7 @@ class PolySlab(Planar):
                 slab_bounds=slab_bounds,
                 dilation=dilation,
                 sidewall_angle=sidewall_angle,
+                **kwargs,
             )
             for verts in all_vertices
         ]

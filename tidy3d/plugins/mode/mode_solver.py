@@ -138,7 +138,7 @@ class ModeSolverData(AbstractSimulationData):
             self.add_to_handle(f_handle)
 
     @classmethod
-    def from_file(cls, fname: str):
+    def from_file(cls, fname: str, **kwargs):  # pylint:disable=unused-argument
         """Load :class:`.ModeSolverData` from .hdf5 file.
 
         Parameters
