@@ -17,7 +17,7 @@ This code allows you to:
 * Submit and magange simulations running on Flexcompute's servers.
 * Download and postprocess the results from the simulations.
 
-You can find a detailed documentation and API reference [here](https://flexcompute-tidy3ddocumentation.readthedocs-hosted.com/en/latest/).
+You can find a detailed documentation and API reference [here](https://flexcompute-tidy3ddocumentation.readthedocs-hosted.com/).
 The source code for our documentation is [here](https://github.com/flexcompute-readthedocs/tidy3d-docs).
 
 ![](https://raw.githubusercontent.com/flexcompute/tidy3d/main/img/snippet.png)
@@ -27,7 +27,7 @@ The source code for our documentation is [here](https://github.com/flexcompute-r
 ### Signing up for tidy3d
 
 Note that while this front end package is open source, to run simulations on Flexcompute servers requires an account with credits.
-You can sign up [here](https://client.simulation.cloud/register-waiting).  While it's currently a waitlist for new users, we will be rolling out to many more users in the coming weeks!  See [this page](https://flexcompute-tidy3ddocumentation.readthedocs-hosted.com/en/latest/quickstart.html) in our documentation for more details.
+You can sign up [here](https://client.simulation.cloud/register-waiting).  While it's currently a waitlist for new users, we will be rolling out to many more users in the coming weeks!  See [this page](https://flexcompute-tidy3ddocumentation.readthedocs-hosted.com/quickstart.html) in our documentation for more details.
 
 ### Installing the package using pip
 
