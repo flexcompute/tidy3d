@@ -16,8 +16,8 @@ print(version["__version__"])
 with open("README.md", "r", encoding="utf-8") as fh:
     long_description = fh.read()
 
-with open("requirements/common.txt") as f:
-    required = f.read().splitlines()
+with open("requirements/core.txt") as f:
+    core_required = f.read().splitlines()
 
 with open("requirements/plotly.txt") as f:
     plotly_required = f.read().splitlines()
@@ -40,10 +40,8 @@ setuptools.setup(
         "License :: OSI Approved :: MIT License",
         "Operating System :: OS Independent",
     ],
-    # package_dir={"": ""},
-    # packages=[PACKAGE_NAME],
     packages=setuptools.find_packages(),
     python_requires=">=3.6",
-    install_requires=required,
+    install_requires=core_required,
     extras_require={"plotly": plotly_required},
 )

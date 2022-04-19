@@ -1,6 +1,6 @@
 # core, plotly and tests
 
--r common.txt
+-r core.txt
 -r plotly.txt
 
 # required for development
