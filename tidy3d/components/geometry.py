@@ -737,13 +737,11 @@ class Box(Geometry):
             if np.isneginf(pt_min) or np.isposinf(pt_max):
                 raise SetupError(
                     f"Bounds of ({pt_min}, {pt_max}) supplied along one dimension. "
-                    "We currently don't support supplying a single `inf` value in bounds "
-                    "for the construction of semi-infinite `Box`. "
-                    "Instead, to construct a semi-infinite `Box`, "
-                    "please supply a large number instead of `inf`. "
-                    "For example, if the Box represents the geometry of a `Structure` in a "
-                    "`Simulation`, its bound should extend outside of the `Simulation` domain "
-                    "including PML."
+                    "We currently don't support a single ``inf`` value in bounds for ``Box``. "
+                    "To construct a semi-infinite ``Box``, "
+                    "please supply a large enough number instead of ``inf``. "
+                    "For example, a location extending outside of the "
+                    "Simulation domain (including PML)."
                 )
             return (pt_min + pt_max) / 2.0
 
