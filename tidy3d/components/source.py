@@ -4,11 +4,10 @@ from abc import ABC, abstractmethod
 from typing import Union, Tuple
 import logging
 
-from typing_extensions import Annotated
 import pydantic
 import numpy as np
 
-from .base import Tidy3dBaseModel, TYPE_TAG_STR
+from .base import Tidy3dBaseModel
 from .types import Direction, Polarization, Ax, FreqBound, Array, Axis, ArrayLike
 from .validators import assert_plane, validate_name_str
 from .geometry import Box
@@ -273,7 +272,55 @@ class Source(Box, ABC):
 
         return Box(center=self.center, size=self.size)
 
+    @property
+    def _dir_vector(self) -> Tuple[float, float, float]:
+        """Returns a vector indicating the source direction for arrow plotting, if not None."""
+        return None
+
+    @property
+    def _pol_vector(self) -> Tuple[float, float, float]:
+        """Returns a vector indicating the source polarization for arrow plotting, if not None."""
+        return None
+
+    def plot(
+        self, x: float = None, y: float = None, z: float = None, ax: Ax = None, **kwargs
+    ) -> Ax:
+
+        # call the `Source.plot()` function first.
+        ax = super().plot(x=x, y=y, z=z, ax=ax, **kwargs)
+
+        # then add the arrow based on the propagation direction
+        if self._dir_vector is not None:
+
+            ax = self._plot_arrow(
+                x=x,
+                y=y,
+                z=z,
+                ax=ax,
+                direction=self._dir_vector,
+                color=ARROW_COLOR_SOURCE,
+                alpha=ARROW_ALPHA,
+                both_dirs=False,
+            )
+
+        if self._pol_vector is not None:
+
+            ax = self._plot_arrow(
+                x=x,
+                y=y,
+                z=z,
+                ax=ax,
+                direction=self._pol_vector,
+                color=ARROW_COLOR_POLARIZATION,
+                alpha=ARROW_ALPHA,
+                both_dirs=False,
+            )
+
+        return ax
+
+
 """ Sources either: (1) implement current distributions or (2) generate fields."""
+
 
 class CurrentSource(Source):
     """Source in a rectangular volume with uniform time dependence. size=(0,0,0) gives point source.
@@ -290,20 +337,37 @@ class CurrentSource(Source):
         description="Specifies the direction and type of current component.",
     )
 
+    @property
+    def _pol_vector(self) -> Tuple[float, float, float]:
+        """Returns a vector indicating the source polarization for arrow plotting, if not None."""
+        component = self.polarization[-1]  # 'x' 'y' or 'z'
+        if component in "xyz":
+            pol_axis = "xyz".index(component)
+            pol_vec = [0, 0, 0]
+            pol_vec[pol_axis] = 1
+            return pol_vec
+        return None
+
 
 class FieldSource(Source, ABC):
     """A Source defined by the desired E and/or H fields."""
 
+
 """ TODO: Custom currents """
+
 
 class CustomSource(Source, ABC):
     """Implements custom current components specified by data."""
-    data : ArrayLike
+
+    data: ArrayLike
+
 
 class CustomFieldSource(FieldSource, CustomSource):
     """Implements custom E, H fields specified by data."""
 
+
 """ Field Sources can be defined either on a (1) surface or (2) volume. Defines injection_axis """
+
 
 class PlanarSource(Source, ABC):
     """A source defined on a 2D plane."""
@@ -314,6 +378,7 @@ class PlanarSource(Source, ABC):
     def injection_axis(self):
         """Injection axis of the source."""
         return self.size.index(0.0)
+
 
 class VolumeSource(Source, ABC):
     """A source defined in a 3D :class:`Box`."""
@@ -326,7 +391,9 @@ class VolumeSource(Source, ABC):
         "directional sources, as it is taken automatically from the plane size.",
     )
 
+
 """ Field Sources require more specification, for now, they all have a notion of a direction."""
+
 
 class DirectionalSource(FieldSource, ABC):
     """A Field source that propagates in a given direction."""
@@ -338,7 +405,18 @@ class DirectionalSource(FieldSource, ABC):
         "axis.",
     )
 
+    @property
+    def _dir_vector(self) -> Tuple[float, float, float]:
+        """Returns a vector indicating the source direction for arrow plotting, if not None."""
+        if hasattr(self, "injection_axis"):
+            dir_vec = [0, 0, 0]
+            dir_vec[self.injection_axis] = 1 if self.direction == "+" else -1
+            return dir_vec
+        return None
+
+
 """ Source current profiles defined by (1) angle or (2) desired mode. Sets theta and phi angles."""
+
 
 class AngledFieldSource(DirectionalSource, ABC):
     """A FieldSource defined with a an angled direction of propagation. The direction is defined by
@@ -374,7 +452,7 @@ class AngledFieldSource(DirectionalSource, ABC):
         "- ``Ex`` polarization for propagation along ``y``."
         "- ``Ex`` polarization for propagation along ``z``.",
         units=RADIAN,
-    )    
+    )
 
     @pydantic.validator("angle_theta", allow_reuse=True, always=True)
     def glancing_incidence(cls, val):
@@ -386,36 +464,26 @@ class AngledFieldSource(DirectionalSource, ABC):
             )
         return val
 
-
-    def plot(
-        self, x: float = None, y: float = None, z: float = None, ax: Ax = None, **kwargs
-    ) -> Ax:
-
-        # call the `Source.plot()` function first.
-        ax = super().plot(x=x, y=y, z=z, ax=ax, **kwargs)
-
-        # then add the arrow based on the propagation direction
-        ax = self._plot_arrow(
-            x=x,
-            y=y,
-            z=z,
-            ax=ax,
-            direction=self._dir_arrow,
-            color=ARROW_COLOR_SOURCE,
-            alpha=ARROW_ALPHA,
-            both_dirs=False,
-        )
-        return ax
-
     # pylint: disable=no-member
     @property
-    def _dir_arrow(self) -> Tuple[float, float, float]:
+    def _dir_vector(self) -> Tuple[float, float, float]:
         """Source direction normal vector in cartesian coordinates."""
         radius = 1.0 if self.direction == "+" else -1.0
         dx = radius * np.cos(self.angle_phi) * np.sin(self.angle_theta)
         dy = radius * np.sin(self.angle_phi) * np.sin(self.angle_theta)
         dz = radius * np.cos(self.angle_theta)
         return self.unpop_axis(dz, (dx, dy), axis=self.injection_axis)
+
+    @property
+    def _pol_vector(self) -> Tuple[float, float, float]:
+        """Source polarization normal vector in cartesian coordinates."""
+        normal_dir = [0.0, 0.0, 0.0]
+        normal_dir[self.injection_axis] = 1.0
+        propagation_dir = list(self._dir_vector)
+        pol_vector = np.cross(normal_dir, propagation_dir)
+        if np.all(pol_vector == 0.0):
+            pol_vector = np.array((0, 1, 0)) if self.injection_axis == 0 else np.array((1, 0, 0))
+        return self.rotate_points(pol_vector, propagation_dir, angle=self.pol_angle)
 
 
 class ModeSource(DirectionalSource, PlanarSource):
@@ -458,7 +526,18 @@ class ModeSource(DirectionalSource, PlanarSource):
         """Azimuth angle of propagation."""
         return self.mode_spec.angle_phi
 
+    @property
+    def _dir_vector(self) -> Tuple[float, float, float]:
+        """Source direction normal vector in cartesian coordinates."""
+        radius = 1.0 if self.direction == "+" else -1.0
+        dx = radius * np.cos(self.angle_phi) * np.sin(self.angle_theta)
+        dy = radius * np.sin(self.angle_phi) * np.sin(self.angle_theta)
+        dz = radius * np.cos(self.angle_theta)
+        return self.unpop_axis(dz, (dx, dy), axis=self.injection_axis)
+
+
 """ Angled Field Sources one can use. """
+
 
 class PlaneWave(AngledFieldSource, PlanarSource):
     """Uniform current distribution on an infinite extent plane.  One element of size must be zero.
@@ -508,46 +587,9 @@ class GaussianBeam(AngledFieldSource, PlanarSource):
         units=MICROMETER,
     )
 
+
 class TFSF(AngledFieldSource, VolumeSource):
     """Total field scattered field with a plane wave field in a volume."""
-
-
-
-# class PolarizedSource(AngledDirectionalSource, ABC):
-#     """AngledDirectionalSource with a polarization angle."""
-
-
-#     def plot(
-#         self, x: float = None, y: float = None, z: float = None, ax: Ax = None, **kwargs
-#     ) -> Ax:
-
-#         # call the `DirectionalSource.plot()` function first (including dir arrow)
-#         ax = super().plot(x=x, y=y, z=z, ax=ax, **kwargs)
-
-#         # then add another arrow based on the polarization direction
-#         ax = self._plot_arrow(
-#             x=x,
-#             y=y,
-#             z=z,
-#             ax=ax,
-#             direction=self._pol_arrow,
-#             color=ARROW_COLOR_POLARIZATION,
-#             alpha=ARROW_ALPHA,
-#             both_dirs=False,
-#         )
-#         return ax
-
-#     @property
-#     def _pol_arrow(self) -> Tuple[float, float, float]:
-#         """Source polarization normal vector in cartesian coordinates."""
-#         normal_dir = [0.0, 0.0, 0.0]
-#         normal_dir[self.injection_axis] = 1.0
-#         propagation_dir = list(self._dir_arrow)
-#         pol_vector = np.cross(normal_dir, propagation_dir)
-#         if np.all(pol_vector == 0.0):
-#             pol_vector = np.array((0, 1, 0)) if self.injection_axis == 0 else np.array((1, 0, 0))
-#         return self.rotate_points(pol_vector, propagation_dir, angle=self.pol_angle)
-
 
 
 # sources allowed in Simulation.sources
