@@ -10,9 +10,11 @@ import numpy as np
 import h5py
 import pydantic as pd
 
-from .types import Numpy, Direction, Array, numpy_encoding, Literal, Ax, Coordinate, Symmetry, Axis
+from .types import Numpy, Direction, Array, numpy_encoding, Literal, Ax, Coordinate, Axis
+from .types import ArrayLike
 from .base import Tidy3dBaseModel, TYPE_TAG_STR
 from .simulation import Simulation
+from .boundary import Symmetry
 from .monitor import Monitor
 from .grid import Grid, Coords
 from .viz import add_ax_if_none, equal_aspect
@@ -334,7 +336,7 @@ class SpatialCollectionData(CollectionData, ABC):
     symmetry: Tuple[Symmetry, Symmetry, Symmetry] = pd.Field(
         (0, 0, 0),
         title="Symmetry Eigenvalues",
-        description="igenvalues of the symmetry under reflection in x, y, and z.",
+        description="Eigenvalues of the symmetry under reflection in x, y, and z.",
     )
 
     expanded_grid: Dict[str, Coords] = pd.Field(
@@ -640,7 +642,7 @@ class ScalarFieldTimeData(ScalarSpatialData, TimeData):
     >>> data = ScalarFieldTimeData(values=values, x=x, y=y, z=z, t=t)
     """
 
-    values: Array[float] = pd.Field(
+    values: ArrayLike = pd.Field(
         ...,
         title="Scalar Field Values",
         description="Multi-dimensional array storing the raw scalar field values in time domain.",

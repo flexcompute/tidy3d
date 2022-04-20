@@ -54,10 +54,10 @@ def test_sim():
             FluxTimeMonitor(size=(1, 1, 0), center=(0, 0, 0), interval=10, name="plane"),
         ],
         symmetry=(0, 0, 0),
-        pml_layers=(
-            PML(num_layers=20),
-            StablePML(num_layers=30),
-            Absorber(num_layers=100),
+        boundary_spec=BoundarySpec(
+            x=Boundary.pml(num_layers=20),
+            y=Boundary.stable_pml(num_layers=30),
+            z=Boundary.absorber(num_layers=100),
         ),
         shutoff=1e-6,
         courant=0.8,
@@ -222,7 +222,9 @@ def test_sim_structure_gap(caplog, box_size, log_level):
         size=(10, 10, 10),
         structures=[box],
         sources=[src],
-        pml_layers=[PML(num_layers=5), PML(num_layers=5), PML(num_layers=5)],
+        boundary_spec=BoundarySpec(
+            x=Boundary.pml(num_layers=5), y=Boundary.pml(num_layers=5), z=Boundary.pml(num_layers=5)
+        ),
         run_time=1e-12,
     )
     assert_log_level(caplog, log_level)

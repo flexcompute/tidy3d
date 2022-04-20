@@ -56,7 +56,11 @@ def test_sim_nonuniform_small():
             grid_y=td.UniformGrid(dl=1.0),
             grid_z=td.UniformGrid(dl=1.0),
         ),
-        pml_layers=[td.PML(num_layers=num_layers_pml_x), None, None],
+        boundary_spec=td.BoundarySpec(
+            x=td.Boundary.pml(num_layers=num_layers_pml_x),
+            y=td.Boundary.periodic(),
+            z=td.Boundary.periodic(),
+        ),
         run_time=1e-12,
     )
 
@@ -105,7 +109,11 @@ def test_sim_nonuniform_large():
             grid_y=td.UniformGrid(dl=1.0),
             grid_z=td.UniformGrid(dl=1.0),
         ),
-        pml_layers=[td.PML(num_layers=num_layers_pml_x), None, None],
+        boundary_spec=td.BoundarySpec(
+            x=td.Boundary.pml(num_layers=num_layers_pml_x),
+            y=td.Boundary.periodic(),
+            z=td.Boundary.periodic(),
+        ),
         run_time=1e-12,
     )
 
@@ -152,10 +160,11 @@ def test_sim_symmetry_grid():
         center=(1, 1, 1),
         size=(11, 11, 11),
         grid_spec=td.GridSpec(grid_x=grid_1d, grid_y=grid_1d, grid_z=grid_1d),
-        pml_layers=[
-            td.PML(num_layers=2),
-        ]
-        * 3,
+        boundary_spec=td.BoundarySpec(
+            x=td.Boundary.pml(num_layers=2),
+            y=td.Boundary.pml(num_layers=2),
+            z=td.Boundary.pml(num_layers=2),
+        ),
         symmetry=(0, 1, -1),
         run_time=1e-12,
     )
@@ -179,7 +188,11 @@ def test_sim_pml_grid():
     sim = td.Simulation(
         size=(4, 4, 4),
         grid_spec=td.GridSpec.uniform(1.0),
-        pml_layers=(td.PML(num_layers=2), td.Absorber(num_layers=2), td.StablePML(num_layers=2)),
+        boundary_spec=td.BoundarySpec(
+            x=td.Boundary.pml(num_layers=2),
+            y=td.Boundary.absorber(num_layers=2),
+            z=td.Boundary.stable_pml(num_layers=2),
+        ),
         run_time=1e-12,
     )
 

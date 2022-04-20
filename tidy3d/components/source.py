@@ -565,15 +565,15 @@ class PlaneWave(AngledFieldSource, PlanarSource):
     >>> pw_source = PlaneWave(size=(inf,0,inf), source_time=pulse, pol_angle=0.1, direction='+')
     """
 
-    @pydantic.validator("angle_theta", always=True)
-    def normal_incidence(cls, val):
-        """Raise not implemented error if not normal incidence."""
-        if val > 0.0:
-            raise NotImplementedError(
-                "Plane wave with off-normal incidence requires Bloch "
-                "boundary conditions, which are not yet implemented."
-            )
-        return val
+    # @pydantic.validator("angle_theta", always=True)
+    # def normal_incidence(cls, val):
+    #     """Raise not implemented error if not normal incidence."""
+    #     if val > 0.0:
+    #         raise NotImplementedError(
+    #             "Plane wave with off-normal incidence requires Bloch "
+    #             "boundary conditions, which are not yet implemented."
+    #         )
+    #     return val
 
 
 class GaussianBeam(AngledFieldSource, PlanarSource):
