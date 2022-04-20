@@ -77,10 +77,6 @@ FreqBoundMax = float
 FreqBoundMin = float
 FreqBound = Tuple[FreqBoundMin, FreqBoundMax]
 
-""" symmetries """
-
-Symmetry = Literal[0, -1, 1]
-
 """ sources """
 
 Polarization = Literal["Ex", "Ey", "Ez", "Hx", "Hy", "Hz"]

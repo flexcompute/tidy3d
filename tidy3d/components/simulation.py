@@ -14,16 +14,19 @@ from .base import cache
 from .validators import assert_unique_names, assert_objects_in_sim_bounds
 from .validators import validate_mode_objects_symmetry
 from .geometry import Box
-from .types import Symmetry, Ax, Shapely, FreqBound, Axis, GridSize
+from .types import Ax, Shapely, FreqBound, GridSize, Axis
 from .grid import Coords1D, Grid, Coords, GridSpec, UniformGrid
 from .medium import Medium, MediumType, AbstractMedium, PECMedium
+from .boundary import BoundarySpec, Symmetry, BlochBoundary, PECBoundary, PMCBoundary
+from .boundary import PML, StablePML, Absorber
 from .structure import Structure
 from .source import SourceType, PlaneWave, GaussianBeam, AstigmaticGaussianBeam
 from .monitor import MonitorType, Monitor, FreqMonitor
-from .pml import PMLTypes, PML, Absorber
 from .viz import add_ax_if_none, equal_aspect
+
 from .viz import MEDIUM_CMAP, PlotParams, plot_params_symmetry
 from .viz import plot_params_structure, plot_params_pml, plot_params_override_structures
+from .viz import plot_params_pec, plot_params_pmc, plot_params_bloch
 
 from ..version import __version__
 from ..constants import C_0, MICROMETER, SECOND, inf
@@ -52,6 +55,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
     >>> from tidy3d import UniformCurrentSource, GaussianPulse
     >>> from tidy3d import FieldMonitor, FluxMonitor
     >>> from tidy3d import GridSpec, AutoGrid
+    >>> from tidy3d import BoundarySpec, Boundary
     >>> sim = Simulation(
     ...     size=(2.0, 2.0, 2.0),
     ...     grid_spec=GridSpec(
@@ -82,10 +86,10 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
     ...         FluxMonitor(size=(1, 1, 0), center=(0, 0, 0), freqs=[2e14, 2.5e14], name='flux'),
     ...     ],
     ...     symmetry=(0, 0, 0),
-    ...     pml_layers=(
-    ...         PML(num_layers=20),
-    ...         PML(num_layers=30),
-    ...         None,
+    ...     boundary_spec=BoundarySpec(
+    ...         x = Boundary.pml(num_layers=20),
+    ...         y = Boundary.pml(num_layers=30),
+    ...         z = Boundary.periodic(),
     ...     ),
     ...     shutoff=1e-6,
     ...     courant=0.8,
@@ -140,6 +144,12 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         description="List of electric current sources injecting fields into the simulation.",
     )
 
+    boundary_spec: BoundarySpec = pydantic.Field(
+        BoundarySpec(),
+        title="Boundaries",
+        description="Specification of boundary conditions along each dimension.",
+    )
+
     monitors: List[MonitorType] = pydantic.Field(
         [],
         title="Monitors",
@@ -151,14 +161,6 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         GridSpec(),
         title="Grid Specification",
         description="Specifications for the simulation grid along each of the three directions.",
-    )
-
-    pml_layers: Tuple[PMLTypes, PMLTypes, PMLTypes] = pydantic.Field(
-        (None, None, None),
-        title="Absorbing Layers",
-        description="Specifications for the absorbing layers on x, y, and z edges. "
-        "If ``None``, no absorber will be added on that dimension "
-        "and periodic boundary conditions will be used.",
     )
 
     shutoff: pydantic.NonNegativeFloat = pydantic.Field(
@@ -237,11 +239,6 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
             _ = val.wavelength_from_sources(sources=values.get("sources"))
         return val
 
-    @pydantic.validator("pml_layers", always=True, allow_reuse=True)
-    def set_none_to_zero_layers(cls, val):
-        """if any PML layer is None, set it to an empty :class:`PML`."""
-        return tuple(PML(num_layers=0) if pml is None else pml for pml in val)
-
     _structures_in_bounds = assert_objects_in_sim_bounds("structures")
     _sources_in_bounds = assert_objects_in_sim_bounds("sources")
     _monitors_in_bounds = assert_objects_in_sim_bounds("monitors")
@@ -264,6 +261,19 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
     # _medium_freq_range_ok = validate_medium_frequency_range()
     # _resolution_fine_enough = validate_resolution()
     # _plane_waves_in_homo = validate_plane_wave_intersections()
+
+    @pydantic.validator("boundary_spec", always=True)
+    def bloch_with_symmetry(cls, val, values):
+        """Error if a Bloch boundary is applied with symmetry"""
+        boundaries = val.to_list
+        symmetry = values.get("symmetry")
+        for dim, boundary in enumerate(boundaries):
+            num_bloch = sum(isinstance(bnd, BlochBoundary) for bnd in boundary)
+            if num_bloch > 0 and symmetry[dim] != 0:
+                raise SetupError(
+                    f"Bloch boundaries cannot be used with a symmetry along dimension {dim}."
+                )
+        return val
 
     @pydantic.validator("structures", always=True)
     def _validate_num_mediums(cls, val):
@@ -308,18 +318,17 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
 
         return val
 
-    @pydantic.validator("pml_layers", always=True)
+    @pydantic.validator("boundary_spec", always=True)
     def _structures_not_close_pml(cls, val, values):  # pylint:disable=too-many-locals
         """Warn if any structures lie at the simulation boundaries."""
-
-        if val is None:
-            return val
 
         sim_box = Box(size=values.get("size"), center=values.get("center"))
         sim_bound_min, sim_bound_max = sim_box.bounds
 
+        boundaries = val.to_list
         structures = values.get("structures")
         sources = values.get("sources")
+
         if (not structures) or (not sources):
             return val
 
@@ -338,25 +347,29 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
             for source in sources:
                 lambda0 = C_0 / source.source_time.freq0
 
-                zipped = zip(["x", "y", "z"], sim_bound_min, struct_bound_min, val)
-                for axis, sim_val, struct_val, pml in zipped:
+                zipped = zip(["x", "y", "z"], sim_bound_min, struct_bound_min, boundaries)
+                for axis, sim_val, struct_val, boundary in zipped:
+                    # The test is required only for PML and stable PML
+                    if not isinstance(boundary[0], (PML, StablePML)):
+                        continue
                     if (
-                        pml.num_layers > 0
+                        boundary[0].num_layers > 0
                         and struct_val > sim_val
-                        and not isinstance(pml, Absorber)
+                        and abs(sim_val - struct_val) < lambda0 / 2
                     ):
-                        if abs(sim_val - struct_val) < lambda0 / 2:
-                            warn(istruct, axis + "-min")
+                        warn(istruct, axis + "-min")
 
-                zipped = zip(["x", "y", "z"], sim_bound_max, struct_bound_max, val)
-                for axis, sim_val, struct_val, pml in zipped:
+                zipped = zip(["x", "y", "z"], sim_bound_max, struct_bound_max, boundaries)
+                for axis, sim_val, struct_val, boundary in zipped:
+                    # The test is required only for PML and stable PML
+                    if not isinstance(boundary[1], (PML, StablePML)):
+                        continue
                     if (
-                        pml.num_layers > 0
+                        boundary[1].num_layers > 0
                         and struct_val < sim_val
-                        and not isinstance(pml, Absorber)
+                        and abs(sim_val - struct_val) < lambda0 / 2
                     ):
-                        if abs(sim_val - struct_val) < lambda0 / 2:
-                            warn(istruct, axis + "-max")
+                        warn(istruct, axis + "-max")
 
         return val
 
@@ -660,6 +673,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         ax = self.plot_symmetries(ax=ax, x=x, y=y, z=z)
         ax = self.plot_pml(ax=ax, x=x, y=y, z=z)
         ax = self._set_plot_bounds(ax=ax, x=x, y=y, z=z)
+        ax = self.plot_boundaries(ax=ax, x=x, y=y, z=z)
         return ax
 
     @equal_aspect
@@ -712,6 +726,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         ax = self.plot_symmetries(ax=ax, x=x, y=y, z=z)
         ax = self.plot_pml(ax=ax, x=x, y=y, z=z)
         ax = self._set_plot_bounds(ax=ax, x=x, y=y, z=z)
+        ax = self.plot_boundaries(ax=ax, x=x, y=y, z=z)
         return ax
 
     @equal_aspect
@@ -1007,8 +1022,14 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         List[Tuple[float, float]]
             List containing the number of absorber layers in - and + boundaries.
         """
+        num_layers = [[0, 0], [0, 0], [0, 0]]
 
-        return [(pml.num_layers, pml.num_layers) for pml in self.pml_layers]
+        for idx_i, boundary1d in enumerate(self.boundary_spec.to_list):
+            for idx_j, boundary in enumerate(boundary1d):
+                if isinstance(boundary, (PML, StablePML, Absorber)):
+                    num_layers[idx_i][idx_j] = boundary.num_layers
+
+        return num_layers
 
     @property
     def pml_thicknesses(self) -> List[Tuple[float, float]]:
@@ -1076,10 +1097,12 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         """make a list of Box objects representing the pml to plot on plane."""
         pml_boxes = []
         pml_thicks = self.pml_thicknesses
-        for pml_axis, pml_layer in enumerate(self.pml_layers):
-            if pml_layer is None or pml_layer.num_layers == 0 or pml_axis == normal_axis:
+        for pml_axis, num_layers_dim in enumerate(self.num_pml_layers):
+            if pml_axis == normal_axis:
                 continue
-            for sign, pml_height in zip((-1, 1), pml_thicks[pml_axis]):
+            for sign, pml_height, num_layers in zip((-1, 1), pml_thicks[pml_axis], num_layers_dim):
+                if num_layers == 0:
+                    continue
                 pml_box = self._make_pml_box(pml_axis=pml_axis, pml_height=pml_height, sign=sign)
                 pml_boxes.append(pml_box)
         return pml_boxes
@@ -1138,8 +1161,11 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
             plot_params.edgecolor = "lightsteelblue"
             plot_params.hatch = "++"
         elif sym_value == -1:
-            plot_params.facecolor = "rosybrown"
-            plot_params.edgecolor = "rosybrown"
+            # plot_params.facecolor = "rosybrown"
+            # plot_params.edgecolor = "rosybrown"
+            # plot_params.hatch = "--"
+            plot_params.facecolor = "goldenrod"
+            plot_params.edgecolor = "goldenrod"
             plot_params.hatch = "--"
 
         return plot_params
@@ -1222,6 +1248,130 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
             ax.add_patch(rect)
 
         ax = self._set_plot_bounds(ax=ax, x=x, y=y, z=z)
+
+        return ax
+
+    @equal_aspect
+    @add_ax_if_none
+    def plot_boundaries(  # pylint:disable=too-many-locals
+        self,
+        x: float = None,
+        y: float = None,
+        z: float = None,
+        ax: Ax = None,
+        **kwargs,
+    ) -> Ax:
+        """Plot the simulation boundary conditions as lines on a plane
+           defined by one nonzero x,y,z coordinate.
+
+        Parameters
+        ----------
+        x : float = None
+            position of plane in x direction, only one of x, y, z must be specified to define plane.
+        y : float = None
+            position of plane in y direction, only one of x, y, z must be specified to define plane.
+        z : float = None
+            position of plane in z direction, only one of x, y, z must be specified to define plane.
+        ax : matplotlib.axes._subplots.Axes = None
+            Matplotlib axes to plot on, if not specified, one is created.
+        **kwargs
+            Optional keyword arguments passed to the matplotlib ``LineCollection``.
+            For details on accepted values, refer to
+            `Matplotlib's documentation <https://tinyurl.com/2p97z4cn>`_.
+
+        Returns
+        -------
+        matplotlib.axes._subplots.Axes
+            The supplied or created matplotlib axes.
+        """
+
+        kwargs.setdefault("clip_on", False)
+
+        def set_plot_params(boundary_edge, lim, side, thickness):
+            """Return the line plot properties such as color and opacity based on the boundary"""
+            if isinstance(boundary_edge, PECBoundary):
+                plot_params = plot_params_pec.copy(deep=True)
+            elif isinstance(boundary_edge, PMCBoundary):
+                plot_params = plot_params_pmc.copy(deep=True)
+            elif isinstance(boundary_edge, BlochBoundary):
+                plot_params = plot_params_bloch.copy(deep=True)
+            else:
+                plot_params = PlotParams()
+                plot_params.alpha = 0
+
+            # expand axis limit so that the axis ticks and labels aren't covered
+            new_lim = lim
+            if plot_params.alpha != 0:
+                if side == -1:
+                    new_lim = lim - thickness
+                elif side == 1:
+                    new_lim = lim + thickness
+
+            return plot_params, new_lim
+
+        boundaries = self.boundary_spec.to_list
+
+        normal_axis, _ = self.parse_xyz_kwargs(x=x, y=y, z=z)
+        _, (dim_u, dim_v) = self.pop_axis([0, 1, 2], axis=normal_axis)
+
+        umin, umax = ax.get_xlim()
+        vmin, vmax = ax.get_ylim()
+
+        size_factor = 1.0 / 35.0
+        thickness_u = (umax - umin) * size_factor
+        thickness_v = (vmax - vmin) * size_factor
+
+        # boundary along the u axis, minus side
+        plot_params, ulim_minus = set_plot_params(boundaries[dim_u][0], umin, -1, thickness_u)
+        rect = mpl.patches.Rectangle(
+            xy=(umin - thickness_u, vmin),
+            width=thickness_u,
+            height=(vmax - vmin),
+            zorder=np.inf,
+            **plot_params.to_kwargs(),
+            **kwargs,
+        )
+        ax.add_patch(rect)
+
+        # boundary along the u axis, plus side
+        plot_params, ulim_plus = set_plot_params(boundaries[dim_u][1], umax, 1, thickness_u)
+        rect = mpl.patches.Rectangle(
+            xy=(umax, vmin),
+            width=thickness_u,
+            height=(vmax - vmin),
+            zorder=np.inf,
+            **plot_params.to_kwargs(),
+            **kwargs,
+        )
+        ax.add_patch(rect)
+
+        # boundary along the v axis, minus side
+        plot_params, vlim_minus = set_plot_params(boundaries[dim_v][0], vmin, -1, thickness_v)
+        rect = mpl.patches.Rectangle(
+            xy=(umin, vmin - thickness_v),
+            width=(umax - umin),
+            height=thickness_v,
+            zorder=np.inf,
+            **plot_params.to_kwargs(),
+            **kwargs,
+        )
+        ax.add_patch(rect)
+
+        # boundary along the v axis, plus side
+        plot_params, vlim_plus = set_plot_params(boundaries[dim_v][1], vmax, 1, thickness_v)
+        rect = mpl.patches.Rectangle(
+            xy=(umin, vmax),
+            width=(umax - umin),
+            height=thickness_v,
+            zorder=np.inf,
+            **plot_params.to_kwargs(),
+            **kwargs,
+        )
+        ax.add_patch(rect)
+
+        # ax = self._set_plot_bounds(ax=ax, x=x, y=y, z=z)
+        ax.set_xlim([ulim_minus, ulim_plus])
+        ax.set_ylim([vlim_minus, vlim_plus])
 
         return ax
 

@@ -16,7 +16,7 @@ def clear_dir(path: str):
 
 TMP_DIR = "tests/tmp/"
 
-# decorator that clears the tmp/ diretory before test
+# decorator that clears the tmp/ directory before test
 def clear_tmp(fn):
     if not os.path.exists(TMP_DIR):
         os.mkdir(TMP_DIR)
@@ -104,10 +104,8 @@ SIM_FULL = Simulation(
         FluxMonitor(size=(1, 1, 0), center=(0, 0, 0), freqs=[2e14, 2.5e14], name="plane"),
     },
     symmetry=(0, 0, 0),
-    pml_layers=(
-        PML(num_layers=20),
-        PML(num_layers=30),
-        None,
+    boundary_spec=BoundarySpec(
+        x=Boundary.pml(num_layers=20), y=Boundary.pml(num_layers=30), z=Boundary.periodic()
     ),
     shutoff=1e-6,
     courant=0.8,
@@ -142,7 +140,7 @@ SIM_CONVERT = td.Simulation(
         )
     ],
     run_time=1e-12,
-    pml_layers=3 * [PML()],
+    boundary_spec=BoundarySpec.pml(x=True, y=True, z=True),
 )
 
 
