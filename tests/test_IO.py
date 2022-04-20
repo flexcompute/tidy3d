@@ -39,7 +39,7 @@ def test_simulation_preserve_types():
             Structure(geometry=Sphere(radius=1), medium=Debye(eps_inf=1.0, coeffs=[]), name="t2"),
         ],
         sources=[
-            CurrentSource(size=(0, 0, 0), source_time=st, polarization="Ex"),
+            UniformCurrentSource(size=(0, 0, 0), source_time=st, polarization="Ex"),
             PlaneWave(
                 center=(0, 0, -4),
                 size=(inf, inf, 0),
@@ -78,7 +78,7 @@ def test_simulation_preserve_types():
         assert G in G_types
 
     S_types = [type(s) for s in sim_2.sources]
-    for S in (CurrentSource, PlaneWave, GaussianBeam):
+    for S in (UniformCurrentSource, PlaneWave, GaussianBeam):
         assert S in S_types
 
     M_types = [type(m) for m in sim_2.monitors]

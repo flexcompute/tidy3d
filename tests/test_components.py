@@ -31,7 +31,7 @@ def test_sim():
             ),
         ],
         sources=[
-            CurrentSource(
+            UniformCurrentSource(
                 size=(0, 0, 0),
                 center=(0, -0.5, 0),
                 polarization="Hx",
@@ -40,7 +40,15 @@ def test_sim():
                     fwidth=1e12,
                 ),
                 name="my_dipole",
-            )
+            ),
+            PointDipole(
+                center=(0, 0, 0),
+                polarization="Ex",
+                source_time=GaussianPulse(
+                    freq0=1e14,
+                    fwidth=1e12,
+                ),
+            ),
         ],
         monitors=[
             FieldMonitor(size=(0, 0, 0), center=(0, 0, 0), freqs=[1, 2], name="point"),
@@ -157,7 +165,7 @@ def test_monitor_medium_frequency_range(caplog, freq, log_level):
     medium = Medium(frequency_range=(2, 3))
     box = Structure(geometry=Box(size=(0.1, 0.1, 0.1)), medium=medium)
     mnt = FieldMonitor(size=(0, 0, 0), name="freq", freqs=[freq])
-    src = CurrentSource(
+    src = UniformCurrentSource(
         source_time=GaussianPulse(freq0=2.5, fwidth=0.5),
         size=(0, 0, 0),
         polarization="Ex",
@@ -178,7 +186,7 @@ def test_monitor_simulation_frequency_range(caplog, fwidth, log_level):
     # monitor frequency outside of the simulation's frequency range should throw a warning
 
     size = (1, 1, 1)
-    src = CurrentSource(
+    src = UniformCurrentSource(
         source_time=GaussianPulse(freq0=2.0, fwidth=fwidth),
         size=(0, 0, 0),
         polarization="Ex",
@@ -196,7 +204,7 @@ def test_sim_grid_size(caplog, grid_size, log_level):
 
     medium = Medium(permittivity=2, frequency_range=(2e14, 3e14))
     box = Structure(geometry=Box(size=(0.1, 0.1, 0.1)), medium=medium)
-    src = CurrentSource(
+    src = UniformCurrentSource(
         source_time=GaussianPulse(freq0=2.5e14, fwidth=1e12),
         size=(0, 0, 0),
         polarization="Ex",
@@ -217,7 +225,7 @@ def test_sim_structure_gap(caplog, box_size, log_level):
     """Make sure the gap between a structure and PML is not too small compared to lambda0."""
     medium = Medium(permittivity=2)
     box = Structure(geometry=Box(size=(box_size, box_size, box_size)), medium=medium)
-    src = CurrentSource(
+    src = UniformCurrentSource(
         source_time=GaussianPulse(freq0=3e14, fwidth=1e13),
         size=(0, 0, 0),
         polarization="Ex",
@@ -279,7 +287,7 @@ def test_sim_plane_wave_error():
 def test_sim_structure_extent(caplog, box_size, log_level):
     """Make sure we warn if structure extends exactly to simulation edges."""
 
-    src = CurrentSource(
+    src = UniformCurrentSource(
         source_time=GaussianPulse(freq0=3e14, fwidth=1e13),
         size=(0, 0, 0),
         polarization="Ex",
@@ -587,19 +595,19 @@ def _test_names_default():
             ),
         ],
         sources=[
-            CurrentSource(
+            UniformCurrentSource(
                 size=(0, 0, 0),
                 center=(0, -0.5, 0),
                 polarization="Hx",
                 source_time=GaussianPulse(freq0=1e14, fwidth=1e12),
             ),
-            CurrentSource(
+            UniformCurrentSource(
                 size=(0, 0, 0),
                 center=(0, -0.5, 0),
                 polarization="Ex",
                 source_time=GaussianPulse(freq0=1e14, fwidth=1e12),
             ),
-            CurrentSource(
+            UniformCurrentSource(
                 size=(0, 0, 0),
                 center=(0, -0.5, 0),
                 polarization="Ey",
@@ -647,14 +655,14 @@ def test_names_unique():
             grid_size=(0.01, 0.01, 0.01),
             run_time=1e-12,
             sources=[
-                CurrentSource(
+                UniformCurrentSource(
                     size=(0, 0, 0),
                     center=(0, -0.5, 0),
                     polarization="Hx",
                     source_time=GaussianPulse(freq0=1e14, fwidth=1e12),
                     name="source1",
                 ),
-                CurrentSource(
+                UniformCurrentSource(
                     size=(0, 0, 0),
                     center=(0, -0.5, 0),
                     polarization="Ex",
@@ -676,15 +684,15 @@ def test_names_unique():
         )
 
 
-""" CurrentSources """
+""" UniformCurrentSources """
 
 
-def test_CurrentSource():
+def test_UniformCurrentSource():
 
     g = GaussianPulse(freq0=1, fwidth=0.1)
 
-    # test we can make generic CurrentSource
-    s = CurrentSource(size=(1, 1, 1), source_time=g, polarization="Ez")
+    # test we can make generic UniformCurrentSource
+    s = UniformCurrentSource(size=(1, 1, 1), source_time=g, polarization="Ez")
 
 
 def test_source_times():
@@ -698,6 +706,15 @@ def test_source_times():
     # c = CW(freq0=1, fwidth=0.1)
     # ts = np.linspace(0, 30, 1001)
     # c.amp_time(ts)
+
+
+def test_dipole():
+
+    g = GaussianPulse(freq0=1, fwidth=0.1)
+    p = PointDipole(center=(1, 2, 3), source_time=g, polarization="Ex")
+
+    with pytest.raises(pydantic.ValidationError) as e_info:
+        p = PointDipole(size=(1, 1, 1), source_time=g, center=(1, 2, 3), polarization="Ex")
 
 
 def test_FieldSource():

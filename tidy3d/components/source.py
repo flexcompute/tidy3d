@@ -4,6 +4,7 @@ from abc import ABC, abstractmethod
 from typing import Union, Tuple
 import logging
 
+from typing_extensions import Literal
 import pydantic
 import numpy as np
 
@@ -323,12 +324,16 @@ class Source(Box, ABC):
 
 
 class CurrentSource(Source):
+    """Source implements a current distribution directly."""
+
+
+class UniformCurrentSource(CurrentSource):
     """Source in a rectangular volume with uniform time dependence. size=(0,0,0) gives point source.
 
     Example
     -------
     >>> pulse = GaussianPulse(freq0=200e12, fwidth=20e12)
-    >>> pt_source = CurrentSource(size=(0,0,0), source_time=pulse, polarization='Ex')
+    >>> pt_source = UniformCurrentSource(size=(0,0,0), source_time=pulse, polarization='Ex')
     """
 
     polarization: Polarization = pydantic.Field(
@@ -347,6 +352,12 @@ class CurrentSource(Source):
             pol_vec[pol_axis] = 1
             return pol_vec
         return None
+
+
+class PointDipole(UniformCurrentSource):
+    """Uniform current source with a zero size."""
+
+    size: Tuple[Literal[0], Literal[0], Literal[0]] = (0, 0, 0)
 
 
 class FieldSource(Source, ABC):
@@ -593,4 +604,4 @@ class TFSF(AngledFieldSource, VolumeSource):
 
 
 # sources allowed in Simulation.sources
-SourceType = Union[CurrentSource, GaussianBeam, ModeSource, PlaneWave]
+SourceType = Union[UniformCurrentSource, PointDipole, GaussianBeam, ModeSource, PlaneWave]

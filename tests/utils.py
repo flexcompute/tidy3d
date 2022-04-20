@@ -82,7 +82,7 @@ SIM_FULL = Simulation(
         ),
     ],
     sources=[
-        CurrentSource(
+        UniformCurrentSource(
             size=(0, 0, 0),
             center=(0, 0.5, 0),
             polarization="Hx",
@@ -119,7 +119,7 @@ SIM_CONVERT = td.Simulation(
         )
     ],
     sources=[
-        td.CurrentSource(
+        td.UniformCurrentSource(
             center=(0, -1.5, 0),
             size=(0.4, 0.4, 0.4),
             source_time=td.GaussianPulse(freq0=3e14, fwidth=1e13),
