@@ -29,7 +29,7 @@ from .components import ModeSpec
 
 # sources
 from .components import GaussianPulse, ContinuousWave
-from .components import VolumeSource, PlaneWave, ModeSource, GaussianBeam
+from .components import CurrentSource, PlaneWave, ModeSource, GaussianBeam
 
 # monitors
 from .components import FieldMonitor, FieldTimeMonitor, FluxMonitor, FluxTimeMonitor

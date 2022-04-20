@@ -24,7 +24,7 @@ from .mode import ModeSpec
 
 # source
 from .source import GaussianPulse, ContinuousWave
-from .source import VolumeSource, PlaneWave, ModeSource, GaussianBeam
+from .source import CurrentSource, PlaneWave, ModeSource, GaussianBeam
 
 # monitor
 from .monitor import FreqMonitor, TimeMonitor, FieldMonitor, FieldTimeMonitor
