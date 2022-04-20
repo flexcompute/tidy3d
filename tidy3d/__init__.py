@@ -8,11 +8,6 @@ from .config import config
 # version
 from .version import __version__
 
-# pml
-from .components import PML, StablePML, Absorber
-from .components import PMLParams, AbsorberParams
-from .components import DefaultPMLParameters, DefaultStablePMLParameters, DefaultAbsorberParameters
-
 # grid
 from .components import Grid, Coords, GridSpec, UniformGrid, CustomGrid, AutoGrid
 
@@ -46,6 +41,12 @@ from .components import SimulationData, FieldData, FluxData, FluxTimeData
 from .components import DATA_TYPE_MAP, ScalarFieldData, ScalarFieldTimeData
 from .components import ModeData, ModeAmpsData, ModeIndexData, ModeFieldData, PermittivityData
 from .components import ScalarPermittivityData
+
+# boundary
+from .components import BoundarySpec, Boundary, BoundaryEdge, BoundaryEdgeType
+from .components import BlochBoundary, Symmetry, Periodic, PECBoundary, PMCBoundary
+from .components import PML, StablePML, Absorber, PMLParams, AbsorberParams, PMLTypes
+from .components import DefaultPMLParameters, DefaultStablePMLParameters, DefaultAbsorberParameters
 
 # constants imported as `C_0 = td.C_0` or `td.constants.C_0`
 from .constants import C_0, ETA_0, HBAR, EPSILON_0, MU_0, Q_e, inf

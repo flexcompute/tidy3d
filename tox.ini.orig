@@ -22,11 +22,14 @@ commands =
     black --check --diff . --line-length 100
     python lint.py
     pytest -rA tests/test_components.py
-    pytest -rA tests/test_boundaries.py
+<<<<<<< HEAD
     pytest -rA tests/test_config.py
     pytest -rA tests/test_data.py
     pytest -rA tests/test_geo_group.py
     pytest -rA tests/test_grid.py
+=======
+    pytest -rA tests/test_boundaries.py
+>>>>>>> 3371e8b... updated data.py for compatibility with develop; added complex time domain field support; temporary boundary.py file
     pytest -rA tests/test_IO.py
     pytest -rA tests/test_log.py
     pytest -rA tests/test_main.py

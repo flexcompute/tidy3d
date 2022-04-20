@@ -10,9 +10,11 @@ import numpy as np
 import h5py
 import pydantic as pd
 
-from .types import Numpy, Direction, Array, numpy_encoding, Literal, Ax, Coordinate, Symmetry, Axis
+from .types import Numpy, Direction, Array, numpy_encoding, Literal, Ax, Coordinate, Axis
+from .types import ArrayLike
 from .base import Tidy3dBaseModel, TYPE_TAG_STR
 from .simulation import Simulation
+from .boundary import Symmetry, BlochBoundary
 from .monitor import Monitor
 from .grid import Grid, Coords
 from .viz import add_ax_if_none, equal_aspect
@@ -364,7 +366,7 @@ class SpatialCollectionData(CollectionData, ABC):
     symmetry: Tuple[Symmetry, Symmetry, Symmetry] = pd.Field(
         (0, 0, 0),
         title="Symmetry Eigenvalues",
-        description="igenvalues of the symmetry under reflection in x, y, and z.",
+        description="Eigenvalues of the symmetry under reflection in x, y, and z.",
     )
 
     symmetry_center: Coordinate = pd.Field(
@@ -683,7 +685,7 @@ class ScalarFieldTimeData(ScalarSpatialData, TimeData):
     >>> data = ScalarFieldTimeData(values=values, x=x, y=y, z=z, t=t)
     """
 
-    values: Array[float] = pd.Field(
+    values: ArrayLike = pd.Field(
         ...,
         title="Scalar Field Values",
         description="Multi-dimensional array storing the raw scalar field values in time domain.",
@@ -1454,7 +1456,7 @@ class SimulationData(AbstractSimulationData):
         if normalize_index is None:
             return sim_data_norm
 
-        # if data alreadty normalized
+        # if data already normalized
         if self.normalized:
 
             # if with a different normalize index, raise an error
@@ -1487,11 +1489,14 @@ class SimulationData(AbstractSimulationData):
 
         times = self.simulation.tmesh
         dt = self.simulation.dt
+        boundaries = self.simulation.boundary_spec.to_list
+        boundaries = [item for boundary in boundaries for item in boundary]
+        complex_fields = any(isinstance(item, BlochBoundary) for item in boundaries)
 
         def normalize_data(monitor_data):
             """normalize a monitor data instance using the source time parameters."""
             freqs = monitor_data.f
-            source_freq_amps = source_time.spectrum(times, freqs, dt)
+            source_freq_amps = source_time.spectrum(times, freqs, dt, complex_fields)
             # We remove the user-defined phase from the normalization. Otherwise, with a single
             # source, we would get the exact same fields regardless of the source_time phase.
             # Instead we would like the field phase to be determined by the source_time phase.
