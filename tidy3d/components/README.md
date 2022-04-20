@@ -58,7 +58,7 @@ pydantic.BaseModel
 			Box
 				Simulation
 				Source
-					VolumeSource
+					CurrentSource
 					DirectionalSource
 						PlaneWave
 						GaussianBeam
@@ -190,7 +190,7 @@ However, since we only consider rectangular sources in this version of the code,
 The `Source()` is the base class for all sources, which contains the `SourceTime()`
 
 From `Source()`, we get either:
-- `VolumeSource(polarization)` (defines a `Box` with current oscillating in uniform the direction and component specified in `polarization`).
+- `CurrentSource(polarization)` (defines a `Box` with current oscillating in uniform the direction and component specified in `polarization`).
 - `DirectionalSource(direction)` (which defines a plane that emits waves in one direction (+ or -), normal to the plane).
 
 The three types of `DirectionalSources` are:

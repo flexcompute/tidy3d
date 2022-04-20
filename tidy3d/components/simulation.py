@@ -49,7 +49,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
     Example
     -------
     >>> from tidy3d import Sphere, Cylinder, PolySlab
-    >>> from tidy3d import VolumeSource, GaussianPulse
+    >>> from tidy3d import CurrentSource, GaussianPulse
     >>> from tidy3d import FieldMonitor, FluxMonitor
     >>> sim = Simulation(
     ...     size=(2.0, 2.0, 2.0),
@@ -62,7 +62,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
     ...         ),
     ...     ],
     ...     sources=[
-    ...         VolumeSource(
+    ...         CurrentSource(
     ...             size=(0, 0, 0),
     ...             center=(0, 0.5, 0),
     ...             polarization="Hx",
