@@ -593,9 +593,9 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         z : float = None
             position of plane in z direction, only one of x, y, z must be specified to define plane.
         source_alpha : float = None
-            Opacity of the sources. If ``None``, uses to Tidy3d default.
+            Opacity of the sources. If ``None``, uses Tidy3d default.
         monitor_alpha : float = None
-            Opacity of the monitors. If ``None``, uses to Tidy3d default.
+            Opacity of the monitors. If ``None``, uses Tidy3d default.
         ax : matplotlib.axes._subplots.Axes = None
             Matplotlib axes to plot on, if not specified, one is created.
 
@@ -644,9 +644,9 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
             Opacity of the structures being plotted.
             Defaults to the structure default alpha.
         source_alpha : float = None
-            Opacity of the sources. If ``None``, uses to Tidy3d default.
+            Opacity of the sources. If ``None``, uses Tidy3d default.
         monitor_alpha : float = None
-            Opacity of the monitors. If ``None``, uses to Tidy3d default.
+            Opacity of the monitors. If ``None``, uses Tidy3d default.
         ax : matplotlib.axes._subplots.Axes = None
             Matplotlib axes to plot on, if not specified, one is created.
 
