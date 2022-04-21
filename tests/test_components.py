@@ -135,7 +135,7 @@ def test_sim_size():
         s._validate_size()
 
 
-def test_monitor_size():
+def _test_monitor_size():
 
     with pytest.raises(SetupError):
         s = Simulation(
@@ -186,6 +186,7 @@ def test_monitor_simulation_frequency_range(caplog, fwidth, log_level):
     sim = Simulation(size=(1, 1, 1), monitors=[mnt], sources=[src], run_time=1e-12)
     assert_log_level(caplog, log_level)
 
+
 @pytest.mark.parametrize("grid_size,log_level", [(0.001, None), (3, 30)])
 def test_large_grid_size(caplog, grid_size, log_level):
     # small fwidth should be inside range, large one should throw warning
@@ -206,6 +207,7 @@ def test_large_grid_size(caplog, grid_size, log_level):
     )
 
     assert_log_level(caplog, log_level)
+
 
 @pytest.mark.parametrize("box_size,log_level", [(0.001, None), (9.9, 30), (20, None)])
 def test_sim_structure_gap(caplog, box_size, log_level):
