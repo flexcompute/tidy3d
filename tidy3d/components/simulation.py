@@ -21,9 +21,8 @@ from .source import SourceType, PlaneWave
 from .monitor import MonitorType, Monitor, FreqMonitor
 from .pml import PMLTypes, PML, Absorber
 from .viz import add_ax_if_none, equal_aspect
-
 from .viz import MEDIUM_CMAP, PlotParams, plot_params_symmetry
-from .viz import plot_params_structure, plot_params_pml
+from .viz import plot_params_structure, plot_params_pml, plot_params_override_structures
 
 from ..version import __version__
 from ..constants import C_0, MICROMETER, SECOND, inf
@@ -1171,8 +1170,27 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         segs_y = [((xmin, bound), (xmax, bound)) for bound in boundaries_y]
         line_segments_y = mpl.collections.LineCollection(segs_y, **kwargs)
 
+        # Plot grid
         ax.add_collection(line_segments_x)
         ax.add_collection(line_segments_y)
+
+        # Plot bounding boxes of override structures
+        plot_params = plot_params_override_structures.include_kwargs(
+            linewidth=2 * kwargs["linewidth"], edgecolor=kwargs["colors"]
+        )
+        for structure in self.grid_spec.override_structures:
+            bounds = list(zip(*structure.geometry.bounds))
+            _, ((xmin, xmax), (ymin, ymax)) = structure.geometry.pop_axis(bounds, axis=axis)
+            xmin, xmax, ymin, ymax = (self._evaluate_inf(v) for v in (xmin, xmax, ymin, ymax))
+            rect = mpl.patches.Rectangle(
+                xy=(xmin, ymin),
+                width=(xmax - xmin),
+                height=(ymax - ymin),
+                zorder=np.inf,
+                **plot_params.to_kwargs(),
+            )
+            ax.add_patch(rect)
+
         ax = self._set_plot_bounds(ax=ax, x=x, y=y, z=z)
 
         return ax

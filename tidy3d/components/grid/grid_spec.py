@@ -377,6 +377,14 @@ class GridSpec(Tidy3dBaseModel):
         units=MICROMETER,
     )
 
+    override_structures: List[Structure] = pd.Field(
+        [],
+        title="Grid specification override structures",
+        description="A list of structures that is added on top of the simulation structures in "
+        "the process of generating the grid. This can be used to refine the grid or make it "
+        "coarser depending than the expected need for higher/lower resolution regions.",
+    )
+
     @property
     def auto_grid_used(self) -> bool:
         """True if any of the three dimensions uses :class:`.AutoGrid`."""
@@ -444,7 +452,7 @@ class GridSpec(Tidy3dBaseModel):
             center=center[0],
             size=size[0],
             axis=0,
-            structures=structures,
+            structures=structures + self.override_structures,
             symmetry=symmetry[0],
             wavelength=wavelength,
             num_pml_layers=num_pml_layers[0],
@@ -453,7 +461,7 @@ class GridSpec(Tidy3dBaseModel):
             center=center[1],
             size=size[1],
             axis=1,
-            structures=structures,
+            structures=structures + self.override_structures,
             symmetry=symmetry[1],
             wavelength=wavelength,
             num_pml_layers=num_pml_layers[1],
@@ -462,7 +470,7 @@ class GridSpec(Tidy3dBaseModel):
             center=center[2],
             size=size[2],
             axis=2,
-            structures=structures,
+            structures=structures + self.override_structures,
             symmetry=symmetry[2],
             wavelength=wavelength,
             num_pml_layers=num_pml_layers[2],
@@ -472,25 +480,32 @@ class GridSpec(Tidy3dBaseModel):
         return Grid(boundaries=coords)
 
     @classmethod
-    def auto(
+    def auto(  # pylint:disable=too-many-arguments
         cls,
         wavelength: pd.PositiveFloat = None,
         min_steps_per_wvl: pd.PositiveFloat = 10.0,
         max_scale: pd.PositiveFloat = 1.4,
+        override_structures: List[Structure] = (),
         mesher: MesherType = GradedMesher(),
     ) -> "GridSpec":
         """Use the same :class:`AutoGrid` along each of the three directions.
 
         Parameters
         ----------
-        wavelength : float = None
+        wavelength : pd.PositiveFloat, optional
             Free-space wavelength for automatic nonuniform grid. It can be 'None'
             if there is at least one source in the simulation, in which case it is defined by
             the source central frequency.
-        min_steps_per_wvl : float, optional
+        min_steps_per_wvl : pd.PositiveFloat, optional
             Minimal number of steps per wavelength in each medium.
-        max_scale : float, optional
+        max_scale : pd.PositiveFloat, optional
             Sets the maximum ratio between any two consecutive grid steps.
+        override_structures : List[Structure]
+            A list of structures that is added on top of the simulation structures in
+            the process of generating the grid. This can be used to refine the grid or make it
+            coarser depending than the expected need for higher/lower resolution regions.
+        mesher : MesherType = GradedMesher()
+            The type of mesher to use to generate the grid automatically.
 
         Returns
         -------
@@ -499,7 +514,13 @@ class GridSpec(Tidy3dBaseModel):
         """
 
         grid_1d = AutoGrid(min_steps_per_wvl=min_steps_per_wvl, max_scale=max_scale, mesher=mesher)
-        return cls(wavelength=wavelength, grid_x=grid_1d, grid_y=grid_1d, grid_z=grid_1d)
+        return cls(
+            wavelength=wavelength,
+            grid_x=grid_1d,
+            grid_y=grid_1d,
+            grid_z=grid_1d,
+            override_structures=override_structures,
+        )
 
     @classmethod
     def uniform(cls, dl: float) -> "GridSpec":

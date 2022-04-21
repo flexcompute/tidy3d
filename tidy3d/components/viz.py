@@ -107,6 +107,7 @@ plot_params_source = PlotParams(alpha=0.4, facecolor="limegreen", edgecolor="lim
 plot_params_monitor = PlotParams(alpha=0.4, facecolor="orange", edgecolor="orange", lw=3)
 plot_params_pml = PlotParams(alpha=0.7, facecolor="gray", edgecolor="gray", hatch="x")
 plot_params_symmetry = PlotParams(edgecolor="gray", facecolor="gray", alpha=0.6)
+plot_params_override_structures = PlotParams(linewidth=0.4, edgecolor="black", fill=False)
 
 # stores color of simulation.structures for given index in simulation.medium_map
 MEDIUM_CMAP = [
