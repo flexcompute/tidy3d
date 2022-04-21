@@ -55,7 +55,7 @@ def get_credentials() -> None:
     if "TIDY3D_USER" in os.environ and (
         "TIDY3D_PASS" in os.environ or "TIDY3D_PASS_HASH" in os.environ
     ):
-        log.debug("Using Tidy3D credentials from enviornment")
+        log.debug("Using Tidy3D credentials from environment")
         email = os.environ["TIDY3D_USER"]
         password = os.environ.get("TIDY3D_PASS")
         if password is None:
