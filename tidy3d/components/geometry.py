@@ -1808,10 +1808,16 @@ class PolySlab(Planar):
                 # the vertex will split into two
                 ints_y.append(y_on)
                 ints_y.append(y_on)
-                slope = (y_on - y_b) / (x_on - x_b)
-                ints_angle.append(np.pi / 2 - np.arctan(np.abs(slope)))
-                slope = (y_on - y_f) / (x_on - x_f)
-                ints_angle.append(np.pi / 2 - np.arctan(np.abs(slope)))
+
+                # the order of the two new vertices needs to handled correctly;
+                # it should be sorted according to the -slope * moving direction
+                slope = [(y_on - y_b) / (x_on - x_b), (y_on - y_f) / (x_on - x_f)]
+                dressed_slope = [-s_i * shift_local for s_i in slope]
+                sort_index = np.argsort(np.array(dressed_slope))
+                sorted_slope = np.array(slope)[sort_index]
+
+                ints_angle.append(np.pi / 2 - np.arctan(np.abs(sorted_slope[0])))
+                ints_angle.append(np.pi / 2 - np.arctan(np.abs(sorted_slope[1])))
             # case 3, one of neightbouring vertices on the plane too:
             else:
                 # now only for angle<np.pi/2, so it's not relevant
