@@ -469,14 +469,16 @@ class SpatialCollectionData(CollectionData, ABC):
 class AbstractFieldData(SpatialCollectionData, ABC):
     """Sores a collection of EM fields either in freq or time domain."""
 
-    _sym_dict = {
-        "Ex": (-1, 1, 1),
-        "Ey": (1, -1, 1),
-        "Ez": (1, 1, -1),
-        "Hx": (1, -1, -1),
-        "Hy": (-1, 1, -1),
-        "Hz": (-1, -1, 1),
-    }
+    _sym_dict: Dict[str, Symmetry] = pd.PrivateAttr(
+        {
+            "Ex": (-1, 1, 1),
+            "Ey": (1, -1, 1),
+            "Ez": (1, 1, -1),
+            "Hx": (1, -1, -1),
+            "Hy": (-1, 1, -1),
+            "Hz": (-1, -1, 1),
+        }
+    )
 
     """ Get the standard EM components from the dict using convenient "dot" syntax."""
 
