@@ -129,7 +129,7 @@ def test_max_erosion_polygon():
             s = setup_polyslab(vertices, dilation, angle, bounds)
         except:
             continue
-        assert np.isclose(minimal_edge_length(s.base_polygon), 0, atol=1e-5)
+        assert np.isclose(minimal_edge_length(s.base_polygon), 0, atol=1e-4)
 
         # verify it is indeed maximal allowed
         dilation = 0.0
@@ -141,7 +141,7 @@ def test_max_erosion_polygon():
             s = setup_polyslab(vertices, dilation, angle, bounds)
         except:
             continue
-        assert np.isclose(minimal_edge_length(s.top_polygon), 0, atol=1e-5)
+        assert np.isclose(minimal_edge_length(s.top_polygon), 0, atol=1e-4)
 
 
 def test_shift_height():
@@ -184,7 +184,7 @@ def test_intersection_with_inside():
     Lx = 10  # maximal length in x,y direction
     for i in range(50):
         vertices = convert_valid_polygon(np.random.random((N, 2)) * Lx)
-        vertices = np.array(vertices).astype("float32")
+        vertices = np.array(vertices)  # .astype("float32")
         dilation = 0
         angle = 0
         bounds = (0, 1)
@@ -193,7 +193,7 @@ def test_intersection_with_inside():
         # set up proper thickness
         _, max_dist = s._crossing_detection(s.base_polygon, -100)
         dilation = 0.0
-        bounds = (0, np.float32(max_dist * 0.95))
+        bounds = (0, (max_dist * 0.95))
         angle = np.pi / 4
         # avoid vertex-edge crossing case
         try:
@@ -205,9 +205,9 @@ def test_intersection_with_inside():
         xp = np.random.random(1)[0] * 2 * Lx - Lx
         yp = np.random.random(10) * 2 * Lx - Lx
         zp = np.random.random(10) * (bounds[1] - bounds[0]) + bounds[0]
-        xp = np.float32(xp)
-        yp = np.float32(yp)
-        zp = np.float32(zp)
+        # xp = np.float32(xp)
+        # yp = np.float32(yp)
+        # zp = np.float32(zp)
         shape_intersect = s.intersections(x=xp)
 
         for i in range(len(yp)):
@@ -230,9 +230,9 @@ def test_intersection_with_inside():
         xp = np.random.random(10) * 2 * Lx - Lx
         yp = np.random.random(1)[0] * 2 * Lx - Lx
         zp = np.random.random(10) * (bounds[1] - bounds[0]) + bounds[0]
-        xp = np.float32(xp)
-        yp = np.float32(yp)
-        zp = np.float32(zp)
+        # xp = np.float32(xp)
+        # yp = np.float32(yp)
+        # zp = np.float32(zp)
         shape_intersect = s.intersections(y=yp)
 
         for i in range(len(xp)):
