@@ -193,9 +193,8 @@ def test_large_grid_size(caplog, grid_size, log_level):
 
     medium = Medium(permittivity=2, frequency_range=(2e14, 3e14))
     box = Structure(geometry=Box(size=(0.1, 0.1, 0.1)), medium=medium)
-    src = VolumeSource(
+    src = PointDipole(
         source_time=GaussianPulse(freq0=2.5e14, fwidth=1e12),
-        size=(0, 0, 0),
         polarization="Ex",
     )
     _ = Simulation(
