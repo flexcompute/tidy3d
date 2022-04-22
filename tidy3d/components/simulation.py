@@ -1034,14 +1034,12 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
 
     def _make_pml_box(self, pml_axis: Axis, pml_height: float, sign: int) -> Box:
         """Construct a :class:`Box` representing an arborbing boundary to be plotted."""
-
-        rmin, rmax = self.bounds_pml
-        pml_size = [abs(dmax - dmin) for dmin, dmax in zip(rmin, rmax)]
-        pml_size[pml_axis] = pml_height
-        pml_center = list(self.center)
-        pml_offset_center = (self.size[pml_axis] + pml_height) / 2.0
-        pml_center[pml_axis] += sign * pml_offset_center
-        return Box(center=pml_center, size=pml_size)
+        rmin, rmax = [list(bounds) for bounds in self.bounds_pml]
+        if sign == -1:
+            rmax[pml_axis] = rmin[pml_axis] + pml_height
+        else:
+            rmin[pml_axis] = rmax[pml_axis] - pml_height
+        return Box.from_bounds(rmin=rmin, rmax=rmax)
 
     @equal_aspect
     @add_ax_if_none
