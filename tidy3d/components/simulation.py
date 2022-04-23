@@ -33,7 +33,7 @@ from ..log import log, Tidy3dKeyError, SetupError, ValidationError
 MIN_GRIDS_PER_WVL = 6.0
 
 # maximum number of mediums supported
-MAX_NUM_MEDIUMS = 200
+MAX_NUM_MEDIUMS = 65530
 
 # maximum numbers of simulation parameters
 MAX_TIME_STEPS = 1e8
