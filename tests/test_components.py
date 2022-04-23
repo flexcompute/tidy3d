@@ -5,6 +5,7 @@ import pydantic
 
 from tidy3d import *
 from tidy3d.log import ValidationError, SetupError
+from tidy3d.components.simulation import MAX_NUM_MEDIUMS
 from .utils import assert_log_level
 
 
@@ -288,7 +289,7 @@ def test_num_mediums():
 
     structures = []
     grid_spec = GridSpec.auto(wavelength=1.0)
-    for i in range(200):
+    for i in range(MAX_NUM_MEDIUMS):
         structures.append(
             Structure(geometry=Box(size=(1, 1, 1)), medium=Medium(permittivity=i + 1))
         )
