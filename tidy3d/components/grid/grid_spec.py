@@ -391,13 +391,11 @@ class GridSpec(Tidy3dBaseModel):
         grid_list = [self.grid_x, self.grid_y, self.grid_z]
         return np.any([isinstance(mesh, AutoGrid) for mesh in grid_list])
 
-    def get_wavelength(self, sources: List[SourceType]) -> pd.PositiveFloat:
-        """Define a wavelength based on attribute or supplied sources."""
+    def wavelength_from_sources(self, sources: List[SourceType]) -> pd.PositiveFloat:
+        """Define a wavelength based on supplied sources. Called if auto mesh is used and
+        ``self.wavelength is None``."""
 
-        if self.wavelength is not None or not self.auto_grid_used:
-            return self.wavelength
-
-        # If auto mesh used and wavelength is None, use central frequency of sources, if any.
+        # Use central frequency of sources, if any.
         freqs = np.array([source.source_time.freq0 for source in sources])
         # no sources
         if len(freqs) == 0:
@@ -412,7 +410,6 @@ class GridSpec(Tidy3dBaseModel):
             )
 
         wavelength = C_0 / freqs[0]
-        log.info(f"Auto meshing using wavelength {wavelength:1.4f} defined from sources.")
         return wavelength
 
     def make_grid(
@@ -446,7 +443,10 @@ class GridSpec(Tidy3dBaseModel):
         center, size = structures[0].geometry.center, structures[0].geometry.size
 
         # Set up wavelength for automatic mesh generation if needed.
-        wavelength = self.get_wavelength(sources)
+        wavelength = self.wavelength
+        if self.wavelength is None and self.auto_grid_used:
+            wavelength = self.wavelength_from_sources(sources)
+            log.info(f"Auto meshing using wavelength {wavelength:1.4f} defined from sources.")
 
         coords_x = self.grid_x.make_coords(
             center=center[0],
