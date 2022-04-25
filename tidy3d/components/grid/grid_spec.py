@@ -320,6 +320,10 @@ class AutoGrid(GridSpec1d):
         interval_coords, max_dl_list = self.mesher.parse_structures(
             axis, structures, wavelength, self.min_steps_per_wvl
         )
+        # Put just a single pixel if 2D-like simulation
+        if interval_coords.size == 1:
+            dl = wavelength / self.min_steps_per_wvl
+            return np.array([center - dl / 2, center + dl / 2])
 
         # generate mesh steps
         interval_coords = np.array(interval_coords).flatten()
