@@ -209,7 +209,8 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
     @pydantic.validator("grid_spec", always=True)
     def _validate_auto_grid_wavelength(cls, val, values):
         """Check that wavelength can be defined if there is auto grid spec."""
-        _ = val.get_wavelength(sources=values.get("sources"))
+        if val.wavelength is None and val.auto_grid_used:
+            _ = val.wavelength_from_sources(sources=values.get("sources"))
         return val
 
     @pydantic.validator("pml_layers", always=True, allow_reuse=True)
