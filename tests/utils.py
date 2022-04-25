@@ -89,7 +89,15 @@ SIM_FULL = Simulation(
                 freq0=2e14,
                 fwidth=4e13,
             ),
-        )
+        ),
+        PointDipole(
+            center=(0, 0.5, 0),
+            polarization="Ex",
+            source_time=GaussianPulse(
+                freq0=2e14,
+                fwidth=4e13,
+            ),
+        ),
     ],
     monitors={
         FieldMonitor(size=(0, 0, 0), center=(0, 0, 0), freqs=[1.5e14, 2e14], name="point"),

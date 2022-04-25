@@ -11,6 +11,7 @@ from .utils import clear_tmp
 
 @clear_tmp
 def test_simulation_load_export():
+
     path = "tests/tmp/simulation.json"
     SIM.to_file(path)
     SIM2 = Simulation.from_file(path)

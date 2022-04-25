@@ -323,18 +323,8 @@ class Source(Box, ABC):
 """ Sources either: (1) implement current distributions or (2) generate fields."""
 
 
-class CurrentSource(Source):
+class CurrentSource(Source, ABC):
     """Source implements a current distribution directly."""
-
-
-class UniformCurrentSource(CurrentSource):
-    """Source in a rectangular volume with uniform time dependence. size=(0,0,0) gives point source.
-
-    Example
-    -------
-    >>> pulse = GaussianPulse(freq0=200e12, fwidth=20e12)
-    >>> pt_source = UniformCurrentSource(size=(0,0,0), source_time=pulse, polarization='Ex')
-    """
 
     polarization: Polarization = pydantic.Field(
         ...,
@@ -354,8 +344,24 @@ class UniformCurrentSource(CurrentSource):
         return None
 
 
-class PointDipole(UniformCurrentSource):
-    """Uniform current source with a zero size."""
+class UniformCurrentSource(CurrentSource):
+    """Source in a rectangular volume with uniform time dependence. size=(0,0,0) gives point source.
+
+    Example
+    -------
+    >>> pulse = GaussianPulse(freq0=200e12, fwidth=20e12)
+    >>> pt_source = UniformCurrentSource(size=(0,0,0), source_time=pulse, polarization='Ex')
+    """
+
+
+class PointDipole(CurrentSource):
+    """Uniform current source with a zero size.
+
+    Example
+    -------
+    >>> pulse = GaussianPulse(freq0=200e12, fwidth=20e12)
+    >>> pt_dipole = PointDipole(center=(1,2,3), source_time=pulse, polarization='Ex')
+    """
 
     size: Tuple[Literal[0], Literal[0], Literal[0]] = (0, 0, 0)
 
