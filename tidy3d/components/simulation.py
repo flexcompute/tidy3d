@@ -1,6 +1,6 @@
 # pylint: disable=too-many-lines, too-many-arguments
 """ Container holding all information about simulation and its components"""
-from typing import Dict, Tuple, List, Set
+from typing import Dict, Tuple, List, Set, Union
 from functools import lru_cache
 
 import pydantic
@@ -101,7 +101,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         units=SECOND,
     )
 
-    grid_size: Tuple[GridSize, GridSize, GridSize] = pydantic.Field(
+    grid_size: Union[GridSpec, Tuple[GridSize, GridSize, GridSize]] = pydantic.Field(
         None,
         title="Grid Size",
         description="NOTE: 'grid_size' has been replaced by 'grid_spec'.",
