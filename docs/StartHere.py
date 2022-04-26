@@ -28,7 +28,7 @@ square = td.Structure(
     medium=dielectric)
 
 # create source
-source = td.VolumeSource(
+source = td.UniformCurrentSource(
     center=(-1.5, 0, 0),
     size=(0, 0.4, 0.4),
     source_time = td.GaussianPulse(
@@ -46,13 +46,12 @@ monitor = td.FieldMonitor(
 
 # Initialize simulation
 sim = td.Simulation(size=sim_size,
-                    grid_size=(grid_size, grid_size, grid_size),
-                    structures=[square],
-                    sources=[source],
-                    monitors=[monitor],
-                    run_time=run_time,
-                    pml_layers=(pml, pml, pml))
-
+    grid_spec = td.GridSpec.auto(min_steps_per_wvl=grid_cells_per_wvl),
+    structures=[square],
+    sources=[source],
+    monitors=[monitor],
+    run_time=run_time,
+    pml_layers=(pml, pml, pml))
 
 print(f'simulation grid is shaped {sim.grid.num_cells} for {int(np.prod(sim.grid.num_cells)/1e6)} million cells.')
 
