@@ -11,10 +11,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `GridSpec1d` class defining how the meshing along each dimension should be done, with sublcasses `UniformGrid` and `CustomGrid` that cover the functionality 
   previously offered by supplying a float or a list of floats to `Simulation.grid_size`. New functionality offered by `AutoGrid` subclass, with the 
   mesh automatically generated based on the minimum required steps per wavelength.
+- `PointDipole` source.
+- Separate opacity arguments for monitors and sources in `Simulation.plot()`.
+- Separated `plotly`-based requirements from core requrements file, can be added with `"pip install tidy3d-beta[plotly]"`.
+- Extra `**kwargs` to `classmethod` constructors like `Box.from_bounds`, allowing this to be used for `Simulation`, sources, monitors.
+
 
 ### Changed
 - `Simulation.grid_spec` uses the default `GridSpec`, which has `AutoGrid(min_steps_per_wvl=10)` in each direction. To initialize a `Simulation` then it is no 
   longer needed to provide grid information, if sources are added to the simulation. Otherwise an error will be raised to provide a wavelength for the auto mesh.
+- Fixed bug in `PolySlab` visualization with sidewalls.
+- Inheritance structure of `Source` reorganized.
+- Better handling of only one `td.inf` in `Box.from_bounds`.
+- Added proper label to intensity plots.
+- Made all attributes `Field()` objects in `data.py` to clean up docs.
+- Handling `Medium.eps_model` at frequency of `td.inf` and `None`.
 
 ### Removed
 - `Simulation.grid_size` is now deprecated in favor of `Simulation.grid_spec`.
