@@ -7,17 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+### Changed
+
+## [1.3.0] - 2022-4-26
+
+### Added
+
 - New `grid_spec` Field in `Simulation` that allows more flexibility in defining the mesh.
 - `GridSpec1d` class defining how the meshing along each dimension should be done, with sublcasses `UniformGrid` and `CustomGrid` that cover the functionality 
   previously offered by supplying a float or a list of floats to `Simulation.grid_size`. New functionality offered by `AutoGrid` subclass, with the 
   mesh automatically generated based on the minimum required steps per wavelength.
+- New `PointDipole` source.
+- Opacity kwargs for monitor and source in `sim.plot`.
 
 ### Changed
 - `Simulation.grid_spec` uses the default `GridSpec`, which has `AutoGrid(min_steps_per_wvl=10)` in each direction. To initialize a `Simulation` then it is no 
-  longer needed to provide grid information, if sources are added to the simulation. Otherwise an error will be raised to provide a wavelength for the auto mesh.
+  longer needed to provide grid information, if sources are added to the simulation. Otherwise an error will be raised asking to provide a wavelength for the auto mesh.
+- `VolumeSource` is now called `UniformCurrentSource`.
+- S-matrix module now places the monitors exactly at the port locations and offsets the source slightly for numerical reasons (more accurate).
 
 ### Removed
-- `Simulation.grid_size` is now deprecated in favor of `Simulation.grid_spec`.
+- `Simulation.grid_size` is removed in favor of `Simulation.grid_spec`.
 
 ## [1.2.2] - 2022-4-16
 
@@ -247,7 +257,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Job and Batch classes for better simulation handling (eventually to fully replace webapi functions).
 - A large number of small improvements and bug fixes.
 
-[Unreleased]: https://github.com/flexcompute/tidy3d/compare/v1.2.2...develop
+[Unreleased]: https://github.com/flexcompute/tidy3d/compare/v1.3.0...develop
+[1.3.0]: https://github.com/flexcompute/tidy3d/compare/v1.2.2...v1.3.0
 [1.2.2]: https://github.com/flexcompute/tidy3d/compare/v1.2.1...v1.2.2
 [1.2.1]: https://github.com/flexcompute/tidy3d/compare/v1.2.0...v1.2.1
 [1.2.0]: https://github.com/flexcompute/tidy3d/compare/v1.1.1...v1.2.0
