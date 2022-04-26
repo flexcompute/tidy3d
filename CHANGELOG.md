@@ -19,12 +19,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   mesh automatically generated based on the minimum required steps per wavelength.
 - New `PointDipole` source.
 - Opacity kwargs for monitor and source in `sim.plot`.
+- Separated `plotly`-based requirements from core requrements file, can be added with `"pip install tidy3d-beta[plotly]"`.
 
 ### Changed
 - `Simulation.grid_spec` uses the default `GridSpec`, which has `AutoGrid(min_steps_per_wvl=10)` in each direction. To initialize a `Simulation` then it is no 
   longer needed to provide grid information, if sources are added to the simulation. Otherwise an error will be raised asking to provide a wavelength for the auto mesh.
 - `VolumeSource` is now called `UniformCurrentSource`.
 - S-matrix module now places the monitors exactly at the port locations and offsets the source slightly for numerical reasons (more accurate).
+- Fixed bug in `PolySlab` visualization with sidewalls.
+- Inheritance structure of `Source` reorganized.
+- Better handling of only one `td.inf` in `Box.from_bounds`.
+- Added proper label to intensity plots.
+- Made all attributes `Field()` objects in `data.py` to clean up docs.
+- Proper handling of `Medium.eps_model` at frequency of `td.inf` and `None`.
 
 ### Removed
 - `Simulation.grid_size` is removed in favor of `Simulation.grid_spec`.
