@@ -14,6 +14,7 @@ Tutorials
 .. toctree::
     :maxdepth: 1
 
+    notebooks/AutoGrid
     notebooks/VizSimulation
     notebooks/VizData
     notebooks/ModeSolver
