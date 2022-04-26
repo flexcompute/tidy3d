@@ -1215,31 +1215,6 @@
             "monitors": [
                 {
                     "center": [
-                        0.0,
-                        0.0,
-                        0.11
-                    ],
-                    "type": "FieldMonitor",
-                    "size": [
-                        "Infinity",
-                        "Infinity",
-                        0.0
-                    ],
-                    "name": "field",
-                    "freqs": [
-                        193414489407062.47
-                    ],
-                    "fields": [
-                        "Ex",
-                        "Ey",
-                        "Ez",
-                        "Hx",
-                        "Hy",
-                        "Hz"
-                    ]
-                },
-                {
-                    "center": [
                         -18.5,
                         4.0,
                         0.11
@@ -1251,37 +1226,6 @@
                         2.0
                     ],
                     "name": "in",
-                    "freqs": [
-                        193414489407062.47
-                    ],
-                    "mode_spec": {
-                        "num_modes": 1,
-                        "target_neff": null,
-                        "num_pml": [
-                            0,
-                            0
-                        ],
-                        "sort_by": "largest_neff",
-                        "angle_theta": 0.0,
-                        "angle_phi": 0.0,
-                        "bend_radius": null,
-                        "bend_axis": null,
-                        "type": "ModeSpec"
-                    }
-                },
-                {
-                    "center": [
-                        -18.5,
-                        4.0,
-                        0.11
-                    ],
-                    "type": "ModeMonitor",
-                    "size": [
-                        0.0,
-                        3.0,
-                        2.0
-                    ],
-                    "name": "reflect_top",
                     "freqs": [
                         193414489407062.47
                     ],
@@ -1397,7 +1341,7 @@
             "grid_spec": {
                 "grid_x": {
                     "type": "AutoGrid",
-                    "min_steps_per_wvl": 20.0,
+                    "min_steps_per_wvl": 16.0,
                     "max_scale": 1.4,
                     "mesher": {
                         "type": "GradedMesher"
@@ -1405,7 +1349,7 @@
                 },
                 "grid_y": {
                     "type": "AutoGrid",
-                    "min_steps_per_wvl": 20.0,
+                    "min_steps_per_wvl": 16.0,
                     "max_scale": 1.4,
                     "mesher": {
                         "type": "GradedMesher"
@@ -1413,7 +1357,7 @@
                 },
                 "grid_z": {
                     "type": "AutoGrid",
-                    "min_steps_per_wvl": 20.0,
+                    "min_steps_per_wvl": 16.0,
                     "max_scale": 1.4,
                     "mesher": {
                         "type": "GradedMesher"
@@ -2692,31 +2636,6 @@
             "monitors": [
                 {
                     "center": [
-                        0.0,
-                        0.0,
-                        0.11
-                    ],
-                    "type": "FieldMonitor",
-                    "size": [
-                        "Infinity",
-                        "Infinity",
-                        0.0
-                    ],
-                    "name": "field",
-                    "freqs": [
-                        193414489407062.47
-                    ],
-                    "fields": [
-                        "Ex",
-                        "Ey",
-                        "Ez",
-                        "Hx",
-                        "Hy",
-                        "Hz"
-                    ]
-                },
-                {
-                    "center": [
                         -18.85,
                         4.0,
                         0.11
@@ -2728,37 +2647,6 @@
                         2.0
                     ],
                     "name": "in",
-                    "freqs": [
-                        193414489407062.47
-                    ],
-                    "mode_spec": {
-                        "num_modes": 1,
-                        "target_neff": null,
-                        "num_pml": [
-                            0,
-                            0
-                        ],
-                        "sort_by": "largest_neff",
-                        "angle_theta": 0.0,
-                        "angle_phi": 0.0,
-                        "bend_radius": null,
-                        "bend_axis": null,
-                        "type": "ModeSpec"
-                    }
-                },
-                {
-                    "center": [
-                        -18.85,
-                        4.0,
-                        0.11
-                    ],
-                    "type": "ModeMonitor",
-                    "size": [
-                        0.0,
-                        3.0,
-                        2.0
-                    ],
-                    "name": "reflect_top",
                     "freqs": [
                         193414489407062.47
                     ],
@@ -2874,7 +2762,7 @@
             "grid_spec": {
                 "grid_x": {
                     "type": "AutoGrid",
-                    "min_steps_per_wvl": 20.0,
+                    "min_steps_per_wvl": 16.0,
                     "max_scale": 1.4,
                     "mesher": {
                         "type": "GradedMesher"
@@ -2882,7 +2770,7 @@
                 },
                 "grid_y": {
                     "type": "AutoGrid",
-                    "min_steps_per_wvl": 20.0,
+                    "min_steps_per_wvl": 16.0,
                     "max_scale": 1.4,
                     "mesher": {
                         "type": "GradedMesher"
@@ -2890,7 +2778,7 @@
                 },
                 "grid_z": {
                     "type": "AutoGrid",
-                    "min_steps_per_wvl": 20.0,
+                    "min_steps_per_wvl": 16.0,
                     "max_scale": 1.4,
                     "mesher": {
                         "type": "GradedMesher"
@@ -4169,31 +4057,6 @@
             "monitors": [
                 {
                     "center": [
-                        0.0,
-                        0.0,
-                        0.11
-                    ],
-                    "type": "FieldMonitor",
-                    "size": [
-                        "Infinity",
-                        "Infinity",
-                        0.0
-                    ],
-                    "name": "field",
-                    "freqs": [
-                        193414489407062.47
-                    ],
-                    "fields": [
-                        "Ex",
-                        "Ey",
-                        "Ez",
-                        "Hx",
-                        "Hy",
-                        "Hz"
-                    ]
-                },
-                {
-                    "center": [
                         -19.2,
                         4.0,
                         0.11
@@ -4205,37 +4068,6 @@
                         2.0
                     ],
                     "name": "in",
-                    "freqs": [
-                        193414489407062.47
-                    ],
-                    "mode_spec": {
-                        "num_modes": 1,
-                        "target_neff": null,
-                        "num_pml": [
-                            0,
-                            0
-                        ],
-                        "sort_by": "largest_neff",
-                        "angle_theta": 0.0,
-                        "angle_phi": 0.0,
-                        "bend_radius": null,
-                        "bend_axis": null,
-                        "type": "ModeSpec"
-                    }
-                },
-                {
-                    "center": [
-                        -19.2,
-                        4.0,
-                        0.11
-                    ],
-                    "type": "ModeMonitor",
-                    "size": [
-                        0.0,
-                        3.0,
-                        2.0
-                    ],
-                    "name": "reflect_top",
                     "freqs": [
                         193414489407062.47
                     ],
@@ -4351,7 +4183,7 @@
             "grid_spec": {
                 "grid_x": {
                     "type": "AutoGrid",
-                    "min_steps_per_wvl": 20.0,
+                    "min_steps_per_wvl": 16.0,
                     "max_scale": 1.4,
                     "mesher": {
                         "type": "GradedMesher"
@@ -4359,7 +4191,7 @@
                 },
                 "grid_y": {
                     "type": "AutoGrid",
-                    "min_steps_per_wvl": 20.0,
+                    "min_steps_per_wvl": 16.0,
                     "max_scale": 1.4,
                     "mesher": {
                         "type": "GradedMesher"
@@ -4367,7 +4199,7 @@
                 },
                 "grid_z": {
                     "type": "AutoGrid",
-                    "min_steps_per_wvl": 20.0,
+                    "min_steps_per_wvl": 16.0,
                     "max_scale": 1.4,
                     "mesher": {
                         "type": "GradedMesher"
@@ -5646,31 +5478,6 @@
             "monitors": [
                 {
                     "center": [
-                        0.0,
-                        0.0,
-                        0.11
-                    ],
-                    "type": "FieldMonitor",
-                    "size": [
-                        "Infinity",
-                        "Infinity",
-                        0.0
-                    ],
-                    "name": "field",
-                    "freqs": [
-                        193414489407062.47
-                    ],
-                    "fields": [
-                        "Ex",
-                        "Ey",
-                        "Ez",
-                        "Hx",
-                        "Hy",
-                        "Hz"
-                    ]
-                },
-                {
-                    "center": [
                         -19.55,
                         4.0,
                         0.11
@@ -5682,37 +5489,6 @@
                         2.0
                     ],
                     "name": "in",
-                    "freqs": [
-                        193414489407062.47
-                    ],
-                    "mode_spec": {
-                        "num_modes": 1,
-                        "target_neff": null,
-                        "num_pml": [
-                            0,
-                            0
-                        ],
-                        "sort_by": "largest_neff",
-                        "angle_theta": 0.0,
-                        "angle_phi": 0.0,
-                        "bend_radius": null,
-                        "bend_axis": null,
-                        "type": "ModeSpec"
-                    }
-                },
-                {
-                    "center": [
-                        -19.55,
-                        4.0,
-                        0.11
-                    ],
-                    "type": "ModeMonitor",
-                    "size": [
-                        0.0,
-                        3.0,
-                        2.0
-                    ],
-                    "name": "reflect_top",
                     "freqs": [
                         193414489407062.47
                     ],
@@ -5828,7 +5604,7 @@
             "grid_spec": {
                 "grid_x": {
                     "type": "AutoGrid",
-                    "min_steps_per_wvl": 20.0,
+                    "min_steps_per_wvl": 16.0,
                     "max_scale": 1.4,
                     "mesher": {
                         "type": "GradedMesher"
@@ -5836,7 +5612,7 @@
                 },
                 "grid_y": {
                     "type": "AutoGrid",
-                    "min_steps_per_wvl": 20.0,
+                    "min_steps_per_wvl": 16.0,
                     "max_scale": 1.4,
                     "mesher": {
                         "type": "GradedMesher"
@@ -5844,7 +5620,7 @@
                 },
                 "grid_z": {
                     "type": "AutoGrid",
-                    "min_steps_per_wvl": 20.0,
+                    "min_steps_per_wvl": 16.0,
                     "max_scale": 1.4,
                     "mesher": {
                         "type": "GradedMesher"
@@ -7123,31 +6899,6 @@
             "monitors": [
                 {
                     "center": [
-                        0.0,
-                        0.0,
-                        0.11
-                    ],
-                    "type": "FieldMonitor",
-                    "size": [
-                        "Infinity",
-                        "Infinity",
-                        0.0
-                    ],
-                    "name": "field",
-                    "freqs": [
-                        193414489407062.47
-                    ],
-                    "fields": [
-                        "Ex",
-                        "Ey",
-                        "Ez",
-                        "Hx",
-                        "Hy",
-                        "Hz"
-                    ]
-                },
-                {
-                    "center": [
                         -19.9,
                         4.0,
                         0.11
@@ -7159,37 +6910,6 @@
                         2.0
                     ],
                     "name": "in",
-                    "freqs": [
-                        193414489407062.47
-                    ],
-                    "mode_spec": {
-                        "num_modes": 1,
-                        "target_neff": null,
-                        "num_pml": [
-                            0,
-                            0
-                        ],
-                        "sort_by": "largest_neff",
-                        "angle_theta": 0.0,
-                        "angle_phi": 0.0,
-                        "bend_radius": null,
-                        "bend_axis": null,
-                        "type": "ModeSpec"
-                    }
-                },
-                {
-                    "center": [
-                        -19.9,
-                        4.0,
-                        0.11
-                    ],
-                    "type": "ModeMonitor",
-                    "size": [
-                        0.0,
-                        3.0,
-                        2.0
-                    ],
-                    "name": "reflect_top",
                     "freqs": [
                         193414489407062.47
                     ],
@@ -7305,7 +7025,7 @@
             "grid_spec": {
                 "grid_x": {
                     "type": "AutoGrid",
-                    "min_steps_per_wvl": 20.0,
+                    "min_steps_per_wvl": 16.0,
                     "max_scale": 1.4,
                     "mesher": {
                         "type": "GradedMesher"
@@ -7313,7 +7033,7 @@
                 },
                 "grid_y": {
                     "type": "AutoGrid",
-                    "min_steps_per_wvl": 20.0,
+                    "min_steps_per_wvl": 16.0,
                     "max_scale": 1.4,
                     "mesher": {
                         "type": "GradedMesher"
@@ -7321,7 +7041,7 @@
                 },
                 "grid_z": {
                     "type": "AutoGrid",
-                    "min_steps_per_wvl": 20.0,
+                    "min_steps_per_wvl": 16.0,
                     "max_scale": 1.4,
                     "mesher": {
                         "type": "GradedMesher"
@@ -8600,31 +8320,6 @@
             "monitors": [
                 {
                     "center": [
-                        0.0,
-                        0.0,
-                        0.11
-                    ],
-                    "type": "FieldMonitor",
-                    "size": [
-                        "Infinity",
-                        "Infinity",
-                        0.0
-                    ],
-                    "name": "field",
-                    "freqs": [
-                        193414489407062.47
-                    ],
-                    "fields": [
-                        "Ex",
-                        "Ey",
-                        "Ez",
-                        "Hx",
-                        "Hy",
-                        "Hz"
-                    ]
-                },
-                {
-                    "center": [
                         -20.25,
                         4.0,
                         0.11
@@ -8636,37 +8331,6 @@
                         2.0
                     ],
                     "name": "in",
-                    "freqs": [
-                        193414489407062.47
-                    ],
-                    "mode_spec": {
-                        "num_modes": 1,
-                        "target_neff": null,
-                        "num_pml": [
-                            0,
-                            0
-                        ],
-                        "sort_by": "largest_neff",
-                        "angle_theta": 0.0,
-                        "angle_phi": 0.0,
-                        "bend_radius": null,
-                        "bend_axis": null,
-                        "type": "ModeSpec"
-                    }
-                },
-                {
-                    "center": [
-                        -20.25,
-                        4.0,
-                        0.11
-                    ],
-                    "type": "ModeMonitor",
-                    "size": [
-                        0.0,
-                        3.0,
-                        2.0
-                    ],
-                    "name": "reflect_top",
                     "freqs": [
                         193414489407062.47
                     ],
@@ -8782,7 +8446,7 @@
             "grid_spec": {
                 "grid_x": {
                     "type": "AutoGrid",
-                    "min_steps_per_wvl": 20.0,
+                    "min_steps_per_wvl": 16.0,
                     "max_scale": 1.4,
                     "mesher": {
                         "type": "GradedMesher"
@@ -8790,7 +8454,7 @@
                 },
                 "grid_y": {
                     "type": "AutoGrid",
-                    "min_steps_per_wvl": 20.0,
+                    "min_steps_per_wvl": 16.0,
                     "max_scale": 1.4,
                     "mesher": {
                         "type": "GradedMesher"
@@ -8798,7 +8462,7 @@
                 },
                 "grid_z": {
                     "type": "AutoGrid",
-                    "min_steps_per_wvl": 20.0,
+                    "min_steps_per_wvl": 16.0,
                     "max_scale": 1.4,
                     "mesher": {
                         "type": "GradedMesher"
@@ -10077,31 +9741,6 @@
             "monitors": [
                 {
                     "center": [
-                        0.0,
-                        0.0,
-                        0.11
-                    ],
-                    "type": "FieldMonitor",
-                    "size": [
-                        "Infinity",
-                        "Infinity",
-                        0.0
-                    ],
-                    "name": "field",
-                    "freqs": [
-                        193414489407062.47
-                    ],
-                    "fields": [
-                        "Ex",
-                        "Ey",
-                        "Ez",
-                        "Hx",
-                        "Hy",
-                        "Hz"
-                    ]
-                },
-                {
-                    "center": [
                         -20.6,
                         4.0,
                         0.11
@@ -10113,37 +9752,6 @@
                         2.0
                     ],
                     "name": "in",
-                    "freqs": [
-                        193414489407062.47
-                    ],
-                    "mode_spec": {
-                        "num_modes": 1,
-                        "target_neff": null,
-                        "num_pml": [
-                            0,
-                            0
-                        ],
-                        "sort_by": "largest_neff",
-                        "angle_theta": 0.0,
-                        "angle_phi": 0.0,
-                        "bend_radius": null,
-                        "bend_axis": null,
-                        "type": "ModeSpec"
-                    }
-                },
-                {
-                    "center": [
-                        -20.6,
-                        4.0,
-                        0.11
-                    ],
-                    "type": "ModeMonitor",
-                    "size": [
-                        0.0,
-                        3.0,
-                        2.0
-                    ],
-                    "name": "reflect_top",
                     "freqs": [
                         193414489407062.47
                     ],
@@ -10259,7 +9867,7 @@
             "grid_spec": {
                 "grid_x": {
                     "type": "AutoGrid",
-                    "min_steps_per_wvl": 20.0,
+                    "min_steps_per_wvl": 16.0,
                     "max_scale": 1.4,
                     "mesher": {
                         "type": "GradedMesher"
@@ -10267,7 +9875,7 @@
                 },
                 "grid_y": {
                     "type": "AutoGrid",
-                    "min_steps_per_wvl": 20.0,
+                    "min_steps_per_wvl": 16.0,
                     "max_scale": 1.4,
                     "mesher": {
                         "type": "GradedMesher"
@@ -10275,7 +9883,7 @@
                 },
                 "grid_z": {
                     "type": "AutoGrid",
-                    "min_steps_per_wvl": 20.0,
+                    "min_steps_per_wvl": 16.0,
                     "max_scale": 1.4,
                     "mesher": {
                         "type": "GradedMesher"
@@ -11554,31 +11162,6 @@
             "monitors": [
                 {
                     "center": [
-                        0.0,
-                        0.0,
-                        0.11
-                    ],
-                    "type": "FieldMonitor",
-                    "size": [
-                        "Infinity",
-                        "Infinity",
-                        0.0
-                    ],
-                    "name": "field",
-                    "freqs": [
-                        193414489407062.47
-                    ],
-                    "fields": [
-                        "Ex",
-                        "Ey",
-                        "Ez",
-                        "Hx",
-                        "Hy",
-                        "Hz"
-                    ]
-                },
-                {
-                    "center": [
                         -20.95,
                         4.0,
                         0.11
@@ -11590,37 +11173,6 @@
                         2.0
                     ],
                     "name": "in",
-                    "freqs": [
-                        193414489407062.47
-                    ],
-                    "mode_spec": {
-                        "num_modes": 1,
-                        "target_neff": null,
-                        "num_pml": [
-                            0,
-                            0
-                        ],
-                        "sort_by": "largest_neff",
-                        "angle_theta": 0.0,
-                        "angle_phi": 0.0,
-                        "bend_radius": null,
-                        "bend_axis": null,
-                        "type": "ModeSpec"
-                    }
-                },
-                {
-                    "center": [
-                        -20.95,
-                        4.0,
-                        0.11
-                    ],
-                    "type": "ModeMonitor",
-                    "size": [
-                        0.0,
-                        3.0,
-                        2.0
-                    ],
-                    "name": "reflect_top",
                     "freqs": [
                         193414489407062.47
                     ],
@@ -11736,7 +11288,7 @@
             "grid_spec": {
                 "grid_x": {
                     "type": "AutoGrid",
-                    "min_steps_per_wvl": 20.0,
+                    "min_steps_per_wvl": 16.0,
                     "max_scale": 1.4,
                     "mesher": {
                         "type": "GradedMesher"
@@ -11744,7 +11296,7 @@
                 },
                 "grid_y": {
                     "type": "AutoGrid",
-                    "min_steps_per_wvl": 20.0,
+                    "min_steps_per_wvl": 16.0,
                     "max_scale": 1.4,
                     "mesher": {
                         "type": "GradedMesher"
@@ -11752,7 +11304,7 @@
                 },
                 "grid_z": {
                     "type": "AutoGrid",
-                    "min_steps_per_wvl": 20.0,
+                    "min_steps_per_wvl": 16.0,
                     "max_scale": 1.4,
                     "mesher": {
                         "type": "GradedMesher"
@@ -13031,31 +12583,6 @@
             "monitors": [
                 {
                     "center": [
-                        0.0,
-                        0.0,
-                        0.11
-                    ],
-                    "type": "FieldMonitor",
-                    "size": [
-                        "Infinity",
-                        "Infinity",
-                        0.0
-                    ],
-                    "name": "field",
-                    "freqs": [
-                        193414489407062.47
-                    ],
-                    "fields": [
-                        "Ex",
-                        "Ey",
-                        "Ez",
-                        "Hx",
-                        "Hy",
-                        "Hz"
-                    ]
-                },
-                {
-                    "center": [
                         -21.3,
                         4.0,
                         0.11
@@ -13067,37 +12594,6 @@
                         2.0
                     ],
                     "name": "in",
-                    "freqs": [
-                        193414489407062.47
-                    ],
-                    "mode_spec": {
-                        "num_modes": 1,
-                        "target_neff": null,
-                        "num_pml": [
-                            0,
-                            0
-                        ],
-                        "sort_by": "largest_neff",
-                        "angle_theta": 0.0,
-                        "angle_phi": 0.0,
-                        "bend_radius": null,
-                        "bend_axis": null,
-                        "type": "ModeSpec"
-                    }
-                },
-                {
-                    "center": [
-                        -21.3,
-                        4.0,
-                        0.11
-                    ],
-                    "type": "ModeMonitor",
-                    "size": [
-                        0.0,
-                        3.0,
-                        2.0
-                    ],
-                    "name": "reflect_top",
                     "freqs": [
                         193414489407062.47
                     ],
@@ -13213,7 +12709,7 @@
             "grid_spec": {
                 "grid_x": {
                     "type": "AutoGrid",
-                    "min_steps_per_wvl": 20.0,
+                    "min_steps_per_wvl": 16.0,
                     "max_scale": 1.4,
                     "mesher": {
                         "type": "GradedMesher"
@@ -13221,7 +12717,7 @@
                 },
                 "grid_y": {
                     "type": "AutoGrid",
-                    "min_steps_per_wvl": 20.0,
+                    "min_steps_per_wvl": 16.0,
                     "max_scale": 1.4,
                     "mesher": {
                         "type": "GradedMesher"
@@ -13229,7 +12725,7 @@
                 },
                 "grid_z": {
                     "type": "AutoGrid",
-                    "min_steps_per_wvl": 20.0,
+                    "min_steps_per_wvl": 16.0,
                     "max_scale": 1.4,
                     "mesher": {
                         "type": "GradedMesher"
@@ -14508,31 +14004,6 @@
             "monitors": [
                 {
                     "center": [
-                        0.0,
-                        0.0,
-                        0.11
-                    ],
-                    "type": "FieldMonitor",
-                    "size": [
-                        "Infinity",
-                        "Infinity",
-                        0.0
-                    ],
-                    "name": "field",
-                    "freqs": [
-                        193414489407062.47
-                    ],
-                    "fields": [
-                        "Ex",
-                        "Ey",
-                        "Ez",
-                        "Hx",
-                        "Hy",
-                        "Hz"
-                    ]
-                },
-                {
-                    "center": [
                         -21.65,
                         4.0,
                         0.11
@@ -14544,37 +14015,6 @@
                         2.0
                     ],
                     "name": "in",
-                    "freqs": [
-                        193414489407062.47
-                    ],
-                    "mode_spec": {
-                        "num_modes": 1,
-                        "target_neff": null,
-                        "num_pml": [
-                            0,
-                            0
-                        ],
-                        "sort_by": "largest_neff",
-                        "angle_theta": 0.0,
-                        "angle_phi": 0.0,
-                        "bend_radius": null,
-                        "bend_axis": null,
-                        "type": "ModeSpec"
-                    }
-                },
-                {
-                    "center": [
-                        -21.65,
-                        4.0,
-                        0.11
-                    ],
-                    "type": "ModeMonitor",
-                    "size": [
-                        0.0,
-                        3.0,
-                        2.0
-                    ],
-                    "name": "reflect_top",
                     "freqs": [
                         193414489407062.47
                     ],
@@ -14690,7 +14130,7 @@
             "grid_spec": {
                 "grid_x": {
                     "type": "AutoGrid",
-                    "min_steps_per_wvl": 20.0,
+                    "min_steps_per_wvl": 16.0,
                     "max_scale": 1.4,
                     "mesher": {
                         "type": "GradedMesher"
@@ -14698,7 +14138,7 @@
                 },
                 "grid_y": {
                     "type": "AutoGrid",
-                    "min_steps_per_wvl": 20.0,
+                    "min_steps_per_wvl": 16.0,
                     "max_scale": 1.4,
                     "mesher": {
                         "type": "GradedMesher"
@@ -14706,7 +14146,7 @@
                 },
                 "grid_z": {
                     "type": "AutoGrid",
-                    "min_steps_per_wvl": 20.0,
+                    "min_steps_per_wvl": 16.0,
                     "max_scale": 1.4,
                     "mesher": {
                         "type": "GradedMesher"
@@ -15985,31 +15425,6 @@
             "monitors": [
                 {
                     "center": [
-                        0.0,
-                        0.0,
-                        0.11
-                    ],
-                    "type": "FieldMonitor",
-                    "size": [
-                        "Infinity",
-                        "Infinity",
-                        0.0
-                    ],
-                    "name": "field",
-                    "freqs": [
-                        193414489407062.47
-                    ],
-                    "fields": [
-                        "Ex",
-                        "Ey",
-                        "Ez",
-                        "Hx",
-                        "Hy",
-                        "Hz"
-                    ]
-                },
-                {
-                    "center": [
                         -22.0,
                         4.0,
                         0.11
@@ -16021,37 +15436,6 @@
                         2.0
                     ],
                     "name": "in",
-                    "freqs": [
-                        193414489407062.47
-                    ],
-                    "mode_spec": {
-                        "num_modes": 1,
-                        "target_neff": null,
-                        "num_pml": [
-                            0,
-                            0
-                        ],
-                        "sort_by": "largest_neff",
-                        "angle_theta": 0.0,
-                        "angle_phi": 0.0,
-                        "bend_radius": null,
-                        "bend_axis": null,
-                        "type": "ModeSpec"
-                    }
-                },
-                {
-                    "center": [
-                        -22.0,
-                        4.0,
-                        0.11
-                    ],
-                    "type": "ModeMonitor",
-                    "size": [
-                        0.0,
-                        3.0,
-                        2.0
-                    ],
-                    "name": "reflect_top",
                     "freqs": [
                         193414489407062.47
                     ],
@@ -16167,7 +15551,7 @@
             "grid_spec": {
                 "grid_x": {
                     "type": "AutoGrid",
-                    "min_steps_per_wvl": 20.0,
+                    "min_steps_per_wvl": 16.0,
                     "max_scale": 1.4,
                     "mesher": {
                         "type": "GradedMesher"
@@ -16175,7 +15559,7 @@
                 },
                 "grid_y": {
                     "type": "AutoGrid",
-                    "min_steps_per_wvl": 20.0,
+                    "min_steps_per_wvl": 16.0,
                     "max_scale": 1.4,
                     "mesher": {
                         "type": "GradedMesher"
@@ -16183,7 +15567,7 @@
                 },
                 "grid_z": {
                     "type": "AutoGrid",
-                    "min_steps_per_wvl": 20.0,
+                    "min_steps_per_wvl": 16.0,
                     "max_scale": 1.4,
                     "mesher": {
                         "type": "GradedMesher"
@@ -17466,31 +16850,6 @@
                 "monitors": [
                     {
                         "center": [
-                            0.0,
-                            0.0,
-                            0.11
-                        ],
-                        "type": "FieldMonitor",
-                        "size": [
-                            "Infinity",
-                            "Infinity",
-                            0.0
-                        ],
-                        "name": "field",
-                        "freqs": [
-                            193414489407062.47
-                        ],
-                        "fields": [
-                            "Ex",
-                            "Ey",
-                            "Ez",
-                            "Hx",
-                            "Hy",
-                            "Hz"
-                        ]
-                    },
-                    {
-                        "center": [
                             -18.5,
                             4.0,
                             0.11
@@ -17502,37 +16861,6 @@
                             2.0
                         ],
                         "name": "in",
-                        "freqs": [
-                            193414489407062.47
-                        ],
-                        "mode_spec": {
-                            "num_modes": 1,
-                            "target_neff": null,
-                            "num_pml": [
-                                0,
-                                0
-                            ],
-                            "sort_by": "largest_neff",
-                            "angle_theta": 0.0,
-                            "angle_phi": 0.0,
-                            "bend_radius": null,
-                            "bend_axis": null,
-                            "type": "ModeSpec"
-                        }
-                    },
-                    {
-                        "center": [
-                            -18.5,
-                            4.0,
-                            0.11
-                        ],
-                        "type": "ModeMonitor",
-                        "size": [
-                            0.0,
-                            3.0,
-                            2.0
-                        ],
-                        "name": "reflect_top",
                         "freqs": [
                             193414489407062.47
                         ],
@@ -17648,7 +16976,7 @@
                 "grid_spec": {
                     "grid_x": {
                         "type": "AutoGrid",
-                        "min_steps_per_wvl": 20.0,
+                        "min_steps_per_wvl": 16.0,
                         "max_scale": 1.4,
                         "mesher": {
                             "type": "GradedMesher"
@@ -17656,7 +16984,7 @@
                     },
                     "grid_y": {
                         "type": "AutoGrid",
-                        "min_steps_per_wvl": 20.0,
+                        "min_steps_per_wvl": 16.0,
                         "max_scale": 1.4,
                         "mesher": {
                             "type": "GradedMesher"
@@ -17664,7 +16992,7 @@
                     },
                     "grid_z": {
                         "type": "AutoGrid",
-                        "min_steps_per_wvl": 20.0,
+                        "min_steps_per_wvl": 16.0,
                         "max_scale": 1.4,
                         "mesher": {
                             "type": "GradedMesher"
@@ -17731,7 +17059,7 @@
             },
             "task_name": "l=5.00",
             "folder_name": "default",
-            "task_id": "5067740f-87d2-4f78-ae5e-601859f32f81",
+            "task_id": "f078c19c-0d1e-474d-945c-6a3a3fd92edc",
             "callback_url": null
         },
         "l=5.70": {
@@ -18950,31 +18278,6 @@
                 "monitors": [
                     {
                         "center": [
-                            0.0,
-                            0.0,
-                            0.11
-                        ],
-                        "type": "FieldMonitor",
-                        "size": [
-                            "Infinity",
-                            "Infinity",
-                            0.0
-                        ],
-                        "name": "field",
-                        "freqs": [
-                            193414489407062.47
-                        ],
-                        "fields": [
-                            "Ex",
-                            "Ey",
-                            "Ez",
-                            "Hx",
-                            "Hy",
-                            "Hz"
-                        ]
-                    },
-                    {
-                        "center": [
                             -18.85,
                             4.0,
                             0.11
@@ -18986,37 +18289,6 @@
                             2.0
                         ],
                         "name": "in",
-                        "freqs": [
-                            193414489407062.47
-                        ],
-                        "mode_spec": {
-                            "num_modes": 1,
-                            "target_neff": null,
-                            "num_pml": [
-                                0,
-                                0
-                            ],
-                            "sort_by": "largest_neff",
-                            "angle_theta": 0.0,
-                            "angle_phi": 0.0,
-                            "bend_radius": null,
-                            "bend_axis": null,
-                            "type": "ModeSpec"
-                        }
-                    },
-                    {
-                        "center": [
-                            -18.85,
-                            4.0,
-                            0.11
-                        ],
-                        "type": "ModeMonitor",
-                        "size": [
-                            0.0,
-                            3.0,
-                            2.0
-                        ],
-                        "name": "reflect_top",
                         "freqs": [
                             193414489407062.47
                         ],
@@ -19132,7 +18404,7 @@
                 "grid_spec": {
                     "grid_x": {
                         "type": "AutoGrid",
-                        "min_steps_per_wvl": 20.0,
+                        "min_steps_per_wvl": 16.0,
                         "max_scale": 1.4,
                         "mesher": {
                             "type": "GradedMesher"
@@ -19140,7 +18412,7 @@
                     },
                     "grid_y": {
                         "type": "AutoGrid",
-                        "min_steps_per_wvl": 20.0,
+                        "min_steps_per_wvl": 16.0,
                         "max_scale": 1.4,
                         "mesher": {
                             "type": "GradedMesher"
@@ -19148,7 +18420,7 @@
                     },
                     "grid_z": {
                         "type": "AutoGrid",
-                        "min_steps_per_wvl": 20.0,
+                        "min_steps_per_wvl": 16.0,
                         "max_scale": 1.4,
                         "mesher": {
                             "type": "GradedMesher"
@@ -19215,7 +18487,7 @@
             },
             "task_name": "l=5.70",
             "folder_name": "default",
-            "task_id": "caa6296d-38af-43c9-b45d-18ed32caafc2",
+            "task_id": "3dc7a9d6-1e66-400b-ad68-8d6a60248898",
             "callback_url": null
         },
         "l=6.40": {
@@ -20434,31 +19706,6 @@
                 "monitors": [
                     {
                         "center": [
-                            0.0,
-                            0.0,
-                            0.11
-                        ],
-                        "type": "FieldMonitor",
-                        "size": [
-                            "Infinity",
-                            "Infinity",
-                            0.0
-                        ],
-                        "name": "field",
-                        "freqs": [
-                            193414489407062.47
-                        ],
-                        "fields": [
-                            "Ex",
-                            "Ey",
-                            "Ez",
-                            "Hx",
-                            "Hy",
-                            "Hz"
-                        ]
-                    },
-                    {
-                        "center": [
                             -19.2,
                             4.0,
                             0.11
@@ -20470,37 +19717,6 @@
                             2.0
                         ],
                         "name": "in",
-                        "freqs": [
-                            193414489407062.47
-                        ],
-                        "mode_spec": {
-                            "num_modes": 1,
-                            "target_neff": null,
-                            "num_pml": [
-                                0,
-                                0
-                            ],
-                            "sort_by": "largest_neff",
-                            "angle_theta": 0.0,
-                            "angle_phi": 0.0,
-                            "bend_radius": null,
-                            "bend_axis": null,
-                            "type": "ModeSpec"
-                        }
-                    },
-                    {
-                        "center": [
-                            -19.2,
-                            4.0,
-                            0.11
-                        ],
-                        "type": "ModeMonitor",
-                        "size": [
-                            0.0,
-                            3.0,
-                            2.0
-                        ],
-                        "name": "reflect_top",
                         "freqs": [
                             193414489407062.47
                         ],
@@ -20616,7 +19832,7 @@
                 "grid_spec": {
                     "grid_x": {
                         "type": "AutoGrid",
-                        "min_steps_per_wvl": 20.0,
+                        "min_steps_per_wvl": 16.0,
                         "max_scale": 1.4,
                         "mesher": {
                             "type": "GradedMesher"
@@ -20624,7 +19840,7 @@
                     },
                     "grid_y": {
                         "type": "AutoGrid",
-                        "min_steps_per_wvl": 20.0,
+                        "min_steps_per_wvl": 16.0,
                         "max_scale": 1.4,
                         "mesher": {
                             "type": "GradedMesher"
@@ -20632,7 +19848,7 @@
                     },
                     "grid_z": {
                         "type": "AutoGrid",
-                        "min_steps_per_wvl": 20.0,
+                        "min_steps_per_wvl": 16.0,
                         "max_scale": 1.4,
                         "mesher": {
                             "type": "GradedMesher"
@@ -20699,7 +19915,7 @@
             },
             "task_name": "l=6.40",
             "folder_name": "default",
-            "task_id": "59784370-bb1f-4354-ac8a-b5d280d4dc38",
+            "task_id": "081b4b7d-bc37-4aab-a3b5-0b5811073871",
             "callback_url": null
         },
         "l=7.10": {
@@ -21918,31 +21134,6 @@
                 "monitors": [
                     {
                         "center": [
-                            0.0,
-                            0.0,
-                            0.11
-                        ],
-                        "type": "FieldMonitor",
-                        "size": [
-                            "Infinity",
-                            "Infinity",
-                            0.0
-                        ],
-                        "name": "field",
-                        "freqs": [
-                            193414489407062.47
-                        ],
-                        "fields": [
-                            "Ex",
-                            "Ey",
-                            "Ez",
-                            "Hx",
-                            "Hy",
-                            "Hz"
-                        ]
-                    },
-                    {
-                        "center": [
                             -19.55,
                             4.0,
                             0.11
@@ -21954,37 +21145,6 @@
                             2.0
                         ],
                         "name": "in",
-                        "freqs": [
-                            193414489407062.47
-                        ],
-                        "mode_spec": {
-                            "num_modes": 1,
-                            "target_neff": null,
-                            "num_pml": [
-                                0,
-                                0
-                            ],
-                            "sort_by": "largest_neff",
-                            "angle_theta": 0.0,
-                            "angle_phi": 0.0,
-                            "bend_radius": null,
-                            "bend_axis": null,
-                            "type": "ModeSpec"
-                        }
-                    },
-                    {
-                        "center": [
-                            -19.55,
-                            4.0,
-                            0.11
-                        ],
-                        "type": "ModeMonitor",
-                        "size": [
-                            0.0,
-                            3.0,
-                            2.0
-                        ],
-                        "name": "reflect_top",
                         "freqs": [
                             193414489407062.47
                         ],
@@ -22100,7 +21260,7 @@
                 "grid_spec": {
                     "grid_x": {
                         "type": "AutoGrid",
-                        "min_steps_per_wvl": 20.0,
+                        "min_steps_per_wvl": 16.0,
                         "max_scale": 1.4,
                         "mesher": {
                             "type": "GradedMesher"
@@ -22108,7 +21268,7 @@
                     },
                     "grid_y": {
                         "type": "AutoGrid",
-                        "min_steps_per_wvl": 20.0,
+                        "min_steps_per_wvl": 16.0,
                         "max_scale": 1.4,
                         "mesher": {
                             "type": "GradedMesher"
@@ -22116,7 +21276,7 @@
                     },
                     "grid_z": {
                         "type": "AutoGrid",
-                        "min_steps_per_wvl": 20.0,
+                        "min_steps_per_wvl": 16.0,
                         "max_scale": 1.4,
                         "mesher": {
                             "type": "GradedMesher"
@@ -22183,7 +21343,7 @@
             },
             "task_name": "l=7.10",
             "folder_name": "default",
-            "task_id": "e3ad855d-8330-47c2-91f7-c8a181406187",
+            "task_id": "da4445ad-c9df-4fe8-b445-61131189aeef",
             "callback_url": null
         },
         "l=7.80": {
@@ -23402,31 +22562,6 @@
                 "monitors": [
                     {
                         "center": [
-                            0.0,
-                            0.0,
-                            0.11
-                        ],
-                        "type": "FieldMonitor",
-                        "size": [
-                            "Infinity",
-                            "Infinity",
-                            0.0
-                        ],
-                        "name": "field",
-                        "freqs": [
-                            193414489407062.47
-                        ],
-                        "fields": [
-                            "Ex",
-                            "Ey",
-                            "Ez",
-                            "Hx",
-                            "Hy",
-                            "Hz"
-                        ]
-                    },
-                    {
-                        "center": [
                             -19.9,
                             4.0,
                             0.11
@@ -23438,37 +22573,6 @@
                             2.0
                         ],
                         "name": "in",
-                        "freqs": [
-                            193414489407062.47
-                        ],
-                        "mode_spec": {
-                            "num_modes": 1,
-                            "target_neff": null,
-                            "num_pml": [
-                                0,
-                                0
-                            ],
-                            "sort_by": "largest_neff",
-                            "angle_theta": 0.0,
-                            "angle_phi": 0.0,
-                            "bend_radius": null,
-                            "bend_axis": null,
-                            "type": "ModeSpec"
-                        }
-                    },
-                    {
-                        "center": [
-                            -19.9,
-                            4.0,
-                            0.11
-                        ],
-                        "type": "ModeMonitor",
-                        "size": [
-                            0.0,
-                            3.0,
-                            2.0
-                        ],
-                        "name": "reflect_top",
                         "freqs": [
                             193414489407062.47
                         ],
@@ -23584,7 +22688,7 @@
                 "grid_spec": {
                     "grid_x": {
                         "type": "AutoGrid",
-                        "min_steps_per_wvl": 20.0,
+                        "min_steps_per_wvl": 16.0,
                         "max_scale": 1.4,
                         "mesher": {
                             "type": "GradedMesher"
@@ -23592,7 +22696,7 @@
                     },
                     "grid_y": {
                         "type": "AutoGrid",
-                        "min_steps_per_wvl": 20.0,
+                        "min_steps_per_wvl": 16.0,
                         "max_scale": 1.4,
                         "mesher": {
                             "type": "GradedMesher"
@@ -23600,7 +22704,7 @@
                     },
                     "grid_z": {
                         "type": "AutoGrid",
-                        "min_steps_per_wvl": 20.0,
+                        "min_steps_per_wvl": 16.0,
                         "max_scale": 1.4,
                         "mesher": {
                             "type": "GradedMesher"
@@ -23667,7 +22771,7 @@
             },
             "task_name": "l=7.80",
             "folder_name": "default",
-            "task_id": "c2a20463-3873-4e82-8602-ac35315cff92",
+            "task_id": "cd5f9ef6-ebe3-4c0d-b64e-beda5a8c82e1",
             "callback_url": null
         },
         "l=8.50": {
@@ -24886,31 +23990,6 @@
                 "monitors": [
                     {
                         "center": [
-                            0.0,
-                            0.0,
-                            0.11
-                        ],
-                        "type": "FieldMonitor",
-                        "size": [
-                            "Infinity",
-                            "Infinity",
-                            0.0
-                        ],
-                        "name": "field",
-                        "freqs": [
-                            193414489407062.47
-                        ],
-                        "fields": [
-                            "Ex",
-                            "Ey",
-                            "Ez",
-                            "Hx",
-                            "Hy",
-                            "Hz"
-                        ]
-                    },
-                    {
-                        "center": [
                             -20.25,
                             4.0,
                             0.11
@@ -24922,37 +24001,6 @@
                             2.0
                         ],
                         "name": "in",
-                        "freqs": [
-                            193414489407062.47
-                        ],
-                        "mode_spec": {
-                            "num_modes": 1,
-                            "target_neff": null,
-                            "num_pml": [
-                                0,
-                                0
-                            ],
-                            "sort_by": "largest_neff",
-                            "angle_theta": 0.0,
-                            "angle_phi": 0.0,
-                            "bend_radius": null,
-                            "bend_axis": null,
-                            "type": "ModeSpec"
-                        }
-                    },
-                    {
-                        "center": [
-                            -20.25,
-                            4.0,
-                            0.11
-                        ],
-                        "type": "ModeMonitor",
-                        "size": [
-                            0.0,
-                            3.0,
-                            2.0
-                        ],
-                        "name": "reflect_top",
                         "freqs": [
                             193414489407062.47
                         ],
@@ -25068,7 +24116,7 @@
                 "grid_spec": {
                     "grid_x": {
                         "type": "AutoGrid",
-                        "min_steps_per_wvl": 20.0,
+                        "min_steps_per_wvl": 16.0,
                         "max_scale": 1.4,
                         "mesher": {
                             "type": "GradedMesher"
@@ -25076,7 +24124,7 @@
                     },
                     "grid_y": {
                         "type": "AutoGrid",
-                        "min_steps_per_wvl": 20.0,
+                        "min_steps_per_wvl": 16.0,
                         "max_scale": 1.4,
                         "mesher": {
                             "type": "GradedMesher"
@@ -25084,7 +24132,7 @@
                     },
                     "grid_z": {
                         "type": "AutoGrid",
-                        "min_steps_per_wvl": 20.0,
+                        "min_steps_per_wvl": 16.0,
                         "max_scale": 1.4,
                         "mesher": {
                             "type": "GradedMesher"
@@ -25151,7 +24199,7 @@
             },
             "task_name": "l=8.50",
             "folder_name": "default",
-            "task_id": "af70b24f-4d67-47de-90f9-482ca3902d0f",
+            "task_id": "85a9b11f-2e1b-4427-bfb7-a0345d64ace2",
             "callback_url": null
         },
         "l=9.20": {
@@ -26370,31 +25418,6 @@
                 "monitors": [
                     {
                         "center": [
-                            0.0,
-                            0.0,
-                            0.11
-                        ],
-                        "type": "FieldMonitor",
-                        "size": [
-                            "Infinity",
-                            "Infinity",
-                            0.0
-                        ],
-                        "name": "field",
-                        "freqs": [
-                            193414489407062.47
-                        ],
-                        "fields": [
-                            "Ex",
-                            "Ey",
-                            "Ez",
-                            "Hx",
-                            "Hy",
-                            "Hz"
-                        ]
-                    },
-                    {
-                        "center": [
                             -20.6,
                             4.0,
                             0.11
@@ -26406,37 +25429,6 @@
                             2.0
                         ],
                         "name": "in",
-                        "freqs": [
-                            193414489407062.47
-                        ],
-                        "mode_spec": {
-                            "num_modes": 1,
-                            "target_neff": null,
-                            "num_pml": [
-                                0,
-                                0
-                            ],
-                            "sort_by": "largest_neff",
-                            "angle_theta": 0.0,
-                            "angle_phi": 0.0,
-                            "bend_radius": null,
-                            "bend_axis": null,
-                            "type": "ModeSpec"
-                        }
-                    },
-                    {
-                        "center": [
-                            -20.6,
-                            4.0,
-                            0.11
-                        ],
-                        "type": "ModeMonitor",
-                        "size": [
-                            0.0,
-                            3.0,
-                            2.0
-                        ],
-                        "name": "reflect_top",
                         "freqs": [
                             193414489407062.47
                         ],
@@ -26552,7 +25544,7 @@
                 "grid_spec": {
                     "grid_x": {
                         "type": "AutoGrid",
-                        "min_steps_per_wvl": 20.0,
+                        "min_steps_per_wvl": 16.0,
                         "max_scale": 1.4,
                         "mesher": {
                             "type": "GradedMesher"
@@ -26560,7 +25552,7 @@
                     },
                     "grid_y": {
                         "type": "AutoGrid",
-                        "min_steps_per_wvl": 20.0,
+                        "min_steps_per_wvl": 16.0,
                         "max_scale": 1.4,
                         "mesher": {
                             "type": "GradedMesher"
@@ -26568,7 +25560,7 @@
                     },
                     "grid_z": {
                         "type": "AutoGrid",
-                        "min_steps_per_wvl": 20.0,
+                        "min_steps_per_wvl": 16.0,
                         "max_scale": 1.4,
                         "mesher": {
                             "type": "GradedMesher"
@@ -26635,7 +25627,7 @@
             },
             "task_name": "l=9.20",
             "folder_name": "default",
-            "task_id": "640a4e10-0e7b-4f81-94d5-3d65877efef9",
+            "task_id": "38338454-533b-4f4d-815d-dd2babc5d52b",
             "callback_url": null
         },
         "l=9.90": {
@@ -27854,31 +26846,6 @@
                 "monitors": [
                     {
                         "center": [
-                            0.0,
-                            0.0,
-                            0.11
-                        ],
-                        "type": "FieldMonitor",
-                        "size": [
-                            "Infinity",
-                            "Infinity",
-                            0.0
-                        ],
-                        "name": "field",
-                        "freqs": [
-                            193414489407062.47
-                        ],
-                        "fields": [
-                            "Ex",
-                            "Ey",
-                            "Ez",
-                            "Hx",
-                            "Hy",
-                            "Hz"
-                        ]
-                    },
-                    {
-                        "center": [
                             -20.95,
                             4.0,
                             0.11
@@ -27890,37 +26857,6 @@
                             2.0
                         ],
                         "name": "in",
-                        "freqs": [
-                            193414489407062.47
-                        ],
-                        "mode_spec": {
-                            "num_modes": 1,
-                            "target_neff": null,
-                            "num_pml": [
-                                0,
-                                0
-                            ],
-                            "sort_by": "largest_neff",
-                            "angle_theta": 0.0,
-                            "angle_phi": 0.0,
-                            "bend_radius": null,
-                            "bend_axis": null,
-                            "type": "ModeSpec"
-                        }
-                    },
-                    {
-                        "center": [
-                            -20.95,
-                            4.0,
-                            0.11
-                        ],
-                        "type": "ModeMonitor",
-                        "size": [
-                            0.0,
-                            3.0,
-                            2.0
-                        ],
-                        "name": "reflect_top",
                         "freqs": [
                             193414489407062.47
                         ],
@@ -28036,7 +26972,7 @@
                 "grid_spec": {
                     "grid_x": {
                         "type": "AutoGrid",
-                        "min_steps_per_wvl": 20.0,
+                        "min_steps_per_wvl": 16.0,
                         "max_scale": 1.4,
                         "mesher": {
                             "type": "GradedMesher"
@@ -28044,7 +26980,7 @@
                     },
                     "grid_y": {
                         "type": "AutoGrid",
-                        "min_steps_per_wvl": 20.0,
+                        "min_steps_per_wvl": 16.0,
                         "max_scale": 1.4,
                         "mesher": {
                             "type": "GradedMesher"
@@ -28052,7 +26988,7 @@
                     },
                     "grid_z": {
                         "type": "AutoGrid",
-                        "min_steps_per_wvl": 20.0,
+                        "min_steps_per_wvl": 16.0,
                         "max_scale": 1.4,
                         "mesher": {
                             "type": "GradedMesher"
@@ -28119,7 +27055,7 @@
             },
             "task_name": "l=9.90",
             "folder_name": "default",
-            "task_id": "5a6e4d8a-e2ae-46eb-8221-12759507bfa8",
+            "task_id": "8a214658-b67f-418d-ba04-f5896430b2d0",
             "callback_url": null
         },
         "l=10.60": {
@@ -29338,31 +28274,6 @@
                 "monitors": [
                     {
                         "center": [
-                            0.0,
-                            0.0,
-                            0.11
-                        ],
-                        "type": "FieldMonitor",
-                        "size": [
-                            "Infinity",
-                            "Infinity",
-                            0.0
-                        ],
-                        "name": "field",
-                        "freqs": [
-                            193414489407062.47
-                        ],
-                        "fields": [
-                            "Ex",
-                            "Ey",
-                            "Ez",
-                            "Hx",
-                            "Hy",
-                            "Hz"
-                        ]
-                    },
-                    {
-                        "center": [
                             -21.3,
                             4.0,
                             0.11
@@ -29374,37 +28285,6 @@
                             2.0
                         ],
                         "name": "in",
-                        "freqs": [
-                            193414489407062.47
-                        ],
-                        "mode_spec": {
-                            "num_modes": 1,
-                            "target_neff": null,
-                            "num_pml": [
-                                0,
-                                0
-                            ],
-                            "sort_by": "largest_neff",
-                            "angle_theta": 0.0,
-                            "angle_phi": 0.0,
-                            "bend_radius": null,
-                            "bend_axis": null,
-                            "type": "ModeSpec"
-                        }
-                    },
-                    {
-                        "center": [
-                            -21.3,
-                            4.0,
-                            0.11
-                        ],
-                        "type": "ModeMonitor",
-                        "size": [
-                            0.0,
-                            3.0,
-                            2.0
-                        ],
-                        "name": "reflect_top",
                         "freqs": [
                             193414489407062.47
                         ],
@@ -29520,7 +28400,7 @@
                 "grid_spec": {
                     "grid_x": {
                         "type": "AutoGrid",
-                        "min_steps_per_wvl": 20.0,
+                        "min_steps_per_wvl": 16.0,
                         "max_scale": 1.4,
                         "mesher": {
                             "type": "GradedMesher"
@@ -29528,7 +28408,7 @@
                     },
                     "grid_y": {
                         "type": "AutoGrid",
-                        "min_steps_per_wvl": 20.0,
+                        "min_steps_per_wvl": 16.0,
                         "max_scale": 1.4,
                         "mesher": {
                             "type": "GradedMesher"
@@ -29536,7 +28416,7 @@
                     },
                     "grid_z": {
                         "type": "AutoGrid",
-                        "min_steps_per_wvl": 20.0,
+                        "min_steps_per_wvl": 16.0,
                         "max_scale": 1.4,
                         "mesher": {
                             "type": "GradedMesher"
@@ -29603,7 +28483,7 @@
             },
             "task_name": "l=10.60",
             "folder_name": "default",
-            "task_id": "c7d76e81-6f28-4fc9-a2d1-9552f9fe78c6",
+            "task_id": "d03c1c2a-66d3-4433-82d6-9f73f3e633a8",
             "callback_url": null
         },
         "l=11.30": {
@@ -30822,31 +29702,6 @@
                 "monitors": [
                     {
                         "center": [
-                            0.0,
-                            0.0,
-                            0.11
-                        ],
-                        "type": "FieldMonitor",
-                        "size": [
-                            "Infinity",
-                            "Infinity",
-                            0.0
-                        ],
-                        "name": "field",
-                        "freqs": [
-                            193414489407062.47
-                        ],
-                        "fields": [
-                            "Ex",
-                            "Ey",
-                            "Ez",
-                            "Hx",
-                            "Hy",
-                            "Hz"
-                        ]
-                    },
-                    {
-                        "center": [
                             -21.65,
                             4.0,
                             0.11
@@ -30858,37 +29713,6 @@
                             2.0
                         ],
                         "name": "in",
-                        "freqs": [
-                            193414489407062.47
-                        ],
-                        "mode_spec": {
-                            "num_modes": 1,
-                            "target_neff": null,
-                            "num_pml": [
-                                0,
-                                0
-                            ],
-                            "sort_by": "largest_neff",
-                            "angle_theta": 0.0,
-                            "angle_phi": 0.0,
-                            "bend_radius": null,
-                            "bend_axis": null,
-                            "type": "ModeSpec"
-                        }
-                    },
-                    {
-                        "center": [
-                            -21.65,
-                            4.0,
-                            0.11
-                        ],
-                        "type": "ModeMonitor",
-                        "size": [
-                            0.0,
-                            3.0,
-                            2.0
-                        ],
-                        "name": "reflect_top",
                         "freqs": [
                             193414489407062.47
                         ],
@@ -31004,7 +29828,7 @@
                 "grid_spec": {
                     "grid_x": {
                         "type": "AutoGrid",
-                        "min_steps_per_wvl": 20.0,
+                        "min_steps_per_wvl": 16.0,
                         "max_scale": 1.4,
                         "mesher": {
                             "type": "GradedMesher"
@@ -31012,7 +29836,7 @@
                     },
                     "grid_y": {
                         "type": "AutoGrid",
-                        "min_steps_per_wvl": 20.0,
+                        "min_steps_per_wvl": 16.0,
                         "max_scale": 1.4,
                         "mesher": {
                             "type": "GradedMesher"
@@ -31020,7 +29844,7 @@
                     },
                     "grid_z": {
                         "type": "AutoGrid",
-                        "min_steps_per_wvl": 20.0,
+                        "min_steps_per_wvl": 16.0,
                         "max_scale": 1.4,
                         "mesher": {
                             "type": "GradedMesher"
@@ -31087,7 +29911,7 @@
             },
             "task_name": "l=11.30",
             "folder_name": "default",
-            "task_id": "10033238-24ed-423f-9fef-8907567f9638",
+            "task_id": "9f0b5d49-8ea6-4a52-9559-a001a9d856ad",
             "callback_url": null
         },
         "l=12.00": {
@@ -32306,31 +31130,6 @@
                 "monitors": [
                     {
                         "center": [
-                            0.0,
-                            0.0,
-                            0.11
-                        ],
-                        "type": "FieldMonitor",
-                        "size": [
-                            "Infinity",
-                            "Infinity",
-                            0.0
-                        ],
-                        "name": "field",
-                        "freqs": [
-                            193414489407062.47
-                        ],
-                        "fields": [
-                            "Ex",
-                            "Ey",
-                            "Ez",
-                            "Hx",
-                            "Hy",
-                            "Hz"
-                        ]
-                    },
-                    {
-                        "center": [
                             -22.0,
                             4.0,
                             0.11
@@ -32342,37 +31141,6 @@
                             2.0
                         ],
                         "name": "in",
-                        "freqs": [
-                            193414489407062.47
-                        ],
-                        "mode_spec": {
-                            "num_modes": 1,
-                            "target_neff": null,
-                            "num_pml": [
-                                0,
-                                0
-                            ],
-                            "sort_by": "largest_neff",
-                            "angle_theta": 0.0,
-                            "angle_phi": 0.0,
-                            "bend_radius": null,
-                            "bend_axis": null,
-                            "type": "ModeSpec"
-                        }
-                    },
-                    {
-                        "center": [
-                            -22.0,
-                            4.0,
-                            0.11
-                        ],
-                        "type": "ModeMonitor",
-                        "size": [
-                            0.0,
-                            3.0,
-                            2.0
-                        ],
-                        "name": "reflect_top",
                         "freqs": [
                             193414489407062.47
                         ],
@@ -32488,7 +31256,7 @@
                 "grid_spec": {
                     "grid_x": {
                         "type": "AutoGrid",
-                        "min_steps_per_wvl": 20.0,
+                        "min_steps_per_wvl": 16.0,
                         "max_scale": 1.4,
                         "mesher": {
                             "type": "GradedMesher"
@@ -32496,7 +31264,7 @@
                     },
                     "grid_y": {
                         "type": "AutoGrid",
-                        "min_steps_per_wvl": 20.0,
+                        "min_steps_per_wvl": 16.0,
                         "max_scale": 1.4,
                         "mesher": {
                             "type": "GradedMesher"
@@ -32504,7 +31272,7 @@
                     },
                     "grid_z": {
                         "type": "AutoGrid",
-                        "min_steps_per_wvl": 20.0,
+                        "min_steps_per_wvl": 16.0,
                         "max_scale": 1.4,
                         "mesher": {
                             "type": "GradedMesher"
@@ -32571,7 +31339,7 @@
             },
             "task_name": "l=12.00",
             "folder_name": "default",
-            "task_id": "57c831b4-cbc0-4f57-aaee-1e620bd1a9cf",
+            "task_id": "abf40ab8-a1a8-42cd-aa6b-897f4741523b",
             "callback_url": null
         }
     },
