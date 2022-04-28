@@ -870,3 +870,21 @@ def test_deep_copy():
     s_kwargs = s.copy(deep=False, update={"geometry": Sphere(radius=1.0)})
     assert id(s.medium) == id(s_kwargs.medium)
     assert id(s.geometry) != id(s_kwargs.geometry)
+
+    # behavior of modifying attributes
+    s_default = s.copy()
+    s_default.geometry = Sphere(radius=1.0)
+    assert id(s.geometry) != id(s_default.geometry)
+
+    s_shallow = s.copy(deep=False)
+    s_shallow.geometry = Sphere(radius=1.0)
+    assert id(s.geometry) != id(s_shallow.geometry)
+
+    # behavior of modifying attributes of attributes
+    s_default = s.copy()
+    s_default.geometry.size = (2, 2, 2)
+    assert id(s.geometry) != id(s_default.geometry)
+
+    s_shallow = s.copy(deep=False)
+    s_shallow.geometry.size = (2, 2, 2)
+    assert id(s.geometry) == id(s_shallow.geometry)
