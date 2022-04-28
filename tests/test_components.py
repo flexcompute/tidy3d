@@ -725,15 +725,34 @@ def test_FieldSource():
     s = GaussianBeam(size=(0, 1, 1), source_time=g, pol_angle=np.pi / 2, direction="+")
     s.plot(y=0)
 
+    # test we can make an astigmatic gaussian beam
+    s = AstigmaticGaussianBeam(
+        size=(0, 1, 1),
+        source_time=g,
+        pol_angle=np.pi / 2,
+        direction="+",
+        waist_sizes=(0.2, 0.4),
+        waist_distances=(0.1, 0.3),
+    )
+
     # test we can make mode source
     s = ModeSource(size=(0, 1, 1), direction="+", source_time=g, mode_spec=mode_spec, mode_index=0)
     s.plot(y=0)
 
-    # test that non-planar geometry crashes plane wave and gaussian beam
+    # test that non-planar geometry crashes plane wave and gaussian beams
     with pytest.raises(ValidationError) as e_info:
         s = PlaneWave(size=(1, 1, 1), source_time=g, pol_angle=np.pi / 2, direction="+")
     with pytest.raises(ValidationError) as e_info:
         s = GaussianBeam(size=(1, 1, 1), source_time=g, pol_angle=np.pi / 2, direction="+")
+    with pytest.raises(ValidationError) as e_info:
+        s = AstigmaticGaussianBeam(
+            size=(1, 1, 1),
+            source_time=g,
+            pol_angle=np.pi / 2,
+            direction="+",
+            waist_sizes=(0.2, 0.4),
+            waist_distances=(0.1, 0.3),
+        )
     with pytest.raises(ValidationError) as e_info:
         s = ModeSource(size=(1, 1, 1), source_time=g, mode_spec=mode_spec)
 
