@@ -53,13 +53,14 @@ def test_webapi_1_upload():
     task_id = web.upload(
         simulation=sim_original, task_name="test_webapi", callback_url=CALLBACK_URL
     )
+    task_info = web.get_info(task_id)
+    assert task_info.callbackUrl == CALLBACK_URL
     task_id_global.append(task_id)
 
 
 def test_webapi_2_get_info():
     """test that we can grab information about task"""
     task_id = _get_gloabl_task_id()
-    _ = web.get_info(task_id)
 
 
 def test_webapi_3_start():

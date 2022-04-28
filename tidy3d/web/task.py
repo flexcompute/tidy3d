@@ -89,6 +89,7 @@ class TaskInfo(TaskBase):
     shutoffNt: Any = None
     startSolverTime: Any = None
     totalSolverTime: Any = None
+    callbackUrl: str = None
 
 
 class RunInfo(TaskBase):
