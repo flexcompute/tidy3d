@@ -608,9 +608,46 @@ class GaussianBeam(AngledFieldSource, PlanarSource):
     )
 
 
+class AstigmaticGaussianBeam(AngledFieldSource, PlanarSource):
+    """This class implements the simple astigmatic Gaussian beam described in Kochkina et al.,
+    Applied Optics, vol. 52, issue 24, 2013. The simple astigmatic Guassian distribution allows
+    both an elliptical intensity profile and different waist locations for the two principal axes
+    of the ellipse. When equal waist sizes and equal waist distances are specified in the two
+    directions, this source becomes equivalent to :class:`GaussianBeam`.
+
+    Example
+    -------
+    >>> pulse = GaussianPulse(freq0=200e12, fwidth=20e12)
+    >>> gauss = AstigmaticGaussianBeam(
+    ...     size=(0,3,3),
+    ...     source_time=pulse,
+    ...     pol_angle=np.pi / 2,
+    ...     direction='+',
+    ...     waist_sizes=(1.0, 2.0),
+    ...     waist_distances = (3.0, 4.0))
+    """
+
+    waist_sizes: Tuple[pydantic.PositiveFloat, pydantic.PositiveFloat] = pydantic.Field(
+        (1.0, 1.0),
+        title="Waist sizes",
+        description="Size of the beam at the waist in the local x and y directions.",
+        units=MICROMETER,
+    )
+
+    waist_distances: Tuple[float, float] = pydantic.Field(
+        (0.0, 0.0),
+        title="Waist distances",
+        description="Distance to the beam waist along the propagation direction "
+        "for the waist sizes in the local x and y directions.",
+        units=MICROMETER,
+    )
+
+
 class TFSF(AngledFieldSource, VolumeSource):
     """Total field scattered field with a plane wave field in a volume."""
 
 
 # sources allowed in Simulation.sources
-SourceType = Union[UniformCurrentSource, PointDipole, GaussianBeam, ModeSource, PlaneWave]
+SourceType = Union[
+    UniformCurrentSource, PointDipole, GaussianBeam, AstigmaticGaussianBeam, ModeSource, PlaneWave
+]
