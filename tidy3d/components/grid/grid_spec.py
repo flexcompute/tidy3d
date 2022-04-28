@@ -25,7 +25,7 @@ class GridSpec1d(Tidy3dBaseModel, ABC):
         self,
         axis: Axis,
         structures: List[Structure],
-        symmetry: Symmetry,
+        symmetry: Tuple[Symmetry, Symmetry, Symmetry],
         wavelength: pd.PositiveFloat,
         num_pml_layers: Tuple[pd.NonNegativeInt, pd.NonNegativeInt],
     ) -> Coords1D:
@@ -38,8 +38,9 @@ class GridSpec1d(Tidy3dBaseModel, ABC):
             Axis of this direction.
         structures : List[Structure]
             List of structures present in simulation, the first one being the simulation domain.
-        symmetry : Symmetry
-            Reflection symmetry across a plane bisecting the simulation domain normal to the axis.
+        symmetry : Tuple[Symmetry, Symmetry, Symmetry]
+            Reflection symmetry across a plane bisecting the simulation domain
+            normal to each of the three axes.
         wavelength : float
             Free-space wavelength.
         num_pml_layers : Tuple[int, int]
@@ -53,7 +54,7 @@ class GridSpec1d(Tidy3dBaseModel, ABC):
 
         # Determine if one should apply periodic boundary condition.
         # This should only affect auto nonuniform mesh generation for now.
-        is_periodic = sum(num_pml_layers) == 0
+        is_periodic = sum(num_pml_layers) == 0 and symmetry[axis] == 0
 
         # generate boundaries
         bound_coords = self._make_coords_initial(
@@ -66,7 +67,7 @@ class GridSpec1d(Tidy3dBaseModel, ABC):
 
         # incooperate symmetries
         # print(bound_coords)
-        if symmetry != 0:
+        if symmetry[axis] != 0:
             # Offset to center if symmetry present
             # print(structures[0])
             center = structures[0].geometry.center[axis]
@@ -289,7 +290,7 @@ class AutoGrid(GridSpec1d):
         description="The type of mesher to use to generate the grid automatically.",
     )
 
-    def _make_coords_initial(  # pylint:disable=too-many-arguments,arguments-differ
+    def _make_coords_initial(  # pylint:disable=too-many-arguments,arguments-differ,too-many-locals
         self,
         axis: Axis,
         structures: List[Structure],
@@ -307,8 +308,9 @@ class AutoGrid(GridSpec1d):
             List of structures present in simulation.
         wavelength : float
             Free-space wavelength.
-        symmetry : Symmetry
-            Reflection symmetry across a plane bisecting the simulation domain normal to the axis.
+        symmetry : Tuple[Symmetry, Symmetry, Symmetry]
+            Reflection symmetry across a plane bisecting the simulation domain
+            normal to each of the three axes.
         is_periodic : bool
             Apply periodic boundary condition or not.
 
@@ -320,14 +322,17 @@ class AutoGrid(GridSpec1d):
 
         sim_cent = list(structures[0].geometry.center)
         sim_size = list(structures[0].geometry.size)
-        if symmetry != 0:
-            sim_cent[axis] += sim_size[axis] / 4
-            sim_size[axis] /= 2
+        for dim, sym in enumerate(symmetry):
+            if sym != 0:
+                sim_cent[dim] += sim_size[dim] / 4
+                sim_size[dim] /= 2
 
         struct_list = [
             Structure(geometry=Box(center=sim_cent, size=sim_size), medium=structures[0].medium)
         ]
-        struct_list += structures[1:]
+        for structure in structures[1:]:
+            if struct_list[0].geometry.intersects(structure.geometry):
+                struct_list.append(structure)
 
         # parse structures
         interval_coords, max_dl_list = self.mesher.parse_structures(
@@ -466,21 +471,21 @@ class GridSpec(Tidy3dBaseModel):
         coords_x = self.grid_x.make_coords(
             axis=0,
             structures=structures + self.override_structures,
-            symmetry=symmetry[0],
+            symmetry=symmetry,
             wavelength=wavelength,
             num_pml_layers=num_pml_layers[0],
         )
         coords_y = self.grid_y.make_coords(
             axis=1,
             structures=structures + self.override_structures,
-            symmetry=symmetry[1],
+            symmetry=symmetry,
             wavelength=wavelength,
             num_pml_layers=num_pml_layers[1],
         )
         coords_z = self.grid_z.make_coords(
             axis=2,
             structures=structures + self.override_structures,
-            symmetry=symmetry[2],
+            symmetry=symmetry,
             wavelength=wavelength,
             num_pml_layers=num_pml_layers[2],
         )
