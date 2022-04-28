@@ -66,17 +66,13 @@ class GridSpec1d(Tidy3dBaseModel, ABC):
         )
 
         # incooperate symmetries
-        # print(bound_coords)
         if symmetry[axis] != 0:
             # Offset to center if symmetry present
-            # print(structures[0])
             center = structures[0].geometry.center[axis]
             center_ind = np.argmin(np.abs(center - bound_coords))
-            # print(center_ind, bound_coords[center_ind])
             bound_coords += center - bound_coords[center_ind]
             bound_coords = bound_coords[bound_coords >= center]
             bound_coords = np.append(2 * center - bound_coords[:0:-1], bound_coords)
-        # print(bound_coords)
 
         # Add PML layers in using dl on edges
         bound_coords = self._add_pml_to_bounds(num_pml_layers, bound_coords)
@@ -330,6 +326,7 @@ class AutoGrid(GridSpec1d):
         struct_list = [
             Structure(geometry=Box(center=sim_cent, size=sim_size), medium=structures[0].medium)
         ]
+        # Remove structures that are outside the simulation domain (with symmetry applied)
         for structure in structures[1:]:
             if struct_list[0].geometry.intersects(structure.geometry):
                 struct_list.append(structure)

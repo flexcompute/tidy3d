@@ -42,7 +42,7 @@ class GradedMesher(Mesher):
     """Implements automatic nonuniform meshing with a set minimum steps per wavelength and
     a graded mesh expanding from higher- to lower-resolution regions."""
 
-    # pylint:disable=too-many-statements,too-many-locals
+    # pylint:disable=too-many-statements,too-many-locals,too-many-branches
     def parse_structures(
         self,
         axis: Axis,
@@ -96,66 +96,71 @@ class GradedMesher(Mesher):
         if len(structures) == 1:
             return (domain_bounds, medium_steps)
 
-        # Coordinates of all bounding boxes
-        interval_coords = np.array(domain_bounds)
-
-        # Bounding squares in the plane normal to axis (xmin, ymin, xmax, ymax)
-        _, pinds = structures[0].geometry.pop_axis([0, 1, 2], axis=axis)
-        sim_plane_bbox = [sim_bmin[pinds[0]], sim_bmin[pinds[1]]]
-        sim_plane_bbox += [sim_bmax[pinds[0]], sim_bmax[pinds[1]]]
-        plane_bbox = [np.array(sim_plane_bbox)]  # will have len equal to len(structures)
-
-        # list of indexes of structures which are contained in each interval
-        interval_structs = [[0]]  # will have len equal to len(interval_coords) - 1
-
-        # list of indexes of structures that are contained in 2D inside another structure
-        struct_contains = [[]]  # will have len equal to len(structures)
-
-        for struct_ind, structure in enumerate(structures[1:]):
-            # get 3D bounding box and write 2D bouding box
+        # Bounding boxes with the meshing axis rotated to z
+        struct_bbox = []
+        for structure in structures:
+            # Get 3D bounding box and rotate axes
             bmin, bmax = structure.geometry.bounds
-            bounds_2d = np.array([bmin[pinds[0]], bmin[pinds[1]], bmax[pinds[0]], bmax[pinds[1]]])
-            plane_bbox.append(bounds_2d)
+            bmin_ax, bmin_plane = structure.geometry.pop_axis(bmin, axis=axis)
+            bmax_ax, bmax_plane = structure.geometry.pop_axis(bmax, axis=axis)
+            bounds = np.array([list(bmin_plane) + [bmin_ax], list(bmax_plane) + [bmax_ax]])
+            struct_bbox.append(bounds)
 
-            # indexes of structures that are fully covered in 2D by the current structure
-            struct_contain_inds = []
-            for ind, plane_bounds in enumerate(plane_bbox[:-1]):
-                # faster to do the comparison this way than with e.g. np.all
+        # Array of coordinates of all intervals; add the simulation domain bounds already
+        interval_coords = np.array(domain_bounds)
+        # List of indexes of structures which are present in each interval
+        interval_structs = [[0]]  # will have len equal to len(interval_coords) - 1
+        # List of indexes of structures that every structre contains in 2D
+        struct_contains = []  # will have len equal to len(structures)
+
+        for struct_ind in range(len(structures) - 1, 0, -1):
+            structure = structures[struct_ind]
+            bbox = struct_bbox[struct_ind]
+
+            # indexes of structures that the current structure contains in 2D
+            struct_contains_inds = []
+            for ind, bounds in enumerate(struct_bbox[: struct_ind - 1]):
                 if (
-                    bounds_2d[0] <= plane_bounds[0]
-                    and bounds_2d[1] <= plane_bounds[1]
-                    and bounds_2d[2] >= plane_bounds[2]
-                    and bounds_2d[3] >= plane_bounds[3]
+                    bbox[0, 0] <= bounds[0, 0]
+                    and bbox[0, 1] <= bounds[0, 1]
+                    and bbox[1, 0] >= bounds[1, 0]
+                    and bbox[1, 1] >= bounds[1, 1]
                 ):
-                    struct_contain_inds.append(ind)
-            struct_contains.append(struct_contain_inds)
+                    struct_contains_inds.append(ind)
+            struct_contains.append(struct_contains_inds)
 
-            # figure out where to place the bounding box coordinates of current structure
-            coord_min, coord_max = bmin[axis], bmax[axis]
-            indsmin = np.argwhere(coord_min < interval_coords)
-            indsmax = np.argwhere(coord_max > interval_coords)
-
-            # Exit if structure is outside of domain bounds
-            if (
-                indsmin.size == 0
-                or indsmax.size == 0
-                or np.any(bounds_2d[:2] >= sim_plane_bbox[2:])
-                or np.any(bounds_2d[2:] <= sim_plane_bbox[:2])
-            ):
-                continue
-
-            # Add current structure bounding box coordinates
+            # Figure out where to place the bounding box coordinates of current structure
+            indsmin = np.argwhere(bbox[0, 2] < interval_coords)
             indmin = int(indsmin[0])
-            indmax = int(indsmax[-1]) + 2
-            interval_coords = np.insert(interval_coords, indmin, coord_min)
-            interval_coords = np.insert(interval_coords, indmax, coord_max)
-            # Copy the structure containment list to the newly created interval
-            structs_list_copy = interval_structs[max(0, indmin - 1)].copy()
-            interval_structs.insert(indmin, structs_list_copy)
-            structs_list_copy = interval_structs[min(indmax - 1, len(interval_structs) - 1)].copy()
-            interval_structs.insert(indmax, structs_list_copy)
+            bbox0 = np.copy(bbox)
+            bbox0[1, 2] = bbox0[0, 2]
+            if not self.is_contained(bbox0, struct_bbox[struct_ind + 1 :]):
+                # Add current structure bounding box coordinates
+                interval_coords = np.insert(interval_coords, indmin, bbox[0, 2])
+                # Copy the structure containment list to the newly created interval
+                struct_list = interval_structs[max(0, indmin - 1)]
+                interval_structs.insert(indmin, struct_list.copy())
+
+            indsmax = np.argwhere(bbox[1, 2] > interval_coords)
+            indmax = int(indsmax[-1])
+            bbox0 = np.copy(bbox)
+            bbox0[0, 2] = bbox0[1, 2]
+            if not self.is_contained(bbox0, struct_bbox[struct_ind + 1 :]):
+                indmax += 1
+                # Add current structure bounding box coordinates
+                interval_coords = np.insert(interval_coords, indmax, bbox[1, 2])
+                # Copy the structure containment list to the newly created interval
+                struct_list = interval_structs[min(indmax - 1, len(interval_structs) - 1)]
+                interval_structs.insert(indmax, struct_list.copy())
+
+            # Add the structure index to all intervals that it spans
             for interval_ind in range(indmin, indmax):
-                interval_structs[interval_ind].append(struct_ind + 1)
+                interval_structs[interval_ind].append(struct_ind)
+
+        # The simulation domain is the lowest structure and doesn't contain anything
+        struct_contains.append([])
+        # Reverse to match the order in the structures list
+        struct_contains = struct_contains[::-1]
 
         # Truncate intervals to domain bounds
         b_array = np.array(interval_coords)
@@ -173,14 +178,12 @@ class GradedMesher(Mesher):
                 structs_filter.append(interval_structs[coord_ind])
         interval_coords = np.array(coords_filter)
         interval_structs = structs_filter
-        # print(interval_structs)
-        # print(struct_contains)
 
         # Compute the maximum allowed step size in each interval
         max_steps = []
         for coord_ind, _ in enumerate(interval_coords[:-1]):
-            # Structure indexes inside current interval; reverse so first structure on top
-            struct_list = interval_structs[coord_ind][::-1]
+            # Structure indexes inside current intervall in order of latter structures come first
+            struct_list = interval_structs[coord_ind]
             struct_list_filter = []
             # Handle containment
             for ind, struct_ind in enumerate(struct_list):
@@ -193,13 +196,32 @@ class GradedMesher(Mesher):
                 contains = struct_contains[struct_ind]
                 struct_list = [ind for ind in struct_list if ind not in contains]
 
-            # print(struct_list_filter)
-
             # Define the max step as the minimum over all medium steps of media in this interval
             max_step = np.amin(medium_steps[struct_list_filter])
             max_steps.append(float(max_step))
 
         return interval_coords, np.array(max_steps)
+
+    @staticmethod
+    def is_contained(bbox0, bbox_list):
+        """Return True if bbox0 is contained in any of the bbox_list, or False otherwise.
+        It can be much faster to write out the conditions one by one than to use e.g. np.all.
+        """
+        contained = False
+        for bounds in bbox_list:
+            if all(
+                [
+                    bbox0[0, 0] >= bounds[0, 0],
+                    bbox0[1, 0] <= bounds[1, 0],
+                    bbox0[0, 1] >= bounds[0, 1],
+                    bbox0[1, 1] <= bounds[1, 1],
+                    bbox0[0, 2] >= bounds[0, 2],
+                    bbox0[1, 2] <= bounds[1, 2],
+                ]
+            ):
+                contained = True
+
+        return contained
 
     def make_grid_multiple_intervals(  # pylint:disable=too-many-locals
         self,
