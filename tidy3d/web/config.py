@@ -1,12 +1,9 @@
 """ sets configuration options for web interface """
-import os
 from typing import Any, Dict
+import pydantic as pd
 
-from dataclasses import dataclass
 
-
-@dataclass
-class WebConfig:  # pylint:disable=too-many-instance-attributes
+class WebConfig(pd.BaseModel):  # pylint:disable=too-many-instance-attributes
     """configuration of webapi"""
 
     s3_region: str
@@ -57,14 +54,13 @@ ConfigProd = WebConfig(
     website_endpoint="https://tidy3d.simulation.cloud",
 )
 
-# default one to import
-DEFAULT_CONFIG = ConfigProd
+WEB_CONFIGS = {
+    "prod": ConfigProd,
+    "preprod": ConfigPreProd,
+    "uat": ConfigUat,
+    "dev": ConfigDev,
+}
 
-if os.environ.get("TIDY3D_ENV") == "dev":
-    DEFAULT_CONFIG = ConfigDev
-elif os.environ.get("TIDY3D_ENV") == "uat":
-    DEFAULT_CONFIG = ConfigUat
-elif os.environ.get("TIDY3D_ENV") == "preprod":
-    DEFAULT_CONFIG = ConfigPreProd
-elif os.environ.get("TIDY3D_ENV") == "prod":
-    DEFAULT_CONFIG = ConfigProd
+# default one to import
+DEFAULT_CONFIG_KEY = "prod"
+DEFAULT_CONFIG = WEB_CONFIGS[DEFAULT_CONFIG_KEY]
