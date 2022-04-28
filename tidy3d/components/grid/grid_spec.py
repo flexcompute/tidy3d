@@ -12,6 +12,7 @@ from ..base import Tidy3dBaseModel
 from ..types import Axis, Symmetry
 from ..source import SourceType
 from ..structure import Structure
+from ..geometry import Box
 from ...log import SetupError, log
 from ...constants import C_0, MICROMETER
 
@@ -22,8 +23,6 @@ class GridSpec1d(Tidy3dBaseModel, ABC):
 
     def make_coords(  # pylint:disable = too-many-arguments
         self,
-        center: float,
-        size: float,
         axis: Axis,
         structures: List[Structure],
         symmetry: Symmetry,
@@ -35,17 +34,12 @@ class GridSpec1d(Tidy3dBaseModel, ABC):
 
         Parameters
         ----------
-        center : float
-            Center of simulation domain along a given axis.
-        size : float
-            Size of simulation domain along a given axis.
         axis : Axis
             Axis of this direction.
         structures : List[Structure]
-            List of structures present in simulation.
+            List of structures present in simulation, the first one being the simulation domain.
         symmetry : Symmetry
-            Reflection symmetry across a plane bisecting the simulation domain normal
-            to a given axis.
+            Reflection symmetry across a plane bisecting the simulation domain normal to the axis.
         wavelength : float
             Free-space wavelength.
         num_pml_layers : Tuple[int, int]
@@ -63,16 +57,25 @@ class GridSpec1d(Tidy3dBaseModel, ABC):
 
         # generate boundaries
         bound_coords = self._make_coords_initial(
-            center, size, axis, structures, wavelength, is_periodic
+            axis=axis,
+            structures=structures,
+            wavelength=wavelength,
+            symmetry=symmetry,
+            is_periodic=is_periodic,
         )
 
         # incooperate symmetries
+        # print(bound_coords)
         if symmetry != 0:
             # Offset to center if symmetry present
+            # print(structures[0])
+            center = structures[0].geometry.center[axis]
             center_ind = np.argmin(np.abs(center - bound_coords))
+            # print(center_ind, bound_coords[center_ind])
             bound_coords += center - bound_coords[center_ind]
             bound_coords = bound_coords[bound_coords >= center]
             bound_coords = np.append(2 * center - bound_coords[:0:-1], bound_coords)
+        # print(bound_coords)
 
         # Add PML layers in using dl on edges
         bound_coords = self._add_pml_to_bounds(num_pml_layers, bound_coords)
@@ -81,9 +84,9 @@ class GridSpec1d(Tidy3dBaseModel, ABC):
     @abstractmethod
     def _make_coords_initial(
         self,
-        center: float,
-        size: pd.NonNegativeFloat,
-        *args,
+        axis: Axis,
+        structures: List[Structure],
+        **kwargs,
     ) -> Coords1D:
         """Generate 1D coords to be used as grid boundaries, based on simulation parameters.
         Symmetry, PML etc. are not considered in this method.
@@ -92,11 +95,9 @@ class GridSpec1d(Tidy3dBaseModel, ABC):
 
         Parameters
         ----------
-        center : float
-            Center of simulation domain along a given axis.
-        size : float
-            Sie of simulation domain along a given axis.
-        *args
+        structures : List[Structure]
+            List of structures present in simulation, the first one being the simulation domain.
+        **kwargs
             Other arguments
 
         Returns
@@ -152,19 +153,19 @@ class UniformGrid(GridSpec1d):
 
     def _make_coords_initial(
         self,
-        center: float,
-        size: float,
-        *args,
+        axis: Axis,
+        structures: List[Structure],
+        **kwargs,
     ) -> Coords1D:
         """Uniform 1D coords to be used as grid boundaries.
 
         Parameters
         ----------
-        center : float
-            Center of simulation domain along a given axis.
-        size : float
-            Size of simulation domain along a given axis.
-        *args:
+        axis : Axis
+            Axis of this direction.
+        structures : List[Structure]
+            List of structures present in simulation, the first one being the simulation domain.
+        **kwargs:
             Other arguments all go here.
 
         Returns
@@ -172,6 +173,8 @@ class UniformGrid(GridSpec1d):
         :class:`.Coords1D`:
             1D coords to be used as grid boundaries.
         """
+
+        center, size = structures[0].geometry.center[axis], structures[0].geometry.size[axis]
 
         # Take a number of steps commensurate with the size; make dl a bit smaller if needed
         num_cells = int(np.ceil(size / self.dl))
@@ -210,19 +213,19 @@ class CustomGrid(GridSpec1d):
 
     def _make_coords_initial(
         self,
-        center: float,
-        size: float,
-        *args,
+        axis: Axis,
+        structures: List[Structure],
+        **kwargs,
     ) -> Coords1D:
         """Customized 1D coords to be used as grid boundaries.
 
         Parameters
         ----------
-        center : float
-            Center of simulation domain along a given axis.
-        size : float
-            Size of simulation domain along a given axis.
-        *args
+        axis : Axis
+            Axis of this direction.
+        structures : List[Structure]
+            List of structures present in simulation, the first one being the simulation domain.
+        *kwargs
             Other arguments all go here.
 
         Returns
@@ -230,6 +233,8 @@ class CustomGrid(GridSpec1d):
         :class:`.Coords1D`:
             1D coords to be used as grid boundaries.
         """
+
+        center, size = structures[0].geometry.center[axis], structures[0].geometry.size[axis]
 
         # get bounding coordinates
         dl = np.array(self.dl)
@@ -284,29 +289,26 @@ class AutoGrid(GridSpec1d):
         description="The type of mesher to use to generate the grid automatically.",
     )
 
-    def _make_coords_initial(  # pylint:disable = arguments-differ, too-many-arguments
+    def _make_coords_initial(  # pylint:disable=too-many-arguments,arguments-differ
         self,
-        center: float,
-        size: float,
         axis: Axis,
         structures: List[Structure],
         wavelength: float,
+        symmetry: Symmetry,
         is_periodic: bool,
     ) -> Coords1D:
         """Customized 1D coords to be used as grid boundaries.
 
         Parameters
         ----------
-        center : float
-            Center of simulation domain along a given axis.
-        size : float
-            Size of simulation domain along a given axis.
         axis : Axis
             Axis of this direction.
         structures : List[Structure]
             List of structures present in simulation.
         wavelength : float
             Free-space wavelength.
+        symmetry : Symmetry
+            Reflection symmetry across a plane bisecting the simulation domain normal to the axis.
         is_periodic : bool
             Apply periodic boundary condition or not.
 
@@ -316,14 +318,25 @@ class AutoGrid(GridSpec1d):
             1D coords to be used as grid boundaries.
         """
 
+        sim_cent = list(structures[0].geometry.center)
+        sim_size = list(structures[0].geometry.size)
+        if symmetry != 0:
+            sim_cent[axis] += sim_size[axis] / 4
+            sim_size[axis] /= 2
+
+        struct_list = [
+            Structure(geometry=Box(center=sim_cent, size=sim_size), medium=structures[0].medium)
+        ]
+        struct_list += structures[1:]
+
         # parse structures
         interval_coords, max_dl_list = self.mesher.parse_structures(
-            axis, structures, wavelength, self.min_steps_per_wvl
+            axis, struct_list, wavelength, self.min_steps_per_wvl
         )
         # Put just a single pixel if 2D-like simulation
         if interval_coords.size == 1:
             dl = wavelength / self.min_steps_per_wvl
-            return np.array([center - dl / 2, center + dl / 2])
+            return np.array([sim_cent[axis] - dl / 2, sim_cent[axis] + dl / 2])
 
         # generate mesh steps
         interval_coords = np.array(interval_coords).flatten()
@@ -444,8 +457,6 @@ class GridSpec(Tidy3dBaseModel):
             Entire simulation grid.
         """
 
-        center, size = structures[0].geometry.center, structures[0].geometry.size
-
         # Set up wavelength for automatic mesh generation if needed.
         wavelength = self.wavelength
         if self.wavelength is None and self.auto_grid_used:
@@ -453,8 +464,6 @@ class GridSpec(Tidy3dBaseModel):
             log.info(f"Auto meshing using wavelength {wavelength:1.4f} defined from sources.")
 
         coords_x = self.grid_x.make_coords(
-            center=center[0],
-            size=size[0],
             axis=0,
             structures=structures + self.override_structures,
             symmetry=symmetry[0],
@@ -462,8 +471,6 @@ class GridSpec(Tidy3dBaseModel):
             num_pml_layers=num_pml_layers[0],
         )
         coords_y = self.grid_y.make_coords(
-            center=center[1],
-            size=size[1],
             axis=1,
             structures=structures + self.override_structures,
             symmetry=symmetry[1],
@@ -471,8 +478,6 @@ class GridSpec(Tidy3dBaseModel):
             num_pml_layers=num_pml_layers[1],
         )
         coords_z = self.grid_z.make_coords(
-            center=center[2],
-            size=size[2],
             axis=2,
             structures=structures + self.override_structures,
             symmetry=symmetry[2],
