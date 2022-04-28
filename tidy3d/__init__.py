@@ -3,6 +3,8 @@ from concurrent.futures import ProcessPoolExecutor, process
 
 from rich import pretty, traceback
 
+from .config import config
+
 # version
 from .version import __version__
 
@@ -55,15 +57,24 @@ from . import plugins
 # get material `mat` and variant `var` as `material_library[mat][var]`
 from .material_library import material_library
 
-# logging
-from .log import log, set_logging_level, set_logging_file
-
 # for docs
 from .components.medium import AbstractMedium
 from .components.geometry import Geometry
 from .components.source import Source, SourceTime
 from .components.monitor import Monitor
 from .components.grid import YeeGrid, FieldGrid, Coords1D
+
+# logging
+from .log import log, set_logging_file
+
+
+def set_logging_level(level: str) -> None:
+    """Raise a warning here instead of setting the logging level."""
+    raise DeprecationWarning(
+        "``set_logging_level`` no longer supported. "
+        f"To set the logging level, call ``tidy3d.config.logging_level = {level}``."
+    )
+
 
 # make all stdout and errors pretty
 pretty.install()

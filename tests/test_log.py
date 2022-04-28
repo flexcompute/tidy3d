@@ -12,6 +12,7 @@ def test_log():
     log.error("test")
 
 
-def test_log_config():
+def _test_log_config():
+    """these are deprecated."""
     td.set_logging_level("debug")
     td.set_logging_file("test.log")
