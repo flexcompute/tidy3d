@@ -837,3 +837,36 @@ def test_mode_object_syms():
             )
         ],
     )
+
+
+def test_deep_copy():
+    """Make sure deep copying works as expceted with defaults."""
+    b = Box(size=(1, 1, 1))
+    m = Medium(permittivity=1)
+
+    s = Structure(
+        geometry=b,
+        medium=m,
+    )
+
+    s_shallow = s.copy(deep=False)
+
+    # with shallow copy, these should be the same objects
+    assert id(s.geometry) == id(s_shallow.geometry)
+    assert id(s.medium) == id(s_shallow.medium)
+
+    s_deep = s.copy(deep=True)
+
+    # with deep copy, these should be different objects
+    assert id(s.geometry) != id(s_deep.geometry)
+    assert id(s.medium) != id(s_deep.medium)
+
+    # default should be deep
+    s_default = s.copy()
+    assert id(s.geometry) != id(s_default.geometry)
+    assert id(s.medium) != id(s_default.medium)
+
+    # make sure other kwargs work, here we update the geometry to a sphere and shallow copy medium
+    s_kwargs = s.copy(deep=False, update={"geometry": Sphere(radius=1.0)})
+    assert id(s.medium) == id(s_kwargs.medium)
+    assert id(s.geometry) != id(s_kwargs.geometry)

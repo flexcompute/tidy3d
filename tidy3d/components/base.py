@@ -61,6 +61,10 @@ class Tidy3dBaseModel(pydantic.BaseModel):
             complex: lambda x: ComplexNumber(real=x.real, imag=x.imag),
         }
 
+    def copy(self, deep: bool = True, **kwargs) -> "Self":
+        """Copy a Tidy3dBaseModel.  With ``deep=True`` as default."""
+        return super().copy(deep=deep, **kwargs)
+
     def help(self, methods: bool = False) -> None:
         """Prints message describing the fields and methods of a :class:`Tidy3dBaseModel`.
 
