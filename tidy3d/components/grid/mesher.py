@@ -8,7 +8,7 @@ import numpy as np
 from scipy.optimize import root_scalar
 
 from ..base import Tidy3dBaseModel
-from ..types import Axis
+from ..types import Axis, Array
 from ..structure import Structure
 from ...log import SetupError, ValidationError
 from ...constants import C_0, fp_eps
@@ -24,17 +24,17 @@ class Mesher(Tidy3dBaseModel, ABC):
         structures: List[Structure],
         wavelength: pd.PositiveFloat,
         min_steps_per_wvl: pd.NonNegativeInt,
-    ) -> Tuple[np.ndarray, np.ndarray]:
+    ) -> Tuple[Array[float], Array[float]]:
         """Calculate the positions of all bounding box interfaces along a given axis."""
 
     @abstractmethod
     def make_grid_multiple_intervals(
         self,
-        max_dl_list: np.ndarray,
-        len_interval_list: np.ndarray,
+        max_dl_list: Array[float],
+        len_interval_list: Array[float],
         max_scale: float,
         is_periodic: bool,
-    ) -> List[np.ndarray]:
+    ) -> List[Array[float]]:
         """Create grid steps in multiple connecting intervals."""
 
 
@@ -42,14 +42,14 @@ class GradedMesher(Mesher):
     """Implements automatic nonuniform meshing with a set minimum steps per wavelength and
     a graded mesh expanding from higher- to lower-resolution regions."""
 
-    # pylint:disable=too-many-statements,too-many-locals,too-many-branches
+    # pylint:disable=too-many-statements,too-many-locals
     def parse_structures(
         self,
         axis: Axis,
         structures: List[Structure],
         wavelength: pd.PositiveFloat,
         min_steps_per_wvl: pd.NonNegativeInt,
-    ) -> Tuple[np.ndarray, np.ndarray]:
+    ) -> Tuple[Array[float], Array[float]]:
         """Calculate the positions of all bounding box interfaces along a given axis.
         In this implementation, in most cases the complexity should be O(len(structures)**2),
         although the worst-case complexity may approach O(len(structures)**3).
@@ -59,7 +59,7 @@ class GradedMesher(Mesher):
         ----------
         axis : Axis
             Axis index along which to operate.
-        structures : List[Structures]
+        structures : List[Structure]
             List of structures, with the simulation structure being the first item.
         wavelength : pd.PositiveFloat
             Wavelength to use for the step size and for dispersive media epsilon.
@@ -84,27 +84,15 @@ class GradedMesher(Mesher):
         sim_bmin, sim_bmax = structures[0].geometry.bounds
         domain_bounds = np.array([sim_bmin[axis], sim_bmax[axis]])
 
-        # Required minimum steps in every material
-        medium_steps = []
-        for structure in structures:
-            n, k = structure.medium.eps_complex_to_nk(structure.medium.eps_model(C_0 / wavelength))
-            index = max(abs(n), abs(k))
-            medium_steps.append(wavelength / index / min_steps_per_wvl)
-        medium_steps = np.array(medium_steps)
+        # Required maximum steps in every structure
+        structure_steps = self.structure_steps(structures, wavelength, min_steps_per_wvl)
 
         # If empty simulation, return
         if len(structures) == 1:
-            return (domain_bounds, medium_steps)
+            return (domain_bounds, structure_steps)
 
         # Bounding boxes with the meshing axis rotated to z
-        struct_bbox = []
-        for structure in structures:
-            # Get 3D bounding box and rotate axes
-            bmin, bmax = structure.geometry.bounds
-            bmin_ax, bmin_plane = structure.geometry.pop_axis(bmin, axis=axis)
-            bmax_ax, bmax_plane = structure.geometry.pop_axis(bmax, axis=axis)
-            bounds = np.array([list(bmin_plane) + [bmin_ax], list(bmax_plane) + [bmax_ax]])
-            struct_bbox.append(bounds)
+        struct_bbox = self.rotate_structure_bounds(structures, axis)
 
         # Array of coordinates of all intervals; add the simulation domain bounds already
         interval_coords = np.array(domain_bounds)
@@ -114,20 +102,10 @@ class GradedMesher(Mesher):
         struct_contains = []  # will have len equal to len(structures)
 
         for struct_ind in range(len(structures) - 1, 0, -1):
-            structure = structures[struct_ind]
             bbox = struct_bbox[struct_ind]
 
             # indexes of structures that the current structure contains in 2D
-            struct_contains_inds = []
-            for ind, bounds in enumerate(struct_bbox[: struct_ind - 1]):
-                if (
-                    bbox[0, 0] <= bounds[0, 0]
-                    and bbox[0, 1] <= bounds[0, 1]
-                    and bbox[1, 0] >= bounds[1, 0]
-                    and bbox[1, 1] >= bounds[1, 1]
-                ):
-                    struct_contains_inds.append(ind)
-            struct_contains.append(struct_contains_inds)
+            struct_contains.append(self.contains_2d(bbox, struct_bbox[:struct_ind]))
 
             # Figure out where to place the bounding box coordinates of current structure
             indsmin = np.argwhere(bbox[0, 2] < interval_coords)
@@ -169,7 +147,7 @@ class GradedMesher(Mesher):
         interval_structs = [interval_structs[int(i)] for i in in_domain if i < b_array.size - 1]
 
         # Remove intervals that are smaller than the absolute smallest min_step
-        min_step = np.amin(medium_steps)
+        min_step = np.amin(structure_steps)
         coords_filter = [interval_coords[0]]
         structs_filter = []
         for coord_ind, coord in enumerate(interval_coords[1:]):
@@ -197,18 +175,80 @@ class GradedMesher(Mesher):
                 struct_list = [ind for ind in struct_list if ind not in contains]
 
             # Define the max step as the minimum over all medium steps of media in this interval
-            max_step = np.amin(medium_steps[struct_list_filter])
+            max_step = np.amin(structure_steps[struct_list_filter])
             max_steps.append(float(max_step))
 
         return interval_coords, np.array(max_steps)
 
     @staticmethod
-    def is_contained(bbox0, bbox_list):
-        """Return True if bbox0 is contained in any of the bbox_list, or False otherwise.
-        It can be much faster to write out the conditions one by one than to use e.g. np.all.
+    def structure_steps(
+        structures: List[Structure], wavelength: float, min_steps_per_wvl: float
+    ) -> Array[float]:
+        """Get the minimum mesh required in each structure.
+
+        Parameters
+        ----------
+        structures : List[Structure]
+            List of structures, with the simulation structure being the first item.
+        wavelength : float
+            Wavelength to use for the step size and for dispersive media epsilon.
+        min_steps_per_wvl : float
+            Minimum requested steps per wavelength.
+        """
+        min_steps = []
+        for structure in structures:
+            n, k = structure.medium.eps_complex_to_nk(structure.medium.eps_model(C_0 / wavelength))
+            index = max(abs(n), abs(k))
+            min_steps.append(wavelength / index / min_steps_per_wvl)
+        return np.array(min_steps)
+
+    @staticmethod
+    def rotate_structure_bounds(structures: List[Structure], axis: Axis) -> List[Array[float]]:
+        """Get sturcture bounding boxes with a given ``axis`` rotated to z.
+
+        Parameters
+        ----------
+        structures : List[Structure]
+            List of structures, with the simulation structure being the first item.
+        axis : Axis
+            Axis index to place last.
+
+        Returns
+        -------
+        List[Array[float]]
+            A list of the bounding boxes of shape ``(2, 3)`` for each structure, with the bounds
+            along ``axis`` being ``(:, 2)``.
+        """
+        struct_bbox = []
+        for structure in structures:
+            # Get 3D bounding box and rotate axes
+            bmin, bmax = structure.geometry.bounds
+            bmin_ax, bmin_plane = structure.geometry.pop_axis(bmin, axis=axis)
+            bmax_ax, bmax_plane = structure.geometry.pop_axis(bmax, axis=axis)
+            bounds = np.array([list(bmin_plane) + [bmin_ax], list(bmax_plane) + [bmax_ax]])
+            struct_bbox.append(bounds)
+        return struct_bbox
+
+    @staticmethod
+    def is_contained(bbox0: Array[float], bbox_list: List[Array[float]]) -> bool:
+        """Check if a bounding box is contained in any of a list of bounding boxes.
+
+        Parameters
+        ----------
+        bbox0 : Array[float]
+            Bounding box to check.
+        bbox_list : List[Array[float]]
+            List of bounding boxes to check if they contain ``bbox0``.
+
+        Returns
+        -------
+        contained : bool
+            ``True`` if ``bbox0`` is contained in any of the boxes in the list.
         """
         contained = False
         for bounds in bbox_list:
+            # It can be much faster to write out the conditions one by one than e.g. to use np.all
+            # on the bottom values and np.all on the top values
             if all(
                 [
                     bbox0[0, 0] >= bounds[0, 0],
@@ -220,25 +260,55 @@ class GradedMesher(Mesher):
                 ]
             ):
                 contained = True
-
         return contained
+
+    @staticmethod
+    def contains_2d(bbox0: Array[float], bbox_list: List[Array[float]]) -> List[int]:
+        """Check if a bounding box contains along the first two dimensions any of a list of
+        bounding boxes.
+
+        Parameters
+        ----------
+        bbox0 : Array[float]
+            Bounding box to check.
+        bbox_list : List[Array[float]]
+            List of bounding boxes to check if they are contained in ``bbox0``.
+
+        Returns
+        -------
+        List[int]
+            A list with all the indexes into the ``bbox_list`` that are contained in ``bbox0``
+            along the first two dimensions.
+        """
+        struct_contains_inds = []
+        for ind, bounds in enumerate(bbox_list):
+            if all(
+                [
+                    bbox0[0, 0] <= bounds[0, 0],
+                    bbox0[1, 0] >= bounds[1, 0],
+                    bbox0[0, 1] <= bounds[0, 1],
+                    bbox0[1, 1] >= bounds[1, 1],
+                ]
+            ):
+                struct_contains_inds.append(ind)
+        return struct_contains_inds
 
     def make_grid_multiple_intervals(  # pylint:disable=too-many-locals
         self,
-        max_dl_list: np.ndarray,
-        len_interval_list: np.ndarray,
+        max_dl_list: Array[float],
+        len_interval_list: Array[float],
         max_scale: float,
         is_periodic: bool,
-    ) -> List[np.ndarray]:
+    ) -> List[Array[float]]:
         """Create grid steps in multiple connecting intervals of length specified by
         ``len_interval_list``. The maximal allowed step size in each interval is given by
         ``max_dl_list``. The maximum ratio between neighboring steps is bounded by ``max_scale``.
 
         Parameters
         ----------
-        max_dl_list : np.ndarray
+        max_dl_list : Array[float]
             Maximal allowed step size of each interval.
-        len_interval_list : np.ndarray
+        len_interval_list : Array[float]
             A list of interval lengths
         max_scale : float
             Maximal ratio between consecutive steps.
@@ -247,7 +317,7 @@ class GradedMesher(Mesher):
 
         Returns
         -------
-        List[np.ndarray]
+        List[Array[float]]
             A list of of step sizes in each interval.
         """
 
@@ -322,19 +392,19 @@ class GradedMesher(Mesher):
 
     def grid_multiple_interval_analy_refinement(
         self,
-        max_dl_list: np.ndarray,
-        len_interval_list: np.ndarray,
+        max_dl_list: Array[float],
+        len_interval_list: Array[float],
         max_scale: float,
         is_periodic: bool,
-    ) -> Tuple[np.ndarray, np.ndarray]:
+    ) -> Tuple[Array[float], Array[float]]:
         """Analytical refinement for multiple intervals. "analytical" meaning we allow
         non-integar step sizes, so that we don't consider snapping here.
 
         Parameters
         ----------
-        max_dl_list : np.ndarray
+        max_dl_list : Array[float]
             Maximal allowed step size of each interval.
-        len_interval_list : np.ndarray
+        len_interval_list : Array[float]
             A list of interval lengths
         max_scale : float
             Maximal ratio between consecutive steps.
@@ -343,7 +413,7 @@ class GradedMesher(Mesher):
 
         Returns
         -------
-        Tuple[np.ndarray, np.ndarray]
+        Tuple[Array[float], Array[float]]
             left and right step sizes of each interval.
         """
 
@@ -411,7 +481,7 @@ class GradedMesher(Mesher):
         max_dl: float,
         max_scale: float,
         len_interval: float,
-    ) -> np.ndarray:
+    ) -> Array[float]:
         """Create a set of grid steps in an interval of length ``len_interval``,
         with first step no larger than ``max_scale * left_neighbor_dl`` and last step no larger than
         ``max_scale * right_neighbor_dl``, with maximum ratio ``max_scale`` between
@@ -432,7 +502,7 @@ class GradedMesher(Mesher):
 
         Returns
         -------
-        np.ndarray
+        Array[float]
             A list of step sizes in the interval.
         """
 
@@ -517,7 +587,7 @@ class GradedMesher(Mesher):
         max_dl: float,
         max_scale: float,
         len_interval: float,
-    ) -> np.ndarray:
+    ) -> Array[float]:
         """In an interval, grid grows, plateau, and decrease, resembling Lambda letter but
         with plateau in the connection part..
 
@@ -586,7 +656,7 @@ class GradedMesher(Mesher):
         right_dl: float,
         max_scale: float,
         len_interval: float,
-    ) -> np.ndarray:
+    ) -> Array[float]:
         """In an interval, grid grows, and decrease, resembling Lambda letter.
 
         Parameters
@@ -674,7 +744,7 @@ class GradedMesher(Mesher):
         large_dl: float,
         max_scale: float,
         len_interval: float,
-    ) -> np.ndarray:
+    ) -> Array[float]:
         """In an interval, grid grows, then plateau.
 
         Parameters
@@ -690,7 +760,7 @@ class GradedMesher(Mesher):
 
         Returns
         -------
-        np.ndarray
+        Array[float]
             A list of step sizes in the interval, in ascending order.
         """
         # steps for scaling
@@ -728,7 +798,7 @@ class GradedMesher(Mesher):
         small_dl: float,
         max_scale: float,
         len_interval: float,
-    ) -> np.ndarray:
+    ) -> Array[float]:
         """Mesh simply grows in an interval.
 
         Parameters
@@ -742,7 +812,7 @@ class GradedMesher(Mesher):
 
         Returns
         -------
-        np.ndarray
+        Array[float]
             A list of step sizes in the interval, in ascending order.
         """
 
