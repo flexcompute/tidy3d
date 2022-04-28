@@ -108,7 +108,7 @@ class GradedMesher(Mesher):
             struct_contains.append(self.contains_2d(bbox, struct_bbox[:struct_ind]))
 
             # Figure out where to place the bounding box coordinates of current structure
-            indsmin = np.argwhere(bbox[0, 2] < interval_coords)
+            indsmin = np.argwhere(bbox[0, 2] <= interval_coords)
             indmin = int(indsmin[0])
             bbox0 = np.copy(bbox)
             bbox0[1, 2] = bbox0[0, 2]
@@ -119,7 +119,7 @@ class GradedMesher(Mesher):
                 struct_list = interval_structs[max(0, indmin - 1)]
                 interval_structs.insert(indmin, struct_list.copy())
 
-            indsmax = np.argwhere(bbox[1, 2] > interval_coords)
+            indsmax = np.argwhere(bbox[1, 2] >= interval_coords)
             indmax = int(indsmax[-1])
             bbox0 = np.copy(bbox)
             bbox0[0, 2] = bbox0[1, 2]
