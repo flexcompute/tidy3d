@@ -10,6 +10,7 @@ import matplotlib.pylab as plt
 import matplotlib as mpl
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 
+from .base import stored_property
 from .validators import assert_unique_names, assert_objects_in_sim_bounds
 from .validators import validate_mode_objects_symmetry
 from .geometry import Box
@@ -1381,8 +1382,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
 
         return len(self.tmesh)
 
-    @property
-    @lru_cache()
+    @stored_property
     def grid(self) -> Grid:
         """FDTD grid spatial locations and information.
 

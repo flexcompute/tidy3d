@@ -41,7 +41,7 @@ class Coords(Tidy3dBaseModel):
     @property
     def to_list(self):
         """Return a list of the three Coord1D objects."""
-        return list(self.dict(exclude={TYPE_TAG_STR}).values())
+        return list(self.dict(exclude={TYPE_TAG_STR, '_cached_properties'}).values())
 
 
 class FieldGrid(Tidy3dBaseModel):
@@ -167,7 +167,7 @@ class Grid(Tidy3dBaseModel):
         return Coords(
             **{
                 key: self._avg(val)
-                for key, val in self.boundaries.dict(exclude={TYPE_TAG_STR}).items()
+                for key, val in self.boundaries.dict(exclude={TYPE_TAG_STR, '_cached_properties'}).items()
             }
         )
 
@@ -192,7 +192,7 @@ class Grid(Tidy3dBaseModel):
         return Coords(
             **{
                 key: np.diff(val)
-                for key, val in self.boundaries.dict(exclude={TYPE_TAG_STR}).items()
+                for key, val in self.boundaries.dict(exclude={TYPE_TAG_STR, '_cached_properties'}).items()
             }
         )
 
@@ -215,7 +215,7 @@ class Grid(Tidy3dBaseModel):
         >>> Nx, Ny, Nz = grid.num_cells
         """
         return [
-            coords1d.size - 1 for coords1d in self.boundaries.dict(exclude={TYPE_TAG_STR}).values()
+            coords1d.size - 1 for coords1d in self.boundaries.dict(exclude={TYPE_TAG_STR, '_cached_properties'}).values()
         ]
 
     @property
@@ -240,7 +240,7 @@ class Grid(Tidy3dBaseModel):
             applied.
         """
 
-        primal_steps = self._primal_steps.dict(exclude={TYPE_TAG_STR})
+        primal_steps = self._primal_steps.dict(exclude={TYPE_TAG_STR, '_cached_properties'})
         dsteps = {}
         for (key, psteps) in primal_steps.items():
             dsteps[key] = (psteps + np.roll(psteps, 1)) / 2
@@ -296,7 +296,7 @@ class Grid(Tidy3dBaseModel):
     def _yee_e(self, axis: Axis):
         """E field yee lattice sites for axis."""
 
-        boundary_coords = self.boundaries.dict(exclude={TYPE_TAG_STR})
+        boundary_coords = self.boundaries.dict(exclude={TYPE_TAG_STR, '_cached_properties'})
 
         # initially set all to the minus bounds
         yee_coords = {key: self._min(val) for key, val in boundary_coords.items()}
@@ -310,7 +310,7 @@ class Grid(Tidy3dBaseModel):
     def _yee_h(self, axis: Axis):
         """H field yee lattice sites for axis."""
 
-        boundary_coords = self.boundaries.dict(exclude={TYPE_TAG_STR})
+        boundary_coords = self.boundaries.dict(exclude={TYPE_TAG_STR, '_cached_properties'})
 
         # initially set all to centers
         yee_coords = {key: self._avg(val) for key, val in boundary_coords.items()}

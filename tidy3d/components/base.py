@@ -1,6 +1,7 @@
 """global configuration / base class for pydantic models used to make simulation."""
 
 import json
+from typing import Dict, Any
 
 import rich
 import pydantic
@@ -9,7 +10,7 @@ import numpy as np
 from pydantic.fields import ModelField
 
 from .types import ComplexNumber, NumpyArray, Literal
-from ..log import FileError
+from ..log import FileError, log
 
 # default indentation (# spaces) in files
 INDENT = 4
@@ -25,12 +26,6 @@ class Tidy3dBaseModel(pydantic.BaseModel):
     For more details on pydantic base models, see:
     `Pydantic Models <https://pydantic-docs.helpmanual.io/usage/models/>`_
     """
-
-    def __init_subclass__(cls):
-        """Things that are done to each of the models."""
-
-        add_type_field(cls)
-        cls.__doc__ = generate_docstring(cls)
 
     class Config:  # pylint: disable=too-few-public-methods
         """Sets config for all :class:`Tidy3dBaseModel` objects.
@@ -60,6 +55,22 @@ class Tidy3dBaseModel(pydantic.BaseModel):
             np.ndarray: lambda x: NumpyArray(data_list=x.tolist()),
             complex: lambda x: ComplexNumber(real=x.real, imag=x.imag),
         }
+
+    _cached_properties : Dict[str, Any] = pydantic.Field({})
+
+    @pydantic.root_validator(pre=False)
+    def _clear_cached_properties(cls, values):
+        """Any time the component is changed, clear all of it's cached properties."""
+        # log.info('clearing cached properties')
+        values['_cached_properties'] = {}
+        return values
+
+
+    def __init_subclass__(cls):
+        """Things that are done to each of the models."""
+
+        add_type_field(cls)
+        cls.__doc__ = generate_docstring(cls)
 
     def help(self, methods: bool = False) -> None:
         """Prints message describing the fields and methods of a :class:`Tidy3dBaseModel`.
@@ -257,6 +268,27 @@ class Tidy3dBaseModel(pydantic.BaseModel):
 
         return json_string
 
+def stored_property(property_method):
+    """property that caches it's value in self._cached_properties."""
+
+    def new_property_method(self):
+        """New method, with cached value."""
+
+        property_name = property_method.__name__
+
+        # if it's cached, just return it
+        if property_name in self._cached_properties:
+            # log.info(f'getting saved property "{property_name}" from self._cached_properties')
+            return self._cached_properties.get(property_name)
+
+        # otherwise, do the computation and save the return value
+        # log.info(f'computing property "{property_name}" and storing in self._cached_properties')
+        property_value = property_method(self)
+        self._cached_properties[property_name] = property_value
+        return property_value
+
+    # make it a @property and return
+    return property(new_property_method)
 
 def add_type_field(cls):
     """Automatically place "type" field with model name in the model field dictionary."""

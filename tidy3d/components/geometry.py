@@ -10,7 +10,7 @@ import numpy as np
 from shapely.geometry import Point, Polygon, box, MultiPolygon
 from descartes import PolygonPatch
 
-from .base import Tidy3dBaseModel
+from .base import Tidy3dBaseModel, stored_property
 from .types import Bound, Size, Coordinate, Axis, Coordinate2D, tidynumpy, Array
 from .types import Vertices, Ax, Shapely
 from .viz import add_ax_if_none, equal_aspect
@@ -27,7 +27,7 @@ _N_SAMPLE_POLYGON_INTERSECT = 100
 class Geometry(Tidy3dBaseModel, ABC):
     """Abstract base class, defines where something exists in space."""
 
-    @property
+    @stored_property
     def plot_params(self):
         """Default parameters for plotting a Geometry object."""
         return plot_params_geometry
