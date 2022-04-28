@@ -524,11 +524,12 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         """Ensures the monitors arent storing too much data before simulation is uploaded."""
 
         tmesh = self.tmesh
+        grid = self.grid
 
         total_size_bytes = 0
         for monitor in self.monitors:
-            monitor_grid = self.discretize(monitor)
-            num_cells = np.prod(monitor_grid.num_cells)
+            monitor_inds = grid.discretize_inds(monitor, extend=True)
+            num_cells = np.prod([inds[1] - inds[0] for inds in monitor_inds])
             monitor_size = monitor.storage_size(num_cells=num_cells, tmesh=tmesh)
 
             total_size_bytes += monitor_size
