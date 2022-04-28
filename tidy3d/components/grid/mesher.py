@@ -173,6 +173,8 @@ class GradedMesher(Mesher):
                 structs_filter.append(interval_structs[coord_ind])
         interval_coords = np.array(coords_filter)
         interval_structs = structs_filter
+        # print(interval_structs)
+        # print(struct_contains)
 
         # Compute the maximum allowed step size in each interval
         max_steps = []
@@ -190,6 +192,8 @@ class GradedMesher(Mesher):
                 # Remove all structures that current structure overrides
                 contains = struct_contains[struct_ind]
                 struct_list = [ind for ind in struct_list if ind not in contains]
+
+            # print(struct_list_filter)
 
             # Define the max step as the minimum over all medium steps of media in this interval
             max_step = np.amin(medium_steps[struct_list_filter])
