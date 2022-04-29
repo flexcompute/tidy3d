@@ -185,6 +185,9 @@ class AbstractModeMonitor(PlanarMonitor, FreqMonitor):
         # call the monitor.plot() function first
         ax = super().plot(x=x, y=y, z=z, ax=ax, **kwargs)
 
+        kwargs_alpha = kwargs.get("alpha")
+        arrow_alpha = ARROW_ALPHA if kwargs_alpha is None else kwargs_alpha
+
         # and then add an arrow using the direction comuputed from `_dir_arrow`.
         ax = self._plot_arrow(
             x=x,
@@ -193,7 +196,7 @@ class AbstractModeMonitor(PlanarMonitor, FreqMonitor):
             ax=ax,
             direction=self._dir_arrow,
             color=ARROW_COLOR_MONITOR,
-            alpha=ARROW_ALPHA,
+            alpha=arrow_alpha,
             both_dirs=True,
         )
         return ax

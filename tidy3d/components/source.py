@@ -290,6 +290,9 @@ class Source(Box, ABC):
         # call the `Source.plot()` function first.
         ax = super().plot(x=x, y=y, z=z, ax=ax, **kwargs)
 
+        kwargs_alpha = kwargs.get("alpha")
+        arrow_alpha = ARROW_ALPHA if kwargs_alpha is None else kwargs_alpha
+
         # then add the arrow based on the propagation direction
         if self._dir_vector is not None:
 
@@ -300,7 +303,7 @@ class Source(Box, ABC):
                 ax=ax,
                 direction=self._dir_vector,
                 color=ARROW_COLOR_SOURCE,
-                alpha=ARROW_ALPHA,
+                alpha=arrow_alpha,
                 both_dirs=False,
             )
 
@@ -313,7 +316,7 @@ class Source(Box, ABC):
                 ax=ax,
                 direction=self._pol_vector,
                 color=ARROW_COLOR_POLARIZATION,
-                alpha=ARROW_ALPHA,
+                alpha=arrow_alpha,
                 both_dirs=False,
             )
 
