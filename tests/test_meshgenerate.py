@@ -329,11 +329,7 @@ def test_grid_refinement():
 def test_parse_structures():
     """Test some aspects of the structure parsing."""
 
-    source = td.PointDipole(
-        source_time=td.GaussianPulse(freq0=1e14, fwidth=1e13),
-        size=(0, 0, 0),
-        polarization="Ex",
-    )
+    wavelength = 2.9
 
     box1 = td.Structure(
         geometry=td.Box(center=(0, 0, 0), size=(2, 2, 2)), medium=td.Medium(permittivity=9)
@@ -354,10 +350,9 @@ def test_parse_structures():
     # Test that the box2 permittivity is used along z in the region where it fully covers box1
     sim = td.Simulation(
         size=(3, 3, 3),
-        grid_spec=td.GridSpec.auto(),
+        grid_spec=td.GridSpec.auto(wavelength=wavelength),
         run_time=1e-13,
         structures=[box1, box2],
-        sources=[source],
     )
     sizes = sim.grid.sizes.to_list[2]
     assert sizes[sizes.size // 2] > 0.1
@@ -365,10 +360,9 @@ def test_parse_structures():
     # Test that the box3 permittivity is not used along z as it doesn't fully cover box1
     sim = td.Simulation(
         size=(3, 3, 3),
-        grid_spec=td.GridSpec.auto(),
+        grid_spec=td.GridSpec.auto(wavelength=wavelength),
         run_time=1e-13,
         structures=[box1, box3],
-        sources=[source],
     )
     sizes = sim.grid.sizes.to_list[2]
     assert sizes[sizes.size // 2] < 0.1
@@ -378,10 +372,41 @@ def test_parse_structures():
     assert 1.0 in boundaries
     sim = td.Simulation(
         size=(3, 3, 3),
-        grid_spec=td.GridSpec.auto(),
+        grid_spec=td.GridSpec.auto(wavelength=wavelength),
         run_time=1e-13,
         structures=[box1, box4],
-        sources=[source],
     )
     boundaries = sim.grid.boundaries.to_list[1]
     assert 1.0 not in boundaries
+
+    # Test high-index background medium
+    sim = td.Simulation(
+        size=(3, 3, 6),
+        grid_spec=td.GridSpec.auto(wavelength=wavelength),
+        run_time=1e-13,
+        structures=[box1, box2],
+        medium=td.Medium(permittivity=5**2),
+    )
+    sizes = sim.grid.sizes.to_list[2]
+    assert sizes[0] < wavelength / 50
+
+    # Test high-index background with override box
+    sim = td.Simulation(
+        size=(3, 3, 6),
+        grid_spec=td.GridSpec.auto(
+            wavelength=wavelength,
+            override_structures=[
+                td.Structure(
+                    geometry=td.Box(size=(td.inf, td.inf, td.inf)),
+                    medium=td.Medium(permittivity=1),
+                ),
+                box1,
+                box2,
+            ],
+        ),
+        run_time=1e-13,
+        structures=[box1, box2],
+        medium=td.Medium(permittivity=5**2),
+    )
+    sizes = sim.grid.sizes.to_list[2]
+    assert np.isclose(sizes[0], wavelength / 10)
