@@ -326,4 +326,62 @@ def test_grid_refinement():
         )
 
 
-#     # print(max_shrink)
+def test_parse_structures():
+    """Test some aspects of the structure parsing."""
+
+    source = td.PointDipole(
+        source_time=td.GaussianPulse(freq0=1e14, fwidth=1e13),
+        size=(0, 0, 0),
+        polarization="Ex",
+    )
+
+    box1 = td.Structure(
+        geometry=td.Box(center=(0, 0, 0), size=(2, 2, 2)), medium=td.Medium(permittivity=9)
+    )
+    # covers box1 along x and y but not z, smaller permittivity
+    box2 = td.Structure(
+        geometry=td.Box(center=(0, 0, 0), size=(200, 200, 1)), medium=td.Medium(permittivity=4)
+    )
+    # covers box1 along x only, smaller permittivity
+    box3 = td.Structure(
+        geometry=td.Box(center=(0, 1.5, 0), size=(200, 4, 1)), medium=td.Medium(permittivity=4)
+    )
+    # fully covers one edge of box1
+    box4 = td.Structure(
+        geometry=td.Box(center=(0, 1.01, 0), size=(200, 0.2, 2)), medium=td.Medium(permittivity=2)
+    )
+
+    # Test that the box2 permittivity is used along z in the region where it fully covers box1
+    sim = td.Simulation(
+        size=(3, 3, 3),
+        grid_spec=td.GridSpec.auto(),
+        run_time=1e-13,
+        structures=[box1, box2],
+        sources=[source],
+    )
+    sizes = sim.grid.sizes.to_list[2]
+    assert sizes[sizes.size // 2] > 0.1
+
+    # Test that the box3 permittivity is not used along z as it doesn't fully cover box1
+    sim = td.Simulation(
+        size=(3, 3, 3),
+        grid_spec=td.GridSpec.auto(),
+        run_time=1e-13,
+        structures=[box1, box3],
+        sources=[source],
+    )
+    sizes = sim.grid.sizes.to_list[2]
+    assert sizes[sizes.size // 2] < 0.1
+
+    # Test that there is no grid boundary along y at the box1 right side covered by box4
+    boundaries = sim.grid.boundaries.to_list[1]
+    assert 1.0 in boundaries
+    sim = td.Simulation(
+        size=(3, 3, 3),
+        grid_spec=td.GridSpec.auto(),
+        run_time=1e-13,
+        structures=[box1, box4],
+        sources=[source],
+    )
+    boundaries = sim.grid.boundaries.to_list[1]
+    assert 1.0 not in boundaries
