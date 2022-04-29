@@ -9,6 +9,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+## [1.3.1] - 2022-4-29
+
+### Added
+
+### Changed
+
+ - The `copy()` method of Tidy3d components is deep by default.
+ - Maximum allowed number of distinct materials is now 65530.
+
+### Fixed
+
+ - Monitor/source opacity values also applied to associated arrows.
+ - Auto meshing in the presence of symmetries ignores anything outside of the main symmetry quadrant.
+ - If an interface is completely covered by another structure, it is ignored by the mesher.
+
 ## [1.3.0] - 2022-4-26
 
 ### Added
@@ -264,7 +279,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Job and Batch classes for better simulation handling (eventually to fully replace webapi functions).
 - A large number of small improvements and bug fixes.
 
-[Unreleased]: https://github.com/flexcompute/tidy3d/compare/v1.3.0...develop
+[Unreleased]: https://github.com/flexcompute/tidy3d/compare/v1.3.1...develop
+[1.3.1]: https://github.com/flexcompute/tidy3d/compare/v1.3.0...1.3.1
 [1.3.0]: https://github.com/flexcompute/tidy3d/compare/v1.2.2...v1.3.0
 [1.2.2]: https://github.com/flexcompute/tidy3d/compare/v1.2.1...v1.2.2
 [1.2.1]: https://github.com/flexcompute/tidy3d/compare/v1.2.0...v1.2.1
