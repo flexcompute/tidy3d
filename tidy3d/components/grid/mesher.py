@@ -99,9 +99,9 @@ class GradedMesher(Mesher):
         # List of indexes of structures which are present in each interval
         interval_structs = [[0]]  # will have len equal to len(interval_coords) - 1
         # List of indexes of structures that every structre contains in 2D
-        struct_contains = []  # will have len equal to len(structures)
+        struct_contains = [[]]  # will have len equal to len(structures)
 
-        for struct_ind in range(len(structures) - 1, 0, -1):
+        for struct_ind in range(1, len(structures)):
             bbox = struct_bbox[struct_ind]
 
             # indexes of structures that the current structure contains in 2D
@@ -135,11 +135,6 @@ class GradedMesher(Mesher):
             for interval_ind in range(indmin, indmax):
                 interval_structs[interval_ind].append(struct_ind)
 
-        # The simulation domain is the lowest structure and doesn't contain anything
-        struct_contains.append([])
-        # Reverse to match the order in the structures list
-        struct_contains = struct_contains[::-1]
-
         # Truncate intervals to domain bounds
         b_array = np.array(interval_coords)
         in_domain = np.argwhere((b_array >= domain_bounds[0]) * (b_array <= domain_bounds[1]))
@@ -164,7 +159,7 @@ class GradedMesher(Mesher):
             struct_list = interval_structs[coord_ind]
             struct_list_filter = []
             # Handle containment
-            for ind, struct_ind in enumerate(struct_list):
+            for ind, struct_ind in enumerate(struct_list[::-1]):
                 if ind >= len(struct_list):
                     # This can happen because we modify struct_list in the loop
                     break
