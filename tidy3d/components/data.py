@@ -327,14 +327,14 @@ class SpatialCollectionData(CollectionData, ABC):
 
     """ Attributes storing details about any symmetries that can be used to expand the data. """
 
-    symmetry_center: Coordinate = pd.Field(
-        None, title="Symmetry Center", description="Position of the symmetry planes in x, y, and z."
-    )
-
     symmetry: Tuple[Symmetry, Symmetry, Symmetry] = pd.Field(
         (0, 0, 0),
         title="Symmetry Eigenvalues",
         description="igenvalues of the symmetry under reflection in x, y, and z.",
+    )
+
+    symmetry_center: Coordinate = pd.Field(
+        None, title="Symmetry Center", description="Position of the symmetry planes in x, y, and z."
     )
 
     expanded_grid: Dict[str, Coords] = pd.Field(
@@ -356,6 +356,13 @@ class SpatialCollectionData(CollectionData, ABC):
         "If the data name is in the dictionary, for each axis, "
         "the corresponding ``_sym_dict`` value times the ``self.symmetry`` eigenvalue is used.",
     """
+
+    @pd.validator("symmetry_center", always=True)
+    def _defined_if_sym_present(cls, val, values):
+        """If symmetry required, must have symmetry_center."""
+        if any(sym != 0 for sym in values.get("symmetry")):
+            assert val is not None, "symmetry_center must be supplied."
+        return val
 
     def colocate(self, x, y, z) -> xr.Dataset:
         """colocate all of the data at a set of x, y, z coordinates.
@@ -686,8 +693,9 @@ class ModeAmpsData(AbstractModeData):
     Example
     -------
     >>> f = np.linspace(2e14, 3e14, 1001)
-    >>> values = (1+1j) * np.random.random((1, 2, len(f)))
-    >>> data = ModeAmpsData(values=values, direction=['+'], mode_index=np.arange(1, 3), f=f)
+    >>> mode_index = np.arange(1, 3)
+    >>> values = (1+1j) * np.random.random((2, len(f), len(mode_index)))
+    >>> data = ModeAmpsData(values=values, direction=['+', '-'], mode_index=mode_index, f=f)
     """
 
     direction: List[Direction] = pd.Field(
@@ -721,7 +729,7 @@ class ModeIndexData(AbstractModeData):
     Example
     -------
     >>> f = np.linspace(2e14, 3e14, 1001)
-    >>> values = (1+1j) * np.random.random((2, len(f)))
+    >>> values = (1+1j) * np.random.random((len(f), 2))
     >>> data = ModeIndexData(values=values, mode_index=np.arange(1, 3), f=f)
     """
 
@@ -922,10 +930,10 @@ class ModeData(CollectionData):
     -------
     >>> f = np.linspace(1e14, 2e14, 1001)
     >>> mode_index = np.arange(2)
+    >>> amps = (1+1j) * np.random.random((2, len(f), len(mode_index)))
+    >>> amps_data = ModeAmpsData(values=amps, f=f, mode_index=mode_index)
     >>> n_complex = (1+1j) * np.random.random((len(f), len(mode_index)))
     >>> index_data = ModeIndexData(values=n_complex, f=f, mode_index=mode_index)
-    >>> amps = (1+1j) * np.random.random((2, len(f), len(mode_index)))
-    >>> amps_data = ModeIndexData(values=amps, f=f, mode_index=mode_index)
     >>> data = ModeData(data_dict={'n_complex': index_data, 'amps': amps_data})
     """
 
@@ -970,7 +978,20 @@ class ModeData(CollectionData):
 
 
 class ModeFieldData(AbstractFieldData):
-    """Like FieldData but with extra dimension ``mode_index``."""
+    """Like FieldData but with extra dimension ``mode_index``.
+
+
+    Example
+    -------
+    >>> f = np.linspace(1e14, 2e14, 1001)
+    >>> x = np.linspace(-1, 1, 10)
+    >>> y = np.linspace(-2, 2, 20)
+    >>> z = np.linspace(0, 0, 1)
+    >>> mode_index = np.arange(0, 4)
+    >>> values = (1+1j) * np.random.random((len(x), len(y), len(z), len(f), len(mode_index)))
+    >>> field = ScalarModeFieldData(values=values, x=x, y=y, z=z, f=f, mode_index=mode_index)
+    >>> data = ModeFieldData(data_dict={'Ex': field, 'Ey': field})
+    """
 
     data_dict: Dict[str, ScalarModeFieldData] = pd.Field(
         ...,
