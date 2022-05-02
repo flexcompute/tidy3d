@@ -19,6 +19,15 @@ def test_simulation_load_export():
 
 
 @clear_tmp
+def test_simulation_load_export_yaml():
+
+    path = "tests/tmp/simulation.yaml"
+    SIM.to_file(path)
+    SIM2 = Simulation.from_file(path)
+    assert SIM == SIM2, "original and loaded simulations are not the same"
+
+
+@clear_tmp
 def test_simulation_preserve_types():
 
     st = GaussianPulse(freq0=1.0, fwidth=1.0)
