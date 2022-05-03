@@ -385,6 +385,7 @@ class SpatialCollectionData(CollectionData, ABC):
         centered_data_dict = {}
         for field_name, field_data in self.data_dict.items():
             centered_data_array = field_data.data
+            interp_dict = {}
             for coord_name in "xyz":
                 if len(centered_data_array.coords[coord_name]) <= 1:
                     # centered_data_array = centered_data_array.isel(**{coord_name:0})
@@ -393,9 +394,8 @@ class SpatialCollectionData(CollectionData, ABC):
                     centered_data_array = centered_data_array.assign_coords(**coord_kwargs)
                     centered_data_array = centered_data_array.isel(**{coord_name: 0})
                 else:
-                    coord_vals = coord_val_map[coord_name]
-                    centered_data_array = centered_data_array.interp(**{coord_name: coord_vals})
-            centered_data_dict[field_name] = centered_data_array
+                    interp_dict[coord_name] = coord_val_map[coord_name]
+            centered_data_dict[field_name] = centered_data_array.interp(**interp_dict)
         return xr.Dataset(centered_data_dict)
 
     @property
