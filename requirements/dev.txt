@@ -9,3 +9,4 @@ black==22.1.0
 pylint
 tox
 pytest
+gdspy
