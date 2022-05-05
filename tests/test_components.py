@@ -310,13 +310,13 @@ def test_num_mediums():
         structures.append(
             Structure(geometry=Box(size=(1, 1, 1)), medium=Medium(permittivity=i + 1))
         )
-    sim = Simulation(size=(1, 1, 1), grid_spec=grid_spec, structures=structures, run_time=1e-12)
+    sim = Simulation(size=(5, 5, 5), grid_spec=grid_spec, structures=structures, run_time=1e-12)
 
     with pytest.raises(SetupError):
         structures.append(
             Structure(geometry=Box(size=(1, 1, 1)), medium=Medium(permittivity=i + 2))
         )
-        sim = Simulation(size=(1, 1, 1), grid_spec=grid_spec, structures=structures, run_time=1e-12)
+        sim = Simulation(size=(5, 5, 5), grid_spec=grid_spec, structures=structures, run_time=1e-12)
 
 
 """ geometry """
