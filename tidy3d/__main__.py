@@ -86,7 +86,6 @@ def main(args):
     # upload job to server
     job.upload()
 
-
     # inspect credit and data usage
     if inspect_credits:
         info = job.get_info()
