@@ -76,13 +76,16 @@ def main(args):
             print(" - exiting")
             sys.exit()
 
-    # upload to server
+    # create job
     job = Job(simulation=simulation, task_name=task_name)
-    job.upload()
 
     # just test
     if test_only:
         return
+
+    # upload job to server
+    job.upload()
+
 
     # inspect credit and data usage
     if inspect_credits:
