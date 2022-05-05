@@ -1078,6 +1078,7 @@ class Cylinder(Circular, Planar):
             Whether point ``(x,y,z)`` is inside geometry.
         """
         z0, (x0, y0) = self.pop_axis(self.center, axis=self.axis)
+        z, (x, y) = self.pop_axis((x, y, z), axis=self.axis)
         dist_x = np.abs(x - x0)
         dist_y = np.abs(y - y0)
         dist_z = np.abs(z - z0)
