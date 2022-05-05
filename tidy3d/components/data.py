@@ -434,8 +434,8 @@ class SpatialCollectionData(CollectionData, ABC):
                 coords_interp[flip_inds] = 2 * center - coords[flip_inds]
 
                 # Interpolate. There generally shouldn't be values out of bounds except potentially
-                # when handling modes, in which case we set such values to zero.
-                new_data = new_data.interp({dim_name: coords_interp}, kwargs={"fill_value": 0.0})
+                # when handling modes, in which case they should be at the boundary and close to 0.
+                new_data = new_data.sel({dim_name: coords_interp}, method="nearest")
                 new_data = new_data.assign_coords({dim_name: coords})
 
                 sym_eval = self._sym_dict.get(data_key)

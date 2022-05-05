@@ -14,7 +14,7 @@ class WebConfig:  # pylint:disable=too-many-instance-attributes
     auth_api_endpoint: str
     web_api_endpoint: str
     website_endpoint: str
-    solver_version: str = None
+    solver_version: str = "release-22.2.5"
     worker_group: Any = None
     auth: str = None
     user: str = None

@@ -270,6 +270,13 @@ class ModeSolver(Tidy3dBaseModel):
             raise ValidationError(f"ModeSolver plane must be planar, given size={val}")
         return val
 
+    @pydantic.validator("freqs", always=True)
+    def freqs_not_empty(cls, val):
+        """Raise validation error if ``freqs`` is an empty list."""
+        if len(val) == 0:
+            raise ValidationError("ModeSolver 'freqs' must be a non-empty list.")
+        return val
+
     @property
     def normal_axis(self) -> Axis:
         """Axis normal to the mode plane."""
