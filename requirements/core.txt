@@ -1,6 +1,6 @@
 # just core (no plotly, no tests)
 
-xarray
+xarray>=0.16.2
 scipy
 h5py>=3.0.0
 rich
