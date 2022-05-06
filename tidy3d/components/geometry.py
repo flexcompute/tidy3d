@@ -3,6 +3,7 @@
 
 from abc import ABC, abstractmethod
 from typing import List, Tuple, Union, Any, Callable
+from math import isclose
 
 import pydantic
 import numpy as np
@@ -22,6 +23,7 @@ from ..constants import MICROMETER, LARGE_NUMBER, RADIAN
 # for sampling polygon in slanted polyslab along  z-direction for
 # validating polygon to be non_intersecting.
 _N_SAMPLE_POLYGON_INTERSECT = 100
+_IS_CLOSE_RTOL = np.finfo(float).eps
 
 
 class Geometry(Tidy3dBaseModel, ABC):
@@ -1262,7 +1264,7 @@ class PolySlab(Planar):
                 "will be available in future releases."
             )
 
-        if np.isclose(values["sidewall_angle"], 0):
+        if isclose(values["sidewall_angle"], 0):
             return val
 
         # For Slanted PolySlab. Similar procedure to validate
@@ -1454,7 +1456,7 @@ class PolySlab(Planar):
             ys_slab = y[inside_height]
 
             # vertical sidewall
-            if np.isclose(self.sidewall_angle, 0):
+            if isclose(self.sidewall_angle, 0):
                 face_polygon = Polygon(self.base_polygon)
                 fun_contain = contains_pointwise(face_polygon)
                 contains_vectorized = np.vectorize(fun_contain, signature="(n)->()")
@@ -1556,7 +1558,7 @@ class PolySlab(Planar):
             vertices = self._shift_vertices(self.base_polygon, dist)[0]
 
             # for vertical sidewall, no need for complications
-            if np.isclose(self.sidewall_angle, 0):
+            if isclose(self.sidewall_angle, 0):
                 ints_y, ints_angle = self._find_intersecting_ys_angle_vertical(
                     vertices, position, axis
                 )
@@ -1572,7 +1574,7 @@ class PolySlab(Planar):
                 minx, miny = self._order_by_axis(plane_val=y_min, axis_val=z_min, axis=axis)
                 maxx, maxy = self._order_by_axis(plane_val=y_max, axis_val=z_max, axis=axis)
 
-                if np.isclose(self.sidewall_angle, 0):
+                if isclose(self.sidewall_angle, 0):
                     polys.append(box(minx=minx, miny=miny, maxx=maxx, maxy=maxy))
                 else:
                     angle_min = ints_angle[2 * y_index]
@@ -1628,7 +1630,7 @@ class PolySlab(Planar):
         np.ndarray
             Height (relative to the base) where the plane will intersect with vertices.
         """
-        if np.isclose(self.sidewall_angle, 0):
+        if isclose(self.sidewall_angle, 0):
             return np.array([])
 
         vertices = self.base_polygon.copy()
@@ -1637,7 +1639,7 @@ class PolySlab(Planar):
         dist = 1.0
         shift_x, shift_y = PolySlab._shift_vertices(vertices, dist)[2]
         shift_val = shift_x if axis == 0 else shift_y
-        shift_val[np.isclose(shift_val, 0)] = np.inf  # for static vertices
+        shift_val[np.isclose(shift_val, 0, rtol=_IS_CLOSE_RTOL)] = np.inf  # for static vertices
 
         # distance to the plane in the direction of vertex shifting
         distance = vertices[:, axis] - position
@@ -1768,7 +1770,7 @@ class PolySlab(Planar):
 
         ## Second part, plane intersects directly with vertices
         # vertices on the intersection
-        intersects_on = np.isclose(vertices_axis[:, 0], position)
+        intersects_on = np.isclose(vertices_axis[:, 0], position, rtol=_IS_CLOSE_RTOL)
         iverts_on = vertices_axis[intersects_on]
         # position of the neighbouring vertices
         iverts_b = vertices_b[intersects_on]
@@ -1789,7 +1791,7 @@ class PolySlab(Planar):
             if (x_b - position) * (x_f - position) < 0:
                 ints_y.append(y_on)
                 # vertices keep on the plane
-                if np.isclose(shift_local, 0):
+                if np.isclose(shift_local, 0, rtol=_IS_CLOSE_RTOL):
                     ints_angle.append(np.pi / 2)
                 else:
                     x1, y1 = x_b, y_b
@@ -1846,16 +1848,20 @@ class PolySlab(Planar):
             Min and max bounds packaged as ``(minx, miny, minz), (maxx, maxy, maxz)``.
         """
 
-        # get the min and max points in polygon plane
-        xmin, ymin = np.amin(self.vertices, axis=0)
-        xmax, ymax = np.amax(self.vertices, axis=0)
+        # check for the maximum possible contribution from dilation/slant on each side
+        max_offset = self.dilation + max(0, -self._tanq * self.length)
 
-        # add the maximum possible contribution from dilation/slant on each side
-        max_offset = self.dilation + max(0, np.tan(-self.sidewall_angle) * self.length)
-        xmin -= max_offset
-        ymin -= max_offset
-        xmax += max_offset
-        ymax += max_offset
+        # special care when dilated
+        if max_offset > 0:
+            dilated_vertices = self._shift_vertices(
+                self._proper_vertices(self.vertices), max_offset
+            )[0]
+            xmin, ymin = np.amin(dilated_vertices, axis=0)
+            xmax, ymax = np.amax(dilated_vertices, axis=0)
+        else:
+            # otherwise, bounds are directly based on the supplied vertices
+            xmin, ymin = np.amin(self.vertices, axis=0)
+            xmax, ymax = np.amax(self.vertices, axis=0)
 
         # get bounds in (local) z
         z0, _ = self.pop_axis(self.center, axis=self.axis)
@@ -1923,7 +1929,7 @@ class PolySlab(Planar):
 
         vertices_f = np.roll(vertices.copy(), shift=-1, axis=0)
         vertices_diff = np.linalg.norm(vertices - vertices_f, axis=1)
-        return vertices[~np.isclose(vertices_diff, 0)]
+        return vertices[~np.isclose(vertices_diff, 0, rtol=_IS_CLOSE_RTOL)]
 
     @staticmethod
     def _crossing_detection(vertices: np.ndarray, dist: float) -> Tuple[bool, float]:
@@ -2008,7 +2014,7 @@ class PolySlab(Planar):
             Shift along x and y direction.
         """
 
-        if np.isclose(dist, 0):
+        if isclose(dist, 0):
             return vertices, np.zeros(vertices.shape[0], dtype=float), None
 
         def rot90(v):
@@ -2037,7 +2043,9 @@ class PolySlab(Planar):
         det = cross(asm, asp)
 
         tan_half_angle = np.where(
-            np.isclose(det, 0), 0.0, cross(asm, rot90(asm - asp)) / (det + np.isclose(det, 0))
+            np.isclose(det, 0, rtol=_IS_CLOSE_RTOL),
+            0.0,
+            cross(asm, rot90(asm - asp)) / (det + np.isclose(det, 0, rtol=_IS_CLOSE_RTOL)),
         )
         parallel_shift = dist * tan_half_angle
 

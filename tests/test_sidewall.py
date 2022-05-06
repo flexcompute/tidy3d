@@ -7,6 +7,8 @@ from shapely.geometry import Polygon, Point
 import tidy3d as td
 from tidy3d.log import ValidationError, SetupError
 
+np.random.seed(4)
+
 
 def setup_polyslab(vertices, dilation, angle, bounds):
     s = td.PolySlab(
@@ -37,6 +39,24 @@ def convert_valid_polygon(vertices):
 
     vertices_n = np.array(poly.exterior.coords[:])
     return vertices_n
+
+
+def validate_poly_bound(poly):
+    """validate bound based polyslab's base and top polygon"""
+    xmin1, ymin1 = np.amin(poly.base_polygon, axis=0)
+    xmax1, ymax1 = np.amax(poly.base_polygon, axis=0)
+
+    xmin2, ymin2 = np.amin(poly.top_polygon, axis=0)
+    xmax2, ymax2 = np.amax(poly.top_polygon, axis=0)
+
+    xmin, ymin = min(xmin1, xmin2), min(ymin1, ymin2)
+    xmax, ymax = max(xmax1, xmax2), max(ymax1, ymax2)
+
+    bound_tidy = poly.bounds
+    assert bound_tidy[0][0] <= xmin
+    assert bound_tidy[0][1] <= ymin
+    assert bound_tidy[1][0] >= xmax
+    assert bound_tidy[1][1] >= ymax
 
 
 # default values
@@ -262,3 +282,50 @@ def test_intersection_with_inside():
                     if shape.covers(Point(xp[i], yp[j])):
                         res_inter = True
                 assert res_inter == res_inside
+
+
+def test_bound():
+    """
+    Make sure bound works, even though it might not be tight.
+    """
+    N = 10  # number of vertices
+    Lx = 10  # maximal length in x,y direction
+    for i in range(50):
+        vertices = convert_valid_polygon(np.random.random((N, 2)) * Lx)
+        vertices = np.array(vertices)  # .astype("float32")
+
+        ### positive dilation
+        dilation = 0
+        angle = 0
+        bounds = (0, 1)
+        s = setup_polyslab(vertices, dilation, angle, bounds)
+        _, max_dist = s._crossing_detection(s.base_polygon, 100)
+        # verify it is indeed maximal allowed
+        dilation = 1
+        if max_dist is not None:
+            dilation = max_dist - 1e-10
+        bounds = (0, 1)
+        angle = 0.0
+        # avoid vertex-edge crossing case
+        try:
+            s = setup_polyslab(vertices, dilation, angle, bounds)
+        except:
+            continue
+        validate_poly_bound(s)
+
+        ## sidewall
+        dilation = 0
+        angle = 0
+        bounds = (0, 1)
+        s = setup_polyslab(vertices, dilation, angle, bounds)
+        # set up proper thickness
+        _, max_dist = s._crossing_detection(s.base_polygon, -100)
+        dilation = 0.0
+        bounds = (0, (max_dist * 0.95))
+        angle = np.pi / 4
+        # avoid vertex-edge crossing case
+        try:
+            s = setup_polyslab(vertices, dilation, angle, bounds)
+        except:
+            continue
+        validate_poly_bound(s)
