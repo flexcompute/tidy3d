@@ -41,3 +41,4 @@ Case studies
     notebooks/HighQ_Si
     notebooks/HighQ_Ge
     notebooks/Near2FarSphereRCS
+    notebooks/Adjoint
