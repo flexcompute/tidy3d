@@ -2,10 +2,13 @@
 
 from abc import ABC, abstractmethod
 from typing import Tuple, List, Union
+from math import isclose
 
 import pydantic as pd
 import numpy as np
 from scipy.optimize import root_scalar
+from shapely.strtree import STRtree
+from shapely.geometry import box as shapely_box
 
 from ..base import Tidy3dBaseModel
 from ..types import Axis, Array
@@ -42,7 +45,7 @@ class GradedMesher(Mesher):
     """Implements automatic nonuniform meshing with a set minimum steps per wavelength and
     a graded mesh expanding from higher- to lower-resolution regions."""
 
-    # pylint:disable=too-many-statements,too-many-locals
+    # pylint:disable=too-many-locals
     def parse_structures(
         self,
         axis: Axis,
@@ -86,6 +89,8 @@ class GradedMesher(Mesher):
 
         # Required maximum steps in every structure
         structure_steps = self.structure_steps(structures, wavelength, min_steps_per_wvl)
+        # Smallest of the maximum steps
+        min_step = np.amin(structure_steps)
 
         # If empty simulation, return
         if len(structures) == 1:
@@ -93,47 +98,70 @@ class GradedMesher(Mesher):
 
         # Bounding boxes with the meshing axis rotated to z
         struct_bbox = self.rotate_structure_bounds(structures, axis)
+        # Rtree from the 2D part of the bounding boxes
+        tree = self.bounds_2d_tree(struct_bbox)
 
         # Array of coordinates of all intervals; add the simulation domain bounds already
         interval_coords = np.array(domain_bounds)
         # List of indexes of structures which are present in each interval
-        interval_structs = [[0]]  # will have len equal to len(interval_coords) - 1
-        # List of indexes of structures that every structre contains in 2D
-        struct_contains = [[]]  # will have len equal to len(structures)
+        interval_structs = [[]]  # will have len equal to len(interval_coords) - 1
 
-        for struct_ind in range(1, len(structures)):
-            bbox = struct_bbox[struct_ind]
+        # Iterate in reverse order as latter structures override earlier ones. To properly handle
+        # containment then we need to populate interval coordinates starting from the top.
+        for str_ind in range(len(structures) - 1, -1, -1):
+            # 3D and 2D bounding box of current structure
+            bbox = struct_bbox[str_ind]
+            bbox_2d = shapely_box(bbox[0, 0], bbox[0, 1], bbox[1, 0], bbox[1, 1])
 
-            # indexes of structures that the current structure contains in 2D
-            struct_contains.append(self.contains_2d(bbox, struct_bbox[:struct_ind]))
+            # List of structure bounding boxes that may contain the current structure in 2D
+            query_inds = [box.str_ind for box in tree.query(bbox_2d) if box.str_ind > str_ind]
+            query_bbox = [struct_bbox[ind] for ind in query_inds]
 
-            # Figure out where to place the bounding box coordinates of current structure
-            indsmin = np.argwhere(bbox[0, 2] <= interval_coords)
+            # List of structure bboxes that contain the current structure in 2D
+            bbox_contained_2d = self.contained_2d(bbox, query_bbox)
+
+            """Figure out where to place the bounding box coordinates of current structure.
+            For both the left and the right bounds of the structure along the meshing direction,
+            we check if they are not too close to an already existing coordinate, and if the
+            structure is not completely covered by another structure at that location. 
+            Only then we add that boundary to the list of interval coordinates. 
+            We also don't add the bounds if ``str_ind==0``, since the domain bounds have already
+            been added to the interval coords at the start."""
+
+            # Left structure bound
+            bound_coord = bbox[0, 2]
+            indsmin = np.argwhere(bound_coord <= interval_coords)
             indmin = int(indsmin[0])
-            bbox0 = np.copy(bbox)
-            bbox0[1, 2] = bbox0[0, 2]
-            if not self.is_contained(bbox0, struct_bbox[struct_ind + 1 :]):
+            is_close = self.is_close(bound_coord, interval_coords, indmin, min_step)
+            is_contained = self.is_contained(bound_coord, bbox_contained_2d)
+            if not is_close and not is_contained and str_ind > 0:
                 # Add current structure bounding box coordinates
-                interval_coords = np.insert(interval_coords, indmin, bbox[0, 2])
+                interval_coords = np.insert(interval_coords, indmin, bound_coord)
                 # Copy the structure containment list to the newly created interval
                 struct_list = interval_structs[max(0, indmin - 1)]
                 interval_structs.insert(indmin, struct_list.copy())
 
-            indsmax = np.argwhere(bbox[1, 2] >= interval_coords)
+            # Right structure bound
+            bound_coord = bbox[1, 2]
+            indsmax = np.argwhere(bound_coord >= interval_coords)
             indmax = int(indsmax[-1])
-            bbox0 = np.copy(bbox)
-            bbox0[0, 2] = bbox0[1, 2]
-            if not self.is_contained(bbox0, struct_bbox[struct_ind + 1 :]):
+            is_close = self.is_close(bound_coord, interval_coords, indmax + 1, min_step)
+            is_contained = self.is_contained(bound_coord, bbox_contained_2d)
+            if not is_close and not is_contained and str_ind > 0:
                 indmax += 1
                 # Add current structure bounding box coordinates
-                interval_coords = np.insert(interval_coords, indmax, bbox[1, 2])
+                interval_coords = np.insert(interval_coords, indmax, bound_coord)
                 # Copy the structure containment list to the newly created interval
                 struct_list = interval_structs[min(indmax - 1, len(interval_structs) - 1)]
                 interval_structs.insert(indmax, struct_list.copy())
 
-            # Add the structure index to all intervals that it spans
+            # Add the current structure index to all intervals that it spans, if it is not
+            # contained in any of the latter structures
             for interval_ind in range(indmin, indmax):
-                interval_structs[interval_ind].append(struct_ind)
+                # Check at the midpoint to avoid numerical issues at the interval boundaries
+                mid_coord = (interval_coords[interval_ind] + interval_coords[interval_ind + 1]) / 2
+                if not self.is_contained(mid_coord, bbox_contained_2d):
+                    interval_structs[interval_ind].append(str_ind)
 
         # Truncate intervals to domain bounds
         b_array = np.array(interval_coords)
@@ -141,39 +169,17 @@ class GradedMesher(Mesher):
         interval_coords = interval_coords[in_domain]
         interval_structs = [interval_structs[int(i)] for i in in_domain if i < b_array.size - 1]
 
-        # Remove intervals that are smaller than the absolute smallest min_step
-        min_step = np.amin(structure_steps)
-        coords_filter = [interval_coords[0]]
-        structs_filter = []
-        for coord_ind, coord in enumerate(interval_coords[1:]):
-            if coord - coords_filter[-1] > min_step:
-                coords_filter.append(coord)
-                structs_filter.append(interval_structs[coord_ind])
-        interval_coords = np.array(coords_filter)
-        interval_structs = structs_filter
-
         # Compute the maximum allowed step size in each interval
         max_steps = []
         for coord_ind, _ in enumerate(interval_coords[:-1]):
-            # Structure indexes inside current intervall in order of latter structures come first
-            struct_list = interval_structs[coord_ind]
-            struct_list_filter = []
-            # Handle containment
-            for ind, struct_ind in enumerate(struct_list[::-1]):
-                if ind >= len(struct_list):
-                    # This can happen because we modify struct_list in the loop
-                    break
-                # Add current structure to filtered list
-                struct_list_filter.append(struct_ind)
-                # Remove all structures that current structure overrides
-                contains = struct_contains[struct_ind]
-                struct_list = [ind for ind in struct_list if ind not in contains]
-
             # Define the max step as the minimum over all medium steps of media in this interval
-            max_step = np.amin(structure_steps[struct_list_filter])
+            max_step = np.amin(structure_steps[interval_structs[coord_ind]])
             max_steps.append(float(max_step))
 
-        return interval_coords, np.array(max_steps)
+        # Re-evaluate the absolute smallest min_step and remove intervals that are smaller than that
+        interval_coords, max_steps = self.filter_min_step(interval_coords, max_steps)
+
+        return np.array(interval_coords), np.array(max_steps)
 
     @staticmethod
     def structure_steps(
@@ -225,68 +231,75 @@ class GradedMesher(Mesher):
         return struct_bbox
 
     @staticmethod
-    def is_contained(bbox0: Array[float], bbox_list: List[Array[float]]) -> bool:
-        """Check if a bounding box is contained in any of a list of bounding boxes.
+    def bounds_2d_tree(struct_bbox: List[Array[float]]):
+        """Make a shapely Rtree for the 2D bounding boxes of all structures in the plane
+        perpendicular to the meshing axis."""
 
-        Parameters
-        ----------
-        bbox0 : Array[float]
-            Bounding box to check.
-        bbox_list : List[Array[float]]
-            List of bounding boxes to check if they contain ``bbox0``.
-
-        Returns
-        -------
-        contained : bool
-            ``True`` if ``bbox0`` is contained in any of the boxes in the list.
-        """
-        contained = False
-        for bounds in bbox_list:
-            # It can be much faster to write out the conditions one by one than e.g. to use np.all
-            # on the bottom values and np.all on the top values
-            if all(
-                [
-                    bbox0[0, 0] >= bounds[0, 0],
-                    bbox0[1, 0] <= bounds[1, 0],
-                    bbox0[0, 1] >= bounds[0, 1],
-                    bbox0[1, 1] <= bounds[1, 1],
-                    bbox0[0, 2] >= bounds[0, 2],
-                    bbox0[1, 2] <= bounds[1, 2],
-                ]
-            ):
-                contained = True
-        return contained
+        boxes_2d = []
+        for str_ind, bbox in enumerate(struct_bbox):
+            box = shapely_box(bbox[0, 0], bbox[0, 1], bbox[1, 0], bbox[1, 1])
+            box.str_ind = str_ind
+            boxes_2d.append(box)
+        return STRtree(boxes_2d)
 
     @staticmethod
-    def contains_2d(bbox0: Array[float], bbox_list: List[Array[float]]) -> List[int]:
-        """Check if a bounding box contains along the first two dimensions any of a list of
-        bounding boxes.
-
-        Parameters
-        ----------
-        bbox0 : Array[float]
-            Bounding box to check.
-        bbox_list : List[Array[float]]
-            List of bounding boxes to check if they are contained in ``bbox0``.
-
-        Returns
-        -------
-        List[int]
-            A list with all the indexes into the ``bbox_list`` that are contained in ``bbox0``
-            along the first two dimensions.
+    def contained_2d(bbox0: Array[float], query_bbox: List[Array[float]]) -> List[Array[float]]:
+        """Return a list of all bounding boxes among ``query_bbox`` that contain ``bbox0`` in 2D.
         """
-        struct_contains_inds = []
-        for ind, bounds in enumerate(bbox_list):
+        contained_in = []
+        for bbox in query_bbox:
             if all(
                 [
-                    bbox0[0, 0] <= bounds[0, 0],
-                    bbox0[1, 0] >= bounds[1, 0],
-                    bbox0[0, 1] <= bounds[0, 1],
-                    bbox0[1, 1] >= bounds[1, 1],
+                    bbox0[0, 0] >= bbox[0, 0],
+                    bbox0[1, 0] <= bbox[1, 0],
+                    bbox0[0, 1] >= bbox[0, 1],
+                    bbox0[1, 1] <= bbox[1, 1],
                 ]
             ):
-                struct_contains_inds.append(ind)
-        return struct_contains_inds
+                contained_in.append(bbox)
+        return contained_in
+
+    @staticmethod
+    def is_close(
+        coord: float, interval_coords: List[float], interval_ind: int, atol: float
+    ) -> bool:
+        """Check if a given ``coord`` is within ``atol`` of an interval coordinate at a given
+        interval index."""
+        is_close = False
+        if interval_ind > 0:
+            is_close = is_close or isclose(coord, interval_coords[interval_ind - 1], abs_tol=atol)
+        if interval_ind < len(interval_coords):
+            is_close = is_close or isclose(coord, interval_coords[interval_ind], abs_tol=atol)
+        return is_close
+
+    @staticmethod
+    def is_contained(normal_pos: float, contained_2d: List[Array[float]]) -> bool:
+        """Check if a given ``normal_pos`` along the meshing direction is contained inside any
+        of the bounding boxes that are in the ``contained_2d`` list.
+        """
+        for contain_box in contained_2d:
+            if contain_box[0, 2] <= normal_pos <= contain_box[1, 2]:
+                return True
+        return False
+
+    @staticmethod
+    def filter_min_step(
+        interval_coords: List[float], max_steps: List[float]
+    ) -> Tuple[List[float], List[float]]:
+        """Filter intervals that are smaller than the absolute smallest of the ``max_steps``."""
+
+        # Re-compute minimum step in case some high-index structures were completely covered
+        min_step = np.amin(max_steps)
+
+        # Filter interval coordintaes and max_steps
+        coords_filter = [interval_coords[0]]
+        steps_filter = []
+        for coord_ind, coord in enumerate(interval_coords[1:]):
+            if coord - coords_filter[-1] > min_step:
+                coords_filter.append(coord)
+                steps_filter.append(max_steps[coord_ind])
+
+        return coords_filter, steps_filter
 
     def make_grid_multiple_intervals(  # pylint:disable=too-many-locals
         self,
@@ -536,7 +549,7 @@ class GradedMesher(Mesher):
             # Compute the number of steps it takes to scale from small_dl to large_dl
             # Check the remaining length in the interval
             num_step = 1 + int(np.floor(np.log(large_dl / small_dl) / np.log(max_scale)))
-            len_scale = small_dl * (1 - max_scale**num_step) / (1 - max_scale)
+            len_scale = small_dl * (1 - max_scale ** num_step) / (1 - max_scale)
             len_remaining = len_interval - len_scale
 
             # 1) interval length too small, cannot increase to large_dl, or barely can,
@@ -558,8 +571,8 @@ class GradedMesher(Mesher):
             # then compare the length to len_interval
             num_left_step = 1 + int(np.floor(np.log(max_dl / left_dl) / np.log(max_scale)))
             num_right_step = 1 + int(np.floor(np.log(max_dl / right_dl) / np.log(max_scale)))
-            len_left = left_dl * (1 - max_scale**num_left_step) / (1 - max_scale)
-            len_right = right_dl * (1 - max_scale**num_right_step) / (1 - max_scale)
+            len_left = left_dl * (1 - max_scale ** num_left_step) / (1 - max_scale)
+            len_right = right_dl * (1 - max_scale ** num_right_step) / (1 - max_scale)
 
             len_remaining = len_interval - len_left - len_right
 
@@ -605,12 +618,12 @@ class GradedMesher(Mesher):
         num_right_step = 1 + int(np.floor(np.log(max_dl / right_dl) / np.log(max_scale)))
 
         # step list, in ascending order
-        dl_list_left = np.array([left_dl * max_scale**i for i in range(num_left_step)])
-        dl_list_right = np.array([right_dl * max_scale**i for i in range(num_right_step)])
+        dl_list_left = np.array([left_dl * max_scale ** i for i in range(num_left_step)])
+        dl_list_right = np.array([right_dl * max_scale ** i for i in range(num_right_step)])
 
         # length
-        len_left = left_dl * (1 - max_scale**num_left_step) / (1 - max_scale)
-        len_right = right_dl * (1 - max_scale**num_right_step) / (1 - max_scale)
+        len_left = left_dl * (1 - max_scale ** num_left_step) / (1 - max_scale)
+        len_right = right_dl * (1 - max_scale ** num_right_step) / (1 - max_scale)
 
         # remaining part for constant large_dl
         num_const_step = int(np.floor((len_interval - len_left - len_right) / max_dl))
@@ -689,12 +702,12 @@ class GradedMesher(Mesher):
         num_right_step = max(int(np.floor(np.log(tmp_num_r) / np.log(max_scale))), 0)
 
         # step list, in ascending order
-        dl_list_left = np.array([left_dl * max_scale**i for i in range(num_left_step)])
-        dl_list_right = np.array([right_dl * max_scale**i for i in range(num_right_step)])
+        dl_list_left = np.array([left_dl * max_scale ** i for i in range(num_left_step)])
+        dl_list_right = np.array([right_dl * max_scale ** i for i in range(num_right_step)])
 
         # length
-        len_left = left_dl * (1 - max_scale**num_left_step) / (1 - max_scale)
-        len_right = right_dl * (1 - max_scale**num_right_step) / (1 - max_scale)
+        len_left = left_dl * (1 - max_scale ** num_left_step) / (1 - max_scale)
+        len_right = right_dl * (1 - max_scale ** num_right_step) / (1 - max_scale)
 
         # mismatch
         len_mismatch = len_interval - len_left - len_right
@@ -760,8 +773,8 @@ class GradedMesher(Mesher):
         """
         # steps for scaling
         num_scale_step = 1 + int(np.floor(np.log(large_dl / small_dl) / np.log(max_scale)))
-        dl_list_scale = np.array([small_dl * max_scale**i for i in range(num_scale_step)])
-        len_scale = small_dl * (1 - max_scale**num_scale_step) / (1 - max_scale)
+        dl_list_scale = np.array([small_dl * max_scale ** i for i in range(num_scale_step)])
+        len_scale = small_dl * (1 - max_scale ** num_scale_step) / (1 - max_scale)
 
         # remaining part for constant large_dl
         num_const_step = int(np.floor((len_interval - len_scale) / large_dl))
@@ -816,8 +829,8 @@ class GradedMesher(Mesher):
         num_step = int(np.floor(np.log(tmp_step) / np.log(max_scale)))
 
         # assuming num_step grids and scaling = max_scale
-        dl_list = np.array([small_dl * max_scale**i for i in range(num_step)])
-        size_snapped = small_dl * (1 - max_scale**num_step) / (1 - max_scale)
+        dl_list = np.array([small_dl * max_scale ** i for i in range(num_step)])
+        size_snapped = small_dl * (1 - max_scale ** num_step) / (1 - max_scale)
 
         # mismatch
         len_mismatch = len_interval - size_snapped
@@ -835,7 +848,7 @@ class GradedMesher(Mesher):
         # (3) remaining part not sufficient to insert, but will not
         # violate max_scale by repearting 1st step, and the last step to include
         # the mismatch part
-        if num_step >= 2 and len_mismatch >= small_dl - (1 - 1.0 / max_scale**2) * dl_list[-1]:
+        if num_step >= 2 and len_mismatch >= small_dl - (1 - 1.0 / max_scale ** 2) * dl_list[-1]:
             dl_list = np.append(small_dl, dl_list)
             dl_list[-1] += len_mismatch - small_dl
             return dl_list
@@ -853,7 +866,7 @@ class GradedMesher(Mesher):
                     return len_interval - small_dl * (1 + num_step)
                 return (
                     len_interval
-                    - small_dl * (1 - new_scale**num_step) / (1 - new_scale)
+                    - small_dl * (1 - new_scale ** num_step) / (1 - new_scale)
                     - small_dl
                 )
 
@@ -862,7 +875,7 @@ class GradedMesher(Mesher):
             # if not converged, let's use the last strategy
             if sol_scale.converged:
                 new_scale = sol_scale.root
-                dl_list = np.array([small_dl * new_scale**i for i in range(num_step)])
+                dl_list = np.array([small_dl * new_scale ** i for i in range(num_step)])
                 dl_list = np.append(small_dl, dl_list)
                 return dl_list
 
