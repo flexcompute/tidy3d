@@ -9,7 +9,7 @@ import numpy as np
 from pydantic.fields import ModelField
 
 from .types import ComplexNumber, NumpyArray, Literal
-from ..log import FileError
+from ..log import FileError, log
 
 # default indentation (# spaces) in files
 INDENT = 4
@@ -25,6 +25,8 @@ class Tidy3dBaseModel(pydantic.BaseModel):
     For more details on pydantic base models, see:
     `Pydantic Models <https://pydantic-docs.helpmanual.io/usage/models/>`_
     """
+
+    _hash : int = pydantic.PrivateAttr(None)
 
     def __init_subclass__(cls):
         """Things that are done to each of the models."""
@@ -215,6 +217,11 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         -------
         >>> hash_integer = hash(simulation)
         """
+        if self._hash is not None:
+            log.info('using stored hash value')
+            return self._hash
+
+        log.info('computing hash value')
         return hash(self.json())
 
     def __lt__(self, other):
