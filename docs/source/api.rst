@@ -103,10 +103,12 @@ Types of Sources
 .. autosummary::
    :toctree: _autosummary/
 
-   VolumeSource
+   PointDipole
+   UniformCurrentSource
    PlaneWave
-   GaussianBeam
    ModeSource
+   GaussianBeam
+   AstigmaticGaussianBeam
 
 
 Source Time Dependence
@@ -242,8 +244,17 @@ Information Containers
 Plugins
 =======
 
-.. Dispersive Model Fitting Tool
-.. -----------------------------
+Mode Solver
+-----------
+
+.. autosummary::
+   :toctree: _autosummary/
+
+   plugins.ModeSolver
+   plugins.ModeSolverData
+
+Dispersive Model Fitting
+------------------------
 
 .. autosummary::
    :toctree: _autosummary/
@@ -251,14 +262,34 @@ Plugins
    plugins.DispersionFitter
    plugins.StableDispersionFitter
    plugins.AdvancedFitterParam
-   plugins.ModeSolver
-   plugins.ModeSolverData
+
+
+Near Field to Far Field Transformation
+--------------------------------------
+
+.. autosummary::
+   :toctree: _autosummary/
+
    plugins.Near2Far
    plugins.Near2FarSurface
+
+Scattering Matrix Calculator
+----------------------------
+
+.. autosummary::
+   :toctree: _autosummary/
+
    plugins.ComponentModeler
    plugins.Port
-   plugins.SimulationPlotly
-   plugins.SimulationDataApp
+
+Web-based Plotting
+------------------
+
+.. autosummary::
+   :toctree: _autosummary/
+
+   plugins.webplots.SimulationPlotly
+   plugins.webplots.SimulationDataApp
 
 Constants
 =========
