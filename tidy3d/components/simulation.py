@@ -192,6 +192,41 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         description="String specifying the front end version number.",
     )
 
+    """ Static simulation tools."""
+
+    _hash: int = pydantic.PrivateAttr(None)
+
+    def __hash__(self) -> int:
+        """Hash a :class:`Tidy3dBaseModel` objects using its json string.
+
+        Returns
+        -------
+        int
+            Integer representation of the hash of the :class:`Tidy3dBaseModel`.
+
+        Example
+        -------
+        >>> hash_integer = hash(simulation)
+        """
+        if self._hash is not None:
+            # log.warning('using computed hash')
+            return self._hash
+
+        # log.warning('computing hash')
+        return super().__hash__()
+
+    def _freeze(self) -> int:
+        """Computes the hash, sets ``self._hash``, and returns it."""
+        frozen_hash = hash(self)
+        self._hash = frozen_hash
+        return frozen_hash
+
+    def _unfreeze(self) -> int:
+        """Sets ``self._hash`` to ``None``, returns final hash"""
+        self._hash = None
+        final_hash = hash(self)
+        return final_hash
+
     """ Validating setup """
 
     @pydantic.validator("grid_size", always=True)

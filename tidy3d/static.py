@@ -1,77 +1,51 @@
+"""Tools for dealing with static Simulation objects."""
+import functools
+
 from .log import Tidy3dError, log
-from .components.base import Tidy3dBaseModel
+from .components.simulation import Simulation
+
 
 class StaticException(Tidy3dError):
     """An exception when the tidy3d object has changed."""
-
-def freeze_component(tidy3d_component) -> int:
-    """Hashes an object if it's a tidy3dBaseModel.  Returns object and the hash value."""
-
-    if not isinstance(tidy3d_component, Tidy3dBaseModel):
-        return None
-
-    object_hash = hash(tidy3d_component)
-    tidy3d_component._hash = object_hash
-
-    return object_hash
-
-def unfreeze_component(tidy3d_component, object_hash) -> None:
-
-    if not isinstance(tidy3d_component, Tidy3dBaseModel):
-        return
-    
-    final_hash = hash(tidy3d_component)
-    tidy3d_component._hash = None
-
-    log.info(f'checking whether object has been modified')
-    if final_hash != object_hash:
-        raise StaticException(f"object has changed in static context.")
 
 
 class MakeStatic:
     """Context manager that stores a hash and checks if the object has changed upon teardown."""
 
-    def __init__(self, tidy3d_component):
-        self.tidy3d_component = tidy3d_component
+    def __init__(self, simulation: Simulation):
+        """When context manager is initalized, return a copy of the simulation."""
+        if not isinstance(simulation, Simulation):
+            raise ValueError("simulation must be a ``Simulation`` type.")
+        self.simulation = simulation.copy(deep=True)
+        self.original_hash = self.simulation._freeze()
 
     def __enter__(self):
-        self.original_hash = freeze_component(self.tidy3d_component)
-        log.info(f'-> entering static context')
-        return self.tidy3d_component
+        """Freeze the simulation when entering context."""
+        log.debug("-> entering static context")
+        return self.simulation
 
     def __exit__(self, *args):
-        log.info(f'<- done with static context')
-        unfreeze_component(self.tidy3d_component, self.original_hash)
+        """Unfeeze the simulation when leaving context, check the hashes equal."""
+        log.debug("<- done with static context")
+        final_hash = self.simulation._unfreeze()
+        if final_hash != self.original_hash:
+            raise StaticException("Simulation has changed in static context.")
 
-def make_static(method):
-    """Decorates a method to make any tidy3d objects static during the method call."""
 
-    # stores the hashes of each of the args / kwargs
-    hashes = {}
+def make_static(function):
+    """Decorates a function to make the first argument (Simulation) static during the call."""
 
-    def store_hash(obj):
-        hash_value = freeze_component(obj)
-        if hash_value is not None:
-            hashes[obj] = hash_value        
+    @functools.wraps(function)
+    def static_function(*args, **kwargs):
 
-    def method_static(*args, **kwargs):
-        """The method in the static context."""
+        # the first argument is assumed to be the simulation, note this can be customized later.
+        sim_original, *args = args
 
-        # store the args and kwargs if they are tidy3d base model objects
-        for arg in args:
-            store_hash(arg)
+        # call the original function within the static context manager
+        with MakeStatic(sim_original) as sim_static:
+            new_args = sim_static, *args
+            ret_value = function(*new_args, **kwargs)
 
-        for value in kwargs.values():
-            store_hash(value)
+        return ret_value
 
-        # call original method
-        return_value = method(*args, **kwargs)
-
-        # unfreeze anything previously frozen
-        for obj, hash_value in hashes.items():
-            unfreeze_component(obj, hash_value)
-
-        return return_value
-
-    return method_static
-
+    return static_function
