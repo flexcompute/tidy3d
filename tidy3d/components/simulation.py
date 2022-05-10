@@ -1,8 +1,8 @@
 # pylint: disable=too-many-lines, too-many-arguments
 """ Container holding all information about simulation and its components"""
 from typing import Dict, Tuple, List, Set, Union
-from functools import lru_cache
 from math import isclose
+from functools import wraps
 
 import pydantic
 import numpy as np
@@ -41,6 +41,29 @@ MAX_TIME_STEPS = 1e8
 MAX_GRID_CELLS = 20e9
 MAX_CELLS_TIMES_STEPS = 1e17
 MAX_MONITOR_DATA_SIZE_BYTES = 10e9
+
+
+def cache(prop):
+    """Decorates a property to cache the previously computed values based on a hash of self."""
+
+    stored_values = {}
+
+    @wraps(prop)
+    def cached_property(self):
+        """The new property method to be returned by decorator."""
+
+        hash_key = hash(self)
+
+        # if the value has been computed before, we can simply return the stored value
+        if hash_key in stored_values:
+            return stored_values[hash_key]
+
+        # otherwise, we need to recompute the value, store it in the storage dict, and return
+        return_value = prop(self)
+        stored_values[hash_key] = return_value
+        return return_value
+
+    return cached_property
 
 
 class Simulation(Box):  # pylint:disable=too-many-public-methods
@@ -588,7 +611,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
     """ Accounting """
 
     @property
-    @lru_cache()
+    @cache
     def mediums(self) -> Set[MediumType]:
         """Returns set of distinct :class:`AbstractMedium` in simulation.
 
@@ -602,7 +625,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         return list(medium_dict.keys())
 
     @property
-    @lru_cache()
+    @cache
     def medium_map(self) -> Dict[MediumType, pydantic.NonNegativeInt]:
         """Returns dict mapping medium to index in material.
         ``medium_map[medium]`` returns unique global index of :class:`AbstractMedium` in simulation.
@@ -1418,7 +1441,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         return len(self.tmesh)
 
     @property
-    @lru_cache()
+    @cache
     def grid(self) -> Grid:
         """FDTD grid spatial locations and information.
 
