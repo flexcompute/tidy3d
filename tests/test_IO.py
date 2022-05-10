@@ -57,6 +57,7 @@ def test_simulation_preserve_types():
                 pol_angle=2.0,
             ),
             GaussianBeam(
+                center=(0, 0, -4),
                 size=(1, 1, 0),
                 source_time=st,
                 direction="+",

@@ -18,7 +18,7 @@ from .types import Symmetry, Ax, Shapely, FreqBound, Axis, GridSize
 from .grid import Coords1D, Grid, Coords, GridSpec, UniformGrid
 from .medium import Medium, MediumType, AbstractMedium, PECMedium
 from .structure import Structure
-from .source import SourceType, PlaneWave
+from .source import SourceType, PlaneWave, GaussianBeam, AstigmaticGaussianBeam
 from .monitor import MonitorType, Monitor, FreqMonitor
 from .pml import PMLTypes, PML, Absorber
 from .viz import add_ax_if_none, equal_aspect
@@ -484,8 +484,8 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         return val
 
     @pydantic.validator("sources", always=True)
-    def _plane_wave_homogeneous(cls, val, values):
-        """Error if plane wave intersects"""
+    def _source_homogeneous(cls, val, values):
+        """Error if a plane wave or gaussian beam source is not in a homogeneous region."""
 
         if val is None:
             return val
@@ -505,7 +505,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
 
         # for each plane wave in the sources list
         for source in val:
-            if isinstance(source, PlaneWave):
+            if isinstance(source, (PlaneWave, GaussianBeam, AstigmaticGaussianBeam)):
 
                 # get all merged structures on the plane
                 normal_axis_index = source.size.index(0.0)
@@ -519,7 +519,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
                 if len(mediums) > 1:
                     raise SetupError(
                         f"{len(mediums)} different mediums detected on plane "
-                        "intersecting a plane wave source.  Plane must be homogeneous."
+                        f"intersecting a {source.type} source. Plane must be homogeneous."
                     )
 
         return val
