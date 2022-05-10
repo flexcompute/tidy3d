@@ -2,6 +2,7 @@
 """ Container holding all information about simulation and its components"""
 from typing import Dict, Tuple, List, Set, Union
 from functools import lru_cache
+from math import isclose
 
 import pydantic
 import numpy as np
@@ -309,7 +310,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
 
             for sim_val, struct_val in zip(sim_bounds, struct_bounds):
 
-                if np.isclose(sim_val, struct_val):
+                if isclose(sim_val, struct_val):
                     log.warning(
                         f"Structure at structures[{istruct}] has bounds that extend exactly to "
                         "simulation edges. This can cause unexpected behavior. "

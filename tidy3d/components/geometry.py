@@ -1835,20 +1835,34 @@ class PolySlab(Planar):
         return ints_y_sort, ints_angle_sort
 
     @property
-    def _bounds(self):
+    def bounds(self) -> Bound:
+        """Returns bounding box min and max coordinates. The dilation and slant angle are not
+        taken into account exactly for speed. Instead, the polygon may be slightly smaller than
+        the returned bounds, but it should always be fully contained.
+
+        Returns
+        -------
+        Tuple[float, float, float], Tuple[float, float float]
+            Min and max bounds packaged as ``(minx, miny, minz), (maxx, maxy, maxz)``.
+        """
 
         # get the min and max points in polygon plane
-        xpoints_base = tuple(c[0] for c in self.base_polygon)
-        ypoints_base = tuple(c[1] for c in self.base_polygon)
-        xpoints_top = tuple(c[0] for c in self.top_polygon)
-        ypoints_top = tuple(c[1] for c in self.top_polygon)
-        xmin = min(min(xpoints_base), min(xpoints_top))
-        ymin = min(min(ypoints_base), min(ypoints_top))
-        xmax = max(max(xpoints_base), max(xpoints_top))
-        ymax = max(max(ypoints_base), max(ypoints_top))
+        xmin, ymin = np.amin(self.vertices, axis=0)
+        xmax, ymax = np.amax(self.vertices, axis=0)
+
+        # add the maximum possible contribution from dilation/slant on each side
+        max_offset = self.dilation + max(0, np.tan(-self.sidewall_angle) * self.length)
+        xmin -= max_offset
+        ymin -= max_offset
+        xmax += max_offset
+        ymax += max_offset
+
+        # get bounds in (local) z
         z0, _ = self.pop_axis(self.center, axis=self.axis)
         zmin = z0 - self.length / 2
         zmax = z0 + self.length / 2
+
+        # rearrange axes
         coords_min = self.unpop_axis(zmin, (xmin, ymin), axis=self.axis)
         coords_max = self.unpop_axis(zmax, (xmax, ymax), axis=self.axis)
         return (tuple(coords_min), tuple(coords_max))
