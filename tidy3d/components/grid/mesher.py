@@ -123,8 +123,8 @@ class GradedMesher(Mesher):
             """Figure out where to place the bounding box coordinates of current structure.
             For both the left and the right bounds of the structure along the meshing direction,
             we check if they are not too close to an already existing coordinate, and if the
-            structure is not completely covered by another structure at that location. 
-            Only then we add that boundary to the list of interval coordinates. 
+            structure is not completely covered by another structure at that location.
+            Only then we add that boundary to the list of interval coordinates.
             We also don't add the bounds if ``str_ind==0``, since the domain bounds have already
             been added to the interval coords at the start."""
 
@@ -244,8 +244,7 @@ class GradedMesher(Mesher):
 
     @staticmethod
     def contained_2d(bbox0: Array[float], query_bbox: List[Array[float]]) -> List[Array[float]]:
-        """Return a list of all bounding boxes among ``query_bbox`` that contain ``bbox0`` in 2D.
-        """
+        """Return a list of all bounding boxes among ``query_bbox`` that contain ``bbox0`` in 2D."""
         contained_in = []
         for bbox in query_bbox:
             if all(
@@ -549,7 +548,7 @@ class GradedMesher(Mesher):
             # Compute the number of steps it takes to scale from small_dl to large_dl
             # Check the remaining length in the interval
             num_step = 1 + int(np.floor(np.log(large_dl / small_dl) / np.log(max_scale)))
-            len_scale = small_dl * (1 - max_scale ** num_step) / (1 - max_scale)
+            len_scale = small_dl * (1 - max_scale**num_step) / (1 - max_scale)
             len_remaining = len_interval - len_scale
 
             # 1) interval length too small, cannot increase to large_dl, or barely can,
@@ -571,8 +570,8 @@ class GradedMesher(Mesher):
             # then compare the length to len_interval
             num_left_step = 1 + int(np.floor(np.log(max_dl / left_dl) / np.log(max_scale)))
             num_right_step = 1 + int(np.floor(np.log(max_dl / right_dl) / np.log(max_scale)))
-            len_left = left_dl * (1 - max_scale ** num_left_step) / (1 - max_scale)
-            len_right = right_dl * (1 - max_scale ** num_right_step) / (1 - max_scale)
+            len_left = left_dl * (1 - max_scale**num_left_step) / (1 - max_scale)
+            len_right = right_dl * (1 - max_scale**num_right_step) / (1 - max_scale)
 
             len_remaining = len_interval - len_left - len_right
 
@@ -618,12 +617,12 @@ class GradedMesher(Mesher):
         num_right_step = 1 + int(np.floor(np.log(max_dl / right_dl) / np.log(max_scale)))
 
         # step list, in ascending order
-        dl_list_left = np.array([left_dl * max_scale ** i for i in range(num_left_step)])
-        dl_list_right = np.array([right_dl * max_scale ** i for i in range(num_right_step)])
+        dl_list_left = np.array([left_dl * max_scale**i for i in range(num_left_step)])
+        dl_list_right = np.array([right_dl * max_scale**i for i in range(num_right_step)])
 
         # length
-        len_left = left_dl * (1 - max_scale ** num_left_step) / (1 - max_scale)
-        len_right = right_dl * (1 - max_scale ** num_right_step) / (1 - max_scale)
+        len_left = left_dl * (1 - max_scale**num_left_step) / (1 - max_scale)
+        len_right = right_dl * (1 - max_scale**num_right_step) / (1 - max_scale)
 
         # remaining part for constant large_dl
         num_const_step = int(np.floor((len_interval - len_left - len_right) / max_dl))
@@ -702,12 +701,12 @@ class GradedMesher(Mesher):
         num_right_step = max(int(np.floor(np.log(tmp_num_r) / np.log(max_scale))), 0)
 
         # step list, in ascending order
-        dl_list_left = np.array([left_dl * max_scale ** i for i in range(num_left_step)])
-        dl_list_right = np.array([right_dl * max_scale ** i for i in range(num_right_step)])
+        dl_list_left = np.array([left_dl * max_scale**i for i in range(num_left_step)])
+        dl_list_right = np.array([right_dl * max_scale**i for i in range(num_right_step)])
 
         # length
-        len_left = left_dl * (1 - max_scale ** num_left_step) / (1 - max_scale)
-        len_right = right_dl * (1 - max_scale ** num_right_step) / (1 - max_scale)
+        len_left = left_dl * (1 - max_scale**num_left_step) / (1 - max_scale)
+        len_right = right_dl * (1 - max_scale**num_right_step) / (1 - max_scale)
 
         # mismatch
         len_mismatch = len_interval - len_left - len_right
@@ -773,8 +772,8 @@ class GradedMesher(Mesher):
         """
         # steps for scaling
         num_scale_step = 1 + int(np.floor(np.log(large_dl / small_dl) / np.log(max_scale)))
-        dl_list_scale = np.array([small_dl * max_scale ** i for i in range(num_scale_step)])
-        len_scale = small_dl * (1 - max_scale ** num_scale_step) / (1 - max_scale)
+        dl_list_scale = np.array([small_dl * max_scale**i for i in range(num_scale_step)])
+        len_scale = small_dl * (1 - max_scale**num_scale_step) / (1 - max_scale)
 
         # remaining part for constant large_dl
         num_const_step = int(np.floor((len_interval - len_scale) / large_dl))
@@ -829,8 +828,8 @@ class GradedMesher(Mesher):
         num_step = int(np.floor(np.log(tmp_step) / np.log(max_scale)))
 
         # assuming num_step grids and scaling = max_scale
-        dl_list = np.array([small_dl * max_scale ** i for i in range(num_step)])
-        size_snapped = small_dl * (1 - max_scale ** num_step) / (1 - max_scale)
+        dl_list = np.array([small_dl * max_scale**i for i in range(num_step)])
+        size_snapped = small_dl * (1 - max_scale**num_step) / (1 - max_scale)
 
         # mismatch
         len_mismatch = len_interval - size_snapped
@@ -848,7 +847,7 @@ class GradedMesher(Mesher):
         # (3) remaining part not sufficient to insert, but will not
         # violate max_scale by repearting 1st step, and the last step to include
         # the mismatch part
-        if num_step >= 2 and len_mismatch >= small_dl - (1 - 1.0 / max_scale ** 2) * dl_list[-1]:
+        if num_step >= 2 and len_mismatch >= small_dl - (1 - 1.0 / max_scale**2) * dl_list[-1]:
             dl_list = np.append(small_dl, dl_list)
             dl_list[-1] += len_mismatch - small_dl
             return dl_list
@@ -866,7 +865,7 @@ class GradedMesher(Mesher):
                     return len_interval - small_dl * (1 + num_step)
                 return (
                     len_interval
-                    - small_dl * (1 - new_scale ** num_step) / (1 - new_scale)
+                    - small_dl * (1 - new_scale**num_step) / (1 - new_scale)
                     - small_dl
                 )
 
@@ -875,7 +874,7 @@ class GradedMesher(Mesher):
             # if not converged, let's use the last strategy
             if sol_scale.converged:
                 new_scale = sol_scale.root
-                dl_list = np.array([small_dl * new_scale ** i for i in range(num_step)])
+                dl_list = np.array([small_dl * new_scale**i for i in range(num_step)])
                 dl_list = np.append(small_dl, dl_list)
                 return dl_list
 
