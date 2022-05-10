@@ -1,4 +1,5 @@
 import numpy as np
+import pytest
 
 import tidy3d as td
 from tidy3d.constants import fp_eps
@@ -326,87 +327,163 @@ def test_grid_refinement():
         )
 
 
-def test_parse_structures():
-    """Test some aspects of the structure parsing."""
+WAVELENGTH = 2.9
 
-    wavelength = 2.9
+BOX1 = td.Structure(
+    geometry=td.Box(center=(0, 0, 0), size=(2, 2, 2)), medium=td.Medium(permittivity=9)
+)
+# covers BOX1 along x and y but not z, smaller permittivity
+BOX2 = td.Structure(
+    geometry=td.Box(center=(0, 0, 0), size=(200, 200, 1)), medium=td.Medium(permittivity=4)
+)
+# covers BOX1 along x only, smaller permittivity
+BOX3 = td.Structure(
+    geometry=td.Box(center=(0, 1.5, 0), size=(200, 4, 1)), medium=td.Medium(permittivity=4)
+)
+# fully covers one edge of BOX1
+BOX4 = td.Structure(
+    geometry=td.Box(center=(0, 1.01, 0), size=(200, 0.2, 2)), medium=td.Medium(permittivity=2)
+)
+# box made out of gold
+GOLD = td.material_library["Au"]["JohnsonChristy1972"]
+BOX5 = td.Structure(geometry=td.Box(center=(0, 0, 0), size=(1, 1, 0.1)), medium=GOLD)
+# fully covers BOX5, regular dielectric
+BOX6 = td.Structure(
+    geometry=td.Box(center=(0, 0, 0), size=(1, 1, 0.2)), medium=td.Medium(permittivity=2)
+)
 
-    box1 = td.Structure(
-        geometry=td.Box(center=(0, 0, 0), size=(2, 2, 2)), medium=td.Medium(permittivity=9)
-    )
-    # covers box1 along x and y but not z, smaller permittivity
-    box2 = td.Structure(
-        geometry=td.Box(center=(0, 0, 0), size=(200, 200, 1)), medium=td.Medium(permittivity=4)
-    )
-    # covers box1 along x only, smaller permittivity
-    box3 = td.Structure(
-        geometry=td.Box(center=(0, 1.5, 0), size=(200, 4, 1)), medium=td.Medium(permittivity=4)
-    )
-    # fully covers one edge of box1
-    box4 = td.Structure(
-        geometry=td.Box(center=(0, 1.01, 0), size=(200, 0.2, 2)), medium=td.Medium(permittivity=2)
-    )
 
-    # Test that the box2 permittivity is used along z in the region where it fully covers box1
+def test_mesh_structure_covers():
+    # Test that the BOX2 permittivity is used along z in the region where it fully covers BOX1
     sim = td.Simulation(
         size=(3, 3, 3),
-        grid_spec=td.GridSpec.auto(wavelength=wavelength),
+        grid_spec=td.GridSpec.auto(wavelength=WAVELENGTH),
         run_time=1e-13,
-        structures=[box1, box2],
+        structures=[BOX1, BOX2],
     )
     sizes = sim.grid.sizes.to_list[2]
     assert sizes[sizes.size // 2] > 0.1
 
-    # Test that the box3 permittivity is not used along z as it doesn't fully cover box1
+
+def test_mesh_structure_partially_covers():
+    # Test that the BOX3 permittivity is not used along z as it doesn't fully cover BOX1
     sim = td.Simulation(
         size=(3, 3, 3),
-        grid_spec=td.GridSpec.auto(wavelength=wavelength),
+        grid_spec=td.GridSpec.auto(wavelength=WAVELENGTH),
         run_time=1e-13,
-        structures=[box1, box3],
+        structures=[BOX1, BOX3],
     )
     sizes = sim.grid.sizes.to_list[2]
     assert sizes[sizes.size // 2] < 0.1
 
-    # Test that there is no grid boundary along y at the box1 right side covered by box4
-    boundaries = sim.grid.boundaries.to_list[1]
-    assert 1.0 in boundaries
+
+def test_mesh_structure_covers_boundary():
+    # Test that there is no grid boundary along y at the BOX1 right side covered by BOX4
     sim = td.Simulation(
         size=(3, 3, 3),
-        grid_spec=td.GridSpec.auto(wavelength=wavelength),
+        grid_spec=td.GridSpec.auto(wavelength=WAVELENGTH),
         run_time=1e-13,
-        structures=[box1, box4],
+        structures=[BOX1, BOX4],
     )
     boundaries = sim.grid.boundaries.to_list[1]
     assert 1.0 not in boundaries
 
+
+def test_mesh_high_index_background():
     # Test high-index background medium
     sim = td.Simulation(
         size=(3, 3, 6),
-        grid_spec=td.GridSpec.auto(wavelength=wavelength),
+        grid_spec=td.GridSpec.auto(wavelength=WAVELENGTH),
         run_time=1e-13,
-        structures=[box1, box2],
+        structures=[BOX1, BOX2],
         medium=td.Medium(permittivity=5**2),
     )
     sizes = sim.grid.sizes.to_list[2]
-    assert sizes[0] < wavelength / 50
+    assert sizes[0] < WAVELENGTH / 50
 
+
+def test_mesh_high_index_background_override():
     # Test high-index background with override box
     sim = td.Simulation(
         size=(3, 3, 6),
         grid_spec=td.GridSpec.auto(
-            wavelength=wavelength,
+            wavelength=WAVELENGTH,
             override_structures=[
                 td.Structure(
                     geometry=td.Box(size=(td.inf, td.inf, td.inf)),
                     medium=td.Medium(permittivity=1),
                 ),
-                box1,
-                box2,
+                BOX1,
+                BOX2,
             ],
         ),
         run_time=1e-13,
-        structures=[box1, box2],
+        structures=[BOX1, BOX2],
         medium=td.Medium(permittivity=5**2),
     )
     sizes = sim.grid.sizes.to_list[2]
-    assert np.isclose(sizes[0], wavelength / 10)
+    assert np.isclose(sizes[0], WAVELENGTH / 10)
+
+
+def test_mesh_gold_slab():
+    # Test meshing of a slab with large negative permittivity
+    gold_step = WAVELENGTH / 10 / np.sqrt(np.abs(GOLD.eps_model(td.C_0 / WAVELENGTH).real))
+
+    sim = td.Simulation(
+        size=(3, 3, 6),
+        grid_spec=td.GridSpec.auto(wavelength=WAVELENGTH),
+        run_time=1e-13,
+        structures=[BOX5],
+    )
+    sizes = sim.grid.sizes.to_list[2]
+    assert np.amin(sizes) < gold_step
+
+    # Test that the minimum step is overridden if the gold slab is covered
+    # This includes checking that only one of the dielectric box boundaries along z is added
+    sim = td.Simulation(
+        size=(3, 3, 6),
+        grid_spec=td.GridSpec.auto(wavelength=WAVELENGTH),
+        run_time=1e-13,
+        structures=[BOX5, BOX6],
+    )
+    sizes = sim.grid.sizes.to_list[2]
+    assert np.amin(sizes) > BOX6.geometry.size[2]
+
+
+@pytest.mark.timeout(3.0)
+def test_mesher_timeout():
+    """Test that the mesh generation is fast."""
+    np.random.seed(4)
+    num_boxes = 500
+    box_scale = 5
+    sim_size = 5
+    n_max = 5
+    mediums = [td.Medium(permittivity=n**2) for n in (1 + (n_max - 1) * np.random.rand(100))]
+
+    boxes = []
+    for i in range(num_boxes):
+        center = sim_size * (np.random.rand(3) - 0.5)
+        center[0] = 0
+        size = np.abs(box_scale * np.random.randn(3))
+        n = 1 + (n_max - 1) * np.random.rand(1)
+        box = td.Structure(
+            geometry=td.Box(center=center.tolist(), size=size.tolist()),
+            medium=mediums[np.random.randint(0, 100)],
+        )
+        boxes.append(box)
+
+    sim = td.Simulation(
+        size=(sim_size,) * 3,
+        grid_spec=td.GridSpec.auto(min_steps_per_wvl=6),
+        run_time=1e-13,
+        structures=boxes,
+        sources=[
+            td.PointDipole(
+                source_time=td.GaussianPulse(freq0=2e14, fwidth=1e13),
+                size=(0, 0, 0),
+                polarization="Ex",
+            )
+        ],
+    )
+
+    grid = sim.grid
