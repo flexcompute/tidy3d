@@ -10,7 +10,7 @@ from .types import Complex, Axis, Literal
 from .source import GaussianBeam, ModeSource, PlaneWave
 from .medium import Medium
 
-from ..log import log, SetupError
+from ..log import log, SetupError, DataError
 from ..constants import EPSILON_0, MU_0, PML_SIGMA
 
 
@@ -555,6 +555,48 @@ class BoundarySpec(Tidy3dBaseModel):
         title="Boundary condition along z.",
         description="Boundary condition on the plus and minus sides along the z axis.",
     )
+
+    def __getitem__(self, field_name: str) -> Boundary:
+        """Get the :class:`Boundary` field by name (``boundary_spec[field_name]``).
+
+        Parameters
+        ----------
+        field_name : ``str``
+            Name of the axis, eg. "y" along which :class:`Boundary` is requested.
+
+        Returns
+        -------
+        :class:`Boundary`
+            Boundary conditions along the given axis.
+        """
+        if field_name == "x":
+            return self.x
+        if field_name == "y":
+            return self.y
+        if field_name == "z":
+            return self.z
+        raise DataError(f"field_name '{field_name}' not found")
+
+    def __setitem__(self, field_name: str, field: Boundary):
+        """Set the :class:`Boundary` field by name (``boundary_spec[field_name]=field``).
+
+        Parameters
+        ----------
+        field_name : ``str``
+            Name of the axis, eg. "y" along which :class:`Boundary` is to be set.
+        field : :class:`Boundary`
+            Boundary condition to set along the named axis.
+        """
+        if field_name == "x":
+            self.x = field
+            return
+        if field_name == "y":
+            self.y = field
+            return
+        if field_name == "z":
+            self.z = field
+            return
+        raise DataError(f"field_name '{field_name}' not found")
 
     @classmethod
     def pml(cls, x: bool = False, y: bool = False, z: bool = False):
