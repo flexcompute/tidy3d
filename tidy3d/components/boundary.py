@@ -110,10 +110,16 @@ class BlochBoundary(BoundaryEdge):
             medium = Medium(permittivity=1.0, name="free_space")
 
         freq0 = source.source_time.freq0
-        kmag = freq0 * np.sqrt(medium.permittivity * EPSILON_0 * MU_0)
+        eps_complex = medium.eps_model(freq0)
+        kmag = freq0 * np.sqrt(eps_complex * EPSILON_0 * MU_0)
 
         angle_theta = source.angle_theta
         angle_phi = source.angle_phi
+
+        if source.direction == "-":
+            angle_theta += np.pi
+            angle_phi += np.pi
+            kmag *= -1.0
 
         k_local = [
             kmag * np.sin(angle_theta) * np.cos(angle_phi),
@@ -129,7 +135,7 @@ class BlochBoundary(BoundaryEdge):
         return cls(bloch_vec=bloch_vec)
 
 
-# """ Absorbers parameters """
+# """ Absorber parameters """
 
 
 class AbsorberParams(Tidy3dBaseModel):
