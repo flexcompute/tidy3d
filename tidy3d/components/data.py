@@ -1054,6 +1054,8 @@ class AbstractSimulationData(Tidy3dBaseModel, ABC):
         freq: float = None,
         eps_alpha: float = 0.2,
         robust: bool = True,
+        vmin: float = None,
+        vmax: float = None,
         ax: Ax = None,
     ) -> Ax:
         """Plot the field data for a monitor with simulation plot overlayed.
@@ -1075,8 +1077,15 @@ class AbstractSimulationData(Tidy3dBaseModel, ABC):
             Opacity of the structure permittivity.
             Must be between 0 and 1 (inclusive).
         robust : bool = True
-            If specified, uses the 2nd and 98th percentiles of the data to compute the color limits.
-            This helps in visualizing the field patterns especially in the presence of a source.
+            If True and vmin or vmax are absent, uses the 2nd and 98th percentiles of the data
+            to compute the color limits. This helps in visualizing the field patterns especially
+            in the presence of a source.
+        vmin : float = None
+            The lower bound of data range that the colormap covers. If `None`, they are
+            inferred from the data and other keyword arguments.
+        vmax : float = None
+            The upper bound of data range that the colormap covers. If `None`, they are
+            inferred from the data and other keyword arguments.
         ax : matplotlib.axes._subplots.Axes = None
             matplotlib axes to plot on, if not specified, one is created.
 
@@ -1119,7 +1128,9 @@ class AbstractSimulationData(Tidy3dBaseModel, ABC):
         xy_coord_labels = list("xyz")
         xy_coord_labels.pop(axis)
         x_coord_label, y_coord_label = xy_coord_labels  # pylint:disable=unbalanced-tuple-unpacking
-        field_data.plot(ax=ax, x=x_coord_label, y=y_coord_label, robust=robust, cmap=cmap)
+        field_data.plot(
+            ax=ax, x=x_coord_label, y=y_coord_label, robust=robust, cmap=cmap, vmin=vmin, vmax=vmax
+        )
 
         # plot the simulation epsilon
         ax = self.simulation.plot_structures_eps(
@@ -1273,6 +1284,8 @@ class SimulationData(AbstractSimulationData):
         mode_index: int = None,
         eps_alpha: float = 0.2,
         robust: bool = True,
+        vmin: float = None,
+        vmax: float = None,
         ax: Ax = None,
     ) -> Ax:
         """Plot the field data for a monitor with simulation plot overlayed.
@@ -1305,8 +1318,15 @@ class SimulationData(AbstractSimulationData):
             Opacity of the structure permittivity.
             Must be between 0 and 1 (inclusive).
         robust : bool = True
-            If specified, uses the 2nd and 98th percentiles of the data to compute the color limits.
-            This helps in visualizing the field patterns especially in the presence of a source.
+            If True and vmin or vmax are absent, uses the 2nd and 98th percentiles of the data
+            to compute the color limits. This helps in visualizing the field patterns especially
+            in the presence of a source.
+        vmin : float = None
+            The lower bound of data range that the colormap covers. If `None`, they are
+            inferred from the data and other keyword arguments.
+        vmax : float = None
+            The upper bound of data range that the colormap covers. If `None`, they are
+            inferred from the data and other keyword arguments.
         ax : matplotlib.axes._subplots.Axes = None
             matplotlib axes to plot on, if not specified, one is created.
 
@@ -1371,6 +1391,8 @@ class SimulationData(AbstractSimulationData):
             freq=freq,
             eps_alpha=eps_alpha,
             robust=robust,
+            vmin=vmin,
+            vmax=vmax,
             ax=ax,
         )
 
