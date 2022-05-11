@@ -204,17 +204,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
             yaml.dump(json_dict, file_handle, indent=INDENT)
 
     def __hash__(self) -> int:
-        """Hash a :class:`Tidy3dBaseModel` objects using its json string.
-
-        Returns
-        -------
-        int
-            Integer representation of the hash of the :class:`Tidy3dBaseModel`.
-
-        Example
-        -------
-        >>> hash_integer = hash(simulation)
-        """
+        """Hash a :class:`Tidy3dBaseModel` objects using its json string."""
         return hash(self.json())
 
     def __lt__(self, other):

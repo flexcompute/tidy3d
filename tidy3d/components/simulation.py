@@ -28,7 +28,7 @@ from .viz import plot_params_structure, plot_params_pml, plot_params_override_st
 from ..version import __version__
 from ..constants import C_0, MICROMETER, SECOND, inf
 from ..log import log, Tidy3dKeyError, SetupError, ValidationError
-
+from ..static import make_static
 
 # minimum number of grid points allowed per central wavelength in a medium
 MIN_GRIDS_PER_WVL = 6.0
@@ -221,22 +221,10 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
     _hash: int = pydantic.PrivateAttr(None)
 
     def __hash__(self) -> int:
-        """Hash a :class:`Tidy3dBaseModel` objects using its json string.
-
-        Returns
-        -------
-        int
-            Integer representation of the hash of the :class:`Tidy3dBaseModel`.
-
-        Example
-        -------
-        >>> hash_integer = hash(simulation)
-        """
+        """Hash a :class:`Tidy3dBaseModel` objects using its json string."""
         if self._hash is not None:
-            # log.warning('using computed hash')
             return self._hash
 
-        # log.warning('computing hash')
         return super().__hash__()
 
     def _freeze(self) -> int:
@@ -246,7 +234,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         return frozen_hash
 
     def _unfreeze(self) -> int:
-        """Sets ``self._hash`` to ``None``, returns final hash"""
+        """Sets ``self._hash`` to ``None``, returns final hash."""
         self._hash = None
         final_hash = hash(self)
         return final_hash
@@ -655,6 +643,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
 
     @equal_aspect
     @add_ax_if_none
+    @make_static
     def plot(
         self,
         x: float = None,
@@ -698,6 +687,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
 
     @equal_aspect
     @add_ax_if_none
+    @make_static
     def plot_eps(  # pylint:disable=too-many-arguments
         self,
         x: float = None,
