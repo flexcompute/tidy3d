@@ -2,7 +2,6 @@
 import functools
 
 from .log import Tidy3dError, log
-from .components.simulation import Simulation
 
 
 class StaticException(Tidy3dError):
@@ -12,9 +11,9 @@ class StaticException(Tidy3dError):
 class MakeStatic:
     """Context manager that stores a hash and checks if the object has changed upon teardown."""
 
-    def __init__(self, simulation: Simulation):
+    def __init__(self, simulation: "Simulation"):
         """When context manager is initalized, return a copy of the simulation."""
-        if not isinstance(simulation, Simulation):
+        if simulation.type != "Simulation":
             raise ValueError("simulation must be a ``Simulation`` type.")
         self.simulation = simulation.copy(deep=True)
         self.original_hash = self.simulation._freeze()
