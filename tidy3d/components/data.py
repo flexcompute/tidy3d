@@ -14,7 +14,7 @@ from .types import Numpy, Direction, Array, numpy_encoding, Literal, Ax, Coordin
 from .types import ArrayLike
 from .base import Tidy3dBaseModel, TYPE_TAG_STR
 from .simulation import Simulation
-from .boundary import Symmetry
+from .boundary import Symmetry, BlochBoundary
 from .monitor import Monitor
 from .grid import Grid, Coords
 from .viz import add_ax_if_none, equal_aspect
@@ -1377,7 +1377,7 @@ class SimulationData(AbstractSimulationData):
         if normalize_index is None:
             return sim_data_norm
 
-        # if data alreadty normalized
+        # if data already normalized
         if self.normalized:
 
             # if with a different normalize index, raise an error
@@ -1410,11 +1410,14 @@ class SimulationData(AbstractSimulationData):
 
         times = self.simulation.tmesh
         dt = self.simulation.dt
+        boundaries = self.simulation.boundary_spec.to_list
+        boundaries = [item for boundary in boundaries for item in boundary]
+        complex_fields = any(isinstance(item, BlochBoundary) for item in boundaries)
 
         def normalize_data(monitor_data):
             """normalize a monitor data instance using the source time parameters."""
             freqs = monitor_data.f
-            source_freq_amps = source_time.spectrum(times, freqs, dt)
+            source_freq_amps = source_time.spectrum(times, freqs, dt, complex_fields)
             # We remove the user-defined phase from the normalization. Otherwise, with a single
             # source, we would get the exact same fields regardless of the source_time phase.
             # Instead we would like the field phase to be determined by the source_time phase.

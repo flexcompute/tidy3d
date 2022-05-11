@@ -49,7 +49,13 @@ class SourceTime(ABC, Tidy3dBaseModel):
             Complex-valued source amplitude at that time..
         """
 
-    def spectrum(self, times: Array[float], freqs: Array[float], dt: float) -> complex:
+    def spectrum(
+        self,
+        times: Array[float],
+        freqs: Array[float],
+        dt: float,
+        complex_fields: bool = False
+        ) -> complex:
         """Complex-valued source spectrum as a function of frequency
 
         Parameters
@@ -62,6 +68,8 @@ class SourceTime(ABC, Tidy3dBaseModel):
         dt : float or np.ndarray
             Time step to weight FT integral with.
             If array, use to weigh each of the time intervals in ``times``.
+        complex_fields : bool
+            Whether time domain fields are complex, e.g., for Bloch boundaries
 
         Returns
         -------
@@ -69,7 +77,10 @@ class SourceTime(ABC, Tidy3dBaseModel):
             Complex-valued array (of len(freqs)) containing spectrum at those frequencies.
         """
 
-        time_amps = np.real(self.amp_time(times))
+        if complex_fields:
+            time_amps = self.amp_time(times)
+        else:
+            time_amps = np.real(self.amp_time(times))
 
         # Cut to only relevant times
         count_times = np.where(np.abs(time_amps) / np.amax(np.abs(time_amps)) > DFT_CUTOFF)
@@ -111,7 +122,12 @@ class SourceTime(ABC, Tidy3dBaseModel):
         return ax
 
     @add_ax_if_none
-    def plot_spectrum(self, times: Array[float], num_freqs: int = 101, ax: Ax = None) -> Ax:
+    def plot_spectrum(self,
+        times: Array[float],
+        num_freqs: int = 101,
+        ax: Ax = None,
+        complex_fields: bool = False
+        ) -> Ax:
         """Plot the complex-valued amplitude of the source time-dependence.
 
         Parameters
@@ -125,6 +141,8 @@ class SourceTime(ABC, Tidy3dBaseModel):
             Number of frequencies to plot within the SourceTime.frequency_range.
         ax : matplotlib.axes._subplots.Axes = None
             Matplotlib axes to plot on, if not specified, one is created.
+        complex_fields : bool
+            Whether time domain fields are complex, e.g., for Bloch boundaries
 
         Returns
         -------
@@ -142,7 +160,7 @@ class SourceTime(ABC, Tidy3dBaseModel):
         fmin, fmax = self.frequency_range()
         freqs = np.linspace(fmin, fmax, num_freqs)
 
-        spectrum = self.spectrum(times=times, dt=dt, freqs=freqs)
+        spectrum = self.spectrum(times=times, dt=dt, freqs=freqs, complex_fields=complex_fields)
 
         ax.plot(freqs, spectrum.real, color="blueviolet", label="real")
         ax.plot(freqs, spectrum.imag, color="crimson", label="imag")
