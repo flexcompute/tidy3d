@@ -622,7 +622,7 @@ class Planar(Geometry, ABC):
         """
 
     @property
-    def bounds(self):
+    def bounds(self) -> Bound:
         """Returns bounding box for planar geometry, may implement for subclasses.
 
         Returns
@@ -988,7 +988,7 @@ class Sphere(Circular):
         return [Point(x0, y0).buffer(0.5 * intersect_dist)]
 
     @property
-    def bounds(self):
+    def bounds(self) -> Bound:
         """Returns bounding box min and max coordinates.
 
         Returns
@@ -1092,7 +1092,7 @@ class Cylinder(Circular, Planar):
         return inside_radius * inside_height
 
     @property
-    def bounds(self):
+    def bounds(self) -> Bound:
         """Returns bounding box min and max coordinates.
 
         Returns
@@ -2081,3 +2081,63 @@ class PolySlab(Planar):
 # geometries that can be used to define structures.
 GeometryFields = (Box, Sphere, Cylinder, PolySlab)
 GeometryType = Union[GeometryFields]
+
+
+class GeometryGroup(Geometry):
+    """A collection of Geometry objects that can be called as a single geometry object."""
+
+    geometries: List[GeometryType] = pydantic.Field(
+        [],
+        title="Geometries",
+        description="List of geometries in a single grouping. "
+        "Can provide significant performance enhancement in ``Structure`` when all geometries are "
+        "assigned the same medium.",
+        min_items=1,
+    )
+
+    @property
+    def bounds(self) -> Bound:
+        """Returns bounding box min and max coordinates.
+
+        Returns
+        -------
+        Tuple[float, float, float], Tuple[float, float, float]
+            Min and max bounds packaged as ``(minx, miny, minz), (maxx, maxy, maxz)``.
+        """
+
+        rmin = 3 * [np.inf]
+        rmax = 3 * [-np.inf]
+
+        for geometry in self.geometries:
+            _rmin, _rmax = geometry.bounds
+            rmin = [min(coord, _coord) for (coord, _coord) in zip(rmin, _rmin)]
+            rmax = [max(coord, _coord) for (coord, _coord) in zip(rmax, _rmax)]
+
+        return tuple(rmin), tuple(rmax)
+
+    def intersections(self, x: float = None, y: float = None, z: float = None) -> List[Shapely]:
+        """Returns list of shapely geoemtries at plane specified by one non-None value of x,y,z.
+
+        Parameters
+        ----------
+        x : float = None
+            Position of plane in x direction, only one of x,y,z can be specified to define plane.
+        y : float = None
+            Position of plane in y direction, only one of x,y,z can be specified to define plane.
+        z : float = None
+            Position of plane in z direction, only one of x,y,z can be specified to define plane.
+
+        Returns
+        -------
+        List[shapely.geometry.base.BaseGeometry]
+            List of 2D shapes that intersect plane.
+            For more details refer to
+            `Shapely's Documentaton <https://shapely.readthedocs.io/en/stable/project.html>`_.
+        """
+
+        intersections_all = []
+        for geometry in self.geometries:
+            intersections_geometry = geometry.intersections(x=x, y=y, z=z)
+            intersections_all += intersections_geometry
+
+        return intersections_all
