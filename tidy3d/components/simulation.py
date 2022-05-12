@@ -1592,9 +1592,14 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         def make_eps_data(coords: Coords):
             """returns epsilon data on grid of points defined by coords"""
             xs, ys, zs = coords.x, coords.y, coords.z
+            rmin = tuple(coord[0] for coord in (xs, ys, zs))
+            rmax = tuple(coord[-1] for coord in (xs, ys, zs))
+            points_box = Box.from_bounds(rmin=rmin, rmax=rmax)
             x, y, z = np.meshgrid(xs, ys, zs, indexing="ij")
             eps_array = eps_background * np.ones(x.shape, dtype=complex)
             for structure in self.structures:
+                if not points_box.intersects(structure.geometry):
+                    continue
                 eps_structure = get_eps(structure.medium, freq)
                 is_inside = structure.geometry.inside(x, y, z)
                 eps_array[np.where(is_inside)] = eps_structure
