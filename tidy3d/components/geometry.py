@@ -1167,9 +1167,8 @@ class PolySlab(Planar):
 
     @pydantic.validator("vertices", always=True)
     def correct_shape(cls, val):
-        """makes sure vertices size is correct. Remove duplicate
-        neighbouring vertices, orient vertices in CCW direction.
-        make sure no intersecting edges.
+        """Makes sure vertices size is correct.
+        Make sure no intersecting edges.
         """
 
         val_np = PolySlab.vertices_to_array(val)
@@ -1182,20 +1181,13 @@ class PolySlab(Planar):
                 f"Given array with shape of {shape}."
             )
 
-        # remove duplicate neighbouring vertices, and orient in CCW direction
-        vertices = PolySlab._proper_vertices(val)
-        if vertices.shape[0] < 3:
-            raise SetupError(
-                "At least 3 vertices (after removing duplicate neighbouring vertices) "
-                "need to be supplied to setup the polygon."
-            )
-
-        if not Polygon(vertices).is_valid:
+        # make sure no self-intersecting edges
+        if not Polygon(val_np).is_valid:
             raise SetupError(
                 "A valid Polygon may not possess any intersecting or overlapping edges."
             )
 
-        return PolySlab.array_to_vertices(val_np)
+        return val
 
     @pydantic.validator("vertices", always=True)
     def set_center(cls, val, values):
@@ -1227,43 +1219,52 @@ class PolySlab(Planar):
         if they are self-intersecting.
         """
 
+        # no need to valiate anything here
+        if isclose(values["dilation"], 0) and isclose(values["sidewall_angle"], 0):
+            return val
+
         ## First, make sure no vertex-vertex crossing in the base
         ## 1) obviously, vertex-vertex crossing can occur during erosion
         ## 2) for concave polygon, the crossing can even occur during dilation
         val_np = PolySlab._proper_vertices(val)
-        base = PolySlab._shift_vertices(val_np, values["dilation"])[0]
+        if isclose(values["dilation"], 0):
+            # no need to validate the base for 0 dilation
+            base = val_np
+        else:
+            base = PolySlab._shift_vertices(val_np, values["dilation"])[0]
 
-        # compute distance between vertices after dilation to detect vertex-vertex
-        # crossing events
-        cross_val, max_dist = PolySlab._crossing_detection(val_np, values["dilation"])
-        if cross_val:
-            # 1) crossing during erosion
-            if values["dilation"] < 0:
-                # too much erosion
+            # compute distance between vertices after dilation to detect vertex-vertex
+            # crossing events
+            cross_val, max_dist = PolySlab._crossing_detection(val_np, values["dilation"])
+            if cross_val:
+                # 1) crossing during erosion
+                if values["dilation"] < 0:
+                    # too much erosion
+                    raise SetupError(
+                        "Erosion value (-dilation) is too large. Some edges in the base polygon "
+                        f"are fully eroded. Maximal erosion should be {max_dist:.3e} "
+                        "for this polygon. Support for vertices crossing under "
+                        "significant erosion will be available in future releases."
+                    )
+                # 2) crossing during dilation in concave polygon
                 raise SetupError(
-                    "Erosion value (-dilation) is too large. Some edges in the base polygon "
-                    f"are fully eroded. Maximal erosion should be {max_dist:.3e} "
-                    "for this polygon. Support for vertices crossing under "
-                    "significant erosion will be available in future releases."
+                    "Dilation value is too large in a concave polygon, resulting in "
+                    "vertices crossing. "
+                    f"Maximal dilation should be {max_dist:.3e} for this polygon. "
+                    "Support for vertices crossing under significant dilation "
+                    "in concave polygons will be available in future releases."
                 )
-            # 2) crossing during dilation in concave polygon
-            raise SetupError(
-                "Dilation value is too large in a concave polygon, resulting in "
-                "vertices crossing. "
-                f"Maximal dilation should be {max_dist:.3e} for this polygon. "
-                "Support for vertices crossing under significant dilation "
-                "in concave polygons will be available in future releases."
-            )
-        # If no vertex-vertex crossing is detected, but the polygon is still self-intersecting.
-        # it is attributed to vertex-edge crossing.
-        if not Polygon(base).is_valid:
-            raise SetupError(
-                "Dilation/Erosion value is too large, resulting in "
-                "vertex-edge crossing, and thus self-intersecting polygons. "
-                "Support for self-intersecting polygons under significant dilation "
-                "will be available in future releases."
-            )
+            # If no vertex-vertex crossing is detected, but the polygon is still self-intersecting.
+            # it is attributed to vertex-edge crossing.
+            if not Polygon(base).is_valid:
+                raise SetupError(
+                    "Dilation/Erosion value is too large, resulting in "
+                    "vertex-edge crossing, and thus self-intersecting polygons. "
+                    "Support for self-intersecting polygons under significant dilation "
+                    "will be available in future releases."
+                )
 
+        # Second, validate slanted wall case
         if isclose(values["sidewall_angle"], 0):
             return val
 
@@ -1389,6 +1390,7 @@ class PolySlab(Planar):
     @property
     def base_polygon(self) -> tidynumpy:
         """The polygon at the base after potential dilation operation.
+        The vertices will always be transformed to be "proper".
 
         Returns
         -------
@@ -1410,6 +1412,21 @@ class PolySlab(Planar):
 
         dist = -self.length * self._tanq
         return self._shift_vertices(self.base_polygon, dist)[0]
+
+    @property
+    def _base_polygon(self) -> tidynumpy:
+        """Similar as `base_polygon`, but simply return self.vertices
+        in the absence of dilation operation.
+
+        Returns
+        -------
+        tidynumpy
+            The vertices of the polygon at the base.
+        """
+        if isclose(self.sidewall_angle, 0) and isclose(self.dilation, 0):
+            return PolySlab.vertices_to_array(self.vertices)
+
+        return self.base_polygon
 
     def inside(self, x, y, z) -> bool:  # pylint:disable=too-many-locals
         """Returns True if point ``(x,y,z)`` inside volume of geometry.
@@ -1457,7 +1474,7 @@ class PolySlab(Planar):
 
             # vertical sidewall
             if isclose(self.sidewall_angle, 0):
-                face_polygon = Polygon(self.base_polygon)
+                face_polygon = Polygon(self._base_polygon)
                 fun_contain = contains_pointwise(face_polygon)
                 contains_vectorized = np.vectorize(fun_contain, signature="(n)->()")
                 points_stacked = np.stack((xs_slab, ys_slab), axis=1)
@@ -1476,7 +1493,7 @@ class PolySlab(Planar):
                     inside_polygon_slab = contains_vectorized(points_stacked)
                     inside_polygon[:, :, z_i] = inside_polygon_slab.reshape(x.shape[:2])
         else:
-            vertices_z = self._shift_vertices(self.base_polygon, dist)[0]
+            vertices_z = self._shift_vertices(self._base_polygon, dist)[0]
             face_polygon = Polygon(vertices_z)
             point = Point(x, y)
             inside_polygon = face_polygon.covers(point)
@@ -1500,7 +1517,7 @@ class PolySlab(Planar):
         z0, _ = self.pop_axis(self.center, axis=self.axis)
         z_local = z - z0 + self.length / 2  # distance to the base
         dist = -z_local * self._tanq
-        vertices_z = self._shift_vertices(self.base_polygon, dist)[0]
+        vertices_z = self._shift_vertices(self._base_polygon, dist)[0]
         return [Polygon(vertices_z)]
 
     def _intersections_side(self, position, axis) -> list:  # pylint:disable=too-many-locals
@@ -1555,7 +1572,7 @@ class PolySlab(Planar):
 
             # vertices for the base of each subsection
             dist = -h_base * self._tanq
-            vertices = self._shift_vertices(self.base_polygon, dist)[0]
+            vertices = self._shift_vertices(self._base_polygon, dist)[0]
 
             # for vertical sidewall, no need for complications
             if isclose(self.sidewall_angle, 0):
