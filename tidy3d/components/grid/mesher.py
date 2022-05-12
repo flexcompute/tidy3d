@@ -1,7 +1,8 @@
-""" Collection of functions for automatically generating a nonuniform grid. """
+# pylint:disable=too-many-lines
+"""Collection of functions for automatically generating a nonuniform grid. """
 
 from abc import ABC, abstractmethod
-from typing import Tuple, List, Union
+from typing import Tuple, List, Union, Dict
 from math import isclose
 
 import pydantic as pd
@@ -101,85 +102,146 @@ class GradedMesher(Mesher):
         # Rtree from the 2D part of the bounding boxes
         tree = self.bounds_2d_tree(struct_bbox)
 
+        intervals = {}
         # Array of coordinates of all intervals; add the simulation domain bounds already
-        interval_coords = np.array(domain_bounds)
+        intervals["coords"] = list(domain_bounds)
         # List of indexes of structures which are present in each interval
-        interval_structs = [[]]  # will have len equal to len(interval_coords) - 1
+        intervals["structs"] = [[]]  # will have len equal to len(intervals["coords"]) - 1
 
         # Iterate in reverse order as latter structures override earlier ones. To properly handle
         # containment then we need to populate interval coordinates starting from the top.
+        # If a structure is found to be completely contained, the corresponding ``struct_bbox`` is
+        # set to ``None``.
         for str_ind in range(len(structures) - 1, -1, -1):
             # 3D and 2D bounding box of current structure
             bbox = struct_bbox[str_ind]
+            if bbox is None:
+                # Structure has been removed because it is completely contained
+                continue
             bbox_2d = shapely_box(bbox[0, 0], bbox[0, 1], bbox[1, 0], bbox[1, 1])
 
-            # List of structure bounding boxes that may contain the current structure in 2D
-            query_inds = [box.str_ind for box in tree.query(bbox_2d) if box.str_ind > str_ind]
-            query_bbox = [struct_bbox[ind] for ind in query_inds]
+            # List of structure indexes that may intersect the current structure in 2D
+            query_inds = [box.str_ind for box in tree.query(bbox_2d)]
+
+            # Remove all lower structures that the current structure completely contains
+            inds_lower = [ind for ind in query_inds if ind < str_ind]
+            query_bbox = [struct_bbox[ind] for ind in inds_lower if struct_bbox[ind] is not None]
+            bbox_contains_inds = self.contains_3d(bbox, query_bbox)
+            for ind in bbox_contains_inds:
+                struct_bbox[inds_lower[ind]] = None
 
             # List of structure bboxes that contain the current structure in 2D
+            inds_upper = [ind for ind in query_inds if ind > str_ind]
+            query_bbox = [struct_bbox[ind] for ind in inds_upper if struct_bbox[ind] is not None]
             bbox_contained_2d = self.contained_2d(bbox, query_bbox)
 
-            """Figure out where to place the bounding box coordinates of current structure.
-            For both the left and the right bounds of the structure along the meshing direction,
-            we check if they are not too close to an already existing coordinate, and if the
-            structure is not completely covered by another structure at that location.
-            Only then we add that boundary to the list of interval coordinates.
-            We also don't add the bounds if ``str_ind==0``, since the domain bounds have already
-            been added to the interval coords at the start."""
-
-            # Left structure bound
-            bound_coord = bbox[0, 2]
-            indsmin = np.argwhere(bound_coord <= interval_coords)
-            indmin = int(indsmin[0])
-            is_close = self.is_close(bound_coord, interval_coords, indmin, min_step)
-            is_contained = self.is_contained(bound_coord, bbox_contained_2d)
-            if not is_close and not is_contained and str_ind > 0:
-                # Add current structure bounding box coordinates
-                interval_coords = np.insert(interval_coords, indmin, bound_coord)
-                # Copy the structure containment list to the newly created interval
-                struct_list = interval_structs[max(0, indmin - 1)]
-                interval_structs.insert(indmin, struct_list.copy())
-
-            # Right structure bound
-            bound_coord = bbox[1, 2]
-            indsmax = np.argwhere(bound_coord >= interval_coords)
-            indmax = int(indsmax[-1])
-            is_close = self.is_close(bound_coord, interval_coords, indmax + 1, min_step)
-            is_contained = self.is_contained(bound_coord, bbox_contained_2d)
-            if not is_close and not is_contained and str_ind > 0:
-                indmax += 1
-                # Add current structure bounding box coordinates
-                interval_coords = np.insert(interval_coords, indmax, bound_coord)
-                # Copy the structure containment list to the newly created interval
-                struct_list = interval_structs[min(indmax - 1, len(interval_structs) - 1)]
-                interval_structs.insert(indmax, struct_list.copy())
-
-            # Add the current structure index to all intervals that it spans, if it is not
-            # contained in any of the latter structures
-            for interval_ind in range(indmin, indmax):
-                # Check at the midpoint to avoid numerical issues at the interval boundaries
-                mid_coord = (interval_coords[interval_ind] + interval_coords[interval_ind + 1]) / 2
-                if not self.is_contained(mid_coord, bbox_contained_2d):
-                    interval_structs[interval_ind].append(str_ind)
+            # Handle insertion of the current structure bounds in the intervals
+            intervals = self.insert_bbox(intervals, str_ind, bbox, bbox_contained_2d, min_step)
 
         # Truncate intervals to domain bounds
-        b_array = np.array(interval_coords)
-        in_domain = np.argwhere((b_array >= domain_bounds[0]) * (b_array <= domain_bounds[1]))
-        interval_coords = interval_coords[in_domain]
-        interval_structs = [interval_structs[int(i)] for i in in_domain if i < b_array.size - 1]
+        coords = np.array(intervals["coords"])
+        num_ints = len(intervals["structs"])
+        in_domain = np.argwhere((coords >= domain_bounds[0]) * (coords <= domain_bounds[1]))
+        intervals["coords"] = [intervals["coords"][int(i)] for i in in_domain]
+        intervals["structs"] = [intervals["structs"][int(i)] for i in in_domain if i < num_ints]
 
         # Compute the maximum allowed step size in each interval
         max_steps = []
-        for coord_ind, _ in enumerate(interval_coords[:-1]):
+        for coord_ind, _ in enumerate(intervals["coords"][:-1]):
             # Define the max step as the minimum over all medium steps of media in this interval
-            max_step = np.amin(structure_steps[interval_structs[coord_ind]])
+            max_step = np.amin(structure_steps[intervals["structs"][coord_ind]])
             max_steps.append(float(max_step))
 
         # Re-evaluate the absolute smallest min_step and remove intervals that are smaller than that
-        interval_coords, max_steps = self.filter_min_step(interval_coords, max_steps)
+        intervals["coords"], max_steps = self.filter_min_step(intervals["coords"], max_steps)
 
-        return np.array(interval_coords), np.array(max_steps)
+        return np.array(intervals["coords"]), np.array(max_steps)
+
+    # pylint:disable=too-many-locals,too-many-arguments
+    def insert_bbox(
+        self,
+        intervals: Dict[str, List],
+        str_ind: int,
+        str_bbox: Array[float],
+        bbox_contained_2d: List[Array[float]],
+        min_step: float,
+    ) -> Dict[str, List]:
+        """Figure out where to place the bounding box coordinates of current structure.
+        For both the left and the right bounds of the structure along the meshing direction,
+        we check if they are not too close to an already existing coordinate, and if the
+        structure is not completely covered by another structure at that location.
+        Only then we add that boundary to the list of interval coordinates.
+        We also don't add the bounds if ``str_ind==0``, since the domain bounds have already
+        been added to the interval coords at the start.
+        We also compute ``indmin`` and ``indmax`` indexes into the list of intervals, such that
+        the current structure is added to all intervals in the range (indmin, indmax).
+
+        Parameters
+        ----------
+        intervals : Dict[str, List]
+            Dictionary containing the coordinates of the interval boundaries, and a list
+            of lists of structures contained in each interval.
+        str_ind : int
+            Index of the current structure.
+        str_bbox : Array[float]
+            Bounding box of the current structure.
+        bbox_contained_2d : List[Array[float]]
+            List of 3D bounding boxes that contain the current structure in 2D.
+        min_step : float
+            Absolute minimum interval size to impose.
+        """
+
+        coords = intervals["coords"]
+        structs = intervals["structs"]
+
+        # Left structure bound
+        bound_coord = str_bbox[0, 2]
+        indsmin = np.argwhere(bound_coord <= coords)
+        indmin = int(indsmin[0])  # coordinate is in interval index ``indmin - 1````
+        is_close_l = self.is_close(bound_coord, coords, indmin - 1, min_step)
+        is_close_r = self.is_close(bound_coord, coords, indmin, min_step)
+        is_contained = self.is_contained(bound_coord, bbox_contained_2d)
+
+        # Decide on whether coordinate should be inserted or indmin modified
+        if is_close_l:
+            # Don't insert coordinate but decrease indmin
+            indmin -= 1
+        elif not is_close_r and not is_contained and str_ind > 0:
+            # Add current structure bounding box coordinates
+            coords.insert(indmin, bound_coord)
+            # Copy the structure containment list to the newly created interval
+            struct_list = structs[max(0, indmin - 1)]
+            structs.insert(indmin, struct_list.copy())
+
+        # Right structure bound
+        bound_coord = str_bbox[1, 2]
+        indsmax = np.argwhere(bound_coord >= coords)
+        indmax = int(indsmax[-1])  # coordinate is in interval index ``indmax``
+        is_close_l = self.is_close(bound_coord, coords, indmax, min_step)
+        is_close_r = self.is_close(bound_coord, coords, indmax + 1, min_step)
+        is_contained = self.is_contained(bound_coord, bbox_contained_2d)
+
+        # Decide on whether coordinate should be inserted or indmax modified
+        if is_close_r:
+            # Don't insert coordinate but increase indmax
+            indmax += 1
+        elif not is_close_l and not is_contained and str_ind > 0:
+            indmax += 1
+            # Add current structure bounding box coordinates
+            coords.insert(indmax, bound_coord)
+            # Copy the structure containment list to the newly created interval
+            struct_list = structs[min(indmax - 1, len(structs) - 1)]
+            structs.insert(indmax, struct_list.copy())
+
+        # Add the current structure index to all intervals that it spans, if it is not
+        # contained in any of the latter structures
+        for interval_ind in range(indmin, indmax):
+            # Check at the midpoint to avoid numerical issues at the interval boundaries
+            mid_coord = (coords[interval_ind] + coords[interval_ind + 1]) / 2
+            if not self.is_contained(mid_coord, bbox_contained_2d):
+                structs[interval_ind].append(str_ind)
+
+        return {"coords": coords, "structs": structs}
 
     @staticmethod
     def structure_steps(
@@ -259,16 +321,31 @@ class GradedMesher(Mesher):
         return contained_in
 
     @staticmethod
-    def is_close(
-        coord: float, interval_coords: List[float], interval_ind: int, atol: float
-    ) -> bool:
+    def contains_3d(bbox0: Array[float], query_bbox: List[Array[float]]) -> List[int]:
+        """Return a list of all indexes of bounding boxes in the ``query_bbox`` list that ``bbox0``
+        fully contains."""
+        contains = []
+        for ind, bbox in enumerate(query_bbox):
+            if all(
+                [
+                    bbox[0, 0] >= bbox0[0, 0],
+                    bbox[1, 0] <= bbox0[1, 0],
+                    bbox[0, 1] >= bbox0[0, 1],
+                    bbox[1, 1] <= bbox0[1, 1],
+                    bbox[0, 2] >= bbox0[0, 2],
+                    bbox[1, 2] <= bbox0[1, 2],
+                ]
+            ):
+                contains.append(ind)
+        return contains
+
+    @staticmethod
+    def is_close(coord: float, interval_coords: List[float], coord_ind: int, atol: float) -> bool:
         """Check if a given ``coord`` is within ``atol`` of an interval coordinate at a given
-        interval index."""
+        interval index. If the index is out of bounds, return ``False``."""
         is_close = False
-        if interval_ind > 0:
-            is_close = is_close or isclose(coord, interval_coords[interval_ind - 1], abs_tol=atol)
-        if interval_ind < len(interval_coords):
-            is_close = is_close or isclose(coord, interval_coords[interval_ind], abs_tol=atol)
+        if 0 <= coord_ind < len(interval_coords):
+            is_close = isclose(coord, interval_coords[coord_ind], abs_tol=atol)
         return is_close
 
     @staticmethod
