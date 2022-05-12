@@ -1552,7 +1552,6 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         self, box: Box, coord_key: str = "centers", freq: float = None
     ) -> Dict[str, xr.DataArray]:
         """Get array of permittivity at volume specified by box and freq
-
         Parameters
         ----------
         box : :class:`Box`
@@ -1567,7 +1566,6 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         freq : float = None
             The frequency to evaluate the mediums at.
             If not specified, evaluates at infinite frequency.
-
         Returns
         -------
         xarray.DataArray

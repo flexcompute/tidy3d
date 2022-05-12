@@ -15,7 +15,7 @@ from .components import DefaultPMLParameters, DefaultStablePMLParameters, Defaul
 from .components import Grid, Coords, GridSpec, UniformGrid, CustomGrid, AutoGrid
 
 # geometry
-from .components import Box, Sphere, Cylinder, PolySlab
+from .components import Box, Sphere, Cylinder, PolySlab, GeometryGroup
 
 # medium
 from .components import Medium, PoleResidue, AnisotropicMedium, PEC, PECMedium

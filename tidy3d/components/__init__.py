@@ -10,7 +10,7 @@ from .grid import Grid, Coords, GridSpec, UniformGrid, CustomGrid, AutoGrid
 
 # geometry
 from .geometry import Box, Sphere, Cylinder, PolySlab
-from .geometry import Geometry
+from .geometry import Geometry, GeometryGroup
 
 # medium
 from .medium import Medium, PoleResidue, Sellmeier, Debye, Drude, Lorentz, AnisotropicMedium, PEC
