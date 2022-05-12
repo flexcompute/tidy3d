@@ -1587,23 +1587,18 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
                 eps = medium.eps_model(freq)
             return eps
 
-        def all_outside(structure, x, y, z) -> bool:
-            """Whether all of the supplied (x,y,z) points are outside of structure bounds."""
-            pts = (x, y, z)
-            rmin = tuple(np.min(coord) for coord in pts)
-            rmax = tuple(np.max(coord) for coord in pts)
-            points_box = Box.from_bounds(rmin=rmin, rmax=rmax)
-            return not points_box.intersects(structure.geometry)
-
         eps_background = get_eps(self.medium, freq)
 
         def make_eps_data(coords: Coords):
             """returns epsilon data on grid of points defined by coords"""
             xs, ys, zs = coords.x, coords.y, coords.z
+            rmin = tuple(coord[0] for coord in (xs, ys, zs))
+            rmax = tuple(coord[-1] for coord in (xs, ys, zs))
+            points_box = Box.from_bounds(rmin=rmin, rmax=rmax)
             x, y, z = np.meshgrid(xs, ys, zs, indexing="ij")
             eps_array = eps_background * np.ones(x.shape, dtype=complex)
             for structure in self.structures:
-                if all_outside(structure, x, y, z):
+                if not points_box.intersects(structure.geometry):
                     continue
                 eps_structure = get_eps(structure.medium, freq)
                 is_inside = structure.geometry.inside(x, y, z)
