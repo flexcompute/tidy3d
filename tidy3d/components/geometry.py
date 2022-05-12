@@ -4,6 +4,7 @@
 from abc import ABC, abstractmethod
 from typing import List, Tuple, Union, Any, Callable
 from math import isclose
+import functools
 
 import pydantic
 import numpy as np
@@ -2105,15 +2106,14 @@ class GeometryGroup(Geometry):
             Min and max bounds packaged as ``(minx, miny, minz), (maxx, maxy, maxz)``.
         """
 
-        rmin = 3 * [np.inf]
-        rmax = 3 * [-np.inf]
+        bounds = tuple(geometry.bounds for geometry in self.geometries)
+        rmins = (bound[0] for bound in bounds)
+        rmaxs = (bound[1] for bound in bounds)
 
-        for geometry in self.geometries:
-            _rmin, _rmax = geometry.bounds
-            rmin = [min(coord, _coord) for (coord, _coord) in zip(rmin, _rmin)]
-            rmax = [max(coord, _coord) for (coord, _coord) in zip(rmax, _rmax)]
+        rmin = functools.reduce(min, rmins)
+        rmax = functools.reduce(max, rmaxs)
 
-        return tuple(rmin), tuple(rmax)
+        return rmin, rmax
 
     def intersections(self, x: float = None, y: float = None, z: float = None) -> List[Shapely]:
         """Returns list of shapely geoemtries at plane specified by one non-None value of x,y,z.
@@ -2135,9 +2135,28 @@ class GeometryGroup(Geometry):
             `Shapely's Documentaton <https://shapely.readthedocs.io/en/stable/project.html>`_.
         """
 
-        intersections_all = []
-        for geometry in self.geometries:
-            intersections_geometry = geometry.intersections(x=x, y=y, z=z)
-            intersections_all += intersections_geometry
+        all_intersections = (geometry.intersections(x=x, y=y, z=z) for geometry in self.geometries)
 
-        return intersections_all
+        return functools.reduce(lambda a, b: a + b, all_intersections)
+
+    def inside(self, x, y, z) -> bool:
+        """Returns ``True`` if point ``(x,y,z)`` is inside volume of :class:`GeometryGroup`.
+
+        Parameters
+        ----------
+        x : float
+            Position of point in x direction.
+        y : float
+            Position of point in y direction.
+        z : float
+            Position of point in z direction.
+
+        Returns
+        -------
+        bool
+            True if point ``(x,y,z)`` is inside geometry.
+        """
+
+        individual_insides = (geometry.inside(x, y, z) for geometry in self.geometries)
+
+        return functools.reduce(lambda a, b: a | b, individual_insides)
