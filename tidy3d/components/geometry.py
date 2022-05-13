@@ -475,6 +475,9 @@ class Geometry(Tidy3dBaseModel, ABC):
             Angle of rotation counter-clockwise around the axis (rad).
         """
 
+        if isclose(angle % (2 * np.pi), 0):
+            return points
+
         # Normalized axis vector components
         (ux, uy, uz) = axis / np.linalg.norm(axis)
 
@@ -495,7 +498,7 @@ class Geometry(Tidy3dBaseModel, ABC):
         if len(points.shape) == 1:
             return rot_mat @ points
 
-        return np.einsum("ij,jp...->ip...", rot_mat, points)
+        return np.tensordot(rot_mat, points, axes=1)
 
     def reflect_points(
         self,
