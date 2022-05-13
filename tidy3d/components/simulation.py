@@ -8,6 +8,7 @@ import numpy as np
 import xarray as xr
 import matplotlib.pylab as plt
 import matplotlib as mpl
+import matplotlib.patheffects as pe
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 
 from .validators import assert_unique_names, assert_objects_in_sim_bounds
@@ -16,7 +17,7 @@ from .geometry import Box
 from .types import Ax, Shapely, FreqBound, GridSize, Axis
 from .grid import Coords1D, Grid, Coords, GridSpec, UniformGrid
 from .medium import Medium, MediumType, AbstractMedium, PECMedium
-from .boundary import BoundarySpec, Symmetry, BlochBoundary
+from .boundary import BoundarySpec, Symmetry, BlochBoundary, PECBoundary, PMCBoundary
 from .boundary import PML, StablePML, Absorber
 from .structure import Structure
 from .source import SourceType, PlaneWave
@@ -646,6 +647,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         ax = self.plot_symmetries(ax=ax, x=x, y=y, z=z)
         ax = self.plot_pml(ax=ax, x=x, y=y, z=z)
         ax = self._set_plot_bounds(ax=ax, x=x, y=y, z=z)
+        ax = self.plot_boundaries(ax=ax, x=x, y=y, z=z)
         return ax
 
     @equal_aspect
@@ -697,6 +699,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         ax = self.plot_symmetries(ax=ax, x=x, y=y, z=z)
         ax = self.plot_pml(ax=ax, x=x, y=y, z=z)
         ax = self._set_plot_bounds(ax=ax, x=x, y=y, z=z)
+        ax = self.plot_boundaries(ax=ax, x=x, y=y, z=z)        
         return ax
 
     @equal_aspect
@@ -1213,6 +1216,133 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
             ax.add_patch(rect)
 
         ax = self._set_plot_bounds(ax=ax, x=x, y=y, z=z)
+
+        return ax
+
+    @equal_aspect
+    @add_ax_if_none
+    def plot_boundaries(  # pylint:disable=too-many-locals
+        self,
+        x: float = None,
+        y: float = None,
+        z: float = None,
+        ax: Ax = None,
+        **kwargs,
+    ) -> Ax:
+        """Plot the simulation boundary conditions as lines on a plane
+           defined by one nonzero x,y,z coordinate.
+
+        Parameters
+        ----------
+        x : float = None
+            position of plane in x direction, only one of x, y, z must be specified to define plane.
+        y : float = None
+            position of plane in y direction, only one of x, y, z must be specified to define plane.
+        z : float = None
+            position of plane in z direction, only one of x, y, z must be specified to define plane.
+        ax : matplotlib.axes._subplots.Axes = None
+            Matplotlib axes to plot on, if not specified, one is created.
+        **kwargs
+            Optional keyword arguments passed to the matplotlib ``LineCollection``.
+            For details on accepted values, refer to
+            `Matplotlib's documentation <https://tinyurl.com/2p97z4cn>`_.
+
+        Returns
+        -------
+        matplotlib.axes._subplots.Axes
+            The supplied or created matplotlib axes.
+        """
+
+        kwargs.setdefault("clip_on", False)
+
+        def set_plot_params(boundary_edge, lim, side, thickness):
+            """Return the line plot properties such as color and opacity based on the boundary"""
+            plot_params = PlotParams()
+
+            if isinstance(boundary_edge, (PECBoundary, PMCBoundary)):
+                plot_params.facecolor = "gold"
+                plot_params.edgecolor = "black"
+                # plot_params.hatch = "++"
+            elif isinstance(boundary_edge, BlochBoundary):
+                plot_params.facecolor = "orchid"
+                plot_params.edgecolor = "black"
+                # plot_params.hatch = "++"
+            else:
+                plot_params.alpha = 0
+
+            # expand axis limit so that the axis ticks and labels aren't covered
+            new_lim = lim
+            if plot_params.alpha != 0:
+                if side == -1:
+                    new_lim = lim - thickness
+                elif side == 1:
+                    new_lim = lim + thickness
+
+            return plot_params, new_lim
+
+        boundaries = self.boundary_spec.to_list
+
+        normal_axis, _ = self.parse_xyz_kwargs(x=x, y=y, z=z)
+        _, (dim_u, dim_v) = self.pop_axis([0, 1, 2], axis=normal_axis)
+
+        umin, umax = ax.get_xlim()
+        vmin, vmax = ax.get_ylim()
+
+        size_factor = 1.0 / 40.0
+        thickness_u = (umax - umin) * size_factor
+        thickness_v = (vmax - vmin) * size_factor
+
+        # boundary along the u axis, minus side
+        plot_params, ulim_minus = set_plot_params(boundaries[dim_u][0], umin, -1, thickness_u)
+        rect = mpl.patches.Rectangle(
+                xy=(umin-thickness_u, vmin),
+                width=thickness_u,
+                height=(vmax - vmin),
+                zorder=np.inf,
+                **plot_params.to_kwargs(),
+                **kwargs
+            )
+        ax.add_patch(rect)
+
+        # boundary along the u axis, plus side
+        plot_params, ulim_plus = set_plot_params(boundaries[dim_u][1], umax, 1, thickness_u)
+        rect = mpl.patches.Rectangle(
+                xy=(umax, vmin),
+                width=thickness_u,
+                height=(vmax - vmin),
+                zorder=np.inf,
+                **plot_params.to_kwargs(),
+                **kwargs
+            )
+        ax.add_patch(rect)
+
+        # boundary along the v axis, minus side
+        plot_params, vlim_minus = set_plot_params(boundaries[dim_v][0], vmin, -1, thickness_v)
+        rect = mpl.patches.Rectangle(
+                xy=(umin, vmin-thickness_v),
+                width=(umax-umin),
+                height=thickness_v,
+                zorder=np.inf,
+                **plot_params.to_kwargs(),
+                **kwargs
+            )
+        ax.add_patch(rect)
+
+        # boundary along the v axis, plus side
+        plot_params, vlim_plus = set_plot_params(boundaries[dim_v][1], vmax, 1, thickness_v)
+        rect = mpl.patches.Rectangle(
+                xy=(umin, vmax),
+                width=(umax-umin),
+                height=thickness_v,
+                zorder=np.inf,
+                **plot_params.to_kwargs(),
+                **kwargs
+            )
+        ax.add_patch(rect)
+
+        # ax = self._set_plot_bounds(ax=ax, x=x, y=y, z=z)
+        ax.set_xlim([ulim_minus, ulim_plus])
+        ax.set_ylim([vlim_minus, vlim_plus])
 
         return ax
 
