@@ -50,12 +50,8 @@ class SourceTime(ABC, Tidy3dBaseModel):
         """
 
     def spectrum(
-        self,
-        times: Array[float],
-        freqs: Array[float],
-        dt: float,
-        complex_fields: bool = False
-        ) -> complex:
+        self, times: Array[float], freqs: Array[float], dt: float, complex_fields: bool = False
+    ) -> complex:
         """Complex-valued source spectrum as a function of frequency
 
         Parameters
@@ -122,12 +118,9 @@ class SourceTime(ABC, Tidy3dBaseModel):
         return ax
 
     @add_ax_if_none
-    def plot_spectrum(self,
-        times: Array[float],
-        num_freqs: int = 101,
-        ax: Ax = None,
-        complex_fields: bool = False
-        ) -> Ax:
+    def plot_spectrum(
+        self, times: Array[float], num_freqs: int = 101, ax: Ax = None, complex_fields: bool = False
+    ) -> Ax:
         """Plot the complex-valued amplitude of the source time-dependence.
 
         Parameters

@@ -673,6 +673,25 @@ class BoundarySpec(Tidy3dBaseModel):
             z=Boundary.pmc() if z else Boundary.periodic(),
         )
 
+    @classmethod
+    def all_sides(cls, boundary: BoundaryEdge):
+        """Set a given boundary condition on all six sides of the domain
+
+        Parameters
+        ----------
+        boundary : :class:`BoundaryEdge`
+            Boundary condition to apply on all six sides of the domain.
+
+        Example
+        -------
+        boundaries = BoundarySpec.all_sides(boundary=PML())
+        """
+        return cls(
+            x=Boundary(minus=boundary, plus=boundary),
+            y=Boundary(minus=boundary, plus=boundary),
+            z=Boundary(minus=boundary, plus=boundary),
+        )
+
     @property
     def to_list(self) -> List[Tuple[BoundaryEdgeType, BoundaryEdgeType]]:
         """Returns edge-wise boundary conditions along each dimension for internal use."""

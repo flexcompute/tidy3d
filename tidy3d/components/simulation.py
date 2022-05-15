@@ -8,7 +8,6 @@ import numpy as np
 import xarray as xr
 import matplotlib.pylab as plt
 import matplotlib as mpl
-import matplotlib.patheffects as pe
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 
 from .validators import assert_unique_names, assert_objects_in_sim_bounds
@@ -699,7 +698,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         ax = self.plot_symmetries(ax=ax, x=x, y=y, z=z)
         ax = self.plot_pml(ax=ax, x=x, y=y, z=z)
         ax = self._set_plot_bounds(ax=ax, x=x, y=y, z=z)
-        ax = self.plot_boundaries(ax=ax, x=x, y=y, z=z)        
+        ax = self.plot_boundaries(ax=ax, x=x, y=y, z=z)
         return ax
 
     @equal_aspect
@@ -1132,8 +1131,11 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
             plot_params.edgecolor = "lightsteelblue"
             plot_params.hatch = "++"
         elif sym_value == -1:
-            plot_params.facecolor = "rosybrown"
-            plot_params.edgecolor = "rosybrown"
+            # plot_params.facecolor = "rosybrown"
+            # plot_params.edgecolor = "rosybrown"
+            # plot_params.hatch = "--"
+            plot_params.facecolor = "gold"
+            plot_params.edgecolor = "gold"
             plot_params.hatch = "--"
 
         return plot_params
@@ -1259,9 +1261,15 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
             """Return the line plot properties such as color and opacity based on the boundary"""
             plot_params = PlotParams()
 
-            if isinstance(boundary_edge, (PECBoundary, PMCBoundary)):
+            if isinstance(boundary_edge, PECBoundary):
                 plot_params.facecolor = "gold"
                 plot_params.edgecolor = "black"
+                # plot_params.edgecolor = "darkgoldenrod"
+                # plot_params.hatch = "--"
+            elif isinstance(boundary_edge, PMCBoundary):
+                plot_params.facecolor = "lightsteelblue"
+                plot_params.edgecolor = "black"
+                # plot_params.edgecolor = "midnightblue"
                 # plot_params.hatch = "++"
             elif isinstance(boundary_edge, BlochBoundary):
                 plot_params.facecolor = "orchid"
@@ -1288,56 +1296,56 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         umin, umax = ax.get_xlim()
         vmin, vmax = ax.get_ylim()
 
-        size_factor = 1.0 / 40.0
+        size_factor = 1.0 / 35.0
         thickness_u = (umax - umin) * size_factor
         thickness_v = (vmax - vmin) * size_factor
 
         # boundary along the u axis, minus side
         plot_params, ulim_minus = set_plot_params(boundaries[dim_u][0], umin, -1, thickness_u)
         rect = mpl.patches.Rectangle(
-                xy=(umin-thickness_u, vmin),
-                width=thickness_u,
-                height=(vmax - vmin),
-                zorder=np.inf,
-                **plot_params.to_kwargs(),
-                **kwargs
-            )
+            xy=(umin - thickness_u, vmin),
+            width=thickness_u,
+            height=(vmax - vmin),
+            zorder=np.inf,
+            **plot_params.to_kwargs(),
+            **kwargs,
+        )
         ax.add_patch(rect)
 
         # boundary along the u axis, plus side
         plot_params, ulim_plus = set_plot_params(boundaries[dim_u][1], umax, 1, thickness_u)
         rect = mpl.patches.Rectangle(
-                xy=(umax, vmin),
-                width=thickness_u,
-                height=(vmax - vmin),
-                zorder=np.inf,
-                **plot_params.to_kwargs(),
-                **kwargs
-            )
+            xy=(umax, vmin),
+            width=thickness_u,
+            height=(vmax - vmin),
+            zorder=np.inf,
+            **plot_params.to_kwargs(),
+            **kwargs,
+        )
         ax.add_patch(rect)
 
         # boundary along the v axis, minus side
         plot_params, vlim_minus = set_plot_params(boundaries[dim_v][0], vmin, -1, thickness_v)
         rect = mpl.patches.Rectangle(
-                xy=(umin, vmin-thickness_v),
-                width=(umax-umin),
-                height=thickness_v,
-                zorder=np.inf,
-                **plot_params.to_kwargs(),
-                **kwargs
-            )
+            xy=(umin, vmin - thickness_v),
+            width=(umax - umin),
+            height=thickness_v,
+            zorder=np.inf,
+            **plot_params.to_kwargs(),
+            **kwargs,
+        )
         ax.add_patch(rect)
 
         # boundary along the v axis, plus side
         plot_params, vlim_plus = set_plot_params(boundaries[dim_v][1], vmax, 1, thickness_v)
         rect = mpl.patches.Rectangle(
-                xy=(umin, vmax),
-                width=(umax-umin),
-                height=thickness_v,
-                zorder=np.inf,
-                **plot_params.to_kwargs(),
-                **kwargs
-            )
+            xy=(umin, vmax),
+            width=(umax - umin),
+            height=thickness_v,
+            zorder=np.inf,
+            **plot_params.to_kwargs(),
+            **kwargs,
+        )
         ax.add_patch(rect)
 
         # ax = self._set_plot_bounds(ax=ax, x=x, y=y, z=z)

@@ -139,3 +139,10 @@ def test_boundaryspec_classmethods():
         and isinstance(boundaries[2][0], Periodic)
         and isinstance(boundaries[2][1], Periodic)
     )
+
+    # all_sides
+    boundary_spec = BoundarySpec.all_sides(boundary=PML())
+    boundaries = boundary_spec.to_list
+    assert all(
+        [isinstance(boundary, PML) for boundary_dim in boundaries for boundary in boundary_dim]
+    )
