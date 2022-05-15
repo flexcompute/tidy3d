@@ -25,6 +25,7 @@ from .viz import add_ax_if_none, equal_aspect
 
 from .viz import MEDIUM_CMAP, PlotParams, plot_params_symmetry
 from .viz import plot_params_structure, plot_params_pml, plot_params_override_structures
+from .viz import plot_params_pec, plot_params_pmc, plot_params_bloch
 
 from ..version import __version__
 from ..constants import C_0, MICROMETER, SECOND, inf
@@ -1134,8 +1135,8 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
             # plot_params.facecolor = "rosybrown"
             # plot_params.edgecolor = "rosybrown"
             # plot_params.hatch = "--"
-            plot_params.facecolor = "gold"
-            plot_params.edgecolor = "gold"
+            plot_params.facecolor = "goldenrod"
+            plot_params.edgecolor = "goldenrod"
             plot_params.hatch = "--"
 
         return plot_params
@@ -1259,23 +1260,14 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
 
         def set_plot_params(boundary_edge, lim, side, thickness):
             """Return the line plot properties such as color and opacity based on the boundary"""
-            plot_params = PlotParams()
-
             if isinstance(boundary_edge, PECBoundary):
-                plot_params.facecolor = "gold"
-                plot_params.edgecolor = "black"
-                # plot_params.edgecolor = "darkgoldenrod"
-                # plot_params.hatch = "--"
+                plot_params = plot_params_pec.copy(deep=True)
             elif isinstance(boundary_edge, PMCBoundary):
-                plot_params.facecolor = "lightsteelblue"
-                plot_params.edgecolor = "black"
-                # plot_params.edgecolor = "midnightblue"
-                # plot_params.hatch = "++"
+                plot_params = plot_params_pmc.copy(deep=True)
             elif isinstance(boundary_edge, BlochBoundary):
-                plot_params.facecolor = "orchid"
-                plot_params.edgecolor = "black"
-                # plot_params.hatch = "++"
+                plot_params = plot_params_bloch.copy(deep=True)
             else:
+                plot_params = PlotParams()
                 plot_params.alpha = 0
 
             # expand axis limit so that the axis ticks and labels aren't covered
