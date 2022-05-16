@@ -32,6 +32,7 @@ def handle_response(func):
             # ask for credentials and call the http request again
             get_credentials()
             resp = func(*args, **kwargs)
+            attempts += 1
 
         # if still unauthorized, raise an error
         if resp.status_code == ResponseCodes.UNAUTHORIZED.value:
@@ -40,11 +41,13 @@ def handle_response(func):
         # try returning the json of the response
         try:
             json_resp = resp.json()
-            # if the response status is still not OK, try to raise error from the json
-            if resp.status_code != ResponseCodes.OK.value:
-                raise WebError(json_resp["error"])
-        # if that doesnt work, raise http error
         except Exception:  # pylint:disable=broad-except
+            resp.raise_for_status()
+
+        # if the response status is still not OK, try to raise error from the json
+        if resp.status_code != ResponseCodes.OK.value:
+            if "error" in json_resp.keys():
+                raise WebError(json_resp["error"])
             resp.raise_for_status()
 
         return json_resp["data"] if "data" in json_resp else json_resp
