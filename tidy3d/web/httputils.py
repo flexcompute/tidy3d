@@ -5,7 +5,7 @@ from enum import Enum
 
 import requests
 
-from .auth import get_credentials
+from .auth import get_credentials, MAX_ATTEMPTS
 from .config import DEFAULT_CONFIG as Config
 from ..log import WebError
 
@@ -26,25 +26,28 @@ def handle_response(func):
         # call originl request
         resp = func(*args, **kwargs)
 
-        # while it's unauthorized
-        while resp.status_code == ResponseCodes.UNAUTHORIZED.value:
-
+        # try to log in if unauthorized
+        attempts = 0
+        while resp.status_code == ResponseCodes.UNAUTHORIZED.value and attempts < MAX_ATTEMPTS:
             # ask for credentials and call the http request again
             get_credentials()
             resp = func(*args, **kwargs)
 
-        # if the request was not OK, raise an error
-        if resp.status_code != ResponseCodes.OK.value:
-            return resp.raise_for_status()
+        # if still unauthorized, raise an error
+        if resp.status_code == ResponseCodes.UNAUTHORIZED.value:
+            raise WebError("Failed to log in to server!")
 
-        # if it was successful, try returning data from the response
+        # try returning the json of the response
         try:
-            json_str = resp.json()
-            return json_str["data"] if "data" in json_str else json_str
+            json_resp = resp.json()
+            # if the response status is still not OK, try to raise error from the json
+            if resp.status_code != ResponseCodes.OK.value:
+                raise WebError(json_resp["error"])
+        # if that doesnt work, raise http error
+        except Exception:  # pylint:disable=broad-except
+            resp.raise_for_status()
 
-        # if that doesnt work, raise
-        except Exception as e:
-            raise WebError(f"Could not decode response json: {resp.text}") from e
+        return json_resp["data"] if "data" in json_resp else json_resp
 
     return wrapper
 
