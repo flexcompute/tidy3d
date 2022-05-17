@@ -1,8 +1,8 @@
 """ Defnes information about a task """
-
+from datetime import datetime
 from enum import Enum
 from abc import ABC
-from typing import Any
+from typing import Any, Optional
 
 import pydantic
 
@@ -38,58 +38,25 @@ TaskName = str
 class TaskInfo(TaskBase):
     """general information about task"""
 
-    execCount: int = None
-    s3Storage: float = None
-    userEmail: str = None
-    # coreDuration: float
-    coreStartTime: str = None
-    # rankCount: int
-    # submitTime: str
-    updateTime: str = None
-    status: str = None
-    taskParam: str = None
-    # objectId: str
-    # folderId: str
-    solverVersion: str = None
-    worker: str = None
-    # userId: str
-    taskType: str = None
-    # objectType: str
-    taskName: str = None
-    errorMessages: str = None
-    nodeSize: int = None
-    timeSteps: int = None
-    computeWeight: float = None
-    solverStartTime: str = None
-    solverEndTime: str = None
     taskId: str
-    workerGroup: str = None
+    taskName: str = None
+    nodeSize: int = None
+    completedAt: Optional[datetime] = None
+    status: str = None
     realCost: float = None
-    cloudInstanceSize: int = None
-    flow360InstanceSize: int = None
+    timeSteps: int = None
+    solverVersion: str = None
+    createAt: Optional[datetime] = None
     estCostMin: float = None
     estCostMax: float = None
-    # running: bool
-    objectRefId: str = None
-    metdataProcessed: bool = None
-    optSolverUnit: float = None
-    minSolverUnit: float = None
-    maxSolverUnit: float = None
-    coreStartTimeAsLong: float = None
-    id: str = None
-    metadataProcessed: bool = None
-    parentId: str = None
-    realWorkUnit: float = None
-    refId: str = None
-    solverEndTimeAsLong: float = None
-    solverStartTimeAsLong: float = None
-    submitTimeAsLong: float = None
-    credential: Any = None
-    loopSolverTime: Any = None
-    shutoffNt: Any = None
-    startSolverTime: Any = None
-    totalSolverTime: Any = None
+    realFlexUnit: float = None
+    estFlexUnit: float = None
+    s3Storage: float = None
+    startSolverTime: Optional[datetime] = None
+    finishSolverTime: Optional[datetime] = None
+    totalSolverTime: int = None
     callbackUrl: str = None
+    taskType: str = None
 
 
 class RunInfo(TaskBase):
