@@ -61,6 +61,7 @@ def test_webapi_1_upload():
 def test_webapi_2_get_info():
     """test that we can grab information about task"""
     task_id = _get_gloabl_task_id()
+    _ = web.get_info(task_id)
 
 
 def test_webapi_3_start():
