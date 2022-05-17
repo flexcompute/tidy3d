@@ -135,11 +135,6 @@ def upload(  # pylint:disable=too-many-locals,too-many-arguments
     # log the url for the task in the web UI
     log.debug(f"{DEFAULT_CONFIG.website_endpoint}/folders/{folder.projectId}/tasks/{task_id}")
 
-    # log the maximum flex unit cost
-    max_cost = estimate_cost(task_id)
-    if max_cost is not None:
-        log.info(f"Maximum flex unit cost: {max_cost:1.2f}")
-
     return task_id
 
 
@@ -240,32 +235,49 @@ def monitor(task_id: TaskId) -> None:
 
     break_statuses = ("success", "error", "diverged", "deleted", "draft")
 
-    def get_status():
-        """Get status for this task (called many times below, so put into function)."""
-        status = get_info(task_id).status
+    show_cost = True
+
+    def get_status(show_cost=False):
+        """Get status for this task (called many times below, so put into function).
+        If the estimated cost is available, it is displayed if requested."""
+        task_info = get_info(task_id)
+        status = task_info.status
         if status == "visualize":
             return "success"
-        return status
+        if status == "error":
+            raise WebError("Error running task!")
+
+        # log the maximum flex unit cost
+        est_flex_unit = task_info.estFlexUnit
+        if show_cost is True and est_flex_unit is not None and est_flex_unit > 0:
+            log.info(f"Maximum flex unit cost: {est_flex_unit:1.2f}")
+            # Set show_cost to False so that it is only shown once during the run
+            show_cost = False
+
+        return status, show_cost
 
     console = Console()
 
+    status, show_cost = get_status(show_cost=show_cost)
+    log.info(f"status = {status}")
     # already done
-    if get_status() in break_statuses:
-        log.info(f"status = {get_status()}")
+    if status in break_statuses:
         return
 
     # preprocessing
     with console.status(f"[bold green]Starting '{task_name}'...", spinner="runner"):
-        while get_status() not in break_statuses and get_status() != "running":
-            if status != get_status():
-                status = get_status()
+        while status not in break_statuses and status != "running":
+            new_status, show_cost = get_status(show_cost=show_cost)
+            if new_status != status:
+                status = new_status
                 if status != "running":
                     log.info(f"status = {status}")
             time.sleep(REFRESH_TIME)
 
     # startup phase where run info is not available
     log.info("starting up solver")
-    while get_run_info(task_id)[0] is None and get_status() == "running":
+    while get_run_info(task_id)[0] is None and status == "running":
+        status, show_cost = get_status(show_cost=show_cost)
         time.sleep(REFRESH_TIME)
 
     # phase where run % info is available
@@ -273,7 +285,8 @@ def monitor(task_id: TaskId) -> None:
     with Progress(console=console) as progress:
         pbar_pd = progress.add_task("% done", total=100)
         perc_done, _ = get_run_info(task_id)
-        while perc_done is not None and perc_done < 100 and get_status() == "running":
+        while perc_done is not None and perc_done < 100 and status == "running":
+            status, show_cost = get_status(show_cost=show_cost)
             perc_done, field_decay = get_run_info(task_id)
             new_description = f"% done (field decay = {field_decay:.2e})"
             progress.update(pbar_pd, completed=perc_done, description=new_description)
@@ -284,16 +297,15 @@ def monitor(task_id: TaskId) -> None:
             progress.update(pbar_pd, completed=100)
 
     # postprocessing
+    if status != "running":
+        log.info(f"status = {status}")
     with console.status(f"[bold green]Finishing '{task_name}'...", spinner="runner"):
-        while get_status() not in break_statuses:
-            if status != get_status():
-                status = get_status()
+        while status not in break_statuses:
+            new_status, show_cost = get_status(show_cost=show_cost)
+            if new_status != status:
+                status = new_status
                 log.info(f"status = {status}")
             time.sleep(REFRESH_TIME)
-
-    # final status (if diffrent from the last printed status)
-    if status != get_status():
-        log.info(f"status = {get_status()}")
 
 
 def download(task_id: TaskId, path: str = "simulation_data.hdf5") -> None:
@@ -484,7 +496,10 @@ def estimate_cost(task_id: str) -> float:
     try:
         resp = http.post(method, data=data)
     except Exception:  # pylint:disable=broad-except
-        log.warning("Could not get estimated cost!")
+        log.warning(
+            "Could not get estimated cost! It will be reported in preprocessing upon "
+            "simulation run."
+        )
         return None
 
     return resp.get("flex_unit")

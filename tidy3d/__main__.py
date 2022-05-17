@@ -91,7 +91,7 @@ def main(args):
         info = job.get_info()
         print(
             f'task "{task_name}" estimated to use '
-            f"\n\t{info.optSolverUnit:.2f} credits and "
+            f"\n\t{info.estFlexUnit:.2f} credits and "
             f"\n\t{info.s3Storage:.2e} bytes of storage."
         )
         looks_good = input("Do you want to continue to submit? [y]/[n]")
