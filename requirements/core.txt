@@ -13,3 +13,4 @@ PyYAML
 boto3
 requests
 dask
+gdspy
