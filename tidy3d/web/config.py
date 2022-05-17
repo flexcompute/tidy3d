@@ -1,6 +1,6 @@
 """ sets configuration options for web interface """
 import os
-from typing import Any
+from typing import Any, Dict
 
 from dataclasses import dataclass
 
@@ -17,7 +17,7 @@ class WebConfig:  # pylint:disable=too-many-instance-attributes
     solver_version: str = None
     worker_group: Any = None
     auth: str = None
-    user: str = None
+    user: Dict[str, str] = None
     auth_retry: int = 1
 
 

@@ -2,7 +2,7 @@
 from datetime import datetime
 from enum import Enum
 from abc import ABC
-from typing import Any, Optional
+from typing import Optional
 
 import pydantic
 
