@@ -158,6 +158,32 @@ class AbstractFieldMonitor(Monitor, ABC):
         description="Collection of field components to store in the monitor.",
     )
 
+    interval_space: Tuple[
+        pydantic.PositiveInt, pydantic.PositiveInt, pydantic.PositiveInt
+    ] = pydantic.Field(
+        (1, 1, 1),
+        title="Spatial interval",
+        description="Number of grid step intervals between monitor recordings. If equal to `1`, "
+        "there will be no downsampling. If greater than 1, fields will be downsampled "
+        "and automatically colocated.",
+    )
+
+    colocate: bool = pydantic.Field(
+        None,
+        title="Colocate fields",
+        description="Toggle whether fields should be colocated to grid cell centers. Default: "
+        "`False` if `interval_space` is 1 in each direction, `True` if `interval_space` is "
+        "greater than one in any direction.",
+    )
+
+    @pydantic.validator("colocate", always=True)
+    def set_default_colocate(cls, val, values):
+        """Toggle default field colocation setting based on `interval_space`."""
+        interval_space = values.get("interval_space")
+        if val is None:
+            val = not sum(interval_space) == 3
+        return val
+
 
 class PlanarMonitor(Monitor, ABC):
     """:class:`Monitor` that has a planar geometry."""
