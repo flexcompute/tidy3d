@@ -150,6 +150,10 @@ Discretization
 .. autosummary::
    :toctree: _autosummary/
 
+   GridSpec
+   AutoGrid
+   UniformGrid
+   CustomGrid
    Coords
    FieldGrid
    YeeGrid
