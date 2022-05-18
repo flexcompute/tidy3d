@@ -9,13 +9,25 @@ import pydantic as pd
 import numpy as np
 from scipy.optimize import root_scalar
 from shapely.strtree import STRtree
-from shapely.geometry import box as shapely_box
+from shapely.geometry import Polygon
 
 from ..base import Tidy3dBaseModel
 from ..types import Axis, Array
 from ..structure import Structure
 from ...log import SetupError, ValidationError
 from ...constants import C_0, fp_eps
+
+
+# pylint:disable=abstract-method
+class IndexedBox(Polygon):
+    """A 2D shapely box with an extra ``str_ind`` variable to keep structure indexes."""
+
+    def __init__(self, minx, miny, maxx, maxy):
+        """Initialize with the same arguments as ``shapely.geometry.box``."""
+        coords = [(maxx, miny), (maxx, maxy), (minx, maxy), (minx, miny)]
+        super().__init__(coords)
+
+        self.str_ind = None
 
 
 class Mesher(Tidy3dBaseModel, ABC):
@@ -118,7 +130,7 @@ class GradedMesher(Mesher):
             if bbox is None:
                 # Structure has been removed because it is completely contained
                 continue
-            bbox_2d = shapely_box(bbox[0, 0], bbox[0, 1], bbox[1, 0], bbox[1, 1])
+            bbox_2d = IndexedBox(bbox[0, 0], bbox[0, 1], bbox[1, 0], bbox[1, 1])
 
             # List of structure indexes that may intersect the current structure in 2D
             query_inds = [box.str_ind for box in tree.query(bbox_2d)]
@@ -299,7 +311,7 @@ class GradedMesher(Mesher):
 
         boxes_2d = []
         for str_ind, bbox in enumerate(struct_bbox):
-            box = shapely_box(bbox[0, 0], bbox[0, 1], bbox[1, 0], bbox[1, 1])
+            box = IndexedBox(bbox[0, 0], bbox[0, 1], bbox[1, 0], bbox[1, 1])
             box.str_ind = str_ind
             boxes_2d.append(box)
         return STRtree(boxes_2d)
