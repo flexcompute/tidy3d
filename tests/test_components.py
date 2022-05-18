@@ -205,6 +205,35 @@ def test_monitor_simulation_frequency_range(caplog, fwidth, log_level):
     assert_log_level(caplog, log_level)
 
 
+def test_monitor_downsampling():
+    # test that the downsampling parameters can be set and the colocation validator works
+
+    monitor = FieldMonitor(
+        size=(inf, inf, inf),
+        freqs=np.linspace(0, 200e12, 10001),
+        name="test",
+        interval_space=(1, 1, 1),
+    )
+    assert monitor.colocate is False
+
+    monitor = FieldMonitor(
+        size=(inf, inf, inf),
+        freqs=np.linspace(0, 200e12, 10001),
+        name="test",
+        interval_space=(1, 2, 3),
+    )
+    assert monitor.colocate is True
+
+    monitor = FieldMonitor(
+        size=(inf, inf, inf),
+        freqs=np.linspace(0, 200e12, 10001),
+        name="test",
+        interval_space=(1, 2, 3),
+        colocate=False,
+    )
+    assert monitor.colocate is False
+
+
 @pytest.mark.parametrize("grid_size,log_level", [(0.001, None), (3, 30)])
 def test_large_grid_size(caplog, grid_size, log_level):
     # small fwidth should be inside range, large one should throw warning
