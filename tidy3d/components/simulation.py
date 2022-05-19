@@ -2,7 +2,6 @@
 """ Container holding all information about simulation and its components"""
 from typing import Dict, Tuple, List, Set, Union
 from math import isclose
-from functools import wraps
 
 import pydantic
 import numpy as np
@@ -11,6 +10,7 @@ import matplotlib.pylab as plt
 import matplotlib as mpl
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 
+from .base import cache
 from .validators import assert_unique_names, assert_objects_in_sim_bounds
 from .validators import validate_mode_objects_symmetry
 from .geometry import Box
@@ -41,29 +41,6 @@ MAX_TIME_STEPS = 1e8
 MAX_GRID_CELLS = 20e9
 MAX_CELLS_TIMES_STEPS = 1e17
 MAX_MONITOR_DATA_SIZE_BYTES = 10e9
-
-
-def cache(prop):
-    """Decorates a property to cache the previously computed values based on a hash of self."""
-
-    stored_values = {}
-
-    @wraps(prop)
-    def cached_property(self):
-        """The new property method to be returned by decorator."""
-
-        hash_key = hash(self)
-
-        # if the value has been computed before, we can simply return the stored value
-        if hash_key in stored_values:
-            return stored_values[hash_key]
-
-        # otherwise, we need to recompute the value, store it in the storage dict, and return
-        return_value = prop(self)
-        stored_values[hash_key] = return_value
-        return return_value
-
-    return cached_property
 
 
 class Simulation(Box):  # pylint:disable=too-many-public-methods

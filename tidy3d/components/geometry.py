@@ -12,7 +12,7 @@ from gdspy import boolean
 from shapely.geometry import Point, Polygon, box, MultiPolygon
 from descartes import PolygonPatch
 
-from .base import Tidy3dBaseModel
+from .base import Tidy3dBaseModel, cache
 from .types import Bound, Size, Coordinate, Axis, Coordinate2D, tidynumpy, Array
 from .types import Vertices, Ax, Shapely
 from .viz import add_ax_if_none, equal_aspect
@@ -2097,6 +2097,7 @@ class GeometryGroup(Geometry):
     )
 
     @property
+    @cache
     def bounds(self) -> Bound:
         """Returns bounding box min and max coordinates.
 

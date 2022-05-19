@@ -72,10 +72,10 @@ def test_sim():
     mm = sim.medium_map
     m = sim.get_monitor_by_name("point")
     s = sim.background_structure
-    sim.plot(x=0)
-    sim.plot_eps(x=0)
+    # sim.plot(x=0)
+    # sim.plot_eps(x=0)
     sim.num_pml_layers
-    sim.plot_grid(x=0)
+    # sim.plot_grid(x=0)
     sim.frequency_range
     sim.grid
     sim.num_cells
@@ -693,7 +693,7 @@ def test_source_times():
     g = GaussianPulse(freq0=1, fwidth=0.1)
     ts = np.linspace(0, 30, 1001)
     g.amp_time(ts)
-    g.plot(ts)
+    # g.plot(ts)
 
     # test we can make cw pulse
     from tidy3d.components.source import ContinuousWave
@@ -707,7 +707,7 @@ def test_dipole():
 
     g = GaussianPulse(freq0=1, fwidth=0.1)
     p = PointDipole(center=(1, 2, 3), source_time=g, polarization="Ex")
-    p.plot(y=2)
+    # p.plot(y=2)
 
     with pytest.raises(pydantic.ValidationError) as e_info:
         p = PointDipole(size=(1, 1, 1), source_time=g, center=(1, 2, 3), polarization="Ex")
@@ -719,11 +719,11 @@ def test_FieldSource():
 
     # test we can make planewave
     s = PlaneWave(size=(0, inf, inf), source_time=g, pol_angle=np.pi / 2, direction="+")
-    s.plot(y=0)
+    # s.plot(y=0)
 
     # test we can make gaussian beam
     s = GaussianBeam(size=(0, 1, 1), source_time=g, pol_angle=np.pi / 2, direction="+")
-    s.plot(y=0)
+    # s.plot(y=0)
 
     # test we can make an astigmatic gaussian beam
     s = AstigmaticGaussianBeam(
@@ -737,7 +737,7 @@ def test_FieldSource():
 
     # test we can make mode source
     s = ModeSource(size=(0, 1, 1), direction="+", source_time=g, mode_spec=mode_spec, mode_index=0)
-    s.plot(y=0)
+    # s.plot(y=0)
 
     # test that non-planar geometry crashes plane wave and gaussian beams
     with pytest.raises(ValidationError) as e_info:
@@ -759,7 +759,7 @@ def test_FieldSource():
     from tidy3d.components.source import TFSF
 
     s = TFSF(size=(1, 1, 1), direction="+", source_time=g, injection_axis=2)
-    s.plot(z=0)
+    # s.plot(z=0)
 
 
 """ monitors """
@@ -786,7 +786,7 @@ def test_monitor():
     tmesh = np.linspace(0, 1, 10)
 
     for m in [m1, m2, m3, m4, m5, m6, m7]:
-        m.plot(y=2)
+        # m.plot(y=2)
         m.storage_size(num_cells=100, tmesh=tmesh)
 
     for m in [m2, m4]:
