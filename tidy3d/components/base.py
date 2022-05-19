@@ -1,6 +1,7 @@
 """global configuration / base class for pydantic models used to make simulation."""
 
 import json
+from functools import wraps
 
 import rich
 import pydantic
@@ -326,3 +327,26 @@ def generate_docstring(cls) -> str:
     doc += "\n"
 
     return doc
+
+
+def cache(prop):
+    """Decorates a property to cache the previously computed values based on a hash of self."""
+
+    stored_values = {}
+
+    @wraps(prop)
+    def cached_property(self):
+        """The new property method to be returned by decorator."""
+
+        hash_key = hash(self)
+
+        # if the value has been computed before, we can simply return the stored value
+        if hash_key in stored_values:
+            return stored_values[hash_key]
+
+        # otherwise, we need to recompute the value, store it in the storage dict, and return
+        return_value = prop(self)
+        stored_values[hash_key] = return_value
+        return return_value
+
+    return cached_property
