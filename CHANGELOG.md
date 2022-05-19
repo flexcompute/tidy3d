@@ -9,6 +9,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+## [1.3.3] - 2022-5-18
+
+### Fixed
+
+ - Bug in `Cylinder.inside` when `axis != 2`.
+
+### Added
+
+ - `AstigmaticGaussianBeam` source.
+
+### Changed
+
+ - Internal functions that may require hashing the simulation many times now use a `make_static` decorator. This pre-computes the simulation hash and stores it,
+ and makes sure that the simulation has not changed at the beginning and end of the function execution.
+ - Speeding up initialization of `PolySlab` when there is no dilation or slant angle.
+ - Allow customizing data range that colormap covers in `plot_field`.
+ - Speeding up of the automatic grid generation using Rtree and other improvements.
+ - Better handling of http response errors.
+ - In `web.monitor`, the estimated cost is only displayed when available; avoid "Unable to get cost" warning.
+ - In `PolySlab.from_gds`, the selected polygons are first merged if possible, before the `PolySlab`-s are made. This avoids bugs e.g. in the case of slanted walls.
+
 ## [1.3.2] - 2022-4-30
 
 ### Fixed
@@ -286,7 +307,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A large number of small improvements and bug fixes.
 
 [Unreleased]: https://github.com/flexcompute/tidy3d/compare/v1.3.2...develop
-[1.3.1]: https://github.com/flexcompute/tidy3d/compare/v1.3.1...1.3.2
+[1.3.3]: https://github.com/flexcompute/tidy3d/compare/v1.3.2...1.3.3
+[1.3.2]: https://github.com/flexcompute/tidy3d/compare/v1.3.1...1.3.2
 [1.3.1]: https://github.com/flexcompute/tidy3d/compare/v1.3.0...1.3.1
 [1.3.0]: https://github.com/flexcompute/tidy3d/compare/v1.2.2...v1.3.0
 [1.2.2]: https://github.com/flexcompute/tidy3d/compare/v1.2.1...v1.2.2
