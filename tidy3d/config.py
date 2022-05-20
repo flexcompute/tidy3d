@@ -26,7 +26,7 @@ class Tidy3dConfig(pd.BaseModel):
         validate_assignment = True
         allow_population_by_field_name = True
 
-    logging_level: str = pd.Field(
+    logging_level: Literal["debug", "info", "warning", "error"] = pd.Field(
         DEFAULT_LEVEL.lower(),
         title="Logging Level",
         description="The lowest level of logging output that will be displayed. "
