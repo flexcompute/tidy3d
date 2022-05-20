@@ -938,7 +938,11 @@
    "name": "python",
    "nbconvert_exporter": "python",
    "pygments_lexer": "ipython3",
+<<<<<<< HEAD
    "version": "3.7.9"
+=======
+   "version": "3.8.10"
+>>>>>>> fd52da6... updated all notebooks for BoundarySpec API
   },
   "widgets": {
    "application/vnd.jupyter.widget-state+json": {
