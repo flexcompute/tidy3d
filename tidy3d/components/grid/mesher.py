@@ -722,7 +722,7 @@ class GradedMesher(Mesher):
         len_mismatch = len_interval - len_left - len_right - len_const
 
         # (1) happens to be the right length
-        if np.isclose(len_mismatch, 0):
+        if isclose(len_mismatch, 0):
             return np.concatenate((dl_list_left, dl_list_const, np.flip(dl_list_right)))
 
         # (2) sufficient remaining part, can be inserted to left or right
@@ -801,7 +801,7 @@ class GradedMesher(Mesher):
         len_mismatch = len_interval - len_left - len_right
 
         # (1) happens to be the right length
-        if np.isclose(len_mismatch, 0):
+        if isclose(len_mismatch, 0):
             return np.append(dl_list_left, np.flip(dl_list_right))
 
         # if len_mismatch is larger than the last step size, insert the last step
@@ -873,7 +873,7 @@ class GradedMesher(Mesher):
         len_mismatch = len_interval - len_scale - len_const
 
         # (1) happens to be the right length
-        if np.isclose(len_mismatch, 0):
+        if isclose(len_mismatch, 0):
             return np.append(dl_list_scale, dl_list_const)
 
         # (2) sufficient remaining part, can be inserted to dl_list_scale
@@ -924,7 +924,7 @@ class GradedMesher(Mesher):
         len_mismatch = len_interval - size_snapped
 
         # (1) happens to be the right length
-        if np.isclose(len_mismatch, 0):
+        if isclose(len_mismatch, 0):
             return dl_list
 
         # (2) sufficient remaining part, can be inserted
@@ -944,13 +944,13 @@ class GradedMesher(Mesher):
         # (4) let's see if we can squeeze something out of smaller scaling.
         # For this case, duplicate the 1st step size.
         len_mismatch_even = len_interval - num_step * small_dl
-        if np.isclose(len_mismatch_even, small_dl):
+        if isclose(len_mismatch_even, small_dl):
             return np.array([small_dl] * (num_step + 1))
 
         if len_mismatch_even > small_dl:
 
             def fun_scale(new_scale):
-                if np.isclose(new_scale, 1.0):
+                if isclose(new_scale, 1.0):
                     return len_interval - small_dl * (1 + num_step)
                 return (
                     len_interval
@@ -1009,7 +1009,7 @@ class GradedMesher(Mesher):
         if len_interval <= min(left_dl, right_dl, max_dl):
             return -1
         # uniform grid if max_scale is too small
-        if np.isclose(max_scale, 1):
+        if isclose(max_scale, 1):
             return 0
         # uniform grid if max_dl is the smallest
         if max_dl <= left_dl and max_dl <= right_dl:
