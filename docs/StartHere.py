@@ -5,6 +5,8 @@
 # 
 # This is a basic Tidy3D script showing the FDTD simulation of a delectric cube in the presence of a point dipole.
 
+import sys
+sys.path.append('../tidy3d')
 import numpy as np
 
 # import the package and the web API
@@ -13,7 +15,6 @@ import tidy3d.web as web
 
 
 # set up parameters of simulation (length scales are micrometers)
-grid_size = 0.01
 pml = td.PML()
 sim_size = (4, 4, 4)
 lambda0 = 1.0
@@ -46,7 +47,6 @@ monitor = td.FieldMonitor(
 
 # Initialize simulation
 sim = td.Simulation(size=sim_size,
-    grid_spec = td.GridSpec.auto(min_steps_per_wvl=grid_cells_per_wvl),
     structures=[square],
     sources=[source],
     monitors=[monitor],

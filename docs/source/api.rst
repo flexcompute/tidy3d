@@ -321,6 +321,14 @@ Tidy3D Special Constants
    tidy3d.inf
    tidy3d.PEC
 
+Tidy3D Configuration
+--------------------
+
+.. autosummary::
+   :toctree: _autosummary/
+
+   tidy3d.config.Tidy3dConfig
+
 Default Absorber Parameters
 ---------------------------
 
