@@ -322,13 +322,12 @@ class AutoGrid(GridSpec1d):
             if sym != 0:
                 sim_cent[dim] += sim_size[dim] / 4
                 sim_size[dim] /= 2
+        symmetry_domain = Box(center=sim_cent, size=sim_size)
 
-        struct_list = [
-            Structure(geometry=Box(center=sim_cent, size=sim_size), medium=structures[0].medium)
-        ]
-        # Remove structures that are outside the simulation domain (with symmetry applied)
+        # New list of structures with symmetry applied
+        struct_list = [Structure(geometry=symmetry_domain, medium=structures[0].medium)]
         for structure in structures[1:]:
-            if struct_list[0].geometry.intersects(structure.geometry):
+            if symmetry_domain.intersects(structure.geometry):
                 struct_list.append(structure)
 
         # parse structures
@@ -351,6 +350,12 @@ class AutoGrid(GridSpec1d):
         # generate boundaries
         bound_coords = np.append(0.0, np.cumsum(np.concatenate(dl_list)))
         bound_coords += interval_coords[0]
+
+        # fix simulation domain boundaries which may be slightly off
+        bmin, bmax = [bound[axis] for bound in symmetry_domain.bounds]
+        bound_coords[0] = bmin
+        bound_coords[-1] = bmax
+
         return np.array(bound_coords)
 
 
