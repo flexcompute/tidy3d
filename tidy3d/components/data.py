@@ -402,7 +402,9 @@ class SpatialCollectionData(CollectionData, ABC):
                     centered_data_array = centered_data_array.isel(**{coord_name: 0})
                 else:
                     interp_dict[coord_name] = coord_val_map[coord_name]
-            centered_data_dict[field_name] = centered_data_array.interp(**interp_dict)
+            centered_data_dict[field_name] = centered_data_array.interp(
+                **interp_dict, kwargs={"bounds_error": True}
+            )
         return xr.Dataset(centered_data_dict)
 
     @property
