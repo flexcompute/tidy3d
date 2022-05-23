@@ -352,9 +352,15 @@ class AutoGrid(GridSpec1d):
         bound_coords += interval_coords[0]
 
         # fix simulation domain boundaries which may be slightly off
-        bmin, bmax = [bound[axis] for bound in symmetry_domain.bounds]
-        bound_coords[0] = bmin
-        bound_coords[-1] = bmax
+        domain_bounds = [bound[axis] for bound in symmetry_domain.bounds]
+        if not np.all(np.isclose(bound_coords[[0, -1]], domain_bounds)):
+            raise SetupError(
+                f"AutoGrid coordinates along axis {axis} do not match the simulation "
+                "domain, indicating an unexpected error in the meshing. Please create a github "
+                "issue so that the problem can be investigated. In the meantime, switch to "
+                f"uniform or custom grid along {axis}."
+            )
+        bound_coords[[0, -1]] = domain_bounds
 
         return np.array(bound_coords)
 
