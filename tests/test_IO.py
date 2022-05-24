@@ -1,12 +1,19 @@
+import os
+import json
+
 import pydantic
 import numpy as np
 import os
 from time import time
 
 from tidy3d import *
+from tidy3d import __version__
 from .utils import SIM_FULL as SIM
 from .utils import SIM_MONITORS as SIM2
 from .utils import clear_tmp
+
+# Store an example of every minor release simulation to test updater in the future
+SIM_DIR = "tests/sims"
 
 
 @clear_tmp
@@ -20,6 +27,15 @@ def test_simulation_load_export():
 
 @clear_tmp
 def test_simulation_preserve_types():
+
+    st = GaussianPulse(freq0=1.0, fwidth=1.0)
+
+
+@clear_tmp
+def test_simulation_preserve_types():
+    """This test also writes a simulation file to ``tests/sims/simulation_x_y_z.json`` to store
+    an example of the current version. Updating all of these files is then checked in
+    ``test_simulation_updater``. """
 
     st = GaussianPulse(freq0=1.0, fwidth=1.0)
 
@@ -48,10 +64,19 @@ def test_simulation_preserve_types():
                 pol_angle=2.0,
             ),
             GaussianBeam(
+                center=(0, 0, -4),
                 size=(1, 1, 0),
                 source_time=st,
                 direction="+",
                 waist_radius=1,
+            ),
+            ModeSource(
+                center=(0, 0, 0),
+                size=(0, 1, 1),
+                mode_spec=ModeSpec(num_modes=3),
+                mode_index=2,
+                direction="-",
+                source_time=st,
             ),
         ],
         monitors=[
@@ -62,9 +87,16 @@ def test_simulation_preserve_types():
             ModeMonitor(size=(1, 0, 1), freqs=[1, 2], mode_spec=ModeSpec(num_modes=3), name="mode"),
         ],
         run_time=1e-12,
+        symmetry=(0, -1, 1),
+        boundary_spec=BoundarySpec(
+            x=Boundary(minus=PML(), plus=Absorber()),
+            y=Boundary(minus=PMCBoundary(), plus=Periodic()),
+            z=Boundary(minus=StablePML(), plus=PECBoundary()),
+        ),
     )
 
-    path = "tests/tmp/simulation.json"
+    major, minor, patch = __version__.split(".")
+    path = os.path.join(SIM_DIR, f"simulation_{major}_{minor}_{patch}.json")
     sim_all.to_file(path)
     sim_2 = Simulation.from_file(path)
     assert sim_all == sim_2
@@ -125,6 +157,19 @@ def test_validation_speed():
         sizes_bytes.append(size)
 
         print(f"{n} structures \t {size:.1e} bytes \t {time_validate:.1f} seconds to validate")
+
+
+def test_simulation_updater():
+    """Test that all simulations in ``SIM_DIR`` can be updated to current version and loaded."""
+    sim_files = [os.path.join(SIM_DIR, file) for file in os.listdir(SIM_DIR)]
+    for sim_file in sim_files:
+        with open(sim_file) as old_sim_json:
+            old_sim_dict = json.load(old_sim_json)
+
+        print(f"Updating simulation json version {old_sim_dict['version']}")
+
+        new_sim_dict = Updater().update(old_sim_dict)
+        sim = Simulation.parse_obj(new_sim_dict)
 
 
 @clear_tmp
