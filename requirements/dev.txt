@@ -10,3 +10,4 @@ pylint
 tox
 pytest
 pytest-timeout
+gdspy

@@ -8,7 +8,6 @@ import functools
 
 import pydantic
 import numpy as np
-from gdspy import boolean
 from shapely.geometry import Point, Polygon, box, MultiPolygon
 from descartes import PolygonPatch
 
@@ -1389,7 +1388,13 @@ class PolySlab(Planar):
         # apply scaling and convert vertices into polyslabs
         all_vertices = [vertices * gds_scale for vertices in all_vertices]
         all_vertices = [vertices.tolist() for vertices in all_vertices]
-        poly_set = boolean(all_vertices, None, "or")
+        polygons = (Polygon(vertices) for vertices in all_vertices)
+        polys_union = functools.reduce(lambda poly1, poly2: poly1.union(poly2), polygons)
+
+        if isinstance(polys_union, Polygon):
+            all_vertices = [cls.strip_coords(polys_union)[0]]
+        elif isinstance(polys_union, MultiPolygon):
+            all_vertices = [cls.strip_coords(polygon)[0] for polygon in polys_union.geoms]
 
         return [
             cls(
@@ -1400,7 +1405,7 @@ class PolySlab(Planar):
                 sidewall_angle=sidewall_angle,
                 **kwargs,
             )
-            for verts in poly_set.polygons
+            for verts in all_vertices
         ]
 
     @property

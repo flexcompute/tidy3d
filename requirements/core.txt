@@ -13,4 +13,3 @@ PyYAML
 boto3==1.23.1
 requests
 dask
-gdspy
