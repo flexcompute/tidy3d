@@ -8,6 +8,9 @@ from .config import config
 # version
 from .version import __version__
 
+# updater
+from .updater import Updater
+
 # grid
 from .components import Grid, Coords, GridSpec, UniformGrid, CustomGrid, AutoGrid
 
