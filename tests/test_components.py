@@ -377,6 +377,28 @@ def test_pop_axis():
         assert Ly == _Ly
 
 
+def test_polyslab_merge():
+    """make sure polyslabs from gds get merged when they should."""
+
+    import gdspy
+
+    def make_polyslabs(gap_size):
+        """Construct two rectangular polyslabs separated by a gap."""
+        lib = gdspy.GdsLibrary()
+        cell = lib.new_cell(f"polygons_{gap_size:.2f}")
+        rect1 = gdspy.Rectangle((gap_size / 2, 0), (1, 1))
+        rect2 = gdspy.Rectangle((-1, 0), (-gap_size / 2, 1))
+        cell.add(rect1)
+        cell.add(rect2)
+        return PolySlab.from_gds(gds_cell=cell, gds_layer=0, axis=2, slab_bounds=(-1, 1))
+
+    polyslabs_gap = make_polyslabs(gap_size=0.3)
+    assert len(polyslabs_gap) == 2, "untouching polylsabs were merged incorrectly."
+
+    polyslabs_touching = make_polyslabs(gap_size=0)
+    assert len(polyslabs_touching) == 1, "polyslabs didnt merge correctly."
+
+
 """ medium """
 
 
