@@ -35,7 +35,7 @@ def test_simulation_preserve_types():
 def test_simulation_preserve_types():
     """This test also writes a simulation file to ``tests/sims/simulation_x_y_z.json`` to store
     an example of the current version. Updating all of these files is then checked in
-    ``test_simulation_updater``. """
+    ``test_simulation_updater``."""
 
     st = GaussianPulse(freq0=1.0, fwidth=1.0)
 
@@ -163,13 +163,12 @@ def test_simulation_updater():
     """Test that all simulations in ``SIM_DIR`` can be updated to current version and loaded."""
     sim_files = [os.path.join(SIM_DIR, file) for file in os.listdir(SIM_DIR)]
     for sim_file in sim_files:
-        with open(sim_file) as old_sim_json:
-            old_sim_dict = json.load(old_sim_json)
+        updater = Updater(filename=sim_file)
+        sim = updater.update_to_current()
+        assert sim.version == __version__, "Simulation not converted properly"
 
-        print(f"Updating simulation json version {old_sim_dict['version']}")
-
-        new_sim_dict = Updater().update(old_sim_dict)
-        sim = Simulation.parse_obj(new_sim_dict)
+        # just make sure the loaded sim does something properly using this version
+        sim.grid
 
 
 @clear_tmp
