@@ -28,6 +28,10 @@ def test_construct():
     # should not error if loading with construct
     sim = td.Simulation.construct(sim_dict)
 
+    # do something with the loaded sim
+    for monitor in sim.monitors:
+        monitor.storage_size(10, np.arange(10))
+
 
 def test_construct_recursive():
     """Does the validation occur on subclasses?"""
@@ -46,3 +50,7 @@ def test_construct_recursive():
 
     # should not error if loading with construct
     sim = td.Simulation.construct(sim_dict)
+
+    # do something with the loaded sim
+    for structure in sim.structures:
+        structure.geometry.bounds
