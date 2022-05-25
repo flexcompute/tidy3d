@@ -5,7 +5,7 @@ import os
 import pydantic as pd
 from typing_extensions import Literal
 
-from .log import set_logging_level, DEFAULT_LEVEL, Tidy3dKeyError
+from .log import set_logging_level, DEFAULT_LEVEL, Tidy3dKeyError, log
 from .components.base import Tidy3dBaseModel
 from .web.config import DEFAULT_CONFIG, WEB_CONFIGS
 
@@ -49,6 +49,13 @@ class Tidy3dConfig(pd.BaseModel):
         False, title="Frozen", description="Whether all tidy3d components are immutable."
     )
 
+    freeze_cache: bool = pd.Field(
+        False,
+        title="Freeze cache",
+        description="Whether to store cached properties without "
+        "hashing the object to check if it has changed.",
+    )
+
     @pd.validator("logging_level", always=True)
     def _set_logging_level(cls, val):
         """Set the logging level if logging_level is changed."""
@@ -71,7 +78,25 @@ class Tidy3dConfig(pd.BaseModel):
     @pd.validator("frozen", always=True)
     def _change_mutability(cls, val):
         """Set whether tidy3d compoennts are mutable."""
-        Tidy3dBaseModel.__config__.frozen = val
+        Tidy3dBaseModel.Config.frozen = val
+        return val
+
+    @pd.validator("freeze_cache", always=True)
+    def _change_caching(cls, val):
+        """Set whether cached properties use hash (mutability safe) or frozen private property."""
+        old_val = Tidy3dBaseModel.Config.freeze_cache
+        Tidy3dBaseModel.Config.freeze_cache = val
+
+        if val is True:
+            log.warning(
+                "Freezing all @cached properties for faster access. "
+                "Note: if any model fields are mutated, the cached "
+                "values may become out of date."
+            )
+        else:
+            if old_val != val:
+                log.warning("Using model hash for @cached properties. Mutating models is OK.")
+            Tidy3dBaseModel.clear_frozen_cache()
         return val
 
 

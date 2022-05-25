@@ -31,7 +31,6 @@ from .viz import plot_params_pec, plot_params_pmc, plot_params_bloch
 from ..version import __version__
 from ..constants import C_0, MICROMETER, SECOND, inf
 from ..log import log, Tidy3dKeyError, SetupError, ValidationError
-from ..static import make_static
 
 # minimum number of grid points allowed per central wavelength in a medium
 MIN_GRIDS_PER_WVL = 6.0
@@ -634,7 +633,6 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
 
     @equal_aspect
     @add_ax_if_none
-    @make_static
     def plot(
         self,
         x: float = None,
@@ -679,7 +677,6 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
 
     @equal_aspect
     @add_ax_if_none
-    @make_static
     def plot_eps(  # pylint:disable=too-many-arguments
         self,
         x: float = None,

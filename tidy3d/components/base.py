@@ -2,6 +2,7 @@
 
 import json
 from functools import wraps
+from typing import Dict, Any
 
 import rich
 import pydantic
@@ -10,7 +11,7 @@ import numpy as np
 from pydantic.fields import ModelField
 
 from .types import ComplexNumber, NumpyArray, Literal
-from ..log import FileError
+from ..log import FileError, log
 
 # default indentation (# spaces) in files
 INDENT = 4
@@ -50,6 +51,8 @@ class Tidy3dBaseModel(pydantic.BaseModel):
             Validate default values just to be safe.
         validate_assignment : bool
             Re-validate after re-assignment of field in model.
+        freeze_cache: bool
+            Whethr
         """
 
         arbitrary_types_allowed = True
@@ -61,6 +64,29 @@ class Tidy3dBaseModel(pydantic.BaseModel):
             np.ndarray: lambda x: NumpyArray(data_list=x.tolist()),
             complex: lambda x: ComplexNumber(real=x.real, imag=x.imag),
         }
+        freeze_cache = False
+
+    # class variable storing a list of models where frozen cache has been used
+    __models_with_frozen_cache = []
+
+    @classmethod
+    def clear_frozen_cache(cls):
+        """Clear the cache of all models where it has been used."""
+        for model in cls.__models_with_frozen_cache:
+            model.unfreeze_properties()
+            cls.__models_with_frozen_cache = []
+
+    @classmethod
+    def append_frozen_cache_model(cls, model):
+        """Append a model to the list of models using frozen cache."""
+        cls.__models_with_frozen_cache.append(model)
+
+    # stores all of the cached property return values for a class instance
+    _frozen_property_values: Dict[Any, Any] = pydantic.PrivateAttr({})
+
+    def unfreeze_properties(self) -> None:
+        """Remove all of the property return values."""
+        self._frozen_property_values = {}
 
     def copy(self, deep: bool = True, **kwargs) -> "Self":
         """Copy a Tidy3dBaseModel.  With ``deep=True`` as default."""
@@ -330,7 +356,7 @@ def generate_docstring(cls) -> str:
 
 
 def cache(prop):
-    """Decorates a property to cache the previously computed values based on a hash of self."""
+    """Decorates a getter to cache the previously computed values based on a hash of self."""
 
     stored_values = {}
 
@@ -338,13 +364,30 @@ def cache(prop):
     def cached_property(self):
         """The new property method to be returned by decorator."""
 
+        # If config is frozen, do not use hashing but directly look for the frozen values
+        if Tidy3dBaseModel.__config__.freeze_cache is True:
+            # pylint:disable=protected-access
+            frozen_value = self._frozen_property_values.get(prop.__name__)
+            if frozen_value is not None:
+                log.warning("using frozen value")
+                return frozen_value
+
+            log.warning("computing and freezing value")
+            value = prop(self)
+            self._frozen_property_values[prop.__name__] = value
+            Tidy3dBaseModel.append_frozen_cache_model(self)
+            return value
+
+        # Otherwise we use regular hash-based caching
         hash_key = hash(self)
 
-        # if the value has been computed before, we can simply return the stored value
+        # If the value has been computed before, we can simply return the stored value
         if hash_key in stored_values:
+            log.warning("using cached value")
             return stored_values[hash_key]
 
-        # otherwise, we need to recompute the value, store it in the storage dict, and return
+        log.warning("computing value")
+        # Otherwise, we need to recompute the value, store it in the storage dict, and return
         return_value = prop(self)
         stored_values[hash_key] = return_value
         return return_value
