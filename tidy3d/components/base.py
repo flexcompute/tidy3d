@@ -2,6 +2,8 @@
 
 import json
 from functools import wraps
+from typing import Dict, Any
+import inspect
 
 import rich
 import pydantic
@@ -10,7 +12,7 @@ import numpy as np
 from pydantic.fields import ModelField
 
 from .types import ComplexNumber, NumpyArray, Literal
-from ..log import FileError
+from ..log import FileError, log
 
 # default indentation (# spaces) in files
 INDENT = 4
@@ -252,6 +254,33 @@ class Tidy3dBaseModel(pydantic.BaseModel):
 
         return json_string
 
+    # stores all of the cached property return values for this object
+    _frozen_property_values: Dict[Any, Any] = pydantic.PrivateAttr({})
+
+    def freeze_properties(self) -> None:
+        """Store all of the property return values."""
+
+        log.warning(
+            "Freezing all @cached properties for faster access."
+            "Note: if the object or its contents are mutated, "
+            "the values computed by these properties may be out of date."
+        )
+
+        def is_cached_property(attribute):
+            """Whether the attribute is a a property of a function tagged with @cache."""
+            if isinstance(attribute, property):
+                if attribute.fget in CACHED_PROPERTIES:
+                    return True
+            return False
+
+        for property_name, prop in inspect.getmembers(type(self), is_cached_property):
+            prop_value = prop.fget(self)
+            self._frozen_property_values[property_name] = prop_value
+
+    def unfreeze_properties(self) -> None:
+        """Remove all of the property return values."""
+        self._frozen_property_values = {}
+
 
 def add_type_field(cls):
     """Automatically place "type" field with model name in the model field dictionary."""
@@ -329,8 +358,12 @@ def generate_docstring(cls) -> str:
     return doc
 
 
+# stores reference to all of the the cached properties in tidy3d
+CACHED_PROPERTIES = set()
+
+
 def cache(prop):
-    """Decorates a property to cache the previously computed values based on a hash of self."""
+    """Decorates a getter to cache the previously computed values based on a hash of self."""
 
     stored_values = {}
 
@@ -338,15 +371,26 @@ def cache(prop):
     def cached_property(self):
         """The new property method to be returned by decorator."""
 
+        frozen_value = self._frozen_property_values.get(  # pylint:disable=protected-access
+            prop.__name__
+        )
+        if frozen_value is not None:
+            log.warning("using frozen value")
+            return frozen_value
+
         hash_key = hash(self)
 
         # if the value has been computed before, we can simply return the stored value
         if hash_key in stored_values:
+            log.warning("using cached value")
             return stored_values[hash_key]
 
+        log.warning("computing value")
         # otherwise, we need to recompute the value, store it in the storage dict, and return
         return_value = prop(self)
         stored_values[hash_key] = return_value
         return return_value
+
+    CACHED_PROPERTIES.add(cached_property)
 
     return cached_property
