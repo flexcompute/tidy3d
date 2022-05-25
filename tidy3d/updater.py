@@ -73,6 +73,7 @@ class Updater(pd.BaseModel):
             if update_fn is None:
                 raise SetupError(f"version {self.version} not found in update map.")
             self.sim_dict = update_fn(self.sim_dict)
+        self.sim_dict['version'] == __version__
         return self.sim_dict
 
 
@@ -107,7 +108,7 @@ def updates_to_version(version_from_string, version_to_string):
     return decorator
 
 
-@updates_to_version(version_from_string="1.3.0", version_to_string="1.4.0")
+@updates_to_version(version_from_string="1.3.x", version_to_string="1.4.0")
 def update_1_3(sim_dict: dict) -> dict:
     """Updates version 1.3 to 1.4."""
 
