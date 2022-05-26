@@ -258,12 +258,12 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         if not __recursive__:
             return super().construct(_fields_set, **values)
 
-        m = cls.__new__(cls)
+        model = cls.__new__(cls)
 
         fields_values = {}
         for name, field in cls.__fields__.items():
             if name in values:
-                if issubclass(field.type_, BaseModel):
+                if issubclass(field.type_, pydantic.BaseModel):
                     fields_values[name] = field.outer_type_.construct(
                         **values[name], __recursive__=True
                     )
@@ -272,12 +272,12 @@ class Tidy3dBaseModel(pydantic.BaseModel):
             elif not field.required:
                 fields_values[name] = field.get_default()
 
-        object.__setattr__(m, "__dict__", fields_values)
+        object.__setattr__(model, "__dict__", fields_values)
         if _fields_set is None:
             _fields_set = set(values.keys())
-        object.__setattr__(m, "__fields_set__", _fields_set)
-        m._init_private_attributes()
-        return m
+        object.__setattr__(model, "__fields_set__", _fields_set)
+        model._init_private_attributes()  # pylint:disable=protected-access
+        return model
 
 
 def add_type_field(cls):

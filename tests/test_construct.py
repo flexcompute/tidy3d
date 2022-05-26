@@ -26,13 +26,15 @@ def test_construct():
         sim = td.Simulation.parse_obj(sim_dict)
 
     # should not error if loading with construct
-    sim = td.Simulation.construct(sim_dict)
+    sim2 = td.Simulation.construct(sim_dict)
 
-    assert len(sim.monitors) > 0, "monitor list not added"
+    assert len(sim2.monitors) > 0, "monitor list not added"
 
     # do something with the loaded sim
-    for monitor in sim.monitors:
+    for monitor in sim2.monitors:
         monitor.storage_size(10, np.arange(10))
+
+    assert sim == sim2
 
 
 def test_construct_recursive():
@@ -51,10 +53,12 @@ def test_construct_recursive():
         sim = td.Simulation.parse_obj(sim_dict)
 
     # should not error if loading with construct
-    sim = td.Simulation.construct(sim_dict)
+    sim2 = td.Simulation.construct(sim_dict)
 
-    assert len(sim.structures) > 0, "structure list not added"
+    assert len(sim2.structures) > 0, "structure list not added"
 
     # do something with the loaded sim
-    for structure in sim.structures:
+    for structure in sim2.structures:
         structure.geometry.bounds
+
+    assert sim == sim2
