@@ -10,7 +10,7 @@ shapely<=1.8.0,>=1.7.0
 descartes
 pydantic>=1.9.0
 PyYAML
-boto3
+boto3==1.23.1
 requests
 dask
 gdspy

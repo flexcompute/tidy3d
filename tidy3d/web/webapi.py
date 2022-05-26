@@ -318,21 +318,59 @@ def download(task_id: TaskId, path: str = "simulation_data.hdf5") -> None:
     path : str = "simulation_data.hdf5"
         Download path to .hdf5 data file (including filename).
 
+    """
+
+    # TODO: it should be possible to load "diverged" simulations
+    _download_file(task_id, fname="monitor_data.hdf5", path=path)
+
+
+def download_json(task_id: TaskId, path: str = "simulation.json") -> None:
+    """Download the `.json` file associated with the :class:`.Simulation` of a given task.
+
+    Parameters
+    ----------
+    task_id : str
+        Unique identifier of task on server.  Returned by :meth:`upload`.
+    path : str = "simulation.json"
+        Download path to .json file of simulation (including filename).
+    """
+    _download_file(task_id, fname="simulation.json", path=path)
+
+
+def load_simulation(task_id: TaskId, path: str = "simulation.json") -> Simulation:
+    """Download the `.json` file of a task and load the associated :class:`.Simulation`.
+
+    Parameters
+    ----------
+    task_id : str
+        Unique identifier of task on server.  Returned by :meth:`upload`.
+    path : str = "simulation.json"
+        Download path to .json file of simulation (including filename).
+
+    Returns
+    -------
+    :class:`.Simulation`
+        Simulation loaded from downloaded json file.
+    """
+    download_json(task_id, path=path)
+    return Simulation.from_file(path)
+
+
+def download_log(task_id: TaskId, path: str = "tidy3d.log") -> None:
+    """Download the tidy3d log file associated with a task.
+
+    Parameters
+    ----------
+    task_id : str
+        Unique identifier of task on server.  Returned by :meth:`upload`.
+    path : str = "tidy3d.log"
+        Download path to log file (including filename).
+
     Note
     ----
     To load downloaded results into data, call :meth:`load` with option `replace_existing=False`.
     """
-
-    # TODO: it should be possible to load "diverged" simulations
-    task_info = get_info(task_id)
-    if task_info.status in ("error", "deleted"):
-        raise WebError(f"can't download task '{task_id}', status = '{task_info.status}'")
-
-    directory, _ = os.path.split(path)
-    if directory != "":
-        os.makedirs(directory, exist_ok=True)
-
-    _download_file(task_id, fname="monitor_data.hdf5", path=path)
+    _download_file(task_id, fname="tidy3d.log", path=path)
 
 
 def load(
@@ -534,6 +572,15 @@ def _download_file(task_id: TaskId, fname: str, path: str) -> None:
     path : str
         Path where the file will be downloaded to (including filename).
     """
+
+    task_info = get_info(task_id)
+    if task_info.status in ("error", "deleted"):
+        raise WebError(f"can't download task '{task_id}', status = '{task_info.status}'")
+
+    directory, _ = os.path.split(path)
+    if directory != "":
+        os.makedirs(directory, exist_ok=True)
+
     log.info(f'downloading file "{fname}" to "{path}"')
 
     try:
