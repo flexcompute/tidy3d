@@ -87,10 +87,10 @@ class ComponentModeler(Tidy3dBaseModel):
         units=HERTZ,
     )
 
-    batch_data: Tidy3dBaseModel = pd.Field(
+    batch: Tidy3dBaseModel = pd.Field(
         None,
-        title="Batch Data",
-        description="Batch Data of task used to compute S matrix. Set internally.",
+        title="Batch",
+        description="Batch of task used to compute S matrix. Set internally.",
     )
 
     @pd.validator("simulation", always=True)
@@ -204,12 +204,11 @@ class ComponentModeler(Tidy3dBaseModel):
     ) -> "BatchData":
         """Run :class:`Simulations` for each port and return the batch after saving."""
 
-        batch = Batch(simulations=sim_dict, folder_name=folder_name)
-        batch.upload()
-        batch.start()
-        batch.monitor()
-        batch_data = batch.load(path_dir=path_dir)
-        self.batch_data = batch_data
+        self.batch = Batch(simulations=sim_dict, folder_name=folder_name)
+        self.batch.upload()
+        self.batch.start()
+        self.batch.monitor()
+        batch_data = self.batch.load(path_dir=path_dir)
         return batch_data
 
     def _normalization_factor(self, port_source: Port, sim_data: SimulationData) -> complex:
@@ -287,9 +286,10 @@ class ComponentModeler(Tidy3dBaseModel):
         batch_data = self._run_sims(sim_dict=sim_dict, folder_name=folder_name, path_dir=path_dir)
         return self._construct_smatrix(batch_data=batch_data)
 
-    def load(self) -> SMatrixType:
+    def load(self, path_dir: str = DEFAULT_DATA_DIR) -> SMatrixType:
         """Load an Smatrix from saved BatchData object."""
 
-        if self.batch_data is None:
+        if self.batch is None:
             raise SetupError("Component modeler has no batch saved. Run .solve() to generate.")
-        return self._construct_smatrix(batch_data=self.batch_data)
+        batch_data = self.batch.load(path_dir=path_dir)
+        return self._construct_smatrix(batch_data=batch_data)
