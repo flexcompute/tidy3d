@@ -843,6 +843,7 @@ class Box(Geometry):
         length_factor: float = ARROW_LENGTH_FACTOR,
         width_factor: float = ARROW_WIDTH_FACTOR,
         both_dirs: bool = False,
+        sim_bounds: Bound = None,
         ax: Ax = None,
     ) -> Ax:
         """Adds an arrow to the axis if with options if certain conditions met.
@@ -875,18 +876,22 @@ class Box(Geometry):
         """
 
         plot_axis, _ = self.parse_xyz_kwargs(x=x, y=y, z=z)
-        arrow_axis = [component == 0 for component in direction]
-        arrow_length, arrow_width = self._arrow_dims(ax, length_factor, width_factor)
+        arrow_length, arrow_width = self._arrow_dims(
+            ax=ax,
+            length_factor=length_factor,
+            width_factor=width_factor,
+            sim_bounds=sim_bounds,
+            plot_axis=plot_axis,
+        )
 
         # conditions to check to determine whether to plot arrow
         arrow_intersecting_plane = len(self.intersections(x=x, y=y, z=z)) > 0
-        arrow_perp_to_screen = arrow_axis.index(0.0) != plot_axis
-        arrow_not_cartesian_axis = arrow_axis.count(0.0) > 1
+        _, (dx, dy) = self.pop_axis(direction, axis=plot_axis)
+        components_in_plane = any(component != 0 for component in (dx, dy))
 
         # plot if arrow in plotting plane and some non-zero component can be displayed.
-        if arrow_intersecting_plane and (arrow_not_cartesian_axis or arrow_perp_to_screen):
+        if arrow_intersecting_plane and components_in_plane:
             _, (x0, y0) = self.pop_axis(self.center, axis=plot_axis)
-            _, (dx, dy) = self.pop_axis(direction, axis=plot_axis)
 
             def add_arrow(sign=1.0):
                 """Add an arrow to the axes and include a sign to direction."""
@@ -907,26 +912,37 @@ class Box(Geometry):
 
         return ax
 
-    def _arrow_dims(
+    def _arrow_dims(  # pylint: disable=too-many-locals
         self,
         ax: Ax,
         length_factor: float = ARROW_LENGTH_FACTOR,
         width_factor: float = ARROW_WIDTH_FACTOR,
+        sim_bounds: Bound = None,
+        plot_axis: Axis = None,
     ) -> Tuple[float, float]:
         """Length and width of arrow based on axes size and length and width factors."""
 
-        # get the sizes of the matplotlib axes
-        xmin, xmax = ax.get_xlim()
-        ymin, ymax = ax.get_ylim()
-        ax_width = xmax - xmin
-        ax_height = ymax - ymin
+        if sim_bounds is not None:
+
+            # use the sim_bounds to get sizes
+            rmin, rmax = sim_bounds
+            _, (xmin, ymin) = self.pop_axis(rmin, axis=plot_axis)
+            _, (xmax, ymax) = self.pop_axis(rmax, axis=plot_axis)
+
+        else:
+            # get the sizes of the matplotlib axes
+            xmin, xmax = ax.get_xlim()
+            ymin, ymax = ax.get_ylim()
+
+        width = xmax - xmin
+        height = ymax - ymin
 
         # apply length factor to the minimum size to get arrow length
-        arrow_length = length_factor * min(ax_width, ax_height)
+        arrow_length = length_factor * min(width, height)
 
         # constrain arrow width by the maximum size and the max arrow width factor
         arrow_width = width_factor * arrow_length
-        arrow_width = min(arrow_width, MAX_ARROW_WIDTH_FACTOR * max(ax_width, ax_height))
+        arrow_width = min(arrow_width, MAX_ARROW_WIDTH_FACTOR * max(width, height))
 
         return arrow_length, arrow_width
 

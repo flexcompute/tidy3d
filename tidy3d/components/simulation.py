@@ -961,8 +961,9 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         matplotlib.axes._subplots.Axes
             The supplied or created matplotlib axes.
         """
+        bounds = self.bounds
         for source in self.sources:
-            ax = source.plot(x=x, y=y, z=z, alpha=alpha, ax=ax)
+            ax = source.plot(x=x, y=y, z=z, alpha=alpha, ax=ax, sim_bounds=bounds)
         ax = self._set_plot_bounds(ax=ax, x=x, y=y, z=z)
         return ax
 
@@ -991,8 +992,9 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         matplotlib.axes._subplots.Axes
             The supplied or created matplotlib axes.
         """
+        bounds = self.bounds
         for monitor in self.monitors:
-            ax = monitor.plot(x=x, y=y, z=z, alpha=alpha, ax=ax)
+            ax = monitor.plot(x=x, y=y, z=z, alpha=alpha, ax=ax, sim_bounds=bounds)
         ax = self._set_plot_bounds(ax=ax, x=x, y=y, z=z)
         return ax
 

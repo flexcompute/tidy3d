@@ -9,7 +9,7 @@ import pydantic
 import numpy as np
 
 from .base import Tidy3dBaseModel
-from .types import Direction, Polarization, Ax, FreqBound, Array, Axis, ArrayLike
+from .types import Direction, Polarization, Ax, FreqBound, Array, Axis, ArrayLike, Bound
 from .validators import assert_plane, validate_name_str
 from .geometry import Box
 from .mode import ModeSpec
@@ -283,14 +283,20 @@ class Source(Box, ABC):
         """Returns a vector indicating the source polarization for arrow plotting, if not None."""
         return None
 
-    def plot(
-        self, x: float = None, y: float = None, z: float = None, ax: Ax = None, **kwargs
+    def plot(  #  pylint:disable=too-many-arguments
+        self,
+        x: float = None,
+        y: float = None,
+        z: float = None,
+        ax: Ax = None,
+        sim_bounds: Bound = None,
+        **patch_kwargs
     ) -> Ax:
 
         # call the `Source.plot()` function first.
-        ax = super().plot(x=x, y=y, z=z, ax=ax, **kwargs)
+        ax = super().plot(x=x, y=y, z=z, ax=ax, **patch_kwargs)
 
-        kwargs_alpha = kwargs.get("alpha")
+        kwargs_alpha = patch_kwargs.get("alpha")
         arrow_alpha = ARROW_ALPHA if kwargs_alpha is None else kwargs_alpha
 
         # then add the arrow based on the propagation direction
@@ -305,6 +311,7 @@ class Source(Box, ABC):
                 color=ARROW_COLOR_SOURCE,
                 alpha=arrow_alpha,
                 both_dirs=False,
+                sim_bounds=sim_bounds,
             )
 
         if self._pol_vector is not None:
@@ -318,6 +325,7 @@ class Source(Box, ABC):
                 color=ARROW_COLOR_POLARIZATION,
                 alpha=arrow_alpha,
                 both_dirs=False,
+                sim_bounds=sim_bounds,
             )
 
         return ax
