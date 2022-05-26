@@ -130,7 +130,7 @@ def upload(  # pylint:disable=too-many-locals,too-many-arguments
         Key=key,
     )
     if resp.get("ResponseMetadata") and resp.get("ResponseMetadata").get("HTTPStatusCode") != 200:
-        raise WebError("Upload file to 3S failed, please check your network or try it later.")
+        raise WebError("File upload to S3 failed, please check your network or try it later.")
 
     # log the url for the task in the web UI
     log.debug(f"{DEFAULT_CONFIG.website_endpoint}/folders/{folder.projectId}/tasks/{task_id}")
