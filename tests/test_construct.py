@@ -28,6 +28,8 @@ def test_construct():
     # should not error if loading with construct
     sim = td.Simulation.construct(sim_dict)
 
+    assert len(sim.monitors) > 0, "monitor list not added"
+
     # do something with the loaded sim
     for monitor in sim.monitors:
         monitor.storage_size(10, np.arange(10))
@@ -50,6 +52,8 @@ def test_construct_recursive():
 
     # should not error if loading with construct
     sim = td.Simulation.construct(sim_dict)
+
+    assert len(sim.structures) > 0, "structure list not added"
 
     # do something with the loaded sim
     for structure in sim.structures:

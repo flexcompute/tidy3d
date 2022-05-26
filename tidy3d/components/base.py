@@ -252,32 +252,32 @@ class Tidy3dBaseModel(pydantic.BaseModel):
 
         return json_string
 
-    # @classmethod
-    # def construct(cls, _fields_set=None, *, __recursive__=False, **values):
-    #     """Recursive construct."""
-    #     if not __recursive__:
-    #         return super().construct(_fields_set, **values)
+    @classmethod
+    def construct(cls, _fields_set=None, *, __recursive__=True, **values):
+        """Recursive construct."""
+        if not __recursive__:
+            return super().construct(_fields_set, **values)
 
-    #     m = cls.__new__(cls)
+        m = cls.__new__(cls)
 
-    #     fields_values = {}
-    #     for name, field in cls.__fields__.items():
-    #         if name in values:
-    #             if issubclass(field.type_, BaseModel):
-    #                 fields_values[name] = field.outer_type_.construct(
-    #                     **values[name], __recursive__=True
-    #                 )
-    #             else:
-    #                 fields_values[name] = values[name]
-    #         elif not field.required:
-    #             fields_values[name] = field.get_default()
+        fields_values = {}
+        for name, field in cls.__fields__.items():
+            if name in values:
+                if issubclass(field.type_, BaseModel):
+                    fields_values[name] = field.outer_type_.construct(
+                        **values[name], __recursive__=True
+                    )
+                else:
+                    fields_values[name] = values[name]
+            elif not field.required:
+                fields_values[name] = field.get_default()
 
-    #     object.__setattr__(m, "__dict__", fields_values)
-    #     if _fields_set is None:
-    #         _fields_set = set(values.keys())
-    #     object.__setattr__(m, "__fields_set__", _fields_set)
-    #     m._init_private_attributes()
-    #     return m
+        object.__setattr__(m, "__dict__", fields_values)
+        if _fields_set is None:
+            _fields_set = set(values.keys())
+        object.__setattr__(m, "__fields_set__", _fields_set)
+        m._init_private_attributes()
+        return m
 
 
 def add_type_field(cls):
