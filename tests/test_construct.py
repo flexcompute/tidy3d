@@ -34,7 +34,7 @@ def test_construct():
     for monitor in sim2.monitors:
         monitor.storage_size(10, np.arange(10))
 
-    assert sim == sim2
+    assert SIM_FULL == sim2
 
 
 def test_construct_recursive():
@@ -61,4 +61,4 @@ def test_construct_recursive():
     for structure in sim2.structures:
         structure.geometry.bounds
 
-    assert sim == sim2
+    assert SIM_FULL == sim2
