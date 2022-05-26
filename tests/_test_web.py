@@ -92,6 +92,28 @@ def test_webapi_6_load():
     _ = sim_data[first_monitor_name]
 
 
+@clear_tmp
+def test_webapi_7_download_json():
+    """download the simulation data"""
+    task_id = _get_gloabl_task_id()
+    web.download_json(task_id)
+
+
+@clear_tmp
+def test_webapi_8_download_log():
+    """download the simulation data"""
+    task_id = _get_gloabl_task_id()
+    web.download_log(task_id)
+
+
+@clear_tmp
+def test_webapi_9_load_simulation():
+    """download the simulation data"""
+    task_id = _get_gloabl_task_id()
+    sim = web.load_simulation(task_id)
+    assert sim == sim_original
+
+
 # For some reason this test interferes with tests 5 and 6
 # def test_webapi_7_delete():
 #     """test that we can monitor task"""
