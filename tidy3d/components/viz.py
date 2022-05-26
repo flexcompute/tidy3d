@@ -21,7 +21,7 @@ ARROW_ALPHA = 0.8
 
 
 # this times the min of axis height and width gives the arrow length
-ARROW_LENGTH_FACTOR = 0.4
+ARROW_LENGTH_FACTOR = 0.1
 
 # this times ARROW_LENGTH gives width
 ARROW_WIDTH_FACTOR = 0.4
@@ -88,7 +88,7 @@ class PlotParams(Tidy3dBaseModel):
         """Update the plot params with supplied kwargs."""
         new_plot_params = self.copy(deep=True)
         for key, value in kwargs.items():
-            if key not in ("type",) and value is not None:
+            if key not in ("type",) and value is not None and key in self.__fields__:
                 setattr(new_plot_params, key, value)
         return new_plot_params
 
