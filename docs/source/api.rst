@@ -247,6 +247,9 @@ Through python API
    tidy3d.web.webapi.download
    tidy3d.web.webapi.load
    tidy3d.web.webapi.delete
+   tidy3d.web.webapi.download_log
+   tidy3d.web.webapi.download_json
+   tidy3d.web.webapi.load_simulation
 
 Convenience for Single and Batch
 --------------------------------
