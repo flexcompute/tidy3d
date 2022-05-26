@@ -1,6 +1,12 @@
+"""Tests data.py"""
+
+import pytest
 import numpy as np
+
 from tidy3d.components.data import *
 import tidy3d as td
+from tidy3d.log import DataError
+
 from .utils import clear_tmp
 
 
@@ -108,9 +114,7 @@ def test_mode_field_data():
     data.sel_mode_index(1)
 
 
-@clear_tmp
-def test_sim_data():
-
+def make_sim_data():
     center = (0, 0, 0)
     size = (2, 2, 2)
     f0 = 1
@@ -147,6 +151,14 @@ def test_sim_data():
     sim_data = SimulationData(
         simulation=sim, monitor_data={"test": field_data}, log_string="field_decay :1e-4"
     )
+    return sim_data
+
+
+@clear_tmp
+def test_sim_data():
+
+    sim_data = make_sim_data()
+    f0 = float(sim_data["test"].Ex.f[0])
 
     sim_data.plot_field("test", "Ex", val="real", x=0, freq=f0)
     sim_data.at_centers("test")
@@ -177,3 +189,24 @@ def test_symmetries():
         data_dict={"Ex": field, "Ey": field}, symmetry=(1, -1, 0), symmetry_center=(0, 0, 0)
     )
     data.expand_syms
+
+
+@clear_tmp
+def test_data_io_raised():
+
+    sim_data = make_sim_data()
+
+    with pytest.raises(DataError):
+        sim_data._json_string()
+
+    with pytest.raises(DataError):
+        sim_data.to_json("tmp/path")
+
+    with pytest.raises(DataError):
+        sim_data.to_yaml("tmp/path")
+
+    with pytest.raises(DataError):
+        SimulationData.from_json("tmp/path")
+
+    with pytest.raises(DataError):
+        SimulationData.from_yaml("tmp/path")

@@ -49,7 +49,41 @@ class Tidy3dDataArray(xr.DataArray):
 """ Base data classes """
 
 
-class Tidy3dData(Tidy3dBaseModel):
+class Tidy3dBaseDataModel(Tidy3dBaseModel):
+    """Tidy3dBaseModel, but with yaml and json IO methods disabled."""
+
+    def _json_string(self, include_unset: bool = True) -> str:
+        """Disable exporting to json string."""
+        raise DataError("Can't export json string of Tidy3dData.")
+
+    def to_json(self, fname: str) -> None:
+        """Disable exporting to json file."""
+        raise DataError(
+            "Can't export json file of Tidy3dData, " "use `.to_file(fname.hdf5)` instead."
+        )
+
+    def to_yaml(self, fname: str) -> None:
+        """Disable exporting to yaml file."""
+        raise DataError(
+            "Can't export yaml file of Tidy3dData, " "use `.to_file(fname.hdf5)` instead."
+        )
+
+    @classmethod
+    def from_json(cls, fname: str, **parse_file_kwargs):
+        """Disable loading from json file."""
+        raise DataError(
+            "Can't load Tidy3dData from .json file, " "use `.from_file(fname.hdf5)` instead."
+        )
+
+    @classmethod
+    def from_yaml(cls, fname: str, **parse_raw_kwargs):
+        """Disable loading from yaml file."""
+        raise DataError(
+            "Can't load Tidy3dData from .yaml file, " "use `.from_file(fname.hdf5)` instead."
+        )
+
+
+class Tidy3dData(Tidy3dBaseDataModel):
     """Base class for data associated with a simulation."""
 
     class Config:  # pylint: disable=too-few-public-methods
@@ -1035,7 +1069,7 @@ DATA_TYPE_MAP = {
 }
 
 
-class AbstractSimulationData(Tidy3dBaseModel, ABC):
+class AbstractSimulationData(Tidy3dBaseDataModel, ABC):
     """Abstract class to store a simulation and some data associated with it."""
 
     simulation: Simulation = pd.Field(
