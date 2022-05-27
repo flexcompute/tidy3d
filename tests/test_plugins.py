@@ -344,7 +344,7 @@ def test_component_modeler():
         sources=[],
         monitors=[domain_monitor],
         run_time=20 / fwidth,
-        pml_layers=3 * [td.PML()],
+        boundary_spec=td.BoundarySpec.all_sides(boundary=td.PML()),
     )
 
     port_right_top = Port(

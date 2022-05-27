@@ -15,9 +15,10 @@ from ...components import Simulation
 from ...components import ModeSpec
 from ...components import ModeMonitor
 from ...components.source import ModeSource, SourceTime
-from ...components.types import Direction, Array, Ax, Literal, ArrayLike, Axis, Symmetry
+from ...components.types import Direction, Array, Ax, Literal, ArrayLike, Axis
 from ...components.data import Tidy3dData, ModeIndexData, ModeFieldData, ScalarModeFieldData
 from ...components.data import AbstractSimulationData
+from ...components.boundary import Symmetry
 from ...log import ValidationError, DataError
 
 from .solver import compute_modes
