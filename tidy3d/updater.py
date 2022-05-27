@@ -24,7 +24,7 @@ class Version(pd.BaseModel):
             major, minor, _ = string.split(".")
             version = cls(major=major, minor=minor)
         except Exception as e:
-            raise SetupError(f"version string {version_string} can't be parsed.") from e
+            raise SetupError(f"version string {string} can't be parsed.") from e
         return version
 
     @property
@@ -73,7 +73,7 @@ class Updater(pd.BaseModel):
             if update_fn is None:
                 raise SetupError(f"version {self.version} not found in update map.")
             self.sim_dict = update_fn(self.sim_dict)
-        self.sim_dict['version'] == __version__
+        self.sim_dict["version"] = __version__
         return self.sim_dict
 
 
