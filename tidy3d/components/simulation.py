@@ -119,7 +119,8 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         (0, 0, 0),
         title="Symmetries",
         description="Tuple of integers defining reflection symmetry across a plane "
-        "bisecting the simulation domain normal to the x-, y-, and z-axis, respectvely. "
+        "bisecting the simulation domain normal to the x-, y-, and z-axis "
+        "at the simulation center of each axis, respectvely. "
         "Each element can be ``0`` (no symmetry), ``1`` (even, i.e. 'PMC' symmetry) or "
         "``-1`` (odd, i.e. 'PEC' symmetry). "
         "Note that the vectorial nature of the fields must be taken into account to correctly "
