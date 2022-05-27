@@ -876,6 +876,7 @@ class Box(Geometry):
         """
 
         plot_axis, _ = self.parse_xyz_kwargs(x=x, y=y, z=z)
+
         arrow_length, arrow_width = self._arrow_dims(
             ax=ax,
             length_factor=length_factor,
@@ -887,7 +888,7 @@ class Box(Geometry):
         # conditions to check to determine whether to plot arrow
         arrow_intersecting_plane = len(self.intersections(x=x, y=y, z=z)) > 0
         _, (dx, dy) = self.pop_axis(direction, axis=plot_axis)
-        components_in_plane = any(component != 0 for component in (dx, dy))
+        components_in_plane = any(not np.isclose(component, 0) for component in (dx, dy))
 
         # plot if arrow in plotting plane and some non-zero component can be displayed.
         if arrow_intersecting_plane and components_in_plane:
