@@ -399,6 +399,23 @@ class Batch(WebContainer):
         """
         return os.path.join(path_dir, f"{str(task_id)}.hdf5")
 
+    @staticmethod
+    def _batch_path(path_dir: str = DEFAULT_DATA_DIR):
+        """Default path to save :class:`Batch` json file.
+
+        Parameters
+        ----------
+        path_dir : str = './'
+            Base directory where the batch.json will be downloaded,
+            by default, the current working directory.
+
+        Returns
+        -------
+        str
+            Full path to the batch file.
+        """
+        return os.path.join(path_dir, "batch.json")
+
     def download(self, path_dir: str = DEFAULT_DATA_DIR) -> None:
         """Download results of each task.
 
@@ -412,8 +429,11 @@ class Batch(WebContainer):
         To load the data into :class:`.SimulationData`objets, can call :meth:`Batch.items`.
 
         The data for each task will be named as ``{path_dir}/{task_name}.hdf5``.
-
+        The :class:`Batch` json file will be automatically saved as ``{path_dir}/batch.json``,
+        allowing one to load this :class:`Batch` later using ``batch = Batch.from_file()``.
         """
+
+        self.to_file(self._batch_path(path_dir=path_dir))
 
         for job in self.jobs.values():
             job_path = self._job_data_path(task_id=job.task_id, path_dir=path_dir)
@@ -433,7 +453,13 @@ class Batch(WebContainer):
         ------
         :class:`BatchData`
             Contains the :class:`.SimulationData` of each :class:`.Simulation` in :class:`Batch`.
+
+        The :class:`Batch` json file will be automatically saved as ``{path_dir}/batch.json``,
+        allowing one to load this :class:`Batch` later using ``batch = Batch.from_file()``.
         """
+
+        self.to_file(self._batch_path(path_dir=path_dir))
+
         task_paths = {}
         task_ids = {}
         for task_name, job in self.jobs.items():
