@@ -372,7 +372,7 @@ These are classes that are used to organize the tidy3d components, but aren't to
    :toctree: _autosummary/
 
    tidy3d.components.base.Tidy3dBaseModel
-   tidy3d.components.pml.AbsorberSpec
+   tidy3d.components.boundary.AbsorberSpec
    tidy3d.components.medium.AbstractMedium
    tidy3d.components.medium.DispersiveMedium
    tidy3d.components.geometry.Geometry
