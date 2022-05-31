@@ -17,6 +17,29 @@ Simulation
    Simulation
 
 
+Boundary Conditions
+===================
+
+.. autosummary::
+   :toctree: _autosummary/
+
+   BoundarySpec
+   Boundary
+   BoundaryEdge
+
+
+Types of Boundaries
+-------------------
+
+.. autosummary::
+   :toctree: _autosummary/
+
+   Periodic
+   PECBoundary
+   PMCBoundary
+   BlochBoundary
+
+
 Absorbing Boundaries
 ====================
 
