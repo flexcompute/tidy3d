@@ -64,7 +64,7 @@ class Tidy3dConfig(pd.BaseModel):
             )
         new_config = WEB_CONFIGS[val]
         for key, value in new_config.dict().items():
-            DEFAULT_CONFIG.__setattr__(key, value)
+            setattr(DEFAULT_CONFIG, key, value)
 
         return val
 

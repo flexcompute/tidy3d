@@ -60,28 +60,24 @@ class Tidy3dBaseDataModel(Tidy3dBaseModel):
 
     def to_json(self, fname: str) -> None:
         """Disable exporting to json file."""
-        raise DataError(
-            "Can't export json file of Tidy3dData, " "use `.to_file(fname.hdf5)` instead."
-        )
+        raise DataError("Can't export json file of Tidy3dData, use `.to_file(fname.hdf5)` instead.")
 
     def to_yaml(self, fname: str) -> None:
         """Disable exporting to yaml file."""
-        raise DataError(
-            "Can't export yaml file of Tidy3dData, " "use `.to_file(fname.hdf5)` instead."
-        )
+        raise DataError("Can't export yaml file of Tidy3dData, use `.to_file(fname.hdf5)` instead.")
 
     @classmethod
     def from_json(cls, fname: str, **parse_file_kwargs):
         """Disable loading from json file."""
         raise DataError(
-            "Can't load Tidy3dData from .json file, " "use `.from_file(fname.hdf5)` instead."
+            "Can't load Tidy3dData from .json file, use `.from_file(fname.hdf5)` instead."
         )
 
     @classmethod
     def from_yaml(cls, fname: str, **parse_raw_kwargs):
         """Disable loading from yaml file."""
         raise DataError(
-            "Can't load Tidy3dData from .yaml file, " "use `.from_file(fname.hdf5)` instead."
+            "Can't load Tidy3dData from .yaml file, use `.from_file(fname.hdf5)` instead."
         )
 
 
