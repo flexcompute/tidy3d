@@ -13,6 +13,7 @@ from .task import TaskId, TaskInfo, RunInfo, TaskName
 from ..components.simulation import Simulation
 from ..components.data import SimulationData
 from ..components.base import Tidy3dBaseModel
+from ..log import DataError
 
 
 DEFAULT_DATA_PATH = "simulation_data.hdf5"
@@ -481,6 +482,9 @@ class Batch(WebContainer):
         """
 
         self.to_file(self._batch_path(path_dir=path_dir))
+
+        if self.jobs is None:
+            raise DataError("Can't load batch results, hasn't been uploaded.")
 
         task_paths = {}
         task_ids = {}
