@@ -1,6 +1,11 @@
 """Tests webapi bits that dont require authentication."""
+import pytest
+
 import tidy3d as td
 import tidy3d.web as web
+from tidy3d.log import DataError
+
+from .utils import clear_tmp
 
 
 def make_sim():
@@ -18,3 +23,13 @@ def test_batch():
     """tests creation of a batch."""
     sim = make_sim()
     b = web.Batch(simulations={"test": sim})
+
+
+@clear_tmp
+def test_batchdata_load():
+    """Tests loading of a batch data from file."""
+    sim = make_sim()
+    b = web.Batch(simulations={"test": sim})
+    b.to_file("tests/tmp/batch.json")
+    with pytest.raises(DataError):
+        web.BatchData.load(path_dir="tests/tmp")
