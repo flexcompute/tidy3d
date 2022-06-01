@@ -854,9 +854,11 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         """
 
         structures = self.structures
-        alpha_used = alpha is not None and 0 < alpha < 1
 
-        if alpha_used:
+        if alpha is None or alpha <= 0:
+            return ax
+
+        if alpha < 1:
             medium_shapes = self._filter_structures_plane(structures=structures, x=x, y=y, z=z)
         else:
             structures = [self.background_structure] + structures
@@ -864,7 +866,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
 
         eps_min, eps_max = self.eps_bounds(freq=freq)
         for (medium, shape) in medium_shapes:
-            if medium == self.medium and alpha_used:
+            if medium == self.medium and alpha < 1:
                 continue
             ax = self._plot_shape_structure_eps(
                 freq=freq,
