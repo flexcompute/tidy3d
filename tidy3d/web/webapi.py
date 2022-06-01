@@ -14,7 +14,7 @@ from rich.progress import Progress
 
 from . import httputils as http
 from .config import DEFAULT_CONFIG
-from .s3utils import get_s3_user, DownloadProgress
+from .s3utils import upload_file, get_s3_sts_token, download_file
 from .task import TaskId, TaskInfo, Folder
 from ..components.data import SimulationData
 from ..components.simulation import Simulation
@@ -121,19 +121,15 @@ def upload(  # pylint:disable=too-many-locals,too-many-arguments
 
     # upload the file to s3
     log.debug("Uploading the json file")
-    client, bucket, user_id = get_s3_user()
-    key = f"users/{user_id}/{task_id}/simulation.json"
-    log.debug(f"json = {json_string}")
-    resp = client.put_object(
-        Body=json_string,
-        Bucket=bucket,
-        Key=key,
-    )
-    if resp.get("ResponseMetadata") and resp.get("ResponseMetadata").get("HTTPStatusCode") != 200:
-        raise WebError("File upload to S3 failed, please check your network or try it later.")
 
+    upload_file(task_id, json_string, "simulation.json")
     # log the url for the task in the web UI
     log.debug(f"{DEFAULT_CONFIG.website_endpoint}/folders/{folder.projectId}/tasks/{task_id}")
+
+    # log the maximum flex unit cost
+    max_cost = estimate_cost(task_id)
+    if max_cost is not None:
+        log.info(f"Maximum flex unit cost: {max_cost:1.2f}")
 
     return task_id
 
@@ -205,9 +201,9 @@ def get_run_info(task_id: TaskId):
         Is ``None`` if run info not available.
     """
     try:
-        client, bucket, user_id = get_s3_user()
-        key = f"users/{user_id}/{task_id}/output/solver_progress.csv"
-        progress = client.get_object(Bucket=bucket, Key=key)["Body"]
+        token = get_s3_sts_token(task_id, "output/solver_progress.csv")
+        client = token.get_client()
+        progress = client.get_object(Bucket=token.get_bucket(), Key=token.get_s3_key())["Body"]
         progress_string = progress.read().split(b"\n")
         perc_done, field_decay = progress_string[-2].split(b",")
         return float(perc_done), float(field_decay)
@@ -584,20 +580,7 @@ def _download_file(task_id: TaskId, fname: str, path: str) -> None:
     log.info(f'downloading file "{fname}" to "{path}"')
 
     try:
-        client, bucket, user_id = get_s3_user()
-
-        if fname in ("monitor_data.hdf5", "tidy3d.log"):
-            key = f"users/{user_id}/{task_id}/output/{fname}"
-        else:
-            key = f"users/{user_id}/{task_id}/{fname}"
-
-        head_object = client.head_object(Bucket=bucket, Key=key)
-        size_bytes = head_object["ContentLength"]
-        with Progress() as progress:
-            download_progress = DownloadProgress(size_bytes, progress)
-            client.download_file(
-                Bucket=bucket, Filename=path, Key=key, Callback=download_progress.report
-            )
+        download_file(task_id, fname, path)
 
     except Exception as e:  # pylint:disable=broad-except
         task_info = get_info(task_id)
@@ -614,3 +597,17 @@ def _rm_file(path: str):
     if os.path.exists(path) and not os.path.isdir(path):
         log.debug(f"removing file {path}")
         os.remove(path)
+
+
+def _s3_grant(task_id: TaskId):
+    user = DEFAULT_CONFIG.user
+    if "expiration" in user:
+        exp = parser.parse(user["expiration"]).replace(tzinfo=None)
+        # request new temporary credential when existing one expires in 5 minutes.
+        if (exp - datetime.utcnow()).total_seconds() > 300:
+            return
+
+    method = f"tidy3d/s3upload/grant?resourceId={task_id}"
+    resp = http.get(method)
+    credentials = resp["userCredentials"]
+    DEFAULT_CONFIG.user = {**DEFAULT_CONFIG.user, **credentials}
