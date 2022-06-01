@@ -163,7 +163,7 @@ class AbstractFieldMonitor(Monitor, ABC):
     ] = pydantic.Field(
         (1, 1, 1),
         title="Spatial interval",
-        description="Number of grid step intervals between monitor recordings. If equal to `1`, "
+        description="Number of grid step intervals between monitor recordings. If equal to 1, "
         "there will be no downsampling. If greater than 1, fields will be downsampled "
         "and automatically colocated.",
     )
@@ -172,8 +172,8 @@ class AbstractFieldMonitor(Monitor, ABC):
         None,
         title="Colocate fields",
         description="Toggle whether fields should be colocated to grid cell centers. Default: "
-        "`False` if `interval_space` is 1 in each direction, `True` if `interval_space` is "
-        "greater than one in any direction.",
+        "``False`` if ``interval_space`` is 1 in each direction, ``True`` if ``interval_space`` "
+        "is greater than one in any direction.",
     )
 
     @pydantic.validator("colocate", always=True)

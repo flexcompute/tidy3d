@@ -364,7 +364,13 @@
                 "Hx",
                 "Hy",
                 "Hz"
-            ]
+            ],
+            "interval_space": [
+                1,
+                1,
+                1
+            ],
+            "colocate": false
         },
         {
             "center": [
@@ -389,7 +395,13 @@
                 "Hx",
                 "Hy",
                 "Hz"
-            ]
+            ],
+            "interval_space": [
+                1,
+                1,
+                1
+            ],
+            "colocate": false
         },
         {
             "center": [
