@@ -226,6 +226,28 @@ class BatchData(Tidy3dBaseModel):
         """Get the :class:`.SimulationData` for a given ``task_name``."""
         return self.load_sim_data(task_name)
 
+    @classmethod
+    def load(
+        cls, path_dir: str = DEFAULT_DATA_DIR, normalize_index: Optional[int] = 0
+    ) -> "BatchData":
+        """Load :class:`Batch` from file, download results, and load them.
+
+        Parameters
+        ----------
+        path_dir : str = './'
+            Base directory where data will be downloaded, by default current working directory.
+            A `batch.json` file must be present in the directory.
+
+        Returns
+        ------
+        :class:`BatchData`
+            Contains the :class:`.SimulationData` of each :class:`.Simulation` in :class:`Batch`.
+        """
+
+        batch_file = Batch._batch_path(path_dir=path_dir)  # pylint:disable=protected-access
+        batch = Batch.from_file(batch_file)
+        return batch.load(path_dir=path_dir, normalize_index=normalize_index)
+
 
 class Batch(WebContainer):
     """Interface for submitting several :class:`.Simulation` objects to sever."""
@@ -442,7 +464,7 @@ class Batch(WebContainer):
     def load(
         self, path_dir: str = DEFAULT_DATA_DIR, normalize_index: Optional[int] = 0
     ) -> BatchData:
-        """Download results and load them into :class:`.SimulationData` object.
+        """Download results and load them into :class:`.BatchData` object.
 
         Parameters
         ----------

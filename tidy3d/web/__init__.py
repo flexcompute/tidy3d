@@ -3,5 +3,5 @@ import sys
 
 from .webapi import run, upload, get_info, start, monitor, delete, download, load, estimate_cost
 from .webapi import get_tasks, delete_old, download_json, download_log, load_simulation
-from .container import Job, Batch
+from .container import Job, Batch, BatchData
 from .auth import get_credentials

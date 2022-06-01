@@ -279,7 +279,13 @@ def test_batch_6_load():
         _ = sim_data[first_monitor_name]
 
 
-def _test_batch_7_delete():
+@clear_tmp
+def test_batchdata_7_load():
+    """load the BatchData from file."""
+    sim_data_dict = BatchData.load(path_dir=PATH_DIR_SIM_DATA)
+
+
+def _test_batch_8_delete():
     """test that we can monitor task"""
     batch = _get_gloabl_batch()
     batch.delete()
