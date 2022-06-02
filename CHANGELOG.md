@@ -9,6 +9,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+## [1.4.0] - 2022-6-3
+
+### Fixed
+- Bug in plotting when alpha is turned off in permittivity overlay.
+- Bug in plotting polarization of an angled incidence source (S,P -> P,S).
+- Throw warning if user tries to download data instances in `yaml` or `json` format. 
+- Arrow length plotting issues for infinite sources.
+- Issues with nonuniform mesh not extending exactly to simulation boundaries.
+
+### Added
+- Bloch periodic boundary conditions, enabling modeling of angled plane wave.
+- `GeometryGroup` object to associate several `Geometry` intances in a single `Structure` leading to improved performance for many objects.
+- Ability to uniquely specify boundary conditions on all 6 `Simulation` boundaries.
+- Options in field montitors for spatial downsampling and evaluation at yee grid centers.
+- `BatchData.load()` can load the data for a batch directly from a directory.
+- Utility for updating `Simulation` objects from old versions of `Tidy3d` to current version.
+- Explicit `web.` functions for downloading only `simulation.json` and `tidy3d.log` files.
+
+### Changed
+- `Batch` objects automatically download their json file upon `download` and `load`.
+- Uses `shapely` instead of `gdspy` to merge polygons from a gds cell.
+- `ComponentModeler` (S matrix tool) stores the `Batch` rather than the `BatchData`.
+- Custom caching of properties to speed up subsequent calculations.
+- Tidy3d configuration now done through setting attributes of `tidy3d.config` object.
+
 ## [1.3.3] - 2022-5-18
 
 ### Fixed
@@ -306,7 +331,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Job and Batch classes for better simulation handling (eventually to fully replace webapi functions).
 - A large number of small improvements and bug fixes.
 
-[Unreleased]: https://github.com/flexcompute/tidy3d/compare/v1.3.2...develop
+[Unreleased]: https://github.com/flexcompute/tidy3d/compare/v1.4.0...develop
+[1.4.3]: https://github.com/flexcompute/tidy3d/compare/v1.3.3...1.4.0
 [1.3.3]: https://github.com/flexcompute/tidy3d/compare/v1.3.2...1.3.3
 [1.3.2]: https://github.com/flexcompute/tidy3d/compare/v1.3.1...1.3.2
 [1.3.1]: https://github.com/flexcompute/tidy3d/compare/v1.3.0...1.3.1
