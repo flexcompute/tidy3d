@@ -855,7 +855,11 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
 
         structures = self.structures
 
-        if alpha is None or alpha <= 0:
+        # alpha is None just means plot without any transparency
+        if alpha is None:
+            alpha = 1
+
+        if alpha <= 0:
             return ax
 
         if alpha < 1:
