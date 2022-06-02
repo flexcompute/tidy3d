@@ -332,7 +332,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A large number of small improvements and bug fixes.
 
 [Unreleased]: https://github.com/flexcompute/tidy3d/compare/v1.4.0...develop
-[1.4.3]: https://github.com/flexcompute/tidy3d/compare/v1.3.3...1.4.0
+[1.4.0]: https://github.com/flexcompute/tidy3d/compare/v1.3.3...1.4.0
 [1.3.3]: https://github.com/flexcompute/tidy3d/compare/v1.3.2...1.3.3
 [1.3.2]: https://github.com/flexcompute/tidy3d/compare/v1.3.1...1.3.2
 [1.3.1]: https://github.com/flexcompute/tidy3d/compare/v1.3.0...1.3.1
