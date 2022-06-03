@@ -22,17 +22,17 @@ class AdvancedFitterParam(BaseModel):
     bound_amp: NonNegativeFloat = Field(
         None,
         title="Upper bound of oscillator strength",
-        description="Upper bound of oscillator strength in the model "
-        "(The default 'None' will trigger automatic setup based on the "
-        "frequency range of interest).",
-        unis=HERTZ,
+        description="Upper bound of real and imagniary part of oscillator "
+        "strength `c` in the model :class:``PoleResidue`` (The default 'None' will trigger "
+        "automatic setup based on the frequency range of interest).",
+        units=HERTZ,
     )
     bound_f: NonNegativeFloat = Field(
         None,
         title="Upper bound of pole frequency",
-        description="Upper bound of pole frequency in the model "
-        "(The default 'None' will trigger automatic setup based on the "
-        "frequency range of interest).",
+        description="Upper bound of real and imaginary part of pole "
+        "frequency `a` in the model :class:``PoleResidue`` (The default 'None' will trigger "
+        "automatic setup based on the frequency range of interest).",
         units=HERTZ,
     )
     bound_eps_inf: float = Field(
@@ -59,7 +59,7 @@ class AdvancedFitterParam(BaseModel):
 
 # FitterData will be used internally
 class FitterData(AdvancedFitterParam):
-    """Data class for request body of Fitter where dipsersion data is input through list"""
+    """Data class for request body of Fitter where dipsersion data is input through list."""
 
     wvl_um: List[float] = Field(
         ...,
@@ -95,7 +95,7 @@ class FitterData(AdvancedFitterParam):
         100.0,
         title="Upper bound of oscillator strength",
         description="Upper bound of oscillator strength in the model.",
-        unis="eV",
+        units="eV",
     )
     bound_f: PositiveFloat = Field(
         100.0,
@@ -173,6 +173,59 @@ class StableDispersionFitter(DispersionFitter):
 
         return headers
 
+    def _setup_webdata(
+        self,
+        num_poles: PositiveInt,
+        num_tries: PositiveInt,
+        tolerance_rms: NonNegativeFloat,
+        advanced_param: AdvancedFitterParam,
+    ) -> FitterData:
+        """Setup FitterData to be provided to webservice
+
+        Parameters
+        ----------
+        num_poles : PositiveInt
+            Number of poles in the model.
+        num_tries : PositiveInt
+            Number of optimizations to run with random initial guess.
+        tolerance_rms : NonNegativeFloat
+            RMS error below which the fit is successful and the result is returned.
+        advanced_param : :class:`AdvancedFitterParam`
+            Other advanced parameters.
+
+        Returns
+        -------
+        :class:``FitterData``
+            Data class for request body of Fitter where dipsersion
+            data is input through list.
+        """
+
+        # set up bound_f, bound_amp
+        if advanced_param.bound_f is None:
+            advanced_param.bound_f = self.frequency_range[1] * BOUND_MAX_FACTOR
+        if advanced_param.bound_amp is None:
+            advanced_param.bound_amp = self.frequency_range[1] * BOUND_MAX_FACTOR
+
+        wvl_um, n_data, k_data = self._filter_wvl_range(
+            wvl_min=self.wvl_range[0], wvl_max=self.wvl_range[1]
+        )
+
+        web_data = FitterData(
+            wvl_um=wvl_um.tolist(),
+            n_data=n_data.tolist(),
+            k_data=k_data.tolist(),
+            num_poles=num_poles,
+            num_tries=num_tries,
+            tolerance_rms=tolerance_rms,
+            bound_amp=self._Hz_to_eV(advanced_param.bound_amp),
+            bound_f=self._Hz_to_eV(advanced_param.bound_f),
+            bound_eps_inf=advanced_param.bound_eps_inf,
+            constraint=advanced_param.constraint,
+            nlopt_maxeval=advanced_param.nlopt_maxeval,
+        )
+
+        return web_data
+
     def fit(  # pylint:disable=arguments-differ, too-many-locals
         self,
         num_poles: PositiveInt = 1,
@@ -203,29 +256,8 @@ class StableDispersionFitter(DispersionFitter):
         url_server = self._set_url("default")
         headers = self._setup_server(url_server)
 
-        # set up bound_f, bound_amp
-        if advanced_param.bound_f is None:
-            advanced_param.bound_f = self.frequency_range[1] * BOUND_MAX_FACTOR
-        if advanced_param.bound_amp is None:
-            advanced_param.bound_amp = self.frequency_range[1] * BOUND_MAX_FACTOR
-
-        wvl_um, n_data, k_data = self._filter_wvl_range(
-            wvl_min=self.wvl_range[0], wvl_max=self.wvl_range[1]
-        )
-
-        web_data = FitterData(
-            wvl_um=wvl_um.tolist(),
-            n_data=n_data.tolist(),
-            k_data=k_data.tolist(),
-            num_poles=num_poles,
-            num_tries=num_tries,
-            tolerance_rms=tolerance_rms,
-            bound_amp=self._Hz_to_eV(advanced_param.bound_amp),
-            bound_f=self._Hz_to_eV(advanced_param.bound_f),
-            bound_eps_inf=advanced_param.bound_eps_inf,
-            constraint=advanced_param.constraint,
-            nlopt_maxeval=advanced_param.nlopt_maxeval,
-        )
+        # setup web_data
+        web_data = self._setup_webdata(num_poles, num_tries, tolerance_rms, advanced_param)
 
         resp = requests.post(
             url_server + "/dispersion/fit",
