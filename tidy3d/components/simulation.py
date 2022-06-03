@@ -21,7 +21,7 @@ from .boundary import BoundarySpec, Symmetry, BlochBoundary, PECBoundary, PMCBou
 from .boundary import PML, StablePML, Absorber
 from .structure import Structure
 from .source import SourceType, PlaneWave, GaussianBeam, AstigmaticGaussianBeam
-from .monitor import MonitorType, Monitor, FreqMonitor
+from .monitor import MonitorType, Monitor, FreqMonitor, AbstractFieldMonitor
 from .viz import add_ax_if_none, equal_aspect
 
 from .viz import MEDIUM_CMAP, PlotParams, plot_params_symmetry
@@ -567,7 +567,11 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         total_size_bytes = 0
         for monitor in self.monitors:
             monitor_inds = grid.discretize_inds(monitor, extend=True)
-            num_cells = np.prod([inds[1] - inds[0] for inds in monitor_inds])
+            num_cells = [inds[1] - inds[0] for inds in monitor_inds]
+            # take monitor downsampling into account
+            if isinstance(monitor, AbstractFieldMonitor):
+                num_cells = monitor.downsampled_num_cells(num_cells)
+            num_cells = np.prod(num_cells)
             monitor_size = monitor.storage_size(num_cells=num_cells, tmesh=tmesh)
 
             total_size_bytes += monitor_size
