@@ -184,6 +184,18 @@ class AbstractFieldMonitor(Monitor, ABC):
             val = not sum(interval_space) == 3
         return val
 
+    def downsampled_num_cells(self, num_cells: Tuple[int, int, int]) -> Tuple[int, int, int]:
+        """Given a tuple of the number of cells spanned by the monitor along each dimension,
+        return the number of cells one would have after downsampling based on ``interval_space``.
+        """
+        num_cells_new = list(num_cells.copy())
+        for idx, interval in enumerate(self.interval_space):
+            if interval == 1 or num_cells[idx] < 4 or (num_cells[idx] - 1) <= interval:
+                continue
+            num_cells_new[idx] = np.floor((num_cells[idx] - 1) / interval) + 1
+            num_cells_new[idx] += int((num_cells[idx] - 1) % interval > 0)
+        return num_cells_new
+
 
 class PlanarMonitor(Monitor, ABC):
     """:class:`Monitor` that has a planar geometry."""
