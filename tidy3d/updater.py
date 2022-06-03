@@ -1,11 +1,12 @@
 """Utilities for converting between tidy3d versions."""
 import json
 import functools
+import yaml
 
 import pydantic as pd
 
 from .version import __version__
-from .log import FileError, SetupError
+from .log import FileError, SetupError, log
 
 
 """Storing version numbers."""
@@ -36,6 +37,10 @@ class Version(pd.BaseModel):
         """define a hash."""
         return hash(self.as_tuple)
 
+    def __str__(self):
+        """Convert back to string."""
+        return f"{self.major}.{self.minor}.x"
+
 
 CurrentVersion = Version.from_string(__version__)
 
@@ -52,10 +57,23 @@ class Updater(pd.BaseModel):
         """Dictionary representing the simulation loaded from file."""
 
         try:
-            with open(fname, "r") as f:
-                sim_dict = json.load(f)
+            with open(fname, "r", encoding="utf-8") as f:
+                if ".json" in fname:
+                    sim_dict = json.load(f)
+                elif ".yaml" in fname:
+                    sim_dict = yaml.safe_load(f)
+                else:
+                    raise FileError('file extension must be ".json" or ".yaml"')
+
         except Exception as e:
             raise FileError(f"Could not load file {fname}") from e
+
+        return cls(sim_dict=sim_dict)
+
+    @classmethod
+    def from_string(cls, sim_dict_str: str) -> "Updater":
+        """Dictionary representing the simulation loaded from string."""
+        sim_dict = json.loads(sim_dict_str)
         return cls(sim_dict=sim_dict)
 
     @property
@@ -68,6 +86,7 @@ class Updater(pd.BaseModel):
 
     def update_to_current(self) -> dict:
         """Update supplied simulation dictionary to current version."""
+        log.warning(f"updating Simulation from {self.version} to {CurrentVersion}")
         while self.version != CurrentVersion:
             update_fn = UPDATE_MAP.get(self.version)
             if update_fn is None:
