@@ -20,6 +20,7 @@ from .grid import Grid, Coords
 from .viz import add_ax_if_none, equal_aspect
 from ..log import DataError, log
 from ..constants import HERTZ, SECOND, MICROMETER
+from ..updater import Updater
 
 
 # mapping of data coordinates to units for assigning .attrs to the xarray objects
@@ -1565,8 +1566,10 @@ class SimulationData(AbstractSimulationData):
         with h5py.File(fname, "r") as f_handle:
 
             # construct the original simulation from the json string
-            sim_json = Tidy3dData.load_string(f_handle, "sim_json")
-            simulation = Simulation.parse_raw(sim_json)
+            sim_json_str = Tidy3dData.load_string(f_handle, "sim_json")
+            updater = Updater.from_string(sim_json_str)
+            sim_dict = updater.update_to_current()
+            simulation = Simulation.parse_obj(sim_dict)
 
             # get the log if exists
             log_string = Tidy3dData.load_string(f_handle, "log_string")
