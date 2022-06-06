@@ -3,8 +3,9 @@
 from typing import Tuple, List
 from enum import Enum
 import requests
-from pydantic import BaseModel, PositiveInt, NonNegativeFloat, PositiveFloat, Field
+from pydantic import PositiveInt, NonNegativeFloat, PositiveFloat, Field
 
+from ...components.base import Tidy3dBaseModel
 from ...components.types import Literal
 from ...components import PoleResidue
 from ...constants import MICROMETER, HERTZ
@@ -16,14 +17,14 @@ from .fit import DispersionFitter
 BOUND_MAX_FACTOR = 10
 
 
-class AdvancedFitterParam(BaseModel):
+class AdvancedFitterParam(Tidy3dBaseModel):
     """Advanced fitter parameters"""
 
     bound_amp: NonNegativeFloat = Field(
         None,
         title="Upper bound of oscillator strength",
         description="Upper bound of real and imagniary part of oscillator "
-        "strength `c` in the model :class:``PoleResidue`` (The default 'None' will trigger "
+        "strength ``c`` in the model :class:`.PoleResidue` (The default 'None' will trigger "
         "automatic setup based on the frequency range of interest).",
         units=HERTZ,
     )
@@ -31,7 +32,7 @@ class AdvancedFitterParam(BaseModel):
         None,
         title="Upper bound of pole frequency",
         description="Upper bound of real and imaginary part of pole "
-        "frequency `a` in the model :class:``PoleResidue`` (The default 'None' will trigger "
+        "frequency ``a`` in the model :class:`.PoleResidue` (The default 'None' will trigger "
         "automatic setup based on the frequency range of interest).",
         units=HERTZ,
     )
@@ -195,7 +196,7 @@ class StableDispersionFitter(DispersionFitter):
 
         Returns
         -------
-        :class:``FitterData``
+        :class:`FitterData`
             Data class for request body of Fitter where dipsersion
             data is input through list.
         """
@@ -248,7 +249,7 @@ class StableDispersionFitter(DispersionFitter):
 
         Returns
         -------
-        Tuple[:class:``PoleResidue``, float]
+        Tuple[:class:`.PoleResidue`, float]
             Best results of multiple fits: (dispersive medium, RMS error).
         """
 
