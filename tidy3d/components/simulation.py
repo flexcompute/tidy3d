@@ -1531,9 +1531,10 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         Tuple[float, float]
             Minumum and maximum frequencies of the power spectrum of the sources.
         """
-        source_ranges = (source.source_time.frequency_range() for source in self.sources)
+        source_ranges = [source.source_time.frequency_range() for source in self.sources]
         freq_min = min((freq_range[0] for freq_range in source_ranges), default=0.0)
         freq_max = max((freq_range[1] for freq_range in source_ranges), default=0.0)
+
         return (freq_min, freq_max)
 
     """ Discretization """
@@ -1547,7 +1548,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         float
             Time step (seconds).
         """
-        dl_mins = (np.min(sizes) for sizes in self.grid.sizes.to_list)
+        dl_mins = [np.min(sizes) for sizes in self.grid.sizes.to_list]
         dl_sum_inv_sq = sum((1 / dl**2 for dl in dl_mins))
         dl_avg = 1 / np.sqrt(dl_sum_inv_sq)
         return self.courant * dl_avg / C_0
