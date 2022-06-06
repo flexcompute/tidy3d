@@ -19,11 +19,14 @@ class Version(pd.BaseModel):
     minor: int
 
     @classmethod
-    def from_string(cls, string) -> "Version":
+    def from_string(cls, string=None) -> "Version":
         """Return Version from a version string."""
+        if string is None:
+            return cls.from_string(string=__version__)
+
         try:
-            major, minor, _ = string.split(".")
-            version = cls(major=major, minor=minor)
+            version_numbers = string.split(".")
+            version = cls(major=version_numbers[0], minor=version_numbers[1])
         except Exception as e:
             raise SetupError(f"version string {string} can't be parsed.") from e
         return version
@@ -31,7 +34,7 @@ class Version(pd.BaseModel):
     @property
     def as_tuple(self):
         """version as a tuple, leave out patch for now."""
-        return (self.major, self.minor, None)
+        return (self.major, self.minor)
 
     def __hash__(self):
         """define a hash."""
@@ -39,7 +42,35 @@ class Version(pd.BaseModel):
 
     def __str__(self):
         """Convert back to string."""
-        return f"{self.major}.{self.minor}.x"
+        return f"{self.major}.{self.minor}"
+
+    def __eq__(self, other):
+        """versions equal."""
+        return (self.major == other.major) and (self.minor == other.minor)
+
+    def __lt__(self, other):
+        """self < other."""
+        if self.major < other.major:
+            return True
+        if self.major == other.major:
+            return self.minor < other.minor
+        return False
+
+    def __gt__(self, other):
+        """self > other."""
+        if self.major > other.major:
+            return True
+        if self.major == other.major:
+            return self.minor > other.minor
+        return False
+
+    def __le__(self, other):
+        """self <= other."""
+        return (self < other) or (self == other)
+
+    def __ge__(self, other):
+        """self >= other."""
+        return (self > other) or (self == other)
 
 
 CurrentVersion = Version.from_string(__version__)
@@ -84,14 +115,29 @@ class Updater(pd.BaseModel):
             raise SetupError("Could not find a version in the supplied json.")
         return Version.from_string(version_string)
 
+    def get_update_function(self):
+        """Get the highest update verion <= self.version."""
+        leq_versions = [v for v in UPDATE_MAP if v <= self.version]
+        if len(leq_versions) == 0:
+            raise SetupError(f"An update version <= {self.version} not found in update map.")
+        update_version = max(leq_versions)
+        update_fn = UPDATE_MAP[update_version]
+        return update_fn
+
+    def get_next_version(self) -> Version:
+        """Get the next version after self.version."""
+        gt_versions = [v for v in UPDATE_MAP if v > self.version]
+        if len(gt_versions) == 0:
+            return CurrentVersion
+        return str(min(gt_versions))
+
     def update_to_current(self) -> dict:
         """Update supplied simulation dictionary to current version."""
         log.warning(f"updating Simulation from {self.version} to {CurrentVersion}")
         while self.version != CurrentVersion:
-            update_fn = UPDATE_MAP.get(self.version)
-            if update_fn is None:
-                raise SetupError(f"version {self.version} not found in update map.")
+            update_fn = self.get_update_function()
             self.sim_dict = update_fn(self.sim_dict)
+            self.sim_dict["version"] = str(self.get_next_version())
         self.sim_dict["version"] = __version__
         return self.sim_dict
 
@@ -102,12 +148,11 @@ class Updater(pd.BaseModel):
 UPDATE_MAP = {}
 
 
-def updates_to_version(version_from_string, version_to_string):
+def updates_from_version(version_from_string: str):
     """Decorates a sim_dict update function to change the version."""
 
     # make sure the version strings are legit
     from_version = Version.from_string(version_from_string)
-    _ = Version.from_string(version_to_string)
 
     def decorator(update_fn):
         """The actual decorator that gets returned by `updates_to_version('x.y.z')`"""
@@ -117,7 +162,6 @@ def updates_to_version(version_from_string, version_to_string):
             """Update function that automatically adds version string."""
 
             sim_dict_updated = update_fn(sim_dict)
-            sim_dict_updated["version"] = version_to_string
             return sim_dict_updated
 
         UPDATE_MAP[from_version] = new_update_function
@@ -127,7 +171,7 @@ def updates_to_version(version_from_string, version_to_string):
     return decorator
 
 
-@updates_to_version(version_from_string="1.3.x", version_to_string="1.4.0")
+@updates_from_version("1.3")
 def update_1_3(sim_dict: dict) -> dict:
     """Updates version 1.3 to 1.4."""
 
