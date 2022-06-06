@@ -1,7 +1,7 @@
 """Fit PoleResidue Dispersion models to optical NK data
 """
 
-from typing import Tuple, List
+from typing import Tuple, List, Optional
 import csv
 import codecs
 import requests
@@ -9,8 +9,9 @@ import requests
 import nlopt
 import numpy as np
 from rich.progress import Progress
-from pydantic import BaseModel, Field, validator
+from pydantic import Field, validator
 
+from ...components.base import Tidy3dBaseModel
 from ...components import PoleResidue, AbstractMedium
 from ...constants import C_0, HBAR, MICROMETER
 from ...components.viz import add_ax_if_none
@@ -18,14 +19,15 @@ from ...components.types import Ax, Numpy, NumpyArray, ArrayLike
 from ...log import log, ValidationError, WebError, SetupError
 
 
-class DispersionFitter(BaseModel):
-    """Tool for fitting refractive index data to get a dispersive ``Medium``."""
+class DispersionFitter(Tidy3dBaseModel):
+    """Tool for fitting refractive index data to get a
+    dispersive medium described by :class:`.PoleResidue` model."""
 
     wvl_um: ArrayLike = Field(
         ...,
         title="Wavelength data",
         description="Wavelength data in micrometers.",
-        unit=MICROMETER,
+        units=MICROMETER,
     )
 
     n_data: ArrayLike = Field(
@@ -40,12 +42,12 @@ class DispersionFitter(BaseModel):
         description="Imaginary part of the complex index of refraction.",
     )
 
-    wvl_range: Tuple[float, float] = Field(
-        [None, None],
+    wvl_range: Tuple[Optional[float], Optional[float]] = Field(
+        (None, None),
         title="Wavelength range [wvl_min,wvl_max] for fitting",
         description="Truncate the wavelength-nk data to wavelength range "
         "[wvl_min,wvl_max] for fitting",
-        unit=MICROMETER,
+        units=MICROMETER,
     )
 
     @validator("wvl_um", always=True)
@@ -327,7 +329,7 @@ class DispersionFitter(BaseModel):
 
         Returns
         -------
-        Tuple[:class:``PoleResidue``, float]
+        Tuple[:class:`.PoleResidue`, float]
             Best results of multiple fits: (dispersive medium, RMS error).
         """
 
@@ -377,7 +379,7 @@ class DispersionFitter(BaseModel):
 
         Returns
         -------
-        :class:`PoleResidue`
+        :class:`.PoleResidue`
             Dispersive medium corresponding to this set of ``coeffs``.
         """
         poles_complex = DispersionFitter._coeffs_to_poles(coeffs)
@@ -396,7 +398,7 @@ class DispersionFitter(BaseModel):
 
         Returns
         -------
-        Tuple[:class:`PoleResidue`, float]
+        Tuple[:class:`.PoleResidue`, float]
             Results of single fit: (dispersive medium, RMS error).
         """
 
@@ -515,11 +517,11 @@ class DispersionFitter(BaseModel):
 
         Parameters
         ----------
-        medium : PoleResidue = None
+        medium : :class:`.PoleResidue` = None
             medium containing model to plot against data
         wvl_um : Numpy = None
             Wavelengths to evaluate model at for plot in micrometers.
-        ax : Ax = None
+        ax : matplotlib.axes._subplots.Axes = None
             Axes to plot the data on, if None, a new one is created.
 
         Returns
@@ -646,8 +648,8 @@ class DispersionFitter(BaseModel):
 
         Returns
         -------
-        :class`DispersionFitter`
-            A :class`DispersionFitter` instance.
+        :class:`DispersionFitter`
+            A :class:`DispersionFitter` instance.
         """
 
         resp = requests.get(url_file)
@@ -695,7 +697,7 @@ class DispersionFitter(BaseModel):
 
     @classmethod
     def from_file(cls, fname: str, **loadtxt_kwargs):
-        """Loads :class`DispersionFitter` from file containing wavelength, n, k data.
+        """Loads :class:`DispersionFitter` from file containing wavelength, n, k data.
 
         Parameters
         ----------
@@ -706,8 +708,8 @@ class DispersionFitter(BaseModel):
 
         Returns
         -------
-        :class`DispersionFitter`
-            A :class`DispersionFitter` instance.
+        :class:`DispersionFitter`
+            A :class:`DispersionFitter` instance.
         """
         data = np.loadtxt(fname, **loadtxt_kwargs)
         assert len(data.shape) == 2, "data must contain [wavelength, ndata, kdata] in columns"
