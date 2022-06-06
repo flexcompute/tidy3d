@@ -1764,10 +1764,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         -------
         >>> simulation = Simulation.from_file(fname='folder/sim.json')
         """
-        try:
-            updater = Updater.from_file(fname)
-            sim_dict = updater.update_to_current()
-            return Simulation.parse_obj(sim_dict, **parse_kwargs)
-        except Exception:  # pylint:disable=broad-except
-            log.warning("Could not update simulation to latest version! Trying to load as is.")
-            return Simulation.from_file(fname=fname, **parse_kwargs)
+
+        updater = Updater.from_file(fname)
+        sim_dict = updater.update_to_current()
+        return Simulation.parse_obj(sim_dict, **parse_kwargs)

@@ -36,12 +36,6 @@ def test_simulation_load_export_yaml():
 
 @clear_tmp
 def test_simulation_preserve_types():
-
-    st = GaussianPulse(freq0=1.0, fwidth=1.0)
-
-
-@clear_tmp
-def test_simulation_preserve_types():
     """This test also writes a simulation file to ``tests/sims/simulation_x_y_z.json`` to store
     an example of the current version. Updating all of these files is then checked in
     ``test_simulation_updater``."""
