@@ -77,6 +77,120 @@
                 "polarization": "Ex"
             }
         ],
+        "boundary_spec": {
+            "x": {
+                "plus": {
+                    "name": null,
+                    "type": "PML",
+                    "num_layers": 12,
+                    "parameters": {
+                        "sigma_order": 3,
+                        "sigma_min": 0.0,
+                        "sigma_max": 1.5,
+                        "type": "PMLParams",
+                        "kappa_order": 3,
+                        "kappa_min": 1.0,
+                        "kappa_max": 3.0,
+                        "alpha_order": 1,
+                        "alpha_min": 0.0,
+                        "alpha_max": 0.0
+                    }
+                },
+                "minus": {
+                    "name": null,
+                    "type": "PML",
+                    "num_layers": 12,
+                    "parameters": {
+                        "sigma_order": 3,
+                        "sigma_min": 0.0,
+                        "sigma_max": 1.5,
+                        "type": "PMLParams",
+                        "kappa_order": 3,
+                        "kappa_min": 1.0,
+                        "kappa_max": 3.0,
+                        "alpha_order": 1,
+                        "alpha_min": 0.0,
+                        "alpha_max": 0.0
+                    }
+                },
+                "type": "Boundary"
+            },
+            "y": {
+                "plus": {
+                    "name": null,
+                    "type": "PML",
+                    "num_layers": 12,
+                    "parameters": {
+                        "sigma_order": 3,
+                        "sigma_min": 0.0,
+                        "sigma_max": 1.5,
+                        "type": "PMLParams",
+                        "kappa_order": 3,
+                        "kappa_min": 1.0,
+                        "kappa_max": 3.0,
+                        "alpha_order": 1,
+                        "alpha_min": 0.0,
+                        "alpha_max": 0.0
+                    }
+                },
+                "minus": {
+                    "name": null,
+                    "type": "PML",
+                    "num_layers": 12,
+                    "parameters": {
+                        "sigma_order": 3,
+                        "sigma_min": 0.0,
+                        "sigma_max": 1.5,
+                        "type": "PMLParams",
+                        "kappa_order": 3,
+                        "kappa_min": 1.0,
+                        "kappa_max": 3.0,
+                        "alpha_order": 1,
+                        "alpha_min": 0.0,
+                        "alpha_max": 0.0
+                    }
+                },
+                "type": "Boundary"
+            },
+            "z": {
+                "plus": {
+                    "name": null,
+                    "type": "PML",
+                    "num_layers": 12,
+                    "parameters": {
+                        "sigma_order": 3,
+                        "sigma_min": 0.0,
+                        "sigma_max": 1.5,
+                        "type": "PMLParams",
+                        "kappa_order": 3,
+                        "kappa_min": 1.0,
+                        "kappa_max": 3.0,
+                        "alpha_order": 1,
+                        "alpha_min": 0.0,
+                        "alpha_max": 0.0
+                    }
+                },
+                "minus": {
+                    "name": null,
+                    "type": "PML",
+                    "num_layers": 12,
+                    "parameters": {
+                        "sigma_order": 3,
+                        "sigma_min": 0.0,
+                        "sigma_max": 1.5,
+                        "type": "PMLParams",
+                        "kappa_order": 3,
+                        "kappa_min": 1.0,
+                        "kappa_max": 3.0,
+                        "alpha_order": 1,
+                        "alpha_min": 0.0,
+                        "alpha_max": 0.0
+                    }
+                },
+                "type": "Boundary"
+            },
+            "type": "BoundarySpec"
+        },
         "monitors": [
             {
                 "center": [
@@ -98,7 +212,13 @@
                     "Ex",
                     "Ey",
                     "Ez"
-                ]
+                ],
+                "interval_space": [
+                    1,
+                    1,
+                    1
+                ],
+                "colocate": false
             }
         ],
         "grid_spec": {
@@ -118,63 +238,13 @@
             "override_structures": [],
             "type": "GridSpec"
         },
-        "pml_layers": [
-            {
-                "num_layers": 12,
-                "parameters": {
-                    "sigma_order": 3,
-                    "sigma_min": 0.0,
-                    "sigma_max": 1.5,
-                    "type": "PMLParams",
-                    "kappa_order": 3,
-                    "kappa_min": 1.0,
-                    "kappa_max": 3.0,
-                    "alpha_order": 1,
-                    "alpha_min": 0.0,
-                    "alpha_max": 0.0
-                },
-                "type": "PML"
-            },
-            {
-                "num_layers": 12,
-                "parameters": {
-                    "sigma_order": 3,
-                    "sigma_min": 0.0,
-                    "sigma_max": 1.5,
-                    "type": "PMLParams",
-                    "kappa_order": 3,
-                    "kappa_min": 1.0,
-                    "kappa_max": 3.0,
-                    "alpha_order": 1,
-                    "alpha_min": 0.0,
-                    "alpha_max": 0.0
-                },
-                "type": "PML"
-            },
-            {
-                "num_layers": 12,
-                "parameters": {
-                    "sigma_order": 3,
-                    "sigma_min": 0.0,
-                    "sigma_max": 1.5,
-                    "type": "PMLParams",
-                    "kappa_order": 3,
-                    "kappa_min": 1.0,
-                    "kappa_max": 3.0,
-                    "alpha_order": 1,
-                    "alpha_min": 0.0,
-                    "alpha_max": 0.0
-                },
-                "type": "PML"
-            }
-        ],
         "shutoff": 1e-05,
         "subpixel": true,
         "courant": 0.9,
-        "version": "1.3.3"
+        "version": "1.4.0"
     },
     "task_name": "job",
     "folder_name": "default",
-    "task_id": "efcbf0b3-f32e-490c-96ac-2c99b64cffcf",
+    "task_id": "884e2b7c-52b1-42ee-892a-3692e942adf4",
     "callback_url": null
 }
