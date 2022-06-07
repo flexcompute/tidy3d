@@ -63,9 +63,9 @@ class _S3STSToken(BaseModel):
         @return:
         """
         return (
-                       self.user_credential.expiration
-                       - datetime.now(tz=self.user_credential.expiration.tzinfo)
-               ).total_seconds() < 300
+            self.user_credential.expiration
+            - datetime.now(tz=self.user_credential.expiration.tzinfo)
+        ).total_seconds() < 300
 
 
 class UploadProgress:
