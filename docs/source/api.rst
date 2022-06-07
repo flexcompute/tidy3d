@@ -73,6 +73,7 @@ Geometry
    Sphere
    Cylinder
    PolySlab
+   GeometryGroup
 
 Mediums
 =======
