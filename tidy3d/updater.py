@@ -133,6 +133,8 @@ class Updater(pd.BaseModel):
 
     def update_to_current(self) -> dict:
         """Update supplied simulation dictionary to current version."""
+        if self.version == CurrentVersion:
+            return self.sim_dict
         log.warning(f"updating Simulation from {self.version} to {CurrentVersion}")
         while self.version != CurrentVersion:
             update_fn = self.get_update_function()

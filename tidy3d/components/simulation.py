@@ -1767,7 +1767,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
 
         Example
         -------
-        >>> simulation = Simulation.from_file(fname='folder/sim.json')
+        >>> simulation = Simulation.from_file(fname='folder/sim.json') # doctest: +SKIP
         """
 
         updater = Updater.from_file(fname)
