@@ -2,6 +2,7 @@
 """ Container holding all information about simulation and its components"""
 from typing import Dict, Tuple, List, Set, Union
 from math import isclose
+from typing_extensions import Annotated
 
 import pydantic
 import numpy as np
@@ -10,7 +11,11 @@ import matplotlib.pylab as plt
 import matplotlib as mpl
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 
+<<<<<<< HEAD
 from .base import cached_property
+=======
+from .base import cache, TYPE_TAG_STR
+>>>>>>> e91b4f0... updated data.py to compute spherical coordinate far field quantities within Near2FarData
 from .validators import assert_unique_names, assert_objects_in_sim_bounds
 from .validators import validate_mode_objects_symmetry
 from .geometry import Box
@@ -151,12 +156,22 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         description="Specification of boundary conditions along each dimension.",
     )
 
+<<<<<<< HEAD
     monitors: Tuple[annotate_type(MonitorType), ...] = pydantic.Field(
         (),
         title="Monitors",
         description="Tuple of monitors in the simulation. "
         "Note: monitor names are used to access data after simulation is run.",
     )
+=======
+    monitors: List[Annotated[MonitorType, pydantic.Field(discriminator=TYPE_TAG_STR)]] = \
+        pydantic.Field(
+            [],
+            title="Monitors",
+            description="List of monitors in the simulation. "
+            "Note: monitor names are used to access data after simulation is run.",
+        )
+>>>>>>> e91b4f0... updated data.py to compute spherical coordinate far field quantities within Near2FarData
 
     grid_spec: GridSpec = pydantic.Field(
         GridSpec(),

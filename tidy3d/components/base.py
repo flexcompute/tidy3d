@@ -54,6 +54,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         extra = "forbid"
         validate_assignment = True
         allow_population_by_field_name = True
+        # smart_union = True
         json_encoders = {
             np.ndarray: lambda x: tuple(x.tolist()),
             complex: lambda x: ComplexNumber(real=x.real, imag=x.imag),

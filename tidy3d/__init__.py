@@ -34,7 +34,7 @@ from .components import GaussianBeam, AstigmaticGaussianBeam
 
 # monitors
 from .components import FieldMonitor, FieldTimeMonitor, FluxMonitor, FluxTimeMonitor
-from .components import ModeMonitor, ModeFieldMonitor, PermittivityMonitor
+from .components import ModeMonitor, ModeFieldMonitor, PermittivityMonitor, Near2FarMonitor
 
 # simulation
 from .components import Simulation
@@ -44,6 +44,7 @@ from .components import SimulationData, FieldData, FluxData, FluxTimeData
 from .components import DATA_TYPE_MAP, ScalarFieldData, ScalarFieldTimeData
 from .components import ModeData, ModeAmpsData, ModeIndexData, ModeFieldData, PermittivityData
 from .components import ScalarPermittivityData
+from .components import RadiationVector, Near2FarData, Near2FarSurface, Near2Far
 
 # boundary
 from .components import BoundarySpec, Boundary, BoundaryEdge, BoundaryEdgeType

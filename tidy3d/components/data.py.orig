@@ -11,10 +11,16 @@ import scipy
 import h5py
 import pydantic as pd
 
-from rich.progress import track
-
+<<<<<<< HEAD
 from .types import Numpy, Direction, Array, Literal, Ax, Coordinate, Axis, TYPE_TAG_STR
 from .base import Tidy3dBaseModel
+=======
+from rich.progress import track
+
+from .types import Numpy, Direction, Array, numpy_encoding, Literal, Ax, Coordinate, Axis
+from .types import ArrayLike
+from .base import Tidy3dBaseModel, TYPE_TAG_STR
+>>>>>>> e91b4f0... updated data.py to compute spherical coordinate far field quantities within Near2FarData
 from .simulation import Simulation
 from .geometry import Geometry
 from .boundary import Symmetry, BlochBoundary
