@@ -21,7 +21,8 @@ To run the notebooks from browser, click [this link](https://mybinder.org/v2/gh/
 First time you want to use the docs, install all packages and make the docs building script executable.
 
 ```bash
-git submodule --init tidy3d
+git submodule init tidy3d
+pip install -r tidy3d/requirements/dev.txt
 pip install -r docs/requirements.txt
 pip install -r tests/requirements.txt
 ```
