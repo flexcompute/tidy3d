@@ -10,7 +10,7 @@ from .types import Complex, Axis, Literal
 from .source import GaussianBeam, ModeSource, PlaneWave
 from .medium import Medium
 
-from ..log import log, SetupError, DataError
+from ..log import log, SetupError, DataError, ValidationError
 from ..constants import EPSILON_0, MU_0, PML_SIGMA
 
 
@@ -111,7 +111,7 @@ class BlochBoundary(BoundaryEdge):
 
         freq0 = source.source_time.freq0
         eps_complex = medium.eps_model(freq0)
-        kmag = freq0 * np.sqrt(eps_complex * EPSILON_0 * MU_0)
+        kmag = np.real(freq0 * np.sqrt(eps_complex * EPSILON_0 * MU_0))
 
         angle_theta = source.angle_theta
         angle_phi = source.angle_phi
@@ -133,6 +133,13 @@ class BlochBoundary(BoundaryEdge):
 
         bloch_vec = domain_size * k_global[axis]
         return cls(bloch_vec=bloch_vec)
+
+    @pd.validator("bloch_vec", always=True)
+    def _zero_imaginary_part(cls, val):
+        """Make sure the imaginary part of the bloch vector is 0."""
+        if np.imag(val) != 0:
+            raise ValidationError("Bloch vector must be real.")
+        return val
 
 
 # """ Absorber parameters """
