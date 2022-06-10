@@ -815,6 +815,46 @@ def test_FieldSource():
     # s.plot(z=0)
 
 
+def test_pol_arrow():
+
+    g = GaussianPulse(freq0=1, fwidth=0.1)
+
+    def get_pol_dir(axis, pol_angle=0, angle_theta=0, angle_phi=0):
+
+        size = [inf, inf, inf]
+        size[axis] = 0
+
+        pw = PlaneWave(
+            size=size,
+            source_time=g,
+            pol_angle=pol_angle,
+            angle_theta=angle_theta,
+            angle_phi=angle_phi,
+            direction="+",
+        )
+
+        return pw._pol_vector
+
+    assert np.allclose(get_pol_dir(axis=0), (0, 1, 0))
+    assert np.allclose(get_pol_dir(axis=1), (1, 0, 0))
+    assert np.allclose(get_pol_dir(axis=2), (1, 0, 0))
+    assert np.allclose(get_pol_dir(axis=0, angle_phi=np.pi / 2), (0, 0, +1))
+    assert np.allclose(get_pol_dir(axis=1, angle_phi=np.pi / 2), (0, 0, -1))
+    assert np.allclose(get_pol_dir(axis=2, angle_phi=np.pi / 2), (0, +1, 0))
+    assert np.allclose(get_pol_dir(axis=0, pol_angle=np.pi / 2), (0, 0, +1))
+    assert np.allclose(get_pol_dir(axis=1, pol_angle=np.pi / 2), (0, 0, -1))
+    assert np.allclose(get_pol_dir(axis=2, pol_angle=np.pi / 2), (0, +1, 0))
+    assert np.allclose(
+        get_pol_dir(axis=0, angle_theta=np.pi / 4), (+1 / np.sqrt(2), -1 / np.sqrt(2), 0)
+    )
+    assert np.allclose(
+        get_pol_dir(axis=1, angle_theta=np.pi / 4), (-1 / np.sqrt(2), +1 / np.sqrt(2), 0)
+    )
+    assert np.allclose(
+        get_pol_dir(axis=2, angle_theta=np.pi / 4), (-1 / np.sqrt(2), 0, +1 / np.sqrt(2))
+    )
+
+
 """ monitors """
 
 
