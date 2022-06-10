@@ -345,7 +345,7 @@ class Boundary(Tidy3dBaseModel):
         description="Boundary condition on the minus side along a dimension.",
     )
 
-    @pd.root_validator
+    @pd.root_validator(skip_on_failure=True)
     def bloch_on_both_sides(cls, values):
         """Error if a Bloch boundary is applied on only one side."""
         plus = values.get("plus")
@@ -357,7 +357,7 @@ class Boundary(Tidy3dBaseModel):
             )
         return values
 
-    @pd.root_validator
+    @pd.root_validator(skip_on_failure=True)
     def periodic_with_pml(cls, values):
         """Error if PBC is specified with a PML."""
         plus = values.get("plus")
@@ -370,7 +370,7 @@ class Boundary(Tidy3dBaseModel):
             raise SetupError("Cannot have both PML and PBC along the same dimension.")
         return values
 
-    @pd.root_validator
+    @pd.root_validator(skip_on_failure=True)
     def periodic_with_pec_pmc(cls, values):
         """If a PBC is specified along with PEC or PMC on the other side, manually set the PBC
         to PEC or PMC so that no special treatment of halos is required."""

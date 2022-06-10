@@ -21,9 +21,9 @@ Coordinate = Tuple[float, float, float]
 ```
 defines a coordinate in 3D and
 ```python
-Indices = List[pydantic.nonNegativeInt]
+Indices = Tuple[pydantic.nonNegativeInt, ...]
 ```
-defines a list of non-negative integers, for example, a list of indices.
+defines a tuple of non-negative integers, for example, a tuple of indices.
 
 This file provides a way for one to import the same type into multiple components.
 Often times, though, if a type is being used once, it is just declared in the component definition itself.

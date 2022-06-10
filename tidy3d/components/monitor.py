@@ -1,11 +1,11 @@
 """Objects that define how data is recorded from simulation."""
 from abc import ABC, abstractmethod
-from typing import List, Union, Tuple
+from typing import Union, Tuple
 
 import pydantic
 import numpy as np
 
-from .types import Literal, Ax, EMField, ArrayLike, Array, Bound
+from .types import Literal, Ax, EMField, Array, Bound, FreqArray
 from .geometry import Box
 from .validators import assert_plane
 from .mode import ModeSpec
@@ -65,7 +65,7 @@ class Monitor(Box, ABC):
 class FreqMonitor(Monitor, ABC):
     """:class:`Monitor` that records data in the frequency-domain."""
 
-    freqs: Union[List[float], ArrayLike] = pydantic.Field(
+    freqs: FreqArray = pydantic.Field(
         ...,
         title="Frequencies",
         description="Array or list of frequencies stored by the field monitor.",
@@ -152,7 +152,7 @@ class TimeMonitor(Monitor, ABC):
 class AbstractFieldMonitor(Monitor, ABC):
     """:class:`Monitor` that records electromagnetic field data as a function of x,y,z."""
 
-    fields: List[EMField] = pydantic.Field(
+    fields: Tuple[EMField, ...] = pydantic.Field(
         ["Ex", "Ey", "Ez", "Hx", "Hy", "Hz"],
         title="Field Components",
         description="Collection of field components to store in the monitor.",
@@ -274,7 +274,7 @@ class FieldMonitor(AbstractFieldMonitor, FreqMonitor):
         # stores 1 complex number per grid cell, per frequency, per field
         return BYTES_COMPLEX * num_cells * len(self.freqs) * len(self.fields)
 
-    def surfaces(self) -> List["FieldMonitor"]:  # pylint: disable=too-many-locals
+    def surfaces(self) -> Tuple["FieldMonitor", ...]:  # pylint: disable=too-many-locals
         """Returns a list of 6 monitors corresponding to each surface of the field monitor.
         The output monitors are stored in the order [x-, x+, y-, y+, z-, z+], where x, y, and z
         denote which axis is perpendicular to that surface, while "-" and "+" denote the direction
@@ -285,7 +285,7 @@ class FieldMonitor(AbstractFieldMonitor, FreqMonitor):
 
         Returns
         -------
-        List[:class:`FieldMonitor`]
+        Tuple[:class:`FieldMonitor`, ...]
             List of 6 surface monitors for each side of the field monitor.
 
         Example

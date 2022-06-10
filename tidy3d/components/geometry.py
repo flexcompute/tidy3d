@@ -12,7 +12,7 @@ from shapely.geometry import Point, Polygon, box, MultiPolygon
 from descartes import PolygonPatch
 
 from .base import Tidy3dBaseModel, cache
-from .types import Bound, Size, Coordinate, Axis, Coordinate2D, tidynumpy, Array
+from .types import Bound, Size, Coordinate, Axis, Coordinate2D, Array
 from .types import Vertices, Ax, Shapely
 from .viz import add_ax_if_none, equal_aspect
 from .viz import PLOT_BUFFER, ARROW_LENGTH_FACTOR, ARROW_WIDTH_FACTOR, MAX_ARROW_WIDTH_FACTOR
@@ -1160,7 +1160,7 @@ class PolySlab(Planar):
         units=RADIAN,
     )
 
-    vertices: Union[Vertices, tidynumpy] = pydantic.Field(
+    vertices: Vertices = pydantic.Field(
         ...,
         title="Vertices",
         description="List of (d1, d2) defining the 2 dimensional positions of the base polygon "
@@ -1416,25 +1416,25 @@ class PolySlab(Planar):
         return np.tan(self.sidewall_angle)
 
     @property
-    def base_polygon(self) -> tidynumpy:
+    def base_polygon(self) -> Vertices:
         """The polygon at the base after potential dilation operation.
         The vertices will always be transformed to be "proper".
 
         Returns
         -------
-        tidynumpy
+        Array[float, float]
             The vertices of the polygon at the base.
         """
 
         return self._shift_vertices(self._proper_vertices(self.vertices), self.dilation)[0]
 
     @property
-    def top_polygon(self) -> tidynumpy:
+    def top_polygon(self) -> Vertices:
         """The polygon at the top after potential dilation and sidewall operation.
 
         Returns
         -------
-        tidynumpy
+        Array[float, float]
             The vertices of the polygon at the top.
         """
 
@@ -1442,13 +1442,13 @@ class PolySlab(Planar):
         return self._shift_vertices(self.base_polygon, dist)[0]
 
     @property
-    def _base_polygon(self) -> tidynumpy:
+    def _base_polygon(self) -> Vertices:
         """Similar as `base_polygon`, but simply return self.vertices
         in the absence of dilation operation.
 
         Returns
         -------
-        tidynumpy
+        Array[float, float]
             The vertices of the polygon at the base.
         """
         if isclose(self.sidewall_angle, 0) and isclose(self.dilation, 0):
@@ -2025,7 +2025,7 @@ class PolySlab(Planar):
 
         Returns
         -------
-        tidynumpy
+        Array[float, float]
            The vertices of the polygon for internal use.
         """
 
@@ -2109,14 +2109,20 @@ GeometryType = Union[GeometryFields]
 class GeometryGroup(Geometry):
     """A collection of Geometry objects that can be called as a single geometry object."""
 
-    geometries: List[GeometryType] = pydantic.Field(
-        [],
+    geometries: Tuple[GeometryType, ...] = pydantic.Field(
+        ...,
         title="Geometries",
-        description="List of geometries in a single grouping. "
+        description="Tuple of geometries in a single grouping. "
         "Can provide significant performance enhancement in ``Structure`` when all geometries are "
         "assigned the same medium.",
-        min_items=1,
     )
+
+    @pydantic.validator("geometries", always=True)
+    def _geometries_not_empty(cls, val):
+        """make sure geometries are not empty."""
+        if not len(val) > 0:
+            raise ValidationError("GeometryGroup.geometries must not be empty.")
+        return val
 
     @property
     @cache

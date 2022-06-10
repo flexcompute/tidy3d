@@ -9,7 +9,7 @@ import pydantic
 import numpy as np
 
 from .base import Tidy3dBaseModel
-from .types import Direction, Polarization, Ax, FreqBound, Array, Axis, ArrayLike, Bound
+from .types import Direction, Polarization, Ax, FreqBound, Array, Axis, Bound
 from .validators import assert_plane, validate_name_str
 from .geometry import Box
 from .mode import ModeSpec
@@ -398,7 +398,7 @@ class FieldSource(Source, ABC):
 class CustomSource(Source, ABC):
     """Implements custom current components specified by data."""
 
-    data: ArrayLike
+    data: Array[float]
 
 
 class CustomFieldSource(FieldSource, CustomSource):

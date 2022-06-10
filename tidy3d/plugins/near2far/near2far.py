@@ -1,6 +1,6 @@
 """Near field to far field transformation plugin
 """
-from typing import List, Dict, Tuple, Union
+from typing import Dict, Tuple, Union, List
 import numpy as np
 import xarray as xr
 import pydantic
@@ -19,7 +19,7 @@ from ...log import SetupError, ValidationError
 PTS_PER_WVL = 10
 
 # Numpy float array and related array types
-ArrayLikeN2F = Union[float, List[float], ArrayLike]
+ArrayLikeN2F = Union[float, Tuple[float, ...], ArrayLike[float, 1]]
 
 
 class Near2FarSurface(Tidy3dBaseModel):
@@ -62,10 +62,10 @@ class Near2Far(Tidy3dBaseModel):
         description="Container for simulation data containing the near field monitors.",
     )
 
-    surfaces: List[Near2FarSurface] = pydantic.Field(
+    surfaces: Tuple[Near2FarSurface, ...] = pydantic.Field(
         ...,
         title="Surface monitor with direction",
-        description="List of each :class:`.Near2FarSurface` to use as source of near field.",
+        description="Tuple of each :class:`.Near2FarSurface` to use as source of near field.",
     )
 
     frequency: float = pydantic.Field(
@@ -164,9 +164,9 @@ class Near2Far(Tidy3dBaseModel):
         sim_data : :class:`.SimulationData`
             Container for simulation data containing the near field monitors.
         monitors : List[:class:`.FieldMonitor`]
-            List of :class:`.FieldMonitor` objects on which near fields will be sampled.
+            Tuple of :class:`.FieldMonitor` objects on which near fields will be sampled.
         normal_dirs : List[:class:`.Direction`]
-            List containing the :class:`.Direction` of the normal to each surface monitor
+            Tuple containing the :class:`.Direction` of the normal to each surface monitor
             w.r.t. to the positive x, y or z unit vectors. Must have the same length as monitors.
         frequency : float
             Frequency to select from each :class:`.FieldMonitor` to use for projection.
@@ -391,9 +391,9 @@ the number of directions ({len(normal_dirs)})."
 
         Parameters
         ----------
-        theta : Union[float, List[float], np.ndarray]
+        theta : Union[float, Tuple[float, ...], np.ndarray]
             Polar angles (rad) downward from x=y=0 line relative to the local origin.
-        phi : Union[float, List[float], np.ndarray]
+        phi : Union[float, Tuple[float, ...], np.ndarray]
             Azimuthal (rad) angles from y=z=0 line relative to the local origin.
         surface: :class:`Near2FarSurface`
             :class:`Near2FarSurface` object to use as source of near field.
@@ -489,9 +489,9 @@ the number of directions ({len(normal_dirs)})."
 
         Parameters
         ----------
-        theta : Union[float, List[float], np.ndarray]
+        theta : Union[float, Tuple[float, ...], np.ndarray]
             Polar angles (rad) downward from x=y=0 line relative to the local origin.
-        phi : Union[float, List[float], np.ndarray]
+        phi : Union[float, Tuple[float, ...], np.ndarray]
             Azimuthal (rad) angles from y=z=0 line relative to the local origin.
 
         Returns
@@ -524,9 +524,9 @@ the number of directions ({len(normal_dirs)})."
         ----------
         r : float
             (micron) radial distance relative to monitor center.
-        theta : Union[float, List[float], np.ndarray]
+        theta : Union[float, Tuple[float, ...], np.ndarray]
             (radian) polar angles downward from x=y=0 relative to the local origin.
-        phi : Union[float, List[float], np.ndarray]
+        phi : Union[float, Tuple[float, ...], np.ndarray]
             (radian) azimuthal angles from y=z=0 line relative to the local origin.
 
         Returns
@@ -585,11 +585,11 @@ the number of directions ({len(normal_dirs)})."
 
         Parameters
         ----------
-        x : Union[float, List[float], np.ndarray]
+        x : Union[float, Tuple[float, ...], np.ndarray]
             (micron) x positions relative to the local origin.
-        y : Union[float, List[float], np.ndarray]
+        y : Union[float, Tuple[float, ...], np.ndarray]
             (micron) y positions relative to the local origin.
-        z : Union[float, List[float], np.ndarray]
+        z : Union[float, Tuple[float, ...], np.ndarray]
             (micron) z positions relative to the local origin.
 
         Returns
@@ -650,9 +650,9 @@ the number of directions ({len(normal_dirs)})."
         ----------
         r : float
             (micron) radial distance relative to the local origin.
-        theta : Union[float, List[float], np.ndarray]
+        theta : Union[float, Tuple[float, ...], np.ndarray]
             (radian) polar angles downward from x=y=0 relative to the local origin.
-        phi : Union[float, List[float], np.ndarray]
+        phi : Union[float, Tuple[float, ...], np.ndarray]
             (radian) azimuthal angles from y=z=0 line relative to the local origin.
 
         Returns
@@ -681,11 +681,11 @@ the number of directions ({len(normal_dirs)})."
 
         Parameters
         ----------
-        x : Union[float, List[float], np.ndarray]
+        x : Union[float, Tuple[float, ...], np.ndarray]
             (micron) x distances relative to the local origin.
-        y : Union[float, List[float], np.ndarray]
+        y : Union[float, Tuple[float, ...], np.ndarray]
             (micron) y distances relative to the local origin.
-        z : Union[float, List[float], np.ndarray]
+        z : Union[float, Tuple[float, ...], np.ndarray]
             (micron) z distances relative to the local origin.
 
         Returns
@@ -719,9 +719,9 @@ the number of directions ({len(normal_dirs)})."
 
         Parameters
         ----------
-        theta : Union[float, List[float], np.ndarray]
+        theta : Union[float, Tuple[float, ...], np.ndarray]
             (radian) polar angles downward from x=y=0 relative to the local origin.
-        phi : Union[float, List[float], np.ndarray]
+        phi : Union[float, Tuple[float, ...], np.ndarray]
             (radian) azimuthal angles from y=z=0 line relative to the local origin.
 
         Returns

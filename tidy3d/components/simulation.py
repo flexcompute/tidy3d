@@ -132,18 +132,18 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         "determine the symmetry value.",
     )
 
-    structures: List[Structure] = pydantic.Field(
-        [],
+    structures: Tuple[Structure, ...] = pydantic.Field(
+        (),
         title="Structures",
-        description="List of structures present in simulation. "
+        description="Tuple of structures present in simulation. "
         "Note: Structures defined later in this list override the "
         "simulation material properties in regions of spatial overlap.",
     )
 
-    sources: List[SourceType] = pydantic.Field(
-        [],
+    sources: Tuple[SourceType, ...] = pydantic.Field(
+        (),
         title="Sources",
-        description="List of electric current sources injecting fields into the simulation.",
+        description="Tuple of electric current sources injecting fields into the simulation.",
     )
 
     boundary_spec: BoundarySpec = pydantic.Field(
@@ -152,10 +152,10 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         description="Specification of boundary conditions along each dimension.",
     )
 
-    monitors: List[MonitorType] = pydantic.Field(
-        [],
+    monitors: Tuple[MonitorType, ...] = pydantic.Field(
+        (),
         title="Monitors",
-        description="List of monitors in the simulation. "
+        description="Tuple of monitors in the simulation. "
         "Note: monitor names are used to access data after simulation is run.",
     )
 
@@ -255,6 +255,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
     _unique_structure_names = assert_unique_names("structures")
     _unique_source_names = assert_unique_names("sources")
     _unique_monitor_names = assert_unique_names("monitors")
+
     # _unique_medium_names = assert_unique_names("structures", check_mediums=True)
 
     # _few_enough_mediums = validate_num_mediums()
@@ -332,6 +333,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         sources = values.get("sources")
 
         if (not structures) or (not sources):
+
             return val
 
         def warn(istruct, side):
@@ -504,7 +506,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
 
         structures = values.get("structures")
         structures = [] if not structures else structures
-        total_structures = [structure_bg] + structures
+        total_structures = [structure_bg] + list(structures)
 
         # for each plane wave in the sources list
         for source in val:
@@ -520,6 +522,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
                 # make sure there is no more than one medium in the returned list
                 mediums = {medium for medium, _ in structures_merged}
                 if len(mediums) > 1:
+
                     raise SetupError(
                         f"{len(mediums)} different mediums detected on plane "
                         f"intersecting a {source.type} source. Plane must be homogeneous."

@@ -15,7 +15,7 @@ from ...components import Simulation
 from ...components import ModeSpec
 from ...components import ModeMonitor
 from ...components.source import ModeSource, SourceTime
-from ...components.types import Direction, Array, Ax, Literal, ArrayLike, Axis
+from ...components.types import Direction, Array, FreqArray, Ax, Literal, Axis
 from ...components.data import Tidy3dData, ModeIndexData, ModeFieldData, ScalarModeFieldData
 from ...components.data import AbstractSimulationData
 from ...components.boundary import Symmetry
@@ -260,7 +260,7 @@ class ModeSolver(Tidy3dBaseModel):
         description="Container with specifications about the modes to be solved for.",
     )
 
-    freqs: Union[List[float], ArrayLike] = pydantic.Field(
+    freqs: FreqArray = pydantic.Field(
         ..., title="Frequencies", description="A list of frequencies at which to solve."
     )
 
@@ -273,9 +273,9 @@ class ModeSolver(Tidy3dBaseModel):
 
     @pydantic.validator("freqs", always=True)
     def freqs_not_empty(cls, val):
-        """Raise validation error if ``freqs`` is an empty list."""
+        """Raise validation error if ``freqs`` is an empty Tuple."""
         if len(val) == 0:
-            raise ValidationError("ModeSolver 'freqs' must be a non-empty list.")
+            raise ValidationError("ModeSolver 'freqs' must be a non-empty tuple.")
         return val
 
     @property

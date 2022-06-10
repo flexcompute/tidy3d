@@ -5,6 +5,7 @@ import pydantic
 import numpy as np
 
 import tidy3d as td
+from tidy3d.log import ValidationError
 
 
 def make_geo_group():
@@ -39,9 +40,5 @@ def test_methods():
 def test_empty():
     """dont allow empty geometry list."""
 
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(ValidationError):
         geo_group = td.GeometryGroup(geometries=[])
-
-    geo_group = make_geo_group()
-    with pytest.raises(pydantic.ValidationError):
-        geo_group.geometries = []

@@ -2,7 +2,7 @@
 """Defines properties of the medium / materials"""
 
 from abc import ABC, abstractmethod
-from typing import List, Tuple, Union, Callable
+from typing import Tuple, Union, Callable
 
 import pydantic as pd
 import numpy as np
@@ -11,7 +11,7 @@ from .base import Tidy3dBaseModel
 from .types import PoleAndResidue, Ax, FreqBound
 from .viz import add_ax_if_none
 from .validators import validate_name_str
-from ..constants import C_0, pec_val, EPSILON_0, HERTZ, CONDUCTIVITY, PERMITTIVITY, RADPERSEC
+from ..constants import C_0, pec_val, EPSILON_0, HERTZ, CONDUCTIVITY, PERMITTIVITY
 from ..log import log, ValidationError
 
 # evaluate frequency as this number (Hz) if inf
@@ -411,11 +411,10 @@ class PoleResidue(DispersiveMedium):
         description="Relative permittivity at infinite frequency (:math:`\\epsilon_\\infty`).",
     )
 
-    poles: List[PoleAndResidue] = pd.Field(
-        [],
+    poles: Tuple[PoleAndResidue, ...] = pd.Field(
+        (),
         title="Poles",
-        description="List of complex-valued (:math:`a_i, c_i`) poles for the model.",
-        units=RADPERSEC,
+        description="Tuple of complex-valued (:math:`a_i, c_i`) poles for the model.",
     )
 
     @ensure_freq_in_range
@@ -467,7 +466,7 @@ class Sellmeier(DispersiveMedium):
     >>> eps = sellmeier_medium.eps_model(200e12)
     """
 
-    coeffs: List[Tuple[float, pd.PositiveFloat]] = pd.Field(
+    coeffs: Tuple[Tuple[float, pd.PositiveFloat], ...] = pd.Field(
         title="Coefficients",
         description="List of Sellmeier (:math:`B_i, C_i`) coefficients (unitless, microns^2).",
     )
@@ -565,7 +564,7 @@ class Lorentz(DispersiveMedium):
         description="Relative permittivity at infinite frequency (:math:`\\epsilon_\\infty`).",
     )
 
-    coeffs: List[Tuple[float, float, float]] = pd.Field(
+    coeffs: Tuple[Tuple[float, float, float], ...] = pd.Field(
         ...,
         title="Epsilon at Infinity",
         description="List of (:math:`\\Delta\\epsilon_i, f_i, \\delta_i`) values for model (Hz).",
@@ -635,7 +634,7 @@ class Drude(DispersiveMedium):
         description="Relative permittivity at infinite frequency (:math:`\\epsilon_\\infty`).",
     )
 
-    coeffs: List[Tuple[float, pd.PositiveFloat]] = pd.Field(
+    coeffs: Tuple[Tuple[float, pd.PositiveFloat], ...] = pd.Field(
         ...,
         title="Coefficients",
         description="List of (:math:`f_i, \\delta_i`) values for model (Hz).",
@@ -700,7 +699,7 @@ class Debye(DispersiveMedium):
         description="Relative permittivity at infinite frequency (:math:`\\epsilon_\\infty`).",
     )
 
-    coeffs: List[Tuple[float, pd.PositiveFloat]] = pd.Field(
+    coeffs: Tuple[Tuple[float, pd.PositiveFloat], ...] = pd.Field(
         ...,
         title="Coefficients",
         description="List of (:math:`\\Delta\\epsilon_i, \\tau_i`) values for model (Hz, sec).",

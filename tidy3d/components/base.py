@@ -9,7 +9,7 @@ import yaml
 import numpy as np
 from pydantic.fields import ModelField
 
-from .types import ComplexNumber, NumpyArray, Literal
+from .types import ComplexNumber, Literal
 from ..log import FileError
 
 # default indentation (# spaces) in files
@@ -58,7 +58,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         validate_assignment = True
         allow_population_by_field_name = True
         json_encoders = {
-            np.ndarray: lambda x: NumpyArray(data_list=x.tolist()),
+            np.ndarray: lambda x: tuple(x.tolist()),
             complex: lambda x: ComplexNumber(real=x.real, imag=x.imag),
         }
 

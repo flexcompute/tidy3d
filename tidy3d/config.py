@@ -6,7 +6,6 @@ import pydantic as pd
 from typing_extensions import Literal
 
 from .log import set_logging_level, DEFAULT_LEVEL, Tidy3dKeyError
-from .components.base import Tidy3dBaseModel
 from .web.config import DEFAULT_CONFIG, WEB_CONFIGS
 
 # set the default web config based on environment variable, if present
@@ -25,6 +24,7 @@ class Tidy3dConfig(pd.BaseModel):
         extra = "forbid"
         validate_assignment = True
         allow_population_by_field_name = True
+        frozen = False
 
     logging_level: Literal["debug", "info", "warning", "error"] = pd.Field(
         DEFAULT_LEVEL.lower(),
@@ -37,16 +37,6 @@ class Tidy3dConfig(pd.BaseModel):
         DEFAULT_WEB_CONFIG,
         title="Web Configuration",
         description="Default configuration that webapi uses.",
-    )
-
-    # default_folder: str = pd.Field(
-    #     "default",
-    #     title="Default Folder",
-    #     description="Default name of folder where tasks go if ``folder_name`` is not supplied.",
-    # )
-
-    frozen: bool = pd.Field(
-        False, title="Frozen", description="Whether all tidy3d components are immutable."
     )
 
     @pd.validator("logging_level", always=True)
@@ -66,12 +56,6 @@ class Tidy3dConfig(pd.BaseModel):
         for key, value in new_config.dict().items():
             setattr(DEFAULT_CONFIG, key, value)
 
-        return val
-
-    @pd.validator("frozen", always=True)
-    def _change_mutability(cls, val):
-        """Set whether tidy3d compoennts are mutable."""
-        Tidy3dBaseModel.__config__.frozen = val
         return val
 
 
