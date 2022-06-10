@@ -519,11 +519,13 @@ class AngledFieldSource(DirectionalSource, ABC):
         normal_dir = [0.0, 0.0, 0.0]
         normal_dir[self.injection_axis] = 1.0
         propagation_dir = list(self._dir_vector)
-        pol_vector_s = np.cross(normal_dir, propagation_dir)
-        if self.angle_theta == 0.0 or np.allclose(pol_vector_s, 0.0):
-            pol_vector_s = np.array((1, 0, 0)) if self.injection_axis == 0 else np.array((0, -1, 0))
-        pol_vector_p = np.cross(propagation_dir, pol_vector_s)
-        pol_vector_p = np.array(pol_vector_p) / np.linalg.norm(pol_vector_p)
+        if self.angle_theta == 0.0:
+            pol_vector_p = np.array((0, 1, 0)) if self.injection_axis == 0 else np.array((1, 0, 0))
+            pol_vector_p = self.rotate_points(pol_vector_p, normal_dir, angle=self.angle_phi)
+        else:
+            pol_vector_s = np.cross(normal_dir, propagation_dir)
+            pol_vector_p = np.cross(propagation_dir, pol_vector_s)
+            pol_vector_p = np.array(pol_vector_p) / np.linalg.norm(pol_vector_p)
         return self.rotate_points(pol_vector_p, propagation_dir, angle=self.pol_angle)
 
 
