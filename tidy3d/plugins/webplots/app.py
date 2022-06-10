@@ -30,12 +30,6 @@ class App(Tidy3dBaseModel, ABC):
         description='Run app in mode that is one of `"python"`, `"jupyter"`, `"jupyterlab"`.',
     )
 
-    app: Optional[Dash] = pd.Field(
-        None,
-        title="Existing app.",
-        description="An existing app to use in place of the app, leave ``None`` in most cases.",
-    )
-
     def _initialize_app(self) -> Dash:
         """Creates an app based on specs."""
         if "jupyter" in self.mode.lower():
@@ -55,17 +49,17 @@ class App(Tidy3dBaseModel, ABC):
             ]
         )
 
-    def make_app(self) -> Dash:
+    @property
+    def app(self) -> Dash:
         """Initialize everything and make the plotly app."""
-        if not self.app:
-            self.app = self._initialize_app()
-            self.app.layout = self._make_layout()
-        return self.app
+        app = self._initialize_app()
+        app.layout = self._make_layout()
+        return app
 
     def run(self, debug: bool = False) -> None:
         """Starts running the app based on specs."""
 
-        app = self.make_app()
+        app = self.app
 
         if self.mode.lower() == "jupyterlab":
             app.run_server(

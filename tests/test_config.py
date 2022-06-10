@@ -32,7 +32,7 @@ def test_config():
             assert DEFAULT_CONFIG.dict()[key] == target_config.dict()[key]
 
 
-def test_frozen():
+def _test_frozen():
     """Make sure you can dynamically freeze tidy3d components."""
 
     # make sure it's mutable

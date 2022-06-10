@@ -2,16 +2,16 @@
 """Defines properties of the medium / materials"""
 
 from abc import ABC, abstractmethod
-from typing import List, Tuple, Union, Callable
+from typing import Tuple, Union, Callable
 
 import pydantic as pd
 import numpy as np
 
-from .base import Tidy3dBaseModel
+from .base import Tidy3dBaseModel, cached_property
 from .types import PoleAndResidue, Ax, FreqBound
 from .viz import add_ax_if_none
 from .validators import validate_name_str
-from ..constants import C_0, pec_val, EPSILON_0, HERTZ, CONDUCTIVITY, PERMITTIVITY, RADPERSEC
+from ..constants import C_0, pec_val, EPSILON_0, HERTZ, CONDUCTIVITY, PERMITTIVITY
 from ..log import log, ValidationError
 
 # evaluate frequency as this number (Hz) if inf
@@ -368,7 +368,7 @@ class AnisotropicMedium(AbstractMedium):
 class DispersiveMedium(AbstractMedium, ABC):
     """A Medium with dispersion (propagation characteristics depend on frequency)"""
 
-    @property
+    @cached_property
     @abstractmethod
     def pole_residue(self):
         """Representation of Medium as a pole-residue model."""
@@ -411,11 +411,10 @@ class PoleResidue(DispersiveMedium):
         description="Relative permittivity at infinite frequency (:math:`\\epsilon_\\infty`).",
     )
 
-    poles: List[PoleAndResidue] = pd.Field(
-        [],
+    poles: Tuple[PoleAndResidue, ...] = pd.Field(
+        (),
         title="Poles",
-        description="List of complex-valued (:math:`a_i, c_i`) poles for the model.",
-        units=RADPERSEC,
+        description="Tuple of complex-valued (:math:`a_i, c_i`) poles for the model.",
     )
 
     @ensure_freq_in_range
@@ -431,7 +430,7 @@ class PoleResidue(DispersiveMedium):
             eps -= c_cc / (1j * omega + a_cc)
         return eps
 
-    @property
+    @cached_property
     def pole_residue(self):
         """Representation of Medium as a pole-residue model."""
 
@@ -467,7 +466,7 @@ class Sellmeier(DispersiveMedium):
     >>> eps = sellmeier_medium.eps_model(200e12)
     """
 
-    coeffs: List[Tuple[float, pd.PositiveFloat]] = pd.Field(
+    coeffs: Tuple[Tuple[float, pd.PositiveFloat], ...] = pd.Field(
         title="Coefficients",
         description="List of Sellmeier (:math:`B_i, C_i`) coefficients (unitless, microns^2).",
     )
@@ -489,7 +488,7 @@ class Sellmeier(DispersiveMedium):
         n = self._n_model(frequency)
         return AbstractMedium.nk_to_eps_complex(n)
 
-    @property
+    @cached_property
     def pole_residue(self):
         """Representation of Medium as a pole-residue model."""
 
@@ -565,7 +564,7 @@ class Lorentz(DispersiveMedium):
         description="Relative permittivity at infinite frequency (:math:`\\epsilon_\\infty`).",
     )
 
-    coeffs: List[Tuple[float, float, float]] = pd.Field(
+    coeffs: Tuple[Tuple[float, float, float], ...] = pd.Field(
         ...,
         title="Epsilon at Infinity",
         description="List of (:math:`\\Delta\\epsilon_i, f_i, \\delta_i`) values for model (Hz).",
@@ -580,7 +579,7 @@ class Lorentz(DispersiveMedium):
             eps += (de * f**2) / (f**2 - 2j * frequency * delta - frequency**2)
         return eps
 
-    @property
+    @cached_property
     def pole_residue(self):
         """Representation of Medium as a pole-residue model."""
 
@@ -635,7 +634,7 @@ class Drude(DispersiveMedium):
         description="Relative permittivity at infinite frequency (:math:`\\epsilon_\\infty`).",
     )
 
-    coeffs: List[Tuple[float, pd.PositiveFloat]] = pd.Field(
+    coeffs: Tuple[Tuple[float, pd.PositiveFloat], ...] = pd.Field(
         ...,
         title="Coefficients",
         description="List of (:math:`f_i, \\delta_i`) values for model (Hz).",
@@ -650,7 +649,7 @@ class Drude(DispersiveMedium):
             eps -= (f**2) / (frequency**2 + 1j * frequency * delta)
         return eps
 
-    @property
+    @cached_property
     def pole_residue(self):
         """Representation of Medium as a pole-residue model."""
 
@@ -700,7 +699,7 @@ class Debye(DispersiveMedium):
         description="Relative permittivity at infinite frequency (:math:`\\epsilon_\\infty`).",
     )
 
-    coeffs: List[Tuple[float, pd.PositiveFloat]] = pd.Field(
+    coeffs: Tuple[Tuple[float, pd.PositiveFloat], ...] = pd.Field(
         ...,
         title="Coefficients",
         description="List of (:math:`\\Delta\\epsilon_i, \\tau_i`) values for model (Hz, sec).",
@@ -715,7 +714,7 @@ class Debye(DispersiveMedium):
             eps += de / (1 - 1j * frequency * tau)
         return eps
 
-    @property
+    @cached_property
     def pole_residue(self):
         """Representation of Medium as a pole-residue model."""
 

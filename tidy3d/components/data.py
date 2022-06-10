@@ -10,8 +10,7 @@ import numpy as np
 import h5py
 import pydantic as pd
 
-from .types import Numpy, Direction, Array, numpy_encoding, Literal, Ax, Coordinate, Axis
-from .types import ArrayLike
+from .types import Numpy, Direction, Array, Literal, Ax, Coordinate, Axis
 from .base import Tidy3dBaseModel, TYPE_TAG_STR
 from .simulation import Simulation
 from .boundary import Symmetry, BlochBoundary
@@ -93,11 +92,13 @@ class Tidy3dData(Tidy3dBaseDataModel):
         validate_assignment = True  # validate when attributes are set after initialization
         arbitrary_types_allowed = True  # allow types like `Array[float]`
         json_encoders = {  # how to write certain types to json files
-            np.ndarray: numpy_encoding,  # use custom encoding defined in .types
+            # np.ndarray: numpy_encoding,  # use custom encoding defined in .types
             np.int64: lambda x: int(x),  # pylint: disable=unnecessary-lambda
             Tidy3dDataArray: lambda x: None,  # dont write
             xr.Dataset: lambda x: None,  # dont write
         }
+        frozen = False
+        allow_mutation = True
 
     @abstractmethod
     def add_to_group(self, hdf5_grp):
@@ -682,7 +683,7 @@ class ScalarFieldTimeData(ScalarSpatialData, TimeData):
     >>> data = ScalarFieldTimeData(values=values, x=x, y=y, z=z, t=t)
     """
 
-    values: ArrayLike = pd.Field(
+    values: Array[float] = pd.Field(
         ...,
         title="Scalar Field Values",
         description="Multi-dimensional array storing the raw scalar field values in time domain.",
@@ -1302,7 +1303,11 @@ class SimulationData(AbstractSimulationData):
         centers = sub_grid.centers
 
         # colocate each of the field components at centers
-        field_dataset = field_monitor_data.colocate(x=centers.x, y=centers.y, z=centers.z)
+        xs = np.array(centers.x)
+        ys = np.array(centers.y)
+        zs = np.array(centers.z)
+
+        field_dataset = field_monitor_data.colocate(x=xs, y=ys, z=zs)
         return field_dataset
 
     # pylint:disable=too-many-arguments, too-many-locals, too-many-branches, too-many-statements
@@ -1447,7 +1452,7 @@ class SimulationData(AbstractSimulationData):
             A copy of the :class:`.SimulationData` with the data normalized by source spectrum.
         """
 
-        sim_data_norm = self.copy(deep=True)
+        sim_data_norm = self.copy(validate=False)
 
         # if no normalize index, just return the new copy right away.
         if normalize_index is None:

@@ -5,7 +5,7 @@ from typing import Union, Tuple, List
 import pydantic as pd
 import numpy as np
 
-from .base import Tidy3dBaseModel
+from .base import Tidy3dBaseModel, cached_property
 from .types import Complex, Axis, Literal
 from .source import GaussianBeam, ModeSource, PlaneWave
 from .medium import Medium
@@ -57,7 +57,7 @@ class BlochBoundary(BoundaryEdge):
         "along the dimension in which the boundary is specified.",
     )
 
-    @property
+    @cached_property
     def bloch_phase(self) -> Complex:
         """Returns the forward phase factor associated with `bloch_vec`."""
         return np.exp(1j * 2.0 * np.pi * self.bloch_vec)
@@ -352,7 +352,7 @@ class Boundary(Tidy3dBaseModel):
         description="Boundary condition on the minus side along a dimension.",
     )
 
-    @pd.root_validator
+    @pd.root_validator(skip_on_failure=True)
     def bloch_on_both_sides(cls, values):
         """Error if a Bloch boundary is applied on only one side."""
         plus = values.get("plus")
@@ -364,7 +364,7 @@ class Boundary(Tidy3dBaseModel):
             )
         return values
 
-    @pd.root_validator
+    @pd.root_validator(skip_on_failure=True)
     def periodic_with_pml(cls, values):
         """Error if PBC is specified with a PML."""
         plus = values.get("plus")
@@ -377,7 +377,7 @@ class Boundary(Tidy3dBaseModel):
             raise SetupError("Cannot have both PML and PBC along the same dimension.")
         return values
 
-    @pd.root_validator
+    @pd.root_validator(skip_on_failure=True)
     def periodic_with_pec_pmc(cls, values):
         """If a PBC is specified along with PEC or PMC on the other side, manually set the PBC
         to PEC or PMC so that no special treatment of halos is required."""
@@ -699,7 +699,7 @@ class BoundarySpec(Tidy3dBaseModel):
             z=Boundary(minus=boundary, plus=boundary),
         )
 
-    @property
+    @cached_property
     def to_list(self) -> List[Tuple[BoundaryEdgeType, BoundaryEdgeType]]:
         """Returns edge-wise boundary conditions along each dimension for internal use."""
         return [

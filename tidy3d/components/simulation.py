@@ -10,7 +10,7 @@ import matplotlib.pylab as plt
 import matplotlib as mpl
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 
-from .base import cache
+from .base import cached_property
 from .validators import assert_unique_names, assert_objects_in_sim_bounds
 from .validators import validate_mode_objects_symmetry
 from .geometry import Box
@@ -31,7 +31,6 @@ from .viz import plot_params_pec, plot_params_pmc, plot_params_bloch
 from ..version import __version__
 from ..constants import C_0, MICROMETER, SECOND, inf
 from ..log import log, Tidy3dKeyError, SetupError, ValidationError
-from ..static import make_static
 from ..updater import Updater
 
 # minimum number of grid points allowed per central wavelength in a medium
@@ -132,18 +131,18 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         "determine the symmetry value.",
     )
 
-    structures: List[Structure] = pydantic.Field(
-        [],
+    structures: Tuple[Structure, ...] = pydantic.Field(
+        (),
         title="Structures",
-        description="List of structures present in simulation. "
+        description="Tuple of structures present in simulation. "
         "Note: Structures defined later in this list override the "
         "simulation material properties in regions of spatial overlap.",
     )
 
-    sources: List[SourceType] = pydantic.Field(
-        [],
+    sources: Tuple[SourceType, ...] = pydantic.Field(
+        (),
         title="Sources",
-        description="List of electric current sources injecting fields into the simulation.",
+        description="Tuple of electric current sources injecting fields into the simulation.",
     )
 
     boundary_spec: BoundarySpec = pydantic.Field(
@@ -152,10 +151,10 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         description="Specification of boundary conditions along each dimension.",
     )
 
-    monitors: List[MonitorType] = pydantic.Field(
-        [],
+    monitors: Tuple[MonitorType, ...] = pydantic.Field(
+        (),
         title="Monitors",
-        description="List of monitors in the simulation. "
+        description="Tuple of monitors in the simulation. "
         "Note: monitor names are used to access data after simulation is run.",
     )
 
@@ -197,29 +196,6 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         description="String specifying the front end version number.",
     )
 
-    """ Static simulation tools."""
-
-    _hash: int = pydantic.PrivateAttr(None)
-
-    def __hash__(self) -> int:
-        """Hash a :class:`Tidy3dBaseModel` objects using its json string."""
-        if self._hash is not None:
-            return self._hash
-
-        return super().__hash__()
-
-    def _freeze(self) -> int:
-        """Computes the hash, sets ``self._hash``, and returns it."""
-        frozen_hash = hash(self)
-        self._hash = frozen_hash
-        return frozen_hash
-
-    def _unfreeze(self) -> int:
-        """Sets ``self._hash`` to ``None``, returns final hash."""
-        self._hash = None
-        final_hash = hash(self)
-        return final_hash
-
     """ Validating setup """
 
     @pydantic.validator("grid_size", always=True)
@@ -255,6 +231,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
     _unique_structure_names = assert_unique_names("structures")
     _unique_source_names = assert_unique_names("sources")
     _unique_monitor_names = assert_unique_names("monitors")
+
     # _unique_medium_names = assert_unique_names("structures", check_mediums=True)
 
     # _few_enough_mediums = validate_num_mediums()
@@ -332,6 +309,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         sources = values.get("sources")
 
         if (not structures) or (not sources):
+
             return val
 
         def warn(istruct, side):
@@ -504,7 +482,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
 
         structures = values.get("structures")
         structures = [] if not structures else structures
-        total_structures = [structure_bg] + structures
+        total_structures = [structure_bg] + list(structures)
 
         # for each plane wave in the sources list
         for source in val:
@@ -520,6 +498,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
                 # make sure there is no more than one medium in the returned list
                 mediums = {medium for medium, _ in structures_merged}
                 if len(mediums) > 1:
+
                     raise SetupError(
                         f"{len(mediums)} different mediums detected on plane "
                         f"intersecting a {source.type} source. Plane must be homogeneous."
@@ -594,8 +573,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
 
     """ Accounting """
 
-    @property
-    @cache
+    @cached_property
     def mediums(self) -> Set[MediumType]:
         """Returns set of distinct :class:`AbstractMedium` in simulation.
 
@@ -608,8 +586,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         medium_dict.update({structure.medium: None for structure in self.structures})
         return list(medium_dict.keys())
 
-    @property
-    @cache
+    @cached_property
     def medium_map(self) -> Dict[MediumType, pydantic.NonNegativeInt]:
         """Returns dict mapping medium to index in material.
         ``medium_map[medium]`` returns unique global index of :class:`AbstractMedium` in simulation.
@@ -629,7 +606,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
                 return monitor
         raise Tidy3dKeyError(f"No monitor named '{name}'")
 
-    @property
+    @cached_property
     def background_structure(self) -> Structure:
         """Returns structure representing the background of the :class:`Simulation`."""
         geometry = Box(size=(inf, inf, inf))
@@ -639,7 +616,6 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
 
     @equal_aspect
     @add_ax_if_none
-    @make_static
     def plot(
         self,
         x: float = None,
@@ -684,7 +660,6 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
 
     @equal_aspect
     @add_ax_if_none
-    @make_static
     def plot_eps(  # pylint:disable=too-many-arguments
         self,
         x: float = None,
@@ -1025,7 +1000,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         ax = self._set_plot_bounds(ax=ax, x=x, y=y, z=z)
         return ax
 
-    @property
+    @cached_property
     def num_pml_layers(self) -> List[Tuple[float, float]]:
         """Number of absorbing layers in all three axes and directions (-, +).
 
@@ -1043,7 +1018,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
 
         return num_layers
 
-    @property
+    @cached_property
     def pml_thicknesses(self) -> List[Tuple[float, float]]:
         """Thicknesses (um) of absorbers in all three axes and directions (-, +)
 
@@ -1060,7 +1035,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
             pml_thicknesses.append((thick_l, thick_r))
         return pml_thicknesses
 
-    @property
+    @cached_property
     def bounds_pml(self) -> Tuple[Tuple[float, float, float], Tuple[float, float, float]]:
         """Simulation bounds including the PML regions."""
         pml_thick = self.pml_thicknesses
@@ -1523,7 +1498,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         # filter out any remaining None or empty shapes (shapes with area completely removed)
         return [(medium, shape) for (medium, shape, _) in background_shapes if shape]
 
-    @property
+    @cached_property
     def frequency_range(self) -> FreqBound:
         """Range of frequencies spanning all sources' frequency dependence.
 
@@ -1540,7 +1515,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
 
     """ Discretization """
 
-    @property
+    @cached_property
     def dt(self) -> float:
         """Simulation time step (distance).
 
@@ -1554,7 +1529,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         dl_avg = 1 / np.sqrt(dl_sum_inv_sq)
         return self.courant * dl_avg / C_0
 
-    @property
+    @cached_property
     def tmesh(self) -> Coords1D:
         """FDTD time stepping points.
 
@@ -1566,14 +1541,13 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         dt = self.dt
         return np.arange(0.0, self.run_time + dt, dt)
 
-    @property
+    @cached_property
     def num_time_steps(self) -> int:
         """Number of time steps in simulation."""
 
         return len(self.tmesh)
 
-    @property
-    @cache
+    @cached_property
     def grid(self) -> Grid:
         """FDTD grid spatial locations and information.
 
@@ -1594,7 +1568,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
             num_pml_layers=self.num_pml_layers,
         )
 
-    @property
+    @cached_property
     def num_cells(self) -> int:
         """Number of cells in the simulation.
 
@@ -1606,7 +1580,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
 
         return np.prod(self.grid.num_cells, dtype=np.int64)
 
-    @property
+    @cached_property
     def wvl_mat_min(self) -> float:
         """Minimum wavelength in the material.
 
@@ -1743,7 +1717,8 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
                 eps_structure = get_eps(structure.medium, freq)
                 is_inside = structure.geometry.inside(x, y, z)
                 eps_array[np.where(is_inside)] = eps_structure
-            return xr.DataArray(eps_array, coords={"x": xs, "y": ys, "z": zs}, dims=("x", "y", "z"))
+            coords = {"x": np.array(xs), "y": np.array(ys), "z": np.array(zs)}
+            return xr.DataArray(eps_array, coords=coords, dims=("x", "y", "z"))
 
         # combine all data into dictionary
         coords = sub_grid[coord_key]

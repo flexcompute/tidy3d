@@ -362,7 +362,7 @@ def test_mesh_structure_covers():
         structures=[BOX1, BOX2],
     )
     sizes = sim.grid.sizes.to_list[2]
-    assert sizes[sizes.size // 2] > 0.1
+    assert sizes[len(sizes) // 2] > 0.1
 
 
 def test_mesh_structure_partially_covers():
@@ -374,7 +374,7 @@ def test_mesh_structure_partially_covers():
         structures=[BOX1, BOX3],
     )
     sizes = sim.grid.sizes.to_list[2]
-    assert sizes[sizes.size // 2] < 0.1
+    assert sizes[len(sizes) // 2] < 0.1
 
 
 def test_mesh_structure_covers_boundary():
