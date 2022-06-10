@@ -9,7 +9,7 @@ import yaml
 import numpy as np
 from pydantic.fields import ModelField
 
-from .types import ComplexNumber, NumpyArray, Literal
+from .types import ComplexNumber, Literal
 from ..log import FileError
 
 # default indentation (# spaces) in files
@@ -58,13 +58,21 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         validate_assignment = True
         allow_population_by_field_name = True
         json_encoders = {
-            np.ndarray: lambda x: NumpyArray(data_list=x.tolist()),
+            np.ndarray: lambda x: tuple(x.tolist()),
             complex: lambda x: ComplexNumber(real=x.real, imag=x.imag),
         }
+        frozen = True
+        allow_mutation = False
 
-    def copy(self, deep: bool = True, **kwargs) -> "Self":
+    _cached_properties = pydantic.PrivateAttr({})
+
+    def copy(self, validate: bool = True, **kwargs) -> "Self":
         """Copy a Tidy3dBaseModel.  With ``deep=True`` as default."""
-        return super().copy(deep=deep, **kwargs)
+        if "deep" in kwargs and kwargs["deep"] is False:
+            raise ValueError("Can't do shallow copy of component, set `deep=True` in copy().")
+        kwargs.update(dict(deep=True))
+        new_copy = pydantic.BaseModel.copy(self, **kwargs)
+        return self.validate(new_copy.dict()) if validate else new_copy
 
     def help(self, methods: bool = False) -> None:
         """Prints message describing the fields and methods of a :class:`Tidy3dBaseModel`.
@@ -204,9 +212,9 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         with open(fname, "w+", encoding="utf-8") as file_handle:
             yaml.dump(json_dict, file_handle, indent=INDENT)
 
-    def __hash__(self) -> int:
-        """Hash a :class:`Tidy3dBaseModel` objects using its json string."""
-        return hash(self.json())
+    # def __hash__(self) -> int:
+    #     """Hash a :class:`Tidy3dBaseModel` objects using its json string."""
+    #     return hash(self.json())
 
     def __lt__(self, other):
         """define < for getting unique indices based on hash."""
@@ -330,23 +338,28 @@ def generate_docstring(cls) -> str:
 
 
 def cache(prop):
-    """Decorates a property to cache the previously computed values based on a hash of self."""
+    """Decorates a property to cache the first computed value and return it on subsequent calls."""
 
-    stored_values = {}
+    # note, we could also just use `prop` as dict key, but hashing property might be slow
+    prop_name = prop.__name__
 
     @wraps(prop)
-    def cached_property(self):
+    def cached_property_getter(self):
         """The new property method to be returned by decorator."""
 
-        hash_key = hash(self)
+        stored_value = self._cached_properties.get(prop_name)  # pylint:disable=protected-access
 
-        # if the value has been computed before, we can simply return the stored value
-        if hash_key in stored_values:
-            return stored_values[hash_key]
+        if stored_value is not None:
+            return stored_value
 
-        # otherwise, we need to recompute the value, store it in the storage dict, and return
-        return_value = prop(self)
-        stored_values[hash_key] = return_value
-        return return_value
+        computed_value = prop(self)
+        self._cached_properties[prop_name] = computed_value  # pylint:disable=protected-access
+        return computed_value
 
-    return cached_property
+    return cached_property_getter
+
+
+def cached_property(cached_property_getter):
+    """Shortcut for property(cache()) of a getter."""
+
+    return property(cache(cached_property_getter))

@@ -198,7 +198,7 @@ class CustomGrid(GridSpec1d):
     >>> grid_1d = CustomGrid(dl=[0.2, 0.2, 0.1, 0.1, 0.1, 0.2, 0.2])
     """
 
-    dl: List[pd.PositiveFloat] = pd.Field(
+    dl: Tuple[pd.PositiveFloat, ...] = pd.Field(
         ...,
         title="Customized grid sizes.",
         description="An array of custom nonuniform grid sizes. The resulting grid is centered on "
@@ -408,10 +408,10 @@ class GridSpec(Tidy3dBaseModel):
         units=MICROMETER,
     )
 
-    override_structures: List[Structure] = pd.Field(
-        [],
+    override_structures: Tuple[Structure, ...] = pd.Field(
+        (),
         title="Grid specification override structures",
-        description="A list of structures that is added on top of the simulation structures in "
+        description="A set of structures that is added on top of the simulation structures in "
         "the process of generating the grid. This can be used to refine the grid or make it "
         "coarser depending than the expected need for higher/lower resolution regions.",
     )
@@ -479,21 +479,21 @@ class GridSpec(Tidy3dBaseModel):
 
         coords_x = self.grid_x.make_coords(
             axis=0,
-            structures=structures + self.override_structures,
+            structures=list(structures) + list(self.override_structures),
             symmetry=symmetry,
             wavelength=wavelength,
             num_pml_layers=num_pml_layers[0],
         )
         coords_y = self.grid_y.make_coords(
             axis=1,
-            structures=structures + self.override_structures,
+            structures=list(structures) + list(self.override_structures),
             symmetry=symmetry,
             wavelength=wavelength,
             num_pml_layers=num_pml_layers[1],
         )
         coords_z = self.grid_z.make_coords(
             axis=2,
-            structures=structures + self.override_structures,
+            structures=list(structures) + list(self.override_structures),
             symmetry=symmetry,
             wavelength=wavelength,
             num_pml_layers=num_pml_layers[2],

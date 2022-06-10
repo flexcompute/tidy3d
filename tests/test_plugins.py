@@ -156,7 +156,7 @@ def test_dispersion_set_wvg_range():
 
     wvl_min = np.random.random(1)[0] * 0.5 + 1
     wvl_max = wvl_min + 0.5
-    fitter.wvl_range = [wvl_min, wvl_max]
+    fitter = fitter.copy(update=dict(wvl_range=[wvl_min, wvl_max]))
     assert len(fitter.freqs) < num_data
     medium, rms = fitter.fit(num_tries=2)
 
@@ -200,7 +200,7 @@ def test_app():
     sim_data = td.SimulationData(simulation=sim, monitor_data=data_dict_mon)
 
     app = SimulationDataApp(sim_data=sim_data)
-    _app = app.make_app()
+    _app = app.app
 
 
 def test_component_modeler():

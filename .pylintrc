@@ -1,6 +1,6 @@
 [MASTER]
 extension-pkg-allow-list=pydantic
-good-names=ax, im, Lx, Ly, Lz, x0, y0, z0, x, y, z, u, v, w, f, t, y1, y2, x1, x2, x3, x4, y3, y4, xs, ys, zs, Ax, Ay, Az, Nx, Ny, Nz, N, dl, rr, E, H, xx, yy, zz, dx, dy, Jx, Jy, Jz, Ex, Ey, Ez, Mx, My, Mz, Hx, Hy, Hz, dz, e, fp, dt, a, c, kx, ky, kz, k0, Jx_k, Jy_k, My_k, Mx_k, N_theta, N_phi, L_theta, L_phi, ux, uy, uz, nk, i, j, k, J, M, _N_th, _N_ph, _L_th, _L_ph, r, Et_array, Ep_array, Er_array, Ht_array, Hp_array, Hr_array, Et, Ep, Er, Ht, Hp, Hr, Ex_data, Ey_data, Ez_data, Hx_data, Hy_data, Hz_data, Ar, Atheta, Aphi, mu, n, k
+good-names=ax, im, Lx, Ly, Lz, x0, y0, z0, x, y, z, u, v, w, f, t, y1, y2, x1, x2, x3, x4, y3, y4, xs, ys, zs, Ax, Ay, Az, Nx, Ny, Nz, N, dl, rr, E, H, xx, yy, zz, dx, dy, Jx, Jy, Jz, Ex, Ey, Ez, Mx, My, Mz, Hx, Hy, Hz, dz, e, fp, dt, a, c, kx, ky, kz, k0, Jx_k, Jy_k, My_k, Mx_k, N_theta, N_phi, L_theta, L_phi, ux, uy, uz, nk, i, j, k, J, M, _N_th, _N_ph, _L_th, _L_ph, r, Et_array, Ep_array, Er_array, Ht_array, Hp_array, Hr_array, Et, Ep, Er, Ht, Hp, Hr, Ex_data, Ey_data, Ez_data, Hx_data, Hy_data, Hz_data, Ar, Atheta, Aphi, mu, n, k, J1, J2, M1, M2, E1, E2, H1, H2, new_values_J1, new_values_J2, new_values_M1, new_values_M2, E_normal, H_normal
 
 [BASIC]
 

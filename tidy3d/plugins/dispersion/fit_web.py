@@ -1,6 +1,6 @@
 """Fit PoleResidue Dispersion models to optical NK data based on web service
 """
-from typing import Tuple, List
+from typing import Tuple
 from enum import Enum
 import requests
 from pydantic import PositiveInt, NonNegativeFloat, PositiveFloat, Field
@@ -60,25 +60,24 @@ class AdvancedFitterParam(Tidy3dBaseModel):
 
 # FitterData will be used internally
 class FitterData(AdvancedFitterParam):
-    """Data class for request body of Fitter where dipsersion data is input through list."""
+    """Data class for request body of Fitter where dipsersion data is input through tuple."""
 
-    wvl_um: List[float] = Field(
+    wvl_um: Tuple[float, ...] = Field(
         ...,
         title="Wavelengths",
-        description="A list of wavelengths for dispersion data.",
+        description="A set of wavelengths for dispersion data.",
         units=MICROMETER,
     )
-    n_data: List[float] = Field(
+    n_data: Tuple[float, ...] = Field(
         ...,
         title="Index of refraction",
-        description="Real part of the complex index of refraction.",
+        description="Real part of the complex index of refraction at each wavelength.",
     )
-    k_data: List[float] = Field(
+    k_data: Tuple[float, ...] = Field(
         None,
         title="Extinction coefficient",
-        description="Imaginary part of the complex index of refraction.",
+        description="Imaginary part of the complex index of refraction at each wavelength.",
     )
-
     num_poles: PositiveInt = Field(
         1, title="Number of poles", description="Number of poles in model."
     )
@@ -198,7 +197,7 @@ class StableDispersionFitter(DispersionFitter):
         -------
         :class:`FitterData`
             Data class for request body of Fitter where dipsersion
-            data is input through list.
+            data is input through tuple.
         """
 
         # set up bound_f, bound_amp

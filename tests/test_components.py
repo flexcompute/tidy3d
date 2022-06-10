@@ -141,7 +141,7 @@ def test_sim_bounds():
 
 def test_sim_size():
 
-    mesh1d = UniformGrid(dl=1e-5)
+    mesh1d = UniformGrid(dl=1e-6)
     grid_spec = GridSpec(grid_x=mesh1d, grid_y=mesh1d, grid_z=mesh1d)
 
     with pytest.raises(SetupError):
@@ -1011,11 +1011,10 @@ def test_deep_copy():
         medium=m,
     )
 
-    s_shallow = s.copy(deep=False)
-
+    # s_shallow = s.copy(deep=False)
     # with shallow copy, these should be the same objects
-    assert id(s.geometry) == id(s_shallow.geometry)
-    assert id(s.medium) == id(s_shallow.medium)
+    # assert id(s.geometry) == id(s_shallow.geometry)
+    # assert id(s.medium) == id(s_shallow.medium)
 
     s_deep = s.copy(deep=True)
 
@@ -1029,24 +1028,23 @@ def test_deep_copy():
     assert id(s.medium) != id(s_default.medium)
 
     # make sure other kwargs work, here we update the geometry to a sphere and shallow copy medium
-    s_kwargs = s.copy(deep=False, update={"geometry": Sphere(radius=1.0)})
-    assert id(s.medium) == id(s_kwargs.medium)
-    assert id(s.geometry) != id(s_kwargs.geometry)
+    # s_kwargs = s.copy(deep=False, update=dict(geometry=Sphere(radius=1.0)))
+    # assert id(s.medium) == id(s_kwargs.medium)
+    # assert id(s.geometry) != id(s_kwargs.geometry)
 
     # behavior of modifying attributes
-    s_default = s.copy()
-    s_default.geometry = Sphere(radius=1.0)
+    s_default = s.copy(update=dict(geometry=Sphere(radius=1.0)))
     assert id(s.geometry) != id(s_default.geometry)
 
-    s_shallow = s.copy(deep=False)
-    s_shallow.geometry = Sphere(radius=1.0)
-    assert id(s.geometry) != id(s_shallow.geometry)
+    # s_shallow = s.copy(deep=False, update=dict(geometry=Sphere(radius=1.0)))
+    # assert id(s.geometry) != id(s_shallow.geometry)
 
     # behavior of modifying attributes of attributes
-    s_default = s.copy()
-    s_default.geometry.size = (2, 2, 2)
+    new_geometry = s.geometry.copy(update=dict(size=(2, 2, 2)))
+    s_default = s.copy(update=dict(geometry=new_geometry))
     assert id(s.geometry) != id(s_default.geometry)
 
-    s_shallow = s.copy(deep=False)
-    s_shallow.geometry.size = (2, 2, 2)
-    assert id(s.geometry) == id(s_shallow.geometry)
+    # s_shallow = s.copy(deep=False)
+    # new_geometry = s.geometry.copy(update=dict(size=(2,2,2)))
+    # s_shallow = s_shallow.copy(update=dict(geometry=new_geometry))
+    # assert id(s.geometry) == id(s_shallow.geometry)

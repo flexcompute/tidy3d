@@ -17,7 +17,7 @@ def test_scalar_field_data():
     z = np.linspace(0, 0, 1)
     values = (1 + 1j) * np.random.random((len(x), len(y), len(z), len(f)))
     data = ScalarFieldData(values=values, x=x, y=y, z=z, f=f)
-    data.data
+    _ = data.data
 
 
 def test_scalar_field_time_data():
@@ -27,7 +27,7 @@ def test_scalar_field_time_data():
     z = np.linspace(0, 0, 1)
     values = np.random.random((len(x), len(y), len(z), len(t)))
     data = ScalarFieldTimeData(values=values, x=x, y=y, z=z, t=t)
-    data.data
+    _ = data.data
 
 
 def test_scalar_permittivity_data():
@@ -37,7 +37,7 @@ def test_scalar_permittivity_data():
     z = np.linspace(0, 0, 1)
     values = (1 + 1j) * np.random.random((len(x), len(y), len(z), len(f)))
     data = ScalarPermittivityData(values=values, x=x, y=y, z=z, f=f)
-    data.data
+    _ = data.data
 
 
 def test_mode_amps_data():
@@ -45,7 +45,7 @@ def test_mode_amps_data():
     mode_index = np.arange(1, 3)
     values = (1 + 1j) * np.random.random((2, len(f), len(mode_index)))
     data = ModeAmpsData(values=values, direction=["+", "-"], mode_index=mode_index, f=f)
-    data.data
+    _ = data.data
 
 
 def test_mode_index_data():
@@ -53,10 +53,10 @@ def test_mode_index_data():
     mode_index = np.arange(1, 3)
     values = (1 + 1j) * np.random.random((len(f), len(mode_index)))
     data = ModeIndexData(values=values, f=f, mode_index=np.arange(1, 3))
-    data.n_eff
-    data.k_eff
-    data.n_complex
-    data.data
+    _ = data.n_eff
+    _ = data.k_eff
+    _ = data.n_complex
+    _ = data.data
 
 
 def test_field_data():
@@ -67,7 +67,7 @@ def test_field_data():
     values = (1 + 1j) * np.random.random((len(x), len(y), len(z), len(f)))
     field = ScalarFieldData(values=values, x=x, y=y, z=z, f=f)
     data = FieldData(data_dict={"Ex": field, "Ey": field})
-    data.data
+    _ = data.data
 
 
 def test_field_time_data():
@@ -78,7 +78,7 @@ def test_field_time_data():
     values = np.random.random((len(x), len(y), len(z), len(t)))
     field = ScalarFieldTimeData(values=values, x=x, y=y, z=z, t=t)
     data = FieldTimeData(data_dict={"Ex": field, "Ey": field})
-    data.data
+    _ = data.data
 
 
 def test_permittivity_data():
@@ -89,17 +89,17 @@ def test_permittivity_data():
     values = (1 + 1j) * np.random.random((len(x), len(y), len(z), len(f)))
     eps = ScalarPermittivityData(values=values, x=x, y=y, z=z, f=f)
     data = PermittivityData(data_dict={"eps_xx": eps, "eps_yy": eps, "eps_zz": eps})
-    data.eps_xx
-    data.eps_yy
-    data.eps_zz
-    data.data
+    _ = data.eps_xx
+    _ = data.eps_yy
+    _ = data.eps_zz
+    _ = data.data
 
 
 def test_flux_data():
     f = np.linspace(2e14, 3e14, 1001)
     values = np.random.random((len(f),))
     data = FluxData(values=values, f=f)
-    data.data
+    _ = data.data
 
 
 def test_mode_field_data():
@@ -111,7 +111,7 @@ def test_mode_field_data():
     values = (1 + 1j) * np.random.random((len(x), len(y), len(z), len(f), len(mode_index)))
     field = ScalarModeFieldData(values=values, x=x, y=y, z=z, f=f, mode_index=mode_index)
     data = ModeFieldData(data_dict={"Ex": field, "Ey": field})
-    data.sel_mode_index(1)
+    _ = data.sel_mode_index(1)
 
 
 def make_sim_data():
@@ -161,18 +161,18 @@ def test_sim_data():
     f0 = float(sim_data["test"].Ex.f[0])
 
     sim_data.plot_field("test", "Ex", val="real", x=0, freq=f0)
-    sim_data.at_centers("test")
-    sim_data.normalized
-    sim_data.diverged
-    sim_data.final_decay_value
-    sim_data.log
-    sim_data["test"].Ex
-    sim_data["test"].Ey
-    sim_data["test"].Ez
-    sim_data["test"].Ex
-    sim_data["test"].Ey
-    sim_data["test"].Ez
-    sim_data.normalize()
+    _ = sim_data.at_centers("test")
+    _ = sim_data.normalized
+    _ = sim_data.diverged
+    _ = sim_data.final_decay_value
+    _ = sim_data.log
+    _ = sim_data["test"].Ex
+    _ = sim_data["test"].Ey
+    _ = sim_data["test"].Ez
+    _ = sim_data["test"].Ex
+    _ = sim_data["test"].Ey
+    _ = sim_data["test"].Ez
+    _ = sim_data.normalize()
     sim_data.to_file("tests/tmp/sim_data.hdf5")
     sim_data2 = SimulationData.from_file("tests/tmp/sim_data.hdf5")
     # assert sim_data == sim_data2
@@ -188,7 +188,7 @@ def test_symmetries():
     data = FieldData(
         data_dict={"Ex": field, "Ey": field}, symmetry=(1, -1, 0), symmetry_center=(0, 0, 0)
     )
-    data.expand_syms
+    _ = data.expand_syms
 
 
 @clear_tmp
@@ -197,7 +197,7 @@ def test_data_io_raised():
     sim_data = make_sim_data()
 
     with pytest.raises(DataError):
-        sim_data._json_string()
+        _ = sim_data._json_string()
 
     with pytest.raises(DataError):
         sim_data.to_json("tmp/path")

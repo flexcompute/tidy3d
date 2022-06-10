@@ -35,7 +35,7 @@ def test_grid():
     assert np.all(g.centers.z == np.array([-2.5, -1.5, -0.5, 0.5, 1.5, 2.5]))
 
     for s in g.sizes.dict(exclude={TYPE_TAG_STR}).values():
-        assert np.all(s == 1.0)
+        assert np.all(np.array(s) == 1.0)
 
     assert np.all(g.yee.E.x.x == np.array([-0.5, 0.5]))
     assert np.all(g.yee.E.x.y == np.array([-2, -1, 0, 1]))
@@ -172,15 +172,15 @@ def test_sim_symmetry_grid():
     coords_x, coords_y, coords_z = sim.grid.boundaries.to_list
 
     # Assert coords size is odd
-    assert coords_x.size % 2 != 0
-    assert coords_y.size % 2 != 0
-    assert coords_z.size % 2 != 0
+    assert len(coords_x) % 2 != 0
+    assert len(coords_y) % 2 != 0
+    assert len(coords_z) % 2 != 0
 
     # Assert the dls along the symmetric axes are symmetric
     dls_y = np.diff(coords_y)
     dls_z = np.diff(coords_z)
-    assert np.all(dls_y[dls_y.size // 2 - 1 :: -1] == dls_y[dls_y.size // 2 :])
-    assert np.all(dls_z[dls_z.size // 2 - 1 :: -1] == dls_z[dls_z.size // 2 :])
+    assert np.all(dls_y[len(dls_y) // 2 - 1 :: -1] == dls_y[len(dls_y) // 2 :])
+    assert np.all(dls_z[len(dls_z) // 2 - 1 :: -1] == dls_z[len(dls_z) // 2 :])
 
 
 def test_sim_pml_grid():

@@ -12,7 +12,7 @@ from shapely.strtree import STRtree
 from shapely.geometry import box as shapely_box
 
 from ..base import Tidy3dBaseModel
-from ..types import Axis, Array
+from ..types import Axis, ArrayLike
 from ..structure import Structure
 from ...log import SetupError, ValidationError
 from ...constants import C_0, fp_eps
@@ -28,17 +28,17 @@ class Mesher(Tidy3dBaseModel, ABC):
         structures: List[Structure],
         wavelength: pd.PositiveFloat,
         min_steps_per_wvl: pd.NonNegativeInt,
-    ) -> Tuple[Array[float], Array[float]]:
+    ) -> Tuple[ArrayLike[float, 1], ArrayLike[float, 1]]:
         """Calculate the positions of all bounding box interfaces along a given axis."""
 
     @abstractmethod
     def make_grid_multiple_intervals(
         self,
-        max_dl_list: Array[float],
-        len_interval_list: Array[float],
+        max_dl_list: ArrayLike[float, 1],
+        len_interval_list: ArrayLike[float, 1],
         max_scale: float,
         is_periodic: bool,
-    ) -> List[Array[float]]:
+    ) -> List[ArrayLike[float, 1]]:
         """Create grid steps in multiple connecting intervals."""
 
 
@@ -53,7 +53,7 @@ class GradedMesher(Mesher):
         structures: List[Structure],
         wavelength: pd.PositiveFloat,
         min_steps_per_wvl: pd.NonNegativeInt,
-    ) -> Tuple[Array[float], Array[float]]:
+    ) -> Tuple[ArrayLike[float, 1], ArrayLike[float, 1]]:
         """Calculate the positions of all bounding box interfaces along a given axis.
         In this implementation, in most cases the complexity should be O(len(structures)**2),
         although the worst-case complexity may approach O(len(structures)**3).
@@ -162,8 +162,8 @@ class GradedMesher(Mesher):
         self,
         intervals: Dict[str, List],
         str_ind: int,
-        str_bbox: Array[float],
-        bbox_contained_2d: List[Array[float]],
+        str_bbox: ArrayLike[float, 1],
+        bbox_contained_2d: List[ArrayLike[float, 1]],
         min_step: float,
     ) -> Dict[str, List]:
         """Figure out where to place the bounding box coordinates of current structure.
@@ -183,9 +183,9 @@ class GradedMesher(Mesher):
             of lists of structures contained in each interval.
         str_ind : int
             Index of the current structure.
-        str_bbox : Array[float]
+        str_bbox : ArrayLike[float, 1]
             Bounding box of the current structure.
-        bbox_contained_2d : List[Array[float]]
+        bbox_contained_2d : List[ArrayLike[float, 1]]
             List of 3D bounding boxes that contain the current structure in 2D.
         min_step : float
             Absolute minimum interval size to impose.
@@ -246,7 +246,7 @@ class GradedMesher(Mesher):
     @staticmethod
     def structure_steps(
         structures: List[Structure], wavelength: float, min_steps_per_wvl: float
-    ) -> Array[float]:
+    ) -> ArrayLike[float, 1]:
         """Get the minimum mesh required in each structure.
 
         Parameters
@@ -266,7 +266,9 @@ class GradedMesher(Mesher):
         return np.array(min_steps)
 
     @staticmethod
-    def rotate_structure_bounds(structures: List[Structure], axis: Axis) -> List[Array[float]]:
+    def rotate_structure_bounds(
+        structures: List[Structure], axis: Axis
+    ) -> List[ArrayLike[float, 1]]:
         """Get sturcture bounding boxes with a given ``axis`` rotated to z.
 
         Parameters
@@ -278,7 +280,7 @@ class GradedMesher(Mesher):
 
         Returns
         -------
-        List[Array[float]]
+        List[ArrayLike[float, 1]]
             A list of the bounding boxes of shape ``(2, 3)`` for each structure, with the bounds
             along ``axis`` being ``(:, 2)``.
         """
@@ -293,7 +295,7 @@ class GradedMesher(Mesher):
         return struct_bbox
 
     @staticmethod
-    def bounds_2d_tree(struct_bbox: List[Array[float]]):
+    def bounds_2d_tree(struct_bbox: List[ArrayLike[float, 1]]):
         """Make a shapely Rtree for the 2D bounding boxes of all structures in the plane
         perpendicular to the meshing axis."""
 
@@ -304,7 +306,9 @@ class GradedMesher(Mesher):
         return STRtree(boxes_2d)
 
     @staticmethod
-    def contained_2d(bbox0: Array[float], query_bbox: List[Array[float]]) -> List[Array[float]]:
+    def contained_2d(
+        bbox0: ArrayLike[float, 1], query_bbox: List[ArrayLike[float, 1]]
+    ) -> List[ArrayLike[float, 1]]:
         """Return a list of all bounding boxes among ``query_bbox`` that contain ``bbox0`` in 2D."""
         contained_in = []
         for bbox in query_bbox:
@@ -320,7 +324,7 @@ class GradedMesher(Mesher):
         return contained_in
 
     @staticmethod
-    def contains_3d(bbox0: Array[float], query_bbox: List[Array[float]]) -> List[int]:
+    def contains_3d(bbox0: ArrayLike[float, 1], query_bbox: List[ArrayLike[float, 1]]) -> List[int]:
         """Return a list of all indexes of bounding boxes in the ``query_bbox`` list that ``bbox0``
         fully contains."""
         contains = []
@@ -348,7 +352,7 @@ class GradedMesher(Mesher):
         return is_close
 
     @staticmethod
-    def is_contained(normal_pos: float, contained_2d: List[Array[float]]) -> bool:
+    def is_contained(normal_pos: float, contained_2d: List[ArrayLike[float, 1]]) -> bool:
         """Check if a given ``normal_pos`` along the meshing direction is contained inside any
         of the bounding boxes that are in the ``contained_2d`` list.
         """
@@ -378,20 +382,20 @@ class GradedMesher(Mesher):
 
     def make_grid_multiple_intervals(  # pylint:disable=too-many-locals
         self,
-        max_dl_list: Array[float],
-        len_interval_list: Array[float],
+        max_dl_list: ArrayLike[float, 1],
+        len_interval_list: ArrayLike[float, 1],
         max_scale: float,
         is_periodic: bool,
-    ) -> List[Array[float]]:
+    ) -> List[ArrayLike[float, 1]]:
         """Create grid steps in multiple connecting intervals of length specified by
         ``len_interval_list``. The maximal allowed step size in each interval is given by
         ``max_dl_list``. The maximum ratio between neighboring steps is bounded by ``max_scale``.
 
         Parameters
         ----------
-        max_dl_list : Array[float]
+        max_dl_list : ArrayLike[float, 1]
             Maximal allowed step size of each interval.
-        len_interval_list : Array[float]
+        len_interval_list : ArrayLike[float, 1]
             A list of interval lengths
         max_scale : float
             Maximal ratio between consecutive steps.
@@ -400,7 +404,7 @@ class GradedMesher(Mesher):
 
         Returns
         -------
-        List[Array[float]]
+        List[ArrayLike[float, 1]]
             A list of of step sizes in each interval.
         """
 
@@ -475,19 +479,19 @@ class GradedMesher(Mesher):
 
     def grid_multiple_interval_analy_refinement(
         self,
-        max_dl_list: Array[float],
-        len_interval_list: Array[float],
+        max_dl_list: ArrayLike[float, 1],
+        len_interval_list: ArrayLike[float, 1],
         max_scale: float,
         is_periodic: bool,
-    ) -> Tuple[Array[float], Array[float]]:
+    ) -> Tuple[ArrayLike[float, 1], ArrayLike[float, 1]]:
         """Analytical refinement for multiple intervals. "analytical" meaning we allow
         non-integar step sizes, so that we don't consider snapping here.
 
         Parameters
         ----------
-        max_dl_list : Array[float]
+        max_dl_list : ArrayLike[float, 1]
             Maximal allowed step size of each interval.
-        len_interval_list : Array[float]
+        len_interval_list : ArrayLike[float, 1]
             A list of interval lengths
         max_scale : float
             Maximal ratio between consecutive steps.
@@ -496,7 +500,7 @@ class GradedMesher(Mesher):
 
         Returns
         -------
-        Tuple[Array[float], Array[float]]
+        Tuple[ArrayLike[float, 1], ArrayLike[float, 1]]
             left and right step sizes of each interval.
         """
 
@@ -564,7 +568,7 @@ class GradedMesher(Mesher):
         max_dl: float,
         max_scale: float,
         len_interval: float,
-    ) -> Array[float]:
+    ) -> ArrayLike[float, 1]:
         """Create a set of grid steps in an interval of length ``len_interval``,
         with first step no larger than ``max_scale * left_neighbor_dl`` and last step no larger than
         ``max_scale * right_neighbor_dl``, with maximum ratio ``max_scale`` between
@@ -585,7 +589,7 @@ class GradedMesher(Mesher):
 
         Returns
         -------
-        Array[float]
+        ArrayLike[float, 1]
             A list of step sizes in the interval.
         """
 
@@ -670,7 +674,7 @@ class GradedMesher(Mesher):
         max_dl: float,
         max_scale: float,
         len_interval: float,
-    ) -> Array[float]:
+    ) -> ArrayLike[float, 1]:
         """In an interval, grid grows, plateau, and decrease, resembling Lambda letter but
         with plateau in the connection part..
 
@@ -739,7 +743,7 @@ class GradedMesher(Mesher):
         right_dl: float,
         max_scale: float,
         len_interval: float,
-    ) -> Array[float]:
+    ) -> ArrayLike[float, 1]:
         """In an interval, grid grows, and decrease, resembling Lambda letter.
 
         Parameters
@@ -827,7 +831,7 @@ class GradedMesher(Mesher):
         large_dl: float,
         max_scale: float,
         len_interval: float,
-    ) -> Array[float]:
+    ) -> ArrayLike[float, 1]:
         """In an interval, grid grows, then plateau.
 
         Parameters
@@ -843,7 +847,7 @@ class GradedMesher(Mesher):
 
         Returns
         -------
-        Array[float]
+        ArrayLike[float, 1]
             A list of step sizes in the interval, in ascending order.
         """
         # steps for scaling
@@ -881,7 +885,7 @@ class GradedMesher(Mesher):
         small_dl: float,
         max_scale: float,
         len_interval: float,
-    ) -> Array[float]:
+    ) -> ArrayLike[float, 1]:
         """Mesh simply grows in an interval.
 
         Parameters
@@ -895,7 +899,7 @@ class GradedMesher(Mesher):
 
         Returns
         -------
-        Array[float]
+        ArrayLike[float, 1]
             A list of step sizes in the interval, in ascending order.
         """
 

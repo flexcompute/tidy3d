@@ -1,7 +1,7 @@
 """Fit PoleResidue Dispersion models to optical NK data
 """
 
-from typing import Tuple, List, Optional
+from typing import Tuple, List, Optional, Union
 import csv
 import codecs
 import requests
@@ -15,7 +15,7 @@ from ...components.base import Tidy3dBaseModel
 from ...components import PoleResidue, AbstractMedium
 from ...constants import C_0, HBAR, MICROMETER
 from ...components.viz import add_ax_if_none
-from ...components.types import Ax, Numpy, NumpyArray, ArrayLike
+from ...components.types import Ax, ArrayLike
 from ...log import log, ValidationError, WebError, SetupError
 
 
@@ -23,20 +23,20 @@ class DispersionFitter(Tidy3dBaseModel):
     """Tool for fitting refractive index data to get a
     dispersive medium described by :class:`.PoleResidue` model."""
 
-    wvl_um: ArrayLike = Field(
+    wvl_um: Union[Tuple[float, ...], ArrayLike[float, 1]] = Field(
         ...,
         title="Wavelength data",
         description="Wavelength data in micrometers.",
         units=MICROMETER,
     )
 
-    n_data: ArrayLike = Field(
+    n_data: Union[Tuple[float, ...], ArrayLike[float, 1]] = Field(
         ...,
         title="Index of refraction data",
         description="Real part of the complex index of refraction.",
     )
 
-    k_data: ArrayLike = Field(
+    k_data: Union[Tuple[float, ...], ArrayLike[float, 1]] = Field(
         None,
         title="Extinction coefficient data",
         description="Imaginary part of the complex index of refraction.",
@@ -79,7 +79,7 @@ class DispersionFitter(Tidy3dBaseModel):
 
     def _filter_wvl_range(
         self, wvl_min: float = None, wvl_max: float = None
-    ) -> Tuple[NumpyArray, NumpyArray, NumpyArray]:
+    ) -> Tuple[Tuple[float, ...], Tuple[float, ...], Tuple[float, ...]]:
         """
         Filter the wavelength-nk data to wavelength range [wvl_min,wvl_max]
         for fitting.
@@ -93,7 +93,7 @@ class DispersionFitter(Tidy3dBaseModel):
 
         Returns
         -------
-        Tuple[NumpyArray,NumpyArray,NumpyArray]
+        Tuple[Tuple[float, ...], Tuple[float, ...], Tuple[float, ...]]
             Filtered wvl_um, n_data, k_data
 
         """
@@ -142,12 +142,12 @@ class DispersionFitter(Tidy3dBaseModel):
         return AbstractMedium.nk_to_eps_complex(n=n_data, k=k_data)
 
     @property
-    def freqs(self) -> NumpyArray:
+    def freqs(self) -> Tuple[float, ...]:
         """Convert filtered input wavelength data to frequency.
 
         Returns
         -------
-        NumpyArray
+        Tuple[float, ...]
             Frequency array converted from filtered input wavelength data
         """
 
@@ -510,7 +510,7 @@ class DispersionFitter(Tidy3dBaseModel):
     def plot(
         self,
         medium: PoleResidue = None,
-        wvl_um: Numpy = None,
+        wvl_um: Tuple[float, ...] = None,
         ax: Ax = None,
     ) -> Ax:
         """Make plot of model vs data, at a set of wavelengths (if supplied).
@@ -519,7 +519,7 @@ class DispersionFitter(Tidy3dBaseModel):
         ----------
         medium : :class:`.PoleResidue` = None
             medium containing model to plot against data
-        wvl_um : Numpy = None
+        wvl_um : Tuple[float, ...] = None
             Wavelengths to evaluate model at for plot in micrometers.
         ax : matplotlib.axes._subplots.Axes = None
             Axes to plot the data on, if None, a new one is created.

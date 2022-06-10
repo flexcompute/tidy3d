@@ -1,6 +1,6 @@
 """Near field to far field transformation plugin
 """
-from typing import List, Dict, Tuple, Union
+from typing import Dict, Tuple, Union, List
 import numpy as np
 import xarray as xr
 import pydantic
@@ -12,14 +12,14 @@ from ...components.data import SimulationData, FieldData
 from ...components.monitor import FieldMonitor
 from ...components.types import Direction, Axis, Coordinate, ArrayLike
 from ...components.medium import Medium
-from ...components.base import Tidy3dBaseModel
+from ...components.base import Tidy3dBaseModel, cached_property
 from ...log import SetupError, ValidationError
 
 # Default number of points per wavelength in the background medium to use for resampling fields.
 PTS_PER_WVL = 10
 
 # Numpy float array and related array types
-ArrayLikeN2F = Union[float, List[float], ArrayLike]
+ArrayLikeN2F = Union[float, Tuple[float, ...], ArrayLike[float, 4]]
 
 
 class Near2FarSurface(Tidy3dBaseModel):
@@ -38,7 +38,7 @@ class Near2FarSurface(Tidy3dBaseModel):
  the positive x, y or z unit vectors. Must be one of '+' or '-'.",
     )
 
-    @property
+    @cached_property
     def axis(self) -> Axis:
         """Returns the :class:`.Axis` normal to this surface."""
         # assume that the monitor's axis is in the direction where the monitor is thinnest
@@ -62,10 +62,10 @@ class Near2Far(Tidy3dBaseModel):
         description="Container for simulation data containing the near field monitors.",
     )
 
-    surfaces: List[Near2FarSurface] = pydantic.Field(
+    surfaces: Tuple[Near2FarSurface, ...] = pydantic.Field(
         ...,
         title="Surface monitor with direction",
-        description="List of each :class:`.Near2FarSurface` to use as source of near field.",
+        description="Tuple of each :class:`.Near2FarSurface` to use as source of near field.",
     )
 
     frequency: float = pydantic.Field(
@@ -127,19 +127,19 @@ class Near2Far(Tidy3dBaseModel):
             val = values.get("sim_data").simulation.medium
         return val
 
-    @property
+    @cached_property
     def nk(self) -> Tuple[float, float]:
         """Returns the real and imaginary parts of the background medium's refractive index."""
         eps_complex = self.medium.eps_model(self.frequency)
         return self.medium.eps_complex_to_nk(eps_complex)
 
-    @property
+    @cached_property
     def k(self) -> complex:
         """Returns the complex wave number associated with the background medium."""
         index_n, index_k = self.nk
         return (2 * np.pi * self.frequency / C_0) * (index_n + 1j * index_k)
 
-    @property
+    @cached_property
     def eta(self) -> complex:
         """Returns the complex wave impedance associated with the background medium."""
         index_n, index_k = self.nk
@@ -164,9 +164,9 @@ class Near2Far(Tidy3dBaseModel):
         sim_data : :class:`.SimulationData`
             Container for simulation data containing the near field monitors.
         monitors : List[:class:`.FieldMonitor`]
-            List of :class:`.FieldMonitor` objects on which near fields will be sampled.
+            Tuple of :class:`.FieldMonitor` objects on which near fields will be sampled.
         normal_dirs : List[:class:`.Direction`]
-            List containing the :class:`.Direction` of the normal to each surface monitor
+            Tuple containing the :class:`.Direction` of the normal to each surface monitor
             w.r.t. to the positive x, y or z unit vectors. Must have the same length as monitors.
         frequency : float
             Frequency to select from each :class:`.FieldMonitor` to use for projection.
@@ -201,25 +201,26 @@ the number of directions ({len(normal_dirs)})."
             origin=origin,
         )
 
-    @pydantic.validator("currents", always=True)
-    def set_currents(cls, val, values):
+    @cached_property
+    def currents(self):
+
         """Sets the surface currents."""
-        sim_data = values.get("sim_data")
-        surfaces = values.get("surfaces")
-        pts_per_wavelength = values.get("pts_per_wavelength")
-        frequency = values.get("frequency")
-        medium = values.get("medium")
+        sim_data = self.sim_data
+        surfaces = self.surfaces
+        pts_per_wavelength = self.pts_per_wavelength
+        frequency = self.frequency
+        medium = self.medium
         eps_complex = medium.eps_model(frequency)
         index_n, _ = medium.eps_complex_to_nk(eps_complex)
 
-        val = {}
+        surface_currents = {}
         for surface in surfaces:
-            current_data = cls.compute_surface_currents(
+            current_data = self.compute_surface_currents(
                 sim_data, surface, frequency, index_n, pts_per_wavelength
             )
-            val[surface.monitor.name] = current_data
+            surface_currents[surface.monitor.name] = current_data
 
-        return val
+        return surface_currents
 
     @staticmethod
     def compute_surface_currents(
@@ -252,12 +253,11 @@ the number of directions ({len(normal_dirs)})."
             Colocated surface current densities for the given surface.
         """
 
-        try:
-            field_data = sim_data[surface.monitor.name]
-        except Exception as e:
-            raise SetupError(
-                f"No data for monitor named '{surface.monitor.name}' found in sim_data."
-            ) from e
+        monitor_name = surface.monitor.name
+        if monitor_name not in sim_data.monitor_data.keys():
+            raise SetupError(f"No data for monitor named '{monitor_name}' found in sim_data.")
+
+        field_data = sim_data[monitor_name]
 
         currents = Near2Far._fields_to_currents(field_data, surface)
         currents = Near2Far._resample_surface_currents(
@@ -267,7 +267,9 @@ the number of directions ({len(normal_dirs)})."
         return currents
 
     @staticmethod
-    def _fields_to_currents(field_data: FieldData, surface: Near2FarSurface) -> FieldData:
+    def _fields_to_currents(  # pylint:disable=too-many-locals
+        field_data: FieldData, surface: Near2FarSurface
+    ) -> FieldData:
         """Returns surface current densities associated with a given :class:`.FieldData` object.
 
         Parameters
@@ -293,22 +295,39 @@ the number of directions ({len(normal_dirs)})."
             signs *= -1
 
         # compute surface current densities and delete unneeded field components
-        currents = field_data.copy(deep=True)
         cmp_1, cmp_2 = tangent_fields
 
-        currents.data_dict["J" + cmp_2] = currents.data_dict.pop("H" + cmp_1)
-        currents.data_dict["J" + cmp_1] = currents.data_dict.pop("H" + cmp_2)
-        del currents.data_dict["H" + normal_field]
+        J1 = "J" + cmp_1
+        J2 = "J" + cmp_2
+        M1 = "M" + cmp_1
+        M2 = "M" + cmp_2
+        E1 = "E" + cmp_1
+        E2 = "E" + cmp_2
+        H1 = "H" + cmp_1
+        H2 = "H" + cmp_2
+        E_normal = "E" + normal_field
+        H_normal = "H" + normal_field
 
-        currents.data_dict["M" + cmp_2] = currents.data_dict.pop("E" + cmp_1)
-        currents.data_dict["M" + cmp_1] = currents.data_dict.pop("E" + cmp_2)
-        del currents.data_dict["E" + normal_field]
+        currents = field_data.copy()
 
-        currents.data_dict["J" + cmp_1].values *= signs[0]
-        currents.data_dict["J" + cmp_2].values *= signs[1]
+        currents.data_dict[J2] = currents.data_dict.pop(H1)
+        currents.data_dict[J1] = currents.data_dict.pop(H2)
+        del currents.data_dict[H_normal]
 
-        currents.data_dict["M" + cmp_1].values *= signs[1]
-        currents.data_dict["M" + cmp_2].values *= signs[0]
+        currents.data_dict[M2] = currents.data_dict.pop(E1)
+        currents.data_dict[M1] = currents.data_dict.pop(E2)
+        del currents.data_dict[E_normal]
+
+        new_values_J1 = currents.data_dict[J1].values * signs[0]
+        new_values_J2 = currents.data_dict[J2].values * signs[1]
+
+        new_values_M1 = currents.data_dict[M1].values * signs[1]
+        new_values_M2 = currents.data_dict[M2].values * signs[0]
+
+        currents.data_dict[J1] = currents.data_dict[J1].copy(update=dict(values=new_values_J1))
+        currents.data_dict[J2] = currents.data_dict[J2].copy(update=dict(values=new_values_J2))
+        currents.data_dict[M1] = currents.data_dict[M1].copy(update=dict(values=new_values_M1))
+        currents.data_dict[M2] = currents.data_dict[M2].copy(update=dict(values=new_values_M2))
 
         return currents
 
@@ -391,9 +410,9 @@ the number of directions ({len(normal_dirs)})."
 
         Parameters
         ----------
-        theta : Union[float, List[float], np.ndarray]
+        theta : Union[float, Tuple[float, ...], np.ndarray]
             Polar angles (rad) downward from x=y=0 line relative to the local origin.
-        phi : Union[float, List[float], np.ndarray]
+        phi : Union[float, Tuple[float, ...], np.ndarray]
             Azimuthal (rad) angles from y=z=0 line relative to the local origin.
         surface: :class:`Near2FarSurface`
             :class:`Near2FarSurface` object to use as source of near field.
@@ -489,9 +508,9 @@ the number of directions ({len(normal_dirs)})."
 
         Parameters
         ----------
-        theta : Union[float, List[float], np.ndarray]
+        theta : Union[float, Tuple[float, ...], np.ndarray]
             Polar angles (rad) downward from x=y=0 line relative to the local origin.
-        phi : Union[float, List[float], np.ndarray]
+        phi : Union[float, Tuple[float, ...], np.ndarray]
             Azimuthal (rad) angles from y=z=0 line relative to the local origin.
 
         Returns
@@ -524,9 +543,9 @@ the number of directions ({len(normal_dirs)})."
         ----------
         r : float
             (micron) radial distance relative to monitor center.
-        theta : Union[float, List[float], np.ndarray]
+        theta : Union[float, Tuple[float, ...], np.ndarray]
             (radian) polar angles downward from x=y=0 relative to the local origin.
-        phi : Union[float, List[float], np.ndarray]
+        phi : Union[float, Tuple[float, ...], np.ndarray]
             (radian) azimuthal angles from y=z=0 line relative to the local origin.
 
         Returns
@@ -585,11 +604,11 @@ the number of directions ({len(normal_dirs)})."
 
         Parameters
         ----------
-        x : Union[float, List[float], np.ndarray]
+        x : Union[float, Tuple[float, ...], np.ndarray]
             (micron) x positions relative to the local origin.
-        y : Union[float, List[float], np.ndarray]
+        y : Union[float, Tuple[float, ...], np.ndarray]
             (micron) y positions relative to the local origin.
-        z : Union[float, List[float], np.ndarray]
+        z : Union[float, Tuple[float, ...], np.ndarray]
             (micron) z positions relative to the local origin.
 
         Returns
@@ -629,15 +648,15 @@ the number of directions ({len(normal_dirs)})."
                     )
 
         dims = ("x", "y", "z")
-        coords = {"x": x, "y": y, "z": z}
+        coords = {"x": np.array(x), "y": np.array(y), "z": np.array(z)}
 
-        Ex = xr.DataArray(data=Ex_data, coords=coords, dims=dims)
-        Ey = xr.DataArray(data=Ey_data, coords=coords, dims=dims)
-        Ez = xr.DataArray(data=Ez_data, coords=coords, dims=dims)
+        Ex = xr.DataArray(np.array(Ex_data), coords=coords, dims=dims)
+        Ey = xr.DataArray(np.array(Ey_data), coords=coords, dims=dims)
+        Ez = xr.DataArray(np.array(Ez_data), coords=coords, dims=dims)
 
-        Hx = xr.DataArray(data=Hx_data, coords=coords, dims=dims)
-        Hy = xr.DataArray(data=Hy_data, coords=coords, dims=dims)
-        Hz = xr.DataArray(data=Hz_data, coords=coords, dims=dims)
+        Hx = xr.DataArray(np.array(Hx_data), coords=coords, dims=dims)
+        Hy = xr.DataArray(np.array(Hy_data), coords=coords, dims=dims)
+        Hz = xr.DataArray(np.array(Hz_data), coords=coords, dims=dims)
 
         field_data = xr.Dataset({"Ex": Ex, "Ey": Ey, "Ez": Ez, "Hx": Hx, "Hy": Hy, "Hz": Hz})
 
@@ -650,9 +669,9 @@ the number of directions ({len(normal_dirs)})."
         ----------
         r : float
             (micron) radial distance relative to the local origin.
-        theta : Union[float, List[float], np.ndarray]
+        theta : Union[float, Tuple[float, ...], np.ndarray]
             (radian) polar angles downward from x=y=0 relative to the local origin.
-        phi : Union[float, List[float], np.ndarray]
+        phi : Union[float, Tuple[float, ...], np.ndarray]
             (radian) azimuthal angles from y=z=0 line relative to the local origin.
 
         Returns
@@ -681,11 +700,11 @@ the number of directions ({len(normal_dirs)})."
 
         Parameters
         ----------
-        x : Union[float, List[float], np.ndarray]
+        x : Union[float, Tuple[float, ...], np.ndarray]
             (micron) x distances relative to the local origin.
-        y : Union[float, List[float], np.ndarray]
+        y : Union[float, Tuple[float, ...], np.ndarray]
             (micron) y distances relative to the local origin.
-        z : Union[float, List[float], np.ndarray]
+        z : Union[float, Tuple[float, ...], np.ndarray]
             (micron) z distances relative to the local origin.
 
         Returns
@@ -719,9 +738,9 @@ the number of directions ({len(normal_dirs)})."
 
         Parameters
         ----------
-        theta : Union[float, List[float], np.ndarray]
+        theta : Union[float, Tuple[float, ...], np.ndarray]
             (radian) polar angles downward from x=y=0 relative to the local origin.
-        phi : Union[float, List[float], np.ndarray]
+        phi : Union[float, Tuple[float, ...], np.ndarray]
             (radian) azimuthal angles from y=z=0 line relative to the local origin.
 
         Returns
