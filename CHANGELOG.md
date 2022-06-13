@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+## [1.4.1] - 2022-6-13
+
+### Fixed
+- Bug in plotting polarization of a nomral incidence source for some `angle_phi`.
+- Bloch vector values required to be real rather than complex.
+- Web security mitigation.
+
 ## [1.4.0] - 2022-6-3
 
 ### Fixed
@@ -331,7 +338,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Job and Batch classes for better simulation handling (eventually to fully replace webapi functions).
 - A large number of small improvements and bug fixes.
 
-[Unreleased]: https://github.com/flexcompute/tidy3d/compare/v1.4.0...develop
+[Unreleased]: https://github.com/flexcompute/tidy3d/compare/v1.4.1...develop
+[1.4.1]: https://github.com/flexcompute/tidy3d/compare/v1.4.0...1.4.1
 [1.4.0]: https://github.com/flexcompute/tidy3d/compare/v1.3.3...1.4.0
 [1.3.3]: https://github.com/flexcompute/tidy3d/compare/v1.3.2...1.3.3
 [1.3.2]: https://github.com/flexcompute/tidy3d/compare/v1.3.1...1.3.2
