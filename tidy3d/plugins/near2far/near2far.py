@@ -201,25 +201,26 @@ the number of directions ({len(normal_dirs)})."
             origin=origin,
         )
 
-    @pydantic.validator("currents", always=True)
-    def set_currents(cls, val, values):
+    @property
+    def currents(self):
+
         """Sets the surface currents."""
-        sim_data = values.get("sim_data")
-        surfaces = values.get("surfaces")
-        pts_per_wavelength = values.get("pts_per_wavelength")
-        frequency = values.get("frequency")
-        medium = values.get("medium")
+        sim_data = self.sim_data
+        surfaces = self.surfaces
+        pts_per_wavelength = self.pts_per_wavelength
+        frequency = self.frequency
+        medium = self.medium
         eps_complex = medium.eps_model(frequency)
         index_n, _ = medium.eps_complex_to_nk(eps_complex)
 
-        val = {}
+        surface_currents = {}
         for surface in surfaces:
-            current_data = cls.compute_surface_currents(
+            current_data = self.compute_surface_currents(
                 sim_data, surface, frequency, index_n, pts_per_wavelength
             )
-            val[surface.monitor.name] = current_data
+            surface_currents[surface.monitor.name] = current_data
 
-        return val
+        return surface_currents
 
     @staticmethod
     def compute_surface_currents(
@@ -252,12 +253,11 @@ the number of directions ({len(normal_dirs)})."
             Colocated surface current densities for the given surface.
         """
 
-        try:
-            field_data = sim_data[surface.monitor.name]
-        except Exception as e:
-            raise SetupError(
-                f"No data for monitor named '{surface.monitor.name}' found in sim_data."
-            ) from e
+        monitor_name = surface.monitor.name
+        if monitor_name not in sim_data.monitor_data.keys():
+            raise SetupError(f"No data for monitor named '{monitor_name}' found in sim_data.")
+
+        field_data = sim_data[monitor_name]
 
         currents = Near2Far._fields_to_currents(field_data, surface)
         currents = Near2Far._resample_surface_currents(
@@ -267,7 +267,9 @@ the number of directions ({len(normal_dirs)})."
         return currents
 
     @staticmethod
-    def _fields_to_currents(field_data: FieldData, surface: Near2FarSurface) -> FieldData:
+    def _fields_to_currents(  # pylint:disable=too-many-locals
+        field_data: FieldData, surface: Near2FarSurface
+    ) -> FieldData:
         """Returns surface current densities associated with a given :class:`.FieldData` object.
 
         Parameters
@@ -293,22 +295,39 @@ the number of directions ({len(normal_dirs)})."
             signs *= -1
 
         # compute surface current densities and delete unneeded field components
-        currents = field_data.copy(deep=True)
         cmp_1, cmp_2 = tangent_fields
 
-        currents.data_dict["J" + cmp_2] = currents.data_dict.pop("H" + cmp_1)
-        currents.data_dict["J" + cmp_1] = currents.data_dict.pop("H" + cmp_2)
-        del currents.data_dict["H" + normal_field]
+        J1 = "J" + cmp_1
+        J2 = "J" + cmp_2
+        M1 = "M" + cmp_1
+        M2 = "M" + cmp_2
+        E1 = "E" + cmp_1
+        E2 = "E" + cmp_2
+        H1 = "H" + cmp_1
+        H2 = "H" + cmp_2
+        E_normal = "E" + normal_field
+        H_normal = "H" + normal_field
 
-        currents.data_dict["M" + cmp_2] = currents.data_dict.pop("E" + cmp_1)
-        currents.data_dict["M" + cmp_1] = currents.data_dict.pop("E" + cmp_2)
-        del currents.data_dict["E" + normal_field]
+        currents = field_data.copy()
 
-        currents.data_dict["J" + cmp_1].values *= signs[0]
-        currents.data_dict["J" + cmp_2].values *= signs[1]
+        currents.data_dict[J2] = currents.data_dict.pop(H1)
+        currents.data_dict[J1] = currents.data_dict.pop(H2)
+        del currents.data_dict[H_normal]
 
-        currents.data_dict["M" + cmp_1].values *= signs[1]
-        currents.data_dict["M" + cmp_2].values *= signs[0]
+        currents.data_dict[M2] = currents.data_dict.pop(E1)
+        currents.data_dict[M1] = currents.data_dict.pop(E2)
+        del currents.data_dict[E_normal]
+
+        new_values_J1 = currents.data_dict[J1].values * signs[0]
+        new_values_J2 = currents.data_dict[J2].values * signs[1]
+
+        new_values_M1 = currents.data_dict[M1].values * signs[1]
+        new_values_M2 = currents.data_dict[M2].values * signs[0]
+
+        currents.data_dict[J1] = currents.data_dict[J1].copy(update=dict(values=new_values_J1))
+        currents.data_dict[J2] = currents.data_dict[J2].copy(update=dict(values=new_values_J2))
+        currents.data_dict[M1] = currents.data_dict[M1].copy(update=dict(values=new_values_M1))
+        currents.data_dict[M2] = currents.data_dict[M2].copy(update=dict(values=new_values_M2))
 
         return currents
 

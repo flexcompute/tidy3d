@@ -335,10 +335,7 @@ class FieldMonitor(AbstractFieldMonitor, FreqMonitor):
         # Create "surface" monitors
         monitors = []
         for center, size, name in zip(surface_centers, surface_sizes, surface_names):
-            mon_new = self.copy(deep=True)
-            mon_new.center = center
-            mon_new.size = size
-            mon_new.name = name
+            mon_new = self.copy(update=dict(center=center, size=size, name=name))
             monitors.append(mon_new)
 
         return monitors

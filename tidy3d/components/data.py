@@ -51,7 +51,7 @@ class Tidy3dDataArray(xr.DataArray):
 """ Base data classes """
 
 
-class Tidy3dBaseDataModel(Tidy3dBaseModel):
+class Tidy3dBaseDataModel(Tidy3dBaseModel, ABC):
     """Tidy3dBaseModel, but with yaml and json IO methods disabled."""
 
     def _json_string(self, include_unset: bool = True) -> str:
@@ -81,21 +81,23 @@ class Tidy3dBaseDataModel(Tidy3dBaseModel):
         )
 
 
-class Tidy3dData(Tidy3dBaseDataModel):
+class Tidy3dData(Tidy3dBaseDataModel, ABC):
     """Base class for data associated with a simulation."""
 
     class Config:  # pylint: disable=too-few-public-methods
         """Configuration for all Tidy3dData objects."""
 
-        validate_all = True  # validate default values too
-        extra = "allow"  # allow extra kwargs not specified in model (like dir=['+', '-'])
-        validate_assignment = True  # validate when attributes are set after initialization
-        arbitrary_types_allowed = True  # allow types like `Array[float]`
+        # validate_all = True  # validate default values too
+        # extra = "allow"  # allow extra kwargs not specified in model (like dir=['+', '-'])
+        # validate_assignment = True  # validate when attributes are set after initialization
+        # arbitrary_types_allowed = True  # allow types like `Array[float]`
         json_encoders = {  # how to write certain types to json files
             np.int64: lambda x: int(x),  # pylint: disable=unnecessary-lambda
             Tidy3dDataArray: lambda x: None,  # dont write
             xr.Dataset: lambda x: None,  # dont write
         }
+        frozen = False
+        allow_mutation = True
 
     @abstractmethod
     def add_to_group(self, hdf5_grp):
@@ -492,7 +494,7 @@ class SpatialCollectionData(CollectionData, ABC):
         """What gets returned by sim_data['monitor_data_name']"""
         return self.expand_syms
 
-    def set_symmetry_attrs(self, simulation: Simulation, monitor_name: str):
+    def apply_symmetry(self, simulation: Simulation, monitor_name: str):
         """Set the collection data attributes related to symmetries."""
         monitor = simulation.get_monitor_by_name(monitor_name)
         span_inds = simulation.grid.discretize_inds(monitor.geometry, extend=True)
@@ -501,9 +503,14 @@ class SpatialCollectionData(CollectionData, ABC):
             ind_beg, ind_end = span_inds[idim]
             boundary_dict[dim] = simulation.grid.periodic_subspace(idim, ind_beg, ind_end + 1)
         mnt_grid = Grid(boundaries=Coords(**boundary_dict))
-        self.expanded_grid = mnt_grid.yee.grid_dict
-        self.symmetry = simulation.symmetry
-        self.symmetry_center = simulation.center
+
+        return self.copy(
+            update=dict(
+                expanded_grid=mnt_grid.yee.grid_dict,
+                symmetry=simulation.symmetry,
+                symmetry_center=simulation.center,
+            )
+        )
 
 
 class AbstractFieldData(SpatialCollectionData, ABC):
@@ -896,15 +903,19 @@ class PermittivityData(SpatialCollectionData):
             return scalar_data.data
         return None
 
-    def set_symmetry_attrs(self, simulation: Simulation, monitor_name: str):
+    def apply_symmetry(self, simulation: Simulation, monitor_name: str):
         """Set the collection data attributes related to symmetries."""
-        super().set_symmetry_attrs(simulation, monitor_name)
+        sim_with_sym = super().apply_symmetry(simulation, monitor_name)
         # Redefine the expanded grid for epsilon rather than for fields.
-        self.expanded_grid = {
-            "eps_xx": self.expanded_grid["Ex"],
-            "eps_yy": self.expanded_grid["Ey"],
-            "eps_zz": self.expanded_grid["Ez"],
-        }
+        return sim_with_sym.copy(
+            update=dict(
+                expanded_grid={
+                    "eps_xx": self.expanded_grid["Ex"],
+                    "eps_yy": self.expanded_grid["Ey"],
+                    "eps_zz": self.expanded_grid["Ez"],
+                }
+            )
+        )
 
 
 class FluxData(AbstractFluxData, FreqData):
@@ -1184,10 +1195,22 @@ class AbstractSimulationData(Tidy3dBaseDataModel, ABC):
         return ax
 
 
+MonitorDataType = Union[
+    FieldData,
+    FieldTimeData,
+    PermittivityData,
+    ModeFieldData,
+    ModeAmpsData,
+    ModeIndexData,
+    FluxData,
+    FluxTimeData,
+]
+
+
 class SimulationData(AbstractSimulationData):
     """Holds :class:`Monitor` data associated with :class:`Simulation`."""
 
-    monitor_data: Dict[str, Tidy3dData] = pd.Field(
+    monitor_data: Dict[str, MonitorDataType] = pd.Field(
         ...,
         title="Monitor Data",
         description="Mapping of monitor name to :class:`Tidy3dData` instance.",
@@ -1261,7 +1284,7 @@ class SimulationData(AbstractSimulationData):
         self.ensure_monitor_exists(monitor_name)
         monitor_data = self.monitor_data.get(monitor_name)
         if isinstance(monitor_data, SpatialCollectionData):
-            monitor_data.set_symmetry_attrs(self.simulation, monitor_name)
+            monitor_data = monitor_data.apply_symmetry(self.simulation, monitor_name)
         return monitor_data.sim_data_getitem
 
     def ensure_monitor_exists(self, monitor_name: str) -> None:
@@ -1445,7 +1468,7 @@ class SimulationData(AbstractSimulationData):
             A copy of the :class:`.SimulationData` with the data normalized by source spectrum.
         """
 
-        sim_data_norm = self.copy(deep=True)
+        sim_data_norm = self.copy()
 
         # if no normalize index, just return the new copy right away.
         if normalize_index is None:

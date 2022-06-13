@@ -31,7 +31,6 @@ from .viz import plot_params_pec, plot_params_pmc, plot_params_bloch
 from ..version import __version__
 from ..constants import C_0, MICROMETER, SECOND, inf
 from ..log import log, Tidy3dKeyError, SetupError, ValidationError
-from ..static import make_static
 from ..updater import Updater
 
 # minimum number of grid points allowed per central wavelength in a medium
@@ -196,29 +195,6 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         title="Version",
         description="String specifying the front end version number.",
     )
-
-    """ Static simulation tools."""
-
-    _hash: int = pydantic.PrivateAttr(None)
-
-    def __hash__(self) -> int:
-        """Hash a :class:`Tidy3dBaseModel` objects using its json string."""
-        if self._hash is not None:
-            return self._hash
-
-        return super().__hash__()
-
-    def _freeze(self) -> int:
-        """Computes the hash, sets ``self._hash``, and returns it."""
-        frozen_hash = hash(self)
-        self._hash = frozen_hash
-        return frozen_hash
-
-    def _unfreeze(self) -> int:
-        """Sets ``self._hash`` to ``None``, returns final hash."""
-        self._hash = None
-        final_hash = hash(self)
-        return final_hash
 
     """ Validating setup """
 
@@ -642,7 +618,6 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
 
     @equal_aspect
     @add_ax_if_none
-    @make_static
     def plot(
         self,
         x: float = None,
@@ -687,7 +662,6 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
 
     @equal_aspect
     @add_ax_if_none
-    @make_static
     def plot_eps(  # pylint:disable=too-many-arguments
         self,
         x: float = None,

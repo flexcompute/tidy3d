@@ -141,13 +141,11 @@ def test_validation_speed():
     num_structures = np.logspace(0, 2, N_tests).astype(int)
 
     for n in num_structures:
-        S = SIM.copy()
         new_structures = []
         for i in range(n):
-            new_structure = SIM.structures[0].copy()
-            new_structure.name = str(i)
+            new_structure = SIM.structures[0].copy(update={"name": str(i)})
             new_structures.append(new_structure)
-        S.structures = new_structures
+        S = SIM.copy(update=dict(structures=new_structures))
 
         S.to_file(path)
         time_start = time()
