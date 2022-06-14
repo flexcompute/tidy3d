@@ -12,4 +12,4 @@ pytest -ra tests/test_plugins.py
 pytest -ra tests/test_sidewall.py
 pytest -ra tests/test_meshgenerate.py
 
-pytest --doctest-modules tidy3d/components --ignore=tidy3d/components/base.py
+pytest --doctest-modules tidy3d/components
