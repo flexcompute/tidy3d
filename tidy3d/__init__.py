@@ -31,6 +31,7 @@ from .components import ModeSpec
 from .components import GaussianPulse, ContinuousWave
 from .components import UniformCurrentSource, PlaneWave, ModeSource, PointDipole
 from .components import GaussianBeam, AstigmaticGaussianBeam
+from .components import ScalarField, CustomFieldSource, CustomCurrentSource
 
 # monitors
 from .components import FieldMonitor, FieldTimeMonitor, FluxMonitor, FluxTimeMonitor

@@ -7,9 +7,10 @@ import logging
 from typing_extensions import Literal
 import pydantic
 import numpy as np
+import xarray as xr
 
 from .base import Tidy3dBaseModel
-from .types import Direction, Polarization, Ax, FreqBound, Array, Axis, ArrayLike, Bound
+from .types import Direction, Polarization, Ax, FreqBound, Array, Axis, Bound
 from .validators import assert_plane, validate_name_str
 from .geometry import Box
 from .mode import ModeSpec
@@ -395,14 +396,161 @@ class FieldSource(Source, ABC):
 """ TODO: Custom currents """
 
 
+class ScalarField(Tidy3dBaseModel):
+    """Defines a scalar field component of a custom source.
+
+    Example
+    -------
+    >>> xs = (1,2,3)
+    >>> ys = (4,5,6,7)
+    >>> zs = (5,6,7,8,9)
+    >>> values = np.random.random((3, 4, 5)).tolist()
+    >>> ex = ScalarField(x=xs, y=ys, z=zs, values=values)
+    """
+
+    x: Tuple[float, ...] = pydantic.Field(
+        ...,
+        title="X positions",
+        description="Coordinates of the values along the x axis.",
+        units=MICROMETER,
+    )
+    y: Tuple[float, ...] = pydantic.Field(
+        ...,
+        title="X positions",
+        description="Coordinates of the values along the x axis.",
+        units=MICROMETER,
+    )
+    z: Tuple[float, ...] = pydantic.Field(
+        ...,
+        title="X positions",
+        description="Coordinates of the values along the x axis.",
+        units=MICROMETER,
+    )
+    values: Tuple[Tuple[Tuple[Union[complex, float], ...], ...], ...] = pydantic.Field(
+        ...,
+        title="X positions",
+        description="Raw values of the scalar field at each of the positions.",
+    )
+
+    @pydantic.validator("values", always=True)
+    def _check_values(cls, val, values):
+        """Ensure the values reflect the shapes of the coordinates."""
+
+        try:
+            coords_dict = {key: np.array(values.get(key)) for key in "xyz"}
+            _ = xr.DataArray(np.array(val), coords=coords_dict, dims=("x", "y", "z"))
+        except Exception as e:
+            raise SetupError("Could not construct scalar field from supplied fields.") from e
+
+        return val
+
+
 class CustomSource(Source, ABC):
     """Implements custom current components specified by data."""
 
-    data: ArrayLike
-
 
 class CustomFieldSource(FieldSource, CustomSource):
-    """Implements custom E, H fields specified by data."""
+    """Implements custom E, H fields specified by data.
+
+    Example
+    -------
+    >>> xs = (1,2,3)
+    >>> ys = (4,5,6,7)
+    >>> zs = (5,6,7,8,9)
+    >>> values = np.random.random((3, 4, 5)).tolist()
+    >>> ex = ScalarField(x=xs, y=ys, z=zs, values=np.random.random((3, 4, 5)).tolist())
+    >>> hy = ScalarField(x=xs, y=ys, z=zs, values=np.random.random((3, 4, 5)).tolist())
+    >>> source_time = GaussianPulse(freq0=200e12, fwidth=20e12)
+    >>> source = CustomFieldSource(size=(1,1,1), source_time=source_time, Ex=ex, Hy=hy)
+    """
+
+    Ex: ScalarField = pydantic.Field(
+        None,
+        title="Ex(x,y,z)",
+        description="x-component of the electric field to be injected by source.",
+    )
+
+    Ey: ScalarField = pydantic.Field(
+        None,
+        title="Ey(x,y,z)",
+        description="y-component of the electric field to be injected by source.",
+    )
+
+    Ez: ScalarField = pydantic.Field(
+        None,
+        title="Ez(x,y,z)",
+        description="z-component of the electric field to be injected by source.",
+    )
+
+    Hx: ScalarField = pydantic.Field(
+        None,
+        title="Hx(x,y,z)",
+        description="x-component of the magnetic field to be injected by source.",
+    )
+
+    Hy: ScalarField = pydantic.Field(
+        None,
+        title="Hy(x,y,z)",
+        description="y-component of the magnetic field to be injected by source.",
+    )
+
+    Hz: ScalarField = pydantic.Field(
+        None,
+        title="Hz(x,y,z)",
+        description="z-component of the magnetic field to be injected by source.",
+    )
+
+
+class CustomCurrentSource(CustomSource):
+    """Implements custom J, M currents specified by data.
+
+    Example
+    -------
+    >>> xs = (1,2,3)
+    >>> ys = (4,5,6,7)
+    >>> zs = (5,6,7,8,9)
+    >>> values = np.random.random((3, 4, 5)).tolist()
+    >>> jx = ScalarField(x=xs, y=ys, z=zs, values=np.random.random((3, 4, 5)).tolist())
+    >>> my = ScalarField(x=xs, y=ys, z=zs, values=np.random.random((3, 4, 5)).tolist())
+    >>> source_time = GaussianPulse(freq0=200e12, fwidth=20e12)
+    >>> source = CustomCurrentSource(size=(1,1,1), source_time=source_time, Jx=jx, My=my)
+    """
+
+    Jx: ScalarField = pydantic.Field(
+        None,
+        title="Jx(x,y,z)",
+        description="x-component of the electric current to be injected.",
+    )
+
+    Jy: ScalarField = pydantic.Field(
+        None,
+        title="Jy(x,y,z)",
+        description="y-component of the electric current to be injected.",
+    )
+
+    Jz: ScalarField = pydantic.Field(
+        None,
+        title="Jz(x,y,z)",
+        description="z-component of the electric current to be injected.",
+    )
+
+    Mx: ScalarField = pydantic.Field(
+        None,
+        title="Mx(x,y,z)",
+        description="x-component of the magnetic current to be injected.",
+    )
+
+    My: ScalarField = pydantic.Field(
+        None,
+        title="My(x,y,z)",
+        description="y-component of the magnetic current to be injected.",
+    )
+
+    Mz: ScalarField = pydantic.Field(
+        None,
+        title="Mz(x,y,z)",
+        description="z-component of the magnetic current to be injected.",
+    )
 
 
 """ Field Sources can be defined either on a (1) surface or (2) volume. Defines injection_axis """
