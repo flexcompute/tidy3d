@@ -76,7 +76,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
 
         Example
         -------
-        >>> simulation.help(methods=True)
+        >>> simulation.help(methods=True) # doctest: +SKIP
         """
         rich.inspect(self, methods=methods)
 
@@ -98,7 +98,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
 
         Example
         -------
-        >>> simulation = Simulation.from_file(fname='folder/sim.json')
+        >>> simulation = Simulation.from_file(fname='folder/sim.json') # doctest: +SKIP
         """
         if ".json" in fname:
             return cls.from_json(fname=fname, **parse_kwargs)
@@ -116,7 +116,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
 
         Example
         -------
-        >>> simulation.to_file(fname='folder/sim.json')
+        >>> simulation.to_file(fname='folder/sim.json') # doctest: +SKIP
         """
         if ".json" in fname:
             return self.to_json(fname=fname)
@@ -142,7 +142,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
 
         Example
         -------
-        >>> simulation = Simulation.from_json(fname='folder/sim.json')
+        >>> simulation = Simulation.from_json(fname='folder/sim.json') # doctest: +SKIP
         """
         return cls.parse_file(fname, **parse_file_kwargs)
 
@@ -156,7 +156,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
 
         Example
         -------
-        >>> simulation.to_json(fname='folder/sim.json')
+        >>> simulation.to_json(fname='folder/sim.json') # doctest: +SKIP
         """
         json_string = self._json_string()
         with open(fname, "w", encoding="utf-8") as file_handle:
@@ -180,7 +180,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
 
         Example
         -------
-        >>> simulation = Simulation.from_yaml(fname='folder/sim.yaml')
+        >>> simulation = Simulation.from_yaml(fname='folder/sim.yaml') # doctest: +SKIP
         """
         with open(fname, "r", encoding="utf-8") as yaml_in:
             json_dict = yaml.safe_load(yaml_in)
@@ -197,7 +197,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
 
         Example
         -------
-        >>> simulation.to_yaml(fname='folder/sim.yaml')
+        >>> simulation.to_yaml(fname='folder/sim.yaml') # doctest: +SKIP
         """
         json_string = self._json_string()
         json_dict = json.loads(json_string)
