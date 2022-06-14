@@ -51,9 +51,10 @@ sim = td.Simulation(size=sim_size,
     sources=[source],
     monitors=[monitor],
     run_time=run_time,
-    pml_layers=(pml, pml, pml))
+    boundary_spec=td.BoundarySpec.all_sides(boundary=td.PML())
+)
 
-print(f'simulation grid is shaped {sim.grid.num_cells} for {int(np.prod(sim.grid.num_cells)/1e6)} million cells.')
+print(f'simulation grid is shaped {sim.grid.num_cells} for {(sim.num_cells/1e6):.1f} million cells.')
 
 
 # run the simulation, download the data.
