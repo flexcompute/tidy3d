@@ -74,7 +74,7 @@ class FitterData(AdvancedFitterParam):
         description="Real part of the complex index of refraction.",
     )
     k_data: List[float] = Field(
-        ...,
+        None,
         title="Extinction coefficient",
         description="Imaginary part of the complex index of refraction.",
     )
@@ -211,10 +211,15 @@ class StableDispersionFitter(DispersionFitter):
             wvl_min=self.wvl_range[0], wvl_max=self.wvl_range[1]
         )
 
+        if self.lossy:
+            k_data = k_data.tolist()
+        else:
+            k_data = None
+
         web_data = FitterData(
             wvl_um=wvl_um.tolist(),
             n_data=n_data.tolist(),
-            k_data=k_data.tolist(),
+            k_data=k_data,
             num_poles=num_poles,
             num_tries=num_tries,
             tolerance_rms=tolerance_rms,
