@@ -102,12 +102,7 @@ class GradedMesher(Mesher):
         # Rtree from the 2D part of the bounding boxes
         tree = self.bounds_2d_tree(struct_bbox)
 
-        intervals = {}
-        # Array of coordinates of all intervals; add the simulation domain bounds already
-        intervals["coords"] = list(domain_bounds)
-        # List of indexes of structures which are present in each interval
-        intervals["structs"] = [[]]  # will have len equal to len(intervals["coords"]) - 1
-
+        intervals = {"coords": list(domain_bounds), "structs": [[]]}
         # Iterate in reverse order as latter structures override earlier ones. To properly handle
         # containment then we need to populate interval coordinates starting from the top.
         # If a structure is found to be completely contained, the corresponding ``struct_bbox`` is
@@ -310,56 +305,26 @@ class GradedMesher(Mesher):
         bbox0: ArrayLike[float, 1], query_bbox: List[ArrayLike[float, 1]]
     ) -> List[ArrayLike[float, 1]]:
         """Return a list of all bounding boxes among ``query_bbox`` that contain ``bbox0`` in 2D."""
-        contained_in = []
-        for bbox in query_bbox:
-            if all(
-                [
-                    bbox0[0, 0] >= bbox[0, 0],
-                    bbox0[1, 0] <= bbox[1, 0],
-                    bbox0[0, 1] >= bbox[0, 1],
-                    bbox0[1, 1] <= bbox[1, 1],
-                ]
-            ):
-                contained_in.append(bbox)
-        return contained_in
+        return [bbox for bbox in query_bbox if all([bbox0[0, 0] >= bbox[0, 0], bbox0[1, 0] <= bbox[1, 0], bbox0[0, 1] >= bbox[0, 1], bbox0[1, 1] <= bbox[1, 1],])]
 
     @staticmethod
     def contains_3d(bbox0: ArrayLike[float, 1], query_bbox: List[ArrayLike[float, 1]]) -> List[int]:
         """Return a list of all indexes of bounding boxes in the ``query_bbox`` list that ``bbox0``
         fully contains."""
-        contains = []
-        for ind, bbox in enumerate(query_bbox):
-            if all(
-                [
-                    bbox[0, 0] >= bbox0[0, 0],
-                    bbox[1, 0] <= bbox0[1, 0],
-                    bbox[0, 1] >= bbox0[0, 1],
-                    bbox[1, 1] <= bbox0[1, 1],
-                    bbox[0, 2] >= bbox0[0, 2],
-                    bbox[1, 2] <= bbox0[1, 2],
-                ]
-            ):
-                contains.append(ind)
-        return contains
+        return [ind for ind, bbox in enumerate(query_bbox) if all([bbox[0, 0] >= bbox0[0, 0], bbox[1, 0] <= bbox0[1, 0], bbox[0, 1] >= bbox0[0, 1], bbox[1, 1] <= bbox0[1, 1], bbox[0, 2] >= bbox0[0, 2], bbox[1, 2] <= bbox0[1, 2],])]
 
     @staticmethod
     def is_close(coord: float, interval_coords: List[float], coord_ind: int, atol: float) -> bool:
         """Check if a given ``coord`` is within ``atol`` of an interval coordinate at a given
         interval index. If the index is out of bounds, return ``False``."""
-        is_close = False
-        if 0 <= coord_ind < len(interval_coords):
-            is_close = isclose(coord, interval_coords[coord_ind], abs_tol=atol)
-        return is_close
+        return isclose(coord, interval_coords[coord_ind], abs_tol=atol) if 0 <= coord_ind < len(interval_coords) else False
 
     @staticmethod
     def is_contained(normal_pos: float, contained_2d: List[ArrayLike[float, 1]]) -> bool:
         """Check if a given ``normal_pos`` along the meshing direction is contained inside any
         of the bounding boxes that are in the ``contained_2d`` list.
         """
-        for contain_box in contained_2d:
-            if contain_box[0, 2] <= normal_pos <= contain_box[1, 2]:
-                return True
-        return False
+        return any(contain_box[0, 2] <= normal_pos <= contain_box[1, 2] for contain_box in contained_2d)
 
     @staticmethod
     def filter_min_step(
@@ -421,17 +386,7 @@ class GradedMesher(Mesher):
         )
 
         # initialize grid steps
-        dl_list = []
-        for interval_ind in range(num_intervals):
-            dl_list.append(
-                self.make_grid_in_interval(
-                    left_dl_list[interval_ind],
-                    right_dl_list[interval_ind],
-                    max_dl_list[interval_ind],
-                    max_scale,
-                    len_interval_list[interval_ind],
-                )
-            )
+        dl_list = [self.make_grid_in_interval(left_dl_list[interval_ind], right_dl_list[interval_ind], max_dl_list[interval_ind], max_scale, len_interval_list[interval_ind],) for interval_ind in range(num_intervals)]
 
         # refinement
         refine_edge = 1

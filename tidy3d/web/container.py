@@ -99,8 +99,7 @@ class Job(WebContainer):
             :class:`TaskInfo` object containing info about status, size, credits of task and others.
         """
 
-        task_info = web.get_info(task_id=self.task_id)
-        return task_info
+        return web.get_info(task_id=self.task_id)
 
     @property
     def status(self):
@@ -124,8 +123,7 @@ class Job(WebContainer):
         :class:`RunInfo`
             Task run information.
         """
-        run_info = web.get_run_info(task_id=self.task_id)
-        return run_info
+        return web.get_run_info(task_id=self.task_id)
 
     def monitor(self) -> None:
         """Monitor progress of running :class:`Job`.

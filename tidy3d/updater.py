@@ -118,16 +118,15 @@ class Updater(pd.BaseModel):
     def get_update_function(self):
         """Get the highest update verion <= self.version."""
         leq_versions = [v for v in UPDATE_MAP if v <= self.version]
-        if len(leq_versions) == 0:
+        if not leq_versions:
             raise SetupError(f"An update version <= {self.version} not found in update map.")
         update_version = max(leq_versions)
-        update_fn = UPDATE_MAP[update_version]
-        return update_fn
+        return UPDATE_MAP[update_version]
 
     def get_next_version(self) -> Version:
         """Get the next version after self.version."""
         gt_versions = [v for v in UPDATE_MAP if v > self.version]
-        if len(gt_versions) == 0:
+        if not gt_versions:
             return CurrentVersion
         return str(min(gt_versions))
 
@@ -164,8 +163,7 @@ def updates_from_version(version_from_string: str):
         def new_update_function(sim_dict: dict) -> dict:
             """Update function that automatically adds version string."""
 
-            sim_dict_updated = update_fn(sim_dict)
-            return sim_dict_updated
+            return update_fn(sim_dict)
 
         UPDATE_MAP[from_version] = new_update_function
 

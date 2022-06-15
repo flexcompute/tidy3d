@@ -134,14 +134,10 @@ class StableDispersionFitter(DispersionFitter):
         """
 
         _env = config_env
-        if config_env == "default":
+        if _env == "default":
             from ...web.config import DEFAULT_CONFIG  # pylint:disable=import-outside-toplevel
 
-            if "dev" in DEFAULT_CONFIG.web_api_endpoint:
-                _env = "dev"
-            else:
-                _env = "prod"
-
+            _env = "dev" if "dev" in DEFAULT_CONFIG.web_api_endpoint else "prod"
         return URL_ENV[_env]
 
     @staticmethod
@@ -158,14 +154,14 @@ class StableDispersionFitter(DispersionFitter):
         headers = {"Authorization": access_token["Authorization"]}
 
         # test connection
-        resp = requests.get(url_server + "/health")
+        resp = requests.get(f"{url_server}/health")
         try:
             resp.raise_for_status()
         except Exception as e:
             raise WebError("Connection to the server failed. Please try again.") from e
 
         # test authorization
-        resp = requests.get(url_server + "/health/access", headers=headers)
+        resp = requests.get(f"{url_server}/health/access", headers=headers)
         try:
             resp.raise_for_status()
         except Exception as e:
@@ -266,11 +262,8 @@ class StableDispersionFitter(DispersionFitter):
         # setup web_data
         web_data = self._setup_webdata(num_poles, num_tries, tolerance_rms, advanced_param)
 
-        resp = requests.post(
-            url_server + "/dispersion/fit",
-            headers=headers,
-            data=web_data.json(),
-        )
+        resp = requests.post(f"{url_server}/dispersion/fit", headers=headers, data=web_data.json())
+
 
         try:
             resp.raise_for_status()

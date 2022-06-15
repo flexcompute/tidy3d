@@ -37,8 +37,7 @@ def set_field(  # pylint:disable=too-many-arguments
     data_plotly.cs_val = float(value_cs)
     data_plotly.ft_val = float(value_ft)
     data_plotly.mode_ind_val = int(value_mode_ind) if value_mode_ind is not None else None
-    fig = data_plotly.make_figure()
-    return fig
+    return data_plotly.make_figure()
 
 
 # set the minimum of the xyz sliderbar depending on the cross-section axis

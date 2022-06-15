@@ -40,13 +40,13 @@ class Tidy3dConfig(pd.BaseModel):
     )
 
     @pd.validator("logging_level", always=True)
-    def _set_logging_level(cls, val):
+    def _set_logging_level(self, val):
         """Set the logging level if logging_level is changed."""
         set_logging_level(val)
         return val
 
     @pd.validator("web_config", always=True)
-    def _set_web_config(cls, val):
+    def _set_web_config(self, val):
         """Set the default web config."""
         if val not in WEB_CONFIGS:
             raise Tidy3dKeyError(
@@ -57,7 +57,6 @@ class Tidy3dConfig(pd.BaseModel):
             setattr(DEFAULT_CONFIG, key, value)
 
         return val
-
 
 # instance of the config that can be modified.
 config = Tidy3dConfig()

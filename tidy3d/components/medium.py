@@ -595,8 +595,7 @@ class Lorentz(DispersiveMedium):
                 c0 = de * w**2 / 4 / r
                 a1 = -d - r
                 c1 = -c0
-                poles.append((a0, c0))
-                poles.append((a1, c1))
+                poles.extend(((a0, c0), (a1, c1)))
             else:
                 r = np.sqrt(w * w - d * d)
                 a = -d - 1j * r
@@ -654,20 +653,18 @@ class Drude(DispersiveMedium):
         """Representation of Medium as a pole-residue model."""
 
         poles = []
+        a0 = 0j
+
         for (f, delta) in self.coeffs:
 
             w = 2 * np.pi * f
             d = 2 * np.pi * delta
 
             c0 = (w**2) / 2 / d + 0j
-            a0 = 0j
-
             c1 = -c0
             a1 = -d + 0j
 
-            poles.append((a0, c0))
-            poles.append((a1, c1))
-
+            poles.extend(((a0, c0), (a1, c1)))
         return PoleResidue(
             eps_inf=self.eps_inf,
             poles=poles,

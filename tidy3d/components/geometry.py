@@ -353,16 +353,13 @@ class Geometry(Tidy3dBaseModel, ABC):
     @staticmethod
     def _evaluate_inf(v):
         """Processes values and evaluates any infs into large (signed) numbers."""
-        return v if not np.isinf(v) else np.sign(v) * LARGE_NUMBER
+        return np.sign(v) * LARGE_NUMBER if np.isinf(v) else v
 
     @classmethod
     def evaluate_inf_shape(cls, shape: Shapely) -> Shapely:
         """Returns a copy of shape with inf vertices replaced by large numbers if polygon."""
 
-        if not isinstance(shape, Polygon):
-            return shape
-
-        return cls.map_to_coords(cls._evaluate_inf, shape)
+        return cls.map_to_coords(cls._evaluate_inf, shape) if isinstance(shape, Polygon) else shape
 
     @staticmethod
     def pop_axis(coord: Tuple[Any, Any, Any], axis: int) -> Tuple[Any, Tuple[Any, Any]]:
@@ -1122,8 +1119,8 @@ class Cylinder(Centered, Circular, Planar):
         Tuple[float, float, float], Tuple[float, float, float]
             Min and max bounds packaged as ``(minx, miny, minz), (maxx, maxy, maxz)``.
         """
-        coord_min = list(c - self.radius for c in self.center)
-        coord_max = list(c + self.radius for c in self.center)
+        coord_min = [c - self.radius for c in self.center]
+        coord_max = [c + self.radius for c in self.center]
         coord_min[self.axis] = self.center[self.axis] - self.length / 2.0
         coord_max[self.axis] = self.center[self.axis] + self.length / 2.0
         return (tuple(coord_min), tuple(coord_max))
@@ -1374,13 +1371,10 @@ class PolySlab(Planar):
         vert_dict = gds_cell.get_polygons(by_spec=True)
         all_vertices = []
         for (gds_layer_file, gds_dtype_file), vertices in vert_dict.items():
-            if gds_layer_file == gds_layer:
-                if gds_dtype is None or gds_dtype == gds_dtype_file:
-                    for shape_vertices in vertices:
-                        all_vertices.append(shape_vertices)
-
+            if gds_layer_file == gds_layer and (gds_dtype is None or gds_dtype == gds_dtype_file):
+                all_vertices.extend(iter(vertices))
         # make sure something got loaded, otherwise error
-        if len(all_vertices) == 0:
+        if not all_vertices:
             raise Tidy3dKeyError(
                 f"Couldn't load gds_cell, no vertices found at gds_layer={gds_layer} "
                 f"with specified gds_dtype={gds_dtype}."
@@ -1549,7 +1543,7 @@ class PolySlab(Planar):
         vertices_z = self._shift_vertices(self._base_polygon, dist)[0]
         return [Polygon(vertices_z)]
 
-    def _intersections_side(self, position, axis) -> list:  # pylint:disable=too-many-locals
+    def _intersections_side(self, position, axis) -> list:    # pylint:disable=too-many-locals
         """Find shapely geometries intersecting planar geometry with axis orthogonal to slab.
 
         For slanted polyslab, the procedure is as follows,
@@ -1643,7 +1637,6 @@ class PolySlab(Planar):
                         y_mid = y_min + dy_min / h_length * h_mid
                         x3, y3 = self._order_by_axis(plane_val=y_mid, axis_val=z_mid, axis=axis)
                         vertices = ((x1, y1), (x2, y2), (x3, y3))
-                        polys.append(Polygon(vertices))
                     else:
                         x3, y3 = self._order_by_axis(
                             plane_val=y_max - dy_max, axis_val=z_max, axis=axis
@@ -1653,8 +1646,7 @@ class PolySlab(Planar):
                         )
 
                         vertices = ((x1, y1), (x2, y2), (x3, y3), (x4, y4))
-                        polys.append(Polygon(vertices))
-
+                    polys.append(Polygon(vertices))
             # update the base coordinate for the next subsection
             h_base = h_top
 
@@ -1951,10 +1943,7 @@ class PolySlab(Planar):
         np.ndarray
             Vertices of a CCW-oriented polygon.
         """
-        if PolySlab._area(vertices) > 0:
-            return vertices
-
-        return vertices[::-1, :]
+        return vertices if PolySlab._area(vertices) > 0 else vertices[::-1, :]
 
     @staticmethod
     def _remove_duplicate_vertices(vertices: np.ndarray) -> np.ndarray:
@@ -2014,7 +2003,7 @@ class PolySlab(Planar):
     @staticmethod
     def array_to_vertices(arr_vertices: np.ndarray) -> Vertices:
         """Converts a numpy array of vertices to a list of tuples."""
-        return [(x, y) for (x, y) in arr_vertices]  # pylint:disable=unnecessary-comprehension
+        return list(arr_vertices)
 
     @staticmethod
     def _proper_vertices(vertices: Vertices) -> np.ndarray:

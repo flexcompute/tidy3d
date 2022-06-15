@@ -109,15 +109,7 @@ class YeeGrid(Tidy3dBaseModel):
     @property
     def grid_dict(self):
         """The Yee grid coordinates associated to various field components as a dictionary."""
-        yee_grid_dict = {
-            "Ex": self.E.x,
-            "Ey": self.E.y,
-            "Ez": self.E.z,
-            "Hx": self.H.x,
-            "Hy": self.H.y,
-            "Hz": self.H.z,
-        }
-        return yee_grid_dict
+        return {"Ex": self.E.x, "Ey": self.E.y, "Ez": self.E.z, "Hx": self.H.x, "Hy": self.H.y, "Hz": self.H.z,}
 
 
 class Grid(Tidy3dBaseModel):
@@ -236,9 +228,7 @@ class Grid(Tidy3dBaseModel):
         """
 
         primal_steps = self._primal_steps.dict(exclude={TYPE_TAG_STR})
-        dsteps = {}
-        for (key, psteps) in primal_steps.items():
-            dsteps[key] = (psteps + np.roll(psteps, 1)) / 2
+        dsteps = {key: (psteps + np.roll(psteps, 1)) / 2 for (key, psteps) in primal_steps.items()}
 
         return Coords(**dsteps)
 
