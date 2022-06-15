@@ -24,8 +24,7 @@ def set_field(value_amps_or_neff, value_val, value_dir, value_mode_ind, store, s
     data_plotly.dir_val = str(value_dir)
 
     data_plotly.mode_ind_val = int(value_mode_ind) if value_mode_ind is not None else None
-    fig = data_plotly.make_figure()
-    return fig
+    return data_plotly.make_figure()
 
 
 #

@@ -139,17 +139,8 @@ class AbstractFluxDataPlotly(DataPlotly, ABC):
             style={"padding": 10, "flex": 1},
         )
 
-        # define layout
-        component = dcc.Tab(
-            [
-                html.H1(f"Viewing data for {type(self.data).__name__}: '{self.monitor_name}'"),
-                flux_plot,
-            ],
-            label=self.label,
-        )
-
         # return the layout of the component so the app can insert it
-        return component
+        return dcc.Tab([html.H1(f"Viewing data for {type(self.data).__name__}: '{self.monitor_name}'"), flux_plot,], label=self.label,)
 
     def plotly(self) -> PlotlyFig:
         """Generate the plotly figure for this component."""
@@ -451,7 +442,7 @@ class AbstractFieldDataPlotly(DataPlotly, ABC):
     def inital_field_val(self):
         """The starting field value."""
         field_vals = list(self.data.data_dict.keys())
-        if len(field_vals) == 0:
+        if not field_vals:
             raise ValueError("Data doesn't have any field components stored.")
         return field_vals[0]
 

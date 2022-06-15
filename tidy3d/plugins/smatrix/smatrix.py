@@ -51,7 +51,7 @@ class Port(Box):
     )
 
     @pd.validator("mode_indices", always=True)
-    def evaluate_mode_indices(cls, val, values):
+    def evaluate_mode_indices(self, val, values):
         """Evaluates mode indices based on number of modes in mode spec."""
         if val is None:
             num_modes = values.get("mode_spec").num_modes
@@ -100,7 +100,7 @@ class ComponentModeler(Tidy3dBaseModel):
     )
 
     @pd.validator("simulation", always=True)
-    def _sim_has_no_sources(cls, val):
+    def _sim_has_no_sources(self, val):
         """Make sure simulation has no sources as they interfere with tool."""
         if len(val.sources) > 0:
             raise SetupError("Simulation must not have sources.")
@@ -232,8 +232,7 @@ class ComponentModeler(Tidy3dBaseModel):
         """Run :class:`Simulations` for each port and return the batch after saving."""
         self.batch.start()
         self.batch.monitor()
-        batch_data = self.batch.load(path_dir=path_dir)
-        return batch_data
+        return self.batch.load(path_dir=path_dir)
 
     def _normalization_factor(self, port_source: Port, sim_data: SimulationData) -> complex:
         """Compute the normalization amplitude based on the measured input mode amplitude."""

@@ -128,9 +128,7 @@ class GridSpec1d(Tidy3dBaseModel, ABC):
         last_step = bounds[-1] - bounds[-2]
         add_left = bounds[0] - first_step * np.arange(num_layers[0], 0, -1)
         add_right = bounds[-1] + last_step * np.arange(1, num_layers[1] + 1)
-        new_bounds = np.concatenate((add_left, bounds, add_right))
-
-        return new_bounds
+        return np.concatenate((add_left, bounds, add_right))
 
 
 class UniformGrid(GridSpec1d):
@@ -183,10 +181,7 @@ class UniformGrid(GridSpec1d):
         # Adjust step size to fit simulation size exactly
         dl_snapped = size / num_cells if size > 0 else self.dl
 
-        # Make bounds
-        bound_coords = center - size / 2 + np.arange(num_cells + 1) * dl_snapped
-
-        return bound_coords
+        return center - size / 2 + np.arange(num_cells + 1) * dl_snapped
 
 
 class CustomGrid(GridSpec1d):
@@ -440,8 +435,7 @@ class GridSpec(Tidy3dBaseModel):
                 "Please supply a 'wavelength' value for 'grid_spec'."
             )
 
-        wavelength = C_0 / freqs[0]
-        return wavelength
+        return C_0 / freqs[0]
 
     def make_grid(
         self,

@@ -23,12 +23,7 @@ class Store(ABC):
     def get_data_plotly_by_name(self, store: FrontEndStore, name: str) -> DataPlotly:
         """Get data plotly from store by name."""
         sim = self.get_simulation_data(store)
-        for monitor_name, monitor_data in sim.monitor_data.items():
-            if monitor_name == name:
-                return DataPlotly.from_monitor_data(
-                    monitor_data=monitor_data, monitor_name=monitor_name
-                )
-        return None
+        return next((DataPlotly.from_monitor_data(monitor_data=monitor_data, monitor_name=monitor_name) for monitor_name, monitor_data in sim.monitor_data.items() if monitor_name == name), None)
 
 
 class LocalStore(Store):

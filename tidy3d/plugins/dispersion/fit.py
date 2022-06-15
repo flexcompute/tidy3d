@@ -264,9 +264,8 @@ class DispersionFitter(Tidy3dBaseModel):
         """
         coeffs_scaled = coeffs / HBAR
         poles_a, poles_c = DispersionFitter._unpack_coeffs(coeffs_scaled)
-        poles = [(complex(a), complex(c)) for (a, c) in zip(poles_a, poles_c)]
         # poles = [((a.real, a.imag), (c.real, c.imag)) for (a, c) in zip(poles_a, poles_c)]
-        return poles
+        return [(complex(a), complex(c)) for (a, c) in zip(poles_a, poles_c)]
 
     @staticmethod
     def _poles_to_coeffs(poles):
@@ -448,9 +447,8 @@ class DispersionFitter(Tidy3dBaseModel):
             medium = self._make_medium(coeffs)
             eps_model = medium.eps_model(self.freqs)
             residual = self.eps_data - eps_model
-            rms_error = np.sqrt(np.sum(np.square(np.abs(residual))) / len(self.eps_data))
             # cons = constraint(coeffs, _grad)
-            return rms_error
+            return np.sqrt(np.sum(np.square(np.abs(residual))) / len(self.eps_data))
 
         # set initial guess
         num_coeffs = num_poles * 4
@@ -675,24 +673,22 @@ class DispersionFitter(Tidy3dBaseModel):
         for row in data_url[1:]:
             if has_k == 1:
                 k_lam.append([float(x) for x in row])
+            elif row[0] == "wl":
+                has_k += 1
             else:
-                if row[0] == "wl":
-                    has_k += 1
-                else:
-                    n_lam.append([float(x) for x in row])
+                n_lam.append([float(x) for x in row])
 
         n_lam = np.array(n_lam)
         k_lam = np.array(k_lam)
 
-        # for data containing k
         if has_k == 1:
-            # now let's make sure wvl_um in n_lam and k_lam match
-            if not np.allclose(n_lam[:, 0], k_lam[:, 0]):
+            if np.allclose(n_lam[:, 0], k_lam[:, 0]):
+                return cls(wvl_um=n_lam[:, 0], n_data=n_lam[:, 1], k_data=k_lam[:, 1], **kwargs)
+            else:
                 raise ValidationError(
                     "Invalid URL. Both n and k should be provided at each wavelength."
                 )
 
-            return cls(wvl_um=n_lam[:, 0], n_data=n_lam[:, 1], k_data=k_lam[:, 1], **kwargs)
         return cls(wvl_um=n_lam[:, 0], n_data=n_lam[:, 1], **kwargs)
 
     @classmethod

@@ -14,8 +14,7 @@ plot_params_sim_boundary = PlotParams(linewidth=0, facecolor="rgba(0,0,0,0.05)",
 
 def make_fig() -> PlotlyFig:
     """makes an empty plotly figure."""
-    fig = go.Figure()
-    return fig
+    return go.Figure()
 
 
 def add_fig_if_none(plotly):

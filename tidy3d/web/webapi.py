@@ -501,11 +501,7 @@ def get_tasks(
     if num_tasks is None or num_tasks > len(sort_inds):
         num_tasks = len(sort_inds)
 
-    out_dict = []
-    for ipr in range(num_tasks):
-        out_dict.append({key: item[sort_inds[ipr]] for (key, item) in store_dict.items()})
-
-    return out_dict
+    return [{key: item[sort_inds[ipr]] for (key, item) in store_dict.items()} for ipr in range(num_tasks)]
 
 
 def estimate_cost(task_id: str) -> float:

@@ -126,29 +126,20 @@ class TimeMonitor(Monitor, ABC):
                 tind_end = int(tend[-1] + 1)
 
         # Step to compare to in order to handle t_start = t_stop
-        if np.array(tmesh).size < 2:
-            dt = 1e-20
-        else:
-            dt = tmesh[1] - tmesh[0]
-
+        dt = 1e-20 if np.array(tmesh).size < 2 else tmesh[1] - tmesh[0]
         # If equal start and stopping time, record one time step
         if np.abs(self.start - t_stop) < dt:
             tind_beg = max(tind_end - 1, 0)
         else:
-            tbeg = np.nonzero(tmesh[0:tind_end] >= self.start)[0]
-            if tbeg.size > 0:
-                tind_beg = tbeg[0]
-            else:
-                tind_beg = tind_end
-
+            tbeg = np.nonzero(tmesh[:tind_end] >= self.start)[0]
+            tind_beg = tbeg[0] if tbeg.size > 0 else tind_end
         return (tind_beg, tind_end)
 
     def num_steps(self, tmesh: ArrayLike[float, 1]) -> int:
         """Compute number of time steps for a time monitor."""
 
         tind_beg, tind_end = self.time_inds(tmesh)
-        number_of_steps = int((tind_end - tind_beg) / self.interval)
-        return number_of_steps
+        return int((tind_end - tind_beg) / self.interval)
 
 
 class AbstractFieldMonitor(Monitor, ABC):
@@ -183,7 +174,7 @@ class AbstractFieldMonitor(Monitor, ABC):
         """Toggle default field colocation setting based on `interval_space`."""
         interval_space = values.get("interval_space")
         if val is None:
-            val = not sum(interval_space) == 3
+            val = sum(interval_space) != 3
         return val
 
     def downsampled_num_cells(self, num_cells: Tuple[int, int, int]) -> Tuple[int, int, int]:
@@ -325,14 +316,8 @@ class FieldMonitor(AbstractFieldMonitor, FreqMonitor):
             (size_x, size_y, 0.0),  # z+
         )
 
-        surface_names = (
-            self.name + "_x-",
-            self.name + "_x+",
-            self.name + "_y-",
-            self.name + "_y+",
-            self.name + "_z-",
-            self.name + "_z+",
-        )
+        surface_names = f"{self.name}_x-", f"{self.name}_x+", f"{self.name}_y-", f"{self.name}_y+", f"{self.name}_z-", f"{self.name}_z+"
+
 
         # Create "surface" monitors
         monitors = []
@@ -468,9 +453,7 @@ class ModeFieldMonitor(AbstractModeMonitor):
     _data_type: Literal["ModeFieldData"] = pydantic.Field("ModeFieldData")
 
     def storage_size(self, num_cells: int, tmesh: int) -> int:
-        # fields store 6 complex numbers per grid cell, per frequency, per mode.
-        field_size = 6 * BYTES_COMPLEX * num_cells * len(self.freqs) * self.mode_spec.num_modes
-        return field_size
+        return 6 * BYTES_COMPLEX * num_cells * len(self.freqs) * self.mode_spec.num_modes
 
 
 # types of monitors that are accepted by simulation

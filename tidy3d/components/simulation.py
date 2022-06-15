@@ -361,7 +361,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
             return val
 
         structures = values.get("structures")
-        structures = [] if not structures else structures
+        structures = structures or []
         medium_bg = values.get("medium")
         mediums = [medium_bg] + [structure.medium for structure in structures]
 
@@ -384,12 +384,8 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
                     else:
                         medium_str = f"The medium associated with structures[{medium_index-1}]"
 
-                    log.warning(
-                        medium_str + f"has a frequency range: ({fmin_med:2e}, {fmax_med:2e}) (Hz)"
-                        "that does not fully cover the frequencies contained in "
-                        f"monitors[{monitor_index}]. "
-                        "This can cause innacuracies in the recorded results."
-                    )
+                    log.warning(f"{medium_str}has a frequency range: ({fmin_med:2e}, {fmax_med:2e}) (Hz)that does not fully cover the frequencies contained in monitors[{monitor_index}]. This can cause innacuracies in the recorded results.")
+
         return val
 
     @pydantic.validator("monitors", always=True)
@@ -401,7 +397,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
 
         # Get simulation frequency range
         source_ranges = [source.source_time.frequency_range() for source in values["sources"]]
-        if len(source_ranges) == 0:
+        if not source_ranges:
             log.warning("No sources in simulation.")
             return val
 
@@ -422,14 +418,14 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         return val
 
     @pydantic.validator("grid_spec", always=True)
-    def _warn_grid_size_too_small(cls, val, values):  # pylint:disable=too-many-locals
+    def _warn_grid_size_too_small(cls, val, values):    # pylint:disable=too-many-locals
         """Warn user if any grid size is too large compared to minimum wavelength in material."""
 
         if val is None:
             return val
 
         structures = values.get("structures")
-        structures = [] if not structures else structures
+        structures = structures or []
         medium_bg = values.get("medium")
         mediums = [medium_bg] + [structure.medium for structure in structures]
 
@@ -447,20 +443,17 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
                 lambda_min = C_0 / freq0 / n_material
 
                 for key, grid_spec in zip("xyz", (val.grid_x, val.grid_y, val.grid_z)):
-                    if isinstance(grid_spec, UniformGrid):
-
-                        if grid_spec.dl > lambda_min / MIN_GRIDS_PER_WVL:
-
-                            log.warning(
-                                f"The grid step in {key} has a value of {grid_spec.dl:.4f} (um)"
-                                ", which was detected as being large when compared to the "
-                                f"central wavelength of sources[{source_index}] "
-                                f"within the simulation medium "
-                                f"associated with structures[{medium_index + 1}], given by "
-                                f"{lambda_min:.4f} (um). "
-                                "To avoid inaccuracies, it is reccomended the grid size is reduced."
-                            )
-                    # TODO: warn about custom grid spec
+                    if isinstance(grid_spec, UniformGrid) and grid_spec.dl > lambda_min / MIN_GRIDS_PER_WVL:
+                        log.warning(
+                            f"The grid step in {key} has a value of {grid_spec.dl:.4f} (um)"
+                            ", which was detected as being large when compared to the "
+                            f"central wavelength of sources[{source_index}] "
+                            f"within the simulation medium "
+                            f"associated with structures[{medium_index + 1}], given by "
+                            f"{lambda_min:.4f} (um). "
+                            "To avoid inaccuracies, it is reccomended the grid size is reduced."
+                        )
+                                # TODO: warn about custom grid spec
 
         return val
 
@@ -480,8 +473,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
             medium=values.get("medium"),
         )
 
-        structures = values.get("structures")
-        structures = [] if not structures else structures
+        structures = values.get("structures") or []
         total_structures = [structure_bg] + list(structures)
 
         # for each plane wave in the sources list
@@ -565,7 +557,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
     def _validate_run_time(self) -> None:
         """Ensures that the simulation run time is > 0."""
 
-        if not self.run_time > 0:
+        if self.run_time <= 0:
             raise SetupError(
                 "The `Simulation.run_time` parameter was left at its default value of 0.0. "
                 "For running a simulation on our servers it must be set to > 0.0."
@@ -1584,7 +1576,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         n_max, _ = AbstractMedium.eps_complex_to_nk(eps_max)
         return wvl_min / n_max
 
-    def min_sym_box(self, box: Box) -> Box:  # pylint:disable=too-many-locals
+    def min_sym_box(self, box: Box) -> Box:    # pylint:disable=too-many-locals
         """Compute the smallest Box restricted to the first quadrant in the presence of symmetries
         that fully covers the original Box when symmetries are applied.
 
@@ -1608,14 +1600,13 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         for (center, sym, bmin, bmax, sim_bmin, sim_bmax) in zipped:
             if sym == 0 or center < bmin:
                 bmin_tmp, bmax_tmp = bmin, bmax
+            elif bmax < center:
+                bmin_tmp = 2 * center - bmax
+                bmax_tmp = 2 * center - bmin
             else:
-                if bmax < center:
-                    bmin_tmp = 2 * center - bmax
-                    bmax_tmp = 2 * center - bmin
-                else:
-                    # bmin <= center <= bmax
-                    bmin_tmp = center
-                    bmax_tmp = max(bmax, 2 * center - bmin)
+                # bmin <= center <= bmax
+                bmin_tmp = center
+                bmax_tmp = max(bmax, 2 * center - bmin)
             # Extend well past the simulation domain if needed, but truncate if original box
             # is too large, specifically to avoid issues with inf.
             sim_size = sim_bmax - sim_bmin
@@ -1683,12 +1674,10 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
 
         def get_eps(medium: Medium, freq: float):
             """Select the correct epsilon component if field locations are requested."""
-            if coord_key[0] == "E":
-                component = ["x", "y", "z"].index(coord_key[1])
-                eps = medium.eps_diagonal(freq)[component]
-            else:
-                eps = medium.eps_model(freq)
-            return eps
+            if coord_key[0] != "E":
+                return medium.eps_model(freq)
+            component = ["x", "y", "z"].index(coord_key[1])
+            return medium.eps_diagonal(freq)[component]
 
         eps_background = get_eps(self.medium, freq)
 

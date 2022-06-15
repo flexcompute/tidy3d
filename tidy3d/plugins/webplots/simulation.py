@@ -134,7 +134,7 @@ class SimulationPlotly(UIComponent):
         plotly_kwargs = {xyz_label: self.cs_val}
         return self.plotly(**plotly_kwargs)
 
-    def make_component(self):  # pylint: disable=too-many-locals
+    def make_component(self):    # pylint: disable=too-many-locals
         """Creates the dash component."""
 
         xyz_label, (xyz_min, xyz_max) = self.xyz_label_bounds
@@ -164,15 +164,7 @@ class SimulationPlotly(UIComponent):
             style={"padding": 50, "flex": 1},
         )
 
-        component = dcc.Tab(
-            [
-                html.H1("Viewing Simulation."),
-                html.Div([graph, xyz_selection], style={"display": "flex", "flexDirection": "row"}),
-            ],
-            label="Simulation",
-        )
-
-        return component
+        return dcc.Tab([html.H1("Viewing Simulation."), html.Div([graph, xyz_selection], style={"display": "flex", "flexDirection": "row"}),], label="Simulation",)
 
     @equal_aspect_plotly
     @add_fig_if_none
@@ -258,7 +250,7 @@ class SimulationPlotly(UIComponent):
         plot_params_struct = self.simulation._get_structure_plot_params(
             medium=medium, mat_index=mat_index
         )
-        name = medium.name if medium.name else f"medium[{mat_index}]"
+        name = medium.name or f"medium[{mat_index}]"
         fig = plotly_shape(shape=shape, plot_params=plot_params_struct, fig=fig, name=name)
         return fig
 

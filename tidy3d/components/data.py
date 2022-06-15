@@ -140,8 +140,7 @@ class Tidy3dData(Tidy3dBaseDataModel):
     def decode_bytes_array(array_of_bytes: Numpy) -> List[str]:
         """Convert numpy array containing bytes to list of strings."""
         list_of_bytes = array_of_bytes.tolist()
-        list_of_str = [v.decode("utf-8") for v in list_of_bytes]
-        return list_of_str
+        return [v.decode("utf-8") for v in list_of_bytes]
 
 
 class MonitorData(Tidy3dData, ABC):
@@ -235,11 +234,8 @@ class MonitorData(Tidy3dData, ABC):
         """Load Monitor data instance from an hdf5 group."""
 
         # kwargs that gets passed to MonitorData.__init__() to make new MonitorData
-        kwargs = {}
+        kwargs = {data_name: np.array(data_value) for data_name, data_value in hdf5_grp.items()}
 
-        # construct kwarg dict from hdf5 data group for monitor
-        for data_name, data_value in hdf5_grp.items():
-            kwargs[data_name] = np.array(data_value)
 
         # handle data stored as np.array() of bytes instead of strings
         for str_kwarg in ("direction",):
@@ -280,22 +276,17 @@ class CollectionData(Tidy3dData):
             For more details refer to `xarray's Documentaton <https://tinyurl.com/2zrzsp7b>`_.
         """
 
-        data_arrays = {name: arr.data for name, arr in self.data_dict.items()}
-        return data_arrays
+        return {name: arr.data for name, arr in self.data_dict.items()}
 
     def __eq__(self, other):
         """Check for equality against other :class:`AbstractFieldData` object."""
 
         # same keys?
-        if not all(k in other.data_dict.keys() for k in self.data_dict.keys()):
+        if any(k not in other.data_dict.keys() for k in self.data_dict.keys()):
             return False
-        if not all(k in self.data_dict.keys() for k in other.data_dict.keys()):
+        if any(k not in self.data_dict.keys() for k in other.data_dict.keys()):
             return False
-        # same data?
-        for data_name, data_value in self.data_dict.items():
-            if data_value != other.data_dict[data_name]:
-                return False
-        return True
+        return all(data_value == other.data_dict[data_name] for data_name, data_value in self.data_dict.items())
 
     def __getitem__(self, field_name: str) -> xr.DataArray:
         """Get the :class:`MonitorData` xarray representation by name (``col_data[field_name]``).
@@ -392,7 +383,7 @@ class SpatialCollectionData(CollectionData, ABC):
     """
 
     @pd.validator("symmetry_center", always=True)
-    def _defined_if_sym_present(cls, val, values):
+    def _defined_if_sym_present(self, val, values):
         """If symmetry required, must have symmetry_center."""
         if any(sym != 0 for sym in values.get("symmetry")):
             assert val is not None, "symmetry_center must be supplied."
@@ -1240,7 +1231,7 @@ class SimulationData(AbstractSimulationData):
         lines = log_str.split("\n")
         decay_lines = [l for l in lines if "field decay" in l]
         final_decay = 1.0
-        if len(decay_lines) > 0:
+        if decay_lines:
             final_decay_line = decay_lines[-1]
             final_decay = float(final_decay_line.split("field decay: ")[-1])
         return final_decay
@@ -1302,13 +1293,11 @@ class SimulationData(AbstractSimulationData):
         sub_grid = self.simulation.discretize(monitor)
         centers = sub_grid.centers
 
-        # colocate each of the field components at centers
         xs = np.array(centers.x)
         ys = np.array(centers.y)
         zs = np.array(centers.z)
 
-        field_dataset = field_monitor_data.colocate(x=xs, y=ys, z=zs)
-        return field_dataset
+        return field_monitor_data.colocate(x=xs, y=ys, z=zs)
 
     # pylint:disable=too-many-arguments, too-many-locals, too-many-branches, too-many-statements
     def plot_field(

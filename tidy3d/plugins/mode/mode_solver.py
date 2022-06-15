@@ -344,14 +344,7 @@ class ModeSolver(Tidy3dBaseModel):
             mode_index=np.arange(self.mode_spec.num_modes),
             values=np.stack(n_complex, axis=0),
         )
-        mode_data = ModeSolverData(
-            simulation=self.simulation,
-            plane=self.plane,
-            mode_spec=self.mode_spec,
-            data_dict={"fields": field_data, "n_complex": index_data},
-        )
-
-        return mode_data
+        return ModeSolverData(simulation=self.simulation, plane=self.plane, mode_spec=self.mode_spec, data_dict={"fields": field_data, "n_complex": index_data},)
 
     def _get_epsilon(self, plane: Box, freq: float) -> ArrayLike[complex, 4]:
         """Compute the diagonal components of the epsilon tensor in the plane."""
@@ -435,8 +428,7 @@ class ModeSolver(Tidy3dBaseModel):
     def _rotate_field_coords(self, field: FIELD) -> FIELD:
         """Move the propagation axis=z to the proper order in the array."""
         f_x, f_y, f_z = np.moveaxis(field, source=3, destination=1 + self.normal_axis)
-        f_rot = np.stack(self.plane.unpop_axis(f_z, (f_x, f_y), axis=self.normal_axis), axis=0)
-        return f_rot
+        return np.stack(self.plane.unpop_axis(f_z, (f_x, f_y), axis=self.normal_axis), axis=0)
 
     def _process_fields(
         self, mode_fields: ArrayLike[complex, 4], mode_index: int
