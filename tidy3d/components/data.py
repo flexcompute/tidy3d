@@ -738,7 +738,7 @@ class ModeAmpsData(AbstractModeData):
     >>> data = ModeAmpsData(values=values, direction=['+', '-'], mode_index=mode_index, f=f)
     """
 
-    direction: Array[str] = pd.Field(
+    direction: List[str] = pd.Field(
         ["+", "-"],
         title="Direction Coordinates",
         description="List of directions contained in the mode amplitude data.",
@@ -1200,8 +1200,7 @@ MonitorDataType = Union[
     FieldTimeData,
     PermittivityData,
     ModeFieldData,
-    ModeAmpsData,
-    ModeIndexData,
+    ModeData,
     FluxData,
     FluxTimeData,
 ]
