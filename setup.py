@@ -23,6 +23,10 @@ with open("requirements/plotly.txt") as f:
     plotly_required = f.read().splitlines()
     plotly_required = [req for req in plotly_required if "-r" not in req]
 
+with open("requirements/dev.txt") as f:
+    dev_required = f.read().splitlines()
+    dev_required = [req for req in dev_required if "-r" not in req]
+
 setuptools.setup(
     name=PIP_NAME,
     version=version["__version__"],
@@ -43,5 +47,5 @@ setuptools.setup(
     packages=setuptools.find_packages(),
     python_requires=">=3.6",
     install_requires=core_required,
-    extras_require={"plotly": plotly_required},
+    extras_require={"plotly": plotly_required, "dev": dev_required, "core": core_required},
 )
