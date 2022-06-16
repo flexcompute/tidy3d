@@ -33,20 +33,6 @@ class Geometry(Tidy3dBaseModel, ABC):
         """Default parameters for plotting a Geometry object."""
         return plot_params_geometry
 
-    center: Coordinate = pydantic.Field(
-        (0.0, 0.0, 0.0),
-        title="Center",
-        description="Center of object in x, y, and z.",
-        units=MICROMETER,
-    )
-
-    @pydantic.validator("center", always=True)
-    def _center_not_inf(cls, val):
-        """Make sure center is not infinitiy."""
-        if any(np.isinf(v) for v in val):
-            raise ValidationError("center can not contain td.inf terms.")
-        return val
-
     def inside(self, x, y, z) -> bool:
         """Returns ``True`` if point ``(x,y,z)`` is inside volume of :class:`Geometry`.
 
@@ -136,6 +122,7 @@ class Geometry(Tidy3dBaseModel, ABC):
         return bool(intersections)
 
     @cached_property
+    @abstractmethod
     def bounds(self) -> Bound:  # pylint:disable=too-many-locals
         """Returns bounding box min and max coordinates..
 
@@ -144,21 +131,6 @@ class Geometry(Tidy3dBaseModel, ABC):
         Tuple[float, float, float], Tuple[float, float float]
             Min and max bounds packaged as ``(minx, miny, minz), (maxx, maxy, maxz)``.
         """
-
-        x0, y0, z0 = self.center
-        shape_x = self.intersections(x=x0)[0]
-        shape_y = self.intersections(y=y0)[0]
-        shape_z = self.intersections(z=z0)[0]
-        x_miny, x_minz, x_maxy, x_maxz = shape_x.bounds
-        y_minx, y_minz, y_maxx, y_maxz = shape_y.bounds
-        z_minx, z_miny, z_maxx, z_maxy = shape_z.bounds
-        minx = min(y_minx, z_minx)
-        maxx = max(y_maxx, z_maxx)
-        miny = min(x_miny, z_miny)
-        maxy = max(x_maxy, z_maxy)
-        minz = min(x_minz, y_minz)
-        maxz = max(x_maxz, y_maxz)
-        return (minx, miny, minz), (maxx, maxy, maxz)
 
     @cached_property
     def bounding_box(self):
@@ -546,18 +518,40 @@ class Geometry(Tidy3dBaseModel, ABC):
 """ Abstract subclasses """
 
 
+class Centered(Geometry, ABC):
+    """Geometry with a well defined center."""
+
+    center: Coordinate = pydantic.Field(
+        (0.0, 0.0, 0.0),
+        title="Center",
+        description="Center of object in x, y, and z.",
+        units=MICROMETER,
+    )
+
+    @pydantic.validator("center", always=True)
+    def _center_not_inf(cls, val):
+        """Make sure center is not infinitiy."""
+        if any(np.isinf(v) for v in val):
+            raise ValidationError("center can not contain td.inf terms.")
+        return val
+
+
 class Planar(Geometry, ABC):
     """Geometry with one ``axis`` that is slab-like with thickness ``height``."""
 
     axis: Axis = pydantic.Field(
         2, title="Axis", description="Specifies dimension of the planar axis (0,1,2) -> (x,y,z)."
     )
-    length: pydantic.NonNegativeFloat = pydantic.Field(
-        None,
-        title="Length",
-        description="Defines thickness of geometry along axis dimension.",
-        units=MICROMETER,
-    )
+
+    @property
+    @abstractmethod
+    def center_axis(self) -> float:
+        """Gets the position of the center of the geometry in the out of plane dimension."""
+
+    @property
+    @abstractmethod
+    def length_axis(self) -> float:
+        """Gets the length of the geometry along the out of plane dimension."""
 
     def intersections(self, x: float = None, y: float = None, z: float = None):
         """Returns shapely geometry at plane specified by one non None value of x,y,z.
@@ -580,8 +574,8 @@ class Planar(Geometry, ABC):
         """
         axis, position = self.parse_xyz_kwargs(x=x, y=y, z=z)
         if axis == self.axis:
-            z0, _ = self.pop_axis(self.center, axis=self.axis)
-            if (position < z0 - self.length / 2) or (position > z0 + self.length / 2):
+            z0 = self.center_axis
+            if (position < z0 - self.length_axis / 2) or (position > z0 + self.length_axis / 2):
                 return []
             return self._intersections_normal(position)
         return self._intersections_side(position, axis)
@@ -631,9 +625,9 @@ class Planar(Geometry, ABC):
         Tuple[float, float, float], Tuple[float, float float]
             Min and max bounds packaged as ``(minx, miny, minz), (maxx, maxy, maxz)``.
         """
-        z0, _ = self.pop_axis(self.center, axis=self.axis)
-        z_min = z0 - self.length / 2.0
-        z_max = z0 + self.length / 2.0
+        z0 = self.center_axis
+        z_min = z0 - self.length_axis / 2.0
+        z_max = z0 + self.length_axis / 2.0
         shape_top = self.intersections(z=z0)[0]
         (xmin, ymin, xmax, ymax) = shape_top.bounds
         bounds_min = self.unpop_axis(z_min, (xmin, ymin), axis=self.axis)
@@ -704,7 +698,7 @@ class Circular(Geometry):
 """ importable geometries """
 
 
-class Box(Geometry):
+class Box(Centered):
     """Rectangular prism.
        Also base class for :class:`Simulation`, :class:`Monitor`, and :class:`Source`.
 
@@ -948,7 +942,7 @@ class Box(Geometry):
         return arrow_length, arrow_width
 
 
-class Sphere(Circular):
+class Sphere(Centered, Circular):
     """Spherical geometry.
 
     Example
@@ -1019,7 +1013,7 @@ class Sphere(Circular):
         return (coord_min, coord_max)
 
 
-class Cylinder(Circular, Planar):
+class Cylinder(Centered, Circular, Planar):
     """Cylindrical geometry.
 
     Example
@@ -1033,6 +1027,17 @@ class Cylinder(Circular, Planar):
         description="Defines thickness of cylinder along axis dimension.",
         units=MICROMETER,
     )
+
+    @property
+    def center_axis(self):
+        """Gets the position of the center of the geometry in the out of plane dimension."""
+        z0, _ = self.pop_axis(self.center, axis=self.axis)
+        return z0
+
+    @property
+    def length_axis(self) -> float:
+        """Gets the length of the geometry along the out of plane dimension."""
+        return self.length
 
     def _intersections_normal(self, z: float):
         """Find shapely geometries intersecting cylindrical geometry with axis normal to slab.
@@ -1069,12 +1074,11 @@ class Cylinder(Circular, Planar):
             For more details refer to
             `Shapely's Documentaton <https://shapely.readthedocs.io/en/stable/project.html>`_.
         """
-        z0_axis, _ = self.pop_axis(self.center, axis=axis)
+        z0_axis, (x0_plot_plane, y0_plot_plane) = self.pop_axis(self.center, axis=axis)
         intersect_dist = self._intersect_dist(position, z0_axis)
         if not intersect_dist:
             return []
         Lx, Ly = self._order_by_axis(plane_val=intersect_dist, axis_val=self.length, axis=axis)
-        _, (x0_plot_plane, y0_plot_plane) = self.pop_axis(self.center, axis=axis)
         int_box = box(
             minx=x0_plot_plane - Lx / 2,
             miny=y0_plot_plane - Ly / 2,
@@ -1179,12 +1183,19 @@ class PolySlab(Planar):
             )
         return val
 
-    @pydantic.validator("slab_bounds", always=True)
-    def set_length(cls, val, values):
-        """sets the .length field using zmin, zmax"""
-        zmin, zmax = val
-        values["length"] = zmax - zmin
-        return val
+    @property
+    def center_axis(self) -> float:
+        """Gets the position of the center of the geometry in the out of plane dimension."""
+        zmin, zmax = self.slab_bounds
+        if np.isneginf(zmin) and np.isposinf(zmax):
+            return 0.0
+        return (zmax + zmin) / 2.0
+
+    @property
+    def length_axis(self) -> float:
+        """Gets the length of the geometry along the out of plane dimension."""
+        zmin, zmax = self.slab_bounds
+        return zmax - zmin
 
     @pydantic.validator("vertices", always=True)
     def correct_shape(cls, val):
@@ -1208,19 +1219,6 @@ class PolySlab(Planar):
                 "A valid Polygon may not possess any intersecting or overlapping edges."
             )
 
-        return val
-
-    @pydantic.validator("vertices", always=True)
-    def set_center(cls, val, values):
-        """sets the .center field using zmin, zmax, and polygon vertices"""
-        polygon_face = Polygon(val)
-        zmin, zmax = values.get("slab_bounds")
-        if np.isneginf(zmin) and np.isposinf(zmax):
-            z0 = 0.0
-        else:
-            z0 = (zmin + zmax) / 2.0
-        [(x0, y0)] = list(polygon_face.centroid.coords)
-        values["center"] = cls.unpop_axis(z0, (x0, y0), axis=values.get("axis"))
         return val
 
     @pydantic.validator("vertices", always=True)
@@ -1291,10 +1289,12 @@ class PolySlab(Planar):
 
         # For Slanted PolySlab. Similar procedure to validate
         # Fist, no vertex-vertex crossing at any point during extrusion
-        dist = -values["length"] * np.tan(values["sidewall_angle"])
+        zmin, zmax = values["slab_bounds"]
+        length = zmax - zmin
+        dist = -length * np.tan(values["sidewall_angle"])
         cross_val, max_dist = PolySlab._crossing_detection(base, dist)
         if cross_val:
-            max_thick = max_dist / np.abs(dist) * values["length"]
+            max_thick = max_dist / np.abs(dist) * length
             raise SetupError(
                 "Sidewall angle or structure thickness is so large that there are "
                 "vertices crossing somewhere during extrusion. "
@@ -1439,7 +1439,7 @@ class PolySlab(Planar):
             The vertices of the polygon at the top.
         """
 
-        dist = -self.length * self._tanq
+        dist = -self.length_axis * self._tanq
         return self._shift_vertices(self.base_polygon, dist)[0]
 
     @cached_property
@@ -1477,16 +1477,16 @@ class PolySlab(Planar):
             Whether point ``(x,y,z)`` is inside geometry.
         """
 
-        z0, _ = self.pop_axis(self.center, axis=self.axis)
+        z0 = self.center_axis
         dist_z = np.abs(z - z0)
-        inside_height = dist_z <= (self.length / 2)
+        inside_height = dist_z <= (self.length_axis / 2)
 
         # avoid going into face checking if no points are inside slab bounds
         if not np.any(inside_height):
             return inside_height
 
         # check what points are inside polygon cross section (face)
-        z_local = z - z0 + self.length / 2  # distance to the base
+        z_local = z - z0 + self.length_axis / 2  # distance to the base
         dist = -z_local * self._tanq
 
         def contains_pointwise(face_polygon):
@@ -1543,8 +1543,8 @@ class PolySlab(Planar):
             For more details refer to
             `Shapely's Documentaton <https://shapely.readthedocs.io/en/stable/project.html>`_.
         """
-        z0, _ = self.pop_axis(self.center, axis=self.axis)
-        z_local = z - z0 + self.length / 2  # distance to the base
+        z0 = self.center_axis
+        z_local = z - z0 + self.length_axis / 2  # distance to the base
         dist = -z_local * self._tanq
         vertices_z = self._shift_vertices(self._base_polygon, dist)[0]
         return [Polygon(vertices_z)]
@@ -1584,13 +1584,13 @@ class PolySlab(Planar):
         """
 
         # find out all z_i where the plane will intersect the vertex
-        z0, _ = self.pop_axis(self.center, axis=self.axis)
-        z_base = z0 - self.length / 2
+        z0 = self.center_axis
+        z_base = z0 - self.length_axis / 2
         height_list = self._find_intersecting_height(position, axis)
         polys = []
 
         # looping through z_i to assemble the polygons
-        height_list = np.append(height_list, self.length)
+        height_list = np.append(height_list, self.length_axis)
         h_base = 0.0
         for h_top in height_list:
             # length within between top and bottom
@@ -1695,7 +1695,7 @@ class PolySlab(Planar):
             height *= -1
 
         height = height[height > 0]
-        height = height[height < self.length]
+        height = height[height < self.length_axis]
         return height
 
     def _find_intersecting_ys_angle_vertical(  # pylint:disable=too-many-locals
@@ -1895,7 +1895,7 @@ class PolySlab(Planar):
         """
 
         # check for the maximum possible contribution from dilation/slant on each side
-        max_offset = self.dilation + max(0, -self._tanq * self.length)
+        max_offset = self.dilation + max(0, -self._tanq * self.length_axis)
 
         # special care when dilated
         if max_offset > 0:
@@ -1910,9 +1910,7 @@ class PolySlab(Planar):
             xmax, ymax = np.amax(self.vertices, axis=0)
 
         # get bounds in (local) z
-        z0, _ = self.pop_axis(self.center, axis=self.axis)
-        zmin = z0 - self.length / 2
-        zmax = z0 + self.length / 2
+        zmin, zmax = self.slab_bounds
 
         # rearrange axes
         coords_min = self.unpop_axis(zmin, (xmin, ymin), axis=self.axis)

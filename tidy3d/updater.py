@@ -174,6 +174,27 @@ def updates_from_version(version_from_string: str):
     return decorator
 
 
+@updates_from_version("1.4")
+def update_1_4(sim_dict: dict) -> dict:
+    """Updates version 1.3 to 1.4."""
+
+    def fix_polyslab_dict(geo_dict):
+        """Fix a single PolySlab dictionary."""
+        geo_dict.pop("length", None)
+        geo_dict.pop("center", None)
+
+    for structure in sim_dict["structures"]:
+        geo_dict = structure["geometry"]
+        if geo_dict["type"] == "PolySlab":
+            fix_polyslab_dict(geo_dict)
+        elif geo_dict["type"] == "GeometryGroup":
+            for sub_geo in geo_dict["geometries"]:
+                if sub_geo["type"] == "PolySlab":
+                    fix_polyslab_dict(sub_geo)
+
+    return sim_dict
+
+
 @updates_from_version("1.3")
 def update_1_3(sim_dict: dict) -> dict:
     """Updates version 1.3 to 1.4."""
