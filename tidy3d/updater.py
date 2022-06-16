@@ -188,6 +188,7 @@ def update_1_4(sim_dict: dict) -> dict:
         if geo_dict["type"] == "PolySlab":
             fix_polyslab_dict(geo_dict)
         elif geo_dict["type"] == "GeometryGroup":
+            geo_dict.pop("center", None)
             for sub_geo in geo_dict["geometries"]:
                 if sub_geo["type"] == "PolySlab":
                     fix_polyslab_dict(sub_geo)
