@@ -12,7 +12,7 @@ from shapely.geometry import Point, Polygon, box, MultiPolygon
 from descartes import PolygonPatch
 
 from .base import Tidy3dBaseModel, cache
-from .types import Bound, Size, Coordinate, Axis, Coordinate2D, Array
+from .types import Bound, Size, Coordinate, Axis, Coordinate2D, ArrayLike
 from .types import Vertices, Ax, Shapely
 from .viz import add_ax_if_none, equal_aspect
 from .viz import PLOT_BUFFER, ARROW_LENGTH_FACTOR, ARROW_WIDTH_FACTOR, MAX_ARROW_WIDTH_FACTOR
@@ -462,12 +462,12 @@ class Geometry(Tidy3dBaseModel, ABC):
         return axis, position
 
     @staticmethod
-    def rotate_points(points: Array[float], axis: Coordinate, angle: float) -> Array[float]:
+    def rotate_points(points: ArrayLike[float, 3], axis: Coordinate, angle: float) -> ArrayLike[float, 3]:
         """Rotate a set of points in 3D.
 
         Parameters
         ----------
-        points : Array[float]
+        points : ArrayLike[float]
             Array of shape ``(3, ...)``.
         axis : Coordinate
             Axis of rotation
@@ -502,18 +502,18 @@ class Geometry(Tidy3dBaseModel, ABC):
 
     def reflect_points(
         self,
-        points: Array[float],
+        points: ArrayLike[float, 3],
         polar_axis: Axis,
         angle_theta: float,
         angle_phi: float,
-    ) -> Array[float]:
+    ) -> ArrayLike[float, 3]:
         """Reflect a set of points in 3D at a plane passing through the coordinate origin defined
         and normal to a given axis defined in polar coordinates (theta, phi) w.r.t. the
         ``polar_axis`` which can be 0, 1, or 2.
 
         Parameters
         ----------
-        points : Array[float]
+        points : ArrayLike[float]
             Array of shape ``(3, ...)``.
         polar_axis : Axis
             Cartesian axis w.r.t. which the normal axis angles are defined.
@@ -1422,7 +1422,7 @@ class PolySlab(Planar):
 
         Returns
         -------
-        Array[float, float]
+        ArrayLike[float, float]
             The vertices of the polygon at the base.
         """
 
@@ -1434,7 +1434,7 @@ class PolySlab(Planar):
 
         Returns
         -------
-        Array[float, float]
+        ArrayLike[float, float]
             The vertices of the polygon at the top.
         """
 
@@ -1448,7 +1448,7 @@ class PolySlab(Planar):
 
         Returns
         -------
-        Array[float, float]
+        ArrayLike[float, float]
             The vertices of the polygon at the base.
         """
         if isclose(self.sidewall_angle, 0) and isclose(self.dilation, 0):
@@ -2025,7 +2025,7 @@ class PolySlab(Planar):
 
         Returns
         -------
-        Array[float, float]
+        ArrayLike[float, float]
            The vertices of the polygon for internal use.
         """
 

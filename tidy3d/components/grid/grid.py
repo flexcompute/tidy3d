@@ -6,13 +6,13 @@ import numpy as np
 import pydantic as pd
 
 from ..base import Tidy3dBaseModel, TYPE_TAG_STR
-from ..types import Array, Axis
+from ..types import ArrayLike, Axis
 from ..geometry import Box
 
 from ...log import SetupError
 
 # data type of one dimensional coordinate array.
-Coords1D = Array[float]
+Coords1D = ArrayLike[float, 1]
 
 
 class Coords(Tidy3dBaseModel):
@@ -139,11 +139,13 @@ class Grid(Tidy3dBaseModel):
     @staticmethod
     def _avg(coords1d: Coords1D):
         """Return average positions of an array of 1D coordinates."""
+        coords1d = np.array(coords1d)
         return (coords1d[1:] + coords1d[:-1]) / 2.0
 
     @staticmethod
     def _min(coords1d: Coords1D):
         """Return minus positions of 1D coordinates."""
+        coords1d = np.array(coords1d)
         return coords1d[:-1]
 
     @property
@@ -215,7 +217,7 @@ class Grid(Tidy3dBaseModel):
         >>> Nx, Ny, Nz = grid.num_cells
         """
         return [
-            coords1d.size - 1 for coords1d in self.boundaries.dict(exclude={TYPE_TAG_STR}).values()
+            len(coords1d) - 1 for coords1d in self.boundaries.dict(exclude={TYPE_TAG_STR}).values()
         ]
 
     @property
@@ -346,7 +348,7 @@ class Grid(Tidy3dBaseModel):
 
         # for each dimension
         for axis, (pt_min, pt_max) in enumerate(zip(pts_min, pts_max)):
-            bound_coords = boundaries.to_list[axis]
+            bound_coords = np.array(boundaries.to_list[axis])
             assert pt_min <= pt_max, "min point was greater than max point"
 
             # index of smallest coord greater than than pt_max
@@ -391,7 +393,7 @@ class Grid(Tidy3dBaseModel):
             The subspace of the grid along ``axis``.
         """
 
-        coords = self.boundaries.to_list[axis]
+        coords = np.array(self.boundaries.to_list[axis])
         padded_coords = coords
         num_coords = coords.size
         num_cells = num_coords - 1

@@ -5,7 +5,7 @@ from typing import Union, Tuple
 import pydantic
 import numpy as np
 
-from .types import Literal, Ax, EMField, Array, Bound, FreqArray
+from .types import Literal, Ax, EMField, ArrayLike, Bound, FreqArray
 from .geometry import Box
 from .validators import assert_plane
 from .mode import ModeSpec
@@ -45,7 +45,7 @@ class Monitor(Box, ABC):
         return Box(center=self.center, size=self.size)
 
     @abstractmethod
-    def storage_size(self, num_cells: int, tmesh: Array) -> int:
+    def storage_size(self, num_cells: int, tmesh: ArrayLike[float, 1]) -> int:
         """Size of monitor storage given the number of points after discretization.
 
         Parameters
@@ -105,7 +105,7 @@ class TimeMonitor(Monitor, ABC):
             raise SetupError("Monitor start time is greater than stop time.")
         return val
 
-    def time_inds(self, tmesh: Array) -> Tuple[int, int]:
+    def time_inds(self, tmesh: ArrayLike[float, 1]) -> Tuple[int, int]:
         """Compute the starting and stopping index of the monitor in a given discrete time mesh."""
 
         tind_beg, tind_end = (0, 0)
@@ -141,7 +141,7 @@ class TimeMonitor(Monitor, ABC):
 
         return (tind_beg, tind_end)
 
-    def num_steps(self, tmesh: Array) -> int:
+    def num_steps(self, tmesh: ArrayLike[float, 1]) -> int:
         """Compute number of time steps for a time monitor."""
 
         tind_beg, tind_end = self.time_inds(tmesh)
@@ -270,7 +270,7 @@ class FieldMonitor(AbstractFieldMonitor, FreqMonitor):
 
     _data_type: Literal["FieldData"] = pydantic.Field("FieldData")
 
-    def storage_size(self, num_cells: int, tmesh: Array) -> int:
+    def storage_size(self, num_cells: int, tmesh: ArrayLike[float, 1]) -> int:
         # stores 1 complex number per grid cell, per frequency, per field
         return BYTES_COMPLEX * num_cells * len(self.freqs) * len(self.fields)
 
@@ -358,7 +358,7 @@ class FieldTimeMonitor(AbstractFieldMonitor, TimeMonitor):
 
     _data_type: Literal["FieldTimeData"] = pydantic.Field("FieldTimeData")
 
-    def storage_size(self, num_cells: int, tmesh: Array) -> int:
+    def storage_size(self, num_cells: int, tmesh: ArrayLike[float, 1]) -> int:
         # stores 1 real number per grid cell, per time step, per field
         num_steps = self.num_steps(tmesh)
         return BYTES_REAL * num_steps * num_cells * len(self.fields)
@@ -381,7 +381,7 @@ class PermittivityMonitor(FreqMonitor):
 
     _data_type: Literal["PermittivityData"] = pydantic.Field("PermittivityData")
 
-    def storage_size(self, num_cells: int, tmesh: Array) -> int:
+    def storage_size(self, num_cells: int, tmesh: ArrayLike[float, 1]) -> int:
         # stores 3 complex number per grid cell, per frequency
         return BYTES_COMPLEX * num_cells * len(self.freqs) * 3
 
@@ -400,7 +400,7 @@ class FluxMonitor(AbstractFluxMonitor, FreqMonitor):
 
     _data_type: Literal["FluxData"] = pydantic.Field("FluxData")
 
-    def storage_size(self, num_cells: int, tmesh: Array) -> int:
+    def storage_size(self, num_cells: int, tmesh: ArrayLike[float, 1]) -> int:
         # stores 1 real number per frequency
         return BYTES_REAL * len(self.freqs)
 
@@ -421,7 +421,7 @@ class FluxTimeMonitor(AbstractFluxMonitor, TimeMonitor):
 
     _data_type: Literal["FluxTimeData"] = pydantic.Field("FluxTimeData")
 
-    def storage_size(self, num_cells: int, tmesh: Array) -> int:
+    def storage_size(self, num_cells: int, tmesh: ArrayLike[float, 1]) -> int:
         # stores 1 real number per time tep
         num_steps = self.num_steps(tmesh)
         return BYTES_REAL * num_steps

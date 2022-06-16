@@ -9,7 +9,7 @@ import pydantic
 import numpy as np
 
 from .base import Tidy3dBaseModel
-from .types import Direction, Polarization, Ax, FreqBound, Array, Axis, Bound
+from .types import Direction, Polarization, Ax, FreqBound, ArrayLike, Axis, Bound
 from .validators import assert_plane, validate_name_str
 from .geometry import Box
 from .mode import ModeSpec
@@ -50,7 +50,7 @@ class SourceTime(ABC, Tidy3dBaseModel):
         """
 
     def spectrum(
-        self, times: Array[float], freqs: Array[float], dt: float, complex_fields: bool = False
+        self, times: ArrayLike[float, 1], freqs: ArrayLike[float, 1], dt: float, complex_fields: bool = False
     ) -> complex:
         """Complex-valued source spectrum as a function of frequency
 
@@ -73,6 +73,9 @@ class SourceTime(ABC, Tidy3dBaseModel):
             Complex-valued array (of len(freqs)) containing spectrum at those frequencies.
         """
 
+        times = np.array(times)
+        freqs = np.array(freqs)
+
         if complex_fields:
             time_amps = self.amp_time(times)
         else:
@@ -88,7 +91,7 @@ class SourceTime(ABC, Tidy3dBaseModel):
         return dt * dft_matrix @ time_amps
 
     @add_ax_if_none
-    def plot(self, times: Array[float], ax: Ax = None) -> Ax:
+    def plot(self, times: ArrayLike[float, 1], ax: Ax = None) -> Ax:
         """Plot the complex-valued amplitude of the source time-dependence.
 
         Parameters
@@ -119,7 +122,7 @@ class SourceTime(ABC, Tidy3dBaseModel):
 
     @add_ax_if_none
     def plot_spectrum(
-        self, times: Array[float], num_freqs: int = 101, ax: Ax = None, complex_fields: bool = False
+        self, times: ArrayLike[float, 1], num_freqs: int = 101, ax: Ax = None, complex_fields: bool = False
     ) -> Ax:
         """Plot the complex-valued amplitude of the source time-dependence.
 
@@ -398,7 +401,7 @@ class FieldSource(Source, ABC):
 class CustomSource(Source, ABC):
     """Implements custom current components specified by data."""
 
-    data: Array[float]
+    data: ArrayLike[float, 2]
 
 
 class CustomFieldSource(FieldSource, CustomSource):

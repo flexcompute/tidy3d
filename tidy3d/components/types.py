@@ -13,39 +13,65 @@ import numpy as np
 from matplotlib.axes._subplots import Axes
 from shapely.geometry.base import BaseGeometry
 from ..log import ValidationError
-
+# import warnings
+# warnings.filterwarnings(action="error", category=np.ComplexWarning)
 """ Numpy Arrays """
 
 # generic numpy array
 Numpy = np.ndarray
 
 
-class TypedArray(np.ndarray):
-    """A numpy array with a type given by cls.inner_type"""
+# class TypedArray(np.ndarray):
+#     """A numpy array with a type given by cls.inner_type"""
 
-    @classmethod
-    def __get_validators__(cls):
-        """boilerplate"""
-        yield cls.validate_type
+#     @classmethod
+#     def __get_validators__(cls):
+#         """boilerplate"""
+#         yield cls.validate_type
 
-    @classmethod
-    def validate_type(cls, val):
-        """validator"""
-        # need to fix, doesnt work for simulationdata_export and load?
-        return np.array(val, dtype=cls.inner_type)  # pylint: disable=no-member
+#     @classmethod
+#     def validate_type(cls, val):
+#         """validator"""
+#         # need to fix, doesnt work for simulationdata_export and load?
+#         if isinstance(val, np.ndarray):
+#             print(val)
+#             print(f'converting type: {val.dtype} to {cls.inner_type}')
+
+#             # if not np.all(val.astype(cls.inner_type) == val):
+#                 # import pdb; pdb.set_trace()
+#             ret_val = val.astype(cls.inner_type)
+#             if np.any(ret_val != val):
+#                 import pdb; pdb.set_trace()
+#             print(ret_val)
+
+#             return ret_val
+#         return np.array(val, dtype=cls.inner_type)  # pylint: disable=no-member
+
+#     @classmethod
+#     def __modify_schema__(cls, field_schema):
+#         """Sets the schema of NumpyArray."""
+#         field_schema.update(NumpyArray.schema())
+
+# class NumpyArray(pydantic.BaseModel):
+#     """Wrapper around numpy arrays that has a well defined json schema."""
+
+#     data_list: list
+
+#     @property
+#     def arr(self):
+#         """Contructs a numpy array representation of the NumpyArray."""
+#         return np.array(self.data_list)
+
+# class ArrayMeta(type):
+#     """metclass for Array, enables Array[type] -> TypedArray"""
+
+#     def __getitem__(cls, t):
+#         """Array[t] -> TypedArray"""
+#         return type("Array", (TypedArray,), {"inner_type": t})
 
 
-class ArrayMeta(type):
-    """metclass for Array, enables Array[type] -> TypedArray"""
-
-    def __getitem__(cls, t):
-        """Array[t] -> TypedArray"""
-        return type("Array", (TypedArray,), {"inner_type": t})
-
-
-class Array(np.ndarray, metaclass=ArrayMeta):
-    """type of numpy array with annotated type (Array[float], Array[complex])"""
-
+# class Array(np.ndarray, metaclass=ArrayMeta):
+#     """type of numpy array with annotated type (Array[float], Array[complex])"""
 
 class TypedArrayLike(np.ndarray):
     """A numpy array with a type given by cls.inner_type"""
@@ -68,14 +94,18 @@ class TypedArrayLike(np.ndarray):
     def validate_type(cls, val):
         """validator"""
         # need to fix, doesnt work for simulationdata_export and load?
-        val_ndims = len(val.shape)
-        cls_ndims = cls.ndims  # pylint:disable=no-member
 
-        if (cls_ndims is not None) and (cls_ndims != val_ndims):
-            raise ValidationError(
-                "wrong number of dimensions given. " f"Given {val_ndims}, expected {cls_ndims}."
-            )
-        return cls.make_tuple(val.tolist())
+        if isinstance(val, np.ndarray):
+            val_ndims = len(val.shape)
+            cls_ndims = cls.ndims  # pylint:disable=no-member
+
+            if (cls_ndims is not None) and (cls_ndims != val_ndims):
+                raise ValidationError(
+                    "wrong number of dimensions given. " f"Given {val_ndims}, expected {cls_ndims}."
+                )
+            return cls.make_tuple(val.tolist())
+
+        return tuple(val)
 
 
 class ArrayLikeMeta(type):

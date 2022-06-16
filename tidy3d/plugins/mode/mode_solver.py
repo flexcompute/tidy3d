@@ -15,7 +15,7 @@ from ...components import Simulation
 from ...components import ModeSpec
 from ...components import ModeMonitor
 from ...components.source import ModeSource, SourceTime
-from ...components.types import Direction, Array, FreqArray, Ax, Literal, Axis
+from ...components.types import Direction, ArrayLike, FreqArray, Ax, Literal, Axis
 from ...components.data import Tidy3dData, ModeIndexData, ModeFieldData, ScalarModeFieldData
 from ...components.data import AbstractSimulationData
 from ...components.boundary import Symmetry
@@ -23,7 +23,7 @@ from ...log import ValidationError, DataError
 
 from .solver import compute_modes
 
-FIELD = Tuple[Array[complex], Array[complex], Array[complex]]
+FIELD = Tuple[ArrayLike[complex, 3], ArrayLike[complex, 3], ArrayLike[complex, 3]]
 
 # Warning for field intensity at edges over total field intensity larger than this value
 FIELD_DECAY_CUTOFF = 1e-2
@@ -353,7 +353,7 @@ class ModeSolver(Tidy3dBaseModel):
 
         return mode_data
 
-    def _get_epsilon(self, plane: Box, freq: float) -> Array[complex]:
+    def _get_epsilon(self, plane: Box, freq: float) -> ArrayLike[complex, 4]:
         """Compute the diagonal components of the epsilon tensor in the plane."""
 
         eps_xx = self.simulation.epsilon(plane, "Ex", freq)
@@ -362,7 +362,7 @@ class ModeSolver(Tidy3dBaseModel):
 
         return np.stack((eps_xx, eps_yy, eps_zz), axis=0)
 
-    def _solver_eps(self, freq: float) -> Array[complex]:
+    def _solver_eps(self, freq: float) -> ArrayLike[complex, 4]:
         """Get the diagonal permittivity in the shape needed to be supplied to the sovler, with the
         normal axis rotated to z."""
 
@@ -382,8 +382,8 @@ class ModeSolver(Tidy3dBaseModel):
         return np.stack((eps_xx, eps_yy, eps_zz), axis=0)
 
     def _solve_all_freqs(
-        self, coords: Tuple[Array, Array], symmetry: Tuple[Symmetry, Symmetry]
-    ) -> Tuple[List[float], List[Dict[str, Array[complex]]]]:
+        self, coords: Tuple[ArrayLike[float, 1], ArrayLike[float, 1]], symmetry: Tuple[Symmetry, Symmetry]
+    ) -> Tuple[List[float], List[Dict[str, ArrayLike[complex, 4]]]]:
         """Call the mode solver at all requested frequencies."""
 
         fields = []
@@ -398,8 +398,8 @@ class ModeSolver(Tidy3dBaseModel):
         return n_complex, fields
 
     def _solve_single_freq(
-        self, freq: float, coords: Tuple[Array, Array], symmetry: Tuple[Symmetry, Symmetry]
-    ) -> Tuple[float, Dict[str, Array[complex]]]:
+        self, freq: float, coords: Tuple[ArrayLike[float, 1], ArrayLike[float, 1]], symmetry: Tuple[Symmetry, Symmetry]
+    ) -> Tuple[float, Dict[str, ArrayLike[complex, 4]]]:
         """Call the mode solver at a single frequency.
         The fields are rotated from propagation coordinates back to global coordinates.
         """
@@ -433,7 +433,7 @@ class ModeSolver(Tidy3dBaseModel):
         f_rot = np.stack(self.plane.unpop_axis(f_z, (f_x, f_y), axis=self.normal_axis), axis=0)
         return f_rot
 
-    def _process_fields(self, mode_fields: Array[complex], mode_index: int) -> Tuple[FIELD, FIELD]:
+    def _process_fields(self, mode_fields: ArrayLike[complex, 4], mode_index: int) -> Tuple[FIELD, FIELD]:
         """Transform solver fields to simulation axes, set gauge, and check decay at boundaries."""
 
         # Separate E and H fields (in solver coordinates)

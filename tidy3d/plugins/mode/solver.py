@@ -64,7 +64,7 @@ def compute_modes(
     Nx, Ny = eps_xx.shape
     N = eps_xx.size
 
-    if coords[0].size != Nx + 1 or coords[1].size != Ny + 1:
+    if len(coords[0]) != Nx + 1 or len(coords[1]) != Ny + 1:
         raise ValueError("Mismatch between 'coords' and 'esp_cross' shapes.")
     new_coords = [np.copy(c) for c in coords]
 

@@ -19,7 +19,7 @@ from ...log import SetupError, ValidationError
 PTS_PER_WVL = 10
 
 # Numpy float array and related array types
-ArrayLikeN2F = Union[float, Tuple[float, ...], ArrayLike[float, 1]]
+ArrayLikeN2F = Union[float, Tuple[float, ...], ArrayLike[float, 4]]
 
 
 class Near2FarSurface(Tidy3dBaseModel):
@@ -648,15 +648,15 @@ the number of directions ({len(normal_dirs)})."
                     )
 
         dims = ("x", "y", "z")
-        coords = {"x": x, "y": y, "z": z}
+        coords = {"x": np.array(x), "y": np.array(y), "z": np.array(z)}
 
-        Ex = xr.DataArray(data=Ex_data, coords=coords, dims=dims)
-        Ey = xr.DataArray(data=Ey_data, coords=coords, dims=dims)
-        Ez = xr.DataArray(data=Ez_data, coords=coords, dims=dims)
+        Ex = xr.DataArray(np.array(Ex_data), coords=coords, dims=dims)
+        Ey = xr.DataArray(np.array(Ey_data), coords=coords, dims=dims)
+        Ez = xr.DataArray(np.array(Ez_data), coords=coords, dims=dims)
 
-        Hx = xr.DataArray(data=Hx_data, coords=coords, dims=dims)
-        Hy = xr.DataArray(data=Hy_data, coords=coords, dims=dims)
-        Hz = xr.DataArray(data=Hz_data, coords=coords, dims=dims)
+        Hx = xr.DataArray(np.array(Hx_data), coords=coords, dims=dims)
+        Hy = xr.DataArray(np.array(Hy_data), coords=coords, dims=dims)
+        Hz = xr.DataArray(np.array(Hz_data), coords=coords, dims=dims)
 
         field_data = xr.Dataset({"Ex": Ex, "Ey": Ey, "Ez": Ez, "Hx": Hx, "Hy": Hy, "Hz": Hz})
 
