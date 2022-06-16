@@ -56,6 +56,15 @@ def test_simulation_preserve_types():
                 medium=Sellmeier(coeffs=[]),
             ),
             Structure(geometry=Sphere(radius=1), medium=Debye(eps_inf=1.0, coeffs=[]), name="t2"),
+            Structure(
+                geometry=GeometryGroup(
+                    geometries=[
+                        PolySlab(vertices=[(0, 0), (2, 3), (4, 3)], slab_bounds=(-1, 1), axis=2),
+                        Cylinder(radius=1, length=1, axis=2),
+                    ]
+                ),
+                medium=Drude(coeffs=[[1.0, 1.0]]),
+            ),
         ],
         sources=[
             UniformCurrentSource(size=(0, 0, 0), source_time=st, polarization="Ex"),
