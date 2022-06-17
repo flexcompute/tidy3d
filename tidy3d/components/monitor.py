@@ -216,7 +216,7 @@ class AbstractModeMonitor(PlanarMonitor, FreqMonitor):
         z: float = None,
         ax: Ax = None,
         sim_bounds: Bound = None,
-        **patch_kwargs
+        **patch_kwargs,
     ) -> Ax:
 
         # call the monitor.plot() function first
@@ -316,8 +316,14 @@ class FieldMonitor(AbstractFieldMonitor, FreqMonitor):
             (size_x, size_y, 0.0),  # z+
         )
 
-        surface_names = f"{self.name}_x-", f"{self.name}_x+", f"{self.name}_y-", f"{self.name}_y+", f"{self.name}_z-", f"{self.name}_z+"
-
+        surface_names = (
+            f"{self.name}_x-",
+            f"{self.name}_x+",
+            f"{self.name}_y-",
+            f"{self.name}_y+",
+            f"{self.name}_z-",
+            f"{self.name}_z+",
+        )
 
         # Create "surface" monitors
         monitors = []

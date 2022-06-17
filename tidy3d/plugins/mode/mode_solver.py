@@ -344,7 +344,12 @@ class ModeSolver(Tidy3dBaseModel):
             mode_index=np.arange(self.mode_spec.num_modes),
             values=np.stack(n_complex, axis=0),
         )
-        return ModeSolverData(simulation=self.simulation, plane=self.plane, mode_spec=self.mode_spec, data_dict={"fields": field_data, "n_complex": index_data},)
+        return ModeSolverData(
+            simulation=self.simulation,
+            plane=self.plane,
+            mode_spec=self.mode_spec,
+            data_dict={"fields": field_data, "n_complex": index_data},
+        )
 
     def _get_epsilon(self, plane: Box, freq: float) -> ArrayLike[complex, 4]:
         """Compute the diagonal components of the epsilon tensor in the plane."""

@@ -134,7 +134,7 @@ class SimulationPlotly(UIComponent):
         plotly_kwargs = {xyz_label: self.cs_val}
         return self.plotly(**plotly_kwargs)
 
-    def make_component(self):    # pylint: disable=too-many-locals
+    def make_component(self):  # pylint: disable=too-many-locals
         """Creates the dash component."""
 
         xyz_label, (xyz_min, xyz_max) = self.xyz_label_bounds
@@ -164,7 +164,13 @@ class SimulationPlotly(UIComponent):
             style={"padding": 50, "flex": 1},
         )
 
-        return dcc.Tab([html.H1("Viewing Simulation."), html.Div([graph, xyz_selection], style={"display": "flex", "flexDirection": "row"}),], label="Simulation",)
+        return dcc.Tab(
+            [
+                html.H1("Viewing Simulation."),
+                html.Div([graph, xyz_selection], style={"display": "flex", "flexDirection": "row"}),
+            ],
+            label="Simulation",
+        )
 
     @equal_aspect_plotly
     @add_fig_if_none

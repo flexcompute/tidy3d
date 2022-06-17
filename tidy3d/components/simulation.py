@@ -384,7 +384,12 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
                     else:
                         medium_str = f"The medium associated with structures[{medium_index-1}]"
 
-                    log.warning(f"{medium_str}has a frequency range: ({fmin_med:2e}, {fmax_med:2e}) (Hz)that does not fully cover the frequencies contained in monitors[{monitor_index}]. This can cause innacuracies in the recorded results.")
+                    log.warning(
+                        f"{medium_str}has a frequency range: ({fmin_med:2e}, {fmax_med:2e}) "
+                        "(Hz)that does not fully cover the frequencies contained in "
+                        f"monitors[{monitor_index}]. "
+                        "This can cause innacuracies in the recorded results."
+                    )
 
         return val
 
@@ -418,7 +423,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         return val
 
     @pydantic.validator("grid_spec", always=True)
-    def _warn_grid_size_too_small(cls, val, values):    # pylint:disable=too-many-locals
+    def _warn_grid_size_too_small(cls, val, values):  # pylint:disable=too-many-locals
         """Warn user if any grid size is too large compared to minimum wavelength in material."""
 
         if val is None:
@@ -443,7 +448,10 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
                 lambda_min = C_0 / freq0 / n_material
 
                 for key, grid_spec in zip("xyz", (val.grid_x, val.grid_y, val.grid_z)):
-                    if isinstance(grid_spec, UniformGrid) and grid_spec.dl > lambda_min / MIN_GRIDS_PER_WVL:
+                    if (
+                        isinstance(grid_spec, UniformGrid)
+                        and grid_spec.dl > lambda_min / MIN_GRIDS_PER_WVL
+                    ):
                         log.warning(
                             f"The grid step in {key} has a value of {grid_spec.dl:.4f} (um)"
                             ", which was detected as being large when compared to the "
@@ -453,7 +461,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
                             f"{lambda_min:.4f} (um). "
                             "To avoid inaccuracies, it is reccomended the grid size is reduced."
                         )
-                                # TODO: warn about custom grid spec
+                        # TODO: warn about custom grid spec
 
         return val
 
@@ -1576,7 +1584,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         n_max, _ = AbstractMedium.eps_complex_to_nk(eps_max)
         return wvl_min / n_max
 
-    def min_sym_box(self, box: Box) -> Box:    # pylint:disable=too-many-locals
+    def min_sym_box(self, box: Box) -> Box:  # pylint:disable=too-many-locals
         """Compute the smallest Box restricted to the first quadrant in the presence of symmetries
         that fully covers the original Box when symmetries are applied.
 
