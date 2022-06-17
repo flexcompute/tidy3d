@@ -146,7 +146,7 @@ class Near2Far(Tidy3dBaseModel):
         return ETA_0 / (index_n + 1j * index_k)
 
     @classmethod
-    def from_surface_monitors(
+    def from_surface_monitors(  # pylint:disable=too-many-arguments
         cls,
         sim_data: SimulationData,
         monitors: List[FieldMonitor],
@@ -187,7 +187,10 @@ class Near2Far(Tidy3dBaseModel):
 the number of directions ({len(normal_dirs)})."
             )
 
-        surfaces = [Near2FarSurface(monitor=monitor, normal_dir=normal_dir) for monitor, normal_dir in zip(monitors, normal_dirs)]
+        surfaces = [
+            Near2FarSurface(monitor=monitor, normal_dir=normal_dir)
+            for monitor, normal_dir in zip(monitors, normal_dirs)
+        ]
 
         return cls(
             sim_data=sim_data,
@@ -460,14 +463,21 @@ the number of directions ({len(normal_dirs)})."
 
                 phase_ij = phase[idx_u][:, None] * phase[idx_v][None, :] * phase[idx_w]
 
-                J[idx_u, i_th, j_ph] = integrate_2d(currents[f"J{cmp_1}"].values * phase_ij, pts[idx_u], pts[idx_v])
+                J[idx_u, i_th, j_ph] = integrate_2d(
+                    currents[f"J{cmp_1}"].values * phase_ij, pts[idx_u], pts[idx_v]
+                )
 
-                J[idx_v, i_th, j_ph] = integrate_2d(currents[f"J{cmp_2}"].values * phase_ij, pts[idx_u], pts[idx_v])
+                J[idx_v, i_th, j_ph] = integrate_2d(
+                    currents[f"J{cmp_2}"].values * phase_ij, pts[idx_u], pts[idx_v]
+                )
 
+                M[idx_u, i_th, j_ph] = integrate_2d(
+                    currents[f"M{cmp_1}"].values * phase_ij, pts[idx_u], pts[idx_v]
+                )
 
-                M[idx_u, i_th, j_ph] = integrate_2d(currents[f"M{cmp_1}"].values * phase_ij, pts[idx_u], pts[idx_v])
-
-                M[idx_v, i_th, j_ph] = integrate_2d(currents[f"M{cmp_2}"].values * phase_ij, pts[idx_u], pts[idx_v])
+                M[idx_v, i_th, j_ph] = integrate_2d(
+                    currents[f"M{cmp_2}"].values * phase_ij, pts[idx_u], pts[idx_v]
+                )
 
         if len(theta) < 2:
             integrate_for_one_theta(0)
@@ -585,7 +595,9 @@ the number of directions ({len(normal_dirs)})."
         Ht = xr.DataArray(data=Ht_array[None, ...], coords=coords, dims=dims)
         Hp = xr.DataArray(data=Hp_array[None, ...], coords=coords, dims=dims)
 
-        return xr.Dataset({"E_r": Er, "E_theta": Et, "E_phi": Ep, "H_r": Hr, "H_theta": Ht, "H_phi": Hp})
+        return xr.Dataset(
+            {"E_r": Er, "E_theta": Et, "E_phi": Ep, "H_r": Hr, "H_theta": Ht, "H_phi": Hp}
+        )
 
     def fields_cartesian(self, x: ArrayLikeN2F, y: ArrayLikeN2F, z: ArrayLikeN2F) -> xr.Dataset:
         """Get fields at a point relative to monitor center in cartesian coordinates.

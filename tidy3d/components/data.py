@@ -236,7 +236,6 @@ class MonitorData(Tidy3dData, ABC):
         # kwargs that gets passed to MonitorData.__init__() to make new MonitorData
         kwargs = {data_name: np.array(data_value) for data_name, data_value in hdf5_grp.items()}
 
-
         # handle data stored as np.array() of bytes instead of strings
         for str_kwarg in ("direction",):
             if kwargs.get(str_kwarg) is not None:
@@ -286,7 +285,10 @@ class CollectionData(Tidy3dData):
             return False
         if any(k not in self.data_dict.keys() for k in other.data_dict.keys()):
             return False
-        return all(data_value == other.data_dict[data_name] for data_name, data_value in self.data_dict.items())
+        return all(
+            data_value == other.data_dict[data_name]
+            for data_name, data_value in self.data_dict.items()
+        )
 
     def __getitem__(self, field_name: str) -> xr.DataArray:
         """Get the :class:`MonitorData` xarray representation by name (``col_data[field_name]``).

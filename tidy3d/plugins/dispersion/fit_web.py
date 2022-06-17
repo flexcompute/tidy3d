@@ -264,7 +264,6 @@ class StableDispersionFitter(DispersionFitter):
 
         resp = requests.post(f"{url_server}/dispersion/fit", headers=headers, data=web_data.json())
 
-
         try:
             resp.raise_for_status()
         except Exception as e:

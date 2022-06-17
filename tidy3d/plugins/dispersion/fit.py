@@ -684,10 +684,9 @@ class DispersionFitter(Tidy3dBaseModel):
         if has_k == 1:
             if np.allclose(n_lam[:, 0], k_lam[:, 0]):
                 return cls(wvl_um=n_lam[:, 0], n_data=n_lam[:, 1], k_data=k_lam[:, 1], **kwargs)
-            else:
-                raise ValidationError(
-                    "Invalid URL. Both n and k should be provided at each wavelength."
-                )
+            raise ValidationError(
+                "Invalid URL. Both n and k should be provided at each wavelength."
+            )
 
         return cls(wvl_um=n_lam[:, 0], n_data=n_lam[:, 1], **kwargs)
 

@@ -140,7 +140,13 @@ class AbstractFluxDataPlotly(DataPlotly, ABC):
         )
 
         # return the layout of the component so the app can insert it
-        return dcc.Tab([html.H1(f"Viewing data for {type(self.data).__name__}: '{self.monitor_name}'"), flux_plot,], label=self.label,)
+        return dcc.Tab(
+            [
+                html.H1(f"Viewing data for {type(self.data).__name__}: '{self.monitor_name}'"),
+                flux_plot,
+            ],
+            label=self.label,
+        )
 
     def plotly(self) -> PlotlyFig:
         """Generate the plotly figure for this component."""

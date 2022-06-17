@@ -1543,7 +1543,7 @@ class PolySlab(Planar):
         vertices_z = self._shift_vertices(self._base_polygon, dist)[0]
         return [Polygon(vertices_z)]
 
-    def _intersections_side(self, position, axis) -> list:    # pylint:disable=too-many-locals
+    def _intersections_side(self, position, axis) -> list:  # pylint:disable=too-many-locals
         """Find shapely geometries intersecting planar geometry with axis orthogonal to slab.
 
         For slanted polyslab, the procedure is as follows,
