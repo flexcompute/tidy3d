@@ -150,7 +150,74 @@
             },
             "name": "t2",
             "type": "Structure"
-        }
+        },
+        {
+            "geometry": {
+                "type": "GeometryGroup",
+                "center": [
+                    2.0,
+                    2.0,
+                    0.0
+                ],                
+                "geometries": [
+                    {
+                        "type": "PolySlab",
+                        "axis": 2,
+                        "slab_bounds": [
+                            -1.0,
+                            1.0
+                        ],
+                        "length": 2.0,
+                        "center": [
+                            2.0,
+                            2.0,
+                            0.0
+                        ],
+                        "dilation": 0.0,
+                        "sidewall_angle": 0.0,
+                        "vertices": [
+                            [
+                                0.0,
+                                0.0
+                            ],
+                            [
+                                2.0,
+                                3.0
+                            ],
+                            [
+                                4.0,
+                                3.0
+                            ]
+                        ]
+                    },
+                    {
+                        "type": "Cylinder",
+                        "axis": 2,
+                        "radius": 1.0,
+                        "center": [
+                            0.0,
+                            0.0,
+                            0.0
+                        ],
+                        "length": 1.0
+                    }
+                ]
+            },
+            "medium": {
+                "name": null,
+                "frequency_range": null,
+                "type": "Drude",
+                "eps_inf": 1.0,
+                "coeffs": [
+                    [
+                        1.0,
+                        1.0
+                    ]
+                ]
+            },
+            "name": null,
+            "type": "Structure"
+        }        
     ],
     "sources": [
         {
