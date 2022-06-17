@@ -135,7 +135,7 @@ class BlochBoundary(BoundaryEdge):
         return cls(bloch_vec=bloch_vec)
 
     @pd.validator("bloch_vec", always=True)
-    def _zero_imaginary_part(self, val):
+    def _zero_imaginary_part(cls, val):
         """Make sure the imaginary part of the bloch vector is 0."""
         if np.imag(val) != 0:
             raise ValidationError("Bloch vector must be real.")

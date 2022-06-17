@@ -79,14 +79,14 @@ class ModeSpec(Tidy3dBaseModel):
     )
 
     @pd.validator("bend_axis", always=True)
-    def bend_axis_given(self, val, values):
+    def bend_axis_given(cls, val, values):
         """check that ``bend_axis`` is provided if ``bend_radius`` is not ``None``"""
         if val is None and values.get("bend_radius") is not None:
             raise SetupError("bend_axis must also be defined if bend_radius is defined.")
         return val
 
     @pd.validator("angle_theta", allow_reuse=True, always=True)
-    def glancing_incidence(self, val):
+    def glancing_incidence(cls, val):
         """Warn if close to glancing incidence."""
         if np.abs(np.pi / 2 - val) < GLANCING_CUTOFF:
             raise SetupError(

@@ -385,7 +385,7 @@ class SpatialCollectionData(CollectionData, ABC):
     """
 
     @pd.validator("symmetry_center", always=True)
-    def _defined_if_sym_present(self, val, values):
+    def _defined_if_sym_present(cls, val, values):
         """If symmetry required, must have symmetry_center."""
         if any(sym != 0 for sym in values.get("symmetry")):
             assert val is not None, "symmetry_center must be supplied."

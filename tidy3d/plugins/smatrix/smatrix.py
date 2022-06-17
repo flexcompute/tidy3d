@@ -51,7 +51,7 @@ class Port(Box):
     )
 
     @pd.validator("mode_indices", always=True)
-    def evaluate_mode_indices(self, val, values):
+    def evaluate_mode_indices(cls, val, values):
         """Evaluates mode indices based on number of modes in mode spec."""
         if val is None:
             num_modes = values.get("mode_spec").num_modes
@@ -100,7 +100,7 @@ class ComponentModeler(Tidy3dBaseModel):
     )
 
     @pd.validator("simulation", always=True)
-    def _sim_has_no_sources(self, val):
+    def _sim_has_no_sources(cls, val):
         """Make sure simulation has no sources as they interfere with tool."""
         if len(val.sources) > 0:
             raise SetupError("Simulation must not have sources.")
