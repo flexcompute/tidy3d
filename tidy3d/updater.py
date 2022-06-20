@@ -1,4 +1,5 @@
 """Utilities for converting between tidy3d versions."""
+from typing import Dict, Callable
 import json
 import functools
 import yaml
@@ -172,24 +173,53 @@ def updates_from_version(version_from_string: str):
     return decorator
 
 
+def iterate_update_dict(update_dict: Dict, update_types: Dict[str, Callable]):
+    """Recursively iterate nested ``update_dict``. For any nested ``nested_dict`` found,
+    apply an update function if its ``nested_dict["type"]`` is in the keys of the ``update_types``
+    dictionary. Also iterates lists and tuples.
+    """
+
+    if isinstance(update_dict, dict):
+        # Update if we need to, and iterate recursively all items
+        if update_dict.get("type") in update_types.keys():
+            update_types[update_dict["type"]](update_dict)
+        for item in update_dict.values():
+            iterate_update_dict(item, update_types)
+    elif isinstance(update_dict, (list, tuple)):
+        # Try other iterables
+        for item in update_dict:
+            iterate_update_dict(item, update_types)
+
+
 @updates_from_version("1.4")
 def update_1_4(sim_dict: dict) -> dict:
     """Updates version 1.3 to 1.4."""
 
-    def fix_polyslab_dict(geo_dict):
-        """Fix a single PolySlab dictionary."""
+    def fix_polyslab(geo_dict):
+        """Fix a PolySlab dictionary."""
         geo_dict.pop("length", None)
         geo_dict.pop("center", None)
 
-    for structure in sim_dict["structures"]:
-        geo_dict = structure["geometry"]
-        if geo_dict["type"] == "PolySlab":
-            fix_polyslab_dict(geo_dict)
-        elif geo_dict["type"] == "GeometryGroup":
-            geo_dict.pop("center", None)
-            for sub_geo in geo_dict["geometries"]:
-                if sub_geo["type"] == "PolySlab":
-                    fix_polyslab_dict(sub_geo)
+    def fix_modespec(ms_dict):
+        """Fix a ModeSpec dictionary."""
+        sort_by = ms_dict.pop("sort_by", None)
+        if sort_by != "largest_neff":
+            log.warning(
+                "ModeSpec.sort_by was removed in Tidy3D 1.5.0, reverting to sorting by "
+                "largest effective index. Use ModeSpec.filter_pol to select polarization instead."
+            )
+
+    def fix_geometry_group(geo_dict):
+        """Fix a GeometryGroup dictionary."""
+        geo_dict.pop("center", None)
+
+    update_types = {
+        "PolySlab": fix_polyslab,
+        "ModeSpec": fix_modespec,
+        "GeometryGroup": fix_geometry_group,
+    }
+
+    iterate_update_dict(update_dict=sim_dict, update_types=update_types)
 
     return sim_dict
 

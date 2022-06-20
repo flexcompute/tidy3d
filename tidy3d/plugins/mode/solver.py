@@ -165,13 +165,13 @@ def compute_modes(
     # Solve for the modes
     E, H, neff, keff = solver_em(eps_tensor, mu_tensor, der_mats, num_modes, target_neff_p)
 
-    # Reorder if needed
-    if mode_spec.sort_by != "largest_neff":
-        if mode_spec.sort_by == "te_fraction":
-            sort_int = np.sum(np.abs(E[0]) ** 2, axis=0) / np.sum(np.abs(E[:2]) ** 2, axis=(0, 1))
-        elif mode_spec.sort_by == "tm_fraction":
-            sort_int = np.sum(np.abs(E[1]) ** 2, axis=0) / np.sum(np.abs(E[:2]) ** 2, axis=(0, 1))
-        sort_inds = np.argsort(sort_int)[::-1]
+    # Filter polarization if needed
+    if mode_spec.filter_pol is not None:
+        te_int = np.sum(np.abs(E[0]) ** 2, axis=0) / np.sum(np.abs(E[:2]) ** 2, axis=(0, 1))
+        if mode_spec.filter_pol == "te":
+            sort_inds = np.concatenate((np.nonzero(te_int >= 0.5)[0], np.nonzero(te_int < 0.5)[0]))
+        elif mode_spec.filter_pol == "tm":
+            sort_inds = np.concatenate((np.nonzero(te_int <= 0.5)[0], np.nonzero(te_int > 0.5)[0]))
         E = E[..., sort_inds]
         H = H[..., sort_inds]
         neff = neff[..., sort_inds]

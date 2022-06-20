@@ -309,7 +309,7 @@
                     0,
                     0
                 ],
-                "sort_by": "largest_neff",
+                "filter_pol": null,
                 "angle_theta": 0.0,
                 "angle_phi": 0.0,
                 "bend_radius": null,
@@ -513,7 +513,7 @@
                     0,
                     0
                 ],
-                "sort_by": "largest_neff",
+                "filter_pol": null,
                 "angle_theta": 0.0,
                 "angle_phi": 0.0,
                 "bend_radius": null,
