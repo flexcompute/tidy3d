@@ -185,7 +185,8 @@ class Pulse(SourceTime, ABC):
     offset: float = pydantic.Field(
         5.0,
         title="Offset",
-        description="Time delay of the maximum value of the pulse in units of 1 / ``fwidth``.",
+        description="Time delay of the maximum value of the "
+        "pulse in units of 1 / (``2pi * fwidth``).",
         ge=2.5,
     )
 
