@@ -35,14 +35,20 @@ class ModeSpec(Tidy3dBaseModel):
         description="Number of standard pml layers to add in the two tangential axes.",
     )
 
-    sort_by: Literal["largest_neff", "te_fraction", "tm_fraction"] = pd.Field(
-        "largest_neff",
-        title="Ordering of the returned modes",
-        description="The solver will always compute the ``num_modes`` modes closest to the "
-        "``target_neff``, but they can be reordered by the largest ``te_fraction``, defined "
-        "as the integral of the intensity of the E-field component parallel to the first plane "
-        "axis normalized to the total in-plane E-field intensity. Similarly, ``tm_fraction`` "
-        "uses the E field component parallel to the second plane axis.",
+    filter_pol: Literal["te", "tm"] = pd.Field(
+        None,
+        title="Polarization filtering",
+        description="The solver always computes the ``num_modes`` modes closest to the given "
+        "``target_neff``. If ``filter_pol==None``, they are simply sorted in order of decresing "
+        "effective index. If a polarization filter is selected, the modes are rearranged such that "
+        "the first ``n_pol`` modes in the list are the ones with the selected polarization "
+        "fraction larger than or equal to 0.5, while the next ``num_modes - n_pol`` modes are the "
+        "ones where it is smaller than 0.5 (i.e. the opposite polarization fraction is larger than "
+        "0.5). Within each polarization subset, the modes are still ordered by decreasing "
+        "effective index. "
+        "``te``-fraction is defined as the integrated intensity of the E-field component parallel "
+        "to the first plane axis, normalized to the total in-plane E-field intensity. Conversely, "
+        "``tm``-fraction uses the E field component parallel to the second plane axis.",
     )
 
     angle_theta: float = pd.Field(
