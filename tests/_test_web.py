@@ -24,6 +24,9 @@ CALLBACK_URL = "https://callbackurl"
 
 task_id_global = []
 
+# from tidy3d.web.config import DEFAULT_CONFIG
+# DEFAULT_CONFIG.solver_version = "python_upgrade-0.0.0"
+
 
 def _get_gloabl_task_id():
     """returns the task id from the list"""

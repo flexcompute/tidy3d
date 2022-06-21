@@ -6,7 +6,7 @@ h5py>=3.0.0
 rich
 nlopt
 matplotlib
-shapely==1.7.1
+shapely==1.8.0
 descartes
 pydantic>=1.9.0
 PyYAML
