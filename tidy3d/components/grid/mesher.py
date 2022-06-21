@@ -134,6 +134,9 @@ class GradedMesher(Mesher):
 
             # List of structure indexes that may intersect the current structure in 2D
             query_inds = [box.str_ind for box in tree.query(bbox_2d)]
+            # query2 = tree.query_items(bbox_2d)
+            # print(query_inds)
+            # print(query2)
 
             # Remove all lower structures that the current structure completely contains
             inds_lower = [ind for ind in query_inds if ind < str_ind]
