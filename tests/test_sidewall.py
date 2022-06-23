@@ -35,7 +35,7 @@ def convert_valid_polygon(vertices):
     """
     poly = Polygon(vertices).buffer(0)  # make sure no intersecting edges
     if type(poly) is not Polygon:
-        poly = poly[0]
+        poly = poly.geoms[0]
 
     vertices_n = np.array(poly.exterior.coords[:])
     return vertices_n

@@ -5,8 +5,8 @@ from typing import Tuple, List
 import numpy as np
 import pydantic as pd
 
-from ..base import Tidy3dBaseModel, TYPE_TAG_STR
-from ..types import ArrayLike, Axis
+from ..base import Tidy3dBaseModel, TYPE_TAG_STR, cached_property
+from ..types import ArrayLike, Axis, Array
 from ..geometry import Box
 
 from ...log import SetupError
@@ -38,10 +38,15 @@ class Coords(Tidy3dBaseModel):
         ..., title="Z Coordinates", description="1-dimensional array of z coordinates."
     )
 
-    @property
+    @cached_property
+    def to_dict(self):
+        """Return a dict of the three Coord1D objects as numpy arrays."""
+        return {key: np.array(value) for key, value in self.dict(exclude={TYPE_TAG_STR}).items()}
+
+    @cached_property
     def to_list(self):
-        """Return a list of the three Coord1D objects."""
-        return list(self.dict(exclude={TYPE_TAG_STR}).values())
+        """Return a list of the three Coord1D objects as numpy arrays."""
+        return list(self.to_dict.values())
 
 
 class FieldGrid(Tidy3dBaseModel):
@@ -137,15 +142,13 @@ class Grid(Tidy3dBaseModel):
     )
 
     @staticmethod
-    def _avg(coords1d: Coords1D):
+    def _avg(coords1d: Array[float]):
         """Return average positions of an array of 1D coordinates."""
-        coords1d = np.array(coords1d)
         return (coords1d[1:] + coords1d[:-1]) / 2.0
 
     @staticmethod
-    def _min(coords1d: Coords1D):
+    def _min(coords1d: Array[float]):
         """Return minus positions of 1D coordinates."""
-        coords1d = np.array(coords1d)
         return coords1d[:-1]
 
     @property
@@ -166,12 +169,7 @@ class Grid(Tidy3dBaseModel):
         >>> grid = Grid(boundaries=coords)
         >>> centers = grid.centers
         """
-        return Coords(
-            **{
-                key: self._avg(val)
-                for key, val in self.boundaries.dict(exclude={TYPE_TAG_STR}).items()
-            }
-        )
+        return Coords(**{key: self._avg(val) for key, val in self.boundaries.to_dict.items()})
 
     @property
     def sizes(self) -> Coords:
@@ -191,12 +189,7 @@ class Grid(Tidy3dBaseModel):
         >>> grid = Grid(boundaries=coords)
         >>> sizes = grid.sizes
         """
-        return Coords(
-            **{
-                key: np.diff(val)
-                for key, val in self.boundaries.dict(exclude={TYPE_TAG_STR}).items()
-            }
-        )
+        return Coords(**{key: np.diff(val) for key, val in self.boundaries.to_dict.items()})
 
     @property
     def num_cells(self) -> Tuple[int, int, int]:
@@ -298,7 +291,7 @@ class Grid(Tidy3dBaseModel):
     def _yee_e(self, axis: Axis):
         """E field yee lattice sites for axis."""
 
-        boundary_coords = self.boundaries.dict(exclude={TYPE_TAG_STR})
+        boundary_coords = self.boundaries.to_dict
 
         # initially set all to the minus bounds
         yee_coords = {key: self._min(val) for key, val in boundary_coords.items()}
@@ -312,7 +305,7 @@ class Grid(Tidy3dBaseModel):
     def _yee_h(self, axis: Axis):
         """H field yee lattice sites for axis."""
 
-        boundary_coords = self.boundaries.dict(exclude={TYPE_TAG_STR})
+        boundary_coords = self.boundaries.to_dict
 
         # initially set all to centers
         yee_coords = {key: self._avg(val) for key, val in boundary_coords.items()}
@@ -393,7 +386,7 @@ class Grid(Tidy3dBaseModel):
             The subspace of the grid along ``axis``.
         """
 
-        coords = np.array(self.boundaries.to_list[axis])
+        coords = self.boundaries.to_list[axis]
         padded_coords = coords
         num_coords = coords.size
         num_cells = num_coords - 1
