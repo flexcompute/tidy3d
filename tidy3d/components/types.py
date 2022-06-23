@@ -13,6 +13,7 @@ import numpy as np
 from matplotlib.axes._subplots import Axes
 from shapely.geometry.base import BaseGeometry
 from ..log import ValidationError
+
 # import warnings
 # warnings.filterwarnings(action="error", category=np.ComplexWarning)
 """ Numpy Arrays """
@@ -21,57 +22,55 @@ from ..log import ValidationError
 Numpy = np.ndarray
 
 
-# class TypedArray(np.ndarray):
-#     """A numpy array with a type given by cls.inner_type"""
+class TypedArray(np.ndarray):
+    """A numpy array with a type given by cls.inner_type"""
 
-#     @classmethod
-#     def __get_validators__(cls):
-#         """boilerplate"""
-#         yield cls.validate_type
+    @classmethod
+    def __get_validators__(cls):
+        """boilerplate"""
+        yield cls.validate_type
 
-#     @classmethod
-#     def validate_type(cls, val):
-#         """validator"""
-#         # need to fix, doesnt work for simulationdata_export and load?
-#         if isinstance(val, np.ndarray):
-#             print(val)
-#             print(f'converting type: {val.dtype} to {cls.inner_type}')
+    @classmethod
+    def validate_type(cls, val):
+        """validator"""
+        # need to fix, doesnt work for simulationdata_export and load?
+        if isinstance(val, np.ndarray):
 
-#             # if not np.all(val.astype(cls.inner_type) == val):
-#                 # import pdb; pdb.set_trace()
-#             ret_val = val.astype(cls.inner_type)
-#             if np.any(ret_val != val):
-#                 import pdb; pdb.set_trace()
-#             print(ret_val)
+            ret_val = val.astype(cls.inner_type)  # pylint: disable=no-member
+            if np.any(ret_val != val):
+                raise ValidationError("wrong type supplied to ArrayLike")
 
-#             return ret_val
-#         return np.array(val, dtype=cls.inner_type)  # pylint: disable=no-member
+            return ret_val
+        return np.array(val, dtype=cls.inner_type)  # pylint: disable=no-member
 
-#     @classmethod
-#     def __modify_schema__(cls, field_schema):
-#         """Sets the schema of NumpyArray."""
-#         field_schema.update(NumpyArray.schema())
-
-# class NumpyArray(pydantic.BaseModel):
-#     """Wrapper around numpy arrays that has a well defined json schema."""
-
-#     data_list: list
-
-#     @property
-#     def arr(self):
-#         """Contructs a numpy array representation of the NumpyArray."""
-#         return np.array(self.data_list)
-
-# class ArrayMeta(type):
-#     """metclass for Array, enables Array[type] -> TypedArray"""
-
-#     def __getitem__(cls, t):
-#         """Array[t] -> TypedArray"""
-#         return type("Array", (TypedArray,), {"inner_type": t})
+    @classmethod
+    def __modify_schema__(cls, field_schema):
+        """Sets the schema of NumpyArray."""
+        field_schema.update(NumpyArray.schema())
 
 
-# class Array(np.ndarray, metaclass=ArrayMeta):
-#     """type of numpy array with annotated type (Array[float], Array[complex])"""
+class NumpyArray(pydantic.BaseModel):
+    """Wrapper around numpy arrays that has a well defined json schema."""
+
+    data_list: list
+
+    @property
+    def arr(self):
+        """Contructs a numpy array representation of the NumpyArray."""
+        return np.array(self.data_list)
+
+
+class ArrayMeta(type):
+    """metclass for Array, enables Array[type] -> TypedArray"""
+
+    def __getitem__(cls, t):
+        """Array[t] -> TypedArray"""
+        return type("Array", (TypedArray,), {"inner_type": t})
+
+
+class Array(np.ndarray, metaclass=ArrayMeta):
+    """type of numpy array with annotated type (Array[float], Array[complex])"""
+
 
 class TypedArrayLike(np.ndarray):
     """A numpy array with a type given by cls.inner_type"""

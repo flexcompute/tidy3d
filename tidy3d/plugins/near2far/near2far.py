@@ -12,7 +12,7 @@ from ...components.data import SimulationData, FieldData
 from ...components.monitor import FieldMonitor
 from ...components.types import Direction, Axis, Coordinate, ArrayLike
 from ...components.medium import Medium
-from ...components.base import Tidy3dBaseModel
+from ...components.base import Tidy3dBaseModel, cached_property
 from ...log import SetupError, ValidationError
 
 # Default number of points per wavelength in the background medium to use for resampling fields.
@@ -38,7 +38,7 @@ class Near2FarSurface(Tidy3dBaseModel):
  the positive x, y or z unit vectors. Must be one of '+' or '-'.",
     )
 
-    @property
+    @cached_property
     def axis(self) -> Axis:
         """Returns the :class:`.Axis` normal to this surface."""
         # assume that the monitor's axis is in the direction where the monitor is thinnest
@@ -127,19 +127,19 @@ class Near2Far(Tidy3dBaseModel):
             val = values.get("sim_data").simulation.medium
         return val
 
-    @property
+    @cached_property
     def nk(self) -> Tuple[float, float]:
         """Returns the real and imaginary parts of the background medium's refractive index."""
         eps_complex = self.medium.eps_model(self.frequency)
         return self.medium.eps_complex_to_nk(eps_complex)
 
-    @property
+    @cached_property
     def k(self) -> complex:
         """Returns the complex wave number associated with the background medium."""
         index_n, index_k = self.nk
         return (2 * np.pi * self.frequency / C_0) * (index_n + 1j * index_k)
 
-    @property
+    @cached_property
     def eta(self) -> complex:
         """Returns the complex wave impedance associated with the background medium."""
         index_n, index_k = self.nk
@@ -201,7 +201,7 @@ the number of directions ({len(normal_dirs)})."
             origin=origin,
         )
 
-    @property
+    @cached_property
     def currents(self):
 
         """Sets the surface currents."""

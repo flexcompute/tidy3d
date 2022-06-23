@@ -344,7 +344,7 @@ def cache(prop):
     prop_name = prop.__name__
 
     @wraps(prop)
-    def cached_property(self):
+    def cached_property_getter(self):
         """The new property method to be returned by decorator."""
 
         stored_value = self._cached_properties.get(prop_name)  # pylint:disable=protected-access
@@ -356,4 +356,10 @@ def cache(prop):
         self._cached_properties[prop_name] = computed_value  # pylint:disable=protected-access
         return computed_value
 
-    return cached_property
+    return cached_property_getter
+
+
+def cached_property(cached_property_getter):
+    """Shortcut for property(cache()) of a getter."""
+
+    return property(cache(cached_property_getter))

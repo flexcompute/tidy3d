@@ -278,7 +278,9 @@ class GradedMesher(Mesher):
         return np.array(min_steps)
 
     @staticmethod
-    def rotate_structure_bounds(structures: List[Structure], axis: Axis) -> List[ArrayLike[float, 1]]:
+    def rotate_structure_bounds(
+        structures: List[Structure], axis: Axis
+    ) -> List[ArrayLike[float, 1]]:
         """Get sturcture bounding boxes with a given ``axis`` rotated to z.
 
         Parameters
@@ -317,7 +319,9 @@ class GradedMesher(Mesher):
         return STRtree(boxes_2d)
 
     @staticmethod
-    def contained_2d(bbox0: ArrayLike[float, 1], query_bbox: List[ArrayLike[float, 1]]) -> List[ArrayLike[float, 1]]:
+    def contained_2d(
+        bbox0: ArrayLike[float, 1], query_bbox: List[ArrayLike[float, 1]]
+    ) -> List[ArrayLike[float, 1]]:
         """Return a list of all bounding boxes among ``query_bbox`` that contain ``bbox0`` in 2D."""
         contained_in = []
         for bbox in query_bbox:

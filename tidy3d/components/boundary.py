@@ -5,7 +5,7 @@ from typing import Union, Tuple, List
 import pydantic as pd
 import numpy as np
 
-from .base import Tidy3dBaseModel
+from .base import Tidy3dBaseModel, cached_property
 from .types import Complex, Axis, Literal
 from .source import GaussianBeam, ModeSource, PlaneWave
 from .medium import Medium
@@ -57,7 +57,7 @@ class BlochBoundary(BoundaryEdge):
         "along the dimension in which the boundary is specified.",
     )
 
-    @property
+    @cached_property
     def bloch_phase(self) -> Complex:
         """Returns the forward phase factor associated with `bloch_vec`."""
         return np.exp(1j * 2.0 * np.pi * self.bloch_vec)
@@ -692,7 +692,7 @@ class BoundarySpec(Tidy3dBaseModel):
             z=Boundary(minus=boundary, plus=boundary),
         )
 
-    @property
+    @cached_property
     def to_list(self) -> List[Tuple[BoundaryEdgeType, BoundaryEdgeType]]:
         """Returns edge-wise boundary conditions along each dimension for internal use."""
         return [

@@ -8,6 +8,7 @@ import numpy as np
 from .types import Literal, Ax, EMField, ArrayLike, Bound, FreqArray
 from .geometry import Box
 from .validators import assert_plane
+from .base import cached_property
 from .mode import ModeSpec
 from .viz import PlotParams, plot_params_monitor, ARROW_COLOR_MONITOR, ARROW_ALPHA
 from ..log import SetupError
@@ -28,12 +29,12 @@ class Monitor(Box, ABC):
         min_length=1,
     )
 
-    @property
+    @cached_property
     def plot_params(self) -> PlotParams:
         """Default parameters for plotting a Monitor object."""
         return plot_params_monitor
 
-    @property
+    @cached_property
     def geometry(self) -> Box:
         """:class:`Box` representation of monitor.
 
@@ -246,7 +247,7 @@ class AbstractModeMonitor(PlanarMonitor, FreqMonitor):
         )
         return ax
 
-    @property
+    @cached_property
     def _dir_arrow(self) -> Tuple[float, float, float]:
         """Source direction normal vector in cartesian coordinates."""
         dx = np.cos(self.mode_spec.angle_phi) * np.sin(self.mode_spec.angle_theta)

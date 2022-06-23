@@ -8,7 +8,7 @@ from typing_extensions import Literal
 import pydantic
 import numpy as np
 
-from .base import Tidy3dBaseModel
+from .base import Tidy3dBaseModel, cached_property
 from .types import Direction, Polarization, Ax, FreqBound, ArrayLike, Axis, Bound
 from .validators import assert_plane, validate_name_str
 from .geometry import Box
@@ -50,7 +50,11 @@ class SourceTime(ABC, Tidy3dBaseModel):
         """
 
     def spectrum(
-        self, times: ArrayLike[float, 1], freqs: ArrayLike[float, 1], dt: float, complex_fields: bool = False
+        self,
+        times: ArrayLike[float, 1],
+        freqs: ArrayLike[float, 1],
+        dt: float,
+        complex_fields: bool = False,
     ) -> complex:
         """Complex-valued source spectrum as a function of frequency
 
@@ -122,7 +126,11 @@ class SourceTime(ABC, Tidy3dBaseModel):
 
     @add_ax_if_none
     def plot_spectrum(
-        self, times: ArrayLike[float, 1], num_freqs: int = 101, ax: Ax = None, complex_fields: bool = False
+        self,
+        times: ArrayLike[float, 1],
+        num_freqs: int = 101,
+        ax: Ax = None,
+        complex_fields: bool = False,
     ) -> Ax:
         """Plot the complex-valued amplitude of the source time-dependence.
 
@@ -274,25 +282,25 @@ class Source(Box, ABC):
 
     name: str = pydantic.Field(None, title="Name", description="Optional name for the source.")
 
-    @property
+    @cached_property
     def plot_params(self) -> PlotParams:
         """Default parameters for plotting a Source object."""
         return plot_params_source
 
     _name_validator = validate_name_str()
 
-    @property
+    @cached_property
     def geometry(self) -> Box:
         """:class:`Box` representation of source."""
 
         return Box(center=self.center, size=self.size)
 
-    @property
+    @cached_property
     def _dir_vector(self) -> Tuple[float, float, float]:
         """Returns a vector indicating the source direction for arrow plotting, if not None."""
         return None
 
-    @property
+    @cached_property
     def _pol_vector(self) -> Tuple[float, float, float]:
         """Returns a vector indicating the source polarization for arrow plotting, if not None."""
         return None
@@ -357,7 +365,7 @@ class CurrentSource(Source, ABC):
         description="Specifies the direction and type of current component.",
     )
 
-    @property
+    @cached_property
     def _pol_vector(self) -> Tuple[float, float, float]:
         """Returns a vector indicating the source polarization for arrow plotting, if not None."""
         component = self.polarization[-1]  # 'x' 'y' or 'z'
@@ -416,7 +424,7 @@ class PlanarSource(Source, ABC):
 
     _plane_validator = assert_plane()
 
-    @property
+    @cached_property
     def injection_axis(self):
         """Injection axis of the source."""
         return self.size.index(0.0)
@@ -447,7 +455,7 @@ class DirectionalSource(FieldSource, ABC):
         "axis.",
     )
 
-    @property
+    @cached_property
     def _dir_vector(self) -> Tuple[float, float, float]:
         """Returns a vector indicating the source direction for arrow plotting, if not None."""
         if hasattr(self, "injection_axis"):
@@ -507,7 +515,7 @@ class AngledFieldSource(DirectionalSource, ABC):
         return val
 
     # pylint: disable=no-member
-    @property
+    @cached_property
     def _dir_vector(self) -> Tuple[float, float, float]:
         """Source direction normal vector in cartesian coordinates."""
         radius = 1.0 if self.direction == "+" else -1.0
@@ -516,7 +524,7 @@ class AngledFieldSource(DirectionalSource, ABC):
         dz = radius * np.cos(self.angle_theta)
         return self.unpop_axis(dz, (dx, dy), axis=self.injection_axis)
 
-    @property
+    @cached_property
     def _pol_vector(self) -> Tuple[float, float, float]:
         """Source polarization normal vector in cartesian coordinates."""
         normal_dir = [0.0, 0.0, 0.0]
@@ -560,17 +568,17 @@ class ModeSource(DirectionalSource, PlanarSource):
         "``num_modes`` in the solver will be set to ``mode_index + 1``.",
     )
 
-    @property
+    @cached_property
     def angle_theta(self):
         """Polar angle of propagation."""
         return self.mode_spec.angle_theta
 
-    @property
+    @cached_property
     def angle_phi(self):
         """Azimuth angle of propagation."""
         return self.mode_spec.angle_phi
 
-    @property
+    @cached_property
     def _dir_vector(self) -> Tuple[float, float, float]:
         """Source direction normal vector in cartesian coordinates."""
         radius = 1.0 if self.direction == "+" else -1.0

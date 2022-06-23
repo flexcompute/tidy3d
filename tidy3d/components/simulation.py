@@ -10,7 +10,7 @@ import matplotlib.pylab as plt
 import matplotlib as mpl
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 
-from .base import cache
+from .base import cached_property
 from .validators import assert_unique_names, assert_objects_in_sim_bounds
 from .validators import validate_mode_objects_symmetry
 from .geometry import Box
@@ -573,8 +573,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
 
     """ Accounting """
 
-    @property
-    @cache
+    @cached_property
     def mediums(self) -> Set[MediumType]:
         """Returns set of distinct :class:`AbstractMedium` in simulation.
 
@@ -587,8 +586,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         medium_dict.update({structure.medium: None for structure in self.structures})
         return list(medium_dict.keys())
 
-    @property
-    @cache
+    @cached_property
     def medium_map(self) -> Dict[MediumType, pydantic.NonNegativeInt]:
         """Returns dict mapping medium to index in material.
         ``medium_map[medium]`` returns unique global index of :class:`AbstractMedium` in simulation.
@@ -608,7 +606,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
                 return monitor
         raise Tidy3dKeyError(f"No monitor named '{name}'")
 
-    @property
+    @cached_property
     def background_structure(self) -> Structure:
         """Returns structure representing the background of the :class:`Simulation`."""
         geometry = Box(size=(inf, inf, inf))
@@ -1002,7 +1000,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         ax = self._set_plot_bounds(ax=ax, x=x, y=y, z=z)
         return ax
 
-    @property
+    @cached_property
     def num_pml_layers(self) -> List[Tuple[float, float]]:
         """Number of absorbing layers in all three axes and directions (-, +).
 
@@ -1020,7 +1018,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
 
         return num_layers
 
-    @property
+    @cached_property
     def pml_thicknesses(self) -> List[Tuple[float, float]]:
         """Thicknesses (um) of absorbers in all three axes and directions (-, +)
 
@@ -1037,7 +1035,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
             pml_thicknesses.append((thick_l, thick_r))
         return pml_thicknesses
 
-    @property
+    @cached_property
     def bounds_pml(self) -> Tuple[Tuple[float, float, float], Tuple[float, float, float]]:
         """Simulation bounds including the PML regions."""
         pml_thick = self.pml_thicknesses
@@ -1500,7 +1498,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         # filter out any remaining None or empty shapes (shapes with area completely removed)
         return [(medium, shape) for (medium, shape, _) in background_shapes if shape]
 
-    @property
+    @cached_property
     def frequency_range(self) -> FreqBound:
         """Range of frequencies spanning all sources' frequency dependence.
 
@@ -1517,7 +1515,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
 
     """ Discretization """
 
-    @property
+    @cached_property
     def dt(self) -> float:
         """Simulation time step (distance).
 
@@ -1531,7 +1529,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         dl_avg = 1 / np.sqrt(dl_sum_inv_sq)
         return self.courant * dl_avg / C_0
 
-    @property
+    @cached_property
     def tmesh(self) -> Coords1D:
         """FDTD time stepping points.
 
@@ -1543,14 +1541,13 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         dt = self.dt
         return np.arange(0.0, self.run_time + dt, dt)
 
-    @property
+    @cached_property
     def num_time_steps(self) -> int:
         """Number of time steps in simulation."""
 
         return len(self.tmesh)
 
-    @property
-    @cache
+    @cached_property
     def grid(self) -> Grid:
         """FDTD grid spatial locations and information.
 
@@ -1571,7 +1568,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
             num_pml_layers=self.num_pml_layers,
         )
 
-    @property
+    @cached_property
     def num_cells(self) -> int:
         """Number of cells in the simulation.
 
@@ -1583,7 +1580,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
 
         return np.prod(self.grid.num_cells, dtype=np.int64)
 
-    @property
+    @cached_property
     def wvl_mat_min(self) -> float:
         """Minimum wavelength in the material.
 

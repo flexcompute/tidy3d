@@ -11,7 +11,7 @@ import numpy as np
 from shapely.geometry import Point, Polygon, box, MultiPolygon
 from descartes import PolygonPatch
 
-from .base import Tidy3dBaseModel, cache
+from .base import Tidy3dBaseModel, cached_property
 from .types import Bound, Size, Coordinate, Axis, Coordinate2D, ArrayLike
 from .types import Vertices, Ax, Shapely
 from .viz import add_ax_if_none, equal_aspect
@@ -29,7 +29,7 @@ _IS_CLOSE_RTOL = np.finfo(float).eps
 class Geometry(Tidy3dBaseModel, ABC):
     """Abstract base class, defines where something exists in space."""
 
-    @property
+    @cached_property
     def plot_params(self):
         """Default parameters for plotting a Geometry object."""
         return plot_params_geometry
@@ -136,7 +136,7 @@ class Geometry(Tidy3dBaseModel, ABC):
         intersections = self.intersections(x=x, y=y, z=z)
         return bool(intersections)
 
-    @property
+    @cached_property
     def bounds(self) -> Bound:  # pylint:disable=too-many-locals
         """Returns bounding box min and max coordinates..
 
@@ -161,7 +161,7 @@ class Geometry(Tidy3dBaseModel, ABC):
         maxz = max(x_maxz, y_maxz)
         return (minx, miny, minz), (maxx, maxy, maxz)
 
-    @property
+    @cached_property
     def bounding_box(self):
         """Returns :class:`Box` representation of the bounding box of a :class:`Geometry`.
 
@@ -462,7 +462,9 @@ class Geometry(Tidy3dBaseModel, ABC):
         return axis, position
 
     @staticmethod
-    def rotate_points(points: ArrayLike[float, 3], axis: Coordinate, angle: float) -> ArrayLike[float, 3]:
+    def rotate_points(
+        points: ArrayLike[float, 3], axis: Coordinate, angle: float
+    ) -> ArrayLike[float, 3]:
         """Rotate a set of points in 3D.
 
         Parameters
@@ -621,7 +623,7 @@ class Planar(Geometry, ABC):
             `Shapely's Documentaton <https://shapely.readthedocs.io/en/stable/project.html>`_.
         """
 
-    @property
+    @cached_property
     def bounds(self) -> Bound:
         """Returns bounding box for planar geometry, may implement for subclasses.
 
@@ -805,7 +807,7 @@ class Box(Geometry):
         dist_z = np.abs(z - z0)
         return (dist_x <= Lx / 2) * (dist_y <= Ly / 2) * (dist_z <= Lz / 2)
 
-    @property
+    @cached_property
     def bounds(self) -> Bound:
         """Returns bounding box min and max coordinates.
 
@@ -820,7 +822,7 @@ class Box(Geometry):
         coord_max = tuple(c + s / 2 for (s, c) in zip(size, center))
         return (coord_min, coord_max)
 
-    @property
+    @cached_property
     def geometry(self):
         """:class:`Box` representation of self (used for subclasses of Box).
 
@@ -1004,7 +1006,7 @@ class Sphere(Circular):
             return []
         return [Point(x0, y0).buffer(0.5 * intersect_dist)]
 
-    @property
+    @cached_property
     def bounds(self) -> Bound:
         """Returns bounding box min and max coordinates.
 
@@ -1108,7 +1110,7 @@ class Cylinder(Circular, Planar):
         inside_height = dist_z <= (self.length / 2)
         return inside_radius * inside_height
 
-    @property
+    @cached_property
     def bounds(self) -> Bound:
         """Returns bounding box min and max coordinates.
 
@@ -1408,14 +1410,14 @@ class PolySlab(Planar):
             for verts in all_vertices
         ]
 
-    @property
+    @cached_property
     def _tanq(self) -> float:
         """
         tan(sidewall_angle). _tanq*height gives the offset value
         """
         return np.tan(self.sidewall_angle)
 
-    @property
+    @cached_property
     def base_polygon(self) -> Vertices:
         """The polygon at the base after potential dilation operation.
         The vertices will always be transformed to be "proper".
@@ -1428,7 +1430,7 @@ class PolySlab(Planar):
 
         return self._shift_vertices(self._proper_vertices(self.vertices), self.dilation)[0]
 
-    @property
+    @cached_property
     def top_polygon(self) -> Vertices:
         """The polygon at the top after potential dilation and sidewall operation.
 
@@ -1441,7 +1443,7 @@ class PolySlab(Planar):
         dist = -self.length * self._tanq
         return self._shift_vertices(self.base_polygon, dist)[0]
 
-    @property
+    @cached_property
     def _base_polygon(self) -> Vertices:
         """Similar as `base_polygon`, but simply return self.vertices
         in the absence of dilation operation.
@@ -1881,7 +1883,7 @@ class PolySlab(Planar):
 
         return ints_y_sort, ints_angle_sort
 
-    @property
+    @cached_property
     def bounds(self) -> Bound:
         """Returns bounding box min and max coordinates. The dilation and slant angle are not
         taken into account exactly for speed. Instead, the polygon may be slightly smaller than
@@ -2124,8 +2126,7 @@ class GeometryGroup(Geometry):
             raise ValidationError("GeometryGroup.geometries must not be empty.")
         return val
 
-    @property
-    @cache
+    @cached_property
     def bounds(self) -> Bound:
         """Returns bounding box min and max coordinates.
 

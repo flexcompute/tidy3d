@@ -9,7 +9,7 @@ import h5py
 import numpy as np
 import pydantic
 
-from ...components.base import Tidy3dBaseModel
+from ...components.base import Tidy3dBaseModel, cached_property
 from ...components import Box
 from ...components import Simulation
 from ...components import ModeSpec
@@ -46,12 +46,12 @@ class ModeSolverData(AbstractSimulationData):
     mode_spec: ModeSpec
     data_dict: Dict[str, Union[ModeFieldData, ModeIndexData]]
 
-    @property
+    @cached_property
     def fields(self):
         """Get field data."""
         return self.data_dict.get("fields")
 
-    @property
+    @cached_property
     def n_complex(self):
         """Get complex effective indexes."""
         scalar_data = self.data_dict.get("n_complex")
@@ -59,7 +59,7 @@ class ModeSolverData(AbstractSimulationData):
             return scalar_data.data
         return None
 
-    @property
+    @cached_property
     def n_eff(self):
         """Get real part of effective index."""
         scalar_data = self.data_dict.get("n_complex")
@@ -67,7 +67,7 @@ class ModeSolverData(AbstractSimulationData):
             return scalar_data.n_eff
         return None
 
-    @property
+    @cached_property
     def k_eff(self):
         """Get imaginary part of effective index."""
         scalar_data = self.data_dict.get("n_complex")
@@ -278,12 +278,12 @@ class ModeSolver(Tidy3dBaseModel):
             raise ValidationError("ModeSolver 'freqs' must be a non-empty tuple.")
         return val
 
-    @property
+    @cached_property
     def normal_axis(self) -> Axis:
         """Axis normal to the mode plane."""
         return self.plane.size.index(0.0)
 
-    @property
+    @cached_property
     def _plane_sym(self) -> Box:
         """Potentially smaller plane if symmetries present in the simulation."""
         return self.simulation.min_sym_box(self.plane)
@@ -382,7 +382,9 @@ class ModeSolver(Tidy3dBaseModel):
         return np.stack((eps_xx, eps_yy, eps_zz), axis=0)
 
     def _solve_all_freqs(
-        self, coords: Tuple[ArrayLike[float, 1], ArrayLike[float, 1]], symmetry: Tuple[Symmetry, Symmetry]
+        self,
+        coords: Tuple[ArrayLike[float, 1], ArrayLike[float, 1]],
+        symmetry: Tuple[Symmetry, Symmetry],
     ) -> Tuple[List[float], List[Dict[str, ArrayLike[complex, 4]]]]:
         """Call the mode solver at all requested frequencies."""
 
@@ -398,7 +400,10 @@ class ModeSolver(Tidy3dBaseModel):
         return n_complex, fields
 
     def _solve_single_freq(
-        self, freq: float, coords: Tuple[ArrayLike[float, 1], ArrayLike[float, 1]], symmetry: Tuple[Symmetry, Symmetry]
+        self,
+        freq: float,
+        coords: Tuple[ArrayLike[float, 1], ArrayLike[float, 1]],
+        symmetry: Tuple[Symmetry, Symmetry],
     ) -> Tuple[float, Dict[str, ArrayLike[complex, 4]]]:
         """Call the mode solver at a single frequency.
         The fields are rotated from propagation coordinates back to global coordinates.
@@ -433,7 +438,9 @@ class ModeSolver(Tidy3dBaseModel):
         f_rot = np.stack(self.plane.unpop_axis(f_z, (f_x, f_y), axis=self.normal_axis), axis=0)
         return f_rot
 
-    def _process_fields(self, mode_fields: ArrayLike[complex, 4], mode_index: int) -> Tuple[FIELD, FIELD]:
+    def _process_fields(
+        self, mode_fields: ArrayLike[complex, 4], mode_index: int
+    ) -> Tuple[FIELD, FIELD]:
         """Transform solver fields to simulation axes, set gauge, and check decay at boundaries."""
 
         # Separate E and H fields (in solver coordinates)

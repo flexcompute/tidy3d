@@ -7,7 +7,7 @@ from typing import Tuple, Union, Callable
 import pydantic as pd
 import numpy as np
 
-from .base import Tidy3dBaseModel
+from .base import Tidy3dBaseModel, cached_property
 from .types import PoleAndResidue, Ax, FreqBound
 from .viz import add_ax_if_none
 from .validators import validate_name_str
@@ -368,7 +368,7 @@ class AnisotropicMedium(AbstractMedium):
 class DispersiveMedium(AbstractMedium, ABC):
     """A Medium with dispersion (propagation characteristics depend on frequency)"""
 
-    @property
+    @cached_property
     @abstractmethod
     def pole_residue(self):
         """Representation of Medium as a pole-residue model."""
@@ -430,7 +430,7 @@ class PoleResidue(DispersiveMedium):
             eps -= c_cc / (1j * omega + a_cc)
         return eps
 
-    @property
+    @cached_property
     def pole_residue(self):
         """Representation of Medium as a pole-residue model."""
 
@@ -488,7 +488,7 @@ class Sellmeier(DispersiveMedium):
         n = self._n_model(frequency)
         return AbstractMedium.nk_to_eps_complex(n)
 
-    @property
+    @cached_property
     def pole_residue(self):
         """Representation of Medium as a pole-residue model."""
 
@@ -579,7 +579,7 @@ class Lorentz(DispersiveMedium):
             eps += (de * f**2) / (f**2 - 2j * frequency * delta - frequency**2)
         return eps
 
-    @property
+    @cached_property
     def pole_residue(self):
         """Representation of Medium as a pole-residue model."""
 
@@ -649,7 +649,7 @@ class Drude(DispersiveMedium):
             eps -= (f**2) / (frequency**2 + 1j * frequency * delta)
         return eps
 
-    @property
+    @cached_property
     def pole_residue(self):
         """Representation of Medium as a pole-residue model."""
 
@@ -714,7 +714,7 @@ class Debye(DispersiveMedium):
             eps += de / (1 - 1j * frequency * tau)
         return eps
 
-    @property
+    @cached_property
     def pole_residue(self):
         """Representation of Medium as a pole-residue model."""
 

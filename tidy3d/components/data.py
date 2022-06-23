@@ -2,7 +2,7 @@
 """Classes for Storing Monitor and Simulation Data."""
 
 from abc import ABC, abstractmethod
-from typing import Dict, List, Union, Optional, Tuple, Any
+from typing import Dict, List, Union, Optional, Tuple
 import logging
 
 import xarray as xr
@@ -10,7 +10,7 @@ import numpy as np
 import h5py
 import pydantic as pd
 
-from .types import Numpy, Direction, ArrayLike, Literal, Ax, Coordinate, Axis
+from .types import Numpy, Direction, Array, Literal, Ax, Coordinate, Axis
 from .base import Tidy3dBaseModel, TYPE_TAG_STR
 from .simulation import Simulation
 from .boundary import Symmetry, BlochBoundary
@@ -51,7 +51,7 @@ class Tidy3dDataArray(xr.DataArray):
 """ Base data classes """
 
 
-class Tidy3dBaseDataModel(Tidy3dBaseModel, ABC):
+class Tidy3dBaseDataModel(Tidy3dBaseModel):
     """Tidy3dBaseModel, but with yaml and json IO methods disabled."""
 
     def _json_string(self, include_unset: bool = True) -> str:
@@ -81,21 +81,24 @@ class Tidy3dBaseDataModel(Tidy3dBaseModel, ABC):
         )
 
 
-class Tidy3dData(Tidy3dBaseDataModel, ABC):
+class Tidy3dData(Tidy3dBaseDataModel):
     """Base class for data associated with a simulation."""
 
     class Config:  # pylint: disable=too-few-public-methods
         """Configuration for all Tidy3dData objects."""
 
-        # validate_all = True  # validate default values too
-        # extra = "allow"  # allow extra kwargs not specified in model (like dir=['+', '-'])
-        # validate_assignment = True  # validate when attributes are set after initialization
-        # arbitrary_types_allowed = True  # allow types like `ArrayLike[float]`
+        validate_all = True  # validate default values too
+        extra = "allow"  # allow extra kwargs not specified in model (like dir=['+', '-'])
+        validate_assignment = True  # validate when attributes are set after initialization
+        arbitrary_types_allowed = True  # allow types like `Array[float]`
         json_encoders = {  # how to write certain types to json files
+            # np.ndarray: numpy_encoding,  # use custom encoding defined in .types
             np.int64: lambda x: int(x),  # pylint: disable=unnecessary-lambda
             Tidy3dDataArray: lambda x: None,  # dont write
             xr.Dataset: lambda x: None,  # dont write
         }
+        frozen = False
+        allow_mutation = True
 
     @abstractmethod
     def add_to_group(self, hdf5_grp):
@@ -144,7 +147,7 @@ class Tidy3dData(Tidy3dBaseDataModel, ABC):
 class MonitorData(Tidy3dData, ABC):
     """Abstract base class for objects storing individual data from simulation."""
 
-    values: Union[ArrayLike[float, 3], ArrayLike[complex, 2]] = pd.Field(
+    values: Union[Array[float], Array[complex]] = pd.Field(
         ..., title="Values", description="Values of the raw data being stored."
     )
 
@@ -190,9 +193,7 @@ class MonitorData(Tidy3dData, ABC):
         # make DataArray
         data_dict = self.dict()
         coords = {dim: data_dict[dim] for dim in self._dims}
-        values = np.array(self.values)
-        coords = {key: np.array(val) for key, val in coords.items()}
-        data_array = Tidy3dDataArray(values, coords=coords, dims=self._dims)
+        data_array = Tidy3dDataArray(self.values, coords=coords, dims=self._dims)
 
         # assign attrs for xarray
         if self.data_attrs:
@@ -494,7 +495,7 @@ class SpatialCollectionData(CollectionData, ABC):
         """What gets returned by sim_data['monitor_data_name']"""
         return self.expand_syms
 
-    def apply_symmetry(self, simulation: Simulation, monitor_name: str):
+    def set_symmetry_attrs(self, simulation: Simulation, monitor_name: str):
         """Set the collection data attributes related to symmetries."""
         monitor = simulation.get_monitor_by_name(monitor_name)
         span_inds = simulation.grid.discretize_inds(monitor.geometry, extend=True)
@@ -503,14 +504,9 @@ class SpatialCollectionData(CollectionData, ABC):
             ind_beg, ind_end = span_inds[idim]
             boundary_dict[dim] = simulation.grid.periodic_subspace(idim, ind_beg, ind_end + 1)
         mnt_grid = Grid(boundaries=Coords(**boundary_dict))
-
-        return self.copy(
-            update=dict(
-                expanded_grid=mnt_grid.yee.grid_dict,
-                symmetry=simulation.symmetry,
-                symmetry_center=simulation.center,
-            )
-        )
+        self.expanded_grid = mnt_grid.yee.grid_dict
+        self.symmetry = simulation.symmetry
+        self.symmetry_center = simulation.center
 
 
 class AbstractFieldData(SpatialCollectionData, ABC):
@@ -544,6 +540,7 @@ class AbstractFieldData(SpatialCollectionData, ABC):
         if scalar_data:
             return scalar_data.data
         return None
+
     @property
     def Ez(self):
         """Get Ez component of field using '.Ez' syntax."""
@@ -580,7 +577,7 @@ class AbstractFieldData(SpatialCollectionData, ABC):
 class FreqData(MonitorData, ABC):
     """Stores frequency-domain data using an ``f`` dimension for frequency in Hz."""
 
-    f: ArrayLike[float, 1] = pd.Field(
+    f: Array[float] = pd.Field(
         ...,
         title="Frequencies",
         description="Array of frequency values to use as coordintes.",
@@ -588,14 +585,14 @@ class FreqData(MonitorData, ABC):
     )
 
     @abstractmethod
-    def normalize(self, source_freq_amps: ArrayLike[complex, 1]) -> 'Self':
+    def normalize(self, source_freq_amps: Array[complex]) -> None:
         """Normalize values of frequency-domain data by source amplitude spectrum."""
 
 
 class TimeData(MonitorData, ABC):
     """Stores time-domain data using a ``t`` attribute for time in seconds."""
 
-    t: ArrayLike[float, 1] = pd.Field(
+    t: Array[float] = pd.Field(
         ...,
         title="Times",
         description="Array of time values to use as coordintes.",
@@ -606,21 +603,21 @@ class TimeData(MonitorData, ABC):
 class ScalarSpatialData(MonitorData, ABC):
     """Stores a single, scalar variable as a function of spatial coordinates x, y, z."""
 
-    x: ArrayLike[float, 1] = pd.Field(
+    x: Array[float] = pd.Field(
         ...,
         title="X Locations",
         description="Array of x location values to use as coordintes.",
         units=MICROMETER,
     )
 
-    y: ArrayLike[float, 1] = pd.Field(
+    y: Array[float] = pd.Field(
         ...,
         title="Y Locations",
         description="Array of y location values to use as coordintes.",
         units=MICROMETER,
     )
 
-    z: ArrayLike[float, 1] = pd.Field(
+    z: Array[float] = pd.Field(
         ...,
         title="Z Locations",
         description="Array of z location values to use as coordintes.",
@@ -635,7 +632,7 @@ class PlanarData(MonitorData, ABC):
 class AbstractModeData(PlanarData, FreqData, ABC):
     """Abstract class for mode data as a function of frequency and mode index."""
 
-    mode_index: ArrayLike[int, 1] = pd.Field(
+    mode_index: Array[int] = pd.Field(
         ..., title="Mode Indices", description="Array of mode index values to use as coordintes."
     )
 
@@ -660,7 +657,7 @@ class ScalarFieldData(ScalarSpatialData, FreqData):
     >>> data = ScalarFieldData(values=values, x=x, y=y, z=z, f=f)
     """
 
-    values: ArrayLike[complex, 4] = pd.Field(
+    values: Array[complex] = pd.Field(
         ...,
         title="Scalar Field Values",
         description="Multi-dimensional array storing the raw scalar field values in freq. domain.",
@@ -668,10 +665,9 @@ class ScalarFieldData(ScalarSpatialData, FreqData):
 
     _dims = ("x", "y", "z", "f")
 
-    def normalize(self, source_freq_amps: ArrayLike[complex, 1]) -> None:
+    def normalize(self, source_freq_amps: Array[complex]) -> None:
         """normalize the values by the amplitude of the source."""
-        new_values = self.values / source_freq_amps
-        return self.copy(update={'values': new_values})
+        self.values /= source_freq_amps  # pylint: disable=no-member
 
 
 class ScalarFieldTimeData(ScalarSpatialData, TimeData):
@@ -687,7 +683,7 @@ class ScalarFieldTimeData(ScalarSpatialData, TimeData):
     >>> data = ScalarFieldTimeData(values=values, x=x, y=y, z=z, t=t)
     """
 
-    values: ArrayLike[float, 4] = pd.Field(
+    values: Array[float] = pd.Field(
         ...,
         title="Scalar Field Values",
         description="Multi-dimensional array storing the raw scalar field values in time domain.",
@@ -709,7 +705,7 @@ class ScalarPermittivityData(ScalarSpatialData, FreqData):
     >>> data = ScalarPermittivityData(values=values, x=x, y=y, z=z, f=f)
     """
 
-    values: ArrayLike[complex, 4] = pd.Field(
+    values: Array[complex] = pd.Field(
         ...,
         title="Scalar Permittivity Values",
         description="Multi-dimensional array storing the raw permittivity values in freq. domain.",
@@ -717,18 +713,12 @@ class ScalarPermittivityData(ScalarSpatialData, FreqData):
 
     _dims = ("x", "y", "z", "f")
 
-    def normalize(self, source_freq_amps: ArrayLike[complex, 1]) -> None:
-        return self.copy()
+    def normalize(self, source_freq_amps: Array[complex]) -> None:
+        pass
 
 
 class ScalarModeFieldData(ScalarFieldData, AbstractModeData):
     """Like :class:`.ScalarFieldData`, but with extra dimension ``mode_index``."""
-
-    values: ArrayLike[complex, 5] = pd.Field(
-        ...,
-        title="Scalar Mode Field Values",
-        description="Stores the mode fields as a function of space, frequency, and mode index.",
-    )
 
     _dims = ("x", "y", "z", "f", "mode_index")
 
@@ -744,13 +734,13 @@ class ModeAmpsData(AbstractModeData):
     >>> data = ModeAmpsData(values=values, direction=['+', '-'], mode_index=mode_index, f=f)
     """
 
-    direction: Tuple[str, ...] = pd.Field(
-        ("+", "-"),
+    direction: List[Direction] = pd.Field(
+        ["+", "-"],
         title="Direction Coordinates",
         description="List of directions contained in the mode amplitude data.",
     )
 
-    values: ArrayLike[complex, 3] = pd.Field(
+    values: Array[complex] = pd.Field(
         ...,
         title="Mode Amplitude Values",
         description="Multi-dimensional array storing the raw, complex mode amplitude values.",
@@ -764,11 +754,9 @@ class ModeAmpsData(AbstractModeData):
 
     _dims = ("direction", "f", "mode_index")
 
-    def normalize(self, source_freq_amps: ArrayLike[complex, 1]) -> None:
+    def normalize(self, source_freq_amps: Array[complex]) -> None:
         """normalize the values by the amplitude of the source."""
-        new_values = self.values / source_freq_amps[None, :, None]
-        return self.copy(update={'values': new_values})
-
+        self.values /= source_freq_amps[None, :, None]  # pylint: disable=no-member
 
 
 class ModeIndexData(AbstractModeData):
@@ -781,7 +769,7 @@ class ModeIndexData(AbstractModeData):
     >>> data = ModeIndexData(values=values, mode_index=np.arange(1, 3), f=f)
     """
 
-    values: ArrayLike[complex, 2] = pd.Field(
+    values: Array[complex] = pd.Field(
         ..., title="Values", description="Values of the mode's complex effective refractive index."
     )
 
@@ -793,9 +781,9 @@ class ModeIndexData(AbstractModeData):
 
     _dims = ("f", "mode_index")
 
-    def normalize(self, source_freq_amps: ArrayLike[complex, 1]) -> None:
+    def normalize(self, source_freq_amps: Array[complex]) -> None:
         """normalize the values by the amplitude of the source."""
-        return self.copy()
+        return
 
     @property
     def n_complex(self):
@@ -911,19 +899,15 @@ class PermittivityData(SpatialCollectionData):
             return scalar_data.data
         return None
 
-    def apply_symmetry(self, simulation: Simulation, monitor_name: str):
+    def set_symmetry_attrs(self, simulation: Simulation, monitor_name: str):
         """Set the collection data attributes related to symmetries."""
-        sim_with_sym = super().apply_symmetry(simulation, monitor_name)
+        super().set_symmetry_attrs(simulation, monitor_name)
         # Redefine the expanded grid for epsilon rather than for fields.
-        return sim_with_sym.copy(
-            update=dict(
-                expanded_grid={
-                    "eps_xx": self.expanded_grid["Ex"],
-                    "eps_yy": self.expanded_grid["Ey"],
-                    "eps_zz": self.expanded_grid["Ez"],
-                }
-            )
-        )
+        self.expanded_grid = {
+            "eps_xx": self.expanded_grid["Ex"],
+            "eps_yy": self.expanded_grid["Ey"],
+            "eps_zz": self.expanded_grid["Ez"],
+        }
 
 
 class FluxData(AbstractFluxData, FreqData):
@@ -936,7 +920,7 @@ class FluxData(AbstractFluxData, FreqData):
     >>> data = FluxData(values=values, f=f)
     """
 
-    values: ArrayLike[float, 1] = pd.Field(
+    values: Array[float] = pd.Field(
         ..., title="Values", description="Values of the raw flux data in the frequency domain."
     )
     data_attrs: Dict[str, str] = pd.Field(
@@ -947,10 +931,9 @@ class FluxData(AbstractFluxData, FreqData):
 
     _dims = ("f",)
 
-    def normalize(self, source_freq_amps: ArrayLike[complex, 1]) -> None:
+    def normalize(self, source_freq_amps: Array[complex]) -> None:
         """normalize the values by the amplitude of the source."""
-        new_values = self.values / abs(source_freq_amps) ** 2
-        return self.copy(update={'values': new_values})
+        self.values /= abs(source_freq_amps) ** 2  # pylint: disable=no-member
 
 
 class FluxTimeData(AbstractFluxData, TimeData):
@@ -963,7 +946,7 @@ class FluxTimeData(AbstractFluxData, TimeData):
     >>> data = FluxTimeData(values=values, t=t)
     """
 
-    values: ArrayLike[float, 1] = pd.Field(
+    values: Array[float] = pd.Field(
         ..., title="Values", description="Values of the raw flux data in the time domain."
     )
     data_attrs: Dict[str, str] = pd.Field(
@@ -1204,21 +1187,10 @@ class AbstractSimulationData(Tidy3dBaseDataModel, ABC):
         return ax
 
 
-MonitorDataType = Union[
-    FieldData,
-    FieldTimeData,
-    PermittivityData,
-    ModeFieldData,
-    ModeData,
-    FluxData,
-    FluxTimeData,
-]
-
-
 class SimulationData(AbstractSimulationData):
     """Holds :class:`Monitor` data associated with :class:`Simulation`."""
 
-    monitor_data: Dict[str, MonitorDataType] = pd.Field(
+    monitor_data: Dict[str, Tidy3dData] = pd.Field(
         ...,
         title="Monitor Data",
         description="Mapping of monitor name to :class:`Tidy3dData` instance.",
@@ -1292,7 +1264,7 @@ class SimulationData(AbstractSimulationData):
         self.ensure_monitor_exists(monitor_name)
         monitor_data = self.monitor_data.get(monitor_name)
         if isinstance(monitor_data, SpatialCollectionData):
-            monitor_data = monitor_data.apply_symmetry(self.simulation, monitor_name)
+            monitor_data.set_symmetry_attrs(self.simulation, monitor_name)
         return monitor_data.sim_data_getitem
 
     def ensure_monitor_exists(self, monitor_name: str) -> None:
@@ -1331,7 +1303,11 @@ class SimulationData(AbstractSimulationData):
         centers = sub_grid.centers
 
         # colocate each of the field components at centers
-        field_dataset = field_monitor_data.colocate(x=centers.x, y=centers.y, z=centers.z)
+        xs = np.array(centers.x)
+        ys = np.array(centers.y)
+        zs = np.array(centers.z)
+
+        field_dataset = field_monitor_data.colocate(x=xs, y=ys, z=zs)
         return field_dataset
 
     # pylint:disable=too-many-arguments, too-many-locals, too-many-branches, too-many-statements
@@ -1476,7 +1452,7 @@ class SimulationData(AbstractSimulationData):
             A copy of the :class:`.SimulationData` with the data normalized by source spectrum.
         """
 
-        sim_data_norm = self.copy()
+        sim_data_norm = self.copy(validate=False)
 
         # if no normalize index, just return the new copy right away.
         if normalize_index is None:
@@ -1529,18 +1505,16 @@ class SimulationData(AbstractSimulationData):
             source_freq_amps *= np.exp(-1j * source_time.phase)
             monitor_data.normalize(source_freq_amps)
 
-        for monitor_name, monitor_data in sim_data_norm.monitor_data.items():
+        for monitor_data in sim_data_norm.monitor_data.values():
 
             if isinstance(monitor_data, (FieldData, FluxData, ModeData)):
 
                 if isinstance(monitor_data, CollectionData):
                     for attr_data in monitor_data.data_dict.values():
-                        normalized_mon_data = normalize_data(attr_data)
+                        normalize_data(attr_data)
 
                 else:
-                    normalized_mon_data = normalize_data(monitor_data)
-                
-                sim_data_norm.monitor_data[monitor_name] = normalized_mon_data
+                    normalize_data(monitor_data)
 
         sim_data_norm._normalize_index = normalize_index  # pylint:disable=protected-access
         return sim_data_norm
