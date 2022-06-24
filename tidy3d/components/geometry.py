@@ -9,14 +9,13 @@ import functools
 import pydantic
 import numpy as np
 from shapely.geometry import Point, Polygon, box, MultiPolygon
-from descartes import PolygonPatch
 
 from .base import Tidy3dBaseModel, cache
 from .types import Bound, Size, Coordinate, Axis, Coordinate2D, tidynumpy, Array
 from .types import Vertices, Ax, Shapely
 from .viz import add_ax_if_none, equal_aspect
 from .viz import PLOT_BUFFER, ARROW_LENGTH_FACTOR, ARROW_WIDTH_FACTOR, MAX_ARROW_WIDTH_FACTOR
-from .viz import PlotParams, plot_params_geometry
+from .viz import PlotParams, plot_params_geometry, polygon_patch
 from ..log import Tidy3dKeyError, SetupError, ValidationError
 from ..constants import MICROMETER, LARGE_NUMBER, RADIAN
 
@@ -245,7 +244,7 @@ class Geometry(Tidy3dBaseModel, ABC):
     def plot_shape(self, shape: Shapely, plot_params: PlotParams, ax: Ax) -> Ax:
         """Defines how a shape is plotted on a matplotlib axes."""
         _shape = self.evaluate_inf_shape(shape)
-        patch = PolygonPatch(_shape, **plot_params.to_kwargs())
+        patch = polygon_patch(_shape, **plot_params.to_kwargs())
         ax.add_artist(patch)
         return ax
 
