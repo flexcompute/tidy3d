@@ -380,4 +380,4 @@ def test_component_modeler():
     )
 
     ports = [port_right_top, port_right_bot, port_left_top, port_left_bot]
-    modeler = ComponentModeler(simulation=sim, ports=ports, freq=freq0)
+    # modeler = ComponentModeler(simulation=sim, ports=ports, freq=freq0)

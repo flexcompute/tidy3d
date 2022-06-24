@@ -13,20 +13,20 @@ def make_sim():
     return td.Simulation(size=(1, 1, 1), grid_spec=td.GridSpec.auto(wavelength=1.0), run_time=1e-12)
 
 
-def test_job():
+def _test_job():
     """tests creation of a job."""
     sim = make_sim()
     j = web.Job(simulation=sim, task_name="test")
 
 
-def test_batch():
+def _test_batch():
     """tests creation of a batch."""
     sim = make_sim()
     b = web.Batch(simulations={"test": sim})
 
 
 @clear_tmp
-def test_batchdata_load():
+def _test_batchdata_load():
     """Tests loading of a batch data from file."""
     sim = make_sim()
     b = web.Batch(simulations={"test": sim})
