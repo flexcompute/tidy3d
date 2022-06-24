@@ -37,18 +37,18 @@ class Job(WebContainer):
         "default", title="Folder Name", description="Name of folder to store task on web UI."
     )
 
-    task_id: TaskId = pd.Field(
-        None,
-        title="Task Id",
-        description="Task ID number, set when the task is uploaded, leave as None.",
-    )
-
     callback_url: str = pd.Field(
         None,
         title="Callback URL",
         description="Http PUT url to receive simulation finish event. "
         "The body content is a json file with fields "
         "``{'id', 'status', 'name', 'workUnit', 'solverVersion'}``.",
+    )
+
+    task_id: TaskId = pd.Field(
+        None,
+        title="Task Id",
+        description="Task ID number, set when the task is uploaded, leave as None.",
     )
 
     def run(
@@ -72,25 +72,23 @@ class Job(WebContainer):
             Dictionary mapping task name to :class:`.SimulationData` for :class:`Job`.
         """
 
-        self.upload()
         self.start()
         self.monitor()
         return self.load(path=path, normalize_index=normalize_index)
 
-    def upload(self) -> None:
-        """Upload simulation to server without running.
+    @pd.validator("task_id", always=True)
+    def _upload(cls, val, values) -> None:
+        """Upload simulation to server without running."""
+        if val is not None:
+            return val
 
-        Note
-        ----
-        To start the simulation running, call :meth:`Job.start` after uploaded.
-        """
         task_id = web.upload(
-            simulation=self.simulation,
-            task_name=self.task_name,
-            folder_name=self.folder_name,
-            callback_url=self.callback_url,
+            simulation=values.get("simulation"),
+            task_name=values.get("task_name"),
+            folder_name=values.get("folder_name"),
+            callback_url=values.get("callback_url"),
         )
-        self.task_id = task_id
+        return task_id
 
     def get_info(self) -> TaskInfo:
         """Return information about a :class:`Job`.
@@ -259,17 +257,17 @@ class Batch(WebContainer):
         description="Mapping of task names to Simulations to run as a batch.",
     )
 
+    folder_name: str = pd.Field(
+        "default",
+        title="Folder Name",
+        description="Name of folder to store member of each batch on web UI.",
+    )
+
     jobs: Dict[TaskName, Job] = pd.Field(
         None,
         title="Simulations",
         description="Mapping of task names to individual Job object for each task in the batch. "
         "Set by ``Batch.upload``, leave as None.",
-    )
-
-    folder_name: str = pd.Field(
-        "default",
-        title="Folder Name",
-        description="Name of folder to store member of each batch on web UI.",
     )
 
     def run(
@@ -301,23 +299,28 @@ class Batch(WebContainer):
         If no file exists for that task, it downloads it.
         """
 
-        self.upload()
         self.start()
         self.monitor()
         return self.load(path_dir=path_dir, normalize_index=normalize_index)
 
-    def upload(self) -> None:
+    @pd.validator("jobs", always=True)
+    def _upload(cls, val, values) -> None:
         """Create a series of tasks in the :class:`.Batch` and upload them to server.
 
         Note
         ----
         To start the simulations running, must call :meth:`Batch.start` after uploaded.
         """
-        self.jobs = {}
-        for task_name, simulation in self.simulations.items():
-            job = Job(simulation=simulation, task_name=task_name, folder_name=self.folder_name)
-            self.jobs[task_name] = job
-            job.upload()
+        if val is not None:
+            return val
+
+        jobs = {}
+        for task_name, simulation in values.get("simulations").items():
+            job = Job(
+                simulation=simulation, task_name=task_name, folder_name=values.get("folder_name")
+            )
+            jobs[task_name] = job
+        return jobs
 
     def get_info(self) -> Dict[TaskName, TaskInfo]:
         """Get information about each task in the :class:`Batch`.

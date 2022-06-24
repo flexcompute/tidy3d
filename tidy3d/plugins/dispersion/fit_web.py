@@ -202,9 +202,11 @@ class StableDispersionFitter(DispersionFitter):
 
         # set up bound_f, bound_amp
         if advanced_param.bound_f is None:
-            advanced_param.bound_f = self.frequency_range[1] * BOUND_MAX_FACTOR
+            new_bound_f = self.frequency_range[1] * BOUND_MAX_FACTOR
+            advanced_param = advanced_param.copy(update={"bound_f": new_bound_f})
         if advanced_param.bound_amp is None:
-            advanced_param.bound_amp = self.frequency_range[1] * BOUND_MAX_FACTOR
+            new_bound_amp = self.frequency_range[1] * BOUND_MAX_FACTOR
+            advanced_param = advanced_param.copy(update={"bound_amp": new_bound_amp})
 
         wvl_um, n_data, k_data = self._filter_wvl_range(
             wvl_min=self.wvl_range[0], wvl_max=self.wvl_range[1]

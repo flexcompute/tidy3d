@@ -761,22 +761,20 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
     def _get_structure_plot_params(self, mat_index: int, medium: Medium) -> PlotParams:
         """Constructs the plot parameters for a given medium in simulation.plot()."""
 
-        plot_params = plot_params_structure.copy(deep=True)
-        plot_params.linewidth = 0
+        plot_params = plot_params_structure.copy(update={"linewidth": 0})
 
         if mat_index == 0 or medium == self.medium:
             # background medium
-            plot_params.facecolor = "white"
-            plot_params.edgecolor = "white"
+            plot_params = plot_params.copy(update={"facecolor": "white", "edgecolor": "white"})
         elif isinstance(medium, PECMedium):
             # perfect electrical conductor
-            plot_params.facecolor = "gold"
-            plot_params.edgecolor = "k"
-            plot_params.linewidth = 1
+            plot_params = plot_params.copy(
+                update={"facecolor": "gold", "edgecolor": "k", "linewidth": 1}
+            )
         else:
             # regular medium
             facecolor = MEDIUM_CMAP[(mat_index - 1) % len(MEDIUM_CMAP)]
-            plot_params.facecolor = facecolor
+            plot_params = plot_params.copy(update={"facecolor": facecolor})
 
         return plot_params
 
@@ -845,7 +843,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         if alpha < 1:
             medium_shapes = self._filter_structures_plane(structures=structures, x=x, y=y, z=z)
         else:
-            structures = [self.background_structure] + structures
+            structures = [self.background_structure] + list(structures)
             medium_shapes = self._get_structures_plane(structures=structures, x=x, y=y, z=z)
 
         eps_min, eps_max = self.eps_bounds(freq=freq)
@@ -877,7 +875,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
     def eps_bounds(self, freq: float = None) -> Tuple[float, float]:
         """Compute range of (real) permittivity present in the simulation at frequency "freq"."""
 
-        medium_list = [self.medium] + self.mediums
+        medium_list = [self.medium] + list(self.mediums)
         medium_list = [medium for medium in medium_list if not isinstance(medium, PECMedium)]
         eps_list = [medium.eps_model(freq).real for medium in medium_list]
         eps_min = min(1, min(eps_list))
@@ -895,20 +893,15 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
     ) -> PlotParams:
         """Constructs the plot parameters for a given medium in simulation.plot_eps()."""
 
-        plot_params = plot_params_structure.copy(deep=True)
-        plot_params.linewidth = 0
+        plot_params = plot_params_structure.copy(update={"linewidth": 0})
         if alpha is not None:
-            plot_params.alpha = alpha
+            plot_params = plot_params.copy(update={"alpha": alpha})
 
-        # if medium == self.medium:
-        #     # background medium
-        #     plot_params.facecolor = "white"
-        #     plot_params.edgecolor = "white"
         if isinstance(medium, PECMedium):
             # perfect electrical conductor
-            plot_params.facecolor = "gold"
-            plot_params.edgecolor = "k"
-            plot_params.linewidth = 1
+            plot_params = plot_params.copy(
+                update={"facecolor": "gold", "edgecolor": "k", "linewidth": 1}
+            )
         else:
             # regular medium
             eps_medium = medium.eps_model(frequency=freq).real
@@ -916,7 +909,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
             delta_eps_max = eps_max - eps_min + 1e-5
             eps_fraction = delta_eps / delta_eps_max
             color = eps_fraction if reverse else 1 - eps_fraction
-            plot_params.facecolor = str(color)
+            plot_params = plot_params.copy(update={"facecolor": str(color)})
 
         return plot_params
 
@@ -1141,19 +1134,16 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
     def _make_symmetry_plot_params(self, sym_value: Symmetry) -> PlotParams:
         """Make PlotParams for symmetry."""
 
-        plot_params = plot_params_symmetry.copy(deep=True)
+        plot_params = plot_params_symmetry.copy()
 
         if sym_value == 1:
-            plot_params.facecolor = "lightsteelblue"
-            plot_params.edgecolor = "lightsteelblue"
-            plot_params.hatch = "++"
+            plot_params = plot_params.copy(
+                update={"facecolor": "lightsteelblue", "edgecolor": "lightsteelblue", "hatch": "++"}
+            )
         elif sym_value == -1:
-            # plot_params.facecolor = "rosybrown"
-            # plot_params.edgecolor = "rosybrown"
-            # plot_params.hatch = "--"
-            plot_params.facecolor = "goldenrod"
-            plot_params.edgecolor = "goldenrod"
-            plot_params.hatch = "--"
+            plot_params = plot_params.copy(
+                update={"facecolor": "goldenrod", "edgecolor": "goldenrod", "hatch": "--"}
+            )
 
         return plot_params
 
@@ -1283,8 +1273,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
             elif isinstance(boundary_edge, BlochBoundary):
                 plot_params = plot_params_bloch.copy(deep=True)
             else:
-                plot_params = PlotParams()
-                plot_params.alpha = 0
+                plot_params = PlotParams(alpha=0)
 
             # expand axis limit so that the axis ticks and labels aren't covered
             new_lim = lim

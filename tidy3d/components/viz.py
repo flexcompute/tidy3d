@@ -89,11 +89,12 @@ class PlotParams(Tidy3dBaseModel):
 
     def include_kwargs(self, **kwargs) -> "PlotParams":
         """Update the plot params with supplied kwargs."""
-        new_plot_params = self.copy(deep=True)
-        for key, value in kwargs.items():
-            if key not in ("type",) and value is not None and key in self.__fields__:
-                setattr(new_plot_params, key, value)
-        return new_plot_params
+        update_dict = {
+            key: value
+            for key, value in kwargs.items()
+            if key not in ("type",) and value is not None and key in self.__fields__
+        }
+        return self.copy(update=update_dict)
 
     def to_kwargs(self) -> dict:
         """Export the plot parameters as kwargs dict that can be supplied to plot function."""
