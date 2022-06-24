@@ -16,7 +16,7 @@ from ...components.types import Direction, Ax
 from ...components.viz import add_ax_if_none, equal_aspect
 from ...components.base import Tidy3dBaseModel
 from ...log import SetupError, log
-from ...web.container import Batch
+from ...web.container import Batch, BatchData
 
 # fwidth of gaussian pulse in units of central frequency
 FWIDTH_FRAC = 1.0 / 10
@@ -36,7 +36,7 @@ class Port(Box):
         title="Mode Specification",
         description="Specifies how the mode solver will solve for the modes of the port.",
     )
-    mode_indices: Tuple[pd.NonNegativeInt] = pd.Field(
+    mode_indices: Tuple[pd.NonNegativeInt, ...] = pd.Field(
         None,
         title="Mode Indices.",
         description="Indices into modes returned by the mode solver to use in the port. "
@@ -87,6 +87,12 @@ class ComponentModeler(Tidy3dBaseModel):
         units=HERTZ,
     )
 
+    folder_name: str = pd.Field(
+        "default",
+        title="Folder Name",
+        description="Name of the folder for the tasks on web.",
+    )
+
     batch: Tidy3dBaseModel = pd.Field(
         None,
         title="Batch",
@@ -100,23 +106,37 @@ class ComponentModeler(Tidy3dBaseModel):
             raise SetupError("Simulation must not have sources.")
         return val
 
-    def _to_monitor(self, port: Port) -> ModeMonitor:
+    @pd.validator("batch", always=True)
+    def _set_batch(cls, val, values):
+        """Initialize the batch."""
+        if val is not None:
+            return val
+
+        sim_dict = cls._make_sims(
+            ports=values.get("ports"), simulation=values.get("simulation"), freq=values.get("freq")
+        )
+
+        return Batch(simulations=sim_dict, folder_name=values.get("folder_name"))
+
+    @staticmethod
+    def _to_monitor(port: Port, freq: float) -> ModeMonitor:
         """Creates a mode monitor from a given port."""
         return ModeMonitor(
             center=port.center,
             size=port.size,
-            freqs=[self.freq],
+            freqs=[freq],
             mode_spec=port.mode_spec,
             name=port.name,
         )
 
-    def _to_sources(self, port: Port) -> List[ModeSource]:
+    @staticmethod
+    def _to_sources(port: Port, freq: float) -> List[ModeSource]:
         """Creates a list of mode sources from a given port."""
         return [
             ModeSource(
                 center=port.center,
                 size=port.size,
-                source_time=GaussianPulse(freq0=self.freq, fwidth=self.freq * FWIDTH_FRAC),
+                source_time=GaussianPulse(freq0=freq, fwidth=freq * FWIDTH_FRAC),
                 mode_spec=port.mode_spec,
                 mode_index=mode_index,
                 direction=port.direction,
@@ -125,23 +145,13 @@ class ComponentModeler(Tidy3dBaseModel):
             for mode_index in port.mode_indices
         ]
 
-    @equal_aspect
-    @add_ax_if_none
-    def plot_sim(self, x: float = None, y: float = None, z: float = None, ax: Ax = None) -> Ax:
-        """Plot a :class:`Simulation` with all sources added for each port, for troubleshooting."""
-
-        sim_plot = self.simulation.copy(deep=True)
-        for port_source in self.ports:
-            mode_source_0 = self._to_sources(port_source)[0]
-            sim_plot.sources.append(mode_source_0)
-        return sim_plot.plot(x=x, y=y, z=z, ax=ax)
-
-    def _shift_value_signed(self, port: Port) -> float:
+    @staticmethod
+    def _shift_value_signed(simulation: Simulation, port: Port) -> float:
         """How far (signed) to shift the source from the monitor."""
 
         # get the grid boundaries and sizes along port normal from the simulation
         normal_axis = port.size.index(0.0)
-        grid = self.simulation.grid
+        grid = simulation.grid
         grid_boundaries = grid.boundaries.to_list[normal_axis]
         grid_centers = grid.centers.to_list[normal_axis]
 
@@ -170,42 +180,56 @@ class ComponentModeler(Tidy3dBaseModel):
         new_pos = grid_centers[shifted_index]
         return new_pos - port_position
 
-    def _shift_port(self, port: Port) -> Port:
+    @classmethod
+    def _shift_port(cls, simulation: Simulation, port: Port) -> Port:
         """Generate a new port shifted by the shift amount in normal direction."""
 
-        shift_value = self._shift_value_signed(port)
+        shift_value = cls._shift_value_signed(simulation=simulation, port=port)
         center_shifted = list(port.center)
         center_shifted[port.size.index(0.0)] += shift_value
-        port_shifted = port.copy(deep=True)
-        port_shifted.center = center_shifted
+        port_shifted = port.copy(update=dict(center=center_shifted))
         return port_shifted
 
-    def _task_name(self, port_source: Port, mode_index: int) -> str:
+    @staticmethod
+    def _task_name(port_source: Port, mode_index: int) -> str:
         """The name of a task, determined by the port of the source and mode index."""
         return f"smatrix_port{port_source.name}_mode{mode_index}"
 
-    def _make_sims(self) -> Dict[str, Simulation]:
+    @classmethod
+    def _make_sims(
+        cls, ports: List[Port], simulation: Simulation, freq: float
+    ) -> Dict[str, Simulation]:
         """Generate all the :class:`Simulation` objects for the S matrix calculation."""
 
-        mode_monitors = [self._to_monitor(port) for port in self.ports]
+        mode_monitors = [cls._to_monitor(port=port, freq=freq) for port in ports]
         sim_dict = {}
-        for port_source in self.ports:
-            port_source = self._shift_port(port_source)
-            for mode_source in self._to_sources(port_source):
-                sim_copy = self.simulation.copy(deep=True)
-                sim_copy.sources = [mode_source]
-                sim_copy.monitors += mode_monitors
-                task_name = self._task_name(port_source, mode_source.mode_index)
+        for port_source in ports:
+            port_source = cls._shift_port(simulation=simulation, port=port_source)
+            for mode_source in cls._to_sources(port=port_source, freq=freq):
+                sim_copy = simulation.copy(
+                    update=dict(
+                        sources=[mode_source], monitors=list(simulation.monitors) + mode_monitors
+                    )
+                )
+                task_name = cls._task_name(port_source, mode_source.mode_index)
                 sim_dict[task_name] = sim_copy
         return sim_dict
 
-    def _run_sims(
-        self, sim_dict: Dict[str, Simulation], folder_name: str, path_dir: str
-    ) -> "BatchData":
-        """Run :class:`Simulations` for each port and return the batch after saving."""
+    @equal_aspect
+    @add_ax_if_none
+    def plot_sim(self, x: float = None, y: float = None, z: float = None, ax: Ax = None) -> Ax:
+        """Plot a :class:`Simulation` with all sources added for each port, for troubleshooting."""
 
-        self.batch = Batch(simulations=sim_dict, folder_name=folder_name)
-        self.batch.upload()
+        sim_plot = self.simulation.copy(deep=True)
+        plot_sources = []
+        for port_source in self.ports:
+            mode_source_0 = self._to_sources(port=port_source, freq=self.freq)[0]
+            plot_sources.append(mode_source_0)
+        sim_plot = self.simulation.copy(update=dict(sources=plot_sources))
+        return sim_plot.plot(x=x, y=y, z=z, ax=ax)
+
+    def _run_sims(self, path_dir: str) -> BatchData:
+        """Run :class:`Simulations` for each port and return the batch after saving."""
         self.batch.start()
         self.batch.monitor()
         batch_data = self.batch.load(path_dir=path_dir)
@@ -227,10 +251,10 @@ class ComponentModeler(Tidy3dBaseModel):
 
         k0 = 2 * np.pi * C_0 / self.freq
         k_eff = k0 * normalize_n_eff
-        shift_value = self._shift_value_signed(port_source)
+        shift_value = self._shift_value_signed(simulation=self.simulation, port=port_source)
         return normalize_amp * np.exp(1j * k_eff * shift_value)
 
-    def _construct_smatrix(self, batch_data: "BatchData") -> SMatrixType:
+    def _construct_smatrix(self, batch_data: BatchData) -> SMatrixType:
         """Post process batch to generate scattering matrix."""
 
         # load all data
@@ -271,25 +295,24 @@ class ComponentModeler(Tidy3dBaseModel):
 
         return s_matrix_dict
 
-    def solve(self, folder_name: str = "default", path_dir: str = DEFAULT_DATA_DIR) -> SMatrixType:
+    def solve(self, path_dir: str = DEFAULT_DATA_DIR) -> SMatrixType:
         """Solves for the scattering matrix of the system."""
         log.warning(
             "`ComponentModeler.solve()` is renamed to `ComponentModeler.run()` "
             "'and will be removed in a later version."
         )
-        return self.run(folder_name=folder_name, path_dir=path_dir)
+        return self.run(path_dir=path_dir)
 
-    def run(self, folder_name: str = "default", path_dir: str = DEFAULT_DATA_DIR) -> SMatrixType:
+    def run(self, path_dir: str = DEFAULT_DATA_DIR) -> SMatrixType:
         """Solves for the scattering matrix of the system."""
 
-        sim_dict = self._make_sims()
-        batch_data = self._run_sims(sim_dict=sim_dict, folder_name=folder_name, path_dir=path_dir)
+        batch_data = self._run_sims(path_dir=path_dir)
         return self._construct_smatrix(batch_data=batch_data)
 
     def load(self, path_dir: str = DEFAULT_DATA_DIR) -> SMatrixType:
         """Load an Smatrix from saved BatchData object."""
 
         if self.batch is None:
-            raise SetupError("Component modeler has no batch saved. Run .solve() to generate.")
+            raise SetupError("Component modeler has no batch saved. Run .run() to generate.")
         batch_data = self.batch.load(path_dir=path_dir)
         return self._construct_smatrix(batch_data=batch_data)
