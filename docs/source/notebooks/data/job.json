@@ -241,10 +241,10 @@
         "shutoff": 1e-05,
         "subpixel": true,
         "courant": 0.9,
-        "version": "1.4.0"
+        "version": "1.4.1"
     },
     "task_name": "job",
     "folder_name": "default",
-    "task_id": "884e2b7c-52b1-42ee-892a-3692e942adf4",
-    "callback_url": null
+    "callback_url": null,
+    "task_id": "c04c3593-1358-41c7-ba5e-9f50e4de122e"
 }

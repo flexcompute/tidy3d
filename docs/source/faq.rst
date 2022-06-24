@@ -187,3 +187,17 @@ at the central frequency or wavelength (whichever is provided), and a one-pole m
 material is generated. These values are for example readily available from the 
 `refractive index database <https://refractiveindex.info/>`_.
 
+Why can I not change Tidy3D instances after they are created?
+-------------------------------------------------------------
+
+You may notice in Tidy3D verions 1.5 and above that it is no longer possible to modify instances of Tidy3D components after they are created.
+Making Tidy3D components immutable like this was an intentional design decision indended to make Tidy3D safer and more performant.
+
+For example, Tidy3D contains several "validators" on input data.
+If models are mutated, we can't always guarantee that the resulting instance will still satisfy our validations and the simulation may be invalid.
+
+Furthermore, making the objects immutable allows us to cache the results of many expensive operations.
+For example, we can now compute and store the simulation grid once, without needing to worry about the value becoming stale at a later time, which significantly speeds up plotting and other operations.
+
+If you have a Tidy3D component that you want to recreate with a new set of parameters, instead of ``obj.param1 = param1_new``, you can call ``obj_new = obj.copy(update=dict(param1=param1_new))``.
+Note that you may also pass more key value pairs to the dictionary in ``update``.
