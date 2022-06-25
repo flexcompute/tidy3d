@@ -11,6 +11,8 @@ from .derivatives import create_d_matrices as d_mats
 from .derivatives import create_s_matrices as s_mats
 from .transforms import radial_transform, angled_transform
 
+# consider vec to be complex if norm(vec.imag)/norm(vec) > TOL_COMPLEX
+TOL_COMPLEX = fp_eps
 
 # pylint:disable=too-many-statements,too-many-branches,too-many-locals
 def compute_modes(
@@ -162,8 +164,32 @@ def compute_modes(
         target = mode_spec.target_neff
     target_neff_p = target / np.linalg.norm(kp_to_k)
 
+    ## Determine matrix data type for ARPACK eigs solver
+    # 1) check if complex or not
+    complex_solver = False
+    if (
+        isinstance_complex(eps_tensor)
+        or isinstance_complex(mu_tensor)
+        or np.any([isinstance_complex(f) for f in der_mats])
+    ):
+        complex_solver = True
+
+    # 2) determine precision
+    mat_dtype = np.float32
+    if complex_solver:
+        mat_dtype = np.complex128 if mode_spec.precision == "double" else np.complex64
+    else:
+        if mode_spec.precision == "double":
+            mat_dtype = np.float64
+
     # Solve for the modes
-    E, H, neff, keff = solver_em(eps_tensor, mu_tensor, der_mats, num_modes, target_neff_p)
+    E, H, neff, keff = solver_em(
+        eps_tensor.astype(mat_dtype),
+        mu_tensor.astype(mat_dtype),
+        [f.astype(mat_dtype) for f in der_mats],
+        num_modes,
+        mat_dtype(target_neff_p),
+    )
 
     # Reorder if needed
     if mode_spec.sort_by != "largest_neff":
@@ -411,3 +437,20 @@ def solver_eigs(mat, num_modes, guess_value=1.0):
 
     values, vectors = spl.eigs(mat, k=num_modes, sigma=guess_value, tol=fp_eps)
     return values, vectors
+
+
+def isinstance_complex(vec_or_mat, tol=TOL_COMPLEX):
+    """Check if a numpy array or scipy csr_matrix has complex component by looking at
+    norm(x.imag)/norm(x)>TOL_COMPLEX
+
+    Parameters
+    ----------
+    vec_or_mat : Union[np.ndarray, sp.csr_matrix]
+    """
+
+    if isinstance(vec_or_mat, np.ndarray):
+        return np.linalg.norm(vec_or_mat.imag) / np.linalg.norm(vec_or_mat) > tol
+    if isinstance(vec_or_mat, sp.csr_matrix):
+        return spl.norm(vec_or_mat.imag) / spl.norm(vec_or_mat) > tol
+
+    raise RuntimeError("Variable type should be either numpy array or scipy csr_matrix.")

@@ -60,6 +60,13 @@ class ModeSpec(Tidy3dBaseModel):
         units=RADIAN,
     )
 
+    precision: Literal["float", "double"] = pd.Field(
+        "float",
+        title="single or double precision in mode solver",
+        description="The solver will be faster and using less memory with "
+        "single precision, while more accurate with double precision",
+    )
+
     bend_radius: float = pd.Field(
         None,
         title="Bend radius",
