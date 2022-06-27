@@ -40,10 +40,10 @@ from .components import ModeMonitor, ModeFieldMonitor, PermittivityMonitor
 from .components import Simulation
 
 # data
-from .components import SimulationData, FieldData, FluxData, FluxTimeData
-from .components import DATA_TYPE_MAP, ScalarFieldData, ScalarFieldTimeData
-from .components import ModeData, ModeAmpsData, ModeIndexData, ModeFieldData, PermittivityData
-from .components import ScalarPermittivityData
+# from .components import SimulationData, FieldData, FluxData, FluxTimeData
+# from .components import DATA_TYPE_MAP, ScalarFieldData, ScalarFieldTimeData
+# from .components import ModeData, ModeAmpsData, ModeIndexData, ModeFieldData, PermittivityData
+# from .components import ScalarPermittivityData
 
 # boundary
 from .components import BoundarySpec, Boundary, BoundaryEdge, BoundaryEdgeType

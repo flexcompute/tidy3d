@@ -81,10 +81,8 @@ class TypedArrayLike(np.ndarray):
     def make_tuple(cls, v):
         """Converts a nested list of lists into a list of tuples."""
         return (
-            tuple(cls.make_tuple(x) for x in v)
-            if type(v) is list  # pylint:disable=unidiomatic-typecheck
-            else cls.inner_type(v)  # pylint:disable=no-member
-        )
+            tuple(cls.make_tuple(x) for x in v) if isinstance(v, list) else cls.inner_type(v)
+        )  # pylint:disable=no-member
 
     @classmethod
     def __get_validators__(cls):

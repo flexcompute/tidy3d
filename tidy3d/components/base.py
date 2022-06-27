@@ -229,9 +229,9 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         """define >= for getting unique indices based on hash."""
         return hash(self) >= hash(other)
 
-    def __eq__(self, other):
-        """define == for checking whether two base models are equal unique indices based on hash."""
-        return hash(self) == hash(other)
+    # def __eq__(self, other):
+    #     """define == for checking whether two base models are equal unique indices based on hash."""
+    #     return hash(self) == hash(other)
 
     def _json_string(self, include_unset: bool = True) -> str:
         """Returns string representation of a :class:`Tidy3dBaseModel`.
