@@ -16,8 +16,8 @@ from ...components import ModeSpec
 from ...components import ModeMonitor
 from ...components.source import ModeSource, SourceTime
 from ...components.types import Direction, ArrayLike, FreqArray, Ax, Literal, Axis
-from ...components.data import Tidy3dData, ModeIndexData, ModeFieldData, ScalarModeFieldData
-from ...components.data import AbstractSimulationData
+from ...components.data import ModeIndexDataArray, ModeFieldData, ScalarModeFieldDataArray
+from ...components.data import SimulationData
 from ...components.boundary import Symmetry
 from ...log import ValidationError, DataError
 
@@ -29,7 +29,7 @@ FIELD = Tuple[ArrayLike[complex, 3], ArrayLike[complex, 3], ArrayLike[complex, 3
 FIELD_DECAY_CUTOFF = 1e-2
 
 
-class ModeSolverData(AbstractSimulationData):
+class ModeSolverData(SimulationData):
     """Holds data associated with :class:`.ModeSolver`.
 
     Parameters
@@ -38,13 +38,13 @@ class ModeSolverData(AbstractSimulationData):
         Cross-sectional plane in which the modes were be computed.
     mode_spec : :class:`.ModeSpec`
         Container with specifications about the modes.
-    data_dict : Dict[str, Union[ModeFieldData, ModeIndexData]]
-        Mapping of "n_complex" to :class:`.ModeIndexData`, and "fields" to :class:`.ModeFieldData`.
+    data_dict : Dict[str, Union[ModeFieldData, ModeIndexDataArray]]
+        Mapping of "n_complex" to :class:`.ModeIndexDataArray`, and "fields" to :class:`.ModeFieldData`.
     """
 
     plane: Box
     mode_spec: ModeSpec
-    data_dict: Dict[str, Union[ModeFieldData, ModeIndexData]]
+    data_dict: Dict[str, Union[ModeFieldData, ModeIndexDataArray]]
 
     @cached_property
     def fields(self):
@@ -91,7 +91,7 @@ class ModeSolverData(AbstractSimulationData):
             "mode_spec": self.mode_spec,
         }
         for name, obj in json_dict.items():
-            Tidy3dData.save_string(handle, name, obj.json())
+            ScalarModeFieldDataArray.save_string(handle, name, obj.json())
 
         # make groups for mode fields and index data
         for name, data in self.data_dict.items():
@@ -116,13 +116,13 @@ class ModeSolverData(AbstractSimulationData):
         }
         obj_dict = {}
         for name, obj in json_dict.items():
-            json_string = Tidy3dData.load_string(handle, name)
+            json_string = ScalarModeFieldDataArray.load_string(handle, name)
             obj_dict[name] = obj.parse_raw(json_string)
 
         # load fields and effective index data
         data_dict = {
             "fields": ModeFieldData.load_from_group(handle["fields"]),
-            "n_complex": ModeIndexData.load_from_group(handle["n_complex"]),
+            "n_complex": ModeIndexDataArray.load_from_group(handle["n_complex"]),
         }
         return cls(data_dict=data_dict, **obj_dict)
 
@@ -318,12 +318,12 @@ class ModeSolver(Tidy3dBaseModel):
         # Compute and store the modes at all frequencies
         n_complex, fields = self._solve_all_freqs(coords=solver_coords, symmetry=solver_symmetry)
 
-        # Generate the dictionary of ScalarModeFieldData for every field
+        # Generate the dictionary of ScalarModeFieldDataArray for every field
         data_dict = {}
         for field_name in fields[0].keys():
             xyz_coords = plane_grid_sym[field_name].to_list
             xyz_coords[normal_axis] = [self.plane.center[normal_axis]]
-            data_dict[field_name] = ScalarModeFieldData(
+            data_dict[field_name] = ScalarModeFieldDataArray(
                 x=xyz_coords[0],
                 y=xyz_coords[1],
                 z=xyz_coords[2],
@@ -339,7 +339,7 @@ class ModeSolver(Tidy3dBaseModel):
         )
         field_data = field_data.expand_syms
         self._field_decay_warning(field_data)
-        index_data = ModeIndexData(
+        index_data = ModeIndexDataArray(
             f=self.freqs,
             mode_index=np.arange(self.mode_spec.num_modes),
             values=np.stack(n_complex, axis=0),

@@ -30,10 +30,10 @@ from .monitor import ModeFieldMonitor, PermittivityMonitor
 # simulation
 from .simulation import Simulation
 
-# data
-from .data import SimulationData, FieldData, FluxData, ModeData, FluxTimeData
-from .data import ScalarFieldData, ScalarFieldTimeData, ModeAmpsData, ModeIndexData, DATA_TYPE_MAP
-from .data import ModeFieldData, PermittivityData, ScalarPermittivityData
+# # data
+# from .data import SimulationData, FieldData, FluxData, ModeData, FluxTimeData
+# from .data import ScalarFieldData, ScalarFieldTimeData, ModeAmpsData, ModeIndexData
+# from .data import ModeFieldData, PermittivityData, ScalarPermittivityData
 
 # boundary
 from .boundary import BoundarySpec, Boundary, BoundaryEdge, BoundaryEdgeType

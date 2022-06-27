@@ -79,11 +79,10 @@ class SourceTime(ABC, Tidy3dBaseModel):
 
         times = np.array(times)
         freqs = np.array(freqs)
+        time_amps = self.amp_time(times)
 
-        if complex_fields:
-            time_amps = self.amp_time(times)
-        else:
-            time_amps = np.real(self.amp_time(times))
+        if not complex_fields:
+            time_amps = np.real(time_amps)
 
         # Cut to only relevant times
         count_times = np.where(np.abs(time_amps) / np.amax(np.abs(time_amps)) > DFT_CUTOFF)
