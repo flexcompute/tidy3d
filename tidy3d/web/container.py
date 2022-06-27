@@ -181,7 +181,6 @@ class Job(WebContainer):
     def delete(self):
         """Delete server-side data associated with :class:`Job`."""
         web.delete(self.task_id)
-        self.task_id = None
 
 
 class BatchData(Tidy3dBaseModel):
@@ -501,4 +500,3 @@ class Batch(WebContainer):
         """Delete server-side data associated with each task in the batch."""
         for _, job in self.jobs.items():
             job.delete()
-            self.jobs = None

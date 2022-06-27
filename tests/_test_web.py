@@ -165,7 +165,6 @@ def test_job_0_run():
 def test_job_1_upload():
     """test that task uploads ok"""
     job = web.Job(simulation=sim_original, task_name="test_job")
-    job.upload()
     jobs_global.append(job)
 
 
@@ -243,7 +242,6 @@ def test_batch_1_upload():
     sims = 2 * [sim_original]
     simulations = {f"task_{i}": sims[i] for i in range(len(sims))}
     batch = web.Batch(simulations=simulations)
-    batch.upload()
     batches_global.append(batch)
 
 
