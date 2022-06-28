@@ -31,7 +31,7 @@ ConfigDev = WebConfig(
 ConfigUat = WebConfig(
     s3_region="us-gov-west-1",
     studio_bucket="flow360studio",
-    auth_api_endpoint="https://portal-api.simulation.cloud",
+    auth_api_endpoint="https://uat-portal-api.simulation.cloud",
     web_api_endpoint="https://uat-tidy3d-api.simulation.cloud",
     website_endpoint="https://uat-tidy3d.simulation.cloud",
 )

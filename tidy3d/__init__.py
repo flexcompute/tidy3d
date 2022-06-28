@@ -1,6 +1,7 @@
 """ Tidy3d package imports"""
 from concurrent.futures import ProcessPoolExecutor, process
 
+
 from rich import pretty, traceback
 
 from .config import config
@@ -10,6 +11,8 @@ from .version import __version__
 
 # updater
 from .updater import Updater
+from .web.webapi import check_client_version
+
 
 # grid
 from .components import Grid, Coords, GridSpec, UniformGrid, CustomGrid, AutoGrid
@@ -83,3 +86,5 @@ def set_logging_level(level: str) -> None:
 # make all stdout and errors pretty
 pretty.install()
 # traceback.install()
+
+check_client_version()

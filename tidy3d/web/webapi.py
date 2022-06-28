@@ -9,6 +9,7 @@ from typing import List, Dict, Optional
 
 import requests
 from dateutil import parser
+from packaging.version import Version
 from rich.console import Console
 from rich.progress import Progress
 
@@ -24,6 +25,8 @@ from ..version import __version__
 
 REFRESH_TIME = 0.3
 TOTAL_DOTS = 3
+
+APP_NAME = "tidy3d-python-frontend"
 
 
 def run(  # pylint:disable=too-many-arguments
@@ -593,15 +596,33 @@ def _rm_file(path: str):
         os.remove(path)
 
 
-def _s3_grant(task_id: TaskId):
-    user = DEFAULT_CONFIG.user
-    if "expiration" in user:
-        exp = parser.parse(user["expiration"]).replace(tzinfo=None)
-        # request new temporary credential when existing one expires in 5 minutes.
-        if (exp - datetime.utcnow()).total_seconds() > 300:
-            return
+def check_client_version():
 
-    method = f"tidy3d/s3upload/grant?resourceId={task_id}"
-    resp = http.get(method)
-    credentials = resp["userCredentials"]
-    DEFAULT_CONFIG.user = {**DEFAULT_CONFIG.user, **credentials}
+    """Check if the client version is the latest version."""
+    config = DEFAULT_CONFIG
+    try:
+        resp = requests.get(f"{config.auth_api_endpoint}/versions?appName={APP_NAME}")
+        json_resp = resp.json()
+        versions = list(map(lambda x: Version(x["version"]), json_resp["data"]))
+        tidy3d_version = Version(__version__)
+        if tidy3d_version not in versions:
+            log.warning(
+                f"You are using tidy3d version {tidy3d_version}, "
+                f"which is not in the list of supported versions."
+            )
+            log.warning(
+                "Consider upgrading via the 'python -m pip install --upgrade tidy3d' command"
+            )
+
+        versions.sort(reverse=True)
+        if versions and versions[0] > tidy3d_version:
+            log.warning(
+                f"You are using tidy3d version {tidy3d_version};"
+                f" however, version {versions[0]} is available."
+            )
+            log.warning(
+                "Consider upgrading via the 'python -m pip install --upgrade tidy3d' command"
+            )
+    except Exception:  # pylint: disable=broad-except
+        # silence if getting release information failed.
+        pass
