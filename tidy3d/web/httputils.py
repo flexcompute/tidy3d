@@ -1,8 +1,10 @@
 """ handles communication with server """
 # import os
+import time
 from typing import Dict
 from enum import Enum
 
+import jwt
 import requests
 
 from .auth import get_credentials, MAX_ATTEMPTS
@@ -61,9 +63,18 @@ def get_query_url(method: str) -> str:
     # return os.path.join(Config.web_api_endpoint, method)
 
 
+def need_token_refresh(token: str) -> bool:
+    """check whether to refresh token or not"""
+    decoded = jwt.decode(token, options={"verify_signature": False})
+    return decoded["exp"] - time.time() < 300
+
+
 def get_headers() -> Dict[str, str]:
     """get headers for http request"""
-    get_credentials()
+    if Config.auth is None or Config.auth["accessToken"] is None:
+        get_credentials()
+    elif need_token_refresh(Config.auth["accessToken"]):
+        get_credentials()
     access_token = Config.auth["accessToken"]
     return {
         "Authorization": f"Bearer {access_token}",
