@@ -1,6 +1,7 @@
 """Objects that define how data is recorded from simulation."""
 from abc import ABC, abstractmethod
 from typing import Union, Tuple
+from typing_extensions import Annotated
 
 import pydantic
 import numpy as np
@@ -8,7 +9,7 @@ import numpy as np
 from .types import Literal, Ax, EMField, ArrayLike, Bound, FreqArray
 from .geometry import Box
 from .validators import assert_plane
-from .base import cached_property
+from .base import cached_property, TYPE_TAG_STR
 from .mode import ModeSpec
 from .viz import PlotParams, plot_params_monitor, ARROW_COLOR_MONITOR, ARROW_ALPHA
 from ..log import SetupError
@@ -473,12 +474,15 @@ class ModeFieldMonitor(AbstractModeMonitor):
 
 
 # types of monitors that are accepted by simulation
-MonitorType = Union[
-    FieldMonitor,
-    FieldTimeMonitor,
-    PermittivityMonitor,
-    FluxMonitor,
-    FluxTimeMonitor,
-    ModeMonitor,
-    ModeFieldMonitor,
+MonitorType = Annotated[
+    Union[
+        FieldMonitor,
+        FieldTimeMonitor,
+        PermittivityMonitor,
+        FluxMonitor,
+        FluxTimeMonitor,
+        ModeMonitor,
+        ModeFieldMonitor,
+    ],
+    pydantic.Field(discriminator=TYPE_TAG_STR),
 ]
