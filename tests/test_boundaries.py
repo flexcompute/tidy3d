@@ -8,7 +8,7 @@ from tidy3d.components.boundary import BoundarySpec, Boundary, BoundaryEdgeType
 from tidy3d.components.boundary import Periodic, PECBoundary, PMCBoundary, BlochBoundary
 from tidy3d.components.boundary import PML, StablePML, Absorber
 from tidy3d.components.source import GaussianPulse, PlaneWave, PointDipole
-from tidy3d.components.base import TYPE_TAG_STR
+from tidy3d.components.types import TYPE_TAG_STR
 from tidy3d.log import SetupError
 from .utils import assert_log_level
 

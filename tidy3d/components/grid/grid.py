@@ -5,8 +5,8 @@ from typing import Tuple, List
 import numpy as np
 import pydantic as pd
 
-from ..base import Tidy3dBaseModel, TYPE_TAG_STR, cached_property
-from ..types import ArrayLike, Axis, Array
+from ..base import Tidy3dBaseModel, cached_property
+from ..types import ArrayLike, Axis, Array, TYPE_TAG_STR
 from ..geometry import Box
 
 from ...log import SetupError

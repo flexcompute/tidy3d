@@ -9,14 +9,11 @@ import yaml
 import numpy as np
 from pydantic.fields import ModelField
 
-from .types import ComplexNumber, Literal
+from .types import ComplexNumber, Literal, TYPE_TAG_STR
 from ..log import FileError
 
 # default indentation (# spaces) in files
 INDENT = 4
-
-# type tag default name
-TYPE_TAG_STR = "type"
 
 
 class Tidy3dBaseModel(pydantic.BaseModel):

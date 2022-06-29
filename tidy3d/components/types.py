@@ -7,6 +7,7 @@ try:
     from typing import Literal
 except ImportError:
     from typing_extensions import Literal
+from typing_extensions import Annotated
 
 import pydantic
 import numpy as np
@@ -17,6 +18,15 @@ from ..log import ValidationError
 # import warnings
 # warnings.filterwarnings(action="error", category=np.ComplexWarning)
 """ Numpy Arrays """
+
+# type tag default name
+TYPE_TAG_STR = "type"
+
+
+def annotate_type(UnionType):  # pylint:disable=invalid-name
+    """Annotated union type using TYPE_TAG_STR as discriminator."""
+    return Annotated[UnionType, pydantic.Field(discriminator=TYPE_TAG_STR)]
+
 
 # generic numpy array
 Numpy = np.ndarray

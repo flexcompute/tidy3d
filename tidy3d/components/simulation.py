@@ -14,7 +14,7 @@ from .base import cached_property
 from .validators import assert_unique_names, assert_objects_in_sim_bounds
 from .validators import validate_mode_objects_symmetry
 from .geometry import Box
-from .types import Ax, Shapely, FreqBound, GridSize, Axis
+from .types import Ax, Shapely, FreqBound, GridSize, Axis, annotate_type
 from .grid import Coords1D, Grid, Coords, GridSpec, UniformGrid
 from .medium import Medium, MediumType, AbstractMedium, PECMedium
 from .boundary import BoundarySpec, Symmetry, BlochBoundary, PECBoundary, PMCBoundary
@@ -139,7 +139,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         "simulation material properties in regions of spatial overlap.",
     )
 
-    sources: Tuple[SourceType, ...] = pydantic.Field(
+    sources: Tuple[annotate_type(SourceType), ...] = pydantic.Field(
         (),
         title="Sources",
         description="Tuple of electric current sources injecting fields into the simulation.",
@@ -151,7 +151,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         description="Specification of boundary conditions along each dimension.",
     )
 
-    monitors: Tuple[MonitorType, ...] = pydantic.Field(
+    monitors: Tuple[annotate_type(MonitorType), ...] = pydantic.Field(
         (),
         title="Monitors",
         description="Tuple of monitors in the simulation. "
