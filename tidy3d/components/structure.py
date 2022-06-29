@@ -1,14 +1,11 @@
-# pylint:disable=too-many-arguments
 """Defines Geometric objects with Medium properties."""
-from typing import Union
-
 import pydantic
 
 from .base import Tidy3dBaseModel
 from .validators import validate_name_str
-from .geometry import GeometryType, Box, GeometryGroup  # pylint: disable=unused-import
-from .medium import MediumType, Medium  # pylint: disable=unused-import
-from .types import Ax
+from .geometry import GeometryType
+from .medium import MediumType
+from .types import Ax, TYPE_TAG_STR
 from .viz import add_ax_if_none, equal_aspect
 
 
@@ -19,19 +16,24 @@ class Structure(Tidy3dBaseModel):
 
     Example
     -------
+    >>> from tidy3d import Box, Medium
     >>> box = Box(center=(0,0,1), size=(2, 2, 2))
     >>> glass = Medium(permittivity=3.9)
     >>> struct = Structure(geometry=box, medium=glass, name='glass_box')
     """
 
-    geometry: Union[GeometryType, GeometryGroup] = pydantic.Field(
-        ..., title="Geometry", description="Defines geometric properties of the structure."
+    geometry: GeometryType = pydantic.Field(
+        ...,
+        title="Geometry",
+        description="Defines geometric properties of the structure.",
+        discriminator=TYPE_TAG_STR,
     )
 
     medium: MediumType = pydantic.Field(
         ...,
         title="Medium",
         description="Defines the electromagnetic properties of the structure's medium.",
+        discriminator=TYPE_TAG_STR,
     )
 
     name: str = pydantic.Field(None, title="Name", description="Optional name for the structure.")

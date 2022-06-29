@@ -10,8 +10,8 @@ import numpy as np
 import h5py
 import pydantic as pd
 
-from .types import Numpy, Direction, Array, Literal, Ax, Coordinate, Axis
-from .base import Tidy3dBaseModel, TYPE_TAG_STR
+from .types import Numpy, Direction, Array, Literal, Ax, Coordinate, Axis, TYPE_TAG_STR
+from .base import Tidy3dBaseModel
 from .simulation import Simulation
 from .boundary import Symmetry, BlochBoundary
 from .monitor import Monitor

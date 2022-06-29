@@ -12,7 +12,7 @@ from shapely.geometry import Point, Polygon, box, MultiPolygon
 
 from .base import Tidy3dBaseModel, cached_property
 from .types import Bound, Size, Coordinate, Axis, Coordinate2D, ArrayLike
-from .types import Vertices, Ax, Shapely
+from .types import Vertices, Ax, Shapely, annotate_type
 from .viz import add_ax_if_none, equal_aspect
 from .viz import PLOT_BUFFER, ARROW_LENGTH_FACTOR, ARROW_WIDTH_FACTOR, MAX_ARROW_WIDTH_FACTOR
 from .viz import PlotParams, plot_params_geometry, polygon_patch
@@ -2089,15 +2089,14 @@ class PolySlab(Planar):
         return np.swapaxes(vs_orig + shift_total, -2, -1), parallel_shift, (shift_x, shift_y)
 
 
-# geometries that can be used to define structures.
-GeometryFields = (Box, Sphere, Cylinder, PolySlab)
-GeometryType = Union[GeometryFields]
+# types of geometry including just one Geometry object (exluding group)
+SingleGeometryType = Union[Box, Sphere, Cylinder, PolySlab]
 
 
 class GeometryGroup(Geometry):
     """A collection of Geometry objects that can be called as a single geometry object."""
 
-    geometries: Tuple[GeometryType, ...] = pydantic.Field(
+    geometries: Tuple[annotate_type(SingleGeometryType), ...] = pydantic.Field(
         ...,
         title="Geometries",
         description="Tuple of geometries in a single grouping. "
@@ -2176,3 +2175,7 @@ class GeometryGroup(Geometry):
         individual_insides = (geometry.inside(x, y, z) for geometry in self.geometries)
 
         return functools.reduce(lambda a, b: a | b, individual_insides)
+
+
+# geometries usable to define a structure
+GeometryType = Union[SingleGeometryType, GeometryGroup]
