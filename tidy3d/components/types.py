@@ -106,6 +106,20 @@ class TypedArrayLike(np.ndarray):
 
         return tuple(val)
 
+    @classmethod
+    def __modify_schema__(cls, field_schema):
+        """Sets the schema of ArrayLike."""
+
+        field_schema.update(
+            dict(
+                title="Array Like",
+                description="Accepts sequence (tuple, list, numpy array) and converts to tuple.",
+                type="tuple",
+                properties={},
+                required=[],
+            )
+        )
+
 
 class ArrayLikeMeta(type):
     """metclass for Array, enables Array[type] -> TypedArray"""

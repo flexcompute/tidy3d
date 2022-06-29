@@ -30,8 +30,8 @@ class Tidy3dBaseModel(pydantic.BaseModel):
     def __init_subclass__(cls):
         """Things that are done to each of the models."""
 
-        add_type_field(cls)
-        cls.__doc__ = generate_docstring(cls)
+        cls.add_type_field()
+        cls.generate_docstring()
 
     class Config:  # pylint: disable=too-few-public-methods
         """Sets config for all :class:`Tidy3dBaseModel` objects.
@@ -260,81 +260,80 @@ class Tidy3dBaseModel(pydantic.BaseModel):
 
         return json_string
 
+    @classmethod
+    def add_type_field(cls):
+        """Automatically place "type" field with model name in the model field dictionary."""
 
-def add_type_field(cls):
-    """Automatically place "type" field with model name in the model field dictionary."""
+        value = cls.__name__
+        annotation = Literal[value]
 
-    value = cls.__name__
-    annotation = Literal[value]
+        tag_field = ModelField.infer(
+            name=TYPE_TAG_STR,
+            value=value,
+            annotation=annotation,
+            class_validators=None,
+            config=cls.__config__,
+        )
+        cls.__fields__[TYPE_TAG_STR] = tag_field
 
-    tag_field = ModelField.infer(
-        name=TYPE_TAG_STR,
-        value=value,
-        annotation=annotation,
-        class_validators=None,
-        config=cls.__config__,
-    )
-    cls.__fields__[TYPE_TAG_STR] = tag_field
+    @classmethod
+    def generate_docstring(cls) -> str:
+        """Generates a docstring for a Tidy3D mode and saves it to the __doc__ of the class."""
 
+        # store the docstring in here
+        doc = ""
 
-def generate_docstring(cls) -> str:
-    """Generates a docstring for a Tidy3D model."""
+        # if the model already has a docstring, get the first lines and save the rest
+        original_docstrings = []
+        if cls.__doc__:
+            original_docstrings = cls.__doc__.split("\n\n")
+            class_description = original_docstrings.pop(0)
+            doc += class_description
+        original_docstrings = "\n\n".join(original_docstrings)
 
-    # store the docstring in here
-    doc = ""
+        # create the list of parameters (arguments) for the model
+        doc += "\n\n    Parameters\n    ----------\n"
+        for field_name, field in cls.__fields__.items():
 
-    # if the model already has a docstring, get the first lines and save the rest
-    original_docstrings = []
-    if cls.__doc__:
-        original_docstrings = cls.__doc__.split("\n\n")
-        class_description = original_docstrings.pop(0)
-        doc += class_description
-    original_docstrings = "\n\n".join(original_docstrings)
+            # ignore the type tag
+            if field_name == TYPE_TAG_STR:
+                continue
 
-    # create the list of parameters (arguments) for the model
-    doc += "\n\n    Parameters\n    ----------\n"
-    for field_name, field in cls.__fields__.items():
+            # get data type
+            data_type = field._type_display()  # pylint:disable=protected-access
 
-        # ignore the type tag
-        if field_name == TYPE_TAG_STR:
-            continue
+            # get default values
+            default_val = field.get_default()
+            if "=" in str(default_val):
+                # handle cases where default values are pydantic models
+                default_val = f"{default_val.__class__.__name__}({default_val})"
+                default_val = (", ").join(default_val.split(" "))
 
-        # get data type
-        data_type = field._type_display()  # pylint:disable=protected-access
+            # make first line: name : type = default
+            default_str = "" if field.required else f" = {default_val}"
+            doc += f"    {field_name} : {data_type}{default_str}\n"
 
-        # get default values
-        default_val = field.get_default()
-        if "=" in str(default_val):
-            # handle cases where default values are pydantic models
-            default_val = f"{default_val.__class__.__name__}({default_val})"
-            default_val = (", ").join(default_val.split(" "))
+            # get field metadata
+            field_info = field.field_info
+            doc += "        "
 
-        # make first line: name : type = default
-        default_str = f" = {default_val}" if default_val != ... else ""
-        doc += f"    {field_name} : {data_type}{default_str}\n"
+            # add units (if present)
+            units = field_info.extra.get("units")
+            if units is not None:
+                doc += f"[units = {units}].  "
 
-        # get field metadata
-        field_info = field.field_info
-        doc += "        "
+            # add description
+            description_str = field_info.description
+            if description_str is not None:
+                doc += f"{description_str}\n"
 
-        # add units (if present)
-        units = field_info.extra.get("units")
-        if units is not None:
-            doc += f"[units = {units}].  "
+        # add in remaining things in the docs
+        if original_docstrings:
+            doc += "\n"
+            doc += original_docstrings
 
-        # add description
-        description_str = field_info.description
-        if description_str is not None:
-            doc += f"{description_str}\n"
-
-    # add in remaining things in the docs
-    if original_docstrings:
         doc += "\n"
-        doc += original_docstrings
-
-    doc += "\n"
-
-    return doc
+        cls.__doc__ = doc
 
 
 def cache(prop):
