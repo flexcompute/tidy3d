@@ -116,27 +116,11 @@ def compute_modes(
     mu_tensor = np.einsum("ij...,pj...->ip...", mu_tensor, jac_h)
     mu_tensor /= jac_h_det
 
-    """ The forward derivative matrices already impose PEC boundary at the xmax and ymax interfaces.
-    Here, we also impose PEC boundaries on the xmin and ymin interfaces through the permittivity at
-    those positions, unless a PMC symmetry is specifically requested. The PMC symmetry is
-    imposed by modifying the backward derivative matrices."""
-    dmin_pmc = [False, False]
-    if symmetry[0] != 1:
-        # PEC at the xmin edge
-        eps_tensor[1, 1, :Ny] = pec_val
-        eps_tensor[2, 2, :Ny] = pec_val
-    else:
-        # Modify the backwards x derivative
-        dmin_pmc[0] = True
-
-    if Ny > 1:
-        if symmetry[1] != 1:
-            # PEC at the ymin edge
-            eps_tensor[0, 0, ::Ny] = pec_val
-            eps_tensor[2, 2, ::Ny] = pec_val
-        else:
-            # Modify the backwards y derivative
-            dmin_pmc[1] = True
+    """ Boundaries are imposed through the derivative matrices. The forward derivative matrices
+    always impose PEC boundary at the xmax and ymax interfaces, and on the xmin and ymin
+    interfaces unless PMC symmetry is present. If so, the PMC boundary is imposed through the
+    backward derivative matrices."""
+    dmin_pmc = [sym == 1 for sym in symmetry]
 
     # Primal grid steps for E-field derivatives
     dl_f = [new_cs[1:] - new_cs[:-1] for new_cs in new_coords]
@@ -144,7 +128,7 @@ def compute_modes(
     dl_tmp = [(dl[:-1] + dl[1:]) / 2 for dl in dl_f]
     dl_b = [np.hstack((d1[0], d2)) for d1, d2 in zip(dl_f, dl_tmp)]
 
-    # Derivative matrices with PEC boundaries at the far end and optional pmc at the near end
+    # Derivative matrices with PEC boundaries by default and optional PMC at the near end
     der_mats_tmp = d_mats((Nx, Ny), dl_f, dl_b, dmin_pmc)
 
     # PML matrices; do not impose PML on the bottom when symmetry present

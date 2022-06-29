@@ -6,12 +6,14 @@ import scipy.sparse as sp
 from ...constants import EPSILON_0, ETA_0
 
 
-def make_dxf(dls, shape):
+def make_dxf(dls, shape, pmc):
     """Forward derivative in x."""
     Nx, Ny = shape
     if Nx == 1:
         return sp.csr_matrix((Ny, Ny))
-    dxf = sp.diags([-1, 1], [0, 1], shape=(Nx, Nx))
+    dxf = sp.csr_matrix(sp.diags([-1, 1], [0, 1], shape=(Nx, Nx)))
+    if not pmc:
+        dxf[0, 0] = 0.0
     dxf = sp.diags(1 / dls).dot(dxf)
     dxf = sp.kron(dxf, sp.eye(Ny))
     return dxf
@@ -22,21 +24,24 @@ def make_dxb(dls, shape, pmc):
     Nx, Ny = shape
     if Nx == 1:
         return sp.csr_matrix((Ny, Ny))
-    dxb = sp.diags([1, -1], [0, -1], shape=(Nx, Nx))
+    dxb = sp.csr_matrix(sp.diags([1, -1], [0, -1], shape=(Nx, Nx)))
     if pmc:
-        dxb = sp.csr_matrix(dxb)
         dxb[0, 0] = 2.0
+    else:
+        dxb[0, 0] = 0.0
     dxb = sp.diags(1 / dls).dot(dxb)
     dxb = sp.kron(dxb, sp.eye(Ny))
     return dxb
 
 
-def make_dyf(dls, shape):
+def make_dyf(dls, shape, pmc):
     """Forward derivative in y."""
     Nx, Ny = shape
     if Ny == 1:
         return sp.csr_matrix((Nx, Nx))
-    dyf = sp.diags([-1, 1], [0, 1], shape=(Ny, Ny))
+    dyf = sp.csr_matrix(sp.diags([-1, 1], [0, 1], shape=(Ny, Ny)))
+    if not pmc:
+        dyf[0, 0] = 0.0
     dyf = sp.diags(1 / dls).dot(dyf)
     dyf = sp.kron(sp.eye(Nx), dyf)
     return dyf
@@ -47,10 +52,11 @@ def make_dyb(dls, shape, pmc):
     Nx, Ny = shape
     if Ny == 1:
         return sp.csr_matrix((Nx, Nx))
-    dyb = sp.diags([1, -1], [0, -1], shape=(Ny, Ny))
+    dyb = sp.csr_matrix(sp.diags([1, -1], [0, -1], shape=(Ny, Ny)))
     if pmc:
-        dyb = sp.csr_matrix(dyb)
         dyb[0, 0] = 2.0
+    else:
+        dyb[0, 0] = 0.0
     dyb = sp.diags(1 / dls).dot(dyb)
     dyb = sp.kron(sp.eye(Nx), dyb)
     return dyb
@@ -59,11 +65,11 @@ def make_dyb(dls, shape, pmc):
 def create_d_matrices(shape, dlf, dlb, dmin_pmc=(False, False)):
     """Make the derivative matrices without PML. If dmin_pmc is True, the
     'backward' derivative in that dimension will be set to implement PMC
-    symmetry."""
+    boundary, otherwise it will be set to PEC."""
 
-    dxf = make_dxf(dlf[0], shape)
+    dxf = make_dxf(dlf[0], shape, dmin_pmc[0])
     dxb = make_dxb(dlb[0], shape, dmin_pmc[0])
-    dyf = make_dyf(dlf[1], shape)
+    dyf = make_dyf(dlf[1], shape, dmin_pmc[1])
     dyb = make_dyb(dlb[1], shape, dmin_pmc[1])
 
     return (dxf, dxb, dyf, dyb)
