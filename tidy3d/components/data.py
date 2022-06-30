@@ -491,12 +491,7 @@ class SpatialCollectionData(CollectionData, ABC):
     def set_symmetry_attrs(self, simulation: Simulation, monitor_name: str):
         """Set the collection data attributes related to symmetries."""
         monitor = simulation.get_monitor_by_name(monitor_name)
-        span_inds = simulation.grid.discretize_inds(monitor.geometry, extend=True)
-        boundary_dict = {}
-        for idim, dim in enumerate(["x", "y", "z"]):
-            ind_beg, ind_end = span_inds[idim]
-            boundary_dict[dim] = simulation.grid.periodic_subspace(idim, ind_beg, ind_end + 1)
-        mnt_grid = Grid(boundaries=Coords(**boundary_dict))
+        mnt_grid = simulation.discretize(monitor, extend=True)
         self.expanded_grid = mnt_grid.yee.grid_dict
         self.symmetry = simulation.symmetry
         self.symmetry_center = simulation.center
