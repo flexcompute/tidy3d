@@ -1623,13 +1623,16 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
 
         return Box.from_bounds(bmin_new, bmax_new)
 
-    def discretize(self, box: Box) -> Grid:
+    def discretize(self, box: Box, extend: bool = False) -> Grid:
         """Grid containing only cells that intersect with a :class:`Box`.
 
         Parameters
         ----------
         box : :class:`Box`
             Rectangular geometry within simulation to discretize.
+        extend : bool
+            If ``True``, extra pixels are added to the discretized grid if needed, such that Yee
+            grid fields can be interpolated to any point inside the ``box``.
 
         Returns
         -------
@@ -1640,17 +1643,14 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         if not self.intersects(box):
             log.error(f"Box {box} is outside simulation, cannot discretize")
 
-        disc_inds = self.grid.discretize_inds(box)
-        sub_cell_boundary_dict = {}
-        for axis_label, axis_inds in zip("xyz", disc_inds):
-            # copy orginal bound coords into subgrid coords
-            bound_coords = self.grid.boundaries.dict()[axis_label]
-            # axis_inds[1] + 1 because we are selecting cell boundaries not cells
-            sub_cell_boundary_dict[axis_label] = bound_coords[axis_inds[0] : axis_inds[1] + 1]
+        span_inds = self.grid.discretize_inds(box, extend=extend)
+        boundary_dict = {}
+        for idim, dim in enumerate("xyz"):
+            ind_beg, ind_end = span_inds[idim]
+            # ind_end + 1 because we are selecting cell boundaries not cells
+            boundary_dict[dim] = self.grid.periodic_subspace(idim, ind_beg, ind_end + 1)
 
-        # construct sub grid
-        sub_boundaries = Coords(**sub_cell_boundary_dict)
-        return Grid(boundaries=sub_boundaries)
+        return Grid(boundaries=Coords(**boundary_dict))
 
     def epsilon(
         self, box: Box, coord_key: str = "centers", freq: float = None
