@@ -701,6 +701,27 @@ class DispersionFitter(Tidy3dBaseModel):
         **loadtxt_kwargs
             Kwargs passed to ``np.loadtxt``, such as ``skiprows``, ``delimiter``.
 
+        Hint
+        ----
+        The data file should be in this format (``delimiter`` and ``skiprows`` can be
+        customized in ``**loadtxt_kwargs``):
+
+        * For lossless media::
+
+            wl       n
+            [float] [float]
+            .       .
+            .       .
+            .       .
+
+        * For lossy media::
+
+            wl       n       k
+            [float] [float] [float]
+            .       .       .
+            .       .       .
+            .       .       .
+
         Returns
         -------
         :class:`DispersionFitter`
