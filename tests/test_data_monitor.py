@@ -1,10 +1,12 @@
 """Tests data/monitor_data.py"""
 import numpy as np
+import pytest
 
 from tidy3d.components.monitor import FieldMonitor, FieldTimeMonitor, PermittivityMonitor
 from tidy3d.components.monitor import ModeFieldMonitor, ModeMonitor
 from tidy3d.components.monitor import FluxMonitor, FluxTimeMonitor
 from tidy3d.components.mode import ModeSpec
+from tidy3d.log import DataError
 
 from tidy3d.components.data.monitor_data import FieldData, FieldTimeData, PermittivityData
 from tidy3d.components.data.monitor_data import ModeFieldData, ModeData
@@ -124,6 +126,36 @@ def test_flux_data():
 def test_flux_time_data():
     data = make_flux_time_data()
     _ = data.flux
+
+
+def test_colocate():
+
+    # regular colocate
+    data = make_field_data()
+    _ = data.colocate(x=[-0.5, 0.5], y=[-0.5, 0.5], z=[-0.5, 0.5])
+
+    # select len(coord) == 1 at the exact position (z=0)
+    data = make_mode_field_data()
+    _ = data.colocate(x=[-0.5, 0.5], y=[-0.5, 0.5], z=0.0)
+
+    # ignore coordinate
+    _ = data.colocate(x=[-0.5, 0.5], y=[-0.5, 0.5], z=None)
+
+    # data outside range of len(coord)==1 dimension
+    with pytest.raises(DataError):
+        _ = data.colocate(x=[-0.5, 0.5], y=[-0.5, 0.5], z=1.0)
+
+
+def test_sel_mode_index():
+
+    data = make_mode_field_data()
+    field_data = data.sel_mode_index(mode_index=0)
+    assert isinstance(field_data, FieldData), "ModeFieldData wasnt converted to FieldData."
+    assert isinstance(
+        field_data.monitor, FieldMonitor
+    ), "ModeFieldMonitor wasnt converted to FieldMonitor."
+    for _, (scalar_field, _, _) in field_data.field_components.items():
+        assert "mode_index" not in scalar_field.coords, "mode_index coordinate remained in data."
 
 
 def _test_eq():

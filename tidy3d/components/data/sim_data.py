@@ -1,21 +1,21 @@
 """ Simulation Level Data """
-from typing import Dict, Optional
+from typing import Dict, Optional, Literal
 
+import xarray as xr
 import pydantic as pd
 
 from .base import Tidy3dData
 from .monitor_data import MonitorDataType, AbstractFieldData
 from ..base import cached_property
 from ..simulation import Simulation
-from ...log import log
+from ..types import Ax, Axis
+from ..viz import equal_aspect, add_ax_if_none
+from ...log import log, DataError
 
-# TODO: normalization
 # TODO: final decay value
-# TODO: centering of field data
 # TODO: plotting (put some stuff in viz?)
 # TODO: saving and loading from hdf5 group or json file
 # TODO: docstring examples?
-# TODO: at centers
 # TODO: ModeSolverData?
 
 
@@ -79,6 +79,7 @@ class SimulationData(Tidy3dData):
         monitor_data = self.monitor_data[monitor_name]
         monitor_data = self.apply_symmetry(monitor_data)
         monitor_data = self.normalize_monitor_data(monitor_data)
+        return monitor_data
 
     def apply_symmetry(self, monitor_data: MonitorDataType) -> MonitorDataType:
         """Return copy of :class:`.MonitorData` object with symmetry values applied."""
@@ -117,3 +118,289 @@ class SimulationData(Tidy3dData):
             return spectrum * np.conj(user_defined_phase)
 
         return monitor_data.normalize(source_spectrum_fn)
+
+    def load_field_monitor(self, monitor_name: str) -> AbstractFieldData:
+        """Load monitor and raise exception if not a field monitor."""
+        mon_data = self[monitor_name]
+        if not isinstance(mon_data, AbstractFieldData):
+            raise DataError(
+                f"data for monitor '{monitor_name}' does not contain field data as it is a `{type(mon_data)}`."
+            )
+        return mon_data
+
+    def at_centers(self, field_monitor_name: str) -> xr.Dataset:
+        """return xarray.Dataset representation of field monitor data
+        co-located at Yee cell centers.
+
+        Parameters
+        ----------
+        field_monitor_name : str
+            Name of field monitor used in the original :class:`Simulation`.
+
+        Returns
+        -------
+        xarray.Dataset
+            Dataset containing all of the fields in the data
+            interpolated to center locations on Yee grid.
+        """
+
+        # get the data
+        monitor_data = self.load_field_monitor(field_monitor_name)
+
+        # get the monitor, discretize, and get center locations
+        monitor = monitor_data.monitor
+        sub_grid = self.simulation.discretize(monitor, extend=True)
+        centers = sub_grid.centers
+
+        # pass coords if each of the scalar field data have more than one coordinate along a dim
+        xyz_kwargs = {}
+        for dim, centers in zip("xyz", (centers.x, centers.y, centers.z)):
+            scalar_data = [data for _, (data, _, _) in monitor_data.field_components.items()]
+            coord_lens = [len(data.coords[dim]) for data in scalar_data if data is not None]
+            if all([ncoords > 1 for ncoords in coord_lens]):
+                xyz_kwargs[dim] = centers
+
+        return monitor_data.colocate(**xyz_kwargs)
+
+    def get_intensity(self, field_monitor_name: str) -> xr.DataArray:
+        """return `xarray.DataArray` of the intensity of a field monitor at Yee cell centers.
+
+        Parameters
+        ----------
+        field_monitor_name : str
+            Name of field monitor used in the original :class:`Simulation`.
+
+        Returns
+        -------
+        xarray.DataArray
+            DataArray containing the electric intensity of the field-like monitor.
+            Data is interpolated to the center locations on Yee grid.
+        """
+
+        field_dataset = self.at_centers(field_monitor_name)
+
+        field_components = ("Ex", "Ey", "Ez")
+        if not all(field_cmp in field_dataset for field_cmp in field_components):
+            raise DataError(
+                f"Field monitor must contain 'Ex', 'Ey', and 'Ez' fields to compute intensity."
+            )
+
+        intensity_data = 0.0
+        for field_cmp in field_components:
+            field_cmp_data = field_components.data_vars[field_cmp]
+            intensity_data += abs(field_cmp_data) ** 2
+        intensity_data.name = "Intensity"
+        return intensity_data
+
+    def plot_field(
+        self,
+        field_monitor_name: str,
+        field_name: str,
+        val: Literal["real", "imag", "abs"] = "real",
+        eps_alpha: float = 0.2,
+        robust: bool = True,
+        vmin: float = None,
+        vmax: float = None,
+        ax: Ax = None,
+        **sel_kwargs,
+    ) -> Ax:
+        """Plot the field data for a monitor with simulation plot overlayed.
+
+        Parameters
+        ----------
+        field_monitor_name : str
+            Name of :class:`.FieldMonitor`, :class:`.FieldTimeData`, or :class:`.ModeFieldData`
+            to plot.
+        field_name : str
+            Name of `field` component to plot (eg. `'Ex'`).
+            Also accepts `'int'` to plot intensity.
+        val : Literal['real', 'imag', 'abs'] = 'real'
+            Which part of the field to plot.
+            If ``field_name='int'``, this has no effect.
+        eps_alpha : float = 0.2
+            Opacity of the structure permittivity.
+            Must be between 0 and 1 (inclusive).
+        robust : bool = True
+            If True and vmin or vmax are absent, uses the 2nd and 98th percentiles of the data
+            to compute the color limits. This helps in visualizing the field patterns especially
+            in the presence of a source.
+        vmin : float = None
+            The lower bound of data range that the colormap covers. If `None`, they are
+            inferred from the data and other keyword arguments.
+        vmax : float = None
+            The upper bound of data range that the colormap covers. If `None`, they are
+            inferred from the data and other keyword arguments.
+        ax : matplotlib.axes._subplots.Axes = None
+            matplotlib axes to plot on, if not specified, one is created.
+        sel_kwargs : keyword arguments used to perform `.sel()` selection in the monitor data.
+            These kwargs can select over the spatial dimensions (`x`, `y`, `z`),
+            frequency or time dimensions (`f`, `t`) or `mode_index`, if applicable.
+            For the plotting to work appropriately, the resulting data after selection must contain
+            only two coordinates with len > 1.
+            Furthermore, these should be spatial coordinates (`x`, `y`, or `z`).
+
+        Returns
+        -------
+        matplotlib.axes._subplots.Axes
+            The supplied or created matplotlib axes.
+        """
+
+        # get the DataArray corresponding to the monitor_name and field_name
+
+        # intensity
+        if field_name == "int":
+            field_data = self.get_intensity(field_monitor_name)
+            val = "abs"
+
+        # normal case (eg. Ex)
+        else:
+            field_monitor_data = self.load_field_monitor(field_monitor_name)
+            if field_name not in field_monitor_data.field_components:
+                raise DataError(f"field_name '{field_name}' not found in data.")
+            field_data, _, _ = field_monitor_data.field_components[field_name]
+            if field_data is None:
+                raise DataError(
+                    f"field_name '{field_name}' was not stored in data, must be specified in the monitor.fields"
+                )
+
+        # select the extra coordinates out of the data
+        field_data_selected = field_data.sel(**sel_kwargs, drop=True).squeeze()
+
+        # get the in plane dimension for plotting array
+        xyz_kwargs_supplied = {key: val for key, val in sel_kwargs.items() if key in "xyz"}
+        if xyz_kwargs_supplied:
+            axis, position = self.simulation.parse_xyz_kwargs(**xyz_kwargs_supplied)
+        else:
+            spatial_coords = {name: field_data_selected.coords.get(name) for name in 'xyz'}
+            is_scalar = {name: coord for name, coord in spatial_coords.items() if coord is not None}
+            axis, position = list(is_scalar.items())[0]
+
+        field_data_selected = field_data_selected.squeeze(drop=True)
+
+        # assert the data is valid for plotting
+        final_coords = field_data_selected.coords
+        if len(final_coords) != 2:
+            raise DataError(
+                f"Data after selection has {len(final_coords)} coordinates ({final_coords.keys()}), must be 2 spatial coordinates for plotting on plane. Please add keyword arguments to `plot_field()` to select out other"
+            )
+        num_spatial_coords = sum(spatial_coord in final_coords for spatial_coord in "xyz")
+        if num_spatial_coords != 2:
+            raise DataError(
+                f"All coordinates in the data after selection must be spatial (x, y, z), given {final_coords.keys()}."
+            )
+
+        # the frequency at which to evaluate the permittivity with None signaling freq -> inf
+        freq_eps_eval = sel_kwargs["freq"] if "freq" in sel_kwargs else None
+
+        return self.plot_field_array(
+            field_data=field_data_selected,
+            axis=axis,
+            position=position,
+            val=val,
+            freq=freq_eps_eval,
+            eps_alpha=eps_alpha,
+            robust=robust,
+            vmin=vmin,
+            vmax=vmax,
+            ax=ax,
+        )
+
+    @equal_aspect
+    @add_ax_if_none
+    # pylint:disable=too-many-arguments, too-many-locals, too-many-branches, too-many-statements
+    def plot_field_array(
+        self,
+        field_data: xr.DataArray,
+        axis: Axis,
+        position: float,
+        val: Literal["real", "imag", "abs"] = "real",
+        freq: float = None,
+        eps_alpha: float = 0.2,
+        robust: bool = True,
+        vmin: float = None,
+        vmax: float = None,
+        ax: Ax = None,
+    ) -> Ax:
+        """Plot the field data for a monitor with simulation plot overlayed.
+
+        Parameters
+        ----------
+        field_data: xr.DataArray
+            DataArray with the field data to plot.
+        axis: Axis
+            Axis normal to the plotting plane.
+        position: float
+            Position along the axis.
+        val : Literal['real', 'imag', 'abs'] = 'real'
+            Which part of the field to plot.
+        freq: float = None
+            Frequency at which the permittivity is evaluated at (if dispersive).
+            By default, chooses permittivity as frequency goes to infinity.
+        eps_alpha : float = 0.2
+            Opacity of the structure permittivity.
+            Must be between 0 and 1 (inclusive).
+        robust : bool = True
+            If True and vmin or vmax are absent, uses the 2nd and 98th percentiles of the data
+            to compute the color limits. This helps in visualizing the field patterns especially
+            in the presence of a source.
+        vmin : float = None
+            The lower bound of data range that the colormap covers. If `None`, they are
+            inferred from the data and other keyword arguments.
+        vmax : float = None
+            The upper bound of data range that the colormap covers. If `None`, they are
+            inferred from the data and other keyword arguments.
+        ax : matplotlib.axes._subplots.Axes = None
+            matplotlib axes to plot on, if not specified, one is created.
+
+        Returns
+        -------
+        matplotlib.axes._subplots.Axes
+            The supplied or created matplotlib axes.
+        """
+
+        # select the cross section data
+        interp_kwarg = {"xyz"[axis]: position}
+
+        # select the field value
+        if val not in ("real", "imag", "abs"):
+            raise DataError(f"`val` must be one of `{'real', 'imag', 'abs'}`, given {val}.")
+
+        if val == "real":
+            field_data = field_data.real
+        elif val == "imag":
+            field_data = field_data.imag
+        elif val == "abs":
+            field_data = abs(field_data)
+
+        if val == "abs":
+            cmap = "magma"
+            eps_reverse = True
+        else:
+            cmap = "RdBu"
+            eps_reverse = False
+
+        # plot the field
+        xy_coord_labels = list("xyz")
+        xy_coord_labels.pop(axis)
+        x_coord_label, y_coord_label = xy_coord_labels  # pylint:disable=unbalanced-tuple-unpacking
+        field_data.plot(
+            ax=ax, x=x_coord_label, y=y_coord_label, cmap=cmap, vmin=vmin, vmax=vmax, robust=robust
+        )
+
+        # plot the simulation epsilon
+        ax = self.simulation.plot_structures_eps(
+            freq=freq,
+            cbar=False,
+            alpha=eps_alpha,
+            reverse=eps_reverse,
+            ax=ax,
+            **interp_kwarg,
+        )
+
+        # set the limits based on the xarray coordinates min and max
+        x_coord_values = field_data.coords[x_coord_label]
+        y_coord_values = field_data.coords[y_coord_label]
+        ax.set_xlim(min(x_coord_values), max(x_coord_values))
+        ax.set_ylim(min(y_coord_values), max(y_coord_values))
+
+        return ax
