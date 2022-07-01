@@ -14,8 +14,8 @@ FS = np.linspace(1e14, 2e14, 1001)
 TS = np.linspace(0, 1e-12, 1001)
 XS = np.linspace(-1, 1, 10)
 YS = np.linspace(-2, 2, 20)
-ZS = np.linspace(0, 0, 1)
-MODE_INDICES = np.arange(1, 3)
+ZS = np.linspace(-3, 3, 30)
+MODE_INDICES = np.arange(0, 3)
 DIRECTIONS = ["+", "-"]
 
 """ Generate the data arrays (used in other test files) """
@@ -32,9 +32,9 @@ def make_scalar_field_time_data_array():
 
 
 def make_scalar_mode_field_data_array():
-    values = np.random.random((len(XS), len(YS), len(ZS), len(FS), len(MODE_INDICES)))
+    values = np.random.random((len(XS), len(YS), 1, len(FS), len(MODE_INDICES)))
     return ScalarModeFieldDataArray(
-        values, coords=dict(x=XS, y=YS, z=ZS, f=FS, mode_index=MODE_INDICES)
+        values, coords=dict(x=XS, y=YS, z=[0.0], f=FS, mode_index=MODE_INDICES)
     )
 
 
