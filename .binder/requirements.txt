@@ -1,4 +1,4 @@
-tidy3d-beta==0.2.3
+tidy3d-beta
 tmm
 nlopt
 tqdm
