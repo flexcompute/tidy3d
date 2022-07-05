@@ -168,11 +168,14 @@ def compute_modes(
 
     # Solve for the modes
     E, H, neff, keff = solver_em(
-        eps_tensor.astype(mat_dtype),
-        mu_tensor.astype(mat_dtype),
-        [f.astype(mat_dtype) for f in der_mats],
+        Nx,
+        Ny,
+        eps_tensor,
+        mu_tensor,
+        der_mats,
         num_modes,
-        mat_dtype(target_neff_p),
+        target_neff_p,
+        mat_dtype,
     )
 
     # Filter polarization if needed
@@ -199,12 +202,18 @@ def compute_modes(
     return fields, neff + 1j * keff
 
 
-def solver_em(eps_tensor, mu_tensor, der_mats, num_modes, neff_guess):
+def solver_em(
+    Nx, Ny, eps_tensor, mu_tensor, der_mats, num_modes, neff_guess, mat_dtype
+):  # pylint:disable=too-many-arguments
     """Solve for the electromagnetic modes of a system defined by in-plane permittivity and
     permeability and assuming translational invariance in the normal direction.
 
     Parameters
     ----------
+    Nx : int
+        Number of grids along x-direction.
+    Ny : int
+        Number of grids along y-direction.
     eps_tensor : np.ndarray
         Shape (3, 3, N), the permittivity tensor at every point in the plane.
     mu_tensor : np.ndarray
@@ -215,6 +224,8 @@ def solver_em(eps_tensor, mu_tensor, der_mats, num_modes, neff_guess):
         Number of modes to solve for.
     neff_guess : float
         Initial guess for the effective index.
+    mat_dtype : Union[np.complex128, np.complex64, np.float64, np.float32]
+        Data type for all matrices in this function.
 
     Returns
     -------
@@ -228,16 +239,26 @@ def solver_em(eps_tensor, mu_tensor, der_mats, num_modes, neff_guess):
         Imaginary part of the effective index, shape (num_modes, ).
     """
 
+    # data type conversion
+    eps_tensor = type_conversion(eps_tensor, mat_dtype)
+    mu_tensor = type_conversion(mu_tensor, mat_dtype)
+    der_mats = [type_conversion(f, mat_dtype) for f in der_mats]
+    neff_guess = type_conversion(np.array([neff_guess]), mat_dtype)[0]
+
     off_diagonals = (np.ones((3, 3)) - np.eye(3)).astype(bool)
     eps_offd = np.abs(eps_tensor[off_diagonals])
     mu_offd = np.abs(mu_tensor[off_diagonals])
     if np.any(eps_offd > 1e-6) or np.any(mu_offd > 1e-6):
-        return solver_tensorial(eps_tensor, mu_tensor, der_mats, num_modes, neff_guess)
+        vec_init = set_initial_vec(Nx, Ny, mat_dtype=mat_dtype, is_tensorial=True)
+        return solver_tensorial(eps_tensor, mu_tensor, der_mats, num_modes, vec_init, neff_guess)
 
-    return solver_diagonal(eps_tensor, mu_tensor, der_mats, num_modes, neff_guess)
+    vec_init = set_initial_vec(Nx, Ny, mat_dtype=mat_dtype, is_tensorial=False)
+    return solver_diagonal(eps_tensor, mu_tensor, der_mats, num_modes, vec_init, neff_guess)
 
 
-def solver_diagonal(eps, mu, der_mats, num_modes, neff_guess):
+def solver_diagonal(
+    eps, mu, der_mats, num_modes, vec_init, neff_guess
+):  # pylint:disable=too-many-arguments
     """EM eigenmode solver assuming ``eps`` and ``mu`` are diagonal everywhere."""
 
     N = eps.shape[-1]
@@ -268,7 +289,7 @@ def solver_diagonal(eps, mu, der_mats, num_modes, neff_guess):
     mat = pmat.dot(qmat)
 
     # Call the eigensolver. The eigenvalues are -(neff + 1j * keff)**2
-    vals, vecs = solver_eigs(mat, num_modes, guess_value=-(neff_guess**2))
+    vals, vecs = solver_eigs(mat, num_modes, vec_init, guess_value=-(neff_guess**2))
     if vals.size == 0:
         raise RuntimeError("Could not find any eigenmodes for this waveguide")
     vre, vim = -np.real(vals), -np.imag(vals)
@@ -304,7 +325,9 @@ def solver_diagonal(eps, mu, der_mats, num_modes, neff_guess):
     return E, H, neff, keff
 
 
-def solver_tensorial(eps, mu, der_mats, num_modes, neff_guess):
+def solver_tensorial(
+    eps, mu, der_mats, num_modes, vec_init, neff_guess
+):  # pylint:disable=too-many-arguments
     """EM eigenmode solver assuming ``eps`` or ``mu`` have off-diagonal elements."""
 
     N = eps.shape[-1]
@@ -372,7 +395,7 @@ def solver_tensorial(eps, mu, der_mats, num_modes, neff_guess):
     )
 
     # Call the eigensolver. The eigenvalues are 1j * (neff + 1j * keff)
-    vals, vecs = solver_eigs(mat, num_modes, guess_value=1j * neff_guess)
+    vals, vecs = solver_eigs(mat, num_modes, vec_init, guess_value=1j * neff_guess)
     if vals.size == 0:
         raise RuntimeError("Could not find any eigenmodes for this waveguide")
     # Real and imaginary part of the effective index
@@ -407,7 +430,7 @@ def solver_tensorial(eps, mu, der_mats, num_modes, neff_guess):
     return E, H, neff, keff
 
 
-def solver_eigs(mat, num_modes, guess_value=1.0):
+def solver_eigs(mat, num_modes, vec_init, guess_value=1.0):
     """Find ``num_modes`` eigenmodes of ``mat`` cloest to ``guess_value``.
 
     Parameters
@@ -419,7 +442,7 @@ def solver_eigs(mat, num_modes, guess_value=1.0):
     guess_value : float, optional
     """
 
-    values, vectors = spl.eigs(mat, k=num_modes, sigma=guess_value, tol=fp_eps)
+    values, vectors = spl.eigs(mat, k=num_modes, sigma=guess_value, tol=fp_eps, v0=vec_init)
     return values, vectors
 
 
@@ -438,3 +461,65 @@ def isinstance_complex(vec_or_mat, tol=TOL_COMPLEX):
         return spl.norm(vec_or_mat.imag) / spl.norm(vec_or_mat) > tol
 
     raise RuntimeError("Variable type should be either numpy array or scipy csr_matrix.")
+
+
+def type_conversion(vec_or_mat, new_dtype):
+    """Convert vec_or_mat to new_type.
+
+    Parameters
+    ----------
+    vec_or_mat : Union[np.ndarray, sp.csr_matrix]
+        vec or mat to be converted.
+    new_dtype : Union[np.complex128, np.complex64, np.float64, np.float32]
+        Final type of vec or mat
+
+    Returns
+    -------
+    converted_vec_or_mat : Union[np.ndarray, sp.csr_matrix]
+    """
+
+    if new_dtype in {np.complex128, np.complex64}:
+        return vec_or_mat.astype(new_dtype)
+    if new_dtype in {np.float64, np.float32}:
+        converted_vec_or_mat = vec_or_mat.real
+        return converted_vec_or_mat.astype(new_dtype)
+
+    raise RuntimeError("Unsupported new_type.")
+
+
+def set_initial_vec(Nx, Ny, mat_dtype=np.complex128, is_tensorial=False):
+    """Set initial vector for eigs:
+    1) The field at x=0 and y=0 boundaries are set to 0. This should be
+    the case for PEC boundaries, but wouldn't hurt for non-PEC boundary;
+    2) The vector is np.complex128 by default, and will be converted to
+    approriate type afterwards.
+
+    Parameters
+    ----------
+    Nx : int
+        Number of grids along x-direction.
+    Ny : int
+        Number of grids along y-direction.
+    mat_dtype : Union[np.complex128, np.complex64, np.float64, np.float32]
+        The type of returned vector.
+    is_tensorial : bool
+        diagonal or tensorial eigenvalue problem.
+    """
+
+    # The size of the vector is len_multiplier * Nx * Ny
+    len_multiplier = 2
+    if is_tensorial:
+        len_multiplier *= 2
+
+    # Initialize the vector
+    size = (Nx, Ny, len_multiplier)
+    vec_init = np.random.random(size) + 1j * np.random.random(size)
+    vec_init = type_conversion(vec_init, mat_dtype)
+
+    # Set values at the boundary to be 0
+    vec_init[0, :, :] = 0
+    vec_init[:, 0, :] = 0
+
+    # Concatenate the vector appropriately
+    vec_init = np.vstack(vec_init)
+    return vec_init.flatten("F")

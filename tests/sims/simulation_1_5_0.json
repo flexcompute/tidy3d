@@ -312,6 +312,7 @@
                 "filter_pol": null,
                 "angle_theta": 0.0,
                 "angle_phi": 0.0,
+                "precision": "float",
                 "bend_radius": null,
                 "bend_axis": null,
                 "type": "ModeSpec"
@@ -516,6 +517,7 @@
                 "filter_pol": null,
                 "angle_theta": 0.0,
                 "angle_phi": 0.0,
+                "precision": "float",
                 "bend_radius": null,
                 "bend_axis": null,
                 "type": "ModeSpec"
