@@ -167,6 +167,20 @@ Au_JohnsonChristy1972 = PoleResidue(
     frequency_range=(972331166717521.5, 1.002716515677444e16),
 )
 
+Au_RakicLorentzDrude1998 = PoleResidue(
+    eps_inf=1.0,
+    poles=[
+        ((-1146636944.7421875 + 0j), (8.88238982652701e17 + 0j)),
+        ((-80520028106850 + 0j), (-8.88238982652701e17 - 0j)),
+        ((-183071727483533.34 - 603332360445186.9j), 3743420309393974.5j),
+        ((-262073634779331.97 - 1233457817766871.8j), 762938741152796.6j),
+        ((-660881339878315.4 - 4462028230599516j), 1497407504712811j),
+        ((-1894526507651171.2 - 6258461223088549j), 9036929133946472j),
+        ((-1681829064931713 - 2.0166634496554556e16j), 2.0457430700884664e16j),
+    ],
+    frequency_range=(4.83598623e13, 1.20898681e15),
+)
+
 BK7_Zemax = PoleResidue(
     eps_inf=1,
     poles=[
@@ -676,7 +690,10 @@ material_library = {
     "AlN": {"Horiba": AlN_Horiba},
     "AlxOy": {"Horiba": AlxOy_Horiba},
     "Aminoacid": {"Horiba": Aminoacid_Horiba},
-    "Au": {"JohnsonChristy1972": Au_JohnsonChristy1972},
+    "Au": {
+        "JohnsonChristy1972": Au_JohnsonChristy1972,
+        "RakicLorentzDrude1998": Au_RakicLorentzDrude1998,
+    },
     "BK7": {"Zemax": BK7_Zemax},
     "Be": {"Rakic1998": Be_Rakic1998},
     "CaF2": {"Horiba": CaF2_Horiba},
