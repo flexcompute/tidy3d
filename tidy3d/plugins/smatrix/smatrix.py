@@ -220,7 +220,6 @@ class ComponentModeler(Tidy3dBaseModel):
     def plot_sim(self, x: float = None, y: float = None, z: float = None, ax: Ax = None) -> Ax:
         """Plot a :class:`Simulation` with all sources added for each port, for troubleshooting."""
 
-        sim_plot = self.simulation.copy(deep=True)
         plot_sources = []
         for port_source in self.ports:
             mode_source_0 = self._to_sources(port=port_source, freq=self.freq)[0]
