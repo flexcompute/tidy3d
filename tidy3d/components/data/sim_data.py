@@ -13,10 +13,9 @@ from ..viz import equal_aspect, add_ax_if_none
 from ...log import log, DataError
 
 # TODO: final decay value
-# TODO: plotting (put some stuff in viz?)
 # TODO: saving and loading from hdf5 group or json file
 # TODO: docstring examples?
-# TODO: ModeSolverData?
+# TODO: ModeSolverData
 
 
 class SimulationData(Tidy3dData):
@@ -80,6 +79,21 @@ class SimulationData(Tidy3dData):
         monitor_data = self.apply_symmetry(monitor_data)
         monitor_data = self.normalize_monitor_data(monitor_data)
         return monitor_data
+
+    @property
+    def final_decay_value(self) -> float:
+        """Returns value of the field decay at the final time step."""
+        log_str = self.log
+        if log_str is None:
+            raise DataError("No log string in the SimulationData object, "
+                "can't find final decay value.")
+        lines = log_str.split("\n")
+        decay_lines = [l for l in lines if "field decay" in l]
+        final_decay = 1.0
+        if len(decay_lines) > 0:
+            final_decay_line = decay_lines[-1]
+            final_decay = float(final_decay_line.split("field decay: ")[-1])
+        return final_decay
 
     def apply_symmetry(self, monitor_data: MonitorDataType) -> MonitorDataType:
         """Return copy of :class:`.MonitorData` object with symmetry values applied."""
@@ -187,7 +201,7 @@ class SimulationData(Tidy3dData):
 
         intensity_data = 0.0
         for field_cmp in field_components:
-            field_cmp_data = field_components.data_vars[field_cmp]
+            field_cmp_data = field_dataset.data_vars[field_cmp]
             intensity_data += abs(field_cmp_data) ** 2
         intensity_data.name = "Intensity"
         return intensity_data
@@ -264,36 +278,33 @@ class SimulationData(Tidy3dData):
                 )
 
         # select the extra coordinates out of the data
-        field_data_selected = field_data.sel(**sel_kwargs, drop=True).squeeze()
-
-        # get the in plane dimension for plotting array
-        xyz_kwargs_supplied = {key: val for key, val in sel_kwargs.items() if key in "xyz"}
-        if xyz_kwargs_supplied:
-            axis, position = self.simulation.parse_xyz_kwargs(**xyz_kwargs_supplied)
-        else:
-            spatial_coords = {name: field_data_selected.coords.get(name) for name in 'xyz'}
-            is_scalar = {name: coord for name, coord in spatial_coords.items() if coord is not None}
-            axis, position = list(is_scalar.items())[0]
-
-        field_data_selected = field_data_selected.squeeze(drop=True)
+        field_data = field_data.interp(**sel_kwargs)
+        field_data = field_data.squeeze(drop=True)
+        final_coords = {k: v for k, v in field_data.coords.items() if v.size > 1}
 
         # assert the data is valid for plotting
-        final_coords = field_data_selected.coords
         if len(final_coords) != 2:
             raise DataError(
-                f"Data after selection has {len(final_coords)} coordinates ({final_coords.keys()}), must be 2 spatial coordinates for plotting on plane. Please add keyword arguments to `plot_field()` to select out other"
+                f"Data after selection has {len(final_coords)} coordinates ({list(final_coords.keys())}), must be 2 spatial coordinates for plotting on plane. Please add keyword arguments to `plot_field()` to select out other"
             )
-        num_spatial_coords = sum(spatial_coord in final_coords for spatial_coord in "xyz")
-        if num_spatial_coords != 2:
+
+        spatial_coords_in_data = {coord_name: (coord_name in final_coords) for coord_name in "xyz"}
+
+        if sum(spatial_coords_in_data.values()) != 2:
             raise DataError(
                 f"All coordinates in the data after selection must be spatial (x, y, z), given {final_coords.keys()}."
             )
+
+        # get the spatial coordinate corresponding to the plane
+        planar_coord = {name: val for name, val in spatial_coords_in_data.items() if val is False}
+        axis = "xyz".index(list(planar_coord.keys())[0])
+        position = list(planar_coord.values())[0]
 
         # the frequency at which to evaluate the permittivity with None signaling freq -> inf
         freq_eps_eval = sel_kwargs["freq"] if "freq" in sel_kwargs else None
 
         return self.plot_field_array(
-            field_data=field_data_selected,
+            field_data=field_data,
             axis=axis,
             position=position,
             val=val,

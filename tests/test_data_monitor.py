@@ -31,7 +31,7 @@ SIZE_3D = (1, 1, 1)
 SIZE_2D = (1, 0, 1)
 MODE_SPEC = ModeSpec(num_modes=4)
 FREQS = [1e14, 2e14]
-FIELDS = ("Ex", "Ey", "Hz")
+FIELDS = ("Ex", "Ey", "Ez", "Hz")
 INTERVAL = 2
 
 """ Make the montor data """
@@ -39,13 +39,19 @@ INTERVAL = 2
 
 def make_field_data():
     monitor = FieldMonitor(size=SIZE_3D, fields=FIELDS, name="field", freqs=FREQS)
-    return FieldData(monitor=monitor, Ex=FIELD.copy(), Ey=FIELD.copy(), Hz=FIELD.copy())
+    return FieldData(
+        monitor=monitor, Ex=FIELD.copy(), Ey=FIELD.copy(), Ez=FIELD.copy(), Hz=FIELD.copy()
+    )
 
 
 def make_field_time_data():
     monitor = FieldTimeMonitor(size=SIZE_3D, fields=FIELDS, name="field_time", interval=INTERVAL)
     return FieldTimeData(
-        monitor=monitor, Ex=FIELD_TIME.copy(), Ey=FIELD_TIME.copy(), Hz=FIELD_TIME.copy()
+        monitor=monitor,
+        Ex=FIELD_TIME.copy(),
+        Ey=FIELD_TIME.copy(),
+        Ez=FIELD_TIME.copy(),
+        Hz=FIELD_TIME.copy(),
     )
 
 
