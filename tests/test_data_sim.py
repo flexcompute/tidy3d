@@ -51,13 +51,36 @@ def test_centers():
 
 def test_plot():
     sim_data = make_sim_data()
+    ax = None
 
+    # plot regular field data
     for field_cmp in sim_data.simulation.get_monitor_by_name("field").fields:
-        sim_data.plot_field("field", field_cmp, val="real", x=1.0, f=1e14)
+        field_data = sim_data["field"].field_components[field_cmp][0]
+        for axis_name in "xyz":
+            xyz_kwargs = {axis_name: field_data.coords[axis_name][0]}
+            ax = sim_data.plot_field("field", field_cmp, val="real", f=1e14, ax=ax, **xyz_kwargs)
+    for axis_name in "xyz":
+        xyz_kwargs = {axis_name: 0}
+        ax = sim_data.plot_field("field", "int", f=1e14, ax=ax, **xyz_kwargs)
 
+    # plot field time data
     for field_cmp in sim_data.simulation.get_monitor_by_name("field_time").fields:
-        sim_data.plot_field("field_time", field_cmp, val="real", x=1.0, t=0.0)
+        field_data = sim_data["field_time"].field_components[field_cmp][0]
+        for axis_name in "xyz":
+            xyz_kwargs = {axis_name: field_data.coords[axis_name][0]}
+            ax = sim_data.plot_field(
+                "field_time", field_cmp, val="real", t=0.0, ax=ax, **xyz_kwargs
+            )
+    for axis_name in "xyz":
+        xyz_kwargs = {axis_name: 0}
+        ax = sim_data.plot_field("field_time", "int", t=0.0, ax=ax, **xyz_kwargs)
 
-    for field_cmp in ('Ex', 'Ey', 'Ez', 'Hx', 'Hy', 'Hz'):
-        sim_data.plot_field("mode_field", field_cmp, val="real", f=1e14, mode_index=1)
+    # plot mode field data
+    for field_cmp in ("Ex", "Ey", "Ez", "Hx", "Hy", "Hz"):
+        ax = sim_data.plot_field("mode_field", field_cmp, val="real", f=1e14, mode_index=1, ax=ax)
+    ax = sim_data.plot_field("mode_field", "int", f=1e14, mode_index=1, ax=ax)
+
+def test_final_decay():
+    sim_data = make_sim_data()
+    sim_data.final_decay_value
 
