@@ -5,14 +5,15 @@ from typing import Union, Tuple
 import pydantic
 import numpy as np
 
-from .types import Literal, Ax, EMField, ArrayLike, Bound, FreqArray
+from .types import Literal, Ax, EMField, ArrayLike, Bound, FreqArray, Direction, Coordinate, Axis
 from .geometry import Box
+from .medium import Medium
 from .validators import assert_plane
 from .base import cached_property
 from .mode import ModeSpec
 from .viz import PlotParams, plot_params_monitor, ARROW_COLOR_MONITOR, ARROW_ALPHA
-from ..log import SetupError
-from ..constants import HERTZ, SECOND
+from ..log import SetupError, log, DataError
+from ..constants import HERTZ, SECOND, MICROMETER, RADIAN
 
 
 BYTES_REAL = 4
@@ -266,72 +267,6 @@ class FieldMonitor(AbstractFieldMonitor, FreqMonitor):
         # stores 1 complex number per grid cell, per frequency, per field
         return BYTES_COMPLEX * num_cells * len(self.freqs) * len(self.fields)
 
-    def surfaces(self) -> Tuple["FieldMonitor", ...]:  # pylint: disable=too-many-locals
-        """Returns a list of 6 monitors corresponding to each surface of the field monitor.
-        The output monitors are stored in the order [x-, x+, y-, y+, z-, z+], where x, y, and z
-        denote which axis is perpendicular to that surface, while "-" and "+" denote the direction
-        of the normal vector of that surface. Each output monitor will have the same frequency/time
-        data as the calling object. Its name will be that of the calling object appended with the
-        above symbols. E.g., if the calling object's name is "field", the x+ monitor's name will be
-        "field_x+". Does not work when the calling monitor has zero volume.
-
-        Returns
-        -------
-        Tuple[:class:`FieldMonitor`, ...]
-            List of 6 surface monitors for each side of the field monitor.
-
-        Example
-        -------
-        >>> volume_monitor = FieldMonitor(center=(0,0,0), size=(1,2,3), freqs=[2e14], name='field')
-        >>> surface_monitors = volume_monitor.surfaces()
-        """
-
-        if any(s == 0.0 for s in self.size):
-            raise SetupError(
-                "Can't generate surfaces for the given monitor because it has zero volume."
-            )
-
-        self_bmin, self_bmax = self.bounds
-        center_x, center_y, center_z = self.center
-        size_x, size_y, size_z = self.size
-
-        # Set up geometry data and names for each surface:
-
-        surface_centers = (
-            (self_bmin[0], center_y, center_z),  # x-
-            (self_bmax[0], center_y, center_z),  # x+
-            (center_x, self_bmin[1], center_z),  # y-
-            (center_x, self_bmax[1], center_z),  # y+
-            (center_x, center_y, self_bmin[2]),  # z-
-            (center_x, center_y, self_bmax[2]),  # z+
-        )
-
-        surface_sizes = (
-            (0.0, size_y, size_z),  # x-
-            (0.0, size_y, size_z),  # x+
-            (size_x, 0.0, size_z),  # y-
-            (size_x, 0.0, size_z),  # y+
-            (size_x, size_y, 0.0),  # z-
-            (size_x, size_y, 0.0),  # z+
-        )
-
-        surface_names = (
-            f"{self.name}_x-",
-            f"{self.name}_x+",
-            f"{self.name}_y-",
-            f"{self.name}_y+",
-            f"{self.name}_z-",
-            f"{self.name}_z+",
-        )
-
-        # Create "surface" monitors
-        monitors = []
-        for center, size, name in zip(surface_centers, surface_sizes, surface_names):
-            mon_new = self.copy(update=dict(center=center, size=size, name=name))
-            monitors.append(mon_new)
-
-        return monitors
-
 
 class FieldTimeMonitor(AbstractFieldMonitor, TimeMonitor):
     """:class:`Monitor` that records electromagnetic fields in the time domain.
@@ -461,13 +396,222 @@ class ModeFieldMonitor(AbstractModeMonitor):
         return 6 * BYTES_COMPLEX * num_cells * len(self.freqs) * self.mode_spec.num_modes
 
 
+class Near2FarMonitor(AbstractFieldMonitor, FreqMonitor):
+    """:class:`Monitor` that samples electromagnetic near fields in the frequency domain
+       and invokes the computation of far fields at predefined angles.
+
+    Example
+    -------
+    >>> monitor = Near2FarMonitor(
+    ...     center=(1,2,3),
+    ...     size=(2,2,2),
+    ...     freqs=[250e12, 300e12],
+    ...     name='far_field_monitor',
+    ...     custom_origin=(1,2,3),
+    ...     angles_phi=[0, np.pi/2],
+    ...     angles_theta=list(np.linspace(-np.pi/2, np.pi/2, 100))
+    ...     )
+    """
+
+    _data_type: Literal["Near2FarData"] = pydantic.Field("Near2FarData")
+
+    angles_theta: Tuple[float, ...] = pydantic.Field(
+        ...,
+        title="Polar Angles",
+        description="Polar angles relative to ``local_origin`` at which to compute far fields.",
+        units=RADIAN,
+    )
+
+    angles_phi: Tuple[float, ...] = pydantic.Field(
+        ...,
+        title="Azimuth Angles",
+        description="Azimuth angles relative to ``local_origin`` at which to compute far fields.",
+        units=RADIAN,
+    )
+
+    normal_dir: Direction = pydantic.Field(
+        None,
+        title="Normal vector orientation",
+        description=":class:`.Direction` of the surface monitor's normal vector w.r.t. "
+        "the positive x, y or z unit vectors. Must be one of '+' or '-'.",
+    )
+
+    custom_origin: Coordinate = pydantic.Field(
+        None,
+        title="Local origin",
+        description="Local origin used for defining observation points. If ``None``, uses the "
+        "monitor's center.",
+        units=MICROMETER,
+    )
+
+    exclude_surfaces: Tuple[Literal["x-", "x+", "y-", "y+", "z-", "z+"]] = pydantic.Field(
+        None,
+        title="Excluded surfaces",
+        description="Surfaces to exclude during the near-to-far projection.",
+    )
+
+    medium: Medium = pydantic.Field(
+        Medium(permittivity=1),
+        title="Background medium",
+        description="Background medium in which to radiate near fields to far fields. "
+        "If not provided, uses free space.",
+    )
+
+    @pydantic.root_validator()
+    def normal_dir_exists_for_surface(cls, values):
+        """If the monitor is a surface, set default ``normal_dir`` if not provided.
+        If the monitor is a box, warn that ``normal_dir`` is relevant only for surfaces."""
+        normal_dir = values.get("normal_dir")
+        name = values.get("name")
+        size = values.get("size")
+        if size.count(0.0) != 1:
+            if normal_dir is not None:
+                log.warning(
+                    "The ``normal_dir`` field is relevant only for surface monitors "
+                    f"and will be ignored for monitor {name}, which is a box."
+                )
+        else:
+            if normal_dir is None:
+                raise SetupError(f"Must specify ``normal_dir`` for surface monitor {name}.")
+        return values
+
+    @pydantic.root_validator()
+    def check_excluded_surfaces(cls, values):
+        """Error if ``exclude_surfaces`` is provided for a surface monitor."""
+        exclude_surfaces = values.get("exclude_surfaces")
+        if exclude_surfaces is None:
+            return values
+        name = values.get("name")
+        size = values.get("size")
+        if size.count(0.0) > 0:
+            raise SetupError(
+                f"Can't specify ``exclude_surfaces`` for surface monitor {name}; "
+                "valid for box monitors only."
+            )
+        return values
+
+    @property
+    def axis(self) -> Axis:
+        """Returns the :class:`.Axis` normal to this surface."""
+        # assume that the monitor's axis is in the direction where the monitor is thinnest
+        # and errors if the monitor is a box
+        if self.size.count(0.0) != 1:
+            raise DataError(
+                "Requested ``axis`` property for a box monitor; ``axis`` is defined "
+                "for surface monitors only."
+            )
+        return self.size.index(0.0)
+
+    @property
+    def local_origin(self) -> Coordinate:
+        """Returns the local origin associated with this monitor."""
+        if self.custom_origin is None:
+            return self.center
+        return self.custom_origin
+
+    def storage_size(self, num_cells: int, tmesh: ArrayLike[float, 1]) -> int:
+        # stores 1 complex number per pair of angles, per frequency,
+        # for N_theta, N_phi, L_theta, and L_phi (4 components)
+        return BYTES_COMPLEX * len(self.angles_theta) * len(self.angles_phi) * len(self.freqs) * 4
+
+    @staticmethod
+    def angles_from_cartesian_points(
+        x: Tuple[float, ...], y: Tuple[float, ...], z: Tuple[float, ...]
+    ) -> Tuple[Tuple[float, ...]]:
+        """Get a tuple of linearly spaced angles which are guaranteed to span the space
+        occupied by a given set of points in Cartesian coordinates. The lists of angles
+        will have as many points as the largest number of Cartesian points provided
+        along any dimension.
+
+        Parameters
+        ----------
+        x : Tuple[float, ...]
+            x coordinates relative to ``local_origin``.
+        y : Tuple[float, ...]
+            y coordinates relative to ``local_origin``.
+        z : Tuple[float, ...]
+            z coordinates relative to ``local_origin``.
+
+        Returns
+        -------
+        theta : Tuple[float, ...]
+            theta coordinates relative to ``local_origin``.
+        phi : Tuple[float, ...]
+            phi coordinates relative to ``local_origin``.
+        """
+        points_grid = np.meshgrid(x, y, z)
+        x, y, z = [points.flatten() for points in points_grid]
+
+        _, theta, phi = Near2FarMonitor.car_2_sph(x, y, z)
+        theta = np.linspace(np.min(theta), np.max(theta), np.max(points_grid[0].shape))
+        phi = np.linspace(np.min(phi), np.max(phi), np.max(points_grid[0].shape))
+        return list(theta), list(phi)
+
+    @staticmethod
+    def car_2_sph(x: float, y: float, z: float):
+        """Convert Cartesian to spherical coordinates.
+
+        Parameters
+        ----------
+        x : float
+            x coordinate relative to ``local_origin``.
+        y : float
+            y coordinate relative to ``local_origin``.
+        z : float
+            z coordinate relative to ``local_origin``.
+
+        Returns
+        -------
+        r : float
+            r coordinate relative to ``local_origin``.
+        theta : float
+            theta coordinate relative to ``local_origin``.
+        phi : float
+            phi coordinate relative to ``local_origin``.
+        """
+        r = np.sqrt(x**2 + y**2 + z**2)
+        theta = np.arccos(z / r)
+        phi = np.arctan2(y, x)
+        return r, theta, phi
+
+    @staticmethod
+    def sph_2_car(r, theta, phi):
+        """Convert spherical to Cartesian coordinates.
+
+        Parameters
+        ----------
+        r : float
+            radius.
+        theta : float
+            polar angle (rad) downward from x=y=0 line.
+        phi : float
+            azimuthal (rad) angle from y=z=0 line.
+
+        Returns
+        -------
+        x : float
+            x coordinate relative to ``local_origin``.
+        y : float
+            y coordinate relative to ``local_origin``.
+        z : float
+            z coordinate relative to ``local_origin``.
+        """
+        r_sin_theta = r * np.sin(theta)
+        x = r_sin_theta * np.cos(phi)
+        y = r_sin_theta * np.sin(phi)
+        z = r * np.cos(theta)
+        return x, y, z
+
+
 # types of monitors that are accepted by simulation
 MonitorType = Union[
     FieldMonitor,
+    Near2FarMonitor,
     FieldTimeMonitor,
     PermittivityMonitor,
     FluxMonitor,
     FluxTimeMonitor,
     ModeMonitor,
     ModeFieldMonitor,
+    # Near2FarMonitor,
 ]

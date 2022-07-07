@@ -21,7 +21,7 @@ from .boundary import BoundarySpec, Symmetry, BlochBoundary, PECBoundary, PMCBou
 from .boundary import PML, StablePML, Absorber
 from .structure import Structure
 from .source import SourceType, PlaneWave, GaussianBeam, AstigmaticGaussianBeam
-from .monitor import MonitorType, Monitor, FreqMonitor, AbstractFieldMonitor
+from .monitor import MonitorType, Monitor, FreqMonitor, AbstractFieldMonitor, Near2FarMonitor
 from .viz import add_ax_if_none, equal_aspect
 
 from .viz import MEDIUM_CMAP, PlotParams, plot_params_symmetry
@@ -420,6 +420,28 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
                     f"outside of the simulation frequency range ({freq_min:2e}, {freq_max:2e})"
                     "(Hz) as defined by the sources."
                 )
+        return val
+
+    @pydantic.validator("monitors", always=True)
+    def _near2far_monitors_with_symmetry(cls, val, values):
+        """Make sure no far field monitors cross a symmetry plane."""
+
+        if val is None:
+            return val
+
+        sim_center = values.get("center")
+
+        for monitor in val:
+            if not isinstance(monitor, Near2FarMonitor):
+                continue
+            bounds_min, _ = monitor.bounds
+            for dim, sym in enumerate(values.get("symmetry")):
+                if sym != 0 and bounds_min[dim] < sim_center[dim]:
+                    raise SetupError(
+                        f"Far field monitor '{monitor.name}' "
+                        f"must not intersect with the symmetry plane along dimension {dim}."
+                    )
+
         return val
 
     @pydantic.validator("grid_spec", always=True)
