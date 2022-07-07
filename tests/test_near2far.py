@@ -13,6 +13,7 @@ FREQS = [F0, 1.1 * F0]
 THETAS = [0, np.pi / 2]
 PHIS = [np.pi / 6, np.pi / 4, np.pi / 3]
 
+
 def test_near2far_monitor():
     """Make sure a simulation can be initialized with a near2far monitor."""
 
@@ -24,9 +25,9 @@ def test_near2far_monitor():
         angles_theta=THETAS,
         angles_phi=PHIS,
         custom_origin=[0, 0, 1],
-        exclude_surfaces=['z-'],
-        medium=Medium(permittivity=2)
-        )
+        exclude_surfaces=["z-"],
+        medium=Medium(permittivity=2),
+    )
 
     surf_monitor = Near2FarMonitor(
         size=(2, 2, 0),
@@ -36,8 +37,8 @@ def test_near2far_monitor():
         angles_theta=THETAS,
         angles_phi=PHIS,
         medium=Medium(permittivity=1),
-        normal_dir='+'
-        )
+        normal_dir="+",
+    )
 
     sim = Simulation(
         size=(5.0, 5.0, 5.0),
@@ -59,7 +60,7 @@ def test_near2far_monitor():
     assert sim.monitors[1].axis == 2
 
 
-@pytest.mark.parametrize("normal_dir,log_level", [(None, None), ('+', 30)])
+@pytest.mark.parametrize("normal_dir,log_level", [(None, None), ("+", 30)])
 def test_box_normal_dir(caplog, normal_dir, log_level):
     """Make sure a warning is issued when ``normal_dir`` is specified for a volume monitor."""
     vol_monitor = Near2FarMonitor(
@@ -69,9 +70,10 @@ def test_box_normal_dir(caplog, normal_dir, log_level):
         name="near2far_vol",
         angles_theta=THETAS,
         angles_phi=PHIS,
-        normal_dir=normal_dir
-        )
+        normal_dir=normal_dir,
+    )
     assert_log_level(caplog, log_level)
+
 
 def test_surf_normal_dir():
     """Make sure an error is issued when ``normal_dir`` is not given for a surface monitor."""
@@ -83,7 +85,8 @@ def test_surf_normal_dir():
             name="near2far_surf",
             angles_theta=THETAS,
             angles_phi=PHIS,
-            )
+        )
+
 
 def test_surf_excluded_surfaces():
     """Make sure an error is issued when ``excluded_surfaces`` is given for a surface monitor."""
@@ -95,8 +98,9 @@ def test_surf_excluded_surfaces():
             name="near2far_surf",
             angles_theta=THETAS,
             angles_phi=PHIS,
-            exclude_surfaces=['x+']
-            )
+            exclude_surfaces=["x+"],
+        )
+
 
 def test_coord_conversions():
     """Test the conversion between spherical and cartesian coordinates."""
@@ -110,16 +114,20 @@ def test_coord_conversions():
                 r, theta, phi = Near2FarMonitor.car_2_sph(_x, _y, _z)
                 _x2, _y2, _z2 = Near2FarMonitor.sph_2_car(r, theta, phi)
                 print(_x, _x2, _y, _y2, _z, _z2)
-                assert math.isclose(_x, _x2, rel_tol=1e-9, abs_tol=1e-15) and \
-                       math.isclose(_y, _y2, rel_tol=1e-9, abs_tol=1e-15) and \
-                       math.isclose(_z, _z2, rel_tol=1e-9, abs_tol=1e-15)
+                assert (
+                    math.isclose(_x, _x2, rel_tol=1e-9, abs_tol=1e-15)
+                    and math.isclose(_y, _y2, rel_tol=1e-9, abs_tol=1e-15)
+                    and math.isclose(_z, _z2, rel_tol=1e-9, abs_tol=1e-15)
+                )
+
 
 def test_near2far_data():
     """Test the radiation vector data structure."""
-    values = (1+1j) * np.random.random((len(THETAS), len(PHIS), len(FREQS)))
+    values = (1 + 1j) * np.random.random((len(THETAS), len(PHIS), len(FREQS)))
     field = RadiationVector(values=values, theta=THETAS, phi=PHIS, f=FREQS)
     rad_vecs = Near2FarData(
-        data_dict={'Ntheta': field, 'Nphi': field, 'Ltheta': field, 'Lphi': field})
+        data_dict={"Ntheta": field, "Nphi": field, "Ltheta": field, "Lphi": field}
+    )
 
     rad_vecs.fields_spherical()
     rad_vecs.fields_spherical(r=2)
@@ -191,4 +199,3 @@ def test_near2far_clientside():
     pts3 = [3, 4, 5]
     # rad_vecs.power_cartesian(pts1, pts2, pts3)
     rad_vecs.fields_cartesian(pts1, pts2, pts3)
-

@@ -404,25 +404,25 @@ class Near2FarMonitor(AbstractFieldMonitor, FreqMonitor):
     -------
     >>> monitor = Near2FarMonitor(
     ...     center=(1,2,3),
-    ...     size=(2,2,0),
+    ...     size=(2,2,2),
     ...     freqs=[250e12, 300e12],
     ...     name='far_field_monitor',
-    ...     local_origin=(1,2,3),
+    ...     custom_origin=(1,2,3),
     ...     angles_phi=[0, np.pi/2],
-    ...     angles_theta=np.linspace(-np.pi/2, np.pi/2, 100)
+    ...     angles_theta=list(np.linspace(-np.pi/2, np.pi/2, 100))
     ...     )
     """
 
     _data_type: Literal["Near2FarData"] = pydantic.Field("Near2FarData")
 
-    angles_theta: List[float] = pydantic.Field(
+    angles_theta: Tuple[float, ...] = pydantic.Field(
         ...,
         title="Polar Angles",
         description="Polar angles relative to ``local_origin`` at which to compute far fields.",
         units=RADIAN,
     )
 
-    angles_phi: List[float] = pydantic.Field(
+    angles_phi: Tuple[float, ...] = pydantic.Field(
         ...,
         title="Azimuth Angles",
         description="Azimuth angles relative to ``local_origin`` at which to compute far fields.",
@@ -444,7 +444,7 @@ class Near2FarMonitor(AbstractFieldMonitor, FreqMonitor):
         units=MICROMETER,
     )
 
-    exclude_surfaces: List[Literal["x-", "x+", "y-", "y+", "z-", "z+"]] = pydantic.Field(
+    exclude_surfaces: Tuple[Literal["x-", "x+", "y-", "y+", "z-", "z+"]] = pydantic.Field(
         None,
         title="Excluded surfaces",
         description="Surfaces to exclude during the near-to-far projection.",
@@ -467,14 +467,12 @@ class Near2FarMonitor(AbstractFieldMonitor, FreqMonitor):
         if size.count(0.0) != 1:
             if normal_dir is not None:
                 log.warning(
-                        "The ``normal_dir`` field is relevant only for surface monitors "
-                        f"and will be ignored for monitor {name}, which is a box."
-                    )
+                    "The ``normal_dir`` field is relevant only for surface monitors "
+                    f"and will be ignored for monitor {name}, which is a box."
+                )
         else:
             if normal_dir is None:
-                raise SetupError(
-                    f"Must specify ``normal_dir`` for surface monitor {name}."
-                )
+                raise SetupError(f"Must specify ``normal_dir`` for surface monitor {name}.")
         return values
 
     @pydantic.root_validator()
@@ -501,7 +499,7 @@ class Near2FarMonitor(AbstractFieldMonitor, FreqMonitor):
             raise DataError(
                 "Requested ``axis`` property for a box monitor; ``axis`` is defined "
                 "for surface monitors only."
-                )
+            )
         return self.size.index(0.0)
 
     @property
@@ -511,35 +509,34 @@ class Near2FarMonitor(AbstractFieldMonitor, FreqMonitor):
             return self.center
         return self.custom_origin
 
-    def storage_size(self, num_cells: int, tmesh: Array) -> int:
-        # stores 1 complex number per pair of angles, per frequency, 
+    def storage_size(self, num_cells: int, tmesh: ArrayLike[float, 1]) -> int:
+        # stores 1 complex number per pair of angles, per frequency,
         # for N_theta, N_phi, L_theta, and L_phi (4 components)
-        return BYTES_COMPLEX * \
-            len(self.angles_theta) * len(self.angles_phi) * len(self.freqs) * 4
+        return BYTES_COMPLEX * len(self.angles_theta) * len(self.angles_phi) * len(self.freqs) * 4
 
     @staticmethod
     def angles_from_cartesian_points(
-        x: List[float], y: List[float], z: List[float]
-        ) -> List[List[float]]:
-        """Get a list of linearly spaced angles which are guaranteed to span the space
+        x: Tuple[float, ...], y: Tuple[float, ...], z: Tuple[float, ...]
+    ) -> Tuple[Tuple[float, ...]]:
+        """Get a tuple of linearly spaced angles which are guaranteed to span the space
         occupied by a given set of points in Cartesian coordinates. The lists of angles
         will have as many points as the largest number of Cartesian points provided
         along any dimension.
 
         Parameters
         ----------
-        x : List[float]
+        x : Tuple[float, ...]
             x coordinates relative to ``local_origin``.
-        y : List[float]
+        y : Tuple[float, ...]
             y coordinates relative to ``local_origin``.
-        z : List[float]
+        z : Tuple[float, ...]
             z coordinates relative to ``local_origin``.
 
         Returns
         -------
-        theta : List[float]
+        theta : Tuple[float, ...]
             theta coordinates relative to ``local_origin``.
-        phi : List[float]
+        phi : Tuple[float, ...]
             phi coordinates relative to ``local_origin``.
         """
         points_grid = np.meshgrid(x, y, z)
@@ -618,5 +615,3 @@ MonitorType = Union[
     ModeFieldMonitor,
     # Near2FarMonitor,
 ]
-
-

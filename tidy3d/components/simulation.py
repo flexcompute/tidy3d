@@ -436,10 +436,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
                 continue
             bounds_min, _ = monitor.bounds
             for dim, sym in enumerate(values.get("symmetry")):
-                if (
-                    sym != 0
-                    and bounds_min[dim] < sim_center[dim]
-                ):
+                if sym != 0 and bounds_min[dim] < sim_center[dim]:
                     raise SetupError(
                         f"Far field monitor '{monitor.name}' "
                         f"must not intersect with the symmetry plane along dimension {dim}."

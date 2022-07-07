@@ -115,7 +115,7 @@ def test_app():
     center = (0, 0, 0)
     size = (2, 2, 2)
     f0 = 1
-    monitors = FieldMonitor(size=size, center=center, freqs=[f0], name="near_field").surfaces()
+    monitors = FieldMonitor.surfaces(size=size, center=center, freqs=[f0], name="near_field")
 
     sim_size = (5, 5, 5)
     sim = td.Simulation(

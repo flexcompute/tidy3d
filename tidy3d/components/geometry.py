@@ -797,7 +797,7 @@ class Box(Centered):
             (size_x, size_y, 0.0),  # z+
         )
 
-        name = kwargs.pop('name', '')
+        name = kwargs.pop("name", "")
         surface_names = (
             name + "_x-",
             name + "_x+",
@@ -807,16 +807,38 @@ class Box(Centered):
             name + "_z+",
         )
 
-        kwargs.pop('normal_dir', None)
+        kwargs.pop("normal_dir", None)
         normal_dirs = ("-", "+", "-", "+", "-", "+")
 
-        # Return list of surfaces, including `normal_dirs` only if the field exists in cls
+        norm_kwargs = [{} for _ in range(6)]
         if "normal_dir" in cls.__dict__["__fields__"]:
-            return [cls(center=center, size=size, name=name, normal_dir=normal_dir, **kwargs) \
-                for center, size, name, normal_dir in zip(
-                    surface_centers, surface_sizes, surface_names, normal_dirs)]
-        return [cls(center=center, size=size, name=name, **kwargs) \
-            for center, size, name in zip(surface_centers, surface_sizes, surface_names)]            
+            norm_kwargs = [{"normal_dir": normal_dir} for normal_dir in normal_dirs]
+
+        try:
+            return [
+                cls(center=center, size=size, name=_name, **norm_kwarg, **kwargs)
+                for center, size, _name, norm_kwarg in zip(
+                    surface_centers, surface_sizes, surface_names, norm_kwargs
+                )
+            ]
+        except pydantic.ValidationError:
+            return [
+                cls(center=center, size=size, **norm_kwarg, **kwargs)
+                for center, size, norm_kwarg in zip(surface_centers, surface_sizes, norm_kwargs)
+            ]
+
+        # # Return list of surfaces, including `normal_dirs` only if the field exists in cls
+        # if "normal_dir" in cls.__dict__["__fields__"]:
+        #     return [
+        #         cls(center=center, size=size, name=name, normal_dir=normal_dir, **kwargs)
+        #         for center, size, name, normal_dir in zip(
+        #             surface_centers, surface_sizes, surface_names, normal_dirs
+        #         )
+        #     ]
+        # return [
+        #     cls(center=center, size=size, name=name, **kwargs)
+        #     for center, size, name in zip(surface_centers, surface_sizes, surface_names)
+        # ]
 
     def intersections(self, x: float = None, y: float = None, z: float = None):
         """Returns shapely geometry at plane specified by one non None value of x,y,z.

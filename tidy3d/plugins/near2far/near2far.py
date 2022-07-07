@@ -8,8 +8,8 @@ import pydantic
 from rich.progress import track
 
 from ...constants import C_0, ETA_0, MICROMETER
-from ...components.data import FieldData, SimulationData, Near2FarData, ScalarFarFieldData
-from ...components.monitor import FieldMonitor, Near2FarMonitor
+from ...components.data import FieldData, SimulationData, Near2FarData, RadiationVector
+from ...components.monitor import FieldMonitor
 from ...components.types import Direction, Axis, Coordinate, ArrayLike
 from ...components.medium import Medium
 from ...components.base import Tidy3dBaseModel, cached_property
@@ -28,7 +28,7 @@ class Near2FarSurface(Tidy3dBaseModel):
     monitor: FieldMonitor = pydantic.Field(
         ...,
         title="Near field monitor",
-        description=":class:`.FieldMonitor` on which near fields will be sampled and integrated."
+        description=":class:`.FieldMonitor` on which near fields will be sampled and integrated.",
     )
 
     normal_dir: Direction = pydantic.Field(
@@ -202,7 +202,7 @@ class Near2Far(Tidy3dBaseModel):
         """Sets the surface currents."""
         sim_data = self.sim_data
         surfaces = self.surfaces
-	resample = values.get("resample")
+        resample = self.resample
         pts_per_wavelength = self.pts_per_wavelength
         medium = self.medium
 
@@ -211,7 +211,7 @@ class Near2Far(Tidy3dBaseModel):
 
         surface_currents = {}
         for surface in surfaces:
-             current_data = self.compute_surface_currents(
+            current_data = self.compute_surface_currents(
                 sim_data, surface, medium, resample, pts_per_wavelength
             )
             surface_currents[surface.monitor.name] = current_data
@@ -380,7 +380,7 @@ class Near2Far(Tidy3dBaseModel):
         for idx in idx_uv:
 
             if not resample:
-                comp = ['x', 'y', 'z'][idx]
+                comp = ["x", "y", "z"][idx]
                 colocation_points[idx] = sim_data.at_centers(surface.monitor.name)[comp].values
                 continue
 
@@ -409,7 +409,7 @@ class Near2Far(Tidy3dBaseModel):
         theta: ArrayLikeN2F,
         phi: ArrayLikeN2F,
         surface: Near2FarSurface,
-        currents: xr.Dataset
+        currents: xr.Dataset,
     ):
         """Compute radiation vectors at an angle in spherical coordinates
         for a given set of surface currents and observation angles.
@@ -443,7 +443,7 @@ class Near2Far(Tidy3dBaseModel):
             raise SetupError(
                 f"Frequency {frequency} not found in fields for monitor '{surface.monitor.name}'."
             ) from e
-        
+
         idx_w, idx_uv = surface.monitor.pop_axis((0, 1, 2), axis=surface.axis)
         _, source_names = surface.monitor.pop_axis(("x", "y", "z"), axis=surface.axis)
 
@@ -560,8 +560,7 @@ class Near2Far(Tidy3dBaseModel):
         lth = RadiationVector(values=L_theta, theta=theta, phi=phi, f=freqs)
         lph = RadiationVector(values=L_phi, theta=theta, phi=phi, f=freqs)
 
-        return Near2FarData(
-            data_dict={'Ntheta': nth, 'Nphi': nph, 'Ltheta': lth, 'Lphi': lph})
+        return Near2FarData(data_dict={"Ntheta": nth, "Nphi": nph, "Ltheta": lth, "Lphi": lph})
 
     # def fields_spherical(self, r: float, theta: ArrayLikeN2F, phi: ArrayLikeN2F) -> xr.Dataset:
     #     """Get fields at a point relative to monitor center in spherical coordinates.
@@ -740,8 +739,10 @@ class Near2Far(Tidy3dBaseModel):
     #                 r, theta, phi = self._car_2_sph(_x, _y, _z)
     #                 _field_data = self.fields_spherical(r, theta, phi)
 
-    #                 Er, Et, Ep = [_field_data[comp].values for comp in ["E_r", "E_theta", "E_phi"]]
-    #                 Hr, Ht, Hp = [_field_data[comp].values for comp in ["H_r", "H_theta", "H_phi"]]
+    #                 Er, Et, Ep = [_field_data[comp].values \
+    #                     for comp in ["E_r", "E_theta", "E_phi"]]
+    #                 Hr, Ht, Hp = [_field_data[comp].values \
+    #                     for comp in ["H_r", "H_theta", "H_phi"]]
 
     #                 Ex_data[i, j, k], Ey_data[i, j, k], Ez_data[i, j, k] = self._sph_2_car_field(
     #                     Er, Et, Ep, theta, phi
