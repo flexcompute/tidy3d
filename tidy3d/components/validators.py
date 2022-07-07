@@ -153,6 +153,8 @@ def set_names(field_name: str):
 
 
 def enforce_monitor_fields_present():
+    """Make sure all of the fields in the monitor are present in the correponding data."""
+
     @pydantic.root_validator(skip_on_failure=True, allow_reuse=True)
     def _contains_fields(cls, values):
         """Make sure the initially specified fields are here."""

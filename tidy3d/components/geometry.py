@@ -825,10 +825,8 @@ class Box(Centered):
 
     def _plot_arrow(  # pylint:disable=too-many-arguments, too-many-locals
         self,
-        direction: Tuple[
-            float, float, float
-        ],  # a really long comment on drection i just keep typing and typing
-        x: float = None,  # a really long comment I just type and type until the comment is too damn long
+        direction: Tuple[float, float, float],
+        x: float = None,
         y: float = None,
         z: float = None,
         color: str = None,

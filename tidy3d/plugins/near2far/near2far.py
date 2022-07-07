@@ -286,7 +286,7 @@ the number of directions ({len(normal_dirs)})."
         """
 
         # figure out which field components are tangential or normal to the monitor
-        normal_field, tangent_fields = surface.monitor.pop_axis(("x", "y", "z"), axis=surface.axis)
+        _, (cmp_1, cmp_2) = surface.monitor.pop_axis(("x", "y", "z"), axis=surface.axis)
 
         signs = np.array([-1, 1])
         if surface.axis % 2 != 0:
@@ -294,42 +294,22 @@ the number of directions ({len(normal_dirs)})."
         if surface.normal_dir == "-":
             signs *= -1
 
-        # compute surface current densities and delete unneeded field components
-        cmp_1, cmp_2 = tangent_fields
-
-        J1 = "J" + cmp_1
-        J2 = "J" + cmp_2
-        M1 = "M" + cmp_1
-        M2 = "M" + cmp_2
         E1 = "E" + cmp_1
         E2 = "E" + cmp_2
         H1 = "H" + cmp_1
         H2 = "H" + cmp_2
-        E_normal = "E" + normal_field
-        H_normal = "H" + normal_field
 
-        currents = field_data.copy()
+        surface_currents = {}
 
-        currents.data_dict[J2] = currents.data_dict.pop(H1)
-        currents.data_dict[J1] = currents.data_dict.pop(H2)
-        del currents.data_dict[H_normal]
+        surface_currents[E2] = field_data.field_components[H1] * signs[1]
+        surface_currents[E1] = field_data.field_components[H2] * signs[0]
 
-        currents.data_dict[M2] = currents.data_dict.pop(E1)
-        currents.data_dict[M1] = currents.data_dict.pop(E2)
-        del currents.data_dict[E_normal]
+        surface_currents[H2] = field_data.field_components[E1] * signs[0]
+        surface_currents[H1] = field_data.field_components[E2] * signs[1]
 
-        new_values_J1 = currents.data_dict[J1].values * signs[0]
-        new_values_J2 = currents.data_dict[J2].values * signs[1]
+        new_monitor = surface.monitor.copy(update=dict(fields=[E1, E2, H1, H2]))
 
-        new_values_M1 = currents.data_dict[M1].values * signs[1]
-        new_values_M2 = currents.data_dict[M2].values * signs[0]
-
-        currents.data_dict[J1] = currents.data_dict[J1].copy(update=dict(values=new_values_J1))
-        currents.data_dict[J2] = currents.data_dict[J2].copy(update=dict(values=new_values_J2))
-        currents.data_dict[M1] = currents.data_dict[M1].copy(update=dict(values=new_values_M1))
-        currents.data_dict[M2] = currents.data_dict[M2].copy(update=dict(values=new_values_M2))
-
-        return currents
+        return FieldData(monitor=new_monitor, **surface_currents)
 
     @staticmethod
     # pylint:disable=too-many-locals, too-many-arguments
@@ -464,19 +444,19 @@ the number of directions ({len(normal_dirs)})."
                 phase_ij = phase[idx_u][:, None] * phase[idx_v][None, :] * phase[idx_w]
 
                 J[idx_u, i_th, j_ph] = integrate_2d(
-                    currents[f"J{cmp_1}"].values * phase_ij, pts[idx_u], pts[idx_v]
+                    currents[f"E{cmp_1}"].values * phase_ij, pts[idx_u], pts[idx_v]
                 )
 
                 J[idx_v, i_th, j_ph] = integrate_2d(
-                    currents[f"J{cmp_2}"].values * phase_ij, pts[idx_u], pts[idx_v]
+                    currents[f"E{cmp_2}"].values * phase_ij, pts[idx_u], pts[idx_v]
                 )
 
                 M[idx_u, i_th, j_ph] = integrate_2d(
-                    currents[f"M{cmp_1}"].values * phase_ij, pts[idx_u], pts[idx_v]
+                    currents[f"H{cmp_1}"].values * phase_ij, pts[idx_u], pts[idx_v]
                 )
 
                 M[idx_v, i_th, j_ph] = integrate_2d(
-                    currents[f"M{cmp_2}"].values * phase_ij, pts[idx_u], pts[idx_v]
+                    currents[f"H{cmp_2}"].values * phase_ij, pts[idx_u], pts[idx_v]
                 )
 
         if len(theta) < 2:

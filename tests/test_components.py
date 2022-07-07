@@ -871,7 +871,7 @@ def test_monitor():
     m5 = ModeMonitor(
         size=(1, 1, 0), center=center, mode_spec=ModeSpec(), freqs=[1, 2, 3], name="test_mon"
     )
-    m6 = ModeFieldMonitor(
+    m6 = ModeSolverMonitor(
         size=(1, 1, 0), center=center, mode_spec=ModeSpec(), freqs=[1, 2, 3], name="test_mon"
     )
     m7 = PermittivityMonitor(size=size, center=center, freqs=[1, 2, 3], name="perm")
@@ -896,7 +896,7 @@ def test_monitor_plane():
         with pytest.raises(ValidationError) as e_info:
             ModeMonitor(size=size, freqs=freqs, modes=[])
         with pytest.raises(ValidationError) as e_info:
-            ModeFieldMonitor(size=size, freqs=freqs, modes=[])
+            ModeSolverMonitor(size=size, freqs=freqs, modes=[])
         with pytest.raises(ValidationError) as e_info:
             FluxMonitor(size=size, freqs=freqs, modes=[])
 
