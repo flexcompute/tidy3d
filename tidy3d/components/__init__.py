@@ -25,15 +25,22 @@ from .source import GaussianBeam, AstigmaticGaussianBeam
 # monitor
 from .monitor import FreqMonitor, TimeMonitor, FieldMonitor, FieldTimeMonitor
 from .monitor import Monitor, FluxMonitor, FluxTimeMonitor, ModeMonitor
-from .monitor import ModeFieldMonitor, PermittivityMonitor
+from .monitor import ModeSolverMonitor, PermittivityMonitor
 
 # simulation
 from .simulation import Simulation
 
-# # data
-# from .data import SimulationData, FieldData, FluxData, ModeData, FluxTimeData
-# from .data import ScalarFieldData, ScalarFieldTimeData, ModeAmpsData, ModeIndexData
-# from .data import ModeFieldData, PermittivityData, ScalarPermittivityData
+# data
+from .data import ScalarFieldDataArray, ScalarModeFieldDataArray, ScalarFieldTimeDataArray
+from .data import ModeAmpsDataArray, ModeIndexDataArray
+from .data import FluxDataArray, FluxTimeDataArray
+
+from .data import FieldData, FieldTimeData, PermittivityData
+from .data import FluxData, FluxTimeData
+from .data import ModeData, ModeSolverData
+
+from .data import SimulationData
+
 
 # boundary
 from .boundary import BoundarySpec, Boundary, BoundaryEdge, BoundaryEdgeType

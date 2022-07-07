@@ -1,93 +1,83 @@
-"""Tests data/monitor_data.py"""
+"""Tests tidy3d/components/data/monitor_data.py"""
 import numpy as np
 import pytest
 
 from tidy3d.components.monitor import FieldMonitor, FieldTimeMonitor, PermittivityMonitor
-from tidy3d.components.monitor import ModeFieldMonitor, ModeMonitor
+from tidy3d.components.monitor import ModeSolverMonitor, ModeMonitor
 from tidy3d.components.monitor import FluxMonitor, FluxTimeMonitor
 from tidy3d.components.mode import ModeSpec
 from tidy3d.log import DataError
 
 from tidy3d.components.data.monitor_data import FieldData, FieldTimeData, PermittivityData
-from tidy3d.components.data.monitor_data import ModeFieldData, ModeData
+from tidy3d.components.data.monitor_data import ModeSolverData, ModeData
 from tidy3d.components.data.monitor_data import FluxData, FluxTimeData
 
 from .test_data_arrays import make_scalar_field_data_array, make_scalar_field_time_data_array
 from .test_data_arrays import make_scalar_mode_field_data_array
 from .test_data_arrays import make_flux_data_array, make_flux_time_data_array
 from .test_data_arrays import make_mode_amps_data_array, make_mode_index_data_array
+from .test_data_arrays import FIELD_MONITOR, FIELD_TIME_MONITOR, MODE_SOLVE_MONITOR
+from .test_data_arrays import MODE_MONITOR, PERMITTIVITY_MONITOR, FLUX_MONITOR, FLUX_TIME_MONITOR
 
 # data array instances
-FIELD = make_scalar_field_data_array()
-FIELD_TIME = make_scalar_field_time_data_array()
-MODE_FIELD = make_scalar_mode_field_data_array()
 AMPS = make_mode_amps_data_array()
 N_COMPLEX = make_mode_index_data_array()
 FLUX = make_flux_data_array()
 FLUX_TIME = make_flux_time_data_array()
 
-# monitor inputs
-SIZE_3D = (1, 1, 1)
-SIZE_2D = (1, 0, 1)
-MODE_SPEC = ModeSpec(num_modes=4)
-FREQS = [1e14, 2e14]
-FIELDS = ("Ex", "Ey", "Ez", "Hz")
-INTERVAL = 2
-
 """ Make the montor data """
 
 
 def make_field_data():
-    monitor = FieldMonitor(size=SIZE_3D, fields=FIELDS, name="field", freqs=FREQS)
     return FieldData(
-        monitor=monitor, Ex=FIELD.copy(), Ey=FIELD.copy(), Ez=FIELD.copy(), Hz=FIELD.copy()
+        monitor=FIELD_MONITOR, 
+        Ex=make_scalar_field_data_array('Ex'),
+        Ey=make_scalar_field_data_array('Ey'),
+        Ez=make_scalar_field_data_array('Ez'),
+        Hz=make_scalar_field_data_array('Hz'),
     )
 
 
 def make_field_time_data():
-    monitor = FieldTimeMonitor(size=SIZE_3D, fields=FIELDS, name="field_time", interval=INTERVAL)
     return FieldTimeData(
-        monitor=monitor,
-        Ex=FIELD_TIME.copy(),
-        Ey=FIELD_TIME.copy(),
-        Ez=FIELD_TIME.copy(),
-        Hz=FIELD_TIME.copy(),
+        monitor=FIELD_TIME_MONITOR,
+        Ex=make_scalar_field_time_data_array('Ex'),
+        Ey=make_scalar_field_time_data_array('Ey'),
+        Ez=make_scalar_field_time_data_array('Ez'),
+        Hz=make_scalar_field_time_data_array('Ez'),
     )
 
 
 def make_mode_field_data():
-    monitor = ModeFieldMonitor(size=SIZE_2D, name="mode_field", mode_spec=MODE_SPEC, freqs=FREQS)
-    return ModeFieldData(
-        monitor=monitor,
-        Ex=MODE_FIELD.copy(),
-        Ey=MODE_FIELD.copy(),
-        Ez=MODE_FIELD.copy(),
-        Hx=MODE_FIELD.copy(),
-        Hy=MODE_FIELD.copy(),
-        Hz=MODE_FIELD.copy(),
+    return ModeSolverData(
+        monitor=MODE_SOLVE_MONITOR,
+        Ex=make_scalar_mode_field_data_array('Ex'),
+        Ey=make_scalar_mode_field_data_array('Ey'),
+        Ez=make_scalar_mode_field_data_array('Ez'),
+        Hx=make_scalar_mode_field_data_array('Hx'),
+        Hy=make_scalar_mode_field_data_array('Hy'),
+        Hz=make_scalar_mode_field_data_array('Hz'),
+        n_complex=N_COMPLEX.copy(),
     )
-
 
 def make_permittivity_data():
-    monitor = PermittivityMonitor(size=SIZE_3D, name="permittivity", freqs=FREQS)
     return PermittivityData(
-        monitor=monitor, eps_xx=FIELD.copy(), eps_yy=FIELD.copy(), eps_zz=FIELD.copy()
+        monitor=PERMITTIVITY_MONITOR,
+        eps_xx=make_scalar_field_data_array('Ex'),
+        eps_yy=make_scalar_field_data_array('Ey'),
+        eps_zz=make_scalar_field_data_array('Ez'),
     )
 
-
 def make_mode_data():
-    monitor = ModeMonitor(size=SIZE_2D, name="mode", mode_spec=MODE_SPEC, freqs=FREQS)
-    return ModeData(monitor=monitor, amps=AMPS.copy(), n_complex=N_COMPLEX.copy())
+    return ModeData(monitor=MODE_MONITOR, amps=AMPS.copy(), n_complex=N_COMPLEX.copy())
 
 
 def make_flux_data():
-    monitor = FluxMonitor(size=SIZE_2D, freqs=FREQS, name="flux")
-    return FluxData(monitor=monitor, flux=FLUX.copy())
+    return FluxData(monitor=FLUX_MONITOR, flux=FLUX.copy())
 
 
 def make_flux_time_data():
-    monitor = FluxTimeMonitor(size=SIZE_2D, interval=INTERVAL, name="flux_time")
-    return FluxTimeData(monitor=monitor, flux=FLUX_TIME.copy())
+    return FluxTimeData(monitor=FLUX_TIME_MONITOR, flux=FLUX_TIME.copy())
 
 
 """ Test them out """
@@ -95,22 +85,21 @@ def make_flux_time_data():
 
 def test_field_data():
     data = make_field_data()
-    for field in FIELDS:
+    for field in FIELD_MONITOR.fields:
         _ = getattr(data, field)
 
 
 def test_field_time_data():
     data = make_field_time_data()
-    for field in FIELDS:
+    for field in FIELD_TIME_MONITOR.fields:
         _ = getattr(data, field)
 
 
 def test_mode_field_data():
     data = make_mode_field_data()
-    for field in "EH":
-        for comp in "xyz":
-            _ = getattr(data, field + comp)
-
+    for field in 'EH':
+        for component in 'xyz':
+            _ = getattr(data, field + component)
 
 def test_permittivity_data():
     data = make_permittivity_data()
@@ -140,27 +129,26 @@ def test_colocate():
     data = make_field_data()
     _ = data.colocate(x=[-0.5, 0.5], y=[-0.5, 0.5], z=[-0.5, 0.5])
 
-    # select len(coord) == 1 at the exact position (z=0)
-    data = make_mode_field_data()
-    _ = data.colocate(x=[-0.5, 0.5], y=[-0.5, 0.5], z=0.0)
-
     # ignore coordinate
-    _ = data.colocate(x=[-0.5, 0.5], y=[-0.5, 0.5], z=None)
+    _ = data.colocate(x=[-0.5, 0.5], y=None, z=[-0.5, 0.5])
 
     # data outside range of len(coord)==1 dimension
+    data = make_mode_field_data()
     with pytest.raises(DataError):
-        _ = data.colocate(x=[-0.5, 0.5], y=[-0.5, 0.5], z=1.0)
+        _ = data.colocate(x=[-0.5, 0.5], y=1.0, z=[-0.5, 0.5])
 
+    with pytest.raises(DataError):
+        _ = data.colocate(x=[-0.5, 0.5], y=[1.0, 2.0], z=[-0.5, 0.5])
 
 def test_sel_mode_index():
 
     data = make_mode_field_data()
     field_data = data.sel_mode_index(mode_index=0)
-    assert isinstance(field_data, FieldData), "ModeFieldData wasnt converted to FieldData."
+    assert isinstance(field_data, FieldData), "ModeSolverData wasnt converted to FieldData."
     assert isinstance(
         field_data.monitor, FieldMonitor
-    ), "ModeFieldMonitor wasnt converted to FieldMonitor."
-    for _, (scalar_field, _, _) in field_data.field_components.items():
+    ), "ModeSolverMonitor wasnt converted to FieldMonitor."
+    for _, scalar_field in field_data.field_components.items():
         assert "mode_index" not in scalar_field.coords, "mode_index coordinate remained in data."
 
 

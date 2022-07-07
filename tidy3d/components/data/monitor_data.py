@@ -1,34 +1,28 @@
 """ Monitor Level Data, store the DataArrays associated with a single monitor."""
 from abc import ABC, abstractmethod
 from typing import Union, Dict, Tuple, Callable
-from typing_extensions import Annotated
 import xarray as xr
 import numpy as np
 import pydantic as pd
 
-from ..base import TYPE_TAG_STR
+from ..base import TYPE_TAG_STR, Tidy3dBaseModel
 from ..types import Axis, Coordinate
 from ..boundary import Symmetry
 from ..grid import Grid
 from ..validators import enforce_monitor_fields_present
-from ..monitor import Monitor, MonitorType, FieldMonitor, FieldTimeMonitor, ModeFieldMonitor
+from ..monitor import MonitorType, FieldMonitor, FieldTimeMonitor, ModeSolverMonitor
 from ..monitor import ModeMonitor, FluxMonitor, FluxTimeMonitor, PermittivityMonitor
 from ...log import DataError
 
-from .base import Tidy3dData
 from .data_array import ScalarFieldDataArray, ScalarFieldTimeDataArray, ScalarModeFieldDataArray
 from .data_array import FluxTimeDataArray, FluxDataArray, ModeIndexDataArray, ModeAmpsDataArray
 from .data_array import DataArray
 
-# TODO: base class for field objects?
-# TODO: saving and loading from hdf5 group or json file
-# TODO: mode data neff, keff properties
 # TODO: docstring examples?
-# TODO: ModeFieldData select by index -> FieldData
 # TODO: equality checking two MonitorData
 
 
-class MonitorData(Tidy3dData, ABC):
+class MonitorData(Tidy3dBaseModel, ABC):
     """Abstract base class of objects that store data pertaining to a single :class:`.monitor`."""
 
     monitor: MonitorType = pd.Field(
@@ -39,12 +33,17 @@ class MonitorData(Tidy3dData, ABC):
     )
 
     def apply_symmetry(
-        self, symmetry: Symmetry, symmetry_center: Coordinate, grid_expanded: Grid
-    ) -> "Self":
+        self,
+        symmetry: Tuple[Symmetry, Symmetry, Symmetry],  # pylint:disable=unused-argument
+        symmetry_center: Coordinate,  # pylint:disable=unused-argument
+        grid_expanded: Grid,  # pylint:disable=unused-argument
+    ) -> "MonitorData":
         """Return copy of self with symmetry applied."""
         return self.copy()
 
-    def normalize(self, source_spectrum_fn) -> "Self":
+    def normalize(
+        self, source_spectrum_fn: Callable[[float], complex]  # pylint:disable=unused-argument
+    ) -> "MonitorData":
         """Return copy of self after normalization is applied using source spectrum function."""
         return self.copy()
 
@@ -52,16 +51,29 @@ class MonitorData(Tidy3dData, ABC):
 class AbstractFieldData(MonitorData, ABC):
     """Collection of scalar fields with some symmetry properties."""
 
-    monitor: Union[FieldMonitor, FieldTimeMonitor, PermittivityMonitor, ModeFieldMonitor]
+    monitor: Union[FieldMonitor, FieldTimeMonitor, PermittivityMonitor, ModeSolverMonitor]
 
     @property
     @abstractmethod
-    def field_components(self) -> Dict[str, Tuple[DataArray, str, Callable[[Axis], float]]]:
-        """The components of the field in the :class:`.AbstractField`."""
+    def field_components(self) -> Dict[str, DataArray]:
+        """Maps the field components to thier associated data."""
 
-    def apply_symmetry(
-        self, symmetry: Symmetry, symmetry_center: Coordinate, grid_expanded: Grid
-    ) -> "Self":
+    @property
+    @abstractmethod
+    def grid_locations(self) -> Dict[str, str]:
+        """Maps field components to the string key of their grid locations on the yee lattice."""
+
+    @property
+    @abstractmethod
+    def symmetry_eigenvalues(self) -> Dict[str, Callable[[Axis], float]]:
+        """Maps field components to their grid locations on the yee lattice."""
+
+    def apply_symmetry(  # pylint:disable=too-many-locals
+        self,
+        symmetry: Tuple[Symmetry, Symmetry, Symmetry],
+        symmetry_center: Coordinate,
+        grid_expanded: Grid,
+    ) -> "AbstractFieldData":
         """Create a copy of the :class:`.AbstractField` with symmetry applied
 
         Returns
@@ -72,12 +84,20 @@ class AbstractFieldData(MonitorData, ABC):
 
         new_fields = {}
 
-        for field_name, (scalar_data, grid_key, eigenval_fn) in self.field_components.items():
+        for field_name, scalar_data in self.field_components.items():
+
+            if scalar_data is None:
+                continue
+
+            grid_key = self.grid_locations[field_name]
+            eigenval_fn = self.symmetry_eigenvalues[field_name]
 
             # get grid locations for this field component on the expanded grid
             grid_locations = grid_expanded[grid_key]
 
             for sym_dim, (sym_val, sym_center) in enumerate(zip(symmetry, symmetry_center)):
+
+                dim_name = "xyz"[sym_dim]
 
                 # Continue if no symmetry along this dimension
                 if sym_val == 0:
@@ -87,11 +107,11 @@ class AbstractFieldData(MonitorData, ABC):
                 coords = grid_locations.to_list[sym_dim]
 
                 # Get indexes of coords that lie on the left of the symmetry center
-                flip_inds = np.where(coords < center)[0]
+                flip_inds = np.where(coords < sym_center)[0]
 
                 # Get the symmetric coordinates on the right
                 coords_interp = np.copy(coords)
-                coords_interp[flip_inds] = 2 * center - coords[flip_inds]
+                coords_interp[flip_inds] = 2 * sym_center - coords[flip_inds]
 
                 # Interpolate. There generally shouldn't be values out of bounds except potentially
                 # when handling modes, in which case they should be at the boundary and close to 0.
@@ -100,7 +120,7 @@ class AbstractFieldData(MonitorData, ABC):
 
                 # apply the symmetry eigenvalue to the flipped values
                 sym_eig = eigenval_fn(sym_dim)
-                scalar_data[{"xyz"[sym_dim]: flip_inds}] *= sym_val * sym_eig
+                scalar_data[{dim_name: flip_inds}] *= sym_val * sym_eig
 
             # assign the final scalar data to the new_fields
             new_fields[field_name] = scalar_data
@@ -142,7 +162,7 @@ class AbstractFieldData(MonitorData, ABC):
         centered_fields = {}
 
         # loop through field components
-        for field_name, (field_data, _, _) in self.field_components.items():
+        for field_name, field_data in self.field_components.items():
 
             # no field data, just ignore
             if field_data is None:
@@ -154,19 +174,21 @@ class AbstractFieldData(MonitorData, ABC):
                 # if only one element in data long dim, just assign as coord
                 coord_data = field_data.coords[coord_name]
                 if len(coord_data) == 1:
-                    if not np.isclose(coord_data, coords_supplied):
-                        raise DataError(
-                            f"colocate given {coord_name}={coords_supplied}, but "
-                            f"data only has one coordinate at {coord_name}={coord_data.values[0]}. "
-                            "Therefore, can't colocate along this dimension. "
-                            f"supply {coord_name}=None to skip it or correct the value."
-                        )
+                    raise DataError(
+                        f"colocate given {coord_name}={coords_supplied}, but "
+                        f"data only has one coordinate at {coord_name}={coord_data.values[0]}. "
+                        "Therefore, can't colocate along this dimension. "
+                        f"supply {coord_name}=None to skip it."
+                    )
 
                 # otherwise, interpolate at the supplied coordinates for this dim
                 else:
-                    field_data = field_data.interp(
-                        {coord_name: coords_supplied}, kwargs={"bounds_error": True}
-                    )
+                    try:
+                        field_data = field_data.interp(
+                            {coord_name: coords_supplied}, kwargs={"bounds_error": True}
+                        )
+                    except Exception as e:
+                        raise e
 
             centered_fields[field_name] = field_data.copy()
 
@@ -178,16 +200,34 @@ class ElectromagneticFieldData(AbstractFieldData, ABC):
     """Stores a collection of E and H fields with x, y, z components."""
 
     @property
-    def field_components(self) -> Dict[str, Tuple[DataArray, str, Callable[[Axis], float]]]:
-        """Maps field_name to (scalar data, grid key, function of dim giving symmetry eigenvalue."""
-        return {
-            "Ex": (self.Ex, "Ex", lambda dim: -1 if (dim == 0) else +1),
-            "Ey": (self.Ey, "Ey", lambda dim: -1 if (dim == 1) else +1),
-            "Ez": (self.Ez, "Ez", lambda dim: -1 if (dim == 2) else +1),
-            "Hx": (self.Hx, "Hx", lambda dim: +1 if (dim == 0) else -1),
-            "Hy": (self.Hy, "Hy", lambda dim: +1 if (dim == 1) else -1),
-            "Hz": (self.Hz, "Hz", lambda dim: +1 if (dim == 2) else -1),
-        }
+    def field_components(self) -> Dict[str, DataArray]:
+        """Maps the field components to thier associated data."""
+        return dict(
+            Ex=self.Ex,  # pylint:disable=no-member
+            Ey=self.Ey,  # pylint:disable=no-member
+            Ez=self.Ez,  # pylint:disable=no-member
+            Hx=self.Hx,  # pylint:disable=no-member
+            Hy=self.Hy,  # pylint:disable=no-member
+            Hz=self.Hz,  # pylint:disable=no-member
+        )
+
+    @property
+    def grid_locations(self) -> Dict[str, str]:
+        """Maps field components to the string key of their grid locations on the yee lattice."""
+        return dict(Ex="Ex", Ey="Ey", Ez="Ez", Hx="Hx", Hy="Hy", Hz="Hz")
+
+    @property
+    def symmetry_eigenvalues(self) -> Dict[str, Callable[[Axis], float]]:
+        """Maps field components to their grid locations on the yee lattice."""
+
+        return dict(
+            Ex=lambda dim: -1 if (dim == 0) else +1,
+            Ey=lambda dim: -1 if (dim == 1) else +1,
+            Ez=lambda dim: -1 if (dim == 2) else +1,
+            Hx=lambda dim: +1 if (dim == 0) else -1,
+            Hy=lambda dim: +1 if (dim == 1) else -1,
+            Hz=lambda dim: +1 if (dim == 2) else -1,
+        )
 
 
 class FieldData(ElectromagneticFieldData):
@@ -228,11 +268,18 @@ class FieldData(ElectromagneticFieldData):
 
     _contains_monitor_fields = enforce_monitor_fields_present()
 
-    def normalize(self, source_spectrum_fn) -> "FieldData":
+    def normalize(self, source_spectrum_fn: Callable[[float], complex]) -> "FieldData":
         """Return copy of self after normalization is applied using source spectrum function."""
-        src_amps = source_spectrum_fn(self.f)
-        field_norm = {name: val / src_amps for name, (val, _, _) in self.field_components.items()}
-        return self.copy(update=field_norm)
+        fields_norm = {}
+        for field_name, field_data in self.field_components.items():
+
+            if field_data is None:
+                continue
+
+            src_amps = source_spectrum_fn(field_data.f)
+            fields_norm[field_name] = field_data / src_amps
+
+        return self.copy(update=fields_norm)
 
 
 class FieldTimeData(ElectromagneticFieldData):
@@ -274,10 +321,10 @@ class FieldTimeData(ElectromagneticFieldData):
     _contains_monitor_fields = enforce_monitor_fields_present()
 
 
-class ModeFieldData(ElectromagneticFieldData):
-    """Data associated with a :class:`.ModeFieldMonitor`: scalar components of E and H fields."""
+class ModeSolverData(ElectromagneticFieldData):
+    """Data associated with a :class:`.ModeSolverMonitor`: scalar components of E and H fields."""
 
-    monitor: ModeFieldMonitor
+    monitor: ModeSolverMonitor
 
     Ex: ScalarModeFieldDataArray = pd.Field(
         ...,
@@ -310,11 +357,27 @@ class ModeFieldData(ElectromagneticFieldData):
         description="Spatial distribution of the z-component of the magnetic field of the mode.",
     )
 
+    n_complex: ModeIndexDataArray = pd.Field(
+        ...,
+        title="Propagation Index",
+        description="Complex-valued effective propagation constants associated with the mode.",
+    )
+
+    @property
+    def n_eff(self):
+        """Real part of the propagation index."""
+        return self.n_complex.real
+
+    @property
+    def k_eff(self):
+        """Imaginary part of the propagation index."""
+        return self.n_complex.imag
+
     def sel_mode_index(self, mode_index: pd.NonNegativeInt) -> FieldData:
         """Return :class:`.FieldData` for the specificed mode index."""
 
         fields = {}
-        for field_name, (data, _, _) in self.field_components.items():
+        for field_name, data in self.field_components.items():
             data = data.sel(mode_index=mode_index)
             coords = {key: val.data for key, val in data.coords.items()}
             scalar_field = ScalarFieldDataArray(data.data, coords=coords)
@@ -332,13 +395,19 @@ class PermittivityData(MonitorData):
     monitor: PermittivityMonitor
 
     @property
-    def field_components(self) -> Dict[str, Tuple[DataArray, str, Callable[[Axis], float]]]:
-        """Maps field_name to (scalar data, grid key, function of dim giving symmetry eigenvalue."""
-        return {
-            "eps_xx": (self.eps_xx, "Ex", lambda dim: 1),
-            "eps_yy": (self.eps_yy, "Ey", lambda dim: 1),
-            "eps_zz": (self.eps_zz, "Ez", lambda dim: 1),
-        }
+    def field_components(self) -> Dict[str, ScalarFieldDataArray]:
+        """Maps the field components to thier associated data."""
+        return dict(eps_xx=self.eps_xx, eps_yy=self.eps_yy, eps_zz=self.eps_zz)
+
+    @property
+    def grid_locations(self) -> Dict[str, str]:
+        """Maps field components to the string key of their grid locations on the yee lattice."""
+        return dict(eps_xx="Ex", eps_yy="Ey", eps_zz="Ez")
+
+    @property
+    def symmetry_eigenvalues(self) -> Dict[str, Callable[[Axis], float]]:
+        """Maps field components to their grid locations on the yee lattice."""
+        return lambda dim: 1.0
 
     eps_xx: ScalarFieldDataArray = pd.Field(
         ...,
@@ -368,14 +437,9 @@ class ModeData(MonitorData):
 
     n_complex: ModeIndexDataArray = pd.Field(
         ...,
-        title="Amplitudes",
+        title="Propagation Index",
         description="Complex-valued effective propagation constants associated with the mode.",
     )
-
-    def normalize(self, source_spectrum_fn) -> "ModeData":
-        """Return copy of self after normalization is applied using source spectrum function."""
-        source_freq_amps = source_spectrum_fn(self.f)[None, :, None]
-        return self.copy(update={"amps": self.amps / source_freq_amps})
 
     @property
     def n_eff(self):
@@ -387,6 +451,13 @@ class ModeData(MonitorData):
         """Imaginary part of the propagation index."""
         return self.n_complex.imag
 
+    def normalize(self, source_spectrum_fn) -> "ModeData":
+        """Return copy of self after normalization is applied using source spectrum function."""
+        if self.amps is None:
+            raise DataError("ModeData contains no amp data, can't normalize.")
+        source_freq_amps = source_spectrum_fn(self.amps.f)[None, :, None]
+        return self.copy(update={"amps": self.amps / source_freq_amps})
+
 
 class FluxData(MonitorData):
     """Data associated with a :class:`.FluxMonitor`: flux data in the frequency-domain."""
@@ -396,6 +467,7 @@ class FluxData(MonitorData):
 
     def normalize(self, source_spectrum_fn) -> "Self":
         """Return copy of self after normalization is applied using source spectrum function."""
+        source_freq_amps = source_spectrum_fn(self.flux.f)
         source_power = abs(source_freq_amps) ** 2
         return self.copy(update={"flux": self.flux / source_power})
 
@@ -407,9 +479,6 @@ class FluxTimeData(MonitorData):
     flux: FluxTimeDataArray
 
 
-MonitorDataType = Annotated[
-    Union[
-        FieldData, FieldTimeData, PermittivityData, ModeFieldData, ModeData, FluxData, FluxTimeData
-    ],
-    pd.Field(discriminator=TYPE_TAG_STR),
+MonitorDataType = Union[
+    FieldData, FieldTimeData, PermittivityData, ModeSolverData, ModeData, FluxData, FluxTimeData
 ]
