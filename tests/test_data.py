@@ -30,6 +30,16 @@ def test_scalar_field_time_data():
     _ = data.data
 
 
+def test_complex_scalar_field_time_data():
+    t = np.linspace(0, 1e-12, 1001)
+    x = np.linspace(-1, 1, 10)
+    y = np.linspace(-2, 2, 20)
+    z = np.linspace(0, 0, 1)
+    values = (1 + 1j) * np.random.random((len(x), len(y), len(z), len(t)))
+    data = ScalarFieldTimeData(values=values, x=x, y=y, z=z, t=t)
+    _ = data.data
+
+
 def test_scalar_permittivity_data():
     f = np.linspace(1e14, 2e14, 1001)
     x = np.linspace(-1, 1, 10)
