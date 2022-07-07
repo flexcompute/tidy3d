@@ -7,7 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+## [1.5.0] - 2022-7-7
+
 ### Changed
+
+ - All Tidy3D components apart from data structures are now fully immutable.
+ - Stopped support for python 3.6, improved support for python 3.10.
+ - Web material fitter for lossless input data (no `k` data provided) will now return a lossless medium.
+ - `sort_by` changed to `filter_pol` in `ModeSpec`.
+ - `center` no longer a field of all `Geometry` components, instead only present when needed, 
+ removed in `PolySlab` and `GeometryGroup`. `Planar` geometries no longer have a mandatory `length` field, but 
+ have `center_axis` and `lengt_axis` properties for the center and length along the extrusion axis. `PolySlab` now defined exclusively through `slab_bounds`, 
+ while `Cylinder` through `center` and `length`.
 
 ## [1.4.1] - 2022-6-13
 
@@ -338,7 +349,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Job and Batch classes for better simulation handling (eventually to fully replace webapi functions).
 - A large number of small improvements and bug fixes.
 
-[Unreleased]: https://github.com/flexcompute/tidy3d/compare/v1.4.1...develop
+[Unreleased]: https://github.com/flexcompute/tidy3d/compare/v1.5.0...develop
+[1.5.0]: https://github.com/flexcompute/tidy3d/compare/v1.4.1...1.5.0
 [1.4.1]: https://github.com/flexcompute/tidy3d/compare/v1.4.0...1.4.1
 [1.4.0]: https://github.com/flexcompute/tidy3d/compare/v1.3.3...1.4.0
 [1.3.3]: https://github.com/flexcompute/tidy3d/compare/v1.3.2...1.3.3
