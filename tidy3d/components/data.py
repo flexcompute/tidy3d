@@ -671,7 +671,7 @@ class ScalarFieldTimeData(ScalarSpatialData, TimeData):
     >>> data = ScalarFieldTimeData(values=values, x=x, y=y, z=z, t=t)
     """
 
-    values: Array[float] = pd.Field(
+    values: Array[complex] = pd.Field(
         ...,
         title="Scalar Field Values",
         description="Multi-dimensional array storing the raw scalar field values in time domain.",

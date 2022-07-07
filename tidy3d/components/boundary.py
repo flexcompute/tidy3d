@@ -67,6 +67,9 @@ class BlochBoundary(BoundaryEdge):
         cls, source: BlochSourceType, domain_size: float, axis: Axis, medium: Medium = None
     ) -> "BlochBoundary":
         """Set the Bloch vector component based on a given angled source and its center frequency.
+           Note that if a broadband angled source is used, only the frequency components near the
+           center frequency will exhibit angled incidence at the expect angle. In this case, a
+           narrowband source is recommended.
 
         Parameters
         ----------
