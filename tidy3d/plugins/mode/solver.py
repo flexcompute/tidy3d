@@ -11,8 +11,12 @@ from .derivatives import create_d_matrices as d_mats
 from .derivatives import create_s_matrices as s_mats
 from .transforms import radial_transform, angled_transform
 
-# consider vec to be complex if norm(vec.imag)/norm(vec) > TOL_COMPLEX
+# Consider vec to be complex if norm(vec.imag)/norm(vec) > TOL_COMPLEX
 TOL_COMPLEX = fp_eps
+# Tolerance for eigs
+TOL_EIGS = fp_eps
+# Tolerance for deciding on the matrix to be diagonal or tensorial
+TOL_TENSORIAL = 1e-6
 
 # pylint:disable=too-many-statements,too-many-branches,too-many-locals
 def compute_modes(
@@ -146,7 +150,7 @@ def compute_modes(
         target = n_max
     else:
         target = mode_spec.target_neff
-    target_neff_p = target / np.linalg.norm(kp_to_k)
+    target_neff_p = target / np.linalg.norm(kp_to_k) + fp_eps
 
     # Solve for the modes
     E, H, neff, keff = solver_em(
@@ -226,7 +230,7 @@ def solver_em(
     eps_offd = np.abs(eps_tensor[off_diagonals])
     mu_offd = np.abs(mu_tensor[off_diagonals])
     is_tensorial = False
-    if np.any(eps_offd > 1e-6) or np.any(mu_offd > 1e-6):
+    if np.any(eps_offd > TOL_TENSORIAL) or np.any(mu_offd > TOL_TENSORIAL):
         is_tensorial = True
 
     # Determine data types
@@ -454,7 +458,7 @@ def solver_eigs(mat, num_modes, vec_init, guess_value=1.0):
     guess_value : float, optional
     """
 
-    values, vectors = spl.eigs(mat, k=num_modes, sigma=guess_value, tol=fp_eps, v0=vec_init)
+    values, vectors = spl.eigs(mat, k=num_modes, sigma=guess_value, tol=TOL_EIGS, v0=vec_init)
     return values, vectors
 
 
@@ -529,8 +533,10 @@ def set_initial_vec(Nx, Ny, mat_dtype=np.complex128, is_tensorial=False):
     vec_init = type_conversion(vec_init, mat_dtype)
 
     # Set values at the boundary to be 0
-    vec_init[0, :, :] = 0
-    vec_init[:, 0, :] = 0
+    if Nx > 1:
+        vec_init[0, :, :] = 0
+    if Ny > 1:
+        vec_init[:, 0, :] = 0
 
     # Concatenate the vector appropriately
     vec_init = np.vstack(vec_init)
