@@ -1,5 +1,5 @@
 """ Simulation Level Data """
-from typing import Dict, Optional, Literal
+from typing import Dict, Optional
 
 import xarray as xr
 import pydantic as pd
@@ -9,15 +9,37 @@ from .monitor_data import MonitorDataType, AbstractFieldData
 from ..base import Tidy3dBaseModel
 from ..simulation import Simulation
 from ..boundary import BlochBoundary
-from ..types import Ax, Axis, annotate_type
+from ..types import Ax, Axis, annotate_type, Literal
 from ..viz import equal_aspect, add_ax_if_none
 from ...log import log, DataError
 
-# TODO: docstring examples?
-# TODO: checking normalization, symmetry, centers
 
 class SimulationData(Tidy3dBaseModel):
-    """Stores data from a collection of :class:`.Monitor` objects in a :class:`.Simulation`."""
+    """Stores data from a collection of :class:`.Monitor` objects in a :class:`.Simulation`.
+
+    Example
+    -------
+    >>> from tidy3d import ModeSpec, GridSpec, ScalarFieldDataArray, FieldMonitor, FieldData
+    >>> num_modes = 5
+    >>> x = [-1,1]
+    >>> y = [-2,0,2]
+    >>> z = [-3,-1,1,3]
+    >>> f = [2e14, 3e14]
+    >>> t = [0, 1e-12, 2e-12]
+    >>> mode_index = np.arange(num_modes)
+    >>> direction = ["+", "-"]
+    >>> coords = dict(x=x, y=y, z=z, f=f)
+    >>> scalar_field = ScalarFieldDataArray((1+1j) * np.random.random((2,3,4,2)), coords=coords)
+    >>> field_monitor = FieldMonitor(size=(2,4,6), freqs=[2e14, 3e14], name='field', fields=['Ex'])
+    >>> sim = Simulation(
+    ...     size=(2, 4, 6),
+    ...     grid_spec=GridSpec(wavelength=1.0),
+    ...     monitors=[monitor],
+    ...     run_time=2e-12,
+    ... )
+    >>> field_data = FieldData(monitor=monitor, Ex=scalar_field)
+    >>> sim_data = SimulationData(simulation=sim, monitor_data={'field': field_data})
+    """
 
     simulation: Simulation = pd.Field(
         ...,
@@ -162,7 +184,7 @@ class SimulationData(Tidy3dBaseModel):
 
         # get the monitor, discretize, and get center locations
         monitor = monitor_data.monitor
-        sub_grid = self.simulation.discretize(monitor, extend=True)
+        sub_grid = self.simulation.discretize(monitor, extend=False)
         centers = sub_grid.centers
 
         # pass coords if each of the scalar field data have more than one coordinate along a dim
@@ -277,14 +299,22 @@ class SimulationData(Tidy3dBaseModel):
                     "must be specified in the monitor.fields"
                 )
 
-        # select the extra coordinates out of the data
+        # interp out any monitor.size==0 dimensions
+        monitor = self.simulation.get_monitor_by_name(field_monitor_name)
+        thin_dims = {"xyz"[dim]: monitor.center[dim] for dim in range(3) if monitor.size[dim] == 0}
+        for axis, pos in thin_dims.items():
+            if field_data.coords[axis].size <= 1:
+                field_data = field_data.sel(**{axis: pos}, method="nearest")
+            else:
+                field_data = field_data.interp(**{axis: pos})
+
+        # select the extra coordinates out of the data from user-specified kwargs
         field_data = field_data.interp(**sel_kwargs)
         field_data = field_data.squeeze(drop=True)
         non_scalar_coords = {name: val for name, val in field_data.coords.items() if val.size > 1}
 
         # assert the data is valid for plotting
         if len(non_scalar_coords) != 2:
-
             raise DataError(
                 f"Data after selection has {len(non_scalar_coords)} coordinates "
                 f"({list(non_scalar_coords.keys())}), "

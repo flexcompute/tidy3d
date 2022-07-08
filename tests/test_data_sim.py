@@ -7,9 +7,12 @@ from tidy3d.components.monitor import FieldMonitor, FieldTimeMonitor, ModeSolver
 from tidy3d.components.source import GaussianPulse, PointDipole
 
 from .test_data_monitor import make_field_data, make_field_time_data, make_permittivity_data
-from .test_data_monitor import make_mode_data, make_mode_field_data
+from .test_data_monitor import make_mode_data, make_mode_solver_data
 from .test_data_monitor import make_flux_data, make_flux_time_data
+from .test_data_arrays import FIELD_MONITOR, FIELD_TIME_MONITOR, MODE_SOLVE_MONITOR
+from .test_data_arrays import MODE_MONITOR, PERMITTIVITY_MONITOR, FLUX_MONITOR, FLUX_TIME_MONITOR
 from .test_data_arrays import SIM
+
 from .utils import clear_tmp
 
 # monitor data instances
@@ -18,15 +21,14 @@ FIELD = make_field_data()
 FIELD_TIME = make_field_time_data()
 PERMITTIVITY = make_permittivity_data()
 MODE = make_mode_data()
-MODE_FIELD = make_mode_field_data()
+MODE_SOLVER = make_mode_solver_data()
 FLUX = make_flux_data()
 FLUX_TIME = make_flux_time_data()
 
 # for constructing SimulationData
-
-MONITOR_DATA = (FIELD, FIELD_TIME, PERMITTIVITY, MODE, MODE_FIELD, FLUX, FLUX_TIME)
+MONITOR_DATA = (FIELD, FIELD_TIME, MODE_SOLVER, PERMITTIVITY, MODE, FLUX, FLUX_TIME)
 MONITOR_DATA_DICT = {data.monitor.name: data for data in MONITOR_DATA}
-MONITORS = [data.monitor for data in MONITOR_DATA]
+
 
 def make_sim_data():
     return SimulationData(
@@ -39,6 +41,18 @@ def make_sim_data():
 
 def test_sim_data():
     sim_data = make_sim_data()
+
+
+def test_apply_symmetry():
+    sim_data = make_sim_data()
+    for monitor_data in sim_data.monitor_data.values():
+        _ = sim_data.apply_symmetry(monitor_data)
+
+
+def test_normalize():
+    sim_data = make_sim_data()
+    for monitor_data in sim_data.monitor_data.values():
+        _ = sim_data.normalize_monitor_data(monitor_data)
 
 
 def test_getitem():
@@ -82,35 +96,14 @@ def test_plot():
 
     # plot mode field data
     for field_cmp in ("Ex", "Ey", "Ez", "Hx", "Hy", "Hz"):
-        ax = sim_data.plot_field("mode_field", field_cmp, val="real", f=1e14, mode_index=1, ax=ax)
-    ax = sim_data.plot_field("mode_field", "int", f=1e14, mode_index=1, ax=ax)
+        ax = sim_data.plot_field("mode_solver", field_cmp, val="real", f=1e14, mode_index=1, ax=ax)
+    ax = sim_data.plot_field("mode_solver", "int", f=1e14, mode_index=1, ax=ax)
 
-
-def test_sym():
-    sim_data = make_sim_data()
-    for monitor_data in sim_data.monitor_data.values():
-        _ = sim_data.apply_symmetry(monitor_data)
-
-def test_norm():
-    sim_data = make_sim_data()
-    for monitor_data in sim_data.monitor_data.values():
-        _ = sim_data.normalize_monitor_data(monitor_data)
 
 def test_intensity():
     sim_data = make_sim_data()
-    for monitor_name in ['field', 'field_time', 'mode_field']:
+    for monitor_name in ["field", "field_time", "mode_solver"]:
         _ = sim_data.get_intensity(monitor_name)
-
-def test_centers():
-    sim_data = make_sim_data()
-    for monitor_name in ['field', 'field_time', 'mode_field']:
-        _ = sim_data.at_centers(monitor_name)
-
-
-def test_getitem():
-    sim_data = make_sim_data()
-    for monitor in sim_data.simulation.monitors:
-        _ = sim_data[monitor.name]
 
 
 def test_final_decay():
@@ -123,12 +116,14 @@ def test_to_json():
     sim_data = make_sim_data()
     j = sim_data.dict()
     sim_data2 = SimulationData(**j)
-    # assert np.all(sim_data == sim_data2)
-    # assert np.all(sim_data2["field"].Ex == sim_data["field"].Ex)
+    assert sim_data == sim_data2
+    assert sim_data2["field"].Ex == sim_data["field"].Ex
 
 
 @clear_tmp
 def test_to_hdf5():
     sim_data = make_sim_data()
-    sim_data.to_file("tests/tmp/sim_data.hdf5")
-    sim_data2 = SimulationData.from_file("tests/tmp/sim_data.hdf5")
+    FNAME = "tests/tmp/sim_data_refactor.hdf5"
+    sim_data.to_file(fname=FNAME)
+    sim_data2 = SimulationData.from_file(fname=FNAME)
+    assert sim_data == sim_data2
