@@ -30,43 +30,45 @@ FLUX_TIME = make_flux_time_data_array()
 
 def make_field_data():
     return FieldData(
-        monitor=FIELD_MONITOR, 
-        Ex=make_scalar_field_data_array('Ex'),
-        Ey=make_scalar_field_data_array('Ey'),
-        Ez=make_scalar_field_data_array('Ez'),
-        Hz=make_scalar_field_data_array('Hz'),
+        monitor=FIELD_MONITOR,
+        Ex=make_scalar_field_data_array("Ex"),
+        Ey=make_scalar_field_data_array("Ey"),
+        Ez=make_scalar_field_data_array("Ez"),
+        Hz=make_scalar_field_data_array("Hz"),
     )
 
 
 def make_field_time_data():
     return FieldTimeData(
         monitor=FIELD_TIME_MONITOR,
-        Ex=make_scalar_field_time_data_array('Ex'),
-        Ey=make_scalar_field_time_data_array('Ey'),
-        Ez=make_scalar_field_time_data_array('Ez'),
-        Hz=make_scalar_field_time_data_array('Ez'),
+        Ex=make_scalar_field_time_data_array("Ex"),
+        Ey=make_scalar_field_time_data_array("Ey"),
+        Ez=make_scalar_field_time_data_array("Ez"),
+        Hz=make_scalar_field_time_data_array("Ez"),
     )
 
 
-def make_mode_field_data():
+def make_mode_solver_data():
     return ModeSolverData(
         monitor=MODE_SOLVE_MONITOR,
-        Ex=make_scalar_mode_field_data_array('Ex'),
-        Ey=make_scalar_mode_field_data_array('Ey'),
-        Ez=make_scalar_mode_field_data_array('Ez'),
-        Hx=make_scalar_mode_field_data_array('Hx'),
-        Hy=make_scalar_mode_field_data_array('Hy'),
-        Hz=make_scalar_mode_field_data_array('Hz'),
+        Ex=make_scalar_mode_field_data_array("Ex"),
+        Ey=make_scalar_mode_field_data_array("Ey"),
+        Ez=make_scalar_mode_field_data_array("Ez"),
+        Hx=make_scalar_mode_field_data_array("Hx"),
+        Hy=make_scalar_mode_field_data_array("Hy"),
+        Hz=make_scalar_mode_field_data_array("Hz"),
         n_complex=N_COMPLEX.copy(),
     )
+
 
 def make_permittivity_data():
     return PermittivityData(
         monitor=PERMITTIVITY_MONITOR,
-        eps_xx=make_scalar_field_data_array('Ex'),
-        eps_yy=make_scalar_field_data_array('Ey'),
-        eps_zz=make_scalar_field_data_array('Ez'),
+        eps_xx=make_scalar_field_data_array("Ex"),
+        eps_yy=make_scalar_field_data_array("Ey"),
+        eps_zz=make_scalar_field_data_array("Ez"),
     )
+
 
 def make_mode_data():
     return ModeData(monitor=MODE_MONITOR, amps=AMPS.copy(), n_complex=N_COMPLEX.copy())
@@ -96,10 +98,11 @@ def test_field_time_data():
 
 
 def test_mode_field_data():
-    data = make_mode_field_data()
-    for field in 'EH':
-        for component in 'xyz':
+    data = make_mode_solver_data()
+    for field in "EH":
+        for component in "xyz":
             _ = getattr(data, field + component)
+
 
 def test_permittivity_data():
     data = make_permittivity_data()
@@ -133,16 +136,17 @@ def test_colocate():
     _ = data.colocate(x=[-0.5, 0.5], y=None, z=[-0.5, 0.5])
 
     # data outside range of len(coord)==1 dimension
-    data = make_mode_field_data()
+    data = make_mode_solver_data()
     with pytest.raises(DataError):
         _ = data.colocate(x=[-0.5, 0.5], y=1.0, z=[-0.5, 0.5])
 
     with pytest.raises(DataError):
         _ = data.colocate(x=[-0.5, 0.5], y=[1.0, 2.0], z=[-0.5, 0.5])
 
+
 def test_sel_mode_index():
 
-    data = make_mode_field_data()
+    data = make_mode_solver_data()
     field_data = data.sel_mode_index(mode_index=0)
     assert isinstance(field_data, FieldData), "ModeSolverData wasnt converted to FieldData."
     assert isinstance(

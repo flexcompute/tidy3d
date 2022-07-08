@@ -18,9 +18,6 @@ from .data_array import ScalarFieldDataArray, ScalarFieldTimeDataArray, ScalarMo
 from .data_array import FluxTimeDataArray, FluxDataArray, ModeIndexDataArray, ModeAmpsDataArray
 from .data_array import DataArray
 
-# TODO: docstring examples?
-# TODO: equality checking two MonitorData
-
 
 class MonitorData(Tidy3dBaseModel, ABC):
     """Abstract base class of objects that store data pertaining to a single :class:`.monitor`."""
@@ -173,7 +170,7 @@ class AbstractFieldData(MonitorData, ABC):
 
                 # if only one element in data long dim, just assign as coord
                 coord_data = field_data.coords[coord_name]
-                if len(coord_data) == 1:
+                if coord_data.size == 1:
                     raise DataError(
                         f"colocate given {coord_name}={coords_supplied}, but "
                         f"data only has one coordinate at {coord_name}={coord_data.values[0]}. "
@@ -182,13 +179,12 @@ class AbstractFieldData(MonitorData, ABC):
                     )
 
                 # otherwise, interpolate at the supplied coordinates for this dim
-                else:
-                    try:
-                        field_data = field_data.interp(
-                            {coord_name: coords_supplied}, kwargs={"bounds_error": True}
-                        )
-                    except Exception as e:
-                        raise e
+                try:
+                    field_data = field_data.interp(
+                        {coord_name: coords_supplied}, kwargs={"bounds_error": True}
+                    )
+                except Exception as e:
+                    raise e
 
             centered_fields[field_name] = field_data.copy()
 
@@ -231,7 +227,19 @@ class ElectromagneticFieldData(AbstractFieldData, ABC):
 
 
 class FieldData(ElectromagneticFieldData):
-    """Data associated with a :class:`.FieldMonitor`: scalar components of E and H fields."""
+    """Data associated with a :class:`.FieldMonitor`: scalar components of E and H fields.
+
+    Example
+    -------
+    >>> x = [-1,1]
+    >>> y = [-2,0,2]
+    >>> z = [-3,-1,1,3]
+    >>> f = [2e14, 3e14]
+    >>> coords = dict(x=x, y=y, z=z, f=f)
+    >>> scalar_field = ScalarFieldDataArray((1+1j) * np.random.random((2,3,4,2)), coords=coords)
+    >>> monitor = FieldMonitor(size=(2,4,6), freqs=[2e14, 3e14], name='field', fields=['Ex', 'Hz'])
+    >>> data = FieldData(monitor=monitor, Ex=scalar_field, Hz=scalar_field)
+    """
 
     monitor: FieldMonitor
 
@@ -283,7 +291,19 @@ class FieldData(ElectromagneticFieldData):
 
 
 class FieldTimeData(ElectromagneticFieldData):
-    """Data associated with a :class:`.FieldTimeMonitor`: scalar components of E and H fields."""
+    """Data associated with a :class:`.FieldTimeMonitor`: scalar components of E and H fields.
+
+    Example
+    -------
+    >>> x = [-1,1]
+    >>> y = [-2,0,2]
+    >>> z = [-3,-1,1,3]
+    >>> t = [0, 1e-12, 2e-12]
+    >>> coords = dict(x=x, y=y, z=z, t=t)
+    >>> scalar_field = ScalarFieldTimeDataArray(np.random.random((2,3,4,3)), coords=coords)
+    >>> monitor = FieldTimeMonitor(size=(2,4,6), interval=100, name='field', fields=['Ex', 'Hz'])
+    >>> data = FieldTimeData(monitor=monitor, Ex=scalar_field, Hz=scalar_field)
+    """
 
     monitor: FieldTimeMonitor
 
@@ -322,7 +342,37 @@ class FieldTimeData(ElectromagneticFieldData):
 
 
 class ModeSolverData(ElectromagneticFieldData):
-    """Data associated with a :class:`.ModeSolverMonitor`: scalar components of E and H fields."""
+    """Data associated with a :class:`.ModeSolverMonitor`: scalar components of E and H fields.
+
+    Example
+    -------
+    >>> from tidy3d import ModeSpec
+    >>> x = [-1,1]
+    >>> y = [0]
+    >>> z = [-3,-1,1,3]
+    >>> f = [2e14, 3e14]
+    >>> mode_index = np.arange(5)
+    >>> field_coords = dict(x=x, y=y, z=z, f=f, mode_index=mode_index)
+    >>> field = ScalarModeFieldDataArray((1+1j)*np.random.random((2,1,4,2,5)), coords=field_coords)
+    >>> index_coords = dict(f=f, mode_index=mode_index)
+    >>> index_data = ModeIndexDataArray((1+1j) * np.random.random((2,5)), coords=index_coords)
+    >>> monitor = ModeSolverMonitor(
+    ...    size=(2,0,6),
+    ...    freqs=[2e14, 3e14],
+    ...    mode_spec=ModeSpec(num_modes=5),
+    ...    name='mode_solver',
+    ... )
+    >>> data = ModeSolverData(
+    ...     monitor=monitor,
+    ...     Ex=field,
+    ...     Ey=field,
+    ...     Ez=field,
+    ...     Hx=field,
+    ...     Hy=field,
+    ...     Hz=field,
+    ...     n_complex=index_data
+    ... )
+    """
 
     monitor: ModeSolverMonitor
 
@@ -390,7 +440,19 @@ class ModeSolverData(ElectromagneticFieldData):
 
 
 class PermittivityData(MonitorData):
-    """Data for a :class:`.PermittivityMonitor`: diagonal components of the permittivity tensor."""
+    """Data for a :class:`.PermittivityMonitor`: diagonal components of the permittivity tensor.
+
+    Example
+    -------
+    >>> x = [-1,1]
+    >>> y = [-2,0,2]
+    >>> z = [-3,-1,1,3]
+    >>> f = [2e14, 3e14]
+    >>> coords = dict(x=x, y=y, z=z, f=f)
+    >>> sclr_fld = ScalarFieldDataArray((1+1j) * np.random.random((2,3,4,2)), coords=coords)
+    >>> monitor = PermittivityMonitor(size=(2,4,6), freqs=[2e14, 3e14], name='eps')
+    >>> data = PermittivityData(monitor=monitor, eps_xx=sclr_fld, eps_yy=sclr_fld, eps_zz=sclr_fld)
+    """
 
     monitor: PermittivityMonitor
 
@@ -427,7 +489,26 @@ class PermittivityData(MonitorData):
 
 
 class ModeData(MonitorData):
-    """Data associated with a :class:`.ModeMonitor`: modal amplitudes and propagation indices."""
+    """Data associated with a :class:`.ModeMonitor`: modal amplitudes and propagation indices.
+
+    Example
+    -------
+    >>> from tidy3d import ModeSpec
+    >>> direction = ["+", "-"]
+    >>> f = [1e14, 2e14, 3e14]
+    >>> mode_index = np.arange(5)
+    >>> index_coords = dict(f=f, mode_index=mode_index)
+    >>> index_data = ModeIndexDataArray((1+1j) * np.random.random((3, 5)), coords=index_coords)
+    >>> amp_coords = dict(direction=direction, f=f, mode_index=mode_index)
+    >>> amp_data = ModeAmpsDataArray((1+1j) * np.random.random((2, 3, 5)), coords=amp_coords)
+    >>> monitor = ModeMonitor(
+    ...    size=(2,0,6),
+    ...    freqs=[2e14, 3e14],
+    ...    mode_spec=ModeSpec(num_modes=5),
+    ...    name='mode',
+    ... )
+    >>> data = ModeData(monitor=monitor, amps=amp_data, n_complex=index_data)
+    """
 
     monitor: ModeMonitor
 
@@ -460,7 +541,16 @@ class ModeData(MonitorData):
 
 
 class FluxData(MonitorData):
-    """Data associated with a :class:`.FluxMonitor`: flux data in the frequency-domain."""
+    """Data associated with a :class:`.FluxMonitor`: flux data in the frequency-domain.
+
+    Example
+    -------
+    >>> f = [2e14, 3e14]
+    >>> coords = dict(f=f)
+    >>> flux_data = FluxDataArray(np.random.random(2), coords=coords)
+    >>> monitor = FluxMonitor(size=(2,0,6), freqs=[2e14, 3e14], name='flux')
+    >>> data = FluxData(monitor=monitor, flux=flux_data)
+    """
 
     monitor: FluxMonitor
     flux: FluxDataArray
@@ -473,7 +563,16 @@ class FluxData(MonitorData):
 
 
 class FluxTimeData(MonitorData):
-    """Data associated with a :class:`.FluxTimeMonitor`: flux data in the time-domain."""
+    """Data associated with a :class:`.FluxTimeMonitor`: flux data in the time-domain.
+
+    Example
+    -------
+    >>> t = [0, 1e-12, 2e-12]
+    >>> coords = dict(t=t)
+    >>> flux_data = FluxTimeDataArray(np.random.random(3), coords=coords)
+    >>> monitor = FluxTimeMonitor(size=(2,0,6), interval=100, name='flux_time')
+    >>> data = FluxTimeData(monitor=monitor, flux=flux_data)
+    """
 
     monitor: FluxTimeMonitor
     flux: FluxTimeDataArray

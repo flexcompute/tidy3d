@@ -10,7 +10,7 @@ import yaml
 import numpy as np
 import h5py
 from pydantic.fields import ModelField
-from numpy import string_
+import xarray as xr
 
 from .types import ComplexNumber, Literal, TYPE_TAG_STR  # , DataObject
 from ..log import FileError
@@ -63,7 +63,6 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         json_encoders = {
             np.ndarray: lambda x: tuple(x.tolist()),
             complex: lambda x: ComplexNumber(real=x.real, imag=x.imag),
-            # xr.DataArray: lambda x: DataObject(data_type=type(x), data_dict=x.as_dict()),
         }
         frozen = True
         allow_mutation = False
@@ -378,8 +377,8 @@ class Tidy3dBaseModel(pydantic.BaseModel):
 
         # If this did not work, try serializing it to yaml and dumping the string to the dataset
         except TypeError:
-            dataset = hdf5_group.create_dataset(name=key, data=string_(yaml.safe_dump(value)))
-            dataset.attrs.create(name=TYPE_ID_HDF5, data=string_("yaml"))
+            dataset = hdf5_group.create_dataset(name=key, data=np.string_(yaml.safe_dump(value)))
+            dataset.attrs.create(name=TYPE_ID_HDF5, data=np.string_("yaml"))
 
     def dump_hdf5(self, data_dict: dict, fname: str) -> None:
         """Writes a dictionary of data into an hdf5 file.
@@ -400,6 +399,9 @@ class Tidy3dBaseModel(pydantic.BaseModel):
                 # if tuple as key, combine into a single string
                 if isinstance(key, tuple):
                     key = "_".join((str(i) for i in key))
+                if isinstance(value, xr.DataArray):
+                    value = value.to_dict()
+                #     import pdb; pdb.set_trace()
 
                 # if dictionary as item in dict, create subgroup and recurse
                 if isinstance(value, dict):
@@ -432,10 +434,6 @@ class Tidy3dBaseModel(pydantic.BaseModel):
     def __ge__(self, other):
         """define >= for getting unique indices based on hash."""
         return hash(self) >= hash(other)
-
-    # def __eq__(self, other):
-    #     """define == for checking if two base models are equal unique indices based on hash."""
-    #     return hash(self) == hash(other)
 
     def _json_string(self, include_unset: bool = True) -> str:
         """Returns string representation of a :class:`Tidy3dBaseModel`.

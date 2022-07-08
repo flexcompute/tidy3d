@@ -159,8 +159,12 @@ class ModeSolver(Tidy3dBaseModel):
         SimulationData
             :class:`.SimulationData` object containing the effective index and mode fields.
         """
-        monitor_data = {MODE_MONITOR_NAME: self.data}
-        return SimulationData(simulation=self.simulation, monitor_data=monitor_data)
+        monitor_data = self.data
+        new_monitors = list(self.simulation.monitors) + [monitor_data.monitor]
+        new_simulation = self.simulation.copy(update=dict(monitors=new_monitors))
+        return SimulationData(
+            simulation=new_simulation, monitor_data={MODE_MONITOR_NAME: monitor_data}
+        )
 
     def _get_epsilon(self, plane: Box, freq: float) -> ArrayLike[complex, 4]:
         """Compute the diagonal components of the epsilon tensor in the plane."""

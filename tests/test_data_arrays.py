@@ -1,6 +1,7 @@
 """Tests tidy3d/components/data/data_array.py"""
 import pytest
 import numpy as np
+from typing import Tuple, List
 
 from tidy3d.components.data.data_array import ScalarFieldDataArray, ScalarFieldTimeDataArray
 from tidy3d.components.data.data_array import ScalarModeFieldDataArray
@@ -13,6 +14,7 @@ from tidy3d.components.mode import ModeSpec
 from tidy3d.components.monitor import FieldMonitor, FieldTimeMonitor, PermittivityMonitor
 from tidy3d.components.monitor import ModeSolverMonitor, ModeMonitor
 from tidy3d.components.monitor import FluxMonitor, FluxTimeMonitor
+from tidy3d.components.monitor import MonitorType
 
 from .utils import clear_tmp
 
@@ -20,15 +22,6 @@ SOURCES = [PointDipole(source_time=GaussianPulse(freq0=1e14, fwidth=1e14), polar
 GRID_SPEC = GridSpec(wavelength=1.0)
 RUN_TIME = 1e-12
 SIZE_3D = (2, 4, 5)
-
-
-SIM = Simulation(
-        size=SIZE_3D,
-        run_time=RUN_TIME,
-        grid_spec=GRID_SPEC,
-        symmetry=(1, -1, 1),
-    )
-
 
 SIZE_2D = list(SIZE_3D)
 SIZE_2D[1] = 0
@@ -38,12 +31,35 @@ FIELDS = ("Ex", "Ey", "Ez", "Hz")
 INTERVAL = 2
 
 FIELD_MONITOR = FieldMonitor(size=SIZE_3D, fields=FIELDS, name="field", freqs=FREQS)
-FIELD_TIME_MONITOR = FieldTimeMonitor(size=SIZE_3D, fields=FIELDS, name="field_time", interval=INTERVAL)
-MODE_SOLVE_MONITOR = ModeSolverMonitor(size=SIZE_2D, name="mode_field", mode_spec=MODE_SPEC, freqs=FREQS)
+FIELD_TIME_MONITOR = FieldTimeMonitor(
+    size=SIZE_3D, fields=FIELDS, name="field_time", interval=INTERVAL
+)
+MODE_SOLVE_MONITOR = ModeSolverMonitor(
+    size=SIZE_2D, name="mode_solver", mode_spec=MODE_SPEC, freqs=FREQS
+)
 PERMITTIVITY_MONITOR = PermittivityMonitor(size=SIZE_3D, name="permittivity", freqs=FREQS)
 MODE_MONITOR = ModeMonitor(size=SIZE_2D, name="mode", mode_spec=MODE_SPEC, freqs=FREQS)
 FLUX_MONITOR = FluxMonitor(size=SIZE_2D, freqs=FREQS, name="flux")
 FLUX_TIME_MONITOR = FluxTimeMonitor(size=SIZE_2D, interval=INTERVAL, name="flux_time")
+
+MONITORS = [
+    FIELD_MONITOR,
+    FIELD_TIME_MONITOR,
+    MODE_SOLVE_MONITOR,
+    PERMITTIVITY_MONITOR,
+    MODE_MONITOR,
+    FLUX_MONITOR,
+    FLUX_TIME_MONITOR,
+]
+
+SIM = Simulation(
+    size=SIZE_3D,
+    run_time=RUN_TIME,
+    grid_spec=GRID_SPEC,
+    symmetry=(1, -1, 1),
+    sources=SOURCES,
+    monitors=MONITORS,
+)
 
 FS = np.linspace(1e14, 2e14, 11)
 TS = np.linspace(0, 1e-12, 11)
@@ -53,26 +69,32 @@ DIRECTIONS = ["+", "-"]
 """ Generate the data arrays (used in other test files) """
 
 
+def get_xyz(monitor: MonitorType, grid_key: str) -> Tuple[List[float], List[float], List[float]]:
+    grid = SIM.discretize(monitor, extend=True)
+    x, y, z = grid[grid_key].to_list
+    return x, y, z
 
 
 def make_scalar_field_data_array(grid_key: str):
-    XS, YS, ZS = SIM.discretize(FIELD_MONITOR)[grid_key].to_list
+    XS, YS, ZS = get_xyz(FIELD_MONITOR, grid_key)
     values = (1 + 1j) * np.random.random((len(XS), len(YS), len(ZS), len(FS)))
     return ScalarFieldDataArray(values, coords=dict(x=XS, y=YS, z=ZS, f=FS))
 
 
 def make_scalar_field_time_data_array(grid_key: str):
-    XS, YS, ZS = SIM.discretize(FIELD_TIME_MONITOR)[grid_key].to_list
+    XS, YS, ZS = get_xyz(FIELD_TIME_MONITOR, grid_key)
     values = np.random.random((len(XS), len(YS), len(ZS), len(TS)))
     return ScalarFieldTimeDataArray(values, coords=dict(x=XS, y=YS, z=ZS, t=TS))
 
 
 def make_scalar_mode_field_data_array(grid_key: str):
-    XS, YS, ZS = SIM.discretize(MODE_SOLVE_MONITOR)[grid_key].to_list
-    values = np.random.random((len(XS), len(YS), len(ZS), len(FS), len(MODE_INDICES)))
+    XS, YS, ZS = get_xyz(MODE_SOLVE_MONITOR, grid_key)
+    values = np.random.random((len(XS), 1, len(ZS), len(FS), len(MODE_INDICES)))
+
     return ScalarModeFieldDataArray(
-        values, coords=dict(x=XS, y=YS, z=ZS, f=FS, mode_index=MODE_INDICES)
+        values, coords=dict(x=XS, y=[0.0], z=ZS, f=FS, mode_index=MODE_INDICES)
     )
+
 
 def make_mode_amps_data_array():
     values = (1 + 1j) * np.random.random((len(DIRECTIONS), len(FS), len(MODE_INDICES)))
@@ -101,24 +123,24 @@ def make_flux_time_data_array():
 
 
 def test_scalar_field_data_array():
-    for grid_key in ('Ex', 'Ey', 'Ez', 'Hx', 'Hy', 'Hz'):
+    for grid_key in ("Ex", "Ey", "Ez", "Hx", "Hy", "Hz"):
         data = make_scalar_field_data_array(grid_key)
         data = data.interp(f=1.5e14)
         _ = data.isel(y=2)
 
 
 def test_scalar_field_time_data_array():
-    for grid_key in ('Ex', 'Ey', 'Ez', 'Hx', 'Hy', 'Hz'):
+    for grid_key in ("Ex", "Ey", "Ez", "Hx", "Hy", "Hz"):
         data = make_scalar_field_time_data_array(grid_key)
         data = data.interp(t=1e-13)
         _ = data.isel(y=2)
 
 
-def test_scalar_field_time_data_array():
-    for grid_key in ('Ex', 'Ey', 'Ez', 'Hx', 'Hy', 'Hz'):
+def test_scalar_mode_field_data_array():
+    for grid_key in ("Ex", "Ey", "Ez", "Hx", "Hy", "Hz"):
         data = make_scalar_mode_field_data_array(grid_key)
         data = data.interp(f=1.5e14)
-        data = data.isel(y=2)
+        data = data.isel(x=2)
         _ = data.sel(mode_index=2)
 
 
