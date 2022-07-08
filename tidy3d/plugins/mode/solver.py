@@ -148,24 +148,6 @@ def compute_modes(
         target = mode_spec.target_neff
     target_neff_p = target / np.linalg.norm(kp_to_k)
 
-    ## Determine matrix data type for ARPACK eigs solver
-    # 1) check if complex or not
-    complex_solver = False
-    if (
-        isinstance_complex(eps_tensor)
-        or isinstance_complex(mu_tensor)
-        or np.any([isinstance_complex(f) for f in der_mats])
-    ):
-        complex_solver = True
-
-    # 2) determine precision
-    mat_dtype = np.float32
-    if complex_solver:
-        mat_dtype = np.complex128 if mode_spec.precision == "double" else np.complex64
-    else:
-        if mode_spec.precision == "double":
-            mat_dtype = np.float64
-
     # Solve for the modes
     E, H, neff, keff = solver_em(
         Nx,
@@ -175,7 +157,7 @@ def compute_modes(
         der_mats,
         num_modes,
         target_neff_p,
-        mat_dtype,
+        mode_spec.precision,
     )
 
     # Filter polarization if needed
@@ -203,7 +185,7 @@ def compute_modes(
 
 
 def solver_em(
-    Nx, Ny, eps_tensor, mu_tensor, der_mats, num_modes, neff_guess, mat_dtype
+    Nx, Ny, eps_tensor, mu_tensor, der_mats, num_modes, neff_guess, mat_precision
 ):  # pylint:disable=too-many-arguments
     """Solve for the electromagnetic modes of a system defined by in-plane permittivity and
     permeability and assuming translational invariance in the normal direction.
@@ -224,8 +206,8 @@ def solver_em(
         Number of modes to solve for.
     neff_guess : float
         Initial guess for the effective index.
-    mat_dtype : Union[np.complex128, np.complex64, np.float64, np.float32]
-        Data type for all matrices in this function.
+    mat_precision : Union['single', 'double']
+        Single or double-point precision in eigensolver.
 
     Returns
     -------
@@ -239,20 +221,50 @@ def solver_em(
         Imaginary part of the effective index, shape (num_modes, ).
     """
 
+    # Determine if ``eps`` and ``mu`` are diagonal or tensorial
+    off_diagonals = (np.ones((3, 3)) - np.eye(3)).astype(bool)
+    eps_offd = np.abs(eps_tensor[off_diagonals])
+    mu_offd = np.abs(mu_tensor[off_diagonals])
+    is_tensorial = False
+    if np.any(eps_offd > 1e-6) or np.any(mu_offd > 1e-6):
+        is_tensorial = True
+
+    # Determine data types
+    mat_dtype = np.float32
+    # In tensorial case, even though the matrix can be real, the
+    # expected eigenvalue is purely imaginary. So for now we enforce
+    # the matrix to be complex type so that it will look for the right eigenvalues.
+    if is_tensorial:
+        mat_dtype = np.complex128 if mat_precision == "double" else np.complex64
+    else:
+        # 1) check if complex or not
+        complex_solver = False
+        if (
+            isinstance_complex(eps_tensor)
+            or isinstance_complex(mu_tensor)
+            or np.any([isinstance_complex(f) for f in der_mats])
+        ):
+            complex_solver = True
+        # 2) determine precision
+        if complex_solver:
+            mat_dtype = np.complex128 if mat_precision == "double" else np.complex64
+        else:
+            if mat_precision == "double":
+                mat_dtype = np.float64
+
     # data type conversion
     eps_tensor = type_conversion(eps_tensor, mat_dtype)
     mu_tensor = type_conversion(mu_tensor, mat_dtype)
     der_mats = [type_conversion(f, mat_dtype) for f in der_mats]
     neff_guess = type_conversion(np.array([neff_guess]), mat_dtype)[0]
 
-    off_diagonals = (np.ones((3, 3)) - np.eye(3)).astype(bool)
-    eps_offd = np.abs(eps_tensor[off_diagonals])
-    mu_offd = np.abs(mu_tensor[off_diagonals])
-    if np.any(eps_offd > 1e-6) or np.any(mu_offd > 1e-6):
-        vec_init = set_initial_vec(Nx, Ny, mat_dtype=mat_dtype, is_tensorial=True)
+    # initial vector for eigensolver
+    vec_init = set_initial_vec(Nx, Ny, mat_dtype=mat_dtype, is_tensorial=is_tensorial)
+
+    # call solver
+    if is_tensorial:
         return solver_tensorial(eps_tensor, mu_tensor, der_mats, num_modes, vec_init, neff_guess)
 
-    vec_init = set_initial_vec(Nx, Ny, mat_dtype=mat_dtype, is_tensorial=False)
     return solver_diagonal(eps_tensor, mu_tensor, der_mats, num_modes, vec_init, neff_guess)
 
 
