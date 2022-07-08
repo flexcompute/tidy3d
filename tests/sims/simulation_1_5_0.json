@@ -312,7 +312,7 @@
                 "sort_by": "largest_neff",
                 "angle_theta": 0.0,
                 "angle_phi": 0.0,
-                "precision": "float",
+                "precision": "single",
                 "bend_radius": null,
                 "bend_axis": null,
                 "type": "ModeSpec"
@@ -517,7 +517,7 @@
                 "sort_by": "largest_neff",
                 "angle_theta": 0.0,
                 "angle_phi": 0.0,
-                "precision": "float",
+                "precision": "single",
                 "bend_radius": null,
                 "bend_axis": null,
                 "type": "ModeSpec"
