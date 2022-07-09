@@ -13,13 +13,15 @@ import pydantic as pd
 
 from rich.progress import track
 
-from .types import Numpy, Direction, Array, ArrayLike, Literal, Ax, Coordinate, Axis, TYPE_TAG_STR
+from .types import Numpy, Direction, Array, ArrayLike, Literal, Ax, Coordinate, Axis
+from .types import TYPE_TAG_STR, annotate_type
 from .base import Tidy3dBaseModel
 from .simulation import Simulation
 from .geometry import Geometry
 from .boundary import Symmetry, BlochBoundary
 from .medium import Medium
-from .monitor import Monitor, Near2FarMonitor, FieldMonitor
+from .monitor import Monitor, FieldMonitor
+from .monitor import Near2FarAngleMonitor, Near2FarKSpaceMonitor, Near2FarCartesianMonitor
 from .grid import Grid, Coords
 from .viz import add_ax_if_none, equal_aspect
 from ..log import DataError, log, SetupError, ValidationError
@@ -1048,6 +1050,113 @@ class ModeFieldData(AbstractFieldData):
 
 """ Near-to-far transformation """
 
+class AbstractRadiationVector(FreqData):
+    """Stores a single scalar radiation vector in frequency domain.
+    """
+
+    values: Array[complex] = pd.Field(
+        ...,
+        title="Scalar Field Values",
+        description="Multi-dimensional array storing the raw radiation vector "
+        "values in freq. domain.",
+    )
+
+    def normalize(self, source_freq_amps: Array[complex]) -> None:
+        """normalize the values by the amplitude of the source."""
+        self.values /= source_freq_amps  # pylint: disable=no-member
+
+class RadiationVectorAngular(AbstractRadiationVector):
+    """Stores a single scalar radiation vector in frequency domain
+       as a function of angles theta and phi.
+
+    Example
+    -------
+    >>> f = np.linspace(1e14, 2e14, 10)
+    >>> theta = np.linspace(0, np.pi, 10)
+    >>> phi = np.linspace(0, 2*np.pi, 20)
+    >>> values = (1+1j) * np.random.random((len(theta), len(phi), len(f)))
+    >>> data = RadiationVectorAngular(values=values, theta=theta, phi=phi, f=f)
+    """
+
+    theta: Array[float] = pd.Field(
+        ...,
+        title="Elevation angles",
+        description="Array of theta observation angles.",
+        units=RADIAN,
+    )
+
+    phi: Array[float] = pd.Field(
+        ...,
+        title="Azimuth angles",
+        description="Array of phi observation angles.",
+        units=RADIAN,
+    )
+
+    _dims = ("theta", "phi", "f")
+
+class RadiationVectorKSpace(AbstractRadiationVector):
+    """Stores a single scalar radiation vector in frequency domain
+       as a function of normalized kx and ky vectors on the observation plane.
+
+    Example
+    -------
+    >>> f = np.linspace(1e14, 2e14, 10)
+    >>> ux = np.linspace(0, 5, 10)
+    >>> uy = np.linspace(0, 10, 20)
+    >>> values = (1+1j) * np.random.random((len(ux), len(uy), len(f)))
+    >>> data = RadiationVectorKSpace(values=values, ux=ux, uy=uy, f=f)
+    """
+
+    ux: Array[float] = pd.Field(
+        ...,
+        title="Normalized kx",
+        description="Array of observation kx values normalized by wave number.",
+    )
+
+    uy: Array[float] = pd.Field(
+        ...,
+        title="Normalized ky",
+        description="Array of observation ky values normalized by wave number.",
+    )
+
+    _dims = ('ux', 'uy', 'f')
+
+class RadiationVectorCartesian(AbstractRadiationVector):
+    """Stores a single scalar radiation vector in frequency domain
+       as a function of x, y, and z coordinates.
+
+    Example
+    -------
+    >>> f = np.linspace(1e14, 2e14, 10)
+    >>> x = np.linspace(0, 5, 10)
+    >>> y = np.linspace(0, 10, 20)
+    >>> z = np.atleast_1d(50)
+    >>> values = (1+1j) * np.random.random((len(x), len(y), len(z), len(f)))
+    >>> data = RadiationVectorCartesian(values=values, x=x, y=y, z=z, f=f)
+    """
+
+    x: Array[float] = pd.Field(
+        ...,
+        title="x coordinates",
+        description="Array of observation x coordinates.",
+        units=MICROMETER,
+    )
+
+    y: Array[float] = pd.Field(
+        ...,
+        title="y coordinates",
+        description="Array of observation y coordinates.",
+        units=MICROMETER,
+    )
+
+    z: Array[float] = pd.Field(
+        ...,
+        title="z coordinates",
+        description="Array of observation z coordinates.",
+        units=MICROMETER,
+    )
+
+    _dims = ('x', 'y', 'z', 'f')
 
 class RadiationVector(FreqData):
     """Stores a single scalar radiation vector in frequency-domain
@@ -1089,6 +1198,11 @@ class RadiationVector(FreqData):
         """normalize the values by the amplitude of the source."""
         self.values /= source_freq_amps  # pylint: disable=no-member
 
+RadiationVectorType = Union[
+    RadiationVectorAngular,
+    RadiationVectorKSpace,
+    RadiationVectorCartesian
+]
 
 class Near2FarData(CollectionData, ABC):
     """Stores a collection of radiation vectors in the frequency domain
@@ -1104,7 +1218,7 @@ class Near2FarData(CollectionData, ABC):
     >>> data = Near2FarData(data_dict={'Ntheta': fld, 'Nphi': fld, 'Ltheta': fld, 'Lphi': fld})
     """
 
-    data_dict: Dict[str, RadiationVector] = pd.Field(
+    data_dict: Dict[str, annotate_type(RadiationVectorType)] = pd.Field(
         ...,
         title="Data Dictionary",
         description="Mapping of the field names to their corresponding "
@@ -1355,7 +1469,7 @@ class Near2FarData(CollectionData, ABC):
         ]
 
         for (_x, _y, _z), (i, j, k) in track(coords, description="Interpolating far fields"):
-            r, theta, phi = Near2FarMonitor.car_2_sph(_x, _y, _z)
+            r, theta, phi = Near2FarData.car_2_sph(_x, _y, _z)
 
             # _field_data = field_data.sel(theta=theta, phi=phi, method="nearest")
             _field_data = field_data.interp(theta=theta, phi=phi)
@@ -1437,6 +1551,61 @@ class Near2FarData(CollectionData, ABC):
     #     coords = {"x": x, "y": y, "z": z}
 
     #     return xr.DataArray(data=power_data, coords=coords, dims=dims)
+
+    @staticmethod
+    def car_2_sph(x: float, y: float, z: float):
+        """Convert Cartesian to spherical coordinates.
+
+        Parameters
+        ----------
+        x : float
+            x coordinate relative to ``local_origin``.
+        y : float
+            y coordinate relative to ``local_origin``.
+        z : float
+            z coordinate relative to ``local_origin``.
+
+        Returns
+        -------
+        r : float
+            r coordinate relative to ``local_origin``.
+        theta : float
+            theta coordinate relative to ``local_origin``.
+        phi : float
+            phi coordinate relative to ``local_origin``.
+        """
+        r = np.sqrt(x**2 + y**2 + z**2)
+        theta = np.arccos(z / r)
+        phi = np.arctan2(y, x)
+        return r, theta, phi
+
+    @staticmethod
+    def sph_2_car(r, theta, phi):
+        """Convert spherical to Cartesian coordinates.
+
+        Parameters
+        ----------
+        r : float
+            radius.
+        theta : float
+            polar angle (rad) downward from x=y=0 line.
+        phi : float
+            azimuthal (rad) angle from y=z=0 line.
+
+        Returns
+        -------
+        x : float
+            x coordinate relative to ``local_origin``.
+        y : float
+            y coordinate relative to ``local_origin``.
+        z : float
+            z coordinate relative to ``local_origin``.
+        """
+        r_sin_theta = r * np.sin(theta)
+        x = r_sin_theta * np.cos(phi)
+        y = r_sin_theta * np.sin(phi)
+        z = r * np.cos(theta)
+        return x, y, z
 
     @staticmethod
     def sph_2_car_field(f_r, f_theta, f_phi, theta, phi):

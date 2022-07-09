@@ -396,38 +396,10 @@ class ModeFieldMonitor(AbstractModeMonitor):
         return 6 * BYTES_COMPLEX * num_cells * len(self.freqs) * self.mode_spec.num_modes
 
 
-class Near2FarMonitor(AbstractFieldMonitor, FreqMonitor):
-    """:class:`Monitor` that samples electromagnetic near fields in the frequency domain
-       and invokes the computation of far fields at predefined angles.
-
-    Example
-    -------
-    >>> monitor = Near2FarMonitor(
-    ...     center=(1,2,3),
-    ...     size=(2,2,2),
-    ...     freqs=[250e12, 300e12],
-    ...     name='far_field_monitor',
-    ...     custom_origin=(1,2,3),
-    ...     angles_phi=[0, np.pi/2],
-    ...     angles_theta=list(np.linspace(-np.pi/2, np.pi/2, 100))
-    ...     )
+class AbstractNear2FarMonitor(AbstractFieldMonitor, FreqMonitor):
+    """:class:`Monitor` class that samples electromagnetic near fields in the frequency domain
+       and invokes the computation of far fields.
     """
-
-    _data_type: Literal["Near2FarData"] = pydantic.Field("Near2FarData")
-
-    angles_theta: Tuple[float, ...] = pydantic.Field(
-        ...,
-        title="Polar Angles",
-        description="Polar angles relative to ``local_origin`` at which to compute far fields.",
-        units=RADIAN,
-    )
-
-    angles_phi: Tuple[float, ...] = pydantic.Field(
-        ...,
-        title="Azimuth Angles",
-        description="Azimuth angles relative to ``local_origin`` at which to compute far fields.",
-        units=RADIAN,
-    )
 
     normal_dir: Direction = pydantic.Field(
         None,
@@ -509,109 +481,151 @@ class Near2FarMonitor(AbstractFieldMonitor, FreqMonitor):
             return self.center
         return self.custom_origin
 
+
+class Near2FarAngleMonitor(AbstractNear2FarMonitor):
+    """:class:`Monitor` that samples electromagnetic near fields in the frequency domain
+       and invokes the computation of far fields at given observation angles.
+
+    Example
+    -------
+    >>> monitor = Near2FarAngleMonitor(
+    ...     center=(1,2,3),
+    ...     size=(2,2,2),
+    ...     freqs=[250e12, 300e12],
+    ...     name='far_field_monitor',
+    ...     custom_origin=(1,2,3),
+    ...     angles_phi=[0, np.pi/2],
+    ...     angles_theta=list(np.linspace(-np.pi/2, np.pi/2, 100))
+    ...     )
+    """
+
+    _data_type: Literal["Near2FarAngleData"] = pydantic.Field("Near2FarAngleData")
+
+    theta: Tuple[float, ...] = pydantic.Field(
+        ...,
+        title="Polar Angles",
+        description="Polar angles relative to ``local_origin`` at which to compute far fields.",
+        units=RADIAN,
+    )
+
+    phi: Tuple[float, ...] = pydantic.Field(
+        ...,
+        title="Azimuth Angles",
+        description="Azimuth angles relative to ``local_origin`` at which to compute far fields.",
+        units=RADIAN,
+    )
+
     def storage_size(self, num_cells: int, tmesh: ArrayLike[float, 1]) -> int:
         # stores 1 complex number per pair of angles, per frequency,
         # for N_theta, N_phi, L_theta, and L_phi (4 components)
-        return BYTES_COMPLEX * len(self.angles_theta) * len(self.angles_phi) * len(self.freqs) * 4
+        return BYTES_COMPLEX * len(self.theta) * len(self.phi) * len(self.freqs) * 4
 
-    @staticmethod
-    def angles_from_cartesian_points(
-        x: Tuple[float, ...], y: Tuple[float, ...], z: Tuple[float, ...]
-    ) -> Tuple[Tuple[float, ...]]:
-        """Get a tuple of linearly spaced angles which are guaranteed to span the space
-        occupied by a given set of points in Cartesian coordinates. The lists of angles
-        will have as many points as the largest number of Cartesian points provided
-        along any dimension.
 
-        Parameters
-        ----------
-        x : Tuple[float, ...]
-            x coordinates relative to ``local_origin``.
-        y : Tuple[float, ...]
-            y coordinates relative to ``local_origin``.
-        z : Tuple[float, ...]
-            z coordinates relative to ``local_origin``.
+class Near2FarKSpaceMonitor(AbstractNear2FarMonitor):
+    """:class:`Monitor` that samples electromagnetic near fields in the frequency domain
+       and invokes the computation of far fields on an observation plane defined in k-space.
 
-        Returns
-        -------
-        theta : Tuple[float, ...]
-            theta coordinates relative to ``local_origin``.
-        phi : Tuple[float, ...]
-            phi coordinates relative to ``local_origin``.
-        """
-        points_grid = np.meshgrid(x, y, z)
-        x, y, z = [points.flatten() for points in points_grid]
+    Example
+    -------
+    >>> monitor = Near2FarKSpaceMonitor(
+    ...     center=(1,2,3),
+    ...     size=(2,2,2),
+    ...     freqs=[250e12, 300e12],
+    ...     name='far_field_monitor',
+    ...     custom_origin=(1,2,3),
+    ...     u_axis=2,
+    ...     ux=[1,2],
+    ...     uy=[3,4,5]
+    ...     )
+    """
 
-        _, theta, phi = Near2FarMonitor.car_2_sph(x, y, z)
-        theta = np.linspace(np.min(theta), np.max(theta), np.max(points_grid[0].shape))
-        phi = np.linspace(np.min(phi), np.max(phi), np.max(points_grid[0].shape))
-        return list(theta), list(phi)
+    _data_type: Literal["Near2FarKSpaceData"] = pydantic.Field("Near2FarKSpaceData")
 
-    @staticmethod
-    def car_2_sph(x: float, y: float, z: float):
-        """Convert Cartesian to spherical coordinates.
+    u_axis: Axis = pydantic.Field(
+        ...,
+        title="Observation plane axis",
+        description="Axis along which the observation plane is oriented.",
+    )
 
-        Parameters
-        ----------
-        x : float
-            x coordinate relative to ``local_origin``.
-        y : float
-            y coordinate relative to ``local_origin``.
-        z : float
-            z coordinate relative to ``local_origin``.
+    ux: Tuple[float, ...] = pydantic.Field(
+        ...,
+        title="Normalized kx",
+        description="Local x component of wave vectors on the observation plane, "
+        "relative to ``local_origin`` and oriented with respect to ``u_axis``, "
+        "normalized by the wave number associated with the background medium.",
+    )
 
-        Returns
-        -------
-        r : float
-            r coordinate relative to ``local_origin``.
-        theta : float
-            theta coordinate relative to ``local_origin``.
-        phi : float
-            phi coordinate relative to ``local_origin``.
-        """
-        r = np.sqrt(x**2 + y**2 + z**2)
-        theta = np.arccos(z / r)
-        phi = np.arctan2(y, x)
-        return r, theta, phi
+    uy: Tuple[float, ...] = pydantic.Field(
+        ...,
+        title="Normalized ky",
+        description="Local y component of wave vectors on the observation plane, "
+        "relative to ``local_origin`` and oriented with respect to ``u_axis``, "
+        "normalized by the wave number associated with the background medium.",
+    )
 
-    @staticmethod
-    def sph_2_car(r, theta, phi):
-        """Convert spherical to Cartesian coordinates.
+    def storage_size(self, num_cells: int, tmesh: ArrayLike[float, 1]) -> int:
+        # stores 1 complex number per pair of angles, per frequency,
+        # for N_theta, N_phi, L_theta, and L_phi (4 components)
+        return BYTES_COMPLEX * len(self.ux) * len(self.uy) * len(self.freqs) * 4
 
-        Parameters
-        ----------
-        r : float
-            radius.
-        theta : float
-            polar angle (rad) downward from x=y=0 line.
-        phi : float
-            azimuthal (rad) angle from y=z=0 line.
 
-        Returns
-        -------
-        x : float
-            x coordinate relative to ``local_origin``.
-        y : float
-            y coordinate relative to ``local_origin``.
-        z : float
-            z coordinate relative to ``local_origin``.
-        """
-        r_sin_theta = r * np.sin(theta)
-        x = r_sin_theta * np.cos(phi)
-        y = r_sin_theta * np.sin(phi)
-        z = r * np.cos(theta)
-        return x, y, z
+class Near2FarCartesianMonitor(AbstractNear2FarMonitor):
+    """:class:`Monitor` that samples electromagnetic near fields in the frequency domain
+       and invokes the computation of far fields at predefined angles.
+
+    Example
+    -------
+    >>> monitor = Near2FarCartesianMonitor(
+    ...     center=(1,2,3),
+    ...     size=(2,2,2),
+    ...     freqs=[250e12, 300e12],
+    ...     name='far_field_monitor',
+    ...     custom_origin=(1,2,3),
+    ...     x=[-1, 0, 1],
+    ...     y=[-2, -1, 0, 1, 2],
+    ...     z=[15]
+    ...     )
+    """
+
+    _data_type: Literal["Near2FarCartesianData"] = pydantic.Field("Near2FarCartesianData")
+
+    x: Tuple[float, ...] = pydantic.Field(
+        ...,
+        title="x coordinates",
+        description="x coordinates relative to ``local_origin`` at which to compute far fields.",
+        units=MICROMETER,
+    )
+
+    y: Tuple[float, ...] = pydantic.Field(
+        ...,
+        title="y coordinates",
+        description="y coordinates relative to ``local_origin`` at which to compute far fields.",
+        units=MICROMETER,
+    )
+
+    z: Tuple[float, ...] = pydantic.Field(
+        ...,
+        title="z coordinates",
+        description="z coordinates relative to ``local_origin`` at which to compute far fields.",
+        units=MICROMETER,
+    )
+
+    def storage_size(self, num_cells: int, tmesh: ArrayLike[float, 1]) -> int:
+        # stores 1 complex number per pair of angles, per frequency,
+        # for N_theta, N_phi, L_theta, and L_phi (4 components)
+        return BYTES_COMPLEX * len(self.x) * len(self.y) * len(self.z) * len(self.freqs) * 4
 
 
 # types of monitors that are accepted by simulation
 MonitorType = Union[
     FieldMonitor,
-    Near2FarMonitor,
     FieldTimeMonitor,
     PermittivityMonitor,
     FluxMonitor,
     FluxTimeMonitor,
     ModeMonitor,
     ModeFieldMonitor,
-    # Near2FarMonitor,
+    Near2FarAngleMonitor,
+    Near2FarKSpaceMonitor,
+    Near2FarCartesianMonitor
 ]
