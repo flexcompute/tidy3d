@@ -472,9 +472,9 @@ def isinstance_complex(vec_or_mat, tol=TOL_COMPLEX):
     """
 
     if isinstance(vec_or_mat, np.ndarray):
-        return np.linalg.norm(vec_or_mat.imag) / np.linalg.norm(vec_or_mat) > tol
+        return np.linalg.norm(vec_or_mat.imag) / (np.linalg.norm(vec_or_mat) + fp_eps) > tol
     if isinstance(vec_or_mat, sp.csr_matrix):
-        return spl.norm(vec_or_mat.imag) / spl.norm(vec_or_mat) > tol
+        return spl.norm(vec_or_mat.imag) / (spl.norm(vec_or_mat) + fp_eps) > tol
 
     raise RuntimeError("Variable type should be either numpy array or scipy csr_matrix.")
 
