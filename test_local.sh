@@ -6,7 +6,9 @@ python lint.py
 pytest -ra tests/test_components.py
 pytest -ra tests/test_boundaries.py
 pytest -ra tests/test_config.py
-pytest -ra tests/test_data.py
+pytest -ra tests/test_data_arrays.py
+pytest -ra tests/test_data_monitor.py
+pytest -ra tests/test_data_sim.py
 pytest -ra tests/test_geo_group.py
 pytest -ra tests/test_grid.py
 pytest -ra tests/test_IO.py

@@ -7,17 +7,17 @@ from ..store import get_store
 
 
 @callback(
-    Output({"type": "ModeFieldData_figure", "name": MATCH}, "figure"),
+    Output({"type": "ModeSolverData_figure", "name": MATCH}, "figure"),
     [
-        Input({"type": "ModeFieldData_field_dropdown", "name": MATCH}, "value"),
-        Input({"type": "ModeFieldData_val_dropdown", "name": MATCH}, "value"),
-        Input({"type": "ModeFieldData_cs_axis_dropdown", "name": MATCH}, "value"),
-        Input({"type": "ModeFieldData_cs_slider", "name": MATCH}, "value"),
-        Input({"type": "ModeFieldData_ft_slider", "name": MATCH}, "value"),
-        Input({"type": "ModeFieldData_mode_index_selector", "name": MATCH}, "value"),
+        Input({"type": "ModeSolverData_field_dropdown", "name": MATCH}, "value"),
+        Input({"type": "ModeSolverData_val_dropdown", "name": MATCH}, "value"),
+        Input({"type": "ModeSolverData_cs_axis_dropdown", "name": MATCH}, "value"),
+        Input({"type": "ModeSolverData_cs_slider", "name": MATCH}, "value"),
+        Input({"type": "ModeSolverData_ft_slider", "name": MATCH}, "value"),
+        Input({"type": "ModeSolverData_mode_index_selector", "name": MATCH}, "value"),
         Input("store", "data"),
     ],
-    State({"type": "ModeFieldData_figure", "name": MATCH}, "id"),
+    State({"type": "ModeSolverData_figure", "name": MATCH}, "id"),
 )
 def set_field(  # pylint:disable=too-many-arguments
     value_field,
@@ -42,10 +42,10 @@ def set_field(  # pylint:disable=too-many-arguments
 
 # set the minimum of the xyz sliderbar depending on the cross-section axis
 @callback(
-    Output({"type": "ModeFieldData_cs_slider", "name": MATCH}, "min"),
-    Input({"type": "ModeFieldData_cs_axis_dropdown", "name": MATCH}, "value"),
+    Output({"type": "ModeSolverData_cs_slider", "name": MATCH}, "min"),
+    Input({"type": "ModeSolverData_cs_axis_dropdown", "name": MATCH}, "value"),
     Input("store", "data"),
-    State({"type": "ModeFieldData_figure", "name": MATCH}, "id"),
+    State({"type": "ModeSolverData_figure", "name": MATCH}, "id"),
 )
 def set_min(value_cs_axis, store, state_id):
     """set the minimum of the xyz sliderbar depending on the cross-section axis"""
@@ -57,10 +57,10 @@ def set_min(value_cs_axis, store, state_id):
 
 # set the xyz slider back to the average if the axis changes.
 @callback(
-    Output({"type": "ModeFieldData_cs_slider", "name": MATCH}, "value"),
-    Input({"type": "ModeFieldData_cs_axis_dropdown", "name": MATCH}, "value"),
+    Output({"type": "ModeSolverData_cs_slider", "name": MATCH}, "value"),
+    Input({"type": "ModeSolverData_cs_axis_dropdown", "name": MATCH}, "value"),
     Input("store", "data"),
-    State({"type": "ModeFieldData_figure", "name": MATCH}, "id"),
+    State({"type": "ModeSolverData_figure", "name": MATCH}, "id"),
 )
 def reset_slider_position(value_cs_axis, store, state_id):
     """set the xyz slider back to the average if the axis changes."""
@@ -73,10 +73,10 @@ def reset_slider_position(value_cs_axis, store, state_id):
 
 # set the maximum of the xyz sliderbar depending on the cross-section axis
 @callback(
-    Output({"type": "ModeFieldData_cs_slider", "name": MATCH}, "max"),
-    Input({"type": "ModeFieldData_cs_axis_dropdown", "name": MATCH}, "value"),
+    Output({"type": "ModeSolverData_cs_slider", "name": MATCH}, "max"),
+    Input({"type": "ModeSolverData_cs_axis_dropdown", "name": MATCH}, "value"),
     Input("store", "data"),
-    State({"type": "ModeFieldData_figure", "name": MATCH}, "id"),
+    State({"type": "ModeSolverData_figure", "name": MATCH}, "id"),
 )
 def set_max(value_cs_axis, store, state_id):
     """set the maximum of the xyz sliderbar depending on the cross-section axis"""

@@ -9,7 +9,7 @@ from tidy3d.plugins import DispersionFitter
 from tidy3d.plugins.webplots import SimulationPlotly, SimulationDataApp
 from tidy3d.plugins import ModeSolver
 from tidy3d.plugins import Near2Far
-from tidy3d import FieldData, ScalarFieldData, FieldMonitor
+from tidy3d import FieldData, ScalarFieldDataArray, FieldMonitor
 from tidy3d.plugins.smatrix.smatrix import Port
 from tidy3d.plugins.smatrix.smatrix import ComponentModeler
 from .utils import clear_tmp
@@ -32,20 +32,20 @@ def test_near2far():
     )
 
     def rand_data():
-        return ScalarFieldData(
-            x=np.linspace(-1, 1, 10),
-            y=np.linspace(-1, 1, 10),
-            z=np.linspace(-1, 1, 10),
-            f=[f0],
-            values=np.random.random((10, 10, 10, 1)),
+        return ScalarFieldDataArray(
+            np.random.random((10, 10, 10, 1)),
+            coords=dict(
+                x=np.linspace(-1, 1, 10),
+                y=np.linspace(-1, 1, 10),
+                z=np.linspace(-1, 1, 10),
+                f=[f0],
+            ),
         )
 
     fields = ["Ex", "Ey", "Ez", "Hx", "Hy", "Hz"]
     data_dict = {field: rand_data() for field in fields}
-    field_data = FieldData(data_dict=data_dict)
-
-    data_dict_mon = {mon.name: field_data for mon in monitors}
-    sim_data = td.SimulationData(simulation=sim, monitor_data=data_dict_mon)
+    monitor_data = {mon.name: FieldData(monitor=mon, **data_dict) for mon in monitors}
+    sim_data = td.SimulationData(simulation=sim, monitor_data=monitor_data)
 
     n2f = Near2Far.from_surface_monitors(
         sim_data=sim_data,
@@ -184,20 +184,20 @@ def test_app():
     )
 
     def rand_data():
-        return ScalarFieldData(
-            x=np.linspace(-1, 1, 10),
-            y=np.linspace(-1, 1, 10),
-            z=np.linspace(-1, 1, 10),
-            f=[f0],
-            values=np.random.random((10, 10, 10, 1)),
+        return ScalarFieldDataArray(
+            np.random.random((10, 10, 10, 1)),
+            coords=dict(
+                x=np.linspace(-1, 1, 10),
+                y=np.linspace(-1, 1, 10),
+                z=np.linspace(-1, 1, 10),
+                f=[f0],
+            ),
         )
 
     fields = ["Ex", "Ey", "Ez", "Hx", "Hy", "Hz"]
     data_dict = {field: rand_data() for field in fields}
-    field_data = FieldData(data_dict=data_dict)
-
-    data_dict_mon = {mon.name: field_data for mon in monitors}
-    sim_data = td.SimulationData(simulation=sim, monitor_data=data_dict_mon)
+    monitor_data = {mon.name: FieldData(monitor=mon, **data_dict) for mon in monitors}
+    sim_data = td.SimulationData(simulation=sim, monitor_data=monitor_data)
 
     app = SimulationDataApp(sim_data=sim_data)
     _app = app.app

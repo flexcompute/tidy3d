@@ -2,10 +2,9 @@
 invariance along a given propagation axis.
 """
 
-from typing import List, Tuple, Union, Dict
+from typing import List, Tuple, Dict
 import logging
 
-import h5py
 import numpy as np
 import pydantic
 
@@ -13,232 +12,21 @@ from ...components.base import Tidy3dBaseModel, cached_property
 from ...components import Box
 from ...components import Simulation
 from ...components import ModeSpec
-from ...components import ModeMonitor
+from ...components.monitor import ModeSolverMonitor, ModeMonitor
 from ...components.source import ModeSource, SourceTime
 from ...components.types import Direction, ArrayLike, FreqArray, Ax, Literal, Axis
-from ...components.data import Tidy3dData, ModeIndexData, ModeFieldData, ScalarModeFieldData
-from ...components.data import AbstractSimulationData
+from ...components.data.data_array import ModeIndexDataArray, ScalarModeFieldDataArray
+from ...components.data.sim_data import SimulationData
+from ...components.data.monitor_data import ModeSolverData
 from ...components.boundary import Symmetry
-from ...log import ValidationError, DataError
-
+from ...log import ValidationError
 from .solver import compute_modes
 
 FIELD = Tuple[ArrayLike[complex, 3], ArrayLike[complex, 3], ArrayLike[complex, 3]]
+MODE_MONITOR_NAME = "mode"
 
 # Warning for field intensity at edges over total field intensity larger than this value
 FIELD_DECAY_CUTOFF = 1e-2
-
-
-class ModeSolverData(AbstractSimulationData):
-    """Holds data associated with :class:`.ModeSolver`.
-
-    Parameters
-    ----------
-    plane : :class:`.Box`
-        Cross-sectional plane in which the modes were be computed.
-    mode_spec : :class:`.ModeSpec`
-        Container with specifications about the modes.
-    data_dict : Dict[str, Union[ModeFieldData, ModeIndexData]]
-        Mapping of "n_complex" to :class:`.ModeIndexData`, and "fields" to :class:`.ModeFieldData`.
-    """
-
-    plane: Box
-    mode_spec: ModeSpec
-    data_dict: Dict[str, Union[ModeFieldData, ModeIndexData]]
-
-    @cached_property
-    def fields(self):
-        """Get field data."""
-        return self.data_dict.get("fields")
-
-    @cached_property
-    def n_complex(self):
-        """Get complex effective indexes."""
-        scalar_data = self.data_dict.get("n_complex")
-        if scalar_data:
-            return scalar_data.data
-        return None
-
-    @cached_property
-    def n_eff(self):
-        """Get real part of effective index."""
-        scalar_data = self.data_dict.get("n_complex")
-        if scalar_data:
-            return scalar_data.n_eff
-        return None
-
-    @cached_property
-    def k_eff(self):
-        """Get imaginary part of effective index."""
-        scalar_data = self.data_dict.get("n_complex")
-        if scalar_data:
-            return scalar_data.k_eff
-        return None
-
-    def add_to_handle(self, handle: Union[h5py.File, h5py.Group]) -> None:
-        """Export to an hdf5 handle, which can be a file or a group.
-
-        Parameters
-        ----------
-        handle : Union[hdf5.File, hdf5.Group]
-            Handle to write the ModeSolverData to.
-        """
-
-        # save pydantic models as string
-        json_dict = {
-            "simulation": self.simulation,
-            "plane": self.plane,
-            "mode_spec": self.mode_spec,
-        }
-        for name, obj in json_dict.items():
-            Tidy3dData.save_string(handle, name, obj.json())
-
-        # make groups for mode fields and index data
-        for name, data in self.data_dict.items():
-            data_grp = handle.create_group(name)
-            data.add_to_group(data_grp)
-
-    @classmethod
-    def load_from_handle(cls, handle: Union[h5py.File, h5py.Group]) -> "ModeSolverData":
-        """Load from an hdf5 handle, which can be a file or a group.
-
-        Parameters
-        ----------
-        handle : Union[hdf5.File, hdf5.Group]
-            Handle to load the ModeSolverData from.
-        """
-
-        # construct pydantic models from string
-        json_dict = {
-            "simulation": Simulation,
-            "plane": Box,
-            "mode_spec": ModeSpec,
-        }
-        obj_dict = {}
-        for name, obj in json_dict.items():
-            json_string = Tidy3dData.load_string(handle, name)
-            obj_dict[name] = obj.parse_raw(json_string)
-
-        # load fields and effective index data
-        data_dict = {
-            "fields": ModeFieldData.load_from_group(handle["fields"]),
-            "n_complex": ModeIndexData.load_from_group(handle["n_complex"]),
-        }
-        return cls(data_dict=data_dict, **obj_dict)
-
-    def to_file(self, fname: str) -> None:
-        """Export :class:`.ModeSolverData` to single hdf5 file.
-
-        Parameters
-        ----------
-        fname : str
-            Path to .hdf5 data file (including filename).
-        """
-
-        with h5py.File(fname, "a") as f_handle:
-            self.add_to_handle(f_handle)
-
-    @classmethod
-    def from_file(cls, fname: str, **kwargs) -> "ModeSolverData":  # pylint:disable=unused-argument
-        """Load :class:`.ModeSolverData` from .hdf5 file.
-
-        Parameters
-        ----------
-        fname : str
-            Path to .hdf5 data file (including filename).
-
-        Returns
-        -------
-        :class:`.ModeSolverData`
-            A :class:`.ModeSolverData` instance.
-        """
-
-        # read from file at fname
-        with h5py.File(fname, "r") as f_handle:
-            mode_data = cls.load_from_handle(f_handle)
-
-        return mode_data
-
-    # pylint:disable=too-many-arguments, too-many-locals, too-many-branches, too-many-statements
-    def plot_field(
-        self,
-        field_name: str,
-        val: Literal["real", "imag", "abs"] = "real",
-        freq: float = None,
-        mode_index: int = None,
-        eps_alpha: float = 0.2,
-        robust: bool = True,
-        ax: Ax = None,
-        **patch_kwargs,
-    ) -> Ax:
-        """Plot the field data for a monitor with simulation plot overlayed.
-
-        Parameters
-        ----------
-        field_name : str
-            Name of `field` to plot (eg. 'Ex').
-            Also accepts `'int'` to plot intensity.
-        val : Literal['real', 'imag', 'abs'] = 'real'
-            Which part of the field to plot.
-            If ``field_name='int'``, this has no effect.
-        freq: float = None
-            Specifies the frequency (Hz) to plot.
-            Also sets the frequency at which the permittivity is evaluated at (if dispersive).
-        mode_index: int = None
-            Specifies which mode index to plot.
-        eps_alpha : float = 0.2
-            Opacity of the structure permittivity.
-            Must be between 0 and 1 (inclusive).
-        robust : bool = True
-            If specified, uses the 2nd and 98th percentiles of the data to compute the color limits.
-            This helps in visualizing the field patterns especially in the presence of a source.
-        ax : matplotlib.axes._subplots.Axes = None
-            matplotlib axes to plot on, if not specified, one is created.
-        **patch_kwargs
-            Optional keyword arguments passed to ``add_artist(patch, **patch_kwargs)``.
-
-        Returns
-        -------
-        matplotlib.axes._subplots.Axes
-            The supplied or created matplotlib axes.
-        """
-
-        if mode_index >= self.mode_spec.num_modes:
-            raise DataError("``mode_index`` larger than ``mode_spec.num_modes``.")
-        mode_fields = self.fields.sel_mode_index(mode_index=mode_index)
-
-        # get the field data component
-        if field_name == "int":
-            xr_data = 0.0
-            for field in ("Ex", "Ey", "Ez"):
-                mode_fields = mode_fields[field]
-                xr_data += abs(mode_fields) ** 2
-            val = "abs"
-        else:
-            xr_data = mode_fields.data_dict.get(field_name).data
-
-        field_data = xr_data.sel(f=freq, method="nearest")
-
-        axis = self.plane.size.index(0.0)
-        position = self.plane.center[axis]
-
-        ax = self.plot_field_array(
-            field_data=field_data,
-            axis=axis,
-            position=position,
-            val=val,
-            freq=freq,
-            eps_alpha=eps_alpha,
-            robust=robust,
-            ax=ax,
-            **patch_kwargs,
-        )
-
-        n_eff = self.n_eff.isel(mode_index=mode_index).sel(f=freq, method="nearest")
-        title = f"f={float(field_data.f):1.2e}, n_eff={float(n_eff):1.4f}"
-        ax.set_title(title)
-
-        return ax
 
 
 class ModeSolver(Tidy3dBaseModel):
@@ -288,67 +76,105 @@ class ModeSolver(Tidy3dBaseModel):
         """Potentially smaller plane if symmetries present in the simulation."""
         return self.simulation.min_sym_box(self.plane)
 
-    # pylint:disable=too-many-locals
-    def solve(self) -> ModeSolverData:
-        """Finds the modal profile and effective index of the modes.
-
-        Returns
-        -------
-        ModeSolverData
-            :class:`.ModeSolverData` object containing the effective index and mode fields for all
-            modes.
-        """
-
-        normal_axis = self.normal_axis
-
-        # get the in-plane grid coordinates on which eps and the mode fields live
-        plane_grid = self.simulation.discretize(self.plane)
-
-        # restrict to a smaller plane if symmetries present in the simulation
-        plane_grid_sym = self.simulation.discretize(self._plane_sym)
-
-        # Coords and symmetry arguments to the solver (restricted to in-plane)
-        _, solver_coords = self.plane.pop_axis(plane_grid_sym.boundaries.to_list, axis=normal_axis)
+    @cached_property
+    def solver_symmetry(self) -> Tuple[Symmetry, Symmetry]:
+        """Get symmetry for solver for propagation along self.normal axis."""
         mode_symmetry = list(self.simulation.symmetry)
         for dim in range(3):
             if self.simulation.center[dim] != self.plane.center[dim]:
                 mode_symmetry[dim] = 0
-        _, solver_symmetry = self.plane.pop_axis(mode_symmetry, axis=normal_axis)
+        _, solver_sym = self.plane.pop_axis(mode_symmetry, axis=self.normal_axis)
+        return solver_sym
+
+    def solve(self) -> ModeSolverData:
+        """:class:`.ModeSolverData` containing the field and effective index data.
+
+        Returns
+        -------
+        ModeSolverData
+            :class:`.ModeSolverData` object containing the effective index and mode fields.
+        """
+        return self.data
+
+    @cached_property
+    def data_raw(self) -> ModeSolverData:
+        """:class:`.ModeSolverData` containing the field and effective index on unexpanded grid.
+
+        Returns
+        -------
+        ModeSolverData
+            :class:`.ModeSolverData` object containing the effective index and mode fields.
+        """
+
+        plane_grid_sym = self.simulation.discretize(self._plane_sym)
+        _, _solver_coords = self.plane.pop_axis(
+            plane_grid_sym.boundaries.to_list, axis=self.normal_axis
+        )
 
         # Compute and store the modes at all frequencies
-        n_complex, fields = self._solve_all_freqs(coords=solver_coords, symmetry=solver_symmetry)
+        n_complex, fields = self._solve_all_freqs(
+            coords=_solver_coords, symmetry=self.solver_symmetry
+        )
 
-        # Generate the dictionary of ScalarModeFieldData for every field
-        data_dict = {}
-        for field_name in fields[0].keys():
-            xyz_coords = plane_grid_sym[field_name].to_list
-            xyz_coords[normal_axis] = [self.plane.center[normal_axis]]
-            data_dict[field_name] = ScalarModeFieldData(
-                x=xyz_coords[0],
-                y=xyz_coords[1],
-                z=xyz_coords[2],
-                f=self.freqs,
+        # start a dictionary storing the data arrays for the ModeSolverData
+        index_data = ModeIndexDataArray(
+            np.stack(n_complex, axis=0),
+            coords=dict(
+                f=list(self.freqs),
                 mode_index=np.arange(self.mode_spec.num_modes),
-                values=np.stack([field_freq[field_name] for field_freq in fields], axis=-2),
+            ),
+        )
+        data_dict = {"n_complex": index_data}
+
+        # Construct and add all the data for the fields
+        for field_name in ("Ex", "Ey", "Ez", "Hx", "Hy", "Hz"):
+
+            xyz_coords = plane_grid_sym[field_name].to_list
+            xyz_coords[self.normal_axis] = [self.plane.center[self.normal_axis]]
+            scalar_field_data = ScalarModeFieldDataArray(
+                np.stack([field_freq[field_name] for field_freq in fields], axis=-2),
+                coords=dict(
+                    x=xyz_coords[0],
+                    y=xyz_coords[1],
+                    z=xyz_coords[2],
+                    f=list(self.freqs),
+                    mode_index=np.arange(self.mode_spec.num_modes),
+                ),
             )
-        field_data = ModeFieldData(
-            data_dict=data_dict,
-            expanded_grid=plane_grid.yee.grid_dict,
-            symmetry_center=self.simulation.center,
-            symmetry=self.simulation.symmetry,
-        )
-        field_data = field_data.expand_syms
-        self._field_decay_warning(field_data)
-        index_data = ModeIndexData(
-            f=self.freqs,
-            mode_index=np.arange(self.mode_spec.num_modes),
-            values=np.stack(n_complex, axis=0),
-        )
-        return ModeSolverData(
-            simulation=self.simulation,
-            plane=self.plane,
-            mode_spec=self.mode_spec,
-            data_dict={"fields": field_data, "n_complex": index_data},
+            data_dict[field_name] = scalar_field_data
+
+        # make mode solver data
+        mode_solver_monitor = self.to_mode_solver_monitor(name=MODE_MONITOR_NAME)
+        mode_solver_data = ModeSolverData(monitor=mode_solver_monitor, **data_dict)
+        self._field_decay_warning(mode_solver_data)
+        return mode_solver_data
+
+    @cached_property
+    def data(self) -> ModeSolverData:
+        """:class:`.ModeSolverData` containing the field and effective index data.
+
+        Returns
+        -------
+        ModeSolverData
+            :class:`.ModeSolverData` object containing the effective index and mode fields.
+        """
+        mode_solver_data = self.data_raw
+        return mode_solver_data.apply_symmetry(simulation=self.simulation)
+
+    @cached_property
+    def sim_data(self) -> SimulationData:
+        """:class:`.SimulationData` object containing the :class:`.ModeSolverData` for this object.
+
+        Returns
+        -------
+        SimulationData
+            :class:`.SimulationData` object containing the effective index and mode fields.
+        """
+        monitor_data = self.data
+        new_monitors = list(self.simulation.monitors) + [monitor_data.monitor]
+        new_simulation = self.simulation.copy(update=dict(monitors=new_monitors))
+        return SimulationData(
+            simulation=new_simulation, monitor_data={MODE_MONITOR_NAME: monitor_data}
         )
 
     def _get_epsilon(self, plane: Box, freq: float) -> ArrayLike[complex, 4]:
@@ -365,7 +191,7 @@ class ModeSolver(Tidy3dBaseModel):
         normal axis rotated to z."""
 
         # Get diagonal epsilon components in the plane
-        (eps_xx, eps_yy, eps_zz) = self._get_epsilon(self._plane_sym, freq)
+        eps_xx, eps_yy, eps_zz = self._get_epsilon(self._plane_sym, freq)
 
         # get rid of normal axis
         eps_xx = np.squeeze(eps_xx, axis=self.normal_axis)
@@ -397,7 +223,7 @@ class ModeSolver(Tidy3dBaseModel):
 
         return n_complex, fields
 
-    def _solve_single_freq(
+    def _solve_single_freq(  # pylint:disable=too-many-locals
         self,
         freq: float,
         coords: Tuple[ArrayLike[float, 1], ArrayLike[float, 1]],
@@ -415,7 +241,7 @@ class ModeSolver(Tidy3dBaseModel):
             symmetry=symmetry,
         )
 
-        fields = {"Ex": [], "Ey": [], "Ez": [], "Hx": [], "Hy": [], "Hz": []}
+        fields = {key: [] for key in ("Ex", "Ey", "Ez", "Hx", "Hy", "Hz")}
         for mode_index in range(self.mode_spec.num_modes):
             # Get E and H fields at the current mode_index
             ((Ex, Ey, Ez), (Hx, Hy, Hz)) = self._process_fields(solver_fields, mode_index)
@@ -436,7 +262,7 @@ class ModeSolver(Tidy3dBaseModel):
         return np.stack(self.plane.unpop_axis(f_z, (f_x, f_y), axis=self.normal_axis), axis=0)
 
     def _process_fields(
-        self, mode_fields: ArrayLike[complex, 4], mode_index: int
+        self, mode_fields: ArrayLike[complex, 4], mode_index: pydantic.NonNegativeInt
     ) -> Tuple[FIELD, FIELD]:
         """Transform solver fields to simulation axes, set gauge, and check decay at boundaries."""
 
@@ -461,7 +287,7 @@ class ModeSolver(Tidy3dBaseModel):
 
         return ((Ex, Ey, Ez), (Hx, Hy, Hz))
 
-    def _field_decay_warning(self, field_data: ModeFieldData):
+    def _field_decay_warning(self, field_data: ModeSolverData):
         """Warn if any of the modes do not decay at the edges."""
         _, plane_dims = self.plane.pop_axis(["x", "y", "z"], axis=self.normal_axis)
         field_sizes = field_data.Ex.sizes
@@ -491,7 +317,7 @@ class ModeSolver(Tidy3dBaseModel):
         self,
         source_time: SourceTime,
         direction: Direction,
-        mode_index: int = 0,
+        mode_index: pydantic.NonNegativeInt = 0,
     ) -> ModeSource:
         """Creates :class:`.ModeSource` from a :class:`.ModeSolver` instance plus additional
         specifications.
@@ -545,4 +371,87 @@ class ModeSolver(Tidy3dBaseModel):
             freqs=freqs,
             mode_spec=self.mode_spec,
             name=name,
+        )
+
+    def to_mode_solver_monitor(self, name: str) -> ModeSolverMonitor:
+        """Creates :class:`ModeSolverMonitor` from a :class:`.ModeSolver` instance.
+
+        Parameters
+        ----------
+        name : str
+            Name of the monitor.
+
+        Returns
+        -------
+        :class:`.ModeSolverMonitor`
+            Mode monitor with specifications taken from the ModeSolver instance and ``name``.
+        """
+        return ModeSolverMonitor(
+            size=self.plane.size,
+            center=self.plane.center,
+            mode_spec=self.mode_spec,
+            freqs=self.freqs,
+            name=name,
+        )
+
+    def plot_field(  # pylint:disable=too-many-arguments
+        self,
+        field_name: str,
+        val: Literal["real", "imag", "abs"] = "real",
+        eps_alpha: float = 0.2,
+        robust: bool = True,
+        vmin: float = None,
+        vmax: float = None,
+        ax: Ax = None,
+        **sel_kwargs,
+    ) -> Ax:
+        """Plot the field for a :class:`.ModeSolverData` with :class:`.Simulation` plot overlayed.
+
+        Parameters
+        ----------
+        field_name : str
+            Name of ``field`` component to plot (eg. ``'Ex'``).
+            Also accepts ``'int'`` to plot intensity.
+        val : Literal['real', 'imag', 'abs'] = 'real'
+            Which part of the field to plot.
+            If ``field_name == 'int'``, this has no effect.
+        eps_alpha : float = 0.2
+            Opacity of the structure permittivity.
+            Must be between 0 and 1 (inclusive).
+        robust : bool = True
+            If True and vmin or vmax are absent, uses the 2nd and 98th percentiles of the data
+            to compute the color limits. This helps in visualizing the field patterns especially
+            in the presence of a source.
+        vmin : float = None
+            The lower bound of data range that the colormap covers. If ``None``, they are
+            inferred from the data and other keyword arguments.
+        vmax : float = None
+            The upper bound of data range that the colormap covers. If ``None``, they are
+            inferred from the data and other keyword arguments.
+        ax : matplotlib.axes._subplots.Axes = None
+            matplotlib axes to plot on, if not specified, one is created.
+        sel_kwargs : keyword arguments used to perform ``.sel()`` selection in the monitor data.
+            These kwargs can select over the spatial dimensions (``x``, ``y``, ``z``),
+            frequency or time dimensions (``f``, ``t``) or `mode_index`, if applicable.
+            For the plotting to work appropriately, the resulting data after selection must contain
+            only two coordinates with len > 1.
+            Furthermore, these should be spatial coordinates (``x``, ``y``, or ``z``).
+
+        Returns
+        -------
+        matplotlib.axes._subplots.Axes
+            The supplied or created matplotlib axes.
+        """
+
+        sim_data = self.sim_data
+        sim_data.plot_field(
+            field_monitor_name=MODE_MONITOR_NAME,
+            field_name=field_name,
+            val=val,
+            eps_alpha=eps_alpha,
+            robust=robust,
+            vmin=vmin,
+            vmax=vmax,
+            ax=ax,
+            **sel_kwargs,
         )
