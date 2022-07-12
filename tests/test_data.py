@@ -151,7 +151,7 @@ def make_sim_data():
             y=np.linspace(-1, 1, 10),
             z=np.linspace(-1, 1, 10),
             f=[f0],
-            values=np.random.random((10, 10, 10, 1)),
+            values=np.random.random((10, 10, 10, 1)) * (1 + 1j),
         )
 
     fields = ["Ex", "Ey", "Ez", "Hx", "Hy", "Hz"]
