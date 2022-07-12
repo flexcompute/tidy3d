@@ -11,7 +11,7 @@ from typing_extensions import Literal
 from .component import UIComponent
 from .utils import PlotlyFig
 from ...components.data import FluxData, FluxTimeData, FieldData, FieldTimeData
-from ...components.data import ModeFieldData, ModeData, ScalarSpatialData
+from ...components.data import ModeSolverData, ModeData, ScalarFieldDataArray
 from ...components.geometry import Geometry
 from ...components.types import Axis, Direction
 from ...log import Tidy3dKeyError, log
@@ -24,15 +24,17 @@ PICOSECOND = 1e-12
 TERAHERTZ = 1e12
 
 # supported data types
-Tidy3dDataType = Union[FluxData, FluxTimeData, FieldData, FieldTimeData, ModeData, ModeFieldData]
+Tidy3dBaseModelType = Union[
+    FluxData, FluxTimeData, FieldData, FieldTimeData, ModeData, ModeSolverData
+]
 
 
 class DataPlotly(UIComponent, ABC):
     """Base class for anything that generates dash components from tidy3d data objects."""
 
     monitor_name: str = pd.Field(..., tite="monitor name", description="Name of the monitor.")
-    data: Tidy3dDataType = pd.Field(
-        ..., tite="data", description="The Tidy3dData object wrapped by this UI component."
+    data: Tidy3dBaseModelType = pd.Field(
+        ..., tite="data", description="The Tidy3dBaseModel object wrapped by this UI component."
     )
 
     @property
@@ -63,7 +65,9 @@ class DataPlotly(UIComponent, ABC):
         return {"type": f"{type(self.data).__name__}_{value}", "name": self.monitor_name}
 
     @classmethod
-    def from_monitor_data(cls, monitor_name: str, monitor_data: Tidy3dDataType, **kwargs) -> "cls":
+    def from_monitor_data(
+        cls, monitor_name: str, monitor_data: Tidy3dBaseModelType, **kwargs
+    ) -> "cls":
         """Load a PlotlyData UI component from the monitor name and its data."""
 
         # maps the supplied ``monitor_data`` argument to the corresponding plotly wrapper.
@@ -72,7 +76,7 @@ class DataPlotly(UIComponent, ABC):
             FluxTimeData: FluxTimeDataPlotly,
             FieldData: FieldDataPlotly,
             FieldTimeData: FieldTimeDataPlotly,
-            ModeFieldData: ModeFieldDataPlotly,
+            ModeSolverData: ModeSolverDataPlotly,
             ModeData: ModeDataPlotly,
         }
 
@@ -453,7 +457,7 @@ class AbstractFieldDataPlotly(DataPlotly, ABC):
         return field_vals[0]
 
     @property
-    def scalar_field_data(self) -> ScalarSpatialData:
+    def scalar_field_data(self) -> ScalarFieldDataArray:
         """The current scalar field monitor data."""
         if self.field_val is None:
             self.field_val = self.inital_field_val
@@ -751,10 +755,10 @@ class FieldTimeDataPlotly(AbstractFieldDataPlotly):
     )
 
 
-class ModeFieldDataPlotly(AbstractFieldDataPlotly):
-    """Plot :class:`.ModeFieldData` in app."""
+class ModeSolverDataPlotly(AbstractFieldDataPlotly):
+    """Plot :class:`.ModeSolverData` in app."""
 
-    data: ModeFieldData = pd.Field(
+    data: ModeSolverData = pd.Field(
         ...,
         title="data",
         description="A mode field object.",

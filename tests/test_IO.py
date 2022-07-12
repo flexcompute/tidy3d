@@ -35,6 +35,15 @@ def test_simulation_load_export_yaml():
 
 
 @clear_tmp
+def test_simulation_load_export_hdf5():
+
+    path = "tests/tmp/simulation.hdf5"
+    SIM.to_file(path)
+    SIM2 = Simulation.from_file(path)
+    assert SIM == SIM2, "original and loaded simulations are not the same"
+
+
+@clear_tmp
 def test_simulation_preserve_types():
     """This test also writes a simulation file to ``tests/sims/simulation_x_y_z.json`` to store
     an example of the current version. Updating all of these files is then checked in

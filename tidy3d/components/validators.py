@@ -150,3 +150,16 @@ def set_names(field_name: str):
         return val
 
     return set_unique_names
+
+
+def enforce_monitor_fields_present():
+    """Make sure all of the fields in the monitor are present in the correponding data."""
+
+    @pydantic.root_validator(skip_on_failure=True, allow_reuse=True)
+    def _contains_fields(cls, values):
+        """Make sure the initially specified fields are here."""
+        for field_name in values.get("monitor").fields:
+            assert values.get(field_name) is not None, f"missing field {field_name}"
+        return values
+
+    return _contains_fields

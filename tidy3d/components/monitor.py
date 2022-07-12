@@ -5,7 +5,7 @@ from typing import Union, Tuple
 import pydantic
 import numpy as np
 
-from .types import Literal, Ax, EMField, ArrayLike, Bound, FreqArray
+from .types import Ax, EMField, ArrayLike, Bound, FreqArray
 from .geometry import Box
 from .validators import assert_plane
 from .base import cached_property
@@ -260,8 +260,6 @@ class FieldMonitor(AbstractFieldMonitor, FreqMonitor):
     ...     name='steady_state_monitor')
     """
 
-    _data_type: Literal["FieldData"] = pydantic.Field("FieldData")
-
     def storage_size(self, num_cells: int, tmesh: ArrayLike[float, 1]) -> int:
         # stores 1 complex number per grid cell, per frequency, per field
         return BYTES_COMPLEX * num_cells * len(self.freqs) * len(self.fields)
@@ -348,8 +346,6 @@ class FieldTimeMonitor(AbstractFieldMonitor, TimeMonitor):
     ...     name='movie_monitor')
     """
 
-    _data_type: Literal["FieldTimeData"] = pydantic.Field("FieldTimeData")
-
     def storage_size(self, num_cells: int, tmesh: ArrayLike[float, 1]) -> int:
         # stores 1 real number per grid cell, per time step, per field
         num_steps = self.num_steps(tmesh)
@@ -371,8 +367,6 @@ class PermittivityMonitor(FreqMonitor):
     ...     name='eps_monitor')
     """
 
-    _data_type: Literal["PermittivityData"] = pydantic.Field("PermittivityData")
-
     def storage_size(self, num_cells: int, tmesh: ArrayLike[float, 1]) -> int:
         # stores 3 complex number per grid cell, per frequency
         return BYTES_COMPLEX * num_cells * len(self.freqs) * 3
@@ -389,8 +383,6 @@ class FluxMonitor(AbstractFluxMonitor, FreqMonitor):
     ...     freqs=[200e12, 210e12],
     ...     name='flux_monitor')
     """
-
-    _data_type: Literal["FluxData"] = pydantic.Field("FluxData")
 
     def storage_size(self, num_cells: int, tmesh: ArrayLike[float, 1]) -> int:
         # stores 1 real number per frequency
@@ -410,8 +402,6 @@ class FluxTimeMonitor(AbstractFluxMonitor, TimeMonitor):
     ...     interval=2,
     ...     name='flux_vs_time')
     """
-
-    _data_type: Literal["FluxTimeData"] = pydantic.Field("FluxTimeData")
 
     def storage_size(self, num_cells: int, tmesh: ArrayLike[float, 1]) -> int:
         # stores 1 real number per time tep
@@ -433,29 +423,25 @@ class ModeMonitor(AbstractModeMonitor):
     ...     name='mode_monitor')
     """
 
-    _data_type: Literal["ModeData"] = pydantic.Field("ModeData")
-
     def storage_size(self, num_cells: int, tmesh: int) -> int:
         # stores 3 complex numbers per frequency, per mode.
         return 3 * BYTES_COMPLEX * len(self.freqs) * self.mode_spec.num_modes
 
 
-class ModeFieldMonitor(AbstractModeMonitor):
+class ModeSolverMonitor(AbstractModeMonitor):
     """:class:`Monitor` that stores the mode field profiles returned by the mode solver in the
     monitor plane.
 
     Example
     -------
     >>> mode_spec = ModeSpec(num_modes=3)
-    >>> monitor = ModeFieldMonitor(
+    >>> monitor = ModeSolverMonitor(
     ...     center=(1,2,3),
     ...     size=(2,2,0),
     ...     freqs=[200e12, 210e12],
     ...     mode_spec=mode_spec,
     ...     name='mode_monitor')
     """
-
-    _data_type: Literal["ModeFieldData"] = pydantic.Field("ModeFieldData")
 
     def storage_size(self, num_cells: int, tmesh: int) -> int:
         return 6 * BYTES_COMPLEX * num_cells * len(self.freqs) * self.mode_spec.num_modes
@@ -469,5 +455,5 @@ MonitorType = Union[
     FluxMonitor,
     FluxTimeMonitor,
     ModeMonitor,
-    ModeFieldMonitor,
+    ModeSolverMonitor,
 ]

@@ -82,7 +82,7 @@ class TypedArrayLike(np.ndarray):
         """Converts a nested list of lists into a list of tuples."""
         return (
             tuple(cls.make_tuple(x) for x in v)
-            if type(v) is list  # pylint:disable=unidiomatic-typecheck
+            if isinstance(v, list)
             else cls.inner_type(v)  # pylint:disable=no-member
         )
 
@@ -174,6 +174,22 @@ class tidycomplex(complex):  # pylint: disable=invalid-name
     def __modify_schema__(cls, field_schema):
         """Sets the schema of ComplexNumber."""
         field_schema.update(ComplexNumber.schema())
+
+
+""" Data """
+
+
+class DataObject(pydantic.BaseModel):
+    """An object used in tidy3d model that subclasses xr.DataArray."""
+
+    data_dict: dict
+    data_type: type
+
+    @property
+    def as_data_array(self):
+        """return DataArray respresentation of this DataObject."""
+        # is this used?
+        return self.data_type.from_dict(self.data_dict)
 
 
 """ geometric """
