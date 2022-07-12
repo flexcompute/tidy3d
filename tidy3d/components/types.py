@@ -38,20 +38,12 @@ class TypedArray(np.ndarray):
     @classmethod
     def __get_validators__(cls):
         """boilerplate"""
-        yield cls.validate_type
+        yield cls.validate_to_numpy
 
     @classmethod
-    def validate_type(cls, val):
-        """validator"""
-        # need to fix, doesnt work for simulationdata_export and load?
-        if isinstance(val, np.ndarray):
-
-            ret_val = val.astype(cls.inner_type)  # pylint: disable=no-member
-            if np.any(ret_val != val):
-                raise ValidationError("wrong type supplied to ArrayLike")
-
-            return ret_val
-        return np.array(val, dtype=cls.inner_type)  # pylint: disable=no-member
+    def validate_to_numpy(cls, val):
+        """convert to numpy array"""
+        return np.array(val)
 
     @classmethod
     def __modify_schema__(cls, field_schema):
