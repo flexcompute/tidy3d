@@ -578,6 +578,14 @@ class FluxTimeData(MonitorData):
     flux: FluxTimeDataArray
 
 
-MonitorDataType = Union[
-    FieldData, FieldTimeData, PermittivityData, ModeSolverData, ModeData, FluxData, FluxTimeData
-]
+MonitorDataTypes = (
+    FieldData,
+    FieldTimeData,
+    PermittivityData,
+    ModeSolverData,
+    ModeData,
+    FluxData,
+    FluxTimeData,
+)
+MonitorDataType = Union[MonitorDataTypes]
+DATA_TYPE_MAP = {data.__fields__["monitor"].type_: data for data in MonitorDataTypes}

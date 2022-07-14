@@ -40,7 +40,7 @@ from .data import FluxData, FluxTimeData
 from .data import ModeData, ModeSolverData
 
 from .data import SimulationData
-
+from .data import DATA_TYPE_MAP
 
 # boundary
 from .boundary import BoundarySpec, Boundary, BoundaryEdge, BoundaryEdgeType
