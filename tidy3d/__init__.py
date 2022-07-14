@@ -47,6 +47,7 @@ from .components import FieldData, FieldTimeData, PermittivityData
 from .components import FluxData, FluxTimeData
 from .components import ModeData, ModeSolverData
 from .components import SimulationData
+from .components import DATA_TYPE_MAP
 
 # boundary
 from .components import BoundarySpec, Boundary, BoundaryEdge, BoundaryEdgeType
