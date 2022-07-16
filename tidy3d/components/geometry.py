@@ -2125,8 +2125,12 @@ class GeometryGroup(Geometry):
         rmins = (bound[0] for bound in bounds)
         rmaxs = (bound[1] for bound in bounds)
 
-        rmin = functools.reduce(min, rmins)
-        rmax = functools.reduce(max, rmaxs)
+        rmin = functools.reduce(
+            lambda x, y: (min(x[0], y[0]), min(x[1], y[1]), min(x[2], y[2])), rmins
+        )
+        rmax = functools.reduce(
+            lambda x, y: (max(x[0], y[0]), max(x[1], y[1]), max(x[2], y[2])), rmaxs
+        )
 
         return rmin, rmax
 
