@@ -119,8 +119,10 @@ class GradedMesher(Mesher):
             query_inds = tree.query_items(bbox_2d)
 
             # Remove all lower structures that the current structure completely contains
-            inds_lower = [ind for ind in query_inds if ind < str_ind]
-            query_bbox = [struct_bbox[ind] for ind in inds_lower if struct_bbox[ind] is not None]
+            inds_lower = [
+                ind for ind in query_inds if ind < str_ind and struct_bbox[ind] is not None
+            ]
+            query_bbox = [struct_bbox[ind] for ind in inds_lower]
             bbox_contains_inds = self.contains_3d(bbox, query_bbox)
             for ind in bbox_contains_inds:
                 struct_bbox[inds_lower[ind]] = None
