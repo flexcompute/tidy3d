@@ -18,7 +18,7 @@ Work with Tidy3d Components
    * - Get help related to a Tidy3d object (``obj``)?
      - ``obj.help()`` or ``help(Obj)`` if ``Obj`` is the class name (eg. ``help(td.Box)``).
    * - Save and load any Tidy3d object?
-     - If the object ``obj`` is an instance of ``ObjClass``, save and load with ``obj.to_file(path='fname/to/file.json')`` and ``obj = ObjClass.from_file(fname='path/to/file.json')``, respectively.
+     - If the object ``obj`` is an instance of ``ObjClass``, save and load with ``obj.to_file(fname='path/to/file.json')`` and ``obj = ObjClass.from_file(fname='path/to/file.json')``, respectively.
    * - Get all data in a Tidy3d object as a dictionary.
      - ``obj.dict()``.
 
