@@ -326,6 +326,40 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         return value
 
     @classmethod
+    def load_from_handle(cls, hdf5_group: h5py.Group, **kwargs) -> "Self":
+        """Loads an instance of the class from an hdf5 group,
+
+        Parameters
+        ----------
+        hdf5_group : h5py.Group
+            The hdf5 group containing data correponding to the ``dict()`` of the object.
+        kwargs : dict
+            Keyword arguments passed to ``pydantic.BaseModel.parse_obj``
+
+        Returns
+        -------
+        Tidy3dBaseModel
+        """
+        data_dict = cls._load_group_data(data_dict={}, hdf5_group=hdf5_group)
+        return cls.parse_obj(data_dict, **kwargs)
+
+    @classmethod
+    def _load_group_data(cls, data_dict: dict, hdf5_group: h5py.Group) -> dict:
+        """Recusively load the data from the group with dataset unpacking as base case."""
+
+        for key, value in hdf5_group.items():
+
+            # recurive case, try to load the group into data_dict[key]
+            if isinstance(value, h5py.Group):
+                data_dict[key] = cls._load_group_data(data_dict={}, hdf5_group=value)
+
+            # base case, unpack the value in the dataset
+            elif isinstance(value, h5py.Dataset):
+                data_dict[key] = cls.unpack_dataset(value)
+
+        return data_dict
+
+    @classmethod
     def hdf5_to_dict(cls, fname: str) -> dict:
         """Load an hdf5 file into a dictionary storing its unpacked contents.
 
@@ -340,24 +374,9 @@ class Tidy3dBaseModel(pydantic.BaseModel):
             The dictionary containing all group names as keys and datasets as values.
         """
 
-        def _load_group_data(hdf5_group: h5py.Group, data_dict: dict) -> dict:
-            """Recusively load the data from the group with dataset unpacking as base case."""
-
-            for key, value in hdf5_group.items():
-
-                # recurive case, try to load the group into data_dict[key]
-                if isinstance(value, h5py.Group):
-                    data_dict[key] = _load_group_data(value, {})
-
-                # base case, unpack the value in the dataset
-                elif isinstance(value, h5py.Dataset):
-                    data_dict[key] = cls.unpack_dataset(value)
-
-            return data_dict
-
         # open the file and load its data recursively into a dictionary
         with h5py.File(fname, "r") as f:
-            return _load_group_data(f, {})
+            return cls._load_group_data(data_dict={}, hdf5_group=f)
 
     @staticmethod
     def pack_dataset(hdf5_group: h5py.Group, key: str, value: Any) -> None:
@@ -380,6 +399,37 @@ class Tidy3dBaseModel(pydantic.BaseModel):
             dataset = hdf5_group.create_dataset(name=key, data=np.string_(yaml.safe_dump(value)))
             dataset.attrs.create(name=TYPE_ID_HDF5, data=np.string_("yaml"))
 
+    def add_to_handle(self, hdf5_group: h5py.Group) -> None:
+        """Saves a :class:`.Tidy3dBaesModel` instance to an hdf5 group,
+
+        Parameters
+        ----------
+        hdf5_group : h5py.Group
+            The hdf5 group containing data correponding to the ``dict()`` of the object.
+        """
+        self_dict = self.dict()
+        self._save_group_data(data_dict=self_dict, hdf5_group=hdf5_group)
+
+    def _save_group_data(self, data_dict: dict, hdf5_group: h5py.Group) -> None:
+        """Recursively save the data to a group with a non-dict data as base case."""
+
+        for key, value in data_dict.items():
+
+            # if tuple as key, combine into a single string
+            if isinstance(key, tuple):
+                key = "_".join((str(i) for i in key))
+            if isinstance(value, xr.DataArray):
+                value = value.to_dict()
+
+            # if dictionary as item in dict, create subgroup and recurse
+            if isinstance(value, dict):
+                hdf5_subgroup = hdf5_group.create_group(key)
+                self._save_group_data(data_dict=value, hdf5_group=hdf5_subgroup)
+
+            # otherwise (actual data), just encode it and save it to the group as a dataset
+            else:
+                self.pack_dataset(hdf5_group=hdf5_group, key=key, value=value)
+
     def dump_hdf5(self, data_dict: dict, fname: str) -> None:
         """Writes a dictionary of data into an hdf5 file.
 
@@ -391,30 +441,9 @@ class Tidy3dBaseModel(pydantic.BaseModel):
             path to the .hdf5 file.
         """
 
-        def _save_group_data(data_dict: dict, hdf5_group: h5py.Group) -> None:
-            """Recursively save the data to a group with a non-dict data as base case."""
-
-            for key, value in data_dict.items():
-
-                # if tuple as key, combine into a single string
-                if isinstance(key, tuple):
-                    key = "_".join((str(i) for i in key))
-                if isinstance(value, xr.DataArray):
-                    value = value.to_dict()
-                #     import pdb; pdb.set_trace()
-
-                # if dictionary as item in dict, create subgroup and recurse
-                if isinstance(value, dict):
-                    hdf5_subgroup = hdf5_group.create_group(key)
-                    _save_group_data(value, hdf5_subgroup)
-
-                # otherwise (actual data), just encode it and save it to the group as a dataset
-                else:
-                    self.pack_dataset(hdf5_group, key, value)
-
         # open the file and write to it recursively
         with h5py.File(fname, "w") as f:
-            _save_group_data(data_dict, f)
+            self._save_group_data(data_dict=data_dict, hdf5_group=f)
 
     """End hdfdict modification
     ============================================================================================="""
