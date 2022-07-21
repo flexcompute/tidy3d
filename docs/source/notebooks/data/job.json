@@ -1,12 +1,12 @@
 {
     "type": "Job",
     "simulation": {
+        "type": "Simulation",
         "center": [
             0.0,
             0.0,
             0.0
         ],
-        "type": "Simulation",
         "size": [
             4.0,
             4.0,
@@ -29,12 +29,12 @@
         "structures": [
             {
                 "geometry": {
+                    "type": "Box",
                     "center": [
                         0.0,
                         0.0,
                         0.0
                     ],
-                    "type": "Box",
                     "size": [
                         1.5,
                         1.5,
@@ -54,12 +54,12 @@
         ],
         "sources": [
             {
+                "type": "UniformCurrentSource",
                 "center": [
                     -1.5,
                     0.0,
                     0.0
                 ],
-                "type": "UniformCurrentSource",
                 "size": [
                     0.0,
                     0.4,
@@ -193,12 +193,12 @@
         },
         "monitors": [
             {
+                "type": "FieldMonitor",
                 "center": [
                     0.0,
                     0.0,
                     0.0
                 ],
-                "type": "FieldMonitor",
                 "size": [
                     "Infinity",
                     "Infinity",
@@ -241,10 +241,10 @@
         "shutoff": 1e-05,
         "subpixel": true,
         "courant": 0.9,
-        "version": "1.4.1"
+        "version": "1.5.0"
     },
     "task_name": "job",
     "folder_name": "default",
     "callback_url": null,
-    "task_id": "c04c3593-1358-41c7-ba5e-9f50e4de122e"
+    "task_id": "ddb629c8-a36e-426d-8404-6d3ed8ee7736"
 }
