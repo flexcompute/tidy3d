@@ -11,7 +11,8 @@ from .base import Tidy3dBaseModel, cached_property
 from .types import PoleAndResidue, Ax, FreqBound
 from .viz import add_ax_if_none
 from .validators import validate_name_str
-from ..constants import C_0, pec_val, EPSILON_0, HERTZ, CONDUCTIVITY, PERMITTIVITY
+from ..constants import C_0, pec_val, EPSILON_0
+from ..constants import HERTZ, CONDUCTIVITY, PERMITTIVITY, RADPERSEC, MICROMETER, SECOND
 from ..log import log, ValidationError
 
 # evaluate frequency as this number (Hz) if inf
@@ -59,7 +60,7 @@ class AbstractMedium(ABC, Tidy3dBaseModel):
         None,
         title="Frequency Range",
         description="Optional range of validity for the medium.",
-        units=HERTZ,
+        units=(HERTZ, HERTZ),
     )
 
     _name_validator = validate_name_str()
@@ -409,12 +410,14 @@ class PoleResidue(DispersiveMedium):
         1.0,
         title="Epsilon at Infinity",
         description="Relative permittivity at infinite frequency (:math:`\\epsilon_\\infty`).",
+        units=PERMITTIVITY,
     )
 
     poles: Tuple[PoleAndResidue, ...] = pd.Field(
         (),
         title="Poles",
         description="Tuple of complex-valued (:math:`a_i, c_i`) poles for the model.",
+        units=(RADPERSEC, RADPERSEC),
     )
 
     @ensure_freq_in_range
@@ -468,7 +471,8 @@ class Sellmeier(DispersiveMedium):
 
     coeffs: Tuple[Tuple[float, pd.PositiveFloat], ...] = pd.Field(
         title="Coefficients",
-        description="List of Sellmeier (:math:`B_i, C_i`) coefficients (unitless, microns^2).",
+        description="List of Sellmeier (:math:`B_i, C_i`) coefficients.",
+        units=(None, MICROMETER + "^2"),
     )
 
     def _n_model(self, frequency: float) -> complex:
@@ -562,12 +566,14 @@ class Lorentz(DispersiveMedium):
         1.0,
         title="Epsilon at Infinity",
         description="Relative permittivity at infinite frequency (:math:`\\epsilon_\\infty`).",
+        units=PERMITTIVITY,
     )
 
     coeffs: Tuple[Tuple[float, float, float], ...] = pd.Field(
         ...,
         title="Epsilon at Infinity",
-        description="List of (:math:`\\Delta\\epsilon_i, f_i, \\delta_i`) values for model (Hz).",
+        description="List of (:math:`\\Delta\\epsilon_i, f_i, \\delta_i`) values for model.",
+        units=(PERMITTIVITY, HERTZ, HERTZ),
     )
 
     @ensure_freq_in_range
@@ -631,12 +637,14 @@ class Drude(DispersiveMedium):
         1.0,
         title="Epsilon at Infinity",
         description="Relative permittivity at infinite frequency (:math:`\\epsilon_\\infty`).",
+        units=PERMITTIVITY,
     )
 
     coeffs: Tuple[Tuple[float, pd.PositiveFloat], ...] = pd.Field(
         ...,
         title="Coefficients",
-        description="List of (:math:`f_i, \\delta_i`) values for model (Hz).",
+        description="List of (:math:`f_i, \\delta_i`) values for model.",
+        units=(HERTZ, HERTZ),
     )
 
     @ensure_freq_in_range
@@ -694,12 +702,14 @@ class Debye(DispersiveMedium):
         1.0,
         title="Epsilon at Infinity",
         description="Relative permittivity at infinite frequency (:math:`\\epsilon_\\infty`).",
+        units=PERMITTIVITY,
     )
 
     coeffs: Tuple[Tuple[float, pd.PositiveFloat], ...] = pd.Field(
         ...,
         title="Coefficients",
-        description="List of (:math:`\\Delta\\epsilon_i, \\tau_i`) values for model (Hz, sec).",
+        description="List of (:math:`\\Delta\\epsilon_i, \\tau_i`) values for model.",
+        units=(PERMITTIVITY, SECOND),
     )
 
     @ensure_freq_in_range
