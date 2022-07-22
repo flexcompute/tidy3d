@@ -317,7 +317,16 @@ class Tidy3dBaseModel(pydantic.BaseModel):
             # add units (if present)
             units = field_info.extra.get("units")
             if units is not None:
-                doc += f"[units = {units}].  "
+                if isinstance(units, (tuple, list)):
+                    unitstr = "("
+                    for unit in units:
+                        unitstr += str(unit)
+                        unitstr += ", "
+                    unitstr = unitstr[:-2]
+                    unitstr += ")"
+                else:
+                    unitstr = units
+                doc += f"[units = {unitstr}].  "
 
             # add description
             description_str = field_info.description
