@@ -21,7 +21,8 @@ from .boundary import BoundarySpec, Symmetry, BlochBoundary, PECBoundary, PMCBou
 from .boundary import PML, StablePML, Absorber
 from .structure import Structure
 from .source import SourceType, PlaneWave, GaussianBeam, AstigmaticGaussianBeam
-from .monitor import MonitorType, Monitor, FreqMonitor, AbstractFieldMonitor, Near2FarMonitor
+from .monitor import MonitorType, Monitor, FreqMonitor, AbstractFieldMonitor
+from .monitor import Near2FarAngleMonitor, Near2FarKSpaceMonitor, Near2FarCartesianMonitor
 from .viz import add_ax_if_none, equal_aspect
 
 from .viz import MEDIUM_CMAP, PlotParams, plot_params_symmetry
@@ -432,7 +433,9 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         sim_center = values.get("center")
 
         for monitor in val:
-            if not isinstance(monitor, Near2FarMonitor):
+            if not isinstance(
+                monitor, (Near2FarAngleMonitor, Near2FarKSpaceMonitor, Near2FarCartesianMonitor)
+                ):
                 continue
             bounds_min, _ = monitor.bounds
             for dim, sym in enumerate(values.get("symmetry")):

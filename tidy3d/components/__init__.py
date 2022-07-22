@@ -23,9 +23,9 @@ from .source import UniformCurrentSource, PlaneWave, ModeSource, PointDipole
 from .source import GaussianBeam, AstigmaticGaussianBeam
 
 # monitor
-from .monitor import FreqMonitor, TimeMonitor, FieldMonitor, FieldTimeMonitor
-from .monitor import Monitor, FluxMonitor, FluxTimeMonitor, ModeMonitor
-from .monitor import ModeFieldMonitor, PermittivityMonitor, Near2FarMonitor
+from .monitor import FreqMonitor, TimeMonitor, FieldMonitor, FieldTimeMonitor, ModeFieldMonitor
+from .monitor import Monitor, FluxMonitor, FluxTimeMonitor, ModeMonitor, PermittivityMonitor
+from .monitor import Near2FarAngleMonitor, Near2FarKSpaceMonitor, Near2FarCartesianMonitor
 
 # simulation
 from .simulation import Simulation

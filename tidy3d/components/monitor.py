@@ -499,7 +499,7 @@ class Near2FarAngleMonitor(AbstractNear2FarMonitor):
     ...     )
     """
 
-    _data_type: Literal["Near2FarAngleData"] = pydantic.Field("Near2FarAngleData")
+    _data_type: Literal["Near2FarData"] = pydantic.Field("Near2FarData")
 
     theta: Tuple[float, ...] = pydantic.Field(
         ...,
@@ -539,7 +539,7 @@ class Near2FarKSpaceMonitor(AbstractNear2FarMonitor):
     ...     )
     """
 
-    _data_type: Literal["Near2FarKSpaceData"] = pydantic.Field("Near2FarKSpaceData")
+    _data_type: Literal["Near2FarData"] = pydantic.Field("Near2FarData")
 
     u_axis: Axis = pydantic.Field(
         ...,
@@ -571,7 +571,7 @@ class Near2FarKSpaceMonitor(AbstractNear2FarMonitor):
 
 class Near2FarCartesianMonitor(AbstractNear2FarMonitor):
     """:class:`Monitor` that samples electromagnetic near fields in the frequency domain
-       and invokes the computation of far fields at predefined angles.
+       and invokes the computation of far fields on a Cartesian observation plane.
 
     Example
     -------
@@ -587,33 +587,44 @@ class Near2FarCartesianMonitor(AbstractNear2FarMonitor):
     ...     )
     """
 
-    _data_type: Literal["Near2FarCartesianData"] = pydantic.Field("Near2FarCartesianData")
+    _data_type: Literal["Near2FarData"] = pydantic.Field("Near2FarData")
+
+    plane_axis: Axis = pydantic.Field(
+        ...,
+        title="Observation plane axis",
+        description="Axis along which the observation plane is oriented.",
+    )
+
+    plane_distance: Axis = pydantic.Field(
+        ...,
+        title="Observation plane distance",
+        description="Observation plane distance along ``plane_axis`` w.r.t. ``local_origin``",
+    )
 
     x: Tuple[float, ...] = pydantic.Field(
         ...,
-        title="x coordinates",
-        description="x coordinates relative to ``local_origin`` at which to compute far fields.",
+        title="Local x observation coordinates",
+        description="Local x observation coordinates w.r.t. ``local_origin`` and ``plane_axis``. "
+        "When ``plane_axis`` is 0, this corresponds to the global y axis. "
+        "When ``plane_axis`` is 1, this corresponds to the global x axis. "
+        "When ``plane_axis`` is 2, this corresponds to the global x axis. ",
         units=MICROMETER,
     )
 
     y: Tuple[float, ...] = pydantic.Field(
         ...,
-        title="y coordinates",
-        description="y coordinates relative to ``local_origin`` at which to compute far fields.",
-        units=MICROMETER,
-    )
-
-    z: Tuple[float, ...] = pydantic.Field(
-        ...,
-        title="z coordinates",
-        description="z coordinates relative to ``local_origin`` at which to compute far fields.",
+        title="Local y observation coordinates",
+        description="Local y observation coordinates w.r.t. ``local_origin`` and ``plane_axis``. "
+        "When ``plane_axis`` is 0, this corresponds to the global z axis. "
+        "When ``plane_axis`` is 1, this corresponds to the global z axis. "
+        "When ``plane_axis`` is 2, this corresponds to the global y axis. ",
         units=MICROMETER,
     )
 
     def storage_size(self, num_cells: int, tmesh: ArrayLike[float, 1]) -> int:
         # stores 1 complex number per pair of angles, per frequency,
         # for N_theta, N_phi, L_theta, and L_phi (4 components)
-        return BYTES_COMPLEX * len(self.x) * len(self.y) * len(self.z) * len(self.freqs) * 4
+        return BYTES_COMPLEX * len(self.x) * len(self.y) * len(self.freqs) * 4
 
 
 # types of monitors that are accepted by simulation

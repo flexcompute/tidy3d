@@ -34,7 +34,8 @@ from .components import GaussianBeam, AstigmaticGaussianBeam
 
 # monitors
 from .components import FieldMonitor, FieldTimeMonitor, FluxMonitor, FluxTimeMonitor
-from .components import ModeMonitor, ModeFieldMonitor, PermittivityMonitor, Near2FarMonitor
+from .components import ModeMonitor, ModeFieldMonitor, PermittivityMonitor
+from .components import Near2FarAngleMonitor, Near2FarKSpaceMonitor, Near2FarCartesianMonitor
 
 # simulation
 from .components import Simulation
