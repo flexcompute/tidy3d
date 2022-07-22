@@ -33,6 +33,8 @@ class ScalarFieldTimeDataArray(DataArray):
 
 Defines a scalar field in the time-domain, which must have coordinates with keys `"x"`, `"y"`, `"z"`, and `"t"` and we've given the values a long name for plotting purposes.  `__slots__` is just a way to hardcode the dims in `xarray`, so we use it instead of `dims`.
 
+We construct a `DataArray` by supplying the raw values (multi-dimensional array) as the first `*arg` and then coords as a dict `**kwarg`, ie. `flux = FluxDataArray(values, coords={'f': 4e14})`. This construction something that needs to change often in the backend.
+
 The naming convention for `DataArray` objects is to append `DataArray` to their name, ie. "`FluxDataArray`.
 
 TLDR: We use these `DataArray` instances primarily as a template for how to define the various xarray data that gets put in the monitor data described below.
@@ -58,6 +60,8 @@ class FieldTimeData(ElectromagneticFieldData):
 ```
 
 The naming convention for `MonitorData` objects is to replace `Monitor` with `Data` in the monitor name, eg. "`FluxTimeMonitor`" becomes "`FluxTimeData`".
+
+Final note: data for a `FluxMonitor` and `FluxTimeMonitor` are loaded in `FluxData` and `FluxTimeData` instances, respectively. However, these classes contain a single `.flux` field that is a `FluxDataArray` and `FluxTimeDataArray`, respecitvely.  So to access the raw flux data for a monitor, one must do `flux_data.flux` instead of the data being stored directly.  This is a change that comes up a lot in the backend.
 
 #### Normalization
 
