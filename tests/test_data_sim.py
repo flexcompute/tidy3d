@@ -49,6 +49,26 @@ def test_apply_symmetry():
         _ = sim_data.apply_symmetry(monitor_data)
 
 
+def test_apply_symmetry2():
+    sim_data = make_sim_data()
+    eps_raw = sim_data.monitor_data["permittivity"]
+    shape_raw = eps_raw.eps_xx.shape
+
+    eps_ret = sim_data["permittivity"]
+    shape_ret = eps_ret.eps_xx.shape
+    assert shape_raw != shape_ret
+
+
+def test_apply_symmetry3():
+    sim_data = make_sim_data()
+    eps_raw = sim_data.monitor_data["field"]
+    shape_raw = eps_raw.Ex.shape
+
+    eps_ret = sim_data["field"]
+    shape_ret = eps_ret.Ex.shape
+    assert shape_raw != shape_ret
+
+
 def test_normalize():
     sim_data = make_sim_data()
     for monitor_data in sim_data.monitor_data.values():

@@ -439,7 +439,7 @@ class ModeSolverData(ElectromagneticFieldData):
         return FieldData(monitor=field_monitor, **fields)
 
 
-class PermittivityData(MonitorData):
+class PermittivityData(AbstractFieldData):
     """Data for a :class:`.PermittivityMonitor`: diagonal components of the permittivity tensor.
 
     Example
@@ -469,7 +469,11 @@ class PermittivityData(MonitorData):
     @property
     def symmetry_eigenvalues(self) -> Dict[str, Callable[[Axis], float]]:
         """Maps field components to their grid locations on the yee lattice."""
-        return lambda dim: 1.0
+
+        def return_1(dim):  # pylint: disable=unused-argument
+            return 1.0
+
+        return dict(eps_xx=return_1, eps_yy=return_1, eps_zz=return_1)
 
     eps_xx: ScalarFieldDataArray = pd.Field(
         ...,
