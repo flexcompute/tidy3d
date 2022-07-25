@@ -119,8 +119,10 @@ class GradedMesher(Mesher):
             query_inds = tree.query_items(bbox_2d)
 
             # Remove all lower structures that the current structure completely contains
-            inds_lower = [ind for ind in query_inds if ind < str_ind]
-            query_bbox = [struct_bbox[ind] for ind in inds_lower if struct_bbox[ind] is not None]
+            inds_lower = [
+                ind for ind in query_inds if ind < str_ind and struct_bbox[ind] is not None
+            ]
+            query_bbox = [struct_bbox[ind] for ind in inds_lower]
             bbox_contains_inds = self.contains_3d(bbox, query_bbox)
             for ind in bbox_contains_inds:
                 struct_bbox[inds_lower[ind]] = None
@@ -310,10 +312,10 @@ class GradedMesher(Mesher):
             for bbox in query_bbox
             if all(
                 [
-                    bbox0[0, 0] >= bbox[0, 0],
-                    bbox0[1, 0] <= bbox[1, 0],
-                    bbox0[0, 1] >= bbox[0, 1],
-                    bbox0[1, 1] <= bbox[1, 1],
+                    bbox0[0, 0] + fp_eps >= bbox[0, 0],
+                    bbox0[1, 0] <= bbox[1, 0] + fp_eps,
+                    bbox0[0, 1] + fp_eps >= bbox[0, 1],
+                    bbox0[1, 1] <= bbox[1, 1] + fp_eps,
                 ]
             )
         ]
@@ -327,12 +329,12 @@ class GradedMesher(Mesher):
             for ind, bbox in enumerate(query_bbox)
             if all(
                 [
-                    bbox[0, 0] >= bbox0[0, 0],
-                    bbox[1, 0] <= bbox0[1, 0],
-                    bbox[0, 1] >= bbox0[0, 1],
-                    bbox[1, 1] <= bbox0[1, 1],
-                    bbox[0, 2] >= bbox0[0, 2],
-                    bbox[1, 2] <= bbox0[1, 2],
+                    bbox[0, 0] + fp_eps >= bbox0[0, 0],
+                    bbox[1, 0] <= bbox0[1, 0] + fp_eps,
+                    bbox[0, 1] + fp_eps >= bbox0[0, 1],
+                    bbox[1, 1] <= bbox0[1, 1] + fp_eps,
+                    bbox[0, 2] + fp_eps >= bbox0[0, 2],
+                    bbox[1, 2] <= bbox0[1, 2] + fp_eps,
                 ]
             )
         ]

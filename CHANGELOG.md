@@ -7,18 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-## [1.5.0] - 2022-7-7
+## [1.5.0] - 2022-7-21
+
+### Fixed
+- Bug in computing the `bounds` of `GeometryGroup`.
+- Bug in auto-mesh generation.
 
 ### Changed
-
- - All Tidy3D components apart from data structures are now fully immutable.
- - Stopped support for python 3.6, improved support for python 3.10.
- - Web material fitter for lossless input data (no `k` data provided) will now return a lossless medium.
- - `sort_by` changed to `filter_pol` in `ModeSpec`.
- - `center` no longer a field of all `Geometry` components, instead only present when needed, 
+- All Tidy3D components apart from data structures are now fully immutable.
+- Stopped support for python 3.6, improved support for python 3.10.
+- Web material fitter for lossless input data (no `k` data provided) will now return a lossless medium.
+- `sort_by` changed to `filter_pol` in `ModeSpec`.
+- `center` no longer a field of all `Geometry` components, instead only present when needed, 
  removed in `PolySlab` and `GeometryGroup`. `Planar` geometries no longer have a mandatory `length` field, but 
  have `center_axis` and `lengt_axis` properties for the center and length along the extrusion axis. `PolySlab` now defined exclusively through `slab_bounds`, 
  while `Cylinder` through `center` and `length`.
+- In mode solver, allow precision to switch between double and single precision.
+
 
 ## [1.4.1] - 2022-6-13
 

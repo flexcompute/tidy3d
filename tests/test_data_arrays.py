@@ -15,6 +15,7 @@ from tidy3d.components.monitor import FieldMonitor, FieldTimeMonitor, Permittivi
 from tidy3d.components.monitor import ModeSolverMonitor, ModeMonitor
 from tidy3d.components.monitor import FluxMonitor, FluxTimeMonitor
 from tidy3d.components.monitor import MonitorType
+<<<<<<< HEAD
 from tidy3d.components.structure import Structure
 from tidy3d.components.geometry import Box
 from tidy3d.material_library import material_library
@@ -67,7 +68,10 @@ SIM = Simulation(
     symmetry=(1, -1, 1),
     sources=SOURCES,
     monitors=MONITORS,
+<<<<<<< HEAD
     structures=STRUCTURES,
+=======
+>>>>>>> eb4c06980f17701d9c7cb82c09e7c7215795098a
 )
 
 FS = np.linspace(1e14, 2e14, 11)
