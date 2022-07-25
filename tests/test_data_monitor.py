@@ -127,21 +127,21 @@ def test_flux_time_data():
 
 
 def test_colocate():
-
+    # TODO: can we colocate into regions where we dont store fields due to symmetry?
     # regular colocate
     data = make_field_data()
-    _ = data.colocate(x=[-0.5, 0.5], y=[-0.5, 0.5], z=[-0.5, 0.5])
+    _ = data.colocate(x=[+0.1, 0.5], y=[+0.1, 0.5], z=[+0.1, 0.5])
 
     # ignore coordinate
-    _ = data.colocate(x=[-0.5, 0.5], y=None, z=[-0.5, 0.5])
+    _ = data.colocate(x=[+0.1, 0.5], y=None, z=[+0.1, 0.5])
 
     # data outside range of len(coord)==1 dimension
     data = make_mode_solver_data()
     with pytest.raises(DataError):
-        _ = data.colocate(x=[-0.5, 0.5], y=1.0, z=[-0.5, 0.5])
+        _ = data.colocate(x=[+0.1, 0.5], y=1.0, z=[+0.1, 0.5])
 
     with pytest.raises(DataError):
-        _ = data.colocate(x=[-0.5, 0.5], y=[1.0, 2.0], z=[-0.5, 0.5])
+        _ = data.colocate(x=[+0.1, 0.5], y=[1.0, 2.0], z=[+0.1, 0.5])
 
 
 def test_sel_mode_index():

@@ -181,6 +181,7 @@ class SimulationData(Tidy3dBaseModel):
 
         # get the data
         monitor_data = self.load_field_monitor(field_monitor_name)
+        monitor_data = self.apply_symmetry(monitor_data)
 
         # get the monitor, discretize, and get center locations
         monitor = monitor_data.monitor

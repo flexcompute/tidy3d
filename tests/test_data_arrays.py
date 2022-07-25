@@ -194,3 +194,8 @@ def test_ops():
     data1.data[0] = 1e12
     assert not np.all(data1 == data2), "different data are equal"
     assert not np.all(data1 == data3), "different data are equal"
+
+
+def test_empty_field_time():
+    data = ScalarFieldTimeDataArray(np.array([]), coords=dict(x=[], y=[], z=[], t=[]))
+    data = ScalarFieldTimeDataArray([], coords=dict(x=[], y=[], z=[], t=[]))

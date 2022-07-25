@@ -52,6 +52,11 @@ class DataArray(xr.DataArray):
         if (not kwargs.get("fastpath")) and ("attrs" not in kwargs) and (self._data_attrs):
             kwargs["attrs"] = self._data_attrs
 
+        # dont feed data values if there is no data
+        data_values, *other_args = args
+        if np.array(data_values).size == 0:
+            args = other_args
+
         # call xarray's initializer to make the data array
         super().__init__(*args, **kwargs)
 
