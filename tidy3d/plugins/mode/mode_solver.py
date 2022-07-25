@@ -148,12 +148,8 @@ class ModeSolver(Tidy3dBaseModel):
         mode_solver_monitor = self.to_mode_solver_monitor(name=MODE_MONITOR_NAME)
         mode_solver_data = ModeSolverData(monitor=mode_solver_monitor, **data_dict)
         self._field_decay_warning(mode_solver_data)
-        # TODO: momchil double check
-        return mode_solver_data.apply_symmetry(
-            symmetry=self.simulation.symmetry,
-            symmetry_center=self.simulation.center,
-            grid_expanded=self.simulation.discretize(self.plane, extend=False),
-        )
+        # TODO: momchil double check, apply symmetry here?
+        return mode_solver_data
 
     @cached_property
     def sim_data(self) -> SimulationData:
