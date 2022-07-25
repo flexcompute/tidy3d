@@ -15,7 +15,6 @@ from tidy3d.components.monitor import FieldMonitor, FieldTimeMonitor, Permittivi
 from tidy3d.components.monitor import ModeSolverMonitor, ModeMonitor
 from tidy3d.components.monitor import FluxMonitor, FluxTimeMonitor
 from tidy3d.components.monitor import MonitorType
-<<<<<<< HEAD
 from tidy3d.components.structure import Structure
 from tidy3d.components.geometry import Box
 from tidy3d.material_library import material_library
@@ -23,10 +22,9 @@ from tidy3d.constants import inf
 
 from .utils import clear_tmp
 
-STRUCTURES = [Structure(
-    geometry=Box(size=(1, inf, 1)),
-    medium=material_library["cSi"]["SalzbergVilla1957"]
-)]
+STRUCTURES = [
+    Structure(geometry=Box(size=(1, inf, 1)), medium=material_library["cSi"]["SalzbergVilla1957"])
+]
 SOURCES = [PointDipole(source_time=GaussianPulse(freq0=1e14, fwidth=1e14), polarization="Ex")]
 GRID_SPEC = GridSpec(wavelength=1.0)
 RUN_TIME = 1e-12
@@ -68,10 +66,7 @@ SIM = Simulation(
     symmetry=(1, -1, 1),
     sources=SOURCES,
     monitors=MONITORS,
-<<<<<<< HEAD
-    structures=STRUCTURES,
-=======
->>>>>>> eb4c06980f17701d9c7cb82c09e7c7215795098a
+    # structures=STRUCTURES,
 )
 
 FS = np.linspace(1e14, 2e14, 11)

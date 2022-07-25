@@ -18,9 +18,6 @@ from ..log import FileError
 # default indentation (# spaces) in files
 INDENT = 4
 
-# special key used for yaml => hdf5 conversion
-TYPE_ID_HDF5 = "_type_"
-
 
 class Tidy3dBaseModel(pydantic.BaseModel):
     """Base pydantic model that all Tidy3d components inherit from.
@@ -302,11 +299,6 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         """
         value = dataset[()]
 
-        # try loading if tagged as YAML
-        if TYPE_ID_HDF5 in dataset.attrs:
-            if dataset.attrs[TYPE_ID_HDF5].astype(str) == "yaml":
-                value = yaml.safe_load(value.decode())
-
         # decoding numpy arrays
         if isinstance(value, np.ndarray):
             if value.size == 0:
@@ -357,6 +349,9 @@ class Tidy3dBaseModel(pydantic.BaseModel):
             elif isinstance(value, h5py.Dataset):
                 data_dict[key] = cls.unpack_dataset(value)
 
+        if any("TUPLE_ELEMENT_" in key for key in data_dict.keys()):
+            return tuple(data_dict.values())
+
         return data_dict
 
     @classmethod
@@ -390,14 +385,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         elif isinstance(value, bool):
             value = np.array(value)
 
-        # try creating the dataset directly
-        try:
-            dataset = hdf5_group.create_dataset(name=key, data=value)
-
-        # If this did not work, try serializing it to yaml and dumping the string to the dataset
-        except TypeError:
-            dataset = hdf5_group.create_dataset(name=key, data=np.string_(yaml.safe_dump(value)))
-            dataset.attrs.create(name=TYPE_ID_HDF5, data=np.string_("yaml"))
+        _ = hdf5_group.create_dataset(name=key, data=value)
 
     def add_to_handle(self, hdf5_group: h5py.Group) -> None:
         """Saves a :class:`.Tidy3dBaesModel` instance to an hdf5 group,
@@ -418,8 +406,13 @@ class Tidy3dBaseModel(pydantic.BaseModel):
             # if tuple as key, combine into a single string
             if isinstance(key, tuple):
                 key = "_".join((str(i) for i in key))
+
             if isinstance(value, xr.DataArray):
                 value = value.to_dict()
+
+            # if a tuple of dicts, convert to a dict with special
+            elif isinstance(value, tuple) and any(isinstance(val, dict) for val in value):
+                value = {f"TUPLE_ELEMENT_{i}": val for i, val in enumerate(value)}
 
             # if dictionary as item in dict, create subgroup and recurse
             if isinstance(value, dict):
