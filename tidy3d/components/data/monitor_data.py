@@ -63,7 +63,7 @@ class AbstractFieldData(MonitorData, ABC):
     @property
     @abstractmethod
     def symmetry_eigenvalues(self) -> Dict[str, Callable[[Axis], float]]:
-        """Maps field components to their grid locations on the yee lattice."""
+        """Maps field components to their (positive) symmetry eigenvalues."""
 
     def apply_symmetry(  # pylint:disable=too-many-locals
         self,
@@ -115,9 +115,10 @@ class AbstractFieldData(MonitorData, ABC):
                 scalar_data = scalar_data.sel({dim_name: coords_interp}, method="nearest")
                 scalar_data = scalar_data.assign_coords({dim_name: coords})
 
-                # apply the symmetry eigenvalue to the flipped values
-                sym_eig = eigenval_fn(sym_dim)
-                scalar_data[{dim_name: flip_inds}] *= sym_val * sym_eig
+                # apply the symmetry eigenvalue (if defined) to the flipped values
+                if eigenval_fn is not None:
+                    sym_eigenvalue = eigenval_fn(sym_dim)
+                    scalar_data[{dim_name: flip_inds}] *= sym_val * sym_eigenvalue
 
             # assign the final scalar data to the new_fields
             new_fields[field_name] = scalar_data
@@ -214,7 +215,7 @@ class ElectromagneticFieldData(AbstractFieldData, ABC):
 
     @property
     def symmetry_eigenvalues(self) -> Dict[str, Callable[[Axis], float]]:
-        """Maps field components to their grid locations on the yee lattice."""
+        """Maps field components to their (positive) symmetry eigenvalues."""
 
         return dict(
             Ex=lambda dim: -1 if (dim == 0) else +1,
@@ -468,12 +469,8 @@ class PermittivityData(AbstractFieldData):
 
     @property
     def symmetry_eigenvalues(self) -> Dict[str, Callable[[Axis], float]]:
-        """Maps field components to their grid locations on the yee lattice."""
-
-        def return_1(dim):  # pylint: disable=unused-argument
-            return 1.0
-
-        return dict(eps_xx=return_1, eps_yy=return_1, eps_zz=return_1)
+        """Maps field components to their (positive) symmetry eigenvalues."""
+        return dict(eps_xx=None, eps_yy=None, eps_zz=None)
 
     eps_xx: ScalarFieldDataArray = pd.Field(
         ...,
