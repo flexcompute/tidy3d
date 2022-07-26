@@ -5,7 +5,7 @@ import xarray as xr
 import pydantic as pd
 import numpy as np
 
-from .monitor_data import MonitorDataType, AbstractFieldData
+from .monitor_data import MonitorDataType, AbstractFieldData, ModeSolverData
 from ..base import Tidy3dBaseModel
 from ..simulation import Simulation
 from ..boundary import BlochBoundary
@@ -117,7 +117,10 @@ class SimulationData(Tidy3dBaseModel):
 
     def apply_symmetry(self, monitor_data: MonitorDataType) -> MonitorDataType:
         """Return copy of :class:`.MonitorData` object with symmetry values applied."""
-        grid_expanded = self.simulation.discretize(monitor_data.monitor, extend=True)
+        extend = True
+        if isinstance(monitor_data, ModeSolverData):
+            extend = False
+        grid_expanded = self.simulation.discretize(monitor_data.monitor, extend=extend)
         return monitor_data.apply_symmetry(
             symmetry=self.simulation.symmetry,
             symmetry_center=self.simulation.center,

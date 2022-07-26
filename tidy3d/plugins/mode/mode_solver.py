@@ -94,8 +94,9 @@ class ModeSolver(Tidy3dBaseModel):
         ModeSolverData
             :class:`.ModeSolverData` object containing the effective index and mode fields.
         """
-        # note: this is just for backwards compatibility
-        return self.data
+        # note: calling sim_data like this expands the symmetries under the hood
+        # ModeSolver.data will instead return the data without symmetry expansion
+        return self.sim_data[MODE_MONITOR_NAME]
 
     @cached_property
     def data(self) -> ModeSolverData:
@@ -148,7 +149,6 @@ class ModeSolver(Tidy3dBaseModel):
         mode_solver_monitor = self.to_mode_solver_monitor(name=MODE_MONITOR_NAME)
         mode_solver_data = ModeSolverData(monitor=mode_solver_monitor, **data_dict)
         self._field_decay_warning(mode_solver_data)
-        # TODO: momchil double check, apply symmetry here?
         return mode_solver_data
 
     @cached_property
