@@ -166,3 +166,12 @@ def _test_eq():
     data1.flux.data[0] = 1e12
     assert data1 != data2, "different data are equal"
     assert data1 != data3, "different data are equal"
+
+
+def test_empty():
+    import tidy3d as td
+
+    coords = {"x": np.arange(10), "y": np.arange(10), "z": np.arange(10), "t": np.arange(0)}
+    fields = {"Ex": td.ScalarFieldTimeDataArray(np.random.rand(10, 10, 10, 0), coords=coords)}
+    monitor = td.FieldTimeMonitor(size=(1, 1, 1), fields=["Ex"], name="test")
+    field_data = td.FieldTimeData(monitor=monitor, **fields)

@@ -197,5 +197,11 @@ def test_ops():
 
 
 def test_empty_field_time():
-    data = ScalarFieldTimeDataArray(np.array([]), coords=dict(x=[], y=[], z=[], t=[]))
-    data = ScalarFieldTimeDataArray([], coords=dict(x=[], y=[], z=[], t=[]))
+    data = ScalarFieldTimeDataArray(
+        np.random.rand(5, 5, 5, 0),
+        coords=dict(x=np.arange(5), y=np.arange(5), z=np.arange(5), t=[]),
+    )
+    data = ScalarFieldTimeDataArray(
+        np.random.rand(5, 5, 5, 0),
+        coords=dict(x=np.arange(5), y=np.arange(5), z=np.arange(5), t=[]),
+    )
