@@ -2,6 +2,8 @@
 import numpy as np
 import pytest
 
+import tidy3d as td
+
 from tidy3d.components.monitor import FieldMonitor, FieldTimeMonitor, PermittivityMonitor
 from tidy3d.components.monitor import ModeSolverMonitor, ModeMonitor
 from tidy3d.components.monitor import FluxMonitor, FluxTimeMonitor
@@ -18,6 +20,7 @@ from .test_data_arrays import make_flux_data_array, make_flux_time_data_array
 from .test_data_arrays import make_mode_amps_data_array, make_mode_index_data_array
 from .test_data_arrays import FIELD_MONITOR, FIELD_TIME_MONITOR, MODE_SOLVE_MONITOR
 from .test_data_arrays import MODE_MONITOR, PERMITTIVITY_MONITOR, FLUX_MONITOR, FLUX_TIME_MONITOR
+from .utils import clear_tmp
 
 # data array instances
 AMPS = make_mode_amps_data_array()
@@ -168,10 +171,33 @@ def _test_eq():
     assert data1 != data3, "different data are equal"
 
 
-def test_empty():
-    import tidy3d as td
-
-    coords = {"x": np.arange(10), "y": np.arange(10), "z": np.arange(10), "t": np.arange(0)}
+def test_empty_array():
+    coords = {"x": np.arange(10), "y": np.arange(10), "z": np.arange(10), "t": []}
     fields = {"Ex": td.ScalarFieldTimeDataArray(np.random.rand(10, 10, 10, 0), coords=coords)}
     monitor = td.FieldTimeMonitor(size=(1, 1, 1), fields=["Ex"], name="test")
     field_data = td.FieldTimeData(monitor=monitor, **fields)
+
+
+def test_empty_list():
+    coords = {"x": np.arange(10), "y": np.arange(10), "z": np.arange(10), "t": []}
+    fields = {"Ex": td.ScalarFieldTimeDataArray([], coords=coords)}
+    monitor = td.FieldTimeMonitor(size=(1, 1, 1), fields=["Ex"], name="test")
+    field_data = td.FieldTimeData(monitor=monitor, **fields)
+
+
+def test_empty_tuple():
+    coords = {"x": np.arange(10), "y": np.arange(10), "z": np.arange(10), "t": []}
+    fields = {"Ex": td.ScalarFieldTimeDataArray((), coords=coords)}
+    monitor = td.FieldTimeMonitor(size=(1, 1, 1), fields=["Ex"], name="test")
+    field_data = td.FieldTimeData(monitor=monitor, **fields)
+
+
+@clear_tmp
+def test_empty_io():
+    coords = {"x": np.arange(10), "y": np.arange(10), "z": np.arange(10), "t": []}
+    fields = {"Ex": td.ScalarFieldTimeDataArray(np.random.rand(10, 10, 10, 0), coords=coords)}
+    monitor = td.FieldTimeMonitor(size=(1, 1, 1), name="test", fields=["Ex"])
+    field_data = td.FieldTimeData(monitor=monitor, **fields)
+    field_data.to_file("tests/tmp/field_data.hdf5")
+    field_data = td.FieldTimeData.from_file("tests/tmp/field_data.hdf5")
+    assert field_data.Ex.size == 0

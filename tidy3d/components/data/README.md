@@ -81,9 +81,7 @@ All `MonitorData` subclasses also have an `.apply_symmetry()` method, whch retur
 ```python
 def apply_symmetry(
     self,
-    symmetry: Tuple[Symmetry, Symmetry, Symmetry],
-    symmetry_center: Coordinate,
-    grid_expanded: Grid,
+    simulation: Simulation
 ) -> "MonitorData":
 ```
 

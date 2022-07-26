@@ -5,7 +5,7 @@ import xarray as xr
 import pydantic as pd
 import numpy as np
 
-from .monitor_data import MonitorDataType, AbstractFieldData, ModeSolverData
+from .monitor_data import MonitorDataType, AbstractFieldData
 from ..base import Tidy3dBaseModel
 from ..simulation import Simulation
 from ..boundary import BlochBoundary
@@ -80,7 +80,6 @@ class SimulationData(Tidy3dBaseModel):
             return val
 
         assert val >= 0, "normalize_index can't be negative."
-
         num_sources = len(values.get("simulation").sources)
 
         # no sources, just skip normalization
@@ -117,15 +116,7 @@ class SimulationData(Tidy3dBaseModel):
 
     def apply_symmetry(self, monitor_data: MonitorDataType) -> MonitorDataType:
         """Return copy of :class:`.MonitorData` object with symmetry values applied."""
-        extend = True
-        if isinstance(monitor_data, ModeSolverData):
-            extend = False
-        grid_expanded = self.simulation.discretize(monitor_data.monitor, extend=extend)
-        return monitor_data.apply_symmetry(
-            symmetry=self.simulation.symmetry,
-            symmetry_center=self.simulation.center,
-            grid_expanded=grid_expanded,
-        )
+        return monitor_data.apply_symmetry(simulation=self.simulation)
 
     def normalize_monitor_data(self, monitor_data: MonitorDataType) -> MonitorDataType:
         """Return copy of :class:`.MonitorData` object with data normalized to source."""
@@ -184,17 +175,15 @@ class SimulationData(Tidy3dBaseModel):
 
         # get the data
         monitor_data = self.load_field_monitor(field_monitor_name)
-        monitor_data = self.apply_symmetry(monitor_data)
 
-        # get the monitor, discretize, and get center locations
-        monitor = monitor_data.monitor
-        sub_grid = self.simulation.discretize(monitor, extend=False)
+        # discretize the monitor and get center locations
+        sub_grid = self.simulation.discretize(monitor_data.monitor, extend=False)
         centers = sub_grid.centers
 
         # pass coords if each of the scalar field data have more than one coordinate along a dim
         xyz_kwargs = {}
         for dim, centers in zip("xyz", (centers.x, centers.y, centers.z)):
-            scalar_data = [data for _, data in monitor_data.field_components.items()]
+            scalar_data = list(monitor_data.field_components.values())
             coord_lens = [len(data.coords[dim]) for data in scalar_data if data is not None]
             if all(ncoords > 1 for ncoords in coord_lens):
                 xyz_kwargs[dim] = centers

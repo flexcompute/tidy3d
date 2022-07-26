@@ -12,6 +12,7 @@ from ..grid import Grid
 from ..validators import enforce_monitor_fields_present
 from ..monitor import MonitorType, FieldMonitor, FieldTimeMonitor, ModeSolverMonitor
 from ..monitor import ModeMonitor, FluxMonitor, FluxTimeMonitor, PermittivityMonitor
+from ..simulation import Simulation
 from ...log import DataError
 
 from .data_array import ScalarFieldDataArray, ScalarFieldTimeDataArray, ScalarModeFieldDataArray
@@ -30,10 +31,7 @@ class MonitorData(Tidy3dBaseModel, ABC):
     )
 
     def apply_symmetry(
-        self,
-        symmetry: Tuple[Symmetry, Symmetry, Symmetry],  # pylint:disable=unused-argument
-        symmetry_center: Coordinate,  # pylint:disable=unused-argument
-        grid_expanded: Grid,  # pylint:disable=unused-argument
+        self, simulation: Simulation  # pylint:disable=unused-argument
     ) -> "MonitorData":
         """Return copy of self with symmetry applied."""
         return self.copy()
@@ -65,17 +63,25 @@ class AbstractFieldData(MonitorData, ABC):
     def symmetry_eigenvalues(self) -> Dict[str, Callable[[Axis], float]]:
         """Maps field components to their (positive) symmetry eigenvalues."""
 
-    def apply_symmetry(  # pylint:disable=too-many-locals
+    def apply_symmetry(self, simulation: Simulation) -> "AbstractFieldData":
+        """Return copy of self with symmetry applied."""
+        return self._apply_field_symmetry(
+            symmetry=simulation.symmetry,
+            symmetry_center=simulation.center,
+            grid_expanded=simulation.discretize(self.monitor, extend=True),
+        )
+
+    def _apply_field_symmetry(  # pylint:disable=too-many-locals
         self,
         symmetry: Tuple[Symmetry, Symmetry, Symmetry],
         symmetry_center: Coordinate,
         grid_expanded: Grid,
     ) -> "AbstractFieldData":
-        """Create a copy of the :class:`.AbstractField` with symmetry applied
+        """Create a copy of the :class:`.AbstractFieldData` with symmetry applied
 
         Returns
         -------
-        :class:`AbstractField`
+        :class:`AbstractFieldData`
             A new data object with the symmetry expanded fields.
         """
 
@@ -423,6 +429,14 @@ class ModeSolverData(ElectromagneticFieldData):
     def k_eff(self):
         """Imaginary part of the propagation index."""
         return self.n_complex.imag
+
+    def apply_symmetry(self, simulation: Simulation) -> "ModeSolverData":
+        """Return copy of self with symmetry applied. For mode solver, use non-expanded grid."""
+        return self._apply_field_symmetry(
+            symmetry=simulation.symmetry,
+            symmetry_center=simulation.center,
+            grid_expanded=simulation.discretize(self.monitor, extend=False),
+        )
 
     def sel_mode_index(self, mode_index: pd.NonNegativeInt) -> FieldData:
         """Return :class:`.FieldData` for the specificed mode index."""

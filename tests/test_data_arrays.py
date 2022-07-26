@@ -78,7 +78,7 @@ DIRECTIONS = ["+", "-"]
 
 
 def get_xyz(monitor: MonitorType, grid_key: str) -> Tuple[List[float], List[float], List[float]]:
-    grid = SIM.discretize(monitor, extend=False)
+    grid = SIM.discretize(monitor, extend=True)
     x, y, z = grid[grid_key].to_list
     x = [_x for _x in x if _x >= 0]
     y = [_y for _y in y if _y >= 0]

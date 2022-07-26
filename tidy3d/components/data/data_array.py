@@ -52,6 +52,17 @@ class DataArray(xr.DataArray):
         if (not kwargs.get("fastpath")) and ("attrs" not in kwargs) and (self._data_attrs):
             kwargs["attrs"] = self._data_attrs
 
+        # fix case if data of empty list or tuple is supplied as first arg
+        data_arg = args[0]
+        is_empty_array = isinstance(data_arg, np.ndarray) and (data_arg.size == 0)
+        is_empty_list = (isinstance(data_arg, list)) and (data_arg == [])
+        is_empty_tuple = (isinstance(data_arg, tuple)) and (data_arg == ())
+        if is_empty_array or is_empty_list or is_empty_tuple:
+            shape = tuple(len(values) for _, values, _ in coords)
+            new_args = list(args)
+            new_args[0] = np.zeros(shape=shape)
+            args = tuple(new_args)
+
         super().__init__(*args, **kwargs)
 
     @classmethod
