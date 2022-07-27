@@ -7,7 +7,7 @@ import json
 import requests
 
 from .config import DEFAULT_CONFIG as Config
-from ..log import log
+from ..log import log, WebError
 
 # maximum attempts for credentials input
 MAX_ATTEMPTS = 3
@@ -85,7 +85,7 @@ def get_credentials() -> None:
             log.info("Error: Failed to log in with saved credentials.")
 
     # keep trying to log in
-    for _ in range(MAX_ATTEMPTS):
+    for counter in range(MAX_ATTEMPTS):
 
         email = input("enter your email registered at tidy3d: ")
         password = getpass.getpass("enter your password: ")
@@ -96,8 +96,11 @@ def get_credentials() -> None:
             set_authentication_config(email, password)
             break
 
-        except Exception:  # pylint:disable=broad-except
-            log.info("Error: Failed to log in with new username and password.")
+        except Exception as e:  # pylint:disable=broad-except
+            if counter < MAX_ATTEMPTS - 1:
+                log.info("Error: Failed to log in with new username and password.")
+            else:
+                raise WebError("Failed to log in with new username and password.") from e
 
     # ask to stay logged in
     for _ in range(MAX_ATTEMPTS):
