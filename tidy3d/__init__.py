@@ -45,7 +45,8 @@ from .components import SimulationData, FieldData, FluxData, FluxTimeData
 from .components import DATA_TYPE_MAP, ScalarFieldData, ScalarFieldTimeData
 from .components import ModeData, ModeAmpsData, ModeIndexData, ModeFieldData, PermittivityData
 from .components import ScalarPermittivityData
-from .components import RadiationVector, Near2FarData, Near2FarSurface, Near2Far
+from .components import RadiationVectorAngular, RadiationVectorKSpace, RadiationVectorCartesian
+from .components import Near2FarAngleData, Near2FarCartesianData, Near2FarSurface, Near2Far
 
 # boundary
 from .components import BoundarySpec, Boundary, BoundaryEdge, BoundaryEdgeType

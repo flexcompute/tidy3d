@@ -8,7 +8,8 @@ import pydantic
 from rich.progress import track
 
 from ...constants import C_0, ETA_0, MICROMETER
-from ...components.data import FieldData, SimulationData, Near2FarData, RadiationVector
+from ...components.data import FieldData, SimulationData, Near2FarAngleData
+from ...components.data import RadiationVectorAngular
 from ...components.monitor import FieldMonitor
 from ...components.types import Direction, Axis, Coordinate, ArrayLike
 from ...components.medium import Medium
@@ -521,7 +522,7 @@ class Near2Far(Tidy3dBaseModel):
 
         return N_theta, N_phi, L_theta, L_phi
 
-    def radiation_vectors(self, theta: ArrayLikeN2F, phi: ArrayLikeN2F) -> Near2FarData:
+    def radiation_vectors(self, theta: ArrayLikeN2F, phi: ArrayLikeN2F) -> Near2FarAngleData:
         """Compute radiation vectors at given angles in spherical coordinates.
 
         Parameters
@@ -533,7 +534,7 @@ class Near2Far(Tidy3dBaseModel):
 
         Returns
         -------
-        :class:.`Near2FarData`
+        :class:.`Near2FarAngleData`
             Data structure with ``N_theta``, ``N_phi``, ``L_theta``, ``L_phi`` radiation vectors.
         """
 
@@ -555,12 +556,13 @@ class Near2Far(Tidy3dBaseModel):
                 L_theta[..., idx_f] += _L_th
                 L_phi[..., idx_f] += _L_ph
 
-        nth = RadiationVector(values=N_theta, theta=theta, phi=phi, f=freqs)
-        nph = RadiationVector(values=N_phi, theta=theta, phi=phi, f=freqs)
-        lth = RadiationVector(values=L_theta, theta=theta, phi=phi, f=freqs)
-        lph = RadiationVector(values=L_phi, theta=theta, phi=phi, f=freqs)
+        nth = RadiationVectorAngular(values=N_theta, theta=theta, phi=phi, f=freqs)
+        nph = RadiationVectorAngular(values=N_phi, theta=theta, phi=phi, f=freqs)
+        lth = RadiationVectorAngular(values=L_theta, theta=theta, phi=phi, f=freqs)
+        lph = RadiationVectorAngular(values=L_phi, theta=theta, phi=phi, f=freqs)
 
-        return Near2FarData(data_dict={"Ntheta": nth, "Nphi": nph, "Ltheta": lth, "Lphi": lph})
+        return Near2FarAngleData(
+            data_dict={"Ntheta": nth, "Nphi": nph, "Ltheta": lth, "Lphi": lph})
 
     # def fields_spherical(self, r: float, theta: ArrayLikeN2F, phi: ArrayLikeN2F) -> xr.Dataset:
     #     """Get fields at a point relative to monitor center in spherical coordinates.
