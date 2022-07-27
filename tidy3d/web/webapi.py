@@ -544,6 +544,8 @@ def _query_or_create_folder(folder_name) -> Folder:
             method = "tidy3d/projects"
             resp = http.post(method, data={"projectName": folder_name})
         folder = Folder(**resp)
+    except WebError as e:
+        raise e
     except Exception as e:  # pylint:disable=broad-except
         raise WebError("Could not create task folder") from e
 
@@ -575,6 +577,8 @@ def _download_file(task_id: TaskId, fname: str, path: str) -> None:
 
     try:
         download_file(task_id, fname, path)
+    except WebError as e:
+        raise e
     except Exception as e:  # pylint:disable=broad-except
         task_info = get_info(task_id)
         log.warning(str(e))
