@@ -35,7 +35,8 @@ from .data import FieldData, FluxData, ModeData, FluxTimeData, DATA_TYPE_MAP, Si
 from .data import ScalarFieldData, ScalarFieldTimeData, ModeAmpsData, ModeIndexData
 from .data import ModeFieldData, PermittivityData, ScalarPermittivityData
 from .data import RadiationVectorAngular, RadiationVectorKSpace, RadiationVectorCartesian
-from .data import Near2FarAngleData, Near2FarCartesianData, Near2FarSurface, Near2Far
+from .data import Near2FarAngleData, Near2FarCartesianData, Near2FarKSpaceData
+from .data import Near2FarSurface, Near2Far
 
 # boundary
 from .boundary import BoundarySpec, Boundary, BoundaryEdge, BoundaryEdgeType

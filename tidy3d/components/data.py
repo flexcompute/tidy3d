@@ -40,6 +40,8 @@ DIM_ATTRS = {
     "mode_index": {"units": None, "long_name": "mode index"},
     "theta": {"units": "rad", "long_name": "elevation angle"},
     "phi": {"units": "rad", "long_name": "azimuth angle"},
+    "ux": {"units": None, "long_name": "normalized kx"},
+    "uy": {"units": None, "long_name": "normalized ky"},
 }
 
 
@@ -1348,7 +1350,7 @@ class Near2FarAngleData(AbstractNear2FarData):
         self, r: float = None, medium: Medium = Medium(permittivity=1)
     ) -> xr.Dataset:
         """Get fields in spherical coordinates relative to the monitor's local origin
-        for all angles and frequencies specified in the associated :class:`Near2FarMonitor`.
+        for all angles and frequencies specified in :class:`Near2FarAngleMonitor`.
         If the radial distance ``r`` is provided, a corresponding phase factor is applied
         to the returned fields.
 
@@ -1377,15 +1379,15 @@ class Near2FarAngleData(AbstractNear2FarData):
 
         # assemble E felds
         if r is not None:
-            scalar_proj_r = -1j * k * np.exp(1j * k * r) / (4 * np.pi / r)
+            phase = -1j * k * np.exp(1j * k * r) / (4 * np.pi * r)
 
             eta = eta[None, None, None, :]
-            scalar_proj_r = scalar_proj_r[None, None, None, :]
+            phase = phase[None, None, None, :]
 
-            Et_array = -scalar_proj_r * (
+            Et_array = -phase * (
                 self.Lphi.values[None, ...] + eta * self.Ntheta.values[None, ...]
             )
-            Ep_array = scalar_proj_r * (
+            Ep_array = phase * (
                 self.Ltheta.values[None, ...] - eta * self.Nphi.values[None, ...]
             )
             Er_array = np.zeros_like(Ep_array)
@@ -1463,7 +1465,9 @@ class Near2FarAngleData(AbstractNear2FarData):
 
         return xr.DataArray(data=rcs_data, coords=coords, dims=dims)
 
-    def power_spherical(self, r: float) -> xr.DataArray:
+    def power_spherical(
+        self, r: float, medium: Medium = Medium(permittivity=1)
+    ) -> xr.DataArray:
         """Get power scattered to a point relative to the local origin in spherical coordinates.
 
         Parameters
@@ -1477,7 +1481,7 @@ class Near2FarAngleData(AbstractNear2FarData):
             Power at points relative to the local origin.
         """
 
-        field_data = self.fields_spherical(r)
+        field_data = self.fields_spherical(medium=medium, r=r)
         Et, Ep = [field_data[comp].values for comp in ["E_theta", "E_phi"]]
         Ht, Hp = [field_data[comp].values for comp in ["H_theta", "H_phi"]]
         power_theta = 0.5 * np.real(Et * np.conj(Hp))
@@ -1564,6 +1568,12 @@ class Near2FarCartesianData(AbstractNear2FarData):
         z = self.Ntheta.z
         x, y, z = [np.atleast_1d(x), np.atleast_1d(y), np.atleast_1d(z)]
 
+        eta = np.atleast_1d(self.eta(frequencies, medium))
+        wave_number = np.atleast_1d(self.k(frequencies, medium))
+
+        e_theta = -(self.Lphi.values + eta[None, None, None, ...] * self.Ntheta.values)
+        e_phi = (self.Ltheta.values - eta[None, None, None, ...] * self.Nphi.values)
+
         Ex_data = np.zeros((len(x), len(y), len(z), len(frequencies)), dtype=complex)
         Ey_data = np.zeros_like(Ex_data)
         Ez_data = np.zeros_like(Ex_data)
@@ -1572,38 +1582,30 @@ class Near2FarCartesianData(AbstractNear2FarData):
         Hy_data = np.zeros_like(Ex_data)
         Hz_data = np.zeros_like(Ex_data)
 
-        for f, freq in enumerate(frequencies):
-            for i, _x in enumerate(x):
-                for j, _y in enumerate(y):
-                    for k, _z in enumerate(z):
-                        r, theta, phi = self.car_2_sph(_x, _y, _z)
+        for i, _x in enumerate(x):
+            for j, _y in enumerate(y):
+                for k, _z in enumerate(z):
+                    r, theta, phi = self.car_2_sph(_x, _y, _z)
+                    phase = -1j * wave_number * np.exp(1j * wave_number * r) / (4 * np.pi * r)
 
-                        wave_number = self.k(freq, medium)
-                        eta = self.eta(freq, medium)
-                        scalar_proj_r = \
-                            -1j * wave_number * np.exp(1j * wave_number * r) / (4 * np.pi / r)
+                    Et = -phase * e_theta[i,j,k,:]
+                    Ep = phase * e_phi[i,j,k,:]
+                    Er = np.zeros_like(Et)
 
-                        e_theta = -(self.Lphi.values[i,j,k,f] + eta * self.Ntheta.values[i,j,k,f])
-                        e_phi = (self.Ltheta.values[i,j,k,f] - eta * self.Nphi.values[i,j,k,f])
+                    Ht = -Ep / eta
+                    Hp = Et / eta
+                    Hr = np.zeros_like(Hp)
 
-                        Et = -scalar_proj_r * e_theta
-                        Ep = scalar_proj_r * e_phi
-                        Er = np.zeros_like(Et)
+                    e_fields = self.sph_2_car_field(Er, Et, Ep, theta, phi)
+                    h_fields = self.sph_2_car_field(Hr, Ht, Hp, theta, phi)
 
-                        Ht = -Ep / eta
-                        Hp = Et / eta
-                        Hr = np.zeros_like(Hp)
+                    Ex_data[i,j,k,:] = e_fields[0]
+                    Ey_data[i,j,k,:] = e_fields[1]
+                    Ez_data[i,j,k,:] = e_fields[2]
 
-                        e_fields = self.sph_2_car_field(Er, Et, Ep, theta, phi)
-                        h_fields = self.sph_2_car_field(Hr, Ht, Hp, theta, phi)
-
-                        Ex_data[i,j,k,f] = e_fields[0]
-                        Ey_data[i,j,k,f] = e_fields[1]
-                        Ez_data[i,j,k,f] = e_fields[2]
-
-                        Hx_data[i,j,k,f] = h_fields[0]
-                        Hy_data[i,j,k,f] = h_fields[1]
-                        Hz_data[i,j,k,f] = h_fields[2]
+                    Hx_data[i,j,k,:] = h_fields[0]
+                    Hy_data[i,j,k,:] = h_fields[1]
+                    Hz_data[i,j,k,:] = h_fields[2]
 
         dims = ("x", "y", "z", "f")
         coords = {"x": x, "y": y, "z": z, "f": frequencies}
@@ -1657,6 +1659,132 @@ class Near2FarCartesianData(AbstractNear2FarData):
     #     coords = {"x": x, "y": y, "z": z}
 
     #     return xr.DataArray(data=power_data, coords=coords, dims=dims)
+
+
+class Near2FarKSpaceData(AbstractNear2FarData):
+    """Stores a collection of radiation vectors in the frequency domain on a k-space grid
+       from a :class:`.Near2FarKSpaceMonitor`.
+
+    Example
+    -------
+    >>> f = np.linspace(1e14, 2e14, 10)
+    >>> ux = np.linspace(0, 5, 10)
+    >>> uy = np.linspace(0, 3, 20)
+    >>> values = (1+1j) * np.random.random((len(ux), len(uy), len(f)))
+    >>> fld = RadiationVectorKSpace(values=values, ux=ux, uy=uy, f=f)
+    >>> data = Near2FarKSpaceData(
+    ...     data_dict={'Ntheta': fld, 'Nphi': fld, 'Ltheta': fld, 'Lphi': fld})
+    """
+
+    data_dict: Dict[str, RadiationVectorKSpace] = pd.Field(
+        ...,
+        title="Data Dictionary",
+        description="Mapping of the field names to their corresponding "
+        ":class:`.RadiationVectorKSpace`.",
+    )
+
+    # Ntheta: RadiationVectorKSpace = pd.Field(
+    #     None,
+    #     title="Ntheta",
+    #     description="Theta component of the radiation vector N.",
+    #     )
+
+    # Nphi: RadiationVectorKSpace = pd.Field(
+    #     None,
+    #     title="Nphi",
+    #     description="Phi component of the radiation vector N.",
+    #     )
+
+    # Ltheta: RadiationVectorKSpace = pd.Field(
+    #     None,
+    #     title="Ltheta",
+    #     description="Theta component of the radiation vector L.",
+    #     )
+
+    # Lphi: RadiationVectorKSpace = pd.Field(
+    #     None,
+    #     title="Lphi",
+    #     description="Phi component of the radiation vector L.",
+    #     )
+
+    # pylint:disable=too-many-locals
+    def fields_spherical(
+        self, medium: Medium = Medium(permittivity=1)
+    ) -> xr.Dataset:
+        """Get fields in spherical coordinates relative to the monitor's local origin
+        for all k-space points and frequencies specified in :class:`Near2FarKSpaceMonitor`.
+
+        Parameters
+        ----------
+        medium : :class:`.Medium`
+            Background medium in which to radiate near fields to far fields.
+            Default: free space.
+
+        Returns
+        -------
+        xarray.Dataset
+            xarray dataset containing (Er, Etheta, Ephi), (Hr, Htheta, Hphi)
+            in polar coordinates.
+        """
+
+        # def kspace_to_sph(ux, uy, axis):
+        #     """Convert normalized k-space coordinates to angles."""
+        #     theta_local = np.acos(np.sqrt(ux ** 2 + uy ** 2))
+        #     phi_local = np.atan2(uy, ux)
+        #     # Spherical coordinates rotation matrix reference:
+        #     # https://en.wikipedia.org/wiki/Rodrigues%27_rotation_formula#Matrix_notation
+        #     if axis == 0:
+        #         x = np.cos(theta_local)
+        #         y = np.sin(theta_local) * np.sin(phi_local)
+        #         z = -np.sin(theta_local) * np.cos(phi_local)
+        #         theta = np.acos(z)
+        #         phi = np.atan2(y, x)
+        #     elif axis == 1:
+        #         x = np.sin(theta_local) * np.cos(phi_local)
+        #         y = np.cos(theta_local)
+        #         z = -np.sin(theta_local) * np.sin(phi_local)
+        #         theta = np.acos(z)
+        #         phi = np.atan2(y, x)
+        #     elif axis == 2:
+        #         theta = theta_local
+        #         phi = phi_local
+        #     return theta, phi
+
+        # Assumes that frequencies and angles are the same for all radiation vectors
+        ux = self.Ntheta.ux
+        uy = self.Ntheta.uy
+        # theta, phi = kspace_to_sph(ux, uy, 2)
+        frequencies = self.Ntheta.f
+
+        eta = np.array([self.eta(frequency, medium) for frequency in frequencies])
+
+        # assemble E felds
+        eta = eta[None, None, ...]
+        Et_array = -(self.Lphi.values + eta * self.Ntheta.values)
+        Ep_array = self.Ltheta.values - eta * self.Nphi.values
+        Er_array = np.zeros_like(Ep_array)
+
+        dims = ("ux", "uy", "f")
+        coords = {"ux": ux, "uy": uy, "f": frequencies}
+
+        # assemble H fields
+        Ht_array = -Ep_array / eta
+        Hp_array = Et_array / eta
+        Hr_array = np.zeros_like(Hp_array)
+
+        Er = xr.DataArray(data=Er_array, coords=coords, dims=dims)
+        Et = xr.DataArray(data=Et_array, coords=coords, dims=dims)
+        Ep = xr.DataArray(data=Ep_array, coords=coords, dims=dims)
+
+        Hr = xr.DataArray(data=Hr_array, coords=coords, dims=dims)
+        Ht = xr.DataArray(data=Ht_array, coords=coords, dims=dims)
+        Hp = xr.DataArray(data=Hp_array, coords=coords, dims=dims)
+
+        field_data = xr.Dataset(
+            {"E_r": Er, "E_theta": Et, "E_phi": Ep, "H_r": Hr, "H_theta": Ht, "H_phi": Hp}
+        )
+
+        return field_data
 
 
 # Default number of points per wavelength in the background medium to use for resampling fields.
@@ -1720,6 +1848,7 @@ DATA_TYPE_MAP = {
     "RadiationVectorKSpace": RadiationVectorKSpace,
     "Near2FarAngleData": Near2FarAngleData,
     "Near2FarCartesianData": Near2FarCartesianData,
+    "Near2FarKSpaceData": Near2FarKSpaceData,
 }
 
 

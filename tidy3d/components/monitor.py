@@ -611,7 +611,8 @@ class Near2FarKSpaceMonitor(AbstractNear2FarMonitor):
         title="Normalized kx",
         description="Local x component of wave vectors on the observation plane, "
         "relative to ``local_origin`` and oriented with respect to ``u_axis``, "
-        "normalized by the wave number associated with the background medium.",
+        "normalized by (2*pi/lambda) where lambda is the wavelength "
+        "associated with the background medium.",
     )
 
     uy: Tuple[float, ...] = pydantic.Field(
@@ -619,7 +620,8 @@ class Near2FarKSpaceMonitor(AbstractNear2FarMonitor):
         title="Normalized ky",
         description="Local y component of wave vectors on the observation plane, "
         "relative to ``local_origin`` and oriented with respect to ``u_axis``, "
-        "normalized by the wave number associated with the background medium.",
+        "normalized by (2*pi/lambda) where lambda is the wavelength "
+        "associated with the background medium.",
     )
 
     def storage_size(self, num_cells: int, tmesh: ArrayLike[float, 1]) -> int:
