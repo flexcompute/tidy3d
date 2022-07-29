@@ -138,8 +138,8 @@ class Near2Far(Tidy3dBaseModel):
 
     def eta(self, frequency) -> complex:
         """Returns the complex wave impedance associated with the background medium."""
-        index_n, index_k = self.nk(frequency)
-        return ETA_0 / (index_n + 1j * index_k)
+        eps_complex = self.medium.eps_model(frequency)
+        return ETA_0 / np.sqrt(eps_complex)
 
     @classmethod
     # pylint:disable=too-many-arguments
@@ -465,6 +465,7 @@ class Near2Far(Tidy3dBaseModel):
         def integrate_2d(function, pts_u, pts_v):
             """Trapezoidal integration in two dimensions."""
             return np.trapz(np.trapz(function, pts_u, axis=0), pts_v, axis=0)
+            # return np.sum(np.sum(function, axis=0), axis=0)
 
         phase = [None] * 3
         propagation_factor = -1j * self.k(frequency)

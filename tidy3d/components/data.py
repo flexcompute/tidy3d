@@ -1207,8 +1207,8 @@ class AbstractNear2FarData(CollectionData, ABC):
 
     def eta(self, frequency, medium) -> complex:
         """Returns the complex wave impedance associated with the background medium."""
-        index_n, index_k = self.nk(frequency, medium)
-        return ETA_0 / (index_n + 1j * index_k)
+        eps_complex = medium.eps_model(frequency)
+        return ETA_0 / np.sqrt(eps_complex)
 
     @staticmethod
     def car_2_sph(x: float, y: float, z: float):
@@ -1572,41 +1572,38 @@ class Near2FarCartesianData(AbstractNear2FarData):
         Hy_data = np.zeros_like(Ex_data)
         Hz_data = np.zeros_like(Ex_data)
 
-        wave_number = np.array([self.k(frequency, medium) for frequency in frequencies])
-        eta = np.array([self.eta(frequency, medium) for frequency in frequencies])
+        for f, freq in enumerate(frequencies):
+            for i, _x in enumerate(x):
+                for j, _y in enumerate(y):
+                    for k, _z in enumerate(z):
+                        r, theta, phi = self.car_2_sph(_x, _y, _z)
 
-        e_theta = -(self.Lphi.values + eta[None, None, None, :] * self.Ntheta.values)
-        e_phi = (self.Ltheta.values - eta[None, None, None, :] * self.Nphi.values)
+                        wave_number = self.k(freq, medium)
+                        eta = self.eta(freq, medium)
+                        scalar_proj_r = \
+                            -1j * wave_number * np.exp(1j * wave_number * r) / (4 * np.pi / r)
 
-        coords = [
-            ([_x, _y, _z], [i, j, k])
-            for i, _x in enumerate(x)
-            for j, _y in enumerate(y)
-            for k, _z in enumerate(z)
-        ]
+                        e_theta = -(self.Lphi.values[i,j,k,f] + eta * self.Ntheta.values[i,j,k,f])
+                        e_phi = (self.Ltheta.values[i,j,k,f] - eta * self.Nphi.values[i,j,k,f])
 
-        for (_x, _y, _z), (i, j, k) in coords:
-            r, theta, phi = self.car_2_sph(_x, _y, _z)
-            scalar_proj_r = -1j * wave_number * np.exp(1j * wave_number * r) / (4 * np.pi / r)
+                        Et = -scalar_proj_r * e_theta
+                        Ep = scalar_proj_r * e_phi
+                        Er = np.zeros_like(Et)
 
-            Et = -scalar_proj_r * e_theta[i, j, k, :]
-            Ep = scalar_proj_r * e_phi[i, j, k, :]
-            Er = np.zeros_like(Et)
+                        Ht = -Ep / eta
+                        Hp = Et / eta
+                        Hr = np.zeros_like(Hp)
 
-            Ht = -Ep / eta
-            Hp = Et / eta
-            Hr = np.zeros_like(Hp)
+                        e_fields = self.sph_2_car_field(Er, Et, Ep, theta, phi)
+                        h_fields = self.sph_2_car_field(Hr, Ht, Hp, theta, phi)
 
-            e_fields = self.sph_2_car_field(Er, Et, Ep, theta, phi)
-            h_fields = self.sph_2_car_field(Hr, Ht, Hp, theta, phi)
+                        Ex_data[i,j,k,f] = e_fields[0]
+                        Ey_data[i,j,k,f] = e_fields[1]
+                        Ez_data[i,j,k,f] = e_fields[2]
 
-            Ex_data[i, j, k, :] = e_fields[0]
-            Ey_data[i, j, k, :] = e_fields[1]
-            Ez_data[i, j, k, :] = e_fields[2]
-
-            Hx_data[i, j, k, :] = h_fields[0]
-            Hy_data[i, j, k, :] = h_fields[1]
-            Hz_data[i, j, k, :] = h_fields[2]
+                        Hx_data[i,j,k,f] = h_fields[0]
+                        Hy_data[i,j,k,f] = h_fields[1]
+                        Hz_data[i,j,k,f] = h_fields[2]
 
         dims = ("x", "y", "z", "f")
         coords = {"x": x, "y": y, "z": z, "f": frequencies}
@@ -2400,8 +2397,8 @@ class Near2Far(Tidy3dBaseModel):
 
     def eta(self, frequency) -> complex:
         """Returns the complex wave impedance associated with the background medium."""
-        index_n, index_k = self.nk(frequency)
-        return ETA_0 / (index_n + 1j * index_k)
+        eps_complex = self.medium.eps_model(frequency)
+        return ETA_0 / np.sqrt(eps_complex)
 
     @classmethod
     # pylint:disable=too-many-arguments
@@ -2708,6 +2705,7 @@ class Near2Far(Tidy3dBaseModel):
         def integrate_2d(function, pts_u, pts_v):
             """Trapezoidal integration in two dimensions."""
             return np.trapz(np.trapz(function, pts_u, axis=0), pts_v, axis=0)
+            # return np.sum(np.sum(function, axis=0), axis=0)
 
         phase = [None] * 3
         propagation_factor = -1j * self.k(frequency)
