@@ -34,10 +34,10 @@ class SimulationData(Tidy3dBaseModel):
     >>> sim = Simulation(
     ...     size=(2, 4, 6),
     ...     grid_spec=GridSpec(wavelength=1.0),
-    ...     monitors=[monitor],
+    ...     monitors=[field_monitor],
     ...     run_time=2e-12,
     ... )
-    >>> field_data = FieldData(monitor=monitor, Ex=scalar_field)
+    >>> field_data = FieldData(monitor=field_monitor, Ex=scalar_field)
     >>> sim_data = SimulationData(simulation=sim, monitor_data={'field': field_data})
     """
 

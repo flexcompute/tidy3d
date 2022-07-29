@@ -1653,9 +1653,12 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         return Grid(boundaries=Coords(**boundary_dict))
 
     def epsilon(
-        self, box: Box, coord_key: str = "centers", freq: float = None
+        self,
+        box: Box,
+        coord_key: str = "centers",
+        freq: float = None,
     ) -> Dict[str, xr.DataArray]:
-        """Get array of permittivity at volume specified by box and freq
+        """Get array of permittivity at volume specified by box and freq.
 
         Parameters
         ----------
@@ -1680,6 +1683,37 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         """
 
         sub_grid = self.discretize(box)
+        return self.epsilon_on_grid(grid=sub_grid, coord_key=coord_key, freq=freq)
+
+    def epsilon_on_grid(
+        self,
+        grid: Grid,
+        coord_key: str = "centers",
+        freq: float = None,
+    ) -> Dict[str, xr.DataArray]:
+        """Get array of permittivity at a given freq on a given grid.
+
+        Parameters
+        ----------
+        grid : :class:`Grid`
+            Grid specifying where to measure the permittivity.
+        coord_key : str = 'centers'
+            Specifies at what part of the grid to return the permittivity at.
+            Accepted values are ``{'centers', 'boundaries', 'Ex', 'Ey', 'Ez'}``.
+            The field values (eg. 'Ex') correspond to the correponding field locations on the yee
+            lattice. If field values are selected, the corresponding epsilon component from the
+            main diagonal of the epsilon tensor is returned. Otherwise, the average of the diagonal
+            values is returned.
+        freq : float = None
+            The frequency to evaluate the mediums at.
+            If not specified, evaluates at infinite frequency.
+        Returns
+        -------
+        xarray.DataArray
+            Datastructure containing the relative permittivity values and location coordinates.
+            For details on xarray DataArray objects,
+            refer to `xarray's Documentaton <https://tinyurl.com/2zrzsp7b>`_.
+        """
 
         def get_eps(medium: Medium, freq: float):
             """Select the correct epsilon component if field locations are requested."""
@@ -1708,7 +1742,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
             return xr.DataArray(eps_array, coords=coords, dims=("x", "y", "z"))
 
         # combine all data into dictionary
-        coords = sub_grid[coord_key]
+        coords = grid[coord_key]
         return make_eps_data(coords)
 
     @classmethod
