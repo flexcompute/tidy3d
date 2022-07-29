@@ -10,7 +10,7 @@ import pydantic
 
 from ...components.base import Tidy3dBaseModel, cached_property
 from ...components import Box
-from ...components import Simulation
+from ...components import Simulation, Grid
 from ...components import ModeSpec
 from ...components.monitor import ModeSolverMonitor, ModeMonitor
 from ...components.source import ModeSource, SourceTime
@@ -72,11 +72,6 @@ class ModeSolver(Tidy3dBaseModel):
         return self.plane.size.index(0.0)
 
     @cached_property
-    def _plane_sym(self) -> Box:
-        """Potentially smaller plane if symmetries present in the simulation."""
-        return self.simulation.min_sym_box(self.plane)
-
-    @cached_property
     def solver_symmetry(self) -> Tuple[Symmetry, Symmetry]:
         """Get symmetry for solver for propagation along self.normal axis."""
         mode_symmetry = list(self.simulation.symmetry)
@@ -85,6 +80,22 @@ class ModeSolver(Tidy3dBaseModel):
                 mode_symmetry[dim] = 0
         _, solver_sym = self.plane.pop_axis(mode_symmetry, axis=self.normal_axis)
         return solver_sym
+
+    @cached_property
+    def _solver_grid(self) -> Grid:
+        """Grid for the mode solver, including extension in the normal direction, which is needed
+        to get epsilon from the simulation. The mode fields coordinate along the normal direction
+        will be reset to the exact plane position after the solve."""
+        plane_sym = self.simulation.min_sym_box(self.plane)
+        boundaries = self.simulation.discretize(plane_sym, extend=True).boundaries.to_list
+        # Remove extension on the min side if symmetry present
+        bounds_norm, bounds_plane = plane_sym.pop_axis(boundaries, self.normal_axis)
+        bounds_plane = list(bounds_plane)
+        for dim, sym in enumerate(self.solver_symmetry):
+            if sym != 0:
+                bounds_plane[dim] = bounds_plane[dim][1:]
+        boundaries = plane_sym.unpop_axis(bounds_norm, bounds_plane, axis=self.normal_axis)
+        return Grid(boundaries=dict(zip("xyz", boundaries)))
 
     def solve(self) -> ModeSolverData:
         """:class:`.ModeSolverData` containing the field and effective index data.
@@ -106,9 +117,8 @@ class ModeSolver(Tidy3dBaseModel):
             :class:`.ModeSolverData` object containing the effective index and mode fields.
         """
 
-        plane_grid_sym = self.simulation.discretize(self._plane_sym)
         _, _solver_coords = self.plane.pop_axis(
-            plane_grid_sym.boundaries.to_list, axis=self.normal_axis
+            self._solver_grid.boundaries.to_list, axis=self.normal_axis
         )
 
         # Compute and store the modes at all frequencies
@@ -129,7 +139,7 @@ class ModeSolver(Tidy3dBaseModel):
         # Construct and add all the data for the fields
         for field_name in ("Ex", "Ey", "Ez", "Hx", "Hy", "Hz"):
 
-            xyz_coords = plane_grid_sym[field_name].to_list
+            xyz_coords = self._solver_grid[field_name].to_list
             xyz_coords[self.normal_axis] = [self.plane.center[self.normal_axis]]
             scalar_field_data = ScalarModeFieldDataArray(
                 np.stack([field_freq[field_name] for field_freq in fields], axis=-2),
@@ -177,12 +187,12 @@ class ModeSolver(Tidy3dBaseModel):
             simulation=new_simulation, monitor_data={MODE_MONITOR_NAME: monitor_data}
         )
 
-    def _get_epsilon(self, plane: Box, freq: float) -> ArrayLike[complex, 4]:
+    def _get_epsilon(self, freq: float) -> ArrayLike[complex, 4]:
         """Compute the diagonal components of the epsilon tensor in the plane."""
 
-        eps_xx = self.simulation.epsilon(plane, "Ex", freq)
-        eps_yy = self.simulation.epsilon(plane, "Ey", freq)
-        eps_zz = self.simulation.epsilon(plane, "Ez", freq)
+        eps_xx = self.simulation.epsilon_on_grid(self._solver_grid, "Ex", freq)
+        eps_yy = self.simulation.epsilon_on_grid(self._solver_grid, "Ey", freq)
+        eps_zz = self.simulation.epsilon_on_grid(self._solver_grid, "Ez", freq)
 
         return np.stack((eps_xx, eps_yy, eps_zz), axis=0)
 
@@ -191,16 +201,14 @@ class ModeSolver(Tidy3dBaseModel):
         normal axis rotated to z."""
 
         # Get diagonal epsilon components in the plane
-        eps_xx, eps_yy, eps_zz = self._get_epsilon(self._plane_sym, freq)
+        eps_diag = self._get_epsilon(freq)
 
         # get rid of normal axis
-        eps_xx = np.squeeze(eps_xx, axis=self.normal_axis)
-        eps_yy = np.squeeze(eps_yy, axis=self.normal_axis)
-        eps_zz = np.squeeze(eps_zz, axis=self.normal_axis)
+        eps_diag = np.take(eps_diag, indices=[0], axis=1 + self.normal_axis)
+        eps_diag = np.squeeze(eps_diag, axis=1 + self.normal_axis)
 
         # swap axes to plane coordinates (normal_axis goes to z)
-        eps_sim_ax = (eps_xx, eps_yy, eps_zz)
-        eps_zz, (eps_xx, eps_yy) = self.plane.pop_axis(eps_sim_ax, axis=self.normal_axis)
+        eps_zz, (eps_xx, eps_yy) = self.plane.pop_axis(eps_diag, axis=self.normal_axis)
 
         # construct eps to feed to mode solver
         return np.stack((eps_xx, eps_yy, eps_zz), axis=0)

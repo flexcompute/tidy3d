@@ -430,14 +430,6 @@ class ModeSolverData(ElectromagneticFieldData):
         """Imaginary part of the propagation index."""
         return self.n_complex.imag
 
-    def apply_symmetry(self, simulation: Simulation) -> "ModeSolverData":
-        """Return copy of self with symmetry applied. For mode solver, use non-expanded grid."""
-        return self._apply_field_symmetry(
-            symmetry=simulation.symmetry,
-            symmetry_center=simulation.center,
-            grid_expanded=simulation.discretize(self.monitor, extend=False),
-        )
-
     def sel_mode_index(self, mode_index: pd.NonNegativeInt) -> FieldData:
         """Return :class:`.FieldData` for the specificed mode index."""
 
