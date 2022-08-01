@@ -89,9 +89,6 @@ class AbstractFieldData(MonitorData, ABC):
 
         for field_name, scalar_data in self.field_components.items():
 
-            if scalar_data is None:
-                continue
-
             grid_key = self.grid_locations[field_name]
             eigenval_fn = self.symmetry_eigenvalues[field_name]
 
@@ -168,14 +165,8 @@ class AbstractFieldData(MonitorData, ABC):
         # loop through field components
         for field_name, field_data in self.field_components.items():
 
-            # no field data, just ignore
-            if field_data is None:
-                continue
-
-            # loop through x, y, z dimensions
+            # loop through x, y, z dimensions and raise an error if only one element along dim
             for coord_name, coords_supplied in supplied_coord_map.items():
-
-                # if only one element in data long dim, just assign as coord
                 coord_data = field_data.coords[coord_name]
                 if coord_data.size == 1:
                     raise DataError(
@@ -185,15 +176,9 @@ class AbstractFieldData(MonitorData, ABC):
                         f"supply {coord_name}=None to skip it."
                     )
 
-                # otherwise, interpolate at the supplied coordinates for this dim
-                try:
-                    field_data = field_data.interp(
-                        {coord_name: coords_supplied}, kwargs={"bounds_error": True}
-                    )
-                except Exception as e:
-                    raise e
-
-            centered_fields[field_name] = field_data.copy()
+            centered_fields[field_name] = field_data.interp(
+                **supplied_coord_map, kwargs={"bounds_error": True}
+            )
 
         # combine all centered fields in a dataset
         return xr.Dataset(centered_fields)
@@ -205,14 +190,8 @@ class ElectromagneticFieldData(AbstractFieldData, ABC):
     @property
     def field_components(self) -> Dict[str, DataArray]:
         """Maps the field components to thier associated data."""
-        return dict(
-            Ex=self.Ex,  # pylint:disable=no-member
-            Ey=self.Ey,  # pylint:disable=no-member
-            Ez=self.Ez,  # pylint:disable=no-member
-            Hx=self.Hx,  # pylint:disable=no-member
-            Hy=self.Hy,  # pylint:disable=no-member
-            Hz=self.Hz,  # pylint:disable=no-member
-        )
+        # pylint:disable=no-member
+        return {field: getattr(self, field) for field in self.monitor.fields}
 
     @property
     def grid_locations(self) -> Dict[str, str]:
@@ -287,10 +266,6 @@ class FieldData(ElectromagneticFieldData):
         """Return copy of self after normalization is applied using source spectrum function."""
         fields_norm = {}
         for field_name, field_data in self.field_components.items():
-
-            if field_data is None:
-                continue
-
             src_amps = source_spectrum_fn(field_data.f)
             fields_norm[field_name] = field_data / src_amps
 
@@ -419,6 +394,12 @@ class ModeSolverData(ElectromagneticFieldData):
         title="Propagation Index",
         description="Complex-valued effective propagation constants associated with the mode.",
     )
+
+    @property
+    def field_components(self) -> Dict[str, DataArray]:
+        """Maps the field components to thier associated data."""
+        # pylint:disable=no-member
+        return {field: getattr(self, field) for field in ["Ex", "Ey", "Ez", "Hx", "Hy", "Hz"]}
 
     @property
     def n_eff(self):
