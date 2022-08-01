@@ -184,7 +184,7 @@ class SimulationData(Tidy3dBaseModel):
         xyz_kwargs = {}
         for dim, centers in zip("xyz", (centers.x, centers.y, centers.z)):
             scalar_data = list(monitor_data.field_components.values())
-            coord_lens = [len(data.coords[dim]) for data in scalar_data if data is not None]
+            coord_lens = [len(data.coords[dim]) for data in scalar_data]
             if all(ncoords > 1 for ncoords in coord_lens):
                 xyz_kwargs[dim] = centers
 
@@ -286,11 +286,6 @@ class SimulationData(Tidy3dBaseModel):
             if field_name not in field_monitor_data.field_components:
                 raise DataError(f"field_name '{field_name}' not found in data.")
             field_data = field_monitor_data.field_components[field_name]
-            if field_data is None:
-                raise DataError(
-                    f"field_name '{field_name}' was not stored in data, "
-                    "must be specified in the monitor.fields"
-                )
 
         # interp out any monitor.size==0 dimensions
         monitor = self.simulation.get_monitor_by_name(field_monitor_name)
