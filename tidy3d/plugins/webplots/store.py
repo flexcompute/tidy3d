@@ -1,7 +1,7 @@
 """ Data store to hold hdf5 data. """
 from abc import ABC, abstractmethod
 
-from ...components.data import SimulationData
+from ...components.data.sim_data import SimulationData
 from .simulation import SimulationPlotly
 from .data import DataPlotly
 

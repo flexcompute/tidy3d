@@ -1,7 +1,7 @@
 """Defines electric current sources for injecting light into simulation."""
 
 from abc import ABC, abstractmethod
-from typing import Union, Tuple
+from typing import Union, Tuple, Dict
 import logging
 
 from typing_extensions import Literal
@@ -15,6 +15,10 @@ from .geometry import Box
 from .mode import ModeSpec
 from .viz import add_ax_if_none, PlotParams, plot_params_source
 from .viz import ARROW_COLOR_SOURCE, ARROW_ALPHA, ARROW_COLOR_POLARIZATION
+from .data.data_array import ScalarFieldDataArray
+from .data.monitor_data import FieldData
+from .monitor import FieldMonitor
+
 from ..constants import RADIAN, HERTZ, MICROMETER, GLANCING_CUTOFF
 from ..constants import inf  # pylint:disable=unused-import
 from ..log import SetupError
@@ -399,21 +403,117 @@ class PointDipole(CurrentSource):
     size: Tuple[Literal[0], Literal[0], Literal[0]] = (0, 0, 0)
 
 
-class FieldSource(Source, ABC):
+class CustomSource(Source, ABC):
     """A Source defined by the desired E and/or H fields."""
 
+    @cached_property
+    def field_components(self) -> Dict[str, ScalarFieldDataArray]:
+        """Dictionary of field components for the custom source."""
 
-""" TODO: Custom currents """
+        # add all field components to a dict if specified.
+        field_component_dict = {}
+        for field_name in "EHJM":
+            for cmp_name in "xyz":
+                key = field_name + cmp_name
+                if hasattr(self, key):
+                    field = getattr(self, key)
+                    if field is not None:
+                        field_component_dict[key] = field
+
+        # replace currents with fields.
+        field_components_eh = {}
+        for key, value in field_component_dict.items():
+            new_key = key.replace("J", "E")
+            new_key = new_key.replace("M", "H")
+            field_components_eh[new_key] = value
+
+        return field_components_eh
+
+    @cached_property
+    def monitor(self) -> FieldMonitor:
+        """Equivalent monitor corresponding to custom source."""
+        field_cmps = self.field_components
+        freqs = list(field_cmps.values())[0].f
+        fields = [key for key, _ in field_cmps.items()]
+        name = self.name if self.name is not None else "CustomSource"
+        return FieldMonitor(
+            center=self.center, size=self.size, freqs=freqs, fields=fields, name=name
+        )
+
+    @cached_property
+    def field_data(self) -> FieldData:
+        """Representation of custom source as a field data."""
+        return FieldData(monitor=self.monitor, **self.field_components)
 
 
-class CustomSource(Source, ABC):
-    """Implements custom current components specified by data."""
-
-    data: ArrayLike[float, 2]
-
-
-class CustomFieldSource(FieldSource, CustomSource):
+class CustomFieldSource(CustomSource):
     """Implements custom E, H fields specified by data."""
+
+    Ex: ScalarFieldDataArray = pydantic.Field(
+        None,
+        title="Ex",
+        description="Spatial distribution of the x-component of the electric field.",
+    )
+    Ey: ScalarFieldDataArray = pydantic.Field(
+        None,
+        title="Ey",
+        description="Spatial distribution of the y-component of the electric field.",
+    )
+    Ez: ScalarFieldDataArray = pydantic.Field(
+        None,
+        title="Ez",
+        description="Spatial distribution of the z-component of the electric field.",
+    )
+    Hx: ScalarFieldDataArray = pydantic.Field(
+        None,
+        title="Hx",
+        description="Spatial distribution of the x-component of the magnetic field.",
+    )
+    Hy: ScalarFieldDataArray = pydantic.Field(
+        None,
+        title="Hy",
+        description="Spatial distribution of the y-component of the magnetic field.",
+    )
+    Hz: ScalarFieldDataArray = pydantic.Field(
+        None,
+        title="Hz",
+        description="Spatial distribution of the z-component of the magnetic field.",
+    )
+
+
+class CustomCurrentSource(CustomSource):
+    """Implements custom J, M fields specified by data."""
+
+    Jx: ScalarFieldDataArray = pydantic.Field(
+        None,
+        title="Ex",
+        description="Spatial distribution of the x-component of the electric current.",
+    )
+    Jy: ScalarFieldDataArray = pydantic.Field(
+        None,
+        title="Ey",
+        description="Spatial distribution of the y-component of the electric current.",
+    )
+    Jz: ScalarFieldDataArray = pydantic.Field(
+        None,
+        title="Ez",
+        description="Spatial distribution of the z-component of the electric current.",
+    )
+    Mx: ScalarFieldDataArray = pydantic.Field(
+        None,
+        title="Mx",
+        description="Spatial distribution of the x-component of the magnetic current.",
+    )
+    My: ScalarFieldDataArray = pydantic.Field(
+        None,
+        title="My",
+        description="Spatial distribution of the y-component of the magnetic current.",
+    )
+    Mz: ScalarFieldDataArray = pydantic.Field(
+        None,
+        title="Mz",
+        description="Spatial distribution of the z-component of the magnetic current.",
+    )
 
 
 """ Field Sources can be defined either on a (1) surface or (2) volume. Defines injection_axis """
@@ -443,6 +543,10 @@ class VolumeSource(Source, ABC):
 
 
 """ Field Sources require more specification, for now, they all have a notion of a direction."""
+
+
+class FieldSource(Source, ABC):
+    """A Source defined by the desired E and/or H fields."""
 
 
 class DirectionalSource(FieldSource, ABC):

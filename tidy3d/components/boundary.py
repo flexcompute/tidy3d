@@ -8,7 +8,7 @@ import pydantic as pd
 import numpy as np
 
 from .base import Tidy3dBaseModel, cached_property
-from .types import Complex, Axis, Literal
+from .types import Complex, Axis
 from .source import GaussianBeam, ModeSource, PlaneWave
 from .medium import Medium
 
@@ -331,7 +331,6 @@ PMLTypes = Union[PML, StablePML, Absorber, None]
 
 # types of boundaries that can be used in Simulation
 
-Symmetry = Literal[0, -1, 1]
 BoundaryEdgeType = Union[
     Periodic, PECBoundary, PMCBoundary, PML, StablePML, Absorber, BlochBoundary
 ]

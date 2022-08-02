@@ -8,17 +8,16 @@ import numpy as np
 import pydantic as pd
 
 from ..base import TYPE_TAG_STR, Tidy3dBaseModel
-from ..types import Axis, Coordinate
-from ..boundary import Symmetry
+from ..types import Axis, Coordinate, Symmetry
+
 from ..grid import Grid
 from ..validators import enforce_monitor_fields_present
 from ..monitor import MonitorType, FieldMonitor, FieldTimeMonitor, ModeSolverMonitor
 from ..monitor import ModeMonitor, FluxMonitor, FluxTimeMonitor, PermittivityMonitor
-from ...log import DataError
-
 from .data_array import ScalarFieldDataArray, ScalarFieldTimeDataArray, ScalarModeFieldDataArray
 from .data_array import FluxTimeDataArray, FluxDataArray, ModeIndexDataArray, ModeAmpsDataArray
 from .data_array import DataArray
+from ...log import DataError
 
 
 class MonitorData(Tidy3dBaseModel, ABC):
@@ -38,8 +37,24 @@ class MonitorData(Tidy3dBaseModel, ABC):
         symmetry_center: Coordinate,
         grid_expanded: Grid,
     ) -> MonitorData:
-        """Return copy of self with symmetry applied."""
-        return self
+        """Return copy of self with Symmetry applied.
+
+        Parameters
+        ----------
+        symmetry : Tuple[int, int, int]
+            Tuple of integers [-1, 0, or 1] defining reflection symmetry across the x,y,z planes.
+        symmetry_center : Tuple[float, float, float]
+            Intersection point (x,y,z) of the three symmetry planes.
+        grid_expanded : :class:`.Grid`
+            Grid describing the background space where the symmetry will be expaded into.
+
+        Returns
+        -------
+        :class:`MonitorData`
+            A data object with the symmetry expanded fields.
+        """
+
+        return self.copy()
 
     def normalize(
         self, source_spectrum_fn: Callable[[float], complex]  # pylint:disable=unused-argument
@@ -49,7 +64,7 @@ class MonitorData(Tidy3dBaseModel, ABC):
 
 
 class AbstractFieldData(MonitorData, ABC):
-    """Collection of scalar fields with some symmetry properties."""
+    """Collection of scalar fields with some Symmetry properties."""
 
     monitor: Union[FieldMonitor, FieldTimeMonitor, PermittivityMonitor, ModeSolverMonitor]
 
@@ -66,16 +81,25 @@ class AbstractFieldData(MonitorData, ABC):
     @property
     @abstractmethod
     def symmetry_eigenvalues(self) -> Dict[str, Callable[[Axis], float]]:
-        """Maps field components to their (positive) symmetry eigenvalues."""
+        """Maps field components to their (positive) Symmetry eigenvalues."""
 
-    def apply_symmetry(  # pylint:disable=too-many-locals
+    # pylint:disable=too-many-locals
+    def apply_symmetry(
         self,
         symmetry: Tuple[Symmetry, Symmetry, Symmetry],
         symmetry_center: Coordinate,
         grid_expanded: Grid,
     ) -> AbstractFieldData:
-        """Create a copy of the :class:`.AbstractFieldData` with the fields expanded based on
-        symmetry, if any.
+        """Create a copy of the :class:`.AbstractFieldData` with Symmetry applied
+
+        Parameters
+        ----------
+        symmetry : Tuple[int, int, int]
+            Tuple of integers [-1, 0, or 1] defining reflection symmetry across the x,y,z planes.
+        symmetry_center : Tuple[float, float, float]
+            Intersection point (x,y,z) of the three symmetry planes.
+        grid_expanded : :class:`.Grid`
+            Grid describing the background space where the symmetry will be expaded into.
 
         Returns
         -------
@@ -100,14 +124,14 @@ class AbstractFieldData(MonitorData, ABC):
 
                 dim_name = "xyz"[sym_dim]
 
-                # Continue if no symmetry along this dimension
+                # Continue if no Symmetry along this dimension
                 if sym_val == 0:
                     continue
 
                 # Get coordinates for this field component on the expanded grid
                 coords = grid_locations.to_list[sym_dim]
 
-                # Get indexes of coords that lie on the left of the symmetry center
+                # Get indexes of coords that lie on the left of the Symmetry center
                 flip_inds = np.where(coords < sym_center)[0]
 
                 # Get the symmetric coordinates on the right
@@ -119,7 +143,7 @@ class AbstractFieldData(MonitorData, ABC):
                 scalar_data = scalar_data.sel({dim_name: coords_interp}, method="nearest")
                 scalar_data = scalar_data.assign_coords({dim_name: coords})
 
-                # apply the symmetry eigenvalue (if defined) to the flipped values
+                # apply the Symmetry eigenvalue (if defined) to the flipped values
                 if eigenval_fn is not None:
                     sym_eigenvalue = eigenval_fn(sym_dim)
                     scalar_data[{dim_name: flip_inds}] *= sym_val * sym_eigenvalue
@@ -201,7 +225,7 @@ class ElectromagneticFieldData(AbstractFieldData, ABC):
 
     @property
     def symmetry_eigenvalues(self) -> Dict[str, Callable[[Axis], float]]:
-        """Maps field components to their (positive) symmetry eigenvalues."""
+        """Maps field components to their (positive) Symmetry eigenvalues."""
 
         return dict(
             Ex=lambda dim: -1 if (dim == 0) else +1,
@@ -465,7 +489,7 @@ class PermittivityData(AbstractFieldData):
 
     @property
     def symmetry_eigenvalues(self) -> Dict[str, Callable[[Axis], float]]:
-        """Maps field components to their (positive) symmetry eigenvalues."""
+        """Maps field components to their (positive) Symmetry eigenvalues."""
         return dict(eps_xx=None, eps_yy=None, eps_zz=None)
 
     eps_xx: ScalarFieldDataArray = pd.Field(

@@ -12,4 +12,4 @@ from .monitor_data_n2f import AbstractNear2FarData
 from .monitor_data_n2f import Near2FarAngleData, Near2FarCartesianData, Near2FarKSpaceData
 from .near2far import Near2FarSurface, RadiationVectors
 
-from .sim_data import SimulationData, DATA_TYPE_MAP
+from .sim_data import DATA_TYPE_MAP
