@@ -1,17 +1,20 @@
 """ Simulation Level Data """
-from typing import Dict, Optional
+from typing import Dict, Optional, Union
 
 import xarray as xr
 import pydantic as pd
 import numpy as np
 
 from .monitor_data import MonitorDataType, AbstractFieldData
+from .near2far_data import RadiationVectorData, Near2FarDataType
 from ..base import Tidy3dBaseModel
 from ..simulation import Simulation
 from ..boundary import BlochBoundary
 from ..types import Ax, Axis, annotate_type, Literal
 from ..viz import equal_aspect, add_ax_if_none
 from ...log import log, DataError
+
+MonitorDataType = Union[MonitorDataType, Near2FarDataType]
 
 
 class SimulationData(Tidy3dBaseModel):
@@ -147,10 +150,12 @@ class SimulationData(Tidy3dBaseModel):
 
         return monitor_data.normalize(source_spectrum_fn)
 
-    def load_field_monitor(self, monitor_name: str) -> AbstractFieldData:
+    def load_field_monitor(
+        self, monitor_name: str
+        ) -> Union[AbstractFieldData, RadiationVectorData]:
         """Load monitor and raise exception if not a field monitor."""
         mon_data = self[monitor_name]
-        if not isinstance(mon_data, AbstractFieldData):
+        if not isinstance(mon_data, Union[AbstractFieldData, RadiationVectorData]):
             raise DataError(
                 f"data for monitor '{monitor_name}' does not contain field data "
                 f"as it is a `{type(mon_data)}`."

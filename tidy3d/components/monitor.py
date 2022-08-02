@@ -6,13 +6,15 @@ import pydantic
 import numpy as np
 
 from .types import Ax, EMField, ArrayLike, Bound, FreqArray
+from .types import Literal, Direction, Coordinate, Axis, ObsGridArray
 from .geometry import Box
+from .medium import Medium
 from .validators import assert_plane
 from .base import cached_property
 from .mode import ModeSpec
 from .viz import PlotParams, plot_params_monitor, ARROW_COLOR_MONITOR, ARROW_ALPHA
-from ..log import SetupError
-from ..constants import HERTZ, SECOND
+from ..log import SetupError, log, DataError
+from ..constants import HERTZ, SECOND, MICROMETER, RADIAN
 
 
 BYTES_REAL = 4
@@ -447,6 +449,241 @@ class ModeSolverMonitor(AbstractModeMonitor):
         return 6 * BYTES_COMPLEX * num_cells * len(self.freqs) * self.mode_spec.num_modes
 
 
+class AbstractNear2FarMonitor(AbstractFieldMonitor, FreqMonitor):
+    """:class:`Monitor` class that samples electromagnetic near fields in the frequency domain
+       and invokes the computation of far fields.
+    """
+
+    normal_dir: Direction = pydantic.Field(
+        None,
+        title="Normal vector orientation",
+        description=":class:`.Direction` of the surface monitor's normal vector w.r.t. "
+        "the positive x, y or z unit vectors. Must be one of '+' or '-'.",
+    )
+
+    custom_origin: Coordinate = pydantic.Field(
+        None,
+        title="Local origin",
+        description="Local origin used for defining observation points. If ``None``, uses the "
+        "monitor's center.",
+        units=MICROMETER,
+    )
+
+    exclude_surfaces: Tuple[Literal["x-", "x+", "y-", "y+", "z-", "z+"]] = pydantic.Field(
+        None,
+        title="Excluded surfaces",
+        description="Surfaces to exclude during the near-to-far projection.",
+    )
+
+    medium: Medium = pydantic.Field(
+        Medium(permittivity=1),
+        title="Background medium",
+        description="Background medium in which to radiate near fields to far fields. "
+        "If not provided, uses free space.",
+    )
+
+    @pydantic.root_validator()
+    def normal_dir_exists_for_surface(cls, values):
+        """If the monitor is a surface, set default ``normal_dir`` if not provided.
+        If the monitor is a box, warn that ``normal_dir`` is relevant only for surfaces."""
+        normal_dir = values.get("normal_dir")
+        name = values.get("name")
+        size = values.get("size")
+        if size.count(0.0) != 1:
+            if normal_dir is not None:
+                log.warning(
+                    "The ``normal_dir`` field is relevant only for surface monitors "
+                    f"and will be ignored for monitor {name}, which is a box."
+                )
+        else:
+            if normal_dir is None:
+                raise SetupError(f"Must specify ``normal_dir`` for surface monitor {name}.")
+        return values
+
+    @pydantic.root_validator()
+    def check_excluded_surfaces(cls, values):
+        """Error if ``exclude_surfaces`` is provided for a surface monitor."""
+        exclude_surfaces = values.get("exclude_surfaces")
+        if exclude_surfaces is None:
+            return values
+        name = values.get("name")
+        size = values.get("size")
+        if size.count(0.0) > 0:
+            raise SetupError(
+                f"Can't specify ``exclude_surfaces`` for surface monitor {name}; "
+                "valid for box monitors only."
+            )
+        return values
+
+    @property
+    def axis(self) -> Axis:
+        """Returns the :class:`.Axis` normal to this surface."""
+        # assume that the monitor's axis is in the direction where the monitor is thinnest
+        # and errors if the monitor is a box
+        if self.size.count(0.0) != 1:
+            raise DataError(
+                "Requested ``axis`` property for a box monitor; ``axis`` is defined "
+                "for surface monitors only."
+            )
+        return self.size.index(0.0)
+
+    @property
+    def local_origin(self) -> Coordinate:
+        """Returns the local origin associated with this monitor."""
+        if self.custom_origin is None:
+            return self.center
+        return self.custom_origin
+
+
+class Near2FarAngleMonitor(AbstractNear2FarMonitor):
+    """:class:`Monitor` that samples electromagnetic near fields in the frequency domain
+       and invokes the computation of far fields at given observation angles.
+
+    Example
+    -------
+    >>> monitor = Near2FarAngleMonitor(
+    ...     center=(1,2,3),
+    ...     size=(2,2,2),
+    ...     freqs=[250e12, 300e12],
+    ...     name='n2f_monitor',
+    ...     custom_origin=(1,2,3),
+    ...     angles_phi=[0, np.pi/2],
+    ...     angles_theta=list(np.linspace(-np.pi/2, np.pi/2, 100))
+    ...     )
+    """
+
+    _data_type: Literal["Near2FarData"] = pydantic.Field("Near2FarAngleData")
+
+    theta: ObsGridArray = pydantic.Field(
+        ...,
+        title="Polar Angles",
+        description="Polar angles relative to ``local_origin`` at which to compute far fields.",
+        units=RADIAN,
+    )
+
+    phi: ObsGridArray = pydantic.Field(
+        ...,
+        title="Azimuth Angles",
+        description="Azimuth angles relative to ``local_origin`` at which to compute far fields.",
+        units=RADIAN,
+    )
+
+    def storage_size(self, num_cells: int, tmesh: ArrayLike[float, 1]) -> int:
+        # stores 1 complex number per pair of angles, per frequency,
+        # for N_theta, N_phi, L_theta, and L_phi (4 components)
+        return BYTES_COMPLEX * len(self.theta) * len(self.phi) * len(self.freqs) * 4
+
+
+class Near2FarCartesianMonitor(AbstractNear2FarMonitor):
+    """:class:`Monitor` that samples electromagnetic near fields in the frequency domain
+       and invokes the computation of far fields on a Cartesian observation plane.
+
+    Example
+    -------
+    >>> monitor = Near2FarCartesianMonitor(
+    ...     center=(1,2,3),
+    ...     size=(2,2,2),
+    ...     freqs=[250e12, 300e12],
+    ...     name='n2f_monitor',
+    ...     custom_origin=(1,2,3),
+    ...     x=[-1, 0, 1],
+    ...     y=[-2, -1, 0, 1, 2],
+    ...     plane_axis=2,
+    ...     plane_distance=5
+    ...     )
+    """
+
+    _data_type: Literal["Near2FarCartesianData"] = pydantic.Field("Near2FarCartesianData")
+
+    plane_axis: Axis = pydantic.Field(
+        ...,
+        title="Observation plane axis",
+        description="Axis along which the observation plane is oriented.",
+    )
+
+    plane_distance: float = pydantic.Field(
+        ...,
+        title="Observation plane signed distance",
+        description="Signed distance of the observation plane along ``plane_axis`` "
+        "w.r.t. ``local_origin``",
+    )
+
+    x: ObsGridArray = pydantic.Field(
+        ...,
+        title="Local x observation coordinates",
+        description="Local x observation coordinates w.r.t. ``local_origin`` and ``plane_axis``. "
+        "When ``plane_axis`` is 0, this corresponds to the global y axis. "
+        "When ``plane_axis`` is 1, this corresponds to the global x axis. "
+        "When ``plane_axis`` is 2, this corresponds to the global x axis. ",
+        units=MICROMETER,
+    )
+
+    y: ObsGridArray = pydantic.Field(
+        ...,
+        title="Local y observation coordinates",
+        description="Local y observation coordinates w.r.t. ``local_origin`` and ``plane_axis``. "
+        "When ``plane_axis`` is 0, this corresponds to the global z axis. "
+        "When ``plane_axis`` is 1, this corresponds to the global z axis. "
+        "When ``plane_axis`` is 2, this corresponds to the global y axis. ",
+        units=MICROMETER,
+    )
+
+    def storage_size(self, num_cells: int, tmesh: ArrayLike[float, 1]) -> int:
+        # stores 1 complex number per pair of angles, per frequency,
+        # for N_theta, N_phi, L_theta, and L_phi (4 components)
+        return BYTES_COMPLEX * len(self.x) * len(self.y) * len(self.freqs) * 4
+
+
+class Near2FarKSpaceMonitor(AbstractNear2FarMonitor):
+    """:class:`Monitor` that samples electromagnetic near fields in the frequency domain
+       and invokes the computation of far fields on an observation plane defined in k-space.
+
+    Example
+    -------
+    >>> monitor = Near2FarKSpaceMonitor(
+    ...     center=(1,2,3),
+    ...     size=(2,2,2),
+    ...     freqs=[250e12, 300e12],
+    ...     name='n2f_monitor',
+    ...     custom_origin=(1,2,3),
+    ...     u_axis=2,
+    ...     ux=[1,2],
+    ...     uy=[3,4,5]
+    ...     )
+    """
+
+    _data_type: Literal["Near2FarKSpaceData"] = pydantic.Field("Near2FarKSpaceData")
+
+    u_axis: Axis = pydantic.Field(
+        ...,
+        title="Observation plane axis",
+        description="Axis along which the observation plane is oriented.",
+    )
+
+    ux: ObsGridArray = pydantic.Field(
+        ...,
+        title="Normalized kx",
+        description="Local x component of wave vectors on the observation plane, "
+        "relative to ``local_origin`` and oriented with respect to ``u_axis``, "
+        "normalized by (2*pi/lambda) where lambda is the wavelength "
+        "associated with the background medium.",
+    )
+
+    uy: ObsGridArray = pydantic.Field(
+        ...,
+        title="Normalized ky",
+        description="Local y component of wave vectors on the observation plane, "
+        "relative to ``local_origin`` and oriented with respect to ``u_axis``, "
+        "normalized by (2*pi/lambda) where lambda is the wavelength "
+        "associated with the background medium.",
+    )
+
+    def storage_size(self, num_cells: int, tmesh: ArrayLike[float, 1]) -> int:
+        # stores 1 complex number per pair of angles, per frequency,
+        # for N_theta, N_phi, L_theta, and L_phi (4 components)
+        return BYTES_COMPLEX * len(self.ux) * len(self.uy) * len(self.freqs) * 4
+
+
 # types of monitors that are accepted by simulation
 MonitorType = Union[
     FieldMonitor,
@@ -456,4 +693,7 @@ MonitorType = Union[
     FluxTimeMonitor,
     ModeMonitor,
     ModeSolverMonitor,
+    Near2FarAngleMonitor,
+    Near2FarCartesianMonitor,
+    Near2FarKSpaceMonitor,
 ]
