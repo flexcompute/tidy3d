@@ -48,7 +48,7 @@ class DataPlotly(UIComponent, ABC):
     #     return f"monitor_{self.monitor_name}"
 
     @staticmethod
-    def sel_by_val(data, val: str) -> "data":
+    def sel_by_val(data, val: str) -> Tidy3dBaseModelType:
         """Select the correct data type based on the `val` selection."""
         if val.lower() == "real":
             return data.real
@@ -67,7 +67,7 @@ class DataPlotly(UIComponent, ABC):
     @classmethod
     def from_monitor_data(
         cls, monitor_name: str, monitor_data: Tidy3dBaseModelType, **kwargs
-    ) -> "cls":
+    ) -> Tidy3dBaseModelType:
         """Load a PlotlyData UI component from the monitor name and its data."""
 
         # maps the supplied ``monitor_data`` argument to the corresponding plotly wrapper.

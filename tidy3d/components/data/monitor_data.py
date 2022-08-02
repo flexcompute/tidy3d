@@ -1,4 +1,6 @@
 """ Monitor Level Data, store the DataArrays associated with a single monitor."""
+from __future__ import annotations
+
 from abc import ABC, abstractmethod
 from typing import Union, Dict, Tuple, Callable
 import xarray as xr
@@ -32,13 +34,13 @@ class MonitorData(Tidy3dBaseModel, ABC):
 
     def apply_symmetry(
         self, simulation: Simulation  # pylint:disable=unused-argument
-    ) -> "MonitorData":
+    ) -> MonitorData:
         """Return copy of self with symmetry applied."""
         return self.copy()
 
     def normalize(
         self, source_spectrum_fn: Callable[[float], complex]  # pylint:disable=unused-argument
-    ) -> "MonitorData":
+    ) -> MonitorData:
         """Return copy of self after normalization is applied using source spectrum function."""
         return self.copy()
 
@@ -63,7 +65,7 @@ class AbstractFieldData(MonitorData, ABC):
     def symmetry_eigenvalues(self) -> Dict[str, Callable[[Axis], float]]:
         """Maps field components to their (positive) symmetry eigenvalues."""
 
-    def apply_symmetry(self, simulation: Simulation) -> "AbstractFieldData":
+    def apply_symmetry(self, simulation: Simulation) -> AbstractFieldData:
         """Return copy of self with symmetry applied."""
         return self._apply_field_symmetry(
             symmetry=simulation.symmetry,
@@ -76,7 +78,7 @@ class AbstractFieldData(MonitorData, ABC):
         symmetry: Tuple[Symmetry, Symmetry, Symmetry],
         symmetry_center: Coordinate,
         grid_expanded: Grid,
-    ) -> "AbstractFieldData":
+    ) -> AbstractFieldData:
         """Create a copy of the :class:`.AbstractFieldData` with symmetry applied
 
         Returns
@@ -262,7 +264,7 @@ class FieldData(ElectromagneticFieldData):
 
     _contains_monitor_fields = enforce_monitor_fields_present()
 
-    def normalize(self, source_spectrum_fn: Callable[[float], complex]) -> "FieldData":
+    def normalize(self, source_spectrum_fn: Callable[[float], complex]) -> FieldData:
         """Return copy of self after normalization is applied using source spectrum function."""
         fields_norm = {}
         for field_name, field_data in self.field_components.items():
@@ -520,7 +522,7 @@ class ModeData(MonitorData):
         """Imaginary part of the propagation index."""
         return self.n_complex.imag
 
-    def normalize(self, source_spectrum_fn) -> "ModeData":
+    def normalize(self, source_spectrum_fn) -> ModeData:
         """Return copy of self after normalization is applied using source spectrum function."""
         if self.amps is None:
             raise DataError("ModeData contains no amp data, can't normalize.")
@@ -543,7 +545,7 @@ class FluxData(MonitorData):
     monitor: FluxMonitor
     flux: FluxDataArray
 
-    def normalize(self, source_spectrum_fn) -> "Self":
+    def normalize(self, source_spectrum_fn) -> FluxData:
         """Return copy of self after normalization is applied using source spectrum function."""
         source_freq_amps = source_spectrum_fn(self.flux.f)
         source_power = abs(source_freq_amps) ** 2

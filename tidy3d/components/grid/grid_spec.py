@@ -1,4 +1,5 @@
 """ Defines classes specifying meshing in 1D and a collective class for 3D """
+from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from typing import Tuple, List, Union
@@ -504,7 +505,7 @@ class GridSpec(Tidy3dBaseModel):
         max_scale: pd.PositiveFloat = 1.4,
         override_structures: List[Structure] = (),
         mesher: MesherType = GradedMesher(),
-    ) -> "GridSpec":
+    ) -> GridSpec:
         """Use the same :class:`AutoGrid` along each of the three directions.
 
         Parameters
@@ -540,7 +541,7 @@ class GridSpec(Tidy3dBaseModel):
         )
 
     @classmethod
-    def uniform(cls, dl: float) -> "GridSpec":
+    def uniform(cls, dl: float) -> GridSpec:
         """Use the same :class:`UniformGrid` along each of the three directions.
 
         Parameters

@@ -1,4 +1,6 @@
 """Defines electromagnetic boundary conditions"""
+from __future__ import annotations
+
 from abc import ABC
 from typing import Union, Tuple, List
 
@@ -65,7 +67,7 @@ class BlochBoundary(BoundaryEdge):
     @classmethod
     def from_source(
         cls, source: BlochSourceType, domain_size: float, axis: Axis, medium: Medium = None
-    ) -> "BlochBoundary":
+    ) -> BlochBoundary:
         """Set the Bloch vector component based on a given angled source and its center frequency.
            Note that if a broadband angled source is used, only the frequency components near the
            center frequency will exhibit angled incidence at the expect angle. In this case, a

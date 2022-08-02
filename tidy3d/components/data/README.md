@@ -68,7 +68,7 @@ Final note: data for a `FluxMonitor` and `FluxTimeMonitor` are loaded in `FluxDa
 All `MonitorData` subclasses have a `.normalize()` method, which returns a copy of the instance normalized by a given source spectrum.
 
 ```python
-def normalize(self, source_spectrum_fn: Callable[[float], complex]) -> "MonitorData":
+def normalize(self, source_spectrum_fn: Callable[[float], complex]) -> MonitorData:
 ```
 
 Rather than raw data being passed to this, `source_spectrum_fn` is a function of frequency that returns the complex-valued source spectrum.  This was done to simplify things at the `SimulationData` level and provide more customizability.
@@ -82,7 +82,7 @@ All `MonitorData` subclasses also have an `.apply_symmetry()` method, whch retur
 def apply_symmetry(
     self,
     simulation: Simulation
-) -> "MonitorData":
+) -> MonitorData:
 ```
 
 #### Field-Like Data
