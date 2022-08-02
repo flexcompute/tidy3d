@@ -5,7 +5,7 @@ import xarray as xr
 import numpy as np
 
 from ..types import DataObject
-from ...constants import HERTZ, SECOND, MICROMETER
+from ...constants import HERTZ, SECOND, MICROMETER, RADIAN
 from ...log import DataError
 
 # maps the dimension names to their attributes
@@ -17,6 +17,10 @@ DIM_ATTRS = {
     "t": {"units": SECOND, "long_name": "time"},
     "direction": {"long_name": "propagation direction"},
     "mode_index": {"long_name": "mode index"},
+    "theta": {"units": RADIAN, "long_name": "elevation angle"},
+    "phi": {"units": RADIAN, "long_name": "azimuth angle"},
+    "ux": {"long_name": "normalized kx"},
+    "uy": {"long_name": "normalized ky"},
 }
 
 
@@ -214,3 +218,55 @@ class ModeIndexDataArray(DataArray):
 
     __slots__ = ("f", "mode_index")
     _data_attrs = {"long_name": "Propagation index"}
+
+
+class Near2FarAngleDataArray(DataArray):
+    """Radiation vectors in frequency domain as a function of angles theta and phi.
+
+    Example
+    -------
+    >>> f = np.linspace(1e14, 2e14, 10)
+    >>> theta = np.linspace(0, np.pi, 10)
+    >>> phi = np.linspace(0, 2*np.pi, 20)
+    >>> coords = dict(f=f, theta=theta, phi=phi)
+    >>> values = (1+1j) * np.random.random((len(theta), len(phi), len(f)))
+    >>> data = Near2FarAngleDataArray(values, coords=coords)
+    """
+
+    __slots__ = ("theta", "phi", "f")
+    _data_attrs = {"long_name": "radiation vectors"}
+
+
+class Near2FarCartesianDataArray(DataArray):
+    """Radiation vectors in frequency domain as a function of local x and y coordinates.
+
+    Example
+    -------
+    >>> f = np.linspace(1e14, 2e14, 10)
+    >>> x = np.linspace(0, 5, 10)
+    >>> y = np.linspace(0, 10, 20)
+    >>> coords = dict(f=f, x=x, y=y)
+    >>> values = (1+1j) * np.random.random((len(x), len(y), len(f)))
+    >>> data = Near2FarCartesianDataArray(values, coords=coords)
+    """
+
+    __slots__ = ("x", "y", "f")
+    _data_attrs = {"long_name": "radiation vectors"}
+
+
+class Near2FarKSpaceDataArray(DataArray):
+    """Radiation vector in frequency domain as a function of normalized
+    kx and ky vectors on the observation plane.
+
+    Example
+    -------
+    >>> f = np.linspace(1e14, 2e14, 10)
+    >>> ux = np.linspace(0, 5, 10)
+    >>> uy = np.linspace(0, 10, 20)
+    >>> coords = dict(f=f, ux=ux, uy=uy)
+    >>> values = (1+1j) * np.random.random((len(ux), len(uy), len(f)))
+    >>> data = Near2FarKSpaceDataArray(values, coords=coords)
+    """
+
+    __slots__ = ("ux", "uy", "f")
+    _data_attrs = {"long_name": "radiation vectors"}

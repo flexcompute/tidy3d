@@ -13,6 +13,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Bug in computing the `bounds` of `GeometryGroup`.
 - Bug in auto-mesh generation.
 
+### Added
+- Ability to compute far fields server-side on GPUs.
+
 ### Changed
 - All Tidy3D components apart from data structures are now fully immutable.
 - Stopped support for python 3.6, improved support for python 3.10.
@@ -23,6 +26,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
  have `center_axis` and `lengt_axis` properties for the center and length along the extrusion axis. `PolySlab` now defined exclusively through `slab_bounds`, 
  while `Cylinder` through `center` and `length`.
 - In mode solver, allow precision to switch between double and single precision.
+- Near-to-far transformation tool is no longer a plugin, but is now part of Tidy3D's new core data structures
 
 
 ## [1.4.1] - 2022-6-13

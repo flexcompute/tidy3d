@@ -576,5 +576,3 @@ MonitorDataTypes = (
     FluxData,
     FluxTimeData,
 )
-MonitorDataType = Union[MonitorDataTypes]
-DATA_TYPE_MAP = {data.__fields__["monitor"].type_: data for data in MonitorDataTypes}

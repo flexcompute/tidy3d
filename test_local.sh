@@ -16,6 +16,7 @@ pytest -ra tests/test_log.py
 pytest -ra tests/test_main.py
 pytest -ra tests/test_material_library.py
 pytest -ra tests/test_meshgenerate.py
+pytest -ra tests/test_near2far.py
 pytest -ra tests/test_plugins.py
 pytest -ra tests/test_sidewall.py
 
