@@ -1,5 +1,7 @@
 # pylint: disable=invalid-name
 """ utilities for plotting """
+from __future__ import annotations
+
 from typing import Any
 from functools import wraps
 
@@ -87,7 +89,7 @@ class PlotParams(Tidy3dBaseModel):
     hatch: str = pd.Field(None, title="Hatch Style")
     linewidth: pd.NonNegativeFloat = pd.Field(1, title="Line Width", alias="lw")
 
-    def include_kwargs(self, **kwargs) -> "PlotParams":
+    def include_kwargs(self, **kwargs) -> PlotParams:
         """Update the plot params with supplied kwargs."""
         update_dict = {
             key: value

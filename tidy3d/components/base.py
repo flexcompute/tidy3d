@@ -1,4 +1,5 @@
 """global configuration / base class for pydantic models used to make simulation."""
+from __future__ import annotations
 
 import json
 from typing import Any
@@ -27,7 +28,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
     `Pydantic Models <https://pydantic-docs.helpmanual.io/usage/models/>`_
     """
 
-    def __init_subclass__(cls):
+    def __init_subclass__(cls) -> None:
         """Things that are done to each of the models."""
 
         cls.add_type_field()
@@ -66,7 +67,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
 
     _cached_properties = pydantic.PrivateAttr({})
 
-    def copy(self, validate: bool = True, **kwargs) -> "Self":
+    def copy(self, validate: bool = True, **kwargs) -> Tidy3dBaseModel:
         """Copy a Tidy3dBaseModel.  With ``deep=True`` as default."""
         if "deep" in kwargs and kwargs["deep"] is False:
             raise ValueError("Can't do shallow copy of component, set `deep=True` in copy().")
@@ -89,7 +90,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         rich.inspect(self, methods=methods)
 
     @classmethod
-    def from_file(cls, fname: str, **parse_kwargs):
+    def from_file(cls, fname: str, **parse_kwargs) -> Tidy3dBaseModel:
         """Loads a :class:`Tidy3dBaseModel` from .yaml or .json file.
 
         Parameters
@@ -139,7 +140,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         raise FileError(f"File must be .json, .yaml, or .hdf5 type, given {fname}")
 
     @classmethod
-    def from_json(cls, fname: str, **parse_file_kwargs):
+    def from_json(cls, fname: str, **parse_file_kwargs) -> Tidy3dBaseModel:
         """Load a :class:`Tidy3dBaseModel` from .json file.
 
         Parameters
@@ -177,7 +178,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
             file_handle.write(json_string)
 
     @classmethod
-    def from_yaml(cls, fname: str, **parse_raw_kwargs):
+    def from_yaml(cls, fname: str, **parse_raw_kwargs) -> Tidy3dBaseModel:
         """Loads :class:`Tidy3dBaseModel` from .yaml file.
 
         Parameters
@@ -219,7 +220,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
             yaml.dump(json_dict, file_handle, indent=INDENT)
 
     @classmethod
-    def from_hdf5(cls, fname: str, **parse_raw_kwargs):
+    def from_hdf5(cls, fname: str, **parse_raw_kwargs) -> Tidy3dBaseModel:
         """Loads :class:`Tidy3dBaseModel` from .yaml file.
 
         Parameters
@@ -318,7 +319,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         return value
 
     @classmethod
-    def load_from_handle(cls, hdf5_group: h5py.Group, **kwargs) -> "Self":
+    def load_from_handle(cls, hdf5_group: h5py.Group, **kwargs) -> Tidy3dBaseModel:
         """Loads an instance of the class from an hdf5 group,
 
         Parameters
@@ -482,7 +483,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         return json_string
 
     @classmethod
-    def add_type_field(cls):
+    def add_type_field(cls) -> None:
         """Automatically place "type" field with model name in the model field dictionary."""
 
         value = cls.__name__
