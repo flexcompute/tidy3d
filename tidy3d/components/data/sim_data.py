@@ -6,7 +6,7 @@ import pydantic as pd
 import numpy as np
 
 from .monitor_data import MonitorDataType, AbstractFieldData
-from .near2far_data import RadiationVectorData, Near2FarDataType
+from .near2far_data import Near2FarDataType
 from ..base import Tidy3dBaseModel
 from ..simulation import Simulation
 from ..boundary import BlochBoundary
@@ -150,12 +150,10 @@ class SimulationData(Tidy3dBaseModel):
 
         return monitor_data.normalize(source_spectrum_fn)
 
-    def load_field_monitor(
-        self, monitor_name: str
-        ) -> Union[AbstractFieldData, RadiationVectorData]:
+    def load_field_monitor(self, monitor_name: str) -> AbstractFieldData:
         """Load monitor and raise exception if not a field monitor."""
         mon_data = self[monitor_name]
-        if not isinstance(mon_data, Union[AbstractFieldData, RadiationVectorData]):
+        if not isinstance(mon_data, AbstractFieldData):
             raise DataError(
                 f"data for monitor '{monitor_name}' does not contain field data "
                 f"as it is a `{type(mon_data)}`."

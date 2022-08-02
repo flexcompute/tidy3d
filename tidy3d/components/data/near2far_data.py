@@ -1,6 +1,4 @@
 """ Monitor Level Data associated with near-to-far transformation monitors."""
-
-from abc import ABC
 from typing import Dict, Union, Callable, Tuple
 
 import xarray as xr
@@ -18,9 +16,8 @@ from .data_array import DataArray
 from .data_array import Near2FarAngleDataArray, Near2FarCartesianDataArray, Near2FarKSpaceDataArray
 
 
-class RadiationVectorData(MonitorData, ABC):
-    """Collection of radiation vectors in the frequency domain.
-    """
+class RadiationVectorData(MonitorData):
+    """Collection of radiation vectors in the frequency domain."""
 
     monitor: Union[Near2FarAngleMonitor, Near2FarCartesianMonitor, Near2FarKSpaceMonitor]
 
@@ -156,7 +153,7 @@ class Near2FarAngleData(RadiationVectorData):
     >>> phi = np.linspace(0, 2*np.pi, 20)
     >>> coords = dict(f=f, theta=theta, phi=phi)
     >>> values = (1+1j) * np.random.random((len(theta), len(phi), len(f)))
-    >>> scalar_field = Near2FarAngleDataArray(values=values, coords=coords)
+    >>> scalar_field = Near2FarAngleDataArray(values, coords=coords)
     >>> monitor = Near2FarAngleMonitor(
     ...     center=(1,2,3), size=(2,2,2), freqs=f, name='n2f_monitor', phi=phi, theta=theta
     ...     )
@@ -190,7 +187,6 @@ class Near2FarAngleData(RadiationVectorData):
     )
 
     _contains_monitor_fields = enforce_monitor_fields_present()
-
 
     # pylint:disable=too-many-locals
     def fields_spherical(
@@ -231,12 +227,8 @@ class Near2FarAngleData(RadiationVectorData):
             eta = eta[None, None, None, :]
             phase = phase[None, None, None, :]
 
-            Et_array = -phase * (
-                self.Lphi.values[None, ...] + eta * self.Ntheta.values[None, ...]
-            )
-            Ep_array = phase * (
-                self.Ltheta.values[None, ...] - eta * self.Nphi.values[None, ...]
-            )
+            Et_array = -phase * (self.Lphi.values[None, ...] + eta * self.Ntheta.values[None, ...])
+            Ep_array = phase * (self.Ltheta.values[None, ...] - eta * self.Nphi.values[None, ...])
             Er_array = np.zeros_like(Ep_array)
 
             dims = ("r", "theta", "phi", "f")
@@ -269,7 +261,6 @@ class Near2FarAngleData(RadiationVectorData):
         )
 
         return field_data
-
 
     def radar_cross_section(self, medium: Medium = Medium(permittivity=1)) -> xr.DataArray:
         """Get radar cross section at a point relative to the local origin in
@@ -313,10 +304,7 @@ class Near2FarAngleData(RadiationVectorData):
 
         return xr.DataArray(data=rcs_data, coords=coords, dims=dims)
 
-
-    def power_spherical(
-        self, r: float, medium: Medium = Medium(permittivity=1)
-    ) -> xr.DataArray:
+    def power_spherical(self, r: float, medium: Medium = Medium(permittivity=1)) -> xr.DataArray:
         """Get power scattered to a point relative to the local origin in spherical coordinates.
 
         Parameters
@@ -354,7 +342,7 @@ class Near2FarCartesianData(RadiationVectorData):
     >>> y = np.linspace(0, 10, 20)
     >>> coords = dict(f=f, x=x, y=y)
     >>> values = (1+1j) * np.random.random((len(x), len(y), len(f)))
-    >>> scalar_field = Near2FarCartesianDataArray(values=values, coords=coords)
+    >>> scalar_field = Near2FarCartesianDataArray(values, coords=coords)
     >>> monitor = Near2FarCartesianMonitor(
     ...     center=(1,2,3), size=(2,2,2), freqs=f, name='n2f_monitor', x=x, y=y,
     ...     plane_axis=2, plane_distance=50
@@ -390,11 +378,8 @@ class Near2FarCartesianData(RadiationVectorData):
 
     _contains_monitor_fields = enforce_monitor_fields_present()
 
-
     # pylint:disable=too-many-arguments, too-many-locals
-    def fields_cartesian(
-        self, medium: Medium = Medium(permittivity=1)
-    ) -> xr.Dataset:
+    def fields_cartesian(self, medium: Medium = Medium(permittivity=1)) -> xr.Dataset:
         """Get fields on a cartesian plane at a distance relative to monitor center
         along a given axis.
 
@@ -431,7 +416,7 @@ class Near2FarCartesianData(RadiationVectorData):
         wave_number = np.atleast_1d(self.k(frequencies, medium))
 
         e_theta = -(self.Lphi.values + eta[None, None, None, ...] * self.Ntheta.values)
-        e_phi = (self.Ltheta.values - eta[None, None, None, ...] * self.Nphi.values)
+        e_phi = self.Ltheta.values - eta[None, None, None, ...] * self.Nphi.values
 
         Ex_data = np.zeros((len(x), len(y), len(z), len(frequencies)), dtype=complex)
         Ey_data = np.zeros_like(Ex_data)
@@ -447,8 +432,8 @@ class Near2FarCartesianData(RadiationVectorData):
                     r, theta, phi = self.car_2_sph(_x, _y, _z)
                     phase = -1j * wave_number * np.exp(1j * wave_number * r) / (4 * np.pi * r)
 
-                    Et = -phase * e_theta[i,j,k,:]
-                    Ep = phase * e_phi[i,j,k,:]
+                    Et = -phase * e_theta[i, j, k, :]
+                    Ep = phase * e_phi[i, j, k, :]
                     Er = np.zeros_like(Et)
 
                     Ht = -Ep / eta
@@ -458,13 +443,13 @@ class Near2FarCartesianData(RadiationVectorData):
                     e_fields = self.sph_2_car_field(Er, Et, Ep, theta, phi)
                     h_fields = self.sph_2_car_field(Hr, Ht, Hp, theta, phi)
 
-                    Ex_data[i,j,k,:] = e_fields[0]
-                    Ey_data[i,j,k,:] = e_fields[1]
-                    Ez_data[i,j,k,:] = e_fields[2]
+                    Ex_data[i, j, k, :] = e_fields[0]
+                    Ey_data[i, j, k, :] = e_fields[1]
+                    Ez_data[i, j, k, :] = e_fields[2]
 
-                    Hx_data[i,j,k,:] = h_fields[0]
-                    Hy_data[i,j,k,:] = h_fields[1]
-                    Hz_data[i,j,k,:] = h_fields[2]
+                    Hx_data[i, j, k, :] = h_fields[0]
+                    Hy_data[i, j, k, :] = h_fields[1]
+                    Hz_data[i, j, k, :] = h_fields[2]
 
         dims = ("x", "y", "z", "f")
         coords = {"x": x, "y": y, "z": z, "f": frequencies}
@@ -480,7 +465,6 @@ class Near2FarCartesianData(RadiationVectorData):
         field_data = xr.Dataset({"Ex": Ex, "Ey": Ey, "Ez": Ez, "Hx": Hx, "Hy": Hy, "Hz": Hz})
 
         return field_data
-
 
     # def power_cartesian(self, x: ArrayLikeN2F, y: ArrayLikeN2F, z: ArrayLikeN2F) -> xr.DataArray:
     #     """Get power scattered to a point relative to the local origin in cartesian coordinates.
@@ -530,7 +514,7 @@ class Near2FarKSpaceData(RadiationVectorData):
     >>> uy = np.linspace(0, 10, 20)
     >>> coords = dict(f=f, ux=ux, uy=uy)
     >>> values = (1+1j) * np.random.random((len(ux), len(uy), len(f)))
-    >>> scalar_field = Near2FarKSpaceDataArray(values=values, coords=coords)
+    >>> scalar_field = Near2FarKSpaceDataArray(values, coords=coords)
     >>> monitor = Near2FarKSpaceMonitor(
     ...     center=(1,2,3), size=(2,2,2), freqs=f, name='n2f_monitor', ux=ux, uy=uy, u_axis=2
     ...     )
@@ -565,11 +549,8 @@ class Near2FarKSpaceData(RadiationVectorData):
 
     _contains_monitor_fields = enforce_monitor_fields_present()
 
-
     # pylint:disable=too-many-locals
-    def fields_spherical(
-        self, medium: Medium = Medium(permittivity=1)
-    ) -> xr.Dataset:
+    def fields_spherical(self, medium: Medium = Medium(permittivity=1)) -> xr.Dataset:
         """Get fields in spherical coordinates relative to the monitor's local origin
         for all k-space points and frequencies specified in :class:`Near2FarKSpaceMonitor`.
 
@@ -622,11 +603,8 @@ class Near2FarKSpaceData(RadiationVectorData):
         return field_data
 
 
-Near2FarDataTypes = (
-    Near2FarAngleData,
-    Near2FarCartesianData,
-    Near2FarKSpaceData
-)
+Near2FarDataTypes = (Near2FarAngleData, Near2FarCartesianData, Near2FarKSpaceData)
 Near2FarDataType = Union[Near2FarDataTypes]
 DATA_TYPE_MAP = DATA_TYPE_MAP.update(
-    {data.__fields__["monitor"].type_: data for data in Near2FarDataTypes})
+    {data.__fields__["monitor"].type_: data for data in Near2FarDataTypes}
+)

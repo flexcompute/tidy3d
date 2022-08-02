@@ -6,7 +6,7 @@ import pydantic
 import numpy as np
 
 from .types import Ax, EMField, ArrayLike, Bound, FreqArray
-from .types import Literal, Direction, Coordinate, Axis, ObsGridArray
+from .types import Literal, Direction, Coordinate, Axis, ObsGridArray, RadVec
 from .geometry import Box
 from .medium import Medium
 from .validators import assert_plane
@@ -63,6 +63,72 @@ class Monitor(Box, ABC):
         int
             Number of bytes to be stored in monitor.
         """
+
+    def surfaces(self) -> Tuple["Monitor", ...]:  # pylint: disable=too-many-locals
+        """Returns a list of 6 monitors corresponding to each surface of the monitor.
+        The output monitors are stored in the order [x-, x+, y-, y+, z-, z+], where x, y, and z
+        denote which axis is perpendicular to that surface, while "-" and "+" denote the direction
+        of the normal vector of that surface. Each output monitor will have the same frequency/time
+        data as the calling object. Its name will be that of the calling object appended with the
+        above symbols. E.g., if the calling object's name is "field", the x+ monitor's name will be
+        "field_x+". Does not work when the calling monitor has zero volume.
+
+        Returns
+        -------
+        Tuple[:class:`Monitor`, ...]
+            List of 6 surface monitors for each side of the field monitor.
+
+        Example
+        -------
+        >>> volume_monitor = FieldMonitor(center=(0,0,0), size=(1,2,3), freqs=[2e14], name='field')
+        >>> surface_monitors = volume_monitor.surfaces()
+        """
+
+        if any(s == 0.0 for s in self.size):
+            raise SetupError(
+                "Can't generate surfaces for the given monitor because it has zero volume."
+            )
+
+        self_bmin, self_bmax = self.bounds
+        center_x, center_y, center_z = self.center
+        size_x, size_y, size_z = self.size
+
+        # Set up geometry data and names for each surface:
+
+        surface_centers = (
+            (self_bmin[0], center_y, center_z),  # x-
+            (self_bmax[0], center_y, center_z),  # x+
+            (center_x, self_bmin[1], center_z),  # y-
+            (center_x, self_bmax[1], center_z),  # y+
+            (center_x, center_y, self_bmin[2]),  # z-
+            (center_x, center_y, self_bmax[2]),  # z+
+        )
+
+        surface_sizes = (
+            (0.0, size_y, size_z),  # x-
+            (0.0, size_y, size_z),  # x+
+            (size_x, 0.0, size_z),  # y-
+            (size_x, 0.0, size_z),  # y+
+            (size_x, size_y, 0.0),  # z-
+            (size_x, size_y, 0.0),  # z+
+        )
+
+        surface_names = (
+            f"{self.name}_x-",
+            f"{self.name}_x+",
+            f"{self.name}_y-",
+            f"{self.name}_y+",
+            f"{self.name}_z-",
+            f"{self.name}_z+",
+        )
+
+        # Create "surface" monitors
+        monitors = []
+        for center, size, name in zip(surface_centers, surface_sizes, surface_names):
+            mon_new = self.copy(update=dict(center=center, size=size, name=name))
+            monitors.append(mon_new)
+
+        return monitors
 
 
 class FreqMonitor(Monitor, ABC):
@@ -266,72 +332,6 @@ class FieldMonitor(AbstractFieldMonitor, FreqMonitor):
         # stores 1 complex number per grid cell, per frequency, per field
         return BYTES_COMPLEX * num_cells * len(self.freqs) * len(self.fields)
 
-    def surfaces(self) -> Tuple["FieldMonitor", ...]:  # pylint: disable=too-many-locals
-        """Returns a list of 6 monitors corresponding to each surface of the field monitor.
-        The output monitors are stored in the order [x-, x+, y-, y+, z-, z+], where x, y, and z
-        denote which axis is perpendicular to that surface, while "-" and "+" denote the direction
-        of the normal vector of that surface. Each output monitor will have the same frequency/time
-        data as the calling object. Its name will be that of the calling object appended with the
-        above symbols. E.g., if the calling object's name is "field", the x+ monitor's name will be
-        "field_x+". Does not work when the calling monitor has zero volume.
-
-        Returns
-        -------
-        Tuple[:class:`FieldMonitor`, ...]
-            List of 6 surface monitors for each side of the field monitor.
-
-        Example
-        -------
-        >>> volume_monitor = FieldMonitor(center=(0,0,0), size=(1,2,3), freqs=[2e14], name='field')
-        >>> surface_monitors = volume_monitor.surfaces()
-        """
-
-        if any(s == 0.0 for s in self.size):
-            raise SetupError(
-                "Can't generate surfaces for the given monitor because it has zero volume."
-            )
-
-        self_bmin, self_bmax = self.bounds
-        center_x, center_y, center_z = self.center
-        size_x, size_y, size_z = self.size
-
-        # Set up geometry data and names for each surface:
-
-        surface_centers = (
-            (self_bmin[0], center_y, center_z),  # x-
-            (self_bmax[0], center_y, center_z),  # x+
-            (center_x, self_bmin[1], center_z),  # y-
-            (center_x, self_bmax[1], center_z),  # y+
-            (center_x, center_y, self_bmin[2]),  # z-
-            (center_x, center_y, self_bmax[2]),  # z+
-        )
-
-        surface_sizes = (
-            (0.0, size_y, size_z),  # x-
-            (0.0, size_y, size_z),  # x+
-            (size_x, 0.0, size_z),  # y-
-            (size_x, 0.0, size_z),  # y+
-            (size_x, size_y, 0.0),  # z-
-            (size_x, size_y, 0.0),  # z+
-        )
-
-        surface_names = (
-            f"{self.name}_x-",
-            f"{self.name}_x+",
-            f"{self.name}_y-",
-            f"{self.name}_y+",
-            f"{self.name}_z-",
-            f"{self.name}_z+",
-        )
-
-        # Create "surface" monitors
-        monitors = []
-        for center, size, name in zip(surface_centers, surface_sizes, surface_names):
-            mon_new = self.copy(update=dict(center=center, size=size, name=name))
-            monitors.append(mon_new)
-
-        return monitors
-
 
 class FieldTimeMonitor(AbstractFieldMonitor, TimeMonitor):
     """:class:`Monitor` that records electromagnetic fields in the time domain.
@@ -449,10 +449,16 @@ class ModeSolverMonitor(AbstractModeMonitor):
         return 6 * BYTES_COMPLEX * num_cells * len(self.freqs) * self.mode_spec.num_modes
 
 
-class AbstractNear2FarMonitor(AbstractFieldMonitor, FreqMonitor):
+class AbstractNear2FarMonitor(FreqMonitor):
     """:class:`Monitor` class that samples electromagnetic near fields in the frequency domain
-       and invokes the computation of far fields.
+    and invokes the computation of far fields.
     """
+
+    fields: Tuple[RadVec, ...] = pydantic.Field(
+        ["Ntheta", "Nphi", "Ltheta", "Lphi"],
+        title="Field Components",
+        description="Collection of radiation vector components to store in the monitor.",
+    )
 
     normal_dir: Direction = pydantic.Field(
         None,
@@ -547,8 +553,8 @@ class Near2FarAngleMonitor(AbstractNear2FarMonitor):
     ...     freqs=[250e12, 300e12],
     ...     name='n2f_monitor',
     ...     custom_origin=(1,2,3),
-    ...     angles_phi=[0, np.pi/2],
-    ...     angles_theta=list(np.linspace(-np.pi/2, np.pi/2, 100))
+    ...     phi=[0, np.pi/2],
+    ...     theta=np.linspace(-np.pi/2, np.pi/2, 100)
     ...     )
     """
 
