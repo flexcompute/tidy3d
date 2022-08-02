@@ -78,7 +78,7 @@ class DataArray(xr.DataArray):
         if isinstance(value, dict):
             data = value.get("data")
             coords = value.get("coords")
-            coords = {name: np.array(val.get("data")) for name, val in coords.items()}
+            coords = {name: np.array(val) for name, val in coords.items()}
             return cls(np.array(data), coords=coords)
 
         return cls(value)
@@ -90,8 +90,14 @@ class DataArray(xr.DataArray):
 
     def __eq__(self, other) -> bool:
         """Whether two data array objects are equal."""
+        if not np.all(self.data == other.data):
+            return False
+        for key, val in self.coords.items():
+            if not np.all(np.array(val) == np.array(other.coords[key])):
+                return False
+        return True
 
-        return self.to_dict() == other.to_dict()
+        # return self.to_dict() == other.to_dict()
 
 
 class ScalarFieldDataArray(DataArray):
