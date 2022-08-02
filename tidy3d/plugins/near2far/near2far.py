@@ -8,7 +8,8 @@ import pydantic
 from rich.progress import track
 
 from ...constants import C_0, ETA_0, HERTZ, MICROMETER
-from ...components.data import SimulationData, FieldData
+from ...components.data.sim_data import SimulationData
+from ...components.data.monitor_data import FieldData
 from ...components.monitor import FieldMonitor
 from ...components.types import Direction, Axis, Coordinate, ArrayLike
 from ...components.medium import Medium

@@ -9,7 +9,7 @@ import pydantic as pd
 from .store import set_store, LocalStore
 from ...components.base import Tidy3dBaseModel
 from ...components.simulation import Simulation
-from ...components.data import SimulationData
+from ...components.data.sim_data import SimulationData
 from .callback import *  # pylint: disable=wildcard-import,unused-wildcard-import
 
 AppMode = Literal["python", "jupyter", "jupyterlab"]

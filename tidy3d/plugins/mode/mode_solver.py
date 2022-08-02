@@ -14,11 +14,10 @@ from ...components import Simulation, Grid
 from ...components import ModeSpec
 from ...components.monitor import ModeSolverMonitor, ModeMonitor
 from ...components.source import ModeSource, SourceTime
-from ...components.types import Direction, ArrayLike, FreqArray, Ax, Literal, Axis
+from ...components.types import Direction, ArrayLike, FreqArray, Ax, Literal, Axis, Symmetry
 from ...components.data.data_array import ModeIndexDataArray, ScalarModeFieldDataArray
 from ...components.data.sim_data import SimulationData
 from ...components.data.monitor_data import ModeSolverData
-from ...components.boundary import Symmetry
 from ...log import ValidationError
 from .solver import compute_modes
 
