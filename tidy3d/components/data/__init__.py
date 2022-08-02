@@ -7,5 +7,3 @@ from .monitor_data import FieldData, FieldTimeData, PermittivityData
 from .monitor_data import FluxData, FluxTimeData
 from .monitor_data import ModeData, ModeSolverData
 from .monitor_data import DATA_TYPE_MAP
-
-from .sim_data import SimulationData

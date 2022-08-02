@@ -21,6 +21,7 @@ from .mode import ModeSpec
 from .source import GaussianPulse, ContinuousWave
 from .source import UniformCurrentSource, PlaneWave, ModeSource, PointDipole
 from .source import GaussianBeam, AstigmaticGaussianBeam
+from .source import CustomFieldSource, CustomCurrentSource
 
 # monitor
 from .monitor import FreqMonitor, TimeMonitor, FieldMonitor, FieldTimeMonitor
@@ -39,11 +40,11 @@ from .data import FieldData, FieldTimeData, PermittivityData
 from .data import FluxData, FluxTimeData
 from .data import ModeData, ModeSolverData
 
-from .data import SimulationData
+from .data.sim_data import SimulationData
 from .data import DATA_TYPE_MAP
 
 # boundary
 from .boundary import BoundarySpec, Boundary, BoundaryEdge, BoundaryEdgeType
-from .boundary import BlochBoundary, Symmetry, Periodic, PECBoundary, PMCBoundary
+from .boundary import BlochBoundary, Periodic, PECBoundary, PMCBoundary
 from .boundary import PML, StablePML, Absorber, PMLParams, AbsorberParams, PMLTypes
 from .boundary import DefaultPMLParameters, DefaultStablePMLParameters, DefaultAbsorberParameters

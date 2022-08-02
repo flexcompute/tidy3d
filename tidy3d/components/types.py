@@ -192,6 +192,8 @@ class DataObject(pydantic.BaseModel):
         return self.data_type.from_dict(self.data_dict)
 
 
+Symmetry = Literal[0, -1, 1]
+
 """ geometric """
 
 Size1D = pydantic.NonNegativeFloat
