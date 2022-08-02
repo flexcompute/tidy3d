@@ -10,9 +10,7 @@ import pydantic as pd
 from .grid import Coords1D, Coords, Grid
 from .mesher import GradedMesher, MesherType
 from ..base import Tidy3dBaseModel
-from ..types import Axis
-from ..boundary import Symmetry
-from ..source import SourceType
+from ..types import Axis, Symmetry
 from ..structure import Structure
 from ..geometry import Box
 from ...log import SetupError, log
@@ -418,7 +416,7 @@ class GridSpec(Tidy3dBaseModel):
         grid_list = [self.grid_x, self.grid_y, self.grid_z]
         return np.any([isinstance(mesh, AutoGrid) for mesh in grid_list])
 
-    def wavelength_from_sources(self, sources: List[SourceType]) -> pd.PositiveFloat:
+    def wavelength_from_sources(self, sources: List["SourceType"]) -> pd.PositiveFloat:
         """Define a wavelength based on supplied sources. Called if auto mesh is used and
         ``self.wavelength is None``."""
 
@@ -442,7 +440,7 @@ class GridSpec(Tidy3dBaseModel):
         self,
         structures: List[Structure],
         symmetry: Tuple[Symmetry, Symmetry, Symmetry],
-        sources: List[SourceType],
+        sources: List["SourceType"],
         num_pml_layers: List[Tuple[pd.NonNegativeInt, pd.NonNegativeInt]],
     ) -> Grid:
         """Make the entire simulation grid based on some simulation parameters.
@@ -455,7 +453,7 @@ class GridSpec(Tidy3dBaseModel):
         symmetry : Tuple[Symmetry, Symmetry, Symmetry]
             Reflection symmetry across a plane bisecting the simulation domain
             normal to each of the three axes.
-        sources : List[SourceType]
+        sources : List['SourceType']
             List of sources.
         num_pml_layers : List[Tuple[float, float]]
             List containing the number of absorber layers in - and + boundaries.

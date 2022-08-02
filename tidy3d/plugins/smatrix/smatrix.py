@@ -11,7 +11,7 @@ from ...components.geometry import Box
 from ...components.mode import ModeSpec
 from ...components.monitor import ModeMonitor
 from ...components.source import ModeSource, GaussianPulse
-from ...components.data import SimulationData
+from ...components.data.sim_data import SimulationData
 from ...components.types import Direction, Ax
 from ...components.viz import add_ax_if_none, equal_aspect
 from ...components.base import Tidy3dBaseModel

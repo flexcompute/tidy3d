@@ -48,7 +48,7 @@ from .components import DATA_TYPE_MAP
 
 # boundary
 from .components import BoundarySpec, Boundary, BoundaryEdge, BoundaryEdgeType
-from .components import BlochBoundary, Symmetry, Periodic, PECBoundary, PMCBoundary
+from .components import BlochBoundary, Periodic, PECBoundary, PMCBoundary
 from .components import PML, StablePML, Absorber, PMLParams, AbsorberParams, PMLTypes
 from .components import DefaultPMLParameters, DefaultStablePMLParameters, DefaultAbsorberParameters
 

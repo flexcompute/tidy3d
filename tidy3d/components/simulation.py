@@ -14,10 +14,10 @@ from .base import cached_property
 from .validators import assert_unique_names, assert_objects_in_sim_bounds
 from .validators import validate_mode_objects_symmetry
 from .geometry import Box
-from .types import Ax, Shapely, FreqBound, GridSize, Axis, annotate_type
+from .types import Ax, Shapely, FreqBound, GridSize, Axis, annotate_type, Symmetry
 from .grid import Coords1D, Grid, Coords, GridSpec, UniformGrid
 from .medium import Medium, MediumType, AbstractMedium, PECMedium
-from .boundary import BoundarySpec, Symmetry, BlochBoundary, PECBoundary, PMCBoundary
+from .boundary import BoundarySpec, BlochBoundary, PECBoundary, PMCBoundary
 from .boundary import PML, StablePML, Absorber
 from .structure import Structure
 from .source import SourceType, PlaneWave, GaussianBeam, AstigmaticGaussianBeam
