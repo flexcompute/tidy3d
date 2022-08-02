@@ -320,6 +320,9 @@ class Tidy3dBaseModel(pydantic.BaseModel):
                 return [val.decode("utf-8") for val in value]
             if value.dtype == bool:
                 return value.astype(bool)
+            # handle xarray datasets implicitly (retain np.ndarray type)
+            if len(value.shape) >= 4:
+                return value
             return value.tolist()
 
         # decoding special types
@@ -398,6 +401,10 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         elif isinstance(value, bool):
             value = np.array(value)
 
+        # numpy array containing strings (usually direction=['-','+'])
+        elif isinstance(value, np.ndarray) and (value.dtype == "<U1"):
+            value = value.tolist()
+
         _ = hdf5_group.create_dataset(name=key, data=value)
 
     def add_to_handle(self, hdf5_group: h5py.Group) -> None:
@@ -421,7 +428,8 @@ class Tidy3dBaseModel(pydantic.BaseModel):
                 key = "_".join((str(i) for i in key))
 
             if isinstance(value, xr.DataArray):
-                value = value.to_dict()
+                coords = {key: np.array(val) for key, val in value.coords.items()}
+                value = dict(data=value.data, coords=coords)
 
             # if a tuple of dicts, convert to a dict with special
             elif isinstance(value, tuple) and any(isinstance(val, dict) for val in value):
