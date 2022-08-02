@@ -226,6 +226,8 @@ Direction = Literal["+", "-"]
 EMField = Literal["Ex", "Ey", "Ez", "Hx", "Hy", "Hz"]
 FieldType = Literal["Ex", "Ey", "Ez", "Hx", "Hy", "Hz"]
 FreqArray = Union[Tuple[float, ...], ArrayLike[float, 1]]
+ObsGridArray = Union[Tuple[float, ...], ArrayLike[float, 1]]
+RadVec = Literal["Ntheta", "Nphi", "Ltheta", "Lphi"]
 
 """ plotting """
 

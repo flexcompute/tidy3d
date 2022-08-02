@@ -8,68 +8,10 @@ import tidy3d as td
 from tidy3d.plugins import DispersionFitter
 from tidy3d.plugins.webplots import SimulationPlotly, SimulationDataApp
 from tidy3d.plugins import ModeSolver
-from tidy3d.plugins import Near2Far
 from tidy3d import FieldData, ScalarFieldDataArray, FieldMonitor
 from tidy3d.plugins.smatrix.smatrix import Port
 from tidy3d.plugins.smatrix.smatrix import ComponentModeler
 from .utils import clear_tmp
-
-
-def test_near2far():
-    """make sure Near2Far runs"""
-
-    center = (0, 0, 0)
-    size = (2, 2, 2)
-    f0 = 1
-    monitors = FieldMonitor(size=size, center=center, freqs=[f0], name="near_field").surfaces()
-
-    sim_size = (5, 5, 5)
-    sim = td.Simulation(
-        size=sim_size,
-        grid_spec=td.GridSpec.auto(wavelength=td.C_0 / f0),
-        monitors=monitors,
-        run_time=1e-12,
-    )
-
-    def rand_data():
-        return ScalarFieldDataArray(
-            np.random.random((10, 10, 10, 1)),
-            coords=dict(
-                x=np.linspace(-1, 1, 10),
-                y=np.linspace(-1, 1, 10),
-                z=np.linspace(-1, 1, 10),
-                f=[f0],
-            ),
-        )
-
-    fields = ["Ex", "Ey", "Ez", "Hx", "Hy", "Hz"]
-    data_dict = {field: rand_data() for field in fields}
-    monitor_data = {mon.name: FieldData(monitor=mon, **data_dict) for mon in monitors}
-    sim_data = td.SimulationData(simulation=sim, monitor_data=monitor_data)
-
-    n2f = Near2Far.from_surface_monitors(
-        sim_data=sim_data,
-        monitors=monitors,
-        normal_dirs=["-", "+", "-", "+", "-", "+"],
-        frequency=f0,
-    )
-
-    # single inputs
-    n2f.radar_cross_section(1, 1)
-    n2f.power_spherical(1, 1, 1)
-    n2f.power_cartesian(1, 1, 1)
-    n2f.fields_spherical(1, 1, 1)
-    n2f.fields_cartesian(1, 1, 1)
-
-    # vectorized inputs
-    pts1 = [0, 1]
-    pts2 = [0, 1, 2]
-    pts3 = [3, 4, 5]
-    n2f.radar_cross_section(pts1, pts2)
-    n2f.power_spherical(1, pts2, pts3)
-    n2f.power_cartesian(pts1, pts2, pts3)
-    n2f.fields_spherical(1, pts2, pts3)
-    n2f.fields_cartesian(pts1, pts2, pts3)
 
 
 def test_mode_solver():
@@ -173,7 +115,7 @@ def test_app():
     center = (0, 0, 0)
     size = (2, 2, 2)
     f0 = 1
-    monitors = FieldMonitor(size=size, center=center, freqs=[f0], name="near_field").surfaces()
+    monitors = FieldMonitor.surfaces(size=size, center=center, freqs=[f0], name="near_field")
 
     sim_size = (5, 5, 5)
     sim = td.Simulation(

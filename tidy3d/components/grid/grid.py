@@ -313,7 +313,10 @@ class Grid(Tidy3dBaseModel):
 
         return Coords(**yee_coords)
 
-    def discretize_inds(self, box: Box, extend: bool = False) -> List[Tuple[int, int]]:
+    # pylint:disable=too-many-locals
+    def discretize_inds(
+        self, box: Box, extend: bool = False, tight: bool = False
+    ) -> List[Tuple[int, int]]:
         """Start and stopping indexes for the cells that intersect with a :class:`Box`.
 
         Parameters
@@ -323,6 +326,10 @@ class Grid(Tidy3dBaseModel):
         extend : bool = False
             If ``True``, ensure that the returned indexes extend sufficiently in very direction to
             be able to interpolate any field component at any point within the ``box``.
+        tight : bool = False
+            If ``True``, try to find indices that match up exactly with the monitor's position,
+            even if it leads to the same start and stop indices along a direction. This can happen,
+            for example, for a surface monitor with size 0 along a dimension.
 
         Returns
         -------
@@ -342,7 +349,10 @@ class Grid(Tidy3dBaseModel):
             assert pt_min <= pt_max, "min point was greater than max point"
 
             # index of smallest coord greater than than pt_max
-            inds_gt_pt_max = np.where(bound_coords > pt_max)[0]
+            if tight:
+                inds_gt_pt_max = np.where(bound_coords >= pt_max)[0]
+            else:
+                inds_gt_pt_max = np.where(bound_coords > pt_max)[0]
             ind_max = len(bound_coords) - 1 if len(inds_gt_pt_max) == 0 else inds_gt_pt_max[0]
 
             # index of largest coord less than or equal to pt_min

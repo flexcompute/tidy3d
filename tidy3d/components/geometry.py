@@ -746,6 +746,87 @@ class Box(Centered):
         size = tuple((pt_max - pt_min) for pt_min, pt_max in zip(rmin, rmax))
         return cls(center=center, size=size, **kwargs)
 
+    @classmethod
+    def surfaces(cls, size: Size, center: Coordinate, **kwargs):  # pylint: disable=too-many-locals
+        """Returns a list of 6 :class:`Box` instances corresponding to each surface of a 3D volume.
+        The output surfaces are stored in the order [x-, x+, y-, y+, z-, z+], where x, y, and z
+        denote which axis is perpendicular to that surface, while "-" and "+" denote the direction
+        of the normal vector of that surface. If a name is provided, each output surface's name
+        will be that of the provided name appended with the above symbols. E.g., if the provided
+        name is "box", the x+ surfaces's name will be "box_x+".
+
+        Parameters
+        ----------
+        size : Tuple[float, float, float]
+            Size of object in x, y, and z directions.
+        center : Tuple[float, float, float]
+            Center of object in x, y, and z.
+
+        Example
+        -------
+        >>> b = Box.surfaces(size=(1, 2, 3), center=(3, 2, 1))
+        """
+
+        if any(s == 0.0 for s in size):
+            raise SetupError(
+                "Can't generate surfaces for the given object because it has zero volume."
+            )
+
+        center_x, center_y, center_z = center
+        size_x, size_y, size_z = size
+        bmin = tuple(c - s / 2 for (s, c) in zip(size, center))
+        bmax = tuple(c + s / 2 for (s, c) in zip(size, center))
+
+        # Set up geometry data and names for each surface:
+
+        surface_centers = (
+            (bmin[0], center_y, center_z),  # x-
+            (bmax[0], center_y, center_z),  # x+
+            (center_x, bmin[1], center_z),  # y-
+            (center_x, bmax[1], center_z),  # y+
+            (center_x, center_y, bmin[2]),  # z-
+            (center_x, center_y, bmax[2]),  # z+
+        )
+
+        surface_sizes = (
+            (0.0, size_y, size_z),  # x-
+            (0.0, size_y, size_z),  # x+
+            (size_x, 0.0, size_z),  # y-
+            (size_x, 0.0, size_z),  # y+
+            (size_x, size_y, 0.0),  # z-
+            (size_x, size_y, 0.0),  # z+
+        )
+
+        name = kwargs.pop("name", "")
+        surface_names = (
+            name + "_x-",
+            name + "_x+",
+            name + "_y-",
+            name + "_y+",
+            name + "_z-",
+            name + "_z+",
+        )
+
+        kwargs.pop("normal_dir", None)
+        normal_dirs = ("-", "+", "-", "+", "-", "+")
+
+        norm_kwargs = [{} for _ in range(6)]
+        if "normal_dir" in cls.__dict__["__fields__"]:
+            norm_kwargs = [{"normal_dir": normal_dir} for normal_dir in normal_dirs]
+
+        try:
+            return [
+                cls(center=center, size=size, name=_name, **norm_kwarg, **kwargs)
+                for center, size, _name, norm_kwarg in zip(
+                    surface_centers, surface_sizes, surface_names, norm_kwargs
+                )
+            ]
+        except pydantic.ValidationError:
+            return [
+                cls(center=center, size=size, **norm_kwarg, **kwargs)
+                for center, size, norm_kwarg in zip(surface_centers, surface_sizes, norm_kwargs)
+            ]
+
     def intersections(self, x: float = None, y: float = None, z: float = None):
         """Returns shapely geometry at plane specified by one non None value of x,y,z.
 

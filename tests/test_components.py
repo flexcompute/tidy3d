@@ -887,7 +887,7 @@ def test_monitor():
     center = (1, 2, 3)
 
     m1 = FieldMonitor(size=size, center=center, freqs=[1, 2, 3], name="test_monitor")
-    m1.surfaces()
+    m1s = FieldMonitor.surfaces(size=size, center=center, freqs=[1, 2, 3], name="test_monitor")
     m2 = FieldTimeMonitor(size=size, center=center, name="test_mon")
     m3 = FluxMonitor(size=(1, 1, 0), center=center, freqs=[1, 2, 3], name="test_mon")
     m4 = FluxTimeMonitor(size=(1, 1, 0), center=center, name="test_mon")
@@ -936,14 +936,15 @@ def test_monitor_surfaces_from_volume():
     # make sure that monitors with zero volume raise an error (adapted from test_monitor_plane())
     for size in ((0, 0, 0), (1, 0, 0), (1, 1, 0)):
         with pytest.raises(SetupError) as e_info:
-            mon = FieldMonitor(size=size, center=center, freqs=[1, 2, 3], name="test_monitor")
-            mon_surfaces = mon.surfaces()
+            mon_surfaces = FieldMonitor.surfaces(
+                size=size, center=center, freqs=[1, 2, 3], name="test_monitor"
+            )
 
     # test that the surface monitors can be extracted from a volume monitor
     size = (1, 2, 3)
-    mon = FieldMonitor(size=size, center=center, freqs=[1, 2, 3], name="test_monitor")
-
-    monitor_surfaces = mon.surfaces()
+    monitor_surfaces = FieldMonitor.surfaces(
+        size=size, center=center, freqs=[1, 2, 3], name="test_monitor"
+    )
 
     # x- surface
     assert monitor_surfaces[0].center == (center[0] - size[0] / 2.0, center[1], center[2])

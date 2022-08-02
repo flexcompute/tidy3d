@@ -27,6 +27,7 @@ from .components import GaussianBeam, AstigmaticGaussianBeam
 # monitors
 from .components import FieldMonitor, FieldTimeMonitor, FluxMonitor, FluxTimeMonitor
 from .components import ModeMonitor, ModeSolverMonitor, PermittivityMonitor
+from .components import Near2FarAngleMonitor, Near2FarCartesianMonitor, Near2FarKSpaceMonitor
 
 # simulation
 from .components import Simulation
@@ -35,9 +36,13 @@ from .components import Simulation
 from .components import ScalarFieldDataArray, ScalarModeFieldDataArray, ScalarFieldTimeDataArray
 from .components import ModeAmpsDataArray, ModeIndexDataArray
 from .components import FluxDataArray, FluxTimeDataArray
+from .components import Near2FarAngleDataArray, Near2FarCartesianDataArray, Near2FarKSpaceDataArray
 from .components import FieldData, FieldTimeData, PermittivityData
 from .components import FluxData, FluxTimeData
 from .components import ModeData, ModeSolverData
+from .components import AbstractNear2FarData
+from .components import Near2FarAngleData, Near2FarCartesianData, Near2FarKSpaceData
+from .components import Near2FarSurface, RadiationVectors
 from .components import SimulationData
 from .components import DATA_TYPE_MAP
 
