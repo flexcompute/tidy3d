@@ -16,7 +16,7 @@ from .data_array import DataArray
 from .data_array import Near2FarAngleDataArray, Near2FarCartesianDataArray, Near2FarKSpaceDataArray
 
 
-class RadiationVectorData(MonitorData):
+class AbstractNear2FarData(MonitorData):
     """Collection of radiation vectors in the frequency domain."""
 
     monitor: Union[Near2FarAngleMonitor, Near2FarCartesianMonitor, Near2FarKSpaceMonitor]
@@ -32,7 +32,7 @@ class RadiationVectorData(MonitorData):
         """Maps field components to the string key of their locations on the observation grid."""
         return dict(Ntheta="Ntheta", Nphi="Nphi", Ltheta="Ltheta", Lphi="Lphi")
 
-    def normalize(self, source_spectrum_fn: Callable[[float], complex]) -> "RadiationVectorData":
+    def normalize(self, source_spectrum_fn: Callable[[float], complex]) -> "AbstractNear2FarData":
         """Return copy of self after normalization is applied using source spectrum function."""
         fields_norm = {}
         for field_name, field_data in self.field_components.items():
@@ -143,7 +143,7 @@ class RadiationVectorData(MonitorData):
         return f_x, f_y, f_z
 
 
-class Near2FarAngleData(RadiationVectorData):
+class Near2FarAngleData(AbstractNear2FarData):
     """Data associated with a :class:`.Near2FarAngleMonitor`: components of radiation vectors.
 
     Example
@@ -332,7 +332,7 @@ class Near2FarAngleData(RadiationVectorData):
         return xr.DataArray(data=power_data, coords=coords, dims=dims)
 
 
-class Near2FarCartesianData(RadiationVectorData):
+class Near2FarCartesianData(AbstractNear2FarData):
     """Data associated with a :class:`.Near2FarCartesianMonitor`: components of radiation vectors.
 
     Example
@@ -504,7 +504,7 @@ class Near2FarCartesianData(RadiationVectorData):
     #     return xr.DataArray(data=power_data, coords=coords, dims=dims)
 
 
-class Near2FarKSpaceData(RadiationVectorData):
+class Near2FarKSpaceData(AbstractNear2FarData):
     """Data associated with a :class:`.Near2FarKSpaceMonitor`: components of radiation vectors.
 
     Example

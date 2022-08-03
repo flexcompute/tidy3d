@@ -315,10 +315,7 @@ class Grid(Tidy3dBaseModel):
 
     # pylint:disable=too-many-locals
     def discretize_inds(
-        self,
-        box: Box,
-        extend: bool = False,
-        tight: bool = False
+        self, box: Box, extend: bool = False, tight: bool = False
     ) -> List[Tuple[int, int]]:
         """Start and stopping indexes for the cells that intersect with a :class:`Box`.
 

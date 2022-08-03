@@ -35,6 +35,7 @@ from .simulation import Simulation
 from .data import ScalarFieldDataArray, ScalarModeFieldDataArray, ScalarFieldTimeDataArray
 from .data import ModeAmpsDataArray, ModeIndexDataArray
 from .data import FluxDataArray, FluxTimeDataArray
+from .data import AbstractNear2FarData
 from .data import Near2FarAngleDataArray, Near2FarCartesianDataArray, Near2FarKSpaceDataArray
 
 from .data import FieldData, FieldTimeData, PermittivityData

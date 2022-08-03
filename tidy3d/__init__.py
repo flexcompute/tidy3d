@@ -48,6 +48,7 @@ from .components import Near2FarAngleDataArray, Near2FarCartesianDataArray, Near
 from .components import FieldData, FieldTimeData, PermittivityData
 from .components import FluxData, FluxTimeData
 from .components import ModeData, ModeSolverData
+from .components import AbstractNear2FarData
 from .components import Near2FarAngleData, Near2FarCartesianData, Near2FarKSpaceData
 from .components import SimulationData
 from .components import DATA_TYPE_MAP

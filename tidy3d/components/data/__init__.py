@@ -9,6 +9,7 @@ from .monitor_data import FluxData, FluxTimeData
 from .monitor_data import ModeData, ModeSolverData
 from .monitor_data import DATA_TYPE_MAP
 
+from .near2far_data import AbstractNear2FarData
 from .near2far_data import Near2FarAngleData, Near2FarCartesianData, Near2FarKSpaceData
 
 from .sim_data import SimulationData
