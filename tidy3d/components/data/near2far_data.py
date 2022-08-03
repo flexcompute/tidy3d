@@ -400,15 +400,15 @@ class Near2FarCartesianData(AbstractNear2FarData):
         if self.monitor.plane_axis == 0:
             y = self.Ntheta.x
             z = self.Ntheta.y
-            x = self.monitor.far_distance
+            x = self.monitor.plane_distance
         elif self.monitor.plane_axis == 1:
             x = self.Ntheta.x
             z = self.Ntheta.y
-            y = self.monitor.far_distance
+            y = self.monitor.plane_distance
         elif self.monitor.plane_axis == 2:
             x = self.Ntheta.x
             y = self.Ntheta.y
-            z = self.monitor.far_distance
+            z = self.monitor.plane_distance
 
         x, y, z = [np.atleast_1d(x), np.atleast_1d(y), np.atleast_1d(z)]
 
