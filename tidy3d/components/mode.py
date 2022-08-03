@@ -5,7 +5,7 @@ from typing import Tuple
 import pydantic as pd
 import numpy as np
 
-from ..constants import MICROMETER, RADIAN, GLANCING_CUTOFF
+from ..constants import MICROMETER, RADIAN, GLANCING_CUTOFF, TIDY3D_DOUBLE_PRECISION
 from .base import Tidy3dBaseModel
 from .types import Axis2D, Literal
 from ..log import SetupError
@@ -67,7 +67,7 @@ class ModeSpec(Tidy3dBaseModel):
     )
 
     precision: Literal["single", "double"] = pd.Field(
-        "single",
+        "double" if TIDY3D_DOUBLE_PRECISION else "single",
         title="single or double precision in mode solver",
         description="The solver will be faster and using less memory under "
         "single precision, but more accurate under double precision.",

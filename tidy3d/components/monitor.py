@@ -12,11 +12,11 @@ from .base import cached_property
 from .mode import ModeSpec
 from .viz import PlotParams, plot_params_monitor, ARROW_COLOR_MONITOR, ARROW_ALPHA
 from ..log import SetupError
-from ..constants import HERTZ, SECOND
+from ..constants import HERTZ, SECOND, TIDY3D_DOUBLE_PRECISION
 
 
-BYTES_REAL = 4
-BYTES_COMPLEX = 8
+BYTES_REAL = 8 if TIDY3D_DOUBLE_PRECISION else 4
+BYTES_COMPLEX = 16 if TIDY3D_DOUBLE_PRECISION else 8
 
 
 class Monitor(Box, ABC):
