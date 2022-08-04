@@ -21,17 +21,6 @@ def test_logging_level():
         assert log.level == val
 
 
-def test_config():
-    """Make sure setting the web_config in config affects the DEFAULT_CONFIG"""
-
-    for config_key, target_config in WEB_CONFIGS.items():
-
-        td.config.web_config = config_key
-
-        for key in DEFAULT_CONFIG.dict():
-            assert DEFAULT_CONFIG.dict()[key] == target_config.dict()[key]
-
-
 def _test_frozen():
     """Make sure you can dynamically freeze tidy3d components."""
 

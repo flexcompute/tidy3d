@@ -1,16 +1,4 @@
-# just core (no plotly, no tests)
-
-xarray>=0.16.2
-scipy
-h5py>=3.0.0
-rich
-nlopt
-matplotlib
-shapely==1.8.0; python_version<"3.10"
-shapely>=1.8.1; python_version>="3.10"
-pydantic>=1.9.0
-PyYAML
-boto3==1.23.1
-requests
-dask
-pyjwt
+# build and run simulations, use plugins (no plotly, no tests)
+-r basic.txt
+-r web.txt
+-r plugins.txt
