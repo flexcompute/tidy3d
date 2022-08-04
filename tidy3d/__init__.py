@@ -3,14 +3,6 @@ from concurrent.futures import ProcessPoolExecutor, process
 
 from rich import pretty, traceback
 
-from .config import config
-
-# version
-from .version import __version__
-
-# updater
-from .updater import Updater
-
 # grid
 from .components import Grid, Coords, GridSpec, UniformGrid, CustomGrid, AutoGrid
 
@@ -58,9 +50,6 @@ from .components import DefaultPMLParameters, DefaultStablePMLParameters, Defaul
 # constants imported as `C_0 = td.C_0` or `td.constants.C_0`
 from .constants import C_0, ETA_0, HBAR, EPSILON_0, MU_0, Q_e, inf
 
-# plugins typically imported as `from tidy3d.plugins import DispersionFitter`
-from . import plugins
-
 # material library dict imported as `from tidy3d import material_library`
 # get material `mat` and variant `var` as `material_library[mat][var]`
 from .material_library import material_library
@@ -74,6 +63,15 @@ from .components.grid import YeeGrid, FieldGrid, Coords1D
 
 # logging
 from .log import log, set_logging_file
+
+# config
+from .config import config
+
+# version
+from .version import __version__
+
+# updater
+from .updater import Updater
 
 
 def set_logging_level(level: str) -> None:

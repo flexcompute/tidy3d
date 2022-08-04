@@ -1,0 +1,3 @@
+# plugins-specific, excluding plotly
+scipy
+nlopt

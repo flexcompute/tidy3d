@@ -1,4 +1,7 @@
 include requirements.txt
+include requirements/basic.txt
+include requirements/web.txt
+include requirements/plugins.txt
 include requirements/core.txt
 include requirements/plotly.txt
 include requirements/dev.txt

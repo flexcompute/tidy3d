@@ -1,0 +1,5 @@
+# to use the web interface (needed to run tasks)
+
+boto3==1.23.1
+requests
+pyjwt

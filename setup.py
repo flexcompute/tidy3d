@@ -16,8 +16,10 @@ print(version["__version__"])
 with open("README.md", "r", encoding="utf-8") as fh:
     long_description = fh.read()
 
-with open("requirements/core.txt") as f:
-    core_required = f.read().splitlines()
+core_required = []
+for core_file in ["requirements/basic.txt", "requirements/web.txt", "requirements/plugins.txt"]:
+    with open(core_file) as f:
+        core_required.append(f.read().splitlines())
 
 with open("requirements/plotly.txt") as f:
     plotly_required = f.read().splitlines()
@@ -26,6 +28,7 @@ with open("requirements/plotly.txt") as f:
 with open("requirements/dev.txt") as f:
     dev_required = f.read().splitlines()
     dev_required = [req for req in dev_required if "-r" not in req]
+dev_required.append(plotly_required)
 
 setuptools.setup(
     name=PIP_NAME,
