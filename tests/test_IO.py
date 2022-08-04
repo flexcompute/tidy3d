@@ -5,12 +5,15 @@ import pydantic
 import numpy as np
 import os
 from time import time
+import xarray as xr
 
 from tidy3d import *
 from tidy3d import __version__
+import tidy3d as td
 from .utils import SIM_FULL as SIM
 from .utils import SIM_MONITORS as SIM2
 from .utils import clear_tmp
+from .test_data_monitor import make_flux_data
 
 # Store an example of every minor release simulation to test updater in the future
 SIM_DIR = "tests/sims"
@@ -198,3 +201,10 @@ def test_yaml():
     sim.to_yaml(path1)
     sim1 = Simulation.from_yaml(path1)
     assert sim1 == sim
+
+
+def test_to_json_data():
+    """Test that all simulations in ``SIM_DIR`` can be updated to current version and loaded."""
+    data = make_flux_data()
+    assert json.loads(data._json_string())["flux"] is not None
+    assert json.loads(data._json_string(include_data=False))["flux"] is None

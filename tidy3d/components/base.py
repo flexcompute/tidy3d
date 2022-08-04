@@ -14,7 +14,7 @@ from pydantic.fields import ModelField
 import xarray as xr
 
 from .types import ComplexNumber, Literal, TYPE_TAG_STR  # , DataObject
-from ..log import FileError
+from ..log import FileError, log
 
 # default indentation (# spaces) in files
 INDENT = 4
@@ -61,6 +61,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         json_encoders = {
             np.ndarray: lambda x: tuple(x.tolist()),
             complex: lambda x: ComplexNumber(real=x.real, imag=x.imag),
+            xr.DataArray: lambda x: x.to_dict(),
         }
         frozen = True
         allow_mutation = False
@@ -118,23 +119,30 @@ class Tidy3dBaseModel(pydantic.BaseModel):
 
         raise FileError(f"File must be .json, .yaml, or .hdf5 type, given {fname}")
 
-    def to_file(self, fname: str) -> None:
+    def to_file(self, fname: str, include_data: bool = True) -> None:
         """Exports :class:`Tidy3dBaseModel` instance to .yaml or .json file
 
         Parameters
         ----------
         fname : str
             Full path to the .yaml or .json file to save the :class:`Tidy3dBaseModel` to.
+        include_data : bool = True
+            Whether to include xarray data. Note: data is always included in .hdf5 file.
 
         Example
         -------
         >>> simulation.to_file(fname='folder/sim.json') # doctest: +SKIP
         """
         if ".json" in fname:
-            return self.to_json(fname=fname)
+            return self.to_json(fname=fname, include_data=include_data)
         if ".yaml" in fname:
-            return self.to_yaml(fname=fname)
+            return self.to_yaml(fname=fname, include_data=include_data)
         if ".hdf5" in fname:
+            if not include_data:
+                log.warning(
+                    "`include_data` set to `False`."
+                    "This will have no effect for `.hdf5` format, the data will still be written."
+                )
             return self.to_hdf5(fname=fname)
 
         raise FileError(f"File must be .json, .yaml, or .hdf5 type, given {fname}")
@@ -161,19 +169,21 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         """
         return cls.parse_file(fname, **parse_file_kwargs)
 
-    def to_json(self, fname: str) -> None:
+    def to_json(self, fname: str, include_data: bool = True) -> None:
         """Exports :class:`Tidy3dBaseModel` instance to .json file
 
         Parameters
         ----------
         fname : str
             Full path to the .json file to save the :class:`Tidy3dBaseModel` to.
+        include_data : bool = True
+            Whether to include xarray data.
 
         Example
         -------
         >>> simulation.to_json(fname='folder/sim.json') # doctest: +SKIP
         """
-        json_string = self._json_string()
+        json_string = self._json_string(include_data=include_data)
         with open(fname, "w", encoding="utf-8") as file_handle:
             file_handle.write(json_string)
 
@@ -202,19 +212,21 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         json_raw = json.dumps(json_dict, indent=INDENT)
         return cls.parse_raw(json_raw, **parse_raw_kwargs)
 
-    def to_yaml(self, fname: str) -> None:
+    def to_yaml(self, fname: str, include_data: bool = True) -> None:
         """Exports :class:`Tidy3dBaseModel` instance to .yaml file.
 
         Parameters
         ----------
         fname : str
             Full path to the .yaml file to save the :class:`Tidy3dBaseModel` to.
+        include_data : bool = True
+            Whether to include xarray data.
 
         Example
         -------
         >>> simulation.to_yaml(fname='folder/sim.yaml') # doctest: +SKIP
         """
-        json_string = self._json_string()
+        json_string = self._json_string(include_data=include_data)
         json_dict = json.loads(json_string)
         with open(fname, "w+", encoding="utf-8") as file_handle:
             yaml.dump(json_dict, file_handle, indent=INDENT)
@@ -458,13 +470,15 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         """define >= for getting unique indices based on hash."""
         return hash(self) >= hash(other)
 
-    def _json_string(self, include_unset: bool = True) -> str:
+    def _json_string(self, include_unset: bool = True, include_data: bool = True) -> str:
         """Returns string representation of a :class:`Tidy3dBaseModel`.
 
         Parameters
         ----------
         include_unset : bool = True
             Whether to include default fields in json string.
+        include_data : bool = True
+            Whether to include ``xarray`` data.
 
         Returns
         -------
@@ -473,12 +487,20 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         """
         exclude_unset = not include_unset
 
+        # if not include_data, temporarily set the xr.DataArray encoder to return None
+        original_encoder = self.__config__.json_encoders[xr.DataArray]
+        if not include_data:
+            self.__config__.json_encoders[xr.DataArray] = lambda x: None
+
         # put infinity and -infinity in quotes
         tmp_string = "<<TEMPORARY_INFINITY_STRING>>"
         json_string = self.json(indent=INDENT, exclude_unset=exclude_unset)
         json_string = json_string.replace("-Infinity", tmp_string)
         json_string = json_string.replace("Infinity", '"Infinity"')
         json_string = json_string.replace(tmp_string, '"-Infinity"')
+
+        # re-set the json encoder for data
+        self.__config__.json_encoders[xr.DataArray] = original_encoder
 
         return json_string
 
