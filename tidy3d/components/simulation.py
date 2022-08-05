@@ -401,7 +401,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
             return val
 
         # Get simulation frequency range
-        source_ranges = [source.source_time.frequency_range() for source in values["sources"]]
+        source_ranges = [source.source_time.frequency_range() for source in values.get("sources")]
         if not source_ranges:
             log.warning("No sources in simulation.")
             return val
