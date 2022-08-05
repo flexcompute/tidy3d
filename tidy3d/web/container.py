@@ -1,7 +1,7 @@
 """higher level wrappers for webapi functions for individual (Job) and batch (Batch) tasks."""
 import os
 from abc import ABC
-from typing import Dict, Optional, Tuple
+from typing import Dict, Tuple
 import time
 
 from rich.console import Console
@@ -51,20 +51,13 @@ class Job(WebContainer):
         description="Task ID number, set when the task is uploaded, leave as None.",
     )
 
-    def run(
-        self, path: str = DEFAULT_DATA_PATH, normalize_index: Optional[int] = 0
-    ) -> SimulationData:
+    def run(self, path: str = DEFAULT_DATA_PATH) -> SimulationData:
         """run :class:`Job` all the way through and return data.
 
         Parameters
         ----------
         path_dir : str = "./simulation_data.hdf5"
             Base directory where data will be downloaded, by default current working directory.
-        normalize_index : int = 0
-            If specified, normalizes the frequency-domain data by the amplitude spectrum of the
-            source corresponding to ``simulation.sources[normalize_index]``.
-            This occurs when the data is loaded into a :class:`.SimulationData` object.
-            To turn off normalization, set ``normalize_index`` to ``None``.
 
         Returns
         -------
@@ -74,7 +67,7 @@ class Job(WebContainer):
 
         self.start()
         self.monitor()
-        return self.load(path=path, normalize_index=normalize_index)
+        return self.load(path=path)
 
     @pd.validator("task_id", always=True)
     def _upload(cls, val, values) -> None:
@@ -149,9 +142,7 @@ class Job(WebContainer):
         """
         web.download(task_id=self.task_id, path=path)
 
-    def load(
-        self, path: str = DEFAULT_DATA_PATH, normalize_index: Optional[int] = 0
-    ) -> SimulationData:
+    def load(self, path: str = DEFAULT_DATA_PATH) -> SimulationData:
         """Download results from simulation (if not already) and load them into ``SimulationData``
         object.
 
@@ -159,22 +150,13 @@ class Job(WebContainer):
         ----------
         path : str = "./simulation_data.hdf5"
             Path to download data as ``.hdf5`` file (including filename).
-        normalize_index : int = 0
-            If specified, normalizes the frequency-domain data by the amplitude spectrum of the
-            source corresponding to ``simulation.sources[normalize_index]``.
-            This occurs when the data is loaded into a :class:`.SimulationData` object.
-            To turn off normalization, set ``normalize_index`` to ``None``.
 
         Returns
         -------
         :class:`.SimulationData`
             Object containing data about simulation.
         """
-        return web.load(
-            task_id=self.task_id,
-            path=path,
-            normalize_index=normalize_index,
-        )
+        return web.load(task_id=self.task_id, path=path)
 
     def delete(self):
         """Delete server-side data associated with :class:`Job`."""
@@ -194,14 +176,6 @@ class BatchData(Tidy3dBaseModel):
         ..., title="Task IDs", description="Mapping of task_name to task_id for each task in batch."
     )
 
-    normalize_index: Optional[int] = pd.Field(
-        0,
-        title="Source Normalization Index",
-        description="If specified, normalizes the frequency-domain data by the amplitude "
-        "spectrum of the source corresponding to ``simulation.sources[normalize_index]``. "
-        "If ``None``, does not normalize.",
-    )
-
     def load_sim_data(self, task_name: str) -> SimulationData:
         """Load a :class:`.SimulationData` from file by task name."""
         task_data_path = self.task_paths[task_name]
@@ -209,7 +183,6 @@ class BatchData(Tidy3dBaseModel):
         return web.load(
             task_id=task_id,
             path=task_data_path,
-            normalize_index=self.normalize_index,
             replace_existing=False,
         )
 
@@ -223,9 +196,7 @@ class BatchData(Tidy3dBaseModel):
         return self.load_sim_data(task_name)
 
     @classmethod
-    def load(
-        cls, path_dir: str = DEFAULT_DATA_DIR, normalize_index: Optional[int] = 0
-    ) -> "BatchData":
+    def load(cls, path_dir: str = DEFAULT_DATA_DIR) -> "BatchData":
         """Load :class:`Batch` from file, download results, and load them.
 
         Parameters
@@ -242,7 +213,7 @@ class BatchData(Tidy3dBaseModel):
 
         batch_file = Batch._batch_path(path_dir=path_dir)  # pylint:disable=protected-access
         batch = Batch.from_file(batch_file)
-        return batch.load(path_dir=path_dir, normalize_index=normalize_index)
+        return batch.load(path_dir=path_dir)
 
 
 class Batch(WebContainer):
@@ -267,9 +238,7 @@ class Batch(WebContainer):
         "Set by ``Batch.upload``, leave as None.",
     )
 
-    def run(
-        self, path_dir: str = DEFAULT_DATA_DIR, normalize_index: Optional[int] = 0
-    ) -> BatchData:
+    def run(self, path_dir: str = DEFAULT_DATA_DIR) -> BatchData:
         """Upload and run each simulation in :class:`Batch`.
 
         Parameters
@@ -298,7 +267,7 @@ class Batch(WebContainer):
 
         self.start()
         self.monitor()
-        return self.load(path_dir=path_dir, normalize_index=normalize_index)
+        return self.load(path_dir=path_dir)
 
     @pd.validator("jobs", always=True)
     def _upload(cls, val, values) -> None:
@@ -462,9 +431,7 @@ class Batch(WebContainer):
             job_path = self._job_data_path(task_id=job.task_id, path_dir=path_dir)
             job.download(path=job_path)
 
-    def load(
-        self, path_dir: str = DEFAULT_DATA_DIR, normalize_index: Optional[int] = 0
-    ) -> BatchData:
+    def load(self, path_dir: str = DEFAULT_DATA_DIR) -> BatchData:
         """Download results and load them into :class:`.BatchData` object.
 
         Parameters
@@ -492,7 +459,7 @@ class Batch(WebContainer):
             task_paths[task_name] = self._job_data_path(task_id=job.task_id, path_dir=path_dir)
             task_ids[task_name] = self.jobs[task_name].task_id
 
-        return BatchData(task_paths=task_paths, task_ids=task_ids, normalize_index=normalize_index)
+        return BatchData(task_paths=task_paths, task_ids=task_ids)
 
     def delete(self):
         """Delete server-side data associated with each task in the batch."""

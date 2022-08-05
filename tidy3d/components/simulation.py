@@ -1,6 +1,6 @@
 # pylint: disable=too-many-lines, too-many-arguments
 """ Container holding all information about simulation and its components"""
-from typing import Dict, Tuple, List, Set, Union
+from typing import Dict, Tuple, List, Set, Union, Optional
 from math import isclose
 
 import pydantic
@@ -178,6 +178,13 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         title="Subpixel Averaging",
         description="If ``True``, uses subpixel averaging of the permittivity "
         "based on structure definition, resulting in much higher accuracy for a given grid size.",
+    )
+
+    normalize_index: Optional[pydantic.NonNegativeInt] = pydantic.Field(
+        0,
+        title="Normalization index",
+        description="Index of the source in the tuple of sources whose spectrum will be used to "
+        "normalize the frequency-dependent data. If ``None``, the raw field data is returned.",
     )
 
     courant: float = pydantic.Field(
@@ -503,6 +510,24 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
                         f"{len(mediums)} different mediums detected on plane "
                         f"intersecting a {source.type} source. Plane must be homogeneous."
                     )
+
+        return val
+
+    @pydantic.validator("normalize_index", always=True)
+    def _check_normalize_index(cls, val, values):
+        """Check validity of normalize index in context of simulation.sources."""
+
+        # not normalizing
+        if val is None:
+            return val
+
+        assert val >= 0, "normalize_index can't be negative."
+        num_sources = len(values.get("sources"))
+        if num_sources == 0:
+            # No normalization will be used if no sources, but it should be irrelevant anyway
+            return None
+
+        assert val < num_sources, f"{num_sources} sources smaller than normalize_index of {val}"
 
         return val
 

@@ -14,15 +14,18 @@ from .test_data_monitor import make_mode_data, make_mode_solver_data
 from .test_data_monitor import make_flux_data, make_flux_time_data
 from .test_data_arrays import FIELD_MONITOR, FIELD_TIME_MONITOR, MODE_SOLVE_MONITOR
 from .test_data_arrays import MODE_MONITOR, PERMITTIVITY_MONITOR, FLUX_MONITOR, FLUX_TIME_MONITOR
-from .test_data_arrays import SIM
+from .test_data_arrays import SIM, SIM_SYM
 
 from .utils import clear_tmp
 
 # monitor data instances
 
-FIELD = make_field_data()
-FIELD_TIME = make_field_time_data()
-PERMITTIVITY = make_permittivity_data()
+FIELD_SYM = make_field_data()
+FIELD = make_field_data(symmetry=False)
+FIELD_TIME_SYM = make_field_time_data()
+FIELD_TIME = make_field_time_data(symmetry=False)
+PERMITTIVITY_SYM = make_permittivity_data()
+PERMITTIVITY = make_permittivity_data(symmetry=False)
 MODE = make_mode_data()
 MODE_SOLVER = make_mode_solver_data()
 FLUX = make_flux_data()
@@ -30,15 +33,22 @@ FLUX_TIME = make_flux_time_data()
 
 # for constructing SimulationData
 MONITOR_DATA = (FIELD, FIELD_TIME, MODE_SOLVER, PERMITTIVITY, MODE, FLUX, FLUX_TIME)
+MONITOR_DATA_SYM = (FIELD_SYM, FIELD_TIME_SYM, MODE_SOLVER, PERMITTIVITY_SYM, MODE, FLUX, FLUX_TIME)
 MONITOR_DATA_DICT = {data.monitor.name: data for data in MONITOR_DATA}
+MONITOR_DATA_DICT_SYM = {data.monitor.name: data for data in MONITOR_DATA_SYM}
 
 
-def make_sim_data():
+def make_sim_data(symmetry: bool = True):
+    if symmetry:
+        simulation = SIM_SYM
+        monitor_data = MONITOR_DATA_DICT_SYM
+    else:
+        simulation = SIM
+        monitor_data = MONITOR_DATA_DICT
     return SimulationData(
-        simulation=SIM,
-        monitor_data=MONITOR_DATA_DICT,
+        simulation=simulation,
+        monitor_data=monitor_data,
         log="- Time step    827 / time 4.13e-14s (  4 % done), field decay: 0.110e+00",
-        normalize_index=0,
     )
 
 
@@ -64,21 +74,31 @@ def test_apply_symmetry2():
 
 def test_apply_symmetry3():
     sim_data = make_sim_data()
-    eps_raw = sim_data.monitor_data["field"]
-    shape_raw = eps_raw.Ex.shape
+    Ex_raw = sim_data.monitor_data["field"]
+    shape_raw = Ex_raw.Ex.shape
 
-    eps_ret = sim_data["field"]
-    shape_ret = eps_ret.Ex.shape
+    Ex_ret = sim_data["field"]
+    shape_ret = Ex_ret.Ex.shape
     assert shape_raw != shape_ret
 
 
+def test_no_symmetry():
+    sim_data = make_sim_data(symmetry=False)
+    Ex_raw = sim_data.monitor_data["field"]
+    Ex_ret = sim_data["field"]
+    assert id(Ex_raw) == id(Ex_ret)
+
+
 def test_normalize():
-    sim_data = make_sim_data()
-    sim_data_without_norm = sim_data.renormalize(normalize_index=None)
-    sim_data_with_norm = sim_data_without_norm.renormalize(normalize_index=0)
+    sim_data_norm0 = make_sim_data()
+    sim_data_norm_none = sim_data_norm0.renormalize(normalize_index=None)
+    sim_data_norm1 = sim_data_norm_none.renormalize(normalize_index=1)
+    sim_data_renorm0 = sim_data_norm1.renormalize(normalize_index=0)
     name = FIELD_MONITOR.name
-    assert np.allclose(sim_data[name].Ex, sim_data_with_norm[name].Ex)
-    assert not np.allclose(sim_data[name].Ex, sim_data_without_norm[name].Ex)
+    assert np.allclose(sim_data_norm0[name].Ex, sim_data_renorm0[name].Ex)
+    assert not np.allclose(sim_data_norm0[name].Ex, sim_data_norm_none[name].Ex)
+    assert not np.allclose(sim_data_norm0[name].Ex, sim_data_norm1[name].Ex)
+    assert not np.allclose(sim_data_norm_none[name].Ex, sim_data_norm1[name].Ex)
 
 
 def test_getitem():
@@ -162,11 +182,13 @@ def test_empty_io():
     monitor = td.FieldTimeMonitor(size=(1, 1, 1), name="test", fields=["Ex"])
     field_data = td.FieldTimeData(monitor=monitor, **fields)
     sim = td.Simulation(
-        size=(1, 1, 1), monitors=(monitor,), run_time=1e-12, grid_spec=td.GridSpec(wavelength=1.0)
+        size=(1, 1, 1),
+        monitors=(monitor,),
+        run_time=1e-12,
+        grid_spec=td.GridSpec(wavelength=1.0),
+        normalize_index=0,
     )
-    sim_data = SimulationData(
-        simulation=sim, monitor_data={"tmnt": field_data}, normalize_index=None
-    )
+    sim_data = SimulationData(simulation=sim, monitor_data={"tmnt": field_data})
     sim_data.to_file("tests/tmp/sim_data_empty.hdf5")
     sim_data = SimulationData.from_file("tests/tmp/sim_data_empty.hdf5")
     field_data = sim_data["tmnt"]
@@ -206,6 +228,7 @@ def test_run_time_lt_start():
         structures=(box,),
         monitors=(tmnt,),
         boundary_spec=td.BoundarySpec.all_sides(boundary=td.PML()),
+        normalize_index=None,
     )
 
     coords = dict(
@@ -225,7 +248,6 @@ def test_run_time_lt_start():
     sim_data = SimulationData(
         simulation=sim,
         monitor_data={tmnt.name: field_data},
-        normalize_index=None,
     )
 
     sim_data.renormalize(0).to_file("tests/tmp/sim_data_empty.hdf5")

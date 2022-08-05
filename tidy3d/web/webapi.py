@@ -5,7 +5,7 @@ import logging
 import os
 import time
 from datetime import datetime, timedelta
-from typing import List, Dict, Optional
+from typing import List, Dict
 
 import requests
 from dateutil import parser
@@ -32,7 +32,6 @@ def run(  # pylint:disable=too-many-arguments
     folder_name: str = "default",
     path: str = "simulation_data.hdf5",
     callback_url: str = None,
-    normalize_index: Optional[int] = 0,
 ) -> SimulationData:
     """Submits a :class:`.Simulation` to server, starts running, monitors progress, downloads,
     and loads results as a :class:`.SimulationData` object.
@@ -50,11 +49,6 @@ def run(  # pylint:disable=too-many-arguments
     callback_url : str = None
         Http PUT url to receive simulation finish event. The body content is a json file with
         fields ``{'id', 'status', 'name', 'workUnit', 'solverVersion'}``.
-    normalize_index : int = 0
-        If specified, normalizes the frequency-domain data by the amplitude spectrum of the source
-        corresponding to ``simulation.sources[normalize_index]``.
-        This occurs when the data is loaded into a :class:`.SimulationData` object.
-        To turn off normalization, set ``normalize_index`` to ``None``.
 
     Returns
     -------
@@ -69,7 +63,7 @@ def run(  # pylint:disable=too-many-arguments
     )
     start(task_id)
     monitor(task_id)
-    return load(task_id=task_id, path=path, normalize_index=normalize_index)
+    return load(task_id=task_id, path=path)
 
 
 def upload(  # pylint:disable=too-many-locals,too-many-arguments
@@ -368,7 +362,6 @@ def load(
     task_id: TaskId,
     path: str = "simulation_data.hdf5",
     replace_existing: bool = True,
-    normalize_index: Optional[int] = 0,
 ) -> SimulationData:
     """Download and Load simultion results into :class:`.SimulationData` object.
 
@@ -380,11 +373,6 @@ def load(
         Download path to .hdf5 data file (including filename).
     replace_existing: bool = True
         Downloads the data even if path exists (overwriting the existing).
-    normalize_index : int = 0
-        If specified, normalizes the frequency-domain data by the amplitude spectrum of the source
-        corresponding to ``simulation.sources[normalize_index]``.
-        This occurs when the data is loaded into a :class:`.SimulationData` object.
-        To turn off normalization, set ``normalize_index`` to ``None``.
 
     Returns
     -------
@@ -396,7 +384,7 @@ def load(
         download(task_id=task_id, path=path)
 
     log.info(f"loading SimulationData from {path}")
-    sim_data = SimulationData.from_file(path, normalize_index=normalize_index)
+    sim_data = SimulationData.from_file(path)
 
     final_decay_value = sim_data.final_decay_value
     shutoff_value = sim_data.simulation.shutoff
