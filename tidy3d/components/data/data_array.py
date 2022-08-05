@@ -78,8 +78,13 @@ class DataArray(xr.DataArray):
         if isinstance(value, dict):
             data = value.get("data")
             coords = value.get("coords")
-            coords = {name: np.array(val) for name, val in coords.items()}
-            return cls(np.array(data), coords=coords)
+
+            # convert to numpy if not already
+            coords = {k: v if isinstance(v, np.ndarray) else np.array(v) for k, v in coords.items()}
+            if not isinstance(data, np.ndarray):
+                data = np.array(data)
+
+            return cls(data, coords=coords)
 
         return cls(value)
 
