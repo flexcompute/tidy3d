@@ -51,7 +51,7 @@ class AdvancedFitterParam(Tidy3dBaseModel):
         "so restrictive that all good solutions are missed, then please try the 'soft' constraints "
         "for larger search space. However, both constraints improve stability equally well.",
     )
-    nlopt_maxeval: PositiveInt = Field(
+    maxeval: PositiveInt = Field(
         5000,
         title="Number of inner iterations",
         description="Number of iterations in each inner optimization.",
@@ -224,7 +224,7 @@ class StableDispersionFitter(DispersionFitter):
             bound_f=self._Hz_to_eV(advanced_param.bound_f),
             bound_eps_inf=advanced_param.bound_eps_inf,
             constraint=advanced_param.constraint,
-            nlopt_maxeval=advanced_param.nlopt_maxeval,
+            maxeval=advanced_param.maxeval,
         )
 
         return web_data

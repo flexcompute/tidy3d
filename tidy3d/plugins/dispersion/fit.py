@@ -6,7 +6,7 @@ import csv
 import codecs
 import requests
 
-import nlopt
+import scipy
 import numpy as np
 from rich.progress import Progress
 from pydantic import Field, validator
@@ -401,7 +401,7 @@ class DispersionFitter(Tidy3dBaseModel):
             Results of single fit: (dispersive medium, RMS error).
         """
 
-        def constraint(coeffs, _grad):
+        def constraint(coeffs, _grad=None):
             """Evaluates the nonlinear stability criterion of
             Hongjin Choi, Jae-Woo Baek, and Kyung-Young Jung,
             "Comprehensive Study on Numerical Aspects of Modified
@@ -428,7 +428,7 @@ class DispersionFitter(Tidy3dBaseModel):
             res[res >= 0] = 0
             return np.sum(res)
 
-        def obj(coeffs, _grad):
+        def obj(coeffs, _grad=None):
             """objective function for fit
 
             Parameters
@@ -454,11 +454,6 @@ class DispersionFitter(Tidy3dBaseModel):
         num_coeffs = num_poles * 4
         coeffs0 = 2 * (np.random.random(num_coeffs) - 0.5)
 
-        # set method and objective
-        method = nlopt.LN_NELDERMEAD
-        opt = nlopt.opt(method, num_coeffs)
-        opt.set_min_objective(obj)
-
         # set bounds
         bounds_upper = np.zeros(num_coeffs, dtype=float)
         bounds_lower = np.zeros(num_coeffs, dtype=float)
@@ -480,25 +475,30 @@ class DispersionFitter(Tidy3dBaseModel):
         bounds_lower[indices + 3] = -np.inf
         bounds_upper[indices + 3] = np.inf
 
-        opt.set_lower_bounds(bounds_lower.tolist())
-        opt.set_upper_bounds(bounds_upper.tolist())
+        bounds = list(zip(bounds_lower, bounds_upper))
 
-        # opt.add_inequality_constraint(constraint)
-        opt.set_xtol_rel(1e-5)
-        opt.set_ftol_rel(1e-5)
+        # TODO: set up constraint properly
+        scipy_constraint = scipy.optimize.NonlinearConstraint(constraint, lb=0, ub=np.inf)
 
-        # run global optimization with opt as inner loop
-        optglob = nlopt.opt(nlopt.LN_AUGLAG, num_coeffs)
-        optglob.set_min_objective(obj)
-        optglob.set_lower_bounds(bounds_lower.tolist())
-        optglob.set_upper_bounds(bounds_upper.tolist())
-        optglob.add_inequality_constraint(constraint)
-        optglob.set_xtol_rel(1e-5)
-        optglob.set_maxeval(10000)
-        optglob.set_ftol_rel(1e-7)
-        optglob.set_local_optimizer(opt)
-        coeffs = optglob.optimize(coeffs0)
-        rms_error = optglob.last_optimum_value()
+        # TODO: set options properly
+        res = scipy.optimize.minimize(
+            obj,
+            coeffs0,
+            args=(),
+            method="Nelder-Mead",
+            bounds=bounds,
+            constraints=(scipy_constraint,),
+            tol=1e-7,
+            callback=None,
+            options=dict(
+                maxiter=10000,
+                xatol=1e-5,
+                fatol=1e-5,
+            ),
+        )
+
+        coeffs = res.x
+        rms_error = obj(coeffs)
 
         # set the latest fit
         medium = self._make_medium(coeffs)
