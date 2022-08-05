@@ -7,7 +7,7 @@ from tidy3d.components.data.data_array import ScalarFieldDataArray, ScalarFieldT
 from tidy3d.components.data.data_array import ScalarModeFieldDataArray
 from tidy3d.components.data.data_array import ModeAmpsDataArray, ModeIndexDataArray
 from tidy3d.components.data.data_array import FluxDataArray, FluxTimeDataArray
-from tidy3d.components.source import PointDipole, GaussianPulse
+from tidy3d.components.source import PointDipole, GaussianPulse, ModeSource
 from tidy3d.components.simulation import Simulation
 from tidy3d.components.grid import GridSpec
 from tidy3d.components.mode import ModeSpec
@@ -25,18 +25,22 @@ from .utils import clear_tmp
 STRUCTURES = [
     Structure(geometry=Box(size=(1, inf, 1)), medium=material_library["cSi"]["SalzbergVilla1957"])
 ]
-SOURCES = [PointDipole(source_time=GaussianPulse(freq0=1e14, fwidth=1e14), polarization="Ex")]
-GRID_SPEC = GridSpec(wavelength=1.0)
-RUN_TIME = 1e-12
 SIZE_3D = (2, 4, 5)
-
 SIZE_2D = list(SIZE_3D)
 SIZE_2D[1] = 0
 MODE_SPEC = ModeSpec(num_modes=4)
 FREQS = [1e14, 2e14]
+SOURCES = [
+    PointDipole(source_time=GaussianPulse(freq0=FREQS[0], fwidth=1e14), polarization="Ex"),
+    ModeSource(
+        size=SIZE_2D,
+        mode_spec=MODE_SPEC,
+        source_time=GaussianPulse(freq0=FREQS[1], fwidth=1e14),
+        direction="+",
+    ),
+]
 FIELDS = ("Ex", "Ey", "Ez", "Hz")
 INTERVAL = 2
-
 FIELD_MONITOR = FieldMonitor(size=SIZE_3D, fields=FIELDS, name="field", freqs=FREQS)
 FIELD_TIME_MONITOR = FieldTimeMonitor(
     size=SIZE_3D, fields=FIELDS, name="field_time", interval=INTERVAL
@@ -59,11 +63,24 @@ MONITORS = [
     FLUX_TIME_MONITOR,
 ]
 
-SIM = Simulation(
+GRID_SPEC = GridSpec(wavelength=1.0)
+RUN_TIME = 1e-12
+
+SIM_SYM = Simulation(
     size=SIZE_3D,
     run_time=RUN_TIME,
     grid_spec=GRID_SPEC,
     symmetry=(1, -1, 1),
+    sources=SOURCES,
+    monitors=MONITORS,
+    structures=STRUCTURES,
+)
+
+SIM = Simulation(
+    size=SIZE_3D,
+    run_time=RUN_TIME,
+    grid_spec=GRID_SPEC,
+    symmetry=(0, 0, 0),
     sources=SOURCES,
     monitors=MONITORS,
     structures=STRUCTURES,
@@ -77,8 +94,13 @@ DIRECTIONS = ["+", "-"]
 """ Generate the data arrays (used in other test files) """
 
 
-def get_xyz(monitor: MonitorType, grid_key: str) -> Tuple[List[float], List[float], List[float]]:
-    grid = SIM.discretize(monitor, extend=True)
+def get_xyz(
+    monitor: MonitorType, grid_key: str, symmetry: bool
+) -> Tuple[List[float], List[float], List[float]]:
+    if symmetry:
+        grid = SIM_SYM.discretize(monitor, extend=True)
+    else:
+        grid = SIM.discretize(monitor, extend=True)
     x, y, z = grid[grid_key].to_list
     x = [_x for _x in x if _x >= 0]
     y = [_y for _y in y if _y >= 0]
@@ -86,20 +108,20 @@ def get_xyz(monitor: MonitorType, grid_key: str) -> Tuple[List[float], List[floa
     return x, y, z
 
 
-def make_scalar_field_data_array(grid_key: str):
-    XS, YS, ZS = get_xyz(FIELD_MONITOR, grid_key)
+def make_scalar_field_data_array(grid_key: str, symmetry=True):
+    XS, YS, ZS = get_xyz(FIELD_MONITOR, grid_key, symmetry)
     values = (1 + 1j) * np.random.random((len(XS), len(YS), len(ZS), len(FS)))
     return ScalarFieldDataArray(values, coords=dict(x=XS, y=YS, z=ZS, f=FS))
 
 
-def make_scalar_field_time_data_array(grid_key: str):
-    XS, YS, ZS = get_xyz(FIELD_TIME_MONITOR, grid_key)
+def make_scalar_field_time_data_array(grid_key: str, symmetry=True):
+    XS, YS, ZS = get_xyz(FIELD_TIME_MONITOR, grid_key, symmetry)
     values = np.random.random((len(XS), len(YS), len(ZS), len(TS)))
     return ScalarFieldTimeDataArray(values, coords=dict(x=XS, y=YS, z=ZS, t=TS))
 
 
-def make_scalar_mode_field_data_array(grid_key: str):
-    XS, YS, ZS = get_xyz(MODE_SOLVE_MONITOR, grid_key)
+def make_scalar_mode_field_data_array(grid_key: str, symmetry=True):
+    XS, YS, ZS = get_xyz(MODE_SOLVE_MONITOR, grid_key, symmetry)
     values = np.random.random((len(XS), 1, len(ZS), len(FS), len(MODE_INDICES)))
 
     return ScalarModeFieldDataArray(

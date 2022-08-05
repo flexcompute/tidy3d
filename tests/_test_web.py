@@ -137,14 +137,6 @@ def test_query_folder_by_name():
     _ = web.webapi._query_or_create_folder("default")
 
 
-@clear_tmp
-def test_source_norm():
-    """test complete run"""
-    sim_data_raw = web.run(
-        simulation=sim_original, task_name="test_webapi", path=PATH_SIM_DATA, normalize_index=None
-    )
-
-
 """ Jobs """
 
 jobs_global = []
@@ -210,14 +202,6 @@ def _test_job_7_delete():
     assert task_info.status in ("deleted", "deleting")
 
 
-def test_job_source_norm(caplog):
-    """test complete run"""
-    job = web.Job(simulation=sim_original, task_name="test_job", callback_url=CALLBACK_URL)
-    sim_data_norm = job.run(path=PATH_SIM_DATA, normalize_index=0)
-    with pytest.raises(DataError):
-        sim_data_norm = web.load(task_id=job.task_id, normalize_index=1)
-
-
 """ Batches """
 
 batches_global = []
@@ -270,7 +254,6 @@ def test_batch_5_download():
     batch.download(path_dir=PATH_DIR_SIM_DATA)
 
 
-@clear_tmp
 def test_batch_6_load():
     """load the results into sim_data"""
     batch = _get_gloabl_batch()
@@ -283,7 +266,9 @@ def test_batch_6_load():
 @clear_tmp
 def test_batchdata_7_load():
     """load the BatchData from file."""
-    sim_data_dict = BatchData.load(path_dir=PATH_DIR_SIM_DATA)
+    batch = _get_gloabl_batch()
+    batch.to_file(os.path.join(PATH_DIR_SIM_DATA, "batch.json"))
+    sim_data_dict = web.BatchData.load(path_dir=PATH_DIR_SIM_DATA)
 
 
 def _test_batch_8_delete():

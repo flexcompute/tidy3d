@@ -109,11 +109,11 @@ Like before, the `SimulationData` object contains all of the data for a given `S
 
 #### Normalizing
 
-The `SimulationData` objects are initialzed with a `normalize_index` integer. The `SimulationData` has no notion of normalization "state", but rather uses this `normalize_index` to decide how to normalize the `monitor_data` components when returning them.
+The frequency-dependent data in `SimulationData` objects is normalized to the source given by `SimulationData.Simulation.normalize_index`, such that it matches exactly what is written to file (as opposed to the old workflow of the file containing un-normalized data). A copy of the `SimulationData` with a different normalization can be obtained using the
 
 Normalization is achieved through the 
 ```python
-def normalize_monitor_data(self, monitor_data: MonitorDataType) -> MonitorDataType:`
+def renormalize(self, normalize_index: int) -> SimulationData:`
 ```
 method.
 

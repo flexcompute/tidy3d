@@ -1,6 +1,6 @@
 """ Simulation Level Data """
 from __future__ import annotations
-from typing import Dict, Optional, Callable
+from typing import Dict, Callable
 
 import xarray as xr
 import pydantic as pd
@@ -12,7 +12,7 @@ from ..simulation import Simulation
 from ..boundary import BlochBoundary
 from ..types import Ax, Axis, annotate_type, Literal
 from ..viz import equal_aspect, add_ax_if_none
-from ...log import log, DataError
+from ...log import DataError
 
 
 class SimulationData(Tidy3dBaseModel):
@@ -65,27 +65,6 @@ class SimulationData(Tidy3dBaseModel):
         title="Diverged",
         description="A boolean flag denoting whether the simulation run diverged.",
     )
-
-    normalize_index: Optional[pd.NonNegativeInt] = pd.Field(
-        None,
-        title="Normalization index",
-        description="Index of the source in the simulation.sources that was used to normalize the "
-        "data.",
-    )
-
-    @pd.validator("normalize_index", always=True)
-    def _check_normalize_index(cls, val, values):
-        """Check validity of normalize index in context of simulation.sources."""
-
-        # not normalizing
-        if val is None:
-            return val
-
-        assert val >= 0, "normalize_index can't be negative."
-        num_sources = len(values.get("simulation").sources)
-        assert val < num_sources, f"{num_sources} sources greater than normalize_index of {val}"
-
-        return val
 
     def __getitem__(self, monitor_name: str) -> MonitorDataType:
         """Get a :class:`.MonitorData` by name. Apply symmetry if applicable."""
@@ -148,17 +127,11 @@ class SimulationData(Tidy3dBaseModel):
         """Return a copy of the :class:`.SimulationData` with a different source used for the
         normalization."""
 
-        if normalize_index == self.normalize_index:
+        if normalize_index == self.simulation.normalize_index:
             # already normalized to that index
             return self.copy()
 
         num_sources = len(self.simulation.sources)
-
-        if num_sources == 0:
-            # no sources present
-            normalize_index = None
-            log.warning("No sources present in simulation, not doing normalization.")
-
         if normalize_index and (normalize_index < 0 or normalize_index >= num_sources):
             # normalize index out of bounds for source list
             raise DataError(
@@ -169,7 +142,7 @@ class SimulationData(Tidy3dBaseModel):
         def source_spectrum_fn(freqs):
             """Normalization function that also removes previous normalization if needed."""
             new_spectrum_fn = self.source_spectrum(normalize_index)
-            old_spectrum_fn = self.source_spectrum(self.normalize_index)
+            old_spectrum_fn = self.source_spectrum(self.simulation.normalize_index)
             return new_spectrum_fn(freqs) / old_spectrum_fn(freqs)
 
         # Make a new monitor_data dictionary with renormalized data
@@ -177,7 +150,9 @@ class SimulationData(Tidy3dBaseModel):
         for key, val in self.monitor_data.items():
             monitor_data[key] = val.normalize(source_spectrum_fn)
 
-        return self.copy(update=dict(normalize_index=normalize_index, monitor_data=monitor_data))
+        simulation = self.simulation.copy(update=dict(normalize_index=normalize_index))
+
+        return self.copy(update=dict(simulation=simulation, monitor_data=monitor_data))
 
     def load_field_monitor(self, monitor_name: str) -> AbstractFieldData:
         """Load monitor and raise exception if not a field monitor."""
