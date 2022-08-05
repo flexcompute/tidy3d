@@ -1,5 +1,6 @@
 """ Simulation Level Data """
-from typing import Dict, Optional
+from __future__ import annotations
+from typing import Dict, Optional, Callable
 
 import xarray as xr
 import pydantic as pd
@@ -66,9 +67,10 @@ class SimulationData(Tidy3dBaseModel):
     )
 
     normalize_index: Optional[pd.NonNegativeInt] = pd.Field(
-        0,
+        None,
         title="Normalization index",
-        description="Index of the source in the simulation.sources to use to normalize the data.",
+        description="Index of the source in the simulation.sources that was used to normalize the "
+        "data.",
     )
 
     @pd.validator("normalize_index", always=True)
@@ -81,21 +83,14 @@ class SimulationData(Tidy3dBaseModel):
 
         assert val >= 0, "normalize_index can't be negative."
         num_sources = len(values.get("simulation").sources)
-
-        # no sources, just skip normalization
-        if num_sources == 0:
-            log.warning(f"normalize_index={val} supplied but no sources found, not normalizing.")
-            return None  # TODO: do we want this behavior though?
-
         assert val < num_sources, f"{num_sources} sources greater than normalize_index of {val}"
 
         return val
 
     def __getitem__(self, monitor_name: str) -> MonitorDataType:
-        """Get a :class:`.MonitorData` by name. Apply symmetry and normalize if applicable."""
+        """Get a :class:`.MonitorData` by name. Apply symmetry if applicable."""
         monitor_data = self.monitor_data[monitor_name]
         monitor_data = self.apply_symmetry(monitor_data)
-        monitor_data = self.normalize_monitor_data(monitor_data)
         return monitor_data
 
     @property
@@ -116,17 +111,19 @@ class SimulationData(Tidy3dBaseModel):
 
     def apply_symmetry(self, monitor_data: MonitorDataType) -> MonitorDataType:
         """Return copy of :class:`.MonitorData` object with symmetry values applied."""
-        return monitor_data.apply_symmetry(simulation=self.simulation)
+        return monitor_data.apply_symmetry(
+            symmetry=self.simulation.symmetry,
+            symmetry_center=self.simulation.center,
+            grid_expanded=self.simulation.discretize(monitor_data.monitor, extend=True),
+        )
 
-    def normalize_monitor_data(self, monitor_data: MonitorDataType) -> MonitorDataType:
-        """Return copy of :class:`.MonitorData` object with data normalized to source."""
+    def source_spectrum(self, source_index: int) -> Callable:
+        """Get a spectrum normalization function for a given source index."""
 
-        # if no normalize index, just return the new copy right away.
-        if self.normalize_index is None:
-            return monitor_data.copy()
+        if source_index is None:
+            return np.ones_like
 
-        # get source time information
-        source = self.simulation.sources[self.normalize_index]
+        source = self.simulation.sources[source_index]
         source_time = source.source_time
         times = self.simulation.tmesh
         dt = self.simulation.dt
@@ -145,7 +142,42 @@ class SimulationData(Tidy3dBaseModel):
             # remove user defined phase from normalization so its effect is present in the result
             return spectrum * np.conj(user_defined_phase)
 
-        return monitor_data.normalize(source_spectrum_fn)
+        return source_spectrum_fn
+
+    def renormalize(self, normalize_index: int) -> SimulationData:
+        """Return a copy of the :class:`.SimulationData` with a different source used for the
+        normalization."""
+
+        if normalize_index == self.normalize_index:
+            # already normalized to that index
+            return self.copy()
+
+        num_sources = len(self.simulation.sources)
+
+        if num_sources == 0:
+            # no sources present
+            normalize_index = None
+            log.warning("No sources present in simulation, not doing normalization.")
+
+        if normalize_index and (normalize_index < 0 or normalize_index >= num_sources):
+            # normalize index out of bounds for source list
+            raise DataError(
+                f"normalize_index {normalize_index} out of bounds for list of sources "
+                f"of length {num_sources}"
+            )
+
+        def source_spectrum_fn(freqs):
+            """Normalization function that also removes previous normalization if needed."""
+            new_spectrum_fn = self.source_spectrum(normalize_index)
+            old_spectrum_fn = self.source_spectrum(self.normalize_index)
+            return new_spectrum_fn(freqs) / old_spectrum_fn(freqs)
+
+        # Make a new monitor_data dictionary with renormalized data
+        monitor_data = {}
+        for key, val in self.monitor_data.items():
+            monitor_data[key] = val.normalize(source_spectrum_fn)
+
+        return self.copy(update=dict(normalize_index=normalize_index, monitor_data=monitor_data))
 
     def load_field_monitor(self, monitor_name: str) -> AbstractFieldData:
         """Load monitor and raise exception if not a field monitor."""

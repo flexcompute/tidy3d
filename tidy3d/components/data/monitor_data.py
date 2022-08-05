@@ -14,7 +14,6 @@ from ..grid import Grid
 from ..validators import enforce_monitor_fields_present
 from ..monitor import MonitorType, FieldMonitor, FieldTimeMonitor, ModeSolverMonitor
 from ..monitor import ModeMonitor, FluxMonitor, FluxTimeMonitor, PermittivityMonitor
-from ..simulation import Simulation
 from ...log import DataError
 
 from .data_array import ScalarFieldDataArray, ScalarFieldTimeDataArray, ScalarModeFieldDataArray
@@ -32,11 +31,15 @@ class MonitorData(Tidy3dBaseModel, ABC):
         descriminator=TYPE_TAG_STR,
     )
 
+    # pylint:disable=unused-argument
     def apply_symmetry(
-        self, simulation: Simulation  # pylint:disable=unused-argument
+        self,
+        symmetry: Tuple[Symmetry, Symmetry, Symmetry],
+        symmetry_center: Coordinate,
+        grid_expanded: Grid,
     ) -> MonitorData:
         """Return copy of self with symmetry applied."""
-        return self.copy()
+        return self
 
     def normalize(
         self, source_spectrum_fn: Callable[[float], complex]  # pylint:disable=unused-argument
@@ -65,27 +68,23 @@ class AbstractFieldData(MonitorData, ABC):
     def symmetry_eigenvalues(self) -> Dict[str, Callable[[Axis], float]]:
         """Maps field components to their (positive) symmetry eigenvalues."""
 
-    def apply_symmetry(self, simulation: Simulation) -> AbstractFieldData:
-        """Return copy of self with symmetry applied."""
-        return self._apply_field_symmetry(
-            symmetry=simulation.symmetry,
-            symmetry_center=simulation.center,
-            grid_expanded=simulation.discretize(self.monitor, extend=True),
-        )
-
-    def _apply_field_symmetry(  # pylint:disable=too-many-locals
+    def apply_symmetry(  # pylint:disable=too-many-locals
         self,
         symmetry: Tuple[Symmetry, Symmetry, Symmetry],
         symmetry_center: Coordinate,
         grid_expanded: Grid,
     ) -> AbstractFieldData:
-        """Create a copy of the :class:`.AbstractFieldData` with symmetry applied
+        """If symmetry is present, create a copy of the :class:`.AbstractFieldData` with the fields
+        expanded. If symmetry not present, returns the same data object.
 
         Returns
         -------
         :class:`AbstractFieldData`
-            A new data object with the symmetry expanded fields.
+            A data object with the symmetry expanded fields.
         """
+
+        if all(sym == 0 for sym in symmetry):
+            return self
 
         new_fields = {}
 

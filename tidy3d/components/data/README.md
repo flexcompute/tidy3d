@@ -76,12 +76,14 @@ Rather than raw data being passed to this, `source_spectrum_fn` is a function of
 
 #### Symmetry
 
-All `MonitorData` subclasses also have an `.apply_symmetry()` method, whch returns a copy of the instance with symmetry applied. By default, it just returns a straight copy of the object (if not affected by symmetry). There is therefore no notion of "state" with regard to the symmetry of a monitor data.
+All `MonitorData` subclasses also have an `.apply_symmetry()` method, whch returns a copy of the instance with symmetry applied. If no symmetry is applied (all symmetry values are 0), then the original data is returned. There is therefore no notion of "state" with regard to the symmetry of a monitor data.
 
 ```python
 def apply_symmetry(
     self,
-    simulation: Simulation
+    symmetry: Tuple[Symmetry, Symmetry, Symmetry],
+    symmetry_center: Coordinate,
+    grid_expanded: Grid,
 ) -> MonitorData:
 ```
 

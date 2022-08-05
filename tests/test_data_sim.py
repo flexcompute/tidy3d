@@ -74,8 +74,11 @@ def test_apply_symmetry3():
 
 def test_normalize():
     sim_data = make_sim_data()
-    for monitor_data in sim_data.monitor_data.values():
-        _ = sim_data.normalize_monitor_data(monitor_data)
+    sim_data_without_norm = sim_data.renormalize(normalize_index=None)
+    sim_data_with_norm = sim_data_without_norm.renormalize(normalize_index=0)
+    name = FIELD_MONITOR.name
+    assert np.allclose(sim_data[name].Ex, sim_data_with_norm[name].Ex)
+    assert not np.allclose(sim_data[name].Ex, sim_data_without_norm[name].Ex)
 
 
 def test_getitem():
@@ -222,10 +225,10 @@ def test_run_time_lt_start():
     sim_data = SimulationData(
         simulation=sim,
         monitor_data={tmnt.name: field_data},
-        normalize_index=0,
+        normalize_index=None,
     )
 
-    sim_data.to_file("tests/tmp/sim_data_empty.hdf5")
+    sim_data.renormalize(0).to_file("tests/tmp/sim_data_empty.hdf5")
     sim_data = SimulationData.from_file("tests/tmp/sim_data_empty.hdf5")
     tmnt_data = sim_data.monitor_data[tmnt.name]
     tmnt_data = sim_data[tmnt.name]
