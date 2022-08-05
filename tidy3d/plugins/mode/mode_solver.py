@@ -169,7 +169,11 @@ class ModeSolver(Tidy3dBaseModel):
             :class:`.ModeSolverData` object containing the effective index and mode fields.
         """
         mode_solver_data = self.data_raw
-        return mode_solver_data.apply_symmetry(simulation=self.simulation)
+        return mode_solver_data.apply_symmetry(
+            symmetry=self.simulation.symmetry,
+            symmetry_center=self.simulation.center,
+            grid_expanded=self.simulation.discretize(self.plane, extend=True),
+        )
 
     @cached_property
     def sim_data(self) -> SimulationData:
