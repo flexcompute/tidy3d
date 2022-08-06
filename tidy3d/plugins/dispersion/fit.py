@@ -485,7 +485,7 @@ class DispersionFitter(Tidy3dBaseModel):
             obj,
             coeffs0,
             args=(),
-            method="Nelder-Mead",
+            method="SLSQP",
             bounds=bounds,
             constraints=(scipy_constraint,),
             tol=1e-7,
