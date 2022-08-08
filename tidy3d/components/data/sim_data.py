@@ -177,7 +177,8 @@ class SimulationData(Tidy3dBaseModel):
         monitor_data = self.load_field_monitor(field_monitor_name)
 
         # discretize the monitor and get center locations
-        sub_grid = self.simulation.discretize(monitor_data.monitor, extend=False)
+        monitor = self.simulation.get_monitor_by_name(field_monitor_name)
+        sub_grid = self.simulation.discretize(monitor, extend=False)
         centers = sub_grid.centers
 
         # pass coords if each of the scalar field data have more than one coordinate along a dim

@@ -66,6 +66,8 @@ class AbstractFieldData(MonitorData, ABC):
 
     def apply_symmetry(self, simulation: "Simulation") -> "AbstractFieldData":
         """Return copy of self with Symmetry applied."""
+        # TODO: this assumes the monitor data has a monitor.
+        # In the future, let's write it to work if not present.
         return self._apply_field_symmetry(
             symmetry=simulation.symmetry,
             symmetry_center=simulation.center,
@@ -422,9 +424,11 @@ class ModeSolverData(ElectromagneticFieldData):
             scalar_field = ScalarFieldDataArray(data.data, coords=coords)
             fields[field_name] = scalar_field
 
+        if self.monitor is None:
+            return FieldData(**fields)
+
         monitor_dict = self.monitor.dict(exclude={TYPE_TAG_STR, "mode_spec"})
         field_monitor = FieldMonitor(**monitor_dict)
-
         return FieldData(monitor=field_monitor, **fields)
 
 
