@@ -1,5 +1,7 @@
 # pylint:disable=unused-argument
 """ Defines various validation functions that get used to ensure inputs are legit """
+from typing import Any
+
 import pydantic
 
 from .geometry import Box
@@ -36,6 +38,14 @@ from ..log import ValidationError, SetupError
 
     For more details: `Pydantic Validators <https://pydantic-docs.helpmanual.io/usage/validators/>`_
 """
+
+
+def get_value(key: str, values: dict) -> Any:
+    """Grab value from values dictionary. If not present, raise an error before continuing."""
+    val = values.get(key)
+    if val is None:
+        raise ValidationError(f"value {key} not defined, must be present to validate.")
+    return val
 
 
 def assert_plane():

@@ -90,7 +90,7 @@ class AbstractFieldData(MonitorData, ABC):
         symmetry_center: Coordinate,
         grid_expanded: Grid,
     ) -> AbstractFieldData:
-        """Create a copy of the :class:`.AbstractFieldData` with Symmetry applied
+        """Return copy of self with Symmetry applied.
 
         Parameters
         ----------
@@ -446,9 +446,11 @@ class ModeSolverData(ElectromagneticFieldData):
             scalar_field = ScalarFieldDataArray(data.data, coords=coords)
             fields[field_name] = scalar_field
 
+        if self.monitor is None:
+            return FieldData(**fields)
+
         monitor_dict = self.monitor.dict(exclude={TYPE_TAG_STR, "mode_spec"})
         field_monitor = FieldMonitor(**monitor_dict)
-
         return FieldData(monitor=field_monitor, **fields)
 
 
