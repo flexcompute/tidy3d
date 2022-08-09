@@ -1,6 +1,5 @@
 """ Monitor Level Data, store the DataArrays associated with a single monitor."""
 from __future__ import annotations
-
 from abc import ABC, abstractmethod
 from typing import Union, Dict, Tuple, Callable
 import xarray as xr
@@ -10,7 +9,6 @@ import pydantic as pd
 from ..base import TYPE_TAG_STR, Tidy3dBaseModel
 from ..types import Axis, Coordinate, Symmetry
 
-from ..grid import Grid
 from ..validators import enforce_monitor_fields_present
 from ..monitor import MonitorType, FieldMonitor, FieldTimeMonitor, ModeSolverMonitor
 from ..monitor import ModeMonitor, FluxMonitor, FluxTimeMonitor, PermittivityMonitor
@@ -24,7 +22,7 @@ class MonitorData(Tidy3dBaseModel, ABC):
     """Abstract base class of objects that store data pertaining to a single :class:`.monitor`."""
 
     monitor: MonitorType = pd.Field(
-        ...,
+        None,
         title="Monitor",
         description="Monitor associated with the data.",
         descriminator=TYPE_TAG_STR,
@@ -35,7 +33,7 @@ class MonitorData(Tidy3dBaseModel, ABC):
         self,
         symmetry: Tuple[Symmetry, Symmetry, Symmetry],
         symmetry_center: Coordinate,
-        grid_expanded: Grid,
+        grid_expanded: "Grid",
     ) -> MonitorData:
         """Return copy of self with Symmetry applied.
 
@@ -53,8 +51,6 @@ class MonitorData(Tidy3dBaseModel, ABC):
         :class:`MonitorData`
             A data object with the symmetry expanded fields.
         """
-
-        return self.copy()
 
     def normalize(
         self, source_spectrum_fn: Callable[[float], complex]  # pylint:disable=unused-argument
@@ -88,7 +84,7 @@ class AbstractFieldData(MonitorData, ABC):
         self,
         symmetry: Tuple[Symmetry, Symmetry, Symmetry],
         symmetry_center: Coordinate,
-        grid_expanded: Grid,
+        grid_expanded: "Grid",
     ) -> AbstractFieldData:
         """Return copy of self with Symmetry applied.
 
@@ -215,8 +211,15 @@ class ElectromagneticFieldData(AbstractFieldData, ABC):
     @property
     def field_components(self) -> Dict[str, DataArray]:
         """Maps the field components to thier associated data."""
-        # pylint:disable=no-member
-        return {field: getattr(self, field) for field in self.monitor.fields}
+        field_cmps = dict(
+            Ex=self.Ex,  # pylint: disable=no-member
+            Ey=self.Ey,  # pylint: disable=no-member
+            Ez=self.Ez,  # pylint: disable=no-member
+            Hx=self.Hx,  # pylint: disable=no-member
+            Hy=self.Hy,  # pylint: disable=no-member
+            Hz=self.Hz,  # pylint: disable=no-member
+        )
+        return {name: value for name, value in field_cmps.items() if value is not None}
 
     @property
     def grid_locations(self) -> Dict[str, str]:

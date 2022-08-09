@@ -8,6 +8,7 @@ pytest -ra tests/test_component_modeler.py
 pytest -ra tests/test_components.py
 pytest -ra tests/test_construct.py
 pytest -ra tests/test_config.py
+pytest -rA tests/test_custom_components.py
 pytest -ra tests/test_data_arrays.py
 pytest -ra tests/test_data_monitor.py
 pytest -ra tests/test_data_sim.py
