@@ -74,8 +74,8 @@ class AbstractFieldData(MonitorData, ABC):
         symmetry_center: Coordinate,
         grid_expanded: Grid,
     ) -> AbstractFieldData:
-        """If symmetry is present, create a copy of the :class:`.AbstractFieldData` with the fields
-        expanded. If symmetry not present, returns the same data object.
+        """Create a copy of the :class:`.AbstractFieldData` with the fields expanded based on
+        symmetry, if any.
 
         Returns
         -------
@@ -84,7 +84,7 @@ class AbstractFieldData(MonitorData, ABC):
         """
 
         if all(sym == 0 for sym in symmetry):
-            return self
+            return self.copy()
 
         new_fields = {}
 

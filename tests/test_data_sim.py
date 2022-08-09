@@ -84,9 +84,9 @@ def test_apply_symmetry3():
 
 def test_no_symmetry():
     sim_data = make_sim_data(symmetry=False)
-    Ex_raw = sim_data.monitor_data["field"]
-    Ex_ret = sim_data["field"]
-    assert id(Ex_raw) == id(Ex_ret)
+    Ex_raw = sim_data.monitor_data["field"].Ex
+    Ex_ret = sim_data["field"].Ex
+    assert np.allclose(Ex_raw, Ex_ret)
 
 
 def test_normalize():
