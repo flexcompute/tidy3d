@@ -235,6 +235,52 @@ SIM_CONVERT = td.Simulation(
 )
 
 
+def run_emulated(simulation: Simulation, task_name: str = None) -> SimulationData:
+    """Emulates a simulation run."""
+
+    def make_data(coords: dict, data_array_type: type, is_complex: bool = False) -> "data_type":
+        """make a random DataArray out of supplied coordinates and data_type."""
+        data_shape = [len(coords[k]) for k in data_array_type.__slots__]
+        data = np.random.random(data_shape)
+        data = (1 + 1j) * data if is_complex else data
+        return data_array_type(data, coords=coords)
+
+    def make_field_data(monitor: FieldMonitor) -> FieldData:
+        """make a random FieldData from a FieldMonitor."""
+        field_cmps = {}
+        coords = {"f": list(monitor.freqs)}
+        rmin, rmax = simulation.bounds
+        for dim, pos_min, pos_max in zip("xyz", rmin, rmax):
+            coords[dim] = np.linspace(pos_min, pos_max, 101)
+
+        for field_name in monitor.fields:
+            field_cmps[field_name] = make_data(
+                coords=coords, data_array_type=ScalarFieldDataArray, is_complex=True
+            )
+        return FieldData(monitor=monitor, **field_cmps)
+
+    def make_mode_data(monitor: ModeMonitor) -> ModeData:
+        """make a random ModeData from a ModeMonitor."""
+        mode_indices = np.arange(monitor.mode_spec.num_modes)
+        coords_ind = {
+            "f": list(monitor.freqs),
+            "mode_index": np.arange(monitor.mode_spec.num_modes),
+        }
+        n_complex = make_data(
+            coords=coords_ind, data_array_type=ModeIndexDataArray, is_complex=True
+        )
+        coords_amps = coords_ind.copy()
+        coords_amps["direction"] = ["+", "-"]
+        amps = make_data(coords=coords_amps, data_array_type=ModeAmpsDataArray, is_complex=True)
+        return ModeData(monitor=monitor, n_complex=n_complex, amps=amps)
+
+    MONITOR_MAKER_MAP = {FieldMonitor: make_field_data, ModeMonitor: make_mode_data}
+
+    montor_data = {mnt.name: MONITOR_MAKER_MAP[type(mnt)](mnt) for mnt in simulation.monitors}
+
+    return SimulationData(simulation=simulation, monitor_data=montor_data)
+
+
 def assert_log_level(caplog, log_level_expected):
     """ensure something got logged if log_level is not None.
     note: I put this here rather than utils.py because if we import from utils.py,
