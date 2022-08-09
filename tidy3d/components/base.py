@@ -210,7 +210,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
 
     @classmethod
     def from_file(cls, fname: str, **parse_kwargs) -> Tidy3dBaseModel:
-        """Loads a :class:`Tidy3dBaseModel` from .yaml or .json file.
+        """Loads a :class:`Tidy3dBaseModel` from .yaml, .json, or .hdf5 file.
 
         Parameters
         ----------
@@ -238,7 +238,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         raise FileError(f"File must be .json, .yaml, or .hdf5 type, given {fname}")
 
     def to_file(self, fname: str, data_file: Optional[str] = None) -> None:
-        """Exports :class:`Tidy3dBaseModel` instance to .yaml or .json file
+        """Exports :class:`Tidy3dBaseModel` instance to .yaml, .json, or .hdf5 file
 
         Parameters
         ----------
