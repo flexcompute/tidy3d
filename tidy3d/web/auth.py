@@ -52,8 +52,8 @@ def get_credentials() -> None:
     user for login info and saves to file."""
 
     # if we find credentials in environment variables
-    if "TIDY3D_USER" in os.environ and (
-        "TIDY3D_PASS" in os.environ or "TIDY3D_PASS_HASH" in os.environ
+    if os.environ.get("TIDY3D_USER") and (
+        os.environ.get("TIDY3D_PASS") or os.environ.get("TIDY3D_PASS_HASH")
     ):
         log.debug("Using Tidy3D credentials from environment")
         email = os.environ["TIDY3D_USER"]
