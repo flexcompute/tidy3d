@@ -1,6 +1,6 @@
 # pylint: disable=too-many-lines, too-many-arguments
 """ Container holding all information about simulation and its components"""
-from typing import Dict, Tuple, List, Set, Union, Optional
+from typing import Dict, Tuple, List, Set, Union
 from math import isclose
 
 import pydantic
@@ -180,11 +180,12 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         "based on structure definition, resulting in much higher accuracy for a given grid size.",
     )
 
-    normalize_index: Optional[pydantic.NonNegativeInt] = pydantic.Field(
+    normalize_index: Union[pydantic.NonNegativeInt, None] = pydantic.Field(
         0,
         title="Normalization index",
         description="Index of the source in the tuple of sources whose spectrum will be used to "
-        "normalize the frequency-dependent data. If ``None``, the raw field data is returned.",
+        "normalize the frequency-dependent data. If ``None``, the raw field data is returned "
+        "unnormalized.",
     )
 
     courant: float = pydantic.Field(
