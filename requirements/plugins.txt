@@ -1,3 +1,0 @@
-# plugins-specific, excluding plotly
-
-nlopt
