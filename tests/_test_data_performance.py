@@ -4,16 +4,16 @@ import os
 import sys
 from memory_profiler import profile
 
-from tidy3d.components.data import SimulationData, FieldData, ScalarFieldDataArray
+from tidy3d.components.data.sim_data import SimulationData
+from tidy3d.components.data.monitor_data import FieldData
+from tidy3d.components.data.data_array import ScalarFieldDataArray
 from tidy3d.components.monitor import FieldMonitor
 from tidy3d.components.simulation import Simulation
 from tidy3d.components.source import PointDipole, GaussianPulse
 from tidy3d.components.grid import GridSpec
 
 import tidy3d as td
-
-sys.path.append("/users/twhughes/Documents/Flexcompute/tidy3d-core")
-from tidy3d_backend.utils import Profile
+from .utils import clear_tmp
 
 PATH = "tests/tmp/memory.hdf5"
 
@@ -68,55 +68,51 @@ SIM_DATA_1 = make_sim_data_1()
 
 
 @profile
-def test_memory_1_save():
+@clear_tmp
+def test_memory_save_load():
     print(f'sim_data_size = {SIM_DATA_1.monitor_data["test"].Ex.nbytes:.2e} Bytes')
     SIM_DATA_1.to_file(PATH)
-    print(f"file_size = {os.path.getsize(PATH):.2e} Bytes")
-
-
-@profile
-def test_memory_2_load():
     print(f"file_size = {os.path.getsize(PATH):.2e} Bytes")
     return SimulationData.from_file(PATH)
 
 
-def test_core_profile_small_1_save():
+# def test_core_profile_small_1_save():
 
-    Nx, Ny, Nz, Nt = 100, 100, 100, 10
+#     Nx, Ny, Nz, Nt = 100, 100, 100, 10
 
-    x = np.arange(Nx)
-    y = np.arange(Ny)
-    z = np.arange(Nz)
-    t = np.arange(Nt)
-    coords = dict(x=x, y=y, z=z, t=t)
-    scalar_field = td.ScalarFieldTimeDataArray(np.random.random((Nx, Ny, Nz, Nt)), coords=coords)
-    monitor = td.FieldTimeMonitor(size=(2, 4, 6), interval=100, name="field", fields=["Ex", "Hz"])
-    data = td.FieldTimeData(monitor=monitor, Ex=scalar_field, Hz=scalar_field)
-    with Profile():
-        data.to_file(PATH)
-        print(f"file_size = {os.path.getsize(PATH):.2e} Bytes")
-
-
-def test_core_profile_small_2_load():
-
-    with Profile():
-        print(f"file_size = {os.path.getsize(PATH):.2e} Bytes")
-        data = td.FieldTimeData.from_file(PATH)
+#     x = np.arange(Nx)
+#     y = np.arange(Ny)
+#     z = np.arange(Nz)
+#     t = np.arange(Nt)
+#     coords = dict(x=x, y=y, z=z, t=t)
+#     scalar_field = td.ScalarFieldTimeDataArray(np.random.random((Nx, Ny, Nz, Nt)), coords=coords)
+#     monitor = td.FieldTimeMonitor(size=(2, 4, 6), interval=100, name="field", fields=["Ex", "Hz"])
+#     data = td.FieldTimeData(monitor=monitor, Ex=scalar_field, Hz=scalar_field)
+#     with Profile():
+#         data.to_file(PATH)
+#         print(f"file_size = {os.path.getsize(PATH):.2e} Bytes")
 
 
-def test_core_profile_large():
+# def test_core_profile_small_2_load():
 
-    sim_data = make_sim_data_1()
-
-    with Profile():
-        sim_data.to_file(PATH)
-
-    print(f"file_size = {os.path.getsize(PATH):.2e} Bytes")
-
-    with Profile():
-        sim_data.from_file(PATH)
+#     with Profile():
+#         print(f"file_size = {os.path.getsize(PATH):.2e} Bytes")
+#         data = td.FieldTimeData.from_file(PATH)
 
 
-if __name__ == "__main__":
-    test_memory_1_save()
-    sim_data1 = test_memory_2_load()
+# def test_core_profile_large():
+
+#     sim_data = make_sim_data_1()
+
+#     with Profile():
+#         sim_data.to_file(PATH)
+
+#     print(f"file_size = {os.path.getsize(PATH):.2e} Bytes")
+
+#     with Profile():
+#         sim_data.from_file(PATH)
+
+
+# if __name__ == "__main__":
+#     test_memory_1_save()
+#     sim_data1 = test_memory_2_load()

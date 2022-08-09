@@ -479,7 +479,7 @@ class CustomFieldSource(FieldSource, PlanarSource):
                     f"`field_data.{name}` must have a single frequency, "
                     f"contains {len(freqs)} frequencies."
                 )
-            freq = freqs[0]
+            freq = float(freqs[0])
             if (freq < fmin) or (freq > fmax):
                 raise SetupError(
                     f"`field_data.{name}` contains frequency: {freq:.2e} Hz, which is outside "

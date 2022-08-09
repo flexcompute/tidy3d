@@ -5,6 +5,7 @@ from tidy3d.components.monitor import FieldMonitor
 from tidy3d.components.source import CustomFieldSource, GaussianPulse
 from tidy3d.components.data import ScalarFieldDataArray, FieldData
 from tidy3d.log import SetupError
+from .utils import clear_tmp
 
 Nx, Ny, Nz = 10, 11, 12
 X = np.linspace(-1, 1, Nx)
@@ -73,6 +74,7 @@ def test_field_data():
     field_data = FIELD_SRC.field_data
 
 
+@clear_tmp
 def test_io():
     """Saving and loading from file."""
     path = "tests/tmp/custom_source.hdf5"
