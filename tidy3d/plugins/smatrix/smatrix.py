@@ -1,11 +1,12 @@
 """Tools for generating an S matrix automatically from tidy3d simulation and port definitions."""
 
-from typing import List, Tuple, Dict
+from typing import List, Tuple, Dict, Optional
 
 import pydantic as pd
 import numpy as np
 
 from ...constants import HERTZ, C_0
+from ...components.base import cached_property
 from ...components.simulation import Simulation
 from ...components.geometry import Box
 from ...components.mode import ModeSpec
@@ -63,7 +64,9 @@ class Port(Box):
 s_matrix[port_name_in][port_name_out] gives a numpy array of shape (m, n)
 relating the coupling amplitudes between the m and n mode orders in the two ports, respectively.
 """
-SMatrixType = Dict[str, np.ndarray]
+MatrixIndex = Tuple[Port, pd.NonNegativeInt]
+Element = Tuple[MatrixIndex, MatrixIndex]
+SMatrixType = Dict[Element, Element]
 
 
 class ComponentModeler(Tidy3dBaseModel):
@@ -74,8 +77,8 @@ class ComponentModeler(Tidy3dBaseModel):
         title="Simulation",
         description="Simulation describing the device without any sources or monitors present.",
     )
-    ports: List[Port] = pd.Field(
-        [],
+    ports: Tuple[Port, ...] = pd.Field(
+        (),
         title="Ports",
         description="Collection of ports describing the scattering matrix elements. "
         "For each port, one simulation will be run with a modal source.",
@@ -92,31 +95,72 @@ class ComponentModeler(Tidy3dBaseModel):
         title="Folder Name",
         description="Name of the folder for the tasks on web.",
     )
-
-    batch: Tidy3dBaseModel = pd.Field(
+    element_mappings: Dict[Element, Tuple[Element, bool]] = pd.Field(
+        {},
+        title="Element Mappings",
+        description="Mapping between matrix indices of the scattering matrix, "
+        "specified by (:class:`.Port`, `int`). "
+        "``element_mappings(port, mode_index)`` returns ``(port, mode_index), pos_sign``, "
+        "where the ``(port, mode_index)`` refers to the output matrix index "
+        "and ``pos_sign`` determines whether the element should be copied with a positive sign.",
+    )
+    run_only: Optional[Tuple[MatrixIndex, ...]] = pd.Field(
         None,
-        title="Batch",
-        description="Batch of task used to compute S matrix. Set internally.",
+        title="Run Only",
+        description="If specified, a tuple of matrix indices, specified by (:class:`.Port`, `int`),"
+        " to run only, excluding the other rows from the scattering matrix. "
+        "If this option is used, the resulting scattering matrix will not be square or complete.",
     )
 
     @pd.validator("simulation", always=True)
     def _sim_has_no_sources(cls, val):
         """Make sure simulation has no sources as they interfere with tool."""
         if len(val.sources) > 0:
-            raise SetupError("Simulation must not have sources.")
+            raise SetupError("Simulation must not have extraneous `sources`.")
         return val
 
-    @pd.validator("batch", always=True)
-    def _set_batch(cls, val, values):
-        """Initialize the batch."""
-        if val is not None:
-            return val
+    @cached_property
+    def matrix_indices_monitor(self) -> Tuple[MatrixIndex, ...]:
+        """Tuple of all the possible matrix indices (port, mode_index) in the Component Modeler."""
+        matrix_indices = []
+        for port in self.ports:
+            for mode_index in port.mode_indices:
+                matrix_indices.append((port, mode_index))
+        return tuple(matrix_indices)
 
-        sim_dict = cls._make_sims(
-            ports=values.get("ports"), simulation=values.get("simulation"), freq=values.get("freq")
-        )
+    @cached_property
+    def matrix_indices_source(self) -> Tuple[MatrixIndex, ...]:
+        """Tuple of all the source matrix indices (port, mode_index) in the Component Modeler."""
 
-        return Batch(simulations=sim_dict, folder_name=values.get("folder_name"))
+        return self.run_only if self.run_only is not None else self.matrix_indices_monitor
+
+    @cached_property
+    def matrix_indices_run_sim(self) -> Tuple[MatrixIndex, ...]:
+        """Tuple of all the source matrix indices (port, mode_index) in the Component Modeler."""
+
+        # for a given source_index, if all of the monitor indices are covered by mappings, can skip.
+
+        elements_determined_by_map = [element for _, (element, _) in self.element_mappings.items()]
+
+        matrix_indices_needed = []
+        for row_index in self.matrix_indices_source:
+
+            row_needed = False
+            for col_index in self.matrix_indices_monitor:
+                element = (row_index, col_index)
+                if element not in elements_determined_by_map:
+                    row_needed = True
+                    break
+            if row_needed:
+                matrix_indices_needed.append(row_index)
+
+        return matrix_indices_needed
+
+    @cached_property
+    def batch(self) -> Batch:
+        """Batch containing all of the simulations needed for the scattering matrix."""
+
+        return Batch(simulations=self.sim_dict, folder_name=self.folder_name)
 
     @staticmethod
     def _to_monitor(port: Port, freq: float) -> ModeMonitor:
@@ -130,20 +174,17 @@ class ComponentModeler(Tidy3dBaseModel):
         )
 
     @staticmethod
-    def _to_sources(port: Port, freq: float) -> List[ModeSource]:
+    def _to_source(port: Port, mode_index: int, freq: float) -> List[ModeSource]:
         """Creates a list of mode sources from a given port."""
-        return [
-            ModeSource(
-                center=port.center,
-                size=port.size,
-                source_time=GaussianPulse(freq0=freq, fwidth=freq * FWIDTH_FRAC),
-                mode_spec=port.mode_spec,
-                mode_index=mode_index,
-                direction=port.direction,
-                name=port.name,
-            )
-            for mode_index in port.mode_indices
-        ]
+        return ModeSource(
+            center=port.center,
+            size=port.size,
+            source_time=GaussianPulse(freq0=freq, fwidth=freq * FWIDTH_FRAC),
+            mode_spec=port.mode_spec,
+            mode_index=mode_index,
+            direction=port.direction,
+            name=port.name,
+        )
 
     @staticmethod
     def _shift_value_signed(simulation: Simulation, port: Port) -> float:
@@ -191,29 +232,33 @@ class ComponentModeler(Tidy3dBaseModel):
         return port_shifted
 
     @staticmethod
-    def _task_name(port_source: Port, mode_index: int) -> str:
+    def _task_name(port: Port, mode_index: int) -> str:
         """The name of a task, determined by the port of the source and mode index."""
-        return f"smatrix_port{port_source.name}_mode{mode_index}"
+        return f"smatrix_port{port.name}_mode{mode_index}"
 
-    @classmethod
-    def _make_sims(
-        cls, ports: List[Port], simulation: Simulation, freq: float
-    ) -> Dict[str, Simulation]:
+    @cached_property
+    def sim_dict(self) -> Dict[str, Simulation]:
         """Generate all the :class:`Simulation` objects for the S matrix calculation."""
 
-        mode_monitors = [cls._to_monitor(port=port, freq=freq) for port in ports]
-        sim_dict = {}
-        for port_source in ports:
-            port_source = cls._shift_port(simulation=simulation, port=port_source)
-            for mode_source in cls._to_sources(port=port_source, freq=freq):
-                sim_copy = simulation.copy(
-                    update=dict(
-                        sources=[mode_source], monitors=list(simulation.monitors) + mode_monitors
-                    )
-                )
-                task_name = cls._task_name(port_source, mode_source.mode_index)
-                sim_dict[task_name] = sim_copy
-        return sim_dict
+        _sim_dict = {}
+
+        mode_monitors = [
+            self._to_monitor(port=port, freq=self.freq) for port in self.ports
+        ]  # pylint:disable=protected-access
+        for (port, mode_index) in self.matrix_indices_run_sim:
+
+            port_source = self._shift_port(
+                simulation=self.simulation, port=port
+            )  # pylint:disable=protected-access
+            mode_source = self._to_source(
+                port=port_source, mode_index=mode_index, freq=self.freq
+            )  # pylint:disable=protected-access
+
+            new_mnts = list(self.simulation.monitors) + mode_monitors
+            sim_copy = self.simulation.copy(update=dict(sources=[mode_source], monitors=new_mnts))
+            task_name = self._task_name(port=port, mode_index=mode_index)
+            _sim_dict[task_name] = sim_copy
+        return _sim_dict
 
     @equal_aspect
     @add_ax_if_none
@@ -222,7 +267,7 @@ class ComponentModeler(Tidy3dBaseModel):
 
         plot_sources = []
         for port_source in self.ports:
-            mode_source_0 = self._to_sources(port=port_source, freq=self.freq)[0]
+            mode_source_0 = self._to_source(port=port_source, freq=self.freq, mode_index=0)
             plot_sources.append(mode_source_0)
         sim_plot = self.simulation.copy(update=dict(sources=plot_sources))
         return sim_plot.plot(x=x, y=y, z=z, ax=ax)
@@ -252,46 +297,45 @@ class ComponentModeler(Tidy3dBaseModel):
         shift_value = self._shift_value_signed(simulation=self.simulation, port=port_source)
         return normalize_amp * np.exp(1j * k_eff * shift_value)
 
-    def _construct_smatrix(self, batch_data: BatchData) -> SMatrixType:
+    def _construct_smatrix(  # pylint:disable=too-many-locals
+        self, batch_data: BatchData
+    ) -> SMatrixType:
         """Post process batch to generate scattering matrix."""
 
-        # load all data
-        s_matrix_dict = {
-            port_source.name: {port_monitor.name: [] for port_monitor in self.ports}
-            for port_source in self.ports
-        }
+        s_matrix = {}
 
         # loop through source ports
-        for port_source in self.ports:
+        for row_index in self.matrix_indices_source:
 
-            source_name = port_source.name
+            port_in, mode_index_in = row_index
 
-            # loop through all source injection indices
-            for mode_index in port_source.mode_indices:
+            for col_index in self.matrix_indices_monitor:
 
-                # get the data for this source and compute normalization by injection
-                task_name = self._task_name(port_source, mode_index)
-                sim_data = batch_data[task_name]
-                norm_factor = self._normalization_factor(port_source, sim_data)
+                port_out, mode_index_out = row_index
 
-                # loop through all monitors
-                for port_monitor in self.ports:
+                element = (row_index, col_index)
 
-                    monitor_name = port_monitor.name
+                # element already filled in
+                if element in s_matrix:
+                    continue
 
-                    # compute the mode amplitude data
-                    dir_out = "-" if port_monitor.direction == "+" else "+"
-                    mode_data = sim_data[monitor_name].amps.sel(f=self.freq, direction=dir_out)
-                    amps_normalized = np.array(mode_data.values) / norm_factor
-                    s_matrix_dict[source_name][monitor_name].append(amps_normalized)
+                # element can be determined by user-defined mapping
+                for element_in, (element_out, has_pos_sign) in self.element_mappings.items():
+                    if element == element_in:
+                        sign = 1 if has_pos_sign else -1
+                        s_matrix[element_out] = sign * s_matrix[element_in]
+                        continue
 
-            # convert to an array
-            for port_monitor in self.ports:
-                monitor_name = port_monitor.name
-                mode_matrix = np.array(s_matrix_dict[source_name][monitor_name])
-                s_matrix_dict[source_name][monitor_name] = mode_matrix
+                # directly compute the element
+                sim_data = batch_data[self._task_name(port=port_in, mode_index=mode_index_in)]
+                mode_amps_data = sim_data[port_out.name].amps
+                dir_out = "-" if port_out.direction == "+" else "+"
+                amp = mode_amps_data.sel(f=self.freq, direction=dir_out, mode_index=mode_index_out)
+                source_norm = self._normalization_factor(port_in, sim_data)
 
-        return s_matrix_dict
+                s_matrix[element] = amp / source_norm
+
+        return s_matrix
 
     def solve(self, path_dir: str = DEFAULT_DATA_DIR) -> SMatrixType:
         """Solves for the scattering matrix of the system."""
