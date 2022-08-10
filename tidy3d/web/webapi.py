@@ -6,6 +6,7 @@ import os
 import time
 from datetime import datetime, timedelta
 from typing import List, Dict
+import tempfile
 
 import requests
 from dateutil import parser
@@ -14,7 +15,7 @@ from rich.progress import Progress
 
 from . import httputils as http
 from .config import DEFAULT_CONFIG
-from .s3utils import upload_file, get_s3_sts_token, download_file
+from .s3utils import upload_file, upload_string, get_s3_sts_token, download_file
 from .task import TaskId, TaskInfo, Folder
 from ..components.data import SimulationData
 from ..components.simulation import Simulation
@@ -24,6 +25,9 @@ from ..version import __version__
 
 REFRESH_TIME = 0.3
 TOTAL_DOTS = 3
+# file names when uploading to S3
+SIM_FILE_NAME = "simulation.json"
+DATA_FILE_NAME = "extra_data.hdf5"
 
 
 def run(  # pylint:disable=too-many-arguments
@@ -95,7 +99,6 @@ def upload(  # pylint:disable=too-many-locals,too-many-arguments
 
     simulation.validate_pre_upload()
 
-    json_string = simulation._json_string()  # pylint:disable=protected-access
     data = {
         "taskName": task_name,
         "callbackUrl": callback_url,
@@ -116,7 +119,15 @@ def upload(  # pylint:disable=too-many-locals,too-many-arguments
     # upload the file to s3
     log.debug("Uploading the json file")
 
-    upload_file(task_id, json_string, "simulation.json")
+    with tempfile.NamedTemporaryFile() as data_file:
+        # pylint:disable=protected-access
+        json_string = simulation._json_string(data_file=data_file.name)
+        if data_file.name in json_string:
+            # Upload the extra data file if needed
+            json_string.replace(data_file.name, DATA_FILE_NAME)
+            upload_file(task_id, data_file.name, DATA_FILE_NAME)
+        upload_string(task_id, json_string, SIM_FILE_NAME)
+
     # log the url for the task in the web UI
     log.debug(f"{DEFAULT_CONFIG.website_endpoint}/folders/{folder.projectId}/tasks/{task_id}")
 
@@ -309,27 +320,27 @@ def download(task_id: TaskId, path: str = "simulation_data.hdf5") -> None:
     _download_file(task_id, fname="output/monitor_data.hdf5", path=path)
 
 
-def download_json(task_id: TaskId, path: str = "simulation.json") -> None:
+def download_json(task_id: TaskId, path: str = SIM_FILE_NAME) -> None:
     """Download the `.json` file associated with the :class:`.Simulation` of a given task.
 
     Parameters
     ----------
     task_id : str
         Unique identifier of task on server.  Returned by :meth:`upload`.
-    path : str = "simulation.json"
+    path : str = SIM_FILE_NAME
         Download path to .json file of simulation (including filename).
     """
-    _download_file(task_id, fname="simulation.json", path=path)
+    _download_file(task_id, fname=SIM_FILE_NAME, path=path)
 
 
-def load_simulation(task_id: TaskId, path: str = "simulation.json") -> Simulation:
+def load_simulation(task_id: TaskId, path: str = SIM_FILE_NAME) -> Simulation:
     """Download the `.json` file of a task and load the associated :class:`.Simulation`.
 
     Parameters
     ----------
     task_id : str
         Unique identifier of task on server.  Returned by :meth:`upload`.
-    path : str = "simulation.json"
+    path : str = SIM_FILE_NAME
         Download path to .json file of simulation (including filename).
 
     Returns

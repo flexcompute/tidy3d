@@ -13,6 +13,7 @@ import yaml
 import numpy as np
 import h5py
 import xarray as xr
+from dask.base import tokenize
 
 from .types import ComplexNumber, Literal, TYPE_TAG_STR  # , DataObject
 from ..log import FileError, log, Tidy3dKeyError
@@ -236,30 +237,28 @@ class Tidy3dBaseModel(pydantic.BaseModel):
 
         raise FileError(f"File must be .json, .yaml, or .hdf5 type, given {fname}")
 
-    def to_file(self, fname: str, include_data: bool = True) -> None:
+    def to_file(self, fname: str, data_file: str = None) -> None:
         """Exports :class:`Tidy3dBaseModel` instance to .yaml or .json file
 
         Parameters
         ----------
         fname : str
             Full path to the .yaml or .json file to save the :class:`Tidy3dBaseModel` to.
-        include_data : bool = True
-            Whether to include xarray data. Note: data is always included in .hdf5 file.
+        data_file : str = None
+            Path to a separate hdf5 file to write :class:`.DataArray` objects to.
 
         Example
         -------
         >>> simulation.to_file(fname='folder/sim.json') # doctest: +SKIP
         """
+
         if ".json" in fname:
-            return self.to_json(fname=fname, include_data=include_data)
+            return self.to_json(fname=fname, data_file=data_file)
         if ".yaml" in fname:
-            return self.to_yaml(fname=fname, include_data=include_data)
+            return self.to_yaml(fname=fname, data_file=data_file)
         if ".hdf5" in fname:
-            if not include_data:
-                log.warning(
-                    "`include_data` set to `False`."
-                    "This will have no effect for `.hdf5` format, the data will still be written."
-                )
+            if not data_file:
+                log.warning("`data_file` has no effect when already writing to `hdf5` file.")
             return self.to_hdf5(fname=fname)
 
         raise FileError(f"File must be .json, .yaml, or .hdf5 type, given {fname}")
@@ -286,21 +285,21 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         """
         return cls.parse_file(fname, **parse_file_kwargs)
 
-    def to_json(self, fname: str, include_data: bool = True) -> None:
+    def to_json(self, fname: str, data_file: str = None) -> None:
         """Exports :class:`Tidy3dBaseModel` instance to .json file
 
         Parameters
         ----------
         fname : str
             Full path to the .json file to save the :class:`Tidy3dBaseModel` to.
-        include_data : bool = True
-            Whether to include xarray data.
+        data_file : str = None
+            Path to a separate hdf5 file to write :class:`.DataArray` objects to.
 
         Example
         -------
         >>> simulation.to_json(fname='folder/sim.json') # doctest: +SKIP
         """
-        json_string = self._json_string(include_data=include_data)
+        json_string = self._json_string(data_file=data_file)
         with open(fname, "w", encoding="utf-8") as file_handle:
             file_handle.write(json_string)
 
@@ -329,21 +328,21 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         json_raw = json.dumps(json_dict, indent=INDENT)
         return cls.parse_raw(json_raw, **parse_raw_kwargs)
 
-    def to_yaml(self, fname: str, include_data: bool = True) -> None:
+    def to_yaml(self, fname: str, data_file: str = None) -> None:
         """Exports :class:`Tidy3dBaseModel` instance to .yaml file.
 
         Parameters
         ----------
         fname : str
             Full path to the .yaml file to save the :class:`Tidy3dBaseModel` to.
-        include_data : bool = True
-            Whether to include xarray data.
+        data_file : str = None
+            Path to a separate hdf5 file to write :class:`.DataArray` objects to.
 
         Example
         -------
         >>> simulation.to_yaml(fname='folder/sim.yaml') # doctest: +SKIP
         """
-        json_string = self._json_string(include_data=include_data)
+        json_string = self._json_string(data_file=data_file)
         json_dict = json.loads(json_string)
         with open(fname, "w+", encoding="utf-8") as file_handle:
             yaml.dump(json_dict, file_handle, indent=INDENT)
@@ -545,7 +544,8 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         self_dict = self.dict()
         self._save_group_data(data_dict=self_dict, hdf5_group=hdf5_group)
 
-    def _save_group_data(self, data_dict: dict, hdf5_group: h5py.Group) -> None:
+    @classmethod
+    def _save_group_data(cls, data_dict: dict, hdf5_group: h5py.Group) -> None:
         """Recursively save the data to a group with a non-dict data as base case."""
 
         for key, value in data_dict.items():
@@ -565,13 +565,14 @@ class Tidy3dBaseModel(pydantic.BaseModel):
             # if dictionary as item in dict, create subgroup and recurse
             if isinstance(value, dict):
                 hdf5_subgroup = hdf5_group.create_group(key)
-                self._save_group_data(data_dict=value, hdf5_group=hdf5_subgroup)
+                cls._save_group_data(data_dict=value, hdf5_group=hdf5_subgroup)
 
             # otherwise (actual data), just encode it and save it to the group as a dataset
             else:
-                self.pack_dataset(hdf5_group=hdf5_group, key=key, value=value)
+                cls.pack_dataset(hdf5_group=hdf5_group, key=key, value=value)
 
-    def dump_hdf5(self, data_dict: dict, fname: str) -> None:
+    @classmethod
+    def dump_hdf5(cls, data_dict: dict, fname: str) -> None:
         """Writes a dictionary of data into an hdf5 file.
 
         Parameters
@@ -584,7 +585,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
 
         # open the file and write to it recursively
         with h5py.File(fname, "w") as f:
-            self._save_group_data(data_dict=data_dict, hdf5_group=f)
+            cls._save_group_data(data_dict=data_dict, hdf5_group=f)
 
     """End hdfdict modification
     ============================================================================================="""
@@ -605,15 +606,15 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         """define >= for getting unique indices based on hash."""
         return hash(self) >= hash(other)
 
-    def _json_string(self, include_unset: bool = True, include_data: bool = True) -> str:
+    def _json_string(self, include_unset: bool = True, data_file: str = None) -> str:
         """Returns string representation of a :class:`Tidy3dBaseModel`.
 
         Parameters
         ----------
         include_unset : bool = True
             Whether to include default fields in json string.
-        include_data : bool = True
-            Whether to include ``xarray`` data.
+        data_file : str = None
+            Path to a separate hdf5 file to write :class:`.DataArray` objects to.
 
         Returns
         -------
@@ -622,10 +623,24 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         """
         exclude_unset = not include_unset
 
-        # if not include_data, temporarily set the xr.DataArray encoder to return None
+        # if not data_file, temporarily set the xr.DataArray encoder to return None
         original_encoder = self.__config__.json_encoders[xr.DataArray]
-        if not include_data:
-            self.__config__.json_encoders[xr.DataArray] = lambda x: None
+        if data_file:
+            # Create/overwrite data file
+            with h5py.File(data_file, "w"):
+                pass
+
+            def write_data(x):
+                with h5py.File(data_file, "a") as f:
+                    group_name = tokenize(x)
+                    if group_name not in f.keys():
+                        group = f.create_group(group_name)
+                        coords = {key: np.array(val) for key, val in x.coords.items()}
+                        data_dict = dict(data=x.data, coords=coords, keep_numpy=True)
+                        self._save_group_data(data_dict=data_dict, hdf5_group=group)
+                return dict(group_name=group_name, data_file=data_file, tag="DATA_ITEM")
+
+            self.__config__.json_encoders[xr.DataArray] = write_data
 
         # put infinity and -infinity in quotes
         tmp_string = "<<TEMPORARY_INFINITY_STRING>>"

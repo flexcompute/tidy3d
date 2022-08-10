@@ -161,12 +161,21 @@ def test_final_decay():
     assert dv == 0.11
 
 
-def test_to_json():
+def test_to_dict():
     sim_data = make_sim_data()
     j = sim_data.dict()
     sim_data2 = SimulationData(**j)
     assert sim_data == sim_data2
-    assert sim_data2["field"].Ex == sim_data["field"].Ex
+
+
+@clear_tmp
+def test_to_json():
+    sim_data = make_sim_data()
+    FNAME = "tests/tmp/sim_data_refactor.json"
+    DATA_FILE = "tests/tmp/sim_extra_data.hdf5"
+    sim_data.to_file(fname=FNAME, data_file=DATA_FILE)
+    sim_data2 = SimulationData.from_file(fname=FNAME)
+    assert sim_data == sim_data2
 
 
 def test_sel_kwarg_len1():

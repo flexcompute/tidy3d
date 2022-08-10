@@ -145,11 +145,11 @@ def get_s3_sts_token(resource_id: str, file_name: str) -> _S3STSToken:
     return _s3_sts_tokens[cache_key]
 
 
-def upload_file(resource_id: str, content: str, remote_filename: str):
+def upload_string(resource_id: str, content: str, remote_filename: str):
     """
-    upload file to S3
+    upload a string to a file on S3
     @param resource_id: the resource id, e.g. task id
-    @param content:     the content of the fileÒ
+    @param content:     the content of the file
     @param remote_filename: the remote file name on S3
     """
     with _get_progress(_S3Action.UPLOADING) as progress:
@@ -166,6 +166,30 @@ def upload_file(resource_id: str, content: str, remote_filename: str):
             Callback=_call_back,
             Config=_s3_config,
         )
+
+
+def upload_file(resource_id: str, path: str, remote_filename: str):
+    """
+    upload file to S3
+    @param resource_id: the resource id, e.g. task id
+    @param path: path to the file
+    @param remote_filename: the remote file name on S3
+    """
+    with _get_progress(_S3Action.UPLOADING) as progress:
+        task_id = progress.add_task("upload", filename=remote_filename, total=os.path.getsize(path))
+
+        def _call_back(bytes_in_chunk):
+            progress.update(task_id, advance=bytes_in_chunk)
+
+        token = get_s3_sts_token(resource_id, remote_filename)
+        with open(path, "rb") as data:
+            token.get_client().upload_fileobj(
+                data,
+                Bucket=token.get_bucket(),
+                Key=token.get_s3_key(),
+                Callback=_call_back,
+                Config=_s3_config,
+            )
 
 
 def download_file(resource_id: str, remote_filename: str, to_file: str = None):

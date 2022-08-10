@@ -3,7 +3,9 @@ from typing import Dict
 
 import xarray as xr
 import numpy as np
+import h5py
 
+from ..base import Tidy3dBaseModel
 from ..types import DataObject
 from ...constants import HERTZ, SECOND, MICROMETER, RADIAN
 from ...log import DataError
@@ -80,6 +82,13 @@ class DataArray(xr.DataArray):
 
         # loading from raw dict (usually from file)
         if isinstance(value, dict):
+            if value.get("tag") == "DATA_ITEM":
+                # Read from external file
+                with h5py.File(value["data_file"], "r") as f:
+                    group = f[value["group_name"]]
+                    # pylint:disable=protected-access
+                    value = Tidy3dBaseModel._load_group_data(data_dict={}, hdf5_group=group)
+
             data = value.get("data")
             coords = value.get("coords")
 
