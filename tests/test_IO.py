@@ -203,8 +203,10 @@ def test_yaml():
     assert sim1 == sim
 
 
+@clear_tmp
 def test_to_json_data():
     """Test that all simulations in ``SIM_DIR`` can be updated to current version and loaded."""
     data = make_flux_data()
     assert json.loads(data._json_string())["flux"] is not None
-    assert json.loads(data._json_string(include_data=False))["flux"] is None
+    data_file = "tests/tmp/data_file.hdf5"
+    assert json.loads(data._json_string(data_file=data_file))["flux"]["data_file"] == data_file
