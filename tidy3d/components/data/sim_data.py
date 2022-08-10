@@ -94,6 +94,10 @@ class SimulationData(Tidy3dBaseModel):
 
     def apply_symmetry(self, monitor_data: MonitorDataType) -> MonitorDataType:
         """Return copy of :class:`.MonitorData` object with symmetry values applied."""
+
+        if monitor_data.monitor is None:
+            return monitor_data.copy()
+
         return monitor_data.apply_symmetry(
             symmetry=self.simulation.symmetry,
             symmetry_center=self.simulation.center,

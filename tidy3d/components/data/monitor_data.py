@@ -62,7 +62,7 @@ class MonitorData(Tidy3dBaseModel, ABC):
 class AbstractFieldData(MonitorData, ABC):
     """Collection of scalar fields with some Symmetry properties."""
 
-    monitor: Union[FieldMonitor, FieldTimeMonitor, PermittivityMonitor, ModeSolverMonitor]
+    monitor: Union[FieldMonitor, FieldTimeMonitor, PermittivityMonitor, ModeSolverMonitor] = None
 
     @property
     @abstractmethod
@@ -255,7 +255,7 @@ class FieldData(ElectromagneticFieldData):
     >>> data = FieldData(monitor=monitor, Ex=scalar_field, Hz=scalar_field)
     """
 
-    monitor: FieldMonitor
+    monitor: FieldMonitor = None
 
     Ex: ScalarFieldDataArray = pd.Field(
         None,
@@ -315,7 +315,7 @@ class FieldTimeData(ElectromagneticFieldData):
     >>> data = FieldTimeData(monitor=monitor, Ex=scalar_field, Hz=scalar_field)
     """
 
-    monitor: FieldTimeMonitor
+    monitor: FieldTimeMonitor = None
 
     Ex: ScalarFieldTimeDataArray = pd.Field(
         None,
@@ -384,7 +384,7 @@ class ModeSolverData(ElectromagneticFieldData):
     ... )
     """
 
-    monitor: ModeSolverMonitor
+    monitor: ModeSolverMonitor = None
 
     Ex: ScalarModeFieldDataArray = pd.Field(
         ...,
@@ -472,7 +472,7 @@ class PermittivityData(AbstractFieldData):
     >>> data = PermittivityData(monitor=monitor, eps_xx=sclr_fld, eps_yy=sclr_fld, eps_zz=sclr_fld)
     """
 
-    monitor: PermittivityMonitor
+    monitor: PermittivityMonitor = None
 
     @property
     def field_components(self) -> Dict[str, ScalarFieldDataArray]:
@@ -570,8 +570,12 @@ class FluxData(MonitorData):
     >>> data = FluxData(monitor=monitor, flux=flux_data)
     """
 
-    monitor: FluxMonitor
-    flux: FluxDataArray
+    monitor: FluxMonitor = None
+    flux: FluxDataArray = pd.Field(
+        ...,
+        title="Flux",
+        description="Flux through the monitor surface as a function of frequency.",
+    )
 
     def normalize(self, source_spectrum_fn) -> FluxData:
         """Return copy of self after normalization is applied using source spectrum function."""
@@ -592,8 +596,10 @@ class FluxTimeData(MonitorData):
     >>> data = FluxTimeData(monitor=monitor, flux=flux_data)
     """
 
-    monitor: FluxTimeMonitor
-    flux: FluxTimeDataArray
+    monitor: FluxTimeMonitor = None
+    flux: FluxTimeDataArray = pd.Field(
+        ..., title="Flux", description="Flux through the monitor surface as a function of time."
+    )
 
 
 MonitorDataTypes = (

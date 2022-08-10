@@ -6,6 +6,7 @@ from typing import Tuple, Union, Callable, Optional
 
 import pydantic as pd
 import numpy as np
+import xarray as xr
 
 from .base import Tidy3dBaseModel, cached_property
 from .types import PoleAndResidue, Ax, FreqBound
@@ -424,11 +425,15 @@ class CustomMedium(AbstractMedium):
         :class:`CustomMedium`
             Medium containing the spatially varying permittivity data.
         """
+        if k is None:
+            k = xr.zeros_like(n)
+
         if n.coords != k.coords:
             raise SetupError("`n` and `k` must have same coordinates.")
 
-        eps_values = Medium.nk_to_eps_complex(n=n.values, k=k.values)
-        eps_scalar_field_data = ScalarFieldDataArray(eps_values, coords=n.coords)
+        eps_values = Medium.nk_to_eps_complex(n=n.data, k=k.data)
+        coords = {k: np.array(v) for k, v in n.coords.items()}
+        eps_scalar_field_data = ScalarFieldDataArray(eps_values, coords=coords)
         return cls.from_eps_raw(eps=eps_scalar_field_data)
 
 
@@ -812,5 +817,13 @@ class Debye(DispersiveMedium):
 # types of mediums that can be used in Simulation and Structures
 
 MediumType = Union[
-    Medium, AnisotropicMedium, PECMedium, PoleResidue, Sellmeier, Lorentz, Debye, Drude
+    Medium,
+    AnisotropicMedium,
+    CustomMedium,
+    PECMedium,
+    PoleResidue,
+    Sellmeier,
+    Lorentz,
+    Debye,
+    Drude,
 ]
