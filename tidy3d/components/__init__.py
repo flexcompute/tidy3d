@@ -10,6 +10,7 @@ from .geometry import Geometry, GeometryGroup
 # medium
 from .medium import Medium, PoleResidue, Sellmeier, Debye, Drude, Lorentz, AnisotropicMedium, PEC
 from .medium import AbstractMedium, DispersiveMedium, PECMedium
+from .medium import CustomMedium
 
 # structure
 from .structure import Structure

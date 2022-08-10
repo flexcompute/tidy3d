@@ -12,6 +12,7 @@ from .components import Box, Sphere, Cylinder, PolySlab, GeometryGroup
 # medium
 from .components import Medium, PoleResidue, AnisotropicMedium, PEC, PECMedium
 from .components import Sellmeier, Debye, Drude, Lorentz
+from .components import CustomMedium
 
 # structures
 from .components import Structure
