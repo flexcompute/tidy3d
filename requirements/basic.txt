@@ -1,5 +1,6 @@
 # build and load models and data, no web running or plugins
 
+scipy
 xarray>=0.16.2
 h5py>=3.0.0
 rich
