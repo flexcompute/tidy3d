@@ -61,23 +61,26 @@ SIM_FULL = Simulation(
             medium=Medium(permittivity=2.0),
         ),
         Structure(
-            geometry=Box(size=(1, 1, 1), center=(0, 0, 0)),
+            geometry=Box(size=(1, inf, 1), center=(0, 0, 0)),
             medium=Medium(permittivity=1.0, conductivity=3.0),
         ),
         Structure(
-            geometry=Sphere(radius=1.4, center=(1.0, 0.0, 1.0)), medium=Medium(permittivity=6.0)
+            geometry=Sphere(radius=1.4, center=(1.0, 0.0, 1.0)),
+            medium=Sellmeier(coeffs=[(1.03961212, 0.00600069867), (0.231792344, 0.0200179144)]),
         ),
         Structure(
             geometry=Cylinder(radius=1.4, length=2.0, center=(1.0, 0.0, -1.0), axis=1),
-            medium=Medium(permittivity=5.0),
+            medium=AnisotropicMedium(
+                xx=td.Medium(permittivity=1),
+                yy=td.Medium(permittivity=2),
+                zz=td.Medium(permittivity=3),
+            ),
         ),
         Structure(
             geometry=PolySlab(
                 vertices=[(-1.5, -1.5), (-0.5, -1.5), (-0.5, -0.5)], slab_bounds=[-1, 1]
             ),
-            # medium=Lorentz(eps_inf=1., coeffs=[(2., 3., 4.)])
-            # medium=PoleResidue(eps_inf=1., coeffs=[(2., 3.,)])
-            medium=Medium(permittivity=3.0),
+            medium=PoleResidue(eps_inf=1.0, poles=((6206417594288582j, (-3.311074436985222e16j)),)),
         ),
     ],
     sources=[
@@ -105,7 +108,7 @@ SIM_FULL = Simulation(
     },
     symmetry=(0, 0, 0),
     boundary_spec=BoundarySpec(
-        x=Boundary.pml(num_layers=20), y=Boundary.pml(num_layers=30), z=Boundary.periodic()
+        x=Boundary.pml(num_layers=20), y=Boundary.bloch(bloch_vec=0.1), z=Boundary.periodic()
     ),
     shutoff=1e-6,
     courant=0.8,
