@@ -277,6 +277,7 @@ def test_run_component_modeler_mappings(monkeypatch):
         ((("left_top", 0), ("right_top", 0)), (("left_bot", 0), ("right_bot", 0)), -1j),
         ((("left_top", 0), ("right_bot", 0)), (("left_bot", 0), ("right_top", 0)), +1),
     )
+
     modeler = make_component_modeler(element_mappings=element_mappings)
     s_matrix = run_component_modeler(monkeypatch, modeler)
     _test_mappings(element_mappings, s_matrix)
