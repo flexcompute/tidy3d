@@ -11,6 +11,7 @@ from tidy3d.components.data.sim_data import SimulationData
 from tidy3d.components.data import ScalarFieldTimeDataArray, FieldTimeData
 from tidy3d.components.monitor import FieldMonitor, FieldTimeMonitor, ModeSolverMonitor
 from tidy3d.components.source import GaussianPulse, PointDipole
+from tidy3d.log import DataError
 
 from .test_data_monitor import make_field_data, make_field_time_data, make_permittivity_data
 from .test_data_monitor import make_mode_data, make_mode_solver_data
@@ -200,11 +201,45 @@ def test_to_hdf5():
     assert sim_data == sim_data2
 
 
+def test_data_missing_monitor():
+    """If sim_data.monitor_data doesn't have a monitor defined, error."""
+    sim_data = make_sim_data()
+
+    field_data_monitorless = sim_data.monitor_data["field"].copy(update=dict(monitor=None))
+    monitor_data_fail = sim_data.monitor_data.copy()
+    monitor_data_fail["field"] = field_data_monitorless
+
+    with pytest.raises(DataError):
+        _ = sim_data.copy(update=dict(monitor_data=monitor_data_fail))
+
+
+def test_data_monitor_not_found():
+    """If sim_data.monitor_data monitor isn't in sim_data.simulation.monitors, error."""
+    sim_data = make_sim_data()
+    field_data = sim_data.monitor_data["field"]
+    monitor_fail = field_data.monitor.copy(update=dict(name="something_else"))
+    field_data_monitorless = sim_data.monitor_data["field"].copy(update=dict(monitor=monitor_fail))
+    monitor_data_fail = sim_data.monitor_data.copy()
+    monitor_data_fail["field"] = field_data_monitorless
+
+    with pytest.raises(DataError):
+        _ = sim_data.copy(update=dict(monitor_data=monitor_data_fail))
+
+
+def test_sim_missing_monitor():
+    """If sim_data.simulation is missing a monitor that is in the monitor_data, error."""
+    sim_data = make_sim_data()
+    sim = sim_data.simulation
+    sim_fail = sim.copy(update=dict(monitors=list(sim.monitors)[1:]))
+    with pytest.raises(DataError):
+        _ = sim_data.copy(update=dict(simulation=sim_fail))
+
+
 @clear_tmp
 def test_empty_io():
     coords = {"x": np.arange(10), "y": np.arange(10), "z": np.arange(10), "t": []}
     fields = {"Ex": td.ScalarFieldTimeDataArray(np.random.rand(10, 10, 10, 0), coords=coords)}
-    monitor = td.FieldTimeMonitor(size=(1, 1, 1), name="test", fields=["Ex"])
+    monitor = td.FieldTimeMonitor(size=(1, 1, 1), name="tmnt", fields=["Ex"])
     field_data = td.FieldTimeData(monitor=monitor, **fields)
     sim = td.Simulation(
         size=(1, 1, 1),

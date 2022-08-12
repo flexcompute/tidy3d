@@ -13,7 +13,7 @@ from ..simulation import Simulation
 from ..boundary import BlochBoundary
 from ..types import Ax, Axis, annotate_type, Literal
 from ..viz import equal_aspect, add_ax_if_none
-from ...log import DataError
+from ...log import DataError, Tidy3dKeyError
 
 MonitorDataType = Union[MonitorDataTypes + Near2FarDataTypes]
 DATA_TYPE_MAP = {data.__fields__["monitor"].type_: data for data in MonitorDataTypes}
@@ -70,6 +70,44 @@ class SimulationData(Tidy3dBaseModel):
         description="A boolean flag denoting whether the simulation run diverged.",
     )
 
+    @pd.validator("monitor_data", always=True)
+    def _each_monitor_data_has_monitor(cls, val):
+        """make sure each element of monitor_data element has an associated monitor in sim."""
+        for name, mon_data in val.items():
+
+            # no monitor defined.
+            if mon_data.monitor is None:
+                raise DataError(f'MonitorData "{name}" has no monitor, needed for SimulationData.')
+        return val
+
+    @pd.validator("monitor_data", always=True)
+    def _monitor_data_monitor_name_is_key(cls, val):
+        """make sure each element of monitor_data element has an associated monitor in sim."""
+        for name, mon_data in val.items():
+
+            # monitor name different from the monitor_data key
+            if mon_data.monitor.name != name:
+                raise DataError(
+                    f'MonitorData has a monitor name: "{mon_data.monitor.name}" '
+                    f' different name from its key in SimulationData.monitor_data: "{name}"'
+                )
+        return val
+
+    @pd.validator("monitor_data", always=True)
+    def _each_monitor_data_has_monitor_in_sim(cls, val, values):
+        """make sure each element of monitor_data element has an associated monitor in sim."""
+        simulation = values.get("simulation")
+        for name, _ in val.items():
+
+            # monitor not found in sim
+            try:
+                _ = simulation.get_monitor_by_name(name)
+            except Tidy3dKeyError as e:
+                raise DataError(
+                    f'MonitorData "{name}" has no associated monitor in the Simulation.'
+                ) from e
+        return val
+
     def __getitem__(self, monitor_name: str) -> MonitorDataType:
         """Get a :class:`.MonitorData` by name. Apply symmetry if applicable."""
         monitor_data = self.monitor_data[monitor_name]
@@ -96,7 +134,7 @@ class SimulationData(Tidy3dBaseModel):
         """Return copy of :class:`.MonitorData` object with symmetry values applied."""
 
         if monitor_data.monitor is None:
-            return monitor_data.copy()
+            raise DataError(f"Could not find monitor for MonitorData {monitor_data}.")
 
         return monitor_data.apply_symmetry(
             symmetry=self.simulation.symmetry,

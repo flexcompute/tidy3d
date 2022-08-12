@@ -168,8 +168,16 @@ def enforce_monitor_fields_present():
     @pydantic.root_validator(skip_on_failure=True, allow_reuse=True)
     def _contains_fields(cls, values):
         """Make sure the initially specified fields are here."""
+        monitor = values.get("monitor")
+
+        # if no monitor present, can have any fields.
+        if monitor is None:
+            return values
+
+        # otherwise, must have the correct fields
         for field_name in values.get("monitor").fields:
-            assert values.get(field_name) is not None, f"missing field {field_name}"
+            if values.get(field_name) is None:
+                raise ValidationError(f"missing field {field_name}")
         return values
 
     return _contains_fields
