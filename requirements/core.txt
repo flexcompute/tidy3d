@@ -1,4 +1,3 @@
 # build and run simulations, use plugins (no plotly, no tests)
 -r basic.txt
 -r web.txt
--r plugins.txt
