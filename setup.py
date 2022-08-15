@@ -17,7 +17,7 @@ with open("README.md", "r", encoding="utf-8") as fh:
     long_description = fh.read()
 
 core_required = []
-for core_file in ["requirements/basic.txt", "requirements/web.txt", "requirements/plugins.txt"]:
+for core_file in ["requirements/basic.txt", "requirements/web.txt"]:
     with open(core_file) as f:
         core_required.append(f.read().splitlines())
 
