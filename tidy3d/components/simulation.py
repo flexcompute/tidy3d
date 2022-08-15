@@ -402,7 +402,11 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
 
         # Get simulation frequency range
         if "sources" not in values:
-            return val
+            raise ValidationError(
+                "could not validate `_warn_monitor_simulation_frequency_range` "
+                "as `sources` failed validation"
+            )
+
         source_ranges = [source.source_time.frequency_range() for source in values["sources"]]
         if not source_ranges:
             log.warning("No sources in simulation.")
