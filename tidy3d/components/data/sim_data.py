@@ -296,22 +296,25 @@ class SimulationData(Tidy3dBaseModel):
 
         # interp out any monitor.size==0 dimensions
         monitor = self.simulation.get_monitor_by_name(field_monitor_name)
-        thin_dims = {"xyz"[dim]: monitor.center[dim] for dim in range(3) if monitor.size[dim] == 0}
+        thin_dims = {
+            "xyz"[dim]: monitor.center[dim]
+            for dim in range(3)
+            if monitor.size[dim] == 0 and "xyz"[dim] not in sel_kwargs
+        }
         for axis, pos in thin_dims.items():
             if field_data.coords[axis].size <= 1:
                 field_data = field_data.sel(**{axis: pos}, method="nearest")
             else:
-                field_data = field_data.interp(**{axis: pos})
+                field_data = field_data.interp(**{axis: pos}, kwargs=dict(bounds_error=True))
 
         # select the extra coordinates out of the data from user-specified kwargs
         for coord_name, coord_val in sel_kwargs.items():
             if field_data.coords[coord_name].size <= 1:
-                raise DataError(
-                    f"{coord_name}={coord_val} supplied to `sel_kwargs`, "
-                    "but the data only has one coordinate along that dimension. "
-                    f"Please omit {coord_name} from the `plot_field()` arguments."
+                field_data = field_data.sel(**{coord_name: coord_val}, method=None)
+            else:
+                field_data = field_data.interp(
+                    **{coord_name: coord_val}, kwargs=dict(bounds_error=True)
                 )
-            field_data = field_data.interp({coord_name: coord_val})
         field_data = field_data.squeeze(drop=True)
         non_scalar_coords = {name: val for name, val in field_data.coords.items() if val.size > 1}
 
