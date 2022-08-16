@@ -17,7 +17,7 @@ from .viz import add_ax_if_none, equal_aspect
 from .viz import PLOT_BUFFER, ARROW_LENGTH_FACTOR, ARROW_WIDTH_FACTOR, MAX_ARROW_WIDTH_FACTOR
 from .viz import PlotParams, plot_params_geometry, polygon_patch
 from ..log import Tidy3dKeyError, SetupError, ValidationError
-from ..constants import MICROMETER, LARGE_NUMBER, RADIAN
+from ..constants import MICROMETER, LARGE_NUMBER, RADIAN, fp_eps
 
 # for sampling polygon in slanted polyslab along  z-direction for
 # validating polygon to be non_intersecting.
@@ -769,7 +769,7 @@ class Box(Centered):
         z0, (x0, y0) = self.pop_axis(self.center, axis=axis)
         Lz, (Lx, Ly) = self.pop_axis(self.size, axis=axis)
         dz = np.abs(z0 - position)
-        if dz > Lz / 2:
+        if dz > Lz / 2 + fp_eps:
             return []
         return [box(minx=x0 - Lx / 2, miny=y0 - Ly / 2, maxx=x0 + Lx / 2, maxy=y0 + Ly / 2)]
 
