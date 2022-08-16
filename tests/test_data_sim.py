@@ -1,6 +1,9 @@
+"""Tests SimulationData"""
+import pytest
 import numpy as np
 
 import tidy3d as td
+from tidy3d.log import DataError
 
 from tidy3d.components.simulation import Simulation
 from tidy3d.components.grid.grid_spec import GridSpec
@@ -164,6 +167,14 @@ def test_to_json():
     sim_data2 = SimulationData(**j)
     assert sim_data == sim_data2
     assert sim_data2["field"].Ex == sim_data["field"].Ex
+
+
+def test_sel_kwarg_len1():
+    sim_data = make_sim_data()
+
+    # y=0 supplied even though data has only 1 y coordinate, should error
+    with pytest.raises(DataError):
+        sim_data.plot_field("mode_solver", "Ex", y=0, val="real", f=1e14, mode_index=1)
 
 
 @clear_tmp
