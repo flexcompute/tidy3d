@@ -172,9 +172,14 @@ def test_to_json():
 def test_sel_kwarg_len1():
     sim_data = make_sim_data()
 
-    # y=0 supplied even though data has only 1 y coordinate, should error
-    with pytest.raises(DataError):
-        sim_data.plot_field("mode_solver", "Ex", y=0, val="real", f=1e14, mode_index=1)
+    # data has no y dimension (only exists at y=0)
+
+    # passing y=0 sel kwarg should still work
+    sim_data.plot_field("mode_solver", "Ex", y=0.0, val="real", f=1e14, mode_index=1)
+
+    # passing y=1 sel kwarg should error
+    with pytest.raises(ValueError):
+        sim_data.plot_field("mode_solver", "Ex", y=1.0, val="real", f=1e14, mode_index=1)
 
 
 @clear_tmp
