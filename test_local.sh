@@ -14,6 +14,7 @@ pytest -ra tests/test_grid.py
 pytest -ra tests/test_IO.py
 pytest -ra tests/test_log.py
 pytest -ra tests/test_main.py
+pytest -ra tests/test_make_script.py
 pytest -ra tests/test_material_library.py
 pytest -ra tests/test_meshgenerate.py
 pytest -ra tests/test_plugins.py
