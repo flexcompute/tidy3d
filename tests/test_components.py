@@ -395,7 +395,7 @@ def test_geometry_sizes():
         s = Simulation(size=(1, 1, 1), grid_spec=GridSpec.uniform(dl=-1.0), run_time=1e-12)
 
 
-@pytest.mark.parametrize("x0", np.linspace(-4, 4, 5))
+@pytest.mark.parametrize("x0", [5])
 def test_geometry_touching_intersections(x0):
     """Two touching boxes should show at least one intersection at plane where they touch."""
 
@@ -403,7 +403,7 @@ def test_geometry_touching_intersections(x0):
     # L = 1 # works
     # L = 0.1 # works
     # L = 0.12 # assertion errors
-    L = 0.24 # assertion errors
+    L = 0.24  # assertion errors
     # L = 0.25 # works
 
     # one box to the left of x0 and one box to the right of x0, touching at x0
