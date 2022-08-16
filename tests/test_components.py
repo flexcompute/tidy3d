@@ -400,7 +400,11 @@ def test_geometry_touching_intersections(x0):
     """Two touching boxes should show at least one intersection at plane where they touch."""
 
     # size of each box
-    L = 1
+    # L = 1 # works
+    # L = 0.1 # works
+    # L = 0.12 # assertion errors
+    L = 0.24 # assertion errors
+    # L = 0.25 # works
 
     # one box to the left of x0 and one box to the right of x0, touching at x0
     b1 = Box(center=(x0 - L / 2, 0, 0), size=(L, L, L))
