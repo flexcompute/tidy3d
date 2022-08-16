@@ -304,7 +304,14 @@ class SimulationData(Tidy3dBaseModel):
                 field_data = field_data.interp(**{axis: pos})
 
         # select the extra coordinates out of the data from user-specified kwargs
-        field_data = field_data.interp(**sel_kwargs)
+        for coord_name, coord_val in sel_kwargs.items():
+            if field_data.coords[coord_name].size <= 1:
+                raise DataError(
+                    f"{coord_name}={coord_val} supplied to `sel_kwargs`, "
+                    "but the data only has one coordinate along that dimension. "
+                    f"Please omit {coord_name} from the `plot_field()` arguments."
+                )
+            field_data = field_data.interp({coord_name: coord_val})
         field_data = field_data.squeeze(drop=True)
         non_scalar_coords = {name: val for name, val in field_data.coords.items() if val.size > 1}
 
