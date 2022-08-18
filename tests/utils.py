@@ -1,5 +1,5 @@
 import os
-
+import numpy as np
 from tidy3d import *
 import tidy3d as td
 
@@ -61,15 +61,31 @@ SIM_FULL = Simulation(
             medium=Medium(permittivity=2.0),
         ),
         Structure(
-            geometry=Box(size=(1, inf, 1), center=(0, 0, 0)),
+            geometry=Box(size=(1, inf, 1), center=(-1, 0, 0)),
             medium=Medium(permittivity=1.0, conductivity=3.0),
         ),
         Structure(
-            geometry=Sphere(radius=1.4, center=(1.0, 0.0, 1.0)),
+            geometry=Sphere(radius=1.0, center=(1.0, 0.0, 1.0)),
             medium=Sellmeier(coeffs=[(1.03961212, 0.00600069867), (0.231792344, 0.0200179144)]),
         ),
         Structure(
-            geometry=Cylinder(radius=1.4, length=2.0, center=(1.0, 0.0, -1.0), axis=1),
+            geometry=Box(size=(1, 1, 1), center=(-1, 0, 0)),
+            medium=Lorentz(eps_inf=2.0, coeffs=[(1, 2, 3)]),
+        ),
+        Structure(
+            geometry=Box(size=(1, 1, 1), center=(-1, 0, 0)),
+            medium=Debye(eps_inf=2.0, coeffs=[(1, 3)]),
+        ),
+        Structure(
+            geometry=Box(size=(1, 1, 1), center=(-1, 0, 0)),
+            medium=Drude(eps_inf=2.0, coeffs=[(1, 3)]),
+        ),
+        Structure(
+            geometry=GeometryGroup(geometries=[Box(size=(1, 1, 1), center=(-1, 0, 0))]),
+            medium=PEC,
+        ),
+        Structure(
+            geometry=Cylinder(radius=1.0, length=2.0, center=(1.0, 0.0, -1.0), axis=1),
             medium=AnisotropicMedium(
                 xx=td.Medium(permittivity=1),
                 yy=td.Medium(permittivity=2),
@@ -101,18 +117,90 @@ SIM_FULL = Simulation(
                 fwidth=4e13,
             ),
         ),
+        ModeSource(
+            center=(0, 0.5, 0),
+            size=(inf, 0, inf),
+            mode_spec=td.ModeSpec(),
+            source_time=GaussianPulse(
+                freq0=2e14,
+                fwidth=4e13,
+            ),
+            direction="-",
+        ),
+        PlaneWave(
+            size=(0, inf, inf),
+            source_time=GaussianPulse(
+                freq0=2e14,
+                fwidth=4e13,
+            ),
+            pol_angle=0.1,
+            direction="+",
+        ),
+        GaussianBeam(
+            size=(0, 3, 3),
+            source_time=GaussianPulse(
+                freq0=2e14,
+                fwidth=4e13,
+            ),
+            pol_angle=np.pi / 2,
+            direction="+",
+            waist_radius=1.0,
+        ),
+        AstigmaticGaussianBeam(
+            size=(0, 3, 3),
+            source_time=GaussianPulse(
+                freq0=2e14,
+                fwidth=4e13,
+            ),
+            pol_angle=np.pi / 2,
+            direction="+",
+            waist_sizes=(1.0, 2.0),
+            waist_distances=(3.0, 4.0),
+        ),
     ],
-    monitors={
-        FieldMonitor(size=(0, 0, 0), center=(0, 0, 0), freqs=[1.5e14, 2e14], name="point"),
-        FluxMonitor(size=(1, 1, 0), center=(0, 0, 0), freqs=[2e14, 2.5e14], name="plane"),
-    },
+    monitors=(
+        FieldMonitor(
+            size=(0, 0, 0), center=(0, 0, 0), fields=["Ex"], freqs=[1.5e14, 2e14], name="field"
+        ),
+        FieldTimeMonitor(size=(0, 0, 0), center=(0, 0, 0), name="field_time"),
+        FluxMonitor(size=(1, 1, 0), center=(0, 0, 0), freqs=[2e14, 2.5e14], name="flux"),
+        FluxTimeMonitor(size=(1, 1, 0), center=(0, 0, 0), name="flux_time"),
+        PermittivityMonitor(size=(1, 1, 1), name="eps", freqs=[1e13]),
+        ModeMonitor(
+            size=(1, 1, 0),
+            center=(0, 0, 0),
+            name="mode",
+            freqs=[2e14, 2.5e14],
+            mode_spec=ModeSpec(),
+        ),
+        ModeSolverMonitor(
+            size=(1, 1, 0),
+            center=(0, 0, 0),
+            name="mode_solver",
+            freqs=[2e14, 2.5e14],
+            mode_spec=ModeSpec(),
+        ),
+    ),
     symmetry=(0, 0, 0),
     boundary_spec=BoundarySpec(
-        x=Boundary.pml(num_layers=20), y=Boundary.bloch(bloch_vec=0.1), z=Boundary.periodic()
+        x=Boundary(plus=PML(num_layers=20), minus=Absorber(num_layers=100)),
+        y=Boundary.bloch(bloch_vec=0.1),
+        z=Boundary.periodic(),
     ),
     shutoff=1e-6,
     courant=0.8,
     subpixel=False,
+    grid_spec=GridSpec(
+        grid_x=AutoGrid(),
+        grid_y=CustomGrid(dl=101 * [0.01]),
+        grid_z=UniformGrid(dl=0.01),
+        override_structures=[
+            td.Structure(
+                geometry=Box(size=(1, 1, 1), center=(-1, 0, 0)),
+                medium=Medium(permittivity=2.0),
+            )
+        ],
+    ),
 )
 
 
@@ -137,7 +225,7 @@ SIM_CONVERT = td.Simulation(
         td.FieldMonitor(
             fields=["Ex", "Hy"],
             center=(0, 0, 0),
-            size=(td.inf, 0, td.inf),
+            size=(inf, 0, inf),
             freqs=[3e14],
             name="field_monitor",
         )
