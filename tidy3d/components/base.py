@@ -13,12 +13,22 @@ import yaml
 import numpy as np
 import h5py
 import xarray as xr
+from dask.base import tokenize
 
 from .types import ComplexNumber, Literal, TYPE_TAG_STR  # , DataObject
 from ..log import FileError, log, Tidy3dKeyError
 
 # default indentation (# spaces) in files
 INDENT = 4
+
+
+def save_data_array(arr: xr.DataArray) -> str:
+    """Save a DataArray to file and add the filename to json."""
+    fname = tokenize(arr) + ".hdf5"
+    coords = {key: np.array(val) for key, val in arr.coords.items()}
+    data_dict = dict(data=arr.data, coords=coords, keep_numpy=True)
+    Tidy3dBaseModel.dump_hdf5(data_dict, fname)
+    return fname
 
 
 class Tidy3dBaseModel(pydantic.BaseModel):
@@ -62,7 +72,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         json_encoders = {
             np.ndarray: lambda x: tuple(x.tolist()),
             complex: lambda x: ComplexNumber(real=x.real, imag=x.imag),
-            xr.DataArray: lambda x: x.to_dict(),
+            xr.DataArray: save_data_array,
         }
         frozen = True
         allow_mutation = False
@@ -545,7 +555,8 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         self_dict = self.dict()
         self._save_group_data(data_dict=self_dict, hdf5_group=hdf5_group)
 
-    def _save_group_data(self, data_dict: dict, hdf5_group: h5py.Group) -> None:
+    @classmethod
+    def _save_group_data(cls, data_dict: dict, hdf5_group: h5py.Group) -> None:
         """Recursively save the data to a group with a non-dict data as base case."""
 
         for key, value in data_dict.items():
@@ -565,13 +576,14 @@ class Tidy3dBaseModel(pydantic.BaseModel):
             # if dictionary as item in dict, create subgroup and recurse
             if isinstance(value, dict):
                 hdf5_subgroup = hdf5_group.create_group(key)
-                self._save_group_data(data_dict=value, hdf5_group=hdf5_subgroup)
+                cls._save_group_data(data_dict=value, hdf5_group=hdf5_subgroup)
 
             # otherwise (actual data), just encode it and save it to the group as a dataset
             else:
-                self.pack_dataset(hdf5_group=hdf5_group, key=key, value=value)
+                cls.pack_dataset(hdf5_group=hdf5_group, key=key, value=value)
 
-    def dump_hdf5(self, data_dict: dict, fname: str) -> None:
+    @classmethod
+    def dump_hdf5(cls, data_dict: dict, fname: str) -> None:
         """Writes a dictionary of data into an hdf5 file.
 
         Parameters
@@ -584,7 +596,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
 
         # open the file and write to it recursively
         with h5py.File(fname, "w") as f:
-            self._save_group_data(data_dict=data_dict, hdf5_group=f)
+            cls._save_group_data(data_dict=data_dict, hdf5_group=f)
 
     """End hdfdict modification
     ============================================================================================="""

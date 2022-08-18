@@ -4,6 +4,7 @@ from typing import Dict
 import xarray as xr
 import numpy as np
 
+from ..base import Tidy3dBaseModel
 from ..types import DataObject
 from ...constants import HERTZ, SECOND, MICROMETER, RADIAN
 from ...log import DataError
@@ -77,6 +78,9 @@ class DataArray(xr.DataArray):
     @classmethod
     def validate(cls, value):
         """What gets called when you construct a DataArray."""
+
+        if isinstance(value, str):
+            value = Tidy3dBaseModel.hdf5_to_dict(value)
 
         # loading from raw dict (usually from file)
         if isinstance(value, dict):

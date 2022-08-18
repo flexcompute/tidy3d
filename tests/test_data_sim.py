@@ -191,6 +191,14 @@ def test_to_hdf5():
     assert sim_data == sim_data2
 
 
+def test_to_json():
+    sim_data = make_sim_data()
+    FNAME = "tests/tmp/sim_data_refactor.json"
+    sim_data.to_file(fname=FNAME)
+    sim_data2 = SimulationData.from_file(fname=FNAME)
+    assert sim_data == sim_data2
+
+
 @clear_tmp
 def test_empty_io():
     coords = {"x": np.arange(10), "y": np.arange(10), "z": np.arange(10), "t": []}
