@@ -631,7 +631,7 @@ class BoundarySpec(Tidy3dBaseModel):
 
         Example
         -------
-        boundaries = BoundarySpec.pml(y=True)
+        >>> boundaries = BoundarySpec.pml(y=True)
         """
         return cls(
             x=Boundary.pml() if x else Boundary.periodic(),
@@ -654,7 +654,7 @@ class BoundarySpec(Tidy3dBaseModel):
 
         Example
         -------
-        boundaries = BoundarySpec.pec(x=True, z=True)
+        >>> boundaries = BoundarySpec.pec(x=True, z=True)
         """
         return cls(
             x=Boundary.pec() if x else Boundary.periodic(),
@@ -677,7 +677,7 @@ class BoundarySpec(Tidy3dBaseModel):
 
         Example
         -------
-        boundaries = BoundarySpec.pmc(x=True, z=True)
+        >>> boundaries = BoundarySpec.pmc(x=True, z=True)
         """
         return cls(
             x=Boundary.pmc() if x else Boundary.periodic(),
@@ -696,7 +696,7 @@ class BoundarySpec(Tidy3dBaseModel):
 
         Example
         -------
-        boundaries = BoundarySpec.all_sides(boundary=PML())
+        >>> boundaries = BoundarySpec.all_sides(boundary=PML())
         """
         return cls(
             x=Boundary(minus=boundary, plus=boundary),
