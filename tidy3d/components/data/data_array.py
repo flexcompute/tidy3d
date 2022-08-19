@@ -84,10 +84,16 @@ class DataArray(xr.DataArray):
         if isinstance(value, dict):
             if value.get("tag") == "DATA_ITEM":
                 # Read from external file
-                with h5py.File(value["data_file"], "r") as f:
-                    group = f[value["group_name"]]
-                    # pylint:disable=protected-access
-                    value = Tidy3dBaseModel._load_group_data(data_dict={}, hdf5_group=group)
+                data_file = value.get("data_file")
+                try:
+                    with h5py.File(data_file, "r") as f:
+                        group = f[value["group_name"]]
+                        # pylint:disable=protected-access
+                        value = Tidy3dBaseModel._load_group_data(data_dict={}, hdf5_group=group)
+                except FileNotFoundError as e:
+                    raise DataError(
+                        f"External data file {data_file} not found when loading data."
+                    ) from e
 
             data = value.get("data")
             coords = value.get("coords")

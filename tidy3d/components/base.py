@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import json
-from typing import Any, Union
+from typing import Any, Union, Optional
 from functools import wraps
 from typing_extensions import _AnnotatedAlias
 
@@ -237,7 +237,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
 
         raise FileError(f"File must be .json, .yaml, or .hdf5 type, given {fname}")
 
-    def to_file(self, fname: str, data_file: str = None) -> None:
+    def to_file(self, fname: str, data_file: Optional[str] = None) -> None:
         """Exports :class:`Tidy3dBaseModel` instance to .yaml or .json file
 
         Parameters
@@ -257,7 +257,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         if ".yaml" in fname:
             return self.to_yaml(fname=fname, data_file=data_file)
         if ".hdf5" in fname:
-            if not data_file:
+            if data_file:
                 log.warning("`data_file` has no effect when already writing to `hdf5` file.")
             return self.to_hdf5(fname=fname)
 
@@ -285,7 +285,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         """
         return cls.parse_file(fname, **parse_file_kwargs)
 
-    def to_json(self, fname: str, data_file: str = None) -> None:
+    def to_json(self, fname: str, data_file: Optional[str] = None) -> None:
         """Exports :class:`Tidy3dBaseModel` instance to .json file
 
         Parameters
@@ -328,7 +328,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         json_raw = json.dumps(json_dict, indent=INDENT)
         return cls.parse_raw(json_raw, **parse_raw_kwargs)
 
-    def to_yaml(self, fname: str, data_file: str = None) -> None:
+    def to_yaml(self, fname: str, data_file: Optional[str] = None) -> None:
         """Exports :class:`Tidy3dBaseModel` instance to .yaml file.
 
         Parameters
@@ -606,7 +606,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         """define >= for getting unique indices based on hash."""
         return hash(self) >= hash(other)
 
-    def _json_string(self, include_unset: bool = True, data_file: str = None) -> str:
+    def _json_string(self, include_unset: bool = True, data_file: Optional[str] = None) -> str:
         """Returns string representation of a :class:`Tidy3dBaseModel`.
 
         Parameters
@@ -627,17 +627,16 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         original_encoder = self.__config__.json_encoders[xr.DataArray]
         if data_file:
             # Create/overwrite data file
-            with h5py.File(data_file, "w"):
-                pass
+            fhandle = h5py.File(data_file, "w")
 
             def write_data(x):
-                with h5py.File(data_file, "a") as f:
-                    group_name = tokenize(x)
-                    if group_name not in f.keys():
-                        group = f.create_group(group_name)
-                        coords = {key: np.array(val) for key, val in x.coords.items()}
-                        data_dict = dict(data=x.data, coords=coords, keep_numpy=True)
-                        self._save_group_data(data_dict=data_dict, hdf5_group=group)
+                """Write data to group inside hdf5 file."""
+                group_name = tokenize(x)
+                if group_name not in fhandle.keys():
+                    group = fhandle.create_group(group_name)
+                    coords = {key: np.array(val) for key, val in x.coords.items()}
+                    data_dict = dict(data=x.data, coords=coords, keep_numpy=True)
+                    self._save_group_data(data_dict=data_dict, hdf5_group=group)
                 return dict(group_name=group_name, data_file=data_file, tag="DATA_ITEM")
 
             self.__config__.json_encoders[xr.DataArray] = write_data
@@ -650,6 +649,8 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         json_string = json_string.replace(tmp_string, '"-Infinity"')
 
         # re-set the json encoder for data
+        if data_file:
+            fhandle.close()
         self.__config__.json_encoders[xr.DataArray] = original_encoder
 
         return json_string
