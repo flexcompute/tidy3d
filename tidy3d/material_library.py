@@ -47,6 +47,21 @@ Ag_Rakic1998 = PoleResidue(
     frequency_range=(151926744799612.75, 7596337239980637.0),
 )
 
+Ag_RakicLorentzDrude1998 = PoleResidue(
+    eps_inf=1.0,
+    poles=(
+        ((-800062663506.125 + 0j), (1.1099533667426209e18 + 0j)),
+        ((-72124774840307.98 + 0j), (-1.1099533667426209e18 - 0j)),
+        ((-272940800787927.5 + 0j), (1136578330456760.5 + 0j)),
+        ((-5630932502125024 + 0j), (-1136578330456760.5 - 0j)),
+        ((-343354443247124.8 - 6799173351259867j), 1708652013864486.5j),
+        ((-49376192059874.14 - 1.2435106032980426e16j), 82876469878486.64j),
+        ((-695824491182226.4 - 1.3781951983423364e16j), 5710269496109004j),
+        ((-1837553978351315.8 - 3.0771118889340676e16j), 1.7190386342847058e16j),
+    ),
+    frequency_range=(24179892422719.273, 1208994621135963.5),
+)
+
 Ag_JohnsonChristy1972 = PoleResidue(
     eps_inf=1.0,
     poles=[
@@ -89,6 +104,20 @@ Al_Rakic1998 = PoleResidue(
         ),
     ],
     frequency_range=(151926744799612.75, 1.5192674479961274e16),
+)
+
+Al_RakicLorentzDrude1998 = PoleResidue(
+    eps_inf=1.0,
+    poles=(
+        ((-16956600687280.727 + 0j), (3.6126085572070707e18 + 0j)),
+        ((-54448969368537.26 + 0j), (-3.6126085572070707e18 - 0j)),
+        ((-194545209645174.6 + 0j), (5.0321060071503546e17 + 0j)),
+        ((-311370850537535.75 + 0j), (-5.0321060071503546e17 - 0j)),
+        ((-237005721887395.88 - 2333745139453868j), 5548539400655874j),
+        ((-1026265161121384.1 - 2547917843202809j), 1.6872706975652858e16j),
+        ((-2569081254561451.5 - 4608729293067524j), 1685784870483934.5j),
+    ),
+    frequency_range=(1208994621135.9636, 4835978484543854.0),
 )
 
 Al2O3_Horiba = PoleResidue(
@@ -214,6 +243,21 @@ Be_Rakic1998 = PoleResidue(
     frequency_range=(30385348959922.547, 7596337239980637.0),
 )
 
+Be_RakicLorentzDrude1998 = PoleResidue(
+    eps_inf=1.0,
+    poles=(
+        ((-1108290667017.4727 + 0j), (6.51808619662519e17 + 0j)),
+        ((-52066070012846.984 + 0j), (-6.51808619662519e17 - 0j)),
+        ((-9163427576987.25 + 0j), (4884108194218923 + 0j)),
+        ((-2518897605888569 + 0j), (-4884108194218923 - 0j)),
+        ((-531334375653411.75 + 0j), (1.351759826496727e16 + 0j)),
+        ((-4626578610293440 + 0j), (-1.351759826496727e16 - 0j)),
+        ((-3383408606687375.5 - 3455109465888045.5j), 6.06548265916751e16j),
+        ((-1368859970644510.8 - 6859457195810405j), 7493848504616175j),
+    ),
+    frequency_range=(4835978484543.8545, 1208994621135963.5),
+)
+
 CaF2_Horiba = PoleResidue(
     eps_inf=1.0,
     poles=[((-0.0 - 1j * 2.376134288665943e16), (0.0 + 1j * 1.2308375615289586e16))],
@@ -249,6 +293,21 @@ Cr_Rakic1998 = PoleResidue(
     frequency_range=(151926744799612.75, 1.5192674479961274e16),
 )
 
+Cr_RakicLorentzDrude1998 = PoleResidue(
+    eps_inf=1.0,
+    poles=(
+        ((-817479822341.9102 + 0j), (3.211383394563691e17 + 0j)),
+        ((-70588090233476.08 + 0j), (-3.211383394563691e17 - 0j)),
+        ((-7016061501736.5 + 0j), (4187160341714059 + 0j)),
+        ((-4816658085885968 + 0j), (-4187160341714059 - 0j)),
+        ((-441634229628194.1 + 0j), (1.8197032850966144e16 + 0j)),
+        ((-1541009790006751.5 + 0j), (-1.8197032850966144e16 - 0j)),
+        ((-2032779845418818.5 - 2196724138579424.2j), 6.975894511603244e16j),
+        ((-1014111021537414.9 - 1.3292945008240806e16j), 8277289379024513j),
+    ),
+    frequency_range=(4835978484543.8545, 1208994621135963.5),
+)
+
 Cu_JohnsonChristy1972 = PoleResidue(
     eps_inf=1.0,
     poles=[
@@ -274,6 +333,19 @@ Cu_JohnsonChristy1972 = PoleResidue(
         ),
     ],
     frequency_range=(972331166717521.5, 1.002716515677444e16),
+)
+
+Cu_RakicLorentzDrude1998 = PoleResidue(
+    eps_inf=1.0,
+    poles=(
+        ((-506299046.578125 + 0j), (1.7077228480506522e18 + 0j)),
+        ((-45577517140837.24 + 0j), (-1.7077228480506522e18 - 0j)),
+        ((-287141547671268.06 - 336166890703636.9j), 2.4562370654105788e16j),
+        ((-802173212541955.2 - 4420275938629775j), 3184779293720060j),
+        ((-2440703155205778.5 - 7673302022556904j), 1.275414610754998e16j),
+        ((-3270223181811664 - 1.6667627171842064e16j), 5181342297925362j),
+    ),
+    frequency_range=(2.41768111e13, 1.44827274e15),
 )
 
 FusedSilica_Zemax = PoleResidue(
@@ -398,6 +470,21 @@ Ni_JohnsonChristy1972 = PoleResidue(
     frequency_range=(972331166717521.5, 1.002716515677444e16),
 )
 
+Ni_RakicLorentzDrude1998 = PoleResidue(
+    eps_inf=1.0,
+    poles=(
+        ((-800062663506.125 + 0j), (3.936912856387643e17 + 0j)),
+        ((-72124774840307.98 + 0j), (-3.936912856387643e17 - 0j)),
+        ((-10211922369538.5 + 0j), (4280689317169589.5 + 0j)),
+        ((-6843203535540992 + 0j), (-4280689317169589.5 - 0j)),
+        ((-518328915630819.8 + 0j), (3.988443595266845e16 + 0j)),
+        ((-1508373859996014.5 + 0j), (-3.988443595266845e16 - 0j)),
+        ((-1654482250867782.5 - 1774676068987181.8j), 1.7470742743872056e16j),
+        ((-4779615391395816 - 7920412739409055j), 2.6921813490544444e16j),
+    ),
+    frequency_range=(48359784845438.55, 1208994621135963.5),
+)
+
 PEI_Horiba = PoleResidue(
     eps_inf=1.0,
     poles=[((-0.0 - 1j * 1.8231209375953524e16), (0.0 + 1j * 9936009109894670.0))],
@@ -463,6 +550,20 @@ Pd_JohnsonChristy1972 = PoleResidue(
     frequency_range=(972331166717521.5, 1.002716515677444e16),
 )
 
+Pd_RakicLorentzDrude1998 = PoleResidue(
+    eps_inf=1.0,
+    poles=(
+        ((-6077069791984.51 - 4557802343988.38j), 7.894587671231656e18j),
+        ((-58916603694997.75 + 0j), (1.6215501354199708e16 + 0j)),
+        ((-4422922367893578 + 0j), (-1.6215501354199708e16 - 0j)),
+        ((-421596716818925.4 - 633727137461217.1j), 2.0818721955845844e16j),
+        ((-1067065603800966.5 + 0j), (1.4236470639056928e16 + 0j)),
+        ((-5953469273389138 + 0j), (-1.4236470639056928e16 - 0j)),
+        ((-2458174730857734 - 8327373750489667j), 5931453695969745j),
+    ),
+    frequency_range=(24179892422719.273, 1208994621135963.5),
+)
+
 Polycarbonate_Horiba = PoleResidue(
     eps_inf=1.0,
     poles=[((-0.0 - 1j * 1.8240324980641504e16), (0.0 + 1j * 1.3716724385442412e16))],
@@ -506,6 +607,19 @@ Pt_Werner2009 = PoleResidue(
         ),
     ],
     frequency_range=(120884055879414.03, 2997924585809468.0),
+)
+
+Pt_RakicLorentzDrude1998 = PoleResidue(
+    eps_inf=1.0,
+    poles=(
+        ((-476640283942.46875 + 0j), (2.9309972445197843e17 + 0j)),
+        ((-121064755555747.72 + 0j), (-2.9309972445197843e17 - 0j)),
+        ((-392730635306998.94 - 1118058787933578.1j), 1.813194578357386e16j),
+        ((-1396206784708441 - 1426846131279794.5j), 4.9021202075413656e16j),
+        ((-2786336499624897.5 - 3874079860313212j), 1.498630066235504e16j),
+        ((-6469800427291508 - 1.2473655652689588e16j), 3.042842289267071e16j),
+    ),
+    frequency_range=(24179892422719.273, 1208994621135963.5),
 )
 
 Sapphire_Horiba = PoleResidue(
@@ -577,6 +691,20 @@ Ti_Werner2009 = PoleResidue(
     frequency_range=(120884055879414.03, 2997924585809468.0),
 )
 
+Ti_RakicLorentzDrude1998 = PoleResidue(
+    eps_inf=1.0,
+    poles=(
+        ((-464807447764.2969 + 0j), (7.341080927693171e16 + 0j)),
+        ((-124115123287918.16 + 0j), (-7.341080927693171e16 - 0j)),
+        ((-465726048089722.5 + 0j), (2.1824836537305828e16 + 0j)),
+        ((-2992126663549463 + 0j), (-2.1824836537305828e16 - 0j)),
+        ((-1912757717027124.2 - 1360524146154420.5j), 1.7716577274303782e16j),
+        ((-1263270883008780 - 3596426881658456.5j), 3189068866500566j),
+        ((-1338474621684588.2 - 2.9489006173628724e16j), 2079856587113.8086j),
+    ),
+    frequency_range=(9.67072446e12, 1.20884056e15),
+)
+
 TiOx_Horiba = PoleResidue(
     eps_inf=0.29,
     poles=[((-0.0 - 1j * 9875238411974826.0), (0.0 + 1j * 1.7429795797135566e16))],
@@ -608,6 +736,19 @@ W_Werner2009 = PoleResidue(
         ),
     ],
     frequency_range=(120884055879414.03, 2997924585809468.0),
+)
+
+W_RakicLorentzDrude1998 = PoleResidue(
+    eps_inf=1.0,
+    poles=(
+        ((-596977842693.5781 + 0j), (4.3263359766348934e17 + 0j)),
+        ((-96636138829058.58 + 0j), (-4.3263359766348934e17 - 0j)),
+        ((-402605873718973.75 - 1471252666401400j), 7403002173803200j),
+        ((-973090800441519.6 - 2745063931489722j), 1.219711179953004e16j),
+        ((-2531099568361548 - 4814146946972908j), 2.9579221430831028e16j),
+        ((-4433222413252700 - 1.0493429699239636e16j), 4.978330061510859e16j),
+    ),
+    frequency_range=(2.41768111e13, 1.20884056e15),
 )
 
 Y2O3_Horiba = PoleResidue(
@@ -682,8 +823,12 @@ cSi_Green2008 = PoleResidue(
 )
 
 material_library = {
-    "Ag": {"Rakic1998": Ag_Rakic1998, "JohnsonChristy1972": Ag_JohnsonChristy1972},
-    "Al": {"Rakic1998": Al_Rakic1998},
+    "Ag": {
+        "Rakic1998": Ag_Rakic1998,
+        "RakicLorentzDrude1998": Ag_RakicLorentzDrude1998,
+        "JohnsonChristy1972": Ag_JohnsonChristy1972,
+    },
+    "Al": {"Rakic1998": Al_Rakic1998, "RakicLorentzDrude1998": Al_RakicLorentzDrude1998},
     "Al2O3": {"Horiba": Al2O3_Horiba},
     "AlAs": {"Horiba": AlAs_Horiba, "FernOnton1971": AlAs_FernOnton1971},
     "AlGaN": {"Horiba": AlGaN_Horiba},
@@ -695,11 +840,14 @@ material_library = {
         "RakicLorentzDrude1998": Au_RakicLorentzDrude1998,
     },
     "BK7": {"Zemax": BK7_Zemax},
-    "Be": {"Rakic1998": Be_Rakic1998},
+    "Be": {"Rakic1998": Be_Rakic1998, "RakicLorentzDrude1998": Be_RakicLorentzDrude1998},
     "CaF2": {"Horiba": CaF2_Horiba},
     "Cellulose": {"Sultanova2009": Cellulose_Sultanova2009},
-    "Cr": {"Rakic1998": Cr_Rakic1998},
-    "Cu": {"JohnsonChristy1972": Cu_JohnsonChristy1972},
+    "Cr": {"Rakic1998": Cr_Rakic1998, "RakicLorentzDrude1998": Cr_RakicLorentzDrude1998},
+    "Cu": {
+        "JohnsonChristy1972": Cu_JohnsonChristy1972,
+        "RakicLorentzDrude1998": Cu_RakicLorentzDrude1998,
+    },
     "FusedSilica": {"Zemax": FusedSilica_Zemax},
     "GaAs": {"Skauli2003": GaAs_Skauli2003},
     "Ge": {"Icenogle1976": Ge_Icenogle1976},
@@ -711,20 +859,26 @@ material_library = {
     "InP": {"Pettit1965": InP_Pettit1965},
     "MgF2": {"Horiba": MgF2_Horiba},
     "MgO": {"StephensMalitson1952": MgO_StephensMalitson1952},
-    "Ni": {"JohnsonChristy1972": Ni_JohnsonChristy1972},
+    "Ni": {
+        "JohnsonChristy1972": Ni_JohnsonChristy1972,
+        "RakicLorentzDrude1998": Ni_RakicLorentzDrude1998,
+    },
     "PEI": {"Horiba": PEI_Horiba},
     "PEN": {"Horiba": PEN_Horiba},
     "PET": {"Horiba": PET_Horiba},
     "PMMA": {"Horiba": PMMA_Horiba, "Sultanova2009": PMMA_Sultanova2009},
     "PTFE": {"Horiba": PTFE_Horiba},
     "PVC": {"Horiba": PVC_Horiba},
-    "Pd": {"JohnsonChristy1972": Pd_JohnsonChristy1972},
+    "Pd": {
+        "JohnsonChristy1972": Pd_JohnsonChristy1972,
+        "RakicLorentzDrude1998": Pd_RakicLorentzDrude1998,
+    },
     "Polycarbonate": {
         "Horiba": Polycarbonate_Horiba,
         "Sultanova2009": Polycarbonate_Sultanova2009,
     },
     "Polystyrene": {"Sultanova2009": Polystyrene_Sultanova2009},
-    "Pt": {"Werner2009": Pt_Werner2009},
+    "Pt": {"Werner2009": Pt_Werner2009, "RakicLorentzDrude1998": Pt_RakicLorentzDrude1998},
     "Sapphire": {"Horiba": Sapphire_Horiba},
     "Si3N4": {
         "Horiba": Si3N4_Horiba,
@@ -736,9 +890,9 @@ material_library = {
     "SiO2": {"Horiba": SiO2_Horiba},
     "SiON": {"Horiba": SiON_Horiba},
     "Ta2O5": {"Horiba": Ta2O5_Horiba},
-    "Ti": {"Werner2009": Ti_Werner2009},
+    "Ti": {"Werner2009": Ti_Werner2009, "RakicLorentzDrude1998": Ti_RakicLorentzDrude1998},
     "TiOx": {"Horiba": TiOx_Horiba},
-    "W": {"Werner2009": W_Werner2009},
+    "W": {"Werner2009": W_Werner2009, "RakicLorentzDrude1998": W_RakicLorentzDrude1998},
     "Y2O3": {"Horiba": Y2O3_Horiba, "Nigara1968": Y2O3_Nigara1968},
     "YAG": {"Zelmon1998": YAG_Zelmon1998},
     "ZrO2": {"Horiba": ZrO2_Horiba},
