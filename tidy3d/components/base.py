@@ -623,35 +623,43 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         """
         exclude_unset = not include_unset
 
-        # if not data_file, temporarily set the xr.DataArray encoder to return None
-        original_encoder = self.__config__.json_encoders[xr.DataArray]
-        if data_file:
+        def get_json_string() -> str:
+            """Return json string with function settings applied."""
+            return self.json(indent=INDENT, exclude_unset=exclude_unset)
+
+        def json_with_separate_data() -> str:
+            """Return json string with data written to separate file."""
+
+            original_encoder = self.__config__.json_encoders[xr.DataArray]
+
             # Create/overwrite data file
-            fhandle = h5py.File(data_file, "w")
+            with h5py.File(data_file, "w") as fhandle:
 
-            def write_data(x):
-                """Write data to group inside hdf5 file."""
-                group_name = tokenize(x)
-                if group_name not in fhandle.keys():
-                    group = fhandle.create_group(group_name)
-                    coords = {key: np.array(val) for key, val in x.coords.items()}
-                    data_dict = dict(data=x.data, coords=coords, keep_numpy=True)
-                    self._save_group_data(data_dict=data_dict, hdf5_group=group)
-                return dict(group_name=group_name, data_file=data_file, tag="DATA_ITEM")
+                def write_data(x):
+                    """Write data to group inside hdf5 file."""
+                    group_name = tokenize(x)
+                    if group_name not in fhandle.keys():
+                        group = fhandle.create_group(group_name)
+                        coords = {key: np.array(val) for key, val in x.coords.items()}
+                        data_dict = dict(data=x.data, coords=coords, keep_numpy=True)
+                        self._save_group_data(data_dict=data_dict, hdf5_group=group)
+                    return dict(group_name=group_name, data_file=data_file, tag="DATA_ITEM")
 
-            self.__config__.json_encoders[xr.DataArray] = write_data
+                self.__config__.json_encoders[xr.DataArray] = write_data
 
-        # put infinity and -infinity in quotes
+                # put infinity and -infinity in quotes
+                json_string = get_json_string()
+
+                # re-set the json encoder for data
+                self.__config__.json_encoders[xr.DataArray] = original_encoder
+
+                return json_string
+
+        json_string = json_with_separate_data() if data_file else get_json_string()
         tmp_string = "<<TEMPORARY_INFINITY_STRING>>"
-        json_string = self.json(indent=INDENT, exclude_unset=exclude_unset)
         json_string = json_string.replace("-Infinity", tmp_string)
         json_string = json_string.replace("Infinity", '"Infinity"')
         json_string = json_string.replace(tmp_string, '"-Infinity"')
-
-        # re-set the json encoder for data
-        if data_file:
-            fhandle.close()
-        self.__config__.json_encoders[xr.DataArray] = original_encoder
 
         return json_string
 
