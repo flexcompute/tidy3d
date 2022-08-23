@@ -1236,9 +1236,9 @@ class PolySlab(Planar):
         title="Sidewall angle",
         description="Angle of the sidewall. "
         "``sidewall_angle=0`` (default) specifies vertical wall, "
-        "while ``0<sidewall_angle<np.pi/2`` for the base to be larger than the top.",
-        # "and ``sidewall_angle<0`` for base to be smaller than the top.",
-        ge=0.0,
+        "while ``0<sidewall_angle<np.pi/2`` for the base to be larger than the top, "
+        "and ``np.pi/2<sidewall_angle<0`` for base to be smaller than the top.",
+        gt=-np.pi / 2,
         lt=np.pi / 2,
         units=RADIAN,
     )
@@ -1316,6 +1316,9 @@ class PolySlab(Planar):
         if they are self-intersecting.
         """
 
+        # is sidewal_angle a valid value?
+        if "sidewall_angle" not in values:
+            raise ValidationError("``sidewall_angle`` failed validation.")
         # no need to valiate anything here
         if isclose(values["dilation"], 0) and isclose(values["sidewall_angle"], 0):
             return val
@@ -1764,8 +1767,6 @@ class PolySlab(Planar):
         distance = vertices[:, axis] - position
         height = distance / self._tanq / shift_val
         height = np.unique(height)
-        if self.sidewall_angle < 0:
-            height *= -1
 
         height = height[height > 0]
         height = height[height < self.length_axis]
@@ -1810,19 +1811,23 @@ class PolySlab(Planar):
         x_vertices_axis = vertices_axis[:, 0]
 
         # find which segments intersect
-        f_left_to_intersect = (
-            x_vertices_f < position if exclude_on_vertices else x_vertices_f <= position
-        )
+        f_left_to_intersect = x_vertices_f <= position
         orig_right_to_intersect = x_vertices_axis > position
         intersects_b = np.logical_and(f_left_to_intersect, orig_right_to_intersect)
 
         f_right_to_intersect = x_vertices_f > position
-        orig_left_to_intersect = (
-            x_vertices_axis < position if exclude_on_vertices else x_vertices_axis <= position
-        )
+        orig_left_to_intersect = x_vertices_axis <= position
         intersects_f = np.logical_and(f_right_to_intersect, orig_left_to_intersect)
 
+        # exclude vertices at the position if exclude_on_vertices is True
+        if exclude_on_vertices:
+            intersects_on = np.isclose(x_vertices_axis, position, rtol=_IS_CLOSE_RTOL)
+            intersects_f_on = np.isclose(x_vertices_f, position, rtol=_IS_CLOSE_RTOL)
+            intersects_both_off = np.logical_not(np.logical_or(intersects_on, intersects_f_on))
+            intersects_f &= intersects_both_off
+            intersects_b &= intersects_both_off
         intersects_segment = np.logical_or(intersects_b, intersects_f)
+
         iverts_b = vertices_axis[intersects_segment]
         iverts_f = vertices_f[intersects_segment]
 
@@ -1906,45 +1911,39 @@ class PolySlab(Planar):
             x_on, y_on = vertices_on_local
             x_f, y_f = vertices_f_local
             x_b, y_b = vertices_b_local
-            # case 1, neighbouring vertices on opposite side
-            if (x_b - position) * (x_f - position) < 0:
-                ints_y.append(y_on)
-                # vertices keep on the plane
-                if np.isclose(shift_local, 0, rtol=_IS_CLOSE_RTOL):
-                    ints_angle.append(np.pi / 2)
-                else:
-                    x1, y1 = x_b, y_b
-                    # decide which edge the plane will slide into
-                    if shift_local * (x_f - position) < 0:
-                        x1, y1, = (
-                            x_f,
-                            y_f,
-                        )
-                    slope = (y_on - y1) / (x_on - x1)
-                    ints_angle.append(np.pi / 2 - np.arctan(np.abs(slope)))
-            # case 2, neightbouring vertices on the same side:
-            elif (x_b - position) * (x_f - position) > 0:
-                # this vertex is no longer relevant
-                if (x_f - position) * shift_local > 0:
-                    continue
-                # the vertex will split into two
-                ints_y.append(y_on)
-                ints_y.append(y_on)
 
-                # the order of the two new vertices needs to handled correctly;
-                # it should be sorted according to the -slope * moving direction
-                slope = [(y_on - y_b) / (x_on - x_b), (y_on - y_f) / (x_on - x_f)]
+            num_added = 0  # keep track the number of added vertices
+            slope = []  # list of slopes for added vertices
+            # case 1, shifting velocity is 0
+            if np.isclose(shift_local, 0, rtol=_IS_CLOSE_RTOL):
+                ints_y.append(y_on)
+                ints_angle.append(np.pi / 2)
+                continue
+
+            # case 2, shifting towards backward direction
+            if (x_b - position) * shift_local < 0:
+                ints_y.append(y_on)
+                slope.append((y_on - y_b) / (x_on - x_b))
+                num_added += 1
+
+            # case 3, shifting towards forward direction
+            if (x_f - position) * shift_local < 0:
+                ints_y.append(y_on)
+                slope.append((y_on - y_f) / (x_on - x_f))
+                num_added += 1
+
+            # in case 2, and case 3, if just num_added = 1
+            if num_added == 1:
+                ints_angle.append(np.pi / 2 - np.arctan(np.abs(slope[0])))
+            # if num_added = 2, the order of the two new vertices needs to handled correctly;
+            # it should be sorted according to the -slope * moving direction
+            elif num_added == 2:
                 dressed_slope = [-s_i * shift_local for s_i in slope]
                 sort_index = np.argsort(np.array(dressed_slope))
                 sorted_slope = np.array(slope)[sort_index]
 
                 ints_angle.append(np.pi / 2 - np.arctan(np.abs(sorted_slope[0])))
                 ints_angle.append(np.pi / 2 - np.arctan(np.abs(sorted_slope[1])))
-            # case 3, one of neightbouring vertices on the plane too:
-            else:
-                # now only for angle<np.pi/2, so it's not relevant
-                # needs to implement here for angle>pi/2
-                continue
 
         ints_y = np.array(ints_y)
         ints_angle = np.array(ints_angle)
