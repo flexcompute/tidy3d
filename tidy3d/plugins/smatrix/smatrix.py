@@ -1,6 +1,6 @@
 """Tools for generating an S matrix automatically from tidy3d simulation and port definitions."""
 
-from typing import List, Tuple, Dict, Optional
+from typing import List, Tuple, Dict, Optional, Callable
 
 import pydantic as pd
 import numpy as np
@@ -36,27 +36,12 @@ class Port(Box):
         title="Mode Specification",
         description="Specifies how the mode solver will solve for the modes of the port.",
     )
-    mode_indices: Optional[Tuple[pd.NonNegativeInt, ...]] = pd.Field(
-        None,
-        title="Mode Indices.",
-        description="Indices into modes returned by the mode solver to use in the port. "
-        "If ``None``, all modes returned by the mode solver are used in the scattering matrix. "
-        "Otherwise, the scattering matrix will include elements for each supplied mode index.",
-    )
     name: str = pd.Field(
         ...,
         title="Name",
         description="Unique name for the port.",
         min_length=1,
     )
-
-    @pd.validator("mode_indices", always=True)
-    def evaluate_mode_indices(cls, val, values):
-        """Evaluates mode indices based on number of modes in mode spec."""
-        if val is None:
-            num_modes = values.get("mode_spec").num_modes
-            val = tuple(range(num_modes))
-        return val
 
 
 MatrixIndex = Tuple[str, pd.NonNegativeInt]  # the 'i' in S_ij
@@ -90,33 +75,36 @@ class ComponentModeler(Tidy3dBaseModel):
         title="Folder Name",
         description="Name of the folder for the tasks on web.",
     )
-    element_mappings: Dict[Element, Dict[Element, bool]] = pd.Field(
+    element_mappings: Dict[Element, Dict[Element, Callable[[complex], complex]]] = pd.Field(
         {},
         title="Element Mappings",
-        description="Mapping between matrix indices of the scattering matrix, "
-        "specified by (:class:`.Port`.name, `int`). "
-        "``element_mappings(str, mode_index)`` returns ``(str, mode_index), pos_sign``, "
-        "where the ``(str, mode_index)`` refers to the output matrix index "
-        "and ``pos_sign`` determines whether the element should be copied with a positive sign.",
+        description="Mapping between elements of the scattering matrix, "
+        "as specified by pairs of ``(port name, mode index)`` matrix indices. "
+        "``element_mappings[element1][element2]`` returns a function ``f`` that sets the matrix "
+        "element2 as ``f(element1)``. "
+        "Each ``element`` is defined by a pair of indices ``((str, int), (str, int))`` relating "
+        "the source port name and mode index to the monitor port name and mode index.",
     )
     run_only: Optional[Tuple[MatrixIndex, ...]] = pd.Field(
         None,
         title="Run Only",
-        description="If specified, a tuple of matrix indices, specified by (:class:`.Port`, `int`),"
+        description="If given, a tuple of matrix indices, specified by (:class:`.Port`, ``int``),"
         " to run only, excluding the other colulmns from the scattering matrix. "
         "If this option is used, the resulting scattering matrix will not be square or complete.",
     )
     batch: Optional[Batch] = pd.Field(
         None,
         title="Batch",
-        description="Batch containing all of the simulations needed for the scattering matrix." "",
+        description="Batch of generated simulations needed for each row of the scattering matrix."
+        "Should be left ``None`` in almost all cases, which will generate the proper batch "
+        "internally and store it as ``ComponentModeler.batch``.",
     )
 
     @pd.validator("simulation", always=True)
     def _sim_has_no_sources(cls, val):
         """Make sure simulation has no sources as they interfere with tool."""
         if len(val.sources) > 0:
-            raise SetupError("Simulation must not have extraneous `sources`.")
+            raise SetupError("'ComponentModeler.simulation' must not have any sources.")
         return val
 
     @pd.validator("batch", always=True)
@@ -170,7 +158,7 @@ class ComponentModeler(Tidy3dBaseModel):
         """Tuple of all the possible matrix indices (port, mode_index) in the Component Modeler."""
         matrix_indices = []
         for port in ports:
-            for mode_index in port.mode_indices:
+            for mode_index in range(port.mode_spec.num_modes):
                 matrix_indices.append((port.name, mode_index))
         return tuple(matrix_indices)
 
@@ -185,7 +173,7 @@ class ComponentModeler(Tidy3dBaseModel):
     def matrix_indices_run_sim(
         cls,
         ports: Tuple[Port, ...],
-        element_mappings: Dict[Element, Dict[Element, bool]] = None,
+        element_mappings: Dict[Element, Dict[Element, Callable[[complex], complex]]] = None,
         run_only: Tuple[MatrixIndex, ...] = None,
     ) -> Tuple[MatrixIndex, ...]:
         """Tuple of all the source matrix indices (port, mode_index) in the Component Modeler."""
@@ -374,11 +362,10 @@ class ComponentModeler(Tidy3dBaseModel):
 
         # element can be determined by user-defined mapping
         for (row_in, col_in), mapping_out in self.element_mappings.items():
-            for (row_out, col_out), has_pos_sign in mapping_out.items():
+            for (row_out, col_out), map_fn in mapping_out.items():
                 if row_out not in s_matrix:
                     s_matrix[row_out] = {}
-                sign = 1 if has_pos_sign else -1
-                s_matrix[row_out][col_out] = sign * s_matrix[row_in][col_in]
+                s_matrix[row_out][col_out] = map_fn(s_matrix[row_in][col_in])
 
         return s_matrix
 

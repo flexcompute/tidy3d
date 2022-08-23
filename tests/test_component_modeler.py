@@ -268,19 +268,18 @@ def test_component_modeler_run_only(monkeypatch):
 def _test_mappings(element_mappings, s_matrix):
     """Makes sure the mappings are reflected in a given S matrix."""
     for (i, j), out_elements in element_mappings.items():
-        for (k, l), has_pos_sign in out_elements.items():
-            sign = 1 if has_pos_sign else -1
-            assert s_matrix[i][j] == sign * s_matrix[k][l], "element mapping not applied correctly."
+        for (k, l), map_fn in out_elements.items():
+            assert s_matrix[i][j] == map_fn(s_matrix[k][l]), "mapping not applied correctly."
 
 
 def test_run_component_modeler_mappings(monkeypatch):
 
     element_mappings = {
         (("left_top", 0), ("right_top", 0)): {
-            (("left_bot", 0), ("right_bot", 0)): True,
+            (("left_bot", 0), ("right_bot", 0)): lambda x: -x,
         },
         (("left_top", 0), ("right_bot", 0)): {
-            (("left_bot", 0), ("right_top", 0)): False,
+            (("left_bot", 0), ("right_top", 0)): lambda x: x,
         },
     }
 
@@ -303,10 +302,12 @@ def test_mapping_exclusion(monkeypatch):
         for mode_index in range(port.mode_spec.num_modes):
             row_index = (port.name, mode_index)
             if row_index != EXCLUDE_INDEX:
-                element_mappings[(row_index, row_index)] = {(EXCLUDE_INDEX, row_index): True}
+                element_mappings[(row_index, row_index)] = {(EXCLUDE_INDEX, row_index): lambda x: x}
 
     # add the self-self coupling element to complete row
-    element_mappings[(("right_bot", 1), ("right_bot", 1))][(EXCLUDE_INDEX, EXCLUDE_INDEX)] = True
+    element_mappings[(("right_bot", 1), ("right_bot", 1))][
+        (EXCLUDE_INDEX, EXCLUDE_INDEX)
+    ] = lambda x: x
     modeler = make_component_modeler(element_mappings=element_mappings)
 
     run_sim_indices = modeler.matrix_indices_run_sim(
