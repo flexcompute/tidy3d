@@ -249,14 +249,21 @@ def run_emulated(simulation: Simulation, task_name: str = None) -> SimulationDat
         """make a random FieldData from a FieldMonitor."""
         field_cmps = {}
         coords = {"f": list(monitor.freqs)}
-        rmin, rmax = simulation.bounds
-        for dim, pos_min, pos_max in zip("xyz", rmin, rmax):
-            coords[dim] = np.linspace(pos_min, pos_max, 101)
+        grid = simulation.discretize(monitor, extend=True)
 
         for field_name in monitor.fields:
+            spatial_coords_dict = grid[field_name].dict()
+
+            for axis, dim in enumerate("xyz"):
+                if monitor.size[axis] == 0:
+                    coords[dim] = [monitor.center[axis]]
+                else:
+                    coords[dim] = np.array(spatial_coords_dict[dim])
+
             field_cmps[field_name] = make_data(
                 coords=coords, data_array_type=ScalarFieldDataArray, is_complex=True
             )
+
         return FieldData(monitor=monitor, **field_cmps)
 
     def make_mode_data(monitor: ModeMonitor) -> ModeData:
