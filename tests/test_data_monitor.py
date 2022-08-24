@@ -33,7 +33,7 @@ FLUX_TIME = make_flux_time_data_array()
 
 def make_field_data(symmetry: bool = True):
     return FieldData(
-        monitor=FIELD_MONITOR,
+        # monitor=FIELD_MONITOR,
         Ex=make_scalar_field_data_array("Ex", symmetry),
         Ey=make_scalar_field_data_array("Ey", symmetry),
         Ez=make_scalar_field_data_array("Ez", symmetry),
@@ -43,7 +43,7 @@ def make_field_data(symmetry: bool = True):
 
 def make_field_time_data(symmetry: bool = True):
     return FieldTimeData(
-        monitor=FIELD_TIME_MONITOR,
+        # monitor=FIELD_TIME_MONITOR,
         Ex=make_scalar_field_time_data_array("Ex", symmetry),
         Ey=make_scalar_field_time_data_array("Ey", symmetry),
         Ez=make_scalar_field_time_data_array("Ez", symmetry),
@@ -53,7 +53,7 @@ def make_field_time_data(symmetry: bool = True):
 
 def make_mode_solver_data():
     return ModeSolverData(
-        monitor=MODE_SOLVE_MONITOR,
+        # monitor=MODE_SOLVE_MONITOR,
         Ex=make_scalar_mode_field_data_array("Ex"),
         Ey=make_scalar_mode_field_data_array("Ey"),
         Ez=make_scalar_mode_field_data_array("Ez"),
@@ -66,7 +66,7 @@ def make_mode_solver_data():
 
 def make_permittivity_data(symmetry: bool = True):
     return PermittivityData(
-        monitor=PERMITTIVITY_MONITOR,
+        # monitor=PERMITTIVITY_MONITOR,
         eps_xx=make_scalar_field_data_array("Ex", symmetry),
         eps_yy=make_scalar_field_data_array("Ey", symmetry),
         eps_zz=make_scalar_field_data_array("Ez", symmetry),
@@ -74,15 +74,15 @@ def make_permittivity_data(symmetry: bool = True):
 
 
 def make_mode_data():
-    return ModeData(monitor=MODE_MONITOR, amps=AMPS.copy(), n_complex=N_COMPLEX.copy())
+    return ModeData(amps=AMPS.copy(), n_complex=N_COMPLEX.copy())
 
 
 def make_flux_data():
-    return FluxData(monitor=FLUX_MONITOR, flux=FLUX.copy())
+    return FluxData(flux=FLUX.copy())
 
 
 def make_flux_time_data():
-    return FluxTimeData(monitor=FLUX_TIME_MONITOR, flux=FLUX_TIME.copy())
+    return FluxTimeData(flux=FLUX_TIME.copy())
 
 
 """ Test them out """
@@ -175,21 +175,21 @@ def test_empty_array():
     coords = {"x": np.arange(10), "y": np.arange(10), "z": np.arange(10), "t": []}
     fields = {"Ex": td.ScalarFieldTimeDataArray(np.random.rand(10, 10, 10, 0), coords=coords)}
     monitor = td.FieldTimeMonitor(size=(1, 1, 1), fields=["Ex"], name="test")
-    field_data = td.FieldTimeData(monitor=monitor, **fields)
+    field_data = td.FieldTimeData( **fields)
 
 
 def test_empty_list():
     coords = {"x": np.arange(10), "y": np.arange(10), "z": np.arange(10), "t": []}
     fields = {"Ex": td.ScalarFieldTimeDataArray([], coords=coords)}
     monitor = td.FieldTimeMonitor(size=(1, 1, 1), fields=["Ex"], name="test")
-    field_data = td.FieldTimeData(monitor=monitor, **fields)
+    field_data = td.FieldTimeData(**fields)
 
 
 def test_empty_tuple():
     coords = {"x": np.arange(10), "y": np.arange(10), "z": np.arange(10), "t": []}
     fields = {"Ex": td.ScalarFieldTimeDataArray((), coords=coords)}
     monitor = td.FieldTimeMonitor(size=(1, 1, 1), fields=["Ex"], name="test")
-    field_data = td.FieldTimeData(monitor=monitor, **fields)
+    field_data = td.FieldTimeData(**fields)
 
 
 @clear_tmp
@@ -197,7 +197,7 @@ def test_empty_io():
     coords = {"x": np.arange(10), "y": np.arange(10), "z": np.arange(10), "t": []}
     fields = {"Ex": td.ScalarFieldTimeDataArray(np.random.rand(10, 10, 10, 0), coords=coords)}
     monitor = td.FieldTimeMonitor(size=(1, 1, 1), name="test", fields=["Ex"])
-    field_data = td.FieldTimeData(monitor=monitor, **fields)
+    field_data = td.FieldTimeData(**fields)
     field_data.to_file("tests/tmp/field_data.hdf5")
     field_data = td.FieldTimeData.from_file("tests/tmp/field_data.hdf5")
     assert field_data.Ex.size == 0

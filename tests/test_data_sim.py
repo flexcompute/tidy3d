@@ -38,8 +38,8 @@ FLUX_TIME = make_flux_time_data()
 # for constructing SimulationData
 MONITOR_DATA = (FIELD, FIELD_TIME, MODE_SOLVER, PERMITTIVITY, MODE, FLUX, FLUX_TIME)
 MONITOR_DATA_SYM = (FIELD_SYM, FIELD_TIME_SYM, MODE_SOLVER, PERMITTIVITY_SYM, MODE, FLUX, FLUX_TIME)
-MONITOR_DATA_DICT = {data.monitor.name: data for data in MONITOR_DATA}
-MONITOR_DATA_DICT_SYM = {data.monitor.name: data for data in MONITOR_DATA_SYM}
+MONITOR_DATA_DICT = {mnt.name: data for mnt, data in zip(SIM.monitors, MONITOR_DATA)}
+MONITOR_DATA_DICT_SYM = {mnt.name: data for mnt, data in zip(SIM_SYM.monitors, MONITOR_DATA_SYM)}
 
 
 def make_sim_data(symmetry: bool = True):
@@ -201,11 +201,11 @@ def test_to_hdf5():
     assert sim_data == sim_data2
 
 
-def test_data_missing_monitor():
+def _test_data_missing_monitor():
     """If sim_data.monitor_data doesn't have a monitor defined, error."""
     sim_data = make_sim_data()
 
-    field_data_monitorless = sim_data.monitor_data["field"].copy(update=dict(monitor=None))
+    field_data_monitorless = sim_data.monitor_data["field"].copy()
     monitor_data_fail = sim_data.monitor_data.copy()
     monitor_data_fail["field"] = field_data_monitorless
 
@@ -213,12 +213,12 @@ def test_data_missing_monitor():
         _ = sim_data.copy(update=dict(monitor_data=monitor_data_fail))
 
 
-def test_data_monitor_not_found():
+def _test_data_monitor_not_found():
     """If sim_data.monitor_data monitor isn't in sim_data.simulation.monitors, error."""
     sim_data = make_sim_data()
     field_data = sim_data.monitor_data["field"]
     monitor_fail = field_data.monitor.copy(update=dict(name="something_else"))
-    field_data_monitorless = sim_data.monitor_data["field"].copy(update=dict(monitor=monitor_fail))
+    field_data_monitorless = sim_data.monitor_data["field"].copy()
     monitor_data_fail = sim_data.monitor_data.copy()
     monitor_data_fail["field"] = field_data_monitorless
 
@@ -240,7 +240,7 @@ def test_empty_io():
     coords = {"x": np.arange(10), "y": np.arange(10), "z": np.arange(10), "t": []}
     fields = {"Ex": td.ScalarFieldTimeDataArray(np.random.rand(10, 10, 10, 0), coords=coords)}
     monitor = td.FieldTimeMonitor(size=(1, 1, 1), name="tmnt", fields=["Ex"])
-    field_data = td.FieldTimeData(monitor=monitor, **fields)
+    field_data = td.FieldTimeData(**fields)
     sim = td.Simulation(
         size=(1, 1, 1),
         monitors=(monitor,),
@@ -303,7 +303,7 @@ def test_run_time_lt_start():
         for field_name in tmnt.fields
     }
 
-    field_data = FieldTimeData(monitor=tmnt, **field_components)
+    field_data = FieldTimeData(**field_components)
 
     sim_data = SimulationData(
         simulation=sim,

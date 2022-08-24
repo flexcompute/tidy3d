@@ -8,8 +8,8 @@ from .monitor_data import FieldData, FieldTimeData, PermittivityData
 from .monitor_data import FluxData, FluxTimeData
 from .monitor_data import ModeData, ModeSolverData
 
-from .monitor_data_n2f import AbstractNear2FarData
-from .monitor_data_n2f import Near2FarAngleData, Near2FarCartesianData, Near2FarKSpaceData
-from .near2far import Near2FarSurface, RadiationVectors
+# from .monitor_data_n2f import AbstractNear2FarData
+# from .monitor_data_n2f import Near2FarAngleData, Near2FarCartesianData, Near2FarKSpaceData
+# from .near2far import Near2FarSurface, RadiationVectors
 
-from .sim_data import DATA_TYPE_MAP
+# from .sim_data import DATA_TYPE_MAP

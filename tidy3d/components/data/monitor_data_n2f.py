@@ -6,7 +6,7 @@ import xarray as xr
 import numpy as np
 import pydantic as pd
 
-from ..monitor import Near2FarAngleMonitor, Near2FarCartesianMonitor, Near2FarKSpaceMonitor
+# from ..monitor import Near2FarAngleMonitor, Near2FarCartesianMonitor, Near2FarKSpaceMonitor
 from ..medium import Medium
 from ..validators import enforce_monitor_fields_present
 from ...log import SetupError
@@ -20,7 +20,7 @@ from .data_array import Near2FarAngleDataArray, Near2FarCartesianDataArray, Near
 class AbstractNear2FarData(MonitorData):
     """Collection of radiation vectors in the frequency domain."""
 
-    monitor: Union[Near2FarAngleMonitor, Near2FarCartesianMonitor, Near2FarKSpaceMonitor]
+    # monitor: Union[Near2FarAngleMonitor, Near2FarCartesianMonitor, Near2FarKSpaceMonitor]
 
     @property
     def field_components(self) -> Dict[str, DataArray]:
@@ -192,7 +192,7 @@ class Near2FarAngleData(AbstractNear2FarData):
     ...     )
     """
 
-    monitor: Near2FarAngleMonitor
+    # monitor: Near2FarAngleMonitor
 
     Ntheta: Near2FarAngleDataArray = pd.Field(
         None,
@@ -534,7 +534,7 @@ class Near2FarKSpaceData(AbstractNear2FarData):
     ...     )
     """
 
-    monitor: Near2FarKSpaceMonitor
+    # monitor: Near2FarKSpaceMonitor
 
     Ntheta: Near2FarKSpaceDataArray = pd.Field(
         None,

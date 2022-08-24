@@ -10,8 +10,8 @@ from ..base import TYPE_TAG_STR, Tidy3dBaseModel
 from ..types import Axis, Coordinate, Symmetry
 
 from ..validators import enforce_monitor_fields_present
-from ..monitor import MonitorType, FieldMonitor, FieldTimeMonitor, ModeSolverMonitor
-from ..monitor import ModeMonitor, FluxMonitor, FluxTimeMonitor, PermittivityMonitor
+# from ..monitor import MonitorType, FieldMonitor, FieldTimeMonitor, ModeSolverMonitor
+# from ..monitor import ModeMonitor, FluxMonitor, FluxTimeMonitor, PermittivityMonitor
 from .data_array import ScalarFieldDataArray, ScalarFieldTimeDataArray, ScalarModeFieldDataArray
 from .data_array import FluxTimeDataArray, FluxDataArray, ModeIndexDataArray, ModeAmpsDataArray
 from .data_array import DataArray
@@ -21,12 +21,12 @@ from ...log import DataError
 class MonitorData(Tidy3dBaseModel, ABC):
     """Abstract base class of objects that store data pertaining to a single :class:`.monitor`."""
 
-    monitor: MonitorType = pd.Field(
-        None,
-        title="Monitor",
-        description="Monitor associated with the data.",
-        descriminator=TYPE_TAG_STR,
-    )
+    # monitor: str = pd.Field(
+    #     None,
+    #     title="Monitor",
+    #     description="Monitor associated with the data.",
+    #     descriminator=TYPE_TAG_STR,
+    # )
 
     # pylint:disable=unused-argument
     def apply_symmetry(
@@ -62,7 +62,7 @@ class MonitorData(Tidy3dBaseModel, ABC):
 class AbstractFieldData(MonitorData, ABC):
     """Collection of scalar fields with some Symmetry properties."""
 
-    monitor: Union[FieldMonitor, FieldTimeMonitor, PermittivityMonitor, ModeSolverMonitor] = None
+    # monitor: Union[FieldMonitor, FieldTimeMonitor, PermittivityMonitor, ModeSolverMonitor] = None
 
     @property
     @abstractmethod
@@ -255,7 +255,7 @@ class FieldData(ElectromagneticFieldData):
     >>> data = FieldData(monitor=monitor, Ex=scalar_field, Hz=scalar_field)
     """
 
-    monitor: FieldMonitor = None
+    # monitor: FieldMonitor = None
 
     Ex: ScalarFieldDataArray = pd.Field(
         None,
@@ -315,7 +315,7 @@ class FieldTimeData(ElectromagneticFieldData):
     >>> data = FieldTimeData(monitor=monitor, Ex=scalar_field, Hz=scalar_field)
     """
 
-    monitor: FieldTimeMonitor = None
+    # monitor: FieldTimeMonitor = None
 
     Ex: ScalarFieldTimeDataArray = pd.Field(
         None,
@@ -384,7 +384,7 @@ class ModeSolverData(ElectromagneticFieldData):
     ... )
     """
 
-    monitor: ModeSolverMonitor = None
+    # monitor: ModeSolverMonitor = None
 
     Ex: ScalarModeFieldDataArray = pd.Field(
         ...,
@@ -472,7 +472,7 @@ class PermittivityData(AbstractFieldData):
     >>> data = PermittivityData(monitor=monitor, eps_xx=sclr_fld, eps_yy=sclr_fld, eps_zz=sclr_fld)
     """
 
-    monitor: PermittivityMonitor = None
+    # monitor: PermittivityMonitor = None
 
     @property
     def field_components(self) -> Dict[str, ScalarFieldDataArray]:
@@ -528,7 +528,7 @@ class ModeData(MonitorData):
     >>> data = ModeData(monitor=monitor, amps=amp_data, n_complex=index_data)
     """
 
-    monitor: ModeMonitor
+    # monitor: ModeMonitor
 
     amps: ModeAmpsDataArray = pd.Field(
         ..., title="Amplitudes", description="Complex-valued amplitudes associated with the mode."
@@ -570,7 +570,7 @@ class FluxData(MonitorData):
     >>> data = FluxData(monitor=monitor, flux=flux_data)
     """
 
-    monitor: FluxMonitor = None
+    # monitor: FluxMonitor = None
     flux: FluxDataArray = pd.Field(
         ...,
         title="Flux",
@@ -596,7 +596,7 @@ class FluxTimeData(MonitorData):
     >>> data = FluxTimeData(monitor=monitor, flux=flux_data)
     """
 
-    monitor: FluxTimeMonitor = None
+    # monitor: FluxTimeMonitor = None
     flux: FluxTimeDataArray = pd.Field(
         ..., title="Flux", description="Flux through the monitor surface as a function of time."
     )

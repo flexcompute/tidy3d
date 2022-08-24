@@ -45,7 +45,7 @@ from .components import AbstractNear2FarData
 from .components import Near2FarAngleData, Near2FarCartesianData, Near2FarKSpaceData
 from .components import Near2FarSurface, RadiationVectors
 from .components import SimulationData
-from .components import DATA_TYPE_MAP
+# from .components import DATA_TYPE_MAP
 
 # boundary
 from .components import BoundarySpec, Boundary, BoundaryEdge, BoundaryEdgeType

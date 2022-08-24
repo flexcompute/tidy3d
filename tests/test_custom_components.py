@@ -30,8 +30,8 @@ def make_custom_field_source():
     for field in "EH":
         for component in "xyz":
             field_components[field + component] = make_scalar_data()
-    monitor = FieldMonitor(size=SIZE, freqs=freqs, name="test")
-    field_data = FieldData(monitor=monitor, **field_components)
+    # monitor = FieldMonitor(size=SIZE, freqs=freqs, name="test")
+    field_data = FieldData(**field_components)
     return CustomFieldSource(size=SIZE, source_time=ST, field_data=field_data)
 
 
@@ -62,9 +62,9 @@ def test_medium_components():
 def test_tangential_validator():
     """Test that it errors if no tangential field defined."""
     field_data = FIELD_SRC.field_data
-    monitor_normal = field_data.monitor.copy(update=dict(fields=["Ey", "Hy"]))
+    # monitor_normal = field_data.monitor.copy(update=dict(fields=["Ey", "Hy"]))
     field_data = field_data.copy(
-        update=dict(monitor=monitor_normal, Ex=None, Ez=None, Hx=None, Hz=None)
+        update=dict(Ex=None, Ez=None, Hx=None, Hz=None)
     )
     with pytest.raises(SetupError):
         field_source_no_tang = CustomFieldSource(size=SIZE, source_time=ST, field_data=field_data)
