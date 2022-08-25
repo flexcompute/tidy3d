@@ -197,10 +197,6 @@ class PlanarMonitor(Monitor, ABC):
     _plane_validator = assert_plane()
 
 
-class AbstractFluxMonitor(PlanarMonitor, ABC):
-    """:class:`Monitor` that records flux through a plane."""
-
-
 class AbstractModeMonitor(PlanarMonitor, FreqMonitor):
     """:class:`Monitor` that records mode-related data."""
 
@@ -311,8 +307,70 @@ class PermittivityMonitor(FreqMonitor):
         return BYTES_COMPLEX * num_cells * len(self.freqs) * 3
 
 
+class SurfaceIntegrationMonitor(Monitor, ABC):
+    """Abstract class for monitors that perform surface integrals during the solver run, as in
+    flux and near to far transformations."""
+
+    normal_dir: Direction = pydantic.Field(
+        None,
+        title="Normal vector orientation",
+        description="Direction of the surface monitor's normal vector w.r.t. "
+        "the positive x, y or z unit vectors. Must be one of ``'+'`` or ``'-'``. "
+        "Applies to surface monitors only, and defaults to ``'+'`` if not provided.",
+    )
+
+    exclude_surfaces: Tuple[Literal["x-", "x+", "y-", "y+", "z-", "z+"]] = pydantic.Field(
+        None,
+        title="Excluded surfaces",
+        description="Surfaces to exclude in the integration, if a volume monitor.",
+    )
+
+    @pydantic.root_validator(skip_on_failure=True)
+    def normal_dir_exists_for_surface(cls, values):
+        """If the monitor is a surface, set default ``normal_dir`` if not provided.
+        If the monitor is a box, warn that ``normal_dir`` is relevant only for surfaces."""
+        normal_dir = values.get("normal_dir")
+        name = values.get("name")
+        size = values.get("size")
+        if size.count(0.0) != 1:
+            if normal_dir is not None:
+                log.warning(
+                    "The ``normal_dir`` field is relevant only for surface monitors "
+                    f"and will be ignored for monitor {name}, which is a box."
+                )
+        else:
+            if normal_dir is None:
+                values["normal_dir"] = "+"
+        return values
+
+    @pydantic.root_validator(skip_on_failure=True)
+    def check_excluded_surfaces(cls, values):
+        """Error if ``exclude_surfaces`` is provided for a surface monitor."""
+        exclude_surfaces = values.get("exclude_surfaces")
+        if exclude_surfaces is None:
+            return values
+        name = values.get("name")
+        size = values.get("size")
+        if size.count(0.0) > 0:
+            raise SetupError(
+                f"Can't specify ``exclude_surfaces`` for surface monitor {name}; "
+                "valid for box monitors only."
+            )
+        return values
+
+
+class AbstractFluxMonitor(SurfaceIntegrationMonitor, ABC):
+    """:class:`Monitor` that records flux during the solver run."""
+
+
 class FluxMonitor(AbstractFluxMonitor, FreqMonitor):
-    """:class:`Monitor` that records power flux through a plane in the frequency domain.
+    """:class:`Monitor` that records power flux in the frequency domain.
+    If the monitor geometry is a 2D box, the total flux through this plane is returned, with a
+    positive sign corresponding to power flow in the positive direction along the axis normal to
+    the plane. If the geometry is a 3D box, the returned array has a ``surface`` coordinate, and
+    stores the flux through each of the six surfaces of the box. The sign convention in that case
+    is such that positive sign corresponds to power flowing outside of the box, such that
+    summing over the ``surface`` dimension results in the total out-going power.
 
     Example
     -------
@@ -321,6 +379,14 @@ class FluxMonitor(AbstractFluxMonitor, FreqMonitor):
     ...     size=(2,2,0),
     ...     freqs=[200e12, 210e12],
     ...     name='flux_monitor')
+
+    Note
+    ----
+    For a 2D plane, the flux is summed up over all Yee grid pixels that are touched by the plane,
+    rather than integrated over the exact span of the plane. For a 3D monitor, this is also the
+    case, but care is taken to not over- or under-count the power at the edges. Because of this,
+    there can be small discrepancies between using a 3D FluxMonitor and manually placing six
+    2D monitors at the surface locations.
     """
 
     def storage_size(self, num_cells: int, tmesh: ArrayLike[float, 1]) -> int:
@@ -330,7 +396,13 @@ class FluxMonitor(AbstractFluxMonitor, FreqMonitor):
 
 
 class FluxTimeMonitor(AbstractFluxMonitor, TimeMonitor):
-    """:class:`Monitor` that records power flux through a plane in the time domain.
+    """:class:`Monitor` that records power flux in the time domain.
+    If the monitor geometry is a 2D box, the total flux through this plane is returned, with a
+    positive sign corresponding to power flow in the positive direction along the axis normal to
+    the plane. If the geometry is a 3D box, the returned array has a ``surface`` coordinate, and
+    stores the flux through each of the six surfaces of the box. The sign convention in that case
+    is such that positive sign corresponds to power flowing outside of the box, such that
+    summing over the ``surface`` dimension results in the total out-going power.
 
     Example
     -------
@@ -341,6 +413,14 @@ class FluxTimeMonitor(AbstractFluxMonitor, TimeMonitor):
     ...     stop=5e-13,
     ...     interval=2,
     ...     name='flux_vs_time')
+
+    Note
+    ----
+    For a 2D plane, the flux is summed up over all Yee grid pixels that are touched by the plane,
+    rather than integrated over the exact span of the plane. For a 3D monitor, this is also the
+    case, but care is taken to not over- or under-count the power at the edges. Because of this,
+    there can be small discrepancies between using a 3D FluxMonitor and manually placing six
+    2D monitors at the surface locations.
     """
 
     def storage_size(self, num_cells: int, tmesh: ArrayLike[float, 1]) -> int:
@@ -390,7 +470,7 @@ class ModeSolverMonitor(AbstractModeMonitor):
         return 6 * BYTES_COMPLEX * num_cells * len(self.freqs) * self.mode_spec.num_modes
 
 
-class AbstractNear2FarMonitor(FreqMonitor):
+class AbstractNear2FarMonitor(SurfaceIntegrationMonitor, FreqMonitor):
     """:class:`Monitor` class that samples electromagnetic near fields in the frequency domain
     and invokes the computation of far fields.
     """
@@ -401,14 +481,6 @@ class AbstractNear2FarMonitor(FreqMonitor):
         description="Collection of radiation vector components to store in the monitor.",
     )
 
-    normal_dir: Direction = pydantic.Field(
-        None,
-        title="Normal vector orientation",
-        description="Direction of the surface monitor's normal vector w.r.t. "
-        "the positive x, y or z unit vectors. Must be one of ``+`` or ``-``. "
-        "Applies to surface monitors only.",
-    )
-
     custom_origin: Coordinate = pydantic.Field(
         None,
         title="Local origin",
@@ -417,51 +489,12 @@ class AbstractNear2FarMonitor(FreqMonitor):
         units=MICROMETER,
     )
 
-    exclude_surfaces: Tuple[Literal["x-", "x+", "y-", "y+", "z-", "z+"]] = pydantic.Field(
-        None,
-        title="Excluded surfaces",
-        description="Surfaces to exclude during the near-to-far projection.",
-    )
-
     medium: Medium = pydantic.Field(
         Medium(permittivity=1),
         title="Background medium",
         description="Background medium in which to radiate near fields to far fields. "
         "If not provided, uses free space.",
     )
-
-    @pydantic.root_validator(skip_on_failure=True)
-    def normal_dir_exists_for_surface(cls, values):
-        """If the monitor is a surface, set default ``normal_dir`` if not provided.
-        If the monitor is a box, warn that ``normal_dir`` is relevant only for surfaces."""
-        normal_dir = values.get("normal_dir")
-        name = values.get("name")
-        size = values.get("size")
-        if size.count(0.0) != 1:
-            if normal_dir is not None:
-                log.warning(
-                    "The ``normal_dir`` field is relevant only for surface monitors "
-                    f"and will be ignored for monitor {name}, which is a box."
-                )
-        else:
-            if normal_dir is None:
-                raise SetupError(f"Must specify ``normal_dir`` for surface monitor {name}.")
-        return values
-
-    @pydantic.root_validator(skip_on_failure=True)
-    def check_excluded_surfaces(cls, values):
-        """Error if ``exclude_surfaces`` is provided for a surface monitor."""
-        exclude_surfaces = values.get("exclude_surfaces")
-        if exclude_surfaces is None:
-            return values
-        name = values.get("name")
-        size = values.get("size")
-        if size.count(0.0) > 0:
-            raise SetupError(
-                f"Can't specify ``exclude_surfaces`` for surface monitor {name}; "
-                "valid for box monitors only."
-            )
-        return values
 
     @property
     def axis(self) -> Axis:
