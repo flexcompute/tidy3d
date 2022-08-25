@@ -511,6 +511,52 @@ class Geometry(Tidy3dBaseModel, ABC):
 
         return points_new
 
+    def volume(self, bounds: Bound = None):
+        """Returns object's volume with optional bounds.
+
+        Parameters
+        ----------
+        bounds : Tuple[Tuple[float, float, float], Tuple[float, float, float]] = None
+            Min and max bounds packaged as ``(minx, miny, minz), (maxx, maxy, maxz)``.
+
+        Returns
+        -------
+        float
+            Volume.
+        """
+
+        if not bounds:
+            bounds = self.bounds
+
+        return self._volume(bounds)
+
+    @abstractmethod
+    def _volume(self, bounds: Bound) -> float:
+        """Returns object's volume given bounds."""
+
+    def surface_area(self, bounds: Bound = None):
+        """Returns object's surface area with optional bounds.
+
+        Parameters
+        ----------
+        bounds : Tuple[Tuple[float, float, float], Tuple[float, float, float]] = None
+            Min and max bounds packaged as ``(minx, miny, minz), (maxx, maxy, maxz)``.
+
+        Returns
+        -------
+        float
+            Surface area.
+        """
+
+        if not bounds:
+            bounds = self.bounds
+
+        return self._surface_area(bounds)
+
+    @abstractmethod
+    def _surface_area(self, bounds: Bound) -> float:
+        """Returns object's surface area given bounds."""
+
 
 """ Abstract subclasses """
 
@@ -1019,6 +1065,47 @@ class Box(Centered):
 
         return arrow_length, arrow_width
 
+    def _volume(self, bounds: Bound) -> float:
+        """Returns object's volume given bounds."""
+
+        volume = 1
+
+        for axis in range(3):
+
+            min_bound = max(self.bounds[0][axis], bounds[0][axis])
+            max_bound = min(self.bounds[1][axis], bounds[1][axis])
+
+            volume *= max_bound - min_bound
+
+        return volume
+
+    def _surface_area(self, bounds: Bound) -> float:
+        """Returns object's surface area given bounds."""
+
+        min_bounds = list(self.bounds[0])
+        max_bounds = list(self.bounds[1])
+
+        in_bounds_factor = [2, 2, 2]
+        length = [0, 0, 0]
+
+        for axis in (0, 1, 2):
+
+            if min_bounds[axis] < bounds[0][axis]:
+                min_bounds[axis] = bounds[0][axis]
+                in_bounds_factor[axis] -= 1
+
+            if max_bounds[axis] > bounds[1][axis]:
+                max_bounds[axis] = bounds[1][axis]
+                in_bounds_factor[axis] -= 1
+
+            length[axis] = max_bounds[axis] - min_bounds[axis]
+
+        return (
+            length[0] * length[1] * in_bounds_factor[2]
+            + length[1] * length[2] * in_bounds_factor[0]
+            + length[2] * length[0] * in_bounds_factor[1]
+        )
+
 
 class Sphere(Centered, Circular):
     """Spherical geometry.
@@ -1089,6 +1176,34 @@ class Sphere(Centered, Circular):
         coord_min = tuple(c - self.radius for c in self.center)
         coord_max = tuple(c + self.radius for c in self.center)
         return (coord_min, coord_max)
+
+    def _volume(self, bounds: Bound) -> float:
+        """Returns object's volume given bounds."""
+
+        volume = 4.0 / 3.0 * np.pi * self.radius**3
+
+        # a very loose upper bound on how much of sphere is in bounds
+        for axis in range(3):
+
+            if self.center[axis] <= bounds[0][axis] or self.center[axis] >= bounds[1][axis]:
+
+                volume *= 0.5
+
+        return volume
+
+    def _surface_area(self, bounds: Bound) -> float:
+        """Returns object's surface area given bounds."""
+
+        area = 4.0 * np.pi * self.radius**2
+
+        # a very loose upper bound on how much of sphere is in bounds
+        for axis in range(3):
+
+            if self.center[axis] <= bounds[0][axis] or self.center[axis] >= bounds[1][axis]:
+
+                area *= 0.5
+
+        return area
 
 
 class Cylinder(Centered, Circular, Planar):
@@ -1205,6 +1320,58 @@ class Cylinder(Centered, Circular, Planar):
         coord_min[self.axis] = self.center[self.axis] - self.length / 2.0
         coord_max[self.axis] = self.center[self.axis] + self.length / 2.0
         return (tuple(coord_min), tuple(coord_max))
+
+    def _volume(self, bounds: Bound) -> float:
+        """Returns object's volume given bounds."""
+
+        coord_min = max(self.bounds[0][self.axis], bounds[0][self.axis])
+        coord_max = min(self.bounds[1][self.axis], bounds[1][self.axis])
+
+        length = coord_max - coord_min
+
+        volume = np.pi * self.radius**2 * length
+
+        # a very loose upper bound on how much of the cylinder is in bounds
+        for axis in range(3):
+
+            if axis != self.axis:
+                if self.center[axis] <= bounds[0][axis] or self.center[axis] >= bounds[1][axis]:
+
+                    volume *= 0.5
+
+        return volume
+
+    def _surface_area(self, bounds: Bound) -> float:
+        """Returns object's surface area given bounds."""
+
+        area = 0
+
+        coord_min = self.bounds[0][self.axis]
+        coord_max = self.bounds[1][self.axis]
+
+        if coord_min < bounds[0][self.axis]:
+            coord_min = bounds[0][self.axis]
+        else:
+            area += np.pi * self.radius**2
+
+        if coord_max > bounds[1][self.axis]:
+            coord_max = bounds[1][self.axis]
+        else:
+            area += np.pi * self.radius**2
+
+        length = coord_max - coord_min
+
+        area += 2.0 * np.pi * self.radius * length
+
+        # a very loose upper bound on how much of the cylinder is in bounds
+        for axis in range(3):
+
+            if axis != self.axis:
+                if self.center[axis] <= bounds[0][axis] or self.center[axis] >= bounds[1][axis]:
+
+                    area *= 0.5
+
+        return area
 
 
 class PolySlab(Planar):
@@ -2010,6 +2177,26 @@ class PolySlab(Planar):
         return np.sum(term1 - term2) * 0.5
 
     @staticmethod
+    def _perimeter(vertices: np.ndarray) -> float:
+        """Compute the polygon perimeter.
+
+        Parameters
+        ----------
+        vertices : np.ndarray
+            Shape (N, 2) defining the polygon vertices in the xy-plane.
+
+        Returns
+        -------
+        float
+            Polygon perimeter.
+        """
+        vert_shift = np.roll(vertices.copy(), axis=0, shift=-1)
+        dx = vertices[:, 0] - vert_shift[:, 0]
+        dy = vertices[:, 1] - vert_shift[:, 1]
+
+        return np.sum(np.sqrt(dx**2 + dy**2))
+
+    @staticmethod
     def _orient(vertices: np.ndarray) -> np.ndarray:
         """Return a CCW-oriented polygon.
 
@@ -2168,6 +2355,54 @@ class PolySlab(Planar):
 
         return np.swapaxes(vs_orig + shift_total, -2, -1), parallel_shift, (shift_x, shift_y)
 
+    def _volume(self, bounds: Bound) -> float:
+        """Returns object's volume given bounds."""
+
+        z_min, z_max = self.slab_bounds
+
+        z_min = max(z_min, bounds[0][self.axis])
+        z_max = min(z_max, bounds[1][self.axis])
+
+        length = z_max - z_min
+
+        top_area = abs(self._area(self.top_polygon))
+        base_area = abs(self._area(self.base_polygon))
+
+        # https://mathworld.wolfram.com/PyramidalFrustum.html
+        return 1.0 / 3.0 * length * (top_area + base_area + np.sqrt(top_area * base_area))
+
+    def _surface_area(self, bounds: Bound) -> float:
+        """Returns object's surface area given bounds."""
+
+        area = 0
+
+        top = self.top_polygon
+        base = self.base_polygon
+
+        top_area = abs(self._area(top))
+        base_area = abs(self._area(base))
+
+        top_perim = self._perimeter(top)
+        base_perim = self._perimeter(top)
+
+        z_min, z_max = self.slab_bounds
+
+        if z_min < bounds[0][self.axis]:
+            z_min = bounds[0][self.axis]
+        else:
+            area += base_area
+
+        if z_max > bounds[1][self.axis]:
+            z_max = bounds[1][self.axis]
+        else:
+            area += top_area
+
+        length = z_max - z_min
+
+        area += 0.5 * (top_perim + base_perim) * length
+
+        return area
+
 
 # types of geometry including just one Geometry object (exluding group)
 SingleGeometryType = Union[Box, Sphere, Cylinder, PolySlab]
@@ -2259,6 +2494,20 @@ class GeometryGroup(Geometry):
         individual_insides = (geometry.inside(x, y, z) for geometry in self.geometries)
 
         return functools.reduce(lambda a, b: a | b, individual_insides)
+
+    def _volume(self, bounds: Bound) -> float:
+        """Returns object's volume given bounds."""
+
+        individual_volumes = (geometry.volume(bounds) for geometry in self.geometries)
+
+        return np.sum(individual_volumes)
+
+    def _surface_area(self, bounds: Bound) -> float:
+        """Returns object's surface area given bounds."""
+
+        individual_areas = (geometry.surface_area(bounds) for geometry in self.geometries)
+
+        return np.sum(individual_areas)
 
 
 # geometries usable to define a structure
