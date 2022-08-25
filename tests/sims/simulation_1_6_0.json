@@ -471,7 +471,9 @@
                 1.0,
                 2.0,
                 3.0
-            ]
+            ],
+            "normal_dir": "+",
+            "exclude_surfaces": null
         },
         {
             "type": "FluxTimeMonitor",
@@ -488,7 +490,9 @@
             "name": "fluxtime",
             "start": 1e-12,
             "stop": null,
-            "interval": 3
+            "interval": 3,
+            "normal_dir": "+",
+            "exclude_surfaces": null
         },
         {
             "type": "ModeMonitor",
