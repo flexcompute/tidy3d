@@ -37,7 +37,7 @@ class AdvancedFitterParam(Tidy3dBaseModel):
         units=HERTZ,
     )
     bound_eps_inf: float = Field(
-        1.0,
+        10.0,
         title="Upper bound of epsilon at infinity frequency",
         description="Upper bound of epsilon at infinity frequency. It must be no less than 1.",
         ge=1,
