@@ -1,6 +1,7 @@
 """Storing tidy3d data at it's most fundamental level as xr.DataArray objects"""
-from typing import Dict
+from typing import Dict, Optional
 
+from pydantic.fields import ModelField
 import xarray as xr
 import numpy as np
 import h5py
@@ -108,9 +109,24 @@ class DataArray(xr.DataArray):
         return cls(value)
 
     @classmethod
-    def __modify_schema__(cls, field_schema):
-        """Sets the schema of ComplexNumber."""
-        field_schema.update(DataObject.schema())
+    def __modify_schema__(cls, field_schema, field: Optional[ModelField]):
+        """Sets the schema of DataArray object."""
+
+        schema = dict(
+            title="DataArray",
+            type="xr.DataArray",
+            properties=dict(
+                __slots__=dict(
+                    title="__slots__",
+                    type="Tuple[str, ...]",
+                ),
+            ),
+            required=["__slots__"],
+        )
+        field_schema.update(schema)
+
+        # if field:
+        #     import pdb; pdb.set_trace()
 
     def __eq__(self, other) -> bool:
         """Whether two data array objects are equal."""
