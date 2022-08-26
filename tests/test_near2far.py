@@ -2,6 +2,9 @@
 """
 import numpy as np
 import tidy3d as td
+import pytest
+
+from tidy3d.log import SetupError
 
 # Settings
 
@@ -31,6 +34,10 @@ def make_n2f_monitors(center, size, freqs):
     uxs = np.linspace(-0.3, 0.3, Nux)
     uys = np.linspace(-0.4, 0.4, Nuy)
 
+    exclude_surfaces = None
+    if size.count(0.0) == 0:
+        exclude_surfaces = ["x+", "y-"]
+
     n2f_angle_monitor = td.Near2FarAngleMonitor(
         center=center,
         size=size,
@@ -41,6 +48,7 @@ def make_n2f_monitors(center, size, freqs):
         theta=list(thetas),
         medium=MEDIUM,
         normal_dir="+",
+        exclude_surfaces=exclude_surfaces,
     )
 
     plane_axis = 0
@@ -56,6 +64,7 @@ def make_n2f_monitors(center, size, freqs):
         plane_distance=z,
         medium=MEDIUM,
         normal_dir="+",
+        exclude_surfaces=exclude_surfaces,
     )
 
     u_axis = 0
@@ -70,6 +79,7 @@ def make_n2f_monitors(center, size, freqs):
         u_axis=u_axis,
         medium=MEDIUM,
         normal_dir="+",
+        exclude_surfaces=exclude_surfaces,
     )
     return n2f_angle_monitor, n2f_cart_monitor, n2f_ksp_monitor
 
@@ -113,6 +123,20 @@ def test_n2f_monitors():
         boundary_spec=boundary_spec,
         medium=MEDIUM,
     )
+
+    # Make sure server-side n2f monitors raise an error in the presence of symmetry
+    with pytest.raises(SetupError):
+        sim = td.Simulation(
+            size=sim_size,
+            grid_spec=grid_spec,
+            structures=[],
+            sources=[source],
+            monitors=all_monitors,
+            run_time=run_time,
+            boundary_spec=boundary_spec,
+            medium=MEDIUM,
+            symmetry=[1, 0, 0],
+        )
 
 
 def test_n2f_data():
