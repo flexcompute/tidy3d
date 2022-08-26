@@ -1616,6 +1616,20 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         n_max, _ = AbstractMedium.eps_complex_to_nk(eps_max)
         return wvl_min / n_max
 
+    @cached_property
+    def complex_fields(self) -> bool:
+        """Whether complex fields are used in the simulation. Currently this only happens when there
+        are Bloch boundaries.
+
+        Returns
+        -------
+        bool
+            Whether the time-stepping fields are real or complex.
+        """
+        if any(isinstance(boundary[0], BlochBoundary) for boundary in self.boundary_spec.to_list):
+            return True
+        return False
+
     def min_sym_box(self, box: Box) -> Box:  # pylint:disable=too-many-locals
         """Compute the smallest Box restricted to the first quadrant in the presence of symmetries
         that fully covers the original Box when symmetries are applied.
