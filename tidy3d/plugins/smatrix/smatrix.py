@@ -1,6 +1,6 @@
 """Tools for generating an S matrix automatically from tidy3d simulation and port definitions."""
 
-from typing import List, Tuple, Dict, Optional, Callable
+from typing import List, Tuple, Optional, Callable, Dict
 
 import pydantic as pd
 import numpy as np
@@ -75,15 +75,15 @@ class ComponentModeler(Tidy3dBaseModel):
         title="Folder Name",
         description="Name of the folder for the tasks on web.",
     )
-    element_mappings: Dict[Element, Dict[Element, Callable[[complex], complex]]] = pd.Field(
-        {},
+    element_mappings: Tuple[Tuple[Element, Element, float], ...] = pd.Field(
+        (),
         title="Element Mappings",
         description="Mapping between elements of the scattering matrix, "
         "as specified by pairs of ``(port name, mode index)`` matrix indices. "
-        "``element_mappings[element1][element2]`` returns a function ``f`` that sets the matrix "
-        "element2 as ``f(element1)``. "
-        "Each ``element`` is defined by a pair of indices ``((str, int), (str, int))`` relating "
-        "the source port name and mode index to the monitor port name and mode index.",
+        "Each item of ``element_mappings`` is a tuple of ``(element1, element2, c)``, where "
+        "the scattering matrix ``Smatrix[element2]`` is set equal to ``c * Smatrix[element1]``."
+        "If all elements of a given row of the scattering matrix are defined by "
+        " ``element_mappings``, the simulation corresponding to this row is skipped automatically.",
     )
     run_only: Optional[Tuple[MatrixIndex, ...]] = pd.Field(
         None,
@@ -182,10 +182,7 @@ class ComponentModeler(Tidy3dBaseModel):
             return cls.matrix_indices_source(ports=ports, run_only=run_only)
 
         # all the (i, j) pairs in `S_ij` that are tagged as covered by `element_mappings`
-        elements_determined_by_map = []
-        for _, mapping_out in element_mappings.items():
-            for element_out, _ in mapping_out.items():
-                elements_determined_by_map.append(element_out)
+        elements_determined_by_map = [element_out for (_, element_out, _) in element_mappings]
 
         # loop through rows of the full s matrix and record rows that still need running.
         source_indices_needed = []
@@ -361,11 +358,10 @@ class ComponentModeler(Tidy3dBaseModel):
                 s_matrix[row_index][col_index] = complex(amp.data) / complex(source_norm)
 
         # element can be determined by user-defined mapping
-        for (row_in, col_in), mapping_out in self.element_mappings.items():
-            for (row_out, col_out), map_fn in mapping_out.items():
-                if row_out not in s_matrix:
-                    s_matrix[row_out] = {}
-                s_matrix[row_out][col_out] = map_fn(s_matrix[row_in][col_in])
+        for ((row_in, col_in), (row_out, col_out), mult_by) in self.element_mappings:
+            if row_out not in s_matrix:
+                s_matrix[row_out] = {}
+            s_matrix[row_out][col_out] = mult_by * s_matrix[row_in][col_in]
 
         return s_matrix
 

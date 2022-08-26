@@ -267,22 +267,16 @@ def test_component_modeler_run_only(monkeypatch):
 
 def _test_mappings(element_mappings, s_matrix):
     """Makes sure the mappings are reflected in a given S matrix."""
-    for (i, j), out_elements in element_mappings.items():
-        for (k, l), map_fn in out_elements.items():
-            assert s_matrix[i][j] == map_fn(s_matrix[k][l]), "mapping not applied correctly."
+    for (i, j), (k, l), mult_by in element_mappings:
+        assert s_matrix[i][j] == mult_by * s_matrix[k][l], "mapping not applied correctly."
 
 
 def test_run_component_modeler_mappings(monkeypatch):
 
-    element_mappings = {
-        (("left_top", 0), ("right_top", 0)): {
-            (("left_bot", 0), ("right_bot", 0)): lambda x: -x,
-        },
-        (("left_top", 0), ("right_bot", 0)): {
-            (("left_bot", 0), ("right_top", 0)): lambda x: x,
-        },
-    }
-
+    element_mappings = (
+        ((("left_top", 0), ("right_top", 0)), (("left_bot", 0), ("right_bot", 0)), -1),
+        ((("left_top", 0), ("right_bot", 0)), (("left_bot", 0), ("right_top", 0)), +1),
+    )
     modeler = make_component_modeler(element_mappings=element_mappings)
     s_matrix = run_component_modeler(monkeypatch, modeler)
     _test_mappings(element_mappings, s_matrix)
@@ -295,19 +289,19 @@ def test_mapping_exclusion(monkeypatch):
     ports = make_ports()
 
     EXCLUDE_INDEX = ("right_bot", 0)
-    element_mappings = {}
+    element_mappings = []
 
     # add a mapping to each element in the row of EXCLUDE_INDEX
     for port in ports:
         for mode_index in range(port.mode_spec.num_modes):
             row_index = (port.name, mode_index)
             if row_index != EXCLUDE_INDEX:
-                element_mappings[(row_index, row_index)] = {(EXCLUDE_INDEX, row_index): lambda x: x}
+                mapping = ((row_index, row_index), (EXCLUDE_INDEX, row_index), +1)
+                element_mappings.append(mapping)
 
     # add the self-self coupling element to complete row
-    element_mappings[(("right_bot", 1), ("right_bot", 1))][
-        (EXCLUDE_INDEX, EXCLUDE_INDEX)
-    ] = lambda x: x
+    mapping = ((("right_bot", 1), ("right_bot", 1)), (EXCLUDE_INDEX, EXCLUDE_INDEX), +1)
+    element_mappings.append(mapping)
     modeler = make_component_modeler(element_mappings=element_mappings)
 
     run_sim_indices = modeler.matrix_indices_run_sim(
