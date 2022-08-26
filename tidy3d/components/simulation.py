@@ -1630,6 +1630,24 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
             return True
         return False
 
+    @cached_property
+    def nyquist_step(self) -> int:
+        """Maximum number of discrete time steps to keep sampling below Nyquist limit.
+
+        Returns
+        -------
+        int
+            The largest ``N`` such that ``N * self.dt`` is below the Nyquist limit.
+        """
+        freq_range = self.frequency_range
+        if freq_range[1] > 0:
+            nyquist_step = int(1 / (2 * freq_range[1]) / self.dt) - 1
+            nyquist_step = max(1, nyquist_step)
+        else:
+            nyquist_step = 1
+
+        return nyquist_step
+
     def min_sym_box(self, box: Box) -> Box:  # pylint:disable=too-many-locals
         """Compute the smallest Box restricted to the first quadrant in the presence of symmetries
         that fully covers the original Box when symmetries are applied.
