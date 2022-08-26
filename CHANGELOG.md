@@ -7,6 +7,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+## [1.6.0] - 2022-8-29
+
+### Added
+- New classes of near-to-far monitors for server-side computation of the near field to far field projection.
+- Option to exlude `DataArray` Fields from a `Tidy3dBaseModel` json.
+- Option to save/load all models to/from `hdf5` format.
+- Option to load base models without validation.
+- Support negative sidewall angle for slanted `PolySlab`-s.
+- Option to specify only a subset of the S-matrix to compute in the S-matrix plugin, as well as to provide mapping between elements (due to symmetries).
+- More Lorentz-Drude material models to the material database.
+
+### Fixed
+- Raise a more meaningful error if login failed after `MAX_ATTEMPTS`.
+- Environment login credentials set to `""` are now ignored and credentials stored to file are still looked for.
+- Improved subpixel coefficients computation around sharp edges, cornes, and three-structure intersections.
+
+### Changed
+- Major refactor of the way data structures are used internally.
+- `ModeFieldMonitor` -> `ModeSolerMonitor` with associated `ModeSolverData`. `ModeSolverData` is now also stored internally in `ModeSolver`, 
+ and the `plot_field` method can be called directly from `ModeSolver` instead of `ModeSolverData`.
+- Field data for monitors that have a zero size along a given dimension is now interpolated to the exact `monitor.center` along that dimension.
+- Removed `nlopt` from requirements, user-side material fitting now uses `scipy`.
+- New Field `normalize_index` in `Simulation` - used to be input parameter when loading simulation data. A given `SimulationData` 
+ can still be renormalized to a different source later on using the new `SimulationData.renormalize`.
+- `FluxMonitor` and `FluxTimeMonitor`-s can now have a 3D box geometry, in which case the flux going out of all box surfaces is computed (optionally, 
+ some surfaces can be excluded).
+- Reduced the minimum flex unit cost to run a simulation to `0.1`.
+- Reduced the premium cost for dispersive materials in typical cases.
+- Added a cost for monitors that should be negligible in typical cases but affects large monitors that significantly slow down the simulation.
+
 ## [1.5.0] - 2022-7-21
 
 ### Fixed
