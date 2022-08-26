@@ -71,29 +71,27 @@ class DataPlotly(UIComponent, ABC):
         """Load a PlotlyData UI component from the monitor name and its data."""
 
         # maps the supplied ``monitor_data`` argument to the corresponding plotly wrapper.
-        data_plotly_map = {
-            FluxData: FluxDataPlotly,
-            FluxTimeData: FluxTimeDataPlotly,
-            FieldData: FieldDataPlotly,
-            FieldTimeData: FieldTimeDataPlotly,
-            ModeSolverData: ModeSolverDataPlotly,
-            ModeData: ModeDataPlotly,
-        }
+        data_plotly_map = (
+            (FluxData, FluxDataPlotly),
+            (FluxTimeData, FluxTimeDataPlotly),
+            (FieldData, FieldDataPlotly),
+            (FieldTimeData, FieldTimeDataPlotly),
+            (ModeSolverData, ModeSolverDataPlotly),
+            (ModeData, ModeDataPlotly),
+        )
 
         # get the type of the supplied ``monitor_data``.
         monitor_data_type = type(monitor_data)
 
-        # try to grab the right plotly wrapper and complain (or skip) if not found.
-        plotly_data_type = data_plotly_map.get(monitor_data_type)
-        if not plotly_data_type:
-            log.warning(
-                f"could not find a plotly wrapper for monitor {monitor_name}"
-                f"of type {monitor_data_type.__name__}"
-            )
-            return None
+        for mnt_data, mnt_data_plotly in data_plotly_map:
+            if isinstance(monitor_data, mnt_data):
+                return mnt_data_plotly(data=monitor_data, monitor_name=monitor_name, **kwargs)
 
-        # return the right component
-        return plotly_data_type(data=monitor_data, monitor_name=monitor_name, **kwargs)
+        log.warning(
+            f"could not find a plotly wrapper for monitor {monitor_name}"
+            f"of type {monitor_data_type.__name__}"
+        )
+        return None
 
 
 class AbstractFluxDataPlotly(DataPlotly, ABC):

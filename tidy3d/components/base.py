@@ -63,7 +63,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         json_encoders = {
             np.ndarray: lambda x: tuple(x.tolist()),
             complex: lambda x: ComplexNumber(real=x.real, imag=x.imag),
-            xr.DataArray: lambda x: x.to_dict(),
+            xr.DataArray: lambda x: x.to_dict(),  # pylint:disable=unhashable-member
         }
         frozen = True
         allow_mutation = False
