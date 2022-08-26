@@ -1,13 +1,11 @@
 """Storing tidy3d data at it's most fundamental level as xr.DataArray objects"""
-from typing import Dict, Optional
+from typing import Dict
 
-from pydantic.fields import ModelField
 import xarray as xr
 import numpy as np
 import h5py
 
 from ..base import Tidy3dBaseModel
-from ..types import DataObject
 from ...constants import HERTZ, SECOND, MICROMETER, RADIAN
 from ...log import DataError
 
@@ -109,7 +107,7 @@ class DataArray(xr.DataArray):
         return cls(value)
 
     @classmethod
-    def __modify_schema__(cls, field_schema, field: Optional[ModelField]):
+    def __modify_schema__(cls, field_schema):
         """Sets the schema of DataArray object."""
 
         schema = dict(
@@ -125,9 +123,6 @@ class DataArray(xr.DataArray):
         )
         field_schema.update(schema)
 
-        # if field:
-        #     import pdb; pdb.set_trace()
-
     def __eq__(self, other) -> bool:
         """Whether two data array objects are equal."""
         if not np.all(self.data == other.data):
@@ -136,8 +131,6 @@ class DataArray(xr.DataArray):
             if not np.all(np.array(val) == np.array(other.coords[key])):
                 return False
         return True
-
-        # return self.to_dict() == other.to_dict()
 
 
 class ScalarFieldDataArray(DataArray):
