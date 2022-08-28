@@ -9,7 +9,7 @@ from tidy3d.components.data.data_array import ModeAmpsDataArray, ModeIndexDataAr
 from tidy3d.components.data.data_array import FluxDataArray, FluxTimeDataArray
 from tidy3d.components.source import PointDipole, GaussianPulse, ModeSource
 from tidy3d.components.simulation import Simulation
-from tidy3d.components.grid import GridSpec
+from tidy3d.components.grid.grid_spec import GridSpec
 from tidy3d.components.mode import ModeSpec
 from tidy3d.components.monitor import FieldMonitor, FieldTimeMonitor, PermittivityMonitor
 from tidy3d.components.monitor import ModeSolverMonitor, ModeMonitor
