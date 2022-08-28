@@ -268,13 +268,13 @@ def test_component_modeler_run_only(monkeypatch):
 def _test_mappings(element_mappings, s_matrix):
     """Makes sure the mappings are reflected in a given S matrix."""
     for (i, j), (k, l), mult_by in element_mappings:
-        assert s_matrix[i][j] == mult_by * s_matrix[k][l], "mapping not applied correctly."
+        assert s_matrix[k][l] == mult_by * s_matrix[i][j], "mapping not applied correctly."
 
 
 def test_run_component_modeler_mappings(monkeypatch):
 
     element_mappings = (
-        ((("left_top", 0), ("right_top", 0)), (("left_bot", 0), ("right_bot", 0)), -1),
+        ((("left_top", 0), ("right_top", 0)), (("left_bot", 0), ("right_bot", 0)), -1j),
         ((("left_top", 0), ("right_bot", 0)), (("left_bot", 0), ("right_top", 0)), +1),
     )
     modeler = make_component_modeler(element_mappings=element_mappings)
