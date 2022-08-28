@@ -14,7 +14,7 @@ from .base import cached_property
 from .validators import assert_unique_names, assert_objects_in_sim_bounds
 from .validators import validate_mode_objects_symmetry
 from .geometry import Box
-from .types import Ax, Shapely, FreqBound, GridSize, Axis, annotate_type
+from .types import Ax, Shapely, FreqBound, GridSize, Axis, annotate_type, Symmetry
 from .grid.grid import Coords1D, Grid, Coords
 from .grid.grid_spec import GridSpec, UniformGrid
 from .medium import Medium, MediumType, AbstractMedium, PECMedium
