@@ -12,7 +12,7 @@ from ...components.mode import ModeSpec
 from ...components.monitor import ModeMonitor
 from ...components.source import ModeSource, GaussianPulse
 from ...components.data.sim_data import SimulationData
-from ...components.types import Direction, Ax
+from ...components.types import Direction, Ax, Complex
 from ...components.viz import add_ax_if_none, equal_aspect
 from ...components.base import Tidy3dBaseModel
 from ...log import SetupError, Tidy3dKeyError, log
@@ -75,7 +75,7 @@ class ComponentModeler(Tidy3dBaseModel):
         title="Folder Name",
         description="Name of the folder for the tasks on web.",
     )
-    element_mappings: Tuple[Tuple[Element, Element, float], ...] = pd.Field(
+    element_mappings: Tuple[Tuple[Element, Element, Complex], ...] = pd.Field(
         (),
         title="Element Mappings",
         description="Mapping between elements of the scattering matrix, "
