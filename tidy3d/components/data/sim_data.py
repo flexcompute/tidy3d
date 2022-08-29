@@ -13,7 +13,7 @@ from ..simulation import Simulation
 from ..boundary import BlochBoundary
 from ..types import Ax, Axis, annotate_type, Literal
 from ..viz import equal_aspect, add_ax_if_none
-from ...log import DataError
+from ...log import DataError, log
 
 MonitorDataType = Union[MonitorDataTypes + Near2FarDataTypes]
 DATA_TYPE_MAP = {data.__fields__["monitor"].type_: data for data in MonitorDataTypes}
@@ -231,7 +231,7 @@ class SimulationData(Tidy3dBaseModel):
         intensity_data.name = "Intensity"
         return intensity_data
 
-    def plot_field(  # pylint:disable=too-many-arguments, too-many-locals
+    def plot_field(  # pylint:disable=too-many-arguments, too-many-locals, too-many-branches
         self,
         field_monitor_name: str,
         field_name: str,
@@ -311,6 +311,20 @@ class SimulationData(Tidy3dBaseModel):
             else:
                 field_data = field_data.interp(**{axis: pos}, kwargs=dict(bounds_error=True))
 
+        # warn about new API changes and replace the values
+        if "freq" in sel_kwargs:
+            log.warning(
+                "'freq' suppled to 'plot_field', frequency selection key renamed to 'f' and 'freq' "
+                "will error in future release, please update your local script to use 'f=value'."
+            )
+            sel_kwargs["f"] = sel_kwargs.pop("freq")
+        if "time" in sel_kwargs:
+            log.warning(
+                "'time' suppled to 'plot_field', frequency selection key renamed to 't' and 'time' "
+                "will error in future release, please update your local script to use 't=value'."
+            )
+            sel_kwargs["t"] = sel_kwargs.pop("time")
+
         # select the extra coordinates out of the data from user-specified kwargs
         for coord_name, coord_val in sel_kwargs.items():
             if field_data.coords[coord_name].size <= 1:
@@ -347,7 +361,7 @@ class SimulationData(Tidy3dBaseModel):
         position = list(planar_coord.values())[0]
 
         # the frequency at which to evaluate the permittivity with None signaling freq -> inf
-        freq_eps_eval = sel_kwargs["freq"] if "freq" in sel_kwargs else None
+        freq_eps_eval = sel_kwargs["f"] if "f" in sel_kwargs else None
 
         return self.plot_field_array(
             field_data=field_data,
