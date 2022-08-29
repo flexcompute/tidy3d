@@ -448,7 +448,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
             if isinstance(monitor, AbstractNear2FarMonitor):
                 raise SetupError(
                     "Server-side near-to-far calculation is not available with symmetry. "
-                    "Use the local near-to-far available through the ``RadiationVectors`` class."
+                    "Use the local near-to-far available through the 'RadiationVectors' class."
                 )
         return val
 
