@@ -546,11 +546,9 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
 
         assert val >= 0, "normalize_index can't be negative."
         num_sources = len(values.get("sources"))
-        if num_sources == 0:
-            # No normalization will be used if no sources, but it should be irrelevant anyway
-            return None
-
-        assert val < num_sources, f"{num_sources} sources smaller than normalize_index of {val}"
+        if num_sources > 0:
+            # No check if no sources, but it should be irrelevant anyway
+            assert val < num_sources, f"{num_sources} sources smaller than normalize_index of {val}"
 
         return val
 
