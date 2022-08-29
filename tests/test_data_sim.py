@@ -199,7 +199,7 @@ def test_sel_kwarg_len1():
     sim_data.plot_field("mode_solver", "Ex", y=0.0, val="real", f=1e14, mode_index=1)
 
     # passing y=1 sel kwarg should error
-    with pytest.raises(ValueError):
+    with pytest.raises(KeyError):
         sim_data.plot_field("mode_solver", "Ex", y=1.0, val="real", f=1e14, mode_index=1)
 
 
