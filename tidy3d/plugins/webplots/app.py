@@ -1,6 +1,5 @@
 """Makes an app to visualize SimulationData objects."""
 from abc import ABC
-from typing import Optional
 from typing_extensions import Literal
 
 from jupyter_dash import JupyterDash

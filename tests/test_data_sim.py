@@ -178,6 +178,18 @@ def test_to_json():
     assert sim_data == sim_data2
 
 
+def test_sel_kwarg_freq():
+    """Use freq in sel_kwarg, should still work (but warning) for 1.6.x"""
+    sim_data = make_sim_data()
+    sim_data.plot_field("mode_solver", "Ex", y=0.0, val="real", freq=1e14, mode_index=1)
+
+
+def test_sel_kwarg_time():
+    """Use time in sel_kwarg, should still work (but warning) for 1.6.x"""
+    sim_data = make_sim_data()
+    sim_data.plot_field("field_time", "Ex", y=0.0, val="real", time=1e-12)
+
+
 def test_sel_kwarg_len1():
     sim_data = make_sim_data()
 
