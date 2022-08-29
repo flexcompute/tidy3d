@@ -1703,7 +1703,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
 
         return Box.from_bounds(bmin_new, bmax_new)
 
-    def discretize(self, box: Box, extend: bool = False) -> Grid:
+    def discretize(self, box: Box, extend: bool = False, snap_zero_dim: bool = False) -> Grid:
         """Grid containing only cells that intersect with a :class:`Box`.
 
         Parameters
@@ -1713,6 +1713,10 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         extend : bool
             If ``True``, extra pixels are added to the discretized grid if needed, such that Yee
             grid fields can be interpolated to any point inside the ``box``.
+        snap_zero_dim : bool
+            If ``True``, and the ``box`` has size zero along a given direction, the ``grid`` is
+            defined to also have a zero-sized cell exactly centered at the ``box`` center. If
+            false, the ``simulation`` grid cell containing the ``box`` center is instead used.
 
         Returns
         -------
@@ -1726,9 +1730,12 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         span_inds = self.grid.discretize_inds(box, extend=extend)
         boundary_dict = {}
         for idim, dim in enumerate("xyz"):
-            ind_beg, ind_end = span_inds[idim]
-            # ind_end + 1 because we are selecting cell boundaries not cells
-            boundary_dict[dim] = self.grid.periodic_subspace(idim, ind_beg, ind_end + 1)
+            if snap_zero_dim and box.size[idim] == 0:
+                boundary_dict[dim] = [box.center[idim], box.center[idim]]
+            else:
+                ind_beg, ind_end = span_inds[idim]
+                # ind_end + 1 because we are selecting cell boundaries not cells
+                boundary_dict[dim] = self.grid.periodic_subspace(idim, ind_beg, ind_end + 1)
 
         return Grid(boundaries=Coords(**boundary_dict))
 

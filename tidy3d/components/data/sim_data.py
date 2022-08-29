@@ -94,10 +94,11 @@ class SimulationData(Tidy3dBaseModel):
 
     def apply_symmetry(self, monitor_data: MonitorDataType) -> MonitorDataType:
         """Return copy of :class:`.MonitorData` object with symmetry values applied."""
+        grid = self.simulation.discretize(monitor_data.monitor, extend=True, snap_zero_dim=True)
         return monitor_data.apply_symmetry(
             symmetry=self.simulation.symmetry,
             symmetry_center=self.simulation.center,
-            grid_expanded=self.simulation.discretize(monitor_data.monitor, extend=True),
+            grid_expanded=grid,
         )
 
     def source_spectrum(self, source_index: int) -> Callable:
