@@ -23,7 +23,7 @@ from ...log import ValidationError
 from .solver import compute_modes
 
 FIELD = Tuple[ArrayLike[complex, 3], ArrayLike[complex, 3], ArrayLike[complex, 3]]
-MODE_MONITOR_NAME = "mode"
+MODE_MONITOR_NAME = "<<<MODE_SOLVER_MONITOR>>>"
 
 # Warning for field intensity at edges over total field intensity larger than this value
 FIELD_DECAY_CUTOFF = 1e-2
