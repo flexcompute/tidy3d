@@ -132,6 +132,11 @@ class DataArray(xr.DataArray):
                 return False
         return True
 
+    @property
+    def abs(self):
+        """Absolute value of data array."""
+        return abs(self)
+
 
 class ScalarFieldDataArray(DataArray):
     """Spatial distribution in the frequency-domain.

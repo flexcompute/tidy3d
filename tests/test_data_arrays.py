@@ -227,3 +227,8 @@ def test_empty_field_time():
         np.random.rand(5, 5, 5, 0),
         coords=dict(x=np.arange(5), y=np.arange(5), z=np.arange(5), t=[]),
     )
+
+
+def test_abs():
+    data = make_mode_amps_data_array()
+    dabs = data.abs
