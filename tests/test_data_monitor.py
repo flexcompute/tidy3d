@@ -201,3 +201,10 @@ def test_empty_io():
     field_data.to_file("tests/tmp/field_data.hdf5")
     field_data = td.FieldTimeData.from_file("tests/tmp/field_data.hdf5")
     assert field_data.Ex.size == 0
+
+
+def test_mode_solver_plot_field():
+    """Ensure we get a helpful error if trying to .plot_field with a ModeSolverData."""
+    ms_data = make_mode_solver_data()
+    with pytest.raises(DeprecationWarning):
+        ms_data.plot_field(1, 2, 3, z=5, b=True)
