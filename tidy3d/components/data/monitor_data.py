@@ -427,6 +427,14 @@ class ModeSolverData(ElectromagneticFieldData):
 
         return FieldData(monitor=field_monitor, **fields)
 
+    def plot_field(self, *args, **kwargs):
+        """Warn user to use the :class:`.ModeSolver` ``plot_field`` function now."""
+        raise DeprecationWarning(
+            "The 'plot_field()' method was moved to the 'ModeSolver' object."
+            "Once the 'ModeSolver' is contructed, one may call '.plot_field()' on the object and "
+            "the modes will be computed and displayed with 'Simulation' overlay."
+        )
+
 
 class PermittivityData(AbstractFieldData):
     """Data for a :class:`.PermittivityMonitor`: diagonal components of the permittivity tensor.
