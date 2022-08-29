@@ -156,8 +156,11 @@ Monitors
    FluxMonitor
    FluxTimeMonitor
    ModeMonitor
-   ModeFieldMonitor
+   ModeSolverMonitor
    PermittivityMonitor
+   Near2FarCartesianMonitor
+   Near2FarAngleMonitor
+   Near2FarKSpaceMonitor
 
 
 Mode Specifications
@@ -202,22 +205,35 @@ Collections of Data from single monitor
    :toctree: _autosummary/
 
    FieldData
-   ModeData
-   ModeFieldData
+   FieldTimeData
+   ModeSolverData
    PermittivityData
+   FluxData
+   FluxTimeData
+   ModeData
+   AbstractNear2FarData
+   Near2FarAngleData
+   Near2FarCartesianData
+   Near2FarKSpaceData
+   Near2FarSurface
+   RadiationVectors
 
-Individual Dataset
-------------------
+Individual Datasets
+-------------------
 
 .. autosummary::
    :toctree: _autosummary/
 
-   ScalarFieldData
-   ScalarFieldTimeData
-   FluxData
-   FluxTimeData
-   ModeAmpsData
-   ModeIndexData
+   ScalarFieldDataArray
+   ScalarModeFieldDataArray
+   ScalarFieldTimeDataArray
+   ModeAmpsDataArray
+   ModeIndexDataArray
+   FluxDataArray
+   FluxTimeDataArray
+   Near2FarAngleDataArray
+   Near2FarCartesianDataArray
+   Near2FarKSpaceDataArray
 
 Logging
 =======
@@ -282,7 +298,6 @@ Mode Solver
    :toctree: _autosummary/
 
    plugins.ModeSolver
-   plugins.ModeSolverData
 
 Dispersive Model Fitting
 ------------------------
@@ -293,16 +308,6 @@ Dispersive Model Fitting
    plugins.DispersionFitter
    plugins.StableDispersionFitter
    plugins.AdvancedFitterParam
-
-
-Near Field to Far Field Transformation
---------------------------------------
-
-.. autosummary::
-   :toctree: _autosummary/
-
-   plugins.Near2Far
-   plugins.Near2FarSurface
 
 Scattering Matrix Calculator
 ----------------------------
@@ -386,13 +391,3 @@ These are classes that are used to organize the tidy3d components, but aren't to
    tidy3d.components.source.Source
    tidy3d.components.source.FieldSource
    tidy3d.components.monitor.Monitor
-   tidy3d.components.data.Tidy3dData
-   tidy3d.components.data.CollectionData
-   tidy3d.components.data.AbstractFieldData
-   tidy3d.components.data.MonitorData
-   tidy3d.components.data.FreqData
-   tidy3d.components.data.TimeData
-   tidy3d.components.data.PlanarData
-   tidy3d.components.data.AbstractFluxData
-   tidy3d.components.data.ScalarFieldData
-
