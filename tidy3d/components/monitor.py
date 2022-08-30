@@ -13,7 +13,7 @@ from .validators import assert_plane
 from .base import cached_property
 from .mode import ModeSpec
 from .viz import PlotParams, plot_params_monitor, ARROW_COLOR_MONITOR, ARROW_ALPHA
-from ..log import SetupError, log, DataError
+from ..log import SetupError, log, DataError, ValidationError
 from ..constants import HERTZ, SECOND, MICROMETER, RADIAN
 
 
@@ -74,6 +74,13 @@ class FreqMonitor(Monitor, ABC):
         description="Array or list of frequencies stored by the field monitor.",
         units=HERTZ,
     )
+
+    @pydantic.validator("freqs", always=True)
+    def _freqs_non_empty(cls, val):
+        """Assert one frequency present."""
+        if len(val) == 0:
+            raise ValidationError("'freqs' must not be empty.")
+        return val
 
 
 class TimeMonitor(Monitor, ABC):
