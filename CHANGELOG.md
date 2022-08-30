@@ -33,6 +33,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
  can still be renormalized to a different source later on using the new `SimulationData.renormalize`.
 - `FluxMonitor` and `FluxTimeMonitor`-s can now have a 3D box geometry, in which case the flux going out of all box surfaces is computed (optionally, 
  some surfaces can be excluded).
+- Frequency-domain monitors require a non-empty list of frequencies.
 - Reduced the minimum flex unit cost to run a simulation to `0.1`.
 - Reduced the premium cost for dispersive materials in typical cases.
 - Added a cost for monitors that should be negligible in typical cases but affects large monitors that significantly slow down the simulation.
@@ -388,7 +389,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Job and Batch classes for better simulation handling (eventually to fully replace webapi functions).
 - A large number of small improvements and bug fixes.
 
-[Unreleased]: https://github.com/flexcompute/tidy3d/compare/v1.5.0...develop
+[Unreleased]: https://github.com/flexcompute/tidy3d/compare/v1.6.0...develop
+[1.6.0]: https://github.com/flexcompute/tidy3d/compare/v1.5.0...1.6.0
 [1.5.0]: https://github.com/flexcompute/tidy3d/compare/v1.4.1...1.5.0
 [1.4.1]: https://github.com/flexcompute/tidy3d/compare/v1.4.0...1.4.1
 [1.4.0]: https://github.com/flexcompute/tidy3d/compare/v1.3.3...1.4.0
