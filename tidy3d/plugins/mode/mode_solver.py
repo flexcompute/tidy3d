@@ -88,6 +88,10 @@ class ModeSolver(Tidy3dBaseModel):
         will be reset to the exact plane position after the solve."""
         plane_sym = self.simulation.min_sym_box(self.plane)
         boundaries = self.simulation.discretize(plane_sym, extend=True).boundaries.to_list
+        # Do not extend if simulation has a single pixel along a dimension
+        for dim, num_cells in enumerate(self.simulation.grid.num_cells):
+            if num_cells <= 1:
+                boundaries[dim] = self.simulation.grid.boundaries.to_list[dim]
         # Remove extension on the min side if symmetry present
         bounds_norm, bounds_plane = plane_sym.pop_axis(boundaries, self.normal_axis)
         bounds_plane = list(bounds_plane)
@@ -140,7 +144,14 @@ class ModeSolver(Tidy3dBaseModel):
         for field_name in ("Ex", "Ey", "Ez", "Hx", "Hy", "Hz"):
 
             xyz_coords = self._solver_grid[field_name].to_list
+            # Snap to plane center along normal direction
             xyz_coords[self.normal_axis] = [self.plane.center[self.normal_axis]]
+            # Snap to simulation center if simulation is 0D along a tangential dimension
+            _, plane_axes = self.plane.pop_axis([0, 1, 2], axis=self.normal_axis)
+            for plane_axis in plane_axes:
+                if len(xyz_coords[plane_axis]) == 1:
+                    xyz_coords[plane_axis] = [self.simulation.center[plane_axis]]
+
             scalar_field_data = ScalarModeFieldDataArray(
                 np.stack([field_freq[field_name] for field_freq in fields], axis=-2),
                 coords=dict(

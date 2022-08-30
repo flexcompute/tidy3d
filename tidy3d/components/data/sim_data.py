@@ -104,7 +104,7 @@ class SimulationData(Tidy3dBaseModel):
     def source_spectrum(self, source_index: int) -> Callable:
         """Get a spectrum normalization function for a given source index."""
 
-        if source_index is None:
+        if source_index is None or len(self.simulation.sources) == 0:
             return np.ones_like
 
         source = self.simulation.sources[source_index]
@@ -132,11 +132,11 @@ class SimulationData(Tidy3dBaseModel):
         """Return a copy of the :class:`.SimulationData` with a different source used for the
         normalization."""
 
-        if normalize_index == self.simulation.normalize_index:
+        num_sources = len(self.simulation.sources)
+        if normalize_index == self.simulation.normalize_index or num_sources == 0:
             # already normalized to that index
             return self.copy()
 
-        num_sources = len(self.simulation.sources)
         if normalize_index and (normalize_index < 0 or normalize_index >= num_sources):
             # normalize index out of bounds for source list
             raise DataError(
