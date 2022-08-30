@@ -13,7 +13,7 @@
                 10.45,
                 2.22
             ],
-            "run_time": 1.0340486931104608e-12,
+            "run_time": 1.034048694662438e-12,
             "grid_size": null,
             "medium": {
                 "name": null,
@@ -1183,8 +1183,8 @@
                         "amplitude": 1.0,
                         "phase": 0.0,
                         "type": "GaussianPulse",
-                        "freq0": 193414489407062.47,
-                        "fwidth": 19341448940706.246,
+                        "freq0": 193414489116771.6,
+                        "fwidth": 19341448911677.16,
                         "offset": 5.0
                     },
                     "name": null,
@@ -1336,7 +1336,7 @@
                     ],
                     "name": "in",
                     "freqs": [
-                        193414489407062.47
+                        193414489116771.6
                     ],
                     "mode_spec": {
                         "num_modes": 1,
@@ -1368,7 +1368,7 @@
                     ],
                     "name": "refect_bottom",
                     "freqs": [
-                        193414489407062.47
+                        193414489116771.6
                     ],
                     "mode_spec": {
                         "num_modes": 1,
@@ -1400,7 +1400,7 @@
                     ],
                     "name": "top",
                     "freqs": [
-                        193414489407062.47
+                        193414489116771.6
                     ],
                     "mode_spec": {
                         "num_modes": 1,
@@ -1432,7 +1432,7 @@
                     ],
                     "name": "bottom",
                     "freqs": [
-                        193414489407062.47
+                        193414489116771.6
                     ],
                     "mode_spec": {
                         "num_modes": 1,
@@ -1482,8 +1482,9 @@
             },
             "shutoff": 1e-05,
             "subpixel": true,
+            "normalize_index": 0,
             "courant": 0.9,
-            "version": "1.5.0"
+            "version": "1.6.0"
         },
         "l=5.70": {
             "type": "Simulation",
@@ -1497,7 +1498,7 @@
                 10.45,
                 2.22
             ],
-            "run_time": 1.0340486931104608e-12,
+            "run_time": 1.034048694662438e-12,
             "grid_size": null,
             "medium": {
                 "name": null,
@@ -2667,8 +2668,8 @@
                         "amplitude": 1.0,
                         "phase": 0.0,
                         "type": "GaussianPulse",
-                        "freq0": 193414489407062.47,
-                        "fwidth": 19341448940706.246,
+                        "freq0": 193414489116771.6,
+                        "fwidth": 19341448911677.16,
                         "offset": 5.0
                     },
                     "name": null,
@@ -2820,7 +2821,7 @@
                     ],
                     "name": "in",
                     "freqs": [
-                        193414489407062.47
+                        193414489116771.6
                     ],
                     "mode_spec": {
                         "num_modes": 1,
@@ -2852,7 +2853,7 @@
                     ],
                     "name": "refect_bottom",
                     "freqs": [
-                        193414489407062.47
+                        193414489116771.6
                     ],
                     "mode_spec": {
                         "num_modes": 1,
@@ -2884,7 +2885,7 @@
                     ],
                     "name": "top",
                     "freqs": [
-                        193414489407062.47
+                        193414489116771.6
                     ],
                     "mode_spec": {
                         "num_modes": 1,
@@ -2916,7 +2917,7 @@
                     ],
                     "name": "bottom",
                     "freqs": [
-                        193414489407062.47
+                        193414489116771.6
                     ],
                     "mode_spec": {
                         "num_modes": 1,
@@ -2966,8 +2967,9 @@
             },
             "shutoff": 1e-05,
             "subpixel": true,
+            "normalize_index": 0,
             "courant": 0.9,
-            "version": "1.5.0"
+            "version": "1.6.0"
         },
         "l=6.40": {
             "type": "Simulation",
@@ -2981,7 +2983,7 @@
                 10.45,
                 2.22
             ],
-            "run_time": 1.0340486931104608e-12,
+            "run_time": 1.034048694662438e-12,
             "grid_size": null,
             "medium": {
                 "name": null,
@@ -4151,8 +4153,8 @@
                         "amplitude": 1.0,
                         "phase": 0.0,
                         "type": "GaussianPulse",
-                        "freq0": 193414489407062.47,
-                        "fwidth": 19341448940706.246,
+                        "freq0": 193414489116771.6,
+                        "fwidth": 19341448911677.16,
                         "offset": 5.0
                     },
                     "name": null,
@@ -4304,7 +4306,7 @@
                     ],
                     "name": "in",
                     "freqs": [
-                        193414489407062.47
+                        193414489116771.6
                     ],
                     "mode_spec": {
                         "num_modes": 1,
@@ -4336,7 +4338,7 @@
                     ],
                     "name": "refect_bottom",
                     "freqs": [
-                        193414489407062.47
+                        193414489116771.6
                     ],
                     "mode_spec": {
                         "num_modes": 1,
@@ -4368,7 +4370,7 @@
                     ],
                     "name": "top",
                     "freqs": [
-                        193414489407062.47
+                        193414489116771.6
                     ],
                     "mode_spec": {
                         "num_modes": 1,
@@ -4400,7 +4402,7 @@
                     ],
                     "name": "bottom",
                     "freqs": [
-                        193414489407062.47
+                        193414489116771.6
                     ],
                     "mode_spec": {
                         "num_modes": 1,
@@ -4450,8 +4452,9 @@
             },
             "shutoff": 1e-05,
             "subpixel": true,
+            "normalize_index": 0,
             "courant": 0.9,
-            "version": "1.5.0"
+            "version": "1.6.0"
         },
         "l=7.10": {
             "type": "Simulation",
@@ -4465,7 +4468,7 @@
                 10.45,
                 2.22
             ],
-            "run_time": 1.0340486931104608e-12,
+            "run_time": 1.034048694662438e-12,
             "grid_size": null,
             "medium": {
                 "name": null,
@@ -5635,8 +5638,8 @@
                         "amplitude": 1.0,
                         "phase": 0.0,
                         "type": "GaussianPulse",
-                        "freq0": 193414489407062.47,
-                        "fwidth": 19341448940706.246,
+                        "freq0": 193414489116771.6,
+                        "fwidth": 19341448911677.16,
                         "offset": 5.0
                     },
                     "name": null,
@@ -5788,7 +5791,7 @@
                     ],
                     "name": "in",
                     "freqs": [
-                        193414489407062.47
+                        193414489116771.6
                     ],
                     "mode_spec": {
                         "num_modes": 1,
@@ -5820,7 +5823,7 @@
                     ],
                     "name": "refect_bottom",
                     "freqs": [
-                        193414489407062.47
+                        193414489116771.6
                     ],
                     "mode_spec": {
                         "num_modes": 1,
@@ -5852,7 +5855,7 @@
                     ],
                     "name": "top",
                     "freqs": [
-                        193414489407062.47
+                        193414489116771.6
                     ],
                     "mode_spec": {
                         "num_modes": 1,
@@ -5884,7 +5887,7 @@
                     ],
                     "name": "bottom",
                     "freqs": [
-                        193414489407062.47
+                        193414489116771.6
                     ],
                     "mode_spec": {
                         "num_modes": 1,
@@ -5934,8 +5937,9 @@
             },
             "shutoff": 1e-05,
             "subpixel": true,
+            "normalize_index": 0,
             "courant": 0.9,
-            "version": "1.5.0"
+            "version": "1.6.0"
         },
         "l=7.80": {
             "type": "Simulation",
@@ -5949,7 +5953,7 @@
                 10.45,
                 2.22
             ],
-            "run_time": 1.0340486931104608e-12,
+            "run_time": 1.034048694662438e-12,
             "grid_size": null,
             "medium": {
                 "name": null,
@@ -7119,8 +7123,8 @@
                         "amplitude": 1.0,
                         "phase": 0.0,
                         "type": "GaussianPulse",
-                        "freq0": 193414489407062.47,
-                        "fwidth": 19341448940706.246,
+                        "freq0": 193414489116771.6,
+                        "fwidth": 19341448911677.16,
                         "offset": 5.0
                     },
                     "name": null,
@@ -7272,7 +7276,7 @@
                     ],
                     "name": "in",
                     "freqs": [
-                        193414489407062.47
+                        193414489116771.6
                     ],
                     "mode_spec": {
                         "num_modes": 1,
@@ -7304,7 +7308,7 @@
                     ],
                     "name": "refect_bottom",
                     "freqs": [
-                        193414489407062.47
+                        193414489116771.6
                     ],
                     "mode_spec": {
                         "num_modes": 1,
@@ -7336,7 +7340,7 @@
                     ],
                     "name": "top",
                     "freqs": [
-                        193414489407062.47
+                        193414489116771.6
                     ],
                     "mode_spec": {
                         "num_modes": 1,
@@ -7368,7 +7372,7 @@
                     ],
                     "name": "bottom",
                     "freqs": [
-                        193414489407062.47
+                        193414489116771.6
                     ],
                     "mode_spec": {
                         "num_modes": 1,
@@ -7418,8 +7422,9 @@
             },
             "shutoff": 1e-05,
             "subpixel": true,
+            "normalize_index": 0,
             "courant": 0.9,
-            "version": "1.5.0"
+            "version": "1.6.0"
         },
         "l=8.50": {
             "type": "Simulation",
@@ -7433,7 +7438,7 @@
                 10.45,
                 2.22
             ],
-            "run_time": 1.0340486931104608e-12,
+            "run_time": 1.034048694662438e-12,
             "grid_size": null,
             "medium": {
                 "name": null,
@@ -8603,8 +8608,8 @@
                         "amplitude": 1.0,
                         "phase": 0.0,
                         "type": "GaussianPulse",
-                        "freq0": 193414489407062.47,
-                        "fwidth": 19341448940706.246,
+                        "freq0": 193414489116771.6,
+                        "fwidth": 19341448911677.16,
                         "offset": 5.0
                     },
                     "name": null,
@@ -8756,7 +8761,7 @@
                     ],
                     "name": "in",
                     "freqs": [
-                        193414489407062.47
+                        193414489116771.6
                     ],
                     "mode_spec": {
                         "num_modes": 1,
@@ -8788,7 +8793,7 @@
                     ],
                     "name": "refect_bottom",
                     "freqs": [
-                        193414489407062.47
+                        193414489116771.6
                     ],
                     "mode_spec": {
                         "num_modes": 1,
@@ -8820,7 +8825,7 @@
                     ],
                     "name": "top",
                     "freqs": [
-                        193414489407062.47
+                        193414489116771.6
                     ],
                     "mode_spec": {
                         "num_modes": 1,
@@ -8852,7 +8857,7 @@
                     ],
                     "name": "bottom",
                     "freqs": [
-                        193414489407062.47
+                        193414489116771.6
                     ],
                     "mode_spec": {
                         "num_modes": 1,
@@ -8902,8 +8907,9 @@
             },
             "shutoff": 1e-05,
             "subpixel": true,
+            "normalize_index": 0,
             "courant": 0.9,
-            "version": "1.5.0"
+            "version": "1.6.0"
         },
         "l=9.20": {
             "type": "Simulation",
@@ -8917,7 +8923,7 @@
                 10.45,
                 2.22
             ],
-            "run_time": 1.0340486931104608e-12,
+            "run_time": 1.034048694662438e-12,
             "grid_size": null,
             "medium": {
                 "name": null,
@@ -10087,8 +10093,8 @@
                         "amplitude": 1.0,
                         "phase": 0.0,
                         "type": "GaussianPulse",
-                        "freq0": 193414489407062.47,
-                        "fwidth": 19341448940706.246,
+                        "freq0": 193414489116771.6,
+                        "fwidth": 19341448911677.16,
                         "offset": 5.0
                     },
                     "name": null,
@@ -10240,7 +10246,7 @@
                     ],
                     "name": "in",
                     "freqs": [
-                        193414489407062.47
+                        193414489116771.6
                     ],
                     "mode_spec": {
                         "num_modes": 1,
@@ -10272,7 +10278,7 @@
                     ],
                     "name": "refect_bottom",
                     "freqs": [
-                        193414489407062.47
+                        193414489116771.6
                     ],
                     "mode_spec": {
                         "num_modes": 1,
@@ -10304,7 +10310,7 @@
                     ],
                     "name": "top",
                     "freqs": [
-                        193414489407062.47
+                        193414489116771.6
                     ],
                     "mode_spec": {
                         "num_modes": 1,
@@ -10336,7 +10342,7 @@
                     ],
                     "name": "bottom",
                     "freqs": [
-                        193414489407062.47
+                        193414489116771.6
                     ],
                     "mode_spec": {
                         "num_modes": 1,
@@ -10386,8 +10392,9 @@
             },
             "shutoff": 1e-05,
             "subpixel": true,
+            "normalize_index": 0,
             "courant": 0.9,
-            "version": "1.5.0"
+            "version": "1.6.0"
         },
         "l=9.90": {
             "type": "Simulation",
@@ -10401,7 +10408,7 @@
                 10.45,
                 2.22
             ],
-            "run_time": 1.0340486931104608e-12,
+            "run_time": 1.034048694662438e-12,
             "grid_size": null,
             "medium": {
                 "name": null,
@@ -11571,8 +11578,8 @@
                         "amplitude": 1.0,
                         "phase": 0.0,
                         "type": "GaussianPulse",
-                        "freq0": 193414489407062.47,
-                        "fwidth": 19341448940706.246,
+                        "freq0": 193414489116771.6,
+                        "fwidth": 19341448911677.16,
                         "offset": 5.0
                     },
                     "name": null,
@@ -11724,7 +11731,7 @@
                     ],
                     "name": "in",
                     "freqs": [
-                        193414489407062.47
+                        193414489116771.6
                     ],
                     "mode_spec": {
                         "num_modes": 1,
@@ -11756,7 +11763,7 @@
                     ],
                     "name": "refect_bottom",
                     "freqs": [
-                        193414489407062.47
+                        193414489116771.6
                     ],
                     "mode_spec": {
                         "num_modes": 1,
@@ -11788,7 +11795,7 @@
                     ],
                     "name": "top",
                     "freqs": [
-                        193414489407062.47
+                        193414489116771.6
                     ],
                     "mode_spec": {
                         "num_modes": 1,
@@ -11820,7 +11827,7 @@
                     ],
                     "name": "bottom",
                     "freqs": [
-                        193414489407062.47
+                        193414489116771.6
                     ],
                     "mode_spec": {
                         "num_modes": 1,
@@ -11870,8 +11877,9 @@
             },
             "shutoff": 1e-05,
             "subpixel": true,
+            "normalize_index": 0,
             "courant": 0.9,
-            "version": "1.5.0"
+            "version": "1.6.0"
         },
         "l=10.60": {
             "type": "Simulation",
@@ -11885,7 +11893,7 @@
                 10.45,
                 2.22
             ],
-            "run_time": 1.0340486931104608e-12,
+            "run_time": 1.034048694662438e-12,
             "grid_size": null,
             "medium": {
                 "name": null,
@@ -13055,8 +13063,8 @@
                         "amplitude": 1.0,
                         "phase": 0.0,
                         "type": "GaussianPulse",
-                        "freq0": 193414489407062.47,
-                        "fwidth": 19341448940706.246,
+                        "freq0": 193414489116771.6,
+                        "fwidth": 19341448911677.16,
                         "offset": 5.0
                     },
                     "name": null,
@@ -13208,7 +13216,7 @@
                     ],
                     "name": "in",
                     "freqs": [
-                        193414489407062.47
+                        193414489116771.6
                     ],
                     "mode_spec": {
                         "num_modes": 1,
@@ -13240,7 +13248,7 @@
                     ],
                     "name": "refect_bottom",
                     "freqs": [
-                        193414489407062.47
+                        193414489116771.6
                     ],
                     "mode_spec": {
                         "num_modes": 1,
@@ -13272,7 +13280,7 @@
                     ],
                     "name": "top",
                     "freqs": [
-                        193414489407062.47
+                        193414489116771.6
                     ],
                     "mode_spec": {
                         "num_modes": 1,
@@ -13304,7 +13312,7 @@
                     ],
                     "name": "bottom",
                     "freqs": [
-                        193414489407062.47
+                        193414489116771.6
                     ],
                     "mode_spec": {
                         "num_modes": 1,
@@ -13354,8 +13362,9 @@
             },
             "shutoff": 1e-05,
             "subpixel": true,
+            "normalize_index": 0,
             "courant": 0.9,
-            "version": "1.5.0"
+            "version": "1.6.0"
         },
         "l=11.30": {
             "type": "Simulation",
@@ -13369,7 +13378,7 @@
                 10.45,
                 2.22
             ],
-            "run_time": 1.0340486931104608e-12,
+            "run_time": 1.034048694662438e-12,
             "grid_size": null,
             "medium": {
                 "name": null,
@@ -14539,8 +14548,8 @@
                         "amplitude": 1.0,
                         "phase": 0.0,
                         "type": "GaussianPulse",
-                        "freq0": 193414489407062.47,
-                        "fwidth": 19341448940706.246,
+                        "freq0": 193414489116771.6,
+                        "fwidth": 19341448911677.16,
                         "offset": 5.0
                     },
                     "name": null,
@@ -14692,7 +14701,7 @@
                     ],
                     "name": "in",
                     "freqs": [
-                        193414489407062.47
+                        193414489116771.6
                     ],
                     "mode_spec": {
                         "num_modes": 1,
@@ -14724,7 +14733,7 @@
                     ],
                     "name": "refect_bottom",
                     "freqs": [
-                        193414489407062.47
+                        193414489116771.6
                     ],
                     "mode_spec": {
                         "num_modes": 1,
@@ -14756,7 +14765,7 @@
                     ],
                     "name": "top",
                     "freqs": [
-                        193414489407062.47
+                        193414489116771.6
                     ],
                     "mode_spec": {
                         "num_modes": 1,
@@ -14788,7 +14797,7 @@
                     ],
                     "name": "bottom",
                     "freqs": [
-                        193414489407062.47
+                        193414489116771.6
                     ],
                     "mode_spec": {
                         "num_modes": 1,
@@ -14838,8 +14847,9 @@
             },
             "shutoff": 1e-05,
             "subpixel": true,
+            "normalize_index": 0,
             "courant": 0.9,
-            "version": "1.5.0"
+            "version": "1.6.0"
         },
         "l=12.00": {
             "type": "Simulation",
@@ -14853,7 +14863,7 @@
                 10.45,
                 2.22
             ],
-            "run_time": 1.0340486931104608e-12,
+            "run_time": 1.034048694662438e-12,
             "grid_size": null,
             "medium": {
                 "name": null,
@@ -16023,8 +16033,8 @@
                         "amplitude": 1.0,
                         "phase": 0.0,
                         "type": "GaussianPulse",
-                        "freq0": 193414489407062.47,
-                        "fwidth": 19341448940706.246,
+                        "freq0": 193414489116771.6,
+                        "fwidth": 19341448911677.16,
                         "offset": 5.0
                     },
                     "name": null,
@@ -16176,7 +16186,7 @@
                     ],
                     "name": "in",
                     "freqs": [
-                        193414489407062.47
+                        193414489116771.6
                     ],
                     "mode_spec": {
                         "num_modes": 1,
@@ -16208,7 +16218,7 @@
                     ],
                     "name": "refect_bottom",
                     "freqs": [
-                        193414489407062.47
+                        193414489116771.6
                     ],
                     "mode_spec": {
                         "num_modes": 1,
@@ -16240,7 +16250,7 @@
                     ],
                     "name": "top",
                     "freqs": [
-                        193414489407062.47
+                        193414489116771.6
                     ],
                     "mode_spec": {
                         "num_modes": 1,
@@ -16272,7 +16282,7 @@
                     ],
                     "name": "bottom",
                     "freqs": [
-                        193414489407062.47
+                        193414489116771.6
                     ],
                     "mode_spec": {
                         "num_modes": 1,
@@ -16322,8 +16332,9 @@
             },
             "shutoff": 1e-05,
             "subpixel": true,
+            "normalize_index": 0,
             "courant": 0.9,
-            "version": "1.5.0"
+            "version": "1.6.0"
         }
     },
     "folder_name": "default",
@@ -16342,7 +16353,7 @@
                     10.45,
                     2.22
                 ],
-                "run_time": 1.0340486931104608e-12,
+                "run_time": 1.034048694662438e-12,
                 "grid_size": null,
                 "medium": {
                     "name": null,
@@ -17512,8 +17523,8 @@
                             "amplitude": 1.0,
                             "phase": 0.0,
                             "type": "GaussianPulse",
-                            "freq0": 193414489407062.47,
-                            "fwidth": 19341448940706.246,
+                            "freq0": 193414489116771.6,
+                            "fwidth": 19341448911677.16,
                             "offset": 5.0
                         },
                         "name": null,
@@ -17665,7 +17676,7 @@
                         ],
                         "name": "in",
                         "freqs": [
-                            193414489407062.47
+                            193414489116771.6
                         ],
                         "mode_spec": {
                             "num_modes": 1,
@@ -17697,7 +17708,7 @@
                         ],
                         "name": "refect_bottom",
                         "freqs": [
-                            193414489407062.47
+                            193414489116771.6
                         ],
                         "mode_spec": {
                             "num_modes": 1,
@@ -17729,7 +17740,7 @@
                         ],
                         "name": "top",
                         "freqs": [
-                            193414489407062.47
+                            193414489116771.6
                         ],
                         "mode_spec": {
                             "num_modes": 1,
@@ -17761,7 +17772,7 @@
                         ],
                         "name": "bottom",
                         "freqs": [
-                            193414489407062.47
+                            193414489116771.6
                         ],
                         "mode_spec": {
                             "num_modes": 1,
@@ -17811,13 +17822,14 @@
                 },
                 "shutoff": 1e-05,
                 "subpixel": true,
+                "normalize_index": 0,
                 "courant": 0.9,
-                "version": "1.5.0"
+                "version": "1.6.0"
             },
             "task_name": "l=5.00",
             "folder_name": "default",
             "callback_url": null,
-            "task_id": "c869c8af-ff75-40d6-a191-9c02ff68da2c"
+            "task_id": "4dfa7576-ce29-46e3-b516-047d5c0fd675"
         },
         "l=5.70": {
             "type": "Job",
@@ -17833,7 +17845,7 @@
                     10.45,
                     2.22
                 ],
-                "run_time": 1.0340486931104608e-12,
+                "run_time": 1.034048694662438e-12,
                 "grid_size": null,
                 "medium": {
                     "name": null,
@@ -19003,8 +19015,8 @@
                             "amplitude": 1.0,
                             "phase": 0.0,
                             "type": "GaussianPulse",
-                            "freq0": 193414489407062.47,
-                            "fwidth": 19341448940706.246,
+                            "freq0": 193414489116771.6,
+                            "fwidth": 19341448911677.16,
                             "offset": 5.0
                         },
                         "name": null,
@@ -19156,7 +19168,7 @@
                         ],
                         "name": "in",
                         "freqs": [
-                            193414489407062.47
+                            193414489116771.6
                         ],
                         "mode_spec": {
                             "num_modes": 1,
@@ -19188,7 +19200,7 @@
                         ],
                         "name": "refect_bottom",
                         "freqs": [
-                            193414489407062.47
+                            193414489116771.6
                         ],
                         "mode_spec": {
                             "num_modes": 1,
@@ -19220,7 +19232,7 @@
                         ],
                         "name": "top",
                         "freqs": [
-                            193414489407062.47
+                            193414489116771.6
                         ],
                         "mode_spec": {
                             "num_modes": 1,
@@ -19252,7 +19264,7 @@
                         ],
                         "name": "bottom",
                         "freqs": [
-                            193414489407062.47
+                            193414489116771.6
                         ],
                         "mode_spec": {
                             "num_modes": 1,
@@ -19302,13 +19314,14 @@
                 },
                 "shutoff": 1e-05,
                 "subpixel": true,
+                "normalize_index": 0,
                 "courant": 0.9,
-                "version": "1.5.0"
+                "version": "1.6.0"
             },
             "task_name": "l=5.70",
             "folder_name": "default",
             "callback_url": null,
-            "task_id": "873986cd-987e-4421-a74f-6e7c2e0ca869"
+            "task_id": "6f6d00a0-d24e-4819-a49b-3566fd3c000c"
         },
         "l=6.40": {
             "type": "Job",
@@ -19324,7 +19337,7 @@
                     10.45,
                     2.22
                 ],
-                "run_time": 1.0340486931104608e-12,
+                "run_time": 1.034048694662438e-12,
                 "grid_size": null,
                 "medium": {
                     "name": null,
@@ -20494,8 +20507,8 @@
                             "amplitude": 1.0,
                             "phase": 0.0,
                             "type": "GaussianPulse",
-                            "freq0": 193414489407062.47,
-                            "fwidth": 19341448940706.246,
+                            "freq0": 193414489116771.6,
+                            "fwidth": 19341448911677.16,
                             "offset": 5.0
                         },
                         "name": null,
@@ -20647,7 +20660,7 @@
                         ],
                         "name": "in",
                         "freqs": [
-                            193414489407062.47
+                            193414489116771.6
                         ],
                         "mode_spec": {
                             "num_modes": 1,
@@ -20679,7 +20692,7 @@
                         ],
                         "name": "refect_bottom",
                         "freqs": [
-                            193414489407062.47
+                            193414489116771.6
                         ],
                         "mode_spec": {
                             "num_modes": 1,
@@ -20711,7 +20724,7 @@
                         ],
                         "name": "top",
                         "freqs": [
-                            193414489407062.47
+                            193414489116771.6
                         ],
                         "mode_spec": {
                             "num_modes": 1,
@@ -20743,7 +20756,7 @@
                         ],
                         "name": "bottom",
                         "freqs": [
-                            193414489407062.47
+                            193414489116771.6
                         ],
                         "mode_spec": {
                             "num_modes": 1,
@@ -20793,13 +20806,14 @@
                 },
                 "shutoff": 1e-05,
                 "subpixel": true,
+                "normalize_index": 0,
                 "courant": 0.9,
-                "version": "1.5.0"
+                "version": "1.6.0"
             },
             "task_name": "l=6.40",
             "folder_name": "default",
             "callback_url": null,
-            "task_id": "1c7ff4af-6588-4ade-b0f0-125ee76e3395"
+            "task_id": "4a8a1b2d-36cc-4d41-b535-212d2142ef10"
         },
         "l=7.10": {
             "type": "Job",
@@ -20815,7 +20829,7 @@
                     10.45,
                     2.22
                 ],
-                "run_time": 1.0340486931104608e-12,
+                "run_time": 1.034048694662438e-12,
                 "grid_size": null,
                 "medium": {
                     "name": null,
@@ -21985,8 +21999,8 @@
                             "amplitude": 1.0,
                             "phase": 0.0,
                             "type": "GaussianPulse",
-                            "freq0": 193414489407062.47,
-                            "fwidth": 19341448940706.246,
+                            "freq0": 193414489116771.6,
+                            "fwidth": 19341448911677.16,
                             "offset": 5.0
                         },
                         "name": null,
@@ -22138,7 +22152,7 @@
                         ],
                         "name": "in",
                         "freqs": [
-                            193414489407062.47
+                            193414489116771.6
                         ],
                         "mode_spec": {
                             "num_modes": 1,
@@ -22170,7 +22184,7 @@
                         ],
                         "name": "refect_bottom",
                         "freqs": [
-                            193414489407062.47
+                            193414489116771.6
                         ],
                         "mode_spec": {
                             "num_modes": 1,
@@ -22202,7 +22216,7 @@
                         ],
                         "name": "top",
                         "freqs": [
-                            193414489407062.47
+                            193414489116771.6
                         ],
                         "mode_spec": {
                             "num_modes": 1,
@@ -22234,7 +22248,7 @@
                         ],
                         "name": "bottom",
                         "freqs": [
-                            193414489407062.47
+                            193414489116771.6
                         ],
                         "mode_spec": {
                             "num_modes": 1,
@@ -22284,13 +22298,14 @@
                 },
                 "shutoff": 1e-05,
                 "subpixel": true,
+                "normalize_index": 0,
                 "courant": 0.9,
-                "version": "1.5.0"
+                "version": "1.6.0"
             },
             "task_name": "l=7.10",
             "folder_name": "default",
             "callback_url": null,
-            "task_id": "8da7ce80-453e-4902-9efd-578060919b51"
+            "task_id": "5d8db898-de63-4b75-80f9-74dccd420545"
         },
         "l=7.80": {
             "type": "Job",
@@ -22306,7 +22321,7 @@
                     10.45,
                     2.22
                 ],
-                "run_time": 1.0340486931104608e-12,
+                "run_time": 1.034048694662438e-12,
                 "grid_size": null,
                 "medium": {
                     "name": null,
@@ -23476,8 +23491,8 @@
                             "amplitude": 1.0,
                             "phase": 0.0,
                             "type": "GaussianPulse",
-                            "freq0": 193414489407062.47,
-                            "fwidth": 19341448940706.246,
+                            "freq0": 193414489116771.6,
+                            "fwidth": 19341448911677.16,
                             "offset": 5.0
                         },
                         "name": null,
@@ -23629,7 +23644,7 @@
                         ],
                         "name": "in",
                         "freqs": [
-                            193414489407062.47
+                            193414489116771.6
                         ],
                         "mode_spec": {
                             "num_modes": 1,
@@ -23661,7 +23676,7 @@
                         ],
                         "name": "refect_bottom",
                         "freqs": [
-                            193414489407062.47
+                            193414489116771.6
                         ],
                         "mode_spec": {
                             "num_modes": 1,
@@ -23693,7 +23708,7 @@
                         ],
                         "name": "top",
                         "freqs": [
-                            193414489407062.47
+                            193414489116771.6
                         ],
                         "mode_spec": {
                             "num_modes": 1,
@@ -23725,7 +23740,7 @@
                         ],
                         "name": "bottom",
                         "freqs": [
-                            193414489407062.47
+                            193414489116771.6
                         ],
                         "mode_spec": {
                             "num_modes": 1,
@@ -23775,13 +23790,14 @@
                 },
                 "shutoff": 1e-05,
                 "subpixel": true,
+                "normalize_index": 0,
                 "courant": 0.9,
-                "version": "1.5.0"
+                "version": "1.6.0"
             },
             "task_name": "l=7.80",
             "folder_name": "default",
             "callback_url": null,
-            "task_id": "71a030c1-7433-483a-90a2-9fef489ddd1e"
+            "task_id": "4dd4ae5e-738a-4ff0-b0f8-dbd8d3431085"
         },
         "l=8.50": {
             "type": "Job",
@@ -23797,7 +23813,7 @@
                     10.45,
                     2.22
                 ],
-                "run_time": 1.0340486931104608e-12,
+                "run_time": 1.034048694662438e-12,
                 "grid_size": null,
                 "medium": {
                     "name": null,
@@ -24967,8 +24983,8 @@
                             "amplitude": 1.0,
                             "phase": 0.0,
                             "type": "GaussianPulse",
-                            "freq0": 193414489407062.47,
-                            "fwidth": 19341448940706.246,
+                            "freq0": 193414489116771.6,
+                            "fwidth": 19341448911677.16,
                             "offset": 5.0
                         },
                         "name": null,
@@ -25120,7 +25136,7 @@
                         ],
                         "name": "in",
                         "freqs": [
-                            193414489407062.47
+                            193414489116771.6
                         ],
                         "mode_spec": {
                             "num_modes": 1,
@@ -25152,7 +25168,7 @@
                         ],
                         "name": "refect_bottom",
                         "freqs": [
-                            193414489407062.47
+                            193414489116771.6
                         ],
                         "mode_spec": {
                             "num_modes": 1,
@@ -25184,7 +25200,7 @@
                         ],
                         "name": "top",
                         "freqs": [
-                            193414489407062.47
+                            193414489116771.6
                         ],
                         "mode_spec": {
                             "num_modes": 1,
@@ -25216,7 +25232,7 @@
                         ],
                         "name": "bottom",
                         "freqs": [
-                            193414489407062.47
+                            193414489116771.6
                         ],
                         "mode_spec": {
                             "num_modes": 1,
@@ -25266,13 +25282,14 @@
                 },
                 "shutoff": 1e-05,
                 "subpixel": true,
+                "normalize_index": 0,
                 "courant": 0.9,
-                "version": "1.5.0"
+                "version": "1.6.0"
             },
             "task_name": "l=8.50",
             "folder_name": "default",
             "callback_url": null,
-            "task_id": "107e4cab-7510-48be-9a25-cd13d556dbde"
+            "task_id": "ba742020-3e1c-4250-add6-2a804614737e"
         },
         "l=9.20": {
             "type": "Job",
@@ -25288,7 +25305,7 @@
                     10.45,
                     2.22
                 ],
-                "run_time": 1.0340486931104608e-12,
+                "run_time": 1.034048694662438e-12,
                 "grid_size": null,
                 "medium": {
                     "name": null,
@@ -26458,8 +26475,8 @@
                             "amplitude": 1.0,
                             "phase": 0.0,
                             "type": "GaussianPulse",
-                            "freq0": 193414489407062.47,
-                            "fwidth": 19341448940706.246,
+                            "freq0": 193414489116771.6,
+                            "fwidth": 19341448911677.16,
                             "offset": 5.0
                         },
                         "name": null,
@@ -26611,7 +26628,7 @@
                         ],
                         "name": "in",
                         "freqs": [
-                            193414489407062.47
+                            193414489116771.6
                         ],
                         "mode_spec": {
                             "num_modes": 1,
@@ -26643,7 +26660,7 @@
                         ],
                         "name": "refect_bottom",
                         "freqs": [
-                            193414489407062.47
+                            193414489116771.6
                         ],
                         "mode_spec": {
                             "num_modes": 1,
@@ -26675,7 +26692,7 @@
                         ],
                         "name": "top",
                         "freqs": [
-                            193414489407062.47
+                            193414489116771.6
                         ],
                         "mode_spec": {
                             "num_modes": 1,
@@ -26707,7 +26724,7 @@
                         ],
                         "name": "bottom",
                         "freqs": [
-                            193414489407062.47
+                            193414489116771.6
                         ],
                         "mode_spec": {
                             "num_modes": 1,
@@ -26757,13 +26774,14 @@
                 },
                 "shutoff": 1e-05,
                 "subpixel": true,
+                "normalize_index": 0,
                 "courant": 0.9,
-                "version": "1.5.0"
+                "version": "1.6.0"
             },
             "task_name": "l=9.20",
             "folder_name": "default",
             "callback_url": null,
-            "task_id": "6cbd6edf-fc68-4c5a-bfda-f5381c165325"
+            "task_id": "50a5bfff-c041-4f8a-9415-ddefdbbc308a"
         },
         "l=9.90": {
             "type": "Job",
@@ -26779,7 +26797,7 @@
                     10.45,
                     2.22
                 ],
-                "run_time": 1.0340486931104608e-12,
+                "run_time": 1.034048694662438e-12,
                 "grid_size": null,
                 "medium": {
                     "name": null,
@@ -27949,8 +27967,8 @@
                             "amplitude": 1.0,
                             "phase": 0.0,
                             "type": "GaussianPulse",
-                            "freq0": 193414489407062.47,
-                            "fwidth": 19341448940706.246,
+                            "freq0": 193414489116771.6,
+                            "fwidth": 19341448911677.16,
                             "offset": 5.0
                         },
                         "name": null,
@@ -28102,7 +28120,7 @@
                         ],
                         "name": "in",
                         "freqs": [
-                            193414489407062.47
+                            193414489116771.6
                         ],
                         "mode_spec": {
                             "num_modes": 1,
@@ -28134,7 +28152,7 @@
                         ],
                         "name": "refect_bottom",
                         "freqs": [
-                            193414489407062.47
+                            193414489116771.6
                         ],
                         "mode_spec": {
                             "num_modes": 1,
@@ -28166,7 +28184,7 @@
                         ],
                         "name": "top",
                         "freqs": [
-                            193414489407062.47
+                            193414489116771.6
                         ],
                         "mode_spec": {
                             "num_modes": 1,
@@ -28198,7 +28216,7 @@
                         ],
                         "name": "bottom",
                         "freqs": [
-                            193414489407062.47
+                            193414489116771.6
                         ],
                         "mode_spec": {
                             "num_modes": 1,
@@ -28248,13 +28266,14 @@
                 },
                 "shutoff": 1e-05,
                 "subpixel": true,
+                "normalize_index": 0,
                 "courant": 0.9,
-                "version": "1.5.0"
+                "version": "1.6.0"
             },
             "task_name": "l=9.90",
             "folder_name": "default",
             "callback_url": null,
-            "task_id": "5deb1dca-a590-4c30-89a0-0db0ab08542f"
+            "task_id": "d73420a9-03ed-4686-9361-4f7b9162cb27"
         },
         "l=10.60": {
             "type": "Job",
@@ -28270,7 +28289,7 @@
                     10.45,
                     2.22
                 ],
-                "run_time": 1.0340486931104608e-12,
+                "run_time": 1.034048694662438e-12,
                 "grid_size": null,
                 "medium": {
                     "name": null,
@@ -29440,8 +29459,8 @@
                             "amplitude": 1.0,
                             "phase": 0.0,
                             "type": "GaussianPulse",
-                            "freq0": 193414489407062.47,
-                            "fwidth": 19341448940706.246,
+                            "freq0": 193414489116771.6,
+                            "fwidth": 19341448911677.16,
                             "offset": 5.0
                         },
                         "name": null,
@@ -29593,7 +29612,7 @@
                         ],
                         "name": "in",
                         "freqs": [
-                            193414489407062.47
+                            193414489116771.6
                         ],
                         "mode_spec": {
                             "num_modes": 1,
@@ -29625,7 +29644,7 @@
                         ],
                         "name": "refect_bottom",
                         "freqs": [
-                            193414489407062.47
+                            193414489116771.6
                         ],
                         "mode_spec": {
                             "num_modes": 1,
@@ -29657,7 +29676,7 @@
                         ],
                         "name": "top",
                         "freqs": [
-                            193414489407062.47
+                            193414489116771.6
                         ],
                         "mode_spec": {
                             "num_modes": 1,
@@ -29689,7 +29708,7 @@
                         ],
                         "name": "bottom",
                         "freqs": [
-                            193414489407062.47
+                            193414489116771.6
                         ],
                         "mode_spec": {
                             "num_modes": 1,
@@ -29739,13 +29758,14 @@
                 },
                 "shutoff": 1e-05,
                 "subpixel": true,
+                "normalize_index": 0,
                 "courant": 0.9,
-                "version": "1.5.0"
+                "version": "1.6.0"
             },
             "task_name": "l=10.60",
             "folder_name": "default",
             "callback_url": null,
-            "task_id": "a3289ec8-6a29-42d7-8b43-97fb491f805e"
+            "task_id": "33fd8672-9171-459b-ac25-af76bb811eed"
         },
         "l=11.30": {
             "type": "Job",
@@ -29761,7 +29781,7 @@
                     10.45,
                     2.22
                 ],
-                "run_time": 1.0340486931104608e-12,
+                "run_time": 1.034048694662438e-12,
                 "grid_size": null,
                 "medium": {
                     "name": null,
@@ -30931,8 +30951,8 @@
                             "amplitude": 1.0,
                             "phase": 0.0,
                             "type": "GaussianPulse",
-                            "freq0": 193414489407062.47,
-                            "fwidth": 19341448940706.246,
+                            "freq0": 193414489116771.6,
+                            "fwidth": 19341448911677.16,
                             "offset": 5.0
                         },
                         "name": null,
@@ -31084,7 +31104,7 @@
                         ],
                         "name": "in",
                         "freqs": [
-                            193414489407062.47
+                            193414489116771.6
                         ],
                         "mode_spec": {
                             "num_modes": 1,
@@ -31116,7 +31136,7 @@
                         ],
                         "name": "refect_bottom",
                         "freqs": [
-                            193414489407062.47
+                            193414489116771.6
                         ],
                         "mode_spec": {
                             "num_modes": 1,
@@ -31148,7 +31168,7 @@
                         ],
                         "name": "top",
                         "freqs": [
-                            193414489407062.47
+                            193414489116771.6
                         ],
                         "mode_spec": {
                             "num_modes": 1,
@@ -31180,7 +31200,7 @@
                         ],
                         "name": "bottom",
                         "freqs": [
-                            193414489407062.47
+                            193414489116771.6
                         ],
                         "mode_spec": {
                             "num_modes": 1,
@@ -31230,13 +31250,14 @@
                 },
                 "shutoff": 1e-05,
                 "subpixel": true,
+                "normalize_index": 0,
                 "courant": 0.9,
-                "version": "1.5.0"
+                "version": "1.6.0"
             },
             "task_name": "l=11.30",
             "folder_name": "default",
             "callback_url": null,
-            "task_id": "ffa9f712-3eab-4f2e-8ab0-052ec0dab929"
+            "task_id": "7e00367a-e67c-4498-a9af-63b5577015c4"
         },
         "l=12.00": {
             "type": "Job",
@@ -31252,7 +31273,7 @@
                     10.45,
                     2.22
                 ],
-                "run_time": 1.0340486931104608e-12,
+                "run_time": 1.034048694662438e-12,
                 "grid_size": null,
                 "medium": {
                     "name": null,
@@ -32422,8 +32443,8 @@
                             "amplitude": 1.0,
                             "phase": 0.0,
                             "type": "GaussianPulse",
-                            "freq0": 193414489407062.47,
-                            "fwidth": 19341448940706.246,
+                            "freq0": 193414489116771.6,
+                            "fwidth": 19341448911677.16,
                             "offset": 5.0
                         },
                         "name": null,
@@ -32575,7 +32596,7 @@
                         ],
                         "name": "in",
                         "freqs": [
-                            193414489407062.47
+                            193414489116771.6
                         ],
                         "mode_spec": {
                             "num_modes": 1,
@@ -32607,7 +32628,7 @@
                         ],
                         "name": "refect_bottom",
                         "freqs": [
-                            193414489407062.47
+                            193414489116771.6
                         ],
                         "mode_spec": {
                             "num_modes": 1,
@@ -32639,7 +32660,7 @@
                         ],
                         "name": "top",
                         "freqs": [
-                            193414489407062.47
+                            193414489116771.6
                         ],
                         "mode_spec": {
                             "num_modes": 1,
@@ -32671,7 +32692,7 @@
                         ],
                         "name": "bottom",
                         "freqs": [
-                            193414489407062.47
+                            193414489116771.6
                         ],
                         "mode_spec": {
                             "num_modes": 1,
@@ -32721,13 +32742,14 @@
                 },
                 "shutoff": 1e-05,
                 "subpixel": true,
+                "normalize_index": 0,
                 "courant": 0.9,
-                "version": "1.5.0"
+                "version": "1.6.0"
             },
             "task_name": "l=12.00",
             "folder_name": "default",
             "callback_url": null,
-            "task_id": "8dccca4d-22ef-42fd-ad41-52df13b394fc"
+            "task_id": "6d9eeb8c-2d47-4114-828e-4010cca112f1"
         }
     }
 }
