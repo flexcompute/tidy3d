@@ -448,6 +448,8 @@ class Tidy3dBaseModel(pydantic.BaseModel):
             return bool(value)
         if isinstance(value, bytes):
             return value.decode("utf-8")
+        if np.isnan(value):
+            return None
 
         return value
 
@@ -523,7 +525,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
 
         # handle special cases
         if value is None:
-            return
+            value = np.nan
         if isinstance(value, str):
             value = value.encode("utf-8")
 

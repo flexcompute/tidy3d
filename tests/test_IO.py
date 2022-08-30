@@ -210,3 +210,23 @@ def test_to_json_data():
     assert json.loads(data._json_string())["flux"] is not None
     data_file = "tests/tmp/data_file.hdf5"
     assert json.loads(data._json_string(data_file=data_file))["flux"]["data_file"] == data_file
+
+
+@clear_tmp
+def test_none_hdf5():
+    """Tests that values of None where None is not the default are loaded correctly."""
+
+    sim = Simulation(
+        size=(1, 1, 1),
+        grid_spec=GridSpec(wavelength=1.0),
+        run_time=1e-12,
+        normalize_index=None,
+    )
+
+    assert sim.normalize_index is None, "'normalize_index' of 'None' not initialized correctly."
+
+    fname = "tests/tmp/sim_none.hdf5"
+    sim.to_file(fname)
+    sim2 = Simulation.from_file(fname)
+
+    assert sim2.normalize_index is None, "'normalize_index' of 'None' not loaded correctly."
