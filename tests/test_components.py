@@ -205,6 +205,18 @@ def test_monitor_simulation_frequency_range(caplog, fwidth, log_level):
     assert_log_level(caplog, log_level)
 
 
+def test_monitor_freqs_empty():
+    # errors when no frequencies supplied
+
+    with pytest.raises(ValidationError):
+        monitor = FieldMonitor(
+            size=(inf, inf, inf),
+            freqs=[],
+            name="test",
+            interval_space=(1, 1, 1),
+        )
+
+
 def test_monitor_downsampling():
     # test that the downsampling parameters can be set and the colocation validator works
 
