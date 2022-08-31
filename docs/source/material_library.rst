@@ -31,6 +31,8 @@ Silver ("Ag")
 +=============================+=================+========+============+
 | ``'Rakic1998'`` (default)   | 0.1-5eV         | Yes    | 6 poles    |
 +-----------------------------+-----------------+--------+------------+
+| ``'RakicLorentzDrude1998'`` | 0.1-5eV         | Yes    | 8 poles    |
++-----------------------------+-----------------+--------+------------+
 | ``'JohnsonChristy1972'``    | 0.64-6.6eV      | Yes    | 4 poles    |
 +-----------------------------+-----------------+--------+------------+
 
@@ -48,10 +50,13 @@ Aluminum ("Al")
 +=============================+=================+========+============+
 | ``'Rakic1998'`` (default)   | 0.1-10eV        | Yes    | 5 poles    |
 +-----------------------------+-----------------+--------+------------+
+| ``'RakicLorentzDrude1998'`` | 0.005-20eV      | Yes    | 7 poles    |
++-----------------------------+-----------------+--------+------------+
 
 
 
 *  A. D. Rakic. Algorithm for the determination of intrinsic optical constants of metal films: application to aluminum, Appl. Opt. 34, 4755-4767 (1995).
+*  A. D. Rakic et al., Applied Optics, 37, 5271-5283 (1998).
 
 
 Alumina ("Al2O3") 
@@ -157,10 +162,12 @@ Gold ("Au")
     +======================================+=================+========+============+
     | ``'JohnsonChristy1972'`` (default)   | 0.64-6.6eV      | Yes    | 6 poles    |
     +--------------------------------------+-----------------+--------+------------+
-
+    | ``'RakicLorentzDrude1998'``          | 0.2-5eV         | Yes    | 7 poles    |
+    +--------------------------------------+-----------------+--------+------------+
 
 
 *  P. B. Johnson and R. W. Christy. Optical constants of the noble metals, Phys. Rev. B 6, 4370-4379 (1972).
+*  A. D. Rakic et al., Applied Optics, 37, 5271-5283 (1998).
 
 
 N-BK7 borosilicate glass ("BK7") 
@@ -185,11 +192,13 @@ Beryllium ("Be")
     +=============================+=================+========+============+
     | ``'Rakic1998'`` (default)   | 0.02-5eV        | Yes    | 4 poles    |
     +-----------------------------+-----------------+--------+------------+
+    | ``'RakicLorentzDrude1998'`` | 0.02-5eV        | Yes    | 8 poles    |
+    +-----------------------------+-----------------+--------+------------+    
 
 
 
 *  A. D. Rakic. Algorithm for the determination of intrinsic optical constants of metal films: application to aluminum, Appl. Opt. 34, 4755-4767 (1995).
-
+*  A. D. Rakic et al., Applied Optics, 37, 5271-5283 (1998).
 
 Calcium fluoride ("CaF2") 
 =========================
@@ -233,10 +242,13 @@ Chromium ("Cr")
     +=============================+=================+========+============+
     | ``'Rakic1998'`` (default)   | 0.1-10eV        | Yes    | 4 poles    |
     +-----------------------------+-----------------+--------+------------+
+    | ``'RakicLorentzDrude1998'`` | 0.02-5eV        | Yes    | 8 poles    |
+    +-----------------------------+-----------------+--------+------------+   
 
 
 
 *  A. D. Rakic. Algorithm for the determination of intrinsic optical constants of metal films: application to aluminum, Appl. Opt. 34, 4755-4767 (1995).
+*  A. D. Rakic et al., Applied Optics, 37, 5271-5283 (1998).
 
 
 Copper ("Cu") 
@@ -249,10 +261,13 @@ Copper ("Cu")
     +======================================+=================+========+============+
     | ``'JohnsonChristy1972'`` (default)   | 0.64-6.6eV      | Yes    | 5 poles    |
     +--------------------------------------+-----------------+--------+------------+
+    | ``'RakicLorentzDrude1998'``          | 0.1-6eV         | Yes    | 6 poles    |
+    +--------------------------------------+-----------------+--------+------------+
 
 
 
 *  P. B. Johnson and R. W. Christy. Optical constants of the noble metals, Phys. Rev. B 6, 4370-4379 (1972)
+*  A. D. Rakic et al., Applied Optics, 37, 5271-5283 (1998).
 
 
 Fused silica ("FusedSilica") 
@@ -557,10 +572,13 @@ Palladium ("Pd")
     +======================================+=================+========+============+
     | ``'JohnsonChristy1972'`` (default)   | 0.64-6.6eV      | Yes    | 5 poles    |
     +--------------------------------------+-----------------+--------+------------+
+    | ``'RakicLorentzDrude1998'``          | 0.1-5eV         | Yes    | 7 poles    |
+    +--------------------------------------+-----------------+--------+------------+
 
 
 
 *  P. B. Johnson and R. W. Christy. Optical constants of the noble metals, Phys. Rev. B 6, 4370-4379 (1972).
+*  A. D. Rakic et al., Applied Optics, 37, 5271-5283 (1998).
 
 
 Polycarbonate. ("Polycarbonate") 
@@ -608,11 +626,12 @@ Platinum ("Pt")
     +======================================+=================+========+============+
     | ``'Werner2009'`` (default)           | 0.1-2.48um      | Yes    | 5 poles    |
     +--------------------------------------+-----------------+--------+------------+
-
+    | ``'RakicLorentzDrude1998'``          | 0.1-5eV         | Yes    | 6 poles    |
+    +--------------------------------------+-----------------+--------+------------+
 
 
 *  W. S. M. Werner, K. Glantschnig, C. Ambrosch-Draxl.  Optical constants and inelastic electron-scattering data for 17 elemental metals, J. Phys Chem Ref. Data 38, 1013-1092 (2009).
-
+*  A. D. Rakic et al., Applied Optics, 37, 5271-5283 (1998).
 
 Sapphire. ("Sapphire") 
 ======================
@@ -742,10 +761,13 @@ Titanium ("Ti")
     +======================================+=================+========+============+
     | ``'Werner2009'`` (default)           | 0.1-2.48um      | Yes    | 5 poles    |
     +--------------------------------------+-----------------+--------+------------+
+    | ``'RakicLorentzDrude1998'``          | 0.04-5eV        | Yes    | 7 poles    |
+    +--------------------------------------+-----------------+--------+------------+    
 
 
 
 *  W. S. M. Werner, K. Glantschnig, C. Ambrosch-Draxl. Optical constants and inelastic electron-scattering data for 17 elemental metals, J. Phys Chem Ref. Data 38, 1013-1092 (2009).
+*  A. D. Rakic et al., Applied Optics, 37, 5271-5283 (1998).
 
 
 Titanium oxide ("TiOx") 
@@ -774,10 +796,13 @@ Tungsten ("W")
     +======================================+=================+========+============+
     | ``'Werner2009'`` (default)           | 0.1-2.48um      | Yes    | 5 poles    |
     +--------------------------------------+-----------------+--------+------------+
+    | ``'RakicLorentzDrude1998'``          | 0.1-5eV         | Yes    | 6 poles    |
+    +--------------------------------------+-----------------+--------+------------+    
 
 
 
 *  W. S. M. Werner, K. Glantschnig, C. Ambrosch-Draxl. Optical constants and inelastic electron-scattering data for 17 elemental metals, J. Phys Chem Ref. Data 38, 1013-1092 (2009).
+*  A. D. Rakic et al., Applied Optics, 37, 5271-5283 (1998).
 
 
 Yttrium oxide ("Y2O3") 
