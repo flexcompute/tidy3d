@@ -478,7 +478,7 @@ class ModeSolverMonitor(AbstractModeMonitor):
 
 
 class AbstractNear2FarMonitor(SurfaceIntegrationMonitor, FreqMonitor):
-    """:class:`Monitor` class that samples electromagnetic near fields in the frequency domain
+    """:class:`Monitor` that samples electromagnetic near fields in the frequency domain
     and invokes the computation of far fields.
     """
 
@@ -525,7 +525,7 @@ class AbstractNear2FarMonitor(SurfaceIntegrationMonitor, FreqMonitor):
 
 class Near2FarAngleMonitor(AbstractNear2FarMonitor):
     """:class:`Monitor` that samples electromagnetic near fields in the frequency domain
-       and invokes the computation of far fields at given observation angles.
+    and invokes the computation of far fields at given observation angles.
 
     Example
     -------
@@ -563,7 +563,9 @@ class Near2FarAngleMonitor(AbstractNear2FarMonitor):
 
 class Near2FarCartesianMonitor(AbstractNear2FarMonitor):
     """:class:`Monitor` that samples electromagnetic near fields in the frequency domain
-       and invokes the computation of far fields on a Cartesian observation plane.
+    and invokes the computation of far fields on a Cartesian observation plane.
+    The far-field approximation is used, so results projected to points close to
+    the monitor's position, compared to its size, may not be accurate.
 
     Example
     -------
@@ -622,7 +624,7 @@ class Near2FarCartesianMonitor(AbstractNear2FarMonitor):
 
 class Near2FarKSpaceMonitor(AbstractNear2FarMonitor):
     """:class:`Monitor` that samples electromagnetic near fields in the frequency domain
-       and invokes the computation of far fields on an observation plane defined in k-space.
+    and invokes the computation of far fields on an observation plane defined in k-space.
 
     Example
     -------
