@@ -22,6 +22,9 @@ DIM_ATTRS = {
     "phi": {"units": RADIAN, "long_name": "azimuth angle"},
     "ux": {"long_name": "normalized kx"},
     "uy": {"long_name": "normalized ky"},
+    "orders_x": {"long_name": "diffraction order"},
+    "orders_y": {"long_name": "diffraction order"},
+    "polarization": {"long_name": "polarization"},
 }
 
 
@@ -299,3 +302,21 @@ class Near2FarKSpaceDataArray(DataArray):
 
     __slots__ = ("ux", "uy", "f")
     _data_attrs = {"long_name": "radiation vectors"}
+
+
+class DiffractionDataArray(DataArray):
+    """Diffraction power amplitudes as a function of diffraction orders and frequency.
+
+    Example
+    -------
+    >>> f = np.linspace(1e14, 2e14, 10)
+    >>> orders_x = np.linspace(-1, 1, 3)
+    >>> orders_y = np.linspace(-2, 2, 5)
+    >>> pol = ["s", "p"]
+    >>> coords = dict(f=f, orders_x=orders_x, orders_y=orders_y, polarization=pol)
+    >>> values = (1+1j) * np.random.random((len(orders_x), len(orders_y), len(pol), len(f)))
+    >>> data = DiffractionDataArray(values, coords=coords)
+    """
+
+    __slots__ = ("orders_x", "orders_y", "polarization", "f")
+    _data_attrs = {"long_name": "diffraction amplitude"}

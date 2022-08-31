@@ -10,11 +10,13 @@ from tidy3d.components.grid.grid_spec import GridSpec
 from tidy3d.components.data.sim_data import SimulationData
 from tidy3d.components.data import ScalarFieldTimeDataArray, FieldTimeData
 from tidy3d.components.monitor import FieldMonitor, FieldTimeMonitor, ModeSolverMonitor
+from tidy3d.components.monitor import DiffractionMonitor
 from tidy3d.components.source import GaussianPulse, PointDipole
 
 from .test_data_monitor import make_field_data, make_field_time_data, make_permittivity_data
 from .test_data_monitor import make_mode_data, make_mode_solver_data
 from .test_data_monitor import make_flux_data, make_flux_time_data
+from .test_data_monitor import make_diffraction_data
 from .test_data_arrays import FIELD_MONITOR, FIELD_TIME_MONITOR, MODE_SOLVE_MONITOR
 from .test_data_arrays import MODE_MONITOR, PERMITTIVITY_MONITOR, FLUX_MONITOR, FLUX_TIME_MONITOR
 from .test_data_arrays import SIM, SIM_SYM
@@ -33,10 +35,20 @@ MODE = make_mode_data()
 MODE_SOLVER = make_mode_solver_data()
 FLUX = make_flux_data()
 FLUX_TIME = make_flux_time_data()
+DIFFRACTION = make_diffraction_data()
 
 # for constructing SimulationData
-MONITOR_DATA = (FIELD, FIELD_TIME, MODE_SOLVER, PERMITTIVITY, MODE, FLUX, FLUX_TIME)
-MONITOR_DATA_SYM = (FIELD_SYM, FIELD_TIME_SYM, MODE_SOLVER, PERMITTIVITY_SYM, MODE, FLUX, FLUX_TIME)
+MONITOR_DATA = (FIELD, FIELD_TIME, MODE_SOLVER, PERMITTIVITY, MODE, FLUX, FLUX_TIME, DIFFRACTION)
+MONITOR_DATA_SYM = (
+    FIELD_SYM,
+    FIELD_TIME_SYM,
+    MODE_SOLVER,
+    PERMITTIVITY_SYM,
+    MODE,
+    FLUX,
+    FLUX_TIME,
+    DIFFRACTION,
+)
 MONITOR_DATA_DICT = {data.monitor.name: data for data in MONITOR_DATA}
 MONITOR_DATA_DICT_SYM = {data.monitor.name: data for data in MONITOR_DATA_SYM}
 

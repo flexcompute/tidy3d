@@ -7,13 +7,14 @@ from tidy3d.components.data.data_array import ScalarFieldDataArray, ScalarFieldT
 from tidy3d.components.data.data_array import ScalarModeFieldDataArray
 from tidy3d.components.data.data_array import ModeAmpsDataArray, ModeIndexDataArray
 from tidy3d.components.data.data_array import FluxDataArray, FluxTimeDataArray
+from tidy3d.components.data.data_array import DiffractionDataArray
 from tidy3d.components.source import PointDipole, GaussianPulse, ModeSource
 from tidy3d.components.simulation import Simulation
 from tidy3d.components.grid import GridSpec
 from tidy3d.components.mode import ModeSpec
 from tidy3d.components.monitor import FieldMonitor, FieldTimeMonitor, PermittivityMonitor
 from tidy3d.components.monitor import ModeSolverMonitor, ModeMonitor
-from tidy3d.components.monitor import FluxMonitor, FluxTimeMonitor
+from tidy3d.components.monitor import FluxMonitor, FluxTimeMonitor, DiffractionMonitor
 from tidy3d.components.monitor import MonitorType
 from tidy3d.components.structure import Structure
 from tidy3d.components.geometry import Box
@@ -41,6 +42,15 @@ SOURCES = [
 ]
 FIELDS = ("Ex", "Ey", "Ez", "Hz")
 INTERVAL = 2
+ORDERS_X = list(range(-1, 2))
+ORDERS_Y = list(range(-2, 3))
+POL = ["x", "y"]
+
+FS = np.linspace(1e14, 2e14, 11)
+TS = np.linspace(0, 1e-12, 11)
+MODE_INDICES = np.arange(0, 3)
+DIRECTIONS = ["+", "-"]
+
 FIELD_MONITOR = FieldMonitor(size=SIZE_3D, fields=FIELDS, name="field", freqs=FREQS)
 FIELD_TIME_MONITOR = FieldTimeMonitor(
     size=SIZE_3D, fields=FIELDS, name="field_time", interval=INTERVAL
@@ -52,6 +62,9 @@ PERMITTIVITY_MONITOR = PermittivityMonitor(size=SIZE_3D, name="permittivity", fr
 MODE_MONITOR = ModeMonitor(size=SIZE_2D, name="mode", mode_spec=MODE_SPEC, freqs=FREQS)
 FLUX_MONITOR = FluxMonitor(size=SIZE_2D, freqs=FREQS, name="flux")
 FLUX_TIME_MONITOR = FluxTimeMonitor(size=SIZE_2D, interval=INTERVAL, name="flux_time")
+DIFFRACTION_MONITOR = DiffractionMonitor(
+    size=(inf, 0, inf), freqs=FS, name="diffraction", orders_x=ORDERS_X, orders_y=ORDERS_Y
+)
 
 MONITORS = [
     FIELD_MONITOR,
@@ -61,6 +74,7 @@ MONITORS = [
     MODE_MONITOR,
     FLUX_MONITOR,
     FLUX_TIME_MONITOR,
+    DIFFRACTION_MONITOR,
 ]
 
 GRID_SPEC = GridSpec(wavelength=1.0)
@@ -85,11 +99,6 @@ SIM = Simulation(
     monitors=MONITORS,
     structures=STRUCTURES,
 )
-
-FS = np.linspace(1e14, 2e14, 11)
-TS = np.linspace(0, 1e-12, 11)
-MODE_INDICES = np.arange(0, 3)
-DIRECTIONS = ["+", "-"]
 
 """ Generate the data arrays (used in other test files) """
 
@@ -152,6 +161,17 @@ def make_flux_time_data_array():
     return FluxTimeDataArray(values, coords=dict(t=TS))
 
 
+def make_diffraction_data_array():
+    values = (1 + 1j) * np.random.random((len(ORDERS_X), len(ORDERS_Y), len(POL), len(FS)))
+    return (
+        [SIZE_2D[0], SIZE_2D[2]],
+        [1.0, 2.0],
+        DiffractionDataArray(
+            values, coords=dict(orders_x=ORDERS_X, orders_y=ORDERS_Y, polarization=POL, f=FS)
+        ),
+    )
+
+
 """ Test that they work """
 
 
@@ -198,6 +218,11 @@ def test_flux_data_array():
 def test_flux_time_data_array():
     data = make_flux_time_data_array()
     data = data.interp(t=1e-13)
+
+
+def test_diffraction_data_array():
+    _, _, data = make_diffraction_data_array()
+    data = data.interp(f=1.5e14)
 
 
 def test_attrs():

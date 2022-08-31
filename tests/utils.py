@@ -183,6 +183,12 @@ SIM_FULL = Simulation(
             freqs=[2e14, 2.5e14],
             mode_spec=ModeSpec(),
         ),
+        DiffractionMonitor(
+            size=(0, inf, inf),
+            center=(0, 0, 0),
+            name="diffraction",
+            freqs=[1e14, 2e14],
+        ),
     ),
     symmetry=(0, 0, 0),
     boundary_spec=BoundarySpec(

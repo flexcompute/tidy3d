@@ -121,10 +121,14 @@ class BlochBoundary(BoundaryEdge):
         angle_theta = source.angle_theta
         angle_phi = source.angle_phi
 
+        # handle the special case to avoid tiny numerical fluctuations
+        if angle_theta == 0:
+            return cls(bloch_vec=0)
+
         if source.direction == "-":
             angle_theta += np.pi
-            angle_phi += np.pi
-            kmag *= -1.0
+            # angle_phi += np.pi
+            # kmag *= -1.0
 
         k_local = [
             kmag * np.sin(angle_theta) * np.cos(angle_phi),
