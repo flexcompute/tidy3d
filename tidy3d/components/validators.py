@@ -64,6 +64,19 @@ def validate_name_str():
     return field_has_unique_names
 
 
+def validate_unique(field_name: str):
+    """Make sure the given field has unique entries."""
+
+    @pydantic.validator(field_name, always=True, allow_reuse=True)
+    def field_has_unique_entries(cls, val):
+        """Check if the field has unique entries."""
+        if len(set(val)) != len(val):
+            raise SetupError(f"Entries of '{field_name}' must be unique.")
+        return val
+
+    return field_has_unique_entries
+
+
 def validate_mode_objects_symmetry(field_name: str):
     """If a Mode object, this checks that the object is fully in the main quadrant in the presence
     of symmetry along a given axis, or else centered on the symmetry center."""

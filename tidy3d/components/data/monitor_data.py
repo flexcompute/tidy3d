@@ -3,22 +3,25 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from typing import Union, Dict, Tuple, Callable
+import warnings
 import xarray as xr
 import numpy as np
 import pydantic as pd
 
 from ..base import TYPE_TAG_STR, Tidy3dBaseModel
-from ..types import Axis, Coordinate
+from ..types import Axis, Coordinate, ArrayLike
 from ..boundary import Symmetry
 from ..grid import Grid
 from ..validators import enforce_monitor_fields_present
 from ..monitor import MonitorType, FieldMonitor, FieldTimeMonitor, ModeSolverMonitor
 from ..monitor import ModeMonitor, FluxMonitor, FluxTimeMonitor, PermittivityMonitor
+from ..monitor import DiffractionMonitor
 from ...log import DataError
+from ...constants import ETA_0
 
 from .data_array import ScalarFieldDataArray, ScalarFieldTimeDataArray, ScalarModeFieldDataArray
 from .data_array import FluxTimeDataArray, FluxDataArray, ModeIndexDataArray, ModeAmpsDataArray
-from .data_array import DataArray
+from .data_array import DataArray, DiffractionDataArray
 
 
 class MonitorData(Tidy3dBaseModel, ABC):
@@ -575,6 +578,143 @@ class FluxTimeData(MonitorData):
     flux: FluxTimeDataArray
 
 
+class DiffractionData(MonitorData):
+    """Data associated with a :class:`.DiffractionMonitor`:
+    complex components of diffracted far fields.
+
+    Example
+    -------
+    >>> f = np.linspace(1e14, 2e14, 10)
+    >>> orders_x = list(range(-4, 5))
+    >>> orders_y = list(range(-6, 7))
+    >>> pol = ["s", "p"]
+    >>> wave_numbers = np.random.random((len(orders_x), len(orders_y), len(f))).tolist()
+    >>> coords = dict(f=f, orders_x=orders_x, orders_y=orders_y, polarization=pol)
+    >>> values = (1+1j) * np.random.random((len(orders_x), len(orders_y), len(pol), len(f)))
+    >>> field = DiffractionDataArray(values, coords=coords)
+    >>> monitor = DiffractionMonitor(
+    ...     center=(1,2,3), size=(np.inf,np.inf,0), freqs=f, name='diffraction',
+    ...     orders_x=orders_x, orders_y=orders_y
+    ...     )
+    >>> data = DiffractionData(
+    ...     monitor=monitor, E=field, H=field, ux=wave_numbers, uy=wave_numbers
+    ... )
+    """
+
+    monitor: DiffractionMonitor
+
+    ux: ArrayLike[float, 2] = pd.Field(
+        ...,
+        title="Normalized wave vector along x",
+        description="Local x component of wave vectors for each diffraction order and frequency, "
+        "relative to ``local_origin`` and oriented with respect to ``u_axis``, "
+        "normalized by (2*pi/lambda) where lambda is the wavelength "
+        "associated with the background medium.",
+    )
+
+    uy: ArrayLike[float, 2] = pd.Field(
+        ...,
+        title="Normalized wave vector along y",
+        description="Local y component of wave vectors for each diffraction order and frequency, "
+        "relative to ``local_origin`` and oriented with respect to ``u_axis``, "
+        "normalized by (2*pi/lambda) where lambda is the wavelength "
+        "associated with the background medium.",
+    )
+
+    E: DiffractionDataArray = pd.Field(
+        ...,
+        title="E",
+        description="Complex components of the electric far field for each polarization "
+        "tangential to ``monitor.normal_axis``, in the local coordinate system whose "
+        " z-axis is ``monitor.normal_axis``.",
+    )
+    H: DiffractionDataArray = pd.Field(
+        ...,
+        title="H",
+        description="Complex components of the magnetic far field for each polarization "
+        "tangential to ``monitor.normal_axis``, in the local coordinate system whose "
+        "z-axis is ``monitor.normal_axis``.",
+    )
+
+    @property
+    def field_components(self) -> Dict[str, DataArray]:
+        """Maps the field components to thier associated data."""
+        return dict(E=self.E, H=self.H)
+
+    def normalize(self, source_spectrum_fn: Callable[[float], complex]) -> DiffractionData:
+        """Return copy of self after normalization is applied using source spectrum function."""
+        fields_norm = {}
+        for field_name, field_data in self.field_components.items():
+            src_amps = source_spectrum_fn(field_data.f)
+            fields_norm[field_name] = field_data / src_amps
+
+        return self.copy(update=fields_norm)
+
+    def _make_coords(self):
+        """Helper to make the coordinates dictionary."""
+        coords = {}
+        coords["orders_x"] = np.atleast_1d(self.E.orders_x.values)
+        coords["orders_y"] = np.atleast_1d(self.E.orders_y.values)
+        coords["polarization"] = ["s", "p"]
+        coords["f"] = np.array(self.E.f.values)
+        return coords
+
+    @property
+    def angles(self):
+        """Return the (theta, phi) angles corresponding to each allowed pair of diffraction
+        orders as a data array. Disallowed angles are set to ``np.nan``.
+        """
+        # some wave number pairs are outside the light cone, leading to warnings from numpy.arcsin
+        with warnings.catch_warnings():
+            warnings.filterwarnings(
+                "ignore", message="invalid value encountered in arcsin", category=RuntimeWarning
+            )
+            thetas, phis = DiffractionMonitor.kspace_2_sph(
+                np.array(self.ux)[:, None, :], np.array(self.uy)[None, :, :], axis=2
+            )
+
+        coords = self._make_coords()
+        del coords["polarization"]
+        theta_data = xr.DataArray(thetas, coords=coords)
+        phi_data = xr.DataArray(phis, coords=coords)
+        return theta_data, phi_data
+
+    @property
+    def amps(self):
+        """Return normalized field amplitudes in each order, for 's' and 'p' polarizations.
+        Fields are normalized so that the power equals abs(amps)^2 for each polarization.
+        """
+        e_x = self.E.sel(polarization="x").values
+        e_y = self.E.sel(polarization="y").values
+
+        e_theta = np.zeros_like(e_x)
+        e_phi = np.zeros_like(e_x)
+
+        thetas, phis = self.angles
+
+        # compute normalized fields in local spherical coordinates
+        # the terms of the normalization factor are:
+        # 2: this comes from the time-averaged Poynting vector definition
+        # 'ETA_0': this relates E and H components
+        norm = 1.0 / np.sqrt(2.0 * ETA_0)
+        e_phi = np.nan_to_num(-np.sin(phis) * e_x + np.cos(phis) * e_y) * norm
+        e_theta = np.nan_to_num((e_x * np.cos(phis) + e_y * np.sin(phis)) / np.cos(thetas)) * norm
+
+        # stack the fields in s- and p-components along a new polarization axis
+        return DiffractionDataArray(np.stack([e_phi, e_theta], axis=2), coords=self._make_coords())
+
+    @property
+    def power(self):
+        """Return the total power in each order, summed over both polarizations."""
+        amps = self.amps
+        angles = self.angles
+        cos_theta = np.cos(np.nan_to_num(angles[0]))
+
+        amps_s = amps.sel(polarization="s")
+        amps_p = amps.sel(polarization="p")
+        return (np.abs(amps_s) ** 2 + np.abs(amps_p) ** 2) * cos_theta
+
+
 MonitorDataTypes = (
     FieldData,
     FieldTimeData,
@@ -583,4 +723,5 @@ MonitorDataTypes = (
     ModeData,
     FluxData,
     FluxTimeData,
+    DiffractionData,
 )

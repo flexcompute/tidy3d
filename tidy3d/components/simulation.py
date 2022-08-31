@@ -17,12 +17,12 @@ from .geometry import Box
 from .types import Ax, Shapely, FreqBound, Axis, annotate_type
 from .grid import Coords1D, Grid, Coords, GridSpec, UniformGrid
 from .medium import Medium, MediumType, AbstractMedium, PECMedium
-from .boundary import BoundarySpec, Symmetry, BlochBoundary, PECBoundary, PMCBoundary
+from .boundary import BoundarySpec, Symmetry, BlochBoundary, PECBoundary, PMCBoundary, Periodic
 from .boundary import PML, StablePML, Absorber
 from .structure import Structure
 from .source import SourceType, PlaneWave, GaussianBeam, AstigmaticGaussianBeam
 from .monitor import MonitorType, Monitor, FreqMonitor
-from .monitor import AbstractFieldMonitor
+from .monitor import AbstractFieldMonitor, DiffractionMonitor
 from .viz import add_ax_if_none, equal_aspect
 
 from .viz import MEDIUM_CMAP, PlotParams, plot_params_symmetry
@@ -416,6 +416,30 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
                     f"outside of the simulation frequency range ({freq_min:2e}, {freq_max:2e})"
                     "(Hz) as defined by the sources."
                 )
+        return val
+
+    @pydantic.validator("monitors", always=True)
+    def diffraction_monitor_boundaries(cls, val, values):
+        """If any :class:`DiffractionMonitor` exists, ensure boundary conditions in the
+        transverse directions are periodic or Bloch."""
+        monitors = val
+        boundary_spec = values.get("boundary_spec")
+        for monitor in monitors:
+            if isinstance(monitor, DiffractionMonitor):
+                _, (n_x, n_y) = monitor.pop_axis(["x", "y", "z"], axis=monitor.normal_axis)
+                boundaries = [
+                    boundary_spec[n_x].plus,
+                    boundary_spec[n_x].minus,
+                    boundary_spec[n_y].plus,
+                    boundary_spec[n_y].minus,
+                ]
+                # make sure the transverse boundaries are either periodic or Bloch
+                for boundary in boundaries:
+                    if not isinstance(boundary, (Periodic, BlochBoundary)):
+                        raise SetupError(
+                            f"The 'DiffractionMonitor' {monitor.name} requires periodic "
+                            f"or Bloch boundaries along dimensions {n_x} and {n_y}."
+                        )
         return val
 
     @pydantic.validator("grid_spec", always=True)

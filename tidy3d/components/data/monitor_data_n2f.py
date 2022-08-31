@@ -12,7 +12,6 @@ from .data_array import DataArray
 from .data_array import Near2FarAngleDataArray, Near2FarCartesianDataArray, Near2FarKSpaceDataArray
 from ..monitor import Near2FarAngleMonitor, Near2FarCartesianMonitor, Near2FarKSpaceMonitor
 from ..medium import Medium
-from ..types import Axis
 from ..validators import enforce_monitor_fields_present
 from ...log import SetupError, log
 from ...constants import C_0, ETA_0
@@ -161,122 +160,6 @@ class AbstractNear2FarData(MonitorData, ABC):
         keys = ("E_r", "E_theta", "E_phi", "H_r", "H_theta", "H_phi")
         vals = (Er_array, Et_array, Ep_array, Hr_array, Ht_array, Hp_array)
         return self.make_dataset(keys=keys, vals=vals)
-
-    @staticmethod
-    def car_2_sph(x: float, y: float, z: float) -> Tuple[float, float, float]:
-        """Convert Cartesian to spherical coordinates.
-
-        Parameters
-        ----------
-        x : float
-            x coordinate relative to ``local_origin``.
-        y : float
-            y coordinate relative to ``local_origin``.
-        z : float
-            z coordinate relative to ``local_origin``.
-
-        Returns
-        -------
-        Tuple[float, float, float]
-            r, theta, and phi coordinates relative to ``local_origin``.
-        """
-        r = np.sqrt(x**2 + y**2 + z**2)
-        theta = np.arccos(z / r)
-        phi = np.arctan2(y, x)
-        return r, theta, phi
-
-    @staticmethod
-    def sph_2_car(r: float, theta: float, phi: float) -> Tuple[float, float, float]:
-        """Convert spherical to Cartesian coordinates.
-
-        Parameters
-        ----------
-        r : float
-            radius.
-        theta : float
-            polar angle (rad) downward from x=y=0 line.
-        phi : float
-            azimuthal (rad) angle from y=z=0 line.
-
-        Returns
-        -------
-        Tuple[float, float, float]
-            x, y, and z coordinates relative to ``local_origin``.
-        """
-        r_sin_theta = r * np.sin(theta)
-        x = r_sin_theta * np.cos(phi)
-        y = r_sin_theta * np.sin(phi)
-        z = r * np.cos(theta)
-        return x, y, z
-
-    @staticmethod
-    def sph_2_car_field(
-        f_r: float, f_theta: float, f_phi: float, theta: float, phi: float
-    ) -> Tuple[complex, complex, complex]:
-        """Convert vector field components in spherical coordinates to cartesian.
-
-        Parameters
-        ----------
-        f_r : float
-            radial component of the vector field.
-        f_theta : float
-            polar angle component of the vector fielf.
-        f_phi : float
-            azimuthal angle component of the vector field.
-        theta : float
-            polar angle (rad) of location of the vector field.
-        phi : float
-            azimuthal angle (rad) of location of the vector field.
-
-        Returns
-        -------
-        Tuple[float, float, float]
-            x, y, and z components of the vector field in cartesian coordinates.
-        """
-        sin_theta = np.sin(theta)
-        cos_theta = np.cos(theta)
-        sin_phi = np.sin(phi)
-        cos_phi = np.cos(phi)
-        f_x = f_r * sin_theta * cos_phi + f_theta * cos_theta * cos_phi - f_phi * sin_phi
-        f_y = f_r * sin_theta * sin_phi + f_theta * cos_theta * sin_phi + f_phi * cos_phi
-        f_z = f_r * cos_theta - f_theta * sin_theta
-        return f_x, f_y, f_z
-
-    @staticmethod
-    def kspace_2_sph(ux: float, uy: float, axis: Axis) -> Tuple[float, float]:
-        """Convert normalized k-space coordinates to angles.
-
-        Parameters
-        ----------
-        ux : float
-            normalized kx coordinate.
-        uy : float
-            normalized ky coordinate.
-        axis : int
-            axis along which the observation plane is oriented.
-
-        Returns
-        -------
-        Tuple[float, float]
-            theta and phi coordinates relative to ``local_origin``.
-        """
-        phi_local = np.arctan2(uy, ux)
-        theta_local = np.arcsin(np.sqrt(ux**2 + uy**2))
-        # Spherical coordinates rotation matrix reference:
-        # https://en.wikipedia.org/wiki/Rodrigues%27_rotation_formula#Matrix_notation
-        if axis == 2:
-            return theta_local, phi_local
-
-        x = np.cos(theta_local)
-        y = np.sin(theta_local) * np.sin(phi_local)
-        z = -np.sin(theta_local) * np.cos(phi_local)
-
-        if axis == 1:
-            x, y, z = -z, x, -y
-
-        theta = np.arccos(z)
-        phi = np.arctan2(y, x)
-        return theta, phi
 
     @abstractmethod
     def fields(self, r: float = None, medium: Medium = Medium(permittivity=1)) -> xr.Dataset:
@@ -519,7 +402,7 @@ class Near2FarCartesianData(AbstractNear2FarData):
         coords = [xs, ys]
         coords.insert(self.monitor.plane_axis, zs)
         x_glob, y_glob, z_glob = coords
-        return self.car_2_sph(x_glob, y_glob, z_glob)
+        return self.monitor.car_2_sph(x_glob, y_glob, z_glob)
 
     # pylint:disable=too-many-arguments, too-many-locals
     def fields(self, r: float = None, medium: Medium = Medium(permittivity=1)) -> xr.Dataset:
@@ -552,8 +435,8 @@ class Near2FarCartesianData(AbstractNear2FarData):
         Hr, Ht, Hp = (fields_sph[key].values for key in ("H_r", "H_theta", "H_phi"))
 
         # convert the field components to cartesian coordinate system
-        e_data = self.sph_2_car_field(Er, Et, Ep, thetas, phis)
-        h_data = self.sph_2_car_field(Hr, Ht, Hp, thetas, phis)
+        e_data = self.monitor.sph_2_car_field(Er, Et, Ep, thetas, phis)
+        h_data = self.monitor.sph_2_car_field(Hr, Ht, Hp, thetas, phis)
 
         # package into dataset
         keys = ("Ex", "Ey", "Ez", "Hx", "Hy", "Hz")
