@@ -119,14 +119,17 @@ def upload(  # pylint:disable=too-many-locals,too-many-arguments
     # upload the file to s3
     log.debug("Uploading the json file")
 
-    with tempfile.NamedTemporaryFile() as data_file:
-        # pylint:disable=protected-access
-        json_string = simulation._json_string(data_file=data_file.name)
-        if data_file.name in json_string:
-            # Upload the extra data file if needed
-            json_string.replace(data_file.name, DATA_FILE_NAME)
-            upload_file(task_id, data_file.name, DATA_FILE_NAME)
-        upload_string(task_id, json_string, SIM_FILE_NAME)
+    # pylint:disable=consider-using-with
+    data_file = tempfile.NamedTemporaryFile()
+    # data_file will be reopened and closed in _json_string
+    data_file.close()
+    # pylint:disable=protected-access
+    json_string = simulation._json_string(data_file=data_file.name)
+    if data_file.name in json_string:
+        # Upload the extra data file if needed
+        json_string.replace(data_file.name, DATA_FILE_NAME)
+        upload_file(task_id, data_file.name, DATA_FILE_NAME)
+    upload_string(task_id, json_string, SIM_FILE_NAME)
 
     # log the url for the task in the web UI
     log.debug(f"{DEFAULT_CONFIG.website_endpoint}/folders/{folder.projectId}/tasks/{task_id}")

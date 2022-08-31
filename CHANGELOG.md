@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+## [1.6.1] - 2022-8-31
+
+### Fixed
+- Bug in new simulation upload on Windows machines.
+
 ## [1.6.0] - 2022-8-29
 
 ### Added
@@ -389,7 +394,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Job and Batch classes for better simulation handling (eventually to fully replace webapi functions).
 - A large number of small improvements and bug fixes.
 
-[Unreleased]: https://github.com/flexcompute/tidy3d/compare/v1.6.0...develop
+[Unreleased]: https://github.com/flexcompute/tidy3d/compare/v1.6.1...develop
+[1.6.0]: https://github.com/flexcompute/tidy3d/compare/v1.6.0...v1.6.1
 [1.6.0]: https://github.com/flexcompute/tidy3d/compare/v1.5.0...v1.6.0
 [1.5.0]: https://github.com/flexcompute/tidy3d/compare/v1.4.1...v1.5.0
 [1.4.1]: https://github.com/flexcompute/tidy3d/compare/v1.4.0...v1.4.1
