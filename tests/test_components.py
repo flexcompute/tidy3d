@@ -246,6 +246,38 @@ def test_monitor_downsampling():
     assert monitor.colocate is False
 
 
+def test_diffraction_validators():
+
+    # ensure error if boundaries are not periodic
+    boundary_spec = BoundarySpec(
+        x=Boundary.pml(),
+        y=Boundary.periodic(),
+        z=Boundary.pml(),
+    )
+    with pytest.raises(SetupError) as e_info:
+        sim = Simulation(
+            size=(2, 2, 2),
+            run_time=1e-12,
+            structures=[Structure(geometry=Box(size=(1, 1, 1)), medium=Medium())],
+            boundary_spec=boundary_spec,
+            monitors=[DiffractionMonitor(size=[inf, inf, 0], freqs=[1e12], name="de")],
+        )
+
+    # ensure error if monitor isn't infinite in two directions
+    with pytest.raises(SetupError) as e_info:
+        monitor = DiffractionMonitor(size=[inf, 4, 0], freqs=[1e12], name="de")
+
+    # ensure error if orders are non-unique
+    with pytest.raises(SetupError) as e_info:
+        monitor = DiffractionMonitor(
+            size=[inf, inf, 0], freqs=[1e12], name="de", orders_x=[0, 1, 1]
+        )
+    with pytest.raises(SetupError) as e_info:
+        monitor = DiffractionMonitor(
+            size=[inf, inf, 0], freqs=[1e12], name="de", orders_y=[0, 1, 1]
+        )
+
+
 @pytest.mark.parametrize("grid_size,log_level", [(0.001, None), (3, 30)])
 def test_large_grid_size(caplog, grid_size, log_level):
     # small fwidth should be inside range, large one should throw warning
@@ -950,12 +982,14 @@ def test_monitor_plane():
 
     freqs = [1, 2, 3]
 
-    # make sure flux and mode monitors fail with non planar geometries
+    # make sure flux, mode and diffraction monitors fail with non planar geometries
     for size in ((0, 0, 0), (1, 0, 0), (1, 1, 1)):
         with pytest.raises(ValidationError) as e_info:
             ModeMonitor(size=size, freqs=freqs, modes=[])
         with pytest.raises(ValidationError) as e_info:
             ModeSolverMonitor(size=size, freqs=freqs, modes=[])
+        with pytest.raises(ValidationError) as e_info:
+            DiffractionMonitor(size=size, freqs=freqs, name="de")
 
 
 def _test_freqs_nonempty():

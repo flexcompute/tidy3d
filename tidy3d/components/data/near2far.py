@@ -569,7 +569,7 @@ class RadiationVectors(Tidy3dBaseModel):
         for (_x, _y, _z), (i, j, k) in track(
             iter_coords, description="Computing radiation vectors"
         ):
-            _, theta, phi = AbstractNear2FarData.car_2_sph(_x, _y, _z)
+            _, theta, phi = monitor.car_2_sph(_x, _y, _z)
 
             for surface in self.surfaces:
                 for idx_f, frequency in enumerate(freqs):
@@ -613,7 +613,7 @@ class RadiationVectors(Tidy3dBaseModel):
         iter_coords = [([_ux, _uy], [i, j]) for i, _ux in enumerate(ux) for j, _uy in enumerate(uy)]
 
         for (_ux, _uy), (i, j) in track(iter_coords, description="Computing radiation vectors"):
-            theta, phi = AbstractNear2FarData.kspace_2_sph(_ux, _uy, monitor.u_axis)
+            theta, phi = monitor.kspace_2_sph(_ux, _uy, monitor.u_axis)
 
             for surface in self.surfaces:
                 for idx_f, frequency in enumerate(freqs):

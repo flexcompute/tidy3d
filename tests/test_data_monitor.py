@@ -12,14 +12,16 @@ from tidy3d.log import DataError
 
 from tidy3d.components.data.monitor_data import FieldData, FieldTimeData, PermittivityData
 from tidy3d.components.data.monitor_data import ModeSolverData, ModeData
-from tidy3d.components.data.monitor_data import FluxData, FluxTimeData
+from tidy3d.components.data.monitor_data import FluxData, FluxTimeData, DiffractionData
 
 from .test_data_arrays import make_scalar_field_data_array, make_scalar_field_time_data_array
 from .test_data_arrays import make_scalar_mode_field_data_array
 from .test_data_arrays import make_flux_data_array, make_flux_time_data_array
 from .test_data_arrays import make_mode_amps_data_array, make_mode_index_data_array
+from .test_data_arrays import make_diffraction_data_array
 from .test_data_arrays import FIELD_MONITOR, FIELD_TIME_MONITOR, MODE_SOLVE_MONITOR
 from .test_data_arrays import MODE_MONITOR, PERMITTIVITY_MONITOR, FLUX_MONITOR, FLUX_TIME_MONITOR
+from .test_data_arrays import DIFFRACTION_MONITOR
 from .utils import clear_tmp
 
 # data array instances
@@ -85,6 +87,17 @@ def make_flux_time_data():
     return FluxTimeData(monitor=FLUX_TIME_MONITOR, flux=FLUX_TIME.copy())
 
 
+def make_diffraction_data():
+    sim_size, bloch_vecs, data = make_diffraction_data_array()
+    return DiffractionData(
+        monitor=DIFFRACTION_MONITOR,
+        L=data,
+        N=data,
+        sim_size=sim_size,
+        bloch_vecs=bloch_vecs,
+    )
+
+
 """ Test them out """
 
 
@@ -127,6 +140,30 @@ def test_flux_data():
 def test_flux_time_data():
     data = make_flux_time_data()
     _ = data.flux
+
+
+def test_diffraction_data():
+    data = make_diffraction_data()
+    _ = data.L
+    _ = data.N
+    _ = data.orders_x
+    _ = data.orders_y
+    _ = data.frequencies
+    _ = data.wavelength
+    _ = data.wavenumber
+    _ = data.ux
+    _ = data.uy
+    _ = data.angles
+    _ = data.sim_size
+    _ = data.bloch_vecs
+    _ = data.power
+    _ = data.amps
+    _ = data.E_sph
+    _ = data.H_sph
+    _ = data.E_car
+    _ = data.H_car
+    _ = data.L_sph
+    _ = data.N_sph
 
 
 def test_colocate():

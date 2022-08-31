@@ -9,12 +9,12 @@ from .types import Ax, EMField, ArrayLike, Bound, FreqArray
 from .types import Literal, Direction, Coordinate, Axis, ObsGridArray, RadVec
 from .geometry import Box
 from .medium import Medium
-from .validators import assert_plane
+from .validators import assert_plane, validate_unique
 from .base import cached_property
 from .mode import ModeSpec
 from .viz import PlotParams, plot_params_monitor, ARROW_COLOR_MONITOR, ARROW_ALPHA
 from ..log import SetupError, log, DataError, ValidationError
-from ..constants import HERTZ, SECOND, MICROMETER, RADIAN
+from ..constants import HERTZ, SECOND, MICROMETER, RADIAN, inf
 
 
 BYTES_REAL = 4
@@ -667,6 +667,71 @@ class Near2FarKSpaceMonitor(AbstractNear2FarMonitor):
         return BYTES_COMPLEX * len(self.ux) * len(self.uy) * len(self.freqs) * 4
 
 
+class DiffractionMonitor(PlanarMonitor, FreqMonitor):
+    """:class:`Monitor` that uses a 2D Fourier transform to compute the
+    diffraction amplitudes and efficiency for given (or all) diffraction orders.
+
+    Example
+    -------
+    >>> monitor = DiffractionMonitor(
+    ...     center=(1,2,3),
+    ...     size=(inf,inf,0),
+    ...     freqs=[250e12, 300e12],
+    ...     name='diffraction_monitor',
+    ...     normal_dir='+',
+    ...     orders_x=[0, 1, 2],
+    ...     orders_y=[0],
+    ...     )
+    """
+
+    normal_dir: Direction = pydantic.Field(
+        "+",
+        title="Normal vector orientation",
+        description="Direction of the surface monitor's normal vector w.r.t. "
+        "the positive x, y or z unit vectors. Must be one of ``'+'`` or ``'-'``. "
+        "Defaults to ``'+'`` if not provided.",
+    )
+
+    orders_x: Tuple[int, ...] = pydantic.Field(
+        [0],
+        title="Diffraction orders along x",
+        description="Diffraction orders along x for which efficiency should be computed. "
+        "Orders corresponding to wave numbers outside of the light cone will be ignored. "
+        "By default, only order 0 will be considered.",
+    )
+
+    orders_y: Tuple[int, ...] = pydantic.Field(
+        [0],
+        title="Diffraction orders along y",
+        description="Diffraction orders along y for which efficiency should be computed. "
+        "Orders corresponding to wave numbers outside of the light cone will be ignored. "
+        "By default, only order 0 will be considered.",
+    )
+
+    _unique_x = validate_unique("orders_x")
+    _unique_y = validate_unique("orders_y")
+
+    @pydantic.validator("size", always=True)
+    def diffraction_monitor_size(cls, val):
+        """Ensure that the monitor is infinite in the transverse direction."""
+        if val.count(inf) != 2:
+            raise SetupError(
+                "A 'DiffractionMonitor' must have a size of 'td.inf' along both "
+                f"transverse directions, given size={val}."
+            )
+        return val
+
+    @property
+    def normal_axis(self) -> Axis:
+        """Axis normal to the monitor's plane."""
+        return self.size.index(0)
+
+    def storage_size(self, num_cells: int, tmesh: ArrayLike[float, 1]) -> int:
+        """Size of monitor storage given the number of points after discretization."""
+        # stores 1 complex number per pair of diffraction orders, per frequency
+        return BYTES_COMPLEX * len(self.orders_x) * len(self.orders_y) * len(self.freqs)
+
+
 # types of monitors that are accepted by simulation
 MonitorType = Union[
     FieldMonitor,
@@ -679,4 +744,5 @@ MonitorType = Union[
     Near2FarAngleMonitor,
     Near2FarCartesianMonitor,
     Near2FarKSpaceMonitor,
+    DiffractionMonitor,
 ]
