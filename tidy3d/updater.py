@@ -202,7 +202,7 @@ def iterate_update_dict(update_dict: Dict, update_types: Dict[str, Callable]):
 
 @updates_from_version("1.4")
 def update_1_4(sim_dict: dict) -> dict:
-    """Updates version 1.3 to 1.4."""
+    """Updates version 1.4."""
 
     def fix_polyslab(geo_dict):
         """Fix a PolySlab dictionary."""
@@ -229,13 +229,14 @@ def update_1_4(sim_dict: dict) -> dict:
     }
 
     iterate_update_dict(update_dict=sim_dict, update_types=update_types)
-
+    if "grid_size" in sim_dict:
+        sim_dict.pop("grid_size")
     return sim_dict
 
 
 @updates_from_version("1.3")
 def update_1_3(sim_dict: dict) -> dict:
-    """Updates version 1.3 to 1.4."""
+    """Updates version 1.3."""
 
     sim_dict["boundary_spec"] = {"x": {}, "y": {}, "z": {}}
     for dim, pml_layer in zip(["x", "y", "z"], sim_dict["pml_layers"]):

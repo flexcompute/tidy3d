@@ -560,5 +560,5 @@
     "subpixel": true,
     "normalize_index": 0,
     "courant": 0.9,
-    "version": "1.6.0"
+    "version": "1.7.0"
 }
