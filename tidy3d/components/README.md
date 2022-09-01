@@ -109,7 +109,7 @@ The `Simulation` is the core datastructure in `tidy3d` and contains all of the p
 `Simulation` inherits from `Box` and therefore accepts `center` and `size` arguments.
 
 It also accepts many arguments related to the global configuration of the simulation, including:
-- `grid_size` (defines the discretization).
+- `grid_spec` (defines the discretization).
 - `medium` (the background medium).
 - `run_time`
 - `pml_layers` (a list of three `PML(profile, num_layers)` objects specifying the PML, defined in `pml.py`).
