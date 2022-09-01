@@ -1,6 +1,7 @@
 import os
 import json
 
+import pytest
 import pydantic
 import numpy as np
 import os
@@ -181,15 +182,17 @@ def test_validation_speed():
         print(f"{n} structures \t {size:.1e} bytes \t {time_validate:.1f} seconds to validate")
 
 
-def test_simulation_updater():
-    """Test that all simulations in ``SIM_DIR`` can be updated to current version and loaded."""
-    sim_files = [os.path.join(SIM_DIR, file) for file in os.listdir(SIM_DIR)]
-    for sim_file in sim_files:
-        sim_updated = Simulation.from_file(sim_file)
-        assert sim_updated.version == __version__, "Simulation not converted properly"
+SIM_FILES = [os.path.join(SIM_DIR, file) for file in os.listdir(SIM_DIR)]
 
-        # just make sure the loaded sim does something properly using this version
-        sim_updated.grid
+
+@pytest.mark.parametrize("sim_file", SIM_FILES)
+def test_simulation_updater(sim_file):
+    """Test that all simulations in ``SIM_DIR`` can be updated to current version and loaded."""
+    sim_updated = Simulation.from_file(sim_file)
+    assert sim_updated.version == __version__, "Simulation not converted properly"
+
+    # just make sure the loaded sim does something properly using this version
+    sim_updated.grid
 
 
 @clear_tmp

@@ -14,7 +14,7 @@ from .base import cached_property
 from .validators import assert_unique_names, assert_objects_in_sim_bounds
 from .validators import validate_mode_objects_symmetry
 from .geometry import Box
-from .types import Ax, Shapely, FreqBound, GridSize, Axis, annotate_type
+from .types import Ax, Shapely, FreqBound, Axis, annotate_type
 from .grid import Coords1D, Grid, Coords, GridSpec, UniformGrid
 from .medium import Medium, MediumType, AbstractMedium, PECMedium
 from .boundary import BoundarySpec, Symmetry, BlochBoundary, PECBoundary, PMCBoundary
@@ -30,7 +30,7 @@ from .viz import plot_params_structure, plot_params_pml, plot_params_override_st
 from .viz import plot_params_pec, plot_params_pmc, plot_params_bloch
 
 from ..version import __version__
-from ..constants import C_0, MICROMETER, SECOND, inf
+from ..constants import C_0, SECOND, inf
 from ..log import log, Tidy3dKeyError, SetupError, ValidationError
 from ..updater import Updater
 
@@ -105,13 +105,6 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         "Note: If simulation 'shutoff' is specified, "
         "simulation will terminate early when shutoff condition met. ",
         units=SECOND,
-    )
-
-    grid_size: Union[GridSpec, Tuple[GridSize, GridSize, GridSize]] = pydantic.Field(
-        None,
-        title="Grid Size",
-        description="NOTE: 'grid_size' has been replaced by 'grid_spec'.",
-        units=MICROMETER,
     )
 
     medium: MediumType = pydantic.Field(
@@ -206,18 +199,6 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
     )
 
     """ Validating setup """
-
-    @pydantic.validator("grid_size", always=True)
-    def _error_use_grid_size(cls, val):
-        """If ``grid_size`` is provided, raise an error."""
-
-        if val is not None:
-            raise ValidationError(
-                "'grid_size' has been replaced by 'grid_spec'. See the "
-                "'GridSpec' documentation for more information."
-            )
-
-        return val
 
     @pydantic.validator("grid_spec", always=True)
     def _validate_auto_grid_wavelength(cls, val, values):
