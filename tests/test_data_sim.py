@@ -291,3 +291,9 @@ def test_run_time_lt_start():
     sim_data = SimulationData.from_file("tests/tmp/sim_data_empty.hdf5")
     tmnt_data = sim_data.monitor_data[tmnt.name]
     tmnt_data = sim_data[tmnt.name]
+
+
+def test_plot_field_title():
+    sim_data = make_sim_data()
+    ax = sim_data.plot_field("field", "Ey", "real", f=2e14, z=0.10)
+    assert "z=0.10" in ax.title.get_text(), "title rendered incorrectly."

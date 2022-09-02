@@ -357,13 +357,12 @@ class SimulationData(Tidy3dBaseModel):
             )
 
         # get the spatial coordinate corresponding to the plane
-        planar_coord = {name: val for name, val in spatial_coords_in_data.items() if val is False}
-        axis = "xyz".index(list(planar_coord.keys())[0])
-        position = list(planar_coord.values())[0]
+        planar_coord = [name for name, val in spatial_coords_in_data.items() if val is False][0]
+        axis = "xyz".index(planar_coord)
+        position = float(field_data.coords[planar_coord])
 
         # the frequency at which to evaluate the permittivity with None signaling freq -> inf
         freq_eps_eval = sel_kwargs["f"] if "f" in sel_kwargs else None
-
         return self.plot_field_array(
             field_data=field_data,
             axis=axis,
