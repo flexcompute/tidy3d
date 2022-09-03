@@ -124,20 +124,6 @@ def test_n2f_monitors():
         medium=MEDIUM,
     )
 
-    # Make sure server-side n2f monitors raise an error in the presence of symmetry
-    with pytest.raises(SetupError):
-        sim = td.Simulation(
-            size=sim_size,
-            grid_spec=grid_spec,
-            structures=[],
-            sources=[source],
-            monitors=all_monitors,
-            run_time=run_time,
-            boundary_spec=boundary_spec,
-            medium=MEDIUM,
-            symmetry=[1, 0, 0],
-        )
-
 
 def test_n2f_data():
     """Make sure all the near-to-far data structures can be created."""

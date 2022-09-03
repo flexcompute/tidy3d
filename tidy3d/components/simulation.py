@@ -22,7 +22,7 @@ from .boundary import PML, StablePML, Absorber
 from .structure import Structure
 from .source import SourceType, PlaneWave, GaussianBeam, AstigmaticGaussianBeam
 from .monitor import MonitorType, Monitor, FreqMonitor
-from .monitor import AbstractFieldMonitor, AbstractNear2FarMonitor
+from .monitor import AbstractFieldMonitor
 from .viz import add_ax_if_none, equal_aspect
 
 from .viz import MEDIUM_CMAP, PlotParams, plot_params_symmetry
@@ -434,21 +434,6 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
                     f"monitors[{monitor_index}] contains frequencies "
                     f"outside of the simulation frequency range ({freq_min:2e}, {freq_max:2e})"
                     "(Hz) as defined by the sources."
-                )
-        return val
-
-    @pydantic.validator("monitors", always=True)
-    def n2f_monitors_with_symmetry(cls, val, values):
-        """Error if a server-side near-to-far monitor is used with symmetry"""
-        monitors = val
-        symmetry = values.get("symmetry")
-        if not any(symmetry):
-            return val
-        for monitor in monitors:
-            if isinstance(monitor, AbstractNear2FarMonitor):
-                raise SetupError(
-                    "Server-side near-to-far calculation is not available with symmetry. "
-                    "Use the local near-to-far available through the 'RadiationVectors' class."
                 )
         return val
 
