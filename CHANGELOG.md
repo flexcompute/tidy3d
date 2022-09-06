@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+## [1.6.2] - 2022-9-6
+
+### Added
+- Support for `Near2Far` monitors in the presence of simulation symmetries.
+
+### Fixed
+- Bug in 3D `Near2Far` monitors where surfaces defined in `exclude_surfaces` will no actually be excluded.
+- Bug in getting angles from `k`-space values in `Near2FarKSpaceMonitor`.
+- Bug in `SimulationData.plot_field` when getting the position along the normal axis for a 2D plot.
+
 ## [1.6.1] - 2022-8-31
 
 ### Fixed
@@ -395,7 +405,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A large number of small improvements and bug fixes.
 
 [Unreleased]: https://github.com/flexcompute/tidy3d/compare/v1.6.1...develop
-[1.6.0]: https://github.com/flexcompute/tidy3d/compare/v1.6.0...v1.6.1
+[1.6.2]: https://github.com/flexcompute/tidy3d/compare/v1.6.1...v1.6.2
+[1.6.1]: https://github.com/flexcompute/tidy3d/compare/v1.6.0...v1.6.1
 [1.6.0]: https://github.com/flexcompute/tidy3d/compare/v1.5.0...v1.6.0
 [1.5.0]: https://github.com/flexcompute/tidy3d/compare/v1.4.1...v1.5.0
 [1.4.1]: https://github.com/flexcompute/tidy3d/compare/v1.4.0...v1.4.1
