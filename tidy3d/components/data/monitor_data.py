@@ -33,7 +33,7 @@ class MonitorData(Tidy3dBaseModel, ABC):
         self,
         symmetry: Tuple[Symmetry, Symmetry, Symmetry],
         symmetry_center: Coordinate,
-        grid_expanded: "Grid",
+        grid_expanded: Grid,
     ) -> MonitorData:
         """Return copy of self with Symmetry applied.
 
@@ -51,6 +51,7 @@ class MonitorData(Tidy3dBaseModel, ABC):
         :class:`MonitorData`
             A data object with the symmetry expanded fields.
         """
+        return self.copy()
 
     def normalize(
         self, source_spectrum_fn: Callable[[float], complex]  # pylint:disable=unused-argument
@@ -84,7 +85,7 @@ class AbstractFieldData(MonitorData, ABC):
         self,
         symmetry: Tuple[Symmetry, Symmetry, Symmetry],
         symmetry_center: Coordinate,
-        grid_expanded: "Grid",
+        grid_expanded: Grid,
     ) -> AbstractFieldData:
         """Return copy of self with Symmetry applied.
 

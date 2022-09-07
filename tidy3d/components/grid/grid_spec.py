@@ -417,7 +417,7 @@ class GridSpec(Tidy3dBaseModel):
         grid_list = [self.grid_x, self.grid_y, self.grid_z]
         return np.any([isinstance(mesh, AutoGrid) for mesh in grid_list])
 
-    def wavelength_from_sources(self, sources: List["SourceType"]) -> pd.PositiveFloat:
+    def wavelength_from_sources(self, sources: List[SourceType]) -> pd.PositiveFloat:
         """Define a wavelength based on supplied sources. Called if auto mesh is used and
         ``self.wavelength is None``."""
 
@@ -441,7 +441,7 @@ class GridSpec(Tidy3dBaseModel):
         self,
         structures: List[Structure],
         symmetry: Tuple[Symmetry, Symmetry, Symmetry],
-        sources: List["SourceType"],
+        sources: List[SourceType],
         num_pml_layers: List[Tuple[pd.NonNegativeInt, pd.NonNegativeInt]],
     ) -> Grid:
         """Make the entire simulation grid based on some simulation parameters.
