@@ -1,31 +1,85 @@
 """ Monitor Level Data associated with near-to-far transformation monitors."""
 from __future__ import annotations
+from abc import ABC, abstractmethod
 from typing import Dict, Union, Callable, Tuple
 
 import xarray as xr
 import numpy as np
 import pydantic as pd
 
-from ..monitor import Near2FarAngleMonitor, Near2FarCartesianMonitor, Near2FarKSpaceMonitor
-from ..medium import Medium
-from ..validators import enforce_monitor_fields_present
-from ...log import SetupError
-from ...constants import C_0, ETA_0
-
 from .monitor_data import MonitorData
 from .data_array import DataArray
 from .data_array import Near2FarAngleDataArray, Near2FarCartesianDataArray, Near2FarKSpaceDataArray
+from ..monitor import Near2FarAngleMonitor, Near2FarCartesianMonitor, Near2FarKSpaceMonitor
+from ..medium import Medium
+from ..types import Axis
+from ..validators import enforce_monitor_fields_present
+from ...log import SetupError, log
+from ...constants import C_0, ETA_0
 
 
-class AbstractNear2FarData(MonitorData):
+RADVECTYPE = Union[Near2FarAngleDataArray, Near2FarCartesianDataArray, Near2FarKSpaceDataArray]
+
+
+class AbstractNear2FarData(MonitorData, ABC):
     """Collection of radiation vectors in the frequency domain."""
 
-    monitor: Union[Near2FarAngleMonitor, Near2FarCartesianMonitor, Near2FarKSpaceMonitor]
+    monitor: Union[Near2FarAngleMonitor, Near2FarCartesianMonitor, Near2FarKSpaceMonitor] = None
+
+    Ntheta: RADVECTYPE = pd.Field(
+        ...,
+        title="Ntheta",
+        description="Spatial distribution of the theta-component of the N radiation vector.",
+    )
+    Nphi: RADVECTYPE = pd.Field(
+        ...,
+        title="Nphi",
+        description="Spatial distribution of phi-component of the N radiation vector.",
+    )
+    Ltheta: RADVECTYPE = pd.Field(
+        ...,
+        title="Ltheta",
+        description="Spatial distribution of theta-component of the L radiation vector.",
+    )
+    Lphi: RADVECTYPE = pd.Field(
+        ...,
+        title="Lphi",
+        description="Spatial distribution of phi-component of the L radiation vector.",
+    )
 
     @property
     def field_components(self) -> Dict[str, DataArray]:
         """Maps the field components to thier associated data."""
-        return {field: getattr(self, field) for field in self.monitor.fields}
+        return dict(
+            Ntheta=self.Ntheta,
+            Nphi=self.Nphi,
+            Ltheta=self.Ltheta,
+            Lphi=self.Lphi,
+        )
+
+    @property
+    def f(self) -> np.ndarray:
+        """Frequencies."""
+        return self.Ntheta.f.values
+
+    @property
+    def coords(self) -> Dict[str, np.ndarray]:
+        """Coordinates of the radiation vectors contained."""
+        return self.Ntheta.coords
+
+    @property
+    def dims(self) -> Tuple[str, ...]:
+        """Dimensions of the radiation vectors contained."""
+        return self.Ntheta.__slots__
+
+    def make_data_array(self, data: np.ndarray) -> xr.DataArray:
+        """Make an xr.DataArray with data and same coords and dims as radiation vectors of self."""
+        return xr.DataArray(data=data, coords=self.coords, dims=self.dims)
+
+    def make_dataset(self, keys: Tuple[str, ...], vals: Tuple[np.ndarray, ...]) -> xr.Dataset:
+        """Make an xr.Dataset with keys and data with same coords and dims as radiation vectors."""
+        data_arrays = tuple(map(self.make_data_array, vals))
+        return xr.Dataset(dict(zip(keys, data_arrays)))
 
     def normalize(self, source_spectrum_fn: Callable[[float], complex]) -> AbstractNear2FarData:
         """Return copy of self after normalization is applied using source spectrum function."""
@@ -36,23 +90,76 @@ class AbstractNear2FarData(MonitorData):
 
         return self.copy(update=fields_norm)
 
-    @staticmethod
-    def nk(frequency: float, medium: Medium) -> Tuple[float, float]:
+    def nk(self, medium: Medium) -> Tuple[float, float]:
         """Returns the real and imaginary parts of the background medium's refractive index."""
-        eps_complex = medium.eps_model(frequency)
-        return medium.eps_complex_to_nk(eps_complex)
+        return medium.nk_model(frequency=self.f)
 
     @staticmethod
-    def k(frequency: float, medium: Medium) -> complex:
-        """Returns the complex wave number associated with the background medium."""
-        index_n, index_k = AbstractNear2FarData.nk(frequency, medium)
+    def propagation_factor(frequency: float, medium: Medium) -> complex:
+        """Complex valued wavenumber associated with a frequency and medium."""
+        index_n, index_k = medium.nk_model(frequency=frequency)
         return (2 * np.pi * frequency / C_0) * (index_n + 1j * index_k)
 
-    @staticmethod
-    def eta(frequency: float, medium: Medium) -> complex:
+    def k(self, medium: Medium) -> complex:
+        """Returns the complex wave number associated with the background medium."""
+        return self.propagation_factor(frequency=self.f, medium=medium)
+
+    def eta(self, medium: Medium) -> complex:
         """Returns the complex wave impedance associated with the background medium."""
-        eps_complex = medium.eps_model(frequency)
+        eps_complex = medium.eps_model(frequency=self.f)
         return ETA_0 / np.sqrt(eps_complex)
+
+    def near_field_rad_vecs(self, medium: Medium) -> Tuple[np.ndarray, np.ndarray]:
+        """Near field radiation vectors."""
+        eta = self.eta(medium=medium)
+        e_theta = -(self.Lphi.values + eta * self.Ntheta.values)
+        e_phi = self.Ltheta.values - eta * self.Nphi.values
+        return e_theta, e_phi
+
+    @staticmethod
+    def propagation_phase(dist: Union[float, None], wave_number: complex) -> complex:
+        """Phase associated with propagation of a distance with a given wavenumber."""
+        if dist is None:
+            return 1.0
+        return -1j * wave_number * np.exp(1j * wave_number * dist) / (4 * np.pi * dist)
+
+    def fields_sph(self, r: float = None, medium: Medium = Medium(permittivity=1)) -> xr.Dataset:
+        """Get fields in spherical coordinates relative to the monitor's local origin
+        for all angles and frequencies specified in :class:`Near2FarAngleMonitor`.
+        If the radial distance ``r`` is provided, a corresponding phase factor is applied
+        to the returned fields.
+
+        Parameters
+        ----------
+        r : float = None
+            (micron) radial distance relative to the monitor's local origin.
+        medium : :class:`.Medium`
+            Background medium in which to radiate near fields to far fields.
+            Default: free space.
+
+        Returns
+        -------
+        ``xarray.Dataset``
+            xarray dataset containing (Er, Etheta, Ephi), (Hr, Htheta, Hphi)
+            in polar coordinates.
+        """
+
+        # assemble E felds
+        e_theta_near, e_phi_near = self.near_field_rad_vecs(medium=medium)
+        phase = self.propagation_phase(dist=r, wave_number=self.k(medium=medium))
+        Et_array = phase * e_theta_near
+        Ep_array = phase * e_phi_near
+        Er_array = np.zeros_like(Ep_array)
+
+        # assemble H fields
+        eta = self.eta(medium=medium)[None, None, :]
+        Ht_array = -Ep_array / eta
+        Hp_array = Et_array / eta
+        Hr_array = np.zeros_like(Hp_array)
+
+        keys = ("E_r", "E_theta", "E_phi", "H_r", "H_theta", "H_phi")
+        vals = (Er_array, Et_array, Ep_array, Hr_array, Ht_array, Hp_array)
+        return self.make_dataset(keys=keys, vals=vals)
 
     @staticmethod
     def car_2_sph(x: float, y: float, z: float) -> Tuple[float, float, float]:
@@ -78,7 +185,7 @@ class AbstractNear2FarData(MonitorData):
         return r, theta, phi
 
     @staticmethod
-    def sph_2_car(r, theta, phi) -> Tuple[float, float, float]:
+    def sph_2_car(r: float, theta: float, phi: float) -> Tuple[float, float, float]:
         """Convert spherical to Cartesian coordinates.
 
         Parameters
@@ -102,7 +209,9 @@ class AbstractNear2FarData(MonitorData):
         return x, y, z
 
     @staticmethod
-    def sph_2_car_field(f_r, f_theta, f_phi, theta, phi) -> Tuple[complex, complex, complex]:
+    def sph_2_car_field(
+        f_r: float, f_theta: float, f_phi: float, theta: float, phi: float
+    ) -> Tuple[complex, complex, complex]:
         """Convert vector field components in spherical coordinates to cartesian.
 
         Parameters
@@ -133,7 +242,7 @@ class AbstractNear2FarData(MonitorData):
         return f_x, f_y, f_z
 
     @staticmethod
-    def kspace_2_sph(ux, uy, axis) -> Tuple[float, float]:
+    def kspace_2_sph(ux: float, uy: float, axis: Axis) -> Tuple[float, float]:
         """Convert normalized k-space coordinates to angles.
 
         Parameters
@@ -154,22 +263,59 @@ class AbstractNear2FarData(MonitorData):
         theta_local = np.arcsin(np.sqrt(ux**2 + uy**2))
         # Spherical coordinates rotation matrix reference:
         # https://en.wikipedia.org/wiki/Rodrigues%27_rotation_formula#Matrix_notation
-        if axis == 0:
-            x = np.cos(theta_local)
-            y = np.sin(theta_local) * np.sin(phi_local)
-            z = -np.sin(theta_local) * np.cos(phi_local)
-            theta = np.arccos(z)
-            phi = np.arctan2(y, x)
-        elif axis == 1:
-            x = np.sin(theta_local) * np.cos(phi_local)
-            y = np.cos(theta_local)
-            z = -np.sin(theta_local) * np.sin(phi_local)
-            theta = np.arccos(z)
-            phi = np.arctan2(y, x)
-        elif axis == 2:
-            theta = theta_local
-            phi = phi_local
+        if axis == 2:
+            return theta_local, phi_local
+
+        x = np.cos(theta_local)
+        y = np.sin(theta_local) * np.sin(phi_local)
+        z = -np.sin(theta_local) * np.cos(phi_local)
+
+        if axis == 1:
+            x, y, z = -z, x, -y
+
+        theta = np.arccos(z)
+        phi = np.arctan2(y, x)
         return theta, phi
+
+    @abstractmethod
+    def fields(self, r: float = None, medium: Medium = Medium(permittivity=1)) -> xr.Dataset:
+        """Get fields in spherical coordinates relative to the monitor's local origin
+        for all angles and frequencies specified in :class:`Near2FarAngleMonitor`.
+        If the radial distance ``r`` is provided, a corresponding phase factor is applied
+        to the returned fields.
+
+        Parameters
+        ----------
+        r : float = None
+            (micron) radial distance relative to the monitor's local origin.
+        medium : :class:`.Medium`
+            Background medium in which to radiate near fields to far fields.
+            Default: free space.
+
+        Returns
+        -------
+        ``xarray.Dataset``
+            xarray dataset containing (Er, Etheta, Ephi), (Hr, Htheta, Hphi)
+            in polar coordinates.
+        """
+
+    @abstractmethod
+    def power(self, r: float = None, medium: Medium = Medium(permittivity=1)) -> xr.DataArray:
+        """Get power measured on the observation grid defined in spherical coordinates.
+
+        Parameters
+        ----------
+        r : float = None
+            (micron) radial distance relative to the local origin.
+        medium : :class:`.Medium`
+            Background medium in which to radiate near fields to far fields.
+            Default: free space.
+
+        Returns
+        -------
+        ``xarray.DataArray``
+            Power at points relative to the local origin.
+        """
 
 
 class Near2FarAngleData(AbstractNear2FarData):
@@ -192,32 +338,41 @@ class Near2FarAngleData(AbstractNear2FarData):
     ...     )
     """
 
-    monitor: Near2FarAngleMonitor
+    monitor: Near2FarAngleMonitor = None
 
     Ntheta: Near2FarAngleDataArray = pd.Field(
-        None,
+        ...,
         title="Ntheta",
         description="Spatial distribution of the theta-component of the N radiation vector.",
     )
     Nphi: Near2FarAngleDataArray = pd.Field(
-        None,
+        ...,
         title="Nphi",
         description="Spatial distribution of phi-component of the N radiation vector.",
     )
     Ltheta: Near2FarAngleDataArray = pd.Field(
-        None,
+        ...,
         title="Ltheta",
         description="Spatial distribution of theta-component of the L radiation vector.",
     )
     Lphi: Near2FarAngleDataArray = pd.Field(
-        None,
+        ...,
         title="Lphi",
         description="Spatial distribution of phi-component of the L radiation vector.",
     )
 
     _contains_monitor_fields = enforce_monitor_fields_present()
 
-    # pylint:disable=too-many-locals
+    @property
+    def theta(self) -> np.ndarray:
+        """Polar angles."""
+        return self.Ntheta.theta.values
+
+    @property
+    def phi(self) -> np.ndarray:
+        """Azimuthal angles."""
+        return self.Ntheta.phi.values
+
     def fields(self, r: float = None, medium: Medium = Medium(permittivity=1)) -> xr.Dataset:
         """Get fields in spherical coordinates relative to the monitor's local origin
         for all angles and frequencies specified in :class:`Near2FarAngleMonitor`.
@@ -238,47 +393,7 @@ class Near2FarAngleData(AbstractNear2FarData):
             xarray dataset containing (Er, Etheta, Ephi), (Hr, Htheta, Hphi)
             in polar coordinates.
         """
-
-        frequencies = np.array(self.monitor.freqs)
-        theta = np.array(self.monitor.theta)
-        phi = np.array(self.monitor.phi)
-
-        k = np.array([self.k(frequency, medium) for frequency in frequencies])
-        eta = np.array([self.eta(frequency, medium) for frequency in frequencies])
-        eta = eta[None, None, :]
-
-        # assemble E felds
-        if r is not None:
-            phase = -1j * k * np.exp(1j * k * r) / (4 * np.pi * r)
-            phase = phase[None, None, :]
-        else:
-            phase = 1.0
-
-        Et_array = -phase * (self.Lphi.values + eta * self.Ntheta.values)
-        Ep_array = phase * (self.Ltheta.values - eta * self.Nphi.values)
-        Er_array = np.zeros_like(Ep_array)
-
-        dims = ("theta", "phi", "f")
-        coords = {"theta": theta, "phi": phi, "f": frequencies}
-
-        # assemble H fields
-        Ht_array = -Ep_array / eta
-        Hp_array = Et_array / eta
-        Hr_array = np.zeros_like(Hp_array)
-
-        Er = xr.DataArray(data=Er_array, coords=coords, dims=dims)
-        Et = xr.DataArray(data=Et_array, coords=coords, dims=dims)
-        Ep = xr.DataArray(data=Ep_array, coords=coords, dims=dims)
-
-        Hr = xr.DataArray(data=Hr_array, coords=coords, dims=dims)
-        Ht = xr.DataArray(data=Ht_array, coords=coords, dims=dims)
-        Hp = xr.DataArray(data=Hp_array, coords=coords, dims=dims)
-
-        field_data = xr.Dataset(
-            {"E_r": Er, "E_theta": Et, "E_phi": Ep, "H_r": Hr, "H_theta": Ht, "H_phi": Hp}
-        )
-
-        return field_data
+        return self.fields_sph(r=r, medium=medium)
 
     def radar_cross_section(self, medium: Medium = Medium(permittivity=1)) -> xr.DataArray:
         """Get radar cross section at the observation grid in units of incident power.
@@ -295,32 +410,20 @@ class Near2FarAngleData(AbstractNear2FarData):
             Radar cross section at angles relative to the local origin.
         """
 
-        frequencies = np.array(self.monitor.freqs)
-        theta = np.array(self.monitor.theta)
-        phi = np.array(self.monitor.phi)
+        _, index_k = self.nk(medium=medium)
+        if not np.all(index_k == 0):
+            raise SetupError("Can't compute RCS for a lossy background medium.")
 
-        for frequency in frequencies:
-            _, index_k = self.nk(frequency, medium)
-            if index_k != 0.0:
-                raise SetupError("Can't compute RCS for a lossy background medium.")
-
-        k = np.array([self.k(frequency, medium) for frequency in frequencies])
-        eta = np.array([self.eta(frequency, medium) for frequency in frequencies])
-
-        k = k[None, None, ...]
-        eta = eta[None, None, ...]
+        k = self.k(medium=medium)[None, None, ...]
+        eta = self.eta(medium=medium)[None, None, ...]
 
         constant = k**2 / (8 * np.pi * eta)
-        term1 = np.abs(self.Lphi.values + eta * self.Ntheta.values) ** 2
-        term2 = np.abs(self.Ltheta.values - eta * self.Nphi.values) ** 2
-        rcs_data = constant * (term1 + term2)
+        e_theta, e_phi = self.near_field_rad_vecs(medium=medium)
+        rcs_data = constant * (np.abs(e_theta) ** 2 + np.abs(e_phi) ** 2)
 
-        dims = ("theta", "phi", "f")
-        coords = {"theta": theta, "phi": phi, "f": frequencies}
+        return self.make_data_array(data=rcs_data)
 
-        return xr.DataArray(data=rcs_data, coords=coords, dims=dims)
-
-    def power(self, r: float, medium: Medium = Medium(permittivity=1)) -> xr.DataArray:
+    def power(self, r: float = None, medium: Medium = Medium(permittivity=1)) -> xr.DataArray:
         """Get power measured on the observation grid defined in spherical coordinates.
 
         Parameters
@@ -337,6 +440,9 @@ class Near2FarAngleData(AbstractNear2FarData):
             Power at points relative to the local origin.
         """
 
+        if r is None:
+            raise ValueError("'r' required by 'Near2FarAngleData.power'")
+
         field_data = self.fields(medium=medium, r=r)
         Et, Ep = [field_data[comp].values for comp in ["E_theta", "E_phi"]]
         Ht, Hp = [field_data[comp].values for comp in ["H_theta", "H_phi"]]
@@ -344,14 +450,7 @@ class Near2FarAngleData(AbstractNear2FarData):
         power_phi = 0.5 * np.real(-Ep * np.conj(Ht))
         power_data = power_theta + power_phi
 
-        dims = ("theta", "phi", "f")
-        coords = {
-            "theta": np.array(self.monitor.theta),
-            "phi": np.array(self.monitor.phi),
-            "f": np.array(self.monitor.freqs),
-        }
-
-        return xr.DataArray(data=power_data, coords=coords, dims=dims)
+        return self.make_data_array(data=power_data)
 
 
 class Near2FarCartesianData(AbstractNear2FarData):
@@ -375,35 +474,55 @@ class Near2FarCartesianData(AbstractNear2FarData):
     ...     )
     """
 
-    monitor: Near2FarCartesianMonitor
+    monitor: Near2FarCartesianMonitor = None
 
     Ntheta: Near2FarCartesianDataArray = pd.Field(
-        None,
+        ...,
         title="Ntheta",
         description="Spatial distribution of the theta-component of the N radiation vector.",
     )
     Nphi: Near2FarCartesianDataArray = pd.Field(
-        None,
+        ...,
         title="Nphi",
         description="Spatial distribution of the phi-component of the N radiation vector.",
     )
     Ltheta: Near2FarCartesianDataArray = pd.Field(
-        None,
+        ...,
         title="Ltheta",
         description="Spatial distribution of the theta-component of the L radiation vector.",
     )
     Lphi: Near2FarCartesianDataArray = pd.Field(
-        None,
+        ...,
         title="Lphi",
         description="Spatial distribution of the phi-component of the L radiation vector.",
     )
 
     _contains_monitor_fields = enforce_monitor_fields_present()
 
+    @property
+    def x(self) -> np.ndarray:
+        """X positions."""
+        return self.Ntheta.x.values
+
+    @property
+    def y(self) -> np.ndarray:
+        """Y positions."""
+        return self.Ntheta.y.values
+
+    @property
+    def spherical_coords(self) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+        """The data coordinates in spherical coordinate system."""
+        xs, ys, _ = np.meshgrid(self.x, self.y, np.array([0]), indexing="ij")
+        zs = self.monitor.plane_distance * np.ones_like(xs)
+        coords = [xs, ys]
+        coords.insert(self.monitor.plane_axis, zs)
+        x_glob, y_glob, z_glob = coords
+        return self.car_2_sph(x_glob, y_glob, z_glob)
+
     # pylint:disable=too-many-arguments, too-many-locals
-    def fields(self, medium: Medium = Medium(permittivity=1)) -> xr.Dataset:
+    def fields(self, r: float = None, medium: Medium = Medium(permittivity=1)) -> xr.Dataset:
         """Get fields on a cartesian plane at a distance relative to monitor center
-        along a given axis.
+        along a given axis in cartesian coordinates.
 
         Parameters
         ----------
@@ -417,53 +536,28 @@ class Near2FarCartesianData(AbstractNear2FarData):
             xarray dataset containing (Ex, Ey, Ez), (Hx, Hy, Hz) in cartesian coordinates.
         """
 
-        frequencies = np.array(self.monitor.freqs)
+        if r is not None:
+            log.warning(
+                "'r' supplied to 'Near2FarCartesianData.fields' will not be used. "
+                "distance is determined from the coordinates contained in the data."
+            )
 
-        eta = np.atleast_1d(self.eta(frequencies, medium))
-        wave_number = np.atleast_1d(self.k(frequencies, medium))
+        # get the fields in spherical coordinates
+        r_values, thetas, phis = self.spherical_coords
+        fields_sph = self.fields_sph(r=r_values, medium=medium)
+        Er, Et, Ep = (fields_sph[key].values for key in ("E_r", "E_theta", "E_phi"))
+        Hr, Ht, Hp = (fields_sph[key].values for key in ("H_r", "H_theta", "H_phi"))
 
-        e_theta = -(self.Lphi.values + eta[None, None, ...] * self.Ntheta.values)
-        e_phi = self.Ltheta.values - eta[None, None, ...] * self.Nphi.values
+        # convert the field components to cartesian coordinate system
+        e_data = self.sph_2_car_field(Er, Et, Ep, thetas, phis)
+        h_data = self.sph_2_car_field(Hr, Ht, Hp, thetas, phis)
 
-        e_data = np.zeros(
-            (3, len(self.monitor.x), len(self.monitor.y), len(frequencies)), dtype=complex
-        )
-        h_data = np.zeros_like(e_data)
-
-        for i, _x in enumerate(self.monitor.x):
-            for j, _y in enumerate(self.monitor.y):
-                x_glob, y_glob, z_glob = self.monitor.unpop_axis(
-                    self.monitor.plane_distance, (_x, _y), axis=self.monitor.plane_axis
-                )
-                r, theta, phi = self.car_2_sph(x_glob, y_glob, z_glob)
-                phase = -1j * wave_number * np.exp(1j * wave_number * r) / (4 * np.pi * r)
-
-                Et = -phase * e_theta[i, j, :]
-                Ep = phase * e_phi[i, j, :]
-                Er = np.zeros_like(Et)
-
-                Ht = -Ep / eta
-                Hp = Et / eta
-                Hr = np.zeros_like(Hp)
-
-                e_fields = self.sph_2_car_field(Er, Et, Ep, theta, phi)
-                h_fields = self.sph_2_car_field(Hr, Ht, Hp, theta, phi)
-
-                e_data[:, i, j, :] = e_fields
-                h_data[:, i, j, :] = h_fields
-
+        # package into dataset
+        keys = ("Ex", "Ey", "Ez", "Hx", "Hy", "Hz")
         field_components = np.concatenate((e_data, h_data), axis=0)
+        return self.make_dataset(keys=keys, vals=field_components)
 
-        dims = ("x", "y", "f")
-        coords = {"x": np.array(self.monitor.x), "y": np.array(self.monitor.y), "f": frequencies}
-
-        fields = {
-            key: xr.DataArray(data=val, coords=coords, dims=dims)
-            for key, val in zip(("Ex", "Ey", "Ez", "Hx", "Hy", "Hz"), field_components)
-        }
-        return xr.Dataset(fields)
-
-    def power(self, medium: Medium = Medium(permittivity=1)) -> xr.Dataset:
+    def power(self, r: float = None, medium: Medium = Medium(permittivity=1)) -> xr.Dataset:
         """Get power on the observation grid defined in Cartesian coordinates.
 
         Parameters
@@ -478,40 +572,24 @@ class Near2FarCartesianData(AbstractNear2FarData):
             Power at points relative to the local origin.
         """
 
-        frequencies = np.array(self.monitor.freqs)
+        if r is not None:
+            log.warning(
+                "'r' supplied to 'Near2FarCartesianData.power' will not be used. "
+                "distance is determined from the coordinates contained in the data."
+            )
 
-        eta = np.atleast_1d(self.eta(frequencies, medium))
-        wave_number = np.atleast_1d(self.k(frequencies, medium))
+        # get the polar components of the far field
+        fields_sph = self.fields_sph(medium=medium)
+        Et, Ep = (fields_sph[key].values for key in ("E_theta", "E_phi"))
+        Ht, Hp = (fields_sph[key].values for key in ("H_theta", "H_phi"))
 
-        e_theta = -(self.Lphi.values + eta[None, None, ...] * self.Ntheta.values)
-        e_phi = self.Ltheta.values - eta[None, None, ...] * self.Nphi.values
+        # compute power
+        power_theta = 0.5 * np.real(Et * np.conj(Hp))
+        power_phi = 0.5 * np.real(-Ep * np.conj(Ht))
+        power = power_theta + power_phi
 
-        values = np.zeros((len(self.monitor.x), len(self.monitor.y), len(frequencies)))
-
-        for i, _x in enumerate(self.monitor.x):
-            for j, _y in enumerate(self.monitor.y):
-                x_glob, y_glob, z_glob = self.monitor.unpop_axis(
-                    self.monitor.plane_distance, (_x, _y), axis=self.monitor.plane_axis
-                )
-                r, _, _ = self.car_2_sph(x_glob, y_glob, z_glob)
-                phase = -1j * wave_number * np.exp(1j * wave_number * r) / (4 * np.pi * r)
-
-                Et = -phase * e_theta[i, j, :]
-                Ep = phase * e_phi[i, j, :]
-
-                Ht = -Ep / eta
-                Hp = Et / eta
-
-                power_theta = 0.5 * np.real(Et * np.conj(Hp))
-                power_phi = 0.5 * np.real(-Ep * np.conj(Ht))
-                values[i, j, :] = power_theta + power_phi
-
-        dims = ("x", "y", "f")
-        coords = {"x": np.array(self.monitor.x), "y": np.array(self.monitor.y), "f": frequencies}
-
-        power_data = xr.DataArray(data=values, coords=coords, dims=dims)
-
-        return power_data
+        # package as data array
+        return self.make_data_array(data=power)
 
 
 class Near2FarKSpaceData(AbstractNear2FarData):
@@ -537,30 +615,40 @@ class Near2FarKSpaceData(AbstractNear2FarData):
     monitor: Near2FarKSpaceMonitor
 
     Ntheta: Near2FarKSpaceDataArray = pd.Field(
-        None,
+        ...,
         title="Ntheta",
         description="Spatial distribution of the theta-component of the N radiation vector.",
     )
     Nphi: Near2FarKSpaceDataArray = pd.Field(
-        None,
+        ...,
         title="Nphi",
         description="Spatial distribution of phi-component of the N radiation vector.",
     )
     Ltheta: Near2FarKSpaceDataArray = pd.Field(
-        None,
+        ...,
         title="Ltheta",
         description="Spatial distribution of theta-component of the L radiation vector.",
     )
     Lphi: Near2FarKSpaceDataArray = pd.Field(
-        None,
+        ...,
         title="Lphi",
         description="Spatial distribution of phi-component of the L radiation vector.",
     )
 
     _contains_monitor_fields = enforce_monitor_fields_present()
 
+    @property
+    def ux(self) -> np.ndarray:
+        """reciprocal X positions."""
+        return self.Ntheta.ux.values
+
+    @property
+    def uy(self) -> np.ndarray:
+        """reciprocal Y positions."""
+        return self.Ntheta.uy.values
+
     # pylint:disable=too-many-locals
-    def fields(self, medium: Medium = Medium(permittivity=1)) -> xr.Dataset:
+    def fields(self, r: float = None, medium: Medium = Medium(permittivity=1)) -> xr.Dataset:
         """Get fields in spherical coordinates relative to the monitor's local origin
         for all k-space points and frequencies specified in :class:`Near2FarKSpaceMonitor`.
 
@@ -577,15 +665,11 @@ class Near2FarKSpaceData(AbstractNear2FarData):
             in polar coordinates.
         """
 
-        # Assumes that frequencies and angles are the same for all radiation vectors
-        frequencies = np.array(self.monitor.freqs)
-        ux = np.array(self.monitor.ux)
-        uy = np.array(self.monitor.uy)
-
-        eta = np.array([self.eta(frequency, medium) for frequency in frequencies])
+        if r is not None:
+            log.warning("'r' supplied to 'Near2FarKSpaceData.fields' will not be used.")
 
         # assemble E felds
-        eta = eta[None, None, ...]
+        eta = self.eta(medium=medium)[None, None, ...]
         Et_array = -(self.Lphi.values + eta * self.Ntheta.values)
         Ep_array = self.Ltheta.values - eta * self.Nphi.values
         Er_array = np.zeros_like(Ep_array)
@@ -595,24 +679,11 @@ class Near2FarKSpaceData(AbstractNear2FarData):
         Hp_array = Et_array / eta
         Hr_array = np.zeros_like(Hp_array)
 
-        dims = ("ux", "uy", "f")
-        coords = {"ux": ux, "uy": uy, "f": frequencies}
+        keys = ("E_r", "E_theta", "E_phi", "H_r", "H_theta", "H_phi")
+        vals = (Er_array, Et_array, Ep_array, Hr_array, Ht_array, Hp_array)
+        return self.make_dataset(keys=keys, vals=vals)
 
-        Er = xr.DataArray(data=Er_array, coords=coords, dims=dims)
-        Et = xr.DataArray(data=Et_array, coords=coords, dims=dims)
-        Ep = xr.DataArray(data=Ep_array, coords=coords, dims=dims)
-
-        Hr = xr.DataArray(data=Hr_array, coords=coords, dims=dims)
-        Ht = xr.DataArray(data=Ht_array, coords=coords, dims=dims)
-        Hp = xr.DataArray(data=Hp_array, coords=coords, dims=dims)
-
-        field_data = xr.Dataset(
-            {"E_r": Er, "E_theta": Et, "E_phi": Ep, "H_r": Hr, "H_theta": Ht, "H_phi": Hp}
-        )
-
-        return field_data
-
-    def power(self, medium: Medium = Medium(permittivity=1)) -> xr.Dataset:
+    def power(self, r: float = None, medium: Medium = Medium(permittivity=1)) -> xr.Dataset:
         """Get power on the observation grid defined in k-space.
 
         Parameters
@@ -627,32 +698,17 @@ class Near2FarKSpaceData(AbstractNear2FarData):
             xarray dataset containing power.
         """
 
-        # Assumes that frequencies and angles are the same for all radiation vectors
-        frequencies = np.array(self.monitor.freqs)
-        ux = np.array(self.monitor.ux)
-        uy = np.array(self.monitor.uy)
+        if r is not None:
+            log.warning("'r' supplied to 'Near2FarKSpaceData.fields' will not be used.")
 
-        eta = np.array([self.eta(frequency, medium) for frequency in frequencies])
+        fields = self.fields(r=None, medium=medium)
+        Et, Ep, Ht, Hp = (fields[key].values for key in ("E_theta", "E_phi", "H_theta", "H_phi"))
 
-        # assemble E felds
-        eta = eta[None, None, ...]
-        Et_array = -(self.Lphi.values + eta * self.Ntheta.values)
-        Ep_array = self.Ltheta.values - eta * self.Nphi.values
+        power_theta = 0.5 * np.real(Et * np.conj(Hp))
+        power_phi = 0.5 * np.real(-Ep * np.conj(Ht))
+        power_values = power_theta + power_phi
 
-        # assemble H fields
-        Ht_array = -Ep_array / eta
-        Hp_array = Et_array / eta
-
-        power_theta = 0.5 * np.real(Et_array * np.conj(Hp_array))
-        power_phi = 0.5 * np.real(-Ep_array * np.conj(Ht_array))
-        values = power_theta + power_phi
-
-        dims = ("ux", "uy", "f")
-        coords = {"ux": ux, "uy": uy, "f": frequencies}
-
-        power_data = xr.DataArray(data=values, coords=coords, dims=dims)
-
-        return power_data
+        return self.make_data_array(data=power_values)
 
 
 Near2FarDataTypes = (Near2FarAngleData, Near2FarCartesianData, Near2FarKSpaceData)

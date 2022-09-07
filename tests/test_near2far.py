@@ -46,7 +46,6 @@ def make_n2f_monitors(center, size, freqs):
         custom_origin=center,
         phi=list(phis),
         theta=list(thetas),
-        medium=MEDIUM,
         normal_dir="+",
         exclude_surfaces=exclude_surfaces,
     )
@@ -62,7 +61,6 @@ def make_n2f_monitors(center, size, freqs):
         y=list(ys),
         plane_axis=plane_axis,
         plane_distance=z,
-        medium=MEDIUM,
         normal_dir="+",
         exclude_surfaces=exclude_surfaces,
     )
@@ -77,7 +75,6 @@ def make_n2f_monitors(center, size, freqs):
         ux=list(uxs),
         uy=list(uys),
         u_axis=u_axis,
-        medium=MEDIUM,
         normal_dir="+",
         exclude_surfaces=exclude_surfaces,
     )

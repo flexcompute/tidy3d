@@ -8,7 +8,6 @@ import numpy as np
 from .types import Ax, EMField, ArrayLike, Bound, FreqArray
 from .types import Literal, Direction, Coordinate, Axis, ObsGridArray, RadVec
 from .geometry import Box
-from .medium import Medium
 from .validators import assert_plane
 from .base import cached_property
 from .mode import ModeSpec
@@ -494,13 +493,6 @@ class AbstractNear2FarMonitor(SurfaceIntegrationMonitor, FreqMonitor):
         description="Local origin used for defining observation points. If ``None``, uses the "
         "monitor's center.",
         units=MICROMETER,
-    )
-
-    medium: Medium = pydantic.Field(
-        Medium(permittivity=1),
-        title="Background medium",
-        description="Background medium in which to radiate near fields to far fields. "
-        "If not provided, uses free space.",
     )
 
     @property

@@ -419,7 +419,7 @@ class RadiationVectors(Tidy3dBaseModel):
             return np.trapz(np.trapz(np.squeeze(function) * phase, pts_u, axis=0), pts_v, axis=0)
 
         phase = [None] * 3
-        propagation_factor = -1j * AbstractNear2FarData.k(frequency, self.medium)
+        propagation_factor = -1j * AbstractNear2FarData.propagation_factor(frequency, self.medium)
 
         def integrate_for_one_theta(i_th: int):
             """Perform integration for a given theta angle index"""
