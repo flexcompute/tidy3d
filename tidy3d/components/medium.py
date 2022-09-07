@@ -6,15 +6,17 @@ from typing import Tuple, Union, Callable
 
 import pydantic as pd
 import numpy as np
+import xarray as xr
 
 from .base import Tidy3dBaseModel, cached_property
 from .types import PoleAndResidue, Ax, FreqBound
 from .viz import add_ax_if_none
 from .validators import validate_name_str
+from .data.monitor_data import PermittivityData
+from .data.data_array import ScalarFieldDataArray
 from ..constants import C_0, pec_val, EPSILON_0
 from ..constants import HERTZ, CONDUCTIVITY, PERMITTIVITY, RADPERSEC, MICROMETER, SECOND
-from ..log import log, ValidationError
-
+from ..log import log, ValidationError, SetupError
 
 # evaluate frequency as this number (Hz) if inf
 FREQ_EVAL_INF = 1e50
@@ -69,12 +71,10 @@ class AbstractMedium(ABC, Tidy3dBaseModel):
     @abstractmethod
     def eps_model(self, frequency: float) -> complex:
         """Complex-valued permittivity as a function of frequency.
-
         Parameters
         ----------
         frequency : float
             Frequency to evaluate permittivity at (Hz).
-
         Returns
         -------
         complex
@@ -84,12 +84,10 @@ class AbstractMedium(ABC, Tidy3dBaseModel):
     @ensure_freq_in_range
     def eps_diagonal(self, frequency: float) -> Tuple[complex, complex, complex]:
         """Main diagonal of the complex-valued permittivity tensor as a function of frequency.
-
         Parameters
         ----------
         frequency : float
             Frequency to evaluate permittivity at (Hz).
-
         Returns
         -------
         complex
@@ -103,14 +101,12 @@ class AbstractMedium(ABC, Tidy3dBaseModel):
     @add_ax_if_none
     def plot(self, freqs: float, ax: Ax = None) -> Ax:  # pylint: disable=invalid-name
         """Plot n, k of a :class:`Medium` as a function of frequency.
-
         Parameters
         ----------
         freqs: float
             Frequencies (Hz) to evaluate the medium properties at.
         ax : matplotlib.axes._subplots.Axes = None
             Matplotlib axes to plot on, if not specified, one is created.
-
         Returns
         -------
         matplotlib.axes._subplots.Axes
@@ -135,14 +131,12 @@ class AbstractMedium(ABC, Tidy3dBaseModel):
     @staticmethod
     def nk_to_eps_complex(n: float, k: float = 0.0) -> complex:
         """Convert n, k to complex permittivity.
-
         Parameters
         ----------
         n : float
             Real part of refractive index.
         k : float = 0.0
             Imaginary part of refrative index.
-
         Returns
         -------
         complex
@@ -155,12 +149,10 @@ class AbstractMedium(ABC, Tidy3dBaseModel):
     @staticmethod
     def eps_complex_to_nk(eps_c: complex) -> Tuple[float, float]:
         """Convert complex permittivity to n, k values.
-
         Parameters
         ----------
         eps_c : complex
             Complex-valued relative permittivity.
-
         Returns
         -------
         Tuple[float, float]
@@ -172,7 +164,6 @@ class AbstractMedium(ABC, Tidy3dBaseModel):
     @staticmethod
     def nk_to_eps_sigma(n: float, k: float, freq: float) -> Tuple[float, float]:
         """Convert ``n``, ``k`` at frequency ``freq`` to permittivity and conductivity values.
-
         Parameters
         ----------
         n : float
@@ -181,7 +172,6 @@ class AbstractMedium(ABC, Tidy3dBaseModel):
             Imaginary part of refrative index.
         frequency : float
             Frequency to evaluate permittivity at (Hz).
-
         Returns
         -------
         Tuple[float, float]
@@ -196,7 +186,6 @@ class AbstractMedium(ABC, Tidy3dBaseModel):
     @staticmethod
     def eps_sigma_to_eps_complex(eps_real: float, sigma: float, freq: float) -> complex:
         """convert permittivity and conductivity to complex permittivity at freq
-
         Parameters
         ----------
         eps_real : float
@@ -206,7 +195,6 @@ class AbstractMedium(ABC, Tidy3dBaseModel):
         freq : float
             Frequency to evaluate permittivity at (Hz).
             If not supplied, returns real part of permittivity (limit as frequency -> infinity.)
-
         Returns
         -------
         complex
@@ -224,7 +212,6 @@ class AbstractMedium(ABC, Tidy3dBaseModel):
 # PEC keyword
 class PECMedium(AbstractMedium):
     """Perfect electrical conductor class.
-
     Note
     ----
     To avoid confusion from duplicate PECs, should import ``tidy3d.PEC`` instance directly.
@@ -242,7 +229,6 @@ PEC = PECMedium(name="PEC")
 
 class Medium(AbstractMedium):
     """Dispersionless medium.
-
     Example
     -------
     >>> dielectric = Medium(permittivity=4.0, name='my_medium')
@@ -273,7 +259,6 @@ class Medium(AbstractMedium):
     @classmethod
     def from_nk(cls, n: float, k: float, freq: float, **kwargs):
         """Convert ``n`` and ``k`` values at frequency ``freq`` to :class:`Medium`.
-
         Parameters
         ----------
         n : float
@@ -282,7 +267,6 @@ class Medium(AbstractMedium):
             Imaginary part of refrative index.
         freq : float
             Frequency to evaluate permittivity at (Hz).
-
         Returns
         -------
         :class:`Medium`
@@ -294,11 +278,9 @@ class Medium(AbstractMedium):
 
 class AnisotropicMedium(AbstractMedium):
     """Diagonally anisotripic medium.
-
     Note
     ----
     Only diagonal anisotropy and non-dispersive components are currently supported.
-
     Example
     -------
     >>> medium_xx = Medium(permittivity=4.0)
@@ -364,6 +346,72 @@ class AnisotropicMedium(AbstractMedium):
         return ax
 
 
+class CustomMedium(AbstractMedium):
+    """Medium with user-supplied permittivity distribution.
+    Example
+    -------
+    >>> dielectric = CustomMedium(eps_data=4.0, name='my_medium')
+    >>> eps = dielectric.eps_model(200e12)
+    """
+
+    eps_data: PermittivityData = pd.Field(
+        ...,
+        title="Permittivity Data",
+        description="User-supplied data containing complex-valued permittivity "
+        "as a function of space.",
+    )
+
+    @ensure_freq_in_range
+    def eps_model(self, frequency: float) -> complex:
+        """Average of complex-valued permittivity as a function of frequency."""
+        eps_arrays = [eps_array for _, eps_array in self.eps_data.field_components.items()]
+        eps_array_avgs = [np.mean(eps_array.sel(f=frequency)) for eps_array in eps_arrays]
+        return np.mean(eps_array_avgs)
+
+    @classmethod
+    def from_eps_raw(cls, eps: ScalarFieldDataArray) -> CustomMedium:
+        """Construct a :class:`CustomMedium` from datasets containing raw permittivity values.
+        Parameters
+        ----------
+        eps : :class:`.ScalarFieldDataArray`
+            Dataset containing complex-valued permittivity as a function of space.
+        Returns
+        -------
+        :class:`CustomMedium`
+            Medium containing the spatially varying permittivity data.
+        """
+        field_components = {field_name: eps.copy() for field_name in ("eps_xx", "eps_yy", "eps_zz")}
+        eps_data = PermittivityData(**field_components)
+        return cls(eps_data=eps_data)
+
+    @classmethod
+    def from_nk(
+        cls, n: ScalarFieldDataArray, k: Optional[ScalarFieldDataArray] = None
+    ) -> CustomMedium:
+        """Construct a :class:`CustomMedium` from datasets containing n and k values.
+        Parameters
+        ----------
+        n : :class:`.ScalarFieldDataArray`
+            Real part of refractive index.
+        k : :class:`.ScalarFieldDataArray` = None
+            Imaginary part of refrative index.
+        Returns
+        -------
+        :class:`CustomMedium`
+            Medium containing the spatially varying permittivity data.
+        """
+        if k is None:
+            k = xr.zeros_like(n)
+
+        if n.coords != k.coords:
+            raise SetupError("`n` and `k` must have same coordinates.")
+
+        eps_values = Medium.nk_to_eps_complex(n=n.data, k=k.data)
+        coords = {k: np.array(v) for k, v in n.coords.items()}
+        eps_scalar_field_data = ScalarFieldDataArray(eps_values, coords=coords)
+        return cls.from_eps_raw(eps=eps_scalar_field_data)
+
+
 """ Dispersive Media """
 
 
@@ -392,15 +440,12 @@ class DispersiveMedium(AbstractMedium, ABC):
 class PoleResidue(DispersiveMedium):
     """A dispersive medium described by the pole-residue pair model.
     The frequency-dependence of the complex-valued permittivity is described by:
-
     Note
     ----
     .. math::
-
         \\epsilon(\\omega) = \\epsilon_\\infty - \\sum_i
         \\left[\\frac{c_i}{j \\omega + a_i} +
         \\frac{c_i^*}{j \\omega + a_i^*}\\right]
-
     Example
     -------
     >>> pole_res = PoleResidue(eps_inf=2.0, poles=[((1+2j), (3+4j)), ((5+6j), (7+8j))])
@@ -457,13 +502,10 @@ class PoleResidue(DispersiveMedium):
 class Sellmeier(DispersiveMedium):
     """A dispersive medium described by the Sellmeier model.
     The frequency-dependence of the refractive index is described by:
-
     Note
     ----
     .. math::
-
         n(\\lambda)^2 = 1 + \\sum_i \\frac{B_i \\lambda^2}{\\lambda^2 - C_i}
-
     Example
     -------
     >>> sellmeier_medium = Sellmeier(coeffs=[(1,2), (3,4)])
@@ -516,7 +558,6 @@ class Sellmeier(DispersiveMedium):
     def from_dispersion(cls, n: float, freq: float, dn_dwvl: float = 0, **kwargs):
         """Convert ``n`` and wavelength dispersion ``dn_dwvl`` values at frequency ``freq`` to
         a single-pole :class:`Sellmeier` medium.
-
         Parameters
         ----------
         n : float
@@ -525,7 +566,6 @@ class Sellmeier(DispersiveMedium):
             Derivative of the refractive index with wavelength (1/um). Must be negative.
         frequency : float
             Frequency to evaluate permittivity at (Hz).
-
         Returns
         -------
         :class:`Medium`
@@ -549,14 +589,11 @@ class Sellmeier(DispersiveMedium):
 class Lorentz(DispersiveMedium):
     """A dispersive medium described by the Lorentz model.
     The frequency-dependence of the complex-valued permittivity is described by:
-
     Note
     ----
     .. math::
-
         \\epsilon(f) = \\epsilon_\\infty + \\sum_i
         \\frac{\\Delta\\epsilon_i f_i^2}{f_i^2 - 2jf\\delta_i - f^2}
-
     Example
     -------
     >>> lorentz_medium = Lorentz(eps_inf=2.0, coeffs=[(1,2,3), (4,5,6)])
@@ -620,14 +657,11 @@ class Lorentz(DispersiveMedium):
 class Drude(DispersiveMedium):
     """A dispersive medium described by the Drude model.
     The frequency-dependence of the complex-valued permittivity is described by:
-
     Note
     ----
     .. math::
-
         \\epsilon(f) = \\epsilon_\\infty - \\sum_i
         \\frac{ f_i^2}{f^2 + jf\\delta_i}
-
     Example
     -------
     >>> drude_medium = Drude(eps_inf=2.0, coeffs=[(1,2), (3,4)])
@@ -685,14 +719,11 @@ class Drude(DispersiveMedium):
 class Debye(DispersiveMedium):
     """A dispersive medium described by the Debye model.
     The frequency-dependence of the complex-valued permittivity is described by:
-
     Note
     ----
     .. math::
-
         \\epsilon(f) = \\epsilon_\\infty + \\sum_i
         \\frac{\\Delta\\epsilon_i}{1 - jf\\tau_i}
-
     Example
     -------
     >>> debye_medium = Debye(eps_inf=2.0, coeffs=[(1,2),(3,4)])
@@ -746,6 +777,7 @@ class Debye(DispersiveMedium):
 MediumType = Union[
     Medium,
     AnisotropicMedium,
+    CustomMedium,
     PECMedium,
     PoleResidue,
     Sellmeier,
