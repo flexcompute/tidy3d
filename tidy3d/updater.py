@@ -1,4 +1,6 @@
 """Utilities for converting between tidy3d versions."""
+from __future__ import annotations
+
 from typing import Dict, Callable
 import json
 import functools
@@ -20,7 +22,7 @@ class Version(pd.BaseModel):
     minor: int
 
     @classmethod
-    def from_string(cls, string=None) -> "Version":
+    def from_string(cls, string: str = None) -> Version:
         """Return Version from a version string."""
         if string is None:
             return cls.from_string(string=__version__)
@@ -85,7 +87,7 @@ class Updater(pd.BaseModel):
     sim_dict: dict
 
     @classmethod
-    def from_file(cls, fname: str) -> "Updater":
+    def from_file(cls, fname: str) -> Updater:
         """Dictionary representing the simulation loaded from file."""
 
         if ".hdf5" in fname:
@@ -106,7 +108,7 @@ class Updater(pd.BaseModel):
         return cls(sim_dict=sim_dict)
 
     @classmethod
-    def from_string(cls, sim_dict_str: str) -> "Updater":
+    def from_string(cls, sim_dict_str: str) -> Updater:
         """Dictionary representing the simulation loaded from string."""
         sim_dict = json.loads(sim_dict_str)
         return cls(sim_dict=sim_dict)
@@ -146,6 +148,10 @@ class Updater(pd.BaseModel):
             self.sim_dict["version"] = str(self.get_next_version())
         self.sim_dict["version"] = __version__
         return self.sim_dict
+
+    def __eq__(self, other: Updater) -> bool:
+        """Is Updater equal to another one?"""
+        return self.sim_dict == other.sim_dict
 
 
 """Update conversion functions."""

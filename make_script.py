@@ -13,7 +13,6 @@ import argparse
 import sys
 import re
 from black import format_str, FileMode
-import json
 
 
 def main(args):

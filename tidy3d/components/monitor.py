@@ -432,7 +432,7 @@ class FluxTimeMonitor(AbstractFluxMonitor, TimeMonitor):
 
     def storage_size(self, num_cells: int, tmesh: ArrayLike[float, 1]) -> int:
         """Size of monitor storage given the number of points after discretization."""
-        # stores 1 real number per time tep
+        # stores 1 real number per time step
         num_steps = self.num_steps(tmesh)
         return BYTES_REAL * num_steps
 
