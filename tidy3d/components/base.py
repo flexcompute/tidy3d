@@ -63,7 +63,10 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         json_encoders = {
             np.ndarray: lambda x: tuple(x.tolist()),
             complex: lambda x: ComplexNumber(real=x.real, imag=x.imag),
-            xr.DataArray: lambda x: x.to_dict(),  # pylint:disable=unhashable-member
+            xr.DataArray: lambda x: {  # pylint:disable=unhashable-member
+                **x.to_dict(),  # original xarray dict
+                "type": x.__class__.__name__,  # add the type info as well
+            },
         }
         frozen = True
         allow_mutation = False
@@ -643,7 +646,9 @@ class Tidy3dBaseModel(pydantic.BaseModel):
                     if group_name not in fhandle.keys():
                         group = fhandle.create_group(group_name)
                         coords = {key: np.array(val) for key, val in x.coords.items()}
-                        data_dict = dict(data=x.data, coords=coords, keep_numpy=True)
+                        data_dict = dict(
+                            data=x.data, coords=coords, keep_numpy=True, type=x.__class__.__name__
+                        )
                         self._save_group_data(data_dict=data_dict, hdf5_group=group)
                     return dict(group_name=group_name, data_file=data_file, tag="DATA_ITEM")
 

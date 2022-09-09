@@ -204,12 +204,16 @@ def test_yaml():
 
 
 @clear_tmp
-def test_to_json_data():
-    """Test that all simulations in ``SIM_DIR`` can be updated to current version and loaded."""
+def test_to_json_data_separate():
+    """Tests that the json string with data in separate file behaves correctly."""
     data = make_flux_data()
-    assert json.loads(data._json_string())["flux"] is not None
+    json_dict = json.loads(data._json_string())
+    assert json_dict["flux"] is not None
+    assert "type" in json_dict and json_dict["type"] == "FluxData"
     data_file = "tests/tmp/data_file.hdf5"
-    assert json.loads(data._json_string(data_file=data_file))["flux"]["data_file"] == data_file
+    json_dict = json.loads(data._json_string(data_file=data_file))
+    assert json_dict["flux"]["data_file"] == data_file
+    assert "type" in json_dict and json_dict["type"] == "FluxData"
 
 
 @clear_tmp
