@@ -204,7 +204,7 @@ def test_yaml():
 
 
 @clear_tmp
-def test_to_json_data_separate():
+def test_to_json_data():
     """Tests that the json string with data in separate file behaves correctly."""
     data = make_flux_data()
     json_dict = json.loads(data._json_string())
