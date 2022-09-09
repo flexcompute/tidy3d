@@ -15,7 +15,7 @@ import h5py
 import xarray as xr
 from dask.base import tokenize
 
-from .types import ComplexNumber, Literal, TYPE_TAG_STR  # , DataObject
+from .types import ComplexNumber, Literal, TYPE_TAG_STR
 from ..log import FileError, log, Tidy3dKeyError
 
 # default indentation (# spaces) in files
@@ -65,7 +65,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
             complex: lambda x: ComplexNumber(real=x.real, imag=x.imag),
             xr.DataArray: lambda x: {  # pylint:disable=unhashable-member
                 **x.to_dict(),  # original xarray dict
-                "type": x.__class__.__name__,  # add the type info as well
+                TYPE_TAG_STR: x.__class__.__name__,  # add the type info as well
             },
         }
         frozen = True
@@ -110,7 +110,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
 
         def is_dict_with_type(value: Any) -> bool:
             """Is this value a dictionary with a type field? Probably Tidy3dBaseModel."""
-            return isinstance(value, dict) and "type" in value
+            return isinstance(value, dict) and TYPE_TAG_STR in value
 
         def get_cls_type(value: Any, outer_type: type, model_type: type) -> type:
             """Gets the class / type needed to load the data in `value`."""
@@ -130,17 +130,18 @@ class Tidy3dBaseModel(pydantic.BaseModel):
                     union_types = {}
                     for union_type in outer_type.__dict__["__args__"]:
                         if isinstance(union_type, type) and issubclass(union_type, Tidy3dBaseModel):
-                            type_name = union_type.__fields__["type"].type_.__dict__["__args__"][0]
+                            type_dict = union_type.__fields__[TYPE_TAG_STR].type_.__dict__
+                            type_name = type_dict["__args__"][0]
                             union_types[type_name] = union_type
 
                     # try to get the value type from the dict of unions, error if not there
-                    value_type = value["type"]
+                    value_type = value[TYPE_TAG_STR]
                     if value_type not in union_types:
                         raise Tidy3dKeyError(
                             f"trying to construct {value} with type {value_type},"
                             f"but this type is not present in the field type union {union_types}"
                         )
-                    return union_types[value["type"]]
+                    return union_types[value[TYPE_TAG_STR]]
 
             # at this point, the type annotation didnt have a union of types, so we just return
             return model_type
@@ -646,9 +647,12 @@ class Tidy3dBaseModel(pydantic.BaseModel):
                     if group_name not in fhandle.keys():
                         group = fhandle.create_group(group_name)
                         coords = {key: np.array(val) for key, val in x.coords.items()}
-                        data_dict = dict(
-                            data=x.data, coords=coords, keep_numpy=True, type=x.__class__.__name__
-                        )
+                        data_dict = {
+                            "data": x.data,
+                            "coords": coords,
+                            "keep_numpy": True,
+                            TYPE_TAG_STR: x.__class__.__name__,
+                        }
                         self._save_group_data(data_dict=data_dict, hdf5_group=group)
                     return dict(group_name=group_name, data_file=data_file, tag="DATA_ITEM")
 
