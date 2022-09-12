@@ -1,12 +1,12 @@
 """ Simulation Level Data """
 from __future__ import annotations
-from typing import Dict, Callable, Union
+from typing import Dict, Callable, Union, Tuple
 
 import xarray as xr
 import pydantic as pd
 import numpy as np
 
-from .monitor_data import MonitorDataTypes, AbstractFieldData
+from .monitor_data import MonitorDataTypes, AbstractFieldMonitorData
 from .monitor_data_n2f import Near2FarDataTypes
 from ..base import Tidy3dBaseModel
 from ..simulation import Simulation
@@ -24,7 +24,10 @@ class SimulationData(Tidy3dBaseModel):
 
     Example
     -------
-    >>> from tidy3d import ModeSpec, GridSpec, ScalarFieldDataArray, FieldMonitor, FieldData
+    >>> from tidy3d import ModeSpec, GridSpec, FieldMonitor
+    >>> from .data_array import ScalarFieldDataArray
+    >>> from .dataset import FieldData
+    >>> from .monitor_data import FieldMonitorData
     >>> num_modes = 5
     >>> x = [-1,1]
     >>> y = [-2,0,2]
@@ -34,16 +37,18 @@ class SimulationData(Tidy3dBaseModel):
     >>> mode_index = np.arange(num_modes)
     >>> direction = ["+", "-"]
     >>> coords = dict(x=x, y=y, z=z, f=f)
-    >>> scalar_field = ScalarFieldDataArray((1+1j) * np.random.random((2,3,4,2)), coords=coords)
+    >>> data_array = xr.DataArray((1+1j) * np.random.random((2,3,4,2)), coords=coords)
+    >>> scalar_field = ScalarFieldDataArray(data=data_array)
+    >>> dataset = FieldData(Ex=scalar_field)
     >>> field_monitor = FieldMonitor(size=(2,4,6), freqs=[2e14, 3e14], name='field', fields=['Ex'])
+    >>> field_data = FieldMonitorData(monitor=field_monitor, dataset=dataset)
     >>> sim = Simulation(
     ...     size=(2, 4, 6),
     ...     grid_spec=GridSpec(wavelength=1.0),
     ...     monitors=[field_monitor],
     ...     run_time=2e-12,
     ... )
-    >>> field_data = FieldData(monitor=field_monitor, Ex=scalar_field)
-    >>> sim_data = SimulationData(simulation=sim, monitor_data={'field': field_data})
+    >>> sim_data = SimulationData(simulation=sim, data=(field_data,))
     """
 
     simulation: Simulation = pd.Field(
@@ -52,10 +57,10 @@ class SimulationData(Tidy3dBaseModel):
         description="Original :class:`.Simulation` associated with the data.",
     )
 
-    monitor_data: Dict[str, annotate_type(MonitorDataType)] = pd.Field(
+    data: Tuple[annotate_type(MonitorDataType), ...] = pd.Field(
         ...,
         title="Monitor Data",
-        description="Mapping of monitor name to :class:`.MonitorData` instance.",
+        description="Collection of :class:`.MonitorData` holding the data for each monitor.",
     )
 
     log: str = pd.Field(
@@ -75,6 +80,11 @@ class SimulationData(Tidy3dBaseModel):
         monitor_data = self.monitor_data[monitor_name]
         monitor_data = self.apply_symmetry(monitor_data)
         return monitor_data
+
+    @property
+    def monitor_data(self) -> Dict[str, MonitorDataType]:
+        """Dictionary relating monitor name to its MonitorData instance."""
+        return {mnt_data.monitor.name: mnt_data for mnt_data in self.data}
 
     @property
     def final_decay_value(self) -> float:

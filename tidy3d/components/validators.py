@@ -159,7 +159,8 @@ def enforce_monitor_fields_present():
     def _contains_fields(cls, values):
         """Make sure the initially specified fields are here."""
         for field_name in values.get("monitor").fields:
-            assert values.get(field_name) is not None, f"missing field {field_name}"
+            if field_name not in values["dataset"].field_components:
+                raise ValidationError(f"missing field {field_name}")
         return values
 
     return _contains_fields
