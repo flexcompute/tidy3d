@@ -374,10 +374,8 @@ class FluxMonitor(AbstractFluxMonitor, FreqMonitor):
     """:class:`Monitor` that records power flux in the frequency domain.
     If the monitor geometry is a 2D box, the total flux through this plane is returned, with a
     positive sign corresponding to power flow in the positive direction along the axis normal to
-    the plane. If the geometry is a 3D box, the returned array has a ``surface`` coordinate, and
-    stores the flux through each of the six surfaces of the box. The sign convention in that case
-    is such that positive sign corresponds to power flowing outside of the box, such that
-    summing over the ``surface`` dimension results in the total out-going power.
+    the plane. If the geometry is a 3D box, the total power coming out of the box is returned by
+    integrating the flux over all box surfaces (excpet the ones defined in ``exclude_surfaces``).
 
     Example
     -------
@@ -406,10 +404,8 @@ class FluxTimeMonitor(AbstractFluxMonitor, TimeMonitor):
     """:class:`Monitor` that records power flux in the time domain.
     If the monitor geometry is a 2D box, the total flux through this plane is returned, with a
     positive sign corresponding to power flow in the positive direction along the axis normal to
-    the plane. If the geometry is a 3D box, the returned array has a ``surface`` coordinate, and
-    stores the flux through each of the six surfaces of the box. The sign convention in that case
-    is such that positive sign corresponds to power flowing outside of the box, such that
-    summing over the ``surface`` dimension results in the total out-going power.
+    the plane. If the geometry is a 3D box, the total power coming out of the box is returned by
+    integrating the flux over all box surfaces (excpet the ones defined in ``exclude_surfaces``).
 
     Example
     -------

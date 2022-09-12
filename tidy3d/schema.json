@@ -1,6 +1,6 @@
 {
   "title": "Simulation",
-  "description": "Contains all information about Tidy3d simulation.\n\nParameters\n----------\ncenter : Tuple[float, float, float] = (0.0, 0.0, 0.0)\n    [units = um].  Center of object in x, y, and z.\nsize : Tuple[NonNegativeFloat, NonNegativeFloat, NonNegativeFloat]\n    [units = um].  Size in x, y, and z directions.\nrun_time : PositiveFloat\n    [units = sec].  Total electromagnetic evolution time in seconds. Note: If simulation 'shutoff' is specified, simulation will terminate early when shutoff condition met. \ngrid_size : Union[GridSpec, Tuple[Union[pydantic.types.PositiveFloat, Tuple[pydantic.types.PositiveFloat, ...]], Union[pydantic.types.PositiveFloat, Tuple[pydantic.types.PositiveFloat, ...]], Union[pydantic.types.PositiveFloat, Tuple[pydantic.types.PositiveFloat, ...]]]] = None\n    [units = um].  NOTE: 'grid_size' has been replaced by 'grid_spec'.\nmedium : Union[Medium, AnisotropicMedium, PECMedium, PoleResidue, Sellmeier, Lorentz, Debye, Drude] = Medium(name=None, frequency_range=None, type='Medium', permittivity=1.0, conductivity=0.0)\n    Background medium of simulation, defaults to vacuum if not specified.\nsymmetry : Tuple[Literal[0, -1, 1], Literal[0, -1, 1], Literal[0, -1, 1]] = (0, 0, 0)\n    Tuple of integers defining reflection symmetry across a plane bisecting the simulation domain normal to the x-, y-, and z-axis at the simulation center of each axis, respectvely. Each element can be ``0`` (no symmetry), ``1`` (even, i.e. 'PMC' symmetry) or ``-1`` (odd, i.e. 'PEC' symmetry). Note that the vectorial nature of the fields must be taken into account to correctly determine the symmetry value.\nstructures : Tuple[Structure, ...] = ()\n    Tuple of structures present in simulation. Note: Structures defined later in this list override the simulation material properties in regions of spatial overlap.\nsources : Tuple[Annotated[Union[tidy3d.components.source.UniformCurrentSource, tidy3d.components.source.PointDipole, tidy3d.components.source.GaussianBeam, tidy3d.components.source.AstigmaticGaussianBeam, tidy3d.components.source.ModeSource, tidy3d.components.source.PlaneWave], FieldInfo(default=PydanticUndefined, discriminator='type', extra={})], ...] = ()\n    Tuple of electric current sources injecting fields into the simulation.\nboundary_spec : BoundarySpec = BoundarySpec(x=Boundary(plus=Periodic(name=None,, type='Periodic'),, minus=Periodic(name=None,, type='Periodic'),, type='Boundary'), y=Boundary(plus=Periodic(name=None,, type='Periodic'),, minus=Periodic(name=None,, type='Periodic'),, type='Boundary'), z=Boundary(plus=Periodic(name=None,, type='Periodic'),, minus=Periodic(name=None,, type='Periodic'),, type='Boundary'), type='BoundarySpec')\n    Specification of boundary conditions along each dimension.\nmonitors : Tuple[Annotated[Union[tidy3d.components.monitor.FieldMonitor, tidy3d.components.monitor.FieldTimeMonitor, tidy3d.components.monitor.PermittivityMonitor, tidy3d.components.monitor.FluxMonitor, tidy3d.components.monitor.FluxTimeMonitor, tidy3d.components.monitor.ModeMonitor, tidy3d.components.monitor.ModeSolverMonitor, tidy3d.components.monitor.Near2FarAngleMonitor, tidy3d.components.monitor.Near2FarCartesianMonitor, tidy3d.components.monitor.Near2FarKSpaceMonitor], FieldInfo(default=PydanticUndefined, discriminator='type', extra={})], ...] = ()\n    Tuple of monitors in the simulation. Note: monitor names are used to access data after simulation is run.\ngrid_spec : GridSpec = GridSpec(grid_x=AutoGrid(type='AutoGrid',, min_steps_per_wvl=10.0,, max_scale=1.4,, mesher=GradedMesher(type='GradedMesher')), grid_y=AutoGrid(type='AutoGrid',, min_steps_per_wvl=10.0,, max_scale=1.4,, mesher=GradedMesher(type='GradedMesher')), grid_z=AutoGrid(type='AutoGrid',, min_steps_per_wvl=10.0,, max_scale=1.4,, mesher=GradedMesher(type='GradedMesher')), wavelength=None, override_structures=(), type='GridSpec')\n    Specifications for the simulation grid along each of the three directions.\nshutoff : NonNegativeFloat = 1e-05\n    Ratio of the instantaneous integrated E-field intensity to the maximum value at which the simulation will automatically terminate time stepping. Used to prevent extraneous run time of simulations with fully decayed fields. Set to ``0`` to disable this feature.\nsubpixel : bool = True\n    If ``True``, uses subpixel averaging of the permittivity based on structure definition, resulting in much higher accuracy for a given grid size.\nnormalize_index : Optional[NonNegativeInt] = 0\n    Index of the source in the tuple of sources whose spectrum will be used to normalize the frequency-dependent data. If ``None``, the raw field data is returned unnormalized.\ncourant : ConstrainedFloatValue = 0.9\n    Courant stability factor, controls time step to spatial step ratio. Lower values lead to more stable simulations for dispersive materials, but result in longer simulation times.\nversion : str = 1.6.2\n    String specifying the front end version number.\n\nExample\n-------\n>>> from tidy3d import Sphere, Cylinder, PolySlab\n>>> from tidy3d import UniformCurrentSource, GaussianPulse\n>>> from tidy3d import FieldMonitor, FluxMonitor\n>>> from tidy3d import GridSpec, AutoGrid\n>>> from tidy3d import BoundarySpec, Boundary\n>>> sim = Simulation(\n...     size=(2.0, 2.0, 2.0),\n...     grid_spec=GridSpec(\n...         grid_x = AutoGrid(min_steps_per_wvl = 20),\n...         grid_y = AutoGrid(min_steps_per_wvl = 20),\n...         grid_z = AutoGrid(min_steps_per_wvl = 20)\n...     ),\n...     run_time=40e-11,\n...     structures=[\n...         Structure(\n...             geometry=Box(size=(1, 1, 1), center=(-1, 0, 0)),\n...             medium=Medium(permittivity=2.0),\n...         ),\n...     ],\n...     sources=[\n...         UniformCurrentSource(\n...             size=(0, 0, 0),\n...             center=(0, 0.5, 0),\n...             polarization=\"Hx\",\n...             source_time=GaussianPulse(\n...                 freq0=2e14,\n...                 fwidth=4e13,\n...             ),\n...         )\n...     ],\n...     monitors=[\n...         FieldMonitor(size=(0, 0, 0), center=(0, 0, 0), freqs=[1.5e14, 2e14], name='point'),\n...         FluxMonitor(size=(1, 1, 0), center=(0, 0, 0), freqs=[2e14, 2.5e14], name='flux'),\n...     ],\n...     symmetry=(0, 0, 0),\n...     boundary_spec=BoundarySpec(\n...         x = Boundary.pml(num_layers=20),\n...         y = Boundary.pml(num_layers=30),\n...         z = Boundary.periodic(),\n...     ),\n...     shutoff=1e-6,\n...     courant=0.8,\n...     subpixel=False,\n... )",
+  "description": "Contains all information about Tidy3d simulation.\n\nParameters\n----------\ncenter : Tuple[float, float, float] = (0.0, 0.0, 0.0)\n    [units = um].  Center of object in x, y, and z.\nsize : Tuple[NonNegativeFloat, NonNegativeFloat, NonNegativeFloat]\n    [units = um].  Size in x, y, and z directions.\nrun_time : PositiveFloat\n    [units = sec].  Total electromagnetic evolution time in seconds. Note: If simulation 'shutoff' is specified, simulation will terminate early when shutoff condition met. \nmedium : Union[Medium, AnisotropicMedium, PECMedium, PoleResidue, Sellmeier, Lorentz, Debye, Drude] = Medium(name=None, frequency_range=None, type='Medium', permittivity=1.0, conductivity=0.0)\n    Background medium of simulation, defaults to vacuum if not specified.\nsymmetry : Tuple[Literal[0, -1, 1], Literal[0, -1, 1], Literal[0, -1, 1]] = (0, 0, 0)\n    Tuple of integers defining reflection symmetry across a plane bisecting the simulation domain normal to the x-, y-, and z-axis at the simulation center of each axis, respectvely. Each element can be ``0`` (no symmetry), ``1`` (even, i.e. 'PMC' symmetry) or ``-1`` (odd, i.e. 'PEC' symmetry). Note that the vectorial nature of the fields must be taken into account to correctly determine the symmetry value.\nstructures : Tuple[Structure, ...] = ()\n    Tuple of structures present in simulation. Note: Structures defined later in this list override the simulation material properties in regions of spatial overlap.\nsources : Tuple[Annotated[Union[tidy3d.components.source.UniformCurrentSource, tidy3d.components.source.PointDipole, tidy3d.components.source.GaussianBeam, tidy3d.components.source.AstigmaticGaussianBeam, tidy3d.components.source.ModeSource, tidy3d.components.source.PlaneWave], FieldInfo(default=PydanticUndefined, discriminator='type', extra={})], ...] = ()\n    Tuple of electric current sources injecting fields into the simulation.\nboundary_spec : BoundarySpec = BoundarySpec(x=Boundary(plus=Periodic(name=None,, type='Periodic'),, minus=Periodic(name=None,, type='Periodic'),, type='Boundary'), y=Boundary(plus=Periodic(name=None,, type='Periodic'),, minus=Periodic(name=None,, type='Periodic'),, type='Boundary'), z=Boundary(plus=Periodic(name=None,, type='Periodic'),, minus=Periodic(name=None,, type='Periodic'),, type='Boundary'), type='BoundarySpec')\n    Specification of boundary conditions along each dimension.\nmonitors : Tuple[Annotated[Union[tidy3d.components.monitor.FieldMonitor, tidy3d.components.monitor.FieldTimeMonitor, tidy3d.components.monitor.PermittivityMonitor, tidy3d.components.monitor.FluxMonitor, tidy3d.components.monitor.FluxTimeMonitor, tidy3d.components.monitor.ModeMonitor, tidy3d.components.monitor.ModeSolverMonitor, tidy3d.components.monitor.Near2FarAngleMonitor, tidy3d.components.monitor.Near2FarCartesianMonitor, tidy3d.components.monitor.Near2FarKSpaceMonitor], FieldInfo(default=PydanticUndefined, discriminator='type', extra={})], ...] = ()\n    Tuple of monitors in the simulation. Note: monitor names are used to access data after simulation is run.\ngrid_spec : GridSpec = GridSpec(grid_x=AutoGrid(type='AutoGrid',, min_steps_per_wvl=10.0,, max_scale=1.4,, mesher=GradedMesher(type='GradedMesher')), grid_y=AutoGrid(type='AutoGrid',, min_steps_per_wvl=10.0,, max_scale=1.4,, mesher=GradedMesher(type='GradedMesher')), grid_z=AutoGrid(type='AutoGrid',, min_steps_per_wvl=10.0,, max_scale=1.4,, mesher=GradedMesher(type='GradedMesher')), wavelength=None, override_structures=(), type='GridSpec')\n    Specifications for the simulation grid along each of the three directions.\nshutoff : NonNegativeFloat = 1e-05\n    Ratio of the instantaneous integrated E-field intensity to the maximum value at which the simulation will automatically terminate time stepping. Used to prevent extraneous run time of simulations with fully decayed fields. Set to ``0`` to disable this feature.\nsubpixel : bool = True\n    If ``True``, uses subpixel averaging of the permittivity based on structure definition, resulting in much higher accuracy for a given grid size.\nnormalize_index : Optional[NonNegativeInt] = 0\n    Index of the source in the tuple of sources whose spectrum will be used to normalize the frequency-dependent data. If ``None``, the raw field data is returned unnormalized.\ncourant : ConstrainedFloatValue = 0.9\n    Courant stability factor, controls time step to spatial step ratio. Lower values lead to more stable simulations for dispersive materials, but result in longer simulation times.\nversion : str = 1.6.3\n    String specifying the front end version number.\n\nExample\n-------\n>>> from tidy3d import Sphere, Cylinder, PolySlab\n>>> from tidy3d import UniformCurrentSource, GaussianPulse\n>>> from tidy3d import FieldMonitor, FluxMonitor\n>>> from tidy3d import GridSpec, AutoGrid\n>>> from tidy3d import BoundarySpec, Boundary\n>>> sim = Simulation(\n...     size=(2.0, 2.0, 2.0),\n...     grid_spec=GridSpec(\n...         grid_x = AutoGrid(min_steps_per_wvl = 20),\n...         grid_y = AutoGrid(min_steps_per_wvl = 20),\n...         grid_z = AutoGrid(min_steps_per_wvl = 20)\n...     ),\n...     run_time=40e-11,\n...     structures=[\n...         Structure(\n...             geometry=Box(size=(1, 1, 1), center=(-1, 0, 0)),\n...             medium=Medium(permittivity=2.0),\n...         ),\n...     ],\n...     sources=[\n...         UniformCurrentSource(\n...             size=(0, 0, 0),\n...             center=(0, 0.5, 0),\n...             polarization=\"Hx\",\n...             source_time=GaussianPulse(\n...                 freq0=2e14,\n...                 fwidth=4e13,\n...             ),\n...         )\n...     ],\n...     monitors=[\n...         FieldMonitor(size=(0, 0, 0), center=(0, 0, 0), freqs=[1.5e14, 2e14], name='point'),\n...         FluxMonitor(size=(1, 1, 0), center=(0, 0, 0), freqs=[2e14, 2.5e14], name='flux'),\n...     ],\n...     symmetry=(0, 0, 0),\n...     boundary_spec=BoundarySpec(\n...         x = Boundary.pml(num_layers=20),\n...         y = Boundary.pml(num_layers=30),\n...         z = Boundary.periodic(),\n...     ),\n...     shutoff=1e-6,\n...     courant=0.8,\n...     subpixel=False,\n... )",
   "type": "object",
   "properties": {
     "type": {
@@ -63,68 +63,6 @@
       "units": "sec",
       "exclusiveMinimum": 0,
       "type": "number"
-    },
-    "grid_size": {
-      "title": "Grid Size",
-      "description": "NOTE: 'grid_size' has been replaced by 'grid_spec'.",
-      "units": "um",
-      "anyOf": [
-        {
-          "$ref": "#/definitions/GridSpec"
-        },
-        {
-          "type": "array",
-          "minItems": 3,
-          "maxItems": 3,
-          "items": [
-            {
-              "anyOf": [
-                {
-                  "type": "number",
-                  "exclusiveMinimum": 0
-                },
-                {
-                  "type": "array",
-                  "items": {
-                    "type": "number",
-                    "exclusiveMinimum": 0
-                  }
-                }
-              ]
-            },
-            {
-              "anyOf": [
-                {
-                  "type": "number",
-                  "exclusiveMinimum": 0
-                },
-                {
-                  "type": "array",
-                  "items": {
-                    "type": "number",
-                    "exclusiveMinimum": 0
-                  }
-                }
-              ]
-            },
-            {
-              "anyOf": [
-                {
-                  "type": "number",
-                  "exclusiveMinimum": 0
-                },
-                {
-                  "type": "array",
-                  "items": {
-                    "type": "number",
-                    "exclusiveMinimum": 0
-                  }
-                }
-              ]
-            }
-          ]
-        }
-      ]
     },
     "medium": {
       "title": "Background Medium",
@@ -418,7 +356,7 @@
     "version": {
       "title": "Version",
       "description": "String specifying the front end version number.",
-      "default": "1.6.2",
+      "default": "1.6.3",
       "type": "string"
     }
   },
@@ -428,446 +366,6 @@
   ],
   "additionalProperties": false,
   "definitions": {
-    "UniformGrid": {
-      "title": "UniformGrid",
-      "description": "Uniform 1D grid.\n\nParameters\n----------\ndl : PositiveFloat\n    [units = um].  Grid size for uniform grid generation.\n\nExample\n-------\n>>> grid_1d = UniformGrid(dl=0.1)",
-      "type": "object",
-      "properties": {
-        "type": {
-          "title": "Type",
-          "default": "UniformGrid",
-          "enum": [
-            "UniformGrid"
-          ],
-          "type": "string"
-        },
-        "dl": {
-          "title": "Grid Size",
-          "description": "Grid size for uniform grid generation.",
-          "units": "um",
-          "exclusiveMinimum": 0,
-          "type": "number"
-        }
-      },
-      "required": [
-        "dl"
-      ],
-      "additionalProperties": false
-    },
-    "CustomGrid": {
-      "title": "CustomGrid",
-      "description": "Custom 1D grid supplied as a list of grid cell sizes centered on the simulation center.\n\nParameters\n----------\ndl : Tuple[PositiveFloat, ...]\n    [units = um].  An array of custom nonuniform grid sizes. The resulting grid is centered on the simulation center such that it spans the region ``(center - sum(dl)/2, center + sum(dl)/2)``. Note: if supplied sizes do not cover the simulation size, the first and last sizes are repeated to cover the simulation domain.\n\nExample\n-------\n>>> grid_1d = CustomGrid(dl=[0.2, 0.2, 0.1, 0.1, 0.1, 0.2, 0.2])",
-      "type": "object",
-      "properties": {
-        "type": {
-          "title": "Type",
-          "default": "CustomGrid",
-          "enum": [
-            "CustomGrid"
-          ],
-          "type": "string"
-        },
-        "dl": {
-          "title": "Customized grid sizes.",
-          "description": "An array of custom nonuniform grid sizes. The resulting grid is centered on the simulation center such that it spans the region ``(center - sum(dl)/2, center + sum(dl)/2)``. Note: if supplied sizes do not cover the simulation size, the first and last sizes are repeated to cover the simulation domain.",
-          "units": "um",
-          "type": "array",
-          "items": {
-            "type": "number",
-            "exclusiveMinimum": 0
-          }
-        }
-      },
-      "required": [
-        "dl"
-      ],
-      "additionalProperties": false
-    },
-    "GradedMesher": {
-      "title": "GradedMesher",
-      "description": "Implements automatic nonuniform meshing with a set minimum steps per wavelength and\na graded mesh expanding from higher- to lower-resolution regions.\n\nParameters\n----------",
-      "type": "object",
-      "properties": {
-        "type": {
-          "title": "Type",
-          "default": "GradedMesher",
-          "enum": [
-            "GradedMesher"
-          ],
-          "type": "string"
-        }
-      },
-      "additionalProperties": false
-    },
-    "AutoGrid": {
-      "title": "AutoGrid",
-      "description": "Specification for non-uniform grid along a given dimension.\n\nParameters\n----------\nmin_steps_per_wvl : ConstrainedFloatValue = 10.0\n    Minimal number of steps per wavelength in each medium.\nmax_scale : ConstrainedFloatValue = 1.4\n    Sets the maximum ratio between any two consecutive grid steps.\nmesher : GradedMesher = GradedMesher(type='GradedMesher')\n    The type of mesher to use to generate the grid automatically.\n\nExample\n-------\n>>> grid_1d = AutoGrid(min_steps_per_wvl=16, max_scale=1.4)",
-      "type": "object",
-      "properties": {
-        "type": {
-          "title": "Type",
-          "default": "AutoGrid",
-          "enum": [
-            "AutoGrid"
-          ],
-          "type": "string"
-        },
-        "min_steps_per_wvl": {
-          "title": "Minimal number of steps per wavelength",
-          "description": "Minimal number of steps per wavelength in each medium.",
-          "default": 10.0,
-          "minimum": 6.0,
-          "type": "number"
-        },
-        "max_scale": {
-          "title": "Maximum Grid Size Scaling",
-          "description": "Sets the maximum ratio between any two consecutive grid steps.",
-          "default": 1.4,
-          "exclusiveMaximum": 2.0,
-          "minimum": 1.2,
-          "type": "number"
-        },
-        "mesher": {
-          "title": "Grid Construction Tool",
-          "description": "The type of mesher to use to generate the grid automatically.",
-          "default": {
-            "type": "GradedMesher"
-          },
-          "allOf": [
-            {
-              "$ref": "#/definitions/GradedMesher"
-            }
-          ]
-        }
-      },
-      "additionalProperties": false
-    },
-    "Box": {
-      "title": "Box",
-      "description": "Rectangular prism.\n   Also base class for :class:`Simulation`, :class:`Monitor`, and :class:`Source`.\n\nParameters\n----------\ncenter : Tuple[float, float, float] = (0.0, 0.0, 0.0)\n    [units = um].  Center of object in x, y, and z.\nsize : Tuple[NonNegativeFloat, NonNegativeFloat, NonNegativeFloat]\n    [units = um].  Size in x, y, and z directions.\n\nExample\n-------\n>>> b = Box(center=(1,2,3), size=(2,2,2))",
-      "type": "object",
-      "properties": {
-        "type": {
-          "title": "Type",
-          "default": "Box",
-          "enum": [
-            "Box"
-          ],
-          "type": "string"
-        },
-        "center": {
-          "title": "Center",
-          "description": "Center of object in x, y, and z.",
-          "default": [
-            0.0,
-            0.0,
-            0.0
-          ],
-          "units": "um",
-          "type": "array",
-          "minItems": 3,
-          "maxItems": 3,
-          "items": [
-            {
-              "type": "number"
-            },
-            {
-              "type": "number"
-            },
-            {
-              "type": "number"
-            }
-          ]
-        },
-        "size": {
-          "title": "Size",
-          "description": "Size in x, y, and z directions.",
-          "units": "um",
-          "type": "array",
-          "minItems": 3,
-          "maxItems": 3,
-          "items": [
-            {
-              "type": "number",
-              "minimum": 0
-            },
-            {
-              "type": "number",
-              "minimum": 0
-            },
-            {
-              "type": "number",
-              "minimum": 0
-            }
-          ]
-        }
-      },
-      "required": [
-        "size"
-      ],
-      "additionalProperties": false
-    },
-    "Sphere": {
-      "title": "Sphere",
-      "description": "Spherical geometry.\n\nParameters\n----------\nradius : NonNegativeFloat\n    [units = um].  Radius of geometry.\ncenter : Tuple[float, float, float] = (0.0, 0.0, 0.0)\n    [units = um].  Center of object in x, y, and z.\n\nExample\n-------\n>>> b = Sphere(center=(1,2,3), radius=2)",
-      "type": "object",
-      "properties": {
-        "type": {
-          "title": "Type",
-          "default": "Sphere",
-          "enum": [
-            "Sphere"
-          ],
-          "type": "string"
-        },
-        "radius": {
-          "title": "Radius",
-          "description": "Radius of geometry.",
-          "units": "um",
-          "minimum": 0,
-          "type": "number"
-        },
-        "center": {
-          "title": "Center",
-          "description": "Center of object in x, y, and z.",
-          "default": [
-            0.0,
-            0.0,
-            0.0
-          ],
-          "units": "um",
-          "type": "array",
-          "minItems": 3,
-          "maxItems": 3,
-          "items": [
-            {
-              "type": "number"
-            },
-            {
-              "type": "number"
-            },
-            {
-              "type": "number"
-            }
-          ]
-        }
-      },
-      "required": [
-        "radius"
-      ],
-      "additionalProperties": false
-    },
-    "Cylinder": {
-      "title": "Cylinder",
-      "description": "Cylindrical geometry.\n\nParameters\n----------\naxis : Literal[0, 1, 2] = 2\n    Specifies dimension of the planar axis (0,1,2) -> (x,y,z).\nradius : NonNegativeFloat\n    [units = um].  Radius of geometry.\ncenter : Tuple[float, float, float] = (0.0, 0.0, 0.0)\n    [units = um].  Center of object in x, y, and z.\nlength : NonNegativeFloat\n    [units = um].  Defines thickness of cylinder along axis dimension.\n\nExample\n-------\n>>> c = Cylinder(center=(1,2,3), radius=2, length=5, axis=2)",
-      "type": "object",
-      "properties": {
-        "type": {
-          "title": "Type",
-          "default": "Cylinder",
-          "enum": [
-            "Cylinder"
-          ],
-          "type": "string"
-        },
-        "axis": {
-          "title": "Axis",
-          "description": "Specifies dimension of the planar axis (0,1,2) -> (x,y,z).",
-          "default": 2,
-          "enum": [
-            0,
-            1,
-            2
-          ],
-          "type": "integer"
-        },
-        "radius": {
-          "title": "Radius",
-          "description": "Radius of geometry.",
-          "units": "um",
-          "minimum": 0,
-          "type": "number"
-        },
-        "center": {
-          "title": "Center",
-          "description": "Center of object in x, y, and z.",
-          "default": [
-            0.0,
-            0.0,
-            0.0
-          ],
-          "units": "um",
-          "type": "array",
-          "minItems": 3,
-          "maxItems": 3,
-          "items": [
-            {
-              "type": "number"
-            },
-            {
-              "type": "number"
-            },
-            {
-              "type": "number"
-            }
-          ]
-        },
-        "length": {
-          "title": "Length",
-          "description": "Defines thickness of cylinder along axis dimension.",
-          "units": "um",
-          "minimum": 0,
-          "type": "number"
-        }
-      },
-      "required": [
-        "radius",
-        "length"
-      ],
-      "additionalProperties": false
-    },
-    "PolySlab": {
-      "title": "PolySlab",
-      "description": "Polygon extruded with optional sidewall angle along axis direction.\n\nParameters\n----------\naxis : Literal[0, 1, 2] = 2\n    Specifies dimension of the planar axis (0,1,2) -> (x,y,z).\nslab_bounds : Tuple[float, float]\n    [units = um].  Minimum and maximum positions of the slab along axis dimension.\ndilation : float = 0.0\n    [units = um].  Dilation of the polygon in the base by shifting each edge along its normal outwards direction by a distance; a negative value corresponds to erosion.\nsidewall_angle : ConstrainedFloatValue = 0.0\n    [units = rad].  Angle of the sidewall. ``sidewall_angle=0`` (default) specifies vertical wall, while ``0<sidewall_angle<np.pi/2`` for the base to be larger than the top, and ``np.pi/2<sidewall_angle<0`` for base to be smaller than the top.\nvertices : Union[Tuple[Tuple[float, float], ...], Array]\n    [units = um].  List of (d1, d2) defining the 2 dimensional positions of the base polygon face vertices along dimensions parallel to slab normal axis.\n\nExample\n-------\n>>> vertices = np.array([(0,0), (1,0), (1,1)])\n>>> p = PolySlab(vertices=vertices, axis=2, slab_bounds=(-1, 1))",
-      "type": "object",
-      "properties": {
-        "type": {
-          "title": "Type",
-          "default": "PolySlab",
-          "enum": [
-            "PolySlab"
-          ],
-          "type": "string"
-        },
-        "axis": {
-          "title": "Axis",
-          "description": "Specifies dimension of the planar axis (0,1,2) -> (x,y,z).",
-          "default": 2,
-          "enum": [
-            0,
-            1,
-            2
-          ],
-          "type": "integer"
-        },
-        "slab_bounds": {
-          "title": "Slab Bounds",
-          "description": "Minimum and maximum positions of the slab along axis dimension.",
-          "units": "um",
-          "type": "array",
-          "minItems": 2,
-          "maxItems": 2,
-          "items": [
-            {
-              "type": "number"
-            },
-            {
-              "type": "number"
-            }
-          ]
-        },
-        "dilation": {
-          "title": "Dilation",
-          "description": "Dilation of the polygon in the base by shifting each edge along its normal outwards direction by a distance; a negative value corresponds to erosion.",
-          "default": 0.0,
-          "units": "um",
-          "type": "number"
-        },
-        "sidewall_angle": {
-          "title": "Sidewall angle",
-          "description": "Angle of the sidewall. ``sidewall_angle=0`` (default) specifies vertical wall, while ``0<sidewall_angle<np.pi/2`` for the base to be larger than the top, and ``np.pi/2<sidewall_angle<0`` for base to be smaller than the top.",
-          "default": 0.0,
-          "exclusiveMinimum": -1.5707963267948966,
-          "exclusiveMaximum": 1.5707963267948966,
-          "units": "rad",
-          "type": "number"
-        },
-        "vertices": {
-          "title": "Vertices",
-          "description": "List of (d1, d2) defining the 2 dimensional positions of the base polygon face vertices along dimensions parallel to slab normal axis.",
-          "units": "um",
-          "anyOf": [
-            {
-              "type": "array",
-              "items": {
-                "type": "array",
-                "minItems": 2,
-                "maxItems": 2,
-                "items": [
-                  {
-                    "type": "number"
-                  },
-                  {
-                    "type": "number"
-                  }
-                ]
-              }
-            },
-            {
-              "title": "Array Like",
-              "description": "Accepts sequence (tuple, list, numpy array) and converts to tuple.",
-              "type": "tuple",
-              "properties": {},
-              "required": []
-            }
-          ]
-        }
-      },
-      "required": [
-        "slab_bounds",
-        "vertices"
-      ],
-      "additionalProperties": false
-    },
-    "GeometryGroup": {
-      "title": "GeometryGroup",
-      "description": "A collection of Geometry objects that can be called as a single geometry object.\n\nParameters\n----------\ngeometries : Tuple[Annotated[Union[tidy3d.components.geometry.Box, tidy3d.components.geometry.Sphere, tidy3d.components.geometry.Cylinder, tidy3d.components.geometry.PolySlab], FieldInfo(default=PydanticUndefined, discriminator='type', extra={})], ...]\n    Tuple of geometries in a single grouping. Can provide significant performance enhancement in ``Structure`` when all geometries are assigned the same medium.",
-      "type": "object",
-      "properties": {
-        "type": {
-          "title": "Type",
-          "default": "GeometryGroup",
-          "enum": [
-            "GeometryGroup"
-          ],
-          "type": "string"
-        },
-        "geometries": {
-          "title": "Geometries",
-          "description": "Tuple of geometries in a single grouping. Can provide significant performance enhancement in ``Structure`` when all geometries are assigned the same medium.",
-          "type": "array",
-          "items": {
-            "discriminator": {
-              "propertyName": "type",
-              "mapping": {
-                "Box": "#/definitions/Box",
-                "Sphere": "#/definitions/Sphere",
-                "Cylinder": "#/definitions/Cylinder",
-                "PolySlab": "#/definitions/PolySlab"
-              }
-            },
-            "anyOf": [
-              {
-                "$ref": "#/definitions/Box"
-              },
-              {
-                "$ref": "#/definitions/Sphere"
-              },
-              {
-                "$ref": "#/definitions/Cylinder"
-              },
-              {
-                "$ref": "#/definitions/PolySlab"
-              }
-            ]
-          }
-        }
-      },
-      "required": [
-        "geometries"
-      ],
-      "additionalProperties": false
-    },
     "Medium": {
       "title": "Medium",
       "description": "Dispersionless medium.\n\nParameters\n----------\nname : Optional[str] = None\n    Optional unique name for medium.\nfrequency_range : Optional[Tuple[float, float]] = None\n    [units = (Hz, Hz)].  Optional range of validity for the medium.\npermittivity : ConstrainedFloatValue = 1.0\n    [units = None (relative permittivity)].  Relative permittivity.\nconductivity : ConstrainedFloatValue = 0.0\n    [units = S/m].  Electric conductivity.  Defined such that the imaginary part of the complex permittivity at angular frequency omega is given by conductivity/omega.\n\nExample\n-------\n>>> dielectric = Medium(permittivity=4.0, name='my_medium')\n>>> eps = dielectric.eps_model(200e12)",
@@ -1459,6 +957,332 @@
       ],
       "additionalProperties": false
     },
+    "Box": {
+      "title": "Box",
+      "description": "Rectangular prism.\n   Also base class for :class:`Simulation`, :class:`Monitor`, and :class:`Source`.\n\nParameters\n----------\ncenter : Tuple[float, float, float] = (0.0, 0.0, 0.0)\n    [units = um].  Center of object in x, y, and z.\nsize : Tuple[NonNegativeFloat, NonNegativeFloat, NonNegativeFloat]\n    [units = um].  Size in x, y, and z directions.\n\nExample\n-------\n>>> b = Box(center=(1,2,3), size=(2,2,2))",
+      "type": "object",
+      "properties": {
+        "type": {
+          "title": "Type",
+          "default": "Box",
+          "enum": [
+            "Box"
+          ],
+          "type": "string"
+        },
+        "center": {
+          "title": "Center",
+          "description": "Center of object in x, y, and z.",
+          "default": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "units": "um",
+          "type": "array",
+          "minItems": 3,
+          "maxItems": 3,
+          "items": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            }
+          ]
+        },
+        "size": {
+          "title": "Size",
+          "description": "Size in x, y, and z directions.",
+          "units": "um",
+          "type": "array",
+          "minItems": 3,
+          "maxItems": 3,
+          "items": [
+            {
+              "type": "number",
+              "minimum": 0
+            },
+            {
+              "type": "number",
+              "minimum": 0
+            },
+            {
+              "type": "number",
+              "minimum": 0
+            }
+          ]
+        }
+      },
+      "required": [
+        "size"
+      ],
+      "additionalProperties": false
+    },
+    "Sphere": {
+      "title": "Sphere",
+      "description": "Spherical geometry.\n\nParameters\n----------\nradius : NonNegativeFloat\n    [units = um].  Radius of geometry.\ncenter : Tuple[float, float, float] = (0.0, 0.0, 0.0)\n    [units = um].  Center of object in x, y, and z.\n\nExample\n-------\n>>> b = Sphere(center=(1,2,3), radius=2)",
+      "type": "object",
+      "properties": {
+        "type": {
+          "title": "Type",
+          "default": "Sphere",
+          "enum": [
+            "Sphere"
+          ],
+          "type": "string"
+        },
+        "radius": {
+          "title": "Radius",
+          "description": "Radius of geometry.",
+          "units": "um",
+          "minimum": 0,
+          "type": "number"
+        },
+        "center": {
+          "title": "Center",
+          "description": "Center of object in x, y, and z.",
+          "default": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "units": "um",
+          "type": "array",
+          "minItems": 3,
+          "maxItems": 3,
+          "items": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            }
+          ]
+        }
+      },
+      "required": [
+        "radius"
+      ],
+      "additionalProperties": false
+    },
+    "Cylinder": {
+      "title": "Cylinder",
+      "description": "Cylindrical geometry.\n\nParameters\n----------\naxis : Literal[0, 1, 2] = 2\n    Specifies dimension of the planar axis (0,1,2) -> (x,y,z).\nradius : NonNegativeFloat\n    [units = um].  Radius of geometry.\ncenter : Tuple[float, float, float] = (0.0, 0.0, 0.0)\n    [units = um].  Center of object in x, y, and z.\nlength : NonNegativeFloat\n    [units = um].  Defines thickness of cylinder along axis dimension.\n\nExample\n-------\n>>> c = Cylinder(center=(1,2,3), radius=2, length=5, axis=2)",
+      "type": "object",
+      "properties": {
+        "type": {
+          "title": "Type",
+          "default": "Cylinder",
+          "enum": [
+            "Cylinder"
+          ],
+          "type": "string"
+        },
+        "axis": {
+          "title": "Axis",
+          "description": "Specifies dimension of the planar axis (0,1,2) -> (x,y,z).",
+          "default": 2,
+          "enum": [
+            0,
+            1,
+            2
+          ],
+          "type": "integer"
+        },
+        "radius": {
+          "title": "Radius",
+          "description": "Radius of geometry.",
+          "units": "um",
+          "minimum": 0,
+          "type": "number"
+        },
+        "center": {
+          "title": "Center",
+          "description": "Center of object in x, y, and z.",
+          "default": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "units": "um",
+          "type": "array",
+          "minItems": 3,
+          "maxItems": 3,
+          "items": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            }
+          ]
+        },
+        "length": {
+          "title": "Length",
+          "description": "Defines thickness of cylinder along axis dimension.",
+          "units": "um",
+          "minimum": 0,
+          "type": "number"
+        }
+      },
+      "required": [
+        "radius",
+        "length"
+      ],
+      "additionalProperties": false
+    },
+    "PolySlab": {
+      "title": "PolySlab",
+      "description": "Polygon extruded with optional sidewall angle along axis direction.\n\nParameters\n----------\naxis : Literal[0, 1, 2] = 2\n    Specifies dimension of the planar axis (0,1,2) -> (x,y,z).\nslab_bounds : Tuple[float, float]\n    [units = um].  Minimum and maximum positions of the slab along axis dimension.\ndilation : float = 0.0\n    [units = um].  Dilation of the polygon in the base by shifting each edge along its normal outwards direction by a distance; a negative value corresponds to erosion.\nsidewall_angle : ConstrainedFloatValue = 0.0\n    [units = rad].  Angle of the sidewall. ``sidewall_angle=0`` (default) specifies vertical wall, while ``0<sidewall_angle<np.pi/2`` for the base to be larger than the top, and ``np.pi/2<sidewall_angle<0`` for base to be smaller than the top.\nvertices : Union[Tuple[Tuple[float, float], ...], Array]\n    [units = um].  List of (d1, d2) defining the 2 dimensional positions of the base polygon face vertices along dimensions parallel to slab normal axis.\n\nExample\n-------\n>>> vertices = np.array([(0,0), (1,0), (1,1)])\n>>> p = PolySlab(vertices=vertices, axis=2, slab_bounds=(-1, 1))",
+      "type": "object",
+      "properties": {
+        "type": {
+          "title": "Type",
+          "default": "PolySlab",
+          "enum": [
+            "PolySlab"
+          ],
+          "type": "string"
+        },
+        "axis": {
+          "title": "Axis",
+          "description": "Specifies dimension of the planar axis (0,1,2) -> (x,y,z).",
+          "default": 2,
+          "enum": [
+            0,
+            1,
+            2
+          ],
+          "type": "integer"
+        },
+        "slab_bounds": {
+          "title": "Slab Bounds",
+          "description": "Minimum and maximum positions of the slab along axis dimension.",
+          "units": "um",
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "items": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            }
+          ]
+        },
+        "dilation": {
+          "title": "Dilation",
+          "description": "Dilation of the polygon in the base by shifting each edge along its normal outwards direction by a distance; a negative value corresponds to erosion.",
+          "default": 0.0,
+          "units": "um",
+          "type": "number"
+        },
+        "sidewall_angle": {
+          "title": "Sidewall angle",
+          "description": "Angle of the sidewall. ``sidewall_angle=0`` (default) specifies vertical wall, while ``0<sidewall_angle<np.pi/2`` for the base to be larger than the top, and ``np.pi/2<sidewall_angle<0`` for base to be smaller than the top.",
+          "default": 0.0,
+          "exclusiveMinimum": -1.5707963267948966,
+          "exclusiveMaximum": 1.5707963267948966,
+          "units": "rad",
+          "type": "number"
+        },
+        "vertices": {
+          "title": "Vertices",
+          "description": "List of (d1, d2) defining the 2 dimensional positions of the base polygon face vertices along dimensions parallel to slab normal axis.",
+          "units": "um",
+          "anyOf": [
+            {
+              "type": "array",
+              "items": {
+                "type": "array",
+                "minItems": 2,
+                "maxItems": 2,
+                "items": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  }
+                ]
+              }
+            },
+            {
+              "title": "Array Like",
+              "description": "Accepts sequence (tuple, list, numpy array) and converts to tuple.",
+              "type": "tuple",
+              "properties": {},
+              "required": []
+            }
+          ]
+        }
+      },
+      "required": [
+        "slab_bounds",
+        "vertices"
+      ],
+      "additionalProperties": false
+    },
+    "GeometryGroup": {
+      "title": "GeometryGroup",
+      "description": "A collection of Geometry objects that can be called as a single geometry object.\n\nParameters\n----------\ngeometries : Tuple[Annotated[Union[tidy3d.components.geometry.Box, tidy3d.components.geometry.Sphere, tidy3d.components.geometry.Cylinder, tidy3d.components.geometry.PolySlab], FieldInfo(default=PydanticUndefined, discriminator='type', extra={})], ...]\n    Tuple of geometries in a single grouping. Can provide significant performance enhancement in ``Structure`` when all geometries are assigned the same medium.",
+      "type": "object",
+      "properties": {
+        "type": {
+          "title": "Type",
+          "default": "GeometryGroup",
+          "enum": [
+            "GeometryGroup"
+          ],
+          "type": "string"
+        },
+        "geometries": {
+          "title": "Geometries",
+          "description": "Tuple of geometries in a single grouping. Can provide significant performance enhancement in ``Structure`` when all geometries are assigned the same medium.",
+          "type": "array",
+          "items": {
+            "discriminator": {
+              "propertyName": "type",
+              "mapping": {
+                "Box": "#/definitions/Box",
+                "Sphere": "#/definitions/Sphere",
+                "Cylinder": "#/definitions/Cylinder",
+                "PolySlab": "#/definitions/PolySlab"
+              }
+            },
+            "anyOf": [
+              {
+                "$ref": "#/definitions/Box"
+              },
+              {
+                "$ref": "#/definitions/Sphere"
+              },
+              {
+                "$ref": "#/definitions/Cylinder"
+              },
+              {
+                "$ref": "#/definitions/PolySlab"
+              }
+            ]
+          }
+        }
+      },
+      "required": [
+        "geometries"
+      ],
+      "additionalProperties": false
+    },
     "Structure": {
       "title": "Structure",
       "description": "Defines a physical object that interacts with the electromagnetic fields.\nA :class:`Structure` is a combination of a material property (:class:`AbstractMedium`)\nand a :class:`Geometry`.\n\nParameters\n----------\ngeometry : Union[Box, Sphere, Cylinder, PolySlab, GeometryGroup]\n    Defines geometric properties of the structure.\nmedium : Union[Medium, AnisotropicMedium, PECMedium, PoleResidue, Sellmeier, Lorentz, Debye, Drude]\n    Defines the electromagnetic properties of the structure's medium.\nname : Optional[str] = None\n    Optional name for the structure.\n\nExample\n-------\n>>> from tidy3d import Box, Medium\n>>> box = Box(center=(0,0,1), size=(2, 2, 2))\n>>> glass = Medium(permittivity=3.9)\n>>> struct = Structure(geometry=box, medium=glass, name='glass_box')",
@@ -1556,106 +1380,6 @@
         "geometry",
         "medium"
       ],
-      "additionalProperties": false
-    },
-    "GridSpec": {
-      "title": "GridSpec",
-      "description": "Collective grid specification for all three dimensions.\n\nParameters\n----------\ngrid_x : Union[UniformGrid, CustomGrid, AutoGrid] = AutoGrid(type='AutoGrid', min_steps_per_wvl=10.0, max_scale=1.4, mesher=GradedMesher(type='GradedMesher'))\n    Grid specification along x-axis\ngrid_y : Union[UniformGrid, CustomGrid, AutoGrid] = AutoGrid(type='AutoGrid', min_steps_per_wvl=10.0, max_scale=1.4, mesher=GradedMesher(type='GradedMesher'))\n    Grid specification along y-axis\ngrid_z : Union[UniformGrid, CustomGrid, AutoGrid] = AutoGrid(type='AutoGrid', min_steps_per_wvl=10.0, max_scale=1.4, mesher=GradedMesher(type='GradedMesher'))\n    Grid specification along z-axis\nwavelength : Optional[float] = None\n    [units = um].  Free-space wavelength for automatic nonuniform grid. It can be 'None' if there is at least one source in the simulation, in which case it is defined by the source central frequency.\noverride_structures : Tuple[Structure, ...] = ()\n    A set of structures that is added on top of the simulation structures in the process of generating the grid. This can be used to refine the grid or make it coarser depending than the expected need for higher/lower resolution regions.\n\nExample\n-------\n>>> uniform = UniformGrid(dl=0.1)\n>>> custom = CustomGrid(dl=[0.2, 0.2, 0.1, 0.1, 0.1, 0.2, 0.2])\n>>> auto = AutoGrid(min_steps_per_wvl=12)\n>>> grid_spec = GridSpec(grid_x=uniform, grid_y=custom, grid_z=auto, wavelength=1.5)",
-      "type": "object",
-      "properties": {
-        "grid_x": {
-          "title": "Grid specification along x-axis",
-          "description": "Grid specification along x-axis",
-          "default": {
-            "type": "AutoGrid",
-            "min_steps_per_wvl": 10.0,
-            "max_scale": 1.4,
-            "mesher": {
-              "type": "GradedMesher"
-            }
-          },
-          "anyOf": [
-            {
-              "$ref": "#/definitions/UniformGrid"
-            },
-            {
-              "$ref": "#/definitions/CustomGrid"
-            },
-            {
-              "$ref": "#/definitions/AutoGrid"
-            }
-          ]
-        },
-        "grid_y": {
-          "title": "Grid specification along y-axis",
-          "description": "Grid specification along y-axis",
-          "default": {
-            "type": "AutoGrid",
-            "min_steps_per_wvl": 10.0,
-            "max_scale": 1.4,
-            "mesher": {
-              "type": "GradedMesher"
-            }
-          },
-          "anyOf": [
-            {
-              "$ref": "#/definitions/UniformGrid"
-            },
-            {
-              "$ref": "#/definitions/CustomGrid"
-            },
-            {
-              "$ref": "#/definitions/AutoGrid"
-            }
-          ]
-        },
-        "grid_z": {
-          "title": "Grid specification along z-axis",
-          "description": "Grid specification along z-axis",
-          "default": {
-            "type": "AutoGrid",
-            "min_steps_per_wvl": 10.0,
-            "max_scale": 1.4,
-            "mesher": {
-              "type": "GradedMesher"
-            }
-          },
-          "anyOf": [
-            {
-              "$ref": "#/definitions/UniformGrid"
-            },
-            {
-              "$ref": "#/definitions/CustomGrid"
-            },
-            {
-              "$ref": "#/definitions/AutoGrid"
-            }
-          ]
-        },
-        "wavelength": {
-          "title": "Free-space wavelength",
-          "description": "Free-space wavelength for automatic nonuniform grid. It can be 'None' if there is at least one source in the simulation, in which case it is defined by the source central frequency.",
-          "units": "um",
-          "type": "number"
-        },
-        "override_structures": {
-          "title": "Grid specification override structures",
-          "description": "A set of structures that is added on top of the simulation structures in the process of generating the grid. This can be used to refine the grid or make it coarser depending than the expected need for higher/lower resolution regions.",
-          "default": [],
-          "type": "array",
-          "items": {
-            "$ref": "#/definitions/Structure"
-          }
-        },
-        "type": {
-          "title": "Type",
-          "default": "GridSpec",
-          "enum": [
-            "GridSpec"
-          ],
-          "type": "string"
-        }
-      },
       "additionalProperties": false
     },
     "GaussianPulse": {
@@ -3513,7 +3237,7 @@
     },
     "FluxMonitor": {
       "title": "FluxMonitor",
-      "description": ":class:`Monitor` that records power flux in the frequency domain.\nIf the monitor geometry is a 2D box, the total flux through this plane is returned, with a\npositive sign corresponding to power flow in the positive direction along the axis normal to\nthe plane. If the geometry is a 3D box, the returned array has a ``surface`` coordinate, and\nstores the flux through each of the six surfaces of the box. The sign convention in that case\nis such that positive sign corresponds to power flowing outside of the box, such that\nsumming over the ``surface`` dimension results in the total out-going power.\n\nParameters\n----------\ncenter : Tuple[float, float, float] = (0.0, 0.0, 0.0)\n    [units = um].  Center of object in x, y, and z.\nsize : Tuple[NonNegativeFloat, NonNegativeFloat, NonNegativeFloat]\n    [units = um].  Size in x, y, and z directions.\nname : ConstrainedStrValue\n    Unique name for monitor.\nfreqs : Union[Tuple[float, ...], Array]\n    [units = Hz].  Array or list of frequencies stored by the field monitor.\nnormal_dir : Optional[Literal['+', '-']] = None\n    Direction of the surface monitor's normal vector w.r.t. the positive x, y or z unit vectors. Must be one of ``'+'`` or ``'-'``. Applies to surface monitors only, and defaults to ``'+'`` if not provided.\nexclude_surfaces : Optional[Tuple[Literal['x-', 'x+', 'y-', 'y+', 'z-', 'z+'], ...]] = None\n    Surfaces to exclude in the integration, if a volume monitor.\n\nExample\n-------\n>>> monitor = FluxMonitor(\n...     center=(1,2,3),\n...     size=(2,2,0),\n...     freqs=[200e12, 210e12],\n...     name='flux_monitor')\n\nNote\n----\nFor a 2D plane, the flux is summed up over all Yee grid pixels that are touched by the plane,\nrather than integrated over the exact span of the plane. For a 3D monitor, this is also the\ncase, but care is taken to not over- or under-count the power at the edges. Because of this,\nthere can be small discrepancies between using a 3D FluxMonitor and manually placing six\n2D monitors at the surface locations.",
+      "description": ":class:`Monitor` that records power flux in the frequency domain.\nIf the monitor geometry is a 2D box, the total flux through this plane is returned, with a\npositive sign corresponding to power flow in the positive direction along the axis normal to\nthe plane. If the geometry is a 3D box, the total power coming out of the box is returned by\nintegrating the flux over all box surfaces (excpet the ones defined in ``exclude_surfaces``).\n\nParameters\n----------\ncenter : Tuple[float, float, float] = (0.0, 0.0, 0.0)\n    [units = um].  Center of object in x, y, and z.\nsize : Tuple[NonNegativeFloat, NonNegativeFloat, NonNegativeFloat]\n    [units = um].  Size in x, y, and z directions.\nname : ConstrainedStrValue\n    Unique name for monitor.\nfreqs : Union[Tuple[float, ...], Array]\n    [units = Hz].  Array or list of frequencies stored by the field monitor.\nnormal_dir : Optional[Literal['+', '-']] = None\n    Direction of the surface monitor's normal vector w.r.t. the positive x, y or z unit vectors. Must be one of ``'+'`` or ``'-'``. Applies to surface monitors only, and defaults to ``'+'`` if not provided.\nexclude_surfaces : Optional[Tuple[Literal['x-', 'x+', 'y-', 'y+', 'z-', 'z+'], ...]] = None\n    Surfaces to exclude in the integration, if a volume monitor.\n\nExample\n-------\n>>> monitor = FluxMonitor(\n...     center=(1,2,3),\n...     size=(2,2,0),\n...     freqs=[200e12, 210e12],\n...     name='flux_monitor')\n\nNote\n----\nFor a 2D plane, the flux is summed up over all Yee grid pixels that are touched by the plane,\nrather than integrated over the exact span of the plane. For a 3D monitor, this is also the\ncase, but care is taken to not over- or under-count the power at the edges. Because of this,\nthere can be small discrepancies between using a 3D FluxMonitor and manually placing six\n2D monitors at the surface locations.",
       "type": "object",
       "properties": {
         "type": {
@@ -3631,7 +3355,7 @@
     },
     "FluxTimeMonitor": {
       "title": "FluxTimeMonitor",
-      "description": ":class:`Monitor` that records power flux in the time domain.\nIf the monitor geometry is a 2D box, the total flux through this plane is returned, with a\npositive sign corresponding to power flow in the positive direction along the axis normal to\nthe plane. If the geometry is a 3D box, the returned array has a ``surface`` coordinate, and\nstores the flux through each of the six surfaces of the box. The sign convention in that case\nis such that positive sign corresponds to power flowing outside of the box, such that\nsumming over the ``surface`` dimension results in the total out-going power.\n\nParameters\n----------\ncenter : Tuple[float, float, float] = (0.0, 0.0, 0.0)\n    [units = um].  Center of object in x, y, and z.\nsize : Tuple[NonNegativeFloat, NonNegativeFloat, NonNegativeFloat]\n    [units = um].  Size in x, y, and z directions.\nname : ConstrainedStrValue\n    Unique name for monitor.\nstart : NonNegativeFloat = 0.0\n    [units = sec].  Time at which to start monitor recording.\nstop : Optional[NonNegativeFloat] = None\n    [units = sec].  Time at which to stop monitor recording.  If not specified, record until end of simulation.\ninterval : PositiveInt = 1\n    Number of time step intervals between monitor recordings.\nnormal_dir : Optional[Literal['+', '-']] = None\n    Direction of the surface monitor's normal vector w.r.t. the positive x, y or z unit vectors. Must be one of ``'+'`` or ``'-'``. Applies to surface monitors only, and defaults to ``'+'`` if not provided.\nexclude_surfaces : Optional[Tuple[Literal['x-', 'x+', 'y-', 'y+', 'z-', 'z+'], ...]] = None\n    Surfaces to exclude in the integration, if a volume monitor.\n\nExample\n-------\n>>> monitor = FluxTimeMonitor(\n...     center=(1,2,3),\n...     size=(2,2,0),\n...     start=1e-13,\n...     stop=5e-13,\n...     interval=2,\n...     name='flux_vs_time')\n\nNote\n----\nFor a 2D plane, the flux is summed up over all Yee grid pixels that are touched by the plane,\nrather than integrated over the exact span of the plane. For a 3D monitor, this is also the\ncase, but care is taken to not over- or under-count the power at the edges. Because of this,\nthere can be small discrepancies between using a 3D FluxMonitor and manually placing six\n2D monitors at the surface locations.",
+      "description": ":class:`Monitor` that records power flux in the time domain.\nIf the monitor geometry is a 2D box, the total flux through this plane is returned, with a\npositive sign corresponding to power flow in the positive direction along the axis normal to\nthe plane. If the geometry is a 3D box, the total power coming out of the box is returned by\nintegrating the flux over all box surfaces (excpet the ones defined in ``exclude_surfaces``).\n\nParameters\n----------\ncenter : Tuple[float, float, float] = (0.0, 0.0, 0.0)\n    [units = um].  Center of object in x, y, and z.\nsize : Tuple[NonNegativeFloat, NonNegativeFloat, NonNegativeFloat]\n    [units = um].  Size in x, y, and z directions.\nname : ConstrainedStrValue\n    Unique name for monitor.\nstart : NonNegativeFloat = 0.0\n    [units = sec].  Time at which to start monitor recording.\nstop : Optional[NonNegativeFloat] = None\n    [units = sec].  Time at which to stop monitor recording.  If not specified, record until end of simulation.\ninterval : PositiveInt = 1\n    Number of time step intervals between monitor recordings.\nnormal_dir : Optional[Literal['+', '-']] = None\n    Direction of the surface monitor's normal vector w.r.t. the positive x, y or z unit vectors. Must be one of ``'+'`` or ``'-'``. Applies to surface monitors only, and defaults to ``'+'`` if not provided.\nexclude_surfaces : Optional[Tuple[Literal['x-', 'x+', 'y-', 'y+', 'z-', 'z+'], ...]] = None\n    Surfaces to exclude in the integration, if a volume monitor.\n\nExample\n-------\n>>> monitor = FluxTimeMonitor(\n...     center=(1,2,3),\n...     size=(2,2,0),\n...     start=1e-13,\n...     stop=5e-13,\n...     interval=2,\n...     name='flux_vs_time')\n\nNote\n----\nFor a 2D plane, the flux is summed up over all Yee grid pixels that are touched by the plane,\nrather than integrated over the exact span of the plane. For a 3D monitor, this is also the\ncase, but care is taken to not over- or under-count the power at the edges. Because of this,\nthere can be small discrepancies between using a 3D FluxMonitor and manually placing six\n2D monitors at the surface locations.",
       "type": "object",
       "properties": {
         "type": {
@@ -4623,6 +4347,220 @@
         "ux",
         "uy"
       ],
+      "additionalProperties": false
+    },
+    "UniformGrid": {
+      "title": "UniformGrid",
+      "description": "Uniform 1D grid.\n\nParameters\n----------\ndl : PositiveFloat\n    [units = um].  Grid size for uniform grid generation.\n\nExample\n-------\n>>> grid_1d = UniformGrid(dl=0.1)",
+      "type": "object",
+      "properties": {
+        "type": {
+          "title": "Type",
+          "default": "UniformGrid",
+          "enum": [
+            "UniformGrid"
+          ],
+          "type": "string"
+        },
+        "dl": {
+          "title": "Grid Size",
+          "description": "Grid size for uniform grid generation.",
+          "units": "um",
+          "exclusiveMinimum": 0,
+          "type": "number"
+        }
+      },
+      "required": [
+        "dl"
+      ],
+      "additionalProperties": false
+    },
+    "CustomGrid": {
+      "title": "CustomGrid",
+      "description": "Custom 1D grid supplied as a list of grid cell sizes centered on the simulation center.\n\nParameters\n----------\ndl : Tuple[PositiveFloat, ...]\n    [units = um].  An array of custom nonuniform grid sizes. The resulting grid is centered on the simulation center such that it spans the region ``(center - sum(dl)/2, center + sum(dl)/2)``. Note: if supplied sizes do not cover the simulation size, the first and last sizes are repeated to cover the simulation domain.\n\nExample\n-------\n>>> grid_1d = CustomGrid(dl=[0.2, 0.2, 0.1, 0.1, 0.1, 0.2, 0.2])",
+      "type": "object",
+      "properties": {
+        "type": {
+          "title": "Type",
+          "default": "CustomGrid",
+          "enum": [
+            "CustomGrid"
+          ],
+          "type": "string"
+        },
+        "dl": {
+          "title": "Customized grid sizes.",
+          "description": "An array of custom nonuniform grid sizes. The resulting grid is centered on the simulation center such that it spans the region ``(center - sum(dl)/2, center + sum(dl)/2)``. Note: if supplied sizes do not cover the simulation size, the first and last sizes are repeated to cover the simulation domain.",
+          "units": "um",
+          "type": "array",
+          "items": {
+            "type": "number",
+            "exclusiveMinimum": 0
+          }
+        }
+      },
+      "required": [
+        "dl"
+      ],
+      "additionalProperties": false
+    },
+    "GradedMesher": {
+      "title": "GradedMesher",
+      "description": "Implements automatic nonuniform meshing with a set minimum steps per wavelength and\na graded mesh expanding from higher- to lower-resolution regions.\n\nParameters\n----------",
+      "type": "object",
+      "properties": {
+        "type": {
+          "title": "Type",
+          "default": "GradedMesher",
+          "enum": [
+            "GradedMesher"
+          ],
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "AutoGrid": {
+      "title": "AutoGrid",
+      "description": "Specification for non-uniform grid along a given dimension.\n\nParameters\n----------\nmin_steps_per_wvl : ConstrainedFloatValue = 10.0\n    Minimal number of steps per wavelength in each medium.\nmax_scale : ConstrainedFloatValue = 1.4\n    Sets the maximum ratio between any two consecutive grid steps.\nmesher : GradedMesher = GradedMesher(type='GradedMesher')\n    The type of mesher to use to generate the grid automatically.\n\nExample\n-------\n>>> grid_1d = AutoGrid(min_steps_per_wvl=16, max_scale=1.4)",
+      "type": "object",
+      "properties": {
+        "type": {
+          "title": "Type",
+          "default": "AutoGrid",
+          "enum": [
+            "AutoGrid"
+          ],
+          "type": "string"
+        },
+        "min_steps_per_wvl": {
+          "title": "Minimal number of steps per wavelength",
+          "description": "Minimal number of steps per wavelength in each medium.",
+          "default": 10.0,
+          "minimum": 6.0,
+          "type": "number"
+        },
+        "max_scale": {
+          "title": "Maximum Grid Size Scaling",
+          "description": "Sets the maximum ratio between any two consecutive grid steps.",
+          "default": 1.4,
+          "exclusiveMaximum": 2.0,
+          "minimum": 1.2,
+          "type": "number"
+        },
+        "mesher": {
+          "title": "Grid Construction Tool",
+          "description": "The type of mesher to use to generate the grid automatically.",
+          "default": {
+            "type": "GradedMesher"
+          },
+          "allOf": [
+            {
+              "$ref": "#/definitions/GradedMesher"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "GridSpec": {
+      "title": "GridSpec",
+      "description": "Collective grid specification for all three dimensions.\n\nParameters\n----------\ngrid_x : Union[UniformGrid, CustomGrid, AutoGrid] = AutoGrid(type='AutoGrid', min_steps_per_wvl=10.0, max_scale=1.4, mesher=GradedMesher(type='GradedMesher'))\n    Grid specification along x-axis\ngrid_y : Union[UniformGrid, CustomGrid, AutoGrid] = AutoGrid(type='AutoGrid', min_steps_per_wvl=10.0, max_scale=1.4, mesher=GradedMesher(type='GradedMesher'))\n    Grid specification along y-axis\ngrid_z : Union[UniformGrid, CustomGrid, AutoGrid] = AutoGrid(type='AutoGrid', min_steps_per_wvl=10.0, max_scale=1.4, mesher=GradedMesher(type='GradedMesher'))\n    Grid specification along z-axis\nwavelength : Optional[float] = None\n    [units = um].  Free-space wavelength for automatic nonuniform grid. It can be 'None' if there is at least one source in the simulation, in which case it is defined by the source central frequency.\noverride_structures : Tuple[Structure, ...] = ()\n    A set of structures that is added on top of the simulation structures in the process of generating the grid. This can be used to refine the grid or make it coarser depending than the expected need for higher/lower resolution regions.\n\nExample\n-------\n>>> uniform = UniformGrid(dl=0.1)\n>>> custom = CustomGrid(dl=[0.2, 0.2, 0.1, 0.1, 0.1, 0.2, 0.2])\n>>> auto = AutoGrid(min_steps_per_wvl=12)\n>>> grid_spec = GridSpec(grid_x=uniform, grid_y=custom, grid_z=auto, wavelength=1.5)",
+      "type": "object",
+      "properties": {
+        "grid_x": {
+          "title": "Grid specification along x-axis",
+          "description": "Grid specification along x-axis",
+          "default": {
+            "type": "AutoGrid",
+            "min_steps_per_wvl": 10.0,
+            "max_scale": 1.4,
+            "mesher": {
+              "type": "GradedMesher"
+            }
+          },
+          "anyOf": [
+            {
+              "$ref": "#/definitions/UniformGrid"
+            },
+            {
+              "$ref": "#/definitions/CustomGrid"
+            },
+            {
+              "$ref": "#/definitions/AutoGrid"
+            }
+          ]
+        },
+        "grid_y": {
+          "title": "Grid specification along y-axis",
+          "description": "Grid specification along y-axis",
+          "default": {
+            "type": "AutoGrid",
+            "min_steps_per_wvl": 10.0,
+            "max_scale": 1.4,
+            "mesher": {
+              "type": "GradedMesher"
+            }
+          },
+          "anyOf": [
+            {
+              "$ref": "#/definitions/UniformGrid"
+            },
+            {
+              "$ref": "#/definitions/CustomGrid"
+            },
+            {
+              "$ref": "#/definitions/AutoGrid"
+            }
+          ]
+        },
+        "grid_z": {
+          "title": "Grid specification along z-axis",
+          "description": "Grid specification along z-axis",
+          "default": {
+            "type": "AutoGrid",
+            "min_steps_per_wvl": 10.0,
+            "max_scale": 1.4,
+            "mesher": {
+              "type": "GradedMesher"
+            }
+          },
+          "anyOf": [
+            {
+              "$ref": "#/definitions/UniformGrid"
+            },
+            {
+              "$ref": "#/definitions/CustomGrid"
+            },
+            {
+              "$ref": "#/definitions/AutoGrid"
+            }
+          ]
+        },
+        "wavelength": {
+          "title": "Free-space wavelength",
+          "description": "Free-space wavelength for automatic nonuniform grid. It can be 'None' if there is at least one source in the simulation, in which case it is defined by the source central frequency.",
+          "units": "um",
+          "type": "number"
+        },
+        "override_structures": {
+          "title": "Grid specification override structures",
+          "description": "A set of structures that is added on top of the simulation structures in the process of generating the grid. This can be used to refine the grid or make it coarser depending than the expected need for higher/lower resolution regions.",
+          "default": [],
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/Structure"
+          }
+        },
+        "type": {
+          "title": "Type",
+          "default": "GridSpec",
+          "enum": [
+            "GridSpec"
+          ],
+          "type": "string"
+        }
+      },
       "additionalProperties": false
     }
   }
