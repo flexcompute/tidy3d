@@ -562,7 +562,12 @@ class Tidy3dBaseModel(pydantic.BaseModel):
 
             if isinstance(value, xr.DataArray):
                 coords = {key: np.array(val) for key, val in value.coords.items()}
-                value = dict(data=value.data, coords=coords, keep_numpy=True)
+                value = {
+                    "data": value.data,
+                    "coords": coords,
+                    "keep_numpy": True,
+                    TYPE_TAG_STR: value.__class__.__name__,
+                }
 
             # if a tuple of dicts, convert to a dict with special
             elif isinstance(value, tuple) and any(isinstance(val, dict) for val in value):
