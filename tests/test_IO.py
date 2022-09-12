@@ -6,10 +6,14 @@ import numpy as np
 import os
 from time import time
 import xarray as xr
+import h5py
+from dask.base import tokenize
+
 
 from tidy3d import *
 from tidy3d import __version__
 import tidy3d as td
+from tidy3d.components.base import Tidy3dBaseModel
 from .utils import SIM_FULL as SIM
 from .utils import SIM_MONITORS as SIM2
 from .utils import clear_tmp
@@ -206,14 +210,30 @@ def test_yaml():
 @clear_tmp
 def test_to_json_data():
     """Tests that the json string with data in separate file behaves correctly."""
+
+    # type saved in the combined json file?
     data = make_flux_data()
     json_dict = json.loads(data._json_string())
     assert json_dict["flux"] is not None
-    assert "type" in json_dict and json_dict["type"] == "FluxData"
+    assert json_dict["flux"]["type"] == "FluxDataArray"
+
+    # type saved inside of the separated data file?
     data_file = "tests/tmp/data_file.hdf5"
     json_dict = json.loads(data._json_string(data_file=data_file))
+    assert json_dict["flux"] is not None
     assert json_dict["flux"]["data_file"] == data_file
-    assert "type" in json_dict and json_dict["type"] == "FluxData"
+    with h5py.File(data_file, "r") as f:
+        type_dataset = f[tokenize(data.flux)]["type"]
+        type_str = Tidy3dBaseModel.unpack_dataset(type_dataset, keep_numpy=False)
+        assert type_str == "FluxDataArray"
+
+    # type saved to hdf5 file?
+    data_file_direct = "tests/tmp/flux_data.hdf5"
+    data.to_file(data_file_direct)
+    with h5py.File(data_file_direct, "r") as f:
+        type_dataset = f["flux"]["type"]
+        type_str = Tidy3dBaseModel.unpack_dataset(type_dataset, keep_numpy=False)
+        assert type_str == "FluxDataArray"
 
 
 @clear_tmp
