@@ -11,12 +11,12 @@ from tidy3d.log import ValidationError, SetupError
 np.random.seed(4)
 
 
-def setup_polyslab(vertices, dilation, angle, bounds):
+def setup_polyslab(vertices, dilation, angle, bounds, axis=2):
     """Setup slanted polyslab"""
     s = td.PolySlab(
         vertices=vertices,
         slab_bounds=bounds,
-        axis=2,
+        axis=axis,
         dilation=dilation,
         sidewall_angle=angle,
     )
@@ -210,7 +210,9 @@ def test_intersection_with_inside():
         dilation = 0
         angle = 0
         bounds = (0, 1)
-        s = setup_polyslab(vertices, dilation, angle, bounds)
+
+        axis = np.random.randint(3)
+        s = setup_polyslab(vertices, dilation, angle, bounds, axis=axis)
 
         # set up proper thickness
         _, max_dist = s._crossing_detection(s.base_polygon, -100)
@@ -219,7 +221,7 @@ def test_intersection_with_inside():
         angle = np.pi / 4
         # avoid vertex-edge crossing case
         try:
-            s = setup_polyslab(vertices, dilation, angle, bounds)
+            s = setup_polyslab(vertices, dilation, angle, bounds, axis=axis)
         except:
             continue
 
@@ -295,9 +297,11 @@ def test_intersection_with_inside_negative_angle():
         dilation = 0.0
         bounds = (0, (max_dist * 0.95))
         angle = -np.pi / 4
+
+        axis = np.random.randint(3)
         # avoid vertex-edge crossing case
         try:
-            s = setup_polyslab(vertices, dilation, angle, bounds)
+            s = setup_polyslab(vertices, dilation, angle, bounds, axis=axis)
         except:
             continue
 

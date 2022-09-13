@@ -677,6 +677,23 @@ class Planar(Geometry, ABC):
         bounds_max = self.unpop_axis(z_max, (xmax, ymax), axis=self.axis)
         return bounds_min, bounds_max
 
+    def _order_axis(self, axis: int) -> int:
+        """Order the axis as if self.axis is along z-direction.
+
+        Parameters
+        ----------
+        axis : int
+            Integer index into the structure's planar axis.
+
+        Returns
+        -------
+        int
+            New index of axis.
+        """
+        axis_index = [0, 1]
+        axis_index.insert(self.axis, 2)
+        return axis_index[axis]
+
     def _order_by_axis(self, plane_val: Any, axis_val: Any, axis: int) -> Tuple[Any, Any]:
         """Orders a value in the plane and value along axis in correct (x,y) order for plotting.
            Note: sometimes if axis=1 and we compute cross section values orthogonal to axis,
@@ -1414,19 +1431,11 @@ class PolySlab(Planar):
         ...,
         title="Vertices",
         description="List of (d1, d2) defining the 2 dimensional positions of the base polygon "
-        "face vertices along dimensions parallel to slab normal axis.",
+        "face vertices along dimensions parallel to slab normal axis. The index of dimension "
+        "should be in the ascending order: e.g. if the slab normal axis is `y`, the coordinate "
+        "of the vertices will be in (x, z)",
         units=MICROMETER,
     )
-
-    @pydantic.validator("axis", always=True)
-    def supports_z_axis_only(cls, val):
-        """PolySlab can only be oriented in z right now."""
-        if val != 2:
-            raise ValidationError(
-                "PolySlab can only support axis=2 in this version of Tidy3D."
-                "Support for slabs oriented in other axes will be available in future releases."
-            )
-        return val
 
     @property
     def center_axis(self) -> float:
@@ -1722,6 +1731,8 @@ class PolySlab(Planar):
             Whether point ``(x,y,z)`` is inside geometry.
         """
 
+        z, (x, y) = self.pop_axis((x, y, z), axis=self.axis)
+
         z0 = self.center_axis
         dist_z = np.abs(z - z0)
         inside_height = dist_z <= (self.length_axis / 2)
@@ -1756,16 +1767,32 @@ class PolySlab(Planar):
                 inside_polygon[inside_height] = inside_polygon_slab
             # slanted sidewall, offsetting vertices at each z
             else:
-                for z_i in range(z.shape[2]):
-                    if not inside_height[0, 0, z_i]:
+                # a helper function for moving axis
+                def _move_axis(arr):
+                    return np.moveaxis(arr, source=self.axis, destination=-1)
+
+                def _move_axis_reverse(arr):
+                    return np.moveaxis(arr, source=-1, destination=self.axis)
+
+                inside_polygon_axis = _move_axis(inside_polygon)
+                x_axis = _move_axis(x)
+                y_axis = _move_axis(y)
+
+                for z_i in range(z.shape[self.axis]):
+                    if not _move_axis(inside_height)[0, 0, z_i]:
                         continue
-                    vertices_z = self._shift_vertices(self.base_polygon, dist[0, 0, z_i])[0]
+                    vertices_z = self._shift_vertices(
+                        self.base_polygon, _move_axis(dist)[0, 0, z_i]
+                    )[0]
                     face_polygon = Polygon(vertices_z)
                     fun_contain = contains_pointwise(face_polygon)
                     contains_vectorized = np.vectorize(fun_contain, signature="(n)->()")
-                    points_stacked = np.stack((x[:, :, 0].flatten(), y[:, :, 0].flatten()), axis=1)
+                    points_stacked = np.stack(
+                        (x_axis[:, :, 0].flatten(), y_axis[:, :, 0].flatten()), axis=1
+                    )
                     inside_polygon_slab = contains_vectorized(points_stacked)
-                    inside_polygon[:, :, z_i] = inside_polygon_slab.reshape(x.shape[:2])
+                    inside_polygon_axis[:, :, z_i] = inside_polygon_slab.reshape(x_axis.shape[:2])
+                inside_polygon = _move_axis_reverse(inside_polygon_axis)
         else:
             vertices_z = self._shift_vertices(self._base_polygon, dist)[0]
             face_polygon = Polygon(vertices_z)
@@ -1831,7 +1858,9 @@ class PolySlab(Planar):
         # find out all z_i where the plane will intersect the vertex
         z0 = self.center_axis
         z_base = z0 - self.length_axis / 2
-        height_list = self._find_intersecting_height(position, axis)
+
+        axis_ordered = self._order_axis(axis)
+        height_list = self._find_intersecting_height(position, axis_ordered)
         polys = []
 
         # looping through z_i to assemble the polygons
@@ -1851,11 +1880,11 @@ class PolySlab(Planar):
             # for vertical sidewall, no need for complications
             if isclose(self.sidewall_angle, 0):
                 ints_y, ints_angle = self._find_intersecting_ys_angle_vertical(
-                    vertices, position, axis
+                    vertices, position, axis_ordered
                 )
             else:
                 ints_y, ints_angle = self._find_intersecting_ys_angle_slant(
-                    vertices, position, axis
+                    vertices, position, axis_ordered
                 )
 
             # make polygon with intersections and z axis information
@@ -1966,8 +1995,8 @@ class PolySlab(Planar):
         """
 
         vertices_axis = vertices.copy()
-        # if the first coordinate refers to bounds, need to flip the vertices x,y
-        if (axis == 2) or ((self.axis == 2) and (axis == 1)):
+        # flip vertices x,y for axis = y
+        if axis == 1:
             vertices_axis = np.roll(vertices_axis, shift=1, axis=1)
 
         # get the forward vertices
@@ -2043,8 +2072,8 @@ class PolySlab(Planar):
         """
 
         vertices_axis = vertices.copy()
-        # if the first coordinate refers to bounds, need to flip the vertices x,y
-        if (axis == 2) or ((self.axis == 2) and (axis == 1)):
+        # flip vertices x,y for axis = y
+        if axis == 1:
             vertices_axis = np.roll(vertices_axis, shift=1, axis=1)
 
         # get the forward vertices
