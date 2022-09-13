@@ -15,7 +15,6 @@ from ..constants import C_0, pec_val, EPSILON_0
 from ..constants import HERTZ, CONDUCTIVITY, PERMITTIVITY, RADPERSEC, MICROMETER, SECOND
 from ..log import log, ValidationError
 
-# from .data.monitor_data import PermittivityData
 
 # evaluate frequency as this number (Hz) if inf
 FREQ_EVAL_INF = 1e50

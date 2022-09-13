@@ -8,8 +8,7 @@ import numpy as np
 import pydantic as pd
 
 from ..base import TYPE_TAG_STR, Tidy3dBaseModel
-from ..types import Axis, Coordinate
-from ..boundary import Symmetry
+from ..types import Axis, Coordinate, Symmetry
 from ..grid.grid import Grid
 from ..validators import enforce_monitor_fields_present
 from ..monitor import MonitorType, FieldMonitor, FieldTimeMonitor, ModeSolverMonitor

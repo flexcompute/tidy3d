@@ -232,3 +232,7 @@ RadVec = Literal["Ntheta", "Nphi", "Ltheta", "Lphi"]
 """ plotting """
 
 Ax = Axes
+
+""" symmetry """
+
+Symmetry = Literal[0, -1, 1]
