@@ -21,6 +21,7 @@ from .test_dataset import make_flux_data, make_flux_time_data
 
 from .test_data_arrays import FIELD_MONITOR, FIELD_TIME_MONITOR, MODE_SOLVE_MONITOR
 from .test_data_arrays import MODE_MONITOR, PERMITTIVITY_MONITOR, FLUX_MONITOR, FLUX_TIME_MONITOR
+from .test_data_arrays import SIM_SYM
 from .utils import clear_tmp
 
 """ Make the montor data """
@@ -85,6 +86,20 @@ def test_flux_monitor_data():
 
 def test_flux_time_monitor_data():
     data = make_flux_time_monitor_data()
+
+
+def test_symmetry():
+    data = make_field_monitor_data(symmetry=False)
+
+    # make sure we cant interpolate into the region that is defined by symmetry only
+    with pytest.raises(ValueError):
+        data.dataset.Ex.data.interp(x=-0.5, kwargs={"bounds_error": True})
+
+    # make sure we can interpolate into the region that was extrapolated by symmetry
+    data_sym = data.apply_symmetry(
+        symmetry=(1, 1, 1), symmetry_center=(0, 0, 0), grid_expanded=SIM_SYM.grid
+    )
+    data_sym.dataset.Ex.data.interp(x=-0.5, kwargs={"bounds_error": True})
 
 
 def test_colocate():

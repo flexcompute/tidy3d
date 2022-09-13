@@ -1,14 +1,13 @@
 """ Monitor Level Data, store the DataArrays associated with a single monitor."""
 from __future__ import annotations
 
-from abc import ABC, abstractmethod
-from typing import Union, Dict, Tuple, Callable
-import xarray as xr
+from abc import ABC
+from typing import Union, Tuple, Callable
 import numpy as np
 import pydantic as pd
 
 from ..base import TYPE_TAG_STR, Tidy3dBaseModel
-from ..types import Axis, Coordinate, Symmetry
+from ..types import Coordinate, Symmetry
 from ..grid.grid import Grid
 from ..validators import enforce_monitor_fields_present
 from ..monitor import MonitorType, FieldMonitor, FieldTimeMonitor, ModeSolverMonitor
@@ -85,6 +84,8 @@ class AbstractFieldMonitorData(MonitorData, ABC):
             # get grid locations for this field component on the expanded grid
             grid_locations = grid_expanded[grid_key]
 
+            data_array = scalar_data.data
+
             for sym_dim, (sym_val, sym_center) in enumerate(zip(symmetry, symmetry_center)):
 
                 dim_name = "xyz"[sym_dim]
@@ -105,7 +106,6 @@ class AbstractFieldMonitorData(MonitorData, ABC):
 
                 # Interpolate. There generally shouldn't be values out of bounds except potentially
                 # when handling modes, in which case they should be at the boundary and close to 0.
-                data_array = scalar_data.data
                 data_array = data_array.sel({dim_name: coords_interp}, method="nearest")
                 data_array = data_array.assign_coords({dim_name: coords})
 
@@ -280,6 +280,7 @@ class ModeMonitorData(MonitorData):
         new_amps_data = self.dataset.amps.copy(update=dict(data=new_data_array))
         new_datset = self.dataset.copy(update=dict(amps=new_amps_data))
         return self.copy(update=dict(dataset=new_datset))
+
 
 class FluxMonitorData(MonitorData):
     """Data associated with a :class:`.FluxMonitor`: flux data in the frequency-domain.

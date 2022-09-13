@@ -5,6 +5,7 @@ invariance along a given propagation axis.
 from typing import List, Tuple, Dict
 import logging
 
+import xarray as xr
 import numpy as np
 import pydantic
 
@@ -15,11 +16,11 @@ from ...components.grid.grid import Grid
 from ...components.mode import ModeSpec
 from ...components.monitor import ModeSolverMonitor, ModeMonitor
 from ...components.source import ModeSource, SourceTime
-from ...components.types import Direction, ArrayLike, FreqArray, Ax, Literal, Axis
+from ...components.types import Direction, ArrayLike, FreqArray, Ax, Literal, Axis, Symmetry
 from ...components.data.data_array import ModeIndexDataArray, ScalarModeFieldDataArray
+from ...components.data.dataset import ModeSolverData
+from ...components.data.monitor_data import ModeSolverMonitorData
 from ...components.data.sim_data import SimulationData
-from ...components.data.monitor_data import ModeSolverData
-from ...components.boundary import Symmetry
 from ...log import ValidationError
 from .solver import compute_modes
 
@@ -102,8 +103,8 @@ class ModeSolver(Tidy3dBaseModel):
         boundaries = plane_sym.unpop_axis(bounds_norm, bounds_plane, axis=self.normal_axis)
         return Grid(boundaries=dict(zip("xyz", boundaries)))
 
-    def solve(self) -> ModeSolverData:
-        """:class:`.ModeSolverData` containing the field and effective index data.
+    def solve(self) -> ModeSolverMonitorData:
+        """:class:`.ModeSolverMonitorData` containing the field and effective index data.
 
         Returns
         -------
@@ -113,13 +114,13 @@ class ModeSolver(Tidy3dBaseModel):
         return self.data
 
     @cached_property
-    def data_raw(self) -> ModeSolverData:
-        """:class:`.ModeSolverData` containing the field and effective index on unexpanded grid.
+    def data_raw(self) -> ModeSolverMonitorData:
+        """:class:`.ModeSolverMonitorData` containing the field and eff. index on unexpanded grid.
 
         Returns
         -------
-        ModeSolverData
-            :class:`.ModeSolverData` object containing the effective index and mode fields.
+        ModeSolverMonitorData
+            :class:`.ModeSolverMonitorData` object containing the effective index and mode fields.
         """
 
         _, _solver_coords = self.plane.pop_axis(
@@ -132,13 +133,17 @@ class ModeSolver(Tidy3dBaseModel):
         )
 
         # start a dictionary storing the data arrays for the ModeSolverData
-        index_data = ModeIndexDataArray(
+
+        data_array = xr.DataArray(
             np.stack(n_complex, axis=0),
             coords=dict(
                 f=list(self.freqs),
                 mode_index=np.arange(self.mode_spec.num_modes),
             ),
         )
+
+        index_data = ModeIndexDataArray(data=data_array)
+
         data_dict = {"n_complex": index_data}
 
         # Construct and add all the data for the fields
@@ -153,7 +158,7 @@ class ModeSolver(Tidy3dBaseModel):
                 if len(xyz_coords[plane_axis]) == 1:
                     xyz_coords[plane_axis] = [self.simulation.center[plane_axis]]
 
-            scalar_field_data = ScalarModeFieldDataArray(
+            data_array = xr.DataArray(
                 np.stack([field_freq[field_name] for field_freq in fields], axis=-2),
                 coords=dict(
                     x=xyz_coords[0],
@@ -163,16 +168,19 @@ class ModeSolver(Tidy3dBaseModel):
                     mode_index=np.arange(self.mode_spec.num_modes),
                 ),
             )
+            scalar_field_data = ScalarModeFieldDataArray(data=data_array)
+
             data_dict[field_name] = scalar_field_data
 
         # make mode solver data
         mode_solver_monitor = self.to_mode_solver_monitor(name=MODE_MONITOR_NAME)
-        mode_solver_data = ModeSolverData(monitor=mode_solver_monitor, **data_dict)
-        self._field_decay_warning(mode_solver_data)
-        return mode_solver_data
+        msd = ModeSolverData(**data_dict)
+        mode_solver_monitor_data = ModeSolverMonitorData(monitor=mode_solver_monitor, dataset=msd)
+        self._field_decay_warning(msd)
+        return mode_solver_monitor_data
 
     @cached_property
-    def data(self) -> ModeSolverData:
+    def data(self) -> ModeSolverMonitorData:
         """:class:`.ModeSolverData` containing the field and effective index data.
 
         Returns
@@ -199,9 +207,7 @@ class ModeSolver(Tidy3dBaseModel):
         monitor_data = self.data
         new_monitors = list(self.simulation.monitors) + [monitor_data.monitor]
         new_simulation = self.simulation.copy(update=dict(monitors=new_monitors))
-        return SimulationData(
-            simulation=new_simulation, monitor_data={MODE_MONITOR_NAME: monitor_data}
-        )
+        return SimulationData(simulation=new_simulation, data=[monitor_data])
 
     def _get_epsilon(self, freq: float) -> ArrayLike[complex, 4]:
         """Compute the diagonal components of the epsilon tensor in the plane."""
@@ -311,23 +317,23 @@ class ModeSolver(Tidy3dBaseModel):
 
         return ((Ex, Ey, Ez), (Hx, Hy, Hz))
 
-    def _field_decay_warning(self, field_data: ModeSolverData):
+    def _field_decay_warning(self, field_data: ModeSolverData) -> None:
         """Warn if any of the modes do not decay at the edges."""
         _, plane_dims = self.plane.pop_axis(["x", "y", "z"], axis=self.normal_axis)
-        field_sizes = field_data.Ex.sizes
+        field_sizes = field_data.Ex.data.sizes
         for freq_index in range(field_sizes["f"]):
             for mode_index in range(field_sizes["mode_index"]):
                 e_edge, e_norm = 0, 0
                 # Sum up the total field intensity
-                for E in (field_data.Ex, field_data.Ey, field_data.Ez):
+                for E in (field_data.Ex.data, field_data.Ey.data, field_data.Ez.data):
                     e_norm += np.sum(np.abs(E[{"f": freq_index, "mode_index": mode_index}]) ** 2)
                 # Sum up the field intensity at the edges
                 if field_sizes[plane_dims[0]] > 1:
-                    for E in (field_data.Ex, field_data.Ey, field_data.Ez):
+                    for E in (field_data.Ex.data, field_data.Ey.data, field_data.Ez.data):
                         isel = {plane_dims[0]: [0, -1], "f": freq_index, "mode_index": mode_index}
                         e_edge += np.sum(np.abs(E[isel]) ** 2)
                 if field_sizes[plane_dims[1]] > 1:
-                    for E in (field_data.Ex, field_data.Ey, field_data.Ez):
+                    for E in (field_data.Ex.data, field_data.Ey.data, field_data.Ez.data):
                         isel = {plane_dims[1]: [0, -1], "f": freq_index, "mode_index": mode_index}
                         e_edge += np.sum(np.abs(E[isel]) ** 2)
                 # Warn if needed

@@ -8,9 +8,10 @@ from tidy3d.log import DataError
 
 from tidy3d.components.simulation import Simulation
 from tidy3d.components.grid.grid_spec import GridSpec
-from tidy3d.components.data.sim_data import SimulationData
-from tidy3d.components.data.monitor_data import FieldTimeData
 from tidy3d.components.data.data_array import ScalarFieldTimeDataArray
+from tidy3d.components.data.dataset import FieldTimeData
+from tidy3d.components.data.monitor_data import FieldTimeMonitorData
+from tidy3d.components.data.sim_data import SimulationData
 from tidy3d.components.monitor import FieldMonitor, FieldTimeMonitor, ModeSolverMonitor
 from tidy3d.components.source import GaussianPulse, PointDipole
 
@@ -41,6 +42,7 @@ FLUX_TIME = make_flux_time_monitor_data()
 # for constructing SimulationData
 MONITOR_DATA = (FIELD, FIELD_TIME, MODE_SOLVER, PERMITTIVITY, MODE, FLUX, FLUX_TIME)
 MONITOR_DATA_SYM = (FIELD_SYM, FIELD_TIME_SYM, MODE_SOLVER, PERMITTIVITY_SYM, MODE, FLUX, FLUX_TIME)
+
 
 def make_sim_data(symmetry: bool = True):
     if symmetry:
@@ -100,9 +102,15 @@ def test_normalize():
     sim_data_renorm0 = sim_data_norm1.renormalize(normalize_index=0)
     name = FIELD_MONITOR.name
     assert np.allclose(sim_data_norm0[name].dataset.Ex.data, sim_data_renorm0[name].dataset.Ex.data)
-    assert not np.allclose(sim_data_norm0[name].dataset.Ex.data, sim_data_norm_none[name].dataset.Ex.data)
-    assert not np.allclose(sim_data_norm0[name].dataset.Ex.data, sim_data_norm1[name].dataset.Ex.data)
-    assert not np.allclose(sim_data_norm_none[name].dataset.Ex.data, sim_data_norm1[name].dataset.Ex.data)
+    assert not np.allclose(
+        sim_data_norm0[name].dataset.Ex.data, sim_data_norm_none[name].dataset.Ex.data
+    )
+    assert not np.allclose(
+        sim_data_norm0[name].dataset.Ex.data, sim_data_norm1[name].dataset.Ex.data
+    )
+    assert not np.allclose(
+        sim_data_norm_none[name].dataset.Ex.data, sim_data_norm1[name].dataset.Ex.data
+    )
 
 
 def test_getitem():
@@ -124,9 +132,9 @@ def test_plot():
 
     # plot regular field data
     for field_cmp in sim_data.simulation.get_monitor_by_name("field").fields:
-        field_data = sim_data["field"].field_components[field_cmp]
+        field_data = sim_data["field"].dataset.field_components[field_cmp]
         for axis_name in "xyz":
-            xyz_kwargs = {axis_name: field_data.coords[axis_name][0]}
+            xyz_kwargs = {axis_name: field_data.data.coords[axis_name][0]}
             ax = sim_data.plot_field("field", field_cmp, val="real", f=1e14, ax=ax, **xyz_kwargs)
     for axis_name in "xyz":
         xyz_kwargs = {axis_name: 0}
@@ -134,9 +142,9 @@ def test_plot():
 
     # plot field time data
     for field_cmp in sim_data.simulation.get_monitor_by_name("field_time").fields:
-        field_data = sim_data["field_time"].field_components[field_cmp]
+        field_data = sim_data["field_time"].dataset.field_components[field_cmp]
         for axis_name in "xyz":
-            xyz_kwargs = {axis_name: field_data.coords[axis_name][0]}
+            xyz_kwargs = {axis_name: field_data.data.coords[axis_name][0]}
             ax = sim_data.plot_field(
                 "field_time", field_cmp, val="real", t=0.0, ax=ax, **xyz_kwargs
             )
@@ -216,7 +224,8 @@ def test_to_hdf5():
 @clear_tmp
 def test_empty_io():
     coords = {"x": np.arange(10), "y": np.arange(10), "z": np.arange(10), "t": []}
-    fields = {"Ex": td.ScalarFieldTimeDataArray(np.random.rand(10, 10, 10, 0), coords=coords)}
+    data_array = xr.DataArray(np.random.rand(10, 10, 10, 0), coords=coords)
+    fields = {"Ex": td.ScalarFieldTimeDataArray(data=data_array)}
     monitor = td.FieldTimeMonitor(size=(1, 1, 1), name="test", fields=["Ex"])
     field_data = td.FieldTimeData(monitor=monitor, **fields)
     sim = td.Simulation(
@@ -279,15 +288,15 @@ def test_run_time_lt_start():
     data_array = xr.DataArray(np.zeros((10, 10, 1, 0)), coords=coords)
 
     field_components = {
-        field_name: ScalarFieldTimeDataArray(data=data_array)
-        for field_name in tmnt.fields
+        field_name: ScalarFieldTimeDataArray(data=data_array) for field_name in tmnt.fields
     }
 
-    field_data = FieldTimeData(monitor=tmnt, **field_components)
+    field_data = FieldTimeData(**field_components)
+    field_mnt_data = FieldTimeMonitorData(monitor=tmnt, dataset=field_data)
 
     sim_data = SimulationData(
         simulation=sim,
-        monitor_data={tmnt.name: field_data},
+        data=[field_mnt_data],
     )
 
     sim_data.renormalize(0).to_file("tests/tmp/sim_data_empty.hdf5")

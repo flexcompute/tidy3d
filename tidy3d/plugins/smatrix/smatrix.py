@@ -313,7 +313,9 @@ class ComponentModeler(Tidy3dBaseModel):
             mode_index=mode_index,
         ).values
 
-        normalize_n_eff = port_monitor_data.dataset.n_eff.sel(f=self.freq, mode_index=mode_index).values
+        normalize_n_eff = port_monitor_data.dataset.n_eff.sel(
+            f=self.freq, mode_index=mode_index
+        ).values
 
         k0 = 2 * np.pi * C_0 / self.freq
         k_eff = k0 * normalize_n_eff

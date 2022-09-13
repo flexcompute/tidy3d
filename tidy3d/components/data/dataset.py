@@ -2,18 +2,13 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Union, Dict, Tuple, Callable
+from typing import Union, Dict, Callable
 import xarray as xr
 import numpy as np
 import pydantic as pd
 
-from ..base import TYPE_TAG_STR, Tidy3dBaseModel
-from ..types import Axis, Coordinate
-from ..boundary import Symmetry
-from ..grid.grid import Grid
-from ..validators import enforce_monitor_fields_present
-from ..monitor import MonitorType, FieldMonitor, FieldTimeMonitor, ModeSolverMonitor
-from ..monitor import ModeMonitor, FluxMonitor, FluxTimeMonitor, PermittivityMonitor
+from ..base import Tidy3dBaseModel
+from ..types import Axis
 from ...log import DataError
 
 from .data_array import ScalarFieldDataArray, ScalarFieldTimeDataArray, ScalarModeFieldDataArray
@@ -98,38 +93,38 @@ class AbstractFieldData(Dataset, ABC):
         return xr.Dataset(centered_fields)
 
 
-SCALAR_EM_FIELD = Union[ScalarFieldDataArray, ScalarFieldTimeDataArray, ScalarModeFieldDataArray]
+ScalarEMField = Union[ScalarFieldDataArray, ScalarFieldTimeDataArray, ScalarModeFieldDataArray]
 
 
 class ElectromagneticFieldData(AbstractFieldData, ABC):
     """Stores a collection of E and H fields with x, y, z components."""
 
-    Ex: SCALAR_EM_FIELD = pd.Field(
+    Ex: ScalarEMField = pd.Field(
         None,
         title="Ex",
         description="Spatial distribution of the x-component of the electric field.",
     )
-    Ey: SCALAR_EM_FIELD = pd.Field(
+    Ey: ScalarEMField = pd.Field(
         None,
         title="Ey",
         description="Spatial distribution of the y-component of the electric field.",
     )
-    Ez: SCALAR_EM_FIELD = pd.Field(
+    Ez: ScalarEMField = pd.Field(
         None,
         title="Ez",
         description="Spatial distribution of the z-component of the electric field.",
     )
-    Hx: SCALAR_EM_FIELD = pd.Field(
+    Hx: ScalarEMField = pd.Field(
         None,
         title="Hx",
         description="Spatial distribution of the x-component of the magnetic field.",
     )
-    Hy: SCALAR_EM_FIELD = pd.Field(
+    Hy: ScalarEMField = pd.Field(
         None,
         title="Hy",
         description="Spatial distribution of the y-component of the magnetic field.",
     )
-    Hz: SCALAR_EM_FIELD = pd.Field(
+    Hz: ScalarEMField = pd.Field(
         None,
         title="Hz",
         description="Spatial distribution of the z-component of the magnetic field.",

@@ -18,7 +18,7 @@ from .types import Ax, Shapely, FreqBound, Axis, annotate_type, Symmetry
 from .grid.grid import Coords1D, Grid, Coords
 from .grid.grid_spec import GridSpec, UniformGrid
 from .medium import Medium, MediumType, AbstractMedium, PECMedium
-from .boundary import BoundarySpec, Symmetry, BlochBoundary, PECBoundary, PMCBoundary
+from .boundary import BoundarySpec, BlochBoundary, PECBoundary, PMCBoundary
 from .boundary import PML, StablePML, Absorber
 from .structure import Structure
 from .source import SourceType, PlaneWave, GaussianBeam, AstigmaticGaussianBeam

@@ -1,8 +1,9 @@
 import pytest
 import numpy as np
 import pydantic
-
 import gdspy
+import xarray as xr
+
 import tidy3d as td
 
 from tidy3d.plugins import DispersionFitter
@@ -126,7 +127,7 @@ def test_app():
     )
 
     def rand_data():
-        return ScalarFieldDataArray(
+        data_array = xr.DataArray(
             np.random.random((10, 10, 10, 1)),
             coords=dict(
                 x=np.linspace(-1, 1, 10),
@@ -135,11 +136,12 @@ def test_app():
                 f=[f0],
             ),
         )
+        return ScalarFieldDataArray(data=data_array)
 
     fields = ["Ex", "Ey", "Ez", "Hx", "Hy", "Hz"]
-    data_dict = {field: rand_data() for field in fields}
-    monitor_data = {mon.name: FieldData(monitor=mon, **data_dict) for mon in monitors}
-    sim_data = td.SimulationData(simulation=sim, monitor_data=monitor_data)
+    field_data = td.FieldData(**{field: rand_data() for field in fields})
+    mnt_data = [td.FieldMonitorData(monitor=mon, dataset=field_data) for mon in monitors]
+    sim_data = td.SimulationData(simulation=sim, data=mnt_data)
 
     app = SimulationDataApp(sim_data=sim_data)
     _app = app.app

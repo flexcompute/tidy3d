@@ -205,12 +205,12 @@ class SimulationData(Tidy3dBaseModel):
         # pass coords if each of the scalar field data have more than one coordinate along a dim
         xyz_kwargs = {}
         for dim, centers in zip("xyz", (centers.x, centers.y, centers.z)):
-            scalar_data = list(monitor_data.field_components.values())
-            coord_lens = [len(data.coords[dim]) for data in scalar_data]
+            scalar_data = list(monitor_data.dataset.field_components.values())
+            coord_lens = [len(data.data.coords[dim]) for data in scalar_data]
             if all(ncoords > 1 for ncoords in coord_lens):
                 xyz_kwargs[dim] = centers
 
-        return monitor_data.colocate(**xyz_kwargs)
+        return monitor_data.dataset.colocate(**xyz_kwargs)
 
     def get_intensity(self, field_monitor_name: str) -> xr.DataArray:
         """return `xarray.DataArray` of the intensity of a field monitor at Yee cell centers.

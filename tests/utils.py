@@ -278,8 +278,8 @@ def run_emulated(simulation: Simulation, task_name: str = None) -> SimulationDat
         data_array = make_data_array(coords=coords_ind, is_complex=True)
         n_complex = ModeIndexDataArray(data=data_array)
         coords_amps = {"direction": ["+", "-"]}
-        coords_amps['f'] = coords_ind['f']
-        coords_amps['mode_index'] = coords_ind['mode_index']
+        coords_amps["f"] = coords_ind["f"]
+        coords_amps["mode_index"] = coords_ind["mode_index"]
         data_array = make_data_array(coords=coords_amps, is_complex=True)
         amps = ModeAmpsDataArray(data=data_array)
         dataset = ModeData(n_complex=n_complex, amps=amps)

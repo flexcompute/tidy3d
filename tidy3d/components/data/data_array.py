@@ -6,12 +6,11 @@ from abc import ABC
 
 import xarray as xr
 import numpy as np
-import h5py
 import pydantic as pd
 
 from ..base import Tidy3dBaseModel
 from ...constants import HERTZ, SECOND, MICROMETER, RADIAN
-from ...log import DataError, ValidationError
+from ...log import ValidationError
 
 # maps the dimension names to their attributes
 DIM_ATTRS = {
@@ -57,7 +56,7 @@ class DataArray(Tidy3dBaseModel, ABC):
     @pd.validator("data", always=True)
     def _assign_coord_attrs(cls, val):
         """Assign coordinate and value attributes to the data array."""
-        for coord_name, coord_val in val.coords.items():
+        for coord_name, _ in val.coords.items():
             attrs = DIM_ATTRS.get(coord_name)
             val.coords[coord_name].attrs = attrs
         return val
