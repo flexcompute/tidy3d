@@ -106,19 +106,20 @@ class AbstractFieldMonitorData(MonitorData, ABC):
 
                 # Interpolate. There generally shouldn't be values out of bounds except potentially
                 # when handling modes, in which case they should be at the boundary and close to 0.
-                scalar_data = scalar_data.sel({dim_name: coords_interp}, method="nearest")
-                scalar_data = scalar_data.assign_coords({dim_name: coords})
+                data_array = scalar_data.data
+                data_array = data_array.sel({dim_name: coords_interp}, method="nearest")
+                data_array = data_array.assign_coords({dim_name: coords})
 
                 # apply the symmetry eigenvalue (if defined) to the flipped values
                 if eigenval_fn is not None:
                     sym_eigenvalue = eigenval_fn(sym_dim)
-                    scalar_data[{dim_name: flip_inds}] *= sym_val * sym_eigenvalue
+                    data_array[{dim_name: flip_inds}] *= sym_val * sym_eigenvalue
 
             # assign the final scalar data to the new_fields
-            new_fields[field_name] = scalar_data
+            new_fields[field_name] = scalar_data.copy(update=dict(data=data_array))
 
         new_dataset = self.dataset.copy(update=new_fields)
-        return self.copy(update=dict(datset=new_dataset))
+        return self.copy(update=dict(dataset=new_dataset))
 
 
 class FieldMonitorData(AbstractFieldMonitorData):
@@ -147,11 +148,13 @@ class FieldMonitorData(AbstractFieldMonitorData):
     def normalize(self, source_spectrum_fn: Callable[[float], complex]) -> FieldData:
         """Return copy of self after normalization is applied using source spectrum function."""
         fields_norm = {}
-        for field_name, field_data in self.field_components.items():
-            src_amps = source_spectrum_fn(field_data.f)
-            fields_norm[field_name] = field_data / src_amps
+        for field_name, field_data in self.dataset.field_components.items():
+            src_amps = source_spectrum_fn(field_data.data.f)
+            new_data_array = field_data.data / src_amps
+            fields_norm[field_name] = field_data.copy(update=dict(data=new_data_array))
 
-        return self.copy(update=fields_norm)
+        new_dataset = self.dataset.copy(update=fields_norm)
+        return self.copy(update=dict(dataset=new_dataset))
 
 
 class FieldTimeMonitorData(AbstractFieldMonitorData):
@@ -270,11 +273,14 @@ class ModeMonitorData(MonitorData):
 
     def normalize(self, source_spectrum_fn) -> ModeData:
         """Return copy of self after normalization is applied using source spectrum function."""
-        if self.amps is None:
+        if self.dataset.amps is None:
             raise DataError("ModeData contains no amp data, can't normalize.")
-        source_freq_amps = source_spectrum_fn(self.amps.f)[None, :, None]
-        return self.copy(update={"amps": self.amps / source_freq_amps})
+        source_freq_amps = source_spectrum_fn(self.dataset.amps.data.f)[None, :, None]
 
+        new_data_array = self.dataset.amps.data / source_freq_amps
+        new_amps_data = self.dataset.amps.copy(update=dict(data=new_data_array))
+        new_datset = self.dataset.copy(update=dict(amps=new_amps_data))
+        return self.copy(update=dict(dataset=new_datset))
 
 class FluxMonitorData(MonitorData):
     """Data associated with a :class:`.FluxMonitor`: flux data in the frequency-domain.
@@ -296,9 +302,12 @@ class FluxMonitorData(MonitorData):
 
     def normalize(self, source_spectrum_fn) -> FluxData:
         """Return copy of self after normalization is applied using source spectrum function."""
-        source_freq_amps = source_spectrum_fn(self.flux.f)
+        source_freq_amps = source_spectrum_fn(self.dataset.flux.data.f)
         source_power = abs(source_freq_amps) ** 2
-        return self.copy(update={"flux": self.flux / source_power})
+        new_data_array = self.dataset.flux.data / source_power
+        new_flux_data = self.dataset.flux.copy(update=dict(data=new_data_array))
+        new_datset = self.dataset.copy(update=dict(flux=new_flux_data))
+        return self.copy(update=dict(dataset=new_datset))
 
 
 class FluxTimeMonitorData(MonitorData):

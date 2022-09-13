@@ -161,18 +161,18 @@ class SimulationData(Tidy3dBaseModel):
             return new_spectrum_fn(freqs) / old_spectrum_fn(freqs)
 
         # Make a new monitor_data dictionary with renormalized data
-        monitor_data = {}
-        for key, val in self.monitor_data.items():
-            monitor_data[key] = val.normalize(source_spectrum_fn)
+        normalized_data = []
+        for mnt_data in self.data:
+            normalized_data.append(mnt_data.normalize(source_spectrum_fn))
 
         simulation = self.simulation.copy(update=dict(normalize_index=normalize_index))
 
-        return self.copy(update=dict(simulation=simulation, monitor_data=monitor_data))
+        return self.copy(update=dict(simulation=simulation, data=normalized_data))
 
-    def load_field_monitor(self, monitor_name: str) -> AbstractFieldData:
+    def load_field_monitor(self, monitor_name: str) -> AbstractFieldMonitorData:
         """Load monitor and raise exception if not a field monitor."""
         mon_data = self[monitor_name]
-        if not isinstance(mon_data, AbstractFieldData):
+        if not isinstance(mon_data, AbstractFieldMonitorData):
             raise DataError(
                 f"data for monitor '{monitor_name}' does not contain field data "
                 f"as it is a `{type(mon_data)}`."
@@ -304,10 +304,10 @@ class SimulationData(Tidy3dBaseModel):
 
         # normal case (eg. Ex)
         else:
-            field_monitor_data = self.load_field_monitor(field_monitor_name)
+            field_monitor_data = self.load_field_monitor(field_monitor_name).dataset
             if field_name not in field_monitor_data.field_components:
                 raise DataError(f"field_name '{field_name}' not found in data.")
-            field_data = field_monitor_data.field_components[field_name]
+            field_data = field_monitor_data.field_components[field_name].data
 
         # interp out any monitor.size==0 dimensions
         monitor = self.simulation.get_monitor_by_name(field_monitor_name)

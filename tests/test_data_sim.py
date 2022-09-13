@@ -12,9 +12,11 @@ from tidy3d.components.data import ScalarFieldTimeDataArray, FieldTimeData
 from tidy3d.components.monitor import FieldMonitor, FieldTimeMonitor, ModeSolverMonitor
 from tidy3d.components.source import GaussianPulse, PointDipole
 
-from .test_data_monitor import make_field_data, make_field_time_data, make_permittivity_data
-from .test_data_monitor import make_mode_data, make_mode_solver_data
-from .test_data_monitor import make_flux_data, make_flux_time_data
+from .test_data_monitor import make_field_monitor_data, make_field_time_monitor_data
+from .test_data_monitor import make_permittivity_monitor_data
+from .test_data_monitor import make_mode_monitor_data, make_mode_solver_monitor_data
+from .test_data_monitor import make_flux_monitor_data, make_flux_time_monitor_data
+
 from .test_data_arrays import FIELD_MONITOR, FIELD_TIME_MONITOR, MODE_SOLVE_MONITOR
 from .test_data_arrays import MODE_MONITOR, PERMITTIVITY_MONITOR, FLUX_MONITOR, FLUX_TIME_MONITOR
 from .test_data_arrays import SIM, SIM_SYM
@@ -23,34 +25,31 @@ from .utils import clear_tmp
 
 # monitor data instances
 
-FIELD_SYM = make_field_data()
-FIELD = make_field_data(symmetry=False)
-FIELD_TIME_SYM = make_field_time_data()
-FIELD_TIME = make_field_time_data(symmetry=False)
-PERMITTIVITY_SYM = make_permittivity_data()
-PERMITTIVITY = make_permittivity_data(symmetry=False)
-MODE = make_mode_data()
-MODE_SOLVER = make_mode_solver_data()
-FLUX = make_flux_data()
-FLUX_TIME = make_flux_time_data()
+FIELD_SYM = make_field_monitor_data()
+FIELD = make_field_monitor_data(symmetry=False)
+FIELD_TIME_SYM = make_field_time_monitor_data()
+FIELD_TIME = make_field_time_monitor_data(symmetry=False)
+PERMITTIVITY_SYM = make_permittivity_monitor_data()
+PERMITTIVITY = make_permittivity_monitor_data(symmetry=False)
+MODE = make_mode_monitor_data()
+MODE_SOLVER = make_mode_solver_monitor_data()
+FLUX = make_flux_monitor_data()
+FLUX_TIME = make_flux_time_monitor_data()
 
 # for constructing SimulationData
 MONITOR_DATA = (FIELD, FIELD_TIME, MODE_SOLVER, PERMITTIVITY, MODE, FLUX, FLUX_TIME)
 MONITOR_DATA_SYM = (FIELD_SYM, FIELD_TIME_SYM, MODE_SOLVER, PERMITTIVITY_SYM, MODE, FLUX, FLUX_TIME)
-MONITOR_DATA_DICT = {data.monitor.name: data for data in MONITOR_DATA}
-MONITOR_DATA_DICT_SYM = {data.monitor.name: data for data in MONITOR_DATA_SYM}
-
 
 def make_sim_data(symmetry: bool = True):
     if symmetry:
         simulation = SIM_SYM
-        monitor_data = MONITOR_DATA_DICT_SYM
+        data = MONITOR_DATA_SYM
     else:
         simulation = SIM
-        monitor_data = MONITOR_DATA_DICT
+        data = MONITOR_DATA
     return SimulationData(
         simulation=simulation,
-        monitor_data=monitor_data,
+        data=data,
         log="- Time step    827 / time 4.13e-14s (  4 % done), field decay: 0.110e+00",
     )
 
@@ -61,34 +60,34 @@ def test_sim_data():
 
 def test_apply_symmetry():
     sim_data = make_sim_data()
-    for monitor_data in sim_data.monitor_data.values():
+    for monitor_data in sim_data.data:
         _ = sim_data.apply_symmetry(monitor_data)
 
 
 def test_apply_symmetry2():
     sim_data = make_sim_data()
     eps_raw = sim_data.monitor_data["permittivity"]
-    shape_raw = eps_raw.eps_xx.shape
+    shape_raw = eps_raw.dataset.eps_xx.data.shape
 
     eps_ret = sim_data["permittivity"]
-    shape_ret = eps_ret.eps_xx.shape
+    shape_ret = eps_ret.dataset.eps_xx.data.shape
     assert shape_raw != shape_ret
 
 
 def test_apply_symmetry3():
     sim_data = make_sim_data()
     Ex_raw = sim_data.monitor_data["field"]
-    shape_raw = Ex_raw.Ex.shape
+    shape_raw = Ex_raw.dataset.Ex.data.shape
 
     Ex_ret = sim_data["field"]
-    shape_ret = Ex_ret.Ex.shape
+    shape_ret = Ex_ret.dataset.Ex.data.shape
     assert shape_raw != shape_ret
 
 
 def test_no_symmetry():
     sim_data = make_sim_data(symmetry=False)
-    Ex_raw = sim_data.monitor_data["field"].Ex
-    Ex_ret = sim_data["field"].Ex
+    Ex_raw = sim_data.monitor_data["field"].dataset.Ex.data
+    Ex_ret = sim_data["field"].dataset.Ex.data
     assert np.allclose(Ex_raw, Ex_ret)
 
 
@@ -98,10 +97,10 @@ def test_normalize():
     sim_data_norm1 = sim_data_norm_none.renormalize(normalize_index=1)
     sim_data_renorm0 = sim_data_norm1.renormalize(normalize_index=0)
     name = FIELD_MONITOR.name
-    assert np.allclose(sim_data_norm0[name].Ex, sim_data_renorm0[name].Ex)
-    assert not np.allclose(sim_data_norm0[name].Ex, sim_data_norm_none[name].Ex)
-    assert not np.allclose(sim_data_norm0[name].Ex, sim_data_norm1[name].Ex)
-    assert not np.allclose(sim_data_norm_none[name].Ex, sim_data_norm1[name].Ex)
+    assert np.allclose(sim_data_norm0[name].dataset.Ex.data, sim_data_renorm0[name].dataset.Ex.data)
+    assert not np.allclose(sim_data_norm0[name].dataset.Ex.data, sim_data_norm_none[name].dataset.Ex.data)
+    assert not np.allclose(sim_data_norm0[name].dataset.Ex.data, sim_data_norm1[name].dataset.Ex.data)
+    assert not np.allclose(sim_data_norm_none[name].dataset.Ex.data, sim_data_norm1[name].dataset.Ex.data)
 
 
 def test_getitem():
@@ -165,7 +164,7 @@ def test_to_dict():
     sim_data = make_sim_data()
     j = sim_data.dict()
     sim_data2 = SimulationData(**j)
-    assert sim_data == sim_data2
+    assert np.all(sim_data == sim_data2)
 
 
 @clear_tmp
@@ -275,8 +274,10 @@ def test_run_time_lt_start():
         t=[],
     )
 
+    data_array = xr.DataArray(np.zeros((10, 10, 1, 0)), coords=coords)
+
     field_components = {
-        field_name: ScalarFieldTimeDataArray(np.zeros((10, 10, 1, 0)), coords=coords)
+        field_name: ScalarFieldTimeDataArray(data=data_array)
         for field_name in tmnt.fields
     }
 

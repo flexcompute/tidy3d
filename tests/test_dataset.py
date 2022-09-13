@@ -95,6 +95,7 @@ def test_field_time_data():
         for component in "xyz":
             _ = getattr(data, field + component)
 
+
 def test_mode_field_data():
     data = make_mode_solver_data()
     for field in "EH":
@@ -148,7 +149,9 @@ def test_sel_mode_index():
     field_data = data.sel_mode_index(mode_index=0)
     assert isinstance(field_data, FieldData), "ModeSolverData wasnt converted to FieldData."
     for _, scalar_field in field_data.field_components.items():
-        assert "mode_index" not in scalar_field.data.coords, "mode_index coordinate remained in data."
+        assert (
+            "mode_index" not in scalar_field.data.coords
+        ), "mode_index coordinate remained in data."
 
 
 def _test_eq():
@@ -173,7 +176,7 @@ def test_empty_array():
 
 def test_empty_list():
     coords = {"x": np.arange(10), "y": np.arange(10), "z": np.arange(10), "t": []}
-    data_array = xr.DataArray(np.random.random((10,10,10,0)), coords=coords)
+    data_array = xr.DataArray(np.random.random((10, 10, 10, 0)), coords=coords)
     fields = {"Ex": td.ScalarFieldTimeDataArray(data=data_array)}
     monitor = td.FieldTimeMonitor(size=(1, 1, 1), fields=["Ex"], name="test")
     field_data = td.FieldTimeData(**fields)
@@ -181,7 +184,7 @@ def test_empty_list():
 
 def test_empty_tuple():
     coords = {"x": np.arange(10), "y": np.arange(10), "z": np.arange(10), "t": []}
-    data_array = xr.DataArray(np.random.random((10,10,10,0)), coords=coords)
+    data_array = xr.DataArray(np.random.random((10, 10, 10, 0)), coords=coords)
     fields = {"Ex": td.ScalarFieldTimeDataArray(data=data_array)}
     field_data = td.FieldTimeData(**fields)
 
