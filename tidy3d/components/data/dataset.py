@@ -10,7 +10,7 @@ import pydantic as pd
 from ..base import TYPE_TAG_STR, Tidy3dBaseModel
 from ..types import Axis, Coordinate
 from ..boundary import Symmetry
-from ..grid import Grid
+from ..grid.grid import Grid
 from ..validators import enforce_monitor_fields_present
 from ..monitor import MonitorType, FieldMonitor, FieldTimeMonitor, ModeSolverMonitor
 from ..monitor import ModeMonitor, FluxMonitor, FluxTimeMonitor, PermittivityMonitor
@@ -418,12 +418,12 @@ class ModeData(Dataset):
     @property
     def n_eff(self):
         """Real part of the propagation index."""
-        return self.n_complex.real
+        return self.n_complex.data.real
 
     @property
     def k_eff(self):
         """Imaginary part of the propagation index."""
-        return self.n_complex.imag
+        return self.n_complex.data.imag
 
 
 class FluxData(Dataset):

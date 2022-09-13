@@ -71,19 +71,6 @@ class DataArray(Tidy3dBaseModel, ABC):
                 return False
         return True
 
-    # def abs(self) -> DataArray:
-    #     """Absolute value of self."""
-    #     return DataArray(data=abs(self.data))
-
-    # def interp(self, *args, **kwargs):
-    #     return DataArray(data=self.data.interp(*args, **kwargs))
-
-    # def sel(self, *args, **kwargs):
-    #     return DataArray(data=self.data.sel(*args, **kwargs))
-
-    # def isel(self, *args, **kwargs):
-    #     return DataArray(data=self.data.isel(*args, **kwargs))
-
 
 class ScalarFieldDataArray(DataArray):
     """Spatial distribution in the frequency-domain.

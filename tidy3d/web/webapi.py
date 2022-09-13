@@ -17,7 +17,7 @@ from . import httputils as http
 from .config import DEFAULT_CONFIG
 from .s3utils import upload_file, upload_string, get_s3_sts_token, download_file
 from .task import TaskId, TaskInfo, Folder
-from ..components.data import SimulationData
+from ..components.data.sim_data import SimulationData
 from ..components.simulation import Simulation
 from ..components.types import Literal
 from ..log import log, WebError

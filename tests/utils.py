@@ -1,5 +1,6 @@
 import os
 import numpy as np
+import xarray as xr
 from tidy3d import *
 import tidy3d as td
 
@@ -238,17 +239,17 @@ SIM_CONVERT = td.Simulation(
 def run_emulated(simulation: Simulation, task_name: str = None) -> SimulationData:
     """Emulates a simulation run."""
 
-    def make_data(coords: dict, data_array_type: type, is_complex: bool = False) -> "data_type":
+    def make_data_array(coords: dict, is_complex: bool = False) -> xr.DataArray:
         """make a random DataArray out of supplied coordinates and data_type."""
-        data_shape = [len(coords[k]) for k in data_array_type.__slots__]
+        data_shape = [len(coord) for _, coord in coords.items()]
         data = np.random.random(data_shape)
         data = (1 + 1j) * data if is_complex else data
-        return data_array_type(data, coords=coords)
+        return xr.DataArray(data, coords=coords)
 
     def make_field_data(monitor: FieldMonitor) -> FieldData:
         """make a random FieldData from a FieldMonitor."""
         field_cmps = {}
-        coords = {"f": list(monitor.freqs)}
+        coords = {}
         grid = simulation.discretize(monitor, extend=True)
 
         for field_name in monitor.fields:
@@ -260,11 +261,12 @@ def run_emulated(simulation: Simulation, task_name: str = None) -> SimulationDat
                 else:
                     coords[dim] = np.array(spatial_coords_dict[dim])
 
-            field_cmps[field_name] = make_data(
-                coords=coords, data_array_type=ScalarFieldDataArray, is_complex=True
-            )
+            coords["f"] = list(monitor.freqs)
+            data_array = make_data_array(coords=coords, is_complex=True)
+            field_cmps[field_name] = ScalarFieldDataArray(data=data_array)
 
-        return FieldData(monitor=monitor, **field_cmps)
+        dataset = FieldData(**field_cmps)
+        return FieldMonitorData(monitor=monitor, dataset=dataset)
 
     def make_mode_data(monitor: ModeMonitor) -> ModeData:
         """make a random ModeData from a ModeMonitor."""
@@ -273,19 +275,21 @@ def run_emulated(simulation: Simulation, task_name: str = None) -> SimulationDat
             "f": list(monitor.freqs),
             "mode_index": np.arange(monitor.mode_spec.num_modes),
         }
-        n_complex = make_data(
-            coords=coords_ind, data_array_type=ModeIndexDataArray, is_complex=True
-        )
-        coords_amps = coords_ind.copy()
-        coords_amps["direction"] = ["+", "-"]
-        amps = make_data(coords=coords_amps, data_array_type=ModeAmpsDataArray, is_complex=True)
-        return ModeData(monitor=monitor, n_complex=n_complex, amps=amps)
+        data_array = make_data_array(coords=coords_ind, is_complex=True)
+        n_complex = ModeIndexDataArray(data=data_array)
+        coords_amps = {"direction": ["+", "-"]}
+        coords_amps['f'] = coords_ind['f']
+        coords_amps['mode_index'] = coords_ind['mode_index']
+        data_array = make_data_array(coords=coords_amps, is_complex=True)
+        amps = ModeAmpsDataArray(data=data_array)
+        dataset = ModeData(n_complex=n_complex, amps=amps)
+        return ModeMonitorData(monitor=monitor, dataset=dataset)
 
     MONITOR_MAKER_MAP = {FieldMonitor: make_field_data, ModeMonitor: make_mode_data}
 
-    montor_data = {mnt.name: MONITOR_MAKER_MAP[type(mnt)](mnt) for mnt in simulation.monitors}
+    data = [MONITOR_MAKER_MAP[type(mnt)](mnt) for mnt in simulation.monitors]
 
-    return SimulationData(simulation=simulation, monitor_data=montor_data)
+    return SimulationData(simulation=simulation, data=data)
 
 
 def assert_log_level(caplog, log_level_expected):

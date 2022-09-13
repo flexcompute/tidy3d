@@ -1,6 +1,7 @@
 """Tests SimulationData"""
 import pytest
 import numpy as np
+import xarray as xr
 
 import tidy3d as td
 from tidy3d.log import DataError

@@ -41,9 +41,13 @@ from .components.data.data_array import ModeAmpsDataArray, ModeIndexDataArray
 from .components.data.data_array import FluxDataArray, FluxTimeDataArray
 from .components.data.data_array import Near2FarAngleDataArray, Near2FarCartesianDataArray
 from .components.data.data_array import Near2FarKSpaceDataArray
-from .components.data.monitor_data import FieldData, FieldTimeData, PermittivityData
-from .components.data.monitor_data import FluxData, FluxTimeData
-from .components.data.monitor_data import ModeData, ModeSolverData
+from .components.data.dataset import FieldData, FieldTimeData, PermittivityData
+from .components.data.dataset import FluxData, FluxTimeData
+from .components.data.dataset import ModeData, ModeSolverData
+from .components.data.monitor_data import FieldMonitorData, FieldTimeMonitorData
+from .components.data.monitor_data import PermittivityMonitorData
+from .components.data.monitor_data import FluxMonitorData, FluxTimeMonitorData
+from .components.data.monitor_data import ModeMonitorData, ModeSolverMonitorData
 from .components.data.monitor_data_n2f import AbstractNear2FarData
 from .components.data.monitor_data_n2f import Near2FarAngleData, Near2FarCartesianData
 from .components.data.monitor_data_n2f import Near2FarKSpaceData

@@ -307,13 +307,13 @@ class ComponentModeler(Tidy3dBaseModel):
         port_monitor_data = sim_data[port_source.name]
         mode_index = sim_data.simulation.sources[0].mode_index
 
-        normalize_amp = port_monitor_data.amps.sel(
+        normalize_amp = port_monitor_data.dataset.amps.data.sel(
             f=self.freq,
             direction=port_source.direction,
             mode_index=mode_index,
         ).values
 
-        normalize_n_eff = port_monitor_data.n_eff.sel(f=self.freq, mode_index=mode_index).values
+        normalize_n_eff = port_monitor_data.dataset.n_eff.sel(f=self.freq, mode_index=mode_index).values
 
         k0 = 2 * np.pi * C_0 / self.freq
         k_eff = k0 * normalize_n_eff
@@ -351,7 +351,7 @@ class ComponentModeler(Tidy3dBaseModel):
                     continue
 
                 # directly compute the element
-                mode_amps_data = sim_data[port_out.name].copy().amps
+                mode_amps_data = sim_data[port_out.name].copy().dataset.amps.data
                 dir_out = "-" if port_out.direction == "+" else "+"
                 amp = mode_amps_data.sel(f=self.freq, direction=dir_out, mode_index=mode_index_out)
                 source_norm = self._normalization_factor(port_in, sim_data)

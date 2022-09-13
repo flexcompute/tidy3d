@@ -10,9 +10,9 @@ import pydantic as pd
 
 from . import webapi as web
 from .task import TaskId, TaskInfo, RunInfo, TaskName
-from ..components.simulation import Simulation
-from ..components.data import SimulationData
 from ..components.base import Tidy3dBaseModel
+from ..components.simulation import Simulation
+from ..components.data.sim_data import SimulationData
 from ..log import DataError
 
 
