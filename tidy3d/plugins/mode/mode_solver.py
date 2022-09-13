@@ -9,9 +9,10 @@ import numpy as np
 import pydantic
 
 from ...components.base import Tidy3dBaseModel, cached_property
-from ...components import Box
-from ...components import Simulation, Grid
-from ...components import ModeSpec
+from ...components.geometry import Box
+from ...components.simulation import Simulation
+from ...components.grid.grid import Grid
+from ...components.mode import ModeSpec
 from ...components.monitor import ModeSolverMonitor, ModeMonitor
 from ...components.source import ModeSource, SourceTime
 from ...components.types import Direction, ArrayLike, FreqArray, Ax, Literal, Axis

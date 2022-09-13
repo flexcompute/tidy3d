@@ -4,53 +4,59 @@ from concurrent.futures import ProcessPoolExecutor, process
 from rich import pretty, traceback
 
 # grid
-from .components import Grid, Coords, GridSpec, UniformGrid, CustomGrid, AutoGrid
+from .components.grid.grid import Grid, Coords
+from .components.grid.grid_spec import GridSpec, UniformGrid, CustomGrid, AutoGrid
 
 # geometry
-from .components import Box, Sphere, Cylinder, PolySlab, GeometryGroup
+from .components.geometry import Box, Sphere, Cylinder, PolySlab, GeometryGroup
 
 # medium
-from .components import Medium, PoleResidue, AnisotropicMedium, PEC, PECMedium
-from .components import Sellmeier, Debye, Drude, Lorentz
+from .components.medium import Medium, PoleResidue, AnisotropicMedium, PEC, PECMedium
+from .components.medium import Sellmeier, Debye, Drude, Lorentz
 
 # structures
-from .components import Structure
+from .components.structure import Structure
 
 # modes
-from .components import ModeSpec
+from .components.mode import ModeSpec
 
 # sources
-from .components import GaussianPulse, ContinuousWave
-from .components import UniformCurrentSource, PlaneWave, ModeSource, PointDipole
-from .components import GaussianBeam, AstigmaticGaussianBeam
+from .components.source import GaussianPulse, ContinuousWave
+from .components.source import UniformCurrentSource, PlaneWave, ModeSource, PointDipole
+from .components.source import GaussianBeam, AstigmaticGaussianBeam
 
 # monitors
-from .components import FieldMonitor, FieldTimeMonitor, FluxMonitor, FluxTimeMonitor
-from .components import ModeMonitor, ModeSolverMonitor, PermittivityMonitor
-from .components import Near2FarAngleMonitor, Near2FarCartesianMonitor, Near2FarKSpaceMonitor
+from .components.monitor import FieldMonitor, FieldTimeMonitor, FluxMonitor, FluxTimeMonitor
+from .components.monitor import ModeMonitor, ModeSolverMonitor, PermittivityMonitor
+from .components.monitor import Near2FarAngleMonitor, Near2FarCartesianMonitor
+from .components.monitor import Near2FarKSpaceMonitor
 
 # simulation
-from .components import Simulation
+from .components.simulation import Simulation
 
 # data
-from .components import ScalarFieldDataArray, ScalarModeFieldDataArray, ScalarFieldTimeDataArray
-from .components import ModeAmpsDataArray, ModeIndexDataArray
-from .components import FluxDataArray, FluxTimeDataArray
-from .components import Near2FarAngleDataArray, Near2FarCartesianDataArray, Near2FarKSpaceDataArray
-from .components import FieldData, FieldTimeData, PermittivityData
-from .components import FluxData, FluxTimeData
-from .components import ModeData, ModeSolverData
-from .components import AbstractNear2FarData
-from .components import Near2FarAngleData, Near2FarCartesianData, Near2FarKSpaceData
-from .components import Near2FarSurface, RadiationVectors
-from .components import SimulationData
-from .components import DATA_TYPE_MAP
+from .components.data.data_array import ScalarFieldDataArray, ScalarModeFieldDataArray
+from .components.data.data_array import ScalarFieldTimeDataArray
+from .components.data.data_array import ModeAmpsDataArray, ModeIndexDataArray
+from .components.data.data_array import FluxDataArray, FluxTimeDataArray
+from .components.data.data_array import Near2FarAngleDataArray, Near2FarCartesianDataArray
+from .components.data.data_array import Near2FarKSpaceDataArray
+from .components.data.monitor_data import FieldData, FieldTimeData, PermittivityData
+from .components.data.monitor_data import FluxData, FluxTimeData
+from .components.data.monitor_data import ModeData, ModeSolverData
+from .components.data.monitor_data_n2f import AbstractNear2FarData
+from .components.data.monitor_data_n2f import Near2FarAngleData, Near2FarCartesianData
+from .components.data.monitor_data_n2f import Near2FarKSpaceData
+from .components.data.near2far import Near2FarSurface, RadiationVectors
+from .components.data.sim_data import SimulationData
+from .components.data.sim_data import DATA_TYPE_MAP
 
 # boundary
-from .components import BoundarySpec, Boundary, BoundaryEdge, BoundaryEdgeType
-from .components import BlochBoundary, Symmetry, Periodic, PECBoundary, PMCBoundary
-from .components import PML, StablePML, Absorber, PMLParams, AbsorberParams, PMLTypes
-from .components import DefaultPMLParameters, DefaultStablePMLParameters, DefaultAbsorberParameters
+from .components.boundary import BoundarySpec, Boundary, BoundaryEdge, BoundaryEdgeType
+from .components.boundary import BlochBoundary, Symmetry, Periodic, PECBoundary, PMCBoundary
+from .components.boundary import PML, StablePML, Absorber, PMLParams, AbsorberParams, PMLTypes
+from .components.boundary import DefaultPMLParameters, DefaultStablePMLParameters
+from .components.boundary import DefaultAbsorberParameters
 
 # constants imported as `C_0 = td.C_0` or `td.constants.C_0`
 from .constants import C_0, ETA_0, HBAR, EPSILON_0, MU_0, Q_e, inf
@@ -64,7 +70,7 @@ from .components.medium import AbstractMedium
 from .components.geometry import Geometry
 from .components.source import Source, SourceTime
 from .components.monitor import Monitor
-from .components.grid import YeeGrid, FieldGrid, Coords1D
+from .components.grid.grid import YeeGrid, FieldGrid, Coords1D
 
 # logging
 from .log import log, set_logging_file

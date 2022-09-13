@@ -10,8 +10,9 @@ from typing_extensions import Literal
 
 from .component import UIComponent
 from .utils import PlotlyFig
-from ...components.data import FluxData, FluxTimeData, FieldData, FieldTimeData
-from ...components.data import ModeSolverData, ModeData, ScalarFieldDataArray
+from ...components.data.monitor_data import FluxData, FluxTimeData, FieldData, FieldTimeData
+from ...components.data.monitor_data import ModeSolverData, ModeData
+from ...components.data.data_array import ScalarFieldDataArray
 from ...components.geometry import Geometry
 from ...components.types import Axis, Direction
 from ...log import Tidy3dKeyError, log

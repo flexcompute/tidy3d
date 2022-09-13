@@ -8,7 +8,8 @@ from tidy3d.log import DataError
 from tidy3d.components.simulation import Simulation
 from tidy3d.components.grid.grid_spec import GridSpec
 from tidy3d.components.data.sim_data import SimulationData
-from tidy3d.components.data import ScalarFieldTimeDataArray, FieldTimeData
+from tidy3d.components.data.monitor_data import FieldTimeData
+from tidy3d.components.data.data_array import ScalarFieldTimeDataArray
 from tidy3d.components.monitor import FieldMonitor, FieldTimeMonitor, ModeSolverMonitor
 from tidy3d.components.source import GaussianPulse, PointDipole
 
