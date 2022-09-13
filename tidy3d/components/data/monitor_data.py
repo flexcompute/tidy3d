@@ -5,6 +5,11 @@ from abc import ABC
 from typing import Union, Tuple, Callable
 import numpy as np
 import pydantic as pd
+import xarray as xr
+
+from .dataset import Dataset, FieldData, FieldTimeData, ModeSolverData, PermittivityData, ModeData
+from .dataset import FluxData, FluxTimeData
+from .dataset import Near2FarAngleData, Near2FarCartesianData, Near2FarKSpaceData
 
 from ..base import TYPE_TAG_STR, Tidy3dBaseModel
 from ..types import Coordinate, Symmetry
@@ -12,9 +17,10 @@ from ..grid.grid import Grid
 from ..validators import enforce_monitor_fields_present
 from ..monitor import MonitorType, FieldMonitor, FieldTimeMonitor, ModeSolverMonitor
 from ..monitor import ModeMonitor, FluxMonitor, FluxTimeMonitor, PermittivityMonitor
-from .dataset import Dataset, FieldData, FieldTimeData, ModeSolverData, PermittivityData, ModeData
-from .dataset import FluxData, FluxTimeData
-from ...log import DataError
+from ..monitor import Near2FarAngleMonitor, Near2FarCartesianMonitor, Near2FarKSpaceMonitor
+from ..medium import Medium
+from ...log import DataError, SetupError
+from ...constants import C_0, ETA_0
 
 
 class MonitorData(Tidy3dBaseModel, ABC):
@@ -329,6 +335,382 @@ class FluxTimeMonitorData(MonitorData):
     dataset: FluxTimeData
 
 
+class AbstractNear2FarMonitorData(MonitorData, ABC):
+    """Collection of radiation vectors in the frequency domain."""
+
+    monitor: Union[Near2FarAngleMonitor, Near2FarCartesianMonitor, Near2FarKSpaceMonitor]
+    dataset: Union[Near2FarAngleData, Near2FarCartesianData, Near2FarKSpaceData]
+
+    def normalize(
+        self, source_spectrum_fn: Callable[[float], complex]
+    ) -> AbstractNear2FarMonitorData:
+        """Return copy of self after normalization is applied using source spectrum function."""
+        fields_norm = {}
+        for field_name, field_data in self.dataset.field_components.items():
+            src_amps = source_spectrum_fn(field_data.f)
+            fields_norm[field_name] = field_data / src_amps
+        new_dataset = self.dataset.copy(update=fields_norm)
+        return self.copy(update=dict(dataset=new_dataset))
+
+    @staticmethod
+    def nk(frequency: float, medium: Medium) -> Tuple[float, float]:
+        """Returns the real and imaginary parts of the background medium's refractive index."""
+        eps_complex = medium.eps_model(frequency)
+        return medium.eps_complex_to_nk(eps_complex)
+
+    @staticmethod
+    def k(frequency: float, medium: Medium) -> complex:
+        """Returns the complex wave number associated with the background medium."""
+        index_n, index_k = AbstractNear2FarMonitorData.nk(frequency, medium)
+        return (2 * np.pi * frequency / C_0) * (index_n + 1j * index_k)
+
+    @staticmethod
+    def eta(frequency: float, medium: Medium) -> complex:
+        """Returns the complex wave impedance associated with the background medium."""
+        eps_complex = medium.eps_model(frequency)
+        return ETA_0 / np.sqrt(eps_complex)
+
+    @staticmethod
+    def car_2_sph(x: float, y: float, z: float) -> Tuple[float, float, float]:
+        """Convert Cartesian to spherical coordinates.
+
+        Parameters
+        ----------
+        x : float
+            x coordinate relative to ``local_origin``.
+        y : float
+            y coordinate relative to ``local_origin``.
+        z : float
+            z coordinate relative to ``local_origin``.
+
+        Returns
+        -------
+        Tuple[float, float, float]
+            r, theta, and phi coordinates relative to ``local_origin``.
+        """
+        r = np.sqrt(x**2 + y**2 + z**2)
+        theta = np.arccos(z / r)
+        phi = np.arctan2(y, x)
+        return r, theta, phi
+
+    @staticmethod
+    def sph_2_car(r, theta, phi) -> Tuple[float, float, float]:
+        """Convert spherical to Cartesian coordinates.
+
+        Parameters
+        ----------
+        r : float
+            radius.
+        theta : float
+            polar angle (rad) downward from x=y=0 line.
+        phi : float
+            azimuthal (rad) angle from y=z=0 line.
+
+        Returns
+        -------
+        Tuple[float, float, float]
+            x, y, and z coordinates relative to ``local_origin``.
+        """
+        r_sin_theta = r * np.sin(theta)
+        x = r_sin_theta * np.cos(phi)
+        y = r_sin_theta * np.sin(phi)
+        z = r * np.cos(theta)
+        return x, y, z
+
+    @staticmethod
+    def sph_2_car_field(f_r, f_theta, f_phi, theta, phi) -> Tuple[complex, complex, complex]:
+        """Convert vector field components in spherical coordinates to cartesian.
+
+        Parameters
+        ----------
+        f_r : float
+            radial component of the vector field.
+        f_theta : float
+            polar angle component of the vector fielf.
+        f_phi : float
+            azimuthal angle component of the vector field.
+        theta : float
+            polar angle (rad) of location of the vector field.
+        phi : float
+            azimuthal angle (rad) of location of the vector field.
+
+        Returns
+        -------
+        Tuple[float, float, float]
+            x, y, and z components of the vector field in cartesian coordinates.
+        """
+        sin_theta = np.sin(theta)
+        cos_theta = np.cos(theta)
+        sin_phi = np.sin(phi)
+        cos_phi = np.cos(phi)
+        f_x = f_r * sin_theta * cos_phi + f_theta * cos_theta * cos_phi - f_phi * sin_phi
+        f_y = f_r * sin_theta * sin_phi + f_theta * cos_theta * sin_phi + f_phi * cos_phi
+        f_z = f_r * cos_theta - f_theta * sin_theta
+        return f_x, f_y, f_z
+
+    @staticmethod
+    def kspace_2_sph(ux, uy, axis) -> Tuple[float, float]:
+        """Convert normalized k-space coordinates to angles.
+
+        Parameters
+        ----------
+        ux : float
+            normalized kx coordinate.
+        uy : float
+            normalized ky coordinate.
+        axis : int
+            axis along which the observation plane is oriented.
+
+        Returns
+        -------
+        Tuple[float, float]
+            theta and phi coordinates relative to ``local_origin``.
+        """
+        phi_local = np.arctan2(uy, ux)
+        theta_local = np.arcsin(np.sqrt(ux**2 + uy**2))
+        # Spherical coordinates rotation matrix reference:
+        # https://en.wikipedia.org/wiki/Rodrigues%27_rotation_formula#Matrix_notation
+        if axis == 0:
+            x = np.cos(theta_local)
+            y = np.sin(theta_local) * np.sin(phi_local)
+            z = -np.sin(theta_local) * np.cos(phi_local)
+            theta = np.arccos(z)
+            phi = np.arctan2(y, x)
+        elif axis == 1:
+            x = np.sin(theta_local) * np.cos(phi_local)
+            y = np.cos(theta_local)
+            z = -np.sin(theta_local) * np.sin(phi_local)
+            theta = np.arccos(z)
+            phi = np.arctan2(y, x)
+        elif axis == 2:
+            theta = theta_local
+            phi = phi_local
+        return theta, phi
+
+
+class Near2FarAngleMonitorData(AbstractNear2FarMonitorData):
+    """Data associated with a :class:`.Near2FarAngleMonitor`: components of radiation vectors.
+
+    Example
+    -------
+    >>> from .data_array import Near2FarAngleDataArray
+    >>> f = np.linspace(1e14, 2e14, 10)
+    >>> theta = np.linspace(0, np.pi, 10)
+    >>> phi = np.linspace(0, 2*np.pi, 20)
+    >>> coords = dict(theta=theta, phi=phi, f=f)
+    >>> values = (1+1j) * np.random.random((len(theta), len(phi), len(f)))
+    >>> data_array = xr.DataArray(values, coords=coords)
+    >>> scalar_field = Near2FarAngleDataArray(data=data_array)
+    >>> dataset = Near2FarAngleData(
+    ...     Ntheta=scalar_field,
+    ...     Nphi=scalar_field,
+    ...     Ltheta=scalar_field,
+    ...     Lphi=scalar_field
+    ... )
+    >>> monitor = Near2FarAngleMonitor(
+    ...     center=(1,2,3), size=(2,2,2), freqs=f, name='n2f_monitor', phi=phi, theta=theta
+    ... )
+    >>> data = Near2FarAngleMonitorData(monitor=monitor, dataset=dataset)
+    """
+
+    monitor: Near2FarAngleMonitor
+    dataset: Near2FarAngleData
+
+    _contains_monitor_fields = enforce_monitor_fields_present()
+
+    # pylint:disable=too-many-locals
+    def fields(self, r: float = None, medium: Medium = Medium(permittivity=1)) -> xr.Dataset:
+        """Get fields in spherical coordinates relative to the monitor's local origin
+        for all angles and frequencies specified in :class:`Near2FarAngleMonitor`.
+        If the radial distance ``r`` is provided, a corresponding phase factor is applied
+        to the returned fields.
+
+        Parameters
+        ----------
+        r : float = None
+            (micron) radial distance relative to the monitor's local origin.
+        medium : :class:`.Medium`
+            Background medium in which to radiate near fields to far fields.
+            Default: free space.
+
+        Returns
+        -------
+        ``xarray.Dataset``
+            xarray dataset containing (Er, Etheta, Ephi), (Hr, Htheta, Hphi)
+            in polar coordinates.
+        """
+        return self.dataset.fields(r=r, medium=medium)
+
+    def radar_cross_section(self, medium: Medium = Medium(permittivity=1)) -> xr.DataArray:
+        """Get radar cross section at the observation grid in units of incident power.
+
+        Parameters
+        ----------
+        medium : :class:`.Medium`
+            Background medium in which to radiate near fields to far fields.
+            Default: free space.
+
+        Returns
+        -------
+        ``xarray.DataArray``
+            Radar cross section at angles relative to the local origin.
+        """
+        return self.dataset.radar_cross_section(medium=medium, permittivity=permittivity)
+
+    def power(self, r: float, medium: Medium = Medium(permittivity=1)) -> xr.DataArray:
+        """Get power measured on the observation grid defined in spherical coordinates.
+
+        Parameters
+        ----------
+        r : float
+            (micron) radial distance relative to the local origin.
+        medium : :class:`.Medium`
+            Background medium in which to radiate near fields to far fields.
+            Default: free space.
+
+        Returns
+        -------
+        ``xarray.DataArray``
+            Power at points relative to the local origin.
+        """
+
+        return self.dataset.power(r=r, meduim=medium)
+
+
+class Near2FarCartesianMonitorData(AbstractNear2FarMonitorData):
+    """Data associated with a :class:`.Near2FarCartesianMonitor`: components of radiation vectors.
+
+    Example
+    -------
+    >>> from .data_array import Near2FarCartesianDataArray
+    >>> f = np.linspace(1e14, 2e14, 10)
+    >>> x = np.linspace(0, 5, 10)
+    >>> y = np.linspace(0, 10, 20)
+    >>> coords = dict(x=x, y=y, f=f)
+    >>> values = (1+1j) * np.random.random((len(x), len(y), len(f)))
+    >>> data_array = xr.DataArray(values, coords=coords)
+    >>> scalar_field = Near2FarCartesianDataArray(data=data_array)
+    >>> dataset = Near2FarCartesianData(
+    ...     Ntheta=scalar_field,
+    ...     Nphi=scalar_field,
+    ...     Ltheta=scalar_field,
+    ...     Lphi=scalar_field
+    ... )
+    >>> monitor = Near2FarCartesianMonitor(
+    ...     center=(1,2,3), size=(2,2,2), freqs=f, name='n2f_monitor', x=x, y=y,
+    ...     plane_axis=2, plane_distance=50
+    ... )
+    >>> data = Near2FarCartesianMonitorData(monitor=monitor, dataset=dataset)
+    """
+
+    monitor: Near2FarCartesianMonitor
+    dataset: Near2FarCartesianData
+
+    # pylint:disable=too-many-arguments, too-many-locals
+    def fields(self, medium: Medium = Medium(permittivity=1)) -> xr.Dataset:
+        """Get fields on a cartesian plane at a distance relative to monitor center
+        along a given axis.
+
+        Parameters
+        ----------
+        medium : :class:`.Medium`
+            Background medium in which to radiate near fields to far fields.
+            Default: free space.
+
+        Returns
+        -------
+        ``xarray.Dataset``
+            xarray dataset containing (Ex, Ey, Ez), (Hx, Hy, Hz) in cartesian coordinates.
+        """
+        return self.dataset.fields(
+            medium=medium, plane_dist=self.monitor.plane_distance, plan_axis=self.monitor.plane_axis
+        )
+
+    def power(self, medium: Medium = Medium(permittivity=1)) -> xr.Dataset:
+        """Get power on the observation grid defined in Cartesian coordinates.
+
+        Parameters
+        ----------
+        medium : :class:`.Medium`
+            Background medium in which to radiate near fields to far fields.
+            Default: free space.
+
+        Returns
+        -------
+        ``xarray.DataArray``
+            Power at points relative to the local origin.
+        """
+        return self.dataset.power(
+            medium=medium, plane_dist=self.monitor.plane_distance, plan_axis=self.monitor.plane_axis
+        )
+
+
+class Near2FarKSpaceMonitorData(AbstractNear2FarMonitorData):
+    """Data associated with a :class:`.Near2FarKSpaceMonitor`: components of radiation vectors.
+
+    Example
+    -------
+    >>> from .data_array import Near2FarKSpaceDataArray
+    >>> f = np.linspace(1e14, 2e14, 10)
+    >>> ux = np.linspace(0, 5, 10)
+    >>> uy = np.linspace(0, 10, 20)
+    >>> coords = dict(ux=ux, uy=uy, f=f)
+    >>> values = (1+1j) * np.random.random((len(ux), len(uy), len(f)))
+    >>> data_array = xr.DataArray(values, coords=coords)
+    >>> scalar_field = Near2FarKSpaceDataArray(data=data_array)
+    >>> dataset = Near2FarKSpaceData(
+    ...     Ntheta=scalar_field,
+    ...     Nphi=scalar_field,
+    ...     Ltheta=scalar_field,
+    ...     Lphi=scalar_field
+    ... )
+    >>> monitor = Near2FarKSpaceMonitor(
+    ...     center=(1,2,3), size=(2,2,2), freqs=f, name='n2f_monitor', ux=ux, uy=uy, u_axis=2
+    ... )
+    >>> data = Near2FarKSpaceMonitorData(monitor=monitor, dataset=dataset)
+    """
+
+    monitor: Near2FarKSpaceMonitor
+    dataset: Near2FarKSpaceData
+
+    # pylint:disable=too-many-locals
+    def fields(self, medium: Medium = Medium(permittivity=1)) -> xr.Dataset:
+        """Get fields in spherical coordinates relative to the monitor's local origin
+        for all k-space points and frequencies specified in :class:`Near2FarKSpaceMonitor`.
+
+        Parameters
+        ----------
+        medium : :class:`.Medium`
+            Background medium in which to radiate near fields to far fields.
+            Default: free space.
+
+        Returns
+        -------
+        ``xarray.Dataset``
+            xarray dataset containing (Er, Etheta, Ephi), (Hr, Htheta, Hphi)
+            in polar coordinates.
+        """
+
+        return self.dataset.fields(medum=medium)
+
+    def power(self, medium: Medium = Medium(permittivity=1)) -> xr.Dataset:
+        """Get power on the observation grid defined in k-space.
+
+        Parameters
+        ----------
+        medium : :class:`.Medium`
+            Background medium in which to radiate near fields to far fields.
+            Default: free space.
+
+        Returns
+        -------
+        ``xarray.Dataset``
+            xarray dataset containing power.
+        """
+
+        return self.power.fields(medum=medium)
+
+
 MonitorDataTypes = (
     FieldMonitorData,
     FieldTimeMonitorData,
@@ -337,4 +719,7 @@ MonitorDataTypes = (
     ModeMonitorData,
     FluxMonitorData,
     FluxTimeMonitorData,
+    Near2FarAngleData,
+    Near2FarCartesianData,
+    Near2FarKSpaceData,
 )

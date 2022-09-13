@@ -21,7 +21,7 @@ from tidy3d.components.geometry import Box
 from tidy3d.material_library import material_library
 from tidy3d.constants import inf
 
-from .utils import clear_tmp
+from ..utils import clear_tmp
 
 STRUCTURES = [
     Structure(geometry=Box(size=(1, inf, 1)), medium=material_library["cSi"]["SalzbergVilla1957"])

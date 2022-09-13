@@ -12,7 +12,7 @@ from tidy3d.plugins import ModeSolver
 from tidy3d import FieldData, ScalarFieldDataArray, FieldMonitor
 from tidy3d.plugins.smatrix.smatrix import Port, ComponentModeler
 from tidy3d.plugins.smatrix.smatrix import ComponentModeler
-from .utils import clear_tmp, run_emulated
+from ..utils import clear_tmp, run_emulated
 
 
 def test_mode_solver():

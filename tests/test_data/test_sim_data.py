@@ -15,16 +15,16 @@ from tidy3d.components.data.sim_data import SimulationData
 from tidy3d.components.monitor import FieldMonitor, FieldTimeMonitor, ModeSolverMonitor
 from tidy3d.components.source import GaussianPulse, PointDipole
 
-from .test_data_monitor import make_field_monitor_data, make_field_time_monitor_data
-from .test_data_monitor import make_permittivity_monitor_data
-from .test_data_monitor import make_mode_monitor_data, make_mode_solver_monitor_data
-from .test_data_monitor import make_flux_monitor_data, make_flux_time_monitor_data
+from .test_monitor_data import make_field_monitor_data, make_field_time_monitor_data
+from .test_monitor_data import make_permittivity_monitor_data
+from .test_monitor_data import make_mode_monitor_data, make_mode_solver_monitor_data
+from .test_monitor_data import make_flux_monitor_data, make_flux_time_monitor_data
 
 from .test_data_arrays import FIELD_MONITOR, FIELD_TIME_MONITOR, MODE_SOLVE_MONITOR
 from .test_data_arrays import MODE_MONITOR, PERMITTIVITY_MONITOR, FLUX_MONITOR, FLUX_TIME_MONITOR
 from .test_data_arrays import SIM, SIM_SYM
 
-from .utils import clear_tmp
+from ..utils import clear_tmp
 
 # monitor data instances
 

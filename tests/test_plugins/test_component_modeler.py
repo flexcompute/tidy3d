@@ -7,7 +7,7 @@ import gdspy
 import tidy3d as td
 from tidy3d.web.container import Batch
 from tidy3d.plugins.smatrix.smatrix import Port, ComponentModeler
-from .utils import clear_tmp, run_emulated
+from ..utils import clear_tmp, run_emulated
 
 # Waveguide height
 wg_height = 0.22

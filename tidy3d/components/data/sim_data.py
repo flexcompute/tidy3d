@@ -7,7 +7,6 @@ import pydantic as pd
 import numpy as np
 
 from .monitor_data import MonitorDataTypes, AbstractFieldMonitorData
-from .monitor_data_n2f import Near2FarDataTypes
 from ..base import Tidy3dBaseModel
 from ..simulation import Simulation
 from ..boundary import BlochBoundary
@@ -15,8 +14,7 @@ from ..types import Ax, Axis, annotate_type, Literal
 from ..viz import equal_aspect, add_ax_if_none
 from ...log import DataError, log
 
-MonitorDataType = Union[MonitorDataTypes + Near2FarDataTypes]
-DATA_TYPE_MAP = {data.__fields__["monitor"].type_: data for data in MonitorDataTypes}
+MonitorDataType = Union[MonitorDataTypes]
 
 
 class SimulationData(Tidy3dBaseModel):

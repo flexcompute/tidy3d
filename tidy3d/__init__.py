@@ -31,6 +31,9 @@ from .components.monitor import ModeMonitor, ModeSolverMonitor, PermittivityMoni
 from .components.monitor import Near2FarAngleMonitor, Near2FarCartesianMonitor
 from .components.monitor import Near2FarKSpaceMonitor
 
+# near2far
+from .components.near2far import Near2FarSurface, RadiationVectors
+
 # simulation
 from .components.simulation import Simulation
 
@@ -44,16 +47,15 @@ from .components.data.data_array import Near2FarKSpaceDataArray
 from .components.data.dataset import FieldData, FieldTimeData, PermittivityData
 from .components.data.dataset import FluxData, FluxTimeData
 from .components.data.dataset import ModeData, ModeSolverData
+from .components.data.dataset import Near2FarAngleData, Near2FarCartesianData
+from .components.data.dataset import Near2FarKSpaceData
 from .components.data.monitor_data import FieldMonitorData, FieldTimeMonitorData
 from .components.data.monitor_data import PermittivityMonitorData
 from .components.data.monitor_data import FluxMonitorData, FluxTimeMonitorData
 from .components.data.monitor_data import ModeMonitorData, ModeSolverMonitorData
-from .components.data.monitor_data_n2f import AbstractNear2FarData
-from .components.data.monitor_data_n2f import Near2FarAngleData, Near2FarCartesianData
-from .components.data.monitor_data_n2f import Near2FarKSpaceData
-from .components.data.near2far import Near2FarSurface, RadiationVectors
+from .components.data.monitor_data import Near2FarAngleMonitorData, Near2FarCartesianMonitorData
+from .components.data.monitor_data import Near2FarKSpaceMonitorData
 from .components.data.sim_data import SimulationData
-from .components.data.sim_data import DATA_TYPE_MAP
 
 # boundary
 from .components.boundary import BoundarySpec, Boundary, BoundaryEdge, BoundaryEdgeType

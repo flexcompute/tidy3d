@@ -6,7 +6,7 @@ import pydantic
 from tidy3d import *
 from tidy3d.log import ValidationError, SetupError
 from tidy3d.components.simulation import MAX_NUM_MEDIUMS
-from .utils import assert_log_level
+from ..utils import assert_log_level
 
 
 def test_sim():

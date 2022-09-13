@@ -1,13 +1,12 @@
 """Test loading simulation and other objects without validation."""
 import json
+import dill as pickle
 import numpy as np
 import pytest
 import pydantic
 import tidy3d as td
 from tidy3d.log import SetupError, ValidationError
-from .utils import SIM_FULL, clear_tmp
-import json
-import dill as pickle
+from ..utils import SIM_FULL, clear_tmp
 
 
 def load_sim_dict_json_string() -> dict:

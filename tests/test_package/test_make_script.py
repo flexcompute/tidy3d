@@ -3,7 +3,7 @@ import os
 
 import tidy3d as td
 from make_script import main
-from .utils import clear_tmp
+from ..utils import clear_tmp
 
 
 @clear_tmp

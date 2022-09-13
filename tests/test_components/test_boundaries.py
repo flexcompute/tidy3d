@@ -10,7 +10,7 @@ from tidy3d.components.boundary import PML, StablePML, Absorber
 from tidy3d.components.source import GaussianPulse, PlaneWave, PointDipole
 from tidy3d.components.types import TYPE_TAG_STR
 from tidy3d.log import SetupError
-from .utils import assert_log_level
+from ..utils import assert_log_level
 
 
 def test_boundaryedge_types():

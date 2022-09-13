@@ -1,5 +1,5 @@
-"""Near field to far field transformation plugin
-"""
+"""Near field to far field transformation plugin."""
+
 from __future__ import annotations
 from typing import Dict, Tuple, Union, List
 import numpy as np
@@ -8,18 +8,23 @@ import pydantic
 
 from rich.progress import track
 
-from .sim_data import SimulationData
-from .monitor_data import FieldData
-from .data_array import Near2FarAngleDataArray, Near2FarCartesianDataArray, Near2FarKSpaceDataArray
-from .monitor_data_n2f import AbstractNear2FarData
-from .monitor_data_n2f import Near2FarAngleData, Near2FarCartesianData, Near2FarKSpaceData
-from ..monitor import FieldMonitor, AbstractNear2FarMonitor
-from ..monitor import Near2FarAngleMonitor, Near2FarCartesianMonitor, Near2FarKSpaceMonitor
-from ..types import Direction, Axis, Coordinate, ArrayLike
-from ..medium import Medium
-from ..base import Tidy3dBaseModel, cached_property
-from ...log import SetupError, ValidationError
-from ...constants import C_0, MICROMETER
+from .data.data_array import Near2FarAngleDataArray, ScalarFieldDataArray
+from .data.data_array import Near2FarCartesianDataArray, Near2FarKSpaceDataArray
+from .data.dataset import FieldData, AbstractNear2FarData
+from .data.dataset import Near2FarAngleData, Near2FarCartesianData, Near2FarKSpaceData
+from .data.monitor_data import FieldMonitorData
+from .data.monitor_data import AbstractNear2FarMonitorData
+from .data.monitor_data import Near2FarAngleMonitorData, Near2FarCartesianMonitorData
+from .data.monitor_data import Near2FarKSpaceMonitorData
+from .data.sim_data import SimulationData
+
+from .monitor import FieldMonitor, AbstractNear2FarMonitor
+from .monitor import Near2FarAngleMonitor, Near2FarCartesianMonitor, Near2FarKSpaceMonitor
+from .types import Direction, Axis, Coordinate, ArrayLike
+from .medium import Medium
+from .base import Tidy3dBaseModel, cached_property
+from ..log import SetupError, ValidationError
+from ..constants import C_0, MICROMETER
 
 # Default number of points per wavelength in the background medium to use for resampling fields.
 PTS_PER_WVL = 10
@@ -227,7 +232,7 @@ class RadiationVectors(Tidy3dBaseModel):
         if monitor_name not in sim_data.monitor_data.keys():
             raise SetupError(f"No data for monitor named '{monitor_name}' found in sim_data.")
 
-        field_data = sim_data[monitor_name]
+        field_data = sim_data[monitor_name].dataset
 
         currents = RadiationVectors._fields_to_currents(field_data, surface)
         currents = RadiationVectors._resample_surface_currents(
@@ -271,15 +276,24 @@ class RadiationVectors(Tidy3dBaseModel):
 
         surface_currents = {}
 
-        surface_currents[E2] = field_data.field_components[H1] * signs[1]
-        surface_currents[E1] = field_data.field_components[H2] * signs[0]
+        surface_currents[E2] = ScalarFieldDataArray(
+            data=field_data.field_components[H1].data * signs[1]
+        )
+        surface_currents[E1] = ScalarFieldDataArray(
+            data=field_data.field_components[H2].data * signs[0]
+        )
 
-        surface_currents[H2] = field_data.field_components[E1] * signs[0]
-        surface_currents[H1] = field_data.field_components[E2] * signs[1]
+        surface_currents[H2] = ScalarFieldDataArray(
+            data=field_data.field_components[E1].data * signs[0]
+        )
+        surface_currents[H1] = ScalarFieldDataArray(
+            data=field_data.field_components[E2].data * signs[1]
+        )
 
         new_monitor = surface.monitor.copy(update=dict(fields=[E1, E2, H1, H2]))
 
-        return FieldData(monitor=new_monitor, **surface_currents)
+        dataset = FieldData(**surface_currents)
+        return FieldMonitorData(monitor=new_monitor, dataset=dataset)
 
     @staticmethod
     # pylint:disable=too-many-locals, too-many-arguments
@@ -352,7 +366,7 @@ class RadiationVectors(Tidy3dBaseModel):
             if (hasattr(points, "__len__") and len(points) == 1) or not hasattr(points, "__len__"):
                 colocation_points[idx] = None
 
-        currents = currents.colocate(*colocation_points)
+        currents = currents.dataset.colocate(*colocation_points)
         return currents
 
     # pylint:disable=too-many-locals, too-many-arguments
@@ -526,10 +540,11 @@ class RadiationVectors(Tidy3dBaseModel):
 
         coords = {"theta": theta, "phi": phi, "f": freqs}
         fields = {
-            name: Near2FarAngleDataArray(rad_vec, coords=coords)
+            name: Near2FarAngleDataArray(data=xr.DataArray(rad_vec, coords=coords))
             for name, rad_vec in zip(rad_vec_names, rad_vecs)
         }
-        return Near2FarAngleData(monitor=monitor, **fields)
+        dataset = Near2FarAngleData(**fields)
+        return Near2FarAngleMonitorData(monitor=monitor, dataset=dataset)
 
     def _radiation_vectors_cartesian(
         self, monitor: Near2FarCartesianMonitor
@@ -569,7 +584,7 @@ class RadiationVectors(Tidy3dBaseModel):
         for (_x, _y, _z), (i, j, k) in track(
             iter_coords, description="Computing radiation vectors"
         ):
-            _, theta, phi = AbstractNear2FarData.car_2_sph(_x, _y, _z)
+            _, theta, phi = AbstractNear2FarMonitorData.car_2_sph(_x, _y, _z)
 
             for surface in self.surfaces:
                 for idx_f, frequency in enumerate(freqs):
@@ -582,11 +597,12 @@ class RadiationVectors(Tidy3dBaseModel):
         coords = {"x": np.array(monitor.x), "y": np.array(monitor.y), "f": freqs}
         fields = {
             name: Near2FarCartesianDataArray(
-                np.squeeze(rad_vec, axis=monitor.plane_axis), coords=coords
+                data=xr.DataArray(np.squeeze(rad_vec, axis=monitor.plane_axis), coords=coords)
             )
             for name, rad_vec in zip(rad_vec_names, rad_vecs)
         }
-        return Near2FarCartesianData(monitor=monitor, **fields)
+        dataset = Near2FarCartesianData(**fields)
+        return Near2FarCartesianMonitorData(monitor=monitor, dataset=dataset)
 
     def _radiation_vectors_kspace(self, monitor: Near2FarKSpaceMonitor) -> Near2FarKSpaceData:
         """Compute radiation vectors on a k-space grid in spherical coordinates.
@@ -613,7 +629,7 @@ class RadiationVectors(Tidy3dBaseModel):
         iter_coords = [([_ux, _uy], [i, j]) for i, _ux in enumerate(ux) for j, _uy in enumerate(uy)]
 
         for (_ux, _uy), (i, j) in track(iter_coords, description="Computing radiation vectors"):
-            theta, phi = AbstractNear2FarData.kspace_2_sph(_ux, _uy, monitor.u_axis)
+            theta, phi = AbstractNear2FarMonitorData.kspace_2_sph(_ux, _uy, monitor.u_axis)
 
             for surface in self.surfaces:
                 for idx_f, frequency in enumerate(freqs):
@@ -625,7 +641,8 @@ class RadiationVectors(Tidy3dBaseModel):
 
         coords = {"ux": np.array(monitor.ux), "uy": np.array(monitor.uy), "f": freqs}
         fields = {
-            name: Near2FarKSpaceDataArray(rad_vec, coords=coords)
+            name: Near2FarKSpaceDataArray(data=xr.DataArray(rad_vec, coords=coords))
             for name, rad_vec in zip(rad_vec_names, rad_vecs)
         }
-        return Near2FarKSpaceData(monitor=monitor, **fields)
+        dataset = Near2FarKSpaceData(**fields)
+        return Near2FarKSpaceMonitorData(monitor=monitor, dataset=dataset)

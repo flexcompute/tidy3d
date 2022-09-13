@@ -18,7 +18,7 @@ from .test_data_arrays import make_scalar_field_data_array, make_scalar_field_ti
 from .test_data_arrays import make_scalar_mode_field_data_array
 from .test_data_arrays import make_flux_data_array, make_flux_time_data_array
 from .test_data_arrays import make_mode_amps_data_array, make_mode_index_data_array
-from .utils import clear_tmp
+from ..utils import clear_tmp
 
 # data array instances
 AMPS = make_mode_amps_data_array()
