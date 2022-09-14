@@ -221,13 +221,14 @@ def test_to_hdf5():
     assert sim_data == sim_data2
 
 
-@clear_tmp
+# @clear_tmp
 def test_empty_io():
     coords = {"x": np.arange(10), "y": np.arange(10), "z": np.arange(10), "t": []}
     data_array = xr.DataArray(np.random.rand(10, 10, 10, 0), coords=coords)
     fields = {"Ex": td.ScalarFieldTimeDataArray(data=data_array)}
     monitor = td.FieldTimeMonitor(size=(1, 1, 1), name="test", fields=["Ex"])
-    field_data = td.FieldTimeData(monitor=monitor, **fields)
+    dataset = td.FieldTimeData(**fields)
+    field_data = td.FieldTimeMonitorData(monitor=monitor, dataset=dataset)
     sim = td.Simulation(
         size=(1, 1, 1),
         monitors=(monitor,),
@@ -235,11 +236,11 @@ def test_empty_io():
         grid_spec=td.GridSpec(wavelength=1.0),
         normalize_index=0,
     )
-    sim_data = SimulationData(simulation=sim, monitor_data={"tmnt": field_data})
+    sim_data = SimulationData(simulation=sim, data=[field_data])
     sim_data.to_file("tests/tmp/sim_data_empty.hdf5")
     sim_data = SimulationData.from_file("tests/tmp/sim_data_empty.hdf5")
-    field_data = sim_data["tmnt"]
-    Ex = field_data.Ex
+    field_data = sim_data["test"]
+    Ex = field_data.dataset.Ex.data
     assert Ex.size == 0
 
 

@@ -65,7 +65,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
             complex: lambda x: ComplexNumber(real=x.real, imag=x.imag),
             xr.DataArray: lambda x: {  # pylint:disable=unhashable-member
                 **x.to_dict(),  # original xarray dict
-                TYPE_TAG_STR: x.__class__.__name__,  # add the type info as well
+                TYPE_TAG_STR: "xr.DataArray",  # add the type info as well
             },
         }
         frozen = True
@@ -420,15 +420,13 @@ class Tidy3dBaseModel(pydantic.BaseModel):
 
     # pylint:disable=too-many-return-statements
     @staticmethod
-    def unpack_dataset(dataset: h5py.Dataset, keep_numpy: bool = False) -> Any:
+    def unpack_dataset(dataset: h5py.Dataset) -> Any:
         """Gets the value contained in a dataset in a form ready to insert into final dict.
 
         Parameters
         ----------
         item : h5py.Dataset
             The raw value coming from the dataset, which needs to be decoded.
-        keep_numpy : bool = False
-            Whether to load a ``np.ndarray`` as such or convert it to list.
 
         Returns
         -------
@@ -444,9 +442,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
                 return [val.decode("utf-8") for val in value]
             if value.dtype == bool:
                 return value.astype(bool)
-            if not keep_numpy:
-                return value.tolist()
-            return value
+            return value.tolist()
 
         # decoding special types
         if isinstance(value, np.bool_):
@@ -477,28 +473,27 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         return cls.parse_obj(data_dict, **kwargs)
 
     @classmethod
-    def _load_group_data(
-        cls, data_dict: dict, hdf5_group: h5py.Group, keep_numpy: bool = False
-    ) -> dict:
+    def _load_group_data(cls, data_dict: dict, hdf5_group: h5py.Group) -> dict:
         """Recusively load the data from the group with dataset unpacking as base case."""
 
-        if "keep_numpy" in hdf5_group:
-            keep_numpy = hdf5_group["keep_numpy"]
+        # handle xarray.DataArray
+        if TYPE_TAG_STR in hdf5_group:
+            type_str = cls.unpack_dataset(hdf5_group.get(TYPE_TAG_STR))
+            if type_str == "xr.DataArray":
+                coords = {key: np.array(val) for key, val in hdf5_group["coords"].items()}
+                dims = cls.unpack_dataset(hdf5_group["dims"])
+                data = np.array(hdf5_group["data"])
+                return xr.DataArray(data, coords=coords, dims=dims)
 
         for key, value in hdf5_group.items():
 
-            if key == "keep_numpy":
-                continue
-
             # recurive case, try to load the group into data_dict[key]
             if isinstance(value, h5py.Group):
-                data_dict[key] = cls._load_group_data(
-                    data_dict={}, hdf5_group=value, keep_numpy=keep_numpy
-                )
+                data_dict[key] = cls._load_group_data(data_dict={}, hdf5_group=value)
 
             # base case, unpack the value in the dataset
             elif isinstance(value, h5py.Dataset):
-                data_dict[key] = cls.unpack_dataset(value, keep_numpy=keep_numpy)
+                data_dict[key] = cls.unpack_dataset(value)
 
         if any("TUPLE_ELEMENT_" in key for key in data_dict.keys()):
             return tuple(data_dict.values())
@@ -535,10 +530,15 @@ class Tidy3dBaseModel(pydantic.BaseModel):
             value = value.encode("utf-8")
 
         # numpy array containing strings (usually direction=['-','+'])
-        elif isinstance(value, np.ndarray) and (value.dtype == "<U1"):
+        elif isinstance(value, np.ndarray) and (value.dtype in ("<U1", "<U10")):
             value = value.tolist()
 
-        _ = hdf5_group.create_dataset(name=key, data=value)
+        try:
+            _ = hdf5_group.create_dataset(name=key, data=value)
+        except:
+            import pdb
+
+            pdb.set_trace()
 
     def add_to_handle(self, hdf5_group: h5py.Group) -> None:
         """Saves a :class:`.Tidy3dBaesModel` instance to an hdf5 group,
@@ -561,13 +561,14 @@ class Tidy3dBaseModel(pydantic.BaseModel):
             if isinstance(key, tuple):
                 key = "_".join((str(i) for i in key))
 
+            # handle array
             if isinstance(value, xr.DataArray):
                 coords = {key: np.array(val) for key, val in value.coords.items()}
                 value = {
                     "data": value.data,
                     "coords": coords,
-                    "keep_numpy": True,
-                    TYPE_TAG_STR: value.__class__.__name__,
+                    "dims": np.array(value.dims),
+                    TYPE_TAG_STR: "xr.DataArray",
                 }
 
             # if a tuple of dicts, convert to a dict with special
@@ -618,6 +619,26 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         """define >= for getting unique indices based on hash."""
         return hash(self) >= hash(other)
 
+    def _equal_dicts(self, self_dict: dict, other_dict) -> bool:
+        """Are two model dictionaries equal?"""
+        for self_key, self_val in self_dict.items():
+            if self_key not in other_dict:
+                return False
+            other_val = other_dict[self_key]
+
+            if isinstance(self_val, (np.ndarray, xr.DataArray)):
+                return np.all(self_val == other_val)
+
+            elif isinstance(self_val, dict) and isinstance(other_val, dict):
+                return self._equal_dicts(self_val, other_val)
+
+            return self_val == other_val
+
+    def __eq__(self, other):
+        if isinstance(other, pydantic.BaseModel):
+            other = other.dict()
+        return self._equal_dicts(self.dict(), other)
+
     def _json_string(self, include_unset: bool = True, data_file: Optional[str] = None) -> str:
         """Returns string representation of a :class:`Tidy3dBaseModel`.
 
@@ -656,7 +677,6 @@ class Tidy3dBaseModel(pydantic.BaseModel):
                         data_dict = {
                             "data": x.data,
                             "coords": coords,
-                            "keep_numpy": True,
                             TYPE_TAG_STR: x.__class__.__name__,
                         }
                         self._save_group_data(data_dict=data_dict, hdf5_group=group)

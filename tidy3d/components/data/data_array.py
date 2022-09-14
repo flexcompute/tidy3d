@@ -61,14 +61,11 @@ class DataArray(Tidy3dBaseModel, ABC):
             val.coords[coord_name].attrs = attrs
         return val
 
-    def __eq__(self, other) -> bool:
-        """Whether two data array objects are equal."""
-        if not np.all(self.data.data == other.data.data):
-            return False
-        for key, val in self.data.coords.items():
-            if not np.all(np.array(val) == np.array(other.data.coords[key])):
-                return False
-        return True
+    # def __eq__(self, other) -> bool:
+    #     """Whether two data array objects are equal."""
+    #     if not isinstance(other, DataArray):
+    #         return False
+    #     return np.all(self.data.data == other.data.data)
 
 
 class ScalarFieldDataArray(DataArray):
