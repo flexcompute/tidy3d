@@ -70,6 +70,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         }
         frozen = True
         allow_mutation = False
+        copy_on_model_validation = False
 
     _cached_properties = pydantic.PrivateAttr({})
 
