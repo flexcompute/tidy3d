@@ -218,7 +218,7 @@ def test_to_json_data():
     data = make_flux_data()
     json_dict = json.loads(data._json_string())
     assert json_dict["flux"] is not None
-    assert json_dict["flux"]["data"]["type"] == "DataArray"
+    assert json_dict["flux"]["data"]["type"] == "xr.DataArray"
 
     # type saved inside of the separated data file?
     data_file = "tests/tmp/data_file.hdf5"
@@ -227,16 +227,16 @@ def test_to_json_data():
     assert json_dict["flux"]["data"]["data_file"] == data_file
     with h5py.File(data_file, "r") as f:
         type_dataset = f[tokenize(data.flux.data)]["type"]
-        type_str = Tidy3dBaseModel.unpack_dataset(type_dataset, keep_numpy=False)
-        assert type_str == "DataArray"
+        type_str = Tidy3dBaseModel.unpack_dataset(type_dataset)
+        assert type_str == "xr.DataArray"
 
     # type saved to hdf5 file?
     data_file_direct = "tests/tmp/flux_data.hdf5"
     data.to_file(data_file_direct)
     with h5py.File(data_file_direct, "r") as f:
         type_dataset = f["flux"]["data"]["type"]
-        type_str = Tidy3dBaseModel.unpack_dataset(type_dataset, keep_numpy=False)
-        assert type_str == "DataArray"
+        type_str = Tidy3dBaseModel.unpack_dataset(type_dataset)
+        assert type_str == "xr.DataArray"
 
 
 @clear_tmp

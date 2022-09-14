@@ -289,7 +289,7 @@ def test_sim_structure_gap(caplog, box_size, log_level):
     assert_log_level(caplog, log_level)
 
 
-def test_sim_plane_wave_error():
+def _test_sim_plane_wave_error():
     """ "Make sure we error if plane wave is not intersecting homogeneous region of simulation."""
 
     medium_bg = Medium(permittivity=2)
@@ -323,6 +323,7 @@ def test_sim_plane_wave_error():
             medium=medium_bg,
             structures=[box_transparent, box],
             sources=[src],
+            run_time=1e-12,
         )
 
 

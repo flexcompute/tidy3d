@@ -1,9 +1,10 @@
 """Storing tidy3d data at it's most fundamental level as xr.DataArray objects"""
 from __future__ import annotations
 
-from typing import Dict, Tuple
+from typing import Dict, Tuple, Union
 from abc import ABC
 
+import h5py
 import xarray as xr
 import numpy as np
 import pydantic as pd
@@ -34,12 +35,47 @@ class DataArray(Tidy3dBaseModel, ABC):
     _dims: Tuple[str, str] = ()
     _data_attrs: Dict[str, str] = {}
 
-    data: xr.DataArray = pd.Field(
+    data: Union[xr.DataArray, dict] = pd.Field(
         ...,
         title="Data Array",
         description="An ``xarray.DataArray`` object storing a multi-dimensional array "
         "with labelled coordinates.",
     )
+
+    @pd.validator("data", always=True)
+    def _convert_to_data_array(cls, val):
+        """Make sure class dims match the data values."""
+
+        # loading a regular xr.DataArray
+        if isinstance(val, xr.DataArray):
+            return val
+
+        if isinstance(val, dict):
+
+            # data is in a separate file
+            if val.get("tag") == "DATA_ITEM":
+
+                fname = val.get("data_file")
+                group_name = val.get("group_name")
+
+                fhandle = h5py.File(fname, "r")
+                group_data = fhandle[group_name]
+                coords = group_data["coords"]
+                data = group_data["data"]
+                dims = cls.unpack_dataset(group_data["dims"])
+
+            # coords, data stored in dictionary (ie json or hdf5 directly)
+            else:
+                coords = val.get("coords")
+                data = val.get("data")
+                dims = val.get("dims")
+
+            # construct the data array
+            coords = {key: np.array(val) for key, val in coords.items()}
+            data = np.array(data)
+            return xr.DataArray(data, coords=coords, dims=dims)
+
+        raise ValidationError(f"unexpected value '{val}' passed to field expecting 'xr.DataArray'.")
 
     @pd.validator("data", always=True)
     def _check_dims(cls, val):
@@ -60,12 +96,6 @@ class DataArray(Tidy3dBaseModel, ABC):
             attrs = DIM_ATTRS.get(coord_name)
             val.coords[coord_name].attrs = attrs
         return val
-
-    # def __eq__(self, other) -> bool:
-    #     """Whether two data array objects are equal."""
-    #     if not isinstance(other, DataArray):
-    #         return False
-    #     return np.all(self.data.data == other.data.data)
 
 
 class ScalarFieldDataArray(DataArray):

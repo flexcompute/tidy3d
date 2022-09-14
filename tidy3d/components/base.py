@@ -533,12 +533,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         elif isinstance(value, np.ndarray) and (value.dtype in ("<U1", "<U10")):
             value = value.tolist()
 
-        try:
-            _ = hdf5_group.create_dataset(name=key, data=value)
-        except:
-            import pdb
-
-            pdb.set_trace()
+        _ = hdf5_group.create_dataset(name=key, data=value)
 
     def add_to_handle(self, hdf5_group: h5py.Group) -> None:
         """Saves a :class:`.Tidy3dBaesModel` instance to an hdf5 group,
@@ -629,7 +624,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
             if isinstance(self_val, (np.ndarray, xr.DataArray)):
                 return np.all(self_val == other_val)
 
-            elif isinstance(self_val, dict) and isinstance(other_val, dict):
+            if isinstance(self_val, dict) and isinstance(other_val, dict):
                 return self._equal_dicts(self_val, other_val)
 
             return self_val == other_val
@@ -677,7 +672,8 @@ class Tidy3dBaseModel(pydantic.BaseModel):
                         data_dict = {
                             "data": x.data,
                             "coords": coords,
-                            TYPE_TAG_STR: x.__class__.__name__,
+                            "dims": np.array(x.dims),
+                            TYPE_TAG_STR: "xr.DataArray",
                         }
                         self._save_group_data(data_dict=data_dict, hdf5_group=group)
                     return dict(group_name=group_name, data_file=data_file, tag="DATA_ITEM")

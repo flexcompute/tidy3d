@@ -197,7 +197,7 @@ def test_empty_io():
     field_data = td.FieldTimeData(**fields)
     field_data.to_file("tests/tmp/field_data.hdf5")
     field_data = td.FieldTimeData.from_file("tests/tmp/field_data.hdf5")
-    assert field_data.Ex.size == 0
+    assert field_data.Ex.data.size == 0
 
 
 def test_mode_solver_plot_field():
