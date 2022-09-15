@@ -80,6 +80,21 @@ class AbstractMedium(ABC, Tidy3dBaseModel):
             Complex-valued relative permittivity evaluated at ``frequency``.
         """
 
+    def nk_model(self, frequency: float) -> Tuple[float, float]:
+        """Real and imaginary parts of the refactive index as a function of frequency.
+
+        Parameters
+        ----------
+        frequency : float
+            Frequency to evaluate permittivity at (Hz).
+        Returns
+        -------
+        Tuple[float, float]
+            Real part (n) and imaginary part (k) of refractive index of medium.
+        """
+        eps_complex = self.eps_model(frequency=frequency)
+        return self.eps_complex_to_nk(eps_complex)
+
     @ensure_freq_in_range
     def eps_diagonal(self, frequency: float) -> Tuple[complex, complex, complex]:
         """Main diagonal of the complex-valued permittivity tensor as a function of frequency.
