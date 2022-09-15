@@ -8,6 +8,8 @@ from tidy3d.components.data.data_array import ScalarFieldDataArray, ScalarFieldT
 from tidy3d.components.data.data_array import ScalarModeFieldDataArray
 from tidy3d.components.data.data_array import ModeAmpsDataArray, ModeIndexDataArray
 from tidy3d.components.data.data_array import FluxDataArray, FluxTimeDataArray
+from tidy3d.components.data.data_array import Near2FarAngleDataArray, Near2FarKSpaceDataArray
+from tidy3d.components.data.data_array import Near2FarCartesianDataArray
 from tidy3d.components.source import PointDipole, GaussianPulse, ModeSource
 from tidy3d.components.simulation import Simulation
 from tidy3d.components.grid.grid_spec import GridSpec
@@ -160,6 +162,37 @@ def make_flux_time_data_array():
     return FluxTimeDataArray(data=data_array)
 
 
+def make_n2f_angle_data_array():
+    f = np.linspace(1e14, 2e14, 10)
+    theta = np.linspace(0, np.pi, 10)
+    phi = np.linspace(0, 2 * np.pi, 20)
+    coords_tp = dict(theta=theta, phi=phi, f=f)
+    values_tp = (1 + 1j) * np.random.random((len(theta), len(phi), len(f)))
+    data_array = xr.DataArray(values_tp, coords=coords_tp)
+    return Near2FarAngleDataArray(data=data_array)
+
+
+def make_n2f_cartesian_data_array():
+    f = np.linspace(1e14, 2e14, 10)
+    x = np.linspace(0, 5, 10)
+    y = np.linspace(0, 10, 20)
+    coords_xy = dict(x=x, y=y, f=f)
+    values_xy = (1 + 1j) * np.random.random((len(x), len(y), len(f)))
+    data_array = xr.DataArray(values_xy, coords=coords_xy)
+    return Near2FarCartesianDataArray(data=data_array)
+
+
+def make_n2f_kspace_data_array():
+
+    f = np.linspace(1e14, 2e14, 10)
+    ux = np.linspace(0, 5, 10)
+    uy = np.linspace(0, 10, 20)
+    coords_u = dict(ux=ux, uy=uy, f=f)
+    values_u = (1 + 1j) * np.random.random((len(ux), len(uy), len(f)))
+    data_array = xr.DataArray(values_u, coords=coords_u)
+    return Near2FarKSpaceDataArray(data=data_array)
+
+
 """ Test that they work """
 
 
@@ -200,12 +233,27 @@ def test_mode_index_data_array():
 
 def test_flux_data_array():
     data = make_flux_data_array()
-    data = data.data.interp(f=1.5e14)
+    _ = data.data.interp(f=1.5e14)
 
 
 def test_flux_time_data_array():
     data = make_flux_time_data_array()
-    data = data.data.interp(t=1e-13)
+    _ = data.data.interp(t=1e-13)
+
+
+def test_n2f_angle_data_array():
+    data = make_n2f_angle_data_array()
+    _ = data.data.interp(phi=0.0)
+
+
+def test_n2f_cartesian_data_array():
+    data = make_n2f_cartesian_data_array()
+    _ = data.data.interp(x=0.0)
+
+
+def test_n2f_kspace_data_array():
+    data = make_n2f_kspace_data_array()
+    _ = data.data.interp(ux=0.0)
 
 
 def test_attrs():

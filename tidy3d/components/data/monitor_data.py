@@ -1,3 +1,4 @@
+# pylint:disable=too-many-lines
 """ Monitor Level Data, store the DataArrays associated with a single monitor."""
 from __future__ import annotations
 
@@ -29,14 +30,14 @@ class MonitorData(Tidy3dBaseModel, ABC):
     monitor: MonitorType = pd.Field(
         ...,
         title="Monitor",
-        description="Monitor associated with the data.",
+        description=":class:`.Monitor` associated with the data.",
         descriminator=TYPE_TAG_STR,
     )
 
     dataset: Dataset = pd.Field(
         ...,
         title="Dataset",
-        description="Dataset corresponding to the monitor.",
+        description=":class:`.Dataset` storing the data as fields.",
         descriminator=TYPE_TAG_STR,
     )
 
@@ -125,6 +126,41 @@ class AbstractFieldMonitorData(MonitorData, ABC):
 
         new_dataset = self.dataset.copy(update=new_fields)
         return self.copy(update=dict(dataset=new_dataset))
+
+    def get_field_data_array(self, field_name: str) -> xr.DataArray:
+        """Get the scalar field data associated with the string."""
+        field_component = self.dataset.field_components.get(field_name)
+        return None if field_component is None else field_component.data
+
+    @property
+    def Ex(self) -> xr.DataArray:
+        """x-component of electric field."""
+        return self.get_field_data_array("Ex")
+
+    @property
+    def Ey(self) -> xr.DataArray:
+        """y-component of electric field."""
+        return self.get_field_data_array("Ey")
+
+    @property
+    def Ez(self) -> xr.DataArray:
+        """z-component of electric field."""
+        return self.get_field_data_array("Ez")
+
+    @property
+    def Hx(self) -> xr.DataArray:
+        """x-component of magnetic field."""
+        return self.get_field_data_array("Hx")
+
+    @property
+    def Hy(self) -> xr.DataArray:
+        """y-component of magnetic field."""
+        return self.get_field_data_array("Hy")
+
+    @property
+    def Hz(self) -> xr.DataArray:
+        """z-component of magnetic field."""
+        return self.get_field_data_array("Hz")
 
 
 class FieldMonitorData(AbstractFieldMonitorData):
@@ -216,6 +252,11 @@ class ModeSolverMonitorData(AbstractFieldMonitorData):
     monitor: ModeSolverMonitor
     dataset: ModeSolverData
 
+    @property
+    def n_complex(self) -> xr.DataArray:
+        """Effective index as a function of frequency and mode index."""
+        return self.dataset.n_complex.data
+
     def plot_field(self, *args, **kwargs):
         """Warn user to use the :class:`.ModeSolver` ``plot_field`` function now."""
         raise DeprecationWarning(
@@ -245,6 +286,21 @@ class PermittivityMonitorData(AbstractFieldMonitorData):
 
     monitor: PermittivityMonitor
     dataset: PermittivityData
+
+    @property
+    def eps_xx(self) -> xr.DataArray:
+        """xx-component of relative perittivity tensor as a function of space and frequency."""
+        return self.dataset.eps_xx.data
+
+    @property
+    def eps_yy(self) -> xr.DataArray:
+        """yy-component of relative perittivity tensor as a function of space and frequency."""
+        return self.dataset.eps_yy.data
+
+    @property
+    def eps_zz(self) -> xr.DataArray:
+        """zz-component of relative perittivity tensor as a function of space and frequency."""
+        return self.dataset.eps_zz.data
 
 
 class ModeMonitorData(MonitorData):
@@ -276,6 +332,16 @@ class ModeMonitorData(MonitorData):
     monitor: ModeMonitor
     dataset: ModeData
 
+    @property
+    def n_complex(self) -> xr.DataArray:
+        """Effective index as a function of frequency and mode index."""
+        return self.dataset.n_complex.data
+
+    @property
+    def amps(self) -> xr.DataArray:
+        """Modal amplitudes as a function of direction, frequency, and mode index."""
+        return self.dataset.amps.data
+
     def normalize(self, source_spectrum_fn) -> ModeData:
         """Return copy of self after normalization is applied using source spectrum function."""
         if self.dataset.amps is None:
@@ -306,6 +372,11 @@ class FluxMonitorData(MonitorData):
     monitor: FluxMonitor
     dataset: FluxData
 
+    @property
+    def flux(self) -> xr.DataArray:
+        """Flux as a function of frequency."""
+        return self.dataset.flux.data
+
     def normalize(self, source_spectrum_fn) -> FluxData:
         """Return copy of self after normalization is applied using source spectrum function."""
         source_freq_amps = source_spectrum_fn(self.dataset.flux.data.f)
@@ -334,12 +405,37 @@ class FluxTimeMonitorData(MonitorData):
     monitor: FluxTimeMonitor
     dataset: FluxTimeData
 
+    @property
+    def flux(self) -> xr.DataArray:
+        """Flux as a function of time."""
+        return self.dataset.flux.data
+
 
 class AbstractNear2FarMonitorData(MonitorData, ABC):
     """Collection of radiation vectors in the frequency domain."""
 
     monitor: Union[Near2FarAngleMonitor, Near2FarCartesianMonitor, Near2FarKSpaceMonitor]
     dataset: Union[Near2FarAngleData, Near2FarCartesianData, Near2FarKSpaceData]
+
+    @property
+    def Ltheta(self) -> xr.DataArray:
+        """theta-component of the 'L' radiation vector."""
+        return self.dataset.Ltheta.data
+
+    @property
+    def Lphi(self) -> xr.DataArray:
+        """phi-component of the 'L' radiation vector."""
+        return self.dataset.Lphi.data
+
+    @property
+    def Ntheta(self) -> xr.DataArray:
+        """theta-component of the 'N' radiation vector."""
+        return self.dataset.Ntheta.data
+
+    @property
+    def Nphi(self) -> xr.DataArray:
+        """phi-component of the 'N' radiation vector."""
+        return self.dataset.Nphi.data
 
     def normalize(
         self, source_spectrum_fn: Callable[[float], complex]
@@ -719,7 +815,7 @@ MonitorDataTypes = (
     ModeMonitorData,
     FluxMonitorData,
     FluxTimeMonitorData,
-    Near2FarAngleData,
-    Near2FarCartesianData,
-    Near2FarKSpaceData,
+    Near2FarAngleMonitorData,
+    Near2FarCartesianMonitorData,
+    Near2FarKSpaceMonitorData,
 )

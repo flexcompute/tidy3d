@@ -2,26 +2,22 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Union, Dict, Callable
+from typing import Union, Dict, Callable, List
 import xarray as xr
 import numpy as np
 import pydantic as pd
-
-from ..base import Tidy3dBaseModel
-from ..types import Axis
-from ...log import DataError
 
 from .data_array import ScalarFieldDataArray, ScalarFieldTimeDataArray, ScalarModeFieldDataArray
 from .data_array import FluxTimeDataArray, FluxDataArray, ModeIndexDataArray, ModeAmpsDataArray
 from .data_array import Near2FarCartesianDataArray, Near2FarKSpaceDataArray, Near2FarAngleDataArray
 from .data_array import DataArray
+from ..base import Tidy3dBaseModel
+from ..types import Axis
+from ...log import DataError
 
 
 class Dataset(Tidy3dBaseModel, ABC):
     """Stores a collection of ``DataArray`` objects as fields."""
-
-
-FieldDataArray = Union[ScalarFieldDataArray, ScalarFieldTimeDataArray, ScalarModeFieldDataArray]
 
 
 class AbstractFieldData(Dataset, ABC):
@@ -39,27 +35,29 @@ class AbstractFieldData(Dataset, ABC):
 
     @property
     @abstractmethod
-    def symmetry_eigenvalues(self) -> Dict[str, Callable[[Axis], float]]:
+    def symmetry_eigenvalues(self) -> Dict[str, Union[Callable[[Axis], float], None]]:
         """Maps field components to their (positive) symmetry eigenvalues."""
 
-    def colocate(self, x=None, y=None, z=None) -> xr.Dataset:
+    def colocate(
+        self, x: List[float] = None, y: List[float] = None, z: List[float] = None
+    ) -> xr.Dataset:
         """colocate all of the data at a set of x, y, z coordinates.
 
         Parameters
         ----------
-        x : Optional[array-like] = None
+        x : List[float] = None
             x coordinates of locations.
             If not supplied, does not try to colocate on this dimension.
-        y : Optional[array-like] = None
+        y : List[float] = None
             y coordinates of locations.
             If not supplied, does not try to colocate on this dimension.
-        z : Optional[array-like] = None
+        z : List[float] = None
             z coordinates of locations.
             If not supplied, does not try to colocate on this dimension.
 
         Returns
         -------
-        xr.Dataset
+        ``xr.Dataset``
             Dataset containing all fields at the same spatial locations.
             For more details refer to `xarray's Documentaton <https://tinyurl.com/cyca3krz>`_.
 
@@ -84,10 +82,10 @@ class AbstractFieldData(Dataset, ABC):
                 coord_data = field_data.data.coords[coord_name]
                 if coord_data.size == 1:
                     raise DataError(
-                        f"colocate given {coord_name}={coords_supplied}, but "
-                        f"data only has one coordinate at {coord_name}={coord_data.values[0]}. "
+                        f"colocate given '{coord_name}={coords_supplied}', but "
+                        f"data only has one coordinate at '{coord_name}={coord_data.values[0]}'. "
                         "Therefore, can't colocate along this dimension. "
-                        f"supply {coord_name}=None to skip it."
+                        f"supply '{coord_name}=None' to skip it."
                     )
 
             data_array = field_data.data.interp(**supplied_coord_map, kwargs={"bounds_error": True})
@@ -143,10 +141,10 @@ class ElectromagneticFieldData(AbstractFieldData, ABC):
     @property
     def grid_locations(self) -> Dict[str, str]:
         """Maps field components to the string key of their grid locations on the yee lattice."""
-        return dict(Ex="Ex", Ey="Ey", Ez="Ez", Hx="Hx", Hy="Hy", Hz="Hz")
+        return {field_name: field_name for field_name in ("Ex", "Ey", "Ez", "Hx", "Hy", "Hz")}
 
     @property
-    def symmetry_eigenvalues(self) -> Dict[str, Callable[[Axis], float]]:
+    def symmetry_eigenvalues(self) -> Dict[str, Union[Callable[[Axis], float], None]]:
         """Maps field components to their (positive) symmetry eigenvalues."""
 
         return dict(
@@ -321,7 +319,7 @@ class ModeSolverData(ElectromagneticFieldData):
         return self.n_complex.data.imag
 
     def sel_mode_index(self, mode_index: pd.NonNegativeInt) -> FieldData:
-        """Return :class:`.FieldData` for the specificed mode index."""
+        """Return :class:`.FieldData` with the specificed mode index selected from the data."""
 
         scalar_fields = {}
         for field_name, scalar_field_data in self.field_components.items():
@@ -331,7 +329,7 @@ class ModeSolverData(ElectromagneticFieldData):
         return FieldData(**scalar_fields)
 
     def plot_field(self, *args, **kwargs):
-        """Warn user to use the :class:`.ModeSolver` ``plot_field`` function now."""
+        """Warn user to use the ``plot_field`` function from :class:`.ModeSolver` instead."""
         raise DeprecationWarning(
             "The 'plot_field()' method was moved to the 'ModeSolver' object."
             "Once the 'ModeSolver' is contructed, one may call '.plot_field()' on the object and "
@@ -365,24 +363,24 @@ class PermittivityData(AbstractFieldData):
         return dict(eps_xx="Ex", eps_yy="Ey", eps_zz="Ez")
 
     @property
-    def symmetry_eigenvalues(self) -> Dict[str, Callable[[Axis], float]]:
+    def symmetry_eigenvalues(self) -> Dict[str, Union[Callable[[Axis], float], None]]:
         """Maps field components to their (positive) symmetry eigenvalues."""
         return dict(eps_xx=None, eps_yy=None, eps_zz=None)
 
     eps_xx: ScalarFieldDataArray = pd.Field(
         ...,
         title="Epsilon xx",
-        description="Spatial distribution of the x-component of the electric field.",
+        description="Spatial distribution of the xx-component of the relative permittivity tensor.",
     )
     eps_yy: ScalarFieldDataArray = pd.Field(
         ...,
         title="Epsilon yy",
-        description="Spatial distribution of the y-component of the electric field.",
+        description="Spatial distribution of the yt-component of the relative permittivity tensor.",
     )
     eps_zz: ScalarFieldDataArray = pd.Field(
         ...,
         title="Epsilon zz",
-        description="Spatial distribution of the z-component of the electric field.",
+        description="Spatial distribution of the zz-component of the relative permittivity tensor.",
     )
 
 
@@ -464,22 +462,22 @@ class AbstractNear2FarData(Dataset, ABC):
     Ntheta: N2FDataArray = pd.Field(
         None,
         title="Ntheta",
-        description="Spatial distribution of the theta-component of the N radiation vector.",
+        description="Spatial distribution of the theta-component of the 'N' radiation vector.",
     )
     Nphi: N2FDataArray = pd.Field(
         None,
         title="Nphi",
-        description="Spatial distribution of phi-component of the N radiation vector.",
+        description="Spatial distribution of phi-component of the 'N' radiation vector.",
     )
     Ltheta: N2FDataArray = pd.Field(
         None,
         title="Ltheta",
-        description="Spatial distribution of theta-component of the L radiation vector.",
+        description="Spatial distribution of theta-component of the 'L' radiation vector.",
     )
     Lphi: N2FDataArray = pd.Field(
         None,
         title="Lphi",
-        description="Spatial distribution of phi-component of the L radiation vector.",
+        description="Spatial distribution of phi-component of the 'L' radiation vector.",
     )
 
     @property

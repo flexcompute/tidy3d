@@ -13,11 +13,15 @@ from tidy3d.log import DataError
 from tidy3d.components.data.dataset import FieldData, FieldTimeData, PermittivityData
 from tidy3d.components.data.dataset import ModeSolverData, ModeData
 from tidy3d.components.data.dataset import FluxData, FluxTimeData
+from tidy3d.components.data.dataset import Near2FarAngleData, Near2FarKSpaceData
+from tidy3d.components.data.dataset import Near2FarCartesianData
 
 from .test_data_arrays import make_scalar_field_data_array, make_scalar_field_time_data_array
 from .test_data_arrays import make_scalar_mode_field_data_array
 from .test_data_arrays import make_flux_data_array, make_flux_time_data_array
 from .test_data_arrays import make_mode_amps_data_array, make_mode_index_data_array
+from .test_data_arrays import make_n2f_angle_data_array, make_n2f_kspace_data_array
+from .test_data_arrays import make_n2f_cartesian_data_array
 from ..utils import clear_tmp
 
 # data array instances
@@ -79,6 +83,40 @@ def make_flux_time_data():
     return FluxTimeData(flux=FLUX_TIME.copy())
 
 
+def make_n2f_angle_data():
+    """Make sure all the near-to-far data structures can be created."""
+
+    scalar_field_tp = make_n2f_angle_data_array()
+    return Near2FarAngleData(
+        Ntheta=scalar_field_tp,
+        Nphi=scalar_field_tp,
+        Ltheta=scalar_field_tp,
+        Lphi=scalar_field_tp,
+    )
+
+
+def make_n2f_cartesian_data():
+
+    scalar_field_xy = make_n2f_cartesian_data_array()
+    return Near2FarCartesianData(
+        Ntheta=scalar_field_xy,
+        Nphi=scalar_field_xy,
+        Ltheta=scalar_field_xy,
+        Lphi=scalar_field_xy,
+    )
+
+
+def make_n2f_kspace_data():
+
+    scalar_field_u = make_n2f_kspace_data_array()
+    return Near2FarKSpaceData(
+        Ntheta=scalar_field_u,
+        Nphi=scalar_field_u,
+        Ltheta=scalar_field_u,
+        Lphi=scalar_field_u,
+    )
+
+
 """ Test them out """
 
 
@@ -123,6 +161,21 @@ def test_flux_data():
 def test_flux_time_data():
     data = make_flux_time_data()
     _ = data.flux
+
+
+def test_n2f_angle_data():
+    data = make_n2f_angle_data()
+    _ = data.Lphi
+
+
+def test_n2f_kspace_data():
+    data = make_n2f_kspace_data()
+    _ = data.Lphi
+
+
+def test_n2f_cartesian_data():
+    data = make_n2f_cartesian_data()
+    _ = data.Lphi
 
 
 def test_colocate():

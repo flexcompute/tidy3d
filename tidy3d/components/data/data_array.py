@@ -39,17 +39,25 @@ class DataArray(Tidy3dBaseModel, ABC):
         ...,
         title="Data Array",
         description="An ``xarray.DataArray`` object storing a multi-dimensional array "
-        "with labelled coordinates.",
+        "with labelled coordinates. "
+        "May also be a ``dict`` containing '``data``', '``coords``', and '``dims``', which will be "
+        "passed to ``xr.DataArray``s initalizer and stored as a ``xr.DataArray`` in this field. "
+        "Alternatively, if the data is stored in a separate `.hdf5` file, this ``dict`` may contain"
+        " items of '``tag == 'DATA_ITEM``', '``data_file : str``', and '``group_name : str``', "
+        "indicating the filename and hdf5 group name to load from. "
+        "Note: internally, a hash result of ``dash.base.tokenize(x)`` is used as the ``group_name``"
+        ", where '``x``' is the ``xr.DataArray`` instance.",
     )
 
     @pd.validator("data", always=True)
-    def _convert_to_data_array(cls, val):
+    def _convert_to_data_array(cls, val) -> xr.DataArray:
         """Make sure class dims match the data values."""
 
         # loading a regular xr.DataArray
         if isinstance(val, xr.DataArray):
             return val
 
+        # loading xr.DataArray from a dictionary
         if isinstance(val, dict):
 
             # data is in a separate file
