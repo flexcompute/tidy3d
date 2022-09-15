@@ -465,6 +465,30 @@ def test_polyslab_merge():
     assert len(polyslabs_touching) == 1, "polyslabs didnt merge correctly."
 
 
+@pytest.mark.parametrize("axis", [0, 1, 2])
+def test_polyslab_axis(axis):
+    ps = PolySlab(slab_bounds=(-1, 1), vertices=((-5, -5), (-5, 5), (5, 5), (5, -5)), axis=axis)
+
+    # bound test
+    bounds_ideal = [-5, -5]
+    bounds_ideal.insert(axis, -1)
+    bounds_ideal = np.array(bounds_ideal)
+    np.allclose(ps.bounds[0], bounds_ideal)
+    np.allclose(ps.bounds[1], -bounds_ideal)
+
+    # inside
+    point = [0, 0]
+    point.insert(axis, 3)
+    assert ps.inside(point[0], point[1], point[2]) == False
+
+    # intersections
+    plane_coord = [None] * 3
+    plane_coord[axis] = 3
+    assert ps.intersects_plane(x=plane_coord[0], y=plane_coord[1], z=plane_coord[2]) == False
+    plane_coord[axis] = -3
+    assert ps.intersects_plane(x=plane_coord[0], y=plane_coord[1], z=plane_coord[2]) == False
+
+
 """ medium """
 
 
