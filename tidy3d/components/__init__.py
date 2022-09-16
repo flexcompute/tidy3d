@@ -12,7 +12,7 @@ from .medium import Medium, PoleResidue, Sellmeier, Debye, Drude, Lorentz, Aniso
 from .medium import AbstractMedium, DispersiveMedium, PECMedium
 
 # structure
-from .structure import Structure
+from .structure import Structure, MeshOverrideStructure
 
 # mode
 from .mode import ModeSpec

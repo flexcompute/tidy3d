@@ -14,7 +14,7 @@ from .components import Medium, PoleResidue, AnisotropicMedium, PEC, PECMedium
 from .components import Sellmeier, Debye, Drude, Lorentz
 
 # structures
-from .components import Structure
+from .components import Structure, MeshOverrideStructure
 
 # modes
 from .components import ModeSpec
