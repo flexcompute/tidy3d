@@ -29,6 +29,9 @@ from .test_dataset import make_n2f_cartesian_data
 
 from .test_data_arrays import FIELD_MONITOR, FIELD_TIME_MONITOR, MODE_SOLVE_MONITOR
 from .test_data_arrays import MODE_MONITOR, PERMITTIVITY_MONITOR, FLUX_MONITOR, FLUX_TIME_MONITOR
+from .test_data_arrays import N2F_CARTESIAN_MONITOR, N2F_ANGLE_MONITOR, N2F_KSPACE_MONITOR
+
+
 from .test_data_arrays import SIM_SYM
 from ..utils import clear_tmp
 
@@ -66,55 +69,17 @@ def make_flux_time_monitor_data():
 
 
 def make_n2f_angle_monitor_data():
-    """Make sure all the near-to-far data structures can be created."""
-    dataset = make_n2f_angle_data()
-    coords = dataset.Lphi.data.coords
-    monitor_tp = Near2FarAngleMonitor(
-        center=(1, 2, 3),
-        size=(2, 2, 2),
-        freqs=coords["f"],
-        name="n2f_monitor",
-        phi=coords["phi"],
-        theta=coords["theta"],
-    )
-    return Near2FarAngleMonitorData(
-        monitor=monitor_tp,
-        dataset=dataset,
-    )
+    return Near2FarAngleMonitorData(monitor=N2F_ANGLE_MONITOR, dataset=make_n2f_angle_data())
 
 
 def make_n2f_cartesian_monitor_data():
-
-    dataset = make_n2f_cartesian_data()
-    coords = dataset.Lphi.data.coords
-    monitor_xy = Near2FarCartesianMonitor(
-        center=(1, 2, 3),
-        size=(2, 2, 2),
-        freqs=coords["f"],
-        name="n2f_monitor",
-        x=coords["x"],
-        y=coords["y"],
-        plane_axis=2,
-        plane_distance=50,
+    return Near2FarCartesianMonitorData(
+        monitor=N2F_CARTESIAN_MONITOR, dataset=make_n2f_cartesian_data()
     )
-    return Near2FarCartesianMonitorData(monitor=monitor_xy, dataset=dataset)
 
 
 def make_n2f_kspace_monitor_data():
-
-    dataset = make_n2f_kspace_data()
-
-    coords = dataset.Lphi.data.coords
-    monitor_u = Near2FarKSpaceMonitor(
-        center=(1, 2, 3),
-        size=(2, 2, 2),
-        freqs=coords["f"],
-        name="n2f_monitor",
-        ux=coords["ux"],
-        uy=coords["uy"],
-        u_axis=2,
-    )
-    return Near2FarKSpaceMonitorData(monitor=monitor_u, dataset=dataset)
+    return Near2FarKSpaceMonitorData(monitor=N2F_KSPACE_MONITOR, dataset=make_n2f_kspace_data())
 
 
 """ Test them out """

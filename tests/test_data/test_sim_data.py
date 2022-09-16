@@ -19,10 +19,10 @@ from .test_monitor_data import make_field_monitor_data, make_field_time_monitor_
 from .test_monitor_data import make_permittivity_monitor_data
 from .test_monitor_data import make_mode_monitor_data, make_mode_solver_monitor_data
 from .test_monitor_data import make_flux_monitor_data, make_flux_time_monitor_data
+from .test_monitor_data import make_n2f_cartesian_monitor_data, make_n2f_angle_monitor_data
+from .test_monitor_data import make_n2f_kspace_monitor_data
 
-from .test_data_arrays import FIELD_MONITOR, FIELD_TIME_MONITOR, MODE_SOLVE_MONITOR
-from .test_data_arrays import MODE_MONITOR, PERMITTIVITY_MONITOR, FLUX_MONITOR, FLUX_TIME_MONITOR
-from .test_data_arrays import SIM, SIM_SYM
+from .test_data_arrays import FIELD_MONITOR, SIM, SIM_SYM
 
 from ..utils import clear_tmp
 
@@ -38,10 +38,16 @@ MODE = make_mode_monitor_data()
 MODE_SOLVER = make_mode_solver_monitor_data()
 FLUX = make_flux_monitor_data()
 FLUX_TIME = make_flux_time_monitor_data()
+N2F_CARTESIAN = make_n2f_cartesian_monitor_data()
+N2F_ANGLE = make_n2f_angle_monitor_data()
+N2F_KSPACE = make_n2f_kspace_monitor_data()
 
 # for constructing SimulationData
-MONITOR_DATA = (FIELD, FIELD_TIME, MODE_SOLVER, PERMITTIVITY, MODE, FLUX, FLUX_TIME)
-MONITOR_DATA_SYM = (FIELD_SYM, FIELD_TIME_SYM, MODE_SOLVER, PERMITTIVITY_SYM, MODE, FLUX, FLUX_TIME)
+MONITOR_DATA = [FIELD, FIELD_TIME, PERMITTIVITY]
+MONITOR_DATA_SYM = [FIELD_SYM, FIELD_TIME_SYM, PERMITTIVITY_SYM]
+OTHER_MONITOR_DATA = [MODE_SOLVER, MODE, FLUX, FLUX_TIME, N2F_CARTESIAN, N2F_ANGLE, N2F_KSPACE]
+MONITOR_DATA += OTHER_MONITOR_DATA
+MONITOR_DATA_SYM += OTHER_MONITOR_DATA
 
 
 def make_sim_data(symmetry: bool = True):
@@ -182,7 +188,10 @@ def test_to_json():
     sim_data = make_sim_data()
     FNAME = "tests/tmp/sim_data_refactor.json"
     DATA_FILE = "tests/tmp/sim_extra_data.hdf5"
+    # this works
     sim_data.to_file(fname=FNAME, data_file=DATA_FILE)
+    # this hangs
+    sim_data.to_file(fname=FNAME)
     sim_data2 = SimulationData.from_file(fname=FNAME)
     assert sim_data == sim_data2
 
@@ -218,6 +227,10 @@ def test_to_hdf5():
     FNAME = "tests/tmp/sim_data_refactor.hdf5"
     sim_data.to_file(fname=FNAME)
     sim_data2 = SimulationData.from_file(fname=FNAME)
+
+    # The type of direction changes after IO
+    assert sim_data["mode"].amps.direction == sim_data2["mode"].amps.direction
+
     assert sim_data == sim_data2
 
 

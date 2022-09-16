@@ -16,7 +16,8 @@ from tidy3d.components.grid.grid_spec import GridSpec
 from tidy3d.components.mode import ModeSpec
 from tidy3d.components.monitor import FieldMonitor, FieldTimeMonitor, PermittivityMonitor
 from tidy3d.components.monitor import ModeSolverMonitor, ModeMonitor
-from tidy3d.components.monitor import FluxMonitor, FluxTimeMonitor
+from tidy3d.components.monitor import FluxMonitor, FluxTimeMonitor, Near2FarKSpaceMonitor
+from tidy3d.components.monitor import Near2FarCartesianMonitor, Near2FarAngleMonitor
 from tidy3d.components.monitor import MonitorType
 from tidy3d.components.structure import Structure
 from tidy3d.components.geometry import Box
@@ -32,7 +33,7 @@ SIZE_3D = (2, 4, 5)
 SIZE_2D = list(SIZE_3D)
 SIZE_2D[1] = 0
 MODE_SPEC = ModeSpec(num_modes=4)
-FREQS = [1e14, 2e14]
+FREQS = np.linspace(1e14, 2e14, 11)
 SOURCES = [
     PointDipole(source_time=GaussianPulse(freq0=FREQS[0], fwidth=1e14), polarization="Ex"),
     ModeSource(
@@ -56,14 +57,33 @@ MODE_MONITOR = ModeMonitor(size=SIZE_2D, name="mode", mode_spec=MODE_SPEC, freqs
 FLUX_MONITOR = FluxMonitor(size=SIZE_2D, freqs=FREQS, name="flux")
 FLUX_TIME_MONITOR = FluxTimeMonitor(size=SIZE_2D, interval=INTERVAL, name="flux_time")
 
+YS = np.linspace(0, 5, 10)
+XS = np.linspace(0, 10, 20)
+THETA = np.linspace(0, np.pi, 10)
+PHI = np.linspace(0, 2 * np.pi, 20)
+UX = np.linspace(0, 5, 10)
+UY = np.linspace(0, 10, 20)
+N2F_CARTESIAN_MONITOR = Near2FarCartesianMonitor(
+    size=SIZE_2D, freqs=FREQS, plane_axis=2, plane_distance=10, x=XS, y=YS, name="n2f_cart"
+)
+N2F_ANGLE_MONITOR = Near2FarAngleMonitor(
+    size=SIZE_2D, freqs=FREQS, theta=THETA, phi=PHI, name="n2f_angle"
+)
+N2F_KSPACE_MONITOR = Near2FarKSpaceMonitor(
+    size=SIZE_2D, freqs=FREQS, u_axis=2, ux=UX, uy=UY, name="n2f_kspace"
+)
+
 MONITORS = [
     FIELD_MONITOR,
     FIELD_TIME_MONITOR,
-    MODE_SOLVE_MONITOR,
     PERMITTIVITY_MONITOR,
+    MODE_SOLVE_MONITOR,
     MODE_MONITOR,
     FLUX_MONITOR,
     FLUX_TIME_MONITOR,
+    N2F_CARTESIAN_MONITOR,
+    N2F_ANGLE_MONITOR,
+    N2F_KSPACE_MONITOR,
 ]
 
 GRID_SPEC = GridSpec(wavelength=1.0)
@@ -89,7 +109,6 @@ SIM = Simulation(
     structures=STRUCTURES,
 )
 
-FS = np.linspace(1e14, 2e14, 11)
 TS = np.linspace(0, 1e-12, 11)
 MODE_INDICES = np.arange(0, 3)
 DIRECTIONS = ["+", "-"]
@@ -113,8 +132,8 @@ def get_xyz(
 
 def make_scalar_field_data_array(grid_key: str, symmetry=True):
     XS, YS, ZS = get_xyz(FIELD_MONITOR, grid_key, symmetry)
-    values = (1 + 1j) * np.random.random((len(XS), len(YS), len(ZS), len(FS)))
-    data_array = xr.DataArray(values, coords=dict(x=XS, y=YS, z=ZS, f=FS))
+    values = (1 + 1j) * np.random.random((len(XS), len(YS), len(ZS), len(FREQS)))
+    data_array = xr.DataArray(values, coords=dict(x=XS, y=YS, z=ZS, f=FREQS))
     return ScalarFieldDataArray(data=data_array)
 
 
@@ -127,32 +146,32 @@ def make_scalar_field_time_data_array(grid_key: str, symmetry=True):
 
 def make_scalar_mode_field_data_array(grid_key: str, symmetry=True):
     XS, YS, ZS = get_xyz(MODE_SOLVE_MONITOR, grid_key, symmetry)
-    values = np.random.random((len(XS), 1, len(ZS), len(FS), len(MODE_INDICES)))
+    values = np.random.random((len(XS), 1, len(ZS), len(FREQS), len(MODE_INDICES)))
 
     data_array = xr.DataArray(
-        values, coords=dict(x=XS, y=[0.0], z=ZS, f=FS, mode_index=MODE_INDICES)
+        values, coords=dict(x=XS, y=[0.0], z=ZS, f=FREQS, mode_index=MODE_INDICES)
     )
     return ScalarModeFieldDataArray(data=data_array)
 
 
 def make_mode_amps_data_array():
-    values = (1 + 1j) * np.random.random((len(DIRECTIONS), len(FS), len(MODE_INDICES)))
+    values = (1 + 1j) * np.random.random((len(DIRECTIONS), len(FREQS), len(MODE_INDICES)))
     data_array = xr.DataArray(
-        values, coords=dict(direction=DIRECTIONS, f=FS, mode_index=MODE_INDICES)
+        values, coords=dict(direction=DIRECTIONS, f=FREQS, mode_index=MODE_INDICES)
     )
     return ModeAmpsDataArray(data=data_array)
 
 
 def make_mode_index_data_array():
     f = np.linspace(2e14, 3e14, 1001)
-    values = (1 + 1j) * np.random.random((len(FS), len(MODE_INDICES)))
-    data_array = xr.DataArray(values, coords=dict(f=FS, mode_index=MODE_INDICES))
+    values = (1 + 1j) * np.random.random((len(FREQS), len(MODE_INDICES)))
+    data_array = xr.DataArray(values, coords=dict(f=FREQS, mode_index=MODE_INDICES))
     return ModeIndexDataArray(data=data_array)
 
 
 def make_flux_data_array():
-    values = np.random.random(len(FS))
-    data_array = xr.DataArray(values, coords=dict(f=FS))
+    values = np.random.random(len(FREQS))
+    data_array = xr.DataArray(values, coords=dict(f=FREQS))
     return FluxDataArray(data=data_array)
 
 
@@ -163,32 +182,22 @@ def make_flux_time_data_array():
 
 
 def make_n2f_angle_data_array():
-    f = np.linspace(1e14, 2e14, 10)
-    theta = np.linspace(0, np.pi, 10)
-    phi = np.linspace(0, 2 * np.pi, 20)
-    coords_tp = dict(theta=theta, phi=phi, f=f)
-    values_tp = (1 + 1j) * np.random.random((len(theta), len(phi), len(f)))
+    coords_tp = dict(theta=THETA, phi=PHI, f=FREQS)
+    values_tp = (1 + 1j) * np.random.random((len(THETA), len(PHI), len(FREQS)))
     data_array = xr.DataArray(values_tp, coords=coords_tp)
     return Near2FarAngleDataArray(data=data_array)
 
 
 def make_n2f_cartesian_data_array():
-    f = np.linspace(1e14, 2e14, 10)
-    x = np.linspace(0, 5, 10)
-    y = np.linspace(0, 10, 20)
-    coords_xy = dict(x=x, y=y, f=f)
-    values_xy = (1 + 1j) * np.random.random((len(x), len(y), len(f)))
+    coords_xy = dict(x=XS, y=YS, f=FREQS)
+    values_xy = (1 + 1j) * np.random.random((len(XS), len(YS), len(FREQS)))
     data_array = xr.DataArray(values_xy, coords=coords_xy)
     return Near2FarCartesianDataArray(data=data_array)
 
 
 def make_n2f_kspace_data_array():
-
-    f = np.linspace(1e14, 2e14, 10)
-    ux = np.linspace(0, 5, 10)
-    uy = np.linspace(0, 10, 20)
-    coords_u = dict(ux=ux, uy=uy, f=f)
-    values_u = (1 + 1j) * np.random.random((len(ux), len(uy), len(f)))
+    coords_u = dict(ux=UX, uy=UY, f=FREQS)
+    values_u = (1 + 1j) * np.random.random((len(UX), len(UY), len(FREQS)))
     data_array = xr.DataArray(values_u, coords=coords_u)
     return Near2FarKSpaceDataArray(data=data_array)
 

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from abc import ABC
-from typing import Union, Tuple, Callable
+from typing import Union, Tuple, Callable, List
 import numpy as np
 import pydantic as pd
 import xarray as xr
@@ -161,6 +161,37 @@ class AbstractFieldMonitorData(MonitorData, ABC):
     def Hz(self) -> xr.DataArray:
         """z-component of magnetic field."""
         return self.get_field_data_array("Hz")
+
+    def colocate(
+        self, x: List[float] = None, y: List[float] = None, z: List[float] = None
+    ) -> xr.Dataset:
+        """colocate all of the data at a set of x, y, z coordinates.
+
+        Parameters
+        ----------
+        x : List[float] = None
+            x coordinates of locations.
+            If not supplied, does not try to colocate on this dimension.
+        y : List[float] = None
+            y coordinates of locations.
+            If not supplied, does not try to colocate on this dimension.
+        z : List[float] = None
+            z coordinates of locations.
+            If not supplied, does not try to colocate on this dimension.
+
+        Returns
+        -------
+        ``xr.Dataset``
+            Dataset containing all fields at the same spatial locations.
+            For more details refer to `xarray's Documentaton <https://tinyurl.com/cyca3krz>`_.
+
+        Note
+        ----
+        For many operations (such as flux calculations and plotting),
+        it is important that the fields are colocated at the same spatial locations.
+        Be sure to apply this method to your field data in those cases.
+        """
+        return self.dataset.colocate(x=x, y=y, z=z)
 
 
 class FieldMonitorData(AbstractFieldMonitorData):
@@ -443,8 +474,9 @@ class AbstractNear2FarMonitorData(MonitorData, ABC):
         """Return copy of self after normalization is applied using source spectrum function."""
         fields_norm = {}
         for field_name, field_data in self.dataset.field_components.items():
-            src_amps = source_spectrum_fn(field_data.f)
-            fields_norm[field_name] = field_data / src_amps
+            src_amps = source_spectrum_fn(field_data.data.f)
+            new_data_array = field_data.data / src_amps
+            fields_norm[field_name] = field_data.copy(update=dict(data=new_data_array))
         new_dataset = self.dataset.copy(update=fields_norm)
         return self.copy(update=dict(dataset=new_dataset))
 
