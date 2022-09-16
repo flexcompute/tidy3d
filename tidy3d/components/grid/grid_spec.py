@@ -10,10 +10,10 @@ import pydantic as pd
 from .grid import Coords1D, Coords, Grid
 from .mesher import GradedMesher, MesherType
 from ..base import Tidy3dBaseModel
-from ..types import Axis
+from ..types import Axis, annotate_type
 from ..boundary import Symmetry
 from ..source import SourceType
-from ..structure import Structure
+from ..structure import Structure, StructureType
 from ..geometry import Box
 from ...log import SetupError, log
 from ...constants import C_0, MICROMETER
@@ -26,7 +26,7 @@ class GridSpec1d(Tidy3dBaseModel, ABC):
     def make_coords(  # pylint:disable = too-many-arguments
         self,
         axis: Axis,
-        structures: List[Structure],
+        structures: List[StructureType],
         symmetry: Tuple[Symmetry, Symmetry, Symmetry],
         wavelength: pd.PositiveFloat,
         num_pml_layers: Tuple[pd.NonNegativeInt, pd.NonNegativeInt],
@@ -38,7 +38,7 @@ class GridSpec1d(Tidy3dBaseModel, ABC):
         ----------
         axis : Axis
             Axis of this direction.
-        structures : List[Structure]
+        structures : List[StructureType]
             List of structures present in simulation, the first one being the simulation domain.
         symmetry : Tuple[Symmetry, Symmetry, Symmetry]
             Reflection symmetry across a plane bisecting the simulation domain
@@ -84,7 +84,7 @@ class GridSpec1d(Tidy3dBaseModel, ABC):
     def _make_coords_initial(
         self,
         axis: Axis,
-        structures: List[Structure],
+        structures: List[StructureType],
         **kwargs,
     ) -> Coords1D:
         """Generate 1D coords to be used as grid boundaries, based on simulation parameters.
@@ -94,7 +94,7 @@ class GridSpec1d(Tidy3dBaseModel, ABC):
 
         Parameters
         ----------
-        structures : List[Structure]
+        structures : List[StructureType]
             List of structures present in simulation, the first one being the simulation domain.
         **kwargs
             Other arguments
@@ -151,7 +151,7 @@ class UniformGrid(GridSpec1d):
     def _make_coords_initial(
         self,
         axis: Axis,
-        structures: List[Structure],
+        structures: List[StructureType],
         **kwargs,
     ) -> Coords1D:
         """Uniform 1D coords to be used as grid boundaries.
@@ -160,7 +160,7 @@ class UniformGrid(GridSpec1d):
         ----------
         axis : Axis
             Axis of this direction.
-        structures : List[Structure]
+        structures : List[StructureType]
             List of structures present in simulation, the first one being the simulation domain.
         **kwargs:
             Other arguments all go here.
@@ -208,7 +208,7 @@ class CustomGrid(GridSpec1d):
     def _make_coords_initial(
         self,
         axis: Axis,
-        structures: List[Structure],
+        structures: List[StructureType],
         **kwargs,
     ) -> Coords1D:
         """Customized 1D coords to be used as grid boundaries.
@@ -217,7 +217,7 @@ class CustomGrid(GridSpec1d):
         ----------
         axis : Axis
             Axis of this direction.
-        structures : List[Structure]
+        structures : List[StructureType]
             List of structures present in simulation, the first one being the simulation domain.
         *kwargs
             Other arguments all go here.
@@ -277,6 +277,15 @@ class AutoGrid(GridSpec1d):
         lt=2.0,
     )
 
+    global_min_dl: pd.NonNegativeFloat = pd.Field(
+        0,
+        title="Lower bound of grid size",
+        description="Lower bound of the grid size along this dimension regardless of "
+        "structures present in the simulation, including override structures "
+        "with `enforced=True`. It is a soft bound, meaning that the actual minimal "
+        "grid size might be slightly smaller.",
+    )
+
     mesher: MesherType = pd.Field(
         GradedMesher(),
         title="Grid Construction Tool",
@@ -286,7 +295,7 @@ class AutoGrid(GridSpec1d):
     def _make_coords_initial(  # pylint:disable=too-many-arguments,arguments-differ,too-many-locals
         self,
         axis: Axis,
-        structures: List[Structure],
+        structures: List[StructureType],
         wavelength: float,
         symmetry: Symmetry,
         is_periodic: bool,
@@ -297,7 +306,7 @@ class AutoGrid(GridSpec1d):
         ----------
         axis : Axis
             Axis of this direction.
-        structures : List[Structure]
+        structures : List[StructureType]
             List of structures present in simulation.
         wavelength : float
             Free-space wavelength.
@@ -329,7 +338,11 @@ class AutoGrid(GridSpec1d):
 
         # parse structures
         interval_coords, max_dl_list = self.mesher.parse_structures(
-            axis, struct_list, wavelength, self.min_steps_per_wvl
+            axis,
+            struct_list,
+            wavelength,
+            self.min_steps_per_wvl,
+            self.global_min_dl,
         )
         # Put just a single pixel if 2D-like simulation
         if interval_coords.size == 1:
@@ -404,7 +417,7 @@ class GridSpec(Tidy3dBaseModel):
         units=MICROMETER,
     )
 
-    override_structures: Tuple[Structure, ...] = pd.Field(
+    override_structures: Tuple[annotate_type(StructureType), ...] = pd.Field(
         (),
         title="Grid specification override structures",
         description="A set of structures that is added on top of the simulation structures in "
@@ -506,7 +519,8 @@ class GridSpec(Tidy3dBaseModel):
         wavelength: pd.PositiveFloat = None,
         min_steps_per_wvl: pd.PositiveFloat = 10.0,
         max_scale: pd.PositiveFloat = 1.4,
-        override_structures: List[Structure] = (),
+        override_structures: List[StructureType] = (),
+        global_min_dl: pd.NonNegativeFloat = 0.0,
         mesher: MesherType = GradedMesher(),
     ) -> GridSpec:
         """Use the same :class:`AutoGrid` along each of the three directions.
@@ -521,10 +535,12 @@ class GridSpec(Tidy3dBaseModel):
             Minimal number of steps per wavelength in each medium.
         max_scale : pd.PositiveFloat, optional
             Sets the maximum ratio between any two consecutive grid steps.
-        override_structures : List[Structure]
+        override_structures : List[StructureType]
             A list of structures that is added on top of the simulation structures in
             the process of generating the grid. This can be used to refine the grid or make it
             coarser depending than the expected need for higher/lower resolution regions.
+        global_min_dl: pd.NonNegativeFloat
+            Lower bound of grid size.
         mesher : MesherType = GradedMesher()
             The type of mesher to use to generate the grid automatically.
 
@@ -534,7 +550,12 @@ class GridSpec(Tidy3dBaseModel):
             :class:`GridSpec` with the same automatic nonuniform grid settings in each direction.
         """
 
-        grid_1d = AutoGrid(min_steps_per_wvl=min_steps_per_wvl, max_scale=max_scale, mesher=mesher)
+        grid_1d = AutoGrid(
+            min_steps_per_wvl=min_steps_per_wvl,
+            max_scale=max_scale,
+            global_min_dl=global_min_dl,
+            mesher=mesher,
+        )
         return cls(
             wavelength=wavelength,
             grid_x=grid_1d,

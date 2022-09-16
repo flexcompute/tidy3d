@@ -4,6 +4,7 @@
 from abc import ABC, abstractmethod
 from typing import Tuple, List, Union, Dict
 from math import isclose
+from itertools import compress
 
 import pydantic as pd
 import numpy as np
@@ -13,7 +14,7 @@ from shapely.geometry import box as shapely_box
 
 from ..base import Tidy3dBaseModel
 from ..types import Axis, ArrayLike
-from ..structure import Structure
+from ..structure import Structure, MeshOverrideStructure, StructureType
 from ...log import SetupError, ValidationError
 from ...constants import C_0, fp_eps
 
@@ -24,12 +25,13 @@ class Mesher(Tidy3dBaseModel, ABC):
     """Abstract class for automatic meshing."""
 
     @abstractmethod
-    def parse_structures(
+    def parse_structures(  # pylint:disable=too-many-arguments
         self,
         axis: Axis,
-        structures: List[Structure],
+        structures: List[StructureType],
         wavelength: pd.PositiveFloat,
         min_steps_per_wvl: pd.NonNegativeInt,
+        global_min_dl: pd.NonNegativeFloat,
     ) -> Tuple[ArrayLike[float, 1], ArrayLike[float, 1]]:
         """Calculate the positions of all bounding box interfaces along a given axis."""
 
@@ -48,13 +50,14 @@ class GradedMesher(Mesher):
     """Implements automatic nonuniform meshing with a set minimum steps per wavelength and
     a graded mesh expanding from higher- to lower-resolution regions."""
 
-    # pylint:disable=too-many-locals
+    # pylint:disable=too-many-locals, too-many-arguments
     def parse_structures(
         self,
         axis: Axis,
-        structures: List[Structure],
+        structures: List[StructureType],
         wavelength: pd.PositiveFloat,
         min_steps_per_wvl: pd.NonNegativeInt,
+        global_min_dl: pd.NonNegativeFloat,
     ) -> Tuple[ArrayLike[float, 1], ArrayLike[float, 1]]:
         """Calculate the positions of all bounding box interfaces along a given axis.
         In this implementation, in most cases the complexity should be O(len(structures)**2),
@@ -65,12 +68,14 @@ class GradedMesher(Mesher):
         ----------
         axis : Axis
             Axis index along which to operate.
-        structures : List[Structure]
+        structures : List[StructureType]
             List of structures, with the simulation structure being the first item.
         wavelength : pd.PositiveFloat
             Wavelength to use for the step size and for dispersive media epsilon.
         min_steps_per_wvl : pd.NonNegativeInt
             Minimum requested steps per wavelength.
+        global_min_dl: pd.NonNegativeFloat
+            Lower bound of grid size.
 
         Returns
         -------
@@ -90,8 +95,24 @@ class GradedMesher(Mesher):
         sim_bmin, sim_bmax = structures[0].geometry.bounds
         domain_bounds = np.array([sim_bmin[axis], sim_bmax[axis]])
 
+        # Special attention needs to be paid to enforced overrideStructures.
+        # They shouldn't be overridden by other structures;
+        # for overlapping enforced structures, the grid size of the overlapped
+        # region is determined by the last enforced structure. We take two
+        # steps to implement the feature:
+        # 1) reorder structure list so that enforce = True structures are shifted to
+        #    the end of the last.
+        # 2) in each interval, the maximal grid size is:
+        #    a) no enforced structure: min(grid size of each structure).
+        #    b) with enforced structure: grid size of the last override structure.
+
+        # reorder structure list to place enforced ones to the end
+        num_unenforced, structures_ordered = self.reorder_structures_enforced_to_end(structures)
+
         # Required maximum steps in every structure
-        structure_steps = self.structure_steps(structures, wavelength, min_steps_per_wvl)
+        structure_steps = self.structure_steps(
+            structures_ordered, wavelength, min_steps_per_wvl, global_min_dl, axis
+        )
         # Smallest of the maximum steps
         min_step = np.amin(structure_steps)
 
@@ -101,7 +122,7 @@ class GradedMesher(Mesher):
             return np.array(interval_coords), np.array(max_steps)
 
         # Bounding boxes with the meshing axis rotated to z
-        struct_bbox = self.rotate_structure_bounds(structures, axis)
+        struct_bbox = self.rotate_structure_bounds(structures_ordered, axis)
         # Rtree from the 2D part of the bounding boxes
         tree = self.bounds_2d_tree(struct_bbox)
 
@@ -110,7 +131,7 @@ class GradedMesher(Mesher):
         # containment then we need to populate interval coordinates starting from the top.
         # If a structure is found to be completely contained, the corresponding ``struct_bbox`` is
         # set to ``None``.
-        for str_ind in range(len(structures) - 1, -1, -1):
+        for str_ind in range(len(structures_ordered) - 1, -1, -1):
             # 3D and 2D bounding box of current structure
             bbox = struct_bbox[str_ind]
             if bbox is None:
@@ -148,9 +169,15 @@ class GradedMesher(Mesher):
         # Compute the maximum allowed step size in each interval
         max_steps = []
         for coord_ind, _ in enumerate(intervals["coords"][:-1]):
-            # Define the max step as the minimum over all medium steps of media in this interval
-            max_step = np.amin(structure_steps[intervals["structs"][coord_ind]])
-            max_steps.append(float(max_step))
+            # if there are any enforced structure in the interval, use the last structure
+            if max(intervals["structs"][coord_ind]) >= num_unenforced:
+                max_step = structure_steps[max(intervals["structs"][coord_ind])]
+                max_steps.append(float(max_step))
+            # otherwise, define the max step as the minimum over all medium steps
+            # of media in this interval
+            else:
+                max_step = np.amin(structure_steps[intervals["structs"][coord_ind]])
+                max_steps.append(float(max_step))
 
         # Re-evaluate the absolute smallest min_step and remove intervals that are smaller than that
         intervals["coords"], max_steps = self.filter_min_step(intervals["coords"], max_steps)
@@ -244,8 +271,47 @@ class GradedMesher(Mesher):
         return {"coords": coords, "structs": structs}
 
     @staticmethod
+    def reorder_structures_enforced_to_end(
+        structures: List[StructureType],
+    ) -> Tuple[int, List[StructureType]]:
+        """Reorder structure list so that MeshOverrideStructures with ``enforce=True``
+        are shifted to the end of list.
+
+        Parameters
+        ----------
+        structures : List[StructureType]
+            List of structures, with the simulation structure being the first item.
+
+        Returns
+        -------
+        Tuple[int, List[StructureType]]
+            The number of unenforced structures, reordered structure list
+
+        """
+
+        # boolean list for enforced unenforced structures
+        enforced_list = [
+            isinstance(structure, MeshOverrideStructure) and structure.enforce
+            for structure in structures
+        ]
+
+        # if no enforced structure, a quick return here
+        if not any(enforced_list):
+            return len(structures), structures
+
+        # filter structures
+        structures_enforced = list(compress(structures, enforced_list))
+        structures_others = list(compress(structures, [not enforced for enforced in enforced_list]))
+
+        return len(structures_others), structures_others + structures_enforced
+
+    @staticmethod
     def structure_steps(
-        structures: List[Structure], wavelength: float, min_steps_per_wvl: float
+        structures: List[StructureType],
+        wavelength: float,
+        min_steps_per_wvl: float,
+        global_min_dl: pd.NonNegativeFloat,
+        axis: Axis,
     ) -> ArrayLike[float, 1]:
         """Get the minimum mesh required in each structure.
 
@@ -257,23 +323,32 @@ class GradedMesher(Mesher):
             Wavelength to use for the step size and for dispersive media epsilon.
         min_steps_per_wvl : float
             Minimum requested steps per wavelength.
+        global_min_dl: pd.NonNegativeFloat
+            Lower bound of grid size.
+        axis : Axis
+            Axis index along which to operate.
         """
         min_steps = []
         for structure in structures:
-            n, k = structure.medium.eps_complex_to_nk(structure.medium.eps_model(C_0 / wavelength))
-            index = max(abs(n), abs(k))
-            min_steps.append(wavelength / index / min_steps_per_wvl)
+            if isinstance(structure, Structure):
+                n, k = structure.medium.eps_complex_to_nk(
+                    structure.medium.eps_model(C_0 / wavelength)
+                )
+                index = max(abs(n), abs(k))
+                min_steps.append(max(global_min_dl, wavelength / index / min_steps_per_wvl))
+            elif isinstance(structure, MeshOverrideStructure):
+                min_steps.append(max(global_min_dl, structure.dl[axis]))
         return np.array(min_steps)
 
     @staticmethod
     def rotate_structure_bounds(
-        structures: List[Structure], axis: Axis
+        structures: List[StructureType], axis: Axis
     ) -> List[ArrayLike[float, 1]]:
         """Get sturcture bounding boxes with a given ``axis`` rotated to z.
 
         Parameters
         ----------
-        structures : List[Structure]
+        structures : List[StructureType]
             List of structures, with the simulation structure being the first item.
         axis : Axis
             Axis index to place last.

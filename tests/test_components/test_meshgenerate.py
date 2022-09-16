@@ -10,6 +10,7 @@ from tidy3d.components.grid.mesher import GradedMesher
 np.random.seed(4)
 
 MESHER = GradedMesher()
+np.random.seed(4)
 
 
 def validate_dl_multiple_interval(
@@ -426,6 +427,110 @@ def test_mesh_high_index_background_override():
     )
     sizes = sim.grid.sizes.to_list[2]
     assert np.isclose(sizes[0], WAVELENGTH / 10)
+
+
+def test_mesh_direct_override():
+    """test td.MeshOverrideStructure"""
+
+    # default override takes effect when finer than enclosing structure
+    override_fine = td.MeshOverrideStructure(
+        geometry=td.Box(size=(1, 1, 1)),
+        dl=[0.05] * 3,
+    )
+
+    sim = td.Simulation(
+        size=(3, 3, 3),
+        grid_spec=td.GridSpec.auto(
+            wavelength=WAVELENGTH,
+            override_structures=[override_fine],
+        ),
+        run_time=1e-13,
+        structures=[BOX1],
+    )
+    sizes = sim.grid.sizes.to_list[2]
+    assert np.isclose(sizes[len(sizes) // 2], 0.05)
+
+    # default override has no effect when coarser than enclosing structure
+    override_coarse = override_fine.copy(update={"dl": [0.2] * 3})
+    sim = td.Simulation(
+        size=(3, 3, 3),
+        grid_spec=td.GridSpec.auto(
+            wavelength=WAVELENGTH,
+            override_structures=[override_coarse],
+        ),
+        run_time=1e-13,
+        structures=[BOX1],
+    )
+    sizes = sim.grid.sizes.to_list[2]
+    assert sizes[len(sizes) // 2] < 0.1
+
+    # however, when enforced, override takes effect again
+    override_coarse_enforce = override_coarse.copy(update={"enforce": True})
+    sim = td.Simulation(
+        size=(3, 3, 3),
+        grid_spec=td.GridSpec.auto(
+            wavelength=WAVELENGTH,
+            override_structures=[override_coarse_enforce],
+        ),
+        run_time=1e-13,
+        structures=[BOX1],
+    )
+    sizes = sim.grid.sizes.to_list[2]
+    assert sizes[len(sizes) // 2] > 0.15
+
+
+def test_mesh_multiple_direct_override_and_global_min():
+    """Test multiple td.MeshOverrideStructure objects.
+    Let's consider three override structures: enforced + default + enforced;
+    The two enforced structure overlap.
+
+    We also test global_min_dl here.
+    """
+
+    override_enforce1 = td.MeshOverrideStructure(
+        geometry=td.Box(center=(0, -1, 1), size=(0.4, 0.4, 3)),
+        dl=[0.13] * 3,
+        enforce=True,
+    )
+
+    override_enforce2 = td.MeshOverrideStructure(
+        geometry=td.Box(center=(0, -1, 0), size=(0.3, 0.3, 1)), dl=[0.15] * 3, enforce=True
+    )
+
+    override_default = td.MeshOverrideStructure(
+        geometry=td.Box(center=(0, 0, 0), size=(1.5, 1.5, 1.5)),
+        dl=[0.05] * 3,
+    )
+
+    sim = td.Simulation(
+        size=(3, 3, 3),
+        grid_spec=td.GridSpec.auto(
+            wavelength=WAVELENGTH,
+            override_structures=[override_enforce1, override_default, override_enforce2],
+        ),
+        run_time=1e-13,
+        structures=[BOX1],
+    )
+    sizes = sim.grid.sizes.to_list[2]
+    assert max(sizes) > 0.14
+    assert min(sizes) <= 0.05
+    assert sizes[-1] > 0.12
+
+    # now let's set a global_min_dl
+    sim = td.Simulation(
+        size=(3, 3, 3),
+        grid_spec=td.GridSpec.auto(
+            wavelength=WAVELENGTH,
+            override_structures=[override_enforce1, override_default, override_enforce2],
+            global_min_dl=0.1,
+        ),
+        run_time=1e-13,
+        structures=[BOX1],
+    )
+    sizes = sim.grid.sizes.to_list[2]
+    assert max(sizes) > 0.14
+    assert min(sizes) >= 0.08
+    assert sizes[-1] > 0.12
 
 
 def test_mesh_gold_slab():

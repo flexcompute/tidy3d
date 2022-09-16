@@ -1,4 +1,5 @@
 """Defines Geometric objects with Medium properties."""
+from typing import Union, Tuple
 import pydantic
 
 from .base import Tidy3dBaseModel
@@ -7,32 +8,18 @@ from .geometry import GeometryType
 from .medium import MediumType
 from .types import Ax, TYPE_TAG_STR
 from .viz import add_ax_if_none, equal_aspect
+from ..constants import MICROMETER
 
 
-class Structure(Tidy3dBaseModel):
-    """Defines a physical object that interacts with the electromagnetic fields.
-    A :class:`Structure` is a combination of a material property (:class:`AbstractMedium`)
-    and a :class:`Geometry`.
-
-    Example
-    -------
-    >>> from tidy3d import Box, Medium
-    >>> box = Box(center=(0,0,1), size=(2, 2, 2))
-    >>> glass = Medium(permittivity=3.9)
-    >>> struct = Structure(geometry=box, medium=glass, name='glass_box')
+class AbstractStructure(Tidy3dBaseModel):
+    """
+    A basic structure object.
     """
 
     geometry: GeometryType = pydantic.Field(
         ...,
         title="Geometry",
         description="Defines geometric properties of the structure.",
-        discriminator=TYPE_TAG_STR,
-    )
-
-    medium: MediumType = pydantic.Field(
-        ...,
-        title="Medium",
-        description="Defines the electromagnetic properties of the structure's medium.",
         discriminator=TYPE_TAG_STR,
     )
 
@@ -68,3 +55,59 @@ class Structure(Tidy3dBaseModel):
             The supplied or created matplotlib axes.
         """
         return self.geometry.plot(x=x, y=y, z=z, ax=ax, **patch_kwargs)
+
+
+class Structure(AbstractStructure):
+    """Defines a physical object that interacts with the electromagnetic fields.
+    A :class:`Structure` is a combination of a material property (:class:`AbstractMedium`)
+    and a :class:`Geometry`.
+
+    Example
+    -------
+    >>> from tidy3d import Box, Medium
+    >>> box = Box(center=(0,0,1), size=(2, 2, 2))
+    >>> glass = Medium(permittivity=3.9)
+    >>> struct = Structure(geometry=box, medium=glass, name='glass_box')
+    """
+
+    medium: MediumType = pydantic.Field(
+        ...,
+        title="Medium",
+        description="Defines the electromagnetic properties of the structure's medium.",
+        discriminator=TYPE_TAG_STR,
+    )
+
+
+class MeshOverrideStructure(AbstractStructure):
+    """Defines an object that is only used in the process of generating the mesh.
+    A :class:`MeshOverrideStructure` is a combination of geometry :class:`Geometry`,
+    grid size along x,y,z directions, and a boolean on whether the override
+    will be enforced.
+
+    Example
+    -------
+    >>> from tidy3d import Box
+    >>> box = Box(center=(0,0,1), size=(2, 2, 2))
+    >>> struct_override = MeshOverrideStructure(geometry=box, dl=(0.1,0.2,0.3), name='override_box')
+    """
+
+    dl: Tuple[
+        pydantic.PositiveFloat, pydantic.PositiveFloat, pydantic.PositiveFloat
+    ] = pydantic.Field(
+        ...,
+        title="Grid Size",
+        description="Grid size along x, y, z directions.",
+        units=MICROMETER,
+    )
+
+    enforce: bool = pydantic.Field(
+        False,
+        title="Enforce grid size",
+        description="If ``True``, enforce the grid size setup inside the structure "
+        "even if the structure is inside a structure of smaller grid size. In the intersection "
+        "region of multiple structures of ``enforce = True``, grid size is decided by "
+        "the last added structure of ``enforce=True``.",
+    )
+
+
+StructureType = Union[Structure, MeshOverrideStructure]
