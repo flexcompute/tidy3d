@@ -8,6 +8,10 @@ from tidy3d.log import ValidationError, SetupError
 from tidy3d.components.simulation import MAX_NUM_MEDIUMS
 from ..utils import assert_log_level
 
+def test_model_eq():
+    """Test base model equality comparisons"""
+    assert Medium(permittivity=2) != Medium()
+
 
 def test_sim():
     """make sure a simulation can be initialized"""
