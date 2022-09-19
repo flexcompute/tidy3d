@@ -480,7 +480,8 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         if TYPE_TAG_STR in hdf5_group:
             type_str = cls.unpack_dataset(hdf5_group.get(TYPE_TAG_STR))
             if type_str == "xr.DataArray":
-                coords = {key: np.array(val) for key, val in hdf5_group["coords"].items()}
+                coords = {key: cls.unpack_dataset(val) for key, val in hdf5_group["coords"].items()}
+                coords = {key: np.array(val) for key, val in coords.items()}
                 dims = cls.unpack_dataset(hdf5_group["dims"])
                 data = np.array(hdf5_group["data"])
                 return xr.DataArray(data, coords=coords, dims=dims)
@@ -562,7 +563,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
                 value = {
                     "data": value.data,
                     "coords": coords,
-                    "dims": np.array(value.dims),
+                    "dims": value.dims,
                     TYPE_TAG_STR: "xr.DataArray",
                 }
 
@@ -672,7 +673,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
                         data_dict = {
                             "data": x.data,
                             "coords": coords,
-                            "dims": np.array(x.dims),
+                            "dims": x.dims,
                             TYPE_TAG_STR: "xr.DataArray",
                         }
                         self._save_group_data(data_dict=data_dict, hdf5_group=group)

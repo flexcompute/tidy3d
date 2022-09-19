@@ -183,15 +183,22 @@ def test_to_dict():
     assert np.all(sim_data == sim_data2)
 
 
-@clear_tmp
-def test_to_json():
+# @clear_tmp
+def test_to_json_together():
     sim_data = make_sim_data()
     FNAME = "tests/tmp/sim_data_refactor.json"
     DATA_FILE = "tests/tmp/sim_extra_data.hdf5"
-    # this works
-    sim_data.to_file(fname=FNAME, data_file=DATA_FILE)
     # this hangs
     sim_data.to_file(fname=FNAME)
+    sim_data2 = SimulationData.from_file(fname=FNAME)
+
+
+@clear_tmp
+def test_to_json_data_file():
+    sim_data = make_sim_data()
+    FNAME = "tests/tmp/sim_data_refactor.json"
+    DATA_FILE = "tests/tmp/sim_extra_data.hdf5"
+    sim_data.to_file(fname=FNAME, data_file=DATA_FILE)
     sim_data2 = SimulationData.from_file(fname=FNAME)
     assert sim_data == sim_data2
 
@@ -229,7 +236,7 @@ def test_to_hdf5():
     sim_data2 = SimulationData.from_file(fname=FNAME)
 
     # The type of direction changes after IO
-    assert sim_data["mode"].amps.direction == sim_data2["mode"].amps.direction
+    assert all(sim_data["mode"].amps.direction == sim_data2["mode"].amps.direction)
 
     assert sim_data == sim_data2
 

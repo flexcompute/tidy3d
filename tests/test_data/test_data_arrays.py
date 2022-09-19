@@ -33,7 +33,7 @@ SIZE_3D = (2, 4, 5)
 SIZE_2D = list(SIZE_3D)
 SIZE_2D[1] = 0
 MODE_SPEC = ModeSpec(num_modes=4)
-FREQS = np.linspace(1e14, 2e14, 11)
+FREQS = np.linspace(1e14, 2e14, 4)
 SOURCES = [
     PointDipole(source_time=GaussianPulse(freq0=FREQS[0], fwidth=1e14), polarization="Ex"),
     ModeSource(
@@ -57,12 +57,12 @@ MODE_MONITOR = ModeMonitor(size=SIZE_2D, name="mode", mode_spec=MODE_SPEC, freqs
 FLUX_MONITOR = FluxMonitor(size=SIZE_2D, freqs=FREQS, name="flux")
 FLUX_TIME_MONITOR = FluxTimeMonitor(size=SIZE_2D, interval=INTERVAL, name="flux_time")
 
-YS = np.linspace(0, 5, 10)
-XS = np.linspace(0, 10, 20)
-THETA = np.linspace(0, np.pi, 10)
-PHI = np.linspace(0, 2 * np.pi, 20)
-UX = np.linspace(0, 5, 10)
-UY = np.linspace(0, 10, 20)
+YS = np.linspace(0, 5, 6)
+XS = np.linspace(0, 10, 4)
+THETA = np.linspace(0, np.pi, 3)
+PHI = np.linspace(0, 2 * np.pi, 7)
+UX = np.linspace(0, 5, 2)
+UY = np.linspace(0, 10, 4)
 N2F_CARTESIAN_MONITOR = Near2FarCartesianMonitor(
     size=SIZE_2D, freqs=FREQS, plane_axis=2, plane_distance=10, x=XS, y=YS, name="n2f_cart"
 )
@@ -86,7 +86,7 @@ MONITORS = [
     N2F_KSPACE_MONITOR,
 ]
 
-GRID_SPEC = GridSpec(wavelength=1.0)
+GRID_SPEC = GridSpec(wavelength=4.0)
 RUN_TIME = 1e-12
 
 SIM_SYM = Simulation(
@@ -202,6 +202,19 @@ def make_n2f_kspace_data_array():
     return Near2FarKSpaceDataArray(data=data_array)
 
 
+ALL_DATA_ARRAYS = [
+    make_scalar_field_data_array("Ex"),
+    make_scalar_field_time_data_array("Ex"),
+    make_scalar_mode_field_data_array("Ex"),
+    make_mode_amps_data_array(),
+    make_mode_index_data_array(),
+    make_flux_data_array(),
+    make_flux_time_data_array(),
+    make_n2f_angle_data_array(),
+    make_n2f_cartesian_data_array(),
+    make_n2f_kspace_data_array(),
+]
+
 """ Test that they work """
 
 
@@ -292,3 +305,20 @@ def test_empty_field_time():
 def test_abs():
     data = make_mode_amps_data_array()
     dabs = abs(data.data)
+
+
+@pytest.mark.parametrize("data_array", ALL_DATA_ARRAYS)
+def test_json(data_array):
+
+    FNAME = "tests/tmp/data_array.json"
+    data_array.to_file(FNAME)
+    da2 = data_array.from_file(FNAME)
+    # if data_array != da2:
+    # import pdb; pdb.set_trace()
+    assert data_array == da2
+
+
+@clear_tmp
+def test_json_clear_tmp():
+    """Clear tmp after above function runs (decorators dont play well together)"""
+    pass

@@ -20,7 +20,7 @@ from ..monitor import MonitorType, FieldMonitor, FieldTimeMonitor, ModeSolverMon
 from ..monitor import ModeMonitor, FluxMonitor, FluxTimeMonitor, PermittivityMonitor
 from ..monitor import Near2FarAngleMonitor, Near2FarCartesianMonitor, Near2FarKSpaceMonitor
 from ..medium import Medium
-from ...log import DataError, SetupError
+from ...log import DataError
 from ...constants import C_0, ETA_0
 
 
@@ -683,7 +683,7 @@ class Near2FarAngleMonitorData(AbstractNear2FarMonitorData):
         ``xarray.DataArray``
             Radar cross section at angles relative to the local origin.
         """
-        return self.dataset.radar_cross_section(medium=medium, permittivity=permittivity)
+        return self.dataset.radar_cross_section(medium=medium)
 
     def power(self, r: float, medium: Medium = Medium(permittivity=1)) -> xr.DataArray:
         """Get power measured on the observation grid defined in spherical coordinates.
@@ -702,7 +702,7 @@ class Near2FarAngleMonitorData(AbstractNear2FarMonitorData):
             Power at points relative to the local origin.
         """
 
-        return self.dataset.power(r=r, meduim=medium)
+        return self.dataset.power(r=r, medium=medium)
 
 
 class Near2FarCartesianMonitorData(AbstractNear2FarMonitorData):
@@ -751,7 +751,9 @@ class Near2FarCartesianMonitorData(AbstractNear2FarMonitorData):
             xarray dataset containing (Ex, Ey, Ez), (Hx, Hy, Hz) in cartesian coordinates.
         """
         return self.dataset.fields(
-            medium=medium, plane_dist=self.monitor.plane_distance, plan_axis=self.monitor.plane_axis
+            medium=medium,
+            plane_distance=self.monitor.plane_distance,
+            plane_axis=self.monitor.plane_axis,
         )
 
     def power(self, medium: Medium = Medium(permittivity=1)) -> xr.Dataset:
@@ -769,7 +771,9 @@ class Near2FarCartesianMonitorData(AbstractNear2FarMonitorData):
             Power at points relative to the local origin.
         """
         return self.dataset.power(
-            medium=medium, plane_dist=self.monitor.plane_distance, plan_axis=self.monitor.plane_axis
+            medium=medium,
+            plane_distance=self.monitor.plane_distance,
+            plane_axis=self.monitor.plane_axis,
         )
 
 
@@ -819,7 +823,7 @@ class Near2FarKSpaceMonitorData(AbstractNear2FarMonitorData):
             in polar coordinates.
         """
 
-        return self.dataset.fields(medum=medium)
+        return self.dataset.fields(medium=medium)
 
     def power(self, medium: Medium = Medium(permittivity=1)) -> xr.Dataset:
         """Get power on the observation grid defined in k-space.
@@ -836,7 +840,7 @@ class Near2FarKSpaceMonitorData(AbstractNear2FarMonitorData):
             xarray dataset containing power.
         """
 
-        return self.power.fields(medum=medium)
+        return self.dataset.power(medium=medium)
 
 
 MonitorDataTypes = (

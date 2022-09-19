@@ -32,7 +32,7 @@ DIM_ATTRS = {
 class DataArray(Tidy3dBaseModel, ABC):
     """Holds a single xr.DataArray."""
 
-    _dims: Tuple[str, str] = ()
+    _dims: Tuple[str, ...] = ()
     _data_attrs: Dict[str, str] = {}
 
     data: Union[xr.DataArray, dict] = pd.Field(
@@ -52,7 +52,6 @@ class DataArray(Tidy3dBaseModel, ABC):
     @pd.validator("data", always=True)
     def _convert_to_data_array(cls, val) -> xr.DataArray:
         """Make sure class dims match the data values."""
-
         # loading a regular xr.DataArray
         if isinstance(val, xr.DataArray):
             return val
@@ -74,9 +73,17 @@ class DataArray(Tidy3dBaseModel, ABC):
 
             # coords, data stored in dictionary (ie json or hdf5 directly)
             else:
-                coords = val.get("coords")
-                data = val.get("data")
+                coords = {k: v["data"] for k, v in val.get("coords").items()}
+                data = np.array(val.get("data"))
                 dims = val.get("dims")
+
+                # data stored as dictionaries of 'real', 'imag' pairs.
+                if np.array(data).dtype == "O":
+
+                    def convert_re_im(x):
+                        return x["real"] + 1j * x["imag"]
+
+                    data = np.vectorize(convert_re_im)(data)
 
             # construct the data array
             coords = {key: np.array(val) for key, val in coords.items()}

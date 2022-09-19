@@ -1,8 +1,9 @@
+# pylint: disable=too-many-lines
 """ Monitor Level Data, store the DataArrays associated with a single monitor."""
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Union, Dict, Callable, List
+from typing import Union, Dict, Callable, List, Tuple
 import xarray as xr
 import numpy as np
 import pydantic as pd
@@ -13,7 +14,9 @@ from .data_array import Near2FarCartesianDataArray, Near2FarKSpaceDataArray, Nea
 from .data_array import DataArray
 from ..base import Tidy3dBaseModel
 from ..types import Axis
-from ...log import DataError
+from ..medium import Medium
+from ...log import DataError, SetupError, log
+from ...constants import C_0, ETA_0
 
 
 class Dataset(Tidy3dBaseModel, ABC):
@@ -493,17 +496,17 @@ class AbstractNear2FarData(Dataset, ABC):
     @property
     def f(self) -> np.ndarray:
         """Frequencies."""
-        return self.Ntheta.f.values
+        return self.Ntheta.data.f.values
 
     @property
     def coords(self) -> Dict[str, np.ndarray]:
         """Coordinates of the radiation vectors contained."""
-        return self.Ntheta.coords
+        return self.Ntheta.data.coords
 
     @property
     def dims(self) -> Tuple[str, ...]:
         """Dimensions of the radiation vectors contained."""
-        return self.Ntheta.__slots__
+        return self.Ntheta.data.dims
 
     def make_data_array(self, data: np.ndarray) -> xr.DataArray:
         """Make an xr.DataArray with data and same coords and dims as radiation vectors of self."""
@@ -545,8 +548,8 @@ class AbstractNear2FarData(Dataset, ABC):
     def rad_vecs_to_fields(self, medium: Medium) -> Tuple[np.ndarray, np.ndarray]:
         """Compute fields from radiation vectors."""
         eta = self.eta(medium=medium)
-        e_theta = -(self.Lphi.values + eta * self.Ntheta.values)
-        e_phi = self.Ltheta.values - eta * self.Nphi.values
+        e_theta = -(self.Lphi.data.values + eta * self.Ntheta.data.values)
+        e_phi = self.Ltheta.data.values - eta * self.Nphi.data.values
         return e_theta, e_phi
 
     @staticmethod
@@ -711,46 +714,6 @@ class AbstractNear2FarData(Dataset, ABC):
         phi = np.arctan2(y, x)
         return theta, phi
 
-    @abstractmethod
-    def fields(self, r: float = None, medium: Medium = Medium(permittivity=1)) -> xr.Dataset:
-        """Get fields in spherical coordinates relative to the monitor's local origin
-        for all angles and frequencies specified in :class:`Near2FarAngleMonitor`.
-        If the radial distance ``r`` is provided, a corresponding phase factor is applied
-        to the returned fields.
-
-        Parameters
-        ----------
-        r : float = None
-            (micron) radial distance relative to the monitor's local origin.
-        medium : :class:`.Medium`
-            Background medium in which to radiate near fields to far fields.
-            Default: free space.
-
-        Returns
-        -------
-            xarray dataset containing
-            (``E_r``, ``E_theta``, ``E_phi``, ``H_r``, ``H_theta``, ``H_phi``)
-            in polar coordinates.
-        """
-
-    @abstractmethod
-    def power(self, r: float = None, medium: Medium = Medium(permittivity=1)) -> xr.DataArray:
-        """Get power measured on the observation grid defined in spherical coordinates.
-
-        Parameters
-        ----------
-        r : float = None
-            (micron) radial distance relative to the local origin.
-        medium : :class:`.Medium`
-            Background medium in which to radiate near fields to far fields.
-            Default: free space.
-
-        Returns
-        -------
-        ``xarray.DataArray``
-            Power at points relative to the local origin.
-        """
-
 
 class Near2FarAngleData(AbstractNear2FarData):
     """Data associated with a :class:`.Near2FarAngleMonitor`: components of radiation vectors.
@@ -796,12 +759,12 @@ class Near2FarAngleData(AbstractNear2FarData):
     @property
     def theta(self) -> np.ndarray:
         """Polar angles."""
-        return self.Ntheta.theta.values
+        return self.Ntheta.data.theta.values
 
     @property
     def phi(self) -> np.ndarray:
         """Azimuthal angles."""
-        return self.Ntheta.phi.values
+        return self.Ntheta.data.phi.values
 
     def fields(self, r: float = None, medium: Medium = Medium(permittivity=1)) -> xr.Dataset:
         """Get fields in spherical coordinates relative to the monitor's local origin
@@ -928,15 +891,15 @@ class Near2FarCartesianData(AbstractNear2FarData):
     @property
     def x(self) -> np.ndarray:
         """X positions."""
-        return self.Ntheta.x.values
+        return self.Ntheta.data.x.values
 
     @property
     def y(self) -> np.ndarray:
         """Y positions."""
-        return self.Ntheta.y.values
+        return self.Ntheta.data.y.values
 
     def spherical_coords(
-        self, plane_dist: float, plane_axis: Axis
+        self, plane_distance: float, plane_axis: Axis
     ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
         """The data coordinates in spherical coordinate system."""
         xs, ys, _ = np.meshgrid(self.x, self.y, np.array([0]), indexing="ij")
@@ -949,7 +912,7 @@ class Near2FarCartesianData(AbstractNear2FarData):
     # pylint:disable=too-many-arguments, too-many-locals
     def fields(
         self,
-        plane_dist: float,
+        plane_distance: float,
         plane_axis: Axis,
         r: float = None,
         medium: Medium = Medium(permittivity=1),
@@ -977,7 +940,9 @@ class Near2FarCartesianData(AbstractNear2FarData):
             )
 
         # get the fields in spherical coordinates
-        r_values, thetas, phis = self.spherical_coords(plane_dist=plane_dist, plane_axis=plane_axis)
+        r_values, thetas, phis = self.spherical_coords(
+            plane_distance=plane_distance, plane_axis=plane_axis
+        )
         fields_sph = self.fields_sph(r=r_values, medium=medium)
         Er, Et, Ep = (fields_sph[key].values for key in ("E_r", "E_theta", "E_phi"))
         Hr, Ht, Hp = (fields_sph[key].values for key in ("H_r", "H_theta", "H_phi"))
@@ -993,7 +958,7 @@ class Near2FarCartesianData(AbstractNear2FarData):
 
     def power(
         self,
-        plane_dist: float,
+        plane_distance: float,
         plane_axis: Axis,
         r: float = None,
         medium: Medium = Medium(permittivity=1),
@@ -1019,7 +984,7 @@ class Near2FarCartesianData(AbstractNear2FarData):
             )
 
         # get the polar components of the far field
-        r_values, _, _ = self.spherical_coords(plane_dist=plane_dist, plane_axis=plane_axis)
+        r_values, _, _ = self.spherical_coords(plane_distance=plane_distance, plane_axis=plane_axis)
         fields_sph = self.fields_sph(r=r_values, medium=medium)
         Et, Ep = (fields_sph[key].values for key in ("E_theta", "E_phi"))
         Ht, Hp = (fields_sph[key].values for key in ("H_theta", "H_phi"))
@@ -1077,12 +1042,12 @@ class Near2FarKSpaceData(AbstractNear2FarData):
     @property
     def ux(self) -> np.ndarray:
         """reciprocal X positions."""
-        return self.Ntheta.ux.values
+        return self.Ntheta.data.ux.values
 
     @property
     def uy(self) -> np.ndarray:
         """reciprocal Y positions."""
-        return self.Ntheta.uy.values
+        return self.Ntheta.data.uy.values
 
     # pylint:disable=too-many-locals
     def fields(self, r: float = None, medium: Medium = Medium(permittivity=1)) -> xr.Dataset:
@@ -1108,8 +1073,8 @@ class Near2FarKSpaceData(AbstractNear2FarData):
 
         # assemble E felds
         eta = self.eta(medium=medium)[None, None, ...]
-        Et_array = -(self.Lphi.values + eta * self.Ntheta.values)
-        Ep_array = self.Ltheta.values - eta * self.Nphi.values
+        Et_array = -(self.Lphi.data.values + eta * self.Ntheta.data.values)
+        Ep_array = self.Ltheta.data.values - eta * self.Nphi.data.values
         Er_array = np.zeros_like(Ep_array)
 
         # assemble H fields
