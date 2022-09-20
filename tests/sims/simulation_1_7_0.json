@@ -323,6 +323,36 @@
         "x": {
             "plus": {
                 "name": null,
+                "type": "BlochBoundary",
+                "bloch_vec": {
+                    "real": 1.0,
+                    "imag": 0.0
+                }
+            },
+            "minus": {
+                "name": null,
+                "type": "BlochBoundary",
+                "bloch_vec": {
+                    "real": 1.0,
+                    "imag": 0.0
+                }
+            },
+            "type": "Boundary"
+        },
+        "y": {
+            "plus": {
+                "name": null,
+                "type": "PECBoundary"
+            },
+            "minus": {
+                "name": null,
+                "type": "PECBoundary"
+            },
+            "type": "Boundary"
+        },
+        "z": {
+            "plus": {
+                "name": null,
                 "type": "Absorber",
                 "num_layers": 40,
                 "parameters": {
@@ -347,41 +377,6 @@
                     "alpha_order": 1,
                     "alpha_min": 0.0,
                     "alpha_max": 0.0
-                }
-            },
-            "type": "Boundary"
-        },
-        "y": {
-            "plus": {
-                "name": null,
-                "type": "PMCBoundary"
-            },
-            "minus": {
-                "name": null,
-                "type": "PMCBoundary"
-            },
-            "type": "Boundary"
-        },
-        "z": {
-            "plus": {
-                "name": null,
-                "type": "PECBoundary"
-            },
-            "minus": {
-                "name": null,
-                "type": "StablePML",
-                "num_layers": 40,
-                "parameters": {
-                    "sigma_order": 3,
-                    "sigma_min": 0.0,
-                    "sigma_max": 1.0,
-                    "type": "PMLParams",
-                    "kappa_order": 3,
-                    "kappa_min": 1.0,
-                    "kappa_max": 5.0,
-                    "alpha_order": 1,
-                    "alpha_min": 0.0,
-                    "alpha_max": 0.9
                 }
             },
             "type": "Boundary"

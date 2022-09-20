@@ -118,9 +118,9 @@ def test_simulation_preserve_types():
         run_time=1e-12,
         symmetry=(0, -1, 1),
         boundary_spec=BoundarySpec(
-            x=Boundary(minus=PML(), plus=Absorber()),
-            y=Boundary(minus=PMCBoundary(), plus=Periodic()),
-            z=Boundary(minus=StablePML(), plus=PECBoundary()),
+            x=Boundary.bloch(bloch_vec=1.0),
+            y=Boundary(minus=PECBoundary(), plus=Periodic()),
+            z=Boundary(minus=PML(), plus=Absorber()),
         ),
     )
 
