@@ -26,6 +26,9 @@ def set_authentication_config(email: str, password: str) -> None:
     url = "/".join([Config.auth_api_endpoint, "auth"])
     headers = {"Application": "TIDY3D"}
     resp = requests.get(url, headers=headers, auth=(email, password))
+    if resp.status_code != 200:
+        raise WebError("Failed to log in with username and password.")
+    log.info("Authentication successful.")
     access = resp.json()["data"]
     keys = access["user"]
 
@@ -71,7 +74,7 @@ def get_credentials() -> None:
 
     # if we find something in the credential path
     if os.path.exists(credential_path):
-        log.info("Using Tidy3D credentials from stored file")
+        log.info("Using Tidy3D credentials from stored file.")
         # try to authenticate them
         try:
             with open(credential_path, "r", encoding="utf-8") as fp:
@@ -83,12 +86,18 @@ def get_credentials() -> None:
 
         except Exception:  # pylint:disable=broad-except
             log.info("Error: Failed to log in with saved credentials.")
+    else:
+        email = None
 
     # keep trying to log in
     for counter in range(MAX_ATTEMPTS):
+        new_email = None
+        while not new_email:
+            new_email = input(f"Enter your email registered at tidy3d ({email}): ")
 
-        email = input("enter your email registered at tidy3d: ")
-        password = getpass.getpass("enter your password: ")
+        email = new_email
+
+        password = getpass.getpass("Enter your password: ")
         # encrypt
         password = encode_password(password)
 
@@ -105,7 +114,10 @@ def get_credentials() -> None:
     # ask to stay logged in
     for _ in range(MAX_ATTEMPTS):
 
-        keep_logged_in = input("Do you want to keep logged in on this machine? ([Y]es / [N]o) ")
+        keep_logged_in = input(
+            "Authentication successful. "
+            "Do you want to stay logged in on this machine? ([Y]es / [N]o) "
+        )
 
         # if user wants to stay logged in
         if keep_logged_in.lower() == "y":
@@ -128,4 +140,4 @@ def get_credentials() -> None:
             return
 
         # otherwise, prompt again
-        log.info(f"Unknown response: {keep_logged_in}")
+        log.info(f"Unknown response: {keep_logged_in}.")
