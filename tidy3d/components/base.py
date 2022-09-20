@@ -615,20 +615,51 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         """define >= for getting unique indices based on hash."""
         return hash(self) >= hash(other)
 
+    def _equal_values(self, self_val, other_val) -> bool:
+        """Are two values equal?"""
+
+        if isinstance(self_val, np.ndarray):
+            if not np.all(self_val == other_val):
+                return False
+
+        elif isinstance(self_val, xr.DataArray):
+            if not np.all(self_val == other_val):
+                return False
+            for k, v in self_val.coords.items():
+                if k not in other_val.coords:
+                    return False
+                if not np.all(v == other_val.coords[k]):
+                    return False
+
+        elif isinstance(self_val, dict) and isinstance(other_val, dict):
+            if not self._equal_dicts(self_val, other_val):
+                return False
+
+        elif isinstance(self_val, tuple) and isinstance(other_val, tuple):
+            if not all(self._equal_values(s1, s2) for s1, s2 in zip(self_val, other_val)):
+                return False
+
+        else:
+            if self_val != other_val:
+                return False
+
+        return True
+
     def _equal_dicts(self, self_dict: dict, other_dict) -> bool:
         """Are two model dictionaries equal?"""
+
         for self_key, self_val in self_dict.items():
+
             if self_key not in other_dict:
                 return False
+
             other_val = other_dict[self_key]
 
-            if isinstance(self_val, (np.ndarray, xr.DataArray)):
-                return np.all(self_val == other_val)
+            equal_vals = self._equal_values(self_val, other_val)
+            if not equal_vals:
+                return False
 
-            if isinstance(self_val, dict) and isinstance(other_val, dict):
-                return self._equal_dicts(self_val, other_val)
-
-            return self_val == other_val
+        return True
 
     def __eq__(self, other):
         if isinstance(other, pydantic.BaseModel):

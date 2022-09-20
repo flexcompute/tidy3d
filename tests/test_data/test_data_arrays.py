@@ -313,8 +313,6 @@ def test_json(data_array):
     FNAME = "tests/tmp/data_array.json"
     data_array.to_file(FNAME)
     da2 = data_array.from_file(FNAME)
-    # if data_array != da2:
-    # import pdb; pdb.set_trace()
     assert data_array == da2
 
 
@@ -322,3 +320,14 @@ def test_json(data_array):
 def test_json_clear_tmp():
     """Clear tmp after above function runs (decorators dont play well together)"""
     pass
+
+
+@pytest.mark.parametrize("data_array", ALL_DATA_ARRAYS)
+def test_from_data_coords(data_array):
+    data_dict = data_array.data.to_dict()
+    data = data_dict["data"]
+    coords = data_dict["coords"]
+    coords = {name: value["data"] for name, value in coords.items()}
+    data_array_type = data_array.__class__
+    data_array2 = data_array_type.from_data_coords(data=data, coords=coords)
+    assert data_array == data_array2

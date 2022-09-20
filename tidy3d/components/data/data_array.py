@@ -10,6 +10,7 @@ import numpy as np
 import pydantic as pd
 
 from ..base import Tidy3dBaseModel
+from ..types import ArrayLike
 from ...constants import HERTZ, SECOND, MICROMETER, RADIAN
 from ...log import ValidationError
 
@@ -111,6 +112,25 @@ class DataArray(Tidy3dBaseModel, ABC):
             attrs = DIM_ATTRS.get(coord_name)
             val.coords[coord_name].attrs = attrs
         return val
+
+    @classmethod
+    def from_data_coords(cls, data: ArrayLike, coords: Dict[str, ArrayLike]) -> DataArray:
+        """Contruct a :class:`.DataArray` using raw data values and coordinates.
+
+        Parameters
+        ----------
+        data : Array-like
+            Numpy array or nested list containing the raw data to be stored in :class:`.DataArray`.
+        coords : Dict[str, Array-like]
+            Mapping of coordinate name to a 1D array containing coordinates.
+
+        Returns
+        -------
+        :class:`.DataArray`
+            Constructs an `xr.DataArray` from the inputs and uses this to construct a DataArray.
+        """
+        data_array = xr.DataArray(data, coords=coords)
+        return cls(data=data_array)
 
 
 class ScalarFieldDataArray(DataArray):

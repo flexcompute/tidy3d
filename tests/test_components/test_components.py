@@ -2,15 +2,25 @@ from typing import Dict
 import pytest
 import numpy as np
 import pydantic
+import xarray as xr
 
 from tidy3d import *
 from tidy3d.log import ValidationError, SetupError
 from tidy3d.components.simulation import MAX_NUM_MEDIUMS
 from ..utils import assert_log_level
 
+
 def test_model_eq():
     """Test base model equality comparisons"""
+    assert Medium(permittivity=2) == Medium(permittivity=2)
     assert Medium(permittivity=2) != Medium()
+    s1 = FluxDataArray(data=xr.DataArray([1, 2, 3], coords={"f": [1, 2, 3]}))
+    s2 = FluxDataArray(data=xr.DataArray([1, 2, 3], coords={"f": [2, 3, 4]}))
+    assert s1 != s2
+    s3 = FluxDataArray(data=xr.DataArray([1, 2, 3], coords={"f": [1, 2, 3]}))
+    assert s1 == s3
+    s4 = FluxDataArray(data=xr.DataArray([2, 3, 4], coords={"f": [1, 2, 3]}))
+    assert s1 != s4
 
 
 def test_sim():
