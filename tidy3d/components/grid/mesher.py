@@ -7,7 +7,7 @@ from math import isclose
 
 import pydantic as pd
 import numpy as np
-from scipy.optimize import root_scalar
+from pyroots import Brentq
 from shapely.strtree import STRtree
 from shapely.geometry import box as shapely_box
 
@@ -946,13 +946,17 @@ class GradedMesher(Mesher):
                 )
 
             # solve for new scaling factor
-            sol_scale = root_scalar(fun_scale, bracket=[1, max_scale])
-            # if not converged, let's use the last strategy
-            if sol_scale.converged:
-                new_scale = sol_scale.root
+            # let's not raise exception here, but manually check the convergence.
+            root_scalar = Brentq(raise_on_fail=False, epsilon=fp_eps)
+            sol_scale = root_scalar(fun_scale, 1, max_scale)
+
+            # convergence check based on pyroots API and manual evaluation of the function.
+            if sol_scale.converged and abs(fun_scale(sol_scale.x0)) <= fp_eps:
+                new_scale = sol_scale.x0
                 dl_list = np.array([small_dl * new_scale**i for i in range(num_step)])
                 dl_list = np.append(small_dl, dl_list)
                 return dl_list
+            # if not converged, let's use the strategy below.
 
         # nothing more we can do, let's just add smallest step size,
         # and scale each pixel
