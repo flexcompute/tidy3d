@@ -6,7 +6,7 @@ import csv
 import codecs
 import requests
 
-import scipy
+import scipy.optimize as opt
 import numpy as np
 from rich.progress import Progress
 from pydantic import Field, validator
@@ -478,10 +478,10 @@ class DispersionFitter(Tidy3dBaseModel):
         bounds = list(zip(bounds_lower, bounds_upper))
 
         # TODO: set up constraint properly
-        scipy_constraint = scipy.optimize.NonlinearConstraint(constraint, lb=0, ub=np.inf)
+        scipy_constraint = opt.NonlinearConstraint(constraint, lb=0, ub=np.inf)
 
         # TODO: set options properly
-        res = scipy.optimize.minimize(
+        res = opt.minimize(
             obj,
             coeffs0,
             args=(),
