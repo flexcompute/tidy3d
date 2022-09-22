@@ -1,3 +1,5 @@
 # build and run simulations, use plugins (no plotly, no tests)
+scipy
+
 -r basic.txt
 -r web.txt
