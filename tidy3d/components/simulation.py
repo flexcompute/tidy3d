@@ -1,5 +1,6 @@
 # pylint: disable=too-many-lines, too-many-arguments
 """ Container holding all information about simulation and its components"""
+from __future__ import annotations
 from typing import Dict, Tuple, List, Set, Union
 from math import isclose
 
@@ -1797,16 +1798,19 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         return make_eps_data(coords)
 
     @classmethod
-    def from_file(cls, fname: str, **parse_kwargs):
+    def from_file(cls, fname: str, validate=True, **parse_kwargs) -> Simulation:
         """Loads a :class:`Tidy3dBaseModel` from .yaml or .json file.
 
         Parameters
         ----------
         fname : str
             Full path to the .yaml or .json file to load the :class:`Tidy3dBaseModel` from.
+        validate : bool
+            If ``False``, load without calling any validators. Warning: should only be used with
+            trusted and pre-validated data!
         **parse_kwargs
             Keyword arguments passed to either pydantic's ``parse_file`` or ``parse_raw`` methods
-            for ``.json`` and ``.yaml`` file formats, respectively.
+            for ``.json`` and ``.yaml`` file formats, respectively. Applies if ``validate == True``.
         Returns
         -------
         :class:`Tidy3dBaseModel`
@@ -1819,4 +1823,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
 
         updater = Updater.from_file(fname)
         sim_dict = updater.update_to_current()
-        return Simulation.parse_obj(sim_dict, **parse_kwargs)
+
+        if validate:
+            return cls.parse_obj(sim_dict, **parse_kwargs)
+        return cls.load_without_validation(**sim_dict)
