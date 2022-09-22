@@ -1,17 +1,9 @@
 """ tests converted webapi """
 import os
-from datetime import datetime
 from unittest import TestCase, mock
-from requests import HTTPError
 
-import pytest
-from rich.console import Console
-
-import tidy3d as td
-from tidy3d.log import DataError
 import tidy3d.web as web
 from tidy3d.web.auth import get_credentials, encode_password
-from tidy3d.web.webapi import _query_or_create_folder
 from .utils import SIM_CONVERT as sim_original
 from .utils import clear_tmp
 
