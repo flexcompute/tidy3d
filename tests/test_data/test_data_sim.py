@@ -1,6 +1,7 @@
 """Tests SimulationData"""
 import pytest
 import numpy as np
+import matplotlib.pylab as plt
 
 import tidy3d as td
 from tidy3d.log import DataError
@@ -21,8 +22,9 @@ from .test_data_arrays import FIELD_MONITOR, FIELD_TIME_MONITOR, MODE_SOLVE_MONI
 from .test_data_arrays import MODE_MONITOR, PERMITTIVITY_MONITOR, FLUX_MONITOR, FLUX_TIME_MONITOR
 from .test_data_arrays import SIM, SIM_SYM
 
-from .utils import clear_tmp
+from ..utils import clear_tmp
 
+_, AX = plt.subplots()
 # monitor data instances
 
 FIELD_SYM = make_field_data()
@@ -131,34 +133,31 @@ def test_centers():
 
 def test_plot():
     sim_data = make_sim_data()
-    ax = None
 
     # plot regular field data
     for field_cmp in sim_data.simulation.get_monitor_by_name("field").fields:
         field_data = sim_data["field"].field_components[field_cmp]
         for axis_name in "xyz":
             xyz_kwargs = {axis_name: field_data.coords[axis_name][0]}
-            ax = sim_data.plot_field("field", field_cmp, val="real", f=1e14, ax=ax, **xyz_kwargs)
+            _ = sim_data.plot_field("field", field_cmp, val="real", f=1e14, ax=AX, **xyz_kwargs)
     for axis_name in "xyz":
         xyz_kwargs = {axis_name: 0}
-        ax = sim_data.plot_field("field", "int", f=1e14, ax=ax, **xyz_kwargs)
+        _ = sim_data.plot_field("field", "int", f=1e14, ax=AX, **xyz_kwargs)
 
     # plot field time data
     for field_cmp in sim_data.simulation.get_monitor_by_name("field_time").fields:
         field_data = sim_data["field_time"].field_components[field_cmp]
         for axis_name in "xyz":
             xyz_kwargs = {axis_name: field_data.coords[axis_name][0]}
-            ax = sim_data.plot_field(
-                "field_time", field_cmp, val="real", t=0.0, ax=ax, **xyz_kwargs
-            )
+            _ = sim_data.plot_field("field_time", field_cmp, val="real", t=0.0, ax=AX, **xyz_kwargs)
     for axis_name in "xyz":
         xyz_kwargs = {axis_name: 0}
-        ax = sim_data.plot_field("field_time", "int", t=0.0, ax=ax, **xyz_kwargs)
+        _ = sim_data.plot_field("field_time", "int", t=0.0, ax=AX, **xyz_kwargs)
 
     # plot mode field data
     for field_cmp in ("Ex", "Ey", "Ez", "Hx", "Hy", "Hz"):
-        ax = sim_data.plot_field("mode_solver", field_cmp, val="real", f=1e14, mode_index=1, ax=ax)
-    ax = sim_data.plot_field("mode_solver", "int", f=1e14, mode_index=1, ax=ax)
+        _ = sim_data.plot_field("mode_solver", field_cmp, val="real", f=1e14, mode_index=1, ax=AX)
+    _ = sim_data.plot_field("mode_solver", "int", f=1e14, mode_index=1, ax=AX)
 
 
 def test_intensity():
@@ -193,13 +192,13 @@ def test_to_json():
 def test_sel_kwarg_freq():
     """Use freq in sel_kwarg, should still work (but warning) for 1.6.x"""
     sim_data = make_sim_data()
-    sim_data.plot_field("mode_solver", "Ex", y=0.0, val="real", freq=1e14, mode_index=1)
+    sim_data.plot_field("mode_solver", "Ex", y=0.0, val="real", freq=1e14, mode_index=1, ax=AX)
 
 
 def test_sel_kwarg_time():
     """Use time in sel_kwarg, should still work (but warning) for 1.6.x"""
     sim_data = make_sim_data()
-    sim_data.plot_field("field_time", "Ex", y=0.0, val="real", time=1e-12)
+    sim_data.plot_field("field_time", "Ex", y=0.0, val="real", time=1e-12, ax=AX)
 
 
 def test_sel_kwarg_len1():
@@ -208,11 +207,11 @@ def test_sel_kwarg_len1():
     # data has no y dimension (only exists at y=0)
 
     # passing y=0 sel kwarg should still work
-    sim_data.plot_field("mode_solver", "Ex", y=0.0, val="real", f=1e14, mode_index=1)
+    sim_data.plot_field("mode_solver", "Ex", y=0.0, val="real", f=1e14, mode_index=1, ax=AX)
 
     # passing y=1 sel kwarg should error
     with pytest.raises(KeyError):
-        sim_data.plot_field("mode_solver", "Ex", y=1.0, val="real", f=1e14, mode_index=1)
+        sim_data.plot_field("mode_solver", "Ex", y=1.0, val="real", f=1e14, mode_index=1, ax=AX)
 
 
 @clear_tmp
@@ -307,5 +306,5 @@ def test_run_time_lt_start():
 
 def test_plot_field_title():
     sim_data = make_sim_data()
-    ax = sim_data.plot_field("field", "Ey", "real", f=2e14, z=0.10)
+    ax = sim_data.plot_field("field", "Ey", "real", f=2e14, z=0.10, ax=AX)
     assert "z=0.10" in ax.title.get_text(), "title rendered incorrectly."

@@ -245,7 +245,12 @@ class ComponentModeler(Tidy3dBaseModel):
 
         # get the index of the grid cell where the port lies
         port_position = port.center[normal_axis]
-        port_index = np.argwhere(port_position > grid_boundaries)[-1]
+        port_pos_gt_grid_bounds = np.argwhere(port_position > grid_boundaries)
+
+        # no port index can be determined
+        if len(port_pos_gt_grid_bounds) == 0:
+            raise SetupError(f"Port position '{port_position}' outside of simulation bounds.")
+        port_index = port_pos_gt_grid_bounds[-1]
 
         # shift the port to the left
         if port.direction == "+":
@@ -346,10 +351,6 @@ class ComponentModeler(Tidy3dBaseModel):
                 port_name_out, mode_index_out = col_index
                 port_out = self.get_port_by_name(port_name=port_name_out, ports=self.ports)
 
-                # matrix element already filled in
-                if col_index in s_matrix[row_index]:
-                    continue
-
                 # directly compute the element
                 mode_amps_data = sim_data[port_out.name].copy().amps
                 dir_out = "-" if port_out.direction == "+" else "+"
@@ -359,8 +360,6 @@ class ComponentModeler(Tidy3dBaseModel):
 
         # element can be determined by user-defined mapping
         for ((row_in, col_in), (row_out, col_out), mult_by) in self.element_mappings:
-            if row_out not in s_matrix:
-                s_matrix[row_out] = {}
             s_matrix[row_out][col_out] = mult_by * s_matrix[row_in][col_in]
 
         return s_matrix

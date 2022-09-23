@@ -103,6 +103,7 @@ def upload(  # pylint:disable=too-many-locals,too-many-arguments
         "taskName": task_name,
         "callbackUrl": callback_url,
     }
+
     folder = _query_or_create_folder(folder_name)
     method = f"tidy3d/projects/{folder.projectId}/tasks"
 

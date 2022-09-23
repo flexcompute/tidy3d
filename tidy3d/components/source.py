@@ -155,7 +155,7 @@ class SourceTime(ABC, Tidy3dBaseModel):
         times = np.array(times)
 
         dts = np.diff(times)
-        if not np.allclose(dts, dts[0] * np.ones_like(dts)):
+        if not np.allclose(dts, dts[0] * np.ones_like(dts), atol=1e-17):
             raise SetupError("Supplied times not evenly spaced.")
 
         dt = np.mean(dts)
@@ -369,12 +369,10 @@ class CurrentSource(Source, ABC):
     def _pol_vector(self) -> Tuple[float, float, float]:
         """Returns a vector indicating the source polarization for arrow plotting, if not None."""
         component = self.polarization[-1]  # 'x' 'y' or 'z'
-        if component in "xyz":
-            pol_axis = "xyz".index(component)
-            pol_vec = [0, 0, 0]
-            pol_vec[pol_axis] = 1
-            return pol_vec
-        return None
+        pol_axis = "xyz".index(component)
+        pol_vec = [0, 0, 0]
+        pol_vec[pol_axis] = 1
+        return pol_vec
 
 
 class UniformCurrentSource(CurrentSource):

@@ -21,7 +21,7 @@ from tidy3d.components.geometry import Box
 from tidy3d.material_library import material_library
 from tidy3d.constants import inf
 
-from .utils import clear_tmp
+from ..utils import clear_tmp
 
 STRUCTURES = [
     Structure(geometry=Box(size=(1, inf, 1)), medium=material_library["cSi"]["SalzbergVilla1957"])
@@ -77,7 +77,7 @@ MONITORS = [
     DIFFRACTION_MONITOR,
 ]
 
-GRID_SPEC = GridSpec(wavelength=1.0)
+GRID_SPEC = GridSpec(wavelength=2.0)
 RUN_TIME = 1e-12
 
 SIM_SYM = Simulation(
@@ -99,6 +99,11 @@ SIM = Simulation(
     monitors=MONITORS,
     structures=STRUCTURES,
 )
+
+FS = np.linspace(1e14, 2e14, 5)
+TS = np.linspace(0, 1e-12, 4)
+MODE_INDICES = np.arange(0, 3)
+DIRECTIONS = ["+", "-"]
 
 """ Generate the data arrays (used in other test files) """
 

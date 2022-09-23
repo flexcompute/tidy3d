@@ -56,16 +56,12 @@ def compute_modes(
     omega = 2 * np.pi * freq
     k0 = omega / C_0
 
-    try:
-        if isinstance(eps_cross, Numpy):
-            eps_xx, eps_yy, eps_zz = eps_cross
-        elif len(eps_cross) == 3:
-            eps_xx, eps_yy, eps_zz = [np.copy(e) for e in eps_cross]
-        else:
-            raise ValueError
-    except Exception as e:
-        print("Wrong input to mode solver pemittivity!")
-        raise e
+    if isinstance(eps_cross, Numpy):
+        eps_xx, eps_yy, eps_zz = eps_cross
+    elif len(eps_cross) == 3:
+        eps_xx, eps_yy, eps_zz = [np.copy(e) for e in eps_cross]
+    else:
+        raise ValueError("Wrong input to mode solver pemittivity!")
 
     Nx, Ny = eps_xx.shape
     N = eps_xx.size

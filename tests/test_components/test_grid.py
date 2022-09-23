@@ -1,10 +1,19 @@
-""" test the grid operations """
-
+"""Tests grid operations."""
+import pytest
 import numpy as np
 
 import tidy3d as td
 from tidy3d.components.grid import Coords, FieldGrid, YeeGrid, Grid
 from tidy3d.components.types import TYPE_TAG_STR
+from tidy3d.log import SetupError
+
+
+def make_grid():
+    boundaries_x = np.arange(-1, 2, 1)
+    boundaries_y = np.arange(-2, 3, 1)
+    boundaries_z = np.arange(-3, 4, 1)
+    boundaries = Coords(x=boundaries_x, y=boundaries_y, z=boundaries_z)
+    return Grid(boundaries=boundaries)
 
 
 def test_coords():
@@ -28,7 +37,7 @@ def test_grid():
     boundaries_y = np.arange(-2, 3, 1)
     boundaries_z = np.arange(-3, 4, 1)
     boundaries = Coords(x=boundaries_x, y=boundaries_y, z=boundaries_z)
-    g = Grid(boundaries=boundaries)
+    g = make_grid()
 
     assert np.all(g.centers.x == np.array([-0.5, 0.5]))
     assert np.all(g.centers.y == np.array([-1.5, -0.5, 0.5, 1.5]))
@@ -40,6 +49,45 @@ def test_grid():
     assert np.all(g.yee.E.x.x == np.array([-0.5, 0.5]))
     assert np.all(g.yee.E.x.y == np.array([-2, -1, 0, 1]))
     assert np.all(g.yee.E.x.z == np.array([-3, -2, -1, 0, 1, 2]))
+
+
+def test_grid_dict():
+    g = make_grid()
+    yee = g.yee
+    gd = yee.grid_dict
+
+
+def test_primal_steps():
+    g = make_grid()
+    ps = g._primal_steps
+
+
+def test_dual_steps():
+    g = make_grid()
+    ps = g._dual_steps
+
+
+def test_num_cells():
+    g = make_grid()
+    nc = g.num_cells
+
+
+def test_getitem():
+    g = make_grid()
+    _ = g["Ex"]
+    with pytest.raises(SetupError):
+        _ = g["NOT_A_GRID_KEY"]
+
+
+def test_extend_grid():
+    g = make_grid()
+    box = td.Box(size=(2, 4, 6))
+    g.discretize_inds(box=box, extend=True)
+
+
+def test_periodic_subspace():
+    g = make_grid()
+    coords = g.periodic_subspace(axis=0, ind_beg=-2, ind_end=2)
 
 
 def test_sim_nonuniform_small():

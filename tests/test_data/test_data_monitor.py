@@ -22,7 +22,7 @@ from .test_data_arrays import make_diffraction_data_array
 from .test_data_arrays import FIELD_MONITOR, FIELD_TIME_MONITOR, MODE_SOLVE_MONITOR
 from .test_data_arrays import MODE_MONITOR, PERMITTIVITY_MONITOR, FLUX_MONITOR, FLUX_TIME_MONITOR
 from .test_data_arrays import DIFFRACTION_MONITOR
-from .utils import clear_tmp
+from ..utils import clear_tmp
 
 # data array instances
 AMPS = make_mode_amps_data_array()

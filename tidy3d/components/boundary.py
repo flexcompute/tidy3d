@@ -599,27 +599,6 @@ class BoundarySpec(Tidy3dBaseModel):
             return self.z
         raise DataError(f"field_name '{field_name}' not found")
 
-    def __setitem__(self, field_name: str, field: Boundary):
-        """Set the :class:`Boundary` field by name (``boundary_spec[field_name]=field``).
-
-        Parameters
-        ----------
-        field_name : ``str``
-            Name of the axis, eg. "y" along which :class:`Boundary` is to be set.
-        field : :class:`Boundary`
-            Boundary condition to set along the named axis.
-        """
-        if field_name == "x":
-            self.x = field
-            return
-        if field_name == "y":
-            self.y = field
-            return
-        if field_name == "z":
-            self.z = field
-            return
-        raise DataError(f"field_name '{field_name}' not found")
-
     @classmethod
     def pml(cls, x: bool = False, y: bool = False, z: bool = False):
         """Default PML along specified directions
