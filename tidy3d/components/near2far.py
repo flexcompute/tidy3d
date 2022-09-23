@@ -8,18 +8,22 @@ import pydantic
 
 from rich.progress import track
 
-from .sim_data import SimulationData
-from .monitor_data import FieldData
-from .data_array import Near2FarAngleDataArray, Near2FarCartesianDataArray, Near2FarKSpaceDataArray
-from .monitor_data_n2f import AbstractNear2FarData
-from .monitor_data_n2f import Near2FarAngleData, Near2FarCartesianData, Near2FarKSpaceData
-from ..monitor import FieldMonitor, AbstractNear2FarMonitor
-from ..monitor import Near2FarAngleMonitor, Near2FarCartesianMonitor, Near2FarKSpaceMonitor
-from ..types import Direction, Axis, Coordinate, ArrayLike
-from ..medium import Medium
-from ..base import Tidy3dBaseModel, cached_property
-from ...log import SetupError, ValidationError
-from ...constants import C_0, MICROMETER
+from .data.data_array import (
+    Near2FarAngleDataArray,
+    Near2FarCartesianDataArray,
+    Near2FarKSpaceDataArray,
+)
+from .data.monitor_data import FieldData
+from .data.monitor_data import AbstractNear2FarData
+from .data.monitor_data import Near2FarAngleData, Near2FarCartesianData, Near2FarKSpaceData
+from .data.sim_data import SimulationData
+from .monitor import FieldMonitor, AbstractNear2FarMonitor
+from .monitor import Near2FarAngleMonitor, Near2FarCartesianMonitor, Near2FarKSpaceMonitor
+from .types import Direction, Axis, Coordinate, ArrayLike
+from .medium import Medium
+from .base import Tidy3dBaseModel, cached_property
+from ..log import SetupError, ValidationError
+from ..constants import C_0, MICROMETER
 
 # Default number of points per wavelength in the background medium to use for resampling fields.
 PTS_PER_WVL = 10

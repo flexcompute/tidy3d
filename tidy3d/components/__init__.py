@@ -31,6 +31,10 @@ from .monitor import Near2FarAngleMonitor, Near2FarCartesianMonitor, Near2FarKSp
 # simulation
 from .simulation import Simulation
 
+# near2far
+
+from .near2far import Near2FarSurface, RadiationVectors
+
 # data
 from .data import ScalarFieldDataArray, ScalarModeFieldDataArray, ScalarFieldTimeDataArray
 from .data import ModeAmpsDataArray, ModeIndexDataArray
@@ -42,7 +46,6 @@ from .data import FieldData, FieldTimeData, PermittivityData
 from .data import FluxData, FluxTimeData
 from .data import ModeData, ModeSolverData
 from .data import Near2FarAngleData, Near2FarCartesianData, Near2FarKSpaceData
-from .data import Near2FarSurface, RadiationVectors
 
 from .data import SimulationData
 from .data import DATA_TYPE_MAP
