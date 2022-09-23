@@ -6,7 +6,6 @@ import gdspy
 import tidy3d as td
 
 from tidy3d.plugins import DispersionFitter
-from tidy3d.plugins.webplots import SimulationPlotly, SimulationDataApp
 from tidy3d.plugins import ModeSolver
 from tidy3d import FieldData, ScalarFieldDataArray, FieldMonitor
 from tidy3d.plugins.smatrix.smatrix import Port, ComponentModeler
@@ -101,45 +100,3 @@ def test_dispersion_set_wvg_range():
     fitter = fitter.copy(update=dict(wvl_range=[wvl_min, wvl_max]))
     assert len(fitter.freqs) < num_data
     medium, rms = fitter.fit(num_tries=2)
-
-
-def test_plotly():
-    """Tests plotly plotting."""
-    s = td.Simulation(size=(1, 1, 1), grid_spec=td.GridSpec.auto(wavelength=1), run_time=1e-12)
-    sp = SimulationPlotly(simulation=s)
-    fig = sp.plotly(x=0)
-
-
-def test_app():
-    """Tests plotly app."""
-    center = (0, 0, 0)
-    size = (2, 2, 2)
-    f0 = 1
-    monitors = FieldMonitor.surfaces(size=size, center=center, freqs=[f0], name="near_field")
-
-    sim_size = (5, 5, 5)
-    sim = td.Simulation(
-        size=sim_size,
-        grid_spec=td.GridSpec.auto(wavelength=td.C_0 / f0),
-        monitors=monitors,
-        run_time=1e-12,
-    )
-
-    def rand_data():
-        return ScalarFieldDataArray(
-            np.random.random((10, 10, 10, 1)),
-            coords=dict(
-                x=np.linspace(-1, 1, 10),
-                y=np.linspace(-1, 1, 10),
-                z=np.linspace(-1, 1, 10),
-                f=[f0],
-            ),
-        )
-
-    fields = ["Ex", "Ey", "Ez", "Hx", "Hy", "Hz"]
-    data_dict = {field: rand_data() for field in fields}
-    monitor_data = {mon.name: FieldData(monitor=mon, **data_dict) for mon in monitors}
-    sim_data = td.SimulationData(simulation=sim, monitor_data=monitor_data)
-
-    app = SimulationDataApp(sim_data=sim_data)
-    _app = app.app
