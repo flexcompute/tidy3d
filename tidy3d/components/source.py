@@ -394,7 +394,12 @@ class PointDipole(CurrentSource):
     >>> pt_dipole = PointDipole(center=(1,2,3), source_time=pulse, polarization='Ex')
     """
 
-    size: Tuple[Literal[0], Literal[0], Literal[0]] = (0, 0, 0)
+    size: Tuple[Literal[0], Literal[0], Literal[0]] = pydantic.Field(
+        (0, 0, 0),
+        title="Size",
+        description="Size in x, y, and z directions, constrained to ``(0, 0, 0)``.",
+        units=MICROMETER,
+    )
 
 
 class FieldSource(Source, ABC):

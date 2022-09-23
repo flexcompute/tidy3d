@@ -22,8 +22,8 @@ pytest -ra tests/test_components/test_types.py
 pytest -ra tests/test_components/test_viz.py
 
 pytest -ra tests/test_data/test_data_arrays.py
-pytest -ra tests/test_data/test_data_monitor.py
-pytest -ra tests/test_data/test_data_sim.py
+pytest -ra tests/test_data/test_monitor_data.py
+pytest -ra tests/test_data/test_sim_data.py
 
 pytest -ra tests/test_package/test_config.py
 pytest -ra tests/test_package/test_log.py
@@ -32,7 +32,8 @@ pytest -ra tests/test_package/test_make_script.py
 pytest -ra tests/test_package/test_material_library.py
 
 pytest -ra tests/test_plugins/test_component_modeler.py
-pytest -ra tests/test_plugins/test_plugins.py
+pytest -ra tests/test_plugins/test_mode_solver.py
+pytest -ra tests/test_plugins/test_dispersion_fitter.py
 
 pytest -ra tests/test_web/test_auth.py
 pytest -ra tests/test_web/test_task.py

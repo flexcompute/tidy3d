@@ -1,21 +1,19 @@
 """ Simulation Level Data """
 from __future__ import annotations
-from typing import Dict, Callable, Union
+from typing import Dict, Callable, Tuple
 
 import xarray as xr
 import pydantic as pd
 import numpy as np
 
-from .monitor_data import MonitorDataTypes, AbstractFieldData
-from .monitor_data_n2f import Near2FarDataTypes
+from .monitor_data import MonitorDataTypes, MonitorDataType, AbstractFieldData
 from ..base import Tidy3dBaseModel
 from ..simulation import Simulation
 from ..boundary import BlochBoundary
 from ..types import Ax, Axis, annotate_type, Literal
 from ..viz import equal_aspect, add_ax_if_none
-from ...log import DataError, log
+from ...log import DataError, log, Tidy3dKeyError, ValidationError
 
-MonitorDataType = Union[MonitorDataTypes + Near2FarDataTypes]
 DATA_TYPE_MAP = {data.__fields__["monitor"].type_: data for data in MonitorDataTypes}
 
 
@@ -43,7 +41,7 @@ class SimulationData(Tidy3dBaseModel):
     ...     run_time=2e-12,
     ... )
     >>> field_data = FieldData(monitor=field_monitor, Ex=scalar_field)
-    >>> sim_data = SimulationData(simulation=sim, monitor_data={'field': field_data})
+    >>> sim_data = SimulationData(simulation=sim, data=(field_data,))
     """
 
     simulation: Simulation = pd.Field(
@@ -52,7 +50,7 @@ class SimulationData(Tidy3dBaseModel):
         description="Original :class:`.Simulation` associated with the data.",
     )
 
-    monitor_data: Dict[str, annotate_type(MonitorDataType)] = pd.Field(
+    data: Tuple[annotate_type(MonitorDataType), ...] = pd.Field(
         ...,
         title="Monitor Data",
         description="Mapping of monitor name to :class:`.MonitorData` instance.",
@@ -73,8 +71,29 @@ class SimulationData(Tidy3dBaseModel):
     def __getitem__(self, monitor_name: str) -> MonitorDataType:
         """Get a :class:`.MonitorData` by name. Apply symmetry if applicable."""
         monitor_data = self.monitor_data[monitor_name]
-        monitor_data = self.apply_symmetry(monitor_data)
-        return monitor_data
+        return monitor_data.symmetry_expanded_copy
+
+    @property
+    def monitor_data(self) -> Dict[str, MonitorDataType]:
+        """Dictionary mapping monitor name to its associated :class:`.MonitorData`."""
+        return {monitor_data.monitor.name: monitor_data for monitor_data in self.data}
+
+    @pd.validator("data", always=True)
+    def data_monitors_match_sim(cls, val, values):
+        """Ensure each MonitorData in ``.data`` corresponds to a monitor in ``.simulation``."""
+        sim = values.get("simulation")
+        if sim is None:
+            raise ValidationError("Simulation.simulation failed validation, can't validate data.")
+        for mnt_data in val:
+            try:
+                monitor_name = mnt_data.monitor.name
+                sim.get_monitor_by_name(monitor_name)
+            except Tidy3dKeyError as exc:
+                raise DataError(
+                    f"Data with monitor name {monitor_name} supplied "
+                    "but not found in the Simulation"
+                ) from exc
+        return val
 
     @property
     def final_decay_value(self) -> float:
@@ -91,15 +110,6 @@ class SimulationData(Tidy3dBaseModel):
             final_decay_line = decay_lines[-1]
             final_decay = float(final_decay_line.split("field decay: ")[-1])
         return final_decay
-
-    def apply_symmetry(self, monitor_data: MonitorDataType) -> MonitorDataType:
-        """Return copy of :class:`.MonitorData` object with symmetry values applied."""
-        grid = self.simulation.discretize(monitor_data.monitor, extend=True, snap_zero_dim=True)
-        return monitor_data.apply_symmetry(
-            symmetry=self.simulation.symmetry,
-            symmetry_center=self.simulation.center,
-            grid_expanded=grid,
-        )
 
     def source_spectrum(self, source_index: int) -> Callable:
         """Get a spectrum normalization function for a given source index."""
@@ -151,13 +161,11 @@ class SimulationData(Tidy3dBaseModel):
             return new_spectrum_fn(freqs) / old_spectrum_fn(freqs)
 
         # Make a new monitor_data dictionary with renormalized data
-        monitor_data = {}
-        for key, val in self.monitor_data.items():
-            monitor_data[key] = val.normalize(source_spectrum_fn)
+        data_normalized = [mnt_data.normalize(source_spectrum_fn) for mnt_data in self.data]
 
         simulation = self.simulation.copy(update=dict(normalize_index=normalize_index))
 
-        return self.copy(update=dict(simulation=simulation, monitor_data=monitor_data))
+        return self.copy(update=dict(simulation=simulation, data=data_normalized))
 
     def load_field_monitor(self, monitor_name: str) -> AbstractFieldData:
         """Load monitor and raise exception if not a field monitor."""

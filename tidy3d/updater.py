@@ -90,8 +90,10 @@ class Updater(pd.BaseModel):
     def from_file(cls, fname: str) -> Updater:
         """Dictionary representing the simulation loaded from file."""
 
+        # TODO: fix this, it broke
         if ".hdf5" in fname:
-            sim_dict = Tidy3dBaseModel.hdf5_to_dict(fname=fname)
+            sim_dict = Tidy3dBaseModel.from_file(fname=fname).dict()
+
         else:
             # try:
             with open(fname, "r", encoding="utf-8") as f:

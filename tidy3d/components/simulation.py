@@ -15,10 +15,11 @@ from .base import cached_property
 from .validators import assert_unique_names, assert_objects_in_sim_bounds
 from .validators import validate_mode_objects_symmetry
 from .geometry import Box
-from .types import Ax, Shapely, FreqBound, Axis, annotate_type
-from .grid import Coords1D, Grid, Coords, GridSpec, UniformGrid
+from .types import Ax, Shapely, FreqBound, Axis, annotate_type, Symmetry
+from .grid.grid import Coords1D, Grid, Coords
+from .grid.grid_spec import GridSpec, UniformGrid
 from .medium import Medium, MediumType, AbstractMedium, PECMedium
-from .boundary import BoundarySpec, Symmetry, BlochBoundary, PECBoundary, PMCBoundary, Periodic
+from .boundary import BoundarySpec, BlochBoundary, PECBoundary, PMCBoundary, Periodic
 from .boundary import PML, StablePML, Absorber
 from .structure import Structure
 from .source import SourceType, PlaneWave, GaussianBeam, AstigmaticGaussianBeam
@@ -1808,16 +1809,18 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         return make_eps_data(coords)
 
     @classmethod
-    def from_file(cls, fname: str, **parse_kwargs) -> Simulation:
+    def from_file(cls, fname: str, group_path: str = None, **parse_obj_kwargs) -> Simulation:
         """Loads a :class:`Tidy3dBaseModel` from .yaml or .json file.
 
         Parameters
         ----------
         fname : str
             Full path to the .yaml or .json file to load the :class:`Tidy3dBaseModel` from.
-        **parse_kwargs
-            Keyword arguments passed to either pydantic's ``parse_file`` or ``parse_raw`` methods
-            for ``.json`` and ``.yaml`` file formats, respectively.
+        group_path : str, optional
+            Path to a group inside the file to use as the base level. Only for ``.hdf5`` files.
+        **parse_obj_kwargs
+            Keyword arguments passed to either pydantic's ``parse_obj`` function when loading model.
+
         Returns
         -------
         :class:`Tidy3dBaseModel`
@@ -1828,6 +1831,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         >>> simulation = Simulation.from_file(fname='folder/sim.json') # doctest: +SKIP
         """
 
-        updater = Updater.from_file(fname)
-        sim_dict = updater.update_to_current()
-        return cls.parse_obj(sim_dict, **parse_kwargs)
+        sim_dict = cls.dict_from_file(fname=fname, group_path=group_path)
+        updater = Updater(sim_dict=sim_dict)
+        sim_dict_updated = updater.update_to_current()
+        return cls.parse_obj(sim_dict_updated, **parse_obj_kwargs)

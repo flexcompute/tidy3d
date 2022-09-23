@@ -153,7 +153,22 @@ def enforce_monitor_fields_present():
     def _contains_fields(cls, values):
         """Make sure the initially specified fields are here."""
         for field_name in values.get("monitor").fields:
-            assert values.get(field_name) is not None, f"missing field {field_name}"
+            if values.get(field_name) is None:
+                raise SetupError(f"missing field {field_name}")
         return values
 
     return _contains_fields
+
+
+def required_if_symmetry_present(field_name: str):
+    """Make a field required (not None) if any non-zero symmetry eigenvalue is present."""
+
+    @pydantic.validator(field_name, allow_reuse=True, always=True)
+    def _make_required(cls, val, values):
+        """Ensure val is not None if the symmetry is non-zero along any dimension."""
+        symmetry = values.get("symmetry")
+        if any(sym_val != 0 for sym_val in symmetry) and val is None:
+            raise SetupError(f"'{field_name}' must be provided if symmetry present.")
+        return val
+
+    return _make_required

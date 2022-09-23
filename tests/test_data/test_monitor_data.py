@@ -8,9 +8,11 @@ from tidy3d.components.monitor import FieldMonitor, FieldTimeMonitor, Permittivi
 from tidy3d.components.monitor import ModeSolverMonitor, ModeMonitor
 from tidy3d.components.monitor import FluxMonitor, FluxTimeMonitor
 from tidy3d.components.mode import ModeSpec
-from tidy3d.log import DataError
+from tidy3d.log import DataError, SetupError
 
+from tidy3d.components.data.dataset import FieldDataset
 from tidy3d.components.data.monitor_data import FieldData, FieldTimeData, PermittivityData
+
 from tidy3d.components.data.monitor_data import ModeSolverData, ModeData
 from tidy3d.components.data.monitor_data import FluxData, FluxTimeData, DiffractionData
 
@@ -21,8 +23,8 @@ from .test_data_arrays import make_mode_amps_data_array, make_mode_index_data_ar
 from .test_data_arrays import make_diffraction_data_array
 from .test_data_arrays import FIELD_MONITOR, FIELD_TIME_MONITOR, MODE_SOLVE_MONITOR
 from .test_data_arrays import MODE_MONITOR, PERMITTIVITY_MONITOR, FLUX_MONITOR, FLUX_TIME_MONITOR
-from .test_data_arrays import DIFFRACTION_MONITOR
-from ..utils import clear_tmp
+from .test_data_arrays import DIFFRACTION_MONITOR, SIM_SYM, SIM
+from ..utils import clear_tmp, assert_log_level
 
 # data array instances
 AMPS = make_mode_amps_data_array()
@@ -34,22 +36,30 @@ FLUX_TIME = make_flux_time_data_array()
 
 
 def make_field_data(symmetry: bool = True):
+    sim = SIM_SYM if symmetry else SIM
     return FieldData(
         monitor=FIELD_MONITOR,
         Ex=make_scalar_field_data_array("Ex", symmetry),
         Ey=make_scalar_field_data_array("Ey", symmetry),
         Ez=make_scalar_field_data_array("Ez", symmetry),
         Hz=make_scalar_field_data_array("Hz", symmetry),
+        symmetry=sim.symmetry,
+        symmetry_center=sim.center,
+        grid_expanded=sim.discretize(FIELD_MONITOR, extend=True),
     )
 
 
 def make_field_time_data(symmetry: bool = True):
+    sim = SIM_SYM if symmetry else SIM
     return FieldTimeData(
         monitor=FIELD_TIME_MONITOR,
         Ex=make_scalar_field_time_data_array("Ex", symmetry),
         Ey=make_scalar_field_time_data_array("Ey", symmetry),
         Ez=make_scalar_field_time_data_array("Ez", symmetry),
         Hz=make_scalar_field_time_data_array("Ez", symmetry),
+        symmetry=sim.symmetry,
+        symmetry_center=sim.center,
+        grid_expanded=sim.discretize(FIELD_TIME_MONITOR, extend=True),
     )
 
 
@@ -62,16 +72,23 @@ def make_mode_solver_data():
         Hx=make_scalar_mode_field_data_array("Hx"),
         Hy=make_scalar_mode_field_data_array("Hy"),
         Hz=make_scalar_mode_field_data_array("Hz"),
+        symmetry=SIM_SYM.symmetry,
+        symmetry_center=SIM_SYM.center,
+        grid_expanded=SIM_SYM.discretize(MODE_SOLVE_MONITOR, extend=True),
         n_complex=N_COMPLEX.copy(),
     )
 
 
 def make_permittivity_data(symmetry: bool = True):
+    sim = SIM_SYM if symmetry else SIM
     return PermittivityData(
         monitor=PERMITTIVITY_MONITOR,
         eps_xx=make_scalar_field_data_array("Ex", symmetry),
         eps_yy=make_scalar_field_data_array("Ey", symmetry),
         eps_zz=make_scalar_field_data_array("Ez", symmetry),
+        symmetry=sim.symmetry,
+        symmetry_center=sim.center,
+        grid_expanded=sim.discretize(PERMITTIVITY_MONITOR, extend=True),
     )
 
 
@@ -113,11 +130,13 @@ def test_field_time_data():
         _ = getattr(data, field)
 
 
-def test_mode_field_data():
+def test_mode_solver_data():
     data = make_mode_solver_data()
     for field in "EH":
         for component in "xyz":
             _ = getattr(data, field + component)
+    data.n_eff
+    data.k_eff
 
 
 def test_permittivity_data():
@@ -130,6 +149,8 @@ def test_mode_data():
     data = make_mode_data()
     _ = data.amps
     _ = data.n_complex
+    _ = data.n_eff
+    _ = data.k_eff
 
 
 def test_flux_data():
@@ -188,12 +209,8 @@ def test_sel_mode_index():
 
     data = make_mode_solver_data()
     field_data = data.sel_mode_index(mode_index=0)
-    assert isinstance(field_data, FieldData), "ModeSolverData wasnt converted to FieldData."
-    assert isinstance(
-        field_data.monitor, FieldMonitor
-    ), "ModeSolverMonitor wasnt converted to FieldMonitor."
     for _, scalar_field in field_data.field_components.items():
-        assert "mode_index" not in scalar_field.coords, "mode_index coordinate remained in data."
+        assert "mode_index" in scalar_field.coords, "mode_index coordinate removed from data."
 
 
 def _test_eq():
@@ -212,21 +229,41 @@ def test_empty_array():
     coords = {"x": np.arange(10), "y": np.arange(10), "z": np.arange(10), "t": []}
     fields = {"Ex": td.ScalarFieldTimeDataArray(np.random.rand(10, 10, 10, 0), coords=coords)}
     monitor = td.FieldTimeMonitor(size=(1, 1, 1), fields=["Ex"], name="test")
-    field_data = td.FieldTimeData(monitor=monitor, **fields)
+    field_data = td.FieldTimeData(
+        monitor=monitor,
+        symmetry=SIM.symmetry,
+        symmetry_center=SIM.center,
+        grid_expanded=SIM.discretize(monitor, extend=True),
+        **fields
+    )
 
 
-def test_empty_list():
+# NOTE: can remove this? lets not support empty tuple or list, use np.zeros()
+def _test_empty_list():
     coords = {"x": np.arange(10), "y": np.arange(10), "z": np.arange(10), "t": []}
     fields = {"Ex": td.ScalarFieldTimeDataArray([], coords=coords)}
     monitor = td.FieldTimeMonitor(size=(1, 1, 1), fields=["Ex"], name="test")
-    field_data = td.FieldTimeData(monitor=monitor, **fields)
+    field_data = td.FieldTimeData(
+        monitor=monitor,
+        symmetry=SIM.symmetry,
+        symmetry_center=SIM.center,
+        grid_expanded=SIM.discretize(monitor, extend=True),
+        **fields
+    )
 
 
-def test_empty_tuple():
+# NOTE: can remove this? lets not support empty tuple or list, use np.zeros()
+def _test_empty_tuple():
     coords = {"x": np.arange(10), "y": np.arange(10), "z": np.arange(10), "t": []}
     fields = {"Ex": td.ScalarFieldTimeDataArray((), coords=coords)}
     monitor = td.FieldTimeMonitor(size=(1, 1, 1), fields=["Ex"], name="test")
-    field_data = td.FieldTimeData(monitor=monitor, **fields)
+    field_data = td.FieldTimeData(
+        monitor=monitor,
+        symmetry=SIM.symmetry,
+        symmetry_center=SIM.center,
+        grid_expanded=SIM.discretize(monitor, extend=True),
+        **fields
+    )
 
 
 @clear_tmp
@@ -234,7 +271,13 @@ def test_empty_io():
     coords = {"x": np.arange(10), "y": np.arange(10), "z": np.arange(10), "t": []}
     fields = {"Ex": td.ScalarFieldTimeDataArray(np.random.rand(10, 10, 10, 0), coords=coords)}
     monitor = td.FieldTimeMonitor(size=(1, 1, 1), name="test", fields=["Ex"])
-    field_data = td.FieldTimeData(monitor=monitor, **fields)
+    field_data = td.FieldTimeData(
+        monitor=monitor,
+        symmetry=SIM.symmetry,
+        symmetry_center=SIM.center,
+        grid_expanded=SIM.discretize(monitor, extend=True),
+        **fields
+    )
     field_data.to_file("tests/tmp/field_data.hdf5")
     field_data = td.FieldTimeData.from_file("tests/tmp/field_data.hdf5")
     assert field_data.Ex.size == 0
@@ -245,3 +288,55 @@ def test_mode_solver_plot_field():
     ms_data = make_mode_solver_data()
     with pytest.raises(DeprecationWarning):
         ms_data.plot_field(1, 2, 3, z=5, b=True)
+
+
+def test_field_data_symmetry_present():
+
+    coords = {"x": np.arange(10), "y": np.arange(10), "z": np.arange(10), "t": []}
+    fields = {"Ex": td.ScalarFieldTimeDataArray(np.random.rand(10, 10, 10, 0), coords=coords)}
+    monitor = td.FieldTimeMonitor(size=(1, 1, 1), name="test", fields=["Ex"])
+
+    # works if no symmetry specified
+    field_data = td.FieldTimeData(monitor=monitor, **fields)
+
+    # fails if symmetry specified but missing symmetry center
+    with pytest.raises(SetupError):
+        field_data = td.FieldTimeData(
+            monitor=monitor,
+            symmetry=(1, -1, 0),
+            grid_expanded=SIM.discretize(monitor, extend=True),
+            **fields
+        )
+
+    # fails if symmetry specified but missing etended grid
+    with pytest.raises(SetupError):
+        field_data = td.FieldTimeData(
+            monitor=monitor, symmetry=(1, -1, 1), symmetry_center=(0, 0, 0), **fields
+        )
+
+
+def test_data_array_attrs():
+    """Note, this is here because the attrs only get set when added to a pydantic model."""
+    data = make_flux_data()
+    assert data.flux.attrs, "data has no attrs"
+    assert data.flux.f.attrs, "data coordinates have no attrs"
+
+
+def test_data_array_json_warns(caplog):
+    data = make_flux_data()
+    data.to_file("tests/tmp/flux.json")
+    assert_log_level(caplog, 30)
+
+
+def test_data_array_hdf5_no_warnings(caplog):
+    data = make_flux_data()
+    data.to_file("tests/tmp/flux.hdf5")
+    assert_log_level(caplog, None)
+
+
+def test_diffraction_data_use_medium():
+    data = make_diffraction_data()
+    new_monitor = data.monitor.copy(update=dict(medium=td.Medium(permittivity=4)))
+    data = data.copy(update=dict(monitor=new_monitor))
+    assert np.allclose(data.wavelength, td.C_0 / data.frequencies / 2.0)
+    assert np.allclose(data.wavenumber, 2 * 2 * np.pi * data.frequencies / td.C_0)

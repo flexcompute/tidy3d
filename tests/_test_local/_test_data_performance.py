@@ -4,11 +4,13 @@ import os
 import sys
 from memory_profiler import profile
 
-from tidy3d.components.data import SimulationData, FieldData, ScalarFieldDataArray
+from tidy3d.components.data.sim_data import SimulationData
+from tidy3d.components.data.monitor_data import FieldData
+from tidy3d.components.data.data_array import ScalarFieldDataArray
 from tidy3d.components.monitor import FieldMonitor
 from tidy3d.components.simulation import Simulation
 from tidy3d.components.source import PointDipole, GaussianPulse
-from tidy3d.components.grid import GridSpec
+from tidy3d.components.grid.grid_spec import GridSpec
 
 import tidy3d as td
 
@@ -60,7 +62,7 @@ def make_sim_data_1(file_size_gb=FILE_SIZE_GB):
     )
     return SimulationData(
         simulation=sim,
-        monitor_data=dict(test=field_data),
+        data=(field_data,),
     )
 
 
