@@ -13,8 +13,8 @@ from .validators import assert_plane, validate_unique
 from .base import cached_property
 from .mode import ModeSpec
 from .viz import PlotParams, plot_params_monitor, ARROW_COLOR_MONITOR, ARROW_ALPHA
-from ..log import SetupError, log, DataError, ValidationError
 from ..constants import HERTZ, SECOND, MICROMETER, RADIAN, inf
+from ..log import SetupError, log, ValidationError
 
 
 BYTES_REAL = 4
@@ -118,6 +118,7 @@ class TimeMonitor(Monitor, ABC):
     def time_inds(self, tmesh: ArrayLike[float, 1]) -> Tuple[int, int]:
         """Compute the starting and stopping index of the monitor in a given discrete time mesh."""
 
+        tmesh = np.array(tmesh)
         tind_beg, tind_end = (0, 0)
 
         if tmesh.size == 0:
@@ -189,7 +190,7 @@ class AbstractFieldMonitor(Monitor, ABC):
         """Given a tuple of the number of cells spanned by the monitor along each dimension,
         return the number of cells one would have after downsampling based on ``interval_space``.
         """
-        num_cells_new = list(num_cells.copy())
+        num_cells_new = list(num_cells)
         for idx, interval in enumerate(self.interval_space):
             if interval == 1 or num_cells[idx] < 4 or (num_cells[idx] - 1) <= interval:
                 continue
@@ -505,7 +506,7 @@ class AbstractNear2FarMonitor(SurfaceIntegrationMonitor, FreqMonitor):
         # assume that the monitor's axis is in the direction where the monitor is thinnest
         # and errors if the monitor is a box
         if self.size.count(0.0) != 1:
-            raise DataError(
+            raise SetupError(
                 "Requested ``axis`` property for a box monitor; ``axis`` is defined "
                 "for surface monitors only."
             )

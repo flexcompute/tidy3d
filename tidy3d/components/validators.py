@@ -108,18 +108,13 @@ def validate_mode_objects_symmetry(field_name: str):
     return check_symmetry
 
 
-def assert_unique_names(field_name: str, check_mediums=False):
+def assert_unique_names(field_name: str):
     """makes sure all elements of a field have unique .name values"""
 
     @pydantic.validator(field_name, allow_reuse=True, always=True)
     def field_has_unique_names(cls, val, values):
-        """check for intersection of each structure with simulation bounds."""
-        if check_mediums:
-            background = values.get("medium")
-            field_names = [background] + [field.medium.name for field in val if field.medium.name]
-            field_names = [name for name in field_names if ("]" not in name) or ("[" not in name)]
-        else:
-            field_names = [field.name for field in val if field.name]
+        """make sure each element of val has a unique name (if specified)."""
+        field_names = [field.name for field in val if field.name]
         unique_names = set(field_names)
         if len(unique_names) != len(field_names):
             raise SetupError(f"'{field_name}' names are not unique, given {field_names}.")
@@ -149,20 +144,6 @@ def assert_objects_in_sim_bounds(field_name: str):
         return val
 
     return objects_in_sim_bounds
-
-
-def set_names(field_name: str):
-    """set names"""
-
-    @pydantic.validator(field_name, allow_reuse=True, always=True)
-    def set_unique_names(cls, val):
-        """check for intersection of each structure with simulation bounds."""
-        for position_index, geometric_object in enumerate(val):
-            if not geometric_object.name:
-                geometric_object.name = f"{field_name}[{position_index}]"
-        return val
-
-    return set_unique_names
 
 
 def enforce_monitor_fields_present():

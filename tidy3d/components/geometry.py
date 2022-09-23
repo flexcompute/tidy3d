@@ -812,24 +812,6 @@ class Planar(Geometry, ABC):
             `Shapely's Documentaton <https://shapely.readthedocs.io/en/stable/project.html>`_.
         """
 
-    @cached_property
-    def bounds(self) -> Bound:
-        """Returns bounding box for planar geometry, may implement for subclasses.
-
-        Returns
-        -------
-        Tuple[float, float, float], Tuple[float, float float]
-            Min and max bounds packaged as ``(minx, miny, minz), (maxx, maxy, maxz)``.
-        """
-        z0 = self.center_axis
-        z_min = z0 - self.length_axis / 2.0
-        z_max = z0 + self.length_axis / 2.0
-        shape_top = self.intersections(z=z0)[0]
-        (xmin, ymin, xmax, ymax) = shape_top.bounds
-        bounds_min = self.unpop_axis(z_min, (xmin, ymin), axis=self.axis)
-        bounds_max = self.unpop_axis(z_max, (xmax, ymax), axis=self.axis)
-        return bounds_min, bounds_max
-
     def _order_axis(self, axis: int) -> int:
         """Order the axis as if self.axis is along z-direction.
 

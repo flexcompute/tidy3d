@@ -215,16 +215,10 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
     _mode_sources_symmetries = validate_mode_objects_symmetry("sources")
     _mode_monitors_symmetries = validate_mode_objects_symmetry("monitors")
 
-    # assign names to unnamed structures, sources, and mediums
-    # _structure_names = set_names("structures")
-    # _source_names = set_names("sources")
-
     # make sure all names are unique
     _unique_structure_names = assert_unique_names("structures")
     _unique_source_names = assert_unique_names("sources")
     _unique_monitor_names = assert_unique_names("monitors")
-
-    # _unique_medium_names = assert_unique_names("structures", check_mediums=True)
 
     # _few_enough_mediums = validate_num_mediums()
     # _structures_not_at_edges = validate_structure_bounds_not_at_edges()
@@ -598,15 +592,6 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
             raise SetupError(
                 f"Simulation's monitors have {total_size_bytes:.2e} bytes of estimated storage, "
                 f"a maximum of {MAX_MONITOR_DATA_SIZE_BYTES:.2e} are allowed."
-            )
-
-    def _validate_run_time(self) -> None:
-        """Ensures that the simulation run time is > 0."""
-
-        if self.run_time <= 0:
-            raise SetupError(
-                "The `Simulation.run_time` parameter was left at its default value of 0.0. "
-                "For running a simulation on our servers it must be set to > 0.0."
             )
 
     """ Accounting """
@@ -1617,8 +1602,8 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
             Minimum wavelength in the material (microns).
         """
         freq_max = max(source.source_time.freq0 for source in self.sources)
-        wvl_min = C_0 / min(freq_max)
-        eps_max = max(abs(structure.medium.get_eps(freq_max)) for structure in self.structures)
+        wvl_min = C_0 / freq_max
+        eps_max = max(abs(structure.medium.eps_model(freq_max)) for structure in self.structures)
         n_max, _ = AbstractMedium.eps_complex_to_nk(eps_max)
         return wvl_min / n_max
 

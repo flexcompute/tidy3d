@@ -148,7 +148,7 @@ OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 
 class Polygon:
-    """Adapt Shapely or GeoJSON/geo_interface polygons to a common interface"""
+    """Adapt Shapely polygons to a common interface"""
 
     def __init__(self, context):
         if isinstance(context, dict):
@@ -182,24 +182,11 @@ def polygon_path(polygon):
         vals[0] = Path.MOVETO
         return vals
 
-    if hasattr(polygon, "geom_type"):  # Shapely
-        ptype = polygon.geom_type
-        if ptype == "Polygon":
-            polygon = [Polygon(polygon)]
-        elif ptype == "MultiPolygon":
-            polygon = [Polygon(p) for p in polygon.geoms]
-        else:
-            raise ValueError("A polygon or multi-polygon representation is required")
-
-    else:  # GeoJSON
-        polygon = getattr(polygon, "__geo_interface__", polygon)
-        ptype = polygon["type"]
-        if ptype == "Polygon":
-            polygon = [Polygon(polygon)]
-        elif ptype == "MultiPolygon":
-            polygon = [Polygon(p) for p in polygon["coordinates"]]
-        else:
-            raise ValueError("A polygon or multi-polygon representation is required")
+    ptype = polygon.geom_type
+    if ptype == "Polygon":
+        polygon = [Polygon(polygon)]
+    elif ptype == "MultiPolygon":
+        polygon = [Polygon(p) for p in polygon.geoms]
 
     vertices = concatenate(
         [

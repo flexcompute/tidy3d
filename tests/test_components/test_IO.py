@@ -1,3 +1,4 @@
+"""Tests file export and loading."""
 import os
 import json
 
@@ -16,10 +17,10 @@ from tidy3d import *
 from tidy3d import __version__
 import tidy3d as td
 from tidy3d.components.base import Tidy3dBaseModel
-from .utils import SIM_FULL as SIM
-from .utils import SIM_MONITORS as SIM2
-from .utils import clear_tmp
-from .test_data_monitor import make_flux_data
+from ..utils import SIM_FULL as SIM
+from ..utils import SIM_MONITORS as SIM2
+from ..utils import clear_tmp
+from ..test_data.test_data_monitor import make_flux_data
 
 # Store an example of every minor release simulation to test updater in the future
 SIM_DIR = "tests/sims"
@@ -42,6 +43,24 @@ def test_simulation_load_export_yaml():
     SIM.to_file(path)
     SIM2 = Simulation.from_file(path)
     assert SIM == SIM2, "original and loaded simulations are not the same"
+
+
+@clear_tmp
+def test_component_load_export():
+
+    path = "tests/tmp/medium.json"
+    td.Medium().to_file(path)
+    M2 = td.Medium.from_file(path)
+    assert td.Medium() == M2, "original and loaded medium are not the same"
+
+
+@clear_tmp
+def test_component_load_export_yaml():
+
+    path = "tests/tmp/medium.yaml"
+    td.Medium().to_file(path)
+    M2 = td.Medium.from_file(path)
+    assert td.Medium() == M2, "original and loaded medium are not the same"
 
 
 @clear_tmp

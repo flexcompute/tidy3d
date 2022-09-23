@@ -7,7 +7,8 @@ import gdspy
 import tidy3d as td
 from tidy3d.web.container import Batch
 from tidy3d.plugins.smatrix.smatrix import Port, ComponentModeler
-from .utils import clear_tmp, run_emulated
+from tidy3d.log import SetupError, Tidy3dKeyError
+from ..utils import clear_tmp, run_emulated
 
 # Waveguide height
 wg_height = 0.22
@@ -37,7 +38,7 @@ def make_coupler():
     fwidth = freq0 / 10
 
     # Spatial grid specification
-    grid_spec = td.GridSpec.auto(min_steps_per_wvl=14, wavelength=lambda0)
+    grid_spec = td.GridSpec.auto(min_steps_per_wvl=14, wavelength=3 * lambda0)
 
     # Permittivity of waveguide and substrate
     wg_n = 3.48
@@ -218,8 +219,64 @@ def run_component_modeler(monkeypatch, modeler: ComponentModeler):
     return s_matrix
 
 
+def test_validate_no_sources():
+    modeler = make_component_modeler()
+    source = td.PointDipole(
+        source_time=td.GaussianPulse(freq0=2e14, fwidth=1e14), polarization="Ex"
+    )
+    sim_w_source = modeler.simulation.copy(update=dict(sources=(source,)))
+    with pytest.raises(SetupError):
+        modeler_w_source = modeler.copy(update=dict(simulation=sim_w_source))
+
+
+def test_element_mappings_none():
+    modeler = make_component_modeler()
+    modeler.matrix_indices_run_sim(ports=[], element_mappings=None)
+
+
+def test_no_port():
+    modeler = make_component_modeler()
+    ports = modeler.ports
+    with pytest.raises(Tidy3dKeyError):
+        modeler.get_port_by_name(ports=ports, port_name="NOT_A_PORT")
+
+
+def test_ports_too_close_boundary():
+    modeler = make_component_modeler()
+    grid_boundaries = modeler.simulation.grid.boundaries.to_list[0]
+    way_outside = grid_boundaries[0] - 1000
+    xmin = grid_boundaries[1]
+    xmax = grid_boundaries[-2]
+    for edge_val, port_dir in zip((way_outside, xmin, xmax), ("+", "+", "-")):
+        port_at_edge = modeler.ports[0].copy()
+        port_center_at_edge = list(port_at_edge.center)
+        port_center_at_edge[0] = edge_val
+        port_at_edge = port_at_edge.copy(
+            update=dict(center=port_center_at_edge, direction=port_dir)
+        )
+        with pytest.raises(SetupError):
+            modeler._shift_value_signed(simulation=modeler.simulation, port=port_at_edge)
+
+
+def test_validate_batch_supplied():
+
+    sim = make_coupler()
+    modeler = ComponentModeler(simulation=sim, ports=[], freq=sim.monitors[0].freqs[0], batch=None)
+
+
+def test_plot_sim():
+    modeler = make_component_modeler()
+    modeler.plot_sim(z=0)
+
+
 def test_make_component_modeler():
     modeler = make_component_modeler()
+
+
+def test_solve(monkeypatch):
+    modeler = make_component_modeler()
+    monkeypatch.setattr(ComponentModeler, "run", lambda self, path_dir: None)
+    modeler.solve()
 
 
 def test_run_component_modeler(monkeypatch):

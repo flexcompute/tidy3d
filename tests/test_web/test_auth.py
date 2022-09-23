@@ -3,13 +3,13 @@ import json
 
 import pytest
 import requests
+import importlib
 
 import tidy3d.web.auth as tidy3d_auth
 import tidy3d.web.config as config
-from tests.utils import get_test_root_dir
-from tests.web.mock_web import MockResponse
 from tidy3d import log
-import importlib
+from .mock_web import MockResponse
+from ..utils import get_test_root_dir
 
 
 @pytest.fixture

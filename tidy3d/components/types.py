@@ -32,48 +32,6 @@ def annotate_type(UnionType):  # pylint:disable=invalid-name
 Numpy = np.ndarray
 
 
-class TypedArray(np.ndarray):
-    """A numpy array with a type given by cls.inner_type"""
-
-    @classmethod
-    def __get_validators__(cls):
-        """boilerplate"""
-        yield cls.validate_to_numpy
-
-    @classmethod
-    def validate_to_numpy(cls, val):
-        """convert to numpy array"""
-        return np.array(val)
-
-    @classmethod
-    def __modify_schema__(cls, field_schema):
-        """Sets the schema of NumpyArray."""
-        field_schema.update(NumpyArray.schema())
-
-
-class NumpyArray(pydantic.BaseModel):
-    """Wrapper around numpy arrays that has a well defined json schema."""
-
-    data_list: list
-
-    @property
-    def arr(self):
-        """Contructs a numpy array representation of the NumpyArray."""
-        return np.array(self.data_list)
-
-
-class ArrayMeta(type):
-    """metclass for Array, enables Array[type] -> TypedArray"""
-
-    def __getitem__(cls, t):
-        """Array[t] -> TypedArray"""
-        return type("Array", (TypedArray,), {"inner_type": t})
-
-
-class Array(np.ndarray, metaclass=ArrayMeta):
-    """type of numpy array with annotated type (Array[float], Array[complex])"""
-
-
 class TypedArrayLike(np.ndarray):
     """A numpy array with a type given by cls.inner_type"""
 
@@ -174,22 +132,6 @@ class tidycomplex(complex):  # pylint: disable=invalid-name
     def __modify_schema__(cls, field_schema):
         """Sets the schema of ComplexNumber."""
         field_schema.update(ComplexNumber.schema())
-
-
-""" Data """
-
-
-class DataObject(pydantic.BaseModel):
-    """An object used in tidy3d model that subclasses xr.DataArray."""
-
-    data_dict: dict
-    data_type: type
-
-    @property
-    def as_data_array(self):
-        """return DataArray respresentation of this DataObject."""
-        # is this used?
-        return self.data_type.from_dict(self.data_dict)
 
 
 """ geometric """

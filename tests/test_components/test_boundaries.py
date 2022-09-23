@@ -1,4 +1,4 @@
-""" test the grid operations """
+"""Tests boundary conditions."""
 
 import numpy as np
 import pytest
@@ -9,11 +9,34 @@ from tidy3d.components.boundary import Periodic, PECBoundary, PMCBoundary, Bloch
 from tidy3d.components.boundary import PML, StablePML, Absorber
 from tidy3d.components.source import GaussianPulse, PlaneWave, PointDipole
 from tidy3d.components.types import TYPE_TAG_STR
-from tidy3d.log import SetupError
-from .utils import assert_log_level
+from tidy3d.log import SetupError, ValidationError, DataError
+from ..utils import assert_log_level
 
 
-def test_boundaryedge_types():
+def test_bloch_phase():
+    bb = BlochBoundary(bloch_vec=1.0)
+    ph = bb.bloch_phase
+
+
+def test_imaginary_bloch_phase():
+    with pytest.raises(ValidationError):
+        bb = BlochBoundary(bloch_vec=1j)
+
+
+@pytest.mark.parametrize("dimension", ["x", "y", "z"])
+def test_getitem(dimension):
+    spec = BoundarySpec.pml(y=True, z=True)
+    edge_spec = spec[dimension]
+
+
+def test_getitem_not_a_dim():
+    spec = BoundarySpec.pml(y=True, z=True)
+    with pytest.raises(DataError):
+        edge_spec = spec["NOT_A_DIMENSION"]
+
+
+@pytest.mark.parametrize("plane_wave_dir", ["+", "-"])
+def test_boundaryedge_types(plane_wave_dir):
     """Test that each type of boundary condition can be defined."""
     periodic = Periodic()
     pec = PECBoundary()
@@ -22,7 +45,11 @@ def test_boundaryedge_types():
     bloch = BlochBoundary(bloch_vec=1)
     pulse = GaussianPulse(freq0=200e12, fwidth=20e12)
     source = PlaneWave(
-        size=(td.inf, td.inf, 0), source_time=pulse, direction="+", angle_theta=1.5, angle_phi=0.3
+        size=(td.inf, td.inf, 0),
+        source_time=pulse,
+        direction=plane_wave_dir,
+        angle_theta=1.5,
+        angle_phi=0.3,
     )
     bloch_from_source = BlochBoundary.from_source(source=source, domain_size=5, axis=0)
 
@@ -41,23 +68,31 @@ def test_boundaryedge_types():
 def test_boundary_validators():
     """Test the validators in class `Boundary`"""
 
+    bloch = BlochBoundary(bloch_vec=1)
+    pec = PECBoundary()
+    pml = PML(num_layers=10)
+    periodic = Periodic()
+
     # test `bloch_on_both_sides`
     with pytest.raises(SetupError) as e_info:
-        bloch = BlochBoundary(bloch_vec=1)
-        pec = PECBoundary()
         boundary = Boundary(plus=bloch, minus=pec)
 
     # test `periodic_with_pml`
     with pytest.raises(SetupError) as e_info:
-        periodic = Periodic()
-        pml = PML(num_layers=10)
         boundary = Boundary(plus=periodic, minus=pml)
 
 
-@pytest.mark.parametrize("boundary,log_level", [(PMCBoundary(), None), (Periodic(), 30)])
+@pytest.mark.parametrize("boundary, log_level", [(PMCBoundary(), None), (Periodic(), 30)])
 def test_boundary_validator_warnings(caplog, boundary, log_level):
     """Test the validators in class `Boundary` which should show a warning but not an error"""
     boundary = Boundary(plus=PECBoundary(), minus=boundary)
+    assert_log_level(caplog, log_level)
+
+
+@pytest.mark.parametrize("boundary, log_level", [(PMCBoundary(), None), (Periodic(), 30)])
+def test_boundary_validator_warnings_switched(caplog, boundary, log_level):
+    """Test the validators in class `Boundary` which should show a warning but not an error"""
+    boundary = Boundary(minus=PECBoundary(), plus=boundary)
     assert_log_level(caplog, log_level)
 
 

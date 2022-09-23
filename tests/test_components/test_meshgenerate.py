@@ -1,3 +1,4 @@
+"""Tests generating meshes."""
 import numpy as np
 import pytest
 

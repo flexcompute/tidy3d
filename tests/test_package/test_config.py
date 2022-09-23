@@ -1,9 +1,12 @@
 """ test the grid operations """
 
 import pytest
+import pydantic
 
 import tidy3d as td
 from tidy3d.log import log, DEFAULT_LEVEL, LEVEL_MAP
+
+from ..utils import assert_log_level
 
 
 def test_logging_level():
@@ -16,6 +19,11 @@ def test_logging_level():
     for key, val in LEVEL_MAP.items():
         td.config.logging_level = key
         assert log.level == val
+
+
+def test_log_level_not_found():
+    with pytest.raises(pydantic.ValidationError):
+        td.config.logging_level = "NOT_A_LEVEL"
 
 
 def _test_frozen():
