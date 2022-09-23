@@ -4,8 +4,8 @@ import tidy3d as td
 import pytest
 
 from tidy3d.log import SetupError
+from ..utils import clear_tmp
 
-# Settings
 
 MEDIUM = td.Medium(permittivity=3)
 WAVELENGTH = 1
@@ -124,17 +124,18 @@ def test_n2f_monitors():
     )
 
 
+@clear_tmp
 def test_n2f_data():
     """Make sure all the near-to-far data structures can be created."""
 
     f = np.linspace(1e14, 2e14, 10)
     theta = np.linspace(0, np.pi, 10)
     phi = np.linspace(0, 2 * np.pi, 20)
-    coords_tp = dict(f=f, theta=theta, phi=phi)
+    coords_tp = dict(theta=theta, phi=phi, f=f)
     values_tp = (1 + 1j) * np.random.random((len(theta), len(phi), len(f)))
     scalar_field_tp = td.Near2FarAngleDataArray(values_tp, coords=coords_tp)
     monitor_tp = td.Near2FarAngleMonitor(
-        center=(1, 2, 3), size=(2, 2, 2), freqs=f, name="n2f_monitor", phi=phi, theta=theta
+        center=(1, 2, 3), size=(2, 2, 2), freqs=f, name="n2f_monitor_tp", phi=phi, theta=theta
     )
     data_tp = td.Near2FarAngleData(
         monitor=monitor_tp,
@@ -146,14 +147,14 @@ def test_n2f_data():
 
     x = np.linspace(0, 5, 10)
     y = np.linspace(0, 10, 20)
-    coords_xy = dict(f=f, x=x, y=y)
+    coords_xy = dict(x=x, y=y, f=f)
     values_xy = (1 + 1j) * np.random.random((len(x), len(y), len(f)))
     scalar_field_xy = td.Near2FarCartesianDataArray(values_xy, coords=coords_xy)
     monitor_xy = td.Near2FarCartesianMonitor(
         center=(1, 2, 3),
         size=(2, 2, 2),
         freqs=f,
-        name="n2f_monitor",
+        name="n2f_monitor_xy",
         x=x,
         y=y,
         plane_axis=2,
@@ -169,11 +170,11 @@ def test_n2f_data():
 
     ux = np.linspace(0, 5, 10)
     uy = np.linspace(0, 10, 20)
-    coords_u = dict(f=f, ux=ux, uy=uy)
+    coords_u = dict(ux=ux, uy=uy, f=f)
     values_u = (1 + 1j) * np.random.random((len(ux), len(uy), len(f)))
     scalar_field_u = td.Near2FarKSpaceDataArray(values_u, coords=coords_u)
     monitor_u = td.Near2FarKSpaceMonitor(
-        center=(1, 2, 3), size=(2, 2, 2), freqs=f, name="n2f_monitor", ux=ux, uy=uy, u_axis=2
+        center=(1, 2, 3), size=(2, 2, 2), freqs=f, name="n2f_monitor_u", ux=ux, uy=uy, u_axis=2
     )
     data_u = td.Near2FarKSpaceData(
         monitor=monitor_u,
@@ -182,6 +183,18 @@ def test_n2f_data():
         Ltheta=scalar_field_u,
         Lphi=scalar_field_u,
     )
+
+    sim = td.Simulation(
+        size=(7, 7, 7),
+        grid_spec=td.GridSpec.auto(wavelength=5.0),
+        monitors=[monitor_xy, monitor_u, monitor_tp],
+        run_time=1e-12,
+    )
+
+    sim_data = td.SimulationData(simulation=sim, data=(data_xy, data_u, data_tp))
+    sim_data[monitor_xy.name]
+    sim_data.to_file("tests/tmp/sim_data_n2f.hdf5")
+    sim_data = td.SimulationData.from_file("tests/tmp/sim_data_n2f.hdf5")
 
 
 def test_n2f_clientside():
@@ -216,9 +229,12 @@ def test_n2f_clientside():
         Hx=scalar_field,
         Hy=scalar_field,
         Hz=scalar_field,
+        symmetry=sim.symmetry,
+        symmetry_center=sim.center,
+        grid_expanded=sim.discretize(monitor, extend=True),
     )
 
-    sim_data = td.SimulationData(simulation=sim, monitor_data={"near_field": data})
+    sim_data = td.SimulationData(simulation=sim, data=(data,))
 
     n2f = td.RadiationVectors.from_near_field_monitors(
         sim_data=sim_data, near_monitors=[monitor], normal_dirs=["+"]
@@ -236,9 +252,15 @@ def test_n2f_clientside():
     rad_vecs_angular.fields(r=20)
     rad_vecs_angular.radar_cross_section()
     rad_vecs_angular.power(r=20)
+    rad_vecs_angular.phi
+    rad_vecs_angular.theta
+    for key, val in rad_vecs_angular.field_components.items():
+        val.sel(f=f0)
 
     rad_vecs_cartesian.fields()
     rad_vecs_cartesian.power()
 
     rad_vecs_kspace.fields()
     rad_vecs_kspace.power()
+    rad_vecs_kspace.ux
+    rad_vecs_kspace.uy

@@ -10,7 +10,7 @@ from tidy3d.components.data.data_array import FluxDataArray, FluxTimeDataArray
 from tidy3d.components.data.data_array import DiffractionDataArray
 from tidy3d.components.source import PointDipole, GaussianPulse, ModeSource
 from tidy3d.components.simulation import Simulation
-from tidy3d.components.grid import GridSpec
+from tidy3d.components.grid.grid_spec import GridSpec
 from tidy3d.components.mode import ModeSpec
 from tidy3d.components.monitor import FieldMonitor, FieldTimeMonitor, PermittivityMonitor
 from tidy3d.components.monitor import ModeSolverMonitor, ModeMonitor
@@ -144,7 +144,7 @@ def make_scalar_mode_field_data_array(grid_key: str, symmetry=True):
 
 
 def make_mode_amps_data_array():
-    values = (1 + 1j) * np.random.random((len(DIRECTIONS), len(FS), len(MODE_INDICES)))
+    values = (1 + 1j) * np.random.random((len(DIRECTIONS), len(MODE_INDICES), len(FS)))
     return ModeAmpsDataArray(
         values, coords=dict(direction=DIRECTIONS, mode_index=MODE_INDICES, f=FS)
     )
@@ -228,12 +228,6 @@ def test_flux_time_data_array():
 def test_diffraction_data_array():
     _, _, data = make_diffraction_data_array()
     data = data.interp(f=1.5e14)
-
-
-def test_attrs():
-    data = make_flux_data_array()
-    assert data.attrs, "data has no attrs"
-    assert data.f.attrs, "data coordinates have no attrs"
 
 
 def test_ops():

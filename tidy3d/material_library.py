@@ -9,7 +9,7 @@ def export_matlib_to_file(fname: str = "matlib.json") -> None:
 
     mat_lib_dict = {
         mat_name: {
-            var_name: json.loads(var._json_string())  # pylint: disable=protected-access
+            var_name: json.loads(var._json_string)  # pylint: disable=protected-access
             for var_name, var in mat.items()
         }
         for mat_name, mat in material_library.items()

@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import json
-from typing import Any, Optional
 from functools import wraps
 
 import rich
@@ -12,13 +11,14 @@ import yaml
 import numpy as np
 import h5py
 import xarray as xr
-from dask.base import tokenize
 
 from .types import ComplexNumber, Literal, TYPE_TAG_STR
 from ..log import FileError, log
+from .data.data_array import DataArray, DATA_ARRAY_TAG
 
 # default indentation (# spaces) in files
 INDENT = 4
+JSON_TAG = "JSON_STRING"
 
 
 class Tidy3dBaseModel(pydantic.BaseModel):
@@ -62,10 +62,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         json_encoders = {
             np.ndarray: lambda x: tuple(x.tolist()),
             complex: lambda x: ComplexNumber(real=x.real, imag=x.imag),
-            xr.DataArray: lambda x: {  # pylint:disable=unhashable-member
-                **x.to_dict(),  # original xarray dict
-                TYPE_TAG_STR: x.__class__.__name__,  # add the type info as well
-            },
+            xr.DataArray: DataArray._json_encoder,  # pylint:disable=unhashable-member, protected-access
         }
         frozen = True
         allow_mutation = False
@@ -73,13 +70,13 @@ class Tidy3dBaseModel(pydantic.BaseModel):
 
     _cached_properties = pydantic.PrivateAttr({})
 
-    def copy(self, validate: bool = True, **kwargs) -> Tidy3dBaseModel:
+    def copy(self, **kwargs) -> Tidy3dBaseModel:
         """Copy a Tidy3dBaseModel.  With ``deep=True`` as default."""
         if "deep" in kwargs and kwargs["deep"] is False:
             raise ValueError("Can't do shallow copy of component, set `deep=True` in copy().")
         kwargs.update(dict(deep=True))
         new_copy = pydantic.BaseModel.copy(self, **kwargs)
-        return self.validate(new_copy.dict()) if validate else new_copy
+        return self.validate(new_copy.dict())
 
     def help(self, methods: bool = False) -> None:
         """Prints message describing the fields and methods of a :class:`Tidy3dBaseModel`.
@@ -96,16 +93,19 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         rich.inspect(self, methods=methods)
 
     @classmethod
-    def from_file(cls, fname: str, **parse_kwargs) -> Tidy3dBaseModel:
+    def from_file(cls, fname: str, group_path: str = None, **parse_obj_kwargs) -> Tidy3dBaseModel:
         """Loads a :class:`Tidy3dBaseModel` from .yaml, .json, or .hdf5 file.
 
         Parameters
         ----------
         fname : str
             Full path to the .yaml or .json file to load the :class:`Tidy3dBaseModel` from.
-        **parse_kwargs
-            Keyword arguments passed to either pydantic's ``parse_file`` or ``parse_raw`` methods
-            for ``.json`` and ``.yaml`` file formats, respectively.
+        group_path : str, optional
+            Path to a group inside the file to use as the base level. Only for ``.hdf5`` files.
+            Starting `/` is optional.
+        **parse_obj_kwargs
+            Keyword arguments passed to either pydantic's ``parse_obj`` function when loading model.
+
         Returns
         -------
         :class:`Tidy3dBaseModel`
@@ -115,24 +115,51 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         -------
         >>> simulation = Simulation.from_file(fname='folder/sim.json') # doctest: +SKIP
         """
+        model_dict = cls.dict_from_file(fname=fname, group_path=group_path)
+        return cls.parse_obj(model_dict, **parse_obj_kwargs)
+
+    @classmethod
+    def dict_from_file(cls, fname: str, group_path: str = None) -> dict:
+        """Loads a dictionary containing the model from a .yaml, .json, or .hdf5 file.
+
+        Parameters
+        ----------
+        fname : str
+            Full path to the .yaml or .json file to load the :class:`Tidy3dBaseModel` from.
+        group_path : str, optional
+            Path to a group inside the file to use as the base level.
+
+        Returns
+        -------
+        dict
+            A dictionary containing the model.
+
+        Example
+        -------
+        >>> simulation = Simulation.from_file(fname='folder/sim.json') # doctest: +SKIP
+        """
+
+        if (".json" in fname or ".yaml" in fname) and (group_path is not None):
+            log.warning("'group_path' provided, but this feature only works with '.hdf5' files.")
+
         if ".json" in fname:
-            return cls.from_json(fname=fname, **parse_kwargs)
+            return cls.dict_from_json(fname=fname)
         if ".yaml" in fname:
-            return cls.from_yaml(fname=fname, **parse_kwargs)
+            return cls.dict_from_yaml(fname=fname)
         if ".hdf5" in fname:
-            return cls.from_hdf5(fname=fname, **parse_kwargs)
+            if group_path is None:
+                return cls.dict_from_hdf5(fname=fname)
+            return cls.dict_from_hdf5(fname=fname, group_path=group_path)
 
         raise FileError(f"File must be .json, .yaml, or .hdf5 type, given {fname}")
 
-    def to_file(self, fname: str, data_file: Optional[str] = None) -> None:
+    def to_file(self, fname: str) -> None:
         """Exports :class:`Tidy3dBaseModel` instance to .yaml, .json, or .hdf5 file
 
         Parameters
         ----------
         fname : str
             Full path to the .yaml or .json file to save the :class:`Tidy3dBaseModel` to.
-        data_file : str = None
-            Path to a separate hdf5 file to write :class:`.DataArray` objects to.
 
         Example
         -------
@@ -140,18 +167,16 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         """
 
         if ".json" in fname:
-            return self.to_json(fname=fname, data_file=data_file)
+            return self.to_json(fname=fname)
         if ".yaml" in fname:
-            return self.to_yaml(fname=fname, data_file=data_file)
+            return self.to_yaml(fname=fname)
         if ".hdf5" in fname:
-            if data_file:
-                log.warning("`data_file` has no effect when already writing to `hdf5` file.")
             return self.to_hdf5(fname=fname)
 
         raise FileError(f"File must be .json, .yaml, or .hdf5 type, given {fname}")
 
     @classmethod
-    def from_json(cls, fname: str, **parse_file_kwargs) -> Tidy3dBaseModel:
+    def from_json(cls, fname: str, **parse_obj_kwargs) -> Tidy3dBaseModel:
         """Load a :class:`Tidy3dBaseModel` from .json file.
 
         Parameters
@@ -163,43 +188,65 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         -------
         :class:`Tidy3dBaseModel`
             An instance of the component class calling `load`.
-        **parse_file_kwargs
-            Keyword arguments passed to pydantic's ``parse_file`` method.
+        **parse_obj_kwargs
+            Keyword arguments passed to pydantic's ``parse_obj`` method.
 
         Example
         -------
         >>> simulation = Simulation.from_json(fname='folder/sim.json') # doctest: +SKIP
         """
-        return cls.parse_file(fname, **parse_file_kwargs)
+        model_dict = cls.dict_from_json(fname=fname)
+        return cls.parse_obj(model_dict, **parse_obj_kwargs)
 
-    def to_json(self, fname: str, data_file: Optional[str] = None) -> None:
+    @classmethod
+    def dict_from_json(cls, fname: str) -> dict:
+        """Load dictionary of the model from a .json file.
+
+        Parameters
+        ----------
+        fname : str
+            Full path to the .json file to load the :class:`Tidy3dBaseModel` from.
+
+        Returns
+        -------
+        dict
+            A dictionary containing the model.
+
+        Example
+        -------
+        >>> sim_dict = Simulation.dict_from_json(fname='folder/sim.json') # doctest: +SKIP
+        """
+        with open(fname, "r", encoding="utf-8") as json_fhandle:
+            model_dict = json.load(json_fhandle)
+        return model_dict
+
+    def to_json(self, fname: str) -> None:
         """Exports :class:`Tidy3dBaseModel` instance to .json file
 
         Parameters
         ----------
         fname : str
             Full path to the .json file to save the :class:`Tidy3dBaseModel` to.
-        data_file : str = None
-            Path to a separate hdf5 file to write :class:`.DataArray` objects to.
 
         Example
         -------
         >>> simulation.to_json(fname='folder/sim.json') # doctest: +SKIP
         """
-        json_string = self._json_string(data_file=data_file)
+        json_string = self._json_string
+        self._warn_if_contains_data(json_string)
         with open(fname, "w", encoding="utf-8") as file_handle:
             file_handle.write(json_string)
 
     @classmethod
-    def from_yaml(cls, fname: str, **parse_raw_kwargs) -> Tidy3dBaseModel:
+    def from_yaml(cls, fname: str, **parse_obj_kwargs) -> Tidy3dBaseModel:
         """Loads :class:`Tidy3dBaseModel` from .yaml file.
 
         Parameters
         ----------
         fname : str
             Full path to the .yaml file to load the :class:`Tidy3dBaseModel` from.
-        **parse_raw_kwargs
-            Keyword arguments passed to pydantic's ``parse_raw`` method.
+        **parse_obj_kwargs
+            Keyword arguments passed to pydantic's ``parse_obj`` method.
 
         Returns
         -------
@@ -210,52 +257,175 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         -------
         >>> simulation = Simulation.from_yaml(fname='folder/sim.yaml') # doctest: +SKIP
         """
-        with open(fname, "r", encoding="utf-8") as yaml_in:
-            json_dict = yaml.safe_load(yaml_in)
-        json_raw = json.dumps(json_dict, indent=INDENT)
-        return cls.parse_raw(json_raw, **parse_raw_kwargs)
+        model_dict = cls.dict_from_yaml(fname=fname)
+        return cls.parse_obj(model_dict, **parse_obj_kwargs)
 
-    def to_yaml(self, fname: str, data_file: Optional[str] = None) -> None:
+    @classmethod
+    def dict_from_yaml(cls, fname: str) -> dict:
+        """Load dictionary of the model from a .yaml file.
+
+        Parameters
+        ----------
+        fname : str
+            Full path to the .yaml file to load the :class:`Tidy3dBaseModel` from.
+
+        Returns
+        -------
+        dict
+            A dictionary containing the model.
+
+        Example
+        -------
+        >>> sim_dict = Simulation.dict_from_yaml(fname='folder/sim.yaml') # doctest: +SKIP
+        """
+        with open(fname, "r", encoding="utf-8") as yaml_in:
+            model_dict = yaml.safe_load(yaml_in)
+        return model_dict
+
+    def to_yaml(self, fname: str) -> None:
         """Exports :class:`Tidy3dBaseModel` instance to .yaml file.
 
         Parameters
         ----------
         fname : str
             Full path to the .yaml file to save the :class:`Tidy3dBaseModel` to.
-        data_file : str = None
-            Path to a separate hdf5 file to write :class:`.DataArray` objects to.
 
         Example
         -------
         >>> simulation.to_yaml(fname='folder/sim.yaml') # doctest: +SKIP
         """
-        json_string = self._json_string(data_file=data_file)
-        json_dict = json.loads(json_string)
+        json_string = self._json_string
+        self._warn_if_contains_data(json_string)
+        model_dict = json.loads(json_string)
         with open(fname, "w+", encoding="utf-8") as file_handle:
-            yaml.dump(json_dict, file_handle, indent=INDENT)
+            yaml.dump(model_dict, file_handle, indent=INDENT)
+
+    @staticmethod
+    def _warn_if_contains_data(json_str: str) -> None:
+        """Log a warning if the json string contains data, used in '.json' and '.yaml' file."""
+        if DATA_ARRAY_TAG in json_str:
+            log.warning(
+                "Data contents found in the model to be written to file. "
+                "Note that this data will not be included in '.json' or '.yaml' formats. "
+                "As a result, it will not be possible to load the file back to the original model."
+                "Instead, use `.hdf5` extension in filename passed to 'to_file()'."
+            )
+
+    @staticmethod
+    def _construct_group_path(group_path: str) -> str:
+        """Construct a group path with the leading forward slash if not supplied."""
+
+        # empty string or None
+        if not group_path:
+            return "/"
+
+        # missing leading forward slash
+        if group_path[0] != "/":
+            return f"/{group_path}"
+
+        return group_path
+
+    @staticmethod
+    def get_tuple_group_name(index: int) -> str:
+        """Get the group name of a tuple element."""
+        return str(int(index))
+
+    @staticmethod
+    def get_tuple_index(key_name: str) -> int:
+        """Get the index into the tuple based on its group name."""
+        return int(str(key_name))
 
     @classmethod
-    def from_hdf5(cls, fname: str, **parse_raw_kwargs) -> Tidy3dBaseModel:
-        """Loads :class:`Tidy3dBaseModel` from .yaml file.
+    def tuple_to_dict(cls, tuple_values: tuple) -> dict:
+        """How we generate a dictionary mapping new keys to tuple values for hdf5."""
+        return {cls.get_tuple_group_name(index=i): val for i, val in enumerate(tuple_values)}
+
+    @classmethod
+    def get_sub_model(cls, group_path: str, model_dict: dict | list) -> dict:
+        """Get the sub model for a given group path."""
+
+        for key in group_path.split("/"):
+            if key:
+                if isinstance(model_dict, list):
+                    tuple_index = cls.get_tuple_index(key_name=key)
+                    model_dict = model_dict[tuple_index]
+                else:
+                    model_dict = model_dict[key]
+        return model_dict
+
+    @classmethod
+    def dict_from_hdf5(cls, fname: str, group_path: str = "") -> dict:
+        """Loads a dictionary containing the model contents from a .hdf5 file.
 
         Parameters
         ----------
         fname : str
             Full path to the .hdf5 file to load the :class:`Tidy3dBaseModel` from.
-        **parse_raw_kwargs
-            Keyword arguments passed to pydantic's ``parse_raw`` method.
+        group_path : str, optional
+            Path to a group inside the file to selectively load a sub-element of the model only.
 
         Returns
         -------
-        :class:`Tidy3dBaseModel`
-            An instance of the component class calling `from_hdf5`.
+        dict
+            Dictionary containing the model.
 
         Example
         -------
-        >>> simulation = Simulation.from_hdf5(fname='folder/sim.hdf5') # doctest: +SKIP
+        >>> sim_dict = Simulation.dict_from_hdf5(fname='folder/sim.hdf5') # doctest: +SKIP
         """
-        self_data_dict = cls.hdf5_to_dict(fname)
-        return cls.parse_obj(self_data_dict, **parse_raw_kwargs)
+
+        def load_data_from_file(model_dict: dict, group_path: str = "") -> None:
+            """For every DataArray item in dictionary, load path of hdf5 group as value."""
+
+            for key, value in model_dict.items():
+
+                subpath = f"{group_path}/{key}"
+
+                # write the path to the element of the json dict where the data_array should be
+                if value == DATA_ARRAY_TAG:
+                    model_dict[key] = DataArray.from_hdf5(fname=fname, group_path=subpath)
+                    continue
+
+                # if a list, assign each element a unique key, recurse
+                if isinstance(value, (list, tuple)):
+                    value_dict = cls.tuple_to_dict(tuple_values=value)
+                    load_data_from_file(model_dict=value_dict, group_path=subpath)
+
+                # if a dict, recurse
+                elif isinstance(value, dict):
+                    load_data_from_file(model_dict=value, group_path=subpath)
+
+        with h5py.File(fname, "r") as f_handle:
+            json_string = f_handle[JSON_TAG][()]
+            model_dict = json.loads(json_string)
+
+        group_path = cls._construct_group_path(group_path)
+        model_dict = cls.get_sub_model(group_path=group_path, model_dict=model_dict)
+        load_data_from_file(model_dict=model_dict, group_path=group_path)
+        return model_dict
+
+    @classmethod
+    def from_hdf5(cls, fname: str, group_path: str = "", **parse_obj_kwargs) -> Tidy3dBaseModel:
+        """Loads :class:`Tidy3dBaseModel` instance to .hdf5 file.
+
+        Parameters
+        ----------
+        fname : str
+            Full path to the .hdf5 file to load the :class:`Tidy3dBaseModel` from.
+        group_path : str, optional
+            Path to a group inside the file to selectively load a sub-element of the model only.
+            Starting `/` is optional.
+        **parse_obj_kwargs
+            Keyword arguments passed to pydantic's ``parse_obj`` method.
+
+        Example
+        -------
+        >>> simulation.to_hdf5(fname='folder/sim.hdf5') # doctest: +SKIP
+        """
+
+        group_path = cls._construct_group_path(group_path)
+        model_dict = cls.dict_from_hdf5(fname=fname, group_path=group_path)
+        return cls.parse_obj(model_dict, **parse_obj_kwargs)
 
     def to_hdf5(self, fname: str) -> None:
         """Exports :class:`Tidy3dBaseModel` instance to .hdf5 file.
@@ -270,219 +440,32 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         >>> simulation.to_hdf5(fname='folder/sim.hdf5') # doctest: +SKIP
         """
 
-        data_dict = self.dict()
-        self.dump_hdf5(data_dict, fname)
+        def add_data_to_file(data_dict: dict, group_path: str = "") -> None:
+            """For every DataArray item in dictionary, write path of hdf5 group as value."""
 
-    """=============================================================================================
-    Code modified from the hdfdict package: https://github.com/SiggiGue/hdfdict
+            for key, value in data_dict.items():
 
-    MIT License
+                # append the key to the path
+                subpath = f"{group_path}/{key}"
 
-    Copyright (c) 2018 Siegfried Gündert
-    Copyright Flexcompute 2022
+                # write the path to the element of the json dict where the data_array should be
+                if isinstance(value, xr.DataArray):
+                    value.to_hdf5(fname=fname, group_path=subpath)
 
-    Permission is hereby granted, free of charge, to any person obtaining a copy
-    of this software and associated documentation files (the "Software"), to deal
-    in the Software without restriction, including without limitation the rights
-    to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-    copies of the Software, and to permit persons to whom the Software is
-    furnished to do so, subject to the following conditions:
+                # if a tuple, assign each element a unique key
+                if isinstance(value, (list, tuple)):
+                    value_dict = self.tuple_to_dict(tuple_values=value)
+                    add_data_to_file(data_dict=value_dict, group_path=subpath)
 
-    The above copyright notice and this permission notice shall be included in all
-    copies or substantial portions of the Software.
+                # if a dict, recurse
+                elif isinstance(value, dict):
+                    add_data_to_file(data_dict=value, group_path=subpath)
 
-    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-    OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-    SOFTWARE.
-    """
+        json_string = self._json_string
+        with h5py.File(fname, "w") as f_handle:
+            f_handle[JSON_TAG] = json_string
 
-    # pylint:disable=too-many-return-statements
-    @staticmethod
-    def unpack_dataset(dataset: h5py.Dataset, keep_numpy: bool = False) -> Any:
-        """Gets the value contained in a dataset in a form ready to insert into final dict.
-
-        Parameters
-        ----------
-        item : h5py.Dataset
-            The raw value coming from the dataset, which needs to be decoded.
-        keep_numpy : bool = False
-            Whether to load a ``np.ndarray`` as such or convert it to list.
-
-        Returns
-        -------
-        Value taken from the dataset ready to insert into returned dict.
-        """
-        value = dataset[()]
-
-        # decoding numpy arrays
-        if isinstance(value, np.ndarray):
-            if value.size == 0:
-                return ()
-            if isinstance(value[0], bytes):
-                return [val.decode("utf-8") for val in value]
-            if value.dtype == bool:
-                return value.astype(bool)
-            if not keep_numpy:
-                return value.tolist()
-            return value
-
-        # decoding special types
-        if isinstance(value, np.bool_):
-            return bool(value)
-        if isinstance(value, bytes):
-            return value.decode("utf-8")
-        if np.isnan(value):
-            return None
-
-        return value
-
-    @classmethod
-    def load_from_handle(cls, hdf5_group: h5py.Group, **kwargs) -> Tidy3dBaseModel:
-        """Loads an instance of the class from an hdf5 group,
-
-        Parameters
-        ----------
-        hdf5_group : h5py.Group
-            The hdf5 group containing data correponding to the ``dict()`` of the object.
-        kwargs : dict
-            Keyword arguments passed to ``pydantic.BaseModel.parse_obj``
-
-        Returns
-        -------
-        Tidy3dBaseModel
-        """
-        data_dict = cls._load_group_data(data_dict={}, hdf5_group=hdf5_group)
-        return cls.parse_obj(data_dict, **kwargs)
-
-    @classmethod
-    def _load_group_data(
-        cls, data_dict: dict, hdf5_group: h5py.Group, keep_numpy: bool = False
-    ) -> dict:
-        """Recusively load the data from the group with dataset unpacking as base case."""
-
-        if "keep_numpy" in hdf5_group:
-            keep_numpy = hdf5_group["keep_numpy"]
-
-        for key, value in hdf5_group.items():
-
-            if key == "keep_numpy":
-                continue
-
-            # recurive case, try to load the group into data_dict[key]
-            if isinstance(value, h5py.Group):
-                data_dict[key] = cls._load_group_data(
-                    data_dict={}, hdf5_group=value, keep_numpy=keep_numpy
-                )
-
-            # base case, unpack the value in the dataset
-            elif isinstance(value, h5py.Dataset):
-                data_dict[key] = cls.unpack_dataset(value, keep_numpy=keep_numpy)
-
-        if any("TUPLE_ELEMENT_" in key for key in data_dict.keys()):
-            return tuple(data_dict.values())
-
-        return data_dict
-
-    @classmethod
-    def hdf5_to_dict(cls, fname: str) -> dict:
-        """Load an hdf5 file into a dictionary storing its unpacked contents.
-
-        Parameters
-        ----------
-        fname : str
-            Path to the hdf5 file.
-
-        Returns
-        -------
-        dict
-            The dictionary containing all group names as keys and datasets as values.
-        """
-
-        # open the file and load its data recursively into a dictionary
-        with h5py.File(fname, "r") as f:
-            return cls._load_group_data(data_dict={}, hdf5_group=f)
-
-    @staticmethod
-    def pack_dataset(hdf5_group: h5py.Group, key: str, value: Any) -> None:
-        """Loads a key value pair as a dataset in the hdf5 group."""
-
-        # handle special cases
-        if value is None:
-            value = np.nan
-        if isinstance(value, str):
-            value = value.encode("utf-8")
-
-        # numpy array containing strings (usually direction=['-','+'])
-        elif isinstance(value, np.ndarray) and (value.dtype == "<U1"):
-            value = value.tolist()
-
-        _ = hdf5_group.create_dataset(name=key, data=value)
-
-    def add_to_handle(self, hdf5_group: h5py.Group) -> None:
-        """Saves a :class:`.Tidy3dBaesModel` instance to an hdf5 group,
-
-        Parameters
-        ----------
-        hdf5_group : h5py.Group
-            The hdf5 group containing data correponding to the ``dict()`` of the object.
-        """
-        self_dict = self.dict()
-        self._save_group_data(data_dict=self_dict, hdf5_group=hdf5_group)
-
-    @classmethod
-    def _save_group_data(cls, data_dict: dict, hdf5_group: h5py.Group) -> None:
-        """Recursively save the data to a group with a non-dict data as base case."""
-
-        for key, value in data_dict.items():
-
-            # if tuple as key, combine into a single string
-            if isinstance(key, tuple):
-                key = "_".join((str(i) for i in key))
-
-            if isinstance(value, xr.DataArray):
-                coords = {key: np.array(val) for key, val in value.coords.items()}
-                value = {
-                    "data": value.data,
-                    "coords": coords,
-                    "keep_numpy": True,
-                    TYPE_TAG_STR: value.__class__.__name__,
-                }
-
-            # if a tuple of dicts, convert to a dict with special
-            elif isinstance(value, tuple) and any(isinstance(val, dict) for val in value):
-                value = {f"TUPLE_ELEMENT_{i}": val for i, val in enumerate(value)}
-
-            # if dictionary as item in dict, create subgroup and recurse
-            if isinstance(value, dict):
-                hdf5_subgroup = hdf5_group.create_group(key)
-                cls._save_group_data(data_dict=value, hdf5_group=hdf5_subgroup)
-
-            # otherwise (actual data), just encode it and save it to the group as a dataset
-            else:
-                cls.pack_dataset(hdf5_group=hdf5_group, key=key, value=value)
-
-    @classmethod
-    def dump_hdf5(cls, data_dict: dict, fname: str) -> None:
-        """Writes a dictionary of data into an hdf5 file.
-
-        Parameters
-        ----------
-        data_dict : dict
-            A dictionary of data with strings or tuples as keys and data or other dicts as values.
-        fname : str
-            path to the .hdf5 file.
-        """
-
-        # open the file and write to it recursively
-        with h5py.File(fname, "w") as f:
-            cls._save_group_data(data_dict=data_dict, hdf5_group=f)
-
-    """End hdfdict modification
-    ============================================================================================="""
+        add_data_to_file(data_dict=self.dict())
 
     def __lt__(self, other):
         """define < for getting unique indices based on hash."""
@@ -500,67 +483,29 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         """define >= for getting unique indices based on hash."""
         return hash(self) >= hash(other)
 
-    def _json_string(self, include_unset: bool = True, data_file: Optional[str] = None) -> str:
+    @property
+    def _json_string(self) -> str:
         """Returns string representation of a :class:`Tidy3dBaseModel`.
-
-        Parameters
-        ----------
-        include_unset : bool = True
-            Whether to include default fields in json string.
-        data_file : str = None
-            Path to a separate hdf5 file to write :class:`.DataArray` objects to.
 
         Returns
         -------
         str
             Json-formatted string holding :class:`Tidy3dBaseModel` data.
         """
-        exclude_unset = not include_unset
 
-        def get_json_string() -> str:
-            """Return json string with function settings applied."""
-            return self.json(indent=INDENT, exclude_unset=exclude_unset)
+        def make_json_compatible(json_string: str) -> str:
+            """Makes the string compatiable with json standards, notably for infinity."""
 
-        def json_with_separate_data() -> str:
-            """Return json string with data written to separate file."""
+            tmp_string = "<<TEMPORARY_INFINITY_STRING>>"
+            json_string = json_string.replace("-Infinity", tmp_string)
+            json_string = json_string.replace("Infinity", '"Infinity"')
+            return json_string.replace(tmp_string, '"-Infinity"')
 
-            original_encoder = self.__config__.json_encoders[xr.DataArray]
+        json_string = self.json(indent=INDENT, exclude_unset=False)
+        json_string = make_json_compatible(json_string)
+        json_dict = json.loads(json_string)
 
-            # Create/overwrite data file
-            with h5py.File(data_file, "w") as fhandle:
-
-                def write_data(x):
-                    """Write data to group inside hdf5 file."""
-                    group_name = tokenize(x)
-                    if group_name not in fhandle.keys():
-                        group = fhandle.create_group(group_name)
-                        coords = {key: np.array(val) for key, val in x.coords.items()}
-                        data_dict = {
-                            "data": x.data,
-                            "coords": coords,
-                            "keep_numpy": True,
-                            TYPE_TAG_STR: x.__class__.__name__,
-                        }
-                        self._save_group_data(data_dict=data_dict, hdf5_group=group)
-                    return dict(group_name=group_name, data_file=data_file, tag="DATA_ITEM")
-
-                self.__config__.json_encoders[xr.DataArray] = write_data
-
-                # put infinity and -infinity in quotes
-                json_string = get_json_string()
-
-                # re-set the json encoder for data
-                self.__config__.json_encoders[xr.DataArray] = original_encoder
-
-                return json_string
-
-        json_string = json_with_separate_data() if data_file else get_json_string()
-        tmp_string = "<<TEMPORARY_INFINITY_STRING>>"
-        json_string = json_string.replace("-Infinity", tmp_string)
-        json_string = json_string.replace("Infinity", '"Infinity"')
-        json_string = json_string.replace(tmp_string, '"-Infinity"')
-
-        return json_string
+        return json.dumps(json_dict)
 
     @classmethod
     def add_type_field(cls) -> None:

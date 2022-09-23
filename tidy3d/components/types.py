@@ -15,8 +15,6 @@ from matplotlib.axes._subplots import Axes
 from shapely.geometry.base import BaseGeometry
 from ..log import ValidationError
 
-# import warnings
-# warnings.filterwarnings(action="error", category=np.ComplexWarning)
 """ Numpy Arrays """
 
 # type tag default name
@@ -133,6 +131,10 @@ class tidycomplex(complex):  # pylint: disable=invalid-name
         """Sets the schema of ComplexNumber."""
         field_schema.update(ComplexNumber.schema())
 
+
+""" symmetry """
+
+Symmetry = Literal[0, -1, 1]
 
 """ geometric """
 

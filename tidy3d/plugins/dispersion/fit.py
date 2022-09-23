@@ -12,10 +12,10 @@ from rich.progress import Progress
 from pydantic import Field, validator
 
 from ...components.base import Tidy3dBaseModel
-from ...components import PoleResidue, AbstractMedium
-from ...constants import C_0, HBAR, MICROMETER
+from ...components.medium import PoleResidue, AbstractMedium
 from ...components.viz import add_ax_if_none
 from ...components.types import Ax, ArrayLike
+from ...constants import C_0, HBAR, MICROMETER
 from ...log import log, ValidationError, WebError, SetupError
 
 
@@ -687,7 +687,7 @@ class DispersionFitter(Tidy3dBaseModel):
         return cls(wvl_um=n_lam[:, 0], n_data=n_lam[:, 1], **kwargs)
 
     @classmethod
-    def from_file(cls, fname: str, **loadtxt_kwargs):
+    def from_file(cls, fname: str, **loadtxt_kwargs):  # pylint:disable=arguments-differ
         """Loads :class:`DispersionFitter` from file containing wavelength, n, k data.
 
         Parameters

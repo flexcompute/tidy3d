@@ -286,7 +286,7 @@ def run_emulated(simulation: Simulation, task_name: str = None) -> SimulationDat
     def make_field_data(monitor: FieldMonitor) -> FieldData:
         """make a random FieldData from a FieldMonitor."""
         field_cmps = {}
-        coords = {"f": list(monitor.freqs)}
+        coords = {}
         grid = simulation.discretize(monitor, extend=True)
 
         for field_name in monitor.fields:
@@ -298,11 +298,18 @@ def run_emulated(simulation: Simulation, task_name: str = None) -> SimulationDat
                 else:
                     coords[dim] = np.array(spatial_coords_dict[dim])
 
+            coords["f"] = list(monitor.freqs)
             field_cmps[field_name] = make_data(
                 coords=coords, data_array_type=ScalarFieldDataArray, is_complex=True
             )
 
-        return FieldData(monitor=monitor, **field_cmps)
+        return FieldData(
+            monitor=monitor,
+            symmetry=simulation.symmetry,
+            symmetry_center=simulation.center,
+            grid_expanded=simulation.discretize(monitor, extend=True),
+            **field_cmps
+        )
 
     def make_mode_data(monitor: ModeMonitor) -> ModeData:
         """make a random ModeData from a ModeMonitor."""
@@ -314,16 +321,16 @@ def run_emulated(simulation: Simulation, task_name: str = None) -> SimulationDat
         n_complex = make_data(
             coords=coords_ind, data_array_type=ModeIndexDataArray, is_complex=True
         )
-        coords_amps = coords_ind.copy()
-        coords_amps["direction"] = ["+", "-"]
+        coords_amps = dict(direction=["+", "-"])
+        coords_amps.update(coords_ind)
         amps = make_data(coords=coords_amps, data_array_type=ModeAmpsDataArray, is_complex=True)
         return ModeData(monitor=monitor, n_complex=n_complex, amps=amps)
 
     MONITOR_MAKER_MAP = {FieldMonitor: make_field_data, ModeMonitor: make_mode_data}
 
-    montor_data = {mnt.name: MONITOR_MAKER_MAP[type(mnt)](mnt) for mnt in simulation.monitors}
+    data = [MONITOR_MAKER_MAP[type(mnt)](mnt) for mnt in simulation.monitors]
 
-    return SimulationData(simulation=simulation, monitor_data=montor_data)
+    return SimulationData(simulation=simulation, data=data)
 
 
 def assert_log_level(caplog, log_level_expected):

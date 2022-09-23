@@ -1,13 +1,12 @@
 """Storing tidy3d data at it's most fundamental level as xr.DataArray objects"""
+from __future__ import annotations
 from typing import Dict
 
 import xarray as xr
 import numpy as np
-import h5py
 
-from ..base import Tidy3dBaseModel
 from ...constants import HERTZ, SECOND, MICROMETER, RADIAN
-from ...log import DataError
+from ...log import DataError, FileError
 
 # maps the dimension names to their attributes
 DIM_ATTRS = {
@@ -27,6 +26,9 @@ DIM_ATTRS = {
     "polarization": {"long_name": "polarization"},
 }
 
+# string that gets written to the json file
+DATA_ARRAY_TAG = "XR.DATAARRAY"
+
 
 class DataArray(xr.DataArray):
     """Subclass of ``xr.DataArray`` that requires __slots__ to match the keys of the coords."""
@@ -37,77 +39,50 @@ class DataArray(xr.DataArray):
     # stores a dictionary of attributes corresponding to the data values
     _data_attrs: Dict[str, str] = {}
 
-    def __init__(self, *args, **kwargs):
-
-        # if dimensions are supplied, make sure they are valid
-        if "dims" in kwargs:
-            dims = kwargs["dims"]
-            if dims != self.__slots__:
-                raise DataError(
-                    f"supplied dims {dims} different from hardcoded slots {self.__slots__}."
-                )
-
-        # if dimensions not supplied (and not fastpath, which rejects coords), use __slots__ as dims
-        if ("dims" not in kwargs) and (not kwargs.get("fastpath")):
-            kwargs["dims"] = self.__slots__
-
-        # set up coords to use attributes by supplying coords as sequence of (dim, data, attrs)
-        if "coords" in kwargs:
-            coords = [(dim, kwargs["coords"][dim], DIM_ATTRS.get(dim)) for dim in self.__slots__]
-            kwargs["coords"] = coords
-
-        # add class level attributes to data values, if not supplied
-        if (not kwargs.get("fastpath")) and ("attrs" not in kwargs) and (self._data_attrs):
-            kwargs["attrs"] = self._data_attrs
-
-        # fix case if data of empty list or tuple is supplied as first arg
-        data_arg = args[0]
-        is_empty_array = isinstance(data_arg, np.ndarray) and (data_arg.size == 0)
-        is_empty_list = (isinstance(data_arg, list)) and (data_arg == [])
-        is_empty_tuple = (isinstance(data_arg, tuple)) and (data_arg == ())
-        if is_empty_array or is_empty_list or is_empty_tuple:
-            shape = tuple(len(values) for _, values, _ in coords)
-            new_args = list(args)
-            new_args[0] = np.zeros(shape=shape)
-            args = tuple(new_args)
-
-        super().__init__(*args, **kwargs)
-
     @classmethod
     def __get_validators__(cls):
-        """Defines which validator function to use for ComplexNumber."""
-        yield cls.validate
+        """Validators that get run when :class:`.DataArray` objects are added to pydantic models."""
+        yield cls.check_unloaded_data
+        yield cls.validate_dims
+        yield cls.assign_data_attrs
+        yield cls.assign_coord_attrs
 
     @classmethod
-    def validate(cls, value):
-        """What gets called when you construct a DataArray."""
+    def check_unloaded_data(cls, val):
+        """If the data comes in as the raw data array string, raise a custom warning."""
+        if isinstance(val, str):
+            raise DataError(
+                f"Trying to load {cls.__name__} but the data is not present. "
+                "Note that data will not be saved to .json file. "
+                "use .hdf5 format instead if data present."
+            )
+        return cls(val)
 
-        # loading from raw dict (usually from file)
-        if isinstance(value, dict):
-            if value.get("tag") == "DATA_ITEM":
-                # Read from external file
-                data_file = value.get("data_file")
-                try:
-                    with h5py.File(data_file, "r") as f:
-                        group = f[value["group_name"]]
-                        # pylint:disable=protected-access
-                        value = Tidy3dBaseModel._load_group_data(data_dict={}, hdf5_group=group)
-                except FileNotFoundError as e:
-                    raise DataError(
-                        f"External data file {data_file} not found when loading data."
-                    ) from e
+    @classmethod
+    def validate_dims(cls, val):
+        """Make sure the dims are the same as __slots__, then put them in the correct order."""
+        if set(val.dims) != set(cls.__slots__):
+            raise ValueError(f"wrong dims, expected '{cls.__slots__}', got '{val.dims}'")
+        return val.transpose(*cls.__slots__)
 
-            data = value.get("data")
-            coords = value.get("coords")
+    @classmethod
+    def assign_data_attrs(cls, val):
+        """Assign the correct data attributes to the :class:`.DataArray`."""
 
-            # convert to numpy if not already
-            coords = {k: v if isinstance(v, np.ndarray) else np.array(v) for k, v in coords.items()}
-            if not isinstance(data, np.ndarray):
-                data = np.array(data)
+        for attr_name, attr in cls._data_attrs.items():
+            val.attrs[attr_name] = attr
+        return val
 
-            return cls(data, coords=coords)
+    @classmethod
+    def assign_coord_attrs(cls, val):
+        """Assign the correct coordinate attributes to the :class:`.DataArray`."""
 
-        return cls(value)
+        for dim in cls.__slots__:
+            dim_attrs = DIM_ATTRS.get(dim)
+            if dim_attrs is not None:
+                for attr_name, attr in dim_attrs.items():
+                    val.coords[dim].attrs[attr_name] = attr
+        return val
 
     @classmethod
     def __modify_schema__(cls, field_schema):
@@ -126,6 +101,11 @@ class DataArray(xr.DataArray):
         )
         field_schema.update(schema)
 
+    @classmethod
+    def _json_encoder(cls, val):  # pylint:disable=unused-argument
+        """What function to call when writing a DataArray to json."""
+        return DATA_ARRAY_TAG
+
     def __eq__(self, other) -> bool:
         """Whether two data array objects are equal."""
         if not np.all(self.data == other.data):
@@ -139,6 +119,25 @@ class DataArray(xr.DataArray):
     def abs(self):
         """Absolute value of data array."""
         return abs(self)
+
+    def to_hdf5(self, fname: str, group_path: str) -> None:
+        """Save an xr.DataArray to the hdf5 file with a given path to the group."""
+        self.to_netcdf(fname, group=group_path, engine="h5netcdf", invalid_netcdf=True, mode="a")
+
+    @classmethod
+    def from_hdf5(cls, fname: str, group_path: str) -> DataArray:
+        """Load an DataArray from an hdf5 file with a given path to the group."""
+        return xr.load_dataarray(fname, group=group_path, engine="h5netcdf", invalid_netcdf=True)
+
+    @classmethod
+    def from_file(cls, fname: str, group_path: str) -> DataArray:
+        """Load an DataArray from an hdf5 file with a given path to the group."""
+        if ".hdf5" not in fname:
+            raise FileError(
+                "DataArray objects must be written to '.hdf5' format. "
+                f"Given filename of {fname}."
+            )
+        return cls.from_hdf5(fname=fname, group_path=group_path)
 
 
 class ScalarFieldDataArray(DataArray):
@@ -260,7 +259,7 @@ class Near2FarAngleDataArray(DataArray):
     >>> f = np.linspace(1e14, 2e14, 10)
     >>> theta = np.linspace(0, np.pi, 10)
     >>> phi = np.linspace(0, 2*np.pi, 20)
-    >>> coords = dict(f=f, theta=theta, phi=phi)
+    >>> coords = dict(theta=theta, phi=phi, f=f)
     >>> values = (1+1j) * np.random.random((len(theta), len(phi), len(f)))
     >>> data = Near2FarAngleDataArray(values, coords=coords)
     """
@@ -277,7 +276,7 @@ class Near2FarCartesianDataArray(DataArray):
     >>> f = np.linspace(1e14, 2e14, 10)
     >>> x = np.linspace(0, 5, 10)
     >>> y = np.linspace(0, 10, 20)
-    >>> coords = dict(f=f, x=x, y=y)
+    >>> coords = dict(x=x, y=y, f=f)
     >>> values = (1+1j) * np.random.random((len(x), len(y), len(f)))
     >>> data = Near2FarCartesianDataArray(values, coords=coords)
     """
@@ -295,7 +294,7 @@ class Near2FarKSpaceDataArray(DataArray):
     >>> f = np.linspace(1e14, 2e14, 10)
     >>> ux = np.linspace(0, 5, 10)
     >>> uy = np.linspace(0, 10, 20)
-    >>> coords = dict(f=f, ux=ux, uy=uy)
+    >>> coords = dict(ux=ux, uy=uy, f=f)
     >>> values = (1+1j) * np.random.random((len(ux), len(uy), len(f)))
     >>> data = Near2FarKSpaceDataArray(values, coords=coords)
     """
@@ -313,7 +312,7 @@ class DiffractionDataArray(DataArray):
     >>> orders_x = np.linspace(-1, 1, 3)
     >>> orders_y = np.linspace(-2, 2, 5)
     >>> pol = ["s", "p"]
-    >>> coords = dict(f=f, orders_x=orders_x, orders_y=orders_y, polarization=pol)
+    >>> coords = dict(orders_x=orders_x, orders_y=orders_y, polarization=pol, f=f)
     >>> values = (1+1j) * np.random.random((len(orders_x), len(orders_y), len(pol), len(f)))
     >>> data = DiffractionDataArray(values, coords=coords)
     """

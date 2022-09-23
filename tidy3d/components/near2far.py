@@ -8,18 +8,22 @@ import pydantic
 
 from rich.progress import track
 
-from .sim_data import SimulationData
-from .monitor_data import FieldData
-from .data_array import Near2FarAngleDataArray, Near2FarCartesianDataArray, Near2FarKSpaceDataArray
-from .monitor_data_n2f import AbstractNear2FarData
-from .monitor_data_n2f import Near2FarAngleData, Near2FarCartesianData, Near2FarKSpaceData
-from ..monitor import FieldMonitor, AbstractNear2FarMonitor
-from ..monitor import Near2FarAngleMonitor, Near2FarCartesianMonitor, Near2FarKSpaceMonitor
-from ..types import Direction, Axis, Coordinate, ArrayLike
-from ..medium import Medium
-from ..base import Tidy3dBaseModel, cached_property
-from ...log import SetupError, ValidationError
-from ...constants import C_0, MICROMETER
+from .data.data_array import (
+    Near2FarAngleDataArray,
+    Near2FarCartesianDataArray,
+    Near2FarKSpaceDataArray,
+)
+from .data.monitor_data import FieldData
+from .data.monitor_data import AbstractNear2FarData
+from .data.monitor_data import Near2FarAngleData, Near2FarCartesianData, Near2FarKSpaceData
+from .data.sim_data import SimulationData
+from .monitor import FieldMonitor, AbstractNear2FarMonitor
+from .monitor import Near2FarAngleMonitor, Near2FarCartesianMonitor, Near2FarKSpaceMonitor
+from .types import Direction, Axis, Coordinate, ArrayLike
+from .medium import Medium
+from .base import Tidy3dBaseModel, cached_property
+from ..log import SetupError, ValidationError
+from ..constants import C_0, MICROMETER
 
 # Default number of points per wavelength in the background medium to use for resampling fields.
 PTS_PER_WVL = 10
@@ -279,7 +283,13 @@ class RadiationVectors(Tidy3dBaseModel):
 
         new_monitor = surface.monitor.copy(update=dict(fields=[E1, E2, H1, H2]))
 
-        return FieldData(monitor=new_monitor, **surface_currents)
+        return FieldData(
+            monitor=new_monitor,
+            symmetry=field_data.symmetry,
+            symmetry_center=field_data.symmetry_center,
+            grid_expanded=field_data.grid_expanded,
+            **surface_currents,
+        )
 
     @staticmethod
     # pylint:disable=too-many-locals, too-many-arguments
@@ -419,7 +429,9 @@ class RadiationVectors(Tidy3dBaseModel):
             return np.trapz(np.trapz(np.squeeze(function) * phase, pts_u, axis=0), pts_v, axis=0)
 
         phase = [None] * 3
-        propagation_factor = -1j * AbstractNear2FarData.propagation_factor(frequency, self.medium)
+        propagation_factor = -1j * AbstractNear2FarData.propagation_factor(
+            medium=self.medium, frequency=frequency
+        )
 
         def integrate_for_one_theta(i_th: int):
             """Perform integration for a given theta angle index"""
@@ -529,7 +541,7 @@ class RadiationVectors(Tidy3dBaseModel):
             name: Near2FarAngleDataArray(rad_vec, coords=coords)
             for name, rad_vec in zip(rad_vec_names, rad_vecs)
         }
-        return Near2FarAngleData(monitor=monitor, **fields)
+        return Near2FarAngleData(monitor=monitor, medium=monitor.medium, **fields)
 
     def _radiation_vectors_cartesian(
         self, monitor: Near2FarCartesianMonitor
@@ -586,7 +598,7 @@ class RadiationVectors(Tidy3dBaseModel):
             )
             for name, rad_vec in zip(rad_vec_names, rad_vecs)
         }
-        return Near2FarCartesianData(monitor=monitor, **fields)
+        return Near2FarCartesianData(monitor=monitor, medium=monitor.medium, **fields)
 
     def _radiation_vectors_kspace(self, monitor: Near2FarKSpaceMonitor) -> Near2FarKSpaceData:
         """Compute radiation vectors on a k-space grid in spherical coordinates.
@@ -628,4 +640,4 @@ class RadiationVectors(Tidy3dBaseModel):
             name: Near2FarKSpaceDataArray(rad_vec, coords=coords)
             for name, rad_vec in zip(rad_vec_names, rad_vecs)
         }
-        return Near2FarKSpaceData(monitor=monitor, **fields)
+        return Near2FarKSpaceData(monitor=monitor, medium=monitor.medium, **fields)
