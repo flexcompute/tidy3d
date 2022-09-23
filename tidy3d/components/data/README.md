@@ -2,70 +2,73 @@
 
 This document will overview how datastructures are organized in the data refactor set to launch in 2.0.
 
+A diagram explaining the basic organization is shown below.
+
+![Call Structure](../../../img/data_architecture.png)
+
+
 ## Files
 
 The data organization lives in `tidy3d/components/data` directory.
 
 The directory contains three files:
 
-- `data_array.py` defines the most atomic datastructures, which are subclasses of `xarray.DataArray`.
-- `monitor_data.py` defines the datastructures associated with each monitor type. They are regular tidy3d components that contain `DataArray` fields, among others.
-- `sim_data.py` holds the `SimulationData`, which basically holds a dictionary of `MonitorData` objects for the monitors in the simulation.
+- `data_array.py` defines `DataArray` and its subclasses. These objects hold a single field `.data`, which holds a `xarray.DataArray` with dimensions defined in the `DataArray` class. For example, a `ScalarFieldDataArray` holds a single `.data` object, which is an `xarray.DataArray` with dimenensions `('x', 'y', 'x', 'f')`, storing a scalar field in the frequency domain.
+- `dataset.py` defines the `Dataset`, which is effectively a collection of `DataArray` objects as pydantic fields. For example `FieldData` is a `Dataset` with `.Ex`, `.Ey`, etc. fields, each storing a `ScalarFieldDataArray` object.
+- `monitor_data.py` defines the `MonitorData` classes, which basically associate a given `Monitor` with a `Dataset`, as the `.monitor` and `.dataset` fields, respectively.
+- `sim_data.py` holds the `SimulationData`, which holds a tuple of `MonitorData` objects, as well as the `Simulation`. These `MonitorData` objects have a direct correspondence to the `Simulation.monitors` list and are linked by the `Monitor.name`.
 
 ## Structure
 
 ### ``DataArray`` Objects
 
-The most atomic datastructure is the `DataArray`.
+The most atomic datastructure defined as a `Tidy3dBaseModel` is the `DataArray`.
 
-A `DataArray` represents a dataset with a multidimensional array and labelled coordinates. For example, a scalar field, flux over time, etc.
+A `DataArray` holds a dataset with a multidimensional array and labelled coordinates. For example, a scalar field, flux over time, etc.
 
-For simplicity, `DataArray` inherits from `xarray.DataArray` and therefore supports all of the selection, indexing, and other features of a `xarray.DataArray`.
+The dataset itself is a `xarray.DataArray` stored in `DataArray.data` and supports all of the selection, indexing, and plotting features.
 
-The varios `DataArray` subclasses are templates, which define the dimensions and attributes of the data expected.  For example:
+The `DataArray` subclasses are simply templates, which define the dimensions and attributes of the data expected as class variables.  For example:
 
 ```python
 class ScalarFieldTimeDataArray(DataArray):
     """Spatial distribution in the time-domain."""
-    __slots__ = ("x", "y", "z", "t")
+    _dims = ("x", "y", "z", "f")
     _data_attrs = {"long_name": "field value"}
 ```
 
-Defines a scalar field in the time-domain, which must have coordinates with keys `"x"`, `"y"`, `"z"`, and `"t"` and we've given the values a long name for plotting purposes.  `__slots__` is just a way to hardcode the dims in `xarray`, so we use it instead of `dims`.
+Defines a scalar field in the time-domain, which must have coordinates with keys `"x"`, `"y"`, `"z"`, and `"t"` and we've given the values a long name for plotting purposes. When the `xarray.DataArray` is supplied to a `DataArray`, the dims are checked against `_dims` and the `_data_attrs` are applied to the `xr.DataArray` as well as coordinate attributes stored as constants in the file.
 
-We construct a `DataArray` by supplying the raw values (multi-dimensional array) as the first `*arg` and then coords as a dict `**kwarg`, ie. `flux = FluxDataArray(values, coords={'f': 4e14})`. This construction something that needs to change often in the backend.
+There is a `@classmethod` convenience constructor `DataArray.from_data_coords(data, coords)` which constructs a `DataArray` without needing to call `xarray.DataArray(data, coords)` directly.
 
-The naming convention for `DataArray` objects is to append `DataArray` to their name, ie. "`FluxDataArray`.
+The naming convention for `DataArray` objects is to append `DataArray` to the name of the stored quantity, ie. "`FluxDataArray`.
 
-TLDR: We use these `DataArray` instances primarily as a template for how to define the various xarray data that gets put in the monitor data described below.
+TLDR: We use these `DataArray` instances primarily as a template for how to define the various labelled, multi-dimensional datasets we use to store the raw data.
 
-### ``MonitorData`` objects
+### `Dataset` objects
 
-The ``MonitorData`` objects store the data for a single type of monitor. There is a one-to-one correspondence with each ``Monitor`` type.  
+`Dataset` objects store a collection of `DataArray` objects as pydantic fields. For example, a vector field might be defined as a `Dataset` containing a `ScalarFieldDataArray` for each vector component (`.x`, `.y`, and `.z`).
 
-Every ``MonitorData`` contains a field that holds the ``monitor`` it corresponds to. In some cases, we want to create some data without an actual monitor (for example a ``FieldData`` representing the surface currents in Near2Far). To handle this, we create an equivalent monitor using the relevant context at the time of creation. This makes things easier in many places.
+These `Dataset` objects also contain various convenience methods, which can perform transformations or processing on their contained data. For example, applying symmetry, getting field components that are non-None.
 
-``MonitorData`` objects will contain one or more ``Field``s holding data in the form of ``DataArray`` objects.  For example:
+Both `Dataset` and `DataArray` objects are designed to be completely independent of the other Tidy3d components, such as Sources, Monitors. In this way, they can be used to define custom components, such as custom current sources, without introducing circular dependencies.
 
-```python
-class FieldTimeData(ElectromagneticFieldData):
-    """Data associated with a :class:`.FieldTimeMonitor`: scalar components of E and H fields."""
-    monitor: FieldTimeMonitor
-    Ex: ScalarFieldTimeDataArray = None
-    Ey: ScalarFieldTimeDataArray = None
-    Ez: ScalarFieldTimeDataArray = None
-    Hx: ScalarFieldTimeDataArray = None
-    Hy: ScalarFieldTimeDataArray = None
-    Hz: ScalarFieldTimeDataArray = None
-```
+### `MonitorData` objects
 
-The naming convention for `MonitorData` objects is to replace `Monitor` with `Data` in the monitor name, eg. "`FluxTimeMonitor`" becomes "`FluxTimeData`".
+The `MonitorData` objects store a `Dataset` for a single type of `Monitor`. There is a one-to-one correspondence with each `Monitor` type.  
 
-Final note: data for a `FluxMonitor` and `FluxTimeMonitor` are loaded in `FluxData` and `FluxTimeData` instances, respectively. However, these classes contain a single `.flux` field that is a `FluxDataArray` and `FluxTimeDataArray`, respecitvely.  So to access the raw flux data for a monitor, one must do `flux_data.flux` instead of the data being stored directly.  This is a change that comes up a lot in the backend.
+As such, each `MonitorData` contains a `.monitor` and `.dataset` field, which hold the `Monitor` and `Dataset` respectively. If a monitor is named "`XMonitor`", the convention is that the corresponding `Dataset` is called `XData` and the corresponding `MonitorData` is called "`XMonitorData`".
+
+Like `Dataset` objects, `MonitorData` objects contain methods that do various operations on their data. However, since `MonitorData` objects are not designated as "pure" (they can depend on Tidy3d components), these methods are often designed to operate using other tidy3d components in mind. For example, some `MonitorData` objects have `.normalize()` functions, which take source spectrum information. Often, these methods strip parameters from the `.monitor` and pass them to the generic methods defined in `.dataset`.
+
+As a final note, `MonitorData` subclasses contain several `property` getters that are used to conveniently access the `xarray.DataArray` data contained in their `.dataset` fields.
+
+For example, `FluxMonitorData.flux` is a property that provides a shortcut to the `xarray.DataArray` containing the flux as a function of frequency, which would normally be accessed via `FluxMonitorData.dataset.flux.data`.
+
 
 #### Normalization
 
-All `MonitorData` subclasses have a `.normalize()` method, which returns a copy of the instance normalized by a given source spectrum.
+As mentioned, many (typically frequency-domain) `MonitorData` subclasses have a `.normalize()` method, which returns a copy of the instance normalized by a given source spectrum.
 
 ```python
 def normalize(self, source_spectrum_fn: Callable[[float], complex]) -> MonitorData:
@@ -76,7 +79,7 @@ Rather than raw data being passed to this, `source_spectrum_fn` is a function of
 
 #### Symmetry
 
-All `MonitorData` subclasses also have an `.apply_symmetry()` method, whch returns a copy of the instance with symmetry applied. There is therefore no notion of "state" with regard to the symmetry of a monitor data.
+Many `MonitorData` subclasses also have an `.apply_symmetry()` method, whch returns a copy of the instance with symmetry applied. There is therefore no notion of "state" with regard to the symmetry of a monitor data.
 
 ```python
 def apply_symmetry(
@@ -89,7 +92,7 @@ def apply_symmetry(
 
 #### Field-Like Data
 
-The `MonitorData` subclass `AbstractFieldData` defines a few methods and properties needed to propertly handle field-like data, such as `FieldData`, `FieldTimeData`, `PermittivityData`, and `ModeSolverData`.
+The `Dataset` subclass `AbstractFieldData` defines a few methods and properties needed to propertly handle field-like data, such as `FieldData`, `FieldTimeData`, `PermittivityData`, and `ModeSolverData`.
 
 There are a few convenient properties defined for each `AbstractFieldData`:
 
@@ -99,17 +102,13 @@ There are a few convenient properties defined for each `AbstractFieldData`:
 
 Field-like data also support `def colocate(x=None, y=None, z=None) -> xr.Dataset`, which returns an `xarray.Dataset` of all the field components colocated at the supplied x,y,z coordinates. If any of the coordinates are `None`, nothing is done to colocate along that coordinate.
 
-#### Data Type Map
-
-The ``DATA_TYPE_MAP`` is defined in `monitor_data.py` as a dictionary mapping the various `Monitor` types to the corresponding `MonitorData` types. This is used in the backend to select the right data type to load for a given monitor.
-
 ### `SimulationData` objects
 
-Like before, the `SimulationData` object contains all of the data for a given `Simulation`. The `Simulation` is still stored directly as a `pd.Field` and the `monitor_data` is still a dictionary mapping the names of the `Monitor` objects to the correspoding `MonitorData` objects.
+The `SimulationData` object contains all of the data for a given `Simulation`. The `Simulation` is stored directly as a field `.simulation` and the `.data` field stores a tuple of `MonitorData` objects. The `.monitor_data` property returns a dictionary mapping the monitor names to the corresponding `MonitorData` contents, which is consistent with the previous versions of Tidy3d.
 
 #### Normalizing
 
-The frequency-dependent data in `SimulationData` objects is normalized to the source given by `SimulationData.Simulation.normalize_index`, such that it matches exactly what is written to file (as opposed to the old workflow of the file containing un-normalized data). A copy of the `SimulationData` with a different normalization can be obtained using the
+The frequency-dependent data in `SimulationData` objects is normalized to the source given by `SimulationData.simulation.normalize_index`, such that it matches exactly what is written to file (as opposed to the old workflow of the file containing un-normalized data). A copy of the `SimulationData` with a different normalization can be obtained using the
 
 Normalization is achieved through the 
 ```python
@@ -127,12 +126,12 @@ which computes the expanded grid for a monitor and then returns a symmetry-appli
 
 #### Selecting Monitor Data
 
-Selection with square brackets (`sim_data[monitor_name]`) returns a copy of that monitor data with symmetry and normalization applied using the functions described above. Accessing the monitor_data through `SimulationData.monitor_data` dictionary gives direct access if desired (use with caution).
+Selection with square brackets (`sim_data[monitor_name]`) returns a copy of that monitor data with symmetry and normalization applied using the functions described above. Accessing the monitor_data through the `SimulationData.data` tuple or `SimulationData.monitor_data` dictionary gives direct access if desired However, one should use with caution as symmetry and normalization are not applied and modification of the result will mutate the contents of the original `SimulationData` rather than modifying a copy.
 
 #### Getting Fields
-There are a few other convenience methods for dealing with ``AbstractFieldData`` objects stored in the `SimulationData.monitor_data` dict.
+There are a few other convenience methods for dealing with ``AbstractFieldData`` objects stored in the `SimulationData.data` tuple.
 `sim_data.at_centers(monitor_name)` gets the field-like data at the yee cell centers.
-`sim_data.get_intensity(monitor_name` gets the intensity data for a field-like data evaluated at the yee cell centers.
+`sim_data.get_intensity(monitor_name)` gets the intensity data for a field-like data evaluated at the yee cell centers.
 
 #### Plotting
 
@@ -140,13 +139,13 @@ Plotting is very similar to before, except now instead of `freq`, `time`, `mode_
 
 `**sel_kwargs` are any extra kwargs that can be applied through `.interp()` to the field-like data to get it into the proper form for plotting, namely a state where there are only two spatial coordinates with more than one value.
 
-For example, if my data contains `x,y,z,f,mode_index` data, I might need to supply `z=0, f=4e14, mode_index=2` to the `plot_field()` as `**sel_kwargs` to get it into the form needed to plot field(x,y) on the z=0 plane. If there was only one frequency in the data, i could safely leave it out of the `**sel_kwargs`. The code will automatically detect the proper axis position for plotting.
+For example, if the data contains `x,y,z,f,mode_index` data, one could supply `z=0, f=4e14, mode_index=2` to the `plot_field()` as `**sel_kwargs` to get it into the form needed to plot field(x,y) on the z=0 plane. If there was only one frequency in the data, the `f`  could safely be left out of the `**sel_kwargs`. The code will automatically detect the proper axis position for plotting.
 
 ## File IO
 
 ### JSON
 
-`SimulationData` and `MontorData` objects inherit directly from `Tidy3dBaseModel` and can be written directly to json. `DataArray` objects can also be written to json as we define a json encoder that uses [`xarray.DataArray.to_dict()`](https://docs.xarray.dev/en/stable/generated/xarray.DataArray.to_dict.html`). Therefore, an entire `SimulationData`, `MonitorData`, or `DataArray` object can be written to json without issue.
+`SimulationData` and `MontorData` objects inherit directly from `Tidy3dBaseModel` and can be written directly to json. `DataArray` objects can also be written to json as we define a json encoder that uses [`xarray.DataArray.to_dict()`](https://docs.xarray.dev/en/stable/generated/xarray.DataArray.to_dict.html`). Therefore, an entire `SimulationData`, `MonitorData`, or `DataArray` object can be written to json without issue. However, it is worth noting that hdf5 is highly preferred over json when data is contained in the object, as json writing of data will be very slow.
 
 ### HDF5
 
