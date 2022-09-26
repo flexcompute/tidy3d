@@ -74,6 +74,19 @@ class SimulationData(Tidy3dBaseModel):
         """Get a :class:`.MonitorData` by name. Apply symmetry if applicable."""
         monitor_data = self.monitor_data[monitor_name]
         monitor_data = self.apply_symmetry(monitor_data)
+
+        # TODO: eventually some better handling of this without checking the type explicitly, fine for now?
+        if isinstance(monitor_name, DiffractionData):
+            normal_axis = monitor_data.monitor.normalize_index
+            sim_size = self.simulation.size.pop(normal_axis)
+            bloch_vec = [0, 0]
+            dims = ['x', 'y', 'z']
+            dims.pop(normal_axis)
+            for dim_index, dim_str in enumerate(dims):
+                boundary_spec = self.simulation.boundary_spec[dim_str]
+                if isinstance(boundary_spec, BlochBoundary):
+                    bloch_vec[dim_index] = float(boundary_spec.bloch_vec)
+            monitor_data = monitor_data.update_periodicity(domain_size=sim_size, bloch_vec=bloch_vec)
         return monitor_data
 
     @property

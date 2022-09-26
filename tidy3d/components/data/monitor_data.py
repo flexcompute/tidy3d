@@ -603,22 +603,16 @@ class DiffractionData(MonitorData):
 
     monitor: DiffractionMonitor
 
-    ux: ArrayLike[float, 2] = pd.Field(
+    domain_size: Tuple[float, float] = pd.Field(
         ...,
-        title="Normalized wave vector along x",
-        description="Local x component of wave vectors for each diffraction order and frequency, "
-        "relative to ``local_origin`` and oriented with respect to ``u_axis``, "
-        "normalized by (2*pi/lambda) where lambda is the wavelength "
-        "associated with the background medium.",
+        title="Domain Size",
+        description="Size of the finite near field measurement domain in the local xy plane.",
     )
 
-    uy: ArrayLike[float, 2] = pd.Field(
-        ...,
-        title="Normalized wave vector along y",
-        description="Local y component of wave vectors for each diffraction order and frequency, "
-        "relative to ``local_origin`` and oriented with respect to ``u_axis``, "
-        "normalized by (2*pi/lambda) where lambda is the wavelength "
-        "associated with the background medium.",
+    bloch_vec: Tuple[float, float] = pd.Field(
+        (0, 0),
+        title="In Plane Bloch Vectors",
+        description="The Bloch vectors in the local xy plane.",
     )
 
     E: DiffractionDataArray = pd.Field(
@@ -658,6 +652,22 @@ class DiffractionData(MonitorData):
         coords["polarization"] = ["s", "p"]
         coords["f"] = np.array(self.E.f.values)
         return coords
+
+    def update_periodicity(self, domain_size: Tuple[float, float], bloch_vec: Tuple[float, float] = (0, 0)) -> DiffractionData:
+        """Compute a new copy of the :class:`.DiffractionData` object with periodicity info."""
+        return self.copy(update=dict(domain_size=domain_size, bloch_vec=bloch_vec))
+
+    def compute_reciprocal_coords(self, size: float, bloch_vec: float) -> List[float]:
+        """Compute the normalized reciprocal coordinates along a dimension."""
+        raise NotImplementedError('To Do, basically put here whatever is currently done to generate ux, uy on backend.')
+
+    @property
+    def ux(self):
+        return self.compute_reciprocal_coords(size=self.domain_size[0], bloch_vec=self.bloch_vec[0])
+    
+    @property
+    def uy(self):
+        return self.compute_reciprocal_coords(size=self.domain_size[1], bloch_vec=self.bloch_vec[1])
 
     @property
     def angles(self):
