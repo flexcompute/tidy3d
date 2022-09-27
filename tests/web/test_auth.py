@@ -5,9 +5,11 @@ import pytest
 import requests
 
 import tidy3d.web.auth as tidy3d_auth
+import tidy3d.web.config as config
 from tests.utils import get_test_root_dir
 from tests.web.mock_web import MockResponse
 from tidy3d import log
+import importlib
 
 
 @pytest.fixture
@@ -75,6 +77,14 @@ def test_get_credentials_with_env(monkeypatch):
         ),
     )
     tidy3d_auth.get_credentials()
+
+
+def test_get_config_with_env(monkeypatch):
+
+    for TIDY3D_ENV in ("prod", "dev", "uat"):
+        monkeypatch.setenv("TIDY3D_ENV", TIDY3D_ENV)
+        importlib.reload(config)
+        assert config.DEFAULT_CONFIG == config.WEB_CONFIGS[TIDY3D_ENV]
 
 
 def test_get_credentials_with_stored_file(monkeypatch, mock_credential_path):
