@@ -212,7 +212,7 @@ def update_1_4(sim_dict: dict) -> dict:
     def fix_modespec(ms_dict):
         """Fix a ModeSpec dictionary."""
         sort_by = ms_dict.pop("sort_by", None)
-        if sort_by != "largest_neff":
+        if sort_by and sort_by != "largest_neff":
             log.warning(
                 "ModeSpec.sort_by was removed in Tidy3D 1.5.0, reverting to sorting by "
                 "largest effective index. Use ModeSpec.filter_pol to select polarization instead."
