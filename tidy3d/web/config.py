@@ -1,5 +1,7 @@
 """ sets configuration options for web interface """
+import os
 from typing import Any, Dict
+
 import pydantic as pd
 
 
@@ -63,4 +65,6 @@ WEB_CONFIGS = {
 
 # default one to import
 DEFAULT_CONFIG_KEY = "prod"
-DEFAULT_CONFIG = WEB_CONFIGS[DEFAULT_CONFIG_KEY]
+env_key = os.environ.get("TIDY3D_ENV")
+config_key = env_key if env_key is not None else DEFAULT_CONFIG_KEY
+DEFAULT_CONFIG = WEB_CONFIGS[config_key]

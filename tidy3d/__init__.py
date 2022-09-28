@@ -67,7 +67,7 @@ from .components.monitor import Monitor
 from .components.grid import YeeGrid, FieldGrid, Coords1D
 
 # logging
-from .log import log, set_logging_file
+from .log import log, set_logging_file, WebError
 
 # config
 from .config import config
@@ -89,4 +89,5 @@ def set_logging_level(level: str) -> None:
 
 # make all stdout and errors pretty
 pretty.install()
+log.info(f"Using client version: {__version__}")
 # traceback.install()

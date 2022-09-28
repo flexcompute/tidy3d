@@ -1,4 +1,6 @@
 import os
+from pathlib import Path
+
 import numpy as np
 from tidy3d import *
 import tidy3d as td
@@ -15,6 +17,7 @@ def clear_dir(path: str):
 
 
 TMP_DIR = "tests/tmp/"
+
 
 # decorator that clears the tmp/ directory before test
 def clear_tmp(fn):
@@ -203,7 +206,6 @@ SIM_FULL = Simulation(
     ),
 )
 
-
 # Initialize simulation
 SIM_CONVERT = td.Simulation(
     size=[4, 4, 4],
@@ -313,3 +315,9 @@ def assert_log_level(caplog, log_level_expected):
                 # log level was triggered, exit
                 return
         raise Exception
+
+
+def get_test_root_dir():
+    """return the root folder of test code"""
+
+    return Path(__file__).parent

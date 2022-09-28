@@ -13,9 +13,8 @@ from ..log import log, WebError
 MAX_ATTEMPTS = 3
 
 # where we store the credentials locally
-CREDENTIAL_FILE = "~/.tidy3d/auth.json"
-credential_path = os.path.expanduser(CREDENTIAL_FILE)
-credential_dir = os.path.split(credential_path)[0]
+_CREDENTIAL_FILE = "~/.tidy3d/auth.json"
+CREDENTIAL_PATH = os.path.expanduser(_CREDENTIAL_FILE)
 
 
 def set_authentication_config(email: str, password: str) -> None:
@@ -26,6 +25,9 @@ def set_authentication_config(email: str, password: str) -> None:
     url = "/".join([Config.auth_api_endpoint, "auth"])
     headers = {"Application": "TIDY3D"}
     resp = requests.get(url, headers=headers, auth=(email, password))
+    if resp.status_code != 200:
+        raise WebError("Failed to log in with username and password.")
+    log.info("Authentication successful.")
     access = resp.json()["data"]
     keys = access["user"]
 
@@ -46,8 +48,7 @@ def encode_password(password: str) -> str:
     return hashlib.sha512(password.encode("utf-8") + salt.encode("utf-8")).hexdigest()
 
 
-# pylint:disable=too-many-branches
-def get_credentials() -> None:
+def get_credentials() -> None:  # pylint:disable=too-many-branches
     """Tries to log user in from environment variables, then from file, if not working, prompts
     user for login info and saves to file."""
 
@@ -56,13 +57,8 @@ def get_credentials() -> None:
         os.environ.get("TIDY3D_PASS") or os.environ.get("TIDY3D_PASS_HASH")
     ):
         log.debug("Using Tidy3D credentials from environment")
-        email = os.environ["TIDY3D_USER"]
-        password = os.environ.get("TIDY3D_PASS")
-        if password is None:
-            password = os.environ.get("TIDY3D_PASS_HASH")
-        else:
-            password = encode_password(password)
         try:
+            email, password = _get_credential_from_env()
             set_authentication_config(email, password)
             return
 
@@ -70,29 +66,23 @@ def get_credentials() -> None:
             log.info("Error: Failed to log in with environment credentials.")
 
     # if we find something in the credential path
-    if os.path.exists(credential_path):
-        log.info("Using Tidy3D credentials from stored file")
+    if os.path.exists(CREDENTIAL_PATH):
+        log.info("Using Tidy3D credentials from stored file.")
         # try to authenticate them
         try:
-            with open(credential_path, "r", encoding="utf-8") as fp:
-                auth_json = json.load(fp)
-            email = auth_json["email"]
-            password = auth_json["password"]
+            email, password = _get_credential_from_stored_file()
             set_authentication_config(email, password)
             return
 
         except Exception:  # pylint:disable=broad-except
             log.info("Error: Failed to log in with saved credentials.")
+    else:
+        email = None
 
     # keep trying to log in
     for counter in range(MAX_ATTEMPTS):
-
-        email = input("enter your email registered at tidy3d: ")
-        password = getpass.getpass("enter your password: ")
-        # encrypt
-        password = encode_password(password)
-
         try:
+            email, password = _get_credential_from_console(email)
             set_authentication_config(email, password)
             break
 
@@ -105,18 +95,16 @@ def get_credentials() -> None:
     # ask to stay logged in
     for _ in range(MAX_ATTEMPTS):
 
-        keep_logged_in = input("Do you want to keep logged in on this machine? ([Y]es / [N]o) ")
+        keep_logged_in = input(
+            "Authentication successful. "
+            "Do you want to stay logged in on this machine? ([Y]es / [N]o) "
+        )
 
         # if user wants to stay logged in
         if keep_logged_in.lower() == "y":
 
             try:
-                if not os.path.exists(credential_dir):
-                    os.mkdir(credential_dir)
-
-                auth_json = {"email": email, "password": password}
-                with open(credential_path, "w", encoding="utf-8") as fp:
-                    json.dump(auth_json, fp)
+                _save_credential_to_stored_file(email, password)
                 return
 
             except Exception:  # pylint:disable=broad-except
@@ -128,4 +116,86 @@ def get_credentials() -> None:
             return
 
         # otherwise, prompt again
-        log.info(f"Unknown response: {keep_logged_in}")
+        log.info(f"Unknown response: {keep_logged_in}.")
+
+
+def _save_credential_to_stored_file(email, password):
+    """
+    Tries to save credential to stored file.
+
+    Returns
+    -------
+    Tuple[str, str]
+        email and encrypted password
+    """
+    credential_dir = os.path.split(CREDENTIAL_PATH)[0]
+
+    if not os.path.exists(credential_dir):
+        os.mkdir(credential_dir)
+    auth_json = {"email": email, "password": password}
+    with open(CREDENTIAL_PATH, "w", encoding="utf-8") as fp:
+        json.dump(auth_json, fp)
+
+
+def _get_credential_from_stored_file():
+    """
+    Tries to get credential from stored file.
+
+    Returns
+    -------
+    Tuple[str, str]
+        email and encrypted password
+    """
+
+    with open(CREDENTIAL_PATH, "r", encoding="utf-8") as fp:
+        auth_json = json.load(fp)
+    email = auth_json["email"]
+    password = auth_json["password"]
+    return email, password
+
+
+def _get_credential_from_env():
+    """
+    Tries to get credential from environment variables.
+
+    Returns
+    -------
+    Tuple[str, str]
+        email and encrypted password
+    """
+
+    email = os.environ["TIDY3D_USER"]
+    password = os.environ.get("TIDY3D_PASS")
+    if password is None:
+        password = os.environ.get("TIDY3D_PASS_HASH")
+    else:
+        password = encode_password(password)
+    return email, password
+
+
+def _get_credential_from_console(email):
+    """
+    Tries to get credential from console input.
+
+    Returns
+    -------
+    Tuple[str, str]
+        email and encrypted password
+    """
+
+    new_email = None
+    while not new_email:
+        if email:
+            new_email = input(f"Enter your email registered at tidy3d. Default is ({email}): ")
+        else:
+            new_email = input("Enter your email registered at tidy3d : ")
+
+        #  default to use current email
+        if not new_email:
+            new_email = email
+
+    password = getpass.getpass("Enter your password: ")
+    # encrypt
+    password = encode_password(password)
+
+    return new_email, password

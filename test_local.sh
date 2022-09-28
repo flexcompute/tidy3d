@@ -22,5 +22,6 @@ pytest -ra tests/test_meshgenerate.py
 pytest -ra tests/test_near2far.py
 pytest -ra tests/test_plugins.py
 pytest -ra tests/test_sidewall.py
+pytest -ra tests/web/test_auth.py
 
 pytest --doctest-modules tidy3d/components

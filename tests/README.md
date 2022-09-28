@@ -52,7 +52,7 @@ If you can, err on the side of tests that run quickly.  For example, if testing 
 ### Run all tests
 
 All tests must be run from the root directory.
-Ie: `tidy3d-client-revamp/`
+Ie: `tidy3d/`
 
 From there, to run all tests:
 

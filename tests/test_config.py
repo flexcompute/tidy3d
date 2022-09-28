@@ -3,10 +3,7 @@
 import pytest
 
 import tidy3d as td
-from tidy3d.web.config import DEFAULT_CONFIG, WEB_CONFIGS
 from tidy3d.log import log, DEFAULT_LEVEL, LEVEL_MAP
-
-from .utils import assert_log_level
 
 
 def test_logging_level():
