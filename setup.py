@@ -16,19 +16,19 @@ print(version["__version__"])
 with open("README.md", "r", encoding="utf-8") as fh:
     long_description = fh.read()
 
-core_required = []
-for core_file in ["requirements/basic.txt", "requirements/web.txt"]:
-    with open(core_file) as f:
-        core_required.append(f.read().splitlines())
 
-with open("requirements/plotly.txt") as f:
-    plotly_required = f.read().splitlines()
-    plotly_required = [req for req in plotly_required if "-r" not in req]
+def read_requirements(req_file: str):
+    """Read requirements from a file excluding lines that have ``-r``."""
+    with open(req_file) as f:
+        required = f.read().splitlines()
+    return [req for req in required if "-r" not in req]
 
-with open("requirements/dev.txt") as f:
-    dev_required = f.read().splitlines()
-    dev_required = [req for req in dev_required if "-r" not in req]
-dev_required.append(plotly_required)
+
+basic_required = read_requirements("requirements/basic.txt")
+web_required = read_requirements("requirements/web.txt")
+core_required = read_requirements("requirements/core.txt")
+core_required += basic_required + web_required
+dev_required = read_requirements("requirements/dev.txt")
 
 setuptools.setup(
     name=PIP_NAME,
@@ -50,5 +50,5 @@ setuptools.setup(
     packages=setuptools.find_packages(),
     python_requires=">=3.7",
     install_requires=core_required,
-    extras_require={"plotly": plotly_required, "dev": dev_required, "core": core_required},
+    extras_require={"dev": dev_required},
 )

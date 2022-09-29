@@ -1,7 +1,6 @@
-# core, plotly and tests
+# core and tests
 
 -r core.txt
--r plotly.txt
 
 # required for development
 click==8.0.3
