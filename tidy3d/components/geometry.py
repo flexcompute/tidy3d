@@ -1574,7 +1574,7 @@ class PolySlab(Planar):
         description="Angle of the sidewall. "
         "``sidewall_angle=0`` (default) specifies vertical wall, "
         "while ``0<sidewall_angle<np.pi/2`` for the base to be larger than the top, "
-        "and ``np.pi/2<sidewall_angle<0`` for base to be smaller than the top.",
+        "and ``-np.pi/2<sidewall_angle<0`` for base to be smaller than the top.",
         gt=-np.pi / 2,
         lt=np.pi / 2,
         units=RADIAN,
