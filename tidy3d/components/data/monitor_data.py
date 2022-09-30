@@ -682,6 +682,8 @@ class DiffractionData(MonitorData):
         """Normalized wave vector along x relative to ``local_origin`` and oriented
         with respect to ``monitor.normal_dir``, normalized by the wave number in the
         background medium."""
+        if self.sim_size[0] == 0:
+            return np.atleast_2d(0)
         bloch_x = self.shifted_orders(self.orders_x, self.bloch_vecs[0])
         return bloch_x[:, None] * 2.0 * np.pi / self.sim_size[0] / self.wavenumber[None, :]
 
@@ -690,6 +692,8 @@ class DiffractionData(MonitorData):
         """Normalized wave vector along y relative to ``local_origin`` and oriented
         with respect to ``monitor.normal_dir``, normalized by the wave number in the
         background medium."""
+        if self.sim_size[1] == 0:
+            return np.atleast_2d(0)
         bloch_y = self.shifted_orders(self.orders_y, self.bloch_vecs[1])
         return bloch_y[:, None] * 2.0 * np.pi / self.sim_size[1] / self.wavenumber[None, :]
 
