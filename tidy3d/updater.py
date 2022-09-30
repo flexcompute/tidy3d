@@ -200,6 +200,26 @@ def iterate_update_dict(update_dict: Dict, update_types: Dict[str, Callable]):
             iterate_update_dict(item, update_types)
 
 
+@updates_from_version("1.6")
+def update_1_6(sim_dict: dict) -> dict:
+    """Updates version 1.6."""
+    if "grid_size" in sim_dict:
+        sim_dict.pop("grid_size")
+    return sim_dict
+
+
+@updates_from_version("1.5")
+def update_1_5(sim_dict: dict) -> dict:
+    """Updates version 1.5."""
+
+    def fix_mode_field_mnt(mnt_dict: dict) -> dict:
+        mnt_dict["type"] = "ModeSolverMonitor"
+        return mnt_dict
+
+    iterate_update_dict(update_dict=sim_dict, update_types={"ModeFieldMonitor": fix_mode_field_mnt})
+    return sim_dict
+
+
 @updates_from_version("1.4")
 def update_1_4(sim_dict: dict) -> dict:
     """Updates version 1.4."""
@@ -229,8 +249,7 @@ def update_1_4(sim_dict: dict) -> dict:
     }
 
     iterate_update_dict(update_dict=sim_dict, update_types=update_types)
-    if "grid_size" in sim_dict:
-        sim_dict.pop("grid_size")
+
     return sim_dict
 
 

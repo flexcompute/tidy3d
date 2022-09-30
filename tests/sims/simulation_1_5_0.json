@@ -522,6 +522,39 @@
                 "bend_axis": null,
                 "type": "ModeSpec"
             }
+        },
+        {
+            "type": "ModeFieldMonitor",
+            "center": [
+                0.0,
+                0.0,
+                0.0
+            ],
+            "size": [
+                1.0,
+                0.0,
+                1.0
+            ],
+            "name": "mode_field",
+            "freqs": [
+                1.0,
+                2.0
+            ],
+            "mode_spec": {
+                "num_modes": 3,
+                "target_neff": null,
+                "num_pml": [
+                    0,
+                    0
+                ],
+                "filter_pol": null,
+                "angle_theta": 0.0,
+                "angle_phi": 0.0,
+                "precision": "single",
+                "bend_radius": null,
+                "bend_axis": null,
+                "type": "ModeSpec"
+            }
         }
     ],
     "grid_spec": {
