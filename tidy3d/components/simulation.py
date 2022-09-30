@@ -188,7 +188,8 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         title="Courant Factor",
         description="Courant stability factor, controls time step to spatial step ratio. "
         "Lower values lead to more stable simulations for dispersive materials, "
-        "but result in longer simulation times.",
+        "but result in longer simulation times. This factor is normalized to no larger than 1 "
+        "when CFL stability condition is met in 3D.",
         gt=0.0,
         le=1.0,
     )
