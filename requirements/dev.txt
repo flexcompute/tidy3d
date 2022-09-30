@@ -11,4 +11,3 @@ pytest
 pytest-timeout
 gdspy
 memory_profiler
-dill
