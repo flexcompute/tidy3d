@@ -27,7 +27,8 @@ SIM_DIR = "tests/sims"
 @clear_tmp
 def test_simulation_load_export():
 
-    path = "tests/tmp/simulation.json"
+    major, minor, patch = __version__.split(".")
+    path = os.path.join(SIM_DIR, f"simulation_{major}_{minor}_{patch}.json")
     SIM.to_file(path)
     SIM2 = Simulation.from_file(path)
     assert SIM == SIM2, "original and loaded simulations are not the same"
@@ -53,82 +54,12 @@ def test_simulation_load_export_hdf5():
 
 @clear_tmp
 def test_simulation_preserve_types():
-    """This test also writes a simulation file to ``tests/sims/simulation_x_y_z.json`` to store
-    an example of the current version. Updating all of these files is then checked in
-    ``test_simulation_updater``."""
+    """Test that all re-loaded components have the same types."""
 
-    st = GaussianPulse(freq0=1.0, fwidth=1.0)
-
-    sim_all = Simulation(
-        size=(10.0, 10.0, 10.0),
-        structures=[
-            Structure(geometry=Box(size=(1, 1, 1)), medium=Medium()),
-            Structure(geometry=Sphere(radius=1), medium=PoleResidue(eps_inf=1, poles=[])),
-            Structure(
-                geometry=Cylinder(radius=1, length=1, axis=2),
-                medium=Lorentz(eps_inf=1.0, coeffs=[]),
-            ),
-            Structure(
-                geometry=PolySlab(vertices=[(0, 0), (2, 3), (4, 3)], slab_bounds=(-1, 1), axis=2),
-                medium=Sellmeier(coeffs=[]),
-            ),
-            Structure(geometry=Sphere(radius=1), medium=Debye(eps_inf=1.0, coeffs=[]), name="t2"),
-            Structure(
-                geometry=GeometryGroup(
-                    geometries=[
-                        PolySlab(vertices=[(0, 0), (2, 3), (4, 3)], slab_bounds=(-1, 1), axis=2),
-                        Cylinder(radius=1, length=1, axis=2),
-                    ]
-                ),
-                medium=Drude(coeffs=[[1.0, 1.0]]),
-            ),
-        ],
-        sources=[
-            UniformCurrentSource(size=(0, 0, 0), source_time=st, polarization="Ex"),
-            PlaneWave(
-                center=(0, 0, -4),
-                size=(inf, inf, 0),
-                source_time=st,
-                direction="+",
-                pol_angle=2.0,
-            ),
-            GaussianBeam(
-                center=(0, 0, -4),
-                size=(1, 1, 0),
-                source_time=st,
-                direction="+",
-                waist_radius=1,
-            ),
-            ModeSource(
-                center=(0, 0, 0),
-                size=(0, 1, 1),
-                mode_spec=ModeSpec(num_modes=3),
-                mode_index=2,
-                direction="-",
-                source_time=st,
-            ),
-        ],
-        monitors=[
-            FieldMonitor(size=(1, 1, 1), freqs=[1, 2, 3], name="field"),
-            FieldTimeMonitor(size=(1, 1, 1), start=1e-12, interval=3, name="fieldtime"),
-            FluxMonitor(size=(1, 0, 1), freqs=[1, 2, 3], name="flux"),
-            FluxTimeMonitor(size=(1, 0, 1), start=1e-12, interval=3, name="fluxtime"),
-            ModeMonitor(size=(1, 0, 1), freqs=[1, 2], mode_spec=ModeSpec(num_modes=3), name="mode"),
-        ],
-        run_time=1e-12,
-        symmetry=(0, -1, 1),
-        boundary_spec=BoundarySpec(
-            x=Boundary.bloch(bloch_vec=1.0),
-            y=Boundary(minus=PECBoundary(), plus=Periodic()),
-            z=Boundary(minus=PML(), plus=Absorber()),
-        ),
-    )
-
-    major, minor, patch = __version__.split(".")
-    path = os.path.join(SIM_DIR, f"simulation_{major}_{minor}_{patch}.json")
-    sim_all.to_file(path)
+    path = "tests/tmp/simulation.json"
+    SIM.to_file(path)
     sim_2 = Simulation.from_file(path)
-    assert sim_all == sim_2
+    assert SIM == sim_2
 
     M_types = [type(s.medium) for s in sim_2.structures]
     for M in (Medium, PoleResidue, Lorentz, Sellmeier, Debye):
