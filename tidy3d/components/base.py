@@ -2,9 +2,8 @@
 from __future__ import annotations
 
 import json
-from typing import Any, Union, Optional
+from typing import Any, Optional
 from functools import wraps
-from typing_extensions import _AnnotatedAlias
 
 import rich
 import pydantic
@@ -16,7 +15,7 @@ import xarray as xr
 from dask.base import tokenize
 
 from .types import ComplexNumber, Literal, TYPE_TAG_STR
-from ..log import FileError, log, Tidy3dKeyError
+from ..log import FileError, log
 
 # default indentation (# spaces) in files
 INDENT = 4
@@ -95,123 +94,6 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         >>> simulation.help(methods=True) # doctest: +SKIP
         """
         rich.inspect(self, methods=methods)
-
-    @classmethod
-    def load_without_validation(cls, **values) -> Tidy3dBaseModel:
-        """Creates a new model setting from trusted or pre-validated data.
-
-        Parameters
-        ----------
-        **values
-            The fields and values of the model as keyword arguments.
-        """
-
-        # dict of the pd.Field() values for this class, used to get type info later
-        fields = cls.__fields__
-
-        def is_dict_with_type(value: Any) -> bool:
-            """Is this value a dictionary with a type field? Probably Tidy3dBaseModel."""
-            return isinstance(value, dict) and TYPE_TAG_STR in value
-
-        def get_cls_type(value: Any, outer_type: type, model_type: type) -> type:
-            """Gets the class / type needed to load the data in `value`."""
-
-            # if the value could be a tidy3d object, we infer its type from the type annotation.
-            if is_dict_with_type(value):
-
-                # if an annotated type, get the union from the first `arg`
-                if isinstance(model_type, _AnnotatedAlias):
-                    outer_type = model_type.__args__[0]
-
-                # of a union of types, try to grab the correct type using `type` field
-                origin_dict = outer_type.__dict__.get("__origin__")
-                if origin_dict == Union:
-
-                    # make a dictionary containing the type_name : tidy3d_type for each union member
-                    union_types = {}
-                    for union_type in outer_type.__dict__["__args__"]:
-                        if isinstance(union_type, type) and issubclass(union_type, Tidy3dBaseModel):
-                            type_dict = union_type.__fields__[TYPE_TAG_STR].type_.__dict__
-                            type_name = type_dict["__args__"][0]
-                            union_types[type_name] = union_type
-
-                    # try to get the value type from the dict of unions, error if not there
-                    value_type = value[TYPE_TAG_STR]
-                    if value_type not in union_types:
-                        raise Tidy3dKeyError(
-                            f"trying to construct {value} with type {value_type},"
-                            f"but this type is not present in the field type union {union_types}"
-                        )
-                    return union_types[value[TYPE_TAG_STR]]
-
-            # at this point, the type annotation didnt have a union of types, so we just return
-            return model_type
-
-        def convert_list_to_tuple(val_list: list) -> tuple:
-            """Recursively convert a list to tuple."""
-            if not isinstance(val_list, list):
-                return val_list
-            return tuple(convert_list_to_tuple(v) for v in val_list)
-
-        def parse_raw_value(value: Any) -> Any:
-            """Special rules for parsing a single value."""
-            if isinstance(value, list):
-                value = convert_list_to_tuple(value)
-            if isinstance(value, tuple):
-                value = tuple(parse_raw_value(v) for v in value)
-            if value == "Infinity":
-                value = np.inf
-            if value == "-Infinity":
-                value = -np.inf
-            if isinstance(value, dict) and "real" in value and "imag" in value:
-                value = value.get("real") + 1j * value.get("imag")
-            return value
-
-        def construct_value(name: str, value: Any) -> Any:
-            """Load a single value without validation."""
-
-            # infer the type information from the pydantic model
-            model_field = fields[name]
-            model_type = model_field.type_
-            outer_type = model_field.outer_type_
-
-            # if it's a union type, and there is a 'type' in the value dictionary
-            if is_dict_with_type(value):
-
-                # grab the type and load the data without validation using that type
-                model_type = get_cls_type(value, outer_type, model_type)
-                return model_type.load_without_validation(**value)
-
-            # if the type of the field is a tuple and the supplied value is not None
-            if (
-                value is not None
-                and hasattr(outer_type, "_name")
-                and outer_type._name == "Tuple"  # pylint:disable=protected-access
-            ):
-
-                # construct new tuple by loading
-                new_vals = []
-                for val in value:
-                    if is_dict_with_type(val):
-                        model_sub_type = get_cls_type(val, outer_type, model_type)
-                        new_vals.append(model_sub_type.load_without_validation(**val))
-                    else:
-                        val = parse_raw_value(val)
-                        new_vals.append(val)
-                return tuple(new_vals)
-
-            # regular type, cast to the correct value
-            if isinstance(model_type, type) and value is not None:
-                value = parse_raw_value(value)
-                return model_type(value)
-
-            return parse_raw_value(value)
-
-        # loop through supplied values as a dictionary
-        constructed_values = {k: construct_value(name=k, value=v) for k, v in values.items()}
-
-        # use the constructed values to call pydantic's construct function
-        return cls.construct(**constructed_values)
 
     @classmethod
     def from_file(cls, fname: str, **parse_kwargs) -> Tidy3dBaseModel:
