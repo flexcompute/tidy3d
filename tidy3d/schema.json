@@ -1,6 +1,6 @@
 {
   "title": "Simulation",
-  "description": "Contains all information about Tidy3d simulation.\n\nParameters\n----------\ncenter : Tuple[float, float, float] = (0.0, 0.0, 0.0)\n    [units = um].  Center of object in x, y, and z.\nsize : Tuple[NonNegativeFloat, NonNegativeFloat, NonNegativeFloat]\n    [units = um].  Size in x, y, and z directions.\nrun_time : PositiveFloat\n    [units = sec].  Total electromagnetic evolution time in seconds. Note: If simulation 'shutoff' is specified, simulation will terminate early when shutoff condition met. \nmedium : Union[Medium, AnisotropicMedium, PECMedium, PoleResidue, Sellmeier, Lorentz, Debye, Drude] = Medium(name=None, frequency_range=None, type='Medium', permittivity=1.0, conductivity=0.0)\n    Background medium of simulation, defaults to vacuum if not specified.\nsymmetry : Tuple[Literal[0, -1, 1], Literal[0, -1, 1], Literal[0, -1, 1]] = (0, 0, 0)\n    Tuple of integers defining reflection symmetry across a plane bisecting the simulation domain normal to the x-, y-, and z-axis at the simulation center of each axis, respectvely. Each element can be ``0`` (no symmetry), ``1`` (even, i.e. 'PMC' symmetry) or ``-1`` (odd, i.e. 'PEC' symmetry). Note that the vectorial nature of the fields must be taken into account to correctly determine the symmetry value.\nstructures : Tuple[Structure, ...] = ()\n    Tuple of structures present in simulation. Note: Structures defined later in this list override the simulation material properties in regions of spatial overlap.\nsources : Tuple[Annotated[Union[tidy3d.components.source.UniformCurrentSource, tidy3d.components.source.PointDipole, tidy3d.components.source.GaussianBeam, tidy3d.components.source.AstigmaticGaussianBeam, tidy3d.components.source.ModeSource, tidy3d.components.source.PlaneWave], FieldInfo(default=PydanticUndefined, discriminator='type', extra={})], ...] = ()\n    Tuple of electric current sources injecting fields into the simulation.\nboundary_spec : BoundarySpec = BoundarySpec(x=Boundary(plus=Periodic(name=None,, type='Periodic'),, minus=Periodic(name=None,, type='Periodic'),, type='Boundary'), y=Boundary(plus=Periodic(name=None,, type='Periodic'),, minus=Periodic(name=None,, type='Periodic'),, type='Boundary'), z=Boundary(plus=Periodic(name=None,, type='Periodic'),, minus=Periodic(name=None,, type='Periodic'),, type='Boundary'), type='BoundarySpec')\n    Specification of boundary conditions along each dimension.\nmonitors : Tuple[Annotated[Union[tidy3d.components.monitor.FieldMonitor, tidy3d.components.monitor.FieldTimeMonitor, tidy3d.components.monitor.PermittivityMonitor, tidy3d.components.monitor.FluxMonitor, tidy3d.components.monitor.FluxTimeMonitor, tidy3d.components.monitor.ModeMonitor, tidy3d.components.monitor.ModeSolverMonitor, tidy3d.components.monitor.Near2FarAngleMonitor, tidy3d.components.monitor.Near2FarCartesianMonitor, tidy3d.components.monitor.Near2FarKSpaceMonitor], FieldInfo(default=PydanticUndefined, discriminator='type', extra={})], ...] = ()\n    Tuple of monitors in the simulation. Note: monitor names are used to access data after simulation is run.\ngrid_spec : GridSpec = GridSpec(grid_x=AutoGrid(type='AutoGrid',, min_steps_per_wvl=10.0,, max_scale=1.4,, mesher=GradedMesher(type='GradedMesher')), grid_y=AutoGrid(type='AutoGrid',, min_steps_per_wvl=10.0,, max_scale=1.4,, mesher=GradedMesher(type='GradedMesher')), grid_z=AutoGrid(type='AutoGrid',, min_steps_per_wvl=10.0,, max_scale=1.4,, mesher=GradedMesher(type='GradedMesher')), wavelength=None, override_structures=(), type='GridSpec')\n    Specifications for the simulation grid along each of the three directions.\nshutoff : NonNegativeFloat = 1e-05\n    Ratio of the instantaneous integrated E-field intensity to the maximum value at which the simulation will automatically terminate time stepping. Used to prevent extraneous run time of simulations with fully decayed fields. Set to ``0`` to disable this feature.\nsubpixel : bool = True\n    If ``True``, uses subpixel averaging of the permittivity based on structure definition, resulting in much higher accuracy for a given grid size.\nnormalize_index : Optional[NonNegativeInt] = 0\n    Index of the source in the tuple of sources whose spectrum will be used to normalize the frequency-dependent data. If ``None``, the raw field data is returned unnormalized.\ncourant : ConstrainedFloatValue = 0.9\n    Courant stability factor, controls time step to spatial step ratio. Lower values lead to more stable simulations for dispersive materials, but result in longer simulation times.\nversion : str = 1.6.3\n    String specifying the front end version number.\n\nExample\n-------\n>>> from tidy3d import Sphere, Cylinder, PolySlab\n>>> from tidy3d import UniformCurrentSource, GaussianPulse\n>>> from tidy3d import FieldMonitor, FluxMonitor\n>>> from tidy3d import GridSpec, AutoGrid\n>>> from tidy3d import BoundarySpec, Boundary\n>>> sim = Simulation(\n...     size=(2.0, 2.0, 2.0),\n...     grid_spec=GridSpec(\n...         grid_x = AutoGrid(min_steps_per_wvl = 20),\n...         grid_y = AutoGrid(min_steps_per_wvl = 20),\n...         grid_z = AutoGrid(min_steps_per_wvl = 20)\n...     ),\n...     run_time=40e-11,\n...     structures=[\n...         Structure(\n...             geometry=Box(size=(1, 1, 1), center=(-1, 0, 0)),\n...             medium=Medium(permittivity=2.0),\n...         ),\n...     ],\n...     sources=[\n...         UniformCurrentSource(\n...             size=(0, 0, 0),\n...             center=(0, 0.5, 0),\n...             polarization=\"Hx\",\n...             source_time=GaussianPulse(\n...                 freq0=2e14,\n...                 fwidth=4e13,\n...             ),\n...         )\n...     ],\n...     monitors=[\n...         FieldMonitor(size=(0, 0, 0), center=(0, 0, 0), freqs=[1.5e14, 2e14], name='point'),\n...         FluxMonitor(size=(1, 1, 0), center=(0, 0, 0), freqs=[2e14, 2.5e14], name='flux'),\n...     ],\n...     symmetry=(0, 0, 0),\n...     boundary_spec=BoundarySpec(\n...         x = Boundary.pml(num_layers=20),\n...         y = Boundary.pml(num_layers=30),\n...         z = Boundary.periodic(),\n...     ),\n...     shutoff=1e-6,\n...     courant=0.8,\n...     subpixel=False,\n... )",
+  "description": "Contains all information about Tidy3d simulation.\n\nParameters\n----------\ncenter : Tuple[float, float, float] = (0.0, 0.0, 0.0)\n    [units = um].  Center of object in x, y, and z.\nsize : Tuple[NonNegativeFloat, NonNegativeFloat, NonNegativeFloat]\n    [units = um].  Size in x, y, and z directions.\nrun_time : PositiveFloat\n    [units = sec].  Total electromagnetic evolution time in seconds. Note: If simulation 'shutoff' is specified, simulation will terminate early when shutoff condition met. \nmedium : Union[Medium, AnisotropicMedium, PECMedium, PoleResidue, Sellmeier, Lorentz, Debye, Drude] = Medium(name=None, frequency_range=None, type='Medium', permittivity=1.0, conductivity=0.0)\n    Background medium of simulation, defaults to vacuum if not specified.\nsymmetry : Tuple[Literal[0, -1, 1], Literal[0, -1, 1], Literal[0, -1, 1]] = (0, 0, 0)\n    Tuple of integers defining reflection symmetry across a plane bisecting the simulation domain normal to the x-, y-, and z-axis at the simulation center of each axis, respectvely. Each element can be ``0`` (no symmetry), ``1`` (even, i.e. 'PMC' symmetry) or ``-1`` (odd, i.e. 'PEC' symmetry). Note that the vectorial nature of the fields must be taken into account to correctly determine the symmetry value.\nstructures : Tuple[Structure, ...] = ()\n    Tuple of structures present in simulation. Note: Structures defined later in this list override the simulation material properties in regions of spatial overlap.\nsources : Tuple[Annotated[Union[tidy3d.components.source.UniformCurrentSource, tidy3d.components.source.PointDipole, tidy3d.components.source.GaussianBeam, tidy3d.components.source.AstigmaticGaussianBeam, tidy3d.components.source.ModeSource, tidy3d.components.source.PlaneWave], FieldInfo(default=PydanticUndefined, discriminator='type', extra={})], ...] = ()\n    Tuple of electric current sources injecting fields into the simulation.\nboundary_spec : BoundarySpec = BoundarySpec(x=Boundary(plus=Periodic(name=None,, type='Periodic'),, minus=Periodic(name=None,, type='Periodic'),, type='Boundary'), y=Boundary(plus=Periodic(name=None,, type='Periodic'),, minus=Periodic(name=None,, type='Periodic'),, type='Boundary'), z=Boundary(plus=Periodic(name=None,, type='Periodic'),, minus=Periodic(name=None,, type='Periodic'),, type='Boundary'), type='BoundarySpec')\n    Specification of boundary conditions along each dimension.\nmonitors : Tuple[Annotated[Union[tidy3d.components.monitor.FieldMonitor, tidy3d.components.monitor.FieldTimeMonitor, tidy3d.components.monitor.PermittivityMonitor, tidy3d.components.monitor.FluxMonitor, tidy3d.components.monitor.FluxTimeMonitor, tidy3d.components.monitor.ModeMonitor, tidy3d.components.monitor.ModeSolverMonitor, tidy3d.components.monitor.Near2FarAngleMonitor, tidy3d.components.monitor.Near2FarCartesianMonitor, tidy3d.components.monitor.Near2FarKSpaceMonitor, tidy3d.components.monitor.DiffractionMonitor], FieldInfo(default=PydanticUndefined, discriminator='type', extra={})], ...] = ()\n    Tuple of monitors in the simulation. Note: monitor names are used to access data after simulation is run.\ngrid_spec : GridSpec = GridSpec(grid_x=AutoGrid(type='AutoGrid',, min_steps_per_wvl=10.0,, max_scale=1.4,, mesher=GradedMesher(type='GradedMesher')), grid_y=AutoGrid(type='AutoGrid',, min_steps_per_wvl=10.0,, max_scale=1.4,, mesher=GradedMesher(type='GradedMesher')), grid_z=AutoGrid(type='AutoGrid',, min_steps_per_wvl=10.0,, max_scale=1.4,, mesher=GradedMesher(type='GradedMesher')), wavelength=None, override_structures=(), type='GridSpec')\n    Specifications for the simulation grid along each of the three directions.\nshutoff : NonNegativeFloat = 1e-05\n    Ratio of the instantaneous integrated E-field intensity to the maximum value at which the simulation will automatically terminate time stepping. Used to prevent extraneous run time of simulations with fully decayed fields. Set to ``0`` to disable this feature.\nsubpixel : bool = True\n    If ``True``, uses subpixel averaging of the permittivity based on structure definition, resulting in much higher accuracy for a given grid size.\nnormalize_index : Optional[NonNegativeInt] = 0\n    Index of the source in the tuple of sources whose spectrum will be used to normalize the frequency-dependent data. If ``None``, the raw field data is returned unnormalized.\ncourant : ConstrainedFloatValue = 0.9\n    Courant stability factor, controls time step to spatial step ratio. Lower values lead to more stable simulations for dispersive materials, but result in longer simulation times. This factor is normalized to no larger than 1 when CFL stability condition is met in 3D.\nversion : str = 1.7.0\n    String specifying the front end version number.\n\nExample\n-------\n>>> from tidy3d import Sphere, Cylinder, PolySlab\n>>> from tidy3d import UniformCurrentSource, GaussianPulse\n>>> from tidy3d import FieldMonitor, FluxMonitor\n>>> from tidy3d import GridSpec, AutoGrid\n>>> from tidy3d import BoundarySpec, Boundary\n>>> sim = Simulation(\n...     size=(2.0, 2.0, 2.0),\n...     grid_spec=GridSpec(\n...         grid_x = AutoGrid(min_steps_per_wvl = 20),\n...         grid_y = AutoGrid(min_steps_per_wvl = 20),\n...         grid_z = AutoGrid(min_steps_per_wvl = 20)\n...     ),\n...     run_time=40e-11,\n...     structures=[\n...         Structure(\n...             geometry=Box(size=(1, 1, 1), center=(-1, 0, 0)),\n...             medium=Medium(permittivity=2.0),\n...         ),\n...     ],\n...     sources=[\n...         UniformCurrentSource(\n...             size=(0, 0, 0),\n...             center=(0, 0.5, 0),\n...             polarization=\"Hx\",\n...             source_time=GaussianPulse(\n...                 freq0=2e14,\n...                 fwidth=4e13,\n...             ),\n...         )\n...     ],\n...     monitors=[\n...         FieldMonitor(size=(0, 0, 0), center=(0, 0, 0), freqs=[1.5e14, 2e14], name='point'),\n...         FluxMonitor(size=(1, 1, 0), center=(0, 0, 0), freqs=[2e14, 2.5e14], name='flux'),\n...     ],\n...     symmetry=(0, 0, 0),\n...     boundary_spec=BoundarySpec(\n...         x = Boundary.pml(num_layers=20),\n...         y = Boundary.pml(num_layers=30),\n...         z = Boundary.periodic(),\n...     ),\n...     shutoff=1e-6,\n...     courant=0.8,\n...     subpixel=False,\n... )",
   "type": "object",
   "properties": {
     "type": {
@@ -250,7 +250,8 @@
             "ModeSolverMonitor": "#/definitions/ModeSolverMonitor",
             "Near2FarAngleMonitor": "#/definitions/Near2FarAngleMonitor",
             "Near2FarCartesianMonitor": "#/definitions/Near2FarCartesianMonitor",
-            "Near2FarKSpaceMonitor": "#/definitions/Near2FarKSpaceMonitor"
+            "Near2FarKSpaceMonitor": "#/definitions/Near2FarKSpaceMonitor",
+            "DiffractionMonitor": "#/definitions/DiffractionMonitor"
           }
         },
         "anyOf": [
@@ -283,6 +284,9 @@
           },
           {
             "$ref": "#/definitions/Near2FarKSpaceMonitor"
+          },
+          {
+            "$ref": "#/definitions/DiffractionMonitor"
           }
         ]
       }
@@ -347,7 +351,7 @@
     },
     "courant": {
       "title": "Courant Factor",
-      "description": "Courant stability factor, controls time step to spatial step ratio. Lower values lead to more stable simulations for dispersive materials, but result in longer simulation times.",
+      "description": "Courant stability factor, controls time step to spatial step ratio. Lower values lead to more stable simulations for dispersive materials, but result in longer simulation times. This factor is normalized to no larger than 1 when CFL stability condition is met in 3D.",
       "default": 0.9,
       "exclusiveMinimum": 0.0,
       "maximum": 1.0,
@@ -356,7 +360,7 @@
     "version": {
       "title": "Version",
       "description": "String specifying the front end version number.",
-      "default": "1.6.3",
+      "default": "1.7.0",
       "type": "string"
     }
   },
@@ -368,7 +372,7 @@
   "definitions": {
     "Medium": {
       "title": "Medium",
-      "description": "Dispersionless medium.\n\nParameters\n----------\nname : Optional[str] = None\n    Optional unique name for medium.\nfrequency_range : Optional[Tuple[float, float]] = None\n    [units = (Hz, Hz)].  Optional range of validity for the medium.\npermittivity : ConstrainedFloatValue = 1.0\n    [units = None (relative permittivity)].  Relative permittivity.\nconductivity : ConstrainedFloatValue = 0.0\n    [units = S/m].  Electric conductivity.  Defined such that the imaginary part of the complex permittivity at angular frequency omega is given by conductivity/omega.\n\nExample\n-------\n>>> dielectric = Medium(permittivity=4.0, name='my_medium')\n>>> eps = dielectric.eps_model(200e12)",
+      "description": "Dispersionless medium.\n\nParameters\n----------\nname : Optional[str] = None\n    Optional unique name for medium.\nfrequency_range : Optional[Tuple[float, float]] = None\n    [units = (Hz, Hz)].  Optional range of validity for the medium.\npermittivity : ConstrainedFloatValue = 1.0\n    [units = None (relative permittivity)].  Relative permittivity.\nconductivity : ConstrainedFloatValue = 0.0\n    [units = S/um].  Electric conductivity.  Defined such that the imaginary part of the complex permittivity at angular frequency omega is given by conductivity/omega.\n\nExample\n-------\n>>> dielectric = Medium(permittivity=4.0, name='my_medium')\n>>> eps = dielectric.eps_model(200e12)",
       "type": "object",
       "properties": {
         "name": {
@@ -416,7 +420,7 @@
           "description": "Electric conductivity.  Defined such that the imaginary part of the complex permittivity at angular frequency omega is given by conductivity/omega.",
           "default": 0.0,
           "minimum": 0.0,
-          "units": "S/m",
+          "units": "S/um",
           "type": "number"
         }
       },
@@ -1143,7 +1147,7 @@
     },
     "PolySlab": {
       "title": "PolySlab",
-      "description": "Polygon extruded with optional sidewall angle along axis direction.\n\nParameters\n----------\naxis : Literal[0, 1, 2] = 2\n    Specifies dimension of the planar axis (0,1,2) -> (x,y,z).\nslab_bounds : Tuple[float, float]\n    [units = um].  Minimum and maximum positions of the slab along axis dimension.\ndilation : float = 0.0\n    [units = um].  Dilation of the polygon in the base by shifting each edge along its normal outwards direction by a distance; a negative value corresponds to erosion.\nsidewall_angle : ConstrainedFloatValue = 0.0\n    [units = rad].  Angle of the sidewall. ``sidewall_angle=0`` (default) specifies vertical wall, while ``0<sidewall_angle<np.pi/2`` for the base to be larger than the top, and ``np.pi/2<sidewall_angle<0`` for base to be smaller than the top.\nvertices : Union[Tuple[Tuple[float, float], ...], Array]\n    [units = um].  List of (d1, d2) defining the 2 dimensional positions of the base polygon face vertices along dimensions parallel to slab normal axis.\n\nExample\n-------\n>>> vertices = np.array([(0,0), (1,0), (1,1)])\n>>> p = PolySlab(vertices=vertices, axis=2, slab_bounds=(-1, 1))",
+      "description": "Polygon extruded with optional sidewall angle along axis direction.\n\nParameters\n----------\naxis : Literal[0, 1, 2] = 2\n    Specifies dimension of the planar axis (0,1,2) -> (x,y,z).\nslab_bounds : Tuple[float, float]\n    [units = um].  Minimum and maximum positions of the slab along axis dimension.\ndilation : float = 0.0\n    [units = um].  Dilation of the polygon in the base by shifting each edge along its normal outwards direction by a distance; a negative value corresponds to erosion.\nsidewall_angle : ConstrainedFloatValue = 0.0\n    [units = rad].  Angle of the sidewall. ``sidewall_angle=0`` (default) specifies vertical wall, while ``0<sidewall_angle<np.pi/2`` for the base to be larger than the top, and ``-np.pi/2<sidewall_angle<0`` for base to be smaller than the top.\nvertices : Union[Tuple[Tuple[float, float], ...], Array]\n    [units = um].  List of (d1, d2) defining the 2 dimensional positions of the base polygon face vertices along dimensions parallel to slab normal axis. The index of dimension should be in the ascending order: e.g. if the slab normal axis is `y`, the coordinate of the vertices will be in (x, z)\n\nExample\n-------\n>>> vertices = np.array([(0,0), (1,0), (1,1)])\n>>> p = PolySlab(vertices=vertices, axis=2, slab_bounds=(-1, 1))",
       "type": "object",
       "properties": {
         "type": {
@@ -1190,7 +1194,7 @@
         },
         "sidewall_angle": {
           "title": "Sidewall angle",
-          "description": "Angle of the sidewall. ``sidewall_angle=0`` (default) specifies vertical wall, while ``0<sidewall_angle<np.pi/2`` for the base to be larger than the top, and ``np.pi/2<sidewall_angle<0`` for base to be smaller than the top.",
+          "description": "Angle of the sidewall. ``sidewall_angle=0`` (default) specifies vertical wall, while ``0<sidewall_angle<np.pi/2`` for the base to be larger than the top, and ``-np.pi/2<sidewall_angle<0`` for base to be smaller than the top.",
           "default": 0.0,
           "exclusiveMinimum": -1.5707963267948966,
           "exclusiveMaximum": 1.5707963267948966,
@@ -1199,7 +1203,7 @@
         },
         "vertices": {
           "title": "Vertices",
-          "description": "List of (d1, d2) defining the 2 dimensional positions of the base polygon face vertices along dimensions parallel to slab normal axis.",
+          "description": "List of (d1, d2) defining the 2 dimensional positions of the base polygon face vertices along dimensions parallel to slab normal axis. The index of dimension should be in the ascending order: e.g. if the slab normal axis is `y`, the coordinate of the vertices will be in (x, z)",
           "units": "um",
           "anyOf": [
             {
@@ -4346,6 +4350,131 @@
         "u_axis",
         "ux",
         "uy"
+      ],
+      "additionalProperties": false
+    },
+    "DiffractionMonitor": {
+      "title": "DiffractionMonitor",
+      "description": ":class:`Monitor` that uses a 2D Fourier transform to compute the\ndiffraction amplitudes and efficiency for given (or all) diffraction orders.\n\nParameters\n----------\ncenter : Tuple[float, float, float] = (0.0, 0.0, 0.0)\n    [units = um].  Center of object in x, y, and z.\nsize : Tuple[NonNegativeFloat, NonNegativeFloat, NonNegativeFloat]\n    [units = um].  Size in x, y, and z directions.\nname : ConstrainedStrValue\n    Unique name for monitor.\nfreqs : Union[Tuple[float, ...], Array]\n    [units = Hz].  Array or list of frequencies stored by the field monitor.\nnormal_dir : Literal['+', '-'] = +\n    Direction of the surface monitor's normal vector w.r.t. the positive x, y or z unit vectors. Must be one of ``'+'`` or ``'-'``. Defaults to ``'+'`` if not provided.\norders_x : Tuple[int, ...] = [0]\n    Diffraction orders along x for which efficiency should be computed. Orders corresponding to wave numbers outside of the light cone will be ignored. By default, only order 0 will be considered.\norders_y : Tuple[int, ...] = [0]\n    Diffraction orders along y for which efficiency should be computed. Orders corresponding to wave numbers outside of the light cone will be ignored. By default, only order 0 will be considered.\n\nExample\n-------\n>>> monitor = DiffractionMonitor(\n...     center=(1,2,3),\n...     size=(inf,inf,0),\n...     freqs=[250e12, 300e12],\n...     name='diffraction_monitor',\n...     normal_dir='+',\n...     orders_x=[0, 1, 2],\n...     orders_y=[0],\n...     )",
+      "type": "object",
+      "properties": {
+        "type": {
+          "title": "Type",
+          "default": "DiffractionMonitor",
+          "enum": [
+            "DiffractionMonitor"
+          ],
+          "type": "string"
+        },
+        "center": {
+          "title": "Center",
+          "description": "Center of object in x, y, and z.",
+          "default": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "units": "um",
+          "type": "array",
+          "minItems": 3,
+          "maxItems": 3,
+          "items": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            }
+          ]
+        },
+        "size": {
+          "title": "Size",
+          "description": "Size in x, y, and z directions.",
+          "units": "um",
+          "type": "array",
+          "minItems": 3,
+          "maxItems": 3,
+          "items": [
+            {
+              "type": "number",
+              "minimum": 0
+            },
+            {
+              "type": "number",
+              "minimum": 0
+            },
+            {
+              "type": "number",
+              "minimum": 0
+            }
+          ]
+        },
+        "name": {
+          "title": "Name",
+          "description": "Unique name for monitor.",
+          "minLength": 1,
+          "type": "string"
+        },
+        "freqs": {
+          "title": "Frequencies",
+          "description": "Array or list of frequencies stored by the field monitor.",
+          "units": "Hz",
+          "anyOf": [
+            {
+              "type": "array",
+              "items": {
+                "type": "number"
+              }
+            },
+            {
+              "title": "Array Like",
+              "description": "Accepts sequence (tuple, list, numpy array) and converts to tuple.",
+              "type": "tuple",
+              "properties": {},
+              "required": []
+            }
+          ]
+        },
+        "normal_dir": {
+          "title": "Normal vector orientation",
+          "description": "Direction of the surface monitor's normal vector w.r.t. the positive x, y or z unit vectors. Must be one of ``'+'`` or ``'-'``. Defaults to ``'+'`` if not provided.",
+          "default": "+",
+          "enum": [
+            "+",
+            "-"
+          ],
+          "type": "string"
+        },
+        "orders_x": {
+          "title": "Diffraction orders along x",
+          "description": "Diffraction orders along x for which efficiency should be computed. Orders corresponding to wave numbers outside of the light cone will be ignored. By default, only order 0 will be considered.",
+          "default": [
+            0
+          ],
+          "type": "array",
+          "items": {
+            "type": "integer"
+          }
+        },
+        "orders_y": {
+          "title": "Diffraction orders along y",
+          "description": "Diffraction orders along y for which efficiency should be computed. Orders corresponding to wave numbers outside of the light cone will be ignored. By default, only order 0 will be considered.",
+          "default": [
+            0
+          ],
+          "type": "array",
+          "items": {
+            "type": "integer"
+          }
+        }
+      },
+      "required": [
+        "size",
+        "name",
+        "freqs"
       ],
       "additionalProperties": false
     },
