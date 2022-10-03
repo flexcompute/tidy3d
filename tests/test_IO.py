@@ -9,6 +9,7 @@ from time import time
 import xarray as xr
 import h5py
 from dask.base import tokenize
+import dill as pickle
 
 
 from tidy3d import *
@@ -49,6 +50,17 @@ def test_simulation_load_export_hdf5():
     path = "tests/tmp/simulation.hdf5"
     SIM.to_file(path)
     SIM2 = Simulation.from_file(path)
+    assert SIM == SIM2, "original and loaded simulations are not the same"
+
+
+@clear_tmp
+def test_simulation_load_export_pckl():
+
+    path = "tests/tmp/simulation.pckl"
+    with open(path, "wb") as pickle_file:
+        pickle.dump(SIM, pickle_file)
+    with open(path, "rb") as pickle_file:
+        SIM2 = pickle.load(pickle_file)
     assert SIM == SIM2, "original and loaded simulations are not the same"
 
 
