@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - `DiffractionMonitor` to compute the power amplitude distribution in all diffraction orders in simulations of periodic structures.
+- `PolySlab` can be oriented along `x` or `y`, not just `z`.
 
 ### Removed
 - Loading components without validation no longer supported as it is too unpredictable.
