@@ -38,6 +38,7 @@ Case studies
     notebooks/RingResonator
     notebooks/L3_cavity
     notebooks/GratingCoupler
+    notebooks/GratingEfficiency
     notebooks/Metalens
     notebooks/HighQ_Si
     notebooks/HighQ_Ge

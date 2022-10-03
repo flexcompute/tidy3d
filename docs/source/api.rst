@@ -161,6 +161,7 @@ Monitors
    Near2FarCartesianMonitor
    Near2FarAngleMonitor
    Near2FarKSpaceMonitor
+   DiffractionMonitor
 
 
 Mode Specifications
