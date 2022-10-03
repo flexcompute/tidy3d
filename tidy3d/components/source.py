@@ -463,6 +463,29 @@ class DirectionalSource(FieldSource, ABC):
         return None
 
 
+class BroadbandSource(Source, ABC):
+    """A source with frequency dependent field distributions."""
+
+    num_freqs: pydantic.NonNegativeInt = pydantic.Field(
+        1,
+        title="Number of Frequency Points",
+        description="Number of points to approximate the frequency dependence of injected field.",
+    )
+
+    @cached_property
+    def frequency_grid(self) -> np.ndarray:
+        """A Chebyshev grid used to approximate frequency dependence."""
+        fmin, fmax = self.source_time.frequency_range(4)
+        return 0.5 * (fmin + fmax) + 0.5 * (fmax - fmin) * np.cos(
+            0.5 * np.pi * (2 * np.flip(np.arange(self.num_freqs)) + 1) / self.num_freqs
+        )
+
+    def map_frequencies(self, freq_grid) -> np.ndarray:
+        """Map frequency values into (-1,1) interval."""
+        fmin, fmax = self.source_time.frequency_range(4)
+        return (freq_grid - 0.5 * (fmin + fmax)) / (0.5 * (fmax - fmin))
+
+
 """ Source current profiles defined by (1) angle or (2) desired mode. Sets theta and phi angles."""
 
 
@@ -538,7 +561,7 @@ class AngledFieldSource(DirectionalSource, ABC):
         return self.rotate_points(pol_vector_p, propagation_dir, angle=self.pol_angle)
 
 
-class ModeSource(DirectionalSource, PlanarSource):
+class ModeSource(DirectionalSource, PlanarSource, BroadbandSource):
     """Injects current source to excite modal profile on finite extent plane.
 
     Example
@@ -601,7 +624,7 @@ class PlaneWave(AngledFieldSource, PlanarSource):
     """
 
 
-class GaussianBeam(AngledFieldSource, PlanarSource):
+class GaussianBeam(AngledFieldSource, PlanarSource, BroadbandSource):
     """Guassian distribution on finite extent plane.
 
     Example
@@ -630,7 +653,7 @@ class GaussianBeam(AngledFieldSource, PlanarSource):
     )
 
 
-class AstigmaticGaussianBeam(AngledFieldSource, PlanarSource):
+class AstigmaticGaussianBeam(AngledFieldSource, PlanarSource, BroadbandSource):
     """This class implements the simple astigmatic Gaussian beam described in Kochkina et al.,
     Applied Optics, vol. 52, issue 24, 2013. The simple astigmatic Guassian distribution allows
     both an elliptical intensity profile and different waist locations for the two principal axes
