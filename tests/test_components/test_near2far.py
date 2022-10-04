@@ -216,6 +216,9 @@ def test_n2f_clientside():
         Hx=scalar_field,
         Hy=scalar_field,
         Hz=scalar_field,
+        symmetry=sim.symmetry,
+        symmetry_center=sim.center,
+        grid_expanded=sim.discretize(monitor, extend=True),
     )
 
     sim_data = td.SimulationData(simulation=sim, monitor_data={"near_field": data})

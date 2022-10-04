@@ -7,7 +7,7 @@ from pydantic import PositiveInt, NonNegativeFloat, PositiveFloat, Field
 
 from ...components.base import Tidy3dBaseModel
 from ...components.types import Literal
-from ...components import PoleResidue
+from ...components.medium import PoleResidue
 from ...constants import MICROMETER, HERTZ
 from ...log import log, WebError, Tidy3dError
 from ...web.httputils import get_headers

@@ -15,10 +15,9 @@ from .data_array import Near2FarAngleDataArray, Near2FarCartesianDataArray, Near
 from .data_array import DataArray, DiffractionDataArray
 
 from ..base import TYPE_TAG_STR, Tidy3dBaseModel
-from ..types import Axis, Coordinate
-from ..boundary import Symmetry
-from ..grid import Grid
-from ..validators import enforce_monitor_fields_present
+from ..types import Axis, Coordinate, Symmetry
+from ..grid.grid import Grid
+from ..validators import enforce_monitor_fields_present, required_if_symmetry_present
 from ..monitor import MonitorType, FieldMonitor, FieldTimeMonitor, ModeSolverMonitor
 from ..monitor import ModeMonitor, FluxMonitor, FluxTimeMonitor, PermittivityMonitor
 from ..monitor import Near2FarAngleMonitor, Near2FarCartesianMonitor, Near2FarKSpaceMonitor
@@ -38,19 +37,13 @@ class MonitorData(Tidy3dBaseModel, ABC):
         descriminator=TYPE_TAG_STR,
     )
 
-    # pylint:disable=unused-argument
-    def apply_symmetry(
-        self,
-        symmetry: Tuple[Symmetry, Symmetry, Symmetry],
-        symmetry_center: Coordinate,
-        grid_expanded: Grid,
-    ) -> MonitorData:
+    @property
+    def symmetry_expanded_copy(self) -> MonitorData:
         """Return copy of self with symmetry applied."""
-        return self
+        return self.copy()
 
-    def normalize(
-        self, source_spectrum_fn: Callable[[float], complex]  # pylint:disable=unused-argument
-    ) -> MonitorData:
+    # pylint:disable=unused-argument
+    def normalize(self, source_spectrum_fn: Callable[[float], complex]) -> MonitorData:
         """Return copy of self after normalization is applied using source spectrum function."""
         return self.copy()
 
@@ -59,6 +52,28 @@ class AbstractFieldData(MonitorData, ABC):
     """Collection of scalar fields with some symmetry properties."""
 
     monitor: Union[FieldMonitor, FieldTimeMonitor, PermittivityMonitor, ModeSolverMonitor]
+
+    symmetry: Tuple[Symmetry, Symmetry, Symmetry] = pd.Field(
+        (0, 0, 0),
+        title="Symmetry",
+        description="Symmetry eigenvalues of the original simulation in x, y, and z.",
+    )
+
+    symmetry_center: Coordinate = pd.Field(
+        None,
+        title="Symmetry Center",
+        description="Center of the symmetry planes of the original simulation in x, y, and z. "
+        "Required only if any of the ``symmetry`` field are non-zero.",
+    )
+    grid_expanded: Grid = pd.Field(
+        None,
+        title="Expanded Grid",
+        description=":class:`.Grid` on which the symmetry will be expanded. "
+        "Required only if any of the ``symmetry`` field are non-zero.",
+    )
+
+    _require_sym_center = required_if_symmetry_present("symmetry_center")
+    _require_grid_expanded = required_if_symmetry_present("grid_expanded")
 
     @property
     @abstractmethod
@@ -75,14 +90,9 @@ class AbstractFieldData(MonitorData, ABC):
     def symmetry_eigenvalues(self) -> Dict[str, Callable[[Axis], float]]:
         """Maps field components to their (positive) symmetry eigenvalues."""
 
-    def apply_symmetry(  # pylint:disable=too-many-locals
-        self,
-        symmetry: Tuple[Symmetry, Symmetry, Symmetry],
-        symmetry_center: Coordinate,
-        grid_expanded: Grid,
-    ) -> AbstractFieldData:
-        """Create a copy of the :class:`.AbstractFieldData` with the fields expanded based on
-        symmetry, if any.
+    @property
+    def symmetry_expanded_copy(self) -> AbstractFieldData:
+        """Create a copy of the :class:`.AbstractFieldData` with fields expanded based on symmetry.
 
         Returns
         -------
@@ -90,7 +100,7 @@ class AbstractFieldData(MonitorData, ABC):
             A data object with the symmetry expanded fields.
         """
 
-        if all(sym == 0 for sym in symmetry):
+        if all(sym == 0 for sym in self.symmetry):
             return self.copy()
 
         new_fields = {}
@@ -101,9 +111,9 @@ class AbstractFieldData(MonitorData, ABC):
             eigenval_fn = self.symmetry_eigenvalues[field_name]
 
             # get grid locations for this field component on the expanded grid
-            grid_locations = grid_expanded[grid_key]
+            grid_locations = self.grid_expanded[grid_key]
 
-            for sym_dim, (sym_val, sym_center) in enumerate(zip(symmetry, symmetry_center)):
+            for sym_dim, (sym_val, sym_loc) in enumerate(zip(self.symmetry, self.symmetry_center)):
 
                 dim_name = "xyz"[sym_dim]
 
@@ -115,11 +125,11 @@ class AbstractFieldData(MonitorData, ABC):
                 coords = grid_locations.to_list[sym_dim]
 
                 # Get indexes of coords that lie on the left of the symmetry center
-                flip_inds = np.where(coords < sym_center)[0]
+                flip_inds = np.where(coords < sym_loc)[0]
 
                 # Get the symmetric coordinates on the right
                 coords_interp = np.copy(coords)
-                coords_interp[flip_inds] = 2 * sym_center - coords[flip_inds]
+                coords_interp[flip_inds] = 2 * sym_loc - coords[flip_inds]
 
                 # Interpolate. There generally shouldn't be values out of bounds except potentially
                 # when handling modes, in which case they should be at the boundary and close to 0.
@@ -432,7 +442,13 @@ class ModeSolverData(ElectromagneticFieldData):
         monitor_dict = self.monitor.dict(exclude={TYPE_TAG_STR, "mode_spec"})
         field_monitor = FieldMonitor(**monitor_dict)
 
-        return FieldData(monitor=field_monitor, **fields)
+        return FieldData(
+            monitor=field_monitor,
+            symmetry=self.symmetry,
+            symmetry_center=self.symmetry_center,
+            grid_expanded=self.grid_expanded,
+            **fields,
+        )
 
     def plot_field(self, *args, **kwargs):
         """Warn user to use the :class:`.ModeSolver` ``plot_field`` function now."""
@@ -590,6 +606,12 @@ class AbstractNear2FarData(MonitorData, ABC):
 
     monitor: Union[Near2FarAngleMonitor, Near2FarCartesianMonitor, Near2FarKSpaceMonitor] = None
 
+    medium: Medium = pd.Field(
+        Medium(),
+        title="Background Medium",
+        description="Background medium in which to radiate near fields to far fields.",
+    )
+
     Ntheta: RADVECTYPE = pd.Field(
         ...,
         title="Ntheta",
@@ -654,40 +676,43 @@ class AbstractNear2FarData(MonitorData, ABC):
 
         return self.copy(update=fields_norm)
 
-    def nk(self, medium: Medium) -> Tuple[float, float]:
+    @property
+    def nk(self) -> Tuple[float, float]:
         """Returns the real and imaginary parts of the background medium's refractive index."""
-        return medium.nk_model(frequency=self.f)
+        return self.medium.nk_model(frequency=self.f)
 
     @staticmethod
-    def propagation_factor(frequency: float, medium: Medium) -> complex:
-        """Complex valued wavenumber associated with a frequency and medium."""
+    def propagation_factor(medium: Medium, frequency: float) -> complex:
+        """Complex valued wavenumber associated with a frequency."""
         index_n, index_k = medium.nk_model(frequency=frequency)
         return (2 * np.pi * frequency / C_0) * (index_n + 1j * index_k)
 
-    def k(self, medium: Medium) -> complex:
+    @property
+    def k(self) -> complex:
         """Returns the complex wave number associated with the background medium."""
-        return self.propagation_factor(frequency=self.f, medium=medium)
+        return self.propagation_factor(medium=self.medium, frequency=self.f)
 
-    def eta(self, medium: Medium) -> complex:
+    @property
+    def eta(self) -> complex:
         """Returns the complex wave impedance associated with the background medium."""
-        eps_complex = medium.eps_model(frequency=self.f)
+        eps_complex = self.medium.eps_model(frequency=self.f)
         return ETA_0 / np.sqrt(eps_complex)
 
-    def rad_vecs_to_fields(self, medium: Medium) -> Tuple[np.ndarray, np.ndarray]:
+    @property
+    def rad_vecs_to_fields(self) -> Tuple[np.ndarray, np.ndarray]:
         """Compute fields from radiation vectors."""
-        eta = self.eta(medium=medium)
+        eta = self.eta
         e_theta = -(self.Lphi.values + eta * self.Ntheta.values)
         e_phi = self.Ltheta.values - eta * self.Nphi.values
         return e_theta, e_phi
 
-    @staticmethod
-    def propagation_phase(dist: Union[float, None], wave_number: complex) -> complex:
+    def propagation_phase(self, dist: Union[float, None]) -> complex:
         """Phase associated with propagation of a distance with a given wavenumber."""
         if dist is None:
             return 1.0
-        return -1j * wave_number * np.exp(1j * wave_number * dist) / (4 * np.pi * dist)
+        return -1j * self.k * np.exp(1j * self.k * dist) / (4 * np.pi * dist)
 
-    def fields_sph(self, r: float = None, medium: Medium = Medium(permittivity=1)) -> xr.Dataset:
+    def fields_sph(self, r: float = None) -> xr.Dataset:
         """Get fields in spherical coordinates relative to the monitor's local origin
         for all angles and frequencies specified in :class:`Near2FarAngleMonitor`.
         If the radial distance ``r`` is provided, a corresponding phase factor is applied
@@ -697,9 +722,6 @@ class AbstractNear2FarData(MonitorData, ABC):
         ----------
         r : float = None
             (micron) radial distance relative to the monitor's local origin.
-        medium : :class:`.Medium`
-            Background medium in which to radiate near fields to far fields.
-            Default: free space.
 
         Returns
         -------
@@ -710,14 +732,14 @@ class AbstractNear2FarData(MonitorData, ABC):
         """
 
         # assemble E felds
-        e_theta, e_phi = self.rad_vecs_to_fields(medium=medium)
-        phase = self.propagation_phase(dist=r, wave_number=self.k(medium=medium))
+        e_theta, e_phi = self.rad_vecs_to_fields
+        phase = self.propagation_phase(dist=r)
         Et_array = phase * e_theta
         Ep_array = phase * e_phi
         Er_array = np.zeros_like(Ep_array)
 
         # assemble H fields
-        eta = self.eta(medium=medium)[None, None, :]
+        eta = self.eta[None, None, :]
         Ht_array = -Ep_array / eta
         Hp_array = Et_array / eta
         Hr_array = np.zeros_like(Hp_array)
@@ -727,7 +749,7 @@ class AbstractNear2FarData(MonitorData, ABC):
         return self.make_dataset(keys=keys, vals=vals)
 
     @abstractmethod
-    def fields(self, r: float = None, medium: Medium = Medium(permittivity=1)) -> xr.Dataset:
+    def fields(self, r: float = None) -> xr.Dataset:
         """Get fields in spherical coordinates relative to the monitor's local origin
         for all angles and frequencies specified in :class:`Near2FarAngleMonitor`.
         If the radial distance ``r`` is provided, a corresponding phase factor is applied
@@ -737,9 +759,6 @@ class AbstractNear2FarData(MonitorData, ABC):
         ----------
         r : float = None
             (micron) radial distance relative to the monitor's local origin.
-        medium : :class:`.Medium`
-            Background medium in which to radiate near fields to far fields.
-            Default: free space.
 
         Returns
         -------
@@ -749,16 +768,13 @@ class AbstractNear2FarData(MonitorData, ABC):
         """
 
     @abstractmethod
-    def power(self, r: float = None, medium: Medium = Medium(permittivity=1)) -> xr.DataArray:
+    def power(self, r: float = None) -> xr.DataArray:
         """Get power measured on the observation grid defined in spherical coordinates.
 
         Parameters
         ----------
         r : float = None
             (micron) radial distance relative to the local origin.
-        medium : :class:`.Medium`
-            Background medium in which to radiate near fields to far fields.
-            Default: free space.
 
         Returns
         -------
@@ -822,7 +838,7 @@ class Near2FarAngleData(AbstractNear2FarData):
         """Azimuthal angles."""
         return self.Ntheta.phi.values
 
-    def fields(self, r: float = None, medium: Medium = Medium(permittivity=1)) -> xr.Dataset:
+    def fields(self, r: float = None) -> xr.Dataset:
         """Get fields in spherical coordinates relative to the monitor's local origin
         for all angles and frequencies specified in :class:`Near2FarAngleMonitor`.
         If the radial distance ``r`` is provided, a corresponding phase factor is applied
@@ -832,9 +848,6 @@ class Near2FarAngleData(AbstractNear2FarData):
         ----------
         r : float = None
             (micron) radial distance relative to the monitor's local origin.
-        medium : :class:`.Medium`
-            Background medium in which to radiate near fields to far fields.
-            Default: free space.
 
         Returns
         -------
@@ -843,46 +856,31 @@ class Near2FarAngleData(AbstractNear2FarData):
             (``E_r``, ``E_theta``, ``E_phi``, ``H_r``, ``H_theta``, ``H_phi``)
             in polar coordinates.
         """
-        return self.fields_sph(r=r, medium=medium)
+        return self.fields_sph(r=r)
 
-    def radar_cross_section(self, medium: Medium = Medium(permittivity=1)) -> xr.DataArray:
-        """Get radar cross section at the observation grid in units of incident power.
+    def radar_cross_section(self) -> xr.DataArray:
+        """Radar cross section at the observation grid in units of incident power."""
 
-        Parameters
-        ----------
-        medium : :class:`.Medium`
-            Background medium in which to radiate near fields to far fields.
-            Default: free space.
-
-        Returns
-        -------
-        ``xarray.DataArray``
-            Radar cross section at angles relative to the local origin.
-        """
-
-        _, index_k = self.nk(medium=medium)
+        _, index_k = self.nk
         if not np.all(index_k == 0):
             raise SetupError("Can't compute RCS for a lossy background medium.")
 
-        k = self.k(medium=medium)[None, None, ...]
-        eta = self.eta(medium=medium)[None, None, ...]
+        k = self.k[None, None, ...]
+        eta = self.eta[None, None, ...]
 
         constant = k**2 / (8 * np.pi * eta)
-        e_theta, e_phi = self.rad_vecs_to_fields(medium=medium)
+        e_theta, e_phi = self.rad_vecs_to_fields
         rcs_data = constant * (np.abs(e_theta) ** 2 + np.abs(e_phi) ** 2)
 
         return self.make_data_array(data=rcs_data)
 
-    def power(self, r: float = None, medium: Medium = Medium(permittivity=1)) -> xr.DataArray:
+    def power(self, r: float = None) -> xr.DataArray:
         """Get power measured on the observation grid defined in spherical coordinates.
 
         Parameters
         ----------
         r : float
             (micron) radial distance relative to the local origin.
-        medium : :class:`.Medium`
-            Background medium in which to radiate near fields to far fields.
-            Default: free space.
 
         Returns
         -------
@@ -893,7 +891,7 @@ class Near2FarAngleData(AbstractNear2FarData):
         if r is None:
             raise ValueError("'r' required by 'Near2FarAngleData.power'")
 
-        field_data = self.fields(medium=medium, r=r)
+        field_data = self.fields(r=r)
         Et, Ep = [field_data[comp].values for comp in ["E_theta", "E_phi"]]
         Ht, Hp = [field_data[comp].values for comp in ["H_theta", "H_phi"]]
         power_theta = 0.5 * np.real(Et * np.conj(Hp))
@@ -970,15 +968,9 @@ class Near2FarCartesianData(AbstractNear2FarData):
         return self.monitor.car_2_sph(x_glob, y_glob, z_glob)
 
     # pylint:disable=too-many-arguments, too-many-locals
-    def fields(self, r: float = None, medium: Medium = Medium(permittivity=1)) -> xr.Dataset:
+    def fields(self, r: float = None) -> xr.Dataset:
         """Get fields on a cartesian plane at a distance relative to monitor center
         along a given axis in cartesian coordinates.
-
-        Parameters
-        ----------
-        medium : :class:`.Medium`
-            Background medium in which to radiate near fields to far fields.
-            Default: free space.
 
         Returns
         -------
@@ -995,7 +987,7 @@ class Near2FarCartesianData(AbstractNear2FarData):
 
         # get the fields in spherical coordinates
         r_values, thetas, phis = self.spherical_coords
-        fields_sph = self.fields_sph(r=r_values, medium=medium)
+        fields_sph = self.fields_sph(r=r_values)
         Er, Et, Ep = (fields_sph[key].values for key in ("E_r", "E_theta", "E_phi"))
         Hr, Ht, Hp = (fields_sph[key].values for key in ("H_r", "H_theta", "H_phi"))
 
@@ -1008,14 +1000,8 @@ class Near2FarCartesianData(AbstractNear2FarData):
         field_components = np.concatenate((e_data, h_data), axis=0)
         return self.make_dataset(keys=keys, vals=field_components)
 
-    def power(self, r: float = None, medium: Medium = Medium(permittivity=1)) -> xr.Dataset:
+    def power(self, r: float = None) -> xr.Dataset:
         """Get power on the observation grid defined in Cartesian coordinates.
-
-        Parameters
-        ----------
-        medium : :class:`.Medium`
-            Background medium in which to radiate near fields to far fields.
-            Default: free space.
 
         Returns
         -------
@@ -1031,7 +1017,7 @@ class Near2FarCartesianData(AbstractNear2FarData):
 
         # get the polar components of the far field
         r_values, _, _ = self.spherical_coords
-        fields_sph = self.fields_sph(r=r_values, medium=medium)
+        fields_sph = self.fields_sph(r=r_values)
         Et, Ep = (fields_sph[key].values for key in ("E_theta", "E_phi"))
         Ht, Hp = (fields_sph[key].values for key in ("H_theta", "H_phi"))
 
@@ -1100,15 +1086,9 @@ class Near2FarKSpaceData(AbstractNear2FarData):
         return self.Ntheta.uy.values
 
     # pylint:disable=too-many-locals
-    def fields(self, r: float = None, medium: Medium = Medium(permittivity=1)) -> xr.Dataset:
+    def fields(self, r: float = None) -> xr.Dataset:
         """Get fields in spherical coordinates relative to the monitor's local origin
         for all k-space points and frequencies specified in :class:`Near2FarKSpaceMonitor`.
-
-        Parameters
-        ----------
-        medium : :class:`.Medium`
-            Background medium in which to radiate near fields to far fields.
-            Default: free space.
 
         Returns
         -------
@@ -1122,7 +1102,7 @@ class Near2FarKSpaceData(AbstractNear2FarData):
             log.warning("'r' supplied to 'Near2FarKSpaceData.fields' will not be used.")
 
         # assemble E felds
-        eta = self.eta(medium=medium)[None, None, ...]
+        eta = self.eta[None, None, ...]
         Et_array = -(self.Lphi.values + eta * self.Ntheta.values)
         Ep_array = self.Ltheta.values - eta * self.Nphi.values
         Er_array = np.zeros_like(Ep_array)
@@ -1136,14 +1116,8 @@ class Near2FarKSpaceData(AbstractNear2FarData):
         vals = (Er_array, Et_array, Ep_array, Hr_array, Ht_array, Hp_array)
         return self.make_dataset(keys=keys, vals=vals)
 
-    def power(self, r: float = None, medium: Medium = Medium(permittivity=1)) -> xr.Dataset:
+    def power(self, r: float = None) -> xr.Dataset:
         """Get power on the observation grid defined in k-space.
-
-        Parameters
-        ----------
-        medium : :class:`.Medium`
-            Background medium in which to radiate near fields to far fields.
-            Default: free space.
 
         Returns
         -------
@@ -1154,7 +1128,7 @@ class Near2FarKSpaceData(AbstractNear2FarData):
         if r is not None:
             log.warning("'r' supplied to 'Near2FarKSpaceData.fields' will not be used.")
 
-        fields = self.fields(r=None, medium=medium)
+        fields = self.fields(r=None)
         Et, Ep, Ht, Hp = (fields[key].values for key in ("E_theta", "E_phi", "H_theta", "H_phi"))
 
         power_theta = 0.5 * np.real(Et * np.conj(Hp))

@@ -134,6 +134,10 @@ class tidycomplex(complex):  # pylint: disable=invalid-name
         field_schema.update(ComplexNumber.schema())
 
 
+""" symmetry """
+
+Symmetry = Literal[0, -1, 1]
+
 """ geometric """
 
 Size1D = pydantic.NonNegativeFloat
