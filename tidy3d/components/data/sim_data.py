@@ -71,8 +71,7 @@ class SimulationData(Tidy3dBaseModel):
     def __getitem__(self, monitor_name: str) -> MonitorDataType:
         """Get a :class:`.MonitorData` by name. Apply symmetry if applicable."""
         monitor_data = self.monitor_data[monitor_name]
-        monitor_data = self.apply_symmetry(monitor_data)
-        return monitor_data
+        return monitor_data.symmetry_expanded_copy
 
     @property
     def final_decay_value(self) -> float:
@@ -89,15 +88,6 @@ class SimulationData(Tidy3dBaseModel):
             final_decay_line = decay_lines[-1]
             final_decay = float(final_decay_line.split("field decay: ")[-1])
         return final_decay
-
-    def apply_symmetry(self, monitor_data: MonitorDataType) -> MonitorDataType:
-        """Return copy of :class:`.MonitorData` object with symmetry values applied."""
-        grid = self.simulation.discretize(monitor_data.monitor, extend=True, snap_zero_dim=True)
-        return monitor_data.apply_symmetry(
-            symmetry=self.simulation.symmetry,
-            symmetry_center=self.simulation.center,
-            grid_expanded=grid,
-        )
 
     def source_spectrum(self, source_index: int) -> Callable:
         """Get a spectrum normalization function for a given source index."""

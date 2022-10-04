@@ -283,7 +283,13 @@ class RadiationVectors(Tidy3dBaseModel):
 
         new_monitor = surface.monitor.copy(update=dict(fields=[E1, E2, H1, H2]))
 
-        return FieldData(monitor=new_monitor, **surface_currents)
+        return FieldData(
+            monitor=new_monitor,
+            symmetry=field_data.symmetry,
+            symmetry_center=field_data.symmetry_center,
+            grid_expanded=field_data.grid_expanded,
+            **surface_currents,
+        )
 
     @staticmethod
     # pylint:disable=too-many-locals, too-many-arguments
@@ -423,7 +429,9 @@ class RadiationVectors(Tidy3dBaseModel):
             return np.trapz(np.trapz(np.squeeze(function) * phase, pts_u, axis=0), pts_v, axis=0)
 
         phase = [None] * 3
-        propagation_factor = -1j * AbstractNear2FarData.propagation_factor(frequency, self.medium)
+        propagation_factor = -1j * AbstractNear2FarData.propagation_factor(
+            medium=self.medium, frequency=frequency
+        )
 
         def integrate_for_one_theta(i_th: int):
             """Perform integration for a given theta angle index"""

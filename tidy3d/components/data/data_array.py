@@ -1,11 +1,10 @@
 """Storing tidy3d data at it's most fundamental level as xr.DataArray objects"""
+from __future__ import annotations
 from typing import Dict
 
 import xarray as xr
 import numpy as np
-import h5py
 
-from ..base import Tidy3dBaseModel
 from ...constants import HERTZ, SECOND, MICROMETER, RADIAN
 from ...log import DataError
 
@@ -81,32 +80,6 @@ class DataArray(xr.DataArray):
     @classmethod
     def validate(cls, value):
         """What gets called when you construct a DataArray."""
-
-        # loading from raw dict (usually from file)
-        if isinstance(value, dict):
-            if value.get("tag") == "DATA_ITEM":
-                # Read from external file
-                data_file = value.get("data_file")
-                try:
-                    with h5py.File(data_file, "r") as f:
-                        group = f[value["group_name"]]
-                        # pylint:disable=protected-access
-                        value = Tidy3dBaseModel._load_group_data(data_dict={}, hdf5_group=group)
-                except FileNotFoundError as e:
-                    raise DataError(
-                        f"External data file {data_file} not found when loading data."
-                    ) from e
-
-            data = value.get("data")
-            coords = value.get("coords")
-
-            # convert to numpy if not already
-            coords = {k: v if isinstance(v, np.ndarray) else np.array(v) for k, v in coords.items()}
-            if not isinstance(data, np.ndarray):
-                data = np.array(data)
-
-            return cls(data, coords=coords)
-
         return cls(value)
 
     @classmethod
@@ -139,6 +112,15 @@ class DataArray(xr.DataArray):
     def abs(self):
         """Absolute value of data array."""
         return abs(self)
+
+    def to_hdf5(self, fname: str, group_path: str) -> None:
+        """Save an xr.DataArray to the hdf5 file with a given path to the group."""
+        self.to_netcdf(fname, group=group_path, engine="h5netcdf", invalid_netcdf=True, mode="a")
+
+    @classmethod
+    def from_hdf5(cls, fname: str, group_path: str) -> DataArray:
+        """Load an DataArray from an hdf5 file with a given path to the group."""
+        return xr.open_dataarray(fname, group=group_path, engine="h5netcdf", invalid_netcdf=True)
 
 
 class ScalarFieldDataArray(DataArray):
