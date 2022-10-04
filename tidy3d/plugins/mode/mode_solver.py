@@ -9,16 +9,16 @@ import numpy as np
 import pydantic
 
 from ...components.base import Tidy3dBaseModel, cached_property
-from ...components import Box
-from ...components import Simulation, Grid
-from ...components import ModeSpec
+from ...components.geometry import Box
+from ...components.simulation import Simulation
+from ...components.grid.grid import Grid
+from ...components.mode import ModeSpec
 from ...components.monitor import ModeSolverMonitor, ModeMonitor
 from ...components.source import ModeSource, SourceTime
-from ...components.types import Direction, ArrayLike, FreqArray, Ax, Literal, Axis
+from ...components.types import Direction, ArrayLike, FreqArray, Ax, Literal, Axis, Symmetry
 from ...components.data.data_array import ModeIndexDataArray, ScalarModeFieldDataArray
 from ...components.data.sim_data import SimulationData
 from ...components.data.monitor_data import ModeSolverData
-from ...components.boundary import Symmetry
 from ...log import ValidationError
 from .solver import compute_modes
 
@@ -166,7 +166,13 @@ class ModeSolver(Tidy3dBaseModel):
 
         # make mode solver data
         mode_solver_monitor = self.to_mode_solver_monitor(name=MODE_MONITOR_NAME)
-        mode_solver_data = ModeSolverData(monitor=mode_solver_monitor, **data_dict)
+        mode_solver_data = ModeSolverData(
+            monitor=mode_solver_monitor,
+            symmetry=self.simulation.symmetry,
+            symmetry_center=self.simulation.center,
+            grid_expanded=self.simulation.discretize(self.plane, extend=True),
+            **data_dict,
+        )
         self._field_decay_warning(mode_solver_data)
         return mode_solver_data
 
@@ -180,11 +186,7 @@ class ModeSolver(Tidy3dBaseModel):
             :class:`.ModeSolverData` object containing the effective index and mode fields.
         """
         mode_solver_data = self.data_raw
-        return mode_solver_data.apply_symmetry(
-            symmetry=self.simulation.symmetry,
-            symmetry_center=self.simulation.center,
-            grid_expanded=self.simulation.discretize(self.plane, extend=True),
-        )
+        return mode_solver_data.symmetry_expanded_copy
 
     @cached_property
     def sim_data(self) -> SimulationData:

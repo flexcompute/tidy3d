@@ -302,7 +302,13 @@ def run_emulated(simulation: Simulation, task_name: str = None) -> SimulationDat
                 coords=coords, data_array_type=ScalarFieldDataArray, is_complex=True
             )
 
-        return FieldData(monitor=monitor, **field_cmps)
+        return FieldData(
+            monitor=monitor,
+            symmetry=simulation.symmetry,
+            symmetry_center=simulation.center,
+            grid_expanded=simulation.discretize(monitor, extend=True),
+            **field_cmps
+        )
 
     def make_mode_data(monitor: ModeMonitor) -> ModeData:
         """make a random ModeData from a ModeMonitor."""

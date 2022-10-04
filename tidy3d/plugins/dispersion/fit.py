@@ -12,10 +12,10 @@ from rich.progress import Progress
 from pydantic import Field, validator
 
 from ...components.base import Tidy3dBaseModel
-from ...components import PoleResidue, AbstractMedium
-from ...constants import C_0, HBAR, MICROMETER
+from ...components.medium import PoleResidue, AbstractMedium
 from ...components.viz import add_ax_if_none
 from ...components.types import Ax, ArrayLike
+from ...constants import C_0, HBAR, MICROMETER
 from ...log import log, ValidationError, WebError, SetupError
 
 

@@ -15,9 +15,11 @@ from rich.progress import Progress
 
 from . import httputils as http
 from .config import DEFAULT_CONFIG
-from .s3utils import upload_file, upload_string, get_s3_sts_token, download_file
+from .s3utils import upload_string, get_s3_sts_token, download_file
+
+# from .s3utils import upload_file
 from .task import TaskId, TaskInfo, Folder
-from ..components.data import SimulationData
+from ..components.data.sim_data import SimulationData
 from ..components.simulation import Simulation
 from ..components.types import Literal
 from ..log import log, WebError
@@ -125,11 +127,11 @@ def upload(  # pylint:disable=too-many-locals,too-many-arguments
     # data_file will be reopened and closed in _json_string
     data_file.close()
     # pylint:disable=protected-access
-    json_string = simulation._json_string(data_file=data_file.name)
-    if data_file.name in json_string:
-        # Upload the extra data file if needed
-        json_string.replace(data_file.name, DATA_FILE_NAME)
-        upload_file(task_id, data_file.name, DATA_FILE_NAME)
+    json_string = simulation._json_string
+    # if data_file.name in json_string:
+    #     # Upload the extra data file if needed
+    #     json_string.replace(data_file.name, DATA_FILE_NAME)
+    #     upload_file(task_id, data_file.name, DATA_FILE_NAME)
     upload_string(task_id, json_string, SIM_FILE_NAME)
 
     # log the url for the task in the web UI
