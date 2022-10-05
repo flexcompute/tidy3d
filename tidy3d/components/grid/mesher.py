@@ -17,6 +17,8 @@ from ..structure import Structure
 from ...log import SetupError, ValidationError
 from ...constants import C_0, fp_eps
 
+_ROOTS_TOL = 1e-10
+
 
 class Mesher(Tidy3dBaseModel, ABC):
     """Abstract class for automatic meshing."""
@@ -947,11 +949,11 @@ class GradedMesher(Mesher):
 
             # solve for new scaling factor
             # let's not raise exception here, but manually check the convergence.
-            root_scalar = Brentq(raise_on_fail=False, epsilon=fp_eps)
+            root_scalar = Brentq(raise_on_fail=False, epsilon=_ROOTS_TOL)
             sol_scale = root_scalar(fun_scale, 1, max_scale)
 
             # convergence check based on pyroots API and manual evaluation of the function.
-            if sol_scale.converged and abs(fun_scale(sol_scale.x0)) <= fp_eps:
+            if sol_scale.converged and abs(fun_scale(sol_scale.x0)) <= _ROOTS_TOL:
                 new_scale = sol_scale.x0
                 dl_list = np.array([small_dl * new_scale**i for i in range(num_step)])
                 dl_list = np.append(small_dl, dl_list)

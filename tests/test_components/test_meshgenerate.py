@@ -7,6 +7,8 @@ from tidy3d.constants import fp_eps
 
 from tidy3d.components.grid.mesher import GradedMesher
 
+np.random.seed(4)
+
 MESHER = GradedMesher()
 
 
