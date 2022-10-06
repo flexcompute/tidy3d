@@ -12,7 +12,7 @@ from ..simulation import Simulation
 from ..boundary import BlochBoundary
 from ..types import Ax, Axis, annotate_type, Literal
 from ..viz import equal_aspect, add_ax_if_none
-from ...log import DataError, log
+from ...log import DataError, log, Tidy3dKeyError, ValidationError
 
 DATA_TYPE_MAP = {data.__fields__["monitor"].type_: data for data in MonitorDataTypes}
 
@@ -77,6 +77,23 @@ class SimulationData(Tidy3dBaseModel):
     def monitor_data(self) -> Dict[str, MonitorDataType]:
         """Dictionary mapping monitor name to its associated :class:`.MonitorData`."""
         return {monitor_data.monitor.name: monitor_data for monitor_data in self.data}
+
+    @pd.validator("data", always=True)
+    def data_monitors_match_sim(cls, val, values):
+        """Ensure each MonitorData in ``.data`` corresponds to a monitor in ``.simulation``."""
+        sim = values.get("simulation")
+        if sim is None:
+            raise ValidationError("Simulation.simulation failed validation, can't validate data.")
+        for mnt_data in val:
+            try:
+                monitor_name = mnt_data.monitor.name
+                sim.get_monitor_by_name(monitor_name)
+            except Tidy3dKeyError as exc:
+                raise DataError(
+                    f"Data with monitor name {monitor_name} supplied "
+                    "but not found in the Simulation"
+                ) from exc
+        return val
 
     @property
     def final_decay_value(self) -> float:

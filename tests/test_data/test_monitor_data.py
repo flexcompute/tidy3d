@@ -130,11 +130,13 @@ def test_field_time_data():
         _ = getattr(data, field)
 
 
-def test_mode_field_data():
+def test_mode_solver_data():
     data = make_mode_solver_data()
     for field in "EH":
         for component in "xyz":
             _ = getattr(data, field + component)
+    data.n_eff
+    data.k_eff
 
 
 def test_permittivity_data():
@@ -147,6 +149,8 @@ def test_mode_data():
     data = make_mode_data()
     _ = data.amps
     _ = data.n_complex
+    _ = data.n_eff
+    _ = data.k_eff
 
 
 def test_flux_data():
