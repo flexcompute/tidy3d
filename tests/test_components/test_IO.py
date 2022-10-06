@@ -19,7 +19,7 @@ from tidy3d.components.base import Tidy3dBaseModel, DATA_ARRAY_TAG
 from ..utils import SIM_FULL as SIM
 from ..utils import SIM_MONITORS as SIM2
 from ..utils import clear_tmp
-from ..test_data.test_data_monitor import make_flux_data
+from ..test_data.test_monitor_data import make_flux_data
 
 # Store an example of every minor release simulation to test updater in the future
 SIM_DIR = "tests/sims"
