@@ -267,8 +267,8 @@ class Tidy3dBaseModel(pydantic.BaseModel):
                     json_dict[key] = DataArray.from_hdf5(fname=fname, group_path=subpath)
                     continue
 
-                # if a tuple, assign each element a unique key
-                if isinstance(value, tuple):
+                # if a list, assign each element a unique key, recurse
+                if isinstance(value, (list, tuple)):
                     value_dict = cls.tuple_to_dict(tuple_name=key, tuple_values=value)
                     load_data_from_file(json_dict=value_dict, group_path=subpath)
 
@@ -310,7 +310,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
                     value.to_hdf5(fname=fname, group_path=subpath)
 
                 # if a tuple, assign each element a unique key
-                if isinstance(value, tuple):
+                if isinstance(value, (list, tuple)):
                     value_dict = self.tuple_to_dict(tuple_name=key, tuple_values=value)
                     add_data_to_file(data_dict=value_dict, group_path=subpath)
 

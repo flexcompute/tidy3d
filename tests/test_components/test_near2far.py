@@ -221,7 +221,7 @@ def test_n2f_clientside():
         grid_expanded=sim.discretize(monitor, extend=True),
     )
 
-    sim_data = td.SimulationData(simulation=sim, monitor_data={"near_field": data})
+    sim_data = td.SimulationData(simulation=sim, data=(data,))
 
     n2f = td.RadiationVectors.from_near_field_monitors(
         sim_data=sim_data, near_monitors=[monitor], normal_dirs=["+"]
