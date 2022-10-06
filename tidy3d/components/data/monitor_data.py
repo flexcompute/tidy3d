@@ -19,7 +19,7 @@ from ..monitor import Near2FarAngleMonitor, Near2FarCartesianMonitor, Near2FarKS
 from ..monitor import DiffractionMonitor
 from ..medium import Medium
 from ...log import SetupError, log
-from ...constants import ETA_0, C_0
+from ...constants import ETA_0, C_0, MICROMETER
 from .dataset import Dataset, AbstractFieldDataset
 from .dataset import FieldDataset, FieldTimeDataset, ModeSolverDataset, PermittivityDataset
 from .dataset import ModeDataset, FluxDataset, FluxTimeDataset

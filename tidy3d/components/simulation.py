@@ -34,8 +34,7 @@ from .viz import plot_params_pec, plot_params_pmc, plot_params_bloch
 from ..version import __version__
 from ..constants import C_0, SECOND, inf
 from ..log import log, Tidy3dKeyError, SetupError, ValidationError
-
-# from ..updater import Updater
+from ..updater import Updater
 
 # minimum number of grid points allowed per central wavelength in a medium
 MIN_GRIDS_PER_WVL = 6.0
@@ -1809,28 +1808,28 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         coords = grid[coord_key]
         return make_eps_data(coords)
 
-    # @classmethod
-    # def from_file(cls, fname: str, **parse_kwargs) -> Simulation:
-    #     """Loads a :class:`Tidy3dBaseModel` from .yaml or .json file.
+    @classmethod
+    def from_file(cls, fname: str, **parse_kwargs) -> Simulation:
+        """Loads a :class:`Tidy3dBaseModel` from .yaml or .json file.
 
-    #     Parameters
-    #     ----------
-    #     fname : str
-    #         Full path to the .yaml or .json file to load the :class:`Tidy3dBaseModel` from.
-    #     **parse_kwargs
-    #         Keyword arguments passed to either pydantic's ``parse_file`` or ``parse_raw`` methods
-    #         for ``.json`` and ``.yaml`` file formats, respectively.
-    #     Returns
-    #     -------
-    #     :class:`Tidy3dBaseModel`
-    #         An instance of the component class calling `load`.
+        Parameters
+        ----------
+        fname : str
+            Full path to the .yaml or .json file to load the :class:`Tidy3dBaseModel` from.
+        **parse_kwargs
+            Keyword arguments passed to either pydantic's ``parse_file`` or ``parse_raw`` methods
+            for ``.json`` and ``.yaml`` file formats, respectively.
+        Returns
+        -------
+        :class:`Tidy3dBaseModel`
+            An instance of the component class calling `load`.
 
-    #     Example
-    #     -------
-    #     >>> simulation = Simulation.from_file(fname='folder/sim.json') # doctest: +SKIP
-    #     """
+        Example
+        -------
+        >>> simulation = Simulation.from_file(fname='folder/sim.json') # doctest: +SKIP
+        """
 
-    #     updater = Updater.from_file(fname)
-    #     sim
-    #     sim_dict = updater.update_to_current()
-    #     return cls.parse_obj(sim_dict, **parse_kwargs)
+        sim_dict = cls.dict_from_file(fname=fname)
+        updater = Updater(sim_dict=sim_dict)
+        sim_dict_updated = updater.update_to_current()
+        return cls.parse_obj(sim_dict_updated, **parse_kwargs)
