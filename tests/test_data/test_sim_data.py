@@ -134,7 +134,7 @@ def test_plot():
         field_data = sim_data["field"].field_components[field_cmp]
         for axis_name in "xyz":
             xyz_kwargs = {axis_name: field_data.coords[axis_name][0]}
-            _ = sim_data.plot_field("field", field_cmp, val="real", f=1e14, ax=AX, **xyz_kwargs)
+            _ = sim_data.plot_field("field", field_cmp, val="imag", f=1e14, ax=AX, **xyz_kwargs)
     for axis_name in "xyz":
         xyz_kwargs = {axis_name: 0}
         _ = sim_data.plot_field("field", "int", f=1e14, ax=AX, **xyz_kwargs)
@@ -315,3 +315,17 @@ def test_plot_field_title():
     sim_data = make_sim_data()
     ax = sim_data.plot_field("field", "Ey", "real", f=2e14, z=0.10, ax=AX)
     assert "z=0.10" in ax.title.get_text(), "title rendered incorrectly."
+
+
+def test_missing_monitor():
+    sim_data = make_sim_data()
+    new_monitors = list(sim_data.simulation.monitors)[:-1]
+    new_sim = sim_data.simulation.copy(update=dict(monitors=new_monitors))
+    with pytest.raises(DataError):
+        new_sim_data = sim_data.copy(update=dict(simulation=new_sim))
+
+
+def test_loading_non_field_data():
+    sim_data = make_sim_data()
+    with pytest.raises(DataError):
+        sim_data.load_field_monitor("flux")

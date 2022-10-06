@@ -32,7 +32,8 @@ pytest -ra tests/test_package/test_make_script.py
 pytest -ra tests/test_package/test_material_library.py
 
 pytest -ra tests/test_plugins/test_component_modeler.py
-pytest -ra tests/test_plugins/test_plugins.py
+pytest -ra tests/test_plugins/test_mode_solver.py
+pytest -ra tests/test_plugins/test_dispersion_fitter.py
 
 pytest -ra tests/test_web/test_auth.py
 pytest -ra tests/test_web/test_task.py

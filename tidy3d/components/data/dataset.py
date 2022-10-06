@@ -448,8 +448,6 @@ class ModeDataset(Dataset):
 
     def normalize(self, source_spectrum_fn) -> ModeDataset:
         """Return copy of self after normalization is applied using source spectrum function."""
-        if self.amps is None:
-            raise DataError("ModeData contains no amp data, can't normalize.")
         source_freq_amps = source_spectrum_fn(self.amps.f)[None, :, None]
         return self.copy(update={"amps": self.amps / source_freq_amps})
 
