@@ -6,7 +6,6 @@ import xarray as xr
 import numpy as np
 
 from ...constants import HERTZ, SECOND, MICROMETER, RADIAN
-from ...log import DataError
 
 # maps the dimension names to their attributes
 DIM_ATTRS = {
@@ -36,51 +35,38 @@ class DataArray(xr.DataArray):
     # stores a dictionary of attributes corresponding to the data values
     _data_attrs: Dict[str, str] = {}
 
-    def __init__(self, *args, **kwargs):
-
-        # if dimensions are supplied, make sure they are valid
-        if "dims" in kwargs:
-            dims = kwargs["dims"]
-            if dims != self.__slots__:
-                raise DataError(
-                    f"supplied dims {dims} different from hardcoded slots {self.__slots__}."
-                )
-
-        # if dimensions not supplied (and not fastpath, which rejects coords), use __slots__ as dims
-        if ("dims" not in kwargs) and (not kwargs.get("fastpath")):
-            kwargs["dims"] = self.__slots__
-
-        # set up coords to use attributes by supplying coords as sequence of (dim, data, attrs)
-        if "coords" in kwargs:
-            coords = [(dim, kwargs["coords"][dim], DIM_ATTRS.get(dim)) for dim in self.__slots__]
-            kwargs["coords"] = coords
-
-        # add class level attributes to data values, if not supplied
-        if (not kwargs.get("fastpath")) and ("attrs" not in kwargs) and (self._data_attrs):
-            kwargs["attrs"] = self._data_attrs
-
-        # fix case if data of empty list or tuple is supplied as first arg
-        data_arg = args[0]
-        is_empty_array = isinstance(data_arg, np.ndarray) and (data_arg.size == 0)
-        is_empty_list = (isinstance(data_arg, list)) and (data_arg == [])
-        is_empty_tuple = (isinstance(data_arg, tuple)) and (data_arg == ())
-        if is_empty_array or is_empty_list or is_empty_tuple:
-            shape = tuple(len(values) for _, values, _ in coords)
-            new_args = list(args)
-            new_args[0] = np.zeros(shape=shape)
-            args = tuple(new_args)
-
-        super().__init__(*args, **kwargs)
-
     @classmethod
     def __get_validators__(cls):
-        """Defines which validator function to use for ComplexNumber."""
-        yield cls.validate
+        """Validators that get run when :class:`.DataArray` objects are added to pydantic models."""
+        yield cls.validate_dims
+        yield cls.assign_data_attrs
+        yield cls.assign_coord_attrs
 
     @classmethod
-    def validate(cls, value):
-        """What gets called when you construct a DataArray."""
-        return cls(value)
+    def validate_dims(cls, val):
+        """Make sure the dims are the same as __slots__, then put them in the correct order."""
+        if set(val.dims) != set(cls.__slots__):
+            raise ValueError(f"wrong dims, expected '{cls.__slots__}', got '{val.dims}'")
+        return val.transpose(*cls.__slots__)
+
+    @classmethod
+    def assign_data_attrs(cls, val):
+        """Assign the correct data attributes to the :class:`.DataArray`."""
+
+        for attr_name, attr in cls._data_attrs.items():
+            val.attrs[attr_name] = attr
+        return val
+
+    @classmethod
+    def assign_coord_attrs(cls, val):
+        """Assign the correct coordinate attributes to the :class:`.DataArray`."""
+
+        for dim in cls.__slots__:
+            dim_attrs = DIM_ATTRS.get(dim)
+            if dim_attrs is not None:
+                for attr_name, attr in dim_attrs.items():
+                    val.coords[dim].attrs[attr_name] = attr
+        return val
 
     @classmethod
     def __modify_schema__(cls, field_schema):

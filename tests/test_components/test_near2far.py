@@ -130,7 +130,7 @@ def test_n2f_data():
     f = np.linspace(1e14, 2e14, 10)
     theta = np.linspace(0, np.pi, 10)
     phi = np.linspace(0, 2 * np.pi, 20)
-    coords_tp = dict(f=f, theta=theta, phi=phi)
+    coords_tp = dict(theta=theta, phi=phi, f=f)
     values_tp = (1 + 1j) * np.random.random((len(theta), len(phi), len(f)))
     scalar_field_tp = td.Near2FarAngleDataArray(values_tp, coords=coords_tp)
     monitor_tp = td.Near2FarAngleMonitor(
@@ -146,7 +146,7 @@ def test_n2f_data():
 
     x = np.linspace(0, 5, 10)
     y = np.linspace(0, 10, 20)
-    coords_xy = dict(f=f, x=x, y=y)
+    coords_xy = dict(x=x, y=y, f=f)
     values_xy = (1 + 1j) * np.random.random((len(x), len(y), len(f)))
     scalar_field_xy = td.Near2FarCartesianDataArray(values_xy, coords=coords_xy)
     monitor_xy = td.Near2FarCartesianMonitor(
@@ -169,7 +169,7 @@ def test_n2f_data():
 
     ux = np.linspace(0, 5, 10)
     uy = np.linspace(0, 10, 20)
-    coords_u = dict(f=f, ux=ux, uy=uy)
+    coords_u = dict(ux=ux, uy=uy, f=f)
     values_u = (1 + 1j) * np.random.random((len(ux), len(uy), len(f)))
     scalar_field_u = td.Near2FarKSpaceDataArray(values_u, coords=coords_u)
     monitor_u = td.Near2FarKSpaceMonitor(

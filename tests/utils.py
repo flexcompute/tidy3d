@@ -286,7 +286,7 @@ def run_emulated(simulation: Simulation, task_name: str = None) -> SimulationDat
     def make_field_data(monitor: FieldMonitor) -> FieldData:
         """make a random FieldData from a FieldMonitor."""
         field_cmps = {}
-        coords = {"f": list(monitor.freqs)}
+        coords = {}
         grid = simulation.discretize(monitor, extend=True)
 
         for field_name in monitor.fields:
@@ -298,6 +298,7 @@ def run_emulated(simulation: Simulation, task_name: str = None) -> SimulationDat
                 else:
                     coords[dim] = np.array(spatial_coords_dict[dim])
 
+            coords["f"] = list(monitor.freqs)
             field_cmps[field_name] = make_data(
                 coords=coords, data_array_type=ScalarFieldDataArray, is_complex=True
             )
@@ -320,8 +321,8 @@ def run_emulated(simulation: Simulation, task_name: str = None) -> SimulationDat
         n_complex = make_data(
             coords=coords_ind, data_array_type=ModeIndexDataArray, is_complex=True
         )
-        coords_amps = coords_ind.copy()
-        coords_amps["direction"] = ["+", "-"]
+        coords_amps = dict(direction=["+", "-"])
+        coords_amps.update(coords_ind)
         amps = make_data(coords=coords_amps, data_array_type=ModeAmpsDataArray, is_complex=True)
         return ModeData(monitor=monitor, n_complex=n_complex, amps=amps)
 
