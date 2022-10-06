@@ -10,7 +10,9 @@ from tidy3d.components.monitor import FluxMonitor, FluxTimeMonitor
 from tidy3d.components.mode import ModeSpec
 from tidy3d.log import DataError, SetupError
 
+from tidy3d.components.data.dataset import FieldDataset
 from tidy3d.components.data.monitor_data import FieldData, FieldTimeData, PermittivityData
+
 from tidy3d.components.data.monitor_data import ModeSolverData, ModeData
 from tidy3d.components.data.monitor_data import FluxData, FluxTimeData, DiffractionData
 
@@ -203,10 +205,7 @@ def test_sel_mode_index():
 
     data = make_mode_solver_data()
     field_data = data.sel_mode_index(mode_index=0)
-    assert isinstance(field_data, FieldData), "ModeSolverData wasnt converted to FieldData."
-    assert isinstance(
-        field_data.monitor, FieldMonitor
-    ), "ModeSolverMonitor wasnt converted to FieldMonitor."
+    assert isinstance(field_data, FieldDataset), "ModeSolverData wasnt converted to FieldDataset."
     for _, scalar_field in field_data.field_components.items():
         assert "mode_index" not in scalar_field.coords, "mode_index coordinate remained in data."
 
