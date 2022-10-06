@@ -282,7 +282,7 @@ class AutoGrid(GridSpec1d):
         title="Lower bound of grid size",
         description="Lower bound of the grid size along this dimension regardless of "
         "structures present in the simulation, including override structures "
-        "with `enforced=True`. It is a soft bound, meaning that the actual minimal "
+        "with ``enforced=True``. It is a soft bound, meaning that the actual minimal "
         "grid size might be slightly smaller.",
     )
 
@@ -454,6 +454,28 @@ class GridSpec(Tidy3dBaseModel):
 
         return C_0 / freqs[0]
 
+    @property
+    def override_structures_used(self) -> List[bool, bool, bool]:
+        """Along each axis, ``True`` if any override structure is used. However,
+        it is still ``False`` if only :class:`.MeshOverrideStructure` is supplied, and
+        their ``dl[axis]`` all take the ``None`` value.
+        """
+
+        # empty override_structure list
+        if len(self.override_structures) == 0:
+            return [False] * 3
+
+        override_used = [False] * 3
+        for structure in self.override_structures:
+            # override used in all axes if any `Structure` is present
+            if isinstance(structure, Structure):
+                return [True] * 3
+
+            for dl_axis, dl in enumerate(structure.dl):
+                if (not override_used[dl_axis]) and (dl is not None):
+                    override_used[dl_axis] = True
+        return override_used
+
     def make_grid(
         self,
         structures: List[Structure],
@@ -487,6 +509,19 @@ class GridSpec(Tidy3dBaseModel):
         if wavelength is None and self.auto_grid_used:
             wavelength = self.wavelength_from_sources(sources)
             log.info(f"Auto meshing using wavelength {wavelength:1.4f} defined from sources.")
+
+        # Warn user if ``GridType`` along some axis is not ``AutoGrid`` and
+        # ``override_structures`` is not empty. The override structures
+        # are not effective along those axes.
+        for axis_ind, override_used_axis, grid_axis in zip(
+            ["x", "y", "z"], self.override_structures_used, [self.grid_x, self.grid_y, self.grid_z]
+        ):
+            if override_used_axis and not isinstance(grid_axis, AutoGrid):
+                log.warning(
+                    f"Override structures take no effect along {axis_ind}-axis. "
+                    "If intending to apply override structures to this axis, "
+                    "use 'AutoGrid'."
+                )
 
         coords_x = self.grid_x.make_coords(
             axis=0,

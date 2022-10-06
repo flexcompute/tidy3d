@@ -95,6 +95,11 @@ class GradedMesher(Mesher):
         sim_bmin, sim_bmax = structures[0].geometry.bounds
         domain_bounds = np.array([sim_bmin[axis], sim_bmax[axis]])
 
+        # For MeshOverrideStructure, we allow ``dl`` along some axis to be ``None``
+        # so that no override occurs along this axis. So first, we filter all those
+        # structures.
+        structures_effective = self.filter_structures_effective_dl(structures, axis)
+
         # Special attention needs to be paid to enforced overrideStructures.
         # They shouldn't be overridden by other structures;
         # for overlapping enforced structures, the grid size of the overlapped
@@ -107,7 +112,9 @@ class GradedMesher(Mesher):
         #    b) with enforced structure: grid size of the last override structure.
 
         # reorder structure list to place enforced ones to the end
-        num_unenforced, structures_ordered = self.reorder_structures_enforced_to_end(structures)
+        num_unenforced, structures_ordered = self.reorder_structures_enforced_to_end(
+            structures_effective
+        )
 
         # Required maximum steps in every structure
         structure_steps = self.structure_steps(
@@ -306,6 +313,33 @@ class GradedMesher(Mesher):
         return len(structures_others), structures_others + structures_enforced
 
     @staticmethod
+    def filter_structures_effective_dl(
+        structures: List[StructureType], axis: Axis
+    ) -> List[StructureType]:
+        """For :class:`.MeshOverrideStructure`, we allow ``dl`` along some axis
+        to be ``None`` so that no override occurs along this axis.Here those
+        structures with ``dl[axis]=None`` is filtered.
+
+        Parameters
+        ----------
+        structures : List[StructureType]
+            List of structures, with the simulation structure being the first item.
+        axis : Axis
+            Axis index to place last.
+
+        Returns
+        -------
+        List[StructureType]
+            A list of filtered structures whose ``dl`` along this axis is not ``None``.
+        """
+
+        return [
+            structure
+            for structure in structures
+            if not (isinstance(structure, MeshOverrideStructure) and structure.dl[axis] is None)
+        ]
+
+    @staticmethod
     def structure_steps(
         structures: List[StructureType],
         wavelength: float,
@@ -332,7 +366,7 @@ class GradedMesher(Mesher):
         for structure in structures:
             if isinstance(structure, Structure):
                 n, k = structure.medium.eps_complex_to_nk(
-                    structure.medium.eps_model(C_0 / wavelength)
+                    structure.medium.eps_diagonal(C_0 / wavelength)[axis]
                 )
                 index = max(abs(n), abs(k))
                 min_steps.append(max(global_min_dl, wavelength / index / min_steps_per_wvl))

@@ -432,7 +432,56 @@ def test_mesh_high_index_background_override():
 def test_mesh_direct_override():
     """test td.MeshOverrideStructure"""
 
-    # default override takes effect when finer than enclosing structure
+    # default override takes effect along one axis
+    for axis in range(3):
+        dl = [None] * 3
+        dl[axis] = 0.05
+
+        override_fine = td.MeshOverrideStructure(
+            geometry=td.Box(size=(1, 1, 1)),
+            dl=dl,
+        )
+
+        sim = td.Simulation(
+            size=(3, 3, 3),
+            grid_spec=td.GridSpec.auto(
+                wavelength=WAVELENGTH,
+                override_structures=[override_fine],
+            ),
+            run_time=1e-13,
+            structures=[BOX1],
+        )
+        assert np.all(sim.grid.sizes.to_list[(axis + 1) % 3] > 0.09)
+        assert np.all(sim.grid.sizes.to_list[(axis + 2) % 3] > 0.09)
+        sizes = sim.grid.sizes.to_list[axis]
+        assert np.isclose(sizes[len(sizes) // 2], 0.05)
+
+    # default override takes effect along two axes
+    for axis in range(3):
+        dl = [0.05] * 3
+        dl[axis] = None
+
+        override_fine = td.MeshOverrideStructure(
+            geometry=td.Box(size=(1, 1, 1)),
+            dl=dl,
+        )
+
+        sim = td.Simulation(
+            size=(3, 3, 3),
+            grid_spec=td.GridSpec.auto(
+                wavelength=WAVELENGTH,
+                override_structures=[override_fine],
+            ),
+            run_time=1e-13,
+            structures=[BOX1],
+        )
+        assert np.all(sim.grid.sizes.to_list[axis] > 0.09)
+        sizes = sim.grid.sizes.to_list[(axis + 1) % 3]
+        assert np.isclose(sizes[len(sizes) // 2], 0.05)
+        sizes = sim.grid.sizes.to_list[(axis + 2) % 3]
+        assert np.isclose(sizes[len(sizes) // 2], 0.05)
+
+    # Over all three axes
     override_fine = td.MeshOverrideStructure(
         geometry=td.Box(size=(1, 1, 1)),
         dl=[0.05] * 3,
@@ -447,8 +496,9 @@ def test_mesh_direct_override():
         run_time=1e-13,
         structures=[BOX1],
     )
-    sizes = sim.grid.sizes.to_list[2]
-    assert np.isclose(sizes[len(sizes) // 2], 0.05)
+    for axis in range(3):
+        sizes = sim.grid.sizes.to_list[axis]
+        assert np.isclose(sizes[len(sizes) // 2], 0.05)
 
     # default override has no effect when coarser than enclosing structure
     override_coarse = override_fine.copy(update={"dl": [0.2] * 3})
@@ -461,8 +511,9 @@ def test_mesh_direct_override():
         run_time=1e-13,
         structures=[BOX1],
     )
-    sizes = sim.grid.sizes.to_list[2]
-    assert sizes[len(sizes) // 2] < 0.1
+    for axis in range(3):
+        sizes = sim.grid.sizes.to_list[axis]
+        assert sizes[len(sizes) // 2] < 0.1
 
     # however, when enforced, override takes effect again
     override_coarse_enforce = override_coarse.copy(update={"enforce": True})
@@ -475,8 +526,9 @@ def test_mesh_direct_override():
         run_time=1e-13,
         structures=[BOX1],
     )
-    sizes = sim.grid.sizes.to_list[2]
-    assert sizes[len(sizes) // 2] > 0.15
+    for axis in range(3):
+        sizes = sim.grid.sizes.to_list[axis]
+        assert sizes[len(sizes) // 2] > 0.15
 
 
 def test_mesh_multiple_direct_override_and_global_min():
@@ -489,7 +541,7 @@ def test_mesh_multiple_direct_override_and_global_min():
 
     override_enforce1 = td.MeshOverrideStructure(
         geometry=td.Box(center=(0, -1, 1), size=(0.4, 0.4, 3)),
-        dl=[0.13] * 3,
+        dl=[None, None, 0.13],
         enforce=True,
     )
 
