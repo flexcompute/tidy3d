@@ -228,7 +228,7 @@ class Near2FarAngleDataArray(DataArray):
     >>> f = np.linspace(1e14, 2e14, 10)
     >>> theta = np.linspace(0, np.pi, 10)
     >>> phi = np.linspace(0, 2*np.pi, 20)
-    >>> coords = dict(f=f, theta=theta, phi=phi)
+    >>> coords = dict(theta=theta, phi=phi, f=f)
     >>> values = (1+1j) * np.random.random((len(theta), len(phi), len(f)))
     >>> data = Near2FarAngleDataArray(values, coords=coords)
     """
@@ -245,7 +245,7 @@ class Near2FarCartesianDataArray(DataArray):
     >>> f = np.linspace(1e14, 2e14, 10)
     >>> x = np.linspace(0, 5, 10)
     >>> y = np.linspace(0, 10, 20)
-    >>> coords = dict(f=f, x=x, y=y)
+    >>> coords = dict(x=x, y=y, f=f)
     >>> values = (1+1j) * np.random.random((len(x), len(y), len(f)))
     >>> data = Near2FarCartesianDataArray(values, coords=coords)
     """
@@ -263,7 +263,7 @@ class Near2FarKSpaceDataArray(DataArray):
     >>> f = np.linspace(1e14, 2e14, 10)
     >>> ux = np.linspace(0, 5, 10)
     >>> uy = np.linspace(0, 10, 20)
-    >>> coords = dict(f=f, ux=ux, uy=uy)
+    >>> coords = dict(ux=ux, uy=uy, f=f)
     >>> values = (1+1j) * np.random.random((len(ux), len(uy), len(f)))
     >>> data = Near2FarKSpaceDataArray(values, coords=coords)
     """
@@ -281,7 +281,7 @@ class DiffractionDataArray(DataArray):
     >>> orders_x = np.linspace(-1, 1, 3)
     >>> orders_y = np.linspace(-2, 2, 5)
     >>> pol = ["s", "p"]
-    >>> coords = dict(f=f, orders_x=orders_x, orders_y=orders_y, polarization=pol)
+    >>> coords = dict(orders_x=orders_x, orders_y=orders_y, polarization=pol, f=f)
     >>> values = (1+1j) * np.random.random((len(orders_x), len(orders_y), len(pol), len(f)))
     >>> data = DiffractionDataArray(values, coords=coords)
     """
