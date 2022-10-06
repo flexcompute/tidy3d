@@ -8,7 +8,7 @@ import numpy as np
 from .types import Ax, EMField, ArrayLike, Bound, FreqArray
 from .types import Literal, Direction, Coordinate, Axis, ObsGridArray, RadVec
 from .geometry import Box
-from .medium import Medium
+from .medium import Medium, MediumType
 from .validators import assert_plane, validate_unique
 from .base import cached_property
 from .mode import ModeSpec
@@ -493,7 +493,7 @@ class AbstractNear2FarMonitor(SurfaceIntegrationMonitor, FreqMonitor):
         units=MICROMETER,
     )
 
-    medium: Medium = pydantic.Field(
+    medium: MediumType = pydantic.Field(
         Medium(permittivity=1),
         title="Background medium",
         description="Background medium in which to radiate near fields to far fields. "
@@ -707,6 +707,13 @@ class DiffractionMonitor(PlanarMonitor, FreqMonitor):
         description="Diffraction orders along y for which efficiency should be computed. "
         "Orders corresponding to wave numbers outside of the light cone will be ignored. "
         "By default, only order 0 will be considered.",
+    )
+
+    medium: MediumType = pydantic.Field(
+        Medium(permittivity=1),
+        title="Background medium",
+        description="Background medium through which to project fields. "
+        "If not provided, uses free space.",
     )
 
     _unique_x = validate_unique("orders_x")

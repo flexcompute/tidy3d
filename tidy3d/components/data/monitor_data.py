@@ -16,6 +16,7 @@ from ..validators import enforce_monitor_fields_present
 from ..monitor import MonitorType, FieldMonitor, FieldTimeMonitor, ModeSolverMonitor
 from ..monitor import ModeMonitor, FluxMonitor, FluxTimeMonitor, PermittivityMonitor
 from ..monitor import DiffractionMonitor
+from ..medium import MediumType
 from ...log import DataError
 from ...constants import ETA_0, C_0, MICROMETER
 
@@ -653,6 +654,11 @@ class DiffractionData(MonitorData):
         return self.copy(update=fields_norm)
 
     @property
+    def medium(self) -> MediumType:
+        """Medium in which the near fields are recorded and propagated."""
+        return self.monitor.medium
+
+    @property
     def frequencies(self) -> np.ndarray:
         """Frequencies associated with ``monitor``."""
         return np.atleast_1d(self.L.f.values)
@@ -668,14 +674,21 @@ class DiffractionData(MonitorData):
         return np.atleast_1d(self.L.orders_y.values)
 
     @property
-    def wavelength(self) -> np.ndarray:
-        """Wavelength at each frequency."""
-        return C_0 / self.frequencies
-
-    @property
     def wavenumber(self) -> np.ndarray:
         """Wave number at each frequency."""
-        return 2.0 * np.pi / self.wavelength
+        epsilon = self.medium.eps_model(self.frequencies)
+        return np.real(2.0 * np.pi * self.frequencies / C_0 * np.sqrt(epsilon))
+
+    @property
+    def wavelength(self) -> np.ndarray:
+        """Wavelength at each frequency."""
+        return 2.0 * np.pi / self.wavenumber
+
+    @property
+    def eta(self) -> np.ndarray:
+        """Wavelength at each frequency."""
+        epsilon = self.medium.eps_model(self.frequencies)
+        return np.real(ETA_0 / np.sqrt(epsilon))
 
     @property
     def ux(self) -> np.ndarray:
@@ -776,8 +789,8 @@ class DiffractionData(MonitorData):
         n_theta = self.N_sph.sel(polarization="theta").values
         n_phi = self.N_sph.sel(polarization="phi").values
 
-        e_theta = -(l_phi + ETA_0 * n_theta) / 4.0 / np.pi
-        e_phi = (l_theta - ETA_0 * n_phi) / 4.0 / np.pi
+        e_theta = -(l_phi + self.eta * n_theta) / 4.0 / np.pi
+        e_phi = (l_theta - self.eta * n_phi) / 4.0 / np.pi
 
         return DiffractionDataArray(
             np.stack([e_theta, e_phi], axis=2), coords=self._make_coords_for_pol(["theta", "phi"])
@@ -789,8 +802,8 @@ class DiffractionData(MonitorData):
         e_theta = self.E_sph.sel(polarization="theta").values
         e_phi = self.E_sph.sel(polarization="phi").values
 
-        h_theta = -e_phi / ETA_0
-        h_phi = e_theta / ETA_0
+        h_theta = -e_phi / self.eta
+        h_phi = e_theta / self.eta
 
         return DiffractionDataArray(
             np.stack([h_theta, h_phi], axis=2), coords=self._make_coords_for_pol(["theta", "phi"])
@@ -812,7 +825,7 @@ class DiffractionData(MonitorData):
         the power carried by the wave of that order and polarization equals ``abs(amps)^2``.
         """
         cos_theta = np.cos(np.nan_to_num(self.angles[0]))
-        norm = 1.0 / np.sqrt(2.0 * ETA_0) / np.sqrt(cos_theta)
+        norm = 1.0 / np.sqrt(2.0 * self.eta) / np.sqrt(cos_theta)
         amp_theta = self.E_sph.sel(polarization="theta").values * norm
         amp_phi = self.E_sph.sel(polarization="phi").values * norm
 
