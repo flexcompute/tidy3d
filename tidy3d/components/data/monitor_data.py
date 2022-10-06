@@ -435,7 +435,7 @@ class ModeSolverData(ElectromagneticFieldData):
         fields = {}
         for field_name, data in self.field_components.items():
             data = data.sel(mode_index=mode_index)
-            coords = {key: val.data for key, val in data.coords.items()}
+            coords = {dim: data.coords[dim] for dim in "xyzf"}
             scalar_field = ScalarFieldDataArray(data.data, coords=coords)
             fields[field_name] = scalar_field
 
