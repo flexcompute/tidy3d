@@ -236,7 +236,8 @@ def test_empty_array():
     )
 
 
-def test_empty_list():
+# NOTE: can remove this? lets not support empty tuple or list, use np.zeros()
+def _test_empty_list():
     coords = {"x": np.arange(10), "y": np.arange(10), "z": np.arange(10), "t": []}
     fields = {"Ex": td.ScalarFieldTimeDataArray([], coords=coords)}
     monitor = td.FieldTimeMonitor(size=(1, 1, 1), fields=["Ex"], name="test")
@@ -249,7 +250,8 @@ def test_empty_list():
     )
 
 
-def test_empty_tuple():
+# NOTE: can remove this? lets not support empty tuple or list, use np.zeros()
+def _test_empty_tuple():
     coords = {"x": np.arange(10), "y": np.arange(10), "z": np.arange(10), "t": []}
     fields = {"Ex": td.ScalarFieldTimeDataArray((), coords=coords)}
     monitor = td.FieldTimeMonitor(size=(1, 1, 1), fields=["Ex"], name="test")
@@ -309,3 +311,10 @@ def test_field_data_symmetry_present():
         field_data = td.FieldTimeData(
             monitor=monitor, symmetry=(1, -1, 1), symmetry_center=(0, 0, 0), **fields
         )
+
+
+def test_data_array_attrs():
+    """Note, this is here because the attrs only get set when added to a pydantic model."""
+    data = make_flux_data()
+    assert data.flux.attrs, "data has no attrs"
+    assert data.flux.f.attrs, "data coordinates have no attrs"
