@@ -59,13 +59,13 @@ MONITOR_DATA_DICT_SYM = {data.monitor.name: data for data in MONITOR_DATA_SYM}
 def make_sim_data(symmetry: bool = True):
     if symmetry:
         simulation = SIM_SYM
-        monitor_data = MONITOR_DATA_DICT_SYM
+        data = MONITOR_DATA_SYM
     else:
         simulation = SIM
-        monitor_data = MONITOR_DATA_DICT
+        data = MONITOR_DATA
     return SimulationData(
         simulation=simulation,
-        monitor_data=monitor_data,
+        data=data,
         log="- Time step    827 / time 4.13e-14s (  4 % done), field decay: 0.110e+00",
     )
 
@@ -237,10 +237,10 @@ def test_empty_io():
         grid_expanded=sim.discretize(monitor, extend=True),
         **fields
     )
-    sim_data = SimulationData(simulation=sim, monitor_data={"tmnt": field_data})
+    sim_data = SimulationData(simulation=sim, data=(field_data,))
     sim_data.to_file("tests/tmp/sim_data_empty.hdf5")
     sim_data = SimulationData.from_file("tests/tmp/sim_data_empty.hdf5")
-    field_data = sim_data["tmnt"]
+    field_data = sim_data[monitor.name]
     Ex = field_data.Ex
     assert Ex.size == 0
 
@@ -302,7 +302,7 @@ def test_run_time_lt_start():
 
     sim_data = SimulationData(
         simulation=sim,
-        monitor_data={tmnt.name: field_data},
+        data=(field_data,),
     )
 
     sim_data.renormalize(0).to_file("tests/tmp/sim_data_empty.hdf5")

@@ -200,9 +200,7 @@ class ModeSolver(Tidy3dBaseModel):
         monitor_data = self.data
         new_monitors = list(self.simulation.monitors) + [monitor_data.monitor]
         new_simulation = self.simulation.copy(update=dict(monitors=new_monitors))
-        return SimulationData(
-            simulation=new_simulation, monitor_data={MODE_MONITOR_NAME: monitor_data}
-        )
+        return SimulationData(simulation=new_simulation, data=(monitor_data,))
 
     def _get_epsilon(self, freq: float) -> ArrayLike[complex, 4]:
         """Compute the diagonal components of the epsilon tensor in the plane."""

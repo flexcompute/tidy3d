@@ -328,9 +328,9 @@ def run_emulated(simulation: Simulation, task_name: str = None) -> SimulationDat
 
     MONITOR_MAKER_MAP = {FieldMonitor: make_field_data, ModeMonitor: make_mode_data}
 
-    montor_data = {mnt.name: MONITOR_MAKER_MAP[type(mnt)](mnt) for mnt in simulation.monitors}
+    data = [MONITOR_MAKER_MAP[type(mnt)](mnt) for mnt in simulation.monitors]
 
-    return SimulationData(simulation=simulation, monitor_data=montor_data)
+    return SimulationData(simulation=simulation, data=data)
 
 
 def assert_log_level(caplog, log_level_expected):
