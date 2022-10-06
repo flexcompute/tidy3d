@@ -1,5 +1,5 @@
 """Defines Geometric objects with Medium properties."""
-from typing import Union, Tuple
+from typing import Union, Tuple, Optional
 import pydantic
 
 from .base import Tidy3dBaseModel
@@ -92,7 +92,9 @@ class MeshOverrideStructure(AbstractStructure):
     """
 
     dl: Tuple[
-        pydantic.PositiveFloat, pydantic.PositiveFloat, pydantic.PositiveFloat
+        Optional[pydantic.PositiveFloat],
+        Optional[pydantic.PositiveFloat],
+        Optional[pydantic.PositiveFloat],
     ] = pydantic.Field(
         ...,
         title="Grid Size",
