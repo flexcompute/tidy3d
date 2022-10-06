@@ -22,8 +22,8 @@ pytest -ra tests/test_components/test_types.py
 pytest -ra tests/test_components/test_viz.py
 
 pytest -ra tests/test_data/test_data_arrays.py
-pytest -ra tests/test_data/test_data_monitor.py
-pytest -ra tests/test_data/test_data_sim.py
+pytest -ra tests/test_data/test_monitor_data.py
+pytest -ra tests/test_data/test_sim_data.py
 
 pytest -ra tests/test_package/test_config.py
 pytest -ra tests/test_package/test_log.py

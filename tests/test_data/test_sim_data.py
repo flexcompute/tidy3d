@@ -15,10 +15,10 @@ from tidy3d.components.monitor import FieldMonitor, FieldTimeMonitor, ModeSolver
 from tidy3d.components.monitor import DiffractionMonitor
 from tidy3d.components.source import GaussianPulse, PointDipole
 
-from .test_data_monitor import make_field_data, make_field_time_data, make_permittivity_data
-from .test_data_monitor import make_mode_data, make_mode_solver_data
-from .test_data_monitor import make_flux_data, make_flux_time_data
-from .test_data_monitor import make_diffraction_data
+from .test_monitor_data import make_field_data, make_field_time_data, make_permittivity_data
+from .test_monitor_data import make_mode_data, make_mode_solver_data
+from .test_monitor_data import make_flux_data, make_flux_time_data
+from .test_monitor_data import make_diffraction_data
 from .test_data_arrays import FIELD_MONITOR, FIELD_TIME_MONITOR, MODE_SOLVE_MONITOR
 from .test_data_arrays import MODE_MONITOR, PERMITTIVITY_MONITOR, FLUX_MONITOR, FLUX_TIME_MONITOR
 from .test_data_arrays import SIM, SIM_SYM
