@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+## [1.7.1] - 2022-10-10
+
+### Added
+- `medium` field in `DiffractionMonitor` for decomposition of fields that are not in vacuum.
+
+### Fixed
+- Bug in meshing an empty simulation with zero size along one dimension.
+- Bug causing error in the solver when a `PermittivityMonitor` is present in the list of monitors and is not at the end of the list.
+
 ## [1.7.0] - 2022-10-03
 
 ### Added
@@ -425,7 +434,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Job and Batch classes for better simulation handling (eventually to fully replace webapi functions).
 - A large number of small improvements and bug fixes.
 
-[Unreleased]: https://github.com/flexcompute/tidy3d/compare/v1.7.0...develop
+[Unreleased]: https://github.com/flexcompute/tidy3d/compare/v1.7.1...develop
+[1.7.1]: https://github.com/flexcompute/tidy3d/compare/v1.7.0...v1.7.1
 [1.7.0]: https://github.com/flexcompute/tidy3d/compare/v1.6.3...v1.7.0
 [1.6.3]: https://github.com/flexcompute/tidy3d/compare/v1.6.2...v1.6.3
 [1.6.2]: https://github.com/flexcompute/tidy3d/compare/v1.6.1...v1.6.2

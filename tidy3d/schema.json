@@ -1,6 +1,6 @@
 {
   "title": "Simulation",
-  "description": "Contains all information about Tidy3d simulation.\n\nParameters\n----------\ncenter : Tuple[float, float, float] = (0.0, 0.0, 0.0)\n    [units = um].  Center of object in x, y, and z.\nsize : Tuple[NonNegativeFloat, NonNegativeFloat, NonNegativeFloat]\n    [units = um].  Size in x, y, and z directions.\nrun_time : PositiveFloat\n    [units = sec].  Total electromagnetic evolution time in seconds. Note: If simulation 'shutoff' is specified, simulation will terminate early when shutoff condition met. \nmedium : Union[Medium, AnisotropicMedium, PECMedium, PoleResidue, Sellmeier, Lorentz, Debye, Drude] = Medium(name=None, frequency_range=None, type='Medium', permittivity=1.0, conductivity=0.0)\n    Background medium of simulation, defaults to vacuum if not specified.\nsymmetry : Tuple[Literal[0, -1, 1], Literal[0, -1, 1], Literal[0, -1, 1]] = (0, 0, 0)\n    Tuple of integers defining reflection symmetry across a plane bisecting the simulation domain normal to the x-, y-, and z-axis at the simulation center of each axis, respectvely. Each element can be ``0`` (no symmetry), ``1`` (even, i.e. 'PMC' symmetry) or ``-1`` (odd, i.e. 'PEC' symmetry). Note that the vectorial nature of the fields must be taken into account to correctly determine the symmetry value.\nstructures : Tuple[Structure, ...] = ()\n    Tuple of structures present in simulation. Note: Structures defined later in this list override the simulation material properties in regions of spatial overlap.\nsources : Tuple[Annotated[Union[tidy3d.components.source.UniformCurrentSource, tidy3d.components.source.PointDipole, tidy3d.components.source.GaussianBeam, tidy3d.components.source.AstigmaticGaussianBeam, tidy3d.components.source.ModeSource, tidy3d.components.source.PlaneWave], FieldInfo(default=PydanticUndefined, discriminator='type', extra={})], ...] = ()\n    Tuple of electric current sources injecting fields into the simulation.\nboundary_spec : BoundarySpec = BoundarySpec(x=Boundary(plus=Periodic(name=None,, type='Periodic'),, minus=Periodic(name=None,, type='Periodic'),, type='Boundary'), y=Boundary(plus=Periodic(name=None,, type='Periodic'),, minus=Periodic(name=None,, type='Periodic'),, type='Boundary'), z=Boundary(plus=Periodic(name=None,, type='Periodic'),, minus=Periodic(name=None,, type='Periodic'),, type='Boundary'), type='BoundarySpec')\n    Specification of boundary conditions along each dimension.\nmonitors : Tuple[Annotated[Union[tidy3d.components.monitor.FieldMonitor, tidy3d.components.monitor.FieldTimeMonitor, tidy3d.components.monitor.PermittivityMonitor, tidy3d.components.monitor.FluxMonitor, tidy3d.components.monitor.FluxTimeMonitor, tidy3d.components.monitor.ModeMonitor, tidy3d.components.monitor.ModeSolverMonitor, tidy3d.components.monitor.Near2FarAngleMonitor, tidy3d.components.monitor.Near2FarCartesianMonitor, tidy3d.components.monitor.Near2FarKSpaceMonitor, tidy3d.components.monitor.DiffractionMonitor], FieldInfo(default=PydanticUndefined, discriminator='type', extra={})], ...] = ()\n    Tuple of monitors in the simulation. Note: monitor names are used to access data after simulation is run.\ngrid_spec : GridSpec = GridSpec(grid_x=AutoGrid(type='AutoGrid',, min_steps_per_wvl=10.0,, max_scale=1.4,, mesher=GradedMesher(type='GradedMesher')), grid_y=AutoGrid(type='AutoGrid',, min_steps_per_wvl=10.0,, max_scale=1.4,, mesher=GradedMesher(type='GradedMesher')), grid_z=AutoGrid(type='AutoGrid',, min_steps_per_wvl=10.0,, max_scale=1.4,, mesher=GradedMesher(type='GradedMesher')), wavelength=None, override_structures=(), type='GridSpec')\n    Specifications for the simulation grid along each of the three directions.\nshutoff : NonNegativeFloat = 1e-05\n    Ratio of the instantaneous integrated E-field intensity to the maximum value at which the simulation will automatically terminate time stepping. Used to prevent extraneous run time of simulations with fully decayed fields. Set to ``0`` to disable this feature.\nsubpixel : bool = True\n    If ``True``, uses subpixel averaging of the permittivity based on structure definition, resulting in much higher accuracy for a given grid size.\nnormalize_index : Optional[NonNegativeInt] = 0\n    Index of the source in the tuple of sources whose spectrum will be used to normalize the frequency-dependent data. If ``None``, the raw field data is returned unnormalized.\ncourant : ConstrainedFloatValue = 0.9\n    Courant stability factor, controls time step to spatial step ratio. Lower values lead to more stable simulations for dispersive materials, but result in longer simulation times. This factor is normalized to no larger than 1 when CFL stability condition is met in 3D.\nversion : str = 1.7.0\n    String specifying the front end version number.\n\nExample\n-------\n>>> from tidy3d import Sphere, Cylinder, PolySlab\n>>> from tidy3d import UniformCurrentSource, GaussianPulse\n>>> from tidy3d import FieldMonitor, FluxMonitor\n>>> from tidy3d import GridSpec, AutoGrid\n>>> from tidy3d import BoundarySpec, Boundary\n>>> sim = Simulation(\n...     size=(2.0, 2.0, 2.0),\n...     grid_spec=GridSpec(\n...         grid_x = AutoGrid(min_steps_per_wvl = 20),\n...         grid_y = AutoGrid(min_steps_per_wvl = 20),\n...         grid_z = AutoGrid(min_steps_per_wvl = 20)\n...     ),\n...     run_time=40e-11,\n...     structures=[\n...         Structure(\n...             geometry=Box(size=(1, 1, 1), center=(-1, 0, 0)),\n...             medium=Medium(permittivity=2.0),\n...         ),\n...     ],\n...     sources=[\n...         UniformCurrentSource(\n...             size=(0, 0, 0),\n...             center=(0, 0.5, 0),\n...             polarization=\"Hx\",\n...             source_time=GaussianPulse(\n...                 freq0=2e14,\n...                 fwidth=4e13,\n...             ),\n...         )\n...     ],\n...     monitors=[\n...         FieldMonitor(size=(0, 0, 0), center=(0, 0, 0), freqs=[1.5e14, 2e14], name='point'),\n...         FluxMonitor(size=(1, 1, 0), center=(0, 0, 0), freqs=[2e14, 2.5e14], name='flux'),\n...     ],\n...     symmetry=(0, 0, 0),\n...     boundary_spec=BoundarySpec(\n...         x = Boundary.pml(num_layers=20),\n...         y = Boundary.pml(num_layers=30),\n...         z = Boundary.periodic(),\n...     ),\n...     shutoff=1e-6,\n...     courant=0.8,\n...     subpixel=False,\n... )",
+  "description": "Contains all information about Tidy3d simulation.\n\nParameters\n----------\ncenter : Tuple[float, float, float] = (0.0, 0.0, 0.0)\n    [units = um].  Center of object in x, y, and z.\nsize : Tuple[NonNegativeFloat, NonNegativeFloat, NonNegativeFloat]\n    [units = um].  Size in x, y, and z directions.\nrun_time : PositiveFloat\n    [units = sec].  Total electromagnetic evolution time in seconds. Note: If simulation 'shutoff' is specified, simulation will terminate early when shutoff condition met. \nmedium : Union[Medium, AnisotropicMedium, PECMedium, PoleResidue, Sellmeier, Lorentz, Debye, Drude] = Medium(name=None, frequency_range=None, type='Medium', permittivity=1.0, conductivity=0.0)\n    Background medium of simulation, defaults to vacuum if not specified.\nsymmetry : Tuple[Literal[0, -1, 1], Literal[0, -1, 1], Literal[0, -1, 1]] = (0, 0, 0)\n    Tuple of integers defining reflection symmetry across a plane bisecting the simulation domain normal to the x-, y-, and z-axis at the simulation center of each axis, respectvely. Each element can be ``0`` (no symmetry), ``1`` (even, i.e. 'PMC' symmetry) or ``-1`` (odd, i.e. 'PEC' symmetry). Note that the vectorial nature of the fields must be taken into account to correctly determine the symmetry value.\nstructures : Tuple[Structure, ...] = ()\n    Tuple of structures present in simulation. Note: Structures defined later in this list override the simulation material properties in regions of spatial overlap.\nsources : Tuple[Annotated[Union[tidy3d.components.source.UniformCurrentSource, tidy3d.components.source.PointDipole, tidy3d.components.source.GaussianBeam, tidy3d.components.source.AstigmaticGaussianBeam, tidy3d.components.source.ModeSource, tidy3d.components.source.PlaneWave], FieldInfo(default=PydanticUndefined, discriminator='type', extra={})], ...] = ()\n    Tuple of electric current sources injecting fields into the simulation.\nboundary_spec : BoundarySpec = BoundarySpec(x=Boundary(plus=Periodic(name=None,, type='Periodic'),, minus=Periodic(name=None,, type='Periodic'),, type='Boundary'), y=Boundary(plus=Periodic(name=None,, type='Periodic'),, minus=Periodic(name=None,, type='Periodic'),, type='Boundary'), z=Boundary(plus=Periodic(name=None,, type='Periodic'),, minus=Periodic(name=None,, type='Periodic'),, type='Boundary'), type='BoundarySpec')\n    Specification of boundary conditions along each dimension.\nmonitors : Tuple[Annotated[Union[tidy3d.components.monitor.FieldMonitor, tidy3d.components.monitor.FieldTimeMonitor, tidy3d.components.monitor.PermittivityMonitor, tidy3d.components.monitor.FluxMonitor, tidy3d.components.monitor.FluxTimeMonitor, tidy3d.components.monitor.ModeMonitor, tidy3d.components.monitor.ModeSolverMonitor, tidy3d.components.monitor.Near2FarAngleMonitor, tidy3d.components.monitor.Near2FarCartesianMonitor, tidy3d.components.monitor.Near2FarKSpaceMonitor, tidy3d.components.monitor.DiffractionMonitor], FieldInfo(default=PydanticUndefined, discriminator='type', extra={})], ...] = ()\n    Tuple of monitors in the simulation. Note: monitor names are used to access data after simulation is run.\ngrid_spec : GridSpec = GridSpec(grid_x=AutoGrid(type='AutoGrid',, min_steps_per_wvl=10.0,, max_scale=1.4,, mesher=GradedMesher(type='GradedMesher')), grid_y=AutoGrid(type='AutoGrid',, min_steps_per_wvl=10.0,, max_scale=1.4,, mesher=GradedMesher(type='GradedMesher')), grid_z=AutoGrid(type='AutoGrid',, min_steps_per_wvl=10.0,, max_scale=1.4,, mesher=GradedMesher(type='GradedMesher')), wavelength=None, override_structures=(), type='GridSpec')\n    Specifications for the simulation grid along each of the three directions.\nshutoff : NonNegativeFloat = 1e-05\n    Ratio of the instantaneous integrated E-field intensity to the maximum value at which the simulation will automatically terminate time stepping. Used to prevent extraneous run time of simulations with fully decayed fields. Set to ``0`` to disable this feature.\nsubpixel : bool = True\n    If ``True``, uses subpixel averaging of the permittivity based on structure definition, resulting in much higher accuracy for a given grid size.\nnormalize_index : Optional[NonNegativeInt] = 0\n    Index of the source in the tuple of sources whose spectrum will be used to normalize the frequency-dependent data. If ``None``, the raw field data is returned unnormalized.\ncourant : ConstrainedFloatValue = 0.9\n    Courant stability factor, controls time step to spatial step ratio. Lower values lead to more stable simulations for dispersive materials, but result in longer simulation times. This factor is normalized to no larger than 1 when CFL stability condition is met in 3D.\nversion : str = 1.7.1\n    String specifying the front end version number.\n\nExample\n-------\n>>> from tidy3d import Sphere, Cylinder, PolySlab\n>>> from tidy3d import UniformCurrentSource, GaussianPulse\n>>> from tidy3d import FieldMonitor, FluxMonitor\n>>> from tidy3d import GridSpec, AutoGrid\n>>> from tidy3d import BoundarySpec, Boundary\n>>> sim = Simulation(\n...     size=(2.0, 2.0, 2.0),\n...     grid_spec=GridSpec(\n...         grid_x = AutoGrid(min_steps_per_wvl = 20),\n...         grid_y = AutoGrid(min_steps_per_wvl = 20),\n...         grid_z = AutoGrid(min_steps_per_wvl = 20)\n...     ),\n...     run_time=40e-11,\n...     structures=[\n...         Structure(\n...             geometry=Box(size=(1, 1, 1), center=(-1, 0, 0)),\n...             medium=Medium(permittivity=2.0),\n...         ),\n...     ],\n...     sources=[\n...         UniformCurrentSource(\n...             size=(0, 0, 0),\n...             center=(0, 0.5, 0),\n...             polarization=\"Hx\",\n...             source_time=GaussianPulse(\n...                 freq0=2e14,\n...                 fwidth=4e13,\n...             ),\n...         )\n...     ],\n...     monitors=[\n...         FieldMonitor(size=(0, 0, 0), center=(0, 0, 0), freqs=[1.5e14, 2e14], name='point'),\n...         FluxMonitor(size=(1, 1, 0), center=(0, 0, 0), freqs=[2e14, 2.5e14], name='flux'),\n...     ],\n...     symmetry=(0, 0, 0),\n...     boundary_spec=BoundarySpec(\n...         x = Boundary.pml(num_layers=20),\n...         y = Boundary.pml(num_layers=30),\n...         z = Boundary.periodic(),\n...     ),\n...     shutoff=1e-6,\n...     courant=0.8,\n...     subpixel=False,\n... )",
   "type": "object",
   "properties": {
     "type": {
@@ -360,7 +360,7 @@
     "version": {
       "title": "Version",
       "description": "String specifying the front end version number.",
-      "default": "1.7.0",
+      "default": "1.7.1",
       "type": "string"
     }
   },
@@ -3684,7 +3684,7 @@
     },
     "Near2FarAngleMonitor": {
       "title": "Near2FarAngleMonitor",
-      "description": ":class:`Monitor` that samples electromagnetic near fields in the frequency domain\nand invokes the computation of far fields at given observation angles.\n\nParameters\n----------\ncenter : Tuple[float, float, float] = (0.0, 0.0, 0.0)\n    [units = um].  Center of object in x, y, and z.\nsize : Tuple[NonNegativeFloat, NonNegativeFloat, NonNegativeFloat]\n    [units = um].  Size in x, y, and z directions.\nname : ConstrainedStrValue\n    Unique name for monitor.\nfreqs : Union[Tuple[float, ...], Array]\n    [units = Hz].  Array or list of frequencies stored by the field monitor.\nnormal_dir : Optional[Literal['+', '-']] = None\n    Direction of the surface monitor's normal vector w.r.t. the positive x, y or z unit vectors. Must be one of ``'+'`` or ``'-'``. Applies to surface monitors only, and defaults to ``'+'`` if not provided.\nexclude_surfaces : Optional[Tuple[Literal['x-', 'x+', 'y-', 'y+', 'z-', 'z+'], ...]] = None\n    Surfaces to exclude in the integration, if a volume monitor.\nfields : Tuple[Literal['Ntheta', 'Nphi', 'Ltheta', 'Lphi'], ...] = ['Ntheta', 'Nphi', 'Ltheta', 'Lphi']\n    Collection of radiation vector components to store in the monitor.\ncustom_origin : Optional[Tuple[float, float, float]] = None\n    [units = um].  Local origin used for defining observation points. If ``None``, uses the monitor's center.\nmedium : Medium = Medium(name=None, frequency_range=None, type='Medium', permittivity=1.0, conductivity=0.0)\n    Background medium in which to radiate near fields to far fields. If not provided, uses free space.\ntheta : Union[Tuple[float, ...], Array]\n    [units = rad].  Polar angles relative to ``local_origin`` at which to compute far fields.\nphi : Union[Tuple[float, ...], Array]\n    [units = rad].  Azimuth angles relative to ``local_origin`` at which to compute far fields.\n\nExample\n-------\n>>> monitor = Near2FarAngleMonitor(\n...     center=(1,2,3),\n...     size=(2,2,2),\n...     freqs=[250e12, 300e12],\n...     name='n2f_monitor',\n...     custom_origin=(1,2,3),\n...     phi=[0, np.pi/2],\n...     theta=np.linspace(-np.pi/2, np.pi/2, 100)\n...     )",
+      "description": ":class:`Monitor` that samples electromagnetic near fields in the frequency domain\nand invokes the computation of far fields at given observation angles.\n\nParameters\n----------\ncenter : Tuple[float, float, float] = (0.0, 0.0, 0.0)\n    [units = um].  Center of object in x, y, and z.\nsize : Tuple[NonNegativeFloat, NonNegativeFloat, NonNegativeFloat]\n    [units = um].  Size in x, y, and z directions.\nname : ConstrainedStrValue\n    Unique name for monitor.\nfreqs : Union[Tuple[float, ...], Array]\n    [units = Hz].  Array or list of frequencies stored by the field monitor.\nnormal_dir : Optional[Literal['+', '-']] = None\n    Direction of the surface monitor's normal vector w.r.t. the positive x, y or z unit vectors. Must be one of ``'+'`` or ``'-'``. Applies to surface monitors only, and defaults to ``'+'`` if not provided.\nexclude_surfaces : Optional[Tuple[Literal['x-', 'x+', 'y-', 'y+', 'z-', 'z+'], ...]] = None\n    Surfaces to exclude in the integration, if a volume monitor.\nfields : Tuple[Literal['Ntheta', 'Nphi', 'Ltheta', 'Lphi'], ...] = ['Ntheta', 'Nphi', 'Ltheta', 'Lphi']\n    Collection of radiation vector components to store in the monitor.\ncustom_origin : Optional[Tuple[float, float, float]] = None\n    [units = um].  Local origin used for defining observation points. If ``None``, uses the monitor's center.\nmedium : Union[Medium, AnisotropicMedium, PECMedium, PoleResidue, Sellmeier, Lorentz, Debye, Drude] = Medium(name=None, frequency_range=None, type='Medium', permittivity=1.0, conductivity=0.0)\n    Background medium in which to radiate near fields to far fields. If not provided, uses free space.\ntheta : Union[Tuple[float, ...], Array]\n    [units = rad].  Polar angles relative to ``local_origin`` at which to compute far fields.\nphi : Union[Tuple[float, ...], Array]\n    [units = rad].  Azimuth angles relative to ``local_origin`` at which to compute far fields.\n\nExample\n-------\n>>> monitor = Near2FarAngleMonitor(\n...     center=(1,2,3),\n...     size=(2,2,2),\n...     freqs=[250e12, 300e12],\n...     name='n2f_monitor',\n...     custom_origin=(1,2,3),\n...     phi=[0, np.pi/2],\n...     theta=np.linspace(-np.pi/2, np.pi/2, 100)\n...     )",
       "type": "object",
       "properties": {
         "type": {
@@ -3841,9 +3841,30 @@
             "permittivity": 1.0,
             "conductivity": 0.0
           },
-          "allOf": [
+          "anyOf": [
             {
               "$ref": "#/definitions/Medium"
+            },
+            {
+              "$ref": "#/definitions/AnisotropicMedium"
+            },
+            {
+              "$ref": "#/definitions/PECMedium"
+            },
+            {
+              "$ref": "#/definitions/PoleResidue"
+            },
+            {
+              "$ref": "#/definitions/Sellmeier"
+            },
+            {
+              "$ref": "#/definitions/Lorentz"
+            },
+            {
+              "$ref": "#/definitions/Debye"
+            },
+            {
+              "$ref": "#/definitions/Drude"
             }
           ]
         },
@@ -3899,7 +3920,7 @@
     },
     "Near2FarCartesianMonitor": {
       "title": "Near2FarCartesianMonitor",
-      "description": ":class:`Monitor` that samples electromagnetic near fields in the frequency domain\nand invokes the computation of far fields on a Cartesian observation plane.\nThe far-field approximation is used, so results projected to points close to\nthe monitor's position, compared to its size, may not be accurate.\n\nParameters\n----------\ncenter : Tuple[float, float, float] = (0.0, 0.0, 0.0)\n    [units = um].  Center of object in x, y, and z.\nsize : Tuple[NonNegativeFloat, NonNegativeFloat, NonNegativeFloat]\n    [units = um].  Size in x, y, and z directions.\nname : ConstrainedStrValue\n    Unique name for monitor.\nfreqs : Union[Tuple[float, ...], Array]\n    [units = Hz].  Array or list of frequencies stored by the field monitor.\nnormal_dir : Optional[Literal['+', '-']] = None\n    Direction of the surface monitor's normal vector w.r.t. the positive x, y or z unit vectors. Must be one of ``'+'`` or ``'-'``. Applies to surface monitors only, and defaults to ``'+'`` if not provided.\nexclude_surfaces : Optional[Tuple[Literal['x-', 'x+', 'y-', 'y+', 'z-', 'z+'], ...]] = None\n    Surfaces to exclude in the integration, if a volume monitor.\nfields : Tuple[Literal['Ntheta', 'Nphi', 'Ltheta', 'Lphi'], ...] = ['Ntheta', 'Nphi', 'Ltheta', 'Lphi']\n    Collection of radiation vector components to store in the monitor.\ncustom_origin : Optional[Tuple[float, float, float]] = None\n    [units = um].  Local origin used for defining observation points. If ``None``, uses the monitor's center.\nmedium : Medium = Medium(name=None, frequency_range=None, type='Medium', permittivity=1.0, conductivity=0.0)\n    Background medium in which to radiate near fields to far fields. If not provided, uses free space.\nplane_axis : Literal[0, 1, 2]\n    Axis along which the observation plane is oriented.\nplane_distance : float\n    Signed distance of the observation plane along ``plane_axis`` w.r.t. ``local_origin``\nx : Union[Tuple[float, ...], Array]\n    [units = um].  Local x observation coordinates w.r.t. ``local_origin`` and ``plane_axis``. When ``plane_axis`` is 0, this corresponds to the global y axis. When ``plane_axis`` is 1, this corresponds to the global x axis. When ``plane_axis`` is 2, this corresponds to the global x axis. \ny : Union[Tuple[float, ...], Array]\n    [units = um].  Local y observation coordinates w.r.t. ``local_origin`` and ``plane_axis``. When ``plane_axis`` is 0, this corresponds to the global z axis. When ``plane_axis`` is 1, this corresponds to the global z axis. When ``plane_axis`` is 2, this corresponds to the global y axis. \n\nExample\n-------\n>>> monitor = Near2FarCartesianMonitor(\n...     center=(1,2,3),\n...     size=(2,2,2),\n...     freqs=[250e12, 300e12],\n...     name='n2f_monitor',\n...     custom_origin=(1,2,3),\n...     x=[-1, 0, 1],\n...     y=[-2, -1, 0, 1, 2],\n...     plane_axis=2,\n...     plane_distance=5\n...     )",
+      "description": ":class:`Monitor` that samples electromagnetic near fields in the frequency domain\nand invokes the computation of far fields on a Cartesian observation plane.\nThe far-field approximation is used, so results projected to points close to\nthe monitor's position, compared to its size, may not be accurate.\n\nParameters\n----------\ncenter : Tuple[float, float, float] = (0.0, 0.0, 0.0)\n    [units = um].  Center of object in x, y, and z.\nsize : Tuple[NonNegativeFloat, NonNegativeFloat, NonNegativeFloat]\n    [units = um].  Size in x, y, and z directions.\nname : ConstrainedStrValue\n    Unique name for monitor.\nfreqs : Union[Tuple[float, ...], Array]\n    [units = Hz].  Array or list of frequencies stored by the field monitor.\nnormal_dir : Optional[Literal['+', '-']] = None\n    Direction of the surface monitor's normal vector w.r.t. the positive x, y or z unit vectors. Must be one of ``'+'`` or ``'-'``. Applies to surface monitors only, and defaults to ``'+'`` if not provided.\nexclude_surfaces : Optional[Tuple[Literal['x-', 'x+', 'y-', 'y+', 'z-', 'z+'], ...]] = None\n    Surfaces to exclude in the integration, if a volume monitor.\nfields : Tuple[Literal['Ntheta', 'Nphi', 'Ltheta', 'Lphi'], ...] = ['Ntheta', 'Nphi', 'Ltheta', 'Lphi']\n    Collection of radiation vector components to store in the monitor.\ncustom_origin : Optional[Tuple[float, float, float]] = None\n    [units = um].  Local origin used for defining observation points. If ``None``, uses the monitor's center.\nmedium : Union[Medium, AnisotropicMedium, PECMedium, PoleResidue, Sellmeier, Lorentz, Debye, Drude] = Medium(name=None, frequency_range=None, type='Medium', permittivity=1.0, conductivity=0.0)\n    Background medium in which to radiate near fields to far fields. If not provided, uses free space.\nplane_axis : Literal[0, 1, 2]\n    Axis along which the observation plane is oriented.\nplane_distance : float\n    Signed distance of the observation plane along ``plane_axis`` w.r.t. ``local_origin``\nx : Union[Tuple[float, ...], Array]\n    [units = um].  Local x observation coordinates w.r.t. ``local_origin`` and ``plane_axis``. When ``plane_axis`` is 0, this corresponds to the global y axis. When ``plane_axis`` is 1, this corresponds to the global x axis. When ``plane_axis`` is 2, this corresponds to the global x axis. \ny : Union[Tuple[float, ...], Array]\n    [units = um].  Local y observation coordinates w.r.t. ``local_origin`` and ``plane_axis``. When ``plane_axis`` is 0, this corresponds to the global z axis. When ``plane_axis`` is 1, this corresponds to the global z axis. When ``plane_axis`` is 2, this corresponds to the global y axis. \n\nExample\n-------\n>>> monitor = Near2FarCartesianMonitor(\n...     center=(1,2,3),\n...     size=(2,2,2),\n...     freqs=[250e12, 300e12],\n...     name='n2f_monitor',\n...     custom_origin=(1,2,3),\n...     x=[-1, 0, 1],\n...     y=[-2, -1, 0, 1, 2],\n...     plane_axis=2,\n...     plane_distance=5\n...     )",
       "type": "object",
       "properties": {
         "type": {
@@ -4056,9 +4077,30 @@
             "permittivity": 1.0,
             "conductivity": 0.0
           },
-          "allOf": [
+          "anyOf": [
             {
               "$ref": "#/definitions/Medium"
+            },
+            {
+              "$ref": "#/definitions/AnisotropicMedium"
+            },
+            {
+              "$ref": "#/definitions/PECMedium"
+            },
+            {
+              "$ref": "#/definitions/PoleResidue"
+            },
+            {
+              "$ref": "#/definitions/Sellmeier"
+            },
+            {
+              "$ref": "#/definitions/Lorentz"
+            },
+            {
+              "$ref": "#/definitions/Debye"
+            },
+            {
+              "$ref": "#/definitions/Drude"
             }
           ]
         },
@@ -4131,7 +4173,7 @@
     },
     "Near2FarKSpaceMonitor": {
       "title": "Near2FarKSpaceMonitor",
-      "description": ":class:`Monitor` that samples electromagnetic near fields in the frequency domain\nand invokes the computation of far fields on an observation plane defined in k-space.\n\nParameters\n----------\ncenter : Tuple[float, float, float] = (0.0, 0.0, 0.0)\n    [units = um].  Center of object in x, y, and z.\nsize : Tuple[NonNegativeFloat, NonNegativeFloat, NonNegativeFloat]\n    [units = um].  Size in x, y, and z directions.\nname : ConstrainedStrValue\n    Unique name for monitor.\nfreqs : Union[Tuple[float, ...], Array]\n    [units = Hz].  Array or list of frequencies stored by the field monitor.\nnormal_dir : Optional[Literal['+', '-']] = None\n    Direction of the surface monitor's normal vector w.r.t. the positive x, y or z unit vectors. Must be one of ``'+'`` or ``'-'``. Applies to surface monitors only, and defaults to ``'+'`` if not provided.\nexclude_surfaces : Optional[Tuple[Literal['x-', 'x+', 'y-', 'y+', 'z-', 'z+'], ...]] = None\n    Surfaces to exclude in the integration, if a volume monitor.\nfields : Tuple[Literal['Ntheta', 'Nphi', 'Ltheta', 'Lphi'], ...] = ['Ntheta', 'Nphi', 'Ltheta', 'Lphi']\n    Collection of radiation vector components to store in the monitor.\ncustom_origin : Optional[Tuple[float, float, float]] = None\n    [units = um].  Local origin used for defining observation points. If ``None``, uses the monitor's center.\nmedium : Medium = Medium(name=None, frequency_range=None, type='Medium', permittivity=1.0, conductivity=0.0)\n    Background medium in which to radiate near fields to far fields. If not provided, uses free space.\nu_axis : Literal[0, 1, 2]\n    Axis along which the observation plane is oriented.\nux : Union[Tuple[float, ...], Array]\n    Local x component of wave vectors on the observation plane, relative to ``local_origin`` and oriented with respect to ``u_axis``, normalized by (2*pi/lambda) where lambda is the wavelength associated with the background medium.\nuy : Union[Tuple[float, ...], Array]\n    Local y component of wave vectors on the observation plane, relative to ``local_origin`` and oriented with respect to ``u_axis``, normalized by (2*pi/lambda) where lambda is the wavelength associated with the background medium.\n\nExample\n-------\n>>> monitor = Near2FarKSpaceMonitor(\n...     center=(1,2,3),\n...     size=(2,2,2),\n...     freqs=[250e12, 300e12],\n...     name='n2f_monitor',\n...     custom_origin=(1,2,3),\n...     u_axis=2,\n...     ux=[1,2],\n...     uy=[3,4,5]\n...     )",
+      "description": ":class:`Monitor` that samples electromagnetic near fields in the frequency domain\nand invokes the computation of far fields on an observation plane defined in k-space.\n\nParameters\n----------\ncenter : Tuple[float, float, float] = (0.0, 0.0, 0.0)\n    [units = um].  Center of object in x, y, and z.\nsize : Tuple[NonNegativeFloat, NonNegativeFloat, NonNegativeFloat]\n    [units = um].  Size in x, y, and z directions.\nname : ConstrainedStrValue\n    Unique name for monitor.\nfreqs : Union[Tuple[float, ...], Array]\n    [units = Hz].  Array or list of frequencies stored by the field monitor.\nnormal_dir : Optional[Literal['+', '-']] = None\n    Direction of the surface monitor's normal vector w.r.t. the positive x, y or z unit vectors. Must be one of ``'+'`` or ``'-'``. Applies to surface monitors only, and defaults to ``'+'`` if not provided.\nexclude_surfaces : Optional[Tuple[Literal['x-', 'x+', 'y-', 'y+', 'z-', 'z+'], ...]] = None\n    Surfaces to exclude in the integration, if a volume monitor.\nfields : Tuple[Literal['Ntheta', 'Nphi', 'Ltheta', 'Lphi'], ...] = ['Ntheta', 'Nphi', 'Ltheta', 'Lphi']\n    Collection of radiation vector components to store in the monitor.\ncustom_origin : Optional[Tuple[float, float, float]] = None\n    [units = um].  Local origin used for defining observation points. If ``None``, uses the monitor's center.\nmedium : Union[Medium, AnisotropicMedium, PECMedium, PoleResidue, Sellmeier, Lorentz, Debye, Drude] = Medium(name=None, frequency_range=None, type='Medium', permittivity=1.0, conductivity=0.0)\n    Background medium in which to radiate near fields to far fields. If not provided, uses free space.\nu_axis : Literal[0, 1, 2]\n    Axis along which the observation plane is oriented.\nux : Union[Tuple[float, ...], Array]\n    Local x component of wave vectors on the observation plane, relative to ``local_origin`` and oriented with respect to ``u_axis``, normalized by (2*pi/lambda) where lambda is the wavelength associated with the background medium.\nuy : Union[Tuple[float, ...], Array]\n    Local y component of wave vectors on the observation plane, relative to ``local_origin`` and oriented with respect to ``u_axis``, normalized by (2*pi/lambda) where lambda is the wavelength associated with the background medium.\n\nExample\n-------\n>>> monitor = Near2FarKSpaceMonitor(\n...     center=(1,2,3),\n...     size=(2,2,2),\n...     freqs=[250e12, 300e12],\n...     name='n2f_monitor',\n...     custom_origin=(1,2,3),\n...     u_axis=2,\n...     ux=[1,2],\n...     uy=[3,4,5]\n...     )",
       "type": "object",
       "properties": {
         "type": {
@@ -4288,9 +4330,30 @@
             "permittivity": 1.0,
             "conductivity": 0.0
           },
-          "allOf": [
+          "anyOf": [
             {
               "$ref": "#/definitions/Medium"
+            },
+            {
+              "$ref": "#/definitions/AnisotropicMedium"
+            },
+            {
+              "$ref": "#/definitions/PECMedium"
+            },
+            {
+              "$ref": "#/definitions/PoleResidue"
+            },
+            {
+              "$ref": "#/definitions/Sellmeier"
+            },
+            {
+              "$ref": "#/definitions/Lorentz"
+            },
+            {
+              "$ref": "#/definitions/Debye"
+            },
+            {
+              "$ref": "#/definitions/Drude"
             }
           ]
         },
@@ -4355,7 +4418,7 @@
     },
     "DiffractionMonitor": {
       "title": "DiffractionMonitor",
-      "description": ":class:`Monitor` that uses a 2D Fourier transform to compute the\ndiffraction amplitudes and efficiency for given (or all) diffraction orders.\n\nParameters\n----------\ncenter : Tuple[float, float, float] = (0.0, 0.0, 0.0)\n    [units = um].  Center of object in x, y, and z.\nsize : Tuple[NonNegativeFloat, NonNegativeFloat, NonNegativeFloat]\n    [units = um].  Size in x, y, and z directions.\nname : ConstrainedStrValue\n    Unique name for monitor.\nfreqs : Union[Tuple[float, ...], Array]\n    [units = Hz].  Array or list of frequencies stored by the field monitor.\nnormal_dir : Literal['+', '-'] = +\n    Direction of the surface monitor's normal vector w.r.t. the positive x, y or z unit vectors. Must be one of ``'+'`` or ``'-'``. Defaults to ``'+'`` if not provided.\norders_x : Tuple[int, ...] = [0]\n    Diffraction orders along x for which efficiency should be computed. Orders corresponding to wave numbers outside of the light cone will be ignored. By default, only order 0 will be considered.\norders_y : Tuple[int, ...] = [0]\n    Diffraction orders along y for which efficiency should be computed. Orders corresponding to wave numbers outside of the light cone will be ignored. By default, only order 0 will be considered.\n\nExample\n-------\n>>> monitor = DiffractionMonitor(\n...     center=(1,2,3),\n...     size=(inf,inf,0),\n...     freqs=[250e12, 300e12],\n...     name='diffraction_monitor',\n...     normal_dir='+',\n...     orders_x=[0, 1, 2],\n...     orders_y=[0],\n...     )",
+      "description": ":class:`Monitor` that uses a 2D Fourier transform to compute the\ndiffraction amplitudes and efficiency for given (or all) diffraction orders.\n\nParameters\n----------\ncenter : Tuple[float, float, float] = (0.0, 0.0, 0.0)\n    [units = um].  Center of object in x, y, and z.\nsize : Tuple[NonNegativeFloat, NonNegativeFloat, NonNegativeFloat]\n    [units = um].  Size in x, y, and z directions.\nname : ConstrainedStrValue\n    Unique name for monitor.\nfreqs : Union[Tuple[float, ...], Array]\n    [units = Hz].  Array or list of frequencies stored by the field monitor.\nnormal_dir : Literal['+', '-'] = +\n    Direction of the surface monitor's normal vector w.r.t. the positive x, y or z unit vectors. Must be one of ``'+'`` or ``'-'``. Defaults to ``'+'`` if not provided.\norders_x : Tuple[int, ...] = [0]\n    Diffraction orders along x for which efficiency should be computed. Orders corresponding to wave numbers outside of the light cone will be ignored. By default, only order 0 will be considered.\norders_y : Tuple[int, ...] = [0]\n    Diffraction orders along y for which efficiency should be computed. Orders corresponding to wave numbers outside of the light cone will be ignored. By default, only order 0 will be considered.\nmedium : Union[Medium, AnisotropicMedium, PECMedium, PoleResidue, Sellmeier, Lorentz, Debye, Drude] = Medium(name=None, frequency_range=None, type='Medium', permittivity=1.0, conductivity=0.0)\n    Background medium through which to project fields. If not provided, uses free space.\n\nExample\n-------\n>>> monitor = DiffractionMonitor(\n...     center=(1,2,3),\n...     size=(inf,inf,0),\n...     freqs=[250e12, 300e12],\n...     name='diffraction_monitor',\n...     normal_dir='+',\n...     orders_x=[0, 1, 2],\n...     orders_y=[0],\n...     )",
       "type": "object",
       "properties": {
         "type": {
@@ -4469,6 +4532,43 @@
           "items": {
             "type": "integer"
           }
+        },
+        "medium": {
+          "title": "Background medium",
+          "description": "Background medium through which to project fields. If not provided, uses free space.",
+          "default": {
+            "name": null,
+            "frequency_range": null,
+            "type": "Medium",
+            "permittivity": 1.0,
+            "conductivity": 0.0
+          },
+          "anyOf": [
+            {
+              "$ref": "#/definitions/Medium"
+            },
+            {
+              "$ref": "#/definitions/AnisotropicMedium"
+            },
+            {
+              "$ref": "#/definitions/PECMedium"
+            },
+            {
+              "$ref": "#/definitions/PoleResidue"
+            },
+            {
+              "$ref": "#/definitions/Sellmeier"
+            },
+            {
+              "$ref": "#/definitions/Lorentz"
+            },
+            {
+              "$ref": "#/definitions/Debye"
+            },
+            {
+              "$ref": "#/definitions/Drude"
+            }
+          ]
         }
       },
       "required": [
