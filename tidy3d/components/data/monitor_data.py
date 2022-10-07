@@ -272,7 +272,7 @@ class FieldData(ElectromagneticFieldData):
         fields_norm = {}
         for field_name, field_data in self.field_components.items():
             src_amps = source_spectrum_fn(field_data.f)
-            fields_norm[field_name] = field_data / src_amps
+            fields_norm[field_name] = (field_data / src_amps).astype(field_data.dtype)
 
         return self.copy(update=fields_norm)
 
