@@ -97,7 +97,8 @@ class GradedMesher(Mesher):
 
         # If empty simulation, return
         if len(structures) == 1:
-            return (domain_bounds, structure_steps)
+            interval_coords, max_steps = self.filter_min_step(domain_bounds, structure_steps)
+            return np.array(interval_coords), np.array(max_steps)
 
         # Bounding boxes with the meshing axis rotated to z
         struct_bbox = self.rotate_structure_bounds(structures, axis)
