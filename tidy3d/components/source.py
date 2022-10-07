@@ -312,7 +312,7 @@ class Source(Box, ABC):
         z: float = None,
         ax: Ax = None,
         sim_bounds: Bound = None,
-        **patch_kwargs
+        **patch_kwargs,
     ) -> Ax:
 
         # call the `Source.plot()` function first.
@@ -466,24 +466,42 @@ class DirectionalSource(FieldSource, ABC):
 class BroadbandSource(Source, ABC):
     """A source with frequency dependent field distributions."""
 
-    num_freqs: pydantic.NonNegativeInt = pydantic.Field(
+    num_freqs: int = pydantic.Field(
         1,
         title="Number of Frequency Points",
-        description="Number of points to approximate the frequency dependence of injected field.",
+        description="Number of points used to approximate the frequency dependence of injected "
+        "field. A Chebyshev interpolation is used, thus, only a small number of points, i.e., less "
+        "than 20, is typically sufficient to obtain converged results.",
+        ge=1,
+        le=99,
     )
 
     @cached_property
     def frequency_grid(self) -> np.ndarray:
         """A Chebyshev grid used to approximate frequency dependence."""
-        fmin, fmax = self.source_time.frequency_range(4)
-        return 0.5 * (fmin + fmax) + 0.5 * (fmax - fmin) * np.cos(
-            0.5 * np.pi * (2 * np.flip(np.arange(self.num_freqs)) + 1) / self.num_freqs
-        )
+        freq_min, freq_max = self.source_time.frequency_range(num_fwidth=4)
+        freq_avg = 0.5 * (freq_min + freq_max)
+        freq_diff = 0.5 * (freq_max - freq_min)
+        uni_points = (2 * np.arange(self.num_freqs) + 1) / (2 * self.num_freqs)
+        cheb_points = np.cos(np.pi * np.flip(uni_points))
+        return freq_avg + freq_diff * cheb_points
 
-    def map_frequencies(self, freq_grid) -> np.ndarray:
-        """Map frequency values into (-1,1) interval."""
-        fmin, fmax = self.source_time.frequency_range(4)
-        return (freq_grid - 0.5 * (fmin + fmax)) / (0.5 * (fmax - fmin))
+    @pydantic.validator("num_freqs", always=True, allow_reuse=True)
+    def _warn_if_large_number_of_freqs(cls, val):
+        """Warn if a large number of frequency points is requested."""
+
+        if val is None:
+            return val
+
+        if val >= 20:
+            logging.warning(
+                f"A large number ({val}) of frequency points is used in a broadband source. "
+                "This can slow down simulation time and is only needed if the mode fields are "
+                "expected to have a very sharp frequency dependence. 'num_freqs' < 20 is "
+                "sufficient in most cases."
+            )
+
+        return val
 
 
 """ Source current profiles defined by (1) angle or (2) desired mode. Sets theta and phi angles."""

@@ -151,3 +151,81 @@ def test_pol_arrow():
     assert np.allclose(
         get_pol_dir(axis=2, angle_theta=np.pi / 4), (-1 / np.sqrt(2), 0, +1 / np.sqrt(2))
     )
+
+
+def test_broadband_source():
+    g = td.GaussianPulse(freq0=1, fwidth=0.1)
+    mode_spec = td.ModeSpec(num_modes=2)
+    fmin, fmax = g.frequency_range(num_fwidth=4)
+    fdiff = (fmax - fmin) / 2
+    fmean = (fmax + fmin) / 2
+
+    def check_freq_grid(freq_grid, num_freqs):
+        """Test that chebyshev polynomials are orthogonal on provided grid."""
+        cheb_grid = (freq_grid - fmean) / fdiff
+        poly = np.polynomial.chebyshev.chebval(cheb_grid, np.ones(num_freqs))
+        dot_prod_theory = num_freqs + num_freqs * (num_freqs - 1) / 2
+        # print(len(freq_grid), num_freqs)
+        # print(abs(dot_prod_theory - np.dot(poly, poly)))
+        assert len(freq_grid) == num_freqs
+        assert abs(dot_prod_theory - np.dot(poly, poly)) < 1e-10
+
+    # test we can make a broadband gaussian beam
+    num_freqs = 3
+    s = td.GaussianBeam(
+        size=(0, 1, 1), source_time=g, pol_angle=np.pi / 2, direction="+", num_freqs=num_freqs
+    )
+    freq_grid = s.frequency_grid
+    check_freq_grid(freq_grid, num_freqs)
+
+    # test we can make a broadband astigmatic gaussian beam
+    num_freqs = 10
+    s = td.AstigmaticGaussianBeam(
+        size=(0, 1, 1),
+        source_time=g,
+        pol_angle=np.pi / 2,
+        direction="+",
+        waist_sizes=(0.2, 0.4),
+        waist_distances=(0.1, 0.3),
+        num_freqs=num_freqs,
+    )
+    freq_grid = s.frequency_grid
+    check_freq_grid(freq_grid, num_freqs)
+
+    # test we can make a broadband mode source
+    num_freqs = 20
+    s = td.ModeSource(
+        size=(0, 1, 1),
+        direction="+",
+        source_time=g,
+        mode_spec=mode_spec,
+        mode_index=0,
+        num_freqs=num_freqs,
+    )
+    freq_grid = s.frequency_grid
+    check_freq_grid(freq_grid, num_freqs)
+
+    # check validators for num_freqs
+    with pytest.raises(pydantic.ValidationError) as e_info:
+        s = td.GaussianBeam(
+            size=(0, 1, 1), source_time=g, pol_angle=np.pi / 2, direction="+", num_freqs=200
+        )
+    with pytest.raises(pydantic.ValidationError) as e_info:
+        s = td.AstigmaticGaussianBeam(
+            size=(0, 1, 1),
+            source_time=g,
+            pol_angle=np.pi / 2,
+            direction="+",
+            waist_sizes=(0.2, 0.4),
+            waist_distances=(0.1, 0.3),
+            num_freqs=100,
+        )
+    with pytest.raises(pydantic.ValidationError) as e_info:
+        s = td.ModeSource(
+            size=(0, 1, 1),
+            direction="+",
+            source_time=g,
+            mode_spec=mode_spec,
+            mode_index=0,
+            num_freqs=-10,
+        )
