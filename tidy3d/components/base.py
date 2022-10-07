@@ -211,8 +211,8 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         >>> sim_dict = Simulation.dict_from_json(fname='folder/sim.json') # doctest: +SKIP
         """
         with open(fname, "r", encoding="utf-8") as json_fhandle:
-            json_dict = json.load(json_fhandle)
-        return json_dict
+            model_dict = json.load(json_fhandle)
+        return model_dict
 
     def to_json(self, fname: str) -> None:
         """Exports :class:`Tidy3dBaseModel` instance to .json file
@@ -250,8 +250,8 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         -------
         >>> simulation = Simulation.from_yaml(fname='folder/sim.yaml') # doctest: +SKIP
         """
-        json_dict = cls.dict_from_yaml(fname=fname)
-        json_raw = json.dumps(json_dict, indent=INDENT)
+        model_dict = cls.dict_from_yaml(fname=fname)
+        json_raw = json.dumps(model_dict, indent=INDENT)
         return cls.parse_raw(json_raw, **parse_raw_kwargs)
 
     @classmethod
@@ -273,8 +273,8 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         >>> sim_dict = Simulation.dict_from_yaml(fname='folder/sim.yaml') # doctest: +SKIP
         """
         with open(fname, "r", encoding="utf-8") as yaml_in:
-            json_dict = yaml.safe_load(yaml_in)
-        return json_dict
+            model_dict = yaml.safe_load(yaml_in)
+        return model_dict
 
     def to_yaml(self, fname: str) -> None:
         """Exports :class:`Tidy3dBaseModel` instance to .yaml file.
@@ -289,9 +289,9 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         >>> simulation.to_yaml(fname='folder/sim.yaml') # doctest: +SKIP
         """
         json_string = self._json_string
-        json_dict = json.loads(json_string)
+        model_dict = json.loads(json_string)
         with open(fname, "w+", encoding="utf-8") as file_handle:
-            yaml.dump(json_dict, file_handle, indent=INDENT)
+            yaml.dump(model_dict, file_handle, indent=INDENT)
 
     @staticmethod
     def tuple_to_dict(tuple_name: str, tuple_values: tuple) -> dict:
@@ -299,13 +299,15 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         return {f"{tuple_name}_{i}": val for i, val in enumerate(tuple_values)}
 
     @classmethod
-    def dict_from_hdf5(cls, fname: str) -> dict:
+    def dict_from_hdf5(cls, fname: str, group_path: str = "/") -> dict:
         """Loads a dictionary containing the model contents from a .hdf5 file.
 
         Parameters
         ----------
         fname : str
             Full path to the .hdf5 file to load the :class:`Tidy3dBaseModel` from.
+        group_path : str, optional
+            Path to a group inside the file to use as the base level.
 
         Returns
         -------
@@ -317,41 +319,61 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         >>> sim_dict = Simulation.dict_from_hdf5(fname='folder/sim.hdf5') # doctest: +SKIP
         """
 
-        def load_data_from_file(json_dict: dict, group_path: str = "/") -> None:
+        def load_data_from_file(model_dict: dict, group_path: str = "/") -> None:
             """For every DataArray item in dictionary, write path of hdf5 group as value."""
 
-            for key, value in json_dict.items():
+            for key, value in model_dict.items():
 
                 subpath = f"{group_path}/{key}"
 
                 # write the path to the element of the json dict where the data_array should be
                 if value == DATA_ARRAY_TAG:
-                    json_dict[key] = DataArray.from_hdf5(fname=fname, group_path=subpath)
+                    model_dict[key] = DataArray.from_hdf5(fname=fname, group_path=subpath)
                     continue
 
                 # if a list, assign each element a unique key, recurse
                 if isinstance(value, (list, tuple)):
                     value_dict = cls.tuple_to_dict(tuple_name=key, tuple_values=value)
-                    load_data_from_file(json_dict=value_dict, group_path=subpath)
+                    load_data_from_file(model_dict=value_dict, group_path=subpath)
 
                 # if a dict, recurse
                 elif isinstance(value, dict):
-                    load_data_from_file(json_dict=value, group_path=subpath)
+                    load_data_from_file(model_dict=value, group_path=subpath)
 
         with h5py.File(fname, "r") as f_handle:
             json_string = f_handle[JSON_TAG][()]
 
-        json_dict = json.loads(json_string)
-        load_data_from_file(json_dict, group_path="/")
-        return json_dict
+        model_dict = json.loads(json_string)
+        load_data_from_file(model_dict, group_path=group_path)
+        return model_dict
 
-    def to_hdf5(self, fname: str) -> None:
+    @classmethod
+    def from_hdf5(cls, fname: str, group_path: str = "/") -> Tidy3dBaseModel:
+        """Loads :class:`Tidy3dBaseModel` instance to .hdf5 file.
+
+        Parameters
+        ----------
+        fname : str
+            Full path to the .hdf5 file to load the :class:`Tidy3dBaseModel` from.
+        group_path : str, optional
+            Path to a group inside the file to use as the base level.
+
+        Example
+        -------
+        >>> simulation.to_hdf5(fname='folder/sim.hdf5') # doctest: +SKIP
+        """
+        model_dict = cls.dict_from_hdf5(fname=fname, group_path=group_path)
+        return cls.parse_obj(model_dict)
+
+    def to_hdf5(self, fname: str, group_path: str = "/") -> None:
         """Exports :class:`Tidy3dBaseModel` instance to .hdf5 file.
 
         Parameters
         ----------
         fname : str
             Full path to the .hdf5 file to save the :class:`Tidy3dBaseModel` to.
+        group_path : str, optional
+            Path to a group inside the file to use as the base level.
 
         Example
         -------
@@ -383,7 +405,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         with h5py.File(fname, "w") as f_handle:
             f_handle[JSON_TAG] = json_string
 
-        add_data_to_file(data_dict=self.dict(), group_path="/")
+        add_data_to_file(data_dict=self.dict(), group_path=group_path)
 
     def __lt__(self, other):
         """define < for getting unique indices based on hash."""

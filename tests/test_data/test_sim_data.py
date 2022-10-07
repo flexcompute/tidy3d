@@ -180,8 +180,8 @@ def test_to_json():
     FNAME = "tests/tmp/sim_data_refactor.json"
     DATA_FILE = "tests/tmp/sim_extra_data.hdf5"
     sim_data.to_file(fname=FNAME)
-    # sim_data2 = SimulationData.from_file(fname=FNAME)
-    # assert sim_data == sim_data2
+    sim_data2 = SimulationData.from_file(fname=FNAME)
+    assert sim_data == sim_data2
 
 
 def test_sel_kwarg_freq():
