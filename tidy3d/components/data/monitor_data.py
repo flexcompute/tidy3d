@@ -19,7 +19,7 @@ from ..monitor import Near2FarAngleMonitor, Near2FarCartesianMonitor, Near2FarKS
 from ..monitor import DiffractionMonitor
 from ..medium import Medium
 from ...log import SetupError, log
-from ...constants import ETA_0, C_0, MICROMETER
+from ...constants import ETA_0, C_0
 from .dataset import Dataset, AbstractFieldDataset
 from .dataset import FieldDataset, FieldTimeDataset, ModeSolverDataset, PermittivityDataset
 from .dataset import ModeDataset, FluxDataset, FluxTimeDataset
@@ -691,74 +691,10 @@ class DiffractionData(MonitorData, DiffractionDataset):
 
     monitor: DiffractionMonitor
 
-    sim_size: Tuple[float, float] = pd.Field(
-        ...,
-        title="Simulation size",
-        description="Simulation sizes in the local x and y directions.",
-        units=MICROMETER,
-    )
-
-    bloch_vecs: Tuple[float, float] = pd.Field(
-        ...,
-        title="Bloch vectors",
-        description="Bloch vectors along the local x and y directions in units of "
-        "``2 * pi / (simulation size along the respective dimension)``.",
-    )
-
-    L: DiffractionDataArray = pd.Field(
-        ...,
-        title="L",
-        description="Complex components of the far field radiation vectors associated with the "
-        "electric field for each polarization tangential to ``monitor.normal_axis``, "
-        "in a local Cartesian coordinate system whose z-axis is ``monitor.normal_axis``.",
-    )
-
-    N: DiffractionDataArray = pd.Field(
-        ...,
-        title="N",
-        description="Complex components of the far field radiation vectors associated with the "
-        "magnetic field for each polarization tangential to ``monitor.normal_axis``, "
-        "in a local Cartesian coordinate system whose z-axis is ``monitor.normal_axis``.",
-    )
-
-    @staticmethod
-    def shifted_orders(orders: Tuple[int], bloch_vec: float) -> np.ndarray:
-        """Diffraction orders shifted by the Bloch vector."""
-        return bloch_vec + np.atleast_1d(orders)
-
-    @property
-    def field_components(self) -> Dict[str, DataArray]:
-        """Maps the field components to thier associated data."""
-        return dict(L=self.L, N=self.N)
-
-    def normalize(self, source_spectrum_fn: Callable[[float], complex]) -> DiffractionData:
-        """Copy of self after normalization is applied using source spectrum function."""
-        fields_norm = {}
-        for field_name, field_data in self.field_components.items():
-            src_amps = source_spectrum_fn(field_data.f)
-            fields_norm[field_name] = field_data / src_amps
-
-        return self.copy(update=fields_norm)
-
     @property
     def medium(self) -> Medium:
         """Medium in which the near fields are recorded and propagated."""
         return self.monitor.medium
-
-    @property
-    def frequencies(self) -> np.ndarray:
-        """Frequencies associated with ``monitor``."""
-        return np.atleast_1d(self.L.f.values)
-
-    @property
-    def orders_x(self) -> np.ndarray:
-        """Allowed orders along x."""
-        return np.atleast_1d(self.L.orders_x.values)
-
-    @property
-    def orders_y(self) -> np.ndarray:
-        """Allowed orders along y."""
-        return np.atleast_1d(self.L.orders_y.values)
 
     @property
     def wavenumber(self) -> np.ndarray:
@@ -776,35 +712,6 @@ class DiffractionData(MonitorData, DiffractionDataset):
         """Wavelength at each frequency."""
         epsilon = self.medium.eps_model(self.frequencies)
         return np.real(ETA_0 / np.sqrt(epsilon))
-
-    @property
-    def ux(self) -> np.ndarray:
-        """Normalized wave vector along x relative to ``local_origin`` and oriented
-        with respect to ``monitor.normal_dir``, normalized by the wave number in the
-        background medium."""
-        if self.sim_size[0] == 0:
-            return np.atleast_2d(0)
-        bloch_x = self.shifted_orders(self.orders_x, self.bloch_vecs[0])
-        return bloch_x[:, None] * 2.0 * np.pi / self.sim_size[0] / self.wavenumber[None, :]
-
-    @property
-    def uy(self) -> np.ndarray:
-        """Normalized wave vector along y relative to ``local_origin`` and oriented
-        with respect to ``monitor.normal_dir``, normalized by the wave number in the
-        background medium."""
-        if self.sim_size[1] == 0:
-            return np.atleast_2d(0)
-        bloch_y = self.shifted_orders(self.orders_y, self.bloch_vecs[1])
-        return bloch_y[:, None] * 2.0 * np.pi / self.sim_size[1] / self.wavenumber[None, :]
-
-    def _make_coords_for_pol(self, pol: Tuple[str, str]) -> Dict[str, Union[np.ndarray, List]]:
-        """Make a coordinates dictionary for a given pair of polarization names."""
-        coords = {}
-        coords["orders_x"] = np.atleast_1d(self.orders_x)
-        coords["orders_y"] = np.atleast_1d(self.orders_y)
-        coords["polarization"] = pol
-        coords["f"] = np.array(self.frequencies)
-        return coords
 
     @property
     def angles(self) -> Tuple[xr.DataArray]:
@@ -926,26 +833,6 @@ class DiffractionData(MonitorData, DiffractionDataset):
     def H_car(self) -> DiffractionDataArray:
         """Far field magnetic field in Cartesian coordinates."""
         return self.sph_2_car(self.H_sph)
-
-    @property
-    def amps(self) -> DiffractionDataArray:
-        """Complex power amplitude in each order for 's' and 'p' polarizations, normalized so that
-        the power carried by the wave of that order and polarization equals ``abs(amps)^2``.
-        """
-        cos_theta = np.cos(np.nan_to_num(self.angles[0]))
-        norm = 1.0 / np.sqrt(2.0 * self.eta) / np.sqrt(cos_theta)
-        amp_theta = self.E_sph.sel(polarization="theta").values * norm
-        amp_phi = self.E_sph.sel(polarization="phi").values * norm
-
-        # stack the amplitudes in s- and p-components along a new polarization axis
-        return DiffractionDataArray(
-            np.stack([amp_phi, amp_theta], axis=2), coords=self._make_coords_for_pol(["s", "p"])
-        )
-
-    @property
-    def power(self) -> xr.DataArray:
-        """Total power in each order, summed over both polarizations."""
-        return (np.abs(self.amps) ** 2).sum(dim="polarization")
 
 
 MonitorDataTypes = (
