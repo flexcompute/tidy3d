@@ -319,15 +319,6 @@ Scattering Matrix Calculator
    plugins.ComponentModeler
    plugins.Port
 
-Web-based Plotting
-------------------
-
-.. autosummary::
-   :toctree: _autosummary/
-
-   plugins.webplots.SimulationPlotly
-   plugins.webplots.SimulationDataApp
-
 Constants
 =========
 

@@ -126,7 +126,7 @@ copybutton_prompt_is_regexp = True
 # so a file named "default.css" will overwrite the builtin "default.css".
 # html_static_path = ["_static"]
 
-html_theme_options = {"logo_only": True}
+# html_theme_options = {"logo_only": True}
 
 html_static_path = ["_static"]
 
@@ -136,6 +136,7 @@ html_logo = "../../tidy3d/img/Tidy3D-logo.svg"
 html_favicon = "_static/logo.svg"
 html_show_sourcelink = False
 html_theme_options = {
+    "logo_only": True,
     "path_to_docs": "docs",
     "repository_url": "https://github.com/flexcompute/tidy3d",
     "repository_branch": "main",
