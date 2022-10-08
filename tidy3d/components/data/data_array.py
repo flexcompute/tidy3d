@@ -6,6 +6,7 @@ import xarray as xr
 import numpy as np
 
 from ...constants import HERTZ, SECOND, MICROMETER, RADIAN
+from ...log import DataError
 
 # maps the dimension names to their attributes
 DIM_ATTRS = {
@@ -38,9 +39,21 @@ class DataArray(xr.DataArray):
     @classmethod
     def __get_validators__(cls):
         """Validators that get run when :class:`.DataArray` objects are added to pydantic models."""
+        yield cls.check_unloaded_data
         yield cls.validate_dims
         yield cls.assign_data_attrs
         yield cls.assign_coord_attrs
+
+    @classmethod
+    def check_unloaded_data(cls, val):
+        """If the data comes in as the raw data array string, raise a custom warning."""
+        if isinstance(val, str):
+            raise DataError(
+                f"Trying to load {cls.__name__} but the data is not present. "
+                "Note that data will not be saved to .json file. "
+                "use .hdf5 format instead if data present."
+            )
+        return val
 
     @classmethod
     def validate_dims(cls, val):
