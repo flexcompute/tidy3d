@@ -24,7 +24,7 @@ from .test_data_arrays import make_diffraction_data_array
 from .test_data_arrays import FIELD_MONITOR, FIELD_TIME_MONITOR, MODE_SOLVE_MONITOR
 from .test_data_arrays import MODE_MONITOR, PERMITTIVITY_MONITOR, FLUX_MONITOR, FLUX_TIME_MONITOR
 from .test_data_arrays import DIFFRACTION_MONITOR, SIM_SYM, SIM
-from ..utils import clear_tmp
+from ..utils import clear_tmp, assert_log_level
 
 # data array instances
 AMPS = make_mode_amps_data_array()
@@ -321,3 +321,15 @@ def test_data_array_attrs():
     data = make_flux_data()
     assert data.flux.attrs, "data has no attrs"
     assert data.flux.f.attrs, "data coordinates have no attrs"
+
+
+def test_data_array_json_warns(caplog):
+    data = make_flux_data()
+    data.to_file("tests/tmp/flux.json")
+    assert_log_level(caplog, 30)
+
+
+def test_data_array_hdf5_no_warnings(caplog):
+    data = make_flux_data()
+    data.to_file("tests/tmp/flux.hdf5")
+    assert_log_level(caplog, None)

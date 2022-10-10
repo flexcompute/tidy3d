@@ -687,7 +687,7 @@ class DispersionFitter(Tidy3dBaseModel):
         return cls(wvl_um=n_lam[:, 0], n_data=n_lam[:, 1], **kwargs)
 
     @classmethod
-    def from_file(cls, fname: str, **loadtxt_kwargs):
+    def from_file(cls, fname: str, **loadtxt_kwargs):  # pylint:disable=arguments-differ
         """Loads :class:`DispersionFitter` from file containing wavelength, n, k data.
 
         Parameters

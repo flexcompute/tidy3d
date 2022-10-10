@@ -20,6 +20,7 @@ from ..utils import SIM_FULL as SIM
 from ..utils import SIM_MONITORS as SIM2
 from ..utils import clear_tmp
 from ..test_data.test_monitor_data import make_flux_data
+from tidy3d.components.data.data_array import FluxDataArray
 
 # Store an example of every minor release simulation to test updater in the future
 SIM_DIR = "tests/sims"
@@ -185,6 +186,18 @@ def test_to_json_data():
     data = make_flux_data()
     json_dict = json.loads(data._json_string)
     assert json_dict["flux"] == DATA_ARRAY_TAG
+
+
+@clear_tmp
+def test_to_hdf5_group_path():
+    """Tests that the json string with data in separate file behaves correctly."""
+
+    # type saved in the combined json file?
+    data = make_flux_data()
+    FNAME = "tests/tmp/flux_subgroup.hdf5"
+    data.to_file(fname=FNAME)
+    flux_data_array = FluxDataArray.from_file(fname=FNAME, group_path="/flux")
+    assert np.all(flux_data_array == data.flux)
 
 
 @clear_tmp
