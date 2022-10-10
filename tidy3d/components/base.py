@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import json
 
-# from typing import Optional
+# import warnings
 from functools import wraps
 
 import rich
@@ -15,16 +15,13 @@ import numpy as np
 import h5py
 import xarray as xr
 
-# from dask.base import tokenize
-
 from .types import ComplexNumber, Literal, TYPE_TAG_STR
-from ..log import FileError
-from .data.data_array import DataArray
+from ..log import FileError, log
+from .data.data_array import DataArray, DATA_ARRAY_TAG
 
 # default indentation (# spaces) in files
 INDENT = 4
 JSON_TAG = "JSON_STRING"
-DATA_ARRAY_TAG = "XR.DATAARRAY"
 
 
 class Tidy3dBaseModel(pydantic.BaseModel):
@@ -68,7 +65,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         json_encoders = {
             np.ndarray: lambda x: tuple(x.tolist()),
             complex: lambda x: ComplexNumber(real=x.real, imag=x.imag),
-            xr.DataArray: lambda x: DATA_ARRAY_TAG,  # pylint:disable=unhashable-member
+            xr.DataArray: DataArray._json_encoder,  # pylint:disable=unhashable-member, protected-access
         }
         frozen = True
         allow_mutation = False
@@ -99,16 +96,18 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         rich.inspect(self, methods=methods)
 
     @classmethod
-    def from_file(cls, fname: str, **parse_kwargs) -> Tidy3dBaseModel:
+    def from_file(cls, fname: str, group_path: str = None, **parse_obj_kwargs) -> Tidy3dBaseModel:
         """Loads a :class:`Tidy3dBaseModel` from .yaml, .json, or .hdf5 file.
 
         Parameters
         ----------
         fname : str
             Full path to the .yaml or .json file to load the :class:`Tidy3dBaseModel` from.
-        **parse_kwargs
-            Keyword arguments passed to either pydantic's ``parse_file`` or ``parse_raw`` methods
-            for ``.json`` and ``.yaml`` file formats, respectively.
+        group_path : str, optional
+            Path to a group inside the file to use as the base level. Only for ``.hdf5`` files.
+        **parse_obj_kwargs
+            Keyword arguments passed to either pydantic's ``parse_obj`` function when loading model.
+
         Returns
         -------
         :class:`Tidy3dBaseModel`
@@ -118,11 +117,11 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         -------
         >>> simulation = Simulation.from_file(fname='folder/sim.json') # doctest: +SKIP
         """
-        model_dict = cls.dict_from_file(fname=fname)
-        return cls.parse_obj(model_dict, **parse_kwargs)
+        model_dict = cls.dict_from_file(fname=fname, group_path=group_path)
+        return cls.parse_obj(model_dict, **parse_obj_kwargs)
 
     @classmethod
-    def dict_from_file(cls, fname: str) -> dict:
+    def dict_from_file(cls, fname: str, group_path: str = None) -> dict:
         """Loads a dictionary containing the model from a .yaml, .json, or .hdf5 file.
 
         Parameters
@@ -139,12 +138,18 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         -------
         >>> simulation = Simulation.from_file(fname='folder/sim.json') # doctest: +SKIP
         """
+
+        if (".json" in fname or ".yaml" in fname) and (group_path is not None):
+            log.warning("'group_path' provided, but this feature only works with '.hdf5' files.")
+
         if ".json" in fname:
             return cls.dict_from_json(fname=fname)
         if ".yaml" in fname:
             return cls.dict_from_yaml(fname=fname)
         if ".hdf5" in fname:
-            return cls.dict_from_hdf5(fname=fname)
+            if group_path is None:
+                return cls.dict_from_hdf5(fname=fname)
+            return cls.dict_from_hdf5(fname=fname, group_path=group_path)
 
         raise FileError(f"File must be .json, .yaml, or .hdf5 type, given {fname}")
 
@@ -171,7 +176,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         raise FileError(f"File must be .json, .yaml, or .hdf5 type, given {fname}")
 
     @classmethod
-    def from_json(cls, fname: str, **parse_file_kwargs) -> Tidy3dBaseModel:
+    def from_json(cls, fname: str, **parse_obj_kwargs) -> Tidy3dBaseModel:
         """Load a :class:`Tidy3dBaseModel` from .json file.
 
         Parameters
@@ -183,14 +188,15 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         -------
         :class:`Tidy3dBaseModel`
             An instance of the component class calling `load`.
-        **parse_file_kwargs
-            Keyword arguments passed to pydantic's ``parse_file`` method.
+        **parse_obj_kwargs
+            Keyword arguments passed to pydantic's ``parse_obj`` method.
 
         Example
         -------
         >>> simulation = Simulation.from_json(fname='folder/sim.json') # doctest: +SKIP
         """
-        return cls.parse_file(fname, **parse_file_kwargs)
+        model_dict = cls.dict_from_json(fname=fname)
+        return cls.parse_obj(model_dict, **parse_obj_kwargs)
 
     @classmethod
     def dict_from_json(cls, fname: str) -> dict:
@@ -227,19 +233,20 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         >>> simulation.to_json(fname='folder/sim.json') # doctest: +SKIP
         """
         json_string = self._json_string
+        self._warn_if_contains_data(json_string)
         with open(fname, "w", encoding="utf-8") as file_handle:
             file_handle.write(json_string)
 
     @classmethod
-    def from_yaml(cls, fname: str, **parse_raw_kwargs) -> Tidy3dBaseModel:
+    def from_yaml(cls, fname: str, **parse_obj_kwargs) -> Tidy3dBaseModel:
         """Loads :class:`Tidy3dBaseModel` from .yaml file.
 
         Parameters
         ----------
         fname : str
             Full path to the .yaml file to load the :class:`Tidy3dBaseModel` from.
-        **parse_raw_kwargs
-            Keyword arguments passed to pydantic's ``parse_raw`` method.
+        **parse_obj_kwargs
+            Keyword arguments passed to pydantic's ``parse_obj`` method.
 
         Returns
         -------
@@ -251,8 +258,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         >>> simulation = Simulation.from_yaml(fname='folder/sim.yaml') # doctest: +SKIP
         """
         model_dict = cls.dict_from_yaml(fname=fname)
-        json_raw = json.dumps(model_dict, indent=INDENT)
-        return cls.parse_raw(json_raw, **parse_raw_kwargs)
+        return cls.parse_obj(model_dict, **parse_obj_kwargs)
 
     @classmethod
     def dict_from_yaml(cls, fname: str) -> dict:
@@ -289,9 +295,21 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         >>> simulation.to_yaml(fname='folder/sim.yaml') # doctest: +SKIP
         """
         json_string = self._json_string
+        self._warn_if_contains_data(json_string)
         model_dict = json.loads(json_string)
         with open(fname, "w+", encoding="utf-8") as file_handle:
             yaml.dump(model_dict, file_handle, indent=INDENT)
+
+    @staticmethod
+    def _warn_if_contains_data(json_str: str) -> None:
+        """Log a warning if the json string contains data, used in '.json' and '.yaml' file."""
+        if DATA_ARRAY_TAG in json_str:
+            log.warning(
+                "Data contents found in the model to be written to file. "
+                "Note that this data will not be included in '.json' or '.yaml' formats. "
+                "As a result, it will not be possible to load the file back to the original model."
+                "Instead, use `.hdf5` extension in filename passed to 'to_file()'."
+            )
 
     @staticmethod
     def tuple_to_dict(tuple_name: str, tuple_values: tuple) -> dict:
@@ -348,7 +366,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         return model_dict
 
     @classmethod
-    def from_hdf5(cls, fname: str, group_path: str = "/") -> Tidy3dBaseModel:
+    def from_hdf5(cls, fname: str, group_path: str = "/", **parse_obj_kwargs) -> Tidy3dBaseModel:
         """Loads :class:`Tidy3dBaseModel` instance to .hdf5 file.
 
         Parameters
@@ -357,13 +375,15 @@ class Tidy3dBaseModel(pydantic.BaseModel):
             Full path to the .hdf5 file to load the :class:`Tidy3dBaseModel` from.
         group_path : str, optional
             Path to a group inside the file to use as the base level.
+        **parse_obj_kwargs
+            Keyword arguments passed to pydantic's ``parse_obj`` method.
 
         Example
         -------
         >>> simulation.to_hdf5(fname='folder/sim.hdf5') # doctest: +SKIP
         """
         model_dict = cls.dict_from_hdf5(fname=fname, group_path=group_path)
-        return cls.parse_obj(model_dict)
+        return cls.parse_obj(model_dict, **parse_obj_kwargs)
 
     def to_hdf5(self, fname: str, group_path: str = "/") -> None:
         """Exports :class:`Tidy3dBaseModel` instance to .hdf5 file.

@@ -6,7 +6,7 @@ import xarray as xr
 import numpy as np
 
 from ...constants import HERTZ, SECOND, MICROMETER, RADIAN
-from ...log import DataError
+from ...log import DataError, FileError
 
 # maps the dimension names to their attributes
 DIM_ATTRS = {
@@ -25,6 +25,9 @@ DIM_ATTRS = {
     "orders_y": {"long_name": "diffraction order"},
     "polarization": {"long_name": "polarization"},
 }
+
+# string that gets written to the json file
+DATA_ARRAY_TAG = "XR.DATAARRAY"
 
 
 class DataArray(xr.DataArray):
@@ -98,6 +101,11 @@ class DataArray(xr.DataArray):
         )
         field_schema.update(schema)
 
+    @classmethod
+    def _json_encoder(cls, val):  # pylint:disable=unused-argument
+        """What function to call when writing a DataArray to json."""
+        return DATA_ARRAY_TAG
+
     def __eq__(self, other) -> bool:
         """Whether two data array objects are equal."""
         if not np.all(self.data == other.data):
@@ -120,6 +128,16 @@ class DataArray(xr.DataArray):
     def from_hdf5(cls, fname: str, group_path: str) -> DataArray:
         """Load an DataArray from an hdf5 file with a given path to the group."""
         return xr.open_dataarray(fname, group=group_path, engine="h5netcdf", invalid_netcdf=True)
+
+    @classmethod
+    def from_file(cls, fname: str, group_path: str) -> DataArray:
+        """Load an DataArray from an hdf5 file with a given path to the group."""
+        if ".hdf5" not in fname:
+            raise FileError(
+                "DataArray objects must be written to '.hdf5' format. "
+                f"Given filename of {fname}."
+            )
+        return cls.from_hdf5(fname=fname, group_path=group_path)
 
 
 class ScalarFieldDataArray(DataArray):

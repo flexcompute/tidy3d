@@ -15,8 +15,6 @@ from matplotlib.axes._subplots import Axes
 from shapely.geometry.base import BaseGeometry
 from ..log import ValidationError
 
-# import warnings
-# warnings.filterwarnings(action="error", category=np.ComplexWarning)
 """ Numpy Arrays """
 
 # type tag default name
