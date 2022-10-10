@@ -23,38 +23,41 @@ notebook_filenames = [
 
 # if you want to run only some notebooks, put here, if empty, run all
 run_only = []
-# run_only = ["HighQ_Si", "HighQ_Ge", "RingResonator"]
+run_only = ["ParameterScan"]
 if len(run_only):
     notebook_filenames = [NOTEBOOK_DIR + base + ".ipynb" for base in run_only]
 
 # for name in notebook_filenames:
 #     print(f"'{name}'")
 """ 
-as of 5/18/22
-'docs/source/notebooks/Dispersion.ipynb'
-'docs/source/notebooks/Modes_bent_angled.ipynb'
-'docs/source/notebooks/StartHere.ipynb'
-'docs/source/notebooks/VizData.ipynb'
-'docs/source/notebooks/Modal_sources_monitors.ipynb'
-'docs/source/notebooks/Near2FarSphereRCS.ipynb'
-'docs/source/notebooks/HighQ_Ge.ipynb'
-'docs/source/notebooks/WhatsNew.ipynb'
-'docs/source/notebooks/Metalens.ipynb'
-'docs/source/notebooks/GDS_import.ipynb'
-'docs/source/notebooks/RingResonator.ipynb'
-'docs/source/notebooks/HighQ_Si.ipynb'
-'docs/source/notebooks/GratingCoupler.ipynb'
-'docs/source/notebooks/Simulation.ipynb'
-'docs/source/notebooks/ModeSolver.ipynb'
-'docs/source/notebooks/L3_cavity.ipynb'
-'docs/source/notebooks/WebAPI.ipynb'
-'docs/source/notebooks/ParameterScan.ipynb'
-'docs/source/notebooks/VizSimulation.ipynb'
-'docs/source/notebooks/SMatrix.ipynb'
-'docs/source/notebooks/Fitting.ipynb'
-'docs/source/notebooks/AutoGrid.ipynb'
-'docs/source/notebooks/Near2Far.ipynb'
-'docs/source/notebooks/Adjoint.ipynb'
+as of 10/10/22
+Adjoint.ipynb
+AutoGrid.ipynb
+BoundaryConditions.ipynb
+Dispersion.ipynb
+Fitting.ipynb
+GDS_import.ipynb
+GratingCoupler.ipynb
+GratingEfficiency.ipynb
+HighQ_Ge.ipynb
+HighQ_Si.ipynb
+L3_cavity.ipynb
+Metalens.ipynb
+Modal_sources_monitors.ipynb
+Modes_bent_angled.ipynb
+ModeSolver.ipynb
+Near2Far.ipynb
+Near2FarSphereRCS.ipynb
+ParameterScan.ipynb
+RingResonator.ipynb
+simulation_data.hdf5
+Simulation.ipynb
+SMatrix.ipynb
+StartHere.ipynb
+VizData.ipynb
+VizSimulation.ipynb
+WebAPI.ipynb
+WhatsNew.ipynb
 """
 
 
