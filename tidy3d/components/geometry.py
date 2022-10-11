@@ -2248,7 +2248,10 @@ class PolySlab(Planar):
             # case 1, shifting velocity is 0
             if np.isclose(shift_local, 0, rtol=_IS_CLOSE_RTOL):
                 ints_y.append(y_on)
-                ints_angle.append(np.pi / 2)
+                # Slope w.r.t. forward and backward should equal,
+                # just pick one of them.
+                slope.append((y_on - y_b) / (x_on - x_b))
+                ints_angle.append(np.pi / 2 - np.arctan(np.abs(slope[0])))
                 continue
 
             # case 2, shifting towards backward direction
