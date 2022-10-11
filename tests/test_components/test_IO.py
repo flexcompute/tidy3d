@@ -19,11 +19,11 @@ from tidy3d.components.base import Tidy3dBaseModel, DATA_ARRAY_TAG
 from ..utils import SIM_FULL as SIM
 from ..utils import SIM_MONITORS as SIM2
 from ..utils import clear_tmp
-from ..test_data.test_monitor_data import make_flux_data
+from ..test_data.test_monitor_data import make_flux_data, make_flux_time_data
 from ..test_data.test_sim_data import make_sim_data
 from tidy3d.components.data.data_array import FluxDataArray
-from tidy3d.components.data.monitor_data import FieldData
 from tidy3d.components.data.sim_data import DATA_TYPE_MAP
+from tidy3d.components.data.monitor_data import FluxData
 
 # Store an example of every minor release simulation to test updater in the future
 SIM_DIR = "tests/sims"
@@ -202,14 +202,17 @@ def test_to_json_data():
 
 @clear_tmp
 def test_to_hdf5_group_path():
-    """Tests that the json string with data in separate file behaves correctly."""
+    """Tests that writing to different groups in the same file behaves correctly."""
 
-    # type saved in the combined json file?
     data = make_flux_data()
+    data_time = make_flux_time_data()
     FNAME = "tests/tmp/flux_subgroup.hdf5"
-    data.to_file(fname=FNAME)
-    flux_data_array = FluxDataArray.from_file(fname=FNAME, group_path="/flux")
-    assert np.all(flux_data_array == data.flux)
+    data.to_hdf5(fname=FNAME, group_path="flux")
+    # data_time.to_hdf5(fname=FNAME, group_path="flux_time")
+    flux_data = FluxData.from_file(fname=FNAME, group_path="flux")
+    # flux_time_data = FluxTimeData.from_file(fname=FNAME, group_path="flux_time")
+    assert flux_data == data
+    # assert flux_time_data == time_data
 
 
 @clear_tmp

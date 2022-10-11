@@ -371,7 +371,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         return model_dict
 
     @classmethod
-    def dict_from_hdf5(cls, fname: str, group_path: str = "/") -> dict:
+    def dict_from_hdf5(cls, fname: str, group_path: str = "") -> dict:
         """Loads a dictionary containing the model contents from a .hdf5 file.
 
         Parameters
@@ -422,7 +422,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         return model_dict
 
     @classmethod
-    def from_hdf5(cls, fname: str, group_path: str = "/", **parse_obj_kwargs) -> Tidy3dBaseModel:
+    def from_hdf5(cls, fname: str, group_path: str = "", **parse_obj_kwargs) -> Tidy3dBaseModel:
         """Loads :class:`Tidy3dBaseModel` instance to .hdf5 file.
 
         Parameters
@@ -443,7 +443,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         model_dict = cls.dict_from_hdf5(fname=fname, group_path=group_path)
         return cls.parse_obj(model_dict, **parse_obj_kwargs)
 
-    def to_hdf5(self, fname: str, group_path: str = "/") -> None:
+    def to_hdf5(self, fname: str, group_path: str = "") -> None:
         """Exports :class:`Tidy3dBaseModel` instance to .hdf5 file.
 
         Parameters
@@ -458,7 +458,10 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         >>> simulation.to_hdf5(fname='folder/sim.hdf5') # doctest: +SKIP
         """
 
-        def add_data_to_file(data_dict: dict, group_path: str = "/") -> None:
+        # Append "/" for convenience (doesn't hurt if already there)
+        group_path = f"/{group_path}"
+
+        def add_data_to_file(data_dict: dict, group_path: str = "") -> None:
             """For every DataArray item in dictionary, write path of hdf5 group as value."""
 
             for key, value in data_dict.items():
