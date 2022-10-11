@@ -20,7 +20,9 @@ from ..utils import SIM_FULL as SIM
 from ..utils import SIM_MONITORS as SIM2
 from ..utils import clear_tmp
 from ..test_data.test_monitor_data import make_flux_data
+from ..test_data.test_sim_data import make_sim_data
 from tidy3d.components.data.data_array import FluxDataArray
+from tidy3d.components.data.monitor_data import FieldData
 
 # Store an example of every minor release simulation to test updater in the future
 SIM_DIR = "tests/sims"
@@ -198,6 +200,20 @@ def test_to_hdf5_group_path():
     data.to_file(fname=FNAME)
     flux_data_array = FluxDataArray.from_file(fname=FNAME, group_path="/flux")
     assert np.all(flux_data_array == data.flux)
+
+
+@clear_tmp
+def test_to_hdf5_group_path_sim_data():
+    """Tests that the json string with data in separate file behaves correctly in SimulationData."""
+
+    # type saved in the combined json file?
+    data = make_sim_data()
+    FNAME = "tests/tmp/sim_data.hdf5"
+    data.to_file(fname=FNAME)
+    field_data_index = 0
+    group_path = f"/data/data_{field_data_index}"
+    field_data = FieldData.from_file(fname=FNAME, group_path=group_path)
+    assert field_data == data.data[field_data_index]
 
 
 @clear_tmp
