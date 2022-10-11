@@ -348,12 +348,9 @@ class ModeSolverDataset(ElectromagneticFieldDataset):
 
         fields = {}
         for field_name, data in self.field_components.items():
-            data = data.sel(mode_index=mode_index)
-            coords = {dim: data.coords[dim] for dim in "xyzf"}
-            scalar_field = ScalarFieldDataArray(data.data, coords=coords)
-            fields[field_name] = scalar_field
+            fields[field_name] = data.sel(mode_index=[mode_index])
 
-        return FieldDataset(**fields)
+        return self.copy(update=fields)
 
     def plot_field(self, *args, **kwargs):
         """Warn user to use the :class:`.ModeSolver` ``plot_field`` function now."""

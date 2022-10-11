@@ -209,9 +209,8 @@ def test_sel_mode_index():
 
     data = make_mode_solver_data()
     field_data = data.sel_mode_index(mode_index=0)
-    assert isinstance(field_data, FieldDataset), "ModeSolverData wasnt converted to FieldDataset."
     for _, scalar_field in field_data.field_components.items():
-        assert "mode_index" not in scalar_field.coords, "mode_index coordinate remained in data."
+        assert "mode_index" in scalar_field.coords, "mode_index coordinate removed from data."
 
 
 def _test_eq():

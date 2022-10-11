@@ -224,6 +224,19 @@ def test_to_hdf5():
 
 
 @clear_tmp
+def test_from_hdf5_group_path():
+    """Tests that individual monitor data can be loaded from a SimulationData hdf5."""
+
+    data = make_sim_data()
+    FNAME = "tests/tmp/sim_data.hdf5"
+    data.to_file(fname=FNAME)
+    for imnt, mnt_data in enumerate(data.data):
+        group_path = f"data/data_{imnt}"
+        loaded_data = type(mnt_data).from_file(fname=FNAME, group_path=group_path)
+        assert loaded_data == mnt_data
+
+
+@clear_tmp
 def test_empty_io():
     coords = {"x": np.arange(10), "y": np.arange(10), "z": np.arange(10), "t": []}
     fields = {"Ex": td.ScalarFieldTimeDataArray(np.random.rand(10, 10, 10, 0), coords=coords)}
@@ -240,7 +253,7 @@ def test_empty_io():
         symmetry=sim.symmetry,
         symmetry_center=sim.center,
         grid_expanded=sim.discretize(monitor, extend=True),
-        **fields
+        **fields,
     )
     sim_data = SimulationData(simulation=sim, data=(field_data,))
     sim_data.to_file("tests/tmp/sim_data_empty.hdf5")
@@ -302,7 +315,7 @@ def test_run_time_lt_start():
         symmetry=sim.symmetry,
         symmetry_center=sim.center,
         grid_expanded=sim.discretize(tmnt, extend=True),
-        **field_components
+        **field_components,
     )
 
     sim_data = SimulationData(

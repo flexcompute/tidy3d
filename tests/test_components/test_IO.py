@@ -201,6 +201,7 @@ def test_to_json_data():
 
 
 @clear_tmp
+<<<<<<< HEAD
 def test_to_hdf5_group_path():
     """Tests that writing to different groups in the same file behaves correctly."""
 
@@ -232,6 +233,8 @@ def test_to_hdf5_group_path_sim_data():
 
 
 @clear_tmp
+=======
+>>>>>>> 26f7441 (More updates)
 def test_none_hdf5():
     """Tests that values of None where None is not the default are loaded correctly."""
 
