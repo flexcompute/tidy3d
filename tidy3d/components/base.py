@@ -316,6 +316,19 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         """How we generate a dictionary mapping new keys to tuple values for hdf5."""
         return {f"{tuple_name}_{i}": val for i, val in enumerate(tuple_values)}
 
+    @staticmethod
+    def get_sub_model(group_path: str, model_dict: dict) -> dict:
+        """Get the sub model for a given group path."""
+
+        for key in group_path.split("/"):
+            if key:
+                if isinstance(model_dict, list):
+                    _, index = key.split("_")
+                    model_dict = model_dict[int(index)]
+                else:
+                    model_dict = model_dict[key]
+        return model_dict
+
     @classmethod
     def dict_from_hdf5(cls, fname: str, group_path: str = "/") -> dict:
         """Loads a dictionary containing the model contents from a .hdf5 file.
@@ -360,9 +373,10 @@ class Tidy3dBaseModel(pydantic.BaseModel):
 
         with h5py.File(fname, "r") as f_handle:
             json_string = f_handle[JSON_TAG][()]
+            model_dict = json.loads(json_string)
 
-        model_dict = json.loads(json_string)
-        load_data_from_file(model_dict, group_path=group_path)
+        model_dict = cls.get_sub_model(group_path=group_path, model_dict=model_dict)
+        load_data_from_file(model_dict=model_dict, group_path=group_path)
         return model_dict
 
     @classmethod
