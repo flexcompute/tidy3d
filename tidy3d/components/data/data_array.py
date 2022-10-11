@@ -127,7 +127,7 @@ class DataArray(xr.DataArray):
     @classmethod
     def from_hdf5(cls, fname: str, group_path: str) -> DataArray:
         """Load an DataArray from an hdf5 file with a given path to the group."""
-        return xr.open_dataarray(fname, group=group_path, engine="h5netcdf", invalid_netcdf=True)
+        return xr.load_dataarray(fname, group=group_path, engine="h5netcdf", invalid_netcdf=True)
 
     @classmethod
     def from_file(cls, fname: str, group_path: str) -> DataArray:
