@@ -128,6 +128,8 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         ----------
         fname : str
             Full path to the .yaml or .json file to load the :class:`Tidy3dBaseModel` from.
+        group_path : str, optional
+            Path to a group inside the file to use as the base level.
 
         Returns
         -------
@@ -312,6 +314,20 @@ class Tidy3dBaseModel(pydantic.BaseModel):
             )
 
     @staticmethod
+    def _construct_group_path(group_path: str) -> str:
+        """Construct a group path with the leading forward slash if not supplied."""
+
+        # empty string or None
+        if not group_path:
+            return "/"
+
+        # missing leading forward slash
+        if group_path[0] != "/":
+            return f"/{group_path}"
+
+        return group_path
+
+    @staticmethod
     def tuple_to_dict(tuple_name: str, tuple_values: tuple) -> dict:
         """How we generate a dictionary mapping new keys to tuple values for hdf5."""
         return {f"{tuple_name}_{i}": val for i, val in enumerate(tuple_values)}
@@ -350,7 +366,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         >>> sim_dict = Simulation.dict_from_hdf5(fname='folder/sim.hdf5') # doctest: +SKIP
         """
 
-        def load_data_from_file(model_dict: dict, group_path: str = "/") -> None:
+        def load_data_from_file(model_dict: dict, group_path: str = "") -> None:
             """For every DataArray item in dictionary, write path of hdf5 group as value."""
 
             for key, value in model_dict.items():
@@ -375,6 +391,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
             json_string = f_handle[JSON_TAG][()]
             model_dict = json.loads(json_string)
 
+        group_path = cls._construct_group_path(group_path)
         model_dict = cls.get_sub_model(group_path=group_path, model_dict=model_dict)
         load_data_from_file(model_dict=model_dict, group_path=group_path)
         return model_dict
@@ -396,6 +413,8 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         -------
         >>> simulation.to_hdf5(fname='folder/sim.hdf5') # doctest: +SKIP
         """
+
+        group_path = cls._construct_group_path(group_path)
         model_dict = cls.dict_from_hdf5(fname=fname, group_path=group_path)
         return cls.parse_obj(model_dict, **parse_obj_kwargs)
 
@@ -439,6 +458,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         with h5py.File(fname, "w") as f_handle:
             f_handle[JSON_TAG] = json_string
 
+        group_path = self._construct_group_path(group_path)
         add_data_to_file(data_dict=self.dict(), group_path=group_path)
 
     def __lt__(self, other):
