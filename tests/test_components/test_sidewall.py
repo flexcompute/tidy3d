@@ -128,6 +128,20 @@ def test_crossing_square():
         s = setup_polyslab(vertices, dilation, angle, bounds)
 
 
+def test_crossing_concave_poly():
+    """
+    Vertices crossing during dilation for a concave polygon
+    """
+
+    # self-intersecting, concave polygon
+    vertices = ((-1, 1), (-1, -1), (1, -1), (0, -0.1), (0, 0.1), (1, 1))
+    dilation = 0.5
+    angle = 0
+
+    with pytest.raises(SetupError) as e_info:
+        s = setup_polyslab(vertices, dilation, angle, bounds)
+
+
 def test_max_erosion_polygon():
     """
     Maximal erosion distance validation
@@ -204,186 +218,110 @@ def test_intersection_with_inside():
 
     N = 10  # number of vertices
     Lx = 10  # maximal length in x,y direction
-    for i in range(50):
-        vertices = convert_valid_polygon(np.random.random((N, 2)) * Lx)
-        vertices = np.array(vertices)
-        dilation = 0
-        angle = 0
-        bounds = (0, 1)
+    angle_list = [-np.pi / 4, np.pi / 4]
+    dilation = 0.0
 
-        axis = np.random.randint(3)
-        s = setup_polyslab(vertices, dilation, angle, bounds, axis=axis)
+    # generate vertices for testing
+    Ntest = 50
+    vertices_list = []
+    # triangle
+    vertices_list.append([[-1, -1], [0, -1], [1, -1], [0, 1]])
+    # multiple vertices touching axis
+    vertices_list.append([[0, -1], [0, 0], [0, 1], [0, 2], [-1, 2], [-1, -1]])
+    # random vertices
+    for i in range(Ntest):
+        vertices_list.append(np.array(convert_valid_polygon(np.random.random((N, 2)) * Lx)))
 
-        # set up proper thickness
-        _, max_dist = s._crossing_detection(s.base_polygon, -100)
-        dilation = 0.0
-        bounds = (0, (max_dist * 0.95))
-        angle = np.pi / 4
-        # avoid vertex-edge crossing case
-        try:
-            s = setup_polyslab(vertices, dilation, angle, bounds, axis=axis)
-        except:
-            continue
+    # different polyslab axis
+    for axis in range(3):
+        # sidewall angles
+        for angle in angle_list:
+            for vertices in vertices_list:
+                max_dist = 5
+                # for erosion type, setup appropriate bounds
+                if angle > 0:
+                    angle_tmp = 0
+                    bounds = (0, 1)
+                    s = setup_polyslab(vertices, dilation, angle_tmp, bounds, axis=axis)
+                    # set up proper thickness
+                    _, max_dist = s._crossing_detection(s.base_polygon, -100)
 
-        ### side x
-        xp = np.random.random(1)[0] * 2 * Lx - Lx
-        yp = np.random.random(10) * 2 * Lx - Lx
-        zp = np.random.random(10) * (bounds[1] - bounds[0]) + bounds[0]
-        shape_intersect = s.intersections(x=xp)
+                bounds = (-(max_dist * 0.95) / 2, (max_dist * 0.95) / 2)
 
-        for i in range(len(yp)):
-            for j in range(len(zp)):
-                # inside
-                res_inside = s.inside(xp, yp[i], zp[j])
-                # intersect
-                res_inter = False
-                for shape in shape_intersect:
-                    if shape.covers(Point(yp[i], zp[j])):
-                        res_inter = True
-                # if res_inter != res_inside:
-                #     print(repr(vertices))
-                #     print(repr(s.base_polygon))
-                #     print(bounds)
-                #     print(xp, yp[i], zp[j])
-                assert res_inter == res_inside
+                # avoid vertex-edge crossing case
+                try:
+                    s = setup_polyslab(vertices, dilation, angle, bounds, axis=axis)
+                except:
+                    continue
 
-        ### side y
-        xp = np.random.random(10) * 2 * Lx - Lx
-        yp = np.random.random(1)[0] * 2 * Lx - Lx
-        zp = np.random.random(10) * (bounds[1] - bounds[0]) + bounds[0]
-        shape_intersect = s.intersections(y=yp)
+                xyz = np.random.random((10, 3)) * 2 * Lx - Lx
+                ### side x
+                xp = 0
+                yp = xyz[:, 1]
+                zp = xyz[:, 2]
+                shape_intersect = s.intersections(x=xp)
 
-        for i in range(len(xp)):
-            for j in range(len(zp)):
-                # inside
-                res_inside = s.inside(xp[i], yp, zp[j])
-                # intersect
-                res_inter = False
-                for shape in shape_intersect:
-                    if shape.covers(Point(xp[i], zp[j])):
-                        res_inter = True
-                assert res_inter == res_inside
+                xarray, yarray, zarray = np.meshgrid(xp, yp, zp, indexing="ij")
+                res_inside_array = s.inside(xarray, yarray, zarray)
 
-        ### norm z
-        xp = np.random.random(10) * 2 * Lx - Lx
-        yp = np.random.random(10) * 2 * Lx - Lx
-        zp = np.random.random(1)[0] * (bounds[1] - bounds[0]) + bounds[0]
-        shape_intersect = s.intersections(z=zp)
+                for i in range(len(yp)):
+                    for j in range(len(zp)):
+                        # inside
+                        res_inside = s.inside(xp, yp[i], zp[j])
+                        assert res_inside_array[0, i, j] == res_inside
+                        # intersect
+                        res_inter = False
+                        for shape in shape_intersect:
+                            if shape.covers(Point(yp[i], zp[j])):
+                                res_inter = True
+                        # if res_inter != res_inside:
+                        #     print(repr(vertices))
+                        #     print(repr(s.base_polygon))
+                        #     print(bounds)
+                        #     print(xp, yp[i], zp[j])
+                        assert res_inter == res_inside
 
-        for i in range(len(xp)):
-            for j in range(len(yp)):
-                # inside
-                res_inside = s.inside(xp[i], yp[j], zp)
-                # intersect
-                res_inter = False
-                for shape in shape_intersect:
-                    if shape.covers(Point(xp[i], yp[j])):
-                        res_inter = True
-                assert res_inter == res_inside
+                ### side y
+                xp = xyz[:, 0]
+                yp = 0
+                zp = xyz[:, 2]
+                shape_intersect = s.intersections(y=yp)
 
+                xarray, yarray, zarray = np.meshgrid(xp, yp, zp, indexing="ij")
+                res_inside_array = s.inside(xarray, yarray, zarray)
 
-def test_intersection_with_inside_negative_angle():
-    """Make sure intersection produces the same result as inside
-    for slantwall angle < 0
-    """
+                for i in range(len(xp)):
+                    for j in range(len(zp)):
+                        # inside
+                        res_inside = s.inside(xp[i], yp, zp[j])
+                        assert res_inside == res_inside_array[i, 0, j]
+                        # intersect
+                        res_inter = False
+                        for shape in shape_intersect:
+                            if shape.covers(Point(xp[i], zp[j])):
+                                res_inter = True
+                        assert res_inter == res_inside
 
-    N = 10  # number of vertices
-    Lx = 10  # maximal length in x,y direction
-    max_dist = 5
-    for i in range(50):
-        vertices = convert_valid_polygon(np.random.random((N, 2)) * Lx)
-        vertices = np.array(vertices)
+                ### norm z
+                xp = xyz[:, 0]
+                yp = xyz[:, 1]
+                zp = 0
+                shape_intersect = s.intersections(z=zp)
 
-        dilation = 0.0
-        bounds = (0, (max_dist * 0.95))
-        angle = -np.pi / 4
+                xarray, yarray, zarray = np.meshgrid(xp, yp, zp, indexing="ij")
+                res_inside_array = s.inside(xarray, yarray, zarray)
 
-        axis = np.random.randint(3)
-        # avoid vertex-edge crossing case
-        try:
-            s = setup_polyslab(vertices, dilation, angle, bounds, axis=axis)
-        except:
-            continue
-
-        ### side x
-        xp = np.random.random(1)[0] * 2 * Lx - Lx
-        yp = np.random.random(10) * 2 * Lx - Lx
-        zp = np.random.random(10) * (bounds[1] - bounds[0]) + bounds[0]
-        shape_intersect = s.intersections(x=xp)
-
-        for i in range(len(yp)):
-            for j in range(len(zp)):
-                # inside
-                res_inside = s.inside(xp, yp[i], zp[j])
-                # intersect
-                res_inter = False
-                for shape in shape_intersect:
-                    if shape.covers(Point(yp[i], zp[j])):
-                        res_inter = True
-                # if res_inter != res_inside:
-                #     print("============================")
-                #     print(repr(vertices))
-                #     print(repr(s.base_polygon))
-                #     print(bounds)
-                #     print(xp, yp[i], zp[j])
-                #     print('len = ', len(shape_intersect))
-                #     for shape in shape_intersect:
-                #         print(list(shape.exterior.coords))
-                #         print(shape.covers(Point(yp[i],zp[j])))
-
-                #     yp = np.linspace(0,10,200)
-                #     zp = np.linspace(0.,bounds[1],100)
-                #     contain = np.zeros((len(yp),len(zp)),dtype=bool)
-                #     for ii in range(len(yp)):
-                #         for jj in range(len(zp)):
-                #             contain[ii][jj]=s.inside(xp,yp[ii],zp[jj])
-
-                #     intersect = np.zeros((len(yp),len(zp)),dtype=bool)
-                #     for ii in range(len(yp)):
-                #         for jj in range(len(zp)):
-                #             for shape in shape_intersect:
-                #                 if shape.covers(Point(yp[ii],zp[jj])):
-                #                     intersect[i][j] = True
-                #     import matplotlib.pyplot as plt
-                #     fig, ax = plt.subplots(1, 2, constrained_layout=True)
-                #     ax[0].imshow(contain.T,origin='lower',extent=[yp[0],yp[-1],zp[0],zp[-1]],aspect='auto')
-                #     ax[1].imshow(intersect.T,origin='lower',extent=[yp[0],yp[-1],zp[0],zp[-1]],aspect='auto')
-                #     plt.show()
-                assert res_inter == res_inside
-
-        ### side y
-        xp = np.random.random(10) * 2 * Lx - Lx
-        yp = np.random.random(1)[0] * 2 * Lx - Lx
-        zp = np.random.random(10) * (bounds[1] - bounds[0]) + bounds[0]
-        shape_intersect = s.intersections(y=yp)
-
-        for i in range(len(xp)):
-            for j in range(len(zp)):
-                # inside
-                res_inside = s.inside(xp[i], yp, zp[j])
-                # intersect
-                res_inter = False
-                for shape in shape_intersect:
-                    if shape.covers(Point(xp[i], zp[j])):
-                        res_inter = True
-                assert res_inter == res_inside
-
-        ### norm z
-        xp = np.random.random(10) * 2 * Lx - Lx
-        yp = np.random.random(10) * 2 * Lx - Lx
-        zp = np.random.random(1)[0] * (bounds[1] - bounds[0]) + bounds[0]
-        shape_intersect = s.intersections(z=zp)
-
-        for i in range(len(xp)):
-            for j in range(len(yp)):
-                # inside
-                res_inside = s.inside(xp[i], yp[j], zp)
-                # intersect
-                res_inter = False
-                for shape in shape_intersect:
-                    if shape.covers(Point(xp[i], yp[j])):
-                        res_inter = True
-                assert res_inter == res_inside
+                for i in range(len(xp)):
+                    for j in range(len(yp)):
+                        # inside
+                        res_inside = s.inside(xp[i], yp[j], zp)
+                        assert res_inside == res_inside_array[i, j, 0]
+                        # intersect
+                        res_inter = False
+                        for shape in shape_intersect:
+                            if shape.covers(Point(xp[i], yp[j])):
+                                res_inter = True
+                        assert res_inter == res_inside
 
 
 def test_bound():
