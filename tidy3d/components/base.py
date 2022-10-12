@@ -333,14 +333,20 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         return {f"{tuple_name}_{i}": val for i, val in enumerate(tuple_values)}
 
     @staticmethod
-    def get_sub_model(group_path: str, model_dict: dict) -> dict:
+    def get_tuple_index(key_name: str) -> int:
+        """Get the index into the tuple based on its group name."""
+        _, index = key_name.split("_")
+        return int(index)
+
+    @classmethod
+    def get_sub_model(cls, group_path: str, model_dict: dict) -> dict:
         """Get the sub model for a given group path."""
 
         for key in group_path.split("/"):
             if key:
                 if isinstance(model_dict, list):
-                    _, index = key.split("_")
-                    model_dict = model_dict[int(index)]
+                    tuple_index = cls.get_tuple_index(key_name=key)
+                    model_dict = model_dict[tuple_index]
                 else:
                     model_dict = model_dict[key]
         return model_dict

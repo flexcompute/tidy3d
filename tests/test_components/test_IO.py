@@ -234,3 +234,17 @@ def test_none_hdf5():
     sim2 = td.Simulation.from_file(fname)
 
     assert sim2.normalize_index is None, "'normalize_index' of 'None' not loaded correctly."
+
+
+def test_group_name_tuple():
+    """Test conversion of group names and tuples."""
+
+    tidy = td.Medium()
+    tuple_name = "TESTS"
+    tuple_values = ["Something", "Another thing", "Something different entirely"]
+    test_dict = tidy.tuple_to_dict(tuple_name=tuple_name, tuple_values=tuple_values)
+
+    # make sure we can pick out the index from the dictionary keys
+    for true_index, key_name in enumerate(test_dict.keys()):
+        index = tidy.get_tuple_index(key_name=key_name)
+        assert index == true_index
