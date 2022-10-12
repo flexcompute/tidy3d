@@ -230,10 +230,10 @@ def test_from_hdf5_group_path():
     data = make_sim_data()
     FNAME = "tests/tmp/sim_data.hdf5"
     data.to_file(fname=FNAME)
-    for imnt, mnt_data in enumerate(data.data):
-        group_path = f"data/data_{imnt}"
-        loaded_data = type(mnt_data).from_file(fname=FNAME, group_path=group_path)
-        assert loaded_data == mnt_data
+    for monitor_data in data.data:
+        group_path = f"data/{monitor_data.monitor.name}"
+        loaded_data = type(monitor_data).from_file(fname=FNAME, group_path=group_path)
+        assert loaded_data == monitor_data
 
 
 @clear_tmp

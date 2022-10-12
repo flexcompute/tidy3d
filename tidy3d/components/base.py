@@ -483,8 +483,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         with h5py.File(fname, "w") as f_handle:
             f_handle[JSON_TAG] = json_string
 
-        group_path = self._construct_group_path(group_path)
-        add_data_to_file(data_dict=self.dict(), group_path=group_path)
+        add_data_to_file(data_dict=self.dict())
 
     def __lt__(self, other):
         """define < for getting unique indices based on hash."""
