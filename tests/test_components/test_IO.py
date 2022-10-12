@@ -23,6 +23,7 @@ from ..test_data.test_monitor_data import make_flux_data
 from ..test_data.test_sim_data import make_sim_data
 from tidy3d.components.data.data_array import FluxDataArray
 from tidy3d.components.data.monitor_data import FieldData
+from tidy3d.components.data.sim_data import DATA_TYPE_MAP
 
 # Store an example of every minor release simulation to test updater in the future
 SIM_DIR = "tests/sims"
@@ -71,6 +72,15 @@ def test_simulation_load_export_hdf5():
     path = "tests/tmp/simulation.hdf5"
     SIM.to_file(path)
     SIM2 = td.Simulation.from_file(path)
+    assert SIM == SIM2, "original and loaded simulations are not the same"
+
+
+@clear_tmp
+def test_simulation_load_export_hdf5_explicit():
+
+    path = "tests/tmp/simulation.hdf5"
+    SIM.to_hdf5(path)
+    SIM2 = td.Simulation.from_hdf5(path)
     assert SIM == SIM2, "original and loaded simulations are not the same"
 
 
@@ -207,13 +217,15 @@ def test_to_hdf5_group_path_sim_data():
     """Tests that the json string with data in separate file behaves correctly in SimulationData."""
 
     # type saved in the combined json file?
-    data = make_sim_data()
+    sim_data = make_sim_data()
     FNAME = "tests/tmp/sim_data.hdf5"
-    data.to_file(fname=FNAME)
-    field_data_index = 0
-    group_path = f"/data/data_{field_data_index}"
-    field_data = FieldData.from_file(fname=FNAME, group_path=group_path)
-    assert field_data == data.data[field_data_index]
+    sim_data.to_file(fname=FNAME)
+
+    for monitor in sim_data.simulation.monitors:
+        group_path = f"/data/{monitor.name}"
+        MntDataType = DATA_TYPE_MAP[type(monitor)]
+        mnt_data = MntDataType.from_file(fname=FNAME, group_path=group_path)
+        assert mnt_data == sim_data.monitor_data[monitor.name]
 
 
 @clear_tmp
@@ -244,7 +256,30 @@ def test_group_name_tuple():
     tuple_values = ["Something", "Another thing", "Something different entirely"]
     test_dict = tidy.tuple_to_dict(tuple_name=tuple_name, tuple_values=tuple_values)
 
-    # make sure we can pick out the index from the dictionary keys
+    # make sure we can pick out the index from the dictionary keys and get the correct key
     for true_index, key_name in enumerate(test_dict.keys()):
         index = tidy.get_tuple_index(key_name=key_name)
         assert index == true_index
+        group_name = tidy.get_tuple_group_name(
+            index=index, tuple_name=tuple_name, tuple_value=key_name
+        )
+        assert group_name == key_name
+
+    # make sure the group name exists
+
+
+def test_monitor_group_name():
+    """Test conversion of group names and tuples."""
+
+    data = make_sim_data()
+    FNAME = "tests/tmp/sim_data.hdf5"
+    data.to_file(fname=FNAME)
+
+    with h5py.File(FNAME, "r") as f:
+
+        mnt_data_group = f["data"]
+        data_group_keys = mnt_data_group.keys()
+        for monitor in data.simulation.monitors:
+            assert (
+                monitor.name in data_group_keys
+            ), f"monitor {monitor.name} not in data keys {data_group_keys}"

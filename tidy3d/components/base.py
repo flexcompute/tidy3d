@@ -3,8 +3,8 @@ from __future__ import annotations
 
 import json
 
-# import warnings
 from functools import wraps
+from typing import Any
 
 import rich
 
@@ -328,24 +328,43 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         return group_path
 
     @staticmethod
-    def tuple_to_dict(tuple_name: str, tuple_values: tuple) -> dict:
-        """How we generate a dictionary mapping new keys to tuple values for hdf5."""
-        return {f"{tuple_name}_{i}": val for i, val in enumerate(tuple_values)}
+    def get_tuple_group_name(index: int, tuple_name: str, tuple_value: Any) -> str:
+        """Get the group name of a tuple element."""
+        if isinstance(tuple_value, dict):
+            if "name" in tuple_value:
+                return tuple_value["name"]
+            if "monitor" in tuple_value:
+                return tuple_value["monitor"]["name"]
+        return f"{tuple_name}_{index}"
 
     @staticmethod
-    def get_tuple_index(key_name: str) -> int:
+    def get_tuple_index(key_name: str, model_tuple: list = None) -> int:
         """Get the index into the tuple based on its group name."""
+        if model_tuple:
+            for index, item in enumerate(model_tuple):
+                if "name" in item and item["name"] == key_name:
+                    return index
+                if "monitor" in item and item["monitor"]["name"] == key_name:
+                    return index
         _, index = key_name.split("_")
         return int(index)
 
     @classmethod
-    def get_sub_model(cls, group_path: str, model_dict: dict) -> dict:
+    def tuple_to_dict(cls, tuple_name: str, tuple_values: tuple) -> dict:
+        """How we generate a dictionary mapping new keys to tuple values for hdf5."""
+        return {
+            cls.get_tuple_group_name(index=i, tuple_name=tuple_name, tuple_value=val): val
+            for i, val in enumerate(tuple_values)
+        }
+
+    @classmethod
+    def get_sub_model(cls, group_path: str, model_dict: dict | list) -> dict:
         """Get the sub model for a given group path."""
 
         for key in group_path.split("/"):
             if key:
                 if isinstance(model_dict, list):
-                    tuple_index = cls.get_tuple_index(key_name=key)
+                    tuple_index = cls.get_tuple_index(key_name=key, model_tuple=model_dict)
                     model_dict = model_dict[tuple_index]
                 else:
                     model_dict = model_dict[key]
