@@ -10,6 +10,8 @@ from tidy3d.log import SetupError, DataError, ValidationError
 
 from ..test_data.test_monitor_data import make_field_data
 from ..utils import clear_tmp, assert_log_level
+from tidy3d.components.data.dataset import PermittivityDataset
+from tidy3d.components.medium import CustomMedium
 
 Nx, Ny, Nz = 10, 11, 12
 X = np.linspace(-1, 1, Nx)
@@ -123,3 +125,47 @@ def test_custom_source_pckl():
 @clear_tmp
 def test_io_json_clear_tmp():
     pass
+
+def make_custom_medium():
+    """Make a custom medium."""
+    field_components = {f"eps_{d}{d}": make_scalar_data() for d in "xyz"}
+    eps_dataset = PermittivityDataset(**field_components)
+    return CustomMedium(eps_dataset=eps_dataset)
+
+
+CUSTOM_MEDIUM = make_custom_medium()
+
+
+def test_medium_components():
+    """Get Dictionary of field components and select some data."""
+    for name, field in CUSTOM_MEDIUM.eps_dataset.field_components.items():
+        _ = field.interp(x=0, y=0, z=0).sel(f=freqs[0])
+
+
+def test_medium_raw():
+    """Test from a raw permittivity evaluated at center."""
+    eps_raw = make_scalar_data()
+    med = CustomMedium.from_eps_raw(eps_raw)
+
+
+def test_medium_nk():
+    """Construct custom medium from n (and k) DataArrays."""
+    n = make_scalar_data().real
+    k = make_scalar_data().real
+    med = CustomMedium.from_nk(n=n, k=k)
+    med = CustomMedium.from_nk(n=n)
+
+
+def test_medium_eps_model():
+    """Evaluate the permittivity at a given frequency."""
+    med = make_custom_medium()
+    med.eps_model(frequency=freqs[0])
+
+
+def test_nk_diff_coords():
+    """Should error if N and K have different coords."""
+    n = make_scalar_data().real
+    k = make_scalar_data().real
+    k.coords["f"] = [3e14]
+    with pytest.raises(SetupError):
+        med = CustomMedium.from_nk(n=n, k=k)
