@@ -10,7 +10,8 @@ import numpy as np
 
 from .base import Tidy3dBaseModel, cached_property
 from .types import Direction, Polarization, Ax, FreqBound, ArrayLike, Axis, Bound
-from .validators import assert_plane, validate_name_str
+from .validators import assert_plane, validate_name_str, get_value
+from .data.dataset import FieldDataset
 from .geometry import Box
 from .mode import ModeSpec
 from .viz import add_ax_if_none, PlotParams, plot_params_source
@@ -406,19 +407,6 @@ class FieldSource(Source, ABC):
     """A Source defined by the desired E and/or H fields."""
 
 
-""" TODO: Custom currents """
-
-
-class CustomSource(Source, ABC):
-    """Implements custom current components specified by data."""
-
-    data: ArrayLike[float, 2]
-
-
-class CustomFieldSource(FieldSource, CustomSource):
-    """Implements custom E, H fields specified by data."""
-
-
 """ Field Sources can be defined either on a (1) surface or (2) volume. Defines injection_axis """
 
 
@@ -507,6 +495,52 @@ class BroadbandSource(Source, ABC):
             )
 
         return val
+
+
+""" Source current profiles determined by user-supplied data on a plane."""
+
+
+class CustomFieldSource(FieldSource, PlanarSource):
+    """Implements custom E, H fields specified by data."""
+
+    field_dataset: FieldDataset = pydantic.Field(
+        ...,
+        title="Field Dataset",
+        description=":class:`.FieldDataset` containing the desired frequency-domain "
+        "fields patterns to inject. At least one tangetial field component must be specified.",
+    )
+
+    @pydantic.validator("field_dataset", always=True)
+    def _single_frequency_in_range(cls, val: FieldDataset, values: dict) -> FieldDataset:
+        """Assert only one frequency supplied and it's in source time range."""
+        source_time = get_value(key="source_time", values=values)
+        fmin, fmax = source_time.frequency_range()
+        for name, scalar_field in val.field_components.items():
+            freqs = scalar_field.f
+            if len(freqs) != 1:
+                raise SetupError(
+                    f"`field_data.{name}` must have a single frequency, "
+                    f"contains {len(freqs)} frequencies."
+                )
+            freq = float(freqs[0])
+            if (freq < fmin) or (freq > fmax):
+                raise SetupError(
+                    f"`field_data.{name}` contains frequency: {freq:.2e} Hz, which is outside "
+                    f"of the source's `source_time` frequency range [{fmin:.2e}-{fmax:.2e}] Hz."
+                )
+        return val
+
+    @pydantic.validator("field_dataset", always=True)
+    def _tangential_component_defined(cls, val: FieldDataset, values: dict) -> FieldDataset:
+        size = get_value(key="size", values=values)
+        normal_axis = size.index(0.0)
+        _, (cmp1, cmp2) = cls.pop_axis("xyz", axis=normal_axis)
+        for field in "EH":
+            for cmp_name in (cmp1, cmp2):
+                tangential_field = field + cmp_name
+                if tangential_field in val.field_components:
+                    return val
+        raise SetupError("no tangential field found in the suppled `field_data`.")
 
 
 """ Source current profiles defined by (1) angle or (2) desired mode. Sets theta and phi angles."""
