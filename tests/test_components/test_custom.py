@@ -3,6 +3,10 @@ import pytest
 import numpy as np
 import dill as pickle
 
+from tidy3d.components.simulation import Simulation
+from tidy3d.components.geometry import Box
+from tidy3d.components.structure import Structure
+from tidy3d.components.grid.grid_spec import GridSpec
 from tidy3d.components.source import CustomFieldSource, GaussianPulse
 from tidy3d.components.data.data_array import ScalarFieldDataArray
 from tidy3d.components.data.dataset import FieldDataset
@@ -10,6 +14,8 @@ from tidy3d.log import SetupError, DataError, ValidationError
 
 from ..test_data.test_monitor_data import make_field_data
 from ..utils import clear_tmp, assert_log_level
+from tidy3d.components.data.dataset import PermittivityDataset
+from tidy3d.components.medium import CustomMedium
 
 Nx, Ny, Nz = 10, 11, 12
 X = np.linspace(-1, 1, Nx)
@@ -25,6 +31,14 @@ def make_scalar_data():
     """Makes a scalar field data array."""
     data = np.random.random((Nx, Ny, Nz, 1))
     return ScalarFieldDataArray(data, coords=dict(x=X, y=Y, z=Z, f=freqs))
+
+
+def make_scalar_data_multifreqs():
+    """Makes a scalar field data array."""
+    Nfreq = 2
+    freqs_mul = [2e14, 3e14]
+    data = np.random.random((Nx, Ny, Nz, Nfreq))
+    return ScalarFieldDataArray(data, coords=dict(x=X, y=Y, z=Z, f=freqs_mul))
 
 
 def make_custom_field_source():
@@ -45,6 +59,11 @@ def test_field_components():
     """Get Dictionary of field components and select some data."""
     for name, field in FIELD_SRC.field_dataset.field_components.items():
         _ = field.interp(x=0, y=0, z=0).sel(f=freqs[0])
+
+
+def test_custom_source_simulation():
+    """Test adding to simulation."""
+    sim = Simulation(run_time=1e-12, size=(1, 1, 1), sources=(FIELD_SRC,))
 
 
 def test_validator_tangential_field():
@@ -123,3 +142,68 @@ def test_custom_source_pckl():
 @clear_tmp
 def test_io_json_clear_tmp():
     pass
+
+
+def make_custom_medium(scalar_permittivity_data):
+    """Make a custom medium."""
+    field_components = {f"eps_{d}{d}": scalar_permittivity_data for d in "xyz"}
+    eps_dataset = PermittivityDataset(**field_components)
+    return CustomMedium(eps_dataset=eps_dataset)
+
+
+CUSTOM_MEDIUM = make_custom_medium(make_scalar_data())
+
+
+def test_medium_components():
+    """Get Dictionary of field components and select some data."""
+    for name, field in CUSTOM_MEDIUM.eps_dataset.field_components.items():
+        _ = field.interp(x=0, y=0, z=0).sel(f=freqs[0])
+
+
+def test_custom_medium_simulation():
+    """Test adding to simulation."""
+
+    struct = Structure(
+        geometry=Box(size=(0.5, 0.5, 0.5)),
+        medium=CUSTOM_MEDIUM,
+    )
+
+    sim = Simulation(
+        run_time=1e-12,
+        size=(1, 1, 1),
+        grid_spec=GridSpec.auto(wavelength=1.0),
+        structures=(struct,),
+    )
+
+
+def test_medium_raw():
+    """Test from a raw permittivity evaluated at center."""
+    eps_raw = make_scalar_data()
+    med = CustomMedium.from_eps_raw(eps_raw)
+
+
+def test_medium_nk():
+    """Construct custom medium from n (and k) DataArrays."""
+    n = make_scalar_data().real
+    k = make_scalar_data().real
+    med = CustomMedium.from_nk(n=n, k=k)
+    med = CustomMedium.from_nk(n=n)
+
+
+def test_medium_eps_model():
+    """Evaluate the permittivity at a given frequency."""
+    med = make_custom_medium(make_scalar_data())
+    med.eps_model(frequency=freqs[0])
+
+    # error with multifrequency data
+    with pytest.raises(SetupError):
+        med = make_custom_medium(make_scalar_data_multifreqs())
+
+
+def test_nk_diff_coords():
+    """Should error if N and K have different coords."""
+    n = make_scalar_data().real
+    k = make_scalar_data().real
+    k.coords["f"] = [3e14]
+    with pytest.raises(SetupError):
+        med = CustomMedium.from_nk(n=n, k=k)
