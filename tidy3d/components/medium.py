@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Tuple, Union, Callable, Optional
+from typing import Tuple, Union, Callable, Optional, Dict
 import functools
 
 import pydantic as pd
@@ -424,7 +424,7 @@ class CustomMedium(AbstractMedium):
 
         new_field_components = {}
         for name, eps_dataset_component in self.eps_dataset.field_components.items():
-            freq = eps_dataset_component.f[0]
+            freq = eps_dataset_component.coords["f"][0]
             eps_freq = (
                 eps_dataset_component.real + 1j * eps_dataset_component.imag * freq / frequency
             )
@@ -1032,6 +1032,11 @@ class AnisotropicMedium(AbstractMedium):
         description="Medium describing the zz-component of the diagonal permittivity tensor.",
         discriminator=TYPE_TAG_STR,
     )
+
+    @cached_property
+    def components(self) -> Dict[str, Medium]:
+        """Dictionary of diagonal medium components."""
+        return dict(xx=self.xx, yy=self.yy, zz=self.zz)
 
     @ensure_freq_in_range
     def eps_model(self, frequency: float) -> complex:
