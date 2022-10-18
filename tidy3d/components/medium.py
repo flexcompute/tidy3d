@@ -1,19 +1,23 @@
 # pylint: disable=invalid-name
 """Defines properties of the medium / materials"""
+from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Tuple, Union, Callable
+from typing import Tuple, Union, Callable, Optional
 
 import pydantic as pd
 import numpy as np
+import xarray as xr
 
 from .base import Tidy3dBaseModel, cached_property
 from .types import PoleAndResidue, Ax, FreqBound, TYPE_TAG_STR
+from .data.dataset import PermittivityDataset
+from .data.data_array import ScalarFieldDataArray
 from .viz import add_ax_if_none
 from .validators import validate_name_str
 from ..constants import C_0, pec_val, EPSILON_0
 from ..constants import HERTZ, CONDUCTIVITY, PERMITTIVITY, RADPERSEC, MICROMETER, SECOND
-from ..log import log, ValidationError
+from ..log import log, ValidationError, SetupError
 
 # evaluate frequency as this number (Hz) if inf
 FREQ_EVAL_INF = 1e50
@@ -305,9 +309,98 @@ class Medium(AbstractMedium):
         eps, sigma = AbstractMedium.nk_to_eps_sigma(n, k, freq)
         return cls(permittivity=eps, conductivity=sigma, **kwargs)
 
+class CustomMedium(AbstractMedium):
+    """:class:`.Medium` with user-supplied permittivity distribution.
 
+    Example
+    -------
+    >>> Nx, Ny, Nz = 10, 9, 8
+    >>> X = np.linspace(-1, 1, Nx)
+    >>> Y = np.linspace(-1, 1, Ny)
+    >>> Z = np.linspace(-1, 1, Nz)
+    >>> freqs = [2e14]
+    >>> data = np.ones((Nx, Ny, Nz, 1))
+    >>> eps_diagonal_data = ScalarFieldDataArray(data, coords=dict(x=X, y=Y, z=Z, f=freqs))
+    >>> eps_components = {f"eps_{d}{d}": eps_diagonal_data for d in "xyz"}
+    >>> eps_dataset = PermittivityDataset(**eps_components)
+    >>> dielectric = CustomMedium(eps_dataset=eps_dataset, name='my_medium')
+    >>> eps = dielectric.eps_model(200e12)
+    """
+
+    eps_dataset: PermittivityDataset = pd.Field(
+        ...,
+        title="Permittivity Dataset",
+        description="User-supplied dataset containing complex-valued permittivity "
+        "as a function of space.",
+    )
+
+    @pd.validator("eps_dataset", always=True)
+    def _single_frequency(cls, val):
+        """Assert only one frequency supplied."""
+        for name, eps_dataset_component in val.field_components.items():
+            freqs = eps_dataset_component.f
+            if len(freqs) != 1:
+                raise SetupError(
+                    f"'eps_dataset.{name}' must have a single frequency, "
+                    f"but it contains {len(freqs)} frequencies."
+                )
+        return val
+
+    @ensure_freq_in_range
+    def eps_model(self, frequency: float) -> complex:
+        """Average of complex-valued permittivity as a function of frequency."""
+        eps_arrays = [eps_array for _, eps_array in self.eps_dataset.field_components.items()]
+        eps_array_avgs = [np.mean(eps_array.sel(f=frequency)) for eps_array in eps_arrays]
+        return np.mean(eps_array_avgs)
+
+    @classmethod
+    def from_eps_raw(cls, eps: ScalarFieldDataArray) -> CustomMedium:
+        """Construct a :class:`CustomMedium` from datasets containing raw permittivity values.
+
+        Parameters
+        ----------
+        eps : :class:`.ScalarFieldDataArray`
+            Dataset containing complex-valued permittivity as a function of space.
+
+        Returns
+        -------
+        :class:`CustomMedium`
+            Medium containing the spatially varying permittivity data.
+        """
+        field_components = {field_name: eps.copy() for field_name in ("eps_xx", "eps_yy", "eps_zz")}
+        eps_dataset = PermittivityDataset(**field_components)
+        return cls(eps_dataset=eps_dataset)
+
+    @classmethod
+    def from_nk(
+        cls, n: ScalarFieldDataArray, k: Optional[ScalarFieldDataArray] = None
+    ) -> CustomMedium:
+        """Construct a :class:`CustomMedium` from datasets containing n and k values.
+
+        Parameters
+        ----------
+        n : :class:`.ScalarFieldDataArray`
+            Real part of refractive index.
+        k : :class:`.ScalarFieldDataArray` = None
+            Imaginary part of refrative index.
+
+        Returns
+        -------
+        :class:`CustomMedium`
+            Medium containing the spatially varying permittivity data.
+        """
+        if k is None:
+            k = xr.zeros_like(n)
+
+        if n.coords != k.coords:
+            raise SetupError("`n` and `k` must have same coordinates.")
+
+        eps_values = Medium.nk_to_eps_complex(n=n.data, k=k.data)
+        coords = {k: np.array(v) for k, v in n.coords.items()}
+        eps_scalar_field_data = ScalarFieldDataArray(eps_values, coords=coords)
+        return cls.from_eps_raw(eps=eps_scalar_field_data)
+        
 """ Dispersive Media """
-
 
 class DispersiveMedium(AbstractMedium, ABC):
     """A Medium with dispersion (propagation characteristics depend on frequency)"""
@@ -765,5 +858,13 @@ class AnisotropicMedium(AbstractMedium):
 # types of mediums that can be used in Simulation and Structures
 
 MediumType = Union[
-    Medium, AnisotropicMedium, PECMedium, PoleResidue, Sellmeier, Lorentz, Debye, Drude
+    Medium,
+    CustomMedium,
+    AnisotropicMedium,
+    PECMedium,
+    PoleResidue,
+    Sellmeier,
+    Lorentz,
+    Debye,
+    Drude,
 ]

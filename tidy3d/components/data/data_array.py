@@ -4,6 +4,7 @@ from typing import Dict
 
 import xarray as xr
 import numpy as np
+import dask
 
 from ...constants import HERTZ, SECOND, MICROMETER, RADIAN
 from ...log import DataError, FileError
@@ -138,6 +139,11 @@ class DataArray(xr.DataArray):
                 f"Given filename of {fname}."
             )
         return cls.from_hdf5(fname=fname, group_path=group_path)
+
+    def __hash__(self) -> int:
+        """Generate hash value for a :class:.`DataArray` instance, needed for custom components."""
+        token_str = dask.base.tokenize(self)
+        return hash(token_str)
 
 
 class FreqDataArray(DataArray):
