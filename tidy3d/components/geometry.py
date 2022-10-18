@@ -134,6 +134,15 @@ class Geometry(Tidy3dBaseModel, ABC):
             Min and max bounds packaged as ``(minx, miny, minz), (maxx, maxy, maxz)``.
         """
 
+    @staticmethod
+    def bounds_intersection(bounds1: Bound, bounds2: Bound) -> Bound:
+        """Return the bounds that are the intersection of two bounds."""
+        rmin1, rmax1 = bounds1
+        rmin2, rmax2 = bounds2
+        rmin = tuple(max(v1, v2) for v1, v2 in zip(rmin1, rmin2))
+        rmax = tuple(min(v1, v2) for v1, v2 in zip(rmax1, rmax2))
+        return (rmin, rmax)
+
     @cached_property
     def bounding_box(self):
         """Returns :class:`Box` representation of the bounding box of a :class:`Geometry`.
@@ -163,6 +172,22 @@ class Geometry(Tidy3dBaseModel, ABC):
         zmin, (xmin, ymin) = self.pop_axis(b_min, axis=axis)
         zmax, (xmax, ymax) = self.pop_axis(b_max, axis=axis)
         return (zmin, zmax), ((xmin, ymin), (xmax, ymax))
+
+    @staticmethod
+    def _get_center(pt_min: float, pt_max: float) -> float:
+        """Returns center point based on bounds along dimension."""
+        if np.isneginf(pt_min) and np.isposinf(pt_max):
+            return 0.0
+        if np.isneginf(pt_min) or np.isposinf(pt_max):
+            raise SetupError(
+                f"Bounds of ({pt_min}, {pt_max}) supplied along one dimension. "
+                "We currently don't support a single ``inf`` value in bounds for ``Box``. "
+                "To construct a semi-infinite ``Box``, "
+                "please supply a large enough number instead of ``inf``. "
+                "For example, a location extending outside of the "
+                "Simulation domain (including PML)."
+            )
+        return (pt_min + pt_max) / 2.0
 
     @equal_aspect
     @add_ax_if_none
@@ -998,22 +1023,7 @@ class Box(Centered):
         >>> b = Box.from_bounds(rmin=(-1, -2, -3), rmax=(3, 2, 1))
         """
 
-        def get_center(pt_min: float, pt_max: float) -> float:
-            """Returns center point based on bounds along dimension."""
-            if np.isneginf(pt_min) and np.isposinf(pt_max):
-                return 0.0
-            if np.isneginf(pt_min) or np.isposinf(pt_max):
-                raise SetupError(
-                    f"Bounds of ({pt_min}, {pt_max}) supplied along one dimension. "
-                    "We currently don't support a single ``inf`` value in bounds for ``Box``. "
-                    "To construct a semi-infinite ``Box``, "
-                    "please supply a large enough number instead of ``inf``. "
-                    "For example, a location extending outside of the "
-                    "Simulation domain (including PML)."
-                )
-            return (pt_min + pt_max) / 2.0
-
-        center = tuple(get_center(pt_min, pt_max) for pt_min, pt_max in zip(rmin, rmax))
+        center = tuple(cls._get_center(pt_min, pt_max) for pt_min, pt_max in zip(rmin, rmax))
         size = tuple((pt_max - pt_min) for pt_min, pt_max in zip(rmin, rmax))
         return cls(center=center, size=size, **kwargs)
 

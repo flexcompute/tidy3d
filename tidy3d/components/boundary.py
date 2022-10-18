@@ -731,3 +731,16 @@ class BoundarySpec(Tidy3dBaseModel):
             (self.y.minus, self.y.plus),
             (self.z.minus, self.z.plus),
         ]
+
+    @cached_property
+    def flipped_bloch_vecs(self) -> BoundarySpec:
+        """Return a copy of the instance where all Bloch vectors are multiplied by -1."""
+        bound_dims = dict(x=self.x.copy(), y=self.y.copy(), z=self.z.copy())
+        for dim_key, bound_dim in bound_dims.items():
+            bound_edges = dict(plus=bound_dim.plus.copy(), minus=bound_dim.minus.copy())
+            for edge_key, bound_edge in bound_edges.items():
+                if isinstance(bound_edge, BlochBoundary):
+                    new_bloch_vec = -1 * bound_edge.bloch_vec
+                    bound_edges[edge_key] = bound_edge.copy(update=dict(bloch_vec=new_bloch_vec))
+            bound_dims[dim_key] = bound_edges
+        return self.copy(update=bound_dims)
