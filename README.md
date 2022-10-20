@@ -22,6 +22,7 @@ First time you want to use the docs, install all packages and make the docs buil
 
 ```bash
 git submodule init tidy3d
+git submodule update tidy3d
 pip install -r tidy3d/requirements/dev.txt
 pip install -r docs/requirements.txt
 pip install -r tests/requirements.txt
