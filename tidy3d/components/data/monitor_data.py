@@ -334,7 +334,7 @@ class FieldData(FieldDataset, ElectromagneticFieldData):
         return self.copy(update=fields_norm)
 
     def to_source(
-        self, source_time: SourceTimeType, center: Coordinate, size: Size = None
+        self, source_time: SourceTimeType, center: Coordinate, size: Size = None, **kwargs
     ) -> CustomFieldSource:
         """Create a :class:`.CustomFieldSource` from the fields stored in the :class:`.FieldData`.
 
@@ -347,6 +347,8 @@ class FieldData(FieldDataset, ElectromagneticFieldData):
         size: Tuple[float, float, float]
             Source size in x, y, and z. If not provided, the size of the monitor associated to the
             data is used.
+        **kwargs
+            Extra keyword arguments passed to :class:`.CustomFieldSource`.
 
         Returns
         -------
@@ -367,7 +369,7 @@ class FieldData(FieldDataset, ElectromagneticFieldData):
 
         dataset = FieldDataset(**fields)
         return CustomFieldSource(
-            field_dataset=dataset, source_time=source_time, center=center, size=size
+            field_dataset=dataset, source_time=source_time, center=center, size=size, **kwargs
         )
 
 
@@ -673,7 +675,7 @@ class AbstractNear2FarData(MonitorData):
     @property
     def dims(self) -> Tuple[str, ...]:
         """Dimensions of the radiation vectors contained."""
-        return self.Ntheta.dims
+        return self.Etheta.dims
 
     def make_data_array(self, data: np.ndarray) -> xr.DataArray:
         """Make an xr.DataArray with data and same coords and dims as fields of self."""
