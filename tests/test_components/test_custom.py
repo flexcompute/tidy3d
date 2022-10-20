@@ -7,6 +7,8 @@ from tidy3d.components.source import CustomFieldSource, GaussianPulse
 from tidy3d.components.data.data_array import ScalarFieldDataArray
 from tidy3d.components.data.dataset import FieldDataset
 from tidy3d.log import SetupError, DataError, ValidationError
+
+from ..test_data.test_monitor_data import make_field_data
 from ..utils import clear_tmp, assert_log_level
 
 Nx, Ny, Nz = 10, 11, 12
@@ -106,8 +108,9 @@ def test_io_json(caplog):
     path = "tests/tmp/custom_source.json"
     FIELD_SRC.to_file(path)
     assert_log_level(caplog, 30)
-    with pytest.raises(DataError):
-        FIELD_SRC2 = FIELD_SRC.from_file(path)
+    FIELD_SRC2 = FIELD_SRC.from_file(path)
+    assert_log_level(caplog, 30)
+    assert FIELD_SRC2.field_dataset is None
 
 
 @clear_tmp

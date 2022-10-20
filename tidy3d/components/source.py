@@ -1,14 +1,14 @@
 """Defines electric current sources for injecting light into simulation."""
 
 from abc import ABC, abstractmethod
-from typing import Union, Tuple
+from typing import Union, Tuple, Optional
 import logging
 
 from typing_extensions import Literal
 import pydantic
 import numpy as np
 
-from .base import Tidy3dBaseModel, cached_property
+from .base import Tidy3dBaseModel, cached_property, DATA_ARRAY_TAG
 from .types import Direction, Polarization, Ax, FreqBound, ArrayLike, Axis, Bound
 from .validators import assert_plane, validate_name_str, get_value
 from .data.dataset import FieldDataset
@@ -18,7 +18,7 @@ from .viz import add_ax_if_none, PlotParams, plot_params_source
 from .viz import ARROW_COLOR_SOURCE, ARROW_ALPHA, ARROW_COLOR_POLARIZATION
 from ..constants import RADIAN, HERTZ, MICROMETER, GLANCING_CUTOFF
 from ..constants import inf  # pylint:disable=unused-import
-from ..log import SetupError
+from ..log import SetupError, log
 
 # in spectrum computation, discard amplitudes with relative magnitude smaller than cutoff
 DFT_CUTOFF = 1e-8
@@ -539,16 +539,27 @@ class CustomFieldSource(FieldSource, PlanarSource):
 
     """
 
-    field_dataset: FieldDataset = pydantic.Field(
+    field_dataset: Optional[FieldDataset] = pydantic.Field(
         ...,
         title="Field Dataset",
         description=":class:`.FieldDataset` containing the desired frequency-domain "
         "fields patterns to inject. At least one tangetial field component must be specified.",
     )
 
+    @pydantic.validator("field_dataset", pre=True, always=True)
+    def _warn_if_none(cls, val: FieldDataset) -> FieldDataset:
+        """Warn if the DataArrays fail to load."""
+        if isinstance(val, dict):
+            if DATA_ARRAY_TAG in [v for v in val.values() if isinstance(v, str)]:
+                log.warning("Loading 'field_dataset' without data.")
+                return None
+        return val
+
     @pydantic.validator("field_dataset", always=True)
     def _single_frequency_in_range(cls, val: FieldDataset, values: dict) -> FieldDataset:
         """Assert only one frequency supplied and it's in source time range."""
+        if val is None:
+            return val
         source_time = get_value(key="source_time", values=values)
         fmin, fmax = source_time.frequency_range()
         for name, scalar_field in val.field_components.items():
@@ -569,6 +580,8 @@ class CustomFieldSource(FieldSource, PlanarSource):
     @pydantic.validator("field_dataset", always=True)
     def _tangential_component_defined(cls, val: FieldDataset, values: dict) -> FieldDataset:
         """Assert that at least one tangential field component is provided."""
+        if val is None:
+            return val
         size = get_value(key="size", values=values)
         normal_axis = size.index(0.0)
         _, (cmp1, cmp2) = cls.pop_axis("xyz", axis=normal_axis)
@@ -583,13 +596,15 @@ class CustomFieldSource(FieldSource, PlanarSource):
     def _tangential_fields_span_source(cls, val: FieldDataset, values: dict) -> FieldDataset:
         """Assert that provided data spans source bounds in the frame with the source center as the
         origin."""
+        if val is None:
+            return val
         size = get_value(key="size", values=values)
         for name, field in val.field_components.items():
             for dim, dim_name in enumerate("xyz"):
                 in_bounds_min = np.amin(field.coords[dim_name]) <= -size[dim] / 2 + DATA_SPAN_TOL
                 in_bounds_max = np.amax(field.coords[dim_name]) >= size[dim] / 2 - DATA_SPAN_TOL
                 if not (in_bounds_min and in_bounds_max):
-                     raise SetupError(f"Data for field {name} does not span the source plane.")
+                    raise SetupError(f"Data for field {name} does not span the source plane.")
         return val
 
 

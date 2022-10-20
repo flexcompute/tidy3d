@@ -273,7 +273,7 @@ class Near2FarAngleDataArray(DataArray):
     """
 
     __slots__ = ()
-    _dims = ("theta", "phi", "f")
+    _dims = ("r", "theta", "phi", "f")
     _data_attrs = {"long_name": "radiation vectors"}
 
 
@@ -292,7 +292,7 @@ class Near2FarCartesianDataArray(DataArray):
     """
 
     __slots__ = ()
-    _dims = ("x", "y", "f")
+    _dims = ("x", "y", "z", "f")
     _data_attrs = {"long_name": "radiation vectors"}
 
 
@@ -312,7 +312,7 @@ class Near2FarKSpaceDataArray(DataArray):
     """
 
     __slots__ = ()
-    _dims = ("ux", "uy", "f")
+    _dims = ("ux", "uy", "r", "f")
     _data_attrs = {"long_name": "radiation vectors"}
 
 
