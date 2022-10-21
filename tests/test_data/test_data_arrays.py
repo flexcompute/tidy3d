@@ -40,7 +40,7 @@ SOURCES = [
         direction="+",
     ),
 ]
-FIELDS = ("Ex", "Ey", "Ez", "Hz")
+FIELDS = ("Ex", "Ey", "Ez", "Hx", "Hz")
 INTERVAL = 2
 ORDERS_X = list(range(-1, 2))
 ORDERS_Y = list(range(-2, 3))
@@ -54,6 +54,10 @@ DIRECTIONS = ["+", "-"]
 FIELD_MONITOR = FieldMonitor(size=SIZE_3D, fields=FIELDS, name="field", freqs=FREQS)
 FIELD_TIME_MONITOR = FieldTimeMonitor(
     size=SIZE_3D, fields=FIELDS, name="field_time", interval=INTERVAL
+)
+FIELD_MONITOR_2D = FieldMonitor(size=SIZE_2D, fields=FIELDS, name="field_2d", freqs=FREQS)
+FIELD_TIME_MONITOR_2D = FieldTimeMonitor(
+    size=SIZE_2D, fields=FIELDS, name="field_time_2d", interval=INTERVAL
 )
 MODE_SOLVE_MONITOR = ModeSolverMonitor(
     size=SIZE_2D, name="mode_solver", mode_spec=MODE_SPEC, freqs=FREQS
@@ -113,12 +117,13 @@ def get_xyz(
 ) -> Tuple[List[float], List[float], List[float]]:
     if symmetry:
         grid = SIM_SYM.discretize(monitor, extend=True)
+        x, y, z = grid[grid_key].to_list
+        x = [_x for _x in x if _x >= 0]
+        y = [_y for _y in y if _y >= 0]
+        z = [_z for _z in z if _z >= 0]
     else:
         grid = SIM.discretize(monitor, extend=True)
-    x, y, z = grid[grid_key].to_list
-    x = [_x for _x in x if _x >= 0]
-    y = [_y for _y in y if _y >= 0]
-    z = [_z for _z in z if _z >= 0]
+        x, y, z = grid[grid_key].to_list
     return x, y, z
 
 

@@ -23,6 +23,7 @@ from .test_data_arrays import make_mode_amps_data_array, make_mode_index_data_ar
 from .test_data_arrays import make_diffraction_data_array
 from .test_data_arrays import FIELD_MONITOR, FIELD_TIME_MONITOR, MODE_SOLVE_MONITOR
 from .test_data_arrays import MODE_MONITOR, PERMITTIVITY_MONITOR, FLUX_MONITOR, FLUX_TIME_MONITOR
+from .test_data_arrays import FIELD_MONITOR_2D, FIELD_TIME_MONITOR_2D
 from .test_data_arrays import DIFFRACTION_MONITOR, SIM_SYM, SIM
 from ..utils import clear_tmp, assert_log_level
 
@@ -42,6 +43,7 @@ def make_field_data(symmetry: bool = True):
         Ex=make_scalar_field_data_array("Ex", symmetry),
         Ey=make_scalar_field_data_array("Ey", symmetry),
         Ez=make_scalar_field_data_array("Ez", symmetry),
+        Hx=make_scalar_field_data_array("Hx", symmetry),
         Hz=make_scalar_field_data_array("Hz", symmetry),
         symmetry=sim.symmetry,
         symmetry_center=sim.center,
@@ -56,10 +58,33 @@ def make_field_time_data(symmetry: bool = True):
         Ex=make_scalar_field_time_data_array("Ex", symmetry),
         Ey=make_scalar_field_time_data_array("Ey", symmetry),
         Ez=make_scalar_field_time_data_array("Ez", symmetry),
-        Hz=make_scalar_field_time_data_array("Ez", symmetry),
+        Hz=make_scalar_field_time_data_array("Hz", symmetry),
+        Hx=make_scalar_field_time_data_array("Hx", symmetry),
         symmetry=sim.symmetry,
         symmetry_center=sim.center,
         grid_expanded=sim.discretize(FIELD_TIME_MONITOR, extend=True),
+    )
+
+
+def make_field_data_2d(symmetry: bool = True):
+    return FieldData(
+        monitor=FIELD_MONITOR_2D,
+        Ex=make_scalar_field_data_array("Ex", symmetry).isel(y=[0]),
+        Ey=make_scalar_field_data_array("Ey", symmetry).isel(y=[0]),
+        Ez=make_scalar_field_data_array("Ez", symmetry).isel(y=[0]),
+        Hx=make_scalar_field_data_array("Hx", symmetry).isel(y=[0]),
+        Hz=make_scalar_field_data_array("Hz", symmetry).isel(y=[0]),
+    )
+
+
+def make_field_time_data_2d(symmetry: bool = True):
+    return FieldTimeData(
+        monitor=FIELD_TIME_MONITOR_2D,
+        Ex=make_scalar_field_time_data_array("Ex", symmetry).isel(y=[0]),
+        Ey=make_scalar_field_time_data_array("Ey", symmetry).isel(y=[0]),
+        Ez=make_scalar_field_time_data_array("Ez", symmetry).isel(y=[0]),
+        Hx=make_scalar_field_time_data_array("Hx", symmetry).isel(y=[0]),
+        Hz=make_scalar_field_time_data_array("Hz", symmetry).isel(y=[0]),
     )
 
 
@@ -120,14 +145,29 @@ def make_diffraction_data():
 
 def test_field_data():
     data = make_field_data()
+    # Check that calling flux and dot on 3D data raise errors
+    with pytest.raises(DataError):
+        dot = data.dot(data)
+    data_2d = make_field_data_2d()
     for field in FIELD_MONITOR.fields:
-        _ = getattr(data, field)
+        _ = getattr(data_2d, field)
+    # Compute flux directly
+    flux1 = np.abs(data_2d.flux)
+    # Compute flux as dot product with itself
+    flux2 = np.abs(data_2d.dot(data_2d))
+    # Assert result is the same
+    assert np.all(flux1 == flux2)
 
 
 def test_field_time_data():
-    data = make_field_time_data()
+    data = make_field_time_data_2d()
     for field in FIELD_TIME_MONITOR.fields:
         _ = getattr(data, field)
+    # Check that flux can be computed
+    flux1 = np.abs(data.flux)
+    # Check that trying to call the dot product raises an error for time data
+    with pytest.raises(DataError):
+        dot = data.dot(data)
 
 
 def test_mode_solver_data():
@@ -135,8 +175,17 @@ def test_mode_solver_data():
     for field in "EH":
         for component in "xyz":
             _ = getattr(data, field + component)
-    data.n_eff
-    data.k_eff
+    # Compute flux directly
+    flux1 = np.abs(data.flux)
+    # Compute flux as dot product with itself
+    flux2 = np.abs(data.dot(data))
+    # Assert result is the same
+    assert np.all(flux1 == flux2)
+    # Compute dot product with a field data
+    field_data = make_field_data_2d()
+    dot = data.dot(field_data)
+    # Check that broadcasting worked
+    assert data.Ex.shape[-2:] == dot.shape
 
 
 def test_permittivity_data():
