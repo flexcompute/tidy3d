@@ -12,10 +12,10 @@ import pydantic as pd
 from .data_array import FluxTimeDataArray, FluxDataArray, ModeIndexDataArray, ModeAmpsDataArray
 from .data_array import Near2FarAngleDataArray, Near2FarCartesianDataArray, Near2FarKSpaceDataArray
 from .data_array import DataArray, DiffractionDataArray
-from .dataset import Dataset, AbstractFieldDataset
+from .dataset import Dataset, AbstractFieldDataset, ElectromagneticFieldDataset
 from .dataset import FieldDataset, FieldTimeDataset, ModeSolverDataset, PermittivityDataset
-from ..base import TYPE_TAG_STR
-from ..types import Coordinate, Symmetry
+from ..base import TYPE_TAG_STR, cached_property
+from ..types import Coordinate, Symmetry, ArrayLike
 from ..grid.grid import Grid
 from ..validators import enforce_monitor_fields_present, required_if_symmetry_present
 from ..monitor import MonitorType, FieldMonitor, FieldTimeMonitor, ModeSolverMonitor
@@ -23,7 +23,7 @@ from ..monitor import ModeMonitor, FluxMonitor, FluxTimeMonitor, PermittivityMon
 from ..monitor import Near2FarAngleMonitor, Near2FarCartesianMonitor, Near2FarKSpaceMonitor
 from ..monitor import DiffractionMonitor
 from ..medium import Medium
-from ...log import SetupError, log
+from ...log import SetupError, DataError, log
 from ...constants import ETA_0, C_0, MICROMETER
 
 
@@ -133,7 +133,136 @@ class AbstractFieldData(MonitorData, AbstractFieldDataset, ABC):
         return self.copy(update=update_dict)
 
 
-class FieldData(FieldDataset, AbstractFieldData):
+class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, ABC):
+    """Collection of electromagnetic fields."""
+
+    @property
+    def _tangential_dims(self) -> List[str]:
+        """For a 2D monitor data, return the names of the tangential dimensions. Raise if cannot
+        confirm that the associated monitor is 2D."""
+        zero_dims = np.where(np.array(self.monitor.size) == 0)[0]
+        if zero_dims.size != 1:
+            raise DataError("Data must be 2D to get tangential dimensions.")
+        tangential_dims = ["x", "y", "z"]
+        tangential_dims.pop(zero_dims[0])
+
+        return tangential_dims
+
+    @property
+    def _tangential_fields(self) -> Dict[str, DataArray]:
+        """For a 2D monitor data, return a dictionary with only the tangential fields. Raise if any
+        of the tangential field components is missing."""
+        tan_dims = self._tangential_dims
+        field_components = ["E" + dim for dim in tan_dims] + ["H" + dim for dim in tan_dims]
+        for field in field_components:
+            if field not in self.field_components:
+                raise DataError(f"Tangential field component {field} is missing in data.")
+        normal_dim = "xyz"[self.monitor.size.index(0)]
+        return {field: getattr(self, field).squeeze(dim=normal_dim) for field in field_components}
+
+    @cached_property
+    def _plane_grid_boundaries(self) -> Tuple[ArrayLike[float, 1], ArrayLike[float, 1]]:
+        """For a 2D monitor data, return the boundaries of the in-plane grid from the stored field
+        coordinates."""
+        tan_dims = self._tangential_dims
+        tan_fields = self._tangential_fields
+        plane_bounds0 = tan_fields["E" + tan_dims[1]].coords[tan_dims[0]].values
+        plane_bounds1 = tan_fields["E" + tan_dims[0]].coords[tan_dims[1]].values
+        return plane_bounds0, plane_bounds1
+
+    @cached_property
+    def _diff_area(self) -> xr.DataArray:
+        """For a 2D monitor data, return the area of each cell in the plane, for use in numerical
+        integrations."""
+        bounds = self._plane_grid_boundaries
+        sizes = [bs[1:] - bs[:-1] for bs in bounds]
+        return xr.DataArray(np.outer(sizes[0], sizes[1]), dims=self._tangential_dims)
+
+    @property
+    def _centered_tangential_fields(self) -> Dict[str, DataArray]:
+        """For a 2D monitor data, get the tangential E and H fields colocated to the cell centers in
+        the 2D plane grid."""
+
+        # Tangential directions and fields
+        tan_dims = self._tangential_dims
+        tan_fields = self._tangential_fields
+
+        # Plane center coordinates
+        bounds = self._plane_grid_boundaries
+        centers = [(bs[1:] + bs[:-1]) / 2 for bs in bounds]
+
+        # Interpolate tangential field components to cell centers
+        interp_dict = dict(zip(tan_dims, centers))
+        centered_fields = {key: val.interp(**interp_dict) for key, val in tan_fields.items()}
+        return centered_fields
+
+    @property
+    def poynting(self) -> xr.DataArray:
+        """Time-averaged Poynting vector for frequency-domain data associated to a 2D monitor."""
+
+        # Tangential fields are ordered as E1, E2, H1, H2
+        tan_fields = self._centered_tangential_fields
+        field_list = list(tan_fields.values())
+        e_x_h_star = field_list[0] * field_list[3].conj() - field_list[1] * field_list[2].conj()
+        poynting = 0.5 * np.real(e_x_h_star)
+        # cast to xr.DataArray as this is technically no longer a ScalarFieldArray
+        return xr.DataArray(poynting)
+
+    @property
+    def flux(self) -> xr.DataArray:
+        """Flux for data corresponding to a 2D monitor."""
+
+        # Compute flux by integrating Poynting vector in-plane
+        d_area = self._diff_area
+        return (self.poynting * d_area).sum(dim=d_area.dims)
+
+    def dot(
+        self, field_data: Union[FieldData, ModeSolverData], conjugate: bool = True
+    ) -> xr.DataArray:
+        """Dot product (modal overlap) with another ``field_data`` object. Both datasets have to be
+        frequency-domain data associated with a 2D monitor. Along the tangential directions,
+        the datasets have to have the same discretization. Along the normal direction, the monitor
+        position may differ and is ignored. Other coordinates (``frequency``, ``mode_index``) have
+        to be either identical or broadcastable.
+
+        Parameters
+        ----------
+        field_data : :class:`ElectromagneticFieldData`
+            A data instance to compute the dot product with.
+        conjugate : bool, optional
+            If ``True`` (default), the dot product is defined as ``1 / 4`` times the integral of
+            ``E1* x H2 - H1* x E2``, where ``x`` is the cross product, ``*`` is complex conjugation,
+            and ``(E1, H1)``, ``(E2, H2)`` are the two sets of field data. If ``False``, the
+            complex conjugation is skipped.
+
+        Note
+        ----
+            The dot product with and without conjugation is equivalent (up to a phase) for
+            modes in lossless waveguides but differs for modes in lossy materials. In that case,
+            the conjugated dot product can be interpreted as the fraction of the power of the first
+            mode carried by the second, but modes are not orthogonal with respect to that product
+            and the sum of carried power fractions exceed 1. In the non-conjugated definition,
+            orthogonal modes can be defined, but the interpretation of modal overlap as power
+            carried by a given mode is no longer valid.
+        """
+
+        # Tangential fields for current and input field data
+        field_list1 = list(self._centered_tangential_fields.values())
+        # pylint:disable=protected-access
+        field_list2 = list(field_data._centered_tangential_fields.values())
+        if conjugate:
+            field_list1 = [field.conj() for field in field_list1]
+
+        # Cross products of fields
+        e1_x_h2 = field_list1[0] * field_list2[3] - field_list1[1] * field_list2[2]
+        h1_x_e2 = field_list1[1] * field_list2[2] - field_list1[0] * field_list2[3]
+
+        # Integrate over plane
+        d_area = self._diff_area
+        return 0.25 * xr.DataArray((e1_x_h2 - h1_x_e2) * d_area).sum(dim=d_area.dims)
+
+
+class FieldData(FieldDataset, ElectromagneticFieldData):
     """Data associated with a :class:`.FieldMonitor`: scalar components of E and H fields.
 
     Example
@@ -163,7 +292,7 @@ class FieldData(FieldDataset, AbstractFieldData):
         return self.copy(update=fields_norm)
 
 
-class FieldTimeData(FieldTimeDataset, AbstractFieldData):
+class FieldTimeData(FieldTimeDataset, ElectromagneticFieldData):
     """Data associated with a :class:`.FieldTimeMonitor`: scalar components of E and H fields.
 
     Example
@@ -183,8 +312,23 @@ class FieldTimeData(FieldTimeDataset, AbstractFieldData):
 
     _contains_monitor_fields = enforce_monitor_fields_present()
 
+    @property
+    def poynting(self) -> xr.DataArray:
+        """Instantaneous Poynting vector for frequency-domain data associated to a 2D monitor."""
 
-class ModeSolverData(ModeSolverDataset, AbstractFieldData):
+        # Tangential fields are ordered as E1, E2, H1, H2
+        tan_fields = self._centered_tangential_fields
+        field_list = list(tan_fields.values())
+        e_x_h = field_list[0] * field_list[3] - field_list[1] * field_list[2]
+        # cast to xr.DataArray as this is technically no longer a ScalarFieldArray
+        return xr.DataArray(e_x_h)
+
+    def dot(self, field_data: ElectromagneticFieldData, conjugate: bool = True) -> xr.DataArray:
+        """Inner product is not defined for time-domain data."""
+        raise DataError("Inner product is not defined for time-domain data.")
+
+
+class ModeSolverData(ModeSolverDataset, ElectromagneticFieldData):
     """Data associated with a :class:`.ModeSolverMonitor`: scalar components of E and H fields.
 
     Example
