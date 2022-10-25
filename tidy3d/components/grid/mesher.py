@@ -5,12 +5,14 @@ from abc import ABC, abstractmethod
 from typing import Tuple, List, Union, Dict
 from math import isclose
 from itertools import compress
+import warnings
 
 import pydantic as pd
 import numpy as np
 from pyroots import Brentq
 from shapely.strtree import STRtree
 from shapely.geometry import box as shapely_box
+from shapely.errors import ShapelyDeprecationWarning
 
 from ..base import Tidy3dBaseModel
 from ..types import Axis, ArrayLike
@@ -412,7 +414,11 @@ class GradedMesher(Mesher):
         for bbox in struct_bbox:
             box = shapely_box(bbox[0, 0], bbox[0, 1], bbox[1, 0], bbox[1, 1])
             boxes_2d.append(box)
-        return STRtree(boxes_2d)
+
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", category=ShapelyDeprecationWarning)
+            stree = STRtree(boxes_2d)
+        return stree
 
     @staticmethod
     def contained_2d(
