@@ -1,11 +1,13 @@
 """Tests generating meshes."""
 import numpy as np
+import warnings
 import pytest
 
 import tidy3d as td
 from tidy3d.constants import fp_eps
 
 from tidy3d.components.grid.mesher import GradedMesher
+from ..utils import assert_log_level
 
 np.random.seed(4)
 
@@ -647,3 +649,16 @@ def test_mesher_timeout():
     )
 
     grid = sim.grid
+
+
+def test_shapely_strtree_warnings(caplog):
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        m = GradedMesher().parse_structures(
+            axis=2,
+            structures=[BOX1, BOX2],
+            wavelength=1.0,
+            min_steps_per_wvl=6,
+            global_min_dl=1.0,
+        )
