@@ -11,7 +11,7 @@ from tidy3d.log import ValidationError, SetupError
 np.random.seed(4)
 
 
-def setup_polyslab(vertices, dilation, angle, bounds, axis=2):
+def setup_polyslab(vertices, dilation, angle, bounds, axis=2, reference_plane="bottom"):
     """Setup slanted polyslab"""
     s = td.PolySlab(
         vertices=vertices,
@@ -19,8 +19,16 @@ def setup_polyslab(vertices, dilation, angle, bounds, axis=2):
         axis=axis,
         dilation=dilation,
         sidewall_angle=angle,
+        reference_plane=reference_plane,
     )
     return s
+
+
+def convert_polyslab_other_reference_plane(poly, reference_plane):
+    """Convert a polyslab defined at ``bottom`` to other plane"""
+    offset_distance = -poly.offset_distance_to_base(reference_plane, poly.length_axis, poly._tanq)
+    vertices = poly._shift_vertices(poly.base_polygon, offset_distance)[0]
+    return poly.copy(update={"vertices": vertices, "reference_plane": reference_plane})
 
 
 def minimal_edge_length(vertices):
@@ -112,14 +120,23 @@ def test_crossing_square():
     # dilation too significant
     dilation = -1.1
     angle = 0
-    with pytest.raises(SetupError) as e_info:
-        s = setup_polyslab(vertices, dilation, angle, bounds)
+    for ref_plane in ["bottom", "middle", "top"]:
+        with pytest.raises(SetupError) as e_info:
+            s = setup_polyslab(vertices, dilation, angle, bounds, reference_plane=ref_plane)
 
     # angle too large
     dilation = 0
     angle = np.pi / 3
     with pytest.raises(SetupError) as e_info:
         s = setup_polyslab(vertices, dilation, angle, bounds)
+        s = setup_polyslab(vertices, dilation, angle, bounds, reference_plane="top")
+    # middle plane
+    angle = np.arctan(1.999)
+    s = setup_polyslab(vertices, dilation, angle, bounds, reference_plane="middle")
+    # angle too large for middle reference plane
+    angle = np.arctan(2.001)
+    with pytest.raises(SetupError) as e_info:
+        s = setup_polyslab(vertices, dilation, angle, bounds, reference_plane="middle")
 
     # combines both
     dilation = -0.1
@@ -132,14 +149,31 @@ def test_crossing_concave_poly():
     """
     Vertices crossing during dilation for a concave polygon
     """
+    bounds = (0, 0.5)
 
     # self-intersecting, concave polygon
     vertices = ((-1, 1), (-1, -1), (1, -1), (0, -0.1), (0, 0.1), (1, 1))
     dilation = 0.5
     angle = 0
-
     with pytest.raises(SetupError) as e_info:
         s = setup_polyslab(vertices, dilation, angle, bounds)
+
+    # or, effectively
+    dilation = 0
+    angle = -np.pi / 4
+    with pytest.raises(SetupError) as e_info:
+        s = setup_polyslab(vertices, dilation, angle, bounds)
+        s = setup_polyslab(vertices, dilation, -angle, bounds, reference_plane="top")
+
+    # middle plane
+    angle = np.pi / 4
+    bounds = (0, 0.44)
+    s = setup_polyslab(vertices, dilation, angle, bounds, reference_plane="middle")
+    s = setup_polyslab(vertices, dilation, -angle, bounds, reference_plane="middle")
+    with pytest.raises(SetupError) as e_info:
+        bounds = (0, 0.45)
+        s = setup_polyslab(vertices, dilation, angle, bounds, reference_plane="middle")
+        s = setup_polyslab(vertices, dilation, -angle, bounds, reference_plane="middle")
 
 
 def test_max_erosion_polygon():
@@ -156,7 +190,7 @@ def test_max_erosion_polygon():
         s = setup_polyslab(vertices, dilation, angle, bounds)
 
         # compute maximal allowed erosion distance
-        _, max_dist = s._crossing_detection(s.base_polygon, -100)
+        max_dist = s._crossing_detection(s.base_polygon, -100)
 
         # verify it is indeed maximal allowed
         dilation = -max_dist + 1e-10
@@ -193,7 +227,7 @@ def test_shift_height():
         bounds = (0, 1)
         s = setup_polyslab(vertices, dilation, angle, bounds)
         # set up proper thickness
-        _, max_dist = s._crossing_detection(s.base_polygon, -100)
+        max_dist = s._crossing_detection(s.base_polygon, -100)
         dilation = 0.0
         bounds = (0, max_dist * 0.99)
         angle = np.pi / 4
@@ -222,7 +256,7 @@ def test_intersection_with_inside():
     dilation = 0.0
 
     # generate vertices for testing
-    Ntest = 50
+    Ntest = 20
     vertices_list = []
     # triangle
     vertices_list.append([[-1, -1], [0, -1], [1, -1], [0, 1]])
@@ -242,86 +276,100 @@ def test_intersection_with_inside():
                 if angle > 0:
                     angle_tmp = 0
                     bounds = (0, 1)
-                    s = setup_polyslab(vertices, dilation, angle_tmp, bounds, axis=axis)
+                    s_bottom = setup_polyslab(vertices, dilation, angle_tmp, bounds, axis=axis)
                     # set up proper thickness
-                    _, max_dist = s._crossing_detection(s.base_polygon, -100)
+                    max_dist = s_bottom._crossing_detection(s.base_polygon, -100)
 
                 bounds = (-(max_dist * 0.95) / 2, (max_dist * 0.95) / 2)
 
                 # avoid vertex-edge crossing case
                 try:
-                    s = setup_polyslab(vertices, dilation, angle, bounds, axis=axis)
+                    s_bottom = setup_polyslab(vertices, dilation, angle, bounds, axis=axis)
                 except:
                     continue
-
+                s_top = convert_polyslab_other_reference_plane(s_bottom, "top")
+                s_middle = convert_polyslab_other_reference_plane(s_bottom, "middle")
+                s_list = [s_bottom, s_top, s_middle]
                 xyz = np.random.random((10, 3)) * 2 * Lx - Lx
-                ### side x
-                xp = 0
-                yp = xyz[:, 1]
-                zp = xyz[:, 2]
-                shape_intersect = s.intersections(x=xp)
 
-                xarray, yarray, zarray = np.meshgrid(xp, yp, zp, indexing="ij")
-                res_inside_array = s.inside(xarray, yarray, zarray)
+                # keep track for checking the consistency between different
+                # reference plane
+                res_inside_array = []
+                for ind, s in enumerate(s_list):
+                    ### side x
+                    xp = 0
+                    yp = xyz[:, 1]
+                    zp = xyz[:, 2]
+                    shape_intersect = s.intersections(x=xp)
 
-                for i in range(len(yp)):
-                    for j in range(len(zp)):
-                        # inside
-                        res_inside = s.inside(xp, yp[i], zp[j])
-                        assert res_inside_array[0, i, j] == res_inside
-                        # intersect
-                        res_inter = False
-                        for shape in shape_intersect:
-                            if shape.covers(Point(yp[i], zp[j])):
-                                res_inter = True
-                        # if res_inter != res_inside:
-                        #     print(repr(vertices))
-                        #     print(repr(s.base_polygon))
-                        #     print(bounds)
-                        #     print(xp, yp[i], zp[j])
-                        assert res_inter == res_inside
+                    xarray, yarray, zarray = np.meshgrid(xp, yp, zp, indexing="ij")
+                    res_inside_array.append(s.inside(xarray, yarray, zarray))
 
-                ### side y
-                xp = xyz[:, 0]
-                yp = 0
-                zp = xyz[:, 2]
-                shape_intersect = s.intersections(y=yp)
+                    for i in range(len(yp)):
+                        for j in range(len(zp)):
+                            # inside
+                            res_inside = s.inside(xp, yp[i], zp[j])
+                            assert res_inside_array[3 * ind][0, i, j] == res_inside
+                            # intersect
+                            res_inter = False
+                            for shape in shape_intersect:
+                                if shape.covers(Point(yp[i], zp[j])):
+                                    res_inter = True
+                            # if res_inter != res_inside:
+                            #     print(repr(vertices))
+                            #     print(repr(s.base_polygon))
+                            #     print(bounds)
+                            #     print(xp, yp[i], zp[j])
+                            assert res_inter == res_inside
 
-                xarray, yarray, zarray = np.meshgrid(xp, yp, zp, indexing="ij")
-                res_inside_array = s.inside(xarray, yarray, zarray)
+                    ### side y
+                    xp = xyz[:, 0]
+                    yp = 0
+                    zp = xyz[:, 2]
+                    shape_intersect = s.intersections(y=yp)
 
-                for i in range(len(xp)):
-                    for j in range(len(zp)):
-                        # inside
-                        res_inside = s.inside(xp[i], yp, zp[j])
-                        assert res_inside == res_inside_array[i, 0, j]
-                        # intersect
-                        res_inter = False
-                        for shape in shape_intersect:
-                            if shape.covers(Point(xp[i], zp[j])):
-                                res_inter = True
-                        assert res_inter == res_inside
+                    xarray, yarray, zarray = np.meshgrid(xp, yp, zp, indexing="ij")
+                    res_inside_array.append(s.inside(xarray, yarray, zarray))
 
-                ### norm z
-                xp = xyz[:, 0]
-                yp = xyz[:, 1]
-                zp = 0
-                shape_intersect = s.intersections(z=zp)
+                    for i in range(len(xp)):
+                        for j in range(len(zp)):
+                            # inside
+                            res_inside = s.inside(xp[i], yp, zp[j])
+                            assert res_inside == res_inside_array[3 * ind + 1][i, 0, j]
+                            # intersect
+                            res_inter = False
+                            for shape in shape_intersect:
+                                if shape.covers(Point(xp[i], zp[j])):
+                                    res_inter = True
+                            assert res_inter == res_inside
 
-                xarray, yarray, zarray = np.meshgrid(xp, yp, zp, indexing="ij")
-                res_inside_array = s.inside(xarray, yarray, zarray)
+                    ### norm z
+                    xp = xyz[:, 0]
+                    yp = xyz[:, 1]
+                    zp = 0
+                    shape_intersect = s.intersections(z=zp)
 
-                for i in range(len(xp)):
-                    for j in range(len(yp)):
-                        # inside
-                        res_inside = s.inside(xp[i], yp[j], zp)
-                        assert res_inside == res_inside_array[i, j, 0]
-                        # intersect
-                        res_inter = False
-                        for shape in shape_intersect:
-                            if shape.covers(Point(xp[i], yp[j])):
-                                res_inter = True
-                        assert res_inter == res_inside
+                    xarray, yarray, zarray = np.meshgrid(xp, yp, zp, indexing="ij")
+                    res_inside_array.append(s.inside(xarray, yarray, zarray))
+
+                    for i in range(len(xp)):
+                        for j in range(len(yp)):
+                            # inside
+                            res_inside = s.inside(xp[i], yp[j], zp)
+                            assert res_inside == res_inside_array[3 * ind + 2][i, j, 0]
+                            # intersect
+                            res_inter = False
+                            for shape in shape_intersect:
+                                if shape.covers(Point(xp[i], yp[j])):
+                                    res_inter = True
+                            assert res_inter == res_inside
+                # consistency between different reference plane
+                for ind_pol in range(3):
+                    for ind_poly in range(2):
+                        assert np.allclose(
+                            res_inside_array[3 * ind_poly + ind_pol],
+                            res_inside_array[3 * (1 + ind_poly) + ind_pol],
+                        )
 
 
 def test_bound():
@@ -331,41 +379,45 @@ def test_bound():
     N = 10  # number of vertices
     Lx = 10  # maximal length in x,y direction
     for i in range(50):
-        vertices = convert_valid_polygon(np.random.random((N, 2)) * Lx)
-        vertices = np.array(vertices)  # .astype("float32")
+        for reference_plane in ["bottom", "middle", "top"]:
+            vertices = convert_valid_polygon(np.random.random((N, 2)) * Lx)
+            vertices = np.array(vertices)  # .astype("float32")
 
-        ### positive dilation
-        dilation = 0
-        angle = 0
-        bounds = (0, 1)
-        s = setup_polyslab(vertices, dilation, angle, bounds)
-        _, max_dist = s._crossing_detection(s.base_polygon, 100)
-        # verify it is indeed maximal allowed
-        dilation = 1
-        if max_dist is not None:
-            dilation = max_dist - 1e-10
-        bounds = (0, 1)
-        angle = 0.0
-        # avoid vertex-edge crossing case
-        try:
-            s = setup_polyslab(vertices, dilation, angle, bounds)
-        except:
-            continue
-        validate_poly_bound(s)
+            ### positive dilation
+            dilation = 0
+            angle = 0
+            bounds = (0, 1)
+            s = setup_polyslab(vertices, dilation, angle, bounds, reference_plane=reference_plane)
+            max_dist = s._crossing_detection(s.base_polygon, 100)
+            # verify it is indeed maximal allowed
+            dilation = 1
+            if max_dist is not None:
+                dilation = max_dist - 1e-10
+            bounds = (0, 1)
+            angle = 0.0
+            # avoid vertex-edge crossing case
+            try:
+                s = setup_polyslab(
+                    vertices, dilation, angle, bounds, reference_plane=reference_plane
+                )
+            except:
+                continue
+            validate_poly_bound(s)
 
-        ## sidewall
-        dilation = 0
-        angle = 0
-        bounds = (0, 1)
-        s = setup_polyslab(vertices, dilation, angle, bounds)
-        # set up proper thickness
-        _, max_dist = s._crossing_detection(s.base_polygon, -100)
-        dilation = 0.0
-        bounds = (0, (max_dist * 0.95))
-        angle = np.pi / 4
-        # avoid vertex-edge crossing case
-        try:
+            ## sidewall
+            dilation = 0
+            angle = 0
+            bounds = (0, 1)
             s = setup_polyslab(vertices, dilation, angle, bounds)
-        except:
-            continue
-        validate_poly_bound(s)
+            # set up proper thickness
+            max_dist = s._crossing_detection(s.base_polygon, -100)
+            dilation = 0.0
+            bounds = (0, (max_dist * 0.95))
+            angle = np.pi / 4
+            # avoid vertex-edge crossing case
+            try:
+                s = setup_polyslab(vertices, dilation, angle, bounds)
+            except:
+                continue
+            s = convert_polyslab_other_reference_plane(s, reference_plane)
+            validate_poly_bound(s)

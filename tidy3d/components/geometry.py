@@ -11,7 +11,7 @@ import numpy as np
 from shapely.geometry import Point, Polygon, box, MultiPolygon
 
 from .base import Tidy3dBaseModel, cached_property
-from .types import Bound, Size, Coordinate, Axis, Coordinate2D, ArrayLike
+from .types import Bound, Size, Coordinate, Axis, Coordinate2D, ArrayLike, PlanePosition
 from .types import Vertices, Ax, Shapely, annotate_type
 from .viz import add_ax_if_none, equal_aspect
 from .viz import PLOT_BUFFER, ARROW_LENGTH_FACTOR, ARROW_WIDTH_FACTOR, MAX_ARROW_WIDTH_FACTOR
@@ -1562,13 +1562,22 @@ class PolySlab(Planar):
         units=RADIAN,
     )
 
+    reference_plane: PlanePosition = pydantic.Field(
+        "bottom",
+        title="Reference plane of polygon vertices",
+        description="The position of the plane where the supplied ``vertices`` are "
+        "defined. The ``vertices`` of the polygon "
+        "can be defined at the ``bottom``, ``middle``, or ``top`` of the PolySlab.",
+    )
+
     vertices: Vertices = pydantic.Field(
         ...,
         title="Vertices",
-        description="List of (d1, d2) defining the 2 dimensional positions of the base polygon "
-        "face vertices along dimensions parallel to slab normal axis. The index of dimension "
-        "should be in the ascending order: e.g. if the slab normal axis is `y`, the coordinate "
-        "of the vertices will be in (x, z)",
+        description="List of (d1, d2) defining the 2 dimensional positions of the polygon "
+        "face vertices at the plane normal to the slab normal axis. The plane position is "
+        "specified by ``reference_plane``. "
+        "The index of dimension should be in the ascending order: e.g. if "
+        "the slab normal axis is `y`, the coordinate of the vertices will be in (x, z)",
         units=MICROMETER,
     )
 
@@ -1611,82 +1620,104 @@ class PolySlab(Planar):
         return val
 
     @pydantic.validator("vertices", always=True)
-    def no_self_intersecting_polygon(cls, val, values):
+    def no_self_intersecting_polygon_at_reference_plane(cls, val, values):
         """In this version, we don't support self-intersecting polygons yet, meaning that
-        any normal cross section of the PolySlab cannot be self-intersecting.
-        For PolySlab of non-zero dilation or sidewall angle values, self-intersection can
-        occur even if the supplied vertices make a valid polygon. The
-        non-self-intersecting criteria will be validated here.
+        any normal cross section of the PolySlab cannot be self-intersecting. This part
+        checks if the polygon is self-intersecting at the reference plane.
 
         There are two types of self-intersection that can occur during dilation:
-        1) vertex-vertex crossing. This is well treated. A maximal dilation value will be
+        1) vertex-vertex crossing.
+
+        2) vertex-edge crossing.
+        """
+        # no need to valiate anything here
+        if isclose(values["dilation"], 0):
+            return val
+
+        ## First, make sure no vertex-vertex crossing in the reference plane
+        ## 1) obviously, vertex-vertex crossing can occur during erosion
+        ## 2) for concave polygon, the crossing can even occur during dilation
+        val_np = PolySlab._proper_vertices(val)
+
+        # compute distance between vertices after dilation to detect vertex-vertex
+        # crossing events
+        max_dist = PolySlab._crossing_detection(val_np, values["dilation"])
+        if max_dist is not None:
+            # 1) crossing during erosion
+            if values["dilation"] < 0:
+                # too much erosion
+                raise SetupError(
+                    "Erosion value (-dilation) is too large. Some edges in the supplied "
+                    f"polygon are fully eroded. Maximal erosion should be {max_dist:.3e} "
+                    "for this polygon. Support for vertices crossing under "
+                    "significant erosion will be available in future releases."
+                )
+            # 2) crossing during dilation in concave polygon
+            raise SetupError(
+                "Dilation value is too large in a concave polygon, resulting in "
+                "vertices crossing. "
+                f"Maximal dilation should be {max_dist:.3e} for this polygon. "
+                "Support for vertices crossing under significant dilation "
+                "in concave polygons will be available in future releases."
+            )
+        # If no vertex-vertex crossing is detected, but the polygon is still self-intersecting.
+        # it is attributed to vertex-edge crossing.
+        val_np_dilated = PolySlab._shift_vertices(val_np, values["dilation"])[0]
+        if not Polygon(val_np_dilated).is_valid:
+            raise SetupError(
+                "Dilation/Erosion value is too large, resulting in "
+                "vertex-edge crossing, and thus self-intersecting polygons. "
+                "Support for self-intersecting polygons under significant dilation "
+                "will be available in future releases."
+            )
+
+        return val
+
+    @pydantic.validator("vertices", always=True)
+    def no_self_intersecting_polygon_during_extrusion(cls, val, values):
+        """In this version, we don't support self-intersecting polygons yet, meaning that
+        any normal cross section of the PolySlab cannot be self-intersecting. This part checks
+        if any self-interction will occur during extrusion with non-zero sidewall angle.
+
+        There are two types of self-intersection that can occur during dilation:
+        1) vertex-vertex crossing. This is well treated. A maximal slab thickness will be
         suggested if crossing is detected.
 
         2) vertex-edge crossing. The implementation of this part needs improvement. Now we
         just sample _N_SAMPLE_POLYGON_INTERSECT cross sections along the normal axis, and check
         if they are self-intersecting.
         """
-
-        # is sidewal_angle a valid value?
         if "sidewall_angle" not in values:
             raise ValidationError("``sidewall_angle`` failed validation.")
+
         # no need to valiate anything here
-        if isclose(values["dilation"], 0) and isclose(values["sidewall_angle"], 0):
-            return val
-
-        ## First, make sure no vertex-vertex crossing in the base
-        ## 1) obviously, vertex-vertex crossing can occur during erosion
-        ## 2) for concave polygon, the crossing can even occur during dilation
-        val_np = PolySlab._proper_vertices(val)
-        if isclose(values["dilation"], 0):
-            # no need to validate the base for 0 dilation
-            base = val_np
-        else:
-            base = PolySlab._shift_vertices(val_np, values["dilation"])[0]
-
-            # compute distance between vertices after dilation to detect vertex-vertex
-            # crossing events
-            cross_val, max_dist = PolySlab._crossing_detection(val_np, values["dilation"])
-            if cross_val:
-                # 1) crossing during erosion
-                if values["dilation"] < 0:
-                    # too much erosion
-                    raise SetupError(
-                        "Erosion value (-dilation) is too large. Some edges in the base polygon "
-                        f"are fully eroded. Maximal erosion should be {max_dist:.3e} "
-                        "for this polygon. Support for vertices crossing under "
-                        "significant erosion will be available in future releases."
-                    )
-                # 2) crossing during dilation in concave polygon
-                raise SetupError(
-                    "Dilation value is too large in a concave polygon, resulting in "
-                    "vertices crossing. "
-                    f"Maximal dilation should be {max_dist:.3e} for this polygon. "
-                    "Support for vertices crossing under significant dilation "
-                    "in concave polygons will be available in future releases."
-                )
-            # If no vertex-vertex crossing is detected, but the polygon is still self-intersecting.
-            # it is attributed to vertex-edge crossing.
-            if not Polygon(base).is_valid:
-                raise SetupError(
-                    "Dilation/Erosion value is too large, resulting in "
-                    "vertex-edge crossing, and thus self-intersecting polygons. "
-                    "Support for self-intersecting polygons under significant dilation "
-                    "will be available in future releases."
-                )
-
-        # Second, validate slanted wall case
         if isclose(values["sidewall_angle"], 0):
             return val
 
-        # For Slanted PolySlab. Similar procedure to validate
-        # Fist, no vertex-vertex crossing at any point during extrusion
-        zmin, zmax = values["slab_bounds"]
-        length = zmax - zmin
-        dist = -length * np.tan(values["sidewall_angle"])
-        cross_val, max_dist = PolySlab._crossing_detection(base, dist)
-        if cross_val:
-            max_thick = max_dist / np.abs(dist) * length
+        # apply dilation
+        poly_ref = PolySlab._proper_vertices(val)
+        if not isclose(values["dilation"], 0):
+            poly_ref = PolySlab._shift_vertices(poly_ref, values["dilation"])[0]
+
+        # Fist, check vertex-vertex crossing at any point during extrusion
+        length = values["slab_bounds"][1] - values["slab_bounds"][0]
+        dist = [-length * np.tan(values["sidewall_angle"])]
+        # reverse the dilation value if it's defined on the top
+        if values["reference_plane"] == "top":
+            dist = [-dist[0]]
+        # for middle, both direction needs to be examined
+        elif values["reference_plane"] == "middle":
+            dist = [dist[0] / 2, -dist[0] / 2]
+
+        # capture vertex crossing events
+        max_thick = []
+        for dist_val in dist:
+            max_dist = PolySlab._crossing_detection(poly_ref, dist_val)
+            if max_dist is not None:
+                max_thick.append(max_dist / abs(dist_val) * length)
+
+        if len(max_thick) > 0:
+            max_thick = min(max_thick)
             raise SetupError(
                 "Sidewall angle or structure thickness is so large that there are "
                 "vertices crossing somewhere during extrusion. "
@@ -1697,13 +1728,15 @@ class PolySlab(Planar):
 
         # sample _N_SAMPLE_POLYGON_INTERSECT cross sections along the normal axis to check
         # if there is any vertex-edge crossing event.
-        dist_list = dist * np.linspace(
+        dist_list = dist[0] * np.linspace(
             1.0 / (_N_SAMPLE_POLYGON_INTERSECT + 1),
             _N_SAMPLE_POLYGON_INTERSECT / (_N_SAMPLE_POLYGON_INTERSECT + 1.0),
             _N_SAMPLE_POLYGON_INTERSECT,
         )
+        if values["reference_plane"] == "middle":
+            dist_list = dist_list / dist[0] * (dist[1] - dist[0]) + dist[0]
         for dist_i in dist_list:
-            poly_i = PolySlab._shift_vertices(base, dist_i)[0]
+            poly_i = PolySlab._shift_vertices(poly_ref, dist_i)[0]
             if not Polygon(poly_i).is_valid:
                 raise SetupError(
                     "Sidewall angle or structure thickness is so large that there are "
@@ -1726,6 +1759,7 @@ class PolySlab(Planar):
         gds_scale: pydantic.PositiveFloat = 1.0,
         dilation: float = 0.0,
         sidewall_angle: float = 0,
+        reference_plane: PlanePosition = "bottom",
         **kwargs,
     ) -> List["PolySlab"]:
         """Import :class:`PolySlab` from a ``gdspy.Cell``.
@@ -1755,6 +1789,9 @@ class PolySlab(Planar):
             Angle of the sidewall.
             ``sidewall_angle=0`` (default) specifies vertical wall,
             while ``0<sidewall_angle<np.pi/2`` for the base to be larger than the top.
+        reference_plane : PlanePosition = "bottom"
+            The position of the GDS layer is defined along the extrusion direction. It can
+            be at the ``bottom``, ``middle``, or ``top`` of the PolySlab.
 
         Returns
         -------
@@ -1793,6 +1830,7 @@ class PolySlab(Planar):
                 slab_bounds=slab_bounds,
                 dilation=dilation,
                 sidewall_angle=sidewall_angle,
+                reference_plane=reference_plane,
                 **kwargs,
             )
             for verts in all_vertices
@@ -1805,6 +1843,38 @@ class PolySlab(Planar):
         """
         return np.tan(self.sidewall_angle)
 
+    @staticmethod
+    def offset_distance_to_base(
+        reference_plane: PlanePosition, length_axis: float, tan_angle: float
+    ) -> float:
+        """
+        A convenient function that returns the distance needed to offset the polygon from
+        reference plane to the base.
+
+        Parameters
+        ----------
+        reference_plane : PlanePosition
+            The position of the plane where the vertices of the polygon are supplied.
+        length_axis : float
+            The overall length of PolySlab along extrusion direction.
+        tan_angle : float
+            tan(sidewall angle)
+
+        Returns
+        -------
+        float
+            Offset distance.
+        """
+
+        if reference_plane == "top":
+            return length_axis * tan_angle
+
+        if reference_plane == "middle":
+            return length_axis * tan_angle / 2
+
+        # bottom
+        return 0
+
     @cached_property
     def base_polygon(self) -> Vertices:
         """The polygon at the base after potential dilation operation.
@@ -1816,7 +1886,11 @@ class PolySlab(Planar):
             The vertices of the polygon at the base.
         """
 
-        return self._shift_vertices(self._proper_vertices(self.vertices), self.dilation)[0]
+        # offset value to obtain polygon in the base
+        offset_base = self.dilation + self.offset_distance_to_base(
+            self.reference_plane, self.length_axis, self._tanq
+        )
+        return self._shift_vertices(self._proper_vertices(self.vertices), offset_base)[0]
 
     @cached_property
     def top_polygon(self) -> Vertices:
@@ -2043,24 +2117,13 @@ class PolySlab(Planar):
 
                     x1, y1 = self._order_by_axis(plane_val=y_min, axis_val=z_min, axis=axis)
                     x2, y2 = self._order_by_axis(plane_val=y_max, axis_val=z_min, axis=axis)
-
-                    if y_max - y_min <= dy_min + dy_max:
-                        # intersect before reaching top of polygon
-                        # make triangle
-                        h_mid = (y_max - y_min) / (dy_min + dy_max) * h_length
-                        z_mid = z_min + h_mid
-                        y_mid = y_min + dy_min / h_length * h_mid
-                        x3, y3 = self._order_by_axis(plane_val=y_mid, axis_val=z_mid, axis=axis)
-                        vertices = ((x1, y1), (x2, y2), (x3, y3))
-                    else:
-                        x3, y3 = self._order_by_axis(
-                            plane_val=y_max - dy_max, axis_val=z_max, axis=axis
-                        )
-                        x4, y4 = self._order_by_axis(
-                            plane_val=y_min + dy_min, axis_val=z_max, axis=axis
-                        )
-
-                        vertices = ((x1, y1), (x2, y2), (x3, y3), (x4, y4))
+                    x3, y3 = self._order_by_axis(
+                        plane_val=y_max - dy_max, axis_val=z_max, axis=axis
+                    )
+                    x4, y4 = self._order_by_axis(
+                        plane_val=y_min + dy_min, axis_val=z_max, axis=axis
+                    )
+                    vertices = ((x1, y1), (x2, y2), (x3, y3), (x4, y4))
                     polys.append(Polygon(vertices))
             # update the base coordinate for the next subsection
             h_base = h_top
@@ -2301,7 +2364,13 @@ class PolySlab(Planar):
         """
 
         # check for the maximum possible contribution from dilation/slant on each side
-        max_offset = self.dilation + max(0, -self._tanq * self.length_axis)
+        max_offset = self.dilation
+        if self.reference_plane == "bottom":
+            max_offset += max(0, -self._tanq * self.length_axis)
+        elif self.reference_plane == "top":
+            max_offset += max(0, self._tanq * self.length_axis)
+        elif self.reference_plane == "middle":
+            max_offset += max(0, abs(self._tanq) * self.length_axis / 2)
 
         # special care when dilated
         if max_offset > 0:
@@ -2399,7 +2468,7 @@ class PolySlab(Planar):
         return vertices[~np.isclose(vertices_diff, 0, rtol=_IS_CLOSE_RTOL)]
 
     @staticmethod
-    def _crossing_detection(vertices: np.ndarray, dist: float) -> Tuple[bool, float]:
+    def _crossing_detection(vertices: np.ndarray, dist: float) -> float:
         """Detect if vertices will cross after a dilation distance dist.
 
         Parameters
@@ -2411,9 +2480,9 @@ class PolySlab(Planar):
 
         Returns
         -------
-        Tuple[bool,float]
-            True if there are any crossings;
-            if True, return the maximal allowed dilation.
+        float
+            the maximal allowed dilation if there are any crossing, otherwise
+            return ``None``.
         """
 
         # edge length
@@ -2431,8 +2500,8 @@ class PolySlab(Planar):
             index_oversized = length_remaining < 0
             max_dist = np.min(edge_length[index_oversized] / edge_reduction[index_oversized])
             max_dist *= np.abs(dist)
-            return True, max_dist
-        return False, None
+            return max_dist
+        return None
 
     @staticmethod
     def array_to_vertices(arr_vertices: np.ndarray) -> Vertices:
