@@ -148,6 +148,7 @@ Axis = Literal[0, 1, 2]
 Axis2D = Literal[0, 1]
 Shapely = BaseGeometry
 Vertices = Union[Tuple[Coordinate2D, ...], ArrayLike[float, 2]]
+PlanePosition = Literal["bottom", "middle", "top"]
 
 """ medium """
 
