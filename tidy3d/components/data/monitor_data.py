@@ -172,11 +172,11 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
     def _plane_grid_boundaries(self) -> Tuple[ArrayLike[float, 1], ArrayLike[float, 1]]:
         """For a 2D monitor data, return the boundaries of the in-plane grid from the stored field
         coordinates."""
-        tan_dims = self._tangential_dims
+        dim1, dim2 = self._tangential_dims
         tan_fields = self._tangential_fields
-        plane_bounds0 = tan_fields["E" + tan_dims[1]].coords[tan_dims[0]].values
-        plane_bounds1 = tan_fields["E" + tan_dims[0]].coords[tan_dims[1]].values
-        return plane_bounds0, plane_bounds1
+        plane_bounds1 = tan_fields["E" + dim2].coords[dim1].values
+        plane_bounds2 = tan_fields["E" + dim1].coords[dim2].values
+        return plane_bounds1, plane_bounds2
 
     @property
     def _diff_area(self) -> xr.DataArray:
@@ -191,10 +191,10 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
         _, plane_inds = self.monitor.pop_axis([0, 1, 2], self.monitor.size.index(0.0))
         mnt_bounds = np.array(self.monitor.bounds)
         mnt_bounds = mnt_bounds[:, plane_inds].T
-        bounds[0][0] = mnt_bounds[0, 0]
-        bounds[0][-1] = mnt_bounds[0, 1]
-        bounds[1][0] = mnt_bounds[1, 0]
-        bounds[1][-1] = mnt_bounds[1, 1]
+        bounds[0][0] = max(bounds[0][0], mnt_bounds[0, 0])
+        bounds[0][-1] = min(bounds[0][-1], mnt_bounds[0, 1])
+        bounds[1][0] = max(bounds[1][0], mnt_bounds[1, 0])
+        bounds[1][-1] = min(bounds[1][-1], mnt_bounds[1, 1])
 
         sizes = [bs[1:] - bs[:-1] for bs in bounds]
         return xr.DataArray(np.outer(sizes[0], sizes[1]), dims=self._tangential_dims)
@@ -224,14 +224,14 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
 
         # Tangential fields are ordered as E1, E2, H1, H2
         tan_fields = self._centered_tangential_fields
-        tan_dims = self._tangential_dims
-        e_x_h_star = tan_fields["E" + tan_dims[0]] * tan_fields["H" + tan_dims[1]].conj()
-        e_x_h_star -= tan_fields["E" + tan_dims[1]] * tan_fields["H" + tan_dims[0]].conj()
+        dim1, dim2 = self._tangential_dims
+        e_x_h_star = tan_fields["E" + dim1] * tan_fields["H" + dim2].conj()
+        e_x_h_star -= tan_fields["E" + dim2] * tan_fields["H" + dim1].conj()
         poynting = 0.5 * np.real(e_x_h_star)
         return poynting
 
     @property
-    def flux(self) -> xr.DataArray:
+    def flux(self) -> FluxDataArray:
         """Flux for data corresponding to a 2D monitor.
 
         Note
@@ -246,11 +246,11 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
 
         # Compute flux by integrating Poynting vector in-plane
         d_area = self._diff_area
-        return (self.poynting * d_area).sum(dim=d_area.dims)
+        return FluxDataArray((self.poynting * d_area).sum(dim=d_area.dims))
 
     def dot(
         self, field_data: Union[FieldData, ModeSolverData], conjugate: bool = True
-    ) -> xr.DataArray:
+    ) -> ModeAmpsDataArray:
         """Dot product (modal overlap) with another :class:`.FieldData` object. Both datasets have
         to be frequency-domain data associated with a 2D monitor. Along the tangential directions,
         the datasets have to have the same discretization. Along the normal direction, the monitor
@@ -285,16 +285,16 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
             fields_self = {key: field.conj() for key, field in fields_self.items()}
 
         # Cross products of fields
-        tan_dims = self._tangential_dims
-        e_self_x_h_other = fields_self["E" + tan_dims[0]] * fields_other["H" + tan_dims[1]]
-        e_self_x_h_other -= fields_other["E" + tan_dims[1]] * fields_self["H" + tan_dims[0]]
-        h_self_x_e_other = fields_self["H" + tan_dims[0]] * fields_other["E" + tan_dims[1]]
-        h_self_x_e_other -= fields_other["H" + tan_dims[1]] * fields_self["E" + tan_dims[0]]
+        dim1, dim2 = self._tangential_dims
+        e_self_x_h_other = fields_self["E" + dim1] * fields_other["H" + dim2]
+        e_self_x_h_other -= fields_other["E" + dim2] * fields_self["H" + dim1]
+        h_self_x_e_other = fields_self["H" + dim1] * fields_other["E" + dim2]
+        h_self_x_e_other -= fields_other["H" + dim2] * fields_self["E" + dim1]
 
         # Integrate over plane
         d_area = self._diff_area
-        integrand = xr.DataArray((e_self_x_h_other - h_self_x_e_other) * d_area)
-        return 0.25 * integrand.sum(dim=d_area.dims)
+        integrand = (e_self_x_h_other - h_self_x_e_other) * d_area
+        return ModeAmpsDataArray(0.25 * integrand.sum(dim=d_area.dims))
 
 
 class FieldData(FieldDataset, ElectromagneticFieldData):
@@ -354,10 +354,28 @@ class FieldTimeData(FieldTimeDataset, ElectromagneticFieldData):
 
         # Tangential fields are ordered as E1, E2, H1, H2
         tan_fields = self._centered_tangential_fields
-        tan_dims = self._tangential_dims
-        e_x_h = tan_fields["E" + tan_dims[0]] * tan_fields["H" + tan_dims[1]]
-        e_x_h -= tan_fields["E" + tan_dims[1]] * tan_fields["H" + tan_dims[0]]
+        dim1, dim2 = self._tangential_dims
+        e_x_h = tan_fields["E" + dim1] * tan_fields["H" + dim2]
+        e_x_h -= tan_fields["E" + dim2] * tan_fields["H" + dim1]
         return e_x_h
+
+    @property
+    def flux(self) -> FluxTimeDataArray:
+        """Flux for data corresponding to a 2D monitor.
+
+        Note
+        ----
+            Here, the exact monitor center and size is used in the numerical integration.
+            This differs from the on-the-fly computation using a :class:`.FluxTimeMonitor`, where a
+            discretization of the monitor plane in terms of an integer number of Yee grid cells is
+            used. Thus, the two computations are only expected to match if a
+            :class:`.FieldTimeMonitor` is placed exactly at a Yee grid cell center in the normal
+            direction, and spans an integer number of cells in both tangential directions.
+        """
+
+        # Compute flux by integrating Poynting vector in-plane
+        d_area = self._diff_area
+        return FluxTimeDataArray((self.poynting * d_area).sum(dim=d_area.dims))
 
     def dot(self, field_data: ElectromagneticFieldData, conjugate: bool = True) -> xr.DataArray:
         """Inner product is not defined for time-domain data."""
