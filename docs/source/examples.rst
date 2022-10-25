@@ -40,6 +40,7 @@ Case studies
     notebooks/GratingCoupler
     notebooks/GratingEfficiency
     notebooks/Metalens
+    notebooks/MMI_1by4
     notebooks/HighQ_Si
     notebooks/HighQ_Ge
     notebooks/Near2FarSphereRCS
