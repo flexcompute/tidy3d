@@ -1545,7 +1545,7 @@ class PolySlab(Planar):
     dilation: float = pydantic.Field(
         0.0,
         title="Dilation",
-        description="Dilation of the polygon in the base by shifting each edge along its "
+        description="Dilation of the supplied polygon by shifting each edge along its "
         "normal outwards direction by a distance; a negative value corresponds to erosion.",
         units=MICROMETER,
     )
@@ -1564,20 +1564,22 @@ class PolySlab(Planar):
 
     reference_plane: PlanePosition = pydantic.Field(
         "bottom",
-        title="Reference plane of polygon vertices",
+        title="Reference plane for polygon vertices",
         description="The position of the plane where the supplied ``vertices`` are "
-        "defined. The ``vertices`` of the polygon "
-        "can be defined at the ``bottom``, ``middle``, or ``top`` of the PolySlab.",
+        "defined. The plane is perpendicular to the ``axis``. "
+        "The plane is located at the ``bottom``, ``middle``, or ``top`` of the "
+        "PolySlab with respect to the axis. "
+        "E.g. if ``axis=1``, ``bottom`` refers to the negative side of the y-axis, and "
+        "``top`` refers to the positive side of the y-axis.",
     )
 
     vertices: Vertices = pydantic.Field(
         ...,
         title="Vertices",
         description="List of (d1, d2) defining the 2 dimensional positions of the polygon "
-        "face vertices at the plane normal to the slab normal axis. The plane position is "
-        "specified by ``reference_plane``. "
+        "face vertices at the ``reference_plane``. "
         "The index of dimension should be in the ascending order: e.g. if "
-        "the slab normal axis is `y`, the coordinate of the vertices will be in (x, z)",
+        "the slab normal axis is ``axis=y``, the coordinate of the vertices will be in (x, z)",
         units=MICROMETER,
     )
 
@@ -1790,8 +1792,9 @@ class PolySlab(Planar):
             ``sidewall_angle=0`` (default) specifies vertical wall,
             while ``0<sidewall_angle<np.pi/2`` for the base to be larger than the top.
         reference_plane : PlanePosition = "bottom"
-            The position of the GDS layer is defined along the extrusion direction. It can
-            be at the ``bottom``, ``middle``, or ``top`` of the PolySlab.
+            The position of the GDS layer. It can be at the ``bottom``, ``middle``,
+            or ``top`` of the PolySlab. E.g. if ``axis=1``, ``bottom`` refers to the
+            negative side of y-axis, and ``top`` refers to the positive side of y-axis.
 
         Returns
         -------
