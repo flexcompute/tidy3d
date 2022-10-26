@@ -115,6 +115,7 @@ Structures
    :toctree: _autosummary/
 
    Structure
+   MeshOverrideStructure
 
 
 Sources
