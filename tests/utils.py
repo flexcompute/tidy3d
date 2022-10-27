@@ -200,8 +200,8 @@ SIM_FULL = Simulation(
             custom_origin=(1, 2, 3),
             x=[-1, 0, 1],
             y=[-2, -1, 0, 1, 2],
-            plane_axis=2,
-            plane_distance=5,
+            proj_axis=2,
+            proj_distance=5,
         ),
         # Near2FarKSpaceMonitor(
         #     center=(1,2,3),
@@ -209,7 +209,7 @@ SIM_FULL = Simulation(
         #     freqs=[250e12, 300e12],
         #     name='n2f_kspace',
         #     custom_origin=(1,2,3),
-        #     u_axis=2,
+        #     proj_axis=2,
         #     ux=[1,2],
         #     uy=[3,4,5]
         # ),

@@ -6,7 +6,7 @@ import pydantic
 import numpy as np
 
 from .types import Ax, EMField, ArrayLike, Bound, FreqArray
-from .types import Literal, Direction, Coordinate, Axis, ObsGridArray, RadVec
+from .types import Literal, Direction, Coordinate, Axis, ObsGridArray
 from .geometry import Box
 from .medium import Medium, MediumType
 from .validators import assert_plane, validate_unique
@@ -479,12 +479,6 @@ class AbstractNear2FarMonitor(SurfaceIntegrationMonitor, FreqMonitor):
     and invokes the computation of far fields.
     """
 
-    fields: Tuple[RadVec, ...] = pydantic.Field(
-        ["Ntheta", "Nphi", "Ltheta", "Lphi"],
-        title="Field Components",
-        description="Collection of radiation vector components to store in the monitor.",
-    )
-
     custom_origin: Coordinate = pydantic.Field(
         None,
         title="Local origin",
@@ -537,6 +531,13 @@ class Near2FarAngleMonitor(AbstractNear2FarMonitor):
     ...     )
     """
 
+    proj_distance: float = pydantic.Field(
+        1e6,
+        title="Projection distance",
+        description="Radial distance of the projection points from ``local_origin``.",
+        units=MICROMETER,
+    )
+
     theta: ObsGridArray = pydantic.Field(
         ...,
         title="Polar Angles",
@@ -554,8 +555,8 @@ class Near2FarAngleMonitor(AbstractNear2FarMonitor):
     def storage_size(self, num_cells: int, tmesh: ArrayLike[float, 1]) -> int:
         """Size of monitor storage given the number of points after discretization."""
         # stores 1 complex number per pair of angles, per frequency,
-        # for N_theta, N_phi, L_theta, and L_phi (4 components)
-        return BYTES_COMPLEX * len(self.theta) * len(self.phi) * len(self.freqs) * 4
+        # for Er, Etheta, Ephi, Hr, Htheta, and Hphi (6 components)
+        return BYTES_COMPLEX * len(self.theta) * len(self.phi) * len(self.freqs) * 6
 
 
 class Near2FarCartesianMonitor(AbstractNear2FarMonitor):
@@ -574,49 +575,50 @@ class Near2FarCartesianMonitor(AbstractNear2FarMonitor):
     ...     custom_origin=(1,2,3),
     ...     x=[-1, 0, 1],
     ...     y=[-2, -1, 0, 1, 2],
-    ...     plane_axis=2,
-    ...     plane_distance=5
+    ...     proj_axis=2,
+    ...     proj_distance=5
     ...     )
     """
 
-    plane_axis: Axis = pydantic.Field(
+    proj_axis: Axis = pydantic.Field(
         ...,
-        title="Observation plane axis",
+        title="Projection plane axis",
         description="Axis along which the observation plane is oriented.",
     )
 
-    plane_distance: float = pydantic.Field(
-        ...,
-        title="Observation plane signed distance",
-        description="Signed distance of the observation plane along ``plane_axis`` "
-        "w.r.t. ``local_origin``",
+    proj_distance: float = pydantic.Field(
+        1e6,
+        title="Projection distance",
+        description="Signed distance of the projection plane along ``proj_axis``. "
+        "from the plane containing ``local_origin``.",
+        units=MICROMETER,
     )
 
     x: ObsGridArray = pydantic.Field(
         ...,
         title="Local x observation coordinates",
-        description="Local x observation coordinates w.r.t. ``local_origin`` and ``plane_axis``. "
-        "When ``plane_axis`` is 0, this corresponds to the global y axis. "
-        "When ``plane_axis`` is 1, this corresponds to the global x axis. "
-        "When ``plane_axis`` is 2, this corresponds to the global x axis. ",
+        description="Local x observation coordinates w.r.t. ``local_origin`` and ``proj_axis``. "
+        "When ``proj_axis`` is 0, this corresponds to the global y axis. "
+        "When ``proj_axis`` is 1, this corresponds to the global x axis. "
+        "When ``proj_axis`` is 2, this corresponds to the global x axis. ",
         units=MICROMETER,
     )
 
     y: ObsGridArray = pydantic.Field(
         ...,
         title="Local y observation coordinates",
-        description="Local y observation coordinates w.r.t. ``local_origin`` and ``plane_axis``. "
-        "When ``plane_axis`` is 0, this corresponds to the global z axis. "
-        "When ``plane_axis`` is 1, this corresponds to the global z axis. "
-        "When ``plane_axis`` is 2, this corresponds to the global y axis. ",
+        description="Local y observation coordinates w.r.t. ``local_origin`` and ``proj_axis``. "
+        "When ``proj_axis`` is 0, this corresponds to the global z axis. "
+        "When ``proj_axis`` is 1, this corresponds to the global z axis. "
+        "When ``proj_axis`` is 2, this corresponds to the global y axis. ",
         units=MICROMETER,
     )
 
     def storage_size(self, num_cells: int, tmesh: ArrayLike[float, 1]) -> int:
         """Size of monitor storage given the number of points after discretization."""
         # stores 1 complex number per pair of grid points, per frequency,
-        # for N_theta, N_phi, L_theta, and L_phi (4 components)
-        return BYTES_COMPLEX * len(self.x) * len(self.y) * len(self.freqs) * 4
+        # for Er, Etheta, Ephi, Hr, Htheta, and Hphi (6 components)
+        return BYTES_COMPLEX * len(self.x) * len(self.y) * len(self.freqs) * 6
 
 
 class Near2FarKSpaceMonitor(AbstractNear2FarMonitor):
@@ -631,23 +633,30 @@ class Near2FarKSpaceMonitor(AbstractNear2FarMonitor):
     ...     freqs=[250e12, 300e12],
     ...     name='n2f_monitor',
     ...     custom_origin=(1,2,3),
-    ...     u_axis=2,
+    ...     proj_axis=2,
     ...     ux=[1,2],
     ...     uy=[3,4,5]
     ...     )
     """
 
-    u_axis: Axis = pydantic.Field(
+    proj_axis: Axis = pydantic.Field(
         ...,
-        title="Observation plane axis",
+        title="Projection plane axis",
         description="Axis along which the observation plane is oriented.",
+    )
+
+    proj_distance: float = pydantic.Field(
+        1e6,
+        title="Projection distance",
+        description="Radial distance of the projection points from ``local_origin``.",
+        units=MICROMETER,
     )
 
     ux: ObsGridArray = pydantic.Field(
         ...,
         title="Normalized kx",
         description="Local x component of wave vectors on the observation plane, "
-        "relative to ``local_origin`` and oriented with respect to ``u_axis``, "
+        "relative to ``local_origin`` and oriented with respect to ``proj_axis``, "
         "normalized by (2*pi/lambda) where lambda is the wavelength "
         "associated with the background medium.",
     )
@@ -656,7 +665,7 @@ class Near2FarKSpaceMonitor(AbstractNear2FarMonitor):
         ...,
         title="Normalized ky",
         description="Local y component of wave vectors on the observation plane, "
-        "relative to ``local_origin`` and oriented with respect to ``u_axis``, "
+        "relative to ``local_origin`` and oriented with respect to ``proj_axis``, "
         "normalized by (2*pi/lambda) where lambda is the wavelength "
         "associated with the background medium.",
     )
@@ -664,8 +673,8 @@ class Near2FarKSpaceMonitor(AbstractNear2FarMonitor):
     def storage_size(self, num_cells: int, tmesh: ArrayLike[float, 1]) -> int:
         """Size of monitor storage given the number of points after discretization."""
         # stores 1 complex number per pair of grid points, per frequency,
-        # for N_theta, N_phi, L_theta, and L_phi (4 components)
-        return BYTES_COMPLEX * len(self.ux) * len(self.uy) * len(self.freqs) * 4
+        # for Er, Etheta, Ephi, Hr, Htheta, and Hphi (6 components)
+        return BYTES_COMPLEX * len(self.ux) * len(self.uy) * len(self.freqs) * 6
 
 
 class DiffractionMonitor(PlanarMonitor, FreqMonitor):

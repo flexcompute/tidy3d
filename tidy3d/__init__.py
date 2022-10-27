@@ -37,7 +37,7 @@ from .components.simulation import Simulation
 
 # near2far
 
-from .components.near2far import Near2FarSurface, RadiationVectors
+from .components.near2far import Near2FarSurface, FarFields
 
 # data
 from .components.data.data_array import ScalarFieldDataArray, ScalarModeFieldDataArray

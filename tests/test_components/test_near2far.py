@@ -50,7 +50,7 @@ def make_n2f_monitors(center, size, freqs):
         exclude_surfaces=exclude_surfaces,
     )
 
-    plane_axis = 0
+    proj_axis = 0
     n2f_cart_monitor = td.Near2FarCartesianMonitor(
         center=center,
         size=size,
@@ -59,14 +59,14 @@ def make_n2f_monitors(center, size, freqs):
         custom_origin=center,
         x=list(xs),
         y=list(ys),
-        plane_axis=plane_axis,
-        plane_distance=z,
+        proj_axis=proj_axis,
+        proj_distance=z,
         medium=MEDIUM,
         normal_dir="+",
         exclude_surfaces=exclude_surfaces,
     )
 
-    u_axis = 0
+    proj_axis = 0
     n2f_ksp_monitor = td.Near2FarKSpaceMonitor(
         center=center,
         size=size,
@@ -75,7 +75,7 @@ def make_n2f_monitors(center, size, freqs):
         custom_origin=center,
         ux=list(uxs),
         uy=list(uys),
-        u_axis=u_axis,
+        proj_axis=proj_axis,
         medium=MEDIUM,
         normal_dir="+",
         exclude_surfaces=exclude_surfaces,
@@ -129,26 +129,30 @@ def test_n2f_data():
     """Make sure all the near-to-far data structures can be created."""
 
     f = np.linspace(1e14, 2e14, 10)
+    r = np.atleast_1d(5)
     theta = np.linspace(0, np.pi, 10)
     phi = np.linspace(0, 2 * np.pi, 20)
-    coords_tp = dict(theta=theta, phi=phi, f=f)
-    values_tp = (1 + 1j) * np.random.random((len(theta), len(phi), len(f)))
+    coords_tp = dict(r=r, theta=theta, phi=phi, f=f)
+    values_tp = (1 + 1j) * np.random.random((len(r), len(theta), len(phi), len(f)))
     scalar_field_tp = td.Near2FarAngleDataArray(values_tp, coords=coords_tp)
     monitor_tp = td.Near2FarAngleMonitor(
         center=(1, 2, 3), size=(2, 2, 2), freqs=f, name="n2f_monitor_tp", phi=phi, theta=theta
     )
     data_tp = td.Near2FarAngleData(
         monitor=monitor_tp,
-        Ntheta=scalar_field_tp,
-        Nphi=scalar_field_tp,
-        Ltheta=scalar_field_tp,
-        Lphi=scalar_field_tp,
+        Er=scalar_field_tp,
+        Etheta=scalar_field_tp,
+        Ephi=scalar_field_tp,
+        Hr=scalar_field_tp,
+        Htheta=scalar_field_tp,
+        Hphi=scalar_field_tp,
     )
 
     x = np.linspace(0, 5, 10)
     y = np.linspace(0, 10, 20)
-    coords_xy = dict(x=x, y=y, f=f)
-    values_xy = (1 + 1j) * np.random.random((len(x), len(y), len(f)))
+    z = np.atleast_1d(5)
+    coords_xy = dict(x=x, y=y, z=z, f=f)
+    values_xy = (1 + 1j) * np.random.random((len(x), len(y), len(z), len(f)))
     scalar_field_xy = td.Near2FarCartesianDataArray(values_xy, coords=coords_xy)
     monitor_xy = td.Near2FarCartesianMonitor(
         center=(1, 2, 3),
@@ -157,31 +161,36 @@ def test_n2f_data():
         name="n2f_monitor_xy",
         x=x,
         y=y,
-        plane_axis=2,
-        plane_distance=50,
+        proj_axis=2,
+        proj_distance=50,
     )
     data_xy = td.Near2FarCartesianData(
         monitor=monitor_xy,
-        Ntheta=scalar_field_xy,
-        Nphi=scalar_field_xy,
-        Ltheta=scalar_field_xy,
-        Lphi=scalar_field_xy,
+        Er=scalar_field_xy,
+        Etheta=scalar_field_xy,
+        Ephi=scalar_field_xy,
+        Hr=scalar_field_xy,
+        Htheta=scalar_field_xy,
+        Hphi=scalar_field_xy,
     )
 
-    ux = np.linspace(0, 5, 10)
-    uy = np.linspace(0, 10, 20)
-    coords_u = dict(ux=ux, uy=uy, f=f)
-    values_u = (1 + 1j) * np.random.random((len(ux), len(uy), len(f)))
+    ux = np.linspace(0, 0.4, 10)
+    uy = np.linspace(0, 0.6, 20)
+    r = np.atleast_1d(5)
+    coords_u = dict(ux=ux, uy=uy, r=r, f=f)
+    values_u = (1 + 1j) * np.random.random((len(ux), len(uy), len(r), len(f)))
     scalar_field_u = td.Near2FarKSpaceDataArray(values_u, coords=coords_u)
     monitor_u = td.Near2FarKSpaceMonitor(
-        center=(1, 2, 3), size=(2, 2, 2), freqs=f, name="n2f_monitor_u", ux=ux, uy=uy, u_axis=2
+        center=(1, 2, 3), size=(2, 2, 2), freqs=f, name="n2f_monitor_u", ux=ux, uy=uy, proj_axis=2
     )
     data_u = td.Near2FarKSpaceData(
         monitor=monitor_u,
-        Ntheta=scalar_field_u,
-        Nphi=scalar_field_u,
-        Ltheta=scalar_field_u,
-        Lphi=scalar_field_u,
+        Er=scalar_field_u,
+        Etheta=scalar_field_u,
+        Ephi=scalar_field_u,
+        Hr=scalar_field_u,
+        Htheta=scalar_field_u,
+        Hphi=scalar_field_u,
     )
 
     sim = td.Simulation(
@@ -236,31 +245,47 @@ def test_n2f_clientside():
 
     sim_data = td.SimulationData(simulation=sim, data=(data,))
 
-    n2f = td.RadiationVectors.from_near_field_monitors(
+    n2f = td.FarFields.from_near_field_monitors(
         sim_data=sim_data, near_monitors=[monitor], normal_dirs=["+"]
     )
 
     # make near-to-far monitors
     n2f_angle_monitor, n2f_cart_monitor, n2f_ksp_monitor = make_n2f_monitors(center, size, [f0])
 
-    rad_vecs_angular = n2f.radiation_vectors(n2f_angle_monitor)
-    rad_vecs_cartesian = n2f.radiation_vectors(n2f_cart_monitor)
-    rad_vecs_kspace = n2f.radiation_vectors(n2f_ksp_monitor)
+    far_fields_angular = n2f.far_fields(n2f_angle_monitor)
+    far_fields_cartesian = n2f.far_fields(n2f_cart_monitor)
+    far_fields_kspace = n2f.far_fields(n2f_ksp_monitor)
 
     # compute far field quantities
-    rad_vecs_angular.fields()
-    rad_vecs_angular.fields(r=20)
-    rad_vecs_angular.radar_cross_section()
-    rad_vecs_angular.power(r=20)
-    rad_vecs_angular.phi
-    rad_vecs_angular.theta
-    for key, val in rad_vecs_angular.field_components.items():
+    far_fields_angular.r
+    far_fields_angular.theta
+    far_fields_angular.phi
+    far_fields_angular.fields_spherical()
+    far_fields_angular.fields_cartesian()
+    far_fields_angular.radar_cross_section()
+    far_fields_angular.power()
+    for key, val in far_fields_angular.field_components.items():
         val.sel(f=f0)
+    far_fields_angular.renormalize_fields(proj_distance=5e6)
 
-    rad_vecs_cartesian.fields()
-    rad_vecs_cartesian.power()
+    far_fields_cartesian.x
+    far_fields_cartesian.y
+    far_fields_cartesian.z
+    far_fields_cartesian.fields_spherical()
+    far_fields_cartesian.fields_cartesian()
+    far_fields_cartesian.radar_cross_section()
+    far_fields_cartesian.power()
+    for key, val in far_fields_cartesian.field_components.items():
+        val.sel(f=f0)
+    far_fields_cartesian.renormalize_fields(proj_distance=5e6)
 
-    rad_vecs_kspace.fields()
-    rad_vecs_kspace.power()
-    rad_vecs_kspace.ux
-    rad_vecs_kspace.uy
+    far_fields_kspace.ux
+    far_fields_kspace.uy
+    far_fields_kspace.r
+    far_fields_kspace.fields_spherical()
+    far_fields_kspace.fields_cartesian()
+    far_fields_kspace.radar_cross_section()
+    far_fields_kspace.power()
+    for key, val in far_fields_kspace.field_components.items():
+        val.sel(f=f0)
+    far_fields_kspace.renormalize_fields(proj_distance=5e6)
