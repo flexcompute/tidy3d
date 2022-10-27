@@ -252,55 +252,58 @@ class ModeIndexDataArray(DataArray):
 
 
 class Near2FarAngleDataArray(DataArray):
-    """Radiation vectors in frequency domain as a function of angles theta and phi.
+    """Far fields in frequency domain as a function of angles theta and phi.
 
     Example
     -------
     >>> f = np.linspace(1e14, 2e14, 10)
+    >>> r = np.atleast_1d(5)
     >>> theta = np.linspace(0, np.pi, 10)
     >>> phi = np.linspace(0, 2*np.pi, 20)
-    >>> coords = dict(theta=theta, phi=phi, f=f)
-    >>> values = (1+1j) * np.random.random((len(theta), len(phi), len(f)))
+    >>> coords = dict(r=r, theta=theta, phi=phi, f=f)
+    >>> values = (1+1j) * np.random.random((len(r), len(theta), len(phi), len(f)))
     >>> data = Near2FarAngleDataArray(values, coords=coords)
     """
 
-    __slots__ = ("theta", "phi", "f")
-    _data_attrs = {"long_name": "radiation vectors"}
+    __slots__ = ("r", "theta", "phi", "f")
+    _data_attrs = {"long_name": "Far fields"}
 
 
 class Near2FarCartesianDataArray(DataArray):
-    """Radiation vectors in frequency domain as a function of local x and y coordinates.
+    """Far fields in frequency domain as a function of local x and y coordinates.
 
     Example
     -------
     >>> f = np.linspace(1e14, 2e14, 10)
     >>> x = np.linspace(0, 5, 10)
     >>> y = np.linspace(0, 10, 20)
-    >>> coords = dict(x=x, y=y, f=f)
-    >>> values = (1+1j) * np.random.random((len(x), len(y), len(f)))
+    >>> z = np.atleast_1d(5)
+    >>> coords = dict(x=x, y=y, z=z, f=f)
+    >>> values = (1+1j) * np.random.random((len(x), len(y), len(z), len(f)))
     >>> data = Near2FarCartesianDataArray(values, coords=coords)
     """
 
-    __slots__ = ("x", "y", "f")
-    _data_attrs = {"long_name": "radiation vectors"}
+    __slots__ = ("x", "y", "z", "f")
+    _data_attrs = {"long_name": "Far fields"}
 
 
 class Near2FarKSpaceDataArray(DataArray):
-    """Radiation vector in frequency domain as a function of normalized
+    """Far fields in frequency domain as a function of normalized
     kx and ky vectors on the observation plane.
 
     Example
     -------
     >>> f = np.linspace(1e14, 2e14, 10)
+    >>> r = np.atleast_1d(5)
     >>> ux = np.linspace(0, 5, 10)
     >>> uy = np.linspace(0, 10, 20)
-    >>> coords = dict(ux=ux, uy=uy, f=f)
-    >>> values = (1+1j) * np.random.random((len(ux), len(uy), len(f)))
+    >>> coords = dict(ux=ux, uy=uy, r=r, f=f)
+    >>> values = (1+1j) * np.random.random((len(ux), len(uy), len(r), len(f)))
     >>> data = Near2FarKSpaceDataArray(values, coords=coords)
     """
 
-    __slots__ = ("ux", "uy", "f")
-    _data_attrs = {"long_name": "radiation vectors"}
+    __slots__ = ("ux", "uy", "r", "f")
+    _data_attrs = {"long_name": "Far fields"}
 
 
 class DiffractionDataArray(DataArray):

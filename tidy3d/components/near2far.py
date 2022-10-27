@@ -23,7 +23,7 @@ from .types import Direction, Axis, Coordinate, ArrayLike
 from .medium import Medium
 from .base import Tidy3dBaseModel, cached_property
 from ..log import SetupError, ValidationError
-from ..constants import C_0, MICROMETER
+from ..constants import C_0, MICROMETER, ETA_0
 
 # Default number of points per wavelength in the background medium to use for resampling fields.
 PTS_PER_WVL = 10
@@ -63,8 +63,8 @@ class Near2FarSurface(Tidy3dBaseModel):
         return val
 
 
-class RadiationVectors(Tidy3dBaseModel):
-    """Near field to far field transformation to compute far field radiation vectors."""
+class FarFields(Tidy3dBaseModel):
+    """Near field to far field transformation to compute far fields."""
 
     sim_data: SimulationData = pydantic.Field(
         ...,
@@ -233,8 +233,8 @@ class RadiationVectors(Tidy3dBaseModel):
 
         field_data = sim_data[monitor_name]
 
-        currents = RadiationVectors._fields_to_currents(field_data, surface)
-        currents = RadiationVectors._resample_surface_currents(
+        currents = FarFields._fields_to_currents(field_data, surface)
+        currents = FarFields._resample_surface_currents(
             currents, sim_data, surface, medium, pts_per_wavelength
         )
 
@@ -366,7 +366,7 @@ class RadiationVectors(Tidy3dBaseModel):
         return currents
 
     # pylint:disable=too-many-locals, too-many-arguments
-    def _radiation_vectors_for_surface(
+    def _far_fields_for_surface(
         self,
         frequency: float,
         theta: ArrayLikeN2F,
@@ -374,7 +374,7 @@ class RadiationVectors(Tidy3dBaseModel):
         surface: Near2FarSurface,
         currents: xr.Dataset,
     ):
-        """Compute radiation vectors at an angle in spherical coordinates
+        """Compute far fields at an angle in spherical coordinates
         for a given set of surface currents and observation angles.
 
         Parameters
@@ -393,8 +393,8 @@ class RadiationVectors(Tidy3dBaseModel):
 
         Returns
         -------
-        tuple(numpy.ndarray[float],numpy.ndarray[float],numpy.ndarray[float],numpy.ndarray[float])
-            ``N_theta``, ``N_phi``, ``L_theta``, ``L_phi`` radiation vectors for the given surface.
+        tuple(numpy.ndarray[float], ...)
+            ``Er``, ``Etheta``, ``Ephi``, ``Hr``, ``Htheta``, ``Hphi`` for the given surface.
         """
 
         # make sure that observation points are interpreted w.r.t. the local origin
@@ -472,22 +472,31 @@ class RadiationVectors(Tidy3dBaseModel):
         cos_th_cos_phi = cos_theta[:, None] * cos_phi[None, :]
         cos_th_sin_phi = cos_theta[:, None] * sin_phi[None, :]
 
-        # N_theta (8.33a)
-        N_theta = J[0] * cos_th_cos_phi + J[1] * cos_th_sin_phi - J[2] * sin_theta[:, None]
+        # Ntheta (8.33a)
+        Ntheta = J[0] * cos_th_cos_phi + J[1] * cos_th_sin_phi - J[2] * sin_theta[:, None]
 
-        # N_phi (8.33b)
-        N_phi = -J[0] * sin_phi[None, :] + J[1] * cos_phi[None, :]
+        # Nphi (8.33b)
+        Nphi = -J[0] * sin_phi[None, :] + J[1] * cos_phi[None, :]
 
-        # L_theta  (8.34a)
-        L_theta = M[0] * cos_th_cos_phi + M[1] * cos_th_sin_phi - M[2] * sin_theta[:, None]
+        # Ltheta  (8.34a)
+        Ltheta = M[0] * cos_th_cos_phi + M[1] * cos_th_sin_phi - M[2] * sin_theta[:, None]
 
-        # L_phi  (8.34b)
-        L_phi = -M[0] * sin_phi[None, :] + M[1] * cos_phi[None, :]
+        # Lphi  (8.34b)
+        Lphi = -M[0] * sin_phi[None, :] + M[1] * cos_phi[None, :]
 
-        return N_theta, N_phi, L_theta, L_phi
+        eta = ETA_0 / np.sqrt(self.medium.eps_model(frequency))
 
-    def radiation_vectors(self, far_monitor: AbstractNear2FarMonitor) -> AbstractNear2FarData:
-        """Compute radiation vectors.
+        Etheta = -(Lphi + eta * Ntheta)
+        Ephi = Ltheta - eta * Nphi
+        Er = np.zeros_like(Ephi)
+        Htheta = -Ephi / eta
+        Hphi = Etheta / eta
+        Hr = np.zeros_like(Hphi)
+
+        return Er, Etheta, Ephi, Hr, Htheta, Hphi
+
+    def far_fields(self, far_monitor: AbstractNear2FarMonitor) -> AbstractNear2FarData:
+        """Compute far fields.
 
         Parameters
         ----------
@@ -497,16 +506,16 @@ class RadiationVectors(Tidy3dBaseModel):
         Returns
         -------
         :class:`.AbstractNear2FarData`
-            Data structure with ``N_theta``, ``N_phi``, ``L_theta``, ``L_phi`` radiation vectors.
+            Data structure with ``Er``, ``Etheta``, ``Ephi``, ``Hr``, ``Htheta``, ``Hphi``.
         """
         if isinstance(far_monitor, Near2FarAngleMonitor):
-            return self._radiation_vectors_angular(far_monitor)
+            return self._far_fields_angular(far_monitor)
         if isinstance(far_monitor, Near2FarCartesianMonitor):
-            return self._radiation_vectors_cartesian(far_monitor)
-        return self._radiation_vectors_kspace(far_monitor)
+            return self._far_fields_cartesian(far_monitor)
+        return self._far_fields_kspace(far_monitor)
 
-    def _radiation_vectors_angular(self, monitor: Near2FarAngleMonitor) -> Near2FarAngleData:
-        """Compute radiation vectors on an angle-based grid in spherical coordinates.
+    def _far_fields_angular(self, monitor: Near2FarAngleMonitor) -> Near2FarAngleData:
+        """Compute far fields on an angle-based grid in spherical coordinates.
 
         Parameters
         ----------
@@ -516,37 +525,40 @@ class RadiationVectors(Tidy3dBaseModel):
         Returns
         -------
         :class:.`Near2FarAngleData`
-            Data structure with ``N_theta``, ``N_phi``, ``L_theta``, ``L_phi`` radiation vectors.
+            Data structure with ``Er``, ``Etheta``, ``Ephi``, ``Hr``, ``Htheta``, ``Hphi``.
         """
         freqs = np.atleast_1d(self.frequencies)
         theta = np.atleast_1d(monitor.theta)
         phi = np.atleast_1d(monitor.phi)
 
-        # compute radiation vectors for the dataset associated with each monitor
-        rad_vec_names = ("Ntheta", "Nphi", "Ltheta", "Lphi")
-        rad_vecs = [
-            np.zeros((len(theta), len(phi), len(freqs)), dtype=complex) for _ in rad_vec_names
+        # compute far fields for the dataset associated with each monitor
+        field_names = ("Er", "Etheta", "Ephi", "Hr", "Htheta", "Hphi")
+        fields = [
+            np.zeros((1, len(theta), len(phi), len(freqs)), dtype=complex) for _ in field_names
         ]
+
+        k = AbstractNear2FarData.propagation_factor(medium=self.medium, frequency=freqs)
+        phase = np.atleast_1d(
+            AbstractNear2FarData.propagation_phase(dist=monitor.proj_distance, k=k)
+        )
 
         for surface in self.surfaces:
             for idx_f, frequency in enumerate(freqs):
-                _rad_vecs = self._radiation_vectors_for_surface(
+                _fields = self._far_fields_for_surface(
                     frequency, theta, phi, surface, self.currents[surface.monitor.name]
                 )
-                for rad_vec, _rad_vec in zip(rad_vecs, _rad_vecs):
-                    rad_vec[..., idx_f] += _rad_vec
+                for field, _field in zip(fields, _fields):
+                    field[..., idx_f] += _field * phase[idx_f]
 
-        coords = {"theta": theta, "phi": phi, "f": freqs}
+        coords = {"r": np.atleast_1d(monitor.proj_distance), "theta": theta, "phi": phi, "f": freqs}
         fields = {
-            name: Near2FarAngleDataArray(rad_vec, coords=coords)
-            for name, rad_vec in zip(rad_vec_names, rad_vecs)
+            name: Near2FarAngleDataArray(field, coords=coords)
+            for name, field in zip(field_names, fields)
         }
         return Near2FarAngleData(monitor=monitor, medium=monitor.medium, **fields)
 
-    def _radiation_vectors_cartesian(
-        self, monitor: Near2FarCartesianMonitor
-    ) -> Near2FarCartesianData:
-        """Compute radiation vectors on a Cartesian grid in spherical coordinates.
+    def _far_fields_cartesian(self, monitor: Near2FarCartesianMonitor) -> Near2FarCartesianData:
+        """Compute far fields on a Cartesian grid in spherical coordinates.
 
         Parameters
         ----------
@@ -556,19 +568,21 @@ class RadiationVectors(Tidy3dBaseModel):
         Returns
         -------
         :class:.`Near2FarCartesianData`
-            Data structure with ``N_theta``, ``N_phi``, ``L_theta``, ``L_phi`` radiation vectors.
+            Data structure with ``Er``, ``Etheta``, ``Ephi``, ``Hr``, ``Htheta``, ``Hphi``.
         """
         freqs = np.atleast_1d(self.frequencies)
         x, y, z = monitor.unpop_axis(
-            monitor.plane_distance, (monitor.x, monitor.y), axis=monitor.plane_axis
+            monitor.proj_distance, (monitor.x, monitor.y), axis=monitor.proj_axis
         )
         x, y, z = list(map(np.atleast_1d, [x, y, z]))
 
-        # compute radiation vectors for the dataset associated with each monitor
-        rad_vec_names = ("Ntheta", "Nphi", "Ltheta", "Lphi")
-        rad_vecs = [
-            np.zeros((len(x), len(y), len(z), len(freqs)), dtype=complex) for _ in rad_vec_names
+        # compute far fields for the dataset associated with each monitor
+        field_names = ("Er", "Etheta", "Ephi", "Hr", "Htheta", "Hphi")
+        fields = [
+            np.zeros((len(x), len(y), len(z), len(freqs)), dtype=complex) for _ in field_names
         ]
+
+        wave_number = AbstractNear2FarData.propagation_factor(medium=self.medium, frequency=freqs)
 
         # Zip together all combinations of observation points for better progress tracking
         iter_coords = [
@@ -578,30 +592,27 @@ class RadiationVectors(Tidy3dBaseModel):
             for k, _z in enumerate(z)
         ]
 
-        for (_x, _y, _z), (i, j, k) in track(
-            iter_coords, description="Computing radiation vectors"
-        ):
-            _, theta, phi = monitor.car_2_sph(_x, _y, _z)
+        for (_x, _y, _z), (i, j, k) in track(iter_coords, description="Computing far fields"):
+            r, theta, phi = monitor.car_2_sph(_x, _y, _z)
+            phase = np.atleast_1d(AbstractNear2FarData.propagation_phase(dist=r, k=wave_number))
 
             for surface in self.surfaces:
                 for idx_f, frequency in enumerate(freqs):
-                    _rad_vecs = self._radiation_vectors_for_surface(
+                    _fields = self._far_fields_for_surface(
                         frequency, theta, phi, surface, self.currents[surface.monitor.name]
                     )
-                    for rad_vec, _rad_vec in zip(rad_vecs, _rad_vecs):
-                        rad_vec[i, j, k, idx_f] += _rad_vec
+                    for field, _field in zip(fields, _fields):
+                        field[i, j, k, idx_f] += _field * phase[idx_f]
 
-        coords = {"x": np.array(monitor.x), "y": np.array(monitor.y), "f": freqs}
+        coords = {"x": x, "y": y, "z": z, "f": freqs}
         fields = {
-            name: Near2FarCartesianDataArray(
-                np.squeeze(rad_vec, axis=monitor.plane_axis), coords=coords
-            )
-            for name, rad_vec in zip(rad_vec_names, rad_vecs)
+            name: Near2FarCartesianDataArray(field, coords=coords)
+            for name, field in zip(field_names, fields)
         }
         return Near2FarCartesianData(monitor=monitor, medium=monitor.medium, **fields)
 
-    def _radiation_vectors_kspace(self, monitor: Near2FarKSpaceMonitor) -> Near2FarKSpaceData:
-        """Compute radiation vectors on a k-space grid in spherical coordinates.
+    def _far_fields_kspace(self, monitor: Near2FarKSpaceMonitor) -> Near2FarKSpaceData:
+        """Compute far fields on a k-space grid in spherical coordinates.
 
         Parameters
         ----------
@@ -611,33 +622,43 @@ class RadiationVectors(Tidy3dBaseModel):
         Returns
         -------
         :class:.`Near2FarKSpaceData`
-            Data structure with ``N_theta``, ``N_phi``, ``L_theta``, ``L_phi`` radiation vectors.
+            Data structure with ``Er``, ``Etheta``, ``Ephi``, ``Hr``, ``Htheta``, ``Hphi``.
         """
         freqs = np.atleast_1d(self.frequencies)
         ux = np.atleast_1d(monitor.ux)
         uy = np.atleast_1d(monitor.uy)
 
-        # compute radiation vectors for the dataset associated with each monitor
-        rad_vec_names = ("Ntheta", "Nphi", "Ltheta", "Lphi")
-        rad_vecs = [np.zeros((len(ux), len(uy), len(freqs)), dtype=complex) for _ in rad_vec_names]
+        # compute far fields for the dataset associated with each monitor
+        field_names = ("Er", "Etheta", "Ephi", "Hr", "Htheta", "Hphi")
+        fields = [np.zeros((len(ux), len(uy), 1, len(freqs)), dtype=complex) for _ in field_names]
+
+        k = AbstractNear2FarData.propagation_factor(medium=self.medium, frequency=freqs)
+        phase = np.atleast_1d(
+            AbstractNear2FarData.propagation_phase(dist=monitor.proj_distance, k=k)
+        )
 
         # Zip together all combinations of observation points for better progress tracking
         iter_coords = [([_ux, _uy], [i, j]) for i, _ux in enumerate(ux) for j, _uy in enumerate(uy)]
 
-        for (_ux, _uy), (i, j) in track(iter_coords, description="Computing radiation vectors"):
-            theta, phi = monitor.kspace_2_sph(_ux, _uy, monitor.u_axis)
+        for (_ux, _uy), (i, j) in track(iter_coords, description="Computing far fields"):
+            theta, phi = monitor.kspace_2_sph(_ux, _uy, monitor.proj_axis)
 
             for surface in self.surfaces:
                 for idx_f, frequency in enumerate(freqs):
-                    _rad_vecs = self._radiation_vectors_for_surface(
+                    _fields = self._far_fields_for_surface(
                         frequency, theta, phi, surface, self.currents[surface.monitor.name]
                     )
-                    for rad_vec, _rad_vec in zip(rad_vecs, _rad_vecs):
-                        rad_vec[i, j, idx_f] += _rad_vec
+                    for field, _field in zip(fields, _fields):
+                        field[i, j, 0, idx_f] += _field * phase[idx_f]
 
-        coords = {"ux": np.array(monitor.ux), "uy": np.array(monitor.uy), "f": freqs}
+        coords = {
+            "ux": np.array(monitor.ux),
+            "uy": np.array(monitor.uy),
+            "r": np.atleast_1d(monitor.proj_distance),
+            "f": freqs,
+        }
         fields = {
-            name: Near2FarKSpaceDataArray(rad_vec, coords=coords)
-            for name, rad_vec in zip(rad_vec_names, rad_vecs)
+            name: Near2FarKSpaceDataArray(field, coords=coords)
+            for name, field in zip(field_names, fields)
         }
         return Near2FarKSpaceData(monitor=monitor, medium=monitor.medium, **fields)

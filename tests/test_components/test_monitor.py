@@ -56,9 +56,11 @@ def test_near2far_local_origin():
 N2F_MNTS = [
     td.Near2FarAngleMonitor(size=(2, 0, 2), theta=[1, 2], phi=[0], name="f", freqs=[2e12]),
     td.Near2FarCartesianMonitor(
-        size=(2, 0, 2), x=[1, 2], y=[0], plane_distance=0, plane_axis=2, name="f", freqs=[2e12]
+        size=(2, 0, 2), x=[1, 2], y=[0], proj_distance=0, proj_axis=2, name="f", freqs=[2e12]
     ),
-    td.Near2FarKSpaceMonitor(size=(2, 0, 2), ux=[1, 2], uy=[0], u_axis=2, name="f", freqs=[2e12]),
+    td.Near2FarKSpaceMonitor(
+        size=(2, 0, 2), ux=[1, 2], uy=[0], proj_axis=2, name="f", freqs=[2e12]
+    ),
 ]
 
 
