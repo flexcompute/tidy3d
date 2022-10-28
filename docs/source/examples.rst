@@ -45,3 +45,6 @@ Case studies
     notebooks/HighQ_Ge
     notebooks/Near2FarSphereRCS
     notebooks/Adjoint
+    notebooks/BiosensorGrating.ipynb
+    notebooks/BraggGratings.ipynb
+    notebooks/PlasmonicNanoparticle.ipynb
