@@ -1,12 +1,12 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# # Start Here
+# # Start here
+# 
+# Run this notebook in your browser using [Binder](https://mybinder.org/v2/gh/flexcompute-readthedocs/tidy3d-docs/readthedocs?labpath=docs%2Fsource%2Fnotebooks%2FStartHere.ipynb).
 # 
 # This is a basic Tidy3D script showing the FDTD simulation of a delectric cube in the presence of a point dipole.
 
-import sys
-sys.path.append('../tidy3d')
 import numpy as np
 
 # import the package and the web API
@@ -15,6 +15,7 @@ import tidy3d.web as web
 
 
 # set up parameters of simulation (length scales are micrometers)
+grid_cells_per_wvl = 30
 pml = td.PML()
 sim_size = (4, 4, 4)
 lambda0 = 1.0
@@ -47,6 +48,7 @@ monitor = td.FieldMonitor(
 
 # Initialize simulation
 sim = td.Simulation(size=sim_size,
+    grid_spec = td.GridSpec.auto(min_steps_per_wvl=grid_cells_per_wvl),
     structures=[square],
     sources=[source],
     monitors=[monitor],
@@ -54,7 +56,8 @@ sim = td.Simulation(size=sim_size,
     boundary_spec=td.BoundarySpec.all_sides(boundary=td.PML())
 )
 
-print(f'simulation grid is shaped {sim.grid.num_cells} for {(sim.num_cells/1e6):.1f} million cells.')
+
+print(f'simulation grid is shaped {sim.grid.num_cells} for {int(np.prod(sim.grid.num_cells)/1e6)} million cells.')
 
 
 # run the simulation, download the data.
@@ -66,6 +69,9 @@ print(data.log)
 
 
 # plot the fields stored in the monitor
-ax = data.plot_field('fields_on_plane', 'Ey', freq=freq0, z=0)
+ax = data.plot_field('fields_on_plane', 'Ey', z=0)
 _ = ax.set_title('Ey(x,y)')
+
+
+
 

@@ -17,6 +17,7 @@ sys.path.insert(0, os.path.abspath("../../tidy3d/tidy3d/plugins"))
 # sys.path.insert(0, "../tidy3d/tidy3d/components")
 # sys.path.insert(0, "../tidy3d/tidy3d")
 # sys.path.insert(0, "../tidy3d")
+sys.path.insert(0, os.path.abspath(".."))
 
 print(sys.path)
 
@@ -33,6 +34,11 @@ def find_version(*file_paths):
         return version_match.group(1)
     raise RuntimeError("Unable to find version string.")
 
+
+# -- Generate Material Library documentation ---------------------------------
+
+import generate_doc
+generate_doc.main()
 
 # -- Project information -----------------------------------------------------
 
