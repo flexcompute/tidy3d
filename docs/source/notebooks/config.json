@@ -1,0 +1,18 @@
+{
+    "tmp_path": "./tmp/",
+    "output_path": "./output/",
+    "chunk_file_prefix": "./tmp/chunk",
+    "old_json_file": "./tmp/sim_old.json",
+    "source_modes_file": "./output/source_modes.hdf5",
+    "monitor_modes_file": "./output/monitor_modes.hdf5",
+    "simulation_data_file": "./output/monitor_data.hdf5",
+    "metadata_file": "./output/tidy3d_metadata.json",
+    "work_unit_file": "./output/work_unit.json",
+    "logfile": "./output/tidy3d.log",
+    "logfile_cpu": "./output/tidy3d_cpu.log",
+    "logfile_solver": "./output/tidy3d_solver.log",
+    "fdtd_result_file": "./output/tidy3d_result.json",
+    "mode_solver_error_file": "./output/mode_solver_error.json",
+    "monitor_raw_file": "./output/monitor_raw.hdf5",
+    "solver_progress_file": "./output/solver_progress.csv"
+}

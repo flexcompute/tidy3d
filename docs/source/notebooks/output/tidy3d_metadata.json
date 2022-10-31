@@ -1,0 +1,20 @@
+{
+    "max_res_unit": 2,
+    "min_res_unit": 1,
+    "opt_res_unit": 1,
+    "compute_weight": 207.80161210945948,
+    "sim_weight": 415.60322421891897,
+    "float_rw_time_stepping": 7896.46126015946,
+    "float_rw_post_process": 0.0,
+    "grid_points": 298485,
+    "grid_points_x": 201,
+    "grid_points_y": 3,
+    "grid_points_z": 495,
+    "time_steps": 680466,
+    "work_unit": 0.3113425729669395,
+    "flex_unit": 0.1245370291867758,
+    "tags": [
+        "0-2G",
+        "0-1Am"
+    ]
+}
