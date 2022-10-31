@@ -185,7 +185,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
     )
 
     courant: float = pydantic.Field(
-        0.9,
+        0.99,
         title="Courant Factor",
         description="Courant stability factor, controls time step to spatial step ratio. "
         "Lower values lead to more stable simulations for dispersive materials, "
