@@ -255,7 +255,10 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
         to be frequency-domain data associated with a 2D monitor. Along the tangential directions,
         the datasets have to have the same discretization. Along the normal direction, the monitor
         position may differ and is ignored. Other coordinates (``frequency``, ``mode_index``) have
-        to be either identical or broadcastable.
+        to be either identical or broadcastable. Broadcasting is also supported in the case in
+        which the other ``field_data`` has a dimension of size ``1`` whose coordinate is not in the
+        list of coordinates in the ``self`` dataset along the corresponding dimension. In that case,
+        the coordinates of the ``self`` dataset are used in the output.
 
         Parameters
         ----------
@@ -283,6 +286,9 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
         fields_other = field_data._centered_tangential_fields
         if conjugate:
             fields_self = {key: field.conj() for key, field in fields_self.items()}
+
+        # Drop size-1 dimensions in the other data
+        fields_other = {key: field.squeeze(drop=True) for key, field in fields_other.items()}
 
         # Cross products of fields
         dim1, dim2 = self._tangential_dims
