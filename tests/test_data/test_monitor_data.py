@@ -185,7 +185,17 @@ def test_mode_solver_data():
     field_data = make_field_data_2d()
     dot = data.dot(field_data)
     # Check that broadcasting worked
-    assert data.Ex.shape[-2:] == dot.shape
+    assert data.Ex.f == dot.f
+    assert data.Ex.mode_index == dot.mode_index
+    # Also try with a feild data at a single frequency that is not in the data frequencies
+    freq = 0.9 * field_data.Ex.f[0]
+    fields = field_data.field_components.items()
+    fields_single_f = {key: val.isel(f=[0]).assign_coords(f=[freq]) for key, val in fields}
+    field_data = field_data.copy(update=fields_single_f)
+    dot = data.dot(field_data)
+    # Check that broadcasting worked
+    assert data.Ex.f == dot.f
+    assert data.Ex.mode_index == dot.mode_index
 
 
 def test_permittivity_data():
