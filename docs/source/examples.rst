@@ -44,6 +44,7 @@ Case studies
     notebooks/WaveguideCrossing
     notebooks/HighQ_Si
     notebooks/HighQ_Ge
+    notebooks/PolarizationSplitterRotator
     notebooks/Near2FarSphereRCS
     notebooks/Adjoint
     notebooks/BiosensorGrating.ipynb
