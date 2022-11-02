@@ -75,7 +75,7 @@ autodoc_pydantic_model_show_config_member = False
 autodoc_pydantic_model_show_config_summary = False
 autodoc_pydantic_model_show_validator_summary = False
 autodoc_pydantic_model_show_validator_members = False
-# autodoc_pydantic_model_show_field_summary = False
+autodoc_pydantic_model_show_field_summary = False
 # autodoc_pydantic_model_members = False
 # autodoc_pydantic_field_list_validators = False
 # autodoc_pydantic_settings_summary_list_order = 'bysource'
@@ -145,7 +145,6 @@ html_theme_options = {
         "binderhub_url": "https://mybinder.org/v2/gh/flexcompute-readthedocs/tidy3d-docs/readthedocs?labpath=docs%2Fsource%2Fnotebooks",
         "notebook_interface": "jupyterlab",
     },
-
     "use_edit_page_button": True,
     "use_issues_button": True,
     "use_repository_button": True,
