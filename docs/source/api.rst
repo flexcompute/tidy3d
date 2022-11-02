@@ -217,6 +217,8 @@ Collections of Data from single monitor
    Near2FarCartesianData
    Near2FarKSpaceData
    Near2FarSurface
+   FarFields
+   DiffractionData
 
 Individual Datasets
 -------------------
@@ -234,6 +236,7 @@ Individual Datasets
    Near2FarAngleDataArray
    Near2FarCartesianDataArray
    Near2FarKSpaceDataArray
+   DiffractionDataArray
 
 Logging
 =======
