@@ -67,24 +67,32 @@ def make_field_time_data(symmetry: bool = True):
 
 
 def make_field_data_2d(symmetry: bool = True):
+    sim = SIM_SYM if symmetry else SIM
     return FieldData(
         monitor=FIELD_MONITOR_2D,
-        Ex=make_scalar_field_data_array("Ex", symmetry).isel(y=[0]),
-        Ey=make_scalar_field_data_array("Ey", symmetry).isel(y=[0]),
-        Ez=make_scalar_field_data_array("Ez", symmetry).isel(y=[0]),
-        Hx=make_scalar_field_data_array("Hx", symmetry).isel(y=[0]),
-        Hz=make_scalar_field_data_array("Hz", symmetry).isel(y=[0]),
+        Ex=make_scalar_field_data_array("Ex", symmetry).interp(y=[0]),
+        Ey=make_scalar_field_data_array("Ey", symmetry).interp(y=[0]),
+        Ez=make_scalar_field_data_array("Ez", symmetry).interp(y=[0]),
+        Hx=make_scalar_field_data_array("Hx", symmetry).interp(y=[0]),
+        Hz=make_scalar_field_data_array("Hz", symmetry).interp(y=[0]),
+        symmetry=sim.symmetry,
+        symmetry_center=sim.center,
+        grid_expanded=sim.discretize(FIELD_MONITOR_2D, extend=True),
     )
 
 
 def make_field_time_data_2d(symmetry: bool = True):
+    sim = SIM_SYM if symmetry else SIM
     return FieldTimeData(
         monitor=FIELD_TIME_MONITOR_2D,
-        Ex=make_scalar_field_time_data_array("Ex", symmetry).isel(y=[0]),
-        Ey=make_scalar_field_time_data_array("Ey", symmetry).isel(y=[0]),
-        Ez=make_scalar_field_time_data_array("Ez", symmetry).isel(y=[0]),
-        Hx=make_scalar_field_time_data_array("Hx", symmetry).isel(y=[0]),
-        Hz=make_scalar_field_time_data_array("Hz", symmetry).isel(y=[0]),
+        Ex=make_scalar_field_time_data_array("Ex", symmetry).interp(y=[0]),
+        Ey=make_scalar_field_time_data_array("Ey", symmetry).interp(y=[0]),
+        Ez=make_scalar_field_time_data_array("Ez", symmetry).interp(y=[0]),
+        Hx=make_scalar_field_time_data_array("Hx", symmetry).interp(y=[0]),
+        Hz=make_scalar_field_time_data_array("Hz", symmetry).interp(y=[0]),
+        symmetry=sim.symmetry,
+        symmetry_center=sim.center,
+        grid_expanded=sim.discretize(FIELD_TIME_MONITOR_2D, extend=True),
     )
 
 
@@ -161,6 +169,15 @@ def test_field_data():
     flux2 = np.abs(data_2d.dot(data_2d))
     # Assert result is the same
     assert np.all(flux1 == flux2)
+
+
+def test_field_data_to_source():
+    data = make_field_data_2d(symmetry=True)
+    data = data.copy(update={key: val.isel(f=[-1]) for key, val in data.field_components.items()})
+    source = data.to_source(source_time=td.GaussianPulse(freq0=2e14, fwidth=2e13), center=(1, 2, 3))
+    data = make_field_data_2d(symmetry=False)
+    data = data.copy(update={key: val.isel(f=[-1]) for key, val in data.field_components.items()})
+    source = data.to_source(source_time=td.GaussianPulse(freq0=2e14, fwidth=2e13), center=(1, 2, 3))
 
 
 def test_field_time_data():
