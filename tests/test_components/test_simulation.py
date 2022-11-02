@@ -477,6 +477,151 @@ def test_sim_plane_wave_error():
         )
 
 
+def test_sim_monitor_homogeneous():
+    """Make sure we error if a field projection monitor is not intersecting a
+    homogeneous region of the simulation.
+    """
+
+    medium_bg = td.Medium(permittivity=2)
+    medium_air = td.Medium(permittivity=1)
+
+    box = td.Structure(geometry=td.Box(size=(0.1, 0.1, 0.1)), medium=medium_air)
+
+    box_transparent = td.Structure(geometry=td.Box(size=(0.1, 0.1, 0.1)), medium=medium_bg)
+
+    monitor_n2f = td.Near2FarAngleMonitor(
+        center=(0, 0, 0),
+        size=(td.inf, td.inf, 0),
+        freqs=[250e12, 300e12],
+        name="monitor_n2f",
+        theta=[0],
+        phi=[0],
+    )
+
+    monitor_n2f_vol = td.Near2FarAngleMonitor(
+        center=(0.1, 0, 0),
+        size=(0.04, 0.04, 0.04),
+        freqs=[250e12, 300e12],
+        name="monitor_n2f_vol",
+        theta=[0],
+        phi=[0],
+    )
+
+    monitor_diffraction = td.DiffractionMonitor(
+        center=(0, 0, 0),
+        size=(td.inf, td.inf, 0),
+        freqs=[250e12, 300e12],
+        name="monitor_diffraction",
+        normal_dir="+",
+    )
+
+    src = td.PlaneWave(
+        source_time=td.GaussianPulse(freq0=2.5e14, fwidth=1e13),
+        center=(0, 0, 0),
+        size=(td.inf, td.inf, 0),
+        direction="+",
+        pol_angle=-1.0,
+    )
+
+    for monitor in [monitor_n2f, monitor_n2f_vol, monitor_diffraction]:
+
+        # with transparent box continue
+        sim1 = td.Simulation(
+            size=(1, 1, 1),
+            medium=medium_bg,
+            structures=[box_transparent],
+            sources=[src],
+            run_time=1e-12,
+            monitors=[monitor],
+        )
+
+        # with non-transparent box, raise
+        with pytest.raises(SetupError):
+            _ = td.Simulation(
+                size=(1, 1, 1),
+                medium=medium_bg,
+                structures=[box_transparent, box],
+                sources=[src],
+                monitors=[monitor],
+                run_time=1e-12,
+            )
+
+    mediums = td.Simulation.intersecting_media(monitor_n2f_vol, sim1.structures)
+    assert len(mediums) == 1
+
+    # when another medium intersects an excluded surface, no errors should be raised
+    monitor_n2f_vol_exclude = td.Near2FarAngleMonitor(
+        center=(0.2, 0, 0.2),
+        size=(0.4, 0.4, 0.4),
+        freqs=[250e12, 300e12],
+        name="monitor_n2f_vol",
+        theta=[0],
+        phi=[0],
+        exclude_surfaces=["x-", "z-"],
+    )
+
+    src = td.PlaneWave(
+        source_time=td.GaussianPulse(freq0=2.5e14, fwidth=1e13),
+        center=(0, 0, -0.5),
+        size=(td.inf, td.inf, 0),
+        direction="+",
+        pol_angle=-1.0,
+    )
+
+    _ = td.Simulation(
+        size=(1, 1, 1),
+        medium=medium_bg,
+        structures=[box_transparent, box],
+        sources=[src],
+        monitors=[monitor_n2f_vol_exclude],
+        run_time=1e-12,
+    )
+
+
+def test_diffraction_medium():
+    """Make sure we error if a diffraction monitor is in a lossy medium."""
+
+    medium_cond = td.Medium(permittivity=2, conductivity=1)
+    medium_disp = td.Lorentz(eps_inf=1.0, coeffs=[(1, 3, 2), (2, 4, 1)])
+
+    box_cond = td.Structure(geometry=td.Box(size=(td.inf, td.inf, 1)), medium=medium_cond)
+    box_disp = td.Structure(geometry=td.Box(size=(td.inf, td.inf, 1)), medium=medium_disp)
+
+    monitor = td.DiffractionMonitor(
+        center=(0, 0, 0),
+        size=(td.inf, td.inf, 0),
+        freqs=[250e12, 300e12],
+        name="monitor_diffraction",
+        normal_dir="+",
+    )
+
+    src = td.PlaneWave(
+        source_time=td.GaussianPulse(freq0=2.5e14, fwidth=1e13),
+        center=(0, 0, 0),
+        size=(td.inf, td.inf, 0),
+        direction="+",
+        pol_angle=-1.0,
+    )
+
+    with pytest.raises(SetupError):
+        _ = td.Simulation(
+            size=(2, 2, 2),
+            structures=[box_cond],
+            sources=[src],
+            run_time=1e-12,
+            monitors=[monitor],
+        )
+
+    with pytest.raises(SetupError):
+        _ = td.Simulation(
+            size=(2, 2, 2),
+            structures=[box_disp],
+            sources=[src],
+            monitors=[monitor],
+            run_time=1e-12,
+        )
+
+
 @pytest.mark.parametrize(
     "box_size,log_level",
     [((0.1, 0.1, 0.1), None), ((1, 0.1, 0.1), 30), ((0.1, 1, 0.1), 30), ((0.1, 0.1, 1), 30)],

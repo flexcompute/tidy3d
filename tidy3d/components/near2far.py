@@ -14,13 +14,13 @@ from .data.data_array import (
     Near2FarKSpaceDataArray,
 )
 from .data.monitor_data import FieldData
-from .data.monitor_data import AbstractNear2FarData
+from .data.monitor_data import AbstractFieldProjectionData
 from .data.monitor_data import Near2FarAngleData, Near2FarCartesianData, Near2FarKSpaceData
 from .data.sim_data import SimulationData
 from .monitor import FieldMonitor, AbstractNear2FarMonitor
 from .monitor import Near2FarAngleMonitor, Near2FarCartesianMonitor, Near2FarKSpaceMonitor
 from .types import Direction, Axis, Coordinate, ArrayLike
-from .medium import Medium
+from .medium import MediumType
 from .base import Tidy3dBaseModel, cached_property
 from ..log import SetupError, ValidationError
 from ..constants import C_0, MICROMETER, ETA_0
@@ -86,13 +86,6 @@ class FarFields(Tidy3dBaseModel):
         "will not resampled, but will still be colocated.",
     )
 
-    medium: Medium = pydantic.Field(
-        None,
-        title="Background medium",
-        description="Background medium in which to radiate near fields to far fields. "
-        "If ``None``, uses the :class:.Simulation background medium.",
-    )
-
     origin: Coordinate = pydantic.Field(
         None,
         title="Local origin",
@@ -117,12 +110,12 @@ class FarFields(Tidy3dBaseModel):
             return tuple(np.mean(val, axis=0))
         return val
 
-    @pydantic.validator("medium", always=True)
-    def set_medium(cls, val, values):
-        """Sets the .medium field using the simulation default if no medium was provided."""
-        if val is None:
-            val = values.get("sim_data").simulation.medium
-        return val
+    @cached_property
+    def medium(self) -> MediumType:
+        """Medium into which fields are to be projected."""
+        sim = self.sim_data.simulation
+        monitor = self.surfaces[0].monitor
+        return sim.monitor_medium(monitor)
 
     @cached_property
     def frequencies(self) -> List[float]:
@@ -136,7 +129,6 @@ class FarFields(Tidy3dBaseModel):
         near_monitors: List[FieldMonitor],
         normal_dirs: List[Direction],
         pts_per_wavelength: int = PTS_PER_WVL,
-        medium: Medium = None,
         origin: Coordinate = None,
     ):
         """Constructs :class:`Near2Far` from a list of surface monitors and their directions.
@@ -153,9 +145,6 @@ class FarFields(Tidy3dBaseModel):
         pts_per_wavelength : int = 10
             Number of points per wavelength with which to discretize the
             surface monitors for the projection. If ``None``, fields will not be resampled.
-        medium : :class:`.Medium`
-            Background medium in which to radiate near fields to far fields.
-            Default: same as the :class:`.Simulation` background medium.
         origin : :class:`.Coordinate`
             Local origin used for defining observation points. If ``None``, uses the
             average of the centers of all surface monitors.
@@ -176,7 +165,6 @@ class FarFields(Tidy3dBaseModel):
             sim_data=sim_data,
             surfaces=surfaces,
             pts_per_wavelength=pts_per_wavelength,
-            medium=medium,
             origin=origin,
         )
 
@@ -202,7 +190,7 @@ class FarFields(Tidy3dBaseModel):
     def compute_surface_currents(
         sim_data: SimulationData,
         surface: Near2FarSurface,
-        medium: Medium,
+        medium: MediumType,
         pts_per_wavelength: int = PTS_PER_WVL,
     ) -> xr.Dataset:
         """Returns resampled surface current densities associated with the surface monitor.
@@ -213,7 +201,7 @@ class FarFields(Tidy3dBaseModel):
             Container for simulation data containing the near field monitors.
         surface: :class:`.Near2FarSurface`
             :class:`.Near2FarSurface` to use as source of near field.
-        medium : :class:`.Medium`
+        medium : :class:`.MediumType`
             Background medium in which to radiate near fields to far fields.
             Default: same as the :class:`.Simulation` background medium.
         pts_per_wavelength : int = 10
@@ -297,7 +285,7 @@ class FarFields(Tidy3dBaseModel):
         currents: xr.Dataset,
         sim_data: SimulationData,
         surface: Near2FarSurface,
-        medium: Medium,
+        medium: MediumType,
         pts_per_wavelength: int = PTS_PER_WVL,
     ) -> xr.Dataset:
         """Returns the surface current densities associated with the surface monitor.
@@ -310,7 +298,7 @@ class FarFields(Tidy3dBaseModel):
             Container for simulation data containing the near field monitors.
         surface: :class:`.Near2FarSurface`
             :class:`.Near2FarSurface` to use as source of near field.
-        medium : :class:`.Medium`
+        medium : :class:`.MediumType`
             Background medium in which to radiate near fields to far fields.
             Default: same as the :class:`.Simulation` background medium.
         pts_per_wavelength : int = 10
@@ -429,7 +417,7 @@ class FarFields(Tidy3dBaseModel):
             return np.trapz(np.trapz(np.squeeze(function) * phase, pts_u, axis=0), pts_v, axis=0)
 
         phase = [None] * 3
-        propagation_factor = -1j * AbstractNear2FarData.propagation_factor(
+        propagation_factor = -1j * AbstractFieldProjectionData.wavenumber(
             medium=self.medium, frequency=frequency
         )
 
@@ -495,7 +483,7 @@ class FarFields(Tidy3dBaseModel):
 
         return Er, Etheta, Ephi, Hr, Htheta, Hphi
 
-    def far_fields(self, far_monitor: AbstractNear2FarMonitor) -> AbstractNear2FarData:
+    def far_fields(self, far_monitor: AbstractNear2FarMonitor) -> AbstractFieldProjectionData:
         """Compute far fields.
 
         Parameters
@@ -505,7 +493,7 @@ class FarFields(Tidy3dBaseModel):
 
         Returns
         -------
-        :class:`.AbstractNear2FarData`
+        :class:`.AbstractFieldProjectionData`
             Data structure with ``Er``, ``Etheta``, ``Ephi``, ``Hr``, ``Htheta``, ``Hphi``.
         """
         if isinstance(far_monitor, Near2FarAngleMonitor):
@@ -537,9 +525,9 @@ class FarFields(Tidy3dBaseModel):
             np.zeros((1, len(theta), len(phi), len(freqs)), dtype=complex) for _ in field_names
         ]
 
-        k = AbstractNear2FarData.propagation_factor(medium=self.medium, frequency=freqs)
+        k = AbstractFieldProjectionData.wavenumber(medium=self.medium, frequency=freqs)
         phase = np.atleast_1d(
-            AbstractNear2FarData.propagation_phase(dist=monitor.proj_distance, k=k)
+            AbstractFieldProjectionData.propagation_phase(dist=monitor.proj_distance, k=k)
         )
 
         for surface in self.surfaces:
@@ -555,7 +543,7 @@ class FarFields(Tidy3dBaseModel):
             name: Near2FarAngleDataArray(field, coords=coords)
             for name, field in zip(field_names, fields)
         }
-        return Near2FarAngleData(monitor=monitor, medium=monitor.medium, **fields)
+        return Near2FarAngleData(monitor=monitor, medium=self.medium, **fields)
 
     def _far_fields_cartesian(self, monitor: Near2FarCartesianMonitor) -> Near2FarCartesianData:
         """Compute far fields on a Cartesian grid in spherical coordinates.
@@ -582,7 +570,7 @@ class FarFields(Tidy3dBaseModel):
             np.zeros((len(x), len(y), len(z), len(freqs)), dtype=complex) for _ in field_names
         ]
 
-        wave_number = AbstractNear2FarData.propagation_factor(medium=self.medium, frequency=freqs)
+        wavenumber = AbstractFieldProjectionData.wavenumber(medium=self.medium, frequency=freqs)
 
         # Zip together all combinations of observation points for better progress tracking
         iter_coords = [
@@ -594,7 +582,9 @@ class FarFields(Tidy3dBaseModel):
 
         for (_x, _y, _z), (i, j, k) in track(iter_coords, description="Computing far fields"):
             r, theta, phi = monitor.car_2_sph(_x, _y, _z)
-            phase = np.atleast_1d(AbstractNear2FarData.propagation_phase(dist=r, k=wave_number))
+            phase = np.atleast_1d(
+                AbstractFieldProjectionData.propagation_phase(dist=r, k=wavenumber)
+            )
 
             for surface in self.surfaces:
                 for idx_f, frequency in enumerate(freqs):
@@ -609,7 +599,7 @@ class FarFields(Tidy3dBaseModel):
             name: Near2FarCartesianDataArray(field, coords=coords)
             for name, field in zip(field_names, fields)
         }
-        return Near2FarCartesianData(monitor=monitor, medium=monitor.medium, **fields)
+        return Near2FarCartesianData(monitor=monitor, medium=self.medium, **fields)
 
     def _far_fields_kspace(self, monitor: Near2FarKSpaceMonitor) -> Near2FarKSpaceData:
         """Compute far fields on a k-space grid in spherical coordinates.
@@ -632,9 +622,9 @@ class FarFields(Tidy3dBaseModel):
         field_names = ("Er", "Etheta", "Ephi", "Hr", "Htheta", "Hphi")
         fields = [np.zeros((len(ux), len(uy), 1, len(freqs)), dtype=complex) for _ in field_names]
 
-        k = AbstractNear2FarData.propagation_factor(medium=self.medium, frequency=freqs)
+        k = AbstractFieldProjectionData.wavenumber(medium=self.medium, frequency=freqs)
         phase = np.atleast_1d(
-            AbstractNear2FarData.propagation_phase(dist=monitor.proj_distance, k=k)
+            AbstractFieldProjectionData.propagation_phase(dist=monitor.proj_distance, k=k)
         )
 
         # Zip together all combinations of observation points for better progress tracking
@@ -661,4 +651,4 @@ class FarFields(Tidy3dBaseModel):
             name: Near2FarKSpaceDataArray(field, coords=coords)
             for name, field in zip(field_names, fields)
         }
-        return Near2FarKSpaceData(monitor=monitor, medium=monitor.medium, **fields)
+        return Near2FarKSpaceData(monitor=monitor, medium=self.medium, **fields)

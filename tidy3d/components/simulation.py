@@ -24,7 +24,7 @@ from .boundary import PML, StablePML, Absorber
 from .structure import Structure
 from .source import SourceType, PlaneWave, GaussianBeam, AstigmaticGaussianBeam
 from .monitor import MonitorType, Monitor, FreqMonitor
-from .monitor import AbstractFieldMonitor, DiffractionMonitor
+from .monitor import AbstractFieldMonitor, DiffractionMonitor, AbstractNear2FarMonitor
 from .viz import add_ax_if_none, equal_aspect
 
 from .viz import MEDIUM_CMAP, PlotParams, plot_params_symmetry
@@ -439,6 +439,53 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
                         )
         return val
 
+    # pylint: disable=too-many-locals
+    @pydantic.validator("monitors", always=True)
+    def _projection_monitors_homogeneous(cls, val, values):
+        """Error if any field projection monitor is not in a homogeneous region."""
+
+        if val is None:
+            return val
+
+        # list of structures including background as a Box()
+        structure_bg = Structure(
+            geometry=Box(
+                size=values.get("size"),
+                center=values.get("center"),
+            ),
+            medium=values.get("medium"),
+        )
+
+        structures = values.get("structures") or []
+        total_structures = [structure_bg] + list(structures)
+
+        for monitor in val:
+            if isinstance(monitor, (AbstractNear2FarMonitor, DiffractionMonitor)):
+                mediums = cls.intersecting_media(monitor, total_structures)
+                # make sure there is no more than one medium in the returned list
+                if len(mediums) > 1:
+                    raise SetupError(
+                        f"{len(mediums)} different mediums detected on plane "
+                        f"intersecting a {monitor.type}. Plane must be homogeneous."
+                    )
+
+        return val
+
+    @pydantic.validator("monitors", always=True)
+    def diffraction_monitor_medium(cls, val, values):
+        """If any :class:`DiffractionMonitor` exists, ensure is does not lie in a lossy medium."""
+        monitors = val
+        structures = values.get("structures")
+        medium = values.get("medium")
+        for monitor in monitors:
+            if isinstance(monitor, DiffractionMonitor):
+                medium_set = Simulation.intersecting_media(monitor, structures)
+                medium = medium_set.pop() if medium_set else medium
+                _, index_k = medium.nk_model(frequency=np.array(monitor.freqs))
+                if not np.all(index_k == 0):
+                    raise SetupError("Diffraction monitors must not lie in a lossy medium.")
+        return val
+
     @pydantic.validator("grid_spec", always=True)
     def _warn_grid_size_too_small(cls, val, values):  # pylint:disable=too-many-locals
         """Warn user if any grid size is too large compared to minimum wavelength in material."""
@@ -504,18 +551,9 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         # for each plane wave in the sources list
         for source in val:
             if isinstance(source, (PlaneWave, GaussianBeam, AstigmaticGaussianBeam)):
-
-                # get all merged structures on the plane
-                normal_axis_index = source.size.index(0.0)
-                dim = "xyz"[normal_axis_index]
-                pos = source.center[normal_axis_index]
-                xyz_kwargs = {dim: pos}
-                structures_merged = cls._filter_structures_plane(total_structures, **xyz_kwargs)
-
+                mediums = cls.intersecting_media(source, total_structures)
                 # make sure there is no more than one medium in the returned list
-                mediums = {medium for medium, _ in structures_merged}
                 if len(mediums) > 1:
-
                     raise SetupError(
                         f"{len(mediums)} different mediums detected on plane "
                         f"intersecting a {source.type} source. Plane must be homogeneous."
@@ -635,6 +673,67 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         """Returns structure representing the background of the :class:`Simulation`."""
         geometry = Box(size=(inf, inf, inf))
         return Structure(geometry=geometry, medium=self.medium)
+
+    @staticmethod
+    def intersecting_media(
+        test_object: Box, structures: Tuple[Structure, ...]
+    ) -> Tuple[MediumType, ...]:
+        """From a given list of structures, returns a list of :class:`AbstractMedium` associated
+        with those structures that intersect with the ``test_object``, if it is a surface, or its
+        surfaces, if it is a volume.
+
+        Parameters
+        -------
+        test_object : :class:`Box`
+            Object for which intersecting media are to be detected.
+        structures : List[:class:`AbstractMedium`]
+            List of structures whose media will be tested.
+
+        Returns
+        -------
+        List[:class:`AbstractMedium`]
+            Set of distinct mediums that intersect with the given planar object.
+        """
+        if test_object.size.count(0.0) == 1:
+            # get all merged structures on the test_object, which is already planar
+            normal_axis_index = test_object.size.index(0.0)
+            dim = "xyz"[normal_axis_index]
+            pos = test_object.center[normal_axis_index]
+            xyz_kwargs = {dim: pos}
+            structures_merged = Simulation._filter_structures_plane(structures, **xyz_kwargs)
+            mediums = {medium for medium, _ in structures_merged}
+            return mediums
+
+        # if the test object is a volume, test each surface recursively
+        object_dict = test_object.dict()
+        exclude_surfaces = object_dict.pop("exclude_surfaces", None)
+        surfaces = test_object.surfaces(**object_dict)
+        if exclude_surfaces:
+            surfaces = [surf for surf in surfaces if surf.name[-2:] not in exclude_surfaces]
+        mediums = set()
+        for surface in surfaces:
+            _mediums = Simulation.intersecting_media(surface, structures)
+            mediums.update(_mediums)
+        return mediums
+
+    def monitor_medium(self, monitor: MonitorType):
+        """Return the medium in which the given monitor resides.
+
+        Parameters
+        -------
+        monitor : :class:`Monitor`
+            Monitor whose associated medium is to be returned.
+
+        Returns
+        -------
+        :class:`AbstractMedium`
+            Medium associated with the given :class:`Monitor`.
+        """
+        medium_set = self.intersecting_media(monitor, self.structures)
+        if len(medium_set) > 1:
+            raise SetupError(f"Monitor {monitor.name} intersects more than one medium.")
+        medium = medium_set.pop() if medium_set else self.medium
+        return medium
 
     """ Plotting """
 

@@ -208,11 +208,13 @@ def update_1_7(sim_dict: dict) -> dict:
 
     def fix_angle_info(mnt_dict: dict) -> dict:
         mnt_dict.pop("fields")
+        mnt_dict.pop("medium")
         mnt_dict["proj_distance"] = 1e6
         return mnt_dict
 
     def fix_cartesian_info(mnt_dict: dict) -> dict:
         mnt_dict.pop("fields")
+        mnt_dict.pop("medium")
         dist = mnt_dict.pop("plane_distance")
         mnt_dict["proj_distance"] = dist
         axis = mnt_dict.pop("plane_axis")
@@ -221,9 +223,14 @@ def update_1_7(sim_dict: dict) -> dict:
 
     def fix_kspace_info(mnt_dict: dict) -> dict:
         mnt_dict.pop("fields")
+        mnt_dict.pop("medium")
         mnt_dict["proj_distance"] = 1e6
         axis = mnt_dict.pop("u_axis")
         mnt_dict["proj_axis"] = axis
+        return mnt_dict
+
+    def fix_diffraction_info(mnt_dict: dict) -> dict:
+        mnt_dict.pop("medium", None)
         return mnt_dict
 
     iterate_update_dict(
@@ -232,6 +239,7 @@ def update_1_7(sim_dict: dict) -> dict:
             "Near2FarAngleMonitor": fix_angle_info,
             "Near2FarCartesianMonitor": fix_cartesian_info,
             "Near2FarKSpaceMonitor": fix_kspace_info,
+            "DiffractionMonitor": fix_diffraction_info,
         },
     )
     return sim_dict

@@ -133,8 +133,12 @@ def make_diffraction_data():
     sim_size, bloch_vecs, data = make_diffraction_data_array()
     return DiffractionData(
         monitor=DIFFRACTION_MONITOR,
-        L=data,
-        N=data,
+        Etheta=data,
+        Ephi=data,
+        Er=data,
+        Htheta=data,
+        Hphi=data,
+        Hr=data,
         sim_size=sim_size,
         bloch_vecs=bloch_vecs,
     )
@@ -224,26 +228,24 @@ def test_flux_time_data():
 
 def test_diffraction_data():
     data = make_diffraction_data()
-    _ = data.L
-    _ = data.N
+    _ = data.Etheta
+    _ = data.Ephi
+    _ = data.Er
+    _ = data.Htheta
+    _ = data.Hphi
+    _ = data.Hr
     _ = data.orders_x
     _ = data.orders_y
-    _ = data.frequencies
-    _ = data.wavelength
-    _ = data.wavenumber
+    _ = data.f
     _ = data.ux
     _ = data.uy
     _ = data.angles
     _ = data.sim_size
     _ = data.bloch_vecs
-    _ = data.power
     _ = data.amps
-    _ = data.E_sph
-    _ = data.H_sph
-    _ = data.E_car
-    _ = data.H_car
-    _ = data.L_sph
-    _ = data.N_sph
+    _ = data.power
+    _ = data.fields_spherical
+    _ = data.fields_cartesian
 
 
 def test_colocate():
@@ -395,7 +397,5 @@ def test_data_array_hdf5_no_warnings(caplog):
 
 def test_diffraction_data_use_medium():
     data = make_diffraction_data()
-    new_monitor = data.monitor.copy(update=dict(medium=td.Medium(permittivity=4)))
-    data = data.copy(update=dict(monitor=new_monitor))
-    assert np.allclose(data.wavelength, td.C_0 / data.frequencies / 2.0)
-    assert np.allclose(data.wavenumber, 2 * 2 * np.pi * data.frequencies / td.C_0)
+    data = data.copy(update=dict(medium=td.Medium(permittivity=4)))
+    assert np.allclose(data.eta, np.real(td.ETA_0 / 2.0))

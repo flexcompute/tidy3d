@@ -8,7 +8,6 @@ import numpy as np
 from .types import Ax, EMField, ArrayLike, Bound, FreqArray
 from .types import Literal, Direction, Coordinate, Axis, ObsGridArray
 from .geometry import Box
-from .medium import Medium, MediumType
 from .validators import assert_plane, validate_unique
 from .base import cached_property
 from .mode import ModeSpec
@@ -487,13 +486,6 @@ class AbstractNear2FarMonitor(SurfaceIntegrationMonitor, FreqMonitor):
         units=MICROMETER,
     )
 
-    medium: MediumType = pydantic.Field(
-        Medium(permittivity=1),
-        title="Background medium",
-        description="Background medium in which to radiate near fields to far fields. "
-        "If not provided, uses free space.",
-    )
-
     @property
     def axis(self) -> Axis:
         """Returns the :class:`.Axis` normal to this surface."""
@@ -540,15 +532,17 @@ class Near2FarAngleMonitor(AbstractNear2FarMonitor):
 
     theta: ObsGridArray = pydantic.Field(
         ...,
-        title="Polar Angles",
-        description="Polar angles relative to ``local_origin`` at which to compute far fields.",
+        title="Polar angles",
+        description="Polar angles with respect to the global z axis, relative to the location of "
+        "``local_origin``, at which to compute far fields.",
         units=RADIAN,
     )
 
     phi: ObsGridArray = pydantic.Field(
         ...,
-        title="Azimuth Angles",
-        description="Azimuth angles relative to ``local_origin`` at which to compute far fields.",
+        title="Azimuth angles",
+        description="Azimuth angles with respect to the global z axis, relative to the location of "
+        "``local_origin``, at which to compute far fields.",
         units=RADIAN,
     )
 
@@ -716,13 +710,6 @@ class DiffractionMonitor(PlanarMonitor, FreqMonitor):
         description="Diffraction orders along y for which efficiency should be computed. "
         "Orders corresponding to wave numbers outside of the light cone will be ignored. "
         "By default, only order 0 will be considered.",
-    )
-
-    medium: MediumType = pydantic.Field(
-        Medium(permittivity=1),
-        title="Background medium",
-        description="Background medium through which to project fields. "
-        "If not provided, uses free space.",
     )
 
     _unique_x = validate_unique("orders_x")
