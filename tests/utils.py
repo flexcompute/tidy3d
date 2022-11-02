@@ -160,6 +160,25 @@ SIM_FULL = Simulation(
             waist_sizes=(1.0, 2.0),
             waist_distances=(3.0, 4.0),
         ),
+        # CustomFieldSource(
+        #     center=(1, 2, 3),
+        #     size=(2, 2, 0),
+        #     source_time=GaussianPulse(
+        #         freq0=2e14,
+        #         fwidth=4e13,
+        #     ),
+        #     field_dataset=FieldDataset(
+        #         Ex=ScalarFieldDataArray(
+        #             np.ones((101, 101, 1, 1)),
+        #             coords=dict(
+        #                 x=np.linspace(-1, 1, 101),
+        #                 y=np.linspace(-1, 1, 101),
+        #                 z=np.array([0]),
+        #                 f=[2e14],
+        #             ),
+        #         )
+        #     ),
+        # ),
     ],
     monitors=(
         FieldMonitor(

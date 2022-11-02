@@ -84,6 +84,12 @@ def test_validator_freq_multiple():
         field_source = FIELD_SRC.copy(update=dict(field_dataset=field_dataset))
 
 
+def test_validator_data_span():
+    """Test that it errors if data does not span source size."""
+    with pytest.raises(SetupError):
+        field_source = FIELD_SRC.copy(update=dict(size=(3, 0, 2)))
+
+
 @clear_tmp
 def test_io_hdf5():
     """Saving and loading from hdf5 file."""
@@ -100,6 +106,14 @@ def test_io_json(caplog):
     assert_log_level(caplog, 30)
     with pytest.raises(DataError):
         FIELD_SRC2 = FIELD_SRC.from_file(path)
+
+
+import dill as pickle
+@clear_tmp
+def test_simulation_load_export_pckl():
+    path = "tests/tmp/source.pckl"
+    with open(path, "wb") as pickle_file:
+        pickle.dump(FIELD_SRC, pickle_file)
 
 
 @clear_tmp
