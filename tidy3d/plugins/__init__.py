@@ -4,3 +4,4 @@ from .dispersion.fit import DispersionFitter
 from .dispersion.fit_web import StableDispersionFitter, AdvancedFitterParam
 from .mode.mode_solver import ModeSolver, ModeSolverData
 from .smatrix.smatrix import ComponentModeler, Port
+from .resonance.resonance import ResonanceFinder
