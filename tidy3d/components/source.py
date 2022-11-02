@@ -22,6 +22,9 @@ from ..log import SetupError
 
 # in spectrum computation, discard amplitudes with relative magnitude smaller than cutoff
 DFT_CUTOFF = 1e-8
+# when checking if custom data spans the source plane, allow for a small tolerance
+# due to numerical precision
+DATA_SPAN_TOL = 1e-8
 
 
 class SourceTime(ABC, Tidy3dBaseModel):
@@ -501,7 +504,40 @@ class BroadbandSource(Source, ABC):
 
 
 class CustomFieldSource(FieldSource, PlanarSource):
-    """Implements custom E, H fields specified by data."""
+    """Implements a source corresponding to an input dataset containing ``E`` and ``H`` fields.
+    For the injection to work as expected, the fields must decay by the edges of the source plane,
+    or the source plane must span the entire simulation domain and the fields must match the
+    simulation boundary conditions. The equivalent source currents are fully defined by the field
+    components tangential to the source plane. The normal components (e.g. ``Ez`` and ``Hz``) can be
+    provided but will have no effect on the results, in accordance with the equivalence principle.
+    At least one of the tangential components has to be defined. For example, for a ``z``-normal
+    source, at least one of ``Ex``, ``Ey``, ``Hx``, and ``Hy`` has to be present in the provided
+    dataset. The coordinates of all provided fields are assumed to be relative to the source
+    center. Each provided field component must also span the size of the source.
+
+    Note
+    ----
+        If only the ``E`` or only the ``H`` fields are provided, the source will not be directional,
+        but will inject equal power in both directions instead.
+
+    Example
+    -------
+    >>> from tidy3d import ScalarFieldDataArray
+    >>> pulse = GaussianPulse(freq0=200e12, fwidth=20e12)
+    >>> x = np.linspace(-1, 1, 101)
+    >>> y = np.linspace(-1, 1, 101)
+    >>> z = np.array([0])
+    >>> f = [2e14]
+    >>> coords = dict(x=x, y=y, z=z, f=f)
+    >>> scalar_field = ScalarFieldDataArray(np.ones((101, 101, 1, 1)), coords=coords)
+    >>> dataset = FieldDataset(Ex=scalar_field)
+    >>> custom_source = CustomFieldSource(
+    ...     center=(1, 1, 1),
+    ...     size=(2, 2, 0),
+    ...     source_time=pulse,
+    ...     field_dataset=dataset)
+
+    """
 
     field_dataset: FieldDataset = pydantic.Field(
         ...,
@@ -532,6 +568,7 @@ class CustomFieldSource(FieldSource, PlanarSource):
 
     @pydantic.validator("field_dataset", always=True)
     def _tangential_component_defined(cls, val: FieldDataset, values: dict) -> FieldDataset:
+        """Assert that at least one tangential field component is provided."""
         size = get_value(key="size", values=values)
         normal_axis = size.index(0.0)
         _, (cmp1, cmp2) = cls.pop_axis("xyz", axis=normal_axis)
@@ -541,6 +578,21 @@ class CustomFieldSource(FieldSource, PlanarSource):
                 if tangential_field in val.field_components:
                     return val
         raise SetupError("no tangential field found in the suppled `field_data`.")
+
+    @pydantic.validator("field_dataset", always=True)
+    def _tangential_fields_span_source(cls, val: FieldDataset, values: dict) -> FieldDataset:
+        """Assert that provided data spans source bounds in the frame with the source center as the
+        origin."""
+        size = get_value(key="size", values=values)
+        for field_name, field in val.field_components.items():
+            try:
+                for dim, dim_name in enumerate("xyz"):
+                    assert np.amin(field.coords[dim_name]) <= -size[dim] / 2 + DATA_SPAN_TOL
+                    assert np.amax(field.coords[dim_name]) >= size[dim] / 2 - DATA_SPAN_TOL
+            except AssertionError:
+                # pylint:disable=raise-missing-from
+                raise SetupError(f"Data for field {field_name} does not span the source plane.")
+        return val
 
 
 """ Source current profiles defined by (1) angle or (2) desired mode. Sets theta and phi angles."""
@@ -672,7 +724,7 @@ class ModeSource(DirectionalSource, PlanarSource, BroadbandSource):
 
 
 class PlaneWave(AngledFieldSource, PlanarSource):
-    """Uniform current distribution on an infinite extent plane.  One element of size must be zero.
+    """Uniform current distribution on an infinite extent plane. One element of size must be zero.
 
     Example
     -------
@@ -757,4 +809,5 @@ SourceType = Union[
     AstigmaticGaussianBeam,
     ModeSource,
     PlaneWave,
+    CustomFieldSource,
 ]
