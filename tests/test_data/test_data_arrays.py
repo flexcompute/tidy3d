@@ -44,7 +44,6 @@ FIELDS = ("Ex", "Ey", "Ez", "Hx", "Hz")
 INTERVAL = 2
 ORDERS_X = list(range(-1, 2))
 ORDERS_Y = list(range(-2, 3))
-POL = ["x", "y"]
 
 FS = np.linspace(1e14, 2e14, 11)
 TS = np.linspace(0, 1e-12, 11)
@@ -67,7 +66,12 @@ MODE_MONITOR = ModeMonitor(size=SIZE_2D, name="mode", mode_spec=MODE_SPEC, freqs
 FLUX_MONITOR = FluxMonitor(size=SIZE_2D, freqs=FREQS, name="flux")
 FLUX_TIME_MONITOR = FluxTimeMonitor(size=SIZE_2D, interval=INTERVAL, name="flux_time")
 DIFFRACTION_MONITOR = DiffractionMonitor(
-    size=(inf, 0, inf), freqs=FS, name="diffraction", orders_x=ORDERS_X, orders_y=ORDERS_Y
+    center=(0, 0, 2),
+    size=(inf, inf, 0),
+    freqs=FS,
+    name="diffraction",
+    orders_x=ORDERS_X,
+    orders_y=ORDERS_Y,
 )
 
 MONITORS = [
@@ -172,13 +176,11 @@ def make_flux_time_data_array():
 
 
 def make_diffraction_data_array():
-    values = (1 + 1j) * np.random.random((len(ORDERS_X), len(ORDERS_Y), len(POL), len(FS)))
+    values = (1 + 1j) * np.random.random((len(ORDERS_X), len(ORDERS_Y), len(FS)))
     return (
         [SIZE_2D[0], SIZE_2D[2]],
         [1.0, 2.0],
-        DiffractionDataArray(
-            values, coords=dict(orders_x=ORDERS_X, orders_y=ORDERS_Y, polarization=POL, f=FS)
-        ),
+        DiffractionDataArray(values, coords=dict(orders_x=ORDERS_X, orders_y=ORDERS_Y, f=FS)),
     )
 
 

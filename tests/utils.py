@@ -184,8 +184,8 @@ SIM_FULL = Simulation(
             mode_spec=ModeSpec(),
         ),
         Near2FarAngleMonitor(
-            center=(1, 2, 3),
-            size=(2, 2, 2),
+            center=(0, 0, 0),
+            size=(0, 2, 2),
             freqs=[250e12, 300e12],
             name="n2f_angle",
             custom_origin=(1, 2, 3),
@@ -193,8 +193,8 @@ SIM_FULL = Simulation(
             theta=np.linspace(-np.pi / 2, np.pi / 2, 100),
         ),
         Near2FarCartesianMonitor(
-            center=(1, 2, 3),
-            size=(2, 2, 2),
+            center=(0, 0, 0),
+            size=(0, 2, 2),
             freqs=[250e12, 300e12],
             name="n2f_cartesian",
             custom_origin=(1, 2, 3),
@@ -204,8 +204,8 @@ SIM_FULL = Simulation(
             proj_distance=5,
         ),
         # Near2FarKSpaceMonitor(
-        #     center=(1,2,3),
-        #     size=(2,2,2),
+        #     center=(0, 0, 0),
+        #     size=(0, 2, 2),
         #     freqs=[250e12, 300e12],
         #     name='n2f_kspace',
         #     custom_origin=(1,2,3),

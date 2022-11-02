@@ -45,7 +45,6 @@ def make_n2f_monitors(center, size, freqs):
         custom_origin=center,
         phi=list(phis),
         theta=list(thetas),
-        medium=MEDIUM,
         normal_dir="+",
         exclude_surfaces=exclude_surfaces,
     )
@@ -61,7 +60,6 @@ def make_n2f_monitors(center, size, freqs):
         y=list(ys),
         proj_axis=proj_axis,
         proj_distance=z,
-        medium=MEDIUM,
         normal_dir="+",
         exclude_surfaces=exclude_surfaces,
     )
@@ -76,7 +74,6 @@ def make_n2f_monitors(center, size, freqs):
         ux=list(uxs),
         uy=list(uys),
         proj_axis=proj_axis,
-        medium=MEDIUM,
         normal_dir="+",
         exclude_surfaces=exclude_surfaces,
     )
@@ -260,10 +257,10 @@ def test_n2f_clientside():
     far_fields_angular.r
     far_fields_angular.theta
     far_fields_angular.phi
-    far_fields_angular.fields_spherical()
-    far_fields_angular.fields_cartesian()
-    far_fields_angular.radar_cross_section()
-    far_fields_angular.power()
+    far_fields_angular.fields_spherical
+    far_fields_angular.fields_cartesian
+    far_fields_angular.radar_cross_section
+    far_fields_angular.power
     for key, val in far_fields_angular.field_components.items():
         val.sel(f=f0)
     far_fields_angular.renormalize_fields(proj_distance=5e6)
@@ -271,10 +268,10 @@ def test_n2f_clientside():
     far_fields_cartesian.x
     far_fields_cartesian.y
     far_fields_cartesian.z
-    far_fields_cartesian.fields_spherical()
-    far_fields_cartesian.fields_cartesian()
-    far_fields_cartesian.radar_cross_section()
-    far_fields_cartesian.power()
+    far_fields_cartesian.fields_spherical
+    far_fields_cartesian.fields_cartesian
+    far_fields_cartesian.radar_cross_section
+    far_fields_cartesian.power
     for key, val in far_fields_cartesian.field_components.items():
         val.sel(f=f0)
     far_fields_cartesian.renormalize_fields(proj_distance=5e6)
@@ -282,10 +279,10 @@ def test_n2f_clientside():
     far_fields_kspace.ux
     far_fields_kspace.uy
     far_fields_kspace.r
-    far_fields_kspace.fields_spherical()
-    far_fields_kspace.fields_cartesian()
-    far_fields_kspace.radar_cross_section()
-    far_fields_kspace.power()
+    far_fields_kspace.fields_spherical
+    far_fields_kspace.fields_cartesian
+    far_fields_kspace.radar_cross_section
+    far_fields_kspace.power
     for key, val in far_fields_kspace.field_components.items():
         val.sel(f=f0)
     far_fields_kspace.renormalize_fields(proj_distance=5e6)

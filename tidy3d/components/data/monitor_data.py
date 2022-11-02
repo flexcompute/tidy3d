@@ -23,7 +23,7 @@ from ..monitor import MonitorType, FieldMonitor, FieldTimeMonitor, ModeSolverMon
 from ..monitor import ModeMonitor, FluxMonitor, FluxTimeMonitor, PermittivityMonitor
 from ..monitor import Near2FarAngleMonitor, Near2FarCartesianMonitor, Near2FarKSpaceMonitor
 from ..monitor import DiffractionMonitor
-from ..medium import Medium
+from ..medium import Medium, MediumType
 from ...log import SetupError, DataError
 from ...constants import ETA_0, C_0, MICROMETER
 
@@ -537,13 +537,23 @@ class FluxTimeData(MonitorData):
     flux: FluxTimeDataArray
 
 
-PROJFIELDTYPE = Union[Near2FarAngleDataArray, Near2FarCartesianDataArray, Near2FarKSpaceDataArray]
+PROJFIELDTYPE = Union[
+    Near2FarAngleDataArray,
+    Near2FarCartesianDataArray,
+    Near2FarKSpaceDataArray,
+    DiffractionDataArray,
+]
 
 
-class AbstractNear2FarData(MonitorData):
+class AbstractFieldProjectionData(MonitorData):
     """Collection of projected fields in spherical coordinates in the frequency domain."""
 
-    monitor: Union[Near2FarAngleMonitor, Near2FarCartesianMonitor, Near2FarKSpaceMonitor] = None
+    monitor: Union[
+        Near2FarAngleMonitor,
+        Near2FarCartesianMonitor,
+        Near2FarKSpaceMonitor,
+        DiffractionMonitor,
+    ] = None
 
     Er: PROJFIELDTYPE = pd.Field(
         ...,
@@ -576,7 +586,7 @@ class AbstractNear2FarData(MonitorData):
         description="Spatial distribution of phi-component of the magnetic field.",
     )
 
-    medium: Medium = pd.Field(
+    medium: MediumType = pd.Field(
         Medium(),
         title="Background Medium",
         description="Background medium in which to radiate near fields to far fields.",
@@ -646,7 +656,9 @@ class AbstractNear2FarData(MonitorData):
         data_arrays = tuple(map(self.make_data_array, vals))
         return xr.Dataset(dict(zip(keys, data_arrays)))
 
-    def normalize(self, source_spectrum_fn: Callable[[float], complex]) -> AbstractNear2FarData:
+    def normalize(
+        self, source_spectrum_fn: Callable[[float], complex]
+    ) -> AbstractFieldProjectionData:
         """Return copy of self after normalization is applied using source spectrum function."""
         fields_norm = {}
         for field_name, field_data in self.field_components.items():
@@ -656,7 +668,7 @@ class AbstractNear2FarData(MonitorData):
         return self.copy(update=fields_norm)
 
     @staticmethod
-    def propagation_factor(medium: Medium, frequency: float) -> complex:
+    def wavenumber(medium: MediumType, frequency: float) -> complex:
         """Complex valued wavenumber associated with a frequency."""
         index_n, index_k = medium.nk_model(frequency=frequency)
         return (2 * np.pi * frequency / C_0) * (index_n + 1j * index_k)
@@ -669,7 +681,7 @@ class AbstractNear2FarData(MonitorData):
     @property
     def k(self) -> complex:
         """Returns the complex wave number associated with the background medium."""
-        return self.propagation_factor(medium=self.medium, frequency=self.f)
+        return self.wavenumber(medium=self.medium, frequency=self.f)
 
     @property
     def eta(self) -> complex:
@@ -684,6 +696,7 @@ class AbstractNear2FarData(MonitorData):
             return 1.0
         return -1j * k * np.exp(1j * k * dist) / (4 * np.pi * dist)
 
+    @property
     def fields_spherical(self) -> xr.Dataset:
         """Get all field components in spherical coordinates relative to the monitor's
         local origin for all projection grid points and frequencies specified in the
@@ -700,6 +713,7 @@ class AbstractNear2FarData(MonitorData):
             keys=self.field_components.keys(), vals=self.field_components.values()
         )
 
+    @property
     def fields_cartesian(self) -> xr.Dataset:
         """Get all field components in Cartesian coordinates relative to the monitor's
         local origin for all projection grid points and frequencies specified in the
@@ -733,6 +747,7 @@ class AbstractNear2FarData(MonitorData):
         field_components = np.concatenate((e_data, h_data), axis=0)
         return self.make_dataset(keys=keys, vals=field_components)
 
+    @property
     def power(self) -> xr.DataArray:
         """Get power measured on the projection grid relative to the monitor's local origin.
 
@@ -747,6 +762,7 @@ class AbstractNear2FarData(MonitorData):
 
         return self.make_data_array(data=power)
 
+    @property
     def radar_cross_section(self) -> xr.DataArray:
         """Radar cross section in units of incident power."""
 
@@ -761,7 +777,10 @@ class AbstractNear2FarData(MonitorData):
 
         # normalize fields by the distance-based phase factor
         coords_sph = self.coords_spherical
-        phase = self.propagation_phase(dist=coords_sph["r"][..., None], k=k)
+        if coords_sph["r"] is None:
+            phase = 1.0
+        else:
+            phase = self.propagation_phase(dist=coords_sph["r"][..., None], k=k)
         Etheta = self.Etheta.values / phase
         Ephi = self.Ephi.values / phase
         rcs_data = constant * (np.abs(Etheta) ** 2 + np.abs(Ephi) ** 2)
@@ -769,7 +788,7 @@ class AbstractNear2FarData(MonitorData):
         return self.make_data_array(data=rcs_data)
 
 
-class Near2FarAngleData(AbstractNear2FarData):
+class Near2FarAngleData(AbstractFieldProjectionData):
     """Data associated with a :class:`.Near2FarAngleMonitor`: components of projected fields.
 
     Example
@@ -864,7 +883,7 @@ class Near2FarAngleData(AbstractNear2FarData):
             field["r"] = np.atleast_1d(proj_distance)
 
 
-class Near2FarCartesianData(AbstractNear2FarData):
+class Near2FarCartesianData(AbstractFieldProjectionData):
     """Data associated with a :class:`.Near2FarCartesianMonitor`: components of projected fields.
 
     Example
@@ -966,7 +985,7 @@ class Near2FarCartesianData(AbstractNear2FarData):
             field.values *= phase
 
 
-class Near2FarKSpaceData(AbstractNear2FarData):
+class Near2FarKSpaceData(AbstractFieldProjectionData):
     """Data associated with a :class:`.Near2FarKSpaceMonitor`: components of projected fields.
 
     Example
@@ -1062,7 +1081,7 @@ class Near2FarKSpaceData(AbstractNear2FarData):
 
 
 # pylint: disable=too-many-public-methods
-class DiffractionData(MonitorData):
+class DiffractionData(AbstractFieldProjectionData):
     """Data for a :class:`.DiffractionMonitor`: complex components of diffracted far fields.
 
     Example
@@ -1072,19 +1091,52 @@ class DiffractionData(MonitorData):
     >>> orders_x = list(range(-4, 5))
     >>> orders_y = list(range(-6, 7))
     >>> pol = ["s", "p"]
-    >>> coords = dict(orders_x=orders_x, orders_y=orders_y, polarization=pol, f=f)
-    >>> values = (1+1j) * np.random.random((len(orders_x), len(orders_y), len(pol), len(f)))
+    >>> coords = dict(orders_x=orders_x, orders_y=orders_y, f=f)
+    >>> values = (1+1j) * np.random.random((len(orders_x), len(orders_y), len(f)))
     >>> field = DiffractionDataArray(values, coords=coords)
     >>> monitor = DiffractionMonitor(
     ...     center=(1,2,3), size=(np.inf,np.inf,0), freqs=f, name='diffraction',
     ...     orders_x=orders_x, orders_y=orders_y
     ... )
     >>> data = DiffractionData(
-    ...     monitor=monitor, L=field, N=field, sim_size=[1,1], bloch_vecs=[1,2]
+    ...     monitor=monitor, sim_size=[1,1], bloch_vecs=[1,2],
+    ...     Etheta=field, Ephi=field, Er=field,
+    ...     Htheta=field, Hphi=field, Hr=field,
     ... )
     """
 
     monitor: DiffractionMonitor
+
+    Er: DiffractionDataArray = pd.Field(
+        ...,
+        title="Er",
+        description="Spatial distribution of r-component of the electric field.",
+    )
+    Etheta: DiffractionDataArray = pd.Field(
+        ...,
+        title="Etheta",
+        description="Spatial distribution of the theta-component of the electric field.",
+    )
+    Ephi: DiffractionDataArray = pd.Field(
+        ...,
+        title="Ephi",
+        description="Spatial distribution of phi-component of the electric field.",
+    )
+    Hr: DiffractionDataArray = pd.Field(
+        ...,
+        title="Hr",
+        description="Spatial distribution of r-component of the magnetic field.",
+    )
+    Htheta: DiffractionDataArray = pd.Field(
+        ...,
+        title="Htheta",
+        description="Spatial distribution of theta-component of the magnetic field.",
+    )
+    Hphi: DiffractionDataArray = pd.Field(
+        ...,
+        title="Hphi",
+        description="Spatial distribution of phi-component of the magnetic field.",
+    )
 
     sim_size: Tuple[float, float] = pd.Field(
         ...,
@@ -1100,84 +1152,51 @@ class DiffractionData(MonitorData):
         "``2 * pi / (simulation size along the respective dimension)``.",
     )
 
-    L: DiffractionDataArray = pd.Field(
-        ...,
-        title="L",
-        description="Complex components of the far field radiation vectors associated with the "
-        "electric field for each polarization tangential to the normal axis, "
-        "in a local Cartesian coordinate system whose z-axis is normal to the near field plane.",
-    )
-
-    N: DiffractionDataArray = pd.Field(
-        ...,
-        title="N",
-        description="Complex components of the far field radiation vectors associated with the "
-        "electric field for each polarization tangential to the normal axis, "
-        "in a local Cartesian coordinate system whose z-axis is normal to the near field plane.",
-    )
-
     @staticmethod
     def shifted_orders(orders: Tuple[int], bloch_vec: float) -> np.ndarray:
         """Diffraction orders shifted by the Bloch vector."""
         return bloch_vec + np.atleast_1d(orders)
 
+    @staticmethod
+    def reciprocal_coords(
+        orders: np.ndarray, size: float, bloch_vec: float, f: float, medium: MediumType
+    ) -> np.ndarray:
+        """Get the normalized "u" reciprocal coords for a vector of orders, size, and bloch vec."""
+        if size == 0:
+            return np.atleast_2d(0)
+        epsilon = medium.eps_model(f)
+        bloch_array = DiffractionData.shifted_orders(orders, bloch_vec)
+        return bloch_array[:, None] / size * C_0 / f / np.real(np.sqrt(epsilon))
+
+    @staticmethod
+    def compute_angles(
+        reciprocal_vectors: Tuple[np.ndarray, np.ndarray]
+    ) -> Tuple[np.ndarray, np.ndarray]:
+        """Compute the polar and azimuth angles associated with the given reciprocal vectors."""
+        # some wave number pairs are outside the light cone, leading to warnings from numpy.arcsin
+        with warnings.catch_warnings():
+            warnings.filterwarnings(
+                "ignore", message="invalid value encountered in arcsin", category=RuntimeWarning
+            )
+            ux, uy = reciprocal_vectors
+            thetas, phis = DiffractionMonitor.kspace_2_sph(ux[:, None, :], uy[None, :, :], axis=2)
+        return (thetas, phis)
+
     @property
-    def field_components(self) -> Dict[str, DiffractionDataArray]:
-        """Maps the field components to thier associated data."""
-        return dict(L=self.L, N=self.N)
-
-    def normalize(self, source_spectrum_fn: Callable[[float], complex]) -> DiffractionData:
-        """Copy of self after normalization is applied using source spectrum function."""
-        fields_norm = {}
-        for field_name, field_data in self.field_components.items():
-            src_amps = source_spectrum_fn(field_data.f)
-            fields_norm[field_name] = (field_data / src_amps).astype(field_data.dtype)
-
-        return self.copy(update=fields_norm)
-
-    @property
-    def frequencies(self) -> np.ndarray:
-        """``np.ndarray`` of frequencies in the dataset."""
-        return np.atleast_1d(self.L.f.values)
+    def coords_spherical(self) -> Dict[str, np.ndarray]:
+        """Coordinates grid for the fields in the spherical system."""
+        theta, phi = self.angles
+        return {"r": None, "theta": theta, "phi": phi}
 
     @property
     def orders_x(self) -> np.ndarray:
         """Allowed orders along x."""
-        return np.atleast_1d(self.L.orders_x.values)
+        return np.atleast_1d(self.Etheta.orders_x.values)
 
     @property
     def orders_y(self) -> np.ndarray:
         """Allowed orders along y."""
-        return np.atleast_1d(self.L.orders_y.values)
-
-    @property
-    def medium(self) -> Medium:
-        """Medium in which the near fields are recorded and propagated."""
-        return self.monitor.medium
-
-    @property
-    def eta(self) -> np.ndarray:
-        """Wavelength at each frequency."""
-        epsilon = self.medium.eps_model(self.frequencies)
-        return np.real(ETA_0 / np.sqrt(epsilon))
-
-    @property
-    def wavenumber(self) -> np.ndarray:
-        """Wave number at each frequency."""
-        epsilon = self.medium.eps_model(self.frequencies)
-        return np.real(2.0 * np.pi * self.frequencies / C_0 * np.sqrt(epsilon))
-
-    @property
-    def wavelength(self) -> np.ndarray:
-        """Wavelength at each frequency."""
-        return 2.0 * np.pi / self.wavenumber
-
-    def reciprocal_coords(self, orders: np.ndarray, size: float, bloch_vec: float) -> np.ndarray:
-        """Get the normalized "u" reciprocal coords for a vector of orders, size, and bloch vec."""
-        if size == 0:
-            return np.atleast_2d(0)
-        bloch_array = self.shifted_orders(orders, bloch_vec)
-        return bloch_array[:, None] * 2.0 * np.pi / size / self.wavenumber[None, :]
+        return np.atleast_1d(self.Etheta.orders_y.values)
 
     @property
     def reciprocal_vectors(self) -> Tuple[np.ndarray, np.ndarray]:
@@ -1188,18 +1207,26 @@ class DiffractionData(MonitorData):
     def ux(self) -> np.ndarray:
         """Normalized wave vector along x relative to ``local_origin`` and oriented
         with respect to ``monitor.normal_dir``, normalized by the wave number in the
-        background medium."""
+        projection medium."""
         return self.reciprocal_coords(
-            orders=self.orders_x, size=self.sim_size[0], bloch_vec=self.bloch_vecs[0]
+            orders=self.orders_x,
+            size=self.sim_size[0],
+            bloch_vec=self.bloch_vecs[0],
+            f=self.f,
+            medium=self.medium,
         )
 
     @property
     def uy(self) -> np.ndarray:
         """Normalized wave vector along y relative to ``local_origin`` and oriented
         with respect to ``monitor.normal_dir``, normalized by the wave number in the
-        background medium."""
+        projection medium."""
         return self.reciprocal_coords(
-            orders=self.orders_y, size=self.sim_size[1], bloch_vec=self.bloch_vecs[1]
+            orders=self.orders_y,
+            size=self.sim_size[1],
+            bloch_vec=self.bloch_vecs[1],
+            f=self.f,
+            medium=self.medium,
         )
 
     @property
@@ -1207,130 +1234,87 @@ class DiffractionData(MonitorData):
         """The (theta, phi) angles corresponding to each allowed pair of diffraction
         orders storeds as data arrays. Disallowed angles are set to ``np.nan``.
         """
-        # some wave number pairs are outside the light cone, leading to warnings from numpy.arcsin
-        with warnings.catch_warnings():
-            warnings.filterwarnings(
-                "ignore", message="invalid value encountered in arcsin", category=RuntimeWarning
-            )
-            ux, uy = self.reciprocal_vectors
-            thetas, phis = DiffractionMonitor.kspace_2_sph(ux[:, None, :], uy[None, :, :], axis=2)
-
-        coords = self._make_coords_for_pol(["", ""])
-        del coords["polarization"]
-        theta_data = xr.DataArray(thetas, coords=coords)
-        phi_data = xr.DataArray(phis, coords=coords)
+        thetas, phis = self.compute_angles(self.reciprocal_vectors)
+        theta_data = xr.DataArray(thetas, coords=self.coords)
+        phi_data = xr.DataArray(phis, coords=self.coords)
         return theta_data, phi_data
 
     @property
-    def amps(self) -> DiffractionDataArray:
+    def amps(self) -> xr.DataArray:
         """Complex power amplitude in each order for 's' and 'p' polarizations, normalized so that
         the power carried by the wave of that order and polarization equals ``abs(amps)^2``.
         """
         cos_theta = np.cos(np.nan_to_num(self.angles[0]))
         norm = 1.0 / np.sqrt(2.0 * self.eta) / np.sqrt(cos_theta)
-        amp_theta = self.E_sph.sel(polarization="theta").values * norm
-        amp_phi = self.E_sph.sel(polarization="phi").values * norm
+        amp_theta = self.Etheta.values * norm
+        amp_phi = self.Ephi.values * norm
 
         # stack the amplitudes in s- and p-components along a new polarization axis
-        return DiffractionDataArray(
-            np.stack([amp_phi, amp_theta], axis=2), coords=self._make_coords_for_pol(["s", "p"])
-        )
+        coords = {}
+        coords["orders_x"] = np.atleast_1d(self.orders_x)
+        coords["orders_y"] = np.atleast_1d(self.orders_y)
+        coords["f"] = np.atleast_1d(self.f)
+        coords["polarization"] = ["s", "p"]
+        return xr.DataArray(np.stack([amp_phi, amp_theta], axis=3), coords=coords)
 
     @property
     def power(self) -> xr.DataArray:
         """Total power in each order, summed over both polarizations."""
         return (np.abs(self.amps) ** 2).sum(dim="polarization")
 
-    def sph_2_car(self, field: DiffractionDataArray) -> DiffractionDataArray:
-        """Transform field stored as a :class:`DiffractionDataArray` to Cartesian coordinates,
-        assuming they represent plane waves. Angles are restricted to within the light cone;
-        other values are set to `nan`."""
-        f_theta = field.sel(polarization="theta").values
-        f_phi = field.sel(polarization="phi").values
+    @property
+    def fields_spherical(self) -> xr.Dataset:
+        """Get all field components in spherical coordinates relative to the monitor's
+        local origin for all allowed diffraction orders and frequencies specified in the
+        :class:`DiffractionMonitor`.
+
+        Returns
+        -------
+        ``xarray.Dataset``
+            xarray dataset containing
+            (``Er``, ``Etheta``, ``Ephi``, ``Hr``, ``Htheta``, ``Hphi``)
+            in spherical coordinates.
+        """
+        fields = [field.values for field in self.field_components.values()]
+        keys = ["Er", "Etheta", "Ephi", "Hr", "Htheta", "Hphi"]
+        return self._make_dataset(fields, keys)
+
+    @property
+    def fields_cartesian(self) -> xr.Dataset:
+        """Get all field components in Cartesian coordinates relative to the monitor's
+        local origin for all allowed diffraction orders and frequencies specified in the
+        :class:`DiffractionMonitor`.
+
+        Returns
+        -------
+        ``xarray.Dataset``
+            xarray dataset containing (``Ex``, ``Ey``, ``Ez``, ``Hx``, ``Hy``, ``Hz``)
+            in Cartesian coordinates.
+        """
         theta, phi = self.angles
-        f_x, f_y, f_z = self.monitor.sph_2_car_field(0, f_theta, f_phi, theta.values, phi.values)
-        f_x, f_y, f_z = [np.nan_to_num(fld) for fld in [f_x, f_y, f_z]]
+        theta = theta.values
+        phi = phi.values
 
-        return DiffractionDataArray(
-            np.stack([f_x, f_y, f_z], axis=2), coords=self._make_coords_for_pol(["x", "y", "z"])
+        e_x, e_y, e_z = self.monitor.sph_2_car_field(
+            0, self.Etheta.values, self.Ephi.values, theta, phi
         )
-
-    def car_2_sph(self, field: DiffractionDataArray) -> DiffractionDataArray:
-        """Transform field stored as a :class:`DiffractionDataArray` to spherical coordinates,
-        assuming they represent plane waves. Angles are restricted to within the light cone;
-        other values are set to `nan`."""
-        f_x = field.sel(polarization="x").values
-        f_y = field.sel(polarization="y").values
-        theta, phi = self.angles
-        f_phi = np.nan_to_num(-np.sin(phi) * f_x + np.cos(phi) * f_y)
-        f_theta = np.nan_to_num((f_x * np.cos(phi) + f_y * np.sin(phi)) * np.cos(theta))
-
-        return DiffractionDataArray(
-            np.stack([f_theta, f_phi], axis=2), coords=self._make_coords_for_pol(["theta", "phi"])
+        h_x, h_y, h_z = self.monitor.sph_2_car_field(
+            0, self.Htheta.values, self.Hphi.values, theta, phi
         )
+        e_x, e_y, e_z, h_x, h_y, h_z = [
+            np.nan_to_num(fld) for fld in [e_x, e_y, e_z, h_x, h_y, h_z]
+        ]
 
-    # pylint: disable=invalid-name
-    @property
-    def L_sph(self) -> DiffractionDataArray:
-        """Radiation vectors associated with the electric field in spherical coodinates."""
-        return self.car_2_sph(self.L)
+        fields = [e_x, e_y, e_z, h_x, h_y, h_z]
+        keys = ["Ex", "Ey", "Ez", "Hx", "Hy", "Hz"]
+        return self._make_dataset(fields, keys)
 
-    # pylint: disable=invalid-name
-    @property
-    def N_sph(self) -> DiffractionDataArray:
-        """Radiation vectors associated with the magnetic field in spherical coordinates."""
-        return self.car_2_sph(self.N)
-
-    # pylint: disable=invalid-name
-    @property
-    def E_sph(self) -> DiffractionDataArray:
-        """Far field electric field in spherical coordinates, normalized so that
-        ``(0.5 / eta) * abs(E)**2 / cos(theta)`` is the power density for each polarization
-        and each order."""
-        l_theta = self.L_sph.sel(polarization="theta").values
-        l_phi = self.L_sph.sel(polarization="phi").values
-        n_theta = self.N_sph.sel(polarization="theta").values
-        n_phi = self.N_sph.sel(polarization="phi").values
-
-        e_theta = -(l_phi + self.eta * n_theta) / 4.0 / np.pi
-        e_phi = (l_theta - self.eta * n_phi) / 4.0 / np.pi
-
-        return DiffractionDataArray(
-            np.stack([e_theta, e_phi], axis=2), coords=self._make_coords_for_pol(["theta", "phi"])
-        )
-
-    # pylint: disable=invalid-name
-    @property
-    def H_sph(self) -> DiffractionDataArray:
-        """Far field magnetic field in spherical coordinates."""
-        e_theta = self.E_sph.sel(polarization="theta").values
-        e_phi = self.E_sph.sel(polarization="phi").values
-
-        h_theta = -e_phi / self.eta
-        h_phi = e_theta / self.eta
-
-        return DiffractionDataArray(
-            np.stack([h_theta, h_phi], axis=2), coords=self._make_coords_for_pol(["theta", "phi"])
-        )
-
-    @property
-    def E_car(self) -> DiffractionDataArray:
-        """Far field electric field in Cartesian coordinates."""
-        return self.sph_2_car(self.E_sph)
-
-    @property
-    def H_car(self) -> DiffractionDataArray:
-        """Far field magnetic field in Cartesian coordinates."""
-        return self.sph_2_car(self.H_sph)
-
-    def _make_coords_for_pol(self, pol: Tuple[str, str]) -> Dict[str, Union[np.ndarray, List]]:
-        """Make a coordinates dictionary for a given pair of polarization names."""
-        coords = {}
-        coords["orders_x"] = np.atleast_1d(self.orders_x)
-        coords["orders_y"] = np.atleast_1d(self.orders_y)
-        coords["polarization"] = pol
-        coords["f"] = np.array(self.frequencies)
-        return coords
+    def _make_dataset(self, fields: Tuple[np.ndarray, ...], keys: Tuple[str, ...]) -> xr.Dataset:
+        """Make an xr.Dataset for fields with given field names."""
+        data_arrays = []
+        for field in fields:
+            data_arrays.append(xr.DataArray(data=field, coords=self.coords, dims=self.dims))
+        return xr.Dataset(dict(zip(keys, data_arrays)))
 
 
 MonitorDataTypes = (

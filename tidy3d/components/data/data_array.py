@@ -23,7 +23,6 @@ DIM_ATTRS = {
     "uy": {"long_name": "normalized ky"},
     "orders_x": {"long_name": "diffraction order"},
     "orders_y": {"long_name": "diffraction order"},
-    "polarization": {"long_name": "polarization"},
 }
 
 # string that gets written to the json file
@@ -314,11 +313,10 @@ class DiffractionDataArray(DataArray):
     >>> f = np.linspace(1e14, 2e14, 10)
     >>> orders_x = np.linspace(-1, 1, 3)
     >>> orders_y = np.linspace(-2, 2, 5)
-    >>> pol = ["s", "p"]
-    >>> coords = dict(orders_x=orders_x, orders_y=orders_y, polarization=pol, f=f)
-    >>> values = (1+1j) * np.random.random((len(orders_x), len(orders_y), len(pol), len(f)))
+    >>> coords = dict(orders_x=orders_x, orders_y=orders_y, f=f)
+    >>> values = (1+1j) * np.random.random((len(orders_x), len(orders_y), len(f)))
     >>> data = DiffractionDataArray(values, coords=coords)
     """
 
-    __slots__ = ("orders_x", "orders_y", "polarization", "f")
-    _data_attrs = {"long_name": "diffraction amplitude"}
+    __slots__ = ("orders_x", "orders_y", "f")
+    _data_attrs = {"long_name": "Diffracted field"}

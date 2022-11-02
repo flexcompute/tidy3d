@@ -52,7 +52,7 @@ from .components.data.dataset import PermittivityDataset, ModeSolverDataset
 from .components.data.monitor_data import FieldData, FieldTimeData, PermittivityData
 from .components.data.monitor_data import FluxData, FluxTimeData
 from .components.data.monitor_data import ModeData, ModeSolverData
-from .components.data.monitor_data import AbstractNear2FarData
+from .components.data.monitor_data import AbstractFieldProjectionData
 from .components.data.monitor_data import Near2FarAngleData, Near2FarCartesianData
 from .components.data.monitor_data import Near2FarKSpaceData
 from .components.data.monitor_data import DiffractionData
