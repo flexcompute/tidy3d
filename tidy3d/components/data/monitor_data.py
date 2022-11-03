@@ -35,7 +35,7 @@ class MonitorData(Dataset, ABC):
         ...,
         title="Monitor",
         description="Monitor associated with the data.",
-        descriminator=TYPE_TAG_STR,
+        discriminator=TYPE_TAG_STR,
     )
 
     @property
