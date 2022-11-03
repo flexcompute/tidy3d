@@ -1,11 +1,11 @@
 jupyter
 jinja2==3.0
 nbconvert==6.0.6
-sphinx==4.5.0
+sphinx>=5.3.0
 sphinx_rtd_theme
 nbsphinx==0.8.7
 ipython
-autodoc_pydantic
+autodoc_pydantic>=1.8.0
 sphinx-copybutton
 sphinx-book-theme
 m2r2

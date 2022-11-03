@@ -217,7 +217,6 @@ Collections of Data from single monitor
    Near2FarCartesianData
    Near2FarKSpaceData
    Near2FarSurface
-   RadiationVectors
 
 Individual Datasets
 -------------------
