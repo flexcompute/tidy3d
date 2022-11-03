@@ -1,6 +1,7 @@
 jupyter
 jinja2==3.0
 nbconvert==6.0.6
+sphinx==4.5.0
 sphinx_rtd_theme
 nbsphinx==0.8.7
 ipython
@@ -11,3 +12,4 @@ m2r2
 tmm
 gdspy
 grcwa
+sphinx-sitemap

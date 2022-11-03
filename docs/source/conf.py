@@ -59,6 +59,7 @@ extensions = [
     "IPython.sphinxext.ipython_console_highlighting",
     "sphinx_copybutton",
     "m2r2",
+    "sphinx_sitemap"
 ]
 
 source_suffix = [".rst", ".md"]
