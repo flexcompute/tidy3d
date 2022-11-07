@@ -22,6 +22,7 @@ from ..constants import MICROMETER, LARGE_NUMBER, RADIAN, fp_eps
 # for sampling polygon in slanted polyslab along  z-direction for
 # validating polygon to be non_intersecting.
 _N_SAMPLE_POLYGON_INTERSECT = 100
+_N_SAMPLE_CURVE_SHAPELY = 40
 _IS_CLOSE_RTOL = np.finfo(float).eps
 
 
@@ -739,6 +740,31 @@ class Planar(Geometry, ABC):
         2, title="Axis", description="Specifies dimension of the planar axis (0,1,2) -> (x,y,z)."
     )
 
+    sidewall_angle: float = pydantic.Field(
+        0.0,
+        title="Sidewall angle",
+        description="Angle of the sidewall. "
+        "``sidewall_angle=0`` (default) specifies a vertical wall; "
+        "``0<sidewall_angle<np.pi/2`` specifies a shrinking cross section "
+        "along the ``axis`` direction; "
+        "and ``-np.pi/2<sidewall_angle<0`` specifies an expanding cross section "
+        "along the ``axis`` direction.",
+        gt=-np.pi / 2,
+        lt=np.pi / 2,
+        units=RADIAN,
+    )
+
+    reference_plane: PlanePosition = pydantic.Field(
+        "bottom",
+        title="Reference plane for cross section",
+        description="The position of the plane where the supplied cross section are "
+        "defined. The plane is perpendicular to the ``axis``. "
+        "The plane is located at the ``bottom``, ``middle``, or ``top`` of the "
+        "geometry with respect to the axis. "
+        "E.g. if ``axis=1``, ``bottom`` refers to the negative side of the y-axis, and "
+        "``top`` refers to the positive side of the y-axis.",
+    )
+
     @property
     @abstractmethod
     def center_axis(self) -> float:
@@ -853,6 +879,45 @@ class Planar(Geometry, ABC):
         vals[self.axis] = axis_val
         _, (val_x, val_y) = self.pop_axis(vals, axis=axis)
         return val_x, val_y
+
+    @cached_property
+    def _tanq(self) -> float:
+        """
+        tan(sidewall_angle). _tanq*height gives the offset value
+        """
+        return np.tan(self.sidewall_angle)
+
+    @staticmethod
+    def offset_distance_to_base(
+        reference_plane: PlanePosition, length_axis: float, tan_angle: float
+    ) -> float:
+        """
+        A convenient function that returns the distance needed to offset the cross section
+        from reference plane to the base.
+
+        Parameters
+        ----------
+        reference_plane : PlanePosition
+            The position of the plane where the vertices of the polygon are supplied.
+        length_axis : float
+            The overall length of PolySlab along extrusion direction.
+        tan_angle : float
+            tan(sidewall angle)
+
+        Returns
+        -------
+        float
+            Offset distance.
+        """
+
+        if reference_plane == "top":
+            return length_axis * tan_angle
+
+        if reference_plane == "middle":
+            return length_axis * tan_angle / 2
+
+        # bottom
+        return 0
 
 
 class Circular(Geometry):
@@ -1359,7 +1424,9 @@ class Sphere(Centered, Circular):
 
 
 class Cylinder(Centered, Circular, Planar):
-    """Cylindrical geometry.
+    """Cylindrical geometry with optional sidewall angle along axis
+    direction. When ``sidewall_angle`` is nonzero, the shape is a
+    conical frustum or a cone.
 
     Example
     -------
@@ -1399,11 +1466,21 @@ class Cylinder(Centered, Circular, Planar):
             For more details refer to
             `Shapely's Documentaton <https://shapely.readthedocs.io/en/stable/project.html>`_.
         """
-        _, (x0, y0) = self.pop_axis(self.center, axis=self.axis)
-        return [Point(x0, y0).buffer(self.radius)]
 
-    def _intersections_side(self, position, axis):
+        # radius at z
+        radius_offset = self._radius_z(z)
+
+        if radius_offset <= 0:
+            return []
+
+        _, (x0, y0) = self.pop_axis(self.center, axis=self.axis)
+        return [Point(x0, y0).buffer(radius_offset)]
+
+    def _intersections_side(self, position, axis):  # pylint:disable=too-many-locals
         """Find shapely geometries intersecting cylindrical geometry with axis orthogonal to length.
+        When ``sidewall_angle`` is nonzero, so that it's in fact a conical frustum or cone, the
+        cross section can contain hyperbolic curves. This is currently approximated by a polygon
+        of many vertices.
 
         Parameters
         ----------
@@ -1419,18 +1496,79 @@ class Cylinder(Centered, Circular, Planar):
             For more details refer to
             `Shapely's Documentaton <https://shapely.readthedocs.io/en/stable/project.html>`_.
         """
-        z0_axis, (x0_plot_plane, y0_plot_plane) = self.pop_axis(self.center, axis=axis)
-        intersect_dist = self._intersect_dist(position, z0_axis)
-        if not intersect_dist:
+        # position in the local coordinate of the cylinder
+        position_local = position - self.center[axis]
+
+        # no intersection
+        if abs(position_local) >= self.radius_max:
             return []
-        Lx, Ly = self._order_by_axis(plane_val=intersect_dist, axis_val=self.length, axis=axis)
-        int_box = box(
-            minx=x0_plot_plane - Lx / 2,
-            miny=y0_plot_plane - Ly / 2,
-            maxx=x0_plot_plane + Lx / 2,
-            maxy=y0_plot_plane + Ly / 2,
+
+        # half of intersection length at the top and bottom
+        intersect_half_length_max = np.sqrt(self.radius_max**2 - position_local**2)
+        intersect_half_length_min = -LARGE_NUMBER
+        if abs(position_local) < self.radius_min:
+            intersect_half_length_min = np.sqrt(self.radius_min**2 - position_local**2)
+
+        # the vertices on the max side of top/bottom
+        # The two vertices are present in all scenarios.
+        vertices_max = [
+            self._local_to_global_side_cross_section([-intersect_half_length_max, 0], axis),
+            self._local_to_global_side_cross_section([intersect_half_length_max, 0], axis),
+        ]
+
+        # Extending to a cone, the maximal height of the cone
+        h_cone = (
+            LARGE_NUMBER if isclose(self.sidewall_angle, 0) else self.radius_max / abs(self._tanq)
         )
-        return [int_box]
+        # The maximal height of the cross section
+        height_max = min((1 - abs(position_local) / self.radius_max) * h_cone, self.length_axis)
+
+        # more vertices to add for conical frustum shape
+        vertices_frustum_right = []
+        vertices_frustum_left = []
+        if not (isclose(position, self.center[axis]) or isclose(self.sidewall_angle, 0)):
+            # The y-coordinate for the additional vertices
+            y_list = height_max * np.linspace(0, 1, _N_SAMPLE_CURVE_SHAPELY)
+            # `abs()` to make sure np.sqrt(0-fp_eps) goes through
+            x_list = np.sqrt(
+                np.abs(self.radius_max**2 * (1 - y_list / h_cone) ** 2 - position_local**2)
+            )
+            for i in range(_N_SAMPLE_CURVE_SHAPELY):
+                vertices_frustum_right.append(
+                    self._local_to_global_side_cross_section([x_list[i], y_list[i]], axis)
+                )
+                vertices_frustum_left.append(
+                    self._local_to_global_side_cross_section(
+                        [
+                            -x_list[_N_SAMPLE_CURVE_SHAPELY - i - 1],
+                            y_list[_N_SAMPLE_CURVE_SHAPELY - i - 1],
+                        ],
+                        axis,
+                    )
+                )
+
+        # the vertices on the min side of top/bottom
+        vertices_min = []
+
+        ## termination at the top/bottom
+        if intersect_half_length_min > 0:
+            vertices_min.append(
+                self._local_to_global_side_cross_section(
+                    [intersect_half_length_min, self.length_axis], axis
+                )
+            )
+            vertices_min.append(
+                self._local_to_global_side_cross_section(
+                    [-intersect_half_length_min, self.length_axis], axis
+                )
+            )
+        ## early termination
+        else:
+            vertices_min.append(self._local_to_global_side_cross_section([0, height_max], axis))
+
+        return [
+            Polygon(vertices_max + vertices_frustum_right + vertices_min + vertices_frustum_left)
+        ]
 
     def inside(self, x, y, z) -> bool:
         """Returns True if point ``(x,y,z)`` inside volume of geometry.
@@ -1449,14 +1587,18 @@ class Cylinder(Centered, Circular, Planar):
         bool
             Whether point ``(x,y,z)`` is inside geometry.
         """
+        # radius at z
         z0, (x0, y0) = self.pop_axis(self.center, axis=self.axis)
         z, (x, y) = self.pop_axis((x, y, z), axis=self.axis)
+        radius_offset = self._radius_z(z)
+        positive_radius = radius_offset > 0
+
         dist_x = np.abs(x - x0)
         dist_y = np.abs(y - y0)
         dist_z = np.abs(z - z0)
-        inside_radius = (dist_x**2 + dist_y**2) <= (self.radius**2)
-        inside_height = dist_z <= (self.length / 2)
-        return inside_radius * inside_height
+        inside_radius = (dist_x**2 + dist_y**2) <= (radius_offset**2)
+        inside_height = dist_z <= (self.length_axis / 2)
+        return positive_radius * inside_radius * inside_height
 
     @cached_property
     def bounds(self) -> Bound:
@@ -1467,10 +1609,10 @@ class Cylinder(Centered, Circular, Planar):
         Tuple[float, float, float], Tuple[float, float, float]
             Min and max bounds packaged as ``(minx, miny, minz), (maxx, maxy, maxz)``.
         """
-        coord_min = [c - self.radius for c in self.center]
-        coord_max = [c + self.radius for c in self.center]
-        coord_min[self.axis] = self.center[self.axis] - self.length / 2.0
-        coord_max[self.axis] = self.center[self.axis] + self.length / 2.0
+        coord_min = [c - self.radius_max for c in self.center]
+        coord_max = [c + self.radius_max for c in self.center]
+        coord_min[self.axis] = self.center[self.axis] - self.length_axis / 2.0
+        coord_max[self.axis] = self.center[self.axis] + self.length_axis / 2.0
         return (tuple(coord_min), tuple(coord_max))
 
     def _volume(self, bounds: Bound) -> float:
@@ -1481,7 +1623,7 @@ class Cylinder(Centered, Circular, Planar):
 
         length = coord_max - coord_min
 
-        volume = np.pi * self.radius**2 * length
+        volume = np.pi * self.radius_max**2 * length
 
         # a very loose upper bound on how much of the cylinder is in bounds
         for axis in range(3):
@@ -1504,16 +1646,16 @@ class Cylinder(Centered, Circular, Planar):
         if coord_min < bounds[0][self.axis]:
             coord_min = bounds[0][self.axis]
         else:
-            area += np.pi * self.radius**2
+            area += np.pi * self.radius_max**2
 
         if coord_max > bounds[1][self.axis]:
             coord_max = bounds[1][self.axis]
         else:
-            area += np.pi * self.radius**2
+            area += np.pi * self.radius_max**2
 
         length = coord_max - coord_min
 
-        area += 2.0 * np.pi * self.radius * length
+        area += 2.0 * np.pi * self.radius_max * length
 
         # a very loose upper bound on how much of the cylinder is in bounds
         for axis in range(3):
@@ -1524,6 +1666,68 @@ class Cylinder(Centered, Circular, Planar):
                     area *= 0.5
 
         return area
+
+    @cached_property
+    def radius_max(self) -> float:
+        """max(radius of top, radius of bottom)"""
+        radius_top = self._radius_z(self.center_axis + self.length_axis / 2)
+        radius_bottom = self._radius_z(self.center_axis - self.length_axis / 2)
+        return max(radius_bottom, radius_top)
+
+    @cached_property
+    def radius_min(self) -> float:
+        """min(radius of top, radius of bottom). It can be negative for a large
+        sidewall angle.
+        """
+        radius_top = self._radius_z(self.center_axis + self.length_axis / 2)
+        radius_bottom = self._radius_z(self.center_axis - self.length_axis / 2)
+        return min(radius_bottom, radius_top)
+
+    def _radius_z(self, z: float):
+        """Compute the radius of the cross section at the position z.
+
+        Parameters
+        ----------
+        z : float
+            Position along the axis normal to slab
+        """
+        if isclose(self.sidewall_angle, 0):
+            return self.radius
+
+        radius_base = self.radius + self.offset_distance_to_base(
+            self.reference_plane, self.length_axis, self._tanq
+        )
+        return radius_base - (z - self.center_axis + self.length_axis / 2) * self._tanq
+
+    def _local_to_global_side_cross_section(self, coords: List[float], axis: int) -> List[float]:
+        """Map a point (x,y) from local to global coordinate system in the
+        side cross section.
+
+        The definition of the local: y=0 lies at the base if ``sidewall_angle>=0``,
+        and at the top if ``sidewall_angle<0``; x=0 aligns with the corresponding
+        ``self.center``.
+
+        Parameters
+        ----------
+        axis : int
+            Integer index into 'xyz' (0, 1, 2).
+        coords : List[float, float]
+            The value in the planar coordinate.
+
+        Returns
+        -------
+        Tuple[float, float]
+            The point in the global coordinate for plotting `_intersection_side`.
+
+        """
+
+        _, (x_center, y_center) = self.pop_axis(self.center, axis=axis)
+        lx_offset, ly_offset = self._order_by_axis(
+            plane_val=coords[0], axis_val=-self.length_axis / 2 + coords[1], axis=axis
+        )
+        if not isclose(self.sidewall_angle, 0):
+            ly_offset *= (-1) ** (self.sidewall_angle < 0)
+        return [x_center + lx_offset, y_center + ly_offset]
 
 
 class PolySlab(Planar):
@@ -1548,29 +1752,6 @@ class PolySlab(Planar):
         description="Dilation of the supplied polygon by shifting each edge along its "
         "normal outwards direction by a distance; a negative value corresponds to erosion.",
         units=MICROMETER,
-    )
-
-    sidewall_angle: float = pydantic.Field(
-        0.0,
-        title="Sidewall angle",
-        description="Angle of the sidewall. "
-        "``sidewall_angle=0`` (default) specifies vertical wall, "
-        "while ``0<sidewall_angle<np.pi/2`` for the base to be larger than the top, "
-        "and ``-np.pi/2<sidewall_angle<0`` for base to be smaller than the top.",
-        gt=-np.pi / 2,
-        lt=np.pi / 2,
-        units=RADIAN,
-    )
-
-    reference_plane: PlanePosition = pydantic.Field(
-        "bottom",
-        title="Reference plane for polygon vertices",
-        description="The position of the plane where the supplied ``vertices`` are "
-        "defined. The plane is perpendicular to the ``axis``. "
-        "The plane is located at the ``bottom``, ``middle``, or ``top`` of the "
-        "PolySlab with respect to the axis. "
-        "E.g. if ``axis=1``, ``bottom`` refers to the negative side of the y-axis, and "
-        "``top`` refers to the positive side of the y-axis.",
     )
 
     vertices: Vertices = pydantic.Field(
@@ -1838,45 +2019,6 @@ class PolySlab(Planar):
             )
             for verts in all_vertices
         ]
-
-    @cached_property
-    def _tanq(self) -> float:
-        """
-        tan(sidewall_angle). _tanq*height gives the offset value
-        """
-        return np.tan(self.sidewall_angle)
-
-    @staticmethod
-    def offset_distance_to_base(
-        reference_plane: PlanePosition, length_axis: float, tan_angle: float
-    ) -> float:
-        """
-        A convenient function that returns the distance needed to offset the polygon from
-        reference plane to the base.
-
-        Parameters
-        ----------
-        reference_plane : PlanePosition
-            The position of the plane where the vertices of the polygon are supplied.
-        length_axis : float
-            The overall length of PolySlab along extrusion direction.
-        tan_angle : float
-            tan(sidewall angle)
-
-        Returns
-        -------
-        float
-            Offset distance.
-        """
-
-        if reference_plane == "top":
-            return length_axis * tan_angle
-
-        if reference_plane == "middle":
-            return length_axis * tan_angle / 2
-
-        # bottom
-        return 0
 
     @cached_property
     def base_polygon(self) -> Vertices:

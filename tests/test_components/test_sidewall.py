@@ -75,7 +75,7 @@ dilation = 0.0
 angle = 0
 
 
-def test_remove_duplicate():
+def test_remove_duplicate_poly():
     """
     Make sure redundant neighboring vertices are removed
     """
@@ -108,7 +108,7 @@ def test_valid_polygon():
         s = setup_polyslab(vertices, dilation, angle, bounds)
 
 
-def test_crossing_square():
+def test_crossing_square_poly():
     """
     Vertices crossing detection for a simple square
     """
@@ -214,7 +214,7 @@ def test_max_erosion_polygon():
         assert np.isclose(minimal_edge_length(s.top_polygon), 0, atol=1e-4)
 
 
-def test_shift_height():
+def test_shift_height_poly():
     """Make sure a list of height where the plane will intersect with the vertices
     works properly
     """
@@ -247,7 +247,7 @@ def test_shift_height():
                 assert np.any(np.isclose(diff, 0)) == True
 
 
-def test_intersection_with_inside():
+def test_intersection_with_inside_poly():
     """Make sure intersection produces the same result as inside"""
 
     N = 10  # number of vertices
@@ -372,7 +372,7 @@ def test_intersection_with_inside():
                         )
 
 
-def test_bound():
+def test_bound_poly():
     """
     Make sure bound works, even though it might not be tight.
     """
@@ -421,3 +421,73 @@ def test_bound():
                 continue
             s = convert_polyslab_other_reference_plane(s, reference_plane)
             validate_poly_bound(s)
+
+
+def test_normal_intersection_with_inside_cylinder():
+    """Make sure intersection_normal produces the same result as inside"""
+
+    radius = 1.1
+    length = 0.9
+
+    num_test_point = 10
+    num_test_z = 10
+
+    # a list of cylinders
+    cyl = td.Cylinder(
+        center=(0.1, 0.2, 0.3),
+        radius=radius,
+        length=length,
+        axis=2,
+        sidewall_angle=0,
+        reference_plane="bottom",
+    )
+    s_list = [cyl]
+    s_list.append(cyl.copy(update={"sidewall_angle": np.pi / 2.1}))
+    s_list.append(cyl.copy(update={"sidewall_angle": np.pi / 4}))
+    s_list.append(cyl.copy(update={"reference_plane": "top", "sidewall_angle": np.pi / 4.1}))
+    s_list.append(cyl.copy(update={"reference_plane": "middle", "sidewall_angle": np.pi / 4}))
+
+    x_list = np.linspace(-3 * radius, 3 * radius, num_test_point)
+    y_list = np.linspace(-3 * radius, 3 * radius, num_test_point)
+    z_list = np.linspace(-length, length, num_test_z)
+    for s in s_list:
+        for z in z_list:
+            shape_intersect = s.intersections(z=z)
+            for x in x_list:
+                for y in y_list:
+                    # inside
+                    res_inside = s.inside(x, y, z)
+                    # intersect
+                    res_inter = False
+                    for shape in shape_intersect:
+                        if shape.covers(Point(x, y)):
+                            res_inter = True
+                    if res_inter != res_inside:
+                        print(x, y, z)
+                        print(Point(0.1, 0.2).buffer(1.1).covers(Point(x, y)))
+                    assert res_inter == res_inside
+
+
+def test_side_intersection_cylinder():
+    """Make sure intersection_side produces correct result"""
+
+    radius = 1.0
+    length = 1.0
+
+    # a list of cylinders
+    cyl = td.Cylinder(
+        center=(0, 0, 0),
+        radius=radius,
+        length=length,
+        axis=2,
+        sidewall_angle=np.pi / 4,
+        reference_plane="middle",
+    )
+
+    shape_intersect = cyl.intersections(x=0)
+    assert shape_intersect[0].covers(Point(1.25, 0.4)) == False
+    assert shape_intersect[0].covers(Point(1.25, -0.4)) == True
+
+    shape_intersect = cyl.intersections(x=np.sqrt(3) / 2)
+    assert shape_intersect[0].covers(Point(1.25, -0.4)) == False
+    assert shape_intersect[0].covers(Point(0.7, -0.4)) == True
