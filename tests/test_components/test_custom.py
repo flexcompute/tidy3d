@@ -114,7 +114,7 @@ def test_io_json(caplog):
 def test_custom_source_pckl():
     path = "tests/tmp/source.pckl"
     with open(path, "wb") as pickle_file:
-        pickle.dump(darr, pickle_file)
+        pickle.dump(FIELD_SRC, pickle_file)
 
 
 @clear_tmp

@@ -16,7 +16,7 @@ from .data_array import ScalarFieldDataArray, ScalarFieldTimeDataArray
 from .dataset import Dataset, AbstractFieldDataset, ElectromagneticFieldDataset
 from .dataset import FieldDataset, FieldTimeDataset, ModeSolverDataset, PermittivityDataset
 from ..base import TYPE_TAG_STR
-from ..types import Coordinate, Symmetry, ArrayLike
+from ..types import Coordinate, Symmetry, ArrayLike, Size
 from ..grid.grid import Grid
 from ..validators import enforce_monitor_fields_present, required_if_symmetry_present
 from ..monitor import MonitorType, FieldMonitor, FieldTimeMonitor, ModeSolverMonitor
@@ -334,7 +334,7 @@ class FieldData(FieldDataset, ElectromagneticFieldData):
         return self.copy(update=fields_norm)
 
     def to_source(
-        self, source_time: SourceTimeType, center: Coordinate, size: Coordinate = None
+        self, source_time: SourceTimeType, center: Coordinate, size: Size = None
     ) -> CustomFieldSource:
         """Create a :class:`.CustomFieldSource` from the fields stored in the :class:`.FieldData`.
 
@@ -342,9 +342,9 @@ class FieldData(FieldDataset, ElectromagneticFieldData):
         ----------
         source_time: :class:`.SourceTime`
             Specification of the source time-dependence.
-        center: Coordinate
+        center: Tuple[float, float, float]
             Source center in x, y and z.
-        size: Coordinate
+        size: Tuple[float, float, float]
             Source size in x, y, and z. If not provided, the size of the monitor associated to the
             data is used.
 
