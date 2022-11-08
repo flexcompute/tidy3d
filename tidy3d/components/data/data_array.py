@@ -31,11 +31,12 @@ DATA_ARRAY_TAG = "XR.DATAARRAY"
 
 
 class DataArray(xr.DataArray):
-    """Subclass of ``xr.DataArray`` that requires __slots__ to match the keys of the coords."""
+    """Subclass of ``xr.DataArray`` that requires _dims to match the keys of the coords."""
 
-    # stores an ordered tuple of strings corresponding to the data dimensions
+    # Always set __slots__ = () to avoid xarray warnings
     __slots__ = ()
-
+    # stores an ordered tuple of strings corresponding to the data dimensions
+    _dims = ()
     # stores a dictionary of attributes corresponding to the data values
     _data_attrs: Dict[str, str] = {}
 
@@ -60,10 +61,10 @@ class DataArray(xr.DataArray):
 
     @classmethod
     def validate_dims(cls, val):
-        """Make sure the dims are the same as __slots__, then put them in the correct order."""
-        if set(val.dims) != set(cls.__slots__):
-            raise ValueError(f"wrong dims, expected '{cls.__slots__}', got '{val.dims}'")
-        return val.transpose(*cls.__slots__)
+        """Make sure the dims are the same as _dims, then put them in the correct order."""
+        if set(val.dims) != set(cls._dims):
+            raise ValueError(f"wrong dims, expected '{cls._dims}', got '{val.dims}'")
+        return val.transpose(*cls._dims)
 
     @classmethod
     def assign_data_attrs(cls, val):
@@ -77,7 +78,7 @@ class DataArray(xr.DataArray):
     def assign_coord_attrs(cls, val):
         """Assign the correct coordinate attributes to the :class:`.DataArray`."""
 
-        for dim in cls.__slots__:
+        for dim in cls._dims:
             dim_attrs = DIM_ATTRS.get(dim)
             if dim_attrs is not None:
                 for attr_name, attr in dim_attrs.items():
@@ -92,12 +93,12 @@ class DataArray(xr.DataArray):
             title="DataArray",
             type="xr.DataArray",
             properties=dict(
-                __slots__=dict(
-                    title="__slots__",
+                _dims=dict(
+                    title="_dims",
                     type="Tuple[str, ...]",
                 ),
             ),
-            required=["__slots__"],
+            required=["_dims"],
         )
         field_schema.update(schema)
 
@@ -153,7 +154,8 @@ class ScalarFieldDataArray(DataArray):
     >>> fd = ScalarFieldDataArray((1+1j) * np.random.random((2,3,4,2)), coords=coords)
     """
 
-    __slots__ = ("x", "y", "z", "f")
+    __slots__ = ()
+    _dims = ("x", "y", "z", "f")
     _data_attrs = {"long_name": "field value"}
 
 
@@ -170,7 +172,8 @@ class ScalarFieldTimeDataArray(DataArray):
     >>> fd = ScalarFieldTimeDataArray(np.random.random((2,3,4,3)), coords=coords)
     """
 
-    __slots__ = ("x", "y", "z", "t")
+    __slots__ = ()
+    _dims = ("x", "y", "z", "t")
     _data_attrs = {"long_name": "field value"}
 
 
@@ -188,7 +191,8 @@ class ScalarModeFieldDataArray(DataArray):
     >>> fd = ScalarModeFieldDataArray((1+1j) * np.random.random((2,3,4,2,5)), coords=coords)
     """
 
-    __slots__ = ("x", "y", "z", "f", "mode_index")
+    __slots__ = ()
+    _dims = ("x", "y", "z", "f", "mode_index")
     _data_attrs = {"long_name": "field value"}
 
 
@@ -202,7 +206,8 @@ class FluxDataArray(DataArray):
     >>> fd = FluxDataArray(np.random.random(2), coords=coords)
     """
 
-    __slots__ = ("f",)
+    __slots__ = ()
+    _dims = ("f",)
     _data_attrs = {"units": "W", "long_name": "flux"}
 
 
@@ -216,7 +221,8 @@ class FluxTimeDataArray(DataArray):
     >>> data = FluxTimeDataArray(np.random.random(3), coords=coords)
     """
 
-    __slots__ = ("t",)
+    __slots__ = ()
+    _dims = ("t",)
     _data_attrs = {"units": "W", "long_name": "flux"}
 
 
@@ -232,7 +238,8 @@ class ModeAmpsDataArray(DataArray):
     >>> data = ModeAmpsDataArray((1+1j) * np.random.random((2, 3, 4)), coords=coords)
     """
 
-    __slots__ = ("direction", "f", "mode_index")
+    __slots__ = ()
+    _dims = ("direction", "f", "mode_index")
     _data_attrs = {"units": "sqrt(W)", "long_name": "mode amplitudes"}
 
 
@@ -247,7 +254,8 @@ class ModeIndexDataArray(DataArray):
     >>> data = ModeIndexDataArray((1+1j) * np.random.random((2,4)), coords=coords)
     """
 
-    __slots__ = ("f", "mode_index")
+    __slots__ = ()
+    _dims = ("f", "mode_index")
     _data_attrs = {"long_name": "Propagation index"}
 
 
@@ -265,8 +273,9 @@ class Near2FarAngleDataArray(DataArray):
     >>> data = Near2FarAngleDataArray(values, coords=coords)
     """
 
-    __slots__ = ("r", "theta", "phi", "f")
-    _data_attrs = {"long_name": "Far fields"}
+    __slots__ = ()
+    _dims = ("theta", "phi", "f")
+    _data_attrs = {"long_name": "radiation vectors"}
 
 
 class Near2FarCartesianDataArray(DataArray):
@@ -283,8 +292,9 @@ class Near2FarCartesianDataArray(DataArray):
     >>> data = Near2FarCartesianDataArray(values, coords=coords)
     """
 
-    __slots__ = ("x", "y", "z", "f")
-    _data_attrs = {"long_name": "Far fields"}
+    __slots__ = ()
+    _dims = ("x", "y", "f")
+    _data_attrs = {"long_name": "radiation vectors"}
 
 
 class Near2FarKSpaceDataArray(DataArray):
@@ -302,8 +312,9 @@ class Near2FarKSpaceDataArray(DataArray):
     >>> data = Near2FarKSpaceDataArray(values, coords=coords)
     """
 
-    __slots__ = ("ux", "uy", "r", "f")
-    _data_attrs = {"long_name": "Far fields"}
+    __slots__ = ()
+    _dims = ("ux", "uy", "f")
+    _data_attrs = {"long_name": "radiation vectors"}
 
 
 class DiffractionDataArray(DataArray):
@@ -320,5 +331,6 @@ class DiffractionDataArray(DataArray):
     >>> data = DiffractionDataArray(values, coords=coords)
     """
 
-    __slots__ = ("orders_x", "orders_y", "polarization", "f")
+    __slots__ = ()
+    _dims = ("orders_x", "orders_y", "polarization", "f")
     _data_attrs = {"long_name": "diffraction amplitude"}

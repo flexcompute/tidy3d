@@ -672,8 +672,8 @@ class AbstractNear2FarData(MonitorData):
 
     @property
     def dims(self) -> Tuple[str, ...]:
-        """Dimensions of the fields contained."""
-        return self.Etheta.__slots__
+        """Dimensions of the radiation vectors contained."""
+        return self.Ntheta.dims
 
     def make_data_array(self, data: np.ndarray) -> xr.DataArray:
         """Make an xr.DataArray with data and same coords and dims as fields of self."""
