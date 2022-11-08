@@ -111,9 +111,17 @@ def test_io_json(caplog):
 import dill as pickle
 @clear_tmp
 def test_simulation_load_export_pckl():
+    import xarray as xr
     path = "tests/tmp/source.pckl"
     with open(path, "wb") as pickle_file:
-        pickle.dump(FIELD_SRC, pickle_file)
+        darr = FIELD_SRC.field_dataset.Ex
+        xarray = xr.DataArray(darr.values, coords=darr.coords)
+
+        # works
+        pickle.dump(xarray, pickle_file)
+
+        # fails
+        pickle.dump(darr, pickle_file)
 
 
 @clear_tmp
