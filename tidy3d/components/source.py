@@ -584,14 +584,12 @@ class CustomFieldSource(FieldSource, PlanarSource):
         """Assert that provided data spans source bounds in the frame with the source center as the
         origin."""
         size = get_value(key="size", values=values)
-        for field_name, field in val.field_components.items():
-            try:
-                for dim, dim_name in enumerate("xyz"):
-                    assert np.amin(field.coords[dim_name]) <= -size[dim] / 2 + DATA_SPAN_TOL
-                    assert np.amax(field.coords[dim_name]) >= size[dim] / 2 - DATA_SPAN_TOL
-            except AssertionError:
-                # pylint:disable=raise-missing-from
-                raise SetupError(f"Data for field {field_name} does not span the source plane.")
+        for name, field in val.field_components.items():
+            for dim, dim_name in enumerate("xyz"):
+                in_bounds_min = np.amin(field.coords[dim_name]) <= -size[dim] / 2 + DATA_SPAN_TOL
+                in_bounds_max = np.amax(field.coords[dim_name]) >= size[dim] / 2 - DATA_SPAN_TOL
+                if not (in_bounds_min and in_bounds_max):
+                     raise SetupError(f"Data for field {name} does not span the source plane.")
         return val
 
 
