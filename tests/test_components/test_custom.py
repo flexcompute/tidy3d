@@ -1,6 +1,8 @@
 """Tests custom sources and mediums."""
 import pytest
 import numpy as np
+import dill as pickle
+
 from tidy3d.components.source import CustomFieldSource, GaussianPulse
 from tidy3d.components.data.data_array import ScalarFieldDataArray
 from tidy3d.components.data.dataset import FieldDataset
@@ -108,9 +110,8 @@ def test_io_json(caplog):
         FIELD_SRC2 = FIELD_SRC.from_file(path)
 
 
-import dill as pickle
 @clear_tmp
-def test_simulation_load_export_pckl():
+def test_custom_source_pckl():
     path = "tests/tmp/source.pckl"
     with open(path, "wb") as pickle_file:
         pickle.dump(FIELD_SRC, pickle_file)
