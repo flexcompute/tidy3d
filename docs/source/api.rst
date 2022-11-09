@@ -322,6 +322,14 @@ Scattering Matrix Calculator
    plugins.ComponentModeler
    plugins.Port
 
+Resonance Finder
+----------------
+
+.. autosummary::
+   :toctree: _autosummary/
+        
+   plugins.ResonanceFinder
+
 Constants
 =========
 

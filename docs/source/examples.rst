@@ -50,3 +50,4 @@ Case studies
     notebooks/BiosensorGrating.ipynb
     notebooks/BraggGratings.ipynb
     notebooks/PlasmonicNanoparticle.ipynb
+    notebooks/Bandstructure.ipynb
