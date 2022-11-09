@@ -39,14 +39,15 @@ class ResonanceData(Tidy3dBaseModel):
 
 
 class ResonanceFinder(Tidy3dBaseModel):
-    """Tool that extracts resonance information (frequency, decay rate,
-    amplitude, and phase) from a time series of the following form.
+    """Tool that extracts resonance information from a time series of the form shown below.
+    The resonance information consists of frequency :math:`f`, decay rate :math:`\\alpha`,
+    Q factor :math:`Q = \\pi |f|/\\alpha`, amplitude :math:`a`, and phase :math:`\\phi`.
 
     Note
     ----
     .. math::
 
-        f(t) = \\sum_k a_k e^{i \\phi_k} e^{-2 \\pi i f_k t - \\lambda_k t}
+        f(t) = \\sum_k a_k e^{i \\phi_k} e^{-2 \\pi i f_k t - \\alpha_k t}
 
     Note
     ----
@@ -58,11 +59,15 @@ class ResonanceFinder(Tidy3dBaseModel):
 
     Example
     -------
-    t = np.linspace(0, 10000, 10000)
-    f1 = 2*np.pi*0.1 - 1j*0.002
-    f2 = 2*np.pi*0.2 - 1j*0.0005
-    sig = 2*np.exp(-1j*f1*t) + 3*1j*np.exp(-1j*f2*t)
-    resdata = ResonanceFinder(freq_window=(0.05, 0.25)).run_raw_signal(sig, 1)
+    >>> import numpy as np
+    >>> from tidy3d.plugins import ResonanceFinder
+    >>> t = np.linspace(0, 10000, 10000)
+    >>> f1 = 2*np.pi*0.1 - 1j*0.002
+    >>> f2 = 2*np.pi*0.2 - 1j*0.0005
+    >>> sig = 2*np.exp(-1j*f1*t) + 3*1j*np.exp(-1j*f2*t)
+    >>> resfinder = ResonanceFinder(freq_window=(0.05, 0.25))
+    >>> resdata = resfinder.run_raw_signal(signal=sig, time_step=1)
+    >>> resdata.to_dataframe()
 
     """
 
@@ -93,10 +98,9 @@ class ResonanceFinder(Tidy3dBaseModel):
         title="Cutoff for eigenvalues",
         description="Cutoff for eigenvalues, relative to the largest eigenvalue. "
         "The resonance finder solves a generalized eigenvalue problem of the form "
-        "Ax = lambda B x. If B has small eigenvalues, this is poorly conditioned, "
+        ":math:`Ax = \\lambda B x`. If B has small eigenvalues, this is poorly conditioned, "
         "so we eliminate eigenvalues of B less than ``rcond`` times the largest eigenvalue. "
-        "Making this closer to one will typically return fewer resonances, while making it "
-        "closer to zero will typically return more resonances.",
+        "Making this closer to zero will typically return more resonances.",
     )
 
     @validator("freq_window", always=True)
@@ -171,8 +175,8 @@ class ResonanceFinder(Tidy3dBaseModel):
         Returns
         -------
         xr.Dataset
-            Dataset containing the frequency, decay rate, Q, amplitude, phase,
-            and estimation error of the resonances. Modes with low Q, small
+            Dataset containing the decay rate, Q, amplitude, phase, and estimation error
+            of the resonances as a function of frequency. Modes with low Q, small
             amplitude, or high estimation error are likely to be spurious.
         """
         signal = np.array(signal)
