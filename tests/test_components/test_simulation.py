@@ -567,7 +567,7 @@ def test_sim_monitor_homogeneous():
 
     box_transparent = td.Structure(geometry=td.Box(size=(0.1, 0.1, 0.1)), medium=medium_bg)
 
-    monitor_n2f = td.Near2FarAngleMonitor(
+    monitor_n2f = td.FieldProjectionAngleMonitor(
         center=(0, 0, 0),
         size=(td.inf, td.inf, 0),
         freqs=[250e12, 300e12],
@@ -576,7 +576,7 @@ def test_sim_monitor_homogeneous():
         phi=[0],
     )
 
-    monitor_n2f_vol = td.Near2FarAngleMonitor(
+    monitor_n2f_vol = td.FieldProjectionAngleMonitor(
         center=(0.1, 0, 0),
         size=(0.04, 0.04, 0.04),
         freqs=[250e12, 300e12],
@@ -628,7 +628,7 @@ def test_sim_monitor_homogeneous():
     assert len(mediums) == 1
 
     # when another medium intersects an excluded surface, no errors should be raised
-    monitor_n2f_vol_exclude = td.Near2FarAngleMonitor(
+    monitor_n2f_vol_exclude = td.FieldProjectionAngleMonitor(
         center=(0.2, 0, 0.2),
         size=(0.4, 0.4, 0.4),
         freqs=[250e12, 300e12],
@@ -653,6 +653,81 @@ def test_sim_monitor_homogeneous():
         sources=[src],
         monitors=[monitor_n2f_vol_exclude],
         run_time=1e-12,
+    )
+
+
+def test_proj_monitor_distance(caplog):
+    """Make sure a warning is issued if the projection distance for exact projections
+    is very large compared to the simulation domain size.
+    """
+
+    monitor_n2f = td.FieldProjectionAngleMonitor(
+        center=(0, 0, 0),
+        size=(td.inf, td.inf, 0),
+        freqs=[250e12, 300e12],
+        name="monitor_n2f",
+        theta=[0],
+        phi=[0],
+        proj_distance=1e3,
+        far_field_approx=False,
+    )
+
+    monitor_n2f_far = td.FieldProjectionAngleMonitor(
+        center=(0, 0, 0),
+        size=(td.inf, td.inf, 0),
+        freqs=[250e12, 300e12],
+        name="monitor_n2f",
+        theta=[0],
+        phi=[0],
+        proj_distance=1e5,
+        far_field_approx=False,
+    )
+
+    monitor_n2f_approx = td.FieldProjectionAngleMonitor(
+        center=(0, 0, 0),
+        size=(td.inf, td.inf, 0),
+        freqs=[250e12, 300e12],
+        name="monitor_n2f",
+        theta=[0],
+        phi=[0],
+        proj_distance=1e5,
+        far_field_approx=True,
+    )
+
+    src = td.PlaneWave(
+        source_time=td.GaussianPulse(freq0=2.5e14, fwidth=1e13),
+        center=(0, 0, 0),
+        size=(td.inf, td.inf, 0),
+        direction="+",
+        pol_angle=-1.0,
+    )
+
+    # proj_distance large - warn
+    _ = td.Simulation(
+        size=(1, 1, 0.3),
+        structures=[],
+        sources=[src],
+        run_time=1e-12,
+        monitors=[monitor_n2f_far],
+    )
+    assert_log_level(caplog, 30)
+
+    # proj_distance not too large - don't warn
+    _ = td.Simulation(
+        size=(1, 1, 0.3),
+        structures=[],
+        sources=[src],
+        run_time=1e-12,
+        monitors=[monitor_n2f],
+    )
+
+    # proj_distance large but using approximations - don't warn
+    _ = td.Simulation(
+        size=(1, 1, 0.3),
+        structures=[],
+        sources=[src],
+        run_time=1e-12,
+        monitors=[monitor_n2f_approx],
     )
 
 

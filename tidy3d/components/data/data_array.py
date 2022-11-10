@@ -258,7 +258,7 @@ class ModeIndexDataArray(DataArray):
     _data_attrs = {"long_name": "Propagation index"}
 
 
-class Near2FarAngleDataArray(DataArray):
+class FieldProjectionAngleDataArray(DataArray):
     """Far fields in frequency domain as a function of angles theta and phi.
 
     Example
@@ -269,7 +269,7 @@ class Near2FarAngleDataArray(DataArray):
     >>> phi = np.linspace(0, 2*np.pi, 20)
     >>> coords = dict(r=r, theta=theta, phi=phi, f=f)
     >>> values = (1+1j) * np.random.random((len(r), len(theta), len(phi), len(f)))
-    >>> data = Near2FarAngleDataArray(values, coords=coords)
+    >>> data = FieldProjectionAngleDataArray(values, coords=coords)
     """
 
     __slots__ = ()
@@ -277,7 +277,7 @@ class Near2FarAngleDataArray(DataArray):
     _data_attrs = {"long_name": "radiation vectors"}
 
 
-class Near2FarCartesianDataArray(DataArray):
+class FieldProjectionCartesianDataArray(DataArray):
     """Far fields in frequency domain as a function of local x and y coordinates.
 
     Example
@@ -288,7 +288,7 @@ class Near2FarCartesianDataArray(DataArray):
     >>> z = np.atleast_1d(5)
     >>> coords = dict(x=x, y=y, z=z, f=f)
     >>> values = (1+1j) * np.random.random((len(x), len(y), len(z), len(f)))
-    >>> data = Near2FarCartesianDataArray(values, coords=coords)
+    >>> data = FieldProjectionCartesianDataArray(values, coords=coords)
     """
 
     __slots__ = ()
@@ -296,7 +296,7 @@ class Near2FarCartesianDataArray(DataArray):
     _data_attrs = {"long_name": "radiation vectors"}
 
 
-class Near2FarKSpaceDataArray(DataArray):
+class FieldProjectionKSpaceDataArray(DataArray):
     """Far fields in frequency domain as a function of normalized
     kx and ky vectors on the observation plane.
 
@@ -308,7 +308,7 @@ class Near2FarKSpaceDataArray(DataArray):
     >>> uy = np.linspace(0, 10, 20)
     >>> coords = dict(ux=ux, uy=uy, r=r, f=f)
     >>> values = (1+1j) * np.random.random((len(ux), len(uy), len(r), len(f)))
-    >>> data = Near2FarKSpaceDataArray(values, coords=coords)
+    >>> data = FieldProjectionKSpaceDataArray(values, coords=coords)
     """
 
     __slots__ = ()

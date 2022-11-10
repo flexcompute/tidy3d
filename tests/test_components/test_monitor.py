@@ -34,39 +34,107 @@ def test_excluded_surfaces_flat():
         M = td.FluxMonitor(size=(1, 1, 0), name="f", freqs=[1e12], exclude_surfaces=("x-",))
 
 
-def test_near2far_monitor_axis_volumous():
+def test_integration_surfaces():
+    # test that integration surfaces are extracted correctly for surface and volume
+    # integration monitors
 
-    M = td.Near2FarAngleMonitor(size=(2, 0, 2), theta=[1, 2], phi=[0], name="f", freqs=[2e12])
-    assert M.axis == 1
+    # surface monitor
+    surfaces = td.FieldProjectionAngleMonitor(
+        size=(2, 0, 2), theta=[1, 2], phi=[0], name="f", freqs=[2e12]
+    ).integration_surfaces
+    assert len(surfaces) == 1
+    assert surfaces[0].normal_dir == "+"
 
-    M = td.Near2FarAngleMonitor(size=(2, 2, 2), theta=[1, 2], phi=[0], name="f", freqs=[2e12])
+    # surface monitor oppositely oriented
+    surfaces = td.FieldProjectionAngleMonitor(
+        size=(2, 0, 2), theta=[1, 2], phi=[0], name="f", freqs=[2e12], normal_dir="-"
+    ).integration_surfaces
+    assert len(surfaces) == 1
+    assert surfaces[0].normal_dir == "-"
+
+    # volume monitor
+    surfaces = td.FieldProjectionAngleMonitor(
+        size=(2, 2, 2), theta=[1, 2], phi=[0], name="f", freqs=[2e12]
+    ).integration_surfaces
+    assert len(surfaces) == 6
+    for idx, surface in enumerate(surfaces):
+        if np.mod(idx, 2) == 0:
+            assert surface.normal_dir == "-"
+            assert surface.name[-1] == "-"
+        else:
+            assert surface.normal_dir == "+"
+            assert surface.name[-1] == "+"
+
+    # volume monitor with excluded surfaces
+    surfaces = td.FieldProjectionAngleMonitor(
+        size=(2, 2, 2), theta=[1], phi=[0], name="f", freqs=[2e12], exclude_surfaces=["x-", "y+"]
+    ).integration_surfaces
+    assert len(surfaces) == 4
+    expected_surfs = ["x+", "y-", "z-", "z+"]
+    for idx, surface in enumerate(surfaces):
+        assert surface.normal_dir == expected_surfs[idx][-1]
+        assert surface.name[-2:] == expected_surfs[idx]
+
+
+def test_fieldproj_surfaces():
+    # test the field projection surfaces are set correctly for projection monitors
+    M = td.FieldProjectionAngleMonitor(
+        size=(2, 0, 2), theta=[1, 2], phi=[0], name="f", freqs=[2e12]
+    ).projection_surfaces
+    assert len(M) == 1
+    assert M[0].axis == 1
+
+    M = td.FieldProjectionAngleMonitor(
+        size=(2, 2, 2), theta=[1, 2], phi=[0], name="f", freqs=[2e12]
+    ).projection_surfaces
+    assert len(M) == 6
+
+    M = td.FieldProjectionAngleMonitor(
+        size=(2, 2, 2), theta=[1], phi=[0], name="f", freqs=[2e12], exclude_surfaces=["x-", "y+"]
+    ).projection_surfaces
+    assert len(M) == 4
+
+
+def test_fieldproj_kspace_range():
+    # make sure ux, uy are in [-1, 1] for k-space projection monitors
     with pytest.raises(SetupError):
-        M.axis
+        M = td.FieldProjectionKSpaceMonitor(
+            size=(2, 0, 2), ux=[0.1, 2], uy=[0], name="f", freqs=[2e12], proj_axis=1
+        )
+    with pytest.raises(SetupError):
+        M = td.FieldProjectionKSpaceMonitor(
+            size=(2, 0, 2), ux=[0.1, 0.2], uy=[1.1], name="f", freqs=[2e12], proj_axis=1
+        )
+    M = td.FieldProjectionKSpaceMonitor(
+        size=(2, 0, 2), ux=[1, 0.2], uy=[1.0], name="f", freqs=[2e12], proj_axis=1
+    )
 
 
-def test_near2far_local_origin():
-    M = td.Near2FarAngleMonitor(size=(2, 0, 2), theta=[1, 2], phi=[0], name="f", freqs=[2e12])
+def test_fieldproj_local_origin():
+    M = td.FieldProjectionAngleMonitor(
+        size=(2, 0, 2), theta=[1, 2], phi=[0], name="f", freqs=[2e12]
+    )
     M.local_origin
-    M = td.Near2FarAngleMonitor(
+    M = td.FieldProjectionAngleMonitor(
         size=(2, 0, 2), theta=[1, 2], phi=[0], name="f", freqs=[2e12], custom_origin=(1, 2, 3)
     )
     M.local_origin
 
 
-N2F_MNTS = [
-    td.Near2FarAngleMonitor(size=(2, 0, 2), theta=[1, 2], phi=[0], name="f", freqs=[2e12]),
-    td.Near2FarCartesianMonitor(
+PROJ_MNTS = [
+    td.FieldProjectionAngleMonitor(size=(2, 0, 2), theta=[1, 2], phi=[0], name="f", freqs=[2e12]),
+    td.FieldProjectionCartesianMonitor(
         size=(2, 0, 2), x=[1, 2], y=[0], proj_distance=0, proj_axis=2, name="f", freqs=[2e12]
     ),
-    td.Near2FarKSpaceMonitor(
-        size=(2, 0, 2), ux=[1, 2], uy=[0], proj_axis=2, name="f", freqs=[2e12]
+    td.FieldProjectionKSpaceMonitor(
+        size=(2, 0, 2), ux=[1, 0.2], uy=[0], proj_axis=2, name="f", freqs=[2e12]
     ),
 ]
 
 
-@pytest.mark.parametrize("n2f_mnt", N2F_MNTS)
-def test_storage_sizes(n2f_mnt):
-    n2f_mnt.storage_size(num_cells=100, tmesh=[1, 2, 3])
+@pytest.mark.parametrize("proj_mnt", PROJ_MNTS)
+def test_storage_sizes(proj_mnt):
+    proj_mnt.storage_size(num_cells=100, tmesh=[1, 2, 3])
 
 
 def test_monitor_freqs_empty():

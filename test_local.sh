@@ -16,7 +16,7 @@ pytest -ra tests/test_components/test_medium.py
 pytest -ra tests/test_components/test_meshgenerate.py
 pytest -ra tests/test_components/test_mode.py
 pytest -ra tests/test_components/test_monitor.py
-pytest -ra tests/test_components/test_near2far.py
+pytest -ra tests/test_components/test_field_projection.py
 pytest -ra tests/test_components/test_sidewall.py
 pytest -ra tests/test_components/test_simulation.py
 pytest -ra tests/test_components/test_source.py

@@ -9,21 +9,22 @@ import pydantic
 from rich.progress import track
 
 from .data.data_array import (
-    Near2FarAngleDataArray,
-    Near2FarCartesianDataArray,
-    Near2FarKSpaceDataArray,
+    FieldProjectionAngleDataArray,
+    FieldProjectionCartesianDataArray,
+    FieldProjectionKSpaceDataArray,
 )
 from .data.monitor_data import FieldData
-from .data.monitor_data import AbstractFieldProjectionData
-from .data.monitor_data import Near2FarAngleData, Near2FarCartesianData, Near2FarKSpaceData
+from .data.monitor_data import AbstractFieldProjectionData, FieldProjectionAngleData
+from .data.monitor_data import FieldProjectionCartesianData, FieldProjectionKSpaceData
 from .data.sim_data import SimulationData
-from .monitor import FieldMonitor, AbstractNear2FarMonitor
-from .monitor import Near2FarAngleMonitor, Near2FarCartesianMonitor, Near2FarKSpaceMonitor
-from .types import Direction, Axis, Coordinate, ArrayLike
+from .monitor import FieldProjectionSurface
+from .monitor import FieldMonitor, AbstractFieldProjectionMonitor, FieldProjectionAngleMonitor
+from .monitor import FieldProjectionCartesianMonitor, FieldProjectionKSpaceMonitor
+from .types import Direction, Coordinate, ArrayLike
 from .medium import MediumType
 from .base import Tidy3dBaseModel, cached_property
-from ..log import SetupError, ValidationError
-from ..constants import C_0, MICROMETER, ETA_0
+from ..log import SetupError
+from ..constants import C_0, MICROMETER, ETA_0, EPSILON_0, MU_0
 
 # Default number of points per wavelength in the background medium to use for resampling fields.
 PTS_PER_WVL = 10
@@ -32,39 +33,8 @@ PTS_PER_WVL = 10
 ArrayLikeN2F = Union[float, Tuple[float, ...], ArrayLike[float, 4]]
 
 
-class Near2FarSurface(Tidy3dBaseModel):
-    """Data structure to store surface monitor data with associated surface current densities."""
-
-    monitor: FieldMonitor = pydantic.Field(
-        ...,
-        title="Field monitor",
-        description=":class:`.FieldMonitor` on which near fields will be sampled and integrated.",
-    )
-
-    normal_dir: Direction = pydantic.Field(
-        ...,
-        title="Normal vector orientation",
-        description=":class:`.Direction` of the surface monitor's normal vector w.r.t.\
- the positive x, y or z unit vectors. Must be one of '+' or '-'.",
-    )
-
-    @cached_property
-    def axis(self) -> Axis:
-        """Returns the :class:`.Axis` normal to this surface."""
-        # assume that the monitor's axis is in the direction where the monitor is thinnest
-        return self.monitor.size.index(0.0)
-
-    @pydantic.validator("monitor", always=True)
-    def is_plane(cls, val):
-        """Ensures that the monitor is a plane, i.e., its `size` attribute has exactly 1 zero"""
-        size = val.size
-        if size.count(0.0) != 1:
-            raise ValidationError(f"Monitor '{val.name}' must be planar, given size={size}")
-        return val
-
-
-class FarFields(Tidy3dBaseModel):
-    """Near field to far field transformation to compute far fields."""
+class FieldProjector(Tidy3dBaseModel):
+    """Projection of near fields to points on a given observation grid."""
 
     sim_data: SimulationData = pydantic.Field(
         ...,
@@ -72,10 +42,11 @@ class FarFields(Tidy3dBaseModel):
         description="Container for simulation data containing the near field monitors.",
     )
 
-    surfaces: Tuple[Near2FarSurface, ...] = pydantic.Field(
+    surfaces: Tuple[FieldProjectionSurface, ...] = pydantic.Field(
         ...,
         title="Surface monitor with direction",
-        description="Tuple of each :class:`.Near2FarSurface` to use as source of near field.",
+        description="Tuple of each :class:`.FieldProjectionSurface` to use as source of "
+        "near field.",
     )
 
     pts_per_wavelength: Union[int, type(None)] = pydantic.Field(
@@ -131,7 +102,7 @@ class FarFields(Tidy3dBaseModel):
         pts_per_wavelength: int = PTS_PER_WVL,
         origin: Coordinate = None,
     ):
-        """Constructs :class:`Near2Far` from a list of surface monitors and their directions.
+        """Constructs :class:`FieldProjection` from a list of surface monitors and their directions.
 
         Parameters
         ----------
@@ -157,7 +128,7 @@ class FarFields(Tidy3dBaseModel):
             )
 
         surfaces = [
-            Near2FarSurface(monitor=monitor, normal_dir=normal_dir)
+            FieldProjectionSurface(monitor=monitor, normal_dir=normal_dir)
             for monitor, normal_dir in zip(near_monitors, normal_dirs)
         ]
 
@@ -182,6 +153,11 @@ class FarFields(Tidy3dBaseModel):
             current_data = self.compute_surface_currents(
                 sim_data, surface, medium, pts_per_wavelength
             )
+
+            # shift source coordinates relative to the local origin
+            for name, origin in zip(["x", "y", "z"], self.origin):
+                current_data[name] = current_data[name] - origin
+
             surface_currents[surface.monitor.name] = current_data
 
         return surface_currents
@@ -189,7 +165,7 @@ class FarFields(Tidy3dBaseModel):
     @staticmethod
     def compute_surface_currents(
         sim_data: SimulationData,
-        surface: Near2FarSurface,
+        surface: FieldProjectionSurface,
         medium: MediumType,
         pts_per_wavelength: int = PTS_PER_WVL,
     ) -> xr.Dataset:
@@ -199,11 +175,10 @@ class FarFields(Tidy3dBaseModel):
         ----------
         sim_data : :class:`.SimulationData`
             Container for simulation data containing the near field monitors.
-        surface: :class:`.Near2FarSurface`
-            :class:`.Near2FarSurface` to use as source of near field.
+        surface: :class:`.FieldProjectionSurface`
+            :class:`.FieldProjectionSurface` to use as source of near field.
         medium : :class:`.MediumType`
-            Background medium in which to radiate near fields to far fields.
-            Default: same as the :class:`.Simulation` background medium.
+            Background medium through which to project fields.
         pts_per_wavelength : int = 10
             Number of points per wavelength with which to discretize the
             surface monitors for the projection. If ``None``, fields will not be
@@ -221,8 +196,8 @@ class FarFields(Tidy3dBaseModel):
 
         field_data = sim_data[monitor_name]
 
-        currents = FarFields._fields_to_currents(field_data, surface)
-        currents = FarFields._resample_surface_currents(
+        currents = FieldProjector._fields_to_currents(field_data, surface)
+        currents = FieldProjector._resample_surface_currents(
             currents, sim_data, surface, medium, pts_per_wavelength
         )
 
@@ -230,7 +205,7 @@ class FarFields(Tidy3dBaseModel):
 
     @staticmethod
     def _fields_to_currents(  # pylint:disable=too-many-locals
-        field_data: FieldData, surface: Near2FarSurface
+        field_data: FieldData, surface: FieldProjectionSurface
     ) -> FieldData:
         """Returns surface current densities associated with a given :class:`.FieldData` object.
 
@@ -238,8 +213,8 @@ class FarFields(Tidy3dBaseModel):
         ----------
         field_data : :class:`.FieldData`
             Container for field data associated with the given near field surface.
-        surface: :class:`.Near2FarSurface`
-            :class:`.Near2FarSurface` to use as source of near field.
+        surface: :class:`.FieldProjectionSurface`
+            :class:`.FieldProjectionSurface` to use as source of near field.
 
         Returns
         -------
@@ -284,7 +259,7 @@ class FarFields(Tidy3dBaseModel):
     def _resample_surface_currents(
         currents: xr.Dataset,
         sim_data: SimulationData,
-        surface: Near2FarSurface,
+        surface: FieldProjectionSurface,
         medium: MediumType,
         pts_per_wavelength: int = PTS_PER_WVL,
     ) -> xr.Dataset:
@@ -296,11 +271,10 @@ class FarFields(Tidy3dBaseModel):
             Surface currents defined on the original Yee grid.
         sim_data : :class:`.SimulationData`
             Container for simulation data containing the near field monitors.
-        surface: :class:`.Near2FarSurface`
-            :class:`.Near2FarSurface` to use as source of near field.
+        surface: :class:`.FieldProjectionSurface`
+            :class:`.FieldProjectionSurface` to use as source of near field.
         medium : :class:`.MediumType`
-            Background medium in which to radiate near fields to far fields.
-            Default: same as the :class:`.Simulation` background medium.
+            Background medium through which to project fields.
         pts_per_wavelength : int = 10
             Number of points per wavelength with which to discretize the
             surface monitors for the projection. If ``None``, fields will not be
@@ -353,13 +327,23 @@ class FarFields(Tidy3dBaseModel):
         currents = currents.colocate(*colocation_points)
         return currents
 
+    def integrate_2d(
+        self,
+        function: np.ndarray,
+        phase: np.ndarray,
+        pts_u: np.ndarray,
+        pts_v: np.ndarray,
+    ):
+        """Trapezoidal integration in two dimensions."""
+        return np.trapz(np.trapz(np.squeeze(function) * phase, pts_u, axis=0), pts_v, axis=0)
+
     # pylint:disable=too-many-locals, too-many-arguments
     def _far_fields_for_surface(
         self,
         frequency: float,
         theta: ArrayLikeN2F,
         phi: ArrayLikeN2F,
-        surface: Near2FarSurface,
+        surface: FieldProjectionSurface,
         currents: xr.Dataset,
     ):
         """Compute far fields at an angle in spherical coordinates
@@ -374,8 +358,8 @@ class FarFields(Tidy3dBaseModel):
             Polar angles (rad) downward from x=y=0 line relative to the local origin.
         phi : Union[float, Tuple[float, ...], np.ndarray]
             Azimuthal (rad) angles from y=z=0 line relative to the local origin.
-        surface: :class:`Near2FarSurface`
-            :class:`Near2FarSurface` object to use as source of near field.
+        surface: :class:`FieldProjectionSurface`
+            :class:`FieldProjectionSurface` object to use as source of near field.
         currents : xarray.Dataset
             xarray Dataset containing surface currents associated with the surface monitor.
 
@@ -385,8 +369,7 @@ class FarFields(Tidy3dBaseModel):
             ``Er``, ``Etheta``, ``Ephi``, ``Hr``, ``Htheta``, ``Hphi`` for the given surface.
         """
 
-        # make sure that observation points are interpreted w.r.t. the local origin
-        pts = [currents[name].values - origin for name, origin in zip(["x", "y", "z"], self.origin)]
+        pts = [currents[name].values for name in ["x", "y", "z"]]
 
         try:
             currents_f = currents.sel(f=frequency)
@@ -412,10 +395,6 @@ class FarFields(Tidy3dBaseModel):
         J = np.zeros((3, len(theta), len(phi)), dtype=complex)
         M = np.zeros_like(J)
 
-        def integrate_2d(function, phase, pts_u, pts_v):
-            """Trapezoidal integration in two dimensions."""
-            return np.trapz(np.trapz(np.squeeze(function) * phase, pts_u, axis=0), pts_v, axis=0)
-
         phase = [None] * 3
         propagation_factor = -1j * AbstractFieldProjectionData.wavenumber(
             medium=self.medium, frequency=frequency
@@ -432,19 +411,19 @@ class FarFields(Tidy3dBaseModel):
 
                 phase_ij = phase[idx_u][:, None] * phase[idx_v][None, :] * phase[idx_w]
 
-                J[idx_u, i_th, j_ph] = integrate_2d(
+                J[idx_u, i_th, j_ph] = self.integrate_2d(
                     currents_f[f"E{cmp_1}"].values, phase_ij, pts[idx_u], pts[idx_v]
                 )
 
-                J[idx_v, i_th, j_ph] = integrate_2d(
+                J[idx_v, i_th, j_ph] = self.integrate_2d(
                     currents_f[f"E{cmp_2}"].values, phase_ij, pts[idx_u], pts[idx_v]
                 )
 
-                M[idx_u, i_th, j_ph] = integrate_2d(
+                M[idx_u, i_th, j_ph] = self.integrate_2d(
                     currents_f[f"H{cmp_1}"].values, phase_ij, pts[idx_u], pts[idx_v]
                 )
 
-                M[idx_v, i_th, j_ph] = integrate_2d(
+                M[idx_v, i_th, j_ph] = self.integrate_2d(
                     currents_f[f"H{cmp_2}"].values, phase_ij, pts[idx_u], pts[idx_v]
                 )
 
@@ -483,43 +462,49 @@ class FarFields(Tidy3dBaseModel):
 
         return Er, Etheta, Ephi, Hr, Htheta, Hphi
 
-    def far_fields(self, far_monitor: AbstractNear2FarMonitor) -> AbstractFieldProjectionData:
-        """Compute far fields.
+    def project_fields(
+        self, proj_monitor: AbstractFieldProjectionMonitor
+    ) -> AbstractFieldProjectionData:
+        """Compute projected fields.
 
         Parameters
         ----------
-        far_monitor : :class:`.AbstractNear2FarMonitor`
-            Instance of :class:`.AbstractNear2FarMonitor` defining the far field observation grid.
+        proj_monitor : :class:`.AbstractFieldProjectionMonitor`
+            Instance of :class:`.AbstractFieldProjectionMonitor` defining the projection
+            observation grid.
 
         Returns
         -------
         :class:`.AbstractFieldProjectionData`
             Data structure with ``Er``, ``Etheta``, ``Ephi``, ``Hr``, ``Htheta``, ``Hphi``.
         """
-        if isinstance(far_monitor, Near2FarAngleMonitor):
-            return self._far_fields_angular(far_monitor)
-        if isinstance(far_monitor, Near2FarCartesianMonitor):
-            return self._far_fields_cartesian(far_monitor)
-        return self._far_fields_kspace(far_monitor)
+        if isinstance(proj_monitor, FieldProjectionAngleMonitor):
+            return self._project_fields_angular(proj_monitor)
+        if isinstance(proj_monitor, FieldProjectionCartesianMonitor):
+            return self._project_fields_cartesian(proj_monitor)
+        return self._project_fields_kspace(proj_monitor)
 
-    def _far_fields_angular(self, monitor: Near2FarAngleMonitor) -> Near2FarAngleData:
-        """Compute far fields on an angle-based grid in spherical coordinates.
+    def _project_fields_angular(
+        self, monitor: FieldProjectionAngleMonitor
+    ) -> FieldProjectionAngleData:
+        """Compute projected fields on an angle-based grid in spherical coordinates.
 
         Parameters
         ----------
-        monitor : :class:`.Near2FarAngleMonitor`
-            Instance of :class:`.Near2FarAngleMonitor` defining the far field observation grid.
+        monitor : :class:`.FieldProjectionAngleMonitor`
+            Instance of :class:`.FieldProjectionAngleMonitor` defining the projection
+            observation grid.
 
         Returns
         -------
-        :class:.`Near2FarAngleData`
+        :class:.`FieldProjectionAngleData`
             Data structure with ``Er``, ``Etheta``, ``Ephi``, ``Hr``, ``Htheta``, ``Hphi``.
         """
         freqs = np.atleast_1d(self.frequencies)
         theta = np.atleast_1d(monitor.theta)
         phi = np.atleast_1d(monitor.phi)
 
-        # compute far fields for the dataset associated with each monitor
+        # compute projected fields for the dataset associated with each monitor
         field_names = ("Er", "Etheta", "Ephi", "Hr", "Htheta", "Hphi")
         fields = [
             np.zeros((1, len(theta), len(phi), len(freqs)), dtype=complex) for _ in field_names
@@ -531,31 +516,54 @@ class FarFields(Tidy3dBaseModel):
         )
 
         for surface in self.surfaces:
-            for idx_f, frequency in enumerate(freqs):
-                _fields = self._far_fields_for_surface(
-                    frequency, theta, phi, surface, self.currents[surface.monitor.name]
-                )
-                for field, _field in zip(fields, _fields):
-                    field[..., idx_f] += _field * phase[idx_f]
+
+            if monitor.far_field_approx:
+                for idx_f, frequency in enumerate(freqs):
+                    _fields = self._far_fields_for_surface(
+                        frequency, theta, phi, surface, self.currents[surface.monitor.name]
+                    )
+                    for field, _field in zip(fields, _fields):
+                        field[..., idx_f] += _field * phase[idx_f]
+            else:
+                iter_coords = [
+                    ([_theta, _phi], [i, j])
+                    for i, _theta in enumerate(theta)
+                    for j, _phi in enumerate(phi)
+                ]
+                for (_theta, _phi), (i, j) in track(
+                    iter_coords,
+                    description=f"Processing surface monitor '{surface.monitor.name}'...",
+                ):
+                    _x, _y, _z = monitor.sph_2_car(monitor.proj_distance, _theta, _phi)
+                    _fields = self._fields_for_surface_exact(
+                        _x, _y, _z, surface, self.currents[surface.monitor.name]
+                    )
+                    for field, _field in zip(fields, _fields):
+                        field[0, i, j, :] += _field
 
         coords = {"r": np.atleast_1d(monitor.proj_distance), "theta": theta, "phi": phi, "f": freqs}
         fields = {
-            name: Near2FarAngleDataArray(field, coords=coords)
+            name: FieldProjectionAngleDataArray(field, coords=coords)
             for name, field in zip(field_names, fields)
         }
-        return Near2FarAngleData(monitor=monitor, medium=self.medium, **fields)
+        return FieldProjectionAngleData(
+            monitor=monitor, projection_surfaces=self.surfaces, medium=self.medium, **fields
+        )
 
-    def _far_fields_cartesian(self, monitor: Near2FarCartesianMonitor) -> Near2FarCartesianData:
-        """Compute far fields on a Cartesian grid in spherical coordinates.
+    def _project_fields_cartesian(
+        self, monitor: FieldProjectionCartesianMonitor
+    ) -> FieldProjectionCartesianData:
+        """Compute projected fields on a Cartesian grid in spherical coordinates.
 
         Parameters
         ----------
-        monitor : :class:`.Near2FarCartesianMonitor`
-            Instance of :class:`.Near2FarCartesianMonitor` defining the far field observation grid.
+        monitor : :class:`.FieldProjectionCartesianMonitor`
+            Instance of :class:`.FieldProjectionCartesianMonitor` defining the projection
+            observation grid.
 
         Returns
         -------
-        :class:.`Near2FarCartesianData`
+        :class:.`FieldProjectionCartesianData`
             Data structure with ``Er``, ``Etheta``, ``Ephi``, ``Hr``, ``Htheta``, ``Hphi``.
         """
         freqs = np.atleast_1d(self.frequencies)
@@ -564,7 +572,7 @@ class FarFields(Tidy3dBaseModel):
         )
         x, y, z = list(map(np.atleast_1d, [x, y, z]))
 
-        # compute far fields for the dataset associated with each monitor
+        # compute projected fields for the dataset associated with each monitor
         field_names = ("Er", "Etheta", "Ephi", "Hr", "Htheta", "Hphi")
         fields = [
             np.zeros((len(x), len(y), len(z), len(freqs)), dtype=complex) for _ in field_names
@@ -580,45 +588,58 @@ class FarFields(Tidy3dBaseModel):
             for k, _z in enumerate(z)
         ]
 
-        for (_x, _y, _z), (i, j, k) in track(iter_coords, description="Computing far fields"):
+        for (_x, _y, _z), (i, j, k) in track(iter_coords, description="Computing projected fields"):
             r, theta, phi = monitor.car_2_sph(_x, _y, _z)
             phase = np.atleast_1d(
                 AbstractFieldProjectionData.propagation_phase(dist=r, k=wavenumber)
             )
 
             for surface in self.surfaces:
-                for idx_f, frequency in enumerate(freqs):
-                    _fields = self._far_fields_for_surface(
-                        frequency, theta, phi, surface, self.currents[surface.monitor.name]
+
+                if monitor.far_field_approx:
+                    for idx_f, frequency in enumerate(freqs):
+                        _fields = self._far_fields_for_surface(
+                            frequency, theta, phi, surface, self.currents[surface.monitor.name]
+                        )
+                        for field, _field in zip(fields, _fields):
+                            field[i, j, k, idx_f] += _field * phase[idx_f]
+                else:
+                    _fields = self._fields_for_surface_exact(
+                        _x, _y, _z, surface, self.currents[surface.monitor.name]
                     )
                     for field, _field in zip(fields, _fields):
-                        field[i, j, k, idx_f] += _field * phase[idx_f]
+                        field[i, j, k, :] += _field
 
         coords = {"x": x, "y": y, "z": z, "f": freqs}
         fields = {
-            name: Near2FarCartesianDataArray(field, coords=coords)
+            name: FieldProjectionCartesianDataArray(field, coords=coords)
             for name, field in zip(field_names, fields)
         }
-        return Near2FarCartesianData(monitor=monitor, medium=self.medium, **fields)
+        return FieldProjectionCartesianData(
+            monitor=monitor, projection_surfaces=self.surfaces, medium=self.medium, **fields
+        )
 
-    def _far_fields_kspace(self, monitor: Near2FarKSpaceMonitor) -> Near2FarKSpaceData:
-        """Compute far fields on a k-space grid in spherical coordinates.
+    def _project_fields_kspace(
+        self, monitor: FieldProjectionKSpaceMonitor
+    ) -> FieldProjectionKSpaceData:
+        """Compute projected fields on a k-space grid in spherical coordinates.
 
         Parameters
         ----------
-        monitor : :class:`.Near2FarKSpaceMonitor`
-            Instance of :class:`.Near2FarKSpaceMonitor` defining the far field observation grid.
+        monitor : :class:`.FieldProjectionKSpaceMonitor`
+            Instance of :class:`.FieldProjectionKSpaceMonitor` defining the projection
+            observation grid.
 
         Returns
         -------
-        :class:.`Near2FarKSpaceData`
+        :class:.`FieldProjectionKSpaceData`
             Data structure with ``Er``, ``Etheta``, ``Ephi``, ``Hr``, ``Htheta``, ``Hphi``.
         """
         freqs = np.atleast_1d(self.frequencies)
         ux = np.atleast_1d(monitor.ux)
         uy = np.atleast_1d(monitor.uy)
 
-        # compute far fields for the dataset associated with each monitor
+        # compute projected fields for the dataset associated with each monitor
         field_names = ("Er", "Etheta", "Ephi", "Hr", "Htheta", "Hphi")
         fields = [np.zeros((len(ux), len(uy), 1, len(freqs)), dtype=complex) for _ in field_names]
 
@@ -630,16 +651,26 @@ class FarFields(Tidy3dBaseModel):
         # Zip together all combinations of observation points for better progress tracking
         iter_coords = [([_ux, _uy], [i, j]) for i, _ux in enumerate(ux) for j, _uy in enumerate(uy)]
 
-        for (_ux, _uy), (i, j) in track(iter_coords, description="Computing far fields"):
+        for (_ux, _uy), (i, j) in track(iter_coords, description="Computing projected fields"):
             theta, phi = monitor.kspace_2_sph(_ux, _uy, monitor.proj_axis)
 
             for surface in self.surfaces:
-                for idx_f, frequency in enumerate(freqs):
-                    _fields = self._far_fields_for_surface(
-                        frequency, theta, phi, surface, self.currents[surface.monitor.name]
+
+                if monitor.far_field_approx:
+                    for idx_f, frequency in enumerate(freqs):
+                        _fields = self._far_fields_for_surface(
+                            frequency, theta, phi, surface, self.currents[surface.monitor.name]
+                        )
+                        for field, _field in zip(fields, _fields):
+                            field[i, j, 0, idx_f] += _field * phase[idx_f]
+
+                else:
+                    _x, _y, _z = monitor.sph_2_car(monitor.proj_distance, theta, phi)
+                    _fields = self._fields_for_surface_exact(
+                        _x, _y, _z, surface, self.currents[surface.monitor.name]
                     )
                     for field, _field in zip(fields, _fields):
-                        field[i, j, 0, idx_f] += _field * phase[idx_f]
+                        field[i, j, 0, :] += _field
 
         coords = {
             "ux": np.array(monitor.ux),
@@ -648,7 +679,179 @@ class FarFields(Tidy3dBaseModel):
             "f": freqs,
         }
         fields = {
-            name: Near2FarKSpaceDataArray(field, coords=coords)
+            name: FieldProjectionKSpaceDataArray(field, coords=coords)
             for name, field in zip(field_names, fields)
         }
-        return Near2FarKSpaceData(monitor=monitor, medium=self.medium, **fields)
+        return FieldProjectionKSpaceData(
+            monitor=monitor, projection_surfaces=self.surfaces, medium=self.medium, **fields
+        )
+
+    """Exact projections"""
+
+    # pylint:disable=too-many-locals, too-many-arguments, too-many-statements, invalid-name
+    def _fields_for_surface_exact(
+        self,
+        x: float,
+        y: float,
+        z: float,
+        surface: FieldProjectionSurface,
+        currents: xr.Dataset,
+    ):
+        """Compute projected fields in spherical coordinates at a given projection point on a
+        Cartesian grid for a given set of surface currents using the exact homogeneous medium
+        Green's function without geometric approximations.
+
+        Parameters
+        ----------
+        x : float
+            Observation point x-coordinate (microns) relative to the local origin.
+        y : float
+            Observation point y-coordinate (microns) relative to the local origin.
+        z : float
+            Observation point z-coordinate (microns) relative to the local origin.
+        surface: :class:`FieldProjectionSurface`
+            :class:`FieldProjectionSurface` object to use as source of near field.
+        currents : xarray.Dataset
+            xarray Dataset containing surface currents associated with the surface monitor.
+
+        Returns
+        -------
+        tuple(np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray)
+            ``Er``, ``Etheta``, ``Ephi``, ``Hr``, ``Htheta``, ``Hphi`` projected fields for
+            each frequency.
+        """
+
+        freqs = np.array(self.frequencies)
+        i_omega = 1j * 2.0 * np.pi * freqs[None, None, None, :]
+        wavenumber = AbstractFieldProjectionData.wavenumber(frequency=freqs, medium=self.medium)
+        wavenumber = wavenumber[None, None, None, :]  # add space dimensions
+
+        eps_complex = self.medium.eps_model(frequency=freqs)
+        epsilon = EPSILON_0 * eps_complex[None, None, None, :]
+
+        # source points
+        pts = [currents[name].values for name in ["x", "y", "z"]]
+
+        # transform the coordinate system so that the origin is at the source point
+        # then the observation points in the new system are:
+        x_new, y_new, z_new = [pt_obs - pt_src for pt_src, pt_obs in zip(pts, [x, y, z])]
+
+        # tangential source components to use
+        idx_w, idx_uv = surface.monitor.pop_axis((0, 1, 2), axis=surface.axis)
+        _, source_names = surface.monitor.pop_axis(("x", "y", "z"), axis=surface.axis)
+
+        idx_u, idx_v = idx_uv
+        cmp_1, cmp_2 = source_names
+
+        # set the surface current density Cartesian components
+        J = [np.atleast_1d(0)] * 3
+        M = [np.atleast_1d(0)] * 3
+
+        J[idx_u] = currents[f"E{cmp_1}"].values
+        J[idx_v] = currents[f"E{cmp_2}"].values
+        J[idx_w] = np.zeros_like(J[idx_u])
+        M[idx_u] = currents[f"H{cmp_1}"].values
+        M[idx_v] = currents[f"H{cmp_2}"].values
+        M[idx_w] = np.zeros_like(M[idx_u])
+
+        # observation point in the new spherical system
+        r, theta_obs, phi_obs = surface.monitor.car_2_sph(
+            x_new[:, None, None, None], y_new[None, :, None, None], z_new[None, None, :, None]
+        )
+
+        # angle terms
+        sin_theta = np.sin(theta_obs)
+        cos_theta = np.cos(theta_obs)
+        sin_phi = np.sin(phi_obs)
+        cos_phi = np.cos(phi_obs)
+
+        # Green's function and terms related to its derivatives
+        ikr = 1j * wavenumber * r
+        G = np.exp(ikr) / (4.0 * np.pi * r)
+        dG_dr = G * (ikr - 1.0) / r
+        d2G_dr2 = dG_dr * (ikr - 1.0) / r + G / (r**2)
+
+        # operations between unit vectors and currents
+        def r_x_current(current: Tuple[np.ndarray, ...]) -> Tuple[np.ndarray, ...]:
+            """Cross product between the r unit vector and the current."""
+            return [
+                sin_theta * sin_phi * current[2] - cos_theta * current[1],
+                cos_theta * current[0] - sin_theta * cos_phi * current[2],
+                sin_theta * cos_phi * current[1] - sin_theta * sin_phi * current[0],
+            ]
+
+        def r_dot_current(current: Tuple[np.ndarray, ...]) -> np.ndarray:
+            """Dot product between the r unit vector and the current."""
+            return (
+                sin_theta * cos_phi * current[0]
+                + sin_theta * sin_phi * current[1]
+                + cos_theta * current[2]
+            )
+
+        def r_dot_current_dtheta(current: Tuple[np.ndarray, ...]) -> np.ndarray:
+            """Theta derivative of the dot product between the r unit vector and the current."""
+            return (
+                cos_theta * cos_phi * current[0]
+                + cos_theta * sin_phi * current[1]
+                - sin_theta * current[2]
+            )
+
+        def r_dot_current_dphi_div_sin_theta(current: Tuple[np.ndarray, ...]) -> np.ndarray:
+            """Phi derivative of the dot product between the r unit vector and the current,
+            analytically divided by sin theta."""
+            return -sin_phi * current[0] + cos_phi * current[1]
+
+        def grad_Gr_r_dot_current(current: Tuple[np.ndarray, ...]) -> Tuple[np.ndarray, ...]:
+            """Gradient of the product of the gradient of the Green's function and the dot product
+            between the r unit vector and the current."""
+            temp = [
+                d2G_dr2 * r_dot_current(current),
+                dG_dr * r_dot_current_dtheta(current) / r,
+                dG_dr * r_dot_current_dphi_div_sin_theta(current) / r,
+            ]
+            # convert to Cartesian coordinates
+            return surface.monitor.sph_2_car_field(temp[0], temp[1], temp[2], theta_obs, phi_obs)
+
+        def potential_terms(current: Tuple[np.ndarray, ...], const: complex):
+            """Assemble vector potential and its derivatives."""
+            r_x_c = r_x_current(current)
+            pot = [const * item * G for item in current]
+            curl_pot = [const * item * dG_dr for item in r_x_c]
+            grad_div_pot = grad_Gr_r_dot_current(current)
+            grad_div_pot = [const * item for item in grad_div_pot]
+            return pot, curl_pot, grad_div_pot
+
+        # magnetic vector potential terms
+        A, curl_A, grad_div_A = potential_terms(J, MU_0)
+
+        # electric vector potential terms
+        F, curl_F, grad_div_F = potential_terms(M, epsilon)
+
+        # assemble the electric field components (Taflove 8.24, 8.27)
+        e_x_integrand, e_y_integrand, e_z_integrand = [
+            i_omega * (a + grad_div_a / (wavenumber**2)) - curl_f / epsilon
+            for a, grad_div_a, curl_f in zip(A, grad_div_A, curl_F)
+        ]
+
+        # assemble the magnetic field components (Taflove 8.25, 8.28)
+        h_x_integrand, h_y_integrand, h_z_integrand = [
+            i_omega * (f + grad_div_f / (wavenumber**2)) + curl_a / MU_0
+            for f, grad_div_f, curl_a in zip(F, grad_div_F, curl_A)
+        ]
+
+        # integrate over the surface
+        e_x = self.integrate_2d(e_x_integrand, 1.0, pts[idx_u], pts[idx_v])
+        e_y = self.integrate_2d(e_y_integrand, 1.0, pts[idx_u], pts[idx_v])
+        e_z = self.integrate_2d(e_z_integrand, 1.0, pts[idx_u], pts[idx_v])
+        h_x = self.integrate_2d(h_x_integrand, 1.0, pts[idx_u], pts[idx_v])
+        h_y = self.integrate_2d(h_y_integrand, 1.0, pts[idx_u], pts[idx_v])
+        h_z = self.integrate_2d(h_z_integrand, 1.0, pts[idx_u], pts[idx_v])
+
+        # observation point in the original spherical system
+        _, theta_obs, phi_obs = surface.monitor.car_2_sph(x, y, z)
+
+        # convert fields to the original spherical system
+        e_r, e_theta, e_phi = surface.monitor.car_2_sph_field(e_x, e_y, e_z, theta_obs, phi_obs)
+        h_r, h_theta, h_phi = surface.monitor.car_2_sph_field(h_x, h_y, h_z, theta_obs, phi_obs)
+
+        return [e_r, e_theta, e_phi, h_r, h_theta, h_phi]
