@@ -207,12 +207,14 @@ def update_1_7(sim_dict: dict) -> dict:
     """Updates version 1.7."""
 
     def fix_angle_info(mnt_dict: dict) -> dict:
+        mnt_dict["type"] = "FieldProjectionAngleMonitor"
         mnt_dict.pop("fields")
         mnt_dict.pop("medium")
         mnt_dict["proj_distance"] = 1e6
         return mnt_dict
 
     def fix_cartesian_info(mnt_dict: dict) -> dict:
+        mnt_dict["type"] = "FieldProjectionCartesianMonitor"
         mnt_dict.pop("fields")
         mnt_dict.pop("medium")
         dist = mnt_dict.pop("plane_distance")
@@ -222,6 +224,7 @@ def update_1_7(sim_dict: dict) -> dict:
         return mnt_dict
 
     def fix_kspace_info(mnt_dict: dict) -> dict:
+        mnt_dict["type"] = "FieldProjectionKSpaceMonitor"
         mnt_dict.pop("fields")
         mnt_dict.pop("medium")
         mnt_dict["proj_distance"] = 1e6

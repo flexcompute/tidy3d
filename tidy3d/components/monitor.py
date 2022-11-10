@@ -9,7 +9,7 @@ from .types import Ax, EMField, ArrayLike, Bound, FreqArray
 from .types import Literal, Direction, Coordinate, Axis, ObsGridArray
 from .geometry import Box
 from .validators import assert_plane
-from .base import cached_property
+from .base import cached_property, Tidy3dBaseModel
 from .mode import ModeSpec
 from .apodization import ApodizationSpec
 from .viz import PlotParams, plot_params_monitor, ARROW_COLOR_MONITOR, ARROW_ALPHA
@@ -343,6 +343,18 @@ class SurfaceIntegrationMonitor(Monitor, ABC):
         description="Surfaces to exclude in the integration, if a volume monitor.",
     )
 
+    @property
+    def integration_surfaces(self):
+        """Surfaces of the monitor where fields will be recorded for subsequent integration."""
+        if self.size.count(0.0) == 0:
+            monitor_dict = self.dict()
+            exclude_surfaces = monitor_dict.pop("exclude_surfaces", None)
+            surface_monitors = self.surfaces(**monitor_dict)
+            if exclude_surfaces:
+                return [mnt for mnt in surface_monitors if mnt.name[-2:] not in exclude_surfaces]
+            return surface_monitors
+        return [self]
+
     @pydantic.root_validator(skip_on_failure=True)
     def normal_dir_exists_for_surface(cls, values):
         """If the monitor is a surface, set default ``normal_dir`` if not provided.
@@ -484,9 +496,41 @@ class ModeSolverMonitor(AbstractModeMonitor):
         return 6 * BYTES_COMPLEX * num_cells * len(self.freqs) * self.mode_spec.num_modes
 
 
-class AbstractNear2FarMonitor(SurfaceIntegrationMonitor, FreqMonitor):
+class FieldProjectionSurface(Tidy3dBaseModel):
+    """Data structure to store surface monitors where near fields are recorded for
+    field projections."""
+
+    monitor: FieldMonitor = pydantic.Field(
+        ...,
+        title="Field monitor",
+        description=":class:`.FieldMonitor` on which near fields will be sampled and integrated.",
+    )
+
+    normal_dir: Direction = pydantic.Field(
+        ...,
+        title="Normal vector orientation",
+        description=":class:`.Direction` of the surface monitor's normal vector w.r.t.\
+ the positive x, y or z unit vectors. Must be one of '+' or '-'.",
+    )
+
+    @cached_property
+    def axis(self) -> Axis:
+        """Returns the :class:`.Axis` normal to this surface."""
+        # assume that the monitor's axis is in the direction where the monitor is thinnest
+        return self.monitor.size.index(0.0)
+
+    @pydantic.validator("monitor", always=True)
+    def is_plane(cls, val):
+        """Ensures that the monitor is a plane, i.e., its `size` attribute has exactly 1 zero"""
+        size = val.size
+        if size.count(0.0) != 1:
+            raise ValidationError(f"Monitor '{val.name}' must be planar, given size={size}")
+        return val
+
+
+class AbstractFieldProjectionMonitor(SurfaceIntegrationMonitor, FreqMonitor):
     """:class:`Monitor` that samples electromagnetic near fields in the frequency domain
-    and invokes the computation of far fields.
+    and projects them to a given set of observation points.
     """
 
     custom_origin: Coordinate = pydantic.Field(
@@ -497,17 +541,25 @@ class AbstractNear2FarMonitor(SurfaceIntegrationMonitor, FreqMonitor):
         units=MICROMETER,
     )
 
+    far_field_approx: bool = pydantic.Field(
+        True,
+        title="Far field approximation",
+        description="Whether to enable the far field approximation when projecting fields.",
+    )
+
     @property
-    def axis(self) -> Axis:
-        """Returns the :class:`.Axis` normal to this surface."""
-        # assume that the monitor's axis is in the direction where the monitor is thinnest
-        # and errors if the monitor is a box
-        if self.size.count(0.0) != 1:
-            raise SetupError(
-                "Requested ``axis`` property for a box monitor; ``axis`` is defined "
-                "for surface monitors only."
+    def projection_surfaces(self) -> Tuple[FieldProjectionSurface, ...]:
+        """Surfaces of the monitor where near fields will be recorded for subsequent projection."""
+        surfaces = self.integration_surfaces
+        return [
+            FieldProjectionSurface(
+                monitor=FieldMonitor(
+                    center=surface.center, size=surface.size, freqs=self.freqs, name=surface.name
+                ),
+                normal_dir=surface.normal_dir,
             )
-        return self.size.index(0.0)
+            for surface in surfaces
+        ]
 
     @property
     def local_origin(self) -> Coordinate:
@@ -517,13 +569,13 @@ class AbstractNear2FarMonitor(SurfaceIntegrationMonitor, FreqMonitor):
         return self.custom_origin
 
 
-class Near2FarAngleMonitor(AbstractNear2FarMonitor):
+class FieldProjectionAngleMonitor(AbstractFieldProjectionMonitor):
     """:class:`Monitor` that samples electromagnetic near fields in the frequency domain
-    and invokes the computation of far fields at given observation angles.
+    and projects them at given observation angles.
 
     Example
     -------
-    >>> monitor = Near2FarAngleMonitor(
+    >>> monitor = FieldProjectionAngleMonitor(
     ...     center=(1,2,3),
     ...     size=(2,2,2),
     ...     freqs=[250e12, 300e12],
@@ -545,7 +597,7 @@ class Near2FarAngleMonitor(AbstractNear2FarMonitor):
         ...,
         title="Polar angles",
         description="Polar angles with respect to the global z axis, relative to the location of "
-        "``local_origin``, at which to compute far fields.",
+        "``local_origin``, at which to project fields.",
         units=RADIAN,
     )
 
@@ -553,7 +605,7 @@ class Near2FarAngleMonitor(AbstractNear2FarMonitor):
         ...,
         title="Azimuth angles",
         description="Azimuth angles with respect to the global z axis, relative to the location of "
-        "``local_origin``, at which to compute far fields.",
+        "``local_origin``, at which to project fields.",
         units=RADIAN,
     )
 
@@ -564,15 +616,13 @@ class Near2FarAngleMonitor(AbstractNear2FarMonitor):
         return BYTES_COMPLEX * len(self.theta) * len(self.phi) * len(self.freqs) * 6
 
 
-class Near2FarCartesianMonitor(AbstractNear2FarMonitor):
+class FieldProjectionCartesianMonitor(AbstractFieldProjectionMonitor):
     """:class:`Monitor` that samples electromagnetic near fields in the frequency domain
-    and invokes the computation of far fields on a Cartesian observation plane.
-    The far-field approximation is used, so results projected to points close to
-    the monitor's position, compared to its size, may not be accurate.
+    and projects them on a Cartesian observation plane.
 
     Example
     -------
-    >>> monitor = Near2FarCartesianMonitor(
+    >>> monitor = FieldProjectionCartesianMonitor(
     ...     center=(1,2,3),
     ...     size=(2,2,2),
     ...     freqs=[250e12, 300e12],
@@ -626,21 +676,21 @@ class Near2FarCartesianMonitor(AbstractNear2FarMonitor):
         return BYTES_COMPLEX * len(self.x) * len(self.y) * len(self.freqs) * 6
 
 
-class Near2FarKSpaceMonitor(AbstractNear2FarMonitor):
+class FieldProjectionKSpaceMonitor(AbstractFieldProjectionMonitor):
     """:class:`Monitor` that samples electromagnetic near fields in the frequency domain
-    and invokes the computation of far fields on an observation plane defined in k-space.
+    and projects them on an observation plane defined in k-space.
 
     Example
     -------
-    >>> monitor = Near2FarKSpaceMonitor(
+    >>> monitor = FieldProjectionKSpaceMonitor(
     ...     center=(1,2,3),
     ...     size=(2,2,2),
     ...     freqs=[250e12, 300e12],
     ...     name='n2f_monitor',
     ...     custom_origin=(1,2,3),
     ...     proj_axis=2,
-    ...     ux=[1,2],
-    ...     uy=[3,4,5]
+    ...     ux=[0.1,0.2],
+    ...     uy=[0.3,0.4,0.5]
     ...     )
     """
 
@@ -663,7 +713,7 @@ class Near2FarKSpaceMonitor(AbstractNear2FarMonitor):
         description="Local x component of wave vectors on the observation plane, "
         "relative to ``local_origin`` and oriented with respect to ``proj_axis``, "
         "normalized by (2*pi/lambda) where lambda is the wavelength "
-        "associated with the background medium.",
+        "associated with the background medium. Must be in the range [-1, 1].",
     )
 
     uy: ObsGridArray = pydantic.Field(
@@ -672,8 +722,20 @@ class Near2FarKSpaceMonitor(AbstractNear2FarMonitor):
         description="Local y component of wave vectors on the observation plane, "
         "relative to ``local_origin`` and oriented with respect to ``proj_axis``, "
         "normalized by (2*pi/lambda) where lambda is the wavelength "
-        "associated with the background medium.",
+        "associated with the background medium. Must be in the range [-1, 1].",
     )
+
+    @pydantic.root_validator()
+    def reciprocal_vector_range(cls, values):
+        """Ensure that ux, uy are in [-1, 1]."""
+        maxabs_ux = max(list(values.get("ux")), key=abs)
+        maxabs_uy = max(list(values.get("uy")), key=abs)
+        name = values.get("name")
+        if maxabs_ux > 1:
+            raise SetupError(f"Entries of 'ux' must lie in the range [-1, 1] for monitor {name}.")
+        if maxabs_uy > 1:
+            raise SetupError(f"Entries of 'uy' must lie in the range [-1, 1] for monitor {name}.")
+        return values
 
     def storage_size(self, num_cells: int, tmesh: ArrayLike[float, 1]) -> int:
         """Size of monitor storage given the number of points after discretization."""
@@ -735,8 +797,8 @@ MonitorType = Union[
     FluxTimeMonitor,
     ModeMonitor,
     ModeSolverMonitor,
-    Near2FarAngleMonitor,
-    Near2FarCartesianMonitor,
-    Near2FarKSpaceMonitor,
+    FieldProjectionAngleMonitor,
+    FieldProjectionCartesianMonitor,
+    FieldProjectionKSpaceMonitor,
     DiffractionMonitor,
 ]

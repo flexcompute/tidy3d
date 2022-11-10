@@ -32,24 +32,25 @@ from .components.source import CustomFieldSource
 # monitors
 from .components.monitor import FieldMonitor, FieldTimeMonitor, FluxMonitor, FluxTimeMonitor
 from .components.monitor import ModeMonitor, ModeSolverMonitor, PermittivityMonitor
-from .components.monitor import Near2FarAngleMonitor, Near2FarCartesianMonitor
-from .components.monitor import Near2FarKSpaceMonitor
+from .components.monitor import FieldProjectionAngleMonitor, FieldProjectionCartesianMonitor
+from .components.monitor import FieldProjectionKSpaceMonitor, FieldProjectionSurface
 from .components.monitor import DiffractionMonitor
 
 # simulation
 from .components.simulation import Simulation
 
-# near2far
+# field projection
 
-from .components.near2far import Near2FarSurface, FarFields
+from .components.field_projection import FieldProjector
 
 # data
 from .components.data.data_array import ScalarFieldDataArray, ScalarModeFieldDataArray
 from .components.data.data_array import ScalarFieldTimeDataArray
 from .components.data.data_array import ModeAmpsDataArray, ModeIndexDataArray
 from .components.data.data_array import FluxDataArray, FluxTimeDataArray
-from .components.data.data_array import Near2FarAngleDataArray, Near2FarCartesianDataArray
-from .components.data.data_array import Near2FarKSpaceDataArray
+from .components.data.data_array import FieldProjectionAngleDataArray
+from .components.data.data_array import FieldProjectionCartesianDataArray
+from .components.data.data_array import FieldProjectionKSpaceDataArray
 from .components.data.data_array import DiffractionDataArray
 from .components.data.dataset import FieldDataset, FieldTimeDataset
 from .components.data.dataset import PermittivityDataset, ModeSolverDataset
@@ -57,8 +58,8 @@ from .components.data.monitor_data import FieldData, FieldTimeData, Permittivity
 from .components.data.monitor_data import FluxData, FluxTimeData
 from .components.data.monitor_data import ModeData, ModeSolverData
 from .components.data.monitor_data import AbstractFieldProjectionData
-from .components.data.monitor_data import Near2FarAngleData, Near2FarCartesianData
-from .components.data.monitor_data import Near2FarKSpaceData
+from .components.data.monitor_data import FieldProjectionAngleData, FieldProjectionCartesianData
+from .components.data.monitor_data import FieldProjectionKSpaceData
 from .components.data.monitor_data import DiffractionData
 from .components.data.sim_data import SimulationData
 from .components.data.sim_data import DATA_TYPE_MAP

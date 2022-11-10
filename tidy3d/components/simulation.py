@@ -24,7 +24,7 @@ from .boundary import PML, StablePML, Absorber, AbsorberSpec
 from .structure import Structure
 from .source import SourceType, PlaneWave, GaussianBeam, AstigmaticGaussianBeam, CustomFieldSource
 from .monitor import MonitorType, Monitor, FreqMonitor
-from .monitor import AbstractFieldMonitor, DiffractionMonitor, AbstractNear2FarMonitor
+from .monitor import AbstractFieldMonitor, DiffractionMonitor, AbstractFieldProjectionMonitor
 from .data.dataset import Dataset
 from .viz import add_ax_if_none, equal_aspect
 
@@ -517,7 +517,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         total_structures = [structure_bg] + list(structures)
 
         for monitor in val:
-            if isinstance(monitor, (AbstractNear2FarMonitor, DiffractionMonitor)):
+            if isinstance(monitor, (AbstractFieldProjectionMonitor, DiffractionMonitor)):
                 mediums = cls.intersecting_media(monitor, total_structures)
                 # make sure there is no more than one medium in the returned list
                 if len(mediums) > 1:
@@ -526,6 +526,35 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
                         f"intersecting a {monitor.type}. Plane must be homogeneous."
                     )
 
+        return val
+
+    @pydantic.validator("monitors", always=True)
+    def _projection_monitors_distance(cls, val, values):
+        """Warn if the projection distance is large for exact projections."""
+
+        if val is None:
+            return val
+
+        sim_size = values.get("size")
+
+        for idx, monitor in enumerate(val):
+            if isinstance(monitor, AbstractFieldProjectionMonitor):
+                if (
+                    np.abs(monitor.proj_distance) > 1.0e4 * np.max(sim_size)
+                    and not monitor.far_field_approx
+                ):
+                    monitor = monitor.copy(update={"far_field_approx": True})
+                    val = list(val)
+                    val[idx] = monitor
+                    val = tuple(val)
+                    log.warning(
+                        "A very large projection distance was set for the field projection "
+                        f"monitor '{monitor.name}'. Using exact field projections may result in "
+                        "precision loss for large distances; automatically enabling far-field "
+                        "approximations ('far_field_approx = True') for better precision. "
+                        "To insist on exact projections, consider using client-side projections "
+                        "via the 'FieldProjector' class, where higher precision is available."
+                    )
         return val
 
     @pydantic.validator("monitors", always=True)

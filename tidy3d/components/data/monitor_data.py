@@ -10,7 +10,8 @@ import numpy as np
 import pydantic as pd
 
 from .data_array import FluxTimeDataArray, FluxDataArray, ModeIndexDataArray, ModeAmpsDataArray
-from .data_array import Near2FarAngleDataArray, Near2FarCartesianDataArray, Near2FarKSpaceDataArray
+from .data_array import FieldProjectionAngleDataArray, FieldProjectionCartesianDataArray
+from .data_array import FieldProjectionKSpaceDataArray
 from .data_array import DataArray, DiffractionDataArray
 from .data_array import ScalarFieldDataArray, ScalarFieldTimeDataArray
 from .dataset import Dataset, AbstractFieldDataset, ElectromagneticFieldDataset
@@ -21,7 +22,8 @@ from ..grid.grid import Grid
 from ..validators import enforce_monitor_fields_present, required_if_symmetry_present
 from ..monitor import MonitorType, FieldMonitor, FieldTimeMonitor, ModeSolverMonitor
 from ..monitor import ModeMonitor, FluxMonitor, FluxTimeMonitor, PermittivityMonitor
-from ..monitor import Near2FarAngleMonitor, Near2FarCartesianMonitor, Near2FarKSpaceMonitor
+from ..monitor import FieldProjectionAngleMonitor, FieldProjectionCartesianMonitor
+from ..monitor import FieldProjectionKSpaceMonitor, FieldProjectionSurface
 from ..monitor import DiffractionMonitor
 from ..source import SourceTimeType, CustomFieldSource
 from ..medium import Medium, MediumType
@@ -804,22 +806,28 @@ class FluxTimeData(MonitorData):
 
 
 PROJFIELDTYPE = Union[
-    Near2FarAngleDataArray,
-    Near2FarCartesianDataArray,
-    Near2FarKSpaceDataArray,
+    FieldProjectionAngleDataArray,
+    FieldProjectionCartesianDataArray,
+    FieldProjectionKSpaceDataArray,
     DiffractionDataArray,
+]
+
+PROJMONTYPE = Union[
+    FieldProjectionAngleMonitor,
+    FieldProjectionCartesianMonitor,
+    FieldProjectionKSpaceMonitor,
+    DiffractionMonitor,
 ]
 
 
 class AbstractFieldProjectionData(MonitorData):
     """Collection of projected fields in spherical coordinates in the frequency domain."""
 
-    monitor: Union[
-        Near2FarAngleMonitor,
-        Near2FarCartesianMonitor,
-        Near2FarKSpaceMonitor,
-        DiffractionMonitor,
-    ] = None
+    monitor: PROJMONTYPE = pd.Field(
+        ...,
+        title="Projection monitor",
+        description="Field projection monitor.",
+    )
 
     Er: PROJFIELDTYPE = pd.Field(
         ...,
@@ -855,7 +863,7 @@ class AbstractFieldProjectionData(MonitorData):
     medium: MediumType = pd.Field(
         Medium(),
         title="Background Medium",
-        description="Background medium in which to radiate near fields to far fields.",
+        description="Background medium through which to project fields.",
     )
 
     @property
@@ -966,7 +974,7 @@ class AbstractFieldProjectionData(MonitorData):
     def fields_spherical(self) -> xr.Dataset:
         """Get all field components in spherical coordinates relative to the monitor's
         local origin for all projection grid points and frequencies specified in the
-        :class:`AbstractNear2FarMonitor`.
+        :class:`AbstractFieldProjectionMonitor`.
 
         Returns
         -------
@@ -983,7 +991,7 @@ class AbstractFieldProjectionData(MonitorData):
     def fields_cartesian(self) -> xr.Dataset:
         """Get all field components in Cartesian coordinates relative to the monitor's
         local origin for all projection grid points and frequencies specified in the
-        :class:`AbstractNear2FarMonitor`.
+        :class:`AbstractFieldProjectionMonitor`.
 
         Returns
         -------
@@ -1054,56 +1062,67 @@ class AbstractFieldProjectionData(MonitorData):
         return self.make_data_array(data=rcs_data)
 
 
-class Near2FarAngleData(AbstractFieldProjectionData):
-    """Data associated with a :class:`.Near2FarAngleMonitor`: components of projected fields.
+class FieldProjectionAngleData(AbstractFieldProjectionData):
+    """Data associated with a :class:`.FieldProjectionAngleMonitor`: components of projected fields.
 
     Example
     -------
-    >>> from tidy3d import Near2FarAngleDataArray
+    >>> from tidy3d import FieldProjectionAngleDataArray
     >>> f = np.linspace(1e14, 2e14, 10)
     >>> r = np.atleast_1d(5)
     >>> theta = np.linspace(0, np.pi, 10)
     >>> phi = np.linspace(0, 2*np.pi, 20)
     >>> coords = dict(r=r, theta=theta, phi=phi, f=f)
     >>> values = (1+1j) * np.random.random((len(r), len(theta), len(phi), len(f)))
-    >>> scalar_field = Near2FarAngleDataArray(values, coords=coords)
-    >>> monitor = Near2FarAngleMonitor(
+    >>> scalar_field = FieldProjectionAngleDataArray(values, coords=coords)
+    >>> monitor = FieldProjectionAngleMonitor(
     ...     center=(1,2,3), size=(2,2,2), freqs=f, name='n2f_monitor', phi=phi, theta=theta
     ...     )
-    >>> data = Near2FarAngleData(
+    >>> data = FieldProjectionAngleData(
     ...     monitor=monitor, Er=scalar_field, Etheta=scalar_field, Ephi=scalar_field,
-    ...     Hr=scalar_field, Htheta=scalar_field, Hphi=scalar_field
+    ...     Hr=scalar_field, Htheta=scalar_field, Hphi=scalar_field,
+    ...     projection_surfaces=monitor.projection_surfaces,
     ...     )
     """
 
-    monitor: Near2FarAngleMonitor = None
+    monitor: FieldProjectionAngleMonitor = pd.Field(
+        ...,
+        title="Projection monitor",
+        description="Field projection monitor with an angle-based projection grid.",
+    )
 
-    Er: Near2FarAngleDataArray = pd.Field(
+    projection_surfaces: Tuple[FieldProjectionSurface, ...] = pd.Field(
+        ...,
+        title="Projection surfaces",
+        description="Surfaces of the monitor where near fields were recorded for projection",
+    )
+
+    Er: FieldProjectionAngleDataArray = pd.Field(
         ...,
         title="Er",
         description="Spatial distribution of r-component of the electric field.",
     )
-    Etheta: Near2FarAngleDataArray = pd.Field(
+    Etheta: FieldProjectionAngleDataArray = pd.Field(
         ...,
         title="Etheta",
         description="Spatial distribution of the theta-component of the electric field.",
     )
-    Ephi: Near2FarAngleDataArray = pd.Field(
+    Ephi: FieldProjectionAngleDataArray = pd.Field(
         ...,
         title="Ephi",
         description="Spatial distribution of phi-component of the electric field.",
     )
-    Hr: Near2FarAngleDataArray = pd.Field(
+    Hr: FieldProjectionAngleDataArray = pd.Field(
         ...,
         title="Hr",
         description="Spatial distribution of r-component of the magnetic field.",
     )
-    Htheta: Near2FarAngleDataArray = pd.Field(
+    Htheta: FieldProjectionAngleDataArray = pd.Field(
         ...,
         title="Htheta",
         description="Spatial distribution of theta-component of the magnetic field.",
     )
-    Hphi: Near2FarAngleDataArray = pd.Field(
+    Hphi: FieldProjectionAngleDataArray = pd.Field(
         ...,
         title="Hphi",
         description="Spatial distribution of phi-component of the magnetic field.",
@@ -1133,6 +1152,12 @@ class Near2FarAngleData(AbstractFieldProjectionData):
         proj_distance : float = None
             (micron) new radial distance relative to the monitor's local origin.
         """
+        if self.monitor and not self.monitor.far_field_approx:
+            raise DataError(
+                "Fields projected without invoking the far field approximation "
+                "cannot be re-projected to a new distance."
+            )
+
         # the phase factor associated with the old distance must be removed
         r = self.coords_spherical["r"][..., None]
         old_phase = self.propagation_phase(dist=r, k=self.k[None, None, None, :])
@@ -1149,57 +1174,69 @@ class Near2FarAngleData(AbstractFieldProjectionData):
             field["r"] = np.atleast_1d(proj_distance)
 
 
-class Near2FarCartesianData(AbstractFieldProjectionData):
-    """Data associated with a :class:`.Near2FarCartesianMonitor`: components of projected fields.
+class FieldProjectionCartesianData(AbstractFieldProjectionData):
+    """Data associated with a :class:`.FieldProjectionCartesianMonitor`: components of
+    projected fields.
 
     Example
     -------
-    >>> from tidy3d import Near2FarCartesianDataArray
+    >>> from tidy3d import FieldProjectionCartesianDataArray
     >>> f = np.linspace(1e14, 2e14, 10)
     >>> x = np.linspace(0, 5, 10)
     >>> y = np.linspace(0, 10, 20)
     >>> z = np.atleast_1d(5)
     >>> coords = dict(x=x, y=y, z=z, f=f)
     >>> values = (1+1j) * np.random.random((len(x), len(y), len(z), len(f)))
-    >>> scalar_field = Near2FarCartesianDataArray(values, coords=coords)
-    >>> monitor = Near2FarCartesianMonitor(
+    >>> scalar_field = FieldProjectionCartesianDataArray(values, coords=coords)
+    >>> monitor = FieldProjectionCartesianMonitor(
     ...     center=(1,2,3), size=(2,2,2), freqs=f, name='n2f_monitor', x=x, y=y,
     ...     proj_axis=2, proj_distance=50
     ...     )
-    >>> data = Near2FarCartesianData(
+    >>> data = FieldProjectionCartesianData(
     ...     monitor=monitor, Er=scalar_field, Etheta=scalar_field, Ephi=scalar_field,
-    ...     Hr=scalar_field, Htheta=scalar_field, Hphi=scalar_field
+    ...     Hr=scalar_field, Htheta=scalar_field, Hphi=scalar_field,
+    ...     projection_surfaces=monitor.projection_surfaces,
     ...     )
     """
 
-    monitor: Near2FarCartesianMonitor
+    monitor: FieldProjectionCartesianMonitor = pd.Field(
+        ...,
+        title="Projection monitor",
+        description="Field projection monitor with a Cartesian projection grid.",
+    )
 
-    Er: Near2FarCartesianDataArray = pd.Field(
+    projection_surfaces: Tuple[FieldProjectionSurface, ...] = pd.Field(
+        ...,
+        title="Projection surfaces",
+        description="Surfaces of the monitor where near fields were recorded for projection",
+    )
+
+    Er: FieldProjectionCartesianDataArray = pd.Field(
         ...,
         title="Er",
         description="Spatial distribution of r-component of the electric field.",
     )
-    Etheta: Near2FarCartesianDataArray = pd.Field(
+    Etheta: FieldProjectionCartesianDataArray = pd.Field(
         ...,
         title="Etheta",
         description="Spatial distribution of the theta-component of the electric field.",
     )
-    Ephi: Near2FarCartesianDataArray = pd.Field(
+    Ephi: FieldProjectionCartesianDataArray = pd.Field(
         ...,
         title="Ephi",
         description="Spatial distribution of phi-component of the electric field.",
     )
-    Hr: Near2FarCartesianDataArray = pd.Field(
+    Hr: FieldProjectionCartesianDataArray = pd.Field(
         ...,
         title="Hr",
         description="Spatial distribution of r-component of the magnetic field.",
     )
-    Htheta: Near2FarCartesianDataArray = pd.Field(
+    Htheta: FieldProjectionCartesianDataArray = pd.Field(
         ...,
         title="Htheta",
         description="Spatial distribution of theta-component of the magnetic field.",
     )
-    Hphi: Near2FarCartesianDataArray = pd.Field(
+    Hphi: FieldProjectionCartesianDataArray = pd.Field(
         ...,
         title="Hphi",
         description="Spatial distribution of phi-component of the magnetic field.",
@@ -1229,6 +1266,12 @@ class Near2FarCartesianData(AbstractFieldProjectionData):
         proj_distance : float = None
             (micron) new plane distance relative to the monitor's local origin.
         """
+        if not self.monitor.far_field_approx:
+            raise DataError(
+                "Fields projected without invoking the far field approximation "
+                "cannot be re-projected to a new distance."
+            )
+
         # the phase factor associated with the old distance must be removed
         k = self.k[None, None, None, :]
         r = self.coords_spherical["r"][..., None]
@@ -1251,56 +1294,68 @@ class Near2FarCartesianData(AbstractFieldProjectionData):
             field.values *= phase
 
 
-class Near2FarKSpaceData(AbstractFieldProjectionData):
-    """Data associated with a :class:`.Near2FarKSpaceMonitor`: components of projected fields.
+class FieldProjectionKSpaceData(AbstractFieldProjectionData):
+    """Data associated with a :class:`.FieldProjectionKSpaceMonitor`: components of
+    projected fields.
 
     Example
     -------
-    >>> from tidy3d import Near2FarKSpaceDataArray
+    >>> from tidy3d import FieldProjectionKSpaceDataArray
     >>> f = np.linspace(1e14, 2e14, 10)
     >>> ux = np.linspace(0, 0.4, 10)
     >>> uy = np.linspace(0, 0.6, 20)
     >>> r = np.atleast_1d(5)
     >>> coords = dict(ux=ux, uy=uy, r=r, f=f)
     >>> values = (1+1j) * np.random.random((len(ux), len(uy), len(r), len(f)))
-    >>> scalar_field = Near2FarKSpaceDataArray(values, coords=coords)
-    >>> monitor = Near2FarKSpaceMonitor(
+    >>> scalar_field = FieldProjectionKSpaceDataArray(values, coords=coords)
+    >>> monitor = FieldProjectionKSpaceMonitor(
     ...     center=(1,2,3), size=(2,2,2), freqs=f, name='n2f_monitor', ux=ux, uy=uy, proj_axis=2
     ...     )
-    >>> data = Near2FarKSpaceData(
+    >>> data = FieldProjectionKSpaceData(
     ...     monitor=monitor, Er=scalar_field, Etheta=scalar_field, Ephi=scalar_field,
-    ...     Hr=scalar_field, Htheta=scalar_field, Hphi=scalar_field
+    ...     Hr=scalar_field, Htheta=scalar_field, Hphi=scalar_field,
+    ...     projection_surfaces=monitor.projection_surfaces,
     ...     )
     """
 
-    monitor: Near2FarKSpaceMonitor = None
+    monitor: FieldProjectionKSpaceMonitor = pd.Field(
+        ...,
+        title="Projection monitor",
+        description="Field projection monitor with a projection grid defined in k-space.",
+    )
 
-    Er: Near2FarKSpaceDataArray = pd.Field(
+    projection_surfaces: Tuple[FieldProjectionSurface, ...] = pd.Field(
+        ...,
+        title="Projection surfaces",
+        description="Surfaces of the monitor where near fields were recorded for projection",
+    )
+
+    Er: FieldProjectionKSpaceDataArray = pd.Field(
         ...,
         title="Er",
         description="Spatial distribution of r-component of the electric field.",
     )
-    Etheta: Near2FarKSpaceDataArray = pd.Field(
+    Etheta: FieldProjectionKSpaceDataArray = pd.Field(
         ...,
         title="Etheta",
         description="Spatial distribution of the theta-component of the electric field.",
     )
-    Ephi: Near2FarKSpaceDataArray = pd.Field(
+    Ephi: FieldProjectionKSpaceDataArray = pd.Field(
         ...,
         title="Ephi",
         description="Spatial distribution of phi-component of the electric field.",
     )
-    Hr: Near2FarKSpaceDataArray = pd.Field(
+    Hr: FieldProjectionKSpaceDataArray = pd.Field(
         ...,
         title="Hr",
         description="Spatial distribution of r-component of the magnetic field.",
     )
-    Htheta: Near2FarKSpaceDataArray = pd.Field(
+    Htheta: FieldProjectionKSpaceDataArray = pd.Field(
         ...,
         title="Htheta",
         description="Spatial distribution of theta-component of the magnetic field.",
     )
-    Hphi: Near2FarKSpaceDataArray = pd.Field(
+    Hphi: FieldProjectionKSpaceDataArray = pd.Field(
         ...,
         title="Hphi",
         description="Spatial distribution of phi-component of the magnetic field.",
@@ -1330,6 +1385,12 @@ class Near2FarKSpaceData(AbstractFieldProjectionData):
         proj_distance : float = None
             (micron) new radial distance relative to the monitor's local origin.
         """
+        if self.monitor and not self.monitor.far_field_approx:
+            raise DataError(
+                "Fields projected without invoking the far field approximation "
+                "cannot be re-projected to a new distance."
+            )
+
         # the phase factor associated with the old distance must be removed
         r = self.coords_spherical["r"][..., None]
         old_phase = self.propagation_phase(dist=r, k=self.k[None, None, None, :])
@@ -1590,9 +1651,9 @@ MonitorDataTypes = (
     ModeData,
     FluxData,
     FluxTimeData,
-    Near2FarKSpaceData,
-    Near2FarCartesianData,
-    Near2FarAngleData,
+    FieldProjectionKSpaceData,
+    FieldProjectionCartesianData,
+    FieldProjectionAngleData,
     DiffractionData,
 )
 

@@ -3,7 +3,7 @@ import numpy as np
 import tidy3d as td
 import pytest
 
-from tidy3d.log import SetupError
+from tidy3d.log import SetupError, DataError
 from ..utils import clear_tmp
 
 
@@ -14,7 +14,7 @@ R_FAR = 50 * WAVELENGTH
 MAKE_PLOTS = False
 
 
-def make_n2f_monitors(center, size, freqs):
+def make_proj_monitors(center, size, freqs):
     """Helper function to make near-to-far monitors."""
     Ntheta = 40
     Nphi = 36
@@ -37,7 +37,7 @@ def make_n2f_monitors(center, size, freqs):
     if size.count(0.0) == 0:
         exclude_surfaces = ["x+", "y-"]
 
-    n2f_angle_monitor = td.Near2FarAngleMonitor(
+    n2f_angle_monitor = td.FieldProjectionAngleMonitor(
         center=center,
         size=size,
         freqs=freqs,
@@ -50,7 +50,7 @@ def make_n2f_monitors(center, size, freqs):
     )
 
     proj_axis = 0
-    n2f_cart_monitor = td.Near2FarCartesianMonitor(
+    n2f_cart_monitor = td.FieldProjectionCartesianMonitor(
         center=center,
         size=size,
         freqs=freqs,
@@ -65,7 +65,7 @@ def make_n2f_monitors(center, size, freqs):
     )
 
     proj_axis = 0
-    n2f_ksp_monitor = td.Near2FarKSpaceMonitor(
+    n2f_ksp_monitor = td.FieldProjectionKSpaceMonitor(
         center=center,
         size=size,
         freqs=freqs,
@@ -77,10 +77,26 @@ def make_n2f_monitors(center, size, freqs):
         normal_dir="+",
         exclude_surfaces=exclude_surfaces,
     )
-    return n2f_angle_monitor, n2f_cart_monitor, n2f_ksp_monitor
+
+    exact_cart_monitor = td.FieldProjectionCartesianMonitor(
+        center=center,
+        size=size,
+        freqs=freqs,
+        name="exact_cart",
+        custom_origin=center,
+        x=list(xs),
+        y=list(ys),
+        proj_axis=proj_axis,
+        proj_distance=z,
+        normal_dir="+",
+        exclude_surfaces=exclude_surfaces,
+        far_field_approx=False,
+    )
+
+    return n2f_angle_monitor, n2f_cart_monitor, n2f_ksp_monitor, exact_cart_monitor
 
 
-def test_n2f_monitors():
+def test_proj_monitors():
     """Make sure all the near-to-far monitors can be created."""
 
     dipole_center = [0, 0, 0]
@@ -101,13 +117,13 @@ def test_n2f_monitors():
 
     # make monitors
     mon_size = [buffer_mon] * 3
-    n2f_monitors = make_n2f_monitors(dipole_center, mon_size, freqs)
+    proj_monitors = make_proj_monitors(dipole_center, mon_size, freqs)
 
     near_monitors = td.FieldMonitor.surfaces(
         center=dipole_center, size=mon_size, freqs=freqs, name="near"
     )
 
-    all_monitors = near_monitors + list(n2f_monitors)
+    all_monitors = near_monitors + list(proj_monitors)
 
     sim = td.Simulation(
         size=sim_size,
@@ -122,7 +138,7 @@ def test_n2f_monitors():
 
 
 @clear_tmp
-def test_n2f_data():
+def test_proj_data():
     """Make sure all the near-to-far data structures can be created."""
 
     f = np.linspace(1e14, 2e14, 10)
@@ -131,12 +147,13 @@ def test_n2f_data():
     phi = np.linspace(0, 2 * np.pi, 20)
     coords_tp = dict(r=r, theta=theta, phi=phi, f=f)
     values_tp = (1 + 1j) * np.random.random((len(r), len(theta), len(phi), len(f)))
-    scalar_field_tp = td.Near2FarAngleDataArray(values_tp, coords=coords_tp)
-    monitor_tp = td.Near2FarAngleMonitor(
+    scalar_field_tp = td.FieldProjectionAngleDataArray(values_tp, coords=coords_tp)
+    monitor_tp = td.FieldProjectionAngleMonitor(
         center=(1, 2, 3), size=(2, 2, 2), freqs=f, name="n2f_monitor_tp", phi=phi, theta=theta
     )
-    data_tp = td.Near2FarAngleData(
+    data_tp = td.FieldProjectionAngleData(
         monitor=monitor_tp,
+        projection_surfaces=monitor_tp.projection_surfaces,
         Er=scalar_field_tp,
         Etheta=scalar_field_tp,
         Ephi=scalar_field_tp,
@@ -150,8 +167,8 @@ def test_n2f_data():
     z = np.atleast_1d(5)
     coords_xy = dict(x=x, y=y, z=z, f=f)
     values_xy = (1 + 1j) * np.random.random((len(x), len(y), len(z), len(f)))
-    scalar_field_xy = td.Near2FarCartesianDataArray(values_xy, coords=coords_xy)
-    monitor_xy = td.Near2FarCartesianMonitor(
+    scalar_field_xy = td.FieldProjectionCartesianDataArray(values_xy, coords=coords_xy)
+    monitor_xy = td.FieldProjectionCartesianMonitor(
         center=(1, 2, 3),
         size=(2, 2, 2),
         freqs=f,
@@ -161,8 +178,9 @@ def test_n2f_data():
         proj_axis=2,
         proj_distance=50,
     )
-    data_xy = td.Near2FarCartesianData(
+    data_xy = td.FieldProjectionCartesianData(
         monitor=monitor_xy,
+        projection_surfaces=monitor_xy.projection_surfaces,
         Er=scalar_field_xy,
         Etheta=scalar_field_xy,
         Ephi=scalar_field_xy,
@@ -176,12 +194,13 @@ def test_n2f_data():
     r = np.atleast_1d(5)
     coords_u = dict(ux=ux, uy=uy, r=r, f=f)
     values_u = (1 + 1j) * np.random.random((len(ux), len(uy), len(r), len(f)))
-    scalar_field_u = td.Near2FarKSpaceDataArray(values_u, coords=coords_u)
-    monitor_u = td.Near2FarKSpaceMonitor(
+    scalar_field_u = td.FieldProjectionKSpaceDataArray(values_u, coords=coords_u)
+    monitor_u = td.FieldProjectionKSpaceMonitor(
         center=(1, 2, 3), size=(2, 2, 2), freqs=f, name="n2f_monitor_u", ux=ux, uy=uy, proj_axis=2
     )
-    data_u = td.Near2FarKSpaceData(
+    data_u = td.FieldProjectionKSpaceData(
         monitor=monitor_u,
+        projection_surfaces=monitor_u.projection_surfaces,
         Er=scalar_field_u,
         Etheta=scalar_field_u,
         Ephi=scalar_field_u,
@@ -202,8 +221,36 @@ def test_n2f_data():
     sim_data.to_file("tests/tmp/sim_data_n2f.hdf5")
     sim_data = td.SimulationData.from_file("tests/tmp/sim_data_n2f.hdf5")
 
+    x = np.linspace(0, 5, 10)
+    y = np.linspace(0, 10, 20)
+    z = np.atleast_1d(5)
+    coords_xy = dict(x=x, y=y, z=z, f=f)
+    values_xy = (1 + 1j) * np.random.random((len(x), len(y), len(z), len(f)))
+    scalar_field_xy = td.FieldProjectionCartesianDataArray(values_xy, coords=coords_xy)
+    monitor_xy_exact = td.FieldProjectionCartesianMonitor(
+        center=(1, 2, 3),
+        size=(2, 2, 2),
+        freqs=f,
+        name="exact_monitor_xy",
+        x=x,
+        y=y,
+        proj_axis=2,
+        proj_distance=50,
+        far_field_approx=False,
+    )
+    data_xy_exact = td.FieldProjectionCartesianData(
+        monitor=monitor_xy,
+        projection_surfaces=monitor_xy.projection_surfaces,
+        Er=scalar_field_xy,
+        Etheta=scalar_field_xy,
+        Ephi=scalar_field_xy,
+        Hr=scalar_field_xy,
+        Htheta=scalar_field_xy,
+        Hphi=scalar_field_xy,
+    )
 
-def test_n2f_clientside():
+
+def test_proj_clientside():
     """Make sure the client-side near-to-far class can be created."""
 
     center = (0, 0, 0)
@@ -242,16 +289,19 @@ def test_n2f_clientside():
 
     sim_data = td.SimulationData(simulation=sim, data=(data,))
 
-    n2f = td.FarFields.from_near_field_monitors(
+    proj = td.FieldProjector.from_near_field_monitors(
         sim_data=sim_data, near_monitors=[monitor], normal_dirs=["+"]
     )
 
     # make near-to-far monitors
-    n2f_angle_monitor, n2f_cart_monitor, n2f_ksp_monitor = make_n2f_monitors(center, size, [f0])
+    n2f_angle_monitor, n2f_cart_monitor, n2f_ksp_monitor, exact_cart_monitor = make_proj_monitors(
+        center, size, [f0]
+    )
 
-    far_fields_angular = n2f.far_fields(n2f_angle_monitor)
-    far_fields_cartesian = n2f.far_fields(n2f_cart_monitor)
-    far_fields_kspace = n2f.far_fields(n2f_ksp_monitor)
+    far_fields_angular = proj.project_fields(n2f_angle_monitor)
+    far_fields_cartesian = proj.project_fields(n2f_cart_monitor)
+    far_fields_kspace = proj.project_fields(n2f_ksp_monitor)
+    exact_fields_cartesian = proj.project_fields(exact_cart_monitor)
 
     # compute far field quantities
     far_fields_angular.r
@@ -286,3 +336,15 @@ def test_n2f_clientside():
     for key, val in far_fields_kspace.field_components.items():
         val.sel(f=f0)
     far_fields_kspace.renormalize_fields(proj_distance=5e6)
+
+    exact_fields_cartesian.x
+    exact_fields_cartesian.y
+    exact_fields_cartesian.z
+    exact_fields_cartesian.fields_spherical
+    exact_fields_cartesian.fields_cartesian
+    exact_fields_cartesian.radar_cross_section
+    exact_fields_cartesian.power
+    for key, val in exact_fields_cartesian.field_components.items():
+        val.sel(f=f0)
+    with pytest.raises(DataError):
+        exact_fields_cartesian.renormalize_fields(proj_distance=5e6)
