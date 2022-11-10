@@ -566,14 +566,14 @@ class CustomFieldSource(FieldSource, PlanarSource):
             freqs = scalar_field.f
             if len(freqs) != 1:
                 raise SetupError(
-                    f"`field_data.{name}` must have a single frequency, "
+                    f"'field_dataset.{name}' must have a single frequency, "
                     f"contains {len(freqs)} frequencies."
                 )
             freq = float(freqs[0])
             if (freq < fmin) or (freq > fmax):
                 raise SetupError(
-                    f"`field_data.{name}` contains frequency: {freq:.2e} Hz, which is outside "
-                    f"of the source's `source_time` frequency range [{fmin:.2e}-{fmax:.2e}] Hz."
+                    f"'field_dataset.{name}' contains frequency: {freq:.2e} Hz, which is outside "
+                    f"of the 'source_time' frequency range [{fmin:.2e}-{fmax:.2e}] Hz."
                 )
         return val
 
@@ -590,7 +590,7 @@ class CustomFieldSource(FieldSource, PlanarSource):
                 tangential_field = field + cmp_name
                 if tangential_field in val.field_components:
                     return val
-        raise SetupError("no tangential field found in the suppled `field_data`.")
+        raise SetupError("No tangential field found in the suppled 'field_dataset'.")
 
     @pydantic.validator("field_dataset", always=True)
     def _tangential_fields_span_source(cls, val: FieldDataset, values: dict) -> FieldDataset:

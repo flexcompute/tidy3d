@@ -330,5 +330,5 @@ class DiffractionDataArray(DataArray):
     """
 
     __slots__ = ()
-    _dims = ("orders_x", "orders_y", "polarization", "f")
+    _dims = ("orders_x", "orders_y", "f")
     _data_attrs = {"long_name": "diffraction amplitude"}
