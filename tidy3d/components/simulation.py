@@ -22,9 +22,10 @@ from .medium import Medium, MediumType, AbstractMedium, PECMedium
 from .boundary import BoundarySpec, BlochBoundary, PECBoundary, PMCBoundary, Periodic
 from .boundary import PML, StablePML, Absorber
 from .structure import Structure
-from .source import SourceType, PlaneWave, GaussianBeam, AstigmaticGaussianBeam
+from .source import SourceType, PlaneWave, GaussianBeam, AstigmaticGaussianBeam, CustomFieldSource
 from .monitor import MonitorType, Monitor, FreqMonitor
 from .monitor import AbstractFieldMonitor, DiffractionMonitor, AbstractNear2FarMonitor
+from .data.dataset import Dataset
 from .viz import add_ax_if_none, equal_aspect
 
 from .viz import MEDIUM_CMAP, PlotParams, plot_params_symmetry
@@ -583,6 +584,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         """Validate the fully initialized simulation is ok for upload to our servers."""
         self._validate_size()
         self._validate_monitor_size()
+        self._validate_datasets_not_none()
         # self._validate_run_time()
 
     def _validate_size(self) -> None:
@@ -631,6 +633,15 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
             raise SetupError(
                 f"Simulation's monitors have {total_size_bytes:.2e} bytes of estimated storage, "
                 f"a maximum of {MAX_MONITOR_DATA_SIZE_BYTES:.2e} are allowed."
+            )
+
+    def _validate_datasets_not_none(self) -> None:
+        """Ensures that all custom datasets are defined."""
+        if any(dataset is None for dataset in self.custom_datasets):
+            raise SetupError(
+                "Data for a custom data component is missing. This can happen for example if the "
+                "Simulation has been loaded from json. To save and load simulations with custom "
+                "data, use hdf5 format instead."
             )
 
     """ Accounting """
@@ -1934,3 +1945,11 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         updater = Updater(sim_dict=sim_dict)
         sim_dict_updated = updater.update_to_current()
         return cls.parse_obj(sim_dict_updated, **parse_obj_kwargs)
+
+    @property
+    def custom_datasets(self) -> List[Dataset]:
+        """List of custom datasets for verification purposes. If the list is not empty, then
+        the simulation needs to be exported to hdf5 to store the data.
+        """
+        datasets = [src.field_dataset for src in self.sources if isinstance(src, CustomFieldSource)]
+        return datasets
