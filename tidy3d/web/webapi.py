@@ -17,7 +17,7 @@ from . import httputils as http
 from .config import DEFAULT_CONFIG
 from .s3utils import upload_string, get_s3_sts_token, download_file
 
-# from .s3utils import upload_file
+from .s3utils import upload_file
 from .task import TaskId, TaskInfo, Folder
 from ..components.data.sim_data import SimulationData
 from ..components.simulation import Simulation
@@ -28,8 +28,8 @@ from ..version import __version__
 REFRESH_TIME = 0.3
 TOTAL_DOTS = 3
 # file names when uploading to S3
-SIM_FILE_NAME = "simulation.json"
-DATA_FILE_NAME = "extra_data.hdf5"
+SIM_FILE_JSON = "simulation.json"
+SIM_FILE_HDF5 = "simulation.hdf5"
 
 
 def run(  # pylint:disable=too-many-arguments
@@ -117,22 +117,15 @@ def upload(  # pylint:disable=too-many-locals,too-many-arguments
         error_json = json.loads(e.response.text)
         raise WebError(error_json["error"]) from e
     # log the task_id so users can copy and paste it from STDOUT / file if the need it later.
-    log.info(f"Uploaded task '{task_name}' with task_id '{task_id}'.")
+    log.info(f"Created task '{task_name}' with task_id '{task_id}'.")
 
-    # upload the file to s3
-    log.debug("Uploading the json file")
-
-    # pylint:disable=consider-using-with
-    data_file = tempfile.NamedTemporaryFile()
-    # data_file will be reopened and closed in _json_string
-    data_file.close()
     # pylint:disable=protected-access
-    json_string = simulation._json_string
-    # if data_file.name in json_string:
-    #     # Upload the extra data file if needed
-    #     json_string.replace(data_file.name, DATA_FILE_NAME)
-    #     upload_file(task_id, data_file.name, DATA_FILE_NAME)
-    upload_string(task_id, json_string, SIM_FILE_NAME)
+    upload_string(task_id, simulation._json_string, SIM_FILE_JSON)
+    if len(simulation.custom_datasets) > 0:
+        # Also upload hdf5 containing all data
+        with tempfile.NamedTemporaryFile() as data_file:
+            simulation.to_hdf5(data_file.name)
+            upload_file(task_id, data_file.name, SIM_FILE_HDF5)
 
     # log the url for the task in the web UI
     log.debug(f"{DEFAULT_CONFIG.website_endpoint}/folders/{folder.projectId}/tasks/{task_id}")
@@ -321,32 +314,43 @@ def download(task_id: TaskId, path: str = "simulation_data.hdf5") -> None:
         Download path to .hdf5 data file (including filename).
 
     """
-
-    # TODO: it should be possible to load "diverged" simulations
     _download_file(task_id, fname="output/monitor_data.hdf5", path=path)
 
 
-def download_json(task_id: TaskId, path: str = SIM_FILE_NAME) -> None:
+def download_json(task_id: TaskId, path: str = SIM_FILE_JSON) -> None:
     """Download the `.json` file associated with the :class:`.Simulation` of a given task.
 
     Parameters
     ----------
     task_id : str
         Unique identifier of task on server.  Returned by :meth:`upload`.
-    path : str = SIM_FILE_NAME
+    path : str = "simulation.json"
         Download path to .json file of simulation (including filename).
     """
-    _download_file(task_id, fname=SIM_FILE_NAME, path=path)
+    _download_file(task_id, fname=SIM_FILE_JSON, path=path)
 
 
-def load_simulation(task_id: TaskId, path: str = SIM_FILE_NAME) -> Simulation:
+def download_hdf5(task_id: TaskId, path: str = SIM_FILE_HDF5) -> None:
+    """Download the `.hdf5` file associated with the :class:`.Simulation` of a given task.
+
+    Parameters
+    ----------
+    task_id : str
+        Unique identifier of task on server.  Returned by :meth:`upload`.
+    path : str = "simulation.hdf5"
+        Download path to .hdf5 file of simulation (including filename).
+    """
+    _download_file(task_id, fname=SIM_FILE_HDF5, path=path)
+
+
+def load_simulation(task_id: TaskId, path: str = SIM_FILE_JSON) -> Simulation:
     """Download the `.json` file of a task and load the associated :class:`.Simulation`.
 
     Parameters
     ----------
     task_id : str
         Unique identifier of task on server.  Returned by :meth:`upload`.
-    path : str = SIM_FILE_NAME
+    path : str = "simulation.json"
         Download path to .json file of simulation (including filename).
 
     Returns

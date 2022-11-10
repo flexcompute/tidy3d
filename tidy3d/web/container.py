@@ -204,7 +204,7 @@ class BatchData(Tidy3dBaseModel):
         ----------
         path_dir : str = './'
             Base directory where data will be downloaded, by default current working directory.
-            A `batch.json` file must be present in the directory.
+            A `batch.hdf5` file must be present in the directory.
 
         Returns
         ------
@@ -394,12 +394,12 @@ class Batch(WebContainer):
 
     @staticmethod
     def _batch_path(path_dir: str = DEFAULT_DATA_DIR):
-        """Default path to save :class:`Batch` json file.
+        """Default path to save :class:`Batch` hdf5 file.
 
         Parameters
         ----------
         path_dir : str = './'
-            Base directory where the batch.json will be downloaded,
+            Base directory where the batch.hdf5 will be downloaded,
             by default, the current working directory.
 
         Returns
@@ -407,7 +407,7 @@ class Batch(WebContainer):
         str
             Full path to the batch file.
         """
-        return os.path.join(path_dir, "batch.json")
+        return os.path.join(path_dir, "batch.hdf5")
 
     def download(self, path_dir: str = DEFAULT_DATA_DIR) -> None:
         """Download results of each task.
@@ -422,7 +422,7 @@ class Batch(WebContainer):
         To load the data into :class:`.SimulationData`objets, can call :meth:`Batch.items`.
 
         The data for each task will be named as ``{path_dir}/{task_name}.hdf5``.
-        The :class:`Batch` json file will be automatically saved as ``{path_dir}/batch.json``,
+        The :class:`Batch` hdf5 file will be automatically saved as ``{path_dir}/batch.hdf5``,
         allowing one to load this :class:`Batch` later using ``batch = Batch.from_file()``.
         """
 
@@ -445,7 +445,7 @@ class Batch(WebContainer):
         :class:`BatchData`
             Contains the :class:`.SimulationData` of each :class:`.Simulation` in :class:`Batch`.
 
-        The :class:`Batch` json file will be automatically saved as ``{path_dir}/batch.json``,
+        The :class:`Batch` hdf5 file will be automatically saved as ``{path_dir}/batch.hdf5``,
         allowing one to load this :class:`Batch` later using ``batch = Batch.from_file()``.
         """
 

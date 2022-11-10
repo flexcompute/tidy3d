@@ -29,6 +29,14 @@ from tidy3d.components.data.monitor_data import FluxData
 SIM_DIR = "tests/sims"
 
 
+def set_datasets_to_none(sim):
+    sim_dict = sim.dict()
+    for src in sim_dict["sources"]:
+        if src["type"] == "CustomFieldSource":
+            src["field_dataset"] = None
+    return td.Simulation.parse_obj(sim_dict)
+
+
 @clear_tmp
 def test_simulation_load_export():
 
@@ -36,7 +44,7 @@ def test_simulation_load_export():
     path = os.path.join(SIM_DIR, f"simulation_{major}_{minor}_{patch}.json")
     SIM.to_file(path)
     SIM2 = td.Simulation.from_file(path)
-    assert SIM == SIM2, "original and loaded simulations are not the same"
+    assert set_datasets_to_none(SIM) == SIM2, "original and loaded simulations are not the same"
 
 
 @clear_tmp
@@ -45,7 +53,7 @@ def test_simulation_load_export_yaml():
     path = "tests/tmp/simulation.yaml"
     SIM.to_file(path)
     SIM2 = td.Simulation.from_file(path)
-    assert SIM == SIM2, "original and loaded simulations are not the same"
+    assert set_datasets_to_none(SIM) == SIM2, "original and loaded simulations are not the same"
 
 
 @clear_tmp
@@ -102,7 +110,7 @@ def test_simulation_preserve_types():
     path = "tests/tmp/simulation.json"
     SIM.to_file(path)
     sim_2 = td.Simulation.from_file(path)
-    assert SIM == sim_2
+    assert set_datasets_to_none(SIM) == sim_2
 
     M_types = [type(s.medium) for s in sim_2.structures]
     for M in (td.Medium, td.PoleResidue, td.Lorentz, td.Sellmeier, td.Debye):
@@ -158,7 +166,7 @@ def test_validation_speed():
         _S = td.Simulation.from_file(path)
         time_validate = time() - time_start
         times_sec.append(time_validate)
-        assert S == _S
+        assert set_datasets_to_none(S) == _S
 
         size = os.path.getsize(path)
         sizes_bytes.append(size)
