@@ -40,7 +40,7 @@ Case studies
     notebooks/GratingCoupler
     notebooks/GratingEfficiency
     notebooks/Metalens
-    notebooks/MMI_1by4
+    notebooks/MMI_1x4
     notebooks/WaveguideCrossing
     notebooks/HighQ_Si
     notebooks/HighQ_Ge
