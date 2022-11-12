@@ -213,7 +213,6 @@ Collections of Data from single monitor
    FluxData
    FluxTimeData
    ModeData
-   AbstractNear2FarData
    Near2FarAngleData
    Near2FarCartesianData
    Near2FarKSpaceData
