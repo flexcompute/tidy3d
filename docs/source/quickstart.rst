@@ -7,7 +7,7 @@ Welcome to Tidy3d
 
 This page will get you set up with Tidy3D and running a simple example.
 
-.. note:: This is the documentation for the beta release of Tidy3D.  If you were interested in our previous version, it is documented `at this page <https://simulation.cloud/docs/html/index.html>`_. 
+.. note:: This is the documentation for the beta release of Tidy3D.
 
 Code Repositories
 -----------------

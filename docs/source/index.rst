@@ -15,7 +15,6 @@ This is the documentation for the python API, which is the main way to build sim
    howdoi
    api
    changelog
-   Old Documentation <https://simulation.cloud/docs/html/index.html>
 
 .. image:: _static/ring_resonator.png
    :width: 1200
