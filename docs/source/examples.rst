@@ -16,11 +16,12 @@ Tutorials
 
     notebooks/AutoGrid
     notebooks/VizSimulation
+    notebooks/WebAPI
     notebooks/VizData
     notebooks/ModeSolver
     notebooks/Modal_sources_monitors
     notebooks/Modes_bent_angled
-    notebooks/WebAPI
+    notebooks/CustomFieldSource
     notebooks/GDS_import
     notebooks/ParameterScan
     notebooks/Dispersion

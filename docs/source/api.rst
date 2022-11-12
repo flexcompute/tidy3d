@@ -134,6 +134,7 @@ Types of Sources
    ModeSource
    GaussianBeam
    AstigmaticGaussianBeam
+   CustomFieldSource
 
 
 Source Time Dependence
