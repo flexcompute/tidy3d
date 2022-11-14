@@ -387,7 +387,16 @@ class CustomMedium(AbstractMedium):
 
     Example
     -------
-    >>> dielectric = CustomMedium(eps_dataset=4.0, name='my_medium')
+    >>> Nx, Ny, Nz = 10, 9, 8
+    >>> X = np.linspace(-1, 1, Nx)
+    >>> Y = np.linspace(-1, 1, Ny)
+    >>> Z = np.linspace(-1, 1, Nz)
+    >>> freqs = [2e14]
+    >>> data = np.ones((Nx, Ny, Nz, 1))
+    >>> eps_diagonal_data = ScalarFieldDataArray(data, coords=dict(x=X, y=Y, z=Z, f=freqs))
+    >>> eps_components = {f"eps_{d}{d}": eps_diagonal_data for d in "xyz"}
+    >>> eps_dataset = PermittivityDataset(**eps_components)
+    >>> dielectric = CustomMedium(eps_dataset=eps_dataset, name='my_medium')
     >>> eps = dielectric.eps_model(200e12)
     """
 

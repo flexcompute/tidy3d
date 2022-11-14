@@ -126,6 +126,7 @@ def test_custom_source_pckl():
 def test_io_json_clear_tmp():
     pass
 
+
 def make_custom_medium():
     """Make a custom medium."""
     field_components = {f"eps_{d}{d}": make_scalar_data() for d in "xyz"}
