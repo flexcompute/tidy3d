@@ -218,6 +218,84 @@ def test_validate_bloch_with_symmetry():
         )
 
 
+def test_validate_plane_wave_boundaries(caplog):
+    src1 = td.PlaneWave(
+        source_time=td.GaussianPulse(freq0=2.5e14, fwidth=1e13),
+        center=(0, 0, 0),
+        size=(td.inf, td.inf, 0),
+        direction="+",
+        pol_angle=-1.0,
+    )
+
+    src2 = td.PlaneWave(
+        source_time=td.GaussianPulse(freq0=2.5e14, fwidth=1e13),
+        center=(0, 0, 0),
+        size=(td.inf, td.inf, 0),
+        direction="+",
+        pol_angle=-1.0,
+        angle_theta=np.pi / 4,
+    )
+
+    bspec1 = td.BoundarySpec(
+        x=td.Boundary.pml(),
+        y=td.Boundary.absorber(),
+        z=td.Boundary.stable_pml(),
+    )
+
+    bspec2 = td.BoundarySpec(
+        x=td.Boundary.bloch_from_source(source=src2, domain_size=1, axis=0),
+        y=td.Boundary.bloch_from_source(source=src2, domain_size=1, axis=1),
+        z=td.Boundary.stable_pml(),
+    )
+
+    bspec3 = td.BoundarySpec(
+        x=td.Boundary.bloch(bloch_vec=-3 + bspec2.x.plus.bloch_vec),
+        y=td.Boundary.bloch(bloch_vec=2 + bspec2.y.plus.bloch_vec),
+        z=td.Boundary.stable_pml(),
+    )
+
+    bspec4 = td.BoundarySpec(
+        x=td.Boundary.bloch(bloch_vec=-3 + bspec2.x.plus.bloch_vec),
+        y=td.Boundary.bloch(bloch_vec=1.8 + bspec2.y.plus.bloch_vec),
+        z=td.Boundary.stable_pml(),
+    )
+
+    # normally incident plane wave with PMLs / absorbers is fine
+    td.Simulation(
+        size=(1, 1, 1),
+        run_time=1e-12,
+        sources=[src1],
+        boundary_spec=bspec1,
+    )
+
+    # angled incidence plane wave with PMLs / absorbers should error
+    with pytest.raises(SetupError):
+        td.Simulation(
+            size=(1, 1, 1),
+            run_time=1e-12,
+            sources=[src2],
+            boundary_spec=bspec1,
+        )
+
+    # angled incidence plane wave with an integer-offset Bloch vector should warn
+    td.Simulation(
+        size=(1, 1, 1),
+        run_time=1e-12,
+        sources=[src2],
+        boundary_spec=bspec3,
+    )
+    assert_log_level(caplog, 30)
+
+    # angled incidence plane wave with wrong Bloch vector should error
+    with pytest.raises(SetupError):
+        td.Simulation(
+            size=(1, 1, 1),
+            run_time=1e-12,
+            sources=[src2],
+            boundary_spec=bspec4,
+        )
+
+
 def test_validate_components_none():
 
     assert SIM._structures_not_at_edges(val=None, values=SIM.dict()) is None

@@ -242,7 +242,7 @@ SIM_FULL = Simulation(
     symmetry=(0, 0, 0),
     boundary_spec=BoundarySpec(
         x=Boundary(plus=PML(num_layers=20), minus=Absorber(num_layers=100)),
-        y=Boundary.bloch(bloch_vec=0.1),
+        y=Boundary.bloch(bloch_vec=1),
         z=Boundary.periodic(),
     ),
     shutoff=1e-6,
