@@ -29,6 +29,14 @@ def make_scalar_data():
     return ScalarFieldDataArray(data, coords=dict(x=X, y=Y, z=Z, f=freqs))
 
 
+def make_scalar_data_multifreqs():
+    """Makes a scalar field data array."""
+    Nfreq = 2
+    freqs_mul = [2e14, 3e14]
+    data = np.random.random((Nx, Ny, Nz, Nfreq))
+    return ScalarFieldDataArray(data, coords=dict(x=X, y=Y, z=Z, f=freqs_mul))
+
+
 def make_custom_field_source():
     """Make a custom field source."""
     field_components = {}
@@ -127,14 +135,14 @@ def test_io_json_clear_tmp():
     pass
 
 
-def make_custom_medium():
+def make_custom_medium(scalar_permittivity_data):
     """Make a custom medium."""
-    field_components = {f"eps_{d}{d}": make_scalar_data() for d in "xyz"}
+    field_components = {f"eps_{d}{d}": scalar_permittivity_data for d in "xyz"}
     eps_dataset = PermittivityDataset(**field_components)
     return CustomMedium(eps_dataset=eps_dataset)
 
 
-CUSTOM_MEDIUM = make_custom_medium()
+CUSTOM_MEDIUM = make_custom_medium(make_scalar_data())
 
 
 def test_medium_components():
@@ -159,8 +167,12 @@ def test_medium_nk():
 
 def test_medium_eps_model():
     """Evaluate the permittivity at a given frequency."""
-    med = make_custom_medium()
+    med = make_custom_medium(make_scalar_data())
     med.eps_model(frequency=freqs[0])
+
+    # error with multifrequency data
+    with pytest.raises(SetupError):
+        med = make_custom_medium(make_scalar_data_multifreqs())
 
 
 def test_nk_diff_coords():

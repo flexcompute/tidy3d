@@ -407,6 +407,18 @@ class CustomMedium(AbstractMedium):
         "as a function of space.",
     )
 
+    @pd.validator("eps_dataset", always=True)
+    def _single_frequency(cls, val):
+        """Assert only one frequency supplied."""
+        for name, eps_dataset_component in val.field_components.items():
+            freqs = eps_dataset_component.f
+            if len(freqs) != 1:
+                raise SetupError(
+                    f"'eps_dataset.{name}' must have a single frequency, "
+                    f"but it contains {len(freqs)} frequencies."
+                )
+        return val
+
     @ensure_freq_in_range
     def eps_model(self, frequency: float) -> complex:
         """Average of complex-valued permittivity as a function of frequency."""
@@ -843,5 +855,13 @@ class Debye(DispersiveMedium):
 # types of mediums that can be used in Simulation and Structures
 
 MediumType = Union[
-    Medium, AnisotropicMedium, PECMedium, PoleResidue, Sellmeier, Lorentz, Debye, Drude
+    Medium,
+    CustomMedium,
+    AnisotropicMedium,
+    PECMedium,
+    PoleResidue,
+    Sellmeier,
+    Lorentz,
+    Debye,
+    Drude,
 ]
