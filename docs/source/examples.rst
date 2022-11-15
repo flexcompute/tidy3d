@@ -26,7 +26,7 @@ Tutorials
     notebooks/ParameterScan
     notebooks/Dispersion
     notebooks/Fitting
-    notebooks/Near2Far
+    notebooks/FieldProjections
     notebooks/SMatrix
     notebooks/BoundaryConditions
 
@@ -55,3 +55,4 @@ Case studies
     notebooks/GratingCoupler
     notebooks/RingResonator
     notebooks/Adjoint
+    notebooks/ZonePlateFieldProjection
