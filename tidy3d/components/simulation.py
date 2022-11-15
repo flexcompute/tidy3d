@@ -20,7 +20,7 @@ from .grid.grid import Coords1D, Grid, Coords
 from .grid.grid_spec import GridSpec, UniformGrid
 from .medium import Medium, MediumType, AbstractMedium, PECMedium
 from .boundary import BoundarySpec, BlochBoundary, PECBoundary, PMCBoundary, Periodic
-from .boundary import PML, StablePML, Absorber
+from .boundary import PML, StablePML, Absorber, AbsorberSpec
 from .structure import Structure
 from .source import SourceType, PlaneWave, GaussianBeam, AstigmaticGaussianBeam, CustomFieldSource
 from .monitor import MonitorType, Monitor, FreqMonitor
@@ -240,6 +240,62 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
                 raise SetupError(
                     f"Bloch boundaries cannot be used with a symmetry along dimension {dim}."
                 )
+        return val
+
+    # pylint: disable=too-many-locals
+    @pydantic.validator("boundary_spec", always=True)
+    def plane_wave_boundaries(cls, val, values):
+        """Error if there are plane wave sources incompatible with boundary conditions."""
+        boundaries = val.to_list
+        sources = values.get("sources")
+        size = values.get("size")
+        sim_medium = values.get("medium")
+        structures = values.get("structures")
+        for src_idx, source in enumerate(sources):
+            if not isinstance(source, PlaneWave):
+                continue
+
+            _, tan_dirs = cls.pop_axis([0, 1, 2], axis=source.injection_axis)
+            medium_set = cls.intersecting_media(source, structures)
+            medium = medium_set.pop() if medium_set else sim_medium
+
+            for tan_dir in tan_dirs:
+                boundary = boundaries[tan_dir]
+
+                # check the PML/absorber + angled plane wave case
+                num_pml = sum(isinstance(bnd, AbsorberSpec) for bnd in boundary)
+                if num_pml > 0 and source.angle_theta != 0:
+                    raise SetupError(
+                        "Angled plane wave sources are not compatible with the absorbing boundary "
+                        f"along dimension {tan_dir}. Either set the source ``angle_theta`` to "
+                        "``0``, or use Bloch boundaries that match the source angle."
+                    )
+
+                # check the Bloch boundary + angled plane wave case
+                num_bloch = sum(isinstance(bnd, BlochBoundary) for bnd in boundary)
+                if num_bloch > 0:
+                    # make a dummy Bloch boundary to check for correctness
+                    dummy_bnd = BlochBoundary.from_source(
+                        source=source, domain_size=size[tan_dir], axis=tan_dir, medium=medium
+                    )
+                    expected_bloch_vec = dummy_bnd.bloch_vec
+                    if boundary[0].bloch_vec != expected_bloch_vec:
+                        test_val = np.real(expected_bloch_vec - boundary[0].bloch_vec)
+                        if test_val.is_integer() and test_val != 0:
+                            log.warning(
+                                f"The wave vector of source at index {src_idx} along dimension "
+                                f"{tan_dir} is equal to the Bloch vector of the simulation "
+                                "boundaries along that dimension plus an integer reciprocal "
+                                "lattice vector. If using a ``DiffractionMonitor``, diffraction "
+                                "order 0 will not correspond to the angle of propagation "
+                                "of the source. Consider using ``BlochBoundary.from_source()``."
+                            )
+                        elif not test_val.is_integer():
+                            raise SetupError(
+                                f"The Bloch vector along dimension {tan_dir} is incorrectly set "
+                                f"with respect to the source at index {src_idx}. Consider using "
+                                "``BlochBoundary.from_source()``."
+                            )
         return val
 
     @pydantic.validator("structures", always=True)
