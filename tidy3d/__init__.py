@@ -20,6 +20,9 @@ from .components.structure import Structure, MeshOverrideStructure
 # modes
 from .components.mode import ModeSpec
 
+# apodization
+from .components.apodization import ApodizationSpec
+
 # sources
 from .components.source import GaussianPulse, ContinuousWave
 from .components.source import UniformCurrentSource, PlaneWave, ModeSource, PointDipole

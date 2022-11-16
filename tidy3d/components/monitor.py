@@ -11,6 +11,7 @@ from .geometry import Box
 from .validators import assert_plane, validate_unique
 from .base import cached_property
 from .mode import ModeSpec
+from .apodization import ApodizationSpec
 from .viz import PlotParams, plot_params_monitor, ARROW_COLOR_MONITOR, ARROW_ALPHA
 from ..constants import HERTZ, SECOND, MICROMETER, RADIAN, inf
 from ..log import SetupError, log, ValidationError
@@ -72,6 +73,16 @@ class FreqMonitor(Monitor, ABC):
         title="Frequencies",
         description="Array or list of frequencies stored by the field monitor.",
         units=HERTZ,
+    )
+
+    apodization: ApodizationSpec = pydantic.Field(
+        ApodizationSpec(width=1),
+        title="Apodization Specification",
+        description="Sets parameters of (optional) apodization. Apodization applies a windowing "
+        "function to the Fourier transform of the time-domain fields into frequency-domain ones, "
+        "and can be used to truncate the beginning and/or end of the time signal, for example "
+        "to eliminate the source pulse when studying the eigenmodes of a system. Note: apodization "
+        "affects the normalization of the frequency-domain fields.",
     )
 
     @pydantic.validator("freqs", always=True)
