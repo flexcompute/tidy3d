@@ -2,7 +2,7 @@
 import pytest
 import numpy as np
 import tidy3d as td
-from tidy3d.log import SetupError, DataError, ValidationError
+from tidy3d.log import SetupError, ValidationError
 
 
 def test_stop_start():

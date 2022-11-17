@@ -16,7 +16,7 @@ from .data_array import ScalarFieldDataArray, ScalarFieldTimeDataArray
 from .dataset import Dataset, AbstractFieldDataset, ElectromagneticFieldDataset
 from .dataset import FieldDataset, FieldTimeDataset, ModeSolverDataset, PermittivityDataset
 from ..base import TYPE_TAG_STR
-from ..types import Coordinate, Symmetry, ArrayLike, Size
+from ..types import Coordinate, Symmetry, ArrayLike, Size, Numpy, TrackFreq
 from ..grid.grid import Grid
 from ..validators import enforce_monitor_fields_present, required_if_symmetry_present
 from ..monitor import MonitorType, FieldMonitor, FieldTimeMonitor, ModeSolverMonitor
@@ -25,7 +25,7 @@ from ..monitor import Near2FarAngleMonitor, Near2FarCartesianMonitor, Near2FarKS
 from ..monitor import DiffractionMonitor
 from ..source import SourceTimeType, CustomFieldSource
 from ..medium import Medium, MediumType
-from ...log import SetupError, DataError
+from ...log import SetupError, DataError, log
 from ...constants import ETA_0, C_0, MICROMETER
 
 
@@ -164,7 +164,7 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
         for field in field_components:
             if field not in self.field_components:
                 raise DataError(f"Tangential field component {field} is missing in data.")
-            tan_fields[field] = self.field_components[field].squeeze(dim=normal_dim)
+            tan_fields[field] = self.field_components[field].squeeze(dim=normal_dim).copy()
             if normal_dim == "y" and field[0] == "H":
                 tan_fields[field] *= -1
         return tan_fields
@@ -197,8 +197,10 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
         bounds[1][0] = max(bounds[1][0], mnt_bounds[1, 0])
         bounds[1][-1] = min(bounds[1][-1], mnt_bounds[1, 1])
 
-        sizes = [bs[1:] - bs[:-1] for bs in bounds]
-        return xr.DataArray(np.outer(sizes[0], sizes[1]), dims=self._tangential_dims)
+        sizes_dim0 = bounds[0][1:] - bounds[0][:-1] if bounds[0].size > 1 else [1.0]
+        sizes_dim1 = bounds[1][1:] - bounds[1][:-1] if bounds[1].size > 1 else [1.0]
+
+        return xr.DataArray(np.outer(sizes_dim0, sizes_dim1), dims=self._tangential_dims)
 
     @property
     def _centered_tangential_fields(self) -> Dict[str, DataArray]:
@@ -214,7 +216,10 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
         centers = [(bs[1:] + bs[:-1]) / 2 for bs in bounds]
 
         # Interpolate tangential field components to cell centers
-        interp_dict = dict(zip(tan_dims, centers))
+        interp_dict = {}
+        for dim, cents in zip(tan_dims, centers):
+            if cents.size > 0:
+                interp_dict[dim] = cents
         centered_fields = {key: val.interp(**interp_dict) for key, val in tan_fields.items()}
         return centered_fields
 
@@ -463,6 +468,227 @@ class ModeSolverData(ModeSolverDataset, ElectromagneticFieldData):
     """
 
     monitor: ModeSolverMonitor
+
+    # pylint:disable=too-many-locals
+    def overlap_sort(
+        self,
+        track_freq: TrackFreq,
+        overlap_thresh: float = 0.9,
+    ) -> ModeSolverData:
+        """Starting from the base frequency defined by parameter ``track_freq``, sort modes at each
+        frequency according to their overlap values with the modes at the previous frequency.
+        That is, it attempts to rearrange modes in such a way that a given ``mode_index``
+        corresponds to physically the same mode at all frequencies. Modes with overlap values over
+        ``overlap_tresh`` are considered matching and not rearranged.
+
+        Parameters
+        ----------
+        track_freq : Literal["central", "lowest", "highest"]
+            Parameter that specifies which frequency will serve as a starting point in
+            the reordering process.
+        overlap_thresh : float = 0.9
+            Modal overlap threshold above which two modes are considered to be the same and are not
+            rearranged. If after the sorting procedure the overlap value between two corresponding
+            modes is less than this threshold, a warning about a possible discontinuity is
+            displayed.
+        """
+        num_freqs = len(self.monitor.freqs)
+        num_modes = self.monitor.mode_spec.num_modes
+
+        if track_freq == "lowest":
+            f0_ind = 0
+        elif track_freq == "highest":
+            f0_ind = num_freqs - 1
+        elif track_freq == "central":
+            f0_ind = num_freqs // 2
+
+        # For each mode index determine location for gauge selection
+        gauge_indices = np.zeros(num_modes, dtype=int)
+        for mode_idx in range(num_modes):
+            e_field_all = np.concatenate(
+                (
+                    self.Ex.isel(f=f0_ind, mode_index=mode_idx).data.ravel(),
+                    self.Ey.isel(f=f0_ind, mode_index=mode_idx).data.ravel(),
+                    self.Ez.isel(f=f0_ind, mode_index=mode_idx).data.ravel(),
+                )
+            )
+            gauge_indices[mode_idx] = np.argmax(np.abs(e_field_all))
+
+        # Compute sorting order and overlaps with neighboring frequencies
+        sorting = -np.ones((num_freqs, num_modes), dtype=int)
+        overlap = np.zeros((num_freqs, num_modes))
+        sorting[f0_ind, :] = np.arange(num_modes)  # base frequency won't change
+
+        # Sort in two directions from the base frequency
+        for step, last_ind in zip([-1, 1], [-1, num_freqs]):
+
+            # Start with the base frequency
+            data_template = self.copy(
+                update={key: field.isel(f=[f0_ind]) for key, field in self.field_components.items()}
+            )
+
+            # March to lower/higher frequencies
+            for freq_id in range(f0_ind + step, last_ind, step):
+
+                # Get next frequency to sort
+                data_to_sort = self.copy(
+                    update={
+                        key: field.isel(f=[freq_id]) for key, field in self.field_components.items()
+                    }
+                )
+
+                # Compute "sorting w.r.t. to neighbor" and overlap values
+                # pylint:disable=protected-access
+                sorting_one_mode, overlap_one_mode = data_template._find_ordering_one_freq(
+                    data_to_sort, overlap_thresh
+                )
+
+                # Transform "sorting w.r.t. neighbor" to "sorting w.r.t. to f0_ind"
+                sorting[freq_id, :] = sorting_one_mode[sorting[freq_id - step, :]]
+                overlap[freq_id, :] = overlap_one_mode[sorting[freq_id - step, :]]
+
+                # Check for discontinuities and show warning if any
+                for mode_ind in list(np.nonzero(overlap[freq_id, :] < overlap_thresh)[0]):
+                    # TODO: warning is not showing up
+                    log.warning(
+                        f"WARNING: Mode '{mode_ind}' appears to undergo a discontinuous change "
+                        f"between frequencies '{self.monitor.freqs[freq_id]}' "
+                        f"and '{self.monitor.freqs[freq_id - step]}' "
+                        f"(overlap: '{overlap[freq_id, mode_ind]:.2f}')."
+                    )
+
+                # Reassign for the next iteration
+                data_template = data_to_sort
+
+        # Rearrange modes using computed sorting values
+        mode_data_sorted = self._reorder_modes(
+            sorting=sorting,
+            gauge_indices=gauge_indices,
+            track_freq=track_freq,
+        )
+
+        return mode_data_sorted
+
+    def _find_ordering_one_freq(
+        self,
+        data_to_sort: ModeSolverData,
+        overlap_thresh: float,
+    ) -> Tuple[Numpy, Numpy]:
+        """Find new ordering of modes in data_to_sort based on their similarity to own modes."""
+
+        num_modes = self.n_complex.sizes["mode_index"]
+
+        # Current pairs and their overlaps
+        pairs = np.arange(num_modes)
+        overlaps = self.dot(data_to_sort).abs.data.ravel()
+
+        # Check whether modes already match
+        modes_to_sort = np.where(overlaps < overlap_thresh)[0]
+        num_modes_to_sort = len(modes_to_sort)
+        if num_modes_to_sort <= 1:
+            return pairs, overlaps
+
+        # Compute an overlap matrix for modes chosen for sorting
+        overlaps_reduced = np.zeros((num_modes_to_sort, num_modes_to_sort))
+
+        # Extract all modes of interest from template data
+        data_template_reduced = self.copy(
+            update={
+                key: field.isel(mode_index=modes_to_sort)
+                for key, field in self.field_components.items()
+            }
+        )
+
+        for i, mode_index in enumerate(modes_to_sort):
+
+            # Get one mode from data_to_sort
+            one_mode = data_to_sort.copy(
+                update={
+                    key: field.isel(mode_index=[mode_index])
+                    for key, field in data_to_sort.field_components.items()
+                }
+            )
+
+            # Project to all modes of interest from data_template
+            overlaps_reduced[:, i] = data_template_reduced.dot(one_mode).abs.data.ravel()
+
+        # Find the most similar modes and corresponding overlap values
+        pairs_reduced, overlaps_reduced = self._find_closest_pairs(overlaps_reduced)
+
+        # Insert new sorting and overlap values into arrays with all data
+        overlaps[modes_to_sort] = overlaps_reduced
+        pairs[modes_to_sort] = modes_to_sort[pairs_reduced]
+
+        return pairs, overlaps
+
+    @staticmethod
+    def _find_closest_pairs(arr: Numpy) -> Tuple[Numpy, Numpy]:
+        """Given an overlap matrix pair row and column entries."""
+
+        n, k = np.shape(arr)
+        if n != k:
+            raise DataError("Overlap matrix must be square.")
+
+        pairs = -np.ones(n, dtype=int)
+        values = np.zeros(n)
+        for _ in range(n):
+            imax, jmax = np.unravel_index(np.argmax(arr, axis=None), (n, k))
+            pairs[imax] = jmax
+            values[imax] = arr[imax, jmax]
+            arr[imax, :] = -1
+            arr[:, jmax] = -1
+
+        return pairs, values
+
+    # pylint:disable=too-many-locals
+    def _reorder_modes(
+        self,
+        sorting: Numpy,
+        gauge_indices: Numpy,
+        track_freq: TrackFreq,
+    ) -> ModeSolverData:
+        """Rearrange modes for the i-th frequency according to sorting[i, :] and selects the gauge
+        of the j-th mode such that (Ex, Ey, Ez)[ind] is real, where ind = gauge_indices[j]."""
+
+        num_freqs, num_modes = np.shape(sorting)
+
+        # Calculate phases for guage selection
+        phase = np.zeros((num_freqs, num_modes))
+        for freq_id in range(num_freqs):
+            for mode_id in range(num_modes):
+                e_field_all = np.concatenate(
+                    (
+                        self.Ex.isel(f=freq_id, mode_index=mode_id).data.ravel(),
+                        self.Ey.isel(f=freq_id, mode_index=mode_id).data.ravel(),
+                        self.Ez.isel(f=freq_id, mode_index=mode_id).data.ravel(),
+                    )
+                )
+                e_field_gauge = e_field_all[gauge_indices[mode_id]]
+                phase[freq_id, mode_id] = np.angle(e_field_gauge)
+
+        # Create new dict with rearranged field components
+        fields = {}
+        for field_name, field in self.field_components.items():
+
+            # Apply phase shift
+            field.data = field.data * np.exp(-1j * phase[None, None, None, :, :])
+
+            # Rearrange modes
+            for freq_id in range(num_freqs):
+                field.data[..., freq_id, :] = field.data[..., freq_id, sorting[freq_id, :]]
+
+            fields[field_name] = field
+
+        # Rearrange propagation index data
+        index_data = self.n_complex
+        for freq_id in range(num_freqs):
+            index_data.data[freq_id, :] = index_data.data[freq_id, sorting[freq_id, :]]
+
+        # Update mode_spec in the monitor
+        mode_spec = self.monitor.mode_spec.copy(update=dict(track_freq=track_freq))
+        monitor = self.monitor.copy(update=dict(mode_spec=mode_spec))
+
+        return self.copy(update=dict(monitor=monitor, n_complex=index_data, **fields))
 
 
 class PermittivityData(PermittivityDataset, AbstractFieldData):

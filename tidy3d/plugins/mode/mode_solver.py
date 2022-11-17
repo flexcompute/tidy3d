@@ -174,6 +174,19 @@ class ModeSolver(Tidy3dBaseModel):
             **data_dict,
         )
         self._field_decay_warning(mode_solver_data)
+
+        # normalize modes
+        scaling = np.sqrt(np.abs(mode_solver_data.dot(mode_solver_data)))
+        mode_solver_data = mode_solver_data.copy(
+            update={
+                key: field / scaling for key, field in mode_solver_data.field_components.items()
+            }
+        )
+
+        # sort modes if requested
+        if self.mode_spec.track_freq and len(self.freqs) > 1:
+            mode_solver_data = mode_solver_data.overlap_sort(self.mode_spec.track_freq)
+
         return mode_solver_data
 
     @cached_property

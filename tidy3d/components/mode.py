@@ -1,13 +1,13 @@
 """Defines specification for mode solver."""
 
-from typing import Tuple
+from typing import Tuple, Union
 
 import pydantic as pd
 import numpy as np
 
 from ..constants import MICROMETER, RADIAN, GLANCING_CUTOFF
 from .base import Tidy3dBaseModel
-from .types import Axis2D, Literal
+from .types import Axis2D, Literal, TrackFreq
 from ..log import SetupError
 
 
@@ -89,6 +89,15 @@ class ModeSpec(Tidy3dBaseModel):
         "plane in which the bend lies. This must be provided if ``bend_radius`` is not ``None``. "
         "For example, for a ring in the global xy-plane, and a mode plane in either the xz or the "
         "yz plane, the ``bend_axis`` is always 1 (the global z axis).",
+    )
+
+    track_freq: Union[TrackFreq, None] = pd.Field(
+        "central",
+        title="Mode Tracking Frequency",
+        description="Parameter that turns on/off mode tracking based on their similarity. "
+        "Can take values ``'lowest'``, ``'central'``, or ``'highest'``, which correspond to "
+        "mode tracking based on the lowest, central, or highest frequency. "
+        "If ``None`` no mode tracking is performed.",
     )
 
     @pd.validator("bend_axis", always=True)

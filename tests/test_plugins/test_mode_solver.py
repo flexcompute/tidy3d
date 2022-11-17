@@ -33,9 +33,13 @@ def test_mode_solver_simple():
         target_neff=2.0,
         filter_pol="tm",
         precision="double",
+        track_freq="lowest",
     )
     ms = ModeSolver(
-        simulation=simulation, plane=PLANE, mode_spec=mode_spec, freqs=[td.constants.C_0 / 1.0]
+        simulation=simulation,
+        plane=PLANE,
+        mode_spec=mode_spec,
+        freqs=[td.constants.C_0 / 0.9, td.constants.C_0 / 1.0, td.constants.C_0 / 1.1],
     )
     modes = ms.solve()
 
@@ -56,6 +60,7 @@ def test_mode_solver_angle_bend():
         bend_axis=0,
         angle_theta=np.pi / 3,
         angle_phi=np.pi,
+        track_freq="highest",
     )
     # put plane entirely in the symmetry quadrant rather than sitting on its center
     plane = td.Box(center=(0, 0.5, 0), size=(1, 0, 1))
@@ -73,9 +78,16 @@ def test_mode_solver_angle_bend():
     mmonitor = ms.to_monitor(freqs=[1.0, 2.0], name="mode_mnt")
 
 
+# TODO: FieldData.dot needs to be fixed for 1D monitors
 def test_mode_solver_2D():
     """Run mode solver in 2D simulations."""
-    mode_spec = td.ModeSpec(num_modes=3, filter_pol="te", precision="double", num_pml=(0, 10))
+    mode_spec = td.ModeSpec(
+        num_modes=3,
+        filter_pol="te",
+        precision="double",
+        num_pml=(0, 10),
+        track_freq="central",
+    )
     simulation = td.Simulation(
         size=(0, 2, 2),
         grid_spec=td.GridSpec(wavelength=1.0),
