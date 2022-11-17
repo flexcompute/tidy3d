@@ -4,6 +4,7 @@ set -e
 black .
 python lint.py
 
+pytest -ra tests/test_components/test_apodization.py
 pytest -ra tests/test_components/test_base.py
 pytest -ra tests/test_components/test_boundaries.py
 pytest -ra tests/test_components/test_custom.py

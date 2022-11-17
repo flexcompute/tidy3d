@@ -416,3 +416,21 @@ def test_diffraction_data_use_medium():
     data = make_diffraction_data()
     data = data.copy(update=dict(medium=td.Medium(permittivity=4)))
     assert np.allclose(data.eta, np.real(td.ETA_0 / 2.0))
+
+
+def test_mode_solver_data_sort():
+    # test basic matching algorithm
+    arr = np.array([[1, 2, 3], [6, 5, 4], [7, 9, 8]])
+    pairs, values = ModeSolverData._find_closest_pairs(arr)
+    assert np.all(pairs == [2, 0, 1])
+    assert np.all(values == [3, 6, 9])
+
+    # test sorting function
+    data = make_mode_solver_data()
+    data_first = data.overlap_sort(track_freq="lowest")
+    data_last = data.overlap_sort(track_freq="highest")
+    data_center = data.overlap_sort(track_freq="central")
+    # these are probably not the best tests
+    assert data_first.field_components != data.field_components
+    assert data_first.field_components != data_last.field_components
+    assert data_first.field_components != data_center.field_components

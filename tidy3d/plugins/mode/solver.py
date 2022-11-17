@@ -525,7 +525,8 @@ def set_initial_vec(Nx, Ny, mat_dtype=np.complex128, is_tensorial=False):
 
     # Initialize the vector
     size = (Nx, Ny, len_multiplier)
-    vec_init = np.random.random(size) + 1j * np.random.random(size)
+    rng = np.random.default_rng(0)
+    vec_init = rng.random(size) + 1j * rng.random(size)
     vec_init = type_conversion(vec_init, mat_dtype)
 
     # Set values at the boundary to be 0

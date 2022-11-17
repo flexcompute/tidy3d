@@ -76,7 +76,7 @@ class FreqMonitor(Monitor, ABC):
     )
 
     apodization: ApodizationSpec = pydantic.Field(
-        ApodizationSpec(width=1),
+        ApodizationSpec(),
         title="Apodization Specification",
         description="Sets parameters of (optional) apodization. Apodization applies a windowing "
         "function to the Fourier transform of the time-domain fields into frequency-domain ones, "

@@ -176,3 +176,7 @@ ObsGridArray = Union[Tuple[float, ...], ArrayLike[float, 1]]
 """ plotting """
 
 Ax = Axes
+
+""" mode tracking """
+
+TrackFreq = Literal["central", "lowest", "highest"]

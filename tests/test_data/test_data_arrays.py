@@ -45,9 +45,14 @@ INTERVAL = 2
 ORDERS_X = list(range(-1, 2))
 ORDERS_Y = list(range(-2, 3))
 
-FS = np.linspace(1e14, 2e14, 11)
-TS = np.linspace(0, 1e-12, 11)
-MODE_INDICES = np.arange(0, 3)
+FS11 = np.linspace(1e14, 2e14, 11)
+# unused
+# TS = np.linspace(0, 1e-12, 11)
+# MODE_INDICES = np.arange(0, 3)
+# DIRECTIONS = ["+", "-"]
+FS = np.linspace(1e14, 2e14, 5)
+TS = np.linspace(0, 1e-12, 4)
+MODE_INDICES = np.arange(0, 4)
 DIRECTIONS = ["+", "-"]
 
 FIELD_MONITOR = FieldMonitor(size=SIZE_3D, fields=FIELDS, name="field", freqs=FREQS)
@@ -59,7 +64,7 @@ FIELD_TIME_MONITOR_2D = FieldTimeMonitor(
     size=SIZE_2D, fields=FIELDS, name="field_time_2d", interval=INTERVAL
 )
 MODE_SOLVE_MONITOR = ModeSolverMonitor(
-    size=SIZE_2D, name="mode_solver", mode_spec=MODE_SPEC, freqs=FREQS
+    size=SIZE_2D, name="mode_solver", mode_spec=MODE_SPEC, freqs=FS
 )
 PERMITTIVITY_MONITOR = PermittivityMonitor(size=SIZE_3D, name="permittivity", freqs=FREQS)
 MODE_MONITOR = ModeMonitor(size=SIZE_2D, name="mode", mode_spec=MODE_SPEC, freqs=FREQS)
@@ -108,11 +113,6 @@ SIM = Simulation(
     structures=STRUCTURES,
 )
 
-FS = np.linspace(1e14, 2e14, 5)
-TS = np.linspace(0, 1e-12, 4)
-MODE_INDICES = np.arange(0, 3)
-DIRECTIONS = ["+", "-"]
-
 """ Generate the data arrays (used in other test files) """
 
 
@@ -160,7 +160,6 @@ def make_mode_amps_data_array():
 
 
 def make_mode_index_data_array():
-    f = np.linspace(2e14, 3e14, 1001)
     values = (1 + 1j) * np.random.random((len(FS), len(MODE_INDICES)))
     return ModeIndexDataArray(values, coords=dict(f=FS, mode_index=MODE_INDICES))
 
