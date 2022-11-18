@@ -463,6 +463,7 @@ class PoleResidue(DispersiveMedium):
         """string representation"""
         return (
             f"td.PoleResidue("
+            f"\n\teps_inf={self.eps_inf}, "
             f"\n\tpoles={self.poles}, "
             f"\n\tfrequency_range={self.frequency_range})"
         )
