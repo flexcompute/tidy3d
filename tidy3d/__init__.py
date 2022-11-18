@@ -76,7 +76,7 @@ from .constants import C_0, ETA_0, HBAR, EPSILON_0, MU_0, Q_e, inf
 
 # material library dict imported as `from tidy3d import material_library`
 # get material `mat` and variant `var` as `material_library[mat][var]`
-from .material_library import material_library
+from .material_library.material_library import material_library
 
 # for docs
 from .components.medium import AbstractMedium
