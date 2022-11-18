@@ -50,4 +50,24 @@ To run the test:
 pytest -rA tests
 ```
 
+## Formatting notebooks
+
+Before release, we may want to format the code using [jupyterblack](https://github.com/irahorecka/jupyterblack).
+
+This package may be installed via
+```
+pip install jupyterblack
+```
+and used to format a single notebook `X.ipynb` as
+```
+jblack docs/source/notebooks/X.ipynb
+```
+or all notebooks as 
+```
+jblack docs/source/notebooks/*.ipynb
+```
+
+Note: is is not in the standard requiremenents yet as we are still experimenting with it.
+
+
 
