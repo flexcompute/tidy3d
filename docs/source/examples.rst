@@ -53,3 +53,4 @@ Case studies
     notebooks/PlasmonicNanoparticle.ipynb
     notebooks/DielectricMetasurfaceAbsorber.ipynb
     notebooks/Bandstructure.ipynb
+    notebooks/YJunction.ipynb
