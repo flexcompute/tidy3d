@@ -13,6 +13,7 @@ from tidy3d.components.geometry import Geometry, Planar
 
 GEO = td.Box(size=(1, 1, 1))
 BOX = td.Box(size=(1, 1, 1))
+BOX_2D = td.Box(size=(1, 0, 1))
 POLYSLAB = td.PolySlab(vertices=((0, 0), (1, 0), (1, 1), (0, 1)), slab_bounds=(-0.5, 0.5), axis=2)
 SPHERE = td.Sphere(radius=1)
 CYLINDER = td.Cylinder(axis=2, length=1, radius=1)
@@ -101,6 +102,11 @@ def test_planar_bounds():
 @pytest.mark.parametrize("component", GEO_TYPES)
 def test_inside(component):
     b = component.inside(0, 0, 0)
+
+
+def test_zero_dims():
+    assert BOX.zero_dims == []
+    assert BOX_2D.zero_dims == [1]
 
 
 def test_inside_polyslab_sidewall():

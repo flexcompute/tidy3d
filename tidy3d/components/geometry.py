@@ -1167,6 +1167,11 @@ class Box(Centered):
         """
         return Box(center=self.center, size=self.size)
 
+    @cached_property
+    def zero_dims(self) -> List[Axis]:
+        """A list of axes along which the :class:`Box` is zero-sized."""
+        return [dim for dim, size in enumerate(self.size) if size == 0]
+
     def _plot_arrow(  # pylint:disable=too-many-arguments, too-many-locals
         self,
         direction: Tuple[float, float, float],

@@ -80,9 +80,29 @@ def test_getitem():
 
 
 def test_extend_grid():
+    """This test should clarify the expected behavior of various extensions."""
     g = make_grid()
-    box = td.Box(size=(2, 4, 6))
-    g.discretize_inds(box=box, extend=True)
+    center_y = g.centers.to_list[1][g.num_cells[1] // 2]
+    # 2d box on the left of a grid center
+    box_left = td.Box(center=(0, center_y - 1e-5, 0), size=(2, 0, 6))
+    # 2d box on the right of a grid center
+    box_right = td.Box(center=(0, center_y + 1e-5, 0), size=(2, 0, 6))
+    inds_l_0_0 = g.discretize_inds(box=box_left, extend=False, extend_2d_normal=False)[1]
+    inds_r_0_0 = g.discretize_inds(box=box_right, extend=False, extend_2d_normal=False)[1]
+    inds_l_1_0 = g.discretize_inds(box=box_left, extend=True, extend_2d_normal=False)[1]
+    inds_r_1_0 = g.discretize_inds(box=box_right, extend=True, extend_2d_normal=False)[1]
+    inds_l_0_1 = g.discretize_inds(box=box_left, extend=False, extend_2d_normal=True)[1]
+    inds_r_0_1 = g.discretize_inds(box=box_right, extend=False, extend_2d_normal=True)[1]
+    inds_l_1_1 = g.discretize_inds(box=box_left, extend=True, extend_2d_normal=True)[1]
+    inds_r_1_1 = g.discretize_inds(box=box_right, extend=True, extend_2d_normal=True)[1]
+
+    assert np.diff(inds_l_0_0) == np.diff(inds_r_0_0)
+    assert np.diff(inds_l_0_0) == np.diff(inds_l_1_0) - 2
+    assert np.diff(inds_r_0_0) == np.diff(inds_r_1_0) - 1
+    assert np.diff(inds_l_0_0) == np.diff(inds_l_0_1) - 1
+    assert np.diff(inds_r_0_0) == np.diff(inds_r_0_1) - 1
+    assert np.diff(inds_l_0_0) == np.diff(inds_l_1_1) - 2
+    assert np.diff(inds_r_0_0) == np.diff(inds_r_1_1) - 2
 
 
 def test_periodic_subspace():

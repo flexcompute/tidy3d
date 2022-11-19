@@ -300,11 +300,6 @@ class FieldProjector(Tidy3dBaseModel):
 
         for idx in idx_uv:
 
-            if pts_per_wavelength is None:
-                comp = ["x", "y", "z"][idx]
-                colocation_points[idx] = sim_data.at_centers(surface.monitor.name)[comp].values
-                continue
-
             # pick sample points on the monitor and handle the possibility of an "infinite" monitor
             start = np.maximum(
                 surface.monitor.center[idx] - surface.monitor.size[idx] / 2.0,
@@ -314,11 +309,17 @@ class FieldProjector(Tidy3dBaseModel):
                 surface.monitor.center[idx] + surface.monitor.size[idx] / 2.0,
                 sim_data.simulation.center[idx] + sim_data.simulation.size[idx] / 2.0,
             )
-            size = stop - start
 
-            num_pts = int(np.ceil(pts_per_wavelength * size / wavelength))
-            points = np.linspace(start, stop, num_pts)
-            colocation_points[idx] = points
+            if pts_per_wavelength is None:
+                points = sim_data.simulation.grid.centers.to_list[idx]
+                points[np.argwhere(points < start)] = start
+                points[np.argwhere(points > stop)] = stop
+                colocation_points[idx] = np.unique(points)
+            else:
+                size = stop - start
+                num_pts = int(np.ceil(pts_per_wavelength * size / wavelength))
+                points = np.linspace(start, stop, num_pts)
+                colocation_points[idx] = points
 
         for idx, points in enumerate(colocation_points):
             if (hasattr(points, "__len__") and len(points) == 1) or not hasattr(points, "__len__"):

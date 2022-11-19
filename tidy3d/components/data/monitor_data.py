@@ -16,7 +16,7 @@ from .data_array import DataArray, DiffractionDataArray
 from .data_array import ScalarFieldDataArray, ScalarFieldTimeDataArray
 from .dataset import Dataset, AbstractFieldDataset, ElectromagneticFieldDataset
 from .dataset import FieldDataset, FieldTimeDataset, ModeSolverDataset, PermittivityDataset
-from ..base import TYPE_TAG_STR
+from ..base import TYPE_TAG_STR, cached_property
 from ..types import Coordinate, Symmetry, ArrayLike, Size, Numpy, TrackFreq
 from ..grid.grid import Grid
 from ..validators import enforce_monitor_fields_present, required_if_symmetry_present
@@ -144,11 +144,10 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
     def _tangential_dims(self) -> List[str]:
         """For a 2D monitor data, return the names of the tangential dimensions. Raise if cannot
         confirm that the associated monitor is 2D."""
-        zero_dims = np.where(np.array(self.monitor.size) == 0)[0]
-        if zero_dims.size != 1:
+        if len(self.monitor.zero_dims) != 1:
             raise DataError("Data must be 2D to get tangential dimensions.")
         tangential_dims = ["x", "y", "z"]
-        tangential_dims.pop(zero_dims[0])
+        tangential_dims.pop(self.monitor.zero_dims[0])
 
         return tangential_dims
 
@@ -187,21 +186,26 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
         integrations."""
         bounds = [bs.copy() for bs in self._plane_grid_boundaries]
 
-        """Fix first and last boundary to match the analytic monitor boundary within that pixel.
-        When using the differential area sizes defined in this way together with integrand values
-        defined at pixel centers, the integration is equivalent to trapezoidal rule with the first
-        and last values interpolated to the exact monitor start/end location."""
+        # Fix the grid boundaries to match the analytic monitor boundaries.
         _, plane_inds = self.monitor.pop_axis([0, 1, 2], self.monitor.size.index(0.0))
         mnt_bounds = np.array(self.monitor.bounds)
         mnt_bounds = mnt_bounds[:, plane_inds].T
-        bounds[0][0] = max(bounds[0][0], mnt_bounds[0, 0])
-        bounds[0][-1] = min(bounds[0][-1], mnt_bounds[0, 1])
-        bounds[1][0] = max(bounds[1][0], mnt_bounds[1, 0])
-        bounds[1][-1] = min(bounds[1][-1], mnt_bounds[1, 1])
+
+        """Truncate bounds to monitor boundaries. This implicitly makes extra pixels which may be
+        present have size 0 and so won't be included in the integration. For pixels intersected
+        by the monitor edge, the size is truncated to the part covered by the monitor. When using
+        the differential area sizes defined in this way together with integrand values
+        defined at pixel centers, the integration is equivalent to trapezoidal rule with the first
+        and last values interpolated to the exact monitor start/end location, if the integrand
+        is zero outside of the monitor geometry. This should usually be the case for flux and dot
+        computations"""
+        bounds[0][np.argwhere(bounds[0] < mnt_bounds[0, 0])] = mnt_bounds[0, 0]
+        bounds[0][np.argwhere(bounds[0] > mnt_bounds[0, 1])] = mnt_bounds[0, 1]
+        bounds[1][np.argwhere(bounds[1] < mnt_bounds[1, 0])] = mnt_bounds[1, 0]
+        bounds[1][np.argwhere(bounds[1] > mnt_bounds[1, 1])] = mnt_bounds[1, 1]
 
         sizes_dim0 = bounds[0][1:] - bounds[0][:-1] if bounds[0].size > 1 else [1.0]
         sizes_dim1 = bounds[1][1:] - bounds[1][:-1] if bounds[1].size > 1 else [1.0]
-
         return xr.DataArray(np.outer(sizes_dim0, sizes_dim1), dims=self._tangential_dims)
 
     @property
@@ -238,7 +242,7 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
         poynting = 0.5 * np.real(e_x_h_star)
         return poynting
 
-    @property
+    @cached_property
     def flux(self) -> FluxDataArray:
         """Flux for data corresponding to a 2D monitor.
 
@@ -412,7 +416,7 @@ class FieldTimeData(FieldTimeDataset, ElectromagneticFieldData):
         e_x_h -= tan_fields["E" + dim2] * tan_fields["H" + dim1]
         return e_x_h
 
-    @property
+    @cached_property
     def flux(self) -> FluxTimeDataArray:
         """Flux for data corresponding to a 2D monitor.
 
