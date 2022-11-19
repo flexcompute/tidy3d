@@ -407,14 +407,6 @@ class FluxMonitor(AbstractFluxMonitor, FreqMonitor):
     ...     size=(2,2,0),
     ...     freqs=[200e12, 210e12],
     ...     name='flux_monitor')
-
-    Note
-    ----
-    For a 2D plane, the flux is summed up over all Yee grid pixels that are touched by the plane,
-    rather than integrated over the exact span of the plane. For a 3D monitor, this is also the
-    case, but care is taken to not over- or under-count the power at the edges. Because of this,
-    there can be small discrepancies between using a 3D FluxMonitor and manually placing six
-    2D monitors at the surface locations.
     """
 
     def storage_size(self, num_cells: int, tmesh: ArrayLike[float, 1]) -> int:
@@ -439,14 +431,6 @@ class FluxTimeMonitor(AbstractFluxMonitor, TimeMonitor):
     ...     stop=5e-13,
     ...     interval=2,
     ...     name='flux_vs_time')
-
-    Note
-    ----
-    For a 2D plane, the flux is summed up over all Yee grid pixels that are touched by the plane,
-    rather than integrated over the exact span of the plane. For a 3D monitor, this is also the
-    case, but care is taken to not over- or under-count the power at the edges. Because of this,
-    there can be small discrepancies between using a 3D FluxMonitor and manually placing six
-    2D monitors at the surface locations.
     """
 
     def storage_size(self, num_cells: int, tmesh: ArrayLike[float, 1]) -> int:

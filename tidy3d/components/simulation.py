@@ -1874,20 +1874,19 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
 
         return Box.from_bounds(bmin_new, bmax_new)
 
-    def discretize(self, box: Box, extend: bool = False, snap_zero_dim: bool = False) -> Grid:
+    def discretize(self, box: Box, snap_zero_dim: bool = False, **kwargs) -> Grid:
         """Grid containing only cells that intersect with a :class:`Box`.
 
         Parameters
         ----------
         box : :class:`Box`
             Rectangular geometry within simulation to discretize.
-        extend : bool
-            If ``True``, extra pixels are added to the discretized grid if needed, such that Yee
-            grid fields can be interpolated to any point inside the ``box``.
         snap_zero_dim : bool
             If ``True``, and the ``box`` has size zero along a given direction, the ``grid`` is
             defined to also have a zero-sized cell exactly centered at the ``box`` center. If
             false, the ``simulation`` grid cell containing the ``box`` center is instead used.
+        kwargs :
+            Extra keyword arguments passed to ``discretize_inds`` method of :class:`.Grid`.
 
         Returns
         -------
@@ -1898,7 +1897,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         if not self.intersects(box):
             log.error(f"Box {box} is outside simulation, cannot discretize")
 
-        span_inds = self.grid.discretize_inds(box, extend=extend)
+        span_inds = self.grid.discretize_inds(box, **kwargs)
         boundary_dict = {}
         for idim, dim in enumerate("xyz"):
             if snap_zero_dim and box.size[idim] == 0:
