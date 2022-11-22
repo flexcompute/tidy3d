@@ -27,7 +27,7 @@ from ..monitor import FieldProjectionKSpaceMonitor, FieldProjectionSurface
 from ..monitor import DiffractionMonitor
 from ..source import SourceTimeType, CustomFieldSource
 from ..medium import Medium, MediumType
-from ...log import SetupError, DataError, log
+from ...log import SetupError, DataError, Tidy3dNotImplementedError, log
 from ...constants import ETA_0, C_0, MICROMETER
 
 
@@ -133,7 +133,7 @@ class AbstractFieldData(MonitorData, AbstractFieldDataset, ABC):
             # assign the final scalar data to the update_dict
             update_dict[field_name] = scalar_data
 
-        update_dict.update({"symmetry": (0, 0, 0), "symmetry_center": None, "grid_expanded": None})
+        update_dict.update({"symmetry": (0, 0, 0), "symmetry_center": None})
         return self.copy(update=update_dict)
 
 
@@ -172,12 +172,28 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
 
     @property
     def _plane_grid_boundaries(self) -> Tuple[ArrayLike[float, 1], ArrayLike[float, 1]]:
-        """For a 2D monitor data, return the boundaries of the in-plane grid from the stored field
-        coordinates."""
+        """For a 2D monitor data, return the boundaries of the in-plane grid to be used to compute
+        differential area and to colocate fields to grid centers if needed."""
+        if np.any(np.array(self.monitor.interval_space) > 1):
+            raise Tidy3dNotImplementedError(
+                "Cannot determine grid boundaries corresponding to "
+                "down-sampled monitor data ('interval_space' > 1 along a direction)."
+            )
         dim1, dim2 = self._tangential_dims
         tan_fields = self._tangential_fields
-        plane_bounds1 = tan_fields["E" + dim2].coords[dim1].values
-        plane_bounds2 = tan_fields["E" + dim1].coords[dim2].values
+
+        # In-plane grid bounds inferred from the field data
+        if self.monitor.colocate:
+            # Should be equivalent to sim.discretize(self.monitor, extend=True)
+            plane_bounds1 = self.grid_expanded.boundaries.to_dict[dim1]
+            plane_bounds2 = self.grid_expanded.boundaries.to_dict[dim2]
+        else:
+            # Last pixel missing compared to sim.discretize(self.monitor, extend=True).
+            # This is because we cannot colocate the fields to the center of that pixel.
+            # However, the monitor should be completely outside of this last pixel.
+            plane_bounds1 = tan_fields["E" + dim2].coords[dim1].values
+            plane_bounds2 = tan_fields["E" + dim1].coords[dim2].values
+
         return plane_bounds1, plane_bounds2
 
     @property
@@ -217,7 +233,11 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
         tan_dims = self._tangential_dims
         tan_fields = self._tangential_fields
 
-        # Plane center coordinates
+        if self.monitor.colocate:
+            # Already colocated
+            return tan_fields
+
+        # Colocate to plane center coordinates
         bounds = self._plane_grid_boundaries
         centers = [(bs[1:] + bs[:-1]) / 2 for bs in bounds]
 

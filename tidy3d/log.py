@@ -70,6 +70,10 @@ class Tidy3dImportError(Tidy3dError):
     """Error importing a package needed for tidy3d."""
 
 
+class Tidy3dNotImplementedError(Tidy3dError):
+    """Error when a functionality is not (yet) supported."""
+
+
 """ Logging functions """
 
 

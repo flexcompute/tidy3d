@@ -479,6 +479,16 @@ class ModeSolverMonitor(AbstractModeMonitor):
         """Size of monitor storage given the number of points after discretization."""
         return 6 * BYTES_COMPLEX * num_cells * len(self.freqs) * self.mode_spec.num_modes
 
+    @property
+    def interval_space(self):
+        """No downsampling is applied to the stored fields."""
+        return (1, 1, 1)
+
+    @property
+    def colocate(self):
+        """Fields are stored on the Yee grid."""
+        return False
+
 
 class FieldProjectionSurface(Tidy3dBaseModel):
     """Data structure to store surface monitors where near fields are recorded for
