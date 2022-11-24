@@ -41,6 +41,7 @@ Case studies
     notebooks/GratingEfficiency
     notebooks/BiosensorGrating.ipynb
     notebooks/BraggGratings.ipynb
+    notebooks/DistributedBraggReflectorCavity
     notebooks/HighQ_Si
     notebooks/HighQ_Ge
     notebooks/DielectricMetasurfaceAbsorber.ipynb
