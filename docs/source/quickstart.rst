@@ -39,24 +39,65 @@ Then the notebook will create a simulation and upload it to our server, where it
 
 To play around with the simulation parameters, you can edit the notebook directly and re-run.
 
-Python Installation
--------------------
+Installation of Tidy3D Python API
+---------------------------------
 
-If you have python set up on your computer and wish to run the python API locally, installation is simple.
+If you wish to run the Tidy3D Python API locally, follow the instructions below.
 
-Tidy3D and its dependencies can be installed from the command line by
+Create a new Python virtual environment
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+If you already have Python installed on your computer, it is possible that some packages in your current environment could have version conflicts with Tidy3D. To avoid this, we strongly recommend that you create a clean Python virtual environment to install Tidy3D.
+
+We recommend using the Conda package management system to manage your Python virtual environment as well as installing Tidy3D. You can install Conda conveniently via `Anaconda <https://www.anaconda.com/>`__.
+
+After you install Anaconda, open the Anaconda Prompt and enter
 
 .. code-block:: bash
 
-    $ pip install tidy3d-beta
+    conda create –n tidy3d_env python==3.10
 
-To test whether the installation was successful you can run
+to create a new environment. ``tidy3d_env`` is the name for the new environment, which can be changed to your personal preference. Python version 3.10 and its associated packages will also be installed in this new environment by adding ``python==3.10``. After the environment is created, we need to activate it by
 
 .. code-block:: bash
 
-    $ python -c "import tidy3d as td; print(td.__version__)"
+    conda activate tidy3d_env
 
-or download and run an example script from `here <https://github.com/flexcompute-readthedocs/tidy3d-docs/blob/readthedocs/docs/StartHere.py>`_.
+You are now ready to install Tidy3D in your new environment, which will be discussed in the next section. More information about Conda environment management tools can be found `here <https://conda.io/projects/conda/en/latest/user-guide/tasks/manage-environments.html>`__.
+
+Install Tidy3D
+^^^^^^^^^^^^^^
+
+Tidy3D and its dependencies can be installed from the command line via ``pip``, which is installed with Python when the new environment is created. Simply run
+
+.. code-block:: bash
+
+    pip install tidy3d-beta
+
+and the latest version of Tidy3D will be installed in this environment. To test whether the installation was successful you can run
+
+.. code-block:: bash
+
+    python -c "import tidy3d as td; print(td.__version__)"
+
+If the installation is successful, you should see the client version of Tidy3D being displayed. Now you can open your favorite Python IDE and start creating Tidy3D simulations!
+
+Additional Configuration for Python IDE
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+If your Python IDE of choice is not natively included in Anaconda, you need to configure the environment in your IDE manually. We will use the popular PyCharm IDE as an example. In PyCharm, go to File – Settings – Project – Python Interpreter. Click “Add Interpreter” and choose “Conda Environment”. Then click the “…” icon to choose the path for the Conda environment with Tidy3D installed. The path usually looks like
+
+``C:\Users\xxx\Anaconda3\envs\tidy3d_env\tidy3d_env\python.exe``.
+
+After clicking “OK”, your PyCharm project should be using the correct Conda environment. You can import Tidy3D using the usual
+
+.. code-block:: bash
+
+    import tidy3d as td
+
+in your codes.
+
+.. note:: Please pay attention to any warning or error messages during the installation process as your system configuration might be different. If you are experiencing difficulty in the installation, please reach out to us for help. We would gladly assist you for Tidy3D installation.
 
 Next Steps
 ==========
