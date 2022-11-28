@@ -131,16 +131,6 @@ def test_diffraction_validators():
     with pytest.raises(SetupError) as e_info:
         monitor = td.DiffractionMonitor(size=[td.inf, 4, 0], freqs=[1e12], name="de")
 
-    # ensure error if orders are non-unique
-    with pytest.raises(SetupError) as e_info:
-        monitor = td.DiffractionMonitor(
-            size=[td.inf, td.inf, 0], freqs=[1e12], name="de", orders_x=[0, 1, 1]
-        )
-    with pytest.raises(SetupError) as e_info:
-        monitor = td.DiffractionMonitor(
-            size=[td.inf, td.inf, 0], freqs=[1e12], name="de", orders_y=[0, 1, 1]
-        )
-
 
 def test_monitor():
 

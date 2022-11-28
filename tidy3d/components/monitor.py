@@ -8,7 +8,7 @@ import numpy as np
 from .types import Ax, EMField, ArrayLike, Bound, FreqArray
 from .types import Literal, Direction, Coordinate, Axis, ObsGridArray
 from .geometry import Box
-from .validators import assert_plane, validate_unique
+from .validators import assert_plane
 from .base import cached_property
 from .mode import ModeSpec
 from .apodization import ApodizationSpec
@@ -684,7 +684,7 @@ class Near2FarKSpaceMonitor(AbstractNear2FarMonitor):
 
 class DiffractionMonitor(PlanarMonitor, FreqMonitor):
     """:class:`Monitor` that uses a 2D Fourier transform to compute the
-    diffraction amplitudes and efficiency for given (or all) diffraction orders.
+    diffraction amplitudes and efficiency for allowed diffraction orders.
 
     Example
     -------
@@ -694,8 +694,6 @@ class DiffractionMonitor(PlanarMonitor, FreqMonitor):
     ...     freqs=[250e12, 300e12],
     ...     name='diffraction_monitor',
     ...     normal_dir='+',
-    ...     orders_x=[0, 1, 2],
-    ...     orders_y=[0],
     ...     )
     """
 
@@ -706,25 +704,6 @@ class DiffractionMonitor(PlanarMonitor, FreqMonitor):
         "the positive x, y or z unit vectors. Must be one of ``'+'`` or ``'-'``. "
         "Defaults to ``'+'`` if not provided.",
     )
-
-    orders_x: Tuple[int, ...] = pydantic.Field(
-        [0],
-        title="Diffraction orders along x",
-        description="Diffraction orders along x for which efficiency should be computed. "
-        "Orders corresponding to wave numbers outside of the light cone will be ignored. "
-        "By default, only order 0 will be considered.",
-    )
-
-    orders_y: Tuple[int, ...] = pydantic.Field(
-        [0],
-        title="Diffraction orders along y",
-        description="Diffraction orders along y for which efficiency should be computed. "
-        "Orders corresponding to wave numbers outside of the light cone will be ignored. "
-        "By default, only order 0 will be considered.",
-    )
-
-    _unique_x = validate_unique("orders_x")
-    _unique_y = validate_unique("orders_y")
 
     @pydantic.validator("size", always=True)
     def diffraction_monitor_size(cls, val):
@@ -743,8 +722,8 @@ class DiffractionMonitor(PlanarMonitor, FreqMonitor):
 
     def storage_size(self, num_cells: int, tmesh: ArrayLike[float, 1]) -> int:
         """Size of monitor storage given the number of points after discretization."""
-        # stores 1 complex number per pair of diffraction orders, per frequency
-        return BYTES_COMPLEX * len(self.orders_x) * len(self.orders_y) * len(self.freqs)
+        # assumes 1 diffraction order per frequency; actual size will be larger
+        return BYTES_COMPLEX * len(self.freqs)
 
 
 # types of monitors that are accepted by simulation
