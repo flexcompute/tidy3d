@@ -1361,8 +1361,7 @@ class DiffractionData(AbstractFieldProjectionData):
     >>> values = (1+1j) * np.random.random((len(orders_x), len(orders_y), len(f)))
     >>> field = DiffractionDataArray(values, coords=coords)
     >>> monitor = DiffractionMonitor(
-    ...     center=(1,2,3), size=(np.inf,np.inf,0), freqs=f, name='diffraction',
-    ...     orders_x=orders_x, orders_y=orders_y
+    ...     center=(1,2,3), size=(np.inf,np.inf,0), freqs=f, name='diffraction'
     ... )
     >>> data = DiffractionData(
     ...     monitor=monitor, sim_size=[1,1], bloch_vecs=[1,2],
@@ -1419,7 +1418,7 @@ class DiffractionData(AbstractFieldProjectionData):
     )
 
     @staticmethod
-    def shifted_orders(orders: Tuple[int], bloch_vec: float) -> np.ndarray:
+    def shifted_orders(orders: Tuple[int, ...], bloch_vec: float) -> np.ndarray:
         """Diffraction orders shifted by the Bloch vector."""
         return bloch_vec + np.atleast_1d(orders)
 

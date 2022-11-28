@@ -231,6 +231,8 @@ def update_1_7(sim_dict: dict) -> dict:
 
     def fix_diffraction_info(mnt_dict: dict) -> dict:
         mnt_dict.pop("medium", None)
+        mnt_dict.pop("orders_x", None)
+        mnt_dict.pop("orders_y", None)
         return mnt_dict
 
     iterate_update_dict(

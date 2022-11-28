@@ -75,8 +75,6 @@ DIFFRACTION_MONITOR = DiffractionMonitor(
     size=(inf, inf, 0),
     freqs=FS,
     name="diffraction",
-    orders_x=ORDERS_X,
-    orders_y=ORDERS_Y,
 )
 
 MONITORS = [
