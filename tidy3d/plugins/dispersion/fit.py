@@ -600,7 +600,7 @@ class DispersionFitter(Tidy3dBaseModel):
             raise ValidationError("Invalid URL. Too many k labels.")
 
     @classmethod
-    def from_url(cls, url_file: str, delimiter: str = ",", **kwargs):
+    def from_url(cls, url_file: str, delimiter: str = ",", ignore_k: bool = False, **kwargs):
         """loads :class:`DispersionFitter` from url linked to a csv/txt file that
         contains wavelength (micron), n, and optionally k data. Preferred from
         refractiveindex.info.
@@ -639,6 +639,8 @@ class DispersionFitter(Tidy3dBaseModel):
             e.g. "https://refractiveindex.info/data_csv.php?datafile=data/main/Ag/Johnson.yml"
         delimiter : str = ","
             E.g. in refractiveindex.info, it'll be "," for csv file, and "\\\\t" for txt file.
+        ignore_k : bool = False
+            Ignore the k data if they are present, so the fitted material is lossless.
 
         Returns
         -------
@@ -677,8 +679,8 @@ class DispersionFitter(Tidy3dBaseModel):
         n_lam = np.array(n_lam)
         k_lam = np.array(k_lam)
 
-        if has_k == 1:
-            if np.allclose(n_lam[:, 0], k_lam[:, 0]):
+        if has_k == 1 and not ignore_k:
+            if n_lam.shape == k_lam.shape and np.allclose(n_lam[:, 0], k_lam[:, 0]):
                 return cls(wvl_um=n_lam[:, 0], n_data=n_lam[:, 1], k_data=k_lam[:, 1], **kwargs)
             raise ValidationError(
                 "Invalid URL. Both n and k should be provided at each wavelength."

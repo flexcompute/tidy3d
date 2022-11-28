@@ -1,15 +1,15 @@
 """Fit PoleResidue Dispersion models to optical NK data based on web service
 """
-from typing import Tuple
+from typing import Tuple, Optional
 from enum import Enum
 import requests
-from pydantic import PositiveInt, NonNegativeFloat, PositiveFloat, Field
+from pydantic import PositiveInt, NonNegativeFloat, PositiveFloat, Field, validator
 
 from ...components.base import Tidy3dBaseModel
 from ...components.types import Literal
 from ...components.medium import PoleResidue
 from ...constants import MICROMETER, HERTZ
-from ...log import log, WebError, Tidy3dError
+from ...log import log, WebError, Tidy3dError, SetupError
 from ...web.httputils import get_headers
 
 from .fit import DispersionFitter
@@ -31,9 +31,16 @@ class AdvancedFitterParam(Tidy3dBaseModel):
     bound_f: NonNegativeFloat = Field(
         None,
         title="Upper bound of pole frequency",
-        description="Upper bound of real and imaginary part of pole "
-        "frequency ``a`` in the model :class:`.PoleResidue` (The default 'None' will trigger "
-        "automatic setup based on the frequency range of interest).",
+        description="Upper bound of real and imaginary part of ``a`` that corresponds to pole "
+        "damping rate and frequency in the model :class:`.PoleResidue` (The default 'None' "
+        "will trigger automatic setup based on the frequency range of interest).",
+        units=HERTZ,
+    )
+    bound_f_lower: NonNegativeFloat = Field(
+        0.0,
+        title="Lower bound of pole frequency",
+        description="Lower bound of imaginary part of ``a`` that corresponds to pole "
+        "frequency in the model :class:`.PoleResidue`.",
         units=HERTZ,
     )
     bound_eps_inf: float = Field(
@@ -56,6 +63,28 @@ class AdvancedFitterParam(Tidy3dBaseModel):
         title="Number of inner iterations",
         description="Number of iterations in each inner optimization.",
     )
+    random_seed: Optional[int] = Field(
+        0,
+        title="Random seed for starting coefficients",
+        description="The fitting tool performs global optimizations with random "
+        "starting coefficients. With the same random seed, one obtains identical "
+        "results when re-running the fitter; on the other hand, if "
+        "one wants to re-run the fitter several times to obtain the best results, "
+        "the value of the seed should be changed, or set to  ``None`` so that "
+        "the starting coefficients are different each time. ",
+        ge=0,
+        lt=2**32,
+    )
+
+    @validator("bound_f_lower", always=True)
+    def _validate_lower_frequency_bound(cls, val, values):
+        """bound_f_lower cannot be larger than bound_f."""
+        if values["bound_f"] is not None and val > values["bound_f"]:
+            raise SetupError(
+                "The upper bound 'bound_f' cannot be smaller "
+                "than the lower bound 'bound_f_lower'."
+            )
+        return val
 
 
 # FitterData will be used internally
@@ -198,7 +227,7 @@ class StableDispersionFitter(DispersionFitter):
 
         # set up bound_f, bound_amp
         if advanced_param.bound_f is None:
-            new_bound_f = self.frequency_range[1] * BOUND_MAX_FACTOR
+            new_bound_f = advanced_param.bound_f_lower + self.frequency_range[1] * BOUND_MAX_FACTOR
             advanced_param = advanced_param.copy(update={"bound_f": new_bound_f})
         if advanced_param.bound_amp is None:
             new_bound_amp = self.frequency_range[1] * BOUND_MAX_FACTOR
@@ -222,11 +251,12 @@ class StableDispersionFitter(DispersionFitter):
             tolerance_rms=tolerance_rms,
             bound_amp=self._Hz_to_eV(advanced_param.bound_amp),
             bound_f=self._Hz_to_eV(advanced_param.bound_f),
+            bound_f_lower=self._Hz_to_eV(advanced_param.bound_f_lower),
             bound_eps_inf=advanced_param.bound_eps_inf,
             constraint=advanced_param.constraint,
             nlopt_maxeval=advanced_param.nlopt_maxeval,
+            random_seed=advanced_param.random_seed,
         )
-
         return web_data
 
     def fit(  # pylint:disable=arguments-differ, too-many-locals
