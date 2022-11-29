@@ -431,6 +431,6 @@ def test_mode_solver_data_sort():
     data_last = data.overlap_sort(track_freq="highest")
     data_center = data.overlap_sort(track_freq="central")
     # these are probably not the best tests
-    assert data_first.field_components != data.field_components
-    assert data_first.field_components != data_last.field_components
-    assert data_first.field_components != data_center.field_components
+    assert data_first.field_components == data.field_components
+    assert data_first.field_components == data_last.field_components
+    assert data_first.field_components == data_center.field_components

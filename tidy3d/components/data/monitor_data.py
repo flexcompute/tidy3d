@@ -299,9 +299,9 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
         # Cross products of fields
         dim1, dim2 = self._tangential_dims
         e_self_x_h_other = fields_self["E" + dim1] * fields_other["H" + dim2]
-        e_self_x_h_other -= fields_other["E" + dim2] * fields_self["H" + dim1]
+        e_self_x_h_other -= fields_self["E" + dim2] * fields_other["H" + dim1]
         h_self_x_e_other = fields_self["H" + dim1] * fields_other["E" + dim2]
-        h_self_x_e_other -= fields_other["H" + dim2] * fields_self["E" + dim1]
+        h_self_x_e_other -= fields_self["H" + dim2] * fields_other["E" + dim1]
 
         # Integrate over plane
         d_area = self._diff_area
