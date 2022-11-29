@@ -235,6 +235,10 @@ def update_1_7(sim_dict: dict) -> dict:
         mnt_dict.pop("orders_y", None)
         return mnt_dict
 
+    def fix_bloch_vec(mnt_dict: dict) -> dict:
+        mnt_dict["bloch_vec"] = mnt_dict["bloch_vec"]["real"]
+        return mnt_dict
+
     iterate_update_dict(
         update_dict=sim_dict,
         update_types={
@@ -242,6 +246,7 @@ def update_1_7(sim_dict: dict) -> dict:
             "Near2FarCartesianMonitor": fix_cartesian_info,
             "Near2FarKSpaceMonitor": fix_kspace_info,
             "DiffractionMonitor": fix_diffraction_info,
+            "BlochBoundary": fix_bloch_vec,
         },
     )
     return sim_dict

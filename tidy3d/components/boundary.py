@@ -12,7 +12,7 @@ from .types import Complex, Axis
 from .source import GaussianBeam, ModeSource, PlaneWave
 from .medium import Medium
 
-from ..log import log, SetupError, DataError, ValidationError
+from ..log import log, SetupError, DataError
 from ..constants import EPSILON_0, MU_0, PML_SIGMA
 
 
@@ -51,7 +51,7 @@ class BlochBoundary(BoundaryEdge):
     >>> bloch = BlochBoundary(bloch_vec=1)
     """
 
-    bloch_vec: Complex = pd.Field(
+    bloch_vec: float = pd.Field(
         ...,
         title="Normalized Bloch vector component",
         description="Normalized component of the Bloch vector in units of "
@@ -142,13 +142,6 @@ class BlochBoundary(BoundaryEdge):
 
         bloch_vec = domain_size * k_global[axis]
         return cls(bloch_vec=bloch_vec)
-
-    @pd.validator("bloch_vec", always=True)
-    def _zero_imaginary_part(cls, val):
-        """Make sure the imaginary part of the bloch vector is 0."""
-        if np.imag(val) != 0:
-            raise ValidationError("Bloch vector must be real.")
-        return val
 
 
 # """ Absorber parameters """
