@@ -18,11 +18,6 @@ def test_bloch_phase():
     ph = bb.bloch_phase
 
 
-def test_imaginary_bloch_phase():
-    with pytest.raises(ValidationError):
-        bb = BlochBoundary(bloch_vec=1j)
-
-
 @pytest.mark.parametrize("dimension", ["x", "y", "z"])
 def test_getitem(dimension):
     spec = BoundarySpec.pml(y=True, z=True)
