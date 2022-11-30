@@ -328,15 +328,6 @@ class ModeSolverDataset(ElectromagneticFieldDataset):
         """Imaginary part of the propagation index."""
         return self.n_complex.imag
 
-    def sel_mode_index(self, mode_index: pd.NonNegativeInt) -> FieldDataset:
-        """Return :class:`.FieldData` for the specificed mode index."""
-
-        fields = {}
-        for field_name, data in self.field_components.items():
-            fields[field_name] = data.sel(mode_index=[mode_index])
-
-        return self.copy(update=fields)
-
     def plot_field(self, *args, **kwargs):
         """Warn user to use the :class:`.ModeSolver` ``plot_field`` function now."""
         raise DeprecationWarning(

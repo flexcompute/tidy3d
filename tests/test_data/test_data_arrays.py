@@ -23,6 +23,8 @@ from tidy3d.constants import inf
 
 from ..utils import clear_tmp
 
+np.random.seed(4)
+
 STRUCTURES = [
     Structure(geometry=Box(size=(1, inf, 1)), medium=material_library["cSi"]["SalzbergVilla1957"])
 ]
@@ -158,7 +160,7 @@ def make_mode_amps_data_array():
 
 
 def make_mode_index_data_array():
-    values = (1 + 1j) * np.random.random((len(FS), len(MODE_INDICES)))
+    values = (1 + 0.1j) * np.random.random((len(FS), len(MODE_INDICES)))
     return ModeIndexDataArray(values, coords=dict(f=FS, mode_index=MODE_INDICES))
 
 
