@@ -25,6 +25,8 @@ DFT_CUTOFF = 1e-8
 # when checking if custom data spans the source plane, allow for a small tolerance
 # due to numerical precision
 DATA_SPAN_TOL = 1e-8
+# width of Chebyshev grid used for broadband sources (in units of pulse width)
+CHEB_GRID_WIDTH = 1.5
 
 
 class SourceTime(ABC, Tidy3dBaseModel):
@@ -475,7 +477,7 @@ class BroadbandSource(Source, ABC):
     @cached_property
     def frequency_grid(self) -> np.ndarray:
         """A Chebyshev grid used to approximate frequency dependence."""
-        freq_min, freq_max = self.source_time.frequency_range(num_fwidth=4)
+        freq_min, freq_max = self.source_time.frequency_range(num_fwidth=CHEB_GRID_WIDTH)
         freq_avg = 0.5 * (freq_min + freq_max)
         freq_diff = 0.5 * (freq_max - freq_min)
         uni_points = (2 * np.arange(self.num_freqs) + 1) / (2 * self.num_freqs)
