@@ -5,7 +5,7 @@ import matplotlib.pylab as plt
 import numpy as np
 import tidy3d as td
 from tidy3d.log import SetupError, DataError, ValidationError
-from tidy3d.components.source import DirectionalSource
+from tidy3d.components.source import DirectionalSource, CHEB_GRID_WIDTH
 
 _, AX = plt.subplots()
 
@@ -156,7 +156,7 @@ def test_pol_arrow():
 def test_broadband_source():
     g = td.GaussianPulse(freq0=1, fwidth=0.1)
     mode_spec = td.ModeSpec(num_modes=2)
-    fmin, fmax = g.frequency_range(num_fwidth=4)
+    fmin, fmax = g.frequency_range(num_fwidth=CHEB_GRID_WIDTH)
     fdiff = (fmax - fmin) / 2
     fmean = (fmax + fmin) / 2
 
