@@ -1565,8 +1565,10 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         _, (xmin, ymin) = self.pop_axis(self.bounds_pml[0], axis=axis)
         _, (xmax, ymax) = self.pop_axis(self.bounds_pml[1], axis=axis)
 
-        ax.set_xlim(xmin, xmax)
-        ax.set_ylim(ymin, ymax)
+        if xmin != xmax:
+            ax.set_xlim(xmin, xmax)
+        if ymin != ymax:
+            ax.set_ylim(ymin, ymax)
         return ax
 
     @staticmethod
