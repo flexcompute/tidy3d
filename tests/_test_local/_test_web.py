@@ -255,11 +255,8 @@ def test_batch_6_load():
         _ = sim_data[first_monitor_name]
 
 
-@clear_tmp
 def test_batchdata_7_load():
     """load the BatchData from file."""
-    batch = _get_gloabl_batch()
-    batch.to_file(os.path.join(PATH_DIR_SIM_DATA, "batch.json"))
     sim_data_dict = web.BatchData.load(path_dir=PATH_DIR_SIM_DATA)
 
 
