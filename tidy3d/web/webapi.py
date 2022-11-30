@@ -204,7 +204,7 @@ def get_run_info(task_id: TaskId):
         client = token.get_client()
         progress = client.get_object(Bucket=token.get_bucket(), Key=token.get_s3_key())["Body"]
         progress_string = progress.read().split(b"\n")
-        perc_done, field_decay = progress_string[-2].split(b",")
+        perc_done, field_decay = progress_string[-2].split(b",")[:2]
         return float(perc_done), float(field_decay)
     except Exception:  # pylint:disable=broad-except
         return None, None

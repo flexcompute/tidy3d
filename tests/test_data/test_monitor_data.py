@@ -47,7 +47,7 @@ def make_field_data(symmetry: bool = True):
         Hz=make_scalar_field_data_array("Hz", symmetry),
         symmetry=sim.symmetry,
         symmetry_center=sim.center,
-        grid_expanded=sim.discretize(FIELD_MONITOR, extend=True),
+        grid_expanded=sim.discretize(FIELD_MONITOR, extend=True, snap_zero_dim=True),
     )
 
 
@@ -62,7 +62,7 @@ def make_field_time_data(symmetry: bool = True):
         Hx=make_scalar_field_time_data_array("Hx", symmetry),
         symmetry=sim.symmetry,
         symmetry_center=sim.center,
-        grid_expanded=sim.discretize(FIELD_TIME_MONITOR, extend=True),
+        grid_expanded=sim.discretize(FIELD_TIME_MONITOR, extend=True, snap_zero_dim=True),
     )
 
 
@@ -77,7 +77,7 @@ def make_field_data_2d(symmetry: bool = True):
         Hz=make_scalar_field_data_array("Hz", symmetry).interp(y=[0]),
         symmetry=sim.symmetry,
         symmetry_center=sim.center,
-        grid_expanded=sim.discretize(FIELD_MONITOR_2D, extend=True),
+        grid_expanded=sim.discretize(FIELD_MONITOR_2D, extend=True, snap_zero_dim=True),
     )
 
 
@@ -92,12 +92,12 @@ def make_field_time_data_2d(symmetry: bool = True):
         Hz=make_scalar_field_time_data_array("Hz", symmetry).interp(y=[0]),
         symmetry=sim.symmetry,
         symmetry_center=sim.center,
-        grid_expanded=sim.discretize(FIELD_TIME_MONITOR_2D, extend=True),
+        grid_expanded=sim.discretize(FIELD_TIME_MONITOR_2D, extend=True, snap_zero_dim=True),
     )
 
 
 def make_mode_solver_data():
-    return ModeSolverData(
+    mode_data = ModeSolverData(
         monitor=MODE_SOLVE_MONITOR,
         Ex=make_scalar_mode_field_data_array("Ex"),
         Ey=make_scalar_mode_field_data_array("Ey"),
@@ -107,9 +107,14 @@ def make_mode_solver_data():
         Hz=make_scalar_mode_field_data_array("Hz"),
         symmetry=SIM_SYM.symmetry,
         symmetry_center=SIM_SYM.center,
-        grid_expanded=SIM_SYM.discretize(MODE_SOLVE_MONITOR, extend=True),
+        grid_expanded=SIM_SYM.discretize(MODE_SOLVE_MONITOR, extend=True, snap_zero_dim=True),
         n_complex=N_COMPLEX.copy(),
     )
+    # Mode solver data needs to be normalized
+    scaling = np.sqrt(np.abs(mode_data.symmetry_expanded_copy.flux))
+    norm_data_dict = {key: val / scaling for key, val in mode_data.field_components.items()}
+    mode_data_norm = mode_data.copy(update=norm_data_dict)
+    return mode_data_norm
 
 
 def make_permittivity_data(symmetry: bool = True):
@@ -283,12 +288,10 @@ def test_colocate():
         _ = data.colocate(x=[+0.1, 0.5], y=[1.0, 2.0], z=[+0.1, 0.5])
 
 
-def test_sel_mode_index():
-
-    data = make_mode_solver_data()
-    field_data = data.sel_mode_index(mode_index=0)
-    for _, scalar_field in field_data.field_components.items():
-        assert "mode_index" in scalar_field.coords, "mode_index coordinate removed from data."
+def test_time_reversed_copy():
+    data = make_field_data().time_reversed_copy
+    data = make_mode_solver_data().time_reversed_copy
+    data = make_field_time_data().time_reversed_copy
 
 
 def _test_eq():

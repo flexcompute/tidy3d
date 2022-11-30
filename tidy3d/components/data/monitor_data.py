@@ -247,6 +247,7 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
             if cents.size > 0:
                 interp_dict[dim] = cents
         centered_fields = {key: val.interp(**interp_dict) for key, val in tan_fields.items()}
+
         return centered_fields
 
     @property
@@ -310,6 +311,16 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
             and the sum of carried power fractions exceed 1. In the non-conjugated definition,
             orthogonal modes can be defined, but the interpretation of modal overlap as power
             carried by a given mode is no longer valid.
+
+        Note
+        ----
+            To reproduce exactly results from a :class:`.ModeMonitor` using data from a
+            :class:`.ModeSolverMonitor` and a :class:`.FieldMonitor` as
+            ``mode_amps = mode_solver_data.dot(field_data)``, a factor related to the finite
+            numerical grid needs to be applied. This can be done using the
+            ``finite_grid_copy`` method of :class:`.ModeSolverData`. To compute the amplitudes in
+            the backward direction, the ``time_reversed_copy`` property can be used on either the
+            mode solver data or the field data.
         """
 
         # Tangential fields for current and other field data
@@ -333,6 +344,19 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
         d_area = self._diff_area
         integrand = (e_self_x_h_other - h_self_x_e_other) * d_area
         return ModeAmpsDataArray(0.25 * integrand.sum(dim=d_area.dims))
+
+    @property
+    def time_reversed_copy(self) -> FieldData:
+        """Make a copy of the data with time-reversed fields."""
+
+        # Time reversal for frequency-domain fields; overwritten in :class:`FieldTimeData`.
+        new_data = {}
+        for comp, field in self.field_components.items():
+            if comp[0] == "H":
+                new_data[comp] = -np.conj(field)
+            else:
+                new_data[comp] = np.conj(field)
+        return self.copy(update=new_data)
 
 
 class FieldData(FieldDataset, ElectromagneticFieldData):
@@ -457,6 +481,17 @@ class FieldTimeData(FieldTimeDataset, ElectromagneticFieldData):
     def dot(self, field_data: ElectromagneticFieldData, conjugate: bool = True) -> xr.DataArray:
         """Inner product is not defined for time-domain data."""
         raise DataError("Inner product is not defined for time-domain data.")
+
+    @property
+    def time_reversed_copy(self) -> FieldTimeData:
+        """Make a copy of the data with time-reversed fields."""
+        new_data = {}
+        for comp, field in self.field_components.items():
+            if comp[0] == "H":
+                new_data[comp] = -field
+            else:
+                new_data[comp] = field
+        return self.copy(update=new_data)
 
 
 class ModeSolverData(ModeSolverDataset, ElectromagneticFieldData):
@@ -719,6 +754,62 @@ class ModeSolverData(ModeSolverDataset, ElectromagneticFieldData):
         monitor = self.monitor.copy(update=dict(mode_spec=mode_spec))
 
         return self.copy(update=dict(monitor=monitor, n_complex=index_data, **fields))
+
+    def finite_grid_copy(self, grid: Grid) -> ModeSolverData:
+        """Return a copy of the :class:`.ModeSolverData` with the fields renormalized to account
+        for propagation on a finite grid along the propagation direction. The fields are assumed to
+        have ``E exp(1j k r)`` dependence on the finite grid and are then resampled using linear
+        interpolation to the exact position of the mode plane. This is needed to correctly compute
+        overlap with fields that come from a :class:`.FieldMonitor` placed in the same grid.
+
+        Parameters
+        ----------
+        grid : :class:`.Grid`
+            Numerical grid on which the modes are assumed to propagate.
+
+        Returns
+        -------
+        :class:`.ModeSolverData`
+            Copy of the data with renormalized fields.
+        """
+        normal_ind = self.monitor.size.index(0.0)
+        normal_pos = self.monitor.center[normal_ind]
+        normal_dim, plane_dims = self.monitor.pop_axis("xyz", axis=normal_ind)
+
+        # Primal and dual grid along the normal direction
+        # i.e. locations of the tangential E-field and H-field components, respectively
+        normal_primal = grid.boundaries.to_list[normal_ind]
+        normal_primal = xr.DataArray(normal_primal, coords={normal_dim: normal_primal})
+        normal_dual = grid.centers.to_list[normal_ind]
+        normal_dual = xr.DataArray(normal_dual, coords={normal_dim: normal_dual})
+
+        # Propagation phase at the E and H field locations. The k-vector is along the propagation
+        # direction, so angle_theta has to be taken into account. The distance along the propagation
+        # direction is the distance along the normal direction over cosine(theta).
+        k_vec = 2 * np.pi * self.n_complex * self.n_complex.f / C_0
+        cos_theta = np.cos(self.monitor.mode_spec.angle_theta)
+        phase_primal = np.exp(1j * k_vec * (normal_primal - normal_pos) / cos_theta)
+        phase_dual = np.exp(1j * k_vec * (normal_dual - normal_pos) / cos_theta)
+
+        # Fields are modified by a linear interpolation to the exact monitor position
+        factor_primal = phase_primal.interp(**{normal_dim: normal_pos})
+        factor_dual = phase_dual.interp(**{normal_dim: normal_pos})
+
+        # Rescale fields
+        new_fields = {}
+        primal_comps = ["E" + plane_dims[0], "E" + plane_dims[1], "H" + normal_dim]
+        for comp, field in self.field_components.items():
+            if comp in primal_comps:
+                new_fields[comp] = field * factor_primal
+            else:
+                new_fields[comp] = field * factor_dual
+        new_data = self.copy(update=new_fields)
+
+        # Also need to renormalize the flux
+        scaling = np.sqrt(np.abs(new_data.symmetry_expanded_copy.flux))
+        new_fields = {comp: field / scaling for comp, field in new_fields.items()}
+
+        return self.copy(update=new_fields)
 
 
 class PermittivityData(PermittivityDataset, AbstractFieldData):

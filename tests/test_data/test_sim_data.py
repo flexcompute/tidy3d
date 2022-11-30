@@ -101,6 +101,22 @@ def test_no_symmetry():
     assert np.allclose(Ex_raw, Ex_ret)
 
 
+def test_mode_solver_numerical_grid_data():
+    sim_data = make_sim_data(symmetry=False)
+    mode_data = sim_data["mode_solver"]
+    # Renomralize to numerical grid and compute flux
+    mode_data_num = mode_data.finite_grid_copy(sim_data.simulation.grid)
+    flux = np.abs(mode_data.flux)
+    # Check that flux is still normalized
+    assert np.linalg.norm(flux - 1) < 1e-10
+    # Check that data is only slightly different
+    for comp, field in mode_data.field_components.items():
+        comp_diff_norm = np.linalg.norm(field - mode_data_num.field_components[comp])
+        comp_diff_norm /= np.prod(field.shape)
+        max_diff = np.amax(np.abs(field - mode_data_num.field_components[comp]))
+        assert 0.1 > max_diff > 0
+
+
 def test_normalize():
     sim_data_norm0 = make_sim_data()
     sim_data_norm_none = sim_data_norm0.renormalize(normalize_index=None)
@@ -208,7 +224,7 @@ def test_sel_kwarg_len1():
     sim_data.plot_field("mode_solver", "Ex", y=0.0, val="real", f=1e14, mode_index=1, ax=AX)
 
     # passing y=1 sel kwarg should error
-    with pytest.raises(ValueError):
+    with pytest.raises(KeyError):
         sim_data.plot_field("mode_solver", "Ex", y=-1.0, val="real", f=1e14, mode_index=1, ax=AX)
 
 
