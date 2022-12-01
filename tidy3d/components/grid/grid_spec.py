@@ -15,7 +15,7 @@ from ..source import SourceType
 from ..structure import Structure, StructureType
 from ..geometry import Box
 from ...log import SetupError, log
-from ...constants import C_0, MICROMETER
+from ...constants import C_0, MICROMETER, fp_eps
 
 
 class GridSpec1d(Tidy3dBaseModel, ABC):
@@ -198,9 +198,18 @@ class CustomGrid(GridSpec1d):
         title="Customized grid sizes.",
         description="An array of custom nonuniform grid sizes. The resulting grid is centered on "
         "the simulation center such that it spans the region "
-        "``(center - sum(dl)/2, center + sum(dl)/2)``. "
+        "``(center - sum(dl)/2, center + sum(dl)/2)``, unless a ``custom_offset`` is given. "
         "Note: if supplied sizes do not cover the simulation size, the first and last sizes "
         "are repeated to cover the simulation domain.",
+        units=MICROMETER,
+    )
+
+    custom_offset: float = pd.Field(
+        None,
+        title="Customized grid offset.",
+        description="The starting coordinate of the grid which defines the simulation center. "
+        "If ``None``, the simulation center is set such that it spans the region "
+        "``(center - sum(dl)/2, center + sum(dl)/2)``.",
         units=MICROMETER,
     )
 
@@ -233,12 +242,18 @@ class CustomGrid(GridSpec1d):
         dl = np.array(self.dl)
         bound_coords = np.append(0.0, np.cumsum(dl))
 
-        # place the middle of the bounds at the center of the simulation along dimension
-        bound_coords += center - bound_coords[-1] / 2
+        # place the middle of the bounds at the center of the simulation along dimension,
+        # or use the `custom_offset` if provided
+        if self.custom_offset is None:
+            bound_coords += center - bound_coords[-1] / 2
+        else:
+            bound_coords += self.custom_offset
 
-        # chop off any coords outside of simulation bounds
-        bound_min = center - size / 2
-        bound_max = center + size / 2
+        # chop off any coords outside of simulation bounds, beyond some buffer region
+        # to take numerical effects into account
+        buffer = fp_eps * size
+        bound_min = center - size / 2 - buffer
+        bound_max = center + size / 2 + buffer
         bound_coords = bound_coords[bound_coords <= bound_max]
         bound_coords = bound_coords[bound_coords >= bound_min]
 
@@ -249,6 +264,14 @@ class CustomGrid(GridSpec1d):
             bound_coords = np.insert(bound_coords, 0, bound_coords[0] - dl_min)
         while bound_coords[-1] + dl_max <= bound_max:
             bound_coords = np.append(bound_coords, bound_coords[-1] + dl_max)
+
+        # in case a `custom_offset` is provided, it's possible the bounds were numerically within
+        # the simulation bounds but were still chopped off, which is fixed here
+        if self.custom_offset is not None:
+            if np.isclose(bound_coords[0] - dl_min, bound_min):
+                bound_coords = np.insert(bound_coords, 0, bound_coords[0] - dl_min)
+            if np.isclose(bound_coords[-1] + dl_max, bound_max):
+                bound_coords = np.append(bound_coords, bound_coords[-1] + dl_max)
 
         return bound_coords
 
@@ -429,6 +452,12 @@ class GridSpec(Tidy3dBaseModel):
         """True if any of the three dimensions uses :class:`.AutoGrid`."""
         grid_list = [self.grid_x, self.grid_y, self.grid_z]
         return np.any([isinstance(mesh, AutoGrid) for mesh in grid_list])
+
+    @property
+    def custom_grid_used(self) -> bool:
+        """True if any of the three dimensions uses :class:`.CustomGrid`."""
+        grid_list = [self.grid_x, self.grid_y, self.grid_z]
+        return np.any([isinstance(mesh, CustomGrid) for mesh in grid_list])
 
     @staticmethod
     def wavelength_from_sources(sources: List[SourceType]) -> pd.PositiveFloat:

@@ -205,6 +205,18 @@ SIM_FULL = Simulation(
                 )
             ),
         ),
+        TFSF(
+            center=(1, 2, -3),
+            size=(2.5, 2.5, 0.5),
+            source_time=GaussianPulse(
+                freq0=2e14,
+                fwidth=4e13,
+            ),
+            direction="+",
+            angle_theta=np.pi / 6,
+            angle_phi=np.pi / 5,
+            injection_axis=2,
+        ),
     ],
     monitors=(
         FieldMonitor(

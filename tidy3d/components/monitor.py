@@ -360,12 +360,7 @@ class SurfaceIntegrationMonitor(Monitor, ABC):
     def integration_surfaces(self):
         """Surfaces of the monitor where fields will be recorded for subsequent integration."""
         if self.size.count(0.0) == 0:
-            monitor_dict = self.dict()
-            exclude_surfaces = monitor_dict.pop("exclude_surfaces", None)
-            surface_monitors = self.surfaces(**monitor_dict)
-            if exclude_surfaces:
-                return [mnt for mnt in surface_monitors if mnt.name[-2:] not in exclude_surfaces]
-            return surface_monitors
+            return self.surfaces_with_exclusion(**self.dict())
         return [self]
 
     @pydantic.root_validator(skip_on_failure=True)

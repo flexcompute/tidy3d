@@ -1276,12 +1276,6 @@ class Box(Centered):
         del_idx = [[2 * i, 2 * i + 1] for i in del_idx]
         del_idx = [item for sublist in del_idx for item in sublist]
 
-        if len(del_idx) == 6:
-            raise SetupError(
-                "Can't generate surfaces for the given object because "
-                "all its surfaces are at infinity."
-            )
-
         def del_items(items, indices):
             """Delete list items at indices."""
             return [i for j, i in enumerate(items) if j not in indices]
@@ -1303,6 +1297,38 @@ class Box(Centered):
             surface = cls(center=_cent, size=_size, **kwargs)
             surfaces.append(surface)
 
+        return surfaces
+
+    @classmethod
+    def surfaces_with_exclusion(
+        cls, size: Size, center: Coordinate, **kwargs
+    ):  # pylint: disable=too-many-locals
+        """Returns a list of 6 :class:`Box` instances corresponding to each surface of a 3D volume.
+        The output surfaces are stored in the order [x-, x+, y-, y+, z-, z+], where x, y, and z
+        denote which axis is perpendicular to that surface, while "-" and "+" denote the direction
+        of the normal vector of that surface. If a name is provided, each output surface's name
+        will be that of the provided name appended with the above symbols. E.g., if the provided
+        name is "box", the x+ surfaces's name will be "box_x+". If `kwargs` contains an
+        `exclude_surfaces` parameter, the returned list of surfaces will not include the excluded
+        surfaces. Otherwise, the behavior is identical to that of `surfaces()`.
+
+        Parameters
+        ----------
+        size : Tuple[float, float, float]
+            Size of object in x, y, and z directions.
+        center : Tuple[float, float, float]
+            Center of object in x, y, and z.
+
+        Example
+        -------
+        >>> b = Box.surfaces_with_exclusion(
+        ...     size=(1, 2, 3), center=(3, 2, 1), exclude_surfaces=["x-"]
+        ... )
+        """
+        exclude_surfaces = kwargs.pop("exclude_surfaces", None)
+        surfaces = cls.surfaces(size=size, center=center, **kwargs)
+        if "name" in cls.__dict__["__fields__"] and exclude_surfaces:
+            surfaces = [surf for surf in surfaces if surf.name[-2:] not in exclude_surfaces]
         return surfaces
 
     def intersections_plane(self, x: float = None, y: float = None, z: float = None):
@@ -1406,6 +1432,7 @@ class Box(Centered):
         bend_axis: Axis = None,
         both_dirs: bool = False,
         ax: Ax = None,
+        arrow_base: Coordinate = None,
     ) -> Ax:
         """Adds an arrow to the axis if with options if certain conditions met.
 
@@ -1429,6 +1456,8 @@ class Box(Centered):
             Axis of curvature of `bend_radius`.
         both_dirs : bool = False
             If True, plots an arrow ponting in direction and one in -direction.
+        arrow_base : :class:`.Coordinate` = None
+            Custom base of the arrow. Uses the geometry's center if not provided.
 
         Returns
         -------
@@ -1439,13 +1468,22 @@ class Box(Centered):
         plot_axis, _ = self.parse_xyz_kwargs(x=x, y=y, z=z)
         _, (dx, dy) = self.pop_axis(direction, axis=plot_axis)
 
-        # conditions to check to determine whether to plot arrow
+        # conditions to check to determine whether to plot arrow, taking into account the
+        # possibility of a custom arrow base
         arrow_intersecting_plane = len(self.intersections_plane(x=x, y=y, z=z)) > 0
+        center = self.center
+        if arrow_base:
+            arrow_intersecting_plane = arrow_intersecting_plane and any(
+                a == b for a, b in zip(arrow_base, [x, y, z])
+            )
+            center = arrow_base
+
+        _, (dx, dy) = self.pop_axis(direction, axis=plot_axis)
         components_in_plane = any(not np.isclose(component, 0) for component in (dx, dy))
 
         # plot if arrow in plotting plane and some non-zero component can be displayed.
         if arrow_intersecting_plane and components_in_plane:
-            _, (x0, y0) = self.pop_axis(self.center, axis=plot_axis)
+            _, (x0, y0) = self.pop_axis(center, axis=plot_axis)
 
             # Reasonable value for temporary arrow size.  The correct size and direction
             # have to be calculated after all transforms have been set.  That is why we
