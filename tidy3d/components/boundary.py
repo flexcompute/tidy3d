@@ -9,7 +9,7 @@ import numpy as np
 
 from .base import Tidy3dBaseModel, cached_property
 from .types import Complex, Axis, TYPE_TAG_STR
-from .source import GaussianBeam, ModeSource, PlaneWave
+from .source import GaussianBeam, ModeSource, PlaneWave, TFSF
 from .medium import Medium
 
 from ..log import log, SetupError, DataError
@@ -40,7 +40,7 @@ class PMCBoundary(BoundaryEdge):
 # """ Bloch boundary """
 
 # sources from which Bloch boundary conditions can be defined
-BlochSourceType = Union[GaussianBeam, ModeSource, PlaneWave]
+BlochSourceType = Union[GaussianBeam, ModeSource, PlaneWave, TFSF]
 
 
 class BlochBoundary(BoundaryEdge):
@@ -102,8 +102,8 @@ class BlochBoundary(BoundaryEdge):
 
         if not isinstance(source, BlochSourceType.__args__):
             raise SetupError(
-                "The `source` parameter must be `GaussianBeam`, `ModeSource`, or `PlaneWave` "
-                "in order to define a Bloch boundary condition."
+                "The `source` parameter must be `GaussianBeam`, `ModeSource`, `PlaneWave`, "
+                "or `TFSF` in order to define a Bloch boundary condition."
             )
 
         if axis == source.injection_axis:

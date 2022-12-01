@@ -304,6 +304,24 @@
                     ]
                 ]
             }
+        },
+        {
+            "geometry": {
+                "type": "TriangleMesh",
+                "mesh_dataset": {
+                    "type": "TriangleMeshDataset",
+                    "surface_mesh": "TriangleMeshDataArray"
+                }
+            },
+            "name": null,
+            "type": "Structure",
+            "medium": {
+                "name": null,
+                "frequency_range": null,
+                "type": "Medium",
+                "permittivity": 5.0,
+                "conductivity": 0.0
+            }
         }
     ],
     "sources": [
@@ -1360,5 +1378,5 @@
     "subpixel": false,
     "normalize_index": 0,
     "courant": 0.8,
-    "version": "1.9.0"
+    "version": "1.10.0rc2"
 }

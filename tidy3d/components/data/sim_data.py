@@ -10,6 +10,7 @@ from .monitor_data import MonitorDataTypes, MonitorDataType, AbstractFieldData
 from ..base import Tidy3dBaseModel
 from ..simulation import Simulation
 from ..boundary import BlochBoundary
+from ..source import TFSF
 from ..types import Ax, Axis, annotate_type, Literal, PlotVal
 from ..viz import equal_aspect, add_ax_if_none
 from ...log import DataError, log, Tidy3dKeyError, ValidationError
@@ -128,6 +129,7 @@ class SimulationData(Tidy3dBaseModel):
         boundaries = self.simulation.boundary_spec.to_list
         boundaries_1d = [boundary_1d for dim_boundary in boundaries for boundary_1d in dim_boundary]
         complex_fields = any(isinstance(boundary, BlochBoundary) for boundary in boundaries_1d)
+        complex_fields = complex_fields and not isinstance(source, TFSF)
 
         # plug in mornitor_data frequency domain information
         def source_spectrum_fn(freqs):

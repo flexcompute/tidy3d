@@ -1067,6 +1067,194 @@ def test_mode_object_syms():
     )
 
 
+def test_tfsf_symmetry():
+    """Test that a TFSF source cannot be set in the presence of symmetries."""
+    src_time = td.GaussianPulse(freq0=1, fwidth=0.1)
+
+    source = td.TFSF(
+        size=[1, 1, 1],
+        source_time=src_time,
+        pol_angle=0,
+        angle_theta=np.pi / 4,
+        angle_phi=np.pi / 6,
+        direction="+",
+        injection_axis=2,
+    )
+
+    with pytest.raises(pydantic.ValidationError) as e:
+        _ = td.Simulation(
+            size=(2.0, 2.0, 2.0),
+            grid_spec=td.GridSpec.auto(wavelength=td.C_0 / 1.0),
+            run_time=1e-12,
+            symmetry=(0, -1, 0),
+            sources=[source],
+        )
+
+
+def test_tfsf_boundaries(caplog):
+    """Test that a TFSF source is allowed to cross boundaries only in particular cases."""
+    src_time = td.GaussianPulse(freq0=td.C_0, fwidth=0.1)
+
+    source = td.TFSF(
+        size=[1, 1, 1],
+        source_time=src_time,
+        pol_angle=0,
+        angle_theta=np.pi / 4,
+        angle_phi=np.pi / 6,
+        direction="+",
+        injection_axis=2,
+    )
+
+    # can cross periodic boundaries in the transverse directions
+    _ = td.Simulation(
+        size=(2.0, 0.5, 2.0),
+        grid_spec=td.GridSpec.auto(wavelength=1.0),
+        run_time=1e-12,
+        sources=[source],
+    )
+
+    # can cross Bloch boundaries in the transverse directions
+    _ = td.Simulation(
+        size=(0.5, 0.5, 2.0),
+        grid_spec=td.GridSpec.auto(wavelength=1.0),
+        run_time=1e-12,
+        sources=[source],
+        boundary_spec=td.BoundarySpec(
+            x=td.Boundary.bloch_from_source(source=source, domain_size=0.5, axis=0, medium=None),
+            y=td.Boundary.bloch_from_source(source=source, domain_size=0.5, axis=1, medium=None),
+            z=td.Boundary.pml(),
+        ),
+    )
+
+    # warn if Bloch boundaries are crossed in the transverse directions but
+    # the Bloch vector is incorrect
+    _ = td.Simulation(
+        size=(0.5, 0.5, 2.0),
+        grid_spec=td.GridSpec.auto(wavelength=1.0),
+        run_time=1e-12,
+        sources=[source],
+        boundary_spec=td.BoundarySpec(
+            x=td.Boundary.bloch_from_source(
+                source=source, domain_size=0.5 * 1.1, axis=0, medium=None  # wrong domain size
+            ),
+            y=td.Boundary.bloch_from_source(
+                source=source, domain_size=0.5 * 1.1, axis=1, medium=None  # wrong domain size
+            ),
+            z=td.Boundary.pml(),
+        ),
+    )
+    assert_log_level(caplog, "warning")
+
+    # cannot cross any boundary in the direction of injection
+    with pytest.raises(pydantic.ValidationError) as e:
+        _ = td.Simulation(
+            size=(2.0, 2.0, 0.5),
+            grid_spec=td.GridSpec.auto(wavelength=1.0),
+            run_time=1e-12,
+            sources=[source],
+        )
+
+    # cannot cross any non-periodic boundary in the transverse direction
+    with pytest.raises(pydantic.ValidationError) as e:
+        _ = td.Simulation(
+            center=(0.5, 0, 0),  # also check the case when the boundary is crossed only on one side
+            size=(0.5, 0.5, 2.0),
+            grid_spec=td.GridSpec.auto(wavelength=1.0),
+            run_time=1e-12,
+            sources=[source],
+            boundary_spec=td.BoundarySpec(
+                x=td.Boundary.pml(),
+                y=td.Boundary.absorber(),
+            ),
+        )
+
+
+def test_tfsf_structures_grid(caplog):
+    """Test that a TFSF source is allowed to intersect structures only in particular cases."""
+    src_time = td.GaussianPulse(freq0=td.C_0, fwidth=0.1)
+
+    source = td.TFSF(
+        size=[1, 1, 1],
+        source_time=src_time,
+        pol_angle=0,
+        angle_theta=np.pi / 4,
+        angle_phi=np.pi / 6,
+        direction="+",
+        injection_axis=2,
+    )
+
+    # a non-uniform mesh along the transverse directions should issue a warning
+    sim = td.Simulation(
+        size=(2.0, 2.0, 2.0),
+        grid_spec=td.GridSpec.auto(wavelength=1.0),
+        run_time=1e-12,
+        sources=[source],
+        structures=[
+            td.Structure(
+                geometry=td.Box(center=(0, 0, -1), size=(0.5, 0.5, 0.5)),
+                medium=td.Medium(permittivity=2),
+            )
+        ],
+    )
+    sim.validate_pre_upload()
+    assert_log_level(caplog, "warning")
+
+    # must not have different material profiles on different faces along the injection axis
+    with pytest.raises(SetupError) as e:
+        sim = td.Simulation(
+            size=(2.0, 2.0, 2.0),
+            grid_spec=td.GridSpec.auto(wavelength=1.0),
+            run_time=1e-12,
+            sources=[source],
+            structures=[
+                td.Structure(
+                    geometry=td.Box(center=(0.5, 0, 0), size=(0.25, 0.25, 0.25)),
+                    medium=td.Medium(permittivity=2),
+                )
+            ],
+        )
+        sim.validate_pre_upload()
+
+    # different structures *are* allowed on different faces as long as material properties match
+    sim = td.Simulation(
+        size=(2.0, 2.0, 2.0),
+        grid_spec=td.GridSpec.auto(wavelength=1.0),
+        run_time=1e-12,
+        sources=[source],
+        structures=[
+            td.Structure(
+                geometry=td.Box(center=(0.5, 0, 0), size=(0.25, 0.25, 0.25)), medium=td.Medium()
+            )
+        ],
+    )
+    sim.validate_pre_upload()
+
+    # TFSF box must not intersect a custom medium
+    Nx, Ny, Nz = 10, 9, 8
+    X = np.linspace(-1, 1, Nx)
+    Y = np.linspace(-1, 1, Ny)
+    Z = np.linspace(-1, 1, Nz)
+    data = np.ones((Nx, Ny, Nz, 1))
+    eps_diagonal_data = td.ScalarFieldDataArray(data, coords=dict(x=X, y=Y, z=Z, f=[td.C_0]))
+    eps_components = {f"eps_{d}{d}": eps_diagonal_data for d in "xyz"}
+    eps_dataset = td.PermittivityDataset(**eps_components)
+    custom_medium = td.CustomMedium(eps_dataset=eps_dataset, name="my_medium")
+    sim = td.Simulation(
+        size=(2.0, 2.0, 2.0),
+        grid_spec=td.GridSpec.auto(wavelength=1.0),
+        run_time=1e-12,
+        sources=[source],
+        structures=[
+            td.Structure(
+                geometry=td.Box(center=(0.5, 0, 0), size=(td.inf, td.inf, 0.25)),
+                medium=custom_medium,
+            )
+        ],
+    )
+    with pytest.raises(SetupError) as e:
+        sim.validate_pre_upload()
+
+
 @pytest.mark.parametrize(
     "size, num_struct, log_level", [(1, 1, None), (50, 1, "warning"), (1, 11000, "warning")]
 )

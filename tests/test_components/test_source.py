@@ -117,7 +117,13 @@ def test_FieldSource():
 
     from tidy3d.components.source import TFSF
 
-    s = TFSF(size=(1, 1, 1), direction="+", source_time=g, injection_axis=2)
+    tfsf = td.TFSF(size=(1, 1, 1), direction="+", source_time=g, injection_axis=2)
+    _ = tfsf.injection_plane_center
+
+    # assert that TFSF must be volumetric
+    with pytest.raises(pydantic.ValidationError) as e_info:
+        _ = td.TFSF(size=(1, 1, 0), direction="+", source_time=g, injection_axis=2)
+
     # s.plot(z=0)
 
 

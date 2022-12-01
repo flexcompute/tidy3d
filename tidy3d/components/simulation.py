@@ -23,6 +23,7 @@ from .boundary import BoundarySpec, BlochBoundary, PECBoundary, PMCBoundary, Per
 from .boundary import PML, StablePML, Absorber, AbsorberSpec
 from .structure import Structure
 from .source import SourceType, PlaneWave, GaussianBeam, AstigmaticGaussianBeam, CustomFieldSource
+from .source import TFSF, Source
 from .monitor import MonitorType, Monitor, FreqMonitor
 from .monitor import AbstractFieldMonitor, DiffractionMonitor, AbstractFieldProjectionMonitor
 from .data.dataset import Dataset
@@ -286,7 +287,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         size = values.get("size")
         sim_medium = values.get("medium")
         structures = values.get("structures")
-        for src_idx, source in enumerate(sources):
+        for source in sources:
             if not isinstance(source, PlaneWave):
                 continue
 
@@ -309,36 +310,100 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
                 # check the Bloch boundary + angled plane wave case
                 num_bloch = sum(isinstance(bnd, BlochBoundary) for bnd in boundary)
                 if num_bloch > 0:
-                    # make a dummy Bloch boundary to check for correctness
-                    dummy_bnd = BlochBoundary.from_source(
-                        source=source, domain_size=size[tan_dir], axis=tan_dir, medium=medium
+                    cls._check_bloch_vec(
+                        source=source,
+                        bloch_vec=boundary[0].bloch_vec,
+                        dim=tan_dir,
+                        medium=medium,
+                        domain_size=size[tan_dir],
                     )
-                    expected_bloch_vec = dummy_bnd.bloch_vec
+        return val
 
-                    if boundary[0].bloch_vec != expected_bloch_vec:
-                        test_val = np.abs(expected_bloch_vec - boundary[0].bloch_vec)
+    @pydantic.validator("boundary_spec", always=True)
+    def tfsf_boundaries(cls, val, values):
+        """Error if the boundary conditions are compatible with TFSF sources, if any."""
+        boundaries = val.to_list
+        sources = values.get("sources")
+        size = values.get("size")
+        center = values.get("center")
+        sim_medium = values.get("medium")
+        structures = values.get("structures")
+        sim_bounds = [
+            [c - s / 2.0 for c, s in zip(center, size)],
+            [c + s / 2.0 for c, s in zip(center, size)],
+        ]
+        for src_idx, source in enumerate(sources):
+            if not isinstance(source, TFSF):
+                continue
 
-                        if np.isclose(test_val % 1, 0) and not np.isclose(test_val, 0):
-                            # the given Bloch vector is offset by an integer
-                            log.warning(
-                                f"The wave vector of source at index {src_idx} along dimension "
-                                f"{tan_dir} is equal to the Bloch vector of the simulation "
-                                "boundaries along that dimension plus an integer reciprocal "
-                                "lattice vector. If using a ``DiffractionMonitor``, diffraction "
-                                "order 0 will not correspond to the angle of propagation "
-                                "of the source. Consider using ``BlochBoundary.from_source()``."
-                            )
-                        elif not np.isclose(test_val % 1, 0):
-                            # the given Bloch vector is neither equal to the expected value, nor
-                            # off by an integer
-                            log.warning(
-                                f"The Bloch vector along dimension {tan_dir} may be incorrectly "
-                                f"set with respect to the source at index {src_idx}. The absolute "
-                                "difference between the expected and provided values in "
-                                "bandstructure units, up to an integer offset, is greater than "
-                                "1e-6. Consider using ``BlochBoundary.from_source()``, or "
-                                "double-check that it was defined correctly."
-                            )
+            norm_dir, tan_dirs = cls.pop_axis([0, 1, 2], axis=source.injection_axis)
+            src_bounds = source.bounds
+
+            # make a dummy source that represents the injection surface to get the intersecting
+            # medium, which is later used to test the Bloch vector for correctness
+            temp_size = list(source.size)
+            temp_size[source.injection_axis] = 0
+            temp_src = Source(
+                center=source.injection_plane_center,
+                size=temp_size,
+                source_time=source.source_time,
+            )
+            medium_set = cls.intersecting_media(temp_src, structures)
+            medium = medium_set.pop() if medium_set else sim_medium
+
+            # the source shouldn't touch or cross any boundary in the direction of injection
+            if (
+                src_bounds[0][norm_dir] <= sim_bounds[0][norm_dir]
+                or src_bounds[1][norm_dir] >= sim_bounds[1][norm_dir]
+            ):
+                raise SetupError(
+                    f"The TFSF source at index '{src_idx}' must not touch or cross the "
+                    f"simulation boundary along its injection axis, '{['x', 'y', 'z'][norm_dir]}'."
+                )
+
+            for tan_dir in tan_dirs:
+                boundary = boundaries[tan_dir]
+
+                # if the boundary is periodic, the source is allowed to cross the boundary
+                # so nothing needs to be done
+                num_pbc = sum(isinstance(bnd, Periodic) for bnd in boundary)
+                if num_pbc == 2:
+                    continue
+
+                # crossing may be allowed for Bloch boundaries, but not others
+                if (
+                    src_bounds[0][tan_dir] <= sim_bounds[0][tan_dir]
+                    or src_bounds[1][tan_dir] >= sim_bounds[1][tan_dir]
+                ):
+                    # if the boundary is Bloch periodic, crossing is allowed, but check that the
+                    # Bloch vector has been correctly set, similar to the check for plane waves
+                    num_bloch = sum(isinstance(bnd, BlochBoundary) for bnd in boundary)
+                    if num_bloch == 2:
+                        cls._check_bloch_vec(
+                            source=source,
+                            bloch_vec=boundary[0].bloch_vec,
+                            dim=tan_dir,
+                            medium=medium,
+                            domain_size=size[tan_dir],
+                        )
+                        continue
+
+                    # for any other boundary, the source must not cross the boundary
+                    raise SetupError(
+                        f"The TFSF source at index '{src_idx}' must not touch or cross the "
+                        f"simulation boundary in the '{['x', 'y', 'z'][tan_dir]}' direction, "
+                        "unless that boundary is 'Periodic' or 'BlochBoundary'."
+                    )
+
+        return val
+
+    @pydantic.validator("sources", always=True)
+    def tfsf_with_symmetry(cls, val, values):
+        """Error if a TFSF source is applied with symmetry"""
+        symmetry = values.get("symmetry")
+        for source in val:
+            if isinstance(source, TFSF) and not all(sym == 0 for sym in symmetry):
+                raise SetupError("TFSF sources cannot be used with symmetries.")
         return val
 
     @pydantic.validator("boundary_spec", always=True)
@@ -537,7 +602,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
 
     @pydantic.validator("monitors", always=True)
     def diffraction_monitor_boundaries(cls, val, values):
-        """If any :class:`DiffractionMonitor` exists, ensure boundary conditions in the
+        """If any :class:`.DiffractionMonitor` exists, ensure boundary conditions in the
         transverse directions are periodic or Bloch."""
         monitors = val
         boundary_spec = values.get("boundary_spec")
@@ -622,7 +687,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
 
     @pydantic.validator("monitors", always=True)
     def diffraction_monitor_medium(cls, val, values):
-        """If any :class:`DiffractionMonitor` exists, ensure is does not lie in a lossy medium."""
+        """If any :class:`.DiffractionMonitor` exists, ensure is does not lie in a lossy medium."""
         monitors = val
         structures = values.get("structures")
         medium = values.get("medium")
@@ -735,6 +800,8 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         self._validate_size()
         self._validate_monitor_size()
         self._validate_datasets_not_none()
+        self._validate_tfsf_structure_intersections()
+        self._validate_tfsf_nonuniform_grid()
         # self._validate_run_time()
 
     def _validate_size(self) -> None:
@@ -794,15 +861,127 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
                 "data, use hdf5 format instead."
             )
 
+    def _validate_tfsf_structure_intersections(self) -> None:
+        """Error if the 4 sidewalls of a TFSF box don't all intersect the same structures.
+        This validator may need to compute permittivities on the grid, so it is called
+        pre-upload rather than at the time of definition. Also errors if any side wall
+        intersects with a custom medium.
+        """
+        for source in self.sources:
+            if not isinstance(source, TFSF):
+                continue
+            # get all TFSF surfaces
+            tfsf_surfaces = Source.surfaces(
+                center=source.center, size=source.size, source_time=source.source_time
+            )
+            sidewall_surfaces = []
+            sidewall_structs = []
+            # get the structures that intersect each sidewall
+            for surface in tfsf_surfaces:
+                if surface.name[-2] != "xyz"[source.injection_axis]:
+                    sidewall_surfaces.append(surface)
+                    intersecting_structs = self.intersecting_structures(
+                        test_object=surface, structures=self.structures
+                    )
+
+                    if any(
+                        isinstance(struct.medium, CustomMedium) for struct in intersecting_structs
+                    ):
+                        raise SetupError(
+                            f"The surfaces of TFSF source '{source.name}' must not intersect "
+                            "any structures containing a 'CustomMedium'."
+                        )
+
+                    # if no structures intersect, just add a phantom associated with the simulation
+                    # background, to prevent false positives below
+                    if not intersecting_structs:
+                        sidewall_structs.append(
+                            [
+                                Structure(
+                                    geometry=Box(center=self.center, size=self.size),
+                                    medium=self.medium,
+                                )
+                            ]
+                        )
+                    else:
+                        sidewall_structs.append(intersecting_structs)
+
+            # let the first wall be a reference, and compare the rest of them to the structures
+            # intersected by that reference wall
+            if len(sidewall_structs) > 1:
+                ref_structs = sidewall_structs[0]
+                test_structs = sidewall_structs[1:]
+                if all(structs == ref_structs for structs in test_structs):
+                    continue
+
+                # if the == test doesn't pass, that doesn't mean the materials are necessarily
+                # different, because it's possible that the sidewalls encounter different
+                # `Structure` objects but with an identical material profile, which is still
+                # a valid setup; in this case, compute the epsilon profile on the grid for each
+                # side wall - the profiles must be the same along the injection axis, so we take
+                # a single "stripe" of epsilon as the reference and subtract it from all other
+                # stripes, which should result in zero if all the epsilon profiles are the same
+                _, plane_axs = source.pop_axis("xyz", axis=source.injection_axis)
+                ref_eps = self.epsilon(box=sidewall_surfaces[0], coord_key="centers", freq=None)
+                kwargs = {plane_axs[0]: 0, plane_axs[1]: 0}
+                ref_eps = ref_eps.isel(**kwargs)
+                for surface in sidewall_surfaces:
+                    test_eps = self.epsilon(box=surface, coord_key="centers", freq=None) - ref_eps
+                    if not np.allclose(test_eps.to_numpy(), 0):
+                        raise SetupError(
+                            f"All sidewalls of the TFSF source '{source.name}' must intersect "
+                            "the same media along the injection axis "
+                            f" '{'xyz'[source.injection_axis]}'."
+                        )
+
+    def _validate_tfsf_nonuniform_grid(self) -> None:
+        """Warn if the grid is nonuniform along the directions tangential to the injection plane,
+        inside the TFSF box.
+        """
+        # if the grid is uniform in all directions, there's no need to proceed
+        if not (self.grid_spec.auto_grid_used or self.grid_spec.custom_grid_used):
+            return
+
+        for source in self.sources:
+            if not isinstance(source, TFSF):
+                continue
+
+            centers = self.grid.centers.to_list
+            sizes = self.grid.sizes.to_list
+            tfsf_bounds = source.bounds
+            _, plane_inds = source.pop_axis([0, 1, 2], axis=source.injection_axis)
+            grid_list = [self.grid_spec.grid_x, self.grid_spec.grid_y, self.grid_spec.grid_z]
+            for ind in plane_inds:
+                grid_type = grid_list[ind]
+                if isinstance(grid_type, UniformGrid):
+                    continue
+
+                sizes_in_tfsf = [
+                    size
+                    for size, center in zip(sizes[ind], centers[ind])
+                    if tfsf_bounds[0][ind] <= center <= tfsf_bounds[1][ind]
+                ]
+
+                # check if all the grid sizes are sufficiently unequal
+                if not np.all(np.isclose(sizes_in_tfsf, sizes_in_tfsf[0])):
+                    log.warning(
+                        f"The grid is nonuniform along the '{'xyz'[ind]}' axis, which may lead "
+                        "to sub-optimal cancellation of the incident field in the scattered-field "
+                        "region for the total-field scattered-field (TFSF) source "
+                        f"'{source.name}'. For best results, we recomended ensuring a uniform "
+                        "grid in both directions tangential to the TFSF injection axis, "
+                        f"'{'xyz'[source.injection_axis]}'. "
+                    )
+
     """ Accounting """
 
     @cached_property
     def mediums(self) -> Set[MediumType]:
-        """Returns set of distinct :class:`AbstractMedium` in simulation.
+        """Returns set of distinct :class:`.AbstractMedium` in simulation.
 
         Returns
         -------
-        List[:class:`AbstractMedium`]
+        List[:class:`.AbstractMedium`]
             Set of distinct mediums in the simulation.
         """
         medium_dict = {self.medium: None}
@@ -812,11 +991,12 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
     @cached_property
     def medium_map(self) -> Dict[MediumType, pydantic.NonNegativeInt]:
         """Returns dict mapping medium to index in material.
-        ``medium_map[medium]`` returns unique global index of :class:`AbstractMedium` in simulation.
+        ``medium_map[medium]`` returns unique global index of :class:`.AbstractMedium`
+        in simulation.
 
         Returns
         -------
-        Dict[:class:`AbstractMedium`, int]
+        Dict[:class:`.AbstractMedium`, int]
             Mapping between distinct mediums to index in simulation.
         """
 
@@ -831,7 +1011,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
 
     @cached_property
     def background_structure(self) -> Structure:
-        """Returns structure representing the background of the :class:`Simulation`."""
+        """Returns structure representing the background of the :class:`.Simulation`."""
         geometry = Box(size=(inf, inf, inf))
         return Structure(geometry=geometry, medium=self.medium)
 
@@ -839,20 +1019,20 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
     def intersecting_media(
         test_object: Box, structures: Tuple[Structure, ...]
     ) -> Tuple[MediumType, ...]:
-        """From a given list of structures, returns a list of :class:`AbstractMedium` associated
+        """From a given list of structures, returns a list of :class:`.AbstractMedium` associated
         with those structures that intersect with the ``test_object``, if it is a surface, or its
         surfaces, if it is a volume.
 
         Parameters
         -------
-        test_object : :class:`Box`
+        test_object : :class:`.Box`
             Object for which intersecting media are to be detected.
-        structures : List[:class:`AbstractMedium`]
+        structures : List[:class:`.AbstractMedium`]
             List of structures whose media will be tested.
 
         Returns
         -------
-        List[:class:`AbstractMedium`]
+        List[:class:`.AbstractMedium`]
             Set of distinct mediums that intersect with the given planar object.
         """
         if test_object.size.count(0.0) == 1:
@@ -862,35 +1042,113 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
             return mediums
 
         # if the test object is a volume, test each surface recursively
-        object_dict = test_object.dict()
-        exclude_surfaces = object_dict.pop("exclude_surfaces", None)
-        surfaces = test_object.surfaces(**object_dict)
-        if exclude_surfaces:
-            surfaces = [surf for surf in surfaces if surf.name[-2:] not in exclude_surfaces]
+        surfaces = test_object.surfaces_with_exclusion(**test_object.dict())
         mediums = set()
         for surface in surfaces:
             _mediums = Simulation.intersecting_media(surface, structures)
             mediums.update(_mediums)
         return mediums
 
+    @staticmethod
+    def intersecting_structures(
+        test_object: Box, structures: Tuple[Structure, ...]
+    ) -> Tuple[Structure, ...]:
+        """From a given list of structures, returns a list of :class:`.Structure` that intersect
+        with the ``test_object``, if it is a surface, or its surfaces, if it is a volume.
+
+        Parameters
+        -------
+        test_object : :class:`.Box`
+            Object for which intersecting media are to be detected.
+        structures : List[:class:`.AbstractMedium`]
+            List of structures whose media will be tested.
+
+        Returns
+        -------
+        List[:class:`.Structure`]
+            Set of distinct structures that intersect with the given surface, or with the surfaces
+            of the given volume.
+        """
+        if test_object.size.count(0.0) == 1:
+            # get all merged structures on the test_object, which is already planar
+            normal_axis_index = test_object.size.index(0.0)
+            dim = "xyz"[normal_axis_index]
+            pos = test_object.center[normal_axis_index]
+            xyz_kwargs = {dim: pos}
+
+            structures_merged = []
+            for structure in structures:
+                intersections = structure.geometry.intersections_plane(**xyz_kwargs)
+                if len(intersections) > 0:
+                    structures_merged.append(structure)
+            return structures_merged
+
+        # if the test object is a volume, test each surface recursively
+        surfaces = test_object.surfaces_with_exclusion(**test_object.dict())
+        structures_merged = []
+        for surface in surfaces:
+            structures_merged += Simulation.intersecting_structures(surface, structures)
+        return structures_merged
+
     def monitor_medium(self, monitor: MonitorType):
         """Return the medium in which the given monitor resides.
 
         Parameters
         -------
-        monitor : :class:`Monitor`
+        monitor : :class:`.Monitor`
             Monitor whose associated medium is to be returned.
 
         Returns
         -------
-        :class:`AbstractMedium`
-            Medium associated with the given :class:`Monitor`.
+        :class:`.AbstractMedium`
+            Medium associated with the given :class:`.Monitor`.
         """
         medium_set = self.intersecting_media(monitor, self.structures)
         if len(medium_set) > 1:
-            raise SetupError(f"Monitor {monitor.name} intersects more than one medium.")
+            raise SetupError(f"Monitor '{monitor.name}' intersects more than one medium.")
         medium = medium_set.pop() if medium_set else self.medium
         return medium
+
+    @staticmethod
+    def _check_bloch_vec(
+        source: SourceType,
+        bloch_vec: float,
+        dim: Axis,
+        medium: MediumType,
+        domain_size: float,
+    ):
+        """Helper to check if a given Bloch vector is consistent with a given source."""
+
+        # make a dummy Bloch boundary to check for correctness
+        dummy_bnd = BlochBoundary.from_source(
+            source=source, domain_size=domain_size, axis=dim, medium=medium
+        )
+        expected_bloch_vec = dummy_bnd.bloch_vec
+
+        if bloch_vec != expected_bloch_vec:
+            test_val = np.real(expected_bloch_vec - bloch_vec)
+
+            if np.isclose(test_val % 1, 0) and not np.isclose(test_val, 0):
+                # the given Bloch vector is offset by an integer
+                log.warning(
+                    f"The wave vector of source '{source.name}' along dimension "
+                    f"'{dim}' is equal to the Bloch vector of the simulation "
+                    "boundaries along that dimension plus an integer reciprocal "
+                    "lattice vector. If using a 'DiffractionMonitor', diffraction "
+                    "order 0 will not correspond to the angle of propagation "
+                    "of the source. Consider using 'BlochBoundary.from_source()'."
+                )
+            elif not np.isclose(test_val % 1, 0):
+                # the given Bloch vector is neither equal to the expected value, nor
+                # off by an integer
+                log.warning(
+                    f"The Bloch vector along dimension '{dim}' may be incorrectly "
+                    f"set with respect to the source '{source.name}'. The absolute "
+                    "difference between the expected and provided values in "
+                    "bandstructure units, up to an integer offset, is greater than "
+                    "1e-6. Consider using ``BlochBoundary.from_source()``, or "
+                    "double-check that it was defined correctly."
+                )
 
     """ Plotting """
 
@@ -1467,7 +1725,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         return pml_boxes
 
     def _make_pml_box(self, pml_axis: Axis, pml_height: float, sign: int) -> Box:
-        """Construct a :class:`Box` representing an arborbing boundary to be plotted."""
+        """Construct a :class:`.Box` representing an arborbing boundary to be plotted."""
         rmin, rmax = [list(bounds) for bounds in self.bounds_pml]
         if sign == -1:
             rmax[pml_axis] = rmin[pml_axis] + pml_height
@@ -1527,7 +1785,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         return plot_params
 
     def _make_symmetry_box(self, sym_axis: Axis) -> Box:
-        """Construct a :class:`Box` representing the symmetry to be plotted."""
+        """Construct a :class:`.Box` representing the symmetry to be plotted."""
         sym_box = self.simulation_geometry
         size = list(sym_box.size)
         size[sym_axis] /= 2
@@ -1765,7 +2023,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
 
         Parameters
         ----------
-        structures : List[:class:`Structure`]
+        structures : List[:class:`.Structure`]
             list of structures to filter on the plane.
         x : float = None
             position of plane in x direction, only one of x, y, z must be specified to define plane.
@@ -1776,7 +2034,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
 
         Returns
         -------
-        List[Tuple[:class:`AbstractMedium`, shapely.geometry.base.BaseGeometry]]
+        List[Tuple[:class:`.AbstractMedium`, shapely.geometry.base.BaseGeometry]]
             List of shapes and mediums on the plane.
         """
         medium_shapes = []
@@ -1797,7 +2055,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
 
         Parameters
         ----------
-        structures : List[:class:`Structure`]
+        structures : List[:class:`.Structure`]
             list of structures to filter on the plane.
         x : float = None
             position of plane in x direction, only one of x, y, z must be specified to define plane.
@@ -1808,7 +2066,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
 
         Returns
         -------
-        List[Tuple[:class:`AbstractMedium`, shapely.geometry.base.BaseGeometry]]
+        List[Tuple[:class:`.AbstractMedium`, shapely.geometry.base.BaseGeometry]]
             List of shapes and mediums on the plane after merging.
         """
 
@@ -1915,8 +2173,8 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
 
         Returns
         -------
-        :class:`Grid`
-            :class:`Grid` storing the spatial locations relevant to the simulation.
+        :class:`.Grid`
+            :class:`.Grid` storing the spatial locations relevant to the simulation.
         """
 
         # Add a simulation Box as the first structure
@@ -1995,12 +2253,12 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
 
         Parameters
         ----------
-        box : :class:`Box`
+        box : :class:`.Box`
             Rectangular geometry.
 
         Returns
         -------
-        new_box : :class:`Box`
+        new_box : :class:`.Box`
             The smallest Box such that any point in ``box`` is either in ``new_box`` or can be
             mapped from ``new_box`` using the simulation symmetries.
         """
@@ -2035,7 +2293,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
 
         Parameters
         ----------
-        box : :class:`Box`
+        box : :class:`.Box`
             Rectangular geometry within simulation to discretize.
         snap_zero_dim : bool
             If ``True``, and the ``box`` has size zero along a given direction, the ``grid`` is
@@ -2078,7 +2336,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
 
         Parameters
         ----------
-        box : :class:`Box`
+        box : :class:`.Box`
             Rectangular geometry specifying where to measure the permittivity.
         coord_key : str = 'centers'
             Specifies at what part of the grid to return the permittivity at.
@@ -2111,7 +2369,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
 
         Parameters
         ----------
-        grid : :class:`Grid`
+        grid : :class:`.Grid`
             Grid specifying where to measure the permittivity.
         coord_key : str = 'centers'
             Specifies at what part of the grid to return the permittivity at.
