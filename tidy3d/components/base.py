@@ -1,3 +1,4 @@
+# pylint:disable=too-many-public-methods
 """global configuration / base class for pydantic models used to make simulation."""
 from __future__ import annotations
 
@@ -77,6 +78,10 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         kwargs.update(dict(deep=True))
         new_copy = pydantic.BaseModel.copy(self, **kwargs)
         return self.validate(new_copy.dict())
+
+    def updated_copy(self, **kwargs) -> Tidy3dBaseModel:
+        """Make copy of a component instance with ``**kwargs`` indicating updated field values."""
+        return self.copy(update=kwargs)
 
     def help(self, methods: bool = False) -> None:
         """Prints message describing the fields and methods of a :class:`Tidy3dBaseModel`.
