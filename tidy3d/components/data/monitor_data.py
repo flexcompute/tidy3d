@@ -930,6 +930,17 @@ class AbstractFieldProjectionData(MonitorData):
         data_arrays = tuple(map(self.make_data_array, vals))
         return xr.Dataset(dict(zip(keys, data_arrays)))
 
+    def make_renormalized_data(
+        self, phase: np.ndarray, proj_distance: float
+    ) -> AbstractFieldProjectionData:
+        """Helper to apply the re-projection phase to a copied dataset."""
+        new_data = self.copy()
+        for field in new_data.field_components.values():
+            field.values *= phase
+            if "r" in self.coords.keys():
+                field["r"] = np.atleast_1d(proj_distance)
+        return new_data
+
     def normalize(
         self, source_spectrum_fn: Callable[[float], complex]
     ) -> AbstractFieldProjectionData:
@@ -1143,14 +1154,20 @@ class FieldProjectionAngleData(AbstractFieldProjectionData):
         """Azimuthal angles."""
         return self.Etheta.phi.values
 
-    def renormalize_fields(self, proj_distance: float):
-        """Re-normalize stored fields to a new projection distance by applying a phase factor
-        based on ``proj_distance``.
+    def renormalize_fields(self, proj_distance: float) -> FieldProjectionAngleData:
+        """Return a :class:`.FieldProjectionAngleData` with fields re-normalized to a new
+        projection distance, by applying a phase factor based on ``proj_distance``.
 
         Parameters
         ----------
         proj_distance : float = None
             (micron) new radial distance relative to the monitor's local origin.
+
+        Returns
+        -------
+        :class:`.FieldProjectionAngleData`
+            Copy of this :class:`.FieldProjectionAngleData` with fields re-projected
+            to ``proj_distance``.
         """
         if self.monitor and not self.monitor.far_field_approx:
             raise DataError(
@@ -1169,9 +1186,7 @@ class FieldProjectionAngleData(AbstractFieldProjectionData):
         phase = new_phase[None, None, None, :] / old_phase
 
         # compute updated fields and their coordinates
-        for field in self.field_components.values():
-            field.values *= phase
-            field["r"] = np.atleast_1d(proj_distance)
+        return self.make_renormalized_data(phase, proj_distance)
 
 
 class FieldProjectionCartesianData(AbstractFieldProjectionData):
@@ -1257,14 +1272,20 @@ class FieldProjectionCartesianData(AbstractFieldProjectionData):
         """Z positions."""
         return self.Etheta.z.values
 
-    def renormalize_fields(self, proj_distance: float):
-        """Re-normalize stored fields to a new projection distance by applying a phase factor
-        based on ``proj_distance``.
+    def renormalize_fields(self, proj_distance: float) -> FieldProjectionCartesianData:
+        """Return a :class:`.FieldProjectionCartesianData` with fields re-normalized to a new
+        projection distance, by applying a phase factor based on ``proj_distance``.
 
         Parameters
         ----------
         proj_distance : float = None
             (micron) new plane distance relative to the monitor's local origin.
+
+        Returns
+        -------
+        :class:`.FieldProjectionCartesianData`
+            Copy of this :class:`.FieldProjectionCartesianData` with fields re-projected
+            to ``proj_distance``.
         """
         if not self.monitor.far_field_approx:
             raise DataError(
@@ -1290,8 +1311,7 @@ class FieldProjectionCartesianData(AbstractFieldProjectionData):
         phase = new_phase / old_phase
 
         # compute updated fields and their coordinates
-        for field in self.field_components.values():
-            field.values *= phase
+        return self.make_renormalized_data(phase, proj_distance)
 
 
 class FieldProjectionKSpaceData(AbstractFieldProjectionData):
@@ -1376,14 +1396,20 @@ class FieldProjectionKSpaceData(AbstractFieldProjectionData):
         """Radial distance."""
         return self.Etheta.r.values
 
-    def renormalize_fields(self, proj_distance: float):
-        """Re-normalize stored fields to a new projection distance by applying a phase factor
-        based on ``proj_distance``.
+    def renormalize_fields(self, proj_distance: float) -> FieldProjectionKSpaceData:
+        """Return a :class:`.FieldProjectionKSpaceData` with fields re-normalized to a new
+        projection distance, by applying a phase factor based on ``proj_distance``.
 
         Parameters
         ----------
         proj_distance : float = None
             (micron) new radial distance relative to the monitor's local origin.
+
+        Returns
+        -------
+        :class:`.FieldProjectionKSpaceData`
+            Copy of this :class:`.FieldProjectionKSpaceData` with fields re-projected
+            to ``proj_distance``.
         """
         if self.monitor and not self.monitor.far_field_approx:
             raise DataError(
@@ -1402,9 +1428,7 @@ class FieldProjectionKSpaceData(AbstractFieldProjectionData):
         phase = new_phase[None, None, None, :] / old_phase
 
         # compute updated fields and their coordinates
-        for field in self.field_components.values():
-            field.values *= phase
-            field["r"] = np.atleast_1d(proj_distance)
+        return self.make_renormalized_data(phase, proj_distance)
 
 
 # pylint: disable=too-many-public-methods
