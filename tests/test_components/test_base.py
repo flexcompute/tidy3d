@@ -100,3 +100,22 @@ def test_deep_copy():
     # new_geometry = s.geometry.copy(update=dict(size=(2,2,2)))
     # s_shallow = s_shallow.copy(update=dict(geometry=new_geometry))
     # assert id(s.geometry) == id(s_shallow.geometry)
+
+
+def test_updated_copy():
+    """Make sure updated copying shortcut works as expceted with defaults."""
+    b = td.Box(size=(1, 1, 1))
+    m = td.Medium(permittivity=1)
+
+    s = td.Structure(
+        geometry=b,
+        medium=m,
+    )
+
+    b2 = b.updated_copy(size=(2, 2, 2))
+    m2 = m.updated_copy(permittivity=2)
+    s2 = s.updated_copy(medium=m2, geometry=b2)
+    assert s2.geometry == b2
+    assert s2.medium == m2
+    s3 = s.updated_copy(**{"medium": m2, "geometry": b2})
+    assert s3 == s2
