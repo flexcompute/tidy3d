@@ -1,0 +1,275 @@
+{
+    "far_field": {
+        "type": "FieldProjectionKSpaceMonitor",
+        "Er": {
+            "data_location": {
+                "0": {
+                    "Real": {
+                        "path": "post_viz/data/983aa35a.h5.gz"
+                    },
+                    "Imaginary": {
+                        "path": "post_viz/data/7a49b638.h5.gz"
+                    },
+                    "Phase (rad)": {
+                        "path": "post_viz/data/00dc707a.h5.gz"
+                    },
+                    "Magnitude (abs)": {
+                        "path": "post_viz/data/d72d6b80.h5.gz"
+                    },
+                    "Intensity (abs^2)": {
+                        "path": "post_viz/data/a69658b9.h5.gz"
+                    }
+                }
+            },
+            "dims": [
+                "ux",
+                "uy",
+                "r",
+                "f"
+            ],
+            "type": "FieldProjectionKSpaceDataArray",
+            "complex_functions": [
+                "Real",
+                "Imaginary",
+                "Phase (rad)",
+                "Magnitude (abs)",
+                "Intensity (abs^2)"
+            ],
+            "data_selection": {
+                "0": 399723277507994.7
+            },
+            "denormalize_index": "f"
+        },
+        "Etheta": {
+            "data_location": {
+                "0": {
+                    "Real": {
+                        "path": "post_viz/data/b381c333.h5.gz"
+                    },
+                    "Imaginary": {
+                        "path": "post_viz/data/095aefc6.h5.gz"
+                    },
+                    "Phase (rad)": {
+                        "path": "post_viz/data/45894bd7.h5.gz"
+                    },
+                    "Magnitude (abs)": {
+                        "path": "post_viz/data/4433852e.h5.gz"
+                    },
+                    "Intensity (abs^2)": {
+                        "path": "post_viz/data/a4101690.h5.gz"
+                    }
+                }
+            },
+            "dims": [
+                "ux",
+                "uy",
+                "r",
+                "f"
+            ],
+            "type": "FieldProjectionKSpaceDataArray",
+            "complex_functions": [
+                "Real",
+                "Imaginary",
+                "Phase (rad)",
+                "Magnitude (abs)",
+                "Intensity (abs^2)"
+            ],
+            "data_selection": {
+                "0": 399723277507994.7
+            },
+            "denormalize_index": "f"
+        },
+        "Ephi": {
+            "data_location": {
+                "0": {
+                    "Real": {
+                        "path": "post_viz/data/3bbe5680.h5.gz"
+                    },
+                    "Imaginary": {
+                        "path": "post_viz/data/2c27ccd6.h5.gz"
+                    },
+                    "Phase (rad)": {
+                        "path": "post_viz/data/6a335589.h5.gz"
+                    },
+                    "Magnitude (abs)": {
+                        "path": "post_viz/data/8adff33d.h5.gz"
+                    },
+                    "Intensity (abs^2)": {
+                        "path": "post_viz/data/ba6494ed.h5.gz"
+                    }
+                }
+            },
+            "dims": [
+                "ux",
+                "uy",
+                "r",
+                "f"
+            ],
+            "type": "FieldProjectionKSpaceDataArray",
+            "complex_functions": [
+                "Real",
+                "Imaginary",
+                "Phase (rad)",
+                "Magnitude (abs)",
+                "Intensity (abs^2)"
+            ],
+            "data_selection": {
+                "0": 399723277507994.7
+            },
+            "denormalize_index": "f"
+        },
+        "Hr": {
+            "data_location": {
+                "0": {
+                    "Real": {
+                        "path": "post_viz/data/fe49514e.h5.gz"
+                    },
+                    "Imaginary": {
+                        "path": "post_viz/data/7fc0126d.h5.gz"
+                    },
+                    "Phase (rad)": {
+                        "path": "post_viz/data/725ce6d1.h5.gz"
+                    },
+                    "Magnitude (abs)": {
+                        "path": "post_viz/data/27573116.h5.gz"
+                    },
+                    "Intensity (abs^2)": {
+                        "path": "post_viz/data/a0ac99ab.h5.gz"
+                    }
+                }
+            },
+            "dims": [
+                "ux",
+                "uy",
+                "r",
+                "f"
+            ],
+            "type": "FieldProjectionKSpaceDataArray",
+            "complex_functions": [
+                "Real",
+                "Imaginary",
+                "Phase (rad)",
+                "Magnitude (abs)",
+                "Intensity (abs^2)"
+            ],
+            "data_selection": {
+                "0": 399723277507994.7
+            },
+            "denormalize_index": "f"
+        },
+        "Htheta": {
+            "data_location": {
+                "0": {
+                    "Real": {
+                        "path": "post_viz/data/da445da4.h5.gz"
+                    },
+                    "Imaginary": {
+                        "path": "post_viz/data/753a1b83.h5.gz"
+                    },
+                    "Phase (rad)": {
+                        "path": "post_viz/data/851be4bd.h5.gz"
+                    },
+                    "Magnitude (abs)": {
+                        "path": "post_viz/data/c1adae32.h5.gz"
+                    },
+                    "Intensity (abs^2)": {
+                        "path": "post_viz/data/64fbac18.h5.gz"
+                    }
+                }
+            },
+            "dims": [
+                "ux",
+                "uy",
+                "r",
+                "f"
+            ],
+            "type": "FieldProjectionKSpaceDataArray",
+            "complex_functions": [
+                "Real",
+                "Imaginary",
+                "Phase (rad)",
+                "Magnitude (abs)",
+                "Intensity (abs^2)"
+            ],
+            "data_selection": {
+                "0": 399723277507994.7
+            },
+            "denormalize_index": "f"
+        },
+        "Hphi": {
+            "data_location": {
+                "0": {
+                    "Real": {
+                        "path": "post_viz/data/1c38d899.h5.gz"
+                    },
+                    "Imaginary": {
+                        "path": "post_viz/data/776eb281.h5.gz"
+                    },
+                    "Phase (rad)": {
+                        "path": "post_viz/data/35af6e18.h5.gz"
+                    },
+                    "Magnitude (abs)": {
+                        "path": "post_viz/data/16cd54c4.h5.gz"
+                    },
+                    "Intensity (abs^2)": {
+                        "path": "post_viz/data/610dc657.h5.gz"
+                    }
+                }
+            },
+            "dims": [
+                "ux",
+                "uy",
+                "r",
+                "f"
+            ],
+            "type": "FieldProjectionKSpaceDataArray",
+            "complex_functions": [
+                "Real",
+                "Imaginary",
+                "Phase (rad)",
+                "Magnitude (abs)",
+                "Intensity (abs^2)"
+            ],
+            "data_selection": {
+                "0": 399723277507994.7
+            },
+            "denormalize_index": "f"
+        },
+        "Power": {
+            "data_location": {
+                "0": {
+                    "path": "post_viz/data/7c484fcb.h5.gz"
+                }
+            },
+            "dims": [
+                "ux",
+                "uy",
+                "r",
+                "f"
+            ],
+            "type": "FieldProjectionKSpaceDataPowerPlotting",
+            "data_selection": {
+                "0": 399723277507994.7
+            },
+            "denormalize_index": "f"
+        },
+        "RCS": {
+            "data_location": {
+                "0": {
+                    "path": "post_viz/data/cbb86a17.h5.gz"
+                }
+            },
+            "dims": [
+                "ux",
+                "uy",
+                "r",
+                "f"
+            ],
+            "type": "FieldProjectionKSpaceDataRCSPlotting",
+            "data_selection": {
+                "0": 399723277507994.7
+            },
+            "denormalize_index": "f"
+        }
+    }
+}

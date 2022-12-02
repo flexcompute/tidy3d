@@ -160,9 +160,9 @@ Monitors
    ModeMonitor
    ModeSolverMonitor
    PermittivityMonitor
-   Near2FarCartesianMonitor
-   Near2FarAngleMonitor
-   Near2FarKSpaceMonitor
+   FieldProjectionCartesianMonitor
+   FieldProjectionAngleMonitor
+   FieldProjectionKSpaceMonitor
    DiffractionMonitor
 
 
@@ -190,6 +190,16 @@ Discretization
    Grid
 
 
+Field Projector
+===============
+
+.. autosummary::
+   :toctree: _autosummary/
+
+   FieldProjectionSurface
+   FieldProjector
+
+
 Output Data
 ===========
 
@@ -214,11 +224,9 @@ Collections of Data from single monitor
    FluxData
    FluxTimeData
    ModeData
-   Near2FarAngleData
-   Near2FarCartesianData
-   Near2FarKSpaceData
-   Near2FarSurface
-   FarFields
+   FieldProjectionAngleData
+   FieldProjectionCartesianData
+   FieldProjectionKSpaceData
    DiffractionData
 
 Individual Datasets
@@ -234,9 +242,9 @@ Individual Datasets
    ModeIndexDataArray
    FluxDataArray
    FluxTimeDataArray
-   Near2FarAngleDataArray
-   Near2FarCartesianDataArray
-   Near2FarKSpaceDataArray
+   FieldProjectionAngleDataArray
+   FieldProjectionCartesianDataArray
+   FieldProjectionKSpaceDataArray
    DiffractionDataArray
 
 Logging

@@ -1,5 +1,5 @@
 {
-    "work_unit": 0.25,
-    "flex_unit": 0.1,
-    "pipelineWorkUnit": 0.1
+    "work_unit": 0.0625,
+    "flex_unit": 0.025,
+    "pipelineWorkUnit": 0.025
 }
