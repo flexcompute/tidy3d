@@ -881,7 +881,7 @@ class AbstractFieldProjectionData(MonitorData):
     @property
     def f(self) -> np.ndarray:
         """Frequencies."""
-        return self.Etheta.f.values
+        return np.array(self.Etheta.coords["f"])
 
     @property
     def coords(self) -> Dict[str, np.ndarray]:
@@ -1541,12 +1541,12 @@ class DiffractionData(AbstractFieldProjectionData):
     @property
     def orders_x(self) -> np.ndarray:
         """Allowed orders along x."""
-        return np.atleast_1d(self.Etheta.orders_x.values)
+        return np.atleast_1d(np.array(self.Etheta.coords["orders_x"]))
 
     @property
     def orders_y(self) -> np.ndarray:
         """Allowed orders along y."""
-        return np.atleast_1d(self.Etheta.orders_y.values)
+        return np.atleast_1d(np.array(self.Etheta.coords["orders_y"]))
 
     @property
     def reciprocal_vectors(self) -> Tuple[np.ndarray, np.ndarray]:
