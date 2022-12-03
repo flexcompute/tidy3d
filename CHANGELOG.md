@@ -7,6 +7,87 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+## [1.8.0] - 2022-12-xx
+
+### Added
+- `CustomFieldSource` that can inject arbitrary source fields.
+- `ElectromagneticFieldData.flux` property for data corresponding to 2D monitors, and `ElectromagneticFieldData.dot`
+method for computing the overlap integral over two sets of frequency-domain field data.
+
+### Changed
+- Minimum flex unit charge reduced from `0.1` to `0.025`.
+- Default courant factor was changed from `0.9` to `0.99`.
+- Data corresponding to 2D monitors is renormalized by the solver to hide as much as possible the specifics coming from the finite numerical grid.
+- A point dipole source placed on a symmetry plane now always has twice the amplitude of the same source in a simulation without the 
+ symmetry plane, as expected by continuity with the case when the dipole is slightly off the symmetry plane, in which case 
+ there are effectively two dipoles, the original one and its mirror image. Previously, the amplitude was only doubled for dipoles polarized normal 
+ to the plane, because of Yee grid specifics.
+
+### Fixed
+- Some issues in `DiffractionMonitor` that is not `z`-normal that could lead to solver errors or wrong results.
+- Bug leading to solver error when `Absorber` boundaries with `num_layers = 0` are used.
+- Bug leading to solver error when a `FieldMonitor` crosses a `BlochBoundary` and not all field components are recorded.
+
+
+### Removed
+- 
+
+<!-- TYLER -->
+
+### Added
+-
+
+### Changed
+-
+
+### Fixed
+- 
+
+### Removed
+- 
+
+<!-- WEILIANG -->
+
+### Added
+-
+
+### Changed
+-
+
+### Fixed
+- 
+
+### Removed
+- 
+
+<!-- SHASHWAT -->
+
+### Added
+-
+
+### Changed
+-
+
+### Fixed
+- 
+
+### Removed
+- 
+
+<!-- DANIIL -->
+
+### Added
+-
+
+### Changed
+-
+
+### Fixed
+- 
+
+### Removed
+- 
+
 ## [1.7.1] - 2022-10-10
 
 ### Added
