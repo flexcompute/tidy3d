@@ -34,14 +34,23 @@ method for computing the overlap integral over two sets of frequency-domain fiel
 
 <!-- TYLER -->
 
+### Added or changed, but awaiting review / merge
+- New `.updated_copy(**kwargs)` method to all tidy3d objects to add a more convenient shortcut to copying an instance with updated fields, ie. `med.copy(update=dict(permittivity=3.0))` becomes `med.updated_copy(permittivity=3.0)`.
+- `Batch.run()` checks that `path_dir` exists before starting any tasks.
+
 ### Added
--
+- Test support for python 3.11.
+- Resonance finding feature to analyze `FieldTimeData` using harmonic inversion technique. Accessed through `tidy3d.plugins.ResonanceFinder`.
 
 ### Changed
--
+- Major refactor to internal handling of datastructures, including pure `Dataset` components that do not depend on `Tidy3D` objects and may be therefore used to define custom data in `Tidy3D` models.
+- Speed and memory usage improvement when writing and reading Tidy3d models to and from `.hdf5` files.
+- Writing `Tidy3D` models containing custom data to `.json` file will log a warning and exclude the raw data from the file for performance reasons.
 
 ### Fixed
-- 
+- Ignore shapely `STRtree` deprecation warning.
+- Ignore x axis when plotting 1D `Simulation` cross sections to avoid plot irregularities.
+- Local web api tests.
 
 ### Removed
 - 
