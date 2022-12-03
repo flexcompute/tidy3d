@@ -672,17 +672,21 @@ class ModeSolverData(ModeSolverDataset, ElectromagneticFieldData):
         fields = {}
         for field_name, field in self.field_components.items():
 
+            field_sorted = field.copy()
+
             # Apply phase shift
-            field.data = field.data * np.exp(-1j * phase[None, None, None, :, :])
+            field_sorted.data = field_sorted.data * np.exp(-1j * phase[None, None, None, :, :])
 
             # Rearrange modes
             for freq_id in range(num_freqs):
-                field.data[..., freq_id, :] = field.data[..., freq_id, sorting[freq_id, :]]
+                field_sorted.data[..., freq_id, :] = field_sorted.data[
+                    ..., freq_id, sorting[freq_id, :]
+                ]
 
-            fields[field_name] = field
+            fields[field_name] = field_sorted
 
         # Rearrange propagation index data
-        index_data = self.n_complex
+        index_data = self.n_complex.copy()
         for freq_id in range(num_freqs):
             index_data.data[freq_id, :] = index_data.data[freq_id, sorting[freq_id, :]]
 
