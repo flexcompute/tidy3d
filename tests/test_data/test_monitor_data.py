@@ -428,9 +428,8 @@ def test_mode_solver_data_sort():
     # test sorting function
     data = make_mode_solver_data()
     data_first = data.overlap_sort(track_freq="lowest")
-    data_last = data.overlap_sort(track_freq="highest")
-    data_center = data.overlap_sort(track_freq="central")
-    # these are probably not the best tests
-    assert data_first.field_components == data.field_components
+    data_last = data_first.overlap_sort(track_freq="highest")
+    data_center = data_first.overlap_sort(track_freq="central")
+    # check repeated sorting doesn't change anything
     assert data_first.field_components == data_last.field_components
     assert data_first.field_components == data_center.field_components
