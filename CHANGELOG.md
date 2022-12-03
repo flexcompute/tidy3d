@@ -7,6 +7,69 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+## [1.8.0] - 2022-12-xx
+
+### Added
+- `CustomFieldSource` that can inject arbitrary source fields.
+- `ElectromagneticFieldData.flux` property for data corresponding to 2D monitors, and `ElectromagneticFieldData.dot`
+method for computing the overlap integral over two sets of frequency-domain field data.
+- Data corresponding to 2D `FieldMonitor` and `FieldTimeMonitor`, as well as to `ModeSolverMonitor`, now also stores `grid_correction` data
+ related to the finite grid along the normal direction. This needs to be taken into account to avoid e.g. numerical oscillations of the flux
+ with the exact position of the monitor that is due to the interpolation from the grid cell boundaries. These corrections are automatically
+ applied when using the `flux` and `dot` methods.
+- Resonance finding plugin for estimating resonance frequency and Q-factor of multiple resonances from time-domain data.
+ Accessed through `tidy3d.plugins.ResonanceFinder`.
+- New `.updated_copy(**kwargs)` method to all tidy3d objects to add a more convenient shortcut to copying an instance with updated fields, 
+ i.e. `med.copy(update=dict(permittivity=3.0))` becomes `med.updated_copy(permittivity=3.0)`.
+- Test support for python 3.11.
+- `sidewall_angle` option for `Cylinder` that allows a `Cylinder` to be tuned into a conical frustum or a cone.
+- `reference_plane` for `PolySlab` that provides options to define the vertices at the bottom, middle, or top of the `PolySlab`.
+- Automesh generation: `MeshOverrideStructure` that allows for a direct grid size specification in override structures,
+ and `global_min_dl` that bounds the minimal grid size.
+- More material models to the material database such as gold from Olman2012.
+- In `AdvancedFitterParam` for `StableDispersionFitter`, `random_seed` option to set the random seed,
+ and `bound_f_lower` to set the lower bound of pole frequency.
+- Introduced the option to project fields at near, intermediate, and far distances using an exact Green's function formalism which does not
+ make far-field approximations. This can be enabled in any `AbstractFieldProjectionMonitor` by setting `far_field_approx=False`. A tutorial notebook
+ as a comprehensive reference for field projections was added to the documentation.
+- Tracking of modes in `ModeSolverData` based on overlap values, controlled through `ModeSpec.track_freq`.
+- Native broadband support for `GassuainBeam` `AstigmaticGaussianBeam`, and `ModeSource` through the `num_freqs` argument.
+- Apodization option for frequency-domain monitors to ignore temporal data in the beginning and/or end of a simulation
+
+
+### Changed
+- Minimum flex unit charge reduced from `0.1` to `0.025`.
+- Default courant factor was changed from `0.9` to `0.99`.
+- A point dipole source placed on a symmetry plane now always has twice the amplitude of the same source in a simulation without the 
+ symmetry plane, as expected by continuity with the case when the dipole is slightly off the symmetry plane, in which case 
+ there are effectively two dipoles, the original one and its mirror image. Previously, the amplitude was only doubled for dipoles polarized normal 
+ to the plane, because of Yee grid specifics.
+- `FluxMonitor` and `FluxTimeMonitor` no longer snap fields to centers, but instead provide continuous interpolation of the flux over the
+ exact geometry of the monitor.
+- Major refactor to internal handling of data structures, including pure `Dataset` components that do not depend on other `Tidy3D` components and may
+ therefore be used to define custom data in `Tidy3D` models.
+- Speed and memory usage improvement when writing and reading Tidy3d models to and from `.hdf5` files.
+- Writing `Tidy3D` models containing custom data to `.json` file will log a warning and exclude the raw data from the file for performance reasons.
+- Material database reorganization and fixing a few references to the dispersion data.
+- The name `Near2Far` has been replaced with `FieldProjection`. For example, `Near2FarAngleMonitor` is now `FieldProjectionAngleMonitor`.
+- The API for far field projections has been simplified and several methods have now become properties. 
+ For example, the radar cross section is now accessed as `.radar_cross_section`, not `.radar_cross_section()`.
+- Added a method `renormalize_fields` to `AbstractFieldProjectionData` to re-project far fields to different projection distances.
+- The API for `DiffractionData` was refactored to unify it with the API for `AbstractFieldProjectionData`.
+- The user no longer needs to supply `orders_x` and `orders_y` when creating a `DiffractionMonitor`; all allowed orders are automatically
+generated and returned in the resulting `DiffractionData`.
+
+
+### Fixed
+- Some issues in `DiffractionMonitor` that is not `z`-normal that could lead to solver errors or wrong results.
+- Bug leading to solver error when `Absorber` boundaries with `num_layers = 0` are used.
+- Bug leading to solver error when a `FieldMonitor` crosses a `BlochBoundary` and not all field components are recorded.
+- When running a `Batch`, `path_dir` is created if not existing.
+- Ignore shapely `STRtree` deprecation warning.
+- Ignore x axis when plotting 1D `Simulation` cross sections to avoid plot irregularities.
+- Local web api tests.
+ 
+
 ## [1.7.1] - 2022-10-10
 
 ### Added
