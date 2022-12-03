@@ -239,6 +239,13 @@ class Batch(WebContainer):
         "Set by ``Batch.upload``, leave as None.",
     )
 
+    @staticmethod
+    def _check_path_dir(path_dir: str) -> None:
+        """Make sure ``path_dir`` exists and create one if not."""
+
+        if not os.path.exists(path_dir):
+            os.makedirs(path_dir, exist_ok=True)
+
     def run(self, path_dir: str = DEFAULT_DATA_DIR) -> BatchData:
         """Upload and run each simulation in :class:`Batch`.
 
@@ -262,10 +269,10 @@ class Batch(WebContainer):
 
         ``bach_data`` does not store all of the :class:`.SimulationData` objects in memory,
         rather it iterates over the task names
-        and loads the corresponding :class:`.SimulationData` from file.
+        and loads the corresponding :class:`.SimulationData` from file one by one.
         If no file exists for that task, it downloads it.
         """
-
+        self._check_path_dir(path_dir)
         self.start()
         self.monitor()
         return self.load(path_dir=path_dir)
