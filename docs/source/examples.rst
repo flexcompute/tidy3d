@@ -38,6 +38,7 @@ Case studies
 
     notebooks/Near2FarSphereRCS
     notebooks/PlasmonicNanoparticle.ipynb
+    notebooks/PlasmonicYagiUdaNanoantenna
     notebooks/GratingEfficiency
     notebooks/BiosensorGrating.ipynb
     notebooks/BraggGratings.ipynb
