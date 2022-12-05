@@ -603,7 +603,7 @@ FusedSilica_Zemax_PMLStable = VariantItem(
 
 GaAs_Skauli2003 = VariantItem(
     medium=PoleResidue(
-        eps_inf=1,
+        eps_inf=5.372514,
         poles=[
             ((0.0 + 1j * 4250781024557878.5), (-0.0 - 1j * 1.1618961579876792e16)),
             ((0.0 + 1j * 2153617667595138.0), (-0.0 - 1j * 26166023937747.41)),
