@@ -219,3 +219,20 @@ def test_epsilon_eval():
 
     expected = {2e14: np.mean(eps_diag_2), 5e14: np.mean(eps_diag_5)}
     eps_compare(material, expected)
+
+    # Anisotropic material with dispersion
+    eps = 1.5
+    sig = 0.01
+    mediums = [
+        td.Medium(permittivity=eps, conductivity=sig),
+        td.PoleResidue(poles=poles_silver),
+        td.PoleResidue(poles=poles_silver),
+    ]
+    material = td.AnisotropicMedium(xx=mediums[0], yy=mediums[1], zz=mediums[2])
+
+    eps_diag_2 = material.eps_diagonal(2e14)
+    eps_diag_5 = material.eps_diagonal(5e14)
+    assert np.all(np.array(eps_diag_2) == np.array([medium.eps_model(2e14) for medium in mediums]))
+
+    expected = {2e14: np.mean(eps_diag_2), 5e14: np.mean(eps_diag_5)}
+    eps_compare(material, expected)
