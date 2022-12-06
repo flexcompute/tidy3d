@@ -3,6 +3,10 @@ import pytest
 import numpy as np
 import dill as pickle
 
+from tidy3d.components.simulation import Simulation
+from tidy3d.components.geometry import Box
+from tidy3d.components.structure import Structure
+from tidy3d.components.grid.grid_spec import GridSpec
 from tidy3d.components.source import CustomFieldSource, GaussianPulse
 from tidy3d.components.data.data_array import ScalarFieldDataArray
 from tidy3d.components.data.dataset import FieldDataset
@@ -55,6 +59,11 @@ def test_field_components():
     """Get Dictionary of field components and select some data."""
     for name, field in FIELD_SRC.field_dataset.field_components.items():
         _ = field.interp(x=0, y=0, z=0).sel(f=freqs[0])
+
+
+def test_custom_source_simulation():
+    """Test adding to simulation."""
+    sim = Simulation(run_time=1e-12, size=(1, 1, 1), sources=(FIELD_SRC,))
 
 
 def test_validator_tangential_field():
@@ -149,6 +158,22 @@ def test_medium_components():
     """Get Dictionary of field components and select some data."""
     for name, field in CUSTOM_MEDIUM.eps_dataset.field_components.items():
         _ = field.interp(x=0, y=0, z=0).sel(f=freqs[0])
+
+
+def test_custom_medium_simulation():
+    """Test adding to simulation."""
+
+    struct = Structure(
+        geometry=Box(size=(0.5, 0.5, 0.5)),
+        medium=CUSTOM_MEDIUM,
+    )
+
+    sim = Simulation(
+        run_time=1e-12,
+        size=(1, 1, 1),
+        grid_spec=GridSpec.auto(wavelength=1.0),
+        structures=(struct,),
+    )
 
 
 def test_medium_raw():
