@@ -8,7 +8,7 @@ import pydantic as pd
 import numpy as np
 
 from .base import Tidy3dBaseModel, cached_property
-from .types import PoleAndResidue, Ax, FreqBound
+from .types import PoleAndResidue, Ax, FreqBound, TYPE_TAG_STR
 from .viz import add_ax_if_none
 from .validators import validate_name_str
 from ..constants import C_0, pec_val, EPSILON_0
@@ -304,78 +304,6 @@ class Medium(AbstractMedium):
         """
         eps, sigma = AbstractMedium.nk_to_eps_sigma(n, k, freq)
         return cls(permittivity=eps, conductivity=sigma, **kwargs)
-
-
-class AnisotropicMedium(AbstractMedium):
-    """Diagonally anisotripic medium.
-
-    Note
-    ----
-    Only diagonal anisotropy and non-dispersive components are currently supported.
-
-    Example
-    -------
-    >>> medium_xx = Medium(permittivity=4.0)
-    >>> medium_yy = Medium(permittivity=4.1)
-    >>> medium_zz = Medium(permittivity=3.9)
-    >>> anisotropic_dielectric = AnisotropicMedium(xx=medium_xx, yy=medium_yy, zz=medium_zz)
-    """
-
-    xx: Medium = pd.Field(
-        ...,
-        title="XX Component",
-        description="Medium describing the xx-component of the diagonal permittivity tensor.",
-    )
-
-    yy: Medium = pd.Field(
-        ...,
-        title="YY Component",
-        description="Medium describing the yy-component of the diagonal permittivity tensor.",
-    )
-
-    zz: Medium = pd.Field(
-        ...,
-        title="ZZ Component",
-        description="Medium describing the zz-component of the diagonal permittivity tensor.",
-    )
-
-    @ensure_freq_in_range
-    def eps_model(self, frequency: float) -> complex:
-        """Complex-valued permittivity as a function of frequency."""
-
-        eps_xx = self.xx.eps_model(frequency)
-        eps_yy = self.yy.eps_model(frequency)
-        eps_zz = self.zz.eps_model(frequency)
-        return np.mean((eps_xx, eps_yy, eps_zz))
-
-    @ensure_freq_in_range
-    def eps_diagonal(self, frequency: float) -> Tuple[complex, complex, complex]:
-        """Main diagonal of the complex-valued permittivity tensor as a function of frequency."""
-
-        eps_xx = self.xx.eps_model(frequency)
-        eps_yy = self.yy.eps_model(frequency)
-        eps_zz = self.zz.eps_model(frequency)
-        return (eps_xx, eps_yy, eps_zz)
-
-    @add_ax_if_none
-    def plot(self, freqs: float, ax: Ax = None) -> Ax:
-        """Plot n, k of a :class:`Medium` as a function of frequency."""
-
-        freqs = np.array(freqs)
-        freqs_thz = freqs / 1e12
-
-        for label, medium_component in zip(("xx", "yy", "zz"), (self.xx, self.yy, self.zz)):
-
-            eps_complex = medium_component.eps_model(freqs)
-            n, k = AbstractMedium.eps_complex_to_nk(eps_complex)
-            ax.plot(freqs_thz, n, label=f"n, eps_{label}")
-            ax.plot(freqs_thz, k, label=f"k, eps_{label}")
-
-        ax.set_xlabel("frequency (THz)")
-        ax.set_title("medium dispersion")
-        ax.legend()
-        ax.set_aspect("auto")
-        return ax
 
 
 """ Dispersive Media """
@@ -754,6 +682,84 @@ class Debye(DispersiveMedium):
             frequency_range=self.frequency_range,
             name=self.name,
         )
+
+
+IsotropicMediumType = Union[Medium, PoleResidue, Sellmeier, Lorentz, Debye, Drude]
+
+
+class AnisotropicMedium(AbstractMedium):
+    """Diagonally anisotropic medium.
+
+    Note
+    ----
+    Only diagonal anisotropy is currently supported.
+
+    Example
+    -------
+    >>> medium_xx = Medium(permittivity=4.0)
+    >>> medium_yy = Medium(permittivity=4.1)
+    >>> medium_zz = Medium(permittivity=3.9)
+    >>> anisotropic_dielectric = AnisotropicMedium(xx=medium_xx, yy=medium_yy, zz=medium_zz)
+    """
+
+    xx: IsotropicMediumType = pd.Field(
+        ...,
+        title="XX Component",
+        description="Medium describing the xx-component of the diagonal permittivity tensor.",
+        discriminator=TYPE_TAG_STR,
+    )
+
+    yy: IsotropicMediumType = pd.Field(
+        ...,
+        title="YY Component",
+        description="Medium describing the yy-component of the diagonal permittivity tensor.",
+        discriminator=TYPE_TAG_STR,
+    )
+
+    zz: IsotropicMediumType = pd.Field(
+        ...,
+        title="ZZ Component",
+        description="Medium describing the zz-component of the diagonal permittivity tensor.",
+        discriminator=TYPE_TAG_STR,
+    )
+
+    @ensure_freq_in_range
+    def eps_model(self, frequency: float) -> complex:
+        """Complex-valued permittivity as a function of frequency."""
+
+        eps_xx = self.xx.eps_model(frequency)
+        eps_yy = self.yy.eps_model(frequency)
+        eps_zz = self.zz.eps_model(frequency)
+        return np.mean((eps_xx, eps_yy, eps_zz))
+
+    @ensure_freq_in_range
+    def eps_diagonal(self, frequency: float) -> Tuple[complex, complex, complex]:
+        """Main diagonal of the complex-valued permittivity tensor as a function of frequency."""
+
+        eps_xx = self.xx.eps_model(frequency)
+        eps_yy = self.yy.eps_model(frequency)
+        eps_zz = self.zz.eps_model(frequency)
+        return (eps_xx, eps_yy, eps_zz)
+
+    @add_ax_if_none
+    def plot(self, freqs: float, ax: Ax = None) -> Ax:
+        """Plot n, k of a :class:`Medium` as a function of frequency."""
+
+        freqs = np.array(freqs)
+        freqs_thz = freqs / 1e12
+
+        for label, medium_component in zip(("xx", "yy", "zz"), (self.xx, self.yy, self.zz)):
+
+            eps_complex = medium_component.eps_model(freqs)
+            n, k = AbstractMedium.eps_complex_to_nk(eps_complex)
+            ax.plot(freqs_thz, n, label=f"n, eps_{label}")
+            ax.plot(freqs_thz, k, label=f"k, eps_{label}")
+
+        ax.set_xlabel("frequency (THz)")
+        ax.set_title("medium dispersion")
+        ax.legend()
+        ax.set_aspect("auto")
+        return ax
 
 
 # types of mediums that can be used in Simulation and Structures
