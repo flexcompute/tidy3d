@@ -343,12 +343,14 @@ class Boundary(Tidy3dBaseModel):
 
     plus: BoundaryEdgeType = pd.Field(
         Periodic(),
+        discriminator="type",
         title="Plus BC",
         description="Boundary condition on the plus side along a dimension.",
     )
 
     minus: BoundaryEdgeType = pd.Field(
         Periodic(),
+        discriminator="type",
         title="Minus BC",
         description="Boundary condition on the minus side along a dimension.",
     )
