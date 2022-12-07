@@ -8,7 +8,7 @@ import pydantic as pd
 import numpy as np
 
 from .base import Tidy3dBaseModel, cached_property
-from .types import Complex, Axis
+from .types import Complex, Axis, TYPE_TAG_STR
 from .source import GaussianBeam, ModeSource, PlaneWave
 from .medium import Medium
 
@@ -343,16 +343,16 @@ class Boundary(Tidy3dBaseModel):
 
     plus: BoundaryEdgeType = pd.Field(
         Periodic(),
-        discriminator="type",
         title="Plus BC",
         description="Boundary condition on the plus side along a dimension.",
+        discriminator=TYPE_TAG_STR,
     )
 
     minus: BoundaryEdgeType = pd.Field(
         Periodic(),
-        discriminator="type",
         title="Minus BC",
         description="Boundary condition on the minus side along a dimension.",
+        discriminator=TYPE_TAG_STR,
     )
 
     @pd.root_validator(skip_on_failure=True)
