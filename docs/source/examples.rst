@@ -48,7 +48,7 @@ Case studies
     notebooks/DielectricMetasurfaceAbsorber.ipynb
     notebooks/Metalens
     notebooks/Bandstructure.ipynb
-    notebooks/L3_cavity
+    notebooks/OptimizedL3.ipynb
     notebooks/YJunction.ipynb
     notebooks/MMI_1x4
     notebooks/WaveguideCrossing
