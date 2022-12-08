@@ -10,7 +10,7 @@ import numpy as np
 import xarray as xr
 
 from .base import Tidy3dBaseModel, cached_property
-from .types import PoleAndResidue, Ax, FreqBound, TYPE_TAG_STR
+from .types import PoleAndResidue, Ax, FreqBound, TYPE_TAG_STR, InterpMethod
 from .data.dataset import PermittivityDataset
 from .data.data_array import ScalarFieldDataArray
 from .viz import add_ax_if_none
@@ -309,6 +309,7 @@ class Medium(AbstractMedium):
         eps, sigma = AbstractMedium.nk_to_eps_sigma(n, k, freq)
         return cls(permittivity=eps, conductivity=sigma, **kwargs)
 
+
 class CustomMedium(AbstractMedium):
     """:class:`.Medium` with user-supplied permittivity distribution.
 
@@ -331,7 +332,16 @@ class CustomMedium(AbstractMedium):
         ...,
         title="Permittivity Dataset",
         description="User-supplied dataset containing complex-valued permittivity "
-        "as a function of space.",
+        "as a function of space. Permittivity distribution over the Yee-grid will be "
+        "based on nearest-neighbor interpolation.",
+    )
+
+    interp_method: InterpMethod = pd.Field(
+        "nearest",
+        title="Interpolation method",
+        description="Interpolation method to obtain permittivity values "
+        "that are not supplied at the Yee grids; For grids outside the range "
+        "of the supplied data, extrapolation will be applied.",
     )
 
     @pd.validator("eps_dataset", always=True)
@@ -347,20 +357,70 @@ class CustomMedium(AbstractMedium):
         return val
 
     @ensure_freq_in_range
+    def eps_dataset_freq(self, frequency: float) -> PermittivityDataset:
+        """Permittivity as a function of frequency. The dispersion comes
+        from DC conductivity that results in nonzero Im[permittivity].
+
+        Parameters
+        ----------
+        frequency : float
+            Frequency to evaluate permittivity at (Hz).
+
+        Returns
+        -------
+        PermittivityDataset
+            The permittivity evaluated at ``frequency``.
+        """
+
+        new_field_components = {}
+        for name, eps_dataset_component in self.eps_dataset.field_components.items():
+            freq = eps_dataset_component.f[0]
+            eps_freq = (
+                eps_dataset_component.real + 1j * eps_dataset_component.imag * freq / frequency
+            )
+            eps_freq = eps_freq.assign_coords({"f": [frequency]})
+            new_field_components.update({name: eps_freq})
+        return PermittivityDataset(**new_field_components)
+
+    @ensure_freq_in_range
+    def eps_diagonal(self, frequency: float) -> Tuple[complex, complex, complex]:
+        """Main diagonal of the complex-valued permittivity tensor
+        as a function of frequency.
+
+        Note that spatially, we take max{|eps|}, so that autoMesh generation
+        works appropriately.
+        """
+
+        eps_np_list = [
+            np.array(eps_data_comp).ravel()
+            for _, eps_data_comp in self.eps_dataset_freq(frequency).field_components.items()
+        ]
+        eps_list = [eps_comp[np.argmax(np.abs(eps_comp))] for eps_comp in eps_np_list]
+        return tuple(eps_list)
+
+    @ensure_freq_in_range
     def eps_model(self, frequency: float) -> complex:
-        """Average of complex-valued permittivity as a function of frequency."""
-        eps_arrays = [eps_array for _, eps_array in self.eps_dataset.field_components.items()]
-        eps_array_avgs = [np.mean(eps_array.sel(f=frequency)) for eps_array in eps_arrays]
+        """Spatial and poloarizaiton average of complex-valued permittivity
+        as a function of frequency.
+        """
+        eps_dataset = self.eps_dataset_freq(frequency)
+        eps_arrays = [eps_array for _, eps_array in eps_dataset.field_components.items()]
+        eps_array_avgs = [np.mean(eps_array) for eps_array in eps_arrays]
         return np.mean(eps_array_avgs)
 
     @classmethod
-    def from_eps_raw(cls, eps: ScalarFieldDataArray) -> CustomMedium:
+    def from_eps_raw(
+        cls, eps: ScalarFieldDataArray, interp_method: InterpMethod = "nearest"
+    ) -> CustomMedium:
         """Construct a :class:`CustomMedium` from datasets containing raw permittivity values.
 
         Parameters
         ----------
         eps : :class:`.ScalarFieldDataArray`
             Dataset containing complex-valued permittivity as a function of space.
+        interp_method : InterpMethod, optional
+                Interpolation method to obtain permittivity values that are not supplied
+                at the Yee grids.
 
         Returns
         -------
@@ -369,11 +429,14 @@ class CustomMedium(AbstractMedium):
         """
         field_components = {field_name: eps.copy() for field_name in ("eps_xx", "eps_yy", "eps_zz")}
         eps_dataset = PermittivityDataset(**field_components)
-        return cls(eps_dataset=eps_dataset)
+        return cls(eps_dataset=eps_dataset, interp_method=interp_method)
 
     @classmethod
     def from_nk(
-        cls, n: ScalarFieldDataArray, k: Optional[ScalarFieldDataArray] = None
+        cls,
+        n: ScalarFieldDataArray,
+        k: Optional[ScalarFieldDataArray] = None,
+        interp_method: InterpMethod = "nearest",
     ) -> CustomMedium:
         """Construct a :class:`CustomMedium` from datasets containing n and k values.
 
@@ -383,6 +446,9 @@ class CustomMedium(AbstractMedium):
             Real part of refractive index.
         k : :class:`.ScalarFieldDataArray` = None
             Imaginary part of refrative index.
+        interp_method : InterpMethod, optional
+                Interpolation method to obtain permittivity values that are not supplied
+                at the Yee grids.
 
         Returns
         -------
@@ -398,9 +464,11 @@ class CustomMedium(AbstractMedium):
         eps_values = Medium.nk_to_eps_complex(n=n.data, k=k.data)
         coords = {k: np.array(v) for k, v in n.coords.items()}
         eps_scalar_field_data = ScalarFieldDataArray(eps_values, coords=coords)
-        return cls.from_eps_raw(eps=eps_scalar_field_data)
-        
+        return cls.from_eps_raw(eps=eps_scalar_field_data, interp_method=interp_method)
+
+
 """ Dispersive Media """
+
 
 class DispersiveMedium(AbstractMedium, ABC):
     """A Medium with dispersion (propagation characteristics depend on frequency)"""

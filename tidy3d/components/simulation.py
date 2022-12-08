@@ -18,7 +18,7 @@ from .geometry import Box
 from .types import Ax, Shapely, FreqBound, Axis, annotate_type, Symmetry
 from .grid.grid import Coords1D, Grid, Coords
 from .grid.grid_spec import GridSpec, UniformGrid
-from .medium import Medium, MediumType, AbstractMedium, PECMedium
+from .medium import Medium, MediumType, AbstractMedium, PECMedium, CustomMedium
 from .boundary import BoundarySpec, BlochBoundary, PECBoundary, PMCBoundary, Periodic
 from .boundary import PML, StablePML, Absorber, AbsorberSpec
 from .structure import Structure
@@ -2050,5 +2050,8 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         """List of custom datasets for verification purposes. If the list is not empty, then
         the simulation needs to be exported to hdf5 to store the data.
         """
-        datasets = [src.field_dataset for src in self.sources if isinstance(src, CustomFieldSource)]
-        return datasets
+        datasets_source = [
+            src.field_dataset for src in self.sources if isinstance(src, CustomFieldSource)
+        ]
+        datasets_medium = [mat.eps_dataset for mat in self.mediums if isinstance(mat, CustomMedium)]
+        return datasets_source + datasets_medium
