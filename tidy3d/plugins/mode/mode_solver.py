@@ -7,6 +7,7 @@ import logging
 
 import numpy as np
 import pydantic
+import xarray as xr
 
 from ...components.base import Tidy3dBaseModel, cached_property
 from ...components.geometry import Box
@@ -17,9 +18,11 @@ from ...components.monitor import ModeSolverMonitor, ModeMonitor
 from ...components.source import ModeSource, SourceTime
 from ...components.types import Direction, ArrayLike, FreqArray, Ax, Literal, Axis, Symmetry
 from ...components.data.data_array import ModeIndexDataArray, ScalarModeFieldDataArray
+from ...components.data.data_array import FreqModeDataArray
 from ...components.data.sim_data import SimulationData
 from ...components.data.monitor_data import ModeSolverData
 from ...log import ValidationError
+from ...constants import C_0
 from .solver import compute_modes
 
 FIELD = Tuple[ArrayLike[complex, 3], ArrayLike[complex, 3], ArrayLike[complex, 3]]
@@ -164,6 +167,9 @@ class ModeSolver(Tidy3dBaseModel):
             )
             data_dict[field_name] = scalar_field_data
 
+        # finite grid corrections
+        grid_factors = self._grid_correction(index_data)
+
         # make mode solver data
         mode_solver_monitor = self.to_mode_solver_monitor(name=MODE_MONITOR_NAME)
         mode_solver_data = ModeSolverData(
@@ -171,12 +177,14 @@ class ModeSolver(Tidy3dBaseModel):
             symmetry=self.simulation.symmetry,
             symmetry_center=self.simulation.center,
             grid_expanded=self.simulation.discretize(self.plane, extend=True),
+            grid_primal_correction=grid_factors[0],
+            grid_dual_correction=grid_factors[1],
             **data_dict,
         )
         self._field_decay_warning(mode_solver_data)
 
         # normalize modes
-        scaling = np.sqrt(np.abs(mode_solver_data.dot(mode_solver_data)))
+        scaling = np.sqrt(mode_solver_data.flux)
         mode_solver_data = mode_solver_data.copy(
             update={
                 key: field / scaling for key, field in mode_solver_data.field_components.items()
@@ -348,6 +356,50 @@ class ModeSolver(Tidy3dBaseModel):
                         f"Mode field at frequency index {freq_index}, mode index {mode_index} does "
                         "not decay at the plane boundaries."
                     )
+
+    def _grid_correction(
+        self, n_complex: ModeIndexDataArray
+    ) -> [FreqModeDataArray, FreqModeDataArray]:
+        """Return a copy of the :class:`.ModeSolverData` with the fields renormalized to account
+        for propagation on a finite grid along the propagation direction. The fields are assumed to
+        have ``E exp(1j k r)`` dependence on the finite grid and are then resampled using linear
+        interpolation to the exact position of the mode plane. This is needed to correctly compute
+        overlap with fields that come from a :class:`.FieldMonitor` placed in the same grid.
+
+        Parameters
+        ----------
+        grid : :class:`.Grid`
+            Numerical grid on which the modes are assumed to propagate.
+
+        Returns
+        -------
+        :class:`.ModeSolverData`
+            Copy of the data with renormalized fields.
+        """
+        normal_pos = self.plane.center[self.normal_axis]
+        normal_dim = "xyz"[self.normal_axis]
+
+        # Primal and dual grid along the normal direction,
+        # i.e. locations of the tangential E-field and H-field components, respectively
+        grid = self.simulation.grid
+        normal_primal = grid.boundaries.to_list[self.normal_axis]
+        normal_primal = xr.DataArray(normal_primal, coords={normal_dim: normal_primal})
+        normal_dual = grid.centers.to_list[self.normal_axis]
+        normal_dual = xr.DataArray(normal_dual, coords={normal_dim: normal_dual})
+
+        # Propagation phase at the primal and dual locations. The k-vector is along the propagation
+        # direction, so angle_theta has to be taken into account. The distance along the propagation
+        # direction is the distance along the normal direction over cosine(theta).
+        k_vec = 2 * np.pi * n_complex * n_complex.f / C_0
+        cos_theta = np.cos(self.mode_spec.angle_theta)
+        phase_primal = np.exp(1j * k_vec * (normal_primal - normal_pos) / cos_theta)
+        phase_dual = np.exp(1j * k_vec * (normal_dual - normal_pos) / cos_theta)
+
+        # Fields are modified by a linear interpolation to the exact monitor position
+        factor_primal = FreqModeDataArray(phase_primal.interp(**{normal_dim: normal_pos}))
+        factor_dual = FreqModeDataArray(phase_dual.interp(**{normal_dim: normal_pos}))
+
+        return factor_primal, factor_dual
 
     def to_source(
         self,

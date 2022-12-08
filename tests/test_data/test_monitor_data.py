@@ -11,6 +11,7 @@ from tidy3d.components.mode import ModeSpec
 from tidy3d.log import DataError, SetupError
 
 from tidy3d.components.data.dataset import FieldDataset
+from tidy3d.components.data.data_array import FreqModeDataArray
 from tidy3d.components.data.monitor_data import FieldData, FieldTimeData, PermittivityData
 
 from tidy3d.components.data.monitor_data import ModeSolverData, ModeData
@@ -32,6 +33,9 @@ AMPS = make_mode_amps_data_array()
 N_COMPLEX = make_mode_index_data_array()
 FLUX = make_flux_data_array()
 FLUX_TIME = make_flux_time_data_array()
+GRID_CORRECTION = FreqModeDataArray(
+    1 + 0.01 * np.random.rand(*N_COMPLEX.shape), coords=N_COMPLEX.coords
+)
 
 """ Make the montor data """
 
@@ -109,6 +113,8 @@ def make_mode_solver_data():
         symmetry_center=SIM_SYM.center,
         grid_expanded=SIM_SYM.discretize(MODE_SOLVE_MONITOR, extend=True, snap_zero_dim=True),
         n_complex=N_COMPLEX.copy(),
+        grid_primal_correction=GRID_CORRECTION,
+        grid_dual_correction=GRID_CORRECTION,
     )
     # Mode solver data needs to be normalized
     scaling = np.sqrt(np.abs(mode_data.symmetry_expanded_copy.flux))
@@ -291,7 +297,10 @@ def test_colocate():
 def test_time_reversed_copy():
     data = make_field_data().time_reversed_copy
     data = make_mode_solver_data().time_reversed_copy
-    data = make_field_time_data().time_reversed_copy
+    time_data = make_field_time_data()
+    reversed_time_data = time_data.time_reversed_copy
+    assert np.allclose(time_data.Ex.values, reversed_time_data.Ex.values[..., ::-1])
+    assert np.allclose(time_data.Hx.values, -reversed_time_data.Hx.values[..., ::-1])
 
 
 def _test_eq():
@@ -434,5 +443,24 @@ def test_mode_solver_data_sort():
     data_last = data_first.overlap_sort(track_freq="highest")
     data_center = data_first.overlap_sort(track_freq="central")
     # check repeated sorting doesn't change anything
-    assert data_first.field_components == data_last.field_components
-    assert data_first.field_components == data_center.field_components
+    for comp, field in data_first.field_components.items():
+        assert np.allclose(field, data_last.field_components[comp])
+        assert np.allclose(field, data_center.field_components[comp])
+    assert np.allclose(data_first.n_complex, data_last.n_complex)
+    assert np.allclose(data_first.n_complex, data_center.n_complex)
+    assert np.allclose(data_first.grid_dual_correction, data_last.grid_dual_correction)
+    assert np.allclose(data_first.grid_dual_correction, data_center.grid_dual_correction)
+    assert np.allclose(data_first.grid_primal_correction, data_last.grid_primal_correction)
+    assert np.allclose(data_first.grid_primal_correction, data_center.grid_primal_correction)
+
+
+def test_mode_solver_numerical_grid_data():
+    mode_data = make_mode_solver_data().symmetry_expanded_copy
+    # _tangential_fields property applies the numerical correction and expands the symmetry
+    tan_fields = mode_data._tangential_fields
+    # Check that data is only slightly different
+    for comp, field in mode_data.field_components.items():
+        if comp in tan_fields.keys():
+            max_diff = np.amax(np.abs(np.abs(field) - np.abs(tan_fields[comp])))
+            max_diff /= np.amax(np.abs(field))
+            assert 0.1 > max_diff > 0

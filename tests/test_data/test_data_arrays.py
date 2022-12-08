@@ -145,7 +145,7 @@ def make_scalar_field_time_data_array(grid_key: str, symmetry=True):
 
 def make_scalar_mode_field_data_array(grid_key: str, symmetry=True):
     XS, YS, ZS = get_xyz(MODE_SOLVE_MONITOR, grid_key, symmetry)
-    values = np.random.random((len(XS), 1, len(ZS), len(FS), len(MODE_INDICES)))
+    values = (1 + 0.1j) * np.random.random((len(XS), 1, len(ZS), len(FS), len(MODE_INDICES)))
 
     return ScalarModeFieldDataArray(
         values, coords=dict(x=XS, y=[0.0], z=ZS, f=FS, mode_index=MODE_INDICES)

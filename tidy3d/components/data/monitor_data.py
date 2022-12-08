@@ -14,6 +14,7 @@ from .data_array import FieldProjectionAngleDataArray, FieldProjectionCartesianD
 from .data_array import FieldProjectionKSpaceDataArray
 from .data_array import DataArray, DiffractionDataArray
 from .data_array import ScalarFieldDataArray, ScalarFieldTimeDataArray
+from .data_array import FreqDataArray, TimeDataArray, FreqModeDataArray
 from .dataset import Dataset, AbstractFieldDataset, ElectromagneticFieldDataset
 from .dataset import FieldDataset, FieldTimeDataset, ModeSolverDataset, PermittivityDataset
 from ..base import TYPE_TAG_STR, cached_property
@@ -140,6 +141,33 @@ class AbstractFieldData(MonitorData, AbstractFieldDataset, ABC):
 class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, ABC):
     """Collection of electromagnetic fields."""
 
+    grid_primal_correction: Union[
+        float, FreqDataArray, TimeDataArray, FreqModeDataArray
+    ] = pd.Field(
+        1.0,
+        title="Field correction factor",
+        description="Correction factor that needs to be applied for data corresponding to a 2D "
+        "monitor to take into account the finite grid in the normal direction in the simulation in "
+        "which the data was computed. The factor is applied to fields defined on the primal grid "
+        "locations along the normal direction.",
+    )
+    grid_dual_correction: Union[float, FreqDataArray, TimeDataArray, FreqModeDataArray] = pd.Field(
+        1.0,
+        title="Field correction factor",
+        description="Correction factor that needs to be applied for data corresponding to a 2D "
+        "monitor to take into account the finite grid in the normal direction in the simulation in "
+        "which the data was computed. The factor is applied to fields defined on the dual grid "
+        "locations along the normal direction.",
+    )
+
+    @property
+    def _grid_correction_dict(self):
+        """Return the primal and dual finite grid correction factors as a dictionary."""
+        return {
+            "grid_primal_correction": self.grid_primal_correction,
+            "grid_dual_correction": self.grid_dual_correction,
+        }
+
     @property
     def _tangential_dims(self) -> List[str]:
         """For a 2D monitor data, return the names of the tangential dimensions. Raise if cannot
@@ -156,18 +184,28 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
         """For a 2D monitor data, return a dictionary with only the tangential field components,
         oriented such that the third component would be the normal axis. This just means that the
         H field gets an extra minus sign if the normal axis is ``"y"``. Raise if any of the
-        tangential field components is missing."""
+        tangential field components is missing.
+
+        Note
+        ----
+            The finite grid correction factors are applied and symmetry is expanded.
+        """
 
         tan_dims = self._tangential_dims
         normal_dim = "xyz"[self.monitor.size.index(0)]
         field_components = ["E" + dim for dim in tan_dims] + ["H" + dim for dim in tan_dims]
+        fields_expanded = self.symmetry_expanded_copy.field_components
         tan_fields = {}
         for field in field_components:
             if field not in self.field_components:
                 raise DataError(f"Tangential field component {field} is missing in data.")
-            tan_fields[field] = self.field_components[field].squeeze(dim=normal_dim).copy()
-            if normal_dim == "y" and field[0] == "H":
-                tan_fields[field] *= -1
+            tan_fields[field] = fields_expanded[field].squeeze(dim=normal_dim).copy()
+            if field[0] == "E":
+                tan_fields[field] *= self.grid_primal_correction
+            elif field[0] == "H":
+                tan_fields[field] *= self.grid_dual_correction
+                if normal_dim == "y":
+                    tan_fields[field] *= -1
         return tan_fields
 
     @property
@@ -265,17 +303,7 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
 
     @cached_property
     def flux(self) -> FluxDataArray:
-        """Flux for data corresponding to a 2D monitor.
-
-        Note
-        ----
-            Here, the exact monitor center and size is used in the numerical integration.
-            This differs from the on-the-fly computation using a :class:`.FluxMonitor`, where a
-            discretization of the monitor plane in terms of an integer number of Yee grid cells is
-            used. Thus, the two computations are only expected to match if a :class:`.FieldMonitor`
-            is placed exactly at a Yee grid cell center in the normal direction, and spans an
-            integer number of cells in both tangential directions.
-        """
+        """Flux for data corresponding to a 2D monitor."""
 
         # Compute flux by integrating Poynting vector in-plane
         d_area = self._diff_area
@@ -311,16 +339,6 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
             and the sum of carried power fractions exceed 1. In the non-conjugated definition,
             orthogonal modes can be defined, but the interpretation of modal overlap as power
             carried by a given mode is no longer valid.
-
-        Note
-        ----
-            To reproduce exactly results from a :class:`.ModeMonitor` using data from a
-            :class:`.ModeSolverMonitor` and a :class:`.FieldMonitor` as
-            ``mode_amps = mode_solver_data.dot(field_data)``, a factor related to the finite
-            numerical grid needs to be applied. This can be done using the
-            ``finite_grid_copy`` method of :class:`.ModeSolverData`. To compute the amplitudes in
-            the backward direction, the ``time_reversed_copy`` property can be used on either the
-            mode solver data or the field data.
         """
 
         # Tangential fields for current and other field data
@@ -462,17 +480,7 @@ class FieldTimeData(FieldTimeDataset, ElectromagneticFieldData):
 
     @cached_property
     def flux(self) -> FluxTimeDataArray:
-        """Flux for data corresponding to a 2D monitor.
-
-        Note
-        ----
-            Here, the exact monitor center and size is used in the numerical integration.
-            This differs from the on-the-fly computation using a :class:`.FluxTimeMonitor`, where a
-            discretization of the monitor plane in terms of an integer number of Yee grid cells is
-            used. Thus, the two computations are only expected to match if a
-            :class:`.FieldTimeMonitor` is placed exactly at a Yee grid cell center in the normal
-            direction, and spans an integer number of cells in both tangential directions.
-        """
+        """Flux for data corresponding to a 2D monitor."""
 
         # Compute flux by integrating Poynting vector in-plane
         d_area = self._diff_area
@@ -484,13 +492,19 @@ class FieldTimeData(FieldTimeDataset, ElectromagneticFieldData):
 
     @property
     def time_reversed_copy(self) -> FieldTimeData:
-        """Make a copy of the data with time-reversed fields."""
+        """Make a copy of the data with time-reversed fields. The sign of the magnetic fields is
+        flipped, and the data is reversed along the ``t`` dimension, such that for a given field,
+        ``field[t_beg + t] -> field[t_end - t]``, where ``t_beg`` and ``t_end`` are the first and
+        last coordinates along the ``t`` dimension.
+        """
         new_data = {}
         for comp, field in self.field_components.items():
             if comp[0] == "H":
                 new_data[comp] = -field
             else:
                 new_data[comp] = field
+            # Reverse time coordinates
+            new_data[comp] = new_data[comp].assign_coords({"t": field.t[::-1]}).sortby("t")
         return self.copy(update=new_data)
 
 
@@ -584,19 +598,13 @@ class ModeSolverData(ModeSolverDataset, ElectromagneticFieldData):
         for step, last_ind in zip([-1, 1], [-1, num_freqs]):
 
             # Start with the base frequency
-            data_template = self.copy(
-                update={key: field.isel(f=[f0_ind]) for key, field in self.field_components.items()}
-            )
+            data_template = self._isel(f=[f0_ind])
 
             # March to lower/higher frequencies
             for freq_id in range(f0_ind + step, last_ind, step):
 
                 # Get next frequency to sort
-                data_to_sort = self.copy(
-                    update={
-                        key: field.isel(f=[freq_id]) for key, field in self.field_components.items()
-                    }
-                )
+                data_to_sort = self._isel(f=[freq_id])
 
                 # Compute "sorting w.r.t. to neighbor" and overlap values
                 # pylint:disable=protected-access
@@ -610,7 +618,6 @@ class ModeSolverData(ModeSolverDataset, ElectromagneticFieldData):
 
                 # Check for discontinuities and show warning if any
                 for mode_ind in list(np.nonzero(overlap[freq_id, :] < overlap_thresh)[0]):
-                    # TODO: warning is not showing up
                     log.warning(
                         f"WARNING: Mode '{mode_ind}' appears to undergo a discontinuous change "
                         f"between frequencies '{self.monitor.freqs[freq_id]}' "
@@ -629,6 +636,16 @@ class ModeSolverData(ModeSolverDataset, ElectromagneticFieldData):
         )
 
         return mode_data_sorted
+
+    def _isel(self, **isel_kwargs):
+        """Wraps ``xarray.DataArray.isel`` for all data fields that are defined over frequency and
+        mode index. Used in ``overlap_sort`` but not officially supported since for example
+        ``self.monitor.mode_spec`` and ``self.monitor.freqs`` will no longer be matching the
+        newly created data."""
+
+        update_dict = dict(self._grid_correction_dict, **self.field_components)
+        update_dict = {key: field.isel(**isel_kwargs) for key, field in update_dict.items()}
+        return self.copy(update=update_dict)
 
     def _find_ordering_one_freq(
         self,
@@ -653,22 +670,13 @@ class ModeSolverData(ModeSolverDataset, ElectromagneticFieldData):
         overlaps_reduced = np.zeros((num_modes_to_sort, num_modes_to_sort))
 
         # Extract all modes of interest from template data
-        data_template_reduced = self.copy(
-            update={
-                key: field.isel(mode_index=modes_to_sort)
-                for key, field in self.field_components.items()
-            }
-        )
+        data_template_reduced = self._isel(mode_index=modes_to_sort)
 
         for i, mode_index in enumerate(modes_to_sort):
 
             # Get one mode from data_to_sort
-            one_mode = data_to_sort.copy(
-                update={
-                    key: field.isel(mode_index=[mode_index])
-                    for key, field in data_to_sort.field_components.items()
-                }
-            )
+            # pylint:disable=protected-access
+            one_mode = data_to_sort._isel(mode_index=[mode_index])
 
             # Project to all modes of interest from data_template
             overlaps_reduced[:, i] = data_template_reduced.dot(one_mode).abs.data.ravel()
@@ -728,7 +736,7 @@ class ModeSolverData(ModeSolverDataset, ElectromagneticFieldData):
                 phase[freq_id, mode_id] = np.angle(e_field_gauge)
 
         # Create new dict with rearranged field components
-        fields = {}
+        update_dict = {}
         for field_name, field in self.field_components.items():
 
             field_sorted = field.copy()
@@ -742,74 +750,22 @@ class ModeSolverData(ModeSolverDataset, ElectromagneticFieldData):
                     ..., freq_id, sorting[freq_id, :]
                 ]
 
-            fields[field_name] = field_sorted
+            update_dict[field_name] = field_sorted
 
-        # Rearrange propagation index data
-        index_data = self.n_complex.copy()
-        for freq_id in range(num_freqs):
-            index_data.data[freq_id, :] = index_data.data[freq_id, sorting[freq_id, :]]
+        # Rearrange data over f and mode_index
+        data_dict = dict(**self._grid_correction_dict, n_complex=self.n_complex)
+        for key, data in data_dict.items():
+            for freq_id in range(num_freqs):
+                update_dict[key] = data.copy()
+                update_dict[key].data[freq_id, :] = update_dict[key].data[
+                    freq_id, sorting[freq_id, :]
+                ]
 
         # Update mode_spec in the monitor
         mode_spec = self.monitor.mode_spec.copy(update=dict(track_freq=track_freq))
-        monitor = self.monitor.copy(update=dict(mode_spec=mode_spec))
+        update_dict["monitor"] = self.monitor.copy(update=dict(mode_spec=mode_spec))
 
-        return self.copy(update=dict(monitor=monitor, n_complex=index_data, **fields))
-
-    def finite_grid_copy(self, grid: Grid) -> ModeSolverData:
-        """Return a copy of the :class:`.ModeSolverData` with the fields renormalized to account
-        for propagation on a finite grid along the propagation direction. The fields are assumed to
-        have ``E exp(1j k r)`` dependence on the finite grid and are then resampled using linear
-        interpolation to the exact position of the mode plane. This is needed to correctly compute
-        overlap with fields that come from a :class:`.FieldMonitor` placed in the same grid.
-
-        Parameters
-        ----------
-        grid : :class:`.Grid`
-            Numerical grid on which the modes are assumed to propagate.
-
-        Returns
-        -------
-        :class:`.ModeSolverData`
-            Copy of the data with renormalized fields.
-        """
-        normal_ind = self.monitor.size.index(0.0)
-        normal_pos = self.monitor.center[normal_ind]
-        normal_dim, plane_dims = self.monitor.pop_axis("xyz", axis=normal_ind)
-
-        # Primal and dual grid along the normal direction
-        # i.e. locations of the tangential E-field and H-field components, respectively
-        normal_primal = grid.boundaries.to_list[normal_ind]
-        normal_primal = xr.DataArray(normal_primal, coords={normal_dim: normal_primal})
-        normal_dual = grid.centers.to_list[normal_ind]
-        normal_dual = xr.DataArray(normal_dual, coords={normal_dim: normal_dual})
-
-        # Propagation phase at the E and H field locations. The k-vector is along the propagation
-        # direction, so angle_theta has to be taken into account. The distance along the propagation
-        # direction is the distance along the normal direction over cosine(theta).
-        k_vec = 2 * np.pi * self.n_complex * self.n_complex.f / C_0
-        cos_theta = np.cos(self.monitor.mode_spec.angle_theta)
-        phase_primal = np.exp(1j * k_vec * (normal_primal - normal_pos) / cos_theta)
-        phase_dual = np.exp(1j * k_vec * (normal_dual - normal_pos) / cos_theta)
-
-        # Fields are modified by a linear interpolation to the exact monitor position
-        factor_primal = phase_primal.interp(**{normal_dim: normal_pos})
-        factor_dual = phase_dual.interp(**{normal_dim: normal_pos})
-
-        # Rescale fields
-        new_fields = {}
-        primal_comps = ["E" + plane_dims[0], "E" + plane_dims[1], "H" + normal_dim]
-        for comp, field in self.field_components.items():
-            if comp in primal_comps:
-                new_fields[comp] = field * factor_primal
-            else:
-                new_fields[comp] = field * factor_dual
-        new_data = self.copy(update=new_fields)
-
-        # Also need to renormalize the flux
-        scaling = np.sqrt(np.abs(new_data.symmetry_expanded_copy.flux))
-        new_fields = {comp: field / scaling for comp, field in new_fields.items()}
-
-        return self.copy(update=new_fields)
+        return self.copy(update=update_dict)
 
 
 class PermittivityData(PermittivityDataset, AbstractFieldData):

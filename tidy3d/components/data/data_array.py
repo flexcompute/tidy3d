@@ -140,6 +140,47 @@ class DataArray(xr.DataArray):
         return cls.from_hdf5(fname=fname, group_path=group_path)
 
 
+class FreqDataArray(DataArray):
+    """Frequency-domain array.
+
+    Example
+    -------
+    >>> f = [2e14, 3e14]
+    >>> fd = FreqDataArray((1+1j) * np.random.random((2,)), coords=dict(f=f))
+    """
+
+    __slots__ = ()
+    _dims = "f"
+
+
+class FreqModeDataArray(DataArray):
+    """Array over frequency and mode index.
+
+    Example
+    -------
+    >>> f = [2e14, 3e14]
+    >>> mode_index = np.arange(5)
+    >>> coords = dict(f=f, mode_index=mode_index)
+    >>> fd = FreqModeDataArray((1+1j) * np.random.random((2, 5)), coords=coords)
+    """
+
+    __slots__ = ()
+    _dims = ("f", "mode_index")
+
+
+class TimeDataArray(DataArray):
+    """Time-domain array.
+
+    Example
+    -------
+    >>> t = [0, 1e-12, 2e-12]
+    >>> td = TimeDataArray((1+1j) * np.random.random((3,)), coords=dict(t=t))
+    """
+
+    __slots__ = ()
+    _dims = "t"
+
+
 class ScalarFieldDataArray(DataArray):
     """Spatial distribution in the frequency-domain.
 
