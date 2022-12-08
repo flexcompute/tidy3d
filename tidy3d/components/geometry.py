@@ -143,14 +143,7 @@ class Geometry(Tidy3dBaseModel, ABC):
         :class:`Box`
             Geometric object representing bounding box.
         """
-        (xmin, ymin, zmin), (xmax, ymax, zmax) = self.bounds
-        Lx = xmax - xmin
-        Ly = ymax - ymin
-        Lz = zmax - zmin
-        x0 = (xmax + xmin) / 2.0
-        y0 = (ymax + ymin) / 2.0
-        z0 = (zmax + zmin) / 2.0
-        return Box(center=(x0, y0, z0), size=(Lx, Ly, Lz))
+        return Box.from_bounds(*self.bounds)
 
     def _pop_bounds(self, axis: Axis) -> Tuple[Coordinate2D, Tuple[Coordinate2D, Coordinate2D]]:
         """Returns min and max bounds in plane normal to and tangential to ``axis``.

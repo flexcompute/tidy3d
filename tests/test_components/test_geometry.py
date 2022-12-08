@@ -13,6 +13,7 @@ from tidy3d.components.geometry import Geometry, Planar
 from ..utils import assert_log_level
 
 GEO = td.Box(size=(1, 1, 1))
+GEO_INF = td.Box(size=(1, 1, td.inf))
 BOX = td.Box(size=(1, 1, 1))
 BOX_2D = td.Box(size=(1, 0, 1))
 POLYSLAB = td.PolySlab(vertices=((0, 0), (1, 0), (1, 1), (0, 1)), slab_bounds=(-0.5, 0.5), axis=2)
@@ -35,6 +36,7 @@ def test_base_inside():
 
 def test_bounding_box():
     assert GEO.bounding_box == GEO
+    assert GEO_INF.bounding_box == GEO_INF
 
 
 def test_strip_coords_multi():
