@@ -1481,8 +1481,6 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
             The supplied or created matplotlib axes.
         """
 
-        kwargs.setdefault("clip_on", False)
-
         def set_plot_params(boundary_edge, lim, side, thickness):
             """Return the line plot properties such as color and opacity based on the boundary"""
             if isinstance(boundary_edge, PECBoundary):
