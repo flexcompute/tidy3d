@@ -14,7 +14,7 @@ To import a material "mat" of variant "var" as a tidy3d medium:
 
 For example, silver measured by A. D. Rakic et al. (1998) can be loaded as:
 
->>> silver = material_library['Ag']['Rakic1998']
+>>> silver = material_library['Ag']['Rakic1998BB']
 
 You can also import the default variant of a material by:
 
@@ -981,7 +981,7 @@ Silver ("Ag")
    =========================== ========================== ============= =============================================================================================
    Variant                     Valid for                  Model Info    Reference                                                                                    
    =========================== ========================== ============= =============================================================================================
-   ``'JohnsonChristy1972'``    0.19 - 1.94 :math:`{\mu}m` 4-pole, lossy [1] `[data] <https://refractiveindex.info/data_csv.php?datafile=data/main/Ag/Johnson.yml>`__ 
+   ``'JohnsonChristy1972'``    0.19 - 1.94 :math:`{\mu}m` 3-pole, lossy [1] `[data] <https://refractiveindex.info/data_csv.php?datafile=data/main/Ag/Johnson.yml>`__ 
    ``'Rakic1998BB'`` (default) 0.25 - 12.4 :math:`{\mu}m` 6-pole, lossy [2] `[data] <https://refractiveindex.info/data_csv.php?datafile=data/main/Ag/Rakic-BB.yml>`__
    ``'RakicLorentzDrude1998'`` 0.25 - 12.4 :math:`{\mu}m` 8-pole, lossy [2] `[data] <https://refractiveindex.info/data_csv.php?datafile=data/main/Ag/Rakic-LD.yml>`__
    =========================== ========================== ============= =============================================================================================

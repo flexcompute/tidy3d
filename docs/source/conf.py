@@ -42,9 +42,14 @@ generate_doc.main()
 
 # -- Project information -----------------------------------------------------
 
-project = "Tidy3d"
-copyright = "Flexcompute 2020"
-# release = find_version('..', 'legume', '__init__.py')
+import datetime
+
+project = "Tidy3D"
+
+author = "Flexcompute"
+
+year = datetime.date.today().strftime("%Y")
+copyright = "Flexcompute " + year
 
 master_doc = "index"
 
