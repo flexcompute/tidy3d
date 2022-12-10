@@ -58,6 +58,10 @@ method for computing the overlap integral over two sets of frequency-domain fiel
 - The API for `DiffractionData` was refactored to unify it with the API for `AbstractFieldProjectionData`.
 - The user no longer needs to supply `orders_x` and `orders_y` when creating a `DiffractionMonitor`; all allowed orders are automatically
 generated and returned in the resulting `DiffractionData`.
+- The user no longer needs to supply a `medium` when creating a `DiffractionMonitor` or any `AbstractFieldProjectionMonitor`; the medium through
+which fields are to be projected is now determined automatically based on the medium in which the monitor is placed.
+- The following attributes of `AbstractFieldProjectionMonitor` are now properties rather than methods:
+`fields_spherical`, `fields_cartesian`, `power`, `radar_cross_section`.
 
 
 ### Fixed
