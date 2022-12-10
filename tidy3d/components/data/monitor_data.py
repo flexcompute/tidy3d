@@ -577,22 +577,12 @@ class ModeSolverData(ModeSolverDataset, ElectromagneticFieldData):
         elif track_freq == "central":
             f0_ind = num_freqs // 2
 
-        # For each mode index determine location for gauge selection
-        gauge_indices = np.zeros(num_modes, dtype=int)
-        for mode_idx in range(num_modes):
-            e_field_all = np.concatenate(
-                (
-                    self.Ex.isel(f=f0_ind, mode_index=mode_idx).data.ravel(),
-                    self.Ey.isel(f=f0_ind, mode_index=mode_idx).data.ravel(),
-                    self.Ez.isel(f=f0_ind, mode_index=mode_idx).data.ravel(),
-                )
-            )
-            gauge_indices[mode_idx] = np.argmax(np.abs(e_field_all))
-
         # Compute sorting order and overlaps with neighboring frequencies
         sorting = -np.ones((num_freqs, num_modes), dtype=int)
         overlap = np.zeros((num_freqs, num_modes))
+        phase = np.zeros((num_freqs, num_modes))
         sorting[f0_ind, :] = np.arange(num_modes)  # base frequency won't change
+        overlap[f0_ind, :] = np.ones(num_modes)
 
         # Sort in two directions from the base frequency
         for step, last_ind in zip([-1, 1], [-1, num_freqs]):
@@ -608,13 +598,16 @@ class ModeSolverData(ModeSolverDataset, ElectromagneticFieldData):
 
                 # Compute "sorting w.r.t. to neighbor" and overlap values
                 # pylint:disable=protected-access
-                sorting_one_mode, overlap_one_mode = data_template._find_ordering_one_freq(
+                sorting_one_mode, amps_one_mode = data_template._find_ordering_one_freq(
                     data_to_sort, overlap_thresh
                 )
 
                 # Transform "sorting w.r.t. neighbor" to "sorting w.r.t. to f0_ind"
                 sorting[freq_id, :] = sorting_one_mode[sorting[freq_id - step, :]]
-                overlap[freq_id, :] = overlap_one_mode[sorting[freq_id - step, :]]
+                overlap[freq_id, :] = np.abs(amps_one_mode[sorting[freq_id - step, :]])
+                phase[freq_id, :] = phase[freq_id - step, :] + np.angle(
+                    amps_one_mode[sorting[freq_id - step, :]]
+                )
 
                 # Check for discontinuities and show warning if any
                 for mode_ind in list(np.nonzero(overlap[freq_id, :] < overlap_thresh)[0]):
@@ -631,7 +624,7 @@ class ModeSolverData(ModeSolverDataset, ElectromagneticFieldData):
         # Rearrange modes using computed sorting values
         mode_data_sorted = self._reorder_modes(
             sorting=sorting,
-            gauge_indices=gauge_indices,
+            phase=phase,
             track_freq=track_freq,
         )
 
@@ -658,16 +651,16 @@ class ModeSolverData(ModeSolverDataset, ElectromagneticFieldData):
 
         # Current pairs and their overlaps
         pairs = np.arange(num_modes)
-        overlaps = self.dot(data_to_sort).abs.data.ravel()
+        complex_amps = self.dot(data_to_sort).data.ravel()
 
         # Check whether modes already match
-        modes_to_sort = np.where(overlaps < overlap_thresh)[0]
+        modes_to_sort = np.where(np.abs(complex_amps) < overlap_thresh)[0]
         num_modes_to_sort = len(modes_to_sort)
         if num_modes_to_sort <= 1:
-            return pairs, overlaps
+            return pairs, complex_amps
 
         # Compute an overlap matrix for modes chosen for sorting
-        overlaps_reduced = np.zeros((num_modes_to_sort, num_modes_to_sort))
+        amps_reduced = np.zeros((num_modes_to_sort, num_modes_to_sort), dtype=np.complex128)
 
         # Extract all modes of interest from template data
         data_template_reduced = self._isel(mode_index=modes_to_sort)
@@ -679,33 +672,34 @@ class ModeSolverData(ModeSolverDataset, ElectromagneticFieldData):
             one_mode = data_to_sort._isel(mode_index=[mode_index])
 
             # Project to all modes of interest from data_template
-            overlaps_reduced[:, i] = data_template_reduced.dot(one_mode).abs.data.ravel()
+            amps_reduced[:, i] = data_template_reduced.dot(one_mode).data.ravel()
 
         # Find the most similar modes and corresponding overlap values
-        pairs_reduced, overlaps_reduced = self._find_closest_pairs(overlaps_reduced)
+        pairs_reduced, amps_reduced = self._find_closest_pairs(amps_reduced)
 
         # Insert new sorting and overlap values into arrays with all data
-        overlaps[modes_to_sort] = overlaps_reduced
+        complex_amps[modes_to_sort] = amps_reduced
         pairs[modes_to_sort] = modes_to_sort[pairs_reduced]
 
-        return pairs, overlaps
+        return pairs, complex_amps
 
     @staticmethod
     def _find_closest_pairs(arr: Numpy) -> Tuple[Numpy, Numpy]:
-        """Given an overlap matrix pair row and column entries."""
+        """Given a complex overlap matrix pair row and column entries."""
 
         n, k = np.shape(arr)
         if n != k:
             raise DataError("Overlap matrix must be square.")
 
+        arr_abs = np.abs(arr)
         pairs = -np.ones(n, dtype=int)
-        values = np.zeros(n)
+        values = np.zeros(n, dtype=np.complex128)
         for _ in range(n):
-            imax, jmax = np.unravel_index(np.argmax(arr, axis=None), (n, k))
+            imax, jmax = np.unravel_index(np.argmax(arr_abs, axis=None), (n, k))
             pairs[imax] = jmax
             values[imax] = arr[imax, jmax]
-            arr[imax, :] = -1
-            arr[:, jmax] = -1
+            arr_abs[imax, :] = -1
+            arr_abs[:, jmax] = -1
 
         return pairs, values
 
@@ -713,27 +707,13 @@ class ModeSolverData(ModeSolverDataset, ElectromagneticFieldData):
     def _reorder_modes(
         self,
         sorting: Numpy,
-        gauge_indices: Numpy,
+        phase: Numpy,
         track_freq: TrackFreq,
     ) -> ModeSolverData:
-        """Rearrange modes for the i-th frequency according to sorting[i, :] and selects the gauge
-        of the j-th mode such that (Ex, Ey, Ez)[ind] is real, where ind = gauge_indices[j]."""
+        """Rearrange modes for the i-th frequency according to sorting[i, :] and apply phase
+        shifts."""
 
-        num_freqs, num_modes = np.shape(sorting)
-
-        # Calculate phases for guage selection
-        phase = np.zeros((num_freqs, num_modes))
-        for freq_id in range(num_freqs):
-            for mode_id in range(num_modes):
-                e_field_all = np.concatenate(
-                    (
-                        self.Ex.isel(f=freq_id, mode_index=mode_id).data.ravel(),
-                        self.Ey.isel(f=freq_id, mode_index=mode_id).data.ravel(),
-                        self.Ez.isel(f=freq_id, mode_index=mode_id).data.ravel(),
-                    )
-                )
-                e_field_gauge = e_field_all[gauge_indices[mode_id]]
-                phase[freq_id, mode_id] = np.angle(e_field_gauge)
+        num_freqs, _ = np.shape(sorting)
 
         # Create new dict with rearranged field components
         update_dict = {}
@@ -741,22 +721,22 @@ class ModeSolverData(ModeSolverDataset, ElectromagneticFieldData):
 
             field_sorted = field.copy()
 
-            # Apply phase shift
-            field_sorted.data = field_sorted.data * np.exp(-1j * phase[None, None, None, :, :])
-
             # Rearrange modes
             for freq_id in range(num_freqs):
                 field_sorted.data[..., freq_id, :] = field_sorted.data[
                     ..., freq_id, sorting[freq_id, :]
                 ]
 
+            # Apply phase shift
+            field_sorted.data = field_sorted.data * np.exp(-1j * phase[None, None, None, :, :])
+
             update_dict[field_name] = field_sorted
 
         # Rearrange data over f and mode_index
         data_dict = dict(**self._grid_correction_dict, n_complex=self.n_complex)
         for key, data in data_dict.items():
+            update_dict[key] = data.copy()
             for freq_id in range(num_freqs):
-                update_dict[key] = data.copy()
                 update_dict[key].data[freq_id, :] = update_dict[key].data[
                     freq_id, sorting[freq_id, :]
                 ]

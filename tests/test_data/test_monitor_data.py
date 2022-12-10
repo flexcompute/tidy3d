@@ -19,6 +19,7 @@ from tidy3d.components.data.monitor_data import FluxData, FluxTimeData, Diffract
 
 from .test_data_arrays import make_scalar_field_data_array, make_scalar_field_time_data_array
 from .test_data_arrays import make_scalar_mode_field_data_array
+from .test_data_arrays import make_scalar_mode_field_data_array_smooth
 from .test_data_arrays import make_flux_data_array, make_flux_time_data_array
 from .test_data_arrays import make_mode_amps_data_array, make_mode_index_data_array
 from .test_data_arrays import make_diffraction_data_array
@@ -109,6 +110,29 @@ def make_mode_solver_data():
         Hx=make_scalar_mode_field_data_array("Hx"),
         Hy=make_scalar_mode_field_data_array("Hy"),
         Hz=make_scalar_mode_field_data_array("Hz"),
+        symmetry=SIM_SYM.symmetry,
+        symmetry_center=SIM_SYM.center,
+        grid_expanded=SIM_SYM.discretize(MODE_SOLVE_MONITOR, extend=True, snap_zero_dim=True),
+        n_complex=N_COMPLEX.copy(),
+        grid_primal_correction=GRID_CORRECTION,
+        grid_dual_correction=GRID_CORRECTION,
+    )
+    # Mode solver data needs to be normalized
+    scaling = np.sqrt(np.abs(mode_data.symmetry_expanded_copy.flux))
+    norm_data_dict = {key: val / scaling for key, val in mode_data.field_components.items()}
+    mode_data_norm = mode_data.copy(update=norm_data_dict)
+    return mode_data_norm
+
+
+def make_mode_solver_data_smooth():
+    mode_data = ModeSolverData(
+        monitor=MODE_SOLVE_MONITOR,
+        Ex=make_scalar_mode_field_data_array_smooth("Ex", rot=0.13 * np.pi),
+        Ey=make_scalar_mode_field_data_array_smooth("Ey", rot=0.26 * np.pi),
+        Ez=make_scalar_mode_field_data_array_smooth("Ez", rot=0.39 * np.pi),
+        Hx=make_scalar_mode_field_data_array_smooth("Hx", rot=0.52 * np.pi),
+        Hy=make_scalar_mode_field_data_array_smooth("Hy", rot=0.65 * np.pi),
+        Hz=make_scalar_mode_field_data_array_smooth("Hz", rot=0.78 * np.pi),
         symmetry=SIM_SYM.symmetry,
         symmetry_center=SIM_SYM.center,
         grid_expanded=SIM_SYM.discretize(MODE_SOLVE_MONITOR, extend=True, snap_zero_dim=True),
@@ -438,20 +462,42 @@ def test_mode_solver_data_sort():
     assert np.all(values == [3, 6, 9])
 
     # test sorting function
-    data = make_mode_solver_data()
-    data_first = data.overlap_sort(track_freq="lowest")
-    data_last = data_first.overlap_sort(track_freq="highest")
-    data_center = data_first.overlap_sort(track_freq="central")
-    # check repeated sorting doesn't change anything
-    for comp, field in data_first.field_components.items():
-        assert np.allclose(field, data_last.field_components[comp])
-        assert np.allclose(field, data_center.field_components[comp])
-    assert np.allclose(data_first.n_complex, data_last.n_complex)
-    assert np.allclose(data_first.n_complex, data_center.n_complex)
-    assert np.allclose(data_first.grid_dual_correction, data_last.grid_dual_correction)
-    assert np.allclose(data_first.grid_dual_correction, data_center.grid_dual_correction)
-    assert np.allclose(data_first.grid_primal_correction, data_last.grid_primal_correction)
-    assert np.allclose(data_first.grid_primal_correction, data_center.grid_primal_correction)
+    # get smooth data
+    data = make_mode_solver_data_smooth()
+    # make it unsorted
+    num_modes = len(data.Ex.coords["mode_index"])
+    num_freqs = len(data.Ex.coords["f"])
+    phases = 2 * np.pi * np.random.random((num_freqs, num_modes))
+    unsorting = np.arange(num_modes) * np.ones((num_freqs, num_modes))
+    unsorting = unsorting.astype(int)
+    # we keep first, central, and last sorted
+    for freq_id in range(1, num_freqs - 1):
+        if freq_id != num_freqs // 2:
+            unsorting[freq_id, :] = np.random.permutation(unsorting[freq_id, :])
+
+    # unsort using sorting tool
+    data_unsorted = data._reorder_modes(unsorting, phases, None)
+
+    # sort back using all starting frequencies
+    data_first = data_unsorted.overlap_sort(track_freq="lowest")
+    data_last = data_unsorted.overlap_sort(track_freq="highest")
+    data_center = data_unsorted.overlap_sort(track_freq="central")
+
+    # check that sorted data coincides with original
+    for data_sorted in [data_first, data_last, data_center]:
+        for comp, field in data.field_components.items():
+            assert np.allclose(np.abs(field), np.abs(data_sorted.field_components[comp]))
+        assert np.allclose(data.n_complex, data_sorted.n_complex)
+        assert np.allclose(data.grid_dual_correction, data_sorted.grid_dual_correction)
+        assert np.allclose(data.grid_primal_correction, data_sorted.grid_primal_correction)
+
+        # make sure neighboring frequencies are in phase
+        data_1 = data._isel(f=[0])
+        for i in range(1, num_freqs):
+            data_2 = data._isel(f=[i])
+            complex_amps = data_1.dot(data_2).data.ravel()
+            data_1 = data_2
+            assert np.all(np.abs(np.imag(complex_amps)) < 1e-15)
 
 
 def test_mode_solver_numerical_grid_data():

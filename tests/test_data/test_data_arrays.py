@@ -152,6 +152,25 @@ def make_scalar_mode_field_data_array(grid_key: str, symmetry=True):
     )
 
 
+def make_scalar_mode_field_data_array_smooth(grid_key: str, symmetry=True, rot: float = 0):
+    XS, YS, ZS = get_xyz(MODE_SOLVE_MONITOR, grid_key, symmetry)
+
+    values = np.array([1 + 0.1j])[None, :, None, None, None] * np.sin(
+        0.5
+        * np.pi
+        * (MODE_INDICES[None, None, None, None, :] + 1)
+        * (1.0 + 3e-15 * (FS[None, None, None, :, None] - FS[0]))
+        * (
+            np.cos(rot) * np.array(XS)[:, None, None, None, None]
+            + np.sin(rot) * np.array(ZS)[None, None, :, None, None]
+        )
+    )
+
+    return ScalarModeFieldDataArray(
+        values, coords=dict(x=XS, y=[0.0], z=ZS, f=FS, mode_index=MODE_INDICES)
+    )
+
+
 def make_mode_amps_data_array():
     values = (1 + 1j) * np.random.random((len(DIRECTIONS), len(MODE_INDICES), len(FS)))
     return ModeAmpsDataArray(
