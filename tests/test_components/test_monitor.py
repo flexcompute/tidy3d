@@ -75,6 +75,22 @@ def test_integration_surfaces():
         assert surface.normal_dir == expected_surfs[idx][-1]
         assert surface.name[-2:] == expected_surfs[idx]
 
+    # volume monitor with an infinite dimension
+    surfaces = td.FieldProjectionAngleMonitor(
+        size=(td.inf, 2, 2), theta=[1], phi=[0], name="f", freqs=[2e12]
+    ).integration_surfaces
+    assert len(surfaces) == 4
+    expected_surfs = ["y-", "y+", "z-", "z+"]
+    for idx, surface in enumerate(surfaces):
+        assert surface.normal_dir == expected_surfs[idx][-1]
+        assert surface.name[-2:] == expected_surfs[idx]
+
+    # volume monitor with all infinite dimensions
+    with pytest.raises(SetupError):
+        surfaces = td.FieldProjectionAngleMonitor(
+            size=(td.inf, td.inf, td.inf), theta=[1], phi=[0], name="f", freqs=[2e12]
+        ).integration_surfaces
+
 
 def test_fieldproj_surfaces():
     # test the field projection surfaces are set correctly for projection monitors
