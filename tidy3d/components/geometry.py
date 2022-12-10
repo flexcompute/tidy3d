@@ -17,7 +17,7 @@ from .viz import add_ax_if_none, equal_aspect
 from .viz import PLOT_BUFFER, ARROW_LENGTH_FACTOR, ARROW_WIDTH_FACTOR, MAX_ARROW_WIDTH_FACTOR
 from .viz import PlotParams, plot_params_geometry, polygon_patch
 from ..log import Tidy3dKeyError, SetupError, ValidationError
-from ..constants import MICROMETER, LARGE_NUMBER, RADIAN, fp_eps
+from ..constants import MICROMETER, LARGE_NUMBER, RADIAN, fp_eps, inf
 
 # for sampling polygon in slanted polyslab along  z-direction for
 # validating polygon to be non_intersecting.
@@ -1042,38 +1042,61 @@ class Box(Centered):
 
         # Set up geometry data and names for each surface:
 
-        surface_centers = (
+        surface_centers = [
             (bmin[0], center_y, center_z),  # x-
             (bmax[0], center_y, center_z),  # x+
             (center_x, bmin[1], center_z),  # y-
             (center_x, bmax[1], center_z),  # y+
             (center_x, center_y, bmin[2]),  # z-
             (center_x, center_y, bmax[2]),  # z+
-        )
+        ]
 
-        surface_sizes = (
+        surface_sizes = [
             (0.0, size_y, size_z),  # x-
             (0.0, size_y, size_z),  # x+
             (size_x, 0.0, size_z),  # y-
             (size_x, 0.0, size_z),  # y+
             (size_x, size_y, 0.0),  # z-
             (size_x, size_y, 0.0),  # z+
-        )
+        ]
 
         name = kwargs.pop("name", "")
-        surface_names = (
+        surface_names = [
             name + "_x-",
             name + "_x+",
             name + "_y-",
             name + "_y+",
             name + "_z-",
             name + "_z+",
-        )
+        ]
 
         kwargs.pop("normal_dir", None)
-        normal_dirs = ("-", "+", "-", "+", "-", "+")
+        normal_dirs = ["-", "+", "-", "+", "-", "+"]
 
-        norm_kwargs = [{} for _ in range(6)]
+        # ignore surfaces that are infinitely far away
+        del_idx = []
+        for idx, _size in enumerate(size):
+            if _size == inf:
+                del_idx.append(idx)
+        del_idx = [[2 * i, 2 * i + 1] for i in del_idx]
+        del_idx = [item for sublist in del_idx for item in sublist]
+
+        if len(del_idx) == 6:
+            raise SetupError(
+                "Can't generate surfaces for the given object because "
+                "all its surfaces are at infinity."
+            )
+
+        def del_items(items, indices):
+            """Delete list items at indices."""
+            return [i for j, i in enumerate(items) if j not in indices]
+
+        surface_centers = del_items(surface_centers, del_idx)
+        surface_sizes = del_items(surface_sizes, del_idx)
+        surface_names = del_items(surface_names, del_idx)
+        normal_dirs = del_items(normal_dirs, del_idx)
+
+        norm_kwargs = [{} for _ in range(len(surface_centers))]
         if "normal_dir" in cls.__dict__["__fields__"]:
             norm_kwargs = [{"normal_dir": normal_dir} for normal_dir in normal_dirs]
 
