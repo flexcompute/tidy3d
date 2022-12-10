@@ -281,7 +281,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
                     expected_bloch_vec = dummy_bnd.bloch_vec
                     if boundary[0].bloch_vec != expected_bloch_vec:
                         test_val = np.real(expected_bloch_vec - boundary[0].bloch_vec)
-                        if test_val.is_integer() and test_val != 0:
+                        if np.isclose(test_val % 1, 0) and not np.isclose(test_val, 0):
                             log.warning(
                                 f"The wave vector of source at index {src_idx} along dimension "
                                 f"{tan_dir} is equal to the Bloch vector of the simulation "
@@ -290,7 +290,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
                                 "order 0 will not correspond to the angle of propagation "
                                 "of the source. Consider using ``BlochBoundary.from_source()``."
                             )
-                        elif not test_val.is_integer():
+                        elif not np.isclose(test_val % 1, 0):
                             raise SetupError(
                                 f"The Bloch vector along dimension {tan_dir} is incorrectly set "
                                 f"with respect to the source at index {src_idx}. Consider using "
