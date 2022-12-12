@@ -184,7 +184,7 @@ class ModeSolver(Tidy3dBaseModel):
         self._field_decay_warning(mode_solver_data)
 
         # normalize modes
-        scaling = np.sqrt(mode_solver_data.flux)
+        scaling = np.sqrt(np.abs(mode_solver_data.flux))
         mode_solver_data = mode_solver_data.copy(
             update={
                 key: field / scaling for key, field in mode_solver_data.field_components.items()
