@@ -9,6 +9,6 @@ pylint
 tox
 pytest
 pytest-timeout
-gdspy
+gdstk
 memory_profiler
 dill

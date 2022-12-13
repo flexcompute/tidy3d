@@ -5,7 +5,7 @@ import pydantic
 import numpy as np
 import shapely
 import matplotlib.pylab as plt
-import gdspy
+import gdstk
 
 import tidy3d as td
 from tidy3d.log import ValidationError, SetupError, Tidy3dKeyError
@@ -204,11 +204,16 @@ def test_arrow_both_dirs():
 
 
 def test_gds_cell():
-    gds_cell = gdspy.Cell("name")
-    gds_cell.add(gdspy.Rectangle((0, 0), (1, 1)))
+    gds_cell = gdstk.Cell("name")
+    gds_cell.add(gdstk.rectangle((0, 0), (1, 1)))
     td.PolySlab.from_gds(gds_cell=gds_cell, axis=2, slab_bounds=(-1, 1), gds_layer=0)
+    td.PolySlab.from_gds(gds_cell=gds_cell, axis=2, slab_bounds=(-1, 1), gds_layer=0, gds_dtype=0)
     with pytest.raises(Tidy3dKeyError):
         td.PolySlab.from_gds(gds_cell=gds_cell, axis=2, slab_bounds=(-1, 1), gds_layer=1)
+    with pytest.raises(Tidy3dKeyError):
+        td.PolySlab.from_gds(
+            gds_cell=gds_cell, axis=2, slab_bounds=(-1, 1), gds_layer=1, gds_dtype=0
+        )
 
 
 def test_geo_group_initialize():
@@ -335,16 +340,12 @@ def test_pop_axis():
 def test_polyslab_merge():
     """make sure polyslabs from gds get merged when they should."""
 
-    import gdspy
-
     def make_polyslabs(gap_size):
         """Construct two rectangular polyslabs separated by a gap."""
-        lib = gdspy.GdsLibrary()
-        cell = lib.new_cell(f"polygons_{gap_size:.2f}")
-        rect1 = gdspy.Rectangle((gap_size / 2, 0), (1, 1))
-        rect2 = gdspy.Rectangle((-1, 0), (-gap_size / 2, 1))
-        cell.add(rect1)
-        cell.add(rect2)
+        cell = gdstk.Cell(f"polygons_{gap_size:.2f}")
+        rect1 = gdstk.rectangle((gap_size / 2, 0), (1, 1))
+        rect2 = gdstk.rectangle((-1, 0), (-gap_size / 2, 1))
+        cell.add(rect1, rect2)
         return td.PolySlab.from_gds(gds_cell=cell, gds_layer=0, axis=2, slab_bounds=(-1, 1))
 
     polyslabs_gap = make_polyslabs(gap_size=0.3)
@@ -441,8 +442,8 @@ def test_polyslab_deprecation_classmethod(caplog, sidewall_angle, reference_plan
     reference_plane_kwargs = make_ref_plane_kwargs(reference_plane)
 
     cell_name = str(hash(reference_plane)) + str(hash(sidewall_angle))
-    gds_cell = gdspy.Cell(cell_name)
-    gds_cell.add(gdspy.Rectangle((0, 0), (1, 1)))
+    gds_cell = gdstk.Cell(cell_name)
+    gds_cell.add(gdstk.rectangle((0, 0), (1, 1)))
     td.PolySlab.from_gds(
         gds_cell=gds_cell,
         axis=2,

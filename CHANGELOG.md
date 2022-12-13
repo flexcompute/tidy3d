@@ -89,6 +89,9 @@ which fields are to be projected is now determined automatically based on the me
 - Local web api tests.
 - Use Tidy3D logger for some warnings that used to use default python logging.
  
+### Changed
+
+- Replaced `gdspy` dependency with `gdstk`.
 
 ## [1.7.1] - 2022-10-10
 
