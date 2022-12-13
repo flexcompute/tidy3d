@@ -78,7 +78,6 @@ def test_mode_solver_angle_bend():
     mmonitor = ms.to_monitor(freqs=[1.0, 2.0], name="mode_mnt")
 
 
-# TODO: FieldData.dot needs to be fixed for 1D monitors
 def test_mode_solver_2D():
     """Run mode solver in 2D simulations."""
     mode_spec = td.ModeSpec(
@@ -104,6 +103,17 @@ def test_mode_solver_2D():
         size=(2, 2, 0),
         grid_spec=td.GridSpec(wavelength=1.0),
         structures=[WAVEGUIDE],
+        run_time=1e-12,
+    )
+    ms = ModeSolver(
+        simulation=simulation, plane=PLANE, mode_spec=mode_spec, freqs=[td.constants.C_0 / 1.0]
+    )
+    modes = ms.solve()
+
+    # The simulation and the mode plane are both 0D along the same dimension
+    simulation = td.Simulation(
+        size=PLANE.size,
+        grid_spec=td.GridSpec(wavelength=1.0),
         run_time=1e-12,
     )
     ms = ModeSolver(

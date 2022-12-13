@@ -389,16 +389,22 @@ class ModeSolver(Tidy3dBaseModel):
         # Propagation phase at the primal and dual locations. The k-vector is along the propagation
         # direction, so angle_theta has to be taken into account. The distance along the propagation
         # direction is the distance along the normal direction over cosine(theta).
-        k_vec = 2 * np.pi * n_complex * n_complex.f / C_0
         cos_theta = np.cos(self.mode_spec.angle_theta)
-        phase_primal = np.exp(1j * k_vec * (normal_primal - normal_pos) / cos_theta)
-        phase_dual = np.exp(1j * k_vec * (normal_dual - normal_pos) / cos_theta)
+        k_vec = 2 * np.pi * n_complex * n_complex.f / C_0 / cos_theta
+        phase_primal = np.exp(1j * k_vec * (normal_primal - normal_pos))
+        phase_dual = np.exp(1j * k_vec * (normal_dual - normal_pos))
 
         # Fields are modified by a linear interpolation to the exact monitor position
-        factor_primal = FreqModeDataArray(phase_primal.interp(**{normal_dim: normal_pos}))
-        factor_dual = FreqModeDataArray(phase_dual.interp(**{normal_dim: normal_pos}))
+        if normal_primal.size > 1:
+            phase_primal = phase_primal.interp(**{normal_dim: normal_pos})
+        else:
+            phase_primal = phase_primal.squeeze(dim=normal_dim)
+        if normal_dual.size > 1:
+            phase_dual = phase_dual.interp(**{normal_dim: normal_pos})
+        else:
+            phase_dual = phase_dual.squeeze(dim=normal_dim)
 
-        return factor_primal, factor_dual
+        return FreqModeDataArray(phase_primal), FreqModeDataArray(phase_dual)
 
     def to_source(
         self,
