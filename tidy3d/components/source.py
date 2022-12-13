@@ -2,7 +2,6 @@
 
 from abc import ABC, abstractmethod
 from typing import Union, Tuple, Optional
-import logging
 
 from typing_extensions import Literal
 import pydantic
@@ -492,7 +491,7 @@ class BroadbandSource(Source, ABC):
             return val
 
         if val >= 20:
-            logging.warning(
+            log.warning(
                 f"A large number ({val}) of frequency points is used in a broadband source. "
                 "This can slow down simulation time and is only needed if the mode fields are "
                 "expected to have a very sharp frequency dependence. 'num_freqs' < 20 is "
@@ -653,7 +652,7 @@ class AngledFieldSource(DirectionalSource, ABC):
     def glancing_incidence(cls, val):
         """Warn if close to glancing incidence."""
         if np.abs(np.pi / 2 - val) < GLANCING_CUTOFF:
-            logging.warning(
+            log.warning(
                 "Angled source propagation axis close to glancing angle. "
                 "For best results, switch the injection axis."
             )

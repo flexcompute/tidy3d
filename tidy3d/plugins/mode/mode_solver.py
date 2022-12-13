@@ -3,7 +3,6 @@ invariance along a given propagation axis.
 """
 
 from typing import List, Tuple, Dict
-import logging
 
 import numpy as np
 import pydantic
@@ -21,7 +20,7 @@ from ...components.data.data_array import ModeIndexDataArray, ScalarModeFieldDat
 from ...components.data.data_array import FreqModeDataArray
 from ...components.data.sim_data import SimulationData
 from ...components.data.monitor_data import ModeSolverData
-from ...log import ValidationError
+from ...log import ValidationError, log
 from ...constants import C_0
 from .solver import compute_modes
 
@@ -352,7 +351,7 @@ class ModeSolver(Tidy3dBaseModel):
                         e_edge += np.sum(np.abs(E[isel]) ** 2)
                 # Warn if needed
                 if e_edge / e_norm > FIELD_DECAY_CUTOFF:
-                    logging.warning(
+                    log.warning(
                         f"Mode field at frequency index {freq_index}, mode index {mode_index} does "
                         "not decay at the plane boundaries."
                     )
