@@ -223,8 +223,9 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
         # In-plane grid bounds inferred from the field data
         if self.monitor.colocate:
             # Should be equivalent to sim.discretize(self.monitor, extend=True)
-            plane_bounds1 = self.grid_expanded.boundaries.to_dict[dim1]
-            plane_bounds2 = self.grid_expanded.boundaries.to_dict[dim2]
+            # Take ``unique`` to handle 0D cases along a given dimension
+            plane_bounds1 = np.unique(self.grid_expanded.boundaries.to_dict[dim1])
+            plane_bounds2 = np.unique(self.grid_expanded.boundaries.to_dict[dim2])
         else:
             # Last pixel missing compared to sim.discretize(self.monitor, extend=True).
             # This is because we cannot colocate the fields to the center of that pixel.

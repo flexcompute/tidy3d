@@ -1866,11 +1866,13 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
                 # bmin <= center <= bmax
                 bmin_tmp = center
                 bmax_tmp = max(bmax, 2 * center - bmin)
-            # Extend well past the simulation domain if needed, but truncate if original box
-            # is too large, specifically to avoid issues with inf.
-            sim_size = sim_bmax - sim_bmin
-            bmin_new.append(max(bmin_tmp, sim_bmin - sim_size))
-            bmax_new.append(min(bmax_tmp, sim_bmax + sim_size))
+            # If inf, extend well past the simulation domain but make a finite number
+            if np.isinf(bmin_tmp):
+                bmin_tmp = sim_bmin - np.amax(self.size)
+            if np.isinf(bmax_tmp):
+                bmax_tmp = sim_bmax + np.amax(self.size)
+            bmin_new.append(bmin_tmp)
+            bmax_new.append(bmax_tmp)
 
         return Box.from_bounds(bmin_new, bmax_new)
 
@@ -1900,13 +1902,16 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         span_inds = self.grid.discretize_inds(box, **kwargs)
         boundary_dict = {}
         for idim, dim in enumerate("xyz"):
-            if snap_zero_dim and box.size[idim] == 0:
-                boundary_dict[dim] = [box.center[idim], box.center[idim]]
-            else:
-                ind_beg, ind_end = span_inds[idim]
-                # ind_end + 1 because we are selecting cell boundaries not cells
-                boundary_dict[dim] = self.grid.periodic_subspace(idim, ind_beg, ind_end + 1)
+            ind_beg, ind_end = span_inds[idim]
+            # ind_end + 1 because we are selecting cell boundaries not cells
+            boundary_dict[dim] = self.grid.periodic_subspace(idim, ind_beg, ind_end + 1)
 
+            # Overwrite with zero dimension snapped, if requested
+            if snap_zero_dim:
+                if self.size[idim] == 0:
+                    boundary_dict[dim] = [self.center[idim], self.center[idim]]
+                elif box.size[idim] == 0:
+                    boundary_dict[dim] = [box.center[idim], box.center[idim]]
         return Grid(boundaries=Coords(**boundary_dict))
 
     def epsilon(
