@@ -52,6 +52,7 @@ Case studies
     notebooks/YJunction.ipynb
     notebooks/MMI_1x4
     notebooks/WaveguideCrossing
+    notebooks/WaveguideSizeConverter
     notebooks/EulerWaveguideBend
     notebooks/PolarizationSplitterRotator
     notebooks/GratingCoupler
