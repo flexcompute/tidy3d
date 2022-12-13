@@ -3,7 +3,6 @@ import numpy as np
 import matplotlib.pyplot as plt
 import pydantic
 
-import gdspy
 import tidy3d as td
 
 from tidy3d.plugins import DispersionFitter

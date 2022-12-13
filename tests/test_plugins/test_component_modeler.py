@@ -2,7 +2,7 @@ import pytest
 import numpy as np
 import pydantic
 
-import gdspy
+import gdstk
 
 import tidy3d as td
 from tidy3d.web.container import Batch
@@ -46,67 +46,51 @@ def make_coupler():
     mat_wg = td.Medium(permittivity=wg_n**2)
     mat_sub = td.Medium(permittivity=sub_n**2)
 
-    def bend_pts(bend_length, width, npts=10):
-        """Set of points describing a tanh bend from (0, 0) to (length, width)"""
-        x = np.linspace(0, bend_length, npts)
-        y = width * (1 + np.tanh(6 * (x / bend_length - 0.5))) / 2
-        return np.stack((x, y), axis=1)
-
-    def arm_pts(length, width, coup_length, bend_length, npts_bend=30):
-        """Set of points defining one arm of an integrated coupler"""
-        ### Make the right half of the coupler arm first
-        # Make bend and offset by coup_length/2
-        bend = bend_pts(bend_length, width, npts_bend)
-        bend[:, 0] += coup_length / 2
-        # Add starting point as (0, 0)
-        right_half = np.concatenate(([[0, 0]], bend))
-        # Add an extra point to make sure waveguide is straight past the bend
-        right_half = np.concatenate((right_half, [[right_half[-1, 0] + 0.1, width]]))
-        # Add end point as (length/2, width)
-        right_half = np.concatenate((right_half, [[length / 2, width]]))
-
-        # Make the left half by reflecting and omitting the (0, 0) point
-        left_half = np.copy(right_half)[1:, :]
-        left_half[:, 0] = -left_half[::-1, 0]
-        left_half[:, 1] = left_half[::-1, 1]
-
-        return np.concatenate((left_half, right_half), axis=0)
+    def tanh_interp(max_arg):
+        """Interpolator for tanh with adjustable extension"""
+        scale = 1 / np.tanh(max_arg)
+        return lambda u: 0.5 * (1 + scale * np.tanh(max_arg * (u * 2 - 1)))
 
     def make_coupler(
         length, wg_spacing_in, wg_width, wg_spacing_coup, coup_length, bend_length, npts_bend=30
     ):
-        """Make an integrated coupler using the gdspy FlexPath object."""
+        """Make an integrated coupler using the gdstk RobustPath object."""
+        # bend interpolator
+        interp = tanh_interp(3)
+        delta = wg_width + wg_spacing_coup - wg_spacing_in
+        offset = lambda u: wg_spacing_in + interp(u) * delta
 
-        # Compute one arm of the coupler
-        arm_width = (wg_spacing_in - wg_width - wg_spacing_coup) / 2
-        arm = arm_pts(length, arm_width, coup_length, bend_length, npts_bend)
-        # Reflect and offset bottom arm
-        coup_bot = np.copy(arm)
-        coup_bot[:, 1] = -coup_bot[::-1, 1] - wg_width / 2 - wg_spacing_coup / 2
-        # Offset top arm
-        coup_top = np.copy(arm)
-        coup_top[:, 1] += wg_width / 2 + wg_spacing_coup / 2
-
-        # Create waveguides as GDS paths
-        path_bot = gdspy.FlexPath(coup_bot, wg_width, layer=1, datatype=0)
-        path_top = gdspy.FlexPath(coup_top, wg_width, layer=1, datatype=1)
-
-        return [path_bot, path_top]
-
-    gdspy.current_library = gdspy.GdsLibrary()
-    lib = gdspy.GdsLibrary()
+        coup = gdstk.RobustPath(
+            (-0.5 * length, 0),
+            (wg_width, wg_width),
+            wg_spacing_in,
+            simple_path=True,
+            layer=1,
+            datatype=[0, 1],
+        )
+        coup.segment((-0.5 * coup_length - bend_length, 0))
+        coup.segment(
+            (-0.5 * coup_length, 0), offset=[lambda u: -0.5 * offset(u), lambda u: 0.5 * offset(u)]
+        )
+        coup.segment((0.5 * coup_length, 0))
+        coup.segment(
+            (0.5 * coup_length + bend_length, 0),
+            offset=[lambda u: -0.5 * offset(1 - u), lambda u: 0.5 * offset(1 - u)],
+        )
+        coup.segment((0.5 * length, 0))
+        return coup
 
     # Geometry must be placed in GDS cells to import into Tidy3D
-    coup_cell = lib.new_cell("Coupler")
+    coup_cell = gdstk.Cell("Coupler")
 
-    substrate = gdspy.Rectangle(
+    substrate = gdstk.rectangle(
         (-device_length / 2, -wg_spacing_in / 2 - 10),
         (device_length / 2, wg_spacing_in / 2 + 10),
         layer=0,
     )
     coup_cell.add(substrate)
 
-    # Add the coupler to a gdspy cell
+    # Add the coupler to a gdstk cell
     gds_coup = make_coupler(
         device_length, wg_spacing_in, wg_width, wg_spacing_coup, coup_length, bend_length
     )

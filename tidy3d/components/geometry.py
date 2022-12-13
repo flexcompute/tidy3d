@@ -1987,12 +1987,12 @@ class PolySlab(Planar):
         sidewall_angle: float = 0,
         **kwargs,
     ) -> List["PolySlab"]:
-        """Import :class:`PolySlab` from a ``gdspy.Cell``.
+        """Import :class:`PolySlab` from a ``gdstk.Cell``.
 
         Parameters
         ----------
-        gds_cell : gdspy.Cell
-            ``gdspy.Cell`` containing 2D geometric data.
+        gds_cell : gdstk.Cell
+            ``gdstk.Cell`` containing 2D geometric data.
         axis : int
             Integer index into the polygon's slab axis. (0,1,2) -> (x,y,z).
         slab_bounds: Tuple[float, float]
@@ -2040,12 +2040,20 @@ class PolySlab(Planar):
         else:
             kwargs.pop("reference_plane")
 
-        # load the polygon vertices
-        vert_dict = gds_cell.get_polygons(by_spec=True)
-        all_vertices = []
-        for (gds_layer_file, gds_dtype_file), vertices in vert_dict.items():
-            if gds_layer_file == gds_layer and (gds_dtype is None or gds_dtype == gds_dtype_file):
-                all_vertices.extend(iter(vertices))
+        # apply desired scaling and load the polygon vertices
+        if gds_dtype is not None:
+            # if both layer and datatype are specified, let gdstk do the filtering for better
+            # performance on large layouts
+            all_vertices = [
+                polygon.scale(gds_scale).points
+                for polygon in gds_cell.get_polygons(layer=gds_layer, datatype=gds_dtype)
+            ]
+        else:
+            all_vertices = [
+                polygon.scale(gds_scale).points
+                for polygon in gds_cell.get_polygons()
+                if polygon.layer == gds_layer
+            ]
         # make sure something got loaded, otherwise error
         if not all_vertices:
             raise Tidy3dKeyError(
@@ -2053,9 +2061,7 @@ class PolySlab(Planar):
                 f"with specified gds_dtype={gds_dtype}."
             )
 
-        # apply scaling and convert vertices into polyslabs
-        all_vertices = [vertices * gds_scale for vertices in all_vertices]
-        all_vertices = [vertices.tolist() for vertices in all_vertices]
+        # convert vertices into polyslabs
         polygons = (Polygon(vertices) for vertices in all_vertices)
         polys_union = functools.reduce(lambda poly1, poly2: poly1.union(poly2), polygons)
 
