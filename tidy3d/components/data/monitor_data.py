@@ -199,13 +199,14 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
         for field in field_components:
             if field not in self.field_components:
                 raise DataError(f"Tangential field component {field} is missing in data.")
-            tan_fields[field] = fields_expanded[field].squeeze(dim=normal_dim).copy()
+            tan_fields[field] = fields_expanded[field]
             if field[0] == "E":
                 tan_fields[field] *= self.grid_primal_correction
             elif field[0] == "H":
                 tan_fields[field] *= self.grid_dual_correction
                 if normal_dim == "y":
                     tan_fields[field] *= -1
+            tan_fields[field] = tan_fields[field].squeeze(dim=normal_dim, drop=True)
         return tan_fields
 
     @property
