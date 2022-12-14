@@ -276,7 +276,7 @@ class AutoGrid(GridSpec1d):
         lt=2.0,
     )
 
-    global_min_dl: pd.NonNegativeFloat = pd.Field(
+    dl_min: pd.NonNegativeFloat = pd.Field(
         0,
         title="Lower bound of grid size",
         description="Lower bound of the grid size along this dimension regardless of "
@@ -341,7 +341,7 @@ class AutoGrid(GridSpec1d):
             struct_list,
             wavelength,
             self.min_steps_per_wvl,
-            self.global_min_dl,
+            self.dl_min,
         )
         # Put just a single pixel if 2D-like simulation
         if interval_coords.size == 1:
@@ -554,7 +554,7 @@ class GridSpec(Tidy3dBaseModel):
         min_steps_per_wvl: pd.PositiveFloat = 10.0,
         max_scale: pd.PositiveFloat = 1.4,
         override_structures: List[StructureType] = (),
-        global_min_dl: pd.NonNegativeFloat = 0.0,
+        dl_min: pd.NonNegativeFloat = 0.0,
         mesher: MesherType = GradedMesher(),
     ) -> GridSpec:
         """Use the same :class:`AutoGrid` along each of the three directions.
@@ -573,7 +573,7 @@ class GridSpec(Tidy3dBaseModel):
             A list of structures that is added on top of the simulation structures in
             the process of generating the grid. This can be used to refine the grid or make it
             coarser depending than the expected need for higher/lower resolution regions.
-        global_min_dl: pd.NonNegativeFloat
+        dl_min: pd.NonNegativeFloat
             Lower bound of grid size.
         mesher : MesherType = GradedMesher()
             The type of mesher to use to generate the grid automatically.
@@ -587,7 +587,7 @@ class GridSpec(Tidy3dBaseModel):
         grid_1d = AutoGrid(
             min_steps_per_wvl=min_steps_per_wvl,
             max_scale=max_scale,
-            global_min_dl=global_min_dl,
+            dl_min=dl_min,
             mesher=mesher,
         )
         return cls(
