@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-## [1.8.0] - 2022-12-xx
+## [1.8.0] - 2022-12-14
 
 ### Added
 - `CustomFieldSource` that can inject arbitrary source fields.
@@ -72,6 +72,7 @@ which fields are to be projected is now determined automatically based on the me
 - Ignore shapely `STRtree` deprecation warning.
 - Ignore x axis when plotting 1D `Simulation` cross sections to avoid plot irregularities.
 - Local web api tests.
+- Use Tidy3D logger for some warnings that used to use default python logging.
  
 
 ## [1.7.1] - 2022-10-10
@@ -501,7 +502,8 @@ which fields are to be projected is now determined automatically based on the me
 - Job and Batch classes for better simulation handling (eventually to fully replace webapi functions).
 - A large number of small improvements and bug fixes.
 
-[Unreleased]: https://github.com/flexcompute/tidy3d/compare/v1.7.1...develop
+[Unreleased]: https://github.com/flexcompute/tidy3d/compare/v1.8.0...develop
+[1.8.0]: https://github.com/flexcompute/tidy3d/compare/v1.7.1...v1.8.0
 [1.7.1]: https://github.com/flexcompute/tidy3d/compare/v1.7.0...v1.7.1
 [1.7.0]: https://github.com/flexcompute/tidy3d/compare/v1.6.3...v1.7.0
 [1.6.3]: https://github.com/flexcompute/tidy3d/compare/v1.6.2...v1.6.3

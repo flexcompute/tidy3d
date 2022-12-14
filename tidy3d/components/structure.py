@@ -107,7 +107,7 @@ class MeshOverrideStructure(AbstractStructure):
         title="Enforce grid size",
         description="If ``True``, enforce the grid size setup inside the structure "
         "even if the structure is inside a structure of smaller grid size. In the intersection "
-        "region of multiple structures of ``enforce = True``, grid size is decided by "
+        "region of multiple structures of ``enforce=True``, grid size is decided by "
         "the last added structure of ``enforce=True``.",
     )
 
