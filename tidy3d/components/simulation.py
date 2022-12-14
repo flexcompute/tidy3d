@@ -251,10 +251,6 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         size = values.get("size")
         sim_medium = values.get("medium")
         structures = values.get("structures")
-
-        # tolerance to use for comparisons
-        tol = 1e-6
-
         for src_idx, source in enumerate(sources):
             if not isinstance(source, PlaneWave):
                 continue
@@ -285,10 +281,10 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
                     expected_bloch_vec = dummy_bnd.bloch_vec
 
                     if boundary[0].bloch_vec != expected_bloch_vec:
-                        test_val = np.real(expected_bloch_vec - boundary[0].bloch_vec)
-                        if np.isclose(test_val % 1, 0, atol=tol) and not np.isclose(
-                            test_val, 0, atol=tol
-                        ):
+                        test_val = np.abs(expected_bloch_vec - boundary[0].bloch_vec)
+
+                        if np.isclose(test_val % 1, 0) and not np.isclose(test_val, 0):
+                            # the given Bloch vector is offset by an integer
                             log.warning(
                                 f"The wave vector of source at index {src_idx} along dimension "
                                 f"{tan_dir} is equal to the Bloch vector of the simulation "
@@ -297,7 +293,9 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
                                 "order 0 will not correspond to the angle of propagation "
                                 "of the source. Consider using ``BlochBoundary.from_source()``."
                             )
-                        elif not np.isclose(test_val % 1, 0, atol=tol):
+                        elif not np.isclose(test_val % 1, 0):
+                            # the given Bloch vector is neither equal to the expected value, nor
+                            # off by an integer
                             log.warning(
                                 f"The Bloch vector along dimension {tan_dir} may be incorrectly "
                                 f"set with respect to the source at index {src_idx}. The absolute "
