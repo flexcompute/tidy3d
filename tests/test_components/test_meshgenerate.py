@@ -538,7 +538,7 @@ def test_mesh_multiple_direct_override_and_global_min():
     Let's consider three override structures: enforced + default + enforced;
     The two enforced structure overlap.
 
-    We also test global_min_dl here.
+    We also test dl_min here.
     """
 
     override_enforce1 = td.MeshOverrideStructure(
@@ -570,13 +570,13 @@ def test_mesh_multiple_direct_override_and_global_min():
     assert min(sizes) <= 0.05
     assert sizes[-1] > 0.12
 
-    # now let's set a global_min_dl
+    # now let's set a dl_min
     sim = td.Simulation(
         size=(3, 3, 3),
         grid_spec=td.GridSpec.auto(
             wavelength=WAVELENGTH,
             override_structures=[override_enforce1, override_default, override_enforce2],
-            global_min_dl=0.1,
+            dl_min=0.1,
         ),
         run_time=1e-13,
         structures=[BOX1],
@@ -660,5 +660,5 @@ def test_shapely_strtree_warnings(caplog):
             structures=[BOX1, BOX2],
             wavelength=1.0,
             min_steps_per_wvl=6,
-            global_min_dl=1.0,
+            dl_min=1.0,
         )

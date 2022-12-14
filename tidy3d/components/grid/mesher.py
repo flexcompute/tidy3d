@@ -33,7 +33,7 @@ class Mesher(Tidy3dBaseModel, ABC):
         structures: List[StructureType],
         wavelength: pd.PositiveFloat,
         min_steps_per_wvl: pd.NonNegativeInt,
-        global_min_dl: pd.NonNegativeFloat,
+        dl_min: pd.NonNegativeFloat,
     ) -> Tuple[ArrayLike[float, 1], ArrayLike[float, 1]]:
         """Calculate the positions of all bounding box interfaces along a given axis."""
 
@@ -59,7 +59,7 @@ class GradedMesher(Mesher):
         structures: List[StructureType],
         wavelength: pd.PositiveFloat,
         min_steps_per_wvl: pd.NonNegativeInt,
-        global_min_dl: pd.NonNegativeFloat,
+        dl_min: pd.NonNegativeFloat,
     ) -> Tuple[ArrayLike[float, 1], ArrayLike[float, 1]]:
         """Calculate the positions of all bounding box interfaces along a given axis.
         In this implementation, in most cases the complexity should be O(len(structures)**2),
@@ -76,7 +76,7 @@ class GradedMesher(Mesher):
             Wavelength to use for the step size and for dispersive media epsilon.
         min_steps_per_wvl : pd.NonNegativeInt
             Minimum requested steps per wavelength.
-        global_min_dl: pd.NonNegativeFloat
+        dl_min: pd.NonNegativeFloat
             Lower bound of grid size.
 
         Returns
@@ -120,7 +120,7 @@ class GradedMesher(Mesher):
 
         # Required maximum steps in every structure
         structure_steps = self.structure_steps(
-            structures_ordered, wavelength, min_steps_per_wvl, global_min_dl, axis
+            structures_ordered, wavelength, min_steps_per_wvl, dl_min, axis
         )
         # Smallest of the maximum steps
         min_step = np.amin(structure_steps)
@@ -346,7 +346,7 @@ class GradedMesher(Mesher):
         structures: List[StructureType],
         wavelength: float,
         min_steps_per_wvl: float,
-        global_min_dl: pd.NonNegativeFloat,
+        dl_min: pd.NonNegativeFloat,
         axis: Axis,
     ) -> ArrayLike[float, 1]:
         """Get the minimum mesh required in each structure.
@@ -359,7 +359,7 @@ class GradedMesher(Mesher):
             Wavelength to use for the step size and for dispersive media epsilon.
         min_steps_per_wvl : float
             Minimum requested steps per wavelength.
-        global_min_dl: pd.NonNegativeFloat
+        dl_min: pd.NonNegativeFloat
             Lower bound of grid size.
         axis : Axis
             Axis index along which to operate.
@@ -371,9 +371,9 @@ class GradedMesher(Mesher):
                     structure.medium.eps_diagonal(C_0 / wavelength)[axis]
                 )
                 index = max(abs(n), abs(k))
-                min_steps.append(max(global_min_dl, wavelength / index / min_steps_per_wvl))
+                min_steps.append(max(dl_min, wavelength / index / min_steps_per_wvl))
             elif isinstance(structure, MeshOverrideStructure):
-                min_steps.append(max(global_min_dl, structure.dl[axis]))
+                min_steps.append(max(dl_min, structure.dl[axis]))
         return np.array(min_steps)
 
     @staticmethod

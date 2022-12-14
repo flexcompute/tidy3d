@@ -25,7 +25,7 @@ method for computing the overlap integral over two sets of frequency-domain fiel
 - `sidewall_angle` option for `Cylinder` that allows a `Cylinder` to be tuned into a conical frustum or a cone.
 - `reference_plane` for `PolySlab` that provides options to define the vertices at the bottom, middle, or top of the `PolySlab`.
 - Automesh generation: `MeshOverrideStructure` that allows for a direct grid size specification in override structures,
- and `global_min_dl` that bounds the minimal grid size.
+ and `dl_min` that bounds the minimal grid size.
 - More material models to the material database such as gold from Olman2012.
 - In `AdvancedFitterParam` for `StableDispersionFitter`, `random_seed` option to set the random seed,
  and `bound_f_lower` to set the lower bound of pole frequency.
