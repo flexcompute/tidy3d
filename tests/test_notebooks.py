@@ -23,41 +23,54 @@ notebook_filenames = [
 
 # if you want to run only some notebooks, put here, if empty, run all
 run_only = []
-run_only = ["ParameterScan"]
+# run_only = ["Metalens"]
 if len(run_only):
     notebook_filenames = [NOTEBOOK_DIR + base + ".ipynb" for base in run_only]
 
 # for name in notebook_filenames:
 #     print(f"'{name}'")
 """ 
-as of 10/10/22
+as of 12/10/22 (output of ls -a *.ipynb | cat)
 Adjoint.ipynb
 AutoGrid.ipynb
+Bandstructure.ipynb
+BiosensorGrating.ipynb
 BoundaryConditions.ipynb
+BraggGratings.ipynb
+CustomFieldSource.ipynb
+DielectricMetasurfaceAbsorber.ipynb
 Dispersion.ipynb
+DistributedBraggReflectorCavity.ipynb
+EulerWaveguideBend.ipynb
+FieldProjections.ipynb
 Fitting.ipynb
 GDS_import.ipynb
 GratingCoupler.ipynb
 GratingEfficiency.ipynb
 HighQ_Ge.ipynb
 HighQ_Si.ipynb
-L3_cavity.ipynb
 Metalens.ipynb
+MMI_1x4.ipynb
 Modal_sources_monitors.ipynb
 Modes_bent_angled.ipynb
 ModeSolver.ipynb
-Near2Far.ipynb
 Near2FarSphereRCS.ipynb
+OptimizedL3.ipynb
 ParameterScan.ipynb
+PlasmonicNanoparticle.ipynb
+PlasmonicYagiUdaNanoantenna.ipynb
+PolarizationSplitterRotator.ipynb
 RingResonator.ipynb
-simulation_data.hdf5
 Simulation.ipynb
 SMatrix.ipynb
 StartHere.ipynb
 VizData.ipynb
 VizSimulation.ipynb
+WaveguideCrossing.ipynb
 WebAPI.ipynb
 WhatsNew.ipynb
+YJunction.ipynb
+ZonePlateFieldProjection.ipynb
 """
 
 

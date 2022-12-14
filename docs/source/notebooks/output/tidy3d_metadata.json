@@ -2,19 +2,19 @@
     "max_res_unit": 2,
     "min_res_unit": 1,
     "opt_res_unit": 1,
-    "compute_weight": 60.27363374672726,
-    "sim_weight": 120.54726749345453,
-    "float_rw_time_stepping": 2264.349169147636,
-    "float_rw_post_process": 26.048913228,
-    "grid_points": 8478616,
-    "grid_points_x": 226,
-    "grid_points_y": 226,
-    "grid_points_z": 166,
-    "time_steps": 13998,
-    "work_unit": 0.09038017636746995,
-    "flex_unit": 0.03615207054698798,
+    "compute_weight": 422.99100246910183,
+    "sim_weight": 845.9820049382037,
+    "float_rw_time_stepping": 16073.658093825868,
+    "float_rw_post_process": 0.0,
+    "grid_points": 1439305,
+    "grid_points_x": 1435,
+    "grid_points_y": 1003,
+    "grid_points_z": 1,
+    "time_steps": 460471,
+    "work_unit": 0.6329955044860438,
+    "flex_unit": 0.25319820179441754,
     "tags": [
         "0-2G",
-        "0-1Am"
+        "0-8Am"
     ]
 }

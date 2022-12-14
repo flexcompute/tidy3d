@@ -49,7 +49,7 @@ project = "Tidy3D"
 author = "Flexcompute"
 
 year = datetime.date.today().strftime("%Y")
-copyright = "Flexcompute " + year
+copyright = f"Flexcompute 2020-{year}"
 
 master_doc = "index"
 
