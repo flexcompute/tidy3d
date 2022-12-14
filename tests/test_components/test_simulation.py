@@ -286,14 +286,14 @@ def test_validate_plane_wave_boundaries(caplog):
     )
     assert_log_level(caplog, 30)
 
-    # angled incidence plane wave with wrong Bloch vector should error
-    with pytest.raises(SetupError):
-        td.Simulation(
-            size=(1, 1, 1),
-            run_time=1e-12,
-            sources=[src2],
-            boundary_spec=bspec4,
-        )
+    # angled incidence plane wave with wrong Bloch vector should warn
+    td.Simulation(
+        size=(1, 1, 1),
+        run_time=1e-12,
+        sources=[src2],
+        boundary_spec=bspec4,
+    )
+    assert_log_level(caplog, 30)
 
 
 def test_validate_components_none():
