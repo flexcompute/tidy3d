@@ -53,6 +53,7 @@ SIM_MONITORS = Simulation(
             name="mode",
         ),
     ],
+    boundary_spec=BoundarySpec.all_sides(boundary=Periodic()),
 )
 
 SIM_FULL = Simulation(

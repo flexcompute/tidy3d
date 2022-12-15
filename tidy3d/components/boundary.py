@@ -366,8 +366,8 @@ class Boundary(Tidy3dBaseModel):
             log.warning(
                 f"'Boundary.{field}' uses default value, which is 'Periodic()' "
                 "but will change to 'PML()' in Tidy3D version 2.0. "
-                "We recommend you change your 'BoundarySpec' to explicitly set "
-                "the boundary conditions ahead of this release to avoid unexpected results."
+                "We recommend explicitly setting all boundary conditions "
+                "ahead of this release to avoid unexpected results."
             )
 
         return values
@@ -574,20 +574,40 @@ class BoundarySpec(Tidy3dBaseModel):
     """Specifies boundary conditions on each side of the domain and along each dimension."""
 
     x: Boundary = pd.Field(
-        Boundary(),
+        None,
         title="Boundary condition along x.",
-        description="Boundary condition on the plus and minus sides along the x axis.",
+        description="Boundary condition on the plus and minus sides along the x axis. "
+        "If None, periodic boundaries are applied.",
     )
     y: Boundary = pd.Field(
-        Boundary(),
+        None,
         title="Boundary condition along y.",
-        description="Boundary condition on the plus and minus sides along the y axis.",
+        description="Boundary condition on the plus and minus sides along the y axis. "
+        "If None, periodic boundaries are applied.",
     )
     z: Boundary = pd.Field(
-        Boundary(),
+        None,
         title="Boundary condition along z.",
-        description="Boundary condition on the plus and minus sides along the z axis.",
+        description="Boundary condition on the plus and minus sides along the z axis. "
+        "If None, periodic boundaries are applied.",
     )
+
+    # TODO: remove for 2.0
+    @pd.root_validator(pre=True)
+    def _deprecation_2_0_missing_defaults(cls, values):
+        """Raise deprecation warning if a default boundary condition is used."""
+
+        for field in "xyz":
+            if values.get(field) is None:
+                log.warning(
+                    f"'BoundarySpec.{field}' uses default value, which is 'Periodic()' "
+                    "but will change to 'PML()' in Tidy3D version 2.0. "
+                    "We recommend explicitly setting all boundary conditions "
+                    "ahead of this release to avoid unexpected results."
+                )
+                values[field] = Boundary.periodic()
+
+        return values
 
     def __getitem__(self, field_name: str) -> Boundary:
         """Get the :class:`Boundary` field by name (``boundary_spec[field_name]``).
