@@ -211,7 +211,12 @@ def test_sim_nonuniform_large():
 
 def test_sim_grid():
 
-    sim = td.Simulation(size=(4, 4, 4), grid_spec=td.GridSpec.uniform(1.0), run_time=1e-12)
+    sim = td.Simulation(
+        size=(4, 4, 4),
+        grid_spec=td.GridSpec.uniform(1.0),
+        run_time=1e-12,
+        boundary_spec=td.BoundarySpec.all_sides(boundary=td.Periodic()),
+    )
 
     for c in sim.grid.centers.dict(exclude={TYPE_TAG_STR}).values():
         assert np.all(c == np.array([-1.5, -0.5, 0.5, 1.5]))
@@ -272,7 +277,12 @@ def test_sim_pml_grid():
 
 def test_sim_discretize_vol():
 
-    sim = td.Simulation(size=(4, 4, 4), grid_spec=td.GridSpec.uniform(1.0), run_time=1e-12)
+    sim = td.Simulation(
+        size=(4, 4, 4),
+        grid_spec=td.GridSpec.uniform(1.0),
+        run_time=1e-12,
+        boundary_spec=td.BoundarySpec.all_sides(boundary=td.Periodic()),
+    )
 
     vol = td.Box(size=(1.9, 1.9, 1.9))
 
@@ -289,7 +299,12 @@ def test_sim_discretize_vol():
 
 def test_sim_discretize_plane():
 
-    sim = td.Simulation(size=(4, 4, 4), grid_spec=td.GridSpec.uniform(1.0), run_time=1e-12)
+    sim = td.Simulation(
+        size=(4, 4, 4),
+        grid_spec=td.GridSpec.uniform(1.0),
+        run_time=1e-12,
+        boundary_spec=td.BoundarySpec.all_sides(boundary=td.Periodic()),
+    )
 
     plane = td.Box(size=(6, 6, 0))
 
@@ -312,6 +327,7 @@ def test_grid_auto_uniform():
         grid_spec=td.GridSpec.uniform(0.1),
         run_time=1e-12,
         medium=td.Medium(permittivity=4),
+        boundary_spec=td.BoundarySpec.all_sides(boundary=td.Periodic()),
     )
 
     sim_auto = td.Simulation(
@@ -319,6 +335,7 @@ def test_grid_auto_uniform():
         grid_spec=td.GridSpec.auto(wavelength=2.4, min_steps_per_wvl=12),
         run_time=1e-12,
         medium=td.Medium(permittivity=4),
+        boundary_spec=td.BoundarySpec.all_sides(boundary=td.Periodic()),
     )
 
     bounds_uniform = sim_uniform.grid.boundaries.to_list

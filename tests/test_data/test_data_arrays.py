@@ -18,6 +18,7 @@ from tidy3d.components.monitor import FluxMonitor, FluxTimeMonitor, DiffractionM
 from tidy3d.components.monitor import MonitorType
 from tidy3d.components.structure import Structure
 from tidy3d.components.geometry import Box
+from tidy3d.components.boundary import BoundarySpec, Periodic
 from tidy3d import material_library
 from tidy3d.constants import inf
 
@@ -101,6 +102,7 @@ SIM_SYM = Simulation(
     sources=SOURCES,
     monitors=MONITORS,
     structures=STRUCTURES,
+    boundary_spec=BoundarySpec.all_sides(boundary=Periodic()),
 )
 
 SIM = Simulation(
@@ -111,6 +113,7 @@ SIM = Simulation(
     sources=SOURCES,
     monitors=MONITORS,
     structures=STRUCTURES,
+    boundary_spec=BoundarySpec.all_sides(boundary=Periodic()),
 )
 
 """ Generate the data arrays (used in other test files) """

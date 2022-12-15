@@ -143,7 +143,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
     )
 
     boundary_spec: BoundarySpec = pydantic.Field(
-        BoundarySpec(),
+        BoundarySpec.all_sides(boundary=PML()),
         title="Boundaries",
         description="Specification of boundary conditions along each dimension.",
     )

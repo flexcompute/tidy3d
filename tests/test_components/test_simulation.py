@@ -111,6 +111,7 @@ def test_sim_bounds():
                     geometry=td.Box(size=(1, 1, 1), center=shifted_center), medium=td.Medium()
                 )
             ],
+            boundary_spec=td.BoundarySpec.all_sides(boundary=td.Periodic()),
         )
 
     # create all permutations of squares being shifted 1, -1, or zero in all three directions
@@ -141,11 +142,20 @@ def test_sim_size():
     grid_spec = td.GridSpec(grid_x=mesh1d, grid_y=mesh1d, grid_z=mesh1d)
 
     with pytest.raises(SetupError):
-        s = td.Simulation(size=(1, 1, 1), grid_spec=grid_spec, run_time=1e-12)
+        s = td.Simulation(
+            size=(1, 1, 1),
+            grid_spec=grid_spec,
+            run_time=1e-12,
+            boundary_spec=td.BoundarySpec.all_sides(boundary=td.Periodic()),
+        )
         s._validate_size()
 
     with pytest.raises(SetupError):
-        s = td.Simulation(size=(1, 1, 1), run_time=1e-7)
+        s = td.Simulation(
+            size=(1, 1, 1),
+            run_time=1e-7,
+            boundary_spec=td.BoundarySpec.all_sides(boundary=td.Periodic()),
+        )
         s._validate_size()
 
 
@@ -161,6 +171,7 @@ def _test_monitor_size():
                 )
             ],
             run_time=1e-12,
+            boundary_spec=td.BoundarySpec.all_sides(boundary=td.Periodic()),
         )
         s.validate_pre_upload()
 
@@ -184,6 +195,7 @@ def test_monitor_medium_frequency_range(caplog, freq, log_level):
         monitors=[mnt],
         sources=[src],
         run_time=1e-12,
+        boundary_spec=td.BoundarySpec.all_sides(boundary=td.Periodic()),
     )
     assert_log_level(caplog, log_level)
 
@@ -199,7 +211,13 @@ def test_monitor_simulation_frequency_range(caplog, fwidth, log_level):
         polarization="Ex",
     )
     mnt = td.FieldMonitor(size=(0, 0, 0), name="freq", freqs=[1.5])
-    sim = td.Simulation(size=(1, 1, 1), monitors=[mnt], sources=[src], run_time=1e-12)
+    sim = td.Simulation(
+        size=(1, 1, 1),
+        monitors=[mnt],
+        sources=[src],
+        run_time=1e-12,
+        boundary_spec=td.BoundarySpec.all_sides(boundary=td.Periodic()),
+    )
     assert_log_level(caplog, log_level)
 
 
@@ -489,6 +507,7 @@ def test_large_grid_size(caplog, grid_size, log_level):
         structures=[box],
         sources=[src],
         run_time=1e-12,
+        boundary_spec=td.BoundarySpec.all_sides(boundary=td.Periodic()),
     )
 
     assert_log_level(caplog, log_level)
@@ -543,6 +562,7 @@ def test_sim_plane_wave_error():
         structures=[box_transparent],
         sources=[src],
         run_time=1e-12,
+        boundary_spec=td.BoundarySpec.all_sides(boundary=td.Periodic()),
     )
 
     # with non-transparent box, raise
@@ -552,6 +572,7 @@ def test_sim_plane_wave_error():
             medium=medium_bg,
             structures=[box_transparent, box],
             sources=[src],
+            boundary_spec=td.BoundarySpec.all_sides(boundary=td.Periodic()),
         )
 
 
@@ -611,6 +632,7 @@ def test_sim_monitor_homogeneous():
             sources=[src],
             run_time=1e-12,
             monitors=[monitor],
+            boundary_spec=td.BoundarySpec.all_sides(boundary=td.Periodic()),
         )
 
         # with non-transparent box, raise
@@ -622,6 +644,7 @@ def test_sim_monitor_homogeneous():
                 sources=[src],
                 monitors=[monitor],
                 run_time=1e-12,
+                boundary_spec=td.BoundarySpec.all_sides(boundary=td.Periodic()),
             )
 
     mediums = td.Simulation.intersecting_media(monitor_n2f_vol, sim1.structures)
@@ -653,6 +676,7 @@ def test_sim_monitor_homogeneous():
         sources=[src],
         monitors=[monitor_n2f_vol_exclude],
         run_time=1e-12,
+        boundary_spec=td.BoundarySpec.all_sides(boundary=td.Periodic()),
     )
 
 
@@ -709,6 +733,7 @@ def test_proj_monitor_distance(caplog):
         sources=[src],
         run_time=1e-12,
         monitors=[monitor_n2f_far],
+        boundary_spec=td.BoundarySpec.all_sides(boundary=td.Periodic()),
     )
     assert_log_level(caplog, 30)
 
@@ -719,6 +744,7 @@ def test_proj_monitor_distance(caplog):
         sources=[src],
         run_time=1e-12,
         monitors=[monitor_n2f],
+        boundary_spec=td.BoundarySpec.all_sides(boundary=td.Periodic()),
     )
 
     # proj_distance large but using approximations - don't warn
@@ -728,6 +754,7 @@ def test_proj_monitor_distance(caplog):
         sources=[src],
         run_time=1e-12,
         monitors=[monitor_n2f_approx],
+        boundary_spec=td.BoundarySpec.all_sides(boundary=td.Periodic()),
     )
 
 
@@ -763,6 +790,7 @@ def test_diffraction_medium():
             sources=[src],
             run_time=1e-12,
             monitors=[monitor],
+            boundary_spec=td.BoundarySpec.all_sides(boundary=td.Periodic()),
         )
 
     with pytest.raises(SetupError):
@@ -772,6 +800,7 @@ def test_diffraction_medium():
             sources=[src],
             monitors=[monitor],
             run_time=1e-12,
+            boundary_spec=td.BoundarySpec.all_sides(boundary=td.Periodic()),
         )
 
 
@@ -788,7 +817,13 @@ def test_sim_structure_extent(caplog, box_size, log_level):
         polarization="Ex",
     )
     box = td.Structure(geometry=td.Box(size=box_size), medium=td.Medium(permittivity=2))
-    sim = td.Simulation(size=(1, 1, 1), structures=[box], sources=[src], run_time=1e-12)
+    sim = td.Simulation(
+        size=(1, 1, 1),
+        structures=[box],
+        sources=[src],
+        run_time=1e-12,
+        boundary_spec=td.BoundarySpec.all_sides(boundary=td.Periodic()),
+    )
 
     assert_log_level(caplog, log_level)
 
@@ -802,7 +837,13 @@ def test_num_mediums():
         structures.append(
             td.Structure(geometry=td.Box(size=(1, 1, 1)), medium=td.Medium(permittivity=i + 1))
         )
-    sim = td.Simulation(size=(5, 5, 5), grid_spec=grid_spec, structures=structures, run_time=1e-12)
+    sim = td.Simulation(
+        size=(5, 5, 5),
+        grid_spec=grid_spec,
+        structures=structures,
+        run_time=1e-12,
+        boundary_spec=td.BoundarySpec.all_sides(boundary=td.Periodic()),
+    )
 
     with pytest.raises(SetupError):
         structures.append(
@@ -861,6 +902,7 @@ def _test_names_default():
             td.FluxMonitor(size=(0, 1, 1), center=(0, -0.5, 0), freqs=[1], name="mon2"),
             td.FluxMonitor(size=(1, 0, 1), center=(0, -0.5, 0), freqs=[1], name="mon3"),
         ],
+        boundary_spec=td.BoundarySpec.all_sides(boundary=td.Periodic()),
     )
 
     for i, structure in enumerate(sim.structures):
@@ -888,6 +930,7 @@ def test_names_unique():
                     name="struct1",
                 ),
             ],
+            boundary_spec=td.BoundarySpec.all_sides(boundary=td.Periodic()),
         )
 
     with pytest.raises(SetupError) as e:
@@ -910,6 +953,7 @@ def test_names_unique():
                     name="source1",
                 ),
             ],
+            boundary_spec=td.BoundarySpec.all_sides(boundary=td.Periodic()),
         )
 
     with pytest.raises(SetupError) as e:
@@ -920,6 +964,7 @@ def test_names_unique():
                 td.FluxMonitor(size=(1, 1, 0), center=(0, -0.5, 0), freqs=[1], name="mon1"),
                 td.FluxMonitor(size=(0, 1, 1), center=(0, -0.5, 0), freqs=[1], name="mon1"),
             ],
+            boundary_spec=td.BoundarySpec.all_sides(boundary=td.Periodic()),
         )
 
 
@@ -936,6 +981,7 @@ def test_mode_object_syms():
             run_time=1e-12,
             symmetry=(1, -1, 0),
             sources=[td.ModeSource(size=(2, 2, 0), direction="+", source_time=g)],
+            boundary_spec=td.BoundarySpec.all_sides(boundary=td.Periodic()),
         )
 
     # wrong mode monitor
@@ -949,6 +995,7 @@ def test_mode_object_syms():
             monitors=[
                 td.ModeMonitor(size=(2, 2, 0), name="mnt", freqs=[2], mode_spec=td.ModeSpec())
             ],
+            boundary_spec=td.BoundarySpec.all_sides(boundary=td.Periodic()),
         )
 
     # right mode source (centered on the symmetry)
@@ -959,6 +1006,7 @@ def test_mode_object_syms():
         run_time=1e-12,
         symmetry=(1, -1, 0),
         sources=[td.ModeSource(center=(1, -1, 1), size=(2, 2, 0), direction="+", source_time=g)],
+        boundary_spec=td.BoundarySpec.all_sides(boundary=td.Periodic()),
     )
 
     # right mode monitor (entirely in the main quadrant)
@@ -973,4 +1021,5 @@ def test_mode_object_syms():
                 center=(2, 0, 1), size=(2, 2, 0), name="mnt", freqs=[2], mode_spec=td.ModeSpec()
             )
         ],
+        boundary_spec=td.BoundarySpec.all_sides(boundary=td.Periodic()),
     )
