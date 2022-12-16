@@ -3,7 +3,6 @@
 -r core.txt
 
 # required for development
-click==8.0.3
 black==22.3.0
 pylint
 tox
