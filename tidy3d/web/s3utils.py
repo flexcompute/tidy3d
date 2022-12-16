@@ -186,23 +186,26 @@ def upload_file(resource_id: str, path: str, remote_filename: str):
             )
 
 
-def download_file(resource_id: str, remote_filename: str, to_file: str = None):
+def download_file(resource_id: str, remote_filename: str, to_file: str = None, show_progress=True):
     """
     download file from S3
     @param resource_id: the resource id, e.g. task id
     @param remote_filename: the remote file name on S3
     @param to_file: the local file name to save the file
+    @param show_progress: show progress bar or not
+
     """
     token = get_s3_sts_token(resource_id, remote_filename)
     client = token.get_client()
     meta_data = client.head_object(Bucket=token.get_bucket(), Key=token.get_s3_key())
     with _get_progress(_S3Action.DOWNLOADING) as progress:
-        progress.start()
-        task_id = progress.add_task(
-            "download",
-            filename=os.path.basename(remote_filename),
-            total=meta_data.get("ContentLength", 0),
-        )
+        if show_progress:
+            progress.start()
+            task_id = progress.add_task(
+                "download",
+                filename=os.path.basename(remote_filename),
+                total=meta_data.get("ContentLength", 0),
+            )
 
         def _call_back(bytes_in_chunk):
             progress.update(task_id, advance=bytes_in_chunk)
@@ -212,5 +215,8 @@ def download_file(resource_id: str, remote_filename: str, to_file: str = None):
             to_file = os.path.join(resource_id, os.path.basename(remote_filename))
 
         client.download_file(
-            Bucket=token.get_bucket(), Filename=to_file, Key=token.get_s3_key(), Callback=_call_back
+            Bucket=token.get_bucket(),
+            Filename=to_file,
+            Key=token.get_s3_key(),
+            Callback=_call_back if show_progress else None,
         )

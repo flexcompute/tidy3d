@@ -18,15 +18,18 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v2
-    - uses: actions/setup-python@v2
+    - name: Install poetry
+      run: pipx install poetry
+    - uses: actions/setup-python@v4
+      with:
+        python-version: '3.9'
+        cache: 'poetry'
     - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        python -m pip install setuptools wheel twine build
+      run: poetry install
     - name: Build and publish
       env:
-        TWINE_USERNAME: __token__
-        TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
+        PYPI_TOKEN: ${{ secrets.PYPI_TOKEN }}
       run: |
-        python -m build
-        python -m twine upload --repository pypi dist/*
+        poetry config pypi-token.pypi "$PYPI_TOKEN"
+        poetry build
+        poetry publish
