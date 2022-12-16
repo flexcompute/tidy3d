@@ -218,12 +218,8 @@ def upload_file(resource_id: str, path: str, remote_filename: str, verbose: bool
 def download_file(
     resource_id: str, remote_filename: str, to_file: str = None, verbose: bool = True
 ):
-    """
-    download file from S3
-    @param resource_id: the resource id, e.g. task id
-    @param remote_filename: the remote file name on S3
-    @param to_file: the local file name to save the file
-    """
+    """download file from S3"""
+
 
     token = get_s3_sts_token(resource_id, remote_filename)
     client = token.get_client()

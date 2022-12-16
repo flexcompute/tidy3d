@@ -1,35 +1,26 @@
 """Provides lowest level, user-facing interface to server."""
 
-import json
-import logging
 import os
 import time
 from datetime import datetime, timedelta
 from typing import List, Dict
-import tempfile
 
-import requests
-from dateutil import parser
+import pytz
 from rich.console import Console
 from rich.progress import Progress
 
-from . import httputils as http
-from .config import DEFAULT_CONFIG
-from .s3utils import upload_string, get_s3_sts_token, download_file
-
-from .s3utils import upload_file
-from .task import TaskId, TaskInfo, Folder
+from .environment import Env
+from .simulation_task import SimulationTask, SIM_FILE_HDF5, Folder
+from .task import TaskId, TaskInfo
 from ..components.data.sim_data import SimulationData
 from ..components.simulation import Simulation
 from ..components.types import Literal
 from ..log import log, WebError
-from ..version import __version__
 
 REFRESH_TIME = 0.3
 TOTAL_DOTS = 3
 # file names when uploading to S3
 SIM_FILE_JSON = "simulation.json"
-SIM_FILE_HDF5 = "simulation.hdf5"
 
 
 def run(  # pylint:disable=too-many-arguments
@@ -110,41 +101,18 @@ def upload(  # pylint:disable=too-many-locals,too-many-arguments
     """
 
     simulation.validate_pre_upload()
-
-    data = {
-        "taskName": task_name,
-        "callbackUrl": callback_url,
-    }
-
-    folder = _query_or_create_folder(folder_name)
-    method = f"tidy3d/projects/{folder.projectId}/tasks"
-
     log.debug("Creating task.")
-    try:
-        task = http.post(method=method, data=data)
-        task_id = task["taskId"]
-    except requests.exceptions.HTTPError as e:
-        error_json = json.loads(e.response.text)
-        raise WebError(error_json["error"]) from e
-    # log the task_id so users can copy and paste it from STDOUT / file if the need it later.
-    if verbose:
-        log.info(f"Created task '{task_name}' with task_id '{task_id}'.")
 
-    # pylint:disable=protected-access
-    upload_string(task_id, simulation._json_string, SIM_FILE_JSON, verbose=verbose)
-    if len(simulation.custom_datasets) > 0:
-        # Also upload hdf5 containing all data.
-        # The temp file will be re-opened in `to_hdf5` which can cause an error on some systems
-        # so we explicitly close it first.
-        data_file = tempfile.NamedTemporaryFile()  # pylint:disable=consider-using-with
-        data_file.close()
-        simulation.to_hdf5(data_file.name)
-        upload_file(task_id, data_file.name, SIM_FILE_HDF5, verbose=verbose)
+    task = SimulationTask.create(simulation, task_name, folder_name, callback_url)
+    if verbose:
+        log.info(f"Created task '{task_name}' with task_id '{task.task_id}'.")
+    task.upload_simulation()
 
     # log the url for the task in the web UI
-    log.debug(f"{DEFAULT_CONFIG.website_endpoint}/folders/{folder.projectId}/tasks/{task_id}")
-
-    return task_id
+    log.debug(
+        f"{Env.current.website_endpoint}/folders/{task.folder.folder_id}/tasks/{task.task_id}"
+    )
+    return task.task_id
 
 
 def get_info(task_id: TaskId) -> TaskInfo:
@@ -160,11 +128,10 @@ def get_info(task_id: TaskId) -> TaskInfo:
     :class:`TaskInfo`
         Object containing information about status, size, credits of task.
     """
-    method = f"tidy3d/tasks/{task_id}/detail"
-    info_dict = http.get(method)
-    if info_dict is None:
-        raise WebError(f"task {task_id} not found, unable to load info.")
-    return TaskInfo(**info_dict)
+    task = SimulationTask.get(task_id)
+    if not task:
+        raise ValueError("Task not found.")
+    return TaskInfo(**{"taskId": task.task_id, **task.dict()})
 
 
 def start(task_id: TaskId) -> None:
@@ -184,19 +151,10 @@ def start(task_id: TaskId) -> None:
     ----
     To monitor progress, can call :meth:`monitor` after starting simulation.
     """
-    method = f"tidy3d/tasks/{task_id}/submit"
-    data = {}
-
-    # do not pass protocol version if mapping is missing or needs an override.
-    if DEFAULT_CONFIG.solver_version:
-        data["solverVersion"] = DEFAULT_CONFIG.solver_version
-    else:
-        data["protocolVersion"] = __version__
-
-    if DEFAULT_CONFIG.worker_group:
-        data["workerGroup"] = DEFAULT_CONFIG.worker_group
-
-    http.post(method, data=data)
+    task = SimulationTask.get(task_id)
+    if not task:
+        raise ValueError("Task not found.")
+    task.submit()
 
 
 def get_run_info(task_id: TaskId):
@@ -216,15 +174,10 @@ def get_run_info(task_id: TaskId):
         Average field intensity normlized to max value (1.0).
         Is ``None`` if run info not available.
     """
-    try:
-        token = get_s3_sts_token(task_id, "output/solver_progress.csv")
-        client = token.get_client()
-        progress = client.get_object(Bucket=token.get_bucket(), Key=token.get_s3_key())["Body"]
-        progress_string = progress.read().split(b"\n")
-        perc_done, field_decay = progress_string[-2].split(b",")[:2]
-        return float(perc_done), float(field_decay)
-    except Exception:  # pylint:disable=broad-except
-        return None, None
+    task = SimulationTask.get(task_id)
+    if not task:
+        raise ValueError("Task not found.")
+    return task.get_running_info()
 
 
 # pylint: disable=too-many-statements, too-many-locals, too-many-branches
@@ -367,7 +320,10 @@ def download(task_id: TaskId, path: str = "simulation_data.hdf5", verbose: bool 
         If `True`, will print progressbars and status, otherwise, will run silently.
 
     """
-    _download_file(task_id, fname="output/monitor_data.hdf5", path=path, verbose=verbose)
+    task = SimulationTask.get(task_id)
+    if not task:
+        raise ValueError(f"Task {task_id} not found.")
+    task.get_simulation_hdf5(path, verbose=verbose)
 
 
 def download_json(task_id: TaskId, path: str = SIM_FILE_JSON, verbose: bool = True) -> None:
@@ -383,7 +339,11 @@ def download_json(task_id: TaskId, path: str = SIM_FILE_JSON, verbose: bool = Tr
         If `True`, will print progressbars and status, otherwise, will run silently.
 
     """
-    _download_file(task_id, fname=SIM_FILE_JSON, path=path, verbose=verbose)
+
+    task = SimulationTask.get(task_id)
+    if not task:
+        raise ValueError(f"Task {task_id} not found.")
+    task.get_simulation_json(path, verbose=verbose)
 
 
 def download_hdf5(task_id: TaskId, path: str = SIM_FILE_HDF5, verbose: bool = True) -> None:
@@ -399,7 +359,10 @@ def download_hdf5(task_id: TaskId, path: str = SIM_FILE_HDF5, verbose: bool = Tr
         If `True`, will print progressbars and status, otherwise, will run silently.
 
     """
-    _download_file(task_id, fname=SIM_FILE_HDF5, path=path, verbose=verbose)
+    task = SimulationTask.get(task_id)
+    if not task:
+        raise ValueError(f"Task {task_id} not found.")
+    task.get_simulation_hdf5(path, verbose=verbose)
 
 
 def load_simulation(task_id: TaskId, path: str = SIM_FILE_JSON, verbose: bool = True) -> Simulation:
@@ -419,7 +382,9 @@ def load_simulation(task_id: TaskId, path: str = SIM_FILE_JSON, verbose: bool = 
     :class:`.Simulation`
         Simulation loaded from downloaded json file.
     """
-    download_json(task_id, path=path, verbose=verbose)
+
+    task = SimulationTask.get(task_id)
+    task.get_simulation_json(path, verose=verbose)
     return Simulation.from_file(path)
 
 
@@ -437,7 +402,10 @@ def download_log(task_id: TaskId, path: str = "tidy3d.log", verbose: bool = True
     ----
     To load downloaded results into data, call :meth:`load` with option `replace_existing=False`.
     """
-    _download_file(task_id, fname="output/tidy3d.log", path=path, verbose=verbose)
+    task = SimulationTask.get(task_id)
+    if not task:
+        raise ValueError("Task not found.")
+    task.get_log(path, verbose=verbose)
 
 
 def load(
@@ -499,8 +467,9 @@ def delete(task_id: TaskId) -> TaskInfo:
         Object containing information about status, size, credits of task.
     """
 
-    method = f"tidy3d/tasks/{str(task_id)}"
-    return http.delete(method)
+    task = SimulationTask.get(task_id)
+    task.delete()
+    return TaskInfo(**{"taskId": task.task_id, **task.dict()})
 
 
 def delete_old(
@@ -522,18 +491,18 @@ def delete_old(
         Total number of tasks deleted.
     """
 
-    folder = _query_or_create_folder(folder)
-    tasks = http.get(f"tidy3d/projects/{folder.projectId}/tasks")
-    count = 0
+    folder = Folder.get(folder)
+    if not folder:
+        return 0
+    tasks = folder.list_tasks()
+    if not tasks:
+        return 0
+    tasks = list(
+        filter(lambda t: t.created_at < datetime.now(pytz.utc) - timedelta(days=days_old), tasks)
+    )
     for task in tasks:
-        stime_str = task["createdAt"]
-        stime = parser.parse(stime_str)
-        cutoff_date = datetime.now(stime.tzinfo) - timedelta(days=days_old)
-        if stime < cutoff_date:
-            delete(task["taskId"])
-            count += 1
-
-    return count
+        task.delete()
+    return len(tasks)
 
 
 def get_tasks(
@@ -550,62 +519,47 @@ def get_tasks(
     folder: str = "default"
         Folder from which to get the tasks.
     """
-    folder = _query_or_create_folder(folder)
-    tasks = http.get(f"tidy3d/projects/{folder.projectId}/tasks")
-    store_dict = {
-        "submit_time": [],
-        "status": [],
-        "task_name": [],
-        "task_id": [],
-    }
-    for task in tasks:
-        try:
-            store_dict["submit_time"].append(task["createdAt"])
-            store_dict["status"].append(task["status"])
-            store_dict["task_name"].append(task["taskName"])
-            store_dict["task_id"].append(task["taskId"])
-        except KeyError:
-            logging.warning(f"Error with task {task['taskId']}, skipping.")
-
-    sort_inds = sorted(
-        range(len(store_dict["submit_time"])),
-        key=store_dict["submit_time"].__getitem__,
-        reverse=order == "new",
-    )
-
-    if num_tasks is None or num_tasks > len(sort_inds):
-        num_tasks = len(sort_inds)
-
-    return [
-        {key: item[sort_inds[ipr]] for (key, item) in store_dict.items()}
-        for ipr in range(num_tasks)
-    ]
+    folder = Folder.get(folder)
+    tasks = folder.list_tasks()
+    if order == "new":
+        tasks = sorted(tasks, key=lambda t: t.created_at, reverse=True)
+    elif order == "old":
+        tasks = sorted(tasks, key=lambda t: t.created_at)
+    if num_tasks is not None:
+        tasks = tasks[:num_tasks]
+    return [task.dict() for task in tasks]
 
 
 def estimate_cost(task_id: str) -> float:
-    """Compute the maximum flex unit charge for a given task, assuming the simulation runs for
+    """Compute the maximum flex unit charge for a given task.
+
+    Parameters
+    ----------
+    task_id : str
+        Unique identifier of task on server.  Returned by :meth:`upload`.
+
+    Returns
+    -------
+    float
+        Estimated maximum cost for :class:`.Simulation` associated with given ``task_id``..
+
+    Note
+    ----
+    Cost is calculated assuming the simulation runs for
     the full ``run_time``. If early shut-off is triggered, the cost is adjusted proporionately.
     """
 
-    method = f"tidy3d/tasks/{task_id}/metadata"
-    data = {}
-
-    # do not pass protocol version if mapping is missing or needs an override.
-    if DEFAULT_CONFIG.solver_version:
-        data["solverVersion"] = DEFAULT_CONFIG.solver_version
-    else:
-        data["protocolVersion"] = __version__
-
-    try:
-        resp = http.post(method, data=data)
-    except Exception:  # pylint:disable=broad-except
+    task = SimulationTask.get(task_id)
+    if not task:
+        raise ValueError("Task not found.")
+    resp = task.estimate_cost()
+    flex_unit = resp.get("flex_unit")
+    if not flex_unit:
         log.warning(
             "Could not get estimated cost! It will be reported in preprocessing upon "
             "simulation run."
         )
-        return None
-
-    return resp.get("flex_unit")
+    return flex_unit
 
 
 def real_cost(task_id: str) -> float:
@@ -624,84 +578,3 @@ def real_cost(task_id: str) -> float:
             "successfully run, it should be available shortly."
         )
     return flex_unit
-
-
-def _query_or_create_folder(folder_name) -> Folder:
-    log.debug("query folder")
-    method = f"tidy3d/project?projectName={folder_name}"
-
-    try:
-        resp = http.get(method)
-        if resp is None:
-            log.debug("folder not found, create one.")
-            method = "tidy3d/projects"
-            resp = http.post(method, data={"projectName": folder_name})
-        folder = Folder(**resp)
-    except WebError as e:
-        raise e
-    except Exception as e:  # pylint:disable=broad-except
-        raise WebError("Could not create task folder") from e
-
-    return folder
-
-
-def _download_file(task_id: TaskId, fname: str, path: str, verbose: bool = True) -> None:
-    """Download a specific file from server.
-
-    Parameters
-    ----------
-    task_id : str
-        Unique identifier of task on server.  Returned by :meth:`upload`.
-    fname : str
-        Name of the file on server (eg. ``monitor_data.hdf5``, ``tidy3d.log``, ``simulation.json``)
-    path : str
-        Path where the file will be downloaded to (including filename).
-    verbose : bool = True
-        If `True`, will print progressbars and status, otherwise, will run silently.
-
-    """
-
-    task_info = get_info(task_id)
-    if task_info.status in ("error", "deleted"):
-        raise WebError(f"can't download task '{task_id}', status = '{task_info.status}'")
-
-    directory, _ = os.path.split(path)
-    if directory != "":
-        os.makedirs(directory, exist_ok=True)
-
-    if verbose:
-        log.info(f'downloading file "{fname}" to "{path}"')
-
-    try:
-        download_file(task_id, fname, path, verbose=verbose)
-    except WebError as e:
-        raise e
-    except Exception as e:  # pylint:disable=broad-except
-        task_info = get_info(task_id)
-        log.warning(str(e))
-        log.error(
-            "Cannot retrieve requested file, check the file name and "
-            "make sure the task has run correctly. Current "
-            f"task status is '{task_info.status}.'",
-        )
-
-
-def _rm_file(path: str):
-    """Clear path if it exists."""
-    if os.path.exists(path) and not os.path.isdir(path):
-        log.debug(f"removing file {path}")
-        os.remove(path)
-
-
-def _s3_grant(task_id: TaskId):
-    user = DEFAULT_CONFIG.user
-    if "expiration" in user:
-        exp = parser.parse(user["expiration"]).replace(tzinfo=None)
-        # request new temporary credential when existing one expires in 5 minutes.
-        if (exp - datetime.utcnow()).total_seconds() > 300:
-            return
-
-    method = f"tidy3d/s3upload/grant?resourceId={task_id}"
-    resp = http.get(method)
-    credentials = resp["userCredentials"]
-    DEFAULT_CONFIG.user = {**DEFAULT_CONFIG.user, **credentials}
