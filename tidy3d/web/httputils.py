@@ -1,18 +1,64 @@
 """ handles communication with server """
-# import os
+import os
 import time
-from typing import Dict
 from enum import Enum
+from typing import Dict
 
 import jwt
+import toml
 from requests import Session
 
 from .auth import get_credentials, MAX_ATTEMPTS
+from .cli.app import CONFIG_FILE
 from .config import DEFAULT_CONFIG as Config
 from ..log import WebError
+from ..version import __version__
+
+SIMCLOUD_APIKEY = "SIMCLOUD_APIKEY"
+
+
+def api_key():
+    """
+    Get the api key for the current environment.
+    :return:
+    """
+    if os.environ.get(SIMCLOUD_APIKEY):
+        return os.environ.get(SIMCLOUD_APIKEY)
+    if os.path.exists(CONFIG_FILE):
+        with open(CONFIG_FILE, "r", encoding="utf-8") as config_file:
+            config = toml.loads(config_file.read())
+            return config.get("apikey", "")
+
+    return None
+
+
+def auth(request):
+    """
+    Set the authentication.
+    :param request:
+    :return:
+    """
+    key = api_key()
+    if key:
+        request.headers["simcloud-api-key"] = key
+        request.headers["tidy3d-python-version"] = __version__
+        return request
+
+    headers = get_headers()
+    if headers:
+        request.headers.update(headers)
+        return request
+
+    raise ValueError(
+        "API key not found, please set it by commandline or environment,"
+        " eg: tidy3d configure or export "
+        "SIMCLOUD_APIKEY=xxx"
+    )
+
 
 session = Session()
 session.verify = Config.env_settings.ssl_verify
+session.auth = auth
 
 
 class ResponseCodes(Enum):
@@ -41,13 +87,10 @@ def handle_response(func):
 
         # if still unauthorized, raise an error
         if resp.status_code == ResponseCodes.UNAUTHORIZED.value:
-            raise WebError("Failed to log in to server!")
+            raise WebError(resp.text)
 
-        # try returning the json of the response
-        try:
-            json_resp = resp.json()
-        except Exception:  # pylint:disable=broad-except
-            resp.raise_for_status()
+        resp.raise_for_status()
+        json_resp = resp.json()
 
         # if the response status is still not OK, try to raise error from the json
         if resp.status_code != ResponseCodes.OK.value:
@@ -89,29 +132,25 @@ def get_headers() -> Dict[str, str]:
 def post(method, data=None):
     """Uploads the file."""
     query_url = get_query_url(method)
-    headers = get_headers()
-    return session.post(query_url, headers=headers, json=data)
+    return session.post(query_url, json=data)
 
 
 @handle_response
 def put(method, data):
     """Runs the file."""
     query_url = get_query_url(method)
-    headers = get_headers()
-    return session.put(query_url, headers=headers, json=data)
+    return session.put(query_url, json=data)
 
 
 @handle_response
 def get(method):
     """Downloads the file."""
     query_url = get_query_url(method)
-    headers = get_headers()
-    return session.get(query_url, headers=headers)
+    return session.get(query_url)
 
 
 @handle_response
 def delete(method):
     """Deletes the file."""
     query_url = get_query_url(method)
-    headers = get_headers()
-    return session.delete(query_url, headers=headers)
+    return session.delete(query_url)

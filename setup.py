@@ -1,7 +1,6 @@
 import setuptools
 from distutils.util import convert_path
 
-
 PACKAGE_NAME = "tidy3d"
 PIP_NAME = "tidy3d-beta"
 REPO_NAME = "tidy3d"
@@ -51,4 +50,9 @@ setuptools.setup(
     python_requires=">=3.7",
     install_requires=core_required,
     extras_require={"dev": dev_required},
+    entry_points={
+        "console_scripts": [
+            "tidy3d = tidy3d.web.cli:tidy3d_cli",
+        ],
+    },
 )
