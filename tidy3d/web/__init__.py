@@ -5,3 +5,4 @@ from .webapi import run, upload, get_info, start, monitor, delete, download, loa
 from .webapi import get_tasks, delete_old, download_json, download_log, load_simulation
 from .container import Job, Batch, BatchData
 from .auth import get_credentials
+from .cli import tidy3d_cli
