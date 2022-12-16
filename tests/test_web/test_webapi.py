@@ -28,6 +28,9 @@ class MockResponse:
     def json():
         return {}
 
+    def raise_for_status(self):
+        pass
+
 
 class MockResponseInfoOk(MockResponse):
     """response if web.getinfo(task_id) and task_id found"""
