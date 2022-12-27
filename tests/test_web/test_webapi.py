@@ -3,6 +3,8 @@ import pytest
 import requests
 import datetime
 
+from requests import Session
+
 import tidy3d as td
 import tidy3d.web as web
 from tidy3d.web import httputils, s3utils, webapi
@@ -113,18 +115,18 @@ def mock_response(monkeypatch):
         method = url.split(preamble)[-1]
         return RESPONSE_MAP[method]
 
-    def mock_get(url, **kwargs):
-        return get_response(url)
+    class MockRequests:
+        def get(self, url, **kwargs):
+            return get_response(url)
 
-    def mock_post(url, **kwargs):
-        return get_response(url)
+        def post(self, url, **kwargs):
+            return get_response(url)
 
     monkeypatch.setattr(
         httputils, "get_headers", lambda: {"Authorization": None, "Application": "TIDY3D"}
     )
     monkeypatch.setattr(webapi, "upload_string", lambda a, b, c: None)
-    monkeypatch.setattr(requests, "get", mock_get)
-    monkeypatch.setattr(requests, "post", mock_post)
+    monkeypatch.setattr(httputils, "session", MockRequests())
 
 
 def make_sim():

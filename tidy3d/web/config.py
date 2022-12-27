@@ -3,6 +3,15 @@ import os
 from typing import Any, Dict
 
 import pydantic as pd
+from pydantic import Field
+
+
+class EnvSettings(pd.BaseSettings):
+    """
+    Settings for reading environment variables
+    """
+
+    ssl_verify: bool = Field(True, env="TIDY3D_SSL_VERIFY")
 
 
 class WebConfig(pd.BaseModel):  # pylint:disable=too-many-instance-attributes
@@ -18,6 +27,7 @@ class WebConfig(pd.BaseModel):  # pylint:disable=too-many-instance-attributes
     auth: str = None
     user: Dict[str, str] = None
     auth_retry: int = 1
+    env_settings: EnvSettings = EnvSettings()
 
 
 # development config
