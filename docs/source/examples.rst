@@ -57,5 +57,6 @@ Case studies
     notebooks/PolarizationSplitterRotator
     notebooks/GratingCoupler
     notebooks/RingResonator
+    notebooks/THzDemultiplexerFilter
     notebooks/Adjoint
     notebooks/ZonePlateFieldProjection
