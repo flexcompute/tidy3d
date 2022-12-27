@@ -4,7 +4,7 @@ from unittest import TestCase, mock
 
 import tidy3d.web as web
 from tidy3d.web.auth import get_credentials, encode_password
-from ..utils import SIM_CONVERT as sim_original
+from ..utils import SIM_FULL as sim_original
 from ..utils import clear_tmp
 
 PATH_JSON = "tests/tmp/simulation.json"

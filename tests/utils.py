@@ -56,8 +56,8 @@ SIM_MONITORS = Simulation(
 )
 
 SIM_FULL = Simulation(
-    size=(10.0, 10.0, 10.0),
-    run_time=40e-11,
+    size=(8.0, 8.0, 8.0),
+    run_time=1e-12,
     structures=[
         Structure(
             geometry=Box(size=(1, 1, 1), center=(-1, 0, 0)),
@@ -122,7 +122,7 @@ SIM_FULL = Simulation(
         ),
         ModeSource(
             center=(0, 0.5, 0),
-            size=(inf, 0, inf),
+            size=(2, 0, 2),
             mode_spec=td.ModeSpec(),
             source_time=GaussianPulse(
                 freq0=2e14,
@@ -161,7 +161,7 @@ SIM_FULL = Simulation(
             waist_distances=(3.0, 4.0),
         ),
         CustomFieldSource(
-            center=(1, 2, 3),
+            center=(0, 1, 2),
             size=(2, 2, 0),
             source_time=GaussianPulse(
                 freq0=2e14,
@@ -184,10 +184,10 @@ SIM_FULL = Simulation(
         FieldMonitor(
             size=(0, 0, 0), center=(0, 0, 0), fields=["Ex"], freqs=[1.5e14, 2e14], name="field"
         ),
-        FieldTimeMonitor(size=(0, 0, 0), center=(0, 0, 0), name="field_time"),
+        FieldTimeMonitor(size=(0, 0, 0), center=(0, 0, 0), name="field_time", interval=100),
         FluxMonitor(size=(1, 1, 0), center=(0, 0, 0), freqs=[2e14, 2.5e14], name="flux"),
         FluxTimeMonitor(size=(1, 1, 0), center=(0, 0, 0), name="flux_time"),
-        PermittivityMonitor(size=(1, 1, 1), name="eps", freqs=[1e13]),
+        PermittivityMonitor(size=(1, 1, 0.1), name="eps", freqs=[1e14]),
         ModeMonitor(
             size=(1, 1, 0),
             center=(0, 0, 0),
@@ -255,13 +255,13 @@ SIM_FULL = Simulation(
         y=Boundary.bloch(bloch_vec=1),
         z=Boundary.periodic(),
     ),
-    shutoff=1e-6,
+    shutoff=1e-4,
     courant=0.8,
     subpixel=False,
     grid_spec=GridSpec(
         grid_x=AutoGrid(),
-        grid_y=CustomGrid(dl=101 * [0.01]),
-        grid_z=UniformGrid(dl=0.01),
+        grid_y=CustomGrid(dl=100 * [0.04]),
+        grid_z=UniformGrid(dl=0.05),
         override_structures=[
             td.Structure(
                 geometry=Box(size=(1, 1, 1), center=(-1, 0, 0)),
@@ -269,36 +269,6 @@ SIM_FULL = Simulation(
             )
         ],
     ),
-)
-
-# Initialize simulation
-SIM_CONVERT = td.Simulation(
-    size=[4, 4, 4],
-    structures=[
-        td.Structure(
-            geometry=td.Box(center=[0, 0, 0], size=[1.5, 1.5, 1.5]),
-            medium=td.Medium.from_nk(n=2, k=0, freq=3e14),
-        )
-    ],
-    sources=[
-        td.UniformCurrentSource(
-            center=(0, -1.5, 0),
-            size=(0.4, 0.4, 0.4),
-            source_time=td.GaussianPulse(freq0=3e14, fwidth=1e13),
-            polarization="Ex",
-        ),
-    ],
-    monitors=[
-        td.FieldMonitor(
-            fields=["Ex", "Hy"],
-            center=(0, 0, 0),
-            size=(inf, 0, inf),
-            freqs=[3e14],
-            name="field_monitor",
-        )
-    ],
-    run_time=1e-12,
-    boundary_spec=BoundarySpec.pml(x=True, y=True, z=True),
 )
 
 
