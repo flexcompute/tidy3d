@@ -122,10 +122,13 @@ def upload(  # pylint:disable=too-many-locals,too-many-arguments
     # pylint:disable=protected-access
     upload_string(task_id, simulation._json_string, SIM_FILE_JSON)
     if len(simulation.custom_datasets) > 0:
-        # Also upload hdf5 containing all data
-        with tempfile.NamedTemporaryFile() as data_file:
-            simulation.to_hdf5(data_file.name)
-            upload_file(task_id, data_file.name, SIM_FILE_HDF5)
+        # Also upload hdf5 containing all data.
+        # The temp file will be re-opened in `to_hdf5` which can cause an error on some systems
+        # so we explicitly close it first.
+        data_file = tempfile.NamedTemporaryFile()  # pylint:disable=consider-using-with
+        data_file.close()
+        simulation.to_hdf5(data_file.name)
+        upload_file(task_id, data_file.name, SIM_FILE_HDF5)
 
     # log the url for the task in the web UI
     log.debug(f"{DEFAULT_CONFIG.website_endpoint}/folders/{folder.projectId}/tasks/{task_id}")
