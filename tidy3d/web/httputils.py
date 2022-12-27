@@ -5,11 +5,14 @@ from typing import Dict
 from enum import Enum
 
 import jwt
-import requests
+from requests import Session
 
 from .auth import get_credentials, MAX_ATTEMPTS
 from .config import DEFAULT_CONFIG as Config
 from ..log import WebError
+
+session = Session()
+session.verify = Config.env_settings.ssl_verify
 
 
 class ResponseCodes(Enum):
@@ -87,7 +90,7 @@ def post(method, data=None):
     """Uploads the file."""
     query_url = get_query_url(method)
     headers = get_headers()
-    return requests.post(query_url, headers=headers, json=data)
+    return session.post(query_url, headers=headers, json=data)
 
 
 @handle_response
@@ -95,7 +98,7 @@ def put(method, data):
     """Runs the file."""
     query_url = get_query_url(method)
     headers = get_headers()
-    return requests.put(query_url, headers=headers, json=data)
+    return session.put(query_url, headers=headers, json=data)
 
 
 @handle_response
@@ -103,7 +106,7 @@ def get(method):
     """Downloads the file."""
     query_url = get_query_url(method)
     headers = get_headers()
-    return requests.get(query_url, headers=headers)
+    return session.get(query_url, headers=headers)
 
 
 @handle_response
@@ -111,4 +114,4 @@ def delete(method):
     """Deletes the file."""
     query_url = get_query_url(method)
     headers = get_headers()
-    return requests.delete(query_url, headers=headers)
+    return session.delete(query_url, headers=headers)
