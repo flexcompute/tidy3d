@@ -30,6 +30,25 @@ Then, build and upload, make sure to specify repository `-r` of `test-pypi`.
 
 The changes should be reflected on test PyPI https://test.pypi.org/project/tidy3d-beta/1.8.0/
 
+### Fixing pyproject.toml
+
+Note, this did not work originally because while the package directory name is `tidy3d/`, the repository name on PyPI is `tidy3d-beta`.
+
+So a couple changes were required in `pyproject.toml`.
+
+I needed to change the `name=tidy3d` to `name=tidy3d-beta`
+I needed to add what packages to include, namely
+```
+packages = [
+    { include = "tidy3d" },
+    { include = "tidy3d/web" },
+    { include = "tidy3d/plugins" },
+]
+```
+(note, not 100% sure I needed to include `web` and `plugins`, but I think they are needed because tey aren't imported in the top level `tidy3d/__init__.py` file.)
+
+Once I did this, the steps from the previous section worked properly.
+
 ### Testing installation from test.PyPI
 
 To test, in a clean environment
