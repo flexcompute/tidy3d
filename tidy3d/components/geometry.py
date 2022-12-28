@@ -16,7 +16,7 @@ from .types import Vertices, Ax, Shapely, annotate_type
 from .viz import add_ax_if_none, equal_aspect
 from .viz import PLOT_BUFFER, ARROW_LENGTH_FACTOR, ARROW_WIDTH_FACTOR, MAX_ARROW_WIDTH_FACTOR
 from .viz import PlotParams, plot_params_geometry, polygon_patch
-from ..log import Tidy3dKeyError, SetupError, ValidationError
+from ..log import Tidy3dKeyError, SetupError, ValidationError, log
 from ..constants import MICROMETER, LARGE_NUMBER, RADIAN, fp_eps, inf
 
 # for sampling polygon in slanted polyslab along  z-direction for
@@ -764,6 +764,21 @@ class Planar(Geometry, ABC):
         "E.g. if ``axis=1``, ``bottom`` refers to the negative side of the y-axis, and "
         "``top`` refers to the positive side of the y-axis.",
     )
+
+    # TODO: remove for 2.0
+    @pydantic.root_validator(pre=True)
+    def _deprecation_2_0_missing_defaults(cls, values):
+        """Warn user if reference plane default value is used."""
+        if values.get("reference_plane") is None:
+            sidewall_angle = values.get("sidewall_angle")
+            if sidewall_angle is not None and not isclose(sidewall_angle, 0.0):
+                log.warning(
+                    "'reference_plane' field uses default value, which is 'bottom' "
+                    "but will change to 'middle' in Tidy3D version 2.0. "
+                    "We recommend you change your class initializer to explicitly set "
+                    "the 'reference_plane' field ahead of this release to avoid unexpected results."
+                )
+        return values
 
     @property
     @abstractmethod
@@ -1970,7 +1985,6 @@ class PolySlab(Planar):
         gds_scale: pydantic.PositiveFloat = 1.0,
         dilation: float = 0.0,
         sidewall_angle: float = 0,
-        reference_plane: PlanePosition = "bottom",
         **kwargs,
     ) -> List["PolySlab"]:
         """Import :class:`PolySlab` from a ``gdspy.Cell``.
@@ -2010,6 +2024,21 @@ class PolySlab(Planar):
         List[:class:`PolySlab`]
             List of :class:`PolySlab` objects sharing ``axis`` and  slab bound properties.
         """
+
+        # TODO: change for 2.0
+        # handle reference plane kwarg
+        reference_plane = kwargs.get("reference_plane")
+        if reference_plane is None:
+            reference_plane = "bottom"
+            if not isclose(sidewall_angle, 0.0):
+                log.warning(
+                    "'reference_plane' field uses default value, which is 'bottom' "
+                    "but will change to 'middle' in Tidy3D version 2.0. "
+                    "We recommend you change your classmethod constructor call to explicitly set "
+                    "the 'reference_plane' field ahead of this release to avoid unexpected results."
+                )
+        else:
+            kwargs.pop("reference_plane")
 
         # load the polygon vertices
         vert_dict = gds_cell.get_polygons(by_spec=True)
