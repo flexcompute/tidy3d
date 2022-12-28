@@ -204,6 +204,18 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
 
     """ Validating setup """
 
+    @pydantic.root_validator(pre=True)
+    def _update_simulation(cls, values):
+        """Update the simulation if it is an earlier version."""
+
+        # if no version, assume it's already updated
+        if "version" not in values:
+            return values
+
+        # otherwise, call the updator to update the values dictionary
+        updater = Updater(sim_dict=values)
+        return updater.update_to_current()
+
     @pydantic.validator("grid_spec", always=True)
     def _validate_auto_grid_wavelength(cls, val, values):
         """Check that wavelength can be defined if there is auto grid spec."""
@@ -2014,34 +2026,6 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         # combine all data into dictionary
         coords = grid[coord_key]
         return make_eps_data(coords)
-
-    @classmethod
-    def from_file(cls, fname: str, group_path: str = None, **parse_obj_kwargs) -> Simulation:
-        """Loads a :class:`Tidy3dBaseModel` from .yaml or .json file.
-
-        Parameters
-        ----------
-        fname : str
-            Full path to the .yaml or .json file to load the :class:`Tidy3dBaseModel` from.
-        group_path : str, optional
-            Path to a group inside the file to use as the base level. Only for ``.hdf5`` files.
-        **parse_obj_kwargs
-            Keyword arguments passed to either pydantic's ``parse_obj`` function when loading model.
-
-        Returns
-        -------
-        :class:`Tidy3dBaseModel`
-            An instance of the component class calling `load`.
-
-        Example
-        -------
-        >>> simulation = Simulation.from_file(fname='folder/sim.json') # doctest: +SKIP
-        """
-
-        sim_dict = cls.dict_from_file(fname=fname, group_path=group_path)
-        updater = Updater(sim_dict=sim_dict)
-        sim_dict_updated = updater.update_to_current()
-        return cls.parse_obj(sim_dict_updated, **parse_obj_kwargs)
 
     @property
     def custom_datasets(self) -> List[Dataset]:
