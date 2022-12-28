@@ -107,7 +107,7 @@ unicode-backport = ["unicodedata2"]
 name = "click"
 version = "8.1.3"
 description = "Composable command line interface toolkit"
-category = "dev"
+category = "main"
 optional = false
 python-versions = ">=3.7"
 
@@ -127,7 +127,7 @@ python-versions = ">=3.6"
 name = "colorama"
 version = "0.4.6"
 description = "Cross-platform colored terminal text."
-category = "dev"
+category = "main"
 optional = false
 python-versions = "!=3.0.*,!=3.1.*,!=3.2.*,!=3.3.*,!=3.4.*,!=3.5.*,!=3.6.*,>=2.7"
 
@@ -1042,7 +1042,7 @@ testing = ["flake8 (<5)", "func-timeout", "jaraco.functools", "jaraco.itertools"
 [metadata]
 lock-version = "1.1"
 python-versions = "^3.7.2"
-content-hash = "fa7cf5d382d0bc145b7847717f522775361c4ba4c2481ec55085abd11e960973"
+content-hash = "b95837619317ebd04f0ebba2e7797457f8be1fce4f4fec05e0d30aeee15a5202"
 
 [metadata.files]
 astroid = [

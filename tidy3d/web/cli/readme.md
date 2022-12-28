@@ -30,6 +30,8 @@ Then, build and upload, make sure to specify repository `-r` of `test-pypi`.
 
 The changes should be reflected on test PyPI https://test.pypi.org/project/tidy3d-beta/1.8.0/
 
+### Testing installation from test.PyPI
+
 To test, in a clean environment
 
 ``python3.9 -m pip install --index-url https://test.pypi.org/simple/ tidy3d-beta``
@@ -47,5 +49,40 @@ ERROR: Could not find a version that satisfies the requirement pyroots<0.6.0,>=0
 ERROR: No matching distribution found for pyroots<0.6.0,>=0.5.0
 ```
 
-Work in progress.
+It turns out this is expected using test pyPI as explained [here](https://packaging.python.org/en/latest/tutorials/packaging-projects/#installing-your-newly-uploaded-package).
+
+When I try to install `tidy3d-beta` from test.pyPI in an environment with the dependencies already installed from 
+``python3.9 -m pip install -e '.[dev]'``
+``python3.9 -m pip uninstall tidy3d-beta``
+
+It works as expected, besides needing `click`
+
+``python3.9 -c "import tidy3d as td; import tidy3d.web as web; from tidy3d.plugins import ModeSolver"``
+
+```
+[11:04:02] INFO     Using client version: 1.8.0                                                                                                                                              __init__.py:112
+Traceback (most recent call last):
+  File "<string>", line 1, in <module>
+  File "/usr/local/lib/python3.9/site-packages/tidy3d/web/__init__.py", line 8, in <module>
+    from .cli import tidy3d_cli
+  File "/usr/local/lib/python3.9/site-packages/tidy3d/web/cli/__init__.py", line 4, in <module>
+    from .app import tidy3d_cli
+  File "/usr/local/lib/python3.9/site-packages/tidy3d/web/cli/app.py", line 7, in <module>
+    import click
+ModuleNotFoundError: No module named 'click'
+```
+
+### Fixing the error
+
+So I added `click` with 
+
+``poetry add click``
+
+This changed the `poetry.lock` and `pyproject.toml`.
+
+I then bumped the version in `version.py` and `pyproject.toml` to `1.8.1` (otherwise, could not upload again to PyPI for same version) and repeated the publishing steps from above again.
+
+Testing the newly pip-installed version I was able to successfully import tidy3d and run a simulation!
+
+
 
