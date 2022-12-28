@@ -1,9 +1,15 @@
 [tool.poetry]
-name = "tidy3d"
+name = "tidy3d-beta"
 version = "1.8.0"
 description = ""
 authors = ["Tyler Hughes <tyler@flexcompute.com>"]
 readme = "README.md"
+packages = [
+    { include = "tidy3d" },
+    { include = "tidy3d/web" },
+    { include = "tidy3d/plugins" },
+]
+
 
 [tool.poetry.dependencies]
 python = "^3.7.2"
