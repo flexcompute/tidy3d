@@ -355,6 +355,23 @@ class Boundary(Tidy3dBaseModel):
         discriminator=TYPE_TAG_STR,
     )
 
+    # TODO: remove for 2.0
+    @pd.root_validator(pre=True)
+    def _deprecation_2_0_missing_defaults(cls, values):
+        """Raise deprecation warning if a default `plus` or `minus` is used."""
+
+        fields_use_default = [field for field in ("plus", "minus") if values.get(field) is None]
+
+        for field in fields_use_default:
+            log.warning(
+                f"'Boundary.{field}' uses default value, which is 'Periodic()' "
+                "but will change to 'PML()' in Tidy3D version 2.0. "
+                "We recommend you change your 'BoundarySpec' to explicitly set "
+                "the boundary conditions ahead of this release to avoid unexpected results."
+            )
+
+        return values
+
     @pd.root_validator(skip_on_failure=True)
     def bloch_on_both_sides(cls, values):
         """Error if a Bloch boundary is applied on only one side."""

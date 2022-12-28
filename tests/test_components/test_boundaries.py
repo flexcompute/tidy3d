@@ -176,3 +176,15 @@ def test_boundaryspec_classmethods():
     assert all(
         [isinstance(boundary, PML) for boundary_dim in boundaries for boundary in boundary_dim]
     )
+
+
+PLUS_MINUS_SPECIFIED = (("plus", "minus"), ("plus",), ("minus",), ())
+LOG_LEVELS_EXPECTED = (None, 30, 30, 30)
+
+# TODO: remove for 2.0
+@pytest.mark.parametrize("pm_keys, log_level", zip(PLUS_MINUS_SPECIFIED, LOG_LEVELS_EXPECTED))
+def test_deprecation_defaults(caplog, pm_keys, log_level):
+    """Make sure deprecation warnings thrown if defaults used."""
+    boundary_kwargs = {key: Periodic() for key in pm_keys}
+    bc = Boundary(**boundary_kwargs)
+    assert_log_level(caplog, log_level)

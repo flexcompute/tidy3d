@@ -10,6 +10,7 @@ import gdspy
 import tidy3d as td
 from tidy3d.log import ValidationError, SetupError, Tidy3dKeyError
 from tidy3d.components.geometry import Geometry, Planar
+from ..utils import assert_log_level
 
 GEO = td.Box(size=(1, 1, 1))
 BOX = td.Box(size=(1, 1, 1))
@@ -375,3 +376,80 @@ def test_polyslab_axis(axis):
     assert ps.intersects_plane(x=plane_coord[0], y=plane_coord[1], z=plane_coord[2]) == False
     plane_coord[axis] = -3
     assert ps.intersects_plane(x=plane_coord[0], y=plane_coord[1], z=plane_coord[2]) == False
+
+
+ANGLE = 0.01
+SIDEWALL_ANGLES = (0.0, ANGLE, 0.0, ANGLE, 0.0, ANGLE)
+REFERENCE_PLANES = ("bottom", "bottom", "middle", "middle", None, None)
+LOG_LEVELS_EXPECTED = (None, None, None, None, None, 30)
+
+
+def make_ref_plane_kwargs(reference_plane: str):
+    if reference_plane is None:
+        return {}
+    return dict(reference_plane=reference_plane)
+
+
+# TODO: remove for 2.0
+@pytest.mark.parametrize(
+    "sidewall_angle, reference_plane, log_level",
+    zip(SIDEWALL_ANGLES, REFERENCE_PLANES, LOG_LEVELS_EXPECTED),
+)
+def test_polyslab_deprecation_field(caplog, sidewall_angle, reference_plane, log_level):
+    """Test that deprectaion warnings thrown if polyslab reference plane not specified."""
+
+    reference_plane_kwargs = make_ref_plane_kwargs(reference_plane)
+
+    ps = td.PolySlab(
+        vertices=((0, 0), (1, 0), (1, 1), (0, 1)),
+        slab_bounds=(-0.5, 0.5),
+        axis=2,
+        sidewall_angle=sidewall_angle,
+        **reference_plane_kwargs,
+    )
+    assert_log_level(caplog, log_level)
+
+
+# TODO: remove for 2.0
+@pytest.mark.parametrize(
+    "sidewall_angle, reference_plane, log_level",
+    zip(SIDEWALL_ANGLES, REFERENCE_PLANES, LOG_LEVELS_EXPECTED),
+)
+def test_cylinder_deprecation_field(caplog, sidewall_angle, reference_plane, log_level):
+    """Test that deprectaion warnings thrown if cylinder reference plane not specified."""
+
+    reference_plane_kwargs = make_ref_plane_kwargs(reference_plane)
+
+    ps = td.Cylinder(
+        length=2.0,
+        radius=1.0,
+        axis=2,
+        sidewall_angle=sidewall_angle,
+        **reference_plane_kwargs,
+    )
+    assert_log_level(caplog, log_level)
+
+
+# TODO: remove for 2.0
+@pytest.mark.parametrize(
+    "sidewall_angle, reference_plane, log_level",
+    zip(SIDEWALL_ANGLES, REFERENCE_PLANES, LOG_LEVELS_EXPECTED),
+)
+def test_polyslab_deprecation_classmethod(caplog, sidewall_angle, reference_plane, log_level):
+    """Test that deprectaion warnings thrown if polyslab reference plane not specified."""
+
+    reference_plane_kwargs = make_ref_plane_kwargs(reference_plane)
+
+    cell_name = str(hash(reference_plane)) + str(hash(sidewall_angle))
+    gds_cell = gdspy.Cell(cell_name)
+    gds_cell.add(gdspy.Rectangle((0, 0), (1, 1)))
+    td.PolySlab.from_gds(
+        gds_cell=gds_cell,
+        axis=2,
+        slab_bounds=(-1, 1),
+        gds_layer=0,
+        sidewall_angle=sidewall_angle,
+        **reference_plane_kwargs,
+    )
+
+    assert_log_level(caplog, log_level)
