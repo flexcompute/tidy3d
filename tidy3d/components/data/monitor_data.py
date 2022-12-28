@@ -19,7 +19,7 @@ from .dataset import Dataset, AbstractFieldDataset, ElectromagneticFieldDataset
 from .dataset import FieldDataset, FieldTimeDataset, ModeSolverDataset, PermittivityDataset
 from ..base import TYPE_TAG_STR, cached_property
 from ..types import Coordinate, Symmetry, ArrayLike, Size, Numpy, TrackFreq
-from ..grid.grid import Grid
+from ..grid.grid import Grid, Coords
 from ..validators import enforce_monitor_fields_present, required_if_symmetry_present
 from ..monitor import MonitorType, FieldMonitor, FieldTimeMonitor, ModeSolverMonitor
 from ..monitor import ModeMonitor, FluxMonitor, FluxTimeMonitor, PermittivityMonitor
@@ -80,6 +80,10 @@ class AbstractFieldData(MonitorData, AbstractFieldDataset, ABC):
     _require_sym_center = required_if_symmetry_present("symmetry_center")
     _require_grid_expanded = required_if_symmetry_present("grid_expanded")
 
+    def _expanded_grid_field_coords(self, field_name: str) -> Coords:
+        """Coordinates in the expanded grid corresponding to a given field component."""
+        return self.grid_expanded[self.grid_locations[field_name]]
+
     @property
     def symmetry_expanded_copy(self) -> AbstractFieldData:
         """Create a copy of the :class:`.AbstractFieldData` with fields expanded based on symmetry.
@@ -97,11 +101,10 @@ class AbstractFieldData(MonitorData, AbstractFieldDataset, ABC):
 
         for field_name, scalar_data in self.field_components.items():
 
-            grid_key = self.grid_locations[field_name]
             eigenval_fn = self.symmetry_eigenvalues[field_name]
 
             # get grid locations for this field component on the expanded grid
-            grid_locations = self.grid_expanded[grid_key]
+            field_coords = self._expanded_grid_field_coords(field_name)
 
             for sym_dim, (sym_val, sym_loc) in enumerate(zip(self.symmetry, self.symmetry_center)):
 
@@ -112,7 +115,7 @@ class AbstractFieldData(MonitorData, AbstractFieldDataset, ABC):
                     continue
 
                 # Get coordinates for this field component on the expanded grid
-                coords = grid_locations.to_list[sym_dim]
+                coords = field_coords.to_list[sym_dim]
 
                 # Get indexes of coords that lie on the left of the symmetry center
                 flip_inds = np.where(coords < sym_loc)[0]
@@ -159,6 +162,12 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
         "which the data was computed. The factor is applied to fields defined on the dual grid "
         "locations along the normal direction.",
     )
+
+    def _expanded_grid_field_coords(self, field_name: str):
+        """Coordinates in the expanded grid corresponding to a given field component."""
+        if self.monitor.colocate:
+            return self.grid_expanded["centers"]
+        return self.grid_expanded[self.grid_locations[field_name]]
 
     @property
     def _grid_correction_dict(self):
