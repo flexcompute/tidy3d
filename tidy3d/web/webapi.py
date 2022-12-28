@@ -248,7 +248,7 @@ def monitor(task_id: TaskId) -> None:
         # log the maximum flex unit cost
         est_flex_unit = task_info.estFlexUnit
         if show_cost is True and est_flex_unit is not None and est_flex_unit > 0:
-            log.info(f"Maximum flex unit cost: {est_flex_unit:1.2f}")
+            log.info(f"Maximum FlexUnit cost: {est_flex_unit:1.3f}")
             # Set show_cost to False so that it is only shown once during the run
             show_cost = False
 
@@ -304,6 +304,9 @@ def monitor(task_id: TaskId) -> None:
                 status = new_status
                 log.info(f"status = {status}")
             time.sleep(REFRESH_TIME)
+
+    # show final billed cost
+    log.info(f"Billed FlexUnit cost: {get_info(task_id).realFlexUnit:1.3f}")
 
 
 def download(task_id: TaskId, path: str = "simulation_data.hdf5") -> None:
