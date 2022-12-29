@@ -213,6 +213,7 @@ def get_run_info(task_id: TaskId):
         return None, None
 
 
+# pylint: disable=too-many-statements
 def monitor(task_id: TaskId) -> None:
     """Print the real time task progress until completion.
 
