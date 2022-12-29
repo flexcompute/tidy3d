@@ -587,7 +587,7 @@ class Lorentz(DispersiveMedium):
 
     coeffs: Tuple[Tuple[float, float, float], ...] = pd.Field(
         ...,
-        title="Epsilon at Infinity",
+        title="Coefficients",
         description="List of (:math:`\\Delta\\epsilon_i, f_i, \\delta_i`) values for model.",
         units=(PERMITTIVITY, HERTZ, HERTZ),
     )
