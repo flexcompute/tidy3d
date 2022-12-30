@@ -202,6 +202,12 @@ def iterate_update_dict(update_dict: Dict, update_types: Dict[str, Callable]):
             iterate_update_dict(item, update_types)
 
 
+@updates_from_version("1.8")
+def update_1_8(sim_dict: dict) -> dict:
+    """Updates version 1.8."""
+    return sim_dict
+
+
 @updates_from_version("1.7")
 def update_1_7(sim_dict: dict) -> dict:
     """Updates version 1.7."""
