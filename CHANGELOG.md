@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+## [1.8.1] - 2022-12-30
+
+### Added
+- Environment variable `TIDY3D_SSL_VERIFY` to optionally disable SSL authentication (default is `True`).
+- Billed FlexUnit cost displayed at the end of `web.monitor`.
+
+### Fixed
+- Bug on Windows systems with submitting `CustomFieldSource` data to the server.
+- Fix to `FieldData.symmetry_expanded_copy` for monitors with `colocate=True`.
+
+### Changed
+- The `Simulation` version updater is called every time a `Simulation` object is loaded, not just `from_file`.
+- Boundary specifications that rely on the default `Periodic` boundary now print a deprecation warning, as the default boundaries will change to
+ `PML` in Tidy3D 2.0. 
+
 ## [1.8.0] - 2022-12-14
 
 ### Added
@@ -502,7 +517,8 @@ which fields are to be projected is now determined automatically based on the me
 - Job and Batch classes for better simulation handling (eventually to fully replace webapi functions).
 - A large number of small improvements and bug fixes.
 
-[Unreleased]: https://github.com/flexcompute/tidy3d/compare/v1.8.0...develop
+[Unreleased]: https://github.com/flexcompute/tidy3d/compare/v1.8.1...develop
+[1.8.1]: https://github.com/flexcompute/tidy3d/compare/v1.8.0...v1.8.1
 [1.8.0]: https://github.com/flexcompute/tidy3d/compare/v1.7.1...v1.8.0
 [1.7.1]: https://github.com/flexcompute/tidy3d/compare/v1.7.0...v1.7.1
 [1.7.0]: https://github.com/flexcompute/tidy3d/compare/v1.6.3...v1.7.0
