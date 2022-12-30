@@ -635,7 +635,7 @@ class BoundarySpec(Tidy3dBaseModel):
 
     @classmethod
     def pml(cls, x: bool = False, y: bool = False, z: bool = False):
-        """Default PML along specified directions
+        """PML along specified directions
 
         Parameters
         ----------
@@ -651,9 +651,9 @@ class BoundarySpec(Tidy3dBaseModel):
         >>> boundaries = BoundarySpec.pml(y=True)
         """
         return cls(
-            x=Boundary.pml() if x else Boundary.periodic(),
-            y=Boundary.pml() if y else Boundary.periodic(),
-            z=Boundary.pml() if z else Boundary.periodic(),
+            x=Boundary.pml() if x else None,
+            y=Boundary.pml() if y else None,
+            z=Boundary.pml() if z else None,
         )
 
     @classmethod
@@ -674,9 +674,9 @@ class BoundarySpec(Tidy3dBaseModel):
         >>> boundaries = BoundarySpec.pec(x=True, z=True)
         """
         return cls(
-            x=Boundary.pec() if x else Boundary.periodic(),
-            y=Boundary.pec() if y else Boundary.periodic(),
-            z=Boundary.pec() if z else Boundary.periodic(),
+            x=Boundary.pec() if x else None,
+            y=Boundary.pec() if y else None,
+            z=Boundary.pec() if z else None,
         )
 
     @classmethod
@@ -697,9 +697,9 @@ class BoundarySpec(Tidy3dBaseModel):
         >>> boundaries = BoundarySpec.pmc(x=True, z=True)
         """
         return cls(
-            x=Boundary.pmc() if x else Boundary.periodic(),
-            y=Boundary.pmc() if y else Boundary.periodic(),
-            z=Boundary.pmc() if z else Boundary.periodic(),
+            x=Boundary.pmc() if x else None,
+            y=Boundary.pmc() if y else None,
+            z=Boundary.pmc() if z else None,
         )
 
     @classmethod
