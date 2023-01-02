@@ -149,7 +149,10 @@ class GradedMesher(Mesher):
             bbox_2d = shapely_box(bbox[0, 0], bbox[0, 1], bbox[1, 0], bbox[1, 1])
 
             # List of structure indexes that may intersect the current structure in 2D
-            query_inds = tree.query_items(bbox_2d)
+            try:
+                query_inds = tree.query_items(bbox_2d)
+            except AttributeError:
+                query_inds = tree.query(bbox_2d)
 
             # Remove all lower structures that the current structure completely contains
             inds_lower = [
