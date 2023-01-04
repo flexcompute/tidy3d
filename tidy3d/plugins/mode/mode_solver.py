@@ -180,7 +180,7 @@ class ModeSolver(Tidy3dBaseModel):
             grid_dual_correction=grid_factors[1],
             **data_dict,
         )
-        self._field_decay_warning(mode_solver_data)
+        self._field_decay_warning(mode_solver_data.symmetry_expanded_copy)
 
         # normalize modes
         scaling = np.sqrt(np.abs(mode_solver_data.flux))
