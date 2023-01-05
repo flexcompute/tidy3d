@@ -22,5 +22,5 @@ jobs:
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     - run: |
-        echo "from branch: "
+        echo "from branch: TEST "
         echo ${GITHUB_REF##*/}
