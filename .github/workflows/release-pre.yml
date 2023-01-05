@@ -1,0 +1,26 @@
+name: Tidy3d Pre-Release
+
+# on:
+  # push:
+  #   tags:
+  #     - 'v*.*.*-pre-release+*'
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ pre/1.9 ]
+  pull_request:
+    branches: [ pre/1.9 ]
+
+jobs:
+  echo-from-prerelease-branch:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        ref: pre/1.9
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        echo "from branch: "
+        echo ${GITHUB_REF##*/}
