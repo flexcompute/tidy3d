@@ -21,6 +21,6 @@ jobs:
         ref: pre/1.9
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      run: |
+    - run: |
         echo "from branch: "
         echo ${GITHUB_REF##*/}
