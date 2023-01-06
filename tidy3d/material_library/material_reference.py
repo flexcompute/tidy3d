@@ -21,6 +21,13 @@ class ReferenceData(Tidy3dBaseModel):
 
 
 material_refs = dict(
+    Li2014=ReferenceData(
+        journal="Y. Li, A. Chernikov, X. Zhang, A. Rigosi, H. M. Hill, A. M. van der Zande, "
+        "D. A. Chenet, E. Shih, J. Hone, and T. F. Heinz. Measurement of the optical dielectric "
+        "function of monolayer transition-metal dichalcogenides: MoS2, MoSe2, WS2, and WSe2, "
+        "Phys. Rev. B 90, 205422 (2014)",
+        doi="https://doi.org/10.1103/PhysRevB.90.205422",
+    ),
     Yang2015=ReferenceData(
         journal="H. U. Yang, J. D'Archangel, M. L. Sundheimer, E. Tucker, G. D. Boreman, "
         "M. B. Raschke. Optical dielectric function of silver, Phys. Rev. B 91, 235137 (2015)",
@@ -166,5 +173,10 @@ material_refs = dict(
     Zemax=ReferenceData(
         journal="SCHOTT Zemax catalog 2017-01-20b",
         url="https://refractiveindex.info/download/data/2017/schott_2017-01-20.pdf",
+    ),
+    Hanson2008=ReferenceData(
+        journal="George W. Hanson. Dyadic Green's Functions for an Anisotropic, "
+        "Non-Local Model of Biased Graphene, IEEE Trans. Antennas Propag. 56, 3, 747-757 (2008)",
+        doi="https://doi.org/10.1109/TAP.2008.917005",
     ),
 )
