@@ -1,4 +1,4 @@
-# pylint: disable=too-many-lines, too-many-arguments
+# pylint: disable=too-many-lines, too-many-arguments, too-many-statements
 """ Container holding all information about simulation and its components"""
 from __future__ import annotations
 from typing import Dict, Tuple, List, Set, Union
@@ -14,11 +14,12 @@ from mpl_toolkits.axes_grid1 import make_axes_locatable
 from .base import cached_property
 from .validators import assert_unique_names, assert_objects_in_sim_bounds
 from .validators import validate_mode_objects_symmetry
-from .geometry import Box
+from .geometry import Box, Geometry, PolySlab, Cylinder
 from .types import Ax, Shapely, FreqBound, Axis, annotate_type, Symmetry
 from .grid.grid import Coords1D, Grid, Coords
 from .grid.grid_spec import GridSpec, UniformGrid
-from .medium import Medium, MediumType, AbstractMedium, PECMedium, CustomMedium
+from .medium import Medium, MediumType, AbstractMedium, PECMedium
+from .medium import CustomMedium, Medium2D, MediumType3D
 from .boundary import BoundarySpec, BlochBoundary, PECBoundary, PMCBoundary, Periodic
 from .boundary import PML, StablePML, Absorber, AbsorberSpec
 from .structure import Structure
@@ -33,8 +34,8 @@ from .viz import plot_params_structure, plot_params_pml, plot_params_override_st
 from .viz import plot_params_pec, plot_params_pmc, plot_params_bloch
 
 from ..version import __version__
-from ..constants import C_0, SECOND, inf
-from ..log import log, Tidy3dKeyError, SetupError, ValidationError
+from ..constants import C_0, SECOND, inf, fp_eps
+from ..log import log, Tidy3dKeyError, SetupError, ValidationError, Tidy3dError
 from ..updater import Updater
 
 # minimum number of grid points allowed per central wavelength in a medium
@@ -48,6 +49,10 @@ MAX_TIME_STEPS = 1e8
 MAX_GRID_CELLS = 20e9
 MAX_CELLS_TIMES_STEPS = 1e17
 MAX_MONITOR_DATA_SIZE_BYTES = 10e9
+
+# for 2d materials. to find neighboring media, search a distance on either side
+# equal to this times the grid size
+DIST_NEIGHBOR_REL_2D_MED = 1e-5
 
 
 class Simulation(Box):  # pylint:disable=too-many-public-methods
@@ -630,6 +635,9 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
                 # min wavelength in PEC is meaningless and we'll get divide by inf errors
                 if isinstance(medium, PECMedium):
                     continue
+                # min wavelength in Medium2D is meaningless
+                if isinstance(medium, Medium2D):
+                    continue
 
                 eps_material = medium.eps_model(freq0)
                 n_material, _ = medium.eps_complex_to_nk(eps_material)
@@ -709,6 +717,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         self._validate_monitor_size()
         self._validate_datasets_not_none()
         # self._validate_run_time()
+        _ = self.volumetric_equivalent()
 
     def _validate_size(self) -> None:
         """Ensures the simulation is within size limits before simulation is uploaded."""
@@ -1028,6 +1037,9 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
             plot_params = plot_params.copy(
                 update={"facecolor": "gold", "edgecolor": "k", "linewidth": 1}
             )
+        elif isinstance(medium, Medium2D):
+            # 2d material
+            plot_params = plot_params.copy(update={"edgecolor": "k", "linewidth": 1})
         else:
             # regular medium
             facecolor = MEDIUM_CMAP[(mat_index - 1) % len(MEDIUM_CMAP)]
@@ -1248,6 +1260,9 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
             plot_params = plot_params.copy(
                 update={"facecolor": "gold", "edgecolor": "k", "linewidth": 1}
             )
+        elif isinstance(medium, Medium2D):
+            # 2d material
+            plot_params = plot_params.copy(update={"edgecolor": "k", "linewidth": 1})
         else:
             # regular medium
             eps_medium = medium.eps_model(frequency=freq).real
@@ -2130,7 +2145,9 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
             )
             eps_array = eps_background * np.ones(x.shape, dtype=complex)
 
-            for structure in self.structures:
+            # replace 2d materials with volumetric equivalents
+            vol_sim = self.volumetric_equivalent()
+            for structure in vol_sim.structures:
                 if not points_box.intersects(structure.geometry):
                     continue
                 eps_structure = get_eps(structure=structure, frequency=freq, coords=coords)
@@ -2154,3 +2171,125 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         ]
         datasets_medium = [mat.eps_dataset for mat in self.mediums if isinstance(mat, CustomMedium)]
         return datasets_source + datasets_medium
+
+    def volumetric_equivalent(self) -> Simulation:
+        """Generate new :class:`.Simulation` wherein any 2D materials are converted to 3D
+        volumetric equivalents."""
+
+        def get_bounds(geom: Geometry, axis: Axis) -> Tuple[float, float]:
+            """Get the bounds of a geometry in the axis direction."""
+            return (geom.bounds[0][axis], geom.bounds[1][axis])
+
+        def set_bounds(geom: Geometry, bounds: Tuple[float, float], axis: Axis) -> Geometry:
+            """Set the bounds of a geometry in the axis direction."""
+            if isinstance(geom, Box):
+                new_center = list(geom.center)
+                new_center[axis] = (bounds[0] + bounds[1]) / 2
+                new_size = list(geom.size)
+                new_size[axis] = bounds[1] - bounds[0]
+                return geom.updated_copy(center=new_center, size=new_size)
+            if isinstance(geom, PolySlab):
+                return geom.updated_copy(slab_bounds=bounds)
+            if isinstance(geom, Cylinder):
+                new_center = list(geom.center)
+                new_center[axis] = (bounds[0] + bounds[1]) / 2
+                new_length = bounds[1] - bounds[0]
+                return geom.updated_copy(center=new_center, length=new_length)
+            raise ValidationError(
+                "'Medium2D' is only compatible with 'Box', 'PolySlab', or 'Cylinder' geometry."
+            )
+
+        def get_normal(geom: Geometry) -> Axis:
+            """Get the normal to the given geometry, checking that it is a 2D geometry."""
+            if isinstance(geom, Box):
+                if not min(geom.size) < fp_eps:
+                    raise ValidationError(
+                        "'Medium2D' requires one of the 'Box' dimensions to have size zero."
+                    )
+                return geom.size.index(min(geom.size))
+            if isinstance(geom, PolySlab):
+                if not abs(geom.slab_bounds[0] - geom.slab_bounds[1]) < fp_eps:
+                    raise ValidationError("'Medium2D' requires the 'PolySlab' bounds to be equal.")
+                return geom.axis
+            if isinstance(geom, Cylinder):
+                if not abs(geom.length) < fp_eps:
+                    raise ValidationError("'Medium2D' requires the 'Cylinder' length to be zero.")
+                return geom.axis
+            raise ValidationError(
+                "'Medium2D' is only compatible with 'Box' or 'PolySlab' geometry."
+            )
+
+        def get_dls(geom: Geometry, axis: Axis, num_dls: int) -> float:
+            """Get grid size around the 2D material."""
+            dls = self.discretize(Box.from_bounds(*geom.bounds)).sizes.to_list[axis]
+            if len(dls) != num_dls:
+                raise Tidy3dError(
+                    "Failed to detect grid size around the 2D material. "
+                    "Can't generate volumetric equivalent for this simulation. "
+                    "If you received this error, please create an issue in the Tidy3D "
+                    "github repository."
+                )
+            return dls
+
+        def snap_to_grid(geom: Geometry, axis: Axis) -> Geometry:
+            """Snap a 2D material to the Yee grid."""
+            new_center = self.discretize(Box.from_bounds(*geom.bounds)).boundaries.to_list[axis][0]
+            return set_bounds(geom, (new_center, new_center), axis)
+
+        def get_neighboring_media(
+            geom: Geometry, axis: Axis, structures: List[Structure]
+        ) -> Tuple[List[MediumType3D], List[float]]:
+            """Find the neighboring material properties and grid sizes."""
+            dl = get_dls(geom, axis, 1)[0]
+            center = get_bounds(geom, axis)[0]
+            thickness = dl * DIST_NEIGHBOR_REL_2D_MED
+            thickened_geom = set_bounds(
+                geom, bounds=(center - thickness / 2, center + thickness / 2), axis=axis
+            )
+            grid_sizes = get_dls(thickened_geom, axis, 2)
+            dls_signed = [-grid_sizes[0], grid_sizes[1]]
+            neighbors = []
+            for _, dl_signed in enumerate(dls_signed):
+                geom_shifted = set_bounds(
+                    geom, bounds=(center + dl_signed, center + dl_signed), axis=axis
+                )
+                media = self.intersecting_media(Box.from_bounds(*geom_shifted.bounds), structures)
+                if len(media) > 1:
+                    raise SetupError(
+                        "2D materials do not support multiple neighboring media on a side. "
+                        "Please split the 2D material into multiple smaller 2D materials, one "
+                        "for each background medium."
+                    )
+                medium_side = Medium() if len(media) == 0 else list(media)[0]
+                neighbors.append(medium_side)
+            return (neighbors, grid_sizes)
+
+        simulation_background = Structure(geometry=self.geometry, medium=self.medium)
+        background_structures = []
+        new_structures = []
+        for structure in self.structures:
+            if not isinstance(structure.medium, Medium2D):
+                # found a 3D material; keep it
+                background_structures.append(structure)
+                continue
+            # otherwise, found a 2D material; replace it with volumetric equivalent
+            axis = get_normal(structure.geometry)
+
+            # snap monolayer to grid
+            geometry = snap_to_grid(structure.geometry, axis)
+            center = get_bounds(geometry, axis)[0]
+
+            # get neighboring media and grid sizes
+            (neighbors, dls) = get_neighboring_media(
+                geometry, axis, [simulation_background] + background_structures
+            )
+
+            new_bounds = (center - dls[0] / 2, center + dls[1] / 2)
+            new_geometry = set_bounds(structure.geometry, bounds=new_bounds, axis=axis)
+
+            new_medium = structure.medium.volumetric_equivalent(
+                axis=axis, adjacent_media=neighbors, adjacent_dls=dls
+            )
+            new_structures.append(structure.updated_copy(geometry=new_geometry, medium=new_medium))
+
+        return self.updated_copy(structures=background_structures + new_structures)

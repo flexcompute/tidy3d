@@ -19,6 +19,8 @@ MEDIUMS = [MEDIUM, ANIS_MEDIUM, PEC, PR, SM, LZ, DR, DB]
 
 f, AX = plt.subplots()
 
+RTOL = 0.001
+
 
 @pytest.mark.parametrize("component", MEDIUMS)
 def test_plot(component):
@@ -240,3 +242,28 @@ def test_epsilon_eval():
 
     expected = {2e14: np.mean(eps_diag_2), 5e14: np.mean(eps_diag_5)}
     eps_compare(material, expected)
+
+
+def test_medium2d():
+    sigma = 0.45
+    thickness = 0.01
+    cond_med = td.Medium(conductivity=sigma)
+    medium = td.Medium2D.from_medium(cond_med, thickness=thickness)
+
+    _ = medium.plot(freqs=[2e14, 3e14], ax=AX)
+    _ = medium.plot_sigma(freqs=[2e14, 3e14], ax=AX)
+    assert np.isclose(medium.ss.to_medium().conductivity, sigma * thickness, rtol=RTOL)
+    aniso_medium = td.AnisotropicMedium(xx=td.Medium(permittivity=2), yy=cond_med, zz=td.Medium())
+    medium = td.Medium2D.from_anisotropic_medium(aniso_medium, axis=2, thickness=thickness)
+    medium3d = medium.to_anisotropic_medium(axis=2, thickness=1.5 * thickness)
+    assert np.isclose(medium3d.xx.to_medium().permittivity, 1 + (2 - 1) / 1.5, rtol=RTOL)
+    assert np.isclose(medium3d.yy.to_medium().conductivity, sigma / 1.5, rtol=RTOL)
+    assert np.isclose(medium3d.zz.permittivity, 1, rtol=RTOL)
+    assert np.isclose(
+        medium.to_medium(thickness=1.5 * thickness).conductivity, sigma / 3, rtol=RTOL
+    )
+    assert np.isclose(
+        medium.to_pole_residue(thickness=1.5 * thickness).to_medium().conductivity,
+        sigma / 3,
+        rtol=RTOL,
+    )

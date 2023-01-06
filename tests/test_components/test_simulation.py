@@ -9,10 +9,13 @@ from tidy3d.log import SetupError, ValidationError, Tidy3dKeyError
 from tidy3d.components import simulation
 from tidy3d.components.simulation import MAX_NUM_MEDIUMS
 from ..utils import assert_log_level, SIM_FULL
+from tidy3d.constants import LARGE_NUMBER
 
 SIM = td.Simulation(size=(1, 1, 1), run_time=1e-12, grid_spec=td.GridSpec(wavelength=1.0))
 
 _, AX = plt.subplots()
+
+RTOL = 0.01
 
 
 def test_sim_init():
@@ -1031,4 +1034,74 @@ def test_mode_object_syms():
             )
         ],
         boundary_spec=td.BoundarySpec.all_sides(boundary=td.Periodic()),
+    )
+
+
+def test_sim_volumetric_equivalent():
+    """Test volumetric equivalent of a 2D material."""
+    sigma = 0.45
+    thickness = 0.01
+    medium = td.Medium2D.from_medium(td.Medium(conductivity=sigma), thickness=thickness)
+    grid_dl = 0.03
+    box = td.Structure(geometry=td.Box(size=(td.inf, td.inf, 0)), medium=medium)
+    src = td.UniformCurrentSource(
+        source_time=td.GaussianPulse(freq0=1.5e14, fwidth=0.5e14),
+        size=(0, 0, 0),
+        polarization="Ex",
+    )
+    sim = td.Simulation(
+        size=(10, 10, 10),
+        structures=[box],
+        sources=[src],
+        boundary_spec=td.BoundarySpec(
+            x=td.Boundary.pml(num_layers=5),
+            y=td.Boundary.pml(num_layers=5),
+            z=td.Boundary.pml(num_layers=5),
+        ),
+        grid_spec=td.GridSpec.uniform(dl=grid_dl),
+        run_time=1e-12,
+    )
+    sim2 = sim.volumetric_equivalent()
+    assert np.isclose(sim2.structures[0].geometry.size[2], grid_dl, rtol=RTOL)
+    assert np.isclose(
+        sim2.structures[0].medium.xx.to_medium().conductivity,
+        sigma * thickness / grid_dl,
+        rtol=RTOL,
+    )
+    aniso_medium = td.AnisotropicMedium(
+        xx=td.Medium(permittivity=2), yy=td.Medium(), zz=td.Medium()
+    )
+    box = td.Structure(
+        geometry=td.Box(size=(td.inf, td.inf, 0)),
+        medium=td.Medium2D.from_medium(td.PEC, thickness=thickness),
+    )
+    below = td.Structure(
+        geometry=td.Box.from_bounds([-td.inf, -td.inf, -1000], [td.inf, td.inf, 0]),
+        medium=aniso_medium,
+    )
+
+    sim = td.Simulation(
+        size=(10, 10, 10),
+        structures=[below, box],
+        sources=[src],
+        boundary_spec=td.BoundarySpec(
+            x=td.Boundary.pml(num_layers=5),
+            y=td.Boundary.pml(num_layers=5),
+            z=td.Boundary.pml(num_layers=5),
+        ),
+        grid_spec=td.GridSpec.uniform(dl=grid_dl),
+        run_time=1e-12,
+    )
+    sim2 = sim.volumetric_equivalent()
+    print(sim2.structures)
+    assert np.isclose(
+        sim2.structures[1].medium.xx.to_medium().permittivity,
+        1.5,
+        rtol=RTOL,
+    )
+    assert np.isclose(sim2.structures[1].medium.yy.to_medium().permittivity, 1, rtol=RTOL)
+    assert np.isclose(
+        sim2.structures[1].medium.xx.to_medium().conductivity,
+        LARGE_NUMBER * thickness / grid_dl,
+        rtol=RTOL,
     )
