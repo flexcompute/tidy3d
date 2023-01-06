@@ -310,6 +310,11 @@ class PermittivityMonitor(FreqMonitor):
     :class:`.FieldMonitor` of the same geometry: the permittivity values are saved at the
     Yee grid locations, and can be interpolated to any point inside the monitor.
 
+    Note
+    ----
+    If 2D materials are present, then the permittivity values correspond to the
+    volumetric equivalent of the 2D materials.
+
     Example
     -------
     >>> monitor = PermittivityMonitor(

@@ -17,6 +17,7 @@ from shapely.errors import ShapelyDeprecationWarning
 from ..base import Tidy3dBaseModel
 from ..types import Axis, ArrayLike
 from ..structure import Structure, MeshOverrideStructure, StructureType
+from ..medium import Medium2D
 from ...log import SetupError, ValidationError
 from ...constants import C_0, fp_eps
 
@@ -324,6 +325,7 @@ class GradedMesher(Mesher):
         """For :class:`.MeshOverrideStructure`, we allow ``dl`` along some axis
         to be ``None`` so that no override occurs along this axis.Here those
         structures with ``dl[axis]=None`` is filtered.
+        Also removes any :class:`.Medium2D` from the list.
 
         Parameters
         ----------
@@ -338,11 +340,17 @@ class GradedMesher(Mesher):
             A list of filtered structures whose ``dl`` along this axis is not ``None``.
         """
 
-        return [
-            structure
-            for structure in structures
-            if not (isinstance(structure, MeshOverrideStructure) and structure.dl[axis] is None)
-        ]
+        structures_filtered = []
+        for structure in structures:
+            if isinstance(structure, MeshOverrideStructure):
+                # skip override structure if dl not defined along axis
+                if structure.dl[axis] is None:
+                    continue
+            elif isinstance(structure.medium, Medium2D):
+                # skip 2D medium
+                continue
+            structures_filtered.append(structure)
+        return structures_filtered
 
     @staticmethod
     def structure_steps(

@@ -4,12 +4,13 @@ import pydantic
 
 from .base import Tidy3dBaseModel
 from .validators import validate_name_str
-from .geometry import GeometryType
-from .medium import MediumType, CustomMedium
+from .geometry import GeometryType, Box, PolySlab, Cylinder
+from .medium import MediumType, CustomMedium, Medium2D
 from .types import Ax, TYPE_TAG_STR
 from .viz import add_ax_if_none, equal_aspect
 from .grid.grid import Coords
 from ..constants import MICROMETER
+from ..log import ValidationError
 
 
 class AbstractStructure(Tidy3dBaseModel):
@@ -94,6 +95,17 @@ class Structure(AbstractStructure):
         if isinstance(self.medium, CustomMedium):
             return self.medium.eps_diagonal_on_grid(frequency=frequency, coords=coords)
         return self.medium.eps_diagonal(frequency=frequency)
+
+    @pydantic.validator("medium", always=True)
+    def _check_2d_geometry(cls, val, values):
+        """Medium2D is only consistent with certain geometry types"""
+        geom = values["geometry"]
+        if isinstance(val, Medium2D):
+            if not isinstance(geom, (Box, PolySlab, Cylinder)):
+                raise ValidationError(
+                    "'Medium2D' is only compatible with 'Box', 'PolySlab', or 'Cylinder' geometry."
+                )
+        return val
 
 
 class MeshOverrideStructure(AbstractStructure):
