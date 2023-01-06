@@ -9,7 +9,7 @@ from .components.geometry import Box, Sphere, Cylinder, PolySlab, GeometryGroup
 from .components.geometry import TriangleMesh
 
 # medium
-from .components.medium import Medium, PoleResidue, AnisotropicMedium, PEC, PECMedium
+from .components.medium import Medium, PoleResidue, AnisotropicMedium, PEC, PECMedium, Medium2D
 from .components.medium import Sellmeier, Debye, Drude, Lorentz
 from .components.medium import CustomMedium
 
@@ -71,11 +71,12 @@ from .components.boundary import DefaultPMLParameters, DefaultStablePMLParameter
 from .components.boundary import DefaultAbsorberParameters
 
 # constants imported as `C_0 = td.C_0` or `td.constants.C_0`
-from .constants import C_0, ETA_0, HBAR, EPSILON_0, MU_0, Q_e, inf
+from .constants import C_0, ETA_0, HBAR, EPSILON_0, MU_0, Q_e, K_B, inf
 
 # material library dict imported as `from tidy3d import material_library`
 # get material `mat` and variant `var` as `material_library[mat][var]`
 from .material_library.material_library import material_library
+from .material_library.parametric_materials import Graphene
 
 # for docs
 from .components.medium import AbstractMedium

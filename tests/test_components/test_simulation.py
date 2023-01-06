@@ -9,10 +9,13 @@ from tidy3d.exceptions import SetupError, ValidationError, Tidy3dKeyError
 from tidy3d.components import simulation
 from tidy3d.components.simulation import MAX_NUM_MEDIUMS
 from ..utils import assert_log_level, SIM_FULL, log_capture
+from tidy3d.constants import LARGE_NUMBER
 
 SIM = td.Simulation(size=(1, 1, 1), run_time=1e-12, grid_spec=td.GridSpec(wavelength=1.0))
 
 _, AX = plt.subplots()
+
+RTOL = 0.01
 
 
 def test_sim_init():
@@ -1339,3 +1342,147 @@ def test_dt():
     )
     sim_new = sim.copy(update=dict(structures=[structure]))
     assert sim_new.dt == 0.4 * dt
+    assert_log_level(caplog, log_level)
+
+
+def test_sim_volumetric_structures():
+    """Test volumetric equivalent of 2D materials."""
+    sigma = 0.45
+    thickness = 0.01
+    medium = td.Medium2D.from_medium(td.Medium(conductivity=sigma), thickness=thickness)
+    grid_dl = 0.03
+    box = td.Structure(geometry=td.Box(size=(td.inf, td.inf, 0)), medium=medium)
+    cyl = td.Structure(geometry=td.Cylinder(radius=1, length=0), medium=medium)
+    pslab = td.Structure(
+        geometry=td.PolySlab(vertices=[(-1, -1), (-1, 1), (1, 1), (1, -1)], slab_bounds=(0, 0)),
+        medium=medium,
+    )
+    src = td.UniformCurrentSource(
+        source_time=td.GaussianPulse(freq0=1.5e14, fwidth=0.5e14),
+        size=(0, 0, 0),
+        polarization="Ex",
+    )
+    for struct in [box, cyl, pslab]:
+        sim = td.Simulation(
+            size=(10, 10, 10),
+            structures=[struct],
+            sources=[src],
+            boundary_spec=td.BoundarySpec(
+                x=td.Boundary.pml(num_layers=5),
+                y=td.Boundary.pml(num_layers=5),
+                z=td.Boundary.pml(num_layers=5),
+            ),
+            grid_spec=td.GridSpec.uniform(dl=grid_dl),
+            run_time=1e-12,
+        )
+        if isinstance(struct.geometry, td.Box):
+            assert np.isclose(sim.volumetric_structures[0].geometry.size[2], grid_dl, rtol=RTOL)
+        else:
+            assert np.isclose(sim.volumetric_structures[0].geometry.length_axis, grid_dl, rtol=RTOL)
+        assert np.isclose(
+            sim.volumetric_structures[0].medium.xx.to_medium().conductivity,
+            sigma * thickness / grid_dl,
+            rtol=RTOL,
+        )
+    # now with a substrate and anisotropy
+    aniso_medium = td.AnisotropicMedium(
+        xx=td.Medium(permittivity=2), yy=td.Medium(), zz=td.Medium()
+    )
+    box = td.Structure(
+        geometry=td.Box(size=(td.inf, td.inf, 0)),
+        medium=td.Medium2D.from_medium(td.PEC, thickness=thickness),
+    )
+    below = td.Structure(
+        geometry=td.Box.from_bounds([-td.inf, -td.inf, -1000], [td.inf, td.inf, 0]),
+        medium=aniso_medium,
+    )
+
+    sim = td.Simulation(
+        size=(10, 10, 10),
+        structures=[below, box],
+        sources=[src],
+        boundary_spec=td.BoundarySpec(
+            x=td.Boundary.pml(num_layers=5),
+            y=td.Boundary.pml(num_layers=5),
+            z=td.Boundary.pml(num_layers=5),
+        ),
+        grid_spec=td.GridSpec.uniform(dl=grid_dl),
+        run_time=1e-12,
+    )
+    assert np.isclose(
+        sim.volumetric_structures[1].medium.xx.to_medium().permittivity,
+        1.5,
+        rtol=RTOL,
+    )
+    assert np.isclose(sim.volumetric_structures[1].medium.yy.to_medium().permittivity, 1, rtol=RTOL)
+    assert np.isclose(
+        sim.volumetric_structures[1].medium.xx.to_medium().conductivity,
+        LARGE_NUMBER * thickness / grid_dl,
+        rtol=RTOL,
+    )
+    # nonuniform sub/super-strate should error
+    below_half = td.Structure(
+        geometry=td.Box.from_bounds([-100, -td.inf, -1000], [0, td.inf, 0]),
+        medium=aniso_medium,
+    )
+
+    sim = td.Simulation(
+        size=(10, 10, 10),
+        structures=[below_half, box],
+        sources=[src],
+        boundary_spec=td.BoundarySpec(
+            x=td.Boundary.pml(num_layers=5),
+            y=td.Boundary.pml(num_layers=5),
+            z=td.Boundary.pml(num_layers=5),
+        ),
+        grid_spec=td.GridSpec.uniform(dl=grid_dl),
+        run_time=1e-12,
+    )
+
+    with pytest.raises(SetupError):
+        _ = sim.volumetric_structures
+
+    # structure overlaying the 2D material should overwrite it like normal
+    sim = td.Simulation(
+        size=(10, 10, 10),
+        structures=[box, below],
+        sources=[src],
+        boundary_spec=td.BoundarySpec(
+            x=td.Boundary.pml(num_layers=5),
+            y=td.Boundary.pml(num_layers=5),
+            z=td.Boundary.pml(num_layers=5),
+        ),
+        grid_spec=td.GridSpec.uniform(dl=grid_dl),
+        run_time=1e-12,
+    )
+
+    assert np.isclose(sim.volumetric_structures[1].medium.xx.permittivity, 2, rtol=RTOL)
+
+    # test simulation.medium can't be Medium2D
+    with pytest.raises(ValidationError):
+        sim = td.Simulation(
+            size=(10, 10, 10),
+            structures=[],
+            sources=[src],
+            medium=box.medium,
+            boundary_spec=td.BoundarySpec(
+                x=td.Boundary.pml(num_layers=5),
+                y=td.Boundary.pml(num_layers=5),
+                z=td.Boundary.pml(num_layers=5),
+            ),
+            grid_spec=td.GridSpec.uniform(dl=grid_dl),
+            run_time=1e-12,
+        )
+
+    # test 2d medium is added to 2d geometry
+    with pytest.raises(ValidationError):
+        _ = td.Structure(geometry=td.Box(center=(0, 0, 0), size=(1, 1, 1)), medium=box.medium)
+    with pytest.raises(ValidationError):
+        _ = td.Structure(geometry=td.Cylinder(radius=1, length=1), medium=box.medium)
+    with pytest.raises(ValidationError):
+        _ = td.Structure(
+            geometry=td.PolySlab(vertices=[(0, 0), (1, 0), (1, 1)], slab_bounds=(-1, 1)),
+            medium=box.medium,
+        )
+    with pytest.raises(ValidationError):
+        _ = td.Structure(geometry=td.Sphere(radius=1), medium=box.medium)

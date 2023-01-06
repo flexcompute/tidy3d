@@ -377,6 +377,27 @@ class Geometry(Tidy3dBaseModel, ABC):
             )
         return (pt_min + pt_max) / 2.0
 
+    @cached_property
+    def _normal_2dmaterial(self) -> Axis:
+        """Get the normal to the given geometry, checking that it is a 2D geometry."""
+        if isinstance(self, Box):
+            if np.count_nonzero(self.size) != 2:
+                raise ValidationError(
+                    "'Medium2D' requires exactly one of the 'Box' dimensions to have size zero."
+                )
+            return self.size.index(0)
+        if isinstance(self, PolySlab):
+            if self.slab_bounds[0] != self.slab_bounds[1]:
+                raise ValidationError("'Medium2D' requires the 'PolySlab' bounds to be equal.")
+            return self.axis
+        if isinstance(self, Cylinder):
+            if self.length != 0:
+                raise ValidationError("'Medium2D' requires the 'Cylinder' length to be zero.")
+            return self.axis
+        raise ValidationError(
+            "'Medium2D' is only compatible with 'Box', 'PolySlab', and 'Cylinder' geometries."
+        )
+
     @equal_aspect
     @add_ax_if_none
     def plot(
