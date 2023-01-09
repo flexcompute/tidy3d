@@ -6,7 +6,7 @@ from rich.logging import RichHandler
 
 FORMAT = "%(message)s"
 
-DEFAULT_LEVEL = "INFO"
+DEFAULT_LEVEL = "WARNING"
 
 logging.basicConfig(level=DEFAULT_LEVEL, format=FORMAT, datefmt="[%X]", handlers=[RichHandler()])
 

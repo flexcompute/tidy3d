@@ -107,6 +107,6 @@ def set_logging_level(level: str) -> None:
 
 
 # make all stdout and errors pretty
-pretty.install()
+# pretty.install()
 # traceback.install()
 log.info(f"Using client version: {__version__}")
