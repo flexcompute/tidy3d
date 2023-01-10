@@ -2015,14 +2015,14 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
             refer to `xarray's Documentaton <https://tinyurl.com/2zrzsp7b>`_.
         """
 
-        def get_eps(medium: Medium, freq: float):
+        def get_eps(structure: Structure, frequency: float):
             """Select the correct epsilon component if field locations are requested."""
             if coord_key[0] != "E":
-                return medium.eps_model(freq)
+                return self.medium.eps_model(frequency)
             component = ["x", "y", "z"].index(coord_key[1])
-            return medium.eps_diagonal(freq)[component]
+            return structure.eps_diagonal(frequency)[component]
 
-        eps_background = get_eps(self.medium, freq)
+        eps_background = get_eps(structure=self.background_structure, frequency=freq)
 
         def make_eps_data(coords: Coords):
             """returns epsilon data on grid of points defined by coords"""
@@ -2035,7 +2035,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
             for structure in self.structures:
                 if not points_box.intersects(structure.geometry):
                     continue
-                eps_structure = get_eps(structure.medium, freq)
+                eps_structure = get_eps(structure=structure, frequency=freq)
                 is_inside = structure.geometry.inside(x, y, z)
                 eps_array[np.where(is_inside)] = eps_structure
             coords = {"x": np.array(xs), "y": np.array(ys), "z": np.array(zs)}

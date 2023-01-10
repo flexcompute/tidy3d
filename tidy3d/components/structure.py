@@ -77,6 +77,21 @@ class Structure(AbstractStructure):
         discriminator=TYPE_TAG_STR,
     )
 
+    def eps_diagonal(self, frequency: float) -> Tuple[complex, complex, complex]:
+        """Main diagonal of the complex-valued permittivity tensor as a function of frequency.
+
+        Parameters
+        ----------
+        frequency : float
+            Frequency to evaluate permittivity at (Hz).
+
+        Returns
+        -------
+        complex
+            The diagonal elements of the relative permittivity tensor evaluated at ``frequency``.
+        """
+        return self.medium.eps_diagonal(frequency=frequency)
+
 
 class MeshOverrideStructure(AbstractStructure):
     """Defines an object that is only used in the process of generating the mesh.
