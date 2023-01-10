@@ -7,6 +7,7 @@ from rich.logging import RichHandler
 FORMAT = "%(message)s"
 
 DEFAULT_LEVEL = "INFO"
+LOGGER_NAME = "tidy3d_logger"
 
 logging.basicConfig(level=DEFAULT_LEVEL, format=FORMAT, datefmt="[%X]", handlers=[RichHandler()])
 
@@ -19,7 +20,7 @@ LEVEL_MAP = {
 }
 
 # importable logger
-log = logging.getLogger("rich")
+log = logging.getLogger(LOGGER_NAME)
 
 
 """ Tidy3d custom exceptions """
