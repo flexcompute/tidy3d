@@ -5,6 +5,15 @@
 How do I ...
 ============
 
+Work with the Tidy3d Package
+----------------------------
+
+.. list-table::
+   :header-rows: 1
+   :widths: 40 60
+
+   * - See the version of tidy3d I am using?
+     - In python, after importing `tidy3d`, run `print(tidy3d.__version__)`. Or, do this through the command line via `python -c "import tidy3d; print(tidy3d.__version__)"`.
 
 Work with Tidy3d Components
 ---------------------------
