@@ -1,0 +1,121 @@
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: afb705d488f95978d2bf1459e05e9b7e3dca03ac
+    hooks:
+      - id: check-yaml
+        exclude: ^(conda\.recipe/meta\.yaml|conda_build/templates/.*\.yaml|docs/click/meta\.yaml|conda/meta\.yaml|construct.yaml)
+      - id: end-of-file-fixer
+      - id: trailing-whitespace
+      - id: requirements-txt-fixer
+  - repo: https://github.com/hakancelikdev/unimport
+    rev: 004b5dd0c8112330275beb52c4ccfce016a4b945
+    hooks:
+      - id: unimport
+        args: [--remove, --include-star-import]
+  - repo: https://github.com/pycqa/isort
+    rev: 12cc5fbd67eebf92eb2213b03c07b138ae1fb448
+    hooks:
+      - id: isort
+        files: tidy3d/.*
+        args: [--profile, black, --filter-files]
+
+  - repo: https://github.com/psf/black
+    rev: d4a85643a465f5fae2113d07d22d021d4af4795a
+    hooks:
+      - id: black
+
+  # - repo: https://github.com/omnilib/ufmt
+  #   rev: v2.0.0b1
+  #   hooks:
+  #     - id: ufmt
+  - repo: https://github.com/asottile/blacken-docs
+    rev: 79ef671d15161b9dbc16ac3760086b5222836583
+    hooks:
+      - id: blacken-docs
+        additional_dependencies: [black==22.3.0]
+  - repo: https://github.com/pycqa/flake8
+    rev: 647996c743f9e77368ce46cc74abe98549dd4c3a
+    hooks:
+      - id: flake8
+        entry: pflake8
+        additional_dependencies: [flake8-docstrings, pyproject-flake8]
+
+  - repo: https://github.com/kynan/nbstripout
+    rev: 4e0f64cf03b52e2aa54f7dd57c722e1a04a439f6
+    hooks:
+      - id: nbstripout
+        files: .ipynb
+
+  - repo: https://github.com/asottile/pyupgrade
+    rev: 4c7ee5abff7f53f8be0bacb0974c63cbd413bae6
+    hooks:
+      - id: pyupgrade
+        args: [--py37-plus, --keep-runtime-typing]
+
+  - repo: https://github.com/codespell-project/codespell
+    rev: 6a9d7a7a7d0db950a1bd8d5ecdd3298f114d2a12
+    hooks:
+      - id: codespell
+        args: ["-L TE,TE/TM,te,ba,FPR,fpr_spacing,ro,nd,donot,schem"]
+
+  # - repo: https://github.com/shellcheck-py/shellcheck-py
+  #   rev: 98854f809ca9d0e235c0bd5c0ad5e986e02120a4
+  #   hooks:
+  #     - id: shellcheck
+
+  - repo: https://github.com/pre-commit/pygrep-hooks
+    rev: 7b4409161486c6956bb3206ce96db5d56731b1b9 # Use the ref you want to point at
+    hooks:
+      - id: python-use-type-annotations
+
+  - repo: https://github.com/PyCQA/bandit
+    rev: d9fe642e01866e460454641bcd14b9de9d2b1478
+    hooks:
+      - id: bandit
+        args: [--exit-zero]
+        # ignore all tests, not just tests data
+        exclude: ^tests/
+  # - repo: https://github.com/PyCQA/pylint
+  #   rev: v2.14.1
+  #   hooks:
+  #     - id: pylint
+  #       args: [--exit-zero]
+  # - repo: https://github.com/macisamuele/language-formatters-pre-commit-hooks
+  #   rev: 6565d773ca281682d7062d4c0be74538cc474cc9
+  #   hooks:
+  #     - id: pretty-format-java
+  #       args: [--autofix]
+  #     - id: pretty-format-kotlin
+  #       args: [--autofix]
+  #     - id: pretty-format-yaml
+  #       args: [--autofix, --indent, "2"]
+  # - repo: https://github.com/adrienverge/yamllint.git
+  #   rev: v1.21.0 # or higher tag
+  #   hooks:
+  #       - id: yamllint
+  #         args: [--format, parsable, --strict]
+  # - repo: https://github.com/jumanjihouse/pre-commit-hook-yamlfmt
+  #   rev: 0.1.0 # or specific tag
+  #   hooks:
+  #       - id: yamlfmt
+  # - repo: https://github.com/pre-commit/mirrors-mypy
+  #   rev: "214c33306afe17f1cc7d2d55e4da705b6ebe0627"
+  #   hooks:
+  #     - id: mypy
+  #       exclude: ^(docs/|example-plugin/|tests/fixtures)
+  #       additional_dependencies:
+  #         - "pydantic"
+  # - repo: https://github.com/terrencepreilly/darglint
+  #   rev: master
+  #   hooks:
+  #       - id: darglint
+  #
+  - repo: https://github.com/pycqa/pydocstyle
+    rev: "a6fe4222012e990042c86cdaaa904a8d059752ee"
+    hooks:
+      - id: pydocstyle
+        additional_dependencies: ["pydocstyle[toml]"]
+  # - repo: https://github.com/asottile/reorder_python_imports
+  #   rev: 2b2f0c74acdb3de316e23ceb7dd0d7945c354050
+  #   hooks:
+  #     - id: reorder-python-imports
