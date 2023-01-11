@@ -1,16 +1,16 @@
-# Tidy3D (Beta release)
+# Tidy3D
 
 [![Notebooks](https://mybinder.org/badge_logo.svg)](https://mybinder.org/v2/gh/flexcompute-readthedocs/tidy3d-docs/readthedocs?labpath=docs%2Fsource%2Fnotebooks)
 ![tests](https://github.com/flexcompute/tidy3d/actions/workflows//run_tests.yml/badge.svg)
 [![Documentation Status](https://readthedocs.com/projects/flexcompute-tidy3ddocumentation/badge/?version=latest)](https://flexcompute-tidy3ddocumentation.readthedocs-hosted.com/?badge=latest)
 [![Language grade: Python](https://img.shields.io/lgtm/grade/python/g/flexcompute/tidy3d.svg?logo=lgtm&logoWidth=18)](https://lgtm.com/projects/g/flexcompute/tidy3d/context:python)
-[![PyPI version shields.io](https://img.shields.io/pypi/v/tidy3d-beta.svg)](https://pypi.python.org/pypi/tidy3d-beta/)
+[![PyPI version shields.io](https://img.shields.io/pypi/v/tidy3d.svg)](https://pypi.python.org/pypi/tidy3d/)
 
 ![](https://raw.githubusercontent.com/flexcompute/tidy3d/main/img/Tidy3D-logo.svg)
 
 Tidy3D is a software product from Flexcompute that enables large scale electromagnetic simulation using the finite-difference time-domain (FDTD) method.
 
-This repository stores the python interface for the beta release of Tidy3D that will be officially released to the public in early 2022.
+This repository stores the python interface for Tidy3d.
 
 This code allows you to:
 * Programmatically define FDTD simulations.
@@ -31,10 +31,10 @@ You can sign up [here](https://client.simulation.cloud/register-waiting).  While
 
 ### Installing the package using pip
 
-The easiest way to install this beta version of tidy3d is through [pip](https://pip.pypa.io/en/stable/).
+The easiest way to install tidy3d is through [pip](https://pip.pypa.io/en/stable/).
 
 ```
-pip install tidy3d-beta
+pip install tidy3d
 ```
 
 Note that while our old version is still currently pip installable as `tidy3d`, both versions are imoprted in python as `tidy3d`, eg. `import tidy3d as td`.
@@ -65,7 +65,7 @@ and it should print out the version number, for example:
 
 ## Issues / Feedback / Bug Reporting
 
-This is a beta release and your feedback helps us immensely!
+Your feedback helps us immensely!
 
 If you find bugs, file an [Issue](https://github.com/flexcompute/tidy3d/issues).
 For more general discussions, questions, comments, anything else, open a topic in the [Discussions Tab](https://github.com/flexcompute/tidy3d/discussions).
