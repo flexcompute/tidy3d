@@ -28,3 +28,9 @@ def test_log_level_not_found():
 def test_set_logging_level_deprecated():
     with pytest.raises(DeprecationWarning):
         td.set_logging_level("warning")
+
+
+def test_exception_message():
+    MESSAGE = "message"
+    e = Tidy3dError(MESSAGE)
+    assert str(e) == MESSAGE

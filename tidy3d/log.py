@@ -30,8 +30,8 @@ class Tidy3dError(Exception):
 
     def __init__(self, message: str = None):
         """Log just the error message and then raise the Exception."""
+        super().__init__(message)
         log.error(message)
-        super().__init__(self, message)
 
 
 class ConfigError(Tidy3dError):
