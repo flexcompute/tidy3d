@@ -1,7 +1,4 @@
 """ Tidy3d package imports"""
-from concurrent.futures import ProcessPoolExecutor, process
-
-from rich import pretty, traceback
 
 # grid
 from .components.grid.grid import Grid, Coords
@@ -104,9 +101,3 @@ def set_logging_level(level: str) -> None:
         "``set_logging_level`` no longer supported. "
         f"To set the logging level, call ``tidy3d.config.logging_level = {level}``."
     )
-
-
-# make all stdout and errors pretty
-# pretty.install()
-# traceback.install()
-log.info(f"Using client version: {__version__}")

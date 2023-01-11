@@ -6,9 +6,7 @@ from rich.logging import RichHandler
 
 FORMAT = "%(message)s"
 
-DEFAULT_LEVEL = "INFO"
-
-logging.basicConfig(level=DEFAULT_LEVEL, format=FORMAT, datefmt="[%X]", handlers=[RichHandler()])
+logging.basicConfig(format=FORMAT, datefmt="[%X]", handlers=[RichHandler()])
 
 # maps level string to level integer for python logging package
 LEVEL_MAP = {
@@ -87,12 +85,12 @@ def _get_level_int(level: str) -> int:
     return LEVEL_MAP[level]
 
 
-def set_logging_level(level: str = DEFAULT_LEVEL.lower()) -> None:
+def set_logging_level(level: str) -> None:
     """Set tidy3d logging level priority.
 
     Parameters
     ----------
-    level : str = 'info'
+    level : str
         The lowest priority level of logging messages to display.
         One of ``{'debug', 'info', 'warning', 'error'}`` (listed in increasing priority).
 
@@ -107,7 +105,7 @@ def set_logging_level(level: str = DEFAULT_LEVEL.lower()) -> None:
     log.setLevel(level_int)
 
 
-def set_logging_file(fname: str, filemode="w", level=DEFAULT_LEVEL.lower()):
+def set_logging_file(fname: str, level: str = None, filemode="w"):
     """Set a file to write log to, independently from the stdout and stderr
     output chosen using :meth:`set_logging_level`.
 
@@ -117,8 +115,8 @@ def set_logging_file(fname: str, filemode="w", level=DEFAULT_LEVEL.lower()):
         Path to file to direct the output to.
     filemode : str = 'w'
         'w' or 'a', defining if the file should be overwritten or appended.
-    level : str = 'info'
-        One of 'debug', 'info', 'warning', 'error', 'critical'. This is
+    level : str = None
+        One of 'debug', 'info', 'warning', 'error', 'critical'. If specified, is
         set for the file independently of the console output level set by
         :meth:`set_logging_level`.
 
@@ -129,8 +127,9 @@ def set_logging_file(fname: str, filemode="w", level=DEFAULT_LEVEL.lower()):
     """
 
     file_handler = logging.FileHandler(fname, filemode)
-    level_int = _get_level_int(level)
-    file_handler.setLevel(level_int)
+    if level is not None:
+        level_int = _get_level_int(level)
+        file_handler.setLevel(level_int)
     formatter = logging.Formatter("%(levelname)s: %(message)s")
     file_handler.setFormatter(formatter)
     log.addHandler(file_handler)

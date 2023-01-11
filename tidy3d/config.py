@@ -3,7 +3,7 @@
 import pydantic as pd
 from typing_extensions import Literal
 
-from .log import set_logging_level, DEFAULT_LEVEL
+from .log import set_logging_level
 
 
 class Tidy3dConfig(pd.BaseModel):
@@ -20,15 +20,17 @@ class Tidy3dConfig(pd.BaseModel):
         frozen = False
 
     logging_level: Literal["debug", "info", "warning", "error"] = pd.Field(
-        DEFAULT_LEVEL.lower(),
+        None,
         title="Logging Level",
         description="The lowest level of logging output that will be displayed. "
         'Can be "debug", "info", "warning", "error".',
     )
 
-    @pd.validator("logging_level", always=True)
+    @pd.validator("logging_level", always=True, allow_reuse=True)
     def _set_logging_level(cls, val):
         """Set the logging level if logging_level is changed."""
+        if val is None:
+            return val
         set_logging_level(val)
         return val
 

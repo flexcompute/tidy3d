@@ -4,16 +4,13 @@ import pytest
 import pydantic
 
 import tidy3d as td
-from tidy3d.log import log, DEFAULT_LEVEL, LEVEL_MAP
+from tidy3d.log import log, LEVEL_MAP
 
 from ..utils import assert_log_level
 
 
 def test_logging_level():
     """Make sure setting the logging level in config affects the log.level"""
-
-    # default level
-    assert log.level == LEVEL_MAP[DEFAULT_LEVEL.lower()]
 
     # check etting all levels
     for key, val in LEVEL_MAP.items():
