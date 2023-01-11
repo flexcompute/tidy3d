@@ -92,14 +92,12 @@ from .log import log, set_logging_file, WebError
 from .config import config
 
 # version
-from .version import __version__
+from .version import __version__, PIP_NAME
 
 # updater
 from .updater import Updater
 
 # warn if this was uploaded to the beta PyPI, also sets the pyPI repository that we upload to
-PIP_NAME = "tidy3d-beta"
-
 if "beta" in PIP_NAME:
     log.warning(
         "This version of Tidy3D was pip installed from the 'tidy3d-beta' repository on PyPI. "

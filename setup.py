@@ -1,6 +1,6 @@
 import setuptools
 from distutils.util import convert_path
-from tidy3d import PIP_NAME
+
 
 PACKAGE_NAME = "tidy3d"
 REPO_NAME = "tidy3d"
@@ -11,6 +11,7 @@ with open(version_path) as version_file:
     exec(version_file.read(), version)
 
 print(version["__version__"])
+print(version["PIP_NAME"])
 
 with open("README.md", "r", encoding="utf-8") as fh:
     long_description = fh.read()
@@ -30,7 +31,7 @@ core_required += basic_required + web_required
 dev_required = read_requirements("requirements/dev.txt")
 
 setuptools.setup(
-    name=PIP_NAME,
+    name=version["PIP_NAME"],
     version=version["__version__"],
     author="Tyler Hughes",
     author_email="tyler@flexcompute.com",
