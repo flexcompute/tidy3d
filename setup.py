@@ -1,9 +1,8 @@
 import setuptools
 from distutils.util import convert_path
-
+from tidy3d import PIP_NAME
 
 PACKAGE_NAME = "tidy3d"
-PIP_NAME = "tidy3d-beta"
 REPO_NAME = "tidy3d"
 
 version = {}

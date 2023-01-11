@@ -97,6 +97,16 @@ from .version import __version__
 # updater
 from .updater import Updater
 
+# warn if this was uploaded to the beta PyPI, also sets the pyPI repository that we upload to
+PIP_NAME = "tidy3d-beta"
+
+if "beta" in PIP_NAME:
+    log.warning(
+        "This version of Tidy3D was pip installed from the 'tidy3d-beta' repository on PyPI. "
+        "Future releases will be uploaded to the 'tidy3d' repository. "
+        "From now on, please use 'pip install tidy3d' instead."
+    )
+
 
 def set_logging_level(level: str) -> None:
     """Raise a warning here instead of setting the logging level."""
