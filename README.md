@@ -37,8 +37,6 @@ The easiest way to install tidy3d is through [pip](https://pip.pypa.io/en/stable
 pip install tidy3d
 ```
 
-Note that while our old version is still currently pip installable as `tidy3d`, both versions are imoprted in python as `tidy3d`, eg. `import tidy3d as td`.
-
 ### (Alternativelty) installing from source
 
 For development purposes, you can download and install the package from source as:
