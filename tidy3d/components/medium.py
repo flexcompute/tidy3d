@@ -1,4 +1,4 @@
-# pylint: disable=invalid-name
+# pylint: disable=invalid-name, too-many-lines
 """Defines properties of the medium / materials"""
 from __future__ import annotations
 
@@ -10,6 +10,7 @@ import numpy as np
 import xarray as xr
 
 from .base import Tidy3dBaseModel, cached_property
+from .grid.grid import Coords
 from .types import PoleAndResidue, Ax, FreqBound, TYPE_TAG_STR, InterpMethod
 from .data.dataset import PermittivityDataset
 from .data.data_array import ScalarFieldDataArray
@@ -21,6 +22,9 @@ from ..log import log, ValidationError, SetupError
 
 # evaluate frequency as this number (Hz) if inf
 FREQ_EVAL_INF = 1e50
+
+# extrapolation option in custom medium
+FILL_VALUE = "extrapolate"
 
 
 def ensure_freq_in_range(eps_model: Callable[[float], complex]) -> Callable[[float], complex]:
@@ -236,6 +240,28 @@ class AbstractMedium(ABC, Tidy3dBaseModel):
 
         return eps_real + 1j * sigma / omega / EPSILON_0
 
+    @staticmethod
+    def eps_complex_to_eps_sigma(eps_complex: complex, freq: float) -> Tuple[float, float]:
+        """Convert complex permittivity at frequency ``freq``
+        to permittivity and conductivity values.
+
+        Parameters
+        ----------
+        eps_complex : complex
+            Complex-valued relative permittivity.
+        freq : float
+            Frequency to evaluate permittivity at (Hz).
+
+        Returns
+        -------
+        Tuple[float, float]
+            Real part of relative permittivity & electric conductivity.
+        """
+        eps_real, eps_imag = eps_complex.real, eps_complex.imag  # pylint:disable=no-member
+        omega = 2 * np.pi * freq
+        sigma = omega * eps_imag * EPSILON_0
+        return eps_real, sigma
+
 
 """ Dispersionless Medium """
 
@@ -356,6 +382,25 @@ class CustomMedium(AbstractMedium):
                 )
         return val
 
+    @pd.validator("eps_dataset", always=True)
+    def _eps_inf_greater_no_less_than_one_sigma_positive(cls, val):
+        """Assert any eps_inf must be >=1"""
+
+        for comp in ["eps_xx", "eps_yy", "eps_zz"]:
+            eps_inf, sigma = CustomMedium.eps_complex_to_eps_sigma(
+                val.field_components[comp], val.field_components[comp].f
+            )
+            if np.any(eps_inf.values < 1):
+                raise SetupError(
+                    "Permittivity at infinite frequency at any spatial point "
+                    "must be no less than one."
+                )
+            if np.any(sigma.values < 0):
+                raise SetupError(
+                    "Imaginary part of refrative index must be positive for lossy medium."
+                )
+        return val
+
     @ensure_freq_in_range
     def eps_dataset_freq(self, frequency: float) -> PermittivityDataset:
         """Permittivity as a function of frequency. The dispersion comes
@@ -382,6 +427,37 @@ class CustomMedium(AbstractMedium):
             new_field_components.update({name: eps_freq})
         return PermittivityDataset(**new_field_components)
 
+    def eps_diagonal_spatial(
+        self,
+        frequency: float,
+        coords: Coords,
+    ) -> Tuple[complex, complex, complex]:
+        """Main diagonal of the complex-valued permittivity tensor
+        as a function of frequency interpolated at the supplied coordinate.
+
+        Parameters
+        ----------
+        frequency : float
+            Frequency to evaluate permittivity at (Hz).
+        coords : :class:`.Coords`
+            The grid point coordinates over which interpolation is performed.
+
+        Returns
+        -------
+        Tuple[complex, complex, complex]
+            Description
+        """
+
+        eps_freq = self.eps_dataset_freq(frequency)
+        interp_shape = [len(coord_comp) for coord_comp in coords.to_list]
+        eps_list = [
+            np.array(
+                self._interp(eps_freq.field_components[comp], coords, self.interp_method)
+            ).reshape(interp_shape)
+            for comp in ["eps_xx", "eps_yy", "eps_zz"]
+        ]
+        return tuple(eps_list)
+
     @ensure_freq_in_range
     def eps_diagonal(self, frequency: float) -> Tuple[complex, complex, complex]:
         """Main diagonal of the complex-valued permittivity tensor
@@ -390,10 +466,10 @@ class CustomMedium(AbstractMedium):
         Note that spatially, we take max{|eps|}, so that autoMesh generation
         works appropriately.
         """
-
+        eps_freq = self.eps_dataset_freq(frequency)
         eps_np_list = [
-            np.array(eps_data_comp).ravel()
-            for _, eps_data_comp in self.eps_dataset_freq(frequency).field_components.items()
+            np.array(eps_freq.field_components[comp]).ravel()
+            for comp in ["eps_xx", "eps_yy", "eps_zz"]
         ]
         eps_list = [eps_comp[np.argmax(np.abs(eps_comp))] for eps_comp in eps_np_list]
         return tuple(eps_list)
@@ -403,8 +479,8 @@ class CustomMedium(AbstractMedium):
         """Spatial and poloarizaiton average of complex-valued permittivity
         as a function of frequency.
         """
-        eps_dataset = self.eps_dataset_freq(frequency)
-        eps_arrays = [eps_array for _, eps_array in eps_dataset.field_components.items()]
+        eps_freq = self.eps_dataset_freq(frequency)
+        eps_arrays = [eps_freq.field_components[comp] for comp in ["eps_xx", "eps_yy", "eps_zz"]]
         eps_array_avgs = [np.mean(eps_array) for eps_array in eps_arrays]
         return np.mean(eps_array_avgs)
 
@@ -465,6 +541,77 @@ class CustomMedium(AbstractMedium):
         coords = {k: np.array(v) for k, v in n.coords.items()}
         eps_scalar_field_data = ScalarFieldDataArray(eps_values, coords=coords)
         return cls.from_eps_raw(eps=eps_scalar_field_data, interp_method=interp_method)
+
+    @staticmethod
+    def _interp(
+        scalar_dataset: ScalarFieldDataArray,
+        coord_interp: Coords,
+        interp_method: InterpMethod,
+    ) -> ScalarFieldDataArray:
+        """
+        Enhance xarray's ``.interp`` in two ways:
+            1) Check if the coordinate of the supplied data are in monotically increasing order.
+            If they are, apply the faster ``assume_sorted=True``.
+
+            2) For axes of single entry, instead of error, apply ``isel()`` along the axis.
+
+            3) When linear interp is applied, in the extrapolated region, filter values smaller
+            or larger than the original data's min(max) will be replaced with the original min(max).
+
+        Parameters
+        ----------
+        scalar_dataset : :class:`.ScalarFieldDataArray`
+            Supplied scalar dataset.
+        coord_interp : :class:`.Coords`
+            The grid point coordinates over which interpolation is performed.
+        interp_method : InterpMethod
+            Interpolation method.
+
+        Returns
+        -------
+        :class:`.ScalarFieldDataArray`
+            The interpolated scalar dataset.
+        """
+
+        # check in x/y/z axes, which of them are supplied with a single entry.
+        all_coords = "xyz"
+        is_single_entry = [scalar_dataset.sizes[ax] == 1 for ax in all_coords]
+        interp_ax = [
+            ax for (ax, single_entry) in zip(all_coords, is_single_entry) if not single_entry
+        ]
+        isel_ax = [ax for ax in all_coords if ax not in interp_ax]
+
+        # apply isel for the axis containing single entry
+        if len(isel_ax) > 0:
+            scalar_dataset = scalar_dataset.isel(
+                {ax: [0] * len(coord_interp.to_dict[ax]) for ax in isel_ax}
+            )
+            scalar_dataset = scalar_dataset.assign_coords(
+                {ax: coord_interp.to_dict[ax] for ax in isel_ax}
+            )
+            if len(interp_ax) == 0:
+                return scalar_dataset
+
+        # Apply interp for the rest
+        #   first check if it's sorted
+        is_sorted = all((np.all(np.diff(scalar_dataset.coords[f]) > 0) for f in interp_ax))
+        interp_param = dict(
+            kwargs={"fill_value": FILL_VALUE},
+            assume_sorted=is_sorted,
+            method=interp_method,
+        )
+        #   interpolation
+        interp_dataset = scalar_dataset.interp(
+            {ax: coord_interp.to_dict[ax] for ax in interp_ax},
+            **interp_param,
+        )
+
+        # filter any values larger/smaller than the original data's max/min.
+        max_val = max(scalar_dataset.values.ravel())
+        min_val = min(scalar_dataset.values.ravel())
+        interp_dataset = interp_dataset.where(interp_dataset >= min_val, min_val)
+        interp_dataset = interp_dataset.where(interp_dataset <= max_val, max_val)
+        return interp_dataset
 
 
 """ Dispersive Media """

@@ -5,9 +5,10 @@ import pydantic
 from .base import Tidy3dBaseModel
 from .validators import validate_name_str
 from .geometry import GeometryType
-from .medium import MediumType
+from .medium import MediumType, CustomMedium
 from .types import Ax, TYPE_TAG_STR
 from .viz import add_ax_if_none, equal_aspect
+from .grid.grid import Coords
 from ..constants import MICROMETER
 
 
@@ -77,7 +78,7 @@ class Structure(AbstractStructure):
         discriminator=TYPE_TAG_STR,
     )
 
-    def eps_diagonal(self, frequency: float) -> Tuple[complex, complex, complex]:
+    def eps_diagonal(self, frequency: float, coords: Coords) -> Tuple[complex, complex, complex]:
         """Main diagonal of the complex-valued permittivity tensor as a function of frequency.
 
         Parameters
@@ -90,6 +91,8 @@ class Structure(AbstractStructure):
         complex
             The diagonal elements of the relative permittivity tensor evaluated at ``frequency``.
         """
+        if isinstance(self.medium, CustomMedium):
+            return self.medium.eps_diagonal_spatial(frequency=frequency, coords=coords)
         return self.medium.eps_diagonal(frequency=frequency)
 
 

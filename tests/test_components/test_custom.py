@@ -7,6 +7,7 @@ from tidy3d.components.simulation import Simulation
 from tidy3d.components.geometry import Box
 from tidy3d.components.structure import Structure
 from tidy3d.components.grid.grid_spec import GridSpec
+from tidy3d import Coords
 from tidy3d.components.source import CustomFieldSource, GaussianPulse
 from tidy3d.components.data.data_array import ScalarFieldDataArray
 from tidy3d.components.data.dataset import FieldDataset
@@ -29,7 +30,7 @@ SIZE = (2, 0, 2)
 
 def make_scalar_data():
     """Makes a scalar field data array."""
-    data = np.random.random((Nx, Ny, Nz, 1))
+    data = np.random.random((Nx, Ny, Nz, 1)) + 1
     return ScalarFieldDataArray(data, coords=dict(x=X, y=Y, z=Z, f=freqs))
 
 
@@ -174,6 +175,7 @@ def test_custom_medium_simulation():
         grid_spec=GridSpec.auto(wavelength=1.0),
         structures=(struct,),
     )
+    grid = sim.grid
 
 
 def test_medium_raw():
@@ -182,10 +184,76 @@ def test_medium_raw():
     med = CustomMedium.from_eps_raw(eps_raw)
 
 
+def test_medium_interp():
+    """Test if the interp works."""
+    coord_interp = Coords(**{ax: np.linspace(-2, 2, 20 + ind) for ind, ax in enumerate("xyz")})
+
+    # more than one entries per each axis
+    orig_data = make_scalar_data()
+    data_fit_nearest = CustomMedium._interp(orig_data, coord_interp, "nearest")
+    data_fit_linear = CustomMedium._interp(orig_data, coord_interp, "linear")
+    assert np.allclose(data_fit_nearest.shape[:3], [len(f) for f in coord_interp.to_list])
+    assert np.allclose(data_fit_linear.shape[:3], [len(f) for f in coord_interp.to_list])
+    # maximal or minimal values shouldn't exceed that in the supplied data
+    assert max(data_fit_linear.values.ravel()) <= max(orig_data.values.ravel())
+    assert min(data_fit_linear.values.ravel()) >= min(orig_data.values.ravel())
+    assert max(data_fit_nearest.values.ravel()) <= max(orig_data.values.ravel())
+    assert min(data_fit_nearest.values.ravel()) >= min(orig_data.values.ravel())
+
+    # single entry along some axis
+    Nx = 1
+    X = [1.1]
+    data = np.random.random((Nx, Ny, Nz, 1))
+    orig_data = ScalarFieldDataArray(data, coords=dict(x=X, y=Y, z=Z, f=freqs))
+    data_fit_nearest = CustomMedium._interp(orig_data, coord_interp, "nearest")
+    data_fit_linear = CustomMedium._interp(orig_data, coord_interp, "linear")
+    assert np.allclose(data_fit_nearest.shape[:3], [len(f) for f in coord_interp.to_list])
+    assert np.allclose(data_fit_linear.shape[:3], [len(f) for f in coord_interp.to_list])
+    # maximal or minimal values shouldn't exceed that in the supplied data
+    assert max(data_fit_linear.values.ravel()) <= max(orig_data.values.ravel())
+    assert min(data_fit_linear.values.ravel()) >= min(orig_data.values.ravel())
+    assert max(data_fit_nearest.values.ravel()) <= max(orig_data.values.ravel())
+    assert min(data_fit_nearest.values.ravel()) >= min(orig_data.values.ravel())
+    # original data are not modified
+    assert not np.allclose(orig_data.shape[:3], [len(f) for f in coord_interp.to_list])
+
+
+def test_medium_smaller_than_one_positive_sigma():
+    """Error when any of eps_inf is lower than 1, or sigma is negative."""
+    # single entry along some axis
+
+    # eps_inf < 1
+    n_data = 1 + np.random.random((Nx, Ny, Nz, 1))
+    n_data[0, 0, 0, 0] = 0.5
+    n_dataarray = ScalarFieldDataArray(n_data, coords=dict(x=X, y=Y, z=Z, f=freqs))
+    with pytest.raises(SetupError):
+        mat_custom = CustomMedium.from_nk(n_dataarray)
+
+    # negative sigma
+    n_data = 1 + np.random.random((Nx, Ny, Nz, 1))
+    k_data = np.random.random((Nx, Ny, Nz, 1))
+    k_data[0, 0, 0, 0] = -0.1
+    n_dataarray = ScalarFieldDataArray(n_data, coords=dict(x=X, y=Y, z=Z, f=freqs))
+    k_dataarray = ScalarFieldDataArray(k_data, coords=dict(x=X, y=Y, z=Z, f=freqs))
+    with pytest.raises(SetupError):
+        mat_custom = CustomMedium.from_nk(n_dataarray, k_dataarray)
+
+
+def test_medium_eps_diagonal_spatial():
+    """Test if ``eps_diagonal_spatial`` works."""
+    coord_interp = Coords(**{ax: np.linspace(-1, 1, 20 + ind) for ind, ax in enumerate("xyz")})
+    freq_interp = 1e14
+
+    eps_output = CUSTOM_MEDIUM.eps_diagonal_spatial(freq_interp, coord_interp)
+
+    for i in range(3):
+        assert np.allclose(eps_output[i].shape, [len(f) for f in coord_interp.to_list])
+
+
 def test_medium_nk():
     """Construct custom medium from n (and k) DataArrays."""
     n = make_scalar_data().real
-    k = make_scalar_data().real
+    k = make_scalar_data().real * 0.01
     med = CustomMedium.from_nk(n=n, k=k)
     med = CustomMedium.from_nk(n=n)
 

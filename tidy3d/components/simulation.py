@@ -1295,6 +1295,14 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
 
         return (bounds_min, bounds_max)
 
+    @cached_property
+    def simulation_geometry(self) -> Box:
+        """The entire simulation domain including PML layers. It is identical to
+        ``sim.geometry`` in the absence of PML.
+        """
+        rmin, rmax = self.bounds_pml
+        return Box.from_bounds(rmin=rmin, rmax=rmax)
+
     @equal_aspect
     @add_ax_if_none
     def plot_pml(
@@ -1406,8 +1414,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
 
     def _make_symmetry_box(self, sym_axis: Axis) -> Box:
         """Construct a :class:`Box` representing the symmetry to be plotted."""
-        rmin, rmax = self.bounds_pml
-        sym_box = Box.from_bounds(rmin=rmin, rmax=rmax)
+        sym_box = self.simulation_geometry
         size = list(sym_box.size)
         size[sym_axis] /= 2
         center = list(sym_box.center)
@@ -2015,14 +2022,12 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
             refer to `xarray's Documentaton <https://tinyurl.com/2zrzsp7b>`_.
         """
 
-        def get_eps(structure: Structure, frequency: float):
+        def get_eps(structure: Structure, frequency: float, coords: Coords):
             """Select the correct epsilon component if field locations are requested."""
             if coord_key[0] != "E":
-                return self.medium.eps_model(frequency)
+                return np.mean(structure.eps_diagonal(frequency, coords), axis=0)
             component = ["x", "y", "z"].index(coord_key[1])
-            return structure.eps_diagonal(frequency)[component]
-
-        eps_background = get_eps(structure=self.background_structure, frequency=freq)
+            return structure.eps_diagonal(frequency, coords)[component]
 
         def make_eps_data(coords: Coords):
             """returns epsilon data on grid of points defined by coords"""
@@ -2031,13 +2036,18 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
             rmax = tuple(coord[-1] for coord in (xs, ys, zs))
             points_box = Box.from_bounds(rmin=rmin, rmax=rmax)
             x, y, z = np.meshgrid(xs, ys, zs, indexing="ij")
+            eps_background = get_eps(
+                structure=self.background_structure, frequency=freq, coords=coords
+            )
             eps_array = eps_background * np.ones(x.shape, dtype=complex)
+
             for structure in self.structures:
                 if not points_box.intersects(structure.geometry):
                     continue
-                eps_structure = get_eps(structure=structure, frequency=freq)
+                eps_structure = get_eps(structure=structure, frequency=freq, coords=coords)
                 is_inside = structure.geometry.inside(x, y, z)
-                eps_array[np.where(is_inside)] = eps_structure
+                eps_structure = eps_structure * np.ones_like(eps_array)
+                eps_array[np.where(is_inside)] = eps_structure[np.where(is_inside)]
             coords = {"x": np.array(xs), "y": np.array(ys), "z": np.array(zs)}
             return xr.DataArray(eps_array, coords=coords, dims=("x", "y", "z"))
 
