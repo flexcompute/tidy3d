@@ -49,6 +49,53 @@ def test_mode_solver_simple():
     modes = ms.solve()
 
 
+def test_mode_solver_custom_medium():
+    """Test mode solver can work with custom medium. Consider a waveguide with varying
+    permittivity along x-direction. The value of n_eff at different x position should be
+    different.
+    """
+
+    # waveguide made of custom medium
+    x_custom = np.linspace(-0.6, 0.6, 2)
+    y_custom = [0]
+    z_custom = [0]
+    freq0 = td.constants.C_0 / 1.0
+    n = np.array([1.5, 5])
+    n = n[:, None, None, None]
+    n_data = ScalarFieldDataArray(n, coords=dict(x=x_custom, y=y_custom, z=z_custom, f=[freq0]))
+    mat_custom = td.CustomMedium.from_nk(n_data, interp_method="nearest")
+
+    waveguide = td.Structure(geometry=td.Box(size=(100, 0.5, 0.5)), medium=mat_custom)
+    simulation = td.Simulation(
+        size=(2, 2, 2),
+        grid_spec=td.GridSpec(wavelength=1.0),
+        structures=[waveguide],
+        run_time=1e-12,
+    )
+    mode_spec = td.ModeSpec(
+        num_modes=1,
+        precision="double",
+    )
+
+    plane_left = td.Box(center=(-0.5, 0, 0), size=(1, 0, 1))
+    plane_right = td.Box(center=(0.5, 0, 0), size=(1, 0, 1))
+
+    n_eff = []
+    for plane in [plane_left, plane_right]:
+        ms = ModeSolver(
+            simulation=simulation,
+            plane=plane,
+            mode_spec=mode_spec,
+            freqs=[freq0],
+        )
+        modes = ms.solve()
+        n_eff.append(modes.n_eff.values)
+
+    assert n_eff[0] < 1.5
+    assert n_eff[1] > 4
+    assert n_eff[1] < 5
+
+
 def test_mode_solver_angle_bend():
     """Run mode solver with angle and bend and symmetry"""
     simulation = td.Simulation(

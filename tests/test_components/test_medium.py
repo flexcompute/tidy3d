@@ -68,6 +68,10 @@ def test_medium_conversions():
     eps_z_ = medium.eps_sigma_to_eps_complex(eps, sig, freq)
     assert np.isclose(eps_z, eps_z_)
 
+    eps_, sig_ = medium.eps_complex_to_eps_sigma(eps_z, freq)
+    assert np.isclose(eps_, eps)
+    assert np.isclose(sig_, sig)
+
     n_, k_ = medium.eps_complex_to_nk(eps_z)
     assert np.isclose(n, n_)
     assert np.isclose(k, k_)
