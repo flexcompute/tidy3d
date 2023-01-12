@@ -57,7 +57,7 @@ Create Geometries
    * - How do I...
      - Solution
    * - Load a structure from GDS format?
-     - From a cell in the  ``gdspy`` package, the ``ps = td.PolySlab.from_gds(gds_cell, ...)`` method will load the geometry into a :class:`PolySlab`.
+     - From a cell in the ``gdstk`` package, the ``ps = td.PolySlab.from_gds(gds_cell, ...)`` method will load the geometry into a :class:`PolySlab`.
    * - Create a complex geometry, such as a ring?
      - While many complex geometries can be created by supplying the vertices to :class:`PolySlab`, simple geometries, such as rings, can be constructed by overlaying two structures with :class:`Cylinder` geomety with the inner cylinder defined with medium of air.  Note that structures later in the ``structures`` list will override previous structures, which can be leveraged to make more complex geometries.
 

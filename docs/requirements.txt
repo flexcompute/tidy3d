@@ -10,6 +10,6 @@ sphinx-copybutton
 sphinx-book-theme==0.3.3
 m2r2
 tmm
-gdspy
+gdstk
 grcwa
 sphinx-sitemap
