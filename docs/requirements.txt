@@ -1,8 +1,7 @@
 jupyter
 jinja2==3.0
 nbconvert==6.0.6
-sphinx==4.0.2
-sphinx_rtd_theme
+sphinx
 nbsphinx==0.8.7
 ipython
 autodoc_pydantic>=1.8.0
