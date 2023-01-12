@@ -179,3 +179,5 @@ html_css_files = ["css/custom.css"]
 #     'preamble': r'''\renewcommand{\hyperref}[2][]{#2}'''
 # }
 latex_engine = 'xelatex'
+
+html_baseurl = 'https://docs.flexcompute.com/projects/tidy3d/en/latest/index.html#'
