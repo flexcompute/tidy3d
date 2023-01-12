@@ -5,7 +5,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.8.2] - 2023-1-12
+
 ### Added
+- warning if users install via `tidy3d-beta` on pip, from now on, best to use `tidy3d` directly.
+- support for non-dispersive media in `AnisotropicMedium`
+
+### Changed
+- Support shapely version >=2.0 for all python versions.
+- Internally refactor `Simulation.epsilon` and move `eps_diagonal` to `Structure` in preparation for future changes.
+- Readme displays updated instructions for installing tidy3d (remove beta version mention).
+
+### Fixed
+- Field decay warning in mode solver when symmetry present.
+- Formatting bug in Tidy3d custom exceptions.
+
+### Removed
 
 ## [1.8.1] - 2022-12-30
 
@@ -520,7 +535,8 @@ which fields are to be projected is now determined automatically based on the me
 - Job and Batch classes for better simulation handling (eventually to fully replace webapi functions).
 - A large number of small improvements and bug fixes.
 
-[Unreleased]: https://github.com/flexcompute/tidy3d/compare/v1.8.1...develop
+[Unreleased]: https://github.com/flexcompute/tidy3d/compare/v1.8.2...develop
+[1.8.2]: https://github.com/flexcompute/tidy3d/compare/v1.8.1...v1.8.2
 [1.8.1]: https://github.com/flexcompute/tidy3d/compare/v1.8.0...v1.8.1
 [1.8.0]: https://github.com/flexcompute/tidy3d/compare/v1.7.1...v1.8.0
 [1.7.1]: https://github.com/flexcompute/tidy3d/compare/v1.7.0...v1.7.1
