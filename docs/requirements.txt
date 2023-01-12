@@ -1,7 +1,7 @@
 jupyter
 jinja2==3.0
 nbconvert==6.0.6
-sphinx
+sphinx==4.0.2
 sphinx_rtd_theme
 nbsphinx==0.8.7
 ipython

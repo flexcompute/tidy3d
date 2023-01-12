@@ -14,7 +14,7 @@ Work with the Tidy3d Package
    :widths: 40 60
 
    * - How do I...
-     - Solution   
+     - Solution
    * - See the version of tidy3d I am using?
      - In python, after importing `tidy3d`, run `print(tidy3d.__version__)`. Or, do this through the command line via `python -c "import tidy3d; print(tidy3d.__version__)"`.
 
