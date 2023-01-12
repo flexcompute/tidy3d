@@ -577,21 +577,23 @@ class BoundarySpec(Tidy3dBaseModel):
         None,
         title="Boundary condition along x.",
         description="Boundary condition on the plus and minus sides along the x axis. "
-        "If ``None`, periodic boundaries are applied. Default will change to PML in 2.0 "
+        "If `None`, periodic boundaries are applied. Default will change to PML in 2.0 "
         "so explicitly setting the boundaries is recommended.",
     )
+
     y: Boundary = pd.Field(
         None,
         title="Boundary condition along y.",
         description="Boundary condition on the plus and minus sides along the y axis. "
-        "If ``None`, periodic boundaries are applied. Default will change to PML in 2.0 "
+        "If `None`, periodic boundaries are applied. Default will change to PML in 2.0 "
         "so explicitly setting the boundaries is recommended.",
     )
+
     z: Boundary = pd.Field(
         None,
         title="Boundary condition along z.",
         description="Boundary condition on the plus and minus sides along the z axis. "
-        "If ``None`, periodic boundaries are applied. Default will change to PML in 2.0 "
+        "If `None`, periodic boundaries are applied. Default will change to PML in 2.0 "
         "so explicitly setting the boundaries is recommended.",
     )
 
