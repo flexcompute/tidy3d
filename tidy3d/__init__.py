@@ -110,4 +110,5 @@ def set_logging_level(level: str) -> None:
         f"To set the logging level, call ``tidy3d.config.logging_level = {level}``."
     )
 
+
 log.info(f"Using client version: {__version__}")
