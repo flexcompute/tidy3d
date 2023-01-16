@@ -17,7 +17,7 @@ if os.path.exists(CONFIG_FILE):
     with open(CONFIG_FILE, "r", encoding="utf-8") as f:
         content = f.read()
         config = toml.loads(content)
-        config_description = f"API Key[{config.get('apikey', '')}]"
+        config_description = f"API Key:\nCurrent:[{config.get('apikey', '')}]\nNew:"
 
 
 @click.group()
@@ -38,12 +38,6 @@ def configure(apikey):
     apikey : str
         User input api key.
     """
-    if not os.path.exists(TIDY3D_DIR):
-        os.mkdir(TIDY3D_DIR)
-    with open(CONFIG_FILE, "w+", encoding="utf-8") as config_file:
-        toml_config = toml.loads(config_file.read())
-        toml_config.update({"apikey": apikey})
-        config_file.write(toml.dumps(toml_config))
 
     def auth(req):
         """Enrich auth information to request.
@@ -62,8 +56,14 @@ def configure(apikey):
     resp = requests.get(f"{DEFAULT_CONFIG.web_api_endpoint}/apikey", auth=auth)
     if resp.status_code == 200:
         click.echo("Configured successfully.")
-        return
-    click.echo("API key is invalid.")
+        if not os.path.exists(TIDY3D_DIR):
+            os.mkdir(TIDY3D_DIR)
+        with open(CONFIG_FILE, "w+", encoding="utf-8") as config_file:
+            toml_config = toml.loads(config_file.read())
+            toml_config.update({"apikey": apikey})
+            config_file.write(toml.dumps(toml_config))
+    else:
+        click.echo("API key is invalid.")
 
 
 tidy3d_cli.add_command(configure)
