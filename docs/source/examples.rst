@@ -46,6 +46,7 @@ Case studies
     notebooks/HighQ_Si
     notebooks/HighQ_Ge
     notebooks/DielectricMetasurfaceAbsorber.ipynb
+    notebooks/GradientMetasurfaceReflector
     notebooks/Metalens
     notebooks/Bandstructure.ipynb
     notebooks/OptimizedL3.ipynb
