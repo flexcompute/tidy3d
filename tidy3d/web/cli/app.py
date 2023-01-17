@@ -17,7 +17,7 @@ if os.path.exists(CONFIG_FILE):
     with open(CONFIG_FILE, "r", encoding="utf-8") as f:
         content = f.read()
         config = toml.loads(content)
-        config_description = f"API Key:\nCurrent:[{config.get('apikey', '')}]\nNew:"
+        config_description = f"API Key:\nCurrent:[{config.get('apikey', '')}]\nNew"
 
 
 @click.group()
