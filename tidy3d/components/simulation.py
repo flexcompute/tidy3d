@@ -28,7 +28,7 @@ from .monitor import AbstractFieldMonitor, DiffractionMonitor, AbstractFieldProj
 from .data.dataset import Dataset
 from .viz import add_ax_if_none, equal_aspect
 
-from .viz import MEDIUM_CMAP, PlotParams, plot_params_symmetry
+from .viz import MEDIUM_CMAP, STRUCTURE_EPS_CMAP, PlotParams, plot_params_symmetry, polygon_path
 from .viz import plot_params_structure, plot_params_pml, plot_params_override_structures
 from .viz import plot_params_pec, plot_params_pmc, plot_params_bloch
 
@@ -1041,7 +1041,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         norm = mpl.colors.Normalize(vmin=eps_min, vmax=eps_max)
         divider = make_axes_locatable(ax)
         cax = divider.append_axes("right", size="5%", pad=0.15)
-        mappable = mpl.cm.ScalarMappable(norm=norm, cmap="gist_yarg")
+        mappable = mpl.cm.ScalarMappable(norm=norm, cmap=STRUCTURE_EPS_CMAP)
         plt.colorbar(mappable, cax=cax, label=r"$\epsilon_r$")
 
     @equal_aspect
@@ -1097,7 +1097,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         if alpha <= 0:
             return ax
 
-        if alpha < 1:
+        if alpha < 1 and not isinstance(self.medium, CustomMedium):
             medium_shapes = self._filter_structures_plane(structures=structures, x=x, y=y, z=z)
         else:
             structures = [self.background_structure] + list(structures)
@@ -1105,18 +1105,26 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
 
         eps_min, eps_max = self.eps_bounds(freq=freq)
         for (medium, shape) in medium_shapes:
-            if medium == self.medium and alpha < 1:
+            # if the background medium is custom medium, it needs to be rendered separately
+            if medium == self.medium and alpha < 1 and not isinstance(medium, CustomMedium):
                 continue
-            ax = self._plot_shape_structure_eps(
-                freq=freq,
-                alpha=alpha,
-                medium=medium,
-                eps_min=eps_min,
-                eps_max=eps_max,
-                reverse=reverse,
-                shape=shape,
-                ax=ax,
-            )
+            # no need to add patches for custom medium
+            if not isinstance(medium, CustomMedium):
+                ax = self._plot_shape_structure_eps(
+                    freq=freq,
+                    alpha=alpha,
+                    medium=medium,
+                    eps_min=eps_min,
+                    eps_max=eps_max,
+                    reverse=reverse,
+                    shape=shape,
+                    ax=ax,
+                )
+            else:
+                # For custom medium, apply pcolormesh clipped by the shape.
+                self._pcolormesh_shape_custom_medium_structure_eps(
+                    x, y, z, freq, alpha, medium, eps_min, eps_max, reverse, shape, ax
+                )
 
         if cbar:
             self._add_cbar(eps_min=eps_min, eps_max=eps_max, ax=ax)
@@ -1134,10 +1142,91 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
 
         medium_list = [self.medium] + list(self.mediums)
         medium_list = [medium for medium in medium_list if not isinstance(medium, PECMedium)]
-        eps_list = [medium.eps_model(freq).real for medium in medium_list]
+        # regular medium
+        eps_list = [
+            medium.eps_model(freq).real
+            for medium in medium_list
+            if not isinstance(medium, CustomMedium)
+        ]
         eps_min = min(1, min(eps_list))
         eps_max = max(1, max(eps_list))
+        # custom medium, the min and max in the supplied dataset over all components and
+        # spatial locations.
+        for mat in [medium for medium in medium_list if isinstance(medium, CustomMedium)]:
+            eps_dataset_at_freq = mat.eps_dataset_freq(freq)
+            for eps_component in eps_dataset_at_freq.field_components.values():
+                eps_min = min(eps_min, min(eps_component.real.values.ravel()))
+                eps_max = max(eps_max, max(eps_component.real.values.ravel()))
         return eps_min, eps_max
+
+    def _pcolormesh_shape_custom_medium_structure_eps(
+        self,
+        x: float,
+        y: float,
+        z: float,
+        freq: float,
+        alpha: float,
+        medium: Medium,
+        eps_min: float,
+        eps_max: float,
+        reverse: bool,
+        shape: Shapely,
+        ax: Ax,
+    ):
+        """
+        Plot shape made of custom medium with ``pcolormesh``.
+        """
+        coords = "xyz"
+        normal_axis_ind, normal_position = self.parse_xyz_kwargs(x=x, y=y, z=z)
+        normal_axis, plane_axes = self.pop_axis(coords, normal_axis_ind)
+
+        # First, obtain `span_inds` of grids for interpolating permittivity in the
+        # bounding box of the shape
+        shape_bounds = shape.bounds
+        rmin, rmax = [*shape_bounds[:2]], [*shape_bounds[2:]]
+        rmin.insert(normal_axis_ind, normal_position)
+        rmax.insert(normal_axis_ind, normal_position)
+        span_inds = self.grid.discretize_inds(Box.from_bounds(rmin=rmin, rmax=rmax), extend=True)
+        # filter negative or too large inds
+        n_grid = [len(grid_comp) for grid_comp in self.grid.boundaries.to_list]
+        span_inds = [
+            (max(fmin, 0), min(fmax, n_grid[f_ind])) for f_ind, (fmin, fmax) in enumerate(span_inds)
+        ]
+
+        # assemble the coordinate in the 2d plane
+        plane_coord = []
+        for plane_axis in range(2):
+            ind_axis = "xyz".index(plane_axes[plane_axis])
+            plane_coord.append(self.grid.boundaries.to_list[ind_axis][slice(*span_inds[ind_axis])])
+
+        # prepare `Coords` for interpolation
+        coord_dict = {
+            plane_axes[0]: plane_coord[0],
+            plane_axes[1]: plane_coord[1],
+            normal_axis: [normal_position],
+        }
+        coord_shape = Coords(**coord_dict)
+        # interpolate permittivity and take the average over components
+        eps_shape = np.mean(medium.eps_diagonal_on_grid(frequency=freq, coords=coord_shape), axis=0)
+        # remove the normal_axis and take real part
+        eps_shape = eps_shape.real.mean(axis=normal_axis_ind)
+        # reverse
+        if reverse:
+            eps_shape = eps_min + eps_max - eps_shape
+
+        # pcolormesh
+        plane_xp, plane_yp = np.meshgrid(plane_coord[0], plane_coord[1], indexing="ij")
+        ax.pcolormesh(
+            plane_xp,
+            plane_yp,
+            eps_shape,
+            clip_path=(polygon_path(shape), ax.transData),
+            cmap=STRUCTURE_EPS_CMAP,
+            vmin=eps_min,
+            vmax=eps_max,
+            alpha=alpha,
+            clip_box=ax.bbox,
+        )
 
     def _get_structure_eps_plot_params(
         self,

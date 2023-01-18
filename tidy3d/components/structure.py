@@ -92,7 +92,7 @@ class Structure(AbstractStructure):
             The diagonal elements of the relative permittivity tensor evaluated at ``frequency``.
         """
         if isinstance(self.medium, CustomMedium):
-            return self.medium.eps_diagonal_spatial(frequency=frequency, coords=coords)
+            return self.medium.eps_diagonal_on_grid(frequency=frequency, coords=coords)
         return self.medium.eps_diagonal(frequency=frequency)
 
 
