@@ -11,7 +11,7 @@ import xarray as xr
 
 from .base import Tidy3dBaseModel, cached_property
 from .grid.grid import Coords
-from .types import PoleAndResidue, Ax, FreqBound, TYPE_TAG_STR, InterpMethod
+from .types import PoleAndResidue, Ax, FreqBound, TYPE_TAG_STR, InterpMethod, Numpy
 from .data.dataset import PermittivityDataset
 from .data.data_array import ScalarFieldDataArray
 from .viz import add_ax_if_none
@@ -397,13 +397,13 @@ class CustomMedium(AbstractMedium):
                 )
             if np.any(sigma.values < 0):
                 raise SetupError(
-                    "Imaginary part of refrative index must be positive for lossy medium."
+                    "Negative imaginary part of refrative index results in a gain medium."
                 )
         return val
 
     @ensure_freq_in_range
     def eps_dataset_freq(self, frequency: float) -> PermittivityDataset:
-        """Permittivity as a function of frequency. The dispersion comes
+        """Permittivity dataset at ``frequency``. The dispersion comes
         from DC conductivity that results in nonzero Im[permittivity].
 
         Parameters
@@ -427,13 +427,13 @@ class CustomMedium(AbstractMedium):
             new_field_components.update({name: eps_freq})
         return PermittivityDataset(**new_field_components)
 
-    def eps_diagonal_spatial(
+    def eps_diagonal_on_grid(
         self,
         frequency: float,
         coords: Coords,
-    ) -> Tuple[complex, complex, complex]:
-        """Main diagonal of the complex-valued permittivity tensor
-        as a function of frequency interpolated at the supplied coordinate.
+    ) -> Tuple[Numpy, Numpy, Numpy]:
+        """Spatial profile of main diagonal of the complex-valued permittivity
+        at ``frequency`` interpolated at the supplied coordinates.
 
         Parameters
         ----------
@@ -444,8 +444,9 @@ class CustomMedium(AbstractMedium):
 
         Returns
         -------
-        Tuple[complex, complex, complex]
-            Description
+        Tuple[Numpy, Numpy, Numpy]
+            The complex-valued permittivity tensor at ``frequency`` interpolated
+            at the supplied coordinate.
         """
 
         eps_freq = self.eps_dataset_freq(frequency)
@@ -461,9 +462,7 @@ class CustomMedium(AbstractMedium):
     @ensure_freq_in_range
     def eps_diagonal(self, frequency: float) -> Tuple[complex, complex, complex]:
         """Main diagonal of the complex-valued permittivity tensor
-        as a function of frequency.
-
-        Note that spatially, we take max{|eps|}, so that autoMesh generation
+        at ``frequency``. Spatially, we take max{|eps|}, so that autoMesh generation
         works appropriately.
         """
         eps_freq = self.eps_dataset_freq(frequency)

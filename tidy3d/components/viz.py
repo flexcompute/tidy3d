@@ -130,6 +130,8 @@ MEDIUM_CMAP = [
     "#877EBC",
 ]
 
+# colormap for structure's permittivity in plot_eps
+STRUCTURE_EPS_CMAP = "gist_yarg"
 
 """=================================================================================================
 Descartes modified from https://pypi.org/project/descartes/ for Shapely >= 1.8.0

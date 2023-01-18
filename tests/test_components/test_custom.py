@@ -239,12 +239,12 @@ def test_medium_smaller_than_one_positive_sigma():
         mat_custom = CustomMedium.from_nk(n_dataarray, k_dataarray)
 
 
-def test_medium_eps_diagonal_spatial():
-    """Test if ``eps_diagonal_spatial`` works."""
+def test_medium_eps_diagonal_on_grid():
+    """Test if ``eps_diagonal_on_grid`` works."""
     coord_interp = Coords(**{ax: np.linspace(-1, 1, 20 + ind) for ind, ax in enumerate("xyz")})
     freq_interp = 1e14
 
-    eps_output = CUSTOM_MEDIUM.eps_diagonal_spatial(freq_interp, coord_interp)
+    eps_output = CUSTOM_MEDIUM.eps_diagonal_on_grid(freq_interp, coord_interp)
 
     for i in range(3):
         assert np.allclose(eps_output[i].shape, [len(f) for f in coord_interp.to_list])
