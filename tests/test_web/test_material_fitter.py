@@ -11,7 +11,7 @@ Env.dev.active()
 
 @responses.activate
 def test_material_fitter(monkeypatch):
-    fitter = DispersionFitter.from_file("../data/nk_data.csv", skiprows=1, delimiter=",")
+    fitter = DispersionFitter.from_file("tests/data/nk_data.csv", skiprows=1, delimiter=",")
 
     monkeypatch.setattr("tidy3d.web.material_fitter.uuid4", lambda: "fitter_id")
 
