@@ -77,14 +77,6 @@ def handle_response(func):
         # call originl request
         resp = func(*args, **kwargs)
 
-        # try to log in if unauthorized
-        attempts = 0
-        while resp.status_code == ResponseCodes.UNAUTHORIZED.value and attempts < MAX_ATTEMPTS:
-            # ask for credentials and call the http request again
-            get_credentials()
-            resp = func(*args, **kwargs)
-            attempts += 1
-
         # if still unauthorized, raise an error
         if resp.status_code == ResponseCodes.UNAUTHORIZED.value:
             raise WebError(resp.text)
