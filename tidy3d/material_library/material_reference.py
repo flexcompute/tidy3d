@@ -21,6 +21,11 @@ class ReferenceData(Tidy3dBaseModel):
 
 
 material_refs = dict(
+    Yang2015=ReferenceData(
+        journal="H. U. Yang, J. D'Archangel, M. L. Sundheimer, E. Tucker, G. D. Boreman, "
+        "M. B. Raschke. Optical dielectric function of silver, Phys. Rev. B 91, 235137 (2015)",
+        doi="https://journals.aps.org/prb/abstract/10.1103/PhysRevB.91.235137",
+    ),
     Olmon2012=ReferenceData(
         journal="R. L. Olmon, B. Slovick, T. W. Johnson, D. Shelton, S.-H. Oh, "
         "G. D. Boreman, and M. B. Raschke. Optical dielectric function of "
