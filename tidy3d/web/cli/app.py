@@ -56,7 +56,6 @@ def configure(apikey):
     resp = requests.get(f"{DEFAULT_CONFIG.web_api_endpoint}/apikey", auth=auth)
     if resp.status_code == 200:
         click.echo("Configured successfully.")
-
         if not os.path.exists(TIDY3D_DIR):
             os.mkdir(TIDY3D_DIR)
         with open(CONFIG_FILE, "w+", encoding="utf-8") as config_file:
