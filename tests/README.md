@@ -88,29 +88,23 @@ def test_test_other():
     pass
 ```
 
-# Porting old tests
+## Test coverage
 
-Below is a list of all the test files in the `test/python` folder in the old repository. Most of them require running the C++ solver, but some do not. We may not end up porting everything if some things don't make sense, but we should make sure that everything that is covered in the old version is covered in the new version too.
+The test coverage tells you what percentage of lines in the source code were traversed over the course of the tests. The test coverage is at 92% as of Jan 20, 2023. We want to make sure any new code is very well tested, ideally as close to 100% as is reasonable. 
 
-| Test file                       | Requires C++ | Ported to file(s)                                         |
-| ------------------------------- | ------------ | --------------------------------------------------------- |
-| test_adjoint.py                 | Y            |                                                           | 
-| test_anisotropic.py             | Y            |                                                           | 
-| test_checks.py                  | N            |                                                           | 
-| test_divergence.py              | Y            |                                                           | 
-| test_grid.py                    | N            |                                                           | 
-| test_material_dispersion.py     | Y            |                                                           | 
-| test_material_library.py        | Y            |                                                           | 
-| test_medium.py                  | N            |                                                           | 
-| test_mode_nonuniform.py         | Y            |                                                           | 
-| test_mode_source.py             | Y            |                                                           | 
-| test_mode_symmetry.py           | Y            |                                                           | 
-| test_monitors.py                | Y            |                                                           | 
-| test_mpi.py                     | Y            |                                                           | 
-| test_near2far.py                | Y            |                                                           | 
-| test_pec.py                     | Y            |                                                           | 
-| test_pml.py                     | Y            |                                                           | 
-| test_sidewall.py                | Y            |                                                           | 
-| test_structure_bounded.py       | N            |                                                           | 
-| test_symmetries.py              | Y            |                                                           | 
-| test_volume_source.py           | Y            |                                                           | 
+To measure the test coverage:
+
+```
+pip install pytest-cov
+```
+if not already installed
+
+To run coverage tests with results printed to STDOUT:
+```
+pytest tests --cov-report term-missing --cov=tidy3d
+```
+To run coverage tests and get output as .html (more intuitive):
+```
+pytest tests --cov-report=html --cov=tidy3d
+open htmlcov/index.html
+```
