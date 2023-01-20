@@ -14,18 +14,24 @@ from tidy3d.plugins.smatrix.smatrix import ComponentModeler
 from ..utils import clear_tmp, run_emulated
 
 WAVEGUIDE = td.Structure(geometry=td.Box(size=(100, 0.5, 0.5)), medium=td.Medium(permittivity=4.0))
-PLANE = td.Box(center=(0, 0, 0), size=(1, 0, 1))
+PLANE = td.Box(center=(0, 0, 0), size=(5, 0, 5))
+SIM_SIZE = (5, 5, 5)
+SRC = td.PointDipole(
+    center=(0, 0, 0), source_time=td.GaussianPulse(freq0=2e14, fwidth=1e13), polarization="Ex"
+)
 
 
 def test_mode_solver_simple():
     """Simple mode solver run (with symmetry)"""
 
     simulation = td.Simulation(
-        size=(2, 2, 2),
+        size=SIM_SIZE,
         grid_spec=td.GridSpec(wavelength=1.0),
         structures=[WAVEGUIDE],
         run_time=1e-12,
         symmetry=(1, 0, -1),
+        boundary_spec=td.BoundarySpec.all_sides(boundary=td.Periodic()),
+        sources=[SRC],
     )
     mode_spec = td.ModeSpec(
         num_modes=3,
@@ -46,11 +52,13 @@ def test_mode_solver_simple():
 def test_mode_solver_angle_bend():
     """Run mode solver with angle and bend and symmetry"""
     simulation = td.Simulation(
-        size=(2, 2, 2),
+        size=SIM_SIZE,
         grid_spec=td.GridSpec(wavelength=1.0),
         structures=[WAVEGUIDE],
         run_time=1e-12,
         symmetry=(-1, 0, 1),
+        boundary_spec=td.BoundarySpec.all_sides(boundary=td.Periodic()),
+        sources=[SRC],
     )
     mode_spec = td.ModeSpec(
         num_modes=3,
@@ -87,10 +95,12 @@ def test_mode_solver_2D():
         track_freq="central",
     )
     simulation = td.Simulation(
-        size=(0, 2, 2),
+        size=(0, SIM_SIZE[1], SIM_SIZE[2]),
         grid_spec=td.GridSpec(wavelength=1.0),
         structures=[WAVEGUIDE],
         run_time=1e-12,
+        boundary_spec=td.BoundarySpec.all_sides(boundary=td.Periodic()),
+        sources=[SRC],
     )
     ms = ModeSolver(
         simulation=simulation, plane=PLANE, mode_spec=mode_spec, freqs=[td.constants.C_0 / 1.0]
@@ -99,10 +109,11 @@ def test_mode_solver_2D():
 
     mode_spec = td.ModeSpec(num_modes=3, filter_pol="te", precision="double", num_pml=(10, 0))
     simulation = td.Simulation(
-        size=(2, 2, 0),
+        size=(SIM_SIZE[0], SIM_SIZE[1], 0),
         grid_spec=td.GridSpec(wavelength=1.0),
         structures=[WAVEGUIDE],
         run_time=1e-12,
+        sources=[SRC],
     )
     ms = ModeSolver(
         simulation=simulation, plane=PLANE, mode_spec=mode_spec, freqs=[td.constants.C_0 / 1.0]
@@ -114,6 +125,8 @@ def test_mode_solver_2D():
         size=PLANE.size,
         grid_spec=td.GridSpec(wavelength=1.0),
         run_time=1e-12,
+        boundary_spec=td.BoundarySpec.all_sides(boundary=td.Periodic()),
+        sources=[SRC],
     )
     ms = ModeSolver(
         simulation=simulation, plane=PLANE, mode_spec=mode_spec, freqs=[td.constants.C_0 / 1.0]
