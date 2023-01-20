@@ -154,6 +154,25 @@ Ag_JohnsonChristy1972 = VariantItem(
     data_url="https://refractiveindex.info/data_csv.php?datafile=data/main/Ag/Johnson.yml",
 )
 
+Ag_Yang2015Drude = VariantItem(
+    medium=PoleResidue(
+        eps_inf=5.0,
+        poles=(
+            (
+                (0.0j),
+                (1.5540587685959158e18 + 0j),
+            ),
+            (
+                (-58823530000000 + 0j),
+                (-1.5540587685959158e18 - 0j),
+            ),
+        ),
+        frequency_range=(154771532566312.25, 1595489401708072.2),
+    ),
+    reference=[material_refs["Yang2015"]],
+    data_url="https://refractiveindex.info/database/data/main/Ag/Yang.yml",
+)
+
 Al_Rakic1995 = VariantItem(
     medium=PoleResidue(
         eps_inf=1.0,
@@ -328,6 +347,25 @@ Au_Olmon2012crystal = VariantItem(
             ),
         ),
         frequency_range=(12025369359446.29, 999308193769986.8),
+    ),
+    reference=[material_refs["Olmon2012"]],
+    data_url="https://refractiveindex.info/data_csv.php?datafile=data/main/Au/Olmon-sc.yml",
+)
+
+Au_Olmon2012Drude = VariantItem(
+    medium=PoleResidue(
+        eps_inf=1.0,
+        poles=(
+            (
+                (0.0j),
+                ((1.153665672616558e18 + 0j)),
+            ),
+            (
+                (-71428570000000 + 0j),
+                (-1.153665672616558e18 - 0j),
+            ),
+        ),
+        frequency_range=(12025369359446.29, 241798930000000),
     ),
     reference=[material_refs["Olmon2012"]],
     data_url="https://refractiveindex.info/data_csv.php?datafile=data/main/Au/Olmon-sc.yml",
@@ -1267,6 +1305,7 @@ material_library = dict(
             Rakic1998BB=Ag_Rakic1998BB,
             JohnsonChristy1972=Ag_JohnsonChristy1972,
             RakicLorentzDrude1998=Ag_RakicLorentzDrude1998,
+            Yang2015Drude=Ag_Yang2015Drude,
         ),
         default="Rakic1998BB",
     ),
@@ -1327,6 +1366,7 @@ material_library = dict(
             Olmon2012crystal=Au_Olmon2012crystal,
             Olmon2012stripped=Au_Olmon2012stripped,
             Olmon2012evaporated=Au_Olmon2012evaporated,
+            Olmon2012Drude=Au_Olmon2012Drude,
             JohnsonChristy1972=Au_JohnsonChristy1972,
             RakicLorentzDrude1998=Au_RakicLorentzDrude1998,
         ),
