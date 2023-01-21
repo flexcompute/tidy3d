@@ -1,5 +1,6 @@
 """Fit PoleResidue Dispersion models to optical NK data based on web service
 """
+import ssl
 from typing import Tuple, Optional
 from enum import Enum
 import requests
@@ -11,7 +12,7 @@ from ...components.medium import PoleResidue
 from ...constants import MICROMETER, HERTZ
 from ...log import log, WebError, Tidy3dError, SetupError
 from ...web.httputils import get_headers
-
+from ...web.config import DEFAULT_CONFIG as Config
 from .fit import DispersionFitter
 
 BOUND_MAX_FACTOR = 10
@@ -182,15 +183,21 @@ class StableDispersionFitter(DispersionFitter):
         access_token = get_headers()
         headers = {"Authorization": access_token["Authorization"]}
 
-        # test connection
-        resp = requests.get(f"{url_server}/health")
         try:
+            # test connection
+            resp = requests.get(f"{url_server}/health", verify=Config.ssl_verify)
             resp.raise_for_status()
+        except (requests.exceptions.SSLError, ssl.SSLError):
+            log.info("disable the ssl verify and retry")
+            Config.ssl_verify = False
+            resp = requests.get(f"{url_server}/health", verify=Config.ssl_verify)
         except Exception as e:
             raise WebError("Connection to the server failed. Please try again.") from e
 
         # test authorization
-        resp = requests.get(f"{url_server}/health/access", headers=headers)
+        resp = requests.get(
+            f"{url_server}/health/access", headers=headers, verify=Config.ssl_verify
+        )
         try:
             resp.raise_for_status()
         except Exception as e:
@@ -292,7 +299,12 @@ class StableDispersionFitter(DispersionFitter):
         # setup web_data
         web_data = self._setup_webdata(num_poles, num_tries, tolerance_rms, advanced_param)
 
-        resp = requests.post(f"{url_server}/dispersion/fit", headers=headers, data=web_data.json())
+        resp = requests.post(
+            f"{url_server}/dispersion/fit",
+            headers=headers,
+            data=web_data.json(),
+            verify=Config.ssl_verify,
+        )
 
         try:
             resp.raise_for_status()
