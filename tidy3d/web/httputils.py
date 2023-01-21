@@ -57,7 +57,7 @@ def auth(request):
 
 
 session = Session()
-session.verify = Config.env_settings.ssl_verify
+session.verify = Config.ssl_verify
 session.auth = auth
 
 
