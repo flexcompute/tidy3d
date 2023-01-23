@@ -2018,7 +2018,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         def get_eps(structure: Structure, frequency: float):
             """Select the correct epsilon component if field locations are requested."""
             if coord_key[0] != "E":
-                return self.medium.eps_model(frequency)
+                return structure.medium.eps_model(frequency)
             component = ["x", "y", "z"].index(coord_key[1])
             return structure.eps_diagonal(frequency)[component]
 
