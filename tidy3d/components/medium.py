@@ -361,7 +361,7 @@ class CustomMedium(AbstractMedium):
         title="Permittivity Dataset",
         description="User-supplied dataset containing complex-valued permittivity "
         "as a function of space. Permittivity distribution over the Yee-grid will be "
-        "based on nearest-neighbor interpolation.",
+        "interpolated based on ``interp_method``.",
     )
 
     interp_method: InterpMethod = pd.Field(
@@ -369,7 +369,9 @@ class CustomMedium(AbstractMedium):
         title="Interpolation method",
         description="Interpolation method to obtain permittivity values "
         "that are not supplied at the Yee grids; For grids outside the range "
-        "of the supplied data, extrapolation will be applied.",
+        "of the supplied data, extrapolation will be applied. When the extrapolated "
+        "value is smaller (greater) than the minimal (maximal) of the supplied data, "
+        "the extrapolated value will take the minimal (maximal) of the supplied data.",
     )
 
     @pd.validator("eps_dataset", always=True)
@@ -399,14 +401,15 @@ class CustomMedium(AbstractMedium):
                 )
             if np.any(sigma.values < 0):
                 raise SetupError(
-                    "Negative imaginary part of refrative index results in a gain medium."
+                    "Negative imaginary part of refrative index leads to a gain medium, "
+                    "which is not supported."
                 )
         return val
 
     @ensure_freq_in_range
     def eps_dataset_freq(self, frequency: float) -> PermittivityDataset:
         """Permittivity dataset at ``frequency``. The dispersion comes
-        from DC conductivity that results in nonzero Im[permittivity].
+        from DC conductivity that results in nonzero Im[eps].
 
         Parameters
         ----------
@@ -415,7 +418,7 @@ class CustomMedium(AbstractMedium):
 
         Returns
         -------
-        PermittivityDataset
+        :class:`.PermittivityDataset`
             The permittivity evaluated at ``frequency``.
         """
 
@@ -464,13 +467,12 @@ class CustomMedium(AbstractMedium):
     @ensure_freq_in_range
     def eps_diagonal(self, frequency: float) -> Tuple[complex, complex, complex]:
         """Main diagonal of the complex-valued permittivity tensor
-        at ``frequency``. Spatially, we take max{|eps|}, so that autoMesh generation
+        at ``frequency``. Spatially, we take max{||eps||}, so that autoMesh generation
         works appropriately.
         """
         eps_freq = self.eps_dataset_freq(frequency)
         eps_np_list = [
-            np.array(eps_freq.field_components[comp]).ravel()
-            for comp in ["eps_xx", "eps_yy", "eps_zz"]
+            np.array(sclr_fld).ravel() for _, sclr_fld in eps_freq.field_components.items()
         ]
         eps_list = [eps_comp[np.argmax(np.abs(eps_comp))] for eps_comp in eps_np_list]
         return tuple(eps_list)
@@ -481,27 +483,26 @@ class CustomMedium(AbstractMedium):
         as a function of frequency.
         """
         eps_freq = self.eps_dataset_freq(frequency)
-        eps_arrays = [eps_freq.field_components[comp] for comp in ["eps_xx", "eps_yy", "eps_zz"]]
-        eps_array_avgs = [np.mean(eps_array) for eps_array in eps_arrays]
+        eps_array_avgs = [np.mean(eps_array) for _, eps_array in eps_freq.field_components.items()]
         return np.mean(eps_array_avgs)
 
     @classmethod
     def from_eps_raw(
         cls, eps: ScalarFieldDataArray, interp_method: InterpMethod = "nearest"
     ) -> CustomMedium:
-        """Construct a :class:`CustomMedium` from datasets containing raw permittivity values.
+        """Construct a :class:`.CustomMedium` from datasets containing raw permittivity values.
 
         Parameters
         ----------
         eps : :class:`.ScalarFieldDataArray`
             Dataset containing complex-valued permittivity as a function of space.
-        interp_method : InterpMethod, optional
+        interp_method : :class:`.InterpMethod`, optional
                 Interpolation method to obtain permittivity values that are not supplied
                 at the Yee grids.
 
         Returns
         -------
-        :class:`CustomMedium`
+        :class:`.CustomMedium`
             Medium containing the spatially varying permittivity data.
         """
         field_components = {field_name: eps.copy() for field_name in ("eps_xx", "eps_yy", "eps_zz")}
@@ -515,7 +516,7 @@ class CustomMedium(AbstractMedium):
         k: Optional[ScalarFieldDataArray] = None,
         interp_method: InterpMethod = "nearest",
     ) -> CustomMedium:
-        """Construct a :class:`CustomMedium` from datasets containing n and k values.
+        """Construct a :class:`.CustomMedium` from datasets containing n and k values.
 
         Parameters
         ----------
@@ -523,13 +524,13 @@ class CustomMedium(AbstractMedium):
             Real part of refractive index.
         k : :class:`.ScalarFieldDataArray` = None
             Imaginary part of refrative index.
-        interp_method : InterpMethod, optional
+        interp_method : :class:`.InterpMethod`, optional
                 Interpolation method to obtain permittivity values that are not supplied
                 at the Yee grids.
 
         Returns
         -------
-        :class:`CustomMedium`
+        :class:`.CustomMedium`
             Medium containing the spatially varying permittivity data.
         """
         if k is None:
@@ -565,7 +566,7 @@ class CustomMedium(AbstractMedium):
             Supplied scalar dataset.
         coord_interp : :class:`.Coords`
             The grid point coordinates over which interpolation is performed.
-        interp_method : InterpMethod
+        interp_method : :class:`.InterpMethod`
             Interpolation method.
 
         Returns
