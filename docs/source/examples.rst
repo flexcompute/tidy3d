@@ -22,6 +22,7 @@ Tutorials
     notebooks/Modal_sources_monitors
     notebooks/Modes_bent_angled
     notebooks/CustomFieldSource
+    notebooks/CustomMediumTutorial
     notebooks/GDS_import
     notebooks/ParameterScan
     notebooks/Dispersion
