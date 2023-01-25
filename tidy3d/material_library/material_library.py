@@ -761,6 +761,36 @@ MgO_StephensMalitson1952 = VariantItem(
     data_url="https://refractiveindex.info/data_csv.php?datafile=data/main/MgO/Stephens.yml",
 )
 
+MoS2_Li2014 = VariantItem(
+    medium=PoleResidue(
+        eps_inf=7,
+        poles=(
+            ((-359315575683882.94-4351037853607888j), 1.3176033127808174e+16j),
+            ((-47550212723398.46-2830800196611070.5j), 423989981007996.2j),
+            ((-115583767884472.11-3044501424941655.5j), 1228598693488551.8j),
+            ((-71809429716556.45-4843776341355436j), 3676495982332201.5j),
+            ((-357036299948221.06-3522742014142554j), 1439441065103469.5j),
+        ),
+        frequency_range=(359760000000000, 719520000000000),
+    ),
+    reference=[material_refs["Li2014"]],
+)
+
+MoSe2_Li2014 = VariantItem(
+    medium=PoleResidue(
+        eps_inf=2.98,
+        poles=(
+            ((-36761326958106.516-2346800992876732.5j), 338220688925072j),
+            ((-529696146171994.1-3250011358803138j), 2592639640470081.5j),
+            ((-83845324190119.6-2655257170055444.5j), 600182265785651.4j),
+            ((-460941134311120.06-3946269084308785.5j), 1.1521315248761458e+16j),
+            ((-365616548688667.1-5272054887123941j), 1.176321407277452e+16j),
+        ),
+        frequency_range=(359760000000000, 719520000000000),
+    ),
+    reference=[material_refs["Li2014"]],
+)
+
 Ni_JohnsonChristy1972 = VariantItem(
     medium=PoleResidue(
         eps_inf=1.0,
@@ -1193,6 +1223,35 @@ W_RakicLorentzDrude1998 = VariantItem(
     data_url="https://refractiveindex.info/data_csv.php?datafile=data/main/W/Rakic-LD.yml",
 )
 
+WS2_Li2014 = VariantItem(
+    medium=PoleResidue(
+        eps_inf=6.18,
+        poles=(
+            ((-24007743182653.15-3052251370817458j), 716432281919880.8j),
+            ((-137029680488199.55-3645019841622440.5j), 1010556928646303.5j),
+            ((-209636856712237.66-4307630639419263j), 3158371314580892.5j),
+            ((-466855949030110.3-4891967555229964j), 1.1703841436358186e+16j),
+        ),
+        frequency_range=(359760000000000, 719520000000000),
+    ),
+    reference=[material_refs["Li2014"]],
+)
+
+WSe2_Li2014 = VariantItem(
+    medium=PoleResidue(
+        eps_inf=6.29,
+        poles=(
+            ((-32911988143375.11-2509059529797599.5j), 280960681034011.66j),
+            ((-138781520516435.52-3149502378897181.5j), 690812354204714j),
+            ((-28255484326386.598-5055392293836629j), 4415551968968067j),
+            ((-258471752123009.2-3675437972450793.5j), 2703088180177408.5j),
+            ((-354954812602843.94-4404690392224204.5j), 7012794593077168j),
+        ),
+        frequency_range=(359760000000000, 719520000000000),
+    ),
+    reference=[material_refs["Li2014"]],
+)
+
 Y2O3_Horiba = VariantItem(
     medium=PoleResidue(
         eps_inf=1.0,
@@ -1496,6 +1555,20 @@ material_library = dict(
         ),
         default="StephensMalitson1952",
     ),
+    MoS2=MaterialItem(
+        name="Molybdenum Disulfide",
+        variants=dict(
+            Li2014=MoS2_Li2014,
+        ),
+        default="Li2014",
+    ),
+    MoSe2=MaterialItem(
+        name="Molybdenum Diselenide",
+        variants=dict(
+            Li2014=MoSe2_Li2014,
+        ),
+        default="Li2014",
+    ),
     Ni=MaterialItem(
         name="Nickel",
         variants=dict(
@@ -1652,6 +1725,20 @@ material_library = dict(
             RakicLorentzDrude1998=W_RakicLorentzDrude1998,
         ),
         default="Werner2009",
+    ),
+    WS2=MaterialItem(
+        name="Tungsten Disulfide",
+        variants=dict(
+            Li2014=WS2_Li2014,
+        ),
+        default="Li2014",
+    ),
+    WSe2=MaterialItem(
+        name="Tungsten Diselenide",
+        variants=dict(
+            Li2014=WSe2_Li2014,
+        ),
+        default="Li2014",
     ),
     Y2O3=MaterialItem(
         name="Yttrium Oxide",
