@@ -15,7 +15,7 @@ import dill as pickle
 
 from tidy3d import __version__
 import tidy3d as td
-from tidy3d.components.base import Tidy3dBaseModel, DATA_ARRAY_TAG
+from tidy3d.components.base import Tidy3dBaseModel, DATA_ARRAY_MAP
 from ..utils import SIM_FULL as SIM
 from ..utils import SIM_MONITORS as SIM2
 from ..utils import clear_tmp
@@ -205,7 +205,7 @@ def test_to_json_data():
     # type saved in the combined json file?
     data = make_flux_data()
     json_dict = json.loads(data._json_string)
-    assert json_dict["flux"] == DATA_ARRAY_TAG
+    assert json_dict["flux"] in DATA_ARRAY_MAP
 
 
 @clear_tmp
