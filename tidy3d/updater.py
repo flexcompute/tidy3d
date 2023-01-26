@@ -205,6 +205,19 @@ def iterate_update_dict(update_dict: Dict, update_types: Dict[str, Callable]):
 @updates_from_version("1.8")
 def update_1_8(sim_dict: dict) -> dict:
     """Updates version 1.8."""
+
+    def fix_missing_scalar_field(mnt_dict: dict) -> dict:
+        for key, val in mnt_dict["field_dataset"].items():
+            if val == "XR.DATAARRAY":
+                mnt_dict["field_dataset"][key] = "ScalarFieldDataArray"
+        return mnt_dict
+
+    iterate_update_dict(
+        update_dict=sim_dict,
+        update_types={
+            "CustomFieldSource": fix_missing_scalar_field,
+        },
+    )
     return sim_dict
 
 
