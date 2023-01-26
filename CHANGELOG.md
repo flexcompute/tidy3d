@@ -5,11 +5,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.8.3] - 2023-1-26
+
+### Fixed
+- Bug in `Simulation.epsilon` with `coord_key="centers"` in which structures were not rendered.
+- Missing `@functools.wrap` in `ensure_freq_in_range` decorator from `medium.py` causing incorrect docstrings.
+
 ## [1.8.2] - 2023-1-12
 
 ### Added
-- warning if users install via `tidy3d-beta` on pip, from now on, best to use `tidy3d` directly.
-- support for non-dispersive media in `AnisotropicMedium`
+- Warning if users install via `tidy3d-beta` on pip, from now on, best to use `tidy3d` directly.
+- Support for dispersive media in `AnisotropicMedium`
 
 ### Changed
 - Support shapely version >=2.0 for all python versions.
@@ -535,7 +541,8 @@ which fields are to be projected is now determined automatically based on the me
 - Job and Batch classes for better simulation handling (eventually to fully replace webapi functions).
 - A large number of small improvements and bug fixes.
 
-[Unreleased]: https://github.com/flexcompute/tidy3d/compare/v1.8.2...develop
+[Unreleased]: https://github.com/flexcompute/tidy3d/compare/v1.8.3...develop
+[1.8.2]: https://github.com/flexcompute/tidy3d/compare/v1.8.2...v1.8.3
 [1.8.2]: https://github.com/flexcompute/tidy3d/compare/v1.8.1...v1.8.2
 [1.8.1]: https://github.com/flexcompute/tidy3d/compare/v1.8.0...v1.8.1
 [1.8.0]: https://github.com/flexcompute/tidy3d/compare/v1.7.1...v1.8.0
