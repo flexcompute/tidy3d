@@ -3,6 +3,7 @@
 
 from abc import ABC, abstractmethod
 from typing import Tuple, Union, Callable
+import functools
 
 import pydantic as pd
 import numpy as np
@@ -22,6 +23,7 @@ FREQ_EVAL_INF = 1e50
 def ensure_freq_in_range(eps_model: Callable[[float], complex]) -> Callable[[float], complex]:
     """Decorate ``eps_model`` to log warning if frequency supplied is out of bounds."""
 
+    @functools.wraps(eps_model)
     def _eps_model(self, frequency: float) -> complex:
         """New eps_model function."""
 
