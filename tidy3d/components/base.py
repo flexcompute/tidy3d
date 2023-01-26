@@ -15,7 +15,7 @@ import xarray as xr
 
 from .types import ComplexNumber, Literal, TYPE_TAG_STR
 from ..log import FileError, log
-from .data.data_array import DataArray, DATA_ARRAY_TAG
+from .data.data_array import DataArray, DATA_ARRAY_MAP
 
 # default indentation (# spaces) in files
 INDENT = 4
@@ -308,7 +308,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
     @staticmethod
     def _warn_if_contains_data(json_str: str) -> None:
         """Log a warning if the json string contains data, used in '.json' and '.yaml' file."""
-        if DATA_ARRAY_TAG in json_str:
+        if any((key in json_str for key, _ in DATA_ARRAY_MAP.items())):
             log.warning(
                 "Data contents found in the model to be written to file. "
                 "Note that this data will not be included in '.json' or '.yaml' formats. "
@@ -387,8 +387,9 @@ class Tidy3dBaseModel(pydantic.BaseModel):
                 subpath = f"{group_path}/{key}"
 
                 # write the path to the element of the json dict where the data_array should be
-                if value == DATA_ARRAY_TAG:
-                    model_dict[key] = DataArray.from_hdf5(fname=fname, group_path=subpath)
+                if isinstance(value, str) and value in DATA_ARRAY_MAP:
+                    data_array_type = DATA_ARRAY_MAP[value]
+                    model_dict[key] = data_array_type.from_hdf5(fname=fname, group_path=subpath)
                     continue
 
                 # if a list, assign each element a unique key, recurse
@@ -445,32 +446,32 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         >>> simulation.to_hdf5(fname='folder/sim.hdf5') # doctest: +SKIP
         """
 
-        def add_data_to_file(data_dict: dict, group_path: str = "") -> None:
-            """For every DataArray item in dictionary, write path of hdf5 group as value."""
-
-            for key, value in data_dict.items():
-
-                # append the key to the path
-                subpath = f"{group_path}/{key}"
-
-                # write the path to the element of the json dict where the data_array should be
-                if isinstance(value, xr.DataArray):
-                    value.to_hdf5(fname=fname, group_path=subpath)
-
-                # if a tuple, assign each element a unique key
-                if isinstance(value, (list, tuple)):
-                    value_dict = self.tuple_to_dict(tuple_values=value)
-                    add_data_to_file(data_dict=value_dict, group_path=subpath)
-
-                # if a dict, recurse
-                elif isinstance(value, dict):
-                    add_data_to_file(data_dict=value, group_path=subpath)
-
-        json_string = self._json_string
         with h5py.File(fname, "w") as f_handle:
-            f_handle[JSON_TAG] = json_string
 
-        add_data_to_file(data_dict=self.dict())
+            f_handle[JSON_TAG] = self._json_string
+
+            def add_data_to_file(data_dict: dict, group_path: str = "") -> None:
+                """For every DataArray item in dictionary, write path of hdf5 group as value."""
+
+                for key, value in data_dict.items():
+
+                    # append the key to the path
+                    subpath = f"{group_path}/{key}"
+
+                    # write the path to the element of the json dict where the data_array should be
+                    if isinstance(value, xr.DataArray):
+                        value.to_hdf5(fname=f_handle, group_path=subpath)
+
+                    # if a tuple, assign each element a unique key
+                    if isinstance(value, (list, tuple)):
+                        value_dict = self.tuple_to_dict(tuple_values=value)
+                        add_data_to_file(data_dict=value_dict, group_path=subpath)
+
+                    # if a dict, recurse
+                    elif isinstance(value, dict):
+                        add_data_to_file(data_dict=value, group_path=subpath)
+
+            add_data_to_file(data_dict=self.dict())
 
     def __lt__(self, other):
         """define < for getting unique indices based on hash."""

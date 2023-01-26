@@ -5,6 +5,7 @@ from typing import Dict
 import xarray as xr
 import numpy as np
 import dask
+import h5py
 
 from ...constants import HERTZ, SECOND, MICROMETER, RADIAN
 from ...log import DataError, FileError
@@ -26,8 +27,9 @@ DIM_ATTRS = {
     "orders_y": {"long_name": "diffraction order"},
 }
 
-# string that gets written to the json file
-DATA_ARRAY_TAG = "XR.DATAARRAY"
+
+# name of the DataArray.values in the hdf5 file (xarray's default name too)
+DATA_ARRAY_VALUE_NAME = "__xarray_dataarray_variable__"
 
 
 class DataArray(xr.DataArray):
@@ -51,7 +53,7 @@ class DataArray(xr.DataArray):
     @classmethod
     def check_unloaded_data(cls, val):
         """If the data comes in as the raw data array string, raise a custom warning."""
-        if isinstance(val, str):
+        if isinstance(val, str) and val in DATA_ARRAY_MAP:
             raise DataError(
                 f"Trying to load {cls.__name__} but the data is not present. "
                 "Note that data will not be saved to .json file. "
@@ -105,7 +107,7 @@ class DataArray(xr.DataArray):
     @classmethod
     def _json_encoder(cls, val):  # pylint:disable=unused-argument
         """What function to call when writing a DataArray to json."""
-        return DATA_ARRAY_TAG
+        return type(val).__name__
 
     def __eq__(self, other) -> bool:
         """Whether two data array objects are equal."""
@@ -123,12 +125,26 @@ class DataArray(xr.DataArray):
 
     def to_hdf5(self, fname: str, group_path: str) -> None:
         """Save an xr.DataArray to the hdf5 file with a given path to the group."""
-        self.to_netcdf(fname, group=group_path, engine="h5netcdf", invalid_netcdf=True, mode="a")
+        sub_group = fname.create_group(group_path)
+        sub_group[DATA_ARRAY_VALUE_NAME] = self.values
+        for key, val in self.coords.items():
+            # sub_group[key] = val
+            if val.dtype == "<U1":
+                sub_group[key] = val.values.tolist()
+            else:
+                sub_group[key] = val
 
     @classmethod
     def from_hdf5(cls, fname: str, group_path: str) -> DataArray:
         """Load an DataArray from an hdf5 file with a given path to the group."""
-        return xr.load_dataarray(fname, group=group_path, engine="h5netcdf", invalid_netcdf=True)
+        with h5py.File(fname, "r") as f:
+            sub_group = f[group_path]
+            values = np.array(sub_group[DATA_ARRAY_VALUE_NAME])
+            coords = {dim: np.array(sub_group[dim]) for dim in cls._dims}
+            for key, val in coords.items():
+                if val.dtype == "O":
+                    coords[key] = [byte_string.decode() for byte_string in val.tolist()]
+            return cls(values, coords=coords)
 
     @classmethod
     def from_file(cls, fname: str, group_path: str) -> DataArray:
@@ -156,7 +172,7 @@ class FreqDataArray(DataArray):
     """
 
     __slots__ = ()
-    _dims = "f"
+    _dims = ("f",)
 
 
 class FreqModeDataArray(DataArray):
@@ -379,3 +395,20 @@ class DiffractionDataArray(DataArray):
     __slots__ = ()
     _dims = ("orders_x", "orders_y", "f")
     _data_attrs = {"long_name": "diffraction amplitude"}
+
+
+DATA_ARRAY_TYPES = [
+    ScalarFieldDataArray,
+    ScalarFieldTimeDataArray,
+    ScalarModeFieldDataArray,
+    FluxDataArray,
+    FluxTimeDataArray,
+    ModeAmpsDataArray,
+    ModeIndexDataArray,
+    FieldProjectionAngleDataArray,
+    FieldProjectionCartesianDataArray,
+    FieldProjectionKSpaceDataArray,
+    DiffractionDataArray,
+    FreqModeDataArray,
+]
+DATA_ARRAY_MAP = {data_array.__name__: data_array for data_array in DATA_ARRAY_TYPES}

@@ -7,7 +7,7 @@ from typing_extensions import Literal
 import pydantic
 import numpy as np
 
-from .base import Tidy3dBaseModel, cached_property, DATA_ARRAY_TAG
+from .base import Tidy3dBaseModel, cached_property, DATA_ARRAY_MAP
 from .types import Direction, Polarization, Ax, FreqBound, ArrayLike, Axis, Bound
 from .validators import assert_plane, validate_name_str, get_value
 from .data.dataset import FieldDataset
@@ -551,7 +551,7 @@ class CustomFieldSource(FieldSource, PlanarSource):
     def _warn_if_none(cls, val: FieldDataset) -> FieldDataset:
         """Warn if the DataArrays fail to load."""
         if isinstance(val, dict):
-            if DATA_ARRAY_TAG in [v for v in val.values() if isinstance(v, str)]:
+            if any((v in DATA_ARRAY_MAP for _, v in val.items() if isinstance(v, str))):
                 log.warning("Loading 'field_dataset' without data.")
                 return None
         return val
