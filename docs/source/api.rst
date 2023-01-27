@@ -87,6 +87,7 @@ Non-Dispersive Medium
    Medium
    AnisotropicMedium
    PECMedium
+   CustomMedium
 
 Dispersive Mediums
 ------------------
@@ -235,6 +236,7 @@ Individual Datasets
 .. autosummary::
    :toctree: _autosummary/
 
+   PermittivityDataset
    ScalarFieldDataArray
    ScalarModeFieldDataArray
    ScalarFieldTimeDataArray
