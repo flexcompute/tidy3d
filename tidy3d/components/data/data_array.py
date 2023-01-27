@@ -410,5 +410,8 @@ DATA_ARRAY_TYPES = [
     FieldProjectionKSpaceDataArray,
     DiffractionDataArray,
     FreqModeDataArray,
+    FreqDataArray,
+    TimeDataArray,
+    FreqModeDataArray,
 ]
 DATA_ARRAY_MAP = {data_array.__name__: data_array for data_array in DATA_ARRAY_TYPES}
