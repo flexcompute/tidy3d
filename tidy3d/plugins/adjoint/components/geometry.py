@@ -300,7 +300,7 @@ class JaxPolySlab(JaxGeometry, PolySlab, JaxObject):
         return val
 
     @pd.validator("vertices", always=True)
-    def no_self_intersecting_polygon_at_reference_plane(cls, val, values):
+    def no_complex_self_intersecting_polygon_at_reference_plane(cls, val, values):
         """Overrides validator enforing that val is not inf."""
         return val
 

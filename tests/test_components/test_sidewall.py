@@ -6,9 +6,11 @@ import pydantic
 from shapely.geometry import Polygon, Point
 
 import tidy3d as td
+from tidy3d.constants import fp_eps
 from tidy3d.log import ValidationError, SetupError
 
 np.random.seed(4)
+_BUFFER_PARAM = {"join_style": 2, "mitre_limit": 1e10}
 
 
 def setup_polyslab(vertices, dilation, angle, bounds, axis=2, reference_plane="bottom"):
@@ -43,7 +45,7 @@ def convert_valid_polygon(vertices):
     """Given vertices that might have intersecting edges, converted to
     vertices of a valid polygon
     """
-    poly = Polygon(vertices).buffer(0)  # make sure no intersecting edges
+    poly = Polygon(vertices).buffer(0, **_BUFFER_PARAM)  # make sure no intersecting edges
     if type(poly) is not Polygon:
         poly = poly.geoms[0]
 
@@ -63,10 +65,10 @@ def validate_poly_bound(poly):
     xmax, ymax = max(xmax1, xmax2), max(ymax1, ymax2)
 
     bound_tidy = poly.bounds
-    assert bound_tidy[0][0] <= xmin
-    assert bound_tidy[0][1] <= ymin
-    assert bound_tidy[1][0] >= xmax
-    assert bound_tidy[1][1] >= ymax
+    assert bound_tidy[0][0] <= xmin + fp_eps
+    assert bound_tidy[0][1] <= ymin + fp_eps
+    assert bound_tidy[1][0] >= xmax - fp_eps
+    assert bound_tidy[1][1] >= ymax - fp_eps
 
 
 # default values
@@ -103,7 +105,6 @@ def test_valid_polygon():
 
     # intersecting edges
     vertices = ((0, 0), (1, 0), (1, 1), (0, 1), (0.5, -1))
-
     with pytest.raises(SetupError) as e_info:
         s = setup_polyslab(vertices, dilation, angle, bounds)
 
@@ -112,19 +113,21 @@ def test_crossing_square_poly():
     """
     Vertices crossing detection for a simple square
     """
+
+    # allows self-intersection right at the top/base
     vertices = ((0, 0), (1, 0), (1, -1), (0, -1))
     dilation = 0.0
     angle = np.pi / 4
     s = setup_polyslab(vertices, dilation, angle, bounds)
 
-    # dilation too significant
+    # fully eroded
     dilation = -1.1
     angle = 0
     for ref_plane in ["bottom", "middle", "top"]:
         with pytest.raises(SetupError) as e_info:
             s = setup_polyslab(vertices, dilation, angle, bounds, reference_plane=ref_plane)
 
-    # angle too large
+    # angle too large, self-intersecting
     dilation = 0
     angle = np.pi / 3
     with pytest.raises(SetupError) as e_info:
@@ -133,6 +136,7 @@ def test_crossing_square_poly():
     # middle plane
     angle = np.arctan(1.999)
     s = setup_polyslab(vertices, dilation, angle, bounds, reference_plane="middle")
+
     # angle too large for middle reference plane
     angle = np.arctan(2.001)
     with pytest.raises(SetupError) as e_info:
@@ -151,19 +155,32 @@ def test_crossing_concave_poly():
     """
     bounds = (0, 0.5)
 
-    # self-intersecting, concave polygon
-    vertices = ((-1, 1), (-1, -1), (1, -1), (0, -0.1), (0, 0.1), (1, 1))
+    # self-intersecting during dilation, making a hole/island
+    vertices = ((-0.5, 1), (-0.5, -1), (1, -1), (0, -0.1), (0, 0.1), (1, 1))
     dilation = 0.5
     angle = 0
     with pytest.raises(SetupError) as e_info:
         s = setup_polyslab(vertices, dilation, angle, bounds)
 
-    # or, effectively
-    dilation = 0
-    angle = -np.pi / 4
+    # polygon splitting
+    dilation = -0.3
+    angle = 0
     with pytest.raises(SetupError) as e_info:
         s = setup_polyslab(vertices, dilation, angle, bounds)
-        s = setup_polyslab(vertices, dilation, -angle, bounds, reference_plane="top")
+
+    # polygon fully eroded
+    dilation = -0.5
+    angle = 0
+    with pytest.raises(SetupError) as e_info:
+        s = setup_polyslab(vertices, dilation, angle, bounds)
+
+    # # or, effectively
+    dilation = 0
+    angle = -np.pi / 4
+    for bounds in [(0, 0.3), (0, 0.5)]:
+        with pytest.raises(SetupError) as e_info:
+            s = setup_polyslab(vertices, dilation, angle, bounds)
+            s = setup_polyslab(vertices, dilation, -angle, bounds, reference_plane="top")
 
     # middle plane
     angle = np.pi / 4
@@ -171,9 +188,35 @@ def test_crossing_concave_poly():
     s = setup_polyslab(vertices, dilation, angle, bounds, reference_plane="middle")
     s = setup_polyslab(vertices, dilation, -angle, bounds, reference_plane="middle")
     with pytest.raises(SetupError) as e_info:
+        # vertices degenerate
         bounds = (0, 0.45)
         s = setup_polyslab(vertices, dilation, angle, bounds, reference_plane="middle")
         s = setup_polyslab(vertices, dilation, -angle, bounds, reference_plane="middle")
+        # polygon splitting
+        bounds = (0, 0.6)
+        s = setup_polyslab(vertices, dilation, angle, bounds, reference_plane="middle")
+        s = setup_polyslab(vertices, dilation, -angle, bounds, reference_plane="middle")
+        # fully eroded
+        bounds = (0, 1)
+        s = setup_polyslab(vertices, dilation, angle, bounds, reference_plane="middle")
+        s = setup_polyslab(vertices, dilation, -angle, bounds, reference_plane="middle")
+
+
+def test_edge_events():
+    """Make sure edge events error properly."""
+
+    # No edge events here; however, if using shapely's buffer directly in detecting
+    # edge events, it can error in mistake.
+    Nx = 1000
+    coord = np.linspace(-1, 1, Nx)
+    vertice1 = [(f, -1) for f in coord]
+    vertice2 = [(1, f) for f in coord[1:]]
+    vertice3 = [(f, 1) for f in np.flip(coord)[1:]]
+    vertice4 = [(-1, f) for f in np.flip(coord)[1:-1]]
+    vertices = vertice1 + vertice2 + vertice3 + vertice4
+
+    angle = -np.pi / 20
+    s = td.PolySlab(vertices=vertices, axis=0, slab_bounds=(-1, 1), sidewall_angle=angle)
 
 
 def test_max_erosion_polygon():
@@ -190,27 +233,20 @@ def test_max_erosion_polygon():
         s = setup_polyslab(vertices, dilation, angle, bounds)
 
         # compute maximal allowed erosion distance
-        max_dist = s._crossing_detection(s.base_polygon, -100)
-
+        max_dist = s._neighbor_vertices_crossing_detection(s.reference_polygon, -100)
         # verify it is indeed maximal allowed
         dilation = -max_dist + 1e-10
-        # avoid vertex-edge crossing case
-        try:
-            s = setup_polyslab(vertices, dilation, angle, bounds)
-        except:
+        # avoid polygon splitting etc. case
+        if s._edge_events_detection(s.reference_polygon, dilation, ignore_at_dist=False):
             continue
-        assert np.isclose(minimal_edge_length(s.base_polygon), 0, atol=1e-4)
+        s = setup_polyslab(vertices, dilation, angle, bounds)
+        assert np.isclose(minimal_edge_length(s.reference_polygon), 0, atol=1e-4)
 
         # verify it is indeed maximal allowed
         dilation = 0.0
         bounds = (0, max_dist - 1e-10)
         angle = np.pi / 4
-
-        # avoid vertex-edge crossing case
-        try:
-            s = setup_polyslab(vertices, dilation, angle, bounds)
-        except:
-            continue
+        s = setup_polyslab(vertices, dilation, angle, bounds)
         assert np.isclose(minimal_edge_length(s.top_polygon), 0, atol=1e-4)
 
 
@@ -227,7 +263,7 @@ def test_shift_height_poly():
         bounds = (0, 1)
         s = setup_polyslab(vertices, dilation, angle, bounds)
         # set up proper thickness
-        max_dist = s._crossing_detection(s.base_polygon, -100)
+        max_dist = s._neighbor_vertices_crossing_detection(s.base_polygon, -100)
         dilation = 0.0
         bounds = (0, max_dist * 0.99)
         angle = np.pi / 4
@@ -278,7 +314,7 @@ def test_intersection_with_inside_poly():
                     bounds = (0, 1)
                     s_bottom = setup_polyslab(vertices, dilation, angle_tmp, bounds, axis=axis)
                     # set up proper thickness
-                    max_dist = s_bottom._crossing_detection(s.base_polygon, -100)
+                    max_dist = s_bottom._neighbor_vertices_crossing_detection(s.base_polygon, -100)
 
                 bounds = (-(max_dist * 0.95) / 2, (max_dist * 0.95) / 2)
 
@@ -388,7 +424,7 @@ def test_bound_poly():
             angle = 0
             bounds = (0, 1)
             s = setup_polyslab(vertices, dilation, angle, bounds, reference_plane=reference_plane)
-            max_dist = s._crossing_detection(s.base_polygon, 100)
+            max_dist = s._neighbor_vertices_crossing_detection(s.base_polygon, 100)
             # verify it is indeed maximal allowed
             dilation = 1
             if max_dist is not None:
@@ -410,7 +446,7 @@ def test_bound_poly():
             bounds = (0, 1)
             s = setup_polyslab(vertices, dilation, angle, bounds)
             # set up proper thickness
-            max_dist = s._crossing_detection(s.base_polygon, -100)
+            max_dist = s._neighbor_vertices_crossing_detection(s.base_polygon, -100)
             dilation = 0.0
             bounds = (0, (max_dist * 0.95))
             angle = np.pi / 4
