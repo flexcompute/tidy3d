@@ -23,3 +23,4 @@ from .adjoint.components.data.sim_data import JaxSimulationData
 from .adjoint.components.data.monitor_data import JaxModeData
 from .adjoint.components.data.dataset import JaxPermittivityDataset
 from .adjoint.components.data.data_array import JaxDataArray
+from .polyslab.polyslab import ComplexPolySlab
