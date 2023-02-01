@@ -340,6 +340,24 @@ Resonance Finder
         
    plugins.ResonanceFinder
 
+Adjoint
+-------
+
+.. autosummary::
+   :toctree: _autosummary/
+
+   plugins.adjoint.run
+   plugins.adjoint.JaxBox
+   plugins.adjoint.JaxMedium
+   plugins.adjoint.JaxAnisotropicMedium
+   plugins.adjoint.JaxCustomMedium
+   plugins.adjoint.JaxStructure
+   plugins.adjoint.JaxSimulation
+   plugins.adjoint.JaxSimulationData
+   plugins.adjoint.JaxModeData
+   plugins.adjoint.JaxPermittivityDataset
+   plugins.adjoint.JaxDataArray
+
 Constants
 =========
 

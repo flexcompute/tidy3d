@@ -30,6 +30,9 @@ Tutorials
     notebooks/FieldProjections
     notebooks/SMatrix
     notebooks/BoundaryConditions
+    notebooks/AdjointPlugin_1_Intro
+    notebooks/AdjointPlugin_2_GradientChecking
+    notebooks/AdjointPlugin_3_InverseDesign
 
 Case studies
 ------------
@@ -61,5 +64,4 @@ Case studies
     notebooks/GratingCoupler
     notebooks/RingResonator
     notebooks/THzDemultiplexerFilter
-    notebooks/Adjoint
     notebooks/ZonePlateFieldProjection
