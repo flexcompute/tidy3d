@@ -9,4 +9,4 @@ good-names=ax, im, Lx, Ly, Lz, x0, y0, z0, x, y, z, u, v, w, f, t, y1, y2, x1, x
 max-line-length=100
 
 [pre-commit-hook]
-disable=pointless-string-statement, too-many-ancestors, too-few-public-methods, fixme, logging-not-lazy, logging-fstring-interpolation, no-self-argument, duplicate-code, unspecified-encoding, no-self-use, missing-timeout, use-dict-literal
+disable=pointless-string-statement, too-many-ancestors, too-few-public-methods, fixme, logging-not-lazy, logging-fstring-interpolation, no-self-argument, duplicate-code, unspecified-encoding, no-self-use, missing-timeout, use-dict-literal, nested-min-max
