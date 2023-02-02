@@ -1173,8 +1173,8 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
             for medium in medium_list
             if not isinstance(medium, CustomMedium)
         ]
-        eps_min = min(1, eps_list)
-        eps_max = max(1, eps_list)
+        eps_min = min(1, min(eps_list))
+        eps_max = max(1, max(eps_list))
         # custom medium, the min and max in the supplied dataset over all components and
         # spatial locations.
         for mat in [medium for medium in medium_list if isinstance(medium, CustomMedium)]:
