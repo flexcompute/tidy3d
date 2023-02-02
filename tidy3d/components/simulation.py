@@ -1173,15 +1173,15 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
             for medium in medium_list
             if not isinstance(medium, CustomMedium)
         ]
-        eps_min = min(1, min(eps_list))
-        eps_max = max(1, max(eps_list))
+        eps_min = min(1, eps_list)
+        eps_max = max(1, eps_list)
         # custom medium, the min and max in the supplied dataset over all components and
         # spatial locations.
         for mat in [medium for medium in medium_list if isinstance(medium, CustomMedium)]:
             eps_dataset_at_freq = mat.eps_dataset_freq(freq)
             for eps_component in eps_dataset_at_freq.field_components.values():
-                eps_min = min(eps_min, min(eps_component.real.values.ravel()))
-                eps_max = max(eps_max, max(eps_component.real.values.ravel()))
+                eps_min = min(eps_min, eps_component.real.values.ravel())
+                eps_max = max(eps_max, eps_component.real.values.ravel())
         return eps_min, eps_max
 
     def _pcolormesh_shape_custom_medium_structure_eps(
