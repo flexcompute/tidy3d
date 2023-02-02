@@ -1135,8 +1135,8 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         medium_list = [self.medium] + list(self.mediums)
         medium_list = [medium for medium in medium_list if not isinstance(medium, PECMedium)]
         eps_list = [medium.eps_model(freq).real for medium in medium_list]
-        eps_min = min(1, min(eps_list))
-        eps_max = max(1, max(eps_list))
+        eps_min = min(1, eps_list)
+        eps_max = max(1, eps_list)
         return eps_min, eps_max
 
     def _get_structure_eps_plot_params(
