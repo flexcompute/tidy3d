@@ -183,10 +183,10 @@ Extensions
    * - How do I...
      - Solution
    * - Create a material from optical n,k data?
-     - Refer to the `Dispersion tutorial <https://docs.simulation.cloud/projects/tidy3d/en/latest/notebooks/Fitting.html>`_ on the :class:`tidy3d.plugins.DispersionFitter` plugin.
+     - Refer to the `Dispersion tutorial <https://docs.flexcompute.com/projects/tidy3d/en/v1.9.0rc1/notebooks/Fitting.html>`_ on the :class:`tidy3d.plugins.DispersionFitter` plugin.
    * - Specify the modes for a :class:`ModeMonitor` or :class:`ModeSource`?
-     - Refer to the `Mode Solver tutorial <https://docs.simulation.cloud/projects/tidy3d/en/latest/notebooks/ModeSolver.html>`_ on the :class:`tidy3d.plugins.ModeSolver` plugin.
+     - Refer to the `Mode Solver tutorial <https://docs.flexcompute.com/projects/tidy3d/en/v1.9.0rc1/notebooks/ModeSolver.html>`_ on the :class:`tidy3d.plugins.ModeSolver` plugin.
    * - Projet electromagnetic near field data to the far field?
-     - Refer to the `Near2Far tutorial <https://docs.simulation.cloud/projects/tidy3d/en/latest/notebooks/Near2Far.html>`_ on the :class:`tidy3d.plugins.Near2Far` plugin.
+     - Refer to the `FieldProjections` tutorial <https://docs.flexcompute.com/projects/tidy3d/en/v1.9.0rc1/notebooks/FieldProjections.html>`_.
    * - Compute scattering matrix parameters for modeling my device?
-     - Refer to the `S Matrix tutorial <https://docs.simulation.cloud/projects/tidy3d/en/latest/notebooks/SMatrix.html>`_ on the :class:`tidy3d.plugins.ComponentModeler` plugin.
+     - Refer to the `S Matrix tutorial <https://docs.flexcompute.com/projects/tidy3d/en/v1.9.0rc1/notebooks/SMatrix.html>`_ on the :class:`tidy3d.plugins.ComponentModeler` plugin.

@@ -62,7 +62,7 @@ an array of three elements defining the PML boundaries along x, y, and z. The
 easiest way to define PML is to use e.g. ``pml_layers=(None, None, td.PML())`` 
 to define PML in the z-direction only (in x and y, the default periodic boundaries will 
 be used). It is also possible to customize the PML further as explained in the 
-`documentation <https://docs.simulation.cloud/>`_ and below.
+`documentation <https://docs.flexcompute.com/>`_ and below.
 
 Tidy3D uses a complex frequency-shifted formulation of the perfectly-matched layers (CPML), 
 for which it is more natural to define the thickness as number of layers rather than as 
