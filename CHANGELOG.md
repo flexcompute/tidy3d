@@ -5,6 +5,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.9.0rc1] - 2023-2-3
+
+### Added
+- Specification of relative permittivity distribution using raw, user-supplied data through a `CustomMedium` component.
+- Automatic differentiation through `Tidy3D` simulations using `jax` through `tidy3d.plugins.adjoint`.
+- New Drude model variants for Gold and Silver in the `material_library`.
+
+### Changed
+- Saving and loading of `.hdf5` files is made orders of magnitude faster due to an internal refactor.
+
 ## [1.8.3] - 2023-1-26
 
 ### Fixed
@@ -541,7 +551,8 @@ which fields are to be projected is now determined automatically based on the me
 - Job and Batch classes for better simulation handling (eventually to fully replace webapi functions).
 - A large number of small improvements and bug fixes.
 
-[Unreleased]: https://github.com/flexcompute/tidy3d/compare/v1.8.3...develop
+[Unreleased]: https://github.com/flexcompute/tidy3d/compare/v1.9.0rc1...develop
+[1.9.0rc1]: https://github.com/flexcompute/tidy3d/compare/v1.8.3...v1.9.0rc1
 [1.8.2]: https://github.com/flexcompute/tidy3d/compare/v1.8.2...v1.8.3
 [1.8.2]: https://github.com/flexcompute/tidy3d/compare/v1.8.1...v1.8.2
 [1.8.1]: https://github.com/flexcompute/tidy3d/compare/v1.8.0...v1.8.1

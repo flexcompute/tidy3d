@@ -39,6 +39,30 @@ The easiest way to install tidy3d is through [pip](https://pip.pypa.io/en/stable
 pip install tidy3d
 ```
 
+This will install the latest stable version, to get the a "pre-release" version.
+
+```
+pip install --pre tidy3d
+```
+
+And to get a specific version `x.y.z`
+
+```
+pip install tidy3d==x.y.z
+```
+
+### Installing on Windows
+
+Pre-release `1.9.0rc1` introduces the `adjoint` plugin, which uses [jax](https://jax.readthedocs.io/en/latest/) for automatic differentiation of tidy3d simulations. As windows users may have trouble installing `jax`, the recommended approach is to use [jax-windows-builder](https://github.com/cloudhan/jax-windows-builder) to first install jaxlib before tidy3d.
+
+```
+pip install "jax[cpu]===0.3.14" -f https://whls.blob.core.windows.net/unstable/index.html --use-deprecated legacy-resolver
+pip install tidy3d
+```
+
+More details can be found [here](https://jax.readthedocs.io/en/latest/developer.html#additional-notes-for-building-jaxlib-from-source-on-windows).
+
+
 ### Installing from source
 
 For development purposes, and to get the latest development versions, you can download and install the package from source as:
