@@ -3,5 +3,3 @@
 -r web.txt
 
 scipy
-jaxlib==0.3.14
-jax[cpu]==0.3.14
