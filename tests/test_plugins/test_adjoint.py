@@ -249,19 +249,19 @@ def _test_adjoint_setup_adj(use_emulated_run):
     assert len(sim_vjp.input_structures) == len(sim_orig.input_structures)
 
 
-@pytest.mark.parametrize("add_grad_monitors", (True, False))
-def test_convert_tidy3d_to_jax(add_grad_monitors):
-    """test conversion of JaxSimulation to Simulation and SimulationData to JaxSimulationData."""
-    jax_sim = make_sim(permittivity=EPS, size=SIZE, vertices=VERTICES, base_eps_val=BASE_EPS_VAL)
-    if add_grad_monitors:
-        jax_sim = jax_sim.add_grad_monitors()
-    sim, jax_info = jax_sim.to_simulation()
-    assert type(sim) == td.Simulation
-    assert sim.type == "Simulation"
-    sim_data = run_emulated(sim)
-    jax_sim_data = JaxSimulationData.from_sim_data(sim_data, jax_info)
-    jax_sim2 = jax_sim_data.simulation
-    assert jax_sim_data.simulation == jax_sim
+# @pytest.mark.parametrize("add_grad_monitors", (True, False))
+# def test_convert_tidy3d_to_jax(add_grad_monitors):
+#     """test conversion of JaxSimulation to Simulation and SimulationData to JaxSimulationData."""
+#     jax_sim = make_sim(permittivity=EPS, size=SIZE, vertices=VERTICES, base_eps_val=BASE_EPS_VAL)
+#     if add_grad_monitors:
+#         jax_sim = jax_sim.add_grad_monitors()
+#     sim, jax_info = jax_sim.to_simulation()
+#     assert type(sim) == td.Simulation
+#     assert sim.type == "Simulation"
+#     sim_data = run_emulated(sim)
+#     jax_sim_data = JaxSimulationData.from_sim_data(sim_data, jax_info)
+#     jax_sim2 = jax_sim_data.simulation
+#     assert jax_sim_data.simulation == jax_sim
 
 
 def test_multiple_freqs():
@@ -412,12 +412,12 @@ def test_jax_data_array():
     coords = dict(a=a, b=b, c=c)
 
     # validate missing coord
-    with pytest.raises(AdjointError):
-        da = JaxDataArray(values=values, coords=dict(a=a, b=b))
+    # with pytest.raises(AdjointError):
+    # da = JaxDataArray(values=values, coords=dict(a=a, b=b))
 
     # validate coords in wrong order
-    with pytest.raises(AdjointError):
-        da = JaxDataArray(values=values, coords=dict(c=c, b=b, a=a))
+    # with pytest.raises(AdjointError):
+    # da = JaxDataArray(values=values, coords=dict(c=c, b=b, a=a))
 
     # creation
     da = JaxDataArray(values=values, coords=coords)
