@@ -30,6 +30,7 @@ Tutorials
     notebooks/FieldProjections
     notebooks/SMatrix
     notebooks/BoundaryConditions
+    notebooks/Self_intersecting_polyslab
     notebooks/AdjointPlugin_1_Intro
     notebooks/AdjointPlugin_2_GradientChecking
     notebooks/AdjointPlugin_3_InverseDesign

@@ -323,6 +323,14 @@ Dispersive Model Fitting
    plugins.StableDispersionFitter
    plugins.AdvancedFitterParam
 
+Self-intersecting Polyslab
+--------------------------
+
+.. autosummary::
+   :toctree: _autosummary/
+
+   plugins.ComplexPolySlab
+
 Scattering Matrix Calculator
 ----------------------------
 
