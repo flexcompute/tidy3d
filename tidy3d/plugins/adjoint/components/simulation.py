@@ -184,7 +184,7 @@ class JaxSimulation(Simulation, JaxObject):
                 "input_structures",
                 "fwidth_adjoint",
             }
-        ).copy()
+        )  # .copy()
         sim = Simulation.parse_obj(sim_dict)
 
         # put all structures and monitors in one list
@@ -264,8 +264,7 @@ class JaxSimulation(Simulation, JaxObject):
     def from_simulation(cls, simulation: Simulation, jax_info: JaxInfo) -> JaxSimulation:
         """Convert :class:`.Simulation` to :class:`.JaxSimulation` with extra info."""
 
-        sim_dict = simulation.dict(exclude={"type", "structures", "monitors"}).copy()
-        jax_sim = cls.parse_obj(sim_dict)
+        sim_dict = simulation.dict(exclude={"type", "structures", "monitors"})  # .copy()
 
         all_monitors = list(simulation.monitors)
         all_structures = list(simulation.structures)
@@ -292,8 +291,8 @@ class JaxSimulation(Simulation, JaxObject):
         ]
         grad_eps_monitors = all_monitors[num_mnts + num_output_monitors + num_grad_monitors :]
 
-        return jax_sim.copy(
-            update=dict(
+        sim_dict.update(
+            dict(
                 monitors=monitors,
                 output_monitors=output_monitors,
                 grad_monitors=grad_monitors,
@@ -304,8 +303,10 @@ class JaxSimulation(Simulation, JaxObject):
             )
         )
 
-    def add_grad_monitors(self) -> JaxSimulation:
-        """Make a copy of a :class:`.JaxSimulation` with gradient monitors added."""
+        return cls.parse_obj(sim_dict)
+
+    def get_grad_monitors(self) -> dict:
+        """Return dictionary of gradient monitors for simulation."""
         grad_mnts = []
         grad_eps_mnts = []
         for index, structure in enumerate(self.input_structures):
@@ -314,11 +315,7 @@ class JaxSimulation(Simulation, JaxObject):
             )
             grad_mnts.append(grad_mnt)
             grad_eps_mnts.append(grad_eps_mnt)
-        return self.copy(update=dict(grad_monitors=grad_mnts, grad_eps_monitors=grad_eps_mnts))
-
-    def remove_grad_monitors(self) -> JaxSimulation:
-        """Make a copy of a :class:`.JaxSimulation` with gradient monitors removed."""
-        return self.copy(update=dict(grad_monitors=(), grad_eps_monitors=()))
+        return dict(grad_monitors=grad_mnts, grad_eps_monitors=grad_eps_mnts)
 
     def store_vjp(
         self,
@@ -337,5 +334,8 @@ class JaxSimulation(Simulation, JaxObject):
             )
             input_structures_vjp.append(input_structure_vjp)
 
-        sim_vjp = self.copy(update=dict(input_structures=input_structures_vjp))
-        return sim_vjp.remove_grad_monitors()
+        return self.copy(
+            update=dict(
+                input_structures=input_structures_vjp, grad_monitors=(), grad_eps_monitors=()
+            )
+        )

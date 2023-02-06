@@ -29,7 +29,7 @@ class JaxObject(Tidy3dBaseModel):
     def tree_flatten(self) -> Tuple[list, dict]:
         """How to flatten a :class:`.JaxObject` instance into a pytree."""
         children = []
-        aux_data = self.dict().copy()
+        aux_data = self.dict()
         for field_name in self.get_jax_field_names():
             field = getattr(self, field_name)
             sub_children, sub_aux_data = jax_tree_flatten(field)
@@ -53,5 +53,5 @@ class JaxObject(Tidy3dBaseModel):
     @classmethod
     def from_tidy3d(cls, tidy3d_obj: Tidy3dBaseModel) -> JaxObject:
         """Convert :class:`.Tidy3dBaseModel` instance to :class:`.JaxObject`."""
-        obj_dict = tidy3d_obj.dict(exclude={"type"}).copy()
+        obj_dict = tidy3d_obj.dict(exclude={"type"})
         return cls.parse_obj(obj_dict)

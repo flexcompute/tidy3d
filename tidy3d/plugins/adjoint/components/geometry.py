@@ -74,7 +74,7 @@ class JaxGeometry(Geometry, ABC):
 
     def to_tidy3d(self) -> Geometry:
         """Convert :class:`.JaxGeometry` instance to :class:`.Geometry`"""
-        self_dict = self.dict(exclude={"type"}).copy()
+        self_dict = self.dict(exclude={"type"})
         map_reverse = {v: k for k, v in JAX_GEOMETRY_MAP.items()}
         tidy3d_type = map_reverse[type(self)]
         return tidy3d_type.parse_obj(self_dict)

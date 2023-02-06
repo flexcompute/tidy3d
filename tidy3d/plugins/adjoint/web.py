@@ -63,7 +63,8 @@ def run_fwd(
     """Run forward pass and stash extra objects for the backwards pass."""
 
     # add the gradient monitors and run the forward simulation
-    sim_fwd = simulation.add_grad_monitors()
+    grad_mnts = simulation.get_grad_monitors()
+    sim_fwd = simulation.updated_copy(**grad_mnts)
     sim_data_fwd = run(
         simulation=sim_fwd,
         task_name=_task_name_fwd(task_name),
