@@ -3,4 +3,5 @@ include requirements/basic.txt
 include requirements/web.txt
 include requirements/plugins.txt
 include requirements/core.txt
+include requirements/jax.txt
 include requirements/dev.txt

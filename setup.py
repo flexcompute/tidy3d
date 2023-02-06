@@ -25,6 +25,7 @@ def read_requirements(req_file: str):
 
 basic_required = read_requirements("requirements/basic.txt")
 web_required = read_requirements("requirements/web.txt")
+jax_required = read_requirements("requirements/jax.txt")
 core_required = read_requirements("requirements/core.txt")
 core_required += basic_required + web_required
 dev_required = read_requirements("requirements/dev.txt")
@@ -49,7 +50,10 @@ setuptools.setup(
     packages=setuptools.find_packages(),
     python_requires=">=3.7",
     install_requires=core_required,
-    extras_require={"dev": dev_required},
+    extras_require={
+        "dev": dev_required,
+        "jax": jax_required,
+    },
     entry_points={
         "console_scripts": [
             "tidy3d = tidy3d.web.cli:tidy3d_cli",
