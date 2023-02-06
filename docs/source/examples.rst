@@ -56,7 +56,6 @@ Case studies
     notebooks/WaveguideSizeConverter
     notebooks/EulerWaveguideBend
     notebooks/PolarizationSplitterRotator
-    notebooks/PhotonicCrystalWaveguidePolarizationFilter
     notebooks/8ChannelDemultiplexer
     notebooks/GratingCoupler
     notebooks/RingResonator

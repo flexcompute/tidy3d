@@ -69,6 +69,5 @@ jblack docs/source/notebooks/*.ipynb
 
 Note: is is not in the standard requiremenents yet as we are still experimenting with it.
 
-## important note
 
-Sometimes, a `"\r"` character sneaks into the docs and will crash the latex build. To fix, replace this character with `"\n"` in any notebooks that might contain it.
+
