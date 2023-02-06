@@ -36,7 +36,7 @@ class JaxStructure(Structure, JaxObject):
 
     def to_structure(self) -> Structure:
         """Convert :class:`.JaxStructure` instance to :class:`.Structure`"""
-        self_dict = self.dict(exclude={"type", "geometry", "medium"}).copy()
+        self_dict = self.dict(exclude={"type", "geometry", "medium"})
         self_dict["geometry"] = self.geometry.to_tidy3d()
         self_dict["medium"] = self.medium.to_medium()
         return Structure.parse_obj(self_dict)
@@ -50,7 +50,7 @@ class JaxStructure(Structure, JaxObject):
         jax_medium_type = JAX_MEDIUM_MAP[type(structure.medium)]
 
         # load them into the JaxStructure dictionary and parse it into an instance
-        struct_dict = structure.dict(exclude={"type", "geometry", "medium"}).copy()
+        struct_dict = structure.dict(exclude={"type", "geometry", "medium"})
         struct_dict["geometry"] = jax_geometry_type.from_tidy3d(structure.geometry)
         struct_dict["medium"] = jax_medium_type.from_tidy3d(structure.medium)
 

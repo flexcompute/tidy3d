@@ -29,49 +29,59 @@ class JaxDataArray(Tidy3dBaseModel):
         description="Dictionary storing the coordinates, namely ``(direction, f, mode_index)``.",
     )
 
-    @pd.validator("values", always=True)
-    def _convert_values_to_jax_array(cls, val) -> jnp.DeviceArray:
-        """Convert supplied values to jax.DeviceArray."""
-        try:
-            return jnp.array(val)
-        except TypeError:
-            return np.array(val)
-
     @pd.validator("coords", always=True)
     def _convert_coords_to_list(cls, val):
         """Convert supplied coordinates to Dict[str, list]."""
         return {coord_name: list(coord_list) for coord_name, coord_list in val.items()}
 
-    @pd.validator("coords", always=True)
-    def _coords_match_values(cls, val, values):
-        """Make sure the coordinate dimensions and shapes match the values data."""
+    # removed because it was slowing things down.
+    # @pd.validator("coords", always=True)
+    # def _coords_match_values(cls, val, values):
+    #     """Make sure the coordinate dimensions and shapes match the values data."""
 
-        values_arr = values.get("values")
+    #     values = values.get("values")
 
-        # if values did not pass validation, just skip this validator
-        if values_arr is None:
-            return None
+    #     # if values did not pass validation, just skip this validator
+    #     if values is None:
+    #         return None
 
-        shape = values_arr.shape
+    #     # compute the shape, otherwise exit.
+    #     try:
+    #         shape = jnp.array(values).shape
+    #     except TypeError:
+    #         return val
 
-        # make sure values array has same number of dims as coords
-        if len(shape) != len(val):
-            raise AdjointError(f"'values' has '{len(shape)}' dims, but given '{len(val)}' coords.")
+    #     if len(shape) != len(val):
+    #         raise AdjointError(f"'values' has '{len(shape)}' dims, but given '{len(val)}'.")
 
-        # make sure each coordinate list has same length as values along that axis
-        for len_dim, (coord_name, coord_list) in zip(shape, val.items()):
-            if len_dim != len(coord_list):
-                raise AdjointError(
-                    f"coordinate '{coord_name}' has '{len(coord_list)}' elements, "
-                    f"expected '{len_dim}' to match number of 'values' along this dimension."
-                )
+    #     # make sure each coordinate list has same length as values along that axis
+    #     for len_dim, (coord_name, coord_list) in zip(shape, val.items()):
+    #         if len_dim != len(coord_list):
+    #             raise AdjointError(
+    #                 f"coordinate '{coord_name}' has '{len(coord_list)}' elements, "
+    #                 f"expected '{len_dim}' to match number of 'values' along this dimension."
+    #             )
 
-        return val
+    #     return val
 
     @cached_property
     def as_ndarray(self) -> np.ndarray:
         """``self.values`` as a numpy array."""
-        return np.array(self.values)
+        if not isinstance(self.values, np.ndarray):
+            return np.array(self.values)
+        return self.values
+
+    @cached_property
+    def as_jnp_array(self) -> jnp.ndarray:
+        """``self.values`` as a jax array."""
+        if not isinstance(self.values, jnp.ndarray):
+            return jnp.array(self.values)
+        return self.values
+
+    @cached_property
+    def shape(self) -> tuple:
+        """Shape of self.values."""
+        return self.as_ndarray.shape
 
     @cached_property
     def as_list(self) -> list:
@@ -92,6 +102,7 @@ class JaxDataArray(Tidy3dBaseModel):
 
     def get_coord_list(self, coord_name: str) -> list:
         """Get a coordinate list by name."""
+
         if coord_name not in self.coords:
             raise Tidy3dKeyError(f"Could not select '{coord_name}', not found in coords dict.")
         return self.coords.get(coord_name)
@@ -101,7 +112,8 @@ class JaxDataArray(Tidy3dBaseModel):
 
         # select out the proper values and coordinates
         coord_axis = list(self.coords.keys()).index(coord_name)
-        new_values = jnp.take(self.values, indices=coord_index, axis=coord_axis)
+        values = self.as_jnp_array
+        new_values = jnp.take(values, indices=coord_index, axis=coord_axis)
         new_coords = self.coords.copy()
         new_coords.pop(coord_name)
 
@@ -154,6 +166,7 @@ class JaxDataArray(Tidy3dBaseModel):
     @cached_property
     def nonzero_val_coords(self) -> Tuple[List[complex], Dict[str, Any]]:
         """The value and coordinate associated with the only non-zero element of ``self.values``."""
+
         values = np.nan_to_num(self.as_ndarray)
         nonzero_inds = np.nonzero(values)
         nonzero_values = values[nonzero_inds].tolist()
@@ -167,18 +180,11 @@ class JaxDataArray(Tidy3dBaseModel):
 
     def tree_flatten(self) -> Tuple[list, dict]:
         """Jax works on the values, stash the coords for reconstruction."""
-        try:
-            values = self.as_ndarray.flatten()
-        except TypeError:
-            values = jnp.array(self.values).flatten()
-        return values, self.coords
+
+        return self.values, self.coords
 
     @classmethod
     def tree_unflatten(cls, aux_data, children) -> JaxDataArray:
         """How to unflatten the values and coords."""
-        shape = tuple(len(v) for _, v in aux_data.items())
-        try:
-            values = np.array(children).reshape(shape).tolist()
-        except TypeError:
-            values = jnp.array(children).reshape(shape)
-        return cls(values=values, coords=aux_data)
+
+        return cls(values=children, coords=aux_data)

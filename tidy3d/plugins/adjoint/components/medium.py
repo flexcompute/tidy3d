@@ -39,7 +39,7 @@ class JaxMedium(Medium, JaxObject):
 
     def to_medium(self) -> Medium:
         """Convert :class:`.JaxMedium` instance to :class:`.Medium`"""
-        self_dict = self.dict(exclude={"type"}).copy()
+        self_dict = self.dict(exclude={"type"})
         return Medium.parse_obj(self_dict)
 
     # pylint: disable =too-many-locals
@@ -145,7 +145,7 @@ class JaxAnisotropicMedium(AnisotropicMedium, JaxObject):
 
     def to_medium(self) -> AnisotropicMedium:
         """Convert :class:`.JaxMedium` instance to :class:`.Medium`"""
-        self_dict = self.dict(exclude={"type", "xx", "yy", "zz"}).copy()
+        self_dict = self.dict(exclude={"type", "xx", "yy", "zz"})
         for component in "xyz":
             field_name = component + component
             jax_medium = self.components[field_name]
@@ -155,7 +155,7 @@ class JaxAnisotropicMedium(AnisotropicMedium, JaxObject):
     @classmethod
     def from_tidy3d(cls, tidy3d_obj: AnisotropicMedium) -> JaxAnisotropicMedium:
         """Convert :class:`.Tidy3dBaseModel` instance to :class:`.JaxObject`."""
-        obj_dict = tidy3d_obj.dict(exclude={"type", "xx", "yy", "zz"}).copy()
+        obj_dict = tidy3d_obj.dict(exclude={"type", "xx", "yy", "zz"})
         for component, tidy3d_medium in tidy3d_obj.components.items():
             obj_dict[component] = JaxMedium.from_tidy3d(tidy3d_medium)
         return cls.parse_obj(obj_dict)
@@ -218,12 +218,12 @@ class JaxCustomMedium(CustomMedium, JaxObject):
 
     def to_medium(self) -> CustomMedium:
         """Convert :class:`.JaxMedium` instance to :class:`.Medium`"""
-        self_dict = self.dict(exclude={"type"}).copy()
+        self_dict = self.dict(exclude={"type"})
         eps_field_components = {}
         for dim in "xyz":
             field_name = f"eps_{dim}{dim}"
             data_array = self_dict["eps_dataset"][field_name]
-            values = data_array["values"]
+            values = np.array(data_array["values"])
             coords = data_array["coords"]
             scalar_field = ScalarFieldDataArray(values, coords=coords)
             eps_field_components[field_name] = scalar_field
@@ -234,7 +234,7 @@ class JaxCustomMedium(CustomMedium, JaxObject):
     @classmethod
     def from_tidy3d(cls, tidy3d_obj: CustomMedium) -> JaxCustomMedium:
         """Convert :class:`.Tidy3dBaseModel` instance to :class:`.JaxObject`."""
-        obj_dict = tidy3d_obj.dict(exclude={"type", "eps_dataset"}).copy()
+        obj_dict = tidy3d_obj.dict(exclude={"type", "eps_dataset"})
         eps_dataset = tidy3d_obj.eps_dataset
         field_components = {}
         for dim in "xyz":

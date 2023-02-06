@@ -60,7 +60,7 @@ class JaxSimulationData(SimulationData, JaxObject):
     def from_sim_data(cls, sim_data: SimulationData, jax_info: JaxInfo) -> JaxSimulationData:
         """Construct a :class:`.JaxSimulationData` instance from a :class:`.SimulationData`."""
 
-        self_dict = sim_data.dict(exclude={"type", "simulation", "data"}).copy()
+        self_dict = sim_data.dict(exclude={"type", "simulation", "data"})
 
         # convert the simulation to JaxSimulation
         jax_sim = JaxSimulation.from_simulation(simulation=sim_data.simulation, jax_info=jax_info)
@@ -68,7 +68,6 @@ class JaxSimulationData(SimulationData, JaxObject):
         # construct JaxSimulationData with no data (yet)
         self_dict["simulation"] = jax_sim
         self_dict["data"] = ()
-        jax_sim_data = cls.parse_obj(self_dict)
 
         # Get information needed to split the full data list
         len_output_data = jax_info.num_output_monitors
@@ -92,11 +91,13 @@ class JaxSimulationData(SimulationData, JaxObject):
         ]
 
         # add all data back in and return
-        return jax_sim_data.copy(
-            update=dict(
+        self_dict.update(
+            dict(
                 data=data, output_data=output_data, grad_data=grad_data, grad_eps_data=grad_eps_data
             )
         )
+
+        return cls.parse_obj(self_dict)
 
     def make_adjoint_simulation(self, fwidth: float) -> JaxSimulation:
         """Make an adjoint simulation out of the data provided (generally, the vjp sim data)."""
@@ -109,10 +110,7 @@ class JaxSimulationData(SimulationData, JaxObject):
         for mnt_data_vjp in self.output_data:
             for adj_source in mnt_data_vjp.to_adjoint_sources(fwidth=fwidth):
                 adj_srcs.append(adj_source)
-        sim_adj = self.simulation.updated_copy(boundary_spec=bc_adj, sources=adj_srcs, monitors=())
 
-        # add gradient monitors and remove output_monitors
-        sim_adj = sim_adj.add_grad_monitors()
-        sim_adj = sim_adj.copy(update=dict(output_monitors=()))
-
-        return sim_adj
+        update_dict = dict(boundary_spec=bc_adj, sources=adj_srcs, monitors=(), output_monitors=())
+        update_dict.update(self.simulation.get_grad_monitors())
+        return self.simulation.updated_copy(**update_dict)
