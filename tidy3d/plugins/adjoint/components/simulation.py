@@ -118,7 +118,6 @@ class JaxSimulation(Simulation, JaxObject):
                 return val
 
         # flag to ensure that we only warn once for touching structures (otherwise, too many logs)
-        warning_triggered = False
         in_structs_background = []
         for i, in_struct in enumerate(structures):
             in_geometry = in_struct.geometry
@@ -127,13 +126,12 @@ class JaxSimulation(Simulation, JaxObject):
             for j, in_struct_bck in enumerate(in_structs_background):
 
                 # if the contracted geometry intersects with a background structure, raise (overlap)
-                if in_geometry.intersects(in_struct_bck.geometry) and not warning_triggered:
+                if in_geometry.intersects(in_struct_bck.geometry):
                     log.warning(
                         f"'JaxSimulation.input_structures' elements {j} and {i} "
                         "are overlapping or touching. "
                         "Geometric gradients for overlapping structures may contain errors. "
                     )
-                    warning_triggered = True
 
             in_structs_background.append(in_struct)
 
