@@ -10,9 +10,11 @@ import jax.numpy as jnp
 from jax.tree_util import register_pytree_node_class
 
 from .....components.source import Source, GaussianPulse
-from .....components.source import ModeSource, PlaneWave
+from .....components.source import ModeSource, PlaneWave, CustomFieldSource
 from .....components.data.monitor_data import MonitorData
-from .....components.data.monitor_data import ModeData, DiffractionData
+from .....components.data.monitor_data import ModeData, DiffractionData, FieldData
+from .....components.data.dataset import FieldDataset
+from .....components.data.data_array import ScalarFieldDataArray
 from .....constants import C_0, ETA_0
 
 from .data_array import JaxDataArray
@@ -98,6 +100,84 @@ class JaxModeData(JaxMonitorData, ModeData):
             adjoint_sources.append(adj_mode_src)
 
         return adjoint_sources
+
+
+@register_pytree_node_class
+class JaxFieldData(JaxMonitorData, FieldData):
+    """A :class:`.FieldData` registered with jax."""
+
+    Ex: JaxDataArray = pd.Field(
+        None,
+        title="Ex",
+        description="Spatial distribution of the x-component of the electric field.",
+        jax_field=True,
+    )
+    Ey: JaxDataArray = pd.Field(
+        None,
+        title="Ey",
+        description="Spatial distribution of the y-component of the electric field.",
+        jax_field=True,
+    )
+    Ez: JaxDataArray = pd.Field(
+        None,
+        title="Ez",
+        description="Spatial distribution of the z-component of the electric field.",
+        jax_field=True,
+    )
+    Hx: JaxDataArray = pd.Field(
+        None,
+        title="Hx",
+        description="Spatial distribution of the x-component of the magnetic field.",
+        jax_field=True,
+    )
+    Hy: JaxDataArray = pd.Field(
+        None,
+        title="Hy",
+        description="Spatial distribution of the y-component of the magnetic field.",
+        jax_field=True,
+    )
+    Hz: JaxDataArray = pd.Field(
+        None,
+        title="Hz",
+        description="Spatial distribution of the z-component of the magnetic field.",
+        jax_field=True,
+    )
+
+    # pylint:disable=too-many-locals
+    def to_adjoint_sources(self, fwidth: float) -> List[CustomFieldSource]:
+        """Converts a :class:`.JaxFieldData` to a list of adjoint :class:`.CustomFieldSource."""
+
+        # parse the frequency from the scalar field data
+        freqs = [scalar_fld.coords["f"] for _, scalar_fld in self.field_components.items()]
+        if any((len(fs) != 1 for fs in freqs)):
+            raise AdjointError("FieldData must have only one frequency.")
+        freqs = [fs[0] for fs in freqs]
+        if len(set(freqs)) != 1:
+            raise AdjointError("FieldData must all contain the same frequency.")
+        freq0 = freqs[0]
+
+        # construct the source time dependence
+        src_amp = 1.0  # TODO: how to normalize?
+        source_time = self.make_source_time(amp_complex=src_amp, freq=freq0, fwidth=fwidth)
+
+        # TODO: convert self to a 'CustomCurrentSource'-like object
+
+        # convert all of the scalar fields to ScalarFieldDataArray
+        src_field_components = {}
+        for name, field_component in self.field_components.items():
+            values = field_component.as_ndarray
+            coords = field_component.coords
+            src_field_components[name] = ScalarFieldDataArray(values, coords=coords)
+
+        # construct the CustomFieldSource and return the single instance in a list
+        dataset = FieldDataset(**src_field_components)
+        custom_source = CustomFieldSource(
+            center=self.monitor.center,
+            size=self.monitor.size,
+            source_time=source_time,
+            field_dataset=dataset,
+        )
+        return [custom_source]
 
 
 @register_pytree_node_class
@@ -227,11 +307,12 @@ class JaxDiffractionData(JaxMonitorData, DiffractionData):
 
 
 # allowed types in JaxSimulationData.output_data
-JaxMonitorDataType = Union[JaxModeData, JaxDiffractionData]
+JaxMonitorDataType = Union[JaxModeData, JaxDiffractionData, JaxFieldData]
 
 # maps regular Tidy3d MonitorData to the JaxTidy3d equivalents, used in JaxSimulationData loading
 # pylint: disable=unhashable-member
 JAX_MONITOR_DATA_MAP = {
     DiffractionData: JaxDiffractionData,
     ModeData: JaxModeData,
+    FieldData: JaxFieldData,
 }
