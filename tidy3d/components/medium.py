@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Tuple, Union, Callable, Optional, Dict
+from typing import Tuple, Union, Callable, Optional, Dict, List
 import functools
 
 import pydantic as pd
@@ -11,8 +11,8 @@ import numpy as np
 import xarray as xr
 
 from .base import Tidy3dBaseModel, cached_property
-from .grid.grid import Coords
-from .types import PoleAndResidue, Ax, FreqBound, TYPE_TAG_STR, InterpMethod, Numpy
+from .grid.grid import Coords, Grid
+from .types import PoleAndResidue, Ax, FreqBound, TYPE_TAG_STR, InterpMethod, Numpy, Bound
 from .data.dataset import PermittivityDataset
 from .data.data_array import ScalarFieldDataArray
 from .viz import add_ax_if_none
@@ -614,6 +614,56 @@ class CustomMedium(AbstractMedium):
         interp_dataset = interp_dataset.where(interp_dataset >= min_val, min_val)
         interp_dataset = interp_dataset.where(interp_dataset <= max_val, max_val)
         return interp_dataset
+
+    def grids(self, bounds: Bound) -> Dict[str, Grid]:
+        """Make a :class:`.Grid` corresponding to the data in each ``eps_ii`` component.
+        The min and max coordinates along each dimension are bounded by ``bounds``."""
+
+        rmin, rmax = bounds
+        pt_mins = dict(zip("xyz", rmin))
+        pt_maxs = dict(zip("xyz", rmax))
+
+        def make_grid(scalar_field: ScalarFieldDataArray) -> Grid:
+            """Make a grid for a single dataset."""
+
+            def make_bound_coords(coords: np.ndarray, pt_min: float, pt_max: float) -> List[float]:
+                """Convert user supplied coords into boundary coords to use in :class:`.Grid`."""
+
+                # get coordinates of the bondaries halfway between user-supplied data
+                coord_bounds = (coords[1:] + coords[:1]) / 2.0
+
+                # filter out boundaries that lie outside geometry bounds
+                coord_bounds[coord_bounds <= pt_min] = pt_min
+                coord_bounds[coord_bounds >= pt_max] = pt_max
+
+                # add the geometry bounds in explicitly
+                return [pt_min] + coord_bounds.tolist() + [pt_max]
+
+            # grab user supplied data long this dimension
+            coords = {key: np.array(val) for key, val in scalar_field.coords.items()}
+            spatial_coords = {key: coords[key] for key in "xyz"}
+
+            # convert each spatial coord to boundary coords
+            bound_coords = {}
+            for key, coords in spatial_coords.items():
+                pt_min = pt_mins[key]
+                pt_max = pt_maxs[key]
+                bound_coords[key] = make_bound_coords(coords=coords, pt_min=pt_min, pt_max=pt_max)
+
+            # construct grid
+            boundaries = Coords(**bound_coords)
+            return Grid(boundaries=boundaries)
+
+        grids = {}
+        for field_name in ("eps_xx", "eps_yy", "eps_zz"):
+
+            # grab user supplied data long this dimension
+            scalar_field = self.eps_dataset.field_components[field_name]
+
+            # feed it to make_grid
+            grids[field_name] = make_grid(scalar_field)
+
+        return grids
 
 
 """ Dispersive Media """
