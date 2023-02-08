@@ -256,24 +256,51 @@ class JaxCustomMedium(CustomMedium, JaxObject):
         wvl_mat: float,
     ) -> JaxMedium:
         """Returns the gradient of the medium parameters given forward and adjoint field data."""
+
+        # get the boundaries of the intersection of the CustomMedium and the Simulation
+        mnt_bounds = grad_data_fwd.monitor.geometry.bounds
+        bounds_intersect = Geometry.bounds_intersection(mnt_bounds, sim_bounds)
+
+        # get the grids associated with the user-supplied coordinates within these bounds
+        grids = self.grids(bounds=bounds_intersect)
+
         vjp_field_components = {}
         for dim in "xyz":
 
             eps_field_name = f"eps_{dim}{dim}"
             field_name = f"E{dim}"
 
+            # grab the original data and its coordinatess
             orig_data_array = self.eps_dataset.field_components[eps_field_name]
             coords = orig_data_array.coords
+
+            # construct the coordinates for interpolation and selection within the custom medium
             interp_coords = {dim_pt: coords[dim_pt] for dim_pt in "xyz" if len(coords[dim_pt]) > 1}
             isel_coords = {dim_pt: 0 for dim_pt in "xyz" if len(coords[dim_pt]) <= 1}
+
+            # interpolate into the forward and adjoint fields along this dimension and dot them
             e_fwd = grad_data_fwd.field_components[field_name]
             e_adj = grad_data_adj.field_components[field_name]
             e_dotted = (e_fwd * e_adj).isel(f=0, **isel_coords).interp(**interp_coords)
 
-            d_vol = 1.0  # TODO: use actual volume element using grid?
+            # compute the size of the user-supplied medium along each dimension.
+            grid = grids[eps_field_name]
+            d_sizes = grid.sizes
 
+            # if any of the sizes are just 0, indicating an ndim < 3, just normalize out to 1.0
+            d_sizes = (
+                np.ones(1) if len(dl) == 1 and dl[0] <= 0 else dl
+                for dl in (d_sizes.x, d_sizes.y, d_sizes.z)
+            )
+
+            # outer product all dimensions to get a volume element mask
+            d_vols = np.einsum("i, j, k -> ijk", *d_sizes)
+
+            # multiply volume element into gradient and reshape to expected vjp_shape
             vjp_shape = tuple(len(coord) for _, coord in coords.items())
-            vjp_values = (d_vol * e_dotted.real.values).reshape(vjp_shape)
+            vjp_values = (np.squeeze(d_vols) * e_dotted.real.values).reshape(vjp_shape)
+
+            # construct a DataArray storing the vjp
             vjp_data_array = JaxDataArray(values=vjp_values, coords=coords)
             vjp_field_components[eps_field_name] = vjp_data_array
 
