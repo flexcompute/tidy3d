@@ -14,7 +14,7 @@ from ....components.monitor import FieldMonitor, PermittivityMonitor
 from ....components.monitor import ModeMonitor, DiffractionMonitor
 from ....components.simulation import Simulation
 from ....components.data.monitor_data import FieldData, PermittivityData
-from ....components.types import Ax
+from ....components.types import Ax, annotate_type
 from ....log import log
 from ....constants import HERTZ
 
@@ -46,7 +46,9 @@ class JaxSimulation(Simulation, JaxObject):
         jax_field=True,
     )
 
-    output_monitors: Tuple[Union[ModeMonitor, DiffractionMonitor], ...] = pd.Field(
+    output_monitors: Tuple[
+        annotate_type(Union[DiffractionMonitor, FieldMonitor, ModeMonitor]), ...
+    ] = pd.Field(
         (),
         title="Output Monitors",
         description="Tuple of monitors whose data the differentiable output depends on.",
