@@ -19,6 +19,7 @@ from .base import JaxObject
 from .types import JaxFloat, validate_jax_float
 from .data.data_array import JaxDataArray
 from .data.dataset import JaxPermittivityDataset
+from ..log import AdjointError
 
 # number of integration points per unit wavelength in material
 PTS_PER_WVL_INTEGRATION = 20
@@ -197,9 +198,16 @@ class JaxCustomMedium(CustomMedium, JaxObject):
         title="Permittivity Dataset",
         description="User-supplied dataset containing complex-valued permittivity "
         "as a function of space. Permittivity distribution over the Yee-grid will be "
-        "interpolated based on ``interp_method``.",
+        "interpolated based on the data nearest to the grid location.",
         jax_field=True,
     )
+
+    @pd.validator("interp_method", always=True)
+    def _interp_nearest_only(cls, val):
+        """Make sure nearest is used."""
+        if val != "nearest":
+            raise AdjointError("JaxCustomMedium only supports 'interp_method' of 'nearest'.")
+        return val
 
     @pd.validator("eps_dataset", always=True)
     def _single_frequency(cls, val):
