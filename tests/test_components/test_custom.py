@@ -275,3 +275,10 @@ def test_nk_diff_coords():
     k.coords["f"] = [3e14]
     with pytest.raises(SetupError):
         med = CustomMedium.from_nk(n=n, k=k)
+
+
+def test_grids():
+    """Get Dictionary of field components and select some data."""
+    bounds = Box(size=(1, 1, 1)).bounds
+    for key, grid in CUSTOM_MEDIUM.grids(bounds=bounds).items():
+        grid.sizes
