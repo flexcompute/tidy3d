@@ -19,7 +19,8 @@ from .base import JaxObject
 from .types import JaxFloat, validate_jax_float
 from .data.data_array import JaxDataArray
 from .data.dataset import JaxPermittivityDataset
-from ..log import AdjointError
+
+# from ..log import AdjointError
 
 # number of integration points per unit wavelength in material
 PTS_PER_WVL_INTEGRATION = 20
@@ -202,12 +203,12 @@ class JaxCustomMedium(CustomMedium, JaxObject):
         jax_field=True,
     )
 
-    @pd.validator("interp_method", always=True)
-    def _interp_nearest_only(cls, val):
-        """Make sure nearest is used."""
-        if val != "nearest":
-            raise AdjointError("JaxCustomMedium only supports 'interp_method' of 'nearest'.")
-        return val
+    # @pd.validator("interp_method", always=True)
+    # def _interp_nearest_only(cls, val):
+    #     """Make sure nearest is used."""
+    #     if val != "nearest":
+    #         raise AdjointError("JaxCustomMedium only supports 'interp_method' of 'nearest'.")
+    #     return val
 
     @pd.validator("eps_dataset", always=True)
     def _single_frequency(cls, val):

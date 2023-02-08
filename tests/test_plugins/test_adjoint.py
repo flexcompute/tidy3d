@@ -110,6 +110,12 @@ def make_sim(
         name=MNT_NAME + "2",
     )
 
+    output_mnt3 = td.FieldMonitor(
+        size=(10, 2, 0),
+        freqs=[FREQ0],
+        name=MNT_NAME + "3",
+    )
+
     extraneous_field_monitor = td.FieldMonitor(
         size=(10, 10, 0),
         freqs=[1e14, 2e14],
@@ -122,7 +128,7 @@ def make_sim(
         grid_spec=td.GridSpec(wavelength=1.0),
         monitors=(extraneous_field_monitor,),
         structures=(extraneous_structure,),
-        output_monitors=(output_mnt1, output_mnt2),
+        output_monitors=(output_mnt1, output_mnt2, output_mnt3),
         input_structures=(jax_struct1, jax_struct2, jax_struct3, jax_struct_custom),
         # input_structures=(jax_struct_custom,),
     )
