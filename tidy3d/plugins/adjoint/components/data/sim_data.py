@@ -99,7 +99,7 @@ class JaxSimulationData(SimulationData, JaxObject):
 
         return cls.parse_obj(self_dict)
 
-    def make_adjoint_simulation(self, fwidth: float) -> JaxSimulation:
+    def make_adjoint_simulation(self, fwidth_dict: dict) -> JaxSimulation:
         """Make an adjoint simulation out of the data provided (generally, the vjp sim data)."""
 
         # grab boundary conditions with flipped bloch vectors (for adjoint)
@@ -108,9 +108,12 @@ class JaxSimulationData(SimulationData, JaxObject):
         # add all adjoint sources and boundary conditions (at same time for BC validators to work)
         adj_srcs = []
         for mnt_data_vjp in self.output_data:
-            for adj_source in mnt_data_vjp.to_adjoint_sources(fwidth=fwidth):
+            for adj_source in mnt_data_vjp.to_adjoint_sources(fwidth_dict=fwidth_dict):
                 adj_srcs.append(adj_source)
 
         update_dict = dict(boundary_spec=bc_adj, sources=adj_srcs, monitors=(), output_monitors=())
         update_dict.update(self.simulation.get_grad_monitors())
-        return self.simulation.updated_copy(**update_dict)
+        sim_adj = self.simulation.updated_copy(**update_dict)
+        if len(sim_adj.output_monitors):
+            return sim_adj.updated_copy(run_time=sim_adj.adjoint_run_time)
+        return sim_adj

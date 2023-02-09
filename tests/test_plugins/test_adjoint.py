@@ -16,13 +16,10 @@ from typing import Tuple, Any
 from tidy3d.log import DataError, Tidy3dKeyError
 from tidy3d.plugins.adjoint.components.base import JaxObject
 from tidy3d.plugins.adjoint.components.geometry import JaxBox, JaxPolySlab
-from tidy3d.plugins.adjoint.components.medium import (
-    JaxMedium,
-    JaxAnisotropicMedium,
-    JaxCustomMedium,
-)
+from tidy3d.plugins.adjoint.components.medium import JaxMedium, JaxAnisotropicMedium
+from tidy3d.plugins.adjoint.components.medium import JaxCustomMedium
 from tidy3d.plugins.adjoint.components.structure import JaxStructure
-from tidy3d.plugins.adjoint.components.simulation import JaxSimulation
+from tidy3d.plugins.adjoint.components.simulation import JaxSimulation, FWIDTH_SPACING_FACTOR
 from tidy3d.plugins.adjoint.components.data.sim_data import JaxSimulationData
 from tidy3d.plugins.adjoint.components.data.monitor_data import JaxModeData
 from tidy3d.plugins.adjoint.components.data.data_array import JaxDataArray
@@ -39,6 +36,7 @@ CENTER = (2.0, -1.0, 1.0)
 VERTICES = ((-1.0, -1.0), (0.0, 0.0), (-1.0, 0.0))
 POLYSLAB_AXIS = 2
 FREQ0 = 2e14
+FREQ1 = 3e14
 BASE_EPS_VAL = 2.0
 
 # name of the output monitor used in tests
@@ -97,7 +95,7 @@ def make_sim(
     output_mnt1 = td.ModeMonitor(
         size=(10, 10, 0),
         mode_spec=td.ModeSpec(num_modes=3),
-        freqs=[FREQ0],
+        freqs=[FREQ0, FREQ1],
         name=MNT_NAME + "1",
     )
 
@@ -106,18 +104,18 @@ def make_sim(
         center=(0, 0, 4),
         size=(td.inf, td.inf, 0),
         normal_dir="+",
-        freqs=[FREQ0],
+        freqs=[FREQ0, FREQ1],
         name=MNT_NAME + "2",
     )
 
     output_mnt3 = td.FieldMonitor(
         size=(10, 2, 0),
-        freqs=[FREQ0],
+        freqs=[FREQ0, FREQ1],
         name=MNT_NAME + "3",
     )
 
     extraneous_field_monitor = td.FieldMonitor(
-        size=(10, 10, 0),
+        size=(1, 1, 0),
         freqs=[1e14, 2e14],
         name="field",
     )
@@ -130,7 +128,6 @@ def make_sim(
         structures=(extraneous_structure,),
         output_monitors=(output_mnt1, output_mnt2, output_mnt3),
         input_structures=(jax_struct1, jax_struct2, jax_struct3, jax_struct_custom),
-        # input_structures=(jax_struct_custom,),
     )
 
     return sim
@@ -150,20 +147,29 @@ def extract_amp(sim_data: td.SimulationData) -> complex:
     mnt_name = MNT_NAME + "1"
     mnt_data = sim_data.output_monitor_data[mnt_name]
     amps = mnt_data.amps
-    ret_value += amps.sel(direction="+", f=2e14, mode_index=0)
+    ret_value += amps.sel(direction="+", f=FREQ0, mode_index=0)
     ret_value += amps.isel(direction=0, f=0, mode_index=0)
-    ret_value += amps.sel(direction="-", f=2e14, mode_index=1)
+    ret_value += amps.sel(direction="-", f=FREQ1, mode_index=1)
     ret_value += amps.sel(mode_index=1, f=2e14, direction="-")
     ret_value += amps.sel(direction="-", f=2e14).isel(mode_index=1)
 
     # DiffractionData
     mnt_name = MNT_NAME + "2"
     mnt_data = sim_data.output_monitor_data[mnt_name]
-    ret_value += mnt_data.amps.sel(orders_x=0, orders_y=0, f=2e14, polarization="p")
-    ret_value += mnt_data.amps.sel(orders_x=-1, orders_y=1, f=2e14, polarization="p")
+    ret_value += mnt_data.amps.sel(orders_x=0, orders_y=0, f=FREQ0, polarization="p")
+    ret_value += mnt_data.amps.sel(orders_x=-1, orders_y=1, f=FREQ1, polarization="p")
     ret_value += mnt_data.amps.isel(orders_x=0, orders_y=1, f=0, polarization=0)
-    ret_value += mnt_data.Er.isel(orders_x=0, orders_y=1, f=0)
+    ret_value += mnt_data.Er.isel(orders_x=0, orders_y=1, f=1)
     ret_value += mnt_data.power.sel(orders_x=-1, orders_y=1, f=2e14)
+
+    # FieldData
+    # mnt_name = MNT_NAME + "3"
+    # mnt_data = sim_data.output_monitor_data[mnt_name]
+    # ret_value += jnp.sum(mnt_data.Ex.sel(f=FREQ0).isel(x=0, y=1, z=0).values)
+    # ret_value += jnp.sum(mnt_data.Ey.sel(f=FREQ1).values)
+    # ret_value += mnt_data.amps.isel(orders_x=0, orders_y=1, f=0, polarization=0)
+    # ret_value += mnt_data.Er.isel(orders_x=0, orders_y=1, f=1)
+    # ret_value += mnt_data.power.sel(orders_x=-1, orders_y=1, f=2e14)
 
     return ret_value
 
@@ -270,55 +276,6 @@ def _test_adjoint_setup_adj(use_emulated_run):
 #     assert jax_sim_data.simulation == jax_sim
 
 
-def test_multiple_freqs():
-    """Test that sim validation fails when output monitors have multiple frequencies."""
-
-    output_mnt = td.ModeMonitor(
-        size=(10, 10, 0),
-        mode_spec=td.ModeSpec(num_modes=3),
-        freqs=[1e14, 2e14],
-        name=MNT_NAME,
-    )
-
-    with pytest.raises(AdjointError):
-        sim = JaxSimulation(
-            size=(10, 10, 10),
-            run_time=1e-12,
-            grid_spec=td.GridSpec(wavelength=1.0),
-            monitors=(),
-            structures=(),
-            output_monitors=(output_mnt,),
-            input_structures=(),
-        )
-
-
-def test_different_freqs():
-    """Test that sim validation fails when output monitors have different frequencies."""
-
-    output_mnt1 = td.ModeMonitor(
-        size=(10, 10, 0),
-        mode_spec=td.ModeSpec(num_modes=3),
-        freqs=[1e14],
-        name=MNT_NAME + "1",
-    )
-    output_mnt2 = td.ModeMonitor(
-        size=(10, 10, 0),
-        mode_spec=td.ModeSpec(num_modes=3),
-        freqs=[2e14],
-        name=MNT_NAME + "2",
-    )
-    with pytest.raises(AdjointError):
-        sim = JaxSimulation(
-            size=(10, 10, 10),
-            run_time=1e-12,
-            grid_spec=td.GridSpec(wavelength=1.0),
-            monitors=(),
-            structures=(),
-            output_monitors=(output_mnt1, output_mnt2),
-            input_structures=(),
-        )
-
-
 def test_get_freq_adjoint():
     """Test that the adjoint frequency property works as expected."""
 
@@ -333,19 +290,20 @@ def test_get_freq_adjoint():
     )
 
     with pytest.raises(AdjointError):
-        f = sim.freq_adjoint
+        f = sim.freqs_adjoint
 
     freq0 = 2e14
+    freq1 = 3e14
     output_mnt1 = td.ModeMonitor(
         size=(10, 10, 0),
         mode_spec=td.ModeSpec(num_modes=3),
-        freqs=[freq0],
+        freqs=[freq0, freq1],
         name=MNT_NAME + "1",
     )
     output_mnt2 = td.ModeMonitor(
         size=(10, 10, 0),
         mode_spec=td.ModeSpec(num_modes=3),
-        freqs=[freq0],
+        freqs=[freq0, freq1],
         name=MNT_NAME + "2",
     )
     sim = JaxSimulation(
@@ -357,10 +315,10 @@ def test_get_freq_adjoint():
         output_monitors=(output_mnt1, output_mnt2),
         input_structures=(),
     )
-    assert sim.freq_adjoint == freq0
+    assert np.allclose(np.array(sim.freqs_adjoint), np.array([freq0, freq1]))
 
 
-def test_get_fwidth_adjoint():
+def test_get_fwidths_adjoint_single_freq():
     """Test that the adjoint fwidth property works as expected."""
 
     from tidy3d.plugins.adjoint.components.simulation import FWIDTH_FACTOR
@@ -389,23 +347,68 @@ def test_get_fwidth_adjoint():
 
     # no sources, use FWIDTH * freq0
     sim = make_sim(sources=(), fwidth_adjoint=None)
-    assert np.isclose(sim._fwidth_adjoint, FWIDTH_FACTOR * freq0)
+    assert np.isclose(sim._fwidths_adjoint[0], FWIDTH_FACTOR * freq0)
 
     # a few sources, use average of fwidths
     fwidths = [1e14, 2e14, 3e14, 4e14]
     src_times = [td.GaussianPulse(freq0=freq0, fwidth=fwidth) for fwidth in fwidths]
     srcs = [td.PointDipole(source_time=src_time, polarization="Ex") for src_time in src_times]
     sim = make_sim(sources=srcs, fwidth_adjoint=None)
-    assert np.isclose(sim._fwidth_adjoint, np.mean(fwidths))
+    assert np.isclose(sim._fwidths_adjoint[0], np.mean(fwidths))
 
     # a few sources, with custom fwidth specified
     fwidth_custom = 3e13
     sim = make_sim(sources=srcs, fwidth_adjoint=fwidth_custom)
-    assert np.isclose(sim._fwidth_adjoint, fwidth_custom)
+    assert np.isclose(sim._fwidths_adjoint[0], fwidth_custom)
 
     # no sources, custom fwidth specified
     sim = make_sim(sources=(), fwidth_adjoint=fwidth_custom)
-    assert np.isclose(sim._fwidth_adjoint, fwidth_custom)
+    assert np.isclose(sim._fwidths_adjoint[0], fwidth_custom)
+
+
+def test_get_fwidths_adjoint_multiple_freq():
+    """Test that the adjoint fwidth property works as expected."""
+
+    from tidy3d.plugins.adjoint.components.simulation import FWIDTH_FACTOR
+
+    freq0 = 2e14
+    freq1 = 3e14
+    freq2 = 5e14
+
+    mnt1 = td.ModeMonitor(
+        size=(10, 10, 0),
+        mode_spec=td.ModeSpec(num_modes=3),
+        freqs=[freq0, freq2],
+        name=MNT_NAME + "1",
+    )
+
+    mnt2 = td.ModeMonitor(
+        size=(10, 10, 0),
+        mode_spec=td.ModeSpec(num_modes=3),
+        freqs=[freq1],
+        name=MNT_NAME + "2",
+    )
+
+    def make_sim(sources=(), fwidth_adjoint=None):
+        """Make a sim with given sources and fwidth_adjoint specified."""
+        return JaxSimulation(
+            size=(10, 10, 10),
+            run_time=1e-12,
+            grid_spec=td.GridSpec(wavelength=1.0),
+            monitors=(),
+            structures=(),
+            output_monitors=(mnt1, mnt2),
+            input_structures=(),
+            sources=sources,
+            fwidth_adjoint=fwidth_adjoint,
+        )
+
+    # no sources, use FWIDTH * freq0
+    sim = make_sim(sources=(), fwidth_adjoint=None)
+    fwidths = sim._fwidths_adjoint
+    assert fwidths[0] == FWIDTH_SPACING_FACTOR * abs(freq1 - freq0)
+    assert fwidths[1] == FWIDTH_SPACING_FACTOR * min(abs(freq1 - freq0), abs(freq2 - freq1))
+    assert fwidths[2] == FWIDTH_SPACING_FACTOR * abs(freq2 - freq1)
 
 
 def test_jax_data_array():

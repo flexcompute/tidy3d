@@ -37,7 +37,7 @@ class JaxMonitorData(MonitorData, JaxObject, ABC):
         return cls.parse_obj(self_dict)
 
     @abstractmethod
-    def to_adjoint_sources(self, fwidth: float) -> List[Source]:
+    def to_adjoint_sources(self, fwidth_dict: dict) -> List[Source]:
         """Construct a list of adjoint sources from this :class:`.JaxMonitorData`."""
 
     @staticmethod
@@ -71,7 +71,7 @@ class JaxModeData(JaxMonitorData, ModeData):
     )
 
     # pylint:disable=too-many-locals
-    def to_adjoint_sources(self, fwidth: float) -> List[ModeSource]:
+    def to_adjoint_sources(self, fwidth_dict: dict) -> List[ModeSource]:
         """Converts a :class:`.ModeData` to a list of adjoint :class:`.ModeSource`."""
 
         amps, sel_coords = self.amps.nonzero_val_coords
@@ -88,6 +88,8 @@ class JaxModeData(JaxMonitorData, ModeData):
             src_amp = grad_const * amp
 
             src_direction = self.flip_direction(str(direction))
+
+            fwidth = fwidth_dict[freq]
 
             adj_mode_src = ModeSource(
                 size=self.monitor.size,
@@ -144,40 +146,48 @@ class JaxFieldData(JaxMonitorData, FieldData):
     )
 
     # pylint:disable=too-many-locals
-    def to_adjoint_sources(self, fwidth: float) -> List[CustomFieldSource]:
+    def to_adjoint_sources(self, fwidth_dict: dict) -> List[CustomFieldSource]:
         """Converts a :class:`.JaxFieldData` to a list of adjoint :class:`.CustomFieldSource."""
 
         # parse the frequency from the scalar field data
-        freqs = [scalar_fld.coords["f"] for _, scalar_fld in self.field_components.items()]
-        if any((len(fs) != 1 for fs in freqs)):
-            raise AdjointError("FieldData must have only one frequency.")
-        freqs = [fs[0] for fs in freqs]
-        if len(set(freqs)) != 1:
-            raise AdjointError("FieldData must all contain the same frequency.")
-        freq0 = freqs[0]
+        freqs = []
+        for _, scalar_fld in self.field_components.items():
+            for freq in scalar_fld.coords["f"]:
+                freqs.append(freq)
 
-        # construct the source time dependence
-        src_amp = 1.0  # TODO: how to normalize?
-        source_time = self.make_source_time(amp_complex=src_amp, freq=freq0, fwidth=fwidth)
+        freqs = np.unique(freqs).tolist()
 
-        # TODO: convert self to a 'CustomCurrentSource'-like object
+        adjoint_sources = []
+        for freq in freqs:
 
-        # convert all of the scalar fields to ScalarFieldDataArray
-        src_field_components = {}
-        for name, field_component in self.field_components.items():
-            values = field_component.as_ndarray
-            coords = field_component.coords
-            src_field_components[name] = ScalarFieldDataArray(values, coords=coords)
+            fwidth = fwidth_dict[freq]
 
-        # construct the CustomFieldSource and return the single instance in a list
-        dataset = FieldDataset(**src_field_components)
-        custom_source = CustomFieldSource(
-            center=self.monitor.center,
-            size=self.monitor.size,
-            source_time=source_time,
-            field_dataset=dataset,
-        )
-        return [custom_source]
+            # construct the source time dependence
+            src_amp = 1.0  # TODO: how to normalize?
+            source_time = self.make_source_time(amp_complex=src_amp, freq=freq, fwidth=fwidth)
+
+            # TODO: convert self to a 'CustomCurrentSource'-like object
+
+            # convert all of the scalar fields to ScalarFieldDataArray
+            src_field_components = {}
+            for name, field_component in self.field_components.items():
+                field_component = field_component.sel(f=freq)
+                values = np.expand_dims(field_component.as_ndarray, axis=-1)
+                coords = field_component.coords
+                coords["f"] = [freq]
+                src_field_components[name] = ScalarFieldDataArray(values, coords=coords)
+
+            # construct the CustomFieldSource and return the single instance in a list
+            dataset = FieldDataset(**src_field_components)
+            custom_source = CustomFieldSource(
+                center=self.monitor.center,
+                size=self.monitor.size,
+                source_time=source_time,
+                field_dataset=dataset,
+            )
+            adjoint_sources.append(custom_source)
+
+        return adjoint_sources
 
 
 @register_pytree_node_class
@@ -257,7 +267,7 @@ class JaxDiffractionData(JaxMonitorData, DiffractionData):
         return JaxDataArray(values=power_values, coords=power_coords)
 
     # pylint:disable=too-many-locals
-    def to_adjoint_sources(self, fwidth: float) -> List[PlaneWave]:
+    def to_adjoint_sources(self, fwidth_dict: dict) -> List[PlaneWave]:
         """Converts a :class:`.DiffractionData` to a list of adjoint :class:`.PlaneWave`."""
 
         # extract the values coordinates of the non-zero amplitudes
@@ -273,6 +283,8 @@ class JaxDiffractionData(JaxMonitorData, DiffractionData):
 
         adjoint_sources = []
         for amp, order_x, order_y, freq, pol in zip(amp_vals, orders_x, orders_y, freqs, pols):
+
+            fwidth = fwidth_dict[freq]
 
             # select the propagation angles from the data
             angle_sel_kwargs = dict(orders_x=int(order_x), orders_y=int(order_y), f=float(freq))

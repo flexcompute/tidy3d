@@ -1,6 +1,8 @@
 """Defines a jax-compatible structure and its conversion to a gradient monitor."""
 from __future__ import annotations
 
+from typing import List
+
 import pydantic as pd
 import numpy as np
 from jax.tree_util import register_pytree_node_class
@@ -66,11 +68,12 @@ class JaxStructure(Structure, JaxObject):
     ) -> JaxStructure:
         """Returns the gradient of the structure parameters given forward and adjoint field data."""
 
-        # compute wavelength in material (to use for determining integration points)
-        freq = float(grad_data_eps.eps_xx.f)
-        wvl_free_space = C_0 / freq
-        ref_ind = np.sqrt(np.max(np.real(self.medium.eps_model(freq))))
-        wvl_mat = wvl_free_space / ref_ind
+        # compute mininum wavelength in material (to use for determining integration points)
+        freqs = np.array(grad_data_eps.eps_xx.f)
+        wvls_free_space = C_0 / freqs
+        ref_inds = np.array([np.sqrt(np.max(np.real(self.medium.eps_model(f)))) for f in freqs])
+        wvl_mats = wvls_free_space / ref_inds
+        wvl_mat = min(wvl_mats)
 
         geo_vjp = self.geometry.store_vjp(
             grad_data_fwd=grad_data_fwd,
@@ -89,6 +92,6 @@ class JaxStructure(Structure, JaxObject):
 
         return self.copy(update=dict(geometry=geo_vjp, medium=medium_vjp))
 
-    def make_grad_monitors(self, freq: float, name: str) -> FieldMonitor:
+    def make_grad_monitors(self, freqs: List[float], name: str) -> FieldMonitor:
         """Return gradient monitor associated with this object."""
-        return self.geometry.make_grad_monitors(freq=freq, name=name)
+        return self.geometry.make_grad_monitors(freqs=freqs, name=name)

@@ -13,6 +13,4 @@ from .smatrix.smatrix import ComponentModeler, Port
 # resonance finder
 from .resonance.resonance import ResonanceFinder
 
-from .polyslab.polyslab import ComplexPolySlab
-
 # adjoint removed because requires jax, import directly through tidy3d.plugins.adjoint

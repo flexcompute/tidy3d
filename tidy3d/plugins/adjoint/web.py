@@ -95,8 +95,8 @@ def run_bwd(
     grad_eps_data_fwd = sim_data_fwd.grad_eps_data
 
     # make and run adjoint simulation
-    fwidth_adj = sim_data_fwd.simulation._fwidth_adjoint  # pylint:disable=protected-access
-    sim_adj = sim_data_vjp.make_adjoint_simulation(fwidth=fwidth_adj)
+    fwidth_dict = sim_data_fwd.simulation._adjoint_freq_to_fwdith  # pylint:disable=protected-access
+    sim_adj = sim_data_vjp.make_adjoint_simulation(fwidth_dict=fwidth_dict)
     sim_data_adj = run(
         simulation=sim_adj,
         task_name=_task_name_adj(task_name),

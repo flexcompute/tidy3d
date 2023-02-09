@@ -93,7 +93,7 @@ class JaxMedium(Medium, JaxObject):
         e_fwd = grad_data_fwd.field_components[field]
         e_adj = grad_data_adj.field_components[field]
         e_dotted = (e_fwd * e_adj).real
-        integrand = e_dotted.isel(f=0).interp(**vol_coords)
+        integrand = e_dotted.interp(**vol_coords)
         return d_vol * jnp.sum(integrand.values)
 
     # pylint:disable=too-many-locals
@@ -287,7 +287,7 @@ class JaxCustomMedium(CustomMedium, JaxObject):
             # interpolate into the forward and adjoint fields along this dimension and dot them
             e_fwd = grad_data_fwd.field_components[field_name]
             e_adj = grad_data_adj.field_components[field_name]
-            e_dotted = (e_fwd * e_adj).isel(f=0, **isel_coords).interp(**interp_coords)
+            e_dotted = (e_fwd * e_adj).isel(**isel_coords).interp(**interp_coords)
 
             # compute the size of the user-supplied medium along each dimension.
             grid = grids[eps_field_name]
@@ -304,7 +304,8 @@ class JaxCustomMedium(CustomMedium, JaxObject):
 
             # multiply volume element into gradient and reshape to expected vjp_shape
             vjp_shape = tuple(len(coord) for _, coord in coords.items())
-            vjp_values = (np.squeeze(d_vols) * e_dotted.real.values).reshape(vjp_shape)
+            vjp_array = np.squeeze(d_vols)[..., None] * e_dotted.real
+            vjp_values = vjp_array.sum("f").values.reshape(vjp_shape)
 
             # construct a DataArray storing the vjp
             vjp_data_array = JaxDataArray(values=vjp_values, coords=coords)

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from abc import ABC
-from typing import Tuple, Union
+from typing import Tuple, Union, List
 
 import pydantic as pd
 import numpy as np
@@ -52,7 +52,7 @@ class JaxGeometry(Geometry, ABC):
         return tuple(get_center(pt_min, pt_max) for (pt_min, pt_max) in zip(rmin, rmax))
 
     def make_grad_monitors(
-        self, freq: float, name: str
+        self, freqs: List[float], name: str
     ) -> Tuple[FieldMonitor, PermittivityMonitor]:
         """Return gradient monitor associated with this object."""
         size_enlarged = tuple(s + 2 * GRAD_MONITOR_EXPANSION for s in self.bound_size)
@@ -60,14 +60,14 @@ class JaxGeometry(Geometry, ABC):
             size=size_enlarged,
             center=self.bound_center,
             fields=["Ex", "Ey", "Ez"],
-            freqs=[freq],
+            freqs=freqs,
             name=name + "_field",
         )
 
         eps_mnt = PermittivityMonitor(
             size=size_enlarged,
             center=self.bound_center,
-            freqs=[freq],
+            freqs=freqs,
             name=name + "_eps",
         )
         return field_mnt, eps_mnt
@@ -178,12 +178,12 @@ class JaxBox(JaxGeometry, Box, JaxObject):
 
                     # select the forward and adjoint E fields along this edge
                     field_name = "E" + field_cmp_dim
-                    e_fwd = grad_data_fwd.field_components[field_name].isel(f=0)
-                    e_adj = grad_data_adj.field_components[field_name].isel(f=0)
+                    e_fwd = grad_data_fwd.field_components[field_name]
+                    e_adj = grad_data_adj.field_components[field_name]
 
                     # select the permittivity data
                     eps_field_name = f"eps_{field_cmp_dim}{field_cmp_dim}"
-                    eps_data = grad_data_eps.field_components[eps_field_name].isel(f=0)
+                    eps_data = grad_data_eps.field_components[eps_field_name]
 
                     # get the permittivity values just inside and outside the edge
                     n_cells_in = 2

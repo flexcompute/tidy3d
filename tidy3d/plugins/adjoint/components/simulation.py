@@ -1,7 +1,7 @@
 """Defines a jax-compatible simulation."""
 from __future__ import annotations
 
-from typing import Tuple, Union
+from typing import Tuple, Union, List, Dict
 from collections import namedtuple
 
 import pydantic as pd
@@ -30,8 +30,16 @@ JaxInfo = namedtuple(
     "fwidth_adjoint",
 )
 
-# bandwidth of adjoint source in units of freq0 if no sources and no `fwidth_adjoint` specified
+# fwidth of a single adjoint source in units of freq0 if no sources and no `fwidth_adjoint` given
 FWIDTH_FACTOR = 1.0 / 10
+
+# for adjoint sources with central frequencies f1 and f2, the fwidth of each may not be more than
+# fwidth <= |f2-f1| * FWIDTH_SPACING_FACTOR
+# to reduce cross talk between frequencies, make this number smaller, but increase runtime
+FWIDTH_SPACING_FACTOR = 1.0 / 10
+
+# the adjoint runtime is given by RUN_TIME_ADJOINT_FACTOR / the smallest fwidth of the adj sources
+RUN_TIME_ADJOINT_FACTOR = 100.0
 
 
 @register_pytree_node_class
@@ -74,28 +82,28 @@ class JaxSimulation(Simulation, JaxObject):
         units=HERTZ,
     )
 
-    @pd.validator("output_monitors", always=True)
-    def _output_monitors_single_freq(cls, val):
-        """Assert all output monitors have just one frequency."""
-        for mnt in val:
-            if len(mnt.freqs) != 1:
-                raise AdjointError(
-                    "All output monitors must have single frequency for adjoint feature. "
-                    f"Monitor '{mnt.name}' had {len(mnt.freqs)} frequencies."
-                )
-        return val
+    # @pd.validator("output_monitors", always=True)
+    # def _output_monitors_single_freq(cls, val):
+    #     """Assert all output monitors have just one frequency."""
+    #     for mnt in val:
+    #         if len(mnt.freqs) != 1:
+    #             raise AdjointError(
+    #                 "All output monitors must have single frequency for adjoint feature. "
+    #                 f"Monitor '{mnt.name}' had {len(mnt.freqs)} frequencies."
+    #             )
+    #     return val
 
-    @pd.validator("output_monitors", always=True)
-    def _output_monitors_same_freq(cls, val):
-        """Assert all output monitors have the same frequency."""
-        freqs = [mnt.freqs[0] for mnt in val]
-        if len(set(freqs)) > 1:
-            raise AdjointError(
-                "All output monitors must have the same frequency, "
-                f"given frequencies of {[f'{f:.2e}' for f in freqs]} (Hz) "
-                f"for monitors named '{[mnt.name for mnt in val]}', respectively."
-            )
-        return val
+    # @pd.validator("output_monitors", always=True)
+    # def _output_monitors_same_freq(cls, val):
+    #     """Assert all output monitors have the same frequency."""
+    #     freqs = [mnt.freqs[0] for mnt in val]
+    #     if len(set(freqs)) > 1:
+    #         raise AdjointError(
+    #             "All output monitors must have the same frequency, "
+    #             f"given frequencies of {[f'{f:.2e}' for f in freqs]} (Hz) "
+    #             f"for monitors named '{[mnt.name for mnt in val]}', respectively."
+    #         )
+    #     return val
 
     @pd.validator("subpixel", always=True)
     def _subpixel_is_on(cls, val):
@@ -140,35 +148,69 @@ class JaxSimulation(Simulation, JaxObject):
         return val
 
     @cached_property
-    def freq_adjoint(self) -> float:
-        """Return the single adjoint frequency stripped from the output monitors."""
+    def freqs_adjoint(self) -> List[float]:
+        """Unique list of adjoint frequencies stripped from the output monitors."""
 
         if len(self.output_monitors) == 0:
             raise AdjointError("Can't get adjoint frequency as no output monitors present.")
 
-        return self.output_monitors[0].freqs[0]
+        freqs = []
+        for mnt in self.output_monitors:
+            for freq in mnt.freqs:
+                freqs.append(freq)
+
+        all_freqs = np.array(freqs).flatten()
+        all_freqs.sort()
+        all_freqs = np.unique(all_freqs)
+        return all_freqs.tolist()
 
     @cached_property
-    def _fwidth_adjoint(self) -> float:
-        """Frequency width to use for adjoint source, user-defined or the average of the sources."""
+    def _fwidths_adjoint(self) -> List[float]:
+        """List of frequency widths to use for adjoint sources."""
 
-        # if user-specified, use that
-        if self.fwidth_adjoint is not None:
-            return self.fwidth_adjoint
+        freqs = self.freqs_adjoint
 
-        # otherwise, grab from sources
-        num_sources = len(self.sources)
+        # single frequency case
+        if len(freqs) <= 1:
 
-        # if no sources, just use a constant factor times the adjoint frequency
-        if num_sources == 0:
-            return FWIDTH_FACTOR * self.freq_adjoint
+            # if user-specified, use that
+            if self.fwidth_adjoint is not None:
+                return [self.fwidth_adjoint]
 
-        # if more than one forward source, use their average
-        if num_sources > 1:
-            log.warning(f"{num_sources} sources, using their average 'fwidth' for adjoint source.")
+            # otherwise, grab from sources
+            num_sources = len(self.sources)
 
-        fwidths = [src.source_time.fwidth for src in self.sources]
-        return np.mean(fwidths)
+            # if no sources, just use a constant factor times the adjoint frequency
+            if num_sources == 0:
+                return [FWIDTH_FACTOR * freqs[0]]
+
+            # if more than one forward source, use their average
+            if num_sources > 1:
+                log.warning(
+                    f"{num_sources} sources, using their average 'fwidth' for adjoint source."
+                )
+
+            fwidths = [src.source_time.fwidth for src in self.sources]
+            return [np.mean(fwidths)]
+
+        # multiple frequency case
+        freqs = np.array(freqs)
+        dfs = np.diff(freqs).tolist()
+        dfs_fwd = np.array(dfs + [np.inf])
+        dfs_bwd = np.array([np.inf] + dfs)
+        fwidths = FWIDTH_SPACING_FACTOR * np.minimum(dfs_fwd, dfs_bwd)
+        return fwidths.tolist()
+
+    @cached_property
+    def _adjoint_freq_to_fwdith(self) -> Dict[float, float]:
+        """Maps the frequency of an adjoint source to the appropriate fwidth to use."""
+        return dict(zip(self.freqs_adjoint, self._fwidths_adjoint))
+
+    @cached_property
+    def adjoint_run_time(self) -> float:
+        """Compute the run_time for adjoint based on the fwidths of the adjoint sources."""
+        min_fwidth = min(self._fwidths_adjoint)
+        return RUN_TIME_ADJOINT_FACTOR / min_fwidth
 
     def to_simulation(self) -> Tuple[Simulation, JaxInfo]:
         """Convert :class:`.JaxSimulation` instance to :class:`.Simulation` with an info dict."""
@@ -311,7 +353,7 @@ class JaxSimulation(Simulation, JaxObject):
         grad_eps_mnts = []
         for index, structure in enumerate(self.input_structures):
             grad_mnt, grad_eps_mnt = structure.make_grad_monitors(
-                freq=self.freq_adjoint, name=f"grad_mnt_{index}"
+                freqs=self.freqs_adjoint, name=f"grad_mnt_{index}"
             )
             grad_mnts.append(grad_mnt)
             grad_eps_mnts.append(grad_eps_mnt)
