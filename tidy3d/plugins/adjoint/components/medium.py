@@ -192,7 +192,11 @@ class JaxAnisotropicMedium(AnisotropicMedium, JaxObject):
 
 @register_pytree_node_class
 class JaxCustomMedium(CustomMedium, JaxObject):
-    """A :class:`.Medium` registered with jax."""
+    """A :class:`.CustomMedium` registered with ``jax``.
+    Note: The gradient calculation assumes uniform field across the pixel.
+    Therefore, the accuracy degrades as the pixel size becomes large
+    with respect to the field variation.
+    """
 
     eps_dataset: JaxPermittivityDataset = pd.Field(
         ...,
@@ -202,13 +206,6 @@ class JaxCustomMedium(CustomMedium, JaxObject):
         "interpolated based on the data nearest to the grid location.",
         jax_field=True,
     )
-
-    # @pd.validator("interp_method", always=True)
-    # def _interp_nearest_only(cls, val):
-    #     """Make sure nearest is used."""
-    #     if val != "nearest":
-    #         raise AdjointError("JaxCustomMedium only supports 'interp_method' of 'nearest'.")
-    #     return val
 
     @pd.validator("eps_dataset", always=True)
     def _single_frequency(cls, val):
