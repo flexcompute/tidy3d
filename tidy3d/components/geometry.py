@@ -2420,8 +2420,8 @@ class PolySlab(Planar):
         is_not_too_close = np.insert((np.diff(height) > fp_eps), 0, True)
         height = height[is_not_too_close]
 
-        height = height[height > 0]
-        height = height[height < self.length_axis]
+        height = height[height > fp_eps]
+        height = height[height < self.length_axis - fp_eps]
         return height
 
     def _find_intersecting_ys_angle_vertical(  # pylint:disable=too-many-locals
