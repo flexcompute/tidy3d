@@ -5,6 +5,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.8.4] - 2023-2-13
+
+### Fixed
+- Import error when matplotlib updated to 3.7
+
 ## [1.8.3] - 2023-1-26
 
 ### Fixed
@@ -541,8 +546,9 @@ which fields are to be projected is now determined automatically based on the me
 - Job and Batch classes for better simulation handling (eventually to fully replace webapi functions).
 - A large number of small improvements and bug fixes.
 
-[Unreleased]: https://github.com/flexcompute/tidy3d/compare/v1.8.3...develop
-[1.8.2]: https://github.com/flexcompute/tidy3d/compare/v1.8.2...v1.8.3
+[Unreleased]: https://github.com/flexcompute/tidy3d/compare/v1.8.4...develop
+[1.8.4]: https://github.com/flexcompute/tidy3d/compare/v1.8.3...v1.8.4
+[1.8.3]: https://github.com/flexcompute/tidy3d/compare/v1.8.2...v1.8.3
 [1.8.2]: https://github.com/flexcompute/tidy3d/compare/v1.8.1...v1.8.2
 [1.8.1]: https://github.com/flexcompute/tidy3d/compare/v1.8.0...v1.8.1
 [1.8.0]: https://github.com/flexcompute/tidy3d/compare/v1.7.1...v1.8.0
