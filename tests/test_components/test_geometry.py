@@ -6,6 +6,7 @@ import numpy as np
 import shapely
 import matplotlib.pylab as plt
 import gdstk
+import gdspy
 
 import tidy3d as td
 from tidy3d.log import ValidationError, SetupError, Tidy3dKeyError
@@ -456,3 +457,33 @@ def test_polyslab_deprecation_classmethod(caplog, sidewall_angle, reference_plan
     )
 
     assert_log_level(caplog, log_level)
+
+
+def test_polyslab_merge():
+    """make sure polyslabs from gds get merged when they should."""
+
+    import gdspy
+
+    def make_polyslabs(gap_size):
+        """Construct two rectangular polyslabs separated by a gap."""
+        lib = gdspy.GdsLibrary()
+        cell = lib.new_cell(f"polygons_{gap_size:.2f}")
+        rect1 = gdspy.Rectangle((gap_size / 2, 0), (1, 1))
+        rect2 = gdspy.Rectangle((-1, 0), (-gap_size / 2, 1))
+        cell.add(rect1)
+        cell.add(rect2)
+        return td.PolySlab.from_gds(gds_cell=cell, gds_layer=0, axis=2, slab_bounds=(-1, 1))
+
+    polyslabs_gap = make_polyslabs(gap_size=0.3)
+    assert len(polyslabs_gap) == 2, "untouching polylsabs were merged incorrectly."
+
+    polyslabs_touching = make_polyslabs(gap_size=0)
+    assert len(polyslabs_touching) == 1, "polyslabs didnt merge correctly."
+
+
+def test_gds_cell():
+    gds_cell = gdspy.Cell("name")
+    gds_cell.add(gdspy.Rectangle((0, 0), (1, 1)))
+    td.PolySlab.from_gds(gds_cell=gds_cell, axis=2, slab_bounds=(-1, 1), gds_layer=0)
+    with pytest.raises(Tidy3dKeyError):
+        td.PolySlab.from_gds(gds_cell=gds_cell, axis=2, slab_bounds=(-1, 1), gds_layer=1)
