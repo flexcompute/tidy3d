@@ -53,7 +53,8 @@ class SimulationData(Tidy3dBaseModel):
     data: Tuple[annotate_type(MonitorDataType), ...] = pd.Field(
         ...,
         title="Monitor Data",
-        description="Mapping of monitor name to :class:`.MonitorData` instance.",
+        description="List of :class:`.MonitorData` instances "
+        "associated with the monitors of the original :class:`.Simulation`.",
     )
 
     log: str = pd.Field(
