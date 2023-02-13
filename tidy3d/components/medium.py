@@ -632,7 +632,7 @@ class CustomMedium(AbstractMedium):
                 # get coordinates of the bondaries halfway between user-supplied data
                 coord_bounds = (coords[1:] + coords[:1]) / 2.0
 
-                # filter out boundaries that lie outside geometry bounds
+                # res-set coord boundaries that lie outside geometry bounds to the boundary (0 vol.)
                 coord_bounds[coord_bounds <= pt_min] = pt_min
                 coord_bounds[coord_bounds >= pt_max] = pt_max
 
