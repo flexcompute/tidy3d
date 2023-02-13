@@ -1,5 +1,6 @@
 # pylint:disable=too-many-lines, too-many-arguments
 """Defines spatial extent of objects."""
+from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from typing import List, Tuple, Union, Any, Callable
@@ -1983,7 +1984,7 @@ class PolySlab(Planar):
         dilation: float = 0.0,
         sidewall_angle: float = 0,
         **kwargs,
-    ) -> List["PolySlab"]:
+    ) -> List[PolySlab]:
         """Import :class:`PolySlab` from a ``gdstk.Cell``.
 
         Parameters
