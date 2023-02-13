@@ -1,6 +1,8 @@
 # core and tests
 
 -r core.txt
+-r gdstk.txt
+-r gdspy.txt
 
 # required for development
 black==22.3.0
@@ -8,6 +10,5 @@ pylint
 tox
 pytest
 pytest-timeout
-gdstk
 memory_profiler
 dill

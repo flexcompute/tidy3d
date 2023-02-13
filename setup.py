@@ -26,6 +26,8 @@ def read_requirements(req_file: str):
 basic_required = read_requirements("requirements/basic.txt")
 web_required = read_requirements("requirements/web.txt")
 jax_required = read_requirements("requirements/jax.txt")
+gdstk_required = read_requirements("requirements/gdstk.txt")
+gdspy_required = read_requirements("requirements/gdspy.txt")
 core_required = read_requirements("requirements/core.txt")
 core_required += basic_required + web_required
 dev_required = read_requirements("requirements/dev.txt")
@@ -53,6 +55,8 @@ setuptools.setup(
     extras_require={
         "dev": dev_required,
         "jax": jax_required,
+        "gdspy": gdspy_required,
+        "gdstk": gdstk_required,
     },
     entry_points={
         "console_scripts": [

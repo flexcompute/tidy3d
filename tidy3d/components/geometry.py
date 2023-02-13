@@ -1985,12 +1985,12 @@ class PolySlab(Planar):
         sidewall_angle: float = 0,
         **kwargs,
     ) -> List[PolySlab]:
-        """Import :class:`PolySlab` from a ``gdstk.Cell``.
+        """Import :class:`PolySlab` from a ``gdstk.Cell`` or a ``gdspy.Cell``.
 
         Parameters
         ----------
-        gds_cell : gdstk.Cell
-            ``gdstk.Cell`` containing 2D geometric data.
+        gds_cell : Union[gdstk.Cell, gdspy.Cell]
+            ``gdstk.Cell`` or ``gdspy.Cell`` containing 2D geometric data.
         axis : int
             Integer index into the polygon's slab axis. (0,1,2) -> (x,y,z).
         slab_bounds: Tuple[float, float]
@@ -2056,19 +2056,80 @@ class PolySlab(Planar):
                 )
         return reference_plane
 
-    @staticmethod
+    @classmethod
     def _load_gds_vertices(
+        cls,
         gds_cell,
         gds_layer: int,
         gds_dtype: int = None,
         gds_scale: pydantic.PositiveFloat = 1.0,
     ) -> List[Vertices]:
-        """Import :class:`PolySlab` from a ``gdstk.Cell``.
+        """Import :class:`PolySlab` from a ``gdstk.Cell`` or a ``gdspy.Cell``.
+
+        Parameters
+        ----------
+        gds_cell : Union[gdstk.Cell, gdspy.Cell]
+            ``gdstk.Cell`` or ``gdspy.Cell`` containing 2D geometric data.
+        gds_layer : int
+            Layer index in the ``gds_cell``.
+        gds_dtype : int = None
+            Data-type index in the ``gds_cell``.
+            If ``None``, imports all data for this layer into the returned list.
+        gds_scale : float = 1.0
+            Length scale used in GDS file in units of MICROMETER.
+            For example, if gds file uses nanometers, set ``gds_scale=1e-3``.
+            Must be positive.
+
+        Returns
+        -------
+        List[Vertices]
+            List of :class:`.Vertices`
+        """
+
+        # switch the GDS cell loader function based on the class name string
+        # TODO: make this more robust in future releases
+        gds_cell_class_name = str(gds_cell.__class__)
+
+        if "gdstk" in gds_cell_class_name:
+            gds_loader_fn = cls._load_gds_vertices_gdstk
+
+        elif "gdspy" in gds_cell_class_name:
+            gds_loader_fn = cls._load_gds_vertices_gdspy
+
+        else:
+            raise ValueError(
+                f"argumeent 'gds_cell' of type '{gds_cell_class_name}' "
+                "does not seem to be associated with 'gdstk' or 'gdspy' packages "
+                "and therefore can't be loaded by Tidy3D."
+            )
+
+        all_vertices = gds_loader_fn(
+            gds_cell=gds_cell, gds_layer=gds_layer, gds_dtype=gds_dtype, gds_scale=gds_scale
+        )
+
+        # convert vertices into polyslabs
+        polygons = (Polygon(vertices) for vertices in all_vertices)
+        polys_union = functools.reduce(lambda poly1, poly2: poly1.union(poly2), polygons)
+
+        if isinstance(polys_union, Polygon):
+            all_vertices = [PolySlab.strip_coords(polys_union)[0]]
+        elif isinstance(polys_union, MultiPolygon):
+            all_vertices = [PolySlab.strip_coords(polygon)[0] for polygon in polys_union.geoms]
+        return all_vertices
+
+    @staticmethod
+    def _load_gds_vertices_gdstk(
+        gds_cell,
+        gds_layer: int,
+        gds_dtype: int = None,
+        gds_scale: pydantic.PositiveFloat = 1.0,
+    ) -> List[Vertices]:
+        """Load :class:`PolySlab` vertices from a ``gdstk.Cell``.
 
         Parameters
         ----------
         gds_cell : gdstk.Cell
-            ``gdstk.Cell`` containing 2D geometric data.
+            ``gdstk.Cell`` or ``gdspy.Cell`` containing 2D geometric data.
         gds_layer : int
             Layer index in the ``gds_cell``.
         gds_dtype : int = None
@@ -2106,14 +2167,55 @@ class PolySlab(Planar):
                 f"with specified gds_dtype={gds_dtype}."
             )
 
-        # convert vertices into polyslabs
-        polygons = (Polygon(vertices) for vertices in all_vertices)
-        polys_union = functools.reduce(lambda poly1, poly2: poly1.union(poly2), polygons)
+        return all_vertices
 
-        if isinstance(polys_union, Polygon):
-            all_vertices = [PolySlab.strip_coords(polys_union)[0]]
-        elif isinstance(polys_union, MultiPolygon):
-            all_vertices = [PolySlab.strip_coords(polygon)[0] for polygon in polys_union.geoms]
+    @classmethod
+    def _load_gds_vertices_gdspy(  # pylint:disable=too-many-arguments, too-many-locals
+        cls,
+        gds_cell,
+        gds_layer: int,
+        gds_dtype: int = None,
+        gds_scale: pydantic.PositiveFloat = 1.0,
+    ) -> List["PolySlab"]:
+        """Load :class:`PolySlab` vertices from a ``gdspy.Cell``.
+
+        Parameters
+        ----------
+        gds_cell :  gdspy.Cell
+            ``gdspy.Cell`` containing 2D geometric data.
+        gds_layer : int
+            Layer index in the ``gds_cell``.
+        gds_dtype : int = None
+            Data-type index in the ``gds_cell``.
+            If ``None``, imports all data for this layer into the returned list.
+        gds_scale : float = 1.0
+            Length scale used in GDS file in units of MICROMETER.
+            For example, if gds file uses nanometers, set ``gds_scale=1e-3``.
+            Must be positive.
+
+        Returns
+        -------
+        List[Vertices]
+            List of :class:`.Vertices`
+        """
+
+        # load the polygon vertices
+        vert_dict = gds_cell.get_polygons(by_spec=True)
+        all_vertices = []
+        for (gds_layer_file, gds_dtype_file), vertices in vert_dict.items():
+            if gds_layer_file == gds_layer and (gds_dtype is None or gds_dtype == gds_dtype_file):
+                all_vertices.extend(iter(vertices))
+        # make sure something got loaded, otherwise error
+        if not all_vertices:
+            raise Tidy3dKeyError(
+                f"Couldn't load gds_cell, no vertices found at gds_layer={gds_layer} "
+                f"with specified gds_dtype={gds_dtype}."
+            )
+
+        # apply scaling and convert vertices into polyslabs
+        all_vertices = [vertices * gds_scale for vertices in all_vertices]
+        all_vertices = [vertices.tolist() for vertices in all_vertices]
+
         return all_vertices
 
     @cached_property
