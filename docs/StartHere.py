@@ -2,9 +2,9 @@
 # coding: utf-8
 
 # # Start here
-# 
+#
 # Run this notebook in your browser using [Binder](https://mybinder.org/v2/gh/flexcompute-readthedocs/tidy3d-docs/readthedocs?labpath=docs%2Fsource%2Fnotebooks%2FStartHere.ipynb).
-# 
+#
 # This is a basic Tidy3D script showing the FDTD simulation of a delectric cube in the presence of a point dipole.
 
 import numpy as np
@@ -25,43 +25,44 @@ run_time = 12.0 / fwidth
 
 # create structure
 dielectric = td.Medium.from_nk(n=2, k=0, freq=freq0)
-square = td.Structure(
-    geometry=td.Box(center=(0, 0, 0), size=(1.5, 1.5, 1.5)),
-    medium=dielectric)
+square = td.Structure(geometry=td.Box(center=(0, 0, 0), size=(1.5, 1.5, 1.5)), medium=dielectric)
 
 # create source
 source = td.UniformCurrentSource(
     center=(-1.5, 0, 0),
     size=(0, 0.4, 0.4),
-    source_time = td.GaussianPulse(
-        freq0=freq0,
-        fwidth=fwidth),
-    polarization='Ey')
+    source_time=td.GaussianPulse(freq0=freq0, fwidth=fwidth),
+    polarization="Ey",
+)
 
 # create monitor
 monitor = td.FieldMonitor(
-    fields=['Ex', 'Ey', 'Hz'],
+    fields=["Ex", "Ey", "Hz"],
     center=(0, 0, 0),
     size=(td.inf, td.inf, 0),
     freqs=[freq0],
-    name='fields_on_plane')
+    name="fields_on_plane",
+)
 
 # Initialize simulation
-sim = td.Simulation(size=sim_size,
-    grid_spec = td.GridSpec.auto(min_steps_per_wvl=grid_cells_per_wvl),
+sim = td.Simulation(
+    size=sim_size,
+    grid_spec=td.GridSpec.auto(min_steps_per_wvl=grid_cells_per_wvl),
     structures=[square],
     sources=[source],
     monitors=[monitor],
     run_time=run_time,
-    boundary_spec=td.BoundarySpec.all_sides(boundary=td.PML())
+    boundary_spec=td.BoundarySpec.all_sides(boundary=td.PML()),
 )
 
 
-print(f'simulation grid is shaped {sim.grid.num_cells} for {int(np.prod(sim.grid.num_cells)/1e6)} million cells.')
+print(
+    f"simulation grid is shaped {sim.grid.num_cells} for {int(np.prod(sim.grid.num_cells)/1e6)} million cells."
+)
 
 
 # run the simulation, download the data.
-data = web.run(sim, task_name='quickstart', path='data/data.hdf5')
+data = web.run(sim, task_name="quickstart", path="data/data.hdf5")
 
 
 # see the log
@@ -69,9 +70,5 @@ print(data.log)
 
 
 # plot the fields stored in the monitor
-ax = data.plot_field('fields_on_plane', 'Ey', z=0)
-_ = ax.set_title('Ey(x,y)')
-
-
-
-
+ax = data.plot_field("fields_on_plane", "Ey", z=0)
+_ = ax.set_title("Ey(x,y)")

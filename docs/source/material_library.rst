@@ -430,19 +430,22 @@ Gold ("Au")
 .. table::
    :widths: auto
 
-   =================================== ========================== ============= =============================================================================================
-   Variant                             Valid for                  Model Info    Reference                                                                                    
-   =================================== ========================== ============= =============================================================================================
-   ``'JohnsonChristy1972'``            0.19 - 1.94 :math:`{\mu}m` 6-pole, lossy [1] `[data] <https://refractiveindex.info/data_csv.php?datafile=data/main/Au/Johnson.yml>`__ 
-   ``'Olmon2012crystal'``              0.3 - 24.93 :math:`{\mu}m` 3-pole, lossy [2] `[data] <https://refractiveindex.info/data_csv.php?datafile=data/main/Au/Olmon-sc.yml>`__
-   ``'Olmon2012evaporated'`` (default) 0.3 - 24.93 :math:`{\mu}m` 3-pole, lossy [2] `[data] <https://refractiveindex.info/data_csv.php?datafile=data/main/Au/Olmon-ev.yml>`__
-   ``'Olmon2012stripped'``             0.3 - 24.93 :math:`{\mu}m` 3-pole, lossy [2] `[data] <https://refractiveindex.info/data_csv.php?datafile=data/main/Au/Olmon-ts.yml>`__
-   ``'RakicLorentzDrude1998'``         0.25 - 6.2 :math:`{\mu}m`  7-pole, lossy [3] `[data] <https://refractiveindex.info/data_csv.php?datafile=data/main/Au/Rakic-LD.yml>`__
-   =================================== ========================== ============= =============================================================================================
+   =================================== =========================== ============= =============================================================================================
+   Variant                             Valid for                   Model Info    Reference                                                                                    
+   =================================== =========================== ============= =============================================================================================
+   ``'JohnsonChristy1972'``            0.19 - 1.94 :math:`{\mu}m`  6-pole, lossy [1] `[data] <https://refractiveindex.info/data_csv.php?datafile=data/main/Au/Johnson.yml>`__ 
+   ``'Olmon2012Drude'``                1.24 - 24.93 :math:`{\mu}m` 2-pole, lossy [2] `[data] <https://refractiveindex.info/data_csv.php?datafile=data/main/Au/Olmon-sc.yml>`__
+   ``'Olmon2012crystal'``              0.3 - 24.93 :math:`{\mu}m`  3-pole, lossy [2] `[data] <https://refractiveindex.info/data_csv.php?datafile=data/main/Au/Olmon-sc.yml>`__
+   ``'Olmon2012evaporated'`` (default) 0.3 - 24.93 :math:`{\mu}m`  3-pole, lossy [2] `[data] <https://refractiveindex.info/data_csv.php?datafile=data/main/Au/Olmon-ev.yml>`__
+   ``'Olmon2012stripped'``             0.3 - 24.93 :math:`{\mu}m`  3-pole, lossy [2] `[data] <https://refractiveindex.info/data_csv.php?datafile=data/main/Au/Olmon-ts.yml>`__
+   ``'RakicLorentzDrude1998'``         0.25 - 6.2 :math:`{\mu}m`   7-pole, lossy [3] `[data] <https://refractiveindex.info/data_csv.php?datafile=data/main/Au/Rakic-LD.yml>`__
+   =================================== =========================== ============= =============================================================================================
 
 Examples:
 
 >>> medium = material_library['Au']['JohnsonChristy1972']
+
+>>> medium = material_library['Au']['Olmon2012Drude']
 
 >>> medium = material_library['Au']['Olmon2012crystal']
 
@@ -984,6 +987,7 @@ Silver ("Ag")
    ``'JohnsonChristy1972'``    0.19 - 1.94 :math:`{\mu}m` 3-pole, lossy [1] `[data] <https://refractiveindex.info/data_csv.php?datafile=data/main/Ag/Johnson.yml>`__ 
    ``'Rakic1998BB'`` (default) 0.25 - 12.4 :math:`{\mu}m` 6-pole, lossy [2] `[data] <https://refractiveindex.info/data_csv.php?datafile=data/main/Ag/Rakic-BB.yml>`__
    ``'RakicLorentzDrude1998'`` 0.25 - 12.4 :math:`{\mu}m` 8-pole, lossy [2] `[data] <https://refractiveindex.info/data_csv.php?datafile=data/main/Ag/Rakic-LD.yml>`__
+   ``'Yang2015Drude'``         0.19 - 1.94 :math:`{\mu}m` 2-pole, lossy [3] `[data] <https://refractiveindex.info/database/data/main/Ag/Yang.yml>`__                 
    =========================== ========================== ============= =============================================================================================
 
 Examples:
@@ -994,10 +998,13 @@ Examples:
 
 >>> medium = material_library['Ag']['RakicLorentzDrude1998']
 
+>>> medium = material_library['Ag']['Yang2015Drude']
+
 References:
 
 #. \P. B. Johnson and R. W. Christy. Optical constants of the noble metals, Phys. Rev. B 6, 4370-4379 (1972) `[doi] <https://doi.org/10.1103/PhysRevB.6.4370>`__
 #. \A. D. Rakic, A. B. Djurisic, J. M. Elazar, and M. L. Majewski. Optical properties of metallic films for vertical-cavity optoelectronic devices, Appl. Opt. 37, 5271-5283 (1998) `[doi] <https://doi.org/10.1364/AO.37.005271>`__
+#. \H. U. Yang, J. D'Archangel, M. L. Sundheimer, E. Tucker, G. D. Boreman, M. B. Raschke. Optical dielectric function of silver, Phys. Rev. B 91, 235137 (2015) `[doi] <https://journals.aps.org/prb/abstract/10.1103/PhysRevB.91.235137>`__
 
 Tantalum Pentoxide ("Ta2O5")
 ============================

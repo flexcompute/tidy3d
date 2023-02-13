@@ -159,6 +159,9 @@ Source Time Dependence
 Monitors
 ========
 
+Monitor Types
+-------------
+
 .. autosummary::
    :toctree: _autosummary/
 
@@ -173,6 +176,14 @@ Monitors
    FieldProjectionAngleMonitor
    FieldProjectionKSpaceMonitor
    DiffractionMonitor
+
+Apodization Specification
+-------------------------
+
+.. autosummary::
+   :toctree: _autosummary/
+
+   ApodizationSpec
 
 
 Mode Specifications

@@ -1,6 +1,9 @@
 Examples
 ========
 
+Introduction
+------------
+
 .. toctree::
     :maxdepth: 1
 
@@ -11,29 +14,81 @@ Examples
 Tutorials
 ---------
 
+Advanced Structure Definition
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
 .. toctree::
     :maxdepth: 1
 
+    notebooks/GDS_import
+    notebooks/Dispersion
+    notebooks/Fitting
+    notebooks/Self_intersecting_polyslab
+
+Grid and Boundaries
+~~~~~~~~~~~~~~~~~~~
+
+.. toctree::
+    :maxdepth: 1
+
+    notebooks/BoundaryConditions
     notebooks/AutoGrid
-    notebooks/VizSimulation
-    notebooks/WebAPI
-    notebooks/VizData
+
+Mode Solver
+~~~~~~~~~~~
+
+.. toctree::
+    :maxdepth: 1
+
     notebooks/ModeSolver
     notebooks/Modal_sources_monitors
     notebooks/Modes_bent_angled
+
+Web API
+~~~~~~~
+
+.. toctree::
+    :maxdepth: 1
+
+    notebooks/WebAPI
+    notebooks/ParameterScan
+
+Visualization
+~~~~~~~~~~~~~
+
+.. toctree::
+    :maxdepth: 1
+
+    notebooks/VizSimulation
+    notebooks/VizData
+
+Custom Components
+~~~~~~~~~~~~~~~~~
+
+.. toctree::
+    :maxdepth: 1
+
     notebooks/CustomFieldSource
     notebooks/CustomMediumTutorial
-    notebooks/GDS_import
-    notebooks/ParameterScan
-    notebooks/Dispersion
-    notebooks/Fitting
-    notebooks/FieldProjections
-    notebooks/SMatrix
-    notebooks/BoundaryConditions
-    notebooks/Self_intersecting_polyslab
+
+Adjoint Plugin
+~~~~~~~~~~~~~~
+
+.. toctree::
+    :maxdepth: 1
+
     notebooks/AdjointPlugin_1_Intro
     notebooks/AdjointPlugin_2_GradientChecking
     notebooks/AdjointPlugin_3_InverseDesign
+
+Pre and Post Processing
+~~~~~~~~~~~~~~~~~~~~~~~
+
+.. toctree::
+    :maxdepth: 1
+
+    notebooks/FieldProjections
+    notebooks/SMatrix
 
 Case studies
 ------------

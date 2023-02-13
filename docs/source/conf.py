@@ -38,6 +38,7 @@ def find_version(*file_paths):
 # -- Generate Material Library documentation ---------------------------------
 
 import generate_doc
+
 generate_doc.main()
 
 # -- Project information -----------------------------------------------------
@@ -70,7 +71,7 @@ extensions = [
     "IPython.sphinxext.ipython_console_highlighting",
     "sphinx_copybutton",
     "m2r2",
-    "sphinx_sitemap"
+    "sphinx_sitemap",
 ]
 
 source_suffix = [".rst", ".md"]
@@ -82,8 +83,8 @@ autodoc_inherit_docstrings = True
 
 # autodoc_pydantic_model_show_json = True
 # autodoc_pydantic_settings_show_json = False
-autodoc_pydantic_model_signature_prefix = 'class'
-autodoc_pydantic_field_signature_prefix = 'attribute'
+autodoc_pydantic_model_signature_prefix = "class"
+autodoc_pydantic_field_signature_prefix = "attribute"
 autodoc_pydantic_model_show_config_member = False
 autodoc_pydantic_model_show_config_summary = False
 autodoc_pydantic_model_show_validator_summary = False
@@ -172,18 +173,18 @@ html_css_files = ["css/custom.css"]
 # sphinx_github_changelog_token = "..."
 
 # def setup(app):
-    # app.add_css_file("css/custom.css")
-    
+# app.add_css_file("css/custom.css")
+
 
 # -- Latex fixes? ------------------------------------------
 
 # latex_elements = {
 #     'preamble': r'''\renewcommand{\hyperref}[2][]{#2}'''
 # }
-latex_engine = 'xelatex'
+latex_engine = "xelatex"
 
 # for sphinx-sitemap
-html_baseurl = 'https://docs.flexcompute.com/projects/tidy3d/en/latest'
+html_baseurl = "https://docs.flexcompute.com/projects/tidy3d/en/latest"
 
 
 # if pandoc isnt working, uncomment below but make sure to not commit the bin/ library
