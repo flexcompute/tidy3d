@@ -14,6 +14,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - Saving and loading of `.hdf5` files is made orders of magnitude faster due to an internal refactor.
+## [1.8.4] - 2023-2-13
+
+### Fixed
+- Import error when matplotlib updated to 3.7
 
 ## [1.8.3] - 2023-1-26
 
@@ -553,6 +557,8 @@ which fields are to be projected is now determined automatically based on the me
 
 [Unreleased]: https://github.com/flexcompute/tidy3d/compare/v1.9.0rc1...develop
 [1.9.0rc1]: https://github.com/flexcompute/tidy3d/compare/v1.8.3...v1.9.0rc1
+[Unreleased]: https://github.com/flexcompute/tidy3d/compare/v1.8.4...develop
+[1.8.4]: https://github.com/flexcompute/tidy3d/compare/v1.8.3...v1.8.4
 [1.8.3]: https://github.com/flexcompute/tidy3d/compare/v1.8.2...v1.8.3
 [1.8.2]: https://github.com/flexcompute/tidy3d/compare/v1.8.1...v1.8.2
 [1.8.1]: https://github.com/flexcompute/tidy3d/compare/v1.8.0...v1.8.1
