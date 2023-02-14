@@ -85,7 +85,6 @@ Non-Dispersive Medium
    :toctree: _autosummary/
 
    Medium
-   AnisotropicMedium
    PECMedium
    CustomMedium
 
@@ -100,6 +99,15 @@ Dispersive Mediums
    Sellmeier
    Drude
    Debye
+
+General Mediums (can be both dispersive and non-dispersive)
+-----------------------------------------------------------
+
+.. autosummary::
+   :toctree: _autosummary/
+
+   AnisotropicMedium
+   .. Medium2D
 
 
 Material Library
