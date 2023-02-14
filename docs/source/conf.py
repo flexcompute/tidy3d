@@ -75,6 +75,8 @@ extensions = [
 
 source_suffix = [".rst", ".md"]
 
+autodoc_default_options = {"inherited-members": True, "show-inheritance":True}
+
 autodoc_inherit_docstrings = True
 # autosummary_generate = True
 
