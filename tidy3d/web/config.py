@@ -86,4 +86,4 @@ DEFAULT_CONFIG_KEY = "prod"
 env_key = os.environ.get("TIDY3D_ENV")
 config_key = env_key if env_key is not None else DEFAULT_CONFIG_KEY
 DEFAULT_CONFIG = WEB_CONFIGS[config_key]
-log.info(f"use cert file for web request: {DEFAULT_CONFIG.ssl_verify}")
+log.debug(f"use cert file for web request: {DEFAULT_CONFIG.ssl_verify}")
