@@ -181,6 +181,10 @@ ObsGridArray = Union[Tuple[float, ...], ArrayLike[float, 1]]
 Ax = Axes
 PlotVal = Literal["real", "imag", "abs"]
 
+""" mode solver """
+
+ModeSolverType = Literal["tensorial", "diagonal"]
+
 """ mode tracking """
 
 TrackFreq = Literal["central", "lowest", "highest"]
