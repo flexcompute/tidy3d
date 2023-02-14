@@ -48,6 +48,7 @@ setuptools.setup(
         "Operating System :: OS Independent",
     ],
     packages=setuptools.find_packages(),
+    include_package_data=True,
     python_requires=">=3.7",
     install_requires=core_required,
     extras_require={
