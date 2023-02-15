@@ -22,6 +22,34 @@ INDENT = 4
 JSON_TAG = "JSON_STRING"
 
 
+def cache(prop):
+    """Decorates a property to cache the first computed value and return it on subsequent calls."""
+
+    # note, we could also just use `prop` as dict key, but hashing property might be slow
+    prop_name = prop.__name__
+
+    @wraps(prop)
+    def cached_property_getter(self):
+        """The new property method to be returned by decorator."""
+
+        stored_value = self._cached_properties.get(prop_name)  # pylint:disable=protected-access
+
+        if stored_value is not None:
+            return stored_value
+
+        computed_value = prop(self)
+        self._cached_properties[prop_name] = computed_value  # pylint:disable=protected-access
+        return computed_value
+
+    return cached_property_getter
+
+
+def cached_property(cached_property_getter):
+    """Shortcut for property(cache()) of a getter."""
+
+    return property(cache(cached_property_getter))
+
+
 class Tidy3dBaseModel(pydantic.BaseModel):
     """Base pydantic model that all Tidy3d components inherit from.
     Defines configuration for handling data structures
@@ -489,7 +517,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         """define >= for getting unique indices based on hash."""
         return hash(self) >= hash(other)
 
-    @property
+    @cached_property
     def _json_string(self) -> str:
         """Returns string representation of a :class:`Tidy3dBaseModel`.
 
@@ -509,9 +537,10 @@ class Tidy3dBaseModel(pydantic.BaseModel):
 
         json_string = self.json(indent=INDENT, exclude_unset=False)
         json_string = make_json_compatible(json_string)
-        json_dict = json.loads(json_string)
+        return json_string
+        # json_dict = json.loads(json_string)
 
-        return json.dumps(json_dict)
+        # return json.dumps(json_dict)
 
     @classmethod
     def add_type_field(cls) -> None:
@@ -596,31 +625,3 @@ class Tidy3dBaseModel(pydantic.BaseModel):
 
         doc += "\n"
         cls.__doc__ = doc
-
-
-def cache(prop):
-    """Decorates a property to cache the first computed value and return it on subsequent calls."""
-
-    # note, we could also just use `prop` as dict key, but hashing property might be slow
-    prop_name = prop.__name__
-
-    @wraps(prop)
-    def cached_property_getter(self):
-        """The new property method to be returned by decorator."""
-
-        stored_value = self._cached_properties.get(prop_name)  # pylint:disable=protected-access
-
-        if stored_value is not None:
-            return stored_value
-
-        computed_value = prop(self)
-        self._cached_properties[prop_name] = computed_value  # pylint:disable=protected-access
-        return computed_value
-
-    return cached_property_getter
-
-
-def cached_property(cached_property_getter):
-    """Shortcut for property(cache()) of a getter."""
-
-    return property(cache(cached_property_getter))
