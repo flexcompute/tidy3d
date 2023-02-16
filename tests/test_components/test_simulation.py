@@ -323,6 +323,42 @@ def test_validate_plane_wave_boundaries(caplog):
     assert_log_level(caplog, 30)
 
 
+def test_validate_zero_dim_boundaries(caplog):
+
+    # zero-dim simulation with an absorbing boundary in that direction should warn
+    src = td.PlaneWave(
+        source_time=td.GaussianPulse(freq0=2.5e14, fwidth=1e13),
+        center=(0, 0, 0),
+        size=(td.inf, 0, td.inf),
+        direction="+",
+        pol_angle=0.0,
+    )
+
+    td.Simulation(
+        size=(1, 1, 0),
+        run_time=1e-12,
+        sources=[src],
+        boundary_spec=td.BoundarySpec(
+            x=td.Boundary.periodic(),
+            y=td.Boundary.periodic(),
+            z=td.Boundary.pml(),
+        ),
+    )
+    assert_log_level(caplog, 30)
+
+    # zero-dim simulation with an absorbing boundary any other direction should not warn
+    td.Simulation(
+        size=(1, 1, 0),
+        run_time=1e-12,
+        sources=[src],
+        boundary_spec=td.BoundarySpec(
+            x=td.Boundary.pml(),
+            y=td.Boundary.stable_pml(),
+            z=td.Boundary.pec(),
+        ),
+    )
+
+
 def test_validate_components_none():
 
     assert SIM._structures_not_at_edges(val=None, values=SIM.dict()) is None
