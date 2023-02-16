@@ -1,4 +1,6 @@
 """higher level wrappers for webapi functions for individual (Job) and batch (Batch) tasks."""
+from __future__ import annotations
+
 import os
 from abc import ABC
 from typing import Dict, Tuple
@@ -46,6 +48,10 @@ class Job(WebContainer):
         "``{'id', 'status', 'name', 'workUnit', 'solverVersion'}``.",
     )
 
+    verbose: bool = pd.Field(
+        True, title="Verbose", description="Whether to print info messages and progressbars."
+    )
+
     task_id: TaskId = pd.Field(
         None,
         title="Task Id",
@@ -81,6 +87,7 @@ class Job(WebContainer):
             task_name=values.get("task_name"),
             folder_name=values.get("folder_name"),
             callback_url=values.get("callback_url"),
+            verbose=values.get("verbose"),
         )
         return task_id
 
@@ -127,7 +134,7 @@ class Job(WebContainer):
         To load the output of completed simulation into :class:`.SimulationData`objets,
         call :meth:`Job.load`.
         """
-        web.monitor(self.task_id)
+        web.monitor(self.task_id, verbose=self.verbose)
 
     def download(self, path: str = DEFAULT_DATA_PATH) -> None:
         """Download results of simulation.
@@ -141,7 +148,7 @@ class Job(WebContainer):
         ----
         To load the data into :class:`.SimulationData`objets, can call :meth:`Job.load`.
         """
-        web.download(task_id=self.task_id, path=path)
+        web.download(task_id=self.task_id, path=path, verbose=self.verbose)
 
     def load(self, path: str = DEFAULT_DATA_PATH) -> SimulationData:
         """Download results from simulation (if not already) and load them into ``SimulationData``
@@ -157,7 +164,7 @@ class Job(WebContainer):
         :class:`.SimulationData`
             Object containing data about simulation.
         """
-        return web.load(task_id=self.task_id, path=path)
+        return web.load(task_id=self.task_id, path=path, verbose=self.verbose)
 
     def delete(self):
         """Delete server-side data associated with :class:`Job`."""
@@ -177,6 +184,10 @@ class BatchData(Tidy3dBaseModel):
         ..., title="Task IDs", description="Mapping of task_name to task_id for each task in batch."
     )
 
+    verbose: bool = pd.Field(
+        True, title="Verbose", description="Whether to print info messages and progressbars."
+    )
+
     def load_sim_data(self, task_name: str) -> SimulationData:
         """Load a :class:`.SimulationData` from file by task name."""
         task_data_path = self.task_paths[task_name]
@@ -185,6 +196,7 @@ class BatchData(Tidy3dBaseModel):
             task_id=task_id,
             path=task_data_path,
             replace_existing=False,
+            verbose=self.verbose,
         )
 
     def items(self) -> Tuple[TaskName, SimulationData]:
@@ -197,7 +209,7 @@ class BatchData(Tidy3dBaseModel):
         return self.load_sim_data(task_name)
 
     @classmethod
-    def load(cls, path_dir: str = DEFAULT_DATA_DIR) -> "BatchData":
+    def load(cls, path_dir: str = DEFAULT_DATA_DIR) -> BatchData:
         """Load :class:`Batch` from file, download results, and load them.
 
         Parameters
@@ -230,6 +242,10 @@ class Batch(WebContainer):
         "default",
         title="Folder Name",
         description="Name of folder to store member of each batch on web UI.",
+    )
+
+    verbose: bool = pd.Field(
+        True, title="Verbose", description="Whether to print info messages and progressbars."
     )
 
     jobs: Dict[TaskName, Job] = pd.Field(
@@ -288,10 +304,15 @@ class Batch(WebContainer):
         if val is not None:
             return val
 
+        verbose = bool(values.get("verbose"))
+
         jobs = {}
         for task_name, simulation in values.get("simulations").items():
             job = Job(
-                simulation=simulation, task_name=task_name, folder_name=values.get("folder_name")
+                simulation=simulation,
+                task_name=task_name,
+                folder_name=values.get("folder_name"),
+                verbose=verbose,
             )
             jobs[task_name] = job
         return jobs
@@ -357,39 +378,47 @@ class Batch(WebContainer):
         ]
         end_statuses = ("success", "error", "diverged", "deleted", "draft")
 
-        console = Console()
-        console.log("Started working on Batch.")
+        if self.verbose:
+            console = Console()
+            console.log("Started working on Batch.")
 
-        with Progress(console=console) as progress:
+            with Progress(console=console) as progress:
 
-            # create progressbars
-            pbar_tasks = {}
-            for task_name, job in self.jobs.items():
-                status = job.status
-                description = pbar_description(task_name, status)
-                pbar = progress.add_task(description, total=len(run_statuses) - 1)
-                pbar_tasks[task_name] = pbar
+                # create progressbars
+                pbar_tasks = {}
+                for task_name, job in self.jobs.items():
+                    status = job.status
+                    description = pbar_description(task_name, status)
+                    pbar = progress.add_task(description, total=len(run_statuses) - 1)
+                    pbar_tasks[task_name] = pbar
 
-            while any(job.status not in end_statuses for job in self.jobs.values()):
+                while any(job.status not in end_statuses for job in self.jobs.values()):
+                    for task_name, job in self.jobs.items():
+                        pbar = pbar_tasks[task_name]
+                        status = job.status
+                        description = pbar_description(task_name, status)
+                        completed = run_statuses.index(status)
+                        progress.update(pbar, description=description, completed=completed)
+                    time.sleep(web.REFRESH_TIME)
+
+                # set all to 100% completed
                 for task_name, job in self.jobs.items():
                     pbar = pbar_tasks[task_name]
                     status = job.status
                     description = pbar_description(task_name, status)
-                    completed = run_statuses.index(status)
-                    progress.update(pbar, description=description, completed=completed)
+                    if status == "success":
+                        progress.update(
+                            pbar,
+                            description=description,
+                            completed=len(run_statuses) - 1,
+                            refresh=True,
+                        )
+
+                console.log("Batch complete.")
+
+        else:
+            while any(job.status not in end_statuses for job in self.jobs.values()):
                 time.sleep(web.REFRESH_TIME)
-
-            # set all to 100% completed
-            for task_name, job in self.jobs.items():
-                pbar = pbar_tasks[task_name]
-                status = job.status
-                description = pbar_description(task_name, status)
-                if status == "success":
-                    progress.update(
-                        pbar, description=description, completed=len(run_statuses) - 1, refresh=True
-                    )
-
-        console.log("Batch complete.")
 
     @staticmethod
     def _job_data_path(task_id: TaskId, path_dir: str = DEFAULT_DATA_DIR):
@@ -477,7 +506,7 @@ class Batch(WebContainer):
             task_paths[task_name] = self._job_data_path(task_id=job.task_id, path_dir=path_dir)
             task_ids[task_name] = self.jobs[task_name].task_id
 
-        return BatchData(task_paths=task_paths, task_ids=task_ids)
+        return BatchData(task_paths=task_paths, task_ids=task_ids, verbose=self.verbose)
 
     def delete(self):
         """Delete server-side data associated with each task in the batch."""
