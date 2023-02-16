@@ -1106,13 +1106,30 @@ def test_sim_volumetric_equivalent():
         rtol=RTOL,
     )
     # nonuniform sub/super-strate should error
-    below = td.Structure(
+    below_half = td.Structure(
         geometry=td.Box.from_bounds([-100, -td.inf, -1000], [0, td.inf, 0]),
         medium=aniso_medium,
     )
     sim = td.Simulation(
         size=(10, 10, 10),
-        structures=[below, box],
+        structures=[below_half, box],
+        sources=[src],
+        boundary_spec=td.BoundarySpec(
+            x=td.Boundary.pml(num_layers=5),
+            y=td.Boundary.pml(num_layers=5),
+            z=td.Boundary.pml(num_layers=5),
+        ),
+        grid_spec=td.GridSpec.uniform(dl=grid_dl),
+        run_time=1e-12,
+    )
+
+    with pytest.raises(SetupError):
+        _ = sim.volumetric_equivalent()
+
+    # structure overlaying the 2D material should error
+    sim = td.Simulation(
+        size=(10, 10, 10),
+        structures=[box, below],
         sources=[src],
         boundary_spec=td.BoundarySpec(
             x=td.Boundary.pml(num_layers=5),

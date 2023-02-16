@@ -717,7 +717,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         self._validate_monitor_size()
         self._validate_datasets_not_none()
         # self._validate_run_time()
-        _ = self.volumetric_equivalent()
+        _ = self._volumetric_structures
 
     def _validate_size(self) -> None:
         """Ensures the simulation is within size limits before simulation is uploaded."""
@@ -2146,8 +2146,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
             eps_array = eps_background * np.ones(x.shape, dtype=complex)
 
             # replace 2d materials with volumetric equivalents
-            vol_sim = self.volumetric_equivalent()
-            for structure in vol_sim.structures:
+            for structure in self._volumetric_structures:
                 if not points_box.intersects(structure.geometry):
                     continue
                 eps_structure = get_eps(structure=structure, frequency=freq, coords=coords)
@@ -2172,9 +2171,13 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         datasets_medium = [mat.eps_dataset for mat in self.mediums if isinstance(mat, CustomMedium)]
         return datasets_source + datasets_medium
 
-    def volumetric_equivalent(self) -> Simulation:
-        """Generate new :class:`.Simulation` wherein any 2D materials are converted to 3D
-        volumetric equivalents."""
+    @property
+    def _volumetric_structures(self) -> Tuple[Structure]:
+        """Generate a tuple of structues wherein any 2D materials are converted to 3D
+        volumetric equivalents, and placed after any regular materials."""
+
+        if not any(isinstance(medium, Medium2D) for medium in self.mediums):
+            return self.structures
 
         def get_bounds(geom: Geometry, axis: Axis) -> Tuple[float, float]:
             """Get the bounds of a geometry in the axis direction."""
@@ -2267,7 +2270,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         simulation_background = Structure(geometry=self.geometry, medium=self.medium)
         background_structures = []
         new_structures = []
-        for structure in self.structures:
+        for istruct, structure in enumerate(self.structures):
             if not isinstance(structure.medium, Medium2D):
                 # found a 3D material; keep it
                 background_structures.append(structure)
@@ -2287,9 +2290,23 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
             new_bounds = (center - dls[0] / 2, center + dls[1] / 2)
             new_geometry = set_bounds(structure.geometry, bounds=new_bounds, axis=axis)
 
+            # check if a regular medium is overlaying a 2D medium
+            media = self.intersecting_media(new_geometry, self.structures[istruct:])
+            if not all(isinstance(medium, Medium2D) for medium in media):
+                raise SetupError(
+                    "A regular medium is overlaying a 2D medium, which is currently "
+                    "not supported."
+                )
+
             new_medium = structure.medium.volumetric_equivalent(
                 axis=axis, adjacent_media=neighbors, adjacent_dls=dls
             )
             new_structures.append(structure.updated_copy(geometry=new_geometry, medium=new_medium))
 
-        return self.updated_copy(structures=background_structures + new_structures)
+        return tuple(background_structures + new_structures)
+
+    def volumetric_equivalent(self) -> Simulation:
+        """Generate new :class:`.Simulation` wherein any 2D materials are converted to 3D
+        volumetric equivalents."""
+
+        return self.updated_copy(structures=self._volumetric_structures)
