@@ -24,6 +24,7 @@ from ..test_data.test_sim_data import make_sim_data
 from tidy3d.components.data.data_array import FluxDataArray
 from tidy3d.components.data.sim_data import DATA_TYPE_MAP
 from tidy3d.components.data.monitor_data import FluxData
+from tidy3d.components.geometry import CustomSurfaceMeshGeometry
 
 # Store an example of every minor release simulation to test updater in the future
 SIM_DIR = "tests/sims"
@@ -34,6 +35,9 @@ def set_datasets_to_none(sim):
     for src in sim_dict["sources"]:
         if src["type"] == "CustomFieldSource":
             src["field_dataset"] = None
+    for structure in sim_dict["structures"]:
+        if structure["geometry"]["type"] == "CustomSurfaceMeshGeometry":
+            structure["geometry"]["mesh_dataset"] = None
     return td.Simulation.parse_obj(sim_dict)
 
 
