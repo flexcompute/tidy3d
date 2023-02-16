@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [1.9.1] - 2023-3-06
 
 ### Added
+- `TriangleMesh` class for modeling geometries specified by triangle surface meshes, with support for STL file import.
 
 ### Changed
 

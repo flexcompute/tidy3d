@@ -6,6 +6,7 @@ from .components.grid.grid_spec import GridSpec, UniformGrid, CustomGrid, AutoGr
 
 # geometry
 from .components.geometry import Box, Sphere, Cylinder, PolySlab, GeometryGroup
+from .components.geometry import TriangleMesh
 
 # medium
 from .components.medium import Medium, PoleResidue, AnisotropicMedium, PEC, PECMedium
