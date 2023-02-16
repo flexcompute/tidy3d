@@ -2120,24 +2120,25 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
 
         def make_eps_data(coords: Coords):
             """returns epsilon data on grid of points defined by coords"""
-            xs, ys, zs = coords.x, coords.y, coords.z
-            rmin = tuple(coord[0] for coord in (xs, ys, zs))
-            rmax = tuple(coord[-1] for coord in (xs, ys, zs))
-            points_box = Box.from_bounds(rmin=rmin, rmax=rmax)
-            x, y, z = np.meshgrid(xs, ys, zs, indexing="ij")
+            xs, ys, zs = np.array(coords.x), np.array(coords.y), np.array(coords.z)
             eps_background = get_eps(
                 structure=self.background_structure, frequency=freq, coords=coords
             )
-            eps_array = eps_background * np.ones(x.shape, dtype=complex)
-
+            eps_array = eps_background * np.ones((xs.size, ys.size, zs.size), dtype=complex)
             for structure in self.structures:
-                if not points_box.intersects(structure.geometry):
-                    continue
-                eps_structure = get_eps(structure=structure, frequency=freq, coords=coords)
-                is_inside = structure.geometry.inside(x, y, z)
-                eps_structure = eps_structure * np.ones_like(eps_array)
-                eps_array[np.where(is_inside)] = eps_structure[np.where(is_inside)]
-            coords = {"x": np.array(xs), "y": np.array(ys), "z": np.array(zs)}
+                # Indexing subset within the bounds of the structure
+                # pylint:disable=protected-access
+                inds_x, inds_y, inds_z = structure.geometry._inds_inside_bounds(xs, ys, zs)
+
+                # Get permittivity on meshgrid over the reduced coordinates
+                red_coords = Coords(**{"x": xs[inds_x], "y": ys[inds_y], "z": zs[inds_z]})
+                eps_structure = get_eps(structure=structure, frequency=freq, coords=red_coords)
+
+                # Update permittivity array at selected indexes within the geometry
+                is_inside = structure.geometry.inside_meshgrid(xs[inds_x], ys[inds_y], zs[inds_z])
+                eps_array[inds_x, inds_y, inds_z] = eps_structure * is_inside
+
+            coords = {"x": xs, "y": ys, "z": zs}
             return xr.DataArray(eps_array, coords=coords, dims=("x", "y", "z"))
 
         # combine all data into dictionary
