@@ -102,6 +102,27 @@ SIM_FULL = Simulation(
             ),
             medium=PoleResidue(eps_inf=1.0, poles=((6206417594288582j, (-3.311074436985222e16j)),)),
         ),
+        Structure(
+            geometry=CustomSurfaceMeshGeometry._from_vectors(
+                np.array(
+                    [
+                        [[1, 0, 0], [0, 1, 0], [0, 0, 1]],
+                        [[0, 0, 0], [0, 0, 1], [0, 1, 0]],
+                        [[0, 0, 0], [1, 0, 0], [0, 0, 1]],
+                        [[0, 0, 0], [0, 1, 0], [1, 0, 0]],
+                    ]
+                )
+                + np.array(
+                    [
+                        [[1, 1, 1], [1, 1, 1], [1, 1, 1]],
+                        [[1, 1, 1], [1, 1, 1], [1, 1, 1]],
+                        [[1, 1, 1], [1, 1, 1], [1, 1, 1]],
+                        [[1, 1, 1], [1, 1, 1], [1, 1, 1]],
+                    ]
+                )
+            ),
+            medium=td.Medium(permittivity=5),
+        ),
     ],
     sources=[
         UniformCurrentSource(

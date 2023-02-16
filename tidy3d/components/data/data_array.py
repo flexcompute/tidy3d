@@ -25,6 +25,9 @@ DIM_ATTRS = {
     "uy": {"long_name": "normalized ky"},
     "orders_x": {"long_name": "diffraction order"},
     "orders_y": {"long_name": "diffraction order"},
+    "facet_index": {"long_name": "facet index"},
+    "vertex_index": {"long_name": "vertex index"},
+    "axis": {"long_name": "axis"},
 }
 
 
@@ -125,6 +128,7 @@ class DataArray(xr.DataArray):
 
     def to_hdf5(self, fname: str, group_path: str) -> None:
         """Save an xr.DataArray to the hdf5 file with a given path to the group."""
+        # from IPython.core.debugger import Pdb; Pdb().set_trace()
         sub_group = fname.create_group(group_path)
         sub_group[DATA_ARRAY_VALUE_NAME] = self.values
         for key, val in self.coords.items():
@@ -397,6 +401,14 @@ class DiffractionDataArray(DataArray):
     _data_attrs = {"long_name": "diffraction amplitude"}
 
 
+class SurfaceMeshDataArray(DataArray):
+    """Data of a surface mesh as in the STL file format."""
+
+    __slots__ = ()
+    _dims = ("facet_index", "vertex_index", "axis")
+    _data_attrs = {"long_name": "surface mesh"}
+
+
 DATA_ARRAY_TYPES = [
     ScalarFieldDataArray,
     ScalarFieldTimeDataArray,
@@ -413,5 +425,6 @@ DATA_ARRAY_TYPES = [
     FreqDataArray,
     TimeDataArray,
     FreqModeDataArray,
+    SurfaceMeshDataArray,
 ]
 DATA_ARRAY_MAP = {data_array.__name__: data_array for data_array in DATA_ARRAY_TYPES}

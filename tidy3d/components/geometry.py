@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import List, Tuple, Union, Any, Callable
+from typing import List, Tuple, Union, Any, Callable, Optional
 from math import isclose
 import functools
 
@@ -20,6 +20,8 @@ from .viz import PLOT_BUFFER, ARROW_LENGTH_FACTOR, ARROW_WIDTH_FACTOR, MAX_ARROW
 from .viz import PlotParams, plot_params_geometry, polygon_patch
 from ..log import Tidy3dKeyError, SetupError, ValidationError, log
 from ..constants import MICROMETER, LARGE_NUMBER, RADIAN, fp_eps, inf
+from .data.dataset import SurfaceMeshDataset
+from .data.data_array import SurfaceMeshDataArray, DATA_ARRAY_MAP
 
 # sampling polygon along dilation for validating polygon to be
 # non self-intersecting during the entire dilation process
@@ -3105,8 +3107,116 @@ class PolySlab(Planar):
         return area
 
 
+class CustomSurfaceMeshGeometry(Geometry, ABC):
+    """Custom surface geometry given by a triangle mesh, as in the STL file format.
+
+    Example
+    -------
+    >>> import stl
+    >>> stl_mesh = stl.mesh.Mesh(np.zeros(4), dtype=stl.mesh.Mesh.dtype)
+    >>> # tetrahedron
+    >>> stl_mesh.vectors = [
+    >>>     [[1,0,0],[0,1,0],[0,0,1]],
+    >>>     [[0,0,0],[0,0,1],[0,1,0]],
+    >>>     [[0,0,0],[1,0,0],[0,0,1]],
+    >>>     [[0,0,0],[0,1,0],[1,0,0]]
+    >>> ]
+    >>> geometry = CustomSurfaceGeometry.from_stl(stl_mesh)
+    """
+
+    mesh_dataset: Optional[SurfaceMeshDataset] = pydantic.Field(
+        ...,
+        title="Surface mesh data",
+        description="Surface mesh data.",
+    )
+
+    @pydantic.validator("mesh_dataset", pre=True, always=True)
+    def _warn_if_none(cls, val: SurfaceMeshDataset) -> SurfaceMeshDataset:
+        """Warn if the DataArray fails to load."""
+        if isinstance(val, dict):
+            if any((v in DATA_ARRAY_MAP for _, v in val.items() if isinstance(v, str))):
+                log.warning("Loading 'mesh_dataset' without data.")
+                return None
+        return val
+
+    @classmethod
+    def from_stl(cls, stl_mesh) -> CustomSurfaceMeshGeometry:
+        """Load a :class:`.CustomSurfaceMeshGeometry` from the data obtained from an STL file.
+
+        Parameters
+        ----------
+        mesh : ``stl.mesh.Mesh``
+            The STL mesh containing the surface geometry mesh data.
+
+        Returns
+        -------
+        :class:`.CustomSurfaceMeshGeometry`
+            The custom surface mesh geometry given by the STL mesh provided.
+        """
+        return cls._from_vectors(stl_mesh.vectors)
+
+    @cached_property
+    def vectors(self) -> np.ndarray:
+        """The vertices of the faces in the surface mesh as an ``np.ndarray``."""
+        if self.mesh_dataset is None:
+            return None
+        return self.mesh_dataset.vertices.to_numpy()
+
+    @classmethod
+    def _from_vectors(cls, vectors: np.ndarray) -> CustomSurfaceMeshGeometry:
+        """Create a :class:`.CustomSurfaceMeshGeometry` from an array of vectors."""
+        num_facets = len(vectors)
+        coords = dict(
+            facet_index=np.arange(num_facets),
+            vertex_index=np.arange(3),
+            axis=np.arange(3),
+        )
+        vertices = SurfaceMeshDataArray(vectors, coords=coords)
+        mesh_dataset = SurfaceMeshDataset(vertices=vertices)
+        return CustomSurfaceMeshGeometry(mesh_dataset=mesh_dataset)
+
+    @cached_property
+    def _normals(self) -> np.ndarray:
+        """Unnormalized outward-facing normals of each triangle.
+        The length of each normal equals the area of the triangle."""
+        vertices = self.vectors
+        vertex0 = vertices[:, 0, :]
+        vertex1 = vertices[:, 1, :]
+        vertex2 = vertices[:, 2, :]
+        return 0.5 * np.cross(vertex1 - vertex0, vertex2 - vertex0)
+
+    @cached_property
+    def _unit_normals(self) -> np.ndarray:
+        """Unit outward-facing normals of each triangle."""
+        normals = self._normals
+        return normals / np.linalg.norm(normals, axis=1)[:, None]
+
+    @cached_property
+    def _areas(self) -> ArrayLike[1]:
+        """Areas of each triangle"""
+        return np.linalg.norm(self._normals, axis=1)
+
+    def _surface_area(self, bounds: Bound) -> float:
+        normals = self._normals
+        return np.sum(np.linalg.norm(normals, axis=1))
+
+    def _volume(self, bounds: Bound) -> float:
+        normals_x = self._normals[:, 0]
+        volume_contributions = normals_x * np.sum(self.vectors[:, :, 0], axis=1) / 3
+        return np.sum(volume_contributions)
+
+    @cached_property
+    def bounds(self) -> Bound:  # pylint:disable=too-many-locals
+        bmin = np.amin(self.vectors, axis=(0, 2))
+        bmax = np.amax(self.vectors, axis=(0, 2))
+        return (bmin, bmax)
+
+    def intersections(self, x: float = None, y: float = None, z: float = None) -> List[Shapely]:
+        return self.bounding_box.intersections(x, y, z)
+
+
 # types of geometry including just one Geometry object (exluding group)
-SingleGeometryType = Union[Box, Sphere, Cylinder, PolySlab]
+SingleGeometryType = Union[Box, Sphere, Cylinder, PolySlab, CustomSurfaceMeshGeometry]
 
 
 class GeometryGroup(Geometry):
