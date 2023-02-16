@@ -128,7 +128,7 @@ def mock_response(monkeypatch):
     monkeypatch.setattr(
         httputils, "get_headers", lambda: {"Authorization": None, "Application": "TIDY3D"}
     )
-    monkeypatch.setattr(webapi, "upload_string", lambda a, b, c: None)
+    monkeypatch.setattr(webapi, "upload_string", lambda *args, **kwargs: None)
     monkeypatch.setattr(httputils, "session", MockRequests())
 
 

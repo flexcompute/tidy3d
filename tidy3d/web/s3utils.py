@@ -1,9 +1,11 @@
+# pylint:disable=unused-argument
 """ handles filesystem, storage """
 import io
 import os
 import urllib
 from datetime import datetime
 from enum import Enum
+from typing import Callable
 
 import boto3
 from boto3.s3.transfer import TransferConfig
@@ -94,6 +96,7 @@ class _S3Action(Enum):
 
 
 def _get_progress(action: _S3Action):
+    """Get the progress of an action."""
     col = (
         TextColumn(f"[bold green]{_S3Action.DOWNLOADING.value}")
         if action == _S3Action.DOWNLOADING
@@ -139,46 +142,51 @@ def get_s3_sts_token(resource_id: str, file_name: str) -> _S3STSToken:
     return _s3_sts_tokens[cache_key]
 
 
-def upload_string(resource_id: str, content: str, remote_filename: str):
+def upload_string(resource_id: str, content: str, remote_filename: str, verbose: bool = True):
     """
     upload a string to a file on S3
     @param resource_id: the resource id, e.g. task id
     @param content:     the content of the file
     @param remote_filename: the remote file name on S3
     """
-    with _get_progress(_S3Action.UPLOADING) as progress:
-        total_size = len(content)
-        task_id = progress.add_task("upload", filename=remote_filename, total=total_size)
 
-        def _call_back(bytes_in_chunk):
-            progress.update(task_id, advance=bytes_in_chunk)
+    def _upload(_callback: Callable) -> None:
+        """Perform the upload with a callback fn"""
 
         token = get_s3_sts_token(resource_id, remote_filename)
         token.get_client().upload_fileobj(
             io.BytesIO(content.encode("utf-8")),
             Bucket=token.get_bucket(),
             Key=token.get_s3_key(),
-            Callback=_call_back,
+            Callback=_callback,
             Config=_s3_config,
         )
 
-        # mark as completed
-        progress.update(task_id, completed=total_size, refresh=True)
+    if verbose:
+        with _get_progress(_S3Action.UPLOADING) as progress:
+            total_size = len(content)
+            task_id = progress.add_task("upload", filename=remote_filename, total=total_size)
+
+            def _callback(bytes_in_chunk):
+                progress.update(task_id, advance=bytes_in_chunk)
+
+            _upload(_callback)
+            progress.update(task_id, completed=total_size, refresh=True)
+
+    else:
+        _upload(lambda bytes_in_chunk: None)
 
 
-def upload_file(resource_id: str, path: str, remote_filename: str):
+def upload_file(resource_id: str, path: str, remote_filename: str, verbose: bool = True):
     """
     upload file to S3
     @param resource_id: the resource id, e.g. task id
     @param path: path to the file
     @param remote_filename: the remote file name on S3
     """
-    with _get_progress(_S3Action.UPLOADING) as progress:
-        total_size = os.path.getsize(path)
-        task_id = progress.add_task("upload", filename=remote_filename, total=total_size)
 
-        def _call_back(bytes_in_chunk):
-            progress.update(task_id, advance=bytes_in_chunk)
+    def _upload(_callback: Callable) -> None:
+        """Perform the upload with a callback fn"""
 
         token = get_s3_sts_token(resource_id, remote_filename)
         with open(path, "rb") as data:
@@ -186,43 +194,67 @@ def upload_file(resource_id: str, path: str, remote_filename: str):
                 data,
                 Bucket=token.get_bucket(),
                 Key=token.get_s3_key(),
-                Callback=_call_back,
+                Callback=_callback,
                 Config=_s3_config,
             )
 
-        # mark as completed
-        progress.update(task_id, completed=total_size, refresh=True)
+    if verbose:
+        with _get_progress(_S3Action.UPLOADING) as progress:
+            total_size = os.path.getsize(path)
+            task_id = progress.add_task("upload", filename=remote_filename, total=total_size)
+
+            def _callback(bytes_in_chunk):
+                progress.update(task_id, advance=bytes_in_chunk)
+
+            _upload(_callback)
+
+            progress.update(task_id, completed=total_size, refresh=True)
+
+    else:
+        _upload(lambda bytes_in_chunk: None)
 
 
-def download_file(resource_id: str, remote_filename: str, to_file: str = None):
+def download_file(
+    resource_id: str, remote_filename: str, to_file: str = None, verbose: bool = True
+):
     """
     download file from S3
     @param resource_id: the resource id, e.g. task id
     @param remote_filename: the remote file name on S3
     @param to_file: the local file name to save the file
     """
+
     token = get_s3_sts_token(resource_id, remote_filename)
     client = token.get_client()
     meta_data = client.head_object(Bucket=token.get_bucket(), Key=token.get_s3_key())
-    with _get_progress(_S3Action.DOWNLOADING) as progress:
-        total_size = meta_data.get("ContentLength", 0)
-        progress.start()
-        task_id = progress.add_task(
-            "download",
-            filename=os.path.basename(remote_filename),
-            total=total_size,
-        )
 
-        def _call_back(bytes_in_chunk):
-            progress.update(task_id, advance=bytes_in_chunk)
+    if not to_file:
+        os.makedirs(resource_id, exist_ok=True)
+        to_file = os.path.join(resource_id, os.path.basename(remote_filename))
 
-        if not to_file:
-            os.makedirs(resource_id, exist_ok=True)
-            to_file = os.path.join(resource_id, os.path.basename(remote_filename))
+    def _download(_callback: Callable) -> None:
+        """Perform the download with a callback fn"""
 
         client.download_file(
-            Bucket=token.get_bucket(), Filename=to_file, Key=token.get_s3_key(), Callback=_call_back
+            Bucket=token.get_bucket(), Filename=to_file, Key=token.get_s3_key(), Callback=_callback
         )
 
-        # mark as completed
-        progress.update(task_id, completed=total_size, refresh=True)
+    if verbose:
+        with _get_progress(_S3Action.DOWNLOADING) as progress:
+            total_size = meta_data.get("ContentLength", 0)
+            progress.start()
+            task_id = progress.add_task(
+                "download",
+                filename=os.path.basename(remote_filename),
+                total=total_size,
+            )
+
+            def _callback(bytes_in_chunk):
+                progress.update(task_id, advance=bytes_in_chunk)
+
+            _download(_callback)
+
+            progress.update(task_id, completed=total_size, refresh=True)
+
+    else:
+        _download(lambda bytes_in_chunk: None)
