@@ -50,7 +50,8 @@ MAX_CELLS_TIMES_STEPS = 1e17
 MAX_MONITOR_DATA_SIZE_BYTES = 10e9
 
 # number of grid cells * structures at which we star warning about slow Simulation.epsilon()
-NUM_CELLS_STRUCTURES_WARN_EPSILON = 274_000_000
+NUM_CELLS_WARN_EPSILON = 100_000_000
+NUM_STRUCTURES_WARN_EPSILON = 10_000
 
 
 class Simulation(Box):  # pylint:disable=too-many-public-methods
@@ -2129,6 +2130,19 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
             refer to `xarray's Documentaton <https://tinyurl.com/2zrzsp7b>`_.
         """
 
+        grid_cells = np.prod(grid.num_cells)
+        num_structures = len(self.structures)
+        if grid_cells > NUM_CELLS_WARN_EPSILON:
+            log.warning(
+                f"Requested grid contains {int(grid_cells):.2e} grid cells. "
+                "Epsilon calculation may be slow."
+            )
+        if num_structures > NUM_STRUCTURES_WARN_EPSILON:
+            log.warning(
+                f"Simulation contains {num_structures:.2e} structures. "
+                "Epsilon calculation may be slow."
+            )
+
         def get_eps(structure: Structure, frequency: float, coords: Coords):
             """Select the correct epsilon component if field locations are requested."""
             if coord_key[0] != "E":
@@ -2138,36 +2152,31 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
 
         def make_eps_data(coords: Coords):
             """returns epsilon data on grid of points defined by coords"""
-            xs, ys, zs = coords.x, coords.y, coords.z
-            rmin = tuple(coord[0] for coord in (xs, ys, zs))
-            rmax = tuple(coord[-1] for coord in (xs, ys, zs))
-            points_box = Box.from_bounds(rmin=rmin, rmax=rmax)
-            x, y, z = np.meshgrid(xs, ys, zs, indexing="ij")
+            arrays = (np.array(coords.x), np.array(coords.y), np.array(coords.z))
             eps_background = get_eps(
                 structure=self.background_structure, frequency=freq, coords=coords
             )
-            eps_array = eps_background * np.ones(x.shape, dtype=complex)
-
+            shape = tuple(len(array) for array in arrays)
+            eps_array = eps_background * np.ones(shape, dtype=complex)
             for structure in self.structures:
-                if not points_box.intersects(structure.geometry):
-                    continue
-                eps_structure = get_eps(structure=structure, frequency=freq, coords=coords)
-                is_inside = structure.geometry.inside(x, y, z)
-                eps_structure = eps_structure * np.ones_like(eps_array)
-                eps_array[np.where(is_inside)] = eps_structure[np.where(is_inside)]
-            coords = {"x": np.array(xs), "y": np.array(ys), "z": np.array(zs)}
+                # Indexing subset within the bounds of the structure
+                # pylint:disable=protected-access
+                inds = structure.geometry._inds_inside_bounds(*arrays)
+
+                # Get permittivity on meshgrid over the reduced coordinates
+                coords_reduced = tuple(arr[ind] for arr, ind in zip(arrays, inds))
+
+                red_coords = Coords(**dict(zip("xyz", coords_reduced)))
+                eps_structure = get_eps(structure=structure, frequency=freq, coords=red_coords)
+
+                # Update permittivity array at selected indexes within the geometry
+                is_inside = structure.geometry.inside_meshgrid(*coords_reduced)
+                eps_array[inds] = eps_structure * is_inside
+
+            coords = dict(zip("xyz", arrays))
             return xr.DataArray(eps_array, coords=coords, dims=("x", "y", "z"))
 
         # combine all data into dictionary
-        grid_cells_times_structures = np.prod(grid.num_cells) * len(self.structures)
-        if grid_cells_times_structures > NUM_CELLS_STRUCTURES_WARN_EPSILON:
-            log.warning(
-                f"Simulation contains {int(np.prod(grid.num_cells)):.2e} grid cells and "
-                f"{len(self.structures):.2e} structures. "
-                f"If the product of these ({grid_cells_times_structures:.2e}) goes above "
-                f" about {int(NUM_CELLS_STRUCTURES_WARN_EPSILON):.2e}, "
-                "epsilon calculation will become slow."
-            )
         coords = grid[coord_key]
         return make_eps_data(coords)
 
