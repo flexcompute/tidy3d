@@ -33,6 +33,18 @@ def test_plot(component):
 
 def test_base_inside():
     assert Geometry.inside(GEO, x=0, y=0, z=0)
+    assert np.all(Geometry.inside(GEO, np.array([0, 0]), np.array([0, 0]), np.array([0, 0])))
+    assert np.all(Geometry.inside(GEO, np.array([[0, 0]]), np.array([[0, 0]]), np.array([[0, 0]])))
+
+
+def test_base_inside_meshgrid():
+    assert np.all(Geometry.inside_meshgrid(GEO, x=[0], y=[0], z=[0]))
+    assert np.all(Geometry.inside_meshgrid(GEO, [0, 0], [0, 0], [0, 0]))
+    # Input dimensions different than 1 error for ``inside_meshgrid``.
+    with pytest.raises(ValueError):
+        b = Geometry.inside_meshgrid(GEO, x=0, y=0, z=0)
+    with pytest.raises(ValueError):
+        b = Geometry.inside_meshgrid(GEO, [[0, 0]], [[0, 0]], [[0, 0]])
 
 
 def test_bounding_box():
@@ -106,6 +118,8 @@ def test_planar_bounds():
 @pytest.mark.parametrize("component", GEO_TYPES)
 def test_inside(component):
     b = component.inside(0, 0, 0)
+    bs = component.inside(np.array([0, 0]), np.array([0, 0]), np.array([0, 0]))
+    bss = component.inside(np.array([[0, 0]]), np.array([[0, 0]]), np.array([[0, 0]]))
 
 
 def test_zero_dims():
@@ -237,6 +251,7 @@ def test_geo_group_methods():
     geo_group = make_geo_group()
     geo_group.inside(0, 1, 2)
     geo_group.inside(np.linspace(0, 1, 10), np.linspace(0, 1, 10), np.linspace(0, 1, 10))
+    geo_group.inside_meshgrid(np.linspace(0, 1, 10), np.linspace(0, 1, 10), np.linspace(0, 1, 10))
     geo_group.intersections(y=0)
     geo_group.intersects(td.Box(size=(1, 1, 1)))
     rmin, rmax = geo_group.bounds

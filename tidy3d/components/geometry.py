@@ -37,26 +37,108 @@ class Geometry(Tidy3dBaseModel, ABC):
         """Default parameters for plotting a Geometry object."""
         return plot_params_geometry
 
-    def inside(self, x, y, z) -> bool:
-        """Returns ``True`` if point ``(x,y,z)`` is inside volume of :class:`Geometry`.
+    def inside(
+        self, x: np.ndarray[float], y: np.ndarray[float], z: np.ndarray[float]
+    ) -> np.ndarray[bool]:
+        """For input arrays ``x``, ``y``, ``z`` of arbitrary but identical shape, return an array
+        with the same shape which is ``True`` for every point in zip(x, y, z) that is inside the
+        volume of the :class:`Geometry`, and ``False`` otherwise.
 
         Parameters
         ----------
-        x : float
-            Position of point in x direction.
-        y : float
-            Position of point in y direction.
-        z : float
-            Position of point in z direction.
+        x : np.ndarray[float]
+            Array of point positions in x direction.
+        y : np.ndarray[float]
+            Array of point positions in y direction.
+        z : np.ndarray[float]
+            Array of point positions in z direction.
 
         Returns
         -------
-        bool
-            True if point ``(x,y,z)`` is inside geometry.
+        np.ndarray[bool]
+            ``True`` for every point that is inside the geometry.
         """
-        shapes_intersect = self.intersections(z=z)
-        loc = Point(x, y)
-        return any(shape.contains(loc) for shape in shapes_intersect)
+
+        def point_inside(x: float, y: float, z: float):
+            """Returns ``True`` if a single point ``(x, y, z)`` is inside."""
+            shapes_intersect = self.intersections(z=z)
+            loc = Point(x, y)
+            return any(shape.contains(loc) for shape in shapes_intersect)
+
+        arrays = tuple(map(np.array, (x, y, z)))
+        self._ensure_equal_shape(*arrays)
+        inside = np.zeros((arrays[0].size,), dtype=bool)
+        arrays_flat = map(np.ravel, arrays)
+        for ipt, args in enumerate(zip(*arrays_flat)):
+            inside[ipt] = point_inside(*args)
+        return inside.reshape(arrays[0].shape)
+
+    @staticmethod
+    def _ensure_equal_shape(*arrays):
+        """Ensure all input arrays have the same shape."""
+        shapes = set(np.array(arr).shape for arr in arrays)
+        if len(shapes) > 1:
+            raise ValueError("All coordinate inputs (x, y, z) must have the same shape.")
+
+    def _inds_inside_bounds(
+        self, x: np.ndarray[float], y: np.ndarray[float], z: np.ndarray[float]
+    ) -> Tuple[slice, slice, slice]:
+        """Return slices into the sorted input arrays that are inside the geometry bounds.
+
+        Parameters
+        ----------
+        x : np.ndarray[float]
+            1D array of point positions in x direction.
+        y : np.ndarray[float]
+            1D array of point positions in y direction.
+        z : np.ndarray[float]
+            1D array of point positions in z direction.
+
+        Returns
+        -------
+        Tuple[slice, slice, slice]
+            Slices into each of the three arrays that are inside the geometry bounds.
+        """
+        bounds = self.bounds
+        inds_in = []
+        for dim, coords in enumerate([x, y, z]):
+            inds = np.nonzero((bounds[0][dim] <= coords) * (coords <= bounds[1][dim]))[0]
+            inds_in.append(slice(0, 0) if inds.size == 0 else slice(inds[0], inds[-1] + 1))
+
+        return tuple(inds_in)
+
+    def inside_meshgrid(
+        self, x: np.ndarray[float], y: np.ndarray[float], z: np.ndarray[float]
+    ) -> np.ndarray[bool]:
+        """Perform ``self.inside`` on a set of sorted 1D coordinates. Applies meshgrid to the
+        supplied coordinates before checking inside.
+
+        Parameters
+        ----------
+        x : np.ndarray[float]
+            1D array of point positions in x direction.
+        y : np.ndarray[float]
+            1D array of point positions in y direction.
+        z : np.ndarray[float]
+            1D array of point positions in z direction.
+
+        Returns
+        -------
+        np.ndarray[bool]
+            Array with shape ``(x.size, y.size, z.size)``, which is ``True`` for every
+            point that is inside the geometry.
+        """
+
+        arrays = tuple(map(np.array, (x, y, z)))
+        if any(arr.ndim != 1 for arr in arrays):
+            raise ValueError("Each of the supplied coordinates (x, y, z) must be 1D.")
+        shape = tuple(arr.size for arr in arrays)
+        is_inside = np.zeros(shape, dtype=bool)
+        inds_inside = self._inds_inside_bounds(*arrays)
+        coords_inside = tuple(arr[ind] for ind, arr in zip(inds_inside, arrays))
+        coords_3d = np.meshgrid(*coords_inside, indexing="ij")
+        is_inside[inds_inside] = self.inside(*coords_3d)
+        return is_inside
 
     @abstractmethod
     def intersections(self, x: float = None, y: float = None, z: float = None) -> List[Shapely]:
@@ -122,8 +204,26 @@ class Geometry(Tidy3dBaseModel, ABC):
         bool
             Whether this geometry intersects the plane.
         """
-        intersections = self.intersections(x=x, y=y, z=z)
-        return bool(intersections)
+
+        axis, position = self.parse_xyz_kwargs(x=x, y=y, z=z)
+        return self.intersects_axis_position(axis, position)
+
+    def intersects_axis_position(self, axis: int, position: float) -> bool:
+        """Whether self intersects plane specified by a given position along a normal axis.
+
+        Parameters
+        ----------
+        axis : int = None
+            Axis nomral to the plane.
+        position : float = None
+            Position of plane along the normal axis.
+
+        Returns
+        -------
+        bool
+            Whether this geometry intersects the plane.
+        """
+        return self.bounds[0][axis] <= position <= self.bounds[1][axis]
 
     @cached_property
     @abstractmethod
@@ -830,10 +930,9 @@ class Planar(Geometry, ABC):
         `Shapely's Documentaton <https://shapely.readthedocs.io/en/stable/project.html>`_.
         """
         axis, position = self.parse_xyz_kwargs(x=x, y=y, z=z)
+        if not self.intersects_axis_position(axis, position):
+            return []
         if axis == self.axis:
-            z0 = self.center_axis
-            if (position < z0 - self.length_axis / 2) or (position > z0 + self.length_axis / 2):
-                return []
             return self._intersections_normal(position)
         return self._intersections_side(position, axis)
 
@@ -1153,6 +1252,8 @@ class Box(Centered):
             `Shapely's Documentaton <https://shapely.readthedocs.io/en/stable/project.html>`_.
         """
         axis, position = self.parse_xyz_kwargs(x=x, y=y, z=z)
+        if not self.intersects_axis_position(axis, position):
+            return []
         z0, (x0, y0) = self.pop_axis(self.center, axis=axis)
         Lz, (Lx, Ly) = self.pop_axis(self.size, axis=axis)
         dz = np.abs(z0 - position)
@@ -1160,23 +1261,28 @@ class Box(Centered):
             return []
         return [box(minx=x0 - Lx / 2, miny=y0 - Ly / 2, maxx=x0 + Lx / 2, maxy=y0 + Ly / 2)]
 
-    def inside(self, x, y, z) -> bool:
-        """Returns ``True`` if point ``(x,y,z)`` inside volume of geometry.
+    def inside(
+        self, x: np.ndarray[float], y: np.ndarray[float], z: np.ndarray[float]
+    ) -> np.ndarray[bool]:
+        """For input arrays ``x``, ``y``, ``z`` of arbitrary but identical shape, return an array
+        with the same shape which is ``True`` for every point in zip(x, y, z) that is inside the
+        volume of the :class:`Geometry`, and ``False`` otherwise.
 
         Parameters
         ----------
-        x : float
-            Position of point in x direction.
-        y : float
-            Position of point in y direction.
-        z : float
-            Position of point in z direction.
+        x : np.ndarray[float]
+            Array of point positions in x direction.
+        y : np.ndarray[float]
+            Array of point positions in y direction.
+        z : np.ndarray[float]
+            Array of point positions in z direction.
 
         Returns
         -------
-        bool
-            Whether point ``(x,y,z)`` is inside geometry.
+        np.ndarray[bool]
+            ``True`` for every point that is inside the geometry.
         """
+        self._ensure_equal_shape(x, y, z)
         x0, y0, z0 = self.center
         Lx, Ly, Lz = self.size
         dist_x = np.abs(x - x0)
@@ -1380,23 +1486,28 @@ class Sphere(Centered, Circular):
     >>> b = Sphere(center=(1,2,3), radius=2)
     """
 
-    def inside(self, x, y, z) -> bool:
-        """Returns True if point ``(x,y,z)`` inside volume of geometry.
+    def inside(
+        self, x: np.ndarray[float], y: np.ndarray[float], z: np.ndarray[float]
+    ) -> np.ndarray[bool]:
+        """For input arrays ``x``, ``y``, ``z`` of arbitrary but identical shape, return an array
+        with the same shape which is ``True`` for every point in zip(x, y, z) that is inside the
+        volume of the :class:`Geometry`, and ``False`` otherwise.
 
         Parameters
         ----------
-        x : float
-            Position of point in x direction.
-        y : float
-            Position of point in y direction.
-        z : float
-            Position of point in z direction.
+        x : np.ndarray[float]
+            Array of point positions in x direction.
+        y : np.ndarray[float]
+            Array of point positions in y direction.
+        z : np.ndarray[float]
+            Array of point positions in z direction.
 
         Returns
         -------
-        bool
-            Whether point ``(x,y,z)`` is inside geometry.
+        np.ndarray[bool]
+            ``True`` for every point that is inside the geometry.
         """
+        self._ensure_equal_shape(x, y, z)
         x0, y0, z0 = self.center
         dist_x = np.abs(x - x0)
         dist_y = np.abs(y - y0)
@@ -1423,6 +1534,8 @@ class Sphere(Centered, Circular):
             `Shapely's Documentaton <https://shapely.readthedocs.io/en/stable/project.html>`_.
         """
         axis, position = self.parse_xyz_kwargs(x=x, y=y, z=z)
+        if not self.intersects_axis_position(axis, position):
+            return []
         z0, (x0, y0) = self.pop_axis(self.center, axis=axis)
         intersect_dist = self._intersect_dist(position, z0)
         if not intersect_dist:
@@ -1618,24 +1731,29 @@ class Cylinder(Centered, Circular, Planar):
             Polygon(vertices_max + vertices_frustum_right + vertices_min + vertices_frustum_left)
         ]
 
-    def inside(self, x, y, z) -> bool:
-        """Returns True if point ``(x,y,z)`` inside volume of geometry.
+    def inside(
+        self, x: np.ndarray[float], y: np.ndarray[float], z: np.ndarray[float]
+    ) -> np.ndarray[bool]:
+        """For input arrays ``x``, ``y``, ``z`` of arbitrary but identical shape, return an array
+        with the same shape which is ``True`` for every point in zip(x, y, z) that is inside the
+        volume of the :class:`Geometry`, and ``False`` otherwise.
 
         Parameters
         ----------
-        x : float
-            Position of point in x direction.
-        y : float
-            Position of point in y direction.
-        z : float
-            Position of point in z direction.
+        x : np.ndarray[float]
+            Array of point positions in x direction.
+        y : np.ndarray[float]
+            Array of point positions in y direction.
+        z : np.ndarray[float]
+            Array of point positions in z direction.
 
         Returns
         -------
-        bool
-            Whether point ``(x,y,z)`` is inside geometry.
+        np.ndarray[bool]
+            ``True`` for every point that is inside the geometry.
         """
         # radius at z
+        self._ensure_equal_shape(x, y, z)
         z0, (x0, y0) = self.pop_axis(self.center, axis=self.axis)
         z, (x, y) = self.pop_axis((x, y, z), axis=self.axis)
         radius_offset = self._radius_z(z)
@@ -2279,25 +2397,29 @@ class PolySlab(Planar):
         dist = self._extrusion_length_to_offset_distance(self.length_axis / 2)
         return self._shift_vertices(self.middle_polygon, dist)[0]
 
-    def inside(self, x, y, z) -> bool:  # pylint:disable=too-many-locals
-        """Returns True if point ``(x,y,z)`` inside volume of geometry.
-        For slanted polyslab and x/y/z to be np.ndarray, a loop over z-axis
-        is performed to find out the offsetted polygon at each z-coordinate.
+    # pylint:disable=too-many-locals
+    def inside(
+        self, x: np.ndarray[float], y: np.ndarray[float], z: np.ndarray[float]
+    ) -> np.ndarray[bool]:
+        """For input arrays ``x``, ``y``, ``z`` of arbitrary but identical shape, return an array
+        with the same shape which is ``True`` for every point in zip(x, y, z) that is inside the
+        volume of the :class:`Geometry`, and ``False`` otherwise.
 
         Parameters
         ----------
-        x : float
-            Position of point in x direction.
-        y : float
-            Position of point in y direction.
-        z : float
-            Position of point in z direction.
+        x : np.ndarray[float]
+            Array of point positions in x direction.
+        y : np.ndarray[float]
+            Array of point positions in y direction.
+        z : np.ndarray[float]
+            Array of point positions in z direction.
 
         Returns
         -------
-        bool
-            Whether point ``(x,y,z)`` is inside geometry.
+        np.ndarray[bool]
+            ``True`` for every point that is inside the geometry.
         """
+        self._ensure_equal_shape(x, y, z)
 
         z, (x, y) = self.pop_axis((x, y, z), axis=self.axis)
 
@@ -3170,29 +3292,78 @@ class GeometryGroup(Geometry):
             `Shapely's Documentaton <https://shapely.readthedocs.io/en/stable/project.html>`_.
         """
 
+        if not self.intersects_plane(x, y, z):
+            return []
         all_intersections = (geometry.intersections(x=x, y=y, z=z) for geometry in self.geometries)
 
         return functools.reduce(lambda a, b: a + b, all_intersections)
 
-    def inside(self, x, y, z) -> bool:
-        """Returns ``True`` if point ``(x,y,z)`` is inside volume of :class:`GeometryGroup`.
+    def intersects_axis_position(self, axis: float, position: float) -> bool:
+        """Whether self intersects plane specified by a given position along a normal axis.
 
         Parameters
         ----------
-        x : float
-            Position of point in x direction.
-        y : float
-            Position of point in y direction.
-        z : float
-            Position of point in z direction.
+        axis : int = None
+            Axis nomral to the plane.
+        position : float = None
+            Position of plane along the normal axis.
 
         Returns
         -------
         bool
-            True if point ``(x,y,z)`` is inside geometry.
+            Whether this geometry intersects the plane.
+        """
+
+        return any(geom.intersects_axis_position(axis, position) for geom in self.geometries)
+
+    def inside(
+        self, x: np.ndarray[float], y: np.ndarray[float], z: np.ndarray[float]
+    ) -> np.ndarray[bool]:
+        """For input arrays ``x``, ``y``, ``z`` of arbitrary but identical shape, return an array
+        with the same shape which is ``True`` for every point in zip(x, y, z) that is inside the
+        volume of the :class:`Geometry`, and ``False`` otherwise.
+
+        Parameters
+        ----------
+        x : np.ndarray[float]
+            Array of point positions in x direction.
+        y : np.ndarray[float]
+            Array of point positions in y direction.
+        z : np.ndarray[float]
+            Array of point positions in z direction.
+
+        Returns
+        -------
+        np.ndarray[bool]
+            ``True`` for every point that is inside the geometry.
         """
 
         individual_insides = (geometry.inside(x, y, z) for geometry in self.geometries)
+
+        return functools.reduce(lambda a, b: a | b, individual_insides)
+
+    def inside_meshgrid(
+        self, x: np.ndarray[float], y: np.ndarray[float], z: np.ndarray[float]
+    ) -> np.ndarray[bool]:
+        """Faster way to check ``self.inside`` on a meshgrid. The input arrays are assumed sorted.
+
+        Parameters
+        ----------
+        x : np.ndarray[float]
+            1D array of point positions in x direction.
+        y : np.ndarray[float]
+            1D array of point positions in y direction.
+        z : np.ndarray[float]
+            1D array of point positions in z direction.
+
+        Returns
+        -------
+        np.ndarray[bool]
+            Array with shape ``(x.size, y.size, z.size)``, which is ``True`` for every
+            point that is inside the geometry.
+        """
+
+        individual_insides = (geom.inside_meshgrid(x, y, z) for geom in self.geometries)
 
         return functools.reduce(lambda a, b: a | b, individual_insides)
 

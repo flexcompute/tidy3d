@@ -1075,22 +1075,23 @@ def test_mode_object_syms():
     )
 
 
-@pytest.mark.parametrize("size, log_level", [(1.0, None), (65, "warning")])
-def test_warn_large_epsilon(caplog, size, log_level):
+@pytest.mark.parametrize(
+    "size, num_struct, log_level", [(1, 1, None), (50, 1, "warning"), (1, 11000, "warning")]
+)
+def test_warn_large_epsilon(caplog, size, num_struct, log_level):
     """Make sure we get a warning if the epsilon grid is too large."""
 
-    num_structures = 1000
     structures = [
         td.Structure(
             geometry=td.Box(center=(0, 0, 0), size=(0.1, 0.1, 0.1)),
             medium=td.Medium(permittivity=1.0),
         )
-        for _ in range(num_structures)
+        for _ in range(num_struct)
     ]
 
     sim = td.Simulation(
         size=(size, size, size),
-        grid_spec=td.GridSpec.uniform(dl=1.0),
+        grid_spec=td.GridSpec.uniform(dl=0.1),
         run_time=1e-12,
         boundary_spec=td.BoundarySpec.all_sides(boundary=td.Periodic()),
         sources=[

@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - Progressbars always set to 100% when webapi functions are finished.
+- Faster handling of `Geometry.intersects` and `Geometry.inside` by taking into account geometry bounds.
 
 
 ## [1.9.0rc2] - 2023-2-17
