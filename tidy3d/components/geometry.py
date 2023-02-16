@@ -21,8 +21,8 @@ from .viz import PLOT_BUFFER, ARROW_LENGTH, arrow_style
 from .viz import PlotParams, plot_params_geometry, polygon_patch
 from ..log import Tidy3dKeyError, SetupError, ValidationError, log, DataError
 from ..constants import MICROMETER, LARGE_NUMBER, RADIAN, fp_eps, inf
-from .data.dataset import SurfaceMeshDataset
-from .data.data_array import SurfaceMeshDataArray, DATA_ARRAY_MAP
+from .data.dataset import TriangleMeshDataset
+from .data.data_array import TriangleMeshDataArray, DATA_ARRAY_MAP
 
 try:
     import trimesh
@@ -3298,17 +3298,17 @@ class PolySlab(Planar):
         return area
 
 
-class CustomSurfaceMeshGeometry(Geometry, ABC):
+class TriangleMesh(Geometry, ABC):
     """Custom surface geometry given by a triangle mesh, as in the STL file format.
 
     Example
     -------
     >>> vertices = np.array([[0, 0, 0], [1, 0, 0], [0, 1, 0], [0, 0, 1]])
     >>> faces = np.array([[1, 2, 3], [0, 3, 2], [0, 1, 3], [0, 2, 1]])
-    >>> stl_geom = CustomSurfaceMeshGeometry.from_vertices_faces(vertices, faces)
+    >>> stl_geom = TriangleMesh.from_vertices_faces(vertices, faces)
     """
 
-    mesh_dataset: Optional[SurfaceMeshDataset] = pydantic.Field(
+    mesh_dataset: Optional[TriangleMeshDataset] = pydantic.Field(
         ...,
         title="Surface mesh data",
         description="Surface mesh data.",
@@ -3319,14 +3319,14 @@ class CustomSurfaceMeshGeometry(Geometry, ABC):
         """Check if the trimesh package is imported."""
         if not TRIMESH_AVAILABLE:
             raise ImportError(
-                "The package 'trimesh' was not found. Please install the 'surfacemesh' "
-                "dependencies to use 'CustomSurfaceMeshGeometry'. For example: "
-                "pip install 'tidy3d[surfacemesh]==1.10.0rc1'."
+                "The package 'trimesh' was not found. Please install the 'trimesh' "
+                "dependencies to use 'TriangleMesh'. For example: "
+                "pip install -r requirements/trimesh.txt."
             )
         return values
 
     @pydantic.validator("mesh_dataset", pre=True, always=True)
-    def _warn_if_none(cls, val: SurfaceMeshDataset) -> SurfaceMeshDataset:
+    def _warn_if_none(cls, val: TriangleMeshDataset) -> TriangleMeshDataset:
         """Warn if the Dataset fails to load."""
         if isinstance(val, dict):
             if any((v in DATA_ARRAY_MAP for _, v in val.items() if isinstance(v, str))):
@@ -3335,7 +3335,7 @@ class CustomSurfaceMeshGeometry(Geometry, ABC):
         return val
 
     @pydantic.validator("mesh_dataset", always=True)
-    def _check_mesh(cls, val: SurfaceMeshDataset) -> SurfaceMeshDataset:
+    def _check_mesh(cls, val: TriangleMeshDataset) -> TriangleMeshDataset:
         """Check that the mesh is valid."""
         if val is None:
             return None
@@ -3371,11 +3371,11 @@ class CustomSurfaceMeshGeometry(Geometry, ABC):
         origin: Tuple[float, float, float] = (0, 0, 0),
         solid_index: int = None,
         **kwargs,
-    ) -> Union[CustomSurfaceMeshGeometry, GeometryGroup]:
-        """Load a :class:`.CustomSurfaceMeshGeometry` directly from an STL file.
+    ) -> Union[TriangleMesh, GeometryGroup]:
+        """Load a :class:`.TriangleMesh` directly from an STL file.
         The ``solid_index`` parameter can be used to select a single solid from the file.
         Otherwise, if the file contains a single solid, it will be loaded as a
-        :class:`.CustomSurfaceMeshGeometry`; if the file contains multiple solids,
+        :class:`.TriangleMesh`; if the file contains multiple solids,
         they will all be loaded as a :class:`.GeometryGroup`.
 
         Parameters
@@ -3394,11 +3394,11 @@ class CustomSurfaceMeshGeometry(Geometry, ABC):
 
         Returns
         -------
-        Union[:class:`.CustomSurfaceMeshGeometry`, :class:`.GeometryGroup`]
+        Union[:class:`.TriangleMesh`, :class:`.GeometryGroup`]
             The geometry or geometry group from the file.
         """
 
-        def process_single(mesh: trimesh.Trimesh) -> CustomSurfaceMeshGeometry:
+        def process_single(mesh: trimesh.Trimesh) -> TriangleMesh:
             """Process a single 'trimesh.Trimesh' using scale and origin."""
             mesh.apply_scale(scale)
             mesh.apply_translation(origin)
@@ -3428,8 +3428,8 @@ class CustomSurfaceMeshGeometry(Geometry, ABC):
         raise ValidationError("No solid found at 'solid_index' in the stl file.")
 
     @classmethod
-    def from_trimesh(cls, mesh: trimesh.Trimesh) -> CustomSurfaceMeshGeometry:
-        """Create a :class:`.CustomSurfaceMeshGeometry` from a ``trimesh.Trimesh`` object.
+    def from_trimesh(cls, mesh: trimesh.Trimesh) -> TriangleMesh:
+        """Create a :class:`.TriangleMesh` from a ``trimesh.Trimesh`` object.
 
         Parameters
         ----------
@@ -3438,14 +3438,14 @@ class CustomSurfaceMeshGeometry(Geometry, ABC):
 
         Returns
         -------
-        :class:`.CustomSurfaceMeshGeometry`
+        :class:`.TriangleMesh`
             The custom surface mesh geometry given by the ``trimesh.Trimesh`` provided.
         """
         return cls.from_vertices_faces(mesh.vertices, mesh.faces)
 
     @classmethod
-    def from_triangles(cls, triangles: np.ndarray) -> CustomSurfaceMeshGeometry:
-        """Create a :class:`.CustomSurfaceMeshGeometry` from a numpy array
+    def from_triangles(cls, triangles: np.ndarray) -> TriangleMesh:
+        """Create a :class:`.TriangleMesh` from a numpy array
         containing the triangles of a surface mesh.
 
         Parameters
@@ -3457,7 +3457,7 @@ class CustomSurfaceMeshGeometry(Geometry, ABC):
 
         Returns
         -------
-        :class:`.CustomSurfaceMeshGeometry`
+        :class:`.TriangleMesh`
             The custom surface mesh geometry given by the triangles provided.
 
         """
@@ -3472,15 +3472,13 @@ class CustomSurfaceMeshGeometry(Geometry, ABC):
             vertex_index=np.arange(3),
             axis=np.arange(3),
         )
-        vertices = SurfaceMeshDataArray(triangles, coords=coords)
-        mesh_dataset = SurfaceMeshDataset(surface_mesh=vertices)
-        return CustomSurfaceMeshGeometry(mesh_dataset=mesh_dataset)
+        vertices = TriangleMeshDataArray(triangles, coords=coords)
+        mesh_dataset = TriangleMeshDataset(surface_mesh=vertices)
+        return TriangleMesh(mesh_dataset=mesh_dataset)
 
     @classmethod
-    def from_vertices_faces(
-        cls, vertices: np.ndarray, faces: np.ndarray
-    ) -> CustomSurfaceMeshGeometry:
-        """Create a :class:`.CustomSurfaceMeshGeometry` from numpy arrays containing the data
+    def from_vertices_faces(cls, vertices: np.ndarray, faces: np.ndarray) -> TriangleMesh:
+        """Create a :class:`.TriangleMesh` from numpy arrays containing the data
         of a surface mesh. The first array contains the vertices, and the second array contains
         faces formed from triples of the vertices.
 
@@ -3497,7 +3495,7 @@ class CustomSurfaceMeshGeometry(Geometry, ABC):
 
         Returns
         -------
-        :class:`.CustomSurfaceMeshGeometry`
+        :class:`.TriangleMesh`
             The custom surface mesh geometry given by the vertices and faces provided.
 
         """
@@ -3585,9 +3583,9 @@ class CustomSurfaceMeshGeometry(Geometry, ABC):
 
         if not NETWORKX_RTREE_AVAILABLE:
             raise ImportError(
-                "'CustomSurfaceMeshGeometry.intersections_plane' requires 'networkx' and 'rtree'. "
-                "Please install the 'surfacemesh' dependencies. For example: "
-                "pip install 'tidy3d[surfacemesh]==1.10.0rc1'."
+                "'TriangleMesh.intersections_plane' requires 'networkx' and 'rtree'. "
+                "Please install the 'trimesh' dependencies. For example: "
+                "pip install -r requirements/trimesh.txt."
             )
 
         section = mesh.section(plane_origin=origin, plane_normal=normal)
@@ -3669,7 +3667,7 @@ class CustomSurfaceMeshGeometry(Geometry, ABC):
         """
 
         log.warning(
-            "Plotting a 'CustomSurfaceMeshGeometry' may give inconsistent results "
+            "Plotting a 'TriangleMesh' may give inconsistent results "
             "if the mesh is not unionized. We recommend unionizing all meshes before import. "
             "A 'PermittivityMonitor' can be used to check that the mesh is loaded correctly."
         )
@@ -3678,7 +3676,7 @@ class CustomSurfaceMeshGeometry(Geometry, ABC):
 
 
 # types of geometry including just one Geometry object (exluding group)
-SingleGeometryType = Union[Box, Sphere, Cylinder, PolySlab, CustomSurfaceMeshGeometry]
+SingleGeometryType = Union[Box, Sphere, Cylinder, PolySlab, TriangleMesh]
 
 
 class GeometryGroup(Geometry):

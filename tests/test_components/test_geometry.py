@@ -510,15 +510,15 @@ def test_custom_surface_geometry():
     vertices = np.array([[0, 0, 0], [1, 0, 0], [0, 1, 0], [0, 0, 1]])
     faces = np.array([[1, 2, 3], [0, 3, 2], [0, 1, 3], [0, 2, 1]])
     tetrahedron = trimesh.Trimesh(vertices, faces)
-    geom = td.CustomSurfaceMeshGeometry.from_trimesh(tetrahedron)
+    geom = td.TriangleMesh.from_trimesh(tetrahedron)
 
     # test import
-    import_geom = td.CustomSurfaceMeshGeometry.from_stl("tests/data/tetrahedron.stl")
+    import_geom = td.TriangleMesh.from_stl("tests/data/tetrahedron.stl")
     assert np.allclose(import_geom.triangles, geom.triangles)
 
     # test export and then import
     geom.trimesh.export(prepend_tmp("export.stl"))
-    import_geom = td.CustomSurfaceMeshGeometry.from_stl(prepend_tmp("export.stl"))
+    import_geom = td.TriangleMesh.from_stl(prepend_tmp("export.stl"))
     assert np.allclose(import_geom.triangles, geom.triangles)
 
     # assert np.array_equal(tetrahedron.vectors, export_vectors)
@@ -557,7 +557,7 @@ def test_custom_surface_geometry():
     tetrahedron = trimesh.Trimesh(vertices, faces)
     # we currently just log a warning
     # with pytest.raises(ValidationError):
-    geom = td.CustomSurfaceMeshGeometry.from_trimesh(tetrahedron)
+    geom = td.TriangleMesh.from_trimesh(tetrahedron)
 
     # test non-watertight mesh
     vertices = np.array([[0, 0, 0], [1, 0, 0], [0, 1, 0], [0, 0, 1]])
@@ -565,11 +565,11 @@ def test_custom_surface_geometry():
     tetrahedron = trimesh.Trimesh(vertices, faces)
     # we currently just log a warning
     # with pytest.raises(ValidationError):
-    geom = td.CustomSurfaceMeshGeometry.from_trimesh(tetrahedron)
+    geom = td.TriangleMesh.from_trimesh(tetrahedron)
 
     # test zero area triangles
     vertices = np.array([[1, 0, 0], [1, 0, 0], [0, 1, 0], [0, 0, 1]])
     faces = np.array([[1, 2, 3], [0, 3, 2], [0, 1, 3], [0, 2, 1]])
     tetrahedron = trimesh.Trimesh(vertices, faces)
     with pytest.raises(ValidationError):
-        geom = td.CustomSurfaceMeshGeometry.from_trimesh(tetrahedron)
+        geom = td.TriangleMesh.from_trimesh(tetrahedron)

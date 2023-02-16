@@ -400,7 +400,7 @@ class DiffractionDataArray(DataArray):
     _data_attrs = {"long_name": "diffraction amplitude"}
 
 
-class SurfaceMeshDataArray(DataArray):
+class TriangleMeshDataArray(DataArray):
     """Data of the triangles of a surface mesh as in the STL file format."""
 
     __slots__ = ()
@@ -424,6 +424,6 @@ DATA_ARRAY_TYPES = [
     FreqDataArray,
     TimeDataArray,
     FreqModeDataArray,
-    SurfaceMeshDataArray,
+    TriangleMeshDataArray,
 ]
 DATA_ARRAY_MAP = {data_array.__name__: data_array for data_array in DATA_ARRAY_TYPES}

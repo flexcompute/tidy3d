@@ -11,7 +11,7 @@ import pydantic as pd
 from .data_array import DataArray
 from .data_array import ScalarFieldDataArray, ScalarFieldTimeDataArray, ScalarModeFieldDataArray
 from .data_array import ModeIndexDataArray
-from .data_array import SurfaceMeshDataArray
+from .data_array import TriangleMeshDataArray
 
 from ..base import Tidy3dBaseModel
 from ..types import Axis
@@ -384,10 +384,10 @@ class PermittivityDataset(AbstractFieldDataset):
     )
 
 
-class SurfaceMeshDataset(Dataset):
+class TriangleMeshDataset(Dataset):
     """Dataset for storing triangular surface data."""
 
-    surface_mesh: SurfaceMeshDataArray = pd.Field(
+    surface_mesh: TriangleMeshDataArray = pd.Field(
         ...,
         title="Surface mesh data",
         description="Dataset containing the surface triangles and corresponding face indices "

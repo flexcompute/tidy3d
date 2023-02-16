@@ -1,4 +1,4 @@
-# surfacemesh
+# trimesh
 
 trimesh==3.20.0
 networkx >=2.6.3, <=3.0

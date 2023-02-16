@@ -4,7 +4,7 @@
 -r gdstk.txt
 -r gdspy.txt
 -r jax.txt
--r surfacemesh.txt
+-r trimesh.txt
 
 # required for development
 pre-commit

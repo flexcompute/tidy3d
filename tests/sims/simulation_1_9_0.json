@@ -304,24 +304,6 @@
                     ]
                 ]
             }
-        },
-        {
-            "geometry": {
-                "type": "CustomSurfaceMeshGeometry",
-                "mesh_dataset": {
-                    "type": "SurfaceMeshDataset",
-                    "surface_mesh": "SurfaceMeshDataArray"
-                }
-            },
-            "name": null,
-            "type": "Structure",
-            "medium": {
-                "name": null,
-                "frequency_range": null,
-                "type": "Medium",
-                "permittivity": 5.0,
-                "conductivity": 0.0
-            }
         }
     ],
     "sources": [

@@ -14,7 +14,7 @@ from mpl_toolkits.axes_grid1 import make_axes_locatable
 from .base import cached_property
 from .validators import assert_unique_names, assert_objects_in_sim_bounds
 from .validators import validate_mode_objects_symmetry
-from .geometry import Box, CustomSurfaceMeshGeometry
+from .geometry import Box, TriangleMesh
 from .types import Ax, Shapely, FreqBound, Axis, annotate_type, Symmetry
 from .grid.grid import Coords1D, Grid, Coords
 from .grid.grid_spec import GridSpec, UniformGrid
@@ -2172,9 +2172,9 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
                 red_coords = Coords(**dict(zip("xyz", coords_reduced)))
                 eps_structure = get_eps(structure=structure, frequency=freq, coords=red_coords)
 
-                if isinstance(structure.geometry, CustomSurfaceMeshGeometry):
+                if isinstance(structure.geometry, TriangleMesh):
                     log.warning(
-                        "Client-side permittivity of a 'CustomSurfaceMeshGeometry' may be "
+                        "Client-side permittivity of a 'TriangleMesh' may be "
                         "inaccurate if the mesh is not unionized. We recommend unionizing "
                         "all meshes before import. A 'PermittivityMonitor' can be used to "
                         "obtain the true permittivity and check that the surface mesh is "
@@ -2204,6 +2204,6 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         datasets_geometry = [
             struct.geometry.mesh_dataset
             for struct in self.structures
-            if isinstance(struct.geometry, CustomSurfaceMeshGeometry)
+            if isinstance(struct.geometry, TriangleMesh)
         ]
         return datasets_source + datasets_medium + datasets_geometry

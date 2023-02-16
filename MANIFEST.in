@@ -7,5 +7,5 @@ include requirements/jax.txt
 include requirements/gdspy.txt
 include requirements/gdstk.txt
 include requirements/dev.txt
-include requirements/surfacemesh.txt
+include requirements/trimesh.txt
 include tidy3d/web/cacert.pem
