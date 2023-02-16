@@ -1068,6 +1068,7 @@ def test_sim_volumetric_equivalent():
         sigma * thickness / grid_dl,
         rtol=RTOL,
     )
+    # now with a substrate and anisotropy
     aniso_medium = td.AnisotropicMedium(
         xx=td.Medium(permittivity=2), yy=td.Medium(), zz=td.Medium()
     )
@@ -1093,7 +1094,6 @@ def test_sim_volumetric_equivalent():
         run_time=1e-12,
     )
     sim2 = sim.volumetric_equivalent()
-    print(sim2.structures)
     assert np.isclose(
         sim2.structures[1].medium.xx.to_medium().permittivity,
         1.5,
@@ -1105,3 +1105,23 @@ def test_sim_volumetric_equivalent():
         LARGE_NUMBER * thickness / grid_dl,
         rtol=RTOL,
     )
+    # nonuniform sub/super-strate should error
+    below = td.Structure(
+        geometry=td.Box.from_bounds([-100, -td.inf, -1000], [0, td.inf, 0]),
+        medium=aniso_medium,
+    )
+    sim = td.Simulation(
+        size=(10, 10, 10),
+        structures=[below, box],
+        sources=[src],
+        boundary_spec=td.BoundarySpec(
+            x=td.Boundary.pml(num_layers=5),
+            y=td.Boundary.pml(num_layers=5),
+            z=td.Boundary.pml(num_layers=5),
+        ),
+        grid_spec=td.GridSpec.uniform(dl=grid_dl),
+        run_time=1e-12,
+    )
+
+    with pytest.raises(SetupError):
+        _ = sim.volumetric_equivalent()
