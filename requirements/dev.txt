@@ -3,6 +3,7 @@
 -r core.txt
 -r gdstk.txt
 -r gdspy.txt
+-r jax.txt
 
 # required for development
 pre-commit
