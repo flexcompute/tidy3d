@@ -3,7 +3,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.9.0rc2] - 2023-2-17
+
+## Added
+
+* Plugin `ComplexPolySlab` for supporting complex polyslabs containing self-intersecting polygons during extrusion.
+
+## Changed
+* `PolySlab.from_gds` supports `gds_cell` from both `gdspy` and `gdstk`, both packages are made optional requirements.
+* Adjoint plugin `JaxCustomMedium` is made faster and can handle several thousand pixels without significant overhead.
+* Jax is made an optional requirement. The adjoint plugin supports jax versions 0.3 and 0.4 for windows and non-windows users, respectively.
+
+## Fixed
+* Error importing `Axes` type with most recent `matplotlib` release.
 
 ## [1.9.0rc1] - 2023-2-3
 
@@ -555,9 +567,8 @@ which fields are to be projected is now determined automatically based on the me
 - Job and Batch classes for better simulation handling (eventually to fully replace webapi functions).
 - A large number of small improvements and bug fixes.
 
-[Unreleased]: https://github.com/flexcompute/tidy3d/compare/v1.9.0rc1...develop
-[1.9.0rc1]: https://github.com/flexcompute/tidy3d/compare/v1.8.3...v1.9.0rc1
-[Unreleased]: https://github.com/flexcompute/tidy3d/compare/v1.8.4...develop
+[1.9.0rc2]: https://github.com/flexcompute/tidy3d/compare/v1.8.4...v1.9.0rc2
+[1.9.0rc1]: https://github.com/flexcompute/tidy3d/compare/v1.8.4...v1.9.0rc1
 [1.8.4]: https://github.com/flexcompute/tidy3d/compare/v1.8.3...v1.8.4
 [1.8.3]: https://github.com/flexcompute/tidy3d/compare/v1.8.2...v1.8.3
 [1.8.2]: https://github.com/flexcompute/tidy3d/compare/v1.8.1...v1.8.2
