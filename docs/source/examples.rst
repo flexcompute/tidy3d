@@ -93,31 +93,53 @@ Pre and Post Processing
 Case studies
 ------------
 
+Photonic Integrated Circuit Components
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 .. toctree::
     :maxdepth: 1
 
-    notebooks/Near2FarSphereRCS
-    notebooks/PlasmonicNanoparticle.ipynb
-    notebooks/PlasmonicYagiUdaNanoantenna
-    notebooks/GratingEfficiency
-    notebooks/BiosensorGrating.ipynb
-    notebooks/BraggGratings.ipynb
-    notebooks/DistributedBraggReflectorCavity
-    notebooks/HighQ_Si
-    notebooks/HighQ_Ge
-    notebooks/DielectricMetasurfaceAbsorber.ipynb
-    notebooks/GradientMetasurfaceReflector
-    notebooks/Metalens
-    notebooks/Bandstructure.ipynb
-    notebooks/OptimizedL3.ipynb
     notebooks/YJunction.ipynb
     notebooks/MMI_1x4
     notebooks/WaveguideCrossing
     notebooks/WaveguideSizeConverter
+    notebooks/BraggGratings.ipynb
     notebooks/EulerWaveguideBend
     notebooks/PolarizationSplitterRotator
     notebooks/8ChannelDemultiplexer
     notebooks/GratingCoupler
     notebooks/RingResonator
     notebooks/THzDemultiplexerFilter
+    notebooks/PhotonicCrystalWaveguidePolarizationFilter
+
+Metamaterials, Grattings, and Other Periodic Structures
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+.. toctree::
+    :maxdepth: 1
+
+    notebooks/DielectricMetasurfaceAbsorber.ipynb
+    notebooks/GradientMetasurfaceReflector
+    notebooks/Metalens
+    notebooks/HighQ_Si
+    notebooks/HighQ_Ge
+    notebooks/GratingEfficiency
+    notebooks/BiosensorGrating.ipynb
+    notebooks/DistributedBraggReflectorCavity
+
+Photonic Crystals
+~~~~~~~~~~~~~~~~~
+.. toctree::
+    :maxdepth: 1
+
+    notebooks/Bandstructure.ipynb
+    notebooks/OptimizedL3.ipynb
+    notebooks/PhotonicCrystalWaveguidePolarizationFilter
+
+Optical Scattering and Far-field Radiation
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+.. toctree::
+    :maxdepth: 1
+
+    notebooks/Near2FarSphereRCS
+    notebooks/PlasmonicNanoparticle.ipynb
+    notebooks/PlasmonicYagiUdaNanoantenna
     notebooks/ZonePlateFieldProjection
