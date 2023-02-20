@@ -267,3 +267,15 @@ def _test_batch_8_delete():
     for job in batch:
         task_info = job.get_info()
         assert task_info.status in ("deleted", "deleting")
+
+
+""" Async """
+
+
+@clear_tmp
+def atest_web_run_async():
+    """test complete run"""
+    sims = 2 * [sim_original]
+    batch_data = web.run_async(sims)
+    for _, sim_data in batch_data.items():
+        _ = sim_data[first_monitor_name]
