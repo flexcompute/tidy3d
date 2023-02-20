@@ -14,7 +14,7 @@ from mpl_toolkits.axes_grid1 import make_axes_locatable
 from .base import cached_property
 from .validators import assert_unique_names, assert_objects_in_sim_bounds
 from .validators import validate_mode_objects_symmetry
-from .geometry import Box
+from .geometry import Box, CustomSurfaceMeshGeometry
 from .types import Ax, Shapely, FreqBound, Axis, annotate_type, Symmetry
 from .grid.grid import Coords1D, Grid, Coords
 from .grid.grid_spec import GridSpec, UniformGrid
@@ -2153,4 +2153,9 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
             src.field_dataset for src in self.sources if isinstance(src, CustomFieldSource)
         ]
         datasets_medium = [mat.eps_dataset for mat in self.mediums if isinstance(mat, CustomMedium)]
-        return datasets_source + datasets_medium
+        datasets_geometry = [
+            struct.geometry.mesh_dataset
+            for struct in self.structures
+            if isinstance(struct.geometry, CustomSurfaceMeshGeometry)
+        ]
+        return datasets_source + datasets_medium + datasets_geometry

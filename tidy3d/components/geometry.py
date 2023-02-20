@@ -18,7 +18,7 @@ from .types import Vertices, Ax, Shapely, annotate_type
 from .viz import add_ax_if_none, equal_aspect
 from .viz import PLOT_BUFFER, ARROW_LENGTH_FACTOR, ARROW_WIDTH_FACTOR, MAX_ARROW_WIDTH_FACTOR
 from .viz import PlotParams, plot_params_geometry, polygon_patch
-from ..log import Tidy3dKeyError, SetupError, ValidationError, log
+from ..log import Tidy3dKeyError, SetupError, ValidationError, log, DataError
 from ..constants import MICROMETER, LARGE_NUMBER, RADIAN, fp_eps, inf
 from .data.dataset import SurfaceMeshDataset
 from .data.data_array import SurfaceMeshDataArray, DATA_ARRAY_MAP
@@ -3159,7 +3159,7 @@ class CustomSurfaceMeshGeometry(Geometry, ABC):
     def vectors(self) -> np.ndarray:
         """The vertices of the faces in the surface mesh as an ``np.ndarray``."""
         if self.mesh_dataset is None:
-            return None
+            raise DataError("Can't get vectors as 'mesh_dataset' is None.")
         return self.mesh_dataset.vertices.to_numpy()
 
     @classmethod
@@ -3207,11 +3207,15 @@ class CustomSurfaceMeshGeometry(Geometry, ABC):
 
     @cached_property
     def bounds(self) -> Bound:  # pylint:disable=too-many-locals
+        if self.mesh_dataset is None:
+            return ((-inf, -inf, -inf), (inf, inf, inf))
         bmin = np.amin(self.vectors, axis=(0, 2))
         bmax = np.amax(self.vectors, axis=(0, 2))
         return (bmin, bmax)
 
     def intersections(self, x: float = None, y: float = None, z: float = None) -> List[Shapely]:
+        if self.mesh_dataset is None:
+            return []
         return self.bounding_box.intersections(x, y, z)
 
 
