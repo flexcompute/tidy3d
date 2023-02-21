@@ -504,7 +504,7 @@ def test_intersect_structures(caplog):
 
     # shouldnt error, just warn because of touching but not intersecting
     sim = make_sim_intersect(spacing=0.0)
-    assert_log_level(caplog, 30)
+    assert_log_level(caplog, "warning")
 
 
 def test_structure_overlaps():

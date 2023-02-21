@@ -127,9 +127,9 @@ def test_io_json(caplog):
     """to json warns and then from json errors."""
     path = "tests/tmp/custom_source.json"
     FIELD_SRC.to_file(path)
-    assert_log_level(caplog, 30)
+    assert_log_level(caplog, "warning")
     FIELD_SRC2 = FIELD_SRC.from_file(path)
-    assert_log_level(caplog, 30)
+    assert_log_level(caplog, "warning")
     assert FIELD_SRC2.field_dataset is None
 
 

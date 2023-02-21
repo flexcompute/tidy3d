@@ -4,6 +4,8 @@ from pathlib import Path
 import numpy as np
 from tidy3d import *
 import tidy3d as td
+from tidy3d.log import _get_level_int
+
 
 """ utilities shared between all tests """
 
@@ -361,28 +363,33 @@ def run_emulated(simulation: Simulation, **kwargs) -> SimulationData:
     return SimulationData(simulation=simulation, data=data)
 
 
-def assert_log_level(caplog, log_level_expected):
+def assert_log_level(caplog, log_level_expected: str):
     """ensure something got logged if log_level is not None.
     note: I put this here rather than utils.py because if we import from utils.py,
     it will validate the sims there and those get included in log.
     """
 
+    if log_level_expected is None:
+        log_level_expected_int = None
+    else:
+        log_level_expected_int = _get_level_int(log_level_expected)
+
     # get log output
     logs = caplog.record_tuples
 
     # there's a log but the log level is not None (problem)
-    if logs and not log_level_expected:
+    if logs and not log_level_expected_int:
         raise Exception
 
     # we expect a log but none is given (problem)
-    if log_level_expected and not logs:
+    if log_level_expected_int and not logs:
         raise Exception
 
     # both expected and got log, check the log levels match
     if logs and log_level_expected:
         for log in logs:
             log_level = log[1]
-            if log_level == log_level_expected:
+            if log_level == log_level_expected_int:
                 # log level was triggered, exit
                 return
         raise Exception
