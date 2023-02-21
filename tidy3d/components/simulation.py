@@ -288,8 +288,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
             if not isinstance(source, PlaneWave):
                 continue
 
-            # pylint:disable=protected-access
-            _, tan_dirs = cls.pop_axis([0, 1, 2], axis=source._injection_axis)
+            _, tan_dirs = cls.pop_axis([0, 1, 2], axis=source.injection_axis)
             medium_set = cls.intersecting_media(source, structures)
             medium = medium_set.pop() if medium_set else sim_medium
 
