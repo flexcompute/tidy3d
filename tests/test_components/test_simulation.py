@@ -505,7 +505,8 @@ def test_discretize_non_intersect(caplog):
 def test_filter_structures():
     s1 = td.Structure(geometry=td.Box(size=(1, 1, 1)), medium=SIM.medium)
     s2 = td.Structure(geometry=td.Box(size=(1, 1, 1), center=(1, 1, 1)), medium=SIM.medium)
-    SIM._filter_structures_plane(structures=[s1, s2], z=1.5)
+    plane = td.Box(center=(0, 0, 1.5), size=(td.inf, td.inf, 0))
+    SIM._filter_structures_plane(structures=[s1, s2], plane=plane)
 
 
 def test_get_structure_plot_params():
@@ -629,9 +630,9 @@ def test_sim_monitor_homogeneous():
     medium_bg = td.Medium(permittivity=2)
     medium_air = td.Medium(permittivity=1)
 
-    box = td.Structure(geometry=td.Box(size=(0.1, 0.1, 0.1)), medium=medium_air)
+    box = td.Structure(geometry=td.Box(size=(0.2, 0.1, 0.1)), medium=medium_air)
 
-    box_transparent = td.Structure(geometry=td.Box(size=(0.1, 0.1, 0.1)), medium=medium_bg)
+    box_transparent = td.Structure(geometry=td.Box(size=(0.2, 0.1, 0.1)), medium=medium_bg)
 
     monitor_n2f = td.FieldProjectionAngleMonitor(
         center=(0, 0, 0),
@@ -659,16 +660,13 @@ def test_sim_monitor_homogeneous():
         normal_dir="+",
     )
 
-    src = td.PlaneWave(
+    src = td.PointDipole(
         source_time=td.GaussianPulse(freq0=2.5e14, fwidth=1e13),
         center=(0, 0, 0),
-        size=(td.inf, td.inf, 0),
-        direction="+",
-        pol_angle=-1.0,
+        polarization="Ex",
     )
 
-    for monitor in [monitor_n2f, monitor_n2f_vol, monitor_diffraction]:
-
+    for monitor in [monitor_n2f_vol]:
         # with transparent box continue
         sim1 = td.Simulation(
             size=(1, 1, 1),
@@ -685,14 +683,16 @@ def test_sim_monitor_homogeneous():
             _ = td.Simulation(
                 size=(1, 1, 1),
                 medium=medium_bg,
-                structures=[box_transparent, box],
+                structures=[box],
                 sources=[src],
                 monitors=[monitor],
                 run_time=1e-12,
                 boundary_spec=td.BoundarySpec.all_sides(boundary=td.Periodic()),
             )
 
-    mediums = td.Simulation.intersecting_media(monitor_n2f_vol, sim1.structures)
+    mediums = td.Simulation.intersecting_media(monitor_n2f_vol, [box])
+    assert len(mediums) == 1
+    mediums = td.Simulation.intersecting_media(monitor_n2f_vol, [box_transparent])
     assert len(mediums) == 1
 
     # when another medium intersects an excluded surface, no errors should be raised
@@ -704,14 +704,6 @@ def test_sim_monitor_homogeneous():
         theta=[0],
         phi=[0],
         exclude_surfaces=["x-", "z-"],
-    )
-
-    src = td.PlaneWave(
-        source_time=td.GaussianPulse(freq0=2.5e14, fwidth=1e13),
-        center=(0, 0, -0.5),
-        size=(td.inf, td.inf, 0),
-        direction="+",
-        pol_angle=-1.0,
     )
 
     _ = td.Simulation(

@@ -61,7 +61,7 @@ class Geometry(Tidy3dBaseModel, ABC):
 
         def point_inside(x: float, y: float, z: float):
             """Returns ``True`` if a single point ``(x, y, z)`` is inside."""
-            shapes_intersect = self.intersections(z=z)
+            shapes_intersect = self.intersections_plane(z=z)
             loc = Point(x, y)
             return any(shape.contains(loc) for shape in shapes_intersect)
 
@@ -140,8 +140,37 @@ class Geometry(Tidy3dBaseModel, ABC):
         is_inside[inds_inside] = self.inside(*coords_3d)
         return is_inside
 
-    @abstractmethod
     def intersections(self, x: float = None, y: float = None, z: float = None) -> List[Shapely]:
+        """Returns list of shapely geoemtries at plane specified by one non-None value of x,y,z.
+        TODO: remove for 2.0
+
+        Parameters
+        ----------
+        x : float = None
+            Position of plane in x direction, only one of x,y,z can be specified to define plane.
+        y : float = None
+            Position of plane in y direction, only one of x,y,z can be specified to define plane.
+        z : float = None
+            Position of plane in z direction, only one of x,y,z can be specified to define plane.
+
+        Returns
+        -------
+        List[shapely.geometry.base.BaseGeometry]
+            List of 2D shapes that intersect plane.
+            For more details refer to
+            `Shapely's Documentaton <https://shapely.readthedocs.io/en/stable/project.html>`_.
+        """
+
+        log.warning(
+            "'Geometry.intersections' will be renamed to 'Geometry.intersections_plane' in "
+            "Tidy3D version 2.0."
+        )
+        return self.intersections_plane(x, y, z)
+
+    @abstractmethod
+    def intersections_plane(
+        self, x: float = None, y: float = None, z: float = None
+    ) -> List[Shapely]:
         """Returns list of shapely geoemtries at plane specified by one non-None value of x,y,z.
 
         Parameters
@@ -160,6 +189,39 @@ class Geometry(Tidy3dBaseModel, ABC):
             For more details refer to
             `Shapely's Documentaton <https://shapely.readthedocs.io/en/stable/project.html>`_.
         """
+
+    def intersections_2dbox(self, plane: Box) -> List[Shapely]:
+        """Returns list of shapely geoemtries representing the intersections of the geometry with
+        a 2D box.
+
+        Returns
+        -------
+        List[shapely.geometry.base.BaseGeometry]
+            List of 2D shapes that intersect plane.
+            For more details refer to
+            `Shapely's Documentaton <https://shapely.readthedocs.io/en/stable/project.html>`_.
+        """
+
+        # Verify 2D
+        if plane.size.count(0.0) != 1:
+            raise ValueError("Input geometry must be a 2D Box.")
+
+        # dont bother if the geometry doesn't intersect the plane at all
+        if not self.intersects(plane):
+            return []
+
+        # get list of Shapely shapes that intersect at the plane
+        normal_ind = plane.size.index(0.0)
+        dim = "xyz"[normal_ind]
+        pos = plane.center[normal_ind]
+        xyz_kwargs = {dim: pos}
+        shapes_plane = self.intersections_plane(**xyz_kwargs)
+
+        # intersect all shapes with the input plane
+        bs_min, bs_max = [plane.pop_axis(bounds, axis=normal_ind)[1] for bounds in plane.bounds]
+        shapely_box = box(minx=bs_min[0], miny=bs_min[0], maxx=bs_max[1], maxy=bs_max[1])
+        shapely_box = plane.evaluate_inf_shape(shapely_box)
+        return [plane.evaluate_inf_shape(shape) & shapely_box for shape in shapes_plane]
 
     def intersects(self, other) -> bool:
         """Returns ``True`` if two :class:`Geometry` have intersecting `.bounds`.
@@ -321,7 +383,7 @@ class Geometry(Tidy3dBaseModel, ABC):
 
         # find shapes that intersect self at plane
         axis, position = self.parse_xyz_kwargs(x=x, y=y, z=z)
-        shapes_intersect = self.intersections(x=x, y=y, z=z)
+        shapes_intersect = self.intersections_plane(x=x, y=y, z=z)
 
         plot_params = self.plot_params.include_kwargs(**patch_kwargs)
 
@@ -910,7 +972,7 @@ class Planar(Geometry, ABC):
     def length_axis(self) -> float:
         """Gets the length of the geometry along the out of plane dimension."""
 
-    def intersections(self, x: float = None, y: float = None, z: float = None):
+    def intersections_plane(self, x: float = None, y: float = None, z: float = None):
         """Returns shapely geometry at plane specified by one non None value of x,y,z.
 
         Parameters
@@ -1224,7 +1286,7 @@ class Box(Centered):
 
         return surfaces
 
-    def intersections(self, x: float = None, y: float = None, z: float = None):
+    def intersections_plane(self, x: float = None, y: float = None, z: float = None):
         """Returns shapely geometry at plane specified by one non None value of x,y,z.
 
         Parameters
@@ -1367,7 +1429,7 @@ class Box(Centered):
         )
 
         # conditions to check to determine whether to plot arrow
-        arrow_intersecting_plane = len(self.intersections(x=x, y=y, z=z)) > 0
+        arrow_intersecting_plane = len(self.intersections_plane(x=x, y=y, z=z)) > 0
         _, (dx, dy) = self.pop_axis(direction, axis=plot_axis)
         components_in_plane = any(not np.isclose(component, 0) for component in (dx, dy))
 
@@ -1506,7 +1568,7 @@ class Sphere(Centered, Circular):
         dist_z = np.abs(z - z0)
         return (dist_x**2 + dist_y**2 + dist_z**2) <= (self.radius**2)
 
-    def intersections(self, x: float = None, y: float = None, z: float = None):
+    def intersections_plane(self, x: float = None, y: float = None, z: float = None):
         """Returns shapely geometry at plane specified by one non None value of x,y,z.
 
         Parameters
@@ -3264,7 +3326,9 @@ class GeometryGroup(Geometry):
 
         return rmin, rmax
 
-    def intersections(self, x: float = None, y: float = None, z: float = None) -> List[Shapely]:
+    def intersections_plane(
+        self, x: float = None, y: float = None, z: float = None
+    ) -> List[Shapely]:
         """Returns list of shapely geoemtries at plane specified by one non-None value of x,y,z.
 
         Parameters
@@ -3286,7 +3350,9 @@ class GeometryGroup(Geometry):
 
         if not self.intersects_plane(x, y, z):
             return []
-        all_intersections = (geometry.intersections(x=x, y=y, z=z) for geometry in self.geometries)
+        all_intersections = (
+            geometry.intersections_plane(x=x, y=y, z=z) for geometry in self.geometries
+        )
 
         return functools.reduce(lambda a, b: a + b, all_intersections)
 

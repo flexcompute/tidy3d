@@ -849,11 +849,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         """
         if test_object.size.count(0.0) == 1:
             # get all merged structures on the test_object, which is already planar
-            normal_axis_index = test_object.size.index(0.0)
-            dim = "xyz"[normal_axis_index]
-            pos = test_object.center[normal_axis_index]
-            xyz_kwargs = {dim: pos}
-            structures_merged = Simulation._filter_structures_plane(structures, **xyz_kwargs)
+            structures_merged = Simulation._filter_structures_plane(structures, test_object)
             mediums = {medium for medium, _ in structures_merged}
             return mediums
 
@@ -1010,8 +1006,6 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
             The supplied or created matplotlib axes.
         """
 
-        # TODO: if we want structure alpha, we will have to filter, otherwise just get overlapped
-        # medium_shapes = self._filter_structures_plane(self.structures, x=x, y=y, z=z)
         medium_shapes = self._get_structures_plane(structures=self.structures, x=x, y=y, z=z)
         medium_map = self.medium_map
 
@@ -1117,7 +1111,11 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
             return ax
 
         if alpha < 1 and not isinstance(self.medium, CustomMedium):
-            medium_shapes = self._filter_structures_plane(structures=structures, x=x, y=y, z=z)
+            axis, position = Box.parse_xyz_kwargs(x=x, y=y, z=z)
+            center = Box.unpop_axis(position, (0, 0), axis=axis)
+            size = Box.unpop_axis(0, (inf, inf), axis=axis)
+            plane = Box(center=center, size=size)
+            medium_shapes = self._filter_structures_plane(structures=structures, plane=plane)
         else:
             structures = [self.background_structure] + list(structures)
             medium_shapes = self._get_structures_plane(structures=structures, x=x, y=y, z=z)
@@ -1775,7 +1773,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         """
         medium_shapes = []
         for structure in structures:
-            intersections = structure.geometry.intersections(x=x, y=y, z=z)
+            intersections = structure.geometry.intersections_plane(x=x, y=y, z=z)
             if len(intersections) > 0:
                 for shape in intersections:
                     shape = Box.evaluate_inf_shape(shape)
@@ -1784,7 +1782,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
 
     @staticmethod
     def _filter_structures_plane(  # pylint:disable=too-many-locals
-        structures: List[Structure], x: float = None, y: float = None, z: float = None
+        structures: List[Structure], plane: Box
     ) -> List[Tuple[Medium, Shapely]]:
         """Compute list of shapes to plot on plane specified by {x,y,z}.
         Overlaps are removed or merged depending on medium.
@@ -1809,16 +1807,11 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         shapes = []
         for structure in structures:
 
-            # dont bother with geometries that dont intersect plane
-            if not structure.geometry.intersects_plane(x=x, y=y, z=z):
-                continue
-
             # get list of Shapely shapes that intersect at the plane
-            shapes_plane = structure.geometry.intersections(x=x, y=y, z=z)
+            shapes_plane = structure.geometry.intersections_2dbox(plane)
 
             # Append each of them and their medium information to the list of shapes
             for shape in shapes_plane:
-                shape = Box.evaluate_inf_shape(shape)
                 shapes.append((structure.medium, shape, shape.bounds))
 
         background_shapes = []
@@ -2165,6 +2158,8 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
 
                 # Get permittivity on meshgrid over the reduced coordinates
                 coords_reduced = tuple(arr[ind] for arr, ind in zip(arrays, inds))
+                if any(coords.size == 0 for coords in coords_reduced):
+                    continue
 
                 red_coords = Coords(**dict(zip("xyz", coords_reduced)))
                 eps_structure = get_eps(structure=structure, frequency=freq, coords=red_coords)
