@@ -425,6 +425,11 @@ class PlanarSource(Source, ABC):
     _plane_validator = assert_plane()
 
     @cached_property
+    def injection_axis(self):
+        """Injection axis of the source."""
+        return self._injection_axis
+
+    @cached_property
     def _injection_axis(self):
         """Injection axis of the source."""
         return self.size.index(0.0)
