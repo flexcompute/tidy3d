@@ -1154,43 +1154,38 @@ class Box(Centered):
                 "Can't generate surfaces for the given object because it has zero volume."
             )
 
-        center_x, center_y, center_z = center
-        size_x, size_y, size_z = size
-        bmin = tuple(c - s / 2 for (s, c) in zip(size, center))
-        bmax = tuple(c + s / 2 for (s, c) in zip(size, center))
+        bounds = Box(center=center, size=size).bounds
 
         # Set up geometry data and names for each surface:
+        centers = [list(center) for _ in range(6)]
+        sizes = [list(size) for _ in range(6)]
 
-        surface_centers = [
-            (bmin[0], center_y, center_z),  # x-
-            (bmax[0], center_y, center_z),  # x+
-            (center_x, bmin[1], center_z),  # y-
-            (center_x, bmax[1], center_z),  # y+
-            (center_x, center_y, bmin[2]),  # z-
-            (center_x, center_y, bmax[2]),  # z+
-        ]
+        surface_index = 0
+        for dim_index in range(3):
+            for min_max_index in range(2):
 
-        surface_sizes = [
-            (0.0, size_y, size_z),  # x-
-            (0.0, size_y, size_z),  # x+
-            (size_x, 0.0, size_z),  # y-
-            (size_x, 0.0, size_z),  # y+
-            (size_x, size_y, 0.0),  # z-
-            (size_x, size_y, 0.0),  # z+
-        ]
+                new_center = centers[surface_index]
+                new_size = sizes[surface_index]
 
-        name = kwargs.pop("name", "")
-        surface_names = [
-            name + "_x-",
-            name + "_x+",
-            name + "_y-",
-            name + "_y+",
-            name + "_z-",
-            name + "_z+",
-        ]
+                new_center[dim_index] = bounds[min_max_index][dim_index]
+                new_size[dim_index] = 0.0
 
+                centers[surface_index] = new_center
+                sizes[surface_index] = new_size
+
+                surface_index += 1
+
+        name_base = kwargs.pop("name", "")
         kwargs.pop("normal_dir", None)
-        normal_dirs = ["-", "+", "-", "+", "-", "+"]
+
+        names = []
+        normal_dirs = []
+
+        for coord in "xyz":
+            for direction in "-+":
+                surface_name = name_base + "_" + coord + direction
+                names.append(surface_name)
+                normal_dirs.append(direction)
 
         # ignore surfaces that are infinitely far away
         del_idx = []
@@ -1210,27 +1205,24 @@ class Box(Centered):
             """Delete list items at indices."""
             return [i for j, i in enumerate(items) if j not in indices]
 
-        surface_centers = del_items(surface_centers, del_idx)
-        surface_sizes = del_items(surface_sizes, del_idx)
-        surface_names = del_items(surface_names, del_idx)
+        centers = del_items(centers, del_idx)
+        sizes = del_items(sizes, del_idx)
+        names = del_items(names, del_idx)
         normal_dirs = del_items(normal_dirs, del_idx)
 
-        norm_kwargs = [{} for _ in range(len(surface_centers))]
-        if "normal_dir" in cls.__dict__["__fields__"]:
-            norm_kwargs = [{"normal_dir": normal_dir} for normal_dir in normal_dirs]
+        surfaces = []
+        for _cent, _size, _name, _normal_dir in zip(centers, sizes, names, normal_dirs):
 
-        try:
-            return [
-                cls(center=center, size=size, name=_name, **norm_kwarg, **kwargs)
-                for center, size, _name, norm_kwarg in zip(
-                    surface_centers, surface_sizes, surface_names, norm_kwargs
-                )
-            ]
-        except pydantic.ValidationError:
-            return [
-                cls(center=center, size=size, **norm_kwarg, **kwargs)
-                for center, size, norm_kwarg in zip(surface_centers, surface_sizes, norm_kwargs)
-            ]
+            if "normal_dir" in cls.__dict__["__fields__"]:
+                kwargs["normal_dir"] = _normal_dir
+
+            if "name" in cls.__dict__["__fields__"]:
+                kwargs["name"] = _name
+
+            surface = cls(center=_cent, size=_size, **kwargs)
+            surfaces.append(surface)
+
+        return surfaces
 
     def intersections(self, x: float = None, y: float = None, z: float = None):
         """Returns shapely geometry at plane specified by one non None value of x,y,z.

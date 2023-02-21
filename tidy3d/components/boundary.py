@@ -106,7 +106,8 @@ class BlochBoundary(BoundaryEdge):
                 "in order to define a Bloch boundary condition."
             )
 
-        if axis == source.injection_axis:
+        # pylint:disable=protected-access
+        if axis == source._injection_axis:
             raise SetupError(
                 "Bloch boundary axis must be orthogonal to the injection axis of `source`."
             )
@@ -136,8 +137,9 @@ class BlochBoundary(BoundaryEdge):
             kmag * np.cos(angle_theta),
         ]
 
+        # pylint:disable=protected-access
         k_global = source.unpop_axis(
-            k_local[2], (k_local[0], k_local[1]), axis=source.injection_axis
+            k_local[2], (k_local[0], k_local[1]), axis=source._injection_axis
         )
 
         bloch_vec = domain_size * k_global[axis]
