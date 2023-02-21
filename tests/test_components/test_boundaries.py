@@ -77,14 +77,14 @@ def test_boundary_validators():
         boundary = Boundary(plus=periodic, minus=pml)
 
 
-@pytest.mark.parametrize("boundary, log_level", [(PMCBoundary(), None), (Periodic(), 30)])
+@pytest.mark.parametrize("boundary, log_level", [(PMCBoundary(), None), (Periodic(), "warning")])
 def test_boundary_validator_warnings(caplog, boundary, log_level):
     """Test the validators in class `Boundary` which should show a warning but not an error"""
     boundary = Boundary(plus=PECBoundary(), minus=boundary)
     assert_log_level(caplog, log_level)
 
 
-@pytest.mark.parametrize("boundary, log_level", [(PMCBoundary(), None), (Periodic(), 30)])
+@pytest.mark.parametrize("boundary, log_level", [(PMCBoundary(), None), (Periodic(), "warning")])
 def test_boundary_validator_warnings_switched(caplog, boundary, log_level):
     """Test the validators in class `Boundary` which should show a warning but not an error"""
     boundary = Boundary(minus=PECBoundary(), plus=boundary)
@@ -179,7 +179,7 @@ def test_boundaryspec_classmethods():
 
 
 PLUS_MINUS_SPECIFIED = (("plus", "minus"), ("plus",), ("minus",), ())
-LOG_LEVELS_EXPECTED = (None, 30, 30, 30)
+LOG_LEVELS_EXPECTED = (None, "warning", "warning", "warning")
 
 # TODO: remove for 2.0
 @pytest.mark.parametrize("pm_keys, log_level", zip(PLUS_MINUS_SPECIFIED, LOG_LEVELS_EXPECTED))

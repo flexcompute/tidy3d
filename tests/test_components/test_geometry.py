@@ -385,7 +385,7 @@ def test_polyslab_axis(axis):
 ANGLE = 0.01
 SIDEWALL_ANGLES = (0.0, ANGLE, 0.0, ANGLE, 0.0, ANGLE)
 REFERENCE_PLANES = ("bottom", "bottom", "middle", "middle", None, None)
-LOG_LEVELS_EXPECTED = (None, None, None, None, None, 30)
+LOG_LEVELS_EXPECTED = (None, None, None, None, None, "warning")
 
 
 def make_ref_plane_kwargs(reference_plane: str):

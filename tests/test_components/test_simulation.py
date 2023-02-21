@@ -97,7 +97,7 @@ def test_deprecation_defaults(caplog):
     s = td.Simulation(
         size=(1, 1, 1), run_time=1e-12, grid_spec=td.GridSpec.uniform(dl=0.1), boundary_spec=None
     )
-    assert_log_level(caplog, 30)
+    assert_log_level(caplog, "warning")
 
 
 def test_sim_bounds():
@@ -185,7 +185,7 @@ def _test_monitor_size():
         s.validate_pre_upload()
 
 
-@pytest.mark.parametrize("freq, log_level", [(1.5, 30), (2.5, None), (3.5, 30)])
+@pytest.mark.parametrize("freq, log_level", [(1.5, "warning"), (2.5, None), (3.5, "warning")])
 def test_monitor_medium_frequency_range(caplog, freq, log_level):
     # monitor frequency above or below a given medium's range should throw a warning
 
@@ -209,7 +209,7 @@ def test_monitor_medium_frequency_range(caplog, freq, log_level):
     assert_log_level(caplog, log_level)
 
 
-@pytest.mark.parametrize("fwidth, log_level", [(0.1, 30), (2, None)])
+@pytest.mark.parametrize("fwidth, log_level", [(0.1, "warning"), (2, None)])
 def test_monitor_simulation_frequency_range(caplog, fwidth, log_level):
     # monitor frequency outside of the simulation's frequency range should throw a warning
 
@@ -311,7 +311,7 @@ def test_validate_plane_wave_boundaries(caplog):
         sources=[src2],
         boundary_spec=bspec3,
     )
-    assert_log_level(caplog, 30)
+    assert_log_level(caplog, "warning")
 
     # angled incidence plane wave with wrong Bloch vector should warn
     td.Simulation(
@@ -320,7 +320,7 @@ def test_validate_plane_wave_boundaries(caplog):
         sources=[src2],
         boundary_spec=bspec4,
     )
-    assert_log_level(caplog, 30)
+    assert_log_level(caplog, "warning")
 
 
 def test_validate_zero_dim_boundaries(caplog):
@@ -499,7 +499,7 @@ def test_min_sym_box():
 
 def test_discretize_non_intersect(caplog):
     SIM.discretize(box=td.Box(center=(-20, -20, -20), size=(1, 1, 1)))
-    assert_log_level(caplog, 40)
+    assert_log_level(caplog, "error")
 
 
 def test_filter_structures():
@@ -533,10 +533,10 @@ def test_warn_sim_background_medium_freq_range(caplog):
             medium=td.Medium(frequency_range=(0, 1)),
         )
     )
-    assert_log_level(caplog, 30)
+    assert_log_level(caplog, "warning")
 
 
-@pytest.mark.parametrize("grid_size,log_level", [(0.001, None), (3, 30)])
+@pytest.mark.parametrize("grid_size,log_level", [(0.001, None), (3, "warning")])
 def test_large_grid_size(caplog, grid_size, log_level):
     # small fwidth should be inside range, large one should throw warning
 
@@ -558,7 +558,7 @@ def test_large_grid_size(caplog, grid_size, log_level):
     assert_log_level(caplog, log_level)
 
 
-@pytest.mark.parametrize("box_size,log_level", [(0.001, None), (9.9, 30), (20, None)])
+@pytest.mark.parametrize("box_size,log_level", [(0.001, None), (9.9, "warning"), (20, None)])
 def test_sim_structure_gap(caplog, box_size, log_level):
     """Make sure the gap between a structure and PML is not too small compared to lambda0."""
     medium = td.Medium(permittivity=2)
@@ -780,7 +780,7 @@ def test_proj_monitor_distance(caplog):
         monitors=[monitor_n2f_far],
         boundary_spec=td.BoundarySpec.all_sides(boundary=td.Periodic()),
     )
-    assert_log_level(caplog, 30)
+    assert_log_level(caplog, "warning")
 
     # proj_distance not too large - don't warn
     _ = td.Simulation(
@@ -851,7 +851,12 @@ def test_diffraction_medium():
 
 @pytest.mark.parametrize(
     "box_size,log_level",
-    [((0.1, 0.1, 0.1), None), ((1, 0.1, 0.1), 30), ((0.1, 1, 0.1), 30), ((0.1, 0.1, 1), 30)],
+    [
+        ((0.1, 0.1, 0.1), None),
+        ((1, 0.1, 0.1), "warning"),
+        ((0.1, 1, 0.1), "warning"),
+        ((0.1, 0.1, 1), "warning"),
+    ],
 )
 def test_sim_structure_extent(caplog, box_size, log_level):
     """Make sure we warn if structure extends exactly to simulation edges."""
@@ -1070,7 +1075,7 @@ def test_mode_object_syms():
     )
 
 
-@pytest.mark.parametrize("size, log_level", [(1.0, None), (65, 30)])
+@pytest.mark.parametrize("size, log_level", [(1.0, None), (65, "warning")])
 def test_warn_large_epsilon(caplog, size, log_level):
     """Make sure we get a warning if the epsilon grid is too large."""
 
