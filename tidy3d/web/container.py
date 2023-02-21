@@ -379,6 +379,16 @@ class Batch(WebContainer):
                     progress.update(pbar, description=description, completed=completed)
                 time.sleep(web.REFRESH_TIME)
 
+            # set all to 100% completed
+            for task_name, job in self.jobs.items():
+                pbar = pbar_tasks[task_name]
+                status = job.status
+                description = pbar_description(task_name, status)
+                if status == "success":
+                    progress.update(
+                        pbar, description=description, completed=len(run_statuses) - 1, refresh=True
+                    )
+
         console.log("Batch complete.")
 
     @staticmethod

@@ -147,7 +147,8 @@ def upload_string(resource_id: str, content: str, remote_filename: str):
     @param remote_filename: the remote file name on S3
     """
     with _get_progress(_S3Action.UPLOADING) as progress:
-        task_id = progress.add_task("upload", filename=remote_filename, total=len(content))
+        total_size = len(content)
+        task_id = progress.add_task("upload", filename=remote_filename, total=total_size)
 
         def _call_back(bytes_in_chunk):
             progress.update(task_id, advance=bytes_in_chunk)
@@ -161,6 +162,9 @@ def upload_string(resource_id: str, content: str, remote_filename: str):
             Config=_s3_config,
         )
 
+        # mark as completed
+        progress.update(task_id, completed=total_size, refresh=True)
+
 
 def upload_file(resource_id: str, path: str, remote_filename: str):
     """
@@ -170,7 +174,8 @@ def upload_file(resource_id: str, path: str, remote_filename: str):
     @param remote_filename: the remote file name on S3
     """
     with _get_progress(_S3Action.UPLOADING) as progress:
-        task_id = progress.add_task("upload", filename=remote_filename, total=os.path.getsize(path))
+        total_size = os.path.getsize(path)
+        task_id = progress.add_task("upload", filename=remote_filename, total=total_size)
 
         def _call_back(bytes_in_chunk):
             progress.update(task_id, advance=bytes_in_chunk)
@@ -185,6 +190,9 @@ def upload_file(resource_id: str, path: str, remote_filename: str):
                 Config=_s3_config,
             )
 
+        # mark as completed
+        progress.update(task_id, completed=total_size, refresh=True)
+
 
 def download_file(resource_id: str, remote_filename: str, to_file: str = None):
     """
@@ -197,11 +205,12 @@ def download_file(resource_id: str, remote_filename: str, to_file: str = None):
     client = token.get_client()
     meta_data = client.head_object(Bucket=token.get_bucket(), Key=token.get_s3_key())
     with _get_progress(_S3Action.DOWNLOADING) as progress:
+        total_size = meta_data.get("ContentLength", 0)
         progress.start()
         task_id = progress.add_task(
             "download",
             filename=os.path.basename(remote_filename),
-            total=meta_data.get("ContentLength", 0),
+            total=total_size,
         )
 
         def _call_back(bytes_in_chunk):
@@ -214,3 +223,6 @@ def download_file(resource_id: str, remote_filename: str, to_file: str = None):
         client.download_file(
             Bucket=token.get_bucket(), Filename=to_file, Key=token.get_s3_key(), Callback=_call_back
         )
+
+        # mark as completed
+        progress.update(task_id, completed=total_size, refresh=True)

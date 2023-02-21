@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- asynchronous running of multiple simulations using `web.run_async`.
+- Asynchronous running of multiple simulations using `web.run_async`.
 - Warning in `Simulation.epsilon` if many grid cells and structures provided and slow run time expected as a result.
 - Warning if PML or absorbing boundaries are used along a simulation dimension with zero size.
 
@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 ### Fixed
+- Progressbars always set to 100% when webapi functions are finished.
 
 
 ## [1.9.0rc2] - 2023-2-17
