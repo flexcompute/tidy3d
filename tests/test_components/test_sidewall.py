@@ -336,7 +336,7 @@ def test_intersection_with_inside_poly():
                     xp = 0
                     yp = xyz[:, 1]
                     zp = xyz[:, 2]
-                    shape_intersect = s.intersections(x=xp)
+                    shape_intersect = s.intersections_plane(x=xp)
 
                     xarray, yarray, zarray = np.meshgrid(xp, yp, zp, indexing="ij")
                     res_inside_array.append(s.inside(xarray, yarray, zarray))
@@ -362,7 +362,7 @@ def test_intersection_with_inside_poly():
                     xp = xyz[:, 0]
                     yp = 0
                     zp = xyz[:, 2]
-                    shape_intersect = s.intersections(y=yp)
+                    shape_intersect = s.intersections_plane(y=yp)
 
                     xarray, yarray, zarray = np.meshgrid(xp, yp, zp, indexing="ij")
                     res_inside_array.append(s.inside(xarray, yarray, zarray))
@@ -383,7 +383,7 @@ def test_intersection_with_inside_poly():
                     xp = xyz[:, 0]
                     yp = xyz[:, 1]
                     zp = 0
-                    shape_intersect = s.intersections(z=zp)
+                    shape_intersect = s.intersections_plane(z=zp)
 
                     xarray, yarray, zarray = np.meshgrid(xp, yp, zp, indexing="ij")
                     res_inside_array.append(s.inside(xarray, yarray, zarray))
@@ -488,7 +488,7 @@ def test_normal_intersection_with_inside_cylinder():
     z_list = np.linspace(-length, length, num_test_z)
     for s in s_list:
         for z in z_list:
-            shape_intersect = s.intersections(z=z)
+            shape_intersect = s.intersections_plane(z=z)
             for x in x_list:
                 for y in y_list:
                     # inside
@@ -520,10 +520,10 @@ def test_side_intersection_cylinder():
         reference_plane="middle",
     )
 
-    shape_intersect = cyl.intersections(x=0)
+    shape_intersect = cyl.intersections_plane(x=0)
     assert shape_intersect[0].covers(Point(1.25, 0.4)) == False
     assert shape_intersect[0].covers(Point(1.25, -0.4)) == True
 
-    shape_intersect = cyl.intersections(x=np.sqrt(3) / 2)
+    shape_intersect = cyl.intersections_plane(x=np.sqrt(3) / 2)
     assert shape_intersect[0].covers(Point(1.25, -0.4)) == False
     assert shape_intersect[0].covers(Point(0.7, -0.4)) == True

@@ -9,17 +9,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - Asynchronous running of multiple simulations concurrently using `web.run_async`.
 - Jax-compatible `run_async` in the `adjoint` plugin for efficiently running multi-simulation objectives concurrently and differentiating result.
-- Warning in `Simulation.epsilon` if many grid cells and structures provided and slow - `verbose` option in `tidy3d.web` functions and containers. If `False`, there will be no non-essential output when running simulations over web api.
-run time expected as a result.
+- Warning in `Simulation.epsilon` if many grid cells and structures provided and slow run time expected as a result.
+- `verbose` option in `tidy3d.web` functions and containers. If `False`, there will be no non-essential output when running simulations over web api.
 - Warning if PML or absorbing boundaries are used along a simulation dimension with zero size.
 
 ### Changed
+- Issue a deprecation warning that `Geometry.intersections` will be renamed to `Geometry.intersections_plane` in 2.0.
 
 
 ### Fixed
 - Progressbars always set to 100% when webapi functions are finished.
 - Faster handling of `Geometry.intersects` and `Geometry.inside` by taking into account geometry bounds.
 - Numpy divide by zero warning in mode solver fixed by initializing jacobians as real instead of complex.
+- Bug in validators for 2D objects being in homogeneous media which were looking at the infinite plane in which the objects lie. This can also significantly speed up some validators in the case of many structures.
 
 
 ## [1.9.0rc2] - 2023-2-17

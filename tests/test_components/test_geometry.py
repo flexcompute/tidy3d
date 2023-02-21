@@ -148,10 +148,10 @@ def test_array_to_vertices():
 
 
 @pytest.mark.parametrize("component", GEO_TYPES)
-def test_intersections(component):
-    assert len(component.intersections(z=0.2)) > 0
-    assert len(component.intersections(x=0.2)) > 0
-    assert len(component.intersections(x=10000)) == 0
+def test_intersections_plane(component):
+    assert len(component.intersections_plane(z=0.2)) > 0
+    assert len(component.intersections_plane(x=0.2)) > 0
+    assert len(component.intersections_plane(x=10000)) == 0
 
 
 def test_bounds_base():
@@ -252,7 +252,7 @@ def test_geo_group_methods():
     geo_group.inside(0, 1, 2)
     geo_group.inside(np.linspace(0, 1, 10), np.linspace(0, 1, 10), np.linspace(0, 1, 10))
     geo_group.inside_meshgrid(np.linspace(0, 1, 10), np.linspace(0, 1, 10), np.linspace(0, 1, 10))
-    geo_group.intersections(y=0)
+    geo_group.intersections_plane(y=0)
     geo_group.intersects(td.Box(size=(1, 1, 1)))
     rmin, rmax = geo_group.bounds
 
@@ -320,7 +320,7 @@ def test_geometry_sizes():
 
 
 @pytest.mark.parametrize("x0", [5])
-def test_geometry_touching_intersections(x0):
+def test_geometry_touching_intersections_plane(x0):
     """Two touching boxes should show at least one intersection at plane where they touch."""
 
     # size of each box
@@ -334,8 +334,8 @@ def test_geometry_touching_intersections(x0):
     b1 = td.Box(center=(x0 - L / 2, 0, 0), size=(L, L, L))
     b2 = td.Box(center=(x0 + L / 2, 0, 0), size=(L, L, L))
 
-    ints1 = b1.intersections(x=x0)
-    ints2 = b2.intersections(x=x0)
+    ints1 = b1.intersections_plane(x=x0)
+    ints2 = b2.intersections_plane(x=x0)
 
     ints_total = ints1 + ints2
 
