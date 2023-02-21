@@ -3,19 +3,31 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+
+## [Unreleased]
+
+### Added
+
+
+### Changed
+
+
+### Fixed
+
+
 ## [1.9.0rc2] - 2023-2-17
 
-## Added
+### Added
 
-* Plugin `ComplexPolySlab` for supporting complex polyslabs containing self-intersecting polygons during extrusion.
+- Plugin `ComplexPolySlab` for supporting complex polyslabs containing self-intersecting polygons during extrusion.
 
-## Changed
-* `PolySlab.from_gds` supports `gds_cell` from both `gdspy` and `gdstk`, both packages are made optional requirements.
-* Adjoint plugin `JaxCustomMedium` is made faster and can handle several thousand pixels without significant overhead.
-* Jax is made an optional requirement. The adjoint plugin supports jax versions 0.3 and 0.4 for windows and non-windows users, respectively.
+### Changed
+- `PolySlab.from_gds` supports `gds_cell` from both `gdspy` and `gdstk`, both packages are made optional requirements.
+- Adjoint plugin `JaxCustomMedium` is made faster and can handle several thousand pixels without significant overhead.
+- Jax is made an optional requirement. The adjoint plugin supports jax versions 0.3 and 0.4 for windows and non-windows users, respectively.
 
-## Fixed
-* Error importing `Axes` type with most recent `matplotlib` release.
+### Fixed
+- Error importing `Axes` type with most recent `matplotlib` release.
 
 ## [1.9.0rc1] - 2023-2-3
 
