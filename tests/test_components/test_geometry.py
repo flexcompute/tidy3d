@@ -33,6 +33,8 @@ def test_plot(component):
 
 def test_base_inside():
     assert Geometry.inside(GEO, x=0, y=0, z=0)
+    assert np.all(Geometry.inside(GEO, np.array([0, 0]), np.array([0, 0]), np.array([0, 0])))
+    assert np.all(Geometry.inside(GEO, np.array([[0, 0]]), np.array([[0, 0]]), np.array([[0, 0]])))
 
 
 def test_bounding_box():
@@ -106,6 +108,8 @@ def test_planar_bounds():
 @pytest.mark.parametrize("component", GEO_TYPES)
 def test_inside(component):
     b = component.inside(0, 0, 0)
+    bs = component.inside(np.array([0, 0]), np.array([0, 0]), np.array([0, 0]))
+    bss = component.inside(np.array([[0, 0]]), np.array([[0, 0]]), np.array([[0, 0]]))
 
 
 def test_zero_dims():

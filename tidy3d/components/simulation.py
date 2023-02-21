@@ -2120,25 +2120,28 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
 
         def make_eps_data(coords: Coords):
             """returns epsilon data on grid of points defined by coords"""
-            xs, ys, zs = np.array(coords.x), np.array(coords.y), np.array(coords.z)
+            arrays = (np.array(coords.x), np.array(coords.y), np.array(coords.z))
             eps_background = get_eps(
                 structure=self.background_structure, frequency=freq, coords=coords
             )
-            eps_array = eps_background * np.ones((xs.size, ys.size, zs.size), dtype=complex)
+            shape = tuple(len(array) for array in arrays)
+            eps_array = eps_background * np.ones(shape, dtype=complex)
             for structure in self.structures:
                 # Indexing subset within the bounds of the structure
                 # pylint:disable=protected-access
-                inds_x, inds_y, inds_z = structure.geometry._inds_inside_bounds(xs, ys, zs)
+                inds = structure.geometry._inds_inside_bounds(*arrays)
 
                 # Get permittivity on meshgrid over the reduced coordinates
-                red_coords = Coords(**{"x": xs[inds_x], "y": ys[inds_y], "z": zs[inds_z]})
+                coords_reduced = tuple(arr[ind] for arr, ind in zip(arrays, inds))
+
+                red_coords = Coords(**dict(zip("xyz", coords_reduced)))
                 eps_structure = get_eps(structure=structure, frequency=freq, coords=red_coords)
 
                 # Update permittivity array at selected indexes within the geometry
-                is_inside = structure.geometry.inside_meshgrid(xs[inds_x], ys[inds_y], zs[inds_z])
-                eps_array[inds_x, inds_y, inds_z] = eps_structure * is_inside
+                is_inside = structure.geometry.inside_meshgrid(*coords_reduced)
+                eps_array[inds] = eps_structure * is_inside
 
-            coords = {"x": xs, "y": ys, "z": zs}
+            coords = dict(zip("xyz", arrays))
             return xr.DataArray(eps_array, coords=coords, dims=("x", "y", "z"))
 
         # combine all data into dictionary

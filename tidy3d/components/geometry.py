@@ -65,11 +65,16 @@ class Geometry(Tidy3dBaseModel, ABC):
             loc = Point(x, y)
             return any(shape.contains(loc) for shape in shapes_intersect)
 
-        x_arr, y_arr, z_arr = np.array(x), np.array(y), np.array(z)
-        inside = np.zeros((x_arr.size,), dtype=bool)
-        for ipt, (xp, yp, zp) in enumerate(zip(x_arr.ravel(), y_arr.ravel(), z_arr.ravel())):
-            inside[ipt] = point_inside(xp, yp, zp)
-        return inside.reshape(x_arr.shape)
+        arrays = tuple(map(np.array, (x, y, z)))
+        shapes = set(arr.shape for arr in arrays)
+        if len(shapes) > 1:
+            raise ValueError("all coordinate inputs (x,y,z) must be same shape.")
+        shape = tuple(shapes)[0]
+        inside = np.zeros((int(np.prod(shape)),), dtype=bool)
+        arrays_flat = map(np.ravel, arrays)
+        for ipt, args in enumerate(zip(*arrays_flat)):
+            inside[ipt] = point_inside(*args)
+        return inside.reshape(shape)
 
     def _inds_inside_bounds(
         self, x_1d: np.ndarray[float], y_1d: np.ndarray[float], z_1d: np.ndarray[float]
@@ -119,11 +124,15 @@ class Geometry(Tidy3dBaseModel, ABC):
             point that is inside the geometry.
         """
 
-        is_inside = np.zeros((x_1d.size, y_1d.size, z_1d.size), dtype=bool)
-        inds_x, inds_y, inds_z = self._inds_inside_bounds(x_1d, y_1d, z_1d)
-        x, y, z = np.meshgrid(x_1d[inds_x], y_1d[inds_y], z_1d[inds_z], indexing="ij")
-        is_inside[inds_x, inds_y, inds_z] = self.inside(x, y, z)
-
+        arrays = tuple(map(np.array, (x_1d, y_1d, z_1d)))
+        if any(arr.ndim != 1 for arr in arrays):
+            raise ValueError("supplied coordinates (x,y,z) must be 1D")
+        shape = tuple(arr.size for arr in arrays)
+        is_inside = np.zeros(shape, dtype=bool)
+        inds_inside = self._inds_inside_bounds(*arrays)
+        coords_inside = tuple(arr[ind] for ind, arr in zip(inds_inside, arrays))
+        coords_3d = np.meshgrid(*coords_inside, indexing="ij")
+        is_inside[inds_inside] = self.inside(*coords_3d)
         return is_inside
 
     @abstractmethod
