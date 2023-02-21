@@ -49,6 +49,9 @@ MAX_GRID_CELLS = 20e9
 MAX_CELLS_TIMES_STEPS = 1e17
 MAX_MONITOR_DATA_SIZE_BYTES = 10e9
 
+# number of grid cells * structures at which we star warning about slow Simulation.epsilon()
+NUM_CELLS_STRUCTURES_WARN_EPSILON = 274_000_000
+
 
 class Simulation(Box):  # pylint:disable=too-many-public-methods
     """Contains all information about Tidy3d simulation.
@@ -2141,6 +2144,15 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
             return xr.DataArray(eps_array, coords=coords, dims=("x", "y", "z"))
 
         # combine all data into dictionary
+        grid_cells_times_structures = np.prod(grid.num_cells) * len(self.structures)
+        if grid_cells_times_structures > NUM_CELLS_STRUCTURES_WARN_EPSILON:
+            log.warning(
+                f"Simulation contains {int(np.prod(grid.num_cells)):.2e} grid cells and "
+                f"{len(self.structures):.2e} structures. "
+                f"If the product of these ({grid_cells_times_structures:.2e}) goes above "
+                f" about {int(NUM_CELLS_STRUCTURES_WARN_EPSILON):.2e}, "
+                "epsilon calculation will become slow."
+            )
         coords = grid[coord_key]
         return make_eps_data(coords)
 
