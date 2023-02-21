@@ -293,8 +293,7 @@ def monitor(task_id: TaskId) -> None:
             time.sleep(1.0)
         if perc_done is not None and perc_done < 100:
             log.info("early shutoff detected, exiting.")
-        else:
-            progress.update(pbar_pd, completed=100)
+        progress.update(pbar_pd, completed=100, refresh=True)
 
     # postprocessing
     if status != "running":
