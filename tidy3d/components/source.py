@@ -301,6 +301,11 @@ class Source(Box, ABC):
         return Box(center=self.center, size=self.size)
 
     @cached_property
+    def _injection_axis(self):
+        """Injection axis of the source."""
+        return None
+
+    @cached_property
     def _dir_vector(self) -> Tuple[float, float, float]:
         """Returns a vector indicating the source direction for arrow plotting, if not None."""
         return None
@@ -420,7 +425,7 @@ class PlanarSource(Source, ABC):
     _plane_validator = assert_plane()
 
     @cached_property
-    def injection_axis(self):
+    def _injection_axis(self):
         """Injection axis of the source."""
         return self.size.index(0.0)
 
@@ -435,6 +440,11 @@ class VolumeSource(Source, ABC):
         "the injection axis by ``angle_theta`` and ``angle_phi``. Must be ``None`` for planar "
         "directional sources, as it is taken automatically from the plane size.",
     )
+
+    @cached_property
+    def _injection_axis(self):
+        """Injection axis of the source."""
+        return self.injection_axis
 
 
 """ Field Sources require more specification, for now, they all have a notion of a direction."""
@@ -453,11 +463,11 @@ class DirectionalSource(FieldSource, ABC):
     @cached_property
     def _dir_vector(self) -> Tuple[float, float, float]:
         """Returns a vector indicating the source direction for arrow plotting, if not None."""
-        if hasattr(self, "injection_axis"):
-            dir_vec = [0, 0, 0]
-            dir_vec[self.injection_axis] = 1 if self.direction == "+" else -1
-            return dir_vec
-        return None
+        if self._injection_axis is None:
+            return None
+        dir_vec = [0, 0, 0]
+        dir_vec[int(self._injection_axis)] = 1 if self.direction == "+" else -1
+        return dir_vec
 
 
 class BroadbandSource(Source, ABC):
@@ -666,16 +676,16 @@ class AngledFieldSource(DirectionalSource, ABC):
         dx = radius * np.cos(self.angle_phi) * np.sin(self.angle_theta)
         dy = radius * np.sin(self.angle_phi) * np.sin(self.angle_theta)
         dz = radius * np.cos(self.angle_theta)
-        return self.unpop_axis(dz, (dx, dy), axis=self.injection_axis)
+        return self.unpop_axis(dz, (dx, dy), axis=self._injection_axis)
 
     @cached_property
     def _pol_vector(self) -> Tuple[float, float, float]:
         """Source polarization normal vector in cartesian coordinates."""
         normal_dir = [0.0, 0.0, 0.0]
-        normal_dir[self.injection_axis] = 1.0
+        normal_dir[int(self._injection_axis)] = 1.0
         propagation_dir = list(self._dir_vector)
         if self.angle_theta == 0.0:
-            pol_vector_p = np.array((0, 1, 0)) if self.injection_axis == 0 else np.array((1, 0, 0))
+            pol_vector_p = np.array((0, 1, 0)) if self._injection_axis == 0 else np.array((1, 0, 0))
             pol_vector_p = self.rotate_points(pol_vector_p, normal_dir, angle=self.angle_phi)
         else:
             pol_vector_s = np.cross(normal_dir, propagation_dir)
@@ -731,7 +741,7 @@ class ModeSource(DirectionalSource, PlanarSource, BroadbandSource):
         dx = radius * np.cos(self.angle_phi) * np.sin(self.angle_theta)
         dy = radius * np.sin(self.angle_phi) * np.sin(self.angle_theta)
         dz = radius * np.cos(self.angle_theta)
-        return self.unpop_axis(dz, (dx, dy), axis=self.injection_axis)
+        return self.unpop_axis(dz, (dx, dy), axis=self._injection_axis)
 
 
 """ Angled Field Sources one can use. """

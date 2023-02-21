@@ -344,7 +344,7 @@ def test_validate_zero_dim_boundaries(caplog):
             z=td.Boundary.pml(),
         ),
     )
-    assert_log_level(caplog, 30)
+    assert_log_level(caplog, "warning")
 
     # zero-dim simulation with an absorbing boundary any other direction should not warn
     td.Simulation(
