@@ -1,10 +1,12 @@
 import os
 from pathlib import Path
+from typing import Dict
 
 import numpy as np
 from tidy3d import *
 import tidy3d as td
 from tidy3d.log import _get_level_int
+from tidy3d.web import BatchData
 
 
 """ utilities shared between all tests """
@@ -361,6 +363,11 @@ def run_emulated(simulation: Simulation, **kwargs) -> SimulationData:
     data = [MONITOR_MAKER_MAP[type(mnt)](mnt) for mnt in simulation.monitors]
 
     return SimulationData(simulation=simulation, data=data)
+
+
+def run_async_emulated(simulations: Dict[str, Simulation], **kwargs) -> BatchData:
+    """Emulate an async run function."""
+    return {task_name: run_emulated(sim) for task_name, sim in simulations.items()}
 
 
 def assert_log_level(caplog, log_level_expected: str):

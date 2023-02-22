@@ -27,10 +27,10 @@ from tidy3d.plugins.adjoint.components.data.sim_data import JaxSimulationData
 from tidy3d.plugins.adjoint.components.data.monitor_data import JaxModeData
 from tidy3d.plugins.adjoint.components.data.data_array import JaxDataArray
 from tidy3d.plugins.adjoint.components.data.dataset import JaxPermittivityDataset
-from tidy3d.plugins.adjoint.web import run
+from tidy3d.plugins.adjoint.web import run, run_async
 from tidy3d.plugins.adjoint.log import AdjointError
 
-from ..utils import run_emulated, assert_log_level
+from ..utils import run_emulated, assert_log_level, run_async_emulated
 
 
 EPS = 2.0
@@ -174,6 +174,14 @@ def use_emulated_run(monkeypatch):
     import tidy3d.plugins.adjoint.web as adjoint_web
 
     monkeypatch.setattr(adjoint_web, "tidy3d_run_fn", run_emulated)
+
+
+@pytest.fixture
+def use_emulated_run_async(monkeypatch):
+    """If this fixture is used, the `tests.utils.run_emulated` function is used for simulation."""
+    import tidy3d.plugins.adjoint.web as adjoint_web
+
+    monkeypatch.setattr(adjoint_web, "tidy3d_run_async_fn", run_async_emulated)
 
 
 def test_adjoint_pipeline(use_emulated_run):
@@ -679,3 +687,40 @@ def _test_polyslab_box(use_emulated_run):
 
     assert np.allclose(gs_b, gs_p), f"size gradients dont match, got {gs_b} and {gs_p}"
     assert np.allclose(gc_b, gc_p), f"center gradients dont match, got {gc_b} and {gc_p}"
+
+
+# @pytest.mark.asyncio
+def test_adjoint_run_async(use_emulated_run_async):
+    """Test differnetiating thorugh async adjoint runs"""
+
+    def make_sim_simple(permittivity: float) -> JaxSimulation:
+        """Make a sim as a function of a single parameter."""
+        return make_sim(
+            permittivity=permittivity, size=SIZE, vertices=VERTICES, base_eps_val=BASE_EPS_VAL
+        )
+
+    def f(x):
+        """Objective function to differentiate."""
+
+        sims = []
+        for i in range(2):
+            permittivity = x + float(1.0 + i)
+            sims.append(make_sim_simple(permittivity=permittivity))
+
+        sim_data_list = run_async(sims)
+
+        result = 0.0
+        for sim_data in sim_data_list:
+            amp = extract_amp(sim_data)
+            result += objective(amp)
+
+        return result
+
+    # test evaluating the function
+    x0 = 1.0
+    # f0 = await f(x0)
+
+    # and its derivatve
+    f0 = f(x0)
+    g = jax.grad(f)
+    g0 = g(x0)

@@ -273,7 +273,7 @@ def _test_batch_8_delete():
 
 
 @clear_tmp
-def atest_web_run_async():
+def test_web_run_async():
     """test complete run"""
     sims = 2 * [sim_original]
     batch_data = web.run_async(sims)
