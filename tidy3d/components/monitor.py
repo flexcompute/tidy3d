@@ -5,7 +5,7 @@ from typing import Union, Tuple
 import pydantic
 import numpy as np
 
-from .types import Ax, EMField, ArrayLike, Bound, FreqArray
+from .types import Ax, EMField, ArrayLike, FreqArray
 from .types import Literal, Direction, Coordinate, Axis, ObsGridArray
 from .geometry import Box
 from .validators import assert_plane
@@ -214,6 +214,11 @@ class PlanarMonitor(Monitor, ABC):
 
     _plane_validator = assert_plane()
 
+    @cached_property
+    def normal_axis(self) -> Axis:
+        """Axis normal to the monitor's plane."""
+        return self.size.index(0.0)
+
 
 class AbstractModeMonitor(PlanarMonitor, FreqMonitor):
     """:class:`Monitor` that records mode-related data."""
@@ -230,10 +235,8 @@ class AbstractModeMonitor(PlanarMonitor, FreqMonitor):
         y: float = None,
         z: float = None,
         ax: Ax = None,
-        sim_bounds: Bound = None,
         **patch_kwargs,
     ) -> Ax:
-
         # call the monitor.plot() function first
         ax = super().plot(x=x, y=y, z=z, ax=ax, **patch_kwargs)
 
@@ -247,10 +250,11 @@ class AbstractModeMonitor(PlanarMonitor, FreqMonitor):
             z=z,
             ax=ax,
             direction=self._dir_arrow,
+            bend_radius=self.mode_spec.bend_radius,
+            bend_axis=self._bend_axis,
             color=ARROW_COLOR_MONITOR,
             alpha=arrow_alpha,
             both_dirs=True,
-            sim_bounds=sim_bounds,
         )
         return ax
 
@@ -260,7 +264,16 @@ class AbstractModeMonitor(PlanarMonitor, FreqMonitor):
         dx = np.cos(self.mode_spec.angle_phi) * np.sin(self.mode_spec.angle_theta)
         dy = np.sin(self.mode_spec.angle_phi) * np.sin(self.mode_spec.angle_theta)
         dz = np.cos(self.mode_spec.angle_theta)
-        return self.unpop_axis(dz, (dx, dy), axis=self.size.index(0.0))
+        return self.unpop_axis(dz, (dx, dy), axis=self.normal_axis)
+
+    @cached_property
+    def _bend_axis(self) -> Axis:
+        if self.mode_spec.bend_radius is None:
+            return None
+        in_plane = [0, 0]
+        in_plane[self.mode_spec.bend_axis] = 1
+        direction = self.unpop_axis(0, in_plane, axis=self.normal_axis)
+        return direction.index(1)
 
 
 class FieldMonitor(AbstractFieldMonitor, FreqMonitor):
@@ -770,11 +783,6 @@ class DiffractionMonitor(PlanarMonitor, FreqMonitor):
                 f"transverse directions, given size={val}."
             )
         return val
-
-    @property
-    def normal_axis(self) -> Axis:
-        """Axis normal to the monitor's plane."""
-        return self.size.index(0)
 
     def storage_size(self, num_cells: int, tmesh: ArrayLike[float, 1]) -> int:
         """Size of monitor storage given the number of points after discretization."""

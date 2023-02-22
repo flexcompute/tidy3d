@@ -48,6 +48,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - Saving and loading of `.hdf5` files is made orders of magnitude faster due to an internal refactor.
+### Changed
+- Sources and monitors with bend radii are displayed with curved arrows.
+
 ## [1.8.4] - 2023-2-13
 
 ### Fixed
