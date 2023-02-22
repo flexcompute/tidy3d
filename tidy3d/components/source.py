@@ -8,7 +8,7 @@ import pydantic
 import numpy as np
 
 from .base import Tidy3dBaseModel, cached_property, DATA_ARRAY_MAP
-from .types import Direction, Polarization, Ax, FreqBound, ArrayLike, Axis, Bound
+from .types import Direction, Polarization, Ax, FreqBound, ArrayLike, Axis
 from .validators import assert_plane, validate_name_str, get_value
 from .data.dataset import FieldDataset
 from .geometry import Box
@@ -321,10 +321,8 @@ class Source(Box, ABC):
         y: float = None,
         z: float = None,
         ax: Ax = None,
-        sim_bounds: Bound = None,
         **patch_kwargs,
     ) -> Ax:
-
         # call the `Source.plot()` function first.
         ax = super().plot(x=x, y=y, z=z, ax=ax, **patch_kwargs)
 
@@ -333,6 +331,11 @@ class Source(Box, ABC):
 
         # then add the arrow based on the propagation direction
         if self._dir_vector is not None:
+            bend_radius = None
+            bend_axis = None
+            if hasattr(self, "mode_spec"):
+                bend_radius = self.mode_spec.bend_radius
+                bend_axis = self._bend_axis
 
             ax = self._plot_arrow(
                 x=x,
@@ -340,14 +343,14 @@ class Source(Box, ABC):
                 z=z,
                 ax=ax,
                 direction=self._dir_vector,
+                bend_radius=bend_radius,
+                bend_axis=bend_axis,
                 color=ARROW_COLOR_SOURCE,
                 alpha=arrow_alpha,
                 both_dirs=False,
-                sim_bounds=sim_bounds,
             )
 
         if self._pol_vector is not None:
-
             ax = self._plot_arrow(
                 x=x,
                 y=y,
@@ -357,7 +360,6 @@ class Source(Box, ABC):
                 color=ARROW_COLOR_POLARIZATION,
                 alpha=arrow_alpha,
                 both_dirs=False,
-                sim_bounds=sim_bounds,
             )
 
         return ax
@@ -747,6 +749,15 @@ class ModeSource(DirectionalSource, PlanarSource, BroadbandSource):
         dy = radius * np.sin(self.angle_phi) * np.sin(self.angle_theta)
         dz = radius * np.cos(self.angle_theta)
         return self.unpop_axis(dz, (dx, dy), axis=self._injection_axis)
+
+    @cached_property
+    def _bend_axis(self) -> Axis:
+        if self.mode_spec.bend_radius is None:
+            return None
+        in_plane = [0, 0]
+        in_plane[self.mode_spec.bend_axis] = 1
+        direction = self.unpop_axis(0, in_plane, axis=self.injection_axis)
+        return direction.index(1)
 
 
 """ Angled Field Sources one can use. """

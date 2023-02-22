@@ -6,7 +6,7 @@ from typing import Any
 from functools import wraps
 
 import matplotlib.pylab as plt
-from matplotlib.patches import PathPatch
+from matplotlib.patches import PathPatch, ArrowStyle
 from matplotlib.path import Path
 from numpy import array, concatenate, ones
 import pydantic as pd
@@ -25,14 +25,8 @@ ARROW_COLOR_POLARIZATION = "brown"
 ARROW_ALPHA = 0.8
 
 
-# this times the min of axis height and width gives the arrow length
-ARROW_LENGTH_FACTOR = 0.1
-
-# this times ARROW_LENGTH gives width
-ARROW_WIDTH_FACTOR = 0.4
-
-# arrow width cannot be larger than this factor times the max of axis height and width
-MAX_ARROW_WIDTH_FACTOR = 0.02
+# Arrow length in inches
+ARROW_LENGTH = 0.3
 
 
 """ Decorators """
@@ -132,6 +126,10 @@ MEDIUM_CMAP = [
 
 # colormap for structure's permittivity in plot_eps
 STRUCTURE_EPS_CMAP = "gist_yarg"
+
+# default arrow style
+arrow_style = ArrowStyle.Simple(head_length=12, head_width=9, tail_width=4)
+
 
 """=================================================================================================
 Descartes modified from https://pypi.org/project/descartes/ for Shapely >= 1.8.0
