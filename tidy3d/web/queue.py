@@ -2,11 +2,16 @@
 import asyncio
 from typing import Dict
 
+import nest_asyncio
+
 from .container import DEFAULT_DATA_DIR, BatchData, Job, Batch
 from ..components.simulation import Simulation
 
+# note: this is to avoid annoying errors with asyncio.run() on jupyter notebooks
+nest_asyncio.apply()
 
-async def run_async(
+
+async def _run_async(
     simulations: Dict[str, Simulation],
     folder_name: str = "default",
     path_dir: str = DEFAULT_DATA_DIR,
@@ -34,7 +39,7 @@ async def run_async(
 
     Note
     ----
-    It is necessary to "await" the return of this function. ie ``await run_async()``.
+    This is an experimental feature and may not work on all systems or configurations.
     For more details, see ``https://realpython.com/async-io-python/``.
 
     Returns
@@ -112,3 +117,51 @@ async def run_async(
 
     # return the batch data containing all of the job run details for loading later
     return BatchData(task_ids=task_ids, task_paths=task_paths)
+
+
+def run_async(
+    simulations: Dict[str, Simulation],
+    folder_name: str = "default",
+    path_dir: str = DEFAULT_DATA_DIR,
+    callback_url: str = None,
+    num_workers: int = None,
+    # verbose: bool = True,
+) -> BatchData:
+    """Submits a set of :class:`.Simulation` objects to server, starts running,
+    monitors progress, downloads, and loads results as a :class:`.BatchData` object.
+    Uses ``asyncio`` to perform these steps asynchronously.
+
+    Parameters
+    ----------
+    simulations : Dict[str, :class:`.Simulation`]
+        Mapping of task name to simulation.
+    folder_name : str = "default"
+        Name of folder to store each task on web UI.
+    path_dir : str
+        Base directory where data will be downloaded, by default current working directory.
+    callback_url : str = None
+        Http PUT url to receive simulation finish event. The body content is a json file with
+        fields ``{'id', 'status', 'name', 'workUnit', 'solverVersion'}``.
+    num_workers: int = None
+        Number of tasks to submit at once in a batch, if None, will run all at the same time.
+
+    Note
+    ----
+    This is an experimental feature and may not work on all systems or configurations.
+    For more details, see ``https://realpython.com/async-io-python/``.
+
+    Returns
+    ------
+    :class:`BatchData`
+        Contains the :class:`.SimulationData` of each :class:`.Simulation` in :class:`Batch`.
+    """
+
+    return asyncio.run(
+        _run_async(
+            simulations=simulations,
+            folder_name=folder_name,
+            path_dir=path_dir,
+            callback_url=callback_url,
+            num_workers=num_workers,
+        )
+    )

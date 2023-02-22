@@ -22,6 +22,10 @@ from ..base import JaxObject
 from ...log import AdjointError
 
 
+# small amount to add to cos_theta in JaxDiffractionData angles to avoid warnings
+EPSILON_ANGLE = 1e-6
+
+
 class JaxMonitorData(MonitorData, JaxObject, ABC):
     """A :class:`.MonitorData` that we regsiter with jax."""
 
@@ -229,7 +233,7 @@ class JaxDiffractionData(JaxMonitorData, DiffractionData):
 
         # compute angles and normalization factors
         theta_angles = jnp.array(self.angles[0].values)
-        cos_theta = np.cos(np.nan_to_num(theta_angles))
+        cos_theta = np.cos(np.nan_to_num(theta_angles)) + EPSILON_ANGLE
         norm = 1.0 / np.sqrt(2.0 * self.eta) / np.sqrt(cos_theta)
 
         # stack the amplitudes in s- and p-components along a new polarization axis
