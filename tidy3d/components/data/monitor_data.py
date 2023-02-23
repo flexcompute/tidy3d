@@ -1661,6 +1661,10 @@ class DiffractionData(AbstractFieldProjectionData):
         the power carried by the wave of that order and polarization equals ``abs(amps)^2``.
         """
         cos_theta = np.cos(np.nan_to_num(self.angles[0]))
+
+        # will set amplitudes to 0 for glancing or negative angles
+        cos_theta[cos_theta <= 0] = np.inf
+
         norm = 1.0 / np.sqrt(2.0 * self.eta) / np.sqrt(cos_theta)
         amp_theta = self.Etheta.values * norm
         amp_phi = self.Ephi.values * norm

@@ -16,15 +16,12 @@ from typing import Tuple, Any
 from tidy3d.log import DataError, Tidy3dKeyError
 from tidy3d.plugins.adjoint.components.base import JaxObject
 from tidy3d.plugins.adjoint.components.geometry import JaxBox, JaxPolySlab
-from tidy3d.plugins.adjoint.components.medium import (
-    JaxMedium,
-    JaxAnisotropicMedium,
-    JaxCustomMedium,
-)
+from tidy3d.plugins.adjoint.components.medium import JaxMedium, JaxAnisotropicMedium
+from tidy3d.plugins.adjoint.components.medium import JaxCustomMedium
 from tidy3d.plugins.adjoint.components.structure import JaxStructure
 from tidy3d.plugins.adjoint.components.simulation import JaxSimulation
 from tidy3d.plugins.adjoint.components.data.sim_data import JaxSimulationData
-from tidy3d.plugins.adjoint.components.data.monitor_data import JaxModeData
+from tidy3d.plugins.adjoint.components.data.monitor_data import JaxModeData, JaxDiffractionData
 from tidy3d.plugins.adjoint.components.data.data_array import JaxDataArray
 from tidy3d.plugins.adjoint.components.data.dataset import JaxPermittivityDataset
 from tidy3d.plugins.adjoint.web import run, run_async
@@ -724,3 +721,44 @@ def test_adjoint_run_async(use_emulated_run_async):
     f0 = f(x0)
     g = jax.grad(f)
     g0 = g(x0)
+
+
+@pytest.mark.parametrize("axis", (0, 1, 2))
+def test_diff_data_angles(axis):
+
+    center = td.DiffractionMonitor.unpop_axis(2, (0, 0), axis)
+    size = td.DiffractionMonitor.unpop_axis(0, (td.inf, td.inf), axis)
+
+    SIZE_2D = 1.0
+    ORDERS_X = [-1, 0, 1]
+    ORDERS_Y = [-1, 0, 1]
+    FS = [2e14]
+
+    DIFFRACTION_MONITOR = td.DiffractionMonitor(
+        center=center,
+        size=size,
+        freqs=FS,
+        name="diffraction",
+    )
+
+    values = (1 + 1j) * np.random.random((len(ORDERS_X), len(ORDERS_Y), len(FS)))
+    sim_size = [SIZE_2D, SIZE_2D]
+    bloch_vecs = [0, 0]
+    data = JaxDataArray(values=values, coords=dict(orders_x=ORDERS_X, orders_y=ORDERS_Y, f=FS))
+
+    diff_data = JaxDiffractionData(
+        monitor=DIFFRACTION_MONITOR,
+        Etheta=data,
+        Ephi=data,
+        Er=data,
+        Htheta=data,
+        Hphi=data,
+        Hr=data,
+        sim_size=sim_size,
+        bloch_vecs=bloch_vecs,
+    )
+
+    thetas, phis = diff_data.angles
+    zeroth_order_theta = thetas.sel(orders_x=0, orders_y=0).isel(f=0)
+
+    assert np.isclose(zeroth_order_theta, 0.0)
