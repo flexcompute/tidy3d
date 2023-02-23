@@ -210,6 +210,7 @@ def test_adjoint_setup_fwd(use_emulated_run):
         folder_name="default",
         path="simulation_data.hdf5",
         callback_url=None,
+        verbose=False,
     )
     sim_orig = sim_data_orig.simulation
     sim_fwd = sim_data_fwd.simulation

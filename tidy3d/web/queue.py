@@ -11,13 +11,14 @@ from ..components.simulation import Simulation
 nest_asyncio.apply()
 
 
+# pylint:disable=too-many-arguments, too-many-locals
 async def _run_async(
     simulations: Dict[str, Simulation],
     folder_name: str = "default",
     path_dir: str = DEFAULT_DATA_DIR,
     callback_url: str = None,
     num_workers: int = None,
-    # verbose: bool = True,
+    verbose: bool = True,
 ) -> BatchData:
     """Submits a set of :class:`.Simulation` objects to server, starts running,
     monitors progress, downloads, and loads results as a :class:`.BatchData` object.
@@ -36,6 +37,8 @@ async def _run_async(
         fields ``{'id', 'status', 'name', 'workUnit', 'solverVersion'}``.
     num_workers: int = None
         Number of tasks to submit at once in a batch, if None, will run all at the same time.
+    verbose : bool = True
+        If `True`, will print progressbars and status, otherwise, will run silently.
 
     Note
     ----
@@ -88,7 +91,7 @@ async def _run_async(
             task_name=task_name,
             callback_url=callback_url,
             folder_name=folder_name,
-            # verbose=verbose,
+            verbose=verbose,
         )
         job.start()
 
@@ -116,16 +119,17 @@ async def _run_async(
     await asyncio.gather(*tasks, return_exceptions=True)
 
     # return the batch data containing all of the job run details for loading later
-    return BatchData(task_ids=task_ids, task_paths=task_paths)
+    return BatchData(task_ids=task_ids, task_paths=task_paths, verbose=verbose)
 
 
+# pylint:disable=too-many-arguments
 def run_async(
     simulations: Dict[str, Simulation],
     folder_name: str = "default",
     path_dir: str = DEFAULT_DATA_DIR,
     callback_url: str = None,
     num_workers: int = None,
-    # verbose: bool = True,
+    verbose: bool = True,
 ) -> BatchData:
     """Submits a set of :class:`.Simulation` objects to server, starts running,
     monitors progress, downloads, and loads results as a :class:`.BatchData` object.
@@ -144,6 +148,8 @@ def run_async(
         fields ``{'id', 'status', 'name', 'workUnit', 'solverVersion'}``.
     num_workers: int = None
         Number of tasks to submit at once in a batch, if None, will run all at the same time.
+    verbose : bool = True
+        If `True`, will print progressbars and status, otherwise, will run silently.
 
     Note
     ----
@@ -163,5 +169,6 @@ def run_async(
             path_dir=path_dir,
             callback_url=callback_url,
             num_workers=num_workers,
+            verbose=verbose,
         )
     )

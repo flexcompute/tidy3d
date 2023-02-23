@@ -37,13 +37,15 @@ def tidy3d_run_async_fn(simulations: Dict[str, Simulation], **kwargs) -> BatchDa
 """ Running a single simulation using web.run. """
 
 
-@partial(custom_vjp, nondiff_argnums=tuple(range(1, 5)))
+# pylint:disable=too-many-arguments
+@partial(custom_vjp, nondiff_argnums=tuple(range(1, 6)))
 def run(
     simulation: JaxSimulation,
     task_name: str,
     folder_name: str = "default",
     path: str = "simulation_data.hdf5",
     callback_url: str = None,
+    verbose: bool = True,
 ) -> JaxSimulationData:
     """Submits a :class:`.JaxSimulation` to server, starts running, monitors progress, downloads,
     and loads results as a :class:`.JaxSimulationData` object.
@@ -62,6 +64,8 @@ def run(
     callback_url : str = None
         Http PUT url to receive simulation finish event. The body content is a json file with
         fields ``{'id', 'status', 'name', 'workUnit', 'solverVersion'}``.
+    verbose : bool = True
+        If `True`, will print progressbars and status, otherwise, will run silently.
 
     Returns
     -------
@@ -79,18 +83,21 @@ def run(
         folder_name=folder_name,
         path=path,
         callback_url=callback_url,
+        verbose=verbose,
     )
 
     # convert back to jax type and return
     return JaxSimulationData.from_sim_data(sim_data_tidy3d, jax_info=jax_info)
 
 
+# pylint:disable=too-many-arguments
 def run_fwd(
     simulation: JaxSimulation,
     task_name: str,
     folder_name: str,
     path: str,
     callback_url: str,
+    verbose: bool,
 ) -> Tuple[JaxSimulationData, tuple]:
     """Run forward pass and stash extra objects for the backwards pass."""
 
@@ -103,6 +110,7 @@ def run_fwd(
         folder_name=folder_name,
         path=path,
         callback_url=callback_url,
+        verbose=verbose,
     )
 
     # remove the gradient data from the returned version (not needed)
@@ -116,6 +124,7 @@ def run_bwd(
     folder_name: str,
     path: str,
     callback_url: str,
+    verbose: bool,
     res: tuple,
     sim_data_vjp: JaxSimulationData,
 ) -> Tuple[JaxSimulation]:
@@ -135,6 +144,7 @@ def run_bwd(
         folder_name=folder_name,
         path=path,
         callback_url=callback_url,
+        verbose=verbose,
     )
     grad_data_adj = sim_data_adj.grad_data
 
@@ -159,12 +169,13 @@ def _task_name_orig(index: int, task_name_suffix: str = None):
 
 
 # pylint:disable=too-many-locals
-@partial(custom_vjp, nondiff_argnums=tuple(range(1, 6)))
+@partial(custom_vjp, nondiff_argnums=tuple(range(1, 7)))
 def run_async(
     simulations: Tuple[JaxSimulation, ...],
     folder_name: str = "default",
     path_dir: str = DEFAULT_DATA_DIR,
     callback_url: str = None,
+    verbose: bool = True,
     num_workers: int = None,
     task_name_suffix: str = None,
 ) -> Tuple[JaxSimulationData, ...]:
@@ -184,6 +195,8 @@ def run_async(
     callback_url : str = None
         Http PUT url to receive simulation finish event. The body content is a json file with
         fields ``{'id', 'status', 'name', 'workUnit', 'solverVersion'}``.
+    verbose : bool = True
+        If `True`, will print progressbars and status, otherwise, will run silently.
     num_workers: int = None
         Number of tasks to submit at once in a batch, if None, will run all at the same time.
 
@@ -212,6 +225,7 @@ def run_async(
         folder_name=folder_name,
         path_dir=path_dir,
         callback_url=callback_url,
+        verbose=verbose,
         num_workers=num_workers,
     )
 
@@ -234,6 +248,7 @@ def run_async_fwd(
     folder_name: str,
     path_dir: str,
     callback_url: str,
+    verbose: bool,
     num_workers: int,
     task_name_suffix: str,
 ) -> Tuple[Dict[str, JaxSimulationData], tuple]:
@@ -252,6 +267,7 @@ def run_async_fwd(
         folder_name=folder_name,
         path_dir=path_dir,
         callback_url=callback_url,
+        verbose=verbose,
         num_workers=num_workers,
         task_name_suffix=task_name_suffix_fwd,
     )
@@ -271,6 +287,7 @@ def run_async_bwd(
     folder_name: str,
     path_dir: str,
     callback_url: str,
+    verbose: bool,
     num_workers: int,
     task_name_suffix: str,
     res: tuple,
@@ -303,6 +320,7 @@ def run_async_bwd(
         folder_name=folder_name,
         path_dir=path_dir,
         callback_url=callback_url,
+        verbose=verbose,
         num_workers=num_workers,
         task_name_suffix=task_name_suffix_adj,
     )
