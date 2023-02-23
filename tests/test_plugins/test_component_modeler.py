@@ -274,42 +274,62 @@ def test_run_component_modeler(monkeypatch):
             for port_out in modeler.ports:
                 for mode_index_out in range(port_out.mode_spec.num_modes):
                     index_out = (port_out.name, mode_index_out)
-                    assert index_in in s_matrix, "source index not present in S matrix"
-                    assert index_out in s_matrix[index_in], "monitor index not present in S matrix"
+
+                    coords_in = dict(port_in=port_in.name, mode_index_in=mode_index_in)
+                    coords_out = dict(port_out=port_out.name, mode_index_out=mode_index_out)
+
+                    assert np.all(
+                        s_matrix.loc[coords_in] != 0
+                    ), "source index not present in S matrix"
+                    assert np.all(
+                        s_matrix.loc[coords_in].loc[coords_out] != 0
+                    ), "monitor index not present in S matrix"
 
 
 def test_component_modeler_run_only(monkeypatch):
     sim = make_coupler()
     ports = make_ports()
-    ONLY_SOURCE = ("right_bot", 0)
+    ONLY_SOURCE = (port_run_only, mode_index_run_only) = ("right_bot", 0)
     run_only = [ONLY_SOURCE]
     modeler = make_component_modeler(run_only=run_only)
     s_matrix = run_component_modeler(monkeypatch, modeler)
 
-    for port_in in ports:
-        for mode_index_in in range(port_in.mode_spec.num_modes):
-            index_in = (port_in.name, mode_index_in)
+    coords_in_run_only = dict(port_in=port_run_only, mode_index_in=mode_index_run_only)
 
-            for port_out in ports:
-                for mode_index_out in range(port_out.mode_spec.num_modes):
-                    index_out = (port_out.name, mode_index_out)
+    # make sure the run only mappings are non-zero
+    assert np.all(s_matrix.loc[coords_in_run_only] != 0)
 
-                    # make sure only allowed elements are in S matrix
-                    if index_in == ONLY_SOURCE:
-                        assert index_in in s_matrix, "run_only source index not present in S matrix"
-                        assert (
-                            index_out in s_matrix[index_in]
-                        ), "run_only out data not present in S matrix"
-                    else:
-                        assert (
-                            index_in not in s_matrix
-                        ), "source index excluded from run_only not present in S matrix"
+    # make sure if we zero out the run_only mappings, everythging is zero
+    s_matrix.loc[coords_in_run_only] = 0
+    assert np.all(s_matrix.values == 0.0)
 
 
 def _test_mappings(element_mappings, s_matrix):
     """Makes sure the mappings are reflected in a given S matrix."""
     for (i, j), (k, l), mult_by in element_mappings:
-        assert s_matrix[k][l] == mult_by * s_matrix[i][j], "mapping not applied correctly."
+
+        (port_in_from, mode_index_in_from) = i
+        (port_out_from, mode_index_out_from) = j
+        (port_in_to, mode_index_in_to) = k
+        (port_out_to, mode_index_out_to) = l
+
+        coords_from = dict(
+            port_in=port_in_from,
+            port_out=port_out_from,
+            mode_index_in=mode_index_in_from,
+            mode_index_out=mode_index_out_from,
+        )
+
+        coords_to = dict(
+            port_in=port_in_to,
+            port_out=port_out_to,
+            mode_index_in=mode_index_in_to,
+            mode_index_out=mode_index_out_to,
+        )
+
+        assert np.all(
+            s_matrix.loc[coords_to].values == mult_by * s_matrix.loc[coords_from].values
+        ), "mapping not applied correctly."
 
 
 def test_run_component_modeler_mappings(monkeypatch):
