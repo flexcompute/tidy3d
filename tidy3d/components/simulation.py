@@ -2166,7 +2166,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
 
                 # Update permittivity array at selected indexes within the geometry
                 is_inside = structure.geometry.inside_meshgrid(*coords_reduced)
-                eps_array[inds] = eps_structure * is_inside
+                eps_array[inds][is_inside] = (eps_structure * is_inside)[is_inside]
 
             coords = dict(zip("xyz", arrays))
             return xr.DataArray(eps_array, coords=coords, dims=("x", "y", "z"))
