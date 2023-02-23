@@ -35,6 +35,7 @@ def make_coupler():
     # wavelength / frequency
     lambda0 = 1.550  # all length scales in microns
     freq0 = td.constants.C_0 / lambda0
+    freqs = [freq0, freq0 * 1.1]
     fwidth = freq0 / 10
 
     # Spatial grid specification
@@ -120,7 +121,7 @@ def make_coupler():
 
     # in-plane field monitor (optional, increases required data storage)
     domain_monitor = td.FieldMonitor(
-        center=[0, 0, wg_height / 2], size=[td.inf, td.inf, 0], freqs=[freq0], name="field"
+        center=[0, 0, wg_height / 2], size=[td.inf, td.inf, 0], freqs=freqs, name="field"
     )
 
     # initialize the simulation
@@ -183,7 +184,7 @@ def make_component_modeler(**kwargs):
     ports = make_ports()
     batch_empty = Batch(simulations={}, folder_name="None")
     return ComponentModeler(
-        simulation=sim, ports=ports, freq=sim.monitors[0].freqs[0], batch=batch_empty, **kwargs
+        simulation=sim, ports=ports, freqs=sim.monitors[0].freqs, batch=batch_empty, **kwargs
     )
 
 
@@ -192,7 +193,7 @@ def run_component_modeler(monkeypatch, modeler: ComponentModeler):
     values = dict(
         simulation=modeler.simulation,
         ports=modeler.ports,
-        freq=modeler.freq,
+        freqs=modeler.freqs,
         run_only=modeler.run_only,
         element_mappings=modeler.element_mappings,
     )
@@ -245,7 +246,7 @@ def test_ports_too_close_boundary():
 def test_validate_batch_supplied():
 
     sim = make_coupler()
-    modeler = ComponentModeler(simulation=sim, ports=[], freq=sim.monitors[0].freqs[0], batch=None)
+    modeler = ComponentModeler(simulation=sim, ports=[], freqs=sim.monitors[0].freqs, batch=None)
 
 
 def test_plot_sim():

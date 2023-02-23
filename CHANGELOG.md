@@ -26,6 +26,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Boundary conditions are now PML by default.
 - `PointDipole` sources now have a continuous dependence on the source position, as opposed to snapping to Yee grid locations.
 Behavior is controlled by the `interpolate` argument, set to `True` by default. 
+- Scattering matrix plugin accepts list of frequencies and returns data as an `xarray.DataArray` instead of a nested `dict`.
 
 ### Fixed
 
