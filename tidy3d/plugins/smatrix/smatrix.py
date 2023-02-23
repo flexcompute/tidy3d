@@ -90,10 +90,10 @@ class ComponentModeler(Tidy3dBaseModel):
         description="Collection of ports describing the scattering matrix elements. "
         "For each port, one simulation will be run with a modal source.",
     )
-    freq: float = pd.Field(
+    freqs: List[float] = pd.Field(
         ...,
-        title="Frequency",
-        description="Frequency at which to evaluate the scattering matrix.",
+        title="Frequencies",
+        description="List of frequencies at which to evaluate the scattering matrix.",
         units=HERTZ,
     )
 
@@ -153,10 +153,10 @@ class ComponentModeler(Tidy3dBaseModel):
         sim_dict = {}
         ports = values.get("ports")
         simulation = values.get("simulation")
-        freq = values.get("freq")
+        freqs = values.get("freqs")
 
         mode_monitors = [
-            cls._to_monitor(port=port, freq=freq) for port in ports
+            cls._to_monitor(port=port, freqs=freqs) for port in ports
         ]  # pylint:disable=protected-access
 
         for (port_name, mode_index) in cls.matrix_indices_run_sim(
@@ -171,7 +171,7 @@ class ComponentModeler(Tidy3dBaseModel):
                 simulation=simulation, port=port
             )  # pylint:disable=protected-access
             mode_source = cls._to_source(
-                port=port_source, mode_index=mode_index, freq=freq
+                port=port_source, mode_index=mode_index, freqs=freqs
             )  # pylint:disable=protected-access
 
             new_mnts = list(simulation.monitors) + mode_monitors
@@ -237,23 +237,26 @@ class ComponentModeler(Tidy3dBaseModel):
         return ports[0]
 
     @staticmethod
-    def _to_monitor(port: Port, freq: float) -> ModeMonitor:
+    def _to_monitor(port: Port, freqs: List[float]) -> ModeMonitor:
         """Creates a mode monitor from a given port."""
         return ModeMonitor(
             center=port.center,
             size=port.size,
-            freqs=[freq],
+            freqs=freqs,
             mode_spec=port.mode_spec,
             name=port.name,
         )
 
     @staticmethod
-    def _to_source(port: Port, mode_index: int, freq: float) -> List[ModeSource]:
+    def _to_source(port: Port, mode_index: int, freqs: List[float]) -> List[ModeSource]:
         """Creates a list of mode sources from a given port."""
+        freq0 = np.mean(freqs)
+        fdiff = max(freqs) - min(freqs)
+        fwidth = max(fdiff, freq0 * FWIDTH_FRAC)
         return ModeSource(
             center=port.center,
             size=port.size,
-            source_time=GaussianPulse(freq0=freq, fwidth=freq * FWIDTH_FRAC),
+            source_time=GaussianPulse(freq0=freq0, fwidth=fwidth),
             mode_spec=port.mode_spec,
             mode_index=mode_index,
             direction=port.direction,
@@ -322,7 +325,7 @@ class ComponentModeler(Tidy3dBaseModel):
 
         plot_sources = []
         for port_source in self.ports:
-            mode_source_0 = self._to_source(port=port_source, freq=self.freq, mode_index=0)
+            mode_source_0 = self._to_source(port=port_source, freqs=self.freqs, mode_index=0)
             plot_sources.append(mode_source_0)
         sim_plot = self.simulation.copy(update=dict(sources=plot_sources))
         return sim_plot.plot(x=x, y=y, z=z, ax=ax)
@@ -339,18 +342,18 @@ class ComponentModeler(Tidy3dBaseModel):
         port_monitor_data = sim_data[port_source.name]
         mode_index = sim_data.simulation.sources[0].mode_index
 
-        normalize_amp = port_monitor_data.amps.sel(
-            f=self.freq,
+        normalize_amps = port_monitor_data.amps.sel(
+            f=self.freqs,
             direction=port_source.direction,
             mode_index=mode_index,
         ).values
 
-        normalize_n_eff = port_monitor_data.n_eff.sel(f=self.freq, mode_index=mode_index).values
+        normalize_n_eff = port_monitor_data.n_eff.sel(f=self.freqs, mode_index=mode_index).values
 
-        k0 = 2 * np.pi * C_0 / self.freq
-        k_eff = k0 * normalize_n_eff
+        k0s = 2 * np.pi * C_0 / np.array(self.freqs)
+        k_effs = k0s * normalize_n_eff
         shift_value = self._shift_value_signed(simulation=self.simulation, port=port_source)
-        return normalize_amp * np.exp(1j * k_eff * shift_value)
+        return normalize_amps * np.exp(1j * k_effs * shift_value)
 
     @property
     def max_mode_index(self) -> Tuple[int, int]:
@@ -395,14 +398,15 @@ class ComponentModeler(Tidy3dBaseModel):
         port_names_in, port_names_out = self.port_names
 
         values = np.zeros(
-            (len(port_names_in), len(port_names_out), num_modes_in, num_modes_out, 1), dtype=complex
+            (len(port_names_in), len(port_names_out), num_modes_in, num_modes_out, len(self.freqs)),
+            dtype=complex,
         )
         coords = dict(
             port_in=port_names_in,
             port_out=port_names_out,
             mode_index_in=range(num_modes_in),
             mode_index_out=range(num_modes_out),
-            f=[self.freq],
+            f=self.freqs,
         )
 
         s_matrix = SMatrixDataArray(values, coords=coords)
@@ -425,9 +429,9 @@ class ComponentModeler(Tidy3dBaseModel):
                 # directly compute the element
                 mode_amps_data = sim_data[port_out.name].copy().amps
                 dir_out = "-" if port_out.direction == "+" else "+"
-                amp = mode_amps_data.sel(f=self.freq, direction=dir_out, mode_index=mode_index_out)
+                amp = mode_amps_data.sel(f=self.freqs, direction=dir_out, mode_index=mode_index_out)
                 source_norm = self._normalization_factor(port_in, sim_data)
-                s_matrix_element = complex(amp.data) / complex(source_norm)
+                s_matrix_elements = np.array(amp.data) / np.array(source_norm)
                 s_matrix.loc[
                     dict(
                         port_in=port_name_in,
@@ -435,7 +439,7 @@ class ComponentModeler(Tidy3dBaseModel):
                         port_out=port_name_out,
                         mode_index_out=mode_index_out,
                     )
-                ] = s_matrix_element
+                ] = s_matrix_elements
 
         # element can be determined by user-defined mapping
         for ((row_in, col_in), (row_out, col_out), mult_by) in self.element_mappings:
