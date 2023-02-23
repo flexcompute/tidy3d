@@ -13,6 +13,7 @@ from ...components.mode import ModeSpec
 from ...components.monitor import ModeMonitor
 from ...components.source import ModeSource, GaussianPulse
 from ...components.data.sim_data import SimulationData
+from ...components.data.data_array import DataArray
 from ...components.types import Direction, Ax, Complex
 from ...components.viz import add_ax_if_none, equal_aspect
 from ...components.base import Tidy3dBaseModel
@@ -48,7 +49,31 @@ class Port(Box):
 
 MatrixIndex = Tuple[str, pd.NonNegativeInt]  # the 'i' in S_ij
 Element = Tuple[MatrixIndex, MatrixIndex]  # the 'ij' in S_ij
-SMatrixType = Dict[MatrixIndex, Dict[MatrixIndex, complex]]  # the 'S' itself
+
+
+class SMatrixDataArray(DataArray):
+    """Scattering matrix elements.
+
+    Example
+    -------
+    >>> port_in = ['port1', 'port2']
+    >>> port_out = ['port1', 'port2']
+    >>> mode_index_in = [0, 1]
+    >>> mode_index_out = [0, 1]
+    >>> f = [2e14]
+    >>> coords = dict(
+    ...     port_in=ports_in,
+    ...     port_out=ports_out,
+    ...     mode_index_in=mode_index_in,
+    ...     mode_index_out=mode_index_out,
+    ...     f=f
+    ... )
+    >>> fd = SMatrixDataArray((1 + 1j) * np.random.random((2, 2, 2, 2, 1)), coords=coords)
+    """
+
+    __slots__ = ()
+    _dims = ("port_in", "port_out", "mode_index_in", "mode_index_out", "f")
+    _data_attrs = {"long_name": "scattering matrix element"}
 
 
 class ComponentModeler(Tidy3dBaseModel):
@@ -327,15 +352,60 @@ class ComponentModeler(Tidy3dBaseModel):
         shift_value = self._shift_value_signed(simulation=self.simulation, port=port_source)
         return normalize_amp * np.exp(1j * k_eff * shift_value)
 
+    @property
+    def max_mode_index(self) -> Tuple[int, int]:
+        """maximum mode indices for the smatrix dataset for the in and out ports, respectively."""
+
+        def get_max_mode_indices(matrix_elements: Tuple[str, int]) -> int:
+            """Get the maximum mode index for a list of (port name, mode index)."""
+            return max(mode_index for _, mode_index in matrix_elements)
+
+        matrix_elements_in = self.matrix_indices_source(ports=self.ports, run_only=self.run_only)
+        matrix_elements_out = self.matrix_indices_monitor(ports=self.ports)
+
+        max_mode_index_in = get_max_mode_indices(matrix_elements_in)
+        max_mode_index_out = get_max_mode_indices(matrix_elements_out)
+
+        return max_mode_index_in, max_mode_index_out
+
+    @property
+    def port_names(self) -> Tuple[List[str], List[str]]:
+        """List of port names for inputs and outputs, respectively."""
+
+        def get_port_names(matrix_elements: Tuple[str, int]) -> List[str]:
+            """Get the port names from a list of (port name, mode index)."""
+            return [port_name for port_name, _ in matrix_elements]
+
+        matrix_elements_in = self.matrix_indices_source(ports=self.ports, run_only=self.run_only)
+        matrix_elements_out = self.matrix_indices_monitor(ports=self.ports)
+
+        port_names_in = get_port_names(matrix_elements_in)
+        port_names_out = get_port_names(matrix_elements_out)
+
+        return port_names_in, port_names_out
+
     def _construct_smatrix(  # pylint:disable=too-many-locals
         self, batch_data: BatchData
-    ) -> SMatrixType:
+    ) -> SMatrixDataArray:
         """Post process batch to generate scattering matrix."""
 
-        s_matrix = {
-            row_index: {}
-            for row_index in self.matrix_indices_source(ports=self.ports, run_only=self.run_only)
-        }
+        max_mode_index_in, max_mode_index_out = self.max_mode_index
+        num_modes_in = max_mode_index_in + 1
+        num_modes_out = max_mode_index_out + 1
+        port_names_in, port_names_out = self.port_names
+
+        values = np.zeros(
+            (len(port_names_in), len(port_names_out), num_modes_in, num_modes_out, 1), dtype=complex
+        )
+        coords = dict(
+            port_in=port_names_in,
+            port_out=port_names_out,
+            mode_index_in=range(num_modes_in),
+            mode_index_out=range(num_modes_out),
+            f=[self.freq],
+        )
+
+        s_matrix = SMatrixDataArray(values, coords=coords)
 
         # loop through source ports
         for row_index in self.matrix_indices_run_sim(
@@ -344,7 +414,6 @@ class ComponentModeler(Tidy3dBaseModel):
 
             port_name_in, mode_index_in = row_index
             port_in = self.get_port_by_name(port_name=port_name_in, ports=self.ports)
-            s_matrix[row_index] = {}
 
             sim_data = batch_data[self._task_name(port=port_in, mode_index=mode_index_in)]
 
@@ -358,15 +427,41 @@ class ComponentModeler(Tidy3dBaseModel):
                 dir_out = "-" if port_out.direction == "+" else "+"
                 amp = mode_amps_data.sel(f=self.freq, direction=dir_out, mode_index=mode_index_out)
                 source_norm = self._normalization_factor(port_in, sim_data)
-                s_matrix[row_index][col_index] = complex(amp.data) / complex(source_norm)
+                s_matrix_element = complex(amp.data) / complex(source_norm)
+                s_matrix.loc[
+                    dict(
+                        port_in=port_name_in,
+                        mode_index_in=mode_index_in,
+                        port_out=port_name_out,
+                        mode_index_out=mode_index_out,
+                    )
+                ] = s_matrix_element
 
         # element can be determined by user-defined mapping
         for ((row_in, col_in), (row_out, col_out), mult_by) in self.element_mappings:
-            s_matrix[row_out][col_out] = mult_by * s_matrix[row_in][col_in]
+
+            port_in_from, mode_index_in_from = row_in
+            port_out_from, mode_index_out_from = col_in
+            coords_from = dict(
+                port_in=port_in_from,
+                mode_index_in=mode_index_in_from,
+                port_out=port_out_from,
+                mode_index_out=mode_index_out_from,
+            )
+
+            port_in_to, mode_index_in_to = row_out
+            port_out_to, mode_index_out_to = col_out
+            coords_to = dict(
+                port_in=port_in_to,
+                mode_index_in=mode_index_in_to,
+                port_out=port_out_to,
+                mode_index_out=mode_index_out_to,
+            )
+            s_matrix.loc[coords_to] = mult_by * s_matrix.loc[coords_from].values
 
         return s_matrix
 
-    def solve(self, path_dir: str = DEFAULT_DATA_DIR) -> SMatrixType:
+    def solve(self, path_dir: str = DEFAULT_DATA_DIR) -> SMatrixDataArray:
         """Solves for the scattering matrix of the system."""
         log.warning(
             "`ComponentModeler.solve()` is renamed to `ComponentModeler.run()` "
@@ -374,13 +469,13 @@ class ComponentModeler(Tidy3dBaseModel):
         )
         return self.run(path_dir=path_dir)
 
-    def run(self, path_dir: str = DEFAULT_DATA_DIR) -> SMatrixType:
+    def run(self, path_dir: str = DEFAULT_DATA_DIR) -> SMatrixDataArray:
         """Solves for the scattering matrix of the system."""
 
         batch_data = self._run_sims(path_dir=path_dir)
         return self._construct_smatrix(batch_data=batch_data)
 
-    def load(self, path_dir: str = DEFAULT_DATA_DIR) -> SMatrixType:
+    def load(self, path_dir: str = DEFAULT_DATA_DIR) -> SMatrixDataArray:
         """Load an Smatrix from saved BatchData object."""
 
         if self.batch is None:
