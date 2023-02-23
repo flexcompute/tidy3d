@@ -110,6 +110,7 @@ Photonic Integrated Circuit Components
     notebooks/RingResonator
     notebooks/THzDemultiplexerFilter
     notebooks/PhotonicCrystalWaveguidePolarizationFilter
+    notebooks/EdgeCoupler
 
 Metamaterials, Grattings, and Other Periodic Structures
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
