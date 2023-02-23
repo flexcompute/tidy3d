@@ -9,7 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - Asynchronous running of multiple simulations concurrently using `web.run_async`.
 - Jax-compatible `run_async` in the `adjoint` plugin for efficiently running multi-simulation objectives concurrently and differentiating result.
-- Warning in `Simulation.epsilon` if many grid cells and structures provided and slow run time expected as a result.
+- Warning in `Simulation.epsilon` if many grid cells and structures provided and slow - `verbose` option in `tidy3d.web` functions and containers. If `False`, there will be no non-essential output when running simulations over web api.
+run time expected as a result.
 - Warning if PML or absorbing boundaries are used along a simulation dimension with zero size.
 
 ### Changed
