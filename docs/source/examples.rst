@@ -62,3 +62,4 @@ Case studies
     notebooks/THzDemultiplexerFilter
     notebooks/Adjoint
     notebooks/ZonePlateFieldProjection
+    notebooks/EdgeCoupler
