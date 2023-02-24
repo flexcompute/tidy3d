@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - Issue a deprecation warning that `Geometry.intersections` will be renamed to `Geometry.intersections_plane` in 2.0.
+- Limit some warnings to only show for the first structure for which they are encountered.
 
 
 ### Fixed

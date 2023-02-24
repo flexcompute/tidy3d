@@ -49,8 +49,9 @@ MAX_GRID_CELLS = 20e9
 MAX_CELLS_TIMES_STEPS = 1e17
 MAX_MONITOR_DATA_SIZE_BYTES = 10e9
 
-# number of grid cells * structures at which we star warning about slow Simulation.epsilon()
+# number of grid cells at which we warn about slow Simulation.epsilon()
 NUM_CELLS_WARN_EPSILON = 100_000_000
+# number of structures at which we warn about slow Simulation.epsilon()
 NUM_STRUCTURES_WARN_EPSILON = 10_000
 
 
@@ -393,8 +394,10 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
                         f"Structure at structures[{istruct}] has bounds that extend exactly to "
                         "simulation edges. This can cause unexpected behavior. "
                         "If intending to extend the structure to infinity along one dimension, "
-                        "use td.inf as a size variable instead to make this explicit."
+                        "use td.inf as a size variable instead to make this explicit. "
+                        f"Skipping check for structure indexes > {istruct}."
                     )
+                    return val
 
         return val
 
@@ -419,7 +422,8 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
                 f"Structure at structures[{istruct}] was detected as being less "
                 f"than half of a central wavelength from a PML on side {side}. "
                 "To avoid inaccurate results, please increase gap between "
-                "any structures and PML or fully extend structure through the pml."
+                "any structures and PML or fully extend structure through the pml. "
+                f"Skipping check for structure indexes > {istruct}."
             )
 
         for istruct, structure in enumerate(structures):
@@ -439,6 +443,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
                         and abs(sim_val - struct_val) < lambda0 / 2
                     ):
                         warn(istruct, axis + "-min")
+                        return val
 
                 zipped = zip(["x", "y", "z"], sim_bound_max, struct_bound_max, boundaries)
                 for axis, sim_val, struct_val, boundary in zipped:
@@ -451,6 +456,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
                         and abs(sim_val - struct_val) < lambda0 / 2
                     ):
                         warn(istruct, axis + "-max")
+                        return val
 
         return val
 
@@ -666,8 +672,10 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
                             f"within the simulation medium "
                             f"associated with structures[{medium_index + 1}], given by "
                             f"{lambda_min:.4f} (um). "
-                            "To avoid inaccuracies, it is reccomended the grid size is reduced."
+                            "To avoid inaccuracies, it is reccomended the grid size is reduced. "
+                            f"Skipping check for structure indexes > {medium_index + 1}."
                         )
+                        return val
                         # TODO: warn about custom grid spec
 
         return val
