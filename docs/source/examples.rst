@@ -98,7 +98,7 @@ Photonic Integrated Circuit Components
 .. toctree::
     :maxdepth: 1
 
-    notebooks/YJunction.ipynb
+    notebooks/YJunction
     notebooks/MMI_1x4
     notebooks/WaveguideCrossing
     notebooks/WaveguideSizeConverter
@@ -117,13 +117,13 @@ Metamaterials, Grattings, and Other Periodic Structures
 .. toctree::
     :maxdepth: 1
 
-    notebooks/DielectricMetasurfaceAbsorber.ipynb
+    notebooks/DielectricMetasurfaceAbsorber
     notebooks/GradientMetasurfaceReflector
     notebooks/Metalens
     notebooks/HighQ_Si
     notebooks/HighQ_Ge
     notebooks/GratingEfficiency
-    notebooks/BiosensorGrating.ipynb
+    notebooks/BiosensorGrating
     notebooks/DistributedBraggReflectorCavity
 
 Photonic Crystals
@@ -131,9 +131,8 @@ Photonic Crystals
 .. toctree::
     :maxdepth: 1
 
-    notebooks/Bandstructure.ipynb
-    notebooks/OptimizedL3.ipynb
-    notebooks/PhotonicCrystalWaveguidePolarizationFilter
+    notebooks/Bandstructure
+    notebooks/OptimizedL3
 
 Optical Scattering and Far-field Radiation
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -141,10 +140,9 @@ Optical Scattering and Far-field Radiation
     :maxdepth: 1
 
     notebooks/Near2FarSphereRCS
-    notebooks/PlasmonicNanoparticle.ipynb
+    notebooks/PlasmonicNanoparticle
     notebooks/PlasmonicYagiUdaNanoantenna
     notebooks/ZonePlateFieldProjection
-    notebooks/Metalens
 
 Lenses
 ~~~~~~
