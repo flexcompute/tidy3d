@@ -1,5 +1,6 @@
 # pylint:disable=too-many-lines, too-many-arguments
 """Defines spatial extent of objects."""
+from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from typing import List, Tuple, Union, Any, Callable
@@ -8,23 +9,25 @@ import functools
 
 import pydantic
 import numpy as np
+from matplotlib import patches
 from shapely.geometry import Point, Polygon, box, MultiPolygon
+from shapely.validation import make_valid
 
 from .base import Tidy3dBaseModel, cached_property
 from .types import Bound, Size, Coordinate, Axis, Coordinate2D, ArrayLike, PlanePosition
 from .types import Vertices, Ax, Shapely, annotate_type
 from .viz import add_ax_if_none, equal_aspect
-from .viz import PLOT_BUFFER, ARROW_LENGTH_FACTOR, ARROW_WIDTH_FACTOR, MAX_ARROW_WIDTH_FACTOR
+from .viz import PLOT_BUFFER, ARROW_LENGTH, arrow_style
 from .viz import PlotParams, plot_params_geometry, polygon_patch
 from ..log import Tidy3dKeyError, SetupError, ValidationError, log
 from ..constants import MICROMETER, LARGE_NUMBER, RADIAN, fp_eps, inf
 
-# for sampling polygon in slanted polyslab along  z-direction for
-# validating polygon to be non_intersecting.
-_N_SAMPLE_POLYGON_INTERSECT = 100
+# sampling polygon along dilation for validating polygon to be
+# non self-intersecting during the entire dilation process
+_N_SAMPLE_POLYGON_INTERSECT = 5
+# for sampling conical frustum in visualization
 _N_SAMPLE_CURVE_SHAPELY = 40
 _IS_CLOSE_RTOL = np.finfo(float).eps
-
 
 # pylint:disable=too-many-public-methods
 class Geometry(Tidy3dBaseModel, ABC):
@@ -35,29 +38,140 @@ class Geometry(Tidy3dBaseModel, ABC):
         """Default parameters for plotting a Geometry object."""
         return plot_params_geometry
 
-    def inside(self, x, y, z) -> bool:
-        """Returns ``True`` if point ``(x,y,z)`` is inside volume of :class:`Geometry`.
+    def inside(
+        self, x: np.ndarray[float], y: np.ndarray[float], z: np.ndarray[float]
+    ) -> np.ndarray[bool]:
+        """For input arrays ``x``, ``y``, ``z`` of arbitrary but identical shape, return an array
+        with the same shape which is ``True`` for every point in zip(x, y, z) that is inside the
+        volume of the :class:`Geometry`, and ``False`` otherwise.
 
         Parameters
         ----------
-        x : float
-            Position of point in x direction.
-        y : float
-            Position of point in y direction.
-        z : float
-            Position of point in z direction.
+        x : np.ndarray[float]
+            Array of point positions in x direction.
+        y : np.ndarray[float]
+            Array of point positions in y direction.
+        z : np.ndarray[float]
+            Array of point positions in z direction.
 
         Returns
         -------
-        bool
-            True if point ``(x,y,z)`` is inside geometry.
+        np.ndarray[bool]
+            ``True`` for every point that is inside the geometry.
         """
-        shapes_intersect = self.intersections(z=z)
-        loc = Point(x, y)
-        return any(shape.contains(loc) for shape in shapes_intersect)
+
+        def point_inside(x: float, y: float, z: float):
+            """Returns ``True`` if a single point ``(x, y, z)`` is inside."""
+            shapes_intersect = self.intersections_plane(z=z)
+            loc = Point(x, y)
+            return any(shape.contains(loc) for shape in shapes_intersect)
+
+        arrays = tuple(map(np.array, (x, y, z)))
+        self._ensure_equal_shape(*arrays)
+        inside = np.zeros((arrays[0].size,), dtype=bool)
+        arrays_flat = map(np.ravel, arrays)
+        for ipt, args in enumerate(zip(*arrays_flat)):
+            inside[ipt] = point_inside(*args)
+        return inside.reshape(arrays[0].shape)
+
+    @staticmethod
+    def _ensure_equal_shape(*arrays):
+        """Ensure all input arrays have the same shape."""
+        shapes = set(np.array(arr).shape for arr in arrays)
+        if len(shapes) > 1:
+            raise ValueError("All coordinate inputs (x, y, z) must have the same shape.")
+
+    def _inds_inside_bounds(
+        self, x: np.ndarray[float], y: np.ndarray[float], z: np.ndarray[float]
+    ) -> Tuple[slice, slice, slice]:
+        """Return slices into the sorted input arrays that are inside the geometry bounds.
+
+        Parameters
+        ----------
+        x : np.ndarray[float]
+            1D array of point positions in x direction.
+        y : np.ndarray[float]
+            1D array of point positions in y direction.
+        z : np.ndarray[float]
+            1D array of point positions in z direction.
+
+        Returns
+        -------
+        Tuple[slice, slice, slice]
+            Slices into each of the three arrays that are inside the geometry bounds.
+        """
+        bounds = self.bounds
+        inds_in = []
+        for dim, coords in enumerate([x, y, z]):
+            inds = np.nonzero((bounds[0][dim] <= coords) * (coords <= bounds[1][dim]))[0]
+            inds_in.append(slice(0, 0) if inds.size == 0 else slice(inds[0], inds[-1] + 1))
+
+        return tuple(inds_in)
+
+    def inside_meshgrid(
+        self, x: np.ndarray[float], y: np.ndarray[float], z: np.ndarray[float]
+    ) -> np.ndarray[bool]:
+        """Perform ``self.inside`` on a set of sorted 1D coordinates. Applies meshgrid to the
+        supplied coordinates before checking inside.
+
+        Parameters
+        ----------
+        x : np.ndarray[float]
+            1D array of point positions in x direction.
+        y : np.ndarray[float]
+            1D array of point positions in y direction.
+        z : np.ndarray[float]
+            1D array of point positions in z direction.
+
+        Returns
+        -------
+        np.ndarray[bool]
+            Array with shape ``(x.size, y.size, z.size)``, which is ``True`` for every
+            point that is inside the geometry.
+        """
+
+        arrays = tuple(map(np.array, (x, y, z)))
+        if any(arr.ndim != 1 for arr in arrays):
+            raise ValueError("Each of the supplied coordinates (x, y, z) must be 1D.")
+        shape = tuple(arr.size for arr in arrays)
+        is_inside = np.zeros(shape, dtype=bool)
+        inds_inside = self._inds_inside_bounds(*arrays)
+        coords_inside = tuple(arr[ind] for ind, arr in zip(inds_inside, arrays))
+        coords_3d = np.meshgrid(*coords_inside, indexing="ij")
+        is_inside[inds_inside] = self.inside(*coords_3d)
+        return is_inside
+
+    def intersections(self, x: float = None, y: float = None, z: float = None) -> List[Shapely]:
+        """Returns list of shapely geoemtries at plane specified by one non-None value of x,y,z.
+        TODO: remove for 2.0
+
+        Parameters
+        ----------
+        x : float = None
+            Position of plane in x direction, only one of x,y,z can be specified to define plane.
+        y : float = None
+            Position of plane in y direction, only one of x,y,z can be specified to define plane.
+        z : float = None
+            Position of plane in z direction, only one of x,y,z can be specified to define plane.
+
+        Returns
+        -------
+        List[shapely.geometry.base.BaseGeometry]
+            List of 2D shapes that intersect plane.
+            For more details refer to
+            `Shapely's Documentaton <https://shapely.readthedocs.io/en/stable/project.html>`_.
+        """
+
+        log.warning(
+            "'Geometry.intersections' will be renamed to 'Geometry.intersections_plane' in "
+            "Tidy3D version 2.0."
+        )
+        return self.intersections_plane(x, y, z)
 
     @abstractmethod
-    def intersections(self, x: float = None, y: float = None, z: float = None) -> List[Shapely]:
+    def intersections_plane(
+        self, x: float = None, y: float = None, z: float = None
+    ) -> List[Shapely]:
         """Returns list of shapely geoemtries at plane specified by one non-None value of x,y,z.
 
         Parameters
@@ -76,6 +190,39 @@ class Geometry(Tidy3dBaseModel, ABC):
             For more details refer to
             `Shapely's Documentaton <https://shapely.readthedocs.io/en/stable/project.html>`_.
         """
+
+    def intersections_2dbox(self, plane: Box) -> List[Shapely]:
+        """Returns list of shapely geoemtries representing the intersections of the geometry with
+        a 2D box.
+
+        Returns
+        -------
+        List[shapely.geometry.base.BaseGeometry]
+            List of 2D shapes that intersect plane.
+            For more details refer to
+            `Shapely's Documentaton <https://shapely.readthedocs.io/en/stable/project.html>`_.
+        """
+
+        # Verify 2D
+        if plane.size.count(0.0) != 1:
+            raise ValueError("Input geometry must be a 2D Box.")
+
+        # dont bother if the geometry doesn't intersect the plane at all
+        if not self.intersects(plane):
+            return []
+
+        # get list of Shapely shapes that intersect at the plane
+        normal_ind = plane.size.index(0.0)
+        dim = "xyz"[normal_ind]
+        pos = plane.center[normal_ind]
+        xyz_kwargs = {dim: pos}
+        shapes_plane = self.intersections_plane(**xyz_kwargs)
+
+        # intersect all shapes with the input plane
+        bs_min, bs_max = [plane.pop_axis(bounds, axis=normal_ind)[1] for bounds in plane.bounds]
+        shapely_box = box(minx=bs_min[0], miny=bs_min[0], maxx=bs_max[1], maxy=bs_max[1])
+        shapely_box = plane.evaluate_inf_shape(shapely_box)
+        return [plane.evaluate_inf_shape(shape) & shapely_box for shape in shapes_plane]
 
     def intersects(self, other) -> bool:
         """Returns ``True`` if two :class:`Geometry` have intersecting `.bounds`.
@@ -120,8 +267,26 @@ class Geometry(Tidy3dBaseModel, ABC):
         bool
             Whether this geometry intersects the plane.
         """
-        intersections = self.intersections(x=x, y=y, z=z)
-        return bool(intersections)
+
+        axis, position = self.parse_xyz_kwargs(x=x, y=y, z=z)
+        return self.intersects_axis_position(axis, position)
+
+    def intersects_axis_position(self, axis: int, position: float) -> bool:
+        """Whether self intersects plane specified by a given position along a normal axis.
+
+        Parameters
+        ----------
+        axis : int = None
+            Axis nomral to the plane.
+        position : float = None
+            Position of plane along the normal axis.
+
+        Returns
+        -------
+        bool
+            Whether this geometry intersects the plane.
+        """
+        return self.bounds[0][axis] <= position <= self.bounds[1][axis]
 
     @cached_property
     @abstractmethod
@@ -134,6 +299,15 @@ class Geometry(Tidy3dBaseModel, ABC):
             Min and max bounds packaged as ``(minx, miny, minz), (maxx, maxy, maxz)``.
         """
 
+    @staticmethod
+    def bounds_intersection(bounds1: Bound, bounds2: Bound) -> Bound:
+        """Return the bounds that are the intersection of two bounds."""
+        rmin1, rmax1 = bounds1
+        rmin2, rmax2 = bounds2
+        rmin = tuple(max(v1, v2) for v1, v2 in zip(rmin1, rmin2))
+        rmax = tuple(min(v1, v2) for v1, v2 in zip(rmax1, rmax2))
+        return (rmin, rmax)
+
     @cached_property
     def bounding_box(self):
         """Returns :class:`Box` representation of the bounding box of a :class:`Geometry`.
@@ -143,14 +317,7 @@ class Geometry(Tidy3dBaseModel, ABC):
         :class:`Box`
             Geometric object representing bounding box.
         """
-        (xmin, ymin, zmin), (xmax, ymax, zmax) = self.bounds
-        Lx = xmax - xmin
-        Ly = ymax - ymin
-        Lz = zmax - zmin
-        x0 = (xmax + xmin) / 2.0
-        y0 = (ymax + ymin) / 2.0
-        z0 = (zmax + zmin) / 2.0
-        return Box(center=(x0, y0, z0), size=(Lx, Ly, Lz))
+        return Box.from_bounds(*self.bounds)
 
     def _pop_bounds(self, axis: Axis) -> Tuple[Coordinate2D, Tuple[Coordinate2D, Coordinate2D]]:
         """Returns min and max bounds in plane normal to and tangential to ``axis``.
@@ -170,6 +337,22 @@ class Geometry(Tidy3dBaseModel, ABC):
         zmin, (xmin, ymin) = self.pop_axis(b_min, axis=axis)
         zmax, (xmax, ymax) = self.pop_axis(b_max, axis=axis)
         return (zmin, zmax), ((xmin, ymin), (xmax, ymax))
+
+    @staticmethod
+    def _get_center(pt_min: float, pt_max: float) -> float:
+        """Returns center point based on bounds along dimension."""
+        if np.isneginf(pt_min) and np.isposinf(pt_max):
+            return 0.0
+        if np.isneginf(pt_min) or np.isposinf(pt_max):
+            raise SetupError(
+                f"Bounds of ({pt_min}, {pt_max}) supplied along one dimension. "
+                "We currently don't support a single ``inf`` value in bounds for ``Box``. "
+                "To construct a semi-infinite ``Box``, "
+                "please supply a large enough number instead of ``inf``. "
+                "For example, a location extending outside of the "
+                "Simulation domain (including PML)."
+            )
+        return (pt_min + pt_max) / 2.0
 
     @equal_aspect
     @add_ax_if_none
@@ -201,7 +384,7 @@ class Geometry(Tidy3dBaseModel, ABC):
 
         # find shapes that intersect self at plane
         axis, position = self.parse_xyz_kwargs(x=x, y=y, z=z)
-        shapes_intersect = self.intersections(x=x, y=y, z=z)
+        shapes_intersect = self.intersections_plane(x=x, y=y, z=z)
 
         plot_params = self.plot_params.include_kwargs(**patch_kwargs)
 
@@ -790,7 +973,7 @@ class Planar(Geometry, ABC):
     def length_axis(self) -> float:
         """Gets the length of the geometry along the out of plane dimension."""
 
-    def intersections(self, x: float = None, y: float = None, z: float = None):
+    def intersections_plane(self, x: float = None, y: float = None, z: float = None):
         """Returns shapely geometry at plane specified by one non None value of x,y,z.
 
         Parameters
@@ -810,10 +993,9 @@ class Planar(Geometry, ABC):
         `Shapely's Documentaton <https://shapely.readthedocs.io/en/stable/project.html>`_.
         """
         axis, position = self.parse_xyz_kwargs(x=x, y=y, z=z)
+        if not self.intersects_axis_position(axis, position):
+            return []
         if axis == self.axis:
-            z0 = self.center_axis
-            if (position < z0 - self.length_axis / 2) or (position > z0 + self.length_axis / 2):
-                return []
             return self._intersections_normal(position)
         return self._intersections_side(position, axis)
 
@@ -1005,22 +1187,7 @@ class Box(Centered):
         >>> b = Box.from_bounds(rmin=(-1, -2, -3), rmax=(3, 2, 1))
         """
 
-        def get_center(pt_min: float, pt_max: float) -> float:
-            """Returns center point based on bounds along dimension."""
-            if np.isneginf(pt_min) and np.isposinf(pt_max):
-                return 0.0
-            if np.isneginf(pt_min) or np.isposinf(pt_max):
-                raise SetupError(
-                    f"Bounds of ({pt_min}, {pt_max}) supplied along one dimension. "
-                    "We currently don't support a single ``inf`` value in bounds for ``Box``. "
-                    "To construct a semi-infinite ``Box``, "
-                    "please supply a large enough number instead of ``inf``. "
-                    "For example, a location extending outside of the "
-                    "Simulation domain (including PML)."
-                )
-            return (pt_min + pt_max) / 2.0
-
-        center = tuple(get_center(pt_min, pt_max) for pt_min, pt_max in zip(rmin, rmax))
+        center = tuple(cls._get_center(pt_min, pt_max) for pt_min, pt_max in zip(rmin, rmax))
         size = tuple((pt_max - pt_min) for pt_min, pt_max in zip(rmin, rmax))
         return cls(center=center, size=size, **kwargs)
 
@@ -1050,43 +1217,38 @@ class Box(Centered):
                 "Can't generate surfaces for the given object because it has zero volume."
             )
 
-        center_x, center_y, center_z = center
-        size_x, size_y, size_z = size
-        bmin = tuple(c - s / 2 for (s, c) in zip(size, center))
-        bmax = tuple(c + s / 2 for (s, c) in zip(size, center))
+        bounds = Box(center=center, size=size).bounds
 
         # Set up geometry data and names for each surface:
+        centers = [list(center) for _ in range(6)]
+        sizes = [list(size) for _ in range(6)]
 
-        surface_centers = [
-            (bmin[0], center_y, center_z),  # x-
-            (bmax[0], center_y, center_z),  # x+
-            (center_x, bmin[1], center_z),  # y-
-            (center_x, bmax[1], center_z),  # y+
-            (center_x, center_y, bmin[2]),  # z-
-            (center_x, center_y, bmax[2]),  # z+
-        ]
+        surface_index = 0
+        for dim_index in range(3):
+            for min_max_index in range(2):
 
-        surface_sizes = [
-            (0.0, size_y, size_z),  # x-
-            (0.0, size_y, size_z),  # x+
-            (size_x, 0.0, size_z),  # y-
-            (size_x, 0.0, size_z),  # y+
-            (size_x, size_y, 0.0),  # z-
-            (size_x, size_y, 0.0),  # z+
-        ]
+                new_center = centers[surface_index]
+                new_size = sizes[surface_index]
 
-        name = kwargs.pop("name", "")
-        surface_names = [
-            name + "_x-",
-            name + "_x+",
-            name + "_y-",
-            name + "_y+",
-            name + "_z-",
-            name + "_z+",
-        ]
+                new_center[dim_index] = bounds[min_max_index][dim_index]
+                new_size[dim_index] = 0.0
 
+                centers[surface_index] = new_center
+                sizes[surface_index] = new_size
+
+                surface_index += 1
+
+        name_base = kwargs.pop("name", "")
         kwargs.pop("normal_dir", None)
-        normal_dirs = ["-", "+", "-", "+", "-", "+"]
+
+        names = []
+        normal_dirs = []
+
+        for coord in "xyz":
+            for direction in "-+":
+                surface_name = name_base + "_" + coord + direction
+                names.append(surface_name)
+                normal_dirs.append(direction)
 
         # ignore surfaces that are infinitely far away
         del_idx = []
@@ -1106,29 +1268,26 @@ class Box(Centered):
             """Delete list items at indices."""
             return [i for j, i in enumerate(items) if j not in indices]
 
-        surface_centers = del_items(surface_centers, del_idx)
-        surface_sizes = del_items(surface_sizes, del_idx)
-        surface_names = del_items(surface_names, del_idx)
+        centers = del_items(centers, del_idx)
+        sizes = del_items(sizes, del_idx)
+        names = del_items(names, del_idx)
         normal_dirs = del_items(normal_dirs, del_idx)
 
-        norm_kwargs = [{} for _ in range(len(surface_centers))]
-        if "normal_dir" in cls.__dict__["__fields__"]:
-            norm_kwargs = [{"normal_dir": normal_dir} for normal_dir in normal_dirs]
+        surfaces = []
+        for _cent, _size, _name, _normal_dir in zip(centers, sizes, names, normal_dirs):
 
-        try:
-            return [
-                cls(center=center, size=size, name=_name, **norm_kwarg, **kwargs)
-                for center, size, _name, norm_kwarg in zip(
-                    surface_centers, surface_sizes, surface_names, norm_kwargs
-                )
-            ]
-        except pydantic.ValidationError:
-            return [
-                cls(center=center, size=size, **norm_kwarg, **kwargs)
-                for center, size, norm_kwarg in zip(surface_centers, surface_sizes, norm_kwargs)
-            ]
+            if "normal_dir" in cls.__dict__["__fields__"]:
+                kwargs["normal_dir"] = _normal_dir
 
-    def intersections(self, x: float = None, y: float = None, z: float = None):
+            if "name" in cls.__dict__["__fields__"]:
+                kwargs["name"] = _name
+
+            surface = cls(center=_cent, size=_size, **kwargs)
+            surfaces.append(surface)
+
+        return surfaces
+
+    def intersections_plane(self, x: float = None, y: float = None, z: float = None):
         """Returns shapely geometry at plane specified by one non None value of x,y,z.
 
         Parameters
@@ -1148,6 +1307,8 @@ class Box(Centered):
             `Shapely's Documentaton <https://shapely.readthedocs.io/en/stable/project.html>`_.
         """
         axis, position = self.parse_xyz_kwargs(x=x, y=y, z=z)
+        if not self.intersects_axis_position(axis, position):
+            return []
         z0, (x0, y0) = self.pop_axis(self.center, axis=axis)
         Lz, (Lx, Ly) = self.pop_axis(self.size, axis=axis)
         dz = np.abs(z0 - position)
@@ -1155,23 +1316,28 @@ class Box(Centered):
             return []
         return [box(minx=x0 - Lx / 2, miny=y0 - Ly / 2, maxx=x0 + Lx / 2, maxy=y0 + Ly / 2)]
 
-    def inside(self, x, y, z) -> bool:
-        """Returns ``True`` if point ``(x,y,z)`` inside volume of geometry.
+    def inside(
+        self, x: np.ndarray[float], y: np.ndarray[float], z: np.ndarray[float]
+    ) -> np.ndarray[bool]:
+        """For input arrays ``x``, ``y``, ``z`` of arbitrary but identical shape, return an array
+        with the same shape which is ``True`` for every point in zip(x, y, z) that is inside the
+        volume of the :class:`Geometry`, and ``False`` otherwise.
 
         Parameters
         ----------
-        x : float
-            Position of point in x direction.
-        y : float
-            Position of point in y direction.
-        z : float
-            Position of point in z direction.
+        x : np.ndarray[float]
+            Array of point positions in x direction.
+        y : np.ndarray[float]
+            Array of point positions in y direction.
+        z : np.ndarray[float]
+            Array of point positions in z direction.
 
         Returns
         -------
-        bool
-            Whether point ``(x,y,z)`` is inside geometry.
+        np.ndarray[bool]
+            ``True`` for every point that is inside the geometry.
         """
+        self._ensure_equal_shape(x, y, z)
         x0, y0, z0 = self.center
         Lx, Ly, Lz = self.size
         dist_x = np.abs(x - x0)
@@ -1218,10 +1384,9 @@ class Box(Centered):
         z: float = None,
         color: str = None,
         alpha: float = None,
-        length_factor: float = ARROW_LENGTH_FACTOR,
-        width_factor: float = ARROW_WIDTH_FACTOR,
+        bend_radius: float = None,
+        bend_axis: Axis = None,
         both_dirs: bool = False,
-        sim_bounds: Bound = None,
         ax: Ax = None,
     ) -> Ax:
         """Adds an arrow to the axis if with options if certain conditions met.
@@ -1240,10 +1405,10 @@ class Box(Centered):
             Color of the arrow.
         alpha : float = None
             Opacity of the arrow (0, 1)
-        length_factor : float = None
-            How long the (3D, unprojected) arrow is compared to the min(height, width) of the axes.
-        width_factor : float = None
-            How wide the (3D, unprojected) arrow is compared to the min(height, width) of the axes.
+        bend_radius : float = None
+            Radius of curvature for this arrow.
+        bend_axis : Axis = None
+            Axis of curvature of `bend_radius`.
         both_dirs : bool = False
             If True, plots an arrow ponting in direction and one in -direction.
 
@@ -1254,76 +1419,85 @@ class Box(Centered):
         """
 
         plot_axis, _ = self.parse_xyz_kwargs(x=x, y=y, z=z)
-
-        arrow_length, arrow_width = self._arrow_dims(
-            ax=ax,
-            length_factor=length_factor,
-            width_factor=width_factor,
-            sim_bounds=sim_bounds,
-            plot_axis=plot_axis,
-        )
+        _, (dx, dy) = self.pop_axis(direction, axis=plot_axis)
 
         # conditions to check to determine whether to plot arrow
-        arrow_intersecting_plane = len(self.intersections(x=x, y=y, z=z)) > 0
-        _, (dx, dy) = self.pop_axis(direction, axis=plot_axis)
+        arrow_intersecting_plane = len(self.intersections_plane(x=x, y=y, z=z)) > 0
         components_in_plane = any(not np.isclose(component, 0) for component in (dx, dy))
 
         # plot if arrow in plotting plane and some non-zero component can be displayed.
         if arrow_intersecting_plane and components_in_plane:
             _, (x0, y0) = self.pop_axis(self.center, axis=plot_axis)
 
-            def add_arrow(sign=1.0):
-                """Add an arrow to the axes and include a sign to direction."""
-                ax.arrow(
-                    x=x0,
-                    y=y0,
-                    dx=sign * arrow_length * dx,
-                    dy=sign * arrow_length * dy,
-                    width=arrow_width,
+            # Reasonable value for temporary arrow size.  The correct size and direction
+            # have to be calculated after all transforms have been set.  That is why we
+            # use a callback to do these calculations only at the drawing phase.
+            xmin, xmax = ax.get_xlim()
+            ymin, ymax = ax.get_ylim()
+            v_x = (xmax - xmin) / 10
+            v_y = (ymax - ymin) / 10
+
+            directions = (1.0, -1.0) if both_dirs else (1.0,)
+            for sign in directions:
+                arrow = patches.FancyArrowPatch(
+                    (x0, y0),
+                    (x0 + v_x, y0 + v_y),
+                    arrowstyle=arrow_style,
                     color=color,
                     alpha=alpha,
                     zorder=np.inf,
                 )
+                # Don't draw this arrow until it's been reshaped
+                arrow.set_visible(False)
 
-            add_arrow(sign=1.0)
-            if both_dirs:
-                add_arrow(sign=-1.0)
+                callback = self._arrow_shape_cb(
+                    arrow, (x0, y0), (dx, dy), sign, bend_radius if bend_axis == plot_axis else None
+                )
+                callback_id = ax.figure.canvas.mpl_connect("draw_event", callback)
+
+                # Store a reference to the callback because mpl_connect does not.
+                arrow.set_shape_cb = (callback_id, callback)
+
+                ax.add_patch(arrow)
 
         return ax
 
-    def _arrow_dims(  # pylint: disable=too-many-locals
-        self,
-        ax: Ax,
-        length_factor: float = ARROW_LENGTH_FACTOR,
-        width_factor: float = ARROW_WIDTH_FACTOR,
-        sim_bounds: Bound = None,
-        plot_axis: Axis = None,
-    ) -> Tuple[float, float]:
-        """Length and width of arrow based on axes size and length and width factors."""
+    @staticmethod
+    def _arrow_shape_cb(arrow, pos, direction, sign, bend_radius):
+        def _cb(event):
+            # We only want to set the shape once, so we disconnect ourselves
+            event.canvas.mpl_disconnect(arrow.set_shape_cb[0])
 
-        if sim_bounds is not None:
+            transform = arrow.axes.transData.transform
+            scale = transform((1, 0))[0] - transform((0, 0))[0]
+            arrow_length = ARROW_LENGTH * event.canvas.figure.get_dpi() / scale
 
-            # use the sim_bounds to get sizes
-            rmin, rmax = sim_bounds
-            _, (xmin, ymin) = self.pop_axis(rmin, axis=plot_axis)
-            _, (xmax, ymax) = self.pop_axis(rmax, axis=plot_axis)
+            if bend_radius:
+                v_norm = (direction[0] ** 2 + direction[1] ** 2) ** 0.5
+                vx_norm = direction[0] / v_norm
+                vy_norm = direction[1] / v_norm
+                bend_angle = -sign * arrow_length / bend_radius
+                t_x = 1 - np.cos(bend_angle)
+                t_y = np.sin(bend_angle)
+                v_x = -bend_radius * (vx_norm * t_y - vy_norm * t_x)
+                v_y = -bend_radius * (vx_norm * t_x + vy_norm * t_y)
+                tangent_angle = np.arctan2(direction[1], direction[0])
+                arrow.set_connectionstyle(
+                    patches.ConnectionStyle.Angle3(
+                        angleA=180 / np.pi * tangent_angle,
+                        angleB=180 / np.pi * (tangent_angle + bend_angle),
+                    )
+                )
 
-        else:
-            # get the sizes of the matplotlib axes
-            xmin, xmax = ax.get_xlim()
-            ymin, ymax = ax.get_ylim()
+            else:
+                v_x = sign * arrow_length * direction[0]
+                v_y = sign * arrow_length * direction[1]
 
-        width = xmax - xmin
-        height = ymax - ymin
+            arrow.set_positions(pos, (pos[0] + v_x, pos[1] + v_y))
+            arrow.set_visible(True)
+            arrow.draw(event.renderer)
 
-        # apply length factor to the minimum size to get arrow length
-        arrow_length = length_factor * min(width, height)
-
-        # constrain arrow width by the maximum size and the max arrow width factor
-        arrow_width = width_factor * arrow_length
-        arrow_width = min(arrow_width, MAX_ARROW_WIDTH_FACTOR * max(width, height))
-
-        return arrow_length, arrow_width
+        return _cb
 
     def _volume(self, bounds: Bound) -> float:
         """Returns object's volume given bounds."""
@@ -1331,7 +1505,6 @@ class Box(Centered):
         volume = 1
 
         for axis in range(3):
-
             min_bound = max(self.bounds[0][axis], bounds[0][axis])
             max_bound = min(self.bounds[1][axis], bounds[1][axis])
 
@@ -1349,7 +1522,6 @@ class Box(Centered):
         length = [0, 0, 0]
 
         for axis in (0, 1, 2):
-
             if min_bounds[axis] < bounds[0][axis]:
                 min_bounds[axis] = bounds[0][axis]
                 in_bounds_factor[axis] -= 1
@@ -1375,30 +1547,35 @@ class Sphere(Centered, Circular):
     >>> b = Sphere(center=(1,2,3), radius=2)
     """
 
-    def inside(self, x, y, z) -> bool:
-        """Returns True if point ``(x,y,z)`` inside volume of geometry.
+    def inside(
+        self, x: np.ndarray[float], y: np.ndarray[float], z: np.ndarray[float]
+    ) -> np.ndarray[bool]:
+        """For input arrays ``x``, ``y``, ``z`` of arbitrary but identical shape, return an array
+        with the same shape which is ``True`` for every point in zip(x, y, z) that is inside the
+        volume of the :class:`Geometry`, and ``False`` otherwise.
 
         Parameters
         ----------
-        x : float
-            Position of point in x direction.
-        y : float
-            Position of point in y direction.
-        z : float
-            Position of point in z direction.
+        x : np.ndarray[float]
+            Array of point positions in x direction.
+        y : np.ndarray[float]
+            Array of point positions in y direction.
+        z : np.ndarray[float]
+            Array of point positions in z direction.
 
         Returns
         -------
-        bool
-            Whether point ``(x,y,z)`` is inside geometry.
+        np.ndarray[bool]
+            ``True`` for every point that is inside the geometry.
         """
+        self._ensure_equal_shape(x, y, z)
         x0, y0, z0 = self.center
         dist_x = np.abs(x - x0)
         dist_y = np.abs(y - y0)
         dist_z = np.abs(z - z0)
         return (dist_x**2 + dist_y**2 + dist_z**2) <= (self.radius**2)
 
-    def intersections(self, x: float = None, y: float = None, z: float = None):
+    def intersections_plane(self, x: float = None, y: float = None, z: float = None):
         """Returns shapely geometry at plane specified by one non None value of x,y,z.
 
         Parameters
@@ -1418,6 +1595,8 @@ class Sphere(Centered, Circular):
             `Shapely's Documentaton <https://shapely.readthedocs.io/en/stable/project.html>`_.
         """
         axis, position = self.parse_xyz_kwargs(x=x, y=y, z=z)
+        if not self.intersects_axis_position(axis, position):
+            return []
         z0, (x0, y0) = self.pop_axis(self.center, axis=axis)
         intersect_dist = self._intersect_dist(position, z0)
         if not intersect_dist:
@@ -1444,9 +1623,7 @@ class Sphere(Centered, Circular):
 
         # a very loose upper bound on how much of sphere is in bounds
         for axis in range(3):
-
             if self.center[axis] <= bounds[0][axis] or self.center[axis] >= bounds[1][axis]:
-
                 volume *= 0.5
 
         return volume
@@ -1458,9 +1635,7 @@ class Sphere(Centered, Circular):
 
         # a very loose upper bound on how much of sphere is in bounds
         for axis in range(3):
-
             if self.center[axis] <= bounds[0][axis] or self.center[axis] >= bounds[1][axis]:
-
                 area *= 0.5
 
         return area
@@ -1613,24 +1788,29 @@ class Cylinder(Centered, Circular, Planar):
             Polygon(vertices_max + vertices_frustum_right + vertices_min + vertices_frustum_left)
         ]
 
-    def inside(self, x, y, z) -> bool:
-        """Returns True if point ``(x,y,z)`` inside volume of geometry.
+    def inside(
+        self, x: np.ndarray[float], y: np.ndarray[float], z: np.ndarray[float]
+    ) -> np.ndarray[bool]:
+        """For input arrays ``x``, ``y``, ``z`` of arbitrary but identical shape, return an array
+        with the same shape which is ``True`` for every point in zip(x, y, z) that is inside the
+        volume of the :class:`Geometry`, and ``False`` otherwise.
 
         Parameters
         ----------
-        x : float
-            Position of point in x direction.
-        y : float
-            Position of point in y direction.
-        z : float
-            Position of point in z direction.
+        x : np.ndarray[float]
+            Array of point positions in x direction.
+        y : np.ndarray[float]
+            Array of point positions in y direction.
+        z : np.ndarray[float]
+            Array of point positions in z direction.
 
         Returns
         -------
-        bool
-            Whether point ``(x,y,z)`` is inside geometry.
+        np.ndarray[bool]
+            ``True`` for every point that is inside the geometry.
         """
         # radius at z
+        self._ensure_equal_shape(x, y, z)
         z0, (x0, y0) = self.pop_axis(self.center, axis=self.axis)
         z, (x, y) = self.pop_axis((x, y, z), axis=self.axis)
         radius_offset = self._radius_z(z)
@@ -1670,10 +1850,8 @@ class Cylinder(Centered, Circular, Planar):
 
         # a very loose upper bound on how much of the cylinder is in bounds
         for axis in range(3):
-
             if axis != self.axis:
                 if self.center[axis] <= bounds[0][axis] or self.center[axis] >= bounds[1][axis]:
-
                     volume *= 0.5
 
         return volume
@@ -1702,10 +1880,8 @@ class Cylinder(Centered, Circular, Planar):
 
         # a very loose upper bound on how much of the cylinder is in bounds
         for axis in range(3):
-
             if axis != self.axis:
                 if self.center[axis] <= bounds[0][axis] or self.center[axis] >= bounds[1][axis]:
-
                     area *= 0.5
 
         return area
@@ -1837,81 +2013,83 @@ class PolySlab(Planar):
                 f"Given array with shape of {shape}."
             )
 
-        # make sure no self-intersecting edges
-        if not Polygon(val_np).is_valid:
-            raise SetupError(
-                "A valid Polygon may not possess any intersecting or overlapping edges."
-            )
+        # make sure no polygon splitting, isalands, 0 area
+        poly_heal = make_valid(Polygon(val_np))
+        if poly_heal.area < fp_eps**2:
+            raise SetupError("The polygon almost collapses to a 1D curve.")
 
+        if not isinstance(poly_heal, Polygon) or len(poly_heal.interiors) > 0:
+            raise SetupError(
+                "Polygon is self-intersecting, resulting in "
+                "polygon splitting or generation of holes/islands. "
+                "A general treatment to self-intersecting polygon will be available "
+                "in future releases."
+            )
         return val
 
     @pydantic.validator("vertices", always=True)
-    def no_self_intersecting_polygon_at_reference_plane(cls, val, values):
-        """In this version, we don't support self-intersecting polygons yet, meaning that
-        any normal cross section of the PolySlab cannot be self-intersecting. This part
-        checks if the polygon is self-intersecting at the reference plane.
+    def no_complex_self_intersecting_polygon_at_reference_plane(cls, val, values):
+        """At the reference plane, check if the polygon is self-intersecting.
 
         There are two types of self-intersection that can occur during dilation:
-        1) vertex-vertex crossing.
+        1) the one that creates holes/islands, or splits polygons, or removes everything;
+        2) the one that does not.
 
-        2) vertex-edge crossing.
+        For 1), we issue an error since it is yet to be supported;
+        For 2), we heal the polygon, and warn that the polygon has been cleaned up.
         """
         # no need to valiate anything here
         if isclose(values["dilation"], 0):
             return val
 
-        ## First, make sure no vertex-vertex crossing in the reference plane
-        ## 1) obviously, vertex-vertex crossing can occur during erosion
-        ## 2) for concave polygon, the crossing can even occur during dilation
         val_np = PolySlab._proper_vertices(val)
+        dist = values["dilation"]
 
-        # compute distance between vertices after dilation to detect vertex-vertex
-        # crossing events
-        max_dist = PolySlab._crossing_detection(val_np, values["dilation"])
-        if max_dist is not None:
-            # 1) crossing during erosion
-            if values["dilation"] < 0:
-                # too much erosion
-                raise SetupError(
-                    "Erosion value (-dilation) is too large. Some edges in the supplied "
-                    f"polygon are fully eroded. Maximal erosion should be {max_dist:.3e} "
-                    "for this polygon. Support for vertices crossing under "
-                    "significant erosion will be available in future releases."
-                )
-            # 2) crossing during dilation in concave polygon
-            raise SetupError(
-                "Dilation value is too large in a concave polygon, resulting in "
-                "vertices crossing. "
-                f"Maximal dilation should be {max_dist:.3e} for this polygon. "
-                "Support for vertices crossing under significant dilation "
-                "in concave polygons will be available in future releases."
-            )
-        # If no vertex-vertex crossing is detected, but the polygon is still self-intersecting.
-        # it is attributed to vertex-edge crossing.
-        val_np_dilated = PolySlab._shift_vertices(val_np, values["dilation"])[0]
-        if not Polygon(val_np_dilated).is_valid:
+        # 0) fully eroded
+        if dist < 0 and dist < -PolySlab._maximal_erosion(val_np):
+            raise SetupError("Erosion value is too large. The polygon is fully eroded.")
+
+        # no edge events
+        if not PolySlab._edge_events_detection(val_np, dist, ignore_at_dist=False):
+            return val
+
+        poly_offset = PolySlab._shift_vertices(val_np, dist)[0]
+        if PolySlab._area(poly_offset) < fp_eps**2:
+            raise SetupError("Erosion value is too large. The polygon is fully eroded.")
+
+        # edge events
+        poly_offset = make_valid(Polygon(poly_offset))
+        # 1) polygon split or create holes/islands
+        if not isinstance(poly_offset, Polygon) or len(poly_offset.interiors) > 0:
             raise SetupError(
                 "Dilation/Erosion value is too large, resulting in "
-                "vertex-edge crossing, and thus self-intersecting polygons. "
-                "Support for self-intersecting polygons under significant dilation "
-                "will be available in future releases."
+                "polygon splitting or generation of holes/islands. "
+                "A general treatment to self-intersecting polygon will be available "
+                "in future releases."
             )
 
+        # case 2
+        log.warning(
+            "The dilation/erosion value is too large. resulting in a "
+            "self-intersecting polygon. "
+            "The vertices have been modified to make a valid polygon."
+        )
         return val
 
     @pydantic.validator("vertices", always=True)
     def no_self_intersecting_polygon_during_extrusion(cls, val, values):
-        """In this version, we don't support self-intersecting polygons yet, meaning that
+        """In this simple polyslab, we don't support self-intersecting polygons yet, meaning that
         any normal cross section of the PolySlab cannot be self-intersecting. This part checks
         if any self-interction will occur during extrusion with non-zero sidewall angle.
 
-        There are two types of self-intersection that can occur during dilation:
-        1) vertex-vertex crossing. This is well treated. A maximal slab thickness will be
-        suggested if crossing is detected.
+        There are two types of self-intersection, known as edge events,
+        that can occur during dilation:
+        1) neighboring vertex-vertex crossing. This type of edge event can be treated with
+        ``ComplexPolySlab`` which divides the polyslab into a list of simple polyslabs.
 
-        2) vertex-edge crossing. The implementation of this part needs improvement. Now we
-        just sample _N_SAMPLE_POLYGON_INTERSECT cross sections along the normal axis, and check
-        if they are self-intersecting.
+        2) other types of edge events that can create holes/islands or split polygons.
+        To detect this, we sample _N_SAMPLE_POLYGON_INTERSECT cross sections to see if any creation
+        of polygons/holes, and changes in vertices number.
         """
         if "sidewall_angle" not in values:
             raise ValidationError("``sidewall_angle`` failed validation.")
@@ -1924,6 +2102,7 @@ class PolySlab(Planar):
         poly_ref = PolySlab._proper_vertices(val)
         if not isclose(values["dilation"], 0):
             poly_ref = PolySlab._shift_vertices(poly_ref, values["dilation"])[0]
+            poly_ref = PolySlab._heal_polygon(poly_ref)
 
         # Fist, check vertex-vertex crossing at any point during extrusion
         length = values["slab_bounds"][1] - values["slab_bounds"][0]
@@ -1938,44 +2117,34 @@ class PolySlab(Planar):
         # capture vertex crossing events
         max_thick = []
         for dist_val in dist:
-            max_dist = PolySlab._crossing_detection(poly_ref, dist_val)
+            max_dist = PolySlab._neighbor_vertices_crossing_detection(poly_ref, dist_val)
+
             if max_dist is not None:
                 max_thick.append(max_dist / abs(dist_val) * length)
 
         if len(max_thick) > 0:
             max_thick = min(max_thick)
             raise SetupError(
-                "Sidewall angle or structure thickness is so large that there are "
-                "vertices crossing somewhere during extrusion. "
-                "Please reduce structure thickness "
-                f"to be < {max_thick:.3e} to avoid the crossing of polygon vertices.  "
-                "Support for vertices crossing will be available in future releases."
+                "Sidewall angle or structure thickness is so large that the polygon "
+                "is self-intersecting during extrusion. "
+                f"Please either reduce structure thickness to be < {max_thick:.3e}, "
+                "or use our plugin 'ComplexPolySlab' to divide the complex polyslab "
+                "into a list of simple polyslabs."
             )
 
-        # sample _N_SAMPLE_POLYGON_INTERSECT cross sections along the normal axis to check
-        # if there is any vertex-edge crossing event.
-        dist_list = dist[0] * np.linspace(
-            1.0 / (_N_SAMPLE_POLYGON_INTERSECT + 1),
-            _N_SAMPLE_POLYGON_INTERSECT / (_N_SAMPLE_POLYGON_INTERSECT + 1.0),
-            _N_SAMPLE_POLYGON_INTERSECT,
-        )
-        if values["reference_plane"] == "middle":
-            dist_list = dist_list / dist[0] * (dist[1] - dist[0]) + dist[0]
-        for dist_i in dist_list:
-            poly_i = PolySlab._shift_vertices(poly_ref, dist_i)[0]
-            if not Polygon(poly_i).is_valid:
+        # vertex-edge crossing event.
+        for dist_val in dist:
+            if PolySlab._edge_events_detection(poly_ref, dist_val):
                 raise SetupError(
-                    "Sidewall angle or structure thickness is so large that there are "
-                    "vertex-edge crossing somewhere during extrusion, resulting in an "
-                    "self-intersecting polygon. "
-                    "Please reduce structure thickness. "
-                    "Support for self-intersecting polygon will be available "
+                    "Sidewall angle or structure thickness is too large, "
+                    "resulting in polygon splitting or generation of holes/islands. "
+                    "A general treatment to self-intersecting polygon will be available "
                     "in future releases."
                 )
         return val
 
     @classmethod
-    def from_gds(  # pylint:disable=too-many-arguments, too-many-locals
+    def from_gds(  # pylint:disable=too-many-arguments
         cls,
         gds_cell,
         axis: Axis,
@@ -1986,13 +2155,13 @@ class PolySlab(Planar):
         dilation: float = 0.0,
         sidewall_angle: float = 0,
         **kwargs,
-    ) -> List["PolySlab"]:
-        """Import :class:`PolySlab` from a ``gdstk.Cell``.
+    ) -> List[PolySlab]:
+        """Import :class:`PolySlab` from a ``gdstk.Cell`` or a ``gdspy.Cell``.
 
         Parameters
         ----------
-        gds_cell : gdstk.Cell
-            ``gdstk.Cell`` containing 2D geometric data.
+        gds_cell : Union[gdstk.Cell, gdspy.Cell]
+            ``gdstk.Cell`` or ``gdspy.Cell`` containing 2D geometric data.
         axis : int
             Integer index into the polygon's slab axis. (0,1,2) -> (x,y,z).
         slab_bounds: Tuple[float, float]
@@ -2027,6 +2196,25 @@ class PolySlab(Planar):
 
         # TODO: change for 2.0
         # handle reference plane kwarg
+        reference_plane = cls._set_reference_plane_kwarg(sidewall_angle, **kwargs)
+
+        all_vertices = cls._load_gds_vertices(gds_cell, gds_layer, gds_dtype, gds_scale)
+
+        return [
+            cls(
+                vertices=verts,
+                axis=axis,
+                slab_bounds=slab_bounds,
+                dilation=dilation,
+                sidewall_angle=sidewall_angle,
+                reference_plane=reference_plane,
+            )
+            for verts in all_vertices
+        ]
+
+    @staticmethod
+    def _set_reference_plane_kwarg(sidewall_angle: float, **kwargs) -> PlanePosition:
+        """Handle reference plane kwarg. (TODO: change for 2.0)"""
         reference_plane = kwargs.get("reference_plane")
         if reference_plane is None:
             reference_plane = "bottom"
@@ -2037,8 +2225,97 @@ class PolySlab(Planar):
                     "We recommend you change your classmethod constructor call to explicitly set "
                     "the 'reference_plane' field ahead of this release to avoid unexpected results."
                 )
+        return reference_plane
+
+    @classmethod
+    def _load_gds_vertices(
+        cls,
+        gds_cell,
+        gds_layer: int,
+        gds_dtype: int = None,
+        gds_scale: pydantic.PositiveFloat = 1.0,
+    ) -> List[Vertices]:
+        """Import :class:`PolySlab` from a ``gdstk.Cell`` or a ``gdspy.Cell``.
+
+        Parameters
+        ----------
+        gds_cell : Union[gdstk.Cell, gdspy.Cell]
+            ``gdstk.Cell`` or ``gdspy.Cell`` containing 2D geometric data.
+        gds_layer : int
+            Layer index in the ``gds_cell``.
+        gds_dtype : int = None
+            Data-type index in the ``gds_cell``.
+            If ``None``, imports all data for this layer into the returned list.
+        gds_scale : float = 1.0
+            Length scale used in GDS file in units of MICROMETER.
+            For example, if gds file uses nanometers, set ``gds_scale=1e-3``.
+            Must be positive.
+
+        Returns
+        -------
+        List[Vertices]
+            List of :class:`.Vertices`
+        """
+
+        # switch the GDS cell loader function based on the class name string
+        # TODO: make this more robust in future releases
+        gds_cell_class_name = str(gds_cell.__class__)
+
+        if "gdstk" in gds_cell_class_name:
+            gds_loader_fn = cls._load_gds_vertices_gdstk
+
+        elif "gdspy" in gds_cell_class_name:
+            gds_loader_fn = cls._load_gds_vertices_gdspy
+
         else:
-            kwargs.pop("reference_plane")
+            raise ValueError(
+                f"argumeent 'gds_cell' of type '{gds_cell_class_name}' "
+                "does not seem to be associated with 'gdstk' or 'gdspy' packages "
+                "and therefore can't be loaded by Tidy3D."
+            )
+
+        all_vertices = gds_loader_fn(
+            gds_cell=gds_cell, gds_layer=gds_layer, gds_dtype=gds_dtype, gds_scale=gds_scale
+        )
+
+        # convert vertices into polyslabs
+        polygons = (Polygon(vertices) for vertices in all_vertices)
+        polys_union = functools.reduce(lambda poly1, poly2: poly1.union(poly2), polygons)
+
+        if isinstance(polys_union, Polygon):
+            all_vertices = [PolySlab.strip_coords(polys_union)[0]]
+        elif isinstance(polys_union, MultiPolygon):
+            all_vertices = [PolySlab.strip_coords(polygon)[0] for polygon in polys_union.geoms]
+        return all_vertices
+
+    @staticmethod
+    def _load_gds_vertices_gdstk(
+        gds_cell,
+        gds_layer: int,
+        gds_dtype: int = None,
+        gds_scale: pydantic.PositiveFloat = 1.0,
+    ) -> List[Vertices]:
+        """Load :class:`PolySlab` vertices from a ``gdstk.Cell``.
+
+        Parameters
+        ----------
+        gds_cell : gdstk.Cell
+            ``gdstk.Cell`` or ``gdspy.Cell`` containing 2D geometric data.
+        gds_layer : int
+            Layer index in the ``gds_cell``.
+        gds_dtype : int = None
+            Data-type index in the ``gds_cell``.
+            If ``None``, imports all data for this layer into the returned list.
+        gds_scale : float = 1.0
+            Length scale used in GDS file in units of MICROMETER.
+            For example, if gds file uses nanometers, set ``gds_scale=1e-3``.
+            Must be positive.
+
+        Returns
+        -------
+        List[Vertices]
+            List of :class:`.Vertices`
+        """
 
         # apply desired scaling and load the polygon vertices
         if gds_dtype is not None:
@@ -2061,92 +2338,141 @@ class PolySlab(Planar):
                 f"with specified gds_dtype={gds_dtype}."
             )
 
-        # convert vertices into polyslabs
-        polygons = (Polygon(vertices) for vertices in all_vertices)
-        polys_union = functools.reduce(lambda poly1, poly2: poly1.union(poly2), polygons)
+        return all_vertices
 
-        if isinstance(polys_union, Polygon):
-            all_vertices = [cls.strip_coords(polys_union)[0]]
-        elif isinstance(polys_union, MultiPolygon):
-            all_vertices = [cls.strip_coords(polygon)[0] for polygon in polys_union.geoms]
+    @classmethod
+    def _load_gds_vertices_gdspy(  # pylint:disable=too-many-arguments, too-many-locals
+        cls,
+        gds_cell,
+        gds_layer: int,
+        gds_dtype: int = None,
+        gds_scale: pydantic.PositiveFloat = 1.0,
+    ) -> List["PolySlab"]:
+        """Load :class:`PolySlab` vertices from a ``gdspy.Cell``.
 
-        return [
-            cls(
-                vertices=verts,
-                axis=axis,
-                slab_bounds=slab_bounds,
-                dilation=dilation,
-                sidewall_angle=sidewall_angle,
-                reference_plane=reference_plane,
-                **kwargs,
+        Parameters
+        ----------
+        gds_cell :  gdspy.Cell
+            ``gdspy.Cell`` containing 2D geometric data.
+        gds_layer : int
+            Layer index in the ``gds_cell``.
+        gds_dtype : int = None
+            Data-type index in the ``gds_cell``.
+            If ``None``, imports all data for this layer into the returned list.
+        gds_scale : float = 1.0
+            Length scale used in GDS file in units of MICROMETER.
+            For example, if gds file uses nanometers, set ``gds_scale=1e-3``.
+            Must be positive.
+
+        Returns
+        -------
+        List[Vertices]
+            List of :class:`.Vertices`
+        """
+
+        # load the polygon vertices
+        vert_dict = gds_cell.get_polygons(by_spec=True)
+        all_vertices = []
+        for (gds_layer_file, gds_dtype_file), vertices in vert_dict.items():
+            if gds_layer_file == gds_layer and (gds_dtype is None or gds_dtype == gds_dtype_file):
+                all_vertices.extend(iter(vertices))
+        # make sure something got loaded, otherwise error
+        if not all_vertices:
+            raise Tidy3dKeyError(
+                f"Couldn't load gds_cell, no vertices found at gds_layer={gds_layer} "
+                f"with specified gds_dtype={gds_dtype}."
             )
-            for verts in all_vertices
-        ]
+
+        # apply scaling and convert vertices into polyslabs
+        all_vertices = [vertices * gds_scale for vertices in all_vertices]
+        all_vertices = [vertices.tolist() for vertices in all_vertices]
+
+        return all_vertices
 
     @cached_property
-    def base_polygon(self) -> Vertices:
-        """The polygon at the base after potential dilation operation.
-        The vertices will always be transformed to be "proper".
+    def reference_polygon(self) -> np.ndarray:
+        """The polygon at the reference plane.
+
+        Returns
+        -------
+        ArrayLike[float, float]
+            The vertices of the polygon at the reference plane.
+        """
+        vertices = self._proper_vertices(self.vertices)
+        if isclose(self.dilation, 0):
+            return vertices
+        offset_vertices = self._shift_vertices(vertices, self.dilation)[0]
+        return self._heal_polygon(offset_vertices)
+
+    @cached_property
+    def middle_polygon(self) -> np.ndarray:
+        """The polygon at the middle.
+
+        Returns
+        -------
+        ArrayLike[float, float]
+            The vertices of the polygon at the middle.
+        """
+
+        dist = self._extrusion_length_to_offset_distance(self.length_axis / 2)
+        if self.reference_plane == "bottom":
+            return self._shift_vertices(self.reference_polygon, dist)[0]
+        if self.reference_plane == "top":
+            return self._shift_vertices(self.reference_polygon, -dist)[0]
+        # middle case
+        return self.reference_polygon
+
+    @cached_property
+    def base_polygon(self) -> np.ndarray:
+        """The polygon at the base, derived from the ``middle_polygon``.
 
         Returns
         -------
         ArrayLike[float, float]
             The vertices of the polygon at the base.
         """
-
-        # offset value to obtain polygon in the base
-        offset_base = self.dilation + self.offset_distance_to_base(
-            self.reference_plane, self.length_axis, self._tanq
-        )
-        return self._shift_vertices(self._proper_vertices(self.vertices), offset_base)[0]
+        if self.reference_plane == "bottom":
+            return self.reference_polygon
+        dist = self._extrusion_length_to_offset_distance(-self.length_axis / 2)
+        return self._shift_vertices(self.middle_polygon, dist)[0]
 
     @cached_property
-    def top_polygon(self) -> Vertices:
-        """The polygon at the top after potential dilation and sidewall operation.
+    def top_polygon(self) -> np.ndarray:
+        """The polygon at the top, derived from the ``middle_polygon``.
 
         Returns
         -------
         ArrayLike[float, float]
             The vertices of the polygon at the top.
         """
+        if self.reference_plane == "top":
+            return self.reference_polygon
+        dist = self._extrusion_length_to_offset_distance(self.length_axis / 2)
+        return self._shift_vertices(self.middle_polygon, dist)[0]
 
-        dist = -self.length_axis * self._tanq
-        return self._shift_vertices(self.base_polygon, dist)[0]
-
-    @cached_property
-    def _base_polygon(self) -> Vertices:
-        """Similar as `base_polygon`, but simply return self.vertices
-        in the absence of dilation operation.
-
-        Returns
-        -------
-        ArrayLike[float, float]
-            The vertices of the polygon at the base.
-        """
-        if isclose(self.sidewall_angle, 0) and isclose(self.dilation, 0):
-            return PolySlab.vertices_to_array(self.vertices)
-
-        return self.base_polygon
-
-    def inside(self, x, y, z) -> bool:  # pylint:disable=too-many-locals
-        """Returns True if point ``(x,y,z)`` inside volume of geometry.
-        For slanted polyslab and x/y/z to be np.ndarray, a loop over z-axis
-        is performed to find out the offsetted polygon at each z-coordinate.
+    # pylint:disable=too-many-locals
+    def inside(
+        self, x: np.ndarray[float], y: np.ndarray[float], z: np.ndarray[float]
+    ) -> np.ndarray[bool]:
+        """For input arrays ``x``, ``y``, ``z`` of arbitrary but identical shape, return an array
+        with the same shape which is ``True`` for every point in zip(x, y, z) that is inside the
+        volume of the :class:`Geometry`, and ``False`` otherwise.
 
         Parameters
         ----------
-        x : float
-            Position of point in x direction.
-        y : float
-            Position of point in y direction.
-        z : float
-            Position of point in z direction.
+        x : np.ndarray[float]
+            Array of point positions in x direction.
+        y : np.ndarray[float]
+            Array of point positions in y direction.
+        z : np.ndarray[float]
+            Array of point positions in z direction.
 
         Returns
         -------
-        bool
-            Whether point ``(x,y,z)`` is inside geometry.
+        np.ndarray[bool]
+            ``True`` for every point that is inside the geometry.
         """
+        self._ensure_equal_shape(x, y, z)
 
         z, (x, y) = self.pop_axis((x, y, z), axis=self.axis)
 
@@ -2159,7 +2485,7 @@ class PolySlab(Planar):
             return inside_height
 
         # check what points are inside polygon cross section (face)
-        z_local = z - z0 + self.length_axis / 2  # distance to the base
+        z_local = z - z0  # distance to the middle
         dist = -z_local * self._tanq
 
         def contains_pointwise(face_polygon):
@@ -2176,7 +2502,7 @@ class PolySlab(Planar):
 
             # vertical sidewall
             if isclose(self.sidewall_angle, 0):
-                face_polygon = Polygon(self._base_polygon)
+                face_polygon = Polygon(self.reference_polygon)
                 fun_contain = contains_pointwise(face_polygon)
                 contains_vectorized = np.vectorize(fun_contain, signature="(n)->()")
                 points_stacked = np.stack((xs_slab, ys_slab), axis=1)
@@ -2199,7 +2525,7 @@ class PolySlab(Planar):
                     if not _move_axis(inside_height)[0, 0, z_i]:
                         continue
                     vertices_z = self._shift_vertices(
-                        self.base_polygon, _move_axis(dist)[0, 0, z_i]
+                        self.middle_polygon, _move_axis(dist)[0, 0, z_i]
                     )[0]
                     face_polygon = Polygon(vertices_z)
                     fun_contain = contains_pointwise(face_polygon)
@@ -2211,7 +2537,7 @@ class PolySlab(Planar):
                     inside_polygon_axis[:, :, z_i] = inside_polygon_slab.reshape(x_axis.shape[:2])
                 inside_polygon = _move_axis_reverse(inside_polygon_axis)
         else:
-            vertices_z = self._shift_vertices(self._base_polygon, dist)[0]
+            vertices_z = self._shift_vertices(self.middle_polygon, dist)[0]
             face_polygon = Polygon(vertices_z)
             point = Point(x, y)
             inside_polygon = face_polygon.covers(point)
@@ -2233,9 +2559,9 @@ class PolySlab(Planar):
             `Shapely's Documentaton <https://shapely.readthedocs.io/en/stable/project.html>`_.
         """
         z0 = self.center_axis
-        z_local = z - z0 + self.length_axis / 2  # distance to the base
+        z_local = z - z0  # distance to the middle
         dist = -z_local * self._tanq
-        vertices_z = self._shift_vertices(self._base_polygon, dist)[0]
+        vertices_z = self._shift_vertices(self.middle_polygon, dist)[0]
         return [Polygon(vertices_z)]
 
     def _intersections_side(self, position, axis) -> list:  # pylint:disable=too-many-locals
@@ -2291,8 +2617,9 @@ class PolySlab(Planar):
             z_min, z_max = z_base + h_base, z_base + h_top
 
             # vertices for the base of each subsection
-            dist = -h_base * self._tanq
-            vertices = self._shift_vertices(self._base_polygon, dist)[0]
+            # move up by `fp_eps` in case vertices are degenerate at the base.
+            dist = -(h_base - self.length_axis / 2 + fp_eps) * self._tanq
+            vertices = self._shift_vertices(self.middle_polygon, dist)[0]
 
             # for vertical sidewall, no need for complications
             if isclose(self.sidewall_angle, 0):
@@ -2357,21 +2684,22 @@ class PolySlab(Planar):
         if isclose(self.sidewall_angle, 0):
             return np.array([])
 
-        vertices = self.base_polygon.copy()
-
         # shift rate
         dist = 1.0
-        shift_x, shift_y = PolySlab._shift_vertices(vertices, dist)[2]
+        shift_x, shift_y = PolySlab._shift_vertices(self.middle_polygon, dist)[2]
         shift_val = shift_x if axis == 0 else shift_y
         shift_val[np.isclose(shift_val, 0, rtol=_IS_CLOSE_RTOL)] = np.inf  # for static vertices
 
         # distance to the plane in the direction of vertex shifting
-        distance = vertices[:, axis] - position
-        height = distance / self._tanq / shift_val
+        distance = self.middle_polygon[:, axis] - position
+        height = distance / self._tanq / shift_val + self.length_axis / 2
         height = np.unique(height)
+        # further filter very close ones
+        is_not_too_close = np.insert((np.diff(height) > fp_eps), 0, True)
+        height = height[is_not_too_close]
 
-        height = height[height > 0]
-        height = height[height < self.length_axis]
+        height = height[height > fp_eps]
+        height = height[height < self.length_axis - fp_eps]
         return height
 
     def _find_intersecting_ys_angle_vertical(  # pylint:disable=too-many-locals
@@ -2436,7 +2764,7 @@ class PolySlab(Planar):
         # intersecting positions and angles
         ints_y = []
         ints_angle = []
-        for (vertices_f_local, vertices_b_local) in zip(iverts_b, iverts_f):
+        for vertices_f_local, vertices_b_local in zip(iverts_b, iverts_f):
             x1, y1 = vertices_f_local
             x2, y2 = vertices_b_local
             slope = (y2 - y1) / (x2 - x1)
@@ -2503,11 +2831,11 @@ class PolySlab(Planar):
         iverts_f = vertices_f[intersects_on]
         # shift rate
         dist = -np.sign(self.sidewall_angle)
-        shift_x, shift_y = self._shift_vertices(vertices, dist)[2]
+        shift_x, shift_y = self._shift_vertices(self.middle_polygon, dist)[2]
         shift_val = shift_x if axis == 0 else shift_y
         shift_val = shift_val[intersects_on]
 
-        for (vertices_f_local, vertices_b_local, vertices_on_local, shift_local) in zip(
+        for vertices_f_local, vertices_b_local, vertices_on_local, shift_local in zip(
             iverts_f, iverts_b, iverts_on, shift_val
         ):
             x_on, y_on = vertices_on_local
@@ -2600,6 +2928,12 @@ class PolySlab(Planar):
         coords_max = self.unpop_axis(zmax, (xmax, ymax), axis=self.axis)
         return (tuple(coords_min), tuple(coords_max))
 
+    def _extrusion_length_to_offset_distance(self, extrusion: float) -> float:
+        """Convert extrusion length to offset distance."""
+        if isclose(self.sidewall_angle, 0):
+            return 0
+        return -extrusion * self._tanq
+
     @staticmethod
     def _area(vertices: np.ndarray) -> float:
         """Compute the signed polygon area (positive for CCW orientation).
@@ -2676,47 +3010,6 @@ class PolySlab(Planar):
         return vertices[~np.isclose(vertices_diff, 0, rtol=_IS_CLOSE_RTOL)]
 
     @staticmethod
-    def _crossing_detection(vertices: np.ndarray, dist: float) -> float:
-        """Detect if vertices will cross after a dilation distance dist.
-
-        Parameters
-        ----------
-        vertices : np.ndarray
-            Shape (N, 2) defining the polygon vertices in the xy-plane.
-        dist : float
-            Distance to offset.
-
-        Returns
-        -------
-        float
-            the maximal allowed dilation if there are any crossing, otherwise
-            return ``None``.
-        """
-
-        # edge length
-        vs_orig = vertices.T.copy()
-        vs_next = np.roll(vs_orig.copy(), axis=-1, shift=-1)
-        edge_length = np.linalg.norm(vs_next - vs_orig, axis=0)
-
-        # edge length remaining
-        parallel_shift = PolySlab._shift_vertices(vertices, dist)[1]
-        parallel_shift_p = np.roll(parallel_shift.copy(), shift=-1)
-        edge_reduction = -(parallel_shift + parallel_shift_p)
-        length_remaining = edge_length - edge_reduction
-
-        if np.any(length_remaining < 0):
-            index_oversized = length_remaining < 0
-            max_dist = np.min(edge_length[index_oversized] / edge_reduction[index_oversized])
-            max_dist *= np.abs(dist)
-            return max_dist
-        return None
-
-    @staticmethod
-    def array_to_vertices(arr_vertices: np.ndarray) -> Vertices:
-        """Converts a numpy array of vertices to a list of tuples."""
-        return list(arr_vertices)
-
-    @staticmethod
     def _proper_vertices(vertices: Vertices) -> np.ndarray:
         """convert vertices to np.array format,
         removing duplicate neighbouring vertices,
@@ -2730,6 +3023,99 @@ class PolySlab(Planar):
 
         vertices_np = PolySlab.vertices_to_array(vertices)
         return PolySlab._orient(PolySlab._remove_duplicate_vertices(vertices_np))
+
+    @staticmethod
+    def _edge_events_detection(  # pylint:disable=too-many-return-statements
+        proper_vertices: np.ndarray, dilation: float, ignore_at_dist: bool = True
+    ) -> bool:
+        """Detect any edge events within the offset distance ``dilation``.
+        If ``ignore_at_dist=True``, the edge event at ``dist`` is ignored.
+        """
+
+        # ignore the event that occurs right at the offset distance
+        if ignore_at_dist:
+            dilation -= fp_eps * dilation / abs(dilation)
+        # number of vertices before offsetting
+        num_vertices = proper_vertices.shape[0]
+
+        # 0) fully eroded?
+        if dilation < 0 and dilation < -PolySlab._maximal_erosion(proper_vertices):
+            return True
+
+        # sample at a few dilation values
+        dist_list = dilation * np.linspace(0, 1, 1 + _N_SAMPLE_CURVE_SHAPELY)[1:]
+        for dist in dist_list:
+            # offset: we offset the vertices first, and then use shapely to make it proper
+            # in principle, one can offset with shapely.buffer directly, but shapely somehow
+            # automatically removes some vertices even though no change of topology.
+            poly_offset = PolySlab._shift_vertices(proper_vertices, dist)[0]
+            # flipped winding number
+            if PolySlab._area(poly_offset) < fp_eps**2:
+                return True
+
+            poly_offset = make_valid(Polygon(poly_offset))
+            # 1) polygon split or create holes/islands
+            if not isinstance(poly_offset, Polygon) or len(poly_offset.interiors) > 0:
+                return True
+
+            # 2) reduction in vertex number
+            offset_vertices = PolySlab._proper_vertices(list(poly_offset.exterior.coords))
+            if offset_vertices.shape[0] != num_vertices:
+                return True
+
+            # 3) some splitted polygon might fully disappear after the offset, but they
+            # can be detected if we offset back.
+            poly_offset_back = make_valid(
+                Polygon(PolySlab._shift_vertices(offset_vertices, -dist)[0])
+            )
+            if isinstance(poly_offset_back, MultiPolygon) or len(poly_offset_back.interiors) > 0:
+                return True
+            offset_back_vertices = list(poly_offset_back.exterior.coords)
+            if PolySlab._proper_vertices(offset_back_vertices).shape[0] != num_vertices:
+                return True
+
+        return False
+
+    @staticmethod
+    def _neighbor_vertices_crossing_detection(
+        vertices: np.ndarray, dist: float, ignore_at_dist: bool = True
+    ) -> float:
+        """Detect if neighboring vertices will cross after a dilation distance dist.
+
+        Parameters
+        ----------
+        vertices : np.ndarray
+            Shape (N, 2) defining the polygon vertices in the xy-plane.
+        dist : float
+            Distance to offset.
+        ignore_at_dist : bool, optional
+            whether to ignore the event right at ``dist`.
+
+        Returns
+        -------
+        float
+            the absolute value of the maximal allowed dilation
+            if there are any crossing, otherwise return ``None``.
+        """
+        # ignore the event that occurs right at the offset distance
+        if ignore_at_dist:
+            dist -= fp_eps * dist / abs(dist)
+
+        edge_length, edge_reduction = PolySlab._edge_length_and_reduction_rate(vertices)
+        length_remaining = edge_length - edge_reduction * dist
+
+        if np.any(length_remaining < 0):
+            index_oversized = length_remaining < 0
+            max_dist = np.min(
+                np.abs(edge_length[index_oversized] / edge_reduction[index_oversized])
+            )
+            return max_dist
+        return None
+
+    @staticmethod
+    def array_to_vertices(arr_vertices: np.ndarray) -> Vertices:
+        """Converts a numpy array of vertices to a list of tuples."""
+        return list(arr_vertices)
 
     @staticmethod
     def vertices_to_array(vertices_tuple: Vertices) -> np.ndarray:
@@ -2798,6 +3184,52 @@ class PolySlab(Planar):
         shift_y = shift_total[1, :]
 
         return np.swapaxes(vs_orig + shift_total, -2, -1), parallel_shift, (shift_x, shift_y)
+
+    @staticmethod
+    def _edge_length_and_reduction_rate(vertices: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+        """Edge length of reduction rate of each edge with unit offset length.
+
+        Parameters
+        ----------
+        vertices : np.ndarray
+            Shape (N, 2) defining the polygon vertices in the xy-plane.
+
+        Returns
+        -------
+        Tuple[np.ndarray, np.narray]
+            edge length, and reduction rate
+        """
+
+        # edge length
+        vs_orig = vertices.T.copy()
+        vs_next = np.roll(vs_orig.copy(), axis=-1, shift=-1)
+        edge_length = np.linalg.norm(vs_next - vs_orig, axis=0)
+
+        # edge length remaining
+        dist = 1
+        parallel_shift = PolySlab._shift_vertices(vertices, dist)[1]
+        parallel_shift_p = np.roll(parallel_shift.copy(), shift=-1)
+        edge_reduction = -(parallel_shift + parallel_shift_p)
+        return edge_length, edge_reduction
+
+    @staticmethod
+    def _maximal_erosion(vertices: np.ndarray) -> float:
+        """The erosion value that reduces the length of
+        all edges to be non-positive.
+        """
+        edge_length, edge_reduction = PolySlab._edge_length_and_reduction_rate(vertices)
+        ind_nonzero = abs(edge_reduction) > fp_eps
+        return -np.min(edge_length[ind_nonzero] / edge_reduction[ind_nonzero])
+
+    @staticmethod
+    def _heal_polygon(vertices: np.ndarray) -> np.ndarray:
+        """heal a self-intersecting polygon."""
+        shapely_poly = Polygon(vertices)
+        if shapely_poly.is_valid:
+            return vertices
+        # perform healing
+        poly_heal = make_valid(shapely_poly)
+        return PolySlab._proper_vertices(list(poly_heal.exterior.coords))
 
     def _volume(self, bounds: Bound) -> float:
         """Returns object's volume given bounds."""
@@ -2893,7 +3325,9 @@ class GeometryGroup(Geometry):
 
         return rmin, rmax
 
-    def intersections(self, x: float = None, y: float = None, z: float = None) -> List[Shapely]:
+    def intersections_plane(
+        self, x: float = None, y: float = None, z: float = None
+    ) -> List[Shapely]:
         """Returns list of shapely geoemtries at plane specified by one non-None value of x,y,z.
 
         Parameters
@@ -2913,29 +3347,80 @@ class GeometryGroup(Geometry):
             `Shapely's Documentaton <https://shapely.readthedocs.io/en/stable/project.html>`_.
         """
 
-        all_intersections = (geometry.intersections(x=x, y=y, z=z) for geometry in self.geometries)
+        if not self.intersects_plane(x, y, z):
+            return []
+        all_intersections = (
+            geometry.intersections_plane(x=x, y=y, z=z) for geometry in self.geometries
+        )
 
         return functools.reduce(lambda a, b: a + b, all_intersections)
 
-    def inside(self, x, y, z) -> bool:
-        """Returns ``True`` if point ``(x,y,z)`` is inside volume of :class:`GeometryGroup`.
+    def intersects_axis_position(self, axis: float, position: float) -> bool:
+        """Whether self intersects plane specified by a given position along a normal axis.
 
         Parameters
         ----------
-        x : float
-            Position of point in x direction.
-        y : float
-            Position of point in y direction.
-        z : float
-            Position of point in z direction.
+        axis : int = None
+            Axis nomral to the plane.
+        position : float = None
+            Position of plane along the normal axis.
 
         Returns
         -------
         bool
-            True if point ``(x,y,z)`` is inside geometry.
+            Whether this geometry intersects the plane.
+        """
+
+        return any(geom.intersects_axis_position(axis, position) for geom in self.geometries)
+
+    def inside(
+        self, x: np.ndarray[float], y: np.ndarray[float], z: np.ndarray[float]
+    ) -> np.ndarray[bool]:
+        """For input arrays ``x``, ``y``, ``z`` of arbitrary but identical shape, return an array
+        with the same shape which is ``True`` for every point in zip(x, y, z) that is inside the
+        volume of the :class:`Geometry`, and ``False`` otherwise.
+
+        Parameters
+        ----------
+        x : np.ndarray[float]
+            Array of point positions in x direction.
+        y : np.ndarray[float]
+            Array of point positions in y direction.
+        z : np.ndarray[float]
+            Array of point positions in z direction.
+
+        Returns
+        -------
+        np.ndarray[bool]
+            ``True`` for every point that is inside the geometry.
         """
 
         individual_insides = (geometry.inside(x, y, z) for geometry in self.geometries)
+
+        return functools.reduce(lambda a, b: a | b, individual_insides)
+
+    def inside_meshgrid(
+        self, x: np.ndarray[float], y: np.ndarray[float], z: np.ndarray[float]
+    ) -> np.ndarray[bool]:
+        """Faster way to check ``self.inside`` on a meshgrid. The input arrays are assumed sorted.
+
+        Parameters
+        ----------
+        x : np.ndarray[float]
+            1D array of point positions in x direction.
+        y : np.ndarray[float]
+            1D array of point positions in y direction.
+        z : np.ndarray[float]
+            1D array of point positions in z direction.
+
+        Returns
+        -------
+        np.ndarray[bool]
+            Array with shape ``(x.size, y.size, z.size)``, which is ``True`` for every
+            point that is inside the geometry.
+        """
+
+        individual_insides = (geom.inside_meshgrid(x, y, z) for geom in self.geometries)
 
         return functools.reduce(lambda a, b: a | b, individual_insides)
 

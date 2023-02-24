@@ -1,9 +1,12 @@
 """ sets configuration options for web interface """
 import os
+from importlib.resources import path as get_path
 from typing import Any, Dict
 
 import pydantic as pd
 from pydantic import Field
+
+from tidy3d import log
 
 
 class EnvSettings(pd.BaseSettings):
@@ -11,7 +14,7 @@ class EnvSettings(pd.BaseSettings):
     Settings for reading environment variables
     """
 
-    ssl_verify: bool = Field(True, env="TIDY3D_SSL_VERIFY")
+    tidy3d_ssl_verify: bool = Field(True, env="TIDY3D_SSL_VERIFY")
 
 
 class WebConfig(pd.BaseModel):  # pylint:disable=too-many-instance-attributes
@@ -28,6 +31,11 @@ class WebConfig(pd.BaseModel):  # pylint:disable=too-many-instance-attributes
     user: Dict[str, str] = None
     auth_retry: int = 1
     env_settings: EnvSettings = EnvSettings()
+    ssl_verify = (
+        str(get_path("tidy3d.web", "cacert.pem").__enter__())
+        if env_settings.tidy3d_ssl_verify
+        else False
+    )
 
 
 # development config
@@ -78,3 +86,4 @@ DEFAULT_CONFIG_KEY = "prod"
 env_key = os.environ.get("TIDY3D_ENV")
 config_key = env_key if env_key is not None else DEFAULT_CONFIG_KEY
 DEFAULT_CONFIG = WEB_CONFIGS[config_key]
+log.debug(f"use cert file for web request: {DEFAULT_CONFIG.ssl_verify}")

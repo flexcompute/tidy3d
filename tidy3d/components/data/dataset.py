@@ -369,15 +369,15 @@ class PermittivityDataset(AbstractFieldDataset):
     eps_xx: ScalarFieldDataArray = pd.Field(
         ...,
         title="Epsilon xx",
-        description="Spatial distribution of the x-component of the electric field.",
+        description="Spatial distribution of the xx-component of the relative permittivity.",
     )
     eps_yy: ScalarFieldDataArray = pd.Field(
         ...,
         title="Epsilon yy",
-        description="Spatial distribution of the y-component of the electric field.",
+        description="Spatial distribution of the yy-component of the relative permittivity.",
     )
     eps_zz: ScalarFieldDataArray = pd.Field(
         ...,
         title="Epsilon zz",
-        description="Spatial distribution of the z-component of the electric field.",
+        description="Spatial distribution of the zz-component of the relative permittivity.",
     )

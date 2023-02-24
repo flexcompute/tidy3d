@@ -152,6 +152,9 @@ PlanePosition = Literal["bottom", "middle", "top"]
 
 """ medium """
 
+# custom medium
+InterpMethod = Literal["nearest", "linear"]
+
 # Complex = Union[complex, ComplexNumber]
 Complex = Union[tidycomplex, ComplexNumber]
 PoleAndResidue = Tuple[Complex, Complex]

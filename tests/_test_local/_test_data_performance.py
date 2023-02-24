@@ -119,6 +119,55 @@ def test_core_profile_large():
         sim_data.from_file(PATH)
 
 
+@profile
+def test_speed_many_datasets():
+
+    Nx, Ny, Nz, Nf = 100, 100, 100, 1
+
+    x = np.arange(Nx)
+    y = np.arange(Ny)
+    z = np.arange(Nz)
+    f = np.arange(Nf)
+    coords = dict(x=x, y=y, z=z, f=f)
+    scalar_field = td.ScalarFieldDataArray(np.random.random((Nx, Ny, Nz, Nf)), coords=coords)
+
+    def make_field_data(num_index: int):
+        monitor = td.FieldMonitor(
+            size=(2, 4, 6),
+            # fields=('Ex', 'Ey', 'Ez'),
+            freqs=np.linspace(1e14, 2e14, Nf).tolist(),
+            name=str(num_index),
+        )
+        scalar_fields = {fld: scalar_field for fld in monitor.fields}
+
+        return td.FieldData(monitor=monitor, **scalar_fields)
+
+    num_datasets = 100
+
+    data = [make_field_data(n) for n in range(num_datasets)]
+    monitors = [d.monitor for d in data]
+    src = PointDipole(
+        center=(0, 0, 0), source_time=GaussianPulse(freq0=3e14, fwidth=1e14), polarization="Ex"
+    )
+    sim = Simulation(
+        size=(2, 2, 2),
+        grid_spec=GridSpec(wavelength=1),
+        sources=(src,),
+        run_time=1e-12,
+        monitors=monitors,
+    )
+
+    sim_data = td.SimulationData(
+        simulation=sim,
+        data=data,
+    )
+
+    with Profile():
+
+        sim_data.to_file(PATH)
+        sim_data2 = sim_data.from_file(PATH)
+
+
 if __name__ == "__main__":
     test_memory_1_save()
     sim_data1 = test_memory_2_load()

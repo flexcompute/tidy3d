@@ -11,3 +11,5 @@ shapely>=2.0
 pydantic>=1.10.0
 PyYAML
 dask
+toml
+nest_asyncio

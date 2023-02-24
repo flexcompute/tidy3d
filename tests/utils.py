@@ -1,9 +1,13 @@
 import os
 from pathlib import Path
+from typing import Dict
 
 import numpy as np
 from tidy3d import *
 import tidy3d as td
+from tidy3d.log import _get_level_int
+from tidy3d.web import BatchData
+
 
 """ utilities shared between all tests """
 
@@ -273,15 +277,19 @@ SIM_FULL = Simulation(
 )
 
 
-def run_emulated(simulation: Simulation, task_name: str = None) -> SimulationData:
+def run_emulated(simulation: Simulation, **kwargs) -> SimulationData:
     """Emulates a simulation run."""
+
+    from scipy.ndimage.filters import gaussian_filter
 
     def make_data(coords: dict, data_array_type: type, is_complex: bool = False) -> "data_type":
         """make a random DataArray out of supplied coordinates and data_type."""
         data_shape = [len(coords[k]) for k in data_array_type._dims]
         data = np.random.random(data_shape)
         data = (1 + 1j) * data if is_complex else data
-        return data_array_type(data, coords=coords)
+        data = gaussian_filter(data, sigma=0.5)  # smooth out the data a little so it isnt random
+        data_array = data_array_type(data, coords=coords)
+        return data_array
 
     def make_field_data(monitor: FieldMonitor) -> FieldData:
         """make a random FieldData from a FieldMonitor."""
@@ -311,6 +319,25 @@ def run_emulated(simulation: Simulation, task_name: str = None) -> SimulationDat
             **field_cmps
         )
 
+    def make_eps_data(monitor: PermittivityMonitor) -> PermittivityData:
+        """make a random PermittivityData from a PermittivityMonitor."""
+        field_mnt = FieldMonitor(**monitor.dict(exclude={"type", "fields"}))
+        field_data = make_field_data(monitor=field_mnt)
+        return PermittivityData(
+            monitor=monitor, eps_xx=field_data.Ex, eps_yy=field_data.Ey, eps_zz=field_data.Ez
+        )
+
+    def make_diff_data(monitor: DiffractionMonitor) -> DiffractionData:
+        """make a random PermittivityData from a PermittivityMonitor."""
+        f = list(monitor.freqs)
+        orders_x = np.linspace(-1, 1, 3)
+        orders_y = np.linspace(-2, 2, 5)
+        coords = dict(orders_x=orders_x, orders_y=orders_y, f=f)
+        values = np.random.random((len(orders_x), len(orders_y), len(f)))
+        data = DiffractionDataArray(values, coords=coords)
+        field_data = {field: data for field in ("Er", "Etheta", "Ephi", "Hr", "Htheta", "Hphi")}
+        return DiffractionData(monitor=monitor, sim_size=(1, 1), bloch_vecs=(0, 0), **field_data)
+
     def make_mode_data(monitor: ModeMonitor) -> ModeData:
         """make a random ModeData from a ModeMonitor."""
         mode_indices = np.arange(monitor.mode_spec.num_modes)
@@ -326,35 +353,50 @@ def run_emulated(simulation: Simulation, task_name: str = None) -> SimulationDat
         amps = make_data(coords=coords_amps, data_array_type=ModeAmpsDataArray, is_complex=True)
         return ModeData(monitor=monitor, n_complex=n_complex, amps=amps)
 
-    MONITOR_MAKER_MAP = {FieldMonitor: make_field_data, ModeMonitor: make_mode_data}
+    MONITOR_MAKER_MAP = {
+        FieldMonitor: make_field_data,
+        ModeMonitor: make_mode_data,
+        PermittivityMonitor: make_eps_data,
+        DiffractionMonitor: make_diff_data,
+    }
 
     data = [MONITOR_MAKER_MAP[type(mnt)](mnt) for mnt in simulation.monitors]
 
     return SimulationData(simulation=simulation, data=data)
 
 
-def assert_log_level(caplog, log_level_expected):
+def run_async_emulated(simulations: Dict[str, Simulation], **kwargs) -> BatchData:
+    """Emulate an async run function."""
+    return {task_name: run_emulated(sim) for task_name, sim in simulations.items()}
+
+
+def assert_log_level(caplog, log_level_expected: str):
     """ensure something got logged if log_level is not None.
     note: I put this here rather than utils.py because if we import from utils.py,
     it will validate the sims there and those get included in log.
     """
 
+    if log_level_expected is None:
+        log_level_expected_int = None
+    else:
+        log_level_expected_int = _get_level_int(log_level_expected)
+
     # get log output
     logs = caplog.record_tuples
 
     # there's a log but the log level is not None (problem)
-    if logs and not log_level_expected:
+    if logs and not log_level_expected_int:
         raise Exception
 
     # we expect a log but none is given (problem)
-    if log_level_expected and not logs:
+    if log_level_expected_int and not logs:
         raise Exception
 
     # both expected and got log, check the log levels match
     if logs and log_level_expected:
         for log in logs:
             log_level = log[1]
-            if log_level == log_level_expected:
+            if log_level == log_level_expected_int:
                 # log level was triggered, exit
                 return
         raise Exception

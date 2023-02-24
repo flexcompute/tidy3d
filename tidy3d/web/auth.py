@@ -3,6 +3,7 @@ import os
 import getpass
 import hashlib
 import json
+import ssl
 
 import requests
 
@@ -24,7 +25,13 @@ def set_authentication_config(email: str, password: str) -> None:
 
     url = "/".join([Config.auth_api_endpoint, "auth"])
     headers = {"Application": "TIDY3D"}
-    resp = requests.get(url, headers=headers, auth=(email, password))
+    try:
+        resp = requests.get(url, headers=headers, auth=(email, password), verify=Config.ssl_verify)
+    except (requests.exceptions.SSLError, ssl.SSLError):
+        log.info("disable the ssl verify and retry")
+        Config.ssl_verify = False
+        resp = requests.get(url, headers=headers, auth=(email, password), verify=Config.ssl_verify)
+
     if resp.status_code != 200:
         raise WebError("Failed to log in with username and password.")
     log.info("Authentication successful.")

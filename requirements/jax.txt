@@ -1,0 +1,10 @@
+# jax
+
+-r core.txt
+
+jaxlib>=0.3.14; platform_system != "Windows"
+jax[cpu]>=0.3.14; platform_system != "Windows"
+
+# we downgrade to 0.3 for windows users because the only binaries for windows are 0.3 currently.
+jaxlib==0.3.14; platform_system == "Windows"
+jax[cpu]==0.3.14; platform_system == "Windows"

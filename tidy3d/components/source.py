@@ -7,8 +7,8 @@ from typing_extensions import Literal
 import pydantic
 import numpy as np
 
-from .base import Tidy3dBaseModel, cached_property, DATA_ARRAY_TAG
-from .types import Direction, Polarization, Ax, FreqBound, ArrayLike, Axis, Bound
+from .base import Tidy3dBaseModel, cached_property, DATA_ARRAY_MAP
+from .types import Direction, Polarization, Ax, FreqBound, ArrayLike, Axis
 from .validators import assert_plane, validate_name_str, get_value
 from .data.dataset import FieldDataset
 from .geometry import Box
@@ -301,6 +301,11 @@ class Source(Box, ABC):
         return Box(center=self.center, size=self.size)
 
     @cached_property
+    def _injection_axis(self):
+        """Injection axis of the source."""
+        return None
+
+    @cached_property
     def _dir_vector(self) -> Tuple[float, float, float]:
         """Returns a vector indicating the source direction for arrow plotting, if not None."""
         return None
@@ -316,10 +321,8 @@ class Source(Box, ABC):
         y: float = None,
         z: float = None,
         ax: Ax = None,
-        sim_bounds: Bound = None,
         **patch_kwargs,
     ) -> Ax:
-
         # call the `Source.plot()` function first.
         ax = super().plot(x=x, y=y, z=z, ax=ax, **patch_kwargs)
 
@@ -328,6 +331,11 @@ class Source(Box, ABC):
 
         # then add the arrow based on the propagation direction
         if self._dir_vector is not None:
+            bend_radius = None
+            bend_axis = None
+            if hasattr(self, "mode_spec"):
+                bend_radius = self.mode_spec.bend_radius
+                bend_axis = self._bend_axis
 
             ax = self._plot_arrow(
                 x=x,
@@ -335,14 +343,14 @@ class Source(Box, ABC):
                 z=z,
                 ax=ax,
                 direction=self._dir_vector,
+                bend_radius=bend_radius,
+                bend_axis=bend_axis,
                 color=ARROW_COLOR_SOURCE,
                 alpha=arrow_alpha,
                 both_dirs=False,
-                sim_bounds=sim_bounds,
             )
 
         if self._pol_vector is not None:
-
             ax = self._plot_arrow(
                 x=x,
                 y=y,
@@ -352,7 +360,6 @@ class Source(Box, ABC):
                 color=ARROW_COLOR_POLARIZATION,
                 alpha=arrow_alpha,
                 both_dirs=False,
-                sim_bounds=sim_bounds,
             )
 
         return ax
@@ -422,6 +429,11 @@ class PlanarSource(Source, ABC):
     @cached_property
     def injection_axis(self):
         """Injection axis of the source."""
+        return self._injection_axis
+
+    @cached_property
+    def _injection_axis(self):
+        """Injection axis of the source."""
         return self.size.index(0.0)
 
 
@@ -435,6 +447,11 @@ class VolumeSource(Source, ABC):
         "the injection axis by ``angle_theta`` and ``angle_phi``. Must be ``None`` for planar "
         "directional sources, as it is taken automatically from the plane size.",
     )
+
+    @cached_property
+    def _injection_axis(self):
+        """Injection axis of the source."""
+        return self.injection_axis
 
 
 """ Field Sources require more specification, for now, they all have a notion of a direction."""
@@ -453,11 +470,11 @@ class DirectionalSource(FieldSource, ABC):
     @cached_property
     def _dir_vector(self) -> Tuple[float, float, float]:
         """Returns a vector indicating the source direction for arrow plotting, if not None."""
-        if hasattr(self, "injection_axis"):
-            dir_vec = [0, 0, 0]
-            dir_vec[self.injection_axis] = 1 if self.direction == "+" else -1
-            return dir_vec
-        return None
+        if self._injection_axis is None:
+            return None
+        dir_vec = [0, 0, 0]
+        dir_vec[int(self._injection_axis)] = 1 if self.direction == "+" else -1
+        return dir_vec
 
 
 class BroadbandSource(Source, ABC):
@@ -551,7 +568,7 @@ class CustomFieldSource(FieldSource, PlanarSource):
     def _warn_if_none(cls, val: FieldDataset) -> FieldDataset:
         """Warn if the DataArrays fail to load."""
         if isinstance(val, dict):
-            if DATA_ARRAY_TAG in [v for v in val.values() if isinstance(v, str)]:
+            if any((v in DATA_ARRAY_MAP for _, v in val.items() if isinstance(v, str))):
                 log.warning("Loading 'field_dataset' without data.")
                 return None
         return val
@@ -666,16 +683,16 @@ class AngledFieldSource(DirectionalSource, ABC):
         dx = radius * np.cos(self.angle_phi) * np.sin(self.angle_theta)
         dy = radius * np.sin(self.angle_phi) * np.sin(self.angle_theta)
         dz = radius * np.cos(self.angle_theta)
-        return self.unpop_axis(dz, (dx, dy), axis=self.injection_axis)
+        return self.unpop_axis(dz, (dx, dy), axis=self._injection_axis)
 
     @cached_property
     def _pol_vector(self) -> Tuple[float, float, float]:
         """Source polarization normal vector in cartesian coordinates."""
         normal_dir = [0.0, 0.0, 0.0]
-        normal_dir[self.injection_axis] = 1.0
+        normal_dir[int(self._injection_axis)] = 1.0
         propagation_dir = list(self._dir_vector)
         if self.angle_theta == 0.0:
-            pol_vector_p = np.array((0, 1, 0)) if self.injection_axis == 0 else np.array((1, 0, 0))
+            pol_vector_p = np.array((0, 1, 0)) if self._injection_axis == 0 else np.array((1, 0, 0))
             pol_vector_p = self.rotate_points(pol_vector_p, normal_dir, angle=self.angle_phi)
         else:
             pol_vector_s = np.cross(normal_dir, propagation_dir)
@@ -731,7 +748,16 @@ class ModeSource(DirectionalSource, PlanarSource, BroadbandSource):
         dx = radius * np.cos(self.angle_phi) * np.sin(self.angle_theta)
         dy = radius * np.sin(self.angle_phi) * np.sin(self.angle_theta)
         dz = radius * np.cos(self.angle_theta)
-        return self.unpop_axis(dz, (dx, dy), axis=self.injection_axis)
+        return self.unpop_axis(dz, (dx, dy), axis=self._injection_axis)
+
+    @cached_property
+    def _bend_axis(self) -> Axis:
+        if self.mode_spec.bend_radius is None:
+            return None
+        in_plane = [0, 0]
+        in_plane[self.mode_spec.bend_axis] = 1
+        direction = self.unpop_axis(0, in_plane, axis=self.injection_axis)
+        return direction.index(1)
 
 
 """ Angled Field Sources one can use. """

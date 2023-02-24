@@ -1,23 +1,31 @@
-# pylint: disable=invalid-name
+# pylint: disable=invalid-name, too-many-lines
 """Defines properties of the medium / materials"""
+from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Tuple, Union, Callable
+from typing import Tuple, Union, Callable, Optional, Dict, List
 import functools
 
 import pydantic as pd
 import numpy as np
+import xarray as xr
 
 from .base import Tidy3dBaseModel, cached_property
-from .types import PoleAndResidue, Ax, FreqBound, TYPE_TAG_STR
+from .grid.grid import Coords, Grid
+from .types import PoleAndResidue, Ax, FreqBound, TYPE_TAG_STR, InterpMethod, Numpy, Bound
+from .data.dataset import PermittivityDataset
+from .data.data_array import ScalarFieldDataArray
 from .viz import add_ax_if_none
 from .validators import validate_name_str
 from ..constants import C_0, pec_val, EPSILON_0
 from ..constants import HERTZ, CONDUCTIVITY, PERMITTIVITY, RADPERSEC, MICROMETER, SECOND
-from ..log import log, ValidationError
+from ..log import log, ValidationError, SetupError
 
 # evaluate frequency as this number (Hz) if inf
 FREQ_EVAL_INF = 1e50
+
+# extrapolation option in custom medium
+FILL_VALUE = "extrapolate"
 
 
 def ensure_freq_in_range(eps_model: Callable[[float], complex]) -> Callable[[float], complex]:
@@ -234,6 +242,28 @@ class AbstractMedium(ABC, Tidy3dBaseModel):
 
         return eps_real + 1j * sigma / omega / EPSILON_0
 
+    @staticmethod
+    def eps_complex_to_eps_sigma(eps_complex: complex, freq: float) -> Tuple[float, float]:
+        """Convert complex permittivity at frequency ``freq``
+        to permittivity and conductivity values.
+
+        Parameters
+        ----------
+        eps_complex : complex
+            Complex-valued relative permittivity.
+        freq : float
+            Frequency to evaluate permittivity at (Hz).
+
+        Returns
+        -------
+        Tuple[float, float]
+            Real part of relative permittivity & electric conductivity.
+        """
+        eps_real, eps_imag = eps_complex.real, eps_complex.imag  # pylint:disable=no-member
+        omega = 2 * np.pi * freq
+        sigma = omega * eps_imag * EPSILON_0
+        return eps_real, sigma
+
 
 """ Dispersionless Medium """
 
@@ -306,6 +336,334 @@ class Medium(AbstractMedium):
         """
         eps, sigma = AbstractMedium.nk_to_eps_sigma(n, k, freq)
         return cls(permittivity=eps, conductivity=sigma, **kwargs)
+
+
+class CustomMedium(AbstractMedium):
+    """:class:`.Medium` with user-supplied permittivity distribution.
+
+    Example
+    -------
+    >>> Nx, Ny, Nz = 10, 9, 8
+    >>> X = np.linspace(-1, 1, Nx)
+    >>> Y = np.linspace(-1, 1, Ny)
+    >>> Z = np.linspace(-1, 1, Nz)
+    >>> freqs = [2e14]
+    >>> data = np.ones((Nx, Ny, Nz, 1))
+    >>> eps_diagonal_data = ScalarFieldDataArray(data, coords=dict(x=X, y=Y, z=Z, f=freqs))
+    >>> eps_components = {f"eps_{d}{d}": eps_diagonal_data for d in "xyz"}
+    >>> eps_dataset = PermittivityDataset(**eps_components)
+    >>> dielectric = CustomMedium(eps_dataset=eps_dataset, name='my_medium')
+    >>> eps = dielectric.eps_model(200e12)
+    """
+
+    eps_dataset: PermittivityDataset = pd.Field(
+        ...,
+        title="Permittivity Dataset",
+        description="User-supplied dataset containing complex-valued permittivity "
+        "as a function of space. Permittivity distribution over the Yee-grid will be "
+        "interpolated based on ``interp_method``.",
+    )
+
+    interp_method: InterpMethod = pd.Field(
+        "nearest",
+        title="Interpolation method",
+        description="Interpolation method to obtain permittivity values "
+        "that are not supplied at the Yee grids; For grids outside the range "
+        "of the supplied data, extrapolation will be applied. When the extrapolated "
+        "value is smaller (greater) than the minimal (maximal) of the supplied data, "
+        "the extrapolated value will take the minimal (maximal) of the supplied data.",
+    )
+
+    @pd.validator("eps_dataset", always=True)
+    def _single_frequency(cls, val):
+        """Assert only one frequency supplied."""
+        for name, eps_dataset_component in val.field_components.items():
+            freqs = eps_dataset_component.f
+            if len(freqs) != 1:
+                raise SetupError(
+                    f"'eps_dataset.{name}' must have a single frequency, "
+                    f"but it contains {len(freqs)} frequencies."
+                )
+        return val
+
+    @pd.validator("eps_dataset", always=True)
+    def _eps_inf_greater_no_less_than_one_sigma_positive(cls, val):
+        """Assert any eps_inf must be >=1"""
+
+        for comp in ["eps_xx", "eps_yy", "eps_zz"]:
+            eps_inf, sigma = CustomMedium.eps_complex_to_eps_sigma(
+                val.field_components[comp], val.field_components[comp].f
+            )
+            if np.any(eps_inf.values < 1):
+                raise SetupError(
+                    "Permittivity at infinite frequency at any spatial point "
+                    "must be no less than one."
+                )
+            if np.any(sigma.values < 0):
+                raise SetupError(
+                    "Negative imaginary part of refrative index leads to a gain medium, "
+                    "which is not supported."
+                )
+        return val
+
+    @ensure_freq_in_range
+    def eps_dataset_freq(self, frequency: float) -> PermittivityDataset:
+        """Permittivity dataset at ``frequency``. The dispersion comes
+        from DC conductivity that results in nonzero Im[eps].
+
+        Parameters
+        ----------
+        frequency : float
+            Frequency to evaluate permittivity at (Hz).
+
+        Returns
+        -------
+        :class:`.PermittivityDataset`
+            The permittivity evaluated at ``frequency``.
+        """
+
+        new_field_components = {}
+        for name, eps_dataset_component in self.eps_dataset.field_components.items():
+            freq = eps_dataset_component.coords["f"][0]
+            eps_freq = (
+                eps_dataset_component.real + 1j * eps_dataset_component.imag * freq / frequency
+            )
+            eps_freq = eps_freq.assign_coords({"f": [frequency]})
+            new_field_components.update({name: eps_freq})
+        return PermittivityDataset(**new_field_components)
+
+    def eps_diagonal_on_grid(
+        self,
+        frequency: float,
+        coords: Coords,
+    ) -> Tuple[Numpy, Numpy, Numpy]:
+        """Spatial profile of main diagonal of the complex-valued permittivity
+        at ``frequency`` interpolated at the supplied coordinates.
+
+        Parameters
+        ----------
+        frequency : float
+            Frequency to evaluate permittivity at (Hz).
+        coords : :class:`.Coords`
+            The grid point coordinates over which interpolation is performed.
+
+        Returns
+        -------
+        Tuple[Numpy, Numpy, Numpy]
+            The complex-valued permittivity tensor at ``frequency`` interpolated
+            at the supplied coordinate.
+        """
+
+        eps_freq = self.eps_dataset_freq(frequency)
+        interp_shape = [len(coord_comp) for coord_comp in coords.to_list]
+        eps_list = [
+            np.array(
+                self._interp(eps_freq.field_components[comp], coords, self.interp_method)
+            ).reshape(interp_shape)
+            for comp in ["eps_xx", "eps_yy", "eps_zz"]
+        ]
+        return tuple(eps_list)
+
+    @ensure_freq_in_range
+    def eps_diagonal(self, frequency: float) -> Tuple[complex, complex, complex]:
+        """Main diagonal of the complex-valued permittivity tensor
+        at ``frequency``. Spatially, we take max{||eps||}, so that autoMesh generation
+        works appropriately.
+        """
+        eps_freq = self.eps_dataset_freq(frequency)
+        eps_np_list = [
+            np.array(sclr_fld).ravel() for _, sclr_fld in eps_freq.field_components.items()
+        ]
+        eps_list = [eps_comp[np.argmax(np.abs(eps_comp))] for eps_comp in eps_np_list]
+        return tuple(eps_list)
+
+    @ensure_freq_in_range
+    def eps_model(self, frequency: float) -> complex:
+        """Spatial and poloarizaiton average of complex-valued permittivity
+        as a function of frequency.
+        """
+        eps_freq = self.eps_dataset_freq(frequency)
+        eps_array_avgs = [np.mean(eps_array) for _, eps_array in eps_freq.field_components.items()]
+        return np.mean(eps_array_avgs)
+
+    @classmethod
+    def from_eps_raw(
+        cls, eps: ScalarFieldDataArray, interp_method: InterpMethod = "nearest"
+    ) -> CustomMedium:
+        """Construct a :class:`.CustomMedium` from datasets containing raw permittivity values.
+
+        Parameters
+        ----------
+        eps : :class:`.ScalarFieldDataArray`
+            Dataset containing complex-valued permittivity as a function of space.
+        interp_method : :class:`.InterpMethod`, optional
+                Interpolation method to obtain permittivity values that are not supplied
+                at the Yee grids.
+
+        Returns
+        -------
+        :class:`.CustomMedium`
+            Medium containing the spatially varying permittivity data.
+        """
+        field_components = {field_name: eps.copy() for field_name in ("eps_xx", "eps_yy", "eps_zz")}
+        eps_dataset = PermittivityDataset(**field_components)
+        return cls(eps_dataset=eps_dataset, interp_method=interp_method)
+
+    @classmethod
+    def from_nk(
+        cls,
+        n: ScalarFieldDataArray,
+        k: Optional[ScalarFieldDataArray] = None,
+        interp_method: InterpMethod = "nearest",
+    ) -> CustomMedium:
+        """Construct a :class:`.CustomMedium` from datasets containing n and k values.
+
+        Parameters
+        ----------
+        n : :class:`.ScalarFieldDataArray`
+            Real part of refractive index.
+        k : :class:`.ScalarFieldDataArray` = None
+            Imaginary part of refrative index.
+        interp_method : :class:`.InterpMethod`, optional
+                Interpolation method to obtain permittivity values that are not supplied
+                at the Yee grids.
+
+        Returns
+        -------
+        :class:`.CustomMedium`
+            Medium containing the spatially varying permittivity data.
+        """
+        if k is None:
+            k = xr.zeros_like(n)
+
+        if n.coords != k.coords:
+            raise SetupError("`n` and `k` must have same coordinates.")
+
+        eps_values = Medium.nk_to_eps_complex(n=n.data, k=k.data)
+        coords = {k: np.array(v) for k, v in n.coords.items()}
+        eps_scalar_field_data = ScalarFieldDataArray(eps_values, coords=coords)
+        return cls.from_eps_raw(eps=eps_scalar_field_data, interp_method=interp_method)
+
+    @staticmethod
+    def _interp(
+        scalar_dataset: ScalarFieldDataArray,
+        coord_interp: Coords,
+        interp_method: InterpMethod,
+    ) -> ScalarFieldDataArray:
+        """
+        Enhance xarray's ``.interp`` in two ways:
+            1) Check if the coordinate of the supplied data are in monotically increasing order.
+            If they are, apply the faster ``assume_sorted=True``.
+
+            2) For axes of single entry, instead of error, apply ``isel()`` along the axis.
+
+            3) When linear interp is applied, in the extrapolated region, filter values smaller
+            or larger than the original data's min(max) will be replaced with the original min(max).
+
+        Parameters
+        ----------
+        scalar_dataset : :class:`.ScalarFieldDataArray`
+            Supplied scalar dataset.
+        coord_interp : :class:`.Coords`
+            The grid point coordinates over which interpolation is performed.
+        interp_method : :class:`.InterpMethod`
+            Interpolation method.
+
+        Returns
+        -------
+        :class:`.ScalarFieldDataArray`
+            The interpolated scalar dataset.
+        """
+
+        # check in x/y/z axes, which of them are supplied with a single entry.
+        all_coords = "xyz"
+        is_single_entry = [scalar_dataset.sizes[ax] == 1 for ax in all_coords]
+        interp_ax = [
+            ax for (ax, single_entry) in zip(all_coords, is_single_entry) if not single_entry
+        ]
+        isel_ax = [ax for ax in all_coords if ax not in interp_ax]
+
+        # apply isel for the axis containing single entry
+        if len(isel_ax) > 0:
+            scalar_dataset = scalar_dataset.isel(
+                {ax: [0] * len(coord_interp.to_dict[ax]) for ax in isel_ax}
+            )
+            scalar_dataset = scalar_dataset.assign_coords(
+                {ax: coord_interp.to_dict[ax] for ax in isel_ax}
+            )
+            if len(interp_ax) == 0:
+                return scalar_dataset
+
+        # Apply interp for the rest
+        #   first check if it's sorted
+        is_sorted = all((np.all(np.diff(scalar_dataset.coords[f]) > 0) for f in interp_ax))
+        interp_param = dict(
+            kwargs={"fill_value": FILL_VALUE},
+            assume_sorted=is_sorted,
+            method=interp_method,
+        )
+        #   interpolation
+        interp_dataset = scalar_dataset.interp(
+            {ax: coord_interp.to_dict[ax] for ax in interp_ax},
+            **interp_param,
+        )
+
+        # filter any values larger/smaller than the original data's max/min.
+        max_val = max(scalar_dataset.values.ravel())
+        min_val = min(scalar_dataset.values.ravel())
+        interp_dataset = interp_dataset.where(interp_dataset >= min_val, min_val)
+        interp_dataset = interp_dataset.where(interp_dataset <= max_val, max_val)
+        return interp_dataset
+
+    def grids(self, bounds: Bound) -> Dict[str, Grid]:
+        """Make a :class:`.Grid` corresponding to the data in each ``eps_ii`` component.
+        The min and max coordinates along each dimension are bounded by ``bounds``."""
+
+        rmin, rmax = bounds
+        pt_mins = dict(zip("xyz", rmin))
+        pt_maxs = dict(zip("xyz", rmax))
+
+        def make_grid(scalar_field: ScalarFieldDataArray) -> Grid:
+            """Make a grid for a single dataset."""
+
+            def make_bound_coords(coords: np.ndarray, pt_min: float, pt_max: float) -> List[float]:
+                """Convert user supplied coords into boundary coords to use in :class:`.Grid`."""
+
+                # get coordinates of the bondaries halfway between user-supplied data
+                coord_bounds = (coords[1:] + coords[:1]) / 2.0
+
+                # res-set coord boundaries that lie outside geometry bounds to the boundary (0 vol.)
+                coord_bounds[coord_bounds <= pt_min] = pt_min
+                coord_bounds[coord_bounds >= pt_max] = pt_max
+
+                # add the geometry bounds in explicitly
+                return [pt_min] + coord_bounds.tolist() + [pt_max]
+
+            # grab user supplied data long this dimension
+            coords = {key: np.array(val) for key, val in scalar_field.coords.items()}
+            spatial_coords = {key: coords[key] for key in "xyz"}
+
+            # convert each spatial coord to boundary coords
+            bound_coords = {}
+            for key, coords in spatial_coords.items():
+                pt_min = pt_mins[key]
+                pt_max = pt_maxs[key]
+                bound_coords[key] = make_bound_coords(coords=coords, pt_min=pt_min, pt_max=pt_max)
+
+            # construct grid
+            boundaries = Coords(**bound_coords)
+            return Grid(boundaries=boundaries)
+
+        grids = {}
+        for field_name in ("eps_xx", "eps_yy", "eps_zz"):
+
+            # grab user supplied data long this dimension
+            scalar_field = self.eps_dataset.field_components[field_name]
+
+            # feed it to make_grid
+            grids[field_name] = make_grid(scalar_field)
+
+        return grids
 
 
 """ Dispersive Media """
@@ -725,6 +1083,11 @@ class AnisotropicMedium(AbstractMedium):
         discriminator=TYPE_TAG_STR,
     )
 
+    @cached_property
+    def components(self) -> Dict[str, Medium]:
+        """Dictionary of diagonal medium components."""
+        return dict(xx=self.xx, yy=self.yy, zz=self.zz)
+
     @ensure_freq_in_range
     def eps_model(self, frequency: float) -> complex:
         """Complex-valued permittivity as a function of frequency."""
@@ -767,5 +1130,13 @@ class AnisotropicMedium(AbstractMedium):
 # types of mediums that can be used in Simulation and Structures
 
 MediumType = Union[
-    Medium, AnisotropicMedium, PECMedium, PoleResidue, Sellmeier, Lorentz, Debye, Drude
+    Medium,
+    CustomMedium,
+    AnisotropicMedium,
+    PECMedium,
+    PoleResidue,
+    Sellmeier,
+    Lorentz,
+    Debye,
+    Drude,
 ]

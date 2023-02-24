@@ -18,7 +18,7 @@ from .geometry import Box
 from .types import Ax, Shapely, FreqBound, Axis, annotate_type, Symmetry
 from .grid.grid import Coords1D, Grid, Coords
 from .grid.grid_spec import GridSpec, UniformGrid
-from .medium import Medium, MediumType, AbstractMedium, PECMedium
+from .medium import Medium, MediumType, AbstractMedium, PECMedium, CustomMedium
 from .boundary import BoundarySpec, BlochBoundary, PECBoundary, PMCBoundary, Periodic
 from .boundary import PML, StablePML, Absorber, AbsorberSpec
 from .structure import Structure
@@ -28,7 +28,7 @@ from .monitor import AbstractFieldMonitor, DiffractionMonitor, AbstractFieldProj
 from .data.dataset import Dataset
 from .viz import add_ax_if_none, equal_aspect
 
-from .viz import MEDIUM_CMAP, PlotParams, plot_params_symmetry
+from .viz import MEDIUM_CMAP, STRUCTURE_EPS_CMAP, PlotParams, plot_params_symmetry, polygon_path
 from .viz import plot_params_structure, plot_params_pml, plot_params_override_structures
 from .viz import plot_params_pec, plot_params_pmc, plot_params_bloch
 
@@ -48,6 +48,11 @@ MAX_TIME_STEPS = 1e8
 MAX_GRID_CELLS = 20e9
 MAX_CELLS_TIMES_STEPS = 1e17
 MAX_MONITOR_DATA_SIZE_BYTES = 10e9
+
+# number of grid cells at which we warn about slow Simulation.epsilon()
+NUM_CELLS_WARN_EPSILON = 100_000_000
+# number of structures at which we warn about slow Simulation.epsilon()
+NUM_STRUCTURES_WARN_EPSILON = 10_000
 
 
 class Simulation(Box):  # pylint:disable=too-many-public-methods
@@ -336,6 +341,21 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
                             )
         return val
 
+    @pydantic.validator("boundary_spec", always=True)
+    def boundaries_for_zero_dims(cls, val, values):
+        """Warn if an absorbing boundary is used along a zero dimension."""
+        boundaries = val.to_list
+        size = values.get("size")
+        for dim, (boundary, size_dim) in enumerate(zip(boundaries, size)):
+            num_absorbing_bdries = sum(isinstance(bnd, AbsorberSpec) for bnd in boundary)
+            if num_absorbing_bdries > 0 and size_dim == 0:
+                log.warning(
+                    f"If the simulation is intended to be 2D in the plane normal to the "
+                    f"{'xyz'[dim]} axis, using a PML or absorbing boundary along that axis "
+                    f"is incorrect. Consider using a 'Periodic' boundary along {'xyz'[dim]}."
+                )
+        return val
+
     @pydantic.validator("structures", always=True)
     def _validate_num_mediums(cls, val):
         """Error if too many mediums present."""
@@ -374,8 +394,10 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
                         f"Structure at structures[{istruct}] has bounds that extend exactly to "
                         "simulation edges. This can cause unexpected behavior. "
                         "If intending to extend the structure to infinity along one dimension, "
-                        "use td.inf as a size variable instead to make this explicit."
+                        "use td.inf as a size variable instead to make this explicit. "
+                        f"Skipping check for structure indexes > {istruct}."
                     )
+                    return val
 
         return val
 
@@ -400,7 +422,8 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
                 f"Structure at structures[{istruct}] was detected as being less "
                 f"than half of a central wavelength from a PML on side {side}. "
                 "To avoid inaccurate results, please increase gap between "
-                "any structures and PML or fully extend structure through the pml."
+                "any structures and PML or fully extend structure through the pml. "
+                f"Skipping check for structure indexes > {istruct}."
             )
 
         for istruct, structure in enumerate(structures):
@@ -420,6 +443,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
                         and abs(sim_val - struct_val) < lambda0 / 2
                     ):
                         warn(istruct, axis + "-min")
+                        return val
 
                 zipped = zip(["x", "y", "z"], sim_bound_max, struct_bound_max, boundaries)
                 for axis, sim_val, struct_val, boundary in zipped:
@@ -432,6 +456,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
                         and abs(sim_val - struct_val) < lambda0 / 2
                     ):
                         warn(istruct, axis + "-max")
+                        return val
 
         return val
 
@@ -647,8 +672,10 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
                             f"within the simulation medium "
                             f"associated with structures[{medium_index + 1}], given by "
                             f"{lambda_min:.4f} (um). "
-                            "To avoid inaccuracies, it is reccomended the grid size is reduced."
+                            "To avoid inaccuracies, it is reccomended the grid size is reduced. "
+                            f"Skipping check for structure indexes > {medium_index + 1}."
                         )
+                        return val
                         # TODO: warn about custom grid spec
 
         return val
@@ -830,11 +857,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         """
         if test_object.size.count(0.0) == 1:
             # get all merged structures on the test_object, which is already planar
-            normal_axis_index = test_object.size.index(0.0)
-            dim = "xyz"[normal_axis_index]
-            pos = test_object.center[normal_axis_index]
-            xyz_kwargs = {dim: pos}
-            structures_merged = Simulation._filter_structures_plane(structures, **xyz_kwargs)
+            structures_merged = Simulation._filter_structures_plane(structures, test_object)
             mediums = {medium for medium, _ in structures_merged}
             return mediums
 
@@ -991,8 +1014,6 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
             The supplied or created matplotlib axes.
         """
 
-        # TODO: if we want structure alpha, we will have to filter, otherwise just get overlapped
-        # medium_shapes = self._filter_structures_plane(self.structures, x=x, y=y, z=z)
         medium_shapes = self._get_structures_plane(structures=self.structures, x=x, y=y, z=z)
         medium_map = self.medium_map
 
@@ -1041,7 +1062,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         norm = mpl.colors.Normalize(vmin=eps_min, vmax=eps_max)
         divider = make_axes_locatable(ax)
         cax = divider.append_axes("right", size="5%", pad=0.15)
-        mappable = mpl.cm.ScalarMappable(norm=norm, cmap="gist_yarg")
+        mappable = mpl.cm.ScalarMappable(norm=norm, cmap=STRUCTURE_EPS_CMAP)
         plt.colorbar(mappable, cax=cax, label=r"$\epsilon_r$")
 
     @equal_aspect
@@ -1097,26 +1118,38 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         if alpha <= 0:
             return ax
 
-        if alpha < 1:
-            medium_shapes = self._filter_structures_plane(structures=structures, x=x, y=y, z=z)
+        if alpha < 1 and not isinstance(self.medium, CustomMedium):
+            axis, position = Box.parse_xyz_kwargs(x=x, y=y, z=z)
+            center = Box.unpop_axis(position, (0, 0), axis=axis)
+            size = Box.unpop_axis(0, (inf, inf), axis=axis)
+            plane = Box(center=center, size=size)
+            medium_shapes = self._filter_structures_plane(structures=structures, plane=plane)
         else:
             structures = [self.background_structure] + list(structures)
             medium_shapes = self._get_structures_plane(structures=structures, x=x, y=y, z=z)
 
         eps_min, eps_max = self.eps_bounds(freq=freq)
         for (medium, shape) in medium_shapes:
-            if medium == self.medium and alpha < 1:
+            # if the background medium is custom medium, it needs to be rendered separately
+            if medium == self.medium and alpha < 1 and not isinstance(medium, CustomMedium):
                 continue
-            ax = self._plot_shape_structure_eps(
-                freq=freq,
-                alpha=alpha,
-                medium=medium,
-                eps_min=eps_min,
-                eps_max=eps_max,
-                reverse=reverse,
-                shape=shape,
-                ax=ax,
-            )
+            # no need to add patches for custom medium
+            if not isinstance(medium, CustomMedium):
+                ax = self._plot_shape_structure_eps(
+                    freq=freq,
+                    alpha=alpha,
+                    medium=medium,
+                    eps_min=eps_min,
+                    eps_max=eps_max,
+                    reverse=reverse,
+                    shape=shape,
+                    ax=ax,
+                )
+            else:
+                # For custom medium, apply pcolormesh clipped by the shape.
+                self._pcolormesh_shape_custom_medium_structure_eps(
+                    x, y, z, freq, alpha, medium, eps_min, eps_max, reverse, shape, ax
+                )
 
         if cbar:
             self._add_cbar(eps_min=eps_min, eps_max=eps_max, ax=ax)
@@ -1134,10 +1167,91 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
 
         medium_list = [self.medium] + list(self.mediums)
         medium_list = [medium for medium in medium_list if not isinstance(medium, PECMedium)]
-        eps_list = [medium.eps_model(freq).real for medium in medium_list]
+        # regular medium
+        eps_list = [
+            medium.eps_model(freq).real
+            for medium in medium_list
+            if not isinstance(medium, CustomMedium)
+        ]
         eps_min = min(1, min(eps_list))
         eps_max = max(1, max(eps_list))
+        # custom medium, the min and max in the supplied dataset over all components and
+        # spatial locations.
+        for mat in [medium for medium in medium_list if isinstance(medium, CustomMedium)]:
+            eps_dataset_at_freq = mat.eps_dataset_freq(freq)
+            for eps_component in eps_dataset_at_freq.field_components.values():
+                eps_min = min(eps_min, min(eps_component.real.values.ravel()))
+                eps_max = max(eps_max, max(eps_component.real.values.ravel()))
         return eps_min, eps_max
+
+    def _pcolormesh_shape_custom_medium_structure_eps(
+        self,
+        x: float,
+        y: float,
+        z: float,
+        freq: float,
+        alpha: float,
+        medium: Medium,
+        eps_min: float,
+        eps_max: float,
+        reverse: bool,
+        shape: Shapely,
+        ax: Ax,
+    ):
+        """
+        Plot shape made of custom medium with ``pcolormesh``.
+        """
+        coords = "xyz"
+        normal_axis_ind, normal_position = self.parse_xyz_kwargs(x=x, y=y, z=z)
+        normal_axis, plane_axes = self.pop_axis(coords, normal_axis_ind)
+
+        # First, obtain `span_inds` of grids for interpolating permittivity in the
+        # bounding box of the shape
+        shape_bounds = shape.bounds
+        rmin, rmax = [*shape_bounds[:2]], [*shape_bounds[2:]]
+        rmin.insert(normal_axis_ind, normal_position)
+        rmax.insert(normal_axis_ind, normal_position)
+        span_inds = self.grid.discretize_inds(Box.from_bounds(rmin=rmin, rmax=rmax), extend=True)
+        # filter negative or too large inds
+        n_grid = [len(grid_comp) for grid_comp in self.grid.boundaries.to_list]
+        span_inds = [
+            (max(fmin, 0), min(fmax, n_grid[f_ind])) for f_ind, (fmin, fmax) in enumerate(span_inds)
+        ]
+
+        # assemble the coordinate in the 2d plane
+        plane_coord = []
+        for plane_axis in range(2):
+            ind_axis = "xyz".index(plane_axes[plane_axis])
+            plane_coord.append(self.grid.boundaries.to_list[ind_axis][slice(*span_inds[ind_axis])])
+
+        # prepare `Coords` for interpolation
+        coord_dict = {
+            plane_axes[0]: plane_coord[0],
+            plane_axes[1]: plane_coord[1],
+            normal_axis: [normal_position],
+        }
+        coord_shape = Coords(**coord_dict)
+        # interpolate permittivity and take the average over components
+        eps_shape = np.mean(medium.eps_diagonal_on_grid(frequency=freq, coords=coord_shape), axis=0)
+        # remove the normal_axis and take real part
+        eps_shape = eps_shape.real.mean(axis=normal_axis_ind)
+        # reverse
+        if reverse:
+            eps_shape = eps_min + eps_max - eps_shape
+
+        # pcolormesh
+        plane_xp, plane_yp = np.meshgrid(plane_coord[0], plane_coord[1], indexing="ij")
+        ax.pcolormesh(
+            plane_xp,
+            plane_yp,
+            eps_shape,
+            clip_path=(polygon_path(shape), ax.transData),
+            cmap=STRUCTURE_EPS_CMAP,
+            vmin=eps_min,
+            vmax=eps_max,
+            alpha=alpha,
+            clip_box=ax.bbox,
+        )
 
     def _get_structure_eps_plot_params(
         self,
@@ -1295,6 +1409,14 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
 
         return (bounds_min, bounds_max)
 
+    @cached_property
+    def simulation_geometry(self) -> Box:
+        """The entire simulation domain including PML layers. It is identical to
+        ``sim.geometry`` in the absence of PML.
+        """
+        rmin, rmax = self.bounds_pml
+        return Box.from_bounds(rmin=rmin, rmax=rmax)
+
     @equal_aspect
     @add_ax_if_none
     def plot_pml(
@@ -1406,8 +1528,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
 
     def _make_symmetry_box(self, sym_axis: Axis) -> Box:
         """Construct a :class:`Box` representing the symmetry to be plotted."""
-        rmin, rmax = self.bounds_pml
-        sym_box = Box.from_bounds(rmin=rmin, rmax=rmax)
+        sym_box = self.simulation_geometry
         size = list(sym_box.size)
         size[sym_axis] /= 2
         center = list(sym_box.center)
@@ -1660,7 +1781,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         """
         medium_shapes = []
         for structure in structures:
-            intersections = structure.geometry.intersections(x=x, y=y, z=z)
+            intersections = structure.geometry.intersections_plane(x=x, y=y, z=z)
             if len(intersections) > 0:
                 for shape in intersections:
                     shape = Box.evaluate_inf_shape(shape)
@@ -1669,7 +1790,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
 
     @staticmethod
     def _filter_structures_plane(  # pylint:disable=too-many-locals
-        structures: List[Structure], x: float = None, y: float = None, z: float = None
+        structures: List[Structure], plane: Box
     ) -> List[Tuple[Medium, Shapely]]:
         """Compute list of shapes to plot on plane specified by {x,y,z}.
         Overlaps are removed or merged depending on medium.
@@ -1694,16 +1815,11 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         shapes = []
         for structure in structures:
 
-            # dont bother with geometries that dont intersect plane
-            if not structure.geometry.intersects_plane(x=x, y=y, z=z):
-                continue
-
             # get list of Shapely shapes that intersect at the plane
-            shapes_plane = structure.geometry.intersections(x=x, y=y, z=z)
+            shapes_plane = structure.geometry.intersections_2dbox(plane)
 
             # Append each of them and their medium information to the list of shapes
             for shape in shapes_plane:
-                shape = Box.evaluate_inf_shape(shape)
                 shapes.append((structure.medium, shape, shape.bounds))
 
         background_shapes = []
@@ -2015,30 +2131,52 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
             refer to `xarray's Documentaton <https://tinyurl.com/2zrzsp7b>`_.
         """
 
-        def get_eps(structure: Structure, frequency: float):
+        grid_cells = np.prod(grid.num_cells)
+        num_structures = len(self.structures)
+        if grid_cells > NUM_CELLS_WARN_EPSILON:
+            log.warning(
+                f"Requested grid contains {int(grid_cells):.2e} grid cells. "
+                "Epsilon calculation may be slow."
+            )
+        if num_structures > NUM_STRUCTURES_WARN_EPSILON:
+            log.warning(
+                f"Simulation contains {num_structures:.2e} structures. "
+                "Epsilon calculation may be slow."
+            )
+
+        def get_eps(structure: Structure, frequency: float, coords: Coords):
             """Select the correct epsilon component if field locations are requested."""
             if coord_key[0] != "E":
-                return structure.medium.eps_model(frequency)
+                return np.mean(structure.eps_diagonal(frequency, coords), axis=0)
             component = ["x", "y", "z"].index(coord_key[1])
-            return structure.eps_diagonal(frequency)[component]
-
-        eps_background = get_eps(structure=self.background_structure, frequency=freq)
+            return structure.eps_diagonal(frequency, coords)[component]
 
         def make_eps_data(coords: Coords):
             """returns epsilon data on grid of points defined by coords"""
-            xs, ys, zs = coords.x, coords.y, coords.z
-            rmin = tuple(coord[0] for coord in (xs, ys, zs))
-            rmax = tuple(coord[-1] for coord in (xs, ys, zs))
-            points_box = Box.from_bounds(rmin=rmin, rmax=rmax)
-            x, y, z = np.meshgrid(xs, ys, zs, indexing="ij")
-            eps_array = eps_background * np.ones(x.shape, dtype=complex)
+            arrays = (np.array(coords.x), np.array(coords.y), np.array(coords.z))
+            eps_background = get_eps(
+                structure=self.background_structure, frequency=freq, coords=coords
+            )
+            shape = tuple(len(array) for array in arrays)
+            eps_array = eps_background * np.ones(shape, dtype=complex)
             for structure in self.structures:
-                if not points_box.intersects(structure.geometry):
+                # Indexing subset within the bounds of the structure
+                # pylint:disable=protected-access
+                inds = structure.geometry._inds_inside_bounds(*arrays)
+
+                # Get permittivity on meshgrid over the reduced coordinates
+                coords_reduced = tuple(arr[ind] for arr, ind in zip(arrays, inds))
+                if any(coords.size == 0 for coords in coords_reduced):
                     continue
-                eps_structure = get_eps(structure=structure, frequency=freq)
-                is_inside = structure.geometry.inside(x, y, z)
-                eps_array[np.where(is_inside)] = eps_structure
-            coords = {"x": np.array(xs), "y": np.array(ys), "z": np.array(zs)}
+
+                red_coords = Coords(**dict(zip("xyz", coords_reduced)))
+                eps_structure = get_eps(structure=structure, frequency=freq, coords=red_coords)
+
+                # Update permittivity array at selected indexes within the geometry
+                is_inside = structure.geometry.inside_meshgrid(*coords_reduced)
+                eps_array[inds][is_inside] = (eps_structure * is_inside)[is_inside]
+
+            coords = dict(zip("xyz", arrays))
             return xr.DataArray(eps_array, coords=coords, dims=("x", "y", "z"))
 
         # combine all data into dictionary
@@ -2050,5 +2188,8 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         """List of custom datasets for verification purposes. If the list is not empty, then
         the simulation needs to be exported to hdf5 to store the data.
         """
-        datasets = [src.field_dataset for src in self.sources if isinstance(src, CustomFieldSource)]
-        return datasets
+        datasets_source = [
+            src.field_dataset for src in self.sources if isinstance(src, CustomFieldSource)
+        ]
+        datasets_medium = [mat.eps_dataset for mat in self.mediums if isinstance(mat, CustomMedium)]
+        return datasets_source + datasets_medium

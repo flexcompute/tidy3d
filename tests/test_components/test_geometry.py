@@ -6,6 +6,7 @@ import numpy as np
 import shapely
 import matplotlib.pylab as plt
 import gdstk
+import gdspy
 
 import tidy3d as td
 from tidy3d.log import ValidationError, SetupError, Tidy3dKeyError
@@ -13,6 +14,7 @@ from tidy3d.components.geometry import Geometry, Planar
 from ..utils import assert_log_level
 
 GEO = td.Box(size=(1, 1, 1))
+GEO_INF = td.Box(size=(1, 1, td.inf))
 BOX = td.Box(size=(1, 1, 1))
 BOX_2D = td.Box(size=(1, 0, 1))
 POLYSLAB = td.PolySlab(vertices=((0, 0), (1, 0), (1, 1), (0, 1)), slab_bounds=(-0.5, 0.5), axis=2)
@@ -31,10 +33,23 @@ def test_plot(component):
 
 def test_base_inside():
     assert Geometry.inside(GEO, x=0, y=0, z=0)
+    assert np.all(Geometry.inside(GEO, np.array([0, 0]), np.array([0, 0]), np.array([0, 0])))
+    assert np.all(Geometry.inside(GEO, np.array([[0, 0]]), np.array([[0, 0]]), np.array([[0, 0]])))
+
+
+def test_base_inside_meshgrid():
+    assert np.all(Geometry.inside_meshgrid(GEO, x=[0], y=[0], z=[0]))
+    assert np.all(Geometry.inside_meshgrid(GEO, [0, 0], [0, 0], [0, 0]))
+    # Input dimensions different than 1 error for ``inside_meshgrid``.
+    with pytest.raises(ValueError):
+        b = Geometry.inside_meshgrid(GEO, x=0, y=0, z=0)
+    with pytest.raises(ValueError):
+        b = Geometry.inside_meshgrid(GEO, [[0, 0]], [[0, 0]], [[0, 0]])
 
 
 def test_bounding_box():
     assert GEO.bounding_box == GEO
+    assert GEO_INF.bounding_box == GEO_INF
 
 
 def test_strip_coords_multi():
@@ -103,6 +118,8 @@ def test_planar_bounds():
 @pytest.mark.parametrize("component", GEO_TYPES)
 def test_inside(component):
     b = component.inside(0, 0, 0)
+    bs = component.inside(np.array([0, 0]), np.array([0, 0]), np.array([0, 0]))
+    bss = component.inside(np.array([[0, 0]]), np.array([[0, 0]]), np.array([[0, 0]]))
 
 
 def test_zero_dims():
@@ -131,10 +148,10 @@ def test_array_to_vertices():
 
 
 @pytest.mark.parametrize("component", GEO_TYPES)
-def test_intersections(component):
-    assert len(component.intersections(z=0.2)) > 0
-    assert len(component.intersections(x=0.2)) > 0
-    assert len(component.intersections(x=10000)) == 0
+def test_intersections_plane(component):
+    assert len(component.intersections_plane(z=0.2)) > 0
+    assert len(component.intersections_plane(x=0.2)) > 0
+    assert len(component.intersections_plane(x=10000)) == 0
 
 
 def test_bounds_base():
@@ -234,7 +251,8 @@ def test_geo_group_methods():
     geo_group = make_geo_group()
     geo_group.inside(0, 1, 2)
     geo_group.inside(np.linspace(0, 1, 10), np.linspace(0, 1, 10), np.linspace(0, 1, 10))
-    geo_group.intersections(y=0)
+    geo_group.inside_meshgrid(np.linspace(0, 1, 10), np.linspace(0, 1, 10), np.linspace(0, 1, 10))
+    geo_group.intersections_plane(y=0)
     geo_group.intersects(td.Box(size=(1, 1, 1)))
     rmin, rmax = geo_group.bounds
 
@@ -302,7 +320,7 @@ def test_geometry_sizes():
 
 
 @pytest.mark.parametrize("x0", [5])
-def test_geometry_touching_intersections(x0):
+def test_geometry_touching_intersections_plane(x0):
     """Two touching boxes should show at least one intersection at plane where they touch."""
 
     # size of each box
@@ -316,8 +334,8 @@ def test_geometry_touching_intersections(x0):
     b1 = td.Box(center=(x0 - L / 2, 0, 0), size=(L, L, L))
     b2 = td.Box(center=(x0 + L / 2, 0, 0), size=(L, L, L))
 
-    ints1 = b1.intersections(x=x0)
-    ints2 = b2.intersections(x=x0)
+    ints1 = b1.intersections_plane(x=x0)
+    ints2 = b2.intersections_plane(x=x0)
 
     ints_total = ints1 + ints2
 
@@ -382,7 +400,7 @@ def test_polyslab_axis(axis):
 ANGLE = 0.01
 SIDEWALL_ANGLES = (0.0, ANGLE, 0.0, ANGLE, 0.0, ANGLE)
 REFERENCE_PLANES = ("bottom", "bottom", "middle", "middle", None, None)
-LOG_LEVELS_EXPECTED = (None, None, None, None, None, 30)
+LOG_LEVELS_EXPECTED = (None, None, None, None, None, "warning")
 
 
 def make_ref_plane_kwargs(reference_plane: str):
@@ -454,3 +472,33 @@ def test_polyslab_deprecation_classmethod(caplog, sidewall_angle, reference_plan
     )
 
     assert_log_level(caplog, log_level)
+
+
+def test_polyslab_merge():
+    """make sure polyslabs from gds get merged when they should."""
+
+    import gdspy
+
+    def make_polyslabs(gap_size):
+        """Construct two rectangular polyslabs separated by a gap."""
+        lib = gdspy.GdsLibrary()
+        cell = lib.new_cell(f"polygons_{gap_size:.2f}")
+        rect1 = gdspy.Rectangle((gap_size / 2, 0), (1, 1))
+        rect2 = gdspy.Rectangle((-1, 0), (-gap_size / 2, 1))
+        cell.add(rect1)
+        cell.add(rect2)
+        return td.PolySlab.from_gds(gds_cell=cell, gds_layer=0, axis=2, slab_bounds=(-1, 1))
+
+    polyslabs_gap = make_polyslabs(gap_size=0.3)
+    assert len(polyslabs_gap) == 2, "untouching polylsabs were merged incorrectly."
+
+    polyslabs_touching = make_polyslabs(gap_size=0)
+    assert len(polyslabs_touching) == 1, "polyslabs didnt merge correctly."
+
+
+def test_gds_cell():
+    gds_cell = gdspy.Cell("name")
+    gds_cell.add(gdspy.Rectangle((0, 0), (1, 1)))
+    td.PolySlab.from_gds(gds_cell=gds_cell, axis=2, slab_bounds=(-1, 1), gds_layer=0)
+    with pytest.raises(Tidy3dKeyError):
+        td.PolySlab.from_gds(gds_cell=gds_cell, axis=2, slab_bounds=(-1, 1), gds_layer=1)

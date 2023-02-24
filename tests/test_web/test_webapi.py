@@ -28,6 +28,9 @@ class MockResponse:
     def json():
         return {}
 
+    def raise_for_status(self):
+        pass
+
 
 class MockResponseInfoOk(MockResponse):
     """response if web.getinfo(task_id) and task_id found"""
@@ -125,7 +128,7 @@ def mock_response(monkeypatch):
     monkeypatch.setattr(
         httputils, "get_headers", lambda: {"Authorization": None, "Application": "TIDY3D"}
     )
-    monkeypatch.setattr(webapi, "upload_string", lambda a, b, c: None)
+    monkeypatch.setattr(webapi, "upload_string", lambda *args, **kwargs: None)
     monkeypatch.setattr(httputils, "session", MockRequests())
 
 

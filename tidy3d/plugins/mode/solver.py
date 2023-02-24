@@ -81,8 +81,8 @@ def compute_modes(
         mu_tensor[dim, dim, :] = 1.0
 
     # Get Jacobian of all coordinate transformations. Initialize as identity (same as mu so far)
-    jac_e = np.copy(mu_tensor)
-    jac_h = np.copy(mu_tensor)
+    jac_e = np.real(np.copy(mu_tensor))
+    jac_h = np.real(np.copy(mu_tensor))
 
     if bend_radius is not None:
         new_coords, jac_e, jac_h = radial_transform(new_coords, bend_radius, bend_axis)
