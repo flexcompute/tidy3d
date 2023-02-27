@@ -220,7 +220,6 @@ def download_file(
 ):
     """download file from S3"""
 
-
     token = get_s3_sts_token(resource_id, remote_filename)
     client = token.get_client()
     meta_data = client.head_object(Bucket=token.get_bucket(), Key=token.get_s3_key())
