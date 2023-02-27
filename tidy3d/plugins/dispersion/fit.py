@@ -11,12 +11,13 @@ import numpy as np
 from rich.progress import Progress
 from pydantic import Field, validator
 
+from ...log import log
 from ...components.base import Tidy3dBaseModel
 from ...components.medium import PoleResidue, AbstractMedium
 from ...components.viz import add_ax_if_none
 from ...components.types import Ax, ArrayLike
 from ...constants import C_0, HBAR, MICROMETER
-from ...log import log, ValidationError, WebError, SetupError
+from ...exceptions import ValidationError, WebError, SetupError
 from ...web.config import DEFAULT_CONFIG as Config
 
 

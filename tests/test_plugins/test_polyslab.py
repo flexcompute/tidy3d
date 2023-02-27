@@ -6,7 +6,7 @@ import gdstk
 import tidy3d as td
 
 from tidy3d.plugins import ComplexPolySlab
-from ..utils import clear_tmp, assert_log_level
+from ..utils import clear_tmp, assert_log_level, log_capture
 
 
 def test_divide_simple_events():
@@ -37,7 +37,7 @@ def test_divide_simple_events():
                 #     print(np.array(poly.vertices))
 
 
-def test_many_sub_polyslabs(caplog):
+def test_many_sub_polyslabs(log_capture):
     """warn when too many subpolyslabs are generated."""
 
     # generate vertices that can generate at least this number
@@ -58,7 +58,7 @@ def test_many_sub_polyslabs(caplog):
         geometry=s.geometry_group,
         medium=td.Medium(permittivity=2),
     )
-    assert_log_level(caplog, "warning")
+    assert_log_level(log_capture, "warning")
 
 
 def test_divide_simulation():

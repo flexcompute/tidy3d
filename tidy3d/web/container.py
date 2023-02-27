@@ -16,7 +16,7 @@ from ..components.simulation import Simulation
 from ..components.base import Tidy3dBaseModel
 from ..components.data.sim_data import SimulationData
 
-from ..log import DataError
+from ..exceptions import DataError
 
 
 DEFAULT_DATA_PATH = "simulation_data.hdf5"

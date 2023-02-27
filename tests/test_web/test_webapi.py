@@ -8,7 +8,7 @@ from requests import Session
 import tidy3d as td
 import tidy3d.web as web
 from tidy3d.web import httputils, s3utils, webapi
-from tidy3d.log import DataError, WebError
+from tidy3d.exceptions import DataError, WebError
 
 from ..utils import clear_tmp
 

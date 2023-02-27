@@ -7,7 +7,7 @@ from shapely.geometry import Polygon, Point
 
 import tidy3d as td
 from tidy3d.constants import fp_eps
-from tidy3d.log import ValidationError, SetupError
+from tidy3d.exceptions import ValidationError, SetupError
 
 np.random.seed(4)
 _BUFFER_PARAM = {"join_style": 2, "mitre_limit": 1e10}

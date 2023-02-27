@@ -9,7 +9,7 @@ from ..base import Tidy3dBaseModel, cached_property
 from ..types import ArrayLike, Axis, TYPE_TAG_STR
 from ..geometry import Box
 
-from ...log import SetupError
+from ...exceptions import SetupError
 
 # data type of one dimensional coordinate array.
 Coords1D = ArrayLike[float, 1]

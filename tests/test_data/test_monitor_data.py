@@ -8,7 +8,7 @@ from tidy3d.components.monitor import FieldMonitor, FieldTimeMonitor, Permittivi
 from tidy3d.components.monitor import ModeSolverMonitor, ModeMonitor
 from tidy3d.components.monitor import FluxMonitor, FluxTimeMonitor
 from tidy3d.components.mode import ModeSpec
-from tidy3d.log import DataError, SetupError
+from tidy3d.exceptions import DataError, SetupError
 
 from tidy3d.components.data.dataset import FieldDataset
 from tidy3d.components.data.data_array import FreqModeDataArray
@@ -27,7 +27,7 @@ from .test_data_arrays import FIELD_MONITOR, FIELD_TIME_MONITOR, MODE_SOLVE_MONI
 from .test_data_arrays import MODE_MONITOR, PERMITTIVITY_MONITOR, FLUX_MONITOR, FLUX_TIME_MONITOR
 from .test_data_arrays import FIELD_MONITOR_2D, FIELD_TIME_MONITOR_2D
 from .test_data_arrays import DIFFRACTION_MONITOR, SIM_SYM, SIM
-from ..utils import clear_tmp, assert_log_level
+from ..utils import clear_tmp, assert_log_level, log_capture
 
 # data array instances
 AMPS = make_mode_amps_data_array()
@@ -436,16 +436,16 @@ def test_data_array_attrs():
     assert data.flux.f.attrs, "data coordinates have no attrs"
 
 
-def test_data_array_json_warns(caplog):
+def test_data_array_json_warns(log_capture):
     data = make_flux_data()
     data.to_file("tests/tmp/flux.json")
-    assert_log_level(caplog, "warning")
+    assert_log_level(log_capture, "warning")
 
 
-def test_data_array_hdf5_no_warnings(caplog):
+def test_data_array_hdf5_no_warnings(log_capture):
     data = make_flux_data()
     data.to_file("tests/tmp/flux.hdf5")
-    assert_log_level(caplog, None)
+    assert_log_level(log_capture, None)
 
 
 def test_diffraction_data_use_medium():

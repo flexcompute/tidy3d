@@ -23,7 +23,7 @@ from .monitor import FieldProjectionCartesianMonitor, FieldProjectionKSpaceMonit
 from .types import Direction, Coordinate, ArrayLike
 from .medium import MediumType
 from .base import Tidy3dBaseModel, cached_property
-from ..log import SetupError
+from ..exceptions import SetupError
 from ..constants import C_0, MICROMETER, ETA_0, EPSILON_0, MU_0
 
 # Default number of points per wavelength in the background medium to use for resampling fields.
