@@ -13,10 +13,10 @@ Attributes:
 
 import numpy as np
 
-# fundamental constants
-EPSILON_0 = 8.85418782e-18
-MU_0 = 1.25663706e-12
-C_0 = 1 / np.sqrt(EPSILON_0 * MU_0)
+# fundamental constants (https://physics.nist.gov)
+C_0 = 2.99792458e14
+MU_0 = 1.25663706212e-12
+EPSILON_0 = 1 / (MU_0 * C_0**2)
 
 #: Free space impedance
 ETA_0 = np.sqrt(MU_0 / EPSILON_0)
