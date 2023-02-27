@@ -106,7 +106,7 @@ def upload(  # pylint:disable=too-many-locals,too-many-arguments
     task = SimulationTask.create(simulation, task_name, folder_name, callback_url)
     if verbose:
         log.info(f"Created task '{task_name}' with task_id '{task.task_id}'.")
-    task.upload_simulation()
+    task.upload_simulation(verbose=verbose)
 
     # log the url for the task in the web UI
     log.debug(

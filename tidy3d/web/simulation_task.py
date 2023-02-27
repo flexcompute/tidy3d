@@ -234,7 +234,7 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
                 return self.simulation
         return None
 
-    def get_simulation_json(self, to_file: str):
+    def get_simulation_json(self, to_file: str, verbose: bool = True):
         """
         Get simulation.json file from Server.
         Parameters
@@ -243,11 +243,16 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
             save file to path.
         """
         assert self.task_id
-        download_file(self.task_id, SIMULATION_JSON, to_file=to_file)
+        download_file(self.task_id, SIMULATION_JSON, to_file=to_file, verbose=verbose)
 
-    def upload_simulation(self):
+    def upload_simulation(self, verbose: bool = True):
         """
         Upload simulation object to Server.
+
+        Parameters
+        ----------
+        verbose: bool = True
+            Whether to display progressbars.
         """
         assert self.task_id
         assert self.simulation
@@ -259,9 +264,9 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
             data_file = tempfile.NamedTemporaryFile()  # pylint:disable=consider-using-with
             data_file.close()
             self.simulation.to_hdf5(data_file.name)
-            upload_file(self.task_id, data_file.name, SIM_FILE_HDF5)
+            upload_file(self.task_id, data_file.name, SIM_FILE_HDF5, verbose=verbose)
 
-    def upload_file(self, local_file: str, remote_filename: str):
+    def upload_file(self, local_file: str, remote_filename: str, verbose: bool = True):
         """
         Upload file to platform. Using this method when the json file is too large to parse
          as :class".simulation".
@@ -274,7 +279,7 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
         """
         assert self.task_id
 
-        upload_file(self.task_id, local_file, remote_filename)
+        upload_file(self.task_id, local_file, remote_filename, verbose=verbose)
 
     def submit(self, solver_version=None, worker_group=None, protocol_version=__version__):
         """
@@ -293,7 +298,7 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
             protocol version
         """
         if self.simulation:
-            upload_string(self.task_id, self.simulation.json(), SIMULATION_JSON)
+            upload_string(self.task_id, self.simulation.json(), SIMULATION_JSON, verbose=False)
         http.post(
             f"tidy3d/tasks/{self.task_id}/submit",
             {
@@ -346,7 +351,8 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
         )
         return resp
 
-    def get_simulation_hdf5(self, to_file: str):
+
+    def get_simulation_hdf5(self, to_file: str, verbose: bool = True):
         """
         Get hdf5 file from Server.
         Parameters
@@ -355,7 +361,7 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
             save file to path.
         """
         assert self.task_id
-        download_file(self.task_id, SIMULATION_HDF5, to_file=to_file)
+        download_file(self.task_id, SIMULATION_HDF5, to_file=to_file, verbose=verbose)
 
     def get_running_info(self):
         """Gets the % done and field_decay for a running task.
@@ -371,13 +377,13 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
         """
         assert self.task_id
         with tempfile.NamedTemporaryFile() as temp:
-            download_file(self.task_id, RUNNING_INFO, to_file=temp.name, show_progress=False)
+            download_file(self.task_id, RUNNING_INFO, to_file=temp.name, verbose=False)
             with open(temp.name, "r", encoding="utf-8") as csv:
                 progress_string = csv.readlines()
                 perc_done, field_decay = progress_string[-1].split(",")
                 return float(perc_done), float(field_decay)
 
-    def get_log(self, to_file: str):
+    def get_log(self, to_file: str, verbose: bool = True):
         """
         Get log file from Server.
         Parameters
@@ -386,4 +392,4 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
             save file to path.
         """
         assert self.task_id
-        download_file(self.task_id, LOG_FILE, to_file=to_file)
+        download_file(self.task_id, LOG_FILE, to_file=to_file, verbose=verbose)
