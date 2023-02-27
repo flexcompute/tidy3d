@@ -8,7 +8,7 @@ import pydantic
 
 
 class TaskStatus(Enum):
-    """the statuses that the task can be in"""
+    """The statuses that the task can be in."""
 
     INIT = "initialized"
     QUEUE = "queued"
@@ -20,7 +20,7 @@ class TaskStatus(Enum):
 
 
 class TaskBase(pydantic.BaseModel, ABC):
-    """base config for all task objects"""
+    """Base config for all task objects."""
 
     class Config:
         """configure class"""
@@ -36,7 +36,7 @@ TaskName = str
 
 
 class TaskInfo(TaskBase):
-    """general information about task"""
+    """General information about task."""
 
     taskId: str
     taskName: str = None
@@ -60,26 +60,24 @@ class TaskInfo(TaskBase):
 
 
 class RunInfo(TaskBase):
-    """information about the run"""
+    """Information about the run."""
 
     perc_done: pydantic.confloat(ge=0.0, le=100.0)
     field_decay: pydantic.confloat(ge=0.0, le=1.0)
 
     def display(self):
-        """print some info"""
+        """Print some info."""
         print(f" - {self.perc_done:.2f} (%) done")
         print(f" - {self.field_decay:.2e} field decay from max")
 
 
 class Folder(pydantic.BaseModel):
-    """
-    Folder information of a task
-    """
+    """Folder information of a task."""
 
     projectName: str = None
     projectId: str = None
 
     class Config:
-        """configure class"""
+        """Configure class."""
 
         arbitrary_types_allowed = True

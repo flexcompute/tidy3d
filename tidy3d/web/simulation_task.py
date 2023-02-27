@@ -4,7 +4,7 @@ Tidy3d webapi types
 import os.path
 import tempfile
 from datetime import datetime
-from typing import List, Optional
+from typing import List, Optional, Callable
 
 from pydantic import Extra, Field, parse_obj_as
 from tidy3d import Simulation
@@ -234,7 +234,9 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
                 return self.simulation
         return None
 
-    def get_simulation_json(self, to_file: str, verbose: bool = True):
+    def get_simulation_json(
+        self, to_file: str, verbose: bool = True, progress_callback: Callable[[float], None] = None
+    ):
         """
         Get simulation.json file from Server.
         Parameters
@@ -243,9 +245,17 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
             save file to path.
         """
         assert self.task_id
-        download_file(self.task_id, SIMULATION_JSON, to_file=to_file, verbose=verbose)
+        download_file(
+            self.task_id,
+            SIMULATION_JSON,
+            to_file=to_file,
+            verbose=verbose,
+            progress_callback=progress_callback,
+        )
 
-    def upload_simulation(self, verbose: bool = True):
+    def upload_simulation(
+        self, verbose: bool = True, progress_callback: Callable[[float], None] = None
+    ):
         """
         Upload simulation object to Server.
 
@@ -256,7 +266,13 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
         """
         assert self.task_id
         assert self.simulation
-        upload_string(self.task_id, self.simulation.json(), SIMULATION_JSON, verbose=verbose)
+        upload_string(
+            self.task_id,
+            self.simulation.json(),
+            SIMULATION_JSON,
+            verbose=verbose,
+            progress_callback=progress_callback,
+        )
         if len(self.simulation.custom_datasets) > 0:
             # Also upload hdf5 containing all data.
             # The temp file will be re-opened in `to_hdf5` which can cause an error on some systems
@@ -264,9 +280,21 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
             data_file = tempfile.NamedTemporaryFile()  # pylint:disable=consider-using-with
             data_file.close()
             self.simulation.to_hdf5(data_file.name)
-            upload_file(self.task_id, data_file.name, SIM_FILE_HDF5, verbose=verbose)
+            upload_file(
+                self.task_id,
+                data_file.name,
+                SIM_FILE_HDF5,
+                verbose=verbose,
+                progress_callback=progress_callback,
+            )
 
-    def upload_file(self, local_file: str, remote_filename: str, verbose: bool = True):
+    def upload_file(
+        self,
+        local_file: str,
+        remote_filename: str,
+        verbose: bool = True,
+        progress_callback: Callable[[float], None] = None,
+    ):
         """
         Upload file to platform. Using this method when the json file is too large to parse
          as :class".simulation".
@@ -279,7 +307,13 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
         """
         assert self.task_id
 
-        upload_file(self.task_id, local_file, remote_filename, verbose=verbose)
+        upload_file(
+            self.task_id,
+            local_file,
+            remote_filename,
+            verbose=verbose,
+            progress_callback=progress_callback,
+        )
 
     def submit(self, solver_version=None, worker_group=None, protocol_version=__version__):
         """
@@ -352,7 +386,9 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
         return resp
 
 
-    def get_simulation_hdf5(self, to_file: str, verbose: bool = True):
+    def get_simulation_hdf5(
+        self, to_file: str, verbose: bool = True, progress_callback: Callable[[float], None] = None
+    ):
         """
         Get hdf5 file from Server.
         Parameters
@@ -361,7 +397,13 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
             save file to path.
         """
         assert self.task_id
-        download_file(self.task_id, SIMULATION_HDF5, to_file=to_file, verbose=verbose)
+        download_file(
+            self.task_id,
+            SIMULATION_HDF5,
+            to_file=to_file,
+            verbose=verbose,
+            progress_callback=progress_callback,
+        )
 
     def get_running_info(self):
         """Gets the % done and field_decay for a running task.
@@ -388,7 +430,9 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
             except Exception:  # pylint:disable=broad-except
                 return None, None
 
-    def get_log(self, to_file: str, verbose: bool = True):
+    def get_log(
+        self, to_file: str, verbose: bool = True, progress_callback: Callable[[float], None] = None
+    ):
         """
         Get log file from Server.
         Parameters
@@ -397,4 +441,10 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
             save file to path.
         """
         assert self.task_id
-        download_file(self.task_id, LOG_FILE, to_file=to_file, verbose=verbose)
+        download_file(
+            self.task_id,
+            LOG_FILE,
+            to_file=to_file,
+            verbose=verbose,
+            progress_callback=progress_callback,
+        )

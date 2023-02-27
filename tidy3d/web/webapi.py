@@ -3,7 +3,7 @@
 import os
 import time
 from datetime import datetime, timedelta
-from typing import List, Dict
+from typing import List, Dict, Callable
 
 import pytz
 from rich.console import Console
@@ -30,6 +30,8 @@ def run(  # pylint:disable=too-many-arguments
     path: str = "simulation_data.hdf5",
     callback_url: str = None,
     verbose: bool = True,
+    progress_callback_upload: Callable[[float], None] = None,
+    progress_callback_download: Callable[[float], None] = None,
 ) -> SimulationData:
     """Submits a :class:`.Simulation` to server, starts running, monitors progress, downloads,
     and loads results as a :class:`.SimulationData` object.
@@ -49,6 +51,10 @@ def run(  # pylint:disable=too-many-arguments
         fields ``{'id', 'status', 'name', 'workUnit', 'solverVersion'}``.
     verbose : bool = True
         If `True`, will print progressbars and status, otherwise, will run silently.
+    progress_callback_upload : Callable[[float], None] = None
+        Optional callback function called when uploading file with ``bytes_in_chunk`` as argument.
+    progress_callback_download : Callable[[float], None] = None
+        Optional callback function called when downloading file with ``bytes_in_chunk`` as argument.
 
     Returns
     -------
@@ -61,10 +67,13 @@ def run(  # pylint:disable=too-many-arguments
         folder_name=folder_name,
         callback_url=callback_url,
         verbose=verbose,
+        progress_callback=progress_callback_upload,
     )
     start(task_id)
     monitor(task_id, verbose=verbose)
-    return load(task_id=task_id, path=path, verbose=verbose)
+    return load(
+        task_id=task_id, path=path, verbose=verbose, progress_callback=progress_callback_download
+    )
 
 
 def upload(  # pylint:disable=too-many-locals,too-many-arguments
@@ -73,6 +82,7 @@ def upload(  # pylint:disable=too-many-locals,too-many-arguments
     folder_name: str = "default",
     callback_url: str = None,
     verbose: bool = True,
+    progress_callback: Callable[[float], None] = None,
 ) -> TaskId:
     """Upload simulation to server, but do not start running :class:`.Simulation`.
 
@@ -89,6 +99,8 @@ def upload(  # pylint:disable=too-many-locals,too-many-arguments
         fields ``{'id', 'status', 'name', 'workUnit', 'solverVersion'}``.
     verbose : bool = True
         If `True`, will print progressbars and status, otherwise, will run silently.
+    progress_callback : Callable[[float], None] = None
+        Optional callback function called when uploading file with ``bytes_in_chunk`` as argument.
 
     Returns
     -------
@@ -106,7 +118,7 @@ def upload(  # pylint:disable=too-many-locals,too-many-arguments
     task = SimulationTask.create(simulation, task_name, folder_name, callback_url)
     if verbose:
         log.info(f"Created task '{task_name}' with task_id '{task.task_id}'.")
-    task.upload_simulation(verbose=verbose)
+    task.upload_simulation(verbose=verbose, progress_callback=progress_callback)
 
     # log the url for the task in the web UI
     log.debug(
@@ -305,7 +317,12 @@ def monitor(task_id: TaskId, verbose: bool = True) -> None:
             time.sleep(REFRESH_TIME)
 
 
-def download(task_id: TaskId, path: str = "simulation_data.hdf5", verbose: bool = True) -> None:
+def download(
+    task_id: TaskId,
+    path: str = "simulation_data.hdf5",
+    verbose: bool = True,
+    progress_callback: Callable[[float], None] = None,
+) -> None:
     """Download results of task and log to file.
 
     Parameters
@@ -316,16 +333,20 @@ def download(task_id: TaskId, path: str = "simulation_data.hdf5", verbose: bool 
         Download path to .hdf5 data file (including filename).
     verbose : bool = True
         If `True`, will print progressbars and status, otherwise, will run silently.
+    progress_callback : Callable[[float], None] = None
+        Optional callback function called when downloading file with ``bytes_in_chunk`` as argument.
 
     """
-    # task = SimulationTask.get(task_id)
-    # if not task:
-    #     raise ValueError(f"Task {task_id} not found.")
     task = SimulationTask(taskId=task_id)
-    task.get_simulation_hdf5(path, verbose=verbose)
+    task.get_simulation_hdf5(path, verbose=verbose, progress_callback=progress_callback)
 
 
-def download_json(task_id: TaskId, path: str = SIM_FILE_JSON, verbose: bool = True) -> None:
+def download_json(
+    task_id: TaskId,
+    path: str = SIM_FILE_JSON,
+    verbose: bool = True,
+    progress_callback: Callable[[float], None] = None,
+) -> None:
     """Download the `.json` file associated with the :class:`.Simulation` of a given task.
 
     Parameters
@@ -336,17 +357,21 @@ def download_json(task_id: TaskId, path: str = SIM_FILE_JSON, verbose: bool = Tr
         Download path to .json file of simulation (including filename).
     verbose : bool = True
         If `True`, will print progressbars and status, otherwise, will run silently.
+    progress_callback : Callable[[float], None] = None
+        Optional callback function called when downloading file with ``bytes_in_chunk`` as argument.
 
     """
 
-    # task = SimulationTask.get(task_id)
-    # if not task:
-    #     raise ValueError(f"Task {task_id} not found.")
     task = SimulationTask(taskId=task_id)
-    task.get_simulation_json(path, verbose=verbose)
+    task.get_simulation_json(path, verbose=verbose, progress_callback=progress_callback)
 
 
-def download_hdf5(task_id: TaskId, path: str = SIM_FILE_HDF5, verbose: bool = True) -> None:
+def download_hdf5(
+    task_id: TaskId,
+    path: str = SIM_FILE_HDF5,
+    verbose: bool = True,
+    progress_callback: Callable[[float], None] = None,
+) -> None:
     """Download the `.hdf5` file associated with the :class:`.Simulation` of a given task.
 
     Parameters
@@ -357,16 +382,21 @@ def download_hdf5(task_id: TaskId, path: str = SIM_FILE_HDF5, verbose: bool = Tr
         Download path to .hdf5 file of simulation (including filename).
     verbose : bool = True
         If `True`, will print progressbars and status, otherwise, will run silently.
+    progress_callback : Callable[[float], None] = None
+        Optional callback function called when downloading file with ``bytes_in_chunk`` as argument.
 
     """
-    # task = SimulationTask.get(task_id)
-    # if not task:
-    #     raise ValueError(f"Task {task_id} not found.")
+
     task = SimulationTask(taskId=task_id)
-    task.get_simulation_hdf5(path, verbose=verbose)
+    task.get_simulation_hdf5(path, verbose=verbose, progress_callback=progress_callback)
 
 
-def load_simulation(task_id: TaskId, path: str = SIM_FILE_JSON, verbose: bool = True) -> Simulation:
+def load_simulation(
+    task_id: TaskId,
+    path: str = SIM_FILE_JSON,
+    verbose: bool = True,
+    progress_callback: Callable[[float], None] = None,
+) -> Simulation:
     """Download the `.json` file of a task and load the associated :class:`.Simulation`.
 
     Parameters
@@ -377,6 +407,8 @@ def load_simulation(task_id: TaskId, path: str = SIM_FILE_JSON, verbose: bool = 
         Download path to .json file of simulation (including filename).
     verbose : bool = True
         If `True`, will print progressbars and status, otherwise, will run silently.
+    progress_callback : Callable[[float], None] = None
+        Optional callback function called when downloading file with ``bytes_in_chunk`` as argument.
 
     Returns
     -------
@@ -386,11 +418,16 @@ def load_simulation(task_id: TaskId, path: str = SIM_FILE_JSON, verbose: bool = 
 
     # task = SimulationTask.get(task_id)
     task = SimulationTask(taskId=task_id)
-    task.get_simulation_json(path, verbose=verbose)
+    task.get_simulation_json(path, verbose=verbose, progress_callback=progress_callback)
     return Simulation.from_file(path)
 
 
-def download_log(task_id: TaskId, path: str = "tidy3d.log", verbose: bool = True) -> None:
+def download_log(
+    task_id: TaskId,
+    path: str = "tidy3d.log",
+    verbose: bool = True,
+    progress_callback: Callable[[float], None] = None,
+) -> None:
     """Download the tidy3d log file associated with a task.
 
     Parameters
@@ -399,6 +436,10 @@ def download_log(task_id: TaskId, path: str = "tidy3d.log", verbose: bool = True
         Unique identifier of task on server.  Returned by :meth:`upload`.
     path : str = "tidy3d.log"
         Download path to log file (including filename).
+    verbose : bool = True
+        If `True`, will print progressbars and status, otherwise, will run silently.
+    progress_callback : Callable[[float], None] = None
+        Optional callback function called when downloading file with ``bytes_in_chunk`` as argument.
 
     Note
     ----
@@ -408,7 +449,7 @@ def download_log(task_id: TaskId, path: str = "tidy3d.log", verbose: bool = True
     # if not task:
     #     raise ValueError("Task not found.")
     task = SimulationTask(taskId=task_id)
-    task.get_log(path, verbose=verbose)
+    task.get_log(path, verbose=verbose, progress_callback=progress_callback)
 
 
 def load(
@@ -416,6 +457,7 @@ def load(
     path: str = "simulation_data.hdf5",
     replace_existing: bool = True,
     verbose: bool = True,
+    progress_callback: Callable[[float], None] = None,
 ) -> SimulationData:
     """Download and Load simultion results into :class:`.SimulationData` object.
 
@@ -429,6 +471,8 @@ def load(
         Downloads the data even if path exists (overwriting the existing).
     verbose : bool = True
         If `True`, will print progressbars and status, otherwise, will run silently.
+    progress_callback : Callable[[float], None] = None
+        Optional callback function called when downloading file with ``bytes_in_chunk`` as argument.
 
     Returns
     -------
@@ -437,7 +481,7 @@ def load(
     """
 
     if not os.path.exists(path) or replace_existing:
-        download(task_id=task_id, path=path, verbose=verbose)
+        download(task_id=task_id, path=path, verbose=verbose, progress_callback=progress_callback)
 
     if verbose:
         log.info(f"loading SimulationData from {path}")
