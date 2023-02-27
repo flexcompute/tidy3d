@@ -23,7 +23,7 @@ def test__save_credential_to_stored_file(mock_credential_path):
     tidy3d_auth._save_credential_to_stored_file("user", "pwd")
     with open(tidy3d_auth.CREDENTIAL_PATH, "r", encoding="utf-8") as fp:
         auth_json = json.load(fp)
-        log.info(auth_json)
+        log.info(str(auth_json))
 
     assert sorted(auth_json.items()) == sorted({"email": "user", "password": "pwd"}.items())
 

@@ -7,7 +7,7 @@ import gdstk
 import tidy3d as td
 from tidy3d.web.container import Batch
 from tidy3d.plugins.smatrix.smatrix import Port, ComponentModeler
-from tidy3d.log import SetupError, Tidy3dKeyError
+from tidy3d.exceptions import SetupError, Tidy3dKeyError
 from ..utils import clear_tmp, run_emulated
 
 # Waveguide height

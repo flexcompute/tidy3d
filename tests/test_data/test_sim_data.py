@@ -4,7 +4,7 @@ import numpy as np
 import matplotlib.pylab as plt
 
 import tidy3d as td
-from tidy3d.log import DataError
+from tidy3d.exceptions import DataError
 
 from tidy3d.components.simulation import Simulation
 from tidy3d.components.grid.grid_spec import GridSpec

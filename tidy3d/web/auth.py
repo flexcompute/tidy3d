@@ -8,7 +8,9 @@ import ssl
 import requests
 
 from .config import DEFAULT_CONFIG as Config
-from ..log import log, WebError
+from ..exceptions import WebError
+from ..log import log
+
 
 # maximum attempts for credentials input
 MAX_ATTEMPTS = 3

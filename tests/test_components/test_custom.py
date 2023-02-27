@@ -11,10 +11,10 @@ from tidy3d import Coords
 from tidy3d.components.source import CustomFieldSource, GaussianPulse
 from tidy3d.components.data.data_array import ScalarFieldDataArray
 from tidy3d.components.data.dataset import FieldDataset
-from tidy3d.log import SetupError, DataError, ValidationError
+from tidy3d.exceptions import SetupError, DataError, ValidationError
 
 from ..test_data.test_monitor_data import make_field_data
-from ..utils import clear_tmp, assert_log_level
+from ..utils import clear_tmp, assert_log_level, log_capture
 from tidy3d.components.data.dataset import PermittivityDataset
 from tidy3d.components.medium import CustomMedium
 
@@ -123,13 +123,13 @@ def test_io_hdf5():
     assert FIELD_SRC == FIELD_SRC2
 
 
-def test_io_json(caplog):
+def test_io_json(log_capture):
     """to json warns and then from json errors."""
     path = "tests/tmp/custom_source.json"
     FIELD_SRC.to_file(path)
-    assert_log_level(caplog, "warning")
+    assert_log_level(log_capture, "warning")
     FIELD_SRC2 = FIELD_SRC.from_file(path)
-    assert_log_level(caplog, "warning")
+    assert_log_level(log_capture, "warning")
     assert FIELD_SRC2.field_dataset is None
 
 

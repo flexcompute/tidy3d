@@ -6,14 +6,16 @@ from enum import Enum
 import requests
 from pydantic import PositiveInt, NonNegativeFloat, PositiveFloat, Field, validator
 
+from ...log import log
 from ...components.base import Tidy3dBaseModel
 from ...components.types import Literal
 from ...components.medium import PoleResidue
 from ...constants import MICROMETER, HERTZ
-from ...log import log, WebError, Tidy3dError, SetupError
+from ...exceptions import WebError, Tidy3dError, SetupError
 from ...web.httputils import get_headers
 from ...web.config import DEFAULT_CONFIG as Config
 from .fit import DispersionFitter
+
 
 BOUND_MAX_FACTOR = 10
 

@@ -1,9 +1,8 @@
 """Sets the configuration of the script, can be changed with `td.config.config_name = new_val`."""
 
 import pydantic as pd
-from typing_extensions import Literal
 
-from .log import set_logging_level, DEFAULT_LEVEL
+from .log import DEFAULT_LEVEL, LogLevel, set_logging_level
 
 
 class Tidy3dConfig(pd.BaseModel):
@@ -19,11 +18,11 @@ class Tidy3dConfig(pd.BaseModel):
         allow_population_by_field_name = True
         frozen = False
 
-    logging_level: Literal["debug", "info", "warning", "error"] = pd.Field(
-        DEFAULT_LEVEL.lower(),
+    logging_level: LogLevel = pd.Field(
+        DEFAULT_LEVEL,
         title="Logging Level",
         description="The lowest level of logging output that will be displayed. "
-        'Can be "debug", "info", "warning", "error".',
+        'Can be "DEBUG", "INFO", "WARNING", "ERROR", or "CRITICAL".',
     )
 
     @pd.validator("logging_level", always=True)

@@ -16,8 +16,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [1.9.1] - 2023-3-06
 
 ### Added
+- `set_logging_console` allows redirection of console messages to stderr.
 
 ### Changed
+- Use custom logger to avoid changing global logging state when importing tidy3d.
+- Separate logging configuration from custom exception definitions.
 
 ### Fixed
 - Avoiding shapely warning in some cases when checking intersection with an empty shape.

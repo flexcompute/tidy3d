@@ -8,7 +8,7 @@ import dask
 import h5py
 
 from ...constants import HERTZ, SECOND, MICROMETER, RADIAN
-from ...log import DataError, FileError
+from ...exceptions import DataError, FileError
 
 # maps the dimension names to their attributes
 DIM_ATTRS = {
