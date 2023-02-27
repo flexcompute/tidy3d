@@ -1,6 +1,7 @@
-"""
-Material Library API
-"""
+"""Material Library API."""
+
+from __future__ import annotations
+
 import json
 from typing import List, Optional
 
@@ -12,9 +13,7 @@ from .tidy3d_types import Queryable
 
 
 class MaterialLibray(Queryable, smart_union=True):
-    """
-    Material Library Resource interface
-    """
+    """Material Library Resource interface."""
 
     id: str = Field(title="Material Library ID", description="Material Library ID")
     name: str = Field(title="Material Library Name", description="Material Library Name")
@@ -29,20 +28,18 @@ class MaterialLibray(Queryable, smart_union=True):
     # pylint: disable=no-self-argument
     @validator("medium", "json_input", pre=True)
     def parse_result(cls, values):
-        """
-        Automatically parsing medium and json_input from string to object
-        """
+        """Automatically parsing medium and json_input from string to object."""
         return json.loads(values)
 
     # pylint: disable=arguments-differ
     @classmethod
-    def list(cls):
-        """
-        List all material libraries
+    def list(cls) -> List[MaterialLibray]:
+        """List all material libraries.
+
         Returns
         -------
-        tasks : [SimulationTask]
-            List of material libraries
+        tasks : List[:class:`.MaterialLibray`]
+            List of material libraries/
         """
         resp = http.get("tidy3d/libraries")
         return parse_obj_as(List[MaterialLibray], resp) if resp else None
