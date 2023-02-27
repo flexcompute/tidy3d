@@ -247,11 +247,11 @@
         "subpixel": true,
         "normalize_index": 0,
         "courant": 0.99,
-        "version": "1.9.0rc2"
+        "version": "1.9.0"
     },
     "task_name": "job",
     "folder_name": "default",
     "callback_url": null,
     "verbose": true,
-    "task_id": "a3258929-659b-4890-b4a4-91a2e4fa116e"
+    "task_id": "02fd6078-eafa-4141-ac4d-6d8653e2a10b"
 }
