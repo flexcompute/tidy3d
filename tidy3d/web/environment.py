@@ -47,7 +47,7 @@ uat = EnvironmentConfig(
 
 prod = EnvironmentConfig(
     name="prod",
-    web_api_endpoint="https://prod-tidy3d-api.simulation.cloud",
+    web_api_endpoint="https://tidy3d-api.simulation.cloud",
     website_endpoint="https://tidy3d.simulation.cloud",
     aws_region="us-gov-west-1",
 )
