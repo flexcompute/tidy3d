@@ -1,6 +1,6 @@
-"""
-Material Fitter API
-"""
+"""Material Fitter API."""
+from __future__ import annotations
+
 import os
 import tempfile
 from enum import Enum
@@ -17,18 +17,14 @@ from .tidy3d_types import Submittable
 
 
 class ConstraintEnum(str, Enum):
-    """
-    Constraint Enum
-    """
+    """Constraint Enum."""
 
     HARD = "hard"
     SOFT = "soft"
 
 
 class FitterOptions(BaseModel):
-    """
-    Fitter Options
-    """
+    """Fitter Options."""
 
     num_poles: Optional[int] = 1
     num_tries: Optional[int] = 50
@@ -43,17 +39,15 @@ class FitterOptions(BaseModel):
 
 
 class _FitterRequest(BaseModel):
+    """Fitter request."""
+
     fileName: str
     jsonInput: str
     resourcePath: str
 
 
-class MaterialFitterTask(
-    Submittable,
-):
-    """
-    Material Fitter Task
-    """
+class MaterialFitterTask(Submittable):
+    """Material Fitter Task."""
 
     id: str = Field(title="Task ID", description="Task ID")
     dispersion_fitter: DispersionFitter = Field(
@@ -69,9 +63,9 @@ class MaterialFitterTask(
 
     # pylint: disable=arguments-differ
     @classmethod
-    def submit(cls, fitter: DispersionFitter, options: FitterOptions):
-        """
-        Create and kickoff fitter task.
+    def submit(cls, fitter: DispersionFitter, options: FitterOptions) -> MaterialFitterTask:
+        """Create and kickoff fitter task.
+
         Parameters
         ----------
         fitter: DispersionFitter
@@ -105,16 +99,14 @@ class MaterialFitterTask(
             resp = http.post("tidy3d/fitter/fit", json=fitter_req.dict())
             return cls(dispersion_fitter=fitter, **resp)
 
-    def sync_status(self):
-        """
-        Sync the status from server and update self.status.
-        """
+    def sync_status(self) -> None:
+        """Sync the status from server and update self.status."""
         resp = http.get(f"tidy3d/fitter/{self.id}")
         self.status = resp["status"]
 
     def save_to_library(self, name: str) -> bool:
-        """
-        Save the fitted material to the material library
+        """Save the fitted material to the material library.
+
         Parameters
         ----------
         name: str

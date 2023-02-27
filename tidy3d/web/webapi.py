@@ -104,7 +104,7 @@ def upload(  # pylint:disable=too-many-locals,too-many-arguments
 
     Returns
     -------
-    TaskId
+    str
         Unique identifier of task on server.
 
     Note
@@ -553,6 +553,7 @@ def delete_old(
     return len(tasks)
 
 
+# TODO: make this return a list of TaskInfo instead?
 def get_tasks(
     num_tasks: int = None, order: Literal["new", "old"] = "new", folder: str = "default"
 ) -> List[Dict]:
@@ -566,6 +567,11 @@ def get_tasks(
         Return the tasks in order of newest-first or oldest-first.
     folder: str = "default"
         Folder from which to get the tasks.
+
+    Returns
+    -------
+    List[Dict]
+        List of dictionaries storing the information for each of the tasks last ``num_tasks`` tasks.
     """
     folder = Folder.get(folder)
     tasks = folder.list_tasks()
@@ -595,6 +601,16 @@ def estimate_cost(task_id: str) -> float:
     ----
     Cost is calculated assuming the simulation runs for
     the full ``run_time``. If early shut-off is triggered, the cost is adjusted proporionately.
+
+    Parameters
+    ----------
+    task_id : str
+        Unique identifier of task on server.  Returned by :meth:`upload`.
+
+    Returns
+    -------
+    float
+        Estimated cost of the task in flex units.
     """
 
     task = SimulationTask.get(task_id)

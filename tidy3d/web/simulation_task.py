@@ -4,7 +4,7 @@ Tidy3d webapi types
 import os.path
 import tempfile
 from datetime import datetime
-from typing import List, Optional, Callable
+from typing import List, Optional, Callable, Tuple
 
 from pydantic import Extra, Field, parse_obj_as
 from tidy3d import Simulation
@@ -29,9 +29,7 @@ SIM_FILE_HDF5 = "simulation.hdf5"
 
 
 class Folder(Tidy3DResource, Queryable, extra=Extra.allow):
-    """
-    Tidy3D Folder
-    """
+    """Tidy3D Folder."""
 
     folder_id: str = Field(..., title="folder id", description="folder id", alias="projectId")
     folder_name: str = Field(
@@ -41,8 +39,8 @@ class Folder(Tidy3DResource, Queryable, extra=Extra.allow):
     # pylint: disable=arguments-differ
     @classmethod
     def list(cls) -> []:
-        """
-        List all folders
+        """List all folders.
+
         Returns
         -------
         folders : [Folder]
@@ -61,12 +59,13 @@ class Folder(Tidy3DResource, Queryable, extra=Extra.allow):
     # pylint: disable=arguments-differ
     @classmethod
     def get(cls, folder_name: str):
-        """
-        Get folder by name.
+        """Get folder by name.
+
         Parameters
         ----------
         folder_name : str
-            Get Folder by name.
+            Name of the folder.
+
         Returns
         -------
         folder : Folder
@@ -77,12 +76,14 @@ class Folder(Tidy3DResource, Queryable, extra=Extra.allow):
     # pylint: disable=arguments-differ
     @classmethod
     def create(cls, folder_name: str):
-        """
-        Create a folder, return existing folder if there is one has the same name.
+        """Create a folder, return existing folder if there is one has the same name.
+
         Parameters
         ----------
+        ----------
         folder_name : str
-            Get folder by name.
+            Name of the folder.
+
         Returns
         -------
         folder : Folder
@@ -94,14 +95,13 @@ class Folder(Tidy3DResource, Queryable, extra=Extra.allow):
         return Folder(**resp) if resp else None
 
     def delete(self):
-        """
-        Remove this folder
-        """
+        """Remove this folder."""
+
         http.delete(f"tidy3d/projects/{self.folder_id}")
 
     def list_tasks(self) -> [T]:
-        """
-        List all tasks in this folder
+        """List all tasks in this folder.
+
         Returns
         -------
         tasks : [SimulationTask]
@@ -128,13 +128,21 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
         alias="taskId",
     )
     status: Optional[str] = Field(title="status", description="Simulation task status.")
-    created_at: Optional[datetime] = Field(title="created_at", alias="createdAt")
 
-    simulation: Optional[Simulation] = Field(
-        title="simulation", description="Simulation to run as a 'task'."
+    created_at: Optional[datetime] = Field(
+        title="created_at", description="Time at which this task was created.", alias="createdAt"
     )
 
-    folder_name: Optional[str] = Field("default", alias="projectName")
+    simulation: Optional[Simulation] = Field(
+        title="simulation", description="A copy of the Simulation being run as this task."
+    )
+
+    folder_name: Optional[str] = Field(
+        "default",
+        title="Folder Name",
+        description="Name of the folder associated with this task.",
+        alias="projectName",
+    )
 
     folder: Optional[Folder]
 
@@ -151,8 +159,7 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
     def create(
         cls, simulation: Simulation, task_name: str, folder_name="default", call_back_url=None
     ) -> T:
-        """
-        Create a new task on the server.
+        """Create a new task on the server.
 
         Parameters
         ----------
@@ -167,6 +174,7 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
         call_back_url: str
             Http PUT url to receive simulation finish event. The body content is a json file with
             fields ``{'id', 'status', 'name', 'workUnit', 'solverVersion'}``.
+
         Returns
         -------
         :class:`SimulationTask`
@@ -189,13 +197,12 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
     # pylint: disable=arguments-differ
     @classmethod
     def get(cls, task_id: str) -> T:
-        """
-        Get task from the server by id.
+        """Get task from the server by id.
 
         Parameters
         ----------
         task_id: str
-            task id.
+            Unique identifier of task on server.
 
         Returns
         -------
@@ -207,16 +214,13 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
         return SimulationTask(**resp) if resp else None
 
     def delete(self):
-        """
-        Delete current task from server.
-        """
+        """Delete current task from server."""
         if not self.task_id:
             raise ValueError("Task id not found.")
         http.delete(f"tidy3d/tasks/{self.task_id}")
 
     def get_simulation(self) -> Optional[Simulation]:
-        """
-        Download simulation from server.
+        """Download simulation from server.
 
         Returns
         -------
@@ -236,9 +240,9 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
 
     def get_simulation_json(
         self, to_file: str, verbose: bool = True, progress_callback: Callable[[float], None] = None
-    ):
-        """
-        Get simulation.json file from Server.
+    ) -> None:
+        """Get json file for a :class:`.Simulation` from server.
+
         Parameters
         ----------
         to_file: str
@@ -255,14 +259,15 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
 
     def upload_simulation(
         self, verbose: bool = True, progress_callback: Callable[[float], None] = None
-    ):
-        """
-        Upload simulation object to Server.
+    ) -> None:
+        """Upload :class:`.Simulation` object to Server.
 
         Parameters
         ----------
         verbose: bool = True
             Whether to display progressbars.
+        progress_callback : Callable[[float], None] = None
+            Optional callback function called when uploading file.
         """
         assert self.task_id
         assert self.simulation
@@ -294,7 +299,7 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
         remote_filename: str,
         verbose: bool = True,
         progress_callback: Callable[[float], None] = None,
-    ):
+    ) -> None:
         """
         Upload file to platform. Using this method when the json file is too large to parse
          as :class".simulation".
@@ -304,6 +309,10 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
             local file path.
         remote_filename: str
             file name on the server
+        verbose: bool = True
+            Whether to display progressbars.
+        progress_callback : Callable[[float], None] = None
+            Optional callback function called when uploading file.
         """
         assert self.task_id
 
@@ -345,12 +354,14 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
     def estimate_cost(self, solver_version=None, protocol_version=None) -> float:
         """Compute the maximum flex unit charge for a given task, assuming the simulation runs for
         the full ``run_time``. If early shut-off is triggered, the cost is adjusted proportionately.
+
         Parameters
         ----------
         solver_version: str
             target solver version.
         protocol_version: str
             protocol version
+
         Returns
         -------
         flex_unit_cost: float
@@ -388,13 +399,17 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
 
     def get_simulation_hdf5(
         self, to_file: str, verbose: bool = True, progress_callback: Callable[[float], None] = None
-    ):
-        """
-        Get hdf5 file from Server.
+    ) -> None:
+        """Get hdf5 file from Server.
+
         Parameters
         ----------
         to_file: str
             save file to path.
+        verbose: bool = True
+            Whether to display progressbars.
+        progress_callback : Callable[[float], None] = None
+            Optional callback function called when uploading file.
         """
         assert self.task_id
         download_file(
@@ -405,7 +420,7 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
             progress_callback=progress_callback,
         )
 
-    def get_running_info(self):
+    def get_running_info(self) -> Tuple[float, float]:
         """Gets the % done and field_decay for a running task.
 
         Returns
@@ -432,14 +447,19 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
 
     def get_log(
         self, to_file: str, verbose: bool = True, progress_callback: Callable[[float], None] = None
-    ):
-        """
-        Get log file from Server.
+    ) -> None:
+        """Get log file from Server.
+
         Parameters
         ----------
         to_file: str
             save file to path.
+        verbose: bool = True
+            Whether to display progressbars.
+        progress_callback : Callable[[float], None] = None
+            Optional callback function called when uploading file.
         """
+
         assert self.task_id
         download_file(
             self.task_id,

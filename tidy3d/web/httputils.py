@@ -1,4 +1,5 @@
-""" handles communication with server """
+"""Handles communication with server."""
+
 import os
 import time
 from enum import Enum
@@ -7,6 +8,7 @@ from typing import Dict
 import jwt
 import toml
 from requests import Session
+import requests
 
 from .auth import get_credentials
 from .cli.app import CONFIG_FILE
@@ -18,9 +20,12 @@ SIMCLOUD_APIKEY = "SIMCLOUD_APIKEY"
 
 
 def api_key():
-    """
-    Get the api key for the current environment.
-    :return:
+    """Get the api key for the current environment.
+
+    Returns
+    -------
+    str
+        The API key for the current environment.
     """
     if os.environ.get(SIMCLOUD_APIKEY):
         return os.environ.get(SIMCLOUD_APIKEY)
@@ -32,11 +37,18 @@ def api_key():
     return None
 
 
-def auth(request):
-    """
-    Set the authentication.
-    :param request:
-    :return:
+def auth(request: requests.request) -> requests.request:
+    """Save the authentication info in a request.
+
+    Parameters
+    ----------
+    request : requests.request
+        The original request to set authentication for.
+
+    Returns
+    -------
+    requests.request
+        The request with authentication set.
     """
     key = api_key()
     if key:
@@ -69,7 +81,18 @@ class ResponseCodes(Enum):
 
 
 def handle_response(func):
-    """Handles return values of http requests based on status."""
+    """Handles return values of http requests based on status.
+
+    Parameters
+    ----------
+    func : Callable
+        the response function
+
+    Returns
+    -------
+    Callable
+        the original function with response handled.
+    """
 
     def wrapper(*args, **kwargs):
         """New function to replace func with."""
@@ -96,19 +119,46 @@ def handle_response(func):
 
 
 def get_query_url(method: str) -> str:
-    """construct query url from method name"""
+    """Construct query url from method name.
+
+    Parameters
+    ----------
+    method : str
+        Method name.
+
+    Returns
+    -------
+    str
+        The full query url
+    """
     return f"{Config.web_api_endpoint}/{method}"
-    # return os.path.join(Config.web_api_endpoint, method)
 
 
 def need_token_refresh(token: str) -> bool:
-    """check whether to refresh token or not"""
+    """Check whether to refresh token or not.
+
+    Parameters
+    ----------
+    token : str
+        Token string
+
+    Returns
+    -------
+    bool
+        Whether refresh is needed.
+    """
     decoded = jwt.decode(token, options={"verify_signature": False})
     return decoded["exp"] - time.time() < 300
 
 
 def get_headers() -> Dict[str, str]:
-    """get headers for http request"""
+    """get headers for http request.
+
+    Returns
+    -------
+    Dict[str, str]
+        dictionary with "Authorization" and "Application" keys.
+    """
     if Config.auth is None or Config.auth["accessToken"] is None:
         get_credentials()
     elif need_token_refresh(Config.auth["accessToken"]):
@@ -121,28 +171,76 @@ def get_headers() -> Dict[str, str]:
 
 
 @handle_response
-def post(method, data=None):
-    """Uploads the file."""
+def post(method: str, data: dict = None) -> requests.Response:
+    """Uploads the file.
+
+    Parameters
+    ----------
+    method : str
+        Method string
+    data : dict = None
+        json data to post.
+
+    Returns
+    -------
+    requests.Response
+        respose to the post request.
+    """
     query_url = get_query_url(method)
     return session.post(query_url, json=data)
 
 
 @handle_response
-def put(method, data):
-    """Runs the file."""
+def put(method, data) -> requests.Response:
+    """Runs the file.
+
+    Parameters
+    ----------
+    method : str
+        Method string
+    data : dict
+        json data to put
+
+    Returns
+    -------
+    requests.Response
+        respose to the put request.
+    """
     query_url = get_query_url(method)
     return session.put(query_url, json=data)
 
 
 @handle_response
-def get(method):
-    """Downloads the file."""
+def get(method) -> requests.Response:
+    """Downloads the file.
+
+    Parameters
+    ----------
+    method : str
+        Method string
+
+    Returns
+    -------
+    requests.Response
+        respose to the get request.
+    """
     query_url = get_query_url(method)
     return session.get(query_url)
 
 
 @handle_response
-def delete(method):
-    """Deletes the file."""
+def delete(method) -> requests.Response:
+    """Deletes the file.
+
+    Parameters
+    ----------
+    method : str
+        Method string
+
+    Returns
+    -------
+    requests.Response
+        respose to the delete request.
+    """
     query_url = get_query_url(method)
     return session.delete(query_url)

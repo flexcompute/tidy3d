@@ -1,6 +1,5 @@
-"""
-Tidy3d abstraction types for the webapi
-"""
+"""Tidy3d abstraction types for the webapi."""
+
 from abc import ABC, abstractmethod
 from typing import TypeVar
 
@@ -10,7 +9,7 @@ T = TypeVar("T", bound="Tidy3DResource")
 
 
 class Tidy3DResource(BaseModel, ABC):
-    """ "Abstract base class / template for a webservice that implements resource query."""
+    """Abstract base class / template for a webservice that implements resource query."""
 
     @classmethod
     @abstractmethod
@@ -19,9 +18,7 @@ class Tidy3DResource(BaseModel, ABC):
 
 
 class ResourceLifecycle(Tidy3DResource, ABC):
-    """
-    Abstract base class / template for a webservice that implements resource life cycle management.
-    """
+    """Abstract base class for a webservice that implements resource life cycle management."""
 
     @classmethod
     @abstractmethod

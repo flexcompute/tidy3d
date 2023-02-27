@@ -1,9 +1,11 @@
-""" Allows users to log in and be authenticated."""
+"""Allows users to log in and be authenticated."""
+
 import os
 import getpass
 import hashlib
 import json
 import ssl
+from typing import Tuple
 
 import requests
 
@@ -19,7 +21,16 @@ CREDENTIAL_PATH = os.path.expanduser(_CREDENTIAL_FILE)
 
 
 def set_authentication_config(email: str, password: str) -> None:
-    """Sets the authorization and keys in the config for a for user."""
+    """Sets the authorization and keys in the config for a for user.
+
+    Parameters
+    ----------
+    email : str
+        Email address.
+    password : str
+        Password string.
+
+    """
     os.environ["TIDY3D_USER"] = email
     os.environ["TIDY3D_PASS_HASH"] = password
 
@@ -49,7 +60,18 @@ def set_authentication_config(email: str, password: str) -> None:
 
 
 def encode_password(password: str) -> str:
-    """Hash a password."""
+    """Hash a password.
+
+    Parameters
+    ----------
+    password : str
+        Password string
+
+    Returns
+    -------
+    str
+        Hash of the password.
+    """
 
     salt = "5ac0e45f46654d70bda109477f10c299"  # TODO: salt should be added server-side
     return hashlib.sha512(password.encode("utf-8") + salt.encode("utf-8")).hexdigest()
@@ -126,14 +148,15 @@ def get_credentials() -> None:  # pylint:disable=too-many-branches
         log.info(f"Unknown response: {keep_logged_in}.")
 
 
-def _save_credential_to_stored_file(email, password):
-    """
-    Tries to save credential to stored file.
+def _save_credential_to_stored_file(email: str, password: str) -> None:
+    """Tries to save credential to stored file.
 
-    Returns
-    -------
-    Tuple[str, str]
-        email and encrypted password
+    Parameters
+    ----------
+    email : str
+        Email address.
+    password : str
+        Password string.
     """
     credential_dir = os.path.split(CREDENTIAL_PATH)[0]
 
@@ -144,9 +167,8 @@ def _save_credential_to_stored_file(email, password):
         json.dump(auth_json, fp)
 
 
-def _get_credential_from_stored_file():
-    """
-    Tries to get credential from stored file.
+def _get_credential_from_stored_file() -> Tuple[str, str]:
+    """Tries to get credential from stored file.
 
     Returns
     -------
@@ -161,9 +183,8 @@ def _get_credential_from_stored_file():
     return email, password
 
 
-def _get_credential_from_env():
-    """
-    Tries to get credential from environment variables.
+def _get_credential_from_env() -> Tuple[str, str]:
+    """Tries to get credential from environment variables.
 
     Returns
     -------
@@ -181,8 +202,13 @@ def _get_credential_from_env():
 
 
 def _get_credential_from_console(email):
-    """
-    Tries to get credential from console input.
+    """Tries to get credential from console input.
+
+
+    Parameters
+    ----------
+    email : str
+        user email
 
     Returns
     -------

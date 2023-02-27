@@ -19,6 +19,8 @@ from .config import DEFAULT_CONFIG
 
 
 class _UserCredential(BaseModel):
+    """Stores information about user credentials."""
+
     access_key_id: str = Field(alias="accessKeyId")
     expiration: datetime
     secret_access_key: str = Field(alias="secretAccessKey")
@@ -26,6 +28,8 @@ class _UserCredential(BaseModel):
 
 
 class _S3STSToken(BaseModel):
+    """Stores information about S3 token."""
+
     cloud_path: str = Field(alias="cloudpath")
     user_credential: _UserCredential = Field(alias="userCredentials")
 
