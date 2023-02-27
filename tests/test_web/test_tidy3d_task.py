@@ -4,10 +4,16 @@ import tempfile
 import responses
 from responses import matchers
 
-from tidy3d.web.environment import Env
+from tidy3d.web.environment import Env, EnvironmentConfig
 from tidy3d.web.simulation_task import Folder, SimulationTask
 
-Env.dev.active()
+test_env = EnvironmentConfig(
+    name="test",
+    web_api_endpoint="https://test",
+    website_endpoint="https://test",
+)
+
+Env.set_current(test_env)
 
 
 @responses.activate

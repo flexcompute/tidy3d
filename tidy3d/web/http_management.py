@@ -4,6 +4,7 @@ Http connection pool and authentication management
 import os
 from functools import wraps
 from os.path import expanduser
+from enum import Enum
 
 import requests
 import toml
@@ -12,6 +13,14 @@ from .environment import Env
 from ..version import __version__
 
 SIMCLOUD_APIKEY = "SIMCLOUD_APIKEY"
+
+
+class ResponseCodes(Enum):
+    """HTTP response codes to handle individually."""
+
+    UNAUTHORIZED = 401
+    OK = 200
+    NOT_FOUND = 404
 
 
 def api_key():
@@ -61,7 +70,7 @@ def http_interceptor(func):
         # Extend some capabilities of func
         resp = func(*args, **kwargs)
 
-        if resp.status_code == 404:
+        if resp.status_code == ResponseCodes.NOT_FOUND.value:
             return None
 
         resp.raise_for_status()

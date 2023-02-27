@@ -13,7 +13,7 @@ class EnvironmentConfig(BaseModel):
     name: str
     web_api_endpoint: str
     website_endpoint: str
-    aws_region: str
+    # aws_region: str
 
     def active(self):
         """
@@ -35,21 +35,21 @@ dev = EnvironmentConfig(
     name="dev",
     web_api_endpoint="https://tidy3d-api.dev-simulation.cloud",
     website_endpoint="https://tidy3d.dev-simulation.cloud",
-    aws_region="us-east-1",
+    # aws_region="us-east-1",
 )
 
 uat = EnvironmentConfig(
     name="uat",
     web_api_endpoint="https://uat-tidy3d-api.simulation.cloud",
     website_endpoint="https://uat-tidy3d.simulation.cloud",
-    aws_region="us-gov-west-1",
+    # aws_region="us-gov-west-1",
 )
 
 prod = EnvironmentConfig(
     name="prod",
     web_api_endpoint="https://tidy3d-api.simulation.cloud",
     website_endpoint="https://tidy3d.simulation.cloud",
-    aws_region="us-gov-west-1",
+    # aws_region="us-gov-west-1",
 )
 
 

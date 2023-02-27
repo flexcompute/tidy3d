@@ -174,9 +174,7 @@ def get_run_info(task_id: TaskId):
         Average field intensity normlized to max value (1.0).
         Is ``None`` if run info not available.
     """
-    task = SimulationTask.get(task_id)
-    if not task:
-        raise ValueError("Task not found.")
+    task = SimulationTask(taskId=task_id)
     return task.get_running_info()
 
 
@@ -320,9 +318,10 @@ def download(task_id: TaskId, path: str = "simulation_data.hdf5", verbose: bool 
         If `True`, will print progressbars and status, otherwise, will run silently.
 
     """
-    task = SimulationTask.get(task_id)
-    if not task:
-        raise ValueError(f"Task {task_id} not found.")
+    # task = SimulationTask.get(task_id)
+    # if not task:
+    #     raise ValueError(f"Task {task_id} not found.")
+    task = SimulationTask(taskId=task_id)
     task.get_simulation_hdf5(path, verbose=verbose)
 
 
@@ -340,9 +339,10 @@ def download_json(task_id: TaskId, path: str = SIM_FILE_JSON, verbose: bool = Tr
 
     """
 
-    task = SimulationTask.get(task_id)
-    if not task:
-        raise ValueError(f"Task {task_id} not found.")
+    # task = SimulationTask.get(task_id)
+    # if not task:
+    #     raise ValueError(f"Task {task_id} not found.")
+    task = SimulationTask(taskId=task_id)
     task.get_simulation_json(path, verbose=verbose)
 
 
@@ -359,9 +359,10 @@ def download_hdf5(task_id: TaskId, path: str = SIM_FILE_HDF5, verbose: bool = Tr
         If `True`, will print progressbars and status, otherwise, will run silently.
 
     """
-    task = SimulationTask.get(task_id)
-    if not task:
-        raise ValueError(f"Task {task_id} not found.")
+    # task = SimulationTask.get(task_id)
+    # if not task:
+    #     raise ValueError(f"Task {task_id} not found.")
+    task = SimulationTask(taskId=task_id)
     task.get_simulation_hdf5(path, verbose=verbose)
 
 
@@ -383,7 +384,8 @@ def load_simulation(task_id: TaskId, path: str = SIM_FILE_JSON, verbose: bool = 
         Simulation loaded from downloaded json file.
     """
 
-    task = SimulationTask.get(task_id)
+    # task = SimulationTask.get(task_id)
+    task = SimulationTask(taskId=task_id)
     task.get_simulation_json(path, verbose=verbose)
     return Simulation.from_file(path)
 
@@ -402,9 +404,10 @@ def download_log(task_id: TaskId, path: str = "tidy3d.log", verbose: bool = True
     ----
     To load downloaded results into data, call :meth:`load` with option `replace_existing=False`.
     """
-    task = SimulationTask.get(task_id)
-    if not task:
-        raise ValueError("Task not found.")
+    # task = SimulationTask.get(task_id)
+    # if not task:
+    #     raise ValueError("Task not found.")
+    task = SimulationTask(taskId=task_id)
     task.get_log(path, verbose=verbose)
 
 
@@ -467,7 +470,8 @@ def delete(task_id: TaskId) -> TaskInfo:
         Object containing information about status, size, credits of task.
     """
 
-    task = SimulationTask.get(task_id)
+    # task = SimulationTask.get(task_id)
+    task = SimulationTask(taskId=task_id)
     task.delete()
     return TaskInfo(**{"taskId": task.task_id, **task.dict()})
 

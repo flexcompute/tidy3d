@@ -148,7 +148,7 @@ def upload_string(resource_id: str, content: str, remote_filename: str, verbose:
     upload a string to a file on S3
     @param resource_id: the resource id, e.g. task id
     @param content:     the content of the file
-    @param remote_filename: the remote file name on S3
+    @param remote_filename: the remote file name on S3 relative to the  resource context root path.
     """
 
     def _upload(_callback: Callable) -> None:
@@ -183,7 +183,7 @@ def upload_file(resource_id: str, path: str, remote_filename: str, verbose: bool
     upload file to S3
     @param resource_id: the resource id, e.g. task id
     @param path: path to the file
-    @param remote_filename: the remote file name on S3
+    @param remote_filename: the remote file name on S3 relative to the  resource context root path.
     """
 
     def _upload(_callback: Callable) -> None:
@@ -216,7 +216,11 @@ def upload_file(resource_id: str, path: str, remote_filename: str, verbose: bool
 
 
 def download_file(
-    resource_id: str, remote_filename: str, to_file: str = None, verbose: bool = True
+    resource_id: str,
+    remote_filename: str,
+    to_file: str = None,
+    verbose: bool = True,
+    progress_callback: Callable[[float], None] = None,
 ):
     """download file from S3"""
 
