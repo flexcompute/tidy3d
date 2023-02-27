@@ -256,7 +256,7 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
         """
         assert self.task_id
         assert self.simulation
-        upload_string(self.task_id, self.simulation.json(), SIMULATION_JSON)
+        upload_string(self.task_id, self.simulation.json(), SIMULATION_JSON, verbose=verbose)
         if len(self.simulation.custom_datasets) > 0:
             # Also upload hdf5 containing all data.
             # The temp file will be re-opened in `to_hdf5` which can cause an error on some systems
@@ -377,11 +377,16 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
         """
         assert self.task_id
         with tempfile.NamedTemporaryFile() as temp:
-            download_file(self.task_id, RUNNING_INFO, to_file=temp.name, verbose=False)
-            with open(temp.name, "r", encoding="utf-8") as csv:
-                progress_string = csv.readlines()
-                perc_done, field_decay = progress_string[-1].split(",")
-                return float(perc_done), float(field_decay)
+            try:
+                download_file(self.task_id, RUNNING_INFO, to_file=temp.name, verbose=False)
+                with open(temp.name, "r", encoding="utf-8") as csv:
+                    progress_string = csv.readlines()
+                    perc_done, field_decay = progress_string[-1].split(",")
+                    return float(perc_done), float(field_decay)
+
+            # file is not ready, return None, None to signify that the running info isnt available
+            except Exception:  # pylint:disable=broad-except
+                return None, None
 
     def get_log(self, to_file: str, verbose: bool = True):
         """
