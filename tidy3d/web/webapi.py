@@ -384,7 +384,7 @@ def load_simulation(task_id: TaskId, path: str = SIM_FILE_JSON, verbose: bool = 
     """
 
     task = SimulationTask.get(task_id)
-    task.get_simulation_json(path, verose=verbose)
+    task.get_simulation_json(path, verbose=verbose)
     return Simulation.from_file(path)
 
 
