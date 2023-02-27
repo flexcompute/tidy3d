@@ -17,6 +17,7 @@ from shapely.errors import ShapelyDeprecationWarning
 from ..base import Tidy3dBaseModel
 from ..types import Axis, ArrayLike
 from ..structure import Structure, MeshOverrideStructure, StructureType
+from ..medium import PECMedium
 from ...log import SetupError, ValidationError
 from ...constants import C_0, fp_eps
 
@@ -352,7 +353,9 @@ class GradedMesher(Mesher):
         dl_min: pd.NonNegativeFloat,
         axis: Axis,
     ) -> ArrayLike[float, 1]:
-        """Get the minimum mesh required in each structure.
+        """Get the minimum mesh required in each structure. Special media are set to index of 1,
+        which would usually make the medium ignored in the meshing, while the structure geometry
+        would still be used to place grid boundaries.
 
         Parameters
         ----------
@@ -370,10 +373,13 @@ class GradedMesher(Mesher):
         min_steps = []
         for structure in structures:
             if isinstance(structure, Structure):
-                n, k = structure.medium.eps_complex_to_nk(
-                    structure.medium.eps_diagonal(C_0 / wavelength)[axis]
-                )
-                index = max(abs(n), abs(k))
+                if isinstance(structure.medium, PECMedium):
+                    index = 1.0
+                else:
+                    n, k = structure.medium.eps_complex_to_nk(
+                        structure.medium.eps_diagonal(C_0 / wavelength)[axis]
+                    )
+                    index = max(abs(n), abs(k))
                 min_steps.append(max(dl_min, wavelength / index / min_steps_per_wvl))
             elif isinstance(structure, MeshOverrideStructure):
                 min_steps.append(max(dl_min, structure.dl[axis]))
