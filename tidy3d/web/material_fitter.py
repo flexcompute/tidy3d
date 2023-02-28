@@ -13,7 +13,7 @@ from pydantic import BaseModel, Field
 from tidy3d.plugins import DispersionFitter
 
 from .http_management import http
-from .tidy3d_types import Submittable
+from .types import Submittable
 
 
 class ConstraintEnum(str, Enum):

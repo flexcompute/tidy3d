@@ -17,8 +17,14 @@ from ..components.simulation import Simulation
 from ..components.types import Literal
 from ..log import log, WebError
 
+# time between checking task status
 REFRESH_TIME = 0.3
+
+# time between checking run status
+RUN_REFRESH_TIME = 1.0
+
 TOTAL_DOTS = 3
+
 # file names when uploading to S3
 SIM_FILE_JSON = "simulation.json"
 
@@ -283,7 +289,7 @@ def monitor(task_id: TaskId, verbose: bool = True) -> None:
                 perc_done, field_decay = get_run_info(task_id)
                 new_description = f"% done (field decay = {field_decay:.2e})"
                 progress.update(pbar_pd, completed=perc_done, description=new_description)
-                time.sleep(1.0)
+                time.sleep(RUN_REFRESH_TIME)
 
             if perc_done is not None and perc_done < 100:
                 log.info("early shutoff detected, exiting.")

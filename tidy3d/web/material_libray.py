@@ -9,7 +9,7 @@ from pydantic import Field, parse_obj_as, validator
 from tidy3d.components.medium import MediumType
 
 from .http_management import http
-from .tidy3d_types import Queryable
+from .types import Queryable
 
 
 class MaterialLibray(Queryable, smart_union=True):
