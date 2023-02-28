@@ -7,7 +7,7 @@ from jax import custom_vjp
 from ...components.simulation import Simulation
 from ...components.data.sim_data import SimulationData
 from ...web.webapi import run as web_run
-from ...web.queue import run_async as web_run_async
+from ...web.asynchronous import run_async as web_run_async
 from ...web.container import BatchData, DEFAULT_DATA_DIR
 
 from .components.simulation import JaxSimulation

@@ -6,4 +6,4 @@ from .webapi import get_tasks, delete_old, download_json, download_log, load_sim
 from .container import Job, Batch, BatchData
 from .auth import get_credentials
 from .cli import tidy3d_cli
-from .queue import run_async
+from .asynchronous import run_async
