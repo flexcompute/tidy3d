@@ -1,3 +1,4 @@
+# Tests webapi and things that depend on it
 import tempfile
 import pytest
 import responses
@@ -18,8 +19,12 @@ from tidy3d.web.queue import run_async
 
 from tidy3d.__main__ import main
 
-# file to dump data for tests
-FNAME_TMP = "data/web_test_tmp"
+# variables used below
+FNAME_TMP = "tests/tmp/web_test_tmp.json"
+TASK_NAME = "task_name_test"
+TASK_ID = "1234"
+CREATED_AT = "2022-01-01T00:00:00.000Z"
+PROJECT_NAME = "default"
 
 
 def make_sim():
@@ -42,20 +47,20 @@ def mock_upload(monkeypatch, set_api_key):
     responses.add(
         responses.GET,
         f"{Env.current.web_api_endpoint}/tidy3d/project",
-        match=[matchers.query_param_matcher({"projectName": "test webapi folder"})],
-        json={"data": {"projectId": "1234", "projectName": "test webapi folder"}},
+        match=[matchers.query_param_matcher({"projectName": PROJECT_NAME})],
+        json={"data": {"projectId": TASK_ID, "projectName": PROJECT_NAME}},
         status=200,
     )
 
     responses.add(
         responses.POST,
-        f"{Env.current.web_api_endpoint}/tidy3d/projects/1234/tasks",
-        match=[matchers.json_params_matcher({"task_name": "test task", "call_back_url": None})],
+        f"{Env.current.web_api_endpoint}/tidy3d/projects/{TASK_ID}/tasks",
+        match=[matchers.json_params_matcher({"task_name": TASK_NAME, "call_back_url": None})],
         json={
             "data": {
-                "taskId": "1234",
-                "taskName": "test task",
-                "createdAt": "2022-01-01T00:00:00.000Z",
+                "taskId": TASK_ID,
+                "taskName": TASK_NAME,
+                "createdAt": CREATED_AT,
             }
         },
         status=200,
@@ -73,11 +78,11 @@ def mock_get_info(monkeypatch, set_api_key):
 
     responses.add(
         responses.GET,
-        f"{Env.current.web_api_endpoint}/tidy3d/tasks/abcd/detail",
+        f"{Env.current.web_api_endpoint}/tidy3d/tasks/{TASK_ID}/detail",
         json={
             "data": {
-                "taskId": "abcd",
-                "createdAt": "2022-01-01T00:00:00.000Z",
+                "taskId": TASK_ID,
+                "createdAt": CREATED_AT,
             }
         },
         status=200,
@@ -90,18 +95,18 @@ def mock_start(monkeypatch, set_api_key):
 
     responses.add(
         responses.GET,
-        f"{Env.current.web_api_endpoint}/tidy3d/tasks/1234/detail",
+        f"{Env.current.web_api_endpoint}/tidy3d/tasks/{TASK_ID}/detail",
         json={
             "data": {
-                "taskId": "1234",
-                "createdAt": "2022-01-01T00:00:00.000Z",
+                "taskId": TASK_ID,
+                "createdAt": CREATED_AT,
             }
         },
         status=200,
     )
     responses.add(
         responses.POST,
-        f"{Env.current.web_api_endpoint}/tidy3d/tasks/1234/submit",
+        f"{Env.current.web_api_endpoint}/tidy3d/tasks/{TASK_ID}/submit",
         match=[
             matchers.json_params_matcher(
                 {
@@ -113,19 +118,13 @@ def mock_start(monkeypatch, set_api_key):
         ],
         json={
             "data": {
-                "taskId": "1234",
-                "taskName": "test task",
-                "createdAt": "2022-01-01T00:00:00.000Z",
+                "taskId": TASK_ID,
+                "taskName": TASK_NAME,
+                "createdAt": CREATED_AT,
             }
         },
         status=200,
     )
-
-
-# @pytest.fixture
-# def mock_monitor(monkeypatch):
-#     """Mocks webapi.monitor."""
-#     monkeypatch.setattr("tidy3d.web.webapi.monitor", lambda task_id, verbose: time.sleep(0.1))
 
 
 @pytest.fixture
@@ -139,9 +138,7 @@ def mock_monitor(monkeypatch):
         current_count = min(status_count[0], len(statuses) - 1)
         current_status = statuses[current_count]
         status_count[0] += 1
-        return TaskInfo(
-            status=current_status, taskName="test task", taskId=task_id, realFlexUnit=1.0
-        )
+        return TaskInfo(status=current_status, taskName=TASK_NAME, taskId=task_id, realFlexUnit=1.0)
 
     run_count = [0]
     perc_dones = (1, 10, 20, 30, 100)
@@ -163,11 +160,11 @@ def mock_download(monkeypatch, set_api_key):
     """Mocks webapi.download."""
     responses.add(
         responses.GET,
-        f"{Env.current.web_api_endpoint}/tidy3d/tasks/abcd/detail",
+        f"{Env.current.web_api_endpoint}/tidy3d/tasks/{TASK_ID}/detail",
         json={
             "data": {
-                "taskId": "abcd",
-                "createdAt": "2022-01-01T00:00:00.000Z",
+                "taskId": TASK_ID,
+                "createdAt": CREATED_AT,
             }
         },
         status=200,
@@ -179,7 +176,7 @@ def mock_download(monkeypatch, set_api_key):
             f.write("0.3,5.7")
 
     monkeypatch.setattr("tidy3d.web.simulation_task.download_file", _mock_download)
-    download("abcd", FNAME_TMP)
+    download(TASK_ID, FNAME_TMP)
     with open(FNAME_TMP, "r") as f:
         assert f.read() == "0.3,5.7"
 
@@ -190,11 +187,11 @@ def mock_load(monkeypatch, set_api_key):
 
     responses.add(
         responses.GET,
-        f"{Env.current.web_api_endpoint}/tidy3d/tasks/abcd/detail",
+        f"{Env.current.web_api_endpoint}/tidy3d/tasks/{TASK_ID}/detail",
         json={
             "data": {
-                "taskId": "abcd",
-                "createdAt": "2022-01-01T00:00:00.000Z",
+                "taskId": TASK_ID,
+                "createdAt": CREATED_AT,
             }
         },
         status=200,
@@ -208,11 +205,11 @@ def mock_load(monkeypatch, set_api_key):
     # estimate cost
     responses.add(
         responses.GET,
-        f"{Env.current.web_api_endpoint}/tidy3d/tasks/abcd/detail",
+        f"{Env.current.web_api_endpoint}/tidy3d/tasks/{TASK_ID}/detail",
         json={
             "data": {
-                "taskId": "abcd",
-                "createdAt": "2022-01-01T00:00:00.000Z",
+                "taskId": TASK_ID,
+                "createdAt": CREATED_AT,
             }
         },
         status=200,
@@ -221,11 +218,11 @@ def mock_load(monkeypatch, set_api_key):
 
 responses.add(
     responses.POST,
-    f"{Env.current.web_api_endpoint}/tidy3d/tasks/abcd/metadata",
+    f"{Env.current.web_api_endpoint}/tidy3d/tasks/{TASK_ID}/metadata",
     json={
         "data": {
             "flex_unit": 11.11,
-            "createdAt": "2022-01-01T00:00:00.000Z",
+            "createdAt": CREATED_AT,
         }
     },
     status=200,
@@ -246,17 +243,17 @@ def mock_webapi(mock_upload, mock_get_info, mock_start, mock_monitor, mock_downl
 @responses.activate
 def test_upload(mock_upload):
     sim = make_sim()
-    assert upload(sim, "test task", "test webapi folder")
+    assert upload(sim, TASK_NAME, PROJECT_NAME)
 
 
 @responses.activate
 def test_get_info(mock_get_info):
-    assert get_info("abcd").taskId == "abcd"
+    assert get_info(TASK_ID).taskId == TASK_ID
 
 
 @responses.activate
 def test_start(mock_start):
-    start("1234")
+    start(TASK_ID)
 
 
 @responses.activate
@@ -277,7 +274,7 @@ def test_get_run_info(monkeypatch):
         json={
             "data": {
                 "taskId": "3eb06d16-208b-487b-864b-e9b1d3e010a7",
-                "createdAt": "2022-01-01T00:00:00.000Z",
+                "createdAt": CREATED_AT,
             }
         },
         status=200,
@@ -287,7 +284,7 @@ def test_get_run_info(monkeypatch):
 
 @responses.activate
 def test_download(mock_download):
-    download("abcd", FNAME_TMP)
+    download(TASK_ID, FNAME_TMP)
     with open(FNAME_TMP, "r") as f:
         assert f.read() == "0.3,5.7"
 
@@ -296,11 +293,11 @@ def test_download(mock_download):
 def _test_load(mock_load):
     responses.add(
         responses.GET,
-        f"{Env.current.web_api_endpoint}/tidy3d/tasks/abcd/detail",
+        f"{Env.current.web_api_endpoint}/tidy3d/tasks/{TASK_ID}/detail",
         json={
             "data": {
-                "taskId": "abcd",
-                "createdAt": "2022-01-01T00:00:00.000Z",
+                "taskId": TASK_ID,
+                "createdAt": CREATED_AT,
             }
         },
         status=200,
@@ -310,18 +307,18 @@ def _test_load(mock_load):
         pass
 
     monkeypatch.setattr("tidy3d.web.simulation_task.download_file", mock_download)
-    load("abcd", "data/monitor_data.hdf5")
+    load(TASK_ID, "tmp/monitor_data.hdf5")
 
 
 @responses.activate
 def test_delete(set_api_key):
     responses.add(
         responses.GET,
-        f"{Env.current.web_api_endpoint}/tidy3d/tasks/abcd/detail",
+        f"{Env.current.web_api_endpoint}/tidy3d/tasks/{TASK_ID}/detail",
         json={
             "data": {
-                "taskId": "abcd",
-                "createdAt": "2022-01-01T00:00:00.000Z",
+                "taskId": TASK_ID,
+                "createdAt": CREATED_AT,
             }
         },
         status=200,
@@ -329,55 +326,55 @@ def test_delete(set_api_key):
 
     responses.add(
         responses.DELETE,
-        f"{Env.current.web_api_endpoint}/tidy3d/tasks/abcd",
+        f"{Env.current.web_api_endpoint}/tidy3d/tasks/{TASK_ID}",
         json={
             "data": {
-                "taskId": "abcd",
-                "createdAt": "2022-01-01T00:00:00.000Z",
+                "taskId": TASK_ID,
+                "createdAt": CREATED_AT,
             }
         },
         status=200,
     )
 
-    assert delete("abcd").taskId == "abcd"
+    assert delete(TASK_ID).taskId == TASK_ID
 
 
 @responses.activate
 def test_estimate_cost(set_api_key):
     responses.add(
         responses.GET,
-        f"{Env.current.web_api_endpoint}/tidy3d/tasks/abcd/detail",
+        f"{Env.current.web_api_endpoint}/tidy3d/tasks/{TASK_ID}/detail",
         json={
             "data": {
-                "taskId": "abcd",
-                "createdAt": "2022-01-01T00:00:00.000Z",
+                "taskId": TASK_ID,
+                "createdAt": CREATED_AT,
             }
         },
         status=200,
     )
     responses.add(
         responses.POST,
-        f"{Env.current.web_api_endpoint}/tidy3d/tasks/abcd/metadata",
+        f"{Env.current.web_api_endpoint}/tidy3d/tasks/{TASK_ID}/metadata",
         json={
             "data": {
                 "flex_unit": 11.11,
-                "createdAt": "2022-01-01T00:00:00.000Z",
+                "createdAt": CREATED_AT,
             }
         },
         status=200,
     )
-    assert estimate_cost("abcd") == 11.11
+    assert estimate_cost(TASK_ID) == 11.11
 
 
 @responses.activate
 def test_download_json(monkeypatch):
     responses.add(
         responses.GET,
-        f"{Env.current.web_api_endpoint}/tidy3d/tasks/abcd/detail",
+        f"{Env.current.web_api_endpoint}/tidy3d/tasks/{TASK_ID}/detail",
         json={
             "data": {
-                "taskId": "abcd",
-                "createdAt": "2022-01-01T00:00:00.000Z",
+                "taskId": TASK_ID,
+                "createdAt": CREATED_AT,
             }
         },
         status=200,
@@ -390,7 +387,7 @@ def test_download_json(monkeypatch):
 
     monkeypatch.setattr("tidy3d.web.simulation_task.download_file", mock_download)
 
-    download_json("abcd", FNAME_TMP)
+    download_json(TASK_ID, FNAME_TMP)
     with open(FNAME_TMP, "r") as f:
         assert f.read() == "0.3,5.7"
 
@@ -399,11 +396,11 @@ def test_download_json(monkeypatch):
 def test_load_simulation(monkeypatch):
     responses.add(
         responses.GET,
-        f"{Env.current.web_api_endpoint}/tidy3d/tasks/abcd/detail",
+        f"{Env.current.web_api_endpoint}/tidy3d/tasks/{TASK_ID}/detail",
         json={
             "data": {
-                "taskId": "abcd",
-                "createdAt": "2022-01-01T00:00:00.000Z",
+                "taskId": TASK_ID,
+                "createdAt": CREATED_AT,
             }
         },
         status=200,
@@ -416,18 +413,18 @@ def test_load_simulation(monkeypatch):
         "tidy3d.web.simulation_task.SimulationTask.get_simulation_json", mock_download
     )
 
-    assert load_simulation("abcd", FNAME_TMP + ".json")
+    assert load_simulation(TASK_ID, FNAME_TMP + ".json")
 
 
 @responses.activate
 def test_download_log(monkeypatch):
     responses.add(
         responses.GET,
-        f"{Env.current.web_api_endpoint}/tidy3d/tasks/abcd/detail",
+        f"{Env.current.web_api_endpoint}/tidy3d/tasks/{TASK_ID}/detail",
         json={
             "data": {
-                "taskId": "abcd",
-                "createdAt": "2022-01-01T00:00:00.000Z",
+                "taskId": TASK_ID,
+                "createdAt": CREATED_AT,
             }
         },
         status=200,
@@ -440,7 +437,7 @@ def test_download_log(monkeypatch):
 
     monkeypatch.setattr("tidy3d.web.simulation_task.download_file", mock)
 
-    download_log("abcd", FNAME_TMP)
+    download_log(TASK_ID, FNAME_TMP)
     with open(FNAME_TMP, "r") as f:
         assert f.read() == "0.3,5.7"
 
@@ -450,24 +447,24 @@ def test_delete_old(set_api_key):
     responses.add(
         responses.GET,
         f"{Env.current.web_api_endpoint}/tidy3d/project",
-        match=[matchers.query_param_matcher({"projectName": "default"})],
-        json={"data": {"projectId": "abcd", "projectName": "default"}},
+        match=[matchers.query_param_matcher({"projectName": PROJECT_NAME})],
+        json={"data": {"projectId": TASK_ID, "projectName": PROJECT_NAME}},
         status=200,
     )
     responses.add(
         responses.GET,
-        f"{Env.current.web_api_endpoint}/tidy3d/projects/abcd/tasks",
-        json={"data": [{"taskId": "abcd", "createdAt": "2022-01-01T00:00:00.000Z"}]},
+        f"{Env.current.web_api_endpoint}/tidy3d/projects/{TASK_ID}/tasks",
+        json={"data": [{"taskId": TASK_ID, "createdAt": CREATED_AT}]},
         status=200,
     )
 
     responses.add(
         responses.DELETE,
-        f"{Env.current.web_api_endpoint}/tidy3d/tasks/abcd",
+        f"{Env.current.web_api_endpoint}/tidy3d/tasks/{TASK_ID}",
         json={
             "data": {
-                "taskId": "abcd",
-                "createdAt": "2022-01-01T00:00:00.000Z",
+                "taskId": TASK_ID,
+                "createdAt": CREATED_AT,
             }
         },
         status=200,
@@ -482,51 +479,54 @@ def test_get_tasks(set_api_key):
     responses.add(
         responses.GET,
         f"{Env.current.web_api_endpoint}/tidy3d/project",
-        match=[matchers.query_param_matcher({"projectName": "default"})],
-        json={"data": {"projectId": "abcd", "projectName": "default"}},
+        match=[matchers.query_param_matcher({"projectName": PROJECT_NAME})],
+        json={"data": {"projectId": TASK_ID, "projectName": PROJECT_NAME}},
         status=200,
     )
     responses.add(
         responses.GET,
-        f"{Env.current.web_api_endpoint}/tidy3d/projects/abcd/tasks",
-        json={"data": [{"taskId": "abcd", "createdAt": "2022-01-01T00:00:00.000Z"}]},
+        f"{Env.current.web_api_endpoint}/tidy3d/projects/{TASK_ID}/tasks",
+        json={"data": [{"taskId": TASK_ID, "createdAt": CREATED_AT}]},
         status=200,
     )
 
-    assert get_tasks(1)[0]["task_id"] == "abcd"
+    assert get_tasks(1)[0]["task_id"] == TASK_ID
 
 
 @responses.activate
-def test_run(mock_webapi):
+def test_run(mock_webapi, monkeypatch):
     sim = make_sim()
-    assert run(sim, task_name="test task", folder_name="test webapi folder")
+    monkeypatch.setattr("tidy3d.web.webapi.load", lambda *args, **kwargs: True)
+    assert run(sim, task_name=TASK_NAME, folder_name=PROJECT_NAME, path=FNAME_TMP)
 
 
 @responses.activate
 def test_monitor(mock_monitor):
-    monitor("abcd", verbose=True)
-    monitor("abcd", verbose=False)
+    monitor(TASK_ID, verbose=True)
+    monitor(TASK_ID, verbose=False)
 
 
 """ Containers """
 
 
 @responses.activate
-def test_job(mock_webapi):
+def test_job(mock_webapi, monkeypatch):
 
+    monkeypatch.setattr("tidy3d.web.container.Job.load", lambda *args, **kwargs: True)
     sim = make_sim()
-    j = Job(simulation=sim, task_name="test task", folder_name="test webapi folder")
+    j = Job(simulation=sim, task_name=TASK_NAME, folder_name=PROJECT_NAME)
 
-    sim_data = j.run()
+    sim_data = j.run(path=FNAME_TMP)
     j.status
     j.get_info()
-    j.download
+    # j.download
     j.delete
 
 
 @pytest.fixture
 def mock_job_status(monkeypatch):
     monkeypatch.setattr("tidy3d.web.container.Job.status", property(lambda self: "success"))
+    monkeypatch.setattr("tidy3d.web.container.Job.load", lambda *args, **kwargs: True)
 
 
 @responses.activate
@@ -535,9 +535,9 @@ def test_batch(mock_webapi, mock_job_status):
     # monkeypatch.setattr("tidy3d.web.container.Batch.monitor", lambda self: time.sleep(0.1))
     # monkeypatch.setattr("tidy3d.web.container.Job.status", property(lambda self: "success"))
 
-    sims = {"test task": make_sim()}
-    b = Batch(simulations=sims, folder_name="test webapi folder")
-    batch_data = b.run()
+    sims = {TASK_NAME: make_sim()}
+    b = Batch(simulations=sims, folder_name=PROJECT_NAME)
+    batch_data = b.run(path_dir="tests/tmp/")
 
 
 """ Async """
@@ -547,8 +547,8 @@ def test_batch(mock_webapi, mock_job_status):
 def test_async(mock_webapi, mock_job_status):
 
     # monkeypatch.setattr("tidy3d.web.container.Job.status", property(lambda self: "success"))
-    sims = {"test task": make_sim()}
-    batch_data = run_async(sims, folder_name="test webapi folder")
+    sims = {TASK_NAME: make_sim()}
+    batch_data = run_async(sims, folder_name=PROJECT_NAME)
 
 
 """ Main """
@@ -557,8 +557,8 @@ def test_async(mock_webapi, mock_job_status):
 @responses.activate
 def test_main(mock_webapi, monkeypatch, mock_job_status):
 
-    # sims = {"test task": make_sim()}
-    # batch_data = run_async(sims, folder_name="test webapi folder")
+    # sims = {TASK_NAME: make_sim()}
+    # batch_data = run_async(sims, folder_name=PROJECT_NAME)
 
     def save_sim_to_path(path: str) -> None:
         sim = Simulation(size=(1, 1, 1), grid_spec=td.GridSpec.auto(wavelength=1.0), run_time=1e-12)
@@ -567,8 +567,8 @@ def test_main(mock_webapi, monkeypatch, mock_job_status):
     def mock_get_info(task_id):
         return TaskInfo(
             status="success",
-            taskName="test task",
-            taskId="abcd",
+            taskName=TASK_NAME,
+            taskId=TASK_ID,
             realFlexUnit=1.0,
             s3Storage=1.0,
             estFlexUnit=1.0,
@@ -583,9 +583,9 @@ def test_main(mock_webapi, monkeypatch, mock_job_status):
         [
             path,
             "--task_name",
-            "test task",
+            TASK_NAME,
             "--folder_name",
-            "test webapi folder",
+            PROJECT_NAME,
             "--inspect_credits",
             "--inspect_sim",
         ]
@@ -597,9 +597,9 @@ def test_main(mock_webapi, monkeypatch, mock_job_status):
             [
                 path,
                 "--task_name",
-                "test task",
+                TASK_NAME,
                 "--folder_name",
-                "test webapi folder",
+                PROJECT_NAME,
                 "--inspect_credits",
             ]
         )
@@ -609,9 +609,9 @@ def test_main(mock_webapi, monkeypatch, mock_job_status):
             [
                 path,
                 "--task_name",
-                "test task",
+                TASK_NAME,
                 "--folder_name",
-                "test webapi folder",
+                PROJECT_NAME,
                 "--inspect_sim",
             ]
         )
