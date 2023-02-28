@@ -1,11 +1,9 @@
 """Tidy3d abstraction types for the webapi."""
+from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import TypeVar
 
 from pydantic import BaseModel
-
-T = TypeVar("T", bound="Tidy3DResource")
 
 
 class Tidy3DResource(BaseModel, ABC):
@@ -13,7 +11,7 @@ class Tidy3DResource(BaseModel, ABC):
 
     @classmethod
     @abstractmethod
-    def get(cls, *args, **kwargs) -> T:
+    def get(cls, *args, **kwargs) -> Tidy3DResource:
         """Get a resource from the server."""
 
 
@@ -22,7 +20,7 @@ class ResourceLifecycle(Tidy3DResource, ABC):
 
     @classmethod
     @abstractmethod
-    def create(cls, *args, **kwargs) -> T:
+    def create(cls, *args, **kwargs) -> Tidy3DResource:
         """Create a new resource and return it."""
 
     @abstractmethod
@@ -38,13 +36,10 @@ class Submittable(BaseModel, ABC):
         """Submit the task to the webservice."""
 
 
-Q = TypeVar("Q", bound="Queryable")
-
-
 class Queryable(BaseModel, ABC):
     """Abstract base class / template for a webservice that implements a query method."""
 
     @classmethod
     @abstractmethod
-    def list(cls, *args, **kwargs) -> [Q]:
+    def list(cls, *args, **kwargs) -> [Queryable]:
         """List all resources of this type."""

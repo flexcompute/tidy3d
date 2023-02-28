@@ -1,6 +1,6 @@
-"""
-Tidy3d webapi types
-"""
+"""Tidy3d webapi types."""
+from __future__ import annotations
+
 import os.path
 import tempfile
 from datetime import datetime
@@ -14,7 +14,7 @@ from .cache import FOLDER_CACHE
 from .http_management import http
 from .s3utils import download_file, upload_file, upload_string
 from .tidy3d_types import Queryable, ResourceLifecycle, Submittable
-from .tidy3d_types import T, Tidy3DResource
+from .tidy3d_types import Tidy3DResource
 
 SIMULATION_JSON = "simulation.json"
 SIMULATION_HDF5 = "output/monitor_data.hdf5"
@@ -26,9 +26,9 @@ SIM_FILE_HDF5 = "simulation.hdf5"
 class Folder(Tidy3DResource, Queryable, extra=Extra.allow):
     """Tidy3D Folder."""
 
-    folder_id: str = Field(..., title="folder id", description="folder id", alias="projectId")
+    folder_id: str = Field(..., title="Folder id", description="folder id", alias="projectId")
     folder_name: str = Field(
-        ..., title="folder name", description="folder name", alias="projectName"
+        ..., title="Folder name", description="folder name", alias="projectName"
     )
 
     # pylint: disable=arguments-differ
@@ -94,12 +94,12 @@ class Folder(Tidy3DResource, Queryable, extra=Extra.allow):
 
         http.delete(f"tidy3d/projects/{self.folder_id}")
 
-    def list_tasks(self) -> [T]:
+    def list_tasks(self) -> List[Tidy3DResource]:
         """List all tasks in this folder.
 
         Returns
         -------
-        tasks : [SimulationTask]
+        tasks : List[:class:`.SimulationTask`]
             List of tasks in this folder
         """
         resp = http.get(f"tidy3d/projects/{self.folder_id}/tasks")
@@ -153,7 +153,7 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
     @classmethod
     def create(
         cls, simulation: Simulation, task_name: str, folder_name="default", call_back_url=None
-    ) -> T:
+    ) -> SimulationTask:
         """Create a new task on the server.
 
         Parameters
@@ -191,7 +191,7 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
 
     # pylint: disable=arguments-differ
     @classmethod
-    def get(cls, task_id: str) -> T:
+    def get(cls, task_id: str) -> SimulationTask:
         """Get task from the server by id.
 
         Parameters
@@ -201,8 +201,8 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
 
         Returns
         -------
-        :class:`SimulationTask`
-            :class:`SimulationTask` object containing info about status,
+        :class:`.SimulationTask`
+            :class:`.SimulationTask` object containing info about status,
              size, credits of task and others.
         """
         resp = http.get(f"tidy3d/tasks/{task_id}/detail")
