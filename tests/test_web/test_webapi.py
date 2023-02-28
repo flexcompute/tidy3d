@@ -1,5 +1,5 @@
 import tempfile
-
+import pytest
 import responses
 import tidy3d as td
 
@@ -29,8 +29,16 @@ def make_sim():
     return td.Simulation(size=(1, 1, 1), grid_spec=td.GridSpec.auto(wavelength=1.0), run_time=1e-12)
 
 
+@pytest.fixture
+def set_api_key(monkeypatch):
+    """Set the api key."""
+    import tidy3d.web.http_management as http_module
+
+    monkeypatch.setattr(http_module, "api_key", lambda: "apikey")
+
+
 @responses.activate
-def test_upload(monkeypatch):
+def test_upload(monkeypatch, set_api_key):
     responses.add(
         responses.GET,
         f"{Env.current.web_api_endpoint}/tidy3d/project",
@@ -63,7 +71,7 @@ def test_upload(monkeypatch):
 
 
 @responses.activate
-def test_get_info():
+def test_get_info(set_api_key):
     responses.add(
         responses.GET,
         f"{Env.current.web_api_endpoint}/tidy3d/tasks/abcd/detail",
@@ -79,7 +87,7 @@ def test_get_info():
 
 
 @responses.activate
-def test_start():
+def test_start(set_api_key):
     responses.add(
         responses.GET,
         f"{Env.current.web_api_endpoint}/tidy3d/tasks/1234/detail",
@@ -184,7 +192,7 @@ def _test_load(monkeypatch):
 
 
 @responses.activate
-def test_delete():
+def test_delete(set_api_key):
     responses.add(
         responses.GET,
         f"{Env.current.web_api_endpoint}/tidy3d/tasks/abcd/detail",
@@ -213,7 +221,7 @@ def test_delete():
 
 
 @responses.activate
-def test_estimate_cost():
+def test_estimate_cost(set_api_key):
     responses.add(
         responses.GET,
         f"{Env.current.web_api_endpoint}/tidy3d/tasks/abcd/detail",
@@ -315,7 +323,7 @@ def test_download_log(monkeypatch):
 
 
 @responses.activate
-def test_delete_old():
+def test_delete_old(set_api_key):
     responses.add(
         responses.GET,
         f"{Env.current.web_api_endpoint}/tidy3d/project",
@@ -346,7 +354,8 @@ def test_delete_old():
 
 
 @responses.activate
-def test_get_tasks():
+def test_get_tasks(set_api_key):
+
     responses.add(
         responses.GET,
         f"{Env.current.web_api_endpoint}/tidy3d/project",
