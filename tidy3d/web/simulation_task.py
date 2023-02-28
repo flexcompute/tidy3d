@@ -13,8 +13,8 @@ from tidy3d.version import __version__
 from .cache import FOLDER_CACHE
 from .http_management import http
 from .s3utils import download_file, upload_file, upload_string
-from .tidy3d_types import Queryable, ResourceLifecycle, Submittable
-from .tidy3d_types import Tidy3DResource
+from .types import Queryable, ResourceLifecycle, Submittable
+from .types import Tidy3DResource
 
 SIMULATION_JSON = "simulation.json"
 SIMULATION_HDF5 = "output/monitor_data.hdf5"

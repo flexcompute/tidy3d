@@ -3,26 +3,20 @@ import pytest
 import responses
 import tidy3d as td
 import os
+import time
 
 from responses import matchers
 
 from tidy3d import Simulation
 from tidy3d.web.environment import Env
-from tidy3d.web.webapi import (
-    delete,
-    delete_old,
-    download,
-    download_json,
-    download_log,
-    estimate_cost,
-    get_info,
-    get_run_info,
-    get_tasks,
-    load,
-    load_simulation,
-    start,
-    upload,
-)
+from tidy3d.web.webapi import delete, delete_old, download, download_json, run
+from tidy3d.web.webapi import download_log, estimate_cost, get_info, get_run_info, get_tasks
+from tidy3d.web.webapi import load, load_simulation, start, upload, monitor
+from tidy3d.web.container import Job, Batch
+from tidy3d.web.task import TaskInfo
+from tidy3d.web.queue import run_async
+
+from tidy3d.__main__ import main
 
 # file to dump data for tests
 FNAME_TMP = "data/web_test_tmp"
@@ -43,7 +37,8 @@ def set_api_key(monkeypatch):
 
 @pytest.fixture
 def mock_upload(monkeypatch, set_api_key):
-    """Uses fake upload call."""
+    """Mocks webapi.uupload."""
+
     responses.add(
         responses.GET,
         f"{Env.current.web_api_endpoint}/tidy3d/project",
@@ -72,41 +67,10 @@ def mock_upload(monkeypatch, set_api_key):
     monkeypatch.setattr("tidy3d.web.simulation_task.upload_string", mock_download)
 
 
-@responses.activate
-def test_upload(monkeypatch, set_api_key):
-    responses.add(
-        responses.GET,
-        f"{Env.current.web_api_endpoint}/tidy3d/project",
-        match=[matchers.query_param_matcher({"projectName": "test webapi folder"})],
-        json={"data": {"projectId": "1234", "projectName": "test webapi folder"}},
-        status=200,
-    )
+@pytest.fixture
+def mock_get_info(monkeypatch, set_api_key):
+    """Mocks webapi.get_info."""
 
-    responses.add(
-        responses.POST,
-        f"{Env.current.web_api_endpoint}/tidy3d/projects/1234/tasks",
-        match=[matchers.json_params_matcher({"task_name": "test task", "call_back_url": None})],
-        json={
-            "data": {
-                "taskId": "1234",
-                "taskName": "test task",
-                "createdAt": "2022-01-01T00:00:00.000Z",
-            }
-        },
-        status=200,
-    )
-
-    def mock_download(*args, **kwargs):
-        pass
-
-    monkeypatch.setattr("tidy3d.web.simulation_task.upload_string", mock_download)
-
-    sim = make_sim()
-    assert upload(sim, "test task", "test webapi folder")
-
-
-@responses.activate
-def test_get_info(set_api_key):
     responses.add(
         responses.GET,
         f"{Env.current.web_api_endpoint}/tidy3d/tasks/abcd/detail",
@@ -118,11 +82,12 @@ def test_get_info(set_api_key):
         },
         status=200,
     )
-    assert get_info("abcd").taskId == "abcd"
 
 
-@responses.activate
-def test_start(set_api_key):
+@pytest.fixture
+def mock_start(monkeypatch, set_api_key):
+    """Mocks webapi.start."""
+
     responses.add(
         responses.GET,
         f"{Env.current.web_api_endpoint}/tidy3d/tasks/1234/detail",
@@ -155,6 +120,142 @@ def test_start(set_api_key):
         },
         status=200,
     )
+
+
+# @pytest.fixture
+# def mock_monitor(monkeypatch):
+#     """Mocks webapi.monitor."""
+#     monkeypatch.setattr("tidy3d.web.webapi.monitor", lambda task_id, verbose: time.sleep(0.1))
+
+
+@pytest.fixture
+def mock_monitor(monkeypatch):
+
+    status_count = [0]
+    statuses = ("upload", "running", "running", "running", "running", "running", "success")
+
+    def mock_get_info(task_id):
+
+        current_count = min(status_count[0], len(statuses) - 1)
+        current_status = statuses[current_count]
+        status_count[0] += 1
+        return TaskInfo(
+            status=current_status, taskName="test task", taskId=task_id, realFlexUnit=1.0
+        )
+
+    run_count = [0]
+    perc_dones = (1, 10, 20, 30, 100)
+
+    def mock_get_run_info(task_id):
+        current_count = min(run_count[0], len(perc_dones) - 1)
+        perc_done = perc_dones[current_count]
+        run_count[0] += 1
+        return perc_done, 1
+
+    monkeypatch.setattr("tidy3d.web.webapi.REFRESH_TIME", 0.00001)
+    monkeypatch.setattr("tidy3d.web.webapi.RUN_REFRESH_TIME", 0.00001)
+    monkeypatch.setattr("tidy3d.web.webapi.get_info", mock_get_info)
+    monkeypatch.setattr("tidy3d.web.webapi.get_run_info", mock_get_run_info)
+
+
+@pytest.fixture
+def mock_download(monkeypatch, set_api_key):
+    """Mocks webapi.download."""
+    responses.add(
+        responses.GET,
+        f"{Env.current.web_api_endpoint}/tidy3d/tasks/abcd/detail",
+        json={
+            "data": {
+                "taskId": "abcd",
+                "createdAt": "2022-01-01T00:00:00.000Z",
+            }
+        },
+        status=200,
+    )
+
+    def _mock_download(*args, **kwargs):
+        file_path = kwargs["to_file"]
+        with open(file_path, "w") as f:
+            f.write("0.3,5.7")
+
+    monkeypatch.setattr("tidy3d.web.simulation_task.download_file", _mock_download)
+    download("abcd", FNAME_TMP)
+    with open(FNAME_TMP, "r") as f:
+        assert f.read() == "0.3,5.7"
+
+
+@pytest.fixture
+def mock_load(monkeypatch, set_api_key):
+    """Mocks webapi.load"""
+
+    responses.add(
+        responses.GET,
+        f"{Env.current.web_api_endpoint}/tidy3d/tasks/abcd/detail",
+        json={
+            "data": {
+                "taskId": "abcd",
+                "createdAt": "2022-01-01T00:00:00.000Z",
+            }
+        },
+        status=200,
+    )
+
+    def _mock_download(*args, **kwargs):
+        pass
+
+    monkeypatch.setattr("tidy3d.web.simulation_task.download_file", _mock_download)
+
+    # estimate cost
+    responses.add(
+        responses.GET,
+        f"{Env.current.web_api_endpoint}/tidy3d/tasks/abcd/detail",
+        json={
+            "data": {
+                "taskId": "abcd",
+                "createdAt": "2022-01-01T00:00:00.000Z",
+            }
+        },
+        status=200,
+    )
+
+
+responses.add(
+    responses.POST,
+    f"{Env.current.web_api_endpoint}/tidy3d/tasks/abcd/metadata",
+    json={
+        "data": {
+            "flex_unit": 11.11,
+            "createdAt": "2022-01-01T00:00:00.000Z",
+        }
+    },
+    status=200,
+)
+
+
+@pytest.fixture
+def mock_get_run_info(monkeypatch, set_api_key):
+    """Mocks webapi.get_run_info"""
+    monkeypatch.setattr("tidy3d.web.webapi.get_run_info", lambda task_id: (100, 0))
+
+
+@pytest.fixture
+def mock_webapi(mock_upload, mock_get_info, mock_start, mock_monitor, mock_download, mock_load):
+    """Mocks all webapi operation."""
+
+
+@responses.activate
+def test_upload(mock_upload):
+    sim = make_sim()
+    assert upload(sim, "test task", "test webapi folder")
+
+
+@responses.activate
+def test_get_info(mock_get_info):
+    assert get_info("abcd").taskId == "abcd"
+
+
+@responses.activate
+def test_start(mock_start):
     start("1234")
 
 
@@ -185,32 +286,14 @@ def test_get_run_info(monkeypatch):
 
 
 @responses.activate
-def test_download(monkeypatch):
-    responses.add(
-        responses.GET,
-        f"{Env.current.web_api_endpoint}/tidy3d/tasks/abcd/detail",
-        json={
-            "data": {
-                "taskId": "abcd",
-                "createdAt": "2022-01-01T00:00:00.000Z",
-            }
-        },
-        status=200,
-    )
-
-    def mock_download(*args, **kwargs):
-        file_path = kwargs["to_file"]
-        with open(file_path, "w") as f:
-            f.write("0.3,5.7")
-
-    monkeypatch.setattr("tidy3d.web.simulation_task.download_file", mock_download)
+def test_download(mock_download):
     download("abcd", FNAME_TMP)
     with open(FNAME_TMP, "r") as f:
         assert f.read() == "0.3,5.7"
 
 
 @responses.activate
-def _test_load(monkeypatch):
+def _test_load(mock_load):
     responses.add(
         responses.GET,
         f"{Env.current.web_api_endpoint}/tidy3d/tasks/abcd/detail",
@@ -411,3 +494,124 @@ def test_get_tasks(set_api_key):
     )
 
     assert get_tasks(1)[0]["task_id"] == "abcd"
+
+
+@responses.activate
+def test_run(mock_webapi):
+    sim = make_sim()
+    assert run(sim, task_name="test task", folder_name="test webapi folder")
+
+
+@responses.activate
+def test_monitor(mock_monitor):
+    monitor("abcd", verbose=True)
+    monitor("abcd", verbose=False)
+
+
+""" Containers """
+
+
+@responses.activate
+def test_job(mock_webapi):
+
+    sim = make_sim()
+    j = Job(simulation=sim, task_name="test task", folder_name="test webapi folder")
+
+    sim_data = j.run()
+    j.status
+    j.get_info()
+    j.download
+    j.delete
+
+
+@pytest.fixture
+def mock_job_status(monkeypatch):
+    monkeypatch.setattr("tidy3d.web.container.Job.status", property(lambda self: "success"))
+
+
+@responses.activate
+def test_batch(mock_webapi, mock_job_status):
+
+    # monkeypatch.setattr("tidy3d.web.container.Batch.monitor", lambda self: time.sleep(0.1))
+    # monkeypatch.setattr("tidy3d.web.container.Job.status", property(lambda self: "success"))
+
+    sims = {"test task": make_sim()}
+    b = Batch(simulations=sims, folder_name="test webapi folder")
+    batch_data = b.run()
+
+
+""" Async """
+
+
+@responses.activate
+def test_async(mock_webapi, mock_job_status):
+
+    # monkeypatch.setattr("tidy3d.web.container.Job.status", property(lambda self: "success"))
+    sims = {"test task": make_sim()}
+    batch_data = run_async(sims, folder_name="test webapi folder")
+
+
+""" Main """
+
+
+@responses.activate
+def test_main(mock_webapi, monkeypatch, mock_job_status):
+
+    # sims = {"test task": make_sim()}
+    # batch_data = run_async(sims, folder_name="test webapi folder")
+
+    def save_sim_to_path(path: str) -> None:
+        sim = Simulation(size=(1, 1, 1), grid_spec=td.GridSpec.auto(wavelength=1.0), run_time=1e-12)
+        sim.to_file(path)
+
+    def mock_get_info(task_id):
+        return TaskInfo(
+            status="success",
+            taskName="test task",
+            taskId="abcd",
+            realFlexUnit=1.0,
+            s3Storage=1.0,
+            estFlexUnit=1.0,
+        )
+
+    monkeypatch.setattr("tidy3d.web.webapi.get_info", mock_get_info)
+    monkeypatch.setattr("builtins.input", lambda _: "Y")
+
+    path = f"tests/tmp/sim.json"
+    save_sim_to_path(path)
+    main(
+        [
+            path,
+            "--task_name",
+            "test task",
+            "--folder_name",
+            "test webapi folder",
+            "--inspect_credits",
+            "--inspect_sim",
+        ]
+    )
+
+    monkeypatch.setattr("builtins.input", lambda _: "N")
+    with pytest.raises(SystemExit):
+        main(
+            [
+                path,
+                "--task_name",
+                "test task",
+                "--folder_name",
+                "test webapi folder",
+                "--inspect_credits",
+            ]
+        )
+
+    with pytest.raises(SystemExit):
+        main(
+            [
+                path,
+                "--task_name",
+                "test task",
+                "--folder_name",
+                "test webapi folder",
+                "--inspect_sim",
+            ]
+        )
