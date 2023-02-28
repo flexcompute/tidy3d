@@ -247,44 +247,35 @@ def monitor(task_id: TaskId, verbose: bool = True) -> None:
     task_info = get_info(task_id)
     task_name = task_info.taskName
 
-    status = None
-
     break_statuses = ("success", "error", "diverged", "deleted", "draft")
 
-    show_cost = True
-
-    def get_status(show_cost=False):
-        """Get status for this task (called many times below, so put into function).
-        If the estimated cost is available, it is displayed if requested."""
+    def get_status() -> str:
+        """Get status for this task."""
         task_info = get_info(task_id)
         status = task_info.status
         if status == "visualize":
             return "success"
         if status == "error":
             raise WebError("Error running task!")
+        return status
 
-        # log the maximum flex unit cost
-        est_flex_unit = task_info.estFlexUnit
-        if show_cost is True and est_flex_unit is not None and est_flex_unit > 0:
-            if verbose:
-                log.info(f"Maximum FlexUnit cost: {est_flex_unit:1.3f}")
-            # Set show_cost to False so that it is only shown once during the run
-            show_cost = False
+    def get_estimated_cost() -> float:
+        """Get estimated cost, if None, is not ready."""
+        task_info = get_info(task_id)
+        return task_info.estFlexUnit
 
-        return status, show_cost
-
-    def monitor_run(show_cost: bool):
+    def monitor_preprocess() -> None:
         """Periodically check the status."""
-        status, show_cost = get_status(show_cost=show_cost)
+        status = get_status()
         while status not in break_statuses and status != "running":
-            new_status, show_cost = get_status(show_cost=show_cost)
+            new_status = get_status()
             if new_status != status:
                 status = new_status
                 if verbose and status != "running":
                     log.info(f"status = {status}")
             time.sleep(REFRESH_TIME)
 
-    status, show_cost = get_status(show_cost=show_cost)
+    status = get_status()
 
     if verbose:
         console = Console()
@@ -297,35 +288,36 @@ def monitor(task_id: TaskId, verbose: bool = True) -> None:
     # preprocessing
     if verbose:
         with console.status(f"[bold green]Starting '{task_name}'...", spinner="runner"):
-            monitor_run(show_cost=True)
+            monitor_preprocess()
     else:
-        monitor_run(show_cost=True)
+        monitor_preprocess()
 
-    # startup phase where run info is not available
+    # if the estimated cost is ready, print it
     if verbose:
+        est_flex_unit = get_estimated_cost()
+        if est_flex_unit is not None and est_flex_unit > 0:
+            log.info(f"Maximum FlexUnit cost: {est_flex_unit:1.3f}")
         log.info("starting up solver")
 
-    while get_run_info(task_id)[0] is None and status == "running":
-        status, show_cost = get_status(show_cost=show_cost)
+    # while running but before the percentage done is available, keep waiting
+    while get_run_info(task_id)[0] is None and get_status() == "running":
         time.sleep(REFRESH_TIME)
 
-    # phase where run % info is available
+    # while running but percentage done is available
     if verbose:
+
+        # verbose case, update progressbar
         log.info("running solver")
-
         with Progress(console=console) as progress:
-            pbar_pd = progress.add_task("% done", total=100)
 
+            pbar_pd = progress.add_task("% done", total=100)
             perc_done, _ = get_run_info(task_id)
 
-            while perc_done is not None and perc_done < 100 and status == "running":
-                status, show_cost = get_status(show_cost=show_cost)
+            while perc_done is not None and perc_done < 100 and get_status() == "running":
                 perc_done, field_decay = get_run_info(task_id)
+                new_description = f"% done (field decay = {field_decay:.2e})"
+                progress.update(pbar_pd, completed=perc_done, description=new_description)
                 time.sleep(1.0)
-
-                if verbose:
-                    new_description = f"% done (field decay = {field_decay:.2e})"
-                    progress.update(pbar_pd, completed=perc_done, description=new_description)
 
             if perc_done is not None and perc_done < 100:
                 log.info("early shutoff detected, exiting.")
@@ -334,33 +326,28 @@ def monitor(task_id: TaskId, verbose: bool = True) -> None:
 
     else:
 
+        # non-verbose case, just keep checking until status is not running or perc_done >= 100
         perc_done, _ = get_run_info(task_id)
-
-        while perc_done is not None and perc_done < 100 and status == "running":
-            status, show_cost = get_status(show_cost=show_cost)
+        while perc_done is not None and perc_done < 100 and get_status() == "running":
             perc_done, field_decay = get_run_info(task_id)
             time.sleep(1.0)
 
-        if perc_done is not None and perc_done < 100:
-            log.info("early shutoff detected, exiting.")
-
-    # postprocessing
-    if verbose and status != "running":
-        log.info(f"status = {status}")
-
+    # post processing
     if verbose:
+
+        status = get_status()
+        if status != "running":
+            log.info(f"status = {status}")
+
         with console.status(f"[bold green]Finishing '{task_name}'...", spinner="runner"):
             while status not in break_statuses:
-                new_status, show_cost = get_status(show_cost=show_cost)
+                new_status = get_status()
                 if new_status != status:
                     status = new_status
                     log.info(f"status = {status}")
                 time.sleep(REFRESH_TIME)
     else:
-        while status not in break_statuses:
-            new_status, show_cost = get_status(show_cost=show_cost)
-            if new_status != status:
-                status = new_status
+        while get_status() not in break_statuses:
             time.sleep(REFRESH_TIME)
 
     # show final billed cost
