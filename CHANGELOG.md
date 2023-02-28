@@ -49,6 +49,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Issue a deprecation warning that `Geometry.intersections` will be renamed to `Geometry.intersections_plane` in 2.0.
 - Limit some warnings to only show for the first structure for which they are encountered.
 - Billed flex unit no longer shown at the end of `web.run` as it may take a few seconds until it is available. Instead, added a `web.real_cost(task_id)` function to get the cost after a task run.
+- Refactored `tidy3d.web` for more robustness and test coverage.
 
 ### Fixed
 - Progressbars always set to 100% when webapi functions are finished.
