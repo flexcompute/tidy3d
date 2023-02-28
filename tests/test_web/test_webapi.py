@@ -2,6 +2,7 @@ import tempfile
 import pytest
 import responses
 import tidy3d as td
+import os
 
 from responses import matchers
 
@@ -23,6 +24,9 @@ from tidy3d.web.webapi import (
     upload,
 )
 
+# file to dump data for tests
+FNAME_TMP = "data/web_test_tmp"
+
 
 def make_sim():
     """Makes a simulation."""
@@ -35,6 +39,37 @@ def set_api_key(monkeypatch):
     import tidy3d.web.http_management as http_module
 
     monkeypatch.setattr(http_module, "api_key", lambda: "apikey")
+
+
+@pytest.fixture
+def mock_upload(monkeypatch, set_api_key):
+    """Uses fake upload call."""
+    responses.add(
+        responses.GET,
+        f"{Env.current.web_api_endpoint}/tidy3d/project",
+        match=[matchers.query_param_matcher({"projectName": "test webapi folder"})],
+        json={"data": {"projectId": "1234", "projectName": "test webapi folder"}},
+        status=200,
+    )
+
+    responses.add(
+        responses.POST,
+        f"{Env.current.web_api_endpoint}/tidy3d/projects/1234/tasks",
+        match=[matchers.json_params_matcher({"task_name": "test task", "call_back_url": None})],
+        json={
+            "data": {
+                "taskId": "1234",
+                "taskName": "test task",
+                "createdAt": "2022-01-01T00:00:00.000Z",
+            }
+        },
+        status=200,
+    )
+
+    def mock_download(*args, **kwargs):
+        pass
+
+    monkeypatch.setattr("tidy3d.web.simulation_task.upload_string", mock_download)
 
 
 @responses.activate
@@ -127,6 +162,10 @@ def test_start(set_api_key):
 def test_get_run_info(monkeypatch):
     def mock(*args, **kwargs):
         file_path = kwargs["to_file"]
+
+        # make compatible with windows
+        # file_path_new = os.path.abspath(file_path)
+
         with open(file_path, "w") as f:
             f.write("0.3,5.7")
 
@@ -165,9 +204,9 @@ def test_download(monkeypatch):
             f.write("0.3,5.7")
 
     monkeypatch.setattr("tidy3d.web.simulation_task.download_file", mock_download)
-    with tempfile.NamedTemporaryFile() as f:
-        download("abcd", f.name)
-        assert f.read() == b"0.3,5.7"
+    download("abcd", FNAME_TMP)
+    with open(FNAME_TMP, "r") as f:
+        assert f.read() == "0.3,5.7"
 
 
 @responses.activate
@@ -267,9 +306,10 @@ def test_download_json(monkeypatch):
             f.write("0.3,5.7")
 
     monkeypatch.setattr("tidy3d.web.simulation_task.download_file", mock_download)
-    with tempfile.NamedTemporaryFile() as f:
-        download_json("abcd", f.name)
-        assert f.read() == b"0.3,5.7"
+
+    download_json("abcd", FNAME_TMP)
+    with open(FNAME_TMP, "r") as f:
+        assert f.read() == "0.3,5.7"
 
 
 @responses.activate
@@ -292,8 +332,8 @@ def test_load_simulation(monkeypatch):
     monkeypatch.setattr(
         "tidy3d.web.simulation_task.SimulationTask.get_simulation_json", mock_download
     )
-    with tempfile.NamedTemporaryFile(suffix=".json") as f:
-        assert load_simulation("abcd", f.name)
+
+    assert load_simulation("abcd", FNAME_TMP + ".json")
 
 
 @responses.activate
@@ -317,9 +357,9 @@ def test_download_log(monkeypatch):
 
     monkeypatch.setattr("tidy3d.web.simulation_task.download_file", mock)
 
-    with tempfile.NamedTemporaryFile() as f:
-        download_log("abcd", f.name)
-        assert f.read() == b"0.3,5.7"
+    download_log("abcd", FNAME_TMP)
+    with open(FNAME_TMP, "r") as f:
+        assert f.read() == "0.3,5.7"
 
 
 @responses.activate

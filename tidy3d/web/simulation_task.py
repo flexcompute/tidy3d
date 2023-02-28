@@ -13,13 +13,8 @@ from tidy3d.version import __version__
 from .cache import FOLDER_CACHE
 from .http_management import http
 from .s3utils import download_file, upload_file, upload_string
-from .tidy3d_types import (
-    Queryable,
-    ResourceLifecycle,
-    Submittable,
-    T,
-    Tidy3DResource,
-)
+from .tidy3d_types import Queryable, ResourceLifecycle, Submittable
+from .tidy3d_types import T, Tidy3DResource
 
 SIMULATION_JSON = "simulation.json"
 SIMULATION_HDF5 = "output/monitor_data.hdf5"
@@ -433,17 +428,28 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
             Is ``None`` if run info not available.
         """
         assert self.task_id
-        with tempfile.NamedTemporaryFile() as temp:
+        perc_done, field_decay = None, None
+
+        # delete=False required for this to work with windows on github actions
+        with tempfile.NamedTemporaryFile(delete=False) as temp:
             try:
                 download_file(self.task_id, RUNNING_INFO, to_file=temp.name, verbose=False)
                 with open(temp.name, "r", encoding="utf-8") as csv:
                     progress_string = csv.readlines()
                     perc_done, field_decay = progress_string[-1].split(",")
-                    return float(perc_done), float(field_decay)
 
-            # file is not ready, return None, None to signify that the running info isnt available
+                    perc_done = float(perc_done)
+                    field_decay = float(field_decay)
+
+            # file is not ready, will return None, None to signify that the info isnt available
             except Exception:  # pylint:disable=broad-except
-                return None, None
+                pass
+
+            # need to close the file manually with delete=False
+            temp.close()
+            os.unlink(temp.name)
+
+        return perc_done, field_decay
 
     def get_log(
         self, to_file: str, verbose: bool = True, progress_callback: Callable[[float], None] = None
