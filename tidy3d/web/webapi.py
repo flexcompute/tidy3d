@@ -296,7 +296,10 @@ def monitor(task_id: TaskId, verbose: bool = True) -> None:
     if verbose:
         est_flex_unit = get_estimated_cost()
         if est_flex_unit is not None and est_flex_unit > 0:
-            log.info(f"Maximum FlexUnit cost: {est_flex_unit:1.3f}")
+            log.info(
+                f"Maximum FlexUnit cost: {est_flex_unit:1.3f}. Use 'real_cost(task_id)' to "
+                "get the billed FlexUnit cost after a simulation run."
+            )
         log.info("starting up solver")
 
     # while running but before the percentage done is available, keep waiting
@@ -349,10 +352,6 @@ def monitor(task_id: TaskId, verbose: bool = True) -> None:
     else:
         while get_status() not in break_statuses:
             time.sleep(REFRESH_TIME)
-
-    # show final billed cost
-    if verbose:
-        log.info(f"Billed FlexUnit cost: {get_info(task_id).realFlexUnit:1.3f}")
 
 
 def download(task_id: TaskId, path: str = "simulation_data.hdf5", verbose: bool = True) -> None:
@@ -607,6 +606,24 @@ def estimate_cost(task_id: str) -> float:
         return None
 
     return resp.get("flex_unit")
+
+
+def real_cost(task_id: str) -> float:
+    """Get the billed cost for given task after it has been run.
+
+    Note
+    ----
+        The billed cost may not be immediately available when the task status is set to ``success``,
+        but should be available shortly after.
+    """
+
+    flex_unit = get_info(task_id).realFlexUnit
+    if not flex_unit:
+        log.warning(
+            f"Billed FlexUnit for task {task_id} is not available. If the task has been "
+            "successfully run, it should be available shortly."
+        )
+    return flex_unit
 
 
 def _query_or_create_folder(folder_name) -> Folder:
