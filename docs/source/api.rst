@@ -85,8 +85,8 @@ Non-Dispersive Medium
    :toctree: _autosummary/
 
    Medium
-   AnisotropicMedium
    PECMedium
+   CustomMedium
 
 Dispersive Mediums
 ------------------
@@ -99,6 +99,15 @@ Dispersive Mediums
    Sellmeier
    Drude
    Debye
+
+General Mediums (can be both dispersive and non-dispersive)
+-----------------------------------------------------------
+
+.. autosummary::
+   :toctree: _autosummary/
+
+   AnisotropicMedium
+   .. Medium2D
 
 
 Material Library
@@ -150,6 +159,9 @@ Source Time Dependence
 Monitors
 ========
 
+Monitor Types
+-------------
+
 .. autosummary::
    :toctree: _autosummary/
 
@@ -164,6 +176,14 @@ Monitors
    FieldProjectionAngleMonitor
    FieldProjectionKSpaceMonitor
    DiffractionMonitor
+
+Apodization Specification
+-------------------------
+
+.. autosummary::
+   :toctree: _autosummary/
+
+   ApodizationSpec
 
 
 Mode Specifications
@@ -235,6 +255,7 @@ Individual Datasets
 .. autosummary::
    :toctree: _autosummary/
 
+   PermittivityDataset
    ScalarFieldDataArray
    ScalarModeFieldDataArray
    ScalarFieldTimeDataArray
@@ -270,6 +291,7 @@ Through python API
    tidy3d.web.webapi.run
    tidy3d.web.webapi.upload
    tidy3d.web.webapi.estimate_cost
+   tidy3d.web.webapi.real_cost
    tidy3d.web.webapi.get_info
    tidy3d.web.webapi.start
    tidy3d.web.webapi.monitor
@@ -321,6 +343,14 @@ Dispersive Model Fitting
    plugins.StableDispersionFitter
    plugins.AdvancedFitterParam
 
+Self-intersecting Polyslab
+--------------------------
+
+.. autosummary::
+   :toctree: _autosummary/
+
+   plugins.ComplexPolySlab
+
 Scattering Matrix Calculator
 ----------------------------
 
@@ -337,6 +367,24 @@ Resonance Finder
    :toctree: _autosummary/
         
    plugins.ResonanceFinder
+
+Adjoint
+-------
+
+.. autosummary::
+   :toctree: _autosummary/
+
+   plugins.adjoint.run
+   plugins.adjoint.JaxBox
+   plugins.adjoint.JaxMedium
+   plugins.adjoint.JaxAnisotropicMedium
+   plugins.adjoint.JaxCustomMedium
+   plugins.adjoint.JaxStructure
+   plugins.adjoint.JaxSimulation
+   plugins.adjoint.JaxSimulationData
+   plugins.adjoint.JaxModeData
+   plugins.adjoint.JaxPermittivityDataset
+   plugins.adjoint.JaxDataArray
 
 Constants
 =========
