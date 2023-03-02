@@ -23,21 +23,21 @@ Before using Tidy3D, you must first `sign up <https://client.simulation.cloud/re
 
 Signing up also grants you access to our browser-based `interface <https://tidy3d.simulation.cloud/account>`_ for managing simulations.
 
-Quick Start (Binder Notebook)
------------------------------
+.. Quick Start (Binder Notebook)
+.. -----------------------------
 
-`Click this text to get started running a Tidy3D simulation right away without any installation or software setup. <https://mybinder.org/v2/gh/flexcompute-readthedocs/tidy3d-docs/readthedocs?labpath=docs%2Fsource%2Fnotebooks%2FStartHere.ipynb>`_
+.. `Click this text to get started running a Tidy3D simulation right away without any installation or software setup. <https://mybinder.org/v2/gh/flexcompute-readthedocs/tidy3d-docs/readthedocs?labpath=docs%2Fsource%2Fnotebooks%2FStartHere.ipynb>`_
 
-Once there, to run the full example, select "Run -> Run All Cells".  Or you can click through the code blocks by pressing the "play" icon.
+.. Once there, to run the full example, select "Run -> Run All Cells".  Or you can click through the code blocks by pressing the "play" icon.
 
-You will first be prompted to log in using the email and password you used for your user account.
+.. You will first be prompted to log in using the email and password you used for your user account.
 
-Then the notebook will create a simulation and upload it to our server, where it will run for a few minutes before downloading the results and plotting the field patterns.
+.. Then the notebook will create a simulation and upload it to our server, where it will run for a few minutes before downloading the results and plotting the field patterns.
 
 .. image:: _static/quickstart_fields.png
-   :width: 600
+..    :width: 600
 
-To play around with the simulation parameters, you can edit the notebook directly and re-run.
+.. To play around with the simulation parameters, you can edit the notebook directly and re-run.
 
 Installation of Tidy3D Python API
 ---------------------------------
@@ -72,7 +72,7 @@ Tidy3D and its dependencies can be installed from the command line via ``pip``, 
 
 .. code-block:: bash
 
-    pip install tidy3d-beta
+    pip install tidy3d
 
 and the latest version of Tidy3D will be installed in this environment. To test whether the installation was successful you can run
 
@@ -81,6 +81,14 @@ and the latest version of Tidy3D will be installed in this environment. To test 
     python -c "import tidy3d as td; print(td.__version__)"
 
 If the installation is successful, you should see the client version of Tidy3D being displayed. Now you can open your favorite Python IDE and start creating Tidy3D simulations!
+
+To get the "pre-release" version of tidy3d with the newest features, one may specify the version as follows:
+
+.. code-block:: bash
+
+    pip install tidy3d==1.9.0rc2
+
+The corresponding documentation is marked as "latest" and is available `here <https://docs.flexcompute.com/projects/tidy3d/en/latest/>`__.
 
 Additional Configuration for Python IDE
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -106,6 +114,6 @@ That should get you started!
 
 To see some other examples of Tidy3D being used in large scale photonics simulations, see `Examples <./examples.html>`_.
 
-To learn more about the many features of Tidy3D, check out our `Feature Walkthrough <./examples/Simulation.html>`_.
+To learn more about the many features of Tidy3D, check out our `Feature Walkthrough <./notebooks/Simulation.html>`_.
 
 Or, if you're interested in the API documentation, see `API Reference <./api.html>`_.
