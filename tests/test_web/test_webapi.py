@@ -27,6 +27,7 @@ CREATED_AT = "2022-01-01T00:00:00.000Z"
 PROJECT_NAME = "default"
 FLEX_UNIT = 1.0
 
+
 def make_sim():
     """Makes a simulation."""
     return td.Simulation(size=(1, 1, 1), grid_spec=td.GridSpec.auto(wavelength=1.0), run_time=1e-12)
@@ -83,7 +84,7 @@ def mock_get_info(monkeypatch, set_api_key):
             "data": {
                 "taskId": TASK_ID,
                 "createdAt": CREATED_AT,
-                "real_flex_unit": FLEX_UNIT,
+                "realFlexUnit": FLEX_UNIT,
             }
         },
         status=200,
@@ -506,9 +507,10 @@ def test_monitor(mock_monitor):
     monitor(TASK_ID, verbose=True)
     monitor(TASK_ID, verbose=False)
 
+
 @responses.activate
 def test_real_cost(mock_get_info):
-    real_cost(TASK_ID)
+    assert real_cost(TASK_ID) == FLEX_UNIT
 
 
 """ Containers """
@@ -526,6 +528,7 @@ def test_job(mock_webapi, monkeypatch):
     j.get_info()
     # j.download
     j.delete
+    assert j.real_cost() == FLEX_UNIT
 
 
 @pytest.fixture
@@ -543,6 +546,7 @@ def test_batch(mock_webapi, mock_job_status):
     sims = {TASK_NAME: make_sim()}
     b = Batch(simulations=sims, folder_name=PROJECT_NAME)
     batch_data = b.run(path_dir="tests/tmp/")
+    assert b.real_cost() == FLEX_UNIT * len(sims)
 
 
 """ Async """
