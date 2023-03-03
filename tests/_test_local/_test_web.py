@@ -124,6 +124,7 @@ def test_webapi_8_get_tasks():
     for i in range(4):
         assert tasks[i]["submit_time"] > tasks[i + 1]["submit_time"]
 
+
 """ Jobs """
 
 jobs_global = []
