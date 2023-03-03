@@ -125,7 +125,7 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
     status: Optional[str] = Field(title="status", description="Simulation task status.")
 
     real_flex_unit: float = Field(
-        None, title="real flex units", description="Billed flex units.", alias="realFlexUnit"
+        None, title="real flex units", description="Billed flex units.", alias="realCost"
     )
 
     created_at: Optional[datetime] = Field(
@@ -375,18 +375,6 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
             },
         )
         return resp
-
-    def real_cost(self) -> float:
-        """Get the billed cost for given task after it has been run.
-
-        Note
-        ----
-            The billed cost may not be immediately available
-            when the task status is set to ``success``,
-            but should be available shortly after.
-        """
-        assert self.task_id
-        return self.get(self.task_id).real_flex_unit
 
     def get_simulation_hdf5(
         self, to_file: str, verbose: bool = True, progress_callback: Callable[[float], None] = None

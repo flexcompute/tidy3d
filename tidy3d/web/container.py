@@ -170,6 +170,10 @@ class Job(WebContainer):
         """Delete server-side data associated with :class:`Job`."""
         web.delete(self.task_id)
 
+    def real_cost(self):
+        """Get the billed cost for the task associated with this job."""
+        return web.real_cost(self.task_id)
+
 
 class BatchData(Tidy3dBaseModel):
     """Holds a collection of :class:`.SimulationData` returned by :class:`.Batch`."""
@@ -512,3 +516,12 @@ class Batch(WebContainer):
         """Delete server-side data associated with each task in the batch."""
         for _, job in self.jobs.items():
             job.delete()
+
+    def real_cost(self):
+        """Get the sum of billed costs for each task associated with this batch."""
+        real_cost_sum = 0.0
+        for _, job in self.jobs.items():
+            cost_job = job.real_cost()
+            if cost_job is not None:
+                real_cost_sum += cost_job
+        return real_cost_sum or None
