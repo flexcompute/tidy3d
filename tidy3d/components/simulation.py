@@ -1837,7 +1837,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
                     continue
 
                 # look more closely to see if intersected.
-                if not shape.intersects(_shape):
+                if _shape.is_empty or not shape.intersects(_shape):
                     continue
 
                 diff_shape = _shape - shape
