@@ -12,10 +12,10 @@ from tidy3d import Simulation
 from tidy3d.web.environment import Env
 from tidy3d.web.webapi import delete, delete_old, download, download_json, run
 from tidy3d.web.webapi import download_log, estimate_cost, get_info, get_run_info, get_tasks
-from tidy3d.web.webapi import load, load_simulation, start, upload, monitor
+from tidy3d.web.webapi import load, load_simulation, start, upload, monitor, real_cost
 from tidy3d.web.container import Job, Batch
 from tidy3d.web.task import TaskInfo
-from tidy3d.web.queue import run_async
+from tidy3d.web.asynchronous import run_async
 
 from tidy3d.__main__ import main
 
@@ -25,7 +25,7 @@ TASK_NAME = "task_name_test"
 TASK_ID = "1234"
 CREATED_AT = "2022-01-01T00:00:00.000Z"
 PROJECT_NAME = "default"
-
+FLEX_UNIT = 1.0
 
 def make_sim():
     """Makes a simulation."""
@@ -83,6 +83,7 @@ def mock_get_info(monkeypatch, set_api_key):
             "data": {
                 "taskId": TASK_ID,
                 "createdAt": CREATED_AT,
+                "real_flex_unit": FLEX_UNIT,
             }
         },
         status=200,
@@ -504,6 +505,10 @@ def test_run(mock_webapi, monkeypatch):
 def test_monitor(mock_monitor):
     monitor(TASK_ID, verbose=True)
     monitor(TASK_ID, verbose=False)
+
+@responses.activate
+def test_real_cost(mock_get_info):
+    real_cost(TASK_ID)
 
 
 """ Containers """

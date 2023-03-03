@@ -124,6 +124,10 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
     )
     status: Optional[str] = Field(title="status", description="Simulation task status.")
 
+    real_flex_unit: float = Field(
+        None, title="real flex units", description="Billed flex units.", alias="realFlexUnit"
+    )
+
     created_at: Optional[datetime] = Field(
         title="created_at", description="Time at which this task was created.", alias="createdAt"
     )
@@ -377,20 +381,12 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
 
         Note
         ----
-            The billed cost may not be immediately available when the task status is set to ``success``,
+            The billed cost may not be immediately available
+            when the task status is set to ``success``,
             but should be available shortly after.
         """
         assert self.task_id
-        
-        resp = http.post(
-            f"tidy3d/tasks/{self.task_id}/metadata",
-            {
-                "solverVersion": solver_version,
-                "protocolVersion": protocol_version,
-            },
-        )
-        return resp
-
+        return self.get(self.task_id).real_flex_unit
 
     def get_simulation_hdf5(
         self, to_file: str, verbose: bool = True, progress_callback: Callable[[float], None] = None

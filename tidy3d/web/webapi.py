@@ -640,8 +640,10 @@ def real_cost(task_id: str) -> float:
         The billed cost may not be immediately available when the task status is set to ``success``,
         but should be available shortly after.
     """
-
-    flex_unit = get_info(task_id).realFlexUnit
+    task = SimulationTask.get(task_id)
+    if not task:
+        raise ValueError("Task not found.")
+    flex_unit = task.real_flex_unit
     if not flex_unit:
         log.warning(
             f"Billed FlexUnit for task '{task_id}'' is not available. If the task has been "
