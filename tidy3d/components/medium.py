@@ -782,7 +782,7 @@ class Sellmeier(DispersiveMedium):
     def _n_model(self, frequency: float) -> complex:
         """Complex-valued refractive index as a function of frequency."""
 
-        wvl = C_0 / frequency
+        wvl = C_0 / np.array(frequency)
         wvl2 = wvl**2
         n_squared = 1.0
         for (B, C) in self.coeffs:
@@ -840,7 +840,7 @@ class Sellmeier(DispersiveMedium):
         if n < 1:
             raise ValidationError("Refractive index ``n`` cannot be smaller than one.")
 
-        wvl = C_0 / freq
+        wvl = C_0 / np.array(freq)
         nsqm1 = n**2 - 1
         c_coeff = -(wvl**3) * n * dn_dwvl / (nsqm1 - wvl * n * dn_dwvl)
         b_coeff = (wvl**2 - c_coeff) / wvl**2 * nsqm1
