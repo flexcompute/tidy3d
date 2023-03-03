@@ -11,6 +11,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 ### Fixed
+- Avoiding shapely warning in some cases when checking intersection with an empty shape.
+- `Medium.eps_model` error when supplied a list of frequencies rather than a numpy array.
 
 ## [1.9.0] - 2023-3-01
 
