@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - Avoiding shapely warning in some cases when checking intersection with an empty shape.
 - `Medium.eps_model` error when supplied a list of frequencies rather than a numpy array.
+- Set install requirement `rich<12.6.0` to fix double output in webapi functions.
 
 ## [1.9.0] - 2023-3-01
 
