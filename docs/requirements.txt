@@ -12,3 +12,5 @@ tmm
 gdstk
 grcwa
 sphinx-sitemap
+
+-r ../../tidy3d/requirements/dev.txt
