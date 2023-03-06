@@ -164,6 +164,7 @@ html_theme_options = {
     "use_repository_button": True,
     "use_download_button": True,
 }
+html_source_suffix = ''
 
 # html_logo = "_static/logo.svg"
 # html_favicon = "_static/logo.svg"
