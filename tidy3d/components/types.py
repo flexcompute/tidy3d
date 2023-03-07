@@ -179,6 +179,7 @@ ObsGridArray = Union[Tuple[float, ...], ArrayLike[float, 1]]
 """ plotting """
 
 Ax = Axes
+PlotVal = Literal["real", "imag", "abs"]
 
 """ mode tracking """
 

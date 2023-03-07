@@ -14,8 +14,16 @@ S = td.PointDipole(source_time=ST, polarization="Ex")
 
 
 def test_plot_source_time():
-    ST.plot(times=[1e-15, 2e-15, 3e-15], ax=AX)
-    ST.plot_spectrum(times=[1e-15, 2e-15, 3e-15], num_freqs=4, ax=AX)
+
+    for val in ("real", "imag", "abs"):
+        ST.plot(times=[1e-15, 2e-15, 3e-15], val=val, ax=AX)
+        ST.plot_spectrum(times=[1e-15, 2e-15, 3e-15], num_freqs=4, val=val, ax=AX)
+
+    with pytest.raises(ValueError):
+        ST.plot(times=[1e-15, 2e-15, 3e-15], val="blah", ax=AX)
+
+    with pytest.raises(ValueError):
+        ST.plot_spectrum(times=[1e-15, 2e-15, 3e-15], num_freqs=4, val="blah", ax=AX)
 
     # uneven spacing in times
     with pytest.raises(SetupError):

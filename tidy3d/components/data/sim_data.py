@@ -10,7 +10,7 @@ from .monitor_data import MonitorDataTypes, MonitorDataType, AbstractFieldData
 from ..base import Tidy3dBaseModel
 from ..simulation import Simulation
 from ..boundary import BlochBoundary
-from ..types import Ax, Axis, annotate_type, Literal
+from ..types import Ax, Axis, annotate_type, Literal, PlotVal
 from ..viz import equal_aspect, add_ax_if_none
 from ...log import DataError, log, Tidy3dKeyError, ValidationError
 
@@ -245,7 +245,7 @@ class SimulationData(Tidy3dBaseModel):
         self,
         field_monitor_name: str,
         field_name: str,
-        val: Literal["real", "imag", "abs"] = "real",
+        val: PlotVal = "real",
         eps_alpha: float = 0.2,
         robust: bool = True,
         vmin: float = None,

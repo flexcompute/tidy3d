@@ -8,7 +8,7 @@ import pydantic
 import numpy as np
 
 from .base import Tidy3dBaseModel, cached_property, DATA_ARRAY_MAP
-from .types import Direction, Polarization, Ax, FreqBound, ArrayLike, Axis
+from .types import Direction, Polarization, Ax, FreqBound, ArrayLike, Axis, PlotVal
 from .validators import assert_plane, validate_name_str, get_value
 from .data.dataset import FieldDataset
 from .geometry import Box
@@ -99,7 +99,7 @@ class SourceTime(ABC, Tidy3dBaseModel):
         return dt * dft_matrix @ time_amps
 
     @add_ax_if_none
-    def plot(self, times: ArrayLike[float, 1], ax: Ax = None) -> Ax:
+    def plot(self, times: ArrayLike[float, 1], val: PlotVal = "real", ax: Ax = None) -> Ax:
         """Plot the complex-valued amplitude of the source time-dependence.
 
         Parameters
@@ -108,6 +108,8 @@ class SourceTime(ABC, Tidy3dBaseModel):
             Array of times (seconds) to plot source at.
             To see source time amplitude for a specific :class:`Simulation`,
             pass ``simulation.tmesh``.
+        val : Literal['real', 'imag', 'abs'] = 'real'
+            Which part of the spectrum to plot.
         ax : matplotlib.axes._subplots.Axes = None
             Matplotlib axes to plot on, if not specified, one is created.
 
@@ -119,20 +121,27 @@ class SourceTime(ABC, Tidy3dBaseModel):
         times = np.array(times)
         amp_complex = self.amp_time(times)
 
-        ax.plot(times, amp_complex.real, color="blueviolet", label="real")
-        ax.plot(times, amp_complex.imag, color="crimson", label="imag")
-        ax.plot(times, np.abs(amp_complex), color="k", label="abs")
+        if val == "real":
+            ax.plot(times, amp_complex.real, color="blueviolet", label="real")
+        elif val == "imag":
+            ax.plot(times, amp_complex.imag, color="crimson", label="imag")
+        elif val == "abs":
+            ax.plot(times, np.abs(amp_complex), color="k", label="abs")
+        else:
+            raise ValueError(f"Plot 'val' option of '{val}' not recognized.")
         ax.set_xlabel("time (s)")
         ax.set_title("source amplitude")
         ax.legend()
         ax.set_aspect("auto")
         return ax
 
+    # pylint:disable=too-many-arguments
     @add_ax_if_none
     def plot_spectrum(
         self,
         times: ArrayLike[float, 1],
         num_freqs: int = 101,
+        val: PlotVal = "real",
         ax: Ax = None,
         complex_fields: bool = False,
     ) -> Ax:
@@ -170,9 +179,14 @@ class SourceTime(ABC, Tidy3dBaseModel):
 
         spectrum = self.spectrum(times=times, dt=dt, freqs=freqs, complex_fields=complex_fields)
 
-        ax.plot(freqs, spectrum.real, color="blueviolet", label="real")
-        ax.plot(freqs, spectrum.imag, color="crimson", label="imag")
-        ax.plot(freqs, np.abs(spectrum), color="k", label="abs")
+        if val == "real":
+            ax.plot(freqs, spectrum.real, color="blueviolet", label="real")
+        elif val == "imag":
+            ax.plot(freqs, spectrum.imag, color="crimson", label="imag")
+        elif val == "abs":
+            ax.plot(freqs, np.abs(spectrum), color="k", label="abs")
+        else:
+            raise ValueError(f"Plot 'val' option of '{val}' not recognized.")
         ax.set_xlabel("frequency (Hz)")
         ax.set_title("source spectrum")
         ax.legend()
