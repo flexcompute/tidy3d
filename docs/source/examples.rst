@@ -24,7 +24,6 @@ Advanced Structure Definition
     notebooks/Dispersion
     notebooks/Fitting
     notebooks/Self_intersecting_polyslab
-    notebooks/STLImport
 
 Grid and Boundaries
 ~~~~~~~~~~~~~~~~~~~
