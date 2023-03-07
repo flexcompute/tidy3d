@@ -51,6 +51,7 @@ class _S3STSToken(BaseModel):
             aws_access_key_id=self.user_credential.access_key_id,
             aws_secret_access_key=self.user_credential.secret_access_key,
             aws_session_token=self.user_credential.session_token,
+            verify=DEFAULT_CONFIG.ssl_verify,
         )
 
     def is_expired(self) -> bool:

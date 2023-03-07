@@ -10,6 +10,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - `TriangleMesh` class for modeling geometries specified by triangle surface meshes, with support for STL file import.
 
+### Changed
+
+### Fixed
+- Bug in remote file transfer when client environment has no correct certificate authority pem file install locally. 
+
+
 ## [1.9.1] - 2023-3-06
 
 ### Fixed
