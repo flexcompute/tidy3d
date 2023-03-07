@@ -6,13 +6,13 @@ import numpy as np
 import pydantic as pd
 
 from ..base import Tidy3dBaseModel, cached_property
-from ..types import ArrayLike, Axis, TYPE_TAG_STR
+from ..types import ArrayFloat1D, Axis, TYPE_TAG_STR
 from ..geometry import Box
 
 from ...exceptions import SetupError
 
 # data type of one dimensional coordinate array.
-Coords1D = ArrayLike[float, 1]
+Coords1D = ArrayFloat1D
 
 
 class Coords(Tidy3dBaseModel):
@@ -141,12 +141,12 @@ class Grid(Tidy3dBaseModel):
     )
 
     @staticmethod
-    def _avg(coords1d: ArrayLike[float, 1]):
+    def _avg(coords1d: Coords1D):
         """Return average positions of an array of 1D coordinates."""
         return (coords1d[1:] + coords1d[:-1]) / 2.0
 
     @staticmethod
-    def _min(coords1d: ArrayLike[float, 1]):
+    def _min(coords1d: Coords1D):
         """Return minus positions of 1D coordinates."""
         return coords1d[:-1]
 

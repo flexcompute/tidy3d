@@ -240,6 +240,18 @@ class JaxPolySlab(JaxGeometry, PolySlab, JaxObject):
         jax_field=True,
     )
 
+    @pd.validator("vertices", pre=True, always=True)
+    def convert_to_numpy(cls, val):
+        """Overwrite to not convert vertices to numpy."""
+        return val
+
+    @pd.validator("vertices", pre=True, always=True)
+    def to_list(cls, val):
+        """Convert any numpy to list."""
+        if isinstance(val, np.ndarray):
+            return val.tolist()
+        return val
+
     # @pd.validator("slab_bounds", always=True)
     # def _is_3d(cls, val):
     #     """Make sure the box is 3D."""

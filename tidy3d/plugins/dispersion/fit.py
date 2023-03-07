@@ -15,7 +15,7 @@ from ...log import log
 from ...components.base import Tidy3dBaseModel
 from ...components.medium import PoleResidue, AbstractMedium
 from ...components.viz import add_ax_if_none
-from ...components.types import Ax, ArrayLike
+from ...components.types import Ax, ArrayFloat1D
 from ...constants import C_0, HBAR, MICROMETER
 from ...exceptions import ValidationError, WebError, SetupError
 from ...web.config import DEFAULT_CONFIG as Config
@@ -25,20 +25,20 @@ class DispersionFitter(Tidy3dBaseModel):
     """Tool for fitting refractive index data to get a
     dispersive medium described by :class:`.PoleResidue` model."""
 
-    wvl_um: Union[Tuple[float, ...], ArrayLike[float, 1]] = Field(
+    wvl_um: Union[Tuple[float, ...], ArrayFloat1D] = Field(
         ...,
         title="Wavelength data",
         description="Wavelength data in micrometers.",
         units=MICROMETER,
     )
 
-    n_data: Union[Tuple[float, ...], ArrayLike[float, 1]] = Field(
+    n_data: Union[Tuple[float, ...], ArrayFloat1D] = Field(
         ...,
         title="Index of refraction data",
         description="Real part of the complex index of refraction.",
     )
 
-    k_data: Union[Tuple[float, ...], ArrayLike[float, 1]] = Field(
+    k_data: Union[Tuple[float, ...], ArrayFloat1D] = Field(
         None,
         title="Extinction coefficient data",
         description="Imaginary part of the complex index of refraction.",

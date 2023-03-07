@@ -51,6 +51,13 @@ def cached_property(cached_property_getter):
     return property(cache(cached_property_getter))
 
 
+def ndarray_encoder(val):
+    """How a ``np.ndarray`` gets handled before saving to json."""
+    if np.any(np.iscomplex(val)):
+        return dict(real=val.real.tolist(), imag=val.imag.tolist())
+    return val.real.tolist()
+
+
 class Tidy3dBaseModel(pydantic.BaseModel):
     """Base pydantic model that all Tidy3d components inherit from.
     Defines configuration for handling data structures
@@ -90,7 +97,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         validate_assignment = True
         allow_population_by_field_name = True
         json_encoders = {
-            np.ndarray: lambda x: tuple(x.tolist()),
+            np.ndarray: ndarray_encoder,
             complex: lambda x: ComplexNumber(real=x.real, imag=x.imag),
             xr.DataArray: DataArray._json_encoder,  # pylint:disable=unhashable-member, protected-access
         }
@@ -517,6 +524,10 @@ class Tidy3dBaseModel(pydantic.BaseModel):
     def __ge__(self, other):
         """define >= for getting unique indices based on hash."""
         return hash(self) >= hash(other)
+
+    def __eq__(self, other):
+        """Define == for two Tidy3DBaseModels."""
+        return self._json_string == other._json_string
 
     @cached_property
     def _json_string(self) -> str:
