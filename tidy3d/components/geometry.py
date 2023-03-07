@@ -14,7 +14,7 @@ from shapely.geometry import Point, Polygon, box, MultiPolygon
 from shapely.validation import make_valid
 
 from .base import Tidy3dBaseModel, cached_property
-from .types import Bound, Size, Coordinate, Axis, Coordinate2D, ArrayLike, PlanePosition
+from .types import Bound, Size, Coordinate, Axis, Coordinate2D, ArrayFloat3D, PlanePosition
 from .types import Vertices, Ax, Shapely, annotate_type
 from .viz import add_ax_if_none, equal_aspect
 from .viz import PLOT_BUFFER, ARROW_LENGTH, arrow_style
@@ -47,6 +47,10 @@ _N_SAMPLE_POLYGON_INTERSECT = 5
 # for sampling conical frustum in visualization
 _N_SAMPLE_CURVE_SHAPELY = 40
 _IS_CLOSE_RTOL = np.finfo(float).eps
+
+
+Points = ArrayFloat3D
+
 
 # pylint:disable=too-many-public-methods
 class Geometry(Tidy3dBaseModel, ABC):
@@ -634,9 +638,7 @@ class Geometry(Tidy3dBaseModel, ABC):
         return axis, position
 
     @staticmethod
-    def rotate_points(
-        points: ArrayLike[float, 3], axis: Coordinate, angle: float
-    ) -> ArrayLike[float, 3]:
+    def rotate_points(points: Points, axis: Coordinate, angle: float) -> Points:
         """Rotate a set of points in 3D.
 
         Parameters
@@ -676,11 +678,11 @@ class Geometry(Tidy3dBaseModel, ABC):
 
     def reflect_points(
         self,
-        points: ArrayLike[float, 3],
+        points: Points,
         polar_axis: Axis,
         angle_theta: float,
         angle_phi: float,
-    ) -> ArrayLike[float, 3]:
+    ) -> Points:
         """Reflect a set of points in 3D at a plane passing through the coordinate origin defined
         and normal to a given axis defined in polar coordinates (theta, phi) w.r.t. the
         ``polar_axis`` which can be 0, 1, or 2.
@@ -2054,14 +2056,18 @@ class PolySlab(Planar):
         zmin, zmax = self.slab_bounds
         return zmax - zmin
 
+    @pydantic.validator("vertices", pre=True, always=True)
+    def convert_to_numpy(cls, val):
+        """Pre-convert vertices to numpy one time."""
+        return np.array(val)
+
     @pydantic.validator("vertices", always=True)
     def correct_shape(cls, val):
         """Makes sure vertices size is correct.
         Make sure no intersecting edges.
         """
 
-        val_np = PolySlab.vertices_to_array(val)
-        shape = val_np.shape
+        shape = val.shape
 
         # overall shape of vertices
         if len(shape) != 2 or shape[1] != 2:
@@ -2071,7 +2077,7 @@ class PolySlab(Planar):
             )
 
         # make sure no polygon splitting, isalands, 0 area
-        poly_heal = make_valid(Polygon(val_np))
+        poly_heal = make_valid(Polygon(val))
         if poly_heal.area < fp_eps:
             raise SetupError("The polygon almost collapses to a 1D curve.")
 
@@ -3190,7 +3196,7 @@ class PolySlab(Planar):
 
         Parameters
         ----------
-        vertices : np.ndarray
+        np.ndarray
             Shape (N, 2) defining the polygon vertices in the xy-plane.
         dist : float
             Distance to offset.

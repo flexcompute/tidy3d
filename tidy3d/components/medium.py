@@ -12,7 +12,7 @@ import xarray as xr
 
 from .base import Tidy3dBaseModel, cached_property
 from .grid.grid import Coords, Grid
-from .types import PoleAndResidue, Ax, FreqBound, TYPE_TAG_STR, InterpMethod, Numpy, Bound
+from .types import PoleAndResidue, Ax, FreqBound, TYPE_TAG_STR, InterpMethod, Bound, ArrayComplex4D
 from .data.dataset import PermittivityDataset
 from .data.data_array import ScalarFieldDataArray
 from .viz import add_ax_if_none
@@ -486,7 +486,7 @@ class CustomMedium(AbstractMedium):
         self,
         frequency: float,
         coords: Coords,
-    ) -> Tuple[Numpy, Numpy, Numpy]:
+    ) -> Tuple[ArrayComplex4D, ArrayComplex4D, ArrayComplex4D]:
         """Spatial profile of main diagonal of the complex-valued permittivity
         at ``frequency`` interpolated at the supplied coordinates.
 
@@ -499,7 +499,7 @@ class CustomMedium(AbstractMedium):
 
         Returns
         -------
-        Tuple[Numpy, Numpy, Numpy]
+        Tuple[np.ndarray, np.ndarray, np.ndarray]
             The complex-valued permittivity tensor at ``frequency`` interpolated
             at the supplied coordinate.
         """

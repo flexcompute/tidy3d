@@ -8,11 +8,8 @@ import pydantic
 
 from rich.progress import track
 
-from .data.data_array import (
-    FieldProjectionAngleDataArray,
-    FieldProjectionCartesianDataArray,
-    FieldProjectionKSpaceDataArray,
-)
+from .data.data_array import FieldProjectionAngleDataArray, FieldProjectionCartesianDataArray
+from .data.data_array import FieldProjectionKSpaceDataArray
 from .data.monitor_data import FieldData
 from .data.monitor_data import AbstractFieldProjectionData, FieldProjectionAngleData
 from .data.monitor_data import FieldProjectionCartesianData, FieldProjectionKSpaceData
@@ -20,7 +17,7 @@ from .data.sim_data import SimulationData
 from .monitor import FieldProjectionSurface
 from .monitor import FieldMonitor, AbstractFieldProjectionMonitor, FieldProjectionAngleMonitor
 from .monitor import FieldProjectionCartesianMonitor, FieldProjectionKSpaceMonitor
-from .types import Direction, Coordinate, ArrayLike
+from .types import Direction, Coordinate, ArrayComplex4D
 from .medium import MediumType
 from .base import Tidy3dBaseModel, cached_property
 from ..exceptions import SetupError
@@ -31,7 +28,7 @@ PTS_PER_WVL = 10
 
 # Numpy float array and related array types
 # pylint: disable=invalid-name
-ArrayLikeN2F = Union[float, Tuple[float, ...], ArrayLike[float, 4]]
+ArrayLikeN2F = Union[float, Tuple[float, ...], ArrayComplex4D]
 
 
 class FieldProjector(Tidy3dBaseModel):

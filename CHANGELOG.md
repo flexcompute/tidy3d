@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Simpler progressbars for `run_async`.
 - Medium property `n_cfl` added to adjust time step size according to CFL condition.
 - In the mode solver plugin, regular methods in `solver.py` transformed into classmethods.
+- `ArrayLike` types are stored internally as `np.ndarray` and written to json as lists. `constrained_array()` provides way to validate `ArrayLike` values based on `ndim` and `dtype`.
 
 ### Fixed
 - Bug in remote file transfer when client environment has no correct certificate authority pem file install locally. 

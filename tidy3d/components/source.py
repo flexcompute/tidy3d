@@ -8,7 +8,8 @@ import pydantic
 import numpy as np
 
 from .base import Tidy3dBaseModel, cached_property, DATA_ARRAY_MAP
-from .types import Direction, Polarization, Ax, FreqBound, ArrayLike, Axis, PlotVal
+
+from .types import Direction, Polarization, Ax, FreqBound, ArrayFloat1D, Axis, PlotVal
 from .validators import assert_plane, assert_volumetric, validate_name_str, get_value
 from .data.dataset import FieldDataset
 from .geometry import Box, Coordinate
@@ -58,8 +59,8 @@ class SourceTime(ABC, Tidy3dBaseModel):
 
     def spectrum(
         self,
-        times: ArrayLike[float, 1],
-        freqs: ArrayLike[float, 1],
+        times: ArrayFloat1D,
+        freqs: ArrayFloat1D,
         dt: float,
         complex_fields: bool = False,
     ) -> complex:
@@ -101,7 +102,7 @@ class SourceTime(ABC, Tidy3dBaseModel):
         return dt * dft_matrix @ time_amps
 
     @add_ax_if_none
-    def plot(self, times: ArrayLike[float, 1], val: PlotVal = "real", ax: Ax = None) -> Ax:
+    def plot(self, times: ArrayFloat1D, val: PlotVal = "real", ax: Ax = None) -> Ax:
         """Plot the complex-valued amplitude of the source time-dependence.
 
         Parameters
@@ -141,7 +142,7 @@ class SourceTime(ABC, Tidy3dBaseModel):
     @add_ax_if_none
     def plot_spectrum(
         self,
-        times: ArrayLike[float, 1],
+        times: ArrayFloat1D,
         num_freqs: int = 101,
         val: PlotVal = "real",
         ax: Ax = None,

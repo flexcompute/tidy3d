@@ -5,7 +5,7 @@ from typing import Union, Tuple
 import pydantic
 import numpy as np
 
-from .types import Ax, EMField, ArrayLike, FreqArray
+from .types import Ax, EMField, ArrayFloat1D, FreqArray
 from .types import Literal, Direction, Coordinate, Axis, ObsGridArray
 from .geometry import Box
 from .validators import assert_plane
@@ -49,7 +49,7 @@ class Monitor(Box, ABC):
         return Box(center=self.center, size=self.size)
 
     @abstractmethod
-    def storage_size(self, num_cells: int, tmesh: ArrayLike[float, 1]) -> int:
+    def storage_size(self, num_cells: int, tmesh: ArrayFloat1D) -> int:
         """Size of monitor storage given the number of points after discretization.
 
         Parameters
@@ -126,7 +126,7 @@ class TimeMonitor(Monitor, ABC):
             raise SetupError("Monitor start time is greater than stop time.")
         return val
 
-    def time_inds(self, tmesh: ArrayLike[float, 1]) -> Tuple[int, int]:
+    def time_inds(self, tmesh: ArrayFloat1D) -> Tuple[int, int]:
         """Compute the starting and stopping index of the monitor in a given discrete time mesh."""
 
         tmesh = np.array(tmesh)
@@ -155,7 +155,7 @@ class TimeMonitor(Monitor, ABC):
             tind_beg = tbeg[0] if tbeg.size > 0 else tind_end
         return (tind_beg, tind_end)
 
-    def num_steps(self, tmesh: ArrayLike[float, 1]) -> int:
+    def num_steps(self, tmesh: ArrayFloat1D) -> int:
         """Compute number of time steps for a time monitor."""
 
         tind_beg, tind_end = self.time_inds(tmesh)
@@ -290,7 +290,7 @@ class FieldMonitor(AbstractFieldMonitor, FreqMonitor):
     ...     name='steady_state_monitor')
     """
 
-    def storage_size(self, num_cells: int, tmesh: ArrayLike[float, 1]) -> int:
+    def storage_size(self, num_cells: int, tmesh: ArrayFloat1D) -> int:
         """Size of monitor storage given the number of points after discretization."""
         # stores 1 complex number per grid cell, per frequency, per field
         return BYTES_COMPLEX * num_cells * len(self.freqs) * len(self.fields)
@@ -311,7 +311,7 @@ class FieldTimeMonitor(AbstractFieldMonitor, TimeMonitor):
     ...     name='movie_monitor')
     """
 
-    def storage_size(self, num_cells: int, tmesh: ArrayLike[float, 1]) -> int:
+    def storage_size(self, num_cells: int, tmesh: ArrayFloat1D) -> int:
         """Size of monitor storage given the number of points after discretization."""
         # stores 1 real number per grid cell, per time step, per field
         num_steps = self.num_steps(tmesh)
@@ -333,7 +333,7 @@ class PermittivityMonitor(FreqMonitor):
     ...     name='eps_monitor')
     """
 
-    def storage_size(self, num_cells: int, tmesh: ArrayLike[float, 1]) -> int:
+    def storage_size(self, num_cells: int, tmesh: ArrayFloat1D) -> int:
         """Size of monitor storage given the number of points after discretization."""
         # stores 3 complex number per grid cell, per frequency
         return BYTES_COMPLEX * num_cells * len(self.freqs) * 3
@@ -418,7 +418,7 @@ class FluxMonitor(AbstractFluxMonitor, FreqMonitor):
     ...     name='flux_monitor')
     """
 
-    def storage_size(self, num_cells: int, tmesh: ArrayLike[float, 1]) -> int:
+    def storage_size(self, num_cells: int, tmesh: ArrayFloat1D) -> int:
         """Size of monitor storage given the number of points after discretization."""
         # stores 1 real number per frequency
         return BYTES_REAL * len(self.freqs)
@@ -442,7 +442,7 @@ class FluxTimeMonitor(AbstractFluxMonitor, TimeMonitor):
     ...     name='flux_vs_time')
     """
 
-    def storage_size(self, num_cells: int, tmesh: ArrayLike[float, 1]) -> int:
+    def storage_size(self, num_cells: int, tmesh: ArrayFloat1D) -> int:
         """Size of monitor storage given the number of points after discretization."""
         # stores 1 real number per time step
         num_steps = self.num_steps(tmesh)
@@ -612,7 +612,7 @@ class FieldProjectionAngleMonitor(AbstractFieldProjectionMonitor):
         units=RADIAN,
     )
 
-    def storage_size(self, num_cells: int, tmesh: ArrayLike[float, 1]) -> int:
+    def storage_size(self, num_cells: int, tmesh: ArrayFloat1D) -> int:
         """Size of monitor storage given the number of points after discretization."""
         # stores 1 complex number per pair of angles, per frequency,
         # for Er, Etheta, Ephi, Hr, Htheta, and Hphi (6 components)
@@ -672,7 +672,7 @@ class FieldProjectionCartesianMonitor(AbstractFieldProjectionMonitor):
         units=MICROMETER,
     )
 
-    def storage_size(self, num_cells: int, tmesh: ArrayLike[float, 1]) -> int:
+    def storage_size(self, num_cells: int, tmesh: ArrayFloat1D) -> int:
         """Size of monitor storage given the number of points after discretization."""
         # stores 1 complex number per pair of grid points, per frequency,
         # for Er, Etheta, Ephi, Hr, Htheta, and Hphi (6 components)
@@ -740,7 +740,7 @@ class FieldProjectionKSpaceMonitor(AbstractFieldProjectionMonitor):
             raise SetupError(f"Entries of 'uy' must lie in the range [-1, 1] for monitor {name}.")
         return values
 
-    def storage_size(self, num_cells: int, tmesh: ArrayLike[float, 1]) -> int:
+    def storage_size(self, num_cells: int, tmesh: ArrayFloat1D) -> int:
         """Size of monitor storage given the number of points after discretization."""
         # stores 1 complex number per pair of grid points, per frequency,
         # for Er, Etheta, Ephi, Hr, Htheta, and Hphi (6 components)
@@ -780,7 +780,7 @@ class DiffractionMonitor(PlanarMonitor, FreqMonitor):
             )
         return val
 
-    def storage_size(self, num_cells: int, tmesh: ArrayLike[float, 1]) -> int:
+    def storage_size(self, num_cells: int, tmesh: ArrayFloat1D) -> int:
         """Size of monitor storage given the number of points after discretization."""
         # assumes 1 diffraction order per frequency; actual size will be larger
         return BYTES_COMPLEX * len(self.freqs)

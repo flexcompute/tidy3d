@@ -6,7 +6,7 @@ import numpy as np
 from .base import Tidy3dBaseModel
 from ..constants import SECOND
 from ..exceptions import SetupError
-from .types import ArrayLike, Ax
+from .types import ArrayFloat1D, Ax
 from .viz import add_ax_if_none
 
 
@@ -57,7 +57,7 @@ class ApodizationSpec(Tidy3dBaseModel):
         return val
 
     @add_ax_if_none
-    def plot(self, times: ArrayLike[float, 1], ax: Ax = None) -> Ax:
+    def plot(self, times: ArrayFloat1D, ax: Ax = None) -> Ax:
         """Plot the apodization function.
 
         Parameters
