@@ -34,7 +34,7 @@ def _get_level_int(level: LogValue) -> int:
             f"'{level}' provided as a logging level. "
             "In the future, only upper-case logging levels may be specified. "
             f"This value will be converted to upper case '{level_upper}'."
-        )    
+        )
     if level_upper not in _level_value:
         # We don't want to import ConfigError to avoid a circular dependency
         raise ValueError(
