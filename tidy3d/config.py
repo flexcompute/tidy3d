@@ -2,7 +2,7 @@
 
 import pydantic as pd
 
-from .log import DEFAULT_LEVEL, LogLevel, set_logging_level
+from .log import DEFAULT_LEVEL, LogLevel, set_logging_level, log
 
 
 class Tidy3dConfig(pd.BaseModel):
@@ -25,11 +25,18 @@ class Tidy3dConfig(pd.BaseModel):
         'Can be "DEBUG", "INFO", "WARNING", "ERROR", or "CRITICAL".',
     )
 
-    @pd.validator("logging_level", always=True)
+    @pd.validator("logging_level", pre=True, always=True)
     def _set_logging_level(cls, val):
         """Set the logging level if logging_level is changed."""
-        set_logging_level(val)
-        return val
+        val_upper = val.upper()
+        if val_upper != val:
+            log.warning(
+                f"'{val}' provided to 'td.config.logging_level'. "
+                "In the future, only upper-case logging levels may be specified. "
+                f"This value will be converted to upper case '{val_upper}'."
+            )
+        set_logging_level(val_upper)
+        return val_upper
 
 
 # instance of the config that can be modified.
