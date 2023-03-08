@@ -95,38 +95,38 @@ class AbstractFieldDataset(Dataset, ABC):
         return xr.Dataset(centered_fields)
 
 
-EMSCALARFIELDTYPE = Union[ScalarFieldDataArray, ScalarFieldTimeDataArray, ScalarModeFieldDataArray]
+EMScalarFieldType = Union[ScalarFieldDataArray, ScalarFieldTimeDataArray, ScalarModeFieldDataArray]
 
 
 class ElectromagneticFieldDataset(AbstractFieldDataset, ABC):
     """Stores a collection of E and H fields with x, y, z components."""
 
-    Ex: EMSCALARFIELDTYPE = pd.Field(
+    Ex: EMScalarFieldType = pd.Field(
         None,
         title="Ex",
         description="Spatial distribution of the x-component of the electric field.",
     )
-    Ey: EMSCALARFIELDTYPE = pd.Field(
+    Ey: EMScalarFieldType = pd.Field(
         None,
         title="Ey",
         description="Spatial distribution of the y-component of the electric field.",
     )
-    Ez: EMSCALARFIELDTYPE = pd.Field(
+    Ez: EMScalarFieldType = pd.Field(
         None,
         title="Ez",
         description="Spatial distribution of the z-component of the electric field.",
     )
-    Hx: EMSCALARFIELDTYPE = pd.Field(
+    Hx: EMScalarFieldType = pd.Field(
         None,
         title="Hx",
         description="Spatial distribution of the x-component of the magnetic field.",
     )
-    Hy: EMSCALARFIELDTYPE = pd.Field(
+    Hy: EMScalarFieldType = pd.Field(
         None,
         title="Hy",
         description="Spatial distribution of the y-component of the magnetic field.",
     )
-    Hz: EMSCALARFIELDTYPE = pd.Field(
+    Hz: EMScalarFieldType = pd.Field(
         None,
         title="Hz",
         description="Spatial distribution of the z-component of the magnetic field.",
