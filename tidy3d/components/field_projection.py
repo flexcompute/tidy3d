@@ -30,6 +30,7 @@ from ..constants import C_0, MICROMETER, ETA_0, EPSILON_0, MU_0
 PTS_PER_WVL = 10
 
 # Numpy float array and related array types
+# pylint: disable=invalid-name
 ArrayLikeN2F = Union[float, Tuple[float, ...], ArrayLike[float, 4]]
 
 

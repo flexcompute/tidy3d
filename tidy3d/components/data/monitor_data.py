@@ -871,14 +871,14 @@ class FluxTimeData(MonitorData):
     flux: FluxTimeDataArray
 
 
-PROJFIELDTYPE = Union[
+ProjFieldType = Union[
     FieldProjectionAngleDataArray,
     FieldProjectionCartesianDataArray,
     FieldProjectionKSpaceDataArray,
     DiffractionDataArray,
 ]
 
-PROJMONTYPE = Union[
+ProjMonitorType = Union[
     FieldProjectionAngleMonitor,
     FieldProjectionCartesianMonitor,
     FieldProjectionKSpaceMonitor,
@@ -889,38 +889,38 @@ PROJMONTYPE = Union[
 class AbstractFieldProjectionData(MonitorData):
     """Collection of projected fields in spherical coordinates in the frequency domain."""
 
-    monitor: PROJMONTYPE = pd.Field(
+    monitor: ProjMonitorType = pd.Field(
         ...,
         title="Projection monitor",
         description="Field projection monitor.",
     )
 
-    Er: PROJFIELDTYPE = pd.Field(
+    Er: ProjFieldType = pd.Field(
         ...,
         title="Ephi",
         description="Spatial distribution of r-component of the electric field.",
     )
-    Etheta: PROJFIELDTYPE = pd.Field(
+    Etheta: ProjFieldType = pd.Field(
         ...,
         title="Etheta",
         description="Spatial distribution of the theta-component of the electric field.",
     )
-    Ephi: PROJFIELDTYPE = pd.Field(
+    Ephi: ProjFieldType = pd.Field(
         ...,
         title="Ephi",
         description="Spatial distribution of phi-component of the electric field.",
     )
-    Hr: PROJFIELDTYPE = pd.Field(
+    Hr: ProjFieldType = pd.Field(
         ...,
         title="Hphi",
         description="Spatial distribution of r-component of the magnetic field.",
     )
-    Htheta: PROJFIELDTYPE = pd.Field(
+    Htheta: ProjFieldType = pd.Field(
         ...,
         title="Htheta",
         description="Spatial distribution of theta-component of the magnetic field.",
     )
-    Hphi: PROJFIELDTYPE = pd.Field(
+    Hphi: ProjFieldType = pd.Field(
         ...,
         title="Hphi",
         description="Spatial distribution of phi-component of the magnetic field.",
