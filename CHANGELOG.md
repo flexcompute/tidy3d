@@ -5,13 +5,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Added
-
-### Changed
-
-## [1.9.2] - 2023-3-08
+## [1.9.3] - 2023-3-08
 
 ### Fixed
+- Allow new `tidy3d.config.logging_level` to accept lower case for backwards compatibility.
+
+## [1.9.2] - 2023-3-08
 
 ### Added
 - `set_logging_console` allows redirection of console messages to stderr.
@@ -597,7 +596,8 @@ which fields are to be projected is now determined automatically based on the me
 - Job and Batch classes for better simulation handling (eventually to fully replace webapi functions).
 - A large number of small improvements and bug fixes.
 
-[Unreleased]: https://github.com/flexcompute/tidy3d/compare/v1.9.2...develop
+[Unreleased]: https://github.com/flexcompute/tidy3d/compare/v1.9.3...develop
+[1.9.3]: https://github.com/flexcompute/tidy3d/compare/v1.9.2...v1.9.3
 [1.9.2]: https://github.com/flexcompute/tidy3d/compare/v1.9.1...v1.9.2
 [1.9.1]: https://github.com/flexcompute/tidy3d/compare/v1.9.0...v1.9.1
 [1.9.0]: https://github.com/flexcompute/tidy3d/compare/v1.8.4...v1.9.0

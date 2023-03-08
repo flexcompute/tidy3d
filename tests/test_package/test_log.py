@@ -8,6 +8,7 @@ from tidy3d.exceptions import Tidy3dError
 from tidy3d.log import DEFAULT_LEVEL, _get_level_int, set_logging_level
 from ..utils import log_capture, assert_log_level
 
+
 def test_log():
     td.log.debug("debug test")
     td.log.info("info test")
@@ -37,12 +38,24 @@ def test_set_logging_level_deprecated():
 
 def test_exception_message():
     MESSAGE = "message"
-    e = Tidy3dError(MESSAGE),
+    e = Tidy3dError(MESSAGE)
     assert str(e) == MESSAGE
 
-@pytest.mark.parametrize('level_supplied, desired_level', [('warning', 'WARNING'), ('WARNING', None)])
+
+@pytest.mark.parametrize(
+    "level_supplied, desired_level",
+    [
+        ("warning", "WARNING"),
+        ("WARNING", None),
+    ],
+)
 def test_logging_upper(log_capture, level_supplied, desired_level):
+    """Make sure we get a deprecation warning if lowrcase."""
     td.config.logging_level = level_supplied
     assert_log_level(log_capture, desired_level)
 
 
+def test_logging_unrecognized():
+    """If unrecognized option, raise validation errorr."""
+    with pytest.raises(pd.ValidationError):
+        td.config.logging_level = "blah"
