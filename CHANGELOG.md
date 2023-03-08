@@ -5,6 +5,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- `export_matlib_to_file` in `material_library` exports material's full name in additional to abbreviation.
+
 ## [1.10.0rc1] - 2023-3-07
 
 ### Added

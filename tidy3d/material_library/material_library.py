@@ -12,7 +12,7 @@ def export_matlib_to_file(fname: str = "matlib.json") -> None:
     """Write the material library to a .json file."""
 
     mat_lib_dict = {
-        mat_name: {
+        f'{mat.name} ("{mat_name}")': {
             var_name: json.loads(var.medium._json_string)  # pylint: disable=protected-access
             for var_name, var in mat.variants.items()
         }
