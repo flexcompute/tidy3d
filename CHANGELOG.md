@@ -5,20 +5,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
 ### Changed
 - `export_matlib_to_file` in `material_library` exports material's full name in additional to abbreviation.
+- Simpler progressbars for `run_async`.
+
+### Fixed
+- Bug in remote file transfer when client environment has no correct certificate authority pem file install locally. 
+- `SourceTime` plotting methods `.plot()` and `.plot_spectrum()` accept a `val` kwarg, which selects which part of the data (`'real'`, `'imag'`, or `'abs'`) to plot, rather than plotting all at once.
 
 ## [1.10.0rc1] - 2023-3-07
 
 ### Added
 - `TriangleMesh` class for modeling geometries specified by triangle surface meshes, with support for STL file import.
-
-### Changed
-
-### Fixed
-- Bug in remote file transfer when client environment has no correct certificate authority pem file install locally. 
-
-- `SourceTime` plotting methods `.plot()` and `.plot_spectrum()` accept a `val` kwarg, which selects which part of the data (`'real'`, `'imag'`, or `'abs'`) to plot, rather than plotting all at once.
 
 ## [1.9.1] - 2023-3-06
 
