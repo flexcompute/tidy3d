@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `SimulationData.plot_field` accepts new field componets and values, including the Poynting vector.
 - `SimulationData.get_poynting_vector` for calculating the 3D Poynting vector at the Yee cell centers.
 - Post init validation of Tidy3D components.
+- `Medium2D` class for surface conductivity model of a 2D material.
+- Entries in `material_library` for graphene and some common TMDs.
+- Ability to create a 2D representation of a thin 3D metal.
+- `AutoGrid` for 2D materials.
 
 ### Changed
 - `export_matlib_to_file` in `material_library` exports material's full name in additional to abbreviation.

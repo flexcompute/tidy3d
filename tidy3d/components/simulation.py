@@ -17,7 +17,7 @@ from .validators import validate_mode_objects_symmetry
 from .geometry import Box, TriangleMesh, Geometry, PolySlab, Cylinder
 from .types import Ax, Shapely, FreqBound, Axis, annotate_type, Symmetry
 from .grid.grid import Coords1D, Grid, Coords
-from .grid.grid_spec import GridSpec, UniformGrid
+from .grid.grid_spec import GridSpec, UniformGrid, AutoGrid
 from .medium import Medium, MediumType, AbstractMedium, PECMedium
 from .medium import CustomMedium, Medium2D, MediumType3D
 from .boundary import BoundarySpec, BlochBoundary, PECBoundary, PMCBoundary, Periodic
@@ -2225,6 +2225,58 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
 
         return len(self.tmesh)
 
+    def _grid_corrections_2dmaterials(self, grid: Grid) -> Grid:
+        """Correct the grid if 2d materials are present, using their volumetric equivalents."""
+        if not any(isinstance(structure.medium, Medium2D) for structure in self.structures):
+            return grid
+
+        # when there are 2D materials, need to make grid again with volumetric_structures
+        # generated using the first grid
+
+        volumetric_structures = [Structure(geometry=self.geometry, medium=self.medium)]
+        volumetric_structures += self._volumetric_structures_grid(grid)
+
+        volumetric_grid = self.grid_spec.make_grid(
+            structures=volumetric_structures,
+            symmetry=self.symmetry,
+            sources=self.sources,
+            num_pml_layers=self.num_pml_layers,
+        )
+
+        # Handle 2D materials if ``AutoGrid`` is used for in-plane directions
+        # must use original grid for the normal directions of all 2d materials
+        grid_axes = [False, False, False]
+        # must use volumetric grid for the ``AutoGrid`` in-plane directions of 2d materials
+        volumetric_grid_axes = [False, False, False]
+        for structure in self.structures:
+            if isinstance(structure.medium, Medium2D):
+                normal = structure.geometry._normal_2dmaterial  # pylint:disable=protected-access
+                grid_axes[normal] = True
+                for axis, grid_axis in enumerate(
+                    [self.grid_spec.grid_x, self.grid_spec.grid_y, self.grid_spec.grid_z]
+                ):
+                    if isinstance(grid_axis, AutoGrid):
+                        if axis != normal:
+                            volumetric_grid_axes[axis] = True
+                        else:
+                            log.warning(
+                                "Using 'AutoGrid' for the normal direction of a 2D material "
+                                "may generate a grid that is not sufficiently fine."
+                            )
+        coords_all = [None, None, None]
+        for axis in range(3):
+            if grid_axes[axis] and volumetric_grid_axes[axis]:
+                raise ValidationError(
+                    "Unable to generate grid. Cannot use 'AutoGrid' for "
+                    "an axis that is in-plane to one 2D material and normal to another."
+                )
+            if volumetric_grid_axes[axis]:
+                coords_all[axis] = volumetric_grid.boundaries.to_list[axis]
+            else:
+                coords_all[axis] = grid.boundaries.to_list[axis]
+
+        return Grid(boundaries=Coords(**dict(zip("xyz", coords_all))))
+
     @cached_property
     def grid(self) -> Grid:
         """FDTD grid spatial locations and information.
@@ -2239,12 +2291,14 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         structures = [Structure(geometry=self.geometry, medium=self.medium)]
         structures += self.structures
 
-        return self.grid_spec.make_grid(
+        grid = self.grid_spec.make_grid(
             structures=structures,
             symmetry=self.symmetry,
             sources=self.sources,
             num_pml_layers=self.num_pml_layers,
         )
+
+        return self._grid_corrections_2dmaterials(grid)
 
     @cached_property
     def num_cells(self) -> int:
@@ -2346,8 +2400,32 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
 
         return Box.from_bounds(bmin_new, bmax_new)
 
-    def discretize(self, box: Box, snap_zero_dim: bool = False, **kwargs) -> Grid:
+    def _discretize_grid(self, box: Box, grid: Grid, snap_zero_dim: bool = False, **kwargs) -> Grid:
         """Grid containing only cells that intersect with a :class:`Box`.
+
+        As opposed to ``Simulation.discretize``, this function operates on a ``grid``
+        which may not be the grid of the simulation.
+        """
+        if not self.intersects(box):
+            log.error(f"Box {box} is outside simulation, cannot discretize")
+
+        span_inds = grid.discretize_inds(box, **kwargs)
+        boundary_dict = {}
+        for idim, dim in enumerate("xyz"):
+            ind_beg, ind_end = span_inds[idim]
+            # ind_end + 1 because we are selecting cell boundaries not cells
+            boundary_dict[dim] = grid.periodic_subspace(idim, ind_beg, ind_end + 1)
+
+            # Overwrite with zero dimension snapped, if requested
+            if snap_zero_dim:
+                if self.size[idim] == 0:
+                    boundary_dict[dim] = [self.center[idim], self.center[idim]]
+                elif box.size[idim] == 0:
+                    boundary_dict[dim] = [box.center[idim], box.center[idim]]
+        return Grid(boundaries=Coords(**boundary_dict))
+
+    def discretize(self, box: Box, snap_zero_dim: bool = False, **kwargs) -> Grid:
+        """Grid containing only cells that intersect with a :class:`.Box`.
 
         Parameters
         ----------
@@ -2365,24 +2443,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         :class:`Grid`
             The FDTD subgrid containing simulation points that intersect with ``box``.
         """
-
-        if not self.intersects(box):
-            log.error(f"Box {box} is outside simulation, cannot discretize")
-
-        span_inds = self.grid.discretize_inds(box, **kwargs)
-        boundary_dict = {}
-        for idim, dim in enumerate("xyz"):
-            ind_beg, ind_end = span_inds[idim]
-            # ind_end + 1 because we are selecting cell boundaries not cells
-            boundary_dict[dim] = self.grid.periodic_subspace(idim, ind_beg, ind_end + 1)
-
-            # Overwrite with zero dimension snapped, if requested
-            if snap_zero_dim:
-                if self.size[idim] == 0:
-                    boundary_dict[dim] = [self.center[idim], self.center[idim]]
-                elif box.size[idim] == 0:
-                    boundary_dict[dim] = [box.center[idim], box.center[idim]]
-        return Grid(boundaries=Coords(**boundary_dict))
+        return self._discretize_grid(box, self.grid, snap_zero_dim, **kwargs)
 
     def epsilon(
         self,
@@ -2525,10 +2586,9 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         ]
         return datasets_source + datasets_medium + datasets_geometry
 
-    @cached_property
-    def volumetric_structures(self) -> Tuple[Structure]:
+    def _volumetric_structures_grid(self, grid: Grid) -> Tuple[Structure]:
         """Generate a tuple of structures wherein any 2D materials are converted to 3D
-        volumetric equivalents."""
+        volumetric equivalents, using ``grid`` as the simulation grid."""
 
         if not any(isinstance(medium, Medium2D) for medium in self.mediums):
             return self.structures
@@ -2558,7 +2618,9 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
 
         def get_dls(geom: Geometry, axis: Axis, num_dls: int) -> float:
             """Get grid size around the 2D material."""
-            dls = self.discretize(Box.from_bounds(*geom.bounds)).sizes.to_list[axis]
+            dls = self._discretize_grid(Box.from_bounds(*geom.bounds), grid=grid).sizes.to_list[
+                axis
+            ]
             if len(dls) != num_dls:
                 raise Tidy3dError(
                     "Failed to detect grid size around the 2D material. "
@@ -2570,7 +2632,10 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
 
         def snap_to_grid(geom: Geometry, axis: Axis) -> Geometry:
             """Snap a 2D material to the Yee grid."""
-            new_center = self.discretize(Box.from_bounds(*geom.bounds)).boundaries.to_list[axis][0]
+            new_centers = self._discretize_grid(
+                Box.from_bounds(*geom.bounds), grid=grid
+            ).boundaries.to_list[axis]
+            new_center = new_centers[np.argmin(abs(new_centers - get_bounds(geom, axis)[0]))]
             return set_bounds(geom, (new_center, new_center), axis)
 
         def get_neighboring_media(
@@ -2629,3 +2694,9 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
             new_structures.append(structure.updated_copy(geometry=new_geometry, medium=new_medium))
 
         return tuple(new_structures)
+
+    @cached_property
+    def volumetric_structures(self) -> Tuple[Structure]:
+        """Generate a tuple of structures wherein any 2D materials are converted to 3D
+        volumetric equivalents."""
+        return self._volumetric_structures_grid(self.grid)

@@ -556,30 +556,16 @@ class GridSpec(Tidy3dBaseModel):
                     "use 'AutoGrid'."
                 )
 
-        coords_x = self.grid_x.make_coords(
-            axis=0,
-            structures=list(structures) + list(self.override_structures),
-            symmetry=symmetry,
-            wavelength=wavelength,
-            num_pml_layers=num_pml_layers[0],
-        )
-        coords_y = self.grid_y.make_coords(
-            axis=1,
-            structures=list(structures) + list(self.override_structures),
-            symmetry=symmetry,
-            wavelength=wavelength,
-            num_pml_layers=num_pml_layers[1],
-        )
-        coords_z = self.grid_z.make_coords(
-            axis=2,
-            structures=list(structures) + list(self.override_structures),
-            symmetry=symmetry,
-            wavelength=wavelength,
-            num_pml_layers=num_pml_layers[2],
-        )
-
-        coords = Coords(x=coords_x, y=coords_y, z=coords_z)
-        return Grid(boundaries=coords)
+        coords_all = [None, None, None]
+        for axis in range(3):
+            coords_all[axis] = [self.grid_x, self.grid_y, self.grid_z][axis].make_coords(
+                axis=axis,
+                structures=list(structures) + list(self.override_structures),
+                symmetry=symmetry,
+                wavelength=wavelength,
+                num_pml_layers=num_pml_layers[axis],
+            )
+        return Grid(boundaries=Coords(**dict(zip("xyz", coords_all))))
 
     @classmethod
     def auto(  # pylint:disable=too-many-arguments
