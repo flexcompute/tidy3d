@@ -325,7 +325,6 @@ class GradedMesher(Mesher):
         """For :class:`.MeshOverrideStructure`, we allow ``dl`` along some axis
         to be ``None`` so that no override occurs along this axis.Here those
         structures with ``dl[axis]=None`` is filtered.
-        Also removes any :class:`.Medium2D` from the list.
 
         Parameters
         ----------
@@ -346,9 +345,6 @@ class GradedMesher(Mesher):
                 # skip override structure if dl not defined along axis
                 if structure.dl[axis] is None:
                     continue
-            elif isinstance(structure.medium, Medium2D):
-                # skip 2D medium
-                continue
             structures_filtered.append(structure)
         return structures_filtered
 
@@ -380,7 +376,7 @@ class GradedMesher(Mesher):
         min_steps = []
         for structure in structures:
             if isinstance(structure, Structure):
-                if isinstance(structure.medium, PECMedium):
+                if isinstance(structure.medium, (PECMedium, Medium2D)):
                     index = 1.0
                 else:
                     n, k = structure.medium.eps_complex_to_nk(
