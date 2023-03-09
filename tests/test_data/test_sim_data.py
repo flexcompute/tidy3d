@@ -2,6 +2,7 @@
 import pytest
 import numpy as np
 import matplotlib.pylab as plt
+import pydantic
 
 import tidy3d as td
 from tidy3d.log import DataError
@@ -182,7 +183,7 @@ def test_to_json():
     sim_data.to_file(fname=FNAME)
 
     # saving to json does not store data, so trying to load from file will trigger custom error.
-    with pytest.raises(DataError):
+    with pytest.raises(pydantic.ValidationError):
         sim_data2 = SimulationData.from_file(fname=FNAME)
         # assert sim_data == sim_data2
 
@@ -343,7 +344,7 @@ def test_missing_monitor():
     sim_data = make_sim_data()
     new_monitors = list(sim_data.simulation.monitors)[:-1]
     new_sim = sim_data.simulation.copy(update=dict(monitors=new_monitors))
-    with pytest.raises(DataError):
+    with pytest.raises(pydantic.ValidationError):
         new_sim_data = sim_data.copy(update=dict(simulation=new_sim))
 
 

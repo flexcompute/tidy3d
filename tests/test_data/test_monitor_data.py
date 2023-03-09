@@ -1,7 +1,7 @@
 """Tests tidy3d/components/data/monitor_data.py"""
 import numpy as np
 import pytest
-
+import pydantic
 import tidy3d as td
 
 from tidy3d.components.monitor import FieldMonitor, FieldTimeMonitor, PermittivityMonitor
@@ -414,7 +414,7 @@ def test_field_data_symmetry_present():
     field_data = td.FieldTimeData(monitor=monitor, **fields)
 
     # fails if symmetry specified but missing symmetry center
-    with pytest.raises(SetupError):
+    with pytest.raises(pydantic.ValidationError):
         field_data = td.FieldTimeData(
             monitor=monitor,
             symmetry=(1, -1, 0),
@@ -423,7 +423,7 @@ def test_field_data_symmetry_present():
         )
 
     # fails if symmetry specified but missing etended grid
-    with pytest.raises(SetupError):
+    with pytest.raises(pydantic.ValidationError):
         field_data = td.FieldTimeData(
             monitor=monitor, symmetry=(1, -1, 1), symmetry_center=(0, 0, 0), **fields
         )

@@ -286,7 +286,7 @@ def test_multiple_freqs():
         name=MNT_NAME,
     )
 
-    with pytest.raises(AdjointError):
+    with pytest.raises(pydantic.ValidationError):
         sim = JaxSimulation(
             size=(10, 10, 10),
             run_time=1e-12,
@@ -313,7 +313,7 @@ def test_different_freqs():
         freqs=[2e14],
         name=MNT_NAME + "2",
     )
-    with pytest.raises(AdjointError):
+    with pytest.raises(pydantic.ValidationError):
         sim = JaxSimulation(
             size=(10, 10, 10),
             run_time=1e-12,
@@ -535,7 +535,7 @@ def test_structure_overlaps():
 
 def test_validate_subpixel():
     """Make sure errors if subpixel is off."""
-    with pytest.raises(AdjointError):
+    with pytest.raises(pydantic.ValidationError):
         sim = JaxSimulation(
             size=(10, 10, 10),
             run_time=1e-12,

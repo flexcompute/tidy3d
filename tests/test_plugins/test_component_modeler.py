@@ -209,7 +209,7 @@ def test_validate_no_sources():
         source_time=td.GaussianPulse(freq0=2e14, fwidth=1e14), polarization="Ex"
     )
     sim_w_source = modeler.simulation.copy(update=dict(sources=(source,)))
-    with pytest.raises(SetupError):
+    with pytest.raises(pydantic.ValidationError):
         modeler_w_source = modeler.copy(update=dict(simulation=sim_w_source))
 
 

@@ -26,7 +26,7 @@ log = logging.getLogger(LOGGER_NAME)
 """ Tidy3d custom exceptions """
 
 
-class Tidy3dError(Exception):
+class Tidy3dError(ValueError):
     """Any error in tidy3d"""
 
     def __init__(self, message: str = None):

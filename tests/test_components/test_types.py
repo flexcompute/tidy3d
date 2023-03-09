@@ -12,7 +12,7 @@ def _test_validate_array_like():
         f: ArrayLike[float, 2]
 
     s = S(f=np.array([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]]))
-    with pytest.raises(ValidationError):
+    with pytest.raises(pydantic.ValidationError):
         s = S(f=np.array([1.0, 2.0, 3.0]))
 
 

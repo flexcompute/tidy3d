@@ -1,5 +1,6 @@
 import pytest
 import numpy as np
+import pydantic
 
 from tidy3d.material_library.material_library import (
     VariantItem,
@@ -35,7 +36,7 @@ def test_MaterialItem():
     material = MaterialItem(name="material", variants=dict(v1=variant1, v2=variant2), default="v1")
     assert material["v1"] == material.medium
 
-    with pytest.raises(SetupError):
+    with pytest.raises(pydantic.ValidationError):
         material = MaterialItem(
             name="material", variants=dict(v1=variant1, v2=variant2), default="v3"
         )
