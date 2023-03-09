@@ -15,16 +15,16 @@ def test_apodization():
 
 
 def test_end_lt_start():
-    with pytest.raises(SetupError):
+    with pytest.raises(pydantic.ValidationError):
         _ = td.ApodizationSpec(start=2, end=1, width=0.2)
 
 
 def test_no_width():
-    with pytest.raises(SetupError):
+    with pytest.raises(pydantic.ValidationError):
         _ = td.ApodizationSpec(start=1, end=2)
-    with pytest.raises(SetupError):
+    with pytest.raises(pydantic.ValidationError):
         _ = td.ApodizationSpec(start=1)
-    with pytest.raises(SetupError):
+    with pytest.raises(pydantic.ValidationError):
         _ = td.ApodizationSpec(end=2)
 
 

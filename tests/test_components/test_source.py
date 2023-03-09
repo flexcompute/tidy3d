@@ -99,11 +99,11 @@ def test_FieldSource():
     # s.plot(y=0)
 
     # test that non-planar geometry crashes plane wave and gaussian beams
-    with pytest.raises(ValidationError) as e_info:
+    with pytest.raises(pydantic.ValidationError) as e_info:
         s = td.PlaneWave(size=(1, 1, 1), source_time=g, pol_angle=np.pi / 2, direction="+")
-    with pytest.raises(ValidationError) as e_info:
+    with pytest.raises(pydantic.ValidationError) as e_info:
         s = td.GaussianBeam(size=(1, 1, 1), source_time=g, pol_angle=np.pi / 2, direction="+")
-    with pytest.raises(ValidationError) as e_info:
+    with pytest.raises(pydantic.ValidationError) as e_info:
         s = td.AstigmaticGaussianBeam(
             size=(1, 1, 1),
             source_time=g,
@@ -112,7 +112,7 @@ def test_FieldSource():
             waist_sizes=(0.2, 0.4),
             waist_distances=(0.1, 0.3),
         )
-    with pytest.raises(ValidationError) as e_info:
+    with pytest.raises(pydantic.ValidationError) as e_info:
         s = td.ModeSource(size=(1, 1, 1), source_time=g, mode_spec=mode_spec)
 
     from tidy3d.components.source import TFSF

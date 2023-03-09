@@ -141,7 +141,7 @@ def test_sim_bounds():
             center = 2 * amp * sign
             if np.sum(center) < 1e-12:
                 continue
-            with pytest.raises(SetupError) as e_info:
+            with pytest.raises(pydantic.ValidationError) as e_info:
                 place_box(tuple(center))
 
 
@@ -159,7 +159,7 @@ def test_sim_size():
         )
         s._validate_size()
 
-    with pytest.raises(SetupError):
+    with pytest.raises(pydantic.ValidationError):
         s = td.Simulation(
             size=(1, 1, 1),
             run_time=1e-7,
@@ -231,7 +231,7 @@ def test_monitor_simulation_frequency_range(caplog, fwidth, log_level):
 
 
 def test_validate_bloch_with_symmetry():
-    with pytest.raises(SetupError):
+    with pytest.raises(pydantic.ValidationError):
         td.Simulation(
             size=(1, 1, 1),
             run_time=1e-12,
@@ -296,7 +296,7 @@ def test_validate_plane_wave_boundaries(caplog):
     )
 
     # angled incidence plane wave with PMLs / absorbers should error
-    with pytest.raises(SetupError):
+    with pytest.raises(pydantic.ValidationError):
         td.Simulation(
             size=(1, 1, 1),
             run_time=1e-12,
@@ -612,7 +612,7 @@ def test_sim_plane_wave_error():
     )
 
     # with non-transparent box, raise
-    with pytest.raises(SetupError):
+    with pytest.raises(pydantic.ValidationError):
         _ = td.Simulation(
             size=(1, 1, 1),
             medium=medium_bg,
@@ -679,7 +679,7 @@ def test_sim_monitor_homogeneous():
         )
 
         # with non-transparent box, raise
-        with pytest.raises(SetupError):
+        with pytest.raises(pydantic.ValidationError):
             _ = td.Simulation(
                 size=(1, 1, 1),
                 medium=medium_bg,
@@ -820,7 +820,7 @@ def test_diffraction_medium():
         pol_angle=-1.0,
     )
 
-    with pytest.raises(SetupError):
+    with pytest.raises(pydantic.ValidationError):
         _ = td.Simulation(
             size=(2, 2, 2),
             structures=[box_cond],
@@ -830,7 +830,7 @@ def test_diffraction_medium():
             boundary_spec=td.BoundarySpec.all_sides(boundary=td.Periodic()),
         )
 
-    with pytest.raises(SetupError):
+    with pytest.raises(pydantic.ValidationError):
         _ = td.Simulation(
             size=(2, 2, 2),
             structures=[box_disp],
@@ -887,7 +887,7 @@ def test_num_mediums():
         boundary_spec=td.BoundarySpec.all_sides(boundary=td.Periodic()),
     )
 
-    with pytest.raises(SetupError):
+    with pytest.raises(pydantic.ValidationError):
         structures.append(
             td.Structure(geometry=td.Box(size=(1, 1, 1)), medium=td.Medium(permittivity=i + 2))
         )
@@ -956,7 +956,7 @@ def _test_names_default():
 
 def test_names_unique():
 
-    with pytest.raises(SetupError) as e:
+    with pytest.raises(pydantic.ValidationError) as e:
         sim = td.Simulation(
             size=(2.0, 2.0, 2.0),
             run_time=1e-12,
@@ -975,7 +975,7 @@ def test_names_unique():
             boundary_spec=td.BoundarySpec.all_sides(boundary=td.Periodic()),
         )
 
-    with pytest.raises(SetupError) as e:
+    with pytest.raises(pydantic.ValidationError) as e:
         sim = td.Simulation(
             size=(2.0, 2.0, 2.0),
             run_time=1e-12,
@@ -998,7 +998,7 @@ def test_names_unique():
             boundary_spec=td.BoundarySpec.all_sides(boundary=td.Periodic()),
         )
 
-    with pytest.raises(SetupError) as e:
+    with pytest.raises(pydantic.ValidationError) as e:
         sim = td.Simulation(
             size=(2.0, 2.0, 2.0),
             run_time=1e-12,
@@ -1015,7 +1015,7 @@ def test_mode_object_syms():
     g = td.GaussianPulse(freq0=1, fwidth=0.1)
 
     # wrong mode source
-    with pytest.raises(SetupError) as e_info:
+    with pytest.raises(pydantic.ValidationError) as e_info:
         sim = td.Simulation(
             center=(1.0, -1.0, 0.5),
             size=(2.0, 2.0, 2.0),
@@ -1027,7 +1027,7 @@ def test_mode_object_syms():
         )
 
     # wrong mode monitor
-    with pytest.raises(SetupError) as e_info:
+    with pytest.raises(pydantic.ValidationError) as e_info:
         sim = td.Simulation(
             center=(1.0, -1.0, 0.5),
             size=(2.0, 2.0, 2.0),

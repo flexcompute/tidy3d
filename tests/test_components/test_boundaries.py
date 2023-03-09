@@ -2,6 +2,7 @@
 
 import numpy as np
 import pytest
+import pydantic
 
 import tidy3d as td
 from tidy3d.components.boundary import BoundarySpec, Boundary, BoundaryEdgeType
@@ -69,11 +70,11 @@ def test_boundary_validators():
     periodic = Periodic()
 
     # test `bloch_on_both_sides`
-    with pytest.raises(SetupError) as e_info:
+    with pytest.raises(pydantic.ValidationError) as e_info:
         boundary = Boundary(plus=bloch, minus=pec)
 
     # test `periodic_with_pml`
-    with pytest.raises(SetupError) as e_info:
+    with pytest.raises(pydantic.ValidationError) as e_info:
         boundary = Boundary(plus=periodic, minus=pml)
 
 

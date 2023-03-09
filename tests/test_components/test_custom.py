@@ -2,6 +2,7 @@
 import pytest
 import numpy as np
 import dill as pickle
+import pydantic
 
 from tidy3d.components.simulation import Simulation
 from tidy3d.components.geometry import Box
@@ -71,7 +72,7 @@ def test_validator_tangential_field():
     """Test that it errors if no tangential field defined."""
     field_dataset = FIELD_SRC.field_dataset
     field_dataset = field_dataset.copy(update=dict(Ex=None, Ez=None, Hx=None, Hz=None))
-    with pytest.raises(SetupError):
+    with pytest.raises(pydantic.ValidationError):
         field_source_no_tang = CustomFieldSource(
             size=SIZE, source_time=ST, field_dataset=field_dataset
         )
@@ -81,7 +82,7 @@ def test_validator_non_planar():
     """Test that it errors if the source geometry has a volume."""
     field_dataset = FIELD_SRC.field_dataset
     field_dataset = field_dataset.copy(update=dict(Ex=None, Ez=None, Hx=None, Hz=None))
-    with pytest.raises(ValidationError):
+    with pytest.raises(pydantic.ValidationError):
         field_source_no_tang = CustomFieldSource(
             size=(1, 1, 1), source_time=ST, field_dataset=field_dataset
         )
@@ -92,7 +93,7 @@ def test_validator_freq_out_of_range():
     field_dataset = FIELD_SRC.field_dataset
     Ex_new = ScalarFieldDataArray(field_dataset.Ex.data, coords=dict(x=X, y=Y, z=Z, f=[0]))
     field_dataset = FIELD_SRC.field_dataset.copy(update=dict(Ex=Ex_new))
-    with pytest.raises(SetupError):
+    with pytest.raises(pydantic.ValidationError):
         field_source_no_tang = CustomFieldSource(
             size=SIZE, source_time=ST, field_dataset=field_dataset
         )
@@ -104,13 +105,13 @@ def test_validator_freq_multiple():
     new_data = np.concatenate((field_dataset.Ex.data, field_dataset.Ex.data), axis=-1)
     Ex_new = ScalarFieldDataArray(new_data, coords=dict(x=X, y=Y, z=Z, f=[1, 2]))
     field_dataset = FIELD_SRC.field_dataset.copy(update=dict(Ex=Ex_new))
-    with pytest.raises(SetupError):
+    with pytest.raises(pydantic.ValidationError):
         field_source = FIELD_SRC.copy(update=dict(field_dataset=field_dataset))
 
 
 def test_validator_data_span():
     """Test that it errors if data does not span source size."""
-    with pytest.raises(SetupError):
+    with pytest.raises(pydantic.ValidationError):
         field_source = FIELD_SRC.copy(update=dict(size=(3, 0, 2)))
 
 
@@ -226,7 +227,7 @@ def test_medium_smaller_than_one_positive_sigma():
     n_data = 1 + np.random.random((Nx, Ny, Nz, 1))
     n_data[0, 0, 0, 0] = 0.5
     n_dataarray = ScalarFieldDataArray(n_data, coords=dict(x=X, y=Y, z=Z, f=freqs))
-    with pytest.raises(SetupError):
+    with pytest.raises(pydantic.ValidationError):
         mat_custom = CustomMedium.from_nk(n_dataarray)
 
     # negative sigma
@@ -235,7 +236,7 @@ def test_medium_smaller_than_one_positive_sigma():
     k_data[0, 0, 0, 0] = -0.1
     n_dataarray = ScalarFieldDataArray(n_data, coords=dict(x=X, y=Y, z=Z, f=freqs))
     k_dataarray = ScalarFieldDataArray(k_data, coords=dict(x=X, y=Y, z=Z, f=freqs))
-    with pytest.raises(SetupError):
+    with pytest.raises(pydantic.ValidationError):
         mat_custom = CustomMedium.from_nk(n_dataarray, k_dataarray)
 
 
@@ -264,7 +265,7 @@ def test_medium_eps_model():
     med.eps_model(frequency=freqs[0])
 
     # error with multifrequency data
-    with pytest.raises(SetupError):
+    with pytest.raises(pydantic.ValidationError):
         med = make_custom_medium(make_scalar_data_multifreqs())
 
 

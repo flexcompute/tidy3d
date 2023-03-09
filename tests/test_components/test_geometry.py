@@ -160,14 +160,14 @@ def test_bounds_base():
 
 
 def test_center_not_inf_validate():
-    with pytest.raises(ValidationError):
+    with pytest.raises(pydantic.ValidationError):
         g = td.Box(center=(td.inf, 0, 0))
-    with pytest.raises(ValidationError):
+    with pytest.raises(pydantic.ValidationError):
         g = td.Box(center=(-td.inf, 0, 0))
 
 
 def test_radius_not_inf_validate():
-    with pytest.raises(ValidationError):
+    with pytest.raises(pydantic.ValidationError):
         g = td.Sphere(radius=td.inf)
 
 
@@ -188,15 +188,15 @@ def test_polyslab_center_axis():
 
 
 def test_validate_polyslab_vertices_valid():
-    with pytest.raises(SetupError):
+    with pytest.raises(pydantic.ValidationError):
         POLYSLAB.copy(update=dict(vertices=(1, 2, 3)))
-    with pytest.raises(SetupError):
+    with pytest.raises(pydantic.ValidationError):
         crossing_verts = ((0, 0), (1, 1), (0, 1), (1, 0))
         POLYSLAB.copy(update=dict(vertices=crossing_verts))
 
 
 def test_sidewall_failed_validation():
-    with pytest.raises(ValidationError):
+    with pytest.raises(pydantic.ValidationError):
         POLYSLAB.copy(update=dict(sidewall_angle=1000))
 
 
@@ -226,9 +226,9 @@ def test_gds_cell():
     gds_cell.add(gdstk.rectangle((0, 0), (1, 1)))
     td.PolySlab.from_gds(gds_cell=gds_cell, axis=2, slab_bounds=(-1, 1), gds_layer=0)
     td.PolySlab.from_gds(gds_cell=gds_cell, axis=2, slab_bounds=(-1, 1), gds_layer=0, gds_dtype=0)
-    with pytest.raises(Tidy3dKeyError):
+    with pytest.raises(pydantic.ValidationError):
         td.PolySlab.from_gds(gds_cell=gds_cell, axis=2, slab_bounds=(-1, 1), gds_layer=1)
-    with pytest.raises(Tidy3dKeyError):
+    with pytest.raises(pydantic.ValidationError):
         td.PolySlab.from_gds(
             gds_cell=gds_cell, axis=2, slab_bounds=(-1, 1), gds_layer=1, gds_dtype=0
         )
@@ -261,7 +261,7 @@ def test_geo_group_methods():
 def test_geo_group_empty():
     """dont allow empty geometry list."""
 
-    with pytest.raises(ValidationError):
+    with pytest.raises(pydantic.ValidationError):
         geo_group = td.GeometryGroup(geometries=[])
 
 
@@ -571,5 +571,5 @@ def test_custom_surface_geometry():
     vertices = np.array([[1, 0, 0], [1, 0, 0], [0, 1, 0], [0, 0, 1]])
     faces = np.array([[1, 2, 3], [0, 3, 2], [0, 1, 3], [0, 2, 1]])
     tetrahedron = trimesh.Trimesh(vertices, faces)
-    with pytest.raises(ValidationError):
+    with pytest.raises(pydantic.ValidationError):
         geom = td.TriangleMesh.from_trimesh(tetrahedron)
