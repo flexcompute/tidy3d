@@ -252,7 +252,7 @@ which fields are to be projected is now determined automatically based on the me
 - Bug in auto-mesh generation.
 
 ### Added
-- Ability to compute far fields server-side on GPUs.
+- Ability to compute field projections server-side.
 
 ### Changed
 - All Tidy3D components apart from data structures are now fully immutable.
