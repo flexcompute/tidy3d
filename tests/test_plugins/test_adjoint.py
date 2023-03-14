@@ -763,3 +763,13 @@ def test_diff_data_angles(axis):
     zeroth_order_theta = thetas.sel(orders_x=0, orders_y=0).isel(f=0)
 
     assert np.isclose(zeroth_order_theta, 0.0)
+
+
+def test_error_regular_web():
+    """Test that a custom error is raised if running tidy3d through web.run()"""
+
+    sim = make_sim(permittivity=EPS, size=SIZE, vertices=VERTICES, base_eps_val=BASE_EPS_VAL)
+    import tidy3d.web as web
+
+    with pytest.raises(ValueError):
+        web.run(sim, task_name="test")
