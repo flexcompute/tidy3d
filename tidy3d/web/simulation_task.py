@@ -5,8 +5,9 @@ import os.path
 import tempfile
 from datetime import datetime
 from typing import List, Optional, Callable, Tuple
-
+import pydantic as pd
 from pydantic import Extra, Field, parse_obj_as
+
 from tidy3d import Simulation
 from tidy3d.version import __version__
 
@@ -153,6 +154,20 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
         "``{'id', 'status', 'name', 'workUnit', 'solverVersion'}``.",
     )
 
+    @pd.root_validator(pre=True)
+    def _error_if_jax_sim(cls, values):
+        """Raise error if user tries to submit simulation that's a JaxSimulation."""
+        sim = values.get("simulation")
+        if sim is None:
+            return values
+        if "JaxSimulation" in str(type(sim)):
+            raise ValueError(
+                "'JaxSimulation' not compatible with regular webapi functions. "
+                "Either convert it to Simulation with 'jax_sim.to_simulation()[0]' or use "
+                "the 'adjoint.run' function to run JaxSimulations."
+            )
+        return values
+
     # pylint: disable=arguments-differ
     @classmethod
     def create(
@@ -191,6 +206,7 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
             f"tidy3d/projects/{folder.folder_id}/tasks",
             {"task_name": task_name, "call_back_url": call_back_url},
         )
+
         return SimulationTask(**resp, simulation=simulation, folder=folder)
 
     # pylint: disable=arguments-differ
