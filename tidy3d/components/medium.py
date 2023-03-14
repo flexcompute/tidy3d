@@ -828,13 +828,14 @@ class Sellmeier(DispersiveMedium):
             Real part of refractive index. Must be larger than or equal to one.
         dn_dwvl : float = 0
             Derivative of the refractive index with wavelength (1/um). Must be negative.
-        frequency : float
-            Frequency to evaluate permittivity at (Hz).
+        freq : float
+            Frequency at which ``n`` and ``dn_dwvl`` are sampled.
 
         Returns
         -------
-        :class:`Medium`
-            medium containing the corresponding ``permittivity`` and ``conductivity``.
+        :class:`Sellmeier`
+            Single-pole Sellmeier medium with the prvoided refractive index and index dispersion
+            valuesat at the prvoided frequency.
         """
 
         if dn_dwvl >= 0:
