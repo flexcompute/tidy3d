@@ -9,6 +9,7 @@ import pytz
 from rich.console import Console
 from rich.progress import Progress
 
+from ..version import __version__
 from .environment import Env
 from .simulation_task import SimulationTask, SIM_FILE_HDF5, Folder
 from .task import TaskId, TaskInfo
@@ -38,6 +39,9 @@ def run(  # pylint:disable=too-many-arguments
     verbose: bool = True,
     progress_callback_upload: Callable[[float], None] = None,
     progress_callback_download: Callable[[float], None] = None,
+    solver_version: str = None,
+    worker_group: str = None,
+    protocol_version: str = __version__,
 ) -> SimulationData:
     """Submits a :class:`.Simulation` to server, starts running, monitors progress, downloads,
     and loads results as a :class:`.SimulationData` object.
@@ -61,6 +65,12 @@ def run(  # pylint:disable=too-many-arguments
         Optional callback function called when uploading file with ``bytes_in_chunk`` as argument.
     progress_callback_download : Callable[[float], None] = None
         Optional callback function called when downloading file with ``bytes_in_chunk`` as argument.
+    solver_version: str = None
+        target solver version.
+    worker_group: str = None
+        worker group
+    protocol_version: str = None
+        protocol version
 
     Returns
     -------
@@ -75,7 +85,12 @@ def run(  # pylint:disable=too-many-arguments
         verbose=verbose,
         progress_callback=progress_callback_upload,
     )
-    start(task_id)
+    start(
+        task_id,
+        solver_version=solver_version,
+        worker_group=worker_group,
+        protocol_version=protocol_version,
+    )
     monitor(task_id, verbose=verbose)
     return load(
         task_id=task_id, path=path, verbose=verbose, progress_callback=progress_callback_download
@@ -152,7 +167,12 @@ def get_info(task_id: TaskId) -> TaskInfo:
     return TaskInfo(**{"taskId": task.task_id, **task.dict()})
 
 
-def start(task_id: TaskId) -> None:
+def start(
+    task_id: TaskId,
+    solver_version: str = None,
+    worker_group: str = None,
+    protocol_version: str = __version__,
+) -> None:
     """Start running the simulation associated with task.
 
     Parameters
@@ -160,10 +180,12 @@ def start(task_id: TaskId) -> None:
 
     task_id : str
         Unique identifier of task on server.  Returned by :meth:`upload`.
-    solver_version : str
-        Supply or override a specific solver version to the task.
-    verbose : bool = True
-        If `True`, will print progressbars and status, otherwise, will run silently.
+    solver_version: str = None
+        target solver version.
+    worker_group: str = None
+        worker group
+    protocol_version: str = None
+        protocol version
 
     Note
     ----
@@ -172,7 +194,9 @@ def start(task_id: TaskId) -> None:
     task = SimulationTask.get(task_id)
     if not task:
         raise ValueError("Task not found.")
-    task.submit()
+    task.submit(
+        solver_version=solver_version, worker_group=worker_group, protocol_version=protocol_version
+    )
 
 
 def get_run_info(task_id: TaskId):

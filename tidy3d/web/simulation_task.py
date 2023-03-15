@@ -204,7 +204,7 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
 
         resp = http.post(
             f"tidy3d/projects/{folder.folder_id}/tasks",
-            {"task_name": task_name, "call_back_url": call_back_url},
+            {"taskName": task_name, "call_back_url": call_back_url},
         )
 
         return SimulationTask(**resp, simulation=simulation, folder=folder)
@@ -339,20 +339,25 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
             progress_callback=progress_callback,
         )
 
-    def submit(self, solver_version=None, worker_group=None, protocol_version=__version__):
-        """
-        Kick off this task. If this task instance contain a :class".simulation",
+    def submit(
+        self,
+        solver_version: str = None,
+        worker_group: str = None,
+        protocol_version: str = __version__,
+    ):
+        """Kick off this task. If this task instance contain a :class:`.Simulation`,
          it will be uploaded to server first,
-        then kick off the task. Otherwise, this method take assumption that
+        then kick off the task. Otherwise, this method makes assumption that
          the Simulation has been uploaded by the
         upload_file function, so the task will be kicked off directly.
+
         Parameters
         ----------
-        solver_version: str
+        solver_version: str = None
             target solver version.
-        worker_group: str
+        worker_group: str = None
             worker group
-        protocol_version: str
+        protocol_version: str = None
             protocol version
         """
         if self.simulation:
