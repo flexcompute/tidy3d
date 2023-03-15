@@ -130,7 +130,7 @@ def test_create():
     responses.add(
         responses.POST,
         f"{Env.current.web_api_endpoint}/tidy3d/projects/1234/tasks",
-        match=[matchers.json_params_matcher({"task_name": "test task", "call_back_url": None})],
+        match=[matchers.json_params_matcher({"taskName": "test task", "call_back_url": None})],
         json={
             "data": {
                 "taskId": "1234",
@@ -156,7 +156,7 @@ def test_submit():
     responses.add(
         responses.POST,
         f"{Env.current.web_api_endpoint}/tidy3d/projects/1234/tasks",
-        match=[matchers.json_params_matcher({"task_name": "test task", "call_back_url": None})],
+        match=[matchers.json_params_matcher({"taskName": "test task", "call_back_url": None})],
         json={
             "data": {
                 "taskId": "1234",
