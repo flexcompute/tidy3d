@@ -40,7 +40,6 @@ def run(  # pylint:disable=too-many-arguments
     progress_callback_download: Callable[[float], None] = None,
     solver_version: str = None,
     worker_group: str = None,
-    protocol_version: str = None,
 ) -> SimulationData:
     """Submits a :class:`.Simulation` to server, starts running, monitors progress, downloads,
     and loads results as a :class:`.SimulationData` object.
@@ -68,8 +67,6 @@ def run(  # pylint:disable=too-many-arguments
         target solver version.
     worker_group: str = None
         worker group
-    protocol_version: str = None
-        protocol version
 
     Returns
     -------
@@ -88,7 +85,6 @@ def run(  # pylint:disable=too-many-arguments
         task_id,
         solver_version=solver_version,
         worker_group=worker_group,
-        protocol_version=protocol_version,
     )
     monitor(task_id, verbose=verbose)
     return load(
@@ -170,7 +166,6 @@ def start(
     task_id: TaskId,
     solver_version: str = None,
     worker_group: str = None,
-    protocol_version: str = None,
 ) -> None:
     """Start running the simulation associated with task.
 
@@ -183,8 +178,6 @@ def start(
         target solver version.
     worker_group: str = None
         worker group
-    protocol_version: str = None
-        protocol version
 
     Note
     ----
@@ -193,9 +186,7 @@ def start(
     task = SimulationTask.get(task_id)
     if not task:
         raise ValueError("Task not found.")
-    task.submit(
-        solver_version=solver_version, worker_group=worker_group, protocol_version=protocol_version
-    )
+    task.submit(solver_version=solver_version, worker_group=worker_group)
 
 
 def get_run_info(task_id: TaskId):
