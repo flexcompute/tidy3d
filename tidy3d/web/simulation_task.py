@@ -343,7 +343,6 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
         self,
         solver_version: str = None,
         worker_group: str = None,
-        protocol_version: str = None,
     ):
         """Kick off this task. If this task instance contain a :class:`.Simulation`,
          it will be uploaded to server first,
@@ -357,8 +356,6 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
             target solver version.
         worker_group: str = None
             worker group
-        protocol_version: str = None
-            protocol version
         """
         if self.simulation:
             upload_string(self.task_id, self.simulation.json(), SIMULATION_JSON, verbose=False)
@@ -377,7 +374,7 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
             },
         )
 
-    def estimate_cost(self, solver_version=None, protocol_version=None) -> float:
+    def estimate_cost(self, solver_version=None) -> float:
         """Compute the maximum flex unit charge for a given task, assuming the simulation runs for
         the full ``run_time``. If early shut-off is triggered, the cost is adjusted proportionately.
 
@@ -385,14 +382,18 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
         ----------
         solver_version: str
             target solver version.
-        protocol_version: str
-            protocol version
 
         Returns
         -------
         flex_unit_cost: float
             estimated cost in flex units
         """
+
+        if solver_version:
+            protocol_version = None
+        else:
+            protocol_version = __version__
+
         assert self.task_id
         resp = http.post(
             f"tidy3d/tasks/{self.task_id}/metadata",

@@ -48,6 +48,13 @@ class Job(WebContainer):
         "``{'id', 'status', 'name', 'workUnit', 'solverVersion'}``.",
     )
 
+    solver_version: str = pd.Field(
+        None,
+        title="Solver Version",
+        description_str="Custom solver version to use, "
+        "otherwise uses default for the current front end version.",
+    )
+
     verbose: bool = pd.Field(
         True, title="Verbose", description="Whether to print info messages and progressbars."
     )
@@ -114,7 +121,7 @@ class Job(WebContainer):
         ----
         To monitor progress of the :class:`Job`, call :meth:`Job.monitor` after started.
         """
-        web.start(self.task_id)
+        web.start(self.task_id, solver_version=self.solver_version)
 
     def get_run_info(self) -> RunInfo:
         """Return information about the running :class:`Job`.
@@ -252,6 +259,13 @@ class Batch(WebContainer):
         True, title="Verbose", description="Whether to print info messages and progressbars."
     )
 
+    solver_version: str = pd.Field(
+        None,
+        title="Solver Version",
+        description_str="Custom solver version to use, "
+        "otherwise uses default for the current front end version.",
+    )
+
     jobs: Dict[TaskName, Job] = pd.Field(
         None,
         title="Simulations",
@@ -316,6 +330,7 @@ class Batch(WebContainer):
                 simulation=simulation,
                 task_name=task_name,
                 folder_name=values.get("folder_name"),
+                solver_version=values.get("solver_version"),
                 verbose=verbose,
             )
             jobs[task_name] = job
