@@ -6,6 +6,7 @@ from responses import matchers
 
 from tidy3d.web.environment import Env, EnvironmentConfig
 from tidy3d.web.simulation_task import Folder, SimulationTask
+from tidy3d.version import __version__
 
 test_env = EnvironmentConfig(
     name="test",
@@ -171,7 +172,7 @@ def test_submit():
         f"{Env.current.web_api_endpoint}/tidy3d/tasks/1234/submit",
         match=[
             matchers.json_params_matcher(
-                {"solverVersion": None, "workerGroup": None, "protocolVersion": "1.6.3"}
+                {"solverVersion": None, "workerGroup": None, "protocolVersion": __version__}
             )
         ],
         json={
@@ -184,7 +185,7 @@ def test_submit():
         status=200,
     )
     task = SimulationTask.create(None, "test task", "test folder1")
-    task.submit(protocol_version="1.6.3")
+    task.submit()
 
 
 @responses.activate

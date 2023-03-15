@@ -343,7 +343,7 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
         self,
         solver_version: str = None,
         worker_group: str = None,
-        protocol_version: str = __version__,
+        protocol_version: str = None,
     ):
         """Kick off this task. If this task instance contain a :class:`.Simulation`,
          it will be uploaded to server first,
@@ -362,6 +362,12 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
         """
         if self.simulation:
             upload_string(self.task_id, self.simulation.json(), SIMULATION_JSON, verbose=False)
+
+        if solver_version:
+            protocol_version = None
+        else:
+            protocol_version = __version__
+
         http.post(
             f"tidy3d/tasks/{self.task_id}/submit",
             {
