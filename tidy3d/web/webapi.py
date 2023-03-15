@@ -9,7 +9,6 @@ import pytz
 from rich.console import Console
 from rich.progress import Progress
 
-from ..version import __version__
 from .environment import Env
 from .simulation_task import SimulationTask, SIM_FILE_HDF5, Folder
 from .task import TaskId, TaskInfo
@@ -41,7 +40,7 @@ def run(  # pylint:disable=too-many-arguments
     progress_callback_download: Callable[[float], None] = None,
     solver_version: str = None,
     worker_group: str = None,
-    protocol_version: str = __version__,
+    protocol_version: str = None,
 ) -> SimulationData:
     """Submits a :class:`.Simulation` to server, starts running, monitors progress, downloads,
     and loads results as a :class:`.SimulationData` object.
@@ -171,7 +170,7 @@ def start(
     task_id: TaskId,
     solver_version: str = None,
     worker_group: str = None,
-    protocol_version: str = __version__,
+    protocol_version: str = None,
 ) -> None:
     """Start running the simulation associated with task.
 
