@@ -132,7 +132,8 @@ Selection with square brackets (`sim_data[monitor_name]`) returns a copy of that
 #### Getting Fields
 There are a few other convenience methods for dealing with ``AbstractFieldData`` objects stored in the `SimulationData.monitor_data` dict.
 `sim_data.at_centers(monitor_name)` gets the field-like data at the yee cell centers.
-`sim_data.get_intensity(monitor_name` gets the intensity data for a field-like data evaluated at the yee cell centers.
+`sim_data.get_intensity(monitor_name)` gets the intensity data for a field-like data evaluated at the yee cell centers.
+`sim_data.get_poynting_vector(monitor_name)` gets the Poynting vector data at the yee cell centers.
 
 #### Plotting
 
