@@ -51,9 +51,13 @@ def api_key_auth(request: requests.request) -> requests.request:
     key = api_key()
     if not key:
         raise ValueError(
-            "API key not found, please set it by commandline or environment,"
-            " eg: tidy3d configure or export "
-            "SIMCLOUD_APIKEY=xxx"
+            "API key not found. To get your API key, sign into 'https://tidy3d.simulation.cloud' "
+            "and copy it from your 'Account' page. Then you can configure tidy3d through command "
+            "line 'tidy3d configure' and enter your API key when prompted. "
+            "Alternatively, especially if using windows, you can manually create the configuration "
+            "file by creating a file at '~/.tidy3d/config' (unix) or "
+            "'C:\Users\USERNAME\.tidy3d/config' (windows) containing the following line: "
+            "apikey = 'XXX'. Here XXX is your API key copied from your account page within quotes."
         )
     request.headers["simcloud-api-key"] = key
     request.headers["tidy3d-python-version"] = __version__
