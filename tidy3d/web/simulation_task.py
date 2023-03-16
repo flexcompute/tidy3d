@@ -448,7 +448,8 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
                 download_file(self.task_id, RUNNING_INFO, to_file=temp.name, verbose=False)
                 with open(temp.name, "r", encoding="utf-8") as csv:
                     progress_string = csv.readlines()
-                    perc_done, field_decay = progress_string[-1].split(",")
+
+                    perc_done, field_decay = progress_string[-1].split(",")[:2]
 
                     perc_done = float(perc_done)
                     field_decay = float(field_decay)
