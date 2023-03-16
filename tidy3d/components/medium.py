@@ -124,6 +124,21 @@ class AbstractMedium(ABC, Tidy3dBaseModel):
         eps = self.eps_model(frequency)
         return (eps, eps, eps)
 
+    @cached_property
+    @abstractmethod
+    def n_cfl(self):
+        """To ensure a stable FDTD simulation, it is essential to select an appropriate
+        time step size in accordance with the CFL condition. The maximal time step
+        size is inversely proportional to the speed of light in the medium, and thus
+        proportional to the index of refraction. However, for dispersive medium,
+        anisotropic medium, and other more complicated media, there are complications in
+        deciding on the choice of the index of refraction.
+
+        This property computes the index of refraction related to CFL condition, so that
+        the FDTD with this medium is stable when the time step size that doesn't take
+        material factor into account is multiplied by ``n_cfl``.
+        """
+
     @add_ax_if_none
     def plot(self, freqs: float, ax: Ax = None) -> Ax:  # pylint: disable=invalid-name
         """Plot n, k of a :class:`Medium` as a function of frequency.
@@ -281,6 +296,14 @@ class PECMedium(AbstractMedium):
         # return something like frequency with value of pec_val + 0j
         return 0j * frequency + pec_val
 
+    @cached_property
+    def n_cfl(self):
+        """This property computes the index of refraction related to CFL condition, so that
+        the FDTD with this medium is stable when the time step size that doesn't take
+        material factor into account is multiplied by ``n_cfl``.
+        """
+        return 1.0
+
 
 # PEC builtin instance
 PEC = PECMedium(name="PEC")
@@ -307,6 +330,16 @@ class Medium(AbstractMedium):
         "permittivity at angular frequency omega is given by conductivity/omega.",
         units=CONDUCTIVITY,
     )
+
+    @cached_property
+    def n_cfl(self):
+        """This property computes the index of refraction related to CFL condition, so that
+        the FDTD with this medium is stable when the time step size that doesn't take
+        material factor into account is multiplied by ``n_cfl``.
+
+        For dispersiveless medium, it equals ``sqrt(permittivity)``.
+        """
+        return np.sqrt(self.permittivity)
 
     @ensure_freq_in_range
     def eps_model(self, frequency: float) -> complex:
@@ -405,6 +438,20 @@ class CustomMedium(AbstractMedium):
                     "which is not supported."
                 )
         return val
+
+    @cached_property
+    def n_cfl(self):
+        """This property computes the index of refraction related to CFL condition, so that
+        the FDTD with this medium is stable when the time step size that doesn't take
+        material factor into account is multiplied by ``n_cfl```.
+
+        For dispersiveless custom medium, it equals ``min[sqrt(eps_inf)]``, where ``min``
+        is performed over all components and spatial points.
+        """
+        eps_array_min = [
+            np.min(eps_array.real) for _, eps_array in self.eps_dataset.field_components.items()
+        ]
+        return np.sqrt(min(eps_array_min))
 
     @ensure_freq_in_range
     def eps_dataset_freq(self, frequency: float) -> PermittivityDataset:
@@ -677,6 +724,17 @@ class DispersiveMedium(AbstractMedium, ABC):
     def pole_residue(self):
         """Representation of Medium as a pole-residue model."""
 
+    @cached_property
+    def n_cfl(self):
+        """This property computes the index of refraction related to CFL condition, so that
+        the FDTD with this medium is stable when the time step size that doesn't take
+        material factor into account is multiplied by ``n_cfl``.
+
+        For PoleResidue model, it equals ``sqrt(eps_inf)``
+        [https://ieeexplore.ieee.org/document/9082879].
+        """
+        return np.sqrt(self.pole_residue.eps_inf)
+
     @staticmethod
     def tuple_to_complex(value: Tuple[float, float]) -> complex:
         """Convert a tuple of real and imaginary parts to complex number."""
@@ -709,7 +767,7 @@ class PoleResidue(DispersiveMedium):
     >>> eps = pole_res.eps_model(200e12)
     """
 
-    eps_inf: float = pd.Field(
+    eps_inf: pd.PositiveFloat = pd.Field(
         1.0,
         title="Epsilon at Infinity",
         description="Relative permittivity at infinite frequency (:math:`\\epsilon_\\infty`).",
@@ -866,7 +924,7 @@ class Lorentz(DispersiveMedium):
     >>> eps = lorentz_medium.eps_model(200e12)
     """
 
-    eps_inf: float = pd.Field(
+    eps_inf: pd.PositiveFloat = pd.Field(
         1.0,
         title="Epsilon at Infinity",
         description="Relative permittivity at infinite frequency (:math:`\\epsilon_\\infty`).",
@@ -937,7 +995,7 @@ class Drude(DispersiveMedium):
     >>> eps = drude_medium.eps_model(200e12)
     """
 
-    eps_inf: float = pd.Field(
+    eps_inf: pd.PositiveFloat = pd.Field(
         1.0,
         title="Epsilon at Infinity",
         description="Relative permittivity at infinite frequency (:math:`\\epsilon_\\infty`).",
@@ -1002,7 +1060,7 @@ class Debye(DispersiveMedium):
     >>> eps = debye_medium.eps_model(200e12)
     """
 
-    eps_inf: float = pd.Field(
+    eps_inf: pd.PositiveFloat = pd.Field(
         1.0,
         title="Epsilon at Infinity",
         description="Relative permittivity at infinite frequency (:math:`\\epsilon_\\infty`).",
@@ -1087,6 +1145,16 @@ class AnisotropicMedium(AbstractMedium):
     def components(self) -> Dict[str, Medium]:
         """Dictionary of diagonal medium components."""
         return dict(xx=self.xx, yy=self.yy, zz=self.zz)
+
+    @cached_property
+    def n_cfl(self):
+        """This property computes the index of refraction related to CFL condition, so that
+        the FDTD with this medium is stable when the time step size that doesn't take
+        material factor into account is multiplied by ``n_cfl``.
+
+        For this medium, it takes the minimal of ``n_clf`` in all components.
+        """
+        return min((mat_component.n_cfl for mat_component in self.components.values()))
 
     @ensure_freq_in_range
     def eps_model(self, frequency: float) -> complex:

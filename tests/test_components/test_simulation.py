@@ -1286,3 +1286,21 @@ def test_warn_large_epsilon(caplog, size, num_struct, log_level):
     )
     sim.epsilon(box=td.Box(size=(size, size, size)))
     assert_log_level(caplog, log_level)
+
+
+def test_dt():
+    """make sure dt is reduced when there is a medium with eps_inf < 1."""
+    sim = td.Simulation(
+        size=(2.0, 2.0, 2.0),
+        run_time=1e-12,
+        grid_spec=td.GridSpec.uniform(dl=0.1),
+    )
+    dt = sim.dt
+
+    # simulation with eps_inf < 1
+    structure = td.Structure(
+        geometry=td.Box(size=(1, 1, 1), center=(-1, 0, 0)),
+        medium=td.PoleResidue(eps_inf=0.16, poles=[(1 + 1j, 2 + 2j)]),
+    )
+    sim_new = sim.copy(update=dict(structures=[structure]))
+    assert sim_new.dt == 0.4 * dt

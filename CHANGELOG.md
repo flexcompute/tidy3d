@@ -10,11 +10,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - `export_matlib_to_file` in `material_library` exports material's full name in additional to abbreviation.
 - Simpler progressbars for `run_async`.
+- Medium property `n_cfl` added to adjust time step size according to CFL condition.
+- In the mode solver plugin, regular methods in `solver.py` transformed into classmethods.
 
 ### Fixed
 - Bug in remote file transfer when client environment has no correct certificate authority pem file install locally. 
 - `SourceTime` plotting methods `.plot()` and `.plot_spectrum()` accept a `val` kwarg, which selects which part of the data (`'real'`, `'imag'`, or `'abs'`) to plot, rather than plotting all at once.
 - Tidy3d exceptions inherit from `ValueError` so they are handled properly by pydantic.
+- Two unstable materials in `material_library`: `Cu_JohnsonChristy1972` and `Ni_JohnsonChristy1972`. `TiOx_HoribStable` added for improved stability.
 
 ## [1.10.0rc1] - 2023-3-07
 
