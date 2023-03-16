@@ -90,6 +90,29 @@ To get the "pre-release" version of tidy3d with the newest features, one may spe
 
 The corresponding documentation is marked as "latest" and is available `here <https://docs.flexcompute.com/projects/tidy3d/en/latest/>`__.
 
+Linking Regiestration
+^^^^^^^^^^^^^^^^^^^^^
+
+Now that tidy3d is installed on your python distribution, we need to link it with your account. First you should copy your "API key" from your account page on the `web interface <https://tidy3d.simulation.cloud/account>`_. We'll refer to that key as "XXX" in the following instructions.
+
+The simplest way to link your account is by typing 
+
+.. code-block:: bash
+
+    tidy3d configure
+
+and pasting the API key when prompted. Note that one can also include the API key in the configure command directly as
+
+.. code-block:: bash
+
+    tidy3d configure --api-key=XXX
+
+Note that this might not work for windows users. Instead, windows users will need to manually create the config file at ``C:\Users\USERNAME\.tidy3d/config`` with the following contents
+
+.. code-block:: bash
+
+    apikey = "XXX"
+
 Additional Configuration for Python IDE
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
