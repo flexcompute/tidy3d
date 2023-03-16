@@ -503,11 +503,11 @@ class ModeSolver(Tidy3dBaseModel):
         Parameters
         ----------
         field_name : str
-            Name of ``field`` component to plot (eg. ``'Ex'``).
-            Also accepts ``'int'`` to plot intensity.
-        val : Literal['real', 'imag', 'abs'] = 'real'
+            Name of `field` component to plot (eg. `'Ex'`).
+            Also accepts `'E'` and `'H'` to plot the vector magnitudes of the electric and
+            magnetic fields, and `'S'` for the Poynting vector.
+        val : Literal['real', 'imag', 'abs', 'abs^2', 'dB'] = 'real'
             Which part of the field to plot.
-            If ``field_name == 'int'``, this has no effect.
         eps_alpha : float = 0.2
             Opacity of the structure permittivity.
             Must be between 0 and 1 (inclusive).

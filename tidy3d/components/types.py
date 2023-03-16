@@ -180,6 +180,9 @@ ObsGridArray = Union[Tuple[float, ...], ArrayLike[float, 1]]
 
 Ax = Axes
 PlotVal = Literal["real", "imag", "abs"]
+FieldVal = Literal["real", "imag", "abs", "abs^2", "phase"]
+PlotScale = Literal["lin", "dB"]
+ColormapType = Literal["divergent", "sequential", "cyclic"]
 
 """ mode solver """
 
