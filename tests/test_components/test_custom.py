@@ -283,3 +283,11 @@ def test_grids():
     bounds = Box(size=(1, 1, 1)).bounds
     for key, grid in CUSTOM_MEDIUM.grids(bounds=bounds).items():
         grid.sizes
+
+
+def test_n_cfl():
+    """CFL number for custom medium"""
+    data = np.random.random((Nx, Ny, Nz, 1)) + 2
+    ndata = ScalarFieldDataArray(data, coords=dict(x=X, y=Y, z=Z, f=freqs))
+    med = CustomMedium.from_nk(n=ndata, k=ndata * 0.01)
+    assert med.n_cfl >= 2

@@ -240,3 +240,26 @@ def test_epsilon_eval():
 
     expected = {2e14: np.mean(eps_diag_2), 5e14: np.mean(eps_diag_5)}
     eps_compare(material, expected)
+
+
+def test_n_cfl():
+    """Test ``n_cfl`` is computed correctly."""
+    # dispersiveless medium
+    assert MEDIUM.n_cfl == 1
+    material = td.Medium(permittivity=4, conductivity=2)
+    assert material.n_cfl == 2
+    # PEC
+    assert PEC.n_cfl == 1
+    # anisotropic
+    material = td.AnisotropicMedium(xx=MEDIUM, yy=td.Medium(permittivity=4), zz=MEDIUM)
+    assert material.n_cfl == 1
+    # dispersive
+    material = td.PoleResidue(eps_inf=0.16, poles=[(1 + 1j, 2 + 2j)])
+    assert material.n_cfl == 0.4
+    assert SM.n_cfl == 1
+    material = td.Lorentz(eps_inf=0.04, coeffs=[(1, 2, 3)])
+    assert material.n_cfl == 0.2
+    material = td.Drude(eps_inf=4, coeffs=[(1, 2)])
+    assert material.n_cfl == 2
+    material = td.Debye(eps_inf=4, coeffs=[(1, 2)])
+    assert material.n_cfl == 2
