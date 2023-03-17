@@ -435,7 +435,9 @@ class GridSpec(Tidy3dBaseModel):
         title="Free-space wavelength",
         description="Free-space wavelength for automatic nonuniform grid. It can be 'None' "
         "if there is at least one source in the simulation, in which case it is defined by "
-        "the source central frequency.",
+        "the source central frequency. "
+        "Note: it only takes effect when at least one of the three dimensions "
+        "uses :class:`.AutoGrid`.",
         units=MICROMETER,
     )
 
@@ -444,7 +446,9 @@ class GridSpec(Tidy3dBaseModel):
         title="Grid specification override structures",
         description="A set of structures that is added on top of the simulation structures in "
         "the process of generating the grid. This can be used to refine the grid or make it "
-        "coarser depending than the expected need for higher/lower resolution regions.",
+        "coarser depending than the expected need for higher/lower resolution regions. "
+        "Note: it only takes effect when at least one of the three dimensions "
+        "uses :class:`.AutoGrid`.",
     )
 
     @property
