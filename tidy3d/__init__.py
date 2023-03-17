@@ -112,4 +112,4 @@ def set_logging_level(level: str) -> None:
     )
 
 
-log.info(f"Using client version: {__version__}")
+log.debug(f"Using client version: {__version__}")
