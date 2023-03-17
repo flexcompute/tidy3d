@@ -308,12 +308,12 @@ class JaxDiffractionData(JaxMonitorData, DiffractionData):
 
 
 # allowed types in JaxSimulationData.output_data
-JaxMonitorDataType = Union[JaxModeData, JaxDiffractionData, JaxFieldData]
+JaxMonitorDataType = Union[JaxModeData, JaxDiffractionData]  # , JaxFieldData]
 
 # maps regular Tidy3d MonitorData to the JaxTidy3d equivalents, used in JaxSimulationData loading
 # pylint: disable=unhashable-member
 JAX_MONITOR_DATA_MAP = {
     DiffractionData: JaxDiffractionData,
     ModeData: JaxModeData,
-    FieldData: JaxFieldData,
+    # FieldData: JaxFieldData,
 }
