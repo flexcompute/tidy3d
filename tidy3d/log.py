@@ -20,7 +20,7 @@ _level_value = {
 
 _level_name = {v: k for k, v in _level_value.items()}
 
-DEFAULT_LEVEL = "INFO"
+DEFAULT_LEVEL = "WARNING"
 
 
 def _get_level_int(level: LogValue) -> int:
