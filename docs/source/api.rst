@@ -144,6 +144,7 @@ Types of Sources
    GaussianBeam
    AstigmaticGaussianBeam
    CustomFieldSource
+   TFSF
 
 
 Source Time Dependence
