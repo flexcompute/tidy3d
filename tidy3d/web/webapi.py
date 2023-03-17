@@ -303,7 +303,7 @@ def monitor(task_id: TaskId, verbose: bool = True) -> None:
 
             while perc_done is not None and perc_done < 100 and get_status() == "running":
                 perc_done, field_decay = get_run_info(task_id)
-                new_description = f"% done (field decay = {field_decay:.2e})"
+                new_description = f"solver progress (field decay = {field_decay:.2e})"
                 progress.update(pbar_pd, completed=perc_done, description=new_description)
                 time.sleep(RUN_REFRESH_TIME)
 
