@@ -422,10 +422,10 @@ class JaxPolySlab(JaxGeometry, PolySlab, JaxObject):
         return self.copy(update=dict(vertices=edge_contributions))
 
 
-JaxGeometryType = Union[JaxBox, JaxPolySlab]
+JaxGeometryType = Union[JaxBox]  # , JaxPolySlab]
 
 # pylint: disable=unhashable-member
 JAX_GEOMETRY_MAP = {
     Box: JaxBox,
-    PolySlab: JaxPolySlab,
+    # PolySlab: JaxPolySlab,
 }

@@ -67,7 +67,7 @@ def make_sim(
     jax_struct2 = JaxStructure(geometry=jax_box2, medium=jax_med2)
 
     jax_polyslab1 = JaxPolySlab(axis=POLYSLAB_AXIS, vertices=vertices, slab_bounds=(-1, 1))
-    jax_struct3 = JaxStructure(geometry=jax_polyslab1, medium=jax_med1)
+    # jax_struct3 = JaxStructure(geometry=jax_polyslab1, medium=jax_med1)
 
     # custom medium
     Nx, Ny, Nz = 10, 10, 1
@@ -125,8 +125,8 @@ def make_sim(
         grid_spec=td.GridSpec(wavelength=1.0),
         monitors=(extraneous_field_monitor,),
         structures=(extraneous_structure,),
-        output_monitors=(output_mnt1, output_mnt2, output_mnt3),
-        input_structures=(jax_struct1, jax_struct2, jax_struct3, jax_struct_custom),
+        output_monitors=(output_mnt1, output_mnt2),  # , output_mnt3),
+        input_structures=(jax_struct1, jax_struct2, jax_struct_custom),
         # input_structures=(jax_struct_custom,),
     )
 
