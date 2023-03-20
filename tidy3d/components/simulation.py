@@ -2298,7 +2298,9 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
             num_pml_layers=self.num_pml_layers,
         )
 
-        return self._grid_corrections_2dmaterials(grid)
+        # This would AutoGrid the in-plane directions of the 2D materials
+        # return self._grid_corrections_2dmaterials(grid)
+        return grid
 
     @cached_property
     def num_cells(self) -> int:

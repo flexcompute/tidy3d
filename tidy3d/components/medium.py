@@ -13,7 +13,7 @@ import xarray as xr
 from .base import Tidy3dBaseModel, cached_property
 from .grid.grid import Coords, Grid
 from .types import PoleAndResidue, Ax, FreqBound, TYPE_TAG_STR, InterpMethod, Bound, ArrayComplex4D
-from .types import Numpy, Axis
+from .types import Axis
 from .data.dataset import PermittivityDataset
 from .data.data_array import ScalarFieldDataArray
 from .viz import add_ax_if_none
@@ -1607,6 +1607,14 @@ class Medium2D(AbstractMedium):
     def elements(self) -> Dict[str, IsotropicMediumType]:
         """The diagonal elements of the 2D medium as a dictionary."""
         return dict(ss=self.ss, tt=self.tt)
+
+    @cached_property
+    def n_cfl(self):
+        """This property computes the index of refraction related to CFL condition, so that
+        the FDTD with this medium is stable when the time step size that doesn't take
+        material factor into account is multiplied by ``n_cfl``.
+        """
+        return 1.0
 
 
 # types of mediums that can be used in Simulation and Structures

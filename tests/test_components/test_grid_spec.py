@@ -135,7 +135,8 @@ def test_autogrid_2dmaterials():
     )
     grid_dl1_inplane = sim.discretize(box.geometry).sizes.x[0]
     grid_dl2_inplane = sim2.discretize(box2.geometry).sizes.x[0]
-    assert grid_dl1_inplane > grid_dl2_inplane
+    # This is commented out until inplane AutoGrid for 2D materials is enabled
+    # assert grid_dl1_inplane > grid_dl2_inplane
 
     # should error if two 2d materials have different normals and both autogrid
     box2 = td.Structure(geometry=td.Box(size=(td.inf, 0, td.inf), center=(0, 0, 1)), medium=medium)
@@ -152,5 +153,6 @@ def test_autogrid_2dmaterials():
         run_time=1e-12,
     )
 
-    with pytest.raises(ValidationError):
-        _ = sim.grid
+    # Commented until inplane AutoGrid for 2D materials is enabled
+    # with pytest.raises(ValidationError):
+    #    _ = sim.grid

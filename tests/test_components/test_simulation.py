@@ -1342,7 +1342,6 @@ def test_dt():
     )
     sim_new = sim.copy(update=dict(structures=[structure]))
     assert sim_new.dt == 0.4 * dt
-    assert_log_level(caplog, log_level)
 
 
 def test_sim_volumetric_structures():
