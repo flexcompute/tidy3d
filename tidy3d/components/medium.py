@@ -449,7 +449,8 @@ class CustomMedium(AbstractMedium):
         is performed over all components and spatial points.
         """
         eps_array_min = [
-            np.min(eps_array.real) for _, eps_array in self.eps_dataset.field_components.items()
+            float(np.min(eps_array.real))
+            for _, eps_array in self.eps_dataset.field_components.items()
         ]
         return np.sqrt(min(eps_array_min))
 
