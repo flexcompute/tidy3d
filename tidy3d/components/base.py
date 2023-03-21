@@ -59,6 +59,14 @@ class Tidy3dBaseModel(pydantic.BaseModel):
     `Pydantic Models <https://pydantic-docs.helpmanual.io/usage/models/>`_
     """
 
+    def __init__(self, **kwargs):
+        """Init method, includes post-init validators."""
+        super().__init__(**kwargs)
+        self._post_init_validators()
+
+    def _post_init_validators(self) -> None:
+        """Call validators taking ``self`` that get run after init, implement in subclasses."""
+
     def __init_subclass__(cls) -> None:
         """Things that are done to each of the models."""
 
