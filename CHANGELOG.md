@@ -24,6 +24,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Log level only accepts upper case strings.
 - `PolySlab` `reference_plane` is `"middle"` by default.
 - Boundary conditions are now PML by default.
+- `PointDipole` sources now have a continuous dependence on the source position, as opposed to snapping to Yee grid locations.
+Behavior is controlled by the `interpolate` argument, set to `True` by default. 
 
 ### Fixed
 
