@@ -2336,7 +2336,9 @@ class PolySlab(Planar):
 
         # convert vertices into polyslabs
         polygons = (Polygon(vertices) for vertices in all_vertices)
-        polys_union = functools.reduce(lambda poly1, poly2: poly1.union(poly2), polygons)
+        polys_union = functools.reduce(
+            lambda poly1, poly2: poly1.union(poly2, grid_size=1e-12), polygons
+        )
 
         if isinstance(polys_union, Polygon):
             all_vertices = [PolySlab.strip_coords(polys_union)[0]]
