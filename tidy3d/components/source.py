@@ -435,6 +435,14 @@ class PointDipole(CurrentSource):
         units=MICROMETER,
     )
 
+    interpolate: bool = pydantic.Field(
+        True,
+        title="Enable Interpolation",
+        description="If ``False``, the dipole is placed at the nearest Yee grid point "
+        "based on the chosen ``polarization``. If ``True``, uses linear interpolation "
+        "so that effectively the dipole is placed at the exact position requested.",
+    )
+
 
 class FieldSource(Source, ABC):
     """A Source defined by the desired E and/or H fields."""
