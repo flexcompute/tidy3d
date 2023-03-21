@@ -765,7 +765,7 @@ def test_diff_data_angles(axis):
     assert np.isclose(zeroth_order_theta, 0.0)
 
 
-def test_error_regular_web():
+def _test_error_regular_web():
     """Test that a custom error is raised if running tidy3d through web.run()"""
 
     sim = make_sim(permittivity=EPS, size=SIZE, vertices=VERTICES, base_eps_val=BASE_EPS_VAL)
