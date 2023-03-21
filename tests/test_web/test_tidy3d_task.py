@@ -213,29 +213,6 @@ def test_estimate_cost():
 
 
 @responses.activate
-def test_running_info(monkeypatch):
-    def mock(*args, **kwargs):
-        file_path = kwargs["to_file"]
-        with open(file_path, "w") as f:
-            f.write("0.3,5.7")
-
-    monkeypatch.setattr("tidy3d.web.simulation_task.download_file", mock)
-    responses.add(
-        responses.GET,
-        f"{Env.current.web_api_endpoint}/tidy3d/tasks/3eb06d16-208b-487b-864b-e9b1d3e010a7/detail",
-        json={
-            "data": {
-                "taskId": "3eb06d16-208b-487b-864b-e9b1d3e010a7",
-                "createdAt": "2022-01-01T00:00:00.000Z",
-            }
-        },
-        status=200,
-    )
-    task = SimulationTask.get("3eb06d16-208b-487b-864b-e9b1d3e010a7")
-    assert task.get_running_info() == (0.3, 5.7)
-
-
-@responses.activate
 def test_get_log(monkeypatch):
     def mock(*args, **kwargs):
         file_path = kwargs["to_file"]

@@ -234,7 +234,17 @@ responses.add(
 @pytest.fixture
 def mock_get_run_info(monkeypatch, set_api_key):
     """Mocks webapi.get_run_info"""
-    monkeypatch.setattr("tidy3d.web.webapi.get_run_info", lambda task_id: (100, 0))
+    responses.add(
+        responses.GET,
+        f"{Env.current.web_api_endpoint}/tidy3d/tasks/{TASK_ID}/progress",
+        json={
+            "data": {
+                "perc_done": 100,
+                "field_decay": 0,
+            }
+        },
+        status=200,
+    )
 
 
 @pytest.fixture
@@ -259,29 +269,8 @@ def test_start(mock_start):
 
 
 @responses.activate
-def test_get_run_info(monkeypatch):
-    def mock(*args, **kwargs):
-        file_path = kwargs["to_file"]
-
-        # make compatible with windows
-        # file_path_new = os.path.abspath(file_path)
-
-        with open(file_path, "w") as f:
-            f.write("0.3,5.7")
-
-    monkeypatch.setattr("tidy3d.web.simulation_task.download_file", mock)
-    responses.add(
-        responses.GET,
-        f"{Env.current.web_api_endpoint}/tidy3d/tasks/3eb06d16-208b-487b-864b-e9b1d3e010a7/detail",
-        json={
-            "data": {
-                "taskId": "3eb06d16-208b-487b-864b-e9b1d3e010a7",
-                "createdAt": CREATED_AT,
-            }
-        },
-        status=200,
-    )
-    assert get_run_info("3eb06d16-208b-487b-864b-e9b1d3e010a7") == (0.3, 5.7)
+def test_get_run_info(mock_get_run_info):
+    assert get_run_info(TASK_ID) == (100, 0)
 
 
 @responses.activate

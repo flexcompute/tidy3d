@@ -440,28 +440,10 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
             Is ``None`` if run info not available.
         """
         assert self.task_id
-        perc_done, field_decay = None, None
 
-        # delete=False required for this to work with windows on github actions
-        with tempfile.NamedTemporaryFile(delete=False) as temp:
-            try:
-                download_file(self.task_id, RUNNING_INFO, to_file=temp.name, verbose=False)
-                with open(temp.name, "r", encoding="utf-8") as csv:
-                    progress_string = csv.readlines()
-
-                    perc_done, field_decay = progress_string[-1].split(",")[:2]
-
-                    perc_done = float(perc_done)
-                    field_decay = float(field_decay)
-
-            # file is not ready, will return None, None to signify that the info isnt available
-            except Exception:  # pylint:disable=broad-except
-                pass
-
-            # need to close the file manually with delete=False
-            temp.close()
-            os.unlink(temp.name)
-
+        resp = http.get(f"tidy3d/tasks/{self.task_id}/progress")
+        perc_done = resp.get("perc_done")
+        field_decay = resp.get("field_decay")
         return perc_done, field_decay
 
     def get_log(
