@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - `SimulationData.plot_field` accepts new field componets and values, including the Poynting vector.
 - `SimulationData.get_poynting_vector` for calculating the 3D Poynting vector at the Yee cell centers.
+- Post init validation of Tidy3D components.
 
 ### Changed
 - `export_matlib_to_file` in `material_library` exports material's full name in additional to abbreviation.

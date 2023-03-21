@@ -185,7 +185,7 @@ def _test_monitor_size():
         s.validate_pre_upload()
 
 
-@pytest.mark.parametrize("freq, log_level", [(1.5, "warning"), (2.5, None), (3.5, "warning")])
+@pytest.mark.parametrize("freq, log_level", [(1.5, "warning"), (2.5, "info"), (3.5, "warning")])
 def test_monitor_medium_frequency_range(log_capture, freq, log_level):
     # monitor frequency above or below a given medium's range should throw a warning
 
@@ -209,7 +209,7 @@ def test_monitor_medium_frequency_range(log_capture, freq, log_level):
     assert_log_level(log_capture, log_level)
 
 
-@pytest.mark.parametrize("fwidth, log_level", [(0.1, "warning"), (2, None)])
+@pytest.mark.parametrize("fwidth, log_level", [(0.1, "warning"), (2, "info")])
 def test_monitor_simulation_frequency_range(log_capture, fwidth, log_level):
     # monitor frequency outside of the simulation's frequency range should throw a warning
 
@@ -559,7 +559,7 @@ def test_large_grid_size(log_capture, grid_size, log_level):
     assert_log_level(log_capture, log_level)
 
 
-@pytest.mark.parametrize("box_size,log_level", [(0.001, None), (9.9, "warning"), (20, None)])
+@pytest.mark.parametrize("box_size,log_level", [(0.001, "info"), (9.9, "warning"), (20, "info")])
 def test_sim_structure_gap(log_capture, box_size, log_level):
     """Make sure the gap between a structure and PML is not too small compared to lambda0."""
     medium = td.Medium(permittivity=2)
@@ -844,7 +844,7 @@ def test_diffraction_medium():
 @pytest.mark.parametrize(
     "box_size,log_level",
     [
-        ((0.1, 0.1, 0.1), None),
+        ((0.1, 0.1, 0.1), "info"),
         ((1, 0.1, 0.1), "warning"),
         ((0.1, 1, 0.1), "warning"),
         ((0.1, 0.1, 1), "warning"),
@@ -865,6 +865,42 @@ def test_sim_structure_extent(log_capture, box_size, log_level):
         sources=[src],
         run_time=1e-12,
         boundary_spec=td.BoundarySpec.all_sides(boundary=td.Periodic()),
+    )
+
+    assert_log_level(log_capture, log_level)
+
+
+@pytest.mark.parametrize(
+    "box_length,absorb_type,log_level",
+    [
+        (0, "PML", "info"),
+        (0.5, "PML", "info"),
+        (1, "PML", "info"),
+        (1.5, "PML", "warning"),
+        (1.5, "absorber", "info"),
+        (5.0, "PML", "info"),
+    ],
+)
+def test_sim_validate_structure_bounds_pml(log_capture, box_length, absorb_type, log_level):
+    """Make sure we warn if structure bounds are within the PML exactly to simulation edges."""
+
+    boundary = td.PML() if absorb_type == "PML" else td.Absorber()
+
+    src = td.UniformCurrentSource(
+        source_time=td.GaussianPulse(freq0=3e14, fwidth=1e13),
+        size=(0, 0, 0),
+        polarization="Ex",
+    )
+    box = td.Structure(
+        geometry=td.Box(size=(box_length, 0.5, 0.5), center=(0, 0, 0)),
+        medium=td.Medium(permittivity=2),
+    )
+    sim = td.Simulation(
+        size=(1, 1, 1),
+        structures=[box],
+        sources=[src],
+        run_time=1e-12,
+        boundary_spec=td.BoundarySpec.all_sides(boundary=boundary),
     )
 
     assert_log_level(log_capture, log_level)
@@ -1227,7 +1263,6 @@ def test_tfsf_structures_grid(log_capture):
             )
         ],
     )
-    sim.validate_pre_upload()
 
     # TFSF box must not intersect a custom medium
     Nx, Ny, Nz = 10, 9, 8

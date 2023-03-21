@@ -795,6 +795,79 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
 
         return val
 
+    """ Post-init validators """
+
+    def _post_init_validators(self) -> None:
+        """Call validators taking z`self` that get run after init."""
+        self._validate_no_structures_pml()
+        self._validate_tfsf_nonuniform_grid()
+
+    def _validate_no_structures_pml(self) -> None:
+        """Ensure no structures terminate / have bounds inside of PML."""
+
+        pml_thicks = self.pml_thicknesses
+        sim_bounds = self.bounds
+        bound_spec = self.boundary_spec.to_list
+        for i, structure in enumerate(self.structures):
+            geo_bounds = structure.geometry.bounds
+            for sim_bound, geo_bound, pml_thick, bound_dim in zip(
+                sim_bounds, geo_bounds, pml_thicks, bound_spec
+            ):
+                for sim_pos, geo_pos, pml, pm_val, bound_edge in zip(
+                    sim_bound, geo_bound, pml_thick, (-1, 1), bound_dim
+                ):
+                    sim_pos_pml = sim_pos + pm_val * pml
+                    in_pml_plus = (pm_val > 0) and (sim_pos < geo_pos <= sim_pos_pml)
+                    in_pml_mnus = (pm_val < 0) and (sim_pos > geo_pos >= sim_pos_pml)
+                    if not isinstance(bound_edge, Absorber) and (in_pml_plus or in_pml_mnus):
+                        log.warning(
+                            f"A bound of Simulation.structures[{i}] was detected as being within "
+                            "the simulation PML. We recommend extending structures to infinity or "
+                            "completely outside of the simulation PML to "
+                            "avoid unexpected effects when the structures are not translationally "
+                            "invariant within the PML. Skipping rest of structures."
+                        )
+                        return
+
+    def _validate_tfsf_nonuniform_grid(self) -> None:
+        """Warn if the grid is nonuniform along the directions tangential to the injection plane,
+        inside the TFSF box.
+        """
+        # if the grid is uniform in all directions, there's no need to proceed
+        if not (self.grid_spec.auto_grid_used or self.grid_spec.custom_grid_used):
+            return
+
+        for source in self.sources:
+            if not isinstance(source, TFSF):
+                continue
+
+            centers = self.grid.centers.to_list
+            sizes = self.grid.sizes.to_list
+            tfsf_bounds = source.bounds
+            _, plane_inds = source.pop_axis([0, 1, 2], axis=source.injection_axis)
+            grid_list = [self.grid_spec.grid_x, self.grid_spec.grid_y, self.grid_spec.grid_z]
+            for ind in plane_inds:
+                grid_type = grid_list[ind]
+                if isinstance(grid_type, UniformGrid):
+                    continue
+
+                sizes_in_tfsf = [
+                    size
+                    for size, center in zip(sizes[ind], centers[ind])
+                    if tfsf_bounds[0][ind] <= center <= tfsf_bounds[1][ind]
+                ]
+
+                # check if all the grid sizes are sufficiently unequal
+                if not np.all(np.isclose(sizes_in_tfsf, sizes_in_tfsf[0])):
+                    log.warning(
+                        f"The grid is nonuniform along the '{'xyz'[ind]}' axis, which may lead "
+                        "to sub-optimal cancellation of the incident field in the scattered-field "
+                        "region for the total-field scattered-field (TFSF) source "
+                        f"'{source.name}'. For best results, we recomended ensuring a uniform "
+                        "grid in both directions tangential to the TFSF injection axis, "
+                        f"'{'xyz'[source.injection_axis]}'. "
+                    )
+
     """ Pre submit validation (before web.upload()) """
 
     def validate_pre_upload(self) -> None:
@@ -803,7 +876,6 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         self._validate_monitor_size()
         self._validate_datasets_not_none()
         self._validate_tfsf_structure_intersections()
-        self._validate_tfsf_nonuniform_grid()
         # self._validate_run_time()
 
     def _validate_size(self) -> None:
@@ -935,45 +1007,6 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
                             "the same media along the injection axis "
                             f" '{'xyz'[source.injection_axis]}'."
                         )
-
-    def _validate_tfsf_nonuniform_grid(self) -> None:
-        """Warn if the grid is nonuniform along the directions tangential to the injection plane,
-        inside the TFSF box.
-        """
-        # if the grid is uniform in all directions, there's no need to proceed
-        if not (self.grid_spec.auto_grid_used or self.grid_spec.custom_grid_used):
-            return
-
-        for source in self.sources:
-            if not isinstance(source, TFSF):
-                continue
-
-            centers = self.grid.centers.to_list
-            sizes = self.grid.sizes.to_list
-            tfsf_bounds = source.bounds
-            _, plane_inds = source.pop_axis([0, 1, 2], axis=source.injection_axis)
-            grid_list = [self.grid_spec.grid_x, self.grid_spec.grid_y, self.grid_spec.grid_z]
-            for ind in plane_inds:
-                grid_type = grid_list[ind]
-                if isinstance(grid_type, UniformGrid):
-                    continue
-
-                sizes_in_tfsf = [
-                    size
-                    for size, center in zip(sizes[ind], centers[ind])
-                    if tfsf_bounds[0][ind] <= center <= tfsf_bounds[1][ind]
-                ]
-
-                # check if all the grid sizes are sufficiently unequal
-                if not np.all(np.isclose(sizes_in_tfsf, sizes_in_tfsf[0])):
-                    log.warning(
-                        f"The grid is nonuniform along the '{'xyz'[ind]}' axis, which may lead "
-                        "to sub-optimal cancellation of the incident field in the scattered-field "
-                        "region for the total-field scattered-field (TFSF) source "
-                        f"'{source.name}'. For best results, we recomended ensuring a uniform "
-                        "grid in both directions tangential to the TFSF injection axis, "
-                        f"'{'xyz'[source.injection_axis]}'. "
-                    )
 
     """ Accounting """
 
