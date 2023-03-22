@@ -107,11 +107,12 @@ and pasting the API key when prompted. Note that one can also include the API ke
 
     tidy3d configure --api-key=XXX
 
-Note that this might not work for windows users. Instead, windows users will need to manually create the config file at ``C:\Users\USERNAME\.tidy3d/config`` with the following contents
+Note: Windows users will need to peform a slighlty different step to link the registration. From the anaconda prompt where tidy3d was pip installed, the following commands should be run instead
 
 .. code-block:: bash
 
-    apikey = "XXX"
+    $ pip install pipx
+    $ pipx run tidy3d configure --api-key=XXX
 
 Additional Configuration for Python IDE
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
