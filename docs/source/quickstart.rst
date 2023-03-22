@@ -93,7 +93,8 @@ The corresponding documentation is marked as "latest" and is available `here <ht
 Linking Regiestration
 ^^^^^^^^^^^^^^^^^^^^^
 
-Now that tidy3d is installed on your python distribution, we need to link it with your account. First you should copy your "API key" from your account page on the `web interface <https://tidy3d.simulation.cloud/account>`_. We'll refer to that key as "XXX" in the following instructions.
+Now that tidy3d is installed on your python distribution, we need to link it with your account. First you should get your "API key" from your account page on the `web interface <https://tidy3d.simulation.cloud/account>`_.  After signing in and navigating to the account page by clicking the "user" icon on the left-hand side, copy the API key from the button on the right-hand side of the page.
+We'll refer to that key as "XXX" in the following instructions.
 
 The simplest way to link your account is by typing 
 
