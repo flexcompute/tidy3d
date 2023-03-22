@@ -334,7 +334,7 @@
     "version": {
       "title": "Version",
       "description": "String specifying the front end version number.",
-      "default": "1.10.0rc1",
+      "default": "1.10.0rc2",
       "type": "string"
     }
   },

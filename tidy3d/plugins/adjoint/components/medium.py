@@ -20,7 +20,6 @@ from .types import JaxFloat, validate_jax_float
 from .data.data_array import JaxDataArray
 from .data.dataset import JaxPermittivityDataset
 
-# from ..log import AdjointError
 
 # number of integration points per unit wavelength in material
 PTS_PER_WVL_INTEGRATION = 20

@@ -4,7 +4,7 @@ from typing import Dict, List
 import pydantic as pd
 from ..components.medium import PoleResidue
 from ..components.base import Tidy3dBaseModel
-from ..log import SetupError
+from ..exceptions import SetupError
 from .material_reference import material_refs, ReferenceData
 
 

@@ -10,7 +10,7 @@ from tidy3d.material_library.material_library import (
     export_matlib_to_file,
 )
 import tidy3d as td
-from tidy3d.log import SetupError
+from tidy3d.exceptions import SetupError
 from ..utils import clear_tmp
 
 

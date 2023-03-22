@@ -19,7 +19,9 @@ from .viz import add_ax_if_none
 from .validators import validate_name_str
 from ..constants import C_0, pec_val, EPSILON_0
 from ..constants import HERTZ, CONDUCTIVITY, PERMITTIVITY, RADPERSEC, MICROMETER, SECOND
-from ..log import log, ValidationError, SetupError
+from ..exceptions import ValidationError, SetupError
+from ..log import log
+
 
 # evaluate frequency as this number (Hz) if inf
 FREQ_EVAL_INF = 1e50
@@ -885,13 +887,14 @@ class Sellmeier(DispersiveMedium):
             Real part of refractive index. Must be larger than or equal to one.
         dn_dwvl : float = 0
             Derivative of the refractive index with wavelength (1/um). Must be negative.
-        frequency : float
-            Frequency to evaluate permittivity at (Hz).
+        freq : float
+            Frequency at which ``n`` and ``dn_dwvl`` are sampled.
 
         Returns
         -------
-        :class:`Medium`
-            medium containing the corresponding ``permittivity`` and ``conductivity``.
+        :class:`Sellmeier`
+            Single-pole Sellmeier medium with the prvoided refractive index and index dispersion
+            valuesat at the prvoided frequency.
         """
 
         if dn_dwvl >= 0:

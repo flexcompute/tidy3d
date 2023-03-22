@@ -5,7 +5,7 @@ import numpy as np
 
 from .base import Tidy3dBaseModel
 from ..constants import SECOND
-from ..log import SetupError
+from ..exceptions import SetupError
 from .types import ArrayLike, Ax
 from .viz import add_ax_if_none
 

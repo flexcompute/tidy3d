@@ -2,7 +2,7 @@
 import pytest
 import pydantic
 import tidy3d as td
-from tidy3d.log import SetupError
+from tidy3d.exceptions import SetupError
 import matplotlib.pylab as plt
 
 

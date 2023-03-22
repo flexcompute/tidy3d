@@ -9,19 +9,20 @@ import numpy as np
 
 from jax.tree_util import register_pytree_node_class
 
+from ....log import log
 from ....components.base import cached_property
 from ....components.monitor import FieldMonitor, PermittivityMonitor
 from ....components.monitor import ModeMonitor, DiffractionMonitor
 from ....components.simulation import Simulation
 from ....components.data.monitor_data import FieldData, PermittivityData
 from ....components.types import Ax, annotate_type
-from ....log import log
 from ....constants import HERTZ
+from ....exceptions import AdjointError
 
-from ..log import AdjointError
 from .base import JaxObject
 from .structure import JaxStructure
 from .geometry import JaxBox
+
 
 # used to store information when converting between jax and tidy3d
 JaxInfo = namedtuple(

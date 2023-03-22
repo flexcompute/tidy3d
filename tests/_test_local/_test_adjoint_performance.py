@@ -28,7 +28,7 @@ from numpy.random import random
 import tidy3d as td
 from typing import Tuple, Any
 
-from tidy3d.log import DataError, Tidy3dKeyError
+from tidy3d.exceptions import DataError, Tidy3dKeyError, AdjointError
 from tidy3d.plugins.adjoint.components.base import JaxObject
 from tidy3d.plugins.adjoint.components.geometry import JaxBox, JaxPolySlab
 from tidy3d.plugins.adjoint.components.medium import (
@@ -43,9 +43,8 @@ from tidy3d.plugins.adjoint.components.data.monitor_data import JaxModeData
 from tidy3d.plugins.adjoint.components.data.data_array import JaxDataArray
 from tidy3d.plugins.adjoint.components.data.dataset import JaxPermittivityDataset
 from tidy3d.plugins.adjoint.web import run
-from tidy3d.plugins.adjoint.log import AdjointError
 
-from ..utils import run_emulated, assert_log_level
+from ..utils import run_emulated
 
 import tidy3d as td
 

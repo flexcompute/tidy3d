@@ -14,8 +14,9 @@ import h5py
 import xarray as xr
 
 from .types import ComplexNumber, Literal, TYPE_TAG_STR
-from ..log import FileError, log
 from .data.data_array import DataArray, DATA_ARRAY_MAP
+from ..exceptions import FileError
+from ..log import log
 
 # default indentation (# spaces) in files
 INDENT = 4

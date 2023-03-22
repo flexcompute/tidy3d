@@ -13,7 +13,7 @@ from numpy.random import random
 import tidy3d as td
 from typing import Tuple, Any
 
-from tidy3d.log import DataError, Tidy3dKeyError
+from tidy3d.exceptions import DataError, Tidy3dKeyError, AdjointError
 from tidy3d.plugins.adjoint.components.base import JaxObject
 from tidy3d.plugins.adjoint.components.geometry import JaxBox, JaxPolySlab
 from tidy3d.plugins.adjoint.components.medium import JaxMedium, JaxAnisotropicMedium
@@ -25,9 +25,8 @@ from tidy3d.plugins.adjoint.components.data.monitor_data import JaxModeData, Jax
 from tidy3d.plugins.adjoint.components.data.data_array import JaxDataArray
 from tidy3d.plugins.adjoint.components.data.dataset import JaxPermittivityDataset
 from tidy3d.plugins.adjoint.web import run, run_async
-from tidy3d.plugins.adjoint.log import AdjointError
 
-from ..utils import run_emulated, assert_log_level, run_async_emulated
+from ..utils import run_emulated, assert_log_level, log_capture, run_async_emulated
 
 
 EPS = 2.0
@@ -479,7 +478,7 @@ def test_jax_sim_data(use_emulated_run):
         mnt_data_c = sim_data[mnt_name]
 
 
-def test_intersect_structures(caplog):
+def test_intersect_structures(log_capture):
     """Test validators for structures touching and intersecting."""
 
     SIZE_X = 1.0
@@ -510,7 +509,7 @@ def test_intersect_structures(caplog):
 
     # shouldnt error, just warn because of touching but not intersecting
     sim = make_sim_intersect(spacing=0.0)
-    assert_log_level(caplog, "warning")
+    assert_log_level(log_capture, "warning")
 
 
 def test_structure_overlaps():

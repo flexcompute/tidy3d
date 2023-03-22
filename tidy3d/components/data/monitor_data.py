@@ -5,6 +5,7 @@ from __future__ import annotations
 from abc import ABC
 from typing import Union, Tuple, Callable, Dict, List
 import warnings
+
 import xarray as xr
 import numpy as np
 import pydantic as pd
@@ -28,8 +29,9 @@ from ..monitor import FieldProjectionKSpaceMonitor, FieldProjectionSurface
 from ..monitor import DiffractionMonitor
 from ..source import SourceTimeType, CustomFieldSource
 from ..medium import Medium, MediumType
-from ...log import SetupError, DataError, Tidy3dNotImplementedError, log
+from ...exceptions import SetupError, DataError, Tidy3dNotImplementedError
 from ...constants import ETA_0, C_0, MICROMETER
+from ...log import log
 
 
 class MonitorData(Dataset, ABC):

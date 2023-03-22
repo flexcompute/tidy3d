@@ -10,9 +10,10 @@ import gdspy
 import trimesh
 
 import tidy3d as td
-from tidy3d.log import ValidationError, SetupError, Tidy3dKeyError
+from tidy3d.exceptions import ValidationError, SetupError, Tidy3dKeyError
 from tidy3d.components.geometry import Geometry, Planar
-from ..utils import assert_log_level, prepend_tmp
+from ..utils import assert_log_level, prepend_tmp, log_capture
+
 
 GEO = td.Box(size=(1, 1, 1))
 GEO_INF = td.Box(size=(1, 1, td.inf))
@@ -415,7 +416,7 @@ def make_ref_plane_kwargs(reference_plane: str):
     "sidewall_angle, reference_plane, log_level",
     zip(SIDEWALL_ANGLES, REFERENCE_PLANES, LOG_LEVELS_EXPECTED),
 )
-def test_polyslab_deprecation_field(caplog, sidewall_angle, reference_plane, log_level):
+def test_polyslab_deprecation_field(log_capture, sidewall_angle, reference_plane, log_level):
     """Test that deprectaion warnings thrown if polyslab reference plane not specified."""
 
     reference_plane_kwargs = make_ref_plane_kwargs(reference_plane)
@@ -427,7 +428,7 @@ def test_polyslab_deprecation_field(caplog, sidewall_angle, reference_plane, log
         sidewall_angle=sidewall_angle,
         **reference_plane_kwargs,
     )
-    assert_log_level(caplog, log_level)
+    assert_log_level(log_capture, log_level)
 
 
 # TODO: remove for 2.0
@@ -435,7 +436,7 @@ def test_polyslab_deprecation_field(caplog, sidewall_angle, reference_plane, log
     "sidewall_angle, reference_plane, log_level",
     zip(SIDEWALL_ANGLES, REFERENCE_PLANES, LOG_LEVELS_EXPECTED),
 )
-def test_cylinder_deprecation_field(caplog, sidewall_angle, reference_plane, log_level):
+def test_cylinder_deprecation_field(log_capture, sidewall_angle, reference_plane, log_level):
     """Test that deprectaion warnings thrown if cylinder reference plane not specified."""
 
     reference_plane_kwargs = make_ref_plane_kwargs(reference_plane)
@@ -447,7 +448,7 @@ def test_cylinder_deprecation_field(caplog, sidewall_angle, reference_plane, log
         sidewall_angle=sidewall_angle,
         **reference_plane_kwargs,
     )
-    assert_log_level(caplog, log_level)
+    assert_log_level(log_capture, log_level)
 
 
 # TODO: remove for 2.0
@@ -455,7 +456,7 @@ def test_cylinder_deprecation_field(caplog, sidewall_angle, reference_plane, log
     "sidewall_angle, reference_plane, log_level",
     zip(SIDEWALL_ANGLES, REFERENCE_PLANES, LOG_LEVELS_EXPECTED),
 )
-def test_polyslab_deprecation_classmethod(caplog, sidewall_angle, reference_plane, log_level):
+def test_polyslab_deprecation_classmethod(log_capture, sidewall_angle, reference_plane, log_level):
     """Test that deprectaion warnings thrown if polyslab reference plane not specified."""
 
     reference_plane_kwargs = make_ref_plane_kwargs(reference_plane)
@@ -472,7 +473,7 @@ def test_polyslab_deprecation_classmethod(caplog, sidewall_angle, reference_plan
         **reference_plane_kwargs,
     )
 
-    assert_log_level(caplog, log_level)
+    assert_log_level(log_capture, log_level)
 
 
 def test_polyslab_merge():

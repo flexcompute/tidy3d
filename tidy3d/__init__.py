@@ -84,8 +84,7 @@ from .components.source import Source, SourceTime
 from .components.monitor import Monitor
 from .components.grid.grid import YeeGrid, FieldGrid, Coords1D
 
-# logging
-from .log import log, set_logging_file, WebError
+from .log import log, set_logging_file, set_logging_console
 
 # config
 from .config import config
@@ -95,6 +94,7 @@ from .version import __version__, PIP_NAME
 
 # updater
 from .updater import Updater
+
 
 # warn if this was uploaded to the beta PyPI, also sets the pyPI repository that we upload to
 if "beta" in PIP_NAME:

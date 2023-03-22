@@ -17,10 +17,10 @@ from ....components.geometry import Geometry, Box, PolySlab
 from ....components.data.monitor_data import FieldData, PermittivityData
 from ....components.monitor import FieldMonitor, PermittivityMonitor
 from ....constants import fp_eps, MICROMETER
+from ....exceptions import AdjointError
 
 from .base import JaxObject
 from .types import JaxFloat, validate_jax_tuple, validate_jax_tuple_tuple
-from ..log import AdjointError
 
 # number of integration points per unit wavelength in material
 PTS_PER_WVL_INTEGRATION = 50

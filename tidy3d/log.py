@@ -1,114 +1,140 @@
-"""Logging and error-handling for Tidy3d."""
-import logging
-from rich.logging import RichHandler
+"""Logging for Tidy3d."""
 
-# TODO: more logging features (to file, etc).
+from typing import Union
+from typing_extensions import Literal
 
-FORMAT = "%(message)s"
+from rich.console import Console
 
-DEFAULT_LEVEL = "INFO"
-LOGGER_NAME = "tidy3d_logger"
 
-logging.basicConfig(level=DEFAULT_LEVEL, format=FORMAT, datefmt="[%X]", handlers=[RichHandler()])
+LogLevel = Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]
+LogValue = Union[int, LogLevel]
 
-# maps level string to level integer for python logging package
-LEVEL_MAP = {
-    "error": 40,
-    "warning": 30,
-    "info": 20,
-    "debug": 10,
+# Logging levels compatible with logging module
+_level_value = {
+    "DEBUG": 10,
+    "INFO": 20,
+    "WARNING": 30,
+    "ERROR": 40,
+    "CRITICAL": 50,
 }
 
-# importable logger
-log = logging.getLogger(LOGGER_NAME)
+_level_name = {v: k for k, v in _level_value.items()}
+
+DEFAULT_LEVEL = "INFO"
 
 
-""" Tidy3d custom exceptions """
-
-
-class Tidy3dError(ValueError):
-    """Any error in tidy3d"""
-
-    def __init__(self, message: str = None):
-        """Log just the error message and then raise the Exception."""
-        super().__init__(message)
-        log.error(message)
-
-
-class ConfigError(Tidy3dError):
-    """Error when configuring Tidy3d."""
-
-
-class Tidy3dKeyError(Tidy3dError):
-    """Could not find a key in a Tidy3d dictionary."""
-
-
-class ValidationError(Tidy3dError):
-    """Error when constructing Tidy3d components."""
-
-
-class SetupError(Tidy3dError):
-    """Error regarding the setup of the components (outside of domains, etc)."""
-
-
-class FileError(Tidy3dError):
-    """Error reading or writing to file."""
-
-
-class WebError(Tidy3dError):
-    """Error with the webAPI."""
-
-
-class AuthenticationError(Tidy3dError):
-    """Error authenticating a user through webapi webAPI."""
-
-
-class DataError(Tidy3dError):
-    """Error accessing data."""
-
-
-class Tidy3dImportError(Tidy3dError):
-    """Error importing a package needed for tidy3d."""
-
-
-class Tidy3dNotImplementedError(Tidy3dError):
-    """Error when a functionality is not (yet) supported."""
-
-
-""" Logging functions """
-
-
-def _get_level_int(level: str) -> int:
+def _get_level_int(level: LogValue) -> int:
     """Get the integer corresponding to the level string."""
-    level = level.lower()
-    if level not in LEVEL_MAP:
-        raise ConfigError(
-            f"logging level {level} not supported, must be in {list(LEVEL_MAP.keys())}."
+    if isinstance(level, int):
+        return level
+
+    level_upper = level.upper()
+    if level_upper != level:
+        log.warning(
+            f"'{level}' provided as a logging level. "
+            "In the future, only upper-case logging levels may be specified. "
+            f"This value will be converted to upper case '{level_upper}'."
         )
-    return LEVEL_MAP[level]
+    if level_upper not in _level_value:
+        # We don't want to import ConfigError to avoid a circular dependency
+        raise ValueError(
+            f"logging level {level_upper} not supported, must be "
+            "'DEBUG', 'INFO', 'WARNING', 'ERROR', or 'CRITICAL'"
+        )
+    return _level_value[level_upper]
 
 
-def set_logging_level(level: str = DEFAULT_LEVEL.lower()) -> None:
-    """Set tidy3d logging level priority.
+class LogHandler:
+    """Handle log messages depending on log level"""
+
+    def __init__(self, console: Console, level: LogValue):
+        self.level = _get_level_int(level)
+        self.console = console
+
+    def handle(self, level, level_name, message):
+        """Output log messages depending on log level"""
+        if level >= self.level:
+            self.console.log(level_name, message, sep=": ")
+
+
+class Logger:
+    """Custom logger to avoid the complexities of the logging module"""
+
+    def __init__(self):
+        self.handlers = {}
+
+    def _log(self, level: int, level_name: str, message: str) -> None:
+        """Distribute log messages to all handlers"""
+        for handler in self.handlers.values():
+            handler.handle(level, level_name, message)
+
+    def log(self, level: LogValue, message: str, *args) -> None:
+        """Log (message) % (args) with given level"""
+        if isinstance(level, str):
+            level_name = level
+            level = _get_level_int(level)
+        else:
+            level_name = _level_name.get(level, "unknown")
+        self._log(level, level_name, message % args)
+
+    def debug(self, message: str, *args) -> None:
+        """Log (message) % (args) at debug level"""
+        self._log(_level_value["DEBUG"], "DEBUG", message % args)
+
+    def info(self, message: str, *args) -> None:
+        """Log (message) % (args) at info level"""
+        self._log(_level_value["INFO"], "INFO", message % args)
+
+    def warning(self, message: str, *args) -> None:
+        """Log (message) % (args) at warning level"""
+        self._log(_level_value["WARNING"], "WARNING", message % args)
+
+    def error(self, message: str, *args) -> None:
+        """Log (message) % (args) at error level"""
+        self._log(_level_value["ERROR"], "ERROR", message % args)
+
+    def critical(self, message: str, *args) -> None:
+        """Log (message) % (args) at critical level"""
+        self._log(_level_value["CRITICAL"], "CRITICAL", message % args)
+
+
+# Initialize Tidy3d's logger
+log = Logger()
+
+
+def set_logging_level(level: LogValue = DEFAULT_LEVEL) -> None:
+    """Set tidy3d console logging level priority.
 
     Parameters
     ----------
-    level : str = 'info'
-        The lowest priority level of logging messages to display.
-        One of ``{'debug', 'info', 'warning', 'error'}`` (listed in increasing priority).
-
-    Example
-    -------
-    >>> log.debug('this message should not appear (default logging level = INFO')
-    >>> set_logging_level('debug')
-    >>> log.debug('this message should appear now')
+    level : str
+        The lowest priority level of logging messages to display. One of ``{'DEBUG', 'INFO',
+        'WARNING', 'ERROR', 'CRITICAL'}`` (listed in increasing priority).
     """
+    if "console" in log.handlers:
+        log.handlers["console"].level = _get_level_int(level)
 
-    level_int = _get_level_int(level)
-    log.setLevel(level_int)
+
+def set_logging_console(stderr: bool = False) -> None:
+    """Set stdout or stderr as console output
+
+    Parameters
+    ----------
+    stderr : bool
+        If False, logs are directed to stdout, otherwise to stderr.
+    """
+    if "console" in log.handlers:
+        previous_level = log.handlers["console"].level
+    else:
+        previous_level = DEFAULT_LEVEL
+    log.handlers["console"] = LogHandler(Console(stderr=stderr), previous_level)
 
 
-def set_logging_file(fname: str, filemode="w", level=DEFAULT_LEVEL.lower()):
+def set_logging_file(
+    fname: str,
+    filemode: str = "w",
+    level: LogValue = DEFAULT_LEVEL,
+) -> None:
     """Set a file to write log to, independently from the stdout and stderr
     output chosen using :meth:`set_logging_level`.
 
@@ -116,22 +142,32 @@ def set_logging_file(fname: str, filemode="w", level=DEFAULT_LEVEL.lower()):
     ----------
     fname : str
         Path to file to direct the output to.
-    filemode : str = 'w'
+    filemode : str
         'w' or 'a', defining if the file should be overwritten or appended.
-    level : str = 'info'
-        One of 'debug', 'info', 'warning', 'error', 'critical'. This is
-        set for the file independently of the console output level set by
-        :meth:`set_logging_level`.
-
-    Example
-    -------
-    >>> set_logging_file('tidy3d_log.log')
-    >>> log.warning('this warning will appear in the tidy3d_log.log')
+    level : str
+        One of ``{'DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'}``. This is set for the file
+        independently of the console output level set by :meth:`set_logging_level`.
     """
+    if filemode not in "wa":
+        raise ValueError("filemode must be either 'w' or 'a'")
 
-    file_handler = logging.FileHandler(fname, filemode)
-    level_int = _get_level_int(level)
-    file_handler.setLevel(level_int)
-    formatter = logging.Formatter("%(levelname)s: %(message)s")
-    file_handler.setFormatter(formatter)
-    log.addHandler(file_handler)
+    # Close previous handler, if any
+    if "file" in log.handlers:
+        try:
+            log.handlers["file"].file.close()
+        except:  # pylint: disable=bare-except
+            del log.handlers["file"]
+            log.warning("Log file could not be closed")
+
+    try:
+        # pylint: disable=consider-using-with
+        file = open(fname, filemode)
+    except:  # pylint: disable=bare-except
+        log.error(f"File {fname} could not be opened")
+        return
+
+    log.handlers["file"] = LogHandler(Console(file=file), level)
+
+
+# Set default logging output
+set_logging_console()

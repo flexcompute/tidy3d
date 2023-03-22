@@ -3,8 +3,7 @@ import tempfile
 import pytest
 import responses
 import tidy3d as td
-import os
-import time
+import tidy3d.web as web
 
 from responses import matchers
 

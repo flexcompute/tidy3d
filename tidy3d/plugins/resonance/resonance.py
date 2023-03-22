@@ -10,12 +10,14 @@ import xarray as xr
 
 from pydantic import Field, NonNegativeFloat, PositiveInt, validator
 
+from ...log import log
 from ...components.base import Tidy3dBaseModel
 from ...components.types import ArrayLike
 from ...components.data.data_array import ScalarFieldTimeDataArray
 from ...components.data.monitor_data import FieldTimeData
 from ...constants import HERTZ
-from ...log import log, SetupError, ValidationError
+from ...exceptions import SetupError, ValidationError
+
 
 INIT_NUM_FREQS = 200
 
