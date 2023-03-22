@@ -30,6 +30,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `SourceTime` plotting methods `.plot()` and `.plot_spectrum()` accept a `val` kwarg, which selects which part of the data (`'real'`, `'imag'`, or `'abs'`) to plot, rather than plotting all at once.
 - Tidy3D exceptions inherit from `ValueError` so they are handled properly by pydantic.
 - Two unstable materials in `material_library`: `Cu_JohnsonChristy1972` and `Ni_JohnsonChristy1972`. `TiOx_HoribStable` added for improved stability.
+- Bug in infinite long cylinder when the `reference_plane` is not at the bottom or the cylinder is slanted.
 
 ## [1.10.0rc1] - 2023-3-07
 

@@ -13,6 +13,36 @@ np.random.seed(4)
 _BUFFER_PARAM = {"join_style": 2, "mitre_limit": 1e10}
 
 
+def offset_distance_to_base(reference_plane, length_axis: float, tan_angle: float) -> float:
+    """
+    A convenient function that returns the distance needed to offset the cross section
+    from reference plane to the base.
+
+    Parameters
+    ----------
+    reference_plane : PlanePosition
+        The position of the plane where the vertices of the polygon are supplied.
+    length_axis : float
+        The overall length of PolySlab along extrusion direction.
+    tan_angle : float
+        tan(sidewall angle)
+
+    Returns
+    -------
+    float
+        Offset distance.
+    """
+
+    if reference_plane == "top":
+        return length_axis * tan_angle
+
+    if reference_plane == "middle":
+        return length_axis * tan_angle / 2
+
+    # bottom
+    return 0
+
+
 def setup_polyslab(vertices, dilation, angle, bounds, axis=2, reference_plane="bottom"):
     """Setup slanted polyslab"""
     s = td.PolySlab(
@@ -28,7 +58,7 @@ def setup_polyslab(vertices, dilation, angle, bounds, axis=2, reference_plane="b
 
 def convert_polyslab_other_reference_plane(poly, reference_plane):
     """Convert a polyslab defined at ``bottom`` to other plane"""
-    offset_distance = -poly.offset_distance_to_base(reference_plane, poly.length_axis, poly._tanq)
+    offset_distance = -offset_distance_to_base(reference_plane, poly.length_axis, poly._tanq)
     vertices = poly._shift_vertices(poly.base_polygon, offset_distance)[0]
     return poly.copy(update={"vertices": vertices, "reference_plane": reference_plane})
 
@@ -527,3 +557,27 @@ def test_side_intersection_cylinder():
     shape_intersect = cyl.intersections_plane(x=np.sqrt(3) / 2)
     assert shape_intersect[0].covers(Point(1.25, -0.4)) == False
     assert shape_intersect[0].covers(Point(0.7, -0.4)) == True
+
+
+def test_slanted_infinite_cylinder():
+    """Make sure infinite slanted cylinder works."""
+
+    radius = 1.0
+    length = td.inf
+
+    # a list of cylinders
+    cyl = td.Cylinder(
+        center=(0, 0, 0),
+        radius=radius,
+        length=length,
+        axis=2,
+        sidewall_angle=np.pi / 4,
+        reference_plane="middle",
+    )
+
+    shape_intersect = cyl.intersections_plane(x=0)
+    assert shape_intersect[0].covers(Point(1.25, 0.4)) == False
+    assert shape_intersect[0].covers(Point(1.25, -0.4)) == True
+
+    shape_intersect = cyl.intersections_plane(x=np.sqrt(3) / 2)
+    assert shape_intersect[0].covers(Point(1.25, -0.4)) == False
