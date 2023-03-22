@@ -22,7 +22,13 @@ def migrate() -> bool:
         password = auth_json["password"]
         if email and password:
             is_migrate = click.prompt(
-                "auth.json found which doesn't support anymore, do you want to migrate to api key?",
+                "This system was found to use the old authentication protocol based on auth.json, "
+                "which will not be supported in the upcoming 2.0 release. We strongly recommend "
+                "migrating to the API key authentication before the release. Would you like to "
+                "migrate to the API key authentication now? "
+                "This will create a '~/.tidy3d/config' file on your machine "
+                "to store the API key from your online account but all other "
+                "workings of Tidy3D will remain the same.",
                 type=bool,
                 default=True,
             )
