@@ -79,7 +79,7 @@ Authentication (linking the front end to your account) will be done via an API k
 
 You can find your API key in the [web interface](ehttp://tidy3d.simulation.cloud)
 
-After signing in and navigating to the account page, copy the API key for the next steps.
+After signing in and navigating to the account page by clicking the "user" icon on the left-hand side, copy the API key from the button on the right-hand side of the page.
 
 To set up the API key to work with Tidy3D, we need to store it either in the `~/.tidy3d/config` file or an environment variable.
 
