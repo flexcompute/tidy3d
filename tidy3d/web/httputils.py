@@ -11,7 +11,7 @@ from requests import Session
 import requests
 
 from .auth import get_credentials
-from .cli.app import CONFIG_FILE
+from .cli.constants import CONFIG_FILE
 from .config import DEFAULT_CONFIG as Config
 from ..log import WebError
 from ..version import __version__
