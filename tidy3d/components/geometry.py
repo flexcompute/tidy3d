@@ -2072,7 +2072,7 @@ class PolySlab(Planar):
 
         # make sure no polygon splitting, isalands, 0 area
         poly_heal = make_valid(Polygon(val_np))
-        if poly_heal.area < fp_eps**2:
+        if poly_heal.area < fp_eps:
             raise SetupError("The polygon almost collapses to a 1D curve.")
 
         if not isinstance(poly_heal, Polygon) or len(poly_heal.interiors) > 0:
