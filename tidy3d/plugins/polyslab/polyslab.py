@@ -235,7 +235,7 @@ class ComplexPolySlab(PolySlab):
                 if len(vertices_now) < 3:
                     break
                 # polygon collapse into 1D
-                if Polygon(vertices_now).buffer(0).area < fp_eps**2:
+                if Polygon(vertices_now).buffer(0).area < fp_eps:
                     break
                 vertices_now = PolySlab._orient(vertices_now)
                 num_division_count += 1
