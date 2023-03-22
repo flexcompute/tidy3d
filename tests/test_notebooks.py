@@ -28,24 +28,10 @@ notebook_filenames_all = [
 
 # if you want to run only some notebooks, put here, if empty, run all
 run_only = [
-    "PlasmonicNanoparticle",
-    "SMatrix"
+    # "WaveguideSizeConverter"
 ]
-skip = []
-#     "Metalens"
-#     "8ChannelDemultiplexer",
-#     "FieldProjections",
-#     "AdjointPlugin_3_InverseDesign",
-#     "BiosensorGrating",
-#     "DielectricMetasurfaceAbsorber",
-#     "EulerWaveguideBend",
-#     "GDS_import",
-#     "HighQ_Si",
-#     "ModeSolver",
-#     "ParameterScan",
-#     "WebAPI",
-#     "WhatsNew"
-# ]
+skip = [
+]
 
 # if any run only supplied, only add those
 if len(run_only):

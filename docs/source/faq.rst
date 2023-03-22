@@ -120,7 +120,12 @@ The injected power values described below assume that the source spectrum normal
   which have a finite extent, the normalization is correct provided that the source profile decays by the boundaries
   of the source plane. Verifying that this is the case is always advised, as otherwise results may be spurious
   beyond just the normalization (numerical artifacts will be present at the source boundary).
-  
+- :class:`.TFSFSource`: Normalized to inject 1W/μm\ :sup:`2` in the direction of the source injection axis. This is convenient
+  for computing scattering and absorption cross sections without the need for additional normalization. Note that for angled incidence,
+  a factor of :math:`1/\cos(\theta)` needs to be applied to convert to the power carried by the plane wave in the propagation direction,
+  which is at an angle :math:`\theta` with respect to the injection axis. Note also that when the source spans the entire simulation
+  domain with periodic or Bloch boundaries, the conversion between the normalization of a :class:`.TFSFSource` and a :class:`.PlaneWave`
+  is just the area of the simulation domain in the plane normal to the injection axis.
 
 Why is a simulation diverging?
 ------------------------------
