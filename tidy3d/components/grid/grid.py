@@ -389,10 +389,17 @@ class Grid(Tidy3dBaseModel):
 
         return inds_list
 
-    def periodic_subspace(self, axis: Axis, ind_beg: int = 0, ind_end: int = 0) -> Coords1D:
+    def extended_subspace(
+        self,
+        axis: Axis,
+        ind_beg: int = 0,
+        ind_end: int = 0,
+        periodic: bool = True,
+    ) -> Coords1D:
         """Pick a subspace of 1D boundaries within ``range(ind_beg, ind_end)``. If any indexes lie
-        outside of the grid boundaries array, periodic padding is used, where the zeroth and last
-        element of the boundaries are identified.
+        outside of the grid boundaries array, padding is used based on the boundary conditions.
+        For periodic BCs, the zeroth and last element of the grid boundaries are identified.
+        For other BCs, the zeroth and last element of the boundaries are a reflection plane.
 
         Parameters
         ----------
@@ -402,6 +409,8 @@ class Grid(Tidy3dBaseModel):
             Starting index for the subspace.
         ind_end : int = 0
             Ending index for the subspace.
+        periodic : bool = True
+            Whether to pad out of bounds indexes with a periodic or reflected pattern.
 
         Returns
         -------
@@ -411,24 +420,30 @@ class Grid(Tidy3dBaseModel):
 
         coords = self.boundaries.to_list[axis]
         padded_coords = coords
-        num_coords = coords.size
-        num_cells = num_coords - 1
-        coords_width = coords[-1] - coords[0]
+        num_cells = coords.size - 1
 
-        # Pad on the left if needed
-        if ind_beg < 0:
-            num_pad = int(np.ceil(-ind_beg / num_cells))
-            coords_pad = coords[:-1, None] + (coords_width * np.arange(-num_pad, 0))[None, :]
-            coords_pad = coords_pad.T.ravel()
-            padded_coords = np.concatenate([coords_pad, padded_coords])
-            ind_beg += num_pad * num_cells
-            ind_end += num_pad * num_cells
+        reverse = True
+        while ind_beg < 0:
+            if periodic or not reverse:
+                offset = padded_coords[0] - coords[-1]
+                padded_coords = np.concatenate([coords[:-1] + offset, padded_coords])
+                reverse = True
+            else:
+                offset = padded_coords[0] + coords[0]
+                padded_coords = np.concatenate([offset - coords[:0:-1], padded_coords])
+                reverse = False
+            ind_beg += num_cells
+            ind_end += num_cells
 
-        # Pad on the right if needed
-        if ind_end >= padded_coords.size:
-            num_pad = int(np.ceil((ind_end - padded_coords.size) / num_cells))
-            coords_pad = coords[1:, None] + (coords_width * np.arange(1, num_pad + 1))[None, :]
-            coords_pad = coords_pad.T.ravel()
-            padded_coords = np.concatenate([padded_coords, coords_pad])
+        reverse = True
+        while ind_end >= padded_coords.size:
+            if periodic or not reverse:
+                offset = padded_coords[-1] - coords[0]
+                padded_coords = np.concatenate([padded_coords, coords[1:] + offset])
+                reverse = True
+            else:
+                offset = padded_coords[-1] + coords[-1]
+                padded_coords = np.concatenate([padded_coords, offset - coords[-2::-1]])
+                reverse = False
 
         return padded_coords[ind_beg:ind_end]

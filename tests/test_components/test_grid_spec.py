@@ -26,6 +26,7 @@ def test_make_coords():
             td.Structure(geometry=td.Box(size=(2, 0.3, 1)), medium=td.Medium(permittivity=2)),
         ],
         symmetry=(1, 0, -1),
+        periodic=(True, False, False),
         wavelength=1.0,
         num_pml_layers=(10, 4),
     )
@@ -40,6 +41,7 @@ def test_make_coords_2d():
             td.Structure(geometry=td.Box(size=(2, 0, 1)), medium=td.Medium(permittivity=2)),
         ],
         symmetry=(1, 0, -1),
+        periodic=(True, True, False),
         wavelength=1.0,
         num_pml_layers=(10, 4),
     )
@@ -81,6 +83,7 @@ def test_auto_grid_from_sources():
             td.Structure(geometry=td.Box(size=(1, 1, 1)), medium=td.Medium()),
         ],
         symmetry=(0, 1, -1),
+        periodic=(False, False, True),
         sources=[src],
         num_pml_layers=((10, 10), (0, 5), (0, 0)),
     )
