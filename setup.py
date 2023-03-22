@@ -1,6 +1,10 @@
 import setuptools
 from distutils.util import convert_path
+from setuptools.command.install import install
+import os
+from os.path import expanduser
 
+TIDY3D_DIR = f"{expanduser('~')}/.tidy3d"
 PACKAGE_NAME = "tidy3d"
 REPO_NAME = "tidy3d"
 
@@ -32,6 +36,18 @@ trimesh_required = read_requirements("requirements/trimesh.txt")
 core_required = read_requirements("requirements/core.txt")
 core_required += basic_required + web_required
 dev_required = read_requirements("requirements/dev.txt")
+
+
+def post_install():
+    # create .tidy3d directory under ~/ folder
+
+    if not os.path.exists(TIDY3D_DIR):
+        os.mkdir(TIDY3D_DIR)
+
+class PostInstallCommand(install):
+    def run(self):
+        install.run(self)
+        post_install()
 
 setuptools.setup(
     name=version["PIP_NAME"],
@@ -66,4 +82,7 @@ setuptools.setup(
             "tidy3d = tidy3d.web.cli:tidy3d_cli",
         ],
     },
+    cmdclass={
+        'install': PostInstallCommand,
+    }
 )
