@@ -1015,6 +1015,13 @@ class Planar(Geometry, ABC):
     def length_axis(self) -> float:
         """Gets the length of the geometry along the out of plane dimension."""
 
+    @property
+    def finite_length_axis(self) -> float:
+        """Gets the length of the geometry along the out of plane dimension.
+        If the length is td.inf, return ``LARGE_NUMBER``
+        """
+        return min(self.length_axis, LARGE_NUMBER)
+
     def intersections_plane(self, x: float = None, y: float = None, z: float = None):
         """Returns shapely geometry at plane specified by one non None value of x,y,z.
 
@@ -1125,38 +1132,6 @@ class Planar(Geometry, ABC):
         tan(sidewall_angle). _tanq*height gives the offset value
         """
         return np.tan(self.sidewall_angle)
-
-    @staticmethod
-    def offset_distance_to_base(
-        reference_plane: PlanePosition, length_axis: float, tan_angle: float
-    ) -> float:
-        """
-        A convenient function that returns the distance needed to offset the cross section
-        from reference plane to the base.
-
-        Parameters
-        ----------
-        reference_plane : PlanePosition
-            The position of the plane where the vertices of the polygon are supplied.
-        length_axis : float
-            The overall length of PolySlab along extrusion direction.
-        tan_angle : float
-            tan(sidewall angle)
-
-        Returns
-        -------
-        float
-            Offset distance.
-        """
-
-        if reference_plane == "top":
-            return length_axis * tan_angle
-
-        if reference_plane == "middle":
-            return length_axis * tan_angle / 2
-
-        # bottom
-        return 0
 
 
 class Circular(Geometry):
@@ -1731,12 +1706,35 @@ class Cylinder(Centered, Circular, Planar):
     >>> c = Cylinder(center=(1,2,3), radius=2, length=5, axis=2)
     """
 
+    # Provide more explanations on where radius is defined
+    radius: pydantic.NonNegativeFloat = pydantic.Field(
+        ...,
+        title="Radius",
+        description="Radius of geometry at the ``reference_plane``.",
+        units=MICROMETER,
+    )
+
     length: pydantic.NonNegativeFloat = pydantic.Field(
         ...,
         title="Length",
         description="Defines thickness of cylinder along axis dimension.",
         units=MICROMETER,
     )
+
+    @pydantic.validator("length", always=True)
+    def _only_middle_for_infinite_length_slanted_cylinder(cls, val, values):
+        """For a slanted cylinder of infinite length, ``reference_plane`` can only
+        be ``middle``; otherwise, the radius at ``center`` is either td.inf or 0.
+        """
+        if isclose(values["sidewall_angle"], 0) or not np.isinf(val):
+            return val
+        if values["reference_plane"] != "middle":
+            raise SetupError(
+                "For a slanted cylinder here is of infinite length, "
+                "defining the reference_plane other than 'middle' "
+                "leads to undefined cylinder behaviors near 'center'."
+            )
+        return val
 
     @property
     def center_axis(self):
@@ -1819,7 +1817,9 @@ class Cylinder(Centered, Circular, Planar):
             LARGE_NUMBER if isclose(self.sidewall_angle, 0) else self.radius_max / abs(self._tanq)
         )
         # The maximal height of the cross section
-        height_max = min((1 - abs(position_local) / self.radius_max) * h_cone, self.length_axis)
+        height_max = min(
+            (1 - abs(position_local) / self.radius_max) * h_cone, self.finite_length_axis
+        )
 
         # more vertices to add for conical frustum shape
         vertices_frustum_right = []
@@ -1852,12 +1852,12 @@ class Cylinder(Centered, Circular, Planar):
         if intersect_half_length_min > 0:
             vertices_min.append(
                 self._local_to_global_side_cross_section(
-                    [intersect_half_length_min, self.length_axis], axis
+                    [intersect_half_length_min, self.finite_length_axis], axis
                 )
             )
             vertices_min.append(
                 self._local_to_global_side_cross_section(
-                    [-intersect_half_length_min, self.length_axis], axis
+                    [-intersect_half_length_min, self.finite_length_axis], axis
                 )
             )
         ## early termination
@@ -1900,7 +1900,7 @@ class Cylinder(Centered, Circular, Planar):
         dist_y = np.abs(y - y0)
         dist_z = np.abs(z - z0)
         inside_radius = (dist_x**2 + dist_y**2) <= (radius_offset**2)
-        inside_height = dist_z <= (self.length_axis / 2)
+        inside_height = dist_z <= (self.finite_length_axis / 2)
         return positive_radius * inside_radius * inside_height
 
     @cached_property
@@ -1967,20 +1967,26 @@ class Cylinder(Centered, Circular, Planar):
         return area
 
     @cached_property
+    def radius_bottom(self) -> float:
+        """radius of bottom"""
+        return self._radius_z(self.center_axis - self.finite_length_axis / 2)
+
+    @cached_property
+    def radius_top(self) -> float:
+        """radius of bottom"""
+        return self._radius_z(self.center_axis + self.finite_length_axis / 2)
+
+    @cached_property
     def radius_max(self) -> float:
         """max(radius of top, radius of bottom)"""
-        radius_top = self._radius_z(self.center_axis + self.length_axis / 2)
-        radius_bottom = self._radius_z(self.center_axis - self.length_axis / 2)
-        return max(radius_bottom, radius_top)
+        return max(self.radius_bottom, self.radius_top)
 
     @cached_property
     def radius_min(self) -> float:
         """min(radius of top, radius of bottom). It can be negative for a large
         sidewall angle.
         """
-        radius_top = self._radius_z(self.center_axis + self.length_axis / 2)
-        radius_bottom = self._radius_z(self.center_axis - self.length_axis / 2)
-        return min(radius_bottom, radius_top)
+        return min(self.radius_bottom, self.radius_top)
 
     def _radius_z(self, z: float):
         """Compute the radius of the cross section at the position z.
@@ -1993,10 +1999,13 @@ class Cylinder(Centered, Circular, Planar):
         if isclose(self.sidewall_angle, 0):
             return self.radius
 
-        radius_base = self.radius + self.offset_distance_to_base(
-            self.reference_plane, self.length_axis, self._tanq
-        )
-        return radius_base - (z - self.center_axis + self.length_axis / 2) * self._tanq
+        radius_middle = self.radius
+        if self.reference_plane == "top":
+            radius_middle += self.finite_length_axis / 2 * self._tanq
+        elif self.reference_plane == "bottom":
+            radius_middle -= self.finite_length_axis / 2 * self._tanq
+
+        return radius_middle - (z - self.center_axis) * self._tanq
 
     def _local_to_global_side_cross_section(self, coords: List[float], axis: int) -> List[float]:
         """Map a point (x,y) from local to global coordinate system in the
@@ -2022,7 +2031,7 @@ class Cylinder(Centered, Circular, Planar):
 
         _, (x_center, y_center) = self.pop_axis(self.center, axis=axis)
         lx_offset, ly_offset = self._order_by_axis(
-            plane_val=coords[0], axis_val=-self.length_axis / 2 + coords[1], axis=axis
+            plane_val=coords[0], axis_val=-self.finite_length_axis / 2 + coords[1], axis=axis
         )
         if not isclose(self.sidewall_angle, 0):
             ly_offset *= (-1) ** (self.sidewall_angle < 0)

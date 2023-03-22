@@ -170,6 +170,41 @@ def test_center_not_inf_validate():
 def test_radius_not_inf_validate():
     with pytest.raises(pydantic.ValidationError):
         g = td.Sphere(radius=td.inf)
+    with pytest.raises(pydantic.ValidationError):
+        g = td.Cylinder(radius=td.inf, center=(0, 0, 0), axis=1, length=1)
+
+
+def test_slanted_cylinder_infinite_length_validate():
+    g = td.Cylinder(radius=1, center=(0, 0, 0), axis=1, length=td.inf)
+    g = td.Cylinder(radius=1, center=(0, 0, 0), axis=1, length=td.inf, reference_plane="top")
+    g = td.Cylinder(radius=1, center=(0, 0, 0), axis=1, length=td.inf, reference_plane="bottom")
+    g = td.Cylinder(radius=1, center=(0, 0, 0), axis=1, length=td.inf, reference_plane="middle")
+    g = td.Cylinder(
+        radius=1,
+        center=(0, 0, 0),
+        axis=1,
+        length=td.inf,
+        sidewall_angle=0.1,
+        reference_plane="middle",
+    )
+    with pytest.raises(pydantic.ValidationError):
+        g = td.Cylinder(
+            radius=1,
+            center=(0, 0, 0),
+            axis=1,
+            length=td.inf,
+            sidewall_angle=0.1,
+            reference_plane="top",
+        )
+    with pytest.raises(pydantic.ValidationError):
+        g = td.Cylinder(
+            radius=1,
+            center=(0, 0, 0),
+            axis=1,
+            length=td.inf,
+            sidewall_angle=0.1,
+            reference_plane="bottom",
+        )
 
 
 def test_box_from_bounds():
