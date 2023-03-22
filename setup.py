@@ -40,14 +40,15 @@ dev_required = read_requirements("requirements/dev.txt")
 
 def post_install():
     # create .tidy3d directory under ~/ folder
-
     if not os.path.exists(TIDY3D_DIR):
         os.mkdir(TIDY3D_DIR)
+
 
 class PostInstallCommand(install):
     def run(self):
         install.run(self)
         post_install()
+
 
 setuptools.setup(
     name=version["PIP_NAME"],
@@ -83,6 +84,6 @@ setuptools.setup(
         ],
     },
     cmdclass={
-        'install': PostInstallCommand,
-    }
+        "install": PostInstallCommand,
+    },
 )
