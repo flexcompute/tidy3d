@@ -2,6 +2,7 @@ import os
 from pathlib import Path
 from typing import Dict
 
+import pytest
 import numpy as np
 from tidy3d import *
 import tidy3d as td
@@ -403,32 +404,51 @@ def run_async_emulated(simulations: Dict[str, Simulation], **kwargs) -> BatchDat
     return {task_name: run_emulated(sim) for task_name, sim in simulations.items()}
 
 
-def assert_log_level(caplog, log_level_expected: str):
+# Log handler used to store log records during tests
+class CaptureHandler:
+    def __init__(self):
+        self.level = 0
+        self.records = []
+
+    def handle(self, level, level_name, message):
+        self.records.append((level, message))
+
+
+# Fixture that captures log records and mek them available as a list of tuples with
+# the log level and message
+@pytest.fixture
+def log_capture(monkeypatch):
+    log_capture = CaptureHandler()
+    monkeypatch.setitem(td.log.handlers, "pytest_capture", log_capture)
+    return log_capture.records
+
+
+def assert_log_level(records, log_level_expected: str):
     """ensure something got logged if log_level is not None.
     note: I put this here rather than utils.py because if we import from utils.py,
     it will validate the sims there and those get included in log.
     """
+    import sys
+
+    sys.stderr.write(str(records) + "\n")
 
     if log_level_expected is None:
         log_level_expected_int = None
     else:
         log_level_expected_int = _get_level_int(log_level_expected)
 
-    # get log output
-    logs = caplog.record_tuples
-
     # there's a log but the log level is not None (problem)
-    if logs and not log_level_expected_int:
+    if records and not log_level_expected_int:
         raise Exception
 
     # we expect a log but none is given (problem)
-    if log_level_expected_int and not logs:
+    if log_level_expected_int and not records:
         raise Exception
 
     # both expected and got log, check the log levels match
-    if logs and log_level_expected:
-        for log in logs:
-            log_level = log[1]
+    if records and log_level_expected:
+        for log in records:
+            log_level = log[0]
             if log_level == log_level_expected_int:
                 # log level was triggered, exit
                 return

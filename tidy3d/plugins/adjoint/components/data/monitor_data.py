@@ -16,10 +16,10 @@ from .....components.data.monitor_data import ModeData, DiffractionData, FieldDa
 from .....components.data.dataset import FieldDataset
 from .....components.data.data_array import ScalarFieldDataArray
 from .....constants import C_0, ETA_0
+from .....exceptions import AdjointError
 
 from .data_array import JaxDataArray
 from ..base import JaxObject
-from ...log import AdjointError
 
 
 class JaxMonitorData(MonitorData, JaxObject, ABC):

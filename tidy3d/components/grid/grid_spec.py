@@ -14,8 +14,9 @@ from ..types import Axis, Symmetry, annotate_type
 from ..source import SourceType
 from ..structure import Structure, StructureType
 from ..geometry import Box
-from ...log import SetupError, log
-from ...constants import C_0, MICROMETER, fp_eps
+from ...log import log
+from ...exceptions import SetupError
+from ...constants import MICROMETER, C_0, fp_eps
 
 
 class GridSpec1d(Tidy3dBaseModel, ABC):

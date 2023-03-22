@@ -26,6 +26,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - `TriangleMesh` class for modeling geometries specified by triangle surface meshes, with support for STL file import.
 
+## [1.9.3] - 2023-3-08
+
+### Fixed
+- Allow new `tidy3d.config.logging_level` to accept lower case for backwards compatibility.
+
+## [1.9.2] - 2023-3-08
+
+### Added
+- `set_logging_console` allows redirection of console messages to stderr.
+
+### Changed
+- Use custom logger to avoid changing global logging state when importing tidy3d.
+- Separate logging configuration from custom exception definitions.
+
 ## [1.9.1] - 2023-3-06
 
 ### Fixed
@@ -260,7 +274,7 @@ which fields are to be projected is now determined automatically based on the me
 - Bug in auto-mesh generation.
 
 ### Added
-- Ability to compute far fields server-side on GPUs.
+- Ability to compute field projections server-side.
 
 ### Changed
 - All Tidy3D components apart from data structures are now fully immutable.
@@ -606,6 +620,9 @@ which fields are to be projected is now determined automatically based on the me
 
 [Unreleased]: https://github.com/flexcompute/tidy3d/compare/v1.10.0rc1...develop
 [1.10.0rc1]: https://github.com/flexcompute/tidy3d/compare/v1.9.1...v1.10.0rc1
+[Unreleased]: https://github.com/flexcompute/tidy3d/compare/v1.9.3...develop
+[1.9.3]: https://github.com/flexcompute/tidy3d/compare/v1.9.2...v1.9.3
+[1.9.2]: https://github.com/flexcompute/tidy3d/compare/v1.9.1...v1.9.2
 [1.9.1]: https://github.com/flexcompute/tidy3d/compare/v1.9.0...v1.9.1
 [1.9.0]: https://github.com/flexcompute/tidy3d/compare/v1.8.4...v1.9.0
 [1.8.4]: https://github.com/flexcompute/tidy3d/compare/v1.8.3...v1.8.4

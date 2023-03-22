@@ -5,7 +5,7 @@ import matplotlib.pylab as plt
 import pydantic
 
 import tidy3d as td
-from tidy3d.log import DataError, Tidy3dKeyError
+from tidy3d.exceptions import DataError, Tidy3dKeyError
 
 from tidy3d.components.simulation import Simulation
 from tidy3d.components.grid.grid_spec import GridSpec

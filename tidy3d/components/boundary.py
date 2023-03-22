@@ -12,8 +12,9 @@ from .types import Complex, Axis, TYPE_TAG_STR
 from .source import GaussianBeam, ModeSource, PlaneWave, TFSF
 from .medium import Medium
 
-from ..log import log, SetupError, DataError
 from ..constants import EPSILON_0, MU_0, PML_SIGMA
+from ..exceptions import SetupError, DataError
+from ..log import log
 
 
 class BoundaryEdge(ABC, Tidy3dBaseModel):

@@ -13,7 +13,9 @@ from ..boundary import BlochBoundary
 from ..source import TFSF
 from ..types import Ax, Axis, annotate_type, FieldVal, PlotScale, ColormapType
 from ..viz import equal_aspect, add_ax_if_none
-from ...log import DataError, log, Tidy3dKeyError, ValidationError
+from ...exceptions import DataError, Tidy3dKeyError, ValidationError
+from ...log import log
+
 
 DATA_TYPE_MAP = {data.__fields__["monitor"].type_: data for data in MonitorDataTypes}
 

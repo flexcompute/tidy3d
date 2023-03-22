@@ -19,7 +19,8 @@ from .types import Vertices, Ax, Shapely, annotate_type
 from .viz import add_ax_if_none, equal_aspect
 from .viz import PLOT_BUFFER, ARROW_LENGTH, arrow_style
 from .viz import PlotParams, plot_params_geometry, polygon_patch
-from ..log import Tidy3dKeyError, SetupError, ValidationError, log, DataError
+from ..log import log
+from ..exceptions import Tidy3dKeyError, SetupError, ValidationError, DataError
 from ..constants import MICROMETER, LARGE_NUMBER, RADIAN, fp_eps, inf
 from .data.dataset import TriangleMeshDataset
 from .data.data_array import TriangleMeshDataArray, DATA_ARRAY_MAP

@@ -3,7 +3,7 @@ import pytest
 import pydantic
 import numpy as np
 import tidy3d as td
-from tidy3d.log import SetupError, ValidationError
+from tidy3d.exceptions import SetupError, ValidationError
 
 
 def test_stop_start():

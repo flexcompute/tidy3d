@@ -5,10 +5,10 @@ import matplotlib.pylab as plt
 
 import numpy as np
 import tidy3d as td
-from tidy3d.log import SetupError, ValidationError, Tidy3dKeyError
+from tidy3d.exceptions import SetupError, ValidationError, Tidy3dKeyError
 from tidy3d.components import simulation
 from tidy3d.components.simulation import MAX_NUM_MEDIUMS
-from ..utils import assert_log_level, SIM_FULL
+from ..utils import assert_log_level, SIM_FULL, log_capture
 
 SIM = td.Simulation(size=(1, 1, 1), run_time=1e-12, grid_spec=td.GridSpec(wavelength=1.0))
 
@@ -92,12 +92,12 @@ def test_sim_init():
 
 
 # TODO: remove for 2.0
-def test_deprecation_defaults(caplog):
+def test_deprecation_defaults(log_capture):
     """Make sure deprecation warnings thrown if defaults used."""
     s = td.Simulation(
         size=(1, 1, 1), run_time=1e-12, grid_spec=td.GridSpec.uniform(dl=0.1), boundary_spec=None
     )
-    assert_log_level(caplog, "warning")
+    assert_log_level(log_capture, "warning")
 
 
 def test_sim_bounds():
@@ -186,7 +186,7 @@ def _test_monitor_size():
 
 
 @pytest.mark.parametrize("freq, log_level", [(1.5, "warning"), (2.5, None), (3.5, "warning")])
-def test_monitor_medium_frequency_range(caplog, freq, log_level):
+def test_monitor_medium_frequency_range(log_capture, freq, log_level):
     # monitor frequency above or below a given medium's range should throw a warning
 
     size = (1, 1, 1)
@@ -206,11 +206,11 @@ def test_monitor_medium_frequency_range(caplog, freq, log_level):
         run_time=1e-12,
         boundary_spec=td.BoundarySpec.all_sides(boundary=td.Periodic()),
     )
-    assert_log_level(caplog, log_level)
+    assert_log_level(log_capture, log_level)
 
 
 @pytest.mark.parametrize("fwidth, log_level", [(0.1, "warning"), (2, None)])
-def test_monitor_simulation_frequency_range(caplog, fwidth, log_level):
+def test_monitor_simulation_frequency_range(log_capture, fwidth, log_level):
     # monitor frequency outside of the simulation's frequency range should throw a warning
 
     size = (1, 1, 1)
@@ -227,7 +227,7 @@ def test_monitor_simulation_frequency_range(caplog, fwidth, log_level):
         run_time=1e-12,
         boundary_spec=td.BoundarySpec.all_sides(boundary=td.Periodic()),
     )
-    assert_log_level(caplog, log_level)
+    assert_log_level(log_capture, log_level)
 
 
 def test_validate_bloch_with_symmetry():
@@ -245,7 +245,7 @@ def test_validate_bloch_with_symmetry():
         )
 
 
-def test_validate_plane_wave_boundaries(caplog):
+def test_validate_plane_wave_boundaries(log_capture):
     src1 = td.PlaneWave(
         source_time=td.GaussianPulse(freq0=2.5e14, fwidth=1e13),
         center=(0, 0, 0),
@@ -311,7 +311,7 @@ def test_validate_plane_wave_boundaries(caplog):
         sources=[src2],
         boundary_spec=bspec3,
     )
-    assert_log_level(caplog, "warning")
+    assert_log_level(log_capture, "warning")
 
     # angled incidence plane wave with wrong Bloch vector should warn
     td.Simulation(
@@ -320,10 +320,10 @@ def test_validate_plane_wave_boundaries(caplog):
         sources=[src2],
         boundary_spec=bspec4,
     )
-    assert_log_level(caplog, "warning")
+    assert_log_level(log_capture, "warning")
 
 
-def test_validate_zero_dim_boundaries(caplog):
+def test_validate_zero_dim_boundaries(log_capture):
 
     # zero-dim simulation with an absorbing boundary in that direction should warn
     src = td.PlaneWave(
@@ -344,7 +344,7 @@ def test_validate_zero_dim_boundaries(caplog):
             z=td.Boundary.pml(),
         ),
     )
-    assert_log_level(caplog, "warning")
+    assert_log_level(log_capture, "warning")
 
     # zero-dim simulation with an absorbing boundary any other direction should not warn
     td.Simulation(
@@ -497,9 +497,9 @@ def test_min_sym_box():
     S.min_sym_box(b)
 
 
-def test_discretize_non_intersect(caplog):
+def test_discretize_non_intersect(log_capture):
     SIM.discretize(box=td.Box(center=(-20, -20, -20), size=(1, 1, 1)))
-    assert_log_level(caplog, "error")
+    assert_log_level(log_capture, "error")
 
 
 def test_filter_structures():
@@ -522,7 +522,7 @@ def test_get_structure_plot_params():
     assert pp.facecolor == "gold"
 
 
-def test_warn_sim_background_medium_freq_range(caplog):
+def test_warn_sim_background_medium_freq_range(log_capture):
     S = SIM.copy(
         update=dict(
             sources=(
@@ -534,11 +534,11 @@ def test_warn_sim_background_medium_freq_range(caplog):
             medium=td.Medium(frequency_range=(0, 1)),
         )
     )
-    assert_log_level(caplog, "warning")
+    assert_log_level(log_capture, "warning")
 
 
 @pytest.mark.parametrize("grid_size,log_level", [(0.001, None), (3, "warning")])
-def test_large_grid_size(caplog, grid_size, log_level):
+def test_large_grid_size(log_capture, grid_size, log_level):
     # small fwidth should be inside range, large one should throw warning
 
     medium = td.Medium(permittivity=2, frequency_range=(2e14, 3e14))
@@ -556,11 +556,11 @@ def test_large_grid_size(caplog, grid_size, log_level):
         boundary_spec=td.BoundarySpec.all_sides(boundary=td.Periodic()),
     )
 
-    assert_log_level(caplog, log_level)
+    assert_log_level(log_capture, log_level)
 
 
 @pytest.mark.parametrize("box_size,log_level", [(0.001, None), (9.9, "warning"), (20, None)])
-def test_sim_structure_gap(caplog, box_size, log_level):
+def test_sim_structure_gap(log_capture, box_size, log_level):
     """Make sure the gap between a structure and PML is not too small compared to lambda0."""
     medium = td.Medium(permittivity=2)
     box = td.Structure(geometry=td.Box(size=(box_size, box_size, box_size)), medium=medium)
@@ -580,7 +580,7 @@ def test_sim_structure_gap(caplog, box_size, log_level):
         ),
         run_time=1e-12,
     )
-    assert_log_level(caplog, log_level)
+    assert_log_level(log_capture, log_level)
 
 
 def test_sim_plane_wave_error():
@@ -717,7 +717,7 @@ def test_sim_monitor_homogeneous():
     )
 
 
-def test_proj_monitor_distance(caplog):
+def test_proj_monitor_distance(log_capture):
     """Make sure a warning is issued if the projection distance for exact projections
     is very large compared to the simulation domain size.
     """
@@ -772,7 +772,7 @@ def test_proj_monitor_distance(caplog):
         monitors=[monitor_n2f_far],
         boundary_spec=td.BoundarySpec.all_sides(boundary=td.Periodic()),
     )
-    assert_log_level(caplog, "warning")
+    assert_log_level(log_capture, "warning")
 
     # proj_distance not too large - don't warn
     _ = td.Simulation(
@@ -850,7 +850,7 @@ def test_diffraction_medium():
         ((0.1, 0.1, 1), "warning"),
     ],
 )
-def test_sim_structure_extent(caplog, box_size, log_level):
+def test_sim_structure_extent(log_capture, box_size, log_level):
     """Make sure we warn if structure extends exactly to simulation edges."""
 
     src = td.UniformCurrentSource(
@@ -867,7 +867,7 @@ def test_sim_structure_extent(caplog, box_size, log_level):
         boundary_spec=td.BoundarySpec.all_sides(boundary=td.Periodic()),
     )
 
-    assert_log_level(caplog, log_level)
+    assert_log_level(log_capture, log_level)
 
 
 def test_num_mediums():
@@ -1091,7 +1091,7 @@ def test_tfsf_symmetry():
         )
 
 
-def test_tfsf_boundaries(caplog):
+def test_tfsf_boundaries(log_capture):
     """Test that a TFSF source is allowed to cross boundaries only in particular cases."""
     src_time = td.GaussianPulse(freq0=td.C_0, fwidth=0.1)
 
@@ -1143,7 +1143,7 @@ def test_tfsf_boundaries(caplog):
             z=td.Boundary.pml(),
         ),
     )
-    assert_log_level(caplog, "warning")
+    assert_log_level(log_capture, "warning")
 
     # cannot cross any boundary in the direction of injection
     with pytest.raises(pydantic.ValidationError) as e:
@@ -1169,7 +1169,7 @@ def test_tfsf_boundaries(caplog):
         )
 
 
-def test_tfsf_structures_grid(caplog):
+def test_tfsf_structures_grid(log_capture):
     """Test that a TFSF source is allowed to intersect structures only in particular cases."""
     src_time = td.GaussianPulse(freq0=td.C_0, fwidth=0.1)
 
@@ -1197,7 +1197,7 @@ def test_tfsf_structures_grid(caplog):
         ],
     )
     sim.validate_pre_upload()
-    assert_log_level(caplog, "warning")
+    assert_log_level(log_capture, "warning")
 
     # must not have different material profiles on different faces along the injection axis
     with pytest.raises(SetupError) as e:
@@ -1258,7 +1258,7 @@ def test_tfsf_structures_grid(caplog):
 @pytest.mark.parametrize(
     "size, num_struct, log_level", [(1, 1, None), (50, 1, "warning"), (1, 11000, "warning")]
 )
-def test_warn_large_epsilon(caplog, size, num_struct, log_level):
+def test_warn_large_epsilon(log_capture, size, num_struct, log_level):
     """Make sure we get a warning if the epsilon grid is too large."""
 
     structures = [
@@ -1285,7 +1285,7 @@ def test_warn_large_epsilon(caplog, size, num_struct, log_level):
         structures=structures,
     )
     sim.epsilon(box=td.Box(size=(size, size, size)))
-    assert_log_level(caplog, log_level)
+    assert_log_level(log_capture, log_level)
 
 
 def test_dt():

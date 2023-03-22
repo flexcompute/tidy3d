@@ -10,8 +10,8 @@ from tidy3d.components.boundary import Periodic, PECBoundary, PMCBoundary, Bloch
 from tidy3d.components.boundary import PML, StablePML, Absorber
 from tidy3d.components.source import GaussianPulse, PlaneWave, PointDipole
 from tidy3d.components.types import TYPE_TAG_STR
-from tidy3d.log import SetupError, ValidationError, DataError
-from ..utils import assert_log_level
+from tidy3d.exceptions import SetupError, ValidationError, DataError
+from ..utils import assert_log_level, log_capture
 
 
 def test_bloch_phase():
@@ -79,17 +79,17 @@ def test_boundary_validators():
 
 
 @pytest.mark.parametrize("boundary, log_level", [(PMCBoundary(), None), (Periodic(), "warning")])
-def test_boundary_validator_warnings(caplog, boundary, log_level):
+def test_boundary_validator_warnings(log_capture, boundary, log_level):
     """Test the validators in class `Boundary` which should show a warning but not an error"""
     boundary = Boundary(plus=PECBoundary(), minus=boundary)
-    assert_log_level(caplog, log_level)
+    assert_log_level(log_capture, log_level)
 
 
 @pytest.mark.parametrize("boundary, log_level", [(PMCBoundary(), None), (Periodic(), "warning")])
-def test_boundary_validator_warnings_switched(caplog, boundary, log_level):
+def test_boundary_validator_warnings_switched(log_capture, boundary, log_level):
     """Test the validators in class `Boundary` which should show a warning but not an error"""
     boundary = Boundary(minus=PECBoundary(), plus=boundary)
-    assert_log_level(caplog, log_level)
+    assert_log_level(log_capture, log_level)
 
 
 def test_boundary():
@@ -184,8 +184,8 @@ LOG_LEVELS_EXPECTED = (None, "warning", "warning", "warning")
 
 # TODO: remove for 2.0
 @pytest.mark.parametrize("pm_keys, log_level", zip(PLUS_MINUS_SPECIFIED, LOG_LEVELS_EXPECTED))
-def test_deprecation_defaults(caplog, pm_keys, log_level):
+def test_deprecation_defaults(log_capture, pm_keys, log_level):
     """Make sure deprecation warnings thrown if defaults used."""
     boundary_kwargs = {key: Periodic() for key in pm_keys}
     bc = Boundary(**boundary_kwargs)
-    assert_log_level(caplog, log_level)
+    assert_log_level(log_capture, log_level)

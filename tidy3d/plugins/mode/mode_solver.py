@@ -8,6 +8,7 @@ import numpy as np
 import pydantic
 import xarray as xr
 
+from ...log import log
 from ...components.base import Tidy3dBaseModel, cached_property
 from ...components.geometry import Box
 from ...components.simulation import Simulation
@@ -20,9 +21,10 @@ from ...components.data.data_array import ModeIndexDataArray, ScalarModeFieldDat
 from ...components.data.data_array import FreqModeDataArray
 from ...components.data.sim_data import SimulationData
 from ...components.data.monitor_data import ModeSolverData
-from ...log import ValidationError, log
+from ...exceptions import ValidationError
 from ...constants import C_0
 from .solver import compute_modes
+
 
 FIELD = Tuple[ArrayLike[complex, 3], ArrayLike[complex, 3], ArrayLike[complex, 3]]
 MODE_MONITOR_NAME = "<<<MODE_SOLVER_MONITOR>>>"

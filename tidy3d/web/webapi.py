@@ -15,7 +15,9 @@ from .task import TaskId, TaskInfo
 from ..components.data.sim_data import SimulationData
 from ..components.simulation import Simulation
 from ..components.types import Literal
-from ..log import log, WebError
+from ..log import log
+from ..exceptions import WebError
+
 
 # time between checking task status
 REFRESH_TIME = 0.3

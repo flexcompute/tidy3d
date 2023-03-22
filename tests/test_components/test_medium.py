@@ -4,7 +4,7 @@ import pytest
 import pydantic
 import matplotlib.pylab as plt
 import tidy3d as td
-from tidy3d.log import ValidationError
+from tidy3d.exceptions import ValidationError
 from typing import Dict
 
 MEDIUM = td.Medium()

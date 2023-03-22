@@ -18,7 +18,7 @@ from ..base import Tidy3dBaseModel
 from ..types import Axis, ArrayLike
 from ..structure import Structure, MeshOverrideStructure, StructureType
 from ..medium import PECMedium
-from ...log import SetupError, ValidationError
+from ...exceptions import SetupError, ValidationError
 from ...constants import C_0, fp_eps
 
 _ROOTS_TOL = 1e-10
