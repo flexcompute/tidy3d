@@ -415,7 +415,7 @@ class Boundary(Tidy3dBaseModel):
         if switched:
             values.update({"plus": plus, "minus": minus})
             log.warning(
-                "A periodic boundary condition was specified on the opposide side of a perfect "
+                "A periodic boundary condition was specified on the opposite side of a perfect "
                 "electric or magnetic conductor boundary. This periodic boundary condition will "
                 "be replaced by the perfect electric or magnetic conductor across from it."
             )

@@ -105,9 +105,12 @@ def test_extend_grid():
     assert np.diff(inds_r_0_0) == np.diff(inds_r_1_1) - 2
 
 
-def test_periodic_subspace():
+def test_extended_subspace():
     g = make_grid()
-    coords = g.periodic_subspace(axis=0, ind_beg=-2, ind_end=2)
+    coords = g.extended_subspace(axis=0, ind_beg=-4, ind_end=6, periodic=False)
+    assert np.allclose(coords, np.arange(-5, 5))
+    coords = g.extended_subspace(axis=0, ind_beg=-4, ind_end=6, periodic=True)
+    assert np.allclose(coords, np.arange(-5, 5))
 
 
 def test_sim_nonuniform_small():

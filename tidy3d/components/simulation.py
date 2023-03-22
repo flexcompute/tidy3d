@@ -2294,6 +2294,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         grid = self.grid_spec.make_grid(
             structures=structures,
             symmetry=self.symmetry,
+            periodic=self._periodic,
             sources=self.sources,
             num_pml_layers=self.num_pml_layers,
         )
@@ -2413,10 +2414,10 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
 
         span_inds = grid.discretize_inds(box, **kwargs)
         boundary_dict = {}
-        for idim, dim in enumerate("xyz"):
+        for idim, (dim, periodic) in enumerate(zip("xyz", self._periodic)):
             ind_beg, ind_end = span_inds[idim]
             # ind_end + 1 because we are selecting cell boundaries not cells
-            boundary_dict[dim] = grid.periodic_subspace(idim, ind_beg, ind_end + 1)
+            boundary_dict[dim] = grid.extended_subspace(idim, ind_beg, ind_end + 1, periodic)
 
             # Overwrite with zero dimension snapped, if requested
             if snap_zero_dim:
@@ -2425,6 +2426,18 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
                 elif box.size[idim] == 0:
                     boundary_dict[dim] = [box.center[idim], box.center[idim]]
         return Grid(boundaries=Coords(**boundary_dict))
+
+    @cached_property
+    def _periodic(self) -> Tuple[bool, bool, bool]:
+        """For each dimension, ``True`` if periodic/Bloch boundaries and ``False`` otherwise.
+        We check on both sides but in practice there should be no cases in which a periodic/Bloch
+        BC is on one side only. This is explicitly validated for Bloch, and implicitly done for
+        periodic, in which case we allow PEC/PMC on the other side, but we replace the periodic
+        boundary with another PEC/PMC plane upon initialization."""
+        periodic = []
+        for bcs_1d in self.boundary_spec.to_list:
+            periodic.append(all(isinstance(bcs, (Periodic, BlochBoundary)) for bcs in bcs_1d))
+        return periodic
 
     def discretize(self, box: Box, snap_zero_dim: bool = False, **kwargs) -> Grid:
         """Grid containing only cells that intersect with a :class:`.Box`.

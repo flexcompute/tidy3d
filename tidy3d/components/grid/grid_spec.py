@@ -28,6 +28,7 @@ class GridSpec1d(Tidy3dBaseModel, ABC):
         axis: Axis,
         structures: List[StructureType],
         symmetry: Tuple[Symmetry, Symmetry, Symmetry],
+        periodic: bool,
         wavelength: pd.PositiveFloat,
         num_pml_layers: Tuple[pd.NonNegativeInt, pd.NonNegativeInt],
     ) -> Coords1D:
@@ -56,7 +57,7 @@ class GridSpec1d(Tidy3dBaseModel, ABC):
 
         # Determine if one should apply periodic boundary condition.
         # This should only affect auto nonuniform mesh generation for now.
-        is_periodic = sum(num_pml_layers) == 0 and symmetry[axis] == 0
+        is_periodic = periodic and symmetry[axis] == 0
 
         # generate boundaries
         bound_coords = self._make_coords_initial(
@@ -509,10 +510,12 @@ class GridSpec(Tidy3dBaseModel):
                     override_used[dl_axis] = True
         return override_used
 
+    # pylint:disable=too-many-locals,too-many-arguments
     def make_grid(
         self,
         structures: List[Structure],
         symmetry: Tuple[Symmetry, Symmetry, Symmetry],
+        periodic: Tuple[bool, bool, bool],
         sources: List[SourceType],
         num_pml_layers: List[Tuple[pd.NonNegativeInt, pd.NonNegativeInt]],
     ) -> Grid:
@@ -556,16 +559,20 @@ class GridSpec(Tidy3dBaseModel):
                     "use 'AutoGrid'."
                 )
 
-        coords_all = [None, None, None]
-        for axis in range(3):
-            coords_all[axis] = [self.grid_x, self.grid_y, self.grid_z][axis].make_coords(
-                axis=axis,
+        grids_1d = [self.grid_x, self.grid_y, self.grid_z]
+        coords_dict = {}
+        for idim, (dim, grid_1d) in enumerate(zip("xyz", grids_1d)):
+            coords_dict[dim] = grid_1d.make_coords(
+                axis=idim,
                 structures=list(structures) + list(self.override_structures),
                 symmetry=symmetry,
+                periodic=periodic[idim],
                 wavelength=wavelength,
-                num_pml_layers=num_pml_layers[axis],
+                num_pml_layers=num_pml_layers[idim],
             )
-        return Grid(boundaries=Coords(**dict(zip("xyz", coords_all))))
+
+        coords = Coords(**coords_dict)
+        return Grid(boundaries=coords)
 
     @classmethod
     def auto(  # pylint:disable=too-many-arguments
