@@ -73,6 +73,7 @@ Geometry
    Sphere
    Cylinder
    PolySlab
+   TriangleMesh
    GeometryGroup
 
 Mediums
