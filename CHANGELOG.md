@@ -6,17 +6,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- `SimulationData.plot_field` accepts new field componets and values, including the Poynting vector.
+- `SimulationData.plot_field` accepts new field components and values, including the Poynting vector.
 - `SimulationData.get_poynting_vector` for calculating the 3D Poynting vector at the Yee cell centers.
-- Post init validation of Tidy3D components.
+- Post-init validation of Tidy3D components.
 - `Medium2D` class for surface conductivity model of a 2D material.
 - Entries in `material_library` for graphene and some common TMDs.
-- Ability to create a 2D representation of a thin 3D metal.
-- `AutoGrid` for 2D materials.
+- Ability to create a 2D representation of a thin 3D material.
+- Total-field scattered-field (TFSF) source which allows angled plane waves to be injected into a finite region of space (the total-field region), such that only scattered fields exist outside this region (scattered-field region).
 
 ### Changed
 - `export_matlib_to_file` in `material_library` exports material's full name in additional to abbreviation.
-- Simpler progressbars for `run_async`.
+- Simpler progress bars for `run_async`.
 - Medium property `n_cfl` added to adjust time step size according to CFL condition.
 - In the mode solver plugin, regular methods in `solver.py` transformed into classmethods.
 - `ArrayLike` types are stored internally as `np.ndarray` and written to json as lists. `constrained_array()` provides way to validate `ArrayLike` values based on `ndim` and `dtype`.
@@ -24,7 +24,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - Bug in remote file transfer when client environment has no correct certificate authority pem file install locally. 
 - `SourceTime` plotting methods `.plot()` and `.plot_spectrum()` accept a `val` kwarg, which selects which part of the data (`'real'`, `'imag'`, or `'abs'`) to plot, rather than plotting all at once.
-- Tidy3d exceptions inherit from `ValueError` so they are handled properly by pydantic.
+- Tidy3D exceptions inherit from `ValueError` so they are handled properly by pydantic.
 - Two unstable materials in `material_library`: `Cu_JohnsonChristy1972` and `Ni_JohnsonChristy1972`. `TiOx_HoribStable` added for improved stability.
 
 ## [1.10.0rc1] - 2023-3-07
