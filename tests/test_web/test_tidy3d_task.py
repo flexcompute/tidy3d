@@ -1,3 +1,4 @@
+import pytest
 import os
 import tempfile
 
@@ -17,8 +18,16 @@ test_env = EnvironmentConfig(
 Env.set_current(test_env)
 
 
+@pytest.fixture
+def set_api_key(monkeypatch):
+    """Set the api key."""
+    import tidy3d.web.http_management as http_module
+
+    monkeypatch.setattr(http_module, "api_key", lambda: "apikey")
+
+
 @responses.activate
-def test_list_tasks():
+def test_list_tasks(set_api_key):
     responses.add(
         responses.GET,
         f"{Env.current.web_api_endpoint}/tidy3d/projects",
@@ -40,7 +49,7 @@ def test_list_tasks():
 
 
 @responses.activate
-def test_query_task():
+def test_query_task(set_api_key):
     responses.add(
         responses.GET,
         f"{Env.current.web_api_endpoint}/tidy3d/tasks/3eb06d16-208b-487b-864b-e9b1d3e010a7/detail",
@@ -71,7 +80,7 @@ def test_query_task():
 
 
 @responses.activate
-def test_get_simulation_json(monkeypatch):
+def test_get_simulation_json(monkeypatch, set_api_key):
     def mock_download(*args, **kwargs):
         file_path = kwargs["to_file"]
         with open(file_path, "w") as f:
@@ -97,7 +106,7 @@ def test_get_simulation_json(monkeypatch):
 
 
 @responses.activate
-def test_upload(monkeypatch):
+def test_upload(monkeypatch, set_api_key):
     responses.add(
         responses.GET,
         f"{Env.current.web_api_endpoint}/tidy3d/tasks/3eb06d16-208b-487b-864b-e9b1d3e010a7/detail",
@@ -120,7 +129,7 @@ def test_upload(monkeypatch):
 
 
 @responses.activate
-def test_create():
+def test_create(set_api_key):
     responses.add(
         responses.GET,
         f"{Env.current.web_api_endpoint}/tidy3d/project",
@@ -146,7 +155,7 @@ def test_create():
 
 
 @responses.activate
-def test_submit():
+def test_submit(set_api_key):
     responses.add(
         responses.GET,
         f"{Env.current.web_api_endpoint}/tidy3d/project",
@@ -189,7 +198,7 @@ def test_submit():
 
 
 @responses.activate
-def test_estimate_cost():
+def test_estimate_cost(set_api_key):
     responses.add(
         responses.GET,
         f"{Env.current.web_api_endpoint}/tidy3d/tasks/3eb06d16-208b-487b-864b-e9b1d3e010a7/detail",
@@ -213,7 +222,7 @@ def test_estimate_cost():
 
 
 @responses.activate
-def test_get_log(monkeypatch):
+def test_get_log(monkeypatch, set_api_key):
     def mock(*args, **kwargs):
         file_path = kwargs["to_file"]
         with open(file_path, "w") as f:

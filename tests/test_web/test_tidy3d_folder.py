@@ -1,3 +1,4 @@
+import pytest
 import responses
 from responses import matchers
 
@@ -7,8 +8,16 @@ from tidy3d.web.environment import Env
 Env.dev.active()
 
 
+@pytest.fixture
+def set_api_key(monkeypatch):
+    """Set the api key."""
+    import tidy3d.web.http_management as http_module
+
+    monkeypatch.setattr(http_module, "api_key", lambda: "apikey")
+
+
 @responses.activate
-def test_list_folders():
+def test_list_folders(set_api_key):
     responses.add(
         responses.GET,
         f"{Env.current.web_api_endpoint}/tidy3d/projects",
@@ -20,7 +29,7 @@ def test_list_folders():
 
 
 @responses.activate
-def test_get_folder():
+def test_get_folder(set_api_key):
     responses.add(
         responses.GET,
         f"{Env.current.web_api_endpoint}/tidy3d/project?projectName=default",
@@ -32,7 +41,7 @@ def test_get_folder():
 
 
 @responses.activate
-def test_create_and_remove_folder():
+def test_create_and_remove_folder(set_api_key):
     responses.add(
         responses.GET,
         f"{Env.current.web_api_endpoint}/tidy3d/project",
