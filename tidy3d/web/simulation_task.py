@@ -254,7 +254,7 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
         return None
 
     def get_simulation_json(
-        self, to_file: str, verbose: bool = True, progress_callback: Callable[[float], None] = None
+        self, to_file: str, verbose: bool = False, progress_callback: Callable[[float], None] = None
     ) -> None:
         """Get json file for a :class:`.Simulation` from server.
 
@@ -273,13 +273,13 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
         )
 
     def upload_simulation(
-        self, verbose: bool = True, progress_callback: Callable[[float], None] = None
+        self, verbose: bool = False, progress_callback: Callable[[float], None] = None
     ) -> None:
         """Upload :class:`.Simulation` object to Server.
 
         Parameters
         ----------
-        verbose: bool = True
+        verbose: bool = False
             Whether to display progressbars.
         progress_callback : Callable[[float], None] = None
             Optional callback function called when uploading file.
@@ -312,7 +312,7 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
         self,
         local_file: str,
         remote_filename: str,
-        verbose: bool = True,
+        verbose: bool = False,
         progress_callback: Callable[[float], None] = None,
     ) -> None:
         """
@@ -324,7 +324,7 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
             local file path.
         remote_filename: str
             file name on the server
-        verbose: bool = True
+        verbose: bool = False
             Whether to display progressbars.
         progress_callback : Callable[[float], None] = None
             Optional callback function called when uploading file.
@@ -405,7 +405,7 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
         return resp
 
     def get_simulation_hdf5(
-        self, to_file: str, verbose: bool = True, progress_callback: Callable[[float], None] = None
+        self, to_file: str, verbose: bool = False, progress_callback: Callable[[float], None] = None
     ) -> None:
         """Get hdf5 file from Server.
 
@@ -413,7 +413,7 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
         ----------
         to_file: str
             save file to path.
-        verbose: bool = True
+        verbose: bool = False
             Whether to display progressbars.
         progress_callback : Callable[[float], None] = None
             Optional callback function called when uploading file.
@@ -447,7 +447,7 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
         return perc_done, field_decay
 
     def get_log(
-        self, to_file: str, verbose: bool = True, progress_callback: Callable[[float], None] = None
+        self, to_file: str, verbose: bool = False, progress_callback: Callable[[float], None] = None
     ) -> None:
         """Get log file from Server.
 
@@ -455,7 +455,7 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
         ----------
         to_file: str
             save file to path.
-        verbose: bool = True
+        verbose: bool = False
             Whether to display progressbars.
         progress_callback : Callable[[float], None] = None
             Optional callback function called when uploading file.

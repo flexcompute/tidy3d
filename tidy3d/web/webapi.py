@@ -37,7 +37,7 @@ def run(  # pylint:disable=too-many-arguments
     folder_name: str = "default",
     path: str = "simulation_data.hdf5",
     callback_url: str = None,
-    verbose: bool = True,
+    verbose: bool = False,
     progress_callback_upload: Callable[[float], None] = None,
     progress_callback_download: Callable[[float], None] = None,
     solver_version: str = None,
@@ -59,7 +59,7 @@ def run(  # pylint:disable=too-many-arguments
     callback_url : str = None
         Http PUT url to receive simulation finish event. The body content is a json file with
         fields ``{'id', 'status', 'name', 'workUnit', 'solverVersion'}``.
-    verbose : bool = True
+    verbose : bool = False
         If `True`, will print progressbars and status, otherwise, will run silently.
     progress_callback_upload : Callable[[float], None] = None
         Optional callback function called when uploading file with ``bytes_in_chunk`` as argument.
@@ -99,7 +99,7 @@ def upload(  # pylint:disable=too-many-locals,too-many-arguments
     task_name: str,
     folder_name: str = "default",
     callback_url: str = None,
-    verbose: bool = True,
+    verbose: bool = False,
     progress_callback: Callable[[float], None] = None,
 ) -> TaskId:
     """Upload simulation to server, but do not start running :class:`.Simulation`.
@@ -115,7 +115,7 @@ def upload(  # pylint:disable=too-many-locals,too-many-arguments
     callback_url : str = None
         Http PUT url to receive simulation finish event. The body content is a json file with
         fields ``{'id', 'status', 'name', 'workUnit', 'solverVersion'}``.
-    verbose : bool = True
+    verbose : bool = False
         If `True`, will print progressbars and status, otherwise, will run silently.
     progress_callback : Callable[[float], None] = None
         Optional callback function called when uploading file with ``bytes_in_chunk`` as argument.
@@ -135,7 +135,8 @@ def upload(  # pylint:disable=too-many-locals,too-many-arguments
 
     task = SimulationTask.create(simulation, task_name, folder_name, callback_url)
     if verbose:
-        log.info(f"Created task '{task_name}' with task_id '{task.task_id}'.")
+        console = Console()
+        console.log(f"Created task '{task_name}' with task_id '{task.task_id}'.")
     task.upload_simulation(verbose=verbose, progress_callback=progress_callback)
 
     # log the url for the task in the web UI
@@ -213,7 +214,7 @@ def get_run_info(task_id: TaskId):
 
 
 # pylint: disable=too-many-statements, too-many-locals, too-many-branches
-def monitor(task_id: TaskId, verbose: bool = True) -> None:
+def monitor(task_id: TaskId, verbose: bool = False) -> None:
     # pylint:disable=too-many-statements
     """Print the real time task progress until completion.
 
@@ -221,7 +222,7 @@ def monitor(task_id: TaskId, verbose: bool = True) -> None:
     ----------
     task_id : str
         Unique identifier of task on server.  Returned by :meth:`upload`.
-    verbose : bool = True
+    verbose : bool = False
         If `True`, will print progressbars and status, otherwise, will run silently.
 
     Note
@@ -233,6 +234,8 @@ def monitor(task_id: TaskId, verbose: bool = True) -> None:
     task_name = task_info.taskName
 
     break_statuses = ("success", "error", "diverged", "deleted", "draft")
+
+    console = Console() if verbose else None
 
     def get_status() -> str:
         """Get status for this task."""
@@ -257,14 +260,13 @@ def monitor(task_id: TaskId, verbose: bool = True) -> None:
             if new_status != status:
                 status = new_status
                 if verbose and status != "running":
-                    log.info(f"status = {status}")
+                    console.log(f"status = {status}")
             time.sleep(REFRESH_TIME)
 
     status = get_status()
 
     if verbose:
-        console = Console()
-        log.info(f"status = {status}")
+        console.log(f"status = {status}")
 
     # already done
     if status in break_statuses:
@@ -281,11 +283,11 @@ def monitor(task_id: TaskId, verbose: bool = True) -> None:
     if verbose:
         est_flex_unit = get_estimated_cost()
         if est_flex_unit is not None and est_flex_unit > 0:
-            log.info(
+            console.log(
                 f"Maximum FlexUnit cost: {est_flex_unit:1.3f}. Use 'web.real_cost(task_id)' to "
                 "get the billed FlexUnit cost after a simulation run."
             )
-        log.info("starting up solver")
+        console.log("starting up solver")
 
     # while running but before the percentage done is available, keep waiting
     while get_run_info(task_id)[0] is None and get_status() == "running":
@@ -295,7 +297,7 @@ def monitor(task_id: TaskId, verbose: bool = True) -> None:
     if verbose:
 
         # verbose case, update progressbar
-        log.info("running solver")
+        console.log("running solver")
         with Progress(console=console) as progress:
 
             pbar_pd = progress.add_task("% done", total=100)
@@ -308,7 +310,7 @@ def monitor(task_id: TaskId, verbose: bool = True) -> None:
                 time.sleep(RUN_REFRESH_TIME)
 
             if perc_done is not None and perc_done < 100:
-                log.info("early shutoff detected, exiting.")
+                console.log("early shutoff detected, exiting.")
 
             progress.update(pbar_pd, completed=100, refresh=True)
 
@@ -325,14 +327,14 @@ def monitor(task_id: TaskId, verbose: bool = True) -> None:
 
         status = get_status()
         if status != "running":
-            log.info(f"status = {status}")
+            console.log(f"status = {status}")
 
         with console.status(f"[bold green]Finishing '{task_name}'...", spinner="runner"):
             while status not in break_statuses:
                 new_status = get_status()
                 if new_status != status:
                     status = new_status
-                    log.info(f"status = {status}")
+                    console.log(f"status = {status}")
                 time.sleep(REFRESH_TIME)
     else:
         while get_status() not in break_statuses:
@@ -342,7 +344,7 @@ def monitor(task_id: TaskId, verbose: bool = True) -> None:
 def download(
     task_id: TaskId,
     path: str = "simulation_data.hdf5",
-    verbose: bool = True,
+    verbose: bool = False,
     progress_callback: Callable[[float], None] = None,
 ) -> None:
     """Download results of task and log to file.
@@ -353,7 +355,7 @@ def download(
         Unique identifier of task on server.  Returned by :meth:`upload`.
     path : str = "simulation_data.hdf5"
         Download path to .hdf5 data file (including filename).
-    verbose : bool = True
+    verbose : bool = False
         If `True`, will print progressbars and status, otherwise, will run silently.
     progress_callback : Callable[[float], None] = None
         Optional callback function called when downloading file with ``bytes_in_chunk`` as argument.
@@ -366,7 +368,7 @@ def download(
 def download_json(
     task_id: TaskId,
     path: str = SIM_FILE_JSON,
-    verbose: bool = True,
+    verbose: bool = False,
     progress_callback: Callable[[float], None] = None,
 ) -> None:
     """Download the `.json` file associated with the :class:`.Simulation` of a given task.
@@ -377,7 +379,7 @@ def download_json(
         Unique identifier of task on server.  Returned by :meth:`upload`.
     path : str = "simulation.json"
         Download path to .json file of simulation (including filename).
-    verbose : bool = True
+    verbose : bool = False
         If `True`, will print progressbars and status, otherwise, will run silently.
     progress_callback : Callable[[float], None] = None
         Optional callback function called when downloading file with ``bytes_in_chunk`` as argument.
@@ -391,7 +393,7 @@ def download_json(
 def download_hdf5(
     task_id: TaskId,
     path: str = SIM_FILE_HDF5,
-    verbose: bool = True,
+    verbose: bool = False,
     progress_callback: Callable[[float], None] = None,
 ) -> None:
     """Download the `.hdf5` file associated with the :class:`.Simulation` of a given task.
@@ -402,7 +404,7 @@ def download_hdf5(
         Unique identifier of task on server.  Returned by :meth:`upload`.
     path : str = "simulation.hdf5"
         Download path to .hdf5 file of simulation (including filename).
-    verbose : bool = True
+    verbose : bool = False
         If `True`, will print progressbars and status, otherwise, will run silently.
     progress_callback : Callable[[float], None] = None
         Optional callback function called when downloading file with ``bytes_in_chunk`` as argument.
@@ -416,7 +418,7 @@ def download_hdf5(
 def load_simulation(
     task_id: TaskId,
     path: str = SIM_FILE_JSON,
-    verbose: bool = True,
+    verbose: bool = False,
     progress_callback: Callable[[float], None] = None,
 ) -> Simulation:
     """Download the `.json` file of a task and load the associated :class:`.Simulation`.
@@ -427,7 +429,7 @@ def load_simulation(
         Unique identifier of task on server.  Returned by :meth:`upload`.
     path : str = "simulation.json"
         Download path to .json file of simulation (including filename).
-    verbose : bool = True
+    verbose : bool = False
         If `True`, will print progressbars and status, otherwise, will run silently.
     progress_callback : Callable[[float], None] = None
         Optional callback function called when downloading file with ``bytes_in_chunk`` as argument.
@@ -447,7 +449,7 @@ def load_simulation(
 def download_log(
     task_id: TaskId,
     path: str = "tidy3d.log",
-    verbose: bool = True,
+    verbose: bool = False,
     progress_callback: Callable[[float], None] = None,
 ) -> None:
     """Download the tidy3d log file associated with a task.
@@ -458,7 +460,7 @@ def download_log(
         Unique identifier of task on server.  Returned by :meth:`upload`.
     path : str = "tidy3d.log"
         Download path to log file (including filename).
-    verbose : bool = True
+    verbose : bool = False
         If `True`, will print progressbars and status, otherwise, will run silently.
     progress_callback : Callable[[float], None] = None
         Optional callback function called when downloading file with ``bytes_in_chunk`` as argument.
@@ -478,7 +480,7 @@ def load(
     task_id: TaskId,
     path: str = "simulation_data.hdf5",
     replace_existing: bool = True,
-    verbose: bool = True,
+    verbose: bool = False,
     progress_callback: Callable[[float], None] = None,
 ) -> SimulationData:
     """Download and Load simultion results into :class:`.SimulationData` object.
@@ -491,7 +493,7 @@ def load(
         Download path to .hdf5 data file (including filename).
     replace_existing: bool = True
         Downloads the data even if path exists (overwriting the existing).
-    verbose : bool = True
+    verbose : bool = False
         If `True`, will print progressbars and status, otherwise, will run silently.
     progress_callback : Callable[[float], None] = None
         Optional callback function called when downloading file with ``bytes_in_chunk`` as argument.
@@ -506,7 +508,8 @@ def load(
         download(task_id=task_id, path=path, verbose=verbose, progress_callback=progress_callback)
 
     if verbose:
-        log.info(f"loading SimulationData from {path}")
+        console = Console()
+        console.log(f"loading SimulationData from {path}")
 
     sim_data = SimulationData.from_file(path)
 

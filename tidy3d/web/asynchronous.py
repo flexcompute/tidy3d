@@ -19,7 +19,7 @@ async def _run_async(
     path_dir: str = DEFAULT_DATA_DIR,
     callback_url: str = None,
     num_workers: int = None,
-    verbose: bool = True,
+    verbose: bool = False,
 ) -> BatchData:
     """Submits a set of :class:`.Simulation` objects to server, starts running,
     monitors progress, downloads, and loads results as a :class:`.BatchData` object.
@@ -38,7 +38,7 @@ async def _run_async(
         fields ``{'id', 'status', 'name', 'workUnit', 'solverVersion'}``.
     num_workers: int = None
         Number of tasks to submit at once in a batch, if None, will run all at the same time.
-    verbose : bool = True
+    verbose : bool = False
         If `True`, will print progressbars and status, otherwise, will run silently.
 
     Note
@@ -174,7 +174,7 @@ def run_async(
     path_dir: str = DEFAULT_DATA_DIR,
     callback_url: str = None,
     num_workers: int = None,
-    verbose: bool = True,
+    verbose: bool = False,
 ) -> BatchData:
     """Submits a set of :class:`.Simulation` objects to server, starts running,
     monitors progress, downloads, and loads results as a :class:`.BatchData` object.
@@ -193,7 +193,7 @@ def run_async(
         fields ``{'id', 'status', 'name', 'workUnit', 'solverVersion'}``.
     num_workers: int = None
         Number of tasks to submit at once in a batch, if None, will run all at the same time.
-    verbose : bool = True
+    verbose : bool = False
         If `True`, will print progressbars and status, otherwise, will run silently.
 
     Note
