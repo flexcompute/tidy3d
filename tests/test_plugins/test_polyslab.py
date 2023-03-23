@@ -5,7 +5,7 @@ import gdstk
 
 import tidy3d as td
 
-from tidy3d.plugins import ComplexPolySlab
+from tidy3d.plugins.polyslab import ComplexPolySlab
 from ..utils import clear_tmp, assert_log_level, log_capture
 
 

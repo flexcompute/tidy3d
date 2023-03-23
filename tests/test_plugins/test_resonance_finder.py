@@ -6,7 +6,7 @@ import tidy3d as td
 
 from numpy.random import default_rng
 
-from tidy3d.plugins import ResonanceFinder
+from tidy3d.plugins.resonance import ResonanceFinder
 from tidy3d import ScalarFieldTimeDataArray, FieldTimeData, FieldTimeMonitor
 
 RTOL = 1e-2
