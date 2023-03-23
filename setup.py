@@ -38,17 +38,12 @@ core_required += basic_required + web_required
 dev_required = read_requirements("requirements/dev.txt")
 
 
-def post_install():
-    # create .tidy3d directory under ~/ folder
+def create_config_folder():
     if not os.path.exists(TIDY3D_DIR):
         os.mkdir(TIDY3D_DIR)
 
 
-class PostInstallCommand(install):
-    def run(self):
-        install.run(self)
-        post_install()
-
+create_config_folder()
 
 setuptools.setup(
     name=version["PIP_NAME"],
@@ -82,8 +77,5 @@ setuptools.setup(
         "console_scripts": [
             "tidy3d = tidy3d.web.cli:tidy3d_cli",
         ],
-    },
-    cmdclass={
-        "install": PostInstallCommand,
     },
 )
