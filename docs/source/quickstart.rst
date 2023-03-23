@@ -115,6 +115,13 @@ Note: Windows users will need to peform a slighlty different step to link the re
     pip install pipx
     pipx run tidy3d configure --api-key=XXX
 
+Alternatively, the API key can be set up using the evironment variable ``SIMCLOUD_APIKEY`` as:
+
+.. code-block:: bash
+
+    export SIMCLOUD_APIKEY="XXX"
+
+
 Additional Configuration for Python IDE
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
