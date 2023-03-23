@@ -106,9 +106,9 @@ or manually insert the line `'apikey = "{your_api_key}"` in the `~/.tidy3d/confi
 
 #### Environment Variable
 
-Set the `SIMCLOUD_API_KEY` environment variable to your API key (in quotes).
+Set the `SIMCLOUD_APIKEY` environment variable to your API key (in quotes).
 
-``export SIMCLOUD_API_KEY="{your_api_key}"``
+``export SIMCLOUD_APIKEY="{your_api_key}"``
 
 ### Testing the installation and authentication
 
