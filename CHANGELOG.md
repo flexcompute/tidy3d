@@ -16,6 +16,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 ### Changed
+- Verbosity now has a default of `False` in the web functions.
+- Default Tidy3d logging level is now set to `'WARNING'`.
 
 ### Fixed
 
