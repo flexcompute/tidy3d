@@ -1,3 +1,4 @@
+import pytest
 import responses
 
 from tidy3d.web.environment import Env
@@ -6,8 +7,16 @@ from tidy3d.web.material_libray import MaterialLibray
 Env.dev.active()
 
 
+@pytest.fixture
+def set_api_key(monkeypatch):
+    """Set the api key."""
+    import tidy3d.web.http_management as http_module
+
+    monkeypatch.setattr(http_module, "api_key", lambda: "apikey")
+
+
 @responses.activate
-def test_lib():
+def test_lib(set_api_key):
     responses.add(
         responses.GET,
         f"{Env.current.web_api_endpoint}/tidy3d/libraries",
