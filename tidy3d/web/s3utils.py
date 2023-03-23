@@ -201,7 +201,7 @@ def upload_string(
     resource_id: str,
     content: str,
     remote_filename: str,
-    verbose: bool = True,
+    verbose: bool = False,
     progress_callback: Callable[[float], None] = None,
 ):
     """Upload a string to a file on S3.
@@ -214,7 +214,7 @@ def upload_string(
         The content of the file
     remote_filename : str
         The remote file name on S3 relative to the resource context root path.
-    verbose : bool = True
+    verbose : bool = False
         Whether to display a progressbar for the upload.
     progress_callback : Callable[[float], None] = None
         User-supplied callback function with ``bytes_in_chunk`` as argument.
@@ -260,7 +260,7 @@ def upload_file(
     resource_id: str,
     path: str,
     remote_filename: str,
-    verbose: bool = True,
+    verbose: bool = False,
     progress_callback: Callable[[float], None] = None,
 ):
     """Upload a file to S3.
@@ -273,7 +273,7 @@ def upload_file(
         Path to the file to upload.
     remote_filename : str
         The remote file name on S3 relative to the resource context root path.
-    verbose : bool = True
+    verbose : bool = False
         Whether to display a progressbar for the upload.
     progress_callback : Callable[[float], None] = None
         User-supplied callback function with ``bytes_in_chunk`` as argument.
@@ -322,7 +322,7 @@ def download_file(
     resource_id: str,
     remote_filename: str,
     to_file: str = None,
-    verbose: bool = True,
+    verbose: bool = False,
     progress_callback: Callable[[float], None] = None,
 ):
     """Download file from S3.
@@ -335,7 +335,7 @@ def download_file(
         The content of the file
     to_file : str = None
         Local filename to save to, if not specified, use the remote_filename.
-    verbose : bool = True
+    verbose : bool = False
         Whether to display a progressbar for the upload
     progress_callback : Callable[[float], None] = None
         User-supplied callback function with ``bytes_in_chunk`` as argument.

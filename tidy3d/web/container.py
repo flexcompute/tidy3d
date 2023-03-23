@@ -56,7 +56,7 @@ class Job(WebContainer):
     )
 
     verbose: bool = pd.Field(
-        True, title="Verbose", description="Whether to print info messages and progressbars."
+        False, title="Verbose", description="Whether to print info messages and progressbars."
     )
 
     task_id: TaskId = pd.Field(
@@ -196,7 +196,7 @@ class BatchData(Tidy3dBaseModel):
     )
 
     verbose: bool = pd.Field(
-        True, title="Verbose", description="Whether to print info messages and progressbars."
+        False, title="Verbose", description="Whether to print info messages and progressbars."
     )
 
     def load_sim_data(self, task_name: str) -> SimulationData:
@@ -256,7 +256,7 @@ class Batch(WebContainer):
     )
 
     verbose: bool = pd.Field(
-        True, title="Verbose", description="Whether to print info messages and progressbars."
+        False, title="Verbose", description="Whether to print info messages and progressbars."
     )
 
     solver_version: str = pd.Field(
