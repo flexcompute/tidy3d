@@ -5,8 +5,8 @@ import pydantic
 
 import tidy3d as td
 
-from tidy3d.plugins import DispersionFitter
-from tidy3d.plugins import ModeSolver
+from tidy3d.plugins.dispersion import DispersionFitter
+from tidy3d.plugins.mode import ModeSolver
 from tidy3d.plugins.mode.solver import compute_modes
 from tidy3d import FieldData, ScalarFieldDataArray, FieldMonitor
 from tidy3d.plugins.smatrix.smatrix import Port, ComponentModeler

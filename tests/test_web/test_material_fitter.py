@@ -2,7 +2,7 @@ import pytest
 import re
 
 import responses
-from tidy3d.plugins import DispersionFitter
+from tidy3d.plugins.dispersion import DispersionFitter
 
 from tidy3d.web.environment import Env
 from tidy3d.web.material_fitter import FitterOptions, MaterialFitterTask

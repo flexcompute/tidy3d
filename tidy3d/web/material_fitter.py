@@ -10,7 +10,7 @@ from uuid import uuid4
 import numpy as np
 import requests
 from pydantic import BaseModel, Field
-from tidy3d.plugins import DispersionFitter
+from tidy3d.plugins.dispersion import DispersionFitter
 
 from .http_management import http
 from .types import Submittable
