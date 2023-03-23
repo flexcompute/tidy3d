@@ -100,9 +100,10 @@ def test_get_simulation_json(monkeypatch, set_api_key):
         status=200,
     )
     task = SimulationTask.get("3eb06d16-208b-487b-864b-e9b1d3e010a7")
-    with tempfile.NamedTemporaryFile() as temp:
-        task.get_simulation_json(temp.name)
-        assert os.path.getsize(temp.name) > 0
+    JSON_NAME = "tests/tmp/task.json"
+    with open(JSON_NAME, "w") as f:
+        task.get_simulation_json(JSON_NAME)
+        assert os.path.getsize(JSON_NAME) > 0
 
 
 @responses.activate
@@ -241,6 +242,7 @@ def test_get_log(monkeypatch, set_api_key):
         status=200,
     )
     task = SimulationTask.get("3eb06d16-208b-487b-864b-e9b1d3e010a7")
-    with tempfile.NamedTemporaryFile() as temp:
-        task.get_log(temp.name)
-        assert os.path.getsize(temp.name) > 0
+    LOG_FNAME = "tests/tmp/test.log"
+    with open(LOG_FNAME, "w") as f:
+        task.get_log(LOG_FNAME)
+        assert os.path.getsize(LOG_FNAME) > 0
