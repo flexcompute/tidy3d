@@ -123,6 +123,8 @@ Metamaterials, Grattings, and Other Periodic Structures
 
     notebooks/DielectricMetasurfaceAbsorber
     notebooks/GradientMetasurfaceReflector
+    notebooks/GrapheneMetamaterial.ipynb
+    notebooks/MicrowaveFrequencySelectiveSurface
     notebooks/HighQ_Si
     notebooks/HighQ_Ge
     notebooks/GratingEfficiency
