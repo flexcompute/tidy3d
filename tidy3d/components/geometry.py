@@ -2082,6 +2082,17 @@ class PolySlab(Planar):
         """Pre-convert vertices to numpy one time."""
         return np.array(val)
 
+    @pydantic.validator("slab_bounds", always=True)
+    def slab_bounds_order(cls, val):
+        """Maximum position of the slab should be no smaller than its minimal position."""
+        if val[1] < val[0]:
+            raise SetupError(
+                "Polyslab.slab_bounds must be specified in the order of "
+                "minimum and maximum positions of the slab along the axis. "
+                f"But now the maximum {val[1]} is smaller than the minimum {val[0]}."
+            )
+        return val
+
     @pydantic.validator("vertices", always=True)
     def correct_shape(cls, val):
         """Makes sure vertices size is correct.
