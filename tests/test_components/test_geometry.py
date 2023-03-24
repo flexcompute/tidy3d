@@ -188,6 +188,11 @@ def test_polyslab_center_axis():
     assert ps.center_axis == 0
 
 
+def test_polyslab_bounds():
+    with pytest.raises(pydantic.ValidationError):
+        td.PolySlab(vertices=((0, 0), (1, 0), (1, 1)), slab_bounds=(0.5, -0.5), axis=2)
+
+
 def test_validate_polyslab_vertices_valid():
     with pytest.raises(pydantic.ValidationError):
         POLYSLAB.copy(update=dict(vertices=(1, 2, 3)))

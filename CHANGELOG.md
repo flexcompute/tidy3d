@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Entries in `material_library` for graphene and some common TMDs.
 - Ability to create a 2D representation of a thin 3D material.
 - Total-field scattered-field (TFSF) source which allows angled plane waves to be injected into a finite region of space (the total-field region), such that only scattered fields exist outside this region (scattered-field region).
+- Validate `slab_bounds` for `PolySlab`.
 
 ### Changed
 - `export_matlib_to_file` in `material_library` exports material's full name in additional to abbreviation.
