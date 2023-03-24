@@ -63,10 +63,18 @@ class Logger:
     def __init__(self):
         self.handlers = {}
 
-    def _log(self, level: int, level_name: str, message: str) -> None:
+    def _log(self, level: int, level_name: str, message: str, *args) -> None:
         """Distribute log messages to all handlers"""
+        if len(args) > 0:
+            try:
+                composed_message = str(message) % args
+            # pylint: disable=broad-exception-caught
+            except Exception as e:
+                composed_message = f"{message} % {args}\n{e}"
+        else:
+            composed_message = str(message)
         for handler in self.handlers.values():
-            handler.handle(level, level_name, message)
+            handler.handle(level, level_name, composed_message)
 
     def log(self, level: LogValue, message: str, *args) -> None:
         """Log (message) % (args) with given level"""
@@ -75,27 +83,27 @@ class Logger:
             level = _get_level_int(level)
         else:
             level_name = _level_name.get(level, "unknown")
-        self._log(level, level_name, message % args)
+        self._log(level, level_name, message, *args)
 
     def debug(self, message: str, *args) -> None:
         """Log (message) % (args) at debug level"""
-        self._log(_level_value["DEBUG"], "DEBUG", message % args)
+        self._log(_level_value["DEBUG"], "DEBUG", message, *args)
 
     def info(self, message: str, *args) -> None:
         """Log (message) % (args) at info level"""
-        self._log(_level_value["INFO"], "INFO", message % args)
+        self._log(_level_value["INFO"], "INFO", message, *args)
 
     def warning(self, message: str, *args) -> None:
         """Log (message) % (args) at warning level"""
-        self._log(_level_value["WARNING"], "WARNING", message % args)
+        self._log(_level_value["WARNING"], "WARNING", message, *args)
 
     def error(self, message: str, *args) -> None:
         """Log (message) % (args) at error level"""
-        self._log(_level_value["ERROR"], "ERROR", message % args)
+        self._log(_level_value["ERROR"], "ERROR", message, *args)
 
     def critical(self, message: str, *args) -> None:
         """Log (message) % (args) at critical level"""
-        self._log(_level_value["CRITICAL"], "CRITICAL", message % args)
+        self._log(_level_value["CRITICAL"], "CRITICAL", message, *args)
 
 
 # Initialize Tidy3d's logger
