@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `SimulationData.plot_field` accepts new field components and values, including the Poynting vector.
 - `SimulationData.get_poynting_vector` for calculating the 3D Poynting vector at the Yee cell centers.
 - Post-init validation of Tidy3D components.
+- Validate post-Simulation init to error if any structures have bounds that terminate inside of the PML.
 - `Medium2D` class for surface conductivity model of a 2D material.
 - Entries in `material_library` for graphene and some common TMDs.
 - Ability to create a 2D representation of a thin 3D material.
@@ -20,6 +21,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Medium property `n_cfl` added to adjust time step size according to CFL condition.
 - In the mode solver plugin, regular methods in `solver.py` transformed into classmethods.
 - `ArrayLike` types are stored internally as `np.ndarray` and written to json as lists. `constrained_array()` provides way to validate `ArrayLike` values based on `ndim` and `dtype`.
+- Tidy3D account authentication done primarily through API key. Migration option offered for useres with old username / password authentication.
+- Pip installing tidy3d automatically creates `~/.tidy3d` directory in home directory.
+- Percentage done and field decay determined through http request.
 
 ### Fixed
 - Bug in remote file transfer when client environment has no correct certificate authority pem file install locally. 
