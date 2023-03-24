@@ -220,7 +220,7 @@
                 "type": "Cylinder",
                 "axis": 1,
                 "sidewall_angle": 0.0,
-                "reference_plane": "bottom",
+                "reference_plane": "middle",
                 "radius": 1.0,
                 "center": [
                     1.0,
@@ -263,7 +263,7 @@
                 "type": "PolySlab",
                 "axis": 2,
                 "sidewall_angle": 0.0,
-                "reference_plane": "bottom",
+                "reference_plane": "middle",
                 "slab_bounds": [
                     -1.0,
                     1.0

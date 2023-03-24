@@ -58,7 +58,7 @@ def test_many_sub_polyslabs(log_capture):
         geometry=s.geometry_group,
         medium=td.Medium(permittivity=2),
     )
-    assert_log_level(log_capture, "warning")
+    assert_log_level(log_capture, "WARNING")
 
 
 def test_divide_simulation():

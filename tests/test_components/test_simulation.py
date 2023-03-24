@@ -94,13 +94,21 @@ def test_sim_init():
     sim.epsilon(m)
 
 
-# TODO: remove for 2.0
 def test_deprecation_defaults(log_capture):
-    """Make sure deprecation warnings thrown if defaults used."""
+    """Make sure deprecation warnings NOT thrown if defaults used."""
     s = td.Simulation(
-        size=(1, 1, 1), run_time=1e-12, grid_spec=td.GridSpec.uniform(dl=0.1), boundary_spec=None
+        size=(1, 1, 1),
+        run_time=1e-12,
+        grid_spec=td.GridSpec.uniform(dl=0.1),
+        sources=[
+            td.PointDipole(
+                center=(0, 0, 0),
+                polarization="Ex",
+                source_time=td.GaussianPulse(freq0=2e14, fwidth=1e14),
+            )
+        ],
     )
-    assert_log_level(log_capture, "warning")
+    assert_log_level(log_capture, None)
 
 
 def test_sim_bounds():
@@ -188,7 +196,7 @@ def _test_monitor_size():
         s.validate_pre_upload()
 
 
-@pytest.mark.parametrize("freq, log_level", [(1.5, "warning"), (2.5, "info"), (3.5, "warning")])
+@pytest.mark.parametrize("freq, log_level", [(1.5, "WARNING"), (2.5, "INFO"), (3.5, "WARNING")])
 def test_monitor_medium_frequency_range(log_capture, freq, log_level):
     # monitor frequency above or below a given medium's range should throw a warning
 
@@ -212,7 +220,7 @@ def test_monitor_medium_frequency_range(log_capture, freq, log_level):
     assert_log_level(log_capture, log_level)
 
 
-@pytest.mark.parametrize("fwidth, log_level", [(0.1, "warning"), (2, "info")])
+@pytest.mark.parametrize("fwidth, log_level", [(0.1, "WARNING"), (2, "INFO")])
 def test_monitor_simulation_frequency_range(log_capture, fwidth, log_level):
     # monitor frequency outside of the simulation's frequency range should throw a warning
 
@@ -314,7 +322,7 @@ def test_validate_plane_wave_boundaries(log_capture):
         sources=[src2],
         boundary_spec=bspec3,
     )
-    assert_log_level(log_capture, "warning")
+    assert_log_level(log_capture, "WARNING")
 
     # angled incidence plane wave with wrong Bloch vector should warn
     td.Simulation(
@@ -323,7 +331,7 @@ def test_validate_plane_wave_boundaries(log_capture):
         sources=[src2],
         boundary_spec=bspec4,
     )
-    assert_log_level(log_capture, "warning")
+    assert_log_level(log_capture, "WARNING")
 
 
 def test_validate_zero_dim_boundaries(log_capture):
@@ -347,7 +355,7 @@ def test_validate_zero_dim_boundaries(log_capture):
             z=td.Boundary.pml(),
         ),
     )
-    assert_log_level(log_capture, "warning")
+    assert_log_level(log_capture, "WARNING")
 
     # zero-dim simulation with an absorbing boundary any other direction should not warn
     td.Simulation(
@@ -447,6 +455,7 @@ def test_plot_boundaries():
             plus=td.BlochBoundary(bloch_vec=1.0),
             minus=td.BlochBoundary(bloch_vec=1.0),
         ),
+        z=td.Boundary(plus=td.Periodic(), minus=td.Periodic()),
     )
     S2 = SIM_FULL.copy(update=dict(boundary_spec=bound_spec))
     S2.plot_boundaries(z=0)
@@ -464,6 +473,7 @@ def test_complex_fields():
             plus=td.BlochBoundary(bloch_vec=1.0),
             minus=td.BlochBoundary(bloch_vec=1.0),
         ),
+        z=td.Boundary(plus=td.Periodic(), minus=td.Periodic()),
     )
     S2 = SIM_FULL.copy(update=dict(boundary_spec=bound_spec))
     assert S2.complex_fields
@@ -502,7 +512,7 @@ def test_min_sym_box():
 
 def test_discretize_non_intersect(log_capture):
     SIM.discretize(box=td.Box(center=(-20, -20, -20), size=(1, 1, 1)))
-    assert_log_level(log_capture, "error")
+    assert_log_level(log_capture, "ERROR")
 
 
 def test_filter_structures():
@@ -537,10 +547,10 @@ def test_warn_sim_background_medium_freq_range(log_capture):
             medium=td.Medium(frequency_range=(0, 1)),
         )
     )
-    assert_log_level(log_capture, "warning")
+    assert_log_level(log_capture, "WARNING")
 
 
-@pytest.mark.parametrize("grid_size,log_level", [(0.001, None), (3, "warning")])
+@pytest.mark.parametrize("grid_size,log_level", [(0.001, None), (3, "WARNING")])
 def test_large_grid_size(log_capture, grid_size, log_level):
     # small fwidth should be inside range, large one should throw warning
 
@@ -562,7 +572,7 @@ def test_large_grid_size(log_capture, grid_size, log_level):
     assert_log_level(log_capture, log_level)
 
 
-@pytest.mark.parametrize("box_size,log_level", [(0.001, "info"), (9.9, "warning"), (20, "info")])
+@pytest.mark.parametrize("box_size,log_level", [(0.001, "INFO"), (9.9, "WARNING"), (20, "INFO")])
 def test_sim_structure_gap(log_capture, box_size, log_level):
     """Make sure the gap between a structure and PML is not too small compared to lambda0."""
     medium = td.Medium(permittivity=2)
@@ -775,7 +785,7 @@ def test_proj_monitor_distance(log_capture):
         monitors=[monitor_n2f_far],
         boundary_spec=td.BoundarySpec.all_sides(boundary=td.Periodic()),
     )
-    assert_log_level(log_capture, "warning")
+    assert_log_level(log_capture, "WARNING")
 
     # proj_distance not too large - don't warn
     _ = td.Simulation(
@@ -847,10 +857,10 @@ def test_diffraction_medium():
 @pytest.mark.parametrize(
     "box_size,log_level",
     [
-        ((0.1, 0.1, 0.1), "info"),
-        ((1, 0.1, 0.1), "warning"),
-        ((0.1, 1, 0.1), "warning"),
-        ((0.1, 0.1, 1), "warning"),
+        ((0.1, 0.1, 0.1), "INFO"),
+        ((1, 0.1, 0.1), "WARNING"),
+        ((0.1, 1, 0.1), "WARNING"),
+        ((0.1, 0.1, 1), "WARNING"),
     ],
 )
 def test_sim_structure_extent(log_capture, box_size, log_level):
@@ -876,12 +886,12 @@ def test_sim_structure_extent(log_capture, box_size, log_level):
 @pytest.mark.parametrize(
     "box_length,absorb_type,log_level",
     [
-        (0, "PML", "info"),
-        (0.5, "PML", "info"),
-        (1, "PML", "info"),
-        (1.5, "PML", "warning"),
-        (1.5, "absorber", "info"),
-        (5.0, "PML", "info"),
+        (0, "PML", "INFO"),
+        (0.5, "PML", "INFO"),
+        (1, "PML", "INFO"),
+        (1.5, "PML", "WARNING"),
+        (1.5, "absorber", "INFO"),
+        (5.0, "PML", "INFO"),
     ],
 )
 def test_sim_validate_structure_bounds_pml(log_capture, box_length, absorb_type, log_level):
@@ -1148,6 +1158,11 @@ def test_tfsf_boundaries(log_capture):
     _ = td.Simulation(
         size=(2.0, 0.5, 2.0),
         grid_spec=td.GridSpec.auto(wavelength=1.0),
+        boundary_spec=td.BoundarySpec(
+            x=td.Boundary.periodic(),
+            y=td.Boundary.periodic(),
+            z=td.Boundary.periodic(),
+        ),
         run_time=1e-12,
         sources=[source],
     )
@@ -1182,7 +1197,7 @@ def test_tfsf_boundaries(log_capture):
             z=td.Boundary.pml(),
         ),
     )
-    assert_log_level(log_capture, "warning")
+    assert_log_level(log_capture, "WARNING")
 
     # cannot cross any boundary in the direction of injection
     with pytest.raises(pydantic.ValidationError) as e:
@@ -1236,7 +1251,7 @@ def test_tfsf_structures_grid(log_capture):
         ],
     )
     sim.validate_pre_upload()
-    assert_log_level(log_capture, "warning")
+    assert_log_level(log_capture, "WARNING")
 
     # must not have different material profiles on different faces along the injection axis
     with pytest.raises(SetupError) as e:
@@ -1294,7 +1309,7 @@ def test_tfsf_structures_grid(log_capture):
 
 
 @pytest.mark.parametrize(
-    "size, num_struct, log_level", [(1, 1, None), (50, 1, "warning"), (1, 11000, "warning")]
+    "size, num_struct, log_level", [(1, 1, None), (50, 1, "WARNING"), (1, 11000, "WARNING")]
 )
 def test_warn_large_epsilon(log_capture, size, num_struct, log_level):
     """Make sure we get a warning if the epsilon grid is too large."""

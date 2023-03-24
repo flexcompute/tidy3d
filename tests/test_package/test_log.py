@@ -42,17 +42,11 @@ def test_exception_message():
     assert str(e) == MESSAGE
 
 
-@pytest.mark.parametrize(
-    "level_supplied, desired_level",
-    [
-        ("warning", "WARNING"),
-        ("WARNING", None),
-    ],
-)
-def test_logging_upper(log_capture, level_supplied, desired_level):
-    """Make sure we get a deprecation warning if lowrcase."""
-    td.config.logging_level = level_supplied
-    assert_log_level(log_capture, desired_level)
+def test_logging_upper():
+    """Make sure we get an error if lowercase."""
+    td.config.logging_level = "WARNING"
+    with pytest.raises(ValueError):
+        td.config.logging_level = "warning"
 
 
 def test_logging_unrecognized():

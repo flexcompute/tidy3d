@@ -78,14 +78,14 @@ def test_boundary_validators():
         boundary = Boundary(plus=periodic, minus=pml)
 
 
-@pytest.mark.parametrize("boundary, log_level", [(PMCBoundary(), None), (Periodic(), "warning")])
+@pytest.mark.parametrize("boundary, log_level", [(PMCBoundary(), None), (Periodic(), "WARNING")])
 def test_boundary_validator_warnings(log_capture, boundary, log_level):
     """Test the validators in class `Boundary` which should show a warning but not an error"""
     boundary = Boundary(plus=PECBoundary(), minus=boundary)
     assert_log_level(log_capture, log_level)
 
 
-@pytest.mark.parametrize("boundary, log_level", [(PMCBoundary(), None), (Periodic(), "warning")])
+@pytest.mark.parametrize("boundary, log_level", [(PMCBoundary(), None), (Periodic(), "WARNING")])
 def test_boundary_validator_warnings_switched(log_capture, boundary, log_level):
     """Test the validators in class `Boundary` which should show a warning but not an error"""
     boundary = Boundary(minus=PECBoundary(), plus=boundary)
@@ -136,7 +136,7 @@ def test_boundaryspec_classmethods():
     """Test that the classmethods for BoundarySpec work correctly."""
 
     # pml
-    boundary_spec = BoundarySpec.pml(y=True, z=True)
+    boundary_spec = BoundarySpec.pml(x=False, y=True, z=True)
     boundaries = boundary_spec.to_list
     assert (
         isinstance(boundaries[0][0], Periodic)
@@ -153,8 +153,8 @@ def test_boundaryspec_classmethods():
     assert (
         isinstance(boundaries[0][0], PECBoundary)
         and isinstance(boundaries[0][1], PECBoundary)
-        and isinstance(boundaries[1][0], Periodic)
-        and isinstance(boundaries[1][1], Periodic)
+        and isinstance(boundaries[1][0], PML)
+        and isinstance(boundaries[1][1], PML)
         and isinstance(boundaries[2][0], PECBoundary)
         and isinstance(boundaries[2][1], PECBoundary)
     )
@@ -163,12 +163,12 @@ def test_boundaryspec_classmethods():
     boundary_spec = BoundarySpec.pmc(y=True)
     boundaries = boundary_spec.to_list
     assert (
-        isinstance(boundaries[0][0], Periodic)
-        and isinstance(boundaries[0][1], Periodic)
+        isinstance(boundaries[0][0], PML)
+        and isinstance(boundaries[0][1], PML)
         and isinstance(boundaries[1][0], PMCBoundary)
         and isinstance(boundaries[1][1], PMCBoundary)
-        and isinstance(boundaries[2][0], Periodic)
-        and isinstance(boundaries[2][1], Periodic)
+        and isinstance(boundaries[2][0], PML)
+        and isinstance(boundaries[2][1], PML)
     )
 
     # all_sides
@@ -177,15 +177,3 @@ def test_boundaryspec_classmethods():
     assert all(
         [isinstance(boundary, PML) for boundary_dim in boundaries for boundary in boundary_dim]
     )
-
-
-PLUS_MINUS_SPECIFIED = (("plus", "minus"), ("plus",), ("minus",), ())
-LOG_LEVELS_EXPECTED = (None, "warning", "warning", "warning")
-
-# TODO: remove for 2.0
-@pytest.mark.parametrize("pm_keys, log_level", zip(PLUS_MINUS_SPECIFIED, LOG_LEVELS_EXPECTED))
-def test_deprecation_defaults(log_capture, pm_keys, log_level):
-    """Make sure deprecation warnings thrown if defaults used."""
-    boundary_kwargs = {key: Periodic() for key in pm_keys}
-    bc = Boundary(**boundary_kwargs)
-    assert_log_level(log_capture, log_level)

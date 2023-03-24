@@ -128,9 +128,9 @@ def test_io_json(log_capture):
     """to json warns and then from json errors."""
     path = "tests/tmp/custom_source.json"
     FIELD_SRC.to_file(path)
-    assert_log_level(log_capture, "warning")
+    assert_log_level(log_capture, "WARNING")
     FIELD_SRC2 = FIELD_SRC.from_file(path)
-    assert_log_level(log_capture, "warning")
+    assert_log_level(log_capture, "WARNING")
     assert FIELD_SRC2.field_dataset is None
 
 
