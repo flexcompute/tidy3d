@@ -439,7 +439,7 @@ def test_data_array_attrs():
 def test_data_array_json_warns(log_capture):
     data = make_flux_data()
     data.to_file("tests/tmp/flux.json")
-    assert_log_level(log_capture, "warning")
+    assert_log_level(log_capture, "WARNING")
 
 
 def test_data_array_hdf5_no_warnings(log_capture):

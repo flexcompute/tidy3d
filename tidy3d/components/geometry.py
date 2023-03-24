@@ -164,33 +164,6 @@ class Geometry(Tidy3dBaseModel, ABC):
         is_inside[inds_inside] = self.inside(*coords_3d)
         return is_inside
 
-    def intersections(self, x: float = None, y: float = None, z: float = None) -> List[Shapely]:
-        """Returns list of shapely geoemtries at plane specified by one non-None value of x,y,z.
-        TODO: remove for 2.0
-
-        Parameters
-        ----------
-        x : float = None
-            Position of plane in x direction, only one of x,y,z can be specified to define plane.
-        y : float = None
-            Position of plane in y direction, only one of x,y,z can be specified to define plane.
-        z : float = None
-            Position of plane in z direction, only one of x,y,z can be specified to define plane.
-
-        Returns
-        -------
-        List[shapely.geometry.base.BaseGeometry]
-            List of 2D shapes that intersect plane.
-            For more details refer to
-            `Shapely's Documentaton <https://shapely.readthedocs.io/en/stable/project.html>`_.
-        """
-
-        log.warning(
-            "'Geometry.intersections' will be renamed to 'Geometry.intersections_plane' in "
-            "Tidy3D version 2.0."
-        )
-        return self.intersections_plane(x, y, z)
-
     @abstractmethod
     def intersections_plane(
         self, x: float = None, y: float = None, z: float = None
@@ -980,7 +953,7 @@ class Planar(Geometry, ABC):
     )
 
     reference_plane: PlanePosition = pydantic.Field(
-        "bottom",
+        "middle",
         title="Reference plane for cross section",
         description="The position of the plane where the supplied cross section are "
         "defined. The plane is perpendicular to the ``axis``. "
@@ -989,21 +962,6 @@ class Planar(Geometry, ABC):
         "E.g. if ``axis=1``, ``bottom`` refers to the negative side of the y-axis, and "
         "``top`` refers to the positive side of the y-axis.",
     )
-
-    # TODO: remove for 2.0
-    @pydantic.root_validator(pre=True)
-    def _deprecation_2_0_missing_defaults(cls, values):
-        """Warn user if reference plane default value is used."""
-        if values.get("reference_plane") is None:
-            sidewall_angle = values.get("sidewall_angle")
-            if sidewall_angle is not None and not isclose(sidewall_angle, 0.0):
-                log.warning(
-                    "'reference_plane' field uses default value, which is 'bottom' "
-                    "but will change to 'middle' in Tidy3D version 2.0. "
-                    "We recommend you change your class initializer to explicitly set "
-                    "the 'reference_plane' field ahead of this release to avoid unexpected results."
-                )
-        return values
 
     @property
     @abstractmethod
@@ -2258,7 +2216,7 @@ class PolySlab(Planar):
         gds_scale: pydantic.PositiveFloat = 1.0,
         dilation: float = 0.0,
         sidewall_angle: float = 0,
-        **kwargs,
+        reference_plane: PlanePosition = "middle",
     ) -> List[PolySlab]:
         """Import :class:`PolySlab` from a ``gdstk.Cell`` or a ``gdspy.Cell``.
 
@@ -2287,7 +2245,7 @@ class PolySlab(Planar):
             Angle of the sidewall.
             ``sidewall_angle=0`` (default) specifies vertical wall,
             while ``0<sidewall_angle<np.pi/2`` for the base to be larger than the top.
-        reference_plane : PlanePosition = "bottom"
+        reference_plane : PlanePosition = "middle"
             The position of the GDS layer. It can be at the ``bottom``, ``middle``,
             or ``top`` of the PolySlab. E.g. if ``axis=1``, ``bottom`` refers to the
             negative side of y-axis, and ``top`` refers to the positive side of y-axis.
@@ -2297,10 +2255,6 @@ class PolySlab(Planar):
         List[:class:`PolySlab`]
             List of :class:`PolySlab` objects sharing ``axis`` and  slab bound properties.
         """
-
-        # TODO: change for 2.0
-        # handle reference plane kwarg
-        reference_plane = cls._set_reference_plane_kwarg(sidewall_angle, **kwargs)
 
         all_vertices = cls._load_gds_vertices(gds_cell, gds_layer, gds_dtype, gds_scale)
 
@@ -2315,21 +2269,6 @@ class PolySlab(Planar):
             )
             for verts in all_vertices
         ]
-
-    @staticmethod
-    def _set_reference_plane_kwarg(sidewall_angle: float, **kwargs) -> PlanePosition:
-        """Handle reference plane kwarg. (TODO: change for 2.0)"""
-        reference_plane = kwargs.get("reference_plane")
-        if reference_plane is None:
-            reference_plane = "bottom"
-            if not isclose(sidewall_angle, 0.0):
-                log.warning(
-                    "'reference_plane' field uses default value, which is 'bottom' "
-                    "but will change to 'middle' in Tidy3D version 2.0. "
-                    "We recommend you change your classmethod constructor call to explicitly set "
-                    "the 'reference_plane' field ahead of this release to avoid unexpected results."
-                )
-        return reference_plane
 
     @classmethod
     def _load_gds_vertices(

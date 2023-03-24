@@ -10,7 +10,7 @@ from ...log import log
 from ...components.geometry import PolySlab, GeometryGroup
 from ...components.medium import MediumType
 from ...components.structure import Structure
-from ...components.types import Axis
+from ...components.types import Axis, PlanePosition
 from ...constants import fp_eps
 
 
@@ -77,7 +77,7 @@ class ComplexPolySlab(PolySlab):
         gds_scale: pydantic.PositiveFloat = 1.0,
         dilation: float = 0.0,
         sidewall_angle: float = 0,
-        **kwargs,
+        reference_plane: PlanePosition = "middle",
     ) -> List[PolySlab]:
         """Import :class:`.PolySlab` from a ``gdstk.Cell``.
 
@@ -106,7 +106,7 @@ class ComplexPolySlab(PolySlab):
             Angle of the sidewall.
             ``sidewall_angle=0`` (default) specifies vertical wall,
             while ``0<sidewall_angle<np.pi/2`` for the base to be larger than the top.
-        reference_plane : PlanePosition = "bottom"
+        reference_plane : PlanePosition = "middle"
             The position of the GDS layer. It can be at the ``bottom``, ``middle``,
             or ``top`` of the PolySlab. E.g. if ``axis=1``, ``bottom`` refers to the
             negative side of y-axis, and ``top`` refers to the positive side of y-axis.
@@ -119,7 +119,6 @@ class ComplexPolySlab(PolySlab):
 
         # TODO: change for 2.0
         # handle reference plane kwarg
-        reference_plane = cls._set_reference_plane_kwarg(sidewall_angle, **kwargs)
         all_vertices = cls._load_gds_vertices(gds_cell, gds_layer, gds_dtype, gds_scale)
         polyslabs = [
             cls(

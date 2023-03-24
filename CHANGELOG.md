@@ -20,6 +20,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Default Tidy3d logging level is now set to `'WARNING'`.
 - Tidy3d is no longer pip installable from `tidy3d-beta` on PyPI.
 - Plugins must be imported from their respective directory, eg. `from tidy3d.plugins.mode import ModeSolver`.
+- Removed `Geometry.intersections()`.
+- Log level only accepts upper case strings.
+- `PolySlab` `reference_plane` is `"middle"` by default.
+- Boundary conditions are now PML by default.
 
 ### Fixed
 
