@@ -18,6 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - Verbosity now has a default of `False` in the web functions.
 - Default Tidy3d logging level is now set to `'WARNING'`.
+- Tidy3d is no longer pip installable from `tidy3d-beta` on PyPI.
 
 ### Fixed
 

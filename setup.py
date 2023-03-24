@@ -7,6 +7,7 @@ from os.path import expanduser
 TIDY3D_DIR = f"{expanduser('~')}/.tidy3d"
 PACKAGE_NAME = "tidy3d"
 REPO_NAME = "tidy3d"
+PIP_NAME = "tidy3d"
 
 version = {}
 version_path = convert_path(f"{PACKAGE_NAME}/version.py")
@@ -14,7 +15,6 @@ with open(version_path) as version_file:
     exec(version_file.read(), version)
 
 print(version["__version__"])
-print(version["PIP_NAME"])
 
 with open("README.md", "r", encoding="utf-8") as fh:
     long_description = fh.read()
@@ -46,7 +46,7 @@ def create_config_folder():
 create_config_folder()
 
 setuptools.setup(
-    name=version["PIP_NAME"],
+    name=PIP_NAME,
     version=version["__version__"],
     author="Tyler Hughes",
     author_email="tyler@flexcompute.com",
