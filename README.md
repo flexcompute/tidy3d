@@ -51,18 +51,6 @@ And to get a specific version `x.y.z`
 pip install tidy3d==x.y.z
 ```
 
-### Installing on Windows
-
-Pre-release `1.9.0rc1` introduces the `adjoint` plugin, which uses [jax](https://jax.readthedocs.io/en/latest/) for automatic differentiation of tidy3d simulations. As windows users may have trouble installing `jax`, the recommended approach is to use [jax-windows-builder](https://github.com/cloudhan/jax-windows-builder) to first install jaxlib before tidy3d.
-
-```
-pip install "jax[cpu]===0.3.14" -f https://whls.blob.core.windows.net/unstable/index.html --use-deprecated legacy-resolver
-pip install tidy3d
-```
-
-More details can be found [here](https://jax.readthedocs.io/en/latest/developer.html#additional-notes-for-building-jaxlib-from-source-on-windows).
-
-
 ### Installing from source
 
 For development purposes, and to get the latest development versions, you can download and install the package from source as:
@@ -75,19 +63,16 @@ pip install -e .
 
 ### Configuring and authentication
 
-Authentication (linking the front end to your account) will be done via an API key moving forward.
+The Tidy3D front end must be configured with your account information, which is done via an API key.
 
-You can find your API key in the [web interface](ehttp://tidy3d.simulation.cloud)
+You can find your API key in the [web interface](ehttp://tidy3d.simulation.cloud). After signing in and navigating to the account page by clicking the "user" icon on the left-hand side, copy the API key from the button on the right-hand side of the page.
 
-After signing in and navigating to the account page by clicking the "user" icon on the left-hand side, copy the API key from the button on the right-hand side of the page.
-
-To set up the API key to work with Tidy3D, we need to store it either in the `~/.tidy3d/config` file or an environment variable.
-
-You can set it up using one of three following options.
+To set up the API key to work with Tidy3D, you may use one of three following options:
+Note: We refer to your API specific API key value as `XXX` below.
 
 #### Command line (recommended)
 
-``tidy3d configure`` and then enter your API key when prompted.
+``tidy3d configure`` and then enter your API key `XXX` when prompted.
 
 Note that Windows users must run the following instead (ideally in an anaconda prompt):
 
@@ -96,19 +81,25 @@ pip install pipx
 pipx run tidy3d configure
 ```
 
+Note that the `api-key` flag  can be provided in this command, eg.
+
+```
+tidy3d configure --api-key=XXX
+```
+
 #### Manually
 
-For an API key of `{your_api_key}`, you may run
+Alternatively, you can place the API key directly in the file where Tidy3D looks for it.
 
-``echo 'apikey = "{your_api_key}"' > ~/.tidy3d/config``
+``echo 'apikey = "XXX"' > ~/.tidy3d/config``
 
-or manually insert the line `'apikey = "{your_api_key}"` in the `~/.tidy3d/config` file.
+or manually insert the line `'apikey = "XXX` in the `~/.tidy3d/config` file.
 
 #### Environment Variable
 
-Set the `SIMCLOUD_APIKEY` environment variable to your API key (in quotes).
+Lastly, you may set the API key as an environment variable called `SIMCLOUD_APIKEY`.
 
-``export SIMCLOUD_APIKEY="{your_api_key}"``
+``export SIMCLOUD_APIKEY="XXX"``
 
 ### Testing the installation and authentication
 
@@ -128,11 +119,13 @@ and it should print out the version number, for example:
 
 #### Authentication
 
-To test the web / authentication
+To test the authentication, try importing the web interface via.
 
 ```
 python -c "import tidy3d.web"
 ```
+
+It should pass without any errors if the API key is set up correctly.
 
 ## Issues / Feedback / Bug Reporting
 
