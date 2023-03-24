@@ -73,7 +73,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
     >>> from tidy3d import GridSpec, AutoGrid
     >>> from tidy3d import BoundarySpec, Boundary
     >>> sim = Simulation(
-    ...     size=(2.0, 2.0, 2.0),
+    ...     size=(3.0, 3.0, 3.0),
     ...     grid_spec=GridSpec(
     ...         grid_x = AutoGrid(min_steps_per_wvl = 20),
     ...         grid_y = AutoGrid(min_steps_per_wvl = 20),
@@ -82,7 +82,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
     ...     run_time=40e-11,
     ...     structures=[
     ...         Structure(
-    ...             geometry=Box(size=(1, 1, 1), center=(-1, 0, 0)),
+    ...             geometry=Box(size=(1, 1, 1), center=(0, 0, 0)),
     ...             medium=Medium(permittivity=2.0),
     ...         ),
     ...     ],
@@ -824,11 +824,11 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         bound_spec = self.boundary_spec.to_list
         for i, structure in enumerate(self.structures):
             geo_bounds = structure.geometry.bounds
-            for sim_bound, geo_bound, pml_thick, bound_dim in zip(
-                sim_bounds, geo_bounds, pml_thicks, bound_spec
+            for sim_bound, geo_bound, pml_thick, bound_dim, pm_val in zip(
+                sim_bounds, geo_bounds, pml_thicks, bound_spec, (-1, 1)
             ):
-                for sim_pos, geo_pos, pml, pm_val, bound_edge in zip(
-                    sim_bound, geo_bound, pml_thick, (-1, 1), bound_dim
+                for sim_pos, geo_pos, pml, bound_edge in zip(
+                    sim_bound, geo_bound, pml_thick, bound_dim
                 ):
                     sim_pos_pml = sim_pos + pm_val * pml
                     in_pml_plus = (pm_val > 0) and (sim_pos < geo_pos <= sim_pos_pml)
