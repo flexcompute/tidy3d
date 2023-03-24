@@ -29,16 +29,16 @@ For more questions or to purchase Flex units, please contact us at ``support@fle
 What are the units used in the simulation?
 ------------------------------------------
 
-We assume the following physical units:
+We generally assume the following physical units in component definitions:
 
-  - Length: micron (μm, :math:`10^{-6}` meters)
-  - Time: Second (s)
-  - Frequency: Hertz (Hz)
-  - Electric conductivity: Siemens per micron (S/μm)
+ - Length: micron (μm, 10\ :sup:`-6` meters)
+ - Time: Second (s)
+ - Frequency: Hertz (Hz)
+ - Electric conductivity: Siemens per micron (S/μm)
 
 Thus, the user should be careful, for example to use the speed of light 
 in μm/s when converting between wavelength and frequency. The built-in 
-speed of light ``td.C_0`` has a unit of μm/s. 
+speed of light :py:obj:`.C_0` has a unit of μm/s. 
 
 For example:
 
@@ -53,101 +53,90 @@ arbitrary normalization proportional to the amplitude of the current sources,
 which is also in arbitrary units. In the API Reference, the units are explicitly 
 stated where applicable. 
 
+Output quantities are also returned in physical units, with the same base units as above. For time-domain outputs
+as well as frequency-domain outputs when the source spectrum is normalized out (default), the following units are
+used:
 
-How do I add PML absorbing boundaries to my simulation?
--------------------------------------------------------
+ - Electric field: Volt per micron (V/μm)
+ - Magnetic field: Ampere per micron (A/μm)
+ - Flux: Watt (W)
+ - Poynting vector: Watt per micron squared (W/μm\ :sup:`2`)
+ - Modal amplitude: Sqare root of watt (W\ :sup:`1/2`)
 
-Upon initializing a simulation, the user can provide an optional argument ``pml_layers``, 
-an array of three elements defining the PML boundaries along x, y, and z. The 
-easiest way to define PML is to use e.g. ``pml_layers=(None, None, td.PML())`` 
-to define PML in the z-direction only (in x and y, the default periodic boundaries will 
-be used). It is also possible to customize the PML further as explained in the 
-`documentation <https://docs.flexcompute.com/>`_ and below.
+If the source normalization is not applied, the electric field, magnetic field, and modal amplitudes are divided by
+Hz, while the flux and Poynting vector are divided by Hz\ :sup:`2`.
 
-Tidy3D uses a complex frequency-shifted formulation of the perfectly-matched layers (CPML), 
-for which it is more natural to define the thickness as number of layers rather than as 
-physical size. We provide two pre-set PML profiles, 'standard' (:class:`.PML`) and 'stable' (:class:`.StablePML`.
-The standard profile has 12 layers by default and should be sufficient in many situations. In the 
-case of a diverging simulation, or when the fields do not appear to be fully absorbed in the PML, 
-the user can increase the number of layers in the 'standard' profile (``PML(num_layers=20)``, or try the 'stable'
-profile, which requires more layers (default is 40) but should generally work better. 
-Adiabatic absorbing boundaries can be used as well through :class:`.Absorber`, which may improve stability over both PML types in certain situations.
+How are results normalized?
+---------------------------
 
-**NB**: The PML layers extend **beyond** the simulation domain. This makes it easier not to worry 
-about PMLs intruding into parts of your simulation where you don't want them to be. The one thing 
-to keep in mind, however, is that structures that span the full simulation should also extend into 
-the PML. So when defining such structures, it is best to extend them well beyond  
-the simulation size. You could even use ``td.inf``, a shortcut for a very large value, for 
-dimensions that span the full domain. Below is an example of a right and a wrong way to make a 
-dielectric slab.
+In many cases, Tidy3D simulations can be run and well-normalized results can be obtained without normalizing/empty runs.
+This is because care is taken internally to normalize the injected power, as well as the output results, in a
+meaningful way. To understand this, there are two separate normalizations that happen, outlined below. Both of those are
+discussed with respect to frequency-domain results, as those are the most commonly used.
 
-.. code-block:: python
+Source spectrum normalization
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-    import tidy3d as td
-    import matplotlib.pyplot as plt
+Every source has a spectrum associated to its particular time dependence that is imprinted on the fields injected
+in the simulation. Usually, this is somewhat arbitrary and it is most convenient for it to be taken out of the
+frequency-domain results. By default, after a run, Tidy3D normalizes all frequency-domain results by the spectrum of the first source
+in the list of sources in the simulation. This choice can be modified using the :py:obj:`.Simulation.normalize_index` attribute, or
+normalization can be turned off by setting that to ``None``. Results can even be renoramlized after the simulation run using
+:meth:`.SimulationData.renormalize`. If multiple sources are used, but they all have the same
+time dependence, the default normalization is still meaningful. However, if different sources have a different time dependence,
+then it may not be possible to obtain well-normalized results without a normalizing run.
 
-    sim_size = [4., 4., 3.]
-    pml_layers = [td.PML(), td.PML(), td.PML()]
+This type of normalization is applied directly to the frequency-domain results. The custom pulse amplitude and phase defined in
+:py:obj:`.SourceTime.amplitude` and :py:obj:`.SourceTime.phase`, respectively, are **not** normalized out. This gives the user control
+over a (complex) prefactor that can be applied to scale any source.
+Additionally, the power injected by each type of source may have some special normalization, as outlined below.
 
-    # Correct way: extend slab beyond simulation domain
-    slab_right = td.Structure(
-        geometry=td.Box(
-            center=[0, 0, 0],
-            size=[td.inf, td.inf, .5],
-        ),
-        medium=td.Medium(epsilon=5)
-    )
+Source power normalization
+^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-    sim_right = td.Simulation(
-        size=sim_size,
-        grid_size=0.05,
-        structures=[slab_right],
-        pml_layers=pml_layers)
+Source power normalization is applied depending on the source type. In the cases where normalization is applied,
+the actual injected power may differ slightly from what is described below due to finite grid effects. The normalization
+should become exact with sufficiently high resolution. That said, in most cases the error is negligible even at default resolution.
 
-    # Wrong: use simulation domain size when using PML
-    slab_wrong = td.Structure(
-        geometry=td.Box(
-            center=[0, 0, 0],
-            size=[sim_size[0], sim_size[1], .5],
-        ),
-        medium=td.Medium(epsilon=5)
-    )
+The injected power values described below assume that the source spectrum normalization has also been applied.
 
-    sim_wrong = td.Simulation(
-        size=sim_size,
-        resolution=20,
-        structures=[slab_wrong],
-        pml_layers=pml_layers)
+- :class:`.PointDipole`: Normalization is such that the power injected by the source in a homogeneous material of
+  refractive index :math:`n` at frequency :math:`\omega = 2\pi f` is given by
 
-    fig, ax = plt.subplots(1, 2, figsize=(11, 4))
-    sim_right.plot_eps(y=0, ax=ax[0])
-    sim_wrong.plot_eps(y=0, ax=ax[1])
-    ax[0].set_title('Right: extend through PML')
-    ax[1].set_title('Wrong: use simulation domain size')
-    plt.show()
+  .. math::
+      \frac{\omega^2}{12\pi}\frac{\mu_0 n}{c}.
 
-.. image:: _static/pml_right_wrong.png
-   :width: 600
+- :class:`.UniformCurrentSource`: No extra normalization applied.
+- :class:`.CustomFieldSource`: No extra normalization applied.
+- :class:`.ModeSource`, :class:`.PlaneWave`, :class:`.GaussianBeam`, :class:`.AstigmaticGaussianBeam`:
+  Normalized to inject 1W power at every frequency. If supplied :py:obj:`.SourceTime.num_freqs` is ``1``, this normalization is
+  only exact at the central frequency of the associated :class:`.SourceTime` pulse, but should still be
+  very close to 1W at nearby frequencies too. Increasing ``num_freqs`` can be used to make sure the normalization
+  works well for a broadband source.
 
-Notice that the simulation size in ``y`` is defined as 4 micron on initialization, 
-but the full simulation domain with the PML layers is 5.5 micron. A large number of PML 
-layers can thus lead to a significant increase of computation time in some cases.
+  The correct usage for a :class:`.PlaneWave` source is to span the whole simulation domain for a simulation with
+  periodic (or Bloch) boundaries, in which
+  case the normalization of this technically infinite source is equivalent to 1W per unit cell. For the other sources
+  which have a finite extent, the normalization is correct provided that the source profile decays by the boundaries
+  of the source plane. Verifying that this is the case is always advised, as otherwise results may be spurious
+  beyond just the normalization (numerical artifacts will be present at the source boundary).
+  
 
 Why is a simulation diverging?
 ------------------------------
 
-Sometimes, a simulation is numerically unstable and can result in divergence. The two 
-things that can be tuned to avoid that are the thickness of the PML layers and the Courant 
-stability factor, each of which are defined upon initializing a simulation. If materials with 
-frequency-independent permittivity smaller than one are included in the simulation, the 
-Courant factor must be set to a value lower than the lowest refractive index. In the case of 
-dispersive materials, understanding the reason for the instability is a matter of trial and error. 
-Some things to try include:
+Sometimes, a simulation is numerically unstable and can result in divergence. All known cases where
+this may happen are related to PML boundaries and/or dispersive media. Below is a checklist of things
+to consider.
 
-- Remove dispersive materials extending into the PML.
-- Increase the number of PML layers.
-- Decrease the value of the Courant stability factor. Note that this leads to an inversely 
-  proportional increase in the simulation time.
+- For dispersive materials with :math:`\epsilon_{\infty} < 1`, decrease the value of the Courant stability factor to
+  below :math:`\sqrt{\epsilon_{\infty}}`.
+- Move PML boundaries further away from structure interfaces inside the simulation domain, or from sources that may be injecting
+  evanescent waves, like :class:`.PointDipole`, :class:`.UniformCurrentSource`, or :class:`.CustomFieldSource`.
+- Make sure structures are translationally invariant into the PML, or if not possible, use :class:`.Absorber` boundaries.
+- Remove dispersive materials extending into the PML, or if not possible, use :class:`.Absorber` boundaries.
+- If none of the above work, try using :class:`.StablePML` or :class:`.Absorber` boundaries anyway
+  (note: these may introduce more reflections than in usual simulations with regular PML).
 
 How do I include material dispersion?
 -------------------------------------
@@ -181,17 +170,50 @@ material definition is best suited for single-frequency results.
 
 For lossless, weakly dispersive materials, the best way to incorporate the dispersion 
 without doing complicated fits and without slowing the simulation down significantly is to 
-include the value of the refractive index dispersion :math:`\mathrm{d}n/\mathrm{d}\lambda` 
-in units of 1/micron when defining the :class:`.Medium`. The value is assumed to be 
+provide the value of the refractive index dispersion :math:`\mathrm{d}n/\mathrm{d}\lambda` 
+in :meth:`.Sellmeier.from_dispersion`. The value is assumed to be 
 at the central frequency or wavelength (whichever is provided), and a one-pole model for the 
 material is generated. These values are for example readily available from the 
 `refractive index database <https://refractiveindex.info/>`_.
 
+Why did my simulation finish early?
+-----------------------------------
+
+By default, Tidy3D checks periodically the total field intensity left in the simulation, and compares
+that to the maximum total field intensity recorded at previous times. If it is found that the ratio
+of these two values is smaller than 10\ :sup:`-5`, the simulation is terminated as the fields remaining
+in the simulation are deemed negligible. The shutoff value can be controlled using the :py:obj:`.Simulation.shutoff`
+parameter, or completely turned off by setting it to zero. In most cases, the default behavior ensures
+that results are correct, while avoiding unnecessarily long run times. The Flex Unit cost of the simulation
+is also proportionally scaled down when early termination is encountered.
+
+Should I make sure that fields have fully decayed by the end of the simulation?
+-------------------------------------------------------------------------------
+
+Conversely to early termination, you may sometimes get a warning that the fields remaining in the simulation
+at the end of the run have not decayed down to the pre-defined shutoff value. This should **usually** be avoided
+(that is to say, :py:obj:`.Simulation.run_time` should be increased), but there are some cases in which it may
+be inevitable. The important thing to understand is that in such simulations, frequency-domain results cannot
+always be trusted. The frequency-domain response obtained in the FDTD simulation only accurately represents
+the continuous-wave response of the system if the fields at the beginning and at the end of the time stepping are (very close to) zero.
+That said, there could be non-negligible fields in the simulation yet the data recorded in a given monitor
+can still be accurate, if the leftover fields will no longer be passing through the monitor volume. From the
+point of view of that monitor, fields have already fully decayed. However, there is no way to automatically check this.
+The accuracy of frequency-domain monitors when fields have not fully decayed is also discussed in one of our
+`FDTD 101 videos <https://www.flexcompute.com/fdtd101/Lecture-3-Applying-FDTD-to-Photonic-Crystal-Slab-Simulation/>`_.
+
+The main use case in which you may want to ignore this warning is when you have high-Q modes in your simulation that would require
+an extremely long run time to decay. In that case, you can use the the :class:`.ResonanceFinder` plugin to analyze the modes,
+as well as field monitors with apodization to capture the modal profiles. The only thing to note is that the normalization of
+these modal profiles would be arbitrary, and would depend on the exact run time and apodization definition. An example of
+such a use case is presented in our high-Q photonic crystal cavity `case study <notebooks/OptimizedL3.html>`_.
+
+
 Why can I not change Tidy3D instances after they are created?
 -------------------------------------------------------------
 
-You may notice in Tidy3D verions 1.5 and above that it is no longer possible to modify instances of Tidy3D components after they are created.
-Making Tidy3D components immutable like this was an intentional design decision indended to make Tidy3D safer and more performant.
+You may notice in Tidy3D versions 1.5 and above that it is no longer possible to modify instances of Tidy3D components after they are created.
+Making Tidy3D components immutable like this was an intentional design decision intended to make Tidy3D safer and more performant.
 
 For example, Tidy3D contains several "validators" on input data.
 If models are mutated, we can't always guarantee that the resulting instance will still satisfy our validations and the simulation may be invalid.

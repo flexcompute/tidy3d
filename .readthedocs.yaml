@@ -21,8 +21,7 @@ python:
     - requirements: docs/requirements.txt
     - requirements: tidy3d/requirements.txt
 
-formats:
-  - pdf
+formats: []
 
 # Build from the docs/ directory with Sphinx
 # sphinx:
