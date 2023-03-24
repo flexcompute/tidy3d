@@ -343,35 +343,18 @@ class Boundary(Tidy3dBaseModel):
     """
 
     plus: BoundaryEdgeType = pd.Field(
-        Periodic(),
+        PML(),
         title="Plus BC",
         description="Boundary condition on the plus side along a dimension.",
         discriminator=TYPE_TAG_STR,
     )
 
     minus: BoundaryEdgeType = pd.Field(
-        Periodic(),
+        PML(),
         title="Minus BC",
         description="Boundary condition on the minus side along a dimension.",
         discriminator=TYPE_TAG_STR,
     )
-
-    # TODO: remove for 2.0
-    @pd.root_validator(pre=True)
-    def _deprecation_2_0_missing_defaults(cls, values):
-        """Raise deprecation warning if a default `plus` or `minus` is used."""
-
-        fields_use_default = [field for field in ("plus", "minus") if values.get(field) is None]
-
-        for field in fields_use_default:
-            log.warning(
-                f"'Boundary.{field}' uses default value, which is 'Periodic()' "
-                "but will change to 'PML()' in Tidy3D version 2.0. "
-                "We recommend explicitly setting all boundary conditions "
-                "ahead of this release to avoid unexpected results."
-            )
-
-        return values
 
     @pd.root_validator(skip_on_failure=True)
     def bloch_on_both_sides(cls, values):
@@ -575,7 +558,7 @@ class BoundarySpec(Tidy3dBaseModel):
     """Specifies boundary conditions on each side of the domain and along each dimension."""
 
     x: Boundary = pd.Field(
-        None,
+        Boundary(),
         title="Boundary condition along x.",
         description="Boundary condition on the plus and minus sides along the x axis. "
         "If `None`, periodic boundaries are applied. Default will change to PML in 2.0 "
@@ -583,7 +566,7 @@ class BoundarySpec(Tidy3dBaseModel):
     )
 
     y: Boundary = pd.Field(
-        None,
+        Boundary(),
         title="Boundary condition along y.",
         description="Boundary condition on the plus and minus sides along the y axis. "
         "If `None`, periodic boundaries are applied. Default will change to PML in 2.0 "
@@ -591,29 +574,12 @@ class BoundarySpec(Tidy3dBaseModel):
     )
 
     z: Boundary = pd.Field(
-        None,
+        Boundary(),
         title="Boundary condition along z.",
         description="Boundary condition on the plus and minus sides along the z axis. "
         "If `None`, periodic boundaries are applied. Default will change to PML in 2.0 "
         "so explicitly setting the boundaries is recommended.",
     )
-
-    # TODO: remove for 2.0
-    @pd.root_validator(pre=True)
-    def _deprecation_2_0_missing_defaults(cls, values):
-        """Raise deprecation warning if a default boundary condition is used."""
-
-        for field in "xyz":
-            if values.get(field) is None:
-                log.warning(
-                    f"'BoundarySpec.{field}' uses default value, which is 'Periodic()' "
-                    "but will change to 'PML()' in Tidy3D version 2.0. "
-                    "We recommend explicitly setting all boundary conditions "
-                    "ahead of this release to avoid unexpected results."
-                )
-                values[field] = Boundary.periodic()
-
-        return values
 
     def __getitem__(self, field_name: str) -> Boundary:
         """Get the :class:`Boundary` field by name (``boundary_spec[field_name]``).
@@ -654,9 +620,9 @@ class BoundarySpec(Tidy3dBaseModel):
         >>> boundaries = BoundarySpec.pml(y=True)
         """
         return cls(
-            x=Boundary.pml() if x else None,
-            y=Boundary.pml() if y else None,
-            z=Boundary.pml() if z else None,
+            x=Boundary.pml() if x else Boundary.periodic(),
+            y=Boundary.pml() if y else Boundary.periodic(),
+            z=Boundary.pml() if z else Boundary.periodic(),
         )
 
     @classmethod
@@ -677,9 +643,9 @@ class BoundarySpec(Tidy3dBaseModel):
         >>> boundaries = BoundarySpec.pec(x=True, z=True)
         """
         return cls(
-            x=Boundary.pec() if x else None,
-            y=Boundary.pec() if y else None,
-            z=Boundary.pec() if z else None,
+            x=Boundary.pec() if x else Boundary(),
+            y=Boundary.pec() if y else Boundary(),
+            z=Boundary.pec() if z else Boundary(),
         )
 
     @classmethod
@@ -700,9 +666,9 @@ class BoundarySpec(Tidy3dBaseModel):
         >>> boundaries = BoundarySpec.pmc(x=True, z=True)
         """
         return cls(
-            x=Boundary.pmc() if x else None,
-            y=Boundary.pmc() if y else None,
-            z=Boundary.pmc() if z else None,
+            x=Boundary.pmc() if x else Boundary(),
+            y=Boundary.pmc() if y else Boundary(),
+            z=Boundary.pmc() if z else Boundary(),
         )
 
     @classmethod

@@ -126,6 +126,7 @@ def make_sim(
         structures=(extraneous_structure,),
         output_monitors=(output_mnt1, output_mnt2),  # , output_mnt3),
         input_structures=(jax_struct1, jax_struct2, jax_struct_custom),
+        boundary_spec=td.BoundarySpec.pml(x=False, y=False, z=False),
         # input_structures=(jax_struct_custom,),
     )
 
@@ -509,7 +510,7 @@ def test_intersect_structures(log_capture):
 
     # shouldnt error, just warn because of touching but not intersecting
     sim = make_sim_intersect(spacing=0.0)
-    assert_log_level(log_capture, "warning")
+    assert_log_level(log_capture, "WARNING")
 
 
 def test_structure_overlaps():

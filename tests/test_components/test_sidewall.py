@@ -246,7 +246,13 @@ def test_edge_events():
     vertices = vertice1 + vertice2 + vertice3 + vertice4
 
     angle = -np.pi / 20
-    s = td.PolySlab(vertices=vertices, axis=0, slab_bounds=(-1, 1), sidewall_angle=angle)
+    s = td.PolySlab(
+        vertices=vertices,
+        axis=0,
+        slab_bounds=(-1, 1),
+        sidewall_angle=angle,
+        reference_plane="bottom",
+    )
 
 
 def test_max_erosion_polygon():

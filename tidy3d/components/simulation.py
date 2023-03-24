@@ -155,7 +155,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
     )
 
     boundary_spec: BoundarySpec = pydantic.Field(
-        None,
+        BoundarySpec(),
         title="Boundaries",
         description="Specification of boundary conditions along each dimension. If ``None``, "
         "periodic boundary conditions are applied on all sides. Default will change to PML in 2.0 "
@@ -229,22 +229,6 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         # otherwise, call the updator to update the values dictionary
         updater = Updater(sim_dict=values)
         return updater.update_to_current()
-
-    # TODO: remove for 2.0
-    @pydantic.root_validator(pre=True)
-    def _deprecation_2_0_missing_defaults(cls, values):
-        """Raise deprecation warning if a default ``boundary_spec`` is used."""
-
-        if values.get("boundary_spec") is None:
-            log.warning(
-                "'Simulation.boundary_spec' uses default value, which is 'Periodic()' on all "
-                "sides but will change to 'PML()' in Tidy3D version 2.0. "
-                "We recommend explicitly setting all boundary conditions "
-                "ahead of this release to avoid unexpected results."
-            )
-            values["boundary_spec"] = BoundarySpec.all_sides(boundary=Periodic())
-
-        return values
 
     @pydantic.validator("medium", always=True)
     def _validate_medium(cls, val):

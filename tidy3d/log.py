@@ -28,20 +28,13 @@ def _get_level_int(level: LogValue) -> int:
     if isinstance(level, int):
         return level
 
-    level_upper = level.upper()
-    if level_upper != level:
-        log.warning(
-            f"'{level}' provided as a logging level. "
-            "In the future, only upper-case logging levels may be specified. "
-            f"This value will be converted to upper case '{level_upper}'."
-        )
-    if level_upper not in _level_value:
+    if level not in _level_value:
         # We don't want to import ConfigError to avoid a circular dependency
         raise ValueError(
-            f"logging level {level_upper} not supported, must be "
+            f"logging level {level} not supported, must be "
             "'DEBUG', 'INFO', 'WARNING', 'ERROR', or 'CRITICAL'"
         )
-    return _level_value[level_upper]
+    return _level_value[level]
 
 
 class LogHandler:
