@@ -91,19 +91,10 @@ from .log import log, set_logging_file, set_logging_console
 from .config import config
 
 # version
-from .version import __version__, PIP_NAME
+from .version import __version__
 
 # updater
 from .updater import Updater
-
-
-# warn if this was uploaded to the beta PyPI, also sets the pyPI repository that we upload to
-if "beta" in PIP_NAME:
-    log.warning(
-        "This version of Tidy3D was pip installed from the 'tidy3d-beta' repository on PyPI. "
-        "Future releases will be uploaded to the 'tidy3d' repository. "
-        "From now on, please use 'pip install tidy3d' instead."
-    )
 
 
 def set_logging_level(level: str) -> None:
