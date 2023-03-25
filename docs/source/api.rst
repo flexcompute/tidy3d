@@ -108,7 +108,7 @@ General Mediums (can be both dispersive and non-dispersive)
    :toctree: _autosummary/
 
    AnisotropicMedium
-   .. Medium2D
+   Medium2D
 
 
 Material Library

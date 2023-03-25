@@ -2,9 +2,7 @@
 # coding: utf-8
 
 # # Start here
-#
-# Run this notebook in your browser using [Binder](https://mybinder.org/v2/gh/flexcompute-readthedocs/tidy3d-docs/readthedocs?labpath=docs%2Fsource%2Fnotebooks%2FStartHere.ipynb).
-#
+# 
 # This is a basic Tidy3D script showing the FDTD simulation of a delectric cube in the presence of a point dipole.
 
 import numpy as np
@@ -25,7 +23,9 @@ run_time = 12.0 / fwidth
 
 # create structure
 dielectric = td.Medium.from_nk(n=2, k=0, freq=freq0)
-square = td.Structure(geometry=td.Box(center=(0, 0, 0), size=(1.5, 1.5, 1.5)), medium=dielectric)
+square = td.Structure(
+    geometry=td.Box(center=(0, 0, 0), size=(1.5, 1.5, 1.5)), medium=dielectric
+)
 
 # create source
 source = td.UniformCurrentSource(
@@ -72,3 +72,7 @@ print(data.log)
 # plot the fields stored in the monitor
 ax = data.plot_field("fields_on_plane", "Ey", z=0)
 _ = ax.set_title("Ey(x,y)")
+
+
+
+

@@ -2,13 +2,17 @@
 Material Library
 ****************
 
+.. currentmodule:: tidy3d
+
 The material library is a dictionary containing various dispersive models from real world materials. To use the materials in the library, import it first by:
 
 >>> from tidy3d import material_library
 
-The first key of the dictionary is the material name (abbreviated), the second key is the "variant" name, which indicates the data source. In the material library below, the material names (abbreviated) are in parentheses in the header and the variant names are in the table.
+The key of the dictionary is the abbreviated material name.
 
-To import a material "mat" of variant "var" as a tidy3d medium:
+Note: some materials have multiple variant models, in which case the second key is the "variant" name.
+
+To import a material "mat" of variant "var":
 
 >>> medium = material_library['mat']['var']
 
@@ -20,7 +24,7 @@ You can also import the default variant of a material by:
 
 >>> medium = material_library['mat'].medium
 
-Note: it is often useful to see the full list of variants for a given medium:
+It is often useful to see the full list of variants for a given medium:
 
 >>> print(material_library['mat'].variants.keys())
 
@@ -29,25 +33,36 @@ To access the details of a variant, including material model, references and tab
 >>> material_library['mat'].variants['var']
 
 
-Alumina ("Al2O3")
-=================
+Silver ("Ag")
+=============
 
 .. table::
    :widths: auto
 
-   ====================== ========================== ================ ===========
-   Variant                Valid for                  Model Info       Reference  
-   ====================== ========================== ================ ===========
-   ``'Horiba'`` (default) 0.21 - 2.07 :math:`{\mu}m` 1-pole, lossless [1]        
-   ====================== ========================== ================ ===========
+   =========================== ========================== ============= =============================================================================================
+   Variant                     Valid for                  Model Info    Reference                                                                                    
+   =========================== ========================== ============= =============================================================================================
+   ``'JohnsonChristy1972'``    0.19 - 1.94 :math:`{\mu}m` 3-pole, lossy [1] `[data] <https://refractiveindex.info/data_csv.php?datafile=data/main/Ag/Johnson.yml>`__ 
+   ``'Rakic1998BB'`` (default) 0.25 - 12.4 :math:`{\mu}m` 6-pole, lossy [2] `[data] <https://refractiveindex.info/data_csv.php?datafile=data/main/Ag/Rakic-BB.yml>`__
+   ``'RakicLorentzDrude1998'`` 0.25 - 12.4 :math:`{\mu}m` 8-pole, lossy [2] `[data] <https://refractiveindex.info/data_csv.php?datafile=data/main/Ag/Rakic-LD.yml>`__
+   ``'Yang2015Drude'``         0.19 - 1.94 :math:`{\mu}m` 2-pole, lossy [3] `[data] <https://refractiveindex.info/database/data/main/Ag/Yang.yml>`__                 
+   =========================== ========================== ============= =============================================================================================
 
 Examples:
 
->>> medium = material_library['Al2O3']['Horiba']
+>>> medium = material_library['Ag']['JohnsonChristy1972']
+
+>>> medium = material_library['Ag']['Rakic1998BB']
+
+>>> medium = material_library['Ag']['RakicLorentzDrude1998']
+
+>>> medium = material_library['Ag']['Yang2015Drude']
 
 References:
 
-#. \Horiba Technical Note 08: Lorentz Dispersion Model `[url] <http://www.horiba.com/fileadmin/uploads/Scientific/Downloads/OpticalSchool_CN/TN/ellipsometer/Lorentz_Dispersion_Model.pdf>`__
+#. \P. B. Johnson and R. W. Christy. Optical constants of the noble metals, Phys. Rev. B 6, 4370-4379 (1972) `[doi] <https://doi.org/10.1103/PhysRevB.6.4370>`__
+#. \A. D. Rakic, A. B. Djurisic, J. M. Elazar, and M. L. Majewski. Optical properties of metallic films for vertical-cavity optoelectronic devices, Appl. Opt. 37, 5271-5283 (1998) `[doi] <https://doi.org/10.1364/AO.37.005271>`__
+#. \H. U. Yang, J. D'Archangel, M. L. Sundheimer, E. Tucker, G. D. Boreman, M. B. Raschke. Optical dielectric function of silver, Phys. Rev. B 91, 235137 (2015) `[doi] <https://journals.aps.org/prb/abstract/10.1103/PhysRevB.91.235137>`__
 
 Aluminum ("Al")
 ===============
@@ -72,6 +87,26 @@ References:
 
 #. \A. D. Rakic. Algorithm for the determination of intrinsic optical constants of metal films: application to aluminum, Appl. Opt. 34, 4755-4767 (1995) `[doi] <https://doi.org/10.1364/AO.34.004755>`__
 #. \A. D. Rakic, A. B. Djurisic, J. M. Elazar, and M. L. Majewski. Optical properties of metallic films for vertical-cavity optoelectronic devices, Appl. Opt. 37, 5271-5283 (1998) `[doi] <https://doi.org/10.1364/AO.37.005271>`__
+
+Alumina ("Al2O3")
+=================
+
+.. table::
+   :widths: auto
+
+   ====================== ========================== ================ ===========
+   Variant                Valid for                  Model Info       Reference  
+   ====================== ========================== ================ ===========
+   ``'Horiba'`` (default) 0.21 - 2.07 :math:`{\mu}m` 1-pole, lossless [1]        
+   ====================== ========================== ================ ===========
+
+Examples:
+
+>>> medium = material_library['Al2O3']['Horiba']
+
+References:
+
+#. \Horiba Technical Note 08: Lorentz Dispersion Model `[url] <http://www.horiba.com/fileadmin/uploads/Scientific/Downloads/OpticalSchool_CN/TN/ellipsometer/Lorentz_Dispersion_Model.pdf>`__
 
 Aluminum Arsenide ("AlAs")
 ==========================
@@ -177,25 +212,62 @@ References:
 
 #. \Horiba Technical Note 08: Lorentz Dispersion Model `[url] <http://www.horiba.com/fileadmin/uploads/Scientific/Downloads/OpticalSchool_CN/TN/ellipsometer/Lorentz_Dispersion_Model.pdf>`__
 
-Amorphous Silicon ("aSi")
-=========================
+Gold ("Au")
+===========
 
 .. table::
    :widths: auto
 
-   ====================== ========================== ============= ===========
-   Variant                Valid for                  Model Info    Reference  
-   ====================== ========================== ============= ===========
-   ``'Horiba'`` (default) 0.21 - 0.83 :math:`{\mu}m` 1-pole, lossy [1]        
-   ====================== ========================== ============= ===========
+   =================================== =========================== ============= =============================================================================================
+   Variant                             Valid for                   Model Info    Reference                                                                                    
+   =================================== =========================== ============= =============================================================================================
+   ``'JohnsonChristy1972'``            0.19 - 1.94 :math:`{\mu}m`  6-pole, lossy [1] `[data] <https://refractiveindex.info/data_csv.php?datafile=data/main/Au/Johnson.yml>`__ 
+   ``'Olmon2012Drude'``                1.24 - 24.93 :math:`{\mu}m` 2-pole, lossy [2] `[data] <https://refractiveindex.info/data_csv.php?datafile=data/main/Au/Olmon-sc.yml>`__
+   ``'Olmon2012crystal'``              0.3 - 24.93 :math:`{\mu}m`  3-pole, lossy [2] `[data] <https://refractiveindex.info/data_csv.php?datafile=data/main/Au/Olmon-sc.yml>`__
+   ``'Olmon2012evaporated'`` (default) 0.3 - 24.93 :math:`{\mu}m`  3-pole, lossy [2] `[data] <https://refractiveindex.info/data_csv.php?datafile=data/main/Au/Olmon-ev.yml>`__
+   ``'Olmon2012stripped'``             0.3 - 24.93 :math:`{\mu}m`  3-pole, lossy [2] `[data] <https://refractiveindex.info/data_csv.php?datafile=data/main/Au/Olmon-ts.yml>`__
+   ``'RakicLorentzDrude1998'``         0.25 - 6.2 :math:`{\mu}m`   7-pole, lossy [3] `[data] <https://refractiveindex.info/data_csv.php?datafile=data/main/Au/Rakic-LD.yml>`__
+   =================================== =========================== ============= =============================================================================================
 
 Examples:
 
->>> medium = material_library['aSi']['Horiba']
+>>> medium = material_library['Au']['JohnsonChristy1972']
+
+>>> medium = material_library['Au']['Olmon2012Drude']
+
+>>> medium = material_library['Au']['Olmon2012crystal']
+
+>>> medium = material_library['Au']['Olmon2012evaporated']
+
+>>> medium = material_library['Au']['Olmon2012stripped']
+
+>>> medium = material_library['Au']['RakicLorentzDrude1998']
 
 References:
 
-#. \Horiba Technical Note 08: Lorentz Dispersion Model `[url] <http://www.horiba.com/fileadmin/uploads/Scientific/Downloads/OpticalSchool_CN/TN/ellipsometer/Lorentz_Dispersion_Model.pdf>`__
+#. \P. B. Johnson and R. W. Christy. Optical constants of the noble metals, Phys. Rev. B 6, 4370-4379 (1972) `[doi] <https://doi.org/10.1103/PhysRevB.6.4370>`__
+#. \R. L. Olmon, B. Slovick, T. W. Johnson, D. Shelton, S.-H. Oh, G. D. Boreman, and M. B. Raschke. Optical dielectric function of gold, Phys. Rev. B 86, 235147 (2012) `[doi] <https://doi.org/10.1103/PhysRevB.86.235147>`__
+#. \A. D. Rakic, A. B. Djurisic, J. M. Elazar, and M. L. Majewski. Optical properties of metallic films for vertical-cavity optoelectronic devices, Appl. Opt. 37, 5271-5283 (1998) `[doi] <https://doi.org/10.1364/AO.37.005271>`__
+
+N-BK7 Borosilicate Glass ("BK7")
+================================
+
+.. table::
+   :widths: auto
+
+   ===================== ======================== ================ ===============================================================================================
+   Variant               Valid for                Model Info       Reference                                                                                      
+   ===================== ======================== ================ ===============================================================================================
+   ``'Zemax'`` (default) 0.3 - 2.5 :math:`{\mu}m` 3-pole, lossless [1] `[data] <https://refractiveindex.info/data_csv.php?datafile=data/glass/schott/N-BK7.yml>`__
+   ===================== ======================== ================ ===============================================================================================
+
+Examples:
+
+>>> medium = material_library['BK7']['Zemax']
+
+References:
+
+#. \SCHOTT Zemax catalog 2017-01-20b `[url] <https://refractiveindex.info/download/data/2017/schott_2017-01-20.pdf>`__
 
 Beryllium ("Be")
 ================
@@ -307,35 +379,6 @@ References:
 #. \P. B. Johnson and R. W. Christy. Optical constants of the noble metals, Phys. Rev. B 6, 4370-4379 (1972) `[doi] <https://doi.org/10.1103/PhysRevB.6.4370>`__
 #. \A. D. Rakic, A. B. Djurisic, J. M. Elazar, and M. L. Majewski. Optical properties of metallic films for vertical-cavity optoelectronic devices, Appl. Opt. 37, 5271-5283 (1998) `[doi] <https://doi.org/10.1364/AO.37.005271>`__
 
-Crystalline Silicon ("cSi")
-===========================
-
-.. table::
-   :widths: auto
-
-   ================================= ========================== ================ ================================================================================================
-   Variant                           Valid for                  Model Info       Reference                                                                                       
-   ================================= ========================== ================ ================================================================================================
-   ``'Green2008'``                   0.25 - 1.45 :math:`{\mu}m` 4-pole, lossy    [1] `[data] <https://refractiveindex.info/data_csv.php?datafile=data/main/Si/Green-2008.yml>`__ 
-   ``'Li1993_293K'``                 1.2 - 14.0 :math:`{\mu}m`  1-pole, lossless [2] `[data] <https://refractiveindex.info/data_csv.php?datafile=data/main/Si/Li-293K.yml>`__    
-   ``'SalzbergVilla1957'`` (default) 1.36 - 11.0 :math:`{\mu}m` 1-pole, lossless [3][4] `[data] <https://refractiveindex.info/data_csv.php?datafile=data/main/Si/Salzberg.yml>`__
-   ================================= ========================== ================ ================================================================================================
-
-Examples:
-
->>> medium = material_library['cSi']['Green2008']
-
->>> medium = material_library['cSi']['Li1993_293K']
-
->>> medium = material_library['cSi']['SalzbergVilla1957']
-
-References:
-
-#. \M. A. Green. Self-consistent optical parameters of intrinsic silicon at 300K including temperature coefficients, Sol. Energ. Mat. Sol. Cells 92, 1305–1310 (2008) `[doi] <https://doi.org/10.1016/j.solmat.2008.06.009>`__
-#. \H. H. Li. Refractive index of silicon and germanium and its wavelength and temperature derivatives, J. Phys. Chem. Ref. Data 9, 561-658 (1993) `[doi] <https://doi.org/10.1063/1.555624>`__
-#. \C. D. Salzberg and J. J. Villa. Infrared Refractive Indexes of Silicon, Germanium and Modified Selenium Glass, J. Opt. Soc. Am., 47, 244-246 (1957) `[doi] <https://doi.org/10.1364/JOSA.47.000244>`__
-#. \B. Tatian. Fitting refractive-index data with the Sellmeier dispersion formula, Appl. Opt. 23, 4477-4485 (1984) `[doi] <https://doi.org/10.1364/AO.23.004477>`__
-
 Fused Silica ("FusedSilica")
 ============================
 
@@ -424,42 +467,45 @@ References:
 
 #. \Horiba Technical Note 08: Lorentz Dispersion Model `[url] <http://www.horiba.com/fileadmin/uploads/Scientific/Downloads/OpticalSchool_CN/TN/ellipsometer/Lorentz_Dispersion_Model.pdf>`__
 
-Gold ("Au")
-===========
+Water ("H2O")
+=============
 
 .. table::
    :widths: auto
 
-   =================================== =========================== ============= =============================================================================================
-   Variant                             Valid for                   Model Info    Reference                                                                                    
-   =================================== =========================== ============= =============================================================================================
-   ``'JohnsonChristy1972'``            0.19 - 1.94 :math:`{\mu}m`  6-pole, lossy [1] `[data] <https://refractiveindex.info/data_csv.php?datafile=data/main/Au/Johnson.yml>`__ 
-   ``'Olmon2012Drude'``                1.24 - 24.93 :math:`{\mu}m` 2-pole, lossy [2] `[data] <https://refractiveindex.info/data_csv.php?datafile=data/main/Au/Olmon-sc.yml>`__
-   ``'Olmon2012crystal'``              0.3 - 24.93 :math:`{\mu}m`  3-pole, lossy [2] `[data] <https://refractiveindex.info/data_csv.php?datafile=data/main/Au/Olmon-sc.yml>`__
-   ``'Olmon2012evaporated'`` (default) 0.3 - 24.93 :math:`{\mu}m`  3-pole, lossy [2] `[data] <https://refractiveindex.info/data_csv.php?datafile=data/main/Au/Olmon-ev.yml>`__
-   ``'Olmon2012stripped'``             0.3 - 24.93 :math:`{\mu}m`  3-pole, lossy [2] `[data] <https://refractiveindex.info/data_csv.php?datafile=data/main/Au/Olmon-ts.yml>`__
-   ``'RakicLorentzDrude1998'``         0.25 - 6.2 :math:`{\mu}m`   7-pole, lossy [3] `[data] <https://refractiveindex.info/data_csv.php?datafile=data/main/Au/Rakic-LD.yml>`__
-   =================================== =========================== ============= =============================================================================================
+   ====================== ========================== ================ ===========
+   Variant                Valid for                  Model Info       Reference  
+   ====================== ========================== ================ ===========
+   ``'Horiba'`` (default) 0.21 - 0.83 :math:`{\mu}m` 1-pole, lossless [1]        
+   ====================== ========================== ================ ===========
 
 Examples:
 
->>> medium = material_library['Au']['JohnsonChristy1972']
-
->>> medium = material_library['Au']['Olmon2012Drude']
-
->>> medium = material_library['Au']['Olmon2012crystal']
-
->>> medium = material_library['Au']['Olmon2012evaporated']
-
->>> medium = material_library['Au']['Olmon2012stripped']
-
->>> medium = material_library['Au']['RakicLorentzDrude1998']
+>>> medium = material_library['H2O']['Horiba']
 
 References:
 
-#. \P. B. Johnson and R. W. Christy. Optical constants of the noble metals, Phys. Rev. B 6, 4370-4379 (1972) `[doi] <https://doi.org/10.1103/PhysRevB.6.4370>`__
-#. \R. L. Olmon, B. Slovick, T. W. Johnson, D. Shelton, S.-H. Oh, G. D. Boreman, and M. B. Raschke. Optical dielectric function of gold, Phys. Rev. B 86, 235147 (2012) `[doi] <https://doi.org/10.1103/PhysRevB.86.235147>`__
-#. \A. D. Rakic, A. B. Djurisic, J. M. Elazar, and M. L. Majewski. Optical properties of metallic films for vertical-cavity optoelectronic devices, Appl. Opt. 37, 5271-5283 (1998) `[doi] <https://doi.org/10.1364/AO.37.005271>`__
+#. \Horiba Technical Note 08: Lorentz Dispersion Model `[url] <http://www.horiba.com/fileadmin/uploads/Scientific/Downloads/OpticalSchool_CN/TN/ellipsometer/Lorentz_Dispersion_Model.pdf>`__
+
+Hexamethyldisilazane, or Bis(trimethylsilyl)amine ("HMDS")
+==========================================================
+
+.. table::
+   :widths: auto
+
+   ====================== ========================== ============= ===========
+   Variant                Valid for                  Model Info    Reference  
+   ====================== ========================== ============= ===========
+   ``'Horiba'`` (default) 0.19 - 0.83 :math:`{\mu}m` 1-pole, lossy [1]        
+   ====================== ========================== ============= ===========
+
+Examples:
+
+>>> medium = material_library['HMDS']['Horiba']
+
+References:
+
+#. \Horiba Technical Note 08: Lorentz Dispersion Model `[url] <http://www.horiba.com/fileadmin/uploads/Scientific/Downloads/OpticalSchool_CN/TN/ellipsometer/Lorentz_Dispersion_Model.pdf>`__
 
 Hafnium Oxide ("HfO2")
 ======================
@@ -481,8 +527,8 @@ References:
 
 #. \Horiba Technical Note 08: Lorentz Dispersion Model `[url] <http://www.horiba.com/fileadmin/uploads/Scientific/Downloads/OpticalSchool_CN/TN/ellipsometer/Lorentz_Dispersion_Model.pdf>`__
 
-Hexamethyldisilazane, or Bis(trimethylsilyl)amine ("HMDS")
-==========================================================
+Indium Tin Oxide ("ITO")
+========================
 
 .. table::
    :widths: auto
@@ -490,12 +536,12 @@ Hexamethyldisilazane, or Bis(trimethylsilyl)amine ("HMDS")
    ====================== ========================== ============= ===========
    Variant                Valid for                  Model Info    Reference  
    ====================== ========================== ============= ===========
-   ``'Horiba'`` (default) 0.19 - 0.83 :math:`{\mu}m` 1-pole, lossy [1]        
+   ``'Horiba'`` (default) 0.21 - 0.83 :math:`{\mu}m` 1-pole, lossy [1]        
    ====================== ========================== ============= ===========
 
 Examples:
 
->>> medium = material_library['HMDS']['Horiba']
+>>> medium = material_library['ITO']['Horiba']
 
 References:
 
@@ -522,26 +568,6 @@ References:
 #. \G. D. Pettit and W. J. Turner. Refractive index of InP, J. Appl. Phys. 36, 2081 (1965) `[doi] <https://doi.org/10.1063/1.1714410>`__
 #. \A. N. Pikhtin and A. D. Yas'kov. Disperson of the refractive index of semiconductors with diamond and zinc-blende structures, Sov. Phys. Semicond. 12, 622-626 (1978)
 #. \Handbook of Optics, 2nd edition, Vol. 2. McGraw-Hill 1994 (ISBN 9780070479746)
-
-Indium Tin Oxide ("ITO")
-========================
-
-.. table::
-   :widths: auto
-
-   ====================== ========================== ============= ===========
-   Variant                Valid for                  Model Info    Reference  
-   ====================== ========================== ============= ===========
-   ``'Horiba'`` (default) 0.21 - 0.83 :math:`{\mu}m` 1-pole, lossy [1]        
-   ====================== ========================== ============= ===========
-
-Examples:
-
->>> medium = material_library['ITO']['Horiba']
-
-References:
-
-#. \Horiba Technical Note 08: Lorentz Dispersion Model `[url] <http://www.horiba.com/fileadmin/uploads/Scientific/Downloads/OpticalSchool_CN/TN/ellipsometer/Lorentz_Dispersion_Model.pdf>`__
 
 Magnesium Fluoride ("MgF2")
 ===========================
@@ -583,25 +609,45 @@ References:
 
 #. \R. E. Stephens and I. H. Malitson. Index of refraction of magnesium oxide, J. Res. Natl. Bur. Stand. 49 249-252 (1952) `[doi] <https://doi.org/10.6028/jres.049.025>`__
 
-N-BK7 Borosilicate Glass ("BK7")
-================================
+Molybdenum Disulfide ("MoS2")
+=============================
 
 .. table::
    :widths: auto
 
-   ===================== ======================== ================ ===============================================================================================
-   Variant               Valid for                Model Info       Reference                                                                                      
-   ===================== ======================== ================ ===============================================================================================
-   ``'Zemax'`` (default) 0.3 - 2.5 :math:`{\mu}m` 3-pole, lossless [1] `[data] <https://refractiveindex.info/data_csv.php?datafile=data/glass/schott/N-BK7.yml>`__
-   ===================== ======================== ================ ===============================================================================================
+   ====================== ============= ================= ===========
+   Variant                Valid for     Model Info        Reference  
+   ====================== ============= ================= ===========
+   ``'Li2014'`` (default) Not specified :class:`Medium2D` [1]        
+   ====================== ============= ================= ===========
 
 Examples:
 
->>> medium = material_library['BK7']['Zemax']
+>>> medium = material_library['MoS2']['Li2014']
 
 References:
 
-#. \SCHOTT Zemax catalog 2017-01-20b `[url] <https://refractiveindex.info/download/data/2017/schott_2017-01-20.pdf>`__
+#. \Y. Li, A. Chernikov, X. Zhang, A. Rigosi, H. M. Hill, A. M. van der Zande, D. A. Chenet, E. Shih, J. Hone, and T. F. Heinz. Measurement of the optical dielectric function of monolayer transition-metal dichalcogenides: MoS2, MoSe2, WS2, and WSe2, Phys. Rev. B 90, 205422 (2014) `[doi] <https://doi.org/10.1103/PhysRevB.90.205422>`__
+
+Molybdenum Diselenide ("MoSe2")
+===============================
+
+.. table::
+   :widths: auto
+
+   ====================== ============= ================= ===========
+   Variant                Valid for     Model Info        Reference  
+   ====================== ============= ================= ===========
+   ``'Li2014'`` (default) Not specified :class:`Medium2D` [1]        
+   ====================== ============= ================= ===========
+
+Examples:
+
+>>> medium = material_library['MoSe2']['Li2014']
+
+References:
+
+#. \Y. Li, A. Chernikov, X. Zhang, A. Rigosi, H. M. Hill, A. M. van der Zande, D. A. Chenet, E. Shih, J. Hone, and T. F. Heinz. Measurement of the optical dielectric function of monolayer transition-metal dichalcogenides: MoS2, MoSe2, WS2, and WSe2, Phys. Rev. B 90, 205422 (2014) `[doi] <https://doi.org/10.1103/PhysRevB.90.205422>`__
 
 Nickel ("Ni")
 =============
@@ -626,102 +672,6 @@ References:
 
 #. \P. B. Johnson and R. W. Christy. Optical constants of the noble metals, Phys. Rev. B 6, 4370-4379 (1972) `[doi] <https://doi.org/10.1103/PhysRevB.6.4370>`__
 #. \A. D. Rakic, A. B. Djurisic, J. M. Elazar, and M. L. Majewski. Optical properties of metallic films for vertical-cavity optoelectronic devices, Appl. Opt. 37, 5271-5283 (1998) `[doi] <https://doi.org/10.1364/AO.37.005271>`__
-
-Palladium ("Pd")
-================
-
-.. table::
-   :widths: auto
-
-   ================================== ========================== ============= =============================================================================================
-   Variant                            Valid for                  Model Info    Reference                                                                                    
-   ================================== ========================== ============= =============================================================================================
-   ``'JohnsonChristy1972'`` (default) 0.19 - 1.94 :math:`{\mu}m` 5-pole, lossy [1] `[data] <https://refractiveindex.info/data_csv.php?datafile=data/main/Pd/Johnson.yml>`__ 
-   ``'RakicLorentzDrude1998'``        0.25 - 12.4 :math:`{\mu}m` 7-pole, lossy [2] `[data] <https://refractiveindex.info/data_csv.php?datafile=data/main/Pd/Rakic-LD.yml>`__
-   ================================== ========================== ============= =============================================================================================
-
-Examples:
-
->>> medium = material_library['Pd']['JohnsonChristy1972']
-
->>> medium = material_library['Pd']['RakicLorentzDrude1998']
-
-References:
-
-#. \P. B. Johnson and R. W. Christy. Optical constants of the noble metals, Phys. Rev. B 6, 4370-4379 (1972) `[doi] <https://doi.org/10.1103/PhysRevB.6.4370>`__
-#. \A. D. Rakic, A. B. Djurisic, J. M. Elazar, and M. L. Majewski. Optical properties of metallic films for vertical-cavity optoelectronic devices, Appl. Opt. 37, 5271-5283 (1998) `[doi] <https://doi.org/10.1364/AO.37.005271>`__
-
-Platinum ("Pt")
-===============
-
-.. table::
-   :widths: auto
-
-   =========================== ========================== ============= =============================================================================================
-   Variant                     Valid for                  Model Info    Reference                                                                                    
-   =========================== ========================== ============= =============================================================================================
-   ``'RakicLorentzDrude1998'`` 0.25 - 12.4 :math:`{\mu}m` 6-pole, lossy [1] `[data] <https://refractiveindex.info/data_csv.php?datafile=data/main/Pt/Rakic-LD.yml>`__
-   ``'Werner2009'`` (default)  0.1 - 2.48 :math:`{\mu}m`  5-pole, lossy [2] `[data] <https://refractiveindex.info/data_csv.php?datafile=data/main/Pt/Werner.yml>`__  
-   =========================== ========================== ============= =============================================================================================
-
-Examples:
-
->>> medium = material_library['Pt']['RakicLorentzDrude1998']
-
->>> medium = material_library['Pt']['Werner2009']
-
-References:
-
-#. \A. D. Rakic, A. B. Djurisic, J. M. Elazar, and M. L. Majewski. Optical properties of metallic films for vertical-cavity optoelectronic devices, Appl. Opt. 37, 5271-5283 (1998) `[doi] <https://doi.org/10.1364/AO.37.005271>`__
-#. \W. S. M. Werner, K. Glantschnig, C. Ambrosch-Draxl. Optical constants and inelastic electron-scattering data for 17 elemental metals, J. Phys Chem Ref. Data 38, 1013-1092 (2009) `[doi] <https://doi.org/10.1063/1.3243762>`__
-
-Poly(methyl Methacrylate) ("PMMA")
-==================================
-
-.. table::
-   :widths: auto
-
-   ============================= ========================== ================ ==========================================================================================================================================
-   Variant                       Valid for                  Model Info       Reference                                                                                                                                 
-   ============================= ========================== ================ ==========================================================================================================================================
-   ``'Horiba'``                  0.27 - 1.65 :math:`{\mu}m` 1-pole, lossless [1]                                                                                                                                       
-   ``'Sultanova2009'`` (default) 0.44 - 1.05 :math:`{\mu}m` 1-pole, lossless [2] `[data] <https://refractiveindex.info/data_csv.php?datafile=data/organic/(C5H8O2)n%20-%20poly(methyl%20methacrylate)/Sultanova.yml>`__
-   ============================= ========================== ================ ==========================================================================================================================================
-
-Examples:
-
->>> medium = material_library['PMMA']['Horiba']
-
->>> medium = material_library['PMMA']['Sultanova2009']
-
-References:
-
-#. \Horiba Technical Note 08: Lorentz Dispersion Model `[url] <http://www.horiba.com/fileadmin/uploads/Scientific/Downloads/OpticalSchool_CN/TN/ellipsometer/Lorentz_Dispersion_Model.pdf>`__
-#. \N. Sultanova, S. Kasarova and I. Nikolov. Dispersion properties of optical polymers, Acta Physica Polonica A 116, 585-587 (2009) `[doi] <https://doi.org/10.12693/aphyspola.116.585>`__
-
-Polycarbonate ("Polycarbonate")
-===============================
-
-.. table::
-   :widths: auto
-
-   ============================= ========================== ================ ==============================================================================================================================
-   Variant                       Valid for                  Model Info       Reference                                                                                                                     
-   ============================= ========================== ================ ==============================================================================================================================
-   ``'Horiba'``                  0.31 - 0.83 :math:`{\mu}m` 1-pole, lossless [1]                                                                                                                           
-   ``'Sultanova2009'`` (default) 0.44 - 1.05 :math:`{\mu}m` 1-pole, lossless [2] `[data] <https://refractiveindex.info/data_csv.php?datafile=data/organic/(C16H14O3)n%20-%20polycarbonate/Sultanova.yml>`__
-   ============================= ========================== ================ ==============================================================================================================================
-
-Examples:
-
->>> medium = material_library['Polycarbonate']['Horiba']
-
->>> medium = material_library['Polycarbonate']['Sultanova2009']
-
-References:
-
-#. \Horiba Technical Note 08: Lorentz Dispersion Model `[url] <http://www.horiba.com/fileadmin/uploads/Scientific/Downloads/OpticalSchool_CN/TN/ellipsometer/Lorentz_Dispersion_Model.pdf>`__
-#. \N. Sultanova, S. Kasarova and I. Nikolov. Dispersion properties of optical polymers, Acta Physica Polonica A 116, 585-587 (2009) `[doi] <https://doi.org/10.12693/aphyspola.116.585>`__
 
 Polyetherimide ("PEI")
 ======================
@@ -783,24 +733,28 @@ References:
 
 #. \Horiba Technical Note 08: Lorentz Dispersion Model `[url] <http://www.horiba.com/fileadmin/uploads/Scientific/Downloads/OpticalSchool_CN/TN/ellipsometer/Lorentz_Dispersion_Model.pdf>`__
 
-Polystyrene ("Polystyrene")
-===========================
+Poly(methyl Methacrylate) ("PMMA")
+==================================
 
 .. table::
    :widths: auto
 
-   ============================= ========================== ================ =======================================================================================================================
-   Variant                       Valid for                  Model Info       Reference                                                                                                              
-   ============================= ========================== ================ =======================================================================================================================
-   ``'Sultanova2009'`` (default) 0.44 - 1.05 :math:`{\mu}m` 1-pole, lossless [1] `[data] <https://refractiveindex.info/data_csv.php?datafile=data/organic/(C8H8)n%20-%20polystyren/Sultanova.yml>`__
-   ============================= ========================== ================ =======================================================================================================================
+   ============================= ========================== ================ ==========================================================================================================================================
+   Variant                       Valid for                  Model Info       Reference                                                                                                                                 
+   ============================= ========================== ================ ==========================================================================================================================================
+   ``'Horiba'``                  0.27 - 1.65 :math:`{\mu}m` 1-pole, lossless [1]                                                                                                                                       
+   ``'Sultanova2009'`` (default) 0.44 - 1.05 :math:`{\mu}m` 1-pole, lossless [2] `[data] <https://refractiveindex.info/data_csv.php?datafile=data/organic/(C5H8O2)n%20-%20poly(methyl%20methacrylate)/Sultanova.yml>`__
+   ============================= ========================== ================ ==========================================================================================================================================
 
 Examples:
 
->>> medium = material_library['Polystyrene']['Sultanova2009']
+>>> medium = material_library['PMMA']['Horiba']
+
+>>> medium = material_library['PMMA']['Sultanova2009']
 
 References:
 
+#. \Horiba Technical Note 08: Lorentz Dispersion Model `[url] <http://www.horiba.com/fileadmin/uploads/Scientific/Downloads/OpticalSchool_CN/TN/ellipsometer/Lorentz_Dispersion_Model.pdf>`__
 #. \N. Sultanova, S. Kasarova and I. Nikolov. Dispersion properties of optical polymers, Acta Physica Polonica A 116, 585-587 (2009) `[doi] <https://doi.org/10.12693/aphyspola.116.585>`__
 
 Polytetrafluoroethylene, or Teflon ("PTFE")
@@ -843,6 +797,98 @@ References:
 
 #. \Horiba Technical Note 08: Lorentz Dispersion Model `[url] <http://www.horiba.com/fileadmin/uploads/Scientific/Downloads/OpticalSchool_CN/TN/ellipsometer/Lorentz_Dispersion_Model.pdf>`__
 
+Palladium ("Pd")
+================
+
+.. table::
+   :widths: auto
+
+   ================================== ========================== ============= =============================================================================================
+   Variant                            Valid for                  Model Info    Reference                                                                                    
+   ================================== ========================== ============= =============================================================================================
+   ``'JohnsonChristy1972'`` (default) 0.19 - 1.94 :math:`{\mu}m` 5-pole, lossy [1] `[data] <https://refractiveindex.info/data_csv.php?datafile=data/main/Pd/Johnson.yml>`__ 
+   ``'RakicLorentzDrude1998'``        0.25 - 12.4 :math:`{\mu}m` 7-pole, lossy [2] `[data] <https://refractiveindex.info/data_csv.php?datafile=data/main/Pd/Rakic-LD.yml>`__
+   ================================== ========================== ============= =============================================================================================
+
+Examples:
+
+>>> medium = material_library['Pd']['JohnsonChristy1972']
+
+>>> medium = material_library['Pd']['RakicLorentzDrude1998']
+
+References:
+
+#. \P. B. Johnson and R. W. Christy. Optical constants of the noble metals, Phys. Rev. B 6, 4370-4379 (1972) `[doi] <https://doi.org/10.1103/PhysRevB.6.4370>`__
+#. \A. D. Rakic, A. B. Djurisic, J. M. Elazar, and M. L. Majewski. Optical properties of metallic films for vertical-cavity optoelectronic devices, Appl. Opt. 37, 5271-5283 (1998) `[doi] <https://doi.org/10.1364/AO.37.005271>`__
+
+Polycarbonate ("Polycarbonate")
+===============================
+
+.. table::
+   :widths: auto
+
+   ============================= ========================== ================ ==============================================================================================================================
+   Variant                       Valid for                  Model Info       Reference                                                                                                                     
+   ============================= ========================== ================ ==============================================================================================================================
+   ``'Horiba'``                  0.31 - 0.83 :math:`{\mu}m` 1-pole, lossless [1]                                                                                                                           
+   ``'Sultanova2009'`` (default) 0.44 - 1.05 :math:`{\mu}m` 1-pole, lossless [2] `[data] <https://refractiveindex.info/data_csv.php?datafile=data/organic/(C16H14O3)n%20-%20polycarbonate/Sultanova.yml>`__
+   ============================= ========================== ================ ==============================================================================================================================
+
+Examples:
+
+>>> medium = material_library['Polycarbonate']['Horiba']
+
+>>> medium = material_library['Polycarbonate']['Sultanova2009']
+
+References:
+
+#. \Horiba Technical Note 08: Lorentz Dispersion Model `[url] <http://www.horiba.com/fileadmin/uploads/Scientific/Downloads/OpticalSchool_CN/TN/ellipsometer/Lorentz_Dispersion_Model.pdf>`__
+#. \N. Sultanova, S. Kasarova and I. Nikolov. Dispersion properties of optical polymers, Acta Physica Polonica A 116, 585-587 (2009) `[doi] <https://doi.org/10.12693/aphyspola.116.585>`__
+
+Polystyrene ("Polystyrene")
+===========================
+
+.. table::
+   :widths: auto
+
+   ============================= ========================== ================ =======================================================================================================================
+   Variant                       Valid for                  Model Info       Reference                                                                                                              
+   ============================= ========================== ================ =======================================================================================================================
+   ``'Sultanova2009'`` (default) 0.44 - 1.05 :math:`{\mu}m` 1-pole, lossless [1] `[data] <https://refractiveindex.info/data_csv.php?datafile=data/organic/(C8H8)n%20-%20polystyren/Sultanova.yml>`__
+   ============================= ========================== ================ =======================================================================================================================
+
+Examples:
+
+>>> medium = material_library['Polystyrene']['Sultanova2009']
+
+References:
+
+#. \N. Sultanova, S. Kasarova and I. Nikolov. Dispersion properties of optical polymers, Acta Physica Polonica A 116, 585-587 (2009) `[doi] <https://doi.org/10.12693/aphyspola.116.585>`__
+
+Platinum ("Pt")
+===============
+
+.. table::
+   :widths: auto
+
+   =========================== ========================== ============= =============================================================================================
+   Variant                     Valid for                  Model Info    Reference                                                                                    
+   =========================== ========================== ============= =============================================================================================
+   ``'RakicLorentzDrude1998'`` 0.25 - 12.4 :math:`{\mu}m` 6-pole, lossy [1] `[data] <https://refractiveindex.info/data_csv.php?datafile=data/main/Pt/Rakic-LD.yml>`__
+   ``'Werner2009'`` (default)  0.1 - 2.48 :math:`{\mu}m`  5-pole, lossy [2] `[data] <https://refractiveindex.info/data_csv.php?datafile=data/main/Pt/Werner.yml>`__  
+   =========================== ========================== ============= =============================================================================================
+
+Examples:
+
+>>> medium = material_library['Pt']['RakicLorentzDrude1998']
+
+>>> medium = material_library['Pt']['Werner2009']
+
+References:
+
+#. \A. D. Rakic, A. B. Djurisic, J. M. Elazar, and M. L. Majewski. Optical properties of metallic films for vertical-cavity optoelectronic devices, Appl. Opt. 37, 5271-5283 (1998) `[doi] <https://doi.org/10.1364/AO.37.005271>`__
+#. \W. S. M. Werner, K. Glantschnig, C. Ambrosch-Draxl. Optical constants and inelastic electron-scattering data for 17 elemental metals, J. Phys Chem Ref. Data 38, 1013-1092 (2009) `[doi] <https://doi.org/10.1063/1.3243762>`__
+
 Sapphire ("Sapphire")
 =====================
 
@@ -858,66 +904,6 @@ Sapphire ("Sapphire")
 Examples:
 
 >>> medium = material_library['Sapphire']['Horiba']
-
-References:
-
-#. \Horiba Technical Note 08: Lorentz Dispersion Model `[url] <http://www.horiba.com/fileadmin/uploads/Scientific/Downloads/OpticalSchool_CN/TN/ellipsometer/Lorentz_Dispersion_Model.pdf>`__
-
-Silicon Carbide ("SiC")
-=======================
-
-.. table::
-   :widths: auto
-
-   ====================== ========================== ================ ===========
-   Variant                Valid for                  Model Info       Reference  
-   ====================== ========================== ================ ===========
-   ``'Horiba'`` (default) 0.31 - 2.07 :math:`{\mu}m` 1-pole, lossless [1]        
-   ====================== ========================== ================ ===========
-
-Examples:
-
->>> medium = material_library['SiC']['Horiba']
-
-References:
-
-#. \Horiba Technical Note 08: Lorentz Dispersion Model `[url] <http://www.horiba.com/fileadmin/uploads/Scientific/Downloads/OpticalSchool_CN/TN/ellipsometer/Lorentz_Dispersion_Model.pdf>`__
-
-Silicon Dioxide ("SiO2")
-========================
-
-.. table::
-   :widths: auto
-
-   ====================== ========================== ============= ===========
-   Variant                Valid for                  Model Info    Reference  
-   ====================== ========================== ============= ===========
-   ``'Horiba'`` (default) 0.25 - 1.77 :math:`{\mu}m` 1-pole, lossy [1]        
-   ====================== ========================== ============= ===========
-
-Examples:
-
->>> medium = material_library['SiO2']['Horiba']
-
-References:
-
-#. \Horiba Technical Note 08: Lorentz Dispersion Model `[url] <http://www.horiba.com/fileadmin/uploads/Scientific/Downloads/OpticalSchool_CN/TN/ellipsometer/Lorentz_Dispersion_Model.pdf>`__
-
-Silicon Mononitride ("SiN")
-===========================
-
-.. table::
-   :widths: auto
-
-   ====================== ========================== ============= ===========
-   Variant                Valid for                  Model Info    Reference  
-   ====================== ========================== ============= ===========
-   ``'Horiba'`` (default) 0.21 - 2.07 :math:`{\mu}m` 1-pole, lossy [1]        
-   ====================== ========================== ============= ===========
-
-Examples:
-
->>> medium = material_library['SiN']['Horiba']
 
 References:
 
@@ -955,6 +941,66 @@ References:
 #. \H. R. Philipp. Optical properties of silicon nitride, J. Electrochim. Soc. 120, 295-300 (1973) `[doi] <https://doi.org/10.1149/1.2403440>`__
 #. \T. Baak. Silicon oxynitride; a material for GRIN optics, Appl. Optics 21, 1069-1072 (1982) `[doi] <https://doi.org/10.1364/AO.21.001069>`__
 
+Silicon Carbide ("SiC")
+=======================
+
+.. table::
+   :widths: auto
+
+   ====================== ========================== ================ ===========
+   Variant                Valid for                  Model Info       Reference  
+   ====================== ========================== ================ ===========
+   ``'Horiba'`` (default) 0.31 - 2.07 :math:`{\mu}m` 1-pole, lossless [1]        
+   ====================== ========================== ================ ===========
+
+Examples:
+
+>>> medium = material_library['SiC']['Horiba']
+
+References:
+
+#. \Horiba Technical Note 08: Lorentz Dispersion Model `[url] <http://www.horiba.com/fileadmin/uploads/Scientific/Downloads/OpticalSchool_CN/TN/ellipsometer/Lorentz_Dispersion_Model.pdf>`__
+
+Silicon Mononitride ("SiN")
+===========================
+
+.. table::
+   :widths: auto
+
+   ====================== ========================== ============= ===========
+   Variant                Valid for                  Model Info    Reference  
+   ====================== ========================== ============= ===========
+   ``'Horiba'`` (default) 0.21 - 2.07 :math:`{\mu}m` 1-pole, lossy [1]        
+   ====================== ========================== ============= ===========
+
+Examples:
+
+>>> medium = material_library['SiN']['Horiba']
+
+References:
+
+#. \Horiba Technical Note 08: Lorentz Dispersion Model `[url] <http://www.horiba.com/fileadmin/uploads/Scientific/Downloads/OpticalSchool_CN/TN/ellipsometer/Lorentz_Dispersion_Model.pdf>`__
+
+Silicon Dioxide ("SiO2")
+========================
+
+.. table::
+   :widths: auto
+
+   ====================== ========================== ============= ===========
+   Variant                Valid for                  Model Info    Reference  
+   ====================== ========================== ============= ===========
+   ``'Horiba'`` (default) 0.25 - 1.77 :math:`{\mu}m` 1-pole, lossy [1]        
+   ====================== ========================== ============= ===========
+
+Examples:
+
+>>> medium = material_library['SiO2']['Horiba']
+
+References:
+
+#. \Horiba Technical Note 08: Lorentz Dispersion Model `[url] <http://www.horiba.com/fileadmin/uploads/Scientific/Downloads/OpticalSchool_CN/TN/ellipsometer/Lorentz_Dispersion_Model.pdf>`__
+
 Silicon Oxynitride ("SiON")
 ===========================
 
@@ -974,37 +1020,6 @@ Examples:
 References:
 
 #. \Horiba Technical Note 08: Lorentz Dispersion Model `[url] <http://www.horiba.com/fileadmin/uploads/Scientific/Downloads/OpticalSchool_CN/TN/ellipsometer/Lorentz_Dispersion_Model.pdf>`__
-
-Silver ("Ag")
-=============
-
-.. table::
-   :widths: auto
-
-   =========================== ========================== ============= =============================================================================================
-   Variant                     Valid for                  Model Info    Reference                                                                                    
-   =========================== ========================== ============= =============================================================================================
-   ``'JohnsonChristy1972'``    0.19 - 1.94 :math:`{\mu}m` 3-pole, lossy [1] `[data] <https://refractiveindex.info/data_csv.php?datafile=data/main/Ag/Johnson.yml>`__ 
-   ``'Rakic1998BB'`` (default) 0.25 - 12.4 :math:`{\mu}m` 6-pole, lossy [2] `[data] <https://refractiveindex.info/data_csv.php?datafile=data/main/Ag/Rakic-BB.yml>`__
-   ``'RakicLorentzDrude1998'`` 0.25 - 12.4 :math:`{\mu}m` 8-pole, lossy [2] `[data] <https://refractiveindex.info/data_csv.php?datafile=data/main/Ag/Rakic-LD.yml>`__
-   ``'Yang2015Drude'``         0.19 - 1.94 :math:`{\mu}m` 2-pole, lossy [3] `[data] <https://refractiveindex.info/database/data/main/Ag/Yang.yml>`__                 
-   =========================== ========================== ============= =============================================================================================
-
-Examples:
-
->>> medium = material_library['Ag']['JohnsonChristy1972']
-
->>> medium = material_library['Ag']['Rakic1998BB']
-
->>> medium = material_library['Ag']['RakicLorentzDrude1998']
-
->>> medium = material_library['Ag']['Yang2015Drude']
-
-References:
-
-#. \P. B. Johnson and R. W. Christy. Optical constants of the noble metals, Phys. Rev. B 6, 4370-4379 (1972) `[doi] <https://doi.org/10.1103/PhysRevB.6.4370>`__
-#. \A. D. Rakic, A. B. Djurisic, J. M. Elazar, and M. L. Majewski. Optical properties of metallic films for vertical-cavity optoelectronic devices, Appl. Opt. 37, 5271-5283 (1998) `[doi] <https://doi.org/10.1364/AO.37.005271>`__
-#. \H. U. Yang, J. D'Archangel, M. L. Sundheimer, E. Tucker, G. D. Boreman, M. B. Raschke. Optical dielectric function of silver, Phys. Rev. B 91, 235137 (2015) `[doi] <https://journals.aps.org/prb/abstract/10.1103/PhysRevB.91.235137>`__
 
 Tantalum Pentoxide ("Ta2O5")
 ============================
@@ -1094,45 +1109,45 @@ References:
 #. \A. D. Rakic, A. B. Djurisic, J. M. Elazar, and M. L. Majewski. Optical properties of metallic films for vertical-cavity optoelectronic devices, Appl. Opt. 37, 5271-5283 (1998) `[doi] <https://doi.org/10.1364/AO.37.005271>`__
 #. \W. S. M. Werner, K. Glantschnig, C. Ambrosch-Draxl. Optical constants and inelastic electron-scattering data for 17 elemental metals, J. Phys Chem Ref. Data 38, 1013-1092 (2009) `[doi] <https://doi.org/10.1063/1.3243762>`__
 
-Water ("H2O")
-=============
+Tungsten Disulfide ("WS2")
+==========================
 
 .. table::
    :widths: auto
 
-   ====================== ========================== ================ ===========
-   Variant                Valid for                  Model Info       Reference  
-   ====================== ========================== ================ ===========
-   ``'Horiba'`` (default) 0.21 - 0.83 :math:`{\mu}m` 1-pole, lossless [1]        
-   ====================== ========================== ================ ===========
+   ====================== ============= ================= ===========
+   Variant                Valid for     Model Info        Reference  
+   ====================== ============= ================= ===========
+   ``'Li2014'`` (default) Not specified :class:`Medium2D` [1]        
+   ====================== ============= ================= ===========
 
 Examples:
 
->>> medium = material_library['H2O']['Horiba']
+>>> medium = material_library['WS2']['Li2014']
 
 References:
 
-#. \Horiba Technical Note 08: Lorentz Dispersion Model `[url] <http://www.horiba.com/fileadmin/uploads/Scientific/Downloads/OpticalSchool_CN/TN/ellipsometer/Lorentz_Dispersion_Model.pdf>`__
+#. \Y. Li, A. Chernikov, X. Zhang, A. Rigosi, H. M. Hill, A. M. van der Zande, D. A. Chenet, E. Shih, J. Hone, and T. F. Heinz. Measurement of the optical dielectric function of monolayer transition-metal dichalcogenides: MoS2, MoSe2, WS2, and WSe2, Phys. Rev. B 90, 205422 (2014) `[doi] <https://doi.org/10.1103/PhysRevB.90.205422>`__
 
-Yttrium Aluminium Garnet ("YAG")
-================================
+Tungsten Diselenide ("WSe2")
+============================
 
 .. table::
    :widths: auto
 
-   ========================== ======================== ================ =================================================================================================
-   Variant                    Valid for                Model Info       Reference                                                                                        
-   ========================== ======================== ================ =================================================================================================
-   ``'Zelmon1998'`` (default) 0.4 - 5.0 :math:`{\mu}m` 2-pole, lossless [1] `[data] <https://refractiveindex.info/data_csv.php?datafile=data/main/Y3Al5O12/Zelmon.yml>`__
-   ========================== ======================== ================ =================================================================================================
+   ====================== ============= ================= ===========
+   Variant                Valid for     Model Info        Reference  
+   ====================== ============= ================= ===========
+   ``'Li2014'`` (default) Not specified :class:`Medium2D` [1]        
+   ====================== ============= ================= ===========
 
 Examples:
 
->>> medium = material_library['YAG']['Zelmon1998']
+>>> medium = material_library['WSe2']['Li2014']
 
 References:
 
-#. \D. E. Zelmon, D. L. Small and R. Page. Refractive-index measurements of undoped yttrium aluminum garnet from 0.4 to 5.0 μm, Appl. Opt. 37, 4933-4935 (1998) `[doi] <https://doi.org/10.1364/AO.37.004933>`__
+#. \Y. Li, A. Chernikov, X. Zhang, A. Rigosi, H. M. Hill, A. M. van der Zande, D. A. Chenet, E. Shih, J. Hone, and T. F. Heinz. Measurement of the optical dielectric function of monolayer transition-metal dichalcogenides: MoS2, MoSe2, WS2, and WSe2, Phys. Rev. B 90, 205422 (2014) `[doi] <https://doi.org/10.1103/PhysRevB.90.205422>`__
 
 Yttrium Oxide ("Y2O3")
 ======================
@@ -1158,6 +1173,26 @@ References:
 #. \Horiba Technical Note 08: Lorentz Dispersion Model `[url] <http://www.horiba.com/fileadmin/uploads/Scientific/Downloads/OpticalSchool_CN/TN/ellipsometer/Lorentz_Dispersion_Model.pdf>`__
 #. \Y. Nigara. Measurement of the optical constants of yttrium oxide, Jpn. J. Appl. Phys. 7, 404-408 (1968) `[doi] <https://doi.org/10.1143/JJAP.7.404>`__
 
+Yttrium Aluminium Garnet ("YAG")
+================================
+
+.. table::
+   :widths: auto
+
+   ========================== ======================== ================ =================================================================================================
+   Variant                    Valid for                Model Info       Reference                                                                                        
+   ========================== ======================== ================ =================================================================================================
+   ``'Zelmon1998'`` (default) 0.4 - 5.0 :math:`{\mu}m` 2-pole, lossless [1] `[data] <https://refractiveindex.info/data_csv.php?datafile=data/main/Y3Al5O12/Zelmon.yml>`__
+   ========================== ======================== ================ =================================================================================================
+
+Examples:
+
+>>> medium = material_library['YAG']['Zelmon1998']
+
+References:
+
+#. \D. E. Zelmon, D. L. Small and R. Page. Refractive-index measurements of undoped yttrium aluminum garnet from 0.4 to 5.0 μm, Appl. Opt. 37, 4933-4935 (1998) `[doi] <https://doi.org/10.1364/AO.37.004933>`__
+
 Zirconium Oxide ("ZrO2")
 ========================
 
@@ -1177,4 +1212,61 @@ Examples:
 References:
 
 #. \Horiba Technical Note 08: Lorentz Dispersion Model `[url] <http://www.horiba.com/fileadmin/uploads/Scientific/Downloads/OpticalSchool_CN/TN/ellipsometer/Lorentz_Dispersion_Model.pdf>`__
+
+Amorphous Silicon ("aSi")
+=========================
+
+.. table::
+   :widths: auto
+
+   ====================== ========================== ============= ===========
+   Variant                Valid for                  Model Info    Reference  
+   ====================== ========================== ============= ===========
+   ``'Horiba'`` (default) 0.21 - 0.83 :math:`{\mu}m` 1-pole, lossy [1]        
+   ====================== ========================== ============= ===========
+
+Examples:
+
+>>> medium = material_library['aSi']['Horiba']
+
+References:
+
+#. \Horiba Technical Note 08: Lorentz Dispersion Model `[url] <http://www.horiba.com/fileadmin/uploads/Scientific/Downloads/OpticalSchool_CN/TN/ellipsometer/Lorentz_Dispersion_Model.pdf>`__
+
+Crystalline Silicon ("cSi")
+===========================
+
+.. table::
+   :widths: auto
+
+   ================================= ========================== ================ ================================================================================================
+   Variant                           Valid for                  Model Info       Reference                                                                                       
+   ================================= ========================== ================ ================================================================================================
+   ``'Green2008'``                   0.25 - 1.45 :math:`{\mu}m` 4-pole, lossy    [1] `[data] <https://refractiveindex.info/data_csv.php?datafile=data/main/Si/Green-2008.yml>`__ 
+   ``'Li1993_293K'``                 1.2 - 14.0 :math:`{\mu}m`  1-pole, lossless [2] `[data] <https://refractiveindex.info/data_csv.php?datafile=data/main/Si/Li-293K.yml>`__    
+   ``'SalzbergVilla1957'`` (default) 1.36 - 11.0 :math:`{\mu}m` 1-pole, lossless [3][4] `[data] <https://refractiveindex.info/data_csv.php?datafile=data/main/Si/Salzberg.yml>`__
+   ================================= ========================== ================ ================================================================================================
+
+Examples:
+
+>>> medium = material_library['cSi']['Green2008']
+
+>>> medium = material_library['cSi']['Li1993_293K']
+
+>>> medium = material_library['cSi']['SalzbergVilla1957']
+
+References:
+
+#. \M. A. Green. Self-consistent optical parameters of intrinsic silicon at 300K including temperature coefficients, Sol. Energ. Mat. Sol. Cells 92, 1305–1310 (2008) `[doi] <https://doi.org/10.1016/j.solmat.2008.06.009>`__
+#. \H. H. Li. Refractive index of silicon and germanium and its wavelength and temperature derivatives, J. Phys. Chem. Ref. Data 9, 561-658 (1993) `[doi] <https://doi.org/10.1063/1.555624>`__
+#. \C. D. Salzberg and J. J. Villa. Infrared Refractive Indexes of Silicon, Germanium and Modified Selenium Glass, J. Opt. Soc. Am., 47, 244-246 (1957) `[doi] <https://doi.org/10.1364/JOSA.47.000244>`__
+#. \B. Tatian. Fitting refractive-index data with the Sellmeier dispersion formula, Appl. Opt. 23, 4477-4485 (1984) `[doi] <https://doi.org/10.1364/AO.23.004477>`__
+
+Graphene ("graphene")
+=====================
+
+.. autosummary::
+   :toctree: _autosummary/
+
+   Graphene
 
