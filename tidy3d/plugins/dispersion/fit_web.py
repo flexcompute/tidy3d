@@ -295,11 +295,18 @@ class StableDispersionFitter(DispersionFitter):
             Best results of multiple fits: (dispersive medium, RMS error).
         """
 
-        options = FitterOptions(**advanced_param.dict())
+        web_data = self._setup_webdata(
+            num_poles=num_poles,
+            num_tries=num_tries,
+            tolerance_rms=tolerance_rms,
+            advanced_param=advanced_param
+        )
+        options = FitterOptions(**web_data.dict())
         task = MaterialFitterTask.submit(fitter=self, options=options)
 
-        # how to get run_result["message"] and run_result["rms"] from the MaterialFitterTask.submit
-        # to complete this method?
+        # at this point, I have the task, but how to get run_result["message"] and run_result["rms"]
+        # to complete the method?
+        import pdb; pdb.set_trace()
     
         run_result = resp.json()
         best_medium = PoleResidue.parse_raw(run_result["message"])
