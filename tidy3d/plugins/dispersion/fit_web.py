@@ -12,8 +12,9 @@ from ...components.types import Literal
 from ...components.medium import PoleResidue
 from ...constants import MICROMETER, HERTZ
 from ...exceptions import WebError, Tidy3dError, SetupError
-from ...web.httputils import get_headers
+from ...web.httputils import get_headers, get
 from ...web.config import DEFAULT_CONFIG as Config
+from ...web.material_fitter import MaterialFitterTask, FitterOptions
 from .fit import DispersionFitter
 
 
@@ -182,19 +183,19 @@ class StableDispersionFitter(DispersionFitter):
             URL for the server
         """
 
-        access_token = get_headers()
-        headers = {"Authorization": access_token["Authorization"]}
+        # access_token = get_headers()
+        # headers = {"Authorization": access_token["Authorization"]}
 
-        try:
-            # test connection
-            resp = requests.get(f"{url_server}/health", verify=Config.ssl_verify)
-            resp.raise_for_status()
-        except (requests.exceptions.SSLError, ssl.SSLError):
-            log.info("disable the ssl verify and retry")
-            Config.ssl_verify = False
-            resp = requests.get(f"{url_server}/health", verify=Config.ssl_verify)
-        except Exception as e:
-            raise WebError("Connection to the server failed. Please try again.") from e
+        # try:
+        #     # test connection
+        #     resp = requests.get(f"{url_server}/health", verify=Config.ssl_verify)
+        #     resp.raise_for_status()
+        # except (requests.exceptions.SSLError, ssl.SSLError):
+        #     log.info("disable the ssl verify and retry")
+        #     Config.ssl_verify = False
+        #     resp = requests.get(f"{url_server}/health", verify=Config.ssl_verify)
+        # except Exception as e:
+        #     raise WebError("Connection to the server failed. Please try again.") from e
 
         # test authorization
         resp = requests.get(
@@ -294,34 +295,12 @@ class StableDispersionFitter(DispersionFitter):
             Best results of multiple fits: (dispersive medium, RMS error).
         """
 
-        # get url
-        url_server = self._set_url("default")
-        headers = self._setup_server(url_server)
+        options = FitterOptions(**advanced_param.dict())
+        task = MaterialFitterTask.submit(fitter=self, options=options)
 
-        # setup web_data
-        web_data = self._setup_webdata(num_poles, num_tries, tolerance_rms, advanced_param)
-
-        resp = requests.post(
-            f"{url_server}/dispersion/fit",
-            headers=headers,
-            data=web_data.json(),
-            verify=Config.ssl_verify,
-        )
-
-        try:
-            resp.raise_for_status()
-        except Exception as e:
-            if resp.status_code == ExceptionCodes.GATEWAY_TIMEOUT.value:
-                raise Tidy3dError(
-                    "Fitter failed due to timeout. Try to decrease "
-                    "the number of tries, the number of inner iterations, "
-                    "to relax RMS tolerance, or to use the 'hard' constraint."
-                ) from e
-
-            raise WebError(
-                "Fitter failed. Try again, or tune the parameters, or contact us for more help."
-            ) from e
-
+        # how to get run_result["message"] and run_result["rms"] from the MaterialFitterTask.submit
+        # to complete this method?
+    
         run_result = resp.json()
         best_medium = PoleResidue.parse_raw(run_result["message"])
         best_rms = float(run_result["rms"])
