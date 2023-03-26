@@ -46,8 +46,8 @@ def generate_material_library_doc():
         f.write(header)
 
         for abbr, mat in sorted(
-            lib.items(), key=lambda item: item[0]
-            ):  # iterate materials sorted by material abbreviation
+            lib.items(), key=lambda item: item[0].lower()
+        ):  # iterate materials sorted by material abbreviation
 
             if isinstance(mat, type):
                 # Write material title
@@ -82,7 +82,7 @@ def generate_material_library_doc():
                     width[col] = len(name[col]) + 2
 
                 for varname, var in sorted(
-                    mat.variants.items(), key=lambda item: item[0]
+                    mat.variants.items(), key=lambda item: item[0].lower()
                 ):  # iterate variants sorted by variant name
 
                     # Initialize row
