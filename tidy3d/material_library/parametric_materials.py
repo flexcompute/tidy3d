@@ -45,12 +45,15 @@ class ParametricVariantItem2D(ABC, Tidy3dBaseModel):
 
 
 class Graphene(ParametricVariantItem2D):
-    """Surface conductivity model for graphene, including intraband and interband terms,
-    as described in
+    """Parametric surface conductivity model for graphene.
 
-    George W. Hanson, "Dyadic Green's Functions for an Anisotropic,
-    Non-Local Model of Biased Graphene," IEEE Trans. Antennas Propag.
-    56, 3, 747-757 (2008).
+    Note
+    ----
+    The model contains intraband and interband terms, as described in::
+
+        George W. Hanson, "Dyadic Green's Functions for an Anisotropic,
+        Non-Local Model of Biased Graphene," IEEE Trans. Antennas Propag.
+        56, 3, 747-757 (2008).
 
     Example
     -------
