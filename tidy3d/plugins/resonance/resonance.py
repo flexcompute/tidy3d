@@ -12,7 +12,7 @@ from pydantic import Field, NonNegativeFloat, PositiveInt, validator
 
 from ...log import log
 from ...components.base import Tidy3dBaseModel
-from ...components.types import ArrayLike
+from ...components.types import ArrayComplex1D, ArrayComplex2D, ArrayComplex3D
 from ...components.data.data_array import ScalarFieldTimeDataArray
 from ...components.data.monitor_data import FieldTimeData
 from ...constants import HERTZ
@@ -25,17 +25,16 @@ TIME_STEP_RTOL = 1e-5
 
 RCOND = 1e-4
 
+
 # ResonanceData will be used internally
 class ResonanceData(Tidy3dBaseModel):
     """Data class for storing objects computed while running the resonance finder."""
 
-    eigvals: ArrayLike[complex, 1] = Field(
-        ..., title="Eigenvalues", description="Resonance eigenvalues."
-    )
-    complex_amplitudes: ArrayLike[complex, 1] = Field(
+    eigvals: ArrayComplex1D = Field(..., title="Eigenvalues", description="Resonance eigenvalues.")
+    complex_amplitudes: ArrayComplex1D = Field(
         None, title="Complex amplitudes", description="Complex resonance amplitudes"
     )
-    errors: ArrayLike[float, 1] = Field(
+    errors: ArrayComplex1D = Field(
         None, title="Errors", description="Rough eigenvalue error estimate."
     )
 
@@ -211,7 +210,7 @@ class ResonanceFinder(Tidy3dBaseModel):
 
     def _validate_scalar_field_time(
         self, signal: ScalarFieldTimeDataArray
-    ) -> Tuple[ArrayLike[complex, 1], float]:
+    ) -> Tuple[ArrayComplex1D, float]:
         """Validates a :class:`.ScalarFieldTimeDataArray` and returns the time step
         as well as underlying data array."""
         dts = np.diff(signal.t)
@@ -301,9 +300,7 @@ class ResonanceFinder(Tidy3dBaseModel):
         data_arrays = tuple(map(partial(xr.DataArray, coords=coords), vals))
         return xr.Dataset(dict(zip(keys, data_arrays)))
 
-    def _evaluate_matrices(
-        self, signal: ArrayLike[complex, 1], eigvals: ArrayLike[complex, 1]
-    ) -> ArrayLike[complex, 3]:
+    def _evaluate_matrices(self, signal: ArrayComplex1D, eigvals: ArrayComplex1D) -> ArrayComplex3D:
         """Compute the evolution matrices"""
         half_len = int(len(signal) / 2) - 2
         nfreqs = len(eigvals)
@@ -338,7 +335,7 @@ class ResonanceFinder(Tidy3dBaseModel):
 
         return u_matrices
 
-    def _gram_schmidt(self, a_matrix: ArrayLike[complex, 2]) -> ArrayLike[complex, 2]:
+    def _gram_schmidt(self, a_matrix: ArrayComplex2D) -> ArrayComplex2D:
         """Perform the Gram-Schmidt process on the columns of a matrix."""
         new_a_matrix = np.zeros(a_matrix.shape, dtype=complex)
         for i in range(new_a_matrix.shape[1]):
@@ -351,8 +348,8 @@ class ResonanceFinder(Tidy3dBaseModel):
         return new_a_matrix
 
     def _solve_gen_eig_prob(
-        self, a_matrix: ArrayLike[complex, 2], b_matrix: ArrayLike[complex, 2], rcond: float
-    ) -> Tuple[ArrayLike[complex, 1], ArrayLike[complex, 2]]:
+        self, a_matrix: ArrayComplex2D, b_matrix: ArrayComplex2D, rcond: float
+    ) -> Tuple[ArrayComplex1D, ArrayComplex2D]:
         """Solve a generalized eigenvalue problem of the form
 
         .. math::
@@ -383,11 +380,11 @@ class ResonanceFinder(Tidy3dBaseModel):
 
     def _find_amplitudes(
         self,
-        signal: ArrayLike[complex, 1],
-        prev_eigvals: ArrayLike[complex, 1],
-        eigvals: ArrayLike[complex, 1],
-        eigvecs: ArrayLike[complex, 2],
-    ) -> ArrayLike[complex, 1]:
+        signal: ArrayComplex1D,
+        prev_eigvals: ArrayComplex1D,
+        eigvals: ArrayComplex1D,
+        eigvecs: ArrayComplex2D,
+    ) -> ArrayComplex1D:
         """Compute the resonance amplitudes."""
         half_len = int(len(signal) / 2) - 2
         nfreqs = len(eigvals)
@@ -404,10 +401,10 @@ class ResonanceFinder(Tidy3dBaseModel):
 
     def _find_errors(
         self,
-        eigvals: ArrayLike[complex, 1],
-        u_matrices: ArrayLike[complex, 3],
-        eigvecs: ArrayLike[complex, 2],
-    ) -> ArrayLike[complex, 1]:
+        eigvals: ArrayComplex1D,
+        u_matrices: ArrayComplex3D,
+        eigvecs: ArrayComplex2D,
+    ) -> ArrayComplex1D:
         """Estimate the eigenvalue error."""
         nfreqs = len(eigvals)
         errors = np.zeros(nfreqs)
@@ -417,7 +414,7 @@ class ResonanceFinder(Tidy3dBaseModel):
             )
         return errors
 
-    def _iterate(self, signal: ArrayLike[complex, 1], prev_resdata: ResonanceData) -> ResonanceData:
+    def _iterate(self, signal: ArrayComplex1D, prev_resdata: ResonanceData) -> ResonanceData:
         """Run a single iteration of the resonance finder."""
         prev_eigvals = prev_resdata.eigvals
 

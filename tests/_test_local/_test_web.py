@@ -125,10 +125,6 @@ def test_webapi_8_get_tasks():
         assert tasks[i]["submit_time"] > tasks[i + 1]["submit_time"]
 
 
-def test_query_folder_by_name():
-    _ = web.webapi._query_or_create_folder("default")
-
-
 """ Jobs """
 
 jobs_global = []

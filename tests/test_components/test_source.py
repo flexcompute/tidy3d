@@ -14,8 +14,16 @@ S = td.PointDipole(source_time=ST, polarization="Ex")
 
 
 def test_plot_source_time():
-    ST.plot(times=[1e-15, 2e-15, 3e-15], ax=AX)
-    ST.plot_spectrum(times=[1e-15, 2e-15, 3e-15], num_freqs=4, ax=AX)
+
+    for val in ("real", "imag", "abs"):
+        ST.plot(times=[1e-15, 2e-15, 3e-15], val=val, ax=AX)
+        ST.plot_spectrum(times=[1e-15, 2e-15, 3e-15], num_freqs=4, val=val, ax=AX)
+
+    with pytest.raises(ValueError):
+        ST.plot(times=[1e-15, 2e-15, 3e-15], val="blah", ax=AX)
+
+    with pytest.raises(ValueError):
+        ST.plot_spectrum(times=[1e-15, 2e-15, 3e-15], num_freqs=4, val="blah", ax=AX)
 
     # uneven spacing in times
     with pytest.raises(SetupError):
@@ -91,11 +99,11 @@ def test_FieldSource():
     # s.plot(y=0)
 
     # test that non-planar geometry crashes plane wave and gaussian beams
-    with pytest.raises(ValidationError) as e_info:
+    with pytest.raises(pydantic.ValidationError) as e_info:
         s = td.PlaneWave(size=(1, 1, 1), source_time=g, pol_angle=np.pi / 2, direction="+")
-    with pytest.raises(ValidationError) as e_info:
+    with pytest.raises(pydantic.ValidationError) as e_info:
         s = td.GaussianBeam(size=(1, 1, 1), source_time=g, pol_angle=np.pi / 2, direction="+")
-    with pytest.raises(ValidationError) as e_info:
+    with pytest.raises(pydantic.ValidationError) as e_info:
         s = td.AstigmaticGaussianBeam(
             size=(1, 1, 1),
             source_time=g,
@@ -104,12 +112,18 @@ def test_FieldSource():
             waist_sizes=(0.2, 0.4),
             waist_distances=(0.1, 0.3),
         )
-    with pytest.raises(ValidationError) as e_info:
+    with pytest.raises(pydantic.ValidationError) as e_info:
         s = td.ModeSource(size=(1, 1, 1), source_time=g, mode_spec=mode_spec)
 
     from tidy3d.components.source import TFSF
 
-    s = TFSF(size=(1, 1, 1), direction="+", source_time=g, injection_axis=2)
+    tfsf = td.TFSF(size=(1, 1, 1), direction="+", source_time=g, injection_axis=2)
+    _ = tfsf.injection_plane_center
+
+    # assert that TFSF must be volumetric
+    with pytest.raises(pydantic.ValidationError) as e_info:
+        _ = td.TFSF(size=(1, 1, 0), direction="+", source_time=g, injection_axis=2)
+
     # s.plot(z=0)
 
 

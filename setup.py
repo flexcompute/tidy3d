@@ -1,6 +1,10 @@
 import setuptools
 from distutils.util import convert_path
+from setuptools.command.install import install
+import os
+from os.path import expanduser
 
+TIDY3D_DIR = f"{expanduser('~')}/.tidy3d"
 PACKAGE_NAME = "tidy3d"
 REPO_NAME = "tidy3d"
 
@@ -28,9 +32,18 @@ web_required = read_requirements("requirements/web.txt")
 jax_required = read_requirements("requirements/jax.txt")
 gdstk_required = read_requirements("requirements/gdstk.txt")
 gdspy_required = read_requirements("requirements/gdspy.txt")
+trimesh_required = read_requirements("requirements/trimesh.txt")
 core_required = read_requirements("requirements/core.txt")
 core_required += basic_required + web_required
 dev_required = read_requirements("requirements/dev.txt")
+
+
+def create_config_folder():
+    if not os.path.exists(TIDY3D_DIR):
+        os.mkdir(TIDY3D_DIR)
+
+
+create_config_folder()
 
 setuptools.setup(
     name=version["PIP_NAME"],
@@ -58,6 +71,7 @@ setuptools.setup(
         "jax": jax_required,
         "gdspy": gdspy_required,
         "gdstk": gdstk_required,
+        "trimesh": trimesh_required,
     },
     entry_points={
         "console_scripts": [

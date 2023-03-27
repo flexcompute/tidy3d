@@ -8,10 +8,11 @@ import pydantic
 import numpy as np
 
 from .base import Tidy3dBaseModel, cached_property, DATA_ARRAY_MAP
-from .types import Direction, Polarization, Ax, FreqBound, ArrayLike, Axis
-from .validators import assert_plane, validate_name_str, get_value
+
+from .types import Direction, Polarization, Ax, FreqBound, ArrayFloat1D, Axis, PlotVal
+from .validators import assert_plane, assert_volumetric, validate_name_str, get_value
 from .data.dataset import FieldDataset
-from .geometry import Box
+from .geometry import Box, Coordinate
 from .mode import ModeSpec
 from .viz import add_ax_if_none, PlotParams, plot_params_source
 from .viz import ARROW_COLOR_SOURCE, ARROW_ALPHA, ARROW_COLOR_POLARIZATION
@@ -58,8 +59,8 @@ class SourceTime(ABC, Tidy3dBaseModel):
 
     def spectrum(
         self,
-        times: ArrayLike[float, 1],
-        freqs: ArrayLike[float, 1],
+        times: ArrayFloat1D,
+        freqs: ArrayFloat1D,
         dt: float,
         complex_fields: bool = False,
     ) -> complex:
@@ -101,7 +102,7 @@ class SourceTime(ABC, Tidy3dBaseModel):
         return dt * dft_matrix @ time_amps
 
     @add_ax_if_none
-    def plot(self, times: ArrayLike[float, 1], ax: Ax = None) -> Ax:
+    def plot(self, times: ArrayFloat1D, val: PlotVal = "real", ax: Ax = None) -> Ax:
         """Plot the complex-valued amplitude of the source time-dependence.
 
         Parameters
@@ -110,6 +111,8 @@ class SourceTime(ABC, Tidy3dBaseModel):
             Array of times (seconds) to plot source at.
             To see source time amplitude for a specific :class:`Simulation`,
             pass ``simulation.tmesh``.
+        val : Literal['real', 'imag', 'abs'] = 'real'
+            Which part of the spectrum to plot.
         ax : matplotlib.axes._subplots.Axes = None
             Matplotlib axes to plot on, if not specified, one is created.
 
@@ -121,20 +124,27 @@ class SourceTime(ABC, Tidy3dBaseModel):
         times = np.array(times)
         amp_complex = self.amp_time(times)
 
-        ax.plot(times, amp_complex.real, color="blueviolet", label="real")
-        ax.plot(times, amp_complex.imag, color="crimson", label="imag")
-        ax.plot(times, np.abs(amp_complex), color="k", label="abs")
+        if val == "real":
+            ax.plot(times, amp_complex.real, color="blueviolet", label="real")
+        elif val == "imag":
+            ax.plot(times, amp_complex.imag, color="crimson", label="imag")
+        elif val == "abs":
+            ax.plot(times, np.abs(amp_complex), color="k", label="abs")
+        else:
+            raise ValueError(f"Plot 'val' option of '{val}' not recognized.")
         ax.set_xlabel("time (s)")
         ax.set_title("source amplitude")
         ax.legend()
         ax.set_aspect("auto")
         return ax
 
+    # pylint:disable=too-many-arguments
     @add_ax_if_none
     def plot_spectrum(
         self,
-        times: ArrayLike[float, 1],
+        times: ArrayFloat1D,
         num_freqs: int = 101,
+        val: PlotVal = "real",
         ax: Ax = None,
         complex_fields: bool = False,
     ) -> Ax:
@@ -172,9 +182,14 @@ class SourceTime(ABC, Tidy3dBaseModel):
 
         spectrum = self.spectrum(times=times, dt=dt, freqs=freqs, complex_fields=complex_fields)
 
-        ax.plot(freqs, spectrum.real, color="blueviolet", label="real")
-        ax.plot(freqs, spectrum.imag, color="crimson", label="imag")
-        ax.plot(freqs, np.abs(spectrum), color="k", label="abs")
+        if val == "real":
+            ax.plot(freqs, spectrum.real, color="blueviolet", label="real")
+        elif val == "imag":
+            ax.plot(freqs, spectrum.imag, color="crimson", label="imag")
+        elif val == "abs":
+            ax.plot(freqs, np.abs(spectrum), color="k", label="abs")
+        else:
+            raise ValueError(f"Plot 'val' option of '{val}' not recognized.")
         ax.set_xlabel("frequency (Hz)")
         ax.set_title("source spectrum")
         ax.legend()
@@ -325,8 +340,11 @@ class Source(Box, ABC):
         ax: Ax = None,
         **patch_kwargs,
     ) -> Ax:
+
+        kwargs_arrow_base = patch_kwargs.pop("arrow_base", None)
+
         # call the `Source.plot()` function first.
-        ax = super().plot(x=x, y=y, z=z, ax=ax, **patch_kwargs)
+        ax = Box.plot(self, x=x, y=y, z=z, ax=ax, **patch_kwargs)
 
         kwargs_alpha = patch_kwargs.get("alpha")
         arrow_alpha = ARROW_ALPHA if kwargs_alpha is None else kwargs_alpha
@@ -350,6 +368,7 @@ class Source(Box, ABC):
                 color=ARROW_COLOR_SOURCE,
                 alpha=arrow_alpha,
                 both_dirs=False,
+                arrow_base=kwargs_arrow_base,
             )
 
         if self._pol_vector is not None:
@@ -362,6 +381,7 @@ class Source(Box, ABC):
                 color=ARROW_COLOR_POLARIZATION,
                 alpha=arrow_alpha,
                 both_dirs=False,
+                arrow_base=kwargs_arrow_base,
             )
 
         return ax
@@ -442,18 +462,7 @@ class PlanarSource(Source, ABC):
 class VolumeSource(Source, ABC):
     """A source defined in a 3D :class:`Box`."""
 
-    injection_axis: Axis = pydantic.Field(
-        None,
-        title="Injection Axis",
-        description="Specifies injection axis. The popagation axis is defined with respect to "
-        "the injection axis by ``angle_theta`` and ``angle_phi``. Must be ``None`` for planar "
-        "directional sources, as it is taken automatically from the plane size.",
-    )
-
-    @cached_property
-    def _injection_axis(self):
-        """Injection axis of the source."""
-        return self.injection_axis
+    _volume_validator = assert_volumetric()
 
 
 """ Field Sources require more specification, for now, they all have a notion of a direction."""
@@ -842,6 +851,42 @@ class AstigmaticGaussianBeam(AngledFieldSource, PlanarSource, BroadbandSource):
 class TFSF(AngledFieldSource, VolumeSource):
     """Total field scattered field with a plane wave field in a volume."""
 
+    injection_axis: Axis = pydantic.Field(
+        ...,
+        title="Injection Axis",
+        description="Specifies the injection axis. The plane of incidence is defined via this "
+        "``injection_axis`` and the ``direction``. The popagation axis is defined with respect "
+        "to the ``injection_axis`` by ``angle_theta`` and ``angle_phi``.",
+    )
+
+    @cached_property
+    def _injection_axis(self):
+        """Injection axis of the source."""
+        return self.injection_axis
+
+    @cached_property
+    def injection_plane_center(self) -> Coordinate:
+        """Center of the injection plane."""
+        sign = 1 if self.direction == "-" else -1
+        center = list(self.center)
+        size = [0 if val == inf else val for val in self.size]
+        center[self.injection_axis] += sign * size[self.injection_axis] / 2
+        return tuple(center)
+
+    def plot(  #  pylint:disable=too-many-arguments
+        self,
+        x: float = None,
+        y: float = None,
+        z: float = None,
+        ax: Ax = None,
+        **patch_kwargs,
+    ) -> Ax:
+
+        # call Source.plot but with the base of the arrow centered on the injection plane
+        patch_kwargs["arrow_base"] = self.injection_plane_center
+        ax = Source.plot(self, x=x, y=y, z=z, ax=ax, **patch_kwargs)
+        return ax
+
 
 # sources allowed in Simulation.sources
 SourceType = Union[
@@ -852,4 +897,5 @@ SourceType = Union[
     ModeSource,
     PlaneWave,
     CustomFieldSource,
+    TFSF,
 ]

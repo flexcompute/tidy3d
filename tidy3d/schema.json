@@ -1,6 +1,6 @@
 {
   "title": "Simulation",
-  "description": "Contains all information about Tidy3d simulation.\n\nParameters\n----------\ncenter : Tuple[float, float, float] = (0.0, 0.0, 0.0)\n    [units = um].  Center of object in x, y, and z.\nsize : Tuple[NonNegativeFloat, NonNegativeFloat, NonNegativeFloat]\n    [units = um].  Size in x, y, and z directions.\nrun_time : PositiveFloat\n    [units = sec].  Total electromagnetic evolution time in seconds. Note: If simulation 'shutoff' is specified, simulation will terminate early when shutoff condition met. \nmedium : Union[Medium, CustomMedium, AnisotropicMedium, PECMedium, PoleResidue, Sellmeier, Lorentz, Debye, Drude] = Medium(name=None, frequency_range=None, type='Medium', permittivity=1.0, conductivity=0.0)\n    Background medium of simulation, defaults to vacuum if not specified.\nsymmetry : Tuple[Literal[0, -1, 1], Literal[0, -1, 1], Literal[0, -1, 1]] = (0, 0, 0)\n    Tuple of integers defining reflection symmetry across a plane bisecting the simulation domain normal to the x-, y-, and z-axis at the simulation center of each axis, respectvely. Each element can be ``0`` (no symmetry), ``1`` (even, i.e. 'PMC' symmetry) or ``-1`` (odd, i.e. 'PEC' symmetry). Note that the vectorial nature of the fields must be taken into account to correctly determine the symmetry value.\nstructures : Tuple[Structure, ...] = ()\n    Tuple of structures present in simulation. Note: Structures defined later in this list override the simulation material properties in regions of spatial overlap.\nsources : Tuple[Annotated[Union[tidy3d.components.source.UniformCurrentSource, tidy3d.components.source.PointDipole, tidy3d.components.source.GaussianBeam, tidy3d.components.source.AstigmaticGaussianBeam, tidy3d.components.source.ModeSource, tidy3d.components.source.PlaneWave, tidy3d.components.source.CustomFieldSource], FieldInfo(default=PydanticUndefined, discriminator='type', extra={})], ...] = ()\n    Tuple of electric current sources injecting fields into the simulation.\nboundary_spec : Optional[BoundarySpec] = None\n    Specification of boundary conditions along each dimension. If ``None``, periodic boundary conditions are applied on all sides. Default will change to PML in 2.0 so explicitly setting the boundaries is recommended.\nmonitors : Tuple[Annotated[Union[tidy3d.components.monitor.FieldMonitor, tidy3d.components.monitor.FieldTimeMonitor, tidy3d.components.monitor.PermittivityMonitor, tidy3d.components.monitor.FluxMonitor, tidy3d.components.monitor.FluxTimeMonitor, tidy3d.components.monitor.ModeMonitor, tidy3d.components.monitor.ModeSolverMonitor, tidy3d.components.monitor.FieldProjectionAngleMonitor, tidy3d.components.monitor.FieldProjectionCartesianMonitor, tidy3d.components.monitor.FieldProjectionKSpaceMonitor, tidy3d.components.monitor.DiffractionMonitor], FieldInfo(default=PydanticUndefined, discriminator='type', extra={})], ...] = ()\n    Tuple of monitors in the simulation. Note: monitor names are used to access data after simulation is run.\ngrid_spec : GridSpec = GridSpec(grid_x=AutoGrid(type='AutoGrid',, min_steps_per_wvl=10.0,, max_scale=1.4,, dl_min=0.0,, mesher=GradedMesher(type='GradedMesher')), grid_y=AutoGrid(type='AutoGrid',, min_steps_per_wvl=10.0,, max_scale=1.4,, dl_min=0.0,, mesher=GradedMesher(type='GradedMesher')), grid_z=AutoGrid(type='AutoGrid',, min_steps_per_wvl=10.0,, max_scale=1.4,, dl_min=0.0,, mesher=GradedMesher(type='GradedMesher')), wavelength=None, override_structures=(), type='GridSpec')\n    Specifications for the simulation grid along each of the three directions.\nshutoff : NonNegativeFloat = 1e-05\n    Ratio of the instantaneous integrated E-field intensity to the maximum value at which the simulation will automatically terminate time stepping. Used to prevent extraneous run time of simulations with fully decayed fields. Set to ``0`` to disable this feature.\nsubpixel : bool = True\n    If ``True``, uses subpixel averaging of the permittivity based on structure definition, resulting in much higher accuracy for a given grid size.\nnormalize_index : Optional[NonNegativeInt] = 0\n    Index of the source in the tuple of sources whose spectrum will be used to normalize the frequency-dependent data. If ``None``, the raw field data is returned unnormalized.\ncourant : ConstrainedFloatValue = 0.99\n    Courant stability factor, controls time step to spatial step ratio. Lower values lead to more stable simulations for dispersive materials, but result in longer simulation times. This factor is normalized to no larger than 1 when CFL stability condition is met in 3D.\nversion : str = 1.9.3\n    String specifying the front end version number.\n\nExample\n-------\n>>> from tidy3d import Sphere, Cylinder, PolySlab\n>>> from tidy3d import UniformCurrentSource, GaussianPulse\n>>> from tidy3d import FieldMonitor, FluxMonitor\n>>> from tidy3d import GridSpec, AutoGrid\n>>> from tidy3d import BoundarySpec, Boundary\n>>> sim = Simulation(\n...     size=(2.0, 2.0, 2.0),\n...     grid_spec=GridSpec(\n...         grid_x = AutoGrid(min_steps_per_wvl = 20),\n...         grid_y = AutoGrid(min_steps_per_wvl = 20),\n...         grid_z = AutoGrid(min_steps_per_wvl = 20)\n...     ),\n...     run_time=40e-11,\n...     structures=[\n...         Structure(\n...             geometry=Box(size=(1, 1, 1), center=(-1, 0, 0)),\n...             medium=Medium(permittivity=2.0),\n...         ),\n...     ],\n...     sources=[\n...         UniformCurrentSource(\n...             size=(0, 0, 0),\n...             center=(0, 0.5, 0),\n...             polarization=\"Hx\",\n...             source_time=GaussianPulse(\n...                 freq0=2e14,\n...                 fwidth=4e13,\n...             ),\n...         )\n...     ],\n...     monitors=[\n...         FieldMonitor(size=(0, 0, 0), center=(0, 0, 0), freqs=[1.5e14, 2e14], name='point'),\n...         FluxMonitor(size=(1, 1, 0), center=(0, 0, 0), freqs=[2e14, 2.5e14], name='flux'),\n...     ],\n...     symmetry=(0, 0, 0),\n...     boundary_spec=BoundarySpec(\n...         x = Boundary.pml(num_layers=20),\n...         y = Boundary.pml(num_layers=30),\n...         z = Boundary.periodic(),\n...     ),\n...     shutoff=1e-6,\n...     courant=0.8,\n...     subpixel=False,\n... )",
+  "description": "Contains all information about Tidy3d simulation.\n\nParameters\n----------\ncenter : Tuple[float, float, float] = (0.0, 0.0, 0.0)\n    [units = um].  Center of object in x, y, and z.\nsize : Tuple[NonNegativeFloat, NonNegativeFloat, NonNegativeFloat]\n    [units = um].  Size in x, y, and z directions.\nrun_time : PositiveFloat\n    [units = sec].  Total electromagnetic evolution time in seconds. Note: If simulation 'shutoff' is specified, simulation will terminate early when shutoff condition met. \nmedium : Union[Medium, CustomMedium, AnisotropicMedium, PECMedium, PoleResidue, Sellmeier, Lorentz, Debye, Drude] = Medium(name=None, frequency_range=None, type='Medium', permittivity=1.0, conductivity=0.0)\n    Background medium of simulation, defaults to vacuum if not specified.\nsymmetry : Tuple[Literal[0, -1, 1], Literal[0, -1, 1], Literal[0, -1, 1]] = (0, 0, 0)\n    Tuple of integers defining reflection symmetry across a plane bisecting the simulation domain normal to the x-, y-, and z-axis at the simulation center of each axis, respectvely. Each element can be ``0`` (no symmetry), ``1`` (even, i.e. 'PMC' symmetry) or ``-1`` (odd, i.e. 'PEC' symmetry). Note that the vectorial nature of the fields must be taken into account to correctly determine the symmetry value.\nstructures : Tuple[Structure, ...] = ()\n    Tuple of structures present in simulation. Note: Structures defined later in this list override the simulation material properties in regions of spatial overlap.\nsources : Tuple[Annotated[Union[tidy3d.components.source.UniformCurrentSource, tidy3d.components.source.PointDipole, tidy3d.components.source.GaussianBeam, tidy3d.components.source.AstigmaticGaussianBeam, tidy3d.components.source.ModeSource, tidy3d.components.source.PlaneWave, tidy3d.components.source.CustomFieldSource], FieldInfo(default=PydanticUndefined, discriminator='type', extra={})], ...] = ()\n    Tuple of electric current sources injecting fields into the simulation.\nboundary_spec : Optional[BoundarySpec] = None\n    Specification of boundary conditions along each dimension. If ``None``, periodic boundary conditions are applied on all sides. Default will change to PML in 2.0 so explicitly setting the boundaries is recommended.\nmonitors : Tuple[Annotated[Union[tidy3d.components.monitor.FieldMonitor, tidy3d.components.monitor.FieldTimeMonitor, tidy3d.components.monitor.PermittivityMonitor, tidy3d.components.monitor.FluxMonitor, tidy3d.components.monitor.FluxTimeMonitor, tidy3d.components.monitor.ModeMonitor, tidy3d.components.monitor.ModeSolverMonitor, tidy3d.components.monitor.FieldProjectionAngleMonitor, tidy3d.components.monitor.FieldProjectionCartesianMonitor, tidy3d.components.monitor.FieldProjectionKSpaceMonitor, tidy3d.components.monitor.DiffractionMonitor], FieldInfo(default=PydanticUndefined, discriminator='type', extra={})], ...] = ()\n    Tuple of monitors in the simulation. Note: monitor names are used to access data after simulation is run.\ngrid_spec : GridSpec = GridSpec(grid_x=AutoGrid(type='AutoGrid',, min_steps_per_wvl=10.0,, max_scale=1.4,, dl_min=0.0,, mesher=GradedMesher(type='GradedMesher')), grid_y=AutoGrid(type='AutoGrid',, min_steps_per_wvl=10.0,, max_scale=1.4,, dl_min=0.0,, mesher=GradedMesher(type='GradedMesher')), grid_z=AutoGrid(type='AutoGrid',, min_steps_per_wvl=10.0,, max_scale=1.4,, dl_min=0.0,, mesher=GradedMesher(type='GradedMesher')), wavelength=None, override_structures=(), type='GridSpec')\n    Specifications for the simulation grid along each of the three directions.\nshutoff : NonNegativeFloat = 1e-05\n    Ratio of the instantaneous integrated E-field intensity to the maximum value at which the simulation will automatically terminate time stepping. Used to prevent extraneous run time of simulations with fully decayed fields. Set to ``0`` to disable this feature.\nsubpixel : bool = True\n    If ``True``, uses subpixel averaging of the permittivity based on structure definition, resulting in much higher accuracy for a given grid size.\nnormalize_index : Optional[NonNegativeInt] = 0\n    Index of the source in the tuple of sources whose spectrum will be used to normalize the frequency-dependent data. If ``None``, the raw field data is returned unnormalized.\ncourant : ConstrainedFloatValue = 0.99\n    Courant stability factor, controls time step to spatial step ratio. Lower values lead to more stable simulations for dispersive materials, but result in longer simulation times. This factor is normalized to no larger than 1 when CFL stability condition is met in 3D.\nversion : str = 1.10.0rc1\n    String specifying the front end version number.\n\nExample\n-------\n>>> from tidy3d import Sphere, Cylinder, PolySlab\n>>> from tidy3d import UniformCurrentSource, GaussianPulse\n>>> from tidy3d import FieldMonitor, FluxMonitor\n>>> from tidy3d import GridSpec, AutoGrid\n>>> from tidy3d import BoundarySpec, Boundary\n>>> sim = Simulation(\n...     size=(2.0, 2.0, 2.0),\n...     grid_spec=GridSpec(\n...         grid_x = AutoGrid(min_steps_per_wvl = 20),\n...         grid_y = AutoGrid(min_steps_per_wvl = 20),\n...         grid_z = AutoGrid(min_steps_per_wvl = 20)\n...     ),\n...     run_time=40e-11,\n...     structures=[\n...         Structure(\n...             geometry=Box(size=(1, 1, 1), center=(-1, 0, 0)),\n...             medium=Medium(permittivity=2.0),\n...         ),\n...     ],\n...     sources=[\n...         UniformCurrentSource(\n...             size=(0, 0, 0),\n...             center=(0, 0.5, 0),\n...             polarization=\"Hx\",\n...             source_time=GaussianPulse(\n...                 freq0=2e14,\n...                 fwidth=4e13,\n...             ),\n...         )\n...     ],\n...     monitors=[\n...         FieldMonitor(size=(0, 0, 0), center=(0, 0, 0), freqs=[1.5e14, 2e14], name='point'),\n...         FluxMonitor(size=(1, 1, 0), center=(0, 0, 0), freqs=[2e14, 2.5e14], name='flux'),\n...     ],\n...     symmetry=(0, 0, 0),\n...     boundary_spec=BoundarySpec(\n...         x = Boundary.pml(num_layers=20),\n...         y = Boundary.pml(num_layers=30),\n...         z = Boundary.periodic(),\n...     ),\n...     shutoff=1e-6,\n...     courant=0.8,\n...     subpixel=False,\n... )",
   "type": "object",
   "properties": {
     "type": {
@@ -334,7 +334,7 @@
     "version": {
       "title": "Version",
       "description": "String specifying the front end version number.",
-      "default": "1.9.3",
+      "default": "1.10.0rc2",
       "type": "string"
     }
   },
@@ -1446,9 +1446,70 @@
       ],
       "additionalProperties": false
     },
+    "TriangleMeshDataset": {
+      "title": "TriangleMeshDataset",
+      "description": "Dataset for storing triangular surface data.\n\nParameters\n----------\nsurface_mesh : TriangleMeshDataArray\n    Dataset containing the surface triangles and corresponding face indices for a surface mesh.",
+      "type": "object",
+      "properties": {
+        "type": {
+          "title": "Type",
+          "default": "TriangleMeshDataset",
+          "enum": [
+            "TriangleMeshDataset"
+          ],
+          "type": "string"
+        },
+        "surface_mesh": {
+          "title": "DataArray",
+          "description": "Dataset containing the surface triangles and corresponding face indices for a surface mesh.",
+          "type": "xr.DataArray",
+          "properties": {
+            "_dims": {
+              "title": "_dims",
+              "type": "Tuple[str, ...]"
+            }
+          },
+          "required": [
+            "_dims"
+          ]
+        }
+      },
+      "required": [
+        "surface_mesh"
+      ],
+      "additionalProperties": false
+    },
+    "TriangleMesh": {
+      "title": "TriangleMesh",
+      "description": "Custom surface geometry given by a triangle mesh, as in the STL file format.\n\nParameters\n----------\nmesh_dataset : Optional[TriangleMeshDataset]\n    Surface mesh data.\n\nExample\n-------\n>>> vertices = np.array([[0, 0, 0], [1, 0, 0], [0, 1, 0], [0, 0, 1]])\n>>> faces = np.array([[1, 2, 3], [0, 3, 2], [0, 1, 3], [0, 2, 1]])\n>>> stl_geom = TriangleMesh.from_vertices_faces(vertices, faces)",
+      "type": "object",
+      "properties": {
+        "type": {
+          "title": "Type",
+          "default": "TriangleMesh",
+          "enum": [
+            "TriangleMesh"
+          ],
+          "type": "string"
+        },
+        "mesh_dataset": {
+          "title": "Surface mesh data",
+          "description": "Surface mesh data.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/TriangleMeshDataset"
+            }
+          ]
+        }
+      },
+      "required": [
+        "mesh_dataset"
+      ],
+      "additionalProperties": false
+    },
     "GeometryGroup": {
       "title": "GeometryGroup",
-      "description": "A collection of Geometry objects that can be called as a single geometry object.\n\nParameters\n----------\ngeometries : Tuple[Annotated[Union[tidy3d.components.geometry.Box, tidy3d.components.geometry.Sphere, tidy3d.components.geometry.Cylinder, tidy3d.components.geometry.PolySlab], FieldInfo(default=PydanticUndefined, discriminator='type', extra={})], ...]\n    Tuple of geometries in a single grouping. Can provide significant performance enhancement in ``Structure`` when all geometries are assigned the same medium.",
+      "description": "A collection of Geometry objects that can be called as a single geometry object.\n\nParameters\n----------\ngeometries : Tuple[Annotated[Union[tidy3d.components.geometry.Box, tidy3d.components.geometry.Sphere, tidy3d.components.geometry.Cylinder, tidy3d.components.geometry.PolySlab, tidy3d.components.geometry.TriangleMesh], FieldInfo(default=PydanticUndefined, discriminator='type', extra={})], ...]\n    Tuple of geometries in a single grouping. Can provide significant performance enhancement in ``Structure`` when all geometries are assigned the same medium.",
       "type": "object",
       "properties": {
         "type": {
@@ -1470,7 +1531,8 @@
                 "Box": "#/definitions/Box",
                 "Sphere": "#/definitions/Sphere",
                 "Cylinder": "#/definitions/Cylinder",
-                "PolySlab": "#/definitions/PolySlab"
+                "PolySlab": "#/definitions/PolySlab",
+                "TriangleMesh": "#/definitions/TriangleMesh"
               }
             },
             "oneOf": [
@@ -1485,6 +1547,9 @@
               },
               {
                 "$ref": "#/definitions/PolySlab"
+              },
+              {
+                "$ref": "#/definitions/TriangleMesh"
               }
             ]
           }
@@ -1497,7 +1562,7 @@
     },
     "Structure": {
       "title": "Structure",
-      "description": "Defines a physical object that interacts with the electromagnetic fields.\nA :class:`Structure` is a combination of a material property (:class:`AbstractMedium`)\nand a :class:`Geometry`.\n\nParameters\n----------\ngeometry : Union[Box, Sphere, Cylinder, PolySlab, GeometryGroup]\n    Defines geometric properties of the structure.\nname : Optional[str] = None\n    Optional name for the structure.\nmedium : Union[Medium, CustomMedium, AnisotropicMedium, PECMedium, PoleResidue, Sellmeier, Lorentz, Debye, Drude]\n    Defines the electromagnetic properties of the structure's medium.\n\nExample\n-------\n>>> from tidy3d import Box, Medium\n>>> box = Box(center=(0,0,1), size=(2, 2, 2))\n>>> glass = Medium(permittivity=3.9)\n>>> struct = Structure(geometry=box, medium=glass, name='glass_box')",
+      "description": "Defines a physical object that interacts with the electromagnetic fields.\nA :class:`Structure` is a combination of a material property (:class:`AbstractMedium`)\nand a :class:`Geometry`.\n\nParameters\n----------\ngeometry : Union[Box, Sphere, Cylinder, PolySlab, TriangleMesh, GeometryGroup]\n    Defines geometric properties of the structure.\nname : Optional[str] = None\n    Optional name for the structure.\nmedium : Union[Medium, CustomMedium, AnisotropicMedium, PECMedium, PoleResidue, Sellmeier, Lorentz, Debye, Drude]\n    Defines the electromagnetic properties of the structure's medium.\n\nExample\n-------\n>>> from tidy3d import Box, Medium\n>>> box = Box(center=(0,0,1), size=(2, 2, 2))\n>>> glass = Medium(permittivity=3.9)\n>>> struct = Structure(geometry=box, medium=glass, name='glass_box')",
       "type": "object",
       "properties": {
         "geometry": {
@@ -1510,6 +1575,7 @@
               "Sphere": "#/definitions/Sphere",
               "Cylinder": "#/definitions/Cylinder",
               "PolySlab": "#/definitions/PolySlab",
+              "TriangleMesh": "#/definitions/TriangleMesh",
               "GeometryGroup": "#/definitions/GeometryGroup"
             }
           },
@@ -1525,6 +1591,9 @@
             },
             {
               "$ref": "#/definitions/PolySlab"
+            },
+            {
+              "$ref": "#/definitions/TriangleMesh"
             },
             {
               "$ref": "#/definitions/GeometryGroup"
@@ -5087,7 +5156,7 @@
     },
     "MeshOverrideStructure": {
       "title": "MeshOverrideStructure",
-      "description": "Defines an object that is only used in the process of generating the mesh.\nA :class:`MeshOverrideStructure` is a combination of geometry :class:`Geometry`,\ngrid size along x,y,z directions, and a boolean on whether the override\nwill be enforced.\n\nParameters\n----------\ngeometry : Union[Box, Sphere, Cylinder, PolySlab, GeometryGroup]\n    Defines geometric properties of the structure.\nname : Optional[str] = None\n    Optional name for the structure.\ndl : Tuple[PositiveFloat, PositiveFloat, PositiveFloat]\n    [units = um].  Grid size along x, y, z directions.\nenforce : bool = False\n    If ``True``, enforce the grid size setup inside the structure even if the structure is inside a structure of smaller grid size. In the intersection region of multiple structures of ``enforce=True``, grid size is decided by the last added structure of ``enforce=True``.\n\nExample\n-------\n>>> from tidy3d import Box\n>>> box = Box(center=(0,0,1), size=(2, 2, 2))\n>>> struct_override = MeshOverrideStructure(geometry=box, dl=(0.1,0.2,0.3), name='override_box')",
+      "description": "Defines an object that is only used in the process of generating the mesh.\nA :class:`MeshOverrideStructure` is a combination of geometry :class:`Geometry`,\ngrid size along x,y,z directions, and a boolean on whether the override\nwill be enforced.\n\nParameters\n----------\ngeometry : Union[Box, Sphere, Cylinder, PolySlab, TriangleMesh, GeometryGroup]\n    Defines geometric properties of the structure.\nname : Optional[str] = None\n    Optional name for the structure.\ndl : Tuple[PositiveFloat, PositiveFloat, PositiveFloat]\n    [units = um].  Grid size along x, y, z directions.\nenforce : bool = False\n    If ``True``, enforce the grid size setup inside the structure even if the structure is inside a structure of smaller grid size. In the intersection region of multiple structures of ``enforce=True``, grid size is decided by the last added structure of ``enforce=True``.\n\nExample\n-------\n>>> from tidy3d import Box\n>>> box = Box(center=(0,0,1), size=(2, 2, 2))\n>>> struct_override = MeshOverrideStructure(geometry=box, dl=(0.1,0.2,0.3), name='override_box')",
       "type": "object",
       "properties": {
         "geometry": {
@@ -5100,6 +5169,7 @@
               "Sphere": "#/definitions/Sphere",
               "Cylinder": "#/definitions/Cylinder",
               "PolySlab": "#/definitions/PolySlab",
+              "TriangleMesh": "#/definitions/TriangleMesh",
               "GeometryGroup": "#/definitions/GeometryGroup"
             }
           },
@@ -5115,6 +5185,9 @@
             },
             {
               "$ref": "#/definitions/PolySlab"
+            },
+            {
+              "$ref": "#/definitions/TriangleMesh"
             },
             {
               "$ref": "#/definitions/GeometryGroup"

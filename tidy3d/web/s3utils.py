@@ -1,5 +1,6 @@
 # pylint:disable=unused-argument
-""" handles filesystem, storage """
+"""handles filesystem, storage 
+"""
 import io
 import os
 import urllib
@@ -18,6 +19,8 @@ from .config import DEFAULT_CONFIG
 
 
 class _UserCredential(BaseModel):
+    """Stores information about user credentials."""
+
     access_key_id: str = Field(alias="accessKeyId")
     expiration: datetime
     secret_access_key: str = Field(alias="secretAccessKey")
@@ -25,39 +28,38 @@ class _UserCredential(BaseModel):
 
 
 class _S3STSToken(BaseModel):
+    """Stores information about S3 token."""
+
     cloud_path: str = Field(alias="cloudpath")
     user_credential: _UserCredential = Field(alias="userCredentials")
 
     def get_bucket(self) -> str:
-        """
-        @return: bucket name
-        """
+        """Get the bucket name for this token."""
+
         r = urllib.parse.urlparse(self.cloud_path)
         return r.netloc
 
     def get_s3_key(self) -> str:
-        """@return: s3 key"""
+        """Get the s3 key for this token."""
+
         r = urllib.parse.urlparse(self.cloud_path)
         return r.path[1:]
 
     def get_client(self) -> boto3.client:
-        """
-        @return: boto3 client
+        """Get the boto client for this token."""
 
-        """
         return boto3.client(
             "s3",
             region_name=DEFAULT_CONFIG.s3_region,
             aws_access_key_id=self.user_credential.access_key_id,
             aws_secret_access_key=self.user_credential.secret_access_key,
             aws_session_token=self.user_credential.session_token,
+            verify=DEFAULT_CONFIG.ssl_verify,
         )
 
     def is_expired(self) -> bool:
-        """
-        @return: True if token is expired
-        @return:
-        """
+        """True if token is expired."""
+
         return (
             self.user_credential.expiration
             - datetime.now(tz=self.user_credential.expiration.tzinfo)
@@ -65,28 +67,72 @@ class _S3STSToken(BaseModel):
 
 
 class UploadProgress:
-    """updates progressbar for the upload status"""
+    """Updates progressbar with the upload status.
+
+    Attributes
+    ----------
+    progress : rich.progress.Progress()
+        Progressbar instance from rich
+    ul_task : rich.progress.Task
+        Progressbar task instance.
+    """
 
     def __init__(self, size_bytes, progress):
-        """initialize with the size of file and rich.progress.Progress() instance"""
+        """initialize with the size of file and rich.progress.Progress() instance.
+
+        Parameters
+        ----------
+        size_bytes: float
+            Number of total bytes to upload.
+        progress : rich.progress.Progress()
+            Progressbar instance from rich
+        """
         self.progress = progress
         self.ul_task = self.progress.add_task("[red]Uploading...", total=size_bytes)
 
     def report(self, bytes_in_chunk):
-        """the progressbar with recent chunk"""
+        """Update the progressbar with the most recent chunk.
+
+        Parameters
+        ----------
+        bytes_in_chunk : float
+            Description
+        """
         self.progress.update(self.ul_task, advance=bytes_in_chunk)
 
 
 class DownloadProgress:
-    """updates progressbar for the download status"""
+    """Updates progressbar using the download status.
+
+    Attributes
+    ----------
+    progress : rich.progress.Progress()
+        Progressbar instance from rich
+    ul_task : rich.progress.Task
+        Progressbar task instance.
+    """
 
     def __init__(self, size_bytes, progress):
-        """initialize with the size of file and rich.progress.Progress() instance"""
+        """initialize with the size of file and rich.progress.Progress() instance
+
+        Parameters
+        ----------
+        size_bytes: float
+            Number of total bytes to download.
+        progress : rich.progress.Progress()
+            Progressbar instance from rich
+        """
         self.progress = progress
         self.dl_task = self.progress.add_task("[red]Downloading...", total=size_bytes)
 
     def report(self, bytes_in_chunk):
-        """the progressbar with recent chunk"""
+        """Update the progressbar with the most recent chunk.
+
+        Parameters
+        ----------
+        bytes_in_chunk : float
+            Description
+        """
         self.progress.update(self.dl_task, advance=bytes_in_chunk)
 
 
@@ -97,6 +143,7 @@ class _S3Action(Enum):
 
 def _get_progress(action: _S3Action):
     """Get the progress of an action."""
+
     col = (
         TextColumn(f"[bold green]{_S3Action.DOWNLOADING.value}")
         if action == _S3Action.DOWNLOADING
@@ -127,11 +174,19 @@ _s3_sts_tokens: [str, _S3STSToken] = {}
 
 
 def get_s3_sts_token(resource_id: str, file_name: str) -> _S3STSToken:
-    """
-    get s3 sts token for the given resource id and file name
-    @param resource_id: the resource id, e.g. task id"
-    @param file_name: the remote file name on S3
-    @return: _S3STSToken
+    """Get s3 sts token for the given resource id and file name.
+
+    Parameters
+    ----------
+    resource_id : str
+        The resource id, e.g. task id.
+    file_name : str
+        The remote file name on S3.
+
+    Returns
+    -------
+    _S3STSToken
+        The S3 STS token.
     """
     cache_key = f"{resource_id}:{file_name}"
     if cache_key not in _s3_sts_tokens or _s3_sts_tokens[cache_key].is_expired():
@@ -142,18 +197,39 @@ def get_s3_sts_token(resource_id: str, file_name: str) -> _S3STSToken:
     return _s3_sts_tokens[cache_key]
 
 
-def upload_string(resource_id: str, content: str, remote_filename: str, verbose: bool = True):
+def upload_string(
+    resource_id: str,
+    content: str,
+    remote_filename: str,
+    verbose: bool = True,
+    progress_callback: Callable[[float], None] = None,
+):
+    """Upload a string to a file on S3.
+
+    Parameters
+    ----------
+    resource_id : str
+        The resource id, e.g. task id.
+    content : str
+        The content of the file
+    remote_filename : str
+        The remote file name on S3 relative to the resource context root path.
+    verbose : bool = True
+        Whether to display a progressbar for the upload.
+    progress_callback : Callable[[float], None] = None
+        User-supplied callback function with ``bytes_in_chunk`` as argument.
     """
-    upload a string to a file on S3
-    @param resource_id: the resource id, e.g. task id
-    @param content:     the content of the file
-    @param remote_filename: the remote file name on S3
-    """
+
+    token = get_s3_sts_token(resource_id, remote_filename)
 
     def _upload(_callback: Callable) -> None:
-        """Perform the upload with a callback fn"""
+        """Perform the upload with a callback fn
 
-        token = get_s3_sts_token(resource_id, remote_filename)
+        Parameters
+        ----------
+        _callback : Callable[[float], None]
+            Callback function for upload, accepts ``bytes_in_chunk``
+        """
         token.get_client().upload_fileobj(
             io.BytesIO(content.encode("utf-8")),
             Bucket=token.get_bucket(),
@@ -162,33 +238,58 @@ def upload_string(resource_id: str, content: str, remote_filename: str, verbose:
             Config=_s3_config,
         )
 
-    if verbose:
-        with _get_progress(_S3Action.UPLOADING) as progress:
-            total_size = len(content)
-            task_id = progress.add_task("upload", filename=remote_filename, total=total_size)
-
-            def _callback(bytes_in_chunk):
-                progress.update(task_id, advance=bytes_in_chunk)
-
-            _upload(_callback)
-            progress.update(task_id, completed=total_size, refresh=True)
-
+    if progress_callback is not None:
+        _upload(progress_callback)
     else:
-        _upload(lambda bytes_in_chunk: None)
+        if verbose:
+            with _get_progress(_S3Action.UPLOADING) as progress:
+                total_size = len(content)
+                task_id = progress.add_task("upload", filename=remote_filename, total=total_size)
+
+                def _callback(bytes_in_chunk):
+                    progress.update(task_id, advance=bytes_in_chunk)
+
+                _upload(_callback)
+                progress.update(task_id, completed=total_size, refresh=True)
+
+        elif progress_callback is None:
+            _upload(lambda bytes_in_chunk: None)
 
 
-def upload_file(resource_id: str, path: str, remote_filename: str, verbose: bool = True):
+def upload_file(
+    resource_id: str,
+    path: str,
+    remote_filename: str,
+    verbose: bool = True,
+    progress_callback: Callable[[float], None] = None,
+):
+    """Upload a file to S3.
+
+    Parameters
+    ----------
+    resource_id : str
+        The resource id, e.g. task id.
+    path : str
+        Path to the file to upload.
+    remote_filename : str
+        The remote file name on S3 relative to the resource context root path.
+    verbose : bool = True
+        Whether to display a progressbar for the upload.
+    progress_callback : Callable[[float], None] = None
+        User-supplied callback function with ``bytes_in_chunk`` as argument.
     """
-    upload file to S3
-    @param resource_id: the resource id, e.g. task id
-    @param path: path to the file
-    @param remote_filename: the remote file name on S3
-    """
+
+    token = get_s3_sts_token(resource_id, remote_filename)
 
     def _upload(_callback: Callable) -> None:
-        """Perform the upload with a callback fn"""
+        """Perform the upload with a callback function.
 
-        token = get_s3_sts_token(resource_id, remote_filename)
+        Parameters
+        ----------
+        _callback : Callable[[float], None]
+            Callback function for upload, accepts ``bytes_in_chunk``
+        """
+
         with open(path, "rb") as data:
             token.get_client().upload_fileobj(
                 data,
@@ -198,30 +299,46 @@ def upload_file(resource_id: str, path: str, remote_filename: str, verbose: bool
                 Config=_s3_config,
             )
 
-    if verbose:
-        with _get_progress(_S3Action.UPLOADING) as progress:
-            total_size = os.path.getsize(path)
-            task_id = progress.add_task("upload", filename=remote_filename, total=total_size)
-
-            def _callback(bytes_in_chunk):
-                progress.update(task_id, advance=bytes_in_chunk)
-
-            _upload(_callback)
-
-            progress.update(task_id, completed=total_size, refresh=True)
-
+    if progress_callback is not None:
+        _upload(progress_callback)
     else:
-        _upload(lambda bytes_in_chunk: None)
+        if verbose:
+            with _get_progress(_S3Action.UPLOADING) as progress:
+                total_size = os.path.getsize(path)
+                task_id = progress.add_task("upload", filename=remote_filename, total=total_size)
+
+                def _callback(bytes_in_chunk):
+                    progress.update(task_id, advance=bytes_in_chunk)
+
+                _upload(_callback)
+
+                progress.update(task_id, completed=total_size, refresh=True)
+
+        else:
+            _upload(lambda bytes_in_chunk: None)
 
 
 def download_file(
-    resource_id: str, remote_filename: str, to_file: str = None, verbose: bool = True
+    resource_id: str,
+    remote_filename: str,
+    to_file: str = None,
+    verbose: bool = True,
+    progress_callback: Callable[[float], None] = None,
 ):
-    """
-    download file from S3
-    @param resource_id: the resource id, e.g. task id
-    @param remote_filename: the remote file name on S3
-    @param to_file: the local file name to save the file
+    """Download file from S3.
+
+    Parameters
+    ----------
+    resource_id : str
+        The resource id, e.g. task id.
+    content : str
+        The content of the file
+    to_file : str = None
+        Local filename to save to, if not specified, use the remote_filename.
+    verbose : bool = True
+        Whether to display a progressbar for the upload
+    progress_callback : Callable[[float], None] = None
+        User-supplied callback function with ``bytes_in_chunk`` as argument.
     """
 
     token = get_s3_sts_token(resource_id, remote_filename)
@@ -233,28 +350,37 @@ def download_file(
         to_file = os.path.join(resource_id, os.path.basename(remote_filename))
 
     def _download(_callback: Callable) -> None:
-        """Perform the download with a callback fn"""
+        """Perform the download with a callback function.
+
+        Parameters
+        ----------
+        _callback : Callable[[float], None]
+            Callback function for download, accepts ``bytes_in_chunk``
+        """
 
         client.download_file(
             Bucket=token.get_bucket(), Filename=to_file, Key=token.get_s3_key(), Callback=_callback
         )
 
-    if verbose:
-        with _get_progress(_S3Action.DOWNLOADING) as progress:
-            total_size = meta_data.get("ContentLength", 0)
-            progress.start()
-            task_id = progress.add_task(
-                "download",
-                filename=os.path.basename(remote_filename),
-                total=total_size,
-            )
-
-            def _callback(bytes_in_chunk):
-                progress.update(task_id, advance=bytes_in_chunk)
-
-            _download(_callback)
-
-            progress.update(task_id, completed=total_size, refresh=True)
-
+    if progress_callback is not None:
+        _download(progress_callback)
     else:
-        _download(lambda bytes_in_chunk: None)
+        if verbose:
+            with _get_progress(_S3Action.DOWNLOADING) as progress:
+                total_size = meta_data.get("ContentLength", 0)
+                progress.start()
+                task_id = progress.add_task(
+                    "download",
+                    filename=os.path.basename(remote_filename),
+                    total=total_size,
+                )
+
+                def _callback(bytes_in_chunk):
+                    progress.update(task_id, advance=bytes_in_chunk)
+
+                _download(_callback)
+
+                progress.update(task_id, completed=total_size, refresh=True)
+
+        else:
+            _download(lambda bytes_in_chunk: None)

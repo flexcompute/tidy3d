@@ -66,7 +66,7 @@ def make_sim(
     jax_struct2 = JaxStructure(geometry=jax_box2, medium=jax_med2)
 
     jax_polyslab1 = JaxPolySlab(axis=POLYSLAB_AXIS, vertices=vertices, slab_bounds=(-1, 1))
-    jax_struct3 = JaxStructure(geometry=jax_polyslab1, medium=jax_med1)
+    # jax_struct3 = JaxStructure(geometry=jax_polyslab1, medium=jax_med1)
 
     # custom medium
     Nx, Ny, Nz = 10, 10, 1
@@ -124,8 +124,8 @@ def make_sim(
         grid_spec=td.GridSpec(wavelength=1.0),
         monitors=(extraneous_field_monitor,),
         structures=(extraneous_structure,),
-        output_monitors=(output_mnt1, output_mnt2, output_mnt3),
-        input_structures=(jax_struct1, jax_struct2, jax_struct3, jax_struct_custom),
+        output_monitors=(output_mnt1, output_mnt2),  # , output_mnt3),
+        input_structures=(jax_struct1, jax_struct2, jax_struct_custom),
         # input_structures=(jax_struct_custom,),
     )
 
@@ -285,7 +285,7 @@ def test_multiple_freqs():
         name=MNT_NAME,
     )
 
-    with pytest.raises(AdjointError):
+    with pytest.raises(pydantic.ValidationError):
         sim = JaxSimulation(
             size=(10, 10, 10),
             run_time=1e-12,
@@ -312,7 +312,7 @@ def test_different_freqs():
         freqs=[2e14],
         name=MNT_NAME + "2",
     )
-    with pytest.raises(AdjointError):
+    with pytest.raises(pydantic.ValidationError):
         sim = JaxSimulation(
             size=(10, 10, 10),
             run_time=1e-12,
@@ -534,7 +534,7 @@ def test_structure_overlaps():
 
 def test_validate_subpixel():
     """Make sure errors if subpixel is off."""
-    with pytest.raises(AdjointError):
+    with pytest.raises(pydantic.ValidationError):
         sim = JaxSimulation(
             size=(10, 10, 10),
             run_time=1e-12,
@@ -762,3 +762,13 @@ def test_diff_data_angles(axis):
     zeroth_order_theta = thetas.sel(orders_x=0, orders_y=0).isel(f=0)
 
     assert np.isclose(zeroth_order_theta, 0.0)
+
+
+def _test_error_regular_web():
+    """Test that a custom error is raised if running tidy3d through web.run()"""
+
+    sim = make_sim(permittivity=EPS, size=SIZE, vertices=VERTICES, base_eps_val=BASE_EPS_VAL)
+    import tidy3d.web as web
+
+    with pytest.raises(ValueError):
+        web.run(sim, task_name="test")

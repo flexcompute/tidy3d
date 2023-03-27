@@ -9,7 +9,7 @@ import numpy as np
 
 from .base import Tidy3dBaseModel, cached_property
 from .types import Complex, Axis, TYPE_TAG_STR
-from .source import GaussianBeam, ModeSource, PlaneWave
+from .source import GaussianBeam, ModeSource, PlaneWave, TFSF
 from .medium import Medium
 
 from ..constants import EPSILON_0, MU_0, PML_SIGMA
@@ -41,7 +41,7 @@ class PMCBoundary(BoundaryEdge):
 # """ Bloch boundary """
 
 # sources from which Bloch boundary conditions can be defined
-BlochSourceType = Union[GaussianBeam, ModeSource, PlaneWave]
+BlochSourceType = Union[GaussianBeam, ModeSource, PlaneWave, TFSF]
 
 
 class BlochBoundary(BoundaryEdge):
@@ -103,8 +103,8 @@ class BlochBoundary(BoundaryEdge):
 
         if not isinstance(source, BlochSourceType.__args__):
             raise SetupError(
-                "The `source` parameter must be `GaussianBeam`, `ModeSource`, or `PlaneWave` "
-                "in order to define a Bloch boundary condition."
+                "The `source` parameter must be `GaussianBeam`, `ModeSource`, `PlaneWave`, "
+                "or `TFSF` in order to define a Bloch boundary condition."
             )
 
         if axis == source.injection_axis:
@@ -415,7 +415,7 @@ class Boundary(Tidy3dBaseModel):
         if switched:
             values.update({"plus": plus, "minus": minus})
             log.warning(
-                "A periodic boundary condition was specified on the opposide side of a perfect "
+                "A periodic boundary condition was specified on the opposite side of a perfect "
                 "electric or magnetic conductor boundary. This periodic boundary condition will "
                 "be replaced by the perfect electric or magnetic conductor across from it."
             )

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import List, Tuple, Union, Any, Callable
+from typing import List, Tuple, Union, Any, Callable, Optional
 from math import isclose
 import functools
 
@@ -14,14 +14,31 @@ from shapely.geometry import Point, Polygon, box, MultiPolygon
 from shapely.validation import make_valid
 
 from .base import Tidy3dBaseModel, cached_property
-from .types import Bound, Size, Coordinate, Axis, Coordinate2D, ArrayLike, PlanePosition
+from .types import Bound, Size, Coordinate, Axis, Coordinate2D, ArrayFloat3D, PlanePosition
 from .types import Vertices, Ax, Shapely, annotate_type
 from .viz import add_ax_if_none, equal_aspect
 from .viz import PLOT_BUFFER, ARROW_LENGTH, arrow_style
 from .viz import PlotParams, plot_params_geometry, polygon_patch
-from ..constants import MICROMETER, LARGE_NUMBER, RADIAN, fp_eps, inf
-from ..exceptions import Tidy3dKeyError, SetupError, ValidationError
 from ..log import log
+from ..exceptions import Tidy3dKeyError, SetupError, ValidationError, DataError
+from ..constants import MICROMETER, LARGE_NUMBER, RADIAN, fp_eps, inf
+from .data.dataset import TriangleMeshDataset
+from .data.data_array import TriangleMeshDataArray, DATA_ARRAY_MAP
+
+try:
+    import trimesh
+
+    TRIMESH_AVAILABLE = True
+except ImportError:
+    TRIMESH_AVAILABLE = False
+
+try:
+    import networkx  # pylint:disable=unused-import
+    import rtree  # pylint:disable=unused-import
+
+    NETWORKX_RTREE_AVAILABLE = True
+except ImportError:
+    NETWORKX_RTREE_AVAILABLE = False
 
 
 # sampling polygon along dilation for validating polygon to be
@@ -30,6 +47,10 @@ _N_SAMPLE_POLYGON_INTERSECT = 5
 # for sampling conical frustum in visualization
 _N_SAMPLE_CURVE_SHAPELY = 40
 _IS_CLOSE_RTOL = np.finfo(float).eps
+
+
+Points = ArrayFloat3D
+
 
 # pylint:disable=too-many-public-methods
 class Geometry(Tidy3dBaseModel, ABC):
@@ -356,6 +377,27 @@ class Geometry(Tidy3dBaseModel, ABC):
             )
         return (pt_min + pt_max) / 2.0
 
+    @cached_property
+    def _normal_2dmaterial(self) -> Axis:
+        """Get the normal to the given geometry, checking that it is a 2D geometry."""
+        if isinstance(self, Box):
+            if np.count_nonzero(self.size) != 2:
+                raise ValidationError(
+                    "'Medium2D' requires exactly one of the 'Box' dimensions to have size zero."
+                )
+            return self.size.index(0)
+        if isinstance(self, PolySlab):
+            if self.slab_bounds[0] != self.slab_bounds[1]:
+                raise ValidationError("'Medium2D' requires the 'PolySlab' bounds to be equal.")
+            return self.axis
+        if isinstance(self, Cylinder):
+            if self.length != 0:
+                raise ValidationError("'Medium2D' requires the 'Cylinder' length to be zero.")
+            return self.axis
+        raise ValidationError(
+            "'Medium2D' is only compatible with 'Box', 'PolySlab', and 'Cylinder' geometries."
+        )
+
     @equal_aspect
     @add_ax_if_none
     def plot(
@@ -617,9 +659,7 @@ class Geometry(Tidy3dBaseModel, ABC):
         return axis, position
 
     @staticmethod
-    def rotate_points(
-        points: ArrayLike[float, 3], axis: Coordinate, angle: float
-    ) -> ArrayLike[float, 3]:
+    def rotate_points(points: Points, axis: Coordinate, angle: float) -> Points:
         """Rotate a set of points in 3D.
 
         Parameters
@@ -659,11 +699,11 @@ class Geometry(Tidy3dBaseModel, ABC):
 
     def reflect_points(
         self,
-        points: ArrayLike[float, 3],
+        points: Points,
         polar_axis: Axis,
         angle_theta: float,
         angle_phi: float,
-    ) -> ArrayLike[float, 3]:
+    ) -> Points:
         """Reflect a set of points in 3D at a plane passing through the coordinate origin defined
         and normal to a given axis defined in polar coordinates (theta, phi) w.r.t. the
         ``polar_axis`` which can be 0, 1, or 2.
@@ -709,7 +749,7 @@ class Geometry(Tidy3dBaseModel, ABC):
         Returns
         -------
         float
-            Volume.
+            Volume in um^3.
         """
 
         if not bounds:
@@ -732,7 +772,7 @@ class Geometry(Tidy3dBaseModel, ABC):
         Returns
         -------
         float
-            Surface area.
+            Surface area in um^2.
         """
 
         if not bounds:
@@ -975,6 +1015,13 @@ class Planar(Geometry, ABC):
     def length_axis(self) -> float:
         """Gets the length of the geometry along the out of plane dimension."""
 
+    @property
+    def finite_length_axis(self) -> float:
+        """Gets the length of the geometry along the out of plane dimension.
+        If the length is td.inf, return ``LARGE_NUMBER``
+        """
+        return min(self.length_axis, LARGE_NUMBER)
+
     def intersections_plane(self, x: float = None, y: float = None, z: float = None):
         """Returns shapely geometry at plane specified by one non None value of x,y,z.
 
@@ -1085,38 +1132,6 @@ class Planar(Geometry, ABC):
         tan(sidewall_angle). _tanq*height gives the offset value
         """
         return np.tan(self.sidewall_angle)
-
-    @staticmethod
-    def offset_distance_to_base(
-        reference_plane: PlanePosition, length_axis: float, tan_angle: float
-    ) -> float:
-        """
-        A convenient function that returns the distance needed to offset the cross section
-        from reference plane to the base.
-
-        Parameters
-        ----------
-        reference_plane : PlanePosition
-            The position of the plane where the vertices of the polygon are supplied.
-        length_axis : float
-            The overall length of PolySlab along extrusion direction.
-        tan_angle : float
-            tan(sidewall angle)
-
-        Returns
-        -------
-        float
-            Offset distance.
-        """
-
-        if reference_plane == "top":
-            return length_axis * tan_angle
-
-        if reference_plane == "middle":
-            return length_axis * tan_angle / 2
-
-        # bottom
-        return 0
 
 
 class Circular(Geometry):
@@ -1260,12 +1275,6 @@ class Box(Centered):
         del_idx = [[2 * i, 2 * i + 1] for i in del_idx]
         del_idx = [item for sublist in del_idx for item in sublist]
 
-        if len(del_idx) == 6:
-            raise SetupError(
-                "Can't generate surfaces for the given object because "
-                "all its surfaces are at infinity."
-            )
-
         def del_items(items, indices):
             """Delete list items at indices."""
             return [i for j, i in enumerate(items) if j not in indices]
@@ -1287,6 +1296,38 @@ class Box(Centered):
             surface = cls(center=_cent, size=_size, **kwargs)
             surfaces.append(surface)
 
+        return surfaces
+
+    @classmethod
+    def surfaces_with_exclusion(
+        cls, size: Size, center: Coordinate, **kwargs
+    ):  # pylint: disable=too-many-locals
+        """Returns a list of 6 :class:`Box` instances corresponding to each surface of a 3D volume.
+        The output surfaces are stored in the order [x-, x+, y-, y+, z-, z+], where x, y, and z
+        denote which axis is perpendicular to that surface, while "-" and "+" denote the direction
+        of the normal vector of that surface. If a name is provided, each output surface's name
+        will be that of the provided name appended with the above symbols. E.g., if the provided
+        name is "box", the x+ surfaces's name will be "box_x+". If `kwargs` contains an
+        `exclude_surfaces` parameter, the returned list of surfaces will not include the excluded
+        surfaces. Otherwise, the behavior is identical to that of `surfaces()`.
+
+        Parameters
+        ----------
+        size : Tuple[float, float, float]
+            Size of object in x, y, and z directions.
+        center : Tuple[float, float, float]
+            Center of object in x, y, and z.
+
+        Example
+        -------
+        >>> b = Box.surfaces_with_exclusion(
+        ...     size=(1, 2, 3), center=(3, 2, 1), exclude_surfaces=["x-"]
+        ... )
+        """
+        exclude_surfaces = kwargs.pop("exclude_surfaces", None)
+        surfaces = cls.surfaces(size=size, center=center, **kwargs)
+        if "name" in cls.__dict__["__fields__"] and exclude_surfaces:
+            surfaces = [surf for surf in surfaces if surf.name[-2:] not in exclude_surfaces]
         return surfaces
 
     def intersections_plane(self, x: float = None, y: float = None, z: float = None):
@@ -1390,6 +1431,7 @@ class Box(Centered):
         bend_axis: Axis = None,
         both_dirs: bool = False,
         ax: Ax = None,
+        arrow_base: Coordinate = None,
     ) -> Ax:
         """Adds an arrow to the axis if with options if certain conditions met.
 
@@ -1413,6 +1455,8 @@ class Box(Centered):
             Axis of curvature of `bend_radius`.
         both_dirs : bool = False
             If True, plots an arrow ponting in direction and one in -direction.
+        arrow_base : :class:`.Coordinate` = None
+            Custom base of the arrow. Uses the geometry's center if not provided.
 
         Returns
         -------
@@ -1423,13 +1467,22 @@ class Box(Centered):
         plot_axis, _ = self.parse_xyz_kwargs(x=x, y=y, z=z)
         _, (dx, dy) = self.pop_axis(direction, axis=plot_axis)
 
-        # conditions to check to determine whether to plot arrow
+        # conditions to check to determine whether to plot arrow, taking into account the
+        # possibility of a custom arrow base
         arrow_intersecting_plane = len(self.intersections_plane(x=x, y=y, z=z)) > 0
+        center = self.center
+        if arrow_base:
+            arrow_intersecting_plane = arrow_intersecting_plane and any(
+                a == b for a, b in zip(arrow_base, [x, y, z])
+            )
+            center = arrow_base
+
+        _, (dx, dy) = self.pop_axis(direction, axis=plot_axis)
         components_in_plane = any(not np.isclose(component, 0) for component in (dx, dy))
 
         # plot if arrow in plotting plane and some non-zero component can be displayed.
         if arrow_intersecting_plane and components_in_plane:
-            _, (x0, y0) = self.pop_axis(self.center, axis=plot_axis)
+            _, (x0, y0) = self.pop_axis(center, axis=plot_axis)
 
             # Reasonable value for temporary arrow size.  The correct size and direction
             # have to be calculated after all transforms have been set.  That is why we
@@ -1653,12 +1706,35 @@ class Cylinder(Centered, Circular, Planar):
     >>> c = Cylinder(center=(1,2,3), radius=2, length=5, axis=2)
     """
 
+    # Provide more explanations on where radius is defined
+    radius: pydantic.NonNegativeFloat = pydantic.Field(
+        ...,
+        title="Radius",
+        description="Radius of geometry at the ``reference_plane``.",
+        units=MICROMETER,
+    )
+
     length: pydantic.NonNegativeFloat = pydantic.Field(
         ...,
         title="Length",
         description="Defines thickness of cylinder along axis dimension.",
         units=MICROMETER,
     )
+
+    @pydantic.validator("length", always=True)
+    def _only_middle_for_infinite_length_slanted_cylinder(cls, val, values):
+        """For a slanted cylinder of infinite length, ``reference_plane`` can only
+        be ``middle``; otherwise, the radius at ``center`` is either td.inf or 0.
+        """
+        if isclose(values["sidewall_angle"], 0) or not np.isinf(val):
+            return val
+        if values["reference_plane"] != "middle":
+            raise SetupError(
+                "For a slanted cylinder here is of infinite length, "
+                "defining the reference_plane other than 'middle' "
+                "leads to undefined cylinder behaviors near 'center'."
+            )
+        return val
 
     @property
     def center_axis(self):
@@ -1741,7 +1817,9 @@ class Cylinder(Centered, Circular, Planar):
             LARGE_NUMBER if isclose(self.sidewall_angle, 0) else self.radius_max / abs(self._tanq)
         )
         # The maximal height of the cross section
-        height_max = min((1 - abs(position_local) / self.radius_max) * h_cone, self.length_axis)
+        height_max = min(
+            (1 - abs(position_local) / self.radius_max) * h_cone, self.finite_length_axis
+        )
 
         # more vertices to add for conical frustum shape
         vertices_frustum_right = []
@@ -1774,12 +1852,12 @@ class Cylinder(Centered, Circular, Planar):
         if intersect_half_length_min > 0:
             vertices_min.append(
                 self._local_to_global_side_cross_section(
-                    [intersect_half_length_min, self.length_axis], axis
+                    [intersect_half_length_min, self.finite_length_axis], axis
                 )
             )
             vertices_min.append(
                 self._local_to_global_side_cross_section(
-                    [-intersect_half_length_min, self.length_axis], axis
+                    [-intersect_half_length_min, self.finite_length_axis], axis
                 )
             )
         ## early termination
@@ -1822,7 +1900,7 @@ class Cylinder(Centered, Circular, Planar):
         dist_y = np.abs(y - y0)
         dist_z = np.abs(z - z0)
         inside_radius = (dist_x**2 + dist_y**2) <= (radius_offset**2)
-        inside_height = dist_z <= (self.length_axis / 2)
+        inside_height = dist_z <= (self.finite_length_axis / 2)
         return positive_radius * inside_radius * inside_height
 
     @cached_property
@@ -1889,20 +1967,26 @@ class Cylinder(Centered, Circular, Planar):
         return area
 
     @cached_property
+    def radius_bottom(self) -> float:
+        """radius of bottom"""
+        return self._radius_z(self.center_axis - self.finite_length_axis / 2)
+
+    @cached_property
+    def radius_top(self) -> float:
+        """radius of bottom"""
+        return self._radius_z(self.center_axis + self.finite_length_axis / 2)
+
+    @cached_property
     def radius_max(self) -> float:
         """max(radius of top, radius of bottom)"""
-        radius_top = self._radius_z(self.center_axis + self.length_axis / 2)
-        radius_bottom = self._radius_z(self.center_axis - self.length_axis / 2)
-        return max(radius_bottom, radius_top)
+        return max(self.radius_bottom, self.radius_top)
 
     @cached_property
     def radius_min(self) -> float:
         """min(radius of top, radius of bottom). It can be negative for a large
         sidewall angle.
         """
-        radius_top = self._radius_z(self.center_axis + self.length_axis / 2)
-        radius_bottom = self._radius_z(self.center_axis - self.length_axis / 2)
-        return min(radius_bottom, radius_top)
+        return min(self.radius_bottom, self.radius_top)
 
     def _radius_z(self, z: float):
         """Compute the radius of the cross section at the position z.
@@ -1915,10 +1999,13 @@ class Cylinder(Centered, Circular, Planar):
         if isclose(self.sidewall_angle, 0):
             return self.radius
 
-        radius_base = self.radius + self.offset_distance_to_base(
-            self.reference_plane, self.length_axis, self._tanq
-        )
-        return radius_base - (z - self.center_axis + self.length_axis / 2) * self._tanq
+        radius_middle = self.radius
+        if self.reference_plane == "top":
+            radius_middle += self.finite_length_axis / 2 * self._tanq
+        elif self.reference_plane == "bottom":
+            radius_middle -= self.finite_length_axis / 2 * self._tanq
+
+        return radius_middle - (z - self.center_axis) * self._tanq
 
     def _local_to_global_side_cross_section(self, coords: List[float], axis: int) -> List[float]:
         """Map a point (x,y) from local to global coordinate system in the
@@ -1944,7 +2031,7 @@ class Cylinder(Centered, Circular, Planar):
 
         _, (x_center, y_center) = self.pop_axis(self.center, axis=axis)
         lx_offset, ly_offset = self._order_by_axis(
-            plane_val=coords[0], axis_val=-self.length_axis / 2 + coords[1], axis=axis
+            plane_val=coords[0], axis_val=-self.finite_length_axis / 2 + coords[1], axis=axis
         )
         if not isclose(self.sidewall_angle, 0):
             ly_offset *= (-1) ** (self.sidewall_angle < 0)
@@ -1999,14 +2086,29 @@ class PolySlab(Planar):
         zmin, zmax = self.slab_bounds
         return zmax - zmin
 
+    @pydantic.validator("vertices", pre=True, always=True)
+    def convert_to_numpy(cls, val):
+        """Pre-convert vertices to numpy one time."""
+        return np.array(val)
+
+    @pydantic.validator("slab_bounds", always=True)
+    def slab_bounds_order(cls, val):
+        """Maximum position of the slab should be no smaller than its minimal position."""
+        if val[1] < val[0]:
+            raise SetupError(
+                "Polyslab.slab_bounds must be specified in the order of "
+                "minimum and maximum positions of the slab along the axis. "
+                f"But now the maximum {val[1]} is smaller than the minimum {val[0]}."
+            )
+        return val
+
     @pydantic.validator("vertices", always=True)
     def correct_shape(cls, val):
         """Makes sure vertices size is correct.
         Make sure no intersecting edges.
         """
 
-        val_np = PolySlab.vertices_to_array(val)
-        shape = val_np.shape
+        shape = val.shape
 
         # overall shape of vertices
         if len(shape) != 2 or shape[1] != 2:
@@ -2016,8 +2118,8 @@ class PolySlab(Planar):
             )
 
         # make sure no polygon splitting, isalands, 0 area
-        poly_heal = make_valid(Polygon(val_np))
-        if poly_heal.area < fp_eps**2:
+        poly_heal = make_valid(Polygon(val))
+        if poly_heal.area < fp_eps:
             raise SetupError("The polygon almost collapses to a 1D curve.")
 
         if not isinstance(poly_heal, Polygon) or len(poly_heal.interiors) > 0:
@@ -2282,7 +2384,9 @@ class PolySlab(Planar):
 
         # convert vertices into polyslabs
         polygons = (Polygon(vertices) for vertices in all_vertices)
-        polys_union = functools.reduce(lambda poly1, poly2: poly1.union(poly2), polygons)
+        polys_union = functools.reduce(
+            lambda poly1, poly2: poly1.union(poly2, grid_size=1e-12), polygons
+        )
 
         if isinstance(polys_union, Polygon):
             all_vertices = [PolySlab.strip_coords(polys_union)[0]]
@@ -3133,7 +3237,7 @@ class PolySlab(Planar):
 
         Parameters
         ----------
-        vertices : np.ndarray
+        np.ndarray
             Shape (N, 2) defining the polygon vertices in the xy-plane.
         dist : float
             Distance to offset.
@@ -3282,8 +3386,397 @@ class PolySlab(Planar):
         return area
 
 
+class TriangleMesh(Geometry, ABC):
+    """Custom surface geometry given by a triangle mesh, as in the STL file format.
+
+    Example
+    -------
+    >>> vertices = np.array([[0, 0, 0], [1, 0, 0], [0, 1, 0], [0, 0, 1]])
+    >>> faces = np.array([[1, 2, 3], [0, 3, 2], [0, 1, 3], [0, 2, 1]])
+    >>> stl_geom = TriangleMesh.from_vertices_faces(vertices, faces)
+    """
+
+    mesh_dataset: Optional[TriangleMeshDataset] = pydantic.Field(
+        ...,
+        title="Surface mesh data",
+        description="Surface mesh data.",
+    )
+
+    @classmethod
+    def _check_trimesh_library(cls):
+        """Check if the trimesh package is imported."""
+        if not TRIMESH_AVAILABLE:
+            raise ImportError(
+                "The package 'trimesh' was not found. Please install the 'trimesh' "
+                "dependencies to use 'TriangleMesh'. For example: "
+                "pip install -r requirements/trimesh.txt."
+            )
+
+    @pydantic.root_validator(pre=True)
+    def _validate_trimesh_library(cls, values):
+        """Check if the trimesh package is imported as a validator."""
+        cls._check_trimesh_library()
+        return values
+
+    @pydantic.validator("mesh_dataset", pre=True, always=True)
+    def _warn_if_none(cls, val: TriangleMeshDataset) -> TriangleMeshDataset:
+        """Warn if the Dataset fails to load."""
+        if isinstance(val, dict):
+            if any((v in DATA_ARRAY_MAP for _, v in val.items() if isinstance(v, str))):
+                log.warning("Loading 'mesh_dataset' without data.")
+                return None
+        return val
+
+    @pydantic.validator("mesh_dataset", always=True)
+    def _check_mesh(cls, val: TriangleMeshDataset) -> TriangleMeshDataset:
+        """Check that the mesh is valid."""
+        if val is None:
+            return None
+        mesh = cls._triangles_to_trimesh(val.surface_mesh)
+        if not all(np.array(mesh.area_faces) > fp_eps):
+            raise ValidationError(
+                "The provided mesh has triangles with zero area. "
+                "Consider using 'trimesh.Trimesh.remove_degenerate_faces' to fix this."
+            )
+        if not mesh.is_winding_consistent:
+            log.warning(
+                "The provided mesh does not have consistent winding (face orientations). "
+                "This can lead to incorrect permittivity distributions. You can use a "
+                "'PermittivityMonitor' to check if the permittivity distribution is correct. "
+                "You could repair the mesh manually, or try 'trimesh.repair.fix_winding'."
+            )
+        if not mesh.is_watertight:
+            log.warning(
+                "The provided mesh is not watertight and may require manual repair. "
+                "Non-watertight meshes can generate incorrect permittivity distributions. "
+                "They also cause problems with plotting. You can use a "
+                "'PermittivityMonitor' to check if the permittivity distribution is correct. "
+                "You can see which faces are broken using 'trimesh.repair.broken_faces'."
+            )
+
+        return val
+
+    @classmethod
+    def from_stl(
+        cls,
+        filename: str,
+        scale: float = 1.0,
+        origin: Tuple[float, float, float] = (0, 0, 0),
+        solid_index: int = None,
+        **kwargs,
+    ) -> Union[TriangleMesh, GeometryGroup]:
+        """Load a :class:`.TriangleMesh` directly from an STL file.
+        The ``solid_index`` parameter can be used to select a single solid from the file.
+        Otherwise, if the file contains a single solid, it will be loaded as a
+        :class:`.TriangleMesh`; if the file contains multiple solids,
+        they will all be loaded as a :class:`.GeometryGroup`.
+
+        Parameters
+        ----------
+        filename : str
+            The name of the STL file containing the surface geometry mesh data.
+        scale : float = 1.0
+            The length scale for the loaded geometry (um).
+            For example, a scale of 10.0 means that a vertex (1, 0, 0) will be placed at
+            x = 10 um.
+        origin : Tuple[float, float, float] = (0, 0, 0)
+            The origin of the loaded geometry, in units of ``scale``.
+            Translates from (0, 0, 0) to this point after applying the scaling.
+        solid_index : int = None
+            If set, read a single solid with this index from the file.
+
+        Returns
+        -------
+        Union[:class:`.TriangleMesh`, :class:`.GeometryGroup`]
+            The geometry or geometry group from the file.
+        """
+
+        def process_single(mesh: trimesh.Trimesh) -> TriangleMesh:
+            """Process a single 'trimesh.Trimesh' using scale and origin."""
+            mesh.apply_scale(scale)
+            mesh.apply_translation(origin)
+            return cls.from_trimesh(mesh)
+
+        cls._check_trimesh_library()
+
+        scene = trimesh.load(filename, **kwargs)
+        meshes = []
+        if isinstance(scene, trimesh.Trimesh):
+            meshes = [scene]
+        elif isinstance(scene.trimesh.Scene):
+            meshes = scene.dump()
+        else:
+            raise ValidationError(
+                "Invalid trimesh type in file. Supported types are 'trimesh.Trimesh' "
+                "and 'trimesh.Scene'."
+            )
+
+        if solid_index is None:
+            if isinstance(scene, trimesh.Trimesh):
+                return process_single(scene)
+            if isinstance(scene, trimesh.Scene):
+                geoms = [process_single(mesh) for mesh in meshes]
+                return GeometryGroup(geometries=geoms)
+
+        if solid_index < len(meshes):
+            return process_single(meshes[solid_index])
+        raise ValidationError("No solid found at 'solid_index' in the stl file.")
+
+    @classmethod
+    def from_trimesh(cls, mesh: trimesh.Trimesh) -> TriangleMesh:
+        """Create a :class:`.TriangleMesh` from a ``trimesh.Trimesh`` object.
+
+        Parameters
+        ----------
+        trimesh : ``trimesh.Trimesh``
+            The Trimesh object containing the surface geometry mesh data.
+
+        Returns
+        -------
+        :class:`.TriangleMesh`
+            The custom surface mesh geometry given by the ``trimesh.Trimesh`` provided.
+        """
+        return cls.from_vertices_faces(mesh.vertices, mesh.faces)
+
+    @classmethod
+    def from_triangles(cls, triangles: np.ndarray) -> TriangleMesh:
+        """Create a :class:`.TriangleMesh` from a numpy array
+        containing the triangles of a surface mesh.
+
+        Parameters
+        ----------
+        triangles : ``np.ndarray``
+            A numpy array of shape (N, 3, 3) storing the triangles of the surface mesh.
+            The first index labels the triangle, the second index labels the vertex
+            within a given triangle, and the third index is the coordinate (x, y, or z).
+
+        Returns
+        -------
+        :class:`.TriangleMesh`
+            The custom surface mesh geometry given by the triangles provided.
+
+        """
+        triangles = np.array(triangles)
+        if len(triangles.shape) != 3 or triangles.shape[1] != 3 or triangles.shape[2] != 3:
+            raise ValidationError(
+                f"Provided 'triangles' must be an N x 3 x 3 array, given {triangles.shape}."
+            )
+        num_faces = len(triangles)
+        coords = dict(
+            face_index=np.arange(num_faces),
+            vertex_index=np.arange(3),
+            axis=np.arange(3),
+        )
+        vertices = TriangleMeshDataArray(triangles, coords=coords)
+        mesh_dataset = TriangleMeshDataset(surface_mesh=vertices)
+        return TriangleMesh(mesh_dataset=mesh_dataset)
+
+    @classmethod
+    def from_vertices_faces(cls, vertices: np.ndarray, faces: np.ndarray) -> TriangleMesh:
+        """Create a :class:`.TriangleMesh` from numpy arrays containing the data
+        of a surface mesh. The first array contains the vertices, and the second array contains
+        faces formed from triples of the vertices.
+
+        Parameters
+        ----------
+        vertices: ``np.ndarray``
+            A numpy array of shape (N, 3) storing the vertices of the surface mesh.
+            The first index labels the vertex, and the second index is the coordinate
+            (x, y, or z).
+        faces : ``np.ndarray``
+            A numpy array of shape (M, 3) storing the indices of the vertices of each face
+            in the surface mesh. The first index labels the face, and the second index
+            labels the vertex index within the ``vertices`` array.
+
+        Returns
+        -------
+        :class:`.TriangleMesh`
+            The custom surface mesh geometry given by the vertices and faces provided.
+
+        """
+
+        cls._check_trimesh_library()
+
+        vertices = np.array(vertices)
+        faces = np.array(faces)
+        if len(vertices.shape) != 2 or vertices.shape[1] != 3:
+            raise ValidationError(
+                f"Provided 'vertices' must be an N x 3 array, given {vertices.shape}."
+            )
+        if len(faces.shape) != 2 or faces.shape[1] != 3:
+            raise ValidationError(f"Provided 'faces' must be an M x 3 array, given {faces.shape}.")
+        return cls.from_triangles(trimesh.Trimesh(vertices, faces).triangles)
+
+    @classmethod
+    def _triangles_to_trimesh(cls, triangles: np.ndarray) -> trimesh.Trimesh:
+        """Convert an (N, 3, 3) numpy array of triangles to a ``trimesh.Trimesh``."""
+
+        cls._check_trimesh_library()
+        return trimesh.Trimesh(**trimesh.triangles.to_kwargs(triangles))
+
+    @cached_property
+    def trimesh(self) -> trimesh.Trimesh:
+        """A ``trimesh.Trimesh`` object representing the custom surface mesh geometry."""
+        return self._triangles_to_trimesh(self.triangles)
+
+    @cached_property
+    def triangles(self) -> np.ndarray:
+        """The triangles of the surface mesh as an ``np.ndarray``."""
+        if self.mesh_dataset is None:
+            raise DataError("Can't get triangles as 'mesh_dataset' is None.")
+        return self.mesh_dataset.surface_mesh.to_numpy()
+
+    def _surface_area(self, bounds: Bound) -> float:
+        """Returns object's surface area given bounds."""
+        # currently ignores bounds
+        return self.trimesh.area
+
+    def _volume(self, bounds: Bound) -> float:
+        """Returns object's volume given bounds."""
+        # currently ignores bounds
+        return self.trimesh.volume
+
+    @cached_property
+    def bounds(self) -> Bound:
+        """Returns bounding box min and max coordinates.
+
+        Returns
+        -------
+        Tuple[float, float, float], Tuple[float, float float]
+            Min and max bounds packaged as ``(minx, miny, minz), (maxx, maxy, maxz)``.
+        """
+        if self.mesh_dataset is None:
+            return ((-inf, -inf, -inf), (inf, inf, inf))
+        return self.trimesh.bounds
+
+    def intersections_plane(
+        self, x: float = None, y: float = None, z: float = None
+    ) -> List[Shapely]:
+        """Returns list of shapely geoemtries at plane specified by one non-None value of x,y,z.
+
+        Parameters
+        ----------
+        x : float = None
+            Position of plane in x direction, only one of x,y,z can be specified to define plane.
+        y : float = None
+            Position of plane in y direction, only one of x,y,z can be specified to define plane.
+        z : float = None
+            Position of plane in z direction, only one of x,y,z can be specified to define plane.
+
+        Returns
+        -------
+        List[shapely.geometry.base.BaseGeometry]
+            List of 2D shapes that intersect plane.
+            For more details refer to
+            `Shapely's Documentaton <https://shapely.readthedocs.io/en/stable/project.html>`_.
+        """
+
+        if self.mesh_dataset is None:
+            return []
+
+        axis, position = self.parse_xyz_kwargs(x=x, y=y, z=z)
+
+        origin = self.unpop_axis(position, (0, 0), axis=axis)
+        normal = self.unpop_axis(1, (0, 0), axis=axis)
+
+        mesh = self.trimesh
+
+        if not NETWORKX_RTREE_AVAILABLE:
+            raise ImportError(
+                "'TriangleMesh.intersections_plane' requires 'networkx' and 'rtree'. "
+                "Please install the 'trimesh' dependencies. For example: "
+                "pip install -r requirements/trimesh.txt."
+            )
+
+        section = mesh.section(plane_origin=origin, plane_normal=normal)
+
+        if section is None:
+            return []
+
+        # homogeneous transformation matrix to map to xy plane
+        mapping = np.eye(4)
+
+        # translate to origin
+        mapping[3, :3] = -np.array(origin)
+
+        # permute so normal is aligned with z axis
+        # and (y, z), (x, z), resp. (x, y) are aligned with (x, y)
+        identity = np.eye(3)
+        permutation = self.unpop_axis(identity[2], identity[0:2], axis=axis)
+        mapping[:3, :3] = np.array(permutation).T
+
+        section2d, _ = section.to_planar(to_2D=mapping)
+        return section2d.polygons_full
+
+    def inside(
+        self, x: np.ndarray[float], y: np.ndarray[float], z: np.ndarray[float]
+    ) -> np.ndarray[bool]:
+        """For input arrays ``x``, ``y``, ``z`` of arbitrary but identical shape, return an array
+        with the same shape which is ``True`` for every point in zip(x, y, z) that is inside the
+        volume of the :class:`Geometry`, and ``False`` otherwise.
+
+        Parameters
+        ----------
+        x : np.ndarray[float]
+            Array of point positions in x direction.
+        y : np.ndarray[float]
+            Array of point positions in y direction.
+        z : np.ndarray[float]
+            Array of point positions in z direction.
+
+        Returns
+        -------
+        np.ndarray[bool]
+            ``True`` for every point that is inside the geometry.
+        """
+
+        arrays = tuple(map(np.array, (x, y, z)))
+        self._ensure_equal_shape(*arrays)
+        inside = np.zeros((arrays[0].size,), dtype=bool)
+        arrays_flat = map(np.ravel, arrays)
+        arrays_stacked = np.stack(tuple(arrays_flat), axis=-1)
+        inside = self.trimesh.contains(arrays_stacked)
+        return inside.reshape(arrays[0].shape)
+
+    @equal_aspect
+    @add_ax_if_none
+    def plot(
+        self, x: float = None, y: float = None, z: float = None, ax: Ax = None, **patch_kwargs
+    ) -> Ax:
+        """Plot geometry cross section at single (x,y,z) coordinate.
+
+        Parameters
+        ----------
+        x : float = None
+            Position of plane in x direction, only one of x,y,z can be specified to define plane.
+        y : float = None
+            Position of plane in y direction, only one of x,y,z can be specified to define plane.
+        z : float = None
+            Position of plane in z direction, only one of x,y,z can be specified to define plane.
+        ax : matplotlib.axes._subplots.Axes = None
+            Matplotlib axes to plot on, if not specified, one is created.
+        **patch_kwargs
+            Optional keyword arguments passed to the matplotlib patch plotting of structure.
+            For details on accepted values, refer to
+            `Matplotlib's documentation <https://tinyurl.com/2nf5c2fk>`_.
+
+        Returns
+        -------
+        matplotlib.axes._subplots.Axes
+            The supplied or created matplotlib axes.
+        """
+
+        log.warning(
+            "Plotting a 'TriangleMesh' may give inconsistent results "
+            "if the mesh is not unionized. We recommend unionizing all meshes before import. "
+            "A 'PermittivityMonitor' can be used to check that the mesh is loaded correctly."
+        )
+
+        return Geometry.plot(self, x=x, y=y, z=z, ax=ax, **patch_kwargs)
+
+
 # types of geometry including just one Geometry object (exluding group)
-SingleGeometryType = Union[Box, Sphere, Cylinder, PolySlab]
+SingleGeometryType = Union[Box, Sphere, Cylinder, PolySlab, TriangleMesh]
 
 
 class GeometryGroup(Geometry):

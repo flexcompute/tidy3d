@@ -16,7 +16,7 @@ from ..structure import Structure, StructureType
 from ..geometry import Box
 from ...log import log
 from ...exceptions import SetupError
-from ...constants import C_0, MICROMETER
+from ...constants import MICROMETER, C_0, fp_eps
 
 
 class GridSpec1d(Tidy3dBaseModel, ABC):
@@ -28,6 +28,7 @@ class GridSpec1d(Tidy3dBaseModel, ABC):
         axis: Axis,
         structures: List[StructureType],
         symmetry: Tuple[Symmetry, Symmetry, Symmetry],
+        periodic: bool,
         wavelength: pd.PositiveFloat,
         num_pml_layers: Tuple[pd.NonNegativeInt, pd.NonNegativeInt],
     ) -> Coords1D:
@@ -56,7 +57,7 @@ class GridSpec1d(Tidy3dBaseModel, ABC):
 
         # Determine if one should apply periodic boundary condition.
         # This should only affect auto nonuniform mesh generation for now.
-        is_periodic = sum(num_pml_layers) == 0 and symmetry[axis] == 0
+        is_periodic = periodic and symmetry[axis] == 0
 
         # generate boundaries
         bound_coords = self._make_coords_initial(
@@ -199,9 +200,18 @@ class CustomGrid(GridSpec1d):
         title="Customized grid sizes.",
         description="An array of custom nonuniform grid sizes. The resulting grid is centered on "
         "the simulation center such that it spans the region "
-        "``(center - sum(dl)/2, center + sum(dl)/2)``. "
+        "``(center - sum(dl)/2, center + sum(dl)/2)``, unless a ``custom_offset`` is given. "
         "Note: if supplied sizes do not cover the simulation size, the first and last sizes "
         "are repeated to cover the simulation domain.",
+        units=MICROMETER,
+    )
+
+    custom_offset: float = pd.Field(
+        None,
+        title="Customized grid offset.",
+        description="The starting coordinate of the grid which defines the simulation center. "
+        "If ``None``, the simulation center is set such that it spans the region "
+        "``(center - sum(dl)/2, center + sum(dl)/2)``.",
         units=MICROMETER,
     )
 
@@ -234,12 +244,18 @@ class CustomGrid(GridSpec1d):
         dl = np.array(self.dl)
         bound_coords = np.append(0.0, np.cumsum(dl))
 
-        # place the middle of the bounds at the center of the simulation along dimension
-        bound_coords += center - bound_coords[-1] / 2
+        # place the middle of the bounds at the center of the simulation along dimension,
+        # or use the `custom_offset` if provided
+        if self.custom_offset is None:
+            bound_coords += center - bound_coords[-1] / 2
+        else:
+            bound_coords += self.custom_offset
 
-        # chop off any coords outside of simulation bounds
-        bound_min = center - size / 2
-        bound_max = center + size / 2
+        # chop off any coords outside of simulation bounds, beyond some buffer region
+        # to take numerical effects into account
+        buffer = fp_eps * size
+        bound_min = center - size / 2 - buffer
+        bound_max = center + size / 2 + buffer
         bound_coords = bound_coords[bound_coords <= bound_max]
         bound_coords = bound_coords[bound_coords >= bound_min]
 
@@ -250,6 +266,14 @@ class CustomGrid(GridSpec1d):
             bound_coords = np.insert(bound_coords, 0, bound_coords[0] - dl_min)
         while bound_coords[-1] + dl_max <= bound_max:
             bound_coords = np.append(bound_coords, bound_coords[-1] + dl_max)
+
+        # in case a `custom_offset` is provided, it's possible the bounds were numerically within
+        # the simulation bounds but were still chopped off, which is fixed here
+        if self.custom_offset is not None:
+            if np.isclose(bound_coords[0] - dl_min, bound_min):
+                bound_coords = np.insert(bound_coords, 0, bound_coords[0] - dl_min)
+            if np.isclose(bound_coords[-1] + dl_max, bound_max):
+                bound_coords = np.append(bound_coords, bound_coords[-1] + dl_max)
 
         return bound_coords
 
@@ -413,7 +437,9 @@ class GridSpec(Tidy3dBaseModel):
         title="Free-space wavelength",
         description="Free-space wavelength for automatic nonuniform grid. It can be 'None' "
         "if there is at least one source in the simulation, in which case it is defined by "
-        "the source central frequency.",
+        "the source central frequency. "
+        "Note: it only takes effect when at least one of the three dimensions "
+        "uses :class:`.AutoGrid`.",
         units=MICROMETER,
     )
 
@@ -422,7 +448,9 @@ class GridSpec(Tidy3dBaseModel):
         title="Grid specification override structures",
         description="A set of structures that is added on top of the simulation structures in "
         "the process of generating the grid. This can be used to refine the grid or make it "
-        "coarser depending than the expected need for higher/lower resolution regions.",
+        "coarser depending than the expected need for higher/lower resolution regions. "
+        "Note: it only takes effect when at least one of the three dimensions "
+        "uses :class:`.AutoGrid`.",
     )
 
     @property
@@ -430,6 +458,12 @@ class GridSpec(Tidy3dBaseModel):
         """True if any of the three dimensions uses :class:`.AutoGrid`."""
         grid_list = [self.grid_x, self.grid_y, self.grid_z]
         return np.any([isinstance(mesh, AutoGrid) for mesh in grid_list])
+
+    @property
+    def custom_grid_used(self) -> bool:
+        """True if any of the three dimensions uses :class:`.CustomGrid`."""
+        grid_list = [self.grid_x, self.grid_y, self.grid_z]
+        return np.any([isinstance(mesh, CustomGrid) for mesh in grid_list])
 
     @staticmethod
     def wavelength_from_sources(sources: List[SourceType]) -> pd.PositiveFloat:
@@ -476,10 +510,12 @@ class GridSpec(Tidy3dBaseModel):
                     override_used[dl_axis] = True
         return override_used
 
+    # pylint:disable=too-many-locals,too-many-arguments
     def make_grid(
         self,
         structures: List[Structure],
         symmetry: Tuple[Symmetry, Symmetry, Symmetry],
+        periodic: Tuple[bool, bool, bool],
         sources: List[SourceType],
         num_pml_layers: List[Tuple[pd.NonNegativeInt, pd.NonNegativeInt]],
     ) -> Grid:
@@ -523,29 +559,19 @@ class GridSpec(Tidy3dBaseModel):
                     "use 'AutoGrid'."
                 )
 
-        coords_x = self.grid_x.make_coords(
-            axis=0,
-            structures=list(structures) + list(self.override_structures),
-            symmetry=symmetry,
-            wavelength=wavelength,
-            num_pml_layers=num_pml_layers[0],
-        )
-        coords_y = self.grid_y.make_coords(
-            axis=1,
-            structures=list(structures) + list(self.override_structures),
-            symmetry=symmetry,
-            wavelength=wavelength,
-            num_pml_layers=num_pml_layers[1],
-        )
-        coords_z = self.grid_z.make_coords(
-            axis=2,
-            structures=list(structures) + list(self.override_structures),
-            symmetry=symmetry,
-            wavelength=wavelength,
-            num_pml_layers=num_pml_layers[2],
-        )
+        grids_1d = [self.grid_x, self.grid_y, self.grid_z]
+        coords_dict = {}
+        for idim, (dim, grid_1d) in enumerate(zip("xyz", grids_1d)):
+            coords_dict[dim] = grid_1d.make_coords(
+                axis=idim,
+                structures=list(structures) + list(self.override_structures),
+                symmetry=symmetry,
+                periodic=periodic[idim],
+                wavelength=wavelength,
+                num_pml_layers=num_pml_layers[idim],
+            )
 
-        coords = Coords(x=coords_x, y=coords_y, z=coords_z)
+        coords = Coords(**coords_dict)
         return Grid(boundaries=coords)
 
     @classmethod

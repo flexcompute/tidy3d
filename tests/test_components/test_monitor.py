@@ -1,12 +1,13 @@
 """Tests monitors."""
 import pytest
+import pydantic
 import numpy as np
 import tidy3d as td
 from tidy3d.exceptions import SetupError, ValidationError
 
 
 def test_stop_start():
-    with pytest.raises(SetupError):
+    with pytest.raises(pydantic.ValidationError):
         td.FluxTimeMonitor(size=(1, 1, 0), name="f", start=2, stop=1)
 
 
@@ -30,7 +31,7 @@ def test_downsampled():
 
 def test_excluded_surfaces_flat():
 
-    with pytest.raises(SetupError):
+    with pytest.raises(pydantic.ValidationError):
         M = td.FluxMonitor(size=(1, 1, 0), name="f", freqs=[1e12], exclude_surfaces=("x-",))
 
 
@@ -86,10 +87,10 @@ def test_integration_surfaces():
         assert surface.name[-2:] == expected_surfs[idx]
 
     # volume monitor with all infinite dimensions
-    with pytest.raises(SetupError):
-        surfaces = td.FieldProjectionAngleMonitor(
-            size=(td.inf, td.inf, td.inf), theta=[1], phi=[0], name="f", freqs=[2e12]
-        ).integration_surfaces
+    surfaces = td.FieldProjectionAngleMonitor(
+        size=(td.inf, td.inf, td.inf), theta=[1], phi=[0], name="f", freqs=[2e12]
+    ).integration_surfaces
+    assert len(surfaces) == 0
 
 
 def test_fieldproj_surfaces():
@@ -113,11 +114,11 @@ def test_fieldproj_surfaces():
 
 def test_fieldproj_kspace_range():
     # make sure ux, uy are in [-1, 1] for k-space projection monitors
-    with pytest.raises(SetupError):
+    with pytest.raises(pydantic.ValidationError):
         M = td.FieldProjectionKSpaceMonitor(
             size=(2, 0, 2), ux=[0.1, 2], uy=[0], name="f", freqs=[2e12], proj_axis=1
         )
-    with pytest.raises(SetupError):
+    with pytest.raises(pydantic.ValidationError):
         M = td.FieldProjectionKSpaceMonitor(
             size=(2, 0, 2), ux=[0.1, 0.2], uy=[1.1], name="f", freqs=[2e12], proj_axis=1
         )
@@ -156,7 +157,7 @@ def test_storage_sizes(proj_mnt):
 def test_monitor_freqs_empty():
     # errors when no frequencies supplied
 
-    with pytest.raises(ValidationError):
+    with pytest.raises(pydantic.ValidationError):
         monitor = td.FieldMonitor(
             size=(td.inf, td.inf, td.inf),
             freqs=[],
@@ -202,7 +203,7 @@ def test_diffraction_validators():
         y=td.Boundary.periodic(),
         z=td.Boundary.pml(),
     )
-    with pytest.raises(SetupError) as e_info:
+    with pytest.raises(pydantic.ValidationError) as e_info:
         sim = td.Simulation(
             size=(2, 2, 2),
             run_time=1e-12,
@@ -212,7 +213,7 @@ def test_diffraction_validators():
         )
 
     # ensure error if monitor isn't infinite in two directions
-    with pytest.raises(SetupError) as e_info:
+    with pytest.raises(pydantic.ValidationError) as e_info:
         monitor = td.DiffractionMonitor(size=[td.inf, 4, 0], freqs=[1e12], name="de")
 
 
@@ -251,11 +252,11 @@ def test_monitor_plane():
 
     # make sure flux, mode and diffraction monitors fail with non planar geometries
     for size in ((0, 0, 0), (1, 0, 0), (1, 1, 1)):
-        with pytest.raises(ValidationError) as e_info:
+        with pytest.raises(pydantic.ValidationError) as e_info:
             td.ModeMonitor(size=size, freqs=freqs, modes=[])
-        with pytest.raises(ValidationError) as e_info:
+        with pytest.raises(pydantic.ValidationError) as e_info:
             td.ModeSolverMonitor(size=size, freqs=freqs, modes=[])
-        with pytest.raises(ValidationError) as e_info:
+        with pytest.raises(pydantic.ValidationError) as e_info:
             td.DiffractionMonitor(size=size, freqs=freqs, name="de")
 
 

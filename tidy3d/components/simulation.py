@@ -1,4 +1,4 @@
-# pylint: disable=too-many-lines, too-many-arguments
+# pylint: disable=too-many-lines, too-many-arguments, too-many-statements
 """ Container holding all information about simulation and its components"""
 from __future__ import annotations
 from typing import Dict, Tuple, List, Set, Union
@@ -14,15 +14,17 @@ from mpl_toolkits.axes_grid1 import make_axes_locatable
 from .base import cached_property
 from .validators import assert_unique_names, assert_objects_in_sim_bounds
 from .validators import validate_mode_objects_symmetry
-from .geometry import Box
+from .geometry import Box, TriangleMesh, Geometry, PolySlab, Cylinder
 from .types import Ax, Shapely, FreqBound, Axis, annotate_type, Symmetry
 from .grid.grid import Coords1D, Grid, Coords
-from .grid.grid_spec import GridSpec, UniformGrid
-from .medium import Medium, MediumType, AbstractMedium, PECMedium, CustomMedium
+from .grid.grid_spec import GridSpec, UniformGrid, AutoGrid
+from .medium import Medium, MediumType, AbstractMedium, PECMedium
+from .medium import CustomMedium, Medium2D, MediumType3D
 from .boundary import BoundarySpec, BlochBoundary, PECBoundary, PMCBoundary, Periodic
 from .boundary import PML, StablePML, Absorber, AbsorberSpec
 from .structure import Structure
 from .source import SourceType, PlaneWave, GaussianBeam, AstigmaticGaussianBeam, CustomFieldSource
+from .source import TFSF, Source
 from .monitor import MonitorType, Monitor, FreqMonitor
 from .monitor import AbstractFieldMonitor, DiffractionMonitor, AbstractFieldProjectionMonitor
 from .data.dataset import Dataset
@@ -34,7 +36,7 @@ from .viz import plot_params_pec, plot_params_pmc, plot_params_bloch
 
 from ..version import __version__
 from ..constants import C_0, SECOND, inf
-from ..exceptions import Tidy3dKeyError, SetupError, ValidationError
+from ..exceptions import Tidy3dKeyError, SetupError, ValidationError, Tidy3dError
 from ..log import log
 from ..updater import Updater
 
@@ -55,6 +57,9 @@ MAX_MONITOR_DATA_SIZE_BYTES = 10e9
 NUM_CELLS_WARN_EPSILON = 100_000_000
 # number of structures at which we warn about slow Simulation.epsilon()
 NUM_STRUCTURES_WARN_EPSILON = 10_000
+# for 2d materials. to find neighboring media, search a distance on either side
+# equal to this times the grid size
+DIST_NEIGHBOR_REL_2D_MED = 1e-5
 
 
 class Simulation(Box):  # pylint:disable=too-many-public-methods
@@ -68,7 +73,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
     >>> from tidy3d import GridSpec, AutoGrid
     >>> from tidy3d import BoundarySpec, Boundary
     >>> sim = Simulation(
-    ...     size=(2.0, 2.0, 2.0),
+    ...     size=(3.0, 3.0, 3.0),
     ...     grid_spec=GridSpec(
     ...         grid_x = AutoGrid(min_steps_per_wvl = 20),
     ...         grid_y = AutoGrid(min_steps_per_wvl = 20),
@@ -77,7 +82,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
     ...     run_time=40e-11,
     ...     structures=[
     ...         Structure(
-    ...             geometry=Box(size=(1, 1, 1), center=(-1, 0, 0)),
+    ...             geometry=Box(size=(1, 1, 1), center=(0, 0, 0)),
     ...             medium=Medium(permittivity=2.0),
     ...         ),
     ...     ],
@@ -241,6 +246,13 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
 
         return values
 
+    @pydantic.validator("medium", always=True)
+    def _validate_medium(cls, val):
+        """Check that the medium is not a :class:`.Medium2D`."""
+        if isinstance(val, Medium2D):
+            raise ValidationError("'Simulation.medium' cannot be a 'Medium2D'.")
+        return val
+
     @pydantic.validator("grid_spec", always=True)
     def _validate_auto_grid_wavelength(cls, val, values):
         """Check that wavelength can be defined if there is auto grid spec."""
@@ -288,7 +300,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         size = values.get("size")
         sim_medium = values.get("medium")
         structures = values.get("structures")
-        for src_idx, source in enumerate(sources):
+        for source in sources:
             if not isinstance(source, PlaneWave):
                 continue
 
@@ -311,36 +323,100 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
                 # check the Bloch boundary + angled plane wave case
                 num_bloch = sum(isinstance(bnd, BlochBoundary) for bnd in boundary)
                 if num_bloch > 0:
-                    # make a dummy Bloch boundary to check for correctness
-                    dummy_bnd = BlochBoundary.from_source(
-                        source=source, domain_size=size[tan_dir], axis=tan_dir, medium=medium
+                    cls._check_bloch_vec(
+                        source=source,
+                        bloch_vec=boundary[0].bloch_vec,
+                        dim=tan_dir,
+                        medium=medium,
+                        domain_size=size[tan_dir],
                     )
-                    expected_bloch_vec = dummy_bnd.bloch_vec
+        return val
 
-                    if boundary[0].bloch_vec != expected_bloch_vec:
-                        test_val = np.abs(expected_bloch_vec - boundary[0].bloch_vec)
+    @pydantic.validator("boundary_spec", always=True)
+    def tfsf_boundaries(cls, val, values):
+        """Error if the boundary conditions are compatible with TFSF sources, if any."""
+        boundaries = val.to_list
+        sources = values.get("sources")
+        size = values.get("size")
+        center = values.get("center")
+        sim_medium = values.get("medium")
+        structures = values.get("structures")
+        sim_bounds = [
+            [c - s / 2.0 for c, s in zip(center, size)],
+            [c + s / 2.0 for c, s in zip(center, size)],
+        ]
+        for src_idx, source in enumerate(sources):
+            if not isinstance(source, TFSF):
+                continue
 
-                        if np.isclose(test_val % 1, 0) and not np.isclose(test_val, 0):
-                            # the given Bloch vector is offset by an integer
-                            log.warning(
-                                f"The wave vector of source at index {src_idx} along dimension "
-                                f"{tan_dir} is equal to the Bloch vector of the simulation "
-                                "boundaries along that dimension plus an integer reciprocal "
-                                "lattice vector. If using a ``DiffractionMonitor``, diffraction "
-                                "order 0 will not correspond to the angle of propagation "
-                                "of the source. Consider using ``BlochBoundary.from_source()``."
-                            )
-                        elif not np.isclose(test_val % 1, 0):
-                            # the given Bloch vector is neither equal to the expected value, nor
-                            # off by an integer
-                            log.warning(
-                                f"The Bloch vector along dimension {tan_dir} may be incorrectly "
-                                f"set with respect to the source at index {src_idx}. The absolute "
-                                "difference between the expected and provided values in "
-                                "bandstructure units, up to an integer offset, is greater than "
-                                "1e-6. Consider using ``BlochBoundary.from_source()``, or "
-                                "double-check that it was defined correctly."
-                            )
+            norm_dir, tan_dirs = cls.pop_axis([0, 1, 2], axis=source.injection_axis)
+            src_bounds = source.bounds
+
+            # make a dummy source that represents the injection surface to get the intersecting
+            # medium, which is later used to test the Bloch vector for correctness
+            temp_size = list(source.size)
+            temp_size[source.injection_axis] = 0
+            temp_src = Source(
+                center=source.injection_plane_center,
+                size=temp_size,
+                source_time=source.source_time,
+            )
+            medium_set = cls.intersecting_media(temp_src, structures)
+            medium = medium_set.pop() if medium_set else sim_medium
+
+            # the source shouldn't touch or cross any boundary in the direction of injection
+            if (
+                src_bounds[0][norm_dir] <= sim_bounds[0][norm_dir]
+                or src_bounds[1][norm_dir] >= sim_bounds[1][norm_dir]
+            ):
+                raise SetupError(
+                    f"The TFSF source at index '{src_idx}' must not touch or cross the "
+                    f"simulation boundary along its injection axis, '{['x', 'y', 'z'][norm_dir]}'."
+                )
+
+            for tan_dir in tan_dirs:
+                boundary = boundaries[tan_dir]
+
+                # if the boundary is periodic, the source is allowed to cross the boundary
+                # so nothing needs to be done
+                num_pbc = sum(isinstance(bnd, Periodic) for bnd in boundary)
+                if num_pbc == 2:
+                    continue
+
+                # crossing may be allowed for Bloch boundaries, but not others
+                if (
+                    src_bounds[0][tan_dir] <= sim_bounds[0][tan_dir]
+                    or src_bounds[1][tan_dir] >= sim_bounds[1][tan_dir]
+                ):
+                    # if the boundary is Bloch periodic, crossing is allowed, but check that the
+                    # Bloch vector has been correctly set, similar to the check for plane waves
+                    num_bloch = sum(isinstance(bnd, BlochBoundary) for bnd in boundary)
+                    if num_bloch == 2:
+                        cls._check_bloch_vec(
+                            source=source,
+                            bloch_vec=boundary[0].bloch_vec,
+                            dim=tan_dir,
+                            medium=medium,
+                            domain_size=size[tan_dir],
+                        )
+                        continue
+
+                    # for any other boundary, the source must not cross the boundary
+                    raise SetupError(
+                        f"The TFSF source at index '{src_idx}' must not touch or cross the "
+                        f"simulation boundary in the '{['x', 'y', 'z'][tan_dir]}' direction, "
+                        "unless that boundary is 'Periodic' or 'BlochBoundary'."
+                    )
+
+        return val
+
+    @pydantic.validator("sources", always=True)
+    def tfsf_with_symmetry(cls, val, values):
+        """Error if a TFSF source is applied with symmetry"""
+        symmetry = values.get("symmetry")
+        for source in val:
+            if isinstance(source, TFSF) and not all(sym == 0 for sym in symmetry):
+                raise SetupError("TFSF sources cannot be used with symmetries.")
         return val
 
     @pydantic.validator("boundary_spec", always=True)
@@ -539,7 +615,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
 
     @pydantic.validator("monitors", always=True)
     def diffraction_monitor_boundaries(cls, val, values):
-        """If any :class:`DiffractionMonitor` exists, ensure boundary conditions in the
+        """If any :class:`.DiffractionMonitor` exists, ensure boundary conditions in the
         transverse directions are periodic or Bloch."""
         monitors = val
         boundary_spec = values.get("boundary_spec")
@@ -624,7 +700,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
 
     @pydantic.validator("monitors", always=True)
     def diffraction_monitor_medium(cls, val, values):
-        """If any :class:`DiffractionMonitor` exists, ensure is does not lie in a lossy medium."""
+        """If any :class:`.DiffractionMonitor` exists, ensure is does not lie in a lossy medium."""
         monitors = val
         structures = values.get("structures")
         medium = values.get("medium")
@@ -656,6 +732,9 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
 
                 # min wavelength in PEC is meaningless and we'll get divide by inf errors
                 if isinstance(medium, PECMedium):
+                    continue
+                # min wavelength in Medium2D is meaningless
+                if isinstance(medium, Medium2D):
                     continue
 
                 eps_material = medium.eps_model(freq0)
@@ -730,6 +809,79 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
 
         return val
 
+    """ Post-init validators """
+
+    def _post_init_validators(self) -> None:
+        """Call validators taking z`self` that get run after init."""
+        self._validate_no_structures_pml()
+        self._validate_tfsf_nonuniform_grid()
+
+    def _validate_no_structures_pml(self) -> None:
+        """Ensure no structures terminate / have bounds inside of PML."""
+
+        pml_thicks = self.pml_thicknesses
+        sim_bounds = self.bounds
+        bound_spec = self.boundary_spec.to_list
+        for i, structure in enumerate(self.structures):
+            geo_bounds = structure.geometry.bounds
+            for sim_bound, geo_bound, pml_thick, bound_dim, pm_val in zip(
+                sim_bounds, geo_bounds, pml_thicks, bound_spec, (-1, 1)
+            ):
+                for sim_pos, geo_pos, pml, bound_edge in zip(
+                    sim_bound, geo_bound, pml_thick, bound_dim
+                ):
+                    sim_pos_pml = sim_pos + pm_val * pml
+                    in_pml_plus = (pm_val > 0) and (sim_pos < geo_pos <= sim_pos_pml)
+                    in_pml_mnus = (pm_val < 0) and (sim_pos > geo_pos >= sim_pos_pml)
+                    if not isinstance(bound_edge, Absorber) and (in_pml_plus or in_pml_mnus):
+                        log.warning(
+                            f"A bound of Simulation.structures[{i}] was detected as being within "
+                            "the simulation PML. We recommend extending structures to infinity or "
+                            "completely outside of the simulation PML to "
+                            "avoid unexpected effects when the structures are not translationally "
+                            "invariant within the PML. Skipping rest of structures."
+                        )
+                        return
+
+    def _validate_tfsf_nonuniform_grid(self) -> None:
+        """Warn if the grid is nonuniform along the directions tangential to the injection plane,
+        inside the TFSF box.
+        """
+        # if the grid is uniform in all directions, there's no need to proceed
+        if not (self.grid_spec.auto_grid_used or self.grid_spec.custom_grid_used):
+            return
+
+        for source in self.sources:
+            if not isinstance(source, TFSF):
+                continue
+
+            centers = self.grid.centers.to_list
+            sizes = self.grid.sizes.to_list
+            tfsf_bounds = source.bounds
+            _, plane_inds = source.pop_axis([0, 1, 2], axis=source.injection_axis)
+            grid_list = [self.grid_spec.grid_x, self.grid_spec.grid_y, self.grid_spec.grid_z]
+            for ind in plane_inds:
+                grid_type = grid_list[ind]
+                if isinstance(grid_type, UniformGrid):
+                    continue
+
+                sizes_in_tfsf = [
+                    size
+                    for size, center in zip(sizes[ind], centers[ind])
+                    if tfsf_bounds[0][ind] <= center <= tfsf_bounds[1][ind]
+                ]
+
+                # check if all the grid sizes are sufficiently unequal
+                if not np.all(np.isclose(sizes_in_tfsf, sizes_in_tfsf[0])):
+                    log.warning(
+                        f"The grid is nonuniform along the '{'xyz'[ind]}' axis, which may lead "
+                        "to sub-optimal cancellation of the incident field in the scattered-field "
+                        "region for the total-field scattered-field (TFSF) source "
+                        f"'{source.name}'. For best results, we recomended ensuring a uniform "
+                        "grid in both directions tangential to the TFSF injection axis, "
+                        f"'{'xyz'[source.injection_axis]}'. "
+                    )
+
     """ Pre submit validation (before web.upload()) """
 
     def validate_pre_upload(self) -> None:
@@ -737,7 +889,9 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         self._validate_size()
         self._validate_monitor_size()
         self._validate_datasets_not_none()
+        self._validate_tfsf_structure_intersections()
         # self._validate_run_time()
+        _ = self.volumetric_structures
 
     def _validate_size(self) -> None:
         """Ensures the simulation is within size limits before simulation is uploaded."""
@@ -796,15 +950,88 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
                 "data, use hdf5 format instead."
             )
 
+    def _validate_tfsf_structure_intersections(self) -> None:
+        """Error if the 4 sidewalls of a TFSF box don't all intersect the same structures.
+        This validator may need to compute permittivities on the grid, so it is called
+        pre-upload rather than at the time of definition. Also errors if any side wall
+        intersects with a custom medium.
+        """
+        for source in self.sources:
+            if not isinstance(source, TFSF):
+                continue
+            # get all TFSF surfaces
+            tfsf_surfaces = Source.surfaces(
+                center=source.center, size=source.size, source_time=source.source_time
+            )
+            sidewall_surfaces = []
+            sidewall_structs = []
+            # get the structures that intersect each sidewall
+            for surface in tfsf_surfaces:
+                if surface.name[-2] != "xyz"[source.injection_axis]:
+                    sidewall_surfaces.append(surface)
+                    intersecting_structs = self.intersecting_structures(
+                        test_object=surface, structures=self.structures
+                    )
+
+                    if any(
+                        isinstance(struct.medium, CustomMedium) for struct in intersecting_structs
+                    ):
+                        raise SetupError(
+                            f"The surfaces of TFSF source '{source.name}' must not intersect "
+                            "any structures containing a 'CustomMedium'."
+                        )
+
+                    # if no structures intersect, just add a phantom associated with the simulation
+                    # background, to prevent false positives below
+                    if not intersecting_structs:
+                        sidewall_structs.append(
+                            [
+                                Structure(
+                                    geometry=Box(center=self.center, size=self.size),
+                                    medium=self.medium,
+                                )
+                            ]
+                        )
+                    else:
+                        sidewall_structs.append(intersecting_structs)
+
+            # let the first wall be a reference, and compare the rest of them to the structures
+            # intersected by that reference wall
+            if len(sidewall_structs) > 1:
+                ref_structs = sidewall_structs[0]
+                test_structs = sidewall_structs[1:]
+                if all(structs == ref_structs for structs in test_structs):
+                    continue
+
+                # if the == test doesn't pass, that doesn't mean the materials are necessarily
+                # different, because it's possible that the sidewalls encounter different
+                # `Structure` objects but with an identical material profile, which is still
+                # a valid setup; in this case, compute the epsilon profile on the grid for each
+                # side wall - the profiles must be the same along the injection axis, so we take
+                # a single "stripe" of epsilon as the reference and subtract it from all other
+                # stripes, which should result in zero if all the epsilon profiles are the same
+                _, plane_axs = source.pop_axis("xyz", axis=source.injection_axis)
+                ref_eps = self.epsilon(box=sidewall_surfaces[0], coord_key="centers", freq=None)
+                kwargs = {plane_axs[0]: 0, plane_axs[1]: 0}
+                ref_eps = ref_eps.isel(**kwargs)
+                for surface in sidewall_surfaces:
+                    test_eps = self.epsilon(box=surface, coord_key="centers", freq=None) - ref_eps
+                    if not np.allclose(test_eps.to_numpy(), 0):
+                        raise SetupError(
+                            f"All sidewalls of the TFSF source '{source.name}' must intersect "
+                            "the same media along the injection axis "
+                            f" '{'xyz'[source.injection_axis]}'."
+                        )
+
     """ Accounting """
 
     @cached_property
     def mediums(self) -> Set[MediumType]:
-        """Returns set of distinct :class:`AbstractMedium` in simulation.
+        """Returns set of distinct :class:`.AbstractMedium` in simulation.
 
         Returns
         -------
-        List[:class:`AbstractMedium`]
+        List[:class:`.AbstractMedium`]
             Set of distinct mediums in the simulation.
         """
         medium_dict = {self.medium: None}
@@ -814,11 +1041,12 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
     @cached_property
     def medium_map(self) -> Dict[MediumType, pydantic.NonNegativeInt]:
         """Returns dict mapping medium to index in material.
-        ``medium_map[medium]`` returns unique global index of :class:`AbstractMedium` in simulation.
+        ``medium_map[medium]`` returns unique global index of :class:`.AbstractMedium`
+        in simulation.
 
         Returns
         -------
-        Dict[:class:`AbstractMedium`, int]
+        Dict[:class:`.AbstractMedium`, int]
             Mapping between distinct mediums to index in simulation.
         """
 
@@ -833,7 +1061,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
 
     @cached_property
     def background_structure(self) -> Structure:
-        """Returns structure representing the background of the :class:`Simulation`."""
+        """Returns structure representing the background of the :class:`.Simulation`."""
         geometry = Box(size=(inf, inf, inf))
         return Structure(geometry=geometry, medium=self.medium)
 
@@ -841,20 +1069,20 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
     def intersecting_media(
         test_object: Box, structures: Tuple[Structure, ...]
     ) -> Tuple[MediumType, ...]:
-        """From a given list of structures, returns a list of :class:`AbstractMedium` associated
+        """From a given list of structures, returns a list of :class:`.AbstractMedium` associated
         with those structures that intersect with the ``test_object``, if it is a surface, or its
         surfaces, if it is a volume.
 
         Parameters
         -------
-        test_object : :class:`Box`
+        test_object : :class:`.Box`
             Object for which intersecting media are to be detected.
-        structures : List[:class:`AbstractMedium`]
+        structures : List[:class:`.AbstractMedium`]
             List of structures whose media will be tested.
 
         Returns
         -------
-        List[:class:`AbstractMedium`]
+        List[:class:`.AbstractMedium`]
             Set of distinct mediums that intersect with the given planar object.
         """
         if test_object.size.count(0.0) == 1:
@@ -864,35 +1092,113 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
             return mediums
 
         # if the test object is a volume, test each surface recursively
-        object_dict = test_object.dict()
-        exclude_surfaces = object_dict.pop("exclude_surfaces", None)
-        surfaces = test_object.surfaces(**object_dict)
-        if exclude_surfaces:
-            surfaces = [surf for surf in surfaces if surf.name[-2:] not in exclude_surfaces]
+        surfaces = test_object.surfaces_with_exclusion(**test_object.dict())
         mediums = set()
         for surface in surfaces:
             _mediums = Simulation.intersecting_media(surface, structures)
             mediums.update(_mediums)
         return mediums
 
+    @staticmethod
+    def intersecting_structures(
+        test_object: Box, structures: Tuple[Structure, ...]
+    ) -> Tuple[Structure, ...]:
+        """From a given list of structures, returns a list of :class:`.Structure` that intersect
+        with the ``test_object``, if it is a surface, or its surfaces, if it is a volume.
+
+        Parameters
+        -------
+        test_object : :class:`.Box`
+            Object for which intersecting media are to be detected.
+        structures : List[:class:`.AbstractMedium`]
+            List of structures whose media will be tested.
+
+        Returns
+        -------
+        List[:class:`.Structure`]
+            Set of distinct structures that intersect with the given surface, or with the surfaces
+            of the given volume.
+        """
+        if test_object.size.count(0.0) == 1:
+            # get all merged structures on the test_object, which is already planar
+            normal_axis_index = test_object.size.index(0.0)
+            dim = "xyz"[normal_axis_index]
+            pos = test_object.center[normal_axis_index]
+            xyz_kwargs = {dim: pos}
+
+            structures_merged = []
+            for structure in structures:
+                intersections = structure.geometry.intersections_plane(**xyz_kwargs)
+                if len(intersections) > 0:
+                    structures_merged.append(structure)
+            return structures_merged
+
+        # if the test object is a volume, test each surface recursively
+        surfaces = test_object.surfaces_with_exclusion(**test_object.dict())
+        structures_merged = []
+        for surface in surfaces:
+            structures_merged += Simulation.intersecting_structures(surface, structures)
+        return structures_merged
+
     def monitor_medium(self, monitor: MonitorType):
         """Return the medium in which the given monitor resides.
 
         Parameters
         -------
-        monitor : :class:`Monitor`
+        monitor : :class:`.Monitor`
             Monitor whose associated medium is to be returned.
 
         Returns
         -------
-        :class:`AbstractMedium`
-            Medium associated with the given :class:`Monitor`.
+        :class:`.AbstractMedium`
+            Medium associated with the given :class:`.Monitor`.
         """
         medium_set = self.intersecting_media(monitor, self.structures)
         if len(medium_set) > 1:
-            raise SetupError(f"Monitor {monitor.name} intersects more than one medium.")
+            raise SetupError(f"Monitor '{monitor.name}' intersects more than one medium.")
         medium = medium_set.pop() if medium_set else self.medium
         return medium
+
+    @staticmethod
+    def _check_bloch_vec(
+        source: SourceType,
+        bloch_vec: float,
+        dim: Axis,
+        medium: MediumType,
+        domain_size: float,
+    ):
+        """Helper to check if a given Bloch vector is consistent with a given source."""
+
+        # make a dummy Bloch boundary to check for correctness
+        dummy_bnd = BlochBoundary.from_source(
+            source=source, domain_size=domain_size, axis=dim, medium=medium
+        )
+        expected_bloch_vec = dummy_bnd.bloch_vec
+
+        if bloch_vec != expected_bloch_vec:
+            test_val = np.real(expected_bloch_vec - bloch_vec)
+
+            if np.isclose(test_val % 1, 0) and not np.isclose(test_val, 0):
+                # the given Bloch vector is offset by an integer
+                log.warning(
+                    f"The wave vector of source '{source.name}' along dimension "
+                    f"'{dim}' is equal to the Bloch vector of the simulation "
+                    "boundaries along that dimension plus an integer reciprocal "
+                    "lattice vector. If using a 'DiffractionMonitor', diffraction "
+                    "order 0 will not correspond to the angle of propagation "
+                    "of the source. Consider using 'BlochBoundary.from_source()'."
+                )
+            elif not np.isclose(test_val % 1, 0):
+                # the given Bloch vector is neither equal to the expected value, nor
+                # off by an integer
+                log.warning(
+                    f"The Bloch vector along dimension '{dim}' may be incorrectly "
+                    f"set with respect to the source '{source.name}'. The absolute "
+                    "difference between the expected and provided values in "
+                    "bandstructure units, up to an integer offset, is greater than "
+                    "1e-6. Consider using ``BlochBoundary.from_source()``, or "
+                    "double-check that it was defined correctly."
+                )
 
     """ Plotting """
 
@@ -1051,6 +1357,9 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
             plot_params = plot_params.copy(
                 update={"facecolor": "gold", "edgecolor": "k", "linewidth": 1}
             )
+        elif isinstance(medium, Medium2D):
+            # 2d material
+            plot_params = plot_params.copy(update={"edgecolor": "k", "linewidth": 1})
         else:
             # regular medium
             facecolor = MEDIUM_CMAP[(mat_index - 1) % len(MEDIUM_CMAP)]
@@ -1182,8 +1491,8 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         for mat in [medium for medium in medium_list if isinstance(medium, CustomMedium)]:
             eps_dataset_at_freq = mat.eps_dataset_freq(freq)
             for eps_component in eps_dataset_at_freq.field_components.values():
-                eps_min = min(eps_min, min(eps_component.real.values.ravel()))
-                eps_max = max(eps_max, max(eps_component.real.values.ravel()))
+                eps_min = min(eps_min, np.min(eps_component.real.values.ravel()))
+                eps_max = max(eps_max, np.max(eps_component.real.values.ravel()))
         return eps_min, eps_max
 
     def _pcolormesh_shape_custom_medium_structure_eps(
@@ -1275,6 +1584,9 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
             plot_params = plot_params.copy(
                 update={"facecolor": "gold", "edgecolor": "k", "linewidth": 1}
             )
+        elif isinstance(medium, Medium2D):
+            # 2d material
+            plot_params = plot_params.copy(update={"edgecolor": "k", "linewidth": 1})
         else:
             # regular medium
             eps_medium = medium.eps_model(frequency=freq).real
@@ -1469,7 +1781,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         return pml_boxes
 
     def _make_pml_box(self, pml_axis: Axis, pml_height: float, sign: int) -> Box:
-        """Construct a :class:`Box` representing an arborbing boundary to be plotted."""
+        """Construct a :class:`.Box` representing an arborbing boundary to be plotted."""
         rmin, rmax = [list(bounds) for bounds in self.bounds_pml]
         if sign == -1:
             rmax[pml_axis] = rmin[pml_axis] + pml_height
@@ -1529,7 +1841,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         return plot_params
 
     def _make_symmetry_box(self, sym_axis: Axis) -> Box:
-        """Construct a :class:`Box` representing the symmetry to be plotted."""
+        """Construct a :class:`.Box` representing the symmetry to be plotted."""
         sym_box = self.simulation_geometry
         size = list(sym_box.size)
         size[sym_axis] /= 2
@@ -1767,7 +2079,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
 
         Parameters
         ----------
-        structures : List[:class:`Structure`]
+        structures : List[:class:`.Structure`]
             list of structures to filter on the plane.
         x : float = None
             position of plane in x direction, only one of x, y, z must be specified to define plane.
@@ -1778,7 +2090,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
 
         Returns
         -------
-        List[Tuple[:class:`AbstractMedium`, shapely.geometry.base.BaseGeometry]]
+        List[Tuple[:class:`.AbstractMedium`, shapely.geometry.base.BaseGeometry]]
             List of shapes and mediums on the plane.
         """
         medium_shapes = []
@@ -1799,7 +2111,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
 
         Parameters
         ----------
-        structures : List[:class:`Structure`]
+        structures : List[:class:`.Structure`]
             list of structures to filter on the plane.
         x : float = None
             position of plane in x direction, only one of x, y, z must be specified to define plane.
@@ -1810,7 +2122,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
 
         Returns
         -------
-        List[Tuple[:class:`AbstractMedium`, shapely.geometry.base.BaseGeometry]]
+        List[Tuple[:class:`.AbstractMedium`, shapely.geometry.base.BaseGeometry]]
             List of shapes and mediums on the plane after merging.
         """
 
@@ -1891,7 +2203,9 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         dl_mins = [np.min(sizes) for sizes in self.grid.sizes.to_list]
         dl_sum_inv_sq = sum((1 / dl**2 for dl in dl_mins))
         dl_avg = 1 / np.sqrt(dl_sum_inv_sq)
-        return self.courant * dl_avg / C_0
+        # material factor
+        n_cfl = min(min((mat.n_cfl for mat in self.mediums)), 1)
+        return n_cfl * self.courant * dl_avg / C_0
 
     @cached_property
     def tmesh(self) -> Coords1D:
@@ -1911,26 +2225,83 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
 
         return len(self.tmesh)
 
+    def _grid_corrections_2dmaterials(self, grid: Grid) -> Grid:
+        """Correct the grid if 2d materials are present, using their volumetric equivalents."""
+        if not any(isinstance(structure.medium, Medium2D) for structure in self.structures):
+            return grid
+
+        # when there are 2D materials, need to make grid again with volumetric_structures
+        # generated using the first grid
+
+        volumetric_structures = [Structure(geometry=self.geometry, medium=self.medium)]
+        volumetric_structures += self._volumetric_structures_grid(grid)
+
+        volumetric_grid = self.grid_spec.make_grid(
+            structures=volumetric_structures,
+            symmetry=self.symmetry,
+            sources=self.sources,
+            num_pml_layers=self.num_pml_layers,
+        )
+
+        # Handle 2D materials if ``AutoGrid`` is used for in-plane directions
+        # must use original grid for the normal directions of all 2d materials
+        grid_axes = [False, False, False]
+        # must use volumetric grid for the ``AutoGrid`` in-plane directions of 2d materials
+        volumetric_grid_axes = [False, False, False]
+        for structure in self.structures:
+            if isinstance(structure.medium, Medium2D):
+                normal = structure.geometry._normal_2dmaterial  # pylint:disable=protected-access
+                grid_axes[normal] = True
+                for axis, grid_axis in enumerate(
+                    [self.grid_spec.grid_x, self.grid_spec.grid_y, self.grid_spec.grid_z]
+                ):
+                    if isinstance(grid_axis, AutoGrid):
+                        if axis != normal:
+                            volumetric_grid_axes[axis] = True
+                        else:
+                            log.warning(
+                                "Using 'AutoGrid' for the normal direction of a 2D material "
+                                "may generate a grid that is not sufficiently fine."
+                            )
+        coords_all = [None, None, None]
+        for axis in range(3):
+            if grid_axes[axis] and volumetric_grid_axes[axis]:
+                raise ValidationError(
+                    "Unable to generate grid. Cannot use 'AutoGrid' for "
+                    "an axis that is in-plane to one 2D material and normal to another."
+                )
+            if volumetric_grid_axes[axis]:
+                coords_all[axis] = volumetric_grid.boundaries.to_list[axis]
+            else:
+                coords_all[axis] = grid.boundaries.to_list[axis]
+
+        return Grid(boundaries=Coords(**dict(zip("xyz", coords_all))))
+
     @cached_property
     def grid(self) -> Grid:
         """FDTD grid spatial locations and information.
 
         Returns
         -------
-        :class:`Grid`
-            :class:`Grid` storing the spatial locations relevant to the simulation.
+        :class:`.Grid`
+            :class:`.Grid` storing the spatial locations relevant to the simulation.
         """
 
         # Add a simulation Box as the first structure
         structures = [Structure(geometry=self.geometry, medium=self.medium)]
         structures += self.structures
 
-        return self.grid_spec.make_grid(
+        grid = self.grid_spec.make_grid(
             structures=structures,
             symmetry=self.symmetry,
+            periodic=self._periodic,
             sources=self.sources,
             num_pml_layers=self.num_pml_layers,
         )
+
+        # This would AutoGrid the in-plane directions of the 2D materials
+        # return self._grid_corrections_2dmaterials(grid)
+        return grid
 
     @cached_property
     def num_cells(self) -> int:
@@ -1997,12 +2368,12 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
 
         Parameters
         ----------
-        box : :class:`Box`
+        box : :class:`.Box`
             Rectangular geometry.
 
         Returns
         -------
-        new_box : :class:`Box`
+        new_box : :class:`.Box`
             The smallest Box such that any point in ``box`` is either in ``new_box`` or can be
             mapped from ``new_box`` using the simulation symmetries.
         """
@@ -2032,12 +2403,48 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
 
         return Box.from_bounds(bmin_new, bmax_new)
 
-    def discretize(self, box: Box, snap_zero_dim: bool = False, **kwargs) -> Grid:
+    def _discretize_grid(self, box: Box, grid: Grid, snap_zero_dim: bool = False, **kwargs) -> Grid:
         """Grid containing only cells that intersect with a :class:`Box`.
+
+        As opposed to ``Simulation.discretize``, this function operates on a ``grid``
+        which may not be the grid of the simulation.
+        """
+        if not self.intersects(box):
+            log.error(f"Box {box} is outside simulation, cannot discretize")
+
+        span_inds = grid.discretize_inds(box, **kwargs)
+        boundary_dict = {}
+        for idim, (dim, periodic) in enumerate(zip("xyz", self._periodic)):
+            ind_beg, ind_end = span_inds[idim]
+            # ind_end + 1 because we are selecting cell boundaries not cells
+            boundary_dict[dim] = grid.extended_subspace(idim, ind_beg, ind_end + 1, periodic)
+
+            # Overwrite with zero dimension snapped, if requested
+            if snap_zero_dim:
+                if self.size[idim] == 0:
+                    boundary_dict[dim] = [self.center[idim], self.center[idim]]
+                elif box.size[idim] == 0:
+                    boundary_dict[dim] = [box.center[idim], box.center[idim]]
+        return Grid(boundaries=Coords(**boundary_dict))
+
+    @cached_property
+    def _periodic(self) -> Tuple[bool, bool, bool]:
+        """For each dimension, ``True`` if periodic/Bloch boundaries and ``False`` otherwise.
+        We check on both sides but in practice there should be no cases in which a periodic/Bloch
+        BC is on one side only. This is explicitly validated for Bloch, and implicitly done for
+        periodic, in which case we allow PEC/PMC on the other side, but we replace the periodic
+        boundary with another PEC/PMC plane upon initialization."""
+        periodic = []
+        for bcs_1d in self.boundary_spec.to_list:
+            periodic.append(all(isinstance(bcs, (Periodic, BlochBoundary)) for bcs in bcs_1d))
+        return periodic
+
+    def discretize(self, box: Box, snap_zero_dim: bool = False, **kwargs) -> Grid:
+        """Grid containing only cells that intersect with a :class:`.Box`.
 
         Parameters
         ----------
-        box : :class:`Box`
+        box : :class:`.Box`
             Rectangular geometry within simulation to discretize.
         snap_zero_dim : bool
             If ``True``, and the ``box`` has size zero along a given direction, the ``grid`` is
@@ -2051,24 +2458,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         :class:`Grid`
             The FDTD subgrid containing simulation points that intersect with ``box``.
         """
-
-        if not self.intersects(box):
-            log.error(f"Box {box} is outside simulation, cannot discretize")
-
-        span_inds = self.grid.discretize_inds(box, **kwargs)
-        boundary_dict = {}
-        for idim, dim in enumerate("xyz"):
-            ind_beg, ind_end = span_inds[idim]
-            # ind_end + 1 because we are selecting cell boundaries not cells
-            boundary_dict[dim] = self.grid.periodic_subspace(idim, ind_beg, ind_end + 1)
-
-            # Overwrite with zero dimension snapped, if requested
-            if snap_zero_dim:
-                if self.size[idim] == 0:
-                    boundary_dict[dim] = [self.center[idim], self.center[idim]]
-                elif box.size[idim] == 0:
-                    boundary_dict[dim] = [box.center[idim], box.center[idim]]
-        return Grid(boundaries=Coords(**boundary_dict))
+        return self._discretize_grid(box, self.grid, snap_zero_dim, **kwargs)
 
     def epsilon(
         self,
@@ -2080,7 +2470,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
 
         Parameters
         ----------
-        box : :class:`Box`
+        box : :class:`.Box`
             Rectangular geometry specifying where to measure the permittivity.
         coord_key : str = 'centers'
             Specifies at what part of the grid to return the permittivity at.
@@ -2113,7 +2503,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
 
         Parameters
         ----------
-        grid : :class:`Grid`
+        grid : :class:`.Grid`
             Grid specifying where to measure the permittivity.
         coord_key : str = 'centers'
             Specifies at what part of the grid to return the permittivity at.
@@ -2161,7 +2551,8 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
             )
             shape = tuple(len(array) for array in arrays)
             eps_array = eps_background * np.ones(shape, dtype=complex)
-            for structure in self.structures:
+            # replace 2d materials with volumetric equivalents
+            for structure in self.volumetric_structures:
                 # Indexing subset within the bounds of the structure
                 # pylint:disable=protected-access
                 inds = structure.geometry._inds_inside_bounds(*arrays)
@@ -2173,6 +2564,15 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
 
                 red_coords = Coords(**dict(zip("xyz", coords_reduced)))
                 eps_structure = get_eps(structure=structure, frequency=freq, coords=red_coords)
+
+                if isinstance(structure.geometry, TriangleMesh):
+                    log.warning(
+                        "Client-side permittivity of a 'TriangleMesh' may be "
+                        "inaccurate if the mesh is not unionized. We recommend unionizing "
+                        "all meshes before import. A 'PermittivityMonitor' can be used to "
+                        "obtain the true permittivity and check that the surface mesh is "
+                        "loaded correctly."
+                    )
 
                 # Update permittivity array at selected indexes within the geometry
                 is_inside = structure.geometry.inside_meshgrid(*coords_reduced)
@@ -2194,4 +2594,124 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
             src.field_dataset for src in self.sources if isinstance(src, CustomFieldSource)
         ]
         datasets_medium = [mat.eps_dataset for mat in self.mediums if isinstance(mat, CustomMedium)]
-        return datasets_source + datasets_medium
+        datasets_geometry = [
+            struct.geometry.mesh_dataset
+            for struct in self.structures
+            if isinstance(struct.geometry, TriangleMesh)
+        ]
+        return datasets_source + datasets_medium + datasets_geometry
+
+    def _volumetric_structures_grid(self, grid: Grid) -> Tuple[Structure]:
+        """Generate a tuple of structures wherein any 2D materials are converted to 3D
+        volumetric equivalents, using ``grid`` as the simulation grid."""
+
+        if not any(isinstance(medium, Medium2D) for medium in self.mediums):
+            return self.structures
+
+        def get_bounds(geom: Geometry, axis: Axis) -> Tuple[float, float]:
+            """Get the bounds of a geometry in the axis direction."""
+            return (geom.bounds[0][axis], geom.bounds[1][axis])
+
+        def set_bounds(geom: Geometry, bounds: Tuple[float, float], axis: Axis) -> Geometry:
+            """Set the bounds of a geometry in the axis direction."""
+            if isinstance(geom, Box):
+                new_center = list(geom.center)
+                new_center[axis] = (bounds[0] + bounds[1]) / 2
+                new_size = list(geom.size)
+                new_size[axis] = bounds[1] - bounds[0]
+                return geom.updated_copy(center=new_center, size=new_size)
+            if isinstance(geom, PolySlab):
+                return geom.updated_copy(slab_bounds=bounds)
+            if isinstance(geom, Cylinder):
+                new_center = list(geom.center)
+                new_center[axis] = (bounds[0] + bounds[1]) / 2
+                new_length = bounds[1] - bounds[0]
+                return geom.updated_copy(center=new_center, length=new_length)
+            raise ValidationError(
+                "'Medium2D' is only compatible with 'Box', 'PolySlab', or 'Cylinder' geometry."
+            )
+
+        def get_dls(geom: Geometry, axis: Axis, num_dls: int) -> float:
+            """Get grid size around the 2D material."""
+            dls = self._discretize_grid(Box.from_bounds(*geom.bounds), grid=grid).sizes.to_list[
+                axis
+            ]
+            if len(dls) != num_dls:
+                raise Tidy3dError(
+                    "Failed to detect grid size around the 2D material. "
+                    "Can't generate volumetric equivalent for this simulation. "
+                    "If you received this error, please create an issue in the Tidy3D "
+                    "github repository."
+                )
+            return dls
+
+        def snap_to_grid(geom: Geometry, axis: Axis) -> Geometry:
+            """Snap a 2D material to the Yee grid."""
+            new_centers = self._discretize_grid(
+                Box.from_bounds(*geom.bounds), grid=grid
+            ).boundaries.to_list[axis]
+            new_center = new_centers[np.argmin(abs(new_centers - get_bounds(geom, axis)[0]))]
+            return set_bounds(geom, (new_center, new_center), axis)
+
+        def get_neighboring_media(
+            geom: Geometry, axis: Axis, structures: List[Structure]
+        ) -> Tuple[List[MediumType3D], List[float]]:
+            """Find the neighboring material properties and grid sizes."""
+            dl = get_dls(geom, axis, 1)[0]
+            center = get_bounds(geom, axis)[0]
+            thickness = dl * DIST_NEIGHBOR_REL_2D_MED
+            thickened_geom = set_bounds(
+                geom, bounds=(center - thickness / 2, center + thickness / 2), axis=axis
+            )
+            grid_sizes = get_dls(thickened_geom, axis, 2)
+            dls_signed = [-grid_sizes[0], grid_sizes[1]]
+            neighbors = []
+            for _, dl_signed in enumerate(dls_signed):
+                geom_shifted = set_bounds(
+                    geom, bounds=(center + dl_signed, center + dl_signed), axis=axis
+                )
+                media = self.intersecting_media(Box.from_bounds(*geom_shifted.bounds), structures)
+                if len(media) > 1:
+                    raise SetupError(
+                        "2D materials do not support multiple neighboring media on a side. "
+                        "Please split the 2D material into multiple smaller 2D materials, one "
+                        "for each background medium."
+                    )
+                medium_side = Medium() if len(media) == 0 else list(media)[0]
+                neighbors.append(medium_side)
+            return (neighbors, grid_sizes)
+
+        simulation_background = Structure(geometry=self.geometry, medium=self.medium)
+        background_structures = [simulation_background]
+        new_structures = []
+        for structure in self.structures:
+            if not isinstance(structure.medium, Medium2D):
+                # found a 3D material; keep it
+                background_structures.append(structure)
+                new_structures.append(structure)
+                continue
+            # otherwise, found a 2D material; replace it with volumetric equivalent
+            axis = structure.geometry._normal_2dmaterial  # pylint: disable=protected-access
+
+            # snap monolayer to grid
+            geometry = snap_to_grid(structure.geometry, axis)
+            center = get_bounds(geometry, axis)[0]
+
+            # get neighboring media and grid sizes
+            (neighbors, dls) = get_neighboring_media(geometry, axis, background_structures)
+
+            new_bounds = (center - dls[0] / 2, center + dls[1] / 2)
+            new_geometry = set_bounds(structure.geometry, bounds=new_bounds, axis=axis)
+
+            new_medium = structure.medium.volumetric_equivalent(
+                axis=axis, adjacent_media=neighbors, adjacent_dls=dls
+            )
+            new_structures.append(structure.updated_copy(geometry=new_geometry, medium=new_medium))
+
+        return tuple(new_structures)
+
+    @cached_property
+    def volumetric_structures(self) -> Tuple[Structure]:
+        """Generate a tuple of structures wherein any 2D materials are converted to 3D
+        volumetric equivalents."""
+        return self._volumetric_structures_grid(self.grid)

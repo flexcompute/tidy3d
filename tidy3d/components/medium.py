@@ -12,12 +12,14 @@ import xarray as xr
 
 from .base import Tidy3dBaseModel, cached_property
 from .grid.grid import Coords, Grid
-from .types import PoleAndResidue, Ax, FreqBound, TYPE_TAG_STR, InterpMethod, Numpy, Bound
+from .types import PoleAndResidue, Ax, FreqBound, TYPE_TAG_STR, InterpMethod, Bound, ArrayComplex4D
+from .types import Axis
 from .data.dataset import PermittivityDataset
 from .data.data_array import ScalarFieldDataArray
 from .viz import add_ax_if_none
+from .geometry import Geometry
 from .validators import validate_name_str
-from ..constants import C_0, pec_val, EPSILON_0
+from ..constants import C_0, pec_val, EPSILON_0, LARGE_NUMBER, fp_eps
 from ..constants import HERTZ, CONDUCTIVITY, PERMITTIVITY, RADPERSEC, MICROMETER, SECOND
 from ..exceptions import ValidationError, SetupError
 from ..log import log
@@ -50,6 +52,9 @@ def ensure_freq_in_range(eps_model: Callable[[float], complex]) -> Callable[[flo
             return eps_model(self, frequency)
 
         fmin, fmax = self.frequency_range
+        # don't warn for evaluating infinite frequency
+        if is_inf_scalar:
+            return eps_model(self, frequency)
         if np.any(frequency < fmin) or np.any(frequency > fmax):
             log.warning(
                 "frequency passed to `Medium.eps_model()`"
@@ -125,6 +130,21 @@ class AbstractMedium(ABC, Tidy3dBaseModel):
         # This only needs to be overwritten for anisotropic materials
         eps = self.eps_model(frequency)
         return (eps, eps, eps)
+
+    @cached_property
+    @abstractmethod
+    def n_cfl(self):
+        """To ensure a stable FDTD simulation, it is essential to select an appropriate
+        time step size in accordance with the CFL condition. The maximal time step
+        size is inversely proportional to the speed of light in the medium, and thus
+        proportional to the index of refraction. However, for dispersive medium,
+        anisotropic medium, and other more complicated media, there are complications in
+        deciding on the choice of the index of refraction.
+
+        This property computes the index of refraction related to CFL condition, so that
+        the FDTD with this medium is stable when the time step size that doesn't take
+        material factor into account is multiplied by ``n_cfl``.
+        """
 
     @add_ax_if_none
     def plot(self, freqs: float, ax: Ax = None) -> Ax:  # pylint: disable=invalid-name
@@ -266,6 +286,26 @@ class AbstractMedium(ABC, Tidy3dBaseModel):
         sigma = omega * eps_imag * EPSILON_0
         return eps_real, sigma
 
+    @ensure_freq_in_range
+    def sigma_model(self, freq: float) -> complex:
+        """Complex-valued conductivity as a function of frequency.
+
+        Parameters
+        ----------
+        freq: float
+            Frequency to evaluate conductivity at (Hz).
+
+        Returns
+        -------
+        complex
+            Complex conductivity at this frequency.
+        """
+        omega = freq * 2 * np.pi
+        eps_complex = self.eps_model(freq)
+        eps_inf = self.eps_model(np.inf)
+        sigma = (eps_inf - eps_complex) * 1j * omega * EPSILON_0
+        return sigma
+
 
 """ Dispersionless Medium """
 
@@ -282,6 +322,14 @@ class PECMedium(AbstractMedium):
 
         # return something like frequency with value of pec_val + 0j
         return 0j * frequency + pec_val
+
+    @cached_property
+    def n_cfl(self):
+        """This property computes the index of refraction related to CFL condition, so that
+        the FDTD with this medium is stable when the time step size that doesn't take
+        material factor into account is multiplied by ``n_cfl``.
+        """
+        return 1.0
 
 
 # PEC builtin instance
@@ -309,6 +357,16 @@ class Medium(AbstractMedium):
         "permittivity at angular frequency omega is given by conductivity/omega.",
         units=CONDUCTIVITY,
     )
+
+    @cached_property
+    def n_cfl(self):
+        """This property computes the index of refraction related to CFL condition, so that
+        the FDTD with this medium is stable when the time step size that doesn't take
+        material factor into account is multiplied by ``n_cfl``.
+
+        For dispersiveless medium, it equals ``sqrt(permittivity)``.
+        """
+        return np.sqrt(self.permittivity)
 
     @ensure_freq_in_range
     def eps_model(self, frequency: float) -> complex:
@@ -408,6 +466,21 @@ class CustomMedium(AbstractMedium):
                 )
         return val
 
+    @cached_property
+    def n_cfl(self):
+        """This property computes the index of refraction related to CFL condition, so that
+        the FDTD with this medium is stable when the time step size that doesn't take
+        material factor into account is multiplied by ``n_cfl```.
+
+        For dispersiveless custom medium, it equals ``min[sqrt(eps_inf)]``, where ``min``
+        is performed over all components and spatial points.
+        """
+        eps_array_min = [
+            float(np.min(eps_array.real))
+            for _, eps_array in self.eps_dataset.field_components.items()
+        ]
+        return np.sqrt(min(eps_array_min))
+
     @ensure_freq_in_range
     def eps_dataset_freq(self, frequency: float) -> PermittivityDataset:
         """Permittivity dataset at ``frequency``. The dispersion comes
@@ -438,7 +511,7 @@ class CustomMedium(AbstractMedium):
         self,
         frequency: float,
         coords: Coords,
-    ) -> Tuple[Numpy, Numpy, Numpy]:
+    ) -> Tuple[ArrayComplex4D, ArrayComplex4D, ArrayComplex4D]:
         """Spatial profile of main diagonal of the complex-valued permittivity
         at ``frequency`` interpolated at the supplied coordinates.
 
@@ -451,7 +524,7 @@ class CustomMedium(AbstractMedium):
 
         Returns
         -------
-        Tuple[Numpy, Numpy, Numpy]
+        Tuple[np.ndarray, np.ndarray, np.ndarray]
             The complex-valued permittivity tensor at ``frequency`` interpolated
             at the supplied coordinate.
         """
@@ -679,6 +752,17 @@ class DispersiveMedium(AbstractMedium, ABC):
     def pole_residue(self):
         """Representation of Medium as a pole-residue model."""
 
+    @cached_property
+    def n_cfl(self):
+        """This property computes the index of refraction related to CFL condition, so that
+        the FDTD with this medium is stable when the time step size that doesn't take
+        material factor into account is multiplied by ``n_cfl``.
+
+        For PoleResidue model, it equals ``sqrt(eps_inf)``
+        [https://ieeexplore.ieee.org/document/9082879].
+        """
+        return np.sqrt(self.pole_residue.eps_inf)
+
     @staticmethod
     def tuple_to_complex(value: Tuple[float, float]) -> complex:
         """Convert a tuple of real and imaginary parts to complex number."""
@@ -711,7 +795,7 @@ class PoleResidue(DispersiveMedium):
     >>> eps = pole_res.eps_model(200e12)
     """
 
-    eps_inf: float = pd.Field(
+    eps_inf: pd.PositiveFloat = pd.Field(
         1.0,
         title="Epsilon at Infinity",
         description="Relative permittivity at infinite frequency (:math:`\\epsilon_\\infty`).",
@@ -756,6 +840,47 @@ class PoleResidue(DispersiveMedium):
             f"\n\teps_inf={self.eps_inf}, "
             f"\n\tpoles={self.poles}, "
             f"\n\tfrequency_range={self.frequency_range})"
+        )
+
+    @classmethod
+    def from_medium(cls, medium: Medium) -> "PoleResidue":
+        """Convert a :class:`.Medium` to a pole residue model.
+
+        Parameters
+        ----------
+        medium: :class:`.Medium`
+            The medium with permittivity and conductivity to convert.
+
+        Returns
+        -------
+        :class:`.PoleResidue`
+            The pole residue equivalent.
+        """
+        poles = [(0, medium.conductivity / (2 * EPSILON_0))]
+        return PoleResidue(
+            eps_inf=medium.permittivity, poles=poles, frequency_range=medium.frequency_range
+        )
+
+    def to_medium(self) -> Medium:
+        """Convert to a :class:`.Medium`.
+        Requires the pole residue model to only have a pole at 0 frequency,
+        corresponding to a constant conductivity term.
+
+        Returns
+        -------
+        :class:`.Medium`
+            The non-dispersive equivalent with constant permittivity and conductivity.
+        """
+        res = 0
+        for (a, c) in self.poles:
+            if abs(a) > fp_eps:
+                raise ValidationError("Cannot convert dispersive 'PoleResidue' to 'Medium'.")
+            res += (c + np.conj(c)) / 2
+        sigma = res * 2 * EPSILON_0
+        return Medium(
+            permittivity=self.eps_inf,
+            conductivity=np.real(sigma),
+            frequency_range=self.frequency_range,
         )
 
 
@@ -869,7 +994,7 @@ class Lorentz(DispersiveMedium):
     >>> eps = lorentz_medium.eps_model(200e12)
     """
 
-    eps_inf: float = pd.Field(
+    eps_inf: pd.PositiveFloat = pd.Field(
         1.0,
         title="Epsilon at Infinity",
         description="Relative permittivity at infinite frequency (:math:`\\epsilon_\\infty`).",
@@ -940,7 +1065,7 @@ class Drude(DispersiveMedium):
     >>> eps = drude_medium.eps_model(200e12)
     """
 
-    eps_inf: float = pd.Field(
+    eps_inf: pd.PositiveFloat = pd.Field(
         1.0,
         title="Epsilon at Infinity",
         description="Relative permittivity at infinite frequency (:math:`\\epsilon_\\infty`).",
@@ -1005,7 +1130,7 @@ class Debye(DispersiveMedium):
     >>> eps = debye_medium.eps_model(200e12)
     """
 
-    eps_inf: float = pd.Field(
+    eps_inf: pd.PositiveFloat = pd.Field(
         1.0,
         title="Epsilon at Infinity",
         description="Relative permittivity at infinite frequency (:math:`\\epsilon_\\infty`).",
@@ -1091,14 +1216,21 @@ class AnisotropicMedium(AbstractMedium):
         """Dictionary of diagonal medium components."""
         return dict(xx=self.xx, yy=self.yy, zz=self.zz)
 
+    @cached_property
+    def n_cfl(self):
+        """This property computes the index of refraction related to CFL condition, so that
+        the FDTD with this medium is stable when the time step size that doesn't take
+        material factor into account is multiplied by ``n_cfl``.
+
+        For this medium, it takes the minimal of ``n_clf`` in all components.
+        """
+        return min((mat_component.n_cfl for mat_component in self.components.values()))
+
     @ensure_freq_in_range
     def eps_model(self, frequency: float) -> complex:
         """Complex-valued permittivity as a function of frequency."""
 
-        eps_xx = self.xx.eps_model(frequency)
-        eps_yy = self.yy.eps_model(frequency)
-        eps_zz = self.zz.eps_model(frequency)
-        return np.mean((eps_xx, eps_yy, eps_zz))
+        return np.mean(self.eps_diagonal(frequency), axis=0)
 
     @ensure_freq_in_range
     def eps_diagonal(self, frequency: float) -> Tuple[complex, complex, complex]:
@@ -1111,12 +1243,12 @@ class AnisotropicMedium(AbstractMedium):
 
     @add_ax_if_none
     def plot(self, freqs: float, ax: Ax = None) -> Ax:
-        """Plot n, k of a :class:`Medium` as a function of frequency."""
+        """Plot n, k of a :class:`.Medium` as a function of frequency."""
 
         freqs = np.array(freqs)
         freqs_thz = freqs / 1e12
 
-        for label, medium_component in zip(("xx", "yy", "zz"), (self.xx, self.yy, self.zz)):
+        for label, medium_component in self.elements.items():
 
             eps_complex = medium_component.eps_model(freqs)
             n, k = AbstractMedium.eps_complex_to_nk(eps_complex)
@@ -1129,10 +1261,15 @@ class AnisotropicMedium(AbstractMedium):
         ax.set_aspect("auto")
         return ax
 
+    @property
+    def elements(self) -> Dict[str, IsotropicMediumType]:
+        """The diagonal elements of the medium as a dictionary."""
+        return dict(xx=self.xx, yy=self.yy, zz=self.zz)
+
 
 # types of mediums that can be used in Simulation and Structures
 
-MediumType = Union[
+MediumType3D = Union[
     Medium,
     CustomMedium,
     AnisotropicMedium,
@@ -1143,3 +1280,349 @@ MediumType = Union[
     Debye,
     Drude,
 ]
+
+
+class Medium2D(AbstractMedium):
+    """2D diagonally anisotropic medium.
+
+    Note
+    ----
+    Only diagonal anisotropy is currently supported.
+
+    Example
+    -------
+    >>> drude_medium = Drude(eps_inf=2.0, coeffs=[(1,2), (3,4)])
+    >>> medium2d = Medium2D(ss=drude_medium, tt=drude_medium)
+
+    """
+
+    ss: IsotropicMediumType = pd.Field(
+        ...,
+        title="SS Component",
+        description="Medium describing the ss-component of the diagonal permittivity tensor. "
+        "The ss-component refers to the in-plane dimension of the medium that is the first "
+        "component in order of 'x', 'y', 'z'. "
+        "If the 2D material is normal to the y-axis, for example, then this determines the "
+        "xx-component of the corresponding 3D medium.",
+        discriminator=TYPE_TAG_STR,
+    )
+
+    tt: IsotropicMediumType = pd.Field(
+        ...,
+        title="TT Component",
+        description="Medium describing the tt-component of the diagonal permittivity tensor. "
+        "The tt-component refers to the in-plane dimension of the medium that is the second "
+        "component in order of 'x', 'y', 'z'. "
+        "If the 2D material is normal to the y-axis, for example, then this determines the "
+        "zz-component of the corresponding 3D medium.",
+        discriminator=TYPE_TAG_STR,
+    )
+
+    @classmethod
+    def _weighted_avg(cls, meds: List[IsotropicMediumType], weights: List[float]) -> PoleResidue:
+        """Average ``meds`` with weights ``weights``."""
+        eps_inf = 1
+        poles = []
+        for (med, weight) in zip(meds, weights):
+            if isinstance(med, DispersiveMedium):
+                pole_res = med.pole_residue
+                eps_inf += weight * (med.pole_residue.eps_inf - 1)
+            elif isinstance(med, Medium):
+                pole_res = PoleResidue.from_medium(med)
+                eps_inf += weight * (med.eps_model(np.inf) - 1)
+            elif isinstance(med, PECMedium):
+                pole_res = PoleResidue.from_medium(Medium(conductivity=LARGE_NUMBER))
+            else:
+                raise ValidationError("Invalid medium type for the components of 'Medium2D'.")
+            poles += [(a, weight * c) for (a, c) in pole_res.poles]
+        return PoleResidue(eps_inf=np.real(eps_inf), poles=poles)
+
+    def volumetric_equivalent(
+        self,
+        axis: Axis,
+        adjacent_media: Tuple[MediumType3D, MediumType3D],
+        adjacent_dls: Tuple[float, float],
+    ) -> AnisotropicMedium:
+        """Produces a 3D volumetric equivalent medium. The new medium has thickness equal to
+        the average of the ``dls`` in the ``axis`` direction.
+        The ss and tt components of the 2D material are mapped in order onto the xx, yy, and
+        zz components of the 3D material, excluding the ``axis`` component. The conductivity
+        and residues (in the case of a dispersive 2D material) are rescaled by ``1/dl``.
+        The neighboring media ``neighbors`` enter in as a background for the resulting
+        volumetric equivalent.
+
+
+        Parameters
+        ----------
+        axis : Axis
+            Index (0, 1, or 2 for x, y, or z respectively) of the normal direction to the
+            2D material.
+        adjacent_media : Tuple[MediumType3D, MediumType3D]
+            The neighboring media on either side of the 2D material.
+            The first element is directly on the - side of the 2D material in the supplied axis,
+            and the second element is directly on the + side.
+        adjacent_dls : Tuple[float, float]
+            Each dl represents twice the thickness of the desired volumetric model on the
+            respective side of the 2D material.
+
+        Returns
+        -------
+        :class:`.AnisotropicMedium`
+            The 3D material corresponding to this 2D material.
+        """
+
+        def get_component(med: MediumType3D, comp: Axis) -> IsotropicMediumType:
+            """Extract the ``comp`` component of ``med``."""
+            if isinstance(med, AnisotropicMedium):
+                dim = "xyz"[comp]
+                element_name = dim + dim
+                return med.elements[element_name]
+            return med
+
+        def get_background(comp: Axis) -> PoleResidue:
+            """Get the background medium appropriate for the ``comp`` component."""
+            meds = [get_component(med=med, comp=comp) for med in adjacent_media]
+            # the Yee site for the E field in the normal direction is fully contained
+            # in the medium on the + side
+            if comp == axis:
+                return meds[1]
+            weights = np.array(adjacent_dls) / np.sum(adjacent_dls)
+            return self._weighted_avg(meds, weights)
+
+        dl = (adjacent_dls[0] + adjacent_dls[1]) / 2
+        media_bg = [get_background(comp=i) for i in range(3)]
+
+        # perform weighted average of planar media transverse dimensions with the
+        # respective background media
+        media_fg_plane = list(self.elements.values())
+        _, media_bg_plane = Geometry.pop_axis(media_bg, axis=axis)
+        media_fg_weighted = [
+            self._weighted_avg([media_bg, media_fg], [1, 1 / dl])
+            for media_bg, media_fg in zip(media_bg_plane, media_fg_plane)
+        ]
+
+        # combine the two weighted, planar media with the background medium and put in the xyz basis
+        media_3d = Geometry.unpop_axis(
+            ax_coord=media_bg[axis], plane_coords=media_fg_weighted, axis=axis
+        )
+        media_3d_kwargs = {dim + dim: medium for dim, medium in zip("xyz", media_3d)}
+        return AnisotropicMedium(**media_3d_kwargs, frequency_range=self.frequency_range)
+
+    def to_anisotropic_medium(self, axis: Axis, thickness: float) -> AnisotropicMedium:
+        """Generate a 3D :class:`.AnisotropicMedium` equivalent of a given thickness.
+
+        Parameters
+        ----------
+        axis: Axis
+            The normal axis to the 2D medium.
+        thickness: float
+            The thickness of the desired 3D medium.
+
+        Returns
+        -------
+        :class:`.AnisotropicMedium`
+            The 3D equivalent of this 2D medium.
+        """
+        media = list(self.elements.values())
+        print(media)
+        media_weighted = [self._weighted_avg([medium], [1 / thickness]) for medium in media]
+        media_3d = Geometry.unpop_axis(ax_coord=Medium(), plane_coords=media_weighted, axis=axis)
+        media_3d_kwargs = {dim + dim: medium for dim, medium in zip("xyz", media_3d)}
+        return AnisotropicMedium(**media_3d_kwargs, frequency_range=self.frequency_range)
+
+    def to_pole_residue(self, thickness: float) -> PoleResidue:
+        """Generate a :class:`.PoleResidue` equivalent of a given thickness.
+        The 2D medium to be isotropic in-plane (otherwise the components are averaged).
+
+        Parameters
+        ----------
+        thickness: float
+            The thickness of the desired 3D medium.
+
+        Returns
+        -------
+        :class:`.PoleResidue`
+            The 3D equivalent pole residue model of this 2D medium.
+        """
+        return self._weighted_avg(
+            [self.ss, self.tt], [1 / (2 * thickness), 1 / (2 * thickness)]
+        ).updated_copy(frequency_range=self.frequency_range)
+
+    def to_medium(self, thickness: float) -> Medium:
+        """Generate a :class:`.Medium` equivalent of a given thickness.
+        The 2D medium should be isotropic in-plane (otherwise the components are averaged)
+        and non-dispersive besides a constant conductivity.
+
+        Parameters
+        ----------
+        thickness: float
+            The thickness of the desired 3D medium.
+
+        Returns
+        -------
+        :class:`.Medium`
+            The 3D equivalent of this 2D medium.
+        """
+        return self.to_pole_residue(thickness=thickness).to_medium()
+
+    @classmethod
+    def from_medium(cls, medium: Medium, thickness: float) -> Medium2D:
+        """Generate a :class:`.Medium2D` equivalent of a :class:`.Medium`
+        with a given thickness.
+
+        Parameters
+        ----------
+        medium: :class:`.Medium`
+            The 3D medium to convert.
+        thickness : float
+            The thickness of the 3D material.
+
+        Returns
+        -------
+        :class:`.Medium2D`
+            The 2D equivalent of the given 3D medium.
+        """
+        med = cls._weighted_avg([medium], [thickness])
+        return Medium2D(ss=med, tt=med, frequency_range=medium.frequency_range)
+
+    @classmethod
+    def from_dispersive_medium(cls, medium: DispersiveMedium, thickness: float) -> Medium2D:
+        """Generate a :class:`.Medium2D` equivalent of a :class:`.DispersiveMedium`
+        with a given thickness.
+
+        Parameters
+        ----------
+        medium: :class:`.DispersiveMedium`
+            The 3D dispersive medium to convert.
+        thickness : float
+            The thickness of the 3D material.
+
+        Returns
+        -------
+        :class:`.Medium2D`
+            The 2D equivalent of the given 3D medium.
+        """
+        med = cls._weighted_avg([medium], [thickness])
+        return Medium2D(ss=med, tt=med, frequency_range=medium.frequency_range)
+
+    @classmethod
+    def from_anisotropic_medium(
+        cls, medium: AnisotropicMedium, axis: Axis, thickness: float
+    ) -> Medium2D:
+        """Generate a :class:`.Medium2D` equivalent of a :class:`.AnisotropicMedium`
+        with given normal axis and thickness. The ``ss`` and ``tt`` components of the resulting
+        2D medium correspond to the first of the ``xx``, ``yy``, and ``zz`` components of
+        the 3D medium, with the ``axis`` component removed.
+
+        Parameters
+        ----------
+        medium: :class:`.AnisotropicMedium`
+            The 3D anisotropic medium to convert.
+        axis: :class:`.Axis`
+            The normal axis to the 2D material.
+        thickness : float
+            The thickness of the 3D material.
+
+        Returns
+        -------
+        :class:`.Medium2D`
+            The 2D equivalent of the given 3D medium.
+        """
+        media = list(medium.elements.values())
+        _, media_plane = Geometry.pop_axis(media, axis=axis)
+        media_plane_scaled = []
+        for _, med in enumerate(media_plane):
+            media_plane_scaled.append(cls._weighted_avg([med], [thickness]))
+        media_kwargs = {dim + dim: medium for dim, medium in zip("st", media_plane_scaled)}
+        return Medium2D(**media_kwargs, frequency_range=medium.frequency_range)
+
+    @ensure_freq_in_range
+    def eps_model(self, frequency: float) -> complex:
+        """Complex-valued permittivity as a function of frequency."""
+        return np.mean(self.eps_diagonal(frequency=frequency), axis=0)
+
+    @ensure_freq_in_range
+    def eps_diagonal(self, frequency: float) -> Tuple[complex, complex]:
+        """Main diagonal of the complex-valued permittivity tensor as a function of frequency."""
+        log.warning("Evaluating permittivity of a 'Medium2D' is unphysical.")
+
+        eps_ss = self.ss.eps_model(frequency)
+        eps_tt = self.tt.eps_model(frequency)
+        return (eps_ss, eps_tt)
+
+    @add_ax_if_none
+    def plot(self, freqs: float, ax: Ax = None) -> Ax:
+        """Plot n, k of a :class:`.Medium` as a function of frequency."""
+        log.warning(
+            "The refractive index of a 'Medium2D' is unphysical. "
+            "Use 'Medium2D.plot_sigma' instead to plot surface conductivty, or call "
+            "'Medium2D.to_anisotropic_medium' or 'Medium2D.to_pole_residue' first "
+            "to obtain the physical refractive index."
+        )
+
+        freqs = np.array(freqs)
+        freqs_thz = freqs / 1e12
+
+        for label, medium_component in self.elements.items():
+
+            eps_complex = medium_component.eps_model(freqs)
+            n, k = AbstractMedium.eps_complex_to_nk(eps_complex)
+            ax.plot(freqs_thz, n, label=f"n, eps_{label}")
+            ax.plot(freqs_thz, k, label=f"k, eps_{label}")
+
+        ax.set_xlabel("frequency (THz)")
+        ax.set_title("medium dispersion")
+        ax.legend()
+        ax.set_aspect("auto")
+        return ax
+
+    @add_ax_if_none
+    def plot_sigma(self, freqs: float, ax: Ax = None) -> Ax:
+        """Plot the surface conductivity of the 2D material."""
+        freqs = np.array(freqs)
+        freqs_thz = freqs / 1e12
+
+        for label, medium_component in self.elements.items():
+            sigma = medium_component.sigma_model(freqs)
+            ax.plot(freqs_thz, np.real(sigma) * 1e6, label=f"Re($\\sigma$) ($\\mu$S), eps_{label}")
+            ax.plot(freqs_thz, np.imag(sigma) * 1e6, label=f"Im($\\sigma$) ($\\mu$S), eps_{label}")
+
+        ax.set_xlabel("frequency (THz)")
+        ax.set_title("surface conductivity")
+        ax.legend()
+        ax.set_aspect("auto")
+        return ax
+
+    @ensure_freq_in_range
+    def sigma_model(self, freq: float) -> complex:
+        """Complex-valued conductivity as a function of frequency.
+
+        Parameters
+        ----------
+        freq: float
+            Frequency to evaluate conductivity at (Hz).
+
+        Returns
+        -------
+        complex
+            Complex conductivity at this frequency.
+        """
+        return np.mean([self.ss.sigma_model(freq), self.tt.sigma_model(freq)], axis=0)
+
+    @property
+    def elements(self) -> Dict[str, IsotropicMediumType]:
+        """The diagonal elements of the 2D medium as a dictionary."""
+        return dict(ss=self.ss, tt=self.tt)
+
+    @cached_property
+    def n_cfl(self):
+        """This property computes the index of refraction related to CFL condition, so that
+        the FDTD with this medium is stable when the time step size that doesn't take
+        material factor into account is multiplied by ``n_cfl``.
+        """
+        return 1.0
+
+
+# types of mediums that can be used in Simulation and Structures
+
+MediumType = Union[MediumType3D, Medium2D]

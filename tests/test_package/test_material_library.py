@@ -1,5 +1,6 @@
 import pytest
 import numpy as np
+import pydantic
 
 from tidy3d.material_library.material_library import (
     VariantItem,
@@ -35,7 +36,7 @@ def test_MaterialItem():
     material = MaterialItem(name="material", variants=dict(v1=variant1, v2=variant2), default="v1")
     assert material["v1"] == material.medium
 
-    with pytest.raises(SetupError):
+    with pytest.raises(pydantic.ValidationError):
         material = MaterialItem(
             name="material", variants=dict(v1=variant1, v2=variant2), default="v3"
         )
@@ -44,6 +45,8 @@ def test_MaterialItem():
 def test_library():
     """for each member of material library, ensure that it evaluates eps_model correctly"""
     for material_name, material in material_library.items():
+        if isinstance(material, type):
+            continue
         for variant_name, variant in material.variants.items():
             if variant.medium.frequency_range:
                 fmin, fmax = variant.medium.frequency_range

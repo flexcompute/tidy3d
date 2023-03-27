@@ -2,9 +2,10 @@
 import pytest
 import numpy as np
 import matplotlib.pylab as plt
+import pydantic
 
 import tidy3d as td
-from tidy3d.exceptions import DataError
+from tidy3d.exceptions import DataError, Tidy3dKeyError
 
 from tidy3d.components.simulation import Simulation
 from tidy3d.components.grid.grid_spec import GridSpec
@@ -161,6 +162,12 @@ def test_intensity(monitor_name):
     _ = sim_data.get_intensity(monitor_name)
 
 
+@pytest.mark.parametrize("monitor_name", ["field", "field_time", "mode_solver"])
+def test_poynting(monitor_name):
+    sim_data = make_sim_data()
+    _ = sim_data.get_poynting_vector(monitor_name)
+
+
 def test_final_decay():
     sim_data = make_sim_data()
     dv = sim_data.final_decay_value
@@ -182,9 +189,40 @@ def test_to_json():
     sim_data.to_file(fname=FNAME)
 
     # saving to json does not store data, so trying to load from file will trigger custom error.
-    with pytest.raises(DataError):
+    with pytest.raises(pydantic.ValidationError):
         sim_data2 = SimulationData.from_file(fname=FNAME)
         # assert sim_data == sim_data2
+
+
+@pytest.mark.filterwarnings("ignore:log10")
+@pytest.mark.parametrize("field_name", ["Ex", "Ey", "Ez", "E", "Hx", "Hz", "Sy"])
+@pytest.mark.parametrize("val", ["real", "imag", "abs", "phase"])
+def test_derived_components(field_name, val):
+    sim_data = make_sim_data()
+    if len(field_name) == 1 and val == "phase":
+        with pytest.raises(Tidy3dKeyError):
+            sim_data.plot_field(
+                "field_time",
+                field_name=field_name,
+                val=val,
+                y=0.0,
+                time=1e-12,
+                ax=AX,
+            )
+    else:
+        sim_data.plot_field(
+            "field_time",
+            field_name=field_name,
+            val=val,
+            y=0.0,
+            time=1e-12,
+            ax=AX,
+        )
+
+
+def test_logscale():
+    sim_data = make_sim_data()
+    sim_data.plot_field("field_time", "Ex", val="real", scale="dB", y=0.0, time=1e-12, ax=AX)
 
 
 def test_sel_kwarg_freq():
@@ -343,7 +381,7 @@ def test_missing_monitor():
     sim_data = make_sim_data()
     new_monitors = list(sim_data.simulation.monitors)[:-1]
     new_sim = sim_data.simulation.copy(update=dict(monitors=new_monitors))
-    with pytest.raises(DataError):
+    with pytest.raises(pydantic.ValidationError):
         new_sim_data = sim_data.copy(update=dict(simulation=new_sim))
 
 

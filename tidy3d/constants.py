@@ -22,6 +22,7 @@ EPSILON_0 = 1 / (MU_0 * C_0**2)
 ETA_0 = np.sqrt(MU_0 / EPSILON_0)
 Q_e = 1.602176634e-19
 HBAR = 6.582119569e-16
+K_B = 8.617333262e-5
 
 # floating point precisions
 dp_eps = np.finfo(np.float64).eps
@@ -43,6 +44,8 @@ CONDUCTIVITY = "S/um"
 PERMITTIVITY = "None (relative permittivity)"
 PML_SIGMA = "2*EPSILON_0/dt"
 RADPERSEC = "rad/sec"
+ELECTRON_VOLT = "eV"
+KELVIN = "K"
 
 # large number used for comparing infinity
 LARGE_NUMBER = 1e10

@@ -77,9 +77,9 @@ pip install -e .
 
 Authentication (linking the front end to your account) will be done via an API key moving forward.
 
-You can find your API key in the web interface http://tidy3d.simulation.cloud
+You can find your API key in the [web interface](ehttp://tidy3d.simulation.cloud)
 
-After signing in, copy the API key for the next steps.
+After signing in and navigating to the account page by clicking the "user" icon on the left-hand side, copy the API key from the button on the right-hand side of the page.
 
 To set up the API key to work with Tidy3D, we need to store it either in the `~/.tidy3d/config` file or an environment variable.
 
@@ -88,6 +88,13 @@ You can set it up using one of three following options.
 #### Command line (recommended)
 
 ``tidy3d configure`` and then enter your API key when prompted.
+
+Note that Windows users must run the following instead (ideally in an anaconda prompt):
+
+```
+pip install pipx
+pipx run tidy3d configure
+```
 
 #### Manually
 
@@ -99,9 +106,9 @@ or manually insert the line `'apikey = "{your_api_key}"` in the `~/.tidy3d/confi
 
 #### Environment Variable
 
-Set the `SIMCLOUD_API_KEY` environment variable to your API key (in quotes).
+Set the `SIMCLOUD_APIKEY` environment variable to your API key (in quotes).
 
-``export SIMCLOUD_API_KEY="{your_api_key}"``
+``export SIMCLOUD_APIKEY="{your_api_key}"``
 
 ### Testing the installation and authentication
 

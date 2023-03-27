@@ -13,6 +13,47 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [1.9.2] - 2023-3-08
 
 ### Added
+### Added
+- `SimulationData.plot_field` accepts new field components and values, including the Poynting vector.
+- `SimulationData.get_poynting_vector` for calculating the 3D Poynting vector at the Yee cell centers.
+- Post-init validation of Tidy3D components.
+- Validate post-Simulation init to error if any structures have bounds that terminate inside of the PML.
+- `Medium2D` class for surface conductivity model of a 2D material.
+- Entries in `material_library` for graphene and some common TMDs.
+- Ability to create a 2D representation of a thin 3D material.
+- Total-field scattered-field (TFSF) source which allows angled plane waves to be injected into a finite region of space (the total-field region), such that only scattered fields exist outside this region (scattered-field region).
+- Validate `slab_bounds` for `PolySlab`.
+
+### Changed
+- `export_matlib_to_file` in `material_library` exports material's full name in additional to abbreviation.
+- Simpler progress bars for `run_async`.
+- Medium property `n_cfl` added to adjust time step size according to CFL condition.
+- In the mode solver plugin, regular methods in `solver.py` transformed into classmethods.
+- `ArrayLike` types are stored internally as `np.ndarray` and written to json as lists. `constrained_array()` provides way to validate `ArrayLike` values based on `ndim` and `dtype`.
+- Tidy3D account authentication done primarily through API key. Migration option offered for useres with old username / password authentication.
+- Pip installing tidy3d automatically creates `~/.tidy3d` directory in home directory.
+- Percentage done and field decay determined through http request.
+
+### Fixed
+- Bug in remote file transfer when client environment has no correct certificate authority pem file install locally. 
+- `SourceTime` plotting methods `.plot()` and `.plot_spectrum()` accept a `val` kwarg, which selects which part of the data (`'real'`, `'imag'`, or `'abs'`) to plot, rather than plotting all at once.
+- Tidy3D exceptions inherit from `ValueError` so they are handled properly by pydantic.
+- Two unstable materials in `material_library`: `Cu_JohnsonChristy1972` and `Ni_JohnsonChristy1972`. `TiOx_HoribStable` added for improved stability.
+- Bug in infinite long cylinder when the `reference_plane` is not at the bottom or the cylinder is slanted.
+
+## [1.10.0rc1] - 2023-3-07
+
+### Added
+- `TriangleMesh` class for modeling geometries specified by triangle surface meshes, with support for STL file import.
+
+## [1.9.3] - 2023-3-08
+
+### Fixed
+- Allow new `tidy3d.config.logging_level` to accept lower case for backwards compatibility.
+
+## [1.9.2] - 2023-3-08
+
+### Added
 - `set_logging_console` allows redirection of console messages to stderr.
 
 ### Changed
@@ -47,6 +88,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Issue a deprecation warning that `Geometry.intersections` will be renamed to `Geometry.intersections_plane` in 2.0.
 - Limit some warnings to only show for the first structure for which they are encountered.
 - Billed flex unit no longer shown at the end of `web.run` as it may take a few seconds until it is available. Instead, added a `web.real_cost(task_id)` function to get the cost after a task run.
+- Refactored `tidy3d.web` for more robustness and test coverage.
 
 ### Fixed
 - Progressbars always set to 100% when webapi functions are finished.
@@ -596,6 +638,8 @@ which fields are to be projected is now determined automatically based on the me
 - Job and Batch classes for better simulation handling (eventually to fully replace webapi functions).
 - A large number of small improvements and bug fixes.
 
+[Unreleased]: https://github.com/flexcompute/tidy3d/compare/v1.10.0rc1...develop
+[1.10.0rc1]: https://github.com/flexcompute/tidy3d/compare/v1.9.1...v1.10.0rc1
 [Unreleased]: https://github.com/flexcompute/tidy3d/compare/v1.9.3...develop
 [1.9.3]: https://github.com/flexcompute/tidy3d/compare/v1.9.2...v1.9.3
 [1.9.2]: https://github.com/flexcompute/tidy3d/compare/v1.9.1...v1.9.2

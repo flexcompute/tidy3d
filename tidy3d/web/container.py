@@ -48,6 +48,13 @@ class Job(WebContainer):
         "``{'id', 'status', 'name', 'workUnit', 'solverVersion'}``.",
     )
 
+    solver_version: str = pd.Field(
+        None,
+        title="Solver Version",
+        description_str="Custom solver version to use, "
+        "otherwise uses default for the current front end version.",
+    )
+
     verbose: bool = pd.Field(
         True, title="Verbose", description="Whether to print info messages and progressbars."
     )
@@ -114,7 +121,7 @@ class Job(WebContainer):
         ----
         To monitor progress of the :class:`Job`, call :meth:`Job.monitor` after started.
         """
-        web.start(self.task_id)
+        web.start(self.task_id, solver_version=self.solver_version)
 
     def get_run_info(self) -> RunInfo:
         """Return information about the running :class:`Job`.
@@ -169,6 +176,10 @@ class Job(WebContainer):
     def delete(self):
         """Delete server-side data associated with :class:`Job`."""
         web.delete(self.task_id)
+
+    def real_cost(self):
+        """Get the billed cost for the task associated with this job."""
+        return web.real_cost(self.task_id)
 
 
 class BatchData(Tidy3dBaseModel):
@@ -248,6 +259,13 @@ class Batch(WebContainer):
         True, title="Verbose", description="Whether to print info messages and progressbars."
     )
 
+    solver_version: str = pd.Field(
+        None,
+        title="Solver Version",
+        description_str="Custom solver version to use, "
+        "otherwise uses default for the current front end version.",
+    )
+
     jobs: Dict[TaskName, Job] = pd.Field(
         None,
         title="Simulations",
@@ -312,6 +330,7 @@ class Batch(WebContainer):
                 simulation=simulation,
                 task_name=task_name,
                 folder_name=values.get("folder_name"),
+                solver_version=values.get("solver_version"),
                 verbose=verbose,
             )
             jobs[task_name] = job
@@ -512,3 +531,12 @@ class Batch(WebContainer):
         """Delete server-side data associated with each task in the batch."""
         for _, job in self.jobs.items():
             job.delete()
+
+    def real_cost(self):
+        """Get the sum of billed costs for each task associated with this batch."""
+        real_cost_sum = 0.0
+        for _, job in self.jobs.items():
+            cost_job = job.real_cost()
+            if cost_job is not None:
+                real_cost_sum += cost_job
+        return real_cost_sum or None

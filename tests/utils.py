@@ -107,6 +107,27 @@ SIM_FULL = Simulation(
             ),
             medium=PoleResidue(eps_inf=1.0, poles=((6206417594288582j, (-3.311074436985222e16j)),)),
         ),
+        Structure(
+            geometry=TriangleMesh.from_triangles(
+                np.array(
+                    [
+                        [[1, 0, 0], [0, 1, 0], [0, 0, 1]],
+                        [[0, 0, 0], [0, 0, 1], [0, 1, 0]],
+                        [[0, 0, 0], [1, 0, 0], [0, 0, 1]],
+                        [[0, 0, 0], [0, 1, 0], [1, 0, 0]],
+                    ]
+                )
+                + np.array(
+                    [
+                        [[1, 1, 1], [1, 1, 1], [1, 1, 1]],
+                        [[1, 1, 1], [1, 1, 1], [1, 1, 1]],
+                        [[1, 1, 1], [1, 1, 1], [1, 1, 1]],
+                        [[1, 1, 1], [1, 1, 1], [1, 1, 1]],
+                    ]
+                )
+            ),
+            medium=td.Medium(permittivity=5),
+        ),
     ],
     sources=[
         UniformCurrentSource(
@@ -184,6 +205,18 @@ SIM_FULL = Simulation(
                     ),
                 )
             ),
+        ),
+        TFSF(
+            center=(1, 2, -3),
+            size=(2.5, 2.5, 0.5),
+            source_time=GaussianPulse(
+                freq0=2e14,
+                fwidth=4e13,
+            ),
+            direction="+",
+            angle_theta=np.pi / 6,
+            angle_phi=np.pi / 5,
+            injection_axis=2,
         ),
     ],
     monitors=(

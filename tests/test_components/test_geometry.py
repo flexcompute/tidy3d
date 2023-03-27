@@ -7,11 +7,13 @@ import shapely
 import matplotlib.pylab as plt
 import gdstk
 import gdspy
+import trimesh
 
 import tidy3d as td
 from tidy3d.exceptions import ValidationError, SetupError, Tidy3dKeyError
 from tidy3d.components.geometry import Geometry, Planar
-from ..utils import assert_log_level, log_capture
+from ..utils import assert_log_level, prepend_tmp, log_capture
+
 
 GEO = td.Box(size=(1, 1, 1))
 GEO_INF = td.Box(size=(1, 1, td.inf))
@@ -159,15 +161,50 @@ def test_bounds_base():
 
 
 def test_center_not_inf_validate():
-    with pytest.raises(ValidationError):
+    with pytest.raises(pydantic.ValidationError):
         g = td.Box(center=(td.inf, 0, 0))
-    with pytest.raises(ValidationError):
+    with pytest.raises(pydantic.ValidationError):
         g = td.Box(center=(-td.inf, 0, 0))
 
 
 def test_radius_not_inf_validate():
-    with pytest.raises(ValidationError):
+    with pytest.raises(pydantic.ValidationError):
         g = td.Sphere(radius=td.inf)
+    with pytest.raises(pydantic.ValidationError):
+        g = td.Cylinder(radius=td.inf, center=(0, 0, 0), axis=1, length=1)
+
+
+def test_slanted_cylinder_infinite_length_validate():
+    g = td.Cylinder(radius=1, center=(0, 0, 0), axis=1, length=td.inf)
+    g = td.Cylinder(radius=1, center=(0, 0, 0), axis=1, length=td.inf, reference_plane="top")
+    g = td.Cylinder(radius=1, center=(0, 0, 0), axis=1, length=td.inf, reference_plane="bottom")
+    g = td.Cylinder(radius=1, center=(0, 0, 0), axis=1, length=td.inf, reference_plane="middle")
+    g = td.Cylinder(
+        radius=1,
+        center=(0, 0, 0),
+        axis=1,
+        length=td.inf,
+        sidewall_angle=0.1,
+        reference_plane="middle",
+    )
+    with pytest.raises(pydantic.ValidationError):
+        g = td.Cylinder(
+            radius=1,
+            center=(0, 0, 0),
+            axis=1,
+            length=td.inf,
+            sidewall_angle=0.1,
+            reference_plane="top",
+        )
+    with pytest.raises(pydantic.ValidationError):
+        g = td.Cylinder(
+            radius=1,
+            center=(0, 0, 0),
+            axis=1,
+            length=td.inf,
+            sidewall_angle=0.1,
+            reference_plane="bottom",
+        )
 
 
 def test_box_from_bounds():
@@ -186,16 +223,21 @@ def test_polyslab_center_axis():
     assert ps.center_axis == 0
 
 
+def test_polyslab_bounds():
+    with pytest.raises(pydantic.ValidationError):
+        td.PolySlab(vertices=((0, 0), (1, 0), (1, 1)), slab_bounds=(0.5, -0.5), axis=2)
+
+
 def test_validate_polyslab_vertices_valid():
-    with pytest.raises(SetupError):
+    with pytest.raises(pydantic.ValidationError):
         POLYSLAB.copy(update=dict(vertices=(1, 2, 3)))
-    with pytest.raises(SetupError):
+    with pytest.raises(pydantic.ValidationError):
         crossing_verts = ((0, 0), (1, 1), (0, 1), (1, 0))
         POLYSLAB.copy(update=dict(vertices=crossing_verts))
 
 
 def test_sidewall_failed_validation():
-    with pytest.raises(ValidationError):
+    with pytest.raises(pydantic.ValidationError):
         POLYSLAB.copy(update=dict(sidewall_angle=1000))
 
 
@@ -225,9 +267,9 @@ def test_gds_cell():
     gds_cell.add(gdstk.rectangle((0, 0), (1, 1)))
     td.PolySlab.from_gds(gds_cell=gds_cell, axis=2, slab_bounds=(-1, 1), gds_layer=0)
     td.PolySlab.from_gds(gds_cell=gds_cell, axis=2, slab_bounds=(-1, 1), gds_layer=0, gds_dtype=0)
-    with pytest.raises(Tidy3dKeyError):
+    with pytest.raises(pydantic.ValidationError):
         td.PolySlab.from_gds(gds_cell=gds_cell, axis=2, slab_bounds=(-1, 1), gds_layer=1)
-    with pytest.raises(Tidy3dKeyError):
+    with pytest.raises(pydantic.ValidationError):
         td.PolySlab.from_gds(
             gds_cell=gds_cell, axis=2, slab_bounds=(-1, 1), gds_layer=1, gds_dtype=0
         )
@@ -260,7 +302,7 @@ def test_geo_group_methods():
 def test_geo_group_empty():
     """dont allow empty geometry list."""
 
-    with pytest.raises(ValidationError):
+    with pytest.raises(pydantic.ValidationError):
         geo_group = td.GeometryGroup(geometries=[])
 
 
@@ -502,3 +544,73 @@ def test_gds_cell():
     td.PolySlab.from_gds(gds_cell=gds_cell, axis=2, slab_bounds=(-1, 1), gds_layer=0)
     with pytest.raises(Tidy3dKeyError):
         td.PolySlab.from_gds(gds_cell=gds_cell, axis=2, slab_bounds=(-1, 1), gds_layer=1)
+
+
+def test_custom_surface_geometry():
+    # create tetrahedron STL
+    vertices = np.array([[0, 0, 0], [1, 0, 0], [0, 1, 0], [0, 0, 1]])
+    faces = np.array([[1, 2, 3], [0, 3, 2], [0, 1, 3], [0, 2, 1]])
+    tetrahedron = trimesh.Trimesh(vertices, faces)
+    geom = td.TriangleMesh.from_trimesh(tetrahedron)
+
+    # test import
+    import_geom = td.TriangleMesh.from_stl("tests/data/tetrahedron.stl")
+    assert np.allclose(import_geom.triangles, geom.triangles)
+
+    # test export and then import
+    geom.trimesh.export(prepend_tmp("export.stl"))
+    import_geom = td.TriangleMesh.from_stl(prepend_tmp("export.stl"))
+    assert np.allclose(import_geom.triangles, geom.triangles)
+
+    # assert np.array_equal(tetrahedron.vectors, export_vectors)
+
+    areas = [0.5 * np.sqrt(2) * np.sqrt(1 + 2 * 0.5**2), 0.5, 0.5, 0.5]
+    unit_normals_unnormalized = [[1, 1, 1], [-1, 0, 0], [0, -1, 0], [0, 0, -1]]
+    unit_normals = [n / np.linalg.norm(n) for n in unit_normals_unnormalized]
+    normals = [n * a for (n, a) in zip(unit_normals, areas)]
+
+    # test bounds
+    assert np.allclose(np.array(geom.bounds), [[0, 0, 0], [1, 1, 1]])
+
+    # test surface area
+    assert np.isclose(geom.surface_area(), np.sum(areas))
+
+    # test volume
+    assert np.isclose(geom.volume(), 1 / 6)
+
+    # test intersections
+    assert shapely.equals(geom.intersections_plane(x=0), shapely.Polygon([[0, 0], [0, 1], [1, 0]]))
+    assert shapely.equals(
+        geom.intersections_plane(z=0.5), shapely.Polygon([[0, 0], [0, 0.5], [0.5, 0]])
+    )
+
+    # test inside
+    assert geom.inside([0.2], [0.2], [0.2])[0]
+    assert not geom.inside([0.8], [0.2], [0.2])[0]
+
+    # test plot
+    _, ax = plt.subplots()
+    _ = geom.plot(z=0.1, ax=ax)
+
+    # test inconsistent winding
+    vertices = np.array([[0, 0, 0], [1, 0, 0], [0, 1, 0], [0, 0, 1]])
+    faces = np.array([[2, 1, 3], [0, 3, 2], [0, 1, 3], [0, 2, 1]])
+    tetrahedron = trimesh.Trimesh(vertices, faces)
+    # we currently just log a warning
+    # with pytest.raises(ValidationError):
+    geom = td.TriangleMesh.from_trimesh(tetrahedron)
+
+    # test non-watertight mesh
+    vertices = np.array([[0, 0, 0], [1, 0, 0], [0, 1, 0], [0, 0, 1]])
+    faces = np.array([[0, 3, 2], [0, 1, 3], [0, 2, 1]])
+    tetrahedron = trimesh.Trimesh(vertices, faces)
+    # we currently just log a warning
+    # with pytest.raises(ValidationError):
+    geom = td.TriangleMesh.from_trimesh(tetrahedron)
+
+    # test zero area triangles
+    vertices = np.array([[1, 0, 0], [1, 0, 0], [0, 1, 0], [0, 0, 1]])
+    faces = np.array([[1, 2, 3], [0, 3, 2], [0, 1, 3], [0, 2, 1]])
+    tetrahedron = trimesh.Trimesh(vertices, faces)
+    with pytest.raises(pydantic.ValidationError):
+        geom = td.TriangleMesh.from_trimesh(tetrahedron)

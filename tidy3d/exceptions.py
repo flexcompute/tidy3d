@@ -3,7 +3,7 @@
 from .log import log
 
 
-class Tidy3dError(Exception):
+class Tidy3dError(ValueError):
     """Any error in tidy3d"""
 
     def __init__(self, message: str = None):

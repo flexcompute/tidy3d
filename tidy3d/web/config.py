@@ -1,4 +1,5 @@
-""" sets configuration options for web interface """
+"""Sets configuration options for web interface."""
+
 import os
 from importlib.resources import path as get_path
 from typing import Any, Dict
@@ -10,15 +11,13 @@ from ..log import log
 
 
 class EnvSettings(pd.BaseSettings):
-    """
-    Settings for reading environment variables
-    """
+    """Settings for reading environment variables."""
 
     tidy3d_ssl_verify: bool = Field(True, env="TIDY3D_SSL_VERIFY")
 
 
 class WebConfig(pd.BaseModel):  # pylint:disable=too-many-instance-attributes
-    """configuration of webapi"""
+    """Configuration of webapi."""
 
     s3_region: str
     studio_bucket: str

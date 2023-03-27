@@ -514,6 +514,33 @@
                 "Hy": null,
                 "Hz": null
             }
+        },
+        {
+            "type": "TFSF",
+            "center": [
+                1.0,
+                2.0,
+                -3.0
+            ],
+            "size": [
+                2.5,
+                2.5,
+                0.5
+            ],
+            "source_time": {
+                "amplitude": 1.0,
+                "phase": 0.0,
+                "type": "GaussianPulse",
+                "freq0": 200000000000000.0,
+                "fwidth": 40000000000000.0,
+                "offset": 5.0
+            },
+            "name": null,
+            "direction": "+",
+            "angle_theta": 0.5235987755982988,
+            "angle_phi": 0.6283185307179586,
+            "pol_angle": 0.0,
+            "injection_axis": 2
         }
     ],
     "boundary_spec": {
@@ -1293,7 +1320,8 @@
                 0.04,
                 0.04,
                 0.04
-            ]
+            ],
+            "custom_offset": null
         },
         "grid_z": {
             "type": "UniformGrid",

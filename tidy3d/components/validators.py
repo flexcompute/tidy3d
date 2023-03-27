@@ -61,6 +61,23 @@ def assert_plane():
     return is_plane
 
 
+def assert_volumetric():
+    """makes sure a field's `size` attribute has no zero entry"""
+
+    @pydantic.validator("size", allow_reuse=True, always=True)
+    def is_volumetric(cls, val):
+        """Raise validation error if volume is 0."""
+        if val.count(0.0) > 0:
+            raise ValidationError(
+                f"'{cls.__name__}' object must be volumetric, given size={val}. "
+                "If intending to make a 2D simulation, please set the size of "
+                f"'{cls.__name__}' along the zero dimension to a dummy non-zero value."
+            )
+        return val
+
+    return is_volumetric
+
+
 def validate_name_str():
     """make sure the name doesnt include [, ] (used for default names)"""
 

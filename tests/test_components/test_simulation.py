@@ -9,10 +9,13 @@ from tidy3d.exceptions import SetupError, ValidationError, Tidy3dKeyError
 from tidy3d.components import simulation
 from tidy3d.components.simulation import MAX_NUM_MEDIUMS
 from ..utils import assert_log_level, SIM_FULL, log_capture
+from tidy3d.constants import LARGE_NUMBER
 
 SIM = td.Simulation(size=(1, 1, 1), run_time=1e-12, grid_spec=td.GridSpec(wavelength=1.0))
 
 _, AX = plt.subplots()
+
+RTOL = 0.01
 
 
 def test_sim_init():
@@ -141,7 +144,7 @@ def test_sim_bounds():
             center = 2 * amp * sign
             if np.sum(center) < 1e-12:
                 continue
-            with pytest.raises(SetupError) as e_info:
+            with pytest.raises(pydantic.ValidationError) as e_info:
                 place_box(tuple(center))
 
 
@@ -159,7 +162,7 @@ def test_sim_size():
         )
         s._validate_size()
 
-    with pytest.raises(SetupError):
+    with pytest.raises(pydantic.ValidationError):
         s = td.Simulation(
             size=(1, 1, 1),
             run_time=1e-7,
@@ -185,7 +188,7 @@ def _test_monitor_size():
         s.validate_pre_upload()
 
 
-@pytest.mark.parametrize("freq, log_level", [(1.5, "warning"), (2.5, None), (3.5, "warning")])
+@pytest.mark.parametrize("freq, log_level", [(1.5, "warning"), (2.5, "info"), (3.5, "warning")])
 def test_monitor_medium_frequency_range(log_capture, freq, log_level):
     # monitor frequency above or below a given medium's range should throw a warning
 
@@ -209,7 +212,7 @@ def test_monitor_medium_frequency_range(log_capture, freq, log_level):
     assert_log_level(log_capture, log_level)
 
 
-@pytest.mark.parametrize("fwidth, log_level", [(0.1, "warning"), (2, None)])
+@pytest.mark.parametrize("fwidth, log_level", [(0.1, "warning"), (2, "info")])
 def test_monitor_simulation_frequency_range(log_capture, fwidth, log_level):
     # monitor frequency outside of the simulation's frequency range should throw a warning
 
@@ -231,7 +234,7 @@ def test_monitor_simulation_frequency_range(log_capture, fwidth, log_level):
 
 
 def test_validate_bloch_with_symmetry():
-    with pytest.raises(SetupError):
+    with pytest.raises(pydantic.ValidationError):
         td.Simulation(
             size=(1, 1, 1),
             run_time=1e-12,
@@ -296,7 +299,7 @@ def test_validate_plane_wave_boundaries(log_capture):
     )
 
     # angled incidence plane wave with PMLs / absorbers should error
-    with pytest.raises(SetupError):
+    with pytest.raises(pydantic.ValidationError):
         td.Simulation(
             size=(1, 1, 1),
             run_time=1e-12,
@@ -559,7 +562,7 @@ def test_large_grid_size(log_capture, grid_size, log_level):
     assert_log_level(log_capture, log_level)
 
 
-@pytest.mark.parametrize("box_size,log_level", [(0.001, None), (9.9, "warning"), (20, None)])
+@pytest.mark.parametrize("box_size,log_level", [(0.001, "info"), (9.9, "warning"), (20, "info")])
 def test_sim_structure_gap(log_capture, box_size, log_level):
     """Make sure the gap between a structure and PML is not too small compared to lambda0."""
     medium = td.Medium(permittivity=2)
@@ -612,7 +615,7 @@ def test_sim_plane_wave_error():
     )
 
     # with non-transparent box, raise
-    with pytest.raises(SetupError):
+    with pytest.raises(pydantic.ValidationError):
         _ = td.Simulation(
             size=(1, 1, 1),
             medium=medium_bg,
@@ -679,7 +682,7 @@ def test_sim_monitor_homogeneous():
         )
 
         # with non-transparent box, raise
-        with pytest.raises(SetupError):
+        with pytest.raises(pydantic.ValidationError):
             _ = td.Simulation(
                 size=(1, 1, 1),
                 medium=medium_bg,
@@ -820,7 +823,7 @@ def test_diffraction_medium():
         pol_angle=-1.0,
     )
 
-    with pytest.raises(SetupError):
+    with pytest.raises(pydantic.ValidationError):
         _ = td.Simulation(
             size=(2, 2, 2),
             structures=[box_cond],
@@ -830,7 +833,7 @@ def test_diffraction_medium():
             boundary_spec=td.BoundarySpec.all_sides(boundary=td.Periodic()),
         )
 
-    with pytest.raises(SetupError):
+    with pytest.raises(pydantic.ValidationError):
         _ = td.Simulation(
             size=(2, 2, 2),
             structures=[box_disp],
@@ -844,7 +847,7 @@ def test_diffraction_medium():
 @pytest.mark.parametrize(
     "box_size,log_level",
     [
-        ((0.1, 0.1, 0.1), None),
+        ((0.1, 0.1, 0.1), "info"),
         ((1, 0.1, 0.1), "warning"),
         ((0.1, 1, 0.1), "warning"),
         ((0.1, 0.1, 1), "warning"),
@@ -870,6 +873,42 @@ def test_sim_structure_extent(log_capture, box_size, log_level):
     assert_log_level(log_capture, log_level)
 
 
+@pytest.mark.parametrize(
+    "box_length,absorb_type,log_level",
+    [
+        (0, "PML", "info"),
+        (0.5, "PML", "info"),
+        (1, "PML", "info"),
+        (1.5, "PML", "warning"),
+        (1.5, "absorber", "info"),
+        (5.0, "PML", "info"),
+    ],
+)
+def test_sim_validate_structure_bounds_pml(log_capture, box_length, absorb_type, log_level):
+    """Make sure we warn if structure bounds are within the PML exactly to simulation edges."""
+
+    boundary = td.PML() if absorb_type == "PML" else td.Absorber()
+
+    src = td.UniformCurrentSource(
+        source_time=td.GaussianPulse(freq0=3e14, fwidth=1e13),
+        size=(0, 0, 0),
+        polarization="Ex",
+    )
+    box = td.Structure(
+        geometry=td.Box(size=(box_length, 0.5, 0.5), center=(0, 0, 0)),
+        medium=td.Medium(permittivity=2),
+    )
+    sim = td.Simulation(
+        size=(1, 1, 1),
+        structures=[box],
+        sources=[src],
+        run_time=1e-12,
+        boundary_spec=td.BoundarySpec.all_sides(boundary=boundary),
+    )
+
+    assert_log_level(log_capture, log_level)
+
+
 def test_num_mediums():
     """Make sure we error if too many mediums supplied."""
 
@@ -887,7 +926,7 @@ def test_num_mediums():
         boundary_spec=td.BoundarySpec.all_sides(boundary=td.Periodic()),
     )
 
-    with pytest.raises(SetupError):
+    with pytest.raises(pydantic.ValidationError):
         structures.append(
             td.Structure(geometry=td.Box(size=(1, 1, 1)), medium=td.Medium(permittivity=i + 2))
         )
@@ -956,7 +995,7 @@ def _test_names_default():
 
 def test_names_unique():
 
-    with pytest.raises(SetupError) as e:
+    with pytest.raises(pydantic.ValidationError) as e:
         sim = td.Simulation(
             size=(2.0, 2.0, 2.0),
             run_time=1e-12,
@@ -975,7 +1014,7 @@ def test_names_unique():
             boundary_spec=td.BoundarySpec.all_sides(boundary=td.Periodic()),
         )
 
-    with pytest.raises(SetupError) as e:
+    with pytest.raises(pydantic.ValidationError) as e:
         sim = td.Simulation(
             size=(2.0, 2.0, 2.0),
             run_time=1e-12,
@@ -998,7 +1037,7 @@ def test_names_unique():
             boundary_spec=td.BoundarySpec.all_sides(boundary=td.Periodic()),
         )
 
-    with pytest.raises(SetupError) as e:
+    with pytest.raises(pydantic.ValidationError) as e:
         sim = td.Simulation(
             size=(2.0, 2.0, 2.0),
             run_time=1e-12,
@@ -1015,7 +1054,7 @@ def test_mode_object_syms():
     g = td.GaussianPulse(freq0=1, fwidth=0.1)
 
     # wrong mode source
-    with pytest.raises(SetupError) as e_info:
+    with pytest.raises(pydantic.ValidationError) as e_info:
         sim = td.Simulation(
             center=(1.0, -1.0, 0.5),
             size=(2.0, 2.0, 2.0),
@@ -1027,7 +1066,7 @@ def test_mode_object_syms():
         )
 
     # wrong mode monitor
-    with pytest.raises(SetupError) as e_info:
+    with pytest.raises(pydantic.ValidationError) as e_info:
         sim = td.Simulation(
             center=(1.0, -1.0, 0.5),
             size=(2.0, 2.0, 2.0),
@@ -1067,6 +1106,193 @@ def test_mode_object_syms():
     )
 
 
+def test_tfsf_symmetry():
+    """Test that a TFSF source cannot be set in the presence of symmetries."""
+    src_time = td.GaussianPulse(freq0=1, fwidth=0.1)
+
+    source = td.TFSF(
+        size=[1, 1, 1],
+        source_time=src_time,
+        pol_angle=0,
+        angle_theta=np.pi / 4,
+        angle_phi=np.pi / 6,
+        direction="+",
+        injection_axis=2,
+    )
+
+    with pytest.raises(pydantic.ValidationError) as e:
+        _ = td.Simulation(
+            size=(2.0, 2.0, 2.0),
+            grid_spec=td.GridSpec.auto(wavelength=td.C_0 / 1.0),
+            run_time=1e-12,
+            symmetry=(0, -1, 0),
+            sources=[source],
+        )
+
+
+def test_tfsf_boundaries(log_capture):
+    """Test that a TFSF source is allowed to cross boundaries only in particular cases."""
+    src_time = td.GaussianPulse(freq0=td.C_0, fwidth=0.1)
+
+    source = td.TFSF(
+        size=[1, 1, 1],
+        source_time=src_time,
+        pol_angle=0,
+        angle_theta=np.pi / 4,
+        angle_phi=np.pi / 6,
+        direction="+",
+        injection_axis=2,
+    )
+
+    # can cross periodic boundaries in the transverse directions
+    _ = td.Simulation(
+        size=(2.0, 0.5, 2.0),
+        grid_spec=td.GridSpec.auto(wavelength=1.0),
+        run_time=1e-12,
+        sources=[source],
+    )
+
+    # can cross Bloch boundaries in the transverse directions
+    _ = td.Simulation(
+        size=(0.5, 0.5, 2.0),
+        grid_spec=td.GridSpec.auto(wavelength=1.0),
+        run_time=1e-12,
+        sources=[source],
+        boundary_spec=td.BoundarySpec(
+            x=td.Boundary.bloch_from_source(source=source, domain_size=0.5, axis=0, medium=None),
+            y=td.Boundary.bloch_from_source(source=source, domain_size=0.5, axis=1, medium=None),
+            z=td.Boundary.pml(),
+        ),
+    )
+
+    # warn if Bloch boundaries are crossed in the transverse directions but
+    # the Bloch vector is incorrect
+    _ = td.Simulation(
+        size=(0.5, 0.5, 2.0),
+        grid_spec=td.GridSpec.auto(wavelength=1.0),
+        run_time=1e-12,
+        sources=[source],
+        boundary_spec=td.BoundarySpec(
+            x=td.Boundary.bloch_from_source(
+                source=source, domain_size=0.5 * 1.1, axis=0, medium=None  # wrong domain size
+            ),
+            y=td.Boundary.bloch_from_source(
+                source=source, domain_size=0.5 * 1.1, axis=1, medium=None  # wrong domain size
+            ),
+            z=td.Boundary.pml(),
+        ),
+    )
+    assert_log_level(log_capture, "warning")
+
+    # cannot cross any boundary in the direction of injection
+    with pytest.raises(pydantic.ValidationError) as e:
+        _ = td.Simulation(
+            size=(2.0, 2.0, 0.5),
+            grid_spec=td.GridSpec.auto(wavelength=1.0),
+            run_time=1e-12,
+            sources=[source],
+        )
+
+    # cannot cross any non-periodic boundary in the transverse direction
+    with pytest.raises(pydantic.ValidationError) as e:
+        _ = td.Simulation(
+            center=(0.5, 0, 0),  # also check the case when the boundary is crossed only on one side
+            size=(0.5, 0.5, 2.0),
+            grid_spec=td.GridSpec.auto(wavelength=1.0),
+            run_time=1e-12,
+            sources=[source],
+            boundary_spec=td.BoundarySpec(
+                x=td.Boundary.pml(),
+                y=td.Boundary.absorber(),
+            ),
+        )
+
+
+def test_tfsf_structures_grid(log_capture):
+    """Test that a TFSF source is allowed to intersect structures only in particular cases."""
+    src_time = td.GaussianPulse(freq0=td.C_0, fwidth=0.1)
+
+    source = td.TFSF(
+        size=[1, 1, 1],
+        source_time=src_time,
+        pol_angle=0,
+        angle_theta=np.pi / 4,
+        angle_phi=np.pi / 6,
+        direction="+",
+        injection_axis=2,
+    )
+
+    # a non-uniform mesh along the transverse directions should issue a warning
+    sim = td.Simulation(
+        size=(2.0, 2.0, 2.0),
+        grid_spec=td.GridSpec.auto(wavelength=1.0),
+        run_time=1e-12,
+        sources=[source],
+        structures=[
+            td.Structure(
+                geometry=td.Box(center=(0, 0, -1), size=(0.5, 0.5, 0.5)),
+                medium=td.Medium(permittivity=2),
+            )
+        ],
+    )
+    sim.validate_pre_upload()
+    assert_log_level(log_capture, "warning")
+
+    # must not have different material profiles on different faces along the injection axis
+    with pytest.raises(SetupError) as e:
+        sim = td.Simulation(
+            size=(2.0, 2.0, 2.0),
+            grid_spec=td.GridSpec.auto(wavelength=1.0),
+            run_time=1e-12,
+            sources=[source],
+            structures=[
+                td.Structure(
+                    geometry=td.Box(center=(0.5, 0, 0), size=(0.25, 0.25, 0.25)),
+                    medium=td.Medium(permittivity=2),
+                )
+            ],
+        )
+        sim.validate_pre_upload()
+
+    # different structures *are* allowed on different faces as long as material properties match
+    sim = td.Simulation(
+        size=(2.0, 2.0, 2.0),
+        grid_spec=td.GridSpec.auto(wavelength=1.0),
+        run_time=1e-12,
+        sources=[source],
+        structures=[
+            td.Structure(
+                geometry=td.Box(center=(0.5, 0, 0), size=(0.25, 0.25, 0.25)), medium=td.Medium()
+            )
+        ],
+    )
+
+    # TFSF box must not intersect a custom medium
+    Nx, Ny, Nz = 10, 9, 8
+    X = np.linspace(-1, 1, Nx)
+    Y = np.linspace(-1, 1, Ny)
+    Z = np.linspace(-1, 1, Nz)
+    data = np.ones((Nx, Ny, Nz, 1))
+    eps_diagonal_data = td.ScalarFieldDataArray(data, coords=dict(x=X, y=Y, z=Z, f=[td.C_0]))
+    eps_components = {f"eps_{d}{d}": eps_diagonal_data for d in "xyz"}
+    eps_dataset = td.PermittivityDataset(**eps_components)
+    custom_medium = td.CustomMedium(eps_dataset=eps_dataset, name="my_medium")
+    sim = td.Simulation(
+        size=(2.0, 2.0, 2.0),
+        grid_spec=td.GridSpec.auto(wavelength=1.0),
+        run_time=1e-12,
+        sources=[source],
+        structures=[
+            td.Structure(
+                geometry=td.Box(center=(0.5, 0, 0), size=(td.inf, td.inf, 0.25)),
+                medium=custom_medium,
+            )
+        ],
+    )
+    with pytest.raises(SetupError) as e:
+        sim.validate_pre_upload()
+
+
 @pytest.mark.parametrize(
     "size, num_struct, log_level", [(1, 1, None), (50, 1, "warning"), (1, 11000, "warning")]
 )
@@ -1098,3 +1324,164 @@ def test_warn_large_epsilon(log_capture, size, num_struct, log_level):
     )
     sim.epsilon(box=td.Box(size=(size, size, size)))
     assert_log_level(log_capture, log_level)
+
+
+def test_dt():
+    """make sure dt is reduced when there is a medium with eps_inf < 1."""
+    sim = td.Simulation(
+        size=(2.0, 2.0, 2.0),
+        run_time=1e-12,
+        grid_spec=td.GridSpec.uniform(dl=0.1),
+    )
+    dt = sim.dt
+
+    # simulation with eps_inf < 1
+    structure = td.Structure(
+        geometry=td.Box(size=(1, 1, 1), center=(-1, 0, 0)),
+        medium=td.PoleResidue(eps_inf=0.16, poles=[(1 + 1j, 2 + 2j)]),
+    )
+    sim_new = sim.copy(update=dict(structures=[structure]))
+    assert sim_new.dt == 0.4 * dt
+
+
+def test_sim_volumetric_structures():
+    """Test volumetric equivalent of 2D materials."""
+    sigma = 0.45
+    thickness = 0.01
+    medium = td.Medium2D.from_medium(td.Medium(conductivity=sigma), thickness=thickness)
+    grid_dl = 0.03
+    box = td.Structure(geometry=td.Box(size=(td.inf, td.inf, 0)), medium=medium)
+    cyl = td.Structure(geometry=td.Cylinder(radius=1, length=0), medium=medium)
+    pslab = td.Structure(
+        geometry=td.PolySlab(vertices=[(-1, -1), (-1, 1), (1, 1), (1, -1)], slab_bounds=(0, 0)),
+        medium=medium,
+    )
+    src = td.UniformCurrentSource(
+        source_time=td.GaussianPulse(freq0=1.5e14, fwidth=0.5e14),
+        size=(0, 0, 0),
+        polarization="Ex",
+    )
+    for struct in [box, cyl, pslab]:
+        sim = td.Simulation(
+            size=(10, 10, 10),
+            structures=[struct],
+            sources=[src],
+            boundary_spec=td.BoundarySpec(
+                x=td.Boundary.pml(num_layers=5),
+                y=td.Boundary.pml(num_layers=5),
+                z=td.Boundary.pml(num_layers=5),
+            ),
+            grid_spec=td.GridSpec.uniform(dl=grid_dl),
+            run_time=1e-12,
+        )
+        if isinstance(struct.geometry, td.Box):
+            assert np.isclose(sim.volumetric_structures[0].geometry.size[2], grid_dl, rtol=RTOL)
+        else:
+            assert np.isclose(sim.volumetric_structures[0].geometry.length_axis, grid_dl, rtol=RTOL)
+        assert np.isclose(
+            sim.volumetric_structures[0].medium.xx.to_medium().conductivity,
+            sigma * thickness / grid_dl,
+            rtol=RTOL,
+        )
+    # now with a substrate and anisotropy
+    aniso_medium = td.AnisotropicMedium(
+        xx=td.Medium(permittivity=2), yy=td.Medium(), zz=td.Medium()
+    )
+    box = td.Structure(
+        geometry=td.Box(size=(td.inf, td.inf, 0)),
+        medium=td.Medium2D.from_medium(td.PEC, thickness=thickness),
+    )
+    below = td.Structure(
+        geometry=td.Box.from_bounds([-td.inf, -td.inf, -1000], [td.inf, td.inf, 0]),
+        medium=aniso_medium,
+    )
+
+    sim = td.Simulation(
+        size=(10, 10, 10),
+        structures=[below, box],
+        sources=[src],
+        boundary_spec=td.BoundarySpec(
+            x=td.Boundary.pml(num_layers=5),
+            y=td.Boundary.pml(num_layers=5),
+            z=td.Boundary.pml(num_layers=5),
+        ),
+        grid_spec=td.GridSpec.uniform(dl=grid_dl),
+        run_time=1e-12,
+    )
+    assert np.isclose(
+        sim.volumetric_structures[1].medium.xx.to_medium().permittivity,
+        1.5,
+        rtol=RTOL,
+    )
+    assert np.isclose(sim.volumetric_structures[1].medium.yy.to_medium().permittivity, 1, rtol=RTOL)
+    assert np.isclose(
+        sim.volumetric_structures[1].medium.xx.to_medium().conductivity,
+        LARGE_NUMBER * thickness / grid_dl,
+        rtol=RTOL,
+    )
+    # nonuniform sub/super-strate should error
+    below_half = td.Structure(
+        geometry=td.Box.from_bounds([-100, -td.inf, -1000], [0, td.inf, 0]),
+        medium=aniso_medium,
+    )
+
+    sim = td.Simulation(
+        size=(10, 10, 10),
+        structures=[below_half, box],
+        sources=[src],
+        boundary_spec=td.BoundarySpec(
+            x=td.Boundary.pml(num_layers=5),
+            y=td.Boundary.pml(num_layers=5),
+            z=td.Boundary.pml(num_layers=5),
+        ),
+        grid_spec=td.GridSpec.uniform(dl=grid_dl),
+        run_time=1e-12,
+    )
+
+    with pytest.raises(SetupError):
+        _ = sim.volumetric_structures
+
+    # structure overlaying the 2D material should overwrite it like normal
+    sim = td.Simulation(
+        size=(10, 10, 10),
+        structures=[box, below],
+        sources=[src],
+        boundary_spec=td.BoundarySpec(
+            x=td.Boundary.pml(num_layers=5),
+            y=td.Boundary.pml(num_layers=5),
+            z=td.Boundary.pml(num_layers=5),
+        ),
+        grid_spec=td.GridSpec.uniform(dl=grid_dl),
+        run_time=1e-12,
+    )
+
+    assert np.isclose(sim.volumetric_structures[1].medium.xx.permittivity, 2, rtol=RTOL)
+
+    # test simulation.medium can't be Medium2D
+    with pytest.raises(Exception):
+        sim = td.Simulation(
+            size=(10, 10, 10),
+            structures=[],
+            sources=[src],
+            medium=box.medium,
+            boundary_spec=td.BoundarySpec(
+                x=td.Boundary.pml(num_layers=5),
+                y=td.Boundary.pml(num_layers=5),
+                z=td.Boundary.pml(num_layers=5),
+            ),
+            grid_spec=td.GridSpec.uniform(dl=grid_dl),
+            run_time=1e-12,
+        )
+
+    # test 2d medium is added to 2d geometry
+    with pytest.raises(Exception):
+        _ = td.Structure(geometry=td.Box(center=(0, 0, 0), size=(1, 1, 1)), medium=box.medium)
+    with pytest.raises(Exception):
+        _ = td.Structure(geometry=td.Cylinder(radius=1, length=1), medium=box.medium)
+    with pytest.raises(Exception):
+        _ = td.Structure(
+            geometry=td.PolySlab(vertices=[(0, 0), (1, 0), (1, 1)], slab_bounds=(-1, 1)),
+            medium=box.medium,
+        )
+    with pytest.raises(Exception):
+        _ = td.Structure(geometry=td.Sphere(radius=1), medium=box.medium)

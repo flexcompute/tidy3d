@@ -40,6 +40,10 @@ def main(args):
     )
 
     parser.add_argument(
+        "--folder_name", "-f", default="default", required=False, help="folder name for task"
+    )
+
+    parser.add_argument(
         "--test_only",
         action="store_true",
         required=False,
@@ -54,12 +58,14 @@ def main(args):
     inspect_credits = args.inspect_credits
     task_name = args.task_name
     test_only = args.test_only
+    folder_name = args.folder_name
 
     print("simulation file: ", sim_file)
     print("data output file: ", out_file)
     print("inspect simulation: ", inspect_sim)
     print("inspect credits: ", inspect_credits)
     print("task name: ", task_name)
+    print("folder name: ", folder_name)
 
     """ main script """
 
@@ -81,7 +87,7 @@ def main(args):
         return
 
     # create job
-    job = Job(simulation=simulation, task_name=task_name)
+    job = Job(simulation=simulation, task_name=task_name, folder_name=folder_name)
 
     # inspect credit and data usage
     if inspect_credits:

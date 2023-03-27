@@ -25,6 +25,9 @@ DIM_ATTRS = {
     "uy": {"long_name": "normalized ky"},
     "orders_x": {"long_name": "diffraction order"},
     "orders_y": {"long_name": "diffraction order"},
+    "face_index": {"long_name": "face index"},
+    "vertex_index": {"long_name": "vertex index"},
+    "axis": {"long_name": "axis"},
 }
 
 
@@ -397,6 +400,14 @@ class DiffractionDataArray(DataArray):
     _data_attrs = {"long_name": "diffraction amplitude"}
 
 
+class TriangleMeshDataArray(DataArray):
+    """Data of the triangles of a surface mesh as in the STL file format."""
+
+    __slots__ = ()
+    _dims = ("face_index", "vertex_index", "axis")
+    _data_attrs = {"long_name": "surface mesh triangles"}
+
+
 DATA_ARRAY_TYPES = [
     ScalarFieldDataArray,
     ScalarFieldTimeDataArray,
@@ -413,5 +424,6 @@ DATA_ARRAY_TYPES = [
     FreqDataArray,
     TimeDataArray,
     FreqModeDataArray,
+    TriangleMeshDataArray,
 ]
 DATA_ARRAY_MAP = {data_array.__name__: data_array for data_array in DATA_ARRAY_TYPES}
