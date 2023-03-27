@@ -5,15 +5,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [1.9.3] - 2023-3-08
+### Added
+
+### Changed
 
 ### Fixed
-- Allow new `tidy3d.config.logging_level` to accept lower case for backwards compatibility.
 
-## [1.9.2] - 2023-3-08
+## [1.10.0] - 2023-3-28
 
 ### Added
-### Added
+- `TriangleMesh` class for modeling geometries specified by triangle surface meshes, with support for STL file import.
 - `SimulationData.plot_field` accepts new field components and values, including the Poynting vector.
 - `SimulationData.get_poynting_vector` for calculating the 3D Poynting vector at the Yee cell centers.
 - Post-init validation of Tidy3D components.
@@ -40,11 +41,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Tidy3D exceptions inherit from `ValueError` so they are handled properly by pydantic.
 - Two unstable materials in `material_library`: `Cu_JohnsonChristy1972` and `Ni_JohnsonChristy1972`. `TiOx_HoribStable` added for improved stability.
 - Bug in infinite long cylinder when the `reference_plane` is not at the bottom or the cylinder is slanted.
-
-## [1.10.0rc1] - 2023-3-07
-
-### Added
-- `TriangleMesh` class for modeling geometries specified by triangle surface meshes, with support for STL file import.
 
 ## [1.9.3] - 2023-3-08
 
@@ -638,9 +634,8 @@ which fields are to be projected is now determined automatically based on the me
 - Job and Batch classes for better simulation handling (eventually to fully replace webapi functions).
 - A large number of small improvements and bug fixes.
 
-[Unreleased]: https://github.com/flexcompute/tidy3d/compare/v1.10.0rc1...develop
-[1.10.0rc1]: https://github.com/flexcompute/tidy3d/compare/v1.9.1...v1.10.0rc1
-[Unreleased]: https://github.com/flexcompute/tidy3d/compare/v1.9.3...develop
+[Unreleased]: https://github.com/flexcompute/tidy3d/compare/v1.10.0...develop
+[1.10.0]: https://github.com/flexcompute/tidy3d/compare/v1.9.3...v1.10.0
 [1.9.3]: https://github.com/flexcompute/tidy3d/compare/v1.9.2...v1.9.3
 [1.9.2]: https://github.com/flexcompute/tidy3d/compare/v1.9.1...v1.9.2
 [1.9.1]: https://github.com/flexcompute/tidy3d/compare/v1.9.0...v1.9.1

@@ -1,6 +1,6 @@
 {
   "title": "Simulation",
-  "description": "Contains all information about Tidy3d simulation.\n\nParameters\n----------\ncenter : Tuple[float, float, float] = (0.0, 0.0, 0.0)\n    [units = um].  Center of object in x, y, and z.\nsize : Tuple[NonNegativeFloat, NonNegativeFloat, NonNegativeFloat]\n    [units = um].  Size in x, y, and z directions.\nrun_time : PositiveFloat\n    [units = sec].  Total electromagnetic evolution time in seconds. Note: If simulation 'shutoff' is specified, simulation will terminate early when shutoff condition met. \nmedium : Union[Medium, CustomMedium, AnisotropicMedium, PECMedium, PoleResidue, Sellmeier, Lorentz, Debye, Drude] = Medium(name=None, frequency_range=None, type='Medium', permittivity=1.0, conductivity=0.0)\n    Background medium of simulation, defaults to vacuum if not specified.\nsymmetry : Tuple[Literal[0, -1, 1], Literal[0, -1, 1], Literal[0, -1, 1]] = (0, 0, 0)\n    Tuple of integers defining reflection symmetry across a plane bisecting the simulation domain normal to the x-, y-, and z-axis at the simulation center of each axis, respectvely. Each element can be ``0`` (no symmetry), ``1`` (even, i.e. 'PMC' symmetry) or ``-1`` (odd, i.e. 'PEC' symmetry). Note that the vectorial nature of the fields must be taken into account to correctly determine the symmetry value.\nstructures : Tuple[Structure, ...] = ()\n    Tuple of structures present in simulation. Note: Structures defined later in this list override the simulation material properties in regions of spatial overlap.\nsources : Tuple[Annotated[Union[tidy3d.components.source.UniformCurrentSource, tidy3d.components.source.PointDipole, tidy3d.components.source.GaussianBeam, tidy3d.components.source.AstigmaticGaussianBeam, tidy3d.components.source.ModeSource, tidy3d.components.source.PlaneWave, tidy3d.components.source.CustomFieldSource], FieldInfo(default=PydanticUndefined, discriminator='type', extra={})], ...] = ()\n    Tuple of electric current sources injecting fields into the simulation.\nboundary_spec : Optional[BoundarySpec] = None\n    Specification of boundary conditions along each dimension. If ``None``, periodic boundary conditions are applied on all sides. Default will change to PML in 2.0 so explicitly setting the boundaries is recommended.\nmonitors : Tuple[Annotated[Union[tidy3d.components.monitor.FieldMonitor, tidy3d.components.monitor.FieldTimeMonitor, tidy3d.components.monitor.PermittivityMonitor, tidy3d.components.monitor.FluxMonitor, tidy3d.components.monitor.FluxTimeMonitor, tidy3d.components.monitor.ModeMonitor, tidy3d.components.monitor.ModeSolverMonitor, tidy3d.components.monitor.FieldProjectionAngleMonitor, tidy3d.components.monitor.FieldProjectionCartesianMonitor, tidy3d.components.monitor.FieldProjectionKSpaceMonitor, tidy3d.components.monitor.DiffractionMonitor], FieldInfo(default=PydanticUndefined, discriminator='type', extra={})], ...] = ()\n    Tuple of monitors in the simulation. Note: monitor names are used to access data after simulation is run.\ngrid_spec : GridSpec = GridSpec(grid_x=AutoGrid(type='AutoGrid',, min_steps_per_wvl=10.0,, max_scale=1.4,, dl_min=0.0,, mesher=GradedMesher(type='GradedMesher')), grid_y=AutoGrid(type='AutoGrid',, min_steps_per_wvl=10.0,, max_scale=1.4,, dl_min=0.0,, mesher=GradedMesher(type='GradedMesher')), grid_z=AutoGrid(type='AutoGrid',, min_steps_per_wvl=10.0,, max_scale=1.4,, dl_min=0.0,, mesher=GradedMesher(type='GradedMesher')), wavelength=None, override_structures=(), type='GridSpec')\n    Specifications for the simulation grid along each of the three directions.\nshutoff : NonNegativeFloat = 1e-05\n    Ratio of the instantaneous integrated E-field intensity to the maximum value at which the simulation will automatically terminate time stepping. Used to prevent extraneous run time of simulations with fully decayed fields. Set to ``0`` to disable this feature.\nsubpixel : bool = True\n    If ``True``, uses subpixel averaging of the permittivity based on structure definition, resulting in much higher accuracy for a given grid size.\nnormalize_index : Optional[NonNegativeInt] = 0\n    Index of the source in the tuple of sources whose spectrum will be used to normalize the frequency-dependent data. If ``None``, the raw field data is returned unnormalized.\ncourant : ConstrainedFloatValue = 0.99\n    Courant stability factor, controls time step to spatial step ratio. Lower values lead to more stable simulations for dispersive materials, but result in longer simulation times. This factor is normalized to no larger than 1 when CFL stability condition is met in 3D.\nversion : str = 1.10.0rc1\n    String specifying the front end version number.\n\nExample\n-------\n>>> from tidy3d import Sphere, Cylinder, PolySlab\n>>> from tidy3d import UniformCurrentSource, GaussianPulse\n>>> from tidy3d import FieldMonitor, FluxMonitor\n>>> from tidy3d import GridSpec, AutoGrid\n>>> from tidy3d import BoundarySpec, Boundary\n>>> sim = Simulation(\n...     size=(2.0, 2.0, 2.0),\n...     grid_spec=GridSpec(\n...         grid_x = AutoGrid(min_steps_per_wvl = 20),\n...         grid_y = AutoGrid(min_steps_per_wvl = 20),\n...         grid_z = AutoGrid(min_steps_per_wvl = 20)\n...     ),\n...     run_time=40e-11,\n...     structures=[\n...         Structure(\n...             geometry=Box(size=(1, 1, 1), center=(-1, 0, 0)),\n...             medium=Medium(permittivity=2.0),\n...         ),\n...     ],\n...     sources=[\n...         UniformCurrentSource(\n...             size=(0, 0, 0),\n...             center=(0, 0.5, 0),\n...             polarization=\"Hx\",\n...             source_time=GaussianPulse(\n...                 freq0=2e14,\n...                 fwidth=4e13,\n...             ),\n...         )\n...     ],\n...     monitors=[\n...         FieldMonitor(size=(0, 0, 0), center=(0, 0, 0), freqs=[1.5e14, 2e14], name='point'),\n...         FluxMonitor(size=(1, 1, 0), center=(0, 0, 0), freqs=[2e14, 2.5e14], name='flux'),\n...     ],\n...     symmetry=(0, 0, 0),\n...     boundary_spec=BoundarySpec(\n...         x = Boundary.pml(num_layers=20),\n...         y = Boundary.pml(num_layers=30),\n...         z = Boundary.periodic(),\n...     ),\n...     shutoff=1e-6,\n...     courant=0.8,\n...     subpixel=False,\n... )",
+  "description": "Contains all information about Tidy3d simulation.\n\nParameters\n----------\ncenter : Tuple[float, float, float] = (0.0, 0.0, 0.0)\n    [units = um].  Center of object in x, y, and z.\nsize : Tuple[NonNegativeFloat, NonNegativeFloat, NonNegativeFloat]\n    [units = um].  Size in x, y, and z directions.\nrun_time : PositiveFloat\n    [units = sec].  Total electromagnetic evolution time in seconds. Note: If simulation 'shutoff' is specified, simulation will terminate early when shutoff condition met. \nmedium : Union[Medium, CustomMedium, AnisotropicMedium, PECMedium, PoleResidue, Sellmeier, Lorentz, Debye, Drude, Medium2D] = Medium(name=None, frequency_range=None, type='Medium', permittivity=1.0, conductivity=0.0)\n    Background medium of simulation, defaults to vacuum if not specified.\nsymmetry : Tuple[Literal[0, -1, 1], Literal[0, -1, 1], Literal[0, -1, 1]] = (0, 0, 0)\n    Tuple of integers defining reflection symmetry across a plane bisecting the simulation domain normal to the x-, y-, and z-axis at the simulation center of each axis, respectvely. Each element can be ``0`` (no symmetry), ``1`` (even, i.e. 'PMC' symmetry) or ``-1`` (odd, i.e. 'PEC' symmetry). Note that the vectorial nature of the fields must be taken into account to correctly determine the symmetry value.\nstructures : Tuple[Structure, ...] = ()\n    Tuple of structures present in simulation. Note: Structures defined later in this list override the simulation material properties in regions of spatial overlap.\nsources : Tuple[Annotated[Union[tidy3d.components.source.UniformCurrentSource, tidy3d.components.source.PointDipole, tidy3d.components.source.GaussianBeam, tidy3d.components.source.AstigmaticGaussianBeam, tidy3d.components.source.ModeSource, tidy3d.components.source.PlaneWave, tidy3d.components.source.CustomFieldSource, tidy3d.components.source.TFSF], FieldInfo(default=PydanticUndefined, discriminator='type', extra={})], ...] = ()\n    Tuple of electric current sources injecting fields into the simulation.\nboundary_spec : Optional[BoundarySpec] = None\n    Specification of boundary conditions along each dimension. If ``None``, periodic boundary conditions are applied on all sides. Default will change to PML in 2.0 so explicitly setting the boundaries is recommended.\nmonitors : Tuple[Annotated[Union[tidy3d.components.monitor.FieldMonitor, tidy3d.components.monitor.FieldTimeMonitor, tidy3d.components.monitor.PermittivityMonitor, tidy3d.components.monitor.FluxMonitor, tidy3d.components.monitor.FluxTimeMonitor, tidy3d.components.monitor.ModeMonitor, tidy3d.components.monitor.ModeSolverMonitor, tidy3d.components.monitor.FieldProjectionAngleMonitor, tidy3d.components.monitor.FieldProjectionCartesianMonitor, tidy3d.components.monitor.FieldProjectionKSpaceMonitor, tidy3d.components.monitor.DiffractionMonitor], FieldInfo(default=PydanticUndefined, discriminator='type', extra={})], ...] = ()\n    Tuple of monitors in the simulation. Note: monitor names are used to access data after simulation is run.\ngrid_spec : GridSpec = GridSpec(grid_x=AutoGrid(type='AutoGrid',, min_steps_per_wvl=10.0,, max_scale=1.4,, dl_min=0.0,, mesher=GradedMesher(type='GradedMesher')), grid_y=AutoGrid(type='AutoGrid',, min_steps_per_wvl=10.0,, max_scale=1.4,, dl_min=0.0,, mesher=GradedMesher(type='GradedMesher')), grid_z=AutoGrid(type='AutoGrid',, min_steps_per_wvl=10.0,, max_scale=1.4,, dl_min=0.0,, mesher=GradedMesher(type='GradedMesher')), wavelength=None, override_structures=(), type='GridSpec')\n    Specifications for the simulation grid along each of the three directions.\nshutoff : NonNegativeFloat = 1e-05\n    Ratio of the instantaneous integrated E-field intensity to the maximum value at which the simulation will automatically terminate time stepping. Used to prevent extraneous run time of simulations with fully decayed fields. Set to ``0`` to disable this feature.\nsubpixel : bool = True\n    If ``True``, uses subpixel averaging of the permittivity based on structure definition, resulting in much higher accuracy for a given grid size.\nnormalize_index : Optional[NonNegativeInt] = 0\n    Index of the source in the tuple of sources whose spectrum will be used to normalize the frequency-dependent data. If ``None``, the raw field data is returned unnormalized.\ncourant : ConstrainedFloatValue = 0.99\n    Courant stability factor, controls time step to spatial step ratio. Lower values lead to more stable simulations for dispersive materials, but result in longer simulation times. This factor is normalized to no larger than 1 when CFL stability condition is met in 3D.\nversion : str = 1.10.0\n    String specifying the front end version number.\n\nExample\n-------\n>>> from tidy3d import Sphere, Cylinder, PolySlab\n>>> from tidy3d import UniformCurrentSource, GaussianPulse\n>>> from tidy3d import FieldMonitor, FluxMonitor\n>>> from tidy3d import GridSpec, AutoGrid\n>>> from tidy3d import BoundarySpec, Boundary\n>>> sim = Simulation(\n...     size=(3.0, 3.0, 3.0),\n...     grid_spec=GridSpec(\n...         grid_x = AutoGrid(min_steps_per_wvl = 20),\n...         grid_y = AutoGrid(min_steps_per_wvl = 20),\n...         grid_z = AutoGrid(min_steps_per_wvl = 20)\n...     ),\n...     run_time=40e-11,\n...     structures=[\n...         Structure(\n...             geometry=Box(size=(1, 1, 1), center=(0, 0, 0)),\n...             medium=Medium(permittivity=2.0),\n...         ),\n...     ],\n...     sources=[\n...         UniformCurrentSource(\n...             size=(0, 0, 0),\n...             center=(0, 0.5, 0),\n...             polarization=\"Hx\",\n...             source_time=GaussianPulse(\n...                 freq0=2e14,\n...                 fwidth=4e13,\n...             ),\n...         )\n...     ],\n...     monitors=[\n...         FieldMonitor(size=(0, 0, 0), center=(0, 0, 0), freqs=[1.5e14, 2e14], name='point'),\n...         FluxMonitor(size=(1, 1, 0), center=(0, 0, 0), freqs=[2e14, 2.5e14], name='flux'),\n...     ],\n...     symmetry=(0, 0, 0),\n...     boundary_spec=BoundarySpec(\n...         x = Boundary.pml(num_layers=20),\n...         y = Boundary.pml(num_layers=30),\n...         z = Boundary.periodic(),\n...     ),\n...     shutoff=1e-6,\n...     courant=0.8,\n...     subpixel=False,\n... )",
   "type": "object",
   "properties": {
     "type": {
@@ -101,6 +101,9 @@
         },
         {
           "$ref": "#/definitions/Drude"
+        },
+        {
+          "$ref": "#/definitions/Medium2D"
         }
       ]
     },
@@ -166,7 +169,8 @@
             "AstigmaticGaussianBeam": "#/definitions/AstigmaticGaussianBeam",
             "ModeSource": "#/definitions/ModeSource",
             "PlaneWave": "#/definitions/PlaneWave",
-            "CustomFieldSource": "#/definitions/CustomFieldSource"
+            "CustomFieldSource": "#/definitions/CustomFieldSource",
+            "TFSF": "#/definitions/TFSF"
           }
         },
         "oneOf": [
@@ -190,6 +194,9 @@
           },
           {
             "$ref": "#/definitions/CustomFieldSource"
+          },
+          {
+            "$ref": "#/definitions/TFSF"
           }
         ]
       }
@@ -334,7 +341,7 @@
     "version": {
       "title": "Version",
       "description": "String specifying the front end version number.",
-      "default": "1.10.0rc2",
+      "default": "1.10.0",
       "type": "string"
     }
   },
@@ -546,7 +553,7 @@
     },
     "PoleResidue": {
       "title": "PoleResidue",
-      "description": "A dispersive medium described by the pole-residue pair model.\nThe frequency-dependence of the complex-valued permittivity is described by:\n\nParameters\n----------\nname : Optional[str] = None\n    Optional unique name for medium.\nfrequency_range : Optional[Tuple[float, float]] = None\n    [units = (Hz, Hz)].  Optional range of validity for the medium.\neps_inf : float = 1.0\n    [units = None (relative permittivity)].  Relative permittivity at infinite frequency (:math:`\\epsilon_\\infty`).\npoles : Tuple[Tuple[Union[tidy3d.components.types.tidycomplex, tidy3d.components.types.ComplexNumber], Union[tidy3d.components.types.tidycomplex, tidy3d.components.types.ComplexNumber]], ...] = ()\n    [units = (rad/sec, rad/sec)].  Tuple of complex-valued (:math:`a_i, c_i`) poles for the model.\n\nNote\n----\n.. math::\n\n    \\epsilon(\\omega) = \\epsilon_\\infty - \\sum_i\n    \\left[\\frac{c_i}{j \\omega + a_i} +\n    \\frac{c_i^*}{j \\omega + a_i^*}\\right]\n\nExample\n-------\n>>> pole_res = PoleResidue(eps_inf=2.0, poles=[((1+2j), (3+4j)), ((5+6j), (7+8j))])\n>>> eps = pole_res.eps_model(200e12)",
+      "description": "A dispersive medium described by the pole-residue pair model.\nThe frequency-dependence of the complex-valued permittivity is described by:\n\nParameters\n----------\nname : Optional[str] = None\n    Optional unique name for medium.\nfrequency_range : Optional[Tuple[float, float]] = None\n    [units = (Hz, Hz)].  Optional range of validity for the medium.\neps_inf : PositiveFloat = 1.0\n    [units = None (relative permittivity)].  Relative permittivity at infinite frequency (:math:`\\epsilon_\\infty`).\npoles : Tuple[Tuple[Union[tidy3d.components.types.tidycomplex, tidy3d.components.types.ComplexNumber], Union[tidy3d.components.types.tidycomplex, tidy3d.components.types.ComplexNumber]], ...] = ()\n    [units = (rad/sec, rad/sec)].  Tuple of complex-valued (:math:`a_i, c_i`) poles for the model.\n\nNote\n----\n.. math::\n\n    \\epsilon(\\omega) = \\epsilon_\\infty - \\sum_i\n    \\left[\\frac{c_i}{j \\omega + a_i} +\n    \\frac{c_i^*}{j \\omega + a_i^*}\\right]\n\nExample\n-------\n>>> pole_res = PoleResidue(eps_inf=2.0, poles=[((1+2j), (3+4j)), ((5+6j), (7+8j))])\n>>> eps = pole_res.eps_model(200e12)",
       "type": "object",
       "properties": {
         "name": {
@@ -586,6 +593,7 @@
           "description": "Relative permittivity at infinite frequency (:math:`\\epsilon_\\infty`).",
           "default": 1.0,
           "units": "None (relative permittivity)",
+          "exclusiveMinimum": 0,
           "type": "number"
         },
         "poles": {
@@ -728,7 +736,7 @@
     },
     "Lorentz": {
       "title": "Lorentz",
-      "description": "A dispersive medium described by the Lorentz model.\nThe frequency-dependence of the complex-valued permittivity is described by:\n\nParameters\n----------\nname : Optional[str] = None\n    Optional unique name for medium.\nfrequency_range : Optional[Tuple[float, float]] = None\n    [units = (Hz, Hz)].  Optional range of validity for the medium.\neps_inf : float = 1.0\n    [units = None (relative permittivity)].  Relative permittivity at infinite frequency (:math:`\\epsilon_\\infty`).\ncoeffs : Tuple[Tuple[float, float, float], ...]\n    [units = (None (relative permittivity), Hz, Hz)].  List of (:math:`\\Delta\\epsilon_i, f_i, \\delta_i`) values for model.\n\nNote\n----\n.. math::\n\n    \\epsilon(f) = \\epsilon_\\infty + \\sum_i\n    \\frac{\\Delta\\epsilon_i f_i^2}{f_i^2 - 2jf\\delta_i - f^2}\n\nExample\n-------\n>>> lorentz_medium = Lorentz(eps_inf=2.0, coeffs=[(1,2,3), (4,5,6)])\n>>> eps = lorentz_medium.eps_model(200e12)",
+      "description": "A dispersive medium described by the Lorentz model.\nThe frequency-dependence of the complex-valued permittivity is described by:\n\nParameters\n----------\nname : Optional[str] = None\n    Optional unique name for medium.\nfrequency_range : Optional[Tuple[float, float]] = None\n    [units = (Hz, Hz)].  Optional range of validity for the medium.\neps_inf : PositiveFloat = 1.0\n    [units = None (relative permittivity)].  Relative permittivity at infinite frequency (:math:`\\epsilon_\\infty`).\ncoeffs : Tuple[Tuple[float, float, float], ...]\n    [units = (None (relative permittivity), Hz, Hz)].  List of (:math:`\\Delta\\epsilon_i, f_i, \\delta_i`) values for model.\n\nNote\n----\n.. math::\n\n    \\epsilon(f) = \\epsilon_\\infty + \\sum_i\n    \\frac{\\Delta\\epsilon_i f_i^2}{f_i^2 - 2jf\\delta_i - f^2}\n\nExample\n-------\n>>> lorentz_medium = Lorentz(eps_inf=2.0, coeffs=[(1,2,3), (4,5,6)])\n>>> eps = lorentz_medium.eps_model(200e12)",
       "type": "object",
       "properties": {
         "name": {
@@ -768,6 +776,7 @@
           "description": "Relative permittivity at infinite frequency (:math:`\\epsilon_\\infty`).",
           "default": 1.0,
           "units": "None (relative permittivity)",
+          "exclusiveMinimum": 0,
           "type": "number"
         },
         "coeffs": {
@@ -804,7 +813,7 @@
     },
     "Debye": {
       "title": "Debye",
-      "description": "A dispersive medium described by the Debye model.\nThe frequency-dependence of the complex-valued permittivity is described by:\n\nParameters\n----------\nname : Optional[str] = None\n    Optional unique name for medium.\nfrequency_range : Optional[Tuple[float, float]] = None\n    [units = (Hz, Hz)].  Optional range of validity for the medium.\neps_inf : float = 1.0\n    [units = None (relative permittivity)].  Relative permittivity at infinite frequency (:math:`\\epsilon_\\infty`).\ncoeffs : Tuple[Tuple[float, pydantic.types.PositiveFloat], ...]\n    [units = (None (relative permittivity), sec)].  List of (:math:`\\Delta\\epsilon_i, \\tau_i`) values for model.\n\nNote\n----\n.. math::\n\n    \\epsilon(f) = \\epsilon_\\infty + \\sum_i\n    \\frac{\\Delta\\epsilon_i}{1 - jf\\tau_i}\n\nExample\n-------\n>>> debye_medium = Debye(eps_inf=2.0, coeffs=[(1,2),(3,4)])\n>>> eps = debye_medium.eps_model(200e12)",
+      "description": "A dispersive medium described by the Debye model.\nThe frequency-dependence of the complex-valued permittivity is described by:\n\nParameters\n----------\nname : Optional[str] = None\n    Optional unique name for medium.\nfrequency_range : Optional[Tuple[float, float]] = None\n    [units = (Hz, Hz)].  Optional range of validity for the medium.\neps_inf : PositiveFloat = 1.0\n    [units = None (relative permittivity)].  Relative permittivity at infinite frequency (:math:`\\epsilon_\\infty`).\ncoeffs : Tuple[Tuple[float, pydantic.types.PositiveFloat], ...]\n    [units = (None (relative permittivity), sec)].  List of (:math:`\\Delta\\epsilon_i, \\tau_i`) values for model.\n\nNote\n----\n.. math::\n\n    \\epsilon(f) = \\epsilon_\\infty + \\sum_i\n    \\frac{\\Delta\\epsilon_i}{1 - jf\\tau_i}\n\nExample\n-------\n>>> debye_medium = Debye(eps_inf=2.0, coeffs=[(1,2),(3,4)])\n>>> eps = debye_medium.eps_model(200e12)",
       "type": "object",
       "properties": {
         "name": {
@@ -844,6 +853,7 @@
           "description": "Relative permittivity at infinite frequency (:math:`\\epsilon_\\infty`).",
           "default": 1.0,
           "units": "None (relative permittivity)",
+          "exclusiveMinimum": 0,
           "type": "number"
         },
         "coeffs": {
@@ -877,7 +887,7 @@
     },
     "Drude": {
       "title": "Drude",
-      "description": "A dispersive medium described by the Drude model.\nThe frequency-dependence of the complex-valued permittivity is described by:\n\nParameters\n----------\nname : Optional[str] = None\n    Optional unique name for medium.\nfrequency_range : Optional[Tuple[float, float]] = None\n    [units = (Hz, Hz)].  Optional range of validity for the medium.\neps_inf : float = 1.0\n    [units = None (relative permittivity)].  Relative permittivity at infinite frequency (:math:`\\epsilon_\\infty`).\ncoeffs : Tuple[Tuple[float, pydantic.types.PositiveFloat], ...]\n    [units = (Hz, Hz)].  List of (:math:`f_i, \\delta_i`) values for model.\n\nNote\n----\n.. math::\n\n    \\epsilon(f) = \\epsilon_\\infty - \\sum_i\n    \\frac{ f_i^2}{f^2 + jf\\delta_i}\n\nExample\n-------\n>>> drude_medium = Drude(eps_inf=2.0, coeffs=[(1,2), (3,4)])\n>>> eps = drude_medium.eps_model(200e12)",
+      "description": "A dispersive medium described by the Drude model.\nThe frequency-dependence of the complex-valued permittivity is described by:\n\nParameters\n----------\nname : Optional[str] = None\n    Optional unique name for medium.\nfrequency_range : Optional[Tuple[float, float]] = None\n    [units = (Hz, Hz)].  Optional range of validity for the medium.\neps_inf : PositiveFloat = 1.0\n    [units = None (relative permittivity)].  Relative permittivity at infinite frequency (:math:`\\epsilon_\\infty`).\ncoeffs : Tuple[Tuple[float, pydantic.types.PositiveFloat], ...]\n    [units = (Hz, Hz)].  List of (:math:`f_i, \\delta_i`) values for model.\n\nNote\n----\n.. math::\n\n    \\epsilon(f) = \\epsilon_\\infty - \\sum_i\n    \\frac{ f_i^2}{f^2 + jf\\delta_i}\n\nExample\n-------\n>>> drude_medium = Drude(eps_inf=2.0, coeffs=[(1,2), (3,4)])\n>>> eps = drude_medium.eps_model(200e12)",
       "type": "object",
       "properties": {
         "name": {
@@ -917,6 +927,7 @@
           "description": "Relative permittivity at infinite frequency (:math:`\\epsilon_\\infty`).",
           "default": 1.0,
           "units": "None (relative permittivity)",
+          "exclusiveMinimum": 0,
           "type": "number"
         },
         "coeffs": {
@@ -1138,6 +1149,120 @@
       },
       "additionalProperties": false
     },
+    "Medium2D": {
+      "title": "Medium2D",
+      "description": "2D diagonally anisotropic medium.\n\nParameters\n----------\nname : Optional[str] = None\n    Optional unique name for medium.\nfrequency_range : Optional[Tuple[float, float]] = None\n    [units = (Hz, Hz)].  Optional range of validity for the medium.\nss : Union[Medium, PoleResidue, Sellmeier, Lorentz, Debye, Drude]\n    Medium describing the ss-component of the diagonal permittivity tensor. The ss-component refers to the in-plane dimension of the medium that is the first component in order of 'x', 'y', 'z'. If the 2D material is normal to the y-axis, for example, then this determines the xx-component of the corresponding 3D medium.\ntt : Union[Medium, PoleResidue, Sellmeier, Lorentz, Debye, Drude]\n    Medium describing the tt-component of the diagonal permittivity tensor. The tt-component refers to the in-plane dimension of the medium that is the second component in order of 'x', 'y', 'z'. If the 2D material is normal to the y-axis, for example, then this determines the zz-component of the corresponding 3D medium.\n\nNote\n----\nOnly diagonal anisotropy is currently supported.\n\nExample\n-------\n>>> drude_medium = Drude(eps_inf=2.0, coeffs=[(1,2), (3,4)])\n>>> medium2d = Medium2D(ss=drude_medium, tt=drude_medium)",
+      "type": "object",
+      "properties": {
+        "name": {
+          "title": "Name",
+          "description": "Optional unique name for medium.",
+          "type": "string"
+        },
+        "frequency_range": {
+          "title": "Frequency Range",
+          "description": "Optional range of validity for the medium.",
+          "units": [
+            "Hz",
+            "Hz"
+          ],
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "items": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            }
+          ]
+        },
+        "type": {
+          "title": "Type",
+          "default": "Medium2D",
+          "enum": [
+            "Medium2D"
+          ],
+          "type": "string"
+        },
+        "ss": {
+          "title": "SS Component",
+          "description": "Medium describing the ss-component of the diagonal permittivity tensor. The ss-component refers to the in-plane dimension of the medium that is the first component in order of 'x', 'y', 'z'. If the 2D material is normal to the y-axis, for example, then this determines the xx-component of the corresponding 3D medium.",
+          "discriminator": {
+            "propertyName": "type",
+            "mapping": {
+              "Medium": "#/definitions/Medium",
+              "PoleResidue": "#/definitions/PoleResidue",
+              "Sellmeier": "#/definitions/Sellmeier",
+              "Lorentz": "#/definitions/Lorentz",
+              "Debye": "#/definitions/Debye",
+              "Drude": "#/definitions/Drude"
+            }
+          },
+          "oneOf": [
+            {
+              "$ref": "#/definitions/Medium"
+            },
+            {
+              "$ref": "#/definitions/PoleResidue"
+            },
+            {
+              "$ref": "#/definitions/Sellmeier"
+            },
+            {
+              "$ref": "#/definitions/Lorentz"
+            },
+            {
+              "$ref": "#/definitions/Debye"
+            },
+            {
+              "$ref": "#/definitions/Drude"
+            }
+          ]
+        },
+        "tt": {
+          "title": "TT Component",
+          "description": "Medium describing the tt-component of the diagonal permittivity tensor. The tt-component refers to the in-plane dimension of the medium that is the second component in order of 'x', 'y', 'z'. If the 2D material is normal to the y-axis, for example, then this determines the zz-component of the corresponding 3D medium.",
+          "discriminator": {
+            "propertyName": "type",
+            "mapping": {
+              "Medium": "#/definitions/Medium",
+              "PoleResidue": "#/definitions/PoleResidue",
+              "Sellmeier": "#/definitions/Sellmeier",
+              "Lorentz": "#/definitions/Lorentz",
+              "Debye": "#/definitions/Debye",
+              "Drude": "#/definitions/Drude"
+            }
+          },
+          "oneOf": [
+            {
+              "$ref": "#/definitions/Medium"
+            },
+            {
+              "$ref": "#/definitions/PoleResidue"
+            },
+            {
+              "$ref": "#/definitions/Sellmeier"
+            },
+            {
+              "$ref": "#/definitions/Lorentz"
+            },
+            {
+              "$ref": "#/definitions/Debye"
+            },
+            {
+              "$ref": "#/definitions/Drude"
+            }
+          ]
+        }
+      },
+      "required": [
+        "ss",
+        "tt"
+      ],
+      "additionalProperties": false
+    },
     "Box": {
       "title": "Box",
       "description": "Rectangular prism.\n   Also base class for :class:`Simulation`, :class:`Monitor`, and :class:`Source`.\n\nParameters\n----------\ncenter : Tuple[float, float, float] = (0.0, 0.0, 0.0)\n    [units = um].  Center of object in x, y, and z.\nsize : Tuple[NonNegativeFloat, NonNegativeFloat, NonNegativeFloat]\n    [units = um].  Size in x, y, and z directions.\n\nExample\n-------\n>>> b = Box(center=(1,2,3), size=(2,2,2))",
@@ -1255,7 +1380,7 @@
     },
     "Cylinder": {
       "title": "Cylinder",
-      "description": "Cylindrical geometry with optional sidewall angle along axis\ndirection. When ``sidewall_angle`` is nonzero, the shape is a\nconical frustum or a cone.\n\nParameters\n----------\naxis : Literal[0, 1, 2] = 2\n    Specifies dimension of the planar axis (0,1,2) -> (x,y,z).\nsidewall_angle : ConstrainedFloatValue = 0.0\n    [units = rad].  Angle of the sidewall. ``sidewall_angle=0`` (default) specifies a vertical wall; ``0<sidewall_angle<np.pi/2`` specifies a shrinking cross section along the ``axis`` direction; and ``-np.pi/2<sidewall_angle<0`` specifies an expanding cross section along the ``axis`` direction.\nreference_plane : Literal['bottom', 'middle', 'top'] = bottom\n    The position of the plane where the supplied cross section are defined. The plane is perpendicular to the ``axis``. The plane is located at the ``bottom``, ``middle``, or ``top`` of the geometry with respect to the axis. E.g. if ``axis=1``, ``bottom`` refers to the negative side of the y-axis, and ``top`` refers to the positive side of the y-axis.\nradius : NonNegativeFloat\n    [units = um].  Radius of geometry.\ncenter : Tuple[float, float, float] = (0.0, 0.0, 0.0)\n    [units = um].  Center of object in x, y, and z.\nlength : NonNegativeFloat\n    [units = um].  Defines thickness of cylinder along axis dimension.\n\nExample\n-------\n>>> c = Cylinder(center=(1,2,3), radius=2, length=5, axis=2)",
+      "description": "Cylindrical geometry with optional sidewall angle along axis\ndirection. When ``sidewall_angle`` is nonzero, the shape is a\nconical frustum or a cone.\n\nParameters\n----------\naxis : Literal[0, 1, 2] = 2\n    Specifies dimension of the planar axis (0,1,2) -> (x,y,z).\nsidewall_angle : ConstrainedFloatValue = 0.0\n    [units = rad].  Angle of the sidewall. ``sidewall_angle=0`` (default) specifies a vertical wall; ``0<sidewall_angle<np.pi/2`` specifies a shrinking cross section along the ``axis`` direction; and ``-np.pi/2<sidewall_angle<0`` specifies an expanding cross section along the ``axis`` direction.\nreference_plane : Literal['bottom', 'middle', 'top'] = bottom\n    The position of the plane where the supplied cross section are defined. The plane is perpendicular to the ``axis``. The plane is located at the ``bottom``, ``middle``, or ``top`` of the geometry with respect to the axis. E.g. if ``axis=1``, ``bottom`` refers to the negative side of the y-axis, and ``top`` refers to the positive side of the y-axis.\nradius : NonNegativeFloat\n    [units = um].  Radius of geometry at the ``reference_plane``.\ncenter : Tuple[float, float, float] = (0.0, 0.0, 0.0)\n    [units = um].  Center of object in x, y, and z.\nlength : NonNegativeFloat\n    [units = um].  Defines thickness of cylinder along axis dimension.\n\nExample\n-------\n>>> c = Cylinder(center=(1,2,3), radius=2, length=5, axis=2)",
       "type": "object",
       "properties": {
         "type": {
@@ -1299,7 +1424,7 @@
         },
         "radius": {
           "title": "Radius",
-          "description": "Radius of geometry.",
+          "description": "Radius of geometry at the ``reference_plane``.",
           "units": "um",
           "minimum": 0,
           "type": "number"
@@ -1344,7 +1469,7 @@
     },
     "PolySlab": {
       "title": "PolySlab",
-      "description": "Polygon extruded with optional sidewall angle along axis direction.\n\nParameters\n----------\naxis : Literal[0, 1, 2] = 2\n    Specifies dimension of the planar axis (0,1,2) -> (x,y,z).\nsidewall_angle : ConstrainedFloatValue = 0.0\n    [units = rad].  Angle of the sidewall. ``sidewall_angle=0`` (default) specifies a vertical wall; ``0<sidewall_angle<np.pi/2`` specifies a shrinking cross section along the ``axis`` direction; and ``-np.pi/2<sidewall_angle<0`` specifies an expanding cross section along the ``axis`` direction.\nreference_plane : Literal['bottom', 'middle', 'top'] = bottom\n    The position of the plane where the supplied cross section are defined. The plane is perpendicular to the ``axis``. The plane is located at the ``bottom``, ``middle``, or ``top`` of the geometry with respect to the axis. E.g. if ``axis=1``, ``bottom`` refers to the negative side of the y-axis, and ``top`` refers to the positive side of the y-axis.\nslab_bounds : Tuple[float, float]\n    [units = um].  Minimum and maximum positions of the slab along axis dimension.\ndilation : float = 0.0\n    [units = um].  Dilation of the supplied polygon by shifting each edge along its normal outwards direction by a distance; a negative value corresponds to erosion.\nvertices : Union[Tuple[Tuple[float, float], ...], Array]\n    [units = um].  List of (d1, d2) defining the 2 dimensional positions of the polygon face vertices at the ``reference_plane``. The index of dimension should be in the ascending order: e.g. if the slab normal axis is ``axis=y``, the coordinate of the vertices will be in (x, z)\n\nExample\n-------\n>>> vertices = np.array([(0,0), (1,0), (1,1)])\n>>> p = PolySlab(vertices=vertices, axis=2, slab_bounds=(-1, 1))",
+      "description": "Polygon extruded with optional sidewall angle along axis direction.\n\nParameters\n----------\naxis : Literal[0, 1, 2] = 2\n    Specifies dimension of the planar axis (0,1,2) -> (x,y,z).\nsidewall_angle : ConstrainedFloatValue = 0.0\n    [units = rad].  Angle of the sidewall. ``sidewall_angle=0`` (default) specifies a vertical wall; ``0<sidewall_angle<np.pi/2`` specifies a shrinking cross section along the ``axis`` direction; and ``-np.pi/2<sidewall_angle<0`` specifies an expanding cross section along the ``axis`` direction.\nreference_plane : Literal['bottom', 'middle', 'top'] = bottom\n    The position of the plane where the supplied cross section are defined. The plane is perpendicular to the ``axis``. The plane is located at the ``bottom``, ``middle``, or ``top`` of the geometry with respect to the axis. E.g. if ``axis=1``, ``bottom`` refers to the negative side of the y-axis, and ``top`` refers to the positive side of the y-axis.\nslab_bounds : Tuple[float, float]\n    [units = um].  Minimum and maximum positions of the slab along axis dimension.\ndilation : float = 0.0\n    [units = um].  Dilation of the supplied polygon by shifting each edge along its normal outwards direction by a distance; a negative value corresponds to erosion.\nvertices : ArrayLike_dtype=<class 'float'>_ndim=2\n    [units = um].  List of (d1, d2) defining the 2 dimensional positions of the polygon face vertices at the ``reference_plane``. The index of dimension should be in the ascending order: e.g. if the slab normal axis is ``axis=y``, the coordinate of the vertices will be in (x, z)\n\nExample\n-------\n>>> vertices = np.array([(0,0), (1,0), (1,1)])\n>>> p = PolySlab(vertices=vertices, axis=2, slab_bounds=(-1, 1))",
       "type": "object",
       "properties": {
         "type": {
@@ -1410,34 +1535,10 @@
           "type": "number"
         },
         "vertices": {
-          "title": "Vertices",
+          "title": "ArrayLike",
           "description": "List of (d1, d2) defining the 2 dimensional positions of the polygon face vertices at the ``reference_plane``. The index of dimension should be in the ascending order: e.g. if the slab normal axis is ``axis=y``, the coordinate of the vertices will be in (x, z)",
           "units": "um",
-          "anyOf": [
-            {
-              "type": "array",
-              "items": {
-                "type": "array",
-                "minItems": 2,
-                "maxItems": 2,
-                "items": [
-                  {
-                    "type": "number"
-                  },
-                  {
-                    "type": "number"
-                  }
-                ]
-              }
-            },
-            {
-              "title": "Array Like",
-              "description": "Accepts sequence (tuple, list, numpy array) and converts to tuple.",
-              "type": "tuple",
-              "properties": {},
-              "required": []
-            }
-          ]
+          "type": "ArrayLike"
         }
       },
       "required": [
@@ -1562,7 +1663,7 @@
     },
     "Structure": {
       "title": "Structure",
-      "description": "Defines a physical object that interacts with the electromagnetic fields.\nA :class:`Structure` is a combination of a material property (:class:`AbstractMedium`)\nand a :class:`Geometry`.\n\nParameters\n----------\ngeometry : Union[Box, Sphere, Cylinder, PolySlab, TriangleMesh, GeometryGroup]\n    Defines geometric properties of the structure.\nname : Optional[str] = None\n    Optional name for the structure.\nmedium : Union[Medium, CustomMedium, AnisotropicMedium, PECMedium, PoleResidue, Sellmeier, Lorentz, Debye, Drude]\n    Defines the electromagnetic properties of the structure's medium.\n\nExample\n-------\n>>> from tidy3d import Box, Medium\n>>> box = Box(center=(0,0,1), size=(2, 2, 2))\n>>> glass = Medium(permittivity=3.9)\n>>> struct = Structure(geometry=box, medium=glass, name='glass_box')",
+      "description": "Defines a physical object that interacts with the electromagnetic fields.\nA :class:`Structure` is a combination of a material property (:class:`AbstractMedium`)\nand a :class:`Geometry`.\n\nParameters\n----------\ngeometry : Union[Box, Sphere, Cylinder, PolySlab, TriangleMesh, GeometryGroup]\n    Defines geometric properties of the structure.\nname : Optional[str] = None\n    Optional name for the structure.\nmedium : Union[Medium, CustomMedium, AnisotropicMedium, PECMedium, PoleResidue, Sellmeier, Lorentz, Debye, Drude, Medium2D]\n    Defines the electromagnetic properties of the structure's medium.\n\nExample\n-------\n>>> from tidy3d import Box, Medium\n>>> box = Box(center=(0,0,1), size=(2, 2, 2))\n>>> glass = Medium(permittivity=3.9)\n>>> struct = Structure(geometry=box, medium=glass, name='glass_box')",
       "type": "object",
       "properties": {
         "geometry": {
@@ -1627,7 +1728,8 @@
               "Sellmeier": "#/definitions/Sellmeier",
               "Lorentz": "#/definitions/Lorentz",
               "Debye": "#/definitions/Debye",
-              "Drude": "#/definitions/Drude"
+              "Drude": "#/definitions/Drude",
+              "Medium2D": "#/definitions/Medium2D"
             }
           },
           "oneOf": [
@@ -1657,6 +1759,9 @@
             },
             {
               "$ref": "#/definitions/Drude"
+            },
+            {
+              "$ref": "#/definitions/Medium2D"
             }
           ]
         }
@@ -2831,6 +2936,131 @@
       ],
       "additionalProperties": false
     },
+    "TFSF": {
+      "title": "TFSF",
+      "description": "Total field scattered field with a plane wave field in a volume.\n\nParameters\n----------\ncenter : Tuple[float, float, float] = (0.0, 0.0, 0.0)\n    [units = um].  Center of object in x, y, and z.\nsize : Tuple[NonNegativeFloat, NonNegativeFloat, NonNegativeFloat]\n    [units = um].  Size in x, y, and z directions.\nsource_time : Union[GaussianPulse, ContinuousWave]\n    Specification of the source time-dependence.\nname : Optional[str] = None\n    Optional name for the source.\ndirection : Literal['+', '-']\n    Specifies propagation in the positive or negative direction of the injection axis.\nangle_theta : float = 0.0\n    [units = rad].  Polar angle of the propagation axis from the injection axis.\nangle_phi : float = 0.0\n    [units = rad].  Azimuth angle of the propagation axis in the plane orthogonal to the injection axis.\npol_angle : float = 0\n    [units = rad].  Specifies the angle between the electric field polarization of the source and the plane defined by the injection axis and the propagation axis (rad). ``pol_angle=0`` (default) specifies P polarization, while ``pol_angle=np.pi/2`` specifies S polarization. At normal incidence when S and P are undefined, ``pol_angle=0`` defines: - ``Ey`` polarization for propagation along ``x``.- ``Ex`` polarization for propagation along ``y``.- ``Ex`` polarization for propagation along ``z``.\ninjection_axis : Literal[0, 1, 2]\n    Specifies the injection axis. The plane of incidence is defined via this ``injection_axis`` and the ``direction``. The popagation axis is defined with respect to the ``injection_axis`` by ``angle_theta`` and ``angle_phi``.",
+      "type": "object",
+      "properties": {
+        "type": {
+          "title": "Type",
+          "default": "TFSF",
+          "enum": [
+            "TFSF"
+          ],
+          "type": "string"
+        },
+        "center": {
+          "title": "Center",
+          "description": "Center of object in x, y, and z.",
+          "default": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "units": "um",
+          "type": "array",
+          "minItems": 3,
+          "maxItems": 3,
+          "items": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            }
+          ]
+        },
+        "size": {
+          "title": "Size",
+          "description": "Size in x, y, and z directions.",
+          "units": "um",
+          "type": "array",
+          "minItems": 3,
+          "maxItems": 3,
+          "items": [
+            {
+              "type": "number",
+              "minimum": 0
+            },
+            {
+              "type": "number",
+              "minimum": 0
+            },
+            {
+              "type": "number",
+              "minimum": 0
+            }
+          ]
+        },
+        "source_time": {
+          "title": "Source Time",
+          "description": "Specification of the source time-dependence.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/GaussianPulse"
+            },
+            {
+              "$ref": "#/definitions/ContinuousWave"
+            }
+          ]
+        },
+        "name": {
+          "title": "Name",
+          "description": "Optional name for the source.",
+          "type": "string"
+        },
+        "direction": {
+          "title": "Direction",
+          "description": "Specifies propagation in the positive or negative direction of the injection axis.",
+          "enum": [
+            "+",
+            "-"
+          ],
+          "type": "string"
+        },
+        "angle_theta": {
+          "title": "Polar Angle",
+          "description": "Polar angle of the propagation axis from the injection axis.",
+          "default": 0.0,
+          "units": "rad",
+          "type": "number"
+        },
+        "angle_phi": {
+          "title": "Azimuth Angle",
+          "description": "Azimuth angle of the propagation axis in the plane orthogonal to the injection axis.",
+          "default": 0.0,
+          "units": "rad",
+          "type": "number"
+        },
+        "pol_angle": {
+          "title": "Polarization Angle",
+          "description": "Specifies the angle between the electric field polarization of the source and the plane defined by the injection axis and the propagation axis (rad). ``pol_angle=0`` (default) specifies P polarization, while ``pol_angle=np.pi/2`` specifies S polarization. At normal incidence when S and P are undefined, ``pol_angle=0`` defines: - ``Ey`` polarization for propagation along ``x``.- ``Ex`` polarization for propagation along ``y``.- ``Ex`` polarization for propagation along ``z``.",
+          "default": 0,
+          "units": "rad",
+          "type": "number"
+        },
+        "injection_axis": {
+          "title": "Injection Axis",
+          "description": "Specifies the injection axis. The plane of incidence is defined via this ``injection_axis`` and the ``direction``. The popagation axis is defined with respect to the ``injection_axis`` by ``angle_theta`` and ``angle_phi``.",
+          "enum": [
+            0,
+            1,
+            2
+          ],
+          "type": "integer"
+        }
+      },
+      "required": [
+        "size",
+        "source_time",
+        "direction",
+        "injection_axis"
+      ],
+      "additionalProperties": false
+    },
     "Periodic": {
       "title": "Periodic",
       "description": "Periodic boundary condition class.\n\nParameters\n----------\nname : Optional[str] = None\n    Optional unique name for boundary.",
@@ -3368,7 +3598,7 @@
     },
     "FieldMonitor": {
       "title": "FieldMonitor",
-      "description": ":class:`Monitor` that records electromagnetic fields in the frequency domain.\n\nParameters\n----------\ncenter : Tuple[float, float, float] = (0.0, 0.0, 0.0)\n    [units = um].  Center of object in x, y, and z.\nsize : Tuple[NonNegativeFloat, NonNegativeFloat, NonNegativeFloat]\n    [units = um].  Size in x, y, and z directions.\nname : ConstrainedStrValue\n    Unique name for monitor.\nfreqs : Union[Tuple[float, ...], Array]\n    [units = Hz].  Array or list of frequencies stored by the field monitor.\napodization : ApodizationSpec = ApodizationSpec(start=None, end=None, width=None, type='ApodizationSpec')\n    Sets parameters of (optional) apodization. Apodization applies a windowing function to the Fourier transform of the time-domain fields into frequency-domain ones, and can be used to truncate the beginning and/or end of the time signal, for example to eliminate the source pulse when studying the eigenmodes of a system. Note: apodization affects the normalization of the frequency-domain fields.\nfields : Tuple[Literal['Ex', 'Ey', 'Ez', 'Hx', 'Hy', 'Hz'], ...] = ['Ex', 'Ey', 'Ez', 'Hx', 'Hy', 'Hz']\n    Collection of field components to store in the monitor.\ninterval_space : Tuple[PositiveInt, PositiveInt, PositiveInt] = (1, 1, 1)\n    Number of grid step intervals between monitor recordings. If equal to 1, there will be no downsampling. If greater than 1, fields will be downsampled and automatically colocated.\ncolocate : Optional[bool] = None\n    Toggle whether fields should be colocated to grid cell centers. Default: ``False`` if ``interval_space`` is 1 in each direction, ``True`` if ``interval_space`` is greater than one in any direction.\n\nExample\n-------\n>>> monitor = FieldMonitor(\n...     center=(1,2,3),\n...     size=(2,2,2),\n...     fields=['Hx'],\n...     freqs=[250e12, 300e12],\n...     name='steady_state_monitor')",
+      "description": ":class:`Monitor` that records electromagnetic fields in the frequency domain.\n\nParameters\n----------\ncenter : Tuple[float, float, float] = (0.0, 0.0, 0.0)\n    [units = um].  Center of object in x, y, and z.\nsize : Tuple[NonNegativeFloat, NonNegativeFloat, NonNegativeFloat]\n    [units = um].  Size in x, y, and z directions.\nname : ConstrainedStrValue\n    Unique name for monitor.\nfreqs : Union[Tuple[float, ...], ArrayLike_dtype=<class 'float'>_ndim=1]\n    [units = Hz].  Array or list of frequencies stored by the field monitor.\napodization : ApodizationSpec = ApodizationSpec(start=None, end=None, width=None, type='ApodizationSpec')\n    Sets parameters of (optional) apodization. Apodization applies a windowing function to the Fourier transform of the time-domain fields into frequency-domain ones, and can be used to truncate the beginning and/or end of the time signal, for example to eliminate the source pulse when studying the eigenmodes of a system. Note: apodization affects the normalization of the frequency-domain fields.\nfields : Tuple[Literal['Ex', 'Ey', 'Ez', 'Hx', 'Hy', 'Hz'], ...] = ['Ex', 'Ey', 'Ez', 'Hx', 'Hy', 'Hz']\n    Collection of field components to store in the monitor.\ninterval_space : Tuple[PositiveInt, PositiveInt, PositiveInt] = (1, 1, 1)\n    Number of grid step intervals between monitor recordings. If equal to 1, there will be no downsampling. If greater than 1, fields will be downsampled and automatically colocated.\ncolocate : Optional[bool] = None\n    Toggle whether fields should be colocated to grid cell centers. Default: ``False`` if ``interval_space`` is 1 in each direction, ``True`` if ``interval_space`` is greater than one in any direction.\n\nExample\n-------\n>>> monitor = FieldMonitor(\n...     center=(1,2,3),\n...     size=(2,2,2),\n...     fields=['Hx'],\n...     freqs=[250e12, 300e12],\n...     name='steady_state_monitor')",
       "type": "object",
       "properties": {
         "type": {
@@ -3443,11 +3673,8 @@
               }
             },
             {
-              "title": "Array Like",
-              "description": "Accepts sequence (tuple, list, numpy array) and converts to tuple.",
-              "type": "tuple",
-              "properties": {},
-              "required": []
+              "title": "ArrayLike",
+              "type": "ArrayLike"
             }
           ]
         },
@@ -3680,7 +3907,7 @@
     },
     "PermittivityMonitor": {
       "title": "PermittivityMonitor",
-      "description": ":class:`Monitor` that records the diagonal components of the complex-valued relative\npermittivity tensor in the frequency domain. The recorded data has the same shape as a\n:class:`.FieldMonitor` of the same geometry: the permittivity values are saved at the\nYee grid locations, and can be interpolated to any point inside the monitor.\n\nParameters\n----------\ncenter : Tuple[float, float, float] = (0.0, 0.0, 0.0)\n    [units = um].  Center of object in x, y, and z.\nsize : Tuple[NonNegativeFloat, NonNegativeFloat, NonNegativeFloat]\n    [units = um].  Size in x, y, and z directions.\nname : ConstrainedStrValue\n    Unique name for monitor.\nfreqs : Union[Tuple[float, ...], Array]\n    [units = Hz].  Array or list of frequencies stored by the field monitor.\napodization : ApodizationSpec = ApodizationSpec(start=None, end=None, width=None, type='ApodizationSpec')\n    Sets parameters of (optional) apodization. Apodization applies a windowing function to the Fourier transform of the time-domain fields into frequency-domain ones, and can be used to truncate the beginning and/or end of the time signal, for example to eliminate the source pulse when studying the eigenmodes of a system. Note: apodization affects the normalization of the frequency-domain fields.\n\nExample\n-------\n>>> monitor = PermittivityMonitor(\n...     center=(1,2,3),\n...     size=(2,2,2),\n...     freqs=[250e12, 300e12],\n...     name='eps_monitor')",
+      "description": ":class:`Monitor` that records the diagonal components of the complex-valued relative\npermittivity tensor in the frequency domain. The recorded data has the same shape as a\n:class:`.FieldMonitor` of the same geometry: the permittivity values are saved at the\nYee grid locations, and can be interpolated to any point inside the monitor.\n\nParameters\n----------\ncenter : Tuple[float, float, float] = (0.0, 0.0, 0.0)\n    [units = um].  Center of object in x, y, and z.\nsize : Tuple[NonNegativeFloat, NonNegativeFloat, NonNegativeFloat]\n    [units = um].  Size in x, y, and z directions.\nname : ConstrainedStrValue\n    Unique name for monitor.\nfreqs : Union[Tuple[float, ...], ArrayLike_dtype=<class 'float'>_ndim=1]\n    [units = Hz].  Array or list of frequencies stored by the field monitor.\napodization : ApodizationSpec = ApodizationSpec(start=None, end=None, width=None, type='ApodizationSpec')\n    Sets parameters of (optional) apodization. Apodization applies a windowing function to the Fourier transform of the time-domain fields into frequency-domain ones, and can be used to truncate the beginning and/or end of the time signal, for example to eliminate the source pulse when studying the eigenmodes of a system. Note: apodization affects the normalization of the frequency-domain fields.\n\nNote\n----\nIf 2D materials are present, then the permittivity values correspond to the\nvolumetric equivalent of the 2D materials.\n\nExample\n-------\n>>> monitor = PermittivityMonitor(\n...     center=(1,2,3),\n...     size=(2,2,2),\n...     freqs=[250e12, 300e12],\n...     name='eps_monitor')",
       "type": "object",
       "properties": {
         "type": {
@@ -3755,11 +3982,8 @@
               }
             },
             {
-              "title": "Array Like",
-              "description": "Accepts sequence (tuple, list, numpy array) and converts to tuple.",
-              "type": "tuple",
-              "properties": {},
-              "required": []
+              "title": "ArrayLike",
+              "type": "ArrayLike"
             }
           ]
         },
@@ -3788,7 +4012,7 @@
     },
     "FluxMonitor": {
       "title": "FluxMonitor",
-      "description": ":class:`Monitor` that records power flux in the frequency domain.\nIf the monitor geometry is a 2D box, the total flux through this plane is returned, with a\npositive sign corresponding to power flow in the positive direction along the axis normal to\nthe plane. If the geometry is a 3D box, the total power coming out of the box is returned by\nintegrating the flux over all box surfaces (excpet the ones defined in ``exclude_surfaces``).\n\nParameters\n----------\ncenter : Tuple[float, float, float] = (0.0, 0.0, 0.0)\n    [units = um].  Center of object in x, y, and z.\nsize : Tuple[NonNegativeFloat, NonNegativeFloat, NonNegativeFloat]\n    [units = um].  Size in x, y, and z directions.\nname : ConstrainedStrValue\n    Unique name for monitor.\nfreqs : Union[Tuple[float, ...], Array]\n    [units = Hz].  Array or list of frequencies stored by the field monitor.\napodization : ApodizationSpec = ApodizationSpec(start=None, end=None, width=None, type='ApodizationSpec')\n    Sets parameters of (optional) apodization. Apodization applies a windowing function to the Fourier transform of the time-domain fields into frequency-domain ones, and can be used to truncate the beginning and/or end of the time signal, for example to eliminate the source pulse when studying the eigenmodes of a system. Note: apodization affects the normalization of the frequency-domain fields.\nnormal_dir : Optional[Literal['+', '-']] = None\n    Direction of the surface monitor's normal vector w.r.t. the positive x, y or z unit vectors. Must be one of ``'+'`` or ``'-'``. Applies to surface monitors only, and defaults to ``'+'`` if not provided.\nexclude_surfaces : Optional[Tuple[Literal['x-', 'x+', 'y-', 'y+', 'z-', 'z+'], ...]] = None\n    Surfaces to exclude in the integration, if a volume monitor.\n\nExample\n-------\n>>> monitor = FluxMonitor(\n...     center=(1,2,3),\n...     size=(2,2,0),\n...     freqs=[200e12, 210e12],\n...     name='flux_monitor')",
+      "description": ":class:`Monitor` that records power flux in the frequency domain.\nIf the monitor geometry is a 2D box, the total flux through this plane is returned, with a\npositive sign corresponding to power flow in the positive direction along the axis normal to\nthe plane. If the geometry is a 3D box, the total power coming out of the box is returned by\nintegrating the flux over all box surfaces (excpet the ones defined in ``exclude_surfaces``).\n\nParameters\n----------\ncenter : Tuple[float, float, float] = (0.0, 0.0, 0.0)\n    [units = um].  Center of object in x, y, and z.\nsize : Tuple[NonNegativeFloat, NonNegativeFloat, NonNegativeFloat]\n    [units = um].  Size in x, y, and z directions.\nname : ConstrainedStrValue\n    Unique name for monitor.\nfreqs : Union[Tuple[float, ...], ArrayLike_dtype=<class 'float'>_ndim=1]\n    [units = Hz].  Array or list of frequencies stored by the field monitor.\napodization : ApodizationSpec = ApodizationSpec(start=None, end=None, width=None, type='ApodizationSpec')\n    Sets parameters of (optional) apodization. Apodization applies a windowing function to the Fourier transform of the time-domain fields into frequency-domain ones, and can be used to truncate the beginning and/or end of the time signal, for example to eliminate the source pulse when studying the eigenmodes of a system. Note: apodization affects the normalization of the frequency-domain fields.\nnormal_dir : Optional[Literal['+', '-']] = None\n    Direction of the surface monitor's normal vector w.r.t. the positive x, y or z unit vectors. Must be one of ``'+'`` or ``'-'``. Applies to surface monitors only, and defaults to ``'+'`` if not provided.\nexclude_surfaces : Optional[Tuple[Literal['x-', 'x+', 'y-', 'y+', 'z-', 'z+'], ...]] = None\n    Surfaces to exclude in the integration, if a volume monitor.\n\nExample\n-------\n>>> monitor = FluxMonitor(\n...     center=(1,2,3),\n...     size=(2,2,0),\n...     freqs=[200e12, 210e12],\n...     name='flux_monitor')",
       "type": "object",
       "properties": {
         "type": {
@@ -3863,11 +4087,8 @@
               }
             },
             {
-              "title": "Array Like",
-              "description": "Accepts sequence (tuple, list, numpy array) and converts to tuple.",
-              "type": "tuple",
-              "properties": {},
-              "required": []
+              "title": "ArrayLike",
+              "type": "ArrayLike"
             }
           ]
         },
@@ -4040,7 +4261,7 @@
     },
     "ModeMonitor": {
       "title": "ModeMonitor",
-      "description": ":class:`Monitor` that records amplitudes from modal decomposition of fields on plane.\n\nParameters\n----------\ncenter : Tuple[float, float, float] = (0.0, 0.0, 0.0)\n    [units = um].  Center of object in x, y, and z.\nsize : Tuple[NonNegativeFloat, NonNegativeFloat, NonNegativeFloat]\n    [units = um].  Size in x, y, and z directions.\nname : ConstrainedStrValue\n    Unique name for monitor.\nfreqs : Union[Tuple[float, ...], Array]\n    [units = Hz].  Array or list of frequencies stored by the field monitor.\napodization : ApodizationSpec = ApodizationSpec(start=None, end=None, width=None, type='ApodizationSpec')\n    Sets parameters of (optional) apodization. Apodization applies a windowing function to the Fourier transform of the time-domain fields into frequency-domain ones, and can be used to truncate the beginning and/or end of the time signal, for example to eliminate the source pulse when studying the eigenmodes of a system. Note: apodization affects the normalization of the frequency-domain fields.\nmode_spec : ModeSpec\n    Parameters to feed to mode solver which determine modes measured by monitor.\n\nExample\n-------\n>>> mode_spec = ModeSpec(num_modes=3)\n>>> monitor = ModeMonitor(\n...     center=(1,2,3),\n...     size=(2,2,0),\n...     freqs=[200e12, 210e12],\n...     mode_spec=mode_spec,\n...     name='mode_monitor')",
+      "description": ":class:`Monitor` that records amplitudes from modal decomposition of fields on plane.\n\nParameters\n----------\ncenter : Tuple[float, float, float] = (0.0, 0.0, 0.0)\n    [units = um].  Center of object in x, y, and z.\nsize : Tuple[NonNegativeFloat, NonNegativeFloat, NonNegativeFloat]\n    [units = um].  Size in x, y, and z directions.\nname : ConstrainedStrValue\n    Unique name for monitor.\nfreqs : Union[Tuple[float, ...], ArrayLike_dtype=<class 'float'>_ndim=1]\n    [units = Hz].  Array or list of frequencies stored by the field monitor.\napodization : ApodizationSpec = ApodizationSpec(start=None, end=None, width=None, type='ApodizationSpec')\n    Sets parameters of (optional) apodization. Apodization applies a windowing function to the Fourier transform of the time-domain fields into frequency-domain ones, and can be used to truncate the beginning and/or end of the time signal, for example to eliminate the source pulse when studying the eigenmodes of a system. Note: apodization affects the normalization of the frequency-domain fields.\nmode_spec : ModeSpec\n    Parameters to feed to mode solver which determine modes measured by monitor.\n\nExample\n-------\n>>> mode_spec = ModeSpec(num_modes=3)\n>>> monitor = ModeMonitor(\n...     center=(1,2,3),\n...     size=(2,2,0),\n...     freqs=[200e12, 210e12],\n...     mode_spec=mode_spec,\n...     name='mode_monitor')",
       "type": "object",
       "properties": {
         "type": {
@@ -4115,11 +4336,8 @@
               }
             },
             {
-              "title": "Array Like",
-              "description": "Accepts sequence (tuple, list, numpy array) and converts to tuple.",
-              "type": "tuple",
-              "properties": {},
-              "required": []
+              "title": "ArrayLike",
+              "type": "ArrayLike"
             }
           ]
         },
@@ -4158,7 +4376,7 @@
     },
     "ModeSolverMonitor": {
       "title": "ModeSolverMonitor",
-      "description": ":class:`Monitor` that stores the mode field profiles returned by the mode solver in the\nmonitor plane.\n\nParameters\n----------\ncenter : Tuple[float, float, float] = (0.0, 0.0, 0.0)\n    [units = um].  Center of object in x, y, and z.\nsize : Tuple[NonNegativeFloat, NonNegativeFloat, NonNegativeFloat]\n    [units = um].  Size in x, y, and z directions.\nname : ConstrainedStrValue\n    Unique name for monitor.\nfreqs : Union[Tuple[float, ...], Array]\n    [units = Hz].  Array or list of frequencies stored by the field monitor.\napodization : ApodizationSpec = ApodizationSpec(start=None, end=None, width=None, type='ApodizationSpec')\n    Sets parameters of (optional) apodization. Apodization applies a windowing function to the Fourier transform of the time-domain fields into frequency-domain ones, and can be used to truncate the beginning and/or end of the time signal, for example to eliminate the source pulse when studying the eigenmodes of a system. Note: apodization affects the normalization of the frequency-domain fields.\nmode_spec : ModeSpec\n    Parameters to feed to mode solver which determine modes measured by monitor.\n\nExample\n-------\n>>> mode_spec = ModeSpec(num_modes=3)\n>>> monitor = ModeSolverMonitor(\n...     center=(1,2,3),\n...     size=(2,2,0),\n...     freqs=[200e12, 210e12],\n...     mode_spec=mode_spec,\n...     name='mode_monitor')",
+      "description": ":class:`Monitor` that stores the mode field profiles returned by the mode solver in the\nmonitor plane.\n\nParameters\n----------\ncenter : Tuple[float, float, float] = (0.0, 0.0, 0.0)\n    [units = um].  Center of object in x, y, and z.\nsize : Tuple[NonNegativeFloat, NonNegativeFloat, NonNegativeFloat]\n    [units = um].  Size in x, y, and z directions.\nname : ConstrainedStrValue\n    Unique name for monitor.\nfreqs : Union[Tuple[float, ...], ArrayLike_dtype=<class 'float'>_ndim=1]\n    [units = Hz].  Array or list of frequencies stored by the field monitor.\napodization : ApodizationSpec = ApodizationSpec(start=None, end=None, width=None, type='ApodizationSpec')\n    Sets parameters of (optional) apodization. Apodization applies a windowing function to the Fourier transform of the time-domain fields into frequency-domain ones, and can be used to truncate the beginning and/or end of the time signal, for example to eliminate the source pulse when studying the eigenmodes of a system. Note: apodization affects the normalization of the frequency-domain fields.\nmode_spec : ModeSpec\n    Parameters to feed to mode solver which determine modes measured by monitor.\n\nExample\n-------\n>>> mode_spec = ModeSpec(num_modes=3)\n>>> monitor = ModeSolverMonitor(\n...     center=(1,2,3),\n...     size=(2,2,0),\n...     freqs=[200e12, 210e12],\n...     mode_spec=mode_spec,\n...     name='mode_monitor')",
       "type": "object",
       "properties": {
         "type": {
@@ -4233,11 +4451,8 @@
               }
             },
             {
-              "title": "Array Like",
-              "description": "Accepts sequence (tuple, list, numpy array) and converts to tuple.",
-              "type": "tuple",
-              "properties": {},
-              "required": []
+              "title": "ArrayLike",
+              "type": "ArrayLike"
             }
           ]
         },
@@ -4276,7 +4491,7 @@
     },
     "FieldProjectionAngleMonitor": {
       "title": "FieldProjectionAngleMonitor",
-      "description": ":class:`Monitor` that samples electromagnetic near fields in the frequency domain\nand projects them at given observation angles.\n\nParameters\n----------\ncenter : Tuple[float, float, float] = (0.0, 0.0, 0.0)\n    [units = um].  Center of object in x, y, and z.\nsize : Tuple[NonNegativeFloat, NonNegativeFloat, NonNegativeFloat]\n    [units = um].  Size in x, y, and z directions.\nname : ConstrainedStrValue\n    Unique name for monitor.\nfreqs : Union[Tuple[float, ...], Array]\n    [units = Hz].  Array or list of frequencies stored by the field monitor.\napodization : ApodizationSpec = ApodizationSpec(start=None, end=None, width=None, type='ApodizationSpec')\n    Sets parameters of (optional) apodization. Apodization applies a windowing function to the Fourier transform of the time-domain fields into frequency-domain ones, and can be used to truncate the beginning and/or end of the time signal, for example to eliminate the source pulse when studying the eigenmodes of a system. Note: apodization affects the normalization of the frequency-domain fields.\nnormal_dir : Optional[Literal['+', '-']] = None\n    Direction of the surface monitor's normal vector w.r.t. the positive x, y or z unit vectors. Must be one of ``'+'`` or ``'-'``. Applies to surface monitors only, and defaults to ``'+'`` if not provided.\nexclude_surfaces : Optional[Tuple[Literal['x-', 'x+', 'y-', 'y+', 'z-', 'z+'], ...]] = None\n    Surfaces to exclude in the integration, if a volume monitor.\ncustom_origin : Optional[Tuple[float, float, float]] = None\n    [units = um].  Local origin used for defining observation points. If ``None``, uses the monitor's center.\nfar_field_approx : bool = True\n    Whether to enable the far field approximation when projecting fields.\nproj_distance : float = 1000000.0\n    [units = um].  Radial distance of the projection points from ``local_origin``.\ntheta : Union[Tuple[float, ...], Array]\n    [units = rad].  Polar angles with respect to the global z axis, relative to the location of ``local_origin``, at which to project fields.\nphi : Union[Tuple[float, ...], Array]\n    [units = rad].  Azimuth angles with respect to the global z axis, relative to the location of ``local_origin``, at which to project fields.\n\nExample\n-------\n>>> monitor = FieldProjectionAngleMonitor(\n...     center=(1,2,3),\n...     size=(2,2,2),\n...     freqs=[250e12, 300e12],\n...     name='n2f_monitor',\n...     custom_origin=(1,2,3),\n...     phi=[0, np.pi/2],\n...     theta=np.linspace(-np.pi/2, np.pi/2, 100)\n...     )",
+      "description": ":class:`Monitor` that samples electromagnetic near fields in the frequency domain\nand projects them at given observation angles.\n\nParameters\n----------\ncenter : Tuple[float, float, float] = (0.0, 0.0, 0.0)\n    [units = um].  Center of object in x, y, and z.\nsize : Tuple[NonNegativeFloat, NonNegativeFloat, NonNegativeFloat]\n    [units = um].  Size in x, y, and z directions.\nname : ConstrainedStrValue\n    Unique name for monitor.\nfreqs : Union[Tuple[float, ...], ArrayLike_dtype=<class 'float'>_ndim=1]\n    [units = Hz].  Array or list of frequencies stored by the field monitor.\napodization : ApodizationSpec = ApodizationSpec(start=None, end=None, width=None, type='ApodizationSpec')\n    Sets parameters of (optional) apodization. Apodization applies a windowing function to the Fourier transform of the time-domain fields into frequency-domain ones, and can be used to truncate the beginning and/or end of the time signal, for example to eliminate the source pulse when studying the eigenmodes of a system. Note: apodization affects the normalization of the frequency-domain fields.\nnormal_dir : Optional[Literal['+', '-']] = None\n    Direction of the surface monitor's normal vector w.r.t. the positive x, y or z unit vectors. Must be one of ``'+'`` or ``'-'``. Applies to surface monitors only, and defaults to ``'+'`` if not provided.\nexclude_surfaces : Optional[Tuple[Literal['x-', 'x+', 'y-', 'y+', 'z-', 'z+'], ...]] = None\n    Surfaces to exclude in the integration, if a volume monitor.\ncustom_origin : Optional[Tuple[float, float, float]] = None\n    [units = um].  Local origin used for defining observation points. If ``None``, uses the monitor's center.\nfar_field_approx : bool = True\n    Whether to enable the far field approximation when projecting fields.\nproj_distance : float = 1000000.0\n    [units = um].  Radial distance of the projection points from ``local_origin``.\ntheta : Union[Tuple[float, ...], ArrayLike_dtype=<class 'float'>_ndim=1]\n    [units = rad].  Polar angles with respect to the global z axis, relative to the location of ``local_origin``, at which to project fields.\nphi : Union[Tuple[float, ...], ArrayLike_dtype=<class 'float'>_ndim=1]\n    [units = rad].  Azimuth angles with respect to the global z axis, relative to the location of ``local_origin``, at which to project fields.\n\nExample\n-------\n>>> monitor = FieldProjectionAngleMonitor(\n...     center=(1,2,3),\n...     size=(2,2,2),\n...     freqs=[250e12, 300e12],\n...     name='n2f_monitor',\n...     custom_origin=(1,2,3),\n...     phi=[0, np.pi/2],\n...     theta=np.linspace(-np.pi/2, np.pi/2, 100)\n...     )",
       "type": "object",
       "properties": {
         "type": {
@@ -4351,11 +4566,8 @@
               }
             },
             {
-              "title": "Array Like",
-              "description": "Accepts sequence (tuple, list, numpy array) and converts to tuple.",
-              "type": "tuple",
-              "properties": {},
-              "required": []
+              "title": "ArrayLike",
+              "type": "ArrayLike"
             }
           ]
         },
@@ -4443,11 +4655,8 @@
               }
             },
             {
-              "title": "Array Like",
-              "description": "Accepts sequence (tuple, list, numpy array) and converts to tuple.",
-              "type": "tuple",
-              "properties": {},
-              "required": []
+              "title": "ArrayLike",
+              "type": "ArrayLike"
             }
           ]
         },
@@ -4463,11 +4672,8 @@
               }
             },
             {
-              "title": "Array Like",
-              "description": "Accepts sequence (tuple, list, numpy array) and converts to tuple.",
-              "type": "tuple",
-              "properties": {},
-              "required": []
+              "title": "ArrayLike",
+              "type": "ArrayLike"
             }
           ]
         }
@@ -4483,7 +4689,7 @@
     },
     "FieldProjectionCartesianMonitor": {
       "title": "FieldProjectionCartesianMonitor",
-      "description": ":class:`Monitor` that samples electromagnetic near fields in the frequency domain\nand projects them on a Cartesian observation plane.\n\nParameters\n----------\ncenter : Tuple[float, float, float] = (0.0, 0.0, 0.0)\n    [units = um].  Center of object in x, y, and z.\nsize : Tuple[NonNegativeFloat, NonNegativeFloat, NonNegativeFloat]\n    [units = um].  Size in x, y, and z directions.\nname : ConstrainedStrValue\n    Unique name for monitor.\nfreqs : Union[Tuple[float, ...], Array]\n    [units = Hz].  Array or list of frequencies stored by the field monitor.\napodization : ApodizationSpec = ApodizationSpec(start=None, end=None, width=None, type='ApodizationSpec')\n    Sets parameters of (optional) apodization. Apodization applies a windowing function to the Fourier transform of the time-domain fields into frequency-domain ones, and can be used to truncate the beginning and/or end of the time signal, for example to eliminate the source pulse when studying the eigenmodes of a system. Note: apodization affects the normalization of the frequency-domain fields.\nnormal_dir : Optional[Literal['+', '-']] = None\n    Direction of the surface monitor's normal vector w.r.t. the positive x, y or z unit vectors. Must be one of ``'+'`` or ``'-'``. Applies to surface monitors only, and defaults to ``'+'`` if not provided.\nexclude_surfaces : Optional[Tuple[Literal['x-', 'x+', 'y-', 'y+', 'z-', 'z+'], ...]] = None\n    Surfaces to exclude in the integration, if a volume monitor.\ncustom_origin : Optional[Tuple[float, float, float]] = None\n    [units = um].  Local origin used for defining observation points. If ``None``, uses the monitor's center.\nfar_field_approx : bool = True\n    Whether to enable the far field approximation when projecting fields.\nproj_axis : Literal[0, 1, 2]\n    Axis along which the observation plane is oriented.\nproj_distance : float = 1000000.0\n    [units = um].  Signed distance of the projection plane along ``proj_axis``. from the plane containing ``local_origin``.\nx : Union[Tuple[float, ...], Array]\n    [units = um].  Local x observation coordinates w.r.t. ``local_origin`` and ``proj_axis``. When ``proj_axis`` is 0, this corresponds to the global y axis. When ``proj_axis`` is 1, this corresponds to the global x axis. When ``proj_axis`` is 2, this corresponds to the global x axis. \ny : Union[Tuple[float, ...], Array]\n    [units = um].  Local y observation coordinates w.r.t. ``local_origin`` and ``proj_axis``. When ``proj_axis`` is 0, this corresponds to the global z axis. When ``proj_axis`` is 1, this corresponds to the global z axis. When ``proj_axis`` is 2, this corresponds to the global y axis. \n\nExample\n-------\n>>> monitor = FieldProjectionCartesianMonitor(\n...     center=(1,2,3),\n...     size=(2,2,2),\n...     freqs=[250e12, 300e12],\n...     name='n2f_monitor',\n...     custom_origin=(1,2,3),\n...     x=[-1, 0, 1],\n...     y=[-2, -1, 0, 1, 2],\n...     proj_axis=2,\n...     proj_distance=5\n...     )",
+      "description": ":class:`Monitor` that samples electromagnetic near fields in the frequency domain\nand projects them on a Cartesian observation plane.\n\nParameters\n----------\ncenter : Tuple[float, float, float] = (0.0, 0.0, 0.0)\n    [units = um].  Center of object in x, y, and z.\nsize : Tuple[NonNegativeFloat, NonNegativeFloat, NonNegativeFloat]\n    [units = um].  Size in x, y, and z directions.\nname : ConstrainedStrValue\n    Unique name for monitor.\nfreqs : Union[Tuple[float, ...], ArrayLike_dtype=<class 'float'>_ndim=1]\n    [units = Hz].  Array or list of frequencies stored by the field monitor.\napodization : ApodizationSpec = ApodizationSpec(start=None, end=None, width=None, type='ApodizationSpec')\n    Sets parameters of (optional) apodization. Apodization applies a windowing function to the Fourier transform of the time-domain fields into frequency-domain ones, and can be used to truncate the beginning and/or end of the time signal, for example to eliminate the source pulse when studying the eigenmodes of a system. Note: apodization affects the normalization of the frequency-domain fields.\nnormal_dir : Optional[Literal['+', '-']] = None\n    Direction of the surface monitor's normal vector w.r.t. the positive x, y or z unit vectors. Must be one of ``'+'`` or ``'-'``. Applies to surface monitors only, and defaults to ``'+'`` if not provided.\nexclude_surfaces : Optional[Tuple[Literal['x-', 'x+', 'y-', 'y+', 'z-', 'z+'], ...]] = None\n    Surfaces to exclude in the integration, if a volume monitor.\ncustom_origin : Optional[Tuple[float, float, float]] = None\n    [units = um].  Local origin used for defining observation points. If ``None``, uses the monitor's center.\nfar_field_approx : bool = True\n    Whether to enable the far field approximation when projecting fields.\nproj_axis : Literal[0, 1, 2]\n    Axis along which the observation plane is oriented.\nproj_distance : float = 1000000.0\n    [units = um].  Signed distance of the projection plane along ``proj_axis``. from the plane containing ``local_origin``.\nx : Union[Tuple[float, ...], ArrayLike_dtype=<class 'float'>_ndim=1]\n    [units = um].  Local x observation coordinates w.r.t. ``local_origin`` and ``proj_axis``. When ``proj_axis`` is 0, this corresponds to the global y axis. When ``proj_axis`` is 1, this corresponds to the global x axis. When ``proj_axis`` is 2, this corresponds to the global x axis. \ny : Union[Tuple[float, ...], ArrayLike_dtype=<class 'float'>_ndim=1]\n    [units = um].  Local y observation coordinates w.r.t. ``local_origin`` and ``proj_axis``. When ``proj_axis`` is 0, this corresponds to the global z axis. When ``proj_axis`` is 1, this corresponds to the global z axis. When ``proj_axis`` is 2, this corresponds to the global y axis. \n\nExample\n-------\n>>> monitor = FieldProjectionCartesianMonitor(\n...     center=(1,2,3),\n...     size=(2,2,2),\n...     freqs=[250e12, 300e12],\n...     name='n2f_monitor',\n...     custom_origin=(1,2,3),\n...     x=[-1, 0, 1],\n...     y=[-2, -1, 0, 1, 2],\n...     proj_axis=2,\n...     proj_distance=5\n...     )",
       "type": "object",
       "properties": {
         "type": {
@@ -4558,11 +4764,8 @@
               }
             },
             {
-              "title": "Array Like",
-              "description": "Accepts sequence (tuple, list, numpy array) and converts to tuple.",
-              "type": "tuple",
-              "properties": {},
-              "required": []
+              "title": "ArrayLike",
+              "type": "ArrayLike"
             }
           ]
         },
@@ -4660,11 +4863,8 @@
               }
             },
             {
-              "title": "Array Like",
-              "description": "Accepts sequence (tuple, list, numpy array) and converts to tuple.",
-              "type": "tuple",
-              "properties": {},
-              "required": []
+              "title": "ArrayLike",
+              "type": "ArrayLike"
             }
           ]
         },
@@ -4680,11 +4880,8 @@
               }
             },
             {
-              "title": "Array Like",
-              "description": "Accepts sequence (tuple, list, numpy array) and converts to tuple.",
-              "type": "tuple",
-              "properties": {},
-              "required": []
+              "title": "ArrayLike",
+              "type": "ArrayLike"
             }
           ]
         }
@@ -4701,7 +4898,7 @@
     },
     "FieldProjectionKSpaceMonitor": {
       "title": "FieldProjectionKSpaceMonitor",
-      "description": ":class:`Monitor` that samples electromagnetic near fields in the frequency domain\nand projects them on an observation plane defined in k-space.\n\nParameters\n----------\ncenter : Tuple[float, float, float] = (0.0, 0.0, 0.0)\n    [units = um].  Center of object in x, y, and z.\nsize : Tuple[NonNegativeFloat, NonNegativeFloat, NonNegativeFloat]\n    [units = um].  Size in x, y, and z directions.\nname : ConstrainedStrValue\n    Unique name for monitor.\nfreqs : Union[Tuple[float, ...], Array]\n    [units = Hz].  Array or list of frequencies stored by the field monitor.\napodization : ApodizationSpec = ApodizationSpec(start=None, end=None, width=None, type='ApodizationSpec')\n    Sets parameters of (optional) apodization. Apodization applies a windowing function to the Fourier transform of the time-domain fields into frequency-domain ones, and can be used to truncate the beginning and/or end of the time signal, for example to eliminate the source pulse when studying the eigenmodes of a system. Note: apodization affects the normalization of the frequency-domain fields.\nnormal_dir : Optional[Literal['+', '-']] = None\n    Direction of the surface monitor's normal vector w.r.t. the positive x, y or z unit vectors. Must be one of ``'+'`` or ``'-'``. Applies to surface monitors only, and defaults to ``'+'`` if not provided.\nexclude_surfaces : Optional[Tuple[Literal['x-', 'x+', 'y-', 'y+', 'z-', 'z+'], ...]] = None\n    Surfaces to exclude in the integration, if a volume monitor.\ncustom_origin : Optional[Tuple[float, float, float]] = None\n    [units = um].  Local origin used for defining observation points. If ``None``, uses the monitor's center.\nfar_field_approx : bool = True\n    Whether to enable the far field approximation when projecting fields.\nproj_axis : Literal[0, 1, 2]\n    Axis along which the observation plane is oriented.\nproj_distance : float = 1000000.0\n    [units = um].  Radial distance of the projection points from ``local_origin``.\nux : Union[Tuple[float, ...], Array]\n    Local x component of wave vectors on the observation plane, relative to ``local_origin`` and oriented with respect to ``proj_axis``, normalized by (2*pi/lambda) where lambda is the wavelength associated with the background medium. Must be in the range [-1, 1].\nuy : Union[Tuple[float, ...], Array]\n    Local y component of wave vectors on the observation plane, relative to ``local_origin`` and oriented with respect to ``proj_axis``, normalized by (2*pi/lambda) where lambda is the wavelength associated with the background medium. Must be in the range [-1, 1].\n\nExample\n-------\n>>> monitor = FieldProjectionKSpaceMonitor(\n...     center=(1,2,3),\n...     size=(2,2,2),\n...     freqs=[250e12, 300e12],\n...     name='n2f_monitor',\n...     custom_origin=(1,2,3),\n...     proj_axis=2,\n...     ux=[0.1,0.2],\n...     uy=[0.3,0.4,0.5]\n...     )",
+      "description": ":class:`Monitor` that samples electromagnetic near fields in the frequency domain\nand projects them on an observation plane defined in k-space.\n\nParameters\n----------\ncenter : Tuple[float, float, float] = (0.0, 0.0, 0.0)\n    [units = um].  Center of object in x, y, and z.\nsize : Tuple[NonNegativeFloat, NonNegativeFloat, NonNegativeFloat]\n    [units = um].  Size in x, y, and z directions.\nname : ConstrainedStrValue\n    Unique name for monitor.\nfreqs : Union[Tuple[float, ...], ArrayLike_dtype=<class 'float'>_ndim=1]\n    [units = Hz].  Array or list of frequencies stored by the field monitor.\napodization : ApodizationSpec = ApodizationSpec(start=None, end=None, width=None, type='ApodizationSpec')\n    Sets parameters of (optional) apodization. Apodization applies a windowing function to the Fourier transform of the time-domain fields into frequency-domain ones, and can be used to truncate the beginning and/or end of the time signal, for example to eliminate the source pulse when studying the eigenmodes of a system. Note: apodization affects the normalization of the frequency-domain fields.\nnormal_dir : Optional[Literal['+', '-']] = None\n    Direction of the surface monitor's normal vector w.r.t. the positive x, y or z unit vectors. Must be one of ``'+'`` or ``'-'``. Applies to surface monitors only, and defaults to ``'+'`` if not provided.\nexclude_surfaces : Optional[Tuple[Literal['x-', 'x+', 'y-', 'y+', 'z-', 'z+'], ...]] = None\n    Surfaces to exclude in the integration, if a volume monitor.\ncustom_origin : Optional[Tuple[float, float, float]] = None\n    [units = um].  Local origin used for defining observation points. If ``None``, uses the monitor's center.\nfar_field_approx : bool = True\n    Whether to enable the far field approximation when projecting fields.\nproj_axis : Literal[0, 1, 2]\n    Axis along which the observation plane is oriented.\nproj_distance : float = 1000000.0\n    [units = um].  Radial distance of the projection points from ``local_origin``.\nux : Union[Tuple[float, ...], ArrayLike_dtype=<class 'float'>_ndim=1]\n    Local x component of wave vectors on the observation plane, relative to ``local_origin`` and oriented with respect to ``proj_axis``, normalized by (2*pi/lambda) where lambda is the wavelength associated with the background medium. Must be in the range [-1, 1].\nuy : Union[Tuple[float, ...], ArrayLike_dtype=<class 'float'>_ndim=1]\n    Local y component of wave vectors on the observation plane, relative to ``local_origin`` and oriented with respect to ``proj_axis``, normalized by (2*pi/lambda) where lambda is the wavelength associated with the background medium. Must be in the range [-1, 1].\n\nExample\n-------\n>>> monitor = FieldProjectionKSpaceMonitor(\n...     center=(1,2,3),\n...     size=(2,2,2),\n...     freqs=[250e12, 300e12],\n...     name='n2f_monitor',\n...     custom_origin=(1,2,3),\n...     proj_axis=2,\n...     ux=[0.1,0.2],\n...     uy=[0.3,0.4,0.5]\n...     )",
       "type": "object",
       "properties": {
         "type": {
@@ -4776,11 +4973,8 @@
               }
             },
             {
-              "title": "Array Like",
-              "description": "Accepts sequence (tuple, list, numpy array) and converts to tuple.",
-              "type": "tuple",
-              "properties": {},
-              "required": []
+              "title": "ArrayLike",
+              "type": "ArrayLike"
             }
           ]
         },
@@ -4877,11 +5071,8 @@
               }
             },
             {
-              "title": "Array Like",
-              "description": "Accepts sequence (tuple, list, numpy array) and converts to tuple.",
-              "type": "tuple",
-              "properties": {},
-              "required": []
+              "title": "ArrayLike",
+              "type": "ArrayLike"
             }
           ]
         },
@@ -4896,11 +5087,8 @@
               }
             },
             {
-              "title": "Array Like",
-              "description": "Accepts sequence (tuple, list, numpy array) and converts to tuple.",
-              "type": "tuple",
-              "properties": {},
-              "required": []
+              "title": "ArrayLike",
+              "type": "ArrayLike"
             }
           ]
         }
@@ -4917,7 +5105,7 @@
     },
     "DiffractionMonitor": {
       "title": "DiffractionMonitor",
-      "description": ":class:`Monitor` that uses a 2D Fourier transform to compute the\ndiffraction amplitudes and efficiency for allowed diffraction orders.\n\nParameters\n----------\ncenter : Tuple[float, float, float] = (0.0, 0.0, 0.0)\n    [units = um].  Center of object in x, y, and z.\nsize : Tuple[NonNegativeFloat, NonNegativeFloat, NonNegativeFloat]\n    [units = um].  Size in x, y, and z directions.\nname : ConstrainedStrValue\n    Unique name for monitor.\nfreqs : Union[Tuple[float, ...], Array]\n    [units = Hz].  Array or list of frequencies stored by the field monitor.\napodization : ApodizationSpec = ApodizationSpec(start=None, end=None, width=None, type='ApodizationSpec')\n    Sets parameters of (optional) apodization. Apodization applies a windowing function to the Fourier transform of the time-domain fields into frequency-domain ones, and can be used to truncate the beginning and/or end of the time signal, for example to eliminate the source pulse when studying the eigenmodes of a system. Note: apodization affects the normalization of the frequency-domain fields.\nnormal_dir : Literal['+', '-'] = +\n    Direction of the surface monitor's normal vector w.r.t. the positive x, y or z unit vectors. Must be one of ``'+'`` or ``'-'``. Defaults to ``'+'`` if not provided.\n\nExample\n-------\n>>> monitor = DiffractionMonitor(\n...     center=(1,2,3),\n...     size=(inf,inf,0),\n...     freqs=[250e12, 300e12],\n...     name='diffraction_monitor',\n...     normal_dir='+',\n...     )",
+      "description": ":class:`Monitor` that uses a 2D Fourier transform to compute the\ndiffraction amplitudes and efficiency for allowed diffraction orders.\n\nParameters\n----------\ncenter : Tuple[float, float, float] = (0.0, 0.0, 0.0)\n    [units = um].  Center of object in x, y, and z.\nsize : Tuple[NonNegativeFloat, NonNegativeFloat, NonNegativeFloat]\n    [units = um].  Size in x, y, and z directions.\nname : ConstrainedStrValue\n    Unique name for monitor.\nfreqs : Union[Tuple[float, ...], ArrayLike_dtype=<class 'float'>_ndim=1]\n    [units = Hz].  Array or list of frequencies stored by the field monitor.\napodization : ApodizationSpec = ApodizationSpec(start=None, end=None, width=None, type='ApodizationSpec')\n    Sets parameters of (optional) apodization. Apodization applies a windowing function to the Fourier transform of the time-domain fields into frequency-domain ones, and can be used to truncate the beginning and/or end of the time signal, for example to eliminate the source pulse when studying the eigenmodes of a system. Note: apodization affects the normalization of the frequency-domain fields.\nnormal_dir : Literal['+', '-'] = +\n    Direction of the surface monitor's normal vector w.r.t. the positive x, y or z unit vectors. Must be one of ``'+'`` or ``'-'``. Defaults to ``'+'`` if not provided.\n\nExample\n-------\n>>> monitor = DiffractionMonitor(\n...     center=(1,2,3),\n...     size=(inf,inf,0),\n...     freqs=[250e12, 300e12],\n...     name='diffraction_monitor',\n...     normal_dir='+',\n...     )",
       "type": "object",
       "properties": {
         "type": {
@@ -4992,11 +5180,8 @@
               }
             },
             {
-              "title": "Array Like",
-              "description": "Accepts sequence (tuple, list, numpy array) and converts to tuple.",
-              "type": "tuple",
-              "properties": {},
-              "required": []
+              "title": "ArrayLike",
+              "type": "ArrayLike"
             }
           ]
         },
@@ -5061,7 +5246,7 @@
     },
     "CustomGrid": {
       "title": "CustomGrid",
-      "description": "Custom 1D grid supplied as a list of grid cell sizes centered on the simulation center.\n\nParameters\n----------\ndl : Tuple[PositiveFloat, ...]\n    [units = um].  An array of custom nonuniform grid sizes. The resulting grid is centered on the simulation center such that it spans the region ``(center - sum(dl)/2, center + sum(dl)/2)``. Note: if supplied sizes do not cover the simulation size, the first and last sizes are repeated to cover the simulation domain.\n\nExample\n-------\n>>> grid_1d = CustomGrid(dl=[0.2, 0.2, 0.1, 0.1, 0.1, 0.2, 0.2])",
+      "description": "Custom 1D grid supplied as a list of grid cell sizes centered on the simulation center.\n\nParameters\n----------\ndl : Tuple[PositiveFloat, ...]\n    [units = um].  An array of custom nonuniform grid sizes. The resulting grid is centered on the simulation center such that it spans the region ``(center - sum(dl)/2, center + sum(dl)/2)``, unless a ``custom_offset`` is given. Note: if supplied sizes do not cover the simulation size, the first and last sizes are repeated to cover the simulation domain.\ncustom_offset : Optional[float] = None\n    [units = um].  The starting coordinate of the grid which defines the simulation center. If ``None``, the simulation center is set such that it spans the region ``(center - sum(dl)/2, center + sum(dl)/2)``.\n\nExample\n-------\n>>> grid_1d = CustomGrid(dl=[0.2, 0.2, 0.1, 0.1, 0.1, 0.2, 0.2])",
       "type": "object",
       "properties": {
         "type": {
@@ -5074,13 +5259,19 @@
         },
         "dl": {
           "title": "Customized grid sizes.",
-          "description": "An array of custom nonuniform grid sizes. The resulting grid is centered on the simulation center such that it spans the region ``(center - sum(dl)/2, center + sum(dl)/2)``. Note: if supplied sizes do not cover the simulation size, the first and last sizes are repeated to cover the simulation domain.",
+          "description": "An array of custom nonuniform grid sizes. The resulting grid is centered on the simulation center such that it spans the region ``(center - sum(dl)/2, center + sum(dl)/2)``, unless a ``custom_offset`` is given. Note: if supplied sizes do not cover the simulation size, the first and last sizes are repeated to cover the simulation domain.",
           "units": "um",
           "type": "array",
           "items": {
             "type": "number",
             "exclusiveMinimum": 0
           }
+        },
+        "custom_offset": {
+          "title": "Customized grid offset.",
+          "description": "The starting coordinate of the grid which defines the simulation center. If ``None``, the simulation center is set such that it spans the region ``(center - sum(dl)/2, center + sum(dl)/2)``.",
+          "units": "um",
+          "type": "number"
         }
       },
       "required": [
@@ -5244,7 +5435,7 @@
     },
     "GridSpec": {
       "title": "GridSpec",
-      "description": "Collective grid specification for all three dimensions.\n\nParameters\n----------\ngrid_x : Union[UniformGrid, CustomGrid, AutoGrid] = AutoGrid(type='AutoGrid', min_steps_per_wvl=10.0, max_scale=1.4, dl_min=0.0, mesher=GradedMesher(type='GradedMesher'))\n    Grid specification along x-axis\ngrid_y : Union[UniformGrid, CustomGrid, AutoGrid] = AutoGrid(type='AutoGrid', min_steps_per_wvl=10.0, max_scale=1.4, dl_min=0.0, mesher=GradedMesher(type='GradedMesher'))\n    Grid specification along y-axis\ngrid_z : Union[UniformGrid, CustomGrid, AutoGrid] = AutoGrid(type='AutoGrid', min_steps_per_wvl=10.0, max_scale=1.4, dl_min=0.0, mesher=GradedMesher(type='GradedMesher'))\n    Grid specification along z-axis\nwavelength : Optional[float] = None\n    [units = um].  Free-space wavelength for automatic nonuniform grid. It can be 'None' if there is at least one source in the simulation, in which case it is defined by the source central frequency.\noverride_structures : Tuple[Annotated[Union[tidy3d.components.structure.Structure, tidy3d.components.structure.MeshOverrideStructure], FieldInfo(default=PydanticUndefined, discriminator='type', extra={})], ...] = ()\n    A set of structures that is added on top of the simulation structures in the process of generating the grid. This can be used to refine the grid or make it coarser depending than the expected need for higher/lower resolution regions.\n\nExample\n-------\n>>> uniform = UniformGrid(dl=0.1)\n>>> custom = CustomGrid(dl=[0.2, 0.2, 0.1, 0.1, 0.1, 0.2, 0.2])\n>>> auto = AutoGrid(min_steps_per_wvl=12)\n>>> grid_spec = GridSpec(grid_x=uniform, grid_y=custom, grid_z=auto, wavelength=1.5)",
+      "description": "Collective grid specification for all three dimensions.\n\nParameters\n----------\ngrid_x : Union[UniformGrid, CustomGrid, AutoGrid] = AutoGrid(type='AutoGrid', min_steps_per_wvl=10.0, max_scale=1.4, dl_min=0.0, mesher=GradedMesher(type='GradedMesher'))\n    Grid specification along x-axis\ngrid_y : Union[UniformGrid, CustomGrid, AutoGrid] = AutoGrid(type='AutoGrid', min_steps_per_wvl=10.0, max_scale=1.4, dl_min=0.0, mesher=GradedMesher(type='GradedMesher'))\n    Grid specification along y-axis\ngrid_z : Union[UniformGrid, CustomGrid, AutoGrid] = AutoGrid(type='AutoGrid', min_steps_per_wvl=10.0, max_scale=1.4, dl_min=0.0, mesher=GradedMesher(type='GradedMesher'))\n    Grid specification along z-axis\nwavelength : Optional[float] = None\n    [units = um].  Free-space wavelength for automatic nonuniform grid. It can be 'None' if there is at least one source in the simulation, in which case it is defined by the source central frequency. Note: it only takes effect when at least one of the three dimensions uses :class:`.AutoGrid`.\noverride_structures : Tuple[Annotated[Union[tidy3d.components.structure.Structure, tidy3d.components.structure.MeshOverrideStructure], FieldInfo(default=PydanticUndefined, discriminator='type', extra={})], ...] = ()\n    A set of structures that is added on top of the simulation structures in the process of generating the grid. This can be used to refine the grid or make it coarser depending than the expected need for higher/lower resolution regions. Note: it only takes effect when at least one of the three dimensions uses :class:`.AutoGrid`.\n\nExample\n-------\n>>> uniform = UniformGrid(dl=0.1)\n>>> custom = CustomGrid(dl=[0.2, 0.2, 0.1, 0.1, 0.1, 0.2, 0.2])\n>>> auto = AutoGrid(min_steps_per_wvl=12)\n>>> grid_spec = GridSpec(grid_x=uniform, grid_y=custom, grid_z=auto, wavelength=1.5)",
       "type": "object",
       "properties": {
         "grid_x": {
@@ -5321,13 +5512,13 @@
         },
         "wavelength": {
           "title": "Free-space wavelength",
-          "description": "Free-space wavelength for automatic nonuniform grid. It can be 'None' if there is at least one source in the simulation, in which case it is defined by the source central frequency.",
+          "description": "Free-space wavelength for automatic nonuniform grid. It can be 'None' if there is at least one source in the simulation, in which case it is defined by the source central frequency. Note: it only takes effect when at least one of the three dimensions uses :class:`.AutoGrid`.",
           "units": "um",
           "type": "number"
         },
         "override_structures": {
           "title": "Grid specification override structures",
-          "description": "A set of structures that is added on top of the simulation structures in the process of generating the grid. This can be used to refine the grid or make it coarser depending than the expected need for higher/lower resolution regions.",
+          "description": "A set of structures that is added on top of the simulation structures in the process of generating the grid. This can be used to refine the grid or make it coarser depending than the expected need for higher/lower resolution regions. Note: it only takes effect when at least one of the three dimensions uses :class:`.AutoGrid`.",
           "default": [],
           "type": "array",
           "items": {
