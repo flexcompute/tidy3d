@@ -16,7 +16,6 @@ from ...web.httputils import get_headers
 from ...web.config import DEFAULT_CONFIG as Config
 from .fit import DispersionFitter
 
-
 BOUND_MAX_FACTOR = 10
 
 
@@ -182,9 +181,6 @@ class StableDispersionFitter(DispersionFitter):
             URL for the server
         """
 
-        access_token = get_headers()
-        headers = {"Authorization": access_token["Authorization"]}
-
         try:
             # test connection
             resp = requests.get(f"{url_server}/health", verify=Config.ssl_verify)
@@ -196,16 +192,7 @@ class StableDispersionFitter(DispersionFitter):
         except Exception as e:
             raise WebError("Connection to the server failed. Please try again.") from e
 
-        # test authorization
-        resp = requests.get(
-            f"{url_server}/health/access", headers=headers, verify=Config.ssl_verify
-        )
-        try:
-            resp.raise_for_status()
-        except Exception as e:
-            raise WebError("Authorization to the server failed. Please try again.") from e
-
-        return headers
+        return get_headers()
 
     def _setup_webdata(
         self,

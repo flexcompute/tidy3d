@@ -10,7 +10,6 @@ import toml
 from requests import Session
 import requests
 
-from .auth import get_credentials
 from .cli.constants import CONFIG_FILE
 from .config import DEFAULT_CONFIG as Config
 from ..exceptions import WebError
@@ -159,13 +158,8 @@ def get_headers() -> Dict[str, str]:
     Dict[str, str]
         dictionary with "Authorization" and "Application" keys.
     """
-    if Config.auth is None or Config.auth["accessToken"] is None:
-        get_credentials()
-    elif need_token_refresh(Config.auth["accessToken"]):
-        get_credentials()
-    access_token = Config.auth["accessToken"]
     return {
-        "Authorization": f"Bearer {access_token}",
+        "simcloud-api-key": api_key(),
         "Application": "TIDY3D",
     }
 
