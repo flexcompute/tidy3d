@@ -3,11 +3,18 @@ from abc import ABC, abstractmethod
 from typing import List, Tuple
 import pydantic as pd
 import numpy as np
-from scipy import integrate
 
 from ..components.medium import PoleResidue, Medium2D, Drude
 from ..components.base import Tidy3dBaseModel
 from ..constants import EPSILON_0, Q_e, HBAR, K_B, ELECTRON_VOLT, KELVIN
+
+try:
+    from scipy import integrate
+
+    INTEGRATE_AVAILABLE = True
+except ImportError:
+    INTEGRATE_AVAILABLE = False
+
 
 # default values of the physical parameters for graphene
 # scattering rate in eV
@@ -217,6 +224,13 @@ class Graphene(ParametricVariantItem2D):
         def integrand(E: float, omega: float) -> float:
             """Integrand for interband term."""
             return (fermi_g(E * HBAR) - fermi_g(HBAR * omega / 2)) / (omega**2 - 4 * E**2)
+
+        if not INTEGRATE_AVAILABLE:
+            raise ImportError(
+                "The package 'scipy' was not found. Please install the 'core' "
+                "dependencies to calculate the interband term of graphene. For example: "
+                "pip install -r requirements/core.txt"
+            )
 
         omegas = 2 * np.pi * np.array(freqs)
         sigma = np.zeros(len(omegas), dtype=complex)

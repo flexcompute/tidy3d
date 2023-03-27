@@ -3402,8 +3402,8 @@ class TriangleMesh(Geometry, ABC):
         description="Surface mesh data.",
     )
 
-    @pydantic.root_validator(pre=True)
-    def _check_trimesh_library(cls, values):
+    @classmethod
+    def _check_trimesh_library(cls):
         """Check if the trimesh package is imported."""
         if not TRIMESH_AVAILABLE:
             raise ImportError(
@@ -3411,6 +3411,11 @@ class TriangleMesh(Geometry, ABC):
                 "dependencies to use 'TriangleMesh'. For example: "
                 "pip install -r requirements/trimesh.txt."
             )
+
+    @pydantic.root_validator(pre=True)
+    def _validate_trimesh_library(cls, values):
+        """Check if the trimesh package is imported as a validator."""
+        cls._check_trimesh_library()
         return values
 
     @pydantic.validator("mesh_dataset", pre=True, always=True)
@@ -3491,6 +3496,8 @@ class TriangleMesh(Geometry, ABC):
             mesh.apply_scale(scale)
             mesh.apply_translation(origin)
             return cls.from_trimesh(mesh)
+
+        cls._check_trimesh_library()
 
         scene = trimesh.load(filename, **kwargs)
         meshes = []
@@ -3587,6 +3594,9 @@ class TriangleMesh(Geometry, ABC):
             The custom surface mesh geometry given by the vertices and faces provided.
 
         """
+
+        cls._check_trimesh_library()
+
         vertices = np.array(vertices)
         faces = np.array(faces)
         if len(vertices.shape) != 2 or vertices.shape[1] != 3:
@@ -3600,6 +3610,8 @@ class TriangleMesh(Geometry, ABC):
     @classmethod
     def _triangles_to_trimesh(cls, triangles: np.ndarray) -> trimesh.Trimesh:
         """Convert an (N, 3, 3) numpy array of triangles to a ``trimesh.Trimesh``."""
+
+        cls._check_trimesh_library()
         return trimesh.Trimesh(**trimesh.triangles.to_kwargs(triangles))
 
     @cached_property
