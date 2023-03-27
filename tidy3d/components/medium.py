@@ -857,7 +857,9 @@ class PoleResidue(DispersiveMedium):
             The pole residue equivalent.
         """
         poles = [(0, medium.conductivity / (2 * EPSILON_0))]
-        return PoleResidue(eps_inf=medium.permittivity, poles=poles)
+        return PoleResidue(
+            eps_inf=medium.permittivity, poles=poles, frequency_range=medium.frequency_range
+        )
 
     def to_medium(self) -> Medium:
         """Convert to a :class:`.Medium`.
@@ -875,7 +877,11 @@ class PoleResidue(DispersiveMedium):
                 raise ValidationError("Cannot convert dispersive 'PoleResidue' to 'Medium'.")
             res += (c + np.conj(c)) / 2
         sigma = res * 2 * EPSILON_0
-        return Medium(permittivity=self.eps_inf, conductivity=np.real(sigma))
+        return Medium(
+            permittivity=self.eps_inf,
+            conductivity=np.real(sigma),
+            frequency_range=self.frequency_range,
+        )
 
 
 class Sellmeier(DispersiveMedium):
@@ -1400,7 +1406,7 @@ class Medium2D(AbstractMedium):
             ax_coord=media_bg[axis], plane_coords=media_fg_weighted, axis=axis
         )
         media_3d_kwargs = {dim + dim: medium for dim, medium in zip("xyz", media_3d)}
-        return AnisotropicMedium(**media_3d_kwargs)
+        return AnisotropicMedium(**media_3d_kwargs, frequency_range=self.frequency_range)
 
     def to_anisotropic_medium(self, axis: Axis, thickness: float) -> AnisotropicMedium:
         """Generate a 3D :class:`.AnisotropicMedium` equivalent of a given thickness.
@@ -1422,7 +1428,7 @@ class Medium2D(AbstractMedium):
         media_weighted = [self._weighted_avg([medium], [1 / thickness]) for medium in media]
         media_3d = Geometry.unpop_axis(ax_coord=Medium(), plane_coords=media_weighted, axis=axis)
         media_3d_kwargs = {dim + dim: medium for dim, medium in zip("xyz", media_3d)}
-        return AnisotropicMedium(**media_3d_kwargs)
+        return AnisotropicMedium(**media_3d_kwargs, frequency_range=self.frequency_range)
 
     def to_pole_residue(self, thickness: float) -> PoleResidue:
         """Generate a :class:`.PoleResidue` equivalent of a given thickness.
@@ -1438,7 +1444,9 @@ class Medium2D(AbstractMedium):
         :class:`.PoleResidue`
             The 3D equivalent pole residue model of this 2D medium.
         """
-        return self._weighted_avg([self.ss, self.tt], [1 / (2 * thickness), 1 / (2 * thickness)])
+        return self._weighted_avg(
+            [self.ss, self.tt], [1 / (2 * thickness), 1 / (2 * thickness)]
+        ).updated_copy(frequency_range=self.frequency_range)
 
     def to_medium(self, thickness: float) -> Medium:
         """Generate a :class:`.Medium` equivalent of a given thickness.
@@ -1455,9 +1463,7 @@ class Medium2D(AbstractMedium):
         :class:`.Medium`
             The 3D equivalent of this 2D medium.
         """
-        return self._weighted_avg(
-            [self.ss, self.tt], [1 / (2 * thickness), 1 / (2 * thickness)]
-        ).to_medium()
+        return self.to_pole_residue(thickness=thickness).to_medium()
 
     @classmethod
     def from_medium(cls, medium: Medium, thickness: float) -> Medium2D:
@@ -1477,7 +1483,7 @@ class Medium2D(AbstractMedium):
             The 2D equivalent of the given 3D medium.
         """
         med = cls._weighted_avg([medium], [thickness])
-        return Medium2D(ss=med, tt=med)
+        return Medium2D(ss=med, tt=med, frequency_range=medium.frequency_range)
 
     @classmethod
     def from_dispersive_medium(cls, medium: DispersiveMedium, thickness: float) -> Medium2D:
@@ -1497,7 +1503,7 @@ class Medium2D(AbstractMedium):
             The 2D equivalent of the given 3D medium.
         """
         med = cls._weighted_avg([medium], [thickness])
-        return Medium2D(ss=med, tt=med)
+        return Medium2D(ss=med, tt=med, frequency_range=medium.frequency_range)
 
     @classmethod
     def from_anisotropic_medium(
@@ -1528,7 +1534,7 @@ class Medium2D(AbstractMedium):
         for _, med in enumerate(media_plane):
             media_plane_scaled.append(cls._weighted_avg([med], [thickness]))
         media_kwargs = {dim + dim: medium for dim, medium in zip("st", media_plane_scaled)}
-        return Medium2D(**media_kwargs)
+        return Medium2D(**media_kwargs, frequency_range=medium.frequency_range)
 
     @ensure_freq_in_range
     def eps_model(self, frequency: float) -> complex:
