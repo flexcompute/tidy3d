@@ -1,6 +1,6 @@
 import numpy as np
 
-from tidy3d.plugins import StableDispersionFitter, DispersionFitter
+from tidy3d.plugins.fitter import StableDispersionFitter, DispersionFitter
 
 
 def test_dispersion_load_list():
