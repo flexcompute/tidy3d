@@ -76,7 +76,7 @@ When I try to install `tidy3d-beta` from test.pyPI in an environment with the de
 
 It works as expected, besides needing `click`
 
-``python3.9 -c "import tidy3d as td; import tidy3d.web as web; from tidy3d.plugins import ModeSolver"``
+``python3.9 -c "import tidy3d as td; import tidy3d.web as web; from tidy3d.plugins.mode import ModeSolver"``
 
 ```
 [11:04:02] INFO     Using client version: 1.8.0                                                                                                                                              __init__.py:112
