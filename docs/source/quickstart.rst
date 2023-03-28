@@ -2,24 +2,22 @@
 Start Here
 **********
 
-Welcome to Tidy3d
+Welcome to Tidy3D
 =================
 
 This page will get you set up with Tidy3D and running a simple example.
 
-.. note:: This is the documentation for the beta release of Tidy3D.
-
 Code Repositories
 -----------------
 
-We host several examples and tutorials at our `documentation repository <https://github.com/flexcompute-readthedocs/tidy3d-docs>`_ and its `notebook section <https://github.com/flexcompute-readthedocs/tidy3d-docs/tree/readthedocs/docs/source/notebooks>`_.
+We host all of the several examples and tutorials from this documentation in the `notebook section <https://github.com/flexcompute-readthedocs/tidy3d-docs/tree/readthedocs/docs/source/notebooks>`_ of our `documentation github repository <https://github.com/flexcompute-readthedocs/tidy3d-docs>`_.
 
-You can find our front end python code in its entirety at `this github repository <https://github.com/flexcompute/tidy3d>`_.  This is also a good place to ask questions or request features through the "Discussions" tab.
+You can find our front end python code in its entirety at `its github repository <https://github.com/flexcompute/tidy3d>`_.  This is also a good place to ask questions or request features through the "Discussions" or "Issues" tabs.
 
 Getting Started
 ===============
 
-Before using Tidy3D, you must first `sign up <https://client.simulation.cloud/register-waiting>`_ for a user account.
+Before using Tidy3D, you must first `sign up <https://tidy3d.simulation.cloud/signup>`_ for a user account.
 
 Signing up also grants you access to our browser-based `interface <https://tidy3d.simulation.cloud/account>`_ for managing simulations.
 
@@ -57,7 +55,7 @@ After you install Anaconda, open the Anaconda Prompt and enter
 
     conda create –n tidy3d_env python==3.10
 
-to create a new environment. ``tidy3d_env`` is the name for the new environment, which can be changed to your personal preference. Python version 3.10 and its associated packages will also be installed in this new environment by adding ``python==3.10``. After the environment is created, we need to activate it by
+to create a new environment. ``tidy3d_env`` is the name of the new environment, which can be changed to your personal preference. Python version 3.10 and its associated packages will also be installed in this new environment by adding ``python==3.10``. After the environment is created, we need to activate it by
 
 .. code-block:: bash
 
@@ -82,19 +80,20 @@ and the latest version of Tidy3D will be installed in this environment. To test 
 
 If the installation is successful, you should see the client version of Tidy3D being displayed. Now you can open your favorite Python IDE and start creating Tidy3D simulations!
 
-To get the "pre-release" version of tidy3d with the newest features, one may specify the version as follows:
+To get a specific version eg. ``x.y.z`` of tidy3d, including the "pre-release" versions, one may specify the version as follows:
 
 .. code-block:: bash
 
-    pip install tidy3d==1.9.0rc2
+    pip install tidy3d==x.y.z
 
-The corresponding documentation is marked as "latest" and is available `here <https://docs.flexcompute.com/projects/tidy3d/en/latest/>`__.
+The documentation for the most recent release is marked as "latest" and is available `here <https://docs.flexcompute.com/projects/tidy3d/en/latest/>`__. The documentation page also allows one to select the state of the docs based on version by toggling the dropdown in the bottom left corner.
 
 Linking Regiestration
 ^^^^^^^^^^^^^^^^^^^^^
 
-Now that tidy3d is installed on your python distribution, we need to link it with your account. First you should get your "API key" from your account page on the `web interface <https://tidy3d.simulation.cloud/account>`_.  After signing in and navigating to the account page by clicking the "user" icon on the left-hand side, copy the API key from the button on the right-hand side of the page.
-We'll refer to that key as "XXX" in the following instructions.
+Now that tidy3d is installed on your python distribution, we need to link it with your account. First you should copy your "API key" from your account page on the `web interface <https://tidy3d.simulation.cloud/account>`_.  To find it, sign in and navigate to the account page by clicking the "Account Center" icon on the left-hand side. Then, find the "API key" tab on the right hand side of the menu and copy your API key from there.
+
+We'll refer to that key as ``XXX`` in the following instructions.
 
 The simplest way to link your account is by typing 
 
@@ -102,7 +101,7 @@ The simplest way to link your account is by typing
 
     tidy3d configure
 
-and pasting the API key when prompted. Note that one can also include the API key in the configure command directly as
+and pasting the API key when prompted. Note that one can also specify the API key directly in the configure command as
 
 .. code-block:: bash
 
@@ -121,6 +120,25 @@ Alternatively, the API key can be set up using the evironment variable ``SIMCLOU
 
     export SIMCLOUD_APIKEY="XXX"
 
+Finally, one may manually set the API key directly in the configuration file where Tidy3D looks for it.
+
+The API key must be in a file called ``.tidy3d/config`` located in your home directory, with the following contents
+
+.. code-block:: bash
+
+    apikey = "XXX"
+
+
+You can manually set up your file like this, or do it through the command line line:
+
+.. code-block:: bash
+
+    echo 'apikey = "XXX"' > ~/.tidy3d/config
+
+Note the quotes around `XXX`.
+
+Note that Windows users will most likely need to place the ``.tidy3d/config`` file in their ``C:\Users\username\`` directory (where ``username`` is your username).
+
 
 Additional Configuration for Python IDE
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -135,7 +153,7 @@ After clicking “OK”, your PyCharm project should be using the correct Conda 
 
     import tidy3d as td
 
-in your codes.
+in your code.
 
 .. note:: Please pay attention to any warning or error messages during the installation process as your system configuration might be different. If you are experiencing difficulty in the installation, please reach out to us for help. We would gladly assist you for Tidy3D installation.
 
