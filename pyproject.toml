@@ -2,4 +2,4 @@
 name = "tidy3d-docs"
 authors = [{name = "Flexcompute Inc.", email = "support@flexcompute.com"}]
 description = "Documentation for the Tidy3D electromagnetic simulation package."
-version = "1.9.0"
+version = "2.0.0"
