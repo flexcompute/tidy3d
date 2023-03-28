@@ -15,29 +15,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - `TriangleMesh` class for modeling geometries specified by triangle surface meshes, with support for STL file import.
+- Total-field scattered-field (TFSF) source which allows angled plane waves to be injected into a finite region of space (the total-field region), such that only scattered fields exist outside this region (scattered-field region).
+- `Medium2D` class for surface conductivity model of a 2D material.
+- Entries in `material_library` for graphene and some common TMDs.
+- Ability to create a 2D representation of a thin 3D material.
 - `SimulationData.plot_field` accepts new field components and values, including the Poynting vector.
 - `SimulationData.get_poynting_vector` for calculating the 3D Poynting vector at the Yee cell centers.
 - Post-init validation of Tidy3D components.
 - Validate post-Simulation init to error if any structures have bounds that terminate inside of the PML.
-- `Medium2D` class for surface conductivity model of a 2D material.
-- Entries in `material_library` for graphene and some common TMDs.
-- Ability to create a 2D representation of a thin 3D material.
-- Total-field scattered-field (TFSF) source which allows angled plane waves to be injected into a finite region of space (the total-field region), such that only scattered fields exist outside this region (scattered-field region).
 - Validate `slab_bounds` for `PolySlab`.
 
 ### Changed
-- `export_matlib_to_file` in `material_library` exports material's full name in additional to abbreviation.
+- Tidy3D account authentication done solely through API key. Migration option offered for useres with old username / password authentication.
+- `export_matlib_to_file` in `material_library` exports material's full name in addition to abbreviation.
 - Simpler progress bars for `run_async`.
 - Medium property `n_cfl` added to adjust time step size according to CFL condition.
 - In the mode solver plugin, regular methods in `solver.py` transformed into classmethods.
 - `ArrayLike` types are stored internally as `np.ndarray` and written to json as lists. `constrained_array()` provides way to validate `ArrayLike` values based on `ndim` and `dtype`.
-- Tidy3D account authentication done primarily through API key. Migration option offered for useres with old username / password authentication.
 - Pip installing tidy3d automatically creates `~/.tidy3d` directory in home directory.
 - Percentage done and field decay determined through http request.
+- `SourceTime` plotting methods `.plot()` and `.plot_spectrum()` accept a `val` kwarg, which selects which part of the data (`'real'`, `'imag'`, or `'abs'`) to plot, rather than plotting all at once.
 
 ### Fixed
 - Bug in remote file transfer when client environment has no correct certificate authority pem file install locally. 
-- `SourceTime` plotting methods `.plot()` and `.plot_spectrum()` accept a `val` kwarg, which selects which part of the data (`'real'`, `'imag'`, or `'abs'`) to plot, rather than plotting all at once.
 - Tidy3D exceptions inherit from `ValueError` so they are handled properly by pydantic.
 - Two unstable materials in `material_library`: `Cu_JohnsonChristy1972` and `Ni_JohnsonChristy1972`. `TiOx_HoribStable` added for improved stability.
 - Bug in infinite long cylinder when the `reference_plane` is not at the bottom or the cylinder is slanted.
