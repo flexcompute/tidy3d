@@ -3,7 +3,6 @@
 [![Notebooks](https://mybinder.org/badge_logo.svg)](https://mybinder.org/v2/gh/flexcompute-readthedocs/tidy3d-docs/readthedocs?labpath=docs%2Fsource%2Fnotebooks)
 ![tests](https://github.com/flexcompute/tidy3d/actions/workflows//run_tests.yml/badge.svg)
 [![Documentation Status](https://readthedocs.com/projects/flexcompute-tidy3ddocumentation/badge/?version=latest)](https://flexcompute-tidy3ddocumentation.readthedocs-hosted.com/?badge=latest)
-[![Language grade: Python](https://img.shields.io/lgtm/grade/python/g/flexcompute/tidy3d.svg?logo=lgtm&logoWidth=18)](https://lgtm.com/projects/g/flexcompute/tidy3d/context:python)
 [![PyPI version shields.io](https://img.shields.io/pypi/v/tidy3d.svg)](https://pypi.python.org/pypi/tidy3d/)
 
 ![](https://raw.githubusercontent.com/flexcompute/tidy3d/main/img/Tidy3D-logo.svg)
@@ -17,7 +16,7 @@ This code allows you to:
 * Submit and magange simulations running on Flexcompute's servers.
 * Download and postprocess the results from the simulations.
 
-You can find a detailed documentation and API reference [here](https://flexcompute-tidy3ddocumentation.readthedocs-hosted.com/).
+You can find a detailed documentation and API reference [here](https://docs.flexcompute.com/projects/tidy3d/en/stable/).
 The source code for our documentation is [here](https://github.com/flexcompute-readthedocs/tidy3d-docs).
 
 ![](https://raw.githubusercontent.com/flexcompute/tidy3d/main/img/snippet.png)
@@ -27,25 +26,22 @@ The source code for our documentation is [here](https://github.com/flexcompute-r
 ### Signing up for tidy3d
 
 Note that while this front end package is open source, to run simulations on Flexcompute servers requires an account with credits.
-You can sign up [here](https://client.simulation.cloud/register-waiting).  While it's currently a waitlist for new users, we will be rolling out to many more users in the coming weeks!  See [this page](https://flexcompute-tidy3ddocumentation.readthedocs-hosted.com/quickstart.html) in our documentation for more details.
+You can sign up for an account [here](https://tidy3d.simulation.cloud/signup).
+After that, you can install the front end with the instructions below, or visit [this page](https://docs.flexcompute.com/projects/tidy3d/en/stable/quickstart.html) in our documentation for more details.
 
 ### Installing the front end 
 
 #### Using pip (recommended)
 
-The easiest way to install tidy3d is through [pip](https://pip.pypa.io/en/stable/).
+The easiest way to install the tidy3d python interface is through [pip](https://pypi.org/project/tidy3d/).
 
 ```
 pip install tidy3d
 ```
 
-This will install the latest stable version, to get the a "pre-release" version.
+This will install the latest stable version.
 
-```
-pip install --pre tidy3d
-```
-
-And to get a specific version `x.y.z`
+To get a specific version `x.y.z`, including the "pre-release" versions, you may specify the version in the command as:
 
 ```
 pip install tidy3d==x.y.z
@@ -53,7 +49,7 @@ pip install tidy3d==x.y.z
 
 ### Installing from source
 
-For development purposes, and to get the latest development versions, you can download and install the package from source as:
+Alternatively, for development purposes, eg. developing your own features, you may download and install the package from source as:
 
 ```
 git clone https://github.com/flexcompute/tidy3d.git
@@ -63,16 +59,23 @@ pip install -e .
 
 ### Configuring and authentication
 
-The Tidy3D front end must be configured with your account information, which is done via an API key.
+With the front end installed, it must now be configured with your account information, which is done via an "API key".
 
-You can find your API key in the [web interface](ehttp://tidy3d.simulation.cloud). After signing in and navigating to the account page by clicking the "user" icon on the left-hand side, copy the API key from the button on the right-hand side of the page.
+You can find your API key in the [web interface](http://tidy3d.simulation.cloud). After signing in and navigating to the account page by clicking the "Account Center" icon on the left-hand side. Then, click on the "API key" tab on the right hand side of the menu and copy your API key.
 
-To set up the API key to work with Tidy3D, you may use one of three following options:
 Note: We refer to your API specific API key value as `XXX` below.
+
+To link your API key with Tidy3D, you may use one of three following options:
 
 #### Command line (recommended)
 
-``tidy3d configure`` and then enter your API key `XXX` when prompted.
+The easiest way is through the command line via the `tidy3d configure` command. Run:
+
+```
+tidy3d configure
+```
+
+and then enter your API key `XXX` when prompted.
 
 Note that Windows users must run the following instead (ideally in an anaconda prompt):
 
@@ -81,7 +84,7 @@ pip install pipx
 pipx run tidy3d configure
 ```
 
-Note that the `api-key` flag  can be provided in this command, eg.
+You can also specify your API key directly as an option to this command using the `api-key` argument, for example:
 
 ```
 tidy3d configure --api-key=XXX
@@ -89,17 +92,29 @@ tidy3d configure --api-key=XXX
 
 #### Manually
 
-Alternatively, you can place the API key directly in the file where Tidy3D looks for it.
+Alternatively, you can manually set up the config file where Tidy3D looks for the API key. The API key must be in a file called `.tidy3d/config` located in your home directory, containing the following
+
+```
+apikey = "XXX"
+```
+
+You can manually set up your file like this, or do it through the command line line:
 
 ``echo 'apikey = "XXX"' > ~/.tidy3d/config``
 
-or manually insert the line `'apikey = "XXX` in the `~/.tidy3d/config` file.
+Note the quotes around `XXX`.
+
+Note that Windows users will most likely need to place the `.tidy3d/config` file in their `C:\Users\username\` directory (where `username` is your username).
 
 #### Environment Variable
 
-Lastly, you may set the API key as an environment variable called `SIMCLOUD_APIKEY`.
+Lastly, you may set the API key as an environment variable named `SIMCLOUD_APIKEY`.
+
+This can be set up using
 
 ``export SIMCLOUD_APIKEY="XXX"``
+
+Note the quotes around `XXX`.
 
 ### Testing the installation and authentication
 
@@ -114,18 +129,20 @@ python -c "import tidy3d as td; print(td.__version__)"
 and it should print out the version number, for example:
 
 ```
-1.0.0
+2.0.0
 ```
 
 #### Authentication
 
-To test the authentication, try importing the web interface via.
+To test the authentication, you may try importing the web interface via.
 
 ```
 python -c "import tidy3d.web"
 ```
 
 It should pass without any errors if the API key is set up correctly.
+
+To get started, our documentation has a lot of [examples](https://docs.flexcompute.com/projects/tidy3d/en/latest/examples.html) for inspiration.
 
 ## Issues / Feedback / Bug Reporting
 
