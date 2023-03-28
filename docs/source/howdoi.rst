@@ -187,6 +187,6 @@ Extensions
    * - Specify the modes for a :class:`ModeMonitor` or :class:`ModeSource`?
      - Refer to the `Mode Solver tutorial <notebooks/ModeSolver.html>`_ on the :class:`tidy3d.plugins.ModeSolver` plugin.
    * - Projet electromagnetic near field data to the far field?
-     - Refer to the `FieldProjections` tutorial <notebooks/FieldProjections.html>`_.
+     - Refer to the `FieldProjections tutorial <notebooks/FieldProjections.html>`_.
    * - Compute scattering matrix parameters for modeling my device?
      - Refer to the `S Matrix tutorial <notebooks/SMatrix.html>`_ on the :class:`tidy3d.plugins.ComponentModeler` plugin.
