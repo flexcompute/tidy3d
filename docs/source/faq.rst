@@ -140,6 +140,7 @@ to consider.
   evanescent waves, like :class:`.PointDipole`, :class:`.UniformCurrentSource`, or :class:`.CustomFieldSource`.
 - Make sure structures are translationally invariant into the PML, or if not possible, use :class:`.Absorber` boundaries.
 - Remove dispersive materials extending into the PML, or if not possible, use :class:`.Absorber` boundaries.
+- If using our fitter to fit your own material data, make sure you are using the :class:`.plugins.StableDispersionFitter`.
 - If none of the above work, try using :class:`.StablePML` or :class:`.Absorber` boundaries anyway
   (note: these may introduce more reflections than in usual simulations with regular PML).
 
