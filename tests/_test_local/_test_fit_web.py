@@ -1,7 +1,7 @@
 import numpy as np
 from math import isclose
 
-from tidy3d.plugins import StableDispersionFitter, AdvancedFitterParam
+from tidy3d.plugins.fitter import StableDispersionFitter, AdvancedFitterParam
 
 np.random.seed(4)
 ATOL = 1e-50

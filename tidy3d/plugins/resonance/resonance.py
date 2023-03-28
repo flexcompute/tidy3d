@@ -61,7 +61,7 @@ class ResonanceFinder(Tidy3dBaseModel):
     Example
     -------
     >>> import numpy as np
-    >>> from tidy3d.plugins import ResonanceFinder
+    >>> from tidy3d.plugins.resonance import ResonanceFinder
     >>> t = np.linspace(0, 10000, 10000)
     >>> f1 = 2*np.pi*0.1 - 1j*0.002
     >>> f2 = 2*np.pi*0.2 - 1j*0.0005
