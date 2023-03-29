@@ -284,8 +284,8 @@ def monitor(task_id: TaskId, verbose: bool = False) -> None:
         est_flex_unit = get_estimated_cost()
         if est_flex_unit is not None and est_flex_unit > 0:
             console.log(
-                f"Maximum FlexUnit cost: {est_flex_unit:1.3f}. Use 'web.real_cost(task_id)' to "
-                "get the billed FlexUnit cost after a simulation run."
+                f"Maximum FlexCredit cost: {est_flex_unit:1.3f}. Use 'web.real_cost(task_id)' to "
+                "get the billed FlexCredit cost after a simulation run."
             )
         console.log("starting up solver")
 
@@ -610,7 +610,7 @@ def get_tasks(
 
 
 def estimate_cost(task_id: str) -> float:
-    """Compute the maximum flex unit charge for a given task.
+    """Compute the maximum FlexCredit charge for a given task.
 
     Parameters
     ----------
@@ -635,7 +635,7 @@ def estimate_cost(task_id: str) -> float:
     Returns
     -------
     float
-        Estimated cost of the task in flex units.
+        Estimated cost of the task in FlexCredits.
     """
 
     task = SimulationTask.get(task_id)
@@ -663,7 +663,7 @@ def real_cost(task_id: str) -> float:
     flex_unit = task_info.realFlexUnit
     if not flex_unit:
         log.warning(
-            f"Billed FlexUnit for task '{task_id}' is not available. If the task has been "
+            f"Billed FlexCredit for task '{task_id}' is not available. If the task has been "
             "successfully run, it should be available shortly."
         )
     return flex_unit

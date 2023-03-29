@@ -126,7 +126,7 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
     status: Optional[str] = Field(title="status", description="Simulation task status.")
 
     real_flex_unit: float = Field(
-        None, title="real flex units", description="Billed flex units.", alias="realCost"
+        None, title="real FlexCredits", description="Billed FlexCredits.", alias="realCost"
     )
 
     created_at: Optional[datetime] = Field(
@@ -386,7 +386,7 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
         Returns
         -------
         flex_unit_cost: float
-            estimated cost in flex units
+            estimated cost in FlexCredits
         """
 
         if solver_version:
