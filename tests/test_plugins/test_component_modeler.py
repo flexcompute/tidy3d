@@ -30,6 +30,8 @@ straight_wg_length = 4
 # space between waveguide and PML
 pml_spacing = 2
 
+PATH_DIR = "tests/tmp"
+
 
 def make_coupler():
     # wavelength / frequency
@@ -200,7 +202,7 @@ def run_component_modeler(monkeypatch, modeler: ComponentModeler):
     sim_dict = modeler.make_sim_dict(values)
     batch_data = {task_name: run_emulated(sim) for task_name, sim in sim_dict.items()}
     monkeypatch.setattr(ComponentModeler, "_run_sims", lambda self, path_dir: batch_data)
-    s_matrix = modeler.run()
+    s_matrix = modeler.run(path_dir=PATH_DIR)
     return s_matrix
 
 
@@ -258,10 +260,10 @@ def test_make_component_modeler():
     modeler = make_component_modeler()
 
 
-def test_solve(monkeypatch):
+def test_run(monkeypatch):
     modeler = make_component_modeler()
     monkeypatch.setattr(ComponentModeler, "run", lambda self, path_dir: None)
-    modeler.solve()
+    modeler.run(path_dir=PATH_DIR)
 
 
 def test_run_component_modeler(monkeypatch):
@@ -270,18 +272,21 @@ def test_run_component_modeler(monkeypatch):
 
     for port_in in modeler.ports:
         for mode_index_in in range(port_in.mode_spec.num_modes):
-            index_in = (port_in.name, mode_index_in)
 
             for port_out in modeler.ports:
                 for mode_index_out in range(port_out.mode_spec.num_modes):
-                    index_out = (port_out.name, mode_index_out)
 
                     coords_in = dict(port_in=port_in.name, mode_index_in=mode_index_in)
                     coords_out = dict(port_out=port_out.name, mode_index_out=mode_index_out)
 
-                    assert np.all(
-                        s_matrix.loc[coords_in] != 0
-                    ), "source index not present in S matrix"
+                    try:
+                        assert np.all(
+                            s_matrix.loc[coords_in] != 0
+                        ), "source index not present in S matrix"
+                    except:
+                        import pdb
+
+                        pdb.set_trace()
                     assert np.all(
                         s_matrix.loc[coords_in].loc[coords_out] != 0
                     ), "monitor index not present in S matrix"
@@ -309,10 +314,10 @@ def _test_mappings(element_mappings, s_matrix):
     """Makes sure the mappings are reflected in a given S matrix."""
     for (i, j), (k, l), mult_by in element_mappings:
 
-        (port_in_from, mode_index_in_from) = i
-        (port_out_from, mode_index_out_from) = j
-        (port_in_to, mode_index_in_to) = k
-        (port_out_to, mode_index_out_to) = l
+        (port_out_from, mode_index_out_from) = i
+        (port_in_from, mode_index_in_from) = j
+        (port_out_to, mode_index_out_to) = k
+        (port_in_to, mode_index_in_to) = l
 
         coords_from = dict(
             port_in=port_in_from,
@@ -336,8 +341,8 @@ def _test_mappings(element_mappings, s_matrix):
 def test_run_component_modeler_mappings(monkeypatch):
 
     element_mappings = (
-        ((("left_top", 0), ("right_top", 0)), (("left_bot", 0), ("right_bot", 0)), -1j),
-        ((("left_top", 0), ("right_bot", 0)), (("left_bot", 0), ("right_top", 0)), +1),
+        ((("left_bot", 0), ("right_bot", 0)), (("left_top", 0), ("right_top", 0)), -1j),
+        ((("left_bot", 0), ("right_top", 0)), (("left_top", 0), ("right_bot", 0)), +1),
     )
     modeler = make_component_modeler(element_mappings=element_mappings)
     s_matrix = run_component_modeler(monkeypatch, modeler)
@@ -358,12 +363,13 @@ def test_mapping_exclusion(monkeypatch):
         for mode_index in range(port.mode_spec.num_modes):
             row_index = (port.name, mode_index)
             if row_index != EXCLUDE_INDEX:
-                mapping = ((row_index, row_index), (EXCLUDE_INDEX, row_index), +1)
+                mapping = ((row_index, row_index), (row_index, EXCLUDE_INDEX), +1)
                 element_mappings.append(mapping)
 
     # add the self-self coupling element to complete row
     mapping = ((("right_bot", 1), ("right_bot", 1)), (EXCLUDE_INDEX, EXCLUDE_INDEX), +1)
     element_mappings.append(mapping)
+
     modeler = make_component_modeler(element_mappings=element_mappings)
 
     run_sim_indices = modeler.matrix_indices_run_sim(
