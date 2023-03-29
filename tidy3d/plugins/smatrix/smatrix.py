@@ -5,7 +5,6 @@ from typing import List, Tuple, Optional, Callable, Dict
 import pydantic as pd
 import numpy as np
 
-from ...log import log
 from ...constants import HERTZ, C_0
 from ...components.simulation import Simulation
 from ...components.geometry import Box
@@ -72,7 +71,7 @@ class SMatrixDataArray(DataArray):
     """
 
     __slots__ = ()
-    _dims = ("port_in", "port_out", "mode_index_in", "mode_index_out", "f")
+    _dims = ("port_out", "mode_index_out", "port_in", "mode_index_in", "f")
     _data_attrs = {"long_name": "scattering matrix element"}
 
 
@@ -82,13 +81,13 @@ class ComponentModeler(Tidy3dBaseModel):
     simulation: Simulation = pd.Field(
         ...,
         title="Simulation",
-        description="Simulation describing the device without any sources or monitors present.",
+        description="Simulation describing the device without any sources present.",
     )
     ports: Tuple[Port, ...] = pd.Field(
         (),
         title="Ports",
         description="Collection of ports describing the scattering matrix elements. "
-        "For each port, one simulation will be run with a modal source.",
+        "For each input mode, one simulation will be run with a modal source.",
     )
     freqs: List[float] = pd.Field(
         ...,
@@ -106,18 +105,26 @@ class ComponentModeler(Tidy3dBaseModel):
         (),
         title="Element Mappings",
         description="Mapping between elements of the scattering matrix, "
-        "as specified by pairs of ``(port name, mode index)`` matrix indices. "
+        "as specified by pairs of ``(port name, mode index)`` matrix indices, where the "
+        "first element of the pair is the output and the second element of the pair is the input."
         "Each item of ``element_mappings`` is a tuple of ``(element1, element2, c)``, where "
         "the scattering matrix ``Smatrix[element2]`` is set equal to ``c * Smatrix[element1]``."
-        "If all elements of a given row of the scattering matrix are defined by "
-        " ``element_mappings``, the simulation corresponding to this row is skipped automatically.",
+        "If all elements of a given column of the scattering matrix are defined by "
+        " ``element_mappings``, the simulation corresponding to this column "
+        "is skipped automatically.",
     )
     run_only: Optional[Tuple[MatrixIndex, ...]] = pd.Field(
         None,
         title="Run Only",
         description="If given, a tuple of matrix indices, specified by (:class:`.Port`, ``int``),"
-        " to run only, excluding the other colulmns from the scattering matrix. "
-        "If this option is used, the resulting scattering matrix will not be square or complete.",
+        " to run only, excluding the other rows from the scattering matrix. "
+        "If this option is used, "
+        "the data corresponding to other inputs will be missing in the resulting matrix.",
+    )
+    verbose: bool = pd.Field(
+        False,
+        title="Verbosity",
+        description="Whether the :class:`.ComponentModeler` should print status and progressbars.",
     )
     batch: Optional[Batch] = pd.Field(
         None,
@@ -144,7 +151,11 @@ class ComponentModeler(Tidy3dBaseModel):
 
         # otherwise, generate all sims and make a new batch
         sim_dict = cls.make_sim_dict(values=values)
-        return Batch(simulations=sim_dict, folder_name=values.get("folder_name"))
+        return Batch(
+            simulations=sim_dict,
+            folder_name=values.get("folder_name"),
+            verbose=values.get("verbose"),
+        )
 
     @classmethod
     def make_sim_dict(cls, values: dict) -> Dict[str, Simulation]:
@@ -213,18 +224,18 @@ class ComponentModeler(Tidy3dBaseModel):
 
         # loop through rows of the full s matrix and record rows that still need running.
         source_indices_needed = []
-        for row_index in cls.matrix_indices_source(ports=ports, run_only=run_only):
+        for col_index in cls.matrix_indices_source(ports=ports, run_only=run_only):
 
             # loop through columns and keep track of whether each element is covered by mapping.
             matrix_elements_covered = []
-            for col_index in cls.matrix_indices_monitor(ports=ports):
+            for row_index in cls.matrix_indices_monitor(ports=ports):
                 element = (row_index, col_index)
                 element_covered_by_map = element in elements_determined_by_map
                 matrix_elements_covered.append(element_covered_by_map)
 
             # if any matrix elements in row still not covered by map, a source is needed for row.
             if not all(matrix_elements_covered):
-                source_indices_needed.append(row_index)
+                source_indices_needed.append(col_index)
 
         return source_indices_needed
 
@@ -363,13 +374,13 @@ class ComponentModeler(Tidy3dBaseModel):
             """Get the maximum mode index for a list of (port name, mode index)."""
             return max(mode_index for _, mode_index in matrix_elements)
 
-        matrix_elements_in = self.matrix_indices_source(ports=self.ports, run_only=self.run_only)
         matrix_elements_out = self.matrix_indices_monitor(ports=self.ports)
+        matrix_elements_in = self.matrix_indices_source(ports=self.ports, run_only=self.run_only)
 
-        max_mode_index_in = get_max_mode_indices(matrix_elements_in)
         max_mode_index_out = get_max_mode_indices(matrix_elements_out)
+        max_mode_index_in = get_max_mode_indices(matrix_elements_in)
 
-        return max_mode_index_in, max_mode_index_out
+        return max_mode_index_out, max_mode_index_in
 
     @property
     def port_names(self) -> Tuple[List[str], List[str]]:
@@ -385,45 +396,45 @@ class ComponentModeler(Tidy3dBaseModel):
         port_names_in = get_port_names(matrix_elements_in)
         port_names_out = get_port_names(matrix_elements_out)
 
-        return port_names_in, port_names_out
+        return port_names_out, port_names_in
 
     def _construct_smatrix(  # pylint:disable=too-many-locals
         self, batch_data: BatchData
     ) -> SMatrixDataArray:
         """Post process batch to generate scattering matrix."""
 
-        max_mode_index_in, max_mode_index_out = self.max_mode_index
-        num_modes_in = max_mode_index_in + 1
+        max_mode_index_out, max_mode_index_in = self.max_mode_index
         num_modes_out = max_mode_index_out + 1
-        port_names_in, port_names_out = self.port_names
+        num_modes_in = max_mode_index_in + 1
+        port_names_out, port_names_in = self.port_names
 
         values = np.zeros(
-            (len(port_names_in), len(port_names_out), num_modes_in, num_modes_out, len(self.freqs)),
+            (len(port_names_out), len(port_names_in), num_modes_out, num_modes_in, len(self.freqs)),
             dtype=complex,
         )
         coords = dict(
-            port_in=port_names_in,
             port_out=port_names_out,
-            mode_index_in=range(num_modes_in),
+            port_in=port_names_in,
             mode_index_out=range(num_modes_out),
+            mode_index_in=range(num_modes_in),
             f=self.freqs,
         )
 
         s_matrix = SMatrixDataArray(values, coords=coords)
 
         # loop through source ports
-        for row_index in self.matrix_indices_run_sim(
+        for col_index in self.matrix_indices_run_sim(
             ports=self.ports, run_only=self.run_only, element_mappings=self.element_mappings
         ):
 
-            port_name_in, mode_index_in = row_index
+            port_name_in, mode_index_in = col_index
             port_in = self.get_port_by_name(port_name=port_name_in, ports=self.ports)
 
             sim_data = batch_data[self._task_name(port=port_in, mode_index=mode_index_in)]
 
-            for col_index in self.matrix_indices_monitor(ports=self.ports):
+            for row_index in self.matrix_indices_monitor(ports=self.ports):
 
-                port_name_out, mode_index_out = col_index
+                port_name_out, mode_index_out = row_index
                 port_out = self.get_port_by_name(port_name=port_name_out, ports=self.ports)
 
                 # directly compute the element
@@ -444,8 +455,8 @@ class ComponentModeler(Tidy3dBaseModel):
         # element can be determined by user-defined mapping
         for ((row_in, col_in), (row_out, col_out), mult_by) in self.element_mappings:
 
-            port_in_from, mode_index_in_from = row_in
-            port_out_from, mode_index_out_from = col_in
+            port_out_from, mode_index_out_from = row_in
+            port_in_from, mode_index_in_from = col_in
             coords_from = dict(
                 port_in=port_in_from,
                 mode_index_in=mode_index_in_from,
@@ -453,8 +464,8 @@ class ComponentModeler(Tidy3dBaseModel):
                 mode_index_out=mode_index_out_from,
             )
 
-            port_in_to, mode_index_in_to = row_out
-            port_out_to, mode_index_out_to = col_out
+            port_out_to, mode_index_out_to = row_out
+            port_in_to, mode_index_in_to = col_out
             coords_to = dict(
                 port_in=port_in_to,
                 mode_index_in=mode_index_in_to,
@@ -464,14 +475,6 @@ class ComponentModeler(Tidy3dBaseModel):
             s_matrix.loc[coords_to] = mult_by * s_matrix.loc[coords_from].values
 
         return s_matrix
-
-    def solve(self, path_dir: str = DEFAULT_DATA_DIR) -> SMatrixDataArray:
-        """Solves for the scattering matrix of the system."""
-        log.warning(
-            "`ComponentModeler.solve()` is renamed to `ComponentModeler.run()` "
-            "'and will be removed in a later version."
-        )
-        return self.run(path_dir=path_dir)
 
     def run(self, path_dir: str = DEFAULT_DATA_DIR) -> SMatrixDataArray:
         """Solves for the scattering matrix of the system."""
