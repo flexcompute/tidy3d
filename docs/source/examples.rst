@@ -9,7 +9,7 @@ Introduction
 
     notebooks/StartHere
     notebooks/Simulation
-    notebooks/WhatsNew
+    notebooks/Primer
 
 Tutorials
 ---------

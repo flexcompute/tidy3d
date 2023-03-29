@@ -303,6 +303,7 @@ Through python API
    tidy3d.web.webapi.download_log
    tidy3d.web.webapi.download_json
    tidy3d.web.webapi.load_simulation
+   tidy3d.web.asynchronous.run_async
 
 Convenience for Single and Batch
 --------------------------------
