@@ -187,7 +187,7 @@ def run_async(
     Parameters
     ----------
     simulations : Tuple[:class:`.JaxSimulation`, ...]
-        Mapping of task name to simulation.
+        Collection of :class:`.JaxSimulations` to run asynchronously.
     folder_name : str = "default"
         Name of folder to store each task on web UI.
     path_dir : str
