@@ -290,20 +290,20 @@ Through python API
 .. autosummary::
    :toctree: _autosummary/
 
-   tidy3d.web.webapi.run
-   tidy3d.web.webapi.upload
-   tidy3d.web.webapi.estimate_cost
-   tidy3d.web.webapi.real_cost
-   tidy3d.web.webapi.get_info
-   tidy3d.web.webapi.start
-   tidy3d.web.webapi.monitor
-   tidy3d.web.webapi.download
-   tidy3d.web.webapi.load
-   tidy3d.web.webapi.delete
-   tidy3d.web.webapi.download_log
-   tidy3d.web.webapi.download_json
-   tidy3d.web.webapi.load_simulation
-   tidy3d.web.asynchronous.run_async
+   tidy3d.web.run
+   tidy3d.web.upload
+   tidy3d.web.estimate_cost
+   tidy3d.web.real_cost
+   tidy3d.web.get_info
+   tidy3d.web.start
+   tidy3d.web.monitor
+   tidy3d.web.download
+   tidy3d.web.load
+   tidy3d.web.delete
+   tidy3d.web.download_log
+   tidy3d.web.download_json
+   tidy3d.web.load_simulation
+   tidy3d.web.run_async
 
 Convenience for Single and Batch
 --------------------------------
@@ -311,9 +311,9 @@ Convenience for Single and Batch
 .. autosummary::
    :toctree: _autosummary/
 
-   tidy3d.web.container.Job
-   tidy3d.web.container.Batch
-   tidy3d.web.container.BatchData
+   tidy3d.web.Job
+   tidy3d.web.Batch
+   tidy3d.web.BatchData
 
 Information Containers
 ----------------------
@@ -334,7 +334,8 @@ Mode Solver
 .. autosummary::
    :toctree: _autosummary/
 
-   plugins.ModeSolver
+   tidy3d.plugins.mode.ModeSolver
+   tidy3d.plugins.mode.ModeSolverData
 
 Dispersive Model Fitting
 ------------------------
@@ -342,9 +343,9 @@ Dispersive Model Fitting
 .. autosummary::
    :toctree: _autosummary/
 
-   plugins.DispersionFitter
-   plugins.StableDispersionFitter
-   plugins.AdvancedFitterParam
+   tidy3d.plugins.fitter.DispersionFitter
+   tidy3d.plugins.fitter.StableDispersionFitter
+   tidy3d.plugins.fitter.AdvancedFitterParam
 
 Self-intersecting Polyslab
 --------------------------
@@ -352,7 +353,7 @@ Self-intersecting Polyslab
 .. autosummary::
    :toctree: _autosummary/
 
-   plugins.ComplexPolySlab
+   tidy3d.plugins.polyslab.ComplexPolySlab
 
 Scattering Matrix Calculator
 ----------------------------
@@ -360,8 +361,9 @@ Scattering Matrix Calculator
 .. autosummary::
    :toctree: _autosummary/
 
-   plugins.ComponentModeler
-   plugins.Port
+   tidy3d.plugins.smatrix.ComponentModeler
+   tidy3d.plugins.smatrix.Port
+   tidy3d.plugins.smatrix.SMatrixDataArray
 
 Resonance Finder
 ----------------
@@ -369,7 +371,7 @@ Resonance Finder
 .. autosummary::
    :toctree: _autosummary/
         
-   plugins.ResonanceFinder
+   tidy3d.plugins.resonance.ResonanceFinder
 
 Adjoint
 -------
@@ -377,17 +379,18 @@ Adjoint
 .. autosummary::
    :toctree: _autosummary/
 
-   plugins.adjoint.run
-   plugins.adjoint.JaxBox
-   plugins.adjoint.JaxMedium
-   plugins.adjoint.JaxAnisotropicMedium
-   plugins.adjoint.JaxCustomMedium
-   plugins.adjoint.JaxStructure
-   plugins.adjoint.JaxSimulation
-   plugins.adjoint.JaxSimulationData
-   plugins.adjoint.JaxModeData
-   plugins.adjoint.JaxPermittivityDataset
-   plugins.adjoint.JaxDataArray
+   tidy3d.plugins.adjoint.run
+   tidy3d.plugins.adjoint.run_async
+   tidy3d.plugins.adjoint.JaxBox
+   tidy3d.plugins.adjoint.JaxMedium
+   tidy3d.plugins.adjoint.JaxAnisotropicMedium
+   tidy3d.plugins.adjoint.JaxCustomMedium
+   tidy3d.plugins.adjoint.JaxStructure
+   tidy3d.plugins.adjoint.JaxSimulation
+   tidy3d.plugins.adjoint.JaxSimulationData
+   tidy3d.plugins.adjoint.JaxModeData
+   tidy3d.plugins.adjoint.JaxPermittivityDataset
+   tidy3d.plugins.adjoint.JaxDataArray
 
 Constants
 =========
@@ -436,7 +439,7 @@ Default Absorber Parameters
 Abstract Models
 ===============
 
-These are classes that are used to organize the tidy3d components, but aren't to be used directly in the code.  Documented here mainly for reference.
+These are some classes that are used to organize the tidy3d components, but aren't to be used directly in the code.  Documented here mainly for reference.
 
 
 .. autosummary::
