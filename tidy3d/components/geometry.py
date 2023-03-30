@@ -29,7 +29,7 @@ try:
     import trimesh
 
     TRIMESH_AVAILABLE = True
-except ImportError:
+except Exception:  # pylint:disable=broad-except
     TRIMESH_AVAILABLE = False
 
 try:
@@ -37,7 +37,7 @@ try:
     import rtree  # pylint:disable=unused-import
 
     NETWORKX_RTREE_AVAILABLE = True
-except ImportError:
+except Exception:  # pylint:disable=broad-except
     NETWORKX_RTREE_AVAILABLE = False
 
 
