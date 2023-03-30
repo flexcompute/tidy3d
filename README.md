@@ -35,7 +35,7 @@ To install the Tidy3D Python API locally, the following instructions should work
 
 ```
 pip install --user tidy3d
-tidy3d configure --api-key=XXX
+tidy3d configure --apikey=XXX
 ```
 
 Where `XXX` is your API key, which can be copied from your [account page](https://tidy3d.simulation.cloud/account) in the web interface.
