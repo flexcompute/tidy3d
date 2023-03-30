@@ -37,7 +37,7 @@ def run(  # pylint:disable=too-many-arguments
     folder_name: str = "default",
     path: str = "simulation_data.hdf5",
     callback_url: str = None,
-    verbose: bool = False,
+    verbose: bool = True,
     progress_callback_upload: Callable[[float], None] = None,
     progress_callback_download: Callable[[float], None] = None,
     solver_version: str = None,
@@ -59,7 +59,7 @@ def run(  # pylint:disable=too-many-arguments
     callback_url : str = None
         Http PUT url to receive simulation finish event. The body content is a json file with
         fields ``{'id', 'status', 'name', 'workUnit', 'solverVersion'}``.
-    verbose : bool = False
+    verbose : bool = True
         If `True`, will print progressbars and status, otherwise, will run silently.
     progress_callback_upload : Callable[[float], None] = None
         Optional callback function called when uploading file with ``bytes_in_chunk`` as argument.
@@ -99,7 +99,7 @@ def upload(  # pylint:disable=too-many-locals,too-many-arguments
     task_name: str,
     folder_name: str = "default",
     callback_url: str = None,
-    verbose: bool = False,
+    verbose: bool = True,
     progress_callback: Callable[[float], None] = None,
 ) -> TaskId:
     """Upload simulation to server, but do not start running :class:`.Simulation`.
@@ -115,7 +115,7 @@ def upload(  # pylint:disable=too-many-locals,too-many-arguments
     callback_url : str = None
         Http PUT url to receive simulation finish event. The body content is a json file with
         fields ``{'id', 'status', 'name', 'workUnit', 'solverVersion'}``.
-    verbose : bool = False
+    verbose : bool = True
         If `True`, will print progressbars and status, otherwise, will run silently.
     progress_callback : Callable[[float], None] = None
         Optional callback function called when uploading file with ``bytes_in_chunk`` as argument.
@@ -214,7 +214,7 @@ def get_run_info(task_id: TaskId):
 
 
 # pylint: disable=too-many-statements, too-many-locals, too-many-branches
-def monitor(task_id: TaskId, verbose: bool = False) -> None:
+def monitor(task_id: TaskId, verbose: bool = True) -> None:
     # pylint:disable=too-many-statements
     """Print the real time task progress until completion.
 
@@ -222,7 +222,7 @@ def monitor(task_id: TaskId, verbose: bool = False) -> None:
     ----------
     task_id : str
         Unique identifier of task on server.  Returned by :meth:`upload`.
-    verbose : bool = False
+    verbose : bool = True
         If `True`, will print progressbars and status, otherwise, will run silently.
 
     Note
@@ -344,7 +344,7 @@ def monitor(task_id: TaskId, verbose: bool = False) -> None:
 def download(
     task_id: TaskId,
     path: str = "simulation_data.hdf5",
-    verbose: bool = False,
+    verbose: bool = True,
     progress_callback: Callable[[float], None] = None,
 ) -> None:
     """Download results of task and log to file.
@@ -355,7 +355,7 @@ def download(
         Unique identifier of task on server.  Returned by :meth:`upload`.
     path : str = "simulation_data.hdf5"
         Download path to .hdf5 data file (including filename).
-    verbose : bool = False
+    verbose : bool = True
         If `True`, will print progressbars and status, otherwise, will run silently.
     progress_callback : Callable[[float], None] = None
         Optional callback function called when downloading file with ``bytes_in_chunk`` as argument.
@@ -368,7 +368,7 @@ def download(
 def download_json(
     task_id: TaskId,
     path: str = SIM_FILE_JSON,
-    verbose: bool = False,
+    verbose: bool = True,
     progress_callback: Callable[[float], None] = None,
 ) -> None:
     """Download the `.json` file associated with the :class:`.Simulation` of a given task.
@@ -379,7 +379,7 @@ def download_json(
         Unique identifier of task on server.  Returned by :meth:`upload`.
     path : str = "simulation.json"
         Download path to .json file of simulation (including filename).
-    verbose : bool = False
+    verbose : bool = True
         If `True`, will print progressbars and status, otherwise, will run silently.
     progress_callback : Callable[[float], None] = None
         Optional callback function called when downloading file with ``bytes_in_chunk`` as argument.
@@ -393,7 +393,7 @@ def download_json(
 def download_hdf5(
     task_id: TaskId,
     path: str = SIM_FILE_HDF5,
-    verbose: bool = False,
+    verbose: bool = True,
     progress_callback: Callable[[float], None] = None,
 ) -> None:
     """Download the `.hdf5` file associated with the :class:`.Simulation` of a given task.
@@ -404,7 +404,7 @@ def download_hdf5(
         Unique identifier of task on server.  Returned by :meth:`upload`.
     path : str = "simulation.hdf5"
         Download path to .hdf5 file of simulation (including filename).
-    verbose : bool = False
+    verbose : bool = True
         If `True`, will print progressbars and status, otherwise, will run silently.
     progress_callback : Callable[[float], None] = None
         Optional callback function called when downloading file with ``bytes_in_chunk`` as argument.
@@ -418,7 +418,7 @@ def download_hdf5(
 def load_simulation(
     task_id: TaskId,
     path: str = SIM_FILE_JSON,
-    verbose: bool = False,
+    verbose: bool = True,
     progress_callback: Callable[[float], None] = None,
 ) -> Simulation:
     """Download the `.json` file of a task and load the associated :class:`.Simulation`.
@@ -429,7 +429,7 @@ def load_simulation(
         Unique identifier of task on server.  Returned by :meth:`upload`.
     path : str = "simulation.json"
         Download path to .json file of simulation (including filename).
-    verbose : bool = False
+    verbose : bool = True
         If `True`, will print progressbars and status, otherwise, will run silently.
     progress_callback : Callable[[float], None] = None
         Optional callback function called when downloading file with ``bytes_in_chunk`` as argument.
@@ -449,7 +449,7 @@ def load_simulation(
 def download_log(
     task_id: TaskId,
     path: str = "tidy3d.log",
-    verbose: bool = False,
+    verbose: bool = True,
     progress_callback: Callable[[float], None] = None,
 ) -> None:
     """Download the tidy3d log file associated with a task.
@@ -460,7 +460,7 @@ def download_log(
         Unique identifier of task on server.  Returned by :meth:`upload`.
     path : str = "tidy3d.log"
         Download path to log file (including filename).
-    verbose : bool = False
+    verbose : bool = True
         If `True`, will print progressbars and status, otherwise, will run silently.
     progress_callback : Callable[[float], None] = None
         Optional callback function called when downloading file with ``bytes_in_chunk`` as argument.
@@ -469,9 +469,6 @@ def download_log(
     ----
     To load downloaded results into data, call :meth:`load` with option `replace_existing=False`.
     """
-    # task = SimulationTask.get(task_id)
-    # if not task:
-    #     raise ValueError("Task not found.")
     task = SimulationTask(taskId=task_id)
     task.get_log(path, verbose=verbose, progress_callback=progress_callback)
 
@@ -480,7 +477,7 @@ def load(
     task_id: TaskId,
     path: str = "simulation_data.hdf5",
     replace_existing: bool = True,
-    verbose: bool = False,
+    verbose: bool = True,
     progress_callback: Callable[[float], None] = None,
 ) -> SimulationData:
     """Download and Load simultion results into :class:`.SimulationData` object.
@@ -493,7 +490,7 @@ def load(
         Download path to .hdf5 data file (including filename).
     replace_existing: bool = True
         Downloads the data even if path exists (overwriting the existing).
-    verbose : bool = False
+    verbose : bool = True
         If `True`, will print progressbars and status, otherwise, will run silently.
     progress_callback : Callable[[float], None] = None
         Optional callback function called when downloading file with ``bytes_in_chunk`` as argument.
