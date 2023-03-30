@@ -31,6 +31,21 @@ After that, you can install the front end with the instructions below, or visit 
 
 ### Installing the front end 
 
+To install the Tidy3D Python API locally, the following instructions should work for most users.
+
+```
+pip install --user tidy3d
+tidy3d configure --api-key=XXX
+```
+
+Where `XXX` is your API key, which can be copied from your [account page](https://tidy3d.simulation.cloud/account) in the web interface.
+
+If those commands did not work, advanced installation instructions are below, which should help solve the issue.
+
+### Advanced Installation Instructions
+
+Some users might require more a specialized installation, which we cover below.
+
 #### Using pip (recommended)
 
 The easiest way to install the tidy3d python interface is through [pip](https://pypi.org/project/tidy3d/).
