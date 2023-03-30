@@ -45,7 +45,7 @@ def run(
     folder_name: str = "default",
     path: str = "simulation_data.hdf5",
     callback_url: str = None,
-    verbose: bool = False,
+    verbose: bool = True,
 ) -> JaxSimulationData:
     """Submits a :class:`.JaxSimulation` to server, starts running, monitors progress, downloads,
     and loads results as a :class:`.JaxSimulationData` object.
@@ -64,7 +64,7 @@ def run(
     callback_url : str = None
         Http PUT url to receive simulation finish event. The body content is a json file with
         fields ``{'id', 'status', 'name', 'workUnit', 'solverVersion'}``.
-    verbose : bool = False
+    verbose : bool = True
         If `True`, will print progressbars and status, otherwise, will run silently.
 
     Returns
@@ -175,7 +175,7 @@ def run_async(
     folder_name: str = "default",
     path_dir: str = DEFAULT_DATA_DIR,
     callback_url: str = None,
-    verbose: bool = False,
+    verbose: bool = True,
     num_workers: int = None,
     task_name_suffix: str = None,
 ) -> Tuple[JaxSimulationData, ...]:
@@ -195,7 +195,7 @@ def run_async(
     callback_url : str = None
         Http PUT url to receive simulation finish event. The body content is a json file with
         fields ``{'id', 'status', 'name', 'workUnit', 'solverVersion'}``.
-    verbose : bool = False
+    verbose : bool = True
         If `True`, will print progressbars and status, otherwise, will run silently.
     num_workers: int = None
         Number of tasks to submit at once in a batch, if None, will run all at the same time.
