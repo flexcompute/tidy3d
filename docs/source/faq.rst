@@ -15,7 +15,7 @@ From the :class:`.SimulationData` object, one can grab and plot the data for eac
 How is using Tidy3D billed?
 ---------------------------
 
-The `Tidy3D client <https://pypi.org/project/tidy3d-beta/>`_ that is used for designing 
+The `Tidy3D client <https://pypi.org/project/tidy3d/>`_ that is used for designing 
 simulations and analyzing the results is free and 
 open source. We only bill the run time of the solver on our server, taking only the compute 
 time into account (as opposed to overhead e.g. during uploading).
