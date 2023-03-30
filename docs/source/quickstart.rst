@@ -40,7 +40,21 @@ Signing up also grants you access to our browser-based `interface <https://tidy3
 Installation of Tidy3D Python API
 ---------------------------------
 
-If you wish to run the Tidy3D Python API locally, follow the instructions below.
+If you wish to install the Tidy3D Python API locally, the following instructions should work for most users.
+
+.. code-block:: bash
+
+    pip install --user tidy3d
+    tidy3d configure --api-key=XXX
+
+Where ``XXX`` is your API key, which can be copied from your `account page <https://tidy3d.simulation.cloud/account>`_ in the web interface.
+
+If those commands did not work, there are advanced installation instructions below, which should help solve the issue.
+
+Advanced Installation Instructions
+----------------------------------
+
+Some users or systems may require a more specialized installation, which we will cover below.
 
 Create a new Python virtual environment
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
