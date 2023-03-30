@@ -12,7 +12,7 @@ from pydantic import Field, NonNegativeFloat, PositiveInt, validator
 
 from ...log import log
 from ...components.base import Tidy3dBaseModel
-from ...components.types import ArrayComplex1D, ArrayComplex2D, ArrayComplex3D
+from ...components.types import ArrayFloat1D, ArrayComplex1D, ArrayComplex2D, ArrayComplex3D
 from ...components.data.data_array import ScalarFieldTimeDataArray
 from ...components.data.monitor_data import FieldTimeData
 from ...constants import HERTZ
@@ -34,7 +34,7 @@ class ResonanceData(Tidy3dBaseModel):
     complex_amplitudes: ArrayComplex1D = Field(
         None, title="Complex amplitudes", description="Complex resonance amplitudes"
     )
-    errors: ArrayComplex1D = Field(
+    errors: ArrayFloat1D = Field(
         None, title="Errors", description="Rough eigenvalue error estimate."
     )
 
