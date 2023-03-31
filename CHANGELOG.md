@@ -17,19 +17,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - Default Tidy3d logging level is now set to `'WARNING'`.
-- Tidy3d is no longer pip installable from `tidy3d-beta` on PyPI.
-- Plugins must be imported from their respective directory, eg. `from tidy3d.plugins.mode import ModeSolver`.
+- Tidy3D is no longer pip installable from `tidy3d-beta` on PyPI.
+- Plugins must be imported from their respective directories, eg. `from tidy3d.plugins.mode import ModeSolver`.
 - Removed `Geometry.intersections()`.
 - Log level only accepts upper case strings.
 - `PolySlab` `reference_plane` is `"middle"` by default.
-- Boundary conditions are now PML by default.
-- `PointDipole` sources now have a continuous dependence on the source position, as opposed to snapping to Yee grid locations.
-Behavior is controlled by the `interpolate` argument, set to `True` by default. 
-- Scattering matrix plugin accepts list of frequencies and returns data as an `xarray.DataArray` instead of a nested `dict`.
-- `importlib_metadata` version set to `>= 6.0.0`.
+- Boundary conditions are now `PML()` by default.
+- `PointDipole` sources now have a continuous dependence on the source position, as opposed to snapping to Yee grid locations. Behavior is controlled by the `interpolate` argument, set to `True` by default. 
+- `smatrix` plugin accepts list of frequencies and returns data as an `xarray.DataArray` instead of a nested `dict`.
+- `importlib-metadata` version set to `>= 6.0.0`.
 
 ### Fixed
-- Helpful error message if insufficient credits.
+- Helpful error message if user has insufficient credits.
 
 ## [1.10.0] - 2023-3-28
 
