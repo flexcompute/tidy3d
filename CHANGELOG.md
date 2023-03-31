@@ -12,6 +12,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+## [2.0.1] - 2023-3-31
+
+### Added
+
+### Changed
+
+### Fixed
+
 ## [2.0.0] - 2023-3-31
 
 ### Added
@@ -654,7 +662,8 @@ which fields are to be projected is now determined automatically based on the me
 - Job and Batch classes for better simulation handling (eventually to fully replace webapi functions).
 - A large number of small improvements and bug fixes.
 
-[Unreleased]: https://github.com/flexcompute/tidy3d/compare/v2.0.0...develop
+[Unreleased]: https://github.com/flexcompute/tidy3d/compare/v2.0.1...develop
+[2.0.1]: https://github.com/flexcompute/tidy3d/compare/v2.0.0...v2.0.1
 [2.0.0]: https://github.com/flexcompute/tidy3d/compare/v1.10.0...v2.0.0
 [1.10.0]: https://github.com/flexcompute/tidy3d/compare/v1.9.3...v1.10.0
 [1.9.3]: https://github.com/flexcompute/tidy3d/compare/v1.9.2...v1.9.3
