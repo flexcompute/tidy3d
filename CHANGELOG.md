@@ -29,6 +29,7 @@ Behavior is controlled by the `interpolate` argument, set to `True` by default.
 - `importlib_metadata` version set to `>= 6.0.0`.
 
 ### Fixed
+- Helpful error message if insufficient credits.
 
 ## [1.10.0] - 2023-3-28
 
