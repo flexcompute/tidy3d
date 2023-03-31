@@ -103,7 +103,6 @@ def handle_response(func):
         if resp.status_code == ResponseCodes.UNAUTHORIZED.value:
             raise WebError(resp.text)
 
-        resp.raise_for_status()
         json_resp = resp.json()
 
         # if the response status is still not OK, try to raise error from the json
