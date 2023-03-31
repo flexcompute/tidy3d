@@ -1,5 +1,5 @@
 """Handles communication with server."""
-
+import json
 import os
 import time
 from enum import Enum
@@ -103,13 +103,12 @@ def handle_response(func):
         if resp.status_code == ResponseCodes.UNAUTHORIZED.value:
             raise WebError(resp.text)
 
-        resp.raise_for_status()
         json_resp = resp.json()
 
         # if the response status is still not OK, try to raise error from the json
         if resp.status_code != ResponseCodes.OK.value:
             if "error" in json_resp.keys():
-                raise WebError(json_resp["error"])
+                raise WebError(json.dumps(json_resp, indent=4))
             resp.raise_for_status()
 
         return json_resp["data"] if "data" in json_resp else json_resp
