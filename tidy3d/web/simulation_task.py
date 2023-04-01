@@ -292,7 +292,7 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
         assert self.simulation
         upload_string(
             self.task_id,
-            self.simulation.json(),
+            self.simulation._json_string,  # pylint: disable=protected-access
             SIMULATION_JSON,
             verbose=verbose,
             progress_callback=progress_callback,
@@ -362,7 +362,12 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
             worker group
         """
         if self.simulation:
-            upload_string(self.task_id, self.simulation.json(), SIMULATION_JSON, verbose=False)
+            upload_string(
+                self.task_id,
+                self.simulation._json_string,  # pylint: disable=protected-access
+                SIMULATION_JSON,
+                verbose=False,
+            )
 
         if solver_version:
             protocol_version = None
