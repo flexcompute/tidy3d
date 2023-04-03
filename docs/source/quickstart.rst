@@ -119,14 +119,14 @@ and pasting the API key when prompted. Note that one can also specify the API ke
 
 .. code-block:: bash
 
-    tidy3d configure --api-key=XXX
+    tidy3d configure --apikey=XXX
 
 Note: Windows users will need to peform a slighlty different step to link the registration. From the anaconda prompt where tidy3d was pip installed, the following commands should be run instead
 
 .. code-block:: bash
 
     pip install pipx
-    pipx run tidy3d configure --api-key=XXX
+    pipx run tidy3d configure --apikey=XXX
 
 Alternatively, the API key can be set up using the evironment variable ``SIMCLOUD_APIKEY`` as:
 
