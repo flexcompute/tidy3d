@@ -102,7 +102,7 @@ pipx run tidy3d configure
 You can also specify your API key directly as an option to this command using the `api-key` argument, for example:
 
 ```
-tidy3d configure --api-key=XXX
+tidy3d configure --apikey=XXX
 ```
 
 #### Manually
