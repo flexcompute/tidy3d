@@ -207,7 +207,7 @@ def run_async(
 
     Returns
     ------
-    Tuple[:class:`JaxSimulationData, ...]
+    Tuple[:class:`.JaxSimulationData`, ...]
         Contains the :class:`.JaxSimulationData` of each :class:`.JaxSimulation`.
     """
 
