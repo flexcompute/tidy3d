@@ -321,9 +321,12 @@ def run_emulated(simulation: Simulation, path: str = SIM_DATA_PATH, **kwargs) ->
     def make_data(coords: dict, data_array_type: type, is_complex: bool = False) -> "data_type":
         """make a random DataArray out of supplied coordinates and data_type."""
         data_shape = [len(coords[k]) for k in data_array_type._dims]
+        np.random.seed(1)
         data = np.random.random(data_shape)
+
+        # data = np.ones(data_shape)
         data = (1 + 1j) * data if is_complex else data
-        data = gaussian_filter(data, sigma=0.5)  # smooth out the data a little so it isnt random
+        data = gaussian_filter(data, sigma=1.0)  # smooth out the data a little so it isnt random
         data_array = data_array_type(data, coords=coords)
         return data_array
 
