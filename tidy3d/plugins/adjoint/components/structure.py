@@ -63,6 +63,8 @@ class JaxStructure(Structure, JaxObject):
         grad_data_adj: FieldData,
         grad_data_eps: PermittivityData,
         sim_bounds: Bound,
+        eps_out: complex,
+        eps_in: complex,
     ) -> JaxStructure:
         """Returns the gradient of the structure parameters given forward and adjoint field data."""
 
@@ -78,6 +80,8 @@ class JaxStructure(Structure, JaxObject):
             grad_data_eps=grad_data_eps,
             sim_bounds=sim_bounds,
             wvl_mat=wvl_mat,
+            eps_out=eps_out,
+            eps_in=eps_in,
         )
 
         medium_vjp = self.medium.store_vjp(
@@ -85,6 +89,7 @@ class JaxStructure(Structure, JaxObject):
             grad_data_adj=grad_data_adj,
             sim_bounds=sim_bounds,
             wvl_mat=wvl_mat,
+            inside_fn=self.geometry.inside,
         )
 
         return self.copy(update=dict(geometry=geo_vjp, medium=medium_vjp))
