@@ -11,6 +11,11 @@ from .....components.base import Tidy3dBaseModel, cached_property
 from .....exceptions import DataError, Tidy3dKeyError, AdjointError
 
 
+# condition setting when to set value in DataArray to zero:
+# if abs(val) <= VALUE_FILTER_THRESHOLD * max(abs(val))
+VALUE_FILTER_THRESHOLD = 1e-6
+
+
 @register_pytree_node_class
 class JaxDataArray(Tidy3dBaseModel):
     """A :class:`.DataArray`-like class that only wraps xarray for jax compability."""
@@ -167,8 +172,15 @@ class JaxDataArray(Tidy3dBaseModel):
         """The value and coordinate associated with the only non-zero element of ``self.values``."""
 
         values = np.nan_to_num(self.as_ndarray)
-        nonzero_inds = np.nonzero(values)
-        nonzero_values = values[nonzero_inds].tolist()
+
+        # filter out values that are very small relative to maximum
+        values_filtered = values.copy()
+        max_value = np.max(np.abs(values_filtered))
+        val_cutoff = VALUE_FILTER_THRESHOLD * max_value
+        values_filtered[np.abs(values_filtered) <= val_cutoff] = 0.0
+
+        nonzero_inds = np.nonzero(values_filtered)
+        nonzero_values = values_filtered[nonzero_inds].tolist()
 
         nonzero_coords = {}
         for nz_inds, (coord_name, coord_list) in zip(nonzero_inds, self.coords.items()):
