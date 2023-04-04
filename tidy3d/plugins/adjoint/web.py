@@ -1,5 +1,5 @@
 """Adjoint-specific webapi."""
-from typing import Tuple, Dict
+from typing import Tuple, Dict, Union
 from functools import partial
 
 from jax import custom_vjp
@@ -10,8 +10,17 @@ from ...web.webapi import run as web_run
 from ...web.asynchronous import run_async as web_run_async
 from ...web.container import BatchData, DEFAULT_DATA_DIR
 
-from .components.simulation import JaxSimulation
+from .components.simulation import JaxSimulation, JaxInfo
 from .components.data.sim_data import JaxSimulationData
+
+
+# temporarily locally store forward sim data for testing purposes
+# TODO: replace with our own storage system
+CACHE = {}
+
+# how we store a key to the forward sim
+# note, must be jax-compatible (not string!) as it's returned by one of the jax vjp makers
+FwdSimKeyType = int
 
 
 def _task_name_fwd(task_name: str) -> str:
@@ -73,12 +82,10 @@ def run(
         Object containing solver results for the supplied :class:`.JaxSimulation`.
     """
 
-    # convert to regular tidy3d (and accounting info)
-    sim_tidy3d, jax_info = simulation.to_simulation()
+    sim, jax_info = simulation.to_simulation()
 
-    # run using regular tidy3d simulation running fn
-    sim_data_tidy3d = tidy3d_run_fn(
-        simulation=sim_tidy3d,
+    sim_data = tidy3d_run_fn(
+        simulation=sim,
         task_name=str(task_name),
         folder_name=folder_name,
         path=path,
@@ -86,8 +93,7 @@ def run(
         verbose=verbose,
     )
 
-    # convert back to jax type and return
-    return JaxSimulationData.from_sim_data(sim_data_tidy3d, jax_info=jax_info)
+    return JaxSimulationData.from_sim_data(sim_data, jax_info)
 
 
 # pylint:disable=too-many-arguments
@@ -98,24 +104,27 @@ def run_fwd(
     path: str,
     callback_url: str,
     verbose: bool,
-) -> Tuple[JaxSimulationData, tuple]:
+) -> Tuple[JaxSimulationData, Tuple[FwdSimKeyType, float]]:
     """Run forward pass and stash extra objects for the backwards pass."""
 
-    # add the gradient monitors and run the forward simulation
-    grad_mnts = simulation.get_grad_monitors()
-    sim_fwd = simulation.updated_copy(**grad_mnts)
-    sim_data_fwd = run(
-        simulation=sim_fwd,
-        task_name=_task_name_fwd(task_name),
+    simulation, jax_info = simulation.to_simulation()
+
+    resp = webapi_run_adjoint_fwd(
+        simulation=simulation,
+        jax_info=jax_info,
+        task_name=str(task_name),
         folder_name=folder_name,
         path=path,
         callback_url=callback_url,
         verbose=verbose,
     )
 
-    # remove the gradient data from the returned version (not needed)
-    sim_data_orig = sim_data_fwd.copy(update=dict(grad_data=(), simulation=simulation))
-    return sim_data_orig, (sim_data_fwd,)
+    # TODO: handle error if keys not present in response
+    jax_sim_data_orig = resp.get("jax_sim_data_orig")
+    fwd_sim_key = resp.get("fwd_sim_key")
+    fwidth_adj = resp.get("fwidth_adj")
+
+    return jax_sim_data_orig, (fwd_sim_key, fwidth_adj)
 
 
 # pylint:disable=too-many-arguments
@@ -130,16 +139,121 @@ def run_bwd(
 ) -> Tuple[JaxSimulation]:
     """Run backward pass and return simulation storing vjp of the objective w.r.t. the sim."""
 
-    # grab the forward simulation and its gradient monitor data
-    (sim_data_fwd,) = res
+    (fwd_sim_key, fwidth_adj) = res
+
+    jax_sim_adj = sim_data_vjp.make_adjoint_simulation(fwidth=fwidth_adj)
+    sim_adj, jax_info_adj = jax_sim_adj.to_simulation()
+
+    resp = webapi_run_adjoint_bwd(
+        sim_adj=sim_adj,
+        jax_info_adj=jax_info_adj,
+        fwd_sim_key=fwd_sim_key,
+        task_name=_task_name_adj(task_name),
+        folder_name=folder_name,
+        path=path,
+        callback_url=callback_url,
+        verbose=verbose,
+    )
+
+    # TODO: handle error if keys not present in response
+    sim_vjp = resp.get("sim_vjp")
+
+    sim_vjp = sim_data_vjp.simulation.updated_copy(input_structures=sim_vjp.input_structures)
+
+    return (sim_vjp,)
+
+
+"""TO DO: IMPLEMENT this section IN WEBAPI """
+
+
+# pylint:disable=unused-argument
+def get_fwd_sim_key(sim_fwd: Simulation) -> FwdSimKeyType:
+    """Returns a unique identifier for the forward task."""
+
+    # todo: find way to assign unique identifier to forward simulation
+    return len(CACHE)
+
+
+def store_fwd_data(fwd_sim_key: FwdSimKeyType, sim_data_fwd: JaxSimulationData) -> None:
+    """Store the forward pass data on our servers."""
+
+    # TODO: save this data to storage, could use pickle as we control it
+    CACHE[fwd_sim_key] = sim_data_fwd
+
+
+def get_fwd_data(fwd_sim_key: FwdSimKeyType) -> JaxSimulationData:
+    """Grab the forward pass data from our servers."""
+
+    # TODO: grab from storage
+    return CACHE[fwd_sim_key]
+
+
+# TODO: implement this as a webapi that can be called via http request
+def webapi_run_adjoint_fwd(
+    simulation: Simulation,
+    jax_info: JaxInfo,
+    task_name: str,
+    folder_name: str,
+    path: str,
+    callback_url: str,
+    verbose: bool,
+) -> Dict[str, Union[SimulationData, FwdSimKeyType, float]]:
+    """Runs the forward simulation on our servers, stores the gradient data for later."""
+
+    jax_sim = JaxSimulation.from_simulation(simulation, jax_info)
+
+    # add the gradient monitors and run the forward simulation
+    grad_mnts = jax_sim.get_grad_monitors()
+    sim_fwd = jax_sim.updated_copy(**grad_mnts)
+
+    jax_sim_data_fwd = run(
+        simulation=sim_fwd,
+        task_name=_task_name_fwd(task_name),
+        folder_name=folder_name,
+        path=path,
+        callback_url=callback_url,
+        verbose=verbose,
+    )
+    fwidth_adj = jax_sim_data_fwd.simulation._fwidth_adjoint  # pylint:disable=protected-access
+
+    # remove the gradient data from the returned version as it's not needed by user
+    jax_sim_data_orig = jax_sim_data_fwd.copy(update=dict(grad_data=(), simulation=jax_sim))
+
+    # store the forward data (including monitor data) on our servers
+    fwd_sim_key = get_fwd_sim_key(sim_fwd=sim_fwd)
+    store_fwd_data(fwd_sim_key=fwd_sim_key, sim_data_fwd=jax_sim_data_fwd)
+
+    # test that everything is serializable before returning.
+    # TODO: remove in production version.
+    simulation.json()
+    jax_sim_data_orig.json()
+
+    # TODO: package as an actual http response
+    return dict(jax_sim_data_orig=jax_sim_data_orig, fwd_sim_key=fwd_sim_key, fwidth_adj=fwidth_adj)
+
+
+# TODO: implement this as a webapi that can be called via http request
+def webapi_run_adjoint_bwd(
+    sim_adj: Simulation,
+    jax_info_adj: JaxInfo,
+    fwd_sim_key: FwdSimKeyType,
+    task_name: str,
+    folder_name: str,
+    path: str,
+    callback_url: str,
+    verbose: bool,
+) -> Dict[str, JaxSimulation]:
+    """Runs adjoint simulation on our servers, grabs the gradient data from fwd for processing."""
+
+    jax_sim_adj = JaxSimulation.from_simulation(sim_adj, jax_info_adj)
+
+    sim_data_fwd = get_fwd_data(fwd_sim_key=fwd_sim_key)
+
     grad_data_fwd = sim_data_fwd.grad_data
     grad_eps_data_fwd = sim_data_fwd.grad_eps_data
 
-    # make and run adjoint simulation
-    fwidth_adj = sim_data_fwd.simulation._fwidth_adjoint  # pylint:disable=protected-access
-    sim_adj = sim_data_vjp.make_adjoint_simulation(fwidth=fwidth_adj)
     sim_data_adj = run(
-        simulation=sim_adj,
+        simulation=jax_sim_adj,
         task_name=_task_name_adj(task_name),
         folder_name=folder_name,
         path=path,
@@ -149,10 +263,18 @@ def run_bwd(
     grad_data_adj = sim_data_adj.grad_data
 
     # get gradient and insert into the resulting simulation structure medium
-    sim_vjp = sim_data_vjp.simulation.store_vjp(grad_data_fwd, grad_data_adj, grad_eps_data_fwd)
+    sim_vjp = sim_data_adj.simulation.store_vjp(grad_data_fwd, grad_data_adj, grad_eps_data_fwd)
 
-    return (sim_vjp,)
+    # test that inputs and outputs are serializable
+    # TODO: remove in production version.
+    sim_adj.json()
+    sim_vjp.json()
 
+    # TODO: package as an actual http response
+    return dict(sim_vjp=sim_vjp)
+
+
+""" END WEBAPI ADDITIONS """
 
 # register the custom forward and backward functions
 run.defvjp(run_fwd, run_bwd)
