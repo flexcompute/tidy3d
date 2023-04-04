@@ -25,6 +25,7 @@ from tidy3d.plugins.adjoint.components.data.monitor_data import JaxModeData, Jax
 from tidy3d.plugins.adjoint.components.data.data_array import JaxDataArray
 from tidy3d.plugins.adjoint.components.data.dataset import JaxPermittivityDataset
 from tidy3d.plugins.adjoint.web import run, run_async
+from tidy3d.plugins.adjoint.components.data.data_array import VALUE_FILTER_THRESHOLD
 
 from ..utils import run_emulated, assert_log_level, log_capture, run_async_emulated
 
@@ -773,3 +774,17 @@ def _test_error_regular_web():
 
     with pytest.raises(ValueError):
         web.run(sim, task_name="test")
+
+
+def test_value_filter():
+    """Ensure value filter works as expected."""
+
+    values = np.array([1, 0.5 * VALUE_FILTER_THRESHOLD, 2 * VALUE_FILTER_THRESHOLD, 0])
+    coords = dict(x=list(range(4)))
+    data = JaxDataArray(values=values, coords=coords)
+
+    values_after, _ = data.nonzero_val_coords
+
+    # assert that the terms <= VALUE_FILTER_THRESHOLD should be removed
+    values_expected = np.array([1, 2 * VALUE_FILTER_THRESHOLD])
+    assert np.allclose(np.array(values_after), values_expected)
