@@ -1,8 +1,7 @@
 """Defines a jax-compatible simulation."""
 from __future__ import annotations
 
-from typing import Tuple, Union
-from collections import namedtuple
+from typing import Tuple, Union, List, Dict
 
 import pydantic as pd
 import numpy as np
@@ -10,11 +9,12 @@ import numpy as np
 from jax.tree_util import register_pytree_node_class
 
 from ....log import log
-from ....components.base import cached_property
+from ....components.base import cached_property, Tidy3dBaseModel
 from ....components.monitor import FieldMonitor, PermittivityMonitor
-from ....components.monitor import ModeMonitor, DiffractionMonitor
+from ....components.monitor import ModeMonitor, DiffractionMonitor, Monitor
 from ....components.simulation import Simulation
 from ....components.data.monitor_data import FieldData, PermittivityData
+from ....components.structure import Structure
 from ....components.types import Ax, annotate_type
 from ....constants import HERTZ
 from ....exceptions import AdjointError
@@ -24,12 +24,40 @@ from .structure import JaxStructure
 from .geometry import JaxBox
 
 
-# used to store information when converting between jax and tidy3d
-JaxInfo = namedtuple(
-    "JaxInfo",
-    "num_input_structures num_output_monitors num_grad_monitors num_grad_eps_monitors "
-    "fwidth_adjoint",
-)
+class JaxInfo(Tidy3dBaseModel):
+    """Class to store information when converting between jax and tidy3d."""
+
+    num_input_structures: pd.NonNegativeInt = pd.Field(
+        ...,
+        title="Number of Input Structures",
+        description="Number of input structures in the original JaxSimulation.",
+    )
+
+    num_output_monitors: pd.NonNegativeInt = pd.Field(
+        ...,
+        title="Number of Output Monitors",
+        description="Number of output monitors in the original JaxSimulation.",
+    )
+
+    num_grad_monitors: pd.NonNegativeInt = pd.Field(
+        ...,
+        title="Number of Gradient Monitors",
+        description="Number of gradient monitors in the original JaxSimulation.",
+    )
+
+    num_grad_eps_monitors: pd.NonNegativeInt = pd.Field(
+        ...,
+        title="Number of Permittivity Monitors",
+        description="Number of permittivity monitors in the original JaxSimulation.",
+    )
+
+    fwidth_adjoint: float = pd.Field(
+        None,
+        title="Adjoint Frequency Width",
+        description="Custom frequency width of the original JaxSimulation.",
+        units=HERTZ,
+    )
+
 
 # bandwidth of adjoint source in units of freq0 if no sources and no `fwidth_adjoint` specified
 FWIDTH_FACTOR = 1.0 / 10
@@ -140,14 +168,19 @@ class JaxSimulation(Simulation, JaxObject):
 
         return val
 
+    @staticmethod
+    def get_freq_adjoint(output_monitors: List[Monitor]) -> float:
+        """Return the single adjoint frequency stripped from the output monitors."""
+
+        if len(output_monitors) == 0:
+            raise AdjointError("Can't get adjoint frequency as no output monitors present.")
+
+        return output_monitors[0].freqs[0]
+
     @cached_property
     def freq_adjoint(self) -> float:
         """Return the single adjoint frequency stripped from the output monitors."""
-
-        if len(self.output_monitors) == 0:
-            raise AdjointError("Can't get adjoint frequency as no output monitors present.")
-
-        return self.output_monitors[0].freqs[0]
+        return self.get_freq_adjoint(output_monitors=self.output_monitors)
 
     @cached_property
     def _fwidth_adjoint(self) -> float:
@@ -260,31 +293,22 @@ class JaxSimulation(Simulation, JaxObject):
         """Are two JaxSimulation objects equal?"""
         return self.to_simulation()[0] == other.to_simulation()[0]
 
-    # pylint:disable=too-many-locals
     @classmethod
-    def from_simulation(cls, simulation: Simulation, jax_info: JaxInfo) -> JaxSimulation:
-        """Convert :class:`.Simulation` to :class:`.JaxSimulation` with extra info."""
+    def split_monitors(cls, monitors: List[Monitor], jax_info: JaxInfo) -> Dict[str, Monitor]:
+        """Split monitors into user and adjoint required based on jax info."""
 
-        sim_dict = simulation.dict(exclude={"type", "structures", "monitors"})  # .copy()
+        all_monitors = list(monitors)
 
-        all_monitors = list(simulation.monitors)
-        all_structures = list(simulation.structures)
-
+        # grab or compute the number of type of monitor
         num_grad_monitors = jax_info.num_grad_monitors
         num_grad_eps_monitors = jax_info.num_grad_eps_monitors
         num_output_monitors = jax_info.num_output_monitors
-        num_input_structures = jax_info.num_input_structures
-
-        num_structs = len(simulation.structures) - num_input_structures
-        structures = all_structures[:num_structs]
-        input_structures = [JaxStructure.from_structure(s) for s in all_structures[num_structs:]]
-
+        num_total_monitors = len(all_monitors)
         num_mnts = (
-            len(simulation.monitors)
-            - num_grad_monitors
-            - num_output_monitors
-            - num_grad_eps_monitors
+            num_total_monitors - num_grad_monitors - num_output_monitors - num_grad_eps_monitors
         )
+
+        # split the monitor list based on these numbers
         monitors = all_monitors[:num_mnts]
         output_monitors = all_monitors[num_mnts : num_mnts + num_output_monitors]
         grad_monitors = all_monitors[
@@ -292,27 +316,100 @@ class JaxSimulation(Simulation, JaxObject):
         ]
         grad_eps_monitors = all_monitors[num_mnts + num_output_monitors + num_grad_monitors :]
 
-        sim_dict.update(
-            dict(
-                monitors=monitors,
-                output_monitors=output_monitors,
-                grad_monitors=grad_monitors,
-                grad_eps_monitors=grad_eps_monitors,
-                structures=structures,
-                input_structures=input_structures,
-                fwidth_adjoint=jax_info.fwidth_adjoint,
-            )
+        # load into a dictionary
+        return dict(
+            monitors=monitors,
+            output_monitors=output_monitors,
+            grad_monitors=grad_monitors,
+            grad_eps_monitors=grad_eps_monitors,
         )
 
+    @classmethod
+    def split_structures(
+        cls, structures: List[Structure], jax_info: JaxInfo
+    ) -> Dict[str, Structure]:
+        """Split structures into regular and input based on jax info."""
+
+        all_structures = list(structures)
+
+        # get numbers of regular and input structures
+        num_input_structures = jax_info.num_input_structures
+        num_structs = len(structures) - num_input_structures
+
+        # split the list based on these numbers
+        structures = all_structures[:num_structs]
+        input_structures = [JaxStructure.from_structure(s) for s in all_structures[num_structs:]]
+
+        # return a dictionary containing these split structures
+        return dict(structures=structures, input_structures=input_structures)
+
+    # pylint:disable=too-many-locals
+    @classmethod
+    def from_simulation(cls, simulation: Simulation, jax_info: JaxInfo) -> JaxSimulation:
+        """Convert :class:`.Simulation` to :class:`.JaxSimulation` with extra info."""
+
+        sim_dict = simulation.dict(exclude={"type", "structures", "monitors"})
+
+        # split structures and monitors into their respective fields for JaxSimulation
+        structures = cls.split_structures(structures=simulation.structures, jax_info=jax_info)
+        monitors = cls.split_monitors(monitors=simulation.monitors, jax_info=jax_info)
+
+        # update the dictionary with these and the adjoint fwidth
+        sim_dict.update(**structures)
+        sim_dict.update(**monitors)
+        sim_dict.update(dict(fwidth_adjoint=jax_info.fwidth_adjoint))
+
+        # load JaxSimulation from the dictionary
         return cls.parse_obj(sim_dict)
 
-    def get_grad_monitors(self) -> dict:
+    @classmethod
+    def make_sim_fwd(cls, simulation: Simulation, jax_info: JaxInfo) -> Tuple[Simulation, JaxInfo]:
+        """Make the forward :class:`.JaxSimulation` from the supplied :class:`.Simulation`."""
+
+        mnt_dict = JaxSimulation.split_monitors(monitors=simulation.monitors, jax_info=jax_info)
+        structure_dict = JaxSimulation.split_structures(
+            structures=simulation.structures, jax_info=jax_info
+        )
+        output_monitors = mnt_dict["output_monitors"]
+        input_structures = structure_dict["input_structures"]
+        grad_mnt_dict = cls.get_grad_monitors(
+            input_structures=input_structures,
+            freq_adjoint=cls.get_freq_adjoint(output_monitors=output_monitors),
+        )
+
+        grad_mnts = grad_mnt_dict["grad_monitors"]
+        grad_eps_mnts = grad_mnt_dict["grad_eps_monitors"]
+
+        full_monitors = list(simulation.monitors) + grad_mnts + grad_eps_mnts
+
+        # jax_sim_fwd = jax_sim.updated_copy(**grad_mnts)
+        # sim_fwd, jax_info = jax_sim_fwd.to_simulation()
+
+        sim_fwd = simulation.updated_copy(monitors=full_monitors)
+        jax_info = jax_info.updated_copy(
+            num_grad_monitors=len(grad_mnts),
+            num_grad_eps_monitors=len(grad_eps_mnts),
+        )
+
+        # cls.split_monitors(monitors=simulation.monitors, jax_info=jax_info)
+        # sim_fwd = simulation.updated_copy()
+
+        return sim_fwd, jax_info
+
+    def to_simulation_fwd(self) -> Tuple[Simulation, JaxInfo, JaxInfo]:
+        """Like ``to_simulation()`` but the gradient monitors are included."""
+        simulation, jax_info = self.to_simulation()
+        sim_fwd, jax_info_fwd = self.make_sim_fwd(simulation=simulation, jax_info=jax_info)
+        return sim_fwd, jax_info_fwd, jax_info
+
+    @staticmethod
+    def get_grad_monitors(input_structures: List[Structure], freq_adjoint: float) -> dict:
         """Return dictionary of gradient monitors for simulation."""
         grad_mnts = []
         grad_eps_mnts = []
-        for index, structure in enumerate(self.input_structures):
+        for index, structure in enumerate(input_structures):
             grad_mnt, grad_eps_mnt = structure.make_grad_monitors(
-                freq=self.freq_adjoint, name=f"grad_mnt_{index}"
+                freq=freq_adjoint, name=f"grad_mnt_{index}"
             )
             grad_mnts.append(grad_mnt)
             grad_eps_mnts.append(grad_eps_mnt)

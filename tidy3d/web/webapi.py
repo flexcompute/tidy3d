@@ -102,6 +102,8 @@ def upload(  # pylint:disable=too-many-locals,too-many-arguments
     callback_url: str = None,
     verbose: bool = True,
     progress_callback: Callable[[float], None] = None,
+    simulation_type: str = "tidy3d",
+    parent_tasks: List[str] = None,
 ) -> TaskId:
     """Upload simulation to server, but do not start running :class:`.Simulation`.
 
@@ -120,6 +122,10 @@ def upload(  # pylint:disable=too-many-locals,too-many-arguments
         If `True`, will print progressbars and status, otherwise, will run silently.
     progress_callback : Callable[[float], None] = None
         Optional callback function called when uploading file with ``bytes_in_chunk`` as argument.
+    simulation_type : str
+        Type of simulation being uploaded.
+    parent_tasks : List[str]
+        List of related task ids.
 
     Returns
     -------
@@ -134,7 +140,9 @@ def upload(  # pylint:disable=too-many-locals,too-many-arguments
     simulation.validate_pre_upload()
     log.debug("Creating task.")
 
-    task = SimulationTask.create(simulation, task_name, folder_name, callback_url)
+    task = SimulationTask.create(
+        simulation, task_name, folder_name, callback_url, simulation_type, parent_tasks
+    )
     if verbose:
         console = Console()
         console.log(f"Created task '{task_name}' with task_id '{task.task_id}'.")
