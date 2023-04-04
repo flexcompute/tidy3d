@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - `web.test()` to simply test if the authentication is configured correctly and raise exception otherwise.
 - Add `SimulationTask.get_running_tasks()` to get a list of running tasks from the server.
+- `JaxPolySlab` in `adjoint` plugin, which can track derivatives through its `.vertices`.
 
 ### Changed
 - Perfect electric conductors (PECs) are now modeled as high-conductivity media in both the frontend and backend mode solvers, and their presence triggers the use of a preconditioner to improve numerical stability and robustness. Consequently, the mode solver provides more accurate eigenvectors and field distributions when PEC structures are present.

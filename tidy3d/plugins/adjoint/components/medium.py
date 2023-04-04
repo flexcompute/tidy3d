@@ -1,7 +1,7 @@
 """Defines jax-compatible mediums."""
 from __future__ import annotations
 
-from typing import Dict, Tuple, Union
+from typing import Dict, Tuple, Union, Callable
 
 import pydantic as pd
 import numpy as np
@@ -62,6 +62,7 @@ class JaxMedium(Medium, JaxObject):
 
             # ignore this dimension if there is no thickness along it
             if size == 0:
+                vol_coords[coord_name] = max_edge
                 continue
 
             # update the volume element value
@@ -75,6 +76,15 @@ class JaxMedium(Medium, JaxObject):
 
         return vol_coords, d_vol
 
+    @staticmethod
+    def make_inside_mask(vol_coords: Dict[str, np.ndarray], inside_fn: Callable) -> np.ndarray:
+        """Make a 3D mask of where the volume coordinates are inside a supplied function."""
+
+        meshgrid_args = [vol_coords[dim] for dim in "xyz" if dim in vol_coords]
+        vol_coords_meshgrid = np.meshgrid(*meshgrid_args, indexing="ij")
+        inside_kwargs = dict(zip("xyz", vol_coords_meshgrid))
+        return inside_fn(**inside_kwargs)
+
     # pylint:disable=too-many-arguments
     def field_contribution(
         self,
@@ -83,6 +93,7 @@ class JaxMedium(Medium, JaxObject):
         grad_data_adj: FieldData,
         sim_bounds: Bound,
         wvl_mat: float,
+        inside_fn: Callable,
     ) -> float:
         """Compute the contribution to the VJP from a given field component."""
 
@@ -92,8 +103,20 @@ class JaxMedium(Medium, JaxObject):
         e_fwd = grad_data_fwd.field_components[field]
         e_adj = grad_data_adj.field_components[field]
         e_dotted = (e_fwd * e_adj).real
-        integrand = e_dotted.isel(f=0).interp(**vol_coords)
-        return d_vol * jnp.sum(integrand.values)
+
+        isel_kwargs = {
+            key: 0
+            for key, value in vol_coords.items()
+            if isinstance(value, float) or len(value) <= 1
+        }
+        interp_kwargs = {key: value for key, value in vol_coords.items() if key not in isel_kwargs}
+        integrand = e_dotted.isel(f=0, **isel_kwargs).interp(**interp_kwargs)
+
+        # mask out any contributions not inside the structure volume
+        inside_mask = self.make_inside_mask(vol_coords=vol_coords, inside_fn=inside_fn)
+        integrand_inside = inside_mask.reshape(integrand.shape) * integrand.values
+
+        return d_vol * jnp.sum(integrand_inside)
 
     # pylint:disable=too-many-locals
     def store_vjp(
@@ -102,6 +125,7 @@ class JaxMedium(Medium, JaxObject):
         grad_data_adj: FieldData,
         sim_bounds: Bound,
         wvl_mat: float,
+        inside_fn: Callable[[np.ndarray, np.ndarray, np.ndarray], np.ndarray],
     ) -> JaxMedium:
         """Returns the gradient of the medium parameters given forward and adjoint field data."""
 
@@ -114,6 +138,7 @@ class JaxMedium(Medium, JaxObject):
                 grad_data_adj=grad_data_adj,
                 sim_bounds=sim_bounds,
                 wvl_mat=wvl_mat,
+                inside_fn=inside_fn,
             )
 
         return self.copy(update=dict(permittivity=vjp_permittivty))
@@ -161,13 +186,14 @@ class JaxAnisotropicMedium(AnisotropicMedium, JaxObject):
             obj_dict[component] = JaxMedium.from_tidy3d(tidy3d_medium)
         return cls.parse_obj(obj_dict)
 
-    # pylint:disable=too-many-locals
+    # pylint:disable=too-many-locals, too-many-arguments
     def store_vjp(
         self,
         grad_data_fwd: FieldData,
         grad_data_adj: FieldData,
         sim_bounds: Bound,
         wvl_mat: float,
+        inside_fn: Callable,
     ) -> JaxMedium:
         """Returns the gradient of the medium parameters given forward and adjoint field data."""
 
@@ -183,6 +209,7 @@ class JaxAnisotropicMedium(AnisotropicMedium, JaxObject):
                 grad_data_adj=grad_data_adj,
                 sim_bounds=sim_bounds,
                 wvl_mat=wvl_mat,
+                inside_fn=inside_fn,
             )
             vjp_fields[component_name] = JaxMedium(permittivity=vjp_ii)
 
@@ -252,13 +279,14 @@ class JaxCustomMedium(CustomMedium, JaxObject):
         obj_dict["eps_dataset"] = eps_dataset
         return cls.parse_obj(obj_dict)
 
-    # pylint:disable=too-many-locals, unused-argument
+    # pylint:disable=too-many-locals, unused-argument, too-many-arguments
     def store_vjp(
         self,
         grad_data_fwd: FieldData,
         grad_data_adj: FieldData,
         sim_bounds: Bound,
         wvl_mat: float,
+        inside_fn: Callable[[np.ndarray, np.ndarray, np.ndarray], np.ndarray],
     ) -> JaxMedium:
         """Returns the gradient of the medium parameters given forward and adjoint field data."""
 

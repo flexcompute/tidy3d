@@ -188,7 +188,7 @@ def make_sim(
 ) -> JaxSimulation:
     """Construt a simulation out of some input parameters."""
 
-    box = td.Box(size=(1, 1, 1), center=(1, 2, 2))
+    box = td.Box(size=(0.2, 0.2, 0.2), center=(1, -2, 2))
     med = td.Medium(permittivity=2.0)
     extraneous_structure = td.Structure(geometry=box, medium=med)
 
@@ -208,7 +208,7 @@ def make_sim(
     jax_struct2 = JaxStructure(geometry=jax_box2, medium=jax_med2)
 
     jax_polyslab1 = JaxPolySlab(axis=POLYSLAB_AXIS, vertices=vertices, slab_bounds=(-1, 1))
-    # jax_struct3 = JaxStructure(geometry=jax_polyslab1, medium=jax_med1)
+    jax_struct3 = JaxStructure(geometry=jax_polyslab1, medium=jax_med1)
 
     # custom medium
     Nx, Ny, Nz = 10, 10, 1
@@ -220,12 +220,13 @@ def make_sim(
         f=[FREQ0],
     )
 
+    jax_box_custom = JaxBox(size=size, center=(1, 0, 2))
     values = base_eps_val + np.random.random((Nx, Ny, Nz, 1))
     eps_ii = JaxDataArray(values=values, coords=coords)
     field_components = {f"eps_{dim}{dim}": eps_ii for dim in "xyz"}
     jax_eps_dataset = JaxPermittivityDataset(**field_components)
     jax_med_custom = JaxCustomMedium(eps_dataset=jax_eps_dataset)
-    jax_struct_custom = JaxStructure(geometry=jax_box1, medium=jax_med_custom)
+    jax_struct_custom = JaxStructure(geometry=jax_box_custom, medium=jax_med_custom)
 
     # TODO: Add new geometries as they are created.
 
@@ -267,7 +268,7 @@ def make_sim(
         monitors=(extraneous_field_monitor,),
         structures=(extraneous_structure,),
         output_monitors=(output_mnt1, output_mnt2),  # , output_mnt3),
-        input_structures=(jax_struct1, jax_struct2, jax_struct_custom),
+        input_structures=(jax_struct1, jax_struct2, jax_struct_custom, jax_struct3),
         boundary_spec=td.BoundarySpec.pml(x=False, y=False, z=False),
     )
 
@@ -721,7 +722,7 @@ def test_strict_types():
         b = JaxBox(size=(1, 1, [1, 2]), center=(0, 0, 0))
 
 
-def _test_polyslab_box(use_emulated_run):
+def test_polyslab_box(use_emulated_run):
     """Make sure box made with polyslab gives equivalent gradients (note, doesn't pass now)."""
 
     np.random.seed(0)
@@ -747,8 +748,8 @@ def _test_polyslab_box(use_emulated_run):
             size_axis, (size_1, size_2) = JaxPolySlab.pop_axis(size, axis=POLYSLAB_AXIS)
             cent_axis, (cent_1, cent_2) = JaxPolySlab.pop_axis(center, axis=POLYSLAB_AXIS)
 
-            pos_x1 = cent_1 - size_1 / 2.0
             pos_x2 = cent_1 + size_1 / 2.0
+            pos_x1 = cent_1 - size_1 / 2.0
             pos_y1 = cent_2 - size_2 / 2.0
             pos_y2 = cent_2 + size_2 / 2.0
 
@@ -762,7 +763,7 @@ def _test_polyslab_box(use_emulated_run):
 
         # ModeMonitors
         output_mnt1 = td.ModeMonitor(
-            size=(10, 10, 0),
+            size=(td.inf, td.inf, 0),
             mode_spec=td.ModeSpec(num_modes=3),
             freqs=[2e14],
             name=MNT_NAME + "1",
@@ -775,12 +776,6 @@ def _test_polyslab_box(use_emulated_run):
             normal_dir="+",
             freqs=[2e14],
             name=MNT_NAME + "2",
-        )
-
-        extraneous_field_monitor = td.FieldMonitor(
-            size=(10, 10, 0),
-            freqs=[1e14, 2e14],
-            name="field",
         )
 
         sim = JaxSimulation(
@@ -818,6 +813,9 @@ def _test_polyslab_box(use_emulated_run):
     print("grad_size_poly = ", gs_p)
     print("grad_cent_box  = ", gc_b)
     print("grad_cent_poly = ", gc_p)
+
+    print(gs_b / (gs_p + 1e-12))
+    print(gc_b / (gc_p + 1e-12))
 
     assert np.allclose(gs_b, gs_p), f"size gradients dont match, got {gs_b} and {gs_p}"
     assert np.allclose(gc_b, gc_p), f"center gradients dont match, got {gc_b} and {gc_p}"

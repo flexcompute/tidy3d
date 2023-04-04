@@ -21,7 +21,7 @@ from ....exceptions import AdjointError
 
 from .base import JaxObject
 from .structure import JaxStructure
-from .geometry import JaxBox
+from .geometry import JaxPolySlab
 
 
 class JaxInfo(Tidy3dBaseModel):
@@ -134,37 +134,51 @@ class JaxSimulation(Simulation, JaxObject):
         return val
 
     @pd.validator("input_structures", always=True)
-    def _no_overlap(cls, val):
-        """Assert no input structures overlap."""
+    def _warn_overlap(cls, val, values):
+        """Print appropriate warning if structures intersect in ways that cause gradient error."""
 
-        # only apply to boxes for now for simplicity..
-        structures = [struct for struct in val if isinstance(struct.geometry, JaxBox)]
+        input_structures = list(val)
+        structures = list(values.get("structures"))
 
         # if the center and size of all structure geometries do not contain all numbers, skip check
-        for struct in structures:
+        for struct in input_structures:
             geometry = struct.geometry
             size_all_floats = all(isinstance(s, (float, int)) for s in geometry.bound_size)
             cent_all_floats = all(isinstance(c, (float, int)) for c in geometry.bound_center)
             if not (size_all_floats and cent_all_floats):
                 return val
 
-        # flag to ensure that we only warn once for touching structures (otherwise, too many logs)
-        in_structs_background = []
-        for i, in_struct in enumerate(structures):
-            in_geometry = in_struct.geometry
-
-            # for all structures in the background
-            for j, in_struct_bck in enumerate(in_structs_background):
-
-                # if the contracted geometry intersects with a background structure, raise (overlap)
-                if in_geometry.intersects(in_struct_bck.geometry):
+        # check intersections with other input_structures
+        for i, in_struct_i in enumerate(input_structures):
+            geometry_i = in_struct_i.geometry
+            for j in range(i + 1, len(input_structures)):
+                geometry_j = input_structures[j].geometry
+                if geometry_i.intersects(geometry_j):
                     log.warning(
-                        f"'JaxSimulation.input_structures' elements {j} and {i} "
-                        "are overlapping or touching. "
-                        "Geometric gradients for overlapping structures may contain errors. "
+                        f"'JaxSimulation.input_structures[{i}]' overlaps or touches "
+                        f"'JaxSimulation.input_structures[{j}]'. "
+                        "Geometric gradients for overlapping input structures may contain errors. "
+                        "Skipping the rest of the structures."
                     )
+                    return val
 
-            in_structs_background.append(in_struct)
+        # check JaxPolySlab intersections with background structures
+        for i, in_struct_i in enumerate(input_structures):
+            geometry_i = in_struct_i.geometry
+            if not isinstance(geometry_i, JaxPolySlab):
+                continue
+            for j, struct_j in enumerate(structures):
+                geometry_j = struct_j.geometry
+                if geometry_i.intersects(geometry_j):
+                    log.warning(
+                        f"'JaxPolySlab'-containing 'JaxSimulation.input_structures[{i}]' "
+                        f"intersects with 'JaxSimulation.structures[{j}]'. "
+                        "Note that in this version of the adjoint plugin, there may be errors "
+                        "in the the gradient when "
+                        "'JaxPolySlab' intersects with background structures. "
+                        "Skipping the rest of the structures."
+                    )
+                    return val
 
         return val
 
@@ -423,13 +437,25 @@ class JaxSimulation(Simulation, JaxObject):
     ) -> JaxSimulation:
         """Store the vjp w.r.t. each input_structure as a sim using fwd and adj grad_data."""
 
+        freq = self.freq_adjoint
+        eps_out = self.medium.eps_model(frequency=freq)
+
         input_structures_vjp = []
-        for in_struct, fld_fwd, fld_adj, eps_data in zip(
-            self.input_structures, grad_data_fwd, grad_data_adj, grad_eps_data
-        ):
+        adjoint_info = zip(self.input_structures, grad_data_fwd, grad_data_adj, grad_eps_data)
+
+        for in_struct, fld_fwd, fld_adj, eps_data in adjoint_info:
+
+            eps_in = in_struct.medium.eps_model(frequency=freq)
+
             input_structure_vjp = in_struct.store_vjp(
-                fld_fwd, fld_adj, eps_data, sim_bounds=self.bounds
+                grad_data_fwd=fld_fwd,
+                grad_data_adj=fld_adj,
+                grad_data_eps=eps_data,
+                sim_bounds=self.bounds,
+                eps_out=eps_out,
+                eps_in=eps_in,
             )
+
             input_structures_vjp.append(input_structure_vjp)
 
         return self.copy(
