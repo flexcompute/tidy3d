@@ -55,7 +55,16 @@ def mock_upload(monkeypatch, set_api_key):
     responses.add(
         responses.POST,
         f"{Env.current.web_api_endpoint}/tidy3d/projects/{TASK_ID}/tasks",
-        match=[matchers.json_params_matcher({"taskName": TASK_NAME, "callbackUrl": None})],
+        match=[
+            matchers.json_params_matcher(
+                {
+                    "taskName": TASK_NAME,
+                    "call_back_url": None,
+                    "simulationType": "tidy3d",
+                    "parentTasks": None,
+                }
+            )
+        ],
         json={
             "data": {
                 "taskId": TASK_ID,

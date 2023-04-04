@@ -1,6 +1,6 @@
 """Tests adjoint plugin."""
 
-from typing import Callable, Tuple
+from typing import Callable, Tuple, Dict
 
 import pytest
 import pydantic
@@ -11,7 +11,7 @@ import jax
 from numpy.random import random
 
 import tidy3d as td
-from typing import Tuple, Any
+from typing import Tuple, Any, List
 
 from tidy3d.exceptions import DataError, Tidy3dKeyError, AdjointError
 from tidy3d.plugins.adjoint.components.base import JaxObject
@@ -19,16 +19,28 @@ from tidy3d.plugins.adjoint.components.geometry import JaxBox, JaxPolySlab
 from tidy3d.plugins.adjoint.components.medium import JaxMedium, JaxAnisotropicMedium
 from tidy3d.plugins.adjoint.components.medium import JaxCustomMedium
 from tidy3d.plugins.adjoint.components.structure import JaxStructure
-from tidy3d.plugins.adjoint.components.simulation import JaxSimulation
+from tidy3d.plugins.adjoint.components.simulation import JaxSimulation, JaxInfo
 from tidy3d.plugins.adjoint.components.data.sim_data import JaxSimulationData
 from tidy3d.plugins.adjoint.components.data.monitor_data import JaxModeData, JaxDiffractionData
 from tidy3d.plugins.adjoint.components.data.data_array import JaxDataArray
 from tidy3d.plugins.adjoint.components.data.dataset import JaxPermittivityDataset
 from tidy3d.plugins.adjoint.web import run, run_async
 from tidy3d.plugins.adjoint.components.data.data_array import VALUE_FILTER_THRESHOLD
+from tidy3d.web.container import BatchData
 
-from ..utils import run_emulated, assert_log_level, log_capture, run_async_emulated
+from ..utils import (
+    run_emulated,
+    assert_log_level,
+    log_capture,
+    run_async_emulated,
+    SIM_DATA_PATH,
+    SIM_FULL,
+    TMP_DIR,
+)
 
+FWD_SIM_DATA_FILE = TMP_DIR + "adjoint_grad_data_fwd.hdf5"
+SIM_VJP_FILE = TMP_DIR + "adjoint_sim_vjp_file.hdf5"
+RUN_PATH = TMP_DIR + "simulation.hdf5"
 
 EPS = 2.0
 SIZE = (1.0, 2.0, 3.0)
@@ -40,6 +52,135 @@ BASE_EPS_VAL = 2.0
 
 # name of the output monitor used in tests
 MNT_NAME = "mode"
+
+# Emulated forward and backward run functions
+def run_emulated_fwd(
+    simulation: td.Simulation,
+    jax_info: JaxInfo,
+    task_name: str,
+    folder_name: str,
+    path: str,
+    callback_url: str,
+    verbose: bool,
+):
+    """Runs the forward simulation on our servers, stores the gradient data for later."""
+
+    # Simulation data with both original and gradient data
+    sim_data = run_emulated(
+        simulation=simulation,
+        task_name=str(task_name),
+        path=path,
+    )
+
+    # simulation data (without gradient data), written to the path file
+    sim_data_orig, sim_data_store = JaxSimulationData.split_fwd_sim_data(
+        sim_data=sim_data, jax_info=jax_info
+    )
+
+    # Test file IO
+    sim_data_orig.to_file(path)
+    sim_data_orig = td.SimulationData.from_file(path)
+
+    # gradient data stored for later use
+    jax_sim_data_store = JaxSimulationData.from_sim_data(sim_data_store, jax_info)
+    jax_sim_data_store.to_file(FWD_SIM_DATA_FILE)
+
+    task_id = "test"
+    return sim_data_orig, task_id
+
+
+def run_emulated_bwd(
+    sim_adj: td.Simulation,
+    jax_info_adj: JaxInfo,
+    fwd_task_id: str,
+    task_name: str,
+    folder_name: str,
+    callback_url: str,
+    verbose: bool,
+) -> JaxSimulation:
+    """Runs adjoint simulation on our servers, grabs the gradient data from fwd for processing."""
+
+    # Forward data
+    sim_data_fwd = JaxSimulationData.from_file(FWD_SIM_DATA_FILE)
+    grad_data_fwd = sim_data_fwd.grad_data
+    grad_eps_data_fwd = sim_data_fwd.grad_eps_data
+
+    # Adjoint data
+    sim_data_adj = run_emulated(
+        simulation=sim_adj,
+        task_name=str(task_name),
+        path=RUN_PATH,
+    )
+
+    jax_sim_data_adj = JaxSimulationData.from_sim_data(sim_data_adj, jax_info_adj)
+    grad_data_adj = jax_sim_data_adj.grad_data
+
+    # get gradient and insert into the resulting simulation structure medium
+    sim_vjp = jax_sim_data_adj.simulation.store_vjp(grad_data_fwd, grad_data_adj, grad_eps_data_fwd)
+
+    # write VJP sim to and from file to emulate webapi download and loading
+    sim_vjp.to_file(SIM_VJP_FILE)
+    sim_vjp = JaxSimulation.from_file(SIM_VJP_FILE)
+
+    return sim_vjp
+
+
+# Emulated forward and backward run functions
+def run_async_emulated_fwd(
+    simulations: Tuple[td.Simulation, ...],
+    jax_infos: Tuple[JaxInfo, ...],
+    folder_name: str,
+    path_dir: str,
+    callback_url: str,
+    verbose: bool,
+) -> Tuple[BatchData, Dict[str, str]]:
+    """Runs the forward simulation on our servers, stores the gradient data for later."""
+
+    sim_datas_orig = {}
+    task_ids = []
+
+    for i, (sim, jax_info) in enumerate(zip(simulations, jax_infos)):
+        sim_data_orig, task_id = run_emulated_fwd(
+            simulation=sim,
+            jax_info=jax_info,
+            task_name=str(i),
+            folder_name=folder_name,
+            path=path_dir + str(i) + ".hdf5",
+            callback_url=callback_url,
+            verbose=verbose,
+        )
+        task_ids.append(task_id)
+        sim_datas_orig[str(i)] = sim_data_orig
+
+    return sim_datas_orig, task_ids
+
+
+def run_async_emulated_bwd(
+    simulations: Tuple[td.Simulation, ...],
+    jax_infos: Tuple[JaxInfo, ...],
+    folder_name: str,
+    path_dir: str,
+    callback_url: str,
+    verbose: bool,
+    parent_tasks: List[List[str]],
+) -> List[JaxSimulation]:
+    """Runs adjoint simulation on our servers, grabs the gradient data from fwd for processing."""
+
+    sim_vjps_orig = []
+
+    for i, (sim, jax_info, parent_tasks_i) in enumerate(zip(simulations, jax_infos, parent_tasks)):
+        sim_vjp = run_emulated_bwd(
+            sim_adj=sim,
+            jax_info_adj=jax_info,
+            fwd_task_id="test",
+            task_name=str(i),
+            folder_name=folder_name,
+            callback_url=callback_url,
+            verbose=verbose,
+        )
+        sim_vjps_orig.append(sim_vjp)
+
+    return sim_vjps_orig
 
 
 def make_sim(
@@ -128,7 +269,6 @@ def make_sim(
         output_monitors=(output_mnt1, output_mnt2),  # , output_mnt3),
         input_structures=(jax_struct1, jax_struct2, jax_struct_custom),
         boundary_spec=td.BoundarySpec.pml(x=False, y=False, z=False),
-        # input_structures=(jax_struct_custom,),
     )
 
     return sim
@@ -172,6 +312,8 @@ def use_emulated_run(monkeypatch):
     import tidy3d.plugins.adjoint.web as adjoint_web
 
     monkeypatch.setattr(adjoint_web, "tidy3d_run_fn", run_emulated)
+    monkeypatch.setattr(adjoint_web, "webapi_run_adjoint_fwd", run_emulated_fwd)
+    monkeypatch.setattr(adjoint_web, "webapi_run_adjoint_bwd", run_emulated_bwd)
 
 
 @pytest.fixture
@@ -180,19 +322,21 @@ def use_emulated_run_async(monkeypatch):
     import tidy3d.plugins.adjoint.web as adjoint_web
 
     monkeypatch.setattr(adjoint_web, "tidy3d_run_async_fn", run_async_emulated)
+    monkeypatch.setattr(adjoint_web, "webapi_run_async_adjoint_fwd", run_async_emulated_fwd)
+    monkeypatch.setattr(adjoint_web, "webapi_run_async_adjoint_bwd", run_async_emulated_bwd)
 
 
 def test_adjoint_pipeline(use_emulated_run):
     """Test computing gradient using jax."""
 
     sim = make_sim(permittivity=EPS, size=SIZE, vertices=VERTICES, base_eps_val=BASE_EPS_VAL)
-    sim_data = run(sim, task_name="test")
+    sim_data = run(sim, task_name="test", path=RUN_PATH)
 
     def f(permittivity, size, vertices, base_eps_val):
         sim = make_sim(
             permittivity=permittivity, size=size, vertices=vertices, base_eps_val=base_eps_val
         )
-        sim_data = run(sim, task_name="test")
+        sim_data = run(sim, task_name="test", path=RUN_PATH)
         amp = extract_amp(sim_data)
         return objective(amp)
 
@@ -205,23 +349,14 @@ def test_adjoint_pipeline(use_emulated_run):
 def test_adjoint_setup_fwd(use_emulated_run):
     """Test that the forward pass works as expected."""
     sim = make_sim(permittivity=EPS, size=SIZE, vertices=VERTICES, base_eps_val=BASE_EPS_VAL)
-    sim_data_orig, (sim_data_fwd,) = run.fwd(
+    sim_data_orig, (task_id_fwd) = run.fwd(
         simulation=sim,
         task_name="test",
         folder_name="default",
-        path="simulation_data.hdf5",
+        path=RUN_PATH,
         callback_url=None,
         verbose=False,
     )
-    sim_orig = sim_data_orig.simulation
-    sim_fwd = sim_data_fwd.simulation
-
-    # check the cached objects are as expected
-    assert sim_orig == sim, "original simulation wasnt cached properly"
-    assert len(sim_orig.monitors) == len(sim_data_fwd.data) == len(sim_data_orig.data)
-    assert len(sim_orig.output_monitors) == len(sim_data_fwd.output_data)
-    assert len(sim_orig.input_structures) == len(sim_data_fwd.grad_data)
-    assert len(sim_data_fwd.grad_data) == len(sim_fwd.grad_monitors)
 
 
 def _test_adjoint_setup_adj(use_emulated_run):
@@ -233,7 +368,7 @@ def _test_adjoint_setup_adj(use_emulated_run):
         simulation=sim_orig,
         task_name="test",
         folder_name="default",
-        path="simulation_data.hdf5",
+        path=RUN_PATH,
         callback_url=None,
     )
 
@@ -250,7 +385,7 @@ def _test_adjoint_setup_adj(use_emulated_run):
     (sim_vjp,) = run.bwd(
         task_name="test",
         folder_name="default",
-        path="simulation_data.hdf5",
+        path=RUN_PATH,
         callback_url=None,
         res=(sim_data_fwd,),
         sim_data_vjp=sim_data_vjp,
@@ -471,7 +606,7 @@ def test_jax_sim_data(use_emulated_run):
     """Test mechanics of the JaxSimulationData."""
 
     sim = make_sim(permittivity=EPS, size=SIZE, vertices=VERTICES, base_eps_val=BASE_EPS_VAL)
-    sim_data = run(sim, task_name="test")
+    sim_data = run(sim, task_name="test", path=RUN_PATH)
 
     for i in range(len(sim.output_monitors)):
         mnt_name = MNT_NAME + str(i + 1)
@@ -688,7 +823,6 @@ def _test_polyslab_box(use_emulated_run):
     assert np.allclose(gc_b, gc_p), f"center gradients dont match, got {gc_b} and {gc_p}"
 
 
-# @pytest.mark.asyncio
 def test_adjoint_run_async(use_emulated_run_async):
     """Test differnetiating thorugh async adjoint runs"""
 
@@ -702,11 +836,11 @@ def test_adjoint_run_async(use_emulated_run_async):
         """Objective function to differentiate."""
 
         sims = []
-        for i in range(2):
-            permittivity = x + float(1.0 + i)
+        for i in range(1):
+            permittivity = x + 1.0
             sims.append(make_sim_simple(permittivity=permittivity))
 
-        sim_data_list = run_async(sims)
+        sim_data_list = run_async(sims, path_dir=TMP_DIR)
 
         result = 0.0
         for sim_data in sim_data_list:
@@ -788,3 +922,30 @@ def test_value_filter():
     # assert that the terms <= VALUE_FILTER_THRESHOLD should be removed
     values_expected = np.array([1, 2 * VALUE_FILTER_THRESHOLD])
     assert np.allclose(np.array(values_after), values_expected)
+
+
+def test_jax_info_to_file():
+    """Test writing jax info to file."""
+
+    sim = make_sim(permittivity=EPS, size=SIZE, vertices=VERTICES, base_eps_val=BASE_EPS_VAL)
+    _, jax_info = sim.to_simulation()
+    jax_info.to_file("tests/tmp/jax_info.json")
+
+
+def test_split_fwd_sim_data():
+    """Test splitting of regular simulation data into user and server data."""
+
+    jax_sim = make_sim(permittivity=EPS, size=SIZE, vertices=VERTICES, base_eps_val=BASE_EPS_VAL)
+    sim, jax_info = jax_sim.to_simulation()
+    sim_data = run_emulated(sim, task_name="test", path=SIM_DATA_PATH)
+    data_user, data_adj = JaxSimulationData.split_fwd_sim_data(sim_data=sim_data, jax_info=jax_info)
+
+
+def test_save_load_simdata(use_emulated_run):
+    """Make sure a simulation data can be saved and loaded from file and retain info."""
+
+    sim = make_sim(permittivity=EPS, size=SIZE, vertices=VERTICES, base_eps_val=BASE_EPS_VAL)
+    sim_data = run(sim, task_name="test", path=RUN_PATH)
+    sim_data.to_file("tests/tmp/adjoint_simdata.hdf5")
+    sim_data2 = JaxSimulationData.from_file("tests/tmp/adjoint_simdata.hdf5")
+    assert sim_data == sim_data2
