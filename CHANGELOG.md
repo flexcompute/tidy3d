@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - Port name duplication in smatrix plugin for multimode ports.
+- Web functions create the leading directories for the supplied filename if they don't exist.
 
 ## [2.0.2] - 2023-4-3
 

@@ -349,6 +349,11 @@ def download_file(
         os.makedirs(resource_id, exist_ok=True)
         to_file = os.path.join(resource_id, os.path.basename(remote_filename))
 
+    # make the leading directories in the 'to_file', if specified.
+    base_dir, _ = os.path.split(to_file)
+    if base_dir and not os.path.exists(base_dir):
+        os.makedirs(base_dir, exist_ok=True)
+
     def _download(_callback: Callable) -> None:
         """Perform the download with a callback function.
 
