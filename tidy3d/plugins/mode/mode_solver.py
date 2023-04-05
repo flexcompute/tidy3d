@@ -116,6 +116,58 @@ class ModeSolver(Tidy3dBaseModel):
         """
         return self.data
 
+    def solve_group_index(self, frac_step: pydantic.PositiveFloat = 0.005) -> ModeIndexDataArray:
+        r"""Calculate the group index.
+
+        The group index is numerically calculated as
+        $$ n_g = n_\text{eff} + f \frac{\mathrm d n_\text{eff}}{\mathrm df} $$
+        with a central difference algorithm used to approximate the differential.
+
+        Parameters
+        ----------
+        frac_step : float
+            Fractional frequency step used for numerical differentiation.
+
+        Returns
+        -------
+        :class:`ModeIndexDataArray`
+            Group indices for all waveguide wavelengths and modes indices.
+        """
+        if frac_step >= 1:
+            raise ValidationError("Argument `frac_step` must be less than 1.")
+
+        if self.mode_spec.track_freq is None:
+            log.warning(
+                "Group index calculation without mode tracking can lead to incorrect results "
+                "around mode crossings."
+            )
+
+        if self.mode_spec.precision != "double":
+            log.warning(
+                "Group index calculation should be performed with double precision for better "
+                "accuracy."
+            )
+
+        # We have to solve all frequencies in a single waveguide because we want to take advantage
+        # of mode tracking.
+        freqs = np.outer(self.freqs, (1 - frac_step, 1, 1 + frac_step)).flatten()
+        end = freqs.size
+
+        mode_solver = self.copy(update={"freqs": freqs})
+        n_backward = mode_solver.data.n_eff.isel(f=slice(0, end, 3)).values
+        n_center = mode_solver.data.n_eff.isel(f=slice(1, end, 3)).values
+        n_forward = mode_solver.data.n_eff.isel(f=slice(2, end, 3)).values
+
+        n_group = n_center + (n_forward - n_backward) / (2 * frac_step)
+        return ModeIndexDataArray(
+            n_group,
+            coords={
+                "f": list(self.freqs),
+                "mode_index": np.arange(self.mode_spec.num_modes),
+            },
+            attrs={"long name": "Group index"},
+        )
+
     @cached_property
     def data_raw(self) -> ModeSolverData:
         """:class:`.ModeSolverData` containing the field and effective index on unexpanded grid.
@@ -147,7 +199,6 @@ class ModeSolver(Tidy3dBaseModel):
 
         # Construct and add all the data for the fields
         for field_name in ("Ex", "Ey", "Ez", "Hx", "Hy", "Hz"):
-
             xyz_coords = self._solver_grid[field_name].to_list
             # Snap to plane center along normal direction
             xyz_coords[self.normal_axis] = [self.plane.center[self.normal_axis]]
