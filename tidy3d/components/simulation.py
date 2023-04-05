@@ -994,12 +994,13 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
                 # side wall - the profiles must be the same along the injection axis, so we take
                 # a single "stripe" of epsilon as the reference and subtract it from all other
                 # stripes, which should result in zero if all the epsilon profiles are the same
+                freq0 = source.source_time.freq0
                 _, plane_axs = source.pop_axis("xyz", axis=source.injection_axis)
-                ref_eps = self.epsilon(box=sidewall_surfaces[0], coord_key="centers", freq=None)
+                ref_eps = self.epsilon(box=sidewall_surfaces[0], coord_key="centers", freq=freq0)
                 kwargs = {plane_axs[0]: 0, plane_axs[1]: 0}
                 ref_eps = ref_eps.isel(**kwargs)
                 for surface in sidewall_surfaces:
-                    test_eps = self.epsilon(box=surface, coord_key="centers", freq=None) - ref_eps
+                    test_eps = self.epsilon(box=surface, coord_key="centers", freq=freq0) - ref_eps
                     if not np.allclose(test_eps.to_numpy(), 0):
                         raise SetupError(
                             f"All sidewalls of the TFSF source '{source.name}' must intersect "
