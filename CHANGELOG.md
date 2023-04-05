@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 ### Fixed
+- Port name duplication in smatrix plugin for multimode ports.
 
 ## [2.0.2] - 2023-4-3
 

@@ -388,7 +388,11 @@ class ComponentModeler(Tidy3dBaseModel):
 
         def get_port_names(matrix_elements: Tuple[str, int]) -> List[str]:
             """Get the port names from a list of (port name, mode index)."""
-            return [port_name for port_name, _ in matrix_elements]
+            port_names = []
+            for port_name, _ in matrix_elements:
+                if port_name not in port_names:
+                    port_names.append(port_name)
+            return port_names
 
         matrix_elements_in = self.matrix_indices_source(ports=self.ports, run_only=self.run_only)
         matrix_elements_out = self.matrix_indices_monitor(ports=self.ports)
