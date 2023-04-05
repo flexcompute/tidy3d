@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - Group index calculation added to ModeSpec.
+- Group index calculation added to ModeSolver.
+- Waveguide plugin for quickly calculating modes in dielectric waveguides.
+- `ElectromagneticFieldData.dot_intep` to calculate mode overlap integrals between modes with different discretizations.
+- `ElectromagneticFieldData.mode_area` to calculate the effective mode area.
 
 ### Changed
 - `adjoint` plugin now filters out adjoint sources that are below a threshold in amplitude relative to the maximum amplitude of the monitor data, reducing unnecessary processing by eliminating sources that won't contribute to the gradient.
