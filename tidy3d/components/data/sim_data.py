@@ -25,7 +25,7 @@ class SimulationData(Tidy3dBaseModel):
 
     Example
     -------
-    >>> from tidy3d import ModeSpec, GridSpec, ScalarFieldDataArray, FieldMonitor, FieldData
+    >>> import tidy3d as td
     >>> num_modes = 5
     >>> x = [-1,1]
     >>> y = [-2,0,2]
@@ -35,16 +35,32 @@ class SimulationData(Tidy3dBaseModel):
     >>> mode_index = np.arange(num_modes)
     >>> direction = ["+", "-"]
     >>> coords = dict(x=x, y=y, z=z, f=f)
-    >>> scalar_field = ScalarFieldDataArray((1+1j) * np.random.random((2,3,4,2)), coords=coords)
-    >>> field_monitor = FieldMonitor(size=(2,4,6), freqs=[2e14, 3e14], name='field', fields=['Ex'])
+    >>> scalar_field = td.ScalarFieldDataArray((1+1j) * np.random.random((2,3,4,2)), coords=coords)
+    >>> field_monitor = td.FieldMonitor(
+    ...     size=(2,4,6),
+    ...     freqs=[2e14, 3e14],
+    ...     name='field',
+    ...     fields=['Ex'],
+    ... )
     >>> sim = Simulation(
     ...     size=(2, 4, 6),
-    ...     grid_spec=GridSpec(wavelength=1.0),
+    ...     grid_spec=td.GridSpec(wavelength=1.0),
     ...     monitors=[field_monitor],
     ...     run_time=2e-12,
+    ...     sources=[
+    ...         td.UniformCurrentSource(
+    ...             size=(0, 0, 0),
+    ...             center=(0, 0.5, 0),
+    ...             polarization="Hx",
+    ...             source_time=td.GaussianPulse(
+    ...                 freq0=2e14,
+    ...                 fwidth=4e13,
+    ...             ),
+    ...         )
+    ...     ],
     ... )
-    >>> field_data = FieldData(monitor=field_monitor, Ex=scalar_field)
-    >>> sim_data = SimulationData(simulation=sim, data=(field_data,))
+    >>> field_data = td.FieldData(monitor=field_monitor, Ex=scalar_field)
+    >>> sim_data = td.SimulationData(simulation=sim, data=(field_data,))
     """
 
     simulation: Simulation = pd.Field(
