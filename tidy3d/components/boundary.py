@@ -97,7 +97,7 @@ class BlochBoundary(BoundaryEdge):
         >>> from tidy3d import GaussianPulse, PlaneWave, inf
         >>> pulse = GaussianPulse(freq0=200e12, fwidth=20e12)
         >>> pw_source = PlaneWave(
-        ...     size=(inf,inf,0), source_time=pulse, direction='+', angle_theta=1.5, angle_phi=0.3)
+        ...     size=(inf,inf,0), source_time=pulse, direction='+', angle_theta=0.2, angle_phi=0.3)
         >>> bloch = BlochBoundary.from_source(source=pw_source, domain_size=5, axis=0)
         """
 
@@ -457,7 +457,7 @@ class Boundary(Tidy3dBaseModel):
         >>> from tidy3d import GaussianPulse, PlaneWave, inf
         >>> pulse = GaussianPulse(freq0=200e12, fwidth=20e12)
         >>> pw_source = PlaneWave(
-        ...     size=(inf,inf,0), source_time=pulse, direction='+', angle_theta=1.5, angle_phi=0.3)
+        ...     size=(inf,inf,0), source_time=pulse, direction='+', angle_theta=0.2, angle_phi=0.3)
         >>> bloch = Boundary.bloch_from_source(source=pw_source, domain_size=5, axis=0)
         """
         plus = BlochBoundary.from_source(
