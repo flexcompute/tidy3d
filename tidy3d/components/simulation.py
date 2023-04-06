@@ -61,6 +61,9 @@ NUM_STRUCTURES_WARN_EPSILON = 10_000
 # equal to this times the grid size
 DIST_NEIGHBOR_REL_2D_MED = 1e-5
 
+# height of the PML plotting boxes along any dimensions where sim.size[dim] == 0
+PML_HEIGHT_FOR_0_DIMS = 0.02
+
 
 class Simulation(Box):  # pylint:disable=too-many-public-methods
     """Contains all information about Tidy3d simulation.
@@ -1772,7 +1775,16 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
             rmax[pml_axis] = rmin[pml_axis] + pml_height
         else:
             rmin[pml_axis] = rmax[pml_axis] - pml_height
-        return Box.from_bounds(rmin=rmin, rmax=rmax)
+        pml_box = Box.from_bounds(rmin=rmin, rmax=rmax)
+
+        # if any dimension of the sim has size 0, set the PML to a very small size along that dim
+        new_size = list(pml_box.size)
+        for dim_index, sim_size in enumerate(self.size):
+            if sim_size == 0.0:
+                new_size[dim_index] = PML_HEIGHT_FOR_0_DIMS
+        pml_box = pml_box.updated_copy(size=new_size)
+
+        return pml_box
 
     @equal_aspect
     @add_ax_if_none

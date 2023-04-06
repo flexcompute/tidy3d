@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Web functions create the leading directories for the supplied filename if they don't exist.
 - Some docstring examples that were giving warnings.
 - `web.monitor()` only prints message when condition met.
+- PML boxes have non-zero extent along any dimensions where the simulation has 0 size, to fix plotting issues for 2D simulations.
 
 ## [2.0.2] - 2023-4-3
 
