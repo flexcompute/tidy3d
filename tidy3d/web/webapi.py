@@ -309,7 +309,8 @@ def monitor(task_id: TaskId, verbose: bool = True) -> None:
                 progress.update(pbar_pd, completed=perc_done, description=new_description)
                 time.sleep(RUN_REFRESH_TIME)
 
-            if perc_done is not None and perc_done < 100:
+            perc_done, field_decay = get_run_info(task_id)
+            if perc_done is not None and perc_done < 100 and field_decay > 0:
                 console.log("early shutoff detected, exiting.")
 
             progress.update(pbar_pd, completed=100, refresh=True)
