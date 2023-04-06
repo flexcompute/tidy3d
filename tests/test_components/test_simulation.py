@@ -1500,3 +1500,34 @@ def test_sim_volumetric_structures():
         )
     with pytest.raises(Exception):
         _ = td.Structure(geometry=td.Sphere(radius=1), medium=box.medium)
+
+
+@pytest.mark.parametrize("normal_axis", (0, 1, 2))
+def test_pml_boxes_2D(normal_axis):
+    """Ensure pml boxes have non-zero dimension for 2D sim."""
+
+    sim_size = [1, 1, 1]
+    sim_size[normal_axis] = 0
+    pml_on_kwargs = {dim: axis != normal_axis for axis, dim in enumerate("xyz")}
+
+    sim2d = td.Simulation(
+        size=sim_size,
+        run_time=1e-12,
+        grid_spec=td.GridSpec(wavelength=1.0),
+        sources=[
+            td.PointDipole(
+                center=(0, 0, 0),
+                polarization="Ex",
+                source_time=td.GaussianPulse(
+                    freq0=1e14,
+                    fwidth=1e12,
+                ),
+            )
+        ],
+        boundary_spec=td.BoundarySpec.pml(**pml_on_kwargs),
+    )
+
+    pml_boxes = sim2d._make_pml_boxes(normal_axis=normal_axis)
+
+    for pml_box in pml_boxes:
+        assert pml_box.size[normal_axis] > 0, "PML box has size of 0 in normal direction of 2D sim."
