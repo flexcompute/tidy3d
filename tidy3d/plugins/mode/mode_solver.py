@@ -134,7 +134,7 @@ class ModeSolver(Tidy3dBaseModel):
             Group indices for all waveguide wavelengths and modes indices.
         """
         if frac_step >= 1:
-            raise ValidationError("Argument `frac_step` must be less than 1.")
+            raise ValidationError("Argument 'frac_step' must be less than 1.")
 
         if self.mode_spec.track_freq is None:
             log.warning(

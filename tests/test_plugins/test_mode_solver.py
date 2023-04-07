@@ -44,7 +44,7 @@ def test_mode_solver_simple():
         simulation=simulation,
         plane=PLANE,
         mode_spec=mode_spec,
-        freqs=[td.constants.C_0 / 0.9, td.constants.C_0 / 1.0, td.constants.C_0 / 1.1],
+        freqs=[td.C_0 / 0.9, td.C_0 / 1.0, td.C_0 / 1.1],
     )
     modes = ms.solve()
 
@@ -59,7 +59,7 @@ def test_mode_solver_custom_medium():
     x_custom = np.linspace(-0.6, 0.6, 2)
     y_custom = [0]
     z_custom = [0]
-    freq0 = td.constants.C_0 / 1.0
+    freq0 = td.C_0 / 1.0
     n = np.array([1.5, 5])
     n = n[:, None, None, None]
     n_data = ScalarFieldDataArray(n, coords=dict(x=x_custom, y=y_custom, z=z_custom, f=[freq0]))
@@ -118,9 +118,7 @@ def test_mode_solver_angle_bend():
     )
     # put plane entirely in the symmetry quadrant rather than sitting on its center
     plane = td.Box(center=(0, 0.5, 0), size=(1, 0, 1))
-    ms = ModeSolver(
-        simulation=simulation, plane=plane, mode_spec=mode_spec, freqs=[td.constants.C_0 / 1.0]
-    )
+    ms = ModeSolver(simulation=simulation, plane=plane, mode_spec=mode_spec, freqs=[td.C_0 / 1.0])
     modes = ms.solve()
     # Plot field
     _, ax = plt.subplots(1)
@@ -149,9 +147,7 @@ def test_mode_solver_2D():
         boundary_spec=td.BoundarySpec.all_sides(boundary=td.Periodic()),
         sources=[SRC],
     )
-    ms = ModeSolver(
-        simulation=simulation, plane=PLANE, mode_spec=mode_spec, freqs=[td.constants.C_0 / 1.0]
-    )
+    ms = ModeSolver(simulation=simulation, plane=PLANE, mode_spec=mode_spec, freqs=[td.C_0 / 1.0])
     modes = ms.solve()
 
     mode_spec = td.ModeSpec(num_modes=3, filter_pol="te", precision="double", num_pml=(10, 0))
@@ -162,9 +158,7 @@ def test_mode_solver_2D():
         run_time=1e-12,
         sources=[SRC],
     )
-    ms = ModeSolver(
-        simulation=simulation, plane=PLANE, mode_spec=mode_spec, freqs=[td.constants.C_0 / 1.0]
-    )
+    ms = ModeSolver(simulation=simulation, plane=PLANE, mode_spec=mode_spec, freqs=[td.C_0 / 1.0])
     modes = ms.solve()
 
     # The simulation and the mode plane are both 0D along the same dimension
@@ -175,9 +169,7 @@ def test_mode_solver_2D():
         boundary_spec=td.BoundarySpec.all_sides(boundary=td.Periodic()),
         sources=[SRC],
     )
-    ms = ModeSolver(
-        simulation=simulation, plane=PLANE, mode_spec=mode_spec, freqs=[td.constants.C_0 / 1.0]
-    )
+    ms = ModeSolver(simulation=simulation, plane=PLANE, mode_spec=mode_spec, freqs=[td.C_0 / 1.0])
     modes = ms.solve()
 
 
@@ -189,6 +181,41 @@ def test_compute_modes():
     modes = compute_modes(
         eps_cross=[eps_cross] * 3,
         coords=[coords, coords],
-        freq=td.constants.C_0 / 1.0,
+        freq=td.C_0 / 1.0,
         mode_spec=mode_spec,
     )
+
+
+def test_group_index():
+    """Test group index calculation"""
+
+    simulation = td.Simulation(
+        size=(5, 5, 1),
+        grid_spec=td.GridSpec(wavelength=1.55),
+        structures=[
+            td.Structure(
+                geometry=td.Box(size=(0.5, 0.22, td.inf)), medium=td.Medium(permittivity=3.48**2)
+            )
+        ],
+        medium=td.Medium(permittivity=1.44**2),
+        run_time=1e-12,
+        boundary_spec=td.BoundarySpec.all_sides(boundary=td.Periodic()),
+        sources=[SRC],
+    )
+    mode_spec = td.ModeSpec(
+        num_modes=2,
+        target_neff=3.0,
+        precision="double",
+        track_freq="central",
+    )
+    ms = ModeSolver(
+        simulation=simulation,
+        plane=td.Box(size=(td.inf, td.inf, 0)),
+        mode_spec=mode_spec,
+        freqs=[td.C_0 / 1.54, td.C_0 / 1.55, td.C_0 / 1.56],
+    )
+    n_group = ms.solve_group_index()
+    assert (n_group.sel(mode_index=0).values > 3.9).all()
+    assert (n_group.sel(mode_index=0).values < 4.2).all()
+    assert (n_group.sel(mode_index=1).values > 3.7).all()
+    assert (n_group.sel(mode_index=1).values < 4.0).all()
