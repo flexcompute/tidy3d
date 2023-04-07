@@ -208,14 +208,26 @@ def test_group_index():
         precision="double",
         track_freq="central",
     )
+
+    # No group index calculation by default
     ms = ModeSolver(
         simulation=simulation,
         plane=td.Box(size=(td.inf, td.inf, 0)),
         mode_spec=mode_spec,
         freqs=[td.C_0 / 1.54, td.C_0 / 1.55, td.C_0 / 1.56],
     )
-    n_group = ms.solve_group_index()
-    assert (n_group.sel(mode_index=0).values > 3.9).all()
-    assert (n_group.sel(mode_index=0).values < 4.2).all()
-    assert (n_group.sel(mode_index=1).values > 3.7).all()
-    assert (n_group.sel(mode_index=1).values < 4.0).all()
+    assert ms.data.n_group is None
+
+    # Group index calculated
+    ms = ModeSolver(
+        simulation=simulation,
+        plane=td.Box(size=(td.inf, td.inf, 0)),
+        mode_spec=mode_spec,
+        freqs=[td.C_0 / 1.54, td.C_0 / 1.55, td.C_0 / 1.56],
+        compute_group_index=True,
+    )
+    modes = ms.solve()
+    assert (modes.n_group.sel(mode_index=0).values > 3.9).all()
+    assert (modes.n_group.sel(mode_index=0).values < 4.2).all()
+    assert (modes.n_group.sel(mode_index=1).values > 3.7).all()
+    assert (modes.n_group.sel(mode_index=1).values < 4.0).all()

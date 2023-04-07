@@ -2,7 +2,7 @@
 invariance along a given propagation axis.
 """
 
-from typing import List, Tuple, Dict
+from typing import List, Tuple, Dict, Union
 
 import numpy as np
 import pydantic
@@ -33,6 +33,8 @@ MODE_MONITOR_NAME = "<<<MODE_SOLVER_MONITOR>>>"
 # Warning for field intensity at edges over total field intensity larger than this value
 FIELD_DECAY_CUTOFF = 1e-2
 
+GROUP_INDEX_STEP = 0.005
+
 
 class ModeSolver(Tidy3dBaseModel):
     """Interface for solving electromagnetic eigenmodes in a 2D plane with translational
@@ -57,6 +59,15 @@ class ModeSolver(Tidy3dBaseModel):
         ..., title="Frequencies", description="A list of frequencies at which to solve."
     )
 
+    compute_group_index: Union[bool, pydantic.PositiveFloat] = pydantic.Field(
+        False,
+        title="Compute group index",
+        description="Control the computation of the group index alongside the effective index. If "
+        "set to a positive value, it sets the fractional frequency step used in the numerical "
+        "differentiation of the effective index to compute the group index. If set to `True`, the "
+        f"default of {GROUP_INDEX_STEP} is used.",
+    )
+
     @pydantic.validator("plane", always=True)
     def is_plane(cls, val):
         """Raise validation error if not planar."""
@@ -70,6 +81,30 @@ class ModeSolver(Tidy3dBaseModel):
         if len(val) == 0:
             raise ValidationError("ModeSolver 'freqs' must be a non-empty tuple.")
         return val
+
+    @pydantic.validator("compute_group_index")
+    def assign_default_on_true(cls, val):
+        """Assing the default fractional frequency step value if not provided."""
+        if val is True:
+            return GROUP_INDEX_STEP
+        return val
+
+    def _post_init_validators(self):
+        if self.compute_group_index >= 1:
+            raise ValidationError("Argument 'compute_group_index' must be less than 1.")
+
+        if self.compute_group_index > 0:
+            if self.mode_spec.track_freq is None:
+                log.warning(
+                    "Group index calculation without mode tracking can lead to incorrect results "
+                    "around mode crossings."
+                )
+
+            if self.mode_spec.precision != "double":
+                log.warning(
+                    "Group index calculation should be performed with double precision for better "
+                    "accuracy."
+                )
 
     @cached_property
     def normal_axis(self) -> Axis:
@@ -116,58 +151,7 @@ class ModeSolver(Tidy3dBaseModel):
         """
         return self.data
 
-    def solve_group_index(self, frac_step: pydantic.PositiveFloat = 0.005) -> ModeIndexDataArray:
-        r"""Calculate the group index.
-
-        The group index is numerically calculated as
-        $$ n_g = n_\text{eff} + f \frac{\mathrm d n_\text{eff}}{\mathrm df} $$
-        with a central difference algorithm used to approximate the differential.
-
-        Parameters
-        ----------
-        frac_step : float
-            Fractional frequency step used for numerical differentiation.
-
-        Returns
-        -------
-        :class:`ModeIndexDataArray`
-            Group indices for all waveguide wavelengths and modes indices.
-        """
-        if frac_step >= 1:
-            raise ValidationError("Argument 'frac_step' must be less than 1.")
-
-        if self.mode_spec.track_freq is None:
-            log.warning(
-                "Group index calculation without mode tracking can lead to incorrect results "
-                "around mode crossings."
-            )
-
-        if self.mode_spec.precision != "double":
-            log.warning(
-                "Group index calculation should be performed with double precision for better "
-                "accuracy."
-            )
-
-        # We have to solve all frequencies in a single waveguide because we want to take advantage
-        # of mode tracking.
-        freqs = np.outer(self.freqs, (1 - frac_step, 1, 1 + frac_step)).flatten()
-        end = freqs.size
-
-        mode_solver = self.copy(update={"freqs": freqs})
-        n_backward = mode_solver.data.n_eff.isel(f=slice(0, end, 3)).values
-        n_center = mode_solver.data.n_eff.isel(f=slice(1, end, 3)).values
-        n_forward = mode_solver.data.n_eff.isel(f=slice(2, end, 3)).values
-
-        n_group = n_center + (n_forward - n_backward) / (2 * frac_step)
-        return ModeIndexDataArray(
-            n_group,
-            coords={
-                "f": list(self.freqs),
-                "mode_index": np.arange(self.mode_spec.num_modes),
-            },
-            attrs={"long name": "Group index"},
-        )
-
+    # pylint: disable=too-many-locals
     @cached_property
     def data_raw(self) -> ModeSolverData:
         """:class:`.ModeSolverData` containing the field and effective index on unexpanded grid.
@@ -177,6 +161,46 @@ class ModeSolver(Tidy3dBaseModel):
         ModeSolverData
             :class:`.ModeSolverData` object containing the effective index and mode fields.
         """
+
+        if self.compute_group_index > 0:
+            # insert extra frequency steps into original array
+            fractional_steps = (1 - self.compute_group_index, 1, 1 + self.compute_group_index)
+            freqs = np.outer(self.freqs, fractional_steps).flatten()
+            num_freqs = freqs.size
+
+            # create a copy with the required frequencies for numerical differentiation
+            mode_solver = self.copy(update={"freqs": freqs, "compute_group_index": False})
+            mode_solver_data = mode_solver.data_raw
+
+            # calculate group index
+            original_slice = slice(1, num_freqs, 3)
+            n_center = mode_solver_data.n_eff.isel(f=original_slice).values
+            n_backward = mode_solver_data.n_eff.isel(f=slice(0, num_freqs, 3)).values
+            n_forward = mode_solver_data.n_eff.isel(f=slice(2, num_freqs, 3)).values
+            n_group_data = n_center + (n_forward - n_backward) / (2 * self.compute_group_index)
+            n_group = ModeIndexDataArray(
+                n_group_data,
+                coords={
+                    "f": list(self.freqs),
+                    "mode_index": np.arange(self.mode_spec.num_modes),
+                },
+                attrs={"long name": "Group index"},
+            )
+
+            # remove data corresponding to frequencies used only for group index calculation
+            update_dict = {
+                "n_complex": mode_solver_data.n_complex.isel(f=original_slice),
+                "n_group": n_group,
+            }
+
+            for field_name, field in mode_solver_data.field_components.items():
+                update_dict[field_name] = field.isel(f=original_slice)
+
+            # pylint: disable=protected-access
+            for key, data in mode_solver_data._grid_correction_dict.items():
+                update_dict[key] = data.isel(f=original_slice)
+
+            return mode_solver_data.copy(update=update_dict)
 
         _, _solver_coords = self.plane.pop_axis(
             self._solver_grid.boundaries.to_list, axis=self.normal_axis
