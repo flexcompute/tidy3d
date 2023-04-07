@@ -223,6 +223,7 @@ class ModeSolver(Tidy3dBaseModel):
 
         # Construct and add all the data for the fields
         for field_name in ("Ex", "Ey", "Ez", "Hx", "Hy", "Hz"):
+
             xyz_coords = self._solver_grid[field_name].to_list
             # Snap to plane center along normal direction
             xyz_coords[self.normal_axis] = [self.plane.center[self.normal_axis]]
