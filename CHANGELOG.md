@@ -8,6 +8,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 ### Changed
+- Times logged in `tidy3d.log` during solver run now split into `Solver time` (time-stepping only),
+`Field projection time`, after the time stepping if any field projection monitors present, and `Data write time`,
+when the raw data is packaged to disk. Previously, `Solver time` used to include the `Field projection time` and
+not include the `Data write time`.
+
 
 ### Fixed
 - Port name duplication in smatrix plugin for multimode ports.
@@ -15,6 +20,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Some docstring examples that were giving warnings.
 - `web.monitor()` only prints message when condition met.
 - PML boxes have non-zero extent along any dimensions where the simulation has 0 size, to fix plotting issues for 2D simulations.
+- Improved PEC handling around curved interfaces and structure intersections. Old handling accessible with `subpixel=False`
+(previously, it was independent of the subpixel setting).
+- Fix to field projections sometimes containing `NaN` values.
 
 ## [2.0.2] - 2023-4-3
 

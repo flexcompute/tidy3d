@@ -59,6 +59,7 @@ class EigSolver(Tidy3dBaseModel):
             effective index.
         """
 
+        # freq += 0.0001j
         num_modes = mode_spec.num_modes
         bend_radius = mode_spec.bend_radius
         bend_axis = mode_spec.bend_axis
