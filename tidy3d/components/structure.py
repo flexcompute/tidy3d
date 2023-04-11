@@ -10,6 +10,7 @@ from .types import Ax, TYPE_TAG_STR
 from .viz import add_ax_if_none, equal_aspect
 from .grid.grid import Coords
 from ..constants import MICROMETER
+from ..exceptions import SetupError
 
 
 class AbstractStructure(Tidy3dBaseModel):
@@ -98,9 +99,13 @@ class Structure(AbstractStructure):
     @pydantic.validator("medium", always=True)
     def _check_2d_geometry(cls, val, values):
         """Medium2D is only consistent with certain geometry types"""
-        geom = values["geometry"]
         if isinstance(val, Medium2D):
             # validate that the geometry is actually 2d
+            geom = values.get("geometry")
+            if not geom:
+                raise SetupError(
+                    "Can't validate 2D structure because its geometry did not pass validation."
+                )
             _ = geom._normal_2dmaterial  # pylint: disable=protected-access
         return val
 
