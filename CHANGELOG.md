@@ -8,11 +8,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 ### Changed
-- Times logged in `tidy3d.log` during solver run now split into `Solver time` (time-stepping only),
-`Field projection time`, after the time stepping if any field projection monitors present, and `Data write time`,
-when the raw data is packaged to disk. Previously, `Solver time` used to include the `Field projection time` and
-not include the `Data write time`.
 
+### Fixed
+
+## [2.0.3] - 2023-4-11
+
+### Added
+
+### Changed
+- Times logged in `tidy3d.log` during solver run now split into `Solver time` (time-stepping only), `Field projection time` (after the time stepping if any field projection monitors present) and `Data write time` (when the raw data is packaged to disk). Previously, `Solver time` used to include the `Field projection time` and not `Data write time`.
 
 ### Fixed
 - Port name duplication in smatrix plugin for multimode ports.
@@ -20,8 +24,7 @@ not include the `Data write time`.
 - Some docstring examples that were giving warnings.
 - `web.monitor()` only prints message when condition met.
 - PML boxes have non-zero extent along any dimensions where the simulation has 0 size, to fix plotting issues for 2D simulations.
-- Improved PEC handling around curved interfaces and structure intersections. Old handling accessible with `subpixel=False`
-(previously, it was independent of the subpixel setting).
+- Improved PEC handling around curved interfaces and structure intersections. Old handling accessible with `subpixel=False` (previously, it was independent of the subpixel setting).
 - Fix to field projections sometimes containing `NaN` values.
 
 ## [2.0.2] - 2023-4-3
@@ -675,8 +678,9 @@ which fields are to be projected is now determined automatically based on the me
 - Job and Batch classes for better simulation handling (eventually to fully replace webapi functions).
 - A large number of small improvements and bug fixes.
 
-[Unreleased]: https://github.com/flexcompute/tidy3d/compare/v2.0.2...develop
-[2.0.2]: https://github.com/flexcompute/tidy3d/compare/v1.0.1...v2.0.2
+[Unreleased]: https://github.com/flexcompute/tidy3d/compare/v2.0.3...develop
+[2.0.3]: https://github.com/flexcompute/tidy3d/compare/v2.0.2...v2.0.3
+[2.0.2]: https://github.com/flexcompute/tidy3d/compare/v2.0.1...v2.0.2
 [2.0.1]: https://github.com/flexcompute/tidy3d/compare/v1.10.0...v2.0.1
 [1.10.0]: https://github.com/flexcompute/tidy3d/compare/v1.9.3...v1.10.0
 [1.9.3]: https://github.com/flexcompute/tidy3d/compare/v1.9.2...v1.9.3
