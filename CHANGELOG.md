@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `adjoint` plugin now filters out adjoint sources that are below a threshold in amplitude relative to the maximum amplitude of the monitor data, reducing unnecessary processing by eliminating sources that won't contribute to the gradient.
 
 ### Fixed
+- More robust handling for 2D structure validator.
 
 ## [2.0.0] - 2023-3-31
 
