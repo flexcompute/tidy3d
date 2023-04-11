@@ -116,7 +116,7 @@ Photonic Integrated Circuit Components
     notebooks/EdgeCoupler
     notebooks/90OpticalHybrid
 
-Metamaterials, Grattings, and Other Periodic Structures
+Metamaterials, Gratings, and Other Periodic Structures
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 .. toctree::
     :maxdepth: 1
