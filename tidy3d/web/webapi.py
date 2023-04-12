@@ -137,6 +137,8 @@ def upload(  # pylint:disable=too-many-locals,too-many-arguments
     if verbose:
         console = Console()
         console.log(f"Created task '{task_name}' with task_id '{task.task_id}'.")
+        url = f"https://tidy3d.simulation.cloud/workbench?taskId={task.task_id}"
+        console.log(f"View task using web UI at [link={url}]'{url}'[/link].")
     task.upload_simulation(verbose=verbose, progress_callback=progress_callback)
 
     # log the url for the task in the web UI
