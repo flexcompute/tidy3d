@@ -1,4 +1,6 @@
-"""Rectangular dielectric waveguide utilities"""
+"""Rectangular dielectric waveguide utilities."""
+
+from typing import List, Any
 
 import numpy
 import pydantic
@@ -201,6 +203,7 @@ class RectangularDielectric(Tidy3dBaseModel):
 
     @pydantic.validator("wavelength", "core_width", "gap", always=True)
     def _set_array(cls, val):
+        """Ensure values are not negative and convert to numpy arrays."""
         result = numpy.array(val, ndmin=1)
         if any(result < 0):
             raise ValidationError("Values may not be negative.")
@@ -208,10 +211,12 @@ class RectangularDielectric(Tidy3dBaseModel):
 
     @pydantic.validator("box_medium", always=True)
     def _set_box_medium(cls, val, values):
+        """Set BOX medium same as cladding as default value."""
         return values["clad_medium"] if val is None else val
 
     @pydantic.validator("clad_thickness", always=True)
     def _set_clad_thickness(cls, val, values):
+        """Set default cladding thickness based on the max wavelength in the cladding medium."""
         if val is None:
             wavelength = values["wavelength"]
             medium = values["clad_medium"]
@@ -222,6 +227,7 @@ class RectangularDielectric(Tidy3dBaseModel):
 
     @pydantic.validator("box_thickness", always=True)
     def _set_box_thickness(cls, val, values):
+        """Set default BOX thickness based on the max wavelength in the BOX medium."""
         if val is None:
             wavelength = values["wavelength"]
             medium = values["box_medium"]
@@ -231,12 +237,15 @@ class RectangularDielectric(Tidy3dBaseModel):
         return val
 
     @pydantic.validator("side_margin", always=True)
-    def _set_side_thickness(cls, val, values):
+    def _set_side_margin(cls, val, values):
+        """Set default side margin based on BOX and cladding thicknesses."""
         return max(values["clad_thickness"], values["box_thickness"]) if val is None else val
 
     @pydantic.validator("gap", always=True)
     def _validate_gaps(cls, val, values):
+        """Ensure the number of gaps is compatible with the number of cores supplied."""
         if val.size == 1 and values["core_width"].size != 2:
+            # If a single value is defined, use it for all gaps
             return numpy.array([val[0]] * (values["core_width"].size - 1))
         if val.size != values["core_width"].size - 1:
             raise ValidationError("Number of gaps must be 1 less than number of core widths.")
@@ -244,74 +253,92 @@ class RectangularDielectric(Tidy3dBaseModel):
 
     @pydantic.root_validator
     def _ensure_consistency(cls, values):
-        if values["sidewall_thickness"] > 0 and values["sidewall_medium"] is None:
+        """Ensure consistency in setting surface/sidewall models and propagation/normal axes."""
+        sidewall_thickness = values["sidewall_thickness"]
+        sidewall_medium = values["sidewall_medium"]
+        surface_thickness = values["surface_thickness"]
+        surface_medium = values["surface_medium"]
+        propagation_axis = values["propagation_axis"]
+        normal_axis = values["normal_axis"]
+
+        if sidewall_thickness > 0 and sidewall_medium is None:
             raise ValidationError(
                 "Sidewall medium must be provided when sidewall thickness is greater than 0."
             )
 
-        if values["sidewall_thickness"] == 0 and values["sidewall_medium"] is not None:
+        if sidewall_thickness == 0 and sidewall_medium is not None:
             log.warning("Sidewall medium not used because sidewall thickness is zero.")
 
-        if values["surface_thickness"] > 0 and values["surface_medium"] is None:
+        if surface_thickness > 0 and surface_medium is None:
             raise ValidationError(
                 "Surface medium must be provided when surface thickness is greater than 0."
             )
 
-        if values["surface_thickness"] == 0 and values["surface_medium"] is not None:
+        if surface_thickness == 0 and surface_medium is not None:
             log.warning("Surface medium not used because surface thickness is zero.")
 
-        if values["propagation_axis"] == values["normal_axis"]:
+        if propagation_axis == normal_axis:
             raise ValidationError("Propagation and normal axes must be different.")
 
         return values
 
     @cached_property
-    def lateral_axis(self):
-        """Lateral direction axis"""
+    def lateral_axis(self) -> Axis:
+        """Lateral direction axis."""
         return 3 - self.propagation_axis - self.normal_axis
 
-    def _swizzle(self, lateral_coord, normal_coord, propagation_coord):
-        """Swap the model coordinates to desired axes"""
+    def _swap_axis(
+        self, lateral_coord: Any, normal_coord: Any, propagation_coord: Any
+    ) -> List[Any]:
+        """Swap the model coordinates to desired axes."""
         result = [None, None, None]
         result[self.lateral_axis] = lateral_coord
         result[self.propagation_axis] = propagation_coord
         result[self.normal_axis] = normal_coord
         return result
 
-    def _translate(self, lateral_coord, normal_coord, propagation_coord):
-        """Swap the model coordinates to desired axes and translate to origin"""
-        result = [
-            a + b
-            for a, b in zip(
-                self.origin,
-                self._swizzle(lateral_coord, normal_coord, propagation_coord),
-            )
-        ]
+    def _translate(
+        self, lateral_coord: float, normal_coord: float, propagation_coord: float
+    ) -> List[float]:
+        """Swap the model coordinates to desired axes and translate to origin."""
+        coordinates = self._swap_axis(lateral_coord, normal_coord, propagation_coord)
+        result = [a + b for a, b in zip(self.origin, coordinates)]
         return result
 
-    def _transform_in_plane(self, lateral_coord, propagation_coord):
-        """Swap the model coordinates to desired axes in the substrate plane"""
+    def _transform_in_plane(self, lateral_coord: float, propagation_coord: float) -> List[float]:
+        """Swap the model coordinates to desired axes in the substrate plane."""
         result = self._translate(lateral_coord, 0, propagation_coord)
-        result.pop(self.normal_axis)
+        _, result = Box.pop_axis(result, self.normal_axis)
         return result
 
     @cached_property
-    def height(self):
-        """Domain height (size in the normal direction)"""
+    def height(self) -> Size1D:
+        """Domain height (size in the normal direction)."""
         return self.box_thickness + self.core_thickness + self.clad_thickness
 
     @cached_property
-    def width(self):
-        """Domain width (size in the lateral direction)"""
+    def width(self) -> Size1D:
+        """Domain width (size in the lateral direction)."""
         w = self.core_width.sum() + self.gap.sum() + 2 * self.side_margin
         if self.sidewall_angle > 0:
             w += 2 * self.core_thickness * numpy.tan(self.sidewall_angle)
         return w
 
-    # pylint:disable=too-many-locals,too-many-statements,too-many-branches
-    @cached_property
-    def _structures_and_gridspec(self):
-        """Build waveguide structure and custom grid_spec for mode solving"""
+    @property
+    def _core_starts(self) -> List[float]:
+        """Starting positions of each waveguide (x is the position in the lateral direction)."""
+        core_x = [-0.5 * (self.core_width.sum() + self.gap.sum())]
+        core_x.extend(core_x[0] + numpy.cumsum(self.core_width[:-1]) + numpy.cumsum(self.gap))
+        return core_x
+
+    # pylint:disable=too-many-locals
+    @property
+    def _override_structures(self) -> List[Structure]:
+        """Build override structures to define the simulation grid."""
+
+        # Grid resolution factor applied to the materials (increase for waveguide corners
+        # and decrase for evanescent tail regions).
+        scale_factor = 1.5
 
         freqs = C_0 / self.wavelength
         nk_core = numpy.array([self.core_medium.nk_model(f) for f in freqs])
@@ -321,21 +348,7 @@ class RectangularDielectric(Tidy3dBaseModel):
         lda_clad = self.wavelength / nk_clad[:, 0]
         lda_box = self.wavelength / nk_box[:, 0]
 
-        # Create a local copy of these values, as they will be modified
-        # according to the desired geometry
-        core_w = numpy.array(self.core_width, copy=True)
-        core_t = self.core_thickness
-        slab_t = self.slab_thickness
-
-        normal_origin = self.origin[self.normal_axis]
-
-        # Starting positions of each waveguide (x is the position in the lateral direction)
-        core_x = [-0.5 * (self.core_width.sum() + self.gap.sum())]
-        core_x.extend(core_x[0] + numpy.cumsum(self.core_width[:-1]) + numpy.cumsum(self.gap))
-
-        # Grid resolution factor applied to the materials (increase for waveguide corners
-        # and decrase for evanescent tail regions).
-        scale_factor = 1.5
+        core_x = self._core_starts
 
         i = numpy.argmin(lda_core)
         hi_index = Medium.from_nk(n=nk_core[i, 0] * scale_factor, k=0, freq=freqs[i])
@@ -349,20 +362,20 @@ class RectangularDielectric(Tidy3dBaseModel):
         # Gather all waveguide edge intervals into `hi_res` list
         corner_margin = max(lda_box.max(), lda_clad.max()) / self.grid_resolution
         if self.sidewall_angle > 0:
-            dx = (core_t - slab_t) * numpy.tan(self.sidewall_angle)
+            dx = (self.core_thickness - self.slab_thickness) * numpy.tan(self.sidewall_angle)
             hi_res = [
                 pair
-                for x, w in zip(core_x, core_w)
+                for x, w in zip(core_x, self.core_width)
                 for pair in [
                     [x - dx - corner_margin, x + corner_margin],
                     [x + w - corner_margin, x + w + dx + corner_margin],
                 ]
             ]
         elif self.sidewall_angle < 0:
-            dx = (core_t - slab_t) * numpy.tan(self.sidewall_angle)
+            dx = (self.core_thickness - self.slab_thickness) * numpy.tan(self.sidewall_angle)
             hi_res = [
                 pair
-                for x, w in zip(core_x, core_w)
+                for x, w in zip(core_x, self.core_width)
                 for pair in [
                     [x - corner_margin, x - dx + corner_margin],
                     [x + w + dx - corner_margin, x + w + corner_margin],
@@ -371,7 +384,7 @@ class RectangularDielectric(Tidy3dBaseModel):
         else:
             hi_res = [
                 pair
-                for x, w in zip(core_x, core_w)
+                for x, w in zip(core_x, self.core_width)
                 for pair in [
                     [x - corner_margin, x + corner_margin],
                     [x + w - corner_margin, x + w + corner_margin],
@@ -395,19 +408,19 @@ class RectangularDielectric(Tidy3dBaseModel):
             Structure(
                 geometry=Box(
                     center=self._translate(0.5 * (a + b), y, 0),
-                    size=self._swizzle(b - a, 2 * corner_margin, inf),
+                    size=self._swap_axis(b - a, 2 * corner_margin, inf),
                 ),
                 medium=hi_index,
             )
             for (a, b) in hi_res
-            for y in (slab_t, core_t)
+            for y in (self.slab_thickness, self.core_thickness)
         ]
         # Low resolution on the sides:
         override_structures.extend(
             Structure(
                 geometry=Box(
                     center=self._translate(0.5 * (a + b), 0, 0),
-                    size=self._swizzle(b - a, inf, inf),
+                    size=self._swap_axis(b - a, inf, inf),
                 ),
                 medium=lo_index_clad,
             )
@@ -418,23 +431,46 @@ class RectangularDielectric(Tidy3dBaseModel):
             Structure(
                 geometry=Box(
                     center=self._translate(0, 0.5 * (a + b), 0),
-                    size=self._swizzle(inf, b - a, inf),
+                    size=self._swap_axis(inf, b - a, inf),
                 ),
                 medium=lo_index,
             )
             for (a, b, lo_index) in (
                 (-2 * self.box_thickness, -corner_margin, lo_index_box),
-                (core_t + corner_margin, core_t + 2 * self.clad_thickness, lo_index_clad),
+                (
+                    self.core_thickness + corner_margin,
+                    self.core_thickness + 2 * self.clad_thickness,
+                    lo_index_clad,
+                ),
             )
         )
 
-        # Set up the grid with overriding geometry
+        return override_structures
+
+    @cached_property
+    def grid_spec(self) -> GridSpec:
+        """Waveguide grid specification with overriding geometry."""
         grid_spec = GridSpec.auto(
             min_steps_per_wvl=self.grid_resolution,
             wavelength=self.wavelength.min(),
-            override_structures=override_structures,
+            override_structures=self._override_structures,
             max_scale=self.max_grid_scaling,
         )
+        return grid_spec
+
+    @cached_property
+    def structures(self) -> List[Structure]:
+        """Waveguide structures for simulation, including the core(s), slabs (if any), and bottom
+        cladding, if different from the top. For bend modes, the structure is a 270 degree bend
+        regardless of :attr:`length`."""
+
+        # Create a local copy of these values, as they will be modified
+        # according to the desired geometry
+        core_w = numpy.array(self.core_width, copy=True)
+        core_t = self.core_thickness
+        slab_t = self.slab_thickness
+
+        core_x = self._core_starts
 
         if self.mode_spec.bend_radius is None or self.mode_spec.bend_radius == 0.0:
             half_length = 0.5 * self.length
@@ -455,7 +491,6 @@ class RectangularDielectric(Tidy3dBaseModel):
                 )
 
             bend_radius = self.mode_spec.bend_radius
-            x0 = -bend_radius
 
             # 10 nm resolution (at center)
             num_points = 1 + int(0.5 + 1.5 * numpy.pi * abs(bend_radius) / 0.01)
@@ -468,13 +503,15 @@ class RectangularDielectric(Tidy3dBaseModel):
 
             def polyslab_vertices(x, w):
                 r_in = bend_radius + x
-                v_in = numpy.vstack((x0 + r_in * cos, r_in * sin)).T
+                v_in = numpy.vstack((-bend_radius + r_in * cos, r_in * sin)).T
                 r_out = r_in + w
-                v_out = numpy.vstack((x0 + r_out * cos, r_out * sin)).T
+                v_out = numpy.vstack((-bend_radius + r_out * cos, r_out * sin)).T
                 return [self._transform_in_plane(*v) for v in list(v_out) + list(v_in[::-1])]
 
         # Create the actual waveguide geometry
         structures = []
+
+        normal_origin = self.origin[self.normal_axis]
 
         # Surface and sidewall loss regions are created first, so that the core
         # can be applied on top.
@@ -502,7 +539,7 @@ class RectangularDielectric(Tidy3dBaseModel):
                     Structure(
                         geometry=Box(
                             center=self._translate(0, 0.5 * slab_t, 0),
-                            size=self._swizzle(inf, slab_t, self.length),
+                            size=self._swap_axis(inf, slab_t, self.length),
                         ),
                         medium=self.surface_medium,
                     )
@@ -558,7 +595,7 @@ class RectangularDielectric(Tidy3dBaseModel):
                 Structure(
                     geometry=Box(
                         center=self._translate(0, 0.5 * slab_t, 0),
-                        size=self._swizzle(inf, slab_t, self.length),
+                        size=self._swap_axis(inf, slab_t, self.length),
                     ),
                     medium=self.core_medium,
                 )
@@ -570,24 +607,16 @@ class RectangularDielectric(Tidy3dBaseModel):
                 Structure(
                     geometry=Box(
                         center=self._translate(0, -self.box_thickness, 0),
-                        size=self._swizzle(inf, 2 * self.box_thickness, self.length),
+                        size=self._swap_axis(inf, 2 * self.box_thickness, self.length),
                     ),
                     medium=self.box_medium,
                 )
             )
 
-        return (structures, grid_spec)
-
-    @property
-    def structures(self):
-        """Waveguide structures for simulation, including the core(s), slabs (if any), and bottom
-        cladding, if different from the top.  For bend modes, the structure is a 270 degree bend
-        regardless of :attr:`length`."""
-
-        return self._structures_and_gridspec[0]
+        return structures
 
     @cached_property
-    def mode_solver(self):
+    def mode_solver(self) -> ModeSolver:
         """Create a mode solver based on this waveguide structure
 
         Returns
@@ -610,11 +639,10 @@ class RectangularDielectric(Tidy3dBaseModel):
 
         """
         freqs = C_0 / self.wavelength
-        structures, grid_spec = self._structures_and_gridspec
 
         plane = Box(
             center=self._translate(0, 0.5 * self.height - self.box_thickness, 0),
-            size=self._swizzle(self.width, self.height, 0),
+            size=self._swap_axis(self.width, self.height, 0),
         )
 
         # Source used only to silence warnings
@@ -630,9 +658,9 @@ class RectangularDielectric(Tidy3dBaseModel):
             center=plane.center,
             size=plane.size,
             medium=self.clad_medium,
-            structures=structures,
+            structures=self.structures,
             boundary_spec=BoundarySpec.all_sides(Periodic()),
-            grid_spec=grid_spec,
+            grid_spec=self.grid_spec,
             sources=[mode_source],
             run_time=1e-12,
         )

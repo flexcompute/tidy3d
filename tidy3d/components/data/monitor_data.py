@@ -10,13 +10,8 @@ import xarray as xr
 import numpy as np
 import pydantic as pd
 
-from .data_array import (
-    FluxTimeDataArray,
-    FluxDataArray,
-    MixedModeDataArray,
-    ModeIndexDataArray,
-    ModeAmpsDataArray,
-)
+from .data_array import FluxTimeDataArray, FluxDataArray
+from .data_array import MixedModeDataArray, ModeIndexDataArray, ModeAmpsDataArray
 from .data_array import FieldProjectionAngleDataArray, FieldProjectionCartesianDataArray
 from .data_array import FieldProjectionKSpaceDataArray
 from .data_array import DataArray, DiffractionDataArray
@@ -207,18 +202,13 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
             raise DataError("Data must be 2D to apply grid corrections.")
         normal_dim = "xyz"[self.monitor.zero_dims[0]]
         fields = {}
-        for comp, field in self.symmetry_expanded_copy.field_components.items():
-            if comp[1] == normal_dim:
-                if comp[0] == "E":
-                    fields[comp] = field * self.grid_dual_correction
-                elif comp[0] == "H":
-                    fields[comp] = field * self.grid_primal_correction
+        for field_name, field in self.symmetry_expanded_copy.field_components.items():
+            eig_val = self.symmetry_eigenvalues[field_name](normal_dim)
+            if eig_val < 0:
+                fields[field_name] = field * self.grid_dual_correction
             else:
-                if comp[0] == "E":
-                    fields[comp] = field * self.grid_primal_correction
-                elif comp[0] == "H":
-                    fields[comp] = field * self.grid_dual_correction
-            fields[comp] = fields[comp].squeeze(dim=normal_dim, drop=True)
+                fields[field_name] = field * self.grid_primal_correction
+            fields[field_name] = fields[field_name].squeeze(dim=normal_dim, drop=True)
         return fields
 
     @property
@@ -296,7 +286,7 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
         tan_fields = {}
         for component in components:
             if component not in fields:
-                raise DataError(f"Tangential field component {component} missing in field data.")
+                raise DataError(f"Tangential field component '{component}' missing in field data.")
 
             if normal_dim == "y" and component[0] == "H":
                 tan_fields[component] = -fields[component]
@@ -455,7 +445,8 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
 
         Return
         ------
-            Dictionary with interpolated fields"""
+            Dictionary with interpolated fields.
+        """
         fields = self._tangential_fields
 
         interp_dict = {}
@@ -484,10 +475,15 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
         ----------
         field_data : :class:`ElectromagneticFieldData`
             A data instance to compute the dot product with.
-        conjugate : bool, optional
+        conjugate : bool = True
             If ``True`` (default), the dot product is defined as ``1 / 4`` times the integral of
             ``E_self* x H_other - H_self* x E_other``, where ``x`` is the cross product and ``*`` is
             complex conjugation. If ``False``, the complex conjugation is skipped.
+
+        Returns
+        -------
+        :class:`.MixedModeDataArray`
+            Dataset with the complex-valued modal overlaps between the two mode data.
 
         See also
         --------
