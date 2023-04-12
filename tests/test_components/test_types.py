@@ -59,4 +59,4 @@ def test_hash():
         b: constrained_array(ndim=1)
 
     c = MyClass(a=[1.0], b=[2.0, 1.0])
-    hash(c)
+    hash(c.json())
