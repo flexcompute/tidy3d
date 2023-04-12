@@ -11,6 +11,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `ElectromagneticFieldData.dot_intep` to calculate mode overlap integrals between modes with different discretizations.
 - `ElectromagneticFieldData.mode_area` to calculate the effective mode area.
 - `ElectromagneticFieldData.intensity` returns the sum of the squared components of the electric field.
+- Group index calculation added to ModeSolver.
+- Web interface prints clickable link to task on Tidy3D web interface.
 
 ### Changed
 - `adjoint` plugin now filters out adjoint sources that are below a threshold in amplitude relative to the maximum amplitude of the monitor data, reducing unnecessary processing by eliminating sources that won't contribute to the gradient.
