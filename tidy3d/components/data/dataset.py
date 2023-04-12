@@ -313,6 +313,12 @@ class ModeSolverDataset(ElectromagneticFieldDataset):
         description="Complex-valued effective propagation constants associated with the mode.",
     )
 
+    n_group: ModeIndexDataArray = pd.Field(
+        None,
+        title="Group Index",
+        description="Index associated with group velocity of the mode.",
+    )
+
     @property
     def field_components(self) -> Dict[str, DataArray]:
         """Maps the field components to thier associated data."""
