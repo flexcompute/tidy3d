@@ -87,24 +87,26 @@ class ModeSolver(Tidy3dBaseModel):
         """Assing the default fractional frequency step value if not provided."""
         if val is True:
             return GROUP_INDEX_STEP
+        if val >= 1:
+            raise ValidationError("Parameter 'compute_group_index' must be less than 1.")
         return val
 
-    def _post_init_validators(self):
-        if self.compute_group_index >= 1:
-            raise ValidationError("Argument 'compute_group_index' must be less than 1.")
-
-        if self.compute_group_index > 0:
-            if self.mode_spec.track_freq is None:
+    @pydantic.root_validator()
+    def check_precision(cls, values):
+        """Verify critical ModeSpec settings for group index calculation."""
+        if values["compute_group_index"] > 0:
+            if values["mode_spec"].track_freq is None:
                 log.warning(
                     "Group index calculation without mode tracking can lead to incorrect results "
-                    "around mode crossings."
+                    "around mode crossings. Consider setting the 'ModeSpec.track_freq' field to "
+                    "'central'."
                 )
-
-            if self.mode_spec.precision != "double":
+            if values["mode_spec"].precision != "double":
                 log.warning(
                     "Group index calculation should be performed with double precision for better "
-                    "accuracy."
+                    "accuracy. Consider setting the 'ModeSpec.precision' field to 'double'."
                 )
+        return values
 
     @cached_property
     def normal_axis(self) -> Axis:
@@ -151,7 +153,55 @@ class ModeSolver(Tidy3dBaseModel):
         """
         return self.data
 
-    # pylint: disable=too-many-locals
+    def _get_data_with_group_index(self) -> ModeSolverData:
+        """:class:`.ModeSolverData` with fields, effective and group indices on unexpanded grid.
+
+        Returns
+        -------
+        ModeSolverData
+            :class:`.ModeSolverData` object containing the effective and group indices, and mode
+            fields.
+        """
+
+        # insert extra frequency steps into original array
+        fractional_steps = (1 - self.compute_group_index, 1, 1 + self.compute_group_index)
+        freqs = np.outer(self.freqs, fractional_steps).flatten()
+
+        # create a copy with the required frequencies for numerical differentiation
+        mode_solver = self.copy(update={"freqs": freqs, "compute_group_index": False})
+        mode_solver_data = mode_solver.data_raw
+
+        # calculate group index
+        num_freqs = freqs.size
+        original_slice = slice(1, num_freqs, 3)
+        n_center = mode_solver_data.n_eff.isel(f=original_slice).values
+        n_backward = mode_solver_data.n_eff.isel(f=slice(0, num_freqs, 3)).values
+        n_forward = mode_solver_data.n_eff.isel(f=slice(2, num_freqs, 3)).values
+
+        n_group = ModeIndexDataArray(
+            n_center + (n_forward - n_backward) / (2 * self.compute_group_index),
+            coords={
+                "f": list(self.freqs),
+                "mode_index": np.arange(self.mode_spec.num_modes),
+            },
+            attrs={"long name": "Group index"},
+        )
+
+        # remove data corresponding to frequencies used only for group index calculation
+        update_dict = {
+            "n_complex": mode_solver_data.n_complex.isel(f=original_slice),
+            "n_group": n_group,
+        }
+
+        for key, field in mode_solver_data.field_components.items():
+            update_dict[key] = field.isel(f=original_slice)
+
+        # pylint: disable=protected-access
+        for key, data in mode_solver_data._grid_correction_dict.items():
+            update_dict[key] = data.isel(f=original_slice)
+
+        return mode_solver_data.copy(update=update_dict)
+
     @cached_property
     def data_raw(self) -> ModeSolverData:
         """:class:`.ModeSolverData` containing the field and effective index on unexpanded grid.
@@ -163,44 +213,7 @@ class ModeSolver(Tidy3dBaseModel):
         """
 
         if self.compute_group_index > 0:
-            # insert extra frequency steps into original array
-            fractional_steps = (1 - self.compute_group_index, 1, 1 + self.compute_group_index)
-            freqs = np.outer(self.freqs, fractional_steps).flatten()
-            num_freqs = freqs.size
-
-            # create a copy with the required frequencies for numerical differentiation
-            mode_solver = self.copy(update={"freqs": freqs, "compute_group_index": False})
-            mode_solver_data = mode_solver.data_raw
-
-            # calculate group index
-            original_slice = slice(1, num_freqs, 3)
-            n_center = mode_solver_data.n_eff.isel(f=original_slice).values
-            n_backward = mode_solver_data.n_eff.isel(f=slice(0, num_freqs, 3)).values
-            n_forward = mode_solver_data.n_eff.isel(f=slice(2, num_freqs, 3)).values
-            n_group_data = n_center + (n_forward - n_backward) / (2 * self.compute_group_index)
-            n_group = ModeIndexDataArray(
-                n_group_data,
-                coords={
-                    "f": list(self.freqs),
-                    "mode_index": np.arange(self.mode_spec.num_modes),
-                },
-                attrs={"long name": "Group index"},
-            )
-
-            # remove data corresponding to frequencies used only for group index calculation
-            update_dict = {
-                "n_complex": mode_solver_data.n_complex.isel(f=original_slice),
-                "n_group": n_group,
-            }
-
-            for field_name, field in mode_solver_data.field_components.items():
-                update_dict[field_name] = field.isel(f=original_slice)
-
-            # pylint: disable=protected-access
-            for key, data in mode_solver_data._grid_correction_dict.items():
-                update_dict[key] = data.isel(f=original_slice)
-
-            return mode_solver_data.copy(update=update_dict)
+            return self._get_data_with_group_index()
 
         _, _solver_coords = self.plane.pop_axis(
             self._solver_grid.boundaries.to_list, axis=self.normal_axis
