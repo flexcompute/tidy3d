@@ -34,15 +34,6 @@ def _totuple(arr: np.ndarray) -> tuple:
     return tuple(arr)
 
 
-class TidyNDArray(np.ndarray):
-    """subclass of np.ndarray with a hash."""
-
-    def __hash__(self) -> int:
-        """Hash the nested tuple version of the data."""
-        tuple_val = _totuple(self)
-        return hash(tuple_val)
-
-
 # generic numpy array
 Numpy = np.ndarray
 
@@ -74,7 +65,7 @@ class ArrayLike:
     def convert_to_numpy(cls, val):
         """Convert the value to np.ndarray and provide some casting."""
         arr_numpy = np.array(val, ndmin=1, dtype=cls.dtype, copy=True)
-        arr_tidy3d = TidyNDArray(shape=arr_numpy.shape, dtype=arr_numpy.dtype)
+        arr_tidy3d = np.ndarray(shape=arr_numpy.shape, dtype=arr_numpy.dtype)
         arr_tidy3d[:] = arr_numpy
         return arr_tidy3d
 
