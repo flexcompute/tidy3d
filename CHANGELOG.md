@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - `adjoint` plugin now filters out adjoint sources that are below a threshold in amplitude relative to the maximum amplitude of the monitor data, reducing unnecessary processing by eliminating sources that won't contribute to the gradient.
+- `ArrayLike` fields use `np.ndarray` internally instead of `TidyNDArray` subclass. Tidy3D objects are no longer hashable, instead, hash the `obj.json()` string.
 
 ### Fixed
 - `web.Batch` monitoring is more robust, will not raise exception if a job errors or diverges. In this case, the progressbar text will render in red.
