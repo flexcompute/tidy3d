@@ -8,7 +8,11 @@ import numpy as np
 from ..constants import MICROMETER, RADIAN, GLANCING_CUTOFF
 from .base import Tidy3dBaseModel
 from .types import Axis2D, Literal, TrackFreq
-from ..exceptions import SetupError
+from ..log import log
+from ..exceptions import SetupError, ValidationError
+
+
+GROUP_INDEX_STEP = 0.005
 
 
 class ModeSpec(Tidy3dBaseModel):
@@ -100,6 +104,15 @@ class ModeSpec(Tidy3dBaseModel):
         "If ``None`` no mode tracking is performed.",
     )
 
+    group_index_step: Union[bool, pd.PositiveFloat] = pd.Field(
+        False,
+        title="Frequency step for group index computation",
+        description="Control the computation of the group index alongside the effective index. If "
+        "set to a positive value, it sets the fractional frequency step used in the numerical "
+        "differentiation of the effective index to compute the group index. If set to `True`, the "
+        f"default of {GROUP_INDEX_STEP} is used.",
+    )
+
     @pd.validator("bend_axis", always=True)
     def bend_axis_given(cls, val, values):
         """check that ``bend_axis`` is provided if ``bend_radius`` is not ``None``"""
@@ -116,3 +129,28 @@ class ModeSpec(Tidy3dBaseModel):
                 "For best results, switch the injection axis."
             )
         return val
+
+    @pd.validator("group_index_step")
+    def assign_default_on_true(cls, val):
+        """Assing the default fractional frequency step value if not provided."""
+        if val is True:
+            return GROUP_INDEX_STEP
+        if val >= 1:
+            raise ValidationError("Parameter 'group_index_step' must be less than 1.")
+        return val
+
+    @pd.root_validator()
+    def check_precision(cls, values):
+        """Verify critical ModeSpec settings for group index calculation."""
+        if values["group_index_step"] > 0:
+            if values["track_freq"] is None:
+                log.warning(
+                    "Group index calculation without mode tracking can lead to incorrect results "
+                    "around mode crossings. Consider setting 'track_freq' to 'central'."
+                )
+            if values["precision"] != "double":
+                log.warning(
+                    "Group index calculation should be performed with double precision for better "
+                    "accuracy. Consider setting 'precision' to 'double'."
+                )
+        return values
