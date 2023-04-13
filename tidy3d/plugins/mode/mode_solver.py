@@ -65,6 +65,13 @@ class ModeSolver(Tidy3dBaseModel):
         "dimension.",
     )
 
+    colocate: bool = pydantic.Field(
+        True,
+        title="Colocate fields",
+        description="Toggle whether fields should be colocated to grid cell boundaries (i.e. "
+        "primal grid nodes). Default is ``True``.",
+    )
+
     @pydantic.validator("plane", always=True)
     def is_plane(cls, val):
         """Raise validation error if not planar."""
@@ -96,23 +103,33 @@ class ModeSolver(Tidy3dBaseModel):
 
     @cached_property
     def _solver_grid(self) -> Grid:
-        """Grid for the mode solver, including extension in the normal direction, which is needed
-        to get epsilon from the simulation. The mode fields coordinate along the normal direction
-        will be reset to the exact plane position after the solve."""
-        plane_sym = self.simulation.min_sym_box(self.plane)
-        boundaries = self.simulation.discretize(plane_sym, extend=True).boundaries.to_list
+        """Grid for the mode solver, not snapped to plane or simulation zero dims, and also with
+        a small correction for symmetries. We don't do the snapping yet because 0-sized cells are
+        currently confusing to the subpixel averaging. The final data coordinates along the
+        plane normal dimension and dimensions where the simulation domain is 2D will be correctly
+        set after the solve."""
+
+        monitor = self.to_mode_solver_monitor(name=MODE_MONITOR_NAME, colocate=False)
+        # pylint:disable=protected-access
+        span_inds = self.simulation._discretize_inds_monitor(monitor)
+
+        # Remove extension along monitor normal
+        span_inds[self.normal_axis, 0] += 1
+        span_inds[self.normal_axis, 1] -= 1
+
         # Do not extend if simulation has a single pixel along a dimension
         for dim, num_cells in enumerate(self.simulation.grid.num_cells):
             if num_cells <= 1:
-                boundaries[dim] = self.simulation.grid.boundaries.to_list[dim]
-        # Remove extension on the min side if symmetry present
-        bounds_norm, bounds_plane = plane_sym.pop_axis(boundaries, self.normal_axis)
-        bounds_plane = list(bounds_plane)
+                span_inds[dim] = [0, 1]
+
+        # Truncate to symmetry quadrant if symmetry present
+        _, plane_inds = monitor.pop_axis([0, 1, 2], self.normal_axis)
         for dim, sym in enumerate(self.solver_symmetry):
             if sym != 0:
-                bounds_plane[dim] = bounds_plane[dim][1:]
-        boundaries = plane_sym.unpop_axis(bounds_norm, bounds_plane, axis=self.normal_axis)
-        return Grid(boundaries=dict(zip("xyz", boundaries)))
+                span_inds[plane_inds[dim], 0] += np.diff(span_inds[plane_inds[dim]]) // 2
+
+        # pylint:disable=protected-access
+        return self.simulation._subgrid(span_inds=span_inds)
 
     def solve(self) -> ModeSolverData:
         """:class:`.ModeSolverData` containing the field and effective index data.
@@ -198,17 +215,14 @@ class ModeSolver(Tidy3dBaseModel):
         data_dict = {"n_complex": index_data}
 
         # Construct and add all the data for the fields
+        # Snap the solver grid to plane normal and simulation 0-sized dims if any
+        grid_snapped = self._solver_grid.snap_to_box_zero_dim(self.plane)
+        # pylint:disable=protected-access
+        grid_snapped = self.simulation._snap_zero_dim(grid_snapped)
+
+        # Construct the field data on Yee grid
         for field_name in ("Ex", "Ey", "Ez", "Hx", "Hy", "Hz"):
-
-            xyz_coords = self._solver_grid[field_name].to_list
-            # Snap to plane center along normal direction
-            xyz_coords[self.normal_axis] = [self.plane.center[self.normal_axis]]
-            # Snap to simulation center if simulation is 0D along a tangential dimension
-            _, plane_axes = self.plane.pop_axis([0, 1, 2], axis=self.normal_axis)
-            for plane_axis in plane_axes:
-                if len(xyz_coords[plane_axis]) == 1:
-                    xyz_coords[plane_axis] = [self.simulation.center[plane_axis]]
-
+            xyz_coords = grid_snapped[field_name].to_list
             scalar_field_data = ScalarModeFieldDataArray(
                 np.stack([field_freq[field_name] for field_freq in fields], axis=-2),
                 coords=dict(
@@ -230,19 +244,43 @@ class ModeSolver(Tidy3dBaseModel):
             direction=self.direction,
         )
 
-        # make mode solver data
-        mode_solver_monitor = self.to_mode_solver_monitor(name=MODE_MONITOR_NAME)
+        # make mode solver data on the Yee grid for now
+        mode_solver_monitor = self.to_mode_solver_monitor(name=MODE_MONITOR_NAME, colocate=False)
+        grid_expanded = self.simulation.discretize_monitor(mode_solver_monitor)
         mode_solver_data = ModeSolverData(
             monitor=mode_solver_monitor,
             symmetry=self.simulation.symmetry,
             symmetry_center=self.simulation.center,
-            grid_expanded=self.simulation.discretize(self.plane, extend=True),
+            grid_expanded=grid_expanded,
             grid_primal_correction=grid_factors[0],
             grid_dual_correction=grid_factors[1],
             eps_spec=eps_spec,
             **data_dict,
         )
         self._field_decay_warning(mode_solver_data.symmetry_expanded_copy)
+
+        # Colocate to grid boundaries if requested
+        if self.colocate:
+            # Get colocation coordinates in the solver plane
+            _, plane_dims = self.plane.pop_axis("xyz", self.normal_axis)
+            colocate_coords = {}
+            for dim, sym in zip(plane_dims, self.solver_symmetry):
+                coords = grid_snapped.boundaries.to_dict[dim]
+                if len(coords) > 2:
+                    if sym == 0:
+                        colocate_coords[dim] = coords[1:-1]
+                    else:
+                        colocate_coords[dim] = coords[:-1]
+            # Colocate to new coordinates using the previously created data
+            data_dict_colocated = {}
+            for key, field in mode_solver_data.symmetry_expanded_copy.field_components.items():
+                data_dict_colocated[key] = field.interp(**colocate_coords)
+            # Update data
+            mode_solver_monitor = self.to_mode_solver_monitor(name=MODE_MONITOR_NAME)
+            grid_expanded = self.simulation.discretize_monitor(mode_solver_monitor)
+            mode_solver_data = mode_solver_data.updated_copy(
+                monitor=mode_solver_monitor, grid_expanded=grid_expanded, **data_dict_colocated
+            )
 
         # normalize modes
         scaling = np.sqrt(np.abs(mode_solver_data.flux))
@@ -557,25 +595,33 @@ class ModeSolver(Tidy3dBaseModel):
             name=name,
         )
 
-    def to_mode_solver_monitor(self, name: str) -> ModeSolverMonitor:
+    def to_mode_solver_monitor(self, name: str, colocate: bool = None) -> ModeSolverMonitor:
         """Creates :class:`ModeSolverMonitor` from a :class:`ModeSolver` instance.
 
         Parameters
         ----------
         name : str
             Name of the monitor.
+        colocate : bool
+            Whether to colocate fields or compute on the Yee grid. If not provided, the value
+            set in the :class:`ModeSolver` instance is used.
 
         Returns
         -------
         :class:`.ModeSolverMonitor`
             Mode monitor with specifications taken from the ModeSolver instance and ``name``.
         """
+
+        if colocate is None:
+            colocate = self.colocate
+
         return ModeSolverMonitor(
             size=self.plane.size,
             center=self.plane.center,
             mode_spec=self.mode_spec,
             freqs=self.freqs,
             direction=self.direction,
+            colocate=colocate,
             name=name,
         )
 

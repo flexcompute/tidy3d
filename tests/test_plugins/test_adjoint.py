@@ -263,12 +263,14 @@ def make_sim(
         size=(2, 0, 2),
         freqs=[FREQ0],
         name=MNT_NAME + "3",
+        colocate=False,
     )
 
     output_mnt4 = td.FieldMonitor(
         size=(0, 0, 0),
         freqs=[FREQ0],
         name=MNT_NAME + "4",
+        colocate=False,
     )
 
     extraneous_field_monitor = td.FieldMonitor(
@@ -1027,12 +1029,14 @@ def test_polyslab_2d(sim_size_axis, use_emulated_run):
             size=(2, 0, 2),
             freqs=[FREQ0],
             name=MNT_NAME + "3",
+            colocate=False,
         )
 
         output_mnt4 = td.FieldMonitor(
             size=(0, 0, 0),
             freqs=[FREQ0],
             name=MNT_NAME + "4",
+            colocate=False,
         )
 
         sim = JaxSimulation(
@@ -1445,5 +1449,5 @@ def test_sim_data_plot_field(use_emulated_run):
     jax_sim = make_sim(permittivity=EPS, size=SIZE, vertices=VERTICES, base_eps_val=BASE_EPS_VAL)
     jax_sim_data = run(jax_sim, task_name="test")
     ax = jax_sim_data.plot_field("field", "Ez", "real", f=1e14)
-    plt.show()
+    # plt.show()
     assert len(ax.collections) == 1

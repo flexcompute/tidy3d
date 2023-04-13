@@ -679,16 +679,6 @@ def test_nyquist():
     assert td.Simulation.nyquist_step.fget(m) == 1
 
 
-def test_min_sym_box():
-    S = SIM.copy(update=dict(symmetry=(1, 1, 1)))
-    b = td.Box(center=(-2, -2, -2), size=(1, 1, 1))
-    S.min_sym_box(b)
-    b = td.Box(center=(2, 2, 2), size=(1, 1, 1))
-    S.min_sym_box(b)
-    b = td.Box(size=(1, 1, 1))
-    S.min_sym_box(b)
-
-
 def test_discretize_non_intersect(log_capture):
     SIM.discretize(box=td.Box(center=(-20, -20, -20), size=(1, 1, 1)))
     assert_log_level(log_capture, "ERROR")

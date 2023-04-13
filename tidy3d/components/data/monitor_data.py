@@ -80,9 +80,20 @@ class AbstractFieldData(MonitorData, AbstractFieldDataset, ABC):
     grid_expanded: Grid = pd.Field(
         None,
         title="Expanded Grid",
-        description=":class:`.Grid` on which the symmetry will be expanded. "
-        "Required only if any of the ``symmetry`` field are non-zero.",
+        description=":class:`.Grid` discretization of the associated monitor in the simulation "
+        "which created the data. Required if symmetries are present, as "
+        "well as in order to use some functionalities like getting poynting and flux.",
     )
+
+    @pd.validator("grid_expanded", always=True)
+    def warn_missing_grid_expanded(cls, val):
+        """If ``colocate`` not provided, set to true, but warn that behavior has changed."""
+        if val is None:
+            log.warning(
+                "Monitor data requires 'grid_expanded' to be defined to compute values like "
+                "flux, Poynting and dot product with other data."
+            )
+        return val
 
     _require_sym_center = required_if_symmetry_present("symmetry_center")
     _require_grid_expanded = required_if_symmetry_present("grid_expanded")
@@ -122,6 +133,7 @@ class AbstractFieldData(MonitorData, AbstractFieldDataset, ABC):
 
                 # Get coordinates for this field component on the expanded grid
                 coords = field_coords.to_list[sym_dim]
+                coords = self.monitor.downsample(coords, axis=sym_dim)
 
                 # Get indexes of coords that lie on the left of the symmetry center
                 flip_inds = np.where(coords < sym_loc)[0]
@@ -147,6 +159,34 @@ class AbstractFieldData(MonitorData, AbstractFieldDataset, ABC):
 
         update_dict.update({"symmetry": (0, 0, 0), "symmetry_center": None})
         return self.copy(update=update_dict)
+
+    def at_coords(self, coords: Coords) -> xr.Dataset:
+        """Colocate data to some supplied coordinates. This is a convenience method that wraps
+        ``colocate``, and skips dimensions for which the data has a single data point only
+        (``colocate`` will error in that case.) If the coords are out of bounds for the data
+        otherwise, an error will still be produced.
+
+        Parameters
+        ----------
+        coords : :class:`Coords`
+            Coordinates in x, y and z to colocate to.
+
+        Returns
+        -------
+        xarray.Dataset
+            Dataset containing all of the fields in the data interpolated to boundary locations on
+            the Yee grid.
+        """
+
+        # pass coords if each of the scalar field data have more than one coordinate along a dim
+        xyz_kwargs = {}
+        for dim, coords_dim in zip("xyz", (coords.x, coords.y, coords.z)):
+            scalar_data = list(self.field_components.values())
+            coord_lens = [len(data.coords[dim]) for data in scalar_data]
+            if all(ncoords > 1 for ncoords in coord_lens):
+                xyz_kwargs[dim] = coords_dim
+
+        return self.colocate(**xyz_kwargs)
 
 
 class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, ABC):
@@ -174,7 +214,8 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
     def _expanded_grid_field_coords(self, field_name: str):
         """Coordinates in the expanded grid corresponding to a given field component."""
         if self.monitor.colocate:
-            return self.grid_expanded["centers"]
+            bounds_dict = self.grid_expanded.boundaries.to_dict
+            return Coords(**{key: val[:-1] for key, val in bounds_dict.items()})
         return self.grid_expanded[self.grid_locations[field_name]]
 
     @property
@@ -210,31 +251,51 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
         return fields
 
     @property
+    def colocation_boundaries(self) -> Coords:
+        """Coordinates to be used for colocation of the data to grid boundaries."""
+
+        if not self.grid_expanded:
+            raise DataError(
+                "Monitor data requires 'grid_expanded' to be defined in order to "
+                "compute colocation coordinates."
+            )
+
+        # Get boundaries from the expanded grid
+        grid_bounds = self.grid_expanded.boundaries.to_dict
+
+        # Non-colocating monitors can only colocate starting from the first boundary
+        # (unless there's a single data point, in which case data has already been snapped).
+        # Regardless of colocation, we also drop the last boundary.
+        colocate_bounds = {}
+        for dim, bounds in grid_bounds.items():
+            cbs = bounds[:-1]
+            if not self.monitor.colocate and cbs.size > 1:
+                cbs = cbs[1:]
+            colocate_bounds[dim] = cbs
+
+        return Coords(**colocate_bounds)
+
+    @property
+    def colocation_centers(self) -> Coords:
+        """Coordinates to be used for colocation of the data to grid centers."""
+        colocate_centers = {}
+        for dim, coords in self.colocation_boundaries.to_dict.items():
+            colocate_centers[dim] = (coords[1:] + coords[:-1]) / 2
+
+        return Coords(**colocate_centers)
+
+    @property
     def _plane_grid_boundaries(self) -> Tuple[Coords1D, Coords1D]:
         """For a 2D monitor data, return the boundaries of the in-plane grid to be used to compute
-        differential area and to colocate fields to grid centers if needed."""
+        differential area and to colocate fields if needed."""
         if np.any(np.array(self.monitor.interval_space) > 1):
             raise Tidy3dNotImplementedError(
                 "Cannot determine grid boundaries corresponding to "
                 "down-sampled monitor data ('interval_space' > 1 along a direction)."
             )
         dim1, dim2 = self._tangential_dims
-
-        # In-plane grid bounds inferred from the field data
-        if self.monitor.colocate:
-            # Should be equivalent to sim.discretize(self.monitor, extend=True)
-            # Take ``unique`` to handle 0D cases along a given dimension
-            plane_bounds1 = np.unique(self.grid_expanded.boundaries.to_dict[dim1])
-            plane_bounds2 = np.unique(self.grid_expanded.boundaries.to_dict[dim2])
-        else:
-            # Last pixel missing compared to sim.discretize(self.monitor, extend=True).
-            # This is because we cannot colocate the fields to the center of that pixel.
-            # However, the monitor should be completely outside of this last pixel.
-            fields = self.symmetry_expanded_copy.field_components
-            plane_bounds1 = np.array(fields["E" + dim2].coords[dim1])
-            plane_bounds2 = np.array(fields["E" + dim1].coords[dim2])
-
-        return plane_bounds1, plane_bounds2
+        bounds_dict = self.colocation_boundaries.to_dict
+        return (bounds_dict[dim1], bounds_dict[dim2])
 
     @property
     def _plane_grid_centers(self) -> Tuple[Coords1D, Coords1D]:
@@ -244,29 +305,41 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
     @property
     def _diff_area(self) -> xr.DataArray:
         """For a 2D monitor data, return the area of each cell in the plane, for use in numerical
-        integrations."""
-        bounds = [bs.copy() for bs in self._plane_grid_boundaries]
+        integrations. This assumes that data is colocated to grid boundaries, and uses the
+        difference in the surrounding grid centers to compute the area.
+        """
 
-        # Fix the grid boundaries to match the analytic monitor boundaries.
+        # Monitor values are interpolated to bounds
+        bounds = self._plane_grid_boundaries
+        # Coords to compute cell sizes around the interpolation locations
+        coords = [bs.copy() for bs in self._plane_grid_centers]
+
+        # Append the first and last boundary
         _, plane_inds = self.monitor.pop_axis([0, 1, 2], self.monitor.size.index(0.0))
-        mnt_bounds = np.array(self.monitor.bounds)
-        mnt_bounds = mnt_bounds[:, plane_inds].T
+        coords[0] = np.array([bounds[0][0]] + coords[0].tolist() + [bounds[0][-1]])
+        coords[1] = np.array([bounds[1][0]] + coords[1].tolist() + [bounds[1][-1]])
 
-        """Truncate bounds to monitor boundaries. This implicitly makes extra pixels which may be
+        """Truncate coords to monitor boundaries. This implicitly makes extra pixels which may be
         present have size 0 and so won't be included in the integration. For pixels intersected
         by the monitor edge, the size is truncated to the part covered by the monitor. When using
         the differential area sizes defined in this way together with integrand values
-        defined at pixel centers, the integration is equivalent to trapezoidal rule with the first
+        defined at cell boundaries, the integration is equivalent to trapezoidal rule with the first
         and last values interpolated to the exact monitor start/end location, if the integrand
         is zero outside of the monitor geometry. This should usually be the case for flux and dot
         computations"""
-        bounds[0][np.argwhere(bounds[0] < mnt_bounds[0, 0])] = mnt_bounds[0, 0]
-        bounds[0][np.argwhere(bounds[0] > mnt_bounds[0, 1])] = mnt_bounds[0, 1]
-        bounds[1][np.argwhere(bounds[1] < mnt_bounds[1, 0])] = mnt_bounds[1, 0]
-        bounds[1][np.argwhere(bounds[1] > mnt_bounds[1, 1])] = mnt_bounds[1, 1]
+        mnt_bounds = np.array(self.monitor.bounds)
+        mnt_bounds = mnt_bounds[:, plane_inds].T
+        coords[0][np.argwhere(coords[0] < mnt_bounds[0, 0])] = mnt_bounds[0, 0]
+        coords[0][np.argwhere(coords[0] > mnt_bounds[0, 1])] = mnt_bounds[0, 1]
+        coords[1][np.argwhere(coords[1] < mnt_bounds[1, 0])] = mnt_bounds[1, 0]
+        coords[1][np.argwhere(coords[1] > mnt_bounds[1, 1])] = mnt_bounds[1, 1]
 
-        sizes_dim0 = bounds[0][1:] - bounds[0][:-1] if bounds[0].size > 1 else [1.0]
-        sizes_dim1 = bounds[1][1:] - bounds[1][:-1] if bounds[1].size > 1 else [1.0]
+        # Do not apply the spurious dl along a dimension where the simulation is 2D.
+        # Instead, we just set the boundaries such that the cell size along the zero dimension is 1,
+        # such that quantities like flux will come out in units of W / um.
+        sizes_dim0 = coords[0][1:] - coords[0][:-1] if bounds[0].size > 1 else [1.0]
+        sizes_dim1 = coords[1][1:] - coords[1][:-1] if bounds[1].size > 1 else [1.0]
+
         return xr.DataArray(np.outer(sizes_dim0, sizes_dim1), dims=self._tangential_dims)
 
     def _tangential_corrected(self, fields: Dict[str, DataArray]) -> Dict[str, DataArray]:
@@ -306,8 +379,8 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
         return self._tangential_corrected(self._in_plane)
 
     @property
-    def _centered_fields(self) -> Dict[str, DataArray]:
-        """For a 2D monitor data, get all E and H fields colocated to the cell centers in the 2D
+    def _colocated_fields(self) -> Dict[str, DataArray]:
+        """For a 2D monitor data, get all E and H fields colocated to the cell boundaries in the 2D
         plane grid.
 
         Note
@@ -320,20 +393,19 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
         if self.monitor.colocate:
             return field_components
 
-        # Interpolate field components to cell centers
+        # Interpolate field components to cell boundaries
         interp_dict = {"assume_sorted": True}
-        for dim, cents in zip(self._tangential_dims, self._plane_grid_centers):
-            if cents.size > 0:
-                interp_dict[dim] = cents
+        for dim, bounds in zip(self._tangential_dims, self._plane_grid_boundaries):
+            if bounds.size > 1:
+                interp_dict[dim] = bounds
 
-        centered_fields = {key: val.interp(**interp_dict) for key, val in field_components.items()}
-
-        return centered_fields
+        colocated_fields = {key: val.interp(**interp_dict) for key, val in field_components.items()}
+        return colocated_fields
 
     @property
-    def _centered_tangential_fields(self) -> Dict[str, DataArray]:
-        """For a 2D monitor data, get the tangential E and H fields colocated to the cell centers in
-        the 2D plane grid.  Fields are oriented such that the third component would be the normal
+    def _colocated_tangential_fields(self) -> Dict[str, DataArray]:
+        """For a 2D monitor data, get the tangential E and H fields colocated to the cell boundaries
+        in the 2D plane grid.  Fields are oriented such that the third component would be the normal
         axis. This just means that the H field gets an extra minus sign if the normal axis is
         ``"y"``. Raise if any of the tangential field components is missing.
 
@@ -341,7 +413,7 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
         ----
             The finite grid correction factors are applied and symmetry is expanded.
         """
-        return self._tangential_corrected(self._centered_fields)
+        return self._tangential_corrected(self._colocated_fields)
 
     @property
     def grid_corrected_copy(self) -> ElectromagneticFieldData:
@@ -364,7 +436,7 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
     @property
     def intensity(self) -> ScalarFieldDataArray:
         """Return the sum of the squared absolute electric field components."""
-        fields = self._centered_fields
+        fields = self._colocated_fields
         components = ("Ex", "Ey", "Ez")
         if any(cmp not in fields for cmp in components):
             raise KeyError("Can't compute intensity, all E field components must be present.")
@@ -376,7 +448,7 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
         projected to the direction normal to the monitor plane."""
 
         # Tangential fields are ordered as E1, E2, H1, H2
-        tan_fields = self._centered_tangential_fields
+        tan_fields = self._colocated_tangential_fields
         dim1, dim2 = self._tangential_dims
 
         e_x_h_star = tan_fields["E" + dim1] * tan_fields["H" + dim2].conj()
@@ -448,9 +520,9 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
         """
 
         # Tangential fields for current and other field data
-        fields_self = self._centered_tangential_fields
+        fields_self = self._colocated_tangential_fields
         # pylint:disable=protected-access
-        fields_other = field_data._centered_tangential_fields
+        fields_other = field_data._colocated_tangential_fields
         if conjugate:
             fields_self = {key: field.conj() for key, field in fields_self.items()}
 
@@ -469,13 +541,13 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
         integrand = (e_self_x_h_other - h_self_x_e_other) * d_area
         return ModeAmpsDataArray(0.25 * integrand.sum(dim=d_area.dims))
 
-    def _interpolated_tangential_fields(self, centers: ArrayFloat2D) -> Dict[str, DataArray]:
-        """For 2D monitors, interpolate this fields to given centers in the tangential plane.
+    def _interpolated_tangential_fields(self, coords: ArrayFloat2D) -> Dict[str, DataArray]:
+        """For 2D monitors, interpolate this fields to given coords in the tangential plane.
 
         Parameters
         ----------
-        centers : ArrayFloat2D
-            Interpolation centers in the monitor's tangential plane.
+        coords : ArrayFloat2D
+            Interpolation coords in the monitor's tangential plane.
 
         Return
         ------
@@ -484,7 +556,7 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
         fields = self._tangential_fields
 
         interp_dict = {"assume_sorted": True}
-        for dim, cents in zip(self._tangential_dims, centers):
+        for dim, cents in zip(self._tangential_dims, coords):
             if cents.size > 0:
                 interp_dict[dim] = cents
 
@@ -532,13 +604,13 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
             raise DataError("Tangential dimentions must match between the two monitors.")
 
         # Tangential fields for current
-        fields_self = self._centered_tangential_fields
+        fields_self = self._colocated_tangential_fields
         if conjugate:
             fields_self = {component: field.conj() for component, field in fields_self.items()}
 
         # Tangential fields for other data
         # pylint:disable=protected-access
-        fields_other = field_data._interpolated_tangential_fields(self._plane_grid_centers)
+        fields_other = field_data._interpolated_tangential_fields(self._plane_grid_boundaries)
 
         # Tangential field component names
         dim1, dim2 = tan_dims
@@ -624,14 +696,17 @@ class FieldData(FieldDataset, ElectromagneticFieldData):
     Example
     -------
     >>> from tidy3d import ScalarFieldDataArray
-    >>> x = [-1,1]
-    >>> y = [-2,0,2]
-    >>> z = [-3,-1,1,3]
+    >>> x = [-1,1,3]
+    >>> y = [-2,0,2,4]
+    >>> z = [-3,-1,1,3,5]
     >>> f = [2e14, 3e14]
-    >>> coords = dict(x=x, y=y, z=z, f=f)
+    >>> coords = dict(x=x[:-1], y=y[:-1], z=z[:-1], f=f)
+    >>> grid = Grid(boundaries=Coords(x=x, y=y, z=z))
     >>> scalar_field = ScalarFieldDataArray((1+1j) * np.random.random((2,3,4,2)), coords=coords)
-    >>> monitor = FieldMonitor(size=(2,4,6), freqs=[2e14, 3e14], name='field', fields=['Ex', 'Hz'])
-    >>> data = FieldData(monitor=monitor, Ex=scalar_field, Hz=scalar_field)
+    >>> monitor = FieldMonitor(
+    ...     size=(2,4,6), freqs=[2e14, 3e14], name='field', fields=['Ex', 'Hz'], colocate=True
+    ... )
+    >>> data = FieldData(monitor=monitor, Ex=scalar_field, Hz=scalar_field, grid_expanded=grid)
     """
 
     monitor: FieldMonitor = pd.Field(
@@ -695,14 +770,17 @@ class FieldTimeData(FieldTimeDataset, ElectromagneticFieldData):
     Example
     -------
     >>> from tidy3d import ScalarFieldTimeDataArray
-    >>> x = [-1,1]
-    >>> y = [-2,0,2]
-    >>> z = [-3,-1,1,3]
+    >>> x = [-1,1,3]
+    >>> y = [-2,0,2,4]
+    >>> z = [-3,-1,1,3,5]
     >>> t = [0, 1e-12, 2e-12]
-    >>> coords = dict(x=x, y=y, z=z, t=t)
+    >>> coords = dict(x=x[:-1], y=y[:-1], z=z[:-1], t=t)
+    >>> grid = Grid(boundaries=Coords(x=x, y=y, z=z))
     >>> scalar_field = ScalarFieldTimeDataArray(np.random.random((2,3,4,3)), coords=coords)
-    >>> monitor = FieldTimeMonitor(size=(2,4,6), interval=100, name='field', fields=['Ex', 'Hz'])
-    >>> data = FieldTimeData(monitor=monitor, Ex=scalar_field, Hz=scalar_field)
+    >>> monitor = FieldTimeMonitor(
+    ...     size=(2,4,6), interval=100, name='field', fields=['Ex', 'Hz'], colocate=True
+    ... )
+    >>> data = FieldTimeData(monitor=monitor, Ex=scalar_field, Hz=scalar_field, grid_expanded=grid)
     """
 
     monitor: FieldTimeMonitor = pd.Field(
@@ -717,7 +795,7 @@ class FieldTimeData(FieldTimeDataset, ElectromagneticFieldData):
         to the direction normal to the monitor plane."""
 
         # Tangential fields are ordered as E1, E2, H1, H2
-        tan_fields = self._centered_tangential_fields
+        tan_fields = self._colocated_tangential_fields
         dim1, dim2 = self._tangential_dims
         e_x_h = tan_fields["E" + dim1] * tan_fields["H" + dim2]
         e_x_h -= tan_fields["E" + dim2] * tan_fields["H" + dim1]
@@ -760,12 +838,13 @@ class ModeSolverData(ModeSolverDataset, ElectromagneticFieldData):
     -------
     >>> from tidy3d import ModeSpec
     >>> from tidy3d import ScalarModeFieldDataArray, ModeIndexDataArray
-    >>> x = [-1,1]
-    >>> y = [0]
-    >>> z = [-3,-1,1,3]
+    >>> x = [-1,1,3]
+    >>> y = [-2,0]
+    >>> z = [-3,-1,1,3,5]
     >>> f = [2e14, 3e14]
     >>> mode_index = np.arange(5)
-    >>> field_coords = dict(x=x, y=y, z=z, f=f, mode_index=mode_index)
+    >>> grid = Grid(boundaries=Coords(x=x, y=y, z=z))
+    >>> field_coords = dict(x=x[:-1], y=y[:-1], z=z[:-1], f=f, mode_index=mode_index)
     >>> field = ScalarModeFieldDataArray((1+1j)*np.random.random((2,1,4,2,5)), coords=field_coords)
     >>> index_coords = dict(f=f, mode_index=mode_index)
     >>> index_data = ModeIndexDataArray((1+1j) * np.random.random((2,5)), coords=index_coords)
@@ -783,7 +862,8 @@ class ModeSolverData(ModeSolverDataset, ElectromagneticFieldData):
     ...     Hx=field,
     ...     Hy=field,
     ...     Hz=field,
-    ...     n_complex=index_data
+    ...     n_complex=index_data,
+    ...     grid_expanded=grid
     ... )
     """
 
@@ -877,7 +957,7 @@ class ModeSolverData(ModeSolverDataset, ElectromagneticFieldData):
                 # Check for discontinuities and show warning if any
                 for mode_ind in list(np.nonzero(overlap[freq_id, :] < overlap_thresh)[0]):
                     log.warning(
-                        f"WARNING: Mode '{mode_ind}' appears to undergo a discontinuous change "
+                        f"Mode '{mode_ind}' appears to undergo a discontinuous change "
                         f"between frequencies '{self.monitor.freqs[freq_id]}' "
                         f"and '{self.monitor.freqs[freq_id - step]}' "
                         f"(overlap: '{overlap[freq_id, mode_ind]:.2f}')."
@@ -1094,14 +1174,17 @@ class PermittivityData(PermittivityDataset, AbstractFieldData):
     Example
     -------
     >>> from tidy3d import ScalarFieldDataArray
-    >>> x = [-1,1]
-    >>> y = [-2,0,2]
-    >>> z = [-3,-1,1,3]
+    >>> x = [-1,1,3]
+    >>> y = [-2,0,2,4]
+    >>> z = [-3,-1,1,3,5]
     >>> f = [2e14, 3e14]
-    >>> coords = dict(x=x, y=y, z=z, f=f)
+    >>> coords = dict(x=x[:-1], y=y[:-1], z=z[:-1], f=f)
+    >>> grid = Grid(boundaries=Coords(x=x, y=y, z=z))
     >>> sclr_fld = ScalarFieldDataArray((1+1j) * np.random.random((2,3,4,2)), coords=coords)
     >>> monitor = PermittivityMonitor(size=(2,4,6), freqs=[2e14, 3e14], name='eps')
-    >>> data = PermittivityData(monitor=monitor, eps_xx=sclr_fld, eps_yy=sclr_fld, eps_zz=sclr_fld)
+    >>> data = PermittivityData(
+    ...     monitor=monitor, eps_xx=sclr_fld, eps_yy=sclr_fld, eps_zz=sclr_fld, grid_expanded=grid
+    ... )
     """
 
     monitor: PermittivityMonitor = pd.Field(

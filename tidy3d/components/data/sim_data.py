@@ -27,20 +27,19 @@ class SimulationData(Tidy3dBaseModel):
     -------
     >>> import tidy3d as td
     >>> num_modes = 5
-    >>> x = [-1,1]
-    >>> y = [-2,0,2]
-    >>> z = [-3,-1,1,3]
+    >>> x = [-1,1,3]
+    >>> y = [-2,0,2,4]
+    >>> z = [-3,-1,1,3,5]
     >>> f = [2e14, 3e14]
-    >>> t = [0, 1e-12, 2e-12]
-    >>> mode_index = np.arange(num_modes)
-    >>> direction = ["+", "-"]
-    >>> coords = dict(x=x, y=y, z=z, f=f)
+    >>> coords = dict(x=x[:-1], y=y[:-1], z=z[:-1], f=f)
+    >>> grid = td.Grid(boundaries=td.Coords(x=x, y=y, z=z))
     >>> scalar_field = td.ScalarFieldDataArray((1+1j) * np.random.random((2,3,4,2)), coords=coords)
     >>> field_monitor = td.FieldMonitor(
     ...     size=(2,4,6),
     ...     freqs=[2e14, 3e14],
     ...     name='field',
     ...     fields=['Ex'],
+    ...     colocate=True,
     ... )
     >>> sim = Simulation(
     ...     size=(2, 4, 6),
@@ -59,7 +58,7 @@ class SimulationData(Tidy3dBaseModel):
     ...         )
     ...     ],
     ... )
-    >>> field_data = td.FieldData(monitor=field_monitor, Ex=scalar_field)
+    >>> field_data = td.FieldData(monitor=field_monitor, Ex=scalar_field, grid_expanded=grid)
     >>> sim_data = td.SimulationData(simulation=sim, data=(field_data,))
     """
 
@@ -201,8 +200,7 @@ class SimulationData(Tidy3dBaseModel):
         return mon_data
 
     def at_centers(self, field_monitor_name: str) -> xr.Dataset:
-        """return xarray.Dataset representation of field monitor data
-        co-located at Yee cell centers.
+        """Return xarray.Dataset representation of field monitor data colocated at Yee cell centers.
 
         Parameters
         ----------
@@ -212,15 +210,16 @@ class SimulationData(Tidy3dBaseModel):
         Returns
         -------
         xarray.Dataset
-            Dataset containing all of the fields in the data
-            interpolated to center locations on Yee grid.
+            Dataset containing all of the fields in the data interpolated to center locations on
+            the Yee grid.
         """
 
-        return self._at_centers(self.load_field_monitor(field_monitor_name))
+        monitor_data = self.load_field_monitor(field_monitor_name)
+        return monitor_data.at_coords(monitor_data.colocation_centers)
 
-    def _at_centers(self, monitor_data: xr.Dataset) -> xr.Dataset:
-        """return xarray.Dataset representation of field monitor data
-        co-located at Yee cell centers.
+    def _at_boundaries(self, monitor_data: xr.Dataset) -> xr.Dataset:
+        """Return xarray.Dataset representation of field monitor data colocated at Yee cell
+        boundaries.
 
         Parameters
         ----------
@@ -230,23 +229,37 @@ class SimulationData(Tidy3dBaseModel):
         Returns
         -------
         xarray.Dataset
-            Dataset containing all of the fields in the data
-            interpolated to center locations on Yee grid.
+            Dataset containing all of the fields in the data interpolated to boundary locations on
+            the Yee grid.
         """
 
-        # discretize the monitor and get center locations
-        sub_grid = self.simulation.discretize(monitor_data.monitor, extend=False)
-        centers = sub_grid.centers
+        if monitor_data.monitor.colocate:
+            # TODO: this still errors if monitor_data.colocate is allowed to be ``True`` in the
+            # adjoint plugin, and the monitor data is tracked in a gradient computation. It seems
+            # interpolating does something to the arrays that makes the JAX chain work.
+            return monitor_data.package_colocate_results(monitor_data.field_components)
 
-        # pass coords if each of the scalar field data have more than one coordinate along a dim
-        xyz_kwargs = {}
-        for dim, centers in zip("xyz", (centers.x, centers.y, centers.z)):
-            scalar_data = list(monitor_data.field_components.values())
-            coord_lens = [len(data.coords[dim]) for data in scalar_data]
-            if all(ncoords > 1 for ncoords in coord_lens):
-                xyz_kwargs[dim] = centers
+        # colocate to monitor grid boundaries
+        return monitor_data.at_coords(monitor_data.colocation_boundaries)
 
-        return monitor_data.colocate(**xyz_kwargs)
+    def at_boundaries(self, field_monitor_name: str) -> xr.Dataset:
+        """Return xarray.Dataset representation of field monitor data colocated at Yee cell
+        boundaries.
+
+        Parameters
+        ----------
+        field_monitor_name : str
+            Name of field monitor used in the original :class:`Simulation`.
+
+        Returns
+        -------
+        xarray.Dataset
+            Dataset containing all of the fields in the data interpolated to boundary locations on
+            the Yee grid.
+        """
+
+        # colocate to monitor grid boundaries
+        return self._at_boundaries(self.load_field_monitor(field_monitor_name))
 
     # pylint: disable=too-many-locals
     def get_poynting_vector(self, field_monitor_name: str) -> xr.Dataset:
@@ -271,7 +284,7 @@ class SimulationData(Tidy3dBaseModel):
         """
         # Fields from 2D monitors need a correction factor
         mon_data = self.load_field_monitor(field_monitor_name).grid_corrected_copy
-        field_dataset = self._at_centers(mon_data)
+        field_dataset = self._at_boundaries(mon_data)
 
         time_domain = isinstance(self.monitor_data[field_monitor_name], FieldTimeData)
 
@@ -364,7 +377,7 @@ class SimulationData(Tidy3dBaseModel):
                     return self._field_component_value(derived_data, val)
                 raise Tidy3dKeyError(f"Poynting component {field_name} not available")
         else:
-            dataset = self.at_centers(field_monitor_name)
+            dataset = self.at_boundaries(field_monitor_name)
 
         if field_name in ("E", "H", "S"):
             # Gather vector components

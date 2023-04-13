@@ -17,6 +17,7 @@ from .data_array import TimeDataArray
 from ..base import Tidy3dBaseModel
 from ..types import Axis
 from ...exceptions import DataError
+from ...log import log
 
 
 class Dataset(Tidy3dBaseModel, ABC):
@@ -46,7 +47,7 @@ class AbstractFieldDataset(Dataset, ABC):
         return xr.Dataset(centered_fields)
 
     def colocate(self, x=None, y=None, z=None) -> xr.Dataset:
-        """colocate all of the data at a set of x, y, z coordinates.
+        """Colocate all of the data at a set of x, y, z coordinates.
 
         Parameters
         ----------
@@ -72,6 +73,16 @@ class AbstractFieldDataset(Dataset, ABC):
         it is important that the fields are colocated at the same spatial locations.
         Be sure to apply this method to your field data in those cases.
         """
+
+        if hasattr(self, "monitor") and getattr(self, "monitor").colocate:
+            with log as consolidated_logger:
+                consolidated_logger.warning(
+                    "Colocating data that has already been colocated during the solver "
+                    "run. For most accurate results when colocating to custom coordinates set "
+                    "'Monitor.colocate' to 'False' to use the raw data on the Yee grid "
+                    "and avoid double interpolation. Note: the default value was changed to 'True' "
+                    "in Tidy3D version 2.4.0."
+                )
 
         # convert supplied coordinates to array and assign string mapping to them
         supplied_coord_map = {k: np.array(v) for k, v in zip("xyz", (x, y, z)) if v is not None}
