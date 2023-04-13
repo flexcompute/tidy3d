@@ -309,7 +309,7 @@ class FieldProjector(Tidy3dBaseModel):
             )
 
             if pts_per_wavelength is None:
-                points = sim_data.simulation.grid.centers.to_list[idx]
+                points = sim_data.simulation.grid.boundaries.to_list[idx]
                 points[np.argwhere(points < start)] = start
                 points[np.argwhere(points > stop)] = stop
                 colocation_points[idx] = np.unique(points)
@@ -320,7 +320,7 @@ class FieldProjector(Tidy3dBaseModel):
                 colocation_points[idx] = points
 
         for idx, points in enumerate(colocation_points):
-            if (hasattr(points, "__len__") and len(points) == 1) or not hasattr(points, "__len__"):
+            if np.array(points).size == 1:
                 colocation_points[idx] = None
 
         currents = currents.colocate(*colocation_points)

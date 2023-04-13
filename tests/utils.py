@@ -470,7 +470,7 @@ def run_emulated(simulation: td.Simulation, path=None, **kwargs) -> td.Simulatio
         """make a random FieldData from a FieldMonitor."""
         field_cmps = {}
         coords = {}
-        grid = simulation.discretize(monitor, extend=True)
+        grid = simulation.discretize_monitor(monitor)
 
         for field_name in monitor.fields:
             spatial_coords_dict = grid[field_name].dict()
@@ -499,11 +499,15 @@ def run_emulated(simulation: td.Simulation, path=None, **kwargs) -> td.Simulatio
         field_mnt = td.FieldMonitor(**monitor.dict(exclude={"type", "fields"}))
         field_data = make_field_data(monitor=field_mnt)
         return td.PermittivityData(
-            monitor=monitor, eps_xx=field_data.Ex, eps_yy=field_data.Ey, eps_zz=field_data.Ez
+            monitor=monitor,
+            eps_xx=field_data.Ex,
+            eps_yy=field_data.Ey,
+            eps_zz=field_data.Ez,
+            grid_expanded=simulation.discretize_monitor(monitor),
         )
 
     def make_diff_data(monitor: td.DiffractionMonitor) -> td.DiffractionData:
-        """make a random PermittivityData from a PermittivityMonitor."""
+        """make a random DiffractionData from a DiffractionMonitor."""
         f = list(monitor.freqs)
         orders_x = np.linspace(-1, 1, 3)
         orders_y = np.linspace(-2, 2, 5)

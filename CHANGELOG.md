@@ -8,17 +8,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - Added `hlim` and `vlim` kwargs to `Simulation.plot()` and `Simulation.plot_eps()` for setting horizontal and veritcal plot limits.
 - Added support for chi3 nonlinearity via `NonlinearSusceptibility` class.
+- Spatial downsampling allowed in ``PermittivityMonitor`` through the ``interval_space`` argument.
 
 ### Changed
 - `nyquist_step` also taking the frequency range of frequency-domain monitors into account.
 - Added option to allow DC component in `GaussianPulse` spectrum, by setting `remove_dc_component=False` in `GaussianPulse`.
 - Jax installation from `pip install "tidy3d[jax]"` handled same way on windows as other OS if python >= 3.9.
+- `colocate` introduced as an argument to `ModeSolver` and a Field in `ModeSolverMonitor`, set to True by default.
+- `FieldTimeMonitor`-s and `FieldMonitor`-s that have `colocate=True` return fields colocated to the grid boundaries rather than centers. This matches better user expectations for example when the simulation has a symmetry (explicitly defined, or implicit) w.r.t. a given axis. When colocating to centers, fields would be ``dl / 2`` away from that symmetry plane, and components that are expected to go to zero do not (of course, they still do if interpolated to the symmetry plane). Another convenient use case is that it is easier to place a 2D monitor exactly on a grid boundary in the automatically generated grid, by simply passing an override structure with the monitor geometry.
+- In these monitors, `colocate` is now set to `True` by default. This is to avoid a lot of potential confusion coming from returning non-colocated fields by default, when colocated fields need to be used when computing quantities that depend on more than one field component, like flux or field intensity.
+- Field colocation for computations like flux, Poynting, and modal overlap also happen to cell boundaries rather than centers. The effect on final results
+should be close to imperceptible as verified by a large number of backend tests and our online examples. Any difference can be at most on the scale of
+the difference that can be observed when slightly modifying the grid resolution.
 
 ### Fixed
 - Bug in angled mode solver with negative `angle_theta`.
 - Properly include `JaxSimulation.input_structures` in `JaxSimulationData.plot_field()`.
 - Numerically stable sigmoid function in radius of curvature constraint.
 - Fixed 2d checking in `Geometry.intersections_2dbox()`.
+- Spatial monitor downsampling when the monitor is crossing a symmetry plane or Bloch boundary conditions.
 
 ## [2.4.0rc1] - 2023-7-27
 
@@ -87,6 +95,7 @@ that the fields match exactly except for a ``pi`` phase shift. This interpretati
 - `ArrayLike` validation properly fails with `None` or `nan` contents.
 - Apply finite grid correction to the fields when calculating the Poynting vector from 2D monitors.
 - `JaxCustomMedium` properly handles complex-valued permittivity.
+
 
 ## [2.3.0] - 2023-6-30
 

@@ -282,7 +282,7 @@ def test_proj_clientside():
         Hz=scalar_field,
         symmetry=sim.symmetry,
         symmetry_center=sim.center,
-        grid_expanded=sim.discretize(monitor, extend=True),
+        grid_expanded=sim.discretize_monitor(monitor),
     )
 
     sim_data = td.SimulationData(simulation=sim, data=(data,))

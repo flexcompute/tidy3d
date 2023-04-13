@@ -5,7 +5,7 @@ from typing import Union, Tuple
 import pydantic
 import numpy as np
 
-from .types import Ax, EMField, ArrayFloat1D, FreqArray, FreqBound
+from .types import Ax, EMField, ArrayFloat1D, FreqArray, FreqBound, Numpy
 from .types import Literal, Direction, Coordinate, Axis, ObsGridArray
 from .geometry import Box
 from .validators import assert_plane
@@ -30,6 +30,23 @@ class Monitor(Box, ABC):
         title="Name",
         description="Unique name for monitor.",
         min_length=1,
+    )
+
+    interval_space: Tuple[Literal[1], Literal[1], Literal[1]] = pydantic.Field(
+        (1, 1, 1),
+        title="Spatial interval",
+        description="Number of grid step intervals between monitor recordings. If equal to 1, "
+        "there will be no downsampling. If greater than 1, the step will be applied, but the last "
+        "point of the monitor grid is always included. "
+        "Not all monitors support values different from 1.",
+    )
+
+    colocate: Literal[True] = pydantic.Field(
+        True,
+        title="Colocate fields",
+        description="Defines whether fields are colocated to grid cell boundaries (i.e. to the "
+        "primal grid) on-the-fly during a solver run. Can be toggled for field recording monitors "
+        "and is hard-coded for other monitors depending on their specific function.",
     )
 
     @cached_property
@@ -64,6 +81,42 @@ class Monitor(Box, ABC):
         int
             Number of bytes to be stored in monitor.
         """
+
+    def downsample(self, arr: Numpy, axis: Axis) -> Numpy:
+        """Downsample a 1D array making sure to keep the first and last entries, based on the
+        spatial interval defined for the ``axis``.
+
+        Parameters
+        ----------
+        arr : Numpy
+            A 1D array of arbitrary type.
+        axis : Axis
+            Axis for which to select the interval_space defined for the monitor.
+
+        Returns
+        -------
+        Numpy
+            Downsampled array.
+        """
+
+        size = len(arr)
+        interval = self.interval_space[axis]
+        # There should always be at least 3 indices for "surface" monitors. Also, if the
+        # size along this dim is already smaller than the interval, then don't downsample.
+        if size < 4 or (size - 1) <= interval:
+            return arr
+        # make sure the last index is always included
+        inds = np.arange(0, size, interval)
+        if inds[-1] != size - 1:
+            inds = np.append(inds, size - 1)
+        return arr[inds]
+
+    def downsampled_num_cells(self, num_cells: Tuple[int, int, int]) -> Tuple[int, int, int]:
+        """Given a tuple of the number of cells spanned by the monitor along each dimension,
+        return the number of cells one would have after downsampling based on ``interval_space``.
+        """
+        arrs = [np.arange(ncells) for ncells in num_cells]
+        return tuple((self.downsample(arr, axis=dim).size for dim, arr in enumerate(arrs)))
 
 
 class FreqMonitor(Monitor, ABC):
@@ -188,37 +241,30 @@ class AbstractFieldMonitor(Monitor, ABC):
         (1, 1, 1),
         title="Spatial interval",
         description="Number of grid step intervals between monitor recordings. If equal to 1, "
-        "there will be no downsampling. If greater than 1, fields will be downsampled "
-        "and automatically colocated.",
+        "there will be no downsampling. If greater than 1, the step will be applied, but the last "
+        "point of the monitor grid is always included.",
     )
 
     colocate: bool = pydantic.Field(
         None,
         title="Colocate fields",
-        description="Toggle whether fields should be colocated to grid cell centers. Default: "
-        "``False`` if ``interval_space`` is 1 in each direction, ``True`` if ``interval_space`` "
-        "is greater than one in any direction.",
+        description="Toggle whether fields should be colocated to grid cell boundaries (i.e. "
+        "primal grid nodes). Default is ``True``.",
     )
 
+    # TODO: remove after 2.4
     @pydantic.validator("colocate", always=True)
-    def set_default_colocate(cls, val, values):
-        """Toggle default field colocation setting based on `interval_space`."""
-        interval_space = values.get("interval_space")
-        if val is None:
-            val = sum(interval_space) != 3
+    def warn_set_colocate(cls, val):
+        """If ``colocate`` not provided, set to true, but warn that behavior has changed."""
+        with log as consolidated_logger:
+            if val is None:
+                consolidated_logger.warning(
+                    "Default value for the field monitor 'colocate' setting has changed to "
+                    "'True' in Tidy3D 2.4.0. All field components will be colocated to the grid "
+                    "boundaries. Set to 'False' to get the raw fields on the Yee grid instead."
+                )
+                return True
         return val
-
-    def downsampled_num_cells(self, num_cells: Tuple[int, int, int]) -> Tuple[int, int, int]:
-        """Given a tuple of the number of cells spanned by the monitor along each dimension,
-        return the number of cells one would have after downsampling based on ``interval_space``.
-        """
-        num_cells_new = list(num_cells)
-        for idx, interval in enumerate(self.interval_space):
-            if interval == 1 or num_cells[idx] < 4 or (num_cells[idx] - 1) <= interval:
-                continue
-            num_cells_new[idx] = np.floor((num_cells[idx] - 1) / interval) + 1
-            num_cells_new[idx] += int((num_cells[idx] - 1) % interval > 0)
-        return num_cells_new
 
 
 class PlanarMonitor(Monitor, ABC):
@@ -298,7 +344,8 @@ class FieldMonitor(AbstractFieldMonitor, FreqMonitor):
     ...     size=(2,2,2),
     ...     fields=['Hx'],
     ...     freqs=[250e12, 300e12],
-    ...     name='steady_state_monitor')
+    ...     name='steady_state_monitor',
+    ...     colocate=True)
     """
 
     def storage_size(self, num_cells: int, tmesh: ArrayFloat1D) -> int:
@@ -319,6 +366,7 @@ class FieldTimeMonitor(AbstractFieldMonitor, TimeMonitor):
     ...     start=1e-13,
     ...     stop=5e-13,
     ...     interval=2,
+    ...     colocate=True,
     ...     name='movie_monitor')
     """
 
@@ -348,6 +396,23 @@ class PermittivityMonitor(FreqMonitor):
     ...     freqs=[250e12, 300e12],
     ...     name='eps_monitor')
     """
+
+    colocate: Literal[False] = pydantic.Field(
+        False,
+        title="Colocate fields",
+        description="Colocation turned off, since colocated permittivity values do not have a "
+        "physical meaning - they do not correspond to the subpixel-averaged ones.",
+    )
+
+    interval_space: Tuple[
+        pydantic.PositiveInt, pydantic.PositiveInt, pydantic.PositiveInt
+    ] = pydantic.Field(
+        (1, 1, 1),
+        title="Spatial interval",
+        description="Number of grid step intervals between monitor recordings. If equal to 1, "
+        "there will be no downsampling. If greater than 1, the step will be applied, but the last "
+        "point of the monitor grid is always included.",
+    )
 
     def storage_size(self, num_cells: int, tmesh: ArrayFloat1D) -> int:
         """Size of monitor storage given the number of points after discretization."""
@@ -484,6 +549,14 @@ class ModeMonitor(AbstractModeMonitor):
     ...     name='mode_monitor')
     """
 
+    colocate: Literal[False] = pydantic.Field(
+        False,
+        title="Colocate fields",
+        description="Defines whether fields are colocated to grid cell boundaries (i.e. to the "
+        "primal grid) on-the-fly during a solver run. Can be toggled for field recording monitors "
+        "and is hard-coded for other monitors depending on their specific function.",
+    )
+
     def storage_size(self, num_cells: int, tmesh: int) -> int:
         """Size of monitor storage given the number of points after discretization."""
         # stores 3 complex numbers per frequency, per mode.
@@ -512,19 +585,16 @@ class ModeSolverMonitor(AbstractModeMonitor):
         "dimension.",
     )
 
+    colocate: bool = pydantic.Field(
+        True,
+        title="Colocate fields",
+        description="Toggle whether fields should be colocated to grid cell boundaries (i.e. "
+        "primal grid nodes). Default is ``True``.",
+    )
+
     def storage_size(self, num_cells: int, tmesh: int) -> int:
         """Size of monitor storage given the number of points after discretization."""
         return 6 * BYTES_COMPLEX * num_cells * len(self.freqs) * self.mode_spec.num_modes
-
-    @property
-    def interval_space(self):
-        """No downsampling is applied to the stored fields."""
-        return (1, 1, 1)
-
-    @property
-    def colocate(self):
-        """Fields are stored on the Yee grid."""
-        return False
 
 
 class FieldProjectionSurface(Tidy3dBaseModel):
@@ -589,7 +659,11 @@ class AbstractFieldProjectionMonitor(SurfaceIntegrationMonitor, FreqMonitor):
         return [
             FieldProjectionSurface(
                 monitor=FieldMonitor(
-                    center=surface.center, size=surface.size, freqs=self.freqs, name=surface.name
+                    center=surface.center,
+                    size=surface.size,
+                    freqs=self.freqs,
+                    name=surface.name,
+                    colocate=True,
                 ),
                 normal_dir=surface.normal_dir,
             )
@@ -840,6 +914,14 @@ class DiffractionMonitor(PlanarMonitor, FreqMonitor):
         description="Direction of the surface monitor's normal vector w.r.t. "
         "the positive x, y or z unit vectors. Must be one of ``'+'`` or ``'-'``. "
         "Defaults to ``'+'`` if not provided.",
+    )
+
+    colocate: Literal[False] = pydantic.Field(
+        False,
+        title="Colocate fields",
+        description="Defines whether fields are colocated to grid cell boundaries (i.e. to the "
+        "primal grid) on-the-fly during a solver run. Can be toggled for field recording monitors "
+        "and is hard-coded for other monitors depending on their specific function.",
     )
 
     @pydantic.validator("size", always=True)

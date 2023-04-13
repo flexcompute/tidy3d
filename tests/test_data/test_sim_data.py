@@ -290,7 +290,7 @@ def test_empty_io(tmp_path):
         monitor=monitor,
         symmetry=sim.symmetry,
         symmetry_center=sim.center,
-        grid_expanded=sim.discretize(monitor, extend=True),
+        grid_expanded=sim.discretize_monitor(monitor),
         **fields,
     )
     sim_data = SimulationData(simulation=sim, data=(field_data,))
