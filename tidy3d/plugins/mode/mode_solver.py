@@ -2,7 +2,7 @@
 invariance along a given propagation axis.
 """
 
-from typing import List, Tuple, Dict, Union
+from typing import List, Tuple, Dict
 
 import numpy as np
 import pydantic
@@ -33,8 +33,6 @@ MODE_MONITOR_NAME = "<<<MODE_SOLVER_MONITOR>>>"
 # Warning for field intensity at edges over total field intensity larger than this value
 FIELD_DECAY_CUTOFF = 1e-2
 
-GROUP_INDEX_STEP = 0.005
-
 
 class ModeSolver(Tidy3dBaseModel):
     """Interface for solving electromagnetic eigenmodes in a 2D plane with translational
@@ -59,15 +57,6 @@ class ModeSolver(Tidy3dBaseModel):
         ..., title="Frequencies", description="A list of frequencies at which to solve."
     )
 
-    compute_group_index: Union[bool, pydantic.PositiveFloat] = pydantic.Field(
-        False,
-        title="Compute group index",
-        description="Control the computation of the group index alongside the effective index. If "
-        "set to a positive value, it sets the fractional frequency step used in the numerical "
-        "differentiation of the effective index to compute the group index. If set to `True`, the "
-        f"default of {GROUP_INDEX_STEP} is used.",
-    )
-
     @pydantic.validator("plane", always=True)
     def is_plane(cls, val):
         """Raise validation error if not planar."""
@@ -81,32 +70,6 @@ class ModeSolver(Tidy3dBaseModel):
         if len(val) == 0:
             raise ValidationError("ModeSolver 'freqs' must be a non-empty tuple.")
         return val
-
-    @pydantic.validator("compute_group_index")
-    def assign_default_on_true(cls, val):
-        """Assing the default fractional frequency step value if not provided."""
-        if val is True:
-            return GROUP_INDEX_STEP
-        if val >= 1:
-            raise ValidationError("Parameter 'compute_group_index' must be less than 1.")
-        return val
-
-    @pydantic.root_validator()
-    def check_precision(cls, values):
-        """Verify critical ModeSpec settings for group index calculation."""
-        if values["compute_group_index"] > 0:
-            if values["mode_spec"].track_freq is None:
-                log.warning(
-                    "Group index calculation without mode tracking can lead to incorrect results "
-                    "around mode crossings. Consider setting the 'ModeSpec.track_freq' field to "
-                    "'central'."
-                )
-            if values["mode_spec"].precision != "double":
-                log.warning(
-                    "Group index calculation should be performed with double precision for better "
-                    "accuracy. Consider setting the 'ModeSpec.precision' field to 'double'."
-                )
-        return values
 
     @cached_property
     def normal_axis(self) -> Axis:
@@ -153,6 +116,7 @@ class ModeSolver(Tidy3dBaseModel):
         """
         return self.data
 
+    # pylint: disable=too-many-locals
     def _get_data_with_group_index(self) -> ModeSolverData:
         """:class:`.ModeSolverData` with fields, effective and group indices on unexpanded grid.
 
@@ -164,11 +128,13 @@ class ModeSolver(Tidy3dBaseModel):
         """
 
         # insert extra frequency steps into original array
-        fractional_steps = (1 - self.compute_group_index, 1, 1 + self.compute_group_index)
+        f_step = self.mode_spec.group_index_step
+        fractional_steps = (1 - f_step, 1, 1 + f_step)
         freqs = np.outer(self.freqs, fractional_steps).flatten()
 
         # create a copy with the required frequencies for numerical differentiation
-        mode_solver = self.copy(update={"freqs": freqs, "compute_group_index": False})
+        mode_spec = self.mode_spec.copy(update={"group_index_step": False})
+        mode_solver = self.copy(update={"freqs": freqs, "mode_spec": mode_spec})
         mode_solver_data = mode_solver.data_raw
 
         # calculate group index
@@ -178,8 +144,9 @@ class ModeSolver(Tidy3dBaseModel):
         n_backward = mode_solver_data.n_eff.isel(f=slice(0, num_freqs, 3)).values
         n_forward = mode_solver_data.n_eff.isel(f=slice(2, num_freqs, 3)).values
 
+        n_group_data = n_center + (n_forward - n_backward) / (2 * f_step)
         n_group = ModeIndexDataArray(
-            n_center + (n_forward - n_backward) / (2 * self.compute_group_index),
+            n_group_data,
             coords={
                 "f": list(self.freqs),
                 "mode_index": np.arange(self.mode_spec.num_modes),
@@ -212,7 +179,7 @@ class ModeSolver(Tidy3dBaseModel):
             :class:`.ModeSolverData` object containing the effective index and mode fields.
         """
 
-        if self.compute_group_index > 0:
+        if self.mode_spec.group_index_step > 0:
             return self._get_data_with_group_index()
 
         _, _solver_coords = self.plane.pop_axis(
@@ -358,7 +325,8 @@ class ModeSolver(Tidy3dBaseModel):
 
         return n_complex, fields
 
-    def _solve_single_freq(  # pylint:disable=too-many-locals
+    # pylint:disable=too-many-locals
+    def _solve_single_freq(
         self,
         freq: float,
         coords: Tuple[ArrayFloat1D, ArrayFloat1D],
@@ -579,7 +547,8 @@ class ModeSolver(Tidy3dBaseModel):
             name=name,
         )
 
-    def plot_field(  # pylint:disable=too-many-arguments
+    # pylint:disable=too-many-arguments
+    def plot_field(
         self,
         field_name: str,
         val: Literal["real", "imag", "abs"] = "real",
