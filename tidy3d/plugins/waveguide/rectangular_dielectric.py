@@ -192,15 +192,6 @@ class RectangularDielectric(Tidy3dBaseModel):
         description="Maximal size increase between adjacent grid boundaries.",
     )
 
-    compute_group_index: Union[bool, pydantic.PositiveFloat] = pydantic.Field(
-        False,
-        title="Compute group index",
-        description="Control the computation of the group index alongside the effective index. If "
-        "set to a positive value, it sets the fractional frequency step used in the numerical "
-        "differentiation of the effective index to compute the group index. If set to `True`, the "
-        f"default of {GROUP_INDEX_STEP} is used.",
-    )
-
     @pydantic.validator("wavelength", "core_width", "gap", always=True)
     def _set_array(cls, val):
         """Ensure values are not negative and convert to numpy arrays."""
@@ -670,7 +661,6 @@ class RectangularDielectric(Tidy3dBaseModel):
             plane=plane,
             mode_spec=self.mode_spec,
             freqs=freqs,
-            compute_group_index=self.compute_group_index,
         )
 
         return mode_solver

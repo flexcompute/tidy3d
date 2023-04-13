@@ -345,6 +345,14 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
         return self._tangential_corrected(self._centered_fields)
 
     @property
+    def intensity(self) -> ScalarFieldDataArray:
+        fields = self._centered_fields
+        components =  ("Ex", "Ey", "Ez")
+        if any(cmp not in fields for cmp in components):
+            raise Exception("Can't compute intensity, all E field components must be present.")
+        return sum(fields[cmp].abs ** 2 for cmp in components)
+
+    @property
     def poynting(self) -> ScalarFieldDataArray:
         """Time-averaged Poynting vector for frequency-domain data associated to a 2D monitor,
         projected to the direction normal to the monitor plane."""
@@ -367,17 +375,15 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
 
     @cached_property
     def mode_area(self) -> FreqModeDataArray:
-        """Effective mode area corresponding to a 2D monitor
+        """Effective mode area corresponding to a 2D monitor.
 
         Effective mode area is calculated as: (∫|E|²dA)² / (∫|E|⁴dA)
         """
-        fields = self._centered_fields
-        abs_e_sq = fields["Ex"].abs ** 2 + fields["Ey"].abs ** 2 + fields["Ez"].abs ** 2
-
+        intensity = self.intensity
         # integrate over the plane
         d_area = self._diff_area
-        num = (abs_e_sq * d_area).sum(dim=d_area.dims) ** 2
-        den = (abs_e_sq**2 * d_area).sum(dim=d_area.dims)
+        num = (intensity * d_area).sum(dim=d_area.dims) ** 2
+        den = (intensity**2 * d_area).sum(dim=d_area.dims)
 
         return FreqModeDataArray(num / den)
 
