@@ -346,10 +346,11 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
 
     @property
     def intensity(self) -> ScalarFieldDataArray:
+        """Return the sum of the squared absolute electric field components."""
         fields = self._centered_fields
         components = ("Ex", "Ey", "Ez")
         if any(cmp not in fields for cmp in components):
-            raise Exception("Can't compute intensity, all E field components must be present.")
+            raise KeyError("Can't compute intensity, all E field components must be present.")
         return sum(fields[cmp].abs ** 2 for cmp in components)
 
     @property

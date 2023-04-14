@@ -20,7 +20,7 @@ from ...constants import C_0, inf, MICROMETER, RADIAN
 from ...exceptions import Tidy3dError, ValidationError
 from ...log import log
 
-from ..mode.mode_solver import ModeSolver, GROUP_INDEX_STEP
+from ..mode.mode_solver import ModeSolver
 
 
 class RectangularDielectric(Tidy3dBaseModel):
