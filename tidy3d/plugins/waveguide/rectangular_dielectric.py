@@ -720,7 +720,7 @@ class RectangularDielectric(Tidy3dBaseModel):
         matplotlib.axes._subplots.Axes
             The supplied or created matplotlib axes.
         """
-        self.mode_solver.simulation.plot(
+        return self.mode_solver.simulation.plot(
             x=x,
             y=y,
             z=z,
@@ -771,7 +771,7 @@ class RectangularDielectric(Tidy3dBaseModel):
         matplotlib.axes._subplots.Axes
             The supplied or created matplotlib axes.
         """
-        self.mode_solver.simulation.plot_eps(
+        return self.mode_solver.simulation.plot_eps(
             x=x,
             y=y,
             z=z,
@@ -803,7 +803,7 @@ class RectangularDielectric(Tidy3dBaseModel):
         matplotlib.axes._subplots.Axes
             The supplied or created matplotlib axes.
         """
-        self.mode_solver.simulation.plot_structures(
+        return self.mode_solver.simulation.plot_structures(
             x=x,
             y=y,
             z=z,
@@ -852,7 +852,7 @@ class RectangularDielectric(Tidy3dBaseModel):
         matplotlib.axes._subplots.Axes
             The supplied or created matplotlib axes.
         """
-        self.mode_solver.simulation.plot_structures_eps(
+        return self.mode_solver.simulation.plot_structures_eps(
             x=x,
             y=y,
             z=z,
@@ -893,7 +893,7 @@ class RectangularDielectric(Tidy3dBaseModel):
         matplotlib.axes._subplots.Axes
             The supplied or created matplotlib axes.
         """
-        self.mode_solver.simulation.plot_grid(
+        return self.mode_solver.simulation.plot_grid(
             x=x,
             y=y,
             z=z,
@@ -950,7 +950,7 @@ class RectangularDielectric(Tidy3dBaseModel):
         matplotlib.axes._subplots.Axes
             The supplied or created matplotlib axes.
         """
-        self.mode_solver.plot_field(
+        return self.mode_solver.plot_field(
             field_name=field_name,
             val=val,
             eps_alpha=eps_alpha,
