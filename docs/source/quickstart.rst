@@ -49,6 +49,14 @@ If you wish to install the Tidy3D Python API locally, the following instructions
 
 Where ``XXX`` is your API key, which can be copied from your `account page <https://tidy3d.simulation.cloud/account>`_ in the web interface.
 
+In a hosted jupyter notebook environment (eg google colab), it may be more convenient to install and configure via the following lines at the top of the notebook.
+
+.. code-block:: bash
+
+    !pip install tidy3d
+    import tidy3d.web as web
+    web.configure("XXX")
+
 If those commands did not work, there are advanced installation instructions below, which should help solve the issue.
 
 Advanced Installation Instructions
