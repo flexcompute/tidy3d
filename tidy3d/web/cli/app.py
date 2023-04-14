@@ -43,6 +43,18 @@ def tidy3d_cli():
 @click.option("--apikey", prompt=False)
 def configure(apikey):
     """Click command to configure the api key.
+
+    Parameters
+    ----------
+    apikey : str
+        User input api key.
+    """
+    configure_fn(apikey)
+
+
+def configure_fn(apikey: str) -> None:
+    """Python function that tries to set configuration based on a provided API key.
+
     Parameters
     ----------
     apikey : str
