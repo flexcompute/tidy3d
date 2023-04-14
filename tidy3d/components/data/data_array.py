@@ -206,6 +206,22 @@ class TimeDataArray(DataArray):
     _dims = "t"
 
 
+class MixedModeDataArray(DataArray):
+    """Scalar property associated with mode pairs
+
+    Example
+    -------
+    >>> f = [1e14, 2e14, 3e14]
+    >>> mode_index_0 = np.arange(4)
+    >>> mode_index_1 = np.arange(2)
+    >>> coords = dict(f=f, mode_index_0=mode_index_0, mode_index_1=mode_index_1)
+    >>> data = MixedModeDataArray((1+1j) * np.random.random((3, 4, 2)), coords=coords)
+    """
+
+    __slots__ = ()
+    _dims = ("f", "mode_index_0", "mode_index_1")
+
+
 class ScalarFieldDataArray(DataArray):
     """Spatial distribution in the frequency-domain.
 
