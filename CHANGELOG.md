@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 ### Fixed
+- `web.Batch` monitoring is more robust, will not raise exception if a job errors or diverges. In this case, the progressbar text will render in red.
 
 ## [2.0.3] - 2023-4-11
 

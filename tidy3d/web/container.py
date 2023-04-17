@@ -383,7 +383,14 @@ class Batch(WebContainer):
         """
 
         def pbar_description(task_name: str, status: str) -> str:
-            return f"{task_name}: status = {status}"
+            """Make a progressbar description based on the status."""
+            description = f"{task_name}: status = {status}"
+
+            # if something went wrong, make it red
+            if "error" in status or "diverge" in status:
+                description = f"[red]{description}"
+
+            return description
 
         run_statuses = [
             "draft",
@@ -395,7 +402,7 @@ class Batch(WebContainer):
             "visualize",
             "success",
         ]
-        end_statuses = ("success", "error", "diverged", "deleted", "draft")
+        end_statuses = ("success", "error", "errored", "diverged", "diverge", "deleted", "draft")
 
         if self.verbose:
             console = Console()
@@ -416,22 +423,28 @@ class Batch(WebContainer):
                         pbar = pbar_tasks[task_name]
                         status = job.status
                         description = pbar_description(task_name, status)
-                        completed = run_statuses.index(status)
+
+                        # if a problem occured, update progressbar completion to 100%
+                        if status not in run_statuses:
+                            completed = run_statuses.index("success")
+                        else:
+                            completed = run_statuses.index(status)
+
                         progress.update(pbar, description=description, completed=completed)
                     time.sleep(web.REFRESH_TIME)
 
-                # set all to 100% completed
+                # set all to 100% completed (if error or diverge, will be red)
                 for task_name, job in self.jobs.items():
                     pbar = pbar_tasks[task_name]
                     status = job.status
                     description = pbar_description(task_name, status)
-                    if status == "success":
-                        progress.update(
-                            pbar,
-                            description=description,
-                            completed=len(run_statuses) - 1,
-                            refresh=True,
-                        )
+
+                    progress.update(
+                        pbar,
+                        description=description,
+                        completed=len(run_statuses) - 1,
+                        refresh=True,
+                    )
 
                 console.log("Batch complete.")
 
