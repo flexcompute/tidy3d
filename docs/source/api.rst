@@ -392,6 +392,14 @@ Adjoint
    tidy3d.plugins.adjoint.JaxPermittivityDataset
    tidy3d.plugins.adjoint.JaxDataArray
 
+Waveguide
+---------
+
+.. autosummary::
+   :toctree: _autosummary/
+
+   tidy3d.plugins.waveguide.RectangularDielectric
+
 Constants
 =========
 

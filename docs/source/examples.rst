@@ -45,6 +45,7 @@ Mode Solver
     notebooks/ModeSolver
     notebooks/Modal_sources_monitors
     notebooks/Modes_bent_angled
+    notebooks/WaveguidePluginDemonstration
 
 Web API
 ~~~~~~~
