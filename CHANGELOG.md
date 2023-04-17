@@ -6,6 +6,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+
+### Changed
+
+### Fixed
+
+## [2.1.0] - 2023-4-18
+
+### Added
 - Group index calculation added to ModeSpec.
 - Waveguide plugin for quickly calculating modes in dielectric waveguides.
 - `ElectromagneticFieldData.dot_intep` to calculate mode overlap integrals between modes with different discretizations.
@@ -690,7 +698,8 @@ which fields are to be projected is now determined automatically based on the me
 - Job and Batch classes for better simulation handling (eventually to fully replace webapi functions).
 - A large number of small improvements and bug fixes.
 
-[Unreleased]: https://github.com/flexcompute/tidy3d/compare/v2.0.3...develop
+[Unreleased]: https://github.com/flexcompute/tidy3d/compare/v2.1.0...develop
+[2.1.0]: https://github.com/flexcompute/tidy3d/compare/v2.0.3...v2.1.0
 [2.0.3]: https://github.com/flexcompute/tidy3d/compare/v2.0.2...v2.0.3
 [2.0.2]: https://github.com/flexcompute/tidy3d/compare/v2.0.1...v2.0.2
 [2.0.1]: https://github.com/flexcompute/tidy3d/compare/v1.10.0...v2.0.1
