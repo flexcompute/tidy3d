@@ -15,6 +15,7 @@ from .task import TaskId, TaskInfo, RunInfo, TaskName
 from ..components.simulation import Simulation
 from ..components.base import Tidy3dBaseModel
 from ..components.data.sim_data import SimulationData
+from ..log import log
 
 from ..exceptions import DataError
 
@@ -203,6 +204,7 @@ class BatchData(Tidy3dBaseModel):
         """Load a :class:`.SimulationData` from file by task name."""
         task_data_path = self.task_paths[task_name]
         task_id = self.task_ids[task_name]
+        web.get_info(task_id)
         return web.load(
             task_id=task_id,
             path=task_data_path,
@@ -506,8 +508,13 @@ class Batch(WebContainer):
 
         self.to_file(self._batch_path(path_dir=path_dir))
 
-        for job in self.jobs.values():
+        for task_name, job in self.jobs.items():
             job_path = self._job_data_path(task_id=job.task_id, path_dir=path_dir)
+
+            if "error" in job.status:
+                log.warning(f"Not downloading '{task_name}' as the task errored.")
+                continue
+
             job.download(path=job_path)
 
     def load(self, path_dir: str = DEFAULT_DATA_DIR) -> BatchData:
@@ -535,6 +542,11 @@ class Batch(WebContainer):
         task_paths = {}
         task_ids = {}
         for task_name, job in self.jobs.items():
+
+            if "error" in job.status:
+                log.warning(f"Not loading '{task_name}' as the task errored.")
+                continue
+
             task_paths[task_name] = self._job_data_path(task_id=job.task_id, path_dir=path_dir)
             task_ids[task_name] = self.jobs[task_name].task_id
 
