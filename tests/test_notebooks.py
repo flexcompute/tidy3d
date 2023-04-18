@@ -21,15 +21,18 @@ notebook_filenames_all = [
     if ".ipynb" in f and f != ".ipynb_checkpoints"
 ]
 
-# for i, path in enumerate(notebook_filenames):
+
+# uncomment to print notebooks
+# for i, path in enumerate(notebook_filenames_all):
 #     notebook_base = path.split('/')[-1]
 #     print(f"notebook[{i}] = '{notebook_base}'")
 
 
 # if you want to run only some notebooks, put here, if empty, run all
 run_only = [
-    # "WaveguideSizeConverter"
+    # "Metalens",
 ]
+
 skip = [
 ]
 
@@ -44,54 +47,65 @@ for fname in notebook_filenames_all:
         notebook_filenames.append(fname)
 
 """ 
-as of Feb 2 2023
+as of April 18 2023
 notebook[0] = 'Metalens.ipynb'
-notebook[1] = 'GDS_import.ipynb'
-notebook[2] = 'HighQ_Si.ipynb'
-notebook[3] = 'ModeSolver.ipynb'
-notebook[4] = 'WhatsNew.ipynb'
-notebook[5] = 'BiosensorGrating.ipynb'
-notebook[6] = 'FieldProjections.ipynb'
-notebook[7] = 'AdjointPlugin_3_InverseDesign.ipynb'
-notebook[8] = 'WebAPI.ipynb'
-notebook[9] = '8ChannelDemultiplexer.ipynb'
-notebook[10] = 'DielectricMetasurfaceAbsorber.ipynb'
-notebook[11] = 'ParameterScan.ipynb'
-notebook[12] = 'MMI_1x4.ipynb'
-notebook[13] = 'Fitting.ipynb'
-notebook[14] = 'OptimizedL3.ipynb'
-notebook[15] = 'ZonePlateFieldProjection.ipynb'
-notebook[16] = 'StartHere.ipynb'
-notebook[17] = 'GratingCoupler.ipynb'
-notebook[18] = 'WaveguideCrossing.ipynb'
-notebook[19] = 'GradientMetasurfaceReflector.ipynb'
-notebook[20] = 'GratingEfficiency.ipynb'
-notebook[21] = 'AdjointPlugin_2_GradientChecking.ipynb'
-notebook[22] = 'YJunction.ipynb'
-notebook[23] = 'VizData.ipynb'
-notebook[24] = 'Modal_sources_monitors.ipynb'
-notebook[25] = 'Modes_bent_angled.ipynb'
-notebook[26] = 'BraggGratings.ipynb'
-notebook[27] = 'Dispersion.ipynb'
-notebook[28] = 'AutoGrid.ipynb'
-notebook[29] = 'DistributedBraggReflectorCavity.ipynb'
-notebook[30] = 'PlasmonicNanoparticle.ipynb'
-notebook[31] = 'BoundaryConditions.ipynb'
-notebook[32] = 'WaveguideSizeConverter.ipynb'
-notebook[33] = 'PolarizationSplitterRotator.ipynb'
-notebook[34] = 'Bandstructure.ipynb'
-notebook[35] = 'CustomFieldSource.ipynb'
-notebook[36] = 'SMatrix.ipynb'
-notebook[37] = 'EulerWaveguideBend.ipynb'
-notebook[38] = 'PlasmonicYagiUdaNanoantenna.ipynb'
-notebook[39] = 'AdjointPlugin_1_Intro.ipynb'
-notebook[40] = 'RingResonator.ipynb'
-notebook[41] = 'THzDemultiplexerFilter.ipynb'
-notebook[42] = 'Near2FarSphereRCS.ipynb'
-notebook[43] = 'Simulation.ipynb'
-notebook[44] = 'VizSimulation.ipynb'
-notebook[45] = 'CustomMediumTutorial.ipynb'
-notebook[46] = 'HighQ_Ge.ipynb'
+notebook[1] = 'Self_intersecting_polyslab.ipynb'
+notebook[2] = 'STLImport.ipynb'
+notebook[3] = 'GDS_import.ipynb'
+notebook[4] = 'HighQ_Si.ipynb'
+notebook[5] = 'ModeSolver.ipynb'
+notebook[6] = 'BiosensorGrating.ipynb'
+notebook[7] = 'FieldProjections.ipynb'
+notebook[8] = 'AdjointPlugin_3_InverseDesign.ipynb'
+notebook[9] = 'WebAPI.ipynb'
+notebook[10] = '8ChannelDemultiplexer.ipynb'
+notebook[11] = 'TFSF.ipynb'
+notebook[12] = 'AdjointPlugin_4_MultiObjective.ipynb'
+notebook[13] = 'DielectricMetasurfaceAbsorber.ipynb'
+notebook[14] = 'ParameterScan.ipynb'
+notebook[15] = 'MMI_1x4.ipynb'
+notebook[16] = 'OpticalLuneburgLens.ipynb'
+notebook[17] = 'Fitting.ipynb'
+notebook[18] = 'OptimizedL3.ipynb'
+notebook[19] = 'ZonePlateFieldProjection.ipynb'
+notebook[20] = 'StartHere.ipynb'
+notebook[21] = 'WaveguidePluginDemonstration.ipynb'
+notebook[22] = 'GratingCoupler.ipynb'
+notebook[23] = 'WaveguideCrossing.ipynb'
+notebook[24] = 'GradientMetasurfaceReflector.ipynb'
+notebook[25] = 'GratingEfficiency.ipynb'
+notebook[26] = 'AdjointPlugin_2_GradientChecking.ipynb'
+notebook[27] = 'YJunction.ipynb'
+notebook[28] = 'VizData.ipynb'
+notebook[29] = 'Modal_sources_monitors.ipynb'
+notebook[30] = 'Modes_bent_angled.ipynb'
+notebook[31] = 'BraggGratings.ipynb'
+notebook[32] = 'Dispersion.ipynb'
+notebook[33] = 'EdgeCoupler.ipynb'
+notebook[34] = 'AutoGrid.ipynb'
+notebook[35] = 'DistributedBraggReflectorCavity.ipynb'
+notebook[36] = 'PlasmonicNanoparticle.ipynb'
+notebook[37] = 'MicrowaveFrequencySelectiveSurface.ipynb'
+notebook[38] = 'BoundaryConditions.ipynb'
+notebook[39] = 'WaveguideSizeConverter.ipynb'
+notebook[40] = 'PolarizationSplitterRotator.ipynb'
+notebook[41] = 'PhotonicCrystalWaveguidePolarizationFilter.ipynb'
+notebook[42] = 'Bandstructure.ipynb'
+notebook[43] = 'CustomFieldSource.ipynb'
+notebook[44] = 'SMatrix.ipynb'
+notebook[45] = '90OpticalHybrid.ipynb'
+notebook[46] = 'Primer.ipynb'
+notebook[47] = 'EulerWaveguideBend.ipynb'
+notebook[48] = 'PlasmonicYagiUdaNanoantenna.ipynb'
+notebook[49] = 'GrapheneMetamaterial.ipynb'
+notebook[50] = 'AdjointPlugin_1_Intro.ipynb'
+notebook[51] = 'RingResonator.ipynb'
+notebook[52] = 'THzDemultiplexerFilter.ipynb'
+notebook[53] = 'Near2FarSphereRCS.ipynb'
+notebook[54] = 'Simulation.ipynb'
+notebook[55] = 'VizSimulation.ipynb'
+notebook[56] = 'CustomMediumTutorial.ipynb'
+notebook[57] = 'HighQ_Ge.ipynb'
 """
 
 
