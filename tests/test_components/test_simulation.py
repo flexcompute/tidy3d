@@ -422,7 +422,7 @@ def test_validate_components_none():
     assert SIM._warn_monitor_mediums_frequency_range(val=None, values=SIM.dict()) is None
     assert SIM._warn_monitor_simulation_frequency_range(val=None, values=SIM.dict()) is None
     assert SIM._warn_grid_size_too_small(val=None, values=SIM.dict()) is None
-    assert SIM._source_homogeneous(val=None, values=SIM.dict()) is None
+    assert SIM._source_homogeneous_isotropic(val=None, values=SIM.dict()) is None
 
 
 def test_sources_edge_case_validation():
@@ -654,6 +654,12 @@ def test_sim_plane_wave_error():
 
     medium_bg = td.Medium(permittivity=2)
     medium_air = td.Medium(permittivity=1)
+    medium_bg_diag = td.AnisotropicMedium(
+        xx=td.Medium(permittivity=1),
+        yy=td.Medium(permittivity=2),
+        zz=td.Medium(permittivity=3),
+    )
+    medium_bg_full = td.FullyAnisotropicMedium(permittivity=[[4, 0.1, 0], [0.1, 2, 0], [0, 0, 3]])
 
     box = td.Structure(geometry=td.Box(size=(0.1, 0.1, 0.1)), medium=medium_air)
 
@@ -683,6 +689,23 @@ def test_sim_plane_wave_error():
             size=(1, 1, 1),
             medium=medium_bg,
             structures=[box_transparent, box],
+            sources=[src],
+            boundary_spec=td.BoundarySpec.all_sides(boundary=td.Periodic()),
+        )
+
+    # raise with anisotropic medium
+    with pytest.raises(pydantic.ValidationError):
+        _ = td.Simulation(
+            size=(1, 1, 1),
+            medium=medium_bg_diag,
+            sources=[src],
+            boundary_spec=td.BoundarySpec.all_sides(boundary=td.Periodic()),
+        )
+
+    with pytest.raises(pydantic.ValidationError):
+        _ = td.Simulation(
+            size=(1, 1, 1),
+            medium=medium_bg_full,
             sources=[src],
             boundary_spec=td.BoundarySpec.all_sides(boundary=td.Periodic()),
         )

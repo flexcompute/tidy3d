@@ -337,17 +337,17 @@ def test_fully_anisotropic_media():
         td.FullyAnisotropicMedium(permittivity=[3, 4, 2])
 
     # check that permittivity >= 1 and conductivity >= 0
-    with pytest.raises(ValidationError):
+    with pytest.raises(pydantic.ValidationError):
         td.FullyAnisotropicMedium(permittivity=[[3, 0, 0], [0, 0.5, 0], [0, 0, 1]])
-    with pytest.raises(ValidationError):
+    with pytest.raises(pydantic.ValidationError):
         td.FullyAnisotropicMedium(conductivity=[[-3, 0, 0], [0, 0.5, 0], [0, 0, 1]])
 
     # check that permittivity needs to be symmetric
-    with pytest.raises(ValidationError):
+    with pytest.raises(pydantic.ValidationError):
         td.FullyAnisotropicMedium(permittivity=[[3, 0.1, 0], [0.2, 2, 0], [0, 0, 1]])
 
     # check that differently oriented permittivity and conductivity are not accepted
-    with pytest.raises(ValidationError):
+    with pytest.raises(pydantic.ValidationError):
         td.FullyAnisotropicMedium(permittivity=perm, conductivity=cond2)
 
     # check creation from diagonal medium
