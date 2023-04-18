@@ -20,6 +20,7 @@ from .grid.grid import Coords1D, Grid, Coords
 from .grid.grid_spec import GridSpec, UniformGrid, AutoGrid
 from .medium import Medium, MediumType, AbstractMedium, PECMedium
 from .medium import CustomMedium, Medium2D, MediumType3D
+from .medium import AnisotropicMedium, FullyAnisotropicMedium
 from .boundary import BoundarySpec, BlochBoundary, PECBoundary, PMCBoundary, Periodic
 from .boundary import PML, StablePML, Absorber, AbsorberSpec
 from .structure import Structure
@@ -743,8 +744,10 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         return val
 
     @pydantic.validator("sources", always=True)
-    def _source_homogeneous(cls, val, values):
-        """Error if a plane wave or gaussian beam source is not in a homogeneous region."""
+    def _source_homogeneous_isotropic(cls, val, values):
+        """Error if a plane wave or gaussian beam source is not in a homogeneous and isotropic
+        region.
+        """
 
         if val is None:
             return val
@@ -770,6 +773,14 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
                     raise SetupError(
                         f"{len(mediums)} different mediums detected on plane "
                         f"intersecting a {source.type} source. Plane must be homogeneous."
+                    )
+                if len(mediums) == 1 and isinstance(
+                    list(mediums)[0], (AnisotropicMedium, FullyAnisotropicMedium)
+                ):
+                    raise SetupError(
+                        f"An anisotropic medium is detected on plane intersecting a {source.type} "
+                        f"source. Injection of {source.type} into anisotropic media currently is "
+                        "not supported."
                     )
 
         return val
