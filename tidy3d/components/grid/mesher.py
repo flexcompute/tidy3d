@@ -380,9 +380,10 @@ class GradedMesher(Mesher):
                     index = 1.0
                 else:
                     n, k = structure.medium.eps_complex_to_nk(
-                        structure.medium.eps_diagonal(C_0 / wavelength)[axis]
+                        structure.medium.eps_diagonal(C_0 / wavelength)
                     )
-                    index = max(abs(n), abs(k))
+                    # take max among all directions because perpendicular eps defines wavelength
+                    index = max(max(abs(n)), max(abs(k)))
                 min_steps.append(max(dl_min, wavelength / index / min_steps_per_wvl))
             elif isinstance(structure, MeshOverrideStructure):
                 min_steps.append(max(dl_min, structure.dl[axis]))

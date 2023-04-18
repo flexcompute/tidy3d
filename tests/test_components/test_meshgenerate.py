@@ -661,3 +661,63 @@ def test_shapely_strtree_warnings():
             min_steps_per_wvl=6,
             dl_min=1.0,
         )
+
+
+def test_anisotropic_material_meshing():
+    """Make sure the largest propagation index defines refinement in all directions."""
+    perm_d = [[3, 0, 0], [0, 2, 0], [0, 0, 1]]
+    cond_d = [[0.2, 0, 0], [0, 0.15, 0], [0, 0, 0.1]]
+
+    box = td.Box(
+        center=(0, 0, 0),
+        size=(1, 2, 3),
+    )
+
+    box_iso = td.Structure(
+        geometry=box,
+        medium=td.Medium(permittivity=perm_d[0][0], conductivity=cond_d[0][0]),
+    )
+
+    box_diag = td.Structure(
+        geometry=box,
+        medium=td.AnisotropicMedium(
+            xx=td.Medium(permittivity=perm_d[0][0], conductivity=cond_d[0][0]),
+            yy=td.Medium(permittivity=perm_d[1][1], conductivity=cond_d[1][1]),
+            zz=td.Medium(permittivity=perm_d[2][2], conductivity=cond_d[2][2]),
+        ),
+    )
+
+    box_full = td.Structure(
+        geometry=box,
+        medium=td.FullyAnisotropicMedium.from_diagonal(
+            xx=td.Medium(permittivity=perm_d[0][0], conductivity=cond_d[0][0]),
+            yy=td.Medium(permittivity=perm_d[1][1], conductivity=cond_d[1][1]),
+            zz=td.Medium(permittivity=perm_d[2][2], conductivity=cond_d[2][2]),
+            rotation=td.RotationAroundAxis(axis=(1, 2, 3), angle=1.23),
+        ),
+    )
+
+    sim_iso = td.Simulation(
+        size=(3, 3, 6),
+        grid_spec=td.GridSpec.auto(wavelength=WAVELENGTH),
+        run_time=1e-13,
+        structures=[box_iso],
+    )
+
+    sim_diag = td.Simulation(
+        size=(3, 3, 6),
+        grid_spec=td.GridSpec.auto(wavelength=WAVELENGTH),
+        run_time=1e-13,
+        structures=[box_diag],
+    )
+
+    sim_full = td.Simulation(
+        size=(3, 3, 6),
+        grid_spec=td.GridSpec.auto(wavelength=WAVELENGTH),
+        run_time=1e-13,
+        structures=[box_full],
+    )
+
+    for dim in range(3):
+        assert np.allclose(sim_iso.grid.sizes.to_list[dim], sim_diag.grid.sizes.to_list[dim])
+        assert np.allclose(sim_iso.grid.sizes.to_list[dim], sim_full.grid.sizes.to_list[dim])

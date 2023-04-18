@@ -182,6 +182,18 @@ FreqBoundMax = float
 FreqBoundMin = float
 FreqBound = Tuple[FreqBoundMin, FreqBoundMax]
 
+ComplexTensor = Tuple[
+    Tuple[Complex, Complex, Complex],
+    Tuple[Complex, Complex, Complex],
+    Tuple[Complex, Complex, Complex],
+]
+
+RealTensor = Tuple[
+    Tuple[float, float, float],
+    Tuple[float, float, float],
+    Tuple[float, float, float],
+]
+
 """ sources """
 
 Polarization = Literal["Ex", "Ey", "Ez", "Hx", "Hy", "Hz"]
