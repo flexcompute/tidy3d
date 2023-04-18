@@ -69,9 +69,11 @@ class EigSolver(Tidy3dBaseModel):
         k0 = omega / C_0
 
         if isinstance(eps_cross, Numpy):
-            eps_xx, eps_yy, eps_zz = eps_cross
-        elif len(eps_cross) == 3:
-            eps_xx, eps_yy, eps_zz = [np.copy(e) for e in eps_cross]
+            eps_xx, eps_xy, eps_xz, eps_yx, eps_yy, eps_yz, eps_zx, eps_zy, eps_zz = eps_cross
+        elif len(eps_cross) == 9:
+            eps_xx, eps_xy, eps_xz, eps_yx, eps_yy, eps_yz, eps_zx, eps_zy, eps_zz = [
+                np.copy(e) for e in eps_cross
+            ]
         else:
             raise ValueError("Wrong input to mode solver pemittivity!")
 
@@ -88,9 +90,12 @@ class EigSolver(Tidy3dBaseModel):
         (2N, 2N), and the full tensorial case, in which case it has shape (4N, 4N)."""
         eps_tensor = np.zeros((3, 3, N), dtype=np.complex128)
         mu_tensor = np.zeros((3, 3, N), dtype=np.complex128)
-        for dim, eps in enumerate([eps_xx, eps_yy, eps_zz]):
-            eps_tensor[dim, dim, :] = eps.ravel()
-            mu_tensor[dim, dim, :] = 1.0
+        for row, eps_row in enumerate(
+            [[eps_xx, eps_xy, eps_xz], [eps_yx, eps_yy, eps_yz], [eps_zx, eps_zy, eps_zz]]
+        ):
+            mu_tensor[row, row, :] = 1.0
+            for col, eps in enumerate(eps_row):
+                eps_tensor[row, col, :] = eps.ravel()
 
         # Get Jacobian of all coordinate transformations. Initialize as identity (same as mu so far)
         jac_e = np.real(np.copy(mu_tensor))

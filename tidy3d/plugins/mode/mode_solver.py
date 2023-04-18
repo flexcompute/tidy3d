@@ -288,24 +288,38 @@ class ModeSolver(Tidy3dBaseModel):
         eps_yy = self.simulation.epsilon_on_grid(self._solver_grid, "Ey", freq)
         eps_zz = self.simulation.epsilon_on_grid(self._solver_grid, "Ez", freq)
 
-        return np.stack((eps_xx, eps_yy, eps_zz), axis=0)
+        eps_xy = self.simulation.epsilon_on_grid(self._solver_grid, "Exy", freq)
+        eps_xz = self.simulation.epsilon_on_grid(self._solver_grid, "Exz", freq)
+        eps_yx = self.simulation.epsilon_on_grid(self._solver_grid, "Eyx", freq)
+        eps_yz = self.simulation.epsilon_on_grid(self._solver_grid, "Eyz", freq)
+        eps_zx = self.simulation.epsilon_on_grid(self._solver_grid, "Ezx", freq)
+        eps_zy = self.simulation.epsilon_on_grid(self._solver_grid, "Ezy", freq)
+
+        return np.stack(
+            (eps_xx, eps_xy, eps_xz, eps_yx, eps_yy, eps_yz, eps_zx, eps_zy, eps_zz), axis=0
+        )
 
     def _solver_eps(self, freq: float) -> ArrayComplex4D:
         """Get the diagonal permittivity in the shape needed to be supplied to the sovler, with the
         normal axis rotated to z."""
 
         # Get diagonal epsilon components in the plane
-        eps_diag = self._get_epsilon(freq)
+        eps_tensor = self._get_epsilon(freq)
 
         # get rid of normal axis
-        eps_diag = np.take(eps_diag, indices=[0], axis=1 + self.normal_axis)
-        eps_diag = np.squeeze(eps_diag, axis=1 + self.normal_axis)
+        eps_tensor = np.take(eps_tensor, indices=[0], axis=1 + self.normal_axis)
+        eps_tensor = np.squeeze(eps_tensor, axis=1 + self.normal_axis)
 
         # swap axes to plane coordinates (normal_axis goes to z)
-        eps_zz, (eps_xx, eps_yy) = self.plane.pop_axis(eps_diag, axis=self.normal_axis)
+        if self.normal_axis == 0:
+            rotated_eps_tensor = eps_tensor[[4, 5, 3, 7, 8, 6, 1, 2, 0], ...]
+        if self.normal_axis == 1:
+            rotated_eps_tensor = eps_tensor[[0, 2, 1, 6, 8, 7, 3, 5, 4], ...]
+        if self.normal_axis == 2:
+            rotated_eps_tensor = eps_tensor
 
         # construct eps to feed to mode solver
-        return np.stack((eps_xx, eps_yy, eps_zz), axis=0)
+        return rotated_eps_tensor
 
     def _solve_all_freqs(
         self,
