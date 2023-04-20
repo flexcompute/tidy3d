@@ -92,7 +92,6 @@ def run(
         callback_url=callback_url,
         verbose=verbose,
     )
-
     return JaxSimulationData.from_sim_data(sim_data, jax_info)
 
 
@@ -120,7 +119,8 @@ def run_fwd(
     )
 
     # TODO: handle error if keys not present in response
-    jax_sim_data_orig = resp.get("jax_sim_data_orig")
+    sim_data_orig = SimulationData.from_file(path)
+    jax_sim_data_orig = JaxSimulationData.from_sim_data(sim_data_orig, jax_info)
     fwd_sim_key = resp.get("fwd_sim_key")
     fwidth_adj = resp.get("fwidth_adj")
 
@@ -216,20 +216,23 @@ def webapi_run_adjoint_fwd(
     )
     fwidth_adj = jax_sim_data_fwd.simulation._fwidth_adjoint  # pylint:disable=protected-access
 
-    # remove the gradient data from the returned version as it's not needed by user
-    jax_sim_data_orig = jax_sim_data_fwd.copy(update=dict(grad_data=(), simulation=jax_sim))
+    # simulation data (without gradient data), written to the path file
+    sim_data_orig = tidy3d_run_fn(
+        simulation=simulation,
+        task_name=_task_name_fwd(task_name),
+        folder_name=folder_name,
+        path=path,
+        callback_url=callback_url,
+        verbose=verbose,
+    )
 
     # store the forward data (including monitor data) on our servers
+    # TODO: store this to file
     fwd_sim_key = get_fwd_sim_key(sim_fwd=sim_fwd)
     store_fwd_data(fwd_sim_key=fwd_sim_key, sim_data_fwd=jax_sim_data_fwd)
 
-    # test that everything is serializable before returning.
-    # TODO: remove in production version.
-    simulation.json()
-    jax_sim_data_orig.json()
-
-    # TODO: package as an actual http response
-    return dict(jax_sim_data_orig=jax_sim_data_orig, fwd_sim_key=fwd_sim_key, fwidth_adj=fwidth_adj)
+    # TODO: there should be no return here but instead things should be packaged in files
+    return dict(fwd_sim_key=fwd_sim_key, fwidth_adj=fwidth_adj)
 
 
 # TODO: implement this as a webapi that can be called via http request
@@ -270,7 +273,7 @@ def webapi_run_adjoint_bwd(
     sim_adj.json()
     sim_vjp.json()
 
-    # TODO: package as an actual http response
+    # TODO: package in a file to be downloaded
     return dict(sim_vjp=sim_vjp)
 
 

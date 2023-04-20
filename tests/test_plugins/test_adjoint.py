@@ -27,7 +27,7 @@ from tidy3d.plugins.adjoint.components.data.dataset import JaxPermittivityDatase
 from tidy3d.plugins.adjoint.web import run, run_async
 from tidy3d.plugins.adjoint.components.data.data_array import VALUE_FILTER_THRESHOLD
 
-from ..utils import run_emulated, assert_log_level, log_capture, run_async_emulated
+from ..utils import run_emulated, assert_log_level, log_capture, run_async_emulated, SIM_DATA_PATH
 
 
 EPS = 2.0
@@ -186,13 +186,13 @@ def test_adjoint_pipeline(use_emulated_run):
     """Test computing gradient using jax."""
 
     sim = make_sim(permittivity=EPS, size=SIZE, vertices=VERTICES, base_eps_val=BASE_EPS_VAL)
-    sim_data = run(sim, task_name="test")
+    sim_data = run(sim, task_name="test", path=SIM_DATA_PATH)
 
     def f(permittivity, size, vertices, base_eps_val):
         sim = make_sim(
             permittivity=permittivity, size=size, vertices=vertices, base_eps_val=base_eps_val
         )
-        sim_data = run(sim, task_name="test")
+        sim_data = run(sim, task_name="test", path=SIM_DATA_PATH)
         amp = extract_amp(sim_data)
         return objective(amp)
 
@@ -209,7 +209,7 @@ def test_adjoint_setup_fwd(use_emulated_run):
         simulation=sim,
         task_name="test",
         folder_name="default",
-        path="simulation_data.hdf5",
+        path=SIM_DATA_PATH,
         callback_url=None,
         verbose=False,
     )
@@ -233,7 +233,7 @@ def _test_adjoint_setup_adj(use_emulated_run):
         simulation=sim_orig,
         task_name="test",
         folder_name="default",
-        path="simulation_data.hdf5",
+        path=SIM_DATA_PATH,
         callback_url=None,
     )
 
@@ -250,7 +250,7 @@ def _test_adjoint_setup_adj(use_emulated_run):
     (sim_vjp,) = run.bwd(
         task_name="test",
         folder_name="default",
-        path="simulation_data.hdf5",
+        path=SIM_DATA_PATH,
         callback_url=None,
         res=(sim_data_fwd,),
         sim_data_vjp=sim_data_vjp,
