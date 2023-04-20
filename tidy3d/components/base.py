@@ -470,7 +470,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
 
         Example
         -------
-        >>> simulation.to_hdf5(fname='folder/sim.hdf5') # doctest: +SKIP
+        >>> simulation = Simulation.from_file(fname='folder/sim.hdf5') # doctest: +SKIP
         """
 
         group_path = cls._construct_group_path(group_path)
