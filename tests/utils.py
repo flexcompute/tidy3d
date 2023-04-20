@@ -22,6 +22,7 @@ def clear_dir(path: str):
 
 
 TMP_DIR = "tests/tmp/"
+SIM_DATA_PATH = TMP_DIR + "simulation_data.hdf5"
 
 
 # decorator that clears the tmp/ directory before test
@@ -311,7 +312,7 @@ SIM_FULL = Simulation(
 )
 
 
-def run_emulated(simulation: Simulation, **kwargs) -> SimulationData:
+def run_emulated(simulation: Simulation, path: str = SIM_DATA_PATH, **kwargs) -> SimulationData:
     """Emulates a simulation run."""
 
     from scipy.ndimage.filters import gaussian_filter
@@ -395,8 +396,10 @@ def run_emulated(simulation: Simulation, **kwargs) -> SimulationData:
     }
 
     data = [MONITOR_MAKER_MAP[type(mnt)](mnt) for mnt in simulation.monitors]
+    sim_data = SimulationData(simulation=simulation, data=data)
+    sim_data.to_file(path)
 
-    return SimulationData(simulation=simulation, data=data)
+    return sim_data
 
 
 def run_async_emulated(simulations: Dict[str, Simulation], **kwargs) -> BatchData:
