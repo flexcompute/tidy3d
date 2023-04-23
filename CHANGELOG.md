@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - Log messages provide the correct caller origin (file name and line number).
+- More helpful error messages from HTTP responses.
 
 ## [2.1.0] - 2023-4-18
 
