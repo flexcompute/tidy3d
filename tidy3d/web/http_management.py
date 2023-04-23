@@ -9,6 +9,7 @@ import requests
 import toml
 
 from .environment import Env
+from ..exceptions import WebError
 from ..version import __version__
 
 SIMCLOUD_APIKEY = "SIMCLOUD_APIKEY"
@@ -74,10 +75,13 @@ def http_interceptor(func):
         # Extend some capabilities of func
         resp = func(*args, **kwargs)
 
-        if resp.status_code == ResponseCodes.NOT_FOUND.value:
-            return None
-
-        resp.raise_for_status()
+        if resp.status_code != ResponseCodes.OK.value:
+            if resp.status_code == ResponseCodes.NOT_FOUND.value:
+                return None
+            json_resp = resp.json()
+            if "error" in json_resp.keys():
+                raise WebError(json_resp["error"])
+            resp.raise_for_status()
 
         if not resp.text:
             return None
