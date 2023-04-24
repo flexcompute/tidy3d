@@ -168,7 +168,7 @@ class Geometry(Tidy3dBaseModel, ABC):
     def intersections_plane(
         self, x: float = None, y: float = None, z: float = None
     ) -> List[Shapely]:
-        """Returns list of shapely geoemtries at plane specified by one non-None value of x,y,z.
+        """Returns list of shapely geomtries at plane specified by one non-None value of x,y,z.
 
         Parameters
         ----------
@@ -188,7 +188,7 @@ class Geometry(Tidy3dBaseModel, ABC):
         """
 
     def intersections_2dbox(self, plane: Box) -> List[Shapely]:
-        """Returns list of shapely geoemtries representing the intersections of the geometry with
+        """Returns list of shapely geomtries representing the intersections of the geometry with
         a 2D box.
 
         Returns
@@ -3591,7 +3591,7 @@ class TriangleMesh(Geometry, ABC):
     def intersections_plane(
         self, x: float = None, y: float = None, z: float = None
     ) -> List[Shapely]:
-        """Returns list of shapely geoemtries at plane specified by one non-None value of x,y,z.
+        """Returns list of shapely geomtries at plane specified by one non-None value of x,y,z.
 
         Parameters
         ----------
@@ -3762,7 +3762,7 @@ class GeometryGroup(Geometry):
     def intersections_plane(
         self, x: float = None, y: float = None, z: float = None
     ) -> List[Shapely]:
-        """Returns list of shapely geoemtries at plane specified by one non-None value of x,y,z.
+        """Returns list of shapely geomtries at plane specified by one non-None value of x,y,z.
 
         Parameters
         ----------

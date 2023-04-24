@@ -136,7 +136,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         title="Symmetries",
         description="Tuple of integers defining reflection symmetry across a plane "
         "bisecting the simulation domain normal to the x-, y-, and z-axis "
-        "at the simulation center of each axis, respectvely. "
+        "at the simulation center of each axis, respectively. "
         "Each element can be ``0`` (no symmetry), ``1`` (even, i.e. 'PMC' symmetry) or "
         "``-1`` (odd, i.e. 'PEC' symmetry). "
         "Note that the vectorial nature of the fields must be taken into account to correctly "
@@ -557,10 +557,10 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
                         medium_str = f"The medium associated with structures[{medium_index-1}]"
 
                     log.warning(
-                        f"{medium_str}has a frequency range: ({fmin_med:2e}, {fmax_med:2e}) "
-                        "(Hz)that does not fully cover the frequencies contained in "
+                        f"{medium_str} has a frequency range: ({fmin_med:2e}, {fmax_med:2e}) "
+                        "(Hz) that does not fully cover the frequencies contained in "
                         f"monitors[{monitor_index}]. "
-                        "This can cause innacuracies in the recorded results."
+                        "This can cause inaccuracies in the recorded results."
                     )
 
         return val
@@ -740,7 +740,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
                             f"within the simulation medium "
                             f"associated with structures[{medium_index + 1}], given by "
                             f"{lambda_min:.4f} (um). "
-                            "To avoid inaccuracies, it is reccomended the grid size is reduced. "
+                            "To avoid inaccuracies, it is recommended the grid size is reduced. "
                             f"Skipping check for structure indexes > {medium_index + 1}."
                         )
                         return val
@@ -864,7 +864,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
                         f"The grid is nonuniform along the '{'xyz'[ind]}' axis, which may lead "
                         "to sub-optimal cancellation of the incident field in the scattered-field "
                         "region for the total-field scattered-field (TFSF) source "
-                        f"'{source.name}'. For best results, we recomended ensuring a uniform "
+                        f"'{source.name}'. For best results, we recommended ensuring a uniform "
                         "grid in both directions tangential to the TFSF injection axis, "
                         f"'{'xyz'[source.injection_axis]}'. "
                     )
