@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - More helpful error messages from HTTP responses.
 - Bug in `_validate_no_structures_pml`, which was using wrong pml thicknesses.
+- Broken `callback_url` in webapi.
 
 ## [2.1.0] - 2023-4-18
 
