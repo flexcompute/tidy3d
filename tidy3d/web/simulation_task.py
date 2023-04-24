@@ -171,7 +171,7 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
     # pylint: disable=arguments-differ
     @classmethod
     def create(
-        cls, simulation: Simulation, task_name: str, folder_name="default", call_back_url=None
+        cls, simulation: Simulation, task_name: str, folder_name="default", callback_url=None
     ) -> SimulationTask:
         """Create a new task on the server.
 
@@ -185,7 +185,7 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
             The name of the task.
         folder_name: str,
             The name of the folder to store the task. Default is "default".
-        call_back_url: str
+        callback_url: str
             Http PUT url to receive simulation finish event. The body content is a json file with
             fields ``{'id', 'status', 'name', 'workUnit', 'solverVersion'}``.
 
@@ -204,7 +204,7 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
 
         resp = http.post(
             f"tidy3d/projects/{folder.folder_id}/tasks",
-            {"taskName": task_name, "call_back_url": call_back_url},
+            {"taskName": task_name, "callbackUrl": callback_url},
         )
 
         return SimulationTask(**resp, simulation=simulation, folder=folder)
