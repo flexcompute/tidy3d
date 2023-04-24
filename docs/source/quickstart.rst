@@ -7,35 +7,12 @@ Welcome to Tidy3D
 
 This page will get you set up with Tidy3D and running a simple example.
 
-Code Repositories
------------------
-
-We host all of the several examples and tutorials from this documentation in the `notebook section <https://github.com/flexcompute-readthedocs/tidy3d-docs/tree/readthedocs/docs/source/notebooks>`_ of our `documentation github repository <https://github.com/flexcompute-readthedocs/tidy3d-docs>`_.
-
-You can find our front end python code in its entirety at `its github repository <https://github.com/flexcompute/tidy3d>`_.  This is also a good place to ask questions or request features through the "Discussions" or "Issues" tabs.
-
 Getting Started
 ===============
 
 Before using Tidy3D, you must first `sign up <https://tidy3d.simulation.cloud/signup>`_ for a user account.
 
-Signing up also grants you access to our browser-based `interface <https://tidy3d.simulation.cloud/account>`_ for managing simulations.
-
-.. Quick Start (Binder Notebook)
-.. -----------------------------
-
-.. `Click this text to get started running a Tidy3D simulation right away without any installation or software setup. <https://mybinder.org/v2/gh/flexcompute-readthedocs/tidy3d-docs/readthedocs?labpath=docs%2Fsource%2Fnotebooks%2FStartHere.ipynb>`_
-
-.. Once there, to run the full example, select "Run -> Run All Cells".  Or you can click through the code blocks by pressing the "play" icon.
-
-.. You will first be prompted to log in using the email and password you used for your user account.
-
-.. Then the notebook will create a simulation and upload it to our server, where it will run for a few minutes before downloading the results and plotting the field patterns.
-
-.. image:: _static/quickstart_fields.png
-..    :width: 600
-
-.. To play around with the simulation parameters, you can edit the notebook directly and re-run.
+By signing up a free account, you can obtain an API key `here <https://tidy3d.simulation.cloud/account>`_. You can also `manage your simulation jobs <https://tidy3d.simulation.cloud/folders>`_ and access `graphic user interface <https://tidy3d.simulation.cloud/workbench?taskId=pa-94c49911-132d-48bc-8ec0-f0a4e55140a3>`_ if needed.
 
 Installation of Tidy3D Python API
 ---------------------------------
@@ -178,6 +155,13 @@ After clicking “OK”, your PyCharm project should be using the correct Conda 
 in your code.
 
 .. note:: Please pay attention to any warning or error messages during the installation process as your system configuration might be different. If you are experiencing difficulty in the installation, please reach out to us for help. We would gladly assist you for Tidy3D installation.
+
+Code Repositories
+^^^^^^^^^^^^^^^^^
+
+We host all of the several examples and tutorials from this documentation in the `notebook section <https://github.com/flexcompute-readthedocs/tidy3d-docs/tree/readthedocs/docs/source/notebooks>`_ of our `documentation github repository <https://github.com/flexcompute-readthedocs/tidy3d-docs>`_.
+
+You can find our front end python code in its entirety at `its github repository <https://github.com/flexcompute/tidy3d>`_.  This is also a good place to ask questions or request features through the "Discussions" or "Issues" tabs.
 
 Next Steps
 ==========
