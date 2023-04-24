@@ -4,6 +4,7 @@ import os
 import time
 from datetime import datetime, timedelta
 from typing import List, Dict, Callable
+from requests import HTTPError
 
 import pytz
 from rich.console import Console
@@ -667,3 +668,20 @@ def real_cost(task_id: str) -> float:
             "successfully run, it should be available shortly."
         )
     return flex_unit
+
+
+def test() -> None:
+    """Confirm whether Tidy3D authentication is configured. Raises exception if not."""
+    try:
+        # note, this is a little slow, but the only call that doesn't require providing a task id.
+        get_tasks(num_tasks=0)
+        console = Console()
+        console.log("Authentication configured successfully!")
+    except (WebError, HTTPError) as e:
+        url = "https://docs.flexcompute.com/projects/tidy3d/en/latest/quickstart.html"
+
+        raise WebError(
+            "Tidy3D not configured correctly. Please refer to our documentation for installation "
+            "instructions at "
+            f"[link={url}]'{url}'[/link]."
+        ) from e
