@@ -1,7 +1,7 @@
 """Defines a jax-compatible SimulationData."""
 from __future__ import annotations
 
-from typing import Tuple, Dict, Union
+from typing import Tuple, Dict, Union, List
 
 import pydantic as pd
 
@@ -56,6 +56,30 @@ class JaxSimulationData(SimulationData, JaxObject):
         reg_mnt_data.update(self.output_monitor_data)
         return reg_mnt_data
 
+    @staticmethod
+    def split_data(
+        mnt_data: List[MonitorDataType], jax_info: JaxInfo
+    ) -> Dict[str, List[MonitorDataType]]:
+        """Split list of monitor data into data, output_data, grad_data, and grad_eps_data."""
+        # Get information needed to split the full data list
+        len_output_data = jax_info.num_output_monitors
+        len_grad_data = jax_info.num_grad_monitors
+        len_grad_eps_data = jax_info.num_grad_eps_monitors
+        len_data = len(mnt_data) - len_output_data - len_grad_data - len_grad_eps_data
+
+        # split the data list into regular data, output_data, and grad_data
+        all_data = list(mnt_data)
+        data = all_data[:len_data]
+        output_data = all_data[len_data : len_data + len_output_data]
+        grad_data = all_data[
+            len_data + len_output_data : len_data + len_output_data + len_grad_data
+        ]
+        grad_eps_data = all_data[len_data + len_output_data + len_grad_data :]
+
+        return dict(
+            data=data, output_data=output_data, grad_data=grad_data, grad_eps_data=grad_eps_data
+        )
+
     @classmethod
     def from_sim_data(cls, sim_data: SimulationData, jax_info: JaxInfo) -> JaxSimulationData:
         """Construct a :class:`.JaxSimulationData` instance from a :class:`.SimulationData`."""
@@ -69,35 +93,43 @@ class JaxSimulationData(SimulationData, JaxObject):
         self_dict["simulation"] = jax_sim
         self_dict["data"] = ()
 
-        # Get information needed to split the full data list
-        len_output_data = jax_info.num_output_monitors
-        len_grad_data = jax_info.num_grad_monitors
-        len_grad_eps_data = jax_info.num_grad_eps_monitors
-        len_data = len(sim_data.data) - len_output_data - len_grad_data - len_grad_eps_data
+        data_dict = cls.split_data(mnt_data=sim_data.data, jax_info=jax_info)
 
-        # split the data list into regular data, output_data, and grad_data
-        all_data = list(sim_data.data)
-        data = all_data[:len_data]
-        output_data = all_data[len_data : len_data + len_output_data]
-        grad_data = all_data[
-            len_data + len_output_data : len_data + len_output_data + len_grad_data
-        ]
-        grad_eps_data = all_data[len_data + len_output_data + len_grad_data :]
-
-        # convert the jax data to the proper jax type
-        output_data = [
-            JAX_MONITOR_DATA_MAP[type(mnt_data)].from_monitor_data(mnt_data)
-            for mnt_data in output_data
+        # convert the output data to the proper jax type
+        data_dict["output_data"] = [
+            JAX_MONITOR_DATA_MAP[type(x)].from_monitor_data(x) for x in data_dict["output_data"]
         ]
 
-        # add all data back in and return
-        self_dict.update(
-            dict(
-                data=data, output_data=output_data, grad_data=grad_data, grad_eps_data=grad_eps_data
-            )
-        )
+        self_dict.update(data_dict)
 
         return cls.parse_obj(self_dict)
+
+    # def to_sim_data(self) -> Tuple[SimulationData, JaxInfo]:
+    #     """Convert regular :class:`.Simulation` to a `JaxSimulationData`."""
+
+    #     sim, jax_info = self.simulation.to_simulation()
+
+    #     data_combined = self.data + self.output_data + self.grad_data + self.grad_eps_data
+
+    #     sim_data = SimulationData(simulation=sim, data=data_combined)
+
+    #     return sim_data, jax_info
+
+    @classmethod
+    def split_fwd_sim_data(
+        cls, sim_data: SimulationData, jax_info: JaxInfo
+    ) -> Tuple[SimulationData, SimulationData]:
+        """Split a :class:`.SimulationData` into two parts, containing user and gradient data."""
+
+        data_dict = cls.split_data(mnt_data=sim_data.data, jax_info=jax_info)
+
+        user_data = data_dict["data"] + data_dict["output_data"]
+        adjoint_data = data_dict["grad_data"] + data_dict["grad_eps_data"]
+
+        user_sim_data = sim_data.updated_copy(data=user_data)
+        adjoint_sim_data = sim_data.updated_copy(data=adjoint_data)
+
+        return user_sim_data, adjoint_sim_data
 
     def make_adjoint_simulation(self, fwidth: float) -> JaxSimulation:
         """Make an adjoint simulation out of the data provided (generally, the vjp sim data)."""

@@ -27,7 +27,14 @@ from tidy3d.plugins.adjoint.components.data.dataset import JaxPermittivityDatase
 from tidy3d.plugins.adjoint.web import run, run_async
 from tidy3d.plugins.adjoint.components.data.data_array import VALUE_FILTER_THRESHOLD
 
-from ..utils import run_emulated, assert_log_level, log_capture, run_async_emulated, SIM_DATA_PATH
+from ..utils import (
+    run_emulated,
+    assert_log_level,
+    log_capture,
+    run_async_emulated,
+    SIM_DATA_PATH,
+    SIM_FULL,
+)
 
 
 EPS = 2.0
@@ -788,3 +795,20 @@ def test_value_filter():
     # assert that the terms <= VALUE_FILTER_THRESHOLD should be removed
     values_expected = np.array([1, 2 * VALUE_FILTER_THRESHOLD])
     assert np.allclose(np.array(values_after), values_expected)
+
+
+def test_jax_info_to_file():
+    """Test writing jax info to file."""
+
+    sim = make_sim(permittivity=EPS, size=SIZE, vertices=VERTICES, base_eps_val=BASE_EPS_VAL)
+    _, jax_info = sim.to_simulation()
+    jax_info.to_file("tests/tmp/jax_info.json")
+
+
+def test_split_fwd_sim_data():
+    """Test splitting of regular simulation data into user and server data."""
+
+    jax_sim = make_sim(permittivity=EPS, size=SIZE, vertices=VERTICES, base_eps_val=BASE_EPS_VAL)
+    sim, jax_info = jax_sim.to_simulation()
+    sim_data = run_emulated(sim, task_name="test")
+    data_user, data_adj = JaxSimulationData.split_fwd_sim_data(sim_data=sim_data, jax_info=jax_info)

@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 from typing import Tuple, Union
-from collections import namedtuple
 
 import pydantic as pd
 import numpy as np
@@ -10,7 +9,7 @@ import numpy as np
 from jax.tree_util import register_pytree_node_class
 
 from ....log import log
-from ....components.base import cached_property
+from ....components.base import cached_property, Tidy3dBaseModel
 from ....components.monitor import FieldMonitor, PermittivityMonitor
 from ....components.monitor import ModeMonitor, DiffractionMonitor
 from ....components.simulation import Simulation
@@ -24,12 +23,40 @@ from .structure import JaxStructure
 from .geometry import JaxBox
 
 
-# used to store information when converting between jax and tidy3d
-JaxInfo = namedtuple(
-    "JaxInfo",
-    "num_input_structures num_output_monitors num_grad_monitors num_grad_eps_monitors "
-    "fwidth_adjoint",
-)
+class JaxInfo(Tidy3dBaseModel):
+    """Class to store information when converting between jax and tidy3d."""
+
+    num_input_structures: pd.NonNegativeInt = pd.Field(
+        ...,
+        title="Number of Input Structures",
+        description="Number of input structures in the original JaxSimulation.",
+    )
+
+    num_output_monitors: pd.NonNegativeInt = pd.Field(
+        ...,
+        title="Number of Output Monitors",
+        description="Number of output monitors in the original JaxSimulation.",
+    )
+
+    num_grad_monitors: pd.NonNegativeInt = pd.Field(
+        ...,
+        title="Number of Gradient Monitors",
+        description="Number of gradient monitors in the original JaxSimulation.",
+    )
+
+    num_grad_eps_monitors: pd.NonNegativeInt = pd.Field(
+        ...,
+        title="Number of Permittivity Monitors",
+        description="Number of permittivity monitors in the original JaxSimulation.",
+    )
+
+    fwidth_adjoint: float = pd.Field(
+        None,
+        title="Adjoint Frequency Width",
+        description="Custom frequency width of the original JaxSimulation.",
+        units=HERTZ,
+    )
+
 
 # bandwidth of adjoint source in units of freq0 if no sources and no `fwidth_adjoint` specified
 FWIDTH_FACTOR = 1.0 / 10
