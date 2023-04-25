@@ -409,6 +409,7 @@
                 "bend_radius": null,
                 "bend_axis": null,
                 "track_freq": "central",
+                "group_index_step": false,
                 "type": "ModeSpec"
             },
             "mode_index": 0
@@ -790,6 +791,7 @@
                 "bend_radius": null,
                 "bend_axis": null,
                 "track_freq": "central",
+                "group_index_step": false,
                 "type": "ModeSpec"
             }
         },
@@ -830,6 +832,7 @@
                 "bend_radius": null,
                 "bend_axis": null,
                 "track_freq": "central",
+                "group_index_step": false,
                 "type": "ModeSpec"
             }
         },
