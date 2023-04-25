@@ -10,6 +10,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 ### Fixed
+
+## [2.1.1] - 2023-4-25
+
+### Added
+
+### Changed
+
+### Fixed
 - More helpful error messages from HTTP responses.
 - Bug in `_validate_no_structures_pml`, which was using wrong pml thicknesses.
 - Broken `callback_url` in webapi.
@@ -701,7 +709,8 @@ which fields are to be projected is now determined automatically based on the me
 - Job and Batch classes for better simulation handling (eventually to fully replace webapi functions).
 - A large number of small improvements and bug fixes.
 
-[Unreleased]: https://github.com/flexcompute/tidy3d/compare/v2.1.0...develop
+[Unreleased]: https://github.com/flexcompute/tidy3d/compare/v2.1.1...develop
+[2.1.1]: https://github.com/flexcompute/tidy3d/compare/v2.1.0...v2.1.1
 [2.1.0]: https://github.com/flexcompute/tidy3d/compare/v2.0.3...v2.1.0
 [2.0.3]: https://github.com/flexcompute/tidy3d/compare/v2.0.2...v2.0.3
 [2.0.2]: https://github.com/flexcompute/tidy3d/compare/v2.0.1...v2.0.2
