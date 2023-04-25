@@ -886,12 +886,10 @@ def test_sim_structure_extent(log_capture, box_size, log_level):
 @pytest.mark.parametrize(
     "box_length,absorb_type,log_level",
     [
-        (0, "PML", "INFO"),
-        (0.5, "PML", "INFO"),
-        (1, "PML", "INFO"),
-        (1.5, "PML", "WARNING"),
-        (1.5, "absorber", "INFO"),
-        (5.0, "PML", "INFO"),
+        (0, "PML", None),
+        (1, "PML", "WARNING"),
+        (1.5, "absorber", None),
+        (2.0, "PML", None),
     ],
 )
 def test_sim_validate_structure_bounds_pml(log_capture, box_length, absorb_type, log_level):
@@ -911,9 +909,10 @@ def test_sim_validate_structure_bounds_pml(log_capture, box_length, absorb_type,
     sim = td.Simulation(
         size=(1, 1, 1),
         structures=[box],
+        grid_spec=td.GridSpec.auto(wavelength=0.001),
         sources=[src],
         run_time=1e-12,
-        boundary_spec=td.BoundarySpec.all_sides(boundary=boundary),
+        boundary_spec=td.BoundarySpec.pml(x=True, y=False, z=False),
     )
 
     assert_log_level(log_capture, log_level)

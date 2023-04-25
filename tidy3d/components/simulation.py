@@ -806,9 +806,10 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
     def _validate_no_structures_pml(self) -> None:
         """Ensure no structures terminate / have bounds inside of PML."""
 
-        pml_thicks = self.pml_thicknesses
+        pml_thicks = np.array(self.pml_thicknesses).T
         sim_bounds = self.bounds
         bound_spec = self.boundary_spec.to_list
+
         for i, structure in enumerate(self.structures):
             geo_bounds = structure.geometry.bounds
             for sim_bound, geo_bound, pml_thick, bound_dim, pm_val in zip(
