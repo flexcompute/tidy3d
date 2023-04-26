@@ -12,10 +12,10 @@ import xarray as xr
 
 from .base import Tidy3dBaseModel, cached_property
 from .grid.grid import Coords, Grid
-from .types import PoleAndResidue, Ax, FreqBound, TYPE_TAG_STR, InterpMethod, Bound, ArrayComplex4D
+from .types import PoleAndResidue, Ax, FreqBound, TYPE_TAG_STR, InterpMethod, Bound, ArrayComplex3D
 from .types import Axis, TensorReal
 from .data.dataset import PermittivityDataset
-from .data.data_array import ScalarFieldDataArray
+from .data.data_array import SpatialDataArray, ScalarFieldDataArray
 from .viz import add_ax_if_none
 from .geometry import Geometry
 from .validators import validate_name_str
@@ -331,6 +331,113 @@ class AbstractMedium(ABC, Tidy3dBaseModel):
         return sigma
 
 
+class AbstractCustomMedium(AbstractMedium, ABC):
+    """A spatially varying medium."""
+
+    interp_method: InterpMethod = pd.Field(
+        "nearest",
+        title="Interpolation method",
+        description="Interpolation method to obtain permittivity values "
+        "that are not supplied at the Yee grids; For grids outside the range "
+        "of the supplied data, extrapolation will be applied. When the extrapolated "
+        "value is smaller (greater) than the minimal (maximal) of the supplied data, "
+        "the extrapolated value will take the minimal (maximal) of the supplied data.",
+    )
+
+    @abstractmethod
+    def eps_diagonal_on_grid(
+        self,
+        frequency: float,
+        coords: Coords,
+    ) -> Tuple[ArrayComplex3D, ArrayComplex3D, ArrayComplex3D]:
+        """Spatial profile of main diagonal of the complex-valued permittivity
+        at ``frequency`` interpolated at the supplied coordinates.
+
+        Parameters
+        ----------
+        frequency : float
+            Frequency to evaluate permittivity at (Hz).
+        coords : :class:`.Coords`
+            The grid point coordinates over which interpolation is performed.
+
+        Returns
+        -------
+        Tuple[ArrayComplex3D, ArrayComplex3D, ArrayComplex3D]
+            The complex-valued permittivity tensor at ``frequency`` interpolated
+            at the supplied coordinate.
+        """
+
+    @staticmethod
+    def _interp(
+        spatial_dataarray: Union[SpatialDataArray, ScalarFieldDataArray],
+        coord_interp: Coords,
+        interp_method: InterpMethod,
+    ) -> Union[SpatialDataArray, ScalarFieldDataArray]:
+        """
+        Enhance xarray's ``.interp`` in two ways:
+            1) Check if the coordinate of the supplied data are in monotically increasing order.
+            If they are, apply the faster ``assume_sorted=True``.
+
+            2) For axes of single entry, instead of error, apply ``isel()`` along the axis.
+
+            3) When linear interp is applied, in the extrapolated region, filter values smaller
+            or larger than the original data's min(max) will be replaced with the original min(max).
+
+        Parameters
+        ----------
+        spatial_dataarray: Union[:class:`.SpatialDataArray`, :class:`.ScalarFieldDataArray`]
+            Supplied scalar dataset
+        coord_interp : :class:`.Coords`
+            The grid point coordinates over which interpolation is performed.
+        interp_method : :class:`.InterpMethod`
+            Interpolation method.
+
+        Returns
+        -------
+        Union[:class:`.SpatialDataArray`, :class:`.ScalarFieldDataArray`]
+            The interpolated spatial dataset.
+        """
+
+        all_coords = "xyz"
+        is_single_entry = [spatial_dataarray.sizes[ax] == 1 for ax in all_coords]
+        interp_ax = [
+            ax for (ax, single_entry) in zip(all_coords, is_single_entry) if not single_entry
+        ]
+        isel_ax = [ax for ax in all_coords if ax not in interp_ax]
+
+        # apply isel for the axis containing single entry
+        if len(isel_ax) > 0:
+            spatial_dataarray = spatial_dataarray.isel(
+                {ax: [0] * len(coord_interp.to_dict[ax]) for ax in isel_ax}
+            )
+            spatial_dataarray = spatial_dataarray.assign_coords(
+                {ax: coord_interp.to_dict[ax] for ax in isel_ax}
+            )
+            if len(interp_ax) == 0:
+                return spatial_dataarray
+
+        # Apply interp for the rest
+        #   first check if it's sorted
+        is_sorted = all((np.all(np.diff(spatial_dataarray.coords[f]) > 0) for f in interp_ax))
+        interp_param = dict(
+            kwargs={"fill_value": FILL_VALUE},
+            assume_sorted=is_sorted,
+            method=interp_method,
+        )
+        #   interpolation
+        interp_dataarray = spatial_dataarray.interp(
+            {ax: coord_interp.to_dict[ax] for ax in interp_ax},
+            **interp_param,
+        )
+
+        # filter any values larger/smaller than the original data's max/min.
+        max_val = max(spatial_dataarray.values.ravel())
+        min_val = min(spatial_dataarray.values.ravel())
+        interp_dataarray = interp_dataarray.where(interp_dataarray >= min_val, min_val)
+        interp_dataarray = interp_dataarray.where(interp_dataarray <= max_val, max_val)
+        return interp_dataarray
+
+
 """ Dispersionless Medium """
 
 # PEC keyword
@@ -422,7 +529,7 @@ class Medium(AbstractMedium):
         return cls(permittivity=eps, conductivity=sigma, **kwargs)
 
 
-class CustomMedium(AbstractMedium):
+class CustomMedium(AbstractCustomMedium):
     """:class:`.Medium` with user-supplied permittivity distribution.
 
     Example
@@ -440,23 +547,79 @@ class CustomMedium(AbstractMedium):
     >>> eps = dielectric.eps_model(200e12)
     """
 
+    # permittivity: Optional[SpatialDataArray] = pd.Field(
+    #     None,
+    #     title="Permittivity",
+    #     description="Spatial profile of relative permittivity.",
+    #     units=PERMITTIVITY,
+    # )
+
+    # conductivity: Optional[SpatialDataArray] = pd.Field(
+    #     None,
+    #     title="Conductivity",
+    #     description="Spatial profile Electric conductivity.  Defined such "
+    #     "that the imaginary part of the complex permittivity at angular "
+    #     "frequency omega is given by conductivity/omega.",
+    #     units=CONDUCTIVITY,
+    # )
+
     eps_dataset: PermittivityDataset = pd.Field(
         ...,
         title="Permittivity Dataset",
-        description="User-supplied dataset containing complex-valued permittivity "
-        "as a function of space. Permittivity distribution over the Yee-grid will be "
-        "interpolated based on ``interp_method``.",
+        description="[To be deprecated] User-supplied dataset containing complex-valued "
+        "permittivity as a function of space. Permittivity distribution over the Yee-grid "
+        "will be interpolated based on ``interp_method``.",
     )
 
-    interp_method: InterpMethod = pd.Field(
-        "nearest",
-        title="Interpolation method",
-        description="Interpolation method to obtain permittivity values "
-        "that are not supplied at the Yee grids; For grids outside the range "
-        "of the supplied data, extrapolation will be applied. When the extrapolated "
-        "value is smaller (greater) than the minimal (maximal) of the supplied data, "
-        "the extrapolated value will take the minimal (maximal) of the supplied data.",
-    )
+    # @pd.root_validator(pre=True)
+    # def _deprecation_dataset(cls, values):
+    #     """Raise deprecation warning if dataset supplied and convert to dataset."""
+
+    #     val = values.get("eps_dataset")
+    #     if val is None:
+    #         return values
+
+    #     if val["eps_xx"] == val["eps_yy"] and val["eps_xx"] == val["eps_zz"]:
+    #         log.warning(
+    #             "For spatially varying isotropic medium, the 'eps_dataset' field "
+    #             "is being replaced by 'permittivity' and 'conductivity' in v3.0. "
+    #             "We recommend you change your scripts to be compatible with the new API."
+    #         )
+
+    #     log.warning(
+    #         "For spatially varying anisotropic medium, this class is being replaced "
+    #         "by 'CustomAnisotropicMedium' in v3.0. "
+    #         "We recommend you change your scripts to be compatible with the new API."
+    #     )
+
+    #     # replace 'dataset'` with supplied 'dataset'
+    #     dataset = values.pop("eps_dataset")
+    #     values["dataset"] = dataset
+    #     return values
+
+    # @pd.validator("eps_dataset", always=True)
+    # def _deprecation_anisotropic_dataset(cls, val):
+    #     """Raise deprecation warning for this class."""
+
+    #     if not (val["eps_xx"] == val["eps_yy"] and val["eps_xx"] == val["eps_zz"]):
+    #         log.warning(
+    #             "For spatially varying anisotropic medium, this class is being replaced "
+    #             "by 'CustomAnisotropicMedium' in v3.0. "
+    #             "We recommend you change your scripts to be compatible with the new API."
+    #         )
+    #     return val
+
+    # @pd.validator("eps_dataset", always=True)
+    # def _deprecation_anisotropic_dataset(cls, val):
+    #     """Raise deprecation warning for this class."""
+
+    #     if not (val["eps_xx"] == val["eps_yy"] and val["eps_xx"] == val["eps_zz"]):
+    #         log.warning(
+    #             "For spatially varying anisotropic medium, this class is being replaced "
+    #             "by 'CustomAnisotropicMedium' in v3.0. "
+    #             "We recommend you change your scripts to be compatible with the new API."
+    #         )
+    #     return val
 
     @pd.validator("eps_dataset", always=True)
     def _single_frequency(cls, val):
@@ -535,7 +698,7 @@ class CustomMedium(AbstractMedium):
         self,
         frequency: float,
         coords: Coords,
-    ) -> Tuple[ArrayComplex4D, ArrayComplex4D, ArrayComplex4D]:
+    ) -> Tuple[ArrayComplex3D, ArrayComplex3D, ArrayComplex3D]:
         """Spatial profile of main diagonal of the complex-valued permittivity
         at ``frequency`` interpolated at the supplied coordinates.
 
@@ -548,7 +711,7 @@ class CustomMedium(AbstractMedium):
 
         Returns
         -------
-        Tuple[np.ndarray, np.ndarray, np.ndarray]
+        Tuple[ArrayComplex3D, ArrayComplex3D, ArrayComplex3D]
             The complex-valued permittivity tensor at ``frequency`` interpolated
             at the supplied coordinate.
         """
@@ -680,77 +843,6 @@ class CustomMedium(AbstractMedium):
         eps_scalar_field_data = ScalarFieldDataArray(eps_values, coords=coords)
         return cls.from_eps_raw(eps=eps_scalar_field_data, interp_method=interp_method)
 
-    @staticmethod
-    def _interp(
-        scalar_dataset: ScalarFieldDataArray,
-        coord_interp: Coords,
-        interp_method: InterpMethod,
-    ) -> ScalarFieldDataArray:
-        """
-        Enhance xarray's ``.interp`` in two ways:
-            1) Check if the coordinate of the supplied data are in monotically increasing order.
-            If they are, apply the faster ``assume_sorted=True``.
-
-            2) For axes of single entry, instead of error, apply ``isel()`` along the axis.
-
-            3) When linear interp is applied, in the extrapolated region, filter values smaller
-            or larger than the original data's min(max) will be replaced with the original min(max).
-
-        Parameters
-        ----------
-        scalar_dataset : :class:`.ScalarFieldDataArray`
-            Supplied scalar dataset.
-        coord_interp : :class:`.Coords`
-            The grid point coordinates over which interpolation is performed.
-        interp_method : :class:`.InterpMethod`
-            Interpolation method.
-
-        Returns
-        -------
-        :class:`.ScalarFieldDataArray`
-            The interpolated scalar dataset.
-        """
-
-        # check in x/y/z axes, which of them are supplied with a single entry.
-        all_coords = "xyz"
-        is_single_entry = [scalar_dataset.sizes[ax] == 1 for ax in all_coords]
-        interp_ax = [
-            ax for (ax, single_entry) in zip(all_coords, is_single_entry) if not single_entry
-        ]
-        isel_ax = [ax for ax in all_coords if ax not in interp_ax]
-
-        # apply isel for the axis containing single entry
-        if len(isel_ax) > 0:
-            scalar_dataset = scalar_dataset.isel(
-                {ax: [0] * len(coord_interp.to_dict[ax]) for ax in isel_ax}
-            )
-            scalar_dataset = scalar_dataset.assign_coords(
-                {ax: coord_interp.to_dict[ax] for ax in isel_ax}
-            )
-            if len(interp_ax) == 0:
-                return scalar_dataset
-
-        # Apply interp for the rest
-        #   first check if it's sorted
-        is_sorted = all((np.all(np.diff(scalar_dataset.coords[f]) > 0) for f in interp_ax))
-        interp_param = dict(
-            kwargs={"fill_value": FILL_VALUE},
-            assume_sorted=is_sorted,
-            method=interp_method,
-        )
-        #   interpolation
-        interp_dataset = scalar_dataset.interp(
-            {ax: coord_interp.to_dict[ax] for ax in interp_ax},
-            **interp_param,
-        )
-
-        # filter any values larger/smaller than the original data's max/min.
-        max_val = max(scalar_dataset.values.ravel())
-        min_val = min(scalar_dataset.values.ravel())
-        interp_dataset = interp_dataset.where(interp_dataset >= min_val, min_val)
-        interp_dataset = interp_dataset.where(interp_dataset <= max_val, max_val)
-        return interp_dataset
-
     def grids(self, bounds: Bound) -> Dict[str, Grid]:
         """Make a :class:`.Grid` corresponding to the data in each ``eps_ii`` component.
         The min and max coordinates along each dimension are bounded by ``bounds``."""
@@ -808,10 +900,14 @@ class CustomMedium(AbstractMedium):
 class DispersiveMedium(AbstractMedium, ABC):
     """A Medium with dispersion (propagation characteristics depend on frequency)"""
 
-    @cached_property
     @abstractmethod
+    def _pole_residue_dict(self) -> Dict:
+        """Dict representation of Medium as a pole-residue model."""
+
+    @cached_property
     def pole_residue(self):
         """Representation of Medium as a pole-residue model."""
+        return PoleResidue(**self._pole_residue_dict())
 
     @cached_property
     def n_cfl(self):
@@ -836,6 +932,93 @@ class DispersiveMedium(AbstractMedium, ABC):
         """Convert a complex number to a tuple of real and imaginary parts."""
 
         return (value.real, value.imag)
+
+
+class CustomDispersiveMedium(AbstractCustomMedium, DispersiveMedium, ABC):
+    """A spatially varying dispersive medium."""
+
+    @cached_property
+    def n_cfl(self):
+        """This property computes the index of refraction related to CFL condition, so that
+        the FDTD with this medium is stable when the time step size that doesn't take
+        material factor into account is multiplied by ``n_cfl``.
+
+        For PoleResidue model, it equals ``sqrt(eps_inf)``
+        [https://ieeexplore.ieee.org/document/9082879].
+        """
+        return np.sqrt(np.min(self.pole_residue.eps_inf))
+
+    @cached_property
+    def pole_residue(self):
+        """Representation of Medium as a pole-residue model."""
+        return CustomPoleResidue(**self._pole_residue_dict())
+
+    @abstractmethod
+    def _eps_dataarray_freq(self, frequency: float) -> SpatialDataArray:
+        """Permittivity array at ``frequency``.
+
+        Parameters
+        ----------
+        frequency : float
+            Frequency to evaluate permittivity at (Hz).
+
+        Returns
+        -------
+        :class:`.SpatialDataArray`
+            The permittivity evaluated at ``frequency``.
+        """
+
+    @staticmethod
+    def _validate_isreal_dataarray(dataarray: SpatialDataArray) -> bool:
+        """Validate that the dataarray is real"""
+        return np.all(np.isreal(dataarray.data))
+
+    @staticmethod
+    def _validate_isreal_dataarray_tuple(dataarray_tuple: Tuple[SpatialDataArray, ...]) -> bool:
+        """Validate that the dataarray is real"""
+        return np.all(
+            [CustomDispersiveMedium._validate_isreal_dataarray(f) for f in dataarray_tuple]
+        )
+
+    def eps_diagonal_on_grid(
+        self,
+        frequency: float,
+        coords: Coords,
+    ) -> Tuple[ArrayComplex3D, ArrayComplex3D, ArrayComplex3D]:
+        """Spatial profile of main diagonal of the complex-valued permittivity
+        at ``frequency`` interpolated at the supplied coordinates.
+
+        Parameters
+        ----------
+        frequency : float
+            Frequency to evaluate permittivity at (Hz).
+        coords : :class:`.Coords`
+            The grid point coordinates over which interpolation is performed.
+
+        Returns
+        -------
+        Tuple[ArrayComplex3D, ArrayComplex3D, ArrayComplex3D]
+            The complex-valued permittivity tensor at ``frequency`` interpolated
+            at the supplied coordinate.
+        """
+        eps_spatial = self._eps_dataarray_freq(frequency)
+        eps_interp = self._interp(eps_spatial, coords, self.interp_method).values
+        return (eps_interp, eps_interp, eps_interp)
+
+    @ensure_freq_in_range
+    def eps_model(self, frequency: float) -> complex:
+        """Complex-valued spatially averaged permittivity as a function of frequency."""
+        return np.mean(self._eps_dataarray_freq(frequency).values)
+
+    @ensure_freq_in_range
+    def eps_diagonal(self, frequency: float) -> Tuple[complex, complex, complex]:
+        """Main diagonal of the complex-valued permittivity tensor
+        at ``frequency``. Spatially, we take max{||eps||}, so that autoMesh generation
+        works appropriately.
+        """
+        eps_spatial = self._eps_dataarray_freq(frequency).values.ravel()
+        eps = eps_spatial[np.argmax(np.abs(eps_spatial))]
+        return (eps, eps, eps)
 
 
 class PoleResidue(DispersiveMedium):
@@ -883,11 +1066,10 @@ class PoleResidue(DispersiveMedium):
             eps -= c_cc / (1j * omega + a_cc)
         return eps
 
-    @cached_property
-    def pole_residue(self):
-        """Representation of Medium as a pole-residue model."""
+    def _pole_residue_dict(self) -> Dict:
+        """Dict representation of Medium as a pole-residue model."""
 
-        return PoleResidue(
+        return dict(
             eps_inf=self.eps_inf,
             poles=self.poles,
             frequency_range=self.frequency_range,
@@ -945,6 +1127,128 @@ class PoleResidue(DispersiveMedium):
         )
 
 
+class CustomPoleResidue(CustomDispersiveMedium, PoleResidue):
+    """A spatially varying dispersive medium described by the pole-residue pair model.
+    The frequency-dependence of the complex-valued permittivity is described by:
+
+    Note
+    ----
+    .. math::
+
+        \\epsilon(\\omega) = \\epsilon_\\infty - \\sum_i
+        \\left[\\frac{c_i}{j \\omega + a_i} +
+        \\frac{c_i^*}{j \\omega + a_i^*}\\right]
+
+    Example
+    -------
+    >>> x = np.linspace(-1, 1, 5)
+    >>> y = np.linspace(-1, 1, 6)
+    >>> z = np.linspace(-1, 1, 7)
+    >>> eps_inf = SpatialDataArray(np.ones((5, 6, 7)), coords=dict(x=x, y=y, z=z))
+    >>> a1 = SpatialDataArray(np.random.random((5, 6, 7)), coords=dict(x=x, y=y, z=z))
+    >>> c1 = SpatialDataArray(np.random.random((5, 6, 7)), coords=dict(x=x, y=y, z=z))
+    >>> a2 = SpatialDataArray(np.random.random((5, 6, 7)), coords=dict(x=x, y=y, z=z))
+    >>> c2 = SpatialDataArray(np.random.random((5, 6, 7)), coords=dict(x=x, y=y, z=z))
+    >>> pole_res = CustomPoleResidue(eps_inf=eps_inf, poles=[(a1, c1), (a2, c2)])
+    >>> eps = pole_res.eps_model(200e12)
+    """
+
+    eps_inf: SpatialDataArray = pd.Field(
+        ...,
+        title="Epsilon at Infinity",
+        description="Relative permittivity at infinite frequency (:math:`\\epsilon_\\infty`).",
+        units=PERMITTIVITY,
+    )
+
+    poles: Tuple[Tuple[SpatialDataArray, SpatialDataArray], ...] = pd.Field(
+        (),
+        title="Poles",
+        description="Tuple of complex-valued (:math:`a_i, c_i`) poles for the model.",
+        units=(RADPERSEC, RADPERSEC),
+    )
+
+    @pd.validator("eps_inf", always=True)
+    def _eps_inf_positive(cls, val):
+        """eps_inf should be positive"""
+        if not CustomDispersiveMedium._validate_isreal_dataarray(val):
+            raise SetupError("'eps_inf' should be real.")
+        if np.any(val < 0):
+            raise SetupError("'eps_inf' should be positive.")
+        return val
+
+    @pd.validator("poles", always=True)
+    def _poles_correct_shape(cls, val, values):
+        """poles should have the same shape."""
+        if values.get("eps_inf") is None:
+            raise ValidationError("'eps_inf' failed validation.")
+
+        expected_shape = values["eps_inf"].shape
+        for coeffs in val:
+            for coeff in coeffs:
+                if coeff.shape != expected_shape:
+                    raise SetupError(
+                        "All pole coefficients 'a' and 'c' should have the same dimension; "
+                        "The dimension should also be consistent with 'eps_inf'."
+                    )
+        return val
+
+    def _eps_dataarray_freq(self, frequency: float) -> ArrayComplex3D:
+        """Permittivity array at ``frequency``.
+
+        Parameters
+        ----------
+        frequency : float
+            Frequency to evaluate permittivity at (Hz).
+
+        Returns
+        -------
+        ArrayComplex3D
+            The permittivity evaluated at ``frequency``.
+        """
+        return PoleResidue.eps_model(self, frequency)
+
+    # @classmethod
+    # def from_medium(cls, medium: CustomMedium) -> "CustomPoleResidue":
+    #     """Convert a :class:`.CustomMedium` to a pole residue model.
+
+    #     Parameters
+    #     ----------
+    #     medium: :class:`.CustomMedium`
+    #         The medium with permittivity and conductivity to convert.
+
+    #     Returns
+    #     -------
+    #     :class:`.CustomPoleResidue`
+    #         The pole residue equivalent.
+    #     """
+    #     poles = [(0, medium.conductivity / (2 * EPSILON_0))]
+    #     return PoleResidue(
+    #         eps_inf=medium.permittivity, poles=poles, frequency_range=medium.frequency_range
+    #     )
+
+    # def to_medium(self) -> Medium:
+    #     """Convert to a :class:`.CustomMedium`.
+    #     Requires the pole residue model to only have a pole at 0 frequency,
+    #     corresponding to a constant conductivity term.
+
+    #     Returns
+    #     -------
+    #     :class:`.CustomMedium`
+    #         The non-dispersive equivalent with constant permittivity and conductivity.
+    #     """
+    #     res = 0
+    #     for (a, c) in self.poles:
+    #         if abs(a) > fp_eps:
+    #             raise ValidationError("Cannot convert dispersive 'PoleResidue' to 'Medium'.")
+    #         res += (c + np.conj(c)) / 2
+    #     sigma = res * 2 * EPSILON_0
+    #     return Medium(
+    #         permittivity=self.eps_inf,
+    #         conductivity=np.real(sigma),
+    #         frequency_range=self.frequency_range,
+    #     )
+
+
 class Sellmeier(DispersiveMedium):
     """A dispersive medium described by the Sellmeier model.
     The frequency-dependence of the refractive index is described by:
@@ -961,7 +1265,7 @@ class Sellmeier(DispersiveMedium):
     >>> eps = sellmeier_medium.eps_model(200e12)
     """
 
-    coeffs: Tuple[Tuple[float, pd.PositiveFloat], ...] = pd.Field(
+    coeffs: Tuple[Tuple[pd.NonNegativeFloat, pd.PositiveFloat], ...] = pd.Field(
         title="Coefficients",
         description="List of Sellmeier (:math:`B_i, C_i`) coefficients.",
         units=(None, MICROMETER + "^2"),
@@ -984,10 +1288,8 @@ class Sellmeier(DispersiveMedium):
         n = self._n_model(frequency)
         return AbstractMedium.nk_to_eps_complex(n)
 
-    @cached_property
-    def pole_residue(self):
-        """Representation of Medium as a pole-residue model."""
-
+    def _pole_residue_dict(self) -> Dict:
+        """Dict representation of Medium as a pole-residue model"""
         poles = []
         for (B, C) in self.coeffs:
             beta = 2 * np.pi * C_0 / np.sqrt(C)
@@ -995,13 +1297,7 @@ class Sellmeier(DispersiveMedium):
             a = 1j * beta
             c = 1j * alpha
             poles.append((a, c))
-
-        return PoleResidue(
-            eps_inf=1,
-            poles=poles,
-            frequency_range=self.frequency_range,
-            name=self.name,
-        )
+        return dict(eps_inf=1, poles=poles, frequency_range=self.frequency_range, name=self.name)
 
     @classmethod
     def from_dispersion(cls, n: float, freq: float, dn_dwvl: float = 0, **kwargs):
@@ -1038,6 +1334,70 @@ class Sellmeier(DispersiveMedium):
         return cls(coeffs=coeffs, **kwargs)
 
 
+class CustomSellmeier(CustomDispersiveMedium, Sellmeier):
+    """A spatially varying dispersive medium described by the Sellmeier model.
+    The frequency-dependence of the refractive index is described by:
+
+    Note
+    ----
+    .. math::
+
+        n(\\lambda)^2 = 1 + \\sum_i \\frac{B_i \\lambda^2}{\\lambda^2 - C_i}
+
+    Example
+    -------
+    >>> x = np.linspace(-1, 1, 5)
+    >>> y = np.linspace(-1, 1, 6)
+    >>> z = np.linspace(-1, 1, 7)
+    >>> b1 = SpatialDataArray(np.random.random((5, 6, 7)), coords=dict(x=x, y=y, z=z))
+    >>> c1 = SpatialDataArray(np.random.random((5, 6, 7)), coords=dict(x=x, y=y, z=z))
+    >>> sellmeier_medium = CustomSellmeier(coeffs=[(b1,c1),])
+    >>> eps = sellmeier_medium.eps_model(200e12)
+    """
+
+    coeffs: Tuple[Tuple[SpatialDataArray, SpatialDataArray], ...] = pd.Field(
+        title="Coefficients",
+        description="List of Sellmeier (:math:`B_i, C_i`) coefficients.",
+        units=(None, MICROMETER + "^2"),
+    )
+
+    @pd.validator("coeffs", always=True)
+    def _correct_shape_and_sign(cls, val):
+        """every term in coeffs should have the same shape, and B>=0 and C>0."""
+        expected_shape = val[0][0].shape
+        for (B, C) in val:
+            if B.shape != expected_shape or C.shape != expected_shape:
+                raise SetupError("Every term in 'coeffs' should have the same dimension.")
+            if not CustomDispersiveMedium._validate_isreal_dataarray_tuple((B, C)):
+                raise SetupError("'B' and 'C' should be real.")
+            if np.any(B < 0):
+                raise SetupError("'B' should be non-negative.")
+            if np.any(C <= 0):
+                raise SetupError("'C' should be positive.")
+        return val
+
+    def _pole_residue_dict(self) -> Dict:
+        """Dict representation of Medium as a pole-residue model."""
+        poles_dict = Sellmeier._pole_residue_dict(self)
+        poles_dict.update({"eps_inf": xr.ones_like(self.coeffs[0][0])})
+        return poles_dict
+
+    def _eps_dataarray_freq(self, frequency: float) -> ArrayComplex3D:
+        """Permittivity array at ``frequency``.
+
+        Parameters
+        ----------
+        frequency : float
+            Frequency to evaluate permittivity at (Hz).
+
+        Returns
+        -------
+        ArrayComplex3D
+            The permittivity evaluated at ``frequency``.
+        """
+        return Sellmeier.eps_model(self, frequency)
+
+
 class Lorentz(DispersiveMedium):
     """A dispersive medium described by the Lorentz model.
     The frequency-dependence of the complex-valued permittivity is described by:
@@ -1062,12 +1422,20 @@ class Lorentz(DispersiveMedium):
         units=PERMITTIVITY,
     )
 
-    coeffs: Tuple[Tuple[float, float, float], ...] = pd.Field(
+    coeffs: Tuple[Tuple[pd.NonNegativeFloat, float, pd.NonNegativeFloat], ...] = pd.Field(
         ...,
         title="Coefficients",
         description="List of (:math:`\\Delta\\epsilon_i, f_i, \\delta_i`) values for model.",
         units=(PERMITTIVITY, HERTZ, HERTZ),
     )
+
+    @pd.validator("coeffs", always=True)
+    def _coeffs_unequal_f_delta(cls, val):
+        """f and delta cannot be exactly the same."""
+        for (_, f, delta) in val:
+            if f == delta:
+                raise SetupError("'f' and 'delta' cannot take equal values.")
+        return val
 
     @ensure_freq_in_range
     def eps_model(self, frequency: float) -> complex:
@@ -1078,9 +1446,8 @@ class Lorentz(DispersiveMedium):
             eps += (de * f**2) / (f**2 - 2j * frequency * delta - frequency**2)
         return eps
 
-    @cached_property
-    def pole_residue(self):
-        """Representation of Medium as a pole-residue model."""
+    def _pole_residue_dict(self) -> Dict:
+        """Dict representation of Medium as a pole-residue model."""
 
         poles = []
         for (de, f, delta) in self.coeffs:
@@ -1088,7 +1455,7 @@ class Lorentz(DispersiveMedium):
             w = 2 * np.pi * f
             d = 2 * np.pi * delta
 
-            if d > w:
+            if self._all_larger(d, w):
                 r = np.sqrt(d * d - w * w) + 0j
                 a0 = -d + r
                 c0 = de * w**2 / 4 / r
@@ -1101,12 +1468,124 @@ class Lorentz(DispersiveMedium):
                 c = 1j * de * w**2 / 2 / r
                 poles.append((a, c))
 
-        return PoleResidue(
+        return dict(
             eps_inf=self.eps_inf,
             poles=poles,
             frequency_range=self.frequency_range,
             name=self.name,
         )
+
+    @staticmethod
+    def _all_larger(coeff_a, coeff_b) -> bool:
+        """`coeff_a` and `coeff_b` can be either float or SpatialDataArray."""
+        if isinstance(coeff_a, SpatialDataArray):
+            return np.all(coeff_a.data > coeff_b.data)
+        return coeff_a > coeff_b
+
+
+class CustomLorentz(CustomDispersiveMedium, Lorentz):
+    """A spatially varying dispersive medium described by the Lorentz model.
+    The frequency-dependence of the complex-valued permittivity is described by:
+
+    Note
+    ----
+    .. math::
+
+        \\epsilon(f) = \\epsilon_\\infty + \\sum_i
+        \\frac{\\Delta\\epsilon_i f_i^2}{f_i^2 - 2jf\\delta_i - f^2}
+
+    Example
+    -------
+    >>> x = np.linspace(-1, 1, 5)
+    >>> y = np.linspace(-1, 1, 6)
+    >>> z = np.linspace(-1, 1, 7)
+    >>> eps_inf = SpatialDataArray(np.ones((5, 6, 7)), coords=dict(x=x, y=y, z=z))
+    >>> epsilon_i = SpatialDataArray(np.random.random((5, 6, 7)), coords=dict(x=x, y=y, z=z))
+    >>> f_i = SpatialDataArray(1+np.random.random((5, 6, 7)), coords=dict(x=x, y=y, z=z))
+    >>> delta_i = SpatialDataArray(np.random.random((5, 6, 7)), coords=dict(x=x, y=y, z=z))
+    >>> lorentz_medium = CustomLorentz(eps_inf=eps_inf, coeffs=[(epsilon_i,f_i,delta_i),])
+    >>> eps = lorentz_medium.eps_model(200e12)
+    """
+
+    eps_inf: SpatialDataArray = pd.Field(
+        ...,
+        title="Epsilon at Infinity",
+        description="Relative permittivity at infinite frequency (:math:`\\epsilon_\\infty`).",
+        units=PERMITTIVITY,
+    )
+
+    coeffs: Tuple[Tuple[SpatialDataArray, SpatialDataArray, SpatialDataArray], ...] = pd.Field(
+        ...,
+        title="Coefficients",
+        description="List of (:math:`\\Delta\\epsilon_i, f_i, \\delta_i`) values for model.",
+        units=(PERMITTIVITY, HERTZ, HERTZ),
+    )
+
+    @pd.validator("eps_inf", always=True)
+    def _eps_inf_positive(cls, val):
+        """eps_inf should be positive"""
+        if not CustomDispersiveMedium._validate_isreal_dataarray(val):
+            raise SetupError("'eps_inf' should be real.")
+        if np.any(val < 0):
+            raise SetupError("'eps_inf' should be positive.")
+        return val
+
+    @pd.validator("coeffs", always=True)
+    def _coeffs_unequal_f_delta(cls, val):
+        """f and delta cannot be exactly the same.
+        Not needed for now because we have a more strict
+        validator `_coeffs_delta_all_smaller_or_larger_than_fi`.
+        """
+        return val
+
+    @pd.validator("coeffs", always=True)
+    def _coeffs_correct_shape_and_sign(cls, val, values):
+        """coeffs should have consistent shape and sign."""
+        if values.get("eps_inf") is None:
+            raise ValidationError("'eps_inf' failed validation.")
+
+        expected_shape = values["eps_inf"].shape
+        for (de, f, delta) in val:
+            if (
+                de.shape != expected_shape
+                or f.shape != expected_shape
+                or delta.shape != expected_shape
+            ):
+                raise SetupError(
+                    "All terms in 'coeffs' should have the same dimension; "
+                    "The dimension should also be consistent with 'eps_inf'."
+                )
+            if not CustomDispersiveMedium._validate_isreal_dataarray_tuple((de, f, delta)):
+                raise SetupError("All terms in 'coeffs' should be real.")
+            if np.any(de < 0):
+                raise SetupError("'Delta epsilon' should be non-negative.")
+            if np.any(delta < 0):
+                raise SetupError("'delta' should be non-negative.")
+        return val
+
+    @pd.validator("coeffs", always=True)
+    def _coeffs_delta_all_smaller_or_larger_than_fi(cls, val):
+        """We restrict either all f>delta or all f<delta for now."""
+        for (_, f, delta) in val:
+            if not (Lorentz._all_larger(f, delta) or Lorentz._all_larger(delta, f)):
+                raise SetupError("We restrict either all 'delta<f' or all 'delta>f'.")
+        return val
+
+    def _eps_dataarray_freq(self, frequency: float) -> ArrayComplex3D:
+        """Permittivity array at ``frequency``.
+
+        Parameters
+        ----------
+        frequency : float
+            Frequency to evaluate permittivity at (Hz).
+
+        Returns
+        -------
+        ArrayComplex3D
+            The permittivity evaluated at ``frequency``.
+        """
+
+        return Lorentz.eps_model(self, frequency)
 
 
 class Drude(DispersiveMedium):
@@ -1149,12 +1628,10 @@ class Drude(DispersiveMedium):
             eps -= (f**2) / (frequency**2 + 1j * frequency * delta)
         return eps
 
-    @cached_property
-    def pole_residue(self):
-        """Representation of Medium as a pole-residue model."""
+    def _pole_residue_dict(self) -> Dict:
+        """Dict representation of Medium as a pole-residue model."""
 
         poles = []
-        a0 = 0j
 
         for (f, delta) in self.coeffs:
 
@@ -1165,13 +1642,101 @@ class Drude(DispersiveMedium):
             c1 = -c0
             a1 = -d + 0j
 
+            if isinstance(c0, complex):
+                a0 = 0j
+            else:
+                a0 = xr.zeros_like(c0)
+
             poles.extend(((a0, c0), (a1, c1)))
-        return PoleResidue(
+
+        return dict(
             eps_inf=self.eps_inf,
             poles=poles,
             frequency_range=self.frequency_range,
             name=self.name,
         )
+
+
+class CustomDrude(CustomDispersiveMedium, Drude):
+    """A spatially varying dispersive medium described by the Drude model.
+    The frequency-dependence of the complex-valued permittivity is described by:
+
+    Note
+    ----
+    .. math::
+
+        \\epsilon(f) = \\epsilon_\\infty - \\sum_i
+        \\frac{ f_i^2}{f^2 + jf\\delta_i}
+
+    Example
+    -------
+    >>> x = np.linspace(-1, 1, 5)
+    >>> y = np.linspace(-1, 1, 6)
+    >>> z = np.linspace(-1, 1, 7)
+    >>> eps_inf = SpatialDataArray(np.ones((5, 6, 7)), coords=dict(x=x, y=y, z=z))
+    >>> f1 = SpatialDataArray(np.random.random((5, 6, 7)), coords=dict(x=x, y=y, z=z))
+    >>> delta1 = SpatialDataArray(np.random.random((5, 6, 7)), coords=dict(x=x, y=y, z=z))
+    >>> drude_medium = CustomDrude(eps_inf=eps_inf, coeffs=[(f1,delta1),])
+    >>> eps = drude_medium.eps_model(200e12)
+    """
+
+    eps_inf: SpatialDataArray = pd.Field(
+        ...,
+        title="Epsilon at Infinity",
+        description="Relative permittivity at infinite frequency (:math:`\\epsilon_\\infty`).",
+        units=PERMITTIVITY,
+    )
+
+    coeffs: Tuple[Tuple[SpatialDataArray, SpatialDataArray], ...] = pd.Field(
+        ...,
+        title="Coefficients",
+        description="List of (:math:`f_i, \\delta_i`) values for model.",
+        units=(HERTZ, HERTZ),
+    )
+
+    @pd.validator("eps_inf", always=True)
+    def _eps_inf_positive(cls, val):
+        """eps_inf should be positive"""
+        if not CustomDispersiveMedium._validate_isreal_dataarray(val):
+            raise SetupError("'eps_inf' should be real.")
+        if np.any(val < 0):
+            raise SetupError("'eps_inf' should be positive.")
+        return val
+
+    @pd.validator("coeffs", always=True)
+    def _coeffs_correct_shape_and_sign(cls, val, values):
+        """coeffs should have consistent shape and sign."""
+        if values.get("eps_inf") is None:
+            raise ValidationError("'eps_inf' failed validation.")
+
+        expected_shape = values["eps_inf"].shape
+        for (f, delta) in val:
+            if f.shape != expected_shape or delta.shape != expected_shape:
+                raise SetupError(
+                    "All terms in 'coeffs' should have the same dimension; "
+                    "The dimension should also be consistent with 'eps_inf'."
+                )
+            if not CustomDispersiveMedium._validate_isreal_dataarray_tuple((f, delta)):
+                raise SetupError("All terms in 'coeffs' should be real.")
+            if np.any(delta < 0):
+                raise SetupError("'delta' should be non-negative.")
+        return val
+
+    def _eps_dataarray_freq(self, frequency: float) -> ArrayComplex3D:
+        """Permittivity array at ``frequency``.
+
+        Parameters
+        ----------
+        frequency : float
+            Frequency to evaluate permittivity at (Hz).
+
+        Returns
+        -------
+        ArrayComplex3D
+            The permittivity evaluated at ``frequency``.
+        """
+
+        return Drude.eps_model(self, frequency)
 
 
 class Debye(DispersiveMedium):
@@ -1198,7 +1763,7 @@ class Debye(DispersiveMedium):
         units=PERMITTIVITY,
     )
 
-    coeffs: Tuple[Tuple[float, pd.PositiveFloat], ...] = pd.Field(
+    coeffs: Tuple[Tuple[pd.NonNegativeFloat, pd.PositiveFloat], ...] = pd.Field(
         ...,
         title="Coefficients",
         description="List of (:math:`\\Delta\\epsilon_i, \\tau_i`) values for model.",
@@ -1214,9 +1779,8 @@ class Debye(DispersiveMedium):
             eps += de / (1 - 1j * frequency * tau)
         return eps
 
-    @cached_property
-    def pole_residue(self):
-        """Representation of Medium as a pole-residue model."""
+    def _pole_residue_dict(self):
+        """Dict representation of Medium as a pole-residue model."""
 
         poles = []
         for (de, tau) in self.coeffs:
@@ -1225,7 +1789,7 @@ class Debye(DispersiveMedium):
 
             poles.append((a, c))
 
-        return PoleResidue(
+        return dict(
             eps_inf=self.eps_inf,
             poles=poles,
             frequency_range=self.frequency_range,
@@ -1233,7 +1797,94 @@ class Debye(DispersiveMedium):
         )
 
 
-IsotropicMediumType = Union[Medium, PoleResidue, Sellmeier, Lorentz, Debye, Drude]
+class CustomDebye(CustomDispersiveMedium, Debye):
+    """A spatially varying dispersive medium described by the Debye model.
+    The frequency-dependence of the complex-valued permittivity is described by:
+
+    Note
+    ----
+    .. math::
+
+        \\epsilon(f) = \\epsilon_\\infty + \\sum_i
+        \\frac{\\Delta\\epsilon_i}{1 - jf\\tau_i}
+
+    Example
+    -------
+    >>> x = np.linspace(-1, 1, 5)
+    >>> y = np.linspace(-1, 1, 6)
+    >>> z = np.linspace(-1, 1, 7)
+    >>> eps_inf = SpatialDataArray(1+np.random.random((5, 6, 7)), coords=dict(x=x, y=y, z=z))
+    >>> eps1 = SpatialDataArray(np.random.random((5, 6, 7)), coords=dict(x=x, y=y, z=z))
+    >>> tau1 = SpatialDataArray(np.random.random((5, 6, 7)), coords=dict(x=x, y=y, z=z))
+    >>> debye_medium = CustomDebye(eps_inf=eps_inf, coeffs=[(eps1,tau1),])
+    >>> eps = debye_medium.eps_model(200e12)
+    """
+
+    eps_inf: SpatialDataArray = pd.Field(
+        ...,
+        title="Epsilon at Infinity",
+        description="Relative permittivity at infinite frequency (:math:`\\epsilon_\\infty`).",
+        units=PERMITTIVITY,
+    )
+
+    coeffs: Tuple[Tuple[SpatialDataArray, SpatialDataArray], ...] = pd.Field(
+        ...,
+        title="Coefficients",
+        description="List of (:math:`\\Delta\\epsilon_i, \\tau_i`) values for model.",
+        units=(PERMITTIVITY, SECOND),
+    )
+
+    @pd.validator("eps_inf", always=True)
+    def _eps_inf_positive(cls, val):
+        """eps_inf should be positive"""
+        if not CustomDispersiveMedium._validate_isreal_dataarray(val):
+            raise SetupError("'eps_inf' should be real.")
+        if np.any(val < 0):
+            raise SetupError("'eps_inf' should be positive.")
+        return val
+
+    @pd.validator("coeffs", always=True)
+    def _coeffs_correct_shape_and_sign(cls, val, values):
+        """coeffs should have consistent shape and sign."""
+        if values.get("eps_inf") is None:
+            raise ValidationError("'eps_inf' failed validation.")
+
+        expected_shape = values["eps_inf"].shape
+        for (de, tau) in val:
+            if de.shape != expected_shape or tau.shape != expected_shape:
+                raise SetupError(
+                    "All terms in 'coeffs' should have the same dimension; "
+                    "The dimension should also be consistent with 'eps_inf'."
+                )
+            if not CustomDispersiveMedium._validate_isreal_dataarray_tuple((de, tau)):
+                raise SetupError("All terms in 'coeffs' should be real.")
+            if np.any(de < 0):
+                raise SetupError("'Delta epsilon' cannot be negative.")
+            if np.any(tau <= 0):
+                raise SetupError("'tau' must be positive.")
+        return val
+
+    def _eps_dataarray_freq(self, frequency: float) -> ArrayComplex3D:
+        """Permittivity array at ``frequency``.
+
+        Parameters
+        ----------
+        frequency : float
+            Frequency to evaluate permittivity at (Hz).
+
+        Returns
+        -------
+        ArrayComplex3D
+            The permittivity evaluated at ``frequency``.
+        """
+        return Debye.eps_model(self, frequency)
+
+
+IsotropicUniformMediumType = Union[Medium, PoleResidue, Sellmeier, Lorentz, Debye, Drude]
+IsotropicCustomMediumType = Union[
+    CustomPoleResidue, CustomSellmeier, CustomLorentz, CustomDebye, CustomDrude
+]
+IsotropicMediumType = Union[IsotropicCustomMediumType, IsotropicUniformMediumType]
 
 
 class AnisotropicMedium(AbstractMedium):
@@ -1567,6 +2218,11 @@ MediumType3D = Union[
     Debye,
     Drude,
     FullyAnisotropicMedium,
+    CustomPoleResidue,
+    CustomSellmeier,
+    CustomLorentz,
+    CustomDebye,
+    CustomDrude,
 ]
 
 
@@ -1584,7 +2240,7 @@ class Medium2D(AbstractMedium):
 
     """
 
-    ss: IsotropicMediumType = pd.Field(
+    ss: IsotropicUniformMediumType = pd.Field(
         ...,
         title="SS Component",
         description="Medium describing the ss-component of the diagonal permittivity tensor. "
@@ -1595,7 +2251,7 @@ class Medium2D(AbstractMedium):
         discriminator=TYPE_TAG_STR,
     )
 
-    tt: IsotropicMediumType = pd.Field(
+    tt: IsotropicUniformMediumType = pd.Field(
         ...,
         title="TT Component",
         description="Medium describing the tt-component of the diagonal permittivity tensor. "
@@ -1607,7 +2263,9 @@ class Medium2D(AbstractMedium):
     )
 
     @classmethod
-    def _weighted_avg(cls, meds: List[IsotropicMediumType], weights: List[float]) -> PoleResidue:
+    def _weighted_avg(
+        cls, meds: List[IsotropicUniformMediumType], weights: List[float]
+    ) -> PoleResidue:
         """Average ``meds`` with weights ``weights``."""
         eps_inf = 1
         poles = []
@@ -1659,7 +2317,7 @@ class Medium2D(AbstractMedium):
             The 3D material corresponding to this 2D material.
         """
 
-        def get_component(med: MediumType3D, comp: Axis) -> IsotropicMediumType:
+        def get_component(med: MediumType3D, comp: Axis) -> IsotropicUniformMediumType:
             """Extract the ``comp`` component of ``med``."""
             if isinstance(med, AnisotropicMedium):
                 dim = "xyz"[comp]
@@ -1898,7 +2556,7 @@ class Medium2D(AbstractMedium):
         return np.mean([self.ss.sigma_model(freq), self.tt.sigma_model(freq)], axis=0)
 
     @property
-    def elements(self) -> Dict[str, IsotropicMediumType]:
+    def elements(self) -> Dict[str, IsotropicUniformMediumType]:
         """The diagonal elements of the 2D medium as a dictionary."""
         return dict(ss=self.ss, tt=self.tt)
 
