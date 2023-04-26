@@ -5,7 +5,7 @@ import pydantic
 from .base import Tidy3dBaseModel
 from .validators import validate_name_str
 from .geometry import GeometryType
-from .medium import MediumType, CustomMedium, Medium2D
+from .medium import MediumType, AbstractCustomMedium, Medium2D
 from .types import Ax, TYPE_TAG_STR, Axis
 from .viz import add_ax_if_none, equal_aspect
 from .grid.grid import Coords
@@ -92,7 +92,7 @@ class Structure(AbstractStructure):
         complex
             The diagonal elements of the relative permittivity tensor evaluated at ``frequency``.
         """
-        if isinstance(self.medium, CustomMedium):
+        if isinstance(self.medium, AbstractCustomMedium):
             return self.medium.eps_diagonal_on_grid(frequency=frequency, coords=coords)
         return self.medium.eps_diagonal(frequency=frequency)
 
@@ -126,7 +126,7 @@ class Structure(AbstractStructure):
         complex
            Element of the relative permittivity tensor evaluated at ``frequency``.
         """
-        if isinstance(self.medium, CustomMedium):
+        if isinstance(self.medium, AbstractCustomMedium):
             return self.medium.eps_comp_on_grid(
                 row=row, col=col, frequency=frequency, coords=coords
             )

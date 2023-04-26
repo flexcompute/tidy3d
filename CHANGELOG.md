@@ -7,16 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - `CustomCurrentSource`, which injects volumetric electric and magnetic current densities based on user-supplied data.
+- Specification of spatial permittivity distribution of dispersive material using user-supplied data through `CustomPoleResidue`, `CustomSellmeier`, `CustomLorentz`, `CustomDebye`, and `CustomDrude` components.
+- `CustomAnisotropicMedium` where each component can take user-supplied data to define spatial permittivity distribution of non-dispersive or dispersive material.
 
 ### Changed
 - Add `Medium2D` to full simulation in tests.
 - `DispersionFitter` and `StableDispersionFitter` unified in a single `DispersionFitter` interface.
 - `StableDispersionFitter` deprecated, with stable fitter now being run instead through `plugins.dispersion.web.run(DispersionFitter)`.
 - Removed validator from `CustomFieldSource` that ensured data spanned the source geometry. Now the current values are extrapolated outside of the supplied data ranges.
+- `CustomMedium` now take fields `permittivity` and `conductivity`. `eps_dataset` will be deprecated in v3.0.
 
 ### Fixed
 - Plotting 2D materials in `SimulationData.plot_field` and other circumstances.
 - More segments in plotting of large cylinder and sphere cross-sections.
+- Proper handling of nested list of custom data components in IO, needed for custom dispersive medium coefficients.
 
 ## [2.2.2] - 2023-5-25
 

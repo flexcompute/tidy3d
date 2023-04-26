@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 from functools import wraps
-from typing import List, Callable, Dict, Union, Tuple
+from typing import List, Callable, Dict, Union, Tuple, Any
 
 import rich
 import pydantic
@@ -441,6 +441,10 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         >>> sim_dict = Simulation.dict_from_hdf5(fname='folder/sim.hdf5') # doctest: +SKIP
         """
 
+        def is_data_array(value: Any) -> bool:
+            """Whether a value is supposed to be a data array based on the contents."""
+            return isinstance(value, str) and value in DATA_ARRAY_MAP
+
         def load_data_from_file(model_dict: dict, group_path: str = "") -> None:
             """For every DataArray item in dictionary, load path of hdf5 group as value."""
 
@@ -460,15 +464,22 @@ class Tidy3dBaseModel(pydantic.BaseModel):
                         )
 
                 # write the path to the element of the json dict where the data_array should be
-                if isinstance(value, str) and value in DATA_ARRAY_MAP:
+                if is_data_array(value):
                     data_array_type = DATA_ARRAY_MAP[value]
                     model_dict[key] = data_array_type.from_hdf5(fname=fname, group_path=subpath)
                     continue
 
                 # if a list, assign each element a unique key, recurse
                 if isinstance(value, (list, tuple)):
+
                     value_dict = cls.tuple_to_dict(tuple_values=value)
                     load_data_from_file(model_dict=value_dict, group_path=subpath)
+
+                    # handle case of nested list of DataArray elements
+                    val_tuple = list(value_dict.values())
+                    for ind, (model_item, value_item) in enumerate(zip(model_dict[key], val_tuple)):
+                        if is_data_array(model_item):
+                            model_dict[key][ind] = value_item
 
                 # if a dict, recurse
                 elif isinstance(value, dict):
