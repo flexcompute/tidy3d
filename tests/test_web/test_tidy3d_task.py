@@ -246,3 +246,16 @@ def test_get_log(monkeypatch, set_api_key):
     with open(LOG_FNAME, "w") as f:
         task.get_log(LOG_FNAME)
         assert os.path.getsize(LOG_FNAME) > 0
+
+
+@responses.activate
+def test_get_running_tasks(set_api_key):
+    responses.add(
+        responses.GET,
+        f"{Env.current.web_api_endpoint}/tidy3d/py/tasks",
+        json={"data": [{"taskId": "1234", "status": "queued"}]},
+        status=200,
+    )
+
+    tasks = SimulationTask.get_running_tasks()
+    assert len(tasks) == 1
