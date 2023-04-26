@@ -124,7 +124,7 @@ def run_fwd(
     fwd_sim_key = resp.get("fwd_sim_key")
     fwidth_adj = resp.get("fwidth_adj")
 
-    return jax_sim_data_orig, (fwd_sim_key, fwidth_adj)
+    return jax_sim_data_orig, (fwd_sim_key,)
 
 
 # pylint:disable=too-many-arguments
@@ -139,8 +139,9 @@ def run_bwd(
 ) -> Tuple[JaxSimulation]:
     """Run backward pass and return simulation storing vjp of the objective w.r.t. the sim."""
 
-    (fwd_sim_key, fwidth_adj) = res
+    (fwd_sim_key,) = res
 
+    fwidth_adj = sim_data_vjp.simulation._fwidth_adjoint
     jax_sim_adj = sim_data_vjp.make_adjoint_simulation(fwidth=fwidth_adj)
     sim_adj, jax_info_adj = jax_sim_adj.to_simulation()
 
@@ -200,31 +201,36 @@ def webapi_run_adjoint_fwd(
 ) -> Dict[str, Union[SimulationData, FwdSimKeyType, float]]:
     """Runs the forward simulation on our servers, stores the gradient data for later."""
 
+    # Make a regular Simulation but with the gradient monitors
+    # TODO: can this be done better / fewer copying around? Currently:
+    # Simulation -> JaxSimulation -> JaxSimulation -> Simulation
     jax_sim = JaxSimulation.from_simulation(simulation, jax_info)
-
-    # add the gradient monitors and run the forward simulation
     grad_mnts = jax_sim.get_grad_monitors()
-    sim_fwd = jax_sim.updated_copy(**grad_mnts)
+    jax_sim_fwd = jax_sim.updated_copy(**grad_mnts)
+    sim_fwd, jax_info = jax_sim_fwd.to_simulation()
 
-    jax_sim_data_fwd = run(
+    sim_data = tidy3d_run_fn(
         simulation=sim_fwd,
-        task_name=_task_name_fwd(task_name),
+        task_name=str(task_name),
         folder_name=folder_name,
         path=path,
         callback_url=callback_url,
         verbose=verbose,
     )
-    fwidth_adj = jax_sim_data_fwd.simulation._fwidth_adjoint  # pylint:disable=protected-access
+    jax_sim_data_fwd = JaxSimulationData.from_sim_data(sim_data, jax_info)
 
     # simulation data (without gradient data), written to the path file
-    sim_data_orig = tidy3d_run_fn(
-        simulation=simulation,
-        task_name=_task_name_fwd(task_name),
-        folder_name=folder_name,
-        path=path,
-        callback_url=callback_url,
-        verbose=verbose,
-    )
+    # TODO: Why doesn't this work instead of calling a separate tidy3d_fun_fn?
+    sim_data_orig, _ = JaxSimulationData.split_fwd_sim_data(sim_data=sim_data, jax_info=jax_info)
+    # # Uncomment to make test pass
+    # sim_data_orig = tidy3d_run_fn(
+    #     simulation=simulation,
+    #     task_name=_task_name_fwd(task_name),
+    #     folder_name=folder_name,
+    #     path=path,
+    #     callback_url=callback_url,
+    #     verbose=verbose,
+    # )
 
     # store the forward data (including monitor data) on our servers
     # TODO: store this to file
@@ -232,7 +238,7 @@ def webapi_run_adjoint_fwd(
     store_fwd_data(fwd_sim_key=fwd_sim_key, sim_data_fwd=jax_sim_data_fwd)
 
     # TODO: there should be no return here but instead things should be packaged in files
-    return dict(fwd_sim_key=fwd_sim_key, fwidth_adj=fwidth_adj)
+    return dict(fwd_sim_key=fwd_sim_key)
 
 
 # TODO: implement this as a webapi that can be called via http request
