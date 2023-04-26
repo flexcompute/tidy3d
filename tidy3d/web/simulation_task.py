@@ -228,6 +228,25 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
         resp = http.get(f"tidy3d/tasks/{task_id}/detail")
         return SimulationTask(**resp) if resp else None
 
+    @classmethod
+    def get_running_tasks(cls) -> List[SimulationTask]:
+        """Get a list of running tasks from the server"
+
+
+        Parameters
+        ----------
+
+        Returns
+        -------
+        List[:class:`.SimulationTask`]
+            :class:`.SimulationTask` object containing info about status,
+             size, credits of task and others.
+        """
+        resp = http.get("tidy3d/py/tasks")
+        if not resp:
+            return []
+        return parse_obj_as(List[SimulationTask], resp)
+
     def delete(self):
         """Delete current task from server."""
         if not self.task_id:
