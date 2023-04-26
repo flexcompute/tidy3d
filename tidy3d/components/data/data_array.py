@@ -222,6 +222,23 @@ class MixedModeDataArray(DataArray):
     _dims = ("f", "mode_index_0", "mode_index_1")
 
 
+class SpatialDataArray(DataArray):
+    """Spatial distribution.
+
+    Example
+    -------
+    >>> x = [1,2]
+    >>> y = [2,3,4]
+    >>> z = [3,4,5,6]
+    >>> coords = dict(x=x, y=y, z=z)
+    >>> fd = SpatialDataArray((1+1j) * np.random.random((2,3,4)), coords=coords)
+    """
+
+    __slots__ = ()
+    _dims = ("x", "y", "z")
+    _data_attrs = {"long_name": "field value"}
+
+
 class ScalarFieldDataArray(DataArray):
     """Spatial distribution in the frequency-domain.
 
@@ -425,6 +442,7 @@ class TriangleMeshDataArray(DataArray):
 
 
 DATA_ARRAY_TYPES = [
+    SpatialDataArray,
     ScalarFieldDataArray,
     ScalarFieldTimeDataArray,
     ScalarModeFieldDataArray,

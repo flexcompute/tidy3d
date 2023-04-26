@@ -176,6 +176,7 @@ InterpMethod = Literal["nearest", "linear"]
 # Complex = Union[complex, ComplexNumber]
 Complex = Union[tidycomplex, ComplexNumber]
 PoleAndResidue = Tuple[Complex, Complex]
+CustomPoleAndResidue = Tuple[ArrayComplex3D, ArrayComplex3D]
 
 # PoleAndResidue = Tuple[Tuple[float, float], Tuple[float, float]]
 FreqBoundMax = float
