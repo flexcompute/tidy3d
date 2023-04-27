@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Union, Dict, Callable
+from typing import Union, Dict, Callable, Tuple
 
 import xarray as xr
 import numpy as np
@@ -11,7 +11,7 @@ import pydantic as pd
 from .data_array import DataArray
 from .data_array import ScalarFieldDataArray, ScalarFieldTimeDataArray, ScalarModeFieldDataArray
 from .data_array import ModeIndexDataArray
-from .data_array import TriangleMeshDataArray
+from .data_array import TriangleMeshDataArray, SpatialDataArray
 
 from ..base import Tidy3dBaseModel
 from ..types import Axis
@@ -388,6 +388,37 @@ class PermittivityDataset(AbstractFieldDataset):
         title="Epsilon zz",
         description="Spatial distribution of the zz-component of the relative permittivity.",
     )
+
+
+class DispersiveDataset(Dataset):
+    """Dataset containing dispersive medium parameters."""
+
+    eps_inf: SpatialDataArray = pd.Field(...)
+
+    coeffs: Tuple[Tuple[SpatialDataArray, ...], ...] = pd.Field(...)
+
+    # TODO: validate that all supplied SpatialDataArrays have the same shape
+
+
+class PoleResidueDataset(Dataset):
+    """Dataset containing dispersive medium parameters."""
+
+    eps_inf: SpatialDataArray = pd.Field(...)
+
+    poles: Tuple[Tuple[SpatialDataArray, SpatialDataArray], ...] = pd.Field(...)
+
+
+class DrudeDataset(Dataset):
+    """Dataset containing dispersive medium parameters."""
+
+    eps_inf: SpatialDataArray = pd.Field(...)
+
+    coeffs: Tuple[Tuple[SpatialDataArray, SpatialDataArray], ...] = pd.Field(...)
+
+
+# TODO: if desired, subclasses of DispersiveDataset specific to Drude, etc.
+# TODO: should this all be moved to medium.py?
+# TODO: an AnisotropicDataset
 
 
 class TriangleMeshDataset(Dataset):

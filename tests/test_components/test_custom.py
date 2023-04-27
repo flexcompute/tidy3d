@@ -149,8 +149,15 @@ def test_io_json_clear_tmp():
 def make_custom_medium(scalar_permittivity_data):
     """Make a custom medium."""
     field_components = {f"eps_{d}{d}": scalar_permittivity_data for d in "xyz"}
-    eps_dataset = PermittivityDataset(**field_components)
-    return CustomMedium(eps_dataset=eps_dataset)
+    dataset = PermittivityDataset(**field_components)
+    return CustomMedium(dataset=dataset)
+
+
+def make_custom_dispersive_medium(scalar_permittivity_data):
+    """Make a custom medium."""
+    field_components = {f"eps_{d}{d}": scalar_permittivity_data for d in "xyz"}
+    dataset = PermittivityDataset(**field_components)
+    return CustomMedium(dataset=dataset)
 
 
 CUSTOM_MEDIUM = make_custom_medium(make_scalar_data())
@@ -158,7 +165,7 @@ CUSTOM_MEDIUM = make_custom_medium(make_scalar_data())
 
 def test_medium_components():
     """Get Dictionary of field components and select some data."""
-    for name, field in CUSTOM_MEDIUM.eps_dataset.field_components.items():
+    for name, field in CUSTOM_MEDIUM.dataset.field_components.items():
         _ = field.interp(x=0, y=0, z=0).sel(f=freqs[0])
 
 
@@ -291,3 +298,16 @@ def test_n_cfl():
     ndata = ScalarFieldDataArray(data, coords=dict(x=X, y=Y, z=Z, f=freqs))
     med = CustomMedium.from_nk(n=ndata, k=ndata * 0.01)
     assert med.n_cfl >= 2
+
+
+@pytest.mark.parametrize("use_eps, desired_log", ((False, None), (True, "WARNING")))
+def test_eps_dataset_deprecation(use_eps, desired_log, log_capture):
+    """CFL number for custom medium"""
+    scalar_permittivity_data = make_scalar_data()
+    field_components = {f"eps_{d}{d}": scalar_permittivity_data for d in "xyz"}
+    dataset = PermittivityDataset(**field_components)
+    if use_eps:
+        cm = CustomMedium(eps_dataset=dataset)
+    else:
+        cm = CustomMedium(dataset=dataset)
+    assert_log_level(log_capture, desired_log)

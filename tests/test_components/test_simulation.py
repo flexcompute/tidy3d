@@ -1290,8 +1290,8 @@ def test_tfsf_structures_grid(log_capture):
     data = np.ones((Nx, Ny, Nz, 1))
     eps_diagonal_data = td.ScalarFieldDataArray(data, coords=dict(x=X, y=Y, z=Z, f=[td.C_0]))
     eps_components = {f"eps_{d}{d}": eps_diagonal_data for d in "xyz"}
-    eps_dataset = td.PermittivityDataset(**eps_components)
-    custom_medium = td.CustomMedium(eps_dataset=eps_dataset, name="my_medium")
+    dataset = td.PermittivityDataset(**eps_components)
+    custom_medium = td.CustomMedium(dataset=dataset, name="my_medium")
     sim = td.Simulation(
         size=(2.0, 2.0, 2.0),
         grid_spec=td.GridSpec.auto(wavelength=1.0),

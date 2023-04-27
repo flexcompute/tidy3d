@@ -197,7 +197,7 @@ class JaxCustomMedium(CustomMedium, JaxObject):
     with respect to the field variation.
     """
 
-    eps_dataset: JaxPermittivityDataset = pd.Field(
+    dataset: JaxPermittivityDataset = pd.Field(
         ...,
         title="Permittivity Dataset",
         description="User-supplied dataset containing complex-valued permittivity "
@@ -206,20 +206,20 @@ class JaxCustomMedium(CustomMedium, JaxObject):
         jax_field=True,
     )
 
-    @pd.validator("eps_dataset", always=True)
+    @pd.validator("dataset", always=True)
     def _single_frequency(cls, val):
         """Override of inherited validator."""
         return val
 
-    @pd.validator("eps_dataset", always=True)
+    @pd.validator("dataset", always=True)
     def _eps_inf_greater_no_less_than_one_sigma_positive(cls, val):
         """Override of inherited validator."""
         return val
 
-    def eps_dataset_freq(self, frequency: float) -> PermittivityDataset:
+    def dataset_freq(self, frequency: float) -> PermittivityDataset:
         """Override of inherited validator."""
         as_custom_medium = self.to_medium()
-        return as_custom_medium.eps_dataset_freq(frequency=frequency)
+        return as_custom_medium.dataset_freq(frequency=frequency)
 
     def to_medium(self) -> CustomMedium:
         """Convert :class:`.JaxMedium` instance to :class:`.Medium`"""
@@ -227,29 +227,29 @@ class JaxCustomMedium(CustomMedium, JaxObject):
         eps_field_components = {}
         for dim in "xyz":
             field_name = f"eps_{dim}{dim}"
-            data_array = self_dict["eps_dataset"][field_name]
+            data_array = self_dict["dataset"][field_name]
             values = np.array(data_array["values"])
             coords = data_array["coords"]
             scalar_field = ScalarFieldDataArray(values, coords=coords)
             eps_field_components[field_name] = scalar_field
-        eps_dataset = PermittivityDataset(**eps_field_components)
-        self_dict["eps_dataset"] = eps_dataset
+        dataset = PermittivityDataset(**eps_field_components)
+        self_dict["dataset"] = dataset
         return CustomMedium.parse_obj(self_dict)
 
     @classmethod
     def from_tidy3d(cls, tidy3d_obj: CustomMedium) -> JaxCustomMedium:
         """Convert :class:`.Tidy3dBaseModel` instance to :class:`.JaxObject`."""
-        obj_dict = tidy3d_obj.dict(exclude={"type", "eps_dataset"})
-        eps_dataset = tidy3d_obj.eps_dataset
+        obj_dict = tidy3d_obj.dict(exclude={"type", "dataset"})
+        dataset = tidy3d_obj.dataset
         field_components = {}
         for dim in "xyz":
             field_name = f"eps_{dim}{dim}"
-            data_array = eps_dataset.field_components[field_name]
+            data_array = dataset.field_components[field_name]
             values = data_array.values.tolist()
             coords = {key: np.array(val).tolist() for key, val in data_array.coords.items()}
             field_components[field_name] = JaxDataArray(values=values, coords=coords)
-        eps_dataset = JaxPermittivityDataset(**field_components)
-        obj_dict["eps_dataset"] = eps_dataset
+        dataset = JaxPermittivityDataset(**field_components)
+        obj_dict["dataset"] = dataset
         return cls.parse_obj(obj_dict)
 
     # pylint:disable=too-many-locals, unused-argument
@@ -276,7 +276,7 @@ class JaxCustomMedium(CustomMedium, JaxObject):
             field_name = f"E{dim}"
 
             # grab the original data and its coordinatess
-            orig_data_array = self.eps_dataset.field_components[eps_field_name]
+            orig_data_array = self.dataset.field_components[eps_field_name]
             coords = orig_data_array.coords
 
             # construct the coordinates for interpolation and selection within the custom medium
@@ -309,8 +309,8 @@ class JaxCustomMedium(CustomMedium, JaxObject):
             vjp_data_array = JaxDataArray(values=vjp_values, coords=coords)
             vjp_field_components[eps_field_name] = vjp_data_array
 
-        vjp_eps_dataset = JaxPermittivityDataset(**vjp_field_components)
-        return self.copy(update=dict(eps_dataset=vjp_eps_dataset))
+        vjp_dataset = JaxPermittivityDataset(**vjp_field_components)
+        return self.copy(update=dict(dataset=vjp_dataset))
 
 
 JaxMediumType = Union[JaxMedium, JaxAnisotropicMedium, JaxCustomMedium]

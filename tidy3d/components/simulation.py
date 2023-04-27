@@ -1477,8 +1477,8 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         # custom medium, the min and max in the supplied dataset over all components and
         # spatial locations.
         for mat in [medium for medium in medium_list if isinstance(medium, CustomMedium)]:
-            eps_dataset_at_freq = mat.eps_dataset_freq(freq)
-            for eps_component in eps_dataset_at_freq.field_components.values():
+            dataset_at_freq = mat.dataset_freq(freq)
+            for eps_component in dataset_at_freq.field_components.values():
                 eps_min = min(eps_min, np.min(eps_component.real.values.ravel()))
                 eps_max = max(eps_max, np.max(eps_component.real.values.ravel()))
         return eps_min, eps_max
@@ -2590,7 +2590,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         datasets_source = [
             src.field_dataset for src in self.sources if isinstance(src, CustomFieldSource)
         ]
-        datasets_medium = [mat.eps_dataset for mat in self.mediums if isinstance(mat, CustomMedium)]
+        datasets_medium = [mat.dataset for mat in self.mediums if isinstance(mat, CustomMedium)]
         datasets_geometry = [
             struct.geometry.mesh_dataset
             for struct in self.structures

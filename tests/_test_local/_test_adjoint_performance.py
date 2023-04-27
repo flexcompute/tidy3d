@@ -93,8 +93,8 @@ def make_sim(eps_values: np.ndarray) -> JaxSimulation:
 
     eps_ii = JaxDataArray(values=eps_values, coords=coords)
     field_components = {f"eps_{dim}{dim}": eps_ii for dim in "xyz"}
-    jax_eps_dataset = JaxPermittivityDataset(**field_components)
-    jax_med_custom = JaxCustomMedium(eps_dataset=jax_eps_dataset)
+    jax_dataset = JaxPermittivityDataset(**field_components)
+    jax_med_custom = JaxCustomMedium(dataset=jax_dataset)
     jax_struct_custom = JaxStructure(geometry=jax_box, medium=jax_med_custom)
 
     # TODO: Add new geometries as they are created.
@@ -240,8 +240,8 @@ def test_simple_jax_data_array(use_emulated_run):
 
     def make_custom_medium(values):
         components = {f"eps_{dim}{dim}": make_data_array(values) for dim in "xyz"}
-        eps_dataset = JaxPermittivityDataset(**components)
-        return JaxCustomMedium(eps_dataset=eps_dataset)
+        dataset = JaxPermittivityDataset(**components)
+        return JaxCustomMedium(dataset=dataset)
 
     def make_custom_structure(values):
         medium = make_custom_medium(values)
@@ -277,11 +277,11 @@ def test_simple_jax_data_array(use_emulated_run):
 
     def f(values):
         custom_medium = make_custom_medium(values)
-        return jnp.sum(custom_medium.eps_dataset.eps_xx.values)
+        return jnp.sum(custom_medium.dataset.eps_xx.values)
 
     def f(values):
         custom_structure = make_custom_structure(values)
-        return jnp.sum(custom_structure.medium.eps_dataset.eps_xx.values)
+        return jnp.sum(custom_structure.medium.dataset.eps_xx.values)
 
     def f(values):
         sim = make_sim(values)

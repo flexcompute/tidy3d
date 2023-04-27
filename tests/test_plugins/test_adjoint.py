@@ -82,8 +82,8 @@ def make_sim(
     values = base_eps_val + np.random.random((Nx, Ny, Nz, 1))
     eps_ii = JaxDataArray(values=values, coords=coords)
     field_components = {f"eps_{dim}{dim}": eps_ii for dim in "xyz"}
-    jax_eps_dataset = JaxPermittivityDataset(**field_components)
-    jax_med_custom = JaxCustomMedium(eps_dataset=jax_eps_dataset)
+    jax_dataset = JaxPermittivityDataset(**field_components)
+    jax_med_custom = JaxCustomMedium(dataset=jax_dataset)
     jax_struct_custom = JaxStructure(geometry=jax_box1, medium=jax_med_custom)
 
     # TODO: Add new geometries as they are created.

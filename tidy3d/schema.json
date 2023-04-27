@@ -586,7 +586,7 @@
     },
     "CustomMedium": {
       "title": "CustomMedium",
-      "description": ":class:`.Medium` with user-supplied permittivity distribution.\n\nParameters\n----------\nname : Optional[str] = None\n    Optional unique name for medium.\nfrequency_range : Optional[Tuple[float, float]] = None\n    [units = (Hz, Hz)].  Optional range of validity for the medium.\neps_dataset : PermittivityDataset\n    User-supplied dataset containing complex-valued permittivity as a function of space. Permittivity distribution over the Yee-grid will be interpolated based on ``interp_method``.\ninterp_method : Literal['nearest', 'linear'] = nearest\n    Interpolation method to obtain permittivity values that are not supplied at the Yee grids; For grids outside the range of the supplied data, extrapolation will be applied. When the extrapolated value is smaller (greater) than the minimal (maximal) of the supplied data, the extrapolated value will take the minimal (maximal) of the supplied data.\n\nExample\n-------\n>>> Nx, Ny, Nz = 10, 9, 8\n>>> X = np.linspace(-1, 1, Nx)\n>>> Y = np.linspace(-1, 1, Ny)\n>>> Z = np.linspace(-1, 1, Nz)\n>>> freqs = [2e14]\n>>> data = np.ones((Nx, Ny, Nz, 1))\n>>> eps_diagonal_data = ScalarFieldDataArray(data, coords=dict(x=X, y=Y, z=Z, f=freqs))\n>>> eps_components = {f\"eps_{d}{d}\": eps_diagonal_data for d in \"xyz\"}\n>>> eps_dataset = PermittivityDataset(**eps_components)\n>>> dielectric = CustomMedium(eps_dataset=eps_dataset, name='my_medium')\n>>> eps = dielectric.eps_model(200e12)",
+      "description": ":class:`.Medium` with user-supplied permittivity distribution.\n\nParameters\n----------\nname : Optional[str] = None\n    Optional unique name for medium.\nfrequency_range : Optional[Tuple[float, float]] = None\n    [units = (Hz, Hz)].  Optional range of validity for the medium.\ndataset : PermittivityDataset\n    User-supplied dataset containing complex-valued permittivity as a function of space. Permittivity distribution over the Yee-grid will be interpolated based on ``interp_method``.\ninterp_method : Literal['nearest', 'linear'] = nearest\n    Interpolation method to obtain permittivity values that are not supplied at the Yee grids; For grids outside the range of the supplied data, extrapolation will be applied. When the extrapolated value is smaller (greater) than the minimal (maximal) of the supplied data, the extrapolated value will take the minimal (maximal) of the supplied data.\n\nExample\n-------\n>>> Nx, Ny, Nz = 10, 9, 8\n>>> X = np.linspace(-1, 1, Nx)\n>>> Y = np.linspace(-1, 1, Ny)\n>>> Z = np.linspace(-1, 1, Nz)\n>>> freqs = [2e14]\n>>> data = np.ones((Nx, Ny, Nz, 1))\n>>> eps_diagonal_data = ScalarFieldDataArray(data, coords=dict(x=X, y=Y, z=Z, f=freqs))\n>>> eps_components = {f\"eps_{d}{d}\": eps_diagonal_data for d in \"xyz\"}\n>>> dataset = PermittivityDataset(**eps_components)\n>>> dielectric = CustomMedium(dataset=dataset, name='my_medium')\n>>> eps = dielectric.eps_model(200e12)",
       "type": "object",
       "properties": {
         "name": {
@@ -621,7 +621,7 @@
           ],
           "type": "string"
         },
-        "eps_dataset": {
+        "dataset": {
           "title": "Permittivity Dataset",
           "description": "User-supplied dataset containing complex-valued permittivity as a function of space. Permittivity distribution over the Yee-grid will be interpolated based on ``interp_method``.",
           "allOf": [
@@ -642,7 +642,7 @@
         }
       },
       "required": [
-        "eps_dataset"
+        "dataset"
       ],
       "additionalProperties": false
     },

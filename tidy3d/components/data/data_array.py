@@ -240,6 +240,26 @@ class ScalarFieldDataArray(DataArray):
     _data_attrs = {"long_name": "field value"}
 
 
+class SpatialDataArray(DataArray):
+    """Spatial distribution of values.
+
+    Example
+    -------
+    >>> x = [1,2]
+    >>> y = [2,3,4]
+    >>> z = [3,4,5,6]
+    >>> coords = dict(x=x, y=y, z=z)
+    >>> fd = SpatialDataArray((1+1j) * np.random.random((2,3,4)), coords=coords)
+    """
+
+    __slots__ = ()
+    _dims = ("x", "y", "z")
+    _data_attrs = {"long_name": "value"}
+
+
+# TODO: add SpatialDataArray to data array tests
+
+
 class ScalarFieldTimeDataArray(DataArray):
     """Spatial distribution in the time-domain.
 
@@ -426,6 +446,7 @@ class TriangleMeshDataArray(DataArray):
 
 DATA_ARRAY_TYPES = [
     ScalarFieldDataArray,
+    SpatialDataArray,
     ScalarFieldTimeDataArray,
     ScalarModeFieldDataArray,
     FluxDataArray,
