@@ -962,7 +962,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         """Error if the 4 sidewalls of a TFSF box don't all intersect the same structures.
         This validator may need to compute permittivities on the grid, so it is called
         pre-upload rather than at the time of definition. Also errors if any side wall
-        intersects with a custom medium.
+        intersects with a custom medium or a fully anisotropic media.
         """
         for source in self.sources:
             if not isinstance(source, TFSF):
@@ -982,11 +982,12 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
                     )
 
                     if any(
-                        isinstance(struct.medium, CustomMedium) for struct in intersecting_structs
+                        isinstance(struct.medium, (CustomMedium, FullyAnisotropicMedium))
+                        for struct in intersecting_structs
                     ):
                         raise SetupError(
-                            f"The surfaces of TFSF source '{source.name}' must not intersect "
-                            "any structures containing a 'CustomMedium'."
+                            f"The surfaces of TFSF source '{source.name}' must not intersect any "
+                            "structures containing a 'CustomMedium' or a 'FullyAnisotropicMedium'."
                         )
 
                     # if no structures intersect, just add a phantom associated with the simulation
@@ -1488,7 +1489,6 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         medium_list = [self.medium] + list(self.mediums)
         medium_list = [medium for medium in medium_list if not isinstance(medium, PECMedium)]
         # regular medium
-        # wouldn't using eps_diagonal be more accurate?
         eps_list = [
             medium.eps_model(freq).real
             for medium in medium_list
@@ -2493,10 +2493,11 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
             Rectangular geometry specifying where to measure the permittivity.
         coord_key : str = 'centers'
             Specifies at what part of the grid to return the permittivity at.
-            Accepted values are ``{'centers', 'boundaries', 'Ex', 'Ey', 'Ez'}``.
-            The field values (eg. 'Ex') correspond to the correponding field locations on the yee
-            lattice. If field values are selected, the corresponding epsilon component from the
-            main diagonal of the epsilon tensor is returned. Otherwise, the average of the diagonal
+            Accepted values are ``{'centers', 'boundaries', 'Ex', 'Ey', 'Ez', 'Exy', 'Exz', 'Eyx',
+            'Eyz', 'Ezx', Ezy'}``. The field values (eg. 'Ex') correspond to the correponding field
+            locations on the yee lattice. If field values are selected, the corresponding diagonal
+            (eg. `eps_xx` in case of `Ex`) or off-diagonal (eg. `eps_xy` in case of `Exy`) epsilon
+            component from the epsilon tensor is returned. Otherwise, the average of the main
             values is returned.
         freq : float = None
             The frequency to evaluate the mediums at.
@@ -2526,10 +2527,11 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
             Grid specifying where to measure the permittivity.
         coord_key : str = 'centers'
             Specifies at what part of the grid to return the permittivity at.
-            Accepted values are ``{'centers', 'boundaries', 'Ex', 'Ey', 'Ez'}``.
-            The field values (eg. 'Ex') correspond to the correponding field locations on the yee
-            lattice. If field values are selected, the corresponding epsilon component from the
-            main diagonal of the epsilon tensor is returned. Otherwise, the average of the diagonal
+            Accepted values are ``{'centers', 'boundaries', 'Ex', 'Ey', 'Ez', 'Exy', 'Exz', 'Eyx',
+            'Eyz', 'Ezx', Ezy'}``. The field values (eg. 'Ex') correspond to the correponding field
+            locations on the yee lattice. If field values are selected, the corresponding diagonal
+            (eg. `eps_xx` in case of `Ex`) or off-diagonal (eg. `eps_xy` in case of `Exy`) epsilon
+            component from the epsilon tensor is returned. Otherwise, the average of the main
             values is returned.
         freq : float = None
             The frequency to evaluate the mediums at.
@@ -2560,9 +2562,9 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
             if coord_key[0] != "E":
                 return np.mean(structure.eps_diagonal(frequency, coords), axis=0)
             row = ["x", "y", "z"].index(coord_key[1])
-            if len(coord_key) == 2:
+            if len(coord_key) == 2:  # diagonal component in case of Ex, Ey, and Ez
                 col = row
-            else:
+            else:  # off-diagonal component in case of Exy, Exz, Eyx, etc
                 col = ["x", "y", "z"].index(coord_key[2])
             return structure.eps_comp(row, col, frequency, coords)
 
@@ -2605,10 +2607,11 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
             return xr.DataArray(eps_array, coords=coords, dims=("x", "y", "z"))
 
         # combine all data into dictionary
-        if coord_key[0] != "E":
-            coords = grid[coord_key]
-        else:
+        if coord_key[0] == "E":
+            # off-diagonal componets are sampled at respective locations (eg. `eps_xy` at `Ex`)
             coords = grid[coord_key[0:2]]
+        else:
+            coords = grid[coord_key]
         return make_eps_data(coords)
 
     @property

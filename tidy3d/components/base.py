@@ -66,6 +66,13 @@ class Tidy3dBaseModel(pydantic.BaseModel):
     `Pydantic Models <https://pydantic-docs.helpmanual.io/usage/models/>`_
     """
 
+    def __hash__(self) -> int:
+        """Hash method."""
+        try:
+            return super().__hash__(self)
+        except TypeError:
+            return hash(self.json())
+
     def __init__(self, **kwargs):
         """Init method, includes post-init validators."""
         super().__init__(**kwargs)

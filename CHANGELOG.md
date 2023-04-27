@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Adjoint processing is done server side by default, to avoid unnecessary downloading of data.
 - `run_local` and `run_async_local` options in `tidy3d.plugins.adjoint.web` to provide way to run adjoint processing locally.
 - `JaxPolySlab` in `adjoint` plugin, which can track derivatives through its `.vertices`.
+- Fully anisotropic medium class (`FullyAnisotropicMedium`) that allows to simulate materials with permittivity and conductivity tensors oriented arbitrary with respect to simulation grid.
 
 ### Changed
 - Perfect electric conductors (PECs) are now modeled as high-conductivity media in both the frontend and backend mode solvers, and their presence triggers the use of a preconditioner to improve numerical stability and robustness. Consequently, the mode solver provides more accurate eigenvectors and field distributions when PEC structures are present.

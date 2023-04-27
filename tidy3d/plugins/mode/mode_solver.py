@@ -282,25 +282,15 @@ class ModeSolver(Tidy3dBaseModel):
         return SimulationData(simulation=new_simulation, data=(monitor_data,))
 
     def _get_epsilon(self, freq: float) -> ArrayComplex4D:
-        """Compute the diagonal components of the epsilon tensor in the plane."""
-
-        eps_xx = self.simulation.epsilon_on_grid(self._solver_grid, "Ex", freq)
-        eps_yy = self.simulation.epsilon_on_grid(self._solver_grid, "Ey", freq)
-        eps_zz = self.simulation.epsilon_on_grid(self._solver_grid, "Ez", freq)
-
-        eps_xy = self.simulation.epsilon_on_grid(self._solver_grid, "Exy", freq)
-        eps_xz = self.simulation.epsilon_on_grid(self._solver_grid, "Exz", freq)
-        eps_yx = self.simulation.epsilon_on_grid(self._solver_grid, "Eyx", freq)
-        eps_yz = self.simulation.epsilon_on_grid(self._solver_grid, "Eyz", freq)
-        eps_zx = self.simulation.epsilon_on_grid(self._solver_grid, "Ezx", freq)
-        eps_zy = self.simulation.epsilon_on_grid(self._solver_grid, "Ezy", freq)
-
-        return np.stack(
-            (eps_xx, eps_xy, eps_xz, eps_yx, eps_yy, eps_yz, eps_zx, eps_zy, eps_zz), axis=0
-        )
+        """Compute the epsilon tensor in the plane. Order of components is xx, xy, xz, yx, etc."""
+        eps_keys = ["Ex", "Exy", "Exz", "Eyx", "Ey", "Eyz", "Ezx", "Ezy", "Ez"]
+        eps_tensor = [
+            self.simulation.epsilon_on_grid(self._solver_grid, key, freq) for key in eps_keys
+        ]
+        return np.stack(eps_tensor, axis=0)
 
     def _solver_eps(self, freq: float) -> ArrayComplex4D:
-        """Get the diagonal permittivity in the shape needed to be supplied to the sovler, with the
+        """Get the permittivity tensor in the shape needed to be supplied to the sovler, with the
         normal axis rotated to z."""
 
         # Get diagonal epsilon components in the plane
@@ -310,16 +300,26 @@ class ModeSolver(Tidy3dBaseModel):
         eps_tensor = np.take(eps_tensor, indices=[0], axis=1 + self.normal_axis)
         eps_tensor = np.squeeze(eps_tensor, axis=1 + self.normal_axis)
 
+        # convert to into 3-by-3 representation for easier axis swap
+        flat_shape = np.shape(eps_tensor)  # 9 components flat
+        tensor_shape = [3, 3] + list(flat_shape[1:])  # 3-by-3 matrix
+        eps_tensor = eps_tensor.reshape(tensor_shape)
+
         # swap axes to plane coordinates (normal_axis goes to z)
         if self.normal_axis == 0:
-            rotated_eps_tensor = eps_tensor[[4, 5, 3, 7, 8, 6, 1, 2, 0], ...]
-        if self.normal_axis == 1:
-            rotated_eps_tensor = eps_tensor[[0, 2, 1, 6, 8, 7, 3, 5, 4], ...]
-        if self.normal_axis == 2:
-            rotated_eps_tensor = eps_tensor
+            # swap x and y
+            eps_tensor[[0, 1], :, ...] = eps_tensor[[1, 0], :, ...]
+            eps_tensor[:, [0, 1], ...] = eps_tensor[:, [1, 0], ...]
+        if self.normal_axis <= 1:
+            # swap x (normal_axis==0) or y (normal_axis==1) and z
+            eps_tensor[[1, 2], :, ...] = eps_tensor[[2, 1], :, ...]
+            eps_tensor[:, [1, 2], ...] = eps_tensor[:, [2, 1], ...]
+
+        # back to "flat" representation
+        eps_tensor = eps_tensor.reshape(flat_shape)
 
         # construct eps to feed to mode solver
-        return rotated_eps_tensor
+        return eps_tensor
 
     def _solve_all_freqs(
         self,

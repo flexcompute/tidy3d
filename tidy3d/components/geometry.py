@@ -24,6 +24,7 @@ from ..exceptions import Tidy3dKeyError, SetupError, ValidationError, DataError
 from ..constants import MICROMETER, LARGE_NUMBER, RADIAN, fp_eps, inf
 from .data.dataset import TriangleMeshDataset
 from .data.data_array import TriangleMeshDataArray, DATA_ARRAY_MAP
+from .transformation import RotationAroundAxis
 
 try:
     import trimesh
@@ -644,31 +645,8 @@ class Geometry(Tidy3dBaseModel, ABC):
         angle : float
             Angle of rotation counter-clockwise around the axis (rad).
         """
-
-        if isclose(angle % (2 * np.pi), 0):
-            return points
-
-        # Normalized axis vector components
-        (ux, uy, uz) = axis / np.linalg.norm(axis)
-
-        # General rotation matrix
-        rot_mat = np.zeros((3, 3))
-        cos = np.cos(angle)
-        sin = np.sin(angle)
-        rot_mat[0, 0] = cos + ux**2 * (1 - cos)
-        rot_mat[0, 1] = ux * uy * (1 - cos) - uz * sin
-        rot_mat[0, 2] = ux * uz * (1 - cos) + uy * sin
-        rot_mat[1, 0] = uy * ux * (1 - cos) + uz * sin
-        rot_mat[1, 1] = cos + uy**2 * (1 - cos)
-        rot_mat[1, 2] = uy * uz * (1 - cos) - ux * sin
-        rot_mat[2, 0] = uz * ux * (1 - cos) - uy * sin
-        rot_mat[2, 1] = uz * uy * (1 - cos) + ux * sin
-        rot_mat[2, 2] = cos + uz**2 * (1 - cos)
-
-        if len(points.shape) == 1:
-            return rot_mat @ points
-
-        return np.tensordot(rot_mat, points, axes=1)
+        rotation = RotationAroundAxis(axis=axis, angle=angle)
+        return rotation.rotate_vector(points)
 
     def reflect_points(
         self,
