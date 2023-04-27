@@ -1382,6 +1382,25 @@ def test_tfsf_structures_grid(log_capture):
     with pytest.raises(SetupError) as e:
         sim.validate_pre_upload()
 
+    # TFSF box must not intersect a fully anisotropic medium
+    anisotropic_medium = td.FullyAnisotropicMedium(
+        permittivity=np.eye(3).tolist(), conductivity=np.eye(3).tolist()
+    )
+    sim = td.Simulation(
+        size=(2.0, 2.0, 2.0),
+        grid_spec=td.GridSpec.auto(wavelength=1.0),
+        run_time=1e-12,
+        sources=[source],
+        structures=[
+            td.Structure(
+                geometry=td.Box(center=(0.5, 0, 0), size=(td.inf, td.inf, 0.25)),
+                medium=anisotropic_medium,
+            )
+        ],
+    )
+    with pytest.raises(SetupError) as e:
+        sim.validate_pre_upload()
+
 
 @pytest.mark.parametrize(
     "size, num_struct, log_level", [(1, 1, None), (50, 1, "WARNING"), (1, 11000, "WARNING")]

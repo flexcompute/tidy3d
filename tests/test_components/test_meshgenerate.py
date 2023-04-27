@@ -665,8 +665,8 @@ def test_shapely_strtree_warnings():
 
 def test_anisotropic_material_meshing():
     """Make sure the largest propagation index defines refinement in all directions."""
-    perm_d = [[3, 0, 0], [0, 2, 0], [0, 0, 1]]
-    cond_d = [[0.2, 0, 0], [0, 0.15, 0], [0, 0, 0.1]]
+    perm_diag = [3, 2, 1]
+    cond_diag = [0.2, 0.15, 0.1]
 
     box = td.Box(
         center=(0, 0, 0),
@@ -675,25 +675,23 @@ def test_anisotropic_material_meshing():
 
     box_iso = td.Structure(
         geometry=box,
-        medium=td.Medium(permittivity=perm_d[0][0], conductivity=cond_d[0][0]),
+        medium=td.Medium(permittivity=perm_diag[0], conductivity=cond_diag[0]),
     )
 
     box_diag = td.Structure(
         geometry=box,
         medium=td.AnisotropicMedium(
-            xx=td.Medium(permittivity=perm_d[0][0], conductivity=cond_d[0][0]),
-            yy=td.Medium(permittivity=perm_d[1][1], conductivity=cond_d[1][1]),
-            zz=td.Medium(permittivity=perm_d[2][2], conductivity=cond_d[2][2]),
+            xx=td.Medium(permittivity=perm_diag[0], conductivity=cond_diag[0]),
+            yy=td.Medium(permittivity=perm_diag[1], conductivity=cond_diag[1]),
+            zz=td.Medium(permittivity=perm_diag[2], conductivity=cond_diag[2]),
         ),
     )
 
     box_full = td.Structure(
         geometry=box,
-        medium=td.FullyAnisotropicMedium.from_diagonal(
-            xx=td.Medium(permittivity=perm_d[0][0], conductivity=cond_d[0][0]),
-            yy=td.Medium(permittivity=perm_d[1][1], conductivity=cond_d[1][1]),
-            zz=td.Medium(permittivity=perm_d[2][2], conductivity=cond_d[2][2]),
-            rotation=td.RotationAroundAxis(axis=(1, 2, 3), angle=1.23),
+        medium=td.FullyAnisotropicMedium(
+            permittivity=np.diag(perm_diag),
+            conductivity=np.diag(cond_diag),
         ),
     )
 

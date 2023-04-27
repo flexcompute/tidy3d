@@ -41,8 +41,8 @@ class EigSolver(Tidy3dBaseModel):
         ----------
         eps_cross : array_like or tuple of array_like
             Either a single 2D array defining the relative permittivity in the cross-section,
-            or three 2D arrays defining the permittivity at the Ex, Ey, and Ez locations
-            of the Yee grid.
+            or nine 2D arrays defining the permittivity at the Ex, Ey, and Ez locations
+            of the Yee grid in the order xx, xy, xz, yx, yy, yz, zx, zy, zz.
         coords : List[Numpy]
             Two 1D arrays with each with size one larger than the corresponding axis of
             ``eps_cross``.
@@ -114,7 +114,7 @@ class EigSolver(Tidy3dBaseModel):
         different from just the transformation of the derivative operator. For example, in a bent
         waveguide, there is strictly speaking no k-vector in the original coordinates as the system
         is not translationally invariant there. However, if we define kz = R k_phi, then the
-        effective index approaches that for a straight-waveguide in the limit of infinite radius. 
+        effective index approaches that for a straight-waveguide in the limit of infinite radius.
         Since we use w = R phi in the radial_transform, there is nothing else neede in the k transform.
         For the angled_transform, the transformation between k-vectors follows from writing the field as
         E' exp(i k_p w) in transformed coordinates, and identifying this with

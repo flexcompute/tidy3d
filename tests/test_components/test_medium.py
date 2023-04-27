@@ -361,7 +361,7 @@ def test_fully_anisotropic_media():
     assert np.allclose(m.permittivity, perm)
     assert np.allclose(m.conductivity, cond)
 
-    perm_d, cond_d = m.eps_sigma_diag
+    perm_d, cond_d, _ = m.eps_sigma_diag
 
     assert all(np.isin(np.round(perm_d), np.round(np.diag(perm_diag))))
     assert all(np.isin(np.round(cond_d), np.round(np.diag(cond_diag))))

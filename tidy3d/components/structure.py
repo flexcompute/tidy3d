@@ -114,10 +114,10 @@ class Structure(AbstractStructure):
 
         Parameters
         ----------
-        row : Axis
-            Component's row in the permittivity tensor.
-        col : Axis
-            Component's column in the permittivity tensor.
+        row : int
+            Component's row in the permittivity tensor (0, 1, or 2 for x, y, or z respectively).
+        col : int
+            Component's column in the permittivity tensor (0, 1, or 2 for x, y, or z respectively).
         frequency : float
             Frequency to evaluate permittivity at (Hz).
 

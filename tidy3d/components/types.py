@@ -43,12 +43,14 @@ class ArrayLike:
 
     ndim = None
     dtype = None
+    shape = None
 
     @classmethod
     def __get_validators__(cls):
         yield cls.load_complex
         yield cls.convert_to_numpy
         yield cls.check_dims
+        yield cls.check_shape
 
     @classmethod
     def load_complex(cls, val):
@@ -77,6 +79,13 @@ class ArrayLike:
         return val
 
     @classmethod
+    def check_shape(cls, val):
+        """Make sure the shape is correct."""
+        if cls.shape and val.shape != cls.shape:
+            raise ValidationError(f"Expected shape {cls.shape} for ArrayLike, got {val.shape}.")
+        return val
+
+    @classmethod
     def __modify_schema__(cls, field_schema):
         """Sets the schema of DataArray object."""
 
@@ -87,7 +96,9 @@ class ArrayLike:
         field_schema.update(schema)
 
 
-def constrained_array(dtype: type = None, ndim: int = None) -> type:
+def constrained_array(
+    dtype: type = None, ndim: int = None, shape: Tuple[pydantic.NonNegativeInt, ...] = None
+) -> type:
     """Generate an ArrayLike sub-type with constraints built in."""
 
     # note, a unique name is required for each subclass of ArrayLike with constraints
@@ -96,7 +107,9 @@ def constrained_array(dtype: type = None, ndim: int = None) -> type:
         type_name += f"_dtype={dtype}"
     if ndim is not None:
         type_name += f"_ndim={ndim}"
-    return type(type_name, (ArrayLike,), dict(dtype=dtype, ndim=ndim))
+    if shape is not None:
+        type_name += f"_shape={shape}"
+    return type(type_name, (ArrayLike,), dict(dtype=dtype, ndim=ndim, shape=shape))
 
 
 # pre-define a set of commonly used array like instances for import and use in type hints
@@ -108,6 +121,8 @@ ArrayComplex1D = constrained_array(dtype=complex, ndim=1)
 ArrayComplex2D = constrained_array(dtype=complex, ndim=2)
 ArrayComplex3D = constrained_array(dtype=complex, ndim=3)
 ArrayComplex4D = constrained_array(dtype=complex, ndim=4)
+
+TensorReal = constrained_array(dtype=float, ndim=2, shape=(3, 3))
 
 """ Complex Values """
 
@@ -181,18 +196,6 @@ PoleAndResidue = Tuple[Complex, Complex]
 FreqBoundMax = float
 FreqBoundMin = float
 FreqBound = Tuple[FreqBoundMin, FreqBoundMax]
-
-ComplexTensor = Tuple[
-    Tuple[Complex, Complex, Complex],
-    Tuple[Complex, Complex, Complex],
-    Tuple[Complex, Complex, Complex],
-]
-
-RealTensor = Tuple[
-    Tuple[float, float, float],
-    Tuple[float, float, float],
-    Tuple[float, float, float],
-]
 
 """ sources """
 
