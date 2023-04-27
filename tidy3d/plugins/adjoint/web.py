@@ -222,15 +222,15 @@ def webapi_run_adjoint_fwd(
     # simulation data (without gradient data), written to the path file
     # TODO: Why doesn't this work instead of calling a separate tidy3d_fun_fn?
     sim_data_orig, _ = JaxSimulationData.split_fwd_sim_data(sim_data=sim_data, jax_info=jax_info)
-    # # Uncomment to make test pass
-    # sim_data_orig = tidy3d_run_fn(
-    #     simulation=simulation,
-    #     task_name=_task_name_fwd(task_name),
-    #     folder_name=folder_name,
-    #     path=path,
-    #     callback_url=callback_url,
-    #     verbose=verbose,
-    # )
+    # Uncomment to make test pass
+    sim_data_orig = tidy3d_run_fn(
+        simulation=simulation,
+        task_name=_task_name_fwd(task_name),
+        folder_name=folder_name,
+        path=path,
+        callback_url=callback_url,
+        verbose=verbose,
+    )
 
     # store the forward data (including monitor data) on our servers
     # TODO: store this to file
@@ -254,25 +254,24 @@ def webapi_run_adjoint_bwd(
 ) -> Dict[str, JaxSimulation]:
     """Runs adjoint simulation on our servers, grabs the gradient data from fwd for processing."""
 
-    jax_sim_adj = JaxSimulation.from_simulation(sim_adj, jax_info_adj)
-
     sim_data_fwd = get_fwd_data(fwd_sim_key=fwd_sim_key)
 
     grad_data_fwd = sim_data_fwd.grad_data
     grad_eps_data_fwd = sim_data_fwd.grad_eps_data
 
-    sim_data_adj = run(
-        simulation=jax_sim_adj,
+    sim_data_adj = tidy3d_run_fn(
+        simulation=sim_adj,
         task_name=_task_name_adj(task_name),
         folder_name=folder_name,
         path=path,
         callback_url=callback_url,
         verbose=verbose,
     )
-    grad_data_adj = sim_data_adj.grad_data
+    jax_sim_data_adj = JaxSimulationData.from_sim_data(sim_data_adj, jax_info_adj)
+    grad_data_adj = jax_sim_data_adj.grad_data
 
     # get gradient and insert into the resulting simulation structure medium
-    sim_vjp = sim_data_adj.simulation.store_vjp(grad_data_fwd, grad_data_adj, grad_eps_data_fwd)
+    sim_vjp = jax_sim_data_adj.simulation.store_vjp(grad_data_fwd, grad_data_adj, grad_eps_data_fwd)
 
     # test that inputs and outputs are serializable
     # TODO: remove in production version.
