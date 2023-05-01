@@ -116,6 +116,7 @@ Photonic Integrated Circuit Components
     notebooks/PhotonicCrystalWaveguidePolarizationFilter
     notebooks/EdgeCoupler
     notebooks/90OpticalHybrid
+    notebooks/SWGBroadbandPolarizer
 
 Metamaterials, Gratings, and Other Periodic Structures
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
