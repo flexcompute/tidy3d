@@ -1,5 +1,7 @@
 """Logging for Tidy3d."""
 
+import inspect
+
 from typing import Union
 from typing_extensions import Literal
 
@@ -47,7 +49,12 @@ class LogHandler:
     def handle(self, level, level_name, message):
         """Output log messages depending on log level"""
         if level >= self.level:
-            self.console.log(level_name, message, sep=": ")
+            stack = inspect.stack()
+            offset = 4
+            if stack[offset - 1].filename.endswith("exceptions.py"):
+                # We want the calling site for exceptions.py
+                offset += 1
+            self.console.log(level_name, message, sep=": ", _stack_offset=offset)
 
 
 class Logger:
