@@ -849,8 +849,13 @@ class DispersiveMedium(AbstractMedium, ABC):
 
     @cached_property
     @abstractmethod
+    def _pole_residue_dict(self) -> Dict:
+        """Dict representation of Medium as a pole-residue model."""
+
+    @cached_property
     def pole_residue(self):
         """Representation of Medium as a pole-residue model."""
+        return PoleResidue(**self._pole_residue_dict)
 
     @cached_property
     def n_cfl(self):
@@ -877,34 +882,8 @@ class DispersiveMedium(AbstractMedium, ABC):
         return (value.real, value.imag)
 
 
-# class CustomDispersiveMedium(DispersiveMedium, AbstractCustomMedium, ABC):
+# class CustomDispersiveMedium(AbstractCustomMedium, DispersiveMedium, ABC):
 #     """A spatially varying dispersive medium."""
-
-#     x: ArrayFloat1D = pd.Field(
-#         ...,
-#         title="x coordinate",
-#         description="x coordinate of user-supplied permittivity data.",
-#         units=MICROMETER,
-#     )
-
-#     y: ArrayFloat1D = pd.Field(
-#         ...,
-#         title="y coordinate",
-#         description="y coordinate of user-supplied permittivity data.",
-#         units=MICROMETER,
-#     )
-
-#     z: ArrayFloat1D = pd.Field(
-#         ...,
-#         title="z coordinate",
-#         description="z coordinate of user-supplied permittivity data.",
-#         units=MICROMETER,
-#     )
-
-#     @cached_property
-#     def coords(self) -> Coords:
-#         """coordinate of the supplied data."""
-#         return Coords(x=self.x, y=self.y, z=self.z)
 
 #     @cached_property
 #     def n_cfl(self):
@@ -920,7 +899,7 @@ class DispersiveMedium(AbstractMedium, ABC):
 #     @cached_property
 #     def pole_residue(self):
 #         """Representation of Medium as a pole-residue model."""
-#         return CustomPoleResidue(**self._pole_residue_data)
+#         return CustomPoleResidue(**self._pole_residue_dict)
 
 #     @abstractmethod
 #     def _eps_dataarray_freq(self, frequency: float) -> ArrayComplex3D:
@@ -1024,10 +1003,10 @@ class PoleResidue(DispersiveMedium):
         return eps
 
     @cached_property
-    def pole_residue(self):
-        """Representation of Medium as a pole-residue model."""
+    def _pole_residue_dict(self) -> Dict:
+        """Dict representation of Medium as a pole-residue model."""
 
-        return PoleResidue(
+        return dict(
             eps_inf=self.eps_inf,
             poles=self.poles,
             frequency_range=self.frequency_range,
@@ -1210,8 +1189,8 @@ class Sellmeier(DispersiveMedium):
         return AbstractMedium.nk_to_eps_complex(n)
 
     @cached_property
-    def pole_residue(self) -> Dict:
-        """Data to represent medium as pole-residue model"""
+    def _pole_residue_dict(self) -> Dict:
+        """Dict representation of Medium as a pole-residue model"""
         poles = []
         for (B, C) in self.coeffs:
             beta = 2 * np.pi * C_0 / np.sqrt(C)
@@ -1219,9 +1198,7 @@ class Sellmeier(DispersiveMedium):
             a = 1j * beta
             c = 1j * alpha
             poles.append((a, c))
-        return PoleResidue(
-            eps_inf=1, poles=poles, frequency_range=self.frequency_range, name=self.name
-        )
+        return dict(eps_inf=1, poles=poles, frequency_range=self.frequency_range, name=self.name)
 
     @classmethod
     def from_dispersion(cls, n: float, freq: float, dn_dwvl: float = 0, **kwargs):
@@ -1351,8 +1328,8 @@ class Lorentz(DispersiveMedium):
         return eps
 
     @cached_property
-    def pole_residue(self):
-        """Representation of Medium as a pole-residue model."""
+    def _pole_residue_dict(self) -> Dict:
+        """Dict representation of Medium as a pole-residue model."""
 
         poles = []
         for (de, f, delta) in self.coeffs:
@@ -1373,7 +1350,7 @@ class Lorentz(DispersiveMedium):
                 c = 1j * de * w**2 / 2 / r
                 poles.append((a, c))
 
-        return PoleResidue(
+        return dict(
             eps_inf=self.eps_inf,
             poles=poles,
             frequency_range=self.frequency_range,
@@ -1499,8 +1476,8 @@ class Drude(DispersiveMedium):
         return eps
 
     @cached_property
-    def pole_residue(self):
-        """Representation of Medium as a pole-residue model."""
+    def _pole_residue_dict(self) -> Dict:
+        """Dict representation of Medium as a pole-residue model."""
 
         poles = []
         a0 = 0j
@@ -1516,7 +1493,7 @@ class Drude(DispersiveMedium):
 
             poles.extend(((a0, c0), (a1, c1)))
 
-        return PoleResidue(
+        return dict(
             eps_inf=self.eps_inf,
             poles=poles,
             frequency_range=self.frequency_range,
@@ -1636,8 +1613,8 @@ class Debye(DispersiveMedium):
         return eps
 
     @cached_property
-    def pole_residue(self):
-        """Representation of Medium as a pole-residue model."""
+    def _pole_residue_dict(self):
+        """Dict representation of Medium as a pole-residue model."""
 
         poles = []
         for (de, tau) in self.coeffs:
@@ -1646,7 +1623,7 @@ class Debye(DispersiveMedium):
 
             poles.append((a, c))
 
-        return PoleResidue(
+        return dict(
             eps_inf=self.eps_inf,
             poles=poles,
             frequency_range=self.frequency_range,
