@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Perfect electric conductors (PECs) are now modeled as high-conductivity media in both the frontend and backend mode solvers, and their presence triggers the use of a preconditioner to improve numerical stability and robustness. Consequently, the mode solver provides more accurate eigenvectors and field distributions when PEC structures are present.
 
 ### Fixed
+- Log messages provide the correct caller origin (file name and line number).
 
 ## [2.1.0] - 2023-4-18
 
