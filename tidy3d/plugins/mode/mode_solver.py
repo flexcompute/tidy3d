@@ -2,6 +2,7 @@
 invariance along a given propagation axis.
 """
 
+from __future__ import annotations
 from typing import List, Tuple, Dict
 
 import numpy as np
@@ -114,9 +115,29 @@ class ModeSolver(Tidy3dBaseModel):
         ModeSolverData
             :class:`.ModeSolverData` object containing the effective index and mode fields.
         """
+        log.warning(
+            "Use the remote mode solver with subpixel averaging for better accuracy through "
+            "'tidy3d.plugins.mode.web.run(...)'.",
+            log_once=True,
+        )
         return self.data
 
-    # pylint: disable=too-many-locals
+    def _freqs_for_group_index(self) -> FreqArray:
+        """Get frequencies used to compute group index."""
+        f_step = self.mode_spec.group_index_step
+        fractional_steps = (1 - f_step, 1, 1 + f_step)
+        return np.outer(self.freqs, fractional_steps).flatten()
+
+    def _remove_freqs_for_group_index(self) -> FreqArray:
+        """Remove frequencies used to compute group index.
+
+        Returns
+        -------
+        FreqArray
+            Filtered frequency array with only original values.
+        """
+        return np.array(self.freqs[1 : len(self.freqs) : 3])
+
     def _get_data_with_group_index(self) -> ModeSolverData:
         """:class:`.ModeSolverData` with fields, effective and group indices on unexpanded grid.
 
@@ -127,46 +148,14 @@ class ModeSolver(Tidy3dBaseModel):
             fields.
         """
 
-        # insert extra frequency steps into original array
-        f_step = self.mode_spec.group_index_step
-        fractional_steps = (1 - f_step, 1, 1 + f_step)
-        freqs = np.outer(self.freqs, fractional_steps).flatten()
-
         # create a copy with the required frequencies for numerical differentiation
         mode_spec = self.mode_spec.copy(update={"group_index_step": False})
-        mode_solver = self.copy(update={"freqs": freqs, "mode_spec": mode_spec})
-        mode_solver_data = mode_solver.data_raw
-
-        # calculate group index
-        num_freqs = freqs.size
-        original_slice = slice(1, num_freqs, 3)
-        n_center = mode_solver_data.n_eff.isel(f=original_slice).values
-        n_backward = mode_solver_data.n_eff.isel(f=slice(0, num_freqs, 3)).values
-        n_forward = mode_solver_data.n_eff.isel(f=slice(2, num_freqs, 3)).values
-
-        n_group_data = n_center + (n_forward - n_backward) / (2 * f_step)
-        n_group = ModeIndexDataArray(
-            n_group_data,
-            coords={
-                "f": list(self.freqs),
-                "mode_index": np.arange(self.mode_spec.num_modes),
-            },
+        mode_solver = self.copy(
+            update={"freqs": self._freqs_for_group_index(), "mode_spec": mode_spec}
         )
 
-        # remove data corresponding to frequencies used only for group index calculation
-        update_dict = {
-            "n_complex": mode_solver_data.n_complex.isel(f=original_slice),
-            "n_group": n_group,
-        }
-
-        for key, field in mode_solver_data.field_components.items():
-            update_dict[key] = field.isel(f=original_slice)
-
-        # pylint: disable=protected-access
-        for key, data in mode_solver_data._grid_correction_dict.items():
-            update_dict[key] = data.isel(f=original_slice)
-
-        return mode_solver_data.copy(update=update_dict)
+        # pylint:disable=protected-access
+        return mode_solver.data_raw._group_index_post_process(self.mode_spec.group_index_step)
 
     @cached_property
     def data_raw(self) -> ModeSolverData:
@@ -179,6 +168,11 @@ class ModeSolver(Tidy3dBaseModel):
         """
 
         if self.mode_spec.group_index_step > 0:
+            if self.mode_spec.precision != "double":
+                log.warning(
+                    "In the local solver, group index calculation should be performed with double "
+                    "precision for better accuracy. Consider setting 'precision' to 'double'."
+                )
             return self._get_data_with_group_index()
 
         _, _solver_coords = self.plane.pop_axis(
@@ -289,8 +283,7 @@ class ModeSolver(Tidy3dBaseModel):
         return np.stack(eps_tensor, axis=0)
 
     def _solver_eps(self, freq: float) -> ArrayComplex4D:
-        """Get the permittivity tensor in the shape needed to be supplied to the sovler, with the
-        normal axis rotated to z."""
+        """Diagonal permittivity in the shape needed by solver, with normal axis rotated to z."""
 
         # Get diagonal epsilon components in the plane
         eps_tensor = self._get_epsilon(freq)
@@ -346,6 +339,7 @@ class ModeSolver(Tidy3dBaseModel):
         symmetry: Tuple[Symmetry, Symmetry],
     ) -> Tuple[float, Dict[str, ArrayComplex4D]]:
         """Call the mode solver at a single frequency.
+
         The fields are rotated from propagation coordinates back to global coordinates.
         """
 
@@ -432,7 +426,9 @@ class ModeSolver(Tidy3dBaseModel):
     def _grid_correction(
         self, n_complex: ModeIndexDataArray
     ) -> [FreqModeDataArray, FreqModeDataArray]:
-        """Return a copy of the :class:`.ModeSolverData` with the fields renormalized to account
+        """Correct the fields due to propagation on the grid.
+
+        Return a copy of the :class:`.ModeSolverData` with the fields renormalized to account
         for propagation on a finite grid along the propagation direction. The fields are assumed to
         have ``E exp(1j k r)`` dependence on the finite grid and are then resampled using linear
         interpolation to the exact position of the mode plane. This is needed to correctly compute
@@ -485,7 +481,7 @@ class ModeSolver(Tidy3dBaseModel):
         direction: Direction,
         mode_index: pydantic.NonNegativeInt = 0,
     ) -> ModeSource:
-        """Creates :class:`.ModeSource` from a :class:`.ModeSolver` instance plus additional
+        """Creates :class:`.ModeSource` from a :class:`ModeSolver` instance plus additional
         specifications.
 
         Parameters
@@ -514,7 +510,7 @@ class ModeSolver(Tidy3dBaseModel):
         )
 
     def to_monitor(self, freqs: List[float], name: str) -> ModeMonitor:
-        """Creates :class:`ModeMonitor` from a :class:`.ModeSolver` instance plus additional
+        """Creates :class:`ModeMonitor` from a :class:`ModeSolver` instance plus additional
         specifications.
 
         Parameters
@@ -540,7 +536,7 @@ class ModeSolver(Tidy3dBaseModel):
         )
 
     def to_mode_solver_monitor(self, name: str) -> ModeSolverMonitor:
-        """Creates :class:`ModeSolverMonitor` from a :class:`.ModeSolver` instance.
+        """Creates :class:`ModeSolverMonitor` from a :class:`ModeSolver` instance.
 
         Parameters
         ----------

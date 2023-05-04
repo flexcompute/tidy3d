@@ -42,7 +42,7 @@ def set_api_key(monkeypatch):
 
 @pytest.fixture
 def mock_upload(monkeypatch, set_api_key):
-    """Mocks webapi.uupload."""
+    """Mocks webapi.upload."""
 
     responses.add(
         responses.GET,

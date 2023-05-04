@@ -968,6 +968,53 @@ class ModeSolverData(ModeSolverDataset, ElectromagneticFieldData):
 
         return self.copy(update=update_dict)
 
+    def _group_index_post_process(self, frequency_step: float) -> ModeSolverData:
+        """Calculate group index and remove added frequencies used only for this calculation.
+
+        Parameters
+        ----------
+        frequency_step: float
+            Fractional frequency step used to calculate the group index.
+
+        Returns
+        -------
+        :class:`.ModeSolverData`
+            Filtered data with calulated group index.
+        """
+
+        freqs = self.n_complex.coords["f"].values
+        num_freqs = freqs.size
+        back = slice(0, num_freqs, 3)
+        center = slice(1, num_freqs, 3)
+        fwd = slice(2, num_freqs, 3)
+
+        # calculate group index
+        n_center = self.n_eff.isel(f=center).values
+        n_backward = self.n_eff.isel(f=back).values
+        n_forward = self.n_eff.isel(f=fwd).values
+
+        n_group_data = n_center + (n_forward - n_backward) / (2 * frequency_step)
+        n_group = ModeIndexDataArray(
+            n_group_data,
+            coords={
+                "f": list(freqs[center]),
+                "mode_index": list(self.n_complex.coords["mode_index"].values),
+            },
+            attrs={"long name": "Group index"},
+        )
+
+        # remove data corresponding to frequencies used only for group index calculation
+        update_dict = {"n_complex": self.n_complex.isel(f=center), "n_group": n_group}
+
+        for key, field in self.field_components.items():
+            update_dict[key] = field.isel(f=center)
+
+        # pylint: disable=protected-access
+        for key, data in self._grid_correction_dict.items():
+            update_dict[key] = data.isel(f=center)
+
+        return self.copy(update=update_dict)
+
 
 class PermittivityData(PermittivityDataset, AbstractFieldData):
     """Data for a :class:`.PermittivityMonitor`: diagonal components of the permittivity tensor.

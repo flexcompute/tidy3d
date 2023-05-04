@@ -15,6 +15,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Support for `JaxGeometryGroup` in adjoint plugin.
 - Support for gradients w.r.t. `FieldMonitor` data from `output_monitors` in adjoint plugin.
 - `estimate_cost()` method for `Job` and `Batch`.
+- `s3utils.get_s3_sts_token` accepts extra query parameters.
+- `plugins.mode.web` to control the server-side mode solver.
 
 ### Changed
 - Add `Medium2D` to full simulation in tests.

@@ -67,20 +67,19 @@ def test_logging_warning_capture():
     run_time = 10 / fwidth
     freqs = np.linspace(f0 - fwidth, f0 + fwidth, 11)
 
-    # 1 warning: "group_index_step" with single precision
     mode_mnt = td.ModeMonitor(
         center=(0, 0, 0),
         size=(domain_size, 0, domain_size),
         freqs=list(freqs),
-        mode_spec=td.ModeSpec(num_modes=3, group_index_step=1),
+        mode_spec=td.ModeSpec(num_modes=3),
         name="mode",
     )
 
-    # 2 warnings: "group_index_step" with single precision, too high num_freqs
+    # 1 warning: too high num_freqs
     mode_source = td.ModeSource(
         size=(domain_size, 0, domain_size),
         source_time=source_time,
-        mode_spec=td.ModeSpec(num_modes=2, group_index_step=1, precision="single"),
+        mode_spec=td.ModeSpec(num_modes=2, precision="single"),
         mode_index=1,
         num_freqs=50,
         direction="-",
@@ -130,5 +129,5 @@ def test_logging_warning_capture():
     td.log.set_capture(True)
     sim = td.Simulation.parse_raw(sim_json)
     warning_list = td.log.captured_warnings()
-    assert len(warning_list) == 17
+    assert len(warning_list) == 15
     td.log.set_capture(False)

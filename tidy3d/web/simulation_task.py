@@ -1,7 +1,8 @@
 """Tidy3d webapi types."""
 from __future__ import annotations
 
-import os.path
+import os
+import pathlib
 import tempfile
 from datetime import datetime
 from typing import List, Optional, Callable, Tuple
@@ -20,7 +21,7 @@ from .types import Tidy3DResource
 SIMULATION_JSON = "simulation.json"
 SIMULATION_HDF5 = "output/monitor_data.hdf5"
 RUNNING_INFO = "output/solver_progress.csv"
-LOG_FILE = "output/tidy3d.log"
+SIM_LOG_FILE = "output/tidy3d.log"
 SIM_FILE_HDF5 = "simulation.hdf5"
 
 
@@ -54,20 +55,31 @@ class Folder(Tidy3DResource, Queryable, extra=Extra.allow):
 
     # pylint: disable=arguments-differ
     @classmethod
-    def get(cls, folder_name: str):
+    def get(cls, folder_name: str, create: bool = False):
         """Get folder by name.
 
         Parameters
         ----------
         folder_name : str
             Name of the folder.
+        create : str
+            If the folder doesn't exist, create it.
 
         Returns
         -------
         folder : Folder
         """
-        resp = http.get(f"tidy3d/project?projectName={folder_name}")
-        return Folder(**resp) if resp else None
+        folder = FOLDER_CACHE.get(folder_name)
+        if not folder:
+            resp = http.get(f"tidy3d/project?projectName={folder_name}")
+            if resp:
+                folder = Folder(**resp)
+        if create and not folder:
+            resp = http.post("tidy3d/projects", {"projectName": folder_name})
+            if resp:
+                folder = Folder(**resp)
+        FOLDER_CACHE[folder_name] = folder
+        return folder
 
     # pylint: disable=arguments-differ
     @classmethod
@@ -76,7 +88,6 @@ class Folder(Tidy3DResource, Queryable, extra=Extra.allow):
 
         Parameters
         ----------
-        ----------
         folder_name : str
             Name of the folder.
 
@@ -84,11 +95,7 @@ class Folder(Tidy3DResource, Queryable, extra=Extra.allow):
         -------
         folder : Folder
         """
-        folder = Folder.get(folder_name)
-        if folder:
-            return folder
-        resp = http.post("tidy3d/projects", {"projectName": folder_name})
-        return Folder(**resp) if resp else None
+        return Folder.get(folder_name, True)
 
     def delete(self):
         """Remove this folder."""
@@ -198,7 +205,7 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
         simulation: :class".Simulation"
             The :class:`.Simulation` will be uploaded to server in the submitting phase.
             If Simulation is too large to fit into memory, pass None to this parameter
-            and use :meth:`.simulationTask.upload_file` instead.
+            and use :meth:`.SimulationTask.upload_file` instead.
         task_name: str
             The name of the task.
         folder_name: str,
@@ -215,15 +222,9 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
         -------
         :class:`SimulationTask`
             :class:`SimulationTask` object containing info about status, size,
-             credits of task and others.
+            credits of task and others.
         """
-        folder = FOLDER_CACHE.get(folder_name)
-        if not folder:
-            folder = Folder.get(folder_name)
-        if not folder:
-            folder = Folder.create(folder_name)
-        FOLDER_CACHE[folder_name] = folder
-
+        folder = Folder.get(folder_name, create=True)
         resp = http.post(
             f"tidy3d/projects/{folder.folder_id}/tasks",
             {
@@ -259,10 +260,6 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
     def get_running_tasks(cls) -> List[SimulationTask]:
         """Get a list of running tasks from the server"
 
-
-        Parameters
-        ----------
-
         Returns
         -------
         List[:class:`.SimulationTask`]
@@ -287,21 +284,21 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
         -------
         :class:`.Simulation`
             :class:`.Simulation` object containing info about status, size,
-             credits of task and others.
+            credits of task and others.
         """
         if self.simulation:
             return self.simulation
 
         with tempfile.NamedTemporaryFile(suffix=".json") as temp:
             self.get_simulation_json(temp.name)
-            if os.path.exists(temp.name):
+            if pathlib.Path(temp.name).exists():
                 self.simulation = Simulation.from_file(temp.name)
                 return self.simulation
         return None
 
     def get_simulation_json(
         self, to_file: str, verbose: bool = True, progress_callback: Callable[[float], None] = None
-    ) -> None:
+    ) -> pathlib.Path:
         """Get json file for a :class:`.Simulation` from server.
 
         Parameters
@@ -309,12 +306,17 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
         to_file: str
             save file to path.
         verbose: bool = True
-            Whether to display progressbars.
+            Whether to display progress bars.
         progress_callback : Callable[[float], None] = None
-            Optional callback function called when uploading file.
+            Optional callback function called while downloading the data.
+
+        Returns
+        -------
+        path: pathlib.Path
+            Path to saved file.
         """
         assert self.task_id
-        download_file(
+        return download_file(
             self.task_id,
             SIMULATION_JSON,
             to_file=to_file,
@@ -330,9 +332,9 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
         Parameters
         ----------
         verbose: bool = True
-            Whether to display progressbars.
+            Whether to display progress bars.
         progress_callback : Callable[[float], None] = None
-            Optional callback function called when uploading file.
+            Optional callback function called while uploading the data.
         """
         assert self.task_id
         assert self.simulation
@@ -345,18 +347,19 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
         )
         if len(self.simulation.custom_datasets) > 0:
             # Also upload hdf5 containing all data.
-            # The temp file will be re-opened in `to_hdf5` which can cause an error on some systems
-            # so we explicitly close it first.
-            data_file = tempfile.NamedTemporaryFile()  # pylint:disable=consider-using-with
-            data_file.close()
-            self.simulation.to_hdf5(data_file.name)
-            upload_file(
-                self.task_id,
-                data_file.name,
-                SIM_FILE_HDF5,
-                verbose=verbose,
-                progress_callback=progress_callback,
-            )
+            file, file_name = tempfile.mkstemp()
+            os.close(file)
+            self.simulation.to_hdf5(file_name)
+            try:
+                upload_file(
+                    self.task_id,
+                    file_name,
+                    SIM_FILE_HDF5,
+                    verbose=verbose,
+                    progress_callback=progress_callback,
+                )
+            finally:
+                os.unlink(file_name)
 
     def upload_file(
         self,
@@ -375,9 +378,9 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
         remote_filename: str
             file name on the server
         verbose: bool = True
-            Whether to display progressbars.
+            Whether to display progress bars.
         progress_callback : Callable[[float], None] = None
-            Optional callback function called when uploading file.
+            Optional callback function called while uploading the data.
         """
         assert self.task_id
 
@@ -394,11 +397,11 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
         solver_version: str = None,
         worker_group: str = None,
     ):
-        """Kick off this task. If this task instance contain a :class:`.Simulation`,
-         it will be uploaded to server first,
-        then kick off the task. Otherwise, this method makes assumption that
-         the Simulation has been uploaded by the
-        upload_file function, so the task will be kicked off directly.
+        """Kick off this task.
+
+        If this task instance contain a :class:`.Simulation`, it will be uploaded to server before
+        starting the task. Otherwise, this method assumes that the Simulation has been uploaded by
+        the upload_file function, so the task will be kicked off directly.
 
         Parameters
         ----------
@@ -461,7 +464,7 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
 
     def get_simulation_hdf5(
         self, to_file: str, verbose: bool = True, progress_callback: Callable[[float], None] = None
-    ) -> None:
+    ) -> pathlib.Path:
         """Get hdf5 file from Server.
 
         Parameters
@@ -469,12 +472,17 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
         to_file: str
             save file to path.
         verbose: bool = True
-            Whether to display progressbars.
+            Whether to display progress bars.
         progress_callback : Callable[[float], None] = None
-            Optional callback function called when uploading file.
+            Optional callback function called while downloading the data.
+
+        Returns
+        -------
+        path: pathlib.Path
+            Path to saved file.
         """
         assert self.task_id
-        download_file(
+        return download_file(
             self.task_id,
             SIMULATION_HDF5,
             to_file=to_file,
@@ -491,7 +499,7 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
             Percentage of run done (in terms of max number of time steps).
             Is ``None`` if run info not available.
         field_decay : float
-            Average field intensity normlized to max value (1.0).
+            Average field intensity normalized to max value (1.0).
             Is ``None`` if run info not available.
         """
         assert self.task_id
@@ -503,7 +511,7 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
 
     def get_log(
         self, to_file: str, verbose: bool = True, progress_callback: Callable[[float], None] = None
-    ) -> None:
+    ) -> pathlib.Path:
         """Get log file from Server.
 
         Parameters
@@ -511,15 +519,20 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
         to_file: str
             save file to path.
         verbose: bool = True
-            Whether to display progressbars.
+            Whether to display progress bars.
         progress_callback : Callable[[float], None] = None
-            Optional callback function called when uploading file.
+            Optional callback function called while downloading the data.
+
+        Returns
+        -------
+        path: pathlib.Path
+            Path to saved file.
         """
 
         assert self.task_id
-        download_file(
+        return download_file(
             self.task_id,
-            LOG_FILE,
+            SIM_LOG_FILE,
             to_file=to_file,
             verbose=verbose,
             progress_callback=progress_callback,

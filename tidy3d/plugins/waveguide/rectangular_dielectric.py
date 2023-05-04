@@ -13,6 +13,7 @@ from ...components.grid.grid_spec import GridSpec
 from ...components.medium import Medium, MediumType
 from ...components.mode import ModeSpec
 from ...components.simulation import Simulation
+
 from ...components.source import ModeSource, GaussianPulse
 from ...components.structure import Structure
 from ...components.types import ArrayFloat1D, Ax, Axis, Coordinate, Literal, Size1D, Union
@@ -630,6 +631,10 @@ class RectangularDielectric(Tidy3dBaseModel):
 
         """
         freqs = C_0 / self.wavelength
+        f_max = freqs.max()
+        f_min = freqs.min()
+        freq0 = 0.5 * (f_max + f_min)
+        fwidth = max(0.1 * freq0, f_max - f_min)
 
         plane = Box(
             center=self._translate(0, 0.5 * self.height - self.box_thickness, 0),
@@ -640,7 +645,7 @@ class RectangularDielectric(Tidy3dBaseModel):
         mode_source = ModeSource(
             center=plane.center,
             size=plane.size,
-            source_time=GaussianPulse(freq0=freqs[0], fwidth=freqs[0] / 10),
+            source_time=GaussianPulse(freq0=freq0, fwidth=fwidth),
             direction="+",
             mode_spec=self.mode_spec,
         )
