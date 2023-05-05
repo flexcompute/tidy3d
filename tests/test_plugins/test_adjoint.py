@@ -821,6 +821,75 @@ def test_polyslab_box(use_emulated_run):
     assert np.allclose(gc_b, gc_p), f"center gradients dont match, got {gc_b} and {gc_p}"
 
 
+@pytest.mark.parametrize("sim_size_axis", [0, 10])
+def test_polyslab_2d(sim_size_axis, use_emulated_run):
+    """Make sure box made with polyslab gives equivalent gradients (note, doesn't pass now)."""
+
+    np.random.seed(0)
+
+    def f(size, center):
+
+        jax_med = JaxMedium(permittivity=2.0)
+        POLYSLAB_AXIS = 2
+
+        size_axis, (size_1, size_2) = JaxPolySlab.pop_axis(size, axis=POLYSLAB_AXIS)
+        cent_axis, (cent_1, cent_2) = JaxPolySlab.pop_axis(center, axis=POLYSLAB_AXIS)
+
+        pos_x2 = cent_1 + size_1 / 2.0
+        pos_x1 = cent_1 - size_1 / 2.0
+        pos_y1 = cent_2 - size_2 / 2.0
+        pos_y2 = cent_2 + size_2 / 2.0
+
+        vertices = ((pos_x1, pos_y1), (pos_x2, pos_y1), (pos_x2, pos_y2), (pos_x1, pos_y2))
+        slab_bounds = (cent_axis - size_axis / 2, cent_axis + size_axis / 2)
+        slab_bounds = tuple(jax.lax.stop_gradient(x) for x in slab_bounds)
+        jax_polyslab = JaxPolySlab(vertices=vertices, axis=POLYSLAB_AXIS, slab_bounds=slab_bounds)
+        jax_struct = JaxStructure(geometry=jax_polyslab, medium=jax_med)
+
+        # ModeMonitors
+        output_mnt1 = td.ModeMonitor(
+            size=(td.inf, td.inf, 0),
+            mode_spec=td.ModeSpec(num_modes=3),
+            freqs=[2e14],
+            name=MNT_NAME + "1",
+        )
+
+        # DiffractionMonitor
+        output_mnt2 = td.DiffractionMonitor(
+            center=(0, 4, 0),
+            size=(td.inf, 0, td.inf),
+            normal_dir="+",
+            freqs=[2e14],
+            name=MNT_NAME + "2",
+        )
+
+        sim = JaxSimulation(
+            size=(10, 10, sim_size_axis),
+            run_time=1e-12,
+            grid_spec=td.GridSpec(wavelength=1.0),
+            boundary_spec=td.BoundarySpec.all_sides(boundary=td.Periodic()),
+            output_monitors=(output_mnt1, output_mnt2),
+            input_structures=(jax_struct,),
+            sources=[
+                td.PointDipole(
+                    source_time=td.GaussianPulse(freq0=1e14, fwidth=1e14),
+                    center=(0, 0, 0),
+                    polarization="Ex",
+                )
+            ],
+        )
+
+        sim_data = run(sim, task_name="test")
+        amp = extract_amp(sim_data)
+        return objective(amp)
+
+    f_b = lambda size, center: f(size, center)
+
+    g_b = grad(f_b, argnums=(0, 1))
+
+    gs_b, gc_b = g_b((1.0, 2.0, 100.0), CENTER)
+
+
 def test_adjoint_run_async(use_emulated_run_async):
     """Test differnetiating thorugh async adjoint runs"""
 

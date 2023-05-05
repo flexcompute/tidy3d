@@ -7,6 +7,7 @@ from typing import Tuple, Union, Dict
 
 import pydantic as pd
 import numpy as np
+import xarray as xr
 import jax.numpy as jnp
 from jax.tree_util import register_pytree_node_class
 import jax
@@ -392,9 +393,9 @@ class JaxPolySlab(JaxGeometry, PolySlab, JaxObject):
             if self.is_ccw:
                 normal_vector *= -1
 
-            def edge_position(s: float) -> float:
+            def edge_position(s: np.array) -> np.array:
                 """Parameterization of position along edge from s=0 (static) to s=1 (gradient)."""
-                return (1 - s) * vertex_stat + s * vertex_grad
+                return (1 - s) * vertex_stat[:, None] + s * vertex_grad[:, None]
 
             def edge_basis(
                 xyz_components: Tuple[FieldData, FieldData, FieldData]
@@ -407,14 +408,14 @@ class JaxPolySlab(JaxGeometry, PolySlab, JaxObject):
 
                 return cmp_t, cmp_n, cmp_z
 
-            def compute_scalar_integrand(s: float, z: np.array) -> np.array:
-                """Get integrand at position `(s, z)` along the edge (z is array)."""
+            def compute_integrand(s: np.array, z: np.array) -> np.array:
+                """Get integrand at positions `(s, z)` along the edge."""
 
                 # grab the position along edge and make dictionary of coords to interp with (s, z)
                 x, y = edge_position(s=s)
+                x = xr.DataArray(x, coords={"s": s})
+                y = xr.DataArray(y, coords={"s": s})
                 coords_interp = dict(x=x, y=y, z=z)
-                # if len(z) == 1:
-                # coords_interp.pop("z")
 
                 def evaluate(scalar_field: ScalarFieldDataArray) -> float:
                     """Evaluate a scalar field at a coordinate along the edge."""
@@ -446,7 +447,8 @@ class JaxPolySlab(JaxGeometry, PolySlab, JaxObject):
                 contrib_total = contrib_e_t + contrib_d_n + contrib_e_z
 
                 # scale the gradient contribution by the normalized distange from the static edge
-                return s * contrib_total
+                # make broadcasting work with both 2D and 3D simulation domains
+                return (s * contrib_total.T).T
 
             # discretize along the edge
             # TODO: handle edge case where a vertex lies far outside simulation domain
@@ -474,12 +476,8 @@ class JaxPolySlab(JaxGeometry, PolySlab, JaxObject):
             z_vals = np.linspace(slab_min + dz / 2, slab_max - dz / 2, num_cells_axis)
 
             # integrate by summing over axis edge (z) and parameterization point (s)
-            # note: can't vectorize over s due to not being on cartesian axis
-            integral_result = 0.0
-            for s in s_vals:
-                scalar_integrand = compute_scalar_integrand(s=s, z=z_vals)
-                scalar_integral = np.sum(scalar_integrand.fillna(0).values)
-                integral_result += scalar_integral
+            integrand = compute_integrand(s=s_vals, z=z_vals)
+            integral_result = np.sum(integrand.fillna(0).values)
 
             # project to the normal direction
             integral_result *= normal_vector
