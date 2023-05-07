@@ -847,7 +847,6 @@ class CustomMedium(AbstractCustomMedium):
 class DispersiveMedium(AbstractMedium, ABC):
     """A Medium with dispersion (propagation characteristics depend on frequency)"""
 
-    @cached_property
     @abstractmethod
     def _pole_residue_dict(self) -> Dict:
         """Dict representation of Medium as a pole-residue model."""
@@ -855,7 +854,7 @@ class DispersiveMedium(AbstractMedium, ABC):
     @cached_property
     def pole_residue(self):
         """Representation of Medium as a pole-residue model."""
-        return PoleResidue(**self._pole_residue_dict)
+        return PoleResidue(**self._pole_residue_dict())
 
     @cached_property
     def n_cfl(self):
@@ -882,79 +881,79 @@ class DispersiveMedium(AbstractMedium, ABC):
         return (value.real, value.imag)
 
 
-# class CustomDispersiveMedium(AbstractCustomMedium, DispersiveMedium, ABC):
-#     """A spatially varying dispersive medium."""
+class CustomDispersiveMedium(AbstractCustomMedium, DispersiveMedium, ABC):
+    """A spatially varying dispersive medium."""
 
-#     @cached_property
-#     def n_cfl(self):
-#         """This property computes the index of refraction related to CFL condition, so that
-#         the FDTD with this medium is stable when the time step size that doesn't take
-#         material factor into account is multiplied by ``n_cfl``.
+    @cached_property
+    def n_cfl(self):
+        """This property computes the index of refraction related to CFL condition, so that
+        the FDTD with this medium is stable when the time step size that doesn't take
+        material factor into account is multiplied by ``n_cfl``.
 
-#         For PoleResidue model, it equals ``sqrt(eps_inf)``
-#         [https://ieeexplore.ieee.org/document/9082879].
-#         """
-#         return np.sqrt(np.min(self.pole_residue.eps_inf))
+        For PoleResidue model, it equals ``sqrt(eps_inf)``
+        [https://ieeexplore.ieee.org/document/9082879].
+        """
+        return np.sqrt(np.min(self.pole_residue.eps_inf))
 
-#     @cached_property
-#     def pole_residue(self):
-#         """Representation of Medium as a pole-residue model."""
-#         return CustomPoleResidue(**self._pole_residue_dict)
+    @cached_property
+    def pole_residue(self):
+        """Representation of Medium as a pole-residue model."""
+        return CustomPoleResidue(**self._pole_residue_dict())
 
-#     @abstractmethod
-#     def _eps_dataarray_freq(self, frequency: float) -> ArrayComplex3D:
-#         """Permittivity array at ``frequency``.
+    @abstractmethod
+    def _eps_dataarray_freq(self, frequency: float) -> SpatialDataArray:
+        """Permittivity array at ``frequency``.
 
-#         Parameters
-#         ----------
-#         frequency : float
-#             Frequency to evaluate permittivity at (Hz).
+        Parameters
+        ----------
+        frequency : float
+            Frequency to evaluate permittivity at (Hz).
 
-#         Returns
-#         -------
-#         ArrayComplex3D
-#             The permittivity evaluated at ``frequency``.
-#         """
+        Returns
+        -------
+        :class:`.SpatialDataArray`
+            The permittivity evaluated at ``frequency``.
+        """
 
-#     def eps_diagonal_on_grid(
-#         self,
-#         frequency: float,
-#         coords: Coords,
-#     ) -> Tuple[ArrayComplex3D, ArrayComplex3D, ArrayComplex3D]:
-#         """Spatial profile of main diagonal of the complex-valued permittivity
-#         at ``frequency`` interpolated at the supplied coordinates.
+    def eps_diagonal_on_grid(
+        self,
+        frequency: float,
+        coords: Coords,
+    ) -> Tuple[ArrayComplex3D, ArrayComplex3D, ArrayComplex3D]:
+        """Spatial profile of main diagonal of the complex-valued permittivity
+        at ``frequency`` interpolated at the supplied coordinates.
 
-#         Parameters
-#         ----------
-#         frequency : float
-#             Frequency to evaluate permittivity at (Hz).
-#         coords : :class:`.Coords`
-#             The grid point coordinates over which interpolation is performed.
+        Parameters
+        ----------
+        frequency : float
+            Frequency to evaluate permittivity at (Hz).
+        coords : :class:`.Coords`
+            The grid point coordinates over which interpolation is performed.
 
-#         Returns
-#         -------
-#         Tuple[ArrayComplex3D, ArrayComplex3D, ArrayComplex3D]
-#             The complex-valued permittivity tensor at ``frequency`` interpolated
-#             at the supplied coordinate.
-#         """
-#         eps_spatial = self._eps_dataarray_freq(frequency)
-#         eps_interp = self._spatial_interp(self.coords, eps_spatial, coords, self.interp_method)
-#         return (eps_interp, eps_interp, eps_interp)
+        Returns
+        -------
+        Tuple[ArrayComplex3D, ArrayComplex3D, ArrayComplex3D]
+            The complex-valued permittivity tensor at ``frequency`` interpolated
+            at the supplied coordinate.
+        """
+        eps_spatial = self._eps_dataarray_freq(frequency)
+        eps_interp = self._interp(eps_spatial, coords, self.interp_method).values
+        return (eps_interp, eps_interp, eps_interp)
 
-#     @ensure_freq_in_range
-#     def eps_model(self, frequency: float) -> complex:
-#         """Complex-valued spatially averaged permittivity as a function of frequency."""
-#         return np.mean(self._eps_dataarray_freq(frequency))
+    @ensure_freq_in_range
+    def eps_model(self, frequency: float) -> complex:
+        """Complex-valued spatially averaged permittivity as a function of frequency."""
+        return np.mean(self._eps_dataarray_freq(frequency).values)
 
-#     @ensure_freq_in_range
-#     def eps_diagonal(self, frequency: float) -> Tuple[complex, complex, complex]:
-#         """Main diagonal of the complex-valued permittivity tensor
-#         at ``frequency``. Spatially, we take max{||eps||}, so that autoMesh generation
-#         works appropriately.
-#         """
-#         eps_spatial = self._eps_dataarray_freq(frequency)
-#         eps = eps_spatial[np.argmax(np.abs(eps_spatial))]
-#         return (eps, eps, eps)
+    @ensure_freq_in_range
+    def eps_diagonal(self, frequency: float) -> Tuple[complex, complex, complex]:
+        """Main diagonal of the complex-valued permittivity tensor
+        at ``frequency``. Spatially, we take max{||eps||}, so that autoMesh generation
+        works appropriately.
+        """
+        eps_spatial = self._eps_dataarray_freq(frequency).values.ravel()
+        eps = eps_spatial[np.argmax(np.abs(eps_spatial))]
+        return (eps, eps, eps)
 
 
 class PoleResidue(DispersiveMedium):
@@ -1002,7 +1001,6 @@ class PoleResidue(DispersiveMedium):
             eps -= c_cc / (1j * omega + a_cc)
         return eps
 
-    @cached_property
     def _pole_residue_dict(self) -> Dict:
         """Dict representation of Medium as a pole-residue model."""
 
@@ -1064,89 +1062,124 @@ class PoleResidue(DispersiveMedium):
         )
 
 
-# class CustomPoleResidue(CustomDispersiveMedium):
-#     """A spatially varying dispersive medium described by the pole-residue pair model.
-#     The frequency-dependence of the complex-valued permittivity is described by:
+class CustomPoleResidue(CustomDispersiveMedium, PoleResidue):
+    """A spatially varying dispersive medium described by the pole-residue pair model.
+    The frequency-dependence of the complex-valued permittivity is described by:
 
-#     Note
-#     ----
-#     .. math::
+    Note
+    ----
+    .. math::
 
-#         \\epsilon(\\omega) = \\epsilon_\\infty - \\sum_i
-#         \\left[\\frac{c_i}{j \\omega + a_i} +
-#         \\frac{c_i^*}{j \\omega + a_i^*}\\right]
+        \\epsilon(\\omega) = \\epsilon_\\infty - \\sum_i
+        \\left[\\frac{c_i}{j \\omega + a_i} +
+        \\frac{c_i^*}{j \\omega + a_i^*}\\right]
 
-#     Example
-#     -------
-#     >>> pole_res = PoleResidue(eps_inf=2.0, poles=[((1+2j), (3+4j)), ((5+6j), (7+8j))])
-#     >>> eps = pole_res.eps_model(200e12)
-#     """
+    Example
+    -------
+    >>> x = np.linspace(-1, 1, 5)
+    >>> y = np.linspace(-1, 1, 6)
+    >>> z = np.linspace(-1, 1, 7)
+    >>> eps_inf = SpatialDataArray(np.ones((5, 6, 7)), coords=dict(x=x, y=y, z=z))
+    >>> a1 = SpatialDataArray(np.random.random((5, 6, 7)), coords=dict(x=x, y=y, z=z))
+    >>> c1 = SpatialDataArray(np.random.random((5, 6, 7)), coords=dict(x=x, y=y, z=z))
+    >>> a2 = SpatialDataArray(np.random.random((5, 6, 7)), coords=dict(x=x, y=y, z=z))
+    >>> c2 = SpatialDataArray(np.random.random((5, 6, 7)), coords=dict(x=x, y=y, z=z))
+    >>> pole_res = CustomPoleResidue(eps_inf=eps_inf, poles=[(a1, c1), (a2, c2)])
+    >>> eps = pole_res.eps_model(200e12)
+    """
 
-#     eps_inf: ArrayFloat3D = pd.Field(
-#         ...,
-#         title="Epsilon at Infinity",
-#         description="Relative permittivity at infinite frequency (:math:`\\epsilon_\\infty`).",
-#         units=PERMITTIVITY,
-#     )
+    eps_inf: SpatialDataArray = pd.Field(
+        ...,
+        title="Epsilon at Infinity",
+        description="Relative permittivity at infinite frequency (:math:`\\epsilon_\\infty`).",
+        units=PERMITTIVITY,
+    )
 
-#     poles: Tuple[CustomPoleAndResidue, ...] = pd.Field(
-#         (),
-#         title="Poles",
-#         description="Tuple of complex-valued (:math:`a_i, c_i`) poles for the model.",
-#         units=(RADPERSEC, RADPERSEC),
-#     )
+    poles: Tuple[Tuple[SpatialDataArray, SpatialDataArray], ...] = pd.Field(
+        (),
+        title="Poles",
+        description="Tuple of complex-valued (:math:`a_i, c_i`) poles for the model.",
+        units=(RADPERSEC, RADPERSEC),
+    )
 
-#     @pd.validator("eps_inf", always=True)
-#     def _eps_inf_correct_shape_and_positive(cls, val, values):
-#         """eps_inf should have shape (len(x), len(y), len(z)), and positive"""
-#         expected_shape = (len(values["x"]), len(values["y"]), len(values["z"]))
-#         if val.shape != expected_shape:
-#             raise SetupError(f"'eps_inf' should have dimension {expected_shape}.")
-#         if np.any(val < 0):
-#             raise SetupError(f"'eps_inf' should be positive.")
-#         return val
+    @pd.validator("eps_inf", always=True)
+    def _eps_inf_positive(cls, val):
+        """eps_inf should be positive"""
+        if np.any(val < 0):
+            raise SetupError("'eps_inf' should be positive.")
+        return val
 
-#     @pd.validator("eps_inf", always=True)
-#     def _poles_correct_shape(cls, val, values):
-#         """poles should have shape (len(x), len(y), len(z))."""
-#         expected_shape = (len(values["x"]), len(values["y"]), len(values["z"]))
-#         for (a, c) in val:
-#             if a.shape != expected_shape or c.shape != expected_shape:
-#                 raise SetupError(f"Both 'a_i' and 'c_i' should have dimension {expected_shape}.")
-#         return val
+    @pd.validator("poles", always=True)
+    def _poles_correct_shape(cls, val, values):
+        """poles should have the same shape."""
+        if "eps_inf" not in values:
+            raise ValidationError("'eps_inf' failed validation.")
 
-#     def _eps_dataarray_freq(self, frequency: float) -> ArrayComplex3D:
-#         """Permittivity array at ``frequency``.
+        expected_shape = values["eps_inf"].shape
+        for (a, c) in val:
+            if a.shape != expected_shape or c.shape != expected_shape:
+                raise SetupError(
+                    "All 'a_i' and 'c_i' should have the same dimension; "
+                    "The dimension should also be consistent with 'eps_inf', "
+                    "if 'eps_inf' is also a 'SpatialDataArray'."
+                )
+        return val
 
-#         Parameters
-#         ----------
-#         frequency : float
-#             Frequency to evaluate permittivity at (Hz).
+    def _eps_dataarray_freq(self, frequency: float) -> ArrayComplex3D:
+        """Permittivity array at ``frequency``.
 
-#         Returns
-#         -------
-#         ArrayComplex3D
-#             The permittivity evaluated at ``frequency``.
-#         """
-#         omega = 2 * np.pi * frequency
-#         eps = self.eps_inf + np.zeros_like(frequency) + 0.0j
-#         for (a, c) in self.poles:
-#             a_cc = np.conj(a)
-#             c_cc = np.conj(c)
-#             eps -= c / (1j * omega + a)
-#             eps -= c_cc / (1j * omega + a_cc)
-#         return eps
+        Parameters
+        ----------
+        frequency : float
+            Frequency to evaluate permittivity at (Hz).
 
-#     @cached_property
-#     def _pole_residue_data(self):
-#         """Representation of Medium as a pole-residue model."""
+        Returns
+        -------
+        ArrayComplex3D
+            The permittivity evaluated at ``frequency``.
+        """
+        return PoleResidue.eps_model(self, frequency)
 
-#         return dict(
-#             eps_inf=self.eps_inf,
-#             poles=self.poles,
-#             frequency_range=self.frequency_range,
-#             name=self.name,
-#         )
+    # @classmethod
+    # def from_medium(cls, medium: CustomMedium) -> "CustomPoleResidue":
+    #     """Convert a :class:`.CustomMedium` to a pole residue model.
+
+    #     Parameters
+    #     ----------
+    #     medium: :class:`.CustomMedium`
+    #         The medium with permittivity and conductivity to convert.
+
+    #     Returns
+    #     -------
+    #     :class:`.CustomPoleResidue`
+    #         The pole residue equivalent.
+    #     """
+    #     poles = [(0, medium.conductivity / (2 * EPSILON_0))]
+    #     return PoleResidue(
+    #         eps_inf=medium.permittivity, poles=poles, frequency_range=medium.frequency_range
+    #     )
+
+    # def to_medium(self) -> Medium:
+    #     """Convert to a :class:`.CustomMedium`.
+    #     Requires the pole residue model to only have a pole at 0 frequency,
+    #     corresponding to a constant conductivity term.
+
+    #     Returns
+    #     -------
+    #     :class:`.CustomMedium`
+    #         The non-dispersive equivalent with constant permittivity and conductivity.
+    #     """
+    #     res = 0
+    #     for (a, c) in self.poles:
+    #         if abs(a) > fp_eps:
+    #             raise ValidationError("Cannot convert dispersive 'PoleResidue' to 'Medium'.")
+    #         res += (c + np.conj(c)) / 2
+    #     sigma = res * 2 * EPSILON_0
+    #     return Medium(
+    #         permittivity=self.eps_inf,
+    #         conductivity=np.real(sigma),
+    #         frequency_range=self.frequency_range,
+    #     )
 
 
 class Sellmeier(DispersiveMedium):
@@ -1188,7 +1221,6 @@ class Sellmeier(DispersiveMedium):
         n = self._n_model(frequency)
         return AbstractMedium.nk_to_eps_complex(n)
 
-    @cached_property
     def _pole_residue_dict(self) -> Dict:
         """Dict representation of Medium as a pole-residue model"""
         poles = []
@@ -1235,56 +1267,66 @@ class Sellmeier(DispersiveMedium):
         return cls(coeffs=coeffs, **kwargs)
 
 
-# class CustomSellmeier(CustomDispersiveMedium, Sellmeier):
-#     """A spatially varying dispersive medium described by the Sellmeier model.
-#     The frequency-dependence of the refractive index is described by:
+class CustomSellmeier(CustomDispersiveMedium, Sellmeier):
+    """A spatially varying dispersive medium described by the Sellmeier model.
+    The frequency-dependence of the refractive index is described by:
 
-#     Note
-#     ----
-#     .. math::
+    Note
+    ----
+    .. math::
 
-#         n(\\lambda)^2 = 1 + \\sum_i \\frac{B_i \\lambda^2}{\\lambda^2 - C_i}
+        n(\\lambda)^2 = 1 + \\sum_i \\frac{B_i \\lambda^2}{\\lambda^2 - C_i}
 
-#     Example
-#     -------
-#     >>> sellmeier_medium = Sellmeier(coeffs=[(1,2), (3,4)])
-#     >>> eps = sellmeier_medium.eps_model(200e12)
-#     """
+    Example
+    -------
+    >>> x = np.linspace(-1, 1, 5)
+    >>> y = np.linspace(-1, 1, 6)
+    >>> z = np.linspace(-1, 1, 7)
+    >>> b1 = SpatialDataArray(np.random.random((5, 6, 7)), coords=dict(x=x, y=y, z=z))
+    >>> c1 = SpatialDataArray(np.random.random((5, 6, 7)), coords=dict(x=x, y=y, z=z))
+    >>> sellmeier_medium = CustomSellmeier(coeffs=[(b1,c1),])
+    >>> eps = sellmeier_medium.eps_model(200e12)
+    """
 
-#     coeffs: Tuple[Tuple[ArrayFloat3D, ArrayFloat3D], ...] = pd.Field(
-#         title="Coefficients",
-#         description="List of Sellmeier (:math:`B_i, C_i`) coefficients.",
-#         units=(None, MICROMETER + "^2"),
-#     )
+    coeffs: Tuple[Tuple[SpatialDataArray, SpatialDataArray], ...] = pd.Field(
+        title="Coefficients",
+        description="List of Sellmeier (:math:`B_i, C_i`) coefficients.",
+        units=(None, MICROMETER + "^2"),
+    )
 
-#     @pd.validator("coeffs", always=True)
-#     def _correct_shape_and_sign(cls, val, values):
-#         """coeffs should have shape (len(x), len(y), len(z)); B>=0 and C>0."""
-#         expected_shape = (len(values["x"]), len(values["y"]), len(values["z"]))
-#         for (B, C) in val:
-#             if B.shape != expected_shape or C.shape != expected_shape:
-#                 raise SetupError(f"Each term in 'coeffs' should have dimension {expected_shape}.")
-#             if np.any(B < 0):
-#                 raise SetupError("'B_i' should be non-negative.")
-#             if np.any(C <= 0):
-#                 raise SetupError("'C_i' should be positive.")
-#         return val
+    @pd.validator("coeffs", always=True)
+    def _correct_shape_and_sign(cls, val):
+        """every term in coeffs should have the same shape, and B>=0 and C>0."""
+        expected_shape = val[0][0].shape
+        for (B, C) in val:
+            if B.shape != expected_shape or C.shape != expected_shape:
+                raise SetupError("Every term in 'coeffs' should have the same dimension.")
+            if np.any(B < 0):
+                raise SetupError("'B_i' should be non-negative.")
+            if np.any(C <= 0):
+                raise SetupError("'C_i' should be positive.")
+        return val
 
-#     def _eps_dataarray_freq(self, frequency: float) -> ArrayComplex3D:
-#         """Permittivity array at ``frequency``.
+    def _pole_residue_dict(self) -> Dict:
+        """Dict representation of Medium as a pole-residue model"""
+        poles_dict = Sellmeier._pole_residue_dict(self)
+        poles_dict.update({"eps_inf": xr.ones_like(self.coeffs[0][0])})
+        return poles_dict
 
-#         Parameters
-#         ----------
-#         frequency : float
-#             Frequency to evaluate permittivity at (Hz).
+    def _eps_dataarray_freq(self, frequency: float) -> ArrayComplex3D:
+        """Permittivity array at ``frequency``.
 
-#         Returns
-#         -------
-#         ArrayComplex3D
-#             The permittivity evaluated at ``frequency``.
-#         """
-#         n = self._n_model(frequency)
-#         return AbstractMedium.nk_to_eps_complex(n)
+        Parameters
+        ----------
+        frequency : float
+            Frequency to evaluate permittivity at (Hz).
+
+        Returns
+        -------
+        ArrayComplex3D
+            The permittivity evaluated at ``frequency``.
+        """
+        return Sellmeier.eps_model(self, frequency)
 
 
 class Lorentz(DispersiveMedium):
@@ -1327,7 +1369,6 @@ class Lorentz(DispersiveMedium):
             eps += (de * f**2) / (f**2 - 2j * frequency * delta - frequency**2)
         return eps
 
-    @cached_property
     def _pole_residue_dict(self) -> Dict:
         """Dict representation of Medium as a pole-residue model."""
 
@@ -1358,81 +1399,101 @@ class Lorentz(DispersiveMedium):
         )
 
 
-# class CustomLorentz(CustomDispersiveMedium, Lorentz):
-#     """A spatially varying dispersive medium described by the Lorentz model.
-#     The frequency-dependence of the complex-valued permittivity is described by:
+class CustomLorentz(CustomDispersiveMedium, Lorentz):
+    """A spatially varying dispersive medium described by the Lorentz model.
+    The frequency-dependence of the complex-valued permittivity is described by:
 
-#     Note
-#     ----
-#     .. math::
+    Note
+    ----
+    .. math::
 
-#         \\epsilon(f) = \\epsilon_\\infty + \\sum_i
-#         \\frac{\\Delta\\epsilon_i f_i^2}{f_i^2 - 2jf\\delta_i - f^2}
+        \\epsilon(f) = \\epsilon_\\infty + \\sum_i
+        \\frac{\\Delta\\epsilon_i f_i^2}{f_i^2 - 2jf\\delta_i - f^2}
 
-#     Example
-#     -------
-#     >>> lorentz_medium = Lorentz(eps_inf=2.0, coeffs=[(1,2,3), (4,5,6)])
-#     >>> eps = lorentz_medium.eps_model(200e12)
-#     """
+    Example
+    -------
+    >>> lorentz_medium = Lorentz(eps_inf=2.0, coeffs=[(1,2,3), (4,5,6)])
+    >>> eps = lorentz_medium.eps_model(200e12)
+    """
 
-#     eps_inf: ArrayFloat3D = pd.Field(
-#         ...,
-#         title="Epsilon at Infinity",
-#         description="Relative permittivity at infinite frequency (:math:`\\epsilon_\\infty`).",
-#         units=PERMITTIVITY,
-#     )
+    eps_inf: Union[float, SpatialDataArray] = pd.Field(
+        ...,
+        title="Epsilon at Infinity",
+        description="Relative permittivity at infinite frequency (:math:`\\epsilon_\\infty`).",
+        units=PERMITTIVITY,
+    )
 
-#     coeffs: Tuple[Tuple[ArrayFloat3D, ArrayFloat3D, ArrayFloat3D], ...] = pd.Field(
-#         ...,
-#         title="Coefficients",
-#         description="List of (:math:`\\Delta\\epsilon_i, f_i, \\delta_i`) values for model.",
-#         units=(PERMITTIVITY, HERTZ, HERTZ),
-#     )
+    coeffs: Tuple[Tuple[SpatialDataArray, SpatialDataArray, SpatialDataArray], ...] = pd.Field(
+        ...,
+        title="Coefficients",
+        description="List of (:math:`\\Delta\\epsilon_i, f_i, \\delta_i`) values for model.",
+        units=(PERMITTIVITY, HERTZ, HERTZ),
+    )
 
-#     @pd.validator("eps_inf", always=True)
-#     def _eps_inf_correct_shape_and_positive(cls, val, values):
-#         """eps_inf should have shape (len(x), len(y), len(z)), and positive"""
-#         expected_shape = (len(values["x"]), len(values["y"]), len(values["z"]))
-#         if val.shape != expected_shape:
-#             raise SetupError(f"'eps_inf' should have dimension {expected_shape}.")
-#         if np.any(val < 0):
-#             raise SetupError(f"'eps_inf' should be positive.")
-#         return val
+    @pd.validator("eps_inf", always=True)
+    def _eps_inf_positive(cls, val):
+        """eps_inf should be positive"""
+        if np.any(val < 0):
+            raise SetupError("'eps_inf' should be positive.")
+        return val
 
-#     @pd.validator("eps_inf", always=True)
-#     def _coeffs_correct_shape_and_sign(cls, val, values):
-#         """coeffs should have shape (len(x), len(y), len(z)); and correct sign"""
-#         expected_shape = (len(values["x"]), len(values["y"]), len(values["z"]))
-#         for (de, f, delta) in val:
-#             if (
-#                 de.shape != expected_shape
-#                 or f.shape != expected_shape
-#                 or delta.shape != expected_shape
-#             ):
-#                 raise SetupError(f"All terms in 'coeffs' should have dimension {expected_shape}.")
-#             if np.any(de < 0):
-#                 raise SetupError(":math:`\\Delta\\epsilon_i` cannot be negative.")
-#             if np.any(delta < 0):
-#                 raise SetupError(":math:`\\delta_i` cannot be negative.")
-#         return val
+    @pd.validator("coeffs", always=True)
+    def _coeffs_correct_shape_and_sign(cls, val, values):
+        """coeffs should have consistent shape and sign."""
+        if "eps_inf" not in values:
+            raise ValidationError("'eps_inf' failed validation.")
 
-#     def _eps_dataarray_freq(self, frequency: float) -> ArrayComplex3D:
-#         """Permittivity array at ``frequency``.
+        expected_shape = val[0][0].shape
+        if not isinstance(values["eps_inf"], float):
+            expected_shape = values["eps_inf"].shape
 
-#         Parameters
-#         ----------
-#         frequency : float
-#             Frequency to evaluate permittivity at (Hz).
+        for (de, f, delta) in val:
+            if (
+                de.shape != expected_shape
+                or f.shape != expected_shape
+                or delta.shape != expected_shape
+            ):
+                raise SetupError(
+                    "All terms in 'coeffs' should have the same dimension; "
+                    "The dimension should also be consistent with 'eps_inf', "
+                    "if 'eps_inf' is also a 'SpatialDataArray'."
+                )
+        return val
 
-#         Returns
-#         -------
-#         ArrayComplex3D
-#             The permittivity evaluated at ``frequency``.
-#         """
-#         eps = self.eps_inf + 0.0j
-#         for (de, f, delta) in self.coeffs:
-#             eps += (de * f**2) / (f**2 - 2j * frequency * delta - frequency**2)
-#         return eps
+    # @pd.validator("eps_inf", always=True)
+    # def _coeffs_correct_shape_and_sign(cls, val, values):
+    #     """coeffs should have shape (len(x), len(y), len(z)); and correct sign"""
+    #     expected_shape = (len(values["x"]), len(values["y"]), len(values["z"]))
+    #     for (de, f, delta) in val:
+    #         if (
+    #             de.shape != expected_shape
+    #             or f.shape != expected_shape
+    #             or delta.shape != expected_shape
+    #         ):
+    #             raise SetupError(f"All terms in 'coeffs' should have dimension {expected_shape}.")
+    #         if np.any(de < 0):
+    #             raise SetupError(":math:`\\Delta\\epsilon_i` cannot be negative.")
+    #         if np.any(delta < 0):
+    #             raise SetupError(":math:`\\delta_i` cannot be negative.")
+    #     return val
+
+    def _eps_dataarray_freq(self, frequency: float) -> ArrayComplex3D:
+        """Permittivity array at ``frequency``.
+
+        Parameters
+        ----------
+        frequency : float
+            Frequency to evaluate permittivity at (Hz).
+
+        Returns
+        -------
+        ArrayComplex3D
+            The permittivity evaluated at ``frequency``.
+        """
+        eps = self.eps_inf + 0.0j
+        for (de, f, delta) in self.coeffs:
+            eps += (de * f**2) / (f**2 - 2j * frequency * delta - frequency**2)
+        return eps
 
 
 class Drude(DispersiveMedium):
@@ -1475,7 +1536,6 @@ class Drude(DispersiveMedium):
             eps -= (f**2) / (frequency**2 + 1j * frequency * delta)
         return eps
 
-    @cached_property
     def _pole_residue_dict(self) -> Dict:
         """Dict representation of Medium as a pole-residue model."""
 
@@ -1612,7 +1672,6 @@ class Debye(DispersiveMedium):
             eps += de / (1 - 1j * frequency * tau)
         return eps
 
-    @cached_property
     def _pole_residue_dict(self):
         """Dict representation of Medium as a pole-residue model."""
 

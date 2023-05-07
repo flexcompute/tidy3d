@@ -10,14 +10,14 @@ from tidy3d.components.structure import Structure
 from tidy3d.components.grid.grid_spec import GridSpec
 from tidy3d import Coords
 from tidy3d.components.source import CustomFieldSource, GaussianPulse
-from tidy3d.components.data.data_array import ScalarFieldDataArray
+from tidy3d.components.data.data_array import ScalarFieldDataArray, SpatialDataArray
 from tidy3d.components.data.dataset import FieldDataset
 from tidy3d.exceptions import SetupError, DataError, ValidationError
 
 from ..test_data.test_monitor_data import make_field_data
 from ..utils import clear_tmp, assert_log_level, log_capture
 from tidy3d.components.data.dataset import PermittivityDataset
-from tidy3d.components.medium import CustomMedium
+from tidy3d.components.medium import CustomMedium, CustomPoleResidue, CustomSellmeier
 
 Nx, Ny, Nz = 10, 11, 12
 X = np.linspace(-1, 1, Nx)
@@ -291,3 +291,66 @@ def test_n_cfl():
     ndata = ScalarFieldDataArray(data, coords=dict(x=X, y=Y, z=Z, f=freqs))
     med = CustomMedium.from_nk(n=ndata, k=ndata * 0.01)
     assert med.n_cfl >= 2
+
+
+def verify_custom_dispersive_medium_methods(mat):
+    """Verify that the methods in custom dispersive medium is producing expected results."""
+    freq = 1.0
+    assert mat._eps_dataarray_freq(freq).shape == (Nx, Ny, Nz)
+    assert isinstance(mat.eps_model(freq), np.complex128)
+    assert len(mat.eps_diagonal(freq)) == 3
+    coord_interp = Coords(**{ax: np.linspace(-1, 1, 20 + ind) for ind, ax in enumerate("xyz")})
+    eps_grid = CUSTOM_MEDIUM.eps_diagonal_on_grid(freq, coord_interp)
+    for i in range(3):
+        assert np.allclose(eps_grid[i].shape, [len(f) for f in coord_interp.to_list])
+
+
+def test_custom_pole_residue():
+    """Custom pole residue medium."""
+    a = SpatialDataArray(np.random.random((Nx, Ny, Nz)), coords=dict(x=X, y=Y, z=Z))
+    c = SpatialDataArray(np.random.random((Nx, Ny, Nz)), coords=dict(x=X, y=Y, z=Z))
+
+    # some terms in eps_inf are negative
+    with pytest.raises(pydantic.ValidationError):
+        eps_inf = SpatialDataArray(np.random.random((Nx, Ny, Nz)) - 0.5, coords=dict(x=X, y=Y, z=Z))
+        mat = CustomPoleResidue(eps_inf=eps_inf, poles=((a, c),))
+
+    # inconsistent size of eps_inf with a,c
+    with pytest.raises(pydantic.ValidationError):
+        eps_inf = SpatialDataArray(
+            np.random.random((Nx - 1, Ny, Nz)) + 1, coords=dict(x=X[:-1], y=Y, z=Z)
+        )
+        mat = CustomPoleResidue(eps_inf=eps_inf, poles=((a, c),))
+
+    eps_inf = SpatialDataArray(np.random.random((Nx, Ny, Nz)) + 1, coords=dict(x=X, y=Y, z=Z))
+    mat = CustomPoleResidue(eps_inf=eps_inf, poles=((a, c),))
+    verify_custom_dispersive_medium_methods(mat)
+    assert mat.n_cfl > 1
+
+
+def test_custom_sellmeier():
+    """Custom pole residue medium."""
+    b1 = SpatialDataArray(np.random.random((Nx, Ny, Nz)), coords=dict(x=X, y=Y, z=Z))
+    c1 = SpatialDataArray(np.random.random((Nx, Ny, Nz)), coords=dict(x=X, y=Y, z=Z))
+
+    b2 = SpatialDataArray(np.random.random((Nx, Ny, Nz)), coords=dict(x=X, y=Y, z=Z))
+    c2 = SpatialDataArray(np.random.random((Nx, Ny, Nz)), coords=dict(x=X, y=Y, z=Z))
+
+    # negative b
+    with pytest.raises(pydantic.ValidationError):
+        btmp = SpatialDataArray(np.random.random((Nx, Ny, Nz)) - 0.5, coords=dict(x=X, y=Y, z=Z))
+        mat = CustomSellmeier(coeffs=((b1, c1), (btmp, c2)))
+
+    # negative c
+    with pytest.raises(pydantic.ValidationError):
+        ctmp = SpatialDataArray(np.random.random((Nx, Ny, Nz)) - 0.5, coords=dict(x=X, y=Y, z=Z))
+        mat = CustomSellmeier(coeffs=((b1, c1), (b2, ctmp)))
+
+    # inconsistent shape
+    with pytest.raises(pydantic.ValidationError):
+        btmp = SpatialDataArray(np.random.random((Nx - 1, Ny, Nz)), coords=dict(x=X[:-1], y=Y, z=Z))
+        mat = CustomSellmeier(coeffs=((b1, c2), (btmp, c2)))
+
+    mat = CustomSellmeier(coeffs=((b1, c1), (b2, c2)))
+    verify_custom_dispersive_medium_methods(mat)
+    assert mat.n_cfl == 1
