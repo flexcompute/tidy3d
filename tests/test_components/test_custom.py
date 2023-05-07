@@ -17,7 +17,14 @@ from tidy3d.exceptions import SetupError, DataError, ValidationError
 from ..test_data.test_monitor_data import make_field_data
 from ..utils import clear_tmp, assert_log_level, log_capture
 from tidy3d.components.data.dataset import PermittivityDataset
-from tidy3d.components.medium import CustomMedium, CustomPoleResidue, CustomSellmeier
+from tidy3d.components.medium import (
+    CustomMedium,
+    CustomPoleResidue,
+    CustomSellmeier,
+    CustomLorentz,
+    CustomDrude,
+    CustomDebye,
+)
 
 Nx, Ny, Nz = 10, 11, 12
 X = np.linspace(-1, 1, Nx)
@@ -329,7 +336,7 @@ def test_custom_pole_residue():
 
 
 def test_custom_sellmeier():
-    """Custom pole residue medium."""
+    """Custom Sellmeier medium."""
     b1 = SpatialDataArray(np.random.random((Nx, Ny, Nz)), coords=dict(x=X, y=Y, z=Z))
     c1 = SpatialDataArray(np.random.random((Nx, Ny, Nz)), coords=dict(x=X, y=Y, z=Z))
 
@@ -354,3 +361,100 @@ def test_custom_sellmeier():
     mat = CustomSellmeier(coeffs=((b1, c1), (b2, c2)))
     verify_custom_dispersive_medium_methods(mat)
     assert mat.n_cfl == 1
+
+
+def test_custom_lorentz():
+    """Custom Lorentz medium."""
+    eps_inf = SpatialDataArray(np.random.random((Nx, Ny, Nz)) + 1, coords=dict(x=X, y=Y, z=Z))
+
+    de1 = SpatialDataArray(np.random.random((Nx, Ny, Nz)), coords=dict(x=X, y=Y, z=Z))
+    f1 = SpatialDataArray(1 + np.random.random((Nx, Ny, Nz)), coords=dict(x=X, y=Y, z=Z))
+    delta1 = SpatialDataArray(np.random.random((Nx, Ny, Nz)), coords=dict(x=X, y=Y, z=Z))
+
+    de2 = SpatialDataArray(np.random.random((Nx, Ny, Nz)), coords=dict(x=X, y=Y, z=Z))
+    f2 = SpatialDataArray(1 + np.random.random((Nx, Ny, Nz)), coords=dict(x=X, y=Y, z=Z))
+    delta2 = SpatialDataArray(np.random.random((Nx, Ny, Nz)), coords=dict(x=X, y=Y, z=Z))
+
+    # negative de
+    with pytest.raises(pydantic.ValidationError):
+        detmp = SpatialDataArray(np.random.random((Nx, Ny, Nz)) - 0.5, coords=dict(x=X, y=Y, z=Z))
+        mat = CustomLorentz(eps_inf=eps_inf, coeffs=((de1, f1, delta1), (detmp, f2, delta2)))
+
+    # negative delta
+    with pytest.raises(pydantic.ValidationError):
+        deltatmp = SpatialDataArray(
+            np.random.random((Nx, Ny, Nz)) - 0.5, coords=dict(x=X, y=Y, z=Z)
+        )
+        mat = CustomLorentz(eps_inf=eps_inf, coeffs=((de1, f1, delta1), (de2, f2, deltatmp)))
+
+    # inconsistent shape
+    with pytest.raises(pydantic.ValidationError):
+        ftmp = SpatialDataArray(
+            1 + np.random.random((Nx - 1, Ny, Nz)), coords=dict(x=X[:-1], y=Y, z=Z)
+        )
+        mat = CustomLorentz(eps_inf=eps_inf, coeffs=((de1, f1, delta1), (de2, ftmp, delta2)))
+
+    mat = CustomLorentz(eps_inf=eps_inf, coeffs=((de1, f1, delta1), (de2, f2, delta2)))
+    verify_custom_dispersive_medium_methods(mat)
+    assert mat.n_cfl > 1
+
+
+def test_custom_drude():
+    """Custom Drude medium."""
+    eps_inf = SpatialDataArray(np.random.random((Nx, Ny, Nz)) + 1, coords=dict(x=X, y=Y, z=Z))
+
+    f1 = SpatialDataArray(1 + np.random.random((Nx, Ny, Nz)), coords=dict(x=X, y=Y, z=Z))
+    delta1 = SpatialDataArray(np.random.random((Nx, Ny, Nz)), coords=dict(x=X, y=Y, z=Z))
+
+    f2 = SpatialDataArray(1 + np.random.random((Nx, Ny, Nz)), coords=dict(x=X, y=Y, z=Z))
+    delta2 = SpatialDataArray(np.random.random((Nx, Ny, Nz)), coords=dict(x=X, y=Y, z=Z))
+
+    # negative delta
+    with pytest.raises(pydantic.ValidationError):
+        deltatmp = SpatialDataArray(
+            np.random.random((Nx, Ny, Nz)) - 0.5, coords=dict(x=X, y=Y, z=Z)
+        )
+        mat = CustomDrude(eps_inf=eps_inf, coeffs=((f1, delta1), (f2, deltatmp)))
+
+    # inconsistent shape
+    with pytest.raises(pydantic.ValidationError):
+        ftmp = SpatialDataArray(
+            1 + np.random.random((Nx - 1, Ny, Nz)), coords=dict(x=X[:-1], y=Y, z=Z)
+        )
+        mat = CustomDrude(eps_inf=eps_inf, coeffs=((f1, delta1), (ftmp, delta2)))
+
+    mat = CustomDrude(eps_inf=eps_inf, coeffs=((f1, delta1), (f2, delta2)))
+    verify_custom_dispersive_medium_methods(mat)
+    assert mat.n_cfl > 1
+
+
+def test_custom_debye():
+    """Custom Debye medium."""
+    eps_inf = SpatialDataArray(np.random.random((Nx, Ny, Nz)) + 1, coords=dict(x=X, y=Y, z=Z))
+
+    eps1 = SpatialDataArray(np.random.random((Nx, Ny, Nz)), coords=dict(x=X, y=Y, z=Z))
+    tau1 = SpatialDataArray(np.random.random((Nx, Ny, Nz)), coords=dict(x=X, y=Y, z=Z))
+
+    eps2 = SpatialDataArray(np.random.random((Nx, Ny, Nz)), coords=dict(x=X, y=Y, z=Z))
+    tau2 = SpatialDataArray(np.random.random((Nx, Ny, Nz)), coords=dict(x=X, y=Y, z=Z))
+
+    # negative eps
+    with pytest.raises(pydantic.ValidationError):
+        epstmp = SpatialDataArray(np.random.random((Nx, Ny, Nz)) - 0.5, coords=dict(x=X, y=Y, z=Z))
+        mat = CustomDebye(eps_inf=eps_inf, coeffs=((eps1, tau1), (epstmp, tau2)))
+
+    # negative tau
+    with pytest.raises(pydantic.ValidationError):
+        tautmp = SpatialDataArray(np.random.random((Nx, Ny, Nz)) - 0.5, coords=dict(x=X, y=Y, z=Z))
+        mat = CustomDebye(eps_inf=eps_inf, coeffs=((eps1, tau1), (eps2, tautmp)))
+
+    # inconsistent shape
+    with pytest.raises(pydantic.ValidationError):
+        epstmp = SpatialDataArray(
+            np.random.random((Nx - 1, Ny, Nz)), coords=dict(x=X[:-1], y=Y, z=Z)
+        )
+        mat = CustomDebye(eps_inf=eps_inf, coeffs=((eps1, tau1), (epstmp, tau2)))
+
+    mat = CustomDebye(eps_inf=eps_inf, coeffs=((eps1, tau1), (eps2, tau2)))
+    verify_custom_dispersive_medium_methods(mat)
+    assert mat.n_cfl > 1

@@ -1116,13 +1116,13 @@ class CustomPoleResidue(CustomDispersiveMedium, PoleResidue):
             raise ValidationError("'eps_inf' failed validation.")
 
         expected_shape = values["eps_inf"].shape
-        for (a, c) in val:
-            if a.shape != expected_shape or c.shape != expected_shape:
-                raise SetupError(
-                    "All 'a_i' and 'c_i' should have the same dimension; "
-                    "The dimension should also be consistent with 'eps_inf', "
-                    "if 'eps_inf' is also a 'SpatialDataArray'."
-                )
+        for coeffs in val:
+            for coeff in coeffs:
+                if coeff.shape != expected_shape:
+                    raise SetupError(
+                        "All 'a_i' and 'c_i' should have the same dimension; "
+                        "The dimension should also be consistent with 'eps_inf'."
+                    )
         return val
 
     def _eps_dataarray_freq(self, frequency: float) -> ArrayComplex3D:
@@ -1308,7 +1308,7 @@ class CustomSellmeier(CustomDispersiveMedium, Sellmeier):
         return val
 
     def _pole_residue_dict(self) -> Dict:
-        """Dict representation of Medium as a pole-residue model"""
+        """Dict representation of Medium as a pole-residue model."""
         poles_dict = Sellmeier._pole_residue_dict(self)
         poles_dict.update({"eps_inf": xr.ones_like(self.coeffs[0][0])})
         return poles_dict
@@ -1412,11 +1412,18 @@ class CustomLorentz(CustomDispersiveMedium, Lorentz):
 
     Example
     -------
-    >>> lorentz_medium = Lorentz(eps_inf=2.0, coeffs=[(1,2,3), (4,5,6)])
+    >>> x = np.linspace(-1, 1, 5)
+    >>> y = np.linspace(-1, 1, 6)
+    >>> z = np.linspace(-1, 1, 7)
+    >>> eps_inf = SpatialDataArray(np.ones((5, 6, 7)), coords=dict(x=x, y=y, z=z))
+    >>> epsilon_i = SpatialDataArray(np.random.random((5, 6, 7)), coords=dict(x=x, y=y, z=z))
+    >>> f_i = SpatialDataArray(1+np.random.random((5, 6, 7)), coords=dict(x=x, y=y, z=z))
+    >>> delta_i = SpatialDataArray(np.random.random((5, 6, 7)), coords=dict(x=x, y=y, z=z))
+    >>> lorentz_medium = CustomLorentz(eps_inf=eps_inf, coeffs=[(epsilon_i,f_i,delta_i),])
     >>> eps = lorentz_medium.eps_model(200e12)
     """
 
-    eps_inf: Union[float, SpatialDataArray] = pd.Field(
+    eps_inf: SpatialDataArray = pd.Field(
         ...,
         title="Epsilon at Infinity",
         description="Relative permittivity at infinite frequency (:math:`\\epsilon_\\infty`).",
@@ -1443,10 +1450,7 @@ class CustomLorentz(CustomDispersiveMedium, Lorentz):
         if "eps_inf" not in values:
             raise ValidationError("'eps_inf' failed validation.")
 
-        expected_shape = val[0][0].shape
-        if not isinstance(values["eps_inf"], float):
-            expected_shape = values["eps_inf"].shape
-
+        expected_shape = values["eps_inf"].shape
         for (de, f, delta) in val:
             if (
                 de.shape != expected_shape
@@ -1455,27 +1459,42 @@ class CustomLorentz(CustomDispersiveMedium, Lorentz):
             ):
                 raise SetupError(
                     "All terms in 'coeffs' should have the same dimension; "
-                    "The dimension should also be consistent with 'eps_inf', "
-                    "if 'eps_inf' is also a 'SpatialDataArray'."
+                    "The dimension should also be consistent with 'eps_inf'."
                 )
+            if np.any(de < 0):
+                raise SetupError(":math:`\\Delta\\epsilon_i` should be non-negative.")
+            if np.any(delta < 0):
+                raise SetupError(":math:`\\delta_i` should be non-negative.")
         return val
 
-    # @pd.validator("eps_inf", always=True)
-    # def _coeffs_correct_shape_and_sign(cls, val, values):
-    #     """coeffs should have shape (len(x), len(y), len(z)); and correct sign"""
-    #     expected_shape = (len(values["x"]), len(values["y"]), len(values["z"]))
-    #     for (de, f, delta) in val:
-    #         if (
-    #             de.shape != expected_shape
-    #             or f.shape != expected_shape
-    #             or delta.shape != expected_shape
-    #         ):
-    #             raise SetupError(f"All terms in 'coeffs' should have dimension {expected_shape}.")
-    #         if np.any(de < 0):
-    #             raise SetupError(":math:`\\Delta\\epsilon_i` cannot be negative.")
-    #         if np.any(delta < 0):
-    #             raise SetupError(":math:`\\delta_i` cannot be negative.")
-    #     return val
+    @pd.validator("coeffs", always=True)
+    def _coeffs_delta_smaller_than_fi(cls, val):
+        """We restrict fi>delta_i for now."""
+        for (_, f, delta) in val:
+            if np.any(delta > f):
+                raise SetupError("We restrict :math:`\\delta_i<f_i` for now.")
+        return val
+
+    def _pole_residue_dict(self) -> Dict:
+        """Dict representation of Medium as a pole-residue model."""
+
+        poles = []
+        for (de, f, delta) in self.coeffs:
+
+            w = 2 * np.pi * f
+            d = 2 * np.pi * delta
+
+            r = np.sqrt(w * w - d * d)
+            a = -d - 1j * r
+            c = 1j * de * w**2 / 2 / r
+            poles.append((a, c))
+
+        return dict(
+            eps_inf=self.eps_inf,
+            poles=poles,
+            frequency_range=self.frequency_range,
+            name=self.name,
+        )
 
     def _eps_dataarray_freq(self, frequency: float) -> ArrayComplex3D:
         """Permittivity array at ``frequency``.
@@ -1490,10 +1509,8 @@ class CustomLorentz(CustomDispersiveMedium, Lorentz):
         ArrayComplex3D
             The permittivity evaluated at ``frequency``.
         """
-        eps = self.eps_inf + 0.0j
-        for (de, f, delta) in self.coeffs:
-            eps += (de * f**2) / (f**2 - 2j * frequency * delta - frequency**2)
-        return eps
+
+        return Lorentz.eps_model(self, frequency)
 
 
 class Drude(DispersiveMedium):
@@ -1561,75 +1578,106 @@ class Drude(DispersiveMedium):
         )
 
 
-# class CustomDrude(CustomDispersiveMedium, Drude):
-#     """A spatially varying dispersive medium described by the Drude model.
-#     The frequency-dependence of the complex-valued permittivity is described by:
+class CustomDrude(CustomDispersiveMedium, Drude):
+    """A spatially varying dispersive medium described by the Drude model.
+    The frequency-dependence of the complex-valued permittivity is described by:
 
-#     Note
-#     ----
-#     .. math::
+    Note
+    ----
+    .. math::
 
-#         \\epsilon(f) = \\epsilon_\\infty - \\sum_i
-#         \\frac{ f_i^2}{f^2 + jf\\delta_i}
+        \\epsilon(f) = \\epsilon_\\infty - \\sum_i
+        \\frac{ f_i^2}{f^2 + jf\\delta_i}
 
-#     Example
-#     -------
-#     >>> drude_medium = Drude(eps_inf=2.0, coeffs=[(1,2), (3,4)])
-#     >>> eps = drude_medium.eps_model(200e12)
-#     """
+    Example
+    -------
+    >>> x = np.linspace(-1, 1, 5)
+    >>> y = np.linspace(-1, 1, 6)
+    >>> z = np.linspace(-1, 1, 7)
+    >>> eps_inf = SpatialDataArray(np.ones((5, 6, 7)), coords=dict(x=x, y=y, z=z))
+    >>> f1 = SpatialDataArray(np.random.random((5, 6, 7)), coords=dict(x=x, y=y, z=z))
+    >>> delta1 = SpatialDataArray(np.random.random((5, 6, 7)), coords=dict(x=x, y=y, z=z))
+    >>> drude_medium = CustomDrude(eps_inf=eps_inf, coeffs=[(f1,delta1),])
+    >>> eps = drude_medium.eps_model(200e12)
+    """
 
-#     eps_inf: ArrayFloat3D = pd.Field(
-#         ...,
-#         title="Epsilon at Infinity",
-#         description="Relative permittivity at infinite frequency (:math:`\\epsilon_\\infty`).",
-#         units=PERMITTIVITY,
-#     )
+    eps_inf: SpatialDataArray = pd.Field(
+        ...,
+        title="Epsilon at Infinity",
+        description="Relative permittivity at infinite frequency (:math:`\\epsilon_\\infty`).",
+        units=PERMITTIVITY,
+    )
 
-#     coeffs: Tuple[Tuple[ArrayFloat3D, ArrayFloat3D], ...] = pd.Field(
-#         ...,
-#         title="Coefficients",
-#         description="List of (:math:`f_i, \\delta_i`) values for model.",
-#         units=(HERTZ, HERTZ),
-#     )
+    coeffs: Tuple[Tuple[SpatialDataArray, SpatialDataArray], ...] = pd.Field(
+        ...,
+        title="Coefficients",
+        description="List of (:math:`f_i, \\delta_i`) values for model.",
+        units=(HERTZ, HERTZ),
+    )
 
-#     @pd.validator("eps_inf", always=True)
-#     def _eps_inf_correct_shape_and_positive(cls, val, values):
-#         """eps_inf should have shape (len(x), len(y), len(z)), and positive"""
-#         expected_shape = (len(values["x"]), len(values["y"]), len(values["z"]))
-#         if val.shape != expected_shape:
-#             raise SetupError(f"'eps_inf' should have dimension {expected_shape}.")
-#         if np.any(val < 0):
-#             raise SetupError(f"'eps_inf' should be positive.")
-#         return val
+    @pd.validator("eps_inf", always=True)
+    def _eps_inf_positive(cls, val):
+        """eps_inf should be positive"""
+        if np.any(val < 0):
+            raise SetupError("'eps_inf' should be positive.")
+        return val
 
-#     @pd.validator("eps_inf", always=True)
-#     def _coeffs_correct_shape_and_sign(cls, val, values):
-#         """coeffs should have shape (len(x), len(y), len(z)); and correct sign"""
-#         expected_shape = (len(values["x"]), len(values["y"]), len(values["z"]))
-#         for (f, delta) in val:
-#             if f.shape != expected_shape or delta.shape != expected_shape:
-#                 raise SetupError(f"All terms in 'coeffs' should have dimension {expected_shape}.")
-#             if np.any(delta < 0):
-#                 raise SetupError(":math:`\\delta_i` cannot be negative.")
-#         return val
+    @pd.validator("coeffs", always=True)
+    def _coeffs_correct_shape_and_sign(cls, val, values):
+        """coeffs should have consistent shape and sign."""
+        if "eps_inf" not in values:
+            raise ValidationError("'eps_inf' failed validation.")
 
-#     def _eps_dataarray_freq(self, frequency: float) -> ArrayComplex3D:
-#         """Permittivity array at ``frequency``.
+        expected_shape = values["eps_inf"].shape
+        for (f, delta) in val:
+            if f.shape != expected_shape or delta.shape != expected_shape:
+                raise SetupError(
+                    "All terms in 'coeffs' should have the same dimension; "
+                    "The dimension should also be consistent with 'eps_inf'."
+                )
+            if np.any(delta < 0):
+                raise SetupError(":math:`\\delta_i` should be non-negative.")
+        return val
 
-#         Parameters
-#         ----------
-#         frequency : float
-#             Frequency to evaluate permittivity at (Hz).
+    def _pole_residue_dict(self) -> Dict:
+        """Dict representation of Medium as a pole-residue model."""
 
-#         Returns
-#         -------
-#         ArrayComplex3D
-#             The permittivity evaluated at ``frequency``.
-#         """
-#         eps = self.eps_inf + 0.0j
-#         for (f, delta) in self.coeffs:
-#             eps -= (f**2) / (frequency**2 + 1j * frequency * delta)
-#         return eps
+        poles = []
+        # a0 = 0j
+
+        for (f, delta) in self.coeffs:
+
+            w = 2 * np.pi * f
+            d = 2 * np.pi * delta
+
+            c0 = (w**2) / 2 / d + 0j
+            c1 = -c0
+            a1 = -d + 0j
+
+            poles.extend(((c0 * 0j, c0), (a1, c1)))
+
+        return dict(
+            eps_inf=self.eps_inf,
+            poles=poles,
+            frequency_range=self.frequency_range,
+            name=self.name,
+        )
+
+    def _eps_dataarray_freq(self, frequency: float) -> ArrayComplex3D:
+        """Permittivity array at ``frequency``.
+
+        Parameters
+        ----------
+        frequency : float
+            Frequency to evaluate permittivity at (Hz).
+
+        Returns
+        -------
+        ArrayComplex3D
+            The permittivity evaluated at ``frequency``.
+        """
+
+        return Drude.eps_model(self, frequency)
 
 
 class Debye(DispersiveMedium):
@@ -1690,80 +1738,90 @@ class Debye(DispersiveMedium):
         )
 
 
-# class CustomDebye(CustomDispersiveMedium, Debye):
-#     """A spatially varying dispersive medium described by the Debye model.
-#     The frequency-dependence of the complex-valued permittivity is described by:
+class CustomDebye(CustomDispersiveMedium, Debye):
+    """A spatially varying dispersive medium described by the Debye model.
+    The frequency-dependence of the complex-valued permittivity is described by:
 
-#     Note
-#     ----
-#     .. math::
+    Note
+    ----
+    .. math::
 
-#         \\epsilon(f) = \\epsilon_\\infty + \\sum_i
-#         \\frac{\\Delta\\epsilon_i}{1 - jf\\tau_i}
+        \\epsilon(f) = \\epsilon_\\infty + \\sum_i
+        \\frac{\\Delta\\epsilon_i}{1 - jf\\tau_i}
 
-#     Example
-#     -------
-#     >>> debye_medium = Debye(eps_inf=2.0, coeffs=[(1,2),(3,4)])
-#     >>> eps = debye_medium.eps_model(200e12)
-#     """
+    Example
+    -------
+    >>> x = np.linspace(-1, 1, 5)
+    >>> y = np.linspace(-1, 1, 6)
+    >>> z = np.linspace(-1, 1, 7)
+    >>> eps_inf = SpatialDataArray(1+np.random.random((5, 6, 7)), coords=dict(x=x, y=y, z=z))
+    >>> eps1 = SpatialDataArray(np.random.random((5, 6, 7)), coords=dict(x=x, y=y, z=z))
+    >>> tau1 = SpatialDataArray(np.random.random((5, 6, 7)), coords=dict(x=x, y=y, z=z))
+    >>> debye_medium = CustomDebye(eps_inf=eps_inf, coeffs=[(eps1,tau1),])
+    >>> eps = debye_medium.eps_model(200e12)
+    """
 
-#     eps_inf: ArrayFloat3D = pd.Field(
-#         ...,
-#         title="Epsilon at Infinity",
-#         description="Relative permittivity at infinite frequency (:math:`\\epsilon_\\infty`).",
-#         units=PERMITTIVITY,
-#     )
+    eps_inf: SpatialDataArray = pd.Field(
+        ...,
+        title="Epsilon at Infinity",
+        description="Relative permittivity at infinite frequency (:math:`\\epsilon_\\infty`).",
+        units=PERMITTIVITY,
+    )
 
-#     coeffs: Tuple[Tuple[ArrayFloat3D, ArrayFloat3D], ...] = pd.Field(
-#         ...,
-#         title="Coefficients",
-#         description="List of (:math:`\\Delta\\epsilon_i, \\tau_i`) values for model.",
-#         units=(PERMITTIVITY, SECOND),
-#     )
+    coeffs: Tuple[Tuple[SpatialDataArray, SpatialDataArray], ...] = pd.Field(
+        ...,
+        title="Coefficients",
+        description="List of (:math:`\\Delta\\epsilon_i, \\tau_i`) values for model.",
+        units=(PERMITTIVITY, SECOND),
+    )
 
-#     @pd.validator("eps_inf", always=True)
-#     def _eps_inf_correct_shape_and_positive(cls, val, values):
-#         """eps_inf should have shape (len(x), len(y), len(z)), and positive"""
-#         expected_shape = (len(values["x"]), len(values["y"]), len(values["z"]))
-#         if val.shape != expected_shape:
-#             raise SetupError(f"'eps_inf' should have dimension {expected_shape}.")
-#         if np.any(val < 0):
-#             raise SetupError(f"'eps_inf' should be positive.")
-#         return val
+    @pd.validator("eps_inf", always=True)
+    def _eps_inf_positive(cls, val):
+        """eps_inf should be positive"""
+        if np.any(val < 0):
+            raise SetupError("'eps_inf' should be positive.")
+        return val
 
-#     @pd.validator("eps_inf", always=True)
-#     def _coeffs_correct_shape_and_sign(cls, val, values):
-#         """coeffs should have shape (len(x), len(y), len(z)); and correct sign"""
-#         expected_shape = (len(values["x"]), len(values["y"]), len(values["z"]))
-#         for (de, tau) in val:
-#             if de.shape != expected_shape or tau.shape != expected_shape:
-#                 raise SetupError(f"All terms in 'coeffs' should have dimension {expected_shape}.")
-#             if np.any(de < 0):
-#                 raise SetupError(":math:`\\Delta\\epsilon_i` cannot be negative.")
-#             if np.any(tau <= 0):
-#                 raise SetupError(":math:`\\tau_i` must be positive.")
-#         return val
+    @pd.validator("coeffs", always=True)
+    def _coeffs_correct_shape_and_sign(cls, val, values):
+        """coeffs should have consistent shape and sign."""
+        if "eps_inf" not in values:
+            raise ValidationError("'eps_inf' failed validation.")
 
-#     def _eps_dataarray_freq(self, frequency: float) -> ArrayComplex3D:
-#         """Permittivity array at ``frequency``.
+        expected_shape = values["eps_inf"].shape
+        for (de, tau) in val:
+            if de.shape != expected_shape or tau.shape != expected_shape:
+                raise SetupError(
+                    "All terms in 'coeffs' should have the same dimension; "
+                    "The dimension should also be consistent with 'eps_inf'."
+                )
+            if np.any(de < 0):
+                raise SetupError(":math:`\\Delta\\epsilon_i` cannot be negative.")
+            if np.any(tau <= 0):
+                raise SetupError(":math:`\\tau_i` must be positive.")
+        return val
 
-#         Parameters
-#         ----------
-#         frequency : float
-#             Frequency to evaluate permittivity at (Hz).
+    def _eps_dataarray_freq(self, frequency: float) -> ArrayComplex3D:
+        """Permittivity array at ``frequency``.
 
-#         Returns
-#         -------
-#         ArrayComplex3D
-#             The permittivity evaluated at ``frequency``.
-#         """
-#         eps = self.eps_inf + 0.0j
-#         for (de, tau) in self.coeffs:
-#             eps += de / (1 - 1j * frequency * tau)
-#         return eps
+        Parameters
+        ----------
+        frequency : float
+            Frequency to evaluate permittivity at (Hz).
+
+        Returns
+        -------
+        ArrayComplex3D
+            The permittivity evaluated at ``frequency``.
+        """
+        return Debye.eps_model(self, frequency)
 
 
-IsotropicMediumType = Union[Medium, PoleResidue, Sellmeier, Lorentz, Debye, Drude]
+IsotropicUniformMediumType = Union[Medium, PoleResidue, Sellmeier, Lorentz, Debye, Drude]
+IsotropicCustomMediumType = Union[
+    CustomPoleResidue, CustomSellmeier, CustomLorentz, CustomDebye, CustomDrude
+]
+IsotropicMediumType = Union[IsotropicCustomMediumType, IsotropicUniformMediumType]
 
 
 class AnisotropicMedium(AbstractMedium):
