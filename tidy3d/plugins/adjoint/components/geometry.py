@@ -470,10 +470,10 @@ class JaxPolySlab(JaxGeometry, PolySlab, JaxObject):
             dz = float(length_axis) / float(num_cells_axis)
 
             # handle a 2D simulation along axis (unitless)
+            z_vals = np.linspace(z_min + dz / 2, z_max - dz / 2, num_cells_axis)
+
             if dz == 0.0:
                 dz = 1.0
-
-            z_vals = np.linspace(slab_min + dz / 2, slab_max - dz / 2, num_cells_axis)
 
             # integrate by summing over axis edge (z) and parameterization point (s)
             integrand = compute_integrand(s=s_vals, z=z_vals)
