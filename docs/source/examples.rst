@@ -107,6 +107,7 @@ Photonic Integrated Circuit Components
     notebooks/WaveguideCrossing
     notebooks/WaveguideSizeConverter
     notebooks/BraggGratings.ipynb
+    notebooks/BroadbandDirectionalCoupler
     notebooks/EulerWaveguideBend
     notebooks/PolarizationSplitterRotator
     notebooks/8ChannelDemultiplexer
