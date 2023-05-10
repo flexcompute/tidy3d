@@ -30,8 +30,6 @@ REFRESH_TIME = 0.3
 # time between checking run status
 RUN_REFRESH_TIME = 1.0
 
-TOTAL_DOTS = 3
-
 # file names when uploading to S3
 SIM_FILE_JSON = "simulation.json"
 
