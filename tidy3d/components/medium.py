@@ -915,6 +915,18 @@ class CustomDispersiveMedium(AbstractCustomMedium, DispersiveMedium, ABC):
             The permittivity evaluated at ``frequency``.
         """
 
+    @staticmethod
+    def _validate_isreal_dataarray(dataarray: SpatialDataArray) -> bool:
+        """Validate that the dataarray is real"""
+        return np.all(np.isreal(dataarray.data))
+
+    @staticmethod
+    def _validate_isreal_dataarray_tuple(dataarray_tuple: Tuple[SpatialDataArray, ...]) -> bool:
+        """Validate that the dataarray is real"""
+        return np.all(
+            [CustomDispersiveMedium._validate_isreal_dataarray(f) for f in dataarray_tuple]
+        )
+
     def eps_diagonal_on_grid(
         self,
         frequency: float,
@@ -1105,6 +1117,8 @@ class CustomPoleResidue(CustomDispersiveMedium, PoleResidue):
     @pd.validator("eps_inf", always=True)
     def _eps_inf_positive(cls, val):
         """eps_inf should be positive"""
+        if not CustomDispersiveMedium._validate_isreal_dataarray(val):
+            raise SetupError("'eps_inf' should be real.")
         if np.any(val < 0):
             raise SetupError("'eps_inf' should be positive.")
         return val
@@ -1301,6 +1315,8 @@ class CustomSellmeier(CustomDispersiveMedium, Sellmeier):
         for (B, C) in val:
             if B.shape != expected_shape or C.shape != expected_shape:
                 raise SetupError("Every term in 'coeffs' should have the same dimension.")
+            if not CustomDispersiveMedium._validate_isreal_dataarray_tuple((B, C)):
+                raise SetupError("'B_i' and 'C_i' should be real.")
             if np.any(B < 0):
                 raise SetupError("'B_i' should be non-negative.")
             if np.any(C <= 0):
@@ -1440,6 +1456,8 @@ class CustomLorentz(CustomDispersiveMedium, Lorentz):
     @pd.validator("eps_inf", always=True)
     def _eps_inf_positive(cls, val):
         """eps_inf should be positive"""
+        if not CustomDispersiveMedium._validate_isreal_dataarray(val):
+            raise SetupError("'eps_inf' should be real.")
         if np.any(val < 0):
             raise SetupError("'eps_inf' should be positive.")
         return val
@@ -1461,6 +1479,8 @@ class CustomLorentz(CustomDispersiveMedium, Lorentz):
                     "All terms in 'coeffs' should have the same dimension; "
                     "The dimension should also be consistent with 'eps_inf'."
                 )
+            if not CustomDispersiveMedium._validate_isreal_dataarray_tuple((de, f, delta)):
+                raise SetupError("All terms in 'coeffs' should be real.")
             if np.any(de < 0):
                 raise SetupError(":math:`\\Delta\\epsilon_i` should be non-negative.")
             if np.any(delta < 0):
@@ -1618,6 +1638,8 @@ class CustomDrude(CustomDispersiveMedium, Drude):
     @pd.validator("eps_inf", always=True)
     def _eps_inf_positive(cls, val):
         """eps_inf should be positive"""
+        if not CustomDispersiveMedium._validate_isreal_dataarray(val):
+            raise SetupError("'eps_inf' should be real.")
         if np.any(val < 0):
             raise SetupError("'eps_inf' should be positive.")
         return val
@@ -1635,6 +1657,8 @@ class CustomDrude(CustomDispersiveMedium, Drude):
                     "All terms in 'coeffs' should have the same dimension; "
                     "The dimension should also be consistent with 'eps_inf'."
                 )
+            if not CustomDispersiveMedium._validate_isreal_dataarray_tuple((f, delta)):
+                raise SetupError("All terms in 'coeffs' should be real.")
             if np.any(delta < 0):
                 raise SetupError(":math:`\\delta_i` should be non-negative.")
         return val
@@ -1778,6 +1802,8 @@ class CustomDebye(CustomDispersiveMedium, Debye):
     @pd.validator("eps_inf", always=True)
     def _eps_inf_positive(cls, val):
         """eps_inf should be positive"""
+        if not CustomDispersiveMedium._validate_isreal_dataarray(val):
+            raise SetupError("'eps_inf' should be real.")
         if np.any(val < 0):
             raise SetupError("'eps_inf' should be positive.")
         return val
@@ -1795,6 +1821,8 @@ class CustomDebye(CustomDispersiveMedium, Debye):
                     "All terms in 'coeffs' should have the same dimension; "
                     "The dimension should also be consistent with 'eps_inf'."
                 )
+            if not CustomDispersiveMedium._validate_isreal_dataarray_tuple((de, tau)):
+                raise SetupError("All terms in 'coeffs' should be real.")
             if np.any(de < 0):
                 raise SetupError(":math:`\\Delta\\epsilon_i` cannot be negative.")
             if np.any(tau <= 0):
@@ -1928,6 +1956,11 @@ MediumType3D = Union[
     Lorentz,
     Debye,
     Drude,
+    CustomPoleResidue,
+    CustomSellmeier,
+    CustomLorentz,
+    CustomDebye,
+    CustomDrude,
 ]
 
 
@@ -1945,7 +1978,7 @@ class Medium2D(AbstractMedium):
 
     """
 
-    ss: IsotropicMediumType = pd.Field(
+    ss: IsotropicUniformMediumType = pd.Field(
         ...,
         title="SS Component",
         description="Medium describing the ss-component of the diagonal permittivity tensor. "
@@ -1956,7 +1989,7 @@ class Medium2D(AbstractMedium):
         discriminator=TYPE_TAG_STR,
     )
 
-    tt: IsotropicMediumType = pd.Field(
+    tt: IsotropicUniformMediumType = pd.Field(
         ...,
         title="TT Component",
         description="Medium describing the tt-component of the diagonal permittivity tensor. "
@@ -1968,7 +2001,9 @@ class Medium2D(AbstractMedium):
     )
 
     @classmethod
-    def _weighted_avg(cls, meds: List[IsotropicMediumType], weights: List[float]) -> PoleResidue:
+    def _weighted_avg(
+        cls, meds: List[IsotropicUniformMediumType], weights: List[float]
+    ) -> PoleResidue:
         """Average ``meds`` with weights ``weights``."""
         eps_inf = 1
         poles = []
@@ -2020,7 +2055,7 @@ class Medium2D(AbstractMedium):
             The 3D material corresponding to this 2D material.
         """
 
-        def get_component(med: MediumType3D, comp: Axis) -> IsotropicMediumType:
+        def get_component(med: MediumType3D, comp: Axis) -> IsotropicUniformMediumType:
             """Extract the ``comp`` component of ``med``."""
             if isinstance(med, AnisotropicMedium):
                 dim = "xyz"[comp]
@@ -2259,7 +2294,7 @@ class Medium2D(AbstractMedium):
         return np.mean([self.ss.sigma_model(freq), self.tt.sigma_model(freq)], axis=0)
 
     @property
-    def elements(self) -> Dict[str, IsotropicMediumType]:
+    def elements(self) -> Dict[str, IsotropicUniformMediumType]:
         """The diagonal elements of the 2D medium as a dictionary."""
         return dict(ss=self.ss, tt=self.tt)
 
