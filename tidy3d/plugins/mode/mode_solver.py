@@ -20,7 +20,7 @@ from ...components.types import Direction, FreqArray, Ax, Literal, Axis, Symmetr
 from ...components.types import ArrayComplex3D, ArrayComplex4D, ArrayFloat1D
 from ...components.data.data_array import ModeIndexDataArray, ScalarModeFieldDataArray
 from ...components.data.data_array import FreqModeDataArray
-from ...components.data.sim_data import SimulationData
+from ...components.data.sim_data import SimulationData, PlotScale
 from ...components.data.monitor_data import ModeSolverData
 from ...exceptions import ValidationError
 from ...constants import C_0
@@ -552,6 +552,7 @@ class ModeSolver(Tidy3dBaseModel):
         self,
         field_name: str,
         val: Literal["real", "imag", "abs"] = "real",
+        scale: PlotScale = "lin",
         eps_alpha: float = 0.2,
         robust: bool = True,
         vmin: float = None,
@@ -569,6 +570,8 @@ class ModeSolver(Tidy3dBaseModel):
             magnetic fields, and `'S'` for the Poynting vector.
         val : Literal['real', 'imag', 'abs', 'abs^2', 'dB'] = 'real'
             Which part of the field to plot.
+        scale : Literal['lin', 'dB']
+            Plot in linear or logarithmic (dB) scale.
         eps_alpha : float = 0.2
             Opacity of the structure permittivity.
             Must be between 0 and 1 (inclusive).
@@ -602,6 +605,7 @@ class ModeSolver(Tidy3dBaseModel):
             field_monitor_name=MODE_MONITOR_NAME,
             field_name=field_name,
             val=val,
+            scale=scale,
             eps_alpha=eps_alpha,
             robust=robust,
             vmin=vmin,
