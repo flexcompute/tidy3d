@@ -12,15 +12,8 @@ import xarray as xr
 
 from .base import Tidy3dBaseModel, cached_property
 from .grid.grid import Coords, Grid
-from .types import (
-    PoleAndResidue,
-    Ax,
-    FreqBound,
-    TYPE_TAG_STR,
-    InterpMethod,
-    Bound,
-    ArrayComplex3D,
-)
+from .types import PoleAndResidue, Ax, FreqBound, TYPE_TAG_STR
+from .types import InterpMethod, Bound, ArrayComplex3D
 from .types import Axis
 from .data.dataset import PermittivityDataset
 from .data.data_array import SpatialDataArray, ScalarFieldDataArray
@@ -1126,7 +1119,7 @@ class CustomPoleResidue(CustomDispersiveMedium, PoleResidue):
     @pd.validator("poles", always=True)
     def _poles_correct_shape(cls, val, values):
         """poles should have the same shape."""
-        if "eps_inf" not in values:
+        if values.get("eps_inf") is None:
             raise ValidationError("'eps_inf' failed validation.")
 
         expected_shape = values["eps_inf"].shape
@@ -1134,7 +1127,7 @@ class CustomPoleResidue(CustomDispersiveMedium, PoleResidue):
             for coeff in coeffs:
                 if coeff.shape != expected_shape:
                     raise SetupError(
-                        "All 'a_i' and 'c_i' should have the same dimension; "
+                        "All pole coefficients 'a' and 'c' should have the same dimension; "
                         "The dimension should also be consistent with 'eps_inf'."
                     )
         return val
@@ -1316,11 +1309,11 @@ class CustomSellmeier(CustomDispersiveMedium, Sellmeier):
             if B.shape != expected_shape or C.shape != expected_shape:
                 raise SetupError("Every term in 'coeffs' should have the same dimension.")
             if not CustomDispersiveMedium._validate_isreal_dataarray_tuple((B, C)):
-                raise SetupError("'B_i' and 'C_i' should be real.")
+                raise SetupError("'B' and 'C' should be real.")
             if np.any(B < 0):
-                raise SetupError("'B_i' should be non-negative.")
+                raise SetupError("'B' should be non-negative.")
             if np.any(C <= 0):
-                raise SetupError("'C_i' should be positive.")
+                raise SetupError("'C' should be positive.")
         return val
 
     def _pole_residue_dict(self) -> Dict:
@@ -1376,6 +1369,14 @@ class Lorentz(DispersiveMedium):
         units=(PERMITTIVITY, HERTZ, HERTZ),
     )
 
+    @pd.validator("coeffs", always=True)
+    def _coeffs_unequal_f_delta(cls, val):
+        """f and delta cannot be exactly the same."""
+        for (_, f, delta) in val:
+            if f == delta:
+                raise SetupError("'f' and 'delta' cannot take equal values.")
+        return val
+
     @ensure_freq_in_range
     def eps_model(self, frequency: float) -> complex:
         """Complex-valued permittivity as a function of frequency."""
@@ -1394,7 +1395,7 @@ class Lorentz(DispersiveMedium):
             w = 2 * np.pi * f
             d = 2 * np.pi * delta
 
-            if d > w:
+            if self._all_larger(d, w):
                 r = np.sqrt(d * d - w * w) + 0j
                 a0 = -d + r
                 c0 = de * w**2 / 4 / r
@@ -1413,6 +1414,13 @@ class Lorentz(DispersiveMedium):
             frequency_range=self.frequency_range,
             name=self.name,
         )
+
+    @staticmethod
+    def _all_larger(coeff_a, coeff_b) -> bool:
+        """`coeff_a` and `coeff_b` can be either float or SpatialDataArray."""
+        if isinstance(coeff_a, SpatialDataArray):
+            return np.all(coeff_a.data > coeff_b.data)
+        return coeff_a > coeff_b
 
 
 class CustomLorentz(CustomDispersiveMedium, Lorentz):
@@ -1463,9 +1471,17 @@ class CustomLorentz(CustomDispersiveMedium, Lorentz):
         return val
 
     @pd.validator("coeffs", always=True)
+    def _coeffs_unequal_f_delta(cls, val):
+        """f and delta cannot be exactly the same.
+        Not needed for now because we have a more strict
+        validator `_coeffs_delta_all_smaller_or_larger_than_fi`.
+        """
+        return val
+
+    @pd.validator("coeffs", always=True)
     def _coeffs_correct_shape_and_sign(cls, val, values):
         """coeffs should have consistent shape and sign."""
-        if "eps_inf" not in values:
+        if values.get("eps_inf") is None:
             raise ValidationError("'eps_inf' failed validation.")
 
         expected_shape = values["eps_inf"].shape
@@ -1482,39 +1498,18 @@ class CustomLorentz(CustomDispersiveMedium, Lorentz):
             if not CustomDispersiveMedium._validate_isreal_dataarray_tuple((de, f, delta)):
                 raise SetupError("All terms in 'coeffs' should be real.")
             if np.any(de < 0):
-                raise SetupError(":math:`\\Delta\\epsilon_i` should be non-negative.")
+                raise SetupError("'Delta epsilon' should be non-negative.")
             if np.any(delta < 0):
-                raise SetupError(":math:`\\delta_i` should be non-negative.")
+                raise SetupError("'delta' should be non-negative.")
         return val
 
     @pd.validator("coeffs", always=True)
-    def _coeffs_delta_smaller_than_fi(cls, val):
-        """We restrict fi>delta_i for now."""
+    def _coeffs_delta_all_smaller_or_larger_than_fi(cls, val):
+        """We restrict either all f>delta or all f<delta for now."""
         for (_, f, delta) in val:
-            if np.any(delta > f):
-                raise SetupError("We restrict :math:`\\delta_i<f_i` for now.")
+            if not (Lorentz._all_larger(f, delta) or Lorentz._all_larger(delta, f)):
+                raise SetupError("We restrict either all 'delta<f' or all 'delta>f'.")
         return val
-
-    def _pole_residue_dict(self) -> Dict:
-        """Dict representation of Medium as a pole-residue model."""
-
-        poles = []
-        for (de, f, delta) in self.coeffs:
-
-            w = 2 * np.pi * f
-            d = 2 * np.pi * delta
-
-            r = np.sqrt(w * w - d * d)
-            a = -d - 1j * r
-            c = 1j * de * w**2 / 2 / r
-            poles.append((a, c))
-
-        return dict(
-            eps_inf=self.eps_inf,
-            poles=poles,
-            frequency_range=self.frequency_range,
-            name=self.name,
-        )
 
     def _eps_dataarray_freq(self, frequency: float) -> ArrayComplex3D:
         """Permittivity array at ``frequency``.
@@ -1577,7 +1572,6 @@ class Drude(DispersiveMedium):
         """Dict representation of Medium as a pole-residue model."""
 
         poles = []
-        a0 = 0j
 
         for (f, delta) in self.coeffs:
 
@@ -1587,6 +1581,11 @@ class Drude(DispersiveMedium):
             c0 = (w**2) / 2 / d + 0j
             c1 = -c0
             a1 = -d + 0j
+
+            if isinstance(c0, complex):
+                a0 = 0j
+            else:
+                a0 = xr.zeros_like(c0)
 
             poles.extend(((a0, c0), (a1, c1)))
 
@@ -1647,7 +1646,7 @@ class CustomDrude(CustomDispersiveMedium, Drude):
     @pd.validator("coeffs", always=True)
     def _coeffs_correct_shape_and_sign(cls, val, values):
         """coeffs should have consistent shape and sign."""
-        if "eps_inf" not in values:
+        if values.get("eps_inf") is None:
             raise ValidationError("'eps_inf' failed validation.")
 
         expected_shape = values["eps_inf"].shape
@@ -1660,32 +1659,8 @@ class CustomDrude(CustomDispersiveMedium, Drude):
             if not CustomDispersiveMedium._validate_isreal_dataarray_tuple((f, delta)):
                 raise SetupError("All terms in 'coeffs' should be real.")
             if np.any(delta < 0):
-                raise SetupError(":math:`\\delta_i` should be non-negative.")
+                raise SetupError("'delta' should be non-negative.")
         return val
-
-    def _pole_residue_dict(self) -> Dict:
-        """Dict representation of Medium as a pole-residue model."""
-
-        poles = []
-        # a0 = 0j
-
-        for (f, delta) in self.coeffs:
-
-            w = 2 * np.pi * f
-            d = 2 * np.pi * delta
-
-            c0 = (w**2) / 2 / d + 0j
-            c1 = -c0
-            a1 = -d + 0j
-
-            poles.extend(((c0 * 0j, c0), (a1, c1)))
-
-        return dict(
-            eps_inf=self.eps_inf,
-            poles=poles,
-            frequency_range=self.frequency_range,
-            name=self.name,
-        )
 
     def _eps_dataarray_freq(self, frequency: float) -> ArrayComplex3D:
         """Permittivity array at ``frequency``.
@@ -1811,7 +1786,7 @@ class CustomDebye(CustomDispersiveMedium, Debye):
     @pd.validator("coeffs", always=True)
     def _coeffs_correct_shape_and_sign(cls, val, values):
         """coeffs should have consistent shape and sign."""
-        if "eps_inf" not in values:
+        if values.get("eps_inf") is None:
             raise ValidationError("'eps_inf' failed validation.")
 
         expected_shape = values["eps_inf"].shape
@@ -1824,9 +1799,9 @@ class CustomDebye(CustomDispersiveMedium, Debye):
             if not CustomDispersiveMedium._validate_isreal_dataarray_tuple((de, tau)):
                 raise SetupError("All terms in 'coeffs' should be real.")
             if np.any(de < 0):
-                raise SetupError(":math:`\\Delta\\epsilon_i` cannot be negative.")
+                raise SetupError("'Delta epsilon' cannot be negative.")
             if np.any(tau <= 0):
-                raise SetupError(":math:`\\tau_i` must be positive.")
+                raise SetupError("'tau' must be positive.")
         return val
 
     def _eps_dataarray_freq(self, frequency: float) -> ArrayComplex3D:

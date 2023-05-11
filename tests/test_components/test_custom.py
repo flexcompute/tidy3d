@@ -17,14 +17,8 @@ from tidy3d.exceptions import SetupError, DataError, ValidationError
 from ..test_data.test_monitor_data import make_field_data
 from ..utils import clear_tmp, assert_log_level, log_capture
 from tidy3d.components.data.dataset import PermittivityDataset
-from tidy3d.components.medium import (
-    CustomMedium,
-    CustomPoleResidue,
-    CustomSellmeier,
-    CustomLorentz,
-    CustomDrude,
-    CustomDebye,
-)
+from tidy3d.components.medium import CustomMedium, CustomPoleResidue, CustomSellmeier
+from tidy3d.components.medium import CustomLorentz, CustomDrude, CustomDebye
 
 Nx, Ny, Nz = 10, 11, 12
 X = np.linspace(-1, 1, Nx)
@@ -403,6 +397,11 @@ def test_custom_lorentz():
     with pytest.raises(pydantic.ValidationError):
         detmp = SpatialDataArray(np.random.random((Nx, Ny, Nz)) - 0.5, coords=dict(x=X, y=Y, z=Z))
         mat = CustomLorentz(eps_inf=eps_inf, coeffs=((de1, f1, delta1), (detmp, f2, delta2)))
+
+    # mixed delta > f and delta < f over spatial points
+    with pytest.raises(pydantic.ValidationError):
+        deltatmp = SpatialDataArray(1 + np.random.random((Nx, Ny, Nz)), coords=dict(x=X, y=Y, z=Z))
+        mat = CustomLorentz(eps_inf=eps_inf, coeffs=((de1, f1, delta1), (de2, f2, deltatmp)))
 
     # negative delta
     with pytest.raises(pydantic.ValidationError):
