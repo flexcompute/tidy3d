@@ -19,6 +19,7 @@ from ..utils import clear_tmp, assert_log_level, log_capture
 from tidy3d.components.data.dataset import PermittivityDataset
 from tidy3d.components.medium import CustomMedium, CustomPoleResidue, CustomSellmeier
 from tidy3d.components.medium import CustomLorentz, CustomDrude, CustomDebye
+from tidy3d.components.medium import CustomIsotropicMedium, CustomAnisotropicMedium
 
 Nx, Ny, Nz = 10, 11, 12
 X = np.linspace(-1, 1, Nx)
@@ -294,18 +295,68 @@ def test_n_cfl():
     assert med.n_cfl >= 2
 
 
-def verify_custom_dispersive_medium_methods(mat):
-    """Verify that the methods in custom dispersive medium is producing expected results."""
+def verify_custom_medium_methods(mat):
+    """Verify that the methods in custom medium is producing expected results."""
     freq = 1.0
-    assert mat._eps_dataarray_freq(freq).shape == (Nx, Ny, Nz)
     assert isinstance(mat.eps_model(freq), np.complex128)
-    np.testing.assert_allclose(mat.eps_model(freq), mat.pole_residue.eps_model(freq))
     assert len(mat.eps_diagonal(freq)) == 3
     coord_interp = Coords(**{ax: np.linspace(-1, 1, 20 + ind) for ind, ax in enumerate("xyz")})
     eps_grid = mat.eps_diagonal_on_grid(freq, coord_interp)
-    np.testing.assert_allclose(eps_grid, mat.pole_residue.eps_diagonal_on_grid(freq, coord_interp))
     for i in range(3):
         assert np.allclose(eps_grid[i].shape, [len(f) for f in coord_interp.to_list])
+
+
+def test_custom_isotropic_medium():
+    """Custom isotropic non-dispersive medium."""
+    permittivity = SpatialDataArray(1 + np.random.random((Nx, Ny, Nz)), coords=dict(x=X, y=Y, z=Z))
+    conductivity = SpatialDataArray(np.random.random((Nx, Ny, Nz)), coords=dict(x=X, y=Y, z=Z))
+
+    # some terms in permittivity are complex
+    with pytest.raises(pydantic.ValidationError):
+        epstmp = SpatialDataArray(
+            1 + np.random.random((Nx, Ny, Nz)) + 0.1j, coords=dict(x=X, y=Y, z=Z)
+        )
+        mat = CustomIsotropicMedium(permittivity=epstmp, conductivity=conductivity)
+
+    # some terms in permittivity are < 1
+    with pytest.raises(pydantic.ValidationError):
+        epstmp = SpatialDataArray(np.random.random((Nx, Ny, Nz)), coords=dict(x=X, y=Y, z=Z))
+        mat = CustomIsotropicMedium(permittivity=epstmp, conductivity=conductivity)
+
+    # some terms in conductivity are complex
+    with pytest.raises(pydantic.ValidationError):
+        sigmatmp = SpatialDataArray(
+            np.random.random((Nx, Ny, Nz)) + 0.1j, coords=dict(x=X, y=Y, z=Z)
+        )
+        mat = CustomIsotropicMedium(permittivity=permittivity, conductivity=sigmatmp)
+
+    # some terms in conductivity are negative
+    with pytest.raises(pydantic.ValidationError):
+        sigmatmp = SpatialDataArray(
+            np.random.random((Nx, Ny, Nz)) - 0.5, coords=dict(x=X, y=Y, z=Z)
+        )
+        mat = CustomIsotropicMedium(permittivity=permittivity, conductivity=sigmatmp)
+
+    # inconsistent shape
+    with pytest.raises(pydantic.ValidationError):
+        sigmatmp = SpatialDataArray(
+            np.random.random((Nx - 1, Ny, Nz)), coords=dict(x=X[:-1], y=Y, z=Z)
+        )
+        mat = CustomIsotropicMedium(permittivity=permittivity, conductivity=sigmatmp)
+
+    mat = CustomIsotropicMedium(permittivity=permittivity, conductivity=conductivity)
+    verify_custom_medium_methods(mat)
+
+
+def verify_custom_dispersive_medium_methods(mat):
+    """Verify that the methods in custom dispersive medium is producing expected results."""
+    verify_custom_medium_methods(mat)
+    freq = 1.0
+    assert mat.eps_dataarray_freq(freq).shape == (Nx, Ny, Nz)
+    np.testing.assert_allclose(mat.eps_model(freq), mat.pole_residue.eps_model(freq))
+    coord_interp = Coords(**{ax: np.linspace(-1, 1, 20 + ind) for ind, ax in enumerate("xyz")})
+    eps_grid = mat.eps_diagonal_on_grid(freq, coord_interp)
+    np.testing.assert_allclose(eps_grid, mat.pole_residue.eps_diagonal_on_grid(freq, coord_interp))
 
 
 def test_custom_pole_residue():
