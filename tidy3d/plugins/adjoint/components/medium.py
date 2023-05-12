@@ -1,7 +1,7 @@
 """Defines jax-compatible mediums."""
 from __future__ import annotations
 
-from typing import Dict, Tuple, Union, Callable
+from typing import Dict, Tuple, Union, Callable, Optional
 from abc import ABC
 
 import pydantic as pd
@@ -264,8 +264,22 @@ class JaxCustomMedium(CustomMedium, AbstractJaxMedium):
     with respect to the field variation.
     """
 
-    eps_dataset: JaxPermittivityDataset = pd.Field(
-        ...,
+    permittivity: Optional[JaxDataArray] = pd.Field(
+        None,
+        title="Permittivity",
+        description="Spatial profile of relative permittivity.",
+    )
+
+    conductivity: Optional[JaxDataArray] = pd.Field(
+        None,
+        title="Conductivity",
+        description="Spatial profile Electric conductivity.  Defined such "
+        "that the imaginary part of the complex permittivity at angular "
+        "frequency omega is given by conductivity/omega.",
+    )
+
+    eps_dataset: Optional[JaxPermittivityDataset] = pd.Field(
+        None,
         title="Permittivity Dataset",
         description="User-supplied dataset containing complex-valued permittivity "
         "as a function of space. Permittivity distribution over the Yee-grid will be "
@@ -273,7 +287,13 @@ class JaxCustomMedium(CustomMedium, AbstractJaxMedium):
         jax_field=True,
     )
 
+    @pd.root_validator(pre=True)
+    def _deprecation_dataset(cls, values):
+        """Raise deprecation warning if dataset supplied and convert to dataset."""
+        return values
+
     @pd.validator("eps_dataset", always=True)
+
     def _is_not_3d(cls, val):
         """Ensure the custom medium pixels contain at least one dimension with only pixel thick."""
 
@@ -310,19 +330,29 @@ class JaxCustomMedium(CustomMedium, AbstractJaxMedium):
         return val
 
     @pd.validator("eps_dataset", always=True)
-    def _single_frequency(cls, val):
+    def _eps_dataset_single_frequency(cls, val):
         """Override of inherited validator."""
         return val
 
     @pd.validator("eps_dataset", always=True)
-    def _eps_inf_greater_no_less_than_one_sigma_positive(cls, val):
+    def _eps_dataset_eps_inf_greater_no_less_than_one_sigma_positive(cls, val):
         """Override of inherited validator."""
         return val
 
-    def eps_dataset_freq(self, frequency: float) -> PermittivityDataset:
-        """Override of inherited validator."""
+    @pd.validator("permittivity", always=True)
+    def _eps_inf_greater_no_less_than_one(cls, val):
+        """Assert any eps_inf must be >=1"""
+        return val
+
+    @pd.validator("conductivity", always=True)
+    def _conductivity_non_negative_correct_shape(cls, val, values):
+        """Assert conductivity>=0"""
+        return val
+
+    def eps_dataarray_freq(self, frequency: float):
+        """ "Permittivity array at ``frequency``"""
         as_custom_medium = self.to_medium()
-        return as_custom_medium.eps_dataset_freq(frequency=frequency)
+        return as_custom_medium.eps_dataarray_freq(frequency)
 
     def to_medium(self) -> CustomMedium:
         """Convert :class:`.JaxMedium` instance to :class:`.Medium`"""
@@ -337,12 +367,14 @@ class JaxCustomMedium(CustomMedium, AbstractJaxMedium):
             eps_field_components[field_name] = scalar_field
         eps_dataset = PermittivityDataset(**eps_field_components)
         self_dict["eps_dataset"] = eps_dataset
+        self_dict["permittivity"] = None
+        self_dict["conductivity"] = None
         return CustomMedium.parse_obj(self_dict)
 
     @classmethod
     def from_tidy3d(cls, tidy3d_obj: CustomMedium) -> JaxCustomMedium:
         """Convert :class:`.Tidy3dBaseModel` instance to :class:`.JaxObject`."""
-        obj_dict = tidy3d_obj.dict(exclude={"type", "eps_dataset"})
+        obj_dict = tidy3d_obj.dict(exclude={"type", "eps_dataset", "permittivity", "conductivity"})
         eps_dataset = tidy3d_obj.eps_dataset
         field_components = {}
         for dim in "xyz":
@@ -353,6 +385,8 @@ class JaxCustomMedium(CustomMedium, AbstractJaxMedium):
             field_components[field_name] = JaxDataArray(values=values, coords=coords)
         eps_dataset = JaxPermittivityDataset(**field_components)
         obj_dict["eps_dataset"] = eps_dataset
+        obj_dict["permittivity"] = None
+        obj_dict["conductivity"] = None
         return cls.parse_obj(obj_dict)
 
     # pylint:disable=too-many-locals, unused-argument, too-many-arguments

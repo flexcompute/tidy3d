@@ -45,6 +45,10 @@ class JaxDataArray(Tidy3dBaseModel):
             return np.array(val)
         return val
 
+    def __eq__(self, other) -> bool:
+        """Check if two ``JaxDataArray`` instances are equal."""
+        return jnp.array_equal(self.values, other.values)
+
     # removed because it was slowing things down.
     # @pd.validator("coords", always=True)
     # def _coords_match_values(cls, val, values):

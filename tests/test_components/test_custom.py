@@ -18,7 +18,8 @@ from ..test_data.test_monitor_data import make_field_data
 from ..utils import clear_tmp, assert_log_level, log_capture
 from tidy3d.components.data.dataset import PermittivityDataset
 from tidy3d.components.medium import CustomMedium, CustomPoleResidue, CustomSellmeier
-from tidy3d.components.medium import CustomLorentz, CustomDrude, CustomDebye
+from tidy3d.components.medium import CustomLorentz, CustomDrude, CustomDebye, AbstractCustomMedium
+from tidy3d.components.medium import CustomIsotropicMedium, CustomAnisotropicMedium
 
 Nx, Ny, Nz = 10, 11, 12
 X = np.linspace(-1, 1, Nx)
@@ -255,7 +256,7 @@ def test_medium_eps_diagonal_on_grid():
 def test_medium_nk():
     """Construct custom medium from n (and k) DataArrays."""
     n = make_scalar_data().real
-    k = make_scalar_data().real * 0.01
+    k = make_scalar_data().real * 0.001
     med = CustomMedium.from_nk(n=n, k=k)
     med = CustomMedium.from_nk(n=n)
 
@@ -294,18 +295,98 @@ def test_n_cfl():
     assert med.n_cfl >= 2
 
 
-def verify_custom_dispersive_medium_methods(mat):
-    """Verify that the methods in custom dispersive medium is producing expected results."""
+def verify_custom_medium_methods(mat):
+    """Verify that the methods in custom medium is producing expected results."""
     freq = 1.0
-    assert mat._eps_dataarray_freq(freq).shape == (Nx, Ny, Nz)
+    assert isinstance(mat, AbstractCustomMedium)
     assert isinstance(mat.eps_model(freq), np.complex128)
-    np.testing.assert_allclose(mat.eps_model(freq), mat.pole_residue.eps_model(freq))
     assert len(mat.eps_diagonal(freq)) == 3
     coord_interp = Coords(**{ax: np.linspace(-1, 1, 20 + ind) for ind, ax in enumerate("xyz")})
     eps_grid = mat.eps_diagonal_on_grid(freq, coord_interp)
-    np.testing.assert_allclose(eps_grid, mat.pole_residue.eps_diagonal_on_grid(freq, coord_interp))
     for i in range(3):
         assert np.allclose(eps_grid[i].shape, [len(f) for f in coord_interp.to_list])
+
+
+def test_anisotropic_custom_medium():
+    """Anisotropic CustomMedium."""
+
+    def make_scalar_data_f():
+        """Makes a scalar field data array with random f."""
+        data = np.random.random((Nx, Ny, Nz, 1)) + 1
+        return ScalarFieldDataArray(
+            data, coords=dict(x=X, y=Y, z=Z, f=[freqs[0] * np.random.random(1)[0]])
+        )
+
+    # same f and different f
+    field_components_list = [
+        {f"eps_{d}{d}": make_scalar_data() for d in "xyz"},
+        {f"eps_{d}{d}": make_scalar_data_f() for d in "xyz"},
+    ]
+    for field_components in field_components_list:
+        eps_dataset = PermittivityDataset(**field_components)
+        mat = CustomMedium(eps_dataset=eps_dataset)
+        verify_custom_medium_methods(mat)
+
+
+def test_custom_isotropic_medium():
+    """Custom isotropic non-dispersive medium."""
+    permittivity = SpatialDataArray(1 + np.random.random((Nx, Ny, Nz)), coords=dict(x=X, y=Y, z=Z))
+    conductivity = SpatialDataArray(np.random.random((Nx, Ny, Nz)), coords=dict(x=X, y=Y, z=Z))
+
+    # some terms in permittivity are complex
+    with pytest.raises(pydantic.ValidationError):
+        epstmp = SpatialDataArray(
+            1 + np.random.random((Nx, Ny, Nz)) + 0.1j, coords=dict(x=X, y=Y, z=Z)
+        )
+        mat = CustomIsotropicMedium(permittivity=epstmp, conductivity=conductivity)
+
+    # some terms in permittivity are < 1
+    with pytest.raises(pydantic.ValidationError):
+        epstmp = SpatialDataArray(np.random.random((Nx, Ny, Nz)), coords=dict(x=X, y=Y, z=Z))
+        mat = CustomIsotropicMedium(permittivity=epstmp, conductivity=conductivity)
+
+    # some terms in conductivity are complex
+    with pytest.raises(pydantic.ValidationError):
+        sigmatmp = SpatialDataArray(
+            np.random.random((Nx, Ny, Nz)) + 0.1j, coords=dict(x=X, y=Y, z=Z)
+        )
+        mat = CustomIsotropicMedium(permittivity=permittivity, conductivity=sigmatmp)
+
+    # some terms in conductivity are negative
+    with pytest.raises(pydantic.ValidationError):
+        sigmatmp = SpatialDataArray(
+            np.random.random((Nx, Ny, Nz)) - 0.5, coords=dict(x=X, y=Y, z=Z)
+        )
+        mat = CustomIsotropicMedium(permittivity=permittivity, conductivity=sigmatmp)
+
+    # inconsistent shape
+    with pytest.raises(pydantic.ValidationError):
+        sigmatmp = SpatialDataArray(
+            np.random.random((Nx - 1, Ny, Nz)), coords=dict(x=X[:-1], y=Y, z=Z)
+        )
+        mat = CustomIsotropicMedium(permittivity=permittivity, conductivity=sigmatmp)
+
+    mat = CustomIsotropicMedium(permittivity=permittivity, conductivity=conductivity)
+    verify_custom_medium_methods(mat)
+
+
+def verify_custom_dispersive_medium_methods(mat):
+    """Verify that the methods in custom dispersive medium is producing expected results."""
+    verify_custom_medium_methods(mat)
+    freq = 1.0
+    for i in range(3):
+        assert mat.eps_dataarray_freq(freq)[i].shape == (Nx, Ny, Nz)
+    np.testing.assert_allclose(mat.eps_model(freq), mat.pole_residue.eps_model(freq))
+    coord_interp = Coords(**{ax: np.linspace(-1, 1, 20 + ind) for ind, ax in enumerate("xyz")})
+    eps_grid = mat.eps_diagonal_on_grid(freq, coord_interp)
+    np.testing.assert_allclose(eps_grid, mat.pole_residue.eps_diagonal_on_grid(freq, coord_interp))
+    # interpolation
+    poles_interp = mat.pole_residue.poles_on_grid(coord_interp)
+    assert len(poles_interp) == len(mat.pole_residue.poles)
+    coord_shape = tuple(len(grid) for grid in coord_interp.to_list)
+    for (a, c) in poles_interp:
+        assert a.shape == coord_shape
+        assert c.shape == coord_shape
 
 
 def test_custom_pole_residue():
@@ -372,6 +453,13 @@ def test_custom_sellmeier():
         mat = CustomSellmeier(coeffs=((b1, c2), (btmp, c2)))
 
     mat = CustomSellmeier(coeffs=((b1, c1), (b2, c2)))
+    verify_custom_dispersive_medium_methods(mat)
+    assert mat.n_cfl == 1
+
+    # from dispersion
+    n = SpatialDataArray(2 + np.random.random((Nx, Ny, Nz)), coords=dict(x=X, y=Y, z=Z))
+    dn_dwvl = SpatialDataArray(-np.random.random((Nx, Ny, Nz)), coords=dict(x=X, y=Y, z=Z))
+    mat = CustomSellmeier.from_dispersion(n=n, dn_dwvl=dn_dwvl, freq=2, interp_method="linear")
     verify_custom_dispersive_medium_methods(mat)
     assert mat.n_cfl == 1
 
@@ -498,3 +586,43 @@ def test_custom_debye():
     mat = CustomDebye(eps_inf=eps_inf, coeffs=((eps1, tau1), (eps2, tau2)))
     verify_custom_dispersive_medium_methods(mat)
     assert mat.n_cfl > 1
+
+
+def test_custom_anisotropic_medium():
+    """Custom anisotropic medium."""
+
+    # xx
+    permittivity = SpatialDataArray(1 + np.random.random((Nx, Ny, Nz)), coords=dict(x=X, y=Y, z=Z))
+    conductivity = SpatialDataArray(np.random.random((Nx, Ny, Nz)), coords=dict(x=X, y=Y, z=Z))
+    mat_xx = CustomMedium(permittivity=permittivity, conductivity=conductivity)
+
+    # yy
+    eps_inf = SpatialDataArray(np.random.random((Nx, Ny, Nz)) + 1, coords=dict(x=X, y=Y, z=Z))
+    eps1 = SpatialDataArray(np.random.random((Nx, Ny, Nz)), coords=dict(x=X, y=Y, z=Z))
+    tau1 = SpatialDataArray(np.random.random((Nx, Ny, Nz)), coords=dict(x=X, y=Y, z=Z))
+    eps2 = SpatialDataArray(np.random.random((Nx, Ny, Nz)), coords=dict(x=X, y=Y, z=Z))
+    tau2 = SpatialDataArray(np.random.random((Nx, Ny, Nz)), coords=dict(x=X, y=Y, z=Z))
+    mat_yy = CustomDebye(eps_inf=eps_inf, coeffs=((eps1, tau1), (eps2, tau2)))
+
+    # zz
+    eps_inf = SpatialDataArray(np.random.random((Nx, Ny, Nz)) + 1, coords=dict(x=X, y=Y, z=Z))
+    f1 = SpatialDataArray(1 + np.random.random((Nx, Ny, Nz)), coords=dict(x=X, y=Y, z=Z))
+    delta1 = SpatialDataArray(np.random.random((Nx, Ny, Nz)), coords=dict(x=X, y=Y, z=Z))
+    f2 = SpatialDataArray(1 + np.random.random((Nx, Ny, Nz)), coords=dict(x=X, y=Y, z=Z))
+    delta2 = SpatialDataArray(np.random.random((Nx, Ny, Nz)), coords=dict(x=X, y=Y, z=Z))
+    mat_zz = CustomDrude(eps_inf=eps_inf, coeffs=((f1, delta1), (f2, delta2)))
+
+    # anisotropic
+    mat = CustomAnisotropicMedium(xx=mat_xx, yy=mat_yy, zz=mat_zz)
+    verify_custom_medium_methods(mat)
+
+    # CustomMedium is anisotropic
+    field_components = {f"eps_{d}{d}": make_scalar_data() for d in "xyz"}
+    eps_dataset = PermittivityDataset(**field_components)
+    mat_tmp = CustomMedium(eps_dataset=eps_dataset)
+    with pytest.raises(pydantic.ValidationError):
+        mat = CustomAnisotropicMedium(xx=mat_tmp, yy=mat_yy, zz=mat_zz)
+    with pytest.raises(pydantic.ValidationError):
+        mat = CustomAnisotropicMedium(xx=mat_xx, yy=mat_tmp, zz=mat_zz)
+    with pytest.raises(pydantic.ValidationError):
+        mat = CustomAnisotropicMedium(xx=mat_xx, yy=mat_yy, zz=mat_tmp)

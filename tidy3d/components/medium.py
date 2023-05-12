@@ -344,7 +344,28 @@ class AbstractCustomMedium(AbstractMedium, ABC):
         "the extrapolated value will take the minimal (maximal) of the supplied data.",
     )
 
+    @cached_property
     @abstractmethod
+    def is_isotropic(self) -> bool:
+        """The medium is isotropic or anisotropic."""
+
+    @abstractmethod
+    def eps_dataarray_freq(
+        self, frequency: float
+    ) -> Tuple[SpatialDataArray, SpatialDataArray, SpatialDataArray]:
+        """Permittivity array at ``frequency``.
+
+        Parameters
+        ----------
+        frequency : float
+            Frequency to evaluate permittivity at (Hz).
+
+        Returns
+        -------
+        Tuple[:class:`.SpatialDataArray`, :class:`.SpatialDataArray`, :class:`.SpatialDataArray`]
+            The permittivity evaluated at ``frequency``.
+        """
+
     def eps_diagonal_on_grid(
         self,
         frequency: float,
@@ -366,6 +387,46 @@ class AbstractCustomMedium(AbstractMedium, ABC):
             The complex-valued permittivity tensor at ``frequency`` interpolated
             at the supplied coordinate.
         """
+        eps_spatial = self.eps_dataarray_freq(frequency)
+        if self.is_isotropic:
+            eps_interp = self._interp(eps_spatial[0], coords, self.interp_method).values
+            return (eps_interp, eps_interp, eps_interp)
+        return tuple(
+            self._interp(eps_comp, coords, self.interp_method).values for eps_comp in eps_spatial
+        )
+
+    @ensure_freq_in_range
+    def eps_model(self, frequency: float) -> complex:
+        """Complex-valued spatially averaged permittivity as a function of frequency."""
+        if self.is_isotropic:
+            return np.mean(self.eps_dataarray_freq(frequency)[0].values)
+        return np.mean(
+            [np.mean(eps_comp.values) for eps_comp in self.eps_dataarray_freq(frequency)]
+        )
+
+    @ensure_freq_in_range
+    def eps_diagonal(self, frequency: float) -> Tuple[complex, complex, complex]:
+        """Main diagonal of the complex-valued permittivity tensor
+        at ``frequency``. Spatially, we take max{||eps||}, so that autoMesh generation
+        works appropriately.
+        """
+        eps_spatial = self.eps_dataarray_freq(frequency)
+        if self.is_isotropic:
+            eps_comp = eps_spatial[0].values.ravel()
+            eps = eps_comp[np.argmax(np.abs(eps_comp))]
+            return (eps, eps, eps)
+        eps_spatial_array = (eps_comp.values.ravel() for eps_comp in eps_spatial)
+        return tuple(eps_comp[np.argmax(np.abs(eps_comp))] for eps_comp in eps_spatial_array)
+
+    @staticmethod
+    def _validate_isreal_dataarray(dataarray: SpatialDataArray) -> bool:
+        """Validate that the dataarray is real"""
+        return np.all(np.isreal(dataarray.values))
+
+    @staticmethod
+    def _validate_isreal_dataarray_tuple(dataarray_tuple: Tuple[SpatialDataArray, ...]) -> bool:
+        """Validate that the dataarray is real"""
+        return np.all([AbstractCustomMedium._validate_isreal_dataarray(f) for f in dataarray_tuple])
 
     @staticmethod
     def _interp(
@@ -484,7 +545,7 @@ class Medium(AbstractMedium):
         0.0,
         ge=0.0,
         title="Conductivity",
-        description="Electric conductivity.  Defined such that the imaginary part of the complex "
+        description="Electric conductivity. Defined such that the imaginary part of the complex "
         "permittivity at angular frequency omega is given by conductivity/omega.",
         units=CONDUCTIVITY,
     )
@@ -529,6 +590,100 @@ class Medium(AbstractMedium):
         return cls(permittivity=eps, conductivity=sigma, **kwargs)
 
 
+class CustomIsotropicMedium(AbstractCustomMedium, Medium):
+    """:class:`.Medium` with user-supplied permittivity distribution.
+    (This class is for internal use in v2.0; it will be renamed as `CustomMedium` in v3.0.)
+
+    Example
+    -------
+    >>> Nx, Ny, Nz = 10, 9, 8
+    >>> X = np.linspace(-1, 1, Nx)
+    >>> Y = np.linspace(-1, 1, Ny)
+    >>> Z = np.linspace(-1, 1, Nz)
+    >>> permittivity= SpatialDataArray(np.ones((Nx, Ny, Nz)), coords=dict(x=X, y=Y, z=Z))
+    >>> conductivity= SpatialDataArray(np.ones((Nx, Ny, Nz)), coords=dict(x=X, y=Y, z=Z))
+    >>> dielectric = CustomIsotropicMedium(permittivity=permittivity, conductivity=conductivity)
+    >>> eps = dielectric.eps_model(200e12)
+    """
+
+    permittivity: SpatialDataArray = pd.Field(
+        ...,
+        title="Permittivity",
+        description="Relative permittivity.",
+        units=PERMITTIVITY,
+    )
+
+    conductivity: SpatialDataArray = pd.Field(
+        ...,
+        title="Conductivity",
+        description="Electric conductivity. Defined such that the imaginary part of the complex "
+        "permittivity at angular frequency omega is given by conductivity/omega.",
+        units=CONDUCTIVITY,
+    )
+
+    @pd.validator("permittivity", always=True)
+    def _eps_inf_greater_no_less_than_one(cls, val):
+        """Assert any eps_inf must be >=1"""
+
+        if not CustomIsotropicMedium._validate_isreal_dataarray(val):
+            raise SetupError("'permittivity' should be real.")
+
+        if np.any(val.values < 1):
+            raise SetupError("'permittivity' should be no less than one.")
+
+        return val
+
+    @pd.validator("conductivity", always=True)
+    def _conductivity_non_negative_correct_shape(cls, val, values):
+        """Assert conductivity>=0"""
+
+        if values.get("permittivity") is None:
+            raise ValidationError("'permittivity' failed validation.")
+
+        if not CustomIsotropicMedium._validate_isreal_dataarray(val):
+            raise SetupError("'conductivity' should be real.")
+
+        if np.any(val.values < 0):
+            raise SetupError("'conductivity' should be non-negative.")
+
+        if values["permittivity"].shape != val.shape:
+            raise SetupError("'permittivity' and 'conductivity' should have the same dimension.")
+        return val
+
+    @cached_property
+    def n_cfl(self):
+        """This property computes the index of refraction related to CFL condition, so that
+        the FDTD with this medium is stable when the time step size that doesn't take
+        material factor into account is multiplied by ``n_cfl``.
+
+        For dispersiveless medium, it equals ``sqrt(permittivity)``.
+        """
+        return np.sqrt(np.min(self.permittivity.values))
+
+    @cached_property
+    def is_isotropic(self):
+        """Whether the medium is isotropic."""
+        return True
+
+    def eps_dataarray_freq(
+        self, frequency: float
+    ) -> Tuple[SpatialDataArray, SpatialDataArray, SpatialDataArray]:
+        """Permittivity array at ``frequency``.
+
+        Parameters
+        ----------
+        frequency : float
+            Frequency to evaluate permittivity at (Hz).
+
+        Returns
+        -------
+        Tuple[:class:`.SpatialDataArray`, :class:`.SpatialDataArray`, :class:`.SpatialDataArray`]
+            The permittivity evaluated at ``frequency``.
+        """
+        eps = Medium.eps_model(self, frequency)
+        return (eps, eps, eps)
+
+
 class CustomMedium(AbstractCustomMedium):
     """:class:`.Medium` with user-supplied permittivity distribution.
 
@@ -538,92 +693,88 @@ class CustomMedium(AbstractCustomMedium):
     >>> X = np.linspace(-1, 1, Nx)
     >>> Y = np.linspace(-1, 1, Ny)
     >>> Z = np.linspace(-1, 1, Nz)
-    >>> freqs = [2e14]
-    >>> data = np.ones((Nx, Ny, Nz, 1))
-    >>> eps_diagonal_data = ScalarFieldDataArray(data, coords=dict(x=X, y=Y, z=Z, f=freqs))
-    >>> eps_components = {f"eps_{d}{d}": eps_diagonal_data for d in "xyz"}
-    >>> eps_dataset = PermittivityDataset(**eps_components)
-    >>> dielectric = CustomMedium(eps_dataset=eps_dataset, name='my_medium')
+    >>> permittivity= SpatialDataArray(np.ones((Nx, Ny, Nz)), coords=dict(x=X, y=Y, z=Z))
+    >>> conductivity= SpatialDataArray(np.ones((Nx, Ny, Nz)), coords=dict(x=X, y=Y, z=Z))
+    >>> dielectric = CustomMedium(permittivity=permittivity, conductivity=conductivity)
     >>> eps = dielectric.eps_model(200e12)
     """
 
-    # permittivity: Optional[SpatialDataArray] = pd.Field(
-    #     None,
-    #     title="Permittivity",
-    #     description="Spatial profile of relative permittivity.",
-    #     units=PERMITTIVITY,
-    # )
+    permittivity: Optional[SpatialDataArray] = pd.Field(
+        None,
+        title="Permittivity",
+        description="Spatial profile of relative permittivity.",
+        units=PERMITTIVITY,
+    )
 
-    # conductivity: Optional[SpatialDataArray] = pd.Field(
-    #     None,
-    #     title="Conductivity",
-    #     description="Spatial profile Electric conductivity.  Defined such "
-    #     "that the imaginary part of the complex permittivity at angular "
-    #     "frequency omega is given by conductivity/omega.",
-    #     units=CONDUCTIVITY,
-    # )
+    conductivity: Optional[SpatialDataArray] = pd.Field(
+        None,
+        title="Conductivity",
+        description="Spatial profile Electric conductivity. Defined such "
+        "that the imaginary part of the complex permittivity at angular "
+        "frequency omega is given by conductivity/omega.",
+        units=CONDUCTIVITY,
+    )
 
-    eps_dataset: PermittivityDataset = pd.Field(
-        ...,
+    eps_dataset: Optional[PermittivityDataset] = pd.Field(
+        None,
         title="Permittivity Dataset",
         description="[To be deprecated] User-supplied dataset containing complex-valued "
         "permittivity as a function of space. Permittivity distribution over the Yee-grid "
         "will be interpolated based on ``interp_method``.",
     )
 
-    # @pd.root_validator(pre=True)
-    # def _deprecation_dataset(cls, values):
-    #     """Raise deprecation warning if dataset supplied and convert to dataset."""
+    @pd.root_validator(pre=True)
+    def _deprecation_dataset(cls, values):
+        """Raise deprecation warning if dataset supplied and convert to dataset."""
 
-    #     val = values.get("eps_dataset")
-    #     if val is None:
-    #         return values
+        eps_dataset = values.get("eps_dataset")
+        permittivity = values.get("permittivity")
+        conductivity = values.get("conductivity")
 
-    #     if val["eps_xx"] == val["eps_yy"] and val["eps_xx"] == val["eps_zz"]:
-    #         log.warning(
-    #             "For spatially varying isotropic medium, the 'eps_dataset' field "
-    #             "is being replaced by 'permittivity' and 'conductivity' in v3.0. "
-    #             "We recommend you change your scripts to be compatible with the new API."
-    #         )
+        # Incomplete custom medium definition.
+        if eps_dataset is None and (permittivity is None or conductivity is None):
+            raise SetupError("Missing spatial profiles of 'permittivity' and 'conductivity'.")
 
-    #     log.warning(
-    #         "For spatially varying anisotropic medium, this class is being replaced "
-    #         "by 'CustomAnisotropicMedium' in v3.0. "
-    #         "We recommend you change your scripts to be compatible with the new API."
-    #     )
+        # Definition racing
+        if eps_dataset is not None and (permittivity is not None or conductivity is not None):
+            raise SetupError(
+                "Please either define 'permittivity' and 'conductivity', or 'eps_dataset', "
+                "but not both simultaneously."
+            )
 
-    #     # replace 'dataset'` with supplied 'dataset'
-    #     dataset = values.pop("eps_dataset")
-    #     values["dataset"] = dataset
-    #     return values
+        if eps_dataset is None:
+            return values
 
-    # @pd.validator("eps_dataset", always=True)
-    # def _deprecation_anisotropic_dataset(cls, val):
-    #     """Raise deprecation warning for this class."""
+        if isinstance(eps_dataset, dict):
+            eps_components = [eps_dataset[f"eps_{dim}{dim}"] for dim in "xyz"]
+        else:
+            eps_components = [eps_dataset.eps_xx, eps_dataset.eps_yy, eps_dataset.eps_zz]
 
-    #     if not (val["eps_xx"] == val["eps_yy"] and val["eps_xx"] == val["eps_zz"]):
-    #         log.warning(
-    #             "For spatially varying anisotropic medium, this class is being replaced "
-    #             "by 'CustomAnisotropicMedium' in v3.0. "
-    #             "We recommend you change your scripts to be compatible with the new API."
-    #         )
-    #     return val
+        is_isotropic = eps_components[0] == eps_components[1] == eps_components[2]
 
-    # @pd.validator("eps_dataset", always=True)
-    # def _deprecation_anisotropic_dataset(cls, val):
-    #     """Raise deprecation warning for this class."""
+        if is_isotropic:
+            # deprecation warning for isotropic custom medium
+            log.warning(
+                "For spatially varying isotropic medium, the 'eps_dataset' field "
+                "is being replaced by 'permittivity' and 'conductivity' in v3.0. "
+                "We recommend you change your scripts to be compatible with the new API."
+            )
+        else:
+            # deprecation warning for anisotropic custom medium
+            log.warning(
+                "For spatially varying anisotropic medium, this class is being replaced "
+                "by 'CustomAnisotropicMedium' in v3.0. "
+                "We recommend you change your scripts to be compatible with the new API."
+            )
 
-    #     if not (val["eps_xx"] == val["eps_yy"] and val["eps_xx"] == val["eps_zz"]):
-    #         log.warning(
-    #             "For spatially varying anisotropic medium, this class is being replaced "
-    #             "by 'CustomAnisotropicMedium' in v3.0. "
-    #             "We recommend you change your scripts to be compatible with the new API."
-    #         )
-    #     return val
+        return values
 
     @pd.validator("eps_dataset", always=True)
-    def _single_frequency(cls, val):
+    def _eps_dataset_single_frequency(cls, val):
         """Assert only one frequency supplied."""
+        if val is None:
+            return val
+
         for name, eps_dataset_component in val.field_components.items():
             freqs = eps_dataset_component.f
             if len(freqs) != 1:
@@ -634,8 +785,10 @@ class CustomMedium(AbstractCustomMedium):
         return val
 
     @pd.validator("eps_dataset", always=True)
-    def _eps_inf_greater_no_less_than_one_sigma_positive(cls, val):
+    def _eps_dataset_eps_inf_greater_no_less_than_one_sigma_positive(cls, val):
         """Assert any eps_inf must be >=1"""
+        if val is None:
+            return val
 
         for comp in ["eps_xx", "eps_yy", "eps_zz"]:
             eps_inf, sigma = CustomMedium.eps_complex_to_eps_sigma(
@@ -653,6 +806,105 @@ class CustomMedium(AbstractCustomMedium):
                 )
         return val
 
+    @pd.validator("permittivity", always=True)
+    def _eps_inf_greater_no_less_than_one(cls, val):
+        """Assert any eps_inf must be >=1"""
+        if val is None:
+            return val
+
+        if not CustomMedium._validate_isreal_dataarray(val):
+            raise SetupError("'permittivity' should be real.")
+
+        if np.any(val.values < 1):
+            raise SetupError("'permittivity' should be no less than one.")
+
+        return val
+
+    @pd.validator("conductivity", always=True)
+    def _conductivity_non_negative_correct_shape(cls, val, values):
+        """Assert conductivity>=0"""
+
+        if val is None:
+            return val
+
+        if values.get("permittivity") is None:
+            raise ValidationError("'permittivity' failed validation.")
+
+        if not CustomMedium._validate_isreal_dataarray(val):
+            raise SetupError("'conductivity' should be real.")
+
+        if np.any(val.values < 0):
+            raise SetupError("'conductivity' should be non-negative.")
+
+        if values["permittivity"].shape != val.shape:
+            raise SetupError("'permittivity' and 'conductivity' should have the same dimension.")
+        return val
+
+    @cached_property
+    def is_isotropic(self) -> bool:
+        """Check if the medium is isotropic or anisotropic."""
+        if self.eps_dataset is None:
+            return True
+        if self.eps_dataset.eps_xx == self.eps_dataset.eps_yy == self.eps_dataset.eps_zz:
+            return True
+        return False
+
+    @cached_property
+    def freqs(self) -> np.ndarray:
+        """float array of frequencies."""
+        return np.array(
+            [
+                self.eps_dataset.eps_xx.coords["f"],
+                self.eps_dataset.eps_yy.coords["f"],
+                self.eps_dataset.eps_zz.coords["f"],
+            ]
+        )
+
+    @cached_property
+    def _medium(self):
+        """Internal representation in the form of
+        either `CustomIsotropicMedium` or `CustomAnisotropicMedium`.
+        """
+        # isotropic
+        if self.eps_dataset is None:
+            return CustomIsotropicMedium(
+                permittivity=self.permittivity,
+                conductivity=self.conductivity,
+                interp_method=self.interp_method,
+            )
+        # isotropic, but with `eps_dataset`
+        if self.is_isotropic:
+            eps_inf, sigma = CustomMedium.eps_complex_to_eps_sigma(
+                np.array(self.eps_dataset.eps_xx.values), self.freqs[0]
+            )
+            coords = self.eps_dataset.eps_xx.coords
+            eps_inf = ScalarFieldDataArray(eps_inf, coords=coords)
+            sigma = ScalarFieldDataArray(sigma, coords=coords)
+            eps_inf = eps_inf.squeeze(dim="f", drop=True)
+            sigma = sigma.squeeze(dim="f", drop=True)
+            return CustomIsotropicMedium(
+                permittivity=eps_inf,
+                conductivity=sigma,
+                interp_method=self.interp_method,
+            )
+        # anisotropic
+        eps_field_components = self.eps_dataset.field_components
+        mat_comp = {}
+        for comp in ["xx", "yy", "zz"]:
+            eps_inf, sigma = CustomMedium.eps_complex_to_eps_sigma(
+                eps_field_components["eps_" + comp], eps_field_components["eps_" + comp].coords["f"]
+            )
+            eps_inf = eps_inf.squeeze(dim="f", drop=True)
+            sigma = sigma.squeeze(dim="f", drop=True)
+            mat_comp.update(
+                {
+                    comp: CustomIsotropicMedium(
+                        permittivity=eps_inf, conductivity=sigma, interp_method=self.interp_method
+                    )
+                }
+            )
+        return CustomAnisotropicMediumInternal(**mat_comp)
+
     @cached_property
     def n_cfl(self):
         """This property computes the index of refraction related to CFL condition, so that
@@ -662,16 +914,12 @@ class CustomMedium(AbstractCustomMedium):
         For dispersiveless custom medium, it equals ``min[sqrt(eps_inf)]``, where ``min``
         is performed over all components and spatial points.
         """
-        eps_array_min = [
-            float(np.min(eps_array.real))
-            for _, eps_array in self.eps_dataset.field_components.items()
-        ]
-        return np.sqrt(min(eps_array_min))
+        return self._medium.n_cfl
 
-    @ensure_freq_in_range
-    def eps_dataset_freq(self, frequency: float) -> PermittivityDataset:
-        """Permittivity dataset at ``frequency``. The dispersion comes
-        from DC conductivity that results in nonzero Im[eps].
+    def eps_dataarray_freq(
+        self, frequency: float
+    ) -> Tuple[SpatialDataArray, SpatialDataArray, SpatialDataArray]:
+        """Permittivity array at ``frequency``. ()
 
         Parameters
         ----------
@@ -680,19 +928,10 @@ class CustomMedium(AbstractCustomMedium):
 
         Returns
         -------
-        :class:`.PermittivityDataset`
+        Tuple[:class:`.SpatialDataArray`, :class:`.SpatialDataArray`, :class:`.SpatialDataArray`]
             The permittivity evaluated at ``frequency``.
         """
-
-        new_field_components = {}
-        for name, eps_dataset_component in self.eps_dataset.field_components.items():
-            freq = eps_dataset_component.coords["f"][0]
-            eps_freq = (
-                eps_dataset_component.real + 1j * eps_dataset_component.imag * freq / frequency
-            )
-            eps_freq = eps_freq.assign_coords({"f": [frequency]})
-            new_field_components.update({name: eps_freq})
-        return PermittivityDataset(**new_field_components)
+        return self._medium.eps_dataarray_freq(frequency)
 
     def eps_diagonal_on_grid(
         self,
@@ -715,16 +954,7 @@ class CustomMedium(AbstractCustomMedium):
             The complex-valued permittivity tensor at ``frequency`` interpolated
             at the supplied coordinate.
         """
-
-        eps_freq = self.eps_dataset_freq(frequency)
-        interp_shape = [len(coord_comp) for coord_comp in coords.to_list]
-        eps_list = [
-            np.array(
-                self._interp(eps_freq.field_components[comp], coords, self.interp_method)
-            ).reshape(interp_shape)
-            for comp in ["eps_xx", "eps_yy", "eps_zz"]
-        ]
-        return tuple(eps_list)
+        return self._medium.eps_diagonal_on_grid(frequency, coords)
 
     def eps_comp_on_grid(
         self,
@@ -769,21 +999,14 @@ class CustomMedium(AbstractCustomMedium):
         at ``frequency``. Spatially, we take max{|eps|}, so that autoMesh generation
         works appropriately.
         """
-        eps_freq = self.eps_dataset_freq(frequency)
-        eps_np_list = [
-            np.array(sclr_fld).ravel() for _, sclr_fld in eps_freq.field_components.items()
-        ]
-        eps_list = [eps_comp[np.argmax(np.abs(eps_comp))] for eps_comp in eps_np_list]
-        return tuple(eps_list)
+        return self._medium.eps_diagonal(frequency)
 
     @ensure_freq_in_range
     def eps_model(self, frequency: float) -> complex:
         """Spatial and polarizaiton average of complex-valued permittivity
         as a function of frequency.
         """
-        eps_freq = self.eps_dataset_freq(frequency)
-        eps_array_avgs = [np.mean(eps_array) for _, eps_array in eps_freq.field_components.items()]
-        return np.mean(eps_array_avgs)
+        return self._medium.eps_model(frequency)
 
     @classmethod
     def from_eps_raw(
@@ -804,9 +1027,10 @@ class CustomMedium(AbstractCustomMedium):
         :class:`.CustomMedium`
             Medium containing the spatially varying permittivity data.
         """
-        field_components = {field_name: eps.copy() for field_name in ("eps_xx", "eps_yy", "eps_zz")}
-        eps_dataset = PermittivityDataset(**field_components)
-        return cls(eps_dataset=eps_dataset, interp_method=interp_method)
+        eps_inf, sigma = CustomMedium.eps_complex_to_eps_sigma(eps, np.array(eps.coords["f"]))
+        eps_inf = eps_inf.squeeze(dim="f", drop=True)
+        sigma = sigma.squeeze(dim="f", drop=True)
+        return cls(permittivity=eps_inf, conductivity=sigma, interp_method=interp_method)
 
     @classmethod
     def from_nk(
@@ -838,10 +1062,10 @@ class CustomMedium(AbstractCustomMedium):
         if n.coords != k.coords:
             raise SetupError("`n` and `k` must have same coordinates.")
 
-        eps_values = Medium.nk_to_eps_complex(n=n.data, k=k.data)
-        coords = {k: np.array(v) for k, v in n.coords.items()}
-        eps_scalar_field_data = ScalarFieldDataArray(eps_values, coords=coords)
-        return cls.from_eps_raw(eps=eps_scalar_field_data, interp_method=interp_method)
+        eps_inf, sigma = CustomMedium.nk_to_eps_sigma(n, k, n.f)
+        eps_inf = eps_inf.squeeze(dim="f", drop=True)
+        sigma = sigma.squeeze(dim="f", drop=True)
+        return cls(permittivity=eps_inf, conductivity=sigma, interp_method=interp_method)
 
     def grids(self, bounds: Bound) -> Dict[str, Grid]:
         """Make a :class:`.Grid` corresponding to the data in each ``eps_ii`` component.
@@ -851,7 +1075,7 @@ class CustomMedium(AbstractCustomMedium):
         pt_mins = dict(zip("xyz", rmin))
         pt_maxs = dict(zip("xyz", rmax))
 
-        def make_grid(scalar_field: ScalarFieldDataArray) -> Grid:
+        def make_grid(scalar_field: Union[ScalarFieldDataArray, SpatialDataArray]) -> Grid:
             """Make a grid for a single dataset."""
 
             def make_bound_coords(coords: np.ndarray, pt_min: float, pt_max: float) -> List[float]:
@@ -946,79 +1170,19 @@ class CustomDispersiveMedium(AbstractCustomMedium, DispersiveMedium, ABC):
         For PoleResidue model, it equals ``sqrt(eps_inf)``
         [https://ieeexplore.ieee.org/document/9082879].
         """
-        return np.sqrt(np.min(self.pole_residue.eps_inf))
+        return np.sqrt(np.min(self.pole_residue.eps_inf.values))
+
+    @cached_property
+    def is_isotropic(self):
+        """Whether the medium is isotropic."""
+        return True
 
     @cached_property
     def pole_residue(self):
         """Representation of Medium as a pole-residue model."""
-        return CustomPoleResidue(**self._pole_residue_dict())
-
-    @abstractmethod
-    def _eps_dataarray_freq(self, frequency: float) -> SpatialDataArray:
-        """Permittivity array at ``frequency``.
-
-        Parameters
-        ----------
-        frequency : float
-            Frequency to evaluate permittivity at (Hz).
-
-        Returns
-        -------
-        :class:`.SpatialDataArray`
-            The permittivity evaluated at ``frequency``.
-        """
-
-    @staticmethod
-    def _validate_isreal_dataarray(dataarray: SpatialDataArray) -> bool:
-        """Validate that the dataarray is real"""
-        return np.all(np.isreal(dataarray.data))
-
-    @staticmethod
-    def _validate_isreal_dataarray_tuple(dataarray_tuple: Tuple[SpatialDataArray, ...]) -> bool:
-        """Validate that the dataarray is real"""
-        return np.all(
-            [CustomDispersiveMedium._validate_isreal_dataarray(f) for f in dataarray_tuple]
-        )
-
-    def eps_diagonal_on_grid(
-        self,
-        frequency: float,
-        coords: Coords,
-    ) -> Tuple[ArrayComplex3D, ArrayComplex3D, ArrayComplex3D]:
-        """Spatial profile of main diagonal of the complex-valued permittivity
-        at ``frequency`` interpolated at the supplied coordinates.
-
-        Parameters
-        ----------
-        frequency : float
-            Frequency to evaluate permittivity at (Hz).
-        coords : :class:`.Coords`
-            The grid point coordinates over which interpolation is performed.
-
-        Returns
-        -------
-        Tuple[ArrayComplex3D, ArrayComplex3D, ArrayComplex3D]
-            The complex-valued permittivity tensor at ``frequency`` interpolated
-            at the supplied coordinate.
-        """
-        eps_spatial = self._eps_dataarray_freq(frequency)
-        eps_interp = self._interp(eps_spatial, coords, self.interp_method).values
-        return (eps_interp, eps_interp, eps_interp)
-
-    @ensure_freq_in_range
-    def eps_model(self, frequency: float) -> complex:
-        """Complex-valued spatially averaged permittivity as a function of frequency."""
-        return np.mean(self._eps_dataarray_freq(frequency).values)
-
-    @ensure_freq_in_range
-    def eps_diagonal(self, frequency: float) -> Tuple[complex, complex, complex]:
-        """Main diagonal of the complex-valued permittivity tensor
-        at ``frequency``. Spatially, we take max{||eps||}, so that autoMesh generation
-        works appropriately.
-        """
-        eps_spatial = self._eps_dataarray_freq(frequency).values.ravel()
-        eps = eps_spatial[np.argmax(np.abs(eps_spatial))]
-        return (eps, eps, eps)
+        pole_info = self._pole_residue_dict()
+        pole_info.update({"interp_method": self.interp_method})
+        return CustomPoleResidue(**pole_info)
 
 
 class PoleResidue(DispersiveMedium):
@@ -1192,7 +1356,9 @@ class CustomPoleResidue(CustomDispersiveMedium, PoleResidue):
                     )
         return val
 
-    def _eps_dataarray_freq(self, frequency: float) -> ArrayComplex3D:
+    def eps_dataarray_freq(
+        self, frequency: float
+    ) -> Tuple[SpatialDataArray, SpatialDataArray, SpatialDataArray]:
         """Permittivity array at ``frequency``.
 
         Parameters
@@ -1202,51 +1368,71 @@ class CustomPoleResidue(CustomDispersiveMedium, PoleResidue):
 
         Returns
         -------
-        ArrayComplex3D
+        Tuple[:class:`.SpatialDataArray`, :class:`.SpatialDataArray`, :class:`.SpatialDataArray`]
             The permittivity evaluated at ``frequency``.
         """
-        return PoleResidue.eps_model(self, frequency)
+        eps = PoleResidue.eps_model(self, frequency)
+        return (eps, eps, eps)
 
-    # @classmethod
-    # def from_medium(cls, medium: CustomMedium) -> "CustomPoleResidue":
-    #     """Convert a :class:`.CustomMedium` to a pole residue model.
+    def poles_on_grid(self, coords: Coords) -> Tuple[Tuple[ArrayComplex3D, ArrayComplex3D], ...]:
+        """Spatial profile of poles interpolated at the supplied coordinates.
 
-    #     Parameters
-    #     ----------
-    #     medium: :class:`.CustomMedium`
-    #         The medium with permittivity and conductivity to convert.
+        Parameters
+        ----------
+        coords : :class:`.Coords`
+            The grid point coordinates over which interpolation is performed.
 
-    #     Returns
-    #     -------
-    #     :class:`.CustomPoleResidue`
-    #         The pole residue equivalent.
-    #     """
-    #     poles = [(0, medium.conductivity / (2 * EPSILON_0))]
-    #     return PoleResidue(
-    #         eps_inf=medium.permittivity, poles=poles, frequency_range=medium.frequency_range
-    #     )
+        Returns
+        -------
+        Tuple[Tuple[ArrayComplex3D, ArrayComplex3D], ...]
+            The poles interpolated at the supplied coordinate.
+        """
 
-    # def to_medium(self) -> Medium:
-    #     """Convert to a :class:`.CustomMedium`.
-    #     Requires the pole residue model to only have a pole at 0 frequency,
-    #     corresponding to a constant conductivity term.
+        def fun_interp(input_data: SpatialDataArray) -> ArrayComplex3D:
+            return self._interp(input_data, coords, self.interp_method).values
 
-    #     Returns
-    #     -------
-    #     :class:`.CustomMedium`
-    #         The non-dispersive equivalent with constant permittivity and conductivity.
-    #     """
-    #     res = 0
-    #     for (a, c) in self.poles:
-    #         if abs(a) > fp_eps:
-    #             raise ValidationError("Cannot convert dispersive 'PoleResidue' to 'Medium'.")
-    #         res += (c + np.conj(c)) / 2
-    #     sigma = res * 2 * EPSILON_0
-    #     return Medium(
-    #         permittivity=self.eps_inf,
-    #         conductivity=np.real(sigma),
-    #         frequency_range=self.frequency_range,
-    #     )
+        return tuple((fun_interp(a), fun_interp(c)) for (a, c) in self.poles)
+
+    @classmethod
+    def from_medium(cls, medium: CustomMedium) -> "CustomPoleResidue":
+        """Convert a :class:`.CustomMedium` to a pole residue model.
+
+        Parameters
+        ----------
+        medium: :class:`.CustomMedium`
+            The medium with permittivity and conductivity to convert.
+
+        Returns
+        -------
+        :class:`.CustomPoleResidue`
+            The pole residue equivalent.
+        """
+        poles = [(0, medium.conductivity / (2 * EPSILON_0))]
+        return CustomPoleResidue(
+            eps_inf=medium.permittivity, poles=poles, frequency_range=medium.frequency_range
+        )
+
+    def to_medium(self) -> CustomMedium:
+        """Convert to a :class:`.CustomMedium`.
+        Requires the pole residue model to only have a pole at 0 frequency,
+        corresponding to a constant conductivity term.
+
+        Returns
+        -------
+        :class:`.CustomMedium`
+            The non-dispersive equivalent with constant permittivity and conductivity.
+        """
+        res = 0
+        for (a, c) in self.poles:
+            if abs(a) > fp_eps:
+                raise ValidationError("Cannot convert dispersive 'PoleResidue' to 'Medium'.")
+            res += (c + np.conj(c)) / 2
+        sigma = res * 2 * EPSILON_0
+        return CustomMedium(
+            permittivity=self.eps_inf,
+            conductivity=np.real(sigma),
+            frequency_range=self.frequency_range,
+        )
 
 
 class Sellmeier(DispersiveMedium):
@@ -1299,6 +1485,15 @@ class Sellmeier(DispersiveMedium):
             poles.append((a, c))
         return dict(eps_inf=1, poles=poles, frequency_range=self.frequency_range, name=self.name)
 
+    @staticmethod
+    def _from_dispersion_to_coeffs(n: float, freq: float, dn_dwvl: float):
+        """Compute Sellmeier coefficients from dispersion."""
+        wvl = C_0 / np.array(freq)
+        nsqm1 = n**2 - 1
+        c_coeff = -(wvl**3) * n * dn_dwvl / (nsqm1 - wvl * n * dn_dwvl)
+        b_coeff = (wvl**2 - c_coeff) / wvl**2 * nsqm1
+        return [(b_coeff, c_coeff)]
+
     @classmethod
     def from_dispersion(cls, n: float, freq: float, dn_dwvl: float = 0, **kwargs):
         """Convert ``n`` and wavelength dispersion ``dn_dwvl`` values at frequency ``freq`` to
@@ -1324,14 +1519,7 @@ class Sellmeier(DispersiveMedium):
             raise ValidationError("Dispersion ``dn_dwvl`` must be smaller than zero.")
         if n < 1:
             raise ValidationError("Refractive index ``n`` cannot be smaller than one.")
-
-        wvl = C_0 / np.array(freq)
-        nsqm1 = n**2 - 1
-        c_coeff = -(wvl**3) * n * dn_dwvl / (nsqm1 - wvl * n * dn_dwvl)
-        b_coeff = (wvl**2 - c_coeff) / wvl**2 * nsqm1
-        coeffs = [(b_coeff, c_coeff)]
-
-        return cls(coeffs=coeffs, **kwargs)
+        return cls(coeffs=cls._from_dispersion_to_coeffs(n, freq, dn_dwvl), **kwargs)
 
 
 class CustomSellmeier(CustomDispersiveMedium, Sellmeier):
@@ -1382,7 +1570,9 @@ class CustomSellmeier(CustomDispersiveMedium, Sellmeier):
         poles_dict.update({"eps_inf": xr.ones_like(self.coeffs[0][0])})
         return poles_dict
 
-    def _eps_dataarray_freq(self, frequency: float) -> ArrayComplex3D:
+    def eps_dataarray_freq(
+        self, frequency: float
+    ) -> Tuple[SpatialDataArray, SpatialDataArray, SpatialDataArray]:
         """Permittivity array at ``frequency``.
 
         Parameters
@@ -1392,10 +1582,42 @@ class CustomSellmeier(CustomDispersiveMedium, Sellmeier):
 
         Returns
         -------
-        ArrayComplex3D
+        Tuple[:class:`.SpatialDataArray`, :class:`.SpatialDataArray`, :class:`.SpatialDataArray`]
             The permittivity evaluated at ``frequency``.
         """
-        return Sellmeier.eps_model(self, frequency)
+        eps = Sellmeier.eps_model(self, frequency)
+        return (eps, eps, eps)
+
+    @classmethod
+    def from_dispersion(
+        cls, n: SpatialDataArray, freq: float, dn_dwvl: SpatialDataArray, **kwargs
+    ):  # pylint:disable=signature-differs
+        """Convert ``n`` and wavelength dispersion ``dn_dwvl`` values at frequency ``freq`` to
+        a single-pole :class:`CustomSellmeier` medium.
+
+        Parameters
+        ----------
+        n : :class:`.SpatialDataArray`
+            Real part of refractive index. Must be larger than or equal to one.
+        dn_dwvl : :class:`.SpatialDataArray`
+            Derivative of the refractive index with wavelength (1/um). Must be negative.
+        freq : float
+            Frequency at which ``n`` and ``dn_dwvl`` are sampled.
+
+        Returns
+        -------
+        :class:`.CustomSellmeier`
+            Single-pole Sellmeier medium with the prvoided refractive index and index dispersion
+            valuesat at the prvoided frequency.
+        """
+
+        if n.shape != dn_dwvl.shape:
+            raise ValidationError("'n' and'dn_dwvl' should have the same dimension.")
+        if np.any(dn_dwvl >= 0):
+            raise ValidationError("Dispersion ``dn_dwvl`` must be smaller than zero.")
+        if np.any(n < 1):
+            raise ValidationError("Refractive index ``n`` cannot be smaller than one.")
+        return cls(coeffs=cls._from_dispersion_to_coeffs(n, freq, dn_dwvl), **kwargs)
 
 
 class Lorentz(DispersiveMedium):
@@ -1479,7 +1701,7 @@ class Lorentz(DispersiveMedium):
     def _all_larger(coeff_a, coeff_b) -> bool:
         """`coeff_a` and `coeff_b` can be either float or SpatialDataArray."""
         if isinstance(coeff_a, SpatialDataArray):
-            return np.all(coeff_a.data > coeff_b.data)
+            return np.all(coeff_a.values > coeff_b.values)
         return coeff_a > coeff_b
 
 
@@ -1500,10 +1722,10 @@ class CustomLorentz(CustomDispersiveMedium, Lorentz):
     >>> y = np.linspace(-1, 1, 6)
     >>> z = np.linspace(-1, 1, 7)
     >>> eps_inf = SpatialDataArray(np.ones((5, 6, 7)), coords=dict(x=x, y=y, z=z))
-    >>> epsilon_i = SpatialDataArray(np.random.random((5, 6, 7)), coords=dict(x=x, y=y, z=z))
-    >>> f_i = SpatialDataArray(1+np.random.random((5, 6, 7)), coords=dict(x=x, y=y, z=z))
-    >>> delta_i = SpatialDataArray(np.random.random((5, 6, 7)), coords=dict(x=x, y=y, z=z))
-    >>> lorentz_medium = CustomLorentz(eps_inf=eps_inf, coeffs=[(epsilon_i,f_i,delta_i),])
+    >>> d_epsilon = SpatialDataArray(np.random.random((5, 6, 7)), coords=dict(x=x, y=y, z=z))
+    >>> f = SpatialDataArray(1+np.random.random((5, 6, 7)), coords=dict(x=x, y=y, z=z))
+    >>> delta = SpatialDataArray(np.random.random((5, 6, 7)), coords=dict(x=x, y=y, z=z))
+    >>> lorentz_medium = CustomLorentz(eps_inf=eps_inf, coeffs=[(d_epsilon,f,delta),])
     >>> eps = lorentz_medium.eps_model(200e12)
     """
 
@@ -1571,7 +1793,9 @@ class CustomLorentz(CustomDispersiveMedium, Lorentz):
                 raise SetupError("We restrict either all 'delta<f' or all 'delta>f'.")
         return val
 
-    def _eps_dataarray_freq(self, frequency: float) -> ArrayComplex3D:
+    def eps_dataarray_freq(
+        self, frequency: float
+    ) -> Tuple[SpatialDataArray, SpatialDataArray, SpatialDataArray]:
         """Permittivity array at ``frequency``.
 
         Parameters
@@ -1581,11 +1805,11 @@ class CustomLorentz(CustomDispersiveMedium, Lorentz):
 
         Returns
         -------
-        ArrayComplex3D
+        Tuple[:class:`.SpatialDataArray`, :class:`.SpatialDataArray`, :class:`.SpatialDataArray`]
             The permittivity evaluated at ``frequency``.
         """
-
-        return Lorentz.eps_model(self, frequency)
+        eps = Lorentz.eps_model(self, frequency)
+        return (eps, eps, eps)
 
 
 class Drude(DispersiveMedium):
@@ -1722,7 +1946,9 @@ class CustomDrude(CustomDispersiveMedium, Drude):
                 raise SetupError("'delta' should be non-negative.")
         return val
 
-    def _eps_dataarray_freq(self, frequency: float) -> ArrayComplex3D:
+    def eps_dataarray_freq(
+        self, frequency: float
+    ) -> Tuple[SpatialDataArray, SpatialDataArray, SpatialDataArray]:
         """Permittivity array at ``frequency``.
 
         Parameters
@@ -1732,11 +1958,11 @@ class CustomDrude(CustomDispersiveMedium, Drude):
 
         Returns
         -------
-        ArrayComplex3D
+        Tuple[:class:`.SpatialDataArray`, :class:`.SpatialDataArray`, :class:`.SpatialDataArray`]
             The permittivity evaluated at ``frequency``.
         """
-
-        return Drude.eps_model(self, frequency)
+        eps = Drude.eps_model(self, frequency)
+        return (eps, eps, eps)
 
 
 class Debye(DispersiveMedium):
@@ -1864,7 +2090,9 @@ class CustomDebye(CustomDispersiveMedium, Debye):
                 raise SetupError("'tau' must be positive.")
         return val
 
-    def _eps_dataarray_freq(self, frequency: float) -> ArrayComplex3D:
+    def eps_dataarray_freq(
+        self, frequency: float
+    ) -> Tuple[SpatialDataArray, SpatialDataArray, SpatialDataArray]:
         """Permittivity array at ``frequency``.
 
         Parameters
@@ -1874,16 +2102,22 @@ class CustomDebye(CustomDispersiveMedium, Debye):
 
         Returns
         -------
-        ArrayComplex3D
+        Tuple[:class:`.SpatialDataArray`, :class:`.SpatialDataArray`, :class:`.SpatialDataArray`]
             The permittivity evaluated at ``frequency``.
         """
-        return Debye.eps_model(self, frequency)
+        eps = Debye.eps_model(self, frequency)
+        return (eps, eps, eps)
 
 
 IsotropicUniformMediumType = Union[Medium, PoleResidue, Sellmeier, Lorentz, Debye, Drude]
 IsotropicCustomMediumType = Union[
-    CustomPoleResidue, CustomSellmeier, CustomLorentz, CustomDebye, CustomDrude
+    CustomPoleResidue,
+    CustomSellmeier,
+    CustomLorentz,
+    CustomDebye,
+    CustomDrude,
 ]
+IsotropicCustomMediumInternalType = Union[IsotropicCustomMediumType, CustomIsotropicMedium]
 IsotropicMediumType = Union[IsotropicCustomMediumType, IsotropicUniformMediumType]
 
 
@@ -1902,21 +2136,21 @@ class AnisotropicMedium(AbstractMedium):
     >>> anisotropic_dielectric = AnisotropicMedium(xx=medium_xx, yy=medium_yy, zz=medium_zz)
     """
 
-    xx: IsotropicMediumType = pd.Field(
+    xx: IsotropicUniformMediumType = pd.Field(
         ...,
         title="XX Component",
         description="Medium describing the xx-component of the diagonal permittivity tensor.",
         discriminator=TYPE_TAG_STR,
     )
 
-    yy: IsotropicMediumType = pd.Field(
+    yy: IsotropicUniformMediumType = pd.Field(
         ...,
         title="YY Component",
         description="Medium describing the yy-component of the diagonal permittivity tensor.",
         discriminator=TYPE_TAG_STR,
     )
 
-    zz: IsotropicMediumType = pd.Field(
+    zz: IsotropicUniformMediumType = pd.Field(
         ...,
         title="ZZ Component",
         description="Medium describing the zz-component of the diagonal permittivity tensor.",
@@ -1998,7 +2232,7 @@ class AnisotropicMedium(AbstractMedium):
         return ax
 
     @property
-    def elements(self) -> Dict[str, IsotropicMediumType]:
+    def elements(self) -> Dict[str, IsotropicUniformMediumType]:
         """The diagonal elements of the medium as a dictionary."""
         return dict(xx=self.xx, yy=self.yy, zz=self.zz)
 
@@ -2204,6 +2438,197 @@ class FullyAnisotropicMedium(AbstractMedium):
         ax.legend()
         return ax
 
+class CustomAnisotropicMedium(AbstractCustomMedium, AnisotropicMedium):
+    """Diagonally anisotropic custom medium.
+
+    Note
+    ----
+    Only diagonal anisotropy is currently supported.
+
+    Example
+    -------
+    >>> Nx, Ny, Nz = 10, 9, 8
+    >>> X = np.linspace(-1, 1, Nx)
+    >>> Y = np.linspace(-1, 1, Ny)
+    >>> Z = np.linspace(-1, 1, Nz)
+    >>> permittivity= SpatialDataArray(np.ones((Nx, Ny, Nz)), coords=dict(x=X, y=Y, z=Z))
+    >>> conductivity= SpatialDataArray(np.ones((Nx, Ny, Nz)), coords=dict(x=X, y=Y, z=Z))
+    >>> medium_xx = CustomMedium(permittivity=permittivity, conductivity=conductivity)
+    >>> medium_yy = CustomMedium(permittivity=permittivity, conductivity=conductivity)
+    >>> d_epsilon = SpatialDataArray(np.random.random((Nx, Ny, Nz)), coords=dict(x=X, y=Y, z=Z))
+    >>> f = SpatialDataArray(1+np.random.random((Nx, Ny, Nz)), coords=dict(x=X, y=Y, z=Z))
+    >>> delta = SpatialDataArray(np.random.random((Nx, Ny, Nz)), coords=dict(x=X, y=Y, z=Z))
+    >>> medium_zz = CustomLorentz(eps_inf=permittivity, coeffs=[(d_epsilon,f,delta),])
+    >>> anisotropic_dielectric = CustomAnisotropicMedium(xx=medium_xx, yy=medium_yy, zz=medium_zz)
+    """
+
+    xx: Union[IsotropicCustomMediumType, CustomMedium] = pd.Field(
+        ...,
+        title="XX Component",
+        description="Medium describing the xx-component of the diagonal permittivity tensor.",
+        discriminator=TYPE_TAG_STR,
+    )
+
+    yy: Union[IsotropicCustomMediumType, CustomMedium] = pd.Field(
+        ...,
+        title="YY Component",
+        description="Medium describing the yy-component of the diagonal permittivity tensor.",
+        discriminator=TYPE_TAG_STR,
+    )
+
+    zz: Union[IsotropicCustomMediumType, CustomMedium] = pd.Field(
+        ...,
+        title="ZZ Component",
+        description="Medium describing the zz-component of the diagonal permittivity tensor.",
+        discriminator=TYPE_TAG_STR,
+    )
+
+    @pd.validator("xx", always=True)
+    def _isotropic_xx(cls, val):
+        """If it's `CustomMedium`, make sure it's isotropic."""
+        if isinstance(val, CustomMedium) and not val.is_isotropic:
+            raise SetupError("The xx-component medium type is not isotropic.")
+        return val
+
+    @pd.validator("yy", always=True)
+    def _isotropic_yy(cls, val):
+        """If it's `CustomMedium`, make sure it's isotropic."""
+        if isinstance(val, CustomMedium) and not val.is_isotropic:
+            raise SetupError("The yy-component medium type is not isotropic.")
+        return val
+
+    @pd.validator("zz", always=True)
+    def _isotropic_zz(cls, val):
+        """If it's `CustomMedium`, make sure it's isotropic."""
+        if isinstance(val, CustomMedium) and not val.is_isotropic:
+            raise SetupError("The zz-component medium type is not isotropic.")
+        return val
+        
+    @cached_property
+    def n_cfl(self):
+        """This property computes the index of refraction related to CFL condition, so that
+        the FDTD with this medium is stable when the time step size that doesn't take
+        material factor into account is multiplied by ``n_cfl``.
+
+        For this medium, it takes the minimal of ``n_clf`` in all components.
+        """
+        return min((mat_component.n_cfl for mat_component in self.components.values()))
+
+    @cached_property
+    def is_isotropic(self):
+        """Whether the medium is isotropic."""
+        return False
+
+    def eps_dataarray_freq(
+        self, frequency: float
+    ) -> Tuple[SpatialDataArray, SpatialDataArray, SpatialDataArray]:
+        """Permittivity array at ``frequency``.
+
+        Parameters
+        ----------
+        frequency : float
+            Frequency to evaluate permittivity at (Hz).
+
+        Returns
+        -------
+        Tuple[:class:`.SpatialDataArray`, :class:`.SpatialDataArray`, :class:`.SpatialDataArray`]
+            The permittivity evaluated at ``frequency``.
+        """
+        return tuple(
+            mat_component.eps_dataarray_freq(frequency)[ind]
+            for ind, mat_component in enumerate(self.components.values())
+        )
+
+    def eps_diagonal_on_grid(
+        self,
+        frequency: float,
+        coords: Coords,
+    ) -> Tuple[ArrayComplex3D, ArrayComplex3D, ArrayComplex3D]:
+        """Spatial profile of main diagonal of the complex-valued permittivity
+        at ``frequency`` interpolated at the supplied coordinates.
+
+        Parameters
+        ----------
+        frequency : float
+            Frequency to evaluate permittivity at (Hz).
+        coords : :class:`.Coords`
+            The grid point coordinates over which interpolation is performed.
+
+        Returns
+        -------
+        Tuple[ArrayComplex3D, ArrayComplex3D, ArrayComplex3D]
+            The complex-valued permittivity tensor at ``frequency`` interpolated
+            at the supplied coordinate.
+        """
+        eps_spatial = self.eps_dataarray_freq(frequency)
+        return tuple(
+            self._interp(eps_spatial_comp, coords, self.interp_method).values
+            for eps_spatial_comp in eps_spatial
+        )
+
+    @ensure_freq_in_range
+    def eps_model(self, frequency: float) -> complex:
+        """Complex-valued spatially averaged permittivity as a function of frequency."""
+        return np.mean(
+            [np.mean(eps_comp.values) for eps_comp in self.eps_dataarray_freq(frequency)]
+        )
+
+    @ensure_freq_in_range
+    def eps_diagonal(self, frequency: float) -> Tuple[complex, complex, complex]:
+        """Main diagonal of the complex-valued permittivity tensor
+        at ``frequency``. Spatially, we take max{||eps||}, so that autoMesh generation
+        works appropriately.
+        """
+        eps_freq = [eps_comp.values.ravel() for eps_comp in self.eps_dataarray_freq(frequency)]
+        return [eps_comp[np.argmax(np.abs(eps_comp))] for eps_comp in eps_freq]
+
+
+class CustomAnisotropicMediumInternal(CustomAnisotropicMedium):
+    """Diagonally anisotropic custom medium.
+
+    Note
+    ----
+    Only diagonal anisotropy is currently supported.
+
+    Example
+    -------
+    >>> Nx, Ny, Nz = 10, 9, 8
+    >>> X = np.linspace(-1, 1, Nx)
+    >>> Y = np.linspace(-1, 1, Ny)
+    >>> Z = np.linspace(-1, 1, Nz)
+    >>> permittivity= SpatialDataArray(np.ones((Nx, Ny, Nz)), coords=dict(x=X, y=Y, z=Z))
+    >>> conductivity= SpatialDataArray(np.ones((Nx, Ny, Nz)), coords=dict(x=X, y=Y, z=Z))
+    >>> medium_xx = CustomMedium(permittivity=permittivity, conductivity=conductivity)
+    >>> medium_yy = CustomMedium(permittivity=permittivity, conductivity=conductivity)
+    >>> d_epsilon = SpatialDataArray(np.random.random((Nx, Ny, Nz)), coords=dict(x=X, y=Y, z=Z))
+    >>> f = SpatialDataArray(1+np.random.random((Nx, Ny, Nz)), coords=dict(x=X, y=Y, z=Z))
+    >>> delta = SpatialDataArray(np.random.random((Nx, Ny, Nz)), coords=dict(x=X, y=Y, z=Z))
+    >>> medium_zz = CustomLorentz(eps_inf=permittivity, coeffs=[(d_epsilon,f,delta),])
+    >>> anisotropic_dielectric = CustomAnisotropicMedium(xx=medium_xx, yy=medium_yy, zz=medium_zz)
+    """
+
+    xx: Union[IsotropicCustomMediumInternalType, CustomMedium] = pd.Field(
+        ...,
+        title="XX Component",
+        description="Medium describing the xx-component of the diagonal permittivity tensor.",
+        discriminator=TYPE_TAG_STR,
+    )
+
+    yy: Union[IsotropicCustomMediumInternalType, CustomMedium] = pd.Field(
+        ...,
+        title="YY Component",
+        description="Medium describing the yy-component of the diagonal permittivity tensor.",
+        discriminator=TYPE_TAG_STR,
+    )
+
+    zz: Union[IsotropicCustomMediumInternalType, CustomMedium] = pd.Field(
+        ...,
+        title="ZZ Component",
+        description="Medium describing the zz-component of the diagonal permittivity tensor.",
+        discriminator=TYPE_TAG_STR,
+    )
+>>>>>>> a09163e6 (Revamp custom non-dispersive medium)
+
 
 # types of mediums that can be used in Simulation and Structures
 
@@ -2370,7 +2795,6 @@ class Medium2D(AbstractMedium):
             The 3D equivalent of this 2D medium.
         """
         media = list(self.elements.values())
-        print(media)
         media_weighted = [self._weighted_avg([medium], [1 / thickness]) for medium in media]
         media_3d = Geometry.unpop_axis(ax_coord=Medium(), plane_coords=media_weighted, axis=axis)
         media_3d_kwargs = {dim + dim: medium for dim, medium in zip("xyz", media_3d)}
