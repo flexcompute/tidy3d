@@ -64,6 +64,7 @@ Visualization
 
     notebooks/VizSimulation
     notebooks/VizData
+    notebooks/AnimationTutorial
 
 Custom Components
 ~~~~~~~~~~~~~~~~~
