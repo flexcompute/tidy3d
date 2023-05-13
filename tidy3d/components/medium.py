@@ -379,7 +379,7 @@ class AbstractCustomMedium(AbstractMedium, ABC):
     @staticmethod
     def _validate_isreal_dataarray(dataarray: SpatialDataArray) -> bool:
         """Validate that the dataarray is real"""
-        return np.all(np.isreal(dataarray.data))
+        return np.all(np.isreal(dataarray.values))
 
     @staticmethod
     def _validate_isreal_dataarray_tuple(dataarray_tuple: Tuple[SpatialDataArray, ...]) -> bool:
@@ -586,7 +586,7 @@ class CustomIsotropicMedium(AbstractCustomMedium, Medium):
         if not CustomIsotropicMedium._validate_isreal_dataarray(val):
             raise SetupError("'permittivity' should be real.")
 
-        if np.any(val.data < 1):
+        if np.any(val.values < 1):
             raise SetupError("'permittivity' should be no less than one.")
 
         return val
@@ -601,7 +601,7 @@ class CustomIsotropicMedium(AbstractCustomMedium, Medium):
         if not CustomIsotropicMedium._validate_isreal_dataarray(val):
             raise SetupError("'conductivity' should be real.")
 
-        if np.any(val.data < 0):
+        if np.any(val.values < 0):
             raise SetupError("'conductivity' should be non-negative.")
 
         if values["permittivity"].shape != val.shape:
@@ -616,7 +616,7 @@ class CustomIsotropicMedium(AbstractCustomMedium, Medium):
 
         For dispersiveless medium, it equals ``sqrt(permittivity)``.
         """
-        return np.sqrt(np.min(self.permittivity))
+        return np.sqrt(np.min(self.permittivity.values))
 
     def eps_dataarray_freq(self, frequency: float) -> SpatialDataArray:
         """Permittivity array at ``frequency``.
@@ -749,16 +749,71 @@ class CustomMedium(AbstractCustomMedium):
                 )
         return val
 
+    @pd.validator("permittivity", always=True)
+    def _eps_inf_greater_no_less_than_one(cls, val):
+        """Assert any eps_inf must be >=1"""
+        if val is None:
+            return val
+
+        if not CustomMedium._validate_isreal_dataarray(val):
+            raise SetupError("'permittivity' should be real.")
+
+        if np.any(val.values < 1):
+            raise SetupError("'permittivity' should be no less than one.")
+
+        return val
+
+    @pd.validator("conductivity", always=True)
+    def _conductivity_non_negative_correct_shape(cls, val, values):
+        """Assert conductivity>=0"""
+
+        if val is None:
+            return val
+
+        if values.get("permittivity") is None:
+            raise ValidationError("'permittivity' failed validation.")
+
+        if not CustomMedium._validate_isreal_dataarray(val):
+            raise SetupError("'conductivity' should be real.")
+
+        if np.any(val.values < 0):
+            raise SetupError("'conductivity' should be non-negative.")
+
+        if values["permittivity"].shape != val.shape:
+            raise SetupError("'permittivity' and 'conductivity' should have the same dimension.")
+        return val
+
+    @cached_property
+    def is_isotropic(self) -> bool:
+        """Check if the medium is isotropic or anisotropic."""
+        if self.eps_dataset is None:
+            return True
+        if (
+            self.eps_dataset.eps_xx == self.eps_dataset.eps_yy
+            and self.eps_dataset.eps_xx == self.eps_dataset.eps_zz
+        ):
+            return True
+        return False
+
     @cached_property
     def _medium(self):
         """Internal representation in the form of
         either `CustomIsotropicMedium` or `CustomAnisotropicMedium`.
         """
+        # isotropic
         if self.eps_dataset is None:
             return CustomIsotropicMedium(
                 permittivity=self.permittivity, conductivity=self.conductivity
             )
-
+        # isotropic, but with `eps_dataset`
+        if self.is_isotropic:
+            eps_inf, sigma = CustomMedium.eps_complex_to_eps_sigma(
+                self.eps_dataset.eps_xx, self.eps_dataset.eps_xx.f
+            )
+            eps_inf = eps_inf.squeeze(dim="f", drop=True)
+            sigma = sigma.squeeze(dim="f", drop=True)
+            return CustomIsotropicMedium(permittivity=eps_inf, conductivity=sigma)
+        # anisotropic
         eps_field_components = self.eps_dataset.field_components
         mat_comp = {}
         for comp in ["xx", "yy", "zz"]:
@@ -768,7 +823,7 @@ class CustomMedium(AbstractCustomMedium):
             eps_inf = eps_inf.squeeze(dim="f", drop=True)
             sigma = sigma.squeeze(dim="f", drop=True)
             mat_comp.update({comp: CustomIsotropicMedium(permittivity=eps_inf, conductivity=sigma)})
-        return CustomAnisotropicMedium(**mat_comp)
+        return CustomAnisotropicMediumInternal(**mat_comp)
 
     @cached_property
     def n_cfl(self):
@@ -781,7 +836,7 @@ class CustomMedium(AbstractCustomMedium):
         """
         return self._medium.n_cfl
 
-    def eps_dataarray_freq(self, frequency: float) -> PermittivityDataset:
+    def eps_dataarray_freq(self, frequency: float):
         """Permittivity array at ``frequency``. ()
 
         Parameters
@@ -853,9 +908,10 @@ class CustomMedium(AbstractCustomMedium):
         :class:`.CustomMedium`
             Medium containing the spatially varying permittivity data.
         """
-        field_components = {field_name: eps.copy() for field_name in ("eps_xx", "eps_yy", "eps_zz")}
-        eps_dataset = PermittivityDataset(**field_components)
-        return cls(eps_dataset=eps_dataset, interp_method=interp_method)
+        eps_inf, sigma = CustomMedium.eps_complex_to_eps_sigma(eps, eps.f)
+        eps_inf = eps_inf.squeeze(dim="f", drop=True)
+        sigma = sigma.squeeze(dim="f", drop=True)
+        return cls(permittivity=eps_inf, conductivity=sigma, interp_method=interp_method)
 
     @classmethod
     def from_nk(
@@ -887,10 +943,10 @@ class CustomMedium(AbstractCustomMedium):
         if n.coords != k.coords:
             raise SetupError("`n` and `k` must have same coordinates.")
 
-        eps_values = Medium.nk_to_eps_complex(n=n.data, k=k.data)
-        coords = {k: np.array(v) for k, v in n.coords.items()}
-        eps_scalar_field_data = ScalarFieldDataArray(eps_values, coords=coords)
-        return cls.from_eps_raw(eps=eps_scalar_field_data, interp_method=interp_method)
+        eps_inf, sigma = CustomMedium.nk_to_eps_sigma(n, k, n.f)
+        eps_inf = eps_inf.squeeze(dim="f", drop=True)
+        sigma = sigma.squeeze(dim="f", drop=True)
+        return cls(permittivity=eps_inf, conductivity=sigma, interp_method=interp_method)
 
     def grids(self, bounds: Bound) -> Dict[str, Grid]:
         """Make a :class:`.Grid` corresponding to the data in each ``eps_ii`` component.
@@ -900,7 +956,7 @@ class CustomMedium(AbstractCustomMedium):
         pt_mins = dict(zip("xyz", rmin))
         pt_maxs = dict(zip("xyz", rmax))
 
-        def make_grid(scalar_field: ScalarFieldDataArray) -> Grid:
+        def make_grid(scalar_field: Union[ScalarFieldDataArray, SpatialDataArray]) -> Grid:
             """Make a grid for a single dataset."""
 
             def make_bound_coords(coords: np.ndarray, pt_min: float, pt_max: float) -> List[float]:
@@ -1189,46 +1245,46 @@ class CustomPoleResidue(CustomDispersiveMedium, PoleResidue):
         """
         return PoleResidue.eps_model(self, frequency)
 
-    # @classmethod
-    # def from_medium(cls, medium: CustomMedium) -> "CustomPoleResidue":
-    #     """Convert a :class:`.CustomMedium` to a pole residue model.
+    @classmethod
+    def from_medium(cls, medium: CustomMedium) -> "CustomPoleResidue":
+        """Convert a :class:`.CustomMedium` to a pole residue model.
 
-    #     Parameters
-    #     ----------
-    #     medium: :class:`.CustomMedium`
-    #         The medium with permittivity and conductivity to convert.
+        Parameters
+        ----------
+        medium: :class:`.CustomMedium`
+            The medium with permittivity and conductivity to convert.
 
-    #     Returns
-    #     -------
-    #     :class:`.CustomPoleResidue`
-    #         The pole residue equivalent.
-    #     """
-    #     poles = [(0, medium.conductivity / (2 * EPSILON_0))]
-    #     return PoleResidue(
-    #         eps_inf=medium.permittivity, poles=poles, frequency_range=medium.frequency_range
-    #     )
+        Returns
+        -------
+        :class:`.CustomPoleResidue`
+            The pole residue equivalent.
+        """
+        poles = [(0, medium.conductivity / (2 * EPSILON_0))]
+        return CustomPoleResidue(
+            eps_inf=medium.permittivity, poles=poles, frequency_range=medium.frequency_range
+        )
 
-    # def to_medium(self) -> Medium:
-    #     """Convert to a :class:`.CustomMedium`.
-    #     Requires the pole residue model to only have a pole at 0 frequency,
-    #     corresponding to a constant conductivity term.
+    def to_medium(self) -> CustomMedium:
+        """Convert to a :class:`.CustomMedium`.
+        Requires the pole residue model to only have a pole at 0 frequency,
+        corresponding to a constant conductivity term.
 
-    #     Returns
-    #     -------
-    #     :class:`.CustomMedium`
-    #         The non-dispersive equivalent with constant permittivity and conductivity.
-    #     """
-    #     res = 0
-    #     for (a, c) in self.poles:
-    #         if abs(a) > fp_eps:
-    #             raise ValidationError("Cannot convert dispersive 'PoleResidue' to 'Medium'.")
-    #         res += (c + np.conj(c)) / 2
-    #     sigma = res * 2 * EPSILON_0
-    #     return Medium(
-    #         permittivity=self.eps_inf,
-    #         conductivity=np.real(sigma),
-    #         frequency_range=self.frequency_range,
-    #     )
+        Returns
+        -------
+        :class:`.CustomMedium`
+            The non-dispersive equivalent with constant permittivity and conductivity.
+        """
+        res = 0
+        for (a, c) in self.poles:
+            if abs(a) > fp_eps:
+                raise ValidationError("Cannot convert dispersive 'PoleResidue' to 'Medium'.")
+            res += (c + np.conj(c)) / 2
+        sigma = res * 2 * EPSILON_0
+        return CustomMedium(
+            permittivity=self.eps_inf,
+            conductivity=np.real(sigma),
+            frequency_range=self.frequency_range,
+        )
 
 
 class Sellmeier(DispersiveMedium):
@@ -1461,7 +1517,7 @@ class Lorentz(DispersiveMedium):
     def _all_larger(coeff_a, coeff_b) -> bool:
         """`coeff_a` and `coeff_b` can be either float or SpatialDataArray."""
         if isinstance(coeff_a, SpatialDataArray):
-            return np.all(coeff_a.data > coeff_b.data)
+            return np.all(coeff_a.values > coeff_b.values)
         return coeff_a > coeff_b
 
 
@@ -1864,7 +1920,6 @@ class CustomDebye(CustomDispersiveMedium, Debye):
 
 IsotropicUniformMediumType = Union[Medium, PoleResidue, Sellmeier, Lorentz, Debye, Drude]
 IsotropicCustomMediumType = Union[
-    CustomIsotropicMedium,
     CustomPoleResidue,
     CustomSellmeier,
     CustomLorentz,
@@ -1981,8 +2036,8 @@ class CustomAnisotropicMedium(AbstractCustomMedium, AnisotropicMedium):
     >>> Z = np.linspace(-1, 1, Nz)
     >>> permittivity= SpatialDataArray(np.ones((Nx, Ny, Nz)), coords=dict(x=X, y=Y, z=Z))
     >>> conductivity= SpatialDataArray(np.ones((Nx, Ny, Nz)), coords=dict(x=X, y=Y, z=Z))
-    >>> medium_xx = CustomIsotropicMedium(permittivity=permittivity, conductivity=conductivity)
-    >>> medium_yy = CustomIsotropicMedium(permittivity=permittivity, conductivity=conductivity)
+    >>> medium_xx = CustomMedium(permittivity=permittivity, conductivity=conductivity)
+    >>> medium_yy = CustomMedium(permittivity=permittivity, conductivity=conductivity)
     >>> d_epsilon = SpatialDataArray(np.random.random((Nx, Ny, Nz)), coords=dict(x=X, y=Y, z=Z))
     >>> f = SpatialDataArray(1+np.random.random((Nx, Ny, Nz)), coords=dict(x=X, y=Y, z=Z))
     >>> delta = SpatialDataArray(np.random.random((Nx, Ny, Nz)), coords=dict(x=X, y=Y, z=Z))
@@ -1990,26 +2045,47 @@ class CustomAnisotropicMedium(AbstractCustomMedium, AnisotropicMedium):
     >>> anisotropic_dielectric = CustomAnisotropicMedium(xx=medium_xx, yy=medium_yy, zz=medium_zz)
     """
 
-    xx: IsotropicCustomMediumType = pd.Field(
+    xx: Union[IsotropicCustomMediumType, CustomMedium] = pd.Field(
         ...,
         title="XX Component",
         description="Medium describing the xx-component of the diagonal permittivity tensor.",
         discriminator=TYPE_TAG_STR,
     )
 
-    yy: IsotropicCustomMediumType = pd.Field(
+    yy: Union[IsotropicCustomMediumType, CustomMedium] = pd.Field(
         ...,
         title="YY Component",
         description="Medium describing the yy-component of the diagonal permittivity tensor.",
         discriminator=TYPE_TAG_STR,
     )
 
-    zz: IsotropicCustomMediumType = pd.Field(
+    zz: Union[IsotropicCustomMediumType, CustomMedium] = pd.Field(
         ...,
         title="ZZ Component",
         description="Medium describing the zz-component of the diagonal permittivity tensor.",
         discriminator=TYPE_TAG_STR,
     )
+
+    @pd.validator("xx", always=True)
+    def _isotropic_xx(cls, val):
+        """If it's `CustomMedium`, make sure it's isotropic."""
+        if isinstance(val, CustomMedium) and not val.is_isotropic:
+            raise SetupError("The xx-component medium type is not isotropic.")
+        return val
+
+    @pd.validator("yy", always=True)
+    def _isotropic_yy(cls, val):
+        """If it's `CustomMedium`, make sure it's isotropic."""
+        if isinstance(val, CustomMedium) and not val.is_isotropic:
+            raise SetupError("The yy-component medium type is not isotropic.")
+        return val
+
+    @pd.validator("zz", always=True)
+    def _isotropic_zz(cls, val):
+        """If it's `CustomMedium`, make sure it's isotropic."""
+        if isinstance(val, CustomMedium) and not val.is_isotropic:
+            raise SetupError("The zz-component medium type is not isotropic.")
+        return val
 
     @cached_property
     def n_cfl(self):
@@ -2083,6 +2159,52 @@ class CustomAnisotropicMedium(AbstractCustomMedium, AnisotropicMedium):
         """
         eps_freq = [eps_comp.values.ravel() for eps_comp in self.eps_dataarray_freq(frequency)]
         return [eps_comp[np.argmax(np.abs(eps_comp))] for eps_comp in eps_freq]
+
+
+class CustomAnisotropicMediumInternal(CustomAnisotropicMedium):
+    """Diagonally anisotropic custom medium.
+
+    Note
+    ----
+    Only diagonal anisotropy is currently supported.
+
+    Example
+    -------
+    >>> Nx, Ny, Nz = 10, 9, 8
+    >>> X = np.linspace(-1, 1, Nx)
+    >>> Y = np.linspace(-1, 1, Ny)
+    >>> Z = np.linspace(-1, 1, Nz)
+    >>> permittivity= SpatialDataArray(np.ones((Nx, Ny, Nz)), coords=dict(x=X, y=Y, z=Z))
+    >>> conductivity= SpatialDataArray(np.ones((Nx, Ny, Nz)), coords=dict(x=X, y=Y, z=Z))
+    >>> medium_xx = CustomMedium(permittivity=permittivity, conductivity=conductivity)
+    >>> medium_yy = CustomMedium(permittivity=permittivity, conductivity=conductivity)
+    >>> d_epsilon = SpatialDataArray(np.random.random((Nx, Ny, Nz)), coords=dict(x=X, y=Y, z=Z))
+    >>> f = SpatialDataArray(1+np.random.random((Nx, Ny, Nz)), coords=dict(x=X, y=Y, z=Z))
+    >>> delta = SpatialDataArray(np.random.random((Nx, Ny, Nz)), coords=dict(x=X, y=Y, z=Z))
+    >>> medium_zz = CustomLorentz(eps_inf=permittivity, coeffs=[(d_epsilon,f,delta),])
+    >>> anisotropic_dielectric = CustomAnisotropicMedium(xx=medium_xx, yy=medium_yy, zz=medium_zz)
+    """
+
+    xx: Union[IsotropicCustomMediumType, CustomMedium, CustomIsotropicMedium] = pd.Field(
+        ...,
+        title="XX Component",
+        description="Medium describing the xx-component of the diagonal permittivity tensor.",
+        discriminator=TYPE_TAG_STR,
+    )
+
+    yy: Union[IsotropicCustomMediumType, CustomMedium, CustomIsotropicMedium] = pd.Field(
+        ...,
+        title="YY Component",
+        description="Medium describing the yy-component of the diagonal permittivity tensor.",
+        discriminator=TYPE_TAG_STR,
+    )
+
+    zz: Union[IsotropicCustomMediumType, CustomMedium, CustomIsotropicMedium] = pd.Field(
+        ...,
+        title="ZZ Component",
+        description="Medium describing the zz-component of the diagonal permittivity tensor.",
+        discriminator=TYPE_TAG_STR,
+    )
 
 
 # types of mediums that can be used in Simulation and Structures
