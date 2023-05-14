@@ -19,7 +19,7 @@ from .types import Ax, Shapely, FreqBound, Axis, annotate_type, Symmetry
 from .grid.grid import Coords1D, Grid, Coords
 from .grid.grid_spec import GridSpec, UniformGrid, AutoGrid
 from .medium import Medium, MediumType, AbstractMedium, PECMedium
-from .medium import CustomMedium, Medium2D, MediumType3D
+from .medium import Medium2D, MediumType3D, AbstractCustomMedium
 from .boundary import BoundarySpec, BlochBoundary, PECBoundary, PMCBoundary, Periodic
 from .boundary import PML, StablePML, Absorber, AbsorberSpec
 from .structure import Structure
@@ -962,11 +962,12 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
                     )
 
                     if any(
-                        isinstance(struct.medium, CustomMedium) for struct in intersecting_structs
+                        isinstance(struct.medium, AbstractCustomMedium)
+                        for struct in intersecting_structs
                     ):
                         raise SetupError(
                             f"The surfaces of TFSF source '{source.name}' must not intersect "
-                            "any structures containing a 'CustomMedium'."
+                            "any structures containing a custom medium."
                         )
 
                     # if no structures intersect, just add a phantom associated with the simulation
@@ -1418,7 +1419,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         if alpha <= 0:
             return ax
 
-        if alpha < 1 and not isinstance(self.medium, CustomMedium):
+        if alpha < 1 and not isinstance(self.medium, AbstractCustomMedium):
             axis, position = Box.parse_xyz_kwargs(x=x, y=y, z=z)
             center = Box.unpop_axis(position, (0, 0), axis=axis)
             size = Box.unpop_axis(0, (inf, inf), axis=axis)
@@ -1431,10 +1432,10 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         eps_min, eps_max = self.eps_bounds(freq=freq)
         for (medium, shape) in medium_shapes:
             # if the background medium is custom medium, it needs to be rendered separately
-            if medium == self.medium and alpha < 1 and not isinstance(medium, CustomMedium):
+            if medium == self.medium and alpha < 1 and not isinstance(medium, AbstractCustomMedium):
                 continue
             # no need to add patches for custom medium
-            if not isinstance(medium, CustomMedium):
+            if not isinstance(medium, AbstractCustomMedium):
                 ax = self._plot_shape_structure_eps(
                     freq=freq,
                     alpha=alpha,
@@ -1471,17 +1472,26 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         eps_list = [
             medium.eps_model(freq).real
             for medium in medium_list
-            if not isinstance(medium, CustomMedium)
+            if not isinstance(medium, AbstractCustomMedium)
         ]
         eps_min = min(1, min(eps_list))
         eps_max = max(1, max(eps_list))
         # custom medium, the min and max in the supplied dataset over all components and
         # spatial locations.
-        for mat in [medium for medium in medium_list if isinstance(medium, CustomMedium)]:
-            eps_dataset_at_freq = mat.eps_dataset_freq(freq)
-            for eps_component in eps_dataset_at_freq.field_components.values():
-                eps_min = min(eps_min, np.min(eps_component.real.values.ravel()))
-                eps_max = max(eps_max, np.max(eps_component.real.values.ravel()))
+        for mat in [medium for medium in medium_list if isinstance(medium, AbstractCustomMedium)]:
+            eps_dataarray = mat.eps_dataarray_freq(freq)
+            if isinstance(eps_dataarray, tuple):
+                eps_min = min(
+                    eps_min,
+                    min((np.min(eps_comp.real.values.ravel()) for eps_comp in eps_dataarray)),
+                )
+                eps_max = max(
+                    eps_max,
+                    max((np.max(eps_comp.real.values.ravel()) for eps_comp in eps_dataarray)),
+                )
+            else:
+                eps_min = min(eps_min, np.min(eps_dataarray.real.values.ravel()))
+                eps_max = max(eps_max, np.max(eps_dataarray.real.values.ravel()))
         return eps_min, eps_max
 
     def _pcolormesh_shape_custom_medium_structure_eps(
@@ -2591,7 +2601,9 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         datasets_source = [
             src.field_dataset for src in self.sources if isinstance(src, CustomFieldSource)
         ]
-        datasets_medium = [mat.eps_dataset for mat in self.mediums if isinstance(mat, CustomMedium)]
+        datasets_medium = [
+            mat.eps_dataset for mat in self.mediums if isinstance(mat, AbstractCustomMedium)
+        ]
         datasets_geometry = [
             struct.geometry.mesh_dataset
             for struct in self.structures

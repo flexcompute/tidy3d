@@ -1926,6 +1926,7 @@ IsotropicCustomMediumType = Union[
     CustomDebye,
     CustomDrude,
 ]
+IsotropicCustomMediumInternalType = Union[IsotropicCustomMediumType, CustomIsotropicMedium]
 IsotropicMediumType = Union[IsotropicCustomMediumType, IsotropicUniformMediumType]
 
 
@@ -2185,21 +2186,21 @@ class CustomAnisotropicMediumInternal(CustomAnisotropicMedium):
     >>> anisotropic_dielectric = CustomAnisotropicMedium(xx=medium_xx, yy=medium_yy, zz=medium_zz)
     """
 
-    xx: Union[IsotropicCustomMediumType, CustomMedium, CustomIsotropicMedium] = pd.Field(
+    xx: Union[IsotropicCustomMediumInternalType, CustomMedium] = pd.Field(
         ...,
         title="XX Component",
         description="Medium describing the xx-component of the diagonal permittivity tensor.",
         discriminator=TYPE_TAG_STR,
     )
 
-    yy: Union[IsotropicCustomMediumType, CustomMedium, CustomIsotropicMedium] = pd.Field(
+    yy: Union[IsotropicCustomMediumInternalType, CustomMedium] = pd.Field(
         ...,
         title="YY Component",
         description="Medium describing the yy-component of the diagonal permittivity tensor.",
         discriminator=TYPE_TAG_STR,
     )
 
-    zz: Union[IsotropicCustomMediumType, CustomMedium, CustomIsotropicMedium] = pd.Field(
+    zz: Union[IsotropicCustomMediumInternalType, CustomMedium] = pd.Field(
         ...,
         title="ZZ Component",
         description="Medium describing the zz-component of the diagonal permittivity tensor.",
