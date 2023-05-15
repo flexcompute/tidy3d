@@ -353,7 +353,8 @@ def verify_custom_dispersive_medium_methods(mat):
     """Verify that the methods in custom dispersive medium is producing expected results."""
     verify_custom_medium_methods(mat)
     freq = 1.0
-    assert mat.eps_dataarray_freq(freq).shape == (Nx, Ny, Nz)
+    for i in range(3):
+        assert mat.eps_dataarray_freq(freq)[i].shape == (Nx, Ny, Nz)
     np.testing.assert_allclose(mat.eps_model(freq), mat.pole_residue.eps_model(freq))
     coord_interp = Coords(**{ax: np.linspace(-1, 1, 20 + ind) for ind, ax in enumerate("xyz")})
     eps_grid = mat.eps_diagonal_on_grid(freq, coord_interp)

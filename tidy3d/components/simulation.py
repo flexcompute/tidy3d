@@ -1480,18 +1480,14 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         # spatial locations.
         for mat in [medium for medium in medium_list if isinstance(medium, AbstractCustomMedium)]:
             eps_dataarray = mat.eps_dataarray_freq(freq)
-            if isinstance(eps_dataarray, tuple):
-                eps_min = min(
-                    eps_min,
-                    min((np.min(eps_comp.real.values.ravel()) for eps_comp in eps_dataarray)),
-                )
-                eps_max = max(
-                    eps_max,
-                    max((np.max(eps_comp.real.values.ravel()) for eps_comp in eps_dataarray)),
-                )
-            else:
-                eps_min = min(eps_min, np.min(eps_dataarray.real.values.ravel()))
-                eps_max = max(eps_max, np.max(eps_dataarray.real.values.ravel()))
+            eps_min = min(
+                eps_min,
+                min((np.min(eps_comp.real.values.ravel()) for eps_comp in eps_dataarray)),
+            )
+            eps_max = max(
+                eps_max,
+                max((np.max(eps_comp.real.values.ravel()) for eps_comp in eps_dataarray)),
+            )
         return eps_min, eps_max
 
     def _pcolormesh_shape_custom_medium_structure_eps(
