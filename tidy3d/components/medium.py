@@ -830,7 +830,9 @@ class CustomMedium(AbstractCustomMedium):
         # isotropic
         if self.eps_dataset is None:
             return CustomIsotropicMedium(
-                permittivity=self.permittivity, conductivity=self.conductivity
+                permittivity=self.permittivity,
+                conductivity=self.conductivity,
+                interp_method=self.interp_method,
             )
         # isotropic, but with `eps_dataset`
         if self.is_isotropic:
@@ -839,7 +841,11 @@ class CustomMedium(AbstractCustomMedium):
             )
             eps_inf = eps_inf.squeeze(dim="f", drop=True)
             sigma = sigma.squeeze(dim="f", drop=True)
-            return CustomIsotropicMedium(permittivity=eps_inf, conductivity=sigma)
+            return CustomIsotropicMedium(
+                permittivity=eps_inf,
+                conductivity=sigma,
+                interp_method=self.interp_method,
+            )
         # anisotropic
         eps_field_components = self.eps_dataset.field_components
         mat_comp = {}
@@ -849,7 +855,13 @@ class CustomMedium(AbstractCustomMedium):
             )
             eps_inf = eps_inf.squeeze(dim="f", drop=True)
             sigma = sigma.squeeze(dim="f", drop=True)
-            mat_comp.update({comp: CustomIsotropicMedium(permittivity=eps_inf, conductivity=sigma)})
+            mat_comp.update(
+                {
+                    comp: CustomIsotropicMedium(
+                        permittivity=eps_inf, conductivity=sigma, interp_method=self.interp_method
+                    )
+                }
+            )
         return CustomAnisotropicMediumInternal(**mat_comp)
 
     @cached_property
@@ -2424,7 +2436,6 @@ class Medium2D(AbstractMedium):
             The 3D equivalent of this 2D medium.
         """
         media = list(self.elements.values())
-        print(media)
         media_weighted = [self._weighted_avg([medium], [1 / thickness]) for medium in media]
         media_3d = Geometry.unpop_axis(ax_coord=Medium(), plane_coords=media_weighted, axis=axis)
         media_3d_kwargs = {dim + dim: medium for dim, medium in zip("xyz", media_3d)}
