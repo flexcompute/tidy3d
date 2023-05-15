@@ -9,6 +9,8 @@ import numpy as np
 from jax import grad, custom_vjp
 import jax
 from numpy.random import random
+import time
+import matplotlib.pylab as plt
 
 import tidy3d as td
 from typing import Tuple, Any, List
@@ -1023,3 +1025,89 @@ def test_save_load_simdata(use_emulated_run):
     sim_data.to_file("tests/tmp/adjoint_simdata.hdf5")
     sim_data2 = JaxSimulationData.from_file("tests/tmp/adjoint_simdata.hdf5")
     assert sim_data == sim_data2
+
+
+def _test_polyslab_scale(use_emulated_run):
+    """Make sure box made with polyslab gives equivalent gradients (note, doesn't pass now)."""
+
+    nums = np.logspace(np.log10(3), 3, 13)
+    times = []
+    for num_vertices in nums:
+        num_vertices = int(num_vertices)
+
+        angles = 2 * np.pi * np.arange(num_vertices) / num_vertices
+        xs = np.cos(angles)
+        ys = np.sin(angles)
+        vertices = np.stack((xs, ys), axis=1).tolist()
+        np.random.seed(0)
+        start_time = time.time()
+
+        def f(scale=1.0):
+
+            jax_med = JaxMedium(permittivity=2.0)
+            POLYSLAB_AXIS = 2
+
+            size_axis, (size_1, size_2) = JaxPolySlab.pop_axis(SIZE, axis=POLYSLAB_AXIS)
+            cent_axis, (cent_1, cent_2) = JaxPolySlab.pop_axis(CENTER, axis=POLYSLAB_AXIS)
+
+            # vertices_jax = [(scale * x, scale * y) for x, y in vertices]
+            vertices_jax = [(x, y) for x, y in vertices]
+
+            slab_bounds = (cent_axis - size_axis / 2, cent_axis + size_axis / 2)
+            slab_bounds = tuple(jax.lax.stop_gradient(x) for x in slab_bounds)
+            jax_polyslab = JaxPolySlab(
+                vertices=vertices_jax, axis=POLYSLAB_AXIS, slab_bounds=slab_bounds
+            )
+            jax_struct = JaxStructure(geometry=jax_polyslab, medium=jax_med)
+
+            # ModeMonitors
+            output_mnt1 = td.ModeMonitor(
+                size=(td.inf, td.inf, 0),
+                mode_spec=td.ModeSpec(num_modes=3),
+                freqs=[2e14],
+                name=MNT_NAME + "1",
+            )
+
+            # DiffractionMonitor
+            output_mnt2 = td.DiffractionMonitor(
+                center=(0, 4, 0),
+                size=(td.inf, 0, td.inf),
+                normal_dir="+",
+                freqs=[2e14],
+                name=MNT_NAME + "2",
+            )
+
+            sim = JaxSimulation(
+                size=(10, 10, 10),
+                run_time=1e-12,
+                grid_spec=td.GridSpec(wavelength=1.0),
+                boundary_spec=td.BoundarySpec.all_sides(boundary=td.Periodic()),
+                output_monitors=(output_mnt1, output_mnt2),
+                input_structures=(jax_struct,),
+                sources=[
+                    td.PointDipole(
+                        source_time=td.GaussianPulse(freq0=1e14, fwidth=1e14),
+                        center=(0, 0, 0),
+                        polarization="Ex",
+                    )
+                ],
+            )
+
+            sim_data = run(sim, task_name="test")
+            amp = extract_amp(sim_data)
+            return objective(amp)
+
+        g = grad(f)
+
+        g_eval = g(1.0)
+
+        total_time = time.time() - start_time
+        print(f"{num_vertices} vertices took {total_time:.2e} seconds")
+        times.append(total_time)
+
+    plt.plot(nums, times)
+    plt.xlabel("number of vertices")
+    plt.ylabel("time to compute gradient")
+    plt.xscale("log")
+    plt.yscale("log")
+    plt.show()
