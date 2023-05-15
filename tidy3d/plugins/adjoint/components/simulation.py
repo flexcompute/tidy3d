@@ -437,14 +437,13 @@ class JaxSimulation(Simulation, JaxObject):
     ) -> JaxSimulation:
         """Store the vjp w.r.t. each input_structure as a sim using fwd and adj grad_data."""
 
-        freq = self.freq_adjoint
-        eps_out = self.medium.eps_model(frequency=freq)
-
         input_structures_vjp = []
         adjoint_info = zip(self.input_structures, grad_data_fwd, grad_data_adj, grad_eps_data)
 
         for in_struct, fld_fwd, fld_adj, eps_data in adjoint_info:
 
+            freq = float(eps_data.eps_xx.coords["f"])
+            eps_out = self.medium.eps_model(frequency=freq)
             eps_in = in_struct.medium.eps_model(frequency=freq)
 
             input_structure_vjp = in_struct.store_vjp(
