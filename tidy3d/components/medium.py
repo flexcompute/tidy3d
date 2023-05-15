@@ -722,7 +722,14 @@ class CustomMedium(AbstractCustomMedium):
         if eps_dataset is None:
             return values
 
-        if eps_dataset.eps_xx == eps_dataset.eps_yy and eps_dataset.eps_xx == eps_dataset.eps_zz:
+        if isinstance(eps_dataset, dict):
+            eps_components = [eps_dataset[f"eps_{dim}{dim}"] for dim in "xyz"]
+        else:
+            eps_components = [eps_dataset.eps_xx, eps_dataset.eps_yy, eps_dataset.eps_zz]
+
+        is_isotropic = eps_components[0] == eps_components[1] == eps_components[2]
+
+        if is_isotropic:
             # deprecation warning for isotropic custom medium
             log.warning(
                 "For spatially varying isotropic medium, the 'eps_dataset' field "
@@ -815,12 +822,14 @@ class CustomMedium(AbstractCustomMedium):
         """Check if the medium is isotropic or anisotropic."""
         if self.eps_dataset is None:
             return True
-        if (
-            self.eps_dataset.eps_xx == self.eps_dataset.eps_yy
-            and self.eps_dataset.eps_xx == self.eps_dataset.eps_zz
-        ):
+        if self.eps_dataset.eps_xx == self.eps_dataset.eps_yy == self.eps_dataset.eps_zz:
             return True
         return False
+
+    @cached_property
+    def freqs(self) -> np.ndarray:
+        """float array of frequencies."""
+        return np.array(self.eps_dataset.eps_xx.coords["f"])
 
     @cached_property
     def _medium(self):
@@ -837,8 +846,11 @@ class CustomMedium(AbstractCustomMedium):
         # isotropic, but with `eps_dataset`
         if self.is_isotropic:
             eps_inf, sigma = CustomMedium.eps_complex_to_eps_sigma(
-                self.eps_dataset.eps_xx, self.eps_dataset.eps_xx.f
+                np.array(self.eps_dataset.eps_xx.values), self.freqs
             )
+            coords = self.eps_dataset.eps_xx.coords
+            eps_inf = ScalarFieldDataArray(eps_inf, coords=coords)
+            sigma = ScalarFieldDataArray(sigma, coords=coords)
             eps_inf = eps_inf.squeeze(dim="f", drop=True)
             sigma = sigma.squeeze(dim="f", drop=True)
             return CustomIsotropicMedium(
@@ -851,7 +863,7 @@ class CustomMedium(AbstractCustomMedium):
         mat_comp = {}
         for comp in ["xx", "yy", "zz"]:
             eps_inf, sigma = CustomMedium.eps_complex_to_eps_sigma(
-                eps_field_components["eps_" + comp], eps_field_components["eps_" + comp].f
+                eps_field_components["eps_" + comp], eps_field_components["eps_" + comp.coords["f"]]
             )
             eps_inf = eps_inf.squeeze(dim="f", drop=True)
             sigma = sigma.squeeze(dim="f", drop=True)
@@ -949,7 +961,7 @@ class CustomMedium(AbstractCustomMedium):
         :class:`.CustomMedium`
             Medium containing the spatially varying permittivity data.
         """
-        eps_inf, sigma = CustomMedium.eps_complex_to_eps_sigma(eps, eps.f)
+        eps_inf, sigma = CustomMedium.eps_complex_to_eps_sigma(eps, np.array(eps.coords["f"]))
         eps_inf = eps_inf.squeeze(dim="f", drop=True)
         sigma = sigma.squeeze(dim="f", drop=True)
         return cls(permittivity=eps_inf, conductivity=sigma, interp_method=interp_method)

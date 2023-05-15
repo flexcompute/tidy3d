@@ -38,6 +38,10 @@ class JaxDataArray(Tidy3dBaseModel):
         """Convert supplied coordinates to Dict[str, list]."""
         return {coord_name: list(coord_list) for coord_name, coord_list in val.items()}
 
+    def __eq__(self, other) -> bool:
+        """Check if two ``JaxDataArray`` instances are equal."""
+        return jnp.array_equal(self.values, other.values)
+
     # removed because it was slowing things down.
     # @pd.validator("coords", always=True)
     # def _coords_match_values(cls, val, values):
