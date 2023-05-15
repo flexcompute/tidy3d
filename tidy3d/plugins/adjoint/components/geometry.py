@@ -226,9 +226,6 @@ class JaxBox(JaxGeometry, Box, JaxObject):
                     eps2 = eps_data.isel(**{dim_normal: isel_out})
                     eps1 = eps_data.isel(**{dim_normal: isel_ins})
 
-                    eps2 = 1.0
-                    eps1 = 2.0
-
                     # get gradient contribution for normal component using normal D field
                     if field_cmp_dim == dim_normal:
 
