@@ -1359,6 +1359,13 @@ class FullyAnisotropicMedium(AbstractMedium):
     magneto-optic effects. Note that dispersive properties and subpixel averaging are currently not
     supported for fully anisotropic materials.
 
+    Note
+    ----
+    Simulations involving fully anisotropic materials are computationally more intensive, thus,
+    they take longer time to complete. This increase strongly depends on the filling fraction of
+    the simulation domain by fully anisotropic materials, varying approximately in the range from
+    1.5 to 5. Cost of running a simulation is adjusted correspondingly.
+
     Example
     -------
     >>> perm = [[2, 0, 0], [0, 1, 0], [0, 0, 3]]
