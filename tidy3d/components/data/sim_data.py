@@ -141,7 +141,6 @@ class SimulationData(Tidy3dBaseModel):
         source_time = source.source_time
         times = self.simulation.tmesh
         dt = self.simulation.dt
-        user_defined_phase = np.exp(1j * source_time.phase)
 
         # get boundary information to determine whether to use complex fields
         boundaries = self.simulation.boundary_spec.to_list
@@ -154,8 +153,11 @@ class SimulationData(Tidy3dBaseModel):
             """Source amplitude as function of frequency."""
             spectrum = source_time.spectrum(times, freqs, dt, complex_fields)
 
-            # remove user defined phase from normalization so its effect is present in the result
-            return spectrum * np.conj(user_defined_phase)
+            # Remove user defined amplitude and phase from the normalization
+            # such that they would still have an effect on the output fields.
+            # In other words, we are only normalizing out the arbitrary part of the spectrum
+            # that depends on things like freq0, fwidth and offset.
+            return spectrum / source_time.amplitude / np.exp(1j * source_time.phase)
 
         return source_spectrum_fn
 

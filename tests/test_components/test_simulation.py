@@ -256,6 +256,51 @@ def test_validate_bloch_with_symmetry():
         )
 
 
+def test_validate_normalize_index():
+    src = td.UniformCurrentSource(
+        source_time=td.GaussianPulse(freq0=2.0, fwidth=1.0),
+        size=(0, 0, 0),
+        polarization="Ex",
+    )
+    src0 = td.UniformCurrentSource(
+        source_time=td.GaussianPulse(freq0=2.0, fwidth=1.0, amplitude=0),
+        size=(0, 0, 0),
+        polarization="Ex",
+    )
+
+    # negative normalize index
+    with pytest.raises(pydantic.ValidationError):
+        td.Simulation(
+            size=(1, 1, 1),
+            run_time=1e-12,
+            grid_spec=td.GridSpec.uniform(dl=0.1),
+            normalize_index=-1,
+        )
+
+    # normalize index out of bounds
+    with pytest.raises(pydantic.ValidationError):
+        td.Simulation(
+            size=(1, 1, 1),
+            run_time=1e-12,
+            grid_spec=td.GridSpec.uniform(dl=0.1),
+            sources=[src],
+            normalize_index=1,
+        )
+    # skipped if no sources
+    td.Simulation(
+        size=(1, 1, 1), run_time=1e-12, grid_spec=td.GridSpec.uniform(dl=0.1), normalize_index=1
+    )
+
+    # normalize by zero-amplitude source
+    with pytest.raises(pydantic.ValidationError):
+        td.Simulation(
+            size=(1, 1, 1),
+            run_time=1e-12,
+            grid_spec=td.GridSpec.uniform(dl=0.1),
+            sources=[src0],
+        )
+
+
 def test_validate_plane_wave_boundaries(log_capture):
     src1 = td.PlaneWave(
         source_time=td.GaussianPulse(freq0=2.5e14, fwidth=1e13),

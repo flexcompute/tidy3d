@@ -781,11 +781,18 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         if val is None:
             return val
 
-        assert val >= 0, "normalize_index can't be negative."
-        num_sources = len(values.get("sources"))
+        sources = values.get("sources")
+        num_sources = len(sources)
         if num_sources > 0:
             # No check if no sources, but it should be irrelevant anyway
-            assert val < num_sources, f"{num_sources} sources smaller than normalize_index of {val}"
+            if val >= num_sources:
+                raise ValidationError(
+                    f"'normalize_index' {val} out of bounds for number of sources {num_sources}."
+                )
+
+            # Also error if normalizing by a zero-amplitude source
+            if sources[val].source_time.amplitude == 0:
+                raise ValidationError("Cannot set 'normalize_index' to source with zero amplitude.")
 
         return val
 
