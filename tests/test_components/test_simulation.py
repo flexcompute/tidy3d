@@ -1472,7 +1472,7 @@ def test_sim_volumetric_structures():
     assert np.isclose(sim.volumetric_structures[1].medium.xx.permittivity, 2, rtol=RTOL)
 
     # test simulation.medium can't be Medium2D
-    with pytest.raises(Exception):
+    with pytest.raises(pydantic.ValidationError):
         sim = td.Simulation(
             size=(10, 10, 10),
             structures=[],
@@ -1488,16 +1488,16 @@ def test_sim_volumetric_structures():
         )
 
     # test 2d medium is added to 2d geometry
-    with pytest.raises(Exception):
+    with pytest.raises(pydantic.ValidationError):
         _ = td.Structure(geometry=td.Box(center=(0, 0, 0), size=(1, 1, 1)), medium=box.medium)
-    with pytest.raises(Exception):
+    with pytest.raises(pydantic.ValidationError):
         _ = td.Structure(geometry=td.Cylinder(radius=1, length=1), medium=box.medium)
-    with pytest.raises(Exception):
+    with pytest.raises(pydantic.ValidationError):
         _ = td.Structure(
             geometry=td.PolySlab(vertices=[(0, 0), (1, 0), (1, 1)], slab_bounds=(-1, 1)),
             medium=box.medium,
         )
-    with pytest.raises(Exception):
+    with pytest.raises(pydantic.ValidationError):
         _ = td.Structure(geometry=td.Sphere(radius=1), medium=box.medium)
 
 
