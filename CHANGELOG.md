@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - `web.test()` to simply test if the authentication is configured correctly and raise exception otherwise.
+- `scale` argument for `ModeSolver.plot_field`.
 
 ### Changed
 
