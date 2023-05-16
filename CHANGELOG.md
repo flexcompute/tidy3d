@@ -10,6 +10,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Add `SimulationTask.get_running_tasks()` to get a list of running tasks from the server.
 - Argument `scale` to `ModeSolver.plot_field` to control plot scaling.
 - Retry for set number of seconds in web functions if internet connection error.
+- Adjoint processing is done server side by default, to avoid unnecessary downloading of data.
+- `run_local` and `run_async_local` options in `tidy3d.plugins.adjoint.web` to provide way to run adjoint processing locally.
 
 ### Changed
 - Perfect electric conductors (PECs) are now modeled as high-conductivity media in both the frontend and backend mode solvers, and their presence triggers the use of a preconditioner to improve numerical stability and robustness. Consequently, the mode solver provides more accurate eigenvectors and field distributions when PEC structures are present.
