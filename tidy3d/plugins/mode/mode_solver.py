@@ -16,7 +16,7 @@ from ...components.grid.grid import Grid
 from ...components.mode import ModeSpec
 from ...components.monitor import ModeSolverMonitor, ModeMonitor
 from ...components.source import ModeSource, SourceTime
-from ...components.types import Direction, FreqArray, Ax, Literal, Axis, Symmetry
+from ...components.types import Direction, FreqArray, Ax, Literal, Axis, Symmetry, PlotScale
 from ...components.types import ArrayComplex3D, ArrayComplex4D, ArrayFloat1D
 from ...components.data.data_array import ModeIndexDataArray, ScalarModeFieldDataArray
 from ...components.data.data_array import FreqModeDataArray
@@ -552,6 +552,7 @@ class ModeSolver(Tidy3dBaseModel):
         self,
         field_name: str,
         val: Literal["real", "imag", "abs"] = "real",
+        scale: PlotScale = "lin",
         eps_alpha: float = 0.2,
         robust: bool = True,
         vmin: float = None,
@@ -602,6 +603,7 @@ class ModeSolver(Tidy3dBaseModel):
             field_monitor_name=MODE_MONITOR_NAME,
             field_name=field_name,
             val=val,
+            scale=scale,
             eps_alpha=eps_alpha,
             robust=robust,
             vmin=vmin,
