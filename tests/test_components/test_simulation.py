@@ -485,6 +485,10 @@ def test_plot():
     SIM_FULL.plot(x=0, ax=AX)
 
 
+def test_plot_3d():
+    SIM_FULL.plot_3d()
+
+
 def test_structure_alpha():
     _ = SIM_FULL.plot_structures_eps(x=0, ax=AX, alpha=None)
     _ = SIM_FULL.plot_structures_eps(x=0, ax=AX, alpha=-1)
