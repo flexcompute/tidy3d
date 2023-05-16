@@ -48,6 +48,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `SimulationTask.get_running_tasks()` to get a list of running tasks from the server.
 - Retry for set number of seconds in web functions if internet connection errors.
 - Argument `scale` to `ModeSolver.plot_field` to control plot scaling.
+- `Simulation.plot_3d()` method to make 3D rendering of simulation.
 
 
 ### Changed

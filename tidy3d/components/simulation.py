@@ -33,7 +33,7 @@ from .viz import add_ax_if_none, equal_aspect
 
 from .viz import MEDIUM_CMAP, STRUCTURE_EPS_CMAP, PlotParams, plot_params_symmetry, polygon_path
 from .viz import plot_params_structure, plot_params_pml, plot_params_override_structures
-from .viz import plot_params_pec, plot_params_pmc, plot_params_bloch
+from .viz import plot_params_pec, plot_params_pmc, plot_params_bloch, plot_sim_3d
 
 from ..version import __version__
 from ..constants import C_0, SECOND, inf
@@ -2216,6 +2216,10 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         freq_max = max((freq_range[1] for freq_range in source_ranges), default=0.0)
 
         return (freq_min, freq_max)
+
+    def plot_3d(self) -> None:
+        """Render 3D plot of ``Simulation`` (in jupyter notebook only)."""
+        return plot_sim_3d(self)
 
     """ Discretization """
 
