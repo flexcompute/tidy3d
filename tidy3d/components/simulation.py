@@ -125,7 +125,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         units=SECOND,
     )
 
-    medium: MediumType = pydantic.Field(
+    medium: MediumType3D = pydantic.Field(
         Medium(),
         title="Background Medium",
         description="Background medium of simulation, defaults to vacuum if not specified.",
@@ -232,13 +232,6 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         # otherwise, call the updator to update the values dictionary
         updater = Updater(sim_dict=values)
         return updater.update_to_current()
-
-    @pydantic.validator("medium", always=True)
-    def _validate_medium(cls, val):
-        """Check that the medium is not a :class:`.Medium2D`."""
-        if isinstance(val, Medium2D):
-            raise ValidationError("'Simulation.medium' cannot be a 'Medium2D'.")
-        return val
 
     @pydantic.validator("grid_spec", always=True)
     def _validate_auto_grid_wavelength(cls, val, values):
