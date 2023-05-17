@@ -285,7 +285,7 @@ class ContinuousWave(Pulse):
         const = 1.0
         offset = np.exp(1j * self.phase)
         oscillation = np.exp(-1j * omega0 * time)
-        amp = 1 / (1 + np.exp(-time_shifted / twidth))
+        amp = 1 / (1 + np.exp(-time_shifted / twidth)) * self.amplitude
 
         return const * offset * oscillation * amp
 
