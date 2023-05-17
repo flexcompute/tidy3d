@@ -1124,6 +1124,7 @@ def test_validate_vertices():
     with pytest.raises(pydantic.ValidationError):
         poly = JaxPolySlab(vertices=vertices, slab_bounds=(-1, 1))
 
+
 def test_custom_medium_3D(use_emulated_run):
     """Ensure custom medium fails if 3D pixelated grid."""
 
