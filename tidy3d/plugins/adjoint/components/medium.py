@@ -80,21 +80,21 @@ class AbstractJaxMedium(ABC, JaxObject):
         grad_data_fwd: FieldData,
         grad_data_adj: FieldData,
         vol_coords: Dict[str, np.ndarray],
+        d_vol: float,
         inside_fn: Callable,
-        insid
     ) -> xr.DataArray:
         """Get the E_fwd * E_adj * dV field distribution inside of the discretized volume."""
 
         e_fwd = grad_data_fwd.field_components[field]
         e_adj = grad_data_adj.field_components[field]
-        e_dotted = d_vol * (e_fwd * e_adj)
-        e_dotted = e_dotted.real.interp(**vol_coords).isel(f=0)
 
-        # mask out any contributions not inside the structure volume
-        inside_mask = self.make_inside_mask(vol_coords=vol_coords, inside_fn=inside_fn)
-        inside_mask = inside_mask.reshape(e_dotted.shape)
+        e_dotted = e_fwd * e_adj
 
-        return inside_mask * xr.DataArray(e_dotted, coords=vol_coords)
+        inside_map = self.make_inside_mask(vol_coords=vol_coords, inside_fn=inside_fn)
+
+        fields_eval = e_dotted.real.isel(f=0).interp(**vol_coords, assume_sorted=True)
+
+        return inside_map.reshape(fields_eval.shape) * d_vol * fields_eval
 
     def d_eps_map(
         self,
@@ -106,6 +106,10 @@ class AbstractJaxMedium(ABC, JaxObject):
     ) -> xr.DataArray:
         """Mapping of gradient w.r.t. permittivity at each point in discretized volume."""
 
+        vol_coords, d_vol = self._get_volume_disc(
+            grad_data=grad_data_fwd, sim_bounds=sim_bounds, wvl_mat=wvl_mat
+        )
+
         e_mult_sum = 0.0
 
         for field in ("Ex", "Ey", "Ez"):
@@ -115,6 +119,7 @@ class AbstractJaxMedium(ABC, JaxObject):
                 grad_data_adj=grad_data_adj,
                 vol_coords=vol_coords,
                 d_vol=d_vol,
+                inside_fn=inside_fn,
             )
 
         return e_mult_sum
@@ -138,7 +143,7 @@ class JaxMedium(Medium, AbstractJaxMedium):
         self_dict = self.dict(exclude={"type"})
         return Medium.parse_obj(self_dict)
 
-    # pylint:disable=too-many-locals
+    # pylint:disable=too-many-locals, too-many-arguments
     def store_vjp(
         self,
         grad_data_fwd: FieldData,
@@ -155,6 +160,7 @@ class JaxMedium(Medium, AbstractJaxMedium):
             grad_data_adj=grad_data_adj,
             sim_bounds=sim_bounds,
             wvl_mat=wvl_mat,
+            inside_fn=inside_fn,
         )
 
         vjp_permittivty = jnp.sum(d_eps_map.values)
@@ -229,6 +235,7 @@ class JaxAnisotropicMedium(AnisotropicMedium, AbstractJaxMedium):
                 grad_data_adj=grad_data_adj,
                 vol_coords=vol_coords,
                 d_vol=d_vol,
+                inside_fn=inside_fn,
             )
 
             vjp_ii = jnp.sum(e_mult_dim.real.values)
@@ -265,9 +272,9 @@ class JaxCustomMedium(CustomMedium, AbstractJaxMedium):
             dims_len1 = [val == 1 for val in coord_lens]
             if sum(dims_len1) == 0:
                 raise SetupError(
-                    "For adjoint plugin, 'JaxCustomMedium' can't contain more than "
-                    "1 pixel along all three dimensions. "
-                    f"Detected 3D pixelated grid in '{field_name}' component of 'eps_dataset.'."
+                    "For adjoint plugin, the 'JaxCustomMedium' is restricted to a 1D or 2D "
+                    "pixellated grid. It may not contain multiple pixels along all 3 dimensions. "
+                    f"Detected 3D pixelated grid in '{field_name}' component of 'eps_dataset'."
                 )
 
         return val
@@ -340,44 +347,75 @@ class JaxCustomMedium(CustomMedium, AbstractJaxMedium):
         for dim in "xyz":
 
             eps_field_name = f"eps_{dim}{dim}"
-            field_name = f"E{dim}"
 
             # grab the original data and its coordinatess
             orig_data_array = self.eps_dataset.field_components[eps_field_name]
             coords = orig_data_array.coords
 
-            # construct the coordinates for interpolation and selection within the custom medium
-            # TODO: extend this to all points within the volume.
-            interp_coords = {dim_pt: coords[dim_pt] for dim_pt in "xyz" if len(coords[dim_pt]) > 1}
-            isel_coords = {dim_pt: 0 for dim_pt in "xyz" if len(coords[dim_pt]) <= 1}
-
-            # interpolate into the forward and adjoint fields along this dimension and dot them
-            e_fwd = grad_data_fwd.field_components[field_name]
-            e_adj = grad_data_adj.field_components[field_name]
-            e_dotted = (e_fwd * e_adj).isel(f=0, **isel_coords)
-            e_dotted = e_dotted.interp(**interp_coords, assume_sorted=True)
-
-            # compute the size of the user-supplied medium along each dimension.
             grid = grids[eps_field_name]
             d_sizes = grid.sizes
-            # import pdb; pdb.set_trace()
-            # if any of the sizes are just 0, indicating an ndim < 3, just normalize out to 1.0
-            d_sizes = (
-                np.ones(1) if len(dl) == 1 and dl[0] <= 0 else dl
-                for dl in (d_sizes.x, d_sizes.y, d_sizes.z)
-            )
+            d_sizes = [d_sizes.x, d_sizes.y, d_sizes.z]
+
+            # construct the coordinates for interpolation and selection within the custom medium
+            # TODO: extend this to all points within the volume.
+            interp_coords = {}
+            sum_axes = []
+
+            for dim_index, dim_pt in enumerate("xyz"):
+
+                coord_dim = coords[dim_pt]
+
+                # if it's uniform / single pixel along this dim
+                if len(np.array(coord_dim)) == 1:
+                    # discretize along this edge like a regular volume
+
+                    # compute the length of the pixel within the sim bounds
+                    r_min_coords, r_max_coords = grid.boundaries.to_list[dim_index]
+                    r_min_sim, r_max_sim = np.array(sim_bounds).T[dim_index]
+                    r_min = max(r_min_coords, r_min_sim)
+                    r_max = min(r_max_coords, r_max_sim)
+                    size = abs(r_max - r_min)
+
+                    # discretize according to PTS_PER_WVL
+                    num_cells_dim = int(size * PTS_PER_WVL_INTEGRATION / wvl_mat) + 1
+
+                    # compute the length element along the dim, handling case of sim.size=0
+                    d_len = size / num_cells_dim if size > 0 else 1.0
+                    d_sizes[dim_index] = np.array([d_len])
+
+                    # construct the interpolation coordinates along this dimension
+                    coords_interp = np.linspace(r_min + d_len / 2, r_max - d_len / 2, num_cells_dim)
+                    interp_coords[dim_pt] = coords_interp
+                    sum_axes.append(dim_pt)
+
+                # otherwise
+                else:
+                    # just evaluate at the original data coords
+                    interp_coords[dim_pt] = coord_dim
 
             # outer product all dimensions to get a volume element mask
             d_vols = np.einsum("i, j, k -> ijk", *d_sizes)
 
-            # multiply volume element into gradient and reshape to expected vjp_shape
+            # grab the correpsonding dotted fields at these interp_coords and sum over len-1 pixels
+            field_name = "E" + dim
+            e_dotted = self.e_mult_volume(
+                field=field_name,
+                grad_data_fwd=grad_data_fwd,
+                grad_data_adj=grad_data_adj,
+                vol_coords=interp_coords,
+                d_vol=d_vols,
+                inside_fn=inside_fn,
+            ).sum(sum_axes)
+
+            # reshape values to the expected vjp shape to be more safe
             vjp_shape = tuple(len(coord) for _, coord in coords.items())
-            vjp_values = (np.squeeze(d_vols) * e_dotted.real.values).reshape(vjp_shape)
+            vjp_values = e_dotted.real.values.reshape(vjp_shape)
 
             # construct a DataArray storing the vjp
             vjp_data_array = JaxDataArray(values=vjp_values, coords=coords)
             vjp_field_components[eps_field_name] = vjp_data_array
 
+        # package everything into dataset
         vjp_eps_dataset = JaxPermittivityDataset(**vjp_field_components)
         return self.copy(update=dict(eps_dataset=vjp_eps_dataset))
 
