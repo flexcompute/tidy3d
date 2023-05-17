@@ -829,7 +829,13 @@ class CustomMedium(AbstractCustomMedium):
     @cached_property
     def freqs(self) -> np.ndarray:
         """float array of frequencies."""
-        return np.array(self.eps_dataset.eps_xx.coords["f"])
+        return np.array(
+            [
+                self.eps_dataset.eps_xx.coords["f"],
+                self.eps_dataset.eps_yy.coords["f"],
+                self.eps_dataset.eps_zz.coords["f"],
+            ]
+        )
 
     @cached_property
     def _medium(self):
@@ -846,7 +852,7 @@ class CustomMedium(AbstractCustomMedium):
         # isotropic, but with `eps_dataset`
         if self.is_isotropic:
             eps_inf, sigma = CustomMedium.eps_complex_to_eps_sigma(
-                np.array(self.eps_dataset.eps_xx.values), self.freqs
+                np.array(self.eps_dataset.eps_xx.values), self.freqs[0]
             )
             coords = self.eps_dataset.eps_xx.coords
             eps_inf = ScalarFieldDataArray(eps_inf, coords=coords)
@@ -863,7 +869,7 @@ class CustomMedium(AbstractCustomMedium):
         mat_comp = {}
         for comp in ["xx", "yy", "zz"]:
             eps_inf, sigma = CustomMedium.eps_complex_to_eps_sigma(
-                eps_field_components["eps_" + comp], eps_field_components["eps_" + comp.coords["f"]]
+                eps_field_components["eps_" + comp], eps_field_components["eps_" + comp].coords["f"]
             )
             eps_inf = eps_inf.squeeze(dim="f", drop=True)
             sigma = sigma.squeeze(dim="f", drop=True)

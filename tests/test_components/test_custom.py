@@ -256,7 +256,7 @@ def test_medium_eps_diagonal_on_grid():
 def test_medium_nk():
     """Construct custom medium from n (and k) DataArrays."""
     n = make_scalar_data().real
-    k = make_scalar_data().real * 0.01
+    k = make_scalar_data().real * 0.001
     med = CustomMedium.from_nk(n=n, k=k)
     med = CustomMedium.from_nk(n=n)
 
@@ -305,6 +305,27 @@ def verify_custom_medium_methods(mat):
     eps_grid = mat.eps_diagonal_on_grid(freq, coord_interp)
     for i in range(3):
         assert np.allclose(eps_grid[i].shape, [len(f) for f in coord_interp.to_list])
+
+
+def test_anisotropic_custom_medium():
+    """Anisotropic CustomMedium."""
+
+    def make_scalar_data_f():
+        """Makes a scalar field data array with random f."""
+        data = np.random.random((Nx, Ny, Nz, 1)) + 1
+        return ScalarFieldDataArray(
+            data, coords=dict(x=X, y=Y, z=Z, f=[freqs[0] * np.random.random(1)[0]])
+        )
+
+    # same f and different f
+    field_components_list = [
+        {f"eps_{d}{d}": make_scalar_data() for d in "xyz"},
+        {f"eps_{d}{d}": make_scalar_data_f() for d in "xyz"},
+    ]
+    for field_components in field_components_list:
+        eps_dataset = PermittivityDataset(**field_components)
+        mat = CustomMedium(eps_dataset=eps_dataset)
+        verify_custom_medium_methods(mat)
 
 
 def test_custom_isotropic_medium():
