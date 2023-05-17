@@ -110,7 +110,7 @@ class JaxMedium(Medium, JaxObject):
             if isinstance(value, float) or len(value) <= 1
         }
         interp_kwargs = {key: value for key, value in vol_coords.items() if key not in isel_kwargs}
-        integrand = e_dotted.isel(f=0, **isel_kwargs).interp(**interp_kwargs)
+        integrand = e_dotted.isel(f=0, **isel_kwargs).interp(**interp_kwargs, assume_sorted=True)
 
         # mask out any contributions not inside the structure volume
         inside_mask = self.make_inside_mask(vol_coords=vol_coords, inside_fn=inside_fn)
@@ -314,7 +314,8 @@ class JaxCustomMedium(CustomMedium, JaxObject):
             # interpolate into the forward and adjoint fields along this dimension and dot them
             e_fwd = grad_data_fwd.field_components[field_name]
             e_adj = grad_data_adj.field_components[field_name]
-            e_dotted = (e_fwd * e_adj).isel(f=0, **isel_coords).interp(**interp_coords)
+            e_dotted = (e_fwd * e_adj).isel(f=0, **isel_coords)
+            e_dotted = e_dotted.interp(**interp_coords, assume_sorted=True)
 
             # compute the size of the user-supplied medium along each dimension.
             grid = grids[eps_field_name]
