@@ -1123,3 +1123,35 @@ def test_validate_vertices():
     vertices = np.random.rand(MAX_NUM_VERTICES + 1, 2)
     with pytest.raises(pydantic.ValidationError):
         poly = JaxPolySlab(vertices=vertices, slab_bounds=(-1, 1))
+
+def test_custom_medium_3D(use_emulated_run):
+    """Ensure custom medium fails if 3D pixelated grid."""
+
+    jax_box = JaxBox(size=(1, 1, 1), center=(0, 0, 0))
+
+    def make_custom_medium(Nx: int, Ny: int, Nz: int) -> JaxCustomMedium:
+
+        # custom medium
+        (xmin, ymin, zmin), (xmax, ymax, zmax) = jax_box.bounds
+        coords = dict(
+            x=np.linspace(xmin, xmax, Nx).tolist(),
+            y=np.linspace(ymin, ymax, Ny).tolist(),
+            z=np.linspace(zmin, zmax, Nz).tolist(),
+            f=[FREQ0],
+        )
+
+        values = np.random.random((Nx, Ny, Nz, 1))
+        eps_ii = JaxDataArray(values=values, coords=coords)
+        field_components = {f"eps_{dim}{dim}": eps_ii for dim in "xyz"}
+        jax_eps_dataset = JaxPermittivityDataset(**field_components)
+        return JaxCustomMedium(eps_dataset=jax_eps_dataset)
+
+    make_custom_medium(1, 1, 1)
+    make_custom_medium(10, 1, 1)
+    make_custom_medium(1, 10, 1)
+    make_custom_medium(1, 1, 10)
+    make_custom_medium(1, 10, 10)
+    make_custom_medium(10, 1, 10)
+    make_custom_medium(10, 10, 1)
+    with pytest.raises(pydantic.ValidationError):
+        make_custom_medium(10, 10, 10)
