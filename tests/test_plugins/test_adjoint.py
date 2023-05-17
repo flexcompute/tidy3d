@@ -17,7 +17,7 @@ from typing import Tuple, Any, List
 
 from tidy3d.exceptions import DataError, Tidy3dKeyError, AdjointError
 from tidy3d.plugins.adjoint.components.base import JaxObject
-from tidy3d.plugins.adjoint.components.geometry import JaxBox, JaxPolySlab
+from tidy3d.plugins.adjoint.components.geometry import JaxBox, JaxPolySlab, MAX_NUM_VERTICES
 from tidy3d.plugins.adjoint.components.medium import JaxMedium, JaxAnisotropicMedium
 from tidy3d.plugins.adjoint.components.medium import JaxCustomMedium
 from tidy3d.plugins.adjoint.components.structure import JaxStructure
@@ -1020,7 +1020,7 @@ def test_save_load_simdata(use_emulated_run):
     assert sim_data == sim_data2
 
 
-def _test_polyslab_scale(use_emulated_run):
+def test_polyslab_scale(use_emulated_run):
     """Make sure box made with polyslab gives equivalent gradients (note, doesn't pass now)."""
 
     nums = np.logspace(np.log10(3), 3, 13)
@@ -1043,8 +1043,8 @@ def _test_polyslab_scale(use_emulated_run):
             size_axis, (size_1, size_2) = JaxPolySlab.pop_axis(SIZE, axis=POLYSLAB_AXIS)
             cent_axis, (cent_1, cent_2) = JaxPolySlab.pop_axis(CENTER, axis=POLYSLAB_AXIS)
 
-            # vertices_jax = [(scale * x, scale * y) for x, y in vertices]
-            vertices_jax = [(x, y) for x, y in vertices]
+            vertices_jax = [(scale * x, scale * y) for x, y in vertices]
+            # vertices_jax = [(x, y) for x, y in vertices]
 
             slab_bounds = (cent_axis - size_axis / 2, cent_axis + size_axis / 2)
             slab_bounds = tuple(jax.lax.stop_gradient(x) for x in slab_bounds)
@@ -1104,3 +1104,12 @@ def _test_polyslab_scale(use_emulated_run):
     plt.xscale("log")
     plt.yscale("log")
     plt.show()
+
+
+def test_validate_vertices():
+    """Test the maximum number of vertices."""
+    vertices = np.random.rand(MAX_NUM_VERTICES, 2)
+    poly = JaxPolySlab(vertices=vertices, slab_bounds=(-1, 1))
+    vertices = np.random.rand(MAX_NUM_VERTICES + 1, 2)
+    with pytest.raises(pydantic.ValidationError):
+        poly = JaxPolySlab(vertices=vertices, slab_bounds=(-1, 1))

@@ -9,7 +9,7 @@ import functools
 
 import pydantic
 import numpy as np
-from matplotlib import patches
+from matplotlib import patches, path
 from shapely.geometry import Point, Polygon, box, MultiPolygon
 from shapely.validation import make_valid
 
@@ -2533,12 +2533,13 @@ class PolySlab(Planar):
         z_local = z - z0  # distance to the middle
         dist = -z_local * self._tanq
 
-        def contains_pointwise(face_polygon):
-            def fun_contain(xy_point):
-                point = Point(xy_point)
-                return face_polygon.covers(point)
-
-            return fun_contain
+        # # Leaving this function and commented out lines using it below in case we want to revert
+        # # to it at some point, e.g. if we introduce a MATPLOTLIB_INSTALLED flag.
+        # def contains_pointwise(face_polygon):
+        #     def fun_contain(xy_point):
+        #         point = Point(xy_point)
+        #         return face_polygon.covers(point)
+        #     return fun_contain
 
         if isinstance(x, np.ndarray):
             inside_polygon = np.zeros_like(inside_height)
@@ -2547,9 +2548,11 @@ class PolySlab(Planar):
 
             # vertical sidewall
             if isclose(self.sidewall_angle, 0):
-                face_polygon = Polygon(self.reference_polygon)
-                fun_contain = contains_pointwise(face_polygon)
-                contains_vectorized = np.vectorize(fun_contain, signature="(n)->()")
+                # face_polygon = Polygon(self.reference_polygon)
+                # fun_contain = contains_pointwise(face_polygon)
+                # contains_vectorized = np.vectorize(fun_contain, signature="(n)->()")
+                poly_path = path.Path(self.reference_polygon)
+                contains_vectorized = poly_path.contains_points
                 points_stacked = np.stack((xs_slab, ys_slab), axis=1)
                 inside_polygon_slab = contains_vectorized(points_stacked)
                 inside_polygon[inside_height] = inside_polygon_slab
@@ -2572,9 +2575,11 @@ class PolySlab(Planar):
                     vertices_z = self._shift_vertices(
                         self.middle_polygon, _move_axis(dist)[0, 0, z_i]
                     )[0]
-                    face_polygon = Polygon(vertices_z)
-                    fun_contain = contains_pointwise(face_polygon)
-                    contains_vectorized = np.vectorize(fun_contain, signature="(n)->()")
+                    # face_polygon = Polygon(vertices_z)
+                    # fun_contain = contains_pointwise(face_polygon)
+                    # contains_vectorized = np.vectorize(fun_contain, signature="(n)->()")
+                    poly_path = path.Path(vertices_z)
+                    contains_vectorized = poly_path.contains_points
                     points_stacked = np.stack(
                         (x_axis[:, :, 0].flatten(), y_axis[:, :, 0].flatten()), axis=1
                     )
