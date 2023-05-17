@@ -327,37 +327,20 @@ def use_emulated_run_async(monkeypatch):
     monkeypatch.setattr(adjoint_web, "webapi_run_async_adjoint_bwd", run_async_emulated_bwd)
 
 
-def test_adjoint_pipeline(use_emulated_run):
+@pytest.mark.parametrize("local", (True, False))
+def test_adjoint_pipeline(local, use_emulated_run):
     """Test computing gradient using jax."""
 
+    run_fn = run_local if local else run
+
     sim = make_sim(permittivity=EPS, size=SIZE, vertices=VERTICES, base_eps_val=BASE_EPS_VAL)
-    sim_data = run(sim, task_name="test", path=RUN_PATH)
+    sim_data = run_fn(sim, task_name="test", path=RUN_PATH)
 
     def f(permittivity, size, vertices, base_eps_val):
         sim = make_sim(
             permittivity=permittivity, size=size, vertices=vertices, base_eps_val=base_eps_val
         )
-        sim_data = run(sim, task_name="test", path=RUN_PATH)
-        amp = extract_amp(sim_data)
-        return objective(amp)
-
-    grad_f = grad(f, argnums=(0, 1, 2, 3))
-    df_deps, df_dsize, df_dvertices, d_eps_base = grad_f(EPS, SIZE, VERTICES, BASE_EPS_VAL)
-
-    print("gradient: ", df_deps, df_dsize, df_dvertices, d_eps_base)
-
-
-def test_adjoint_pipeline_local(use_emulated_run):
-    """Test computing gradient using jax."""
-
-    sim = make_sim(permittivity=EPS, size=SIZE, vertices=VERTICES, base_eps_val=BASE_EPS_VAL)
-    sim_data = run_local(sim, task_name="test", path=RUN_PATH)
-
-    def f(permittivity, size, vertices, base_eps_val):
-        sim = make_sim(
-            permittivity=permittivity, size=size, vertices=vertices, base_eps_val=base_eps_val
-        )
-        sim_data = run_local(sim, task_name="test", path=RUN_PATH)
+        sim_data = run_fn(sim, task_name="test", path=RUN_PATH)
         amp = extract_amp(sim_data)
         return objective(amp)
 
@@ -844,8 +827,11 @@ def _test_polyslab_box(use_emulated_run):
     assert np.allclose(gc_b, gc_p), f"center gradients dont match, got {gc_b} and {gc_p}"
 
 
-def test_adjoint_run_async(use_emulated_run_async):
+@pytest.mark.parametrize("local", (True, False))
+def test_adjoint_run_async(local, use_emulated_run_async):
     """Test differnetiating thorugh async adjoint runs"""
+
+    run_fn = run_async_local if local else run_async
 
     def make_sim_simple(permittivity: float) -> JaxSimulation:
         """Make a sim as a function of a single parameter."""
@@ -861,43 +847,7 @@ def test_adjoint_run_async(use_emulated_run_async):
             permittivity = x + 1.0
             sims.append(make_sim_simple(permittivity=permittivity))
 
-        sim_data_list = run_async(sims, path_dir=TMP_DIR)
-
-        result = 0.0
-        for sim_data in sim_data_list:
-            amp = extract_amp(sim_data)
-            result += objective(amp)
-
-        return result
-
-    # test evaluating the function
-    x0 = 1.0
-    # f0 = await f(x0)
-
-    # and its derivatve
-    f0 = f(x0)
-    g = jax.grad(f)
-    g0 = g(x0)
-
-
-def test_adjoint_run_async_local(use_emulated_run_async):
-    """Test differnetiating thorugh async adjoint runs"""
-
-    def make_sim_simple(permittivity: float) -> JaxSimulation:
-        """Make a sim as a function of a single parameter."""
-        return make_sim(
-            permittivity=permittivity, size=SIZE, vertices=VERTICES, base_eps_val=BASE_EPS_VAL
-        )
-
-    def f(x):
-        """Objective function to differentiate."""
-
-        sims = []
-        for i in range(1):
-            permittivity = x + 1.0
-            sims.append(make_sim_simple(permittivity=permittivity))
-
-        sim_data_list = run_async_local(sims, path_dir=TMP_DIR)
+        sim_data_list = run_fn(sims, path_dir=TMP_DIR)
 
         result = 0.0
         for sim_data in sim_data_list:
