@@ -80,6 +80,7 @@ extensions = [
 ]
 
 source_suffix = [".rst", ".md"]
+html_sourcelink_suffix = ''
 
 autodoc_default_options = {"inherited-members": True, "show-inheritance":True}
 
@@ -169,7 +170,6 @@ html_theme_options = {
     "use_repository_button": True,
     "use_download_button": True,
 }
-html_source_suffix = ''
 
 # html_logo = "_static/logo.svg"
 # html_favicon = "_static/logo.svg"
