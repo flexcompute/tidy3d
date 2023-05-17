@@ -16,3 +16,8 @@ except ImportError as e:
         "To get the appropriate packages, install tidy3d using '[jax]' option, for example: "
         "$pip install 'tidy3d[jax]'."
     ) from e
+
+try:
+    from .web import run, run_async
+except ImportError:
+    pass
