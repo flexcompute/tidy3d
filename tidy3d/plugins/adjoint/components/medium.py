@@ -2,11 +2,13 @@
 from __future__ import annotations
 
 from typing import Dict, Tuple, Union, Callable
+from abc import ABC
 
 import pydantic as pd
 import numpy as np
 import jax.numpy as jnp
 from jax.tree_util import register_pytree_node_class
+import xarray as xr
 
 from ....components.types import Bound, Literal
 from ....components.medium import Medium, AnisotropicMedium, CustomMedium
@@ -14,6 +16,7 @@ from ....components.geometry import Geometry
 from ....components.data.monitor_data import FieldData
 from ....components.data.dataset import PermittivityDataset
 from ....components.data.data_array import ScalarFieldDataArray
+from ....exceptions import SetupError
 
 from .base import JaxObject
 from .types import JaxFloat, validate_jax_float
@@ -25,23 +28,8 @@ from .data.dataset import JaxPermittivityDataset
 PTS_PER_WVL_INTEGRATION = 20
 
 
-@register_pytree_node_class
-class JaxMedium(Medium, JaxObject):
-    """A :class:`.Medium` registered with jax."""
-
-    permittivity: JaxFloat = pd.Field(
-        1.0,
-        title="Permittivity",
-        description="Relative permittivity of the medium. May be a ``jax`` ``DeviceArray``.",
-        jax_field=True,
-    )
-
-    _sanitize_permittivity = validate_jax_float("permittivity")
-
-    def to_medium(self) -> Medium:
-        """Convert :class:`.JaxMedium` instance to :class:`.Medium`"""
-        self_dict = self.dict(exclude={"type"})
-        return Medium.parse_obj(self_dict)
+class AbstractJaxMedium(ABC, JaxObject):
+    """Holds some utility functions for Jax medium types."""
 
     # pylint: disable =too-many-locals
     def _get_volume_disc(
@@ -85,38 +73,70 @@ class JaxMedium(Medium, JaxObject):
         inside_kwargs = dict(zip("xyz", vol_coords_meshgrid))
         return inside_fn(**inside_kwargs)
 
-    # pylint:disable=too-many-arguments
-    def field_contribution(
+    # pylint: disable=too-many-arguments
+    def e_mult_volume(
         self,
         field: Literal["Ex", "Ey", "Ez"],
+        grad_data_fwd: FieldData,
+        grad_data_adj: FieldData,
+        vol_coords: Dict[str, np.ndarray],
+        inside_fn: Callable,
+        insid
+    ) -> xr.DataArray:
+        """Get the E_fwd * E_adj * dV field distribution inside of the discretized volume."""
+
+        e_fwd = grad_data_fwd.field_components[field]
+        e_adj = grad_data_adj.field_components[field]
+        e_dotted = d_vol * (e_fwd * e_adj)
+        e_dotted = e_dotted.real.interp(**vol_coords).isel(f=0)
+
+        # mask out any contributions not inside the structure volume
+        inside_mask = self.make_inside_mask(vol_coords=vol_coords, inside_fn=inside_fn)
+        inside_mask = inside_mask.reshape(e_dotted.shape)
+
+        return inside_mask * xr.DataArray(e_dotted, coords=vol_coords)
+
+    def d_eps_map(
+        self,
         grad_data_fwd: FieldData,
         grad_data_adj: FieldData,
         sim_bounds: Bound,
         wvl_mat: float,
         inside_fn: Callable,
-    ) -> float:
-        """Compute the contribution to the VJP from a given field component."""
+    ) -> xr.DataArray:
+        """Mapping of gradient w.r.t. permittivity at each point in discretized volume."""
 
-        vol_coords, d_vol = self._get_volume_disc(
-            grad_data=grad_data_fwd, sim_bounds=sim_bounds, wvl_mat=wvl_mat
-        )
-        e_fwd = grad_data_fwd.field_components[field]
-        e_adj = grad_data_adj.field_components[field]
-        e_dotted = (e_fwd * e_adj).real
+        e_mult_sum = 0.0
 
-        isel_kwargs = {
-            key: 0
-            for key, value in vol_coords.items()
-            if isinstance(value, float) or len(value) <= 1
-        }
-        interp_kwargs = {key: value for key, value in vol_coords.items() if key not in isel_kwargs}
-        integrand = e_dotted.isel(f=0, **isel_kwargs).interp(**interp_kwargs, assume_sorted=True)
+        for field in ("Ex", "Ey", "Ez"):
+            e_mult_sum += self.e_mult_volume(
+                field=field,
+                grad_data_fwd=grad_data_fwd,
+                grad_data_adj=grad_data_adj,
+                vol_coords=vol_coords,
+                d_vol=d_vol,
+            )
 
-        # mask out any contributions not inside the structure volume
-        inside_mask = self.make_inside_mask(vol_coords=vol_coords, inside_fn=inside_fn)
-        integrand_inside = inside_mask.reshape(integrand.shape) * integrand.values
+        return e_mult_sum
 
-        return d_vol * jnp.sum(integrand_inside)
+
+@register_pytree_node_class
+class JaxMedium(Medium, AbstractJaxMedium):
+    """A :class:`.Medium` registered with jax."""
+
+    permittivity: JaxFloat = pd.Field(
+        1.0,
+        title="Permittivity",
+        description="Relative permittivity of the medium. May be a ``jax`` ``DeviceArray``.",
+        jax_field=True,
+    )
+
+    _sanitize_permittivity = validate_jax_float("permittivity")
+
+    def to_medium(self) -> Medium:
+        """Convert :class:`.JaxMedium` instance to :class:`.Medium`"""
+        self_dict = self.dict(exclude={"type"})
+        return Medium.parse_obj(self_dict)
 
     # pylint:disable=too-many-locals
     def store_vjp(
@@ -130,22 +150,19 @@ class JaxMedium(Medium, JaxObject):
         """Returns the gradient of the medium parameters given forward and adjoint field data."""
 
         # integrate the dot product of each E component over the volume, update vjp for epsilon
-        vjp_permittivty = 0.0
-        for field in ("Ex", "Ey", "Ez"):
-            vjp_permittivty += self.field_contribution(
-                field=field,
-                grad_data_fwd=grad_data_fwd,
-                grad_data_adj=grad_data_adj,
-                sim_bounds=sim_bounds,
-                wvl_mat=wvl_mat,
-                inside_fn=inside_fn,
-            )
+        d_eps_map = self.d_eps_map(
+            grad_data_fwd=grad_data_fwd,
+            grad_data_adj=grad_data_adj,
+            sim_bounds=sim_bounds,
+            wvl_mat=wvl_mat,
+        )
 
+        vjp_permittivty = jnp.sum(d_eps_map.values)
         return self.copy(update=dict(permittivity=vjp_permittivty))
 
 
 @register_pytree_node_class
-class JaxAnisotropicMedium(AnisotropicMedium, JaxObject):
+class JaxAnisotropicMedium(AnisotropicMedium, AbstractJaxMedium):
     """A :class:`.Medium` registered with jax."""
 
     xx: JaxMedium = pd.Field(
@@ -198,26 +215,30 @@ class JaxAnisotropicMedium(AnisotropicMedium, JaxObject):
         """Returns the gradient of the medium parameters given forward and adjoint field data."""
 
         # integrate the dot product of each E component over the volume, update vjp for epsilon
+        vol_coords, d_vol = self._get_volume_disc(
+            grad_data=grad_data_fwd, sim_bounds=sim_bounds, wvl_mat=wvl_mat
+        )
+
         vjp_fields = {}
         for component in "xyz":
             field_name = "E" + component
             component_name = component + component
-            jax_medium = self.components[component_name]
-            vjp_ii = jax_medium.field_contribution(
+            e_mult_dim = self.e_mult_volume(
                 field=field_name,
                 grad_data_fwd=grad_data_fwd,
                 grad_data_adj=grad_data_adj,
-                sim_bounds=sim_bounds,
-                wvl_mat=wvl_mat,
-                inside_fn=inside_fn,
+                vol_coords=vol_coords,
+                d_vol=d_vol,
             )
+
+            vjp_ii = jnp.sum(e_mult_dim.real.values)
             vjp_fields[component_name] = JaxMedium(permittivity=vjp_ii)
 
         return self.copy(update=vjp_fields)
 
 
 @register_pytree_node_class
-class JaxCustomMedium(CustomMedium, JaxObject):
+class JaxCustomMedium(CustomMedium, AbstractJaxMedium):
     """A :class:`.CustomMedium` registered with ``jax``.
     Note: The gradient calculation assumes uniform field across the pixel.
     Therefore, the accuracy degrades as the pixel size becomes large
@@ -232,6 +253,24 @@ class JaxCustomMedium(CustomMedium, JaxObject):
         "interpolated based on the data nearest to the grid location.",
         jax_field=True,
     )
+
+    @pd.validator("eps_dataset", always=True)
+    def _is_not_3d(cls, val):
+        """Ensure the custom medium pixels contain at least one dimension with only pixel thick."""
+
+        for field_dim in "xyz":
+            field_name = f"eps_{field_dim}{field_dim}"
+            data_array = val.field_components[field_name]
+            coord_lens = [len(data_array.coords[key]) for key in "xyz"]
+            dims_len1 = [val == 1 for val in coord_lens]
+            if sum(dims_len1) == 0:
+                raise SetupError(
+                    "For adjoint plugin, 'JaxCustomMedium' can't contain more than "
+                    "1 pixel along all three dimensions. "
+                    f"Detected 3D pixelated grid in '{field_name}' component of 'eps_dataset.'."
+                )
+
+        return val
 
     @pd.validator("eps_dataset", always=True)
     def _single_frequency(cls, val):
@@ -308,6 +347,7 @@ class JaxCustomMedium(CustomMedium, JaxObject):
             coords = orig_data_array.coords
 
             # construct the coordinates for interpolation and selection within the custom medium
+            # TODO: extend this to all points within the volume.
             interp_coords = {dim_pt: coords[dim_pt] for dim_pt in "xyz" if len(coords[dim_pt]) > 1}
             isel_coords = {dim_pt: 0 for dim_pt in "xyz" if len(coords[dim_pt]) <= 1}
 
@@ -320,7 +360,7 @@ class JaxCustomMedium(CustomMedium, JaxObject):
             # compute the size of the user-supplied medium along each dimension.
             grid = grids[eps_field_name]
             d_sizes = grid.sizes
-
+            # import pdb; pdb.set_trace()
             # if any of the sizes are just 0, indicating an ndim < 3, just normalize out to 1.0
             d_sizes = (
                 np.ones(1) if len(dl) == 1 and dl[0] <= 0 else dl
