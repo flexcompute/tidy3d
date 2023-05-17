@@ -51,7 +51,8 @@ MAX_NUM_MEDIUMS = 65530
 MAX_TIME_STEPS = 1e8
 MAX_GRID_CELLS = 20e9
 MAX_CELLS_TIMES_STEPS = 1e17
-MAX_MONITOR_DATA_SIZE_BYTES = 10e9
+WARN_MONITOR_DATA_SIZE_GB = 10
+MAX_SIMULATION_DATA_SIZE_GB = 50
 
 # number of grid cells at which we warn about slow Simulation.epsilon()
 NUM_CELLS_WARN_EPSILON = 100_000_000
@@ -911,7 +912,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         tmesh = self.tmesh
         grid = self.grid
 
-        total_size_bytes = 0
+        total_size_gb = 0
         for monitor in self.monitors:
             monitor_inds = grid.discretize_inds(monitor, extend=True)
             num_cells = [inds[1] - inds[0] for inds in monitor_inds]
@@ -920,13 +921,21 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
                 num_cells = monitor.downsampled_num_cells(num_cells)
             num_cells = np.prod(num_cells)
             monitor_size = monitor.storage_size(num_cells=num_cells, tmesh=tmesh)
+            monitor_size_gb = monitor_size / 2**30
 
-            total_size_bytes += monitor_size
+            if monitor_size_gb > WARN_MONITOR_DATA_SIZE_GB:
+                log.warning(
+                    f"Monitor '{monitor.name}' estimated storage is {monitor_size_gb:1.2f}GB. "
+                    "Consider making it smaller, using fewer frequencies, or spatial or temporal "
+                    "downsampling using 'interval_space' and 'interval', respectively."
+                )
 
-        if total_size_bytes > MAX_MONITOR_DATA_SIZE_BYTES:
+            total_size_gb += monitor_size_gb
+
+        if total_size_gb > MAX_SIMULATION_DATA_SIZE_GB:
             raise SetupError(
-                f"Simulation's monitors have {total_size_bytes:.2e} bytes of estimated storage, "
-                f"a maximum of {MAX_MONITOR_DATA_SIZE_BYTES:.2e} are allowed."
+                f"Simulation's monitors have {total_size_gb:.2f}GB of estimated storage, "
+                f"a maximum of {MAX_SIMULATION_DATA_SIZE_GB:.2f}GB are allowed."
             )
 
     def _validate_datasets_not_none(self) -> None:

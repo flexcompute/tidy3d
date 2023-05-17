@@ -446,8 +446,16 @@ def test_validate_size_spatial_and_time(monkeypatch):
         s._validate_size()
 
 
-def test_validate_mnt_size(monkeypatch):
-    monkeypatch.setattr(simulation, "MAX_MONITOR_DATA_SIZE_BYTES", 1)
+def test_validate_mnt_size(monkeypatch, log_capture):
+
+    # warning for monitor size
+    monkeypatch.setattr(simulation, "WARN_MONITOR_DATA_SIZE_GB", 1 / 2**30)
+    s = SIM.copy(update=dict(monitors=(td.FieldMonitor(name="f", freqs=[1], size=(1, 1, 1)),)))
+    s._validate_monitor_size()
+    assert_log_level(log_capture, "WARNING")
+
+    # error for simulation size
+    monkeypatch.setattr(simulation, "MAX_SIMULATION_DATA_SIZE_GB", 1 / 2**30)
     with pytest.raises(SetupError):
         s = SIM.copy(update=dict(monitors=(td.FieldMonitor(name="f", freqs=[1], size=(1, 1, 1)),)))
         s._validate_monitor_size()
