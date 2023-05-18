@@ -26,6 +26,8 @@ Advanced Structure Definition
     notebooks/Self_intersecting_polyslab
     notebooks/STLImport
     notebooks/TFSF
+    notebooks/FullyAnisotropic
+    notebooks/Gyrotropic
 
 Grid and Boundaries
 ~~~~~~~~~~~~~~~~~~~

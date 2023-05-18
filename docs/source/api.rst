@@ -76,6 +76,14 @@ Geometry
    TriangleMesh
    GeometryGroup
 
+Transformations
+----------------
+
+.. autosummary::
+   :toctree: _autosummary/
+
+   RotationAroundAxis
+
 Mediums
 =======
 
@@ -88,6 +96,7 @@ Non-Dispersive Medium
    Medium
    PECMedium
    CustomMedium
+   FullyAnisotropicMedium
 
 Dispersive Mediums
 ------------------
