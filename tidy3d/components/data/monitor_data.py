@@ -322,7 +322,7 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
             return field_components
 
         # Interpolate field components to cell centers
-        interp_dict = {}
+        interp_dict = {"assume_sorted": True}
         for dim, cents in zip(self._tangential_dims, self._plane_grid_centers):
             if cents.size > 0:
                 interp_dict[dim] = cents
@@ -456,7 +456,7 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
         """
         fields = self._tangential_fields
 
-        interp_dict = {}
+        interp_dict = {"assume_sorted": True}
         for dim, cents in zip(self._tangential_dims, centers):
             if cents.size > 0:
                 interp_dict[dim] = cents
