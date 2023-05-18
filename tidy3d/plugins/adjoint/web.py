@@ -685,8 +685,8 @@ def run_local_bwd(
 
     # grab the forward simulation and its gradient monitor data
     (sim_data_fwd,) = res
-    grad_data_fwd = sim_data_fwd.grad_data
-    grad_eps_data_fwd = sim_data_fwd.grad_eps_data
+    grad_data_fwd = sim_data_fwd.grad_data_symmetry
+    grad_eps_data_fwd = sim_data_fwd.grad_eps_data_symmetry
 
     # make and run adjoint simulation
     fwidth_adj = sim_data_fwd.simulation._fwidth_adjoint  # pylint:disable=protected-access
@@ -699,7 +699,7 @@ def run_local_bwd(
         callback_url=callback_url,
         verbose=verbose,
     )
-    grad_data_adj = sim_data_adj.grad_data
+    grad_data_adj = sim_data_adj.grad_data_symmetry
 
     # get gradient and insert into the resulting simulation structure medium
     sim_vjp = sim_data_vjp.simulation.store_vjp(grad_data_fwd, grad_data_adj, grad_eps_data_fwd)
@@ -861,8 +861,8 @@ def run_async_local_bwd(
     grad_eps_data_fwd = {}
 
     for i, sim_data_fwd in enumerate(batch_data_fwd):
-        grad_data_fwd[i] = sim_data_fwd.grad_data
-        grad_eps_data_fwd[i] = sim_data_fwd.grad_eps_data
+        grad_data_fwd[i] = sim_data_fwd.grad_data_symmetry
+        grad_eps_data_fwd[i] = sim_data_fwd.grad_eps_data_symmetry
 
     # make and run adjoint simulation
     sims_adj = []
@@ -885,9 +885,9 @@ def run_async_local_bwd(
     sims_vjp = []
     for i, (sim_data_fwd, sim_data_adj) in enumerate(zip(batch_data_fwd, batch_data_adj)):
 
-        grad_data_fwd = sim_data_fwd.grad_data
-        grad_data_adj = sim_data_adj.grad_data
-        grad_data_eps_fwd = sim_data_fwd.grad_eps_data
+        grad_data_fwd = sim_data_fwd.grad_data_symmetry
+        grad_data_adj = sim_data_adj.grad_data_symmetry
+        grad_data_eps_fwd = sim_data_fwd.grad_eps_data_symmetry
 
         sim_data_vjp = batch_data_vjp[i]
         sim_vjp = sim_data_vjp.simulation.store_vjp(grad_data_fwd, grad_data_adj, grad_data_eps_fwd)

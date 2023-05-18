@@ -51,6 +51,16 @@ class JaxSimulationData(SimulationData, JaxObject):
     )
 
     @property
+    def grad_data_symmetry(self) -> Tuple[FieldData, ...]:
+        """``self.grad_data`` but with ``symmetry_expanded_copy`` applied."""
+        return tuple(data.symmetry_expanded_copy for data in self.grad_data)
+
+    @property
+    def grad_eps_data_symmetry(self) -> Tuple[FieldData, ...]:
+        """``self.grad_eps_data`` but with ``symmetry_expanded_copy`` applied."""
+        return tuple(data.symmetry_expanded_copy for data in self.grad_eps_data)
+
+    @property
     def output_monitor_data(self) -> Dict[str, JaxMonitorDataType]:
         """Dictionary of ``.output_data`` monitor ``.name`` to the corresponding data."""
         return {monitor_data.monitor.name: monitor_data for monitor_data in self.output_data}

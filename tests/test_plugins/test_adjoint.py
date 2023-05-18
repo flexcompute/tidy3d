@@ -103,8 +103,8 @@ def run_emulated_bwd(
 
     # Forward data
     sim_data_fwd = JaxSimulationData.from_file(FWD_SIM_DATA_FILE)
-    grad_data_fwd = sim_data_fwd.grad_data
-    grad_eps_data_fwd = sim_data_fwd.grad_eps_data
+    grad_data_fwd = sim_data_fwd.grad_data_symmetry
+    grad_eps_data_fwd = sim_data_fwd.grad_eps_data_symmetry
 
     # Adjoint data
     sim_data_adj = run_emulated(
@@ -114,7 +114,7 @@ def run_emulated_bwd(
     )
 
     jax_sim_data_adj = JaxSimulationData.from_sim_data(sim_data_adj, jax_info_adj)
-    grad_data_adj = jax_sim_data_adj.grad_data
+    grad_data_adj = jax_sim_data_adj.grad_data_symmetry
 
     # get gradient and insert into the resulting simulation structure medium
     sim_vjp = jax_sim_data_adj.simulation.store_vjp(grad_data_fwd, grad_data_adj, grad_eps_data_fwd)

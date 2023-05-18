@@ -20,6 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - Log messages provide the correct caller origin (file name and line number).
 - `Medium2D` is removed from the list of allowed options for `Simulation.medium` in the documentation.
+- Symmetry works properly in `adjoint` plugin.
 
 ## [2.1.1] - 2023-4-25
 
