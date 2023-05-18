@@ -105,6 +105,7 @@ Photonic Integrated Circuit Components
 
     notebooks/YJunction
     notebooks/MMI_1x4
+    notebooks/BilevelPSR
     notebooks/WaveguideCrossing
     notebooks/WaveguideSizeConverter
     notebooks/BraggGratings.ipynb
