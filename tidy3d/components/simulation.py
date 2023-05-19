@@ -896,10 +896,10 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
     def _validate_size(self) -> None:
         """Ensures the simulation is within size limits before simulation is uploaded."""
 
-        num_cells = self.num_cells
-        if num_cells > MAX_GRID_CELLS:
+        num_comp_cells = self.num_cells / 2 ** (np.sum(np.abs(self.symmetry)))
+        if num_comp_cells > MAX_GRID_CELLS:
             raise SetupError(
-                f"Simulation has {num_cells:.2e} computational cells, "
+                f"Simulation has {num_comp_cells:.2e} computational cells, "
                 f"a maximum of {MAX_GRID_CELLS:.2e} are allowed."
             )
 
@@ -910,7 +910,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
                 f"a maximum of {MAX_TIME_STEPS:.2e} are allowed."
             )
 
-        num_cells_times_steps = num_time_steps * num_cells
+        num_cells_times_steps = num_time_steps * num_comp_cells
         if num_cells_times_steps > MAX_CELLS_TIMES_STEPS:
             raise SetupError(
                 f"Simulation has {num_cells_times_steps:.2e} grid cells * time steps, "
