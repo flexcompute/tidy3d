@@ -12,6 +12,7 @@ from .data_array import DataArray
 from .data_array import ScalarFieldDataArray, ScalarFieldTimeDataArray, ScalarModeFieldDataArray
 from .data_array import ModeIndexDataArray
 from .data_array import TriangleMeshDataArray
+from .data_array import TimeDataArray
 
 from ..base import Tidy3dBaseModel
 from ..types import Axis
@@ -402,4 +403,12 @@ class TriangleMeshDataset(Dataset):
         title="Surface mesh data",
         description="Dataset containing the surface triangles and corresponding face indices "
         "for a surface mesh.",
+    )
+
+
+class TimeDataset(Dataset):
+    """Dataset for storing a function of time."""
+
+    values: TimeDataArray = pd.Field(
+        ..., title="Values", description="Values as a function of time."
     )

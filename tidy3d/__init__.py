@@ -26,7 +26,7 @@ from .components.mode import ModeSpec
 from .components.apodization import ApodizationSpec
 
 # sources
-from .components.source import GaussianPulse, ContinuousWave
+from .components.source import GaussianPulse, ContinuousWave, CustomSourceTime
 from .components.source import UniformCurrentSource, PlaneWave, ModeSource, PointDipole
 from .components.source import GaussianBeam, AstigmaticGaussianBeam
 from .components.source import CustomFieldSource, TFSF, CustomCurrentSource

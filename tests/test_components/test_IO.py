@@ -37,6 +37,8 @@ def set_datasets_to_none(sim):
             src["field_dataset"] = None
         elif src["type"] == "CustomCurrentSource":
             src["current_dataset"] = None
+        if src["source_time"]["type"] == "CustomSourceTime":
+            src["source_time"]["source_time_dataset"] = None
     for structure in sim_dict["structures"]:
         if structure["geometry"]["type"] == "TriangleMesh":
             structure["geometry"]["mesh_dataset"] = None

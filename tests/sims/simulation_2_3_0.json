@@ -929,6 +929,34 @@
             "angle_phi": 0.6283185307179586,
             "pol_angle": 0.0,
             "injection_axis": 2
+        },
+        {
+            "type": "UniformCurrentSource",
+            "center": [
+                0.0,
+                0.5,
+                0.0
+            ],
+            "size": [
+                0.0,
+                0.0,
+                0.0
+            ],
+            "source_time": {
+                "amplitude": 1.0,
+                "phase": 0.0,
+                "type": "CustomSourceTime",
+                "freq0": 200000000000000.0,
+                "fwidth": 40000000000000.0,
+                "offset": 5.0,
+                "source_time_dataset": {
+                    "type": "TimeDataset",
+                    "values": "TimeDataArray"
+                }
+            },
+            "name": null,
+            "interpolate": true,
+            "polarization": "Hx"
         }
     ],
     "boundary_spec": {

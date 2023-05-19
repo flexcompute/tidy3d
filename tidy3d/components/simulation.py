@@ -26,7 +26,7 @@ from .boundary import BoundarySpec, BlochBoundary, PECBoundary, PMCBoundary, Per
 from .boundary import PML, StablePML, Absorber, AbsorberSpec
 from .structure import Structure
 from .source import SourceType, PlaneWave, GaussianBeam, AstigmaticGaussianBeam, CustomFieldSource
-from .source import CustomCurrentSource
+from .source import CustomCurrentSource, CustomSourceTime
 from .source import TFSF, Source
 from .monitor import MonitorType, Monitor, FreqMonitor, SurfaceIntegrationMonitor
 from .monitor import AbstractFieldMonitor, DiffractionMonitor, AbstractFieldProjectionMonitor
@@ -68,6 +68,10 @@ DIST_NEIGHBOR_REL_2D_MED = 1e-5
 
 # height of the PML plotting boxes along any dimensions where sim.size[dim] == 0
 PML_HEIGHT_FOR_0_DIMS = 0.02
+
+# allow some numerical flexibility before warning about CustomSourceTime
+# in units of dt
+CUSTOMSOURCETIME_TOL = 1.1
 
 
 class Simulation(Box):  # pylint:disable=too-many-public-methods
@@ -840,6 +844,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         """Call validators taking z`self` that get run after init."""
         self._validate_no_structures_pml()
         self._validate_tfsf_nonuniform_grid()
+        self._validate_customsourcetime()
 
     def _validate_no_structures_pml(self) -> None:
         """Ensure no structures terminate / have bounds inside of PML."""
@@ -908,6 +913,34 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
                             "uniform grid in both directions tangential to the TFSF injection "
                             f"axis, '{'xyz'[source.injection_axis]}'."
                         )
+
+    def _validate_customsourcetime(self) -> None:
+        """Make sure custom source time is not undersampled.
+        Also, make sure that all simulation.tmesh values are covered."""
+        for source in self.sources:
+            if isinstance(source.source_time, CustomSourceTime):
+                dataset = source.source_time.source_time_dataset
+                if dataset is None:
+                    continue
+                times = dataset.values.coords["t"].values
+                if (
+                    min(times) > self.tmesh[0]
+                    or max(times) < self.tmesh[-1] - CUSTOMSOURCETIME_TOL * self.dt
+                ):
+                    raise ValidationError(
+                        "'CustomSourceTime' found with time coordinates "
+                        "'times' that do not cover the entire 'Simulation.tmesh'. Currently, "
+                        f"'(min(times), max(times)) = ({min(times)}, {max(times)})', while "
+                        f"'(min(tmesh), max(tmesh)) = ({self.tmesh[0]}, {self.tmesh[-1]}).' "
+                    )
+                max_dt = np.amax(np.diff(times))
+                if max_dt > self.dt * CUSTOMSOURCETIME_TOL:
+                    log.warning(
+                        f"'CustomSourceTime' found with time step 'max(dt) = {max_dt:.3g}', "
+                        f"while the simulation time step is 'dt={self.dt}'. "
+                        "We recommend that the largest time step of the custom source "
+                        f"be smaller than the time step of the simulation."
+                    )
 
     """ Pre submit validation (before web.upload()) """
 
@@ -2693,6 +2726,11 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         """List of custom datasets for verification purposes. If the list is not empty, then
         the simulation needs to be exported to hdf5 to store the data.
         """
+        datasets_source_time = [
+            src.source_time.source_time_dataset
+            for src in self.sources
+            if isinstance(src.source_time, CustomSourceTime)
+        ]
         datasets_field_source = [
             src.field_dataset for src in self.sources if isinstance(src, CustomFieldSource)
         ]
@@ -2709,7 +2747,13 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
                 for geometry in struct.geometry.geometries:
                     datasets_geometry += geometry.mesh_dataset
 
-        return datasets_field_source + datasets_current_source + datasets_medium + datasets_geometry
+        return (
+            datasets_source_time
+            + datasets_field_source
+            + datasets_current_source
+            + datasets_medium
+            + datasets_geometry
+        )
 
     def _volumetric_structures_grid(self, grid: Grid) -> Tuple[Structure]:
         """Generate a tuple of structures wherein any 2D materials are converted to 3D
