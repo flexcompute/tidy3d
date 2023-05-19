@@ -34,6 +34,9 @@ FREQ_EVAL_INF = 1e50
 # extrapolation option in custom medium
 FILL_VALUE = "extrapolate"
 
+# cap on number of nonlinear iterations
+NONLINEAR_MAX_NUMITERS = 100
+
 
 def ensure_freq_in_range(eps_model: Callable[[float], complex]) -> Callable[[float], complex]:
     """Decorate ``eps_model`` to log warning if frequency supplied is out of bounds."""
@@ -71,6 +74,75 @@ def ensure_freq_in_range(eps_model: Callable[[float], complex]) -> Callable[[flo
 """ Medium Definitions """
 
 
+class NonlinearSpec(ABC, Tidy3dBaseModel):
+    """Abstract specification for adding a nonlinearity to a medium.
+
+     Note
+    ----
+    The nonlinear constitutive relation is solved iteratively; it may not converge
+    for strong nonlinearities. Increasing `numiters` can help with convergence.
+    """
+
+    numiters: pd.PositiveInt = pd.Field(
+        1,
+        title="Number of iterations",
+        description="Number of iterations for solving nonlinear constitutive relation.",
+    )
+
+    @pd.validator("numiters", always=True)
+    def _validate_numiters(cls, val):
+        """Check that numiters is not too large."""
+        if val > NONLINEAR_MAX_NUMITERS:
+            raise ValidationError(
+                "'NonlinearSpec.numiters' must be less than "
+                f"{NONLINEAR_MAX_NUMITERS}, currently {val}."
+            )
+        return val
+
+
+class NonlinearSusceptibility(NonlinearSpec):
+    """Specification adding an instantaneous nonlinear susceptibility to a medium.
+
+    Note
+    ----
+    The instantaneous nonlinear polarization is given by
+    .. math::
+
+        P_{NL} = \\epsilon_0 \\chi_3 |E|^2 E
+
+    Note
+    ----
+    The nonlinear constitutive relation is solved iteratively; it may not converge
+    for strong nonlinearities. Increasing `numiters` can help with convergence.
+
+    Note
+    ----
+    For complex fields (e.g. when using Bloch boundary conditions), the nonlinearity
+    is applied separately to the real and imaginary parts, so that the above equation
+    holds when both E and :math:`P_{NL}` are replaced by their real or imaginary parts.
+    The nonlinearity is only applied to the real-valued fields since they are the
+    physical fields.
+
+    Note
+    ----
+    Different field components do not interact nonlinearly. For example,
+    when calculating :math:`P_{NL}_x`, we approximate :math:`|E|^2 \\approx |E_x|^2`.
+    This approximation is valid when the E field is predominantly polarized along one
+    of the x, y, or z axes.
+
+    Example
+    -------
+    >>> medium = Medium(permittivity=2, nonlinear_spec=NonlinearSusceptibility(chi3=1))
+    """
+
+    chi3: float = pd.Field(
+        ..., title="Chi3", description="Chi3 nonlinear susceptibility.", units="um^2 / V^2"
+    )
+
+
+NonlinearSpecType = Union[NonlinearSusceptibility]
+
+
 class AbstractMedium(ABC, Tidy3dBaseModel):
     """A medium within which electromagnetic waves propagate."""
 
@@ -92,6 +164,22 @@ class AbstractMedium(ABC, Tidy3dBaseModel):
         "diverged. Monitor data up to the divergence point will still be returned and can be "
         "useful in some cases.",
     )
+
+    nonlinear_spec: NonlinearSpecType = pd.Field(
+        None,
+        title="Nonlinear Spec",
+        description="Nonlinear spec applied on top of the base medium properties.",
+    )
+
+    @pd.validator("nonlinear_spec", always=True)
+    def _validate_nonlinear_spec(cls, val):
+        """Check compatibility with nonlinear_spec."""
+        if val is None:
+            return val
+        raise ValidationError(
+            f"A 'nonlinear_spec' of class {type(val)} is not "
+            f"currently supported for medium class {cls}."
+        )
 
     _name_validator = validate_name_str()
 
@@ -537,6 +625,16 @@ class Medium(AbstractMedium):
         units=CONDUCTIVITY,
     )
 
+    @pd.validator("nonlinear_spec", always=True)
+    def _validate_nonlinear_spec(cls, val):
+        """Check compatibility with nonlinear_spec."""
+        if val is None or isinstance(val, NonlinearSusceptibility):
+            return val
+        raise ValidationError(
+            f"A 'nonlinear_spec' of class {type(val)} is not "
+            f"currently supported for medium class {cls}."
+        )
+
     @pd.validator("conductivity", always=True)
     def _passivity_validation(cls, val, values):
         """Assert passive medium if `allow_gain` is False."""
@@ -619,6 +717,16 @@ class CustomIsotropicMedium(AbstractCustomMedium, Medium):
         "permittivity at angular frequency omega is given by conductivity/omega.",
         units=CONDUCTIVITY,
     )
+
+    @pd.validator("nonlinear_spec", always=True)
+    def _validate_nonlinear_spec(cls, val):
+        """Check compatibility with nonlinear_spec."""
+        if val is None:
+            return val
+        raise ValidationError(
+            f"A 'nonlinear_spec' of class {type(val)} is not "
+            f"currently supported for medium class {cls}."
+        )
 
     @pd.validator("permittivity", always=True)
     def _eps_inf_greater_no_less_than_one(cls, val):
