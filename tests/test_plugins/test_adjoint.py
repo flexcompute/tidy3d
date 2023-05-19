@@ -19,7 +19,7 @@ from tidy3d.exceptions import DataError, Tidy3dKeyError, AdjointError
 from tidy3d.plugins.adjoint.components.base import JaxObject
 from tidy3d.plugins.adjoint.components.geometry import JaxBox, JaxPolySlab, MAX_NUM_VERTICES
 from tidy3d.plugins.adjoint.components.medium import JaxMedium, JaxAnisotropicMedium
-from tidy3d.plugins.adjoint.components.medium import JaxCustomMedium
+from tidy3d.plugins.adjoint.components.medium import JaxCustomMedium, MAX_NUM_CELLS_CUSTOM_MEDIUM
 from tidy3d.plugins.adjoint.components.structure import JaxStructure
 from tidy3d.plugins.adjoint.components.simulation import JaxSimulation, JaxInfo
 from tidy3d.plugins.adjoint.components.data.sim_data import JaxSimulationData
@@ -1186,3 +1186,34 @@ def test_custom_medium_3D(use_emulated_run):
     make_custom_medium(10, 10, 1)
     with pytest.raises(pydantic.ValidationError):
         make_custom_medium(10, 10, 10)
+
+
+def test_custom_medium_size(use_emulated_run):
+    """Ensure custom medium fails if too many cells provided."""
+
+    jax_box = JaxBox(size=(1, 1, 1), center=(0, 0, 0))
+
+    def make_custom_medium(num_cells: int) -> JaxCustomMedium:
+
+        Nx = num_cells
+        Ny = Nz = 1
+
+        # custom medium
+        (xmin, ymin, zmin), (xmax, ymax, zmax) = jax_box.bounds
+        coords = dict(
+            x=np.linspace(xmin, xmax, Nx).tolist(),
+            y=np.linspace(ymin, ymax, Ny).tolist(),
+            z=np.linspace(zmin, zmax, Nz).tolist(),
+            f=[FREQ0],
+        )
+
+        values = np.random.random((Nx, Ny, Nz, 1))
+        eps_ii = JaxDataArray(values=values, coords=coords)
+        field_components = {f"eps_{dim}{dim}": eps_ii for dim in "xyz"}
+        jax_eps_dataset = JaxPermittivityDataset(**field_components)
+        return JaxCustomMedium(eps_dataset=jax_eps_dataset)
+
+    make_custom_medium(num_cells=1)
+    make_custom_medium(num_cells=MAX_NUM_CELLS_CUSTOM_MEDIUM)
+    with pytest.raises(pydantic.ValidationError):
+        make_custom_medium(num_cells=MAX_NUM_CELLS_CUSTOM_MEDIUM + 1)

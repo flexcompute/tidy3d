@@ -27,6 +27,9 @@ from .data.dataset import JaxPermittivityDataset
 # number of integration points per unit wavelength in material
 PTS_PER_WVL_INTEGRATION = 20
 
+# maximum number of pixels allowed in each component of a JaxCustomMedium
+MAX_NUM_CELLS_CUSTOM_MEDIUM = 250_000
+
 
 class AbstractJaxMedium(ABC, JaxObject):
     """Holds some utility functions for Jax medium types."""
@@ -284,6 +287,24 @@ class JaxCustomMedium(CustomMedium, AbstractJaxMedium):
                     "For adjoint plugin, the 'JaxCustomMedium' is restricted to a 1D or 2D "
                     "pixellated grid. It may not contain multiple pixels along all 3 dimensions. "
                     f"Detected 3D pixelated grid in '{field_name}' component of 'eps_dataset'."
+                )
+
+        return val
+
+    @pd.validator("eps_dataset", always=True)
+    def _is_not_too_large(cls, val):
+        """Ensure number of pixels doesnt surpass a set amount."""
+
+        for field_dim in "xyz":
+            field_name = f"eps_{field_dim}{field_dim}"
+            data_array = val.field_components[field_name]
+            coord_lens = [len(data_array.coords[key]) for key in "xyz"]
+            num_cells_dim = np.prod(coord_lens)
+            if num_cells_dim > MAX_NUM_CELLS_CUSTOM_MEDIUM:
+                raise SetupError(
+                    "For the adjoint plugin, each component of the 'JaxCustomMedium.eps_dataset' "
+                    f"is restricted to have a maximum of {MAX_NUM_CELLS_CUSTOM_MEDIUM} cells. "
+                    f"Detected {num_cells_dim} grid cells in the '{field_name}' component ."
                 )
 
         return val
