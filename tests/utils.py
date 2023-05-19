@@ -365,6 +365,14 @@ SIM_FULL = Simulation(
             angle_phi=np.pi / 5,
             injection_axis=2,
         ),
+        UniformCurrentSource(
+            size=(0, 0, 0),
+            center=(0, 0.5, 0),
+            polarization="Hx",
+            source_time=CustomSourceTime.from_values(
+                freq0=2e14, fwidth=4e13, values=np.linspace(0, 10, 1000), dt=1e-12 / 100
+            ),
+        ),
     ],
     monitors=(
         FieldMonitor(

@@ -1,5 +1,7 @@
 """Defines electric current sources for injecting light into simulation."""
+# pylint: disable=too-many-lines
 
+from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import Union, Tuple, Optional
 
@@ -9,17 +11,19 @@ import numpy as np
 
 from .base import Tidy3dBaseModel, cached_property
 
-from .types import Direction, Polarization, Ax, FreqBound, ArrayFloat1D, Axis, PlotVal
+from .types import Direction, Polarization, Ax, FreqBound
+from .types import ArrayFloat1D, Axis, PlotVal, ArrayComplex1D
 from .validators import assert_plane, assert_volumetric, validate_name_str, get_value
 from .validators import warn_if_dataset_none, assert_single_freq_in_range
-from .data.dataset import FieldDataset
+from .data.dataset import FieldDataset, TimeDataset
+from .data.data_array import TimeDataArray
 from .geometry import Box, Coordinate
 from .mode import ModeSpec
 from .viz import add_ax_if_none, PlotParams, plot_params_source
 from .viz import ARROW_COLOR_SOURCE, ARROW_ALPHA, ARROW_COLOR_POLARIZATION
 from ..constants import RADIAN, HERTZ, MICROMETER, GLANCING_CUTOFF
 from ..constants import inf  # pylint:disable=unused-import
-from ..exceptions import SetupError
+from ..exceptions import SetupError, ValidationError
 from ..log import log
 
 
@@ -291,7 +295,99 @@ class ContinuousWave(Pulse):
         return const * offset * oscillation * amp
 
 
-SourceTimeType = Union[GaussianPulse, ContinuousWave]
+class CustomSourceTime(Pulse):
+    """Custom source time dependence, real or complex valued.
+
+    Note
+    ----
+    The source time dependence is linearly interpolated to the simulation time steps.
+    To ensure that this interpolation does not introduce artifacts, it is necessary
+    to use a sampling rate that is sufficiently fast relative to the simulation time step.
+
+    Example
+    -------
+    >>> cst = td.CustomSourceTime.from_values(freq0=1, fwidth=0.1,
+    >>>     values=np.linspace(0, 9, 10), dt=0.1)
+    """
+
+    source_time_dataset: Optional[TimeDataset] = pydantic.Field(
+        ..., title="Source time dataset", description="Dataset for storing the custom source time."
+    )
+
+    _source_time_dataset_none_warning = warn_if_dataset_none("source_time_dataset")
+
+    @pydantic.validator("source_time_dataset", always=True)
+    def _more_than_one_time(cls, val):
+        """Must have more than one time to interpolate."""
+        if val is None:
+            return val
+        if val.values.size <= 1:
+            raise ValidationError("'CustomSourceTime' must have more than one time coordinate.")
+        return val
+
+    @classmethod
+    def from_values(
+        cls, freq0: float, fwidth: float, values: ArrayComplex1D, dt: float
+    ) -> CustomSourceTime:
+        """Create a :class:`.CustomSourceTime` from a numpy array.
+
+        Parameters
+        ----------
+        freq0 : float
+            Estimated central frequency of the source.
+        fwidth : float
+            Estimated frequency width of the source.
+        values: ArrayComplex1D
+            Complex values of the source amplitude.
+        dt: float
+            Time step for the `values` array. This value should be sufficiently small
+            relative to the simulation `dt` in order to avoid interpolation artifacts.
+
+
+        Returns
+        -------
+        CustomSourceTime
+            :class:`.CustomSourceTime` with these values, and time coordinates evenly spaced
+            between 0 and dt * (N-1) with a step size of `dt`, where N is the length of
+            the values array.
+        """
+        times = np.arange(len(values)) * dt
+        source_time_dataarray = TimeDataArray(values, coords=dict(t=times))
+        source_time_dataset = TimeDataset(values=source_time_dataarray)
+        return CustomSourceTime(
+            freq0=freq0,
+            fwidth=fwidth,
+            source_time_dataset=source_time_dataset,
+        )
+
+    def amp_time(self, time: float) -> complex:
+        """Complex-valued source amplitude as a function of time.
+
+        Parameters
+        ----------
+        time : float
+            Time in seconds.
+
+        Returns
+        -------
+        complex
+            Complex-valued source amplitude at that time.
+        """
+        if self.source_time_dataset is None:
+            return None
+        times = self.source_time_dataset.values.coords["t"].values.squeeze()
+        if isinstance(time, float):
+            if time < min(times) or time > max(times):
+                return self.source_time_dataset.values.sel(t=time, method="nearest").to_numpy()
+            return self.source_time_dataset.values.interp(t=time).to_numpy()
+        val = np.zeros(len(time), dtype=complex)
+        mask = (time < min(times)) | (time > max(times))
+        val[mask] = self.source_time_dataset.values.sel(t=time[mask], method="nearest").to_numpy()
+        val[~mask] = self.source_time_dataset.values.interp(t=time[~mask]).to_numpy()
+        return val
+
+
+SourceTimeType = Union[GaussianPulse, ContinuousWave, CustomSourceTime]
 
 """ Source objects """
 
