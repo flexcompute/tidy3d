@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - Added `hlim` and `vlim` kwargs to `Simulation.plot()` and `Simulation.plot_eps()` for setting horizontal and veritcal plot limits.
+- Added support for chi3 nonlinearity via `NonlinearSusceptibility` class.
 
 ### Changed
 - `nyquist_step` also taking the frequency range of frequency-domain monitors into account.

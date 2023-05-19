@@ -508,3 +508,15 @@ def test_perturbation_medium():
             poles=[(1j, 3), (2j, 4)],
             poles_perturbation=[(None, pp_real)],
         )
+
+
+def test_nonlinear_medium():
+    med = td.Medium(nonlinear_spec=td.NonlinearSusceptibility(chi3=1.5, numiters=20))
+
+    with pytest.raises(pydantic.ValidationError):
+        med = td.PoleResidue(
+            poles=[(-1, 1)], nonlinear_spec=td.NonlinearSusceptibility(chi3=1.5, numiters=20)
+        )
+
+    with pytest.raises(pydantic.ValidationError):
+        med = td.Medium(nonlinear_spec=td.NonlinearSusceptibility(chi3=1.5, numiters=200))

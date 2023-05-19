@@ -195,6 +195,15 @@ SIM_FULL = td.Simulation(
             medium=custom_sellmeier,
         ),
         td.Structure(
+            geometry=td.Box(
+                size=(1, 1, 1),
+                center=(-1.0, 0.5, 0.5),
+            ),
+            medium=td.Medium(
+                nonlinear_spec=td.NonlinearSusceptibility(chi3=0.1, numiters=20),
+            ),
+        ),
+        td.Structure(
             geometry=td.PolySlab(
                 vertices=[(-1.5, -1.5), (-0.5, -1.5), (-0.5, -0.5)], slab_bounds=[-1, 1]
             ),

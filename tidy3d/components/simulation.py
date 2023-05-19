@@ -2885,6 +2885,12 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
                     red_coords = Coords(**dict(zip("xyz", coords_reduced)))
                     eps_structure = get_eps(structure=structure, frequency=freq, coords=red_coords)
 
+                    if structure.medium.nonlinear_spec is not None:
+                        consolidated_logger.warning(
+                            "Evaluating permittivity of a nonlinear "
+                            "medium ignores the nonlinearity."
+                        )
+
                     if isinstance(structure.geometry, TriangleMesh):
                         consolidated_logger.warning(
                             "Client-side permittivity of a 'TriangleMesh' may be "
