@@ -388,9 +388,10 @@ Adjoint
 .. autosummary::
    :toctree: _autosummary/
 
-   tidy3d.plugins.adjoint.run
-   tidy3d.plugins.adjoint.run_async
+   tidy3d.plugins.adjoint.web.run
+   tidy3d.plugins.adjoint.web.run_async
    tidy3d.plugins.adjoint.JaxBox
+   tidy3d.plugins.adjoint.JaxPolySlab
    tidy3d.plugins.adjoint.JaxMedium
    tidy3d.plugins.adjoint.JaxAnisotropicMedium
    tidy3d.plugins.adjoint.JaxCustomMedium
