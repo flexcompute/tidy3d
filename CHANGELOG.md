@@ -20,6 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Include source amplitude in `amp_time`.
 - Increased the maximum allowed estimated simulation data storage to 50GB. Individual monitors with projected data larger than 10GB will trigger a warning.
 - `PolySlab.inside` now uses `matplotlib.path.contains_points`.
+- `JaxCustomMedium` accepts a maximum of 250,000 grid cells.
 
 ### Fixed
 - Log messages provide the correct caller origin (file name and line number).
