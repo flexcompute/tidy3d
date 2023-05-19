@@ -158,23 +158,33 @@ def test_sim_bounds():
 
 def test_sim_size():
 
-    mesh1d = td.UniformGrid(dl=1e-6)
+    # note dl may need to change if we change the maximum allowed number of cells
+    mesh1d = td.UniformGrid(dl=2e-4)
     grid_spec = td.GridSpec(grid_x=mesh1d, grid_y=mesh1d, grid_z=mesh1d)
 
+    # check too many cells
     with pytest.raises(SetupError):
         s = td.Simulation(
             size=(1, 1, 1),
             grid_spec=grid_spec,
             run_time=1e-12,
-            boundary_spec=td.BoundarySpec.all_sides(boundary=td.Periodic()),
         )
         s._validate_size()
 
+    # should pass if symmetries applied
+    s = td.Simulation(
+        size=(1, 1, 1),
+        grid_spec=grid_spec,
+        run_time=1e-12,
+        symmetry=(1, -1, 1),
+    )
+    s._validate_size()
+
+    # check too many time steps
     with pytest.raises(pydantic.ValidationError):
         s = td.Simulation(
             size=(1, 1, 1),
             run_time=1e-7,
-            boundary_spec=td.BoundarySpec.all_sides(boundary=td.Periodic()),
         )
         s._validate_size()
 
