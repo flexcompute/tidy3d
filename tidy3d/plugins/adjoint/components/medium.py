@@ -88,11 +88,17 @@ class AbstractJaxMedium(ABC, JaxObject):
         e_fwd = grad_data_fwd.field_components[field]
         e_adj = grad_data_adj.field_components[field]
 
-        e_dotted = e_fwd * e_adj
+        e_dotted = (e_fwd * e_adj).real
 
         inside_map = self.make_inside_mask(vol_coords=vol_coords, inside_fn=inside_fn)
 
-        fields_eval = e_dotted.real.isel(f=0).interp(**vol_coords, assume_sorted=True)
+        isel_kwargs = {
+            key: 0
+            for key, value in vol_coords.items()
+            if isinstance(value, float) or len(value) <= 1
+        }
+        interp_kwargs = {key: value for key, value in vol_coords.items() if key not in isel_kwargs}
+        fields_eval = e_dotted.isel(f=0, **isel_kwargs).interp(**interp_kwargs, assume_sorted=True)
 
         return inside_map.reshape(fields_eval.shape) * d_vol * fields_eval
 
