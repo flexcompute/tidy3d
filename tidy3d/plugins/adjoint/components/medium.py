@@ -48,9 +48,9 @@ class AbstractJaxMedium(ABC, JaxObject):
 
             size = max_edge - min_edge
 
-            # ignore this dimension if there is no thickness along it
+            # don't discretize this dimension if there is no thickness along it
             if size == 0:
-                vol_coords[coord_name] = max_edge
+                vol_coords[coord_name] = [max_edge]
                 continue
 
             # update the volume element value
@@ -65,13 +65,14 @@ class AbstractJaxMedium(ABC, JaxObject):
         return vol_coords, d_vol
 
     @staticmethod
-    def make_inside_mask(vol_coords: Dict[str, np.ndarray], inside_fn: Callable) -> np.ndarray:
+    def make_inside_mask(vol_coords: Dict[str, np.ndarray], inside_fn: Callable) -> xr.DataArray:
         """Make a 3D mask of where the volume coordinates are inside a supplied function."""
 
         meshgrid_args = [vol_coords[dim] for dim in "xyz" if dim in vol_coords]
         vol_coords_meshgrid = np.meshgrid(*meshgrid_args, indexing="ij")
         inside_kwargs = dict(zip("xyz", vol_coords_meshgrid))
-        return inside_fn(**inside_kwargs)
+        values = inside_fn(**inside_kwargs)
+        return xr.DataArray(values, coords=vol_coords)
 
     # pylint: disable=too-many-arguments
     def e_mult_volume(
@@ -90,17 +91,19 @@ class AbstractJaxMedium(ABC, JaxObject):
 
         e_dotted = (e_fwd * e_adj).real
 
-        inside_map = self.make_inside_mask(vol_coords=vol_coords, inside_fn=inside_fn)
+        inside_mask = self.make_inside_mask(vol_coords=vol_coords, inside_fn=inside_fn)
 
         isel_kwargs = {
-            key: 0
+            key: [0]
             for key, value in vol_coords.items()
             if isinstance(value, float) or len(value) <= 1
         }
         interp_kwargs = {key: value for key, value in vol_coords.items() if key not in isel_kwargs}
-        fields_eval = e_dotted.isel(f=0, **isel_kwargs).interp(**interp_kwargs, assume_sorted=True)
 
-        return inside_map.reshape(fields_eval.shape) * d_vol * fields_eval
+        fields_eval = e_dotted.isel(f=0, **isel_kwargs).interp(**interp_kwargs, assume_sorted=True)
+        inside_mask = inside_mask.isel(**isel_kwargs)
+
+        return inside_mask * d_vol * fields_eval
 
     def d_eps_map(
         self,
@@ -382,16 +385,27 @@ class JaxCustomMedium(CustomMedium, AbstractJaxMedium):
                     r_max = min(r_max_coords, r_max_sim)
                     size = abs(r_max - r_min)
 
-                    # discretize according to PTS_PER_WVL
-                    num_cells_dim = int(size * PTS_PER_WVL_INTEGRATION / wvl_mat) + 1
-
                     # compute the length element along the dim, handling case of sim.size=0
-                    d_len = size / num_cells_dim if size > 0 else 1.0
-                    d_sizes[dim_index] = np.array([d_len])
+                    if size > 0:
+
+                        # discretize according to PTS_PER_WVL
+                        num_cells_dim = int(size * PTS_PER_WVL_INTEGRATION / wvl_mat) + 1
+                        d_len = size / num_cells_dim
+                        coords_interp = np.linspace(
+                            r_min + d_len / 2, r_max - d_len / 2, num_cells_dim
+                        )
+
+                    else:
+
+                        # just interpolate at the single position, dL=1 to normalize out
+                        d_len = 1.0
+                        coords_interp = np.array([(r_min + r_max) / 2.0])
 
                     # construct the interpolation coordinates along this dimension
-                    coords_interp = np.linspace(r_min + d_len / 2, r_max - d_len / 2, num_cells_dim)
+                    d_sizes[dim_index] = np.array([d_len])
                     interp_coords[dim_pt] = coords_interp
+
+                    # only sum this dimesion if there are multiple points
                     sum_axes.append(dim_pt)
 
                 # otherwise
@@ -412,6 +426,9 @@ class JaxCustomMedium(CustomMedium, AbstractJaxMedium):
                 d_vol=d_vols,
                 inside_fn=inside_fn,
             ).sum(sum_axes)
+
+            # if np.any(np.isnan(e_dotted)) or np.isclose(np.sum(e_dotted), 0):
+            #     import pdb; pdb.set_trace()
 
             # reshape values to the expected vjp shape to be more safe
             vjp_shape = tuple(len(coord) for _, coord in coords.items())
