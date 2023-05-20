@@ -191,7 +191,7 @@ def make_sim(
 ) -> JaxSimulation:
     """Construt a simulation out of some input parameters."""
 
-    box = td.Box(size=(0.2, 0.2, 0.2), center=(1, -2, 2))
+    box = td.Box(size=(0.2, 0.2, 0.2), center=(5, 0, 2))
     med = td.Medium(permittivity=2.0)
     extraneous_structure = td.Structure(geometry=box, medium=med)
 
@@ -214,7 +214,7 @@ def make_sim(
     jax_struct3 = JaxStructure(geometry=jax_polyslab1, medium=jax_med1)
 
     # custom medium
-    Nx, Ny, Nz = 10, 10, 1
+    Nx, Ny, Nz = 10, 1, 10
     (xmin, ymin, zmin), (xmax, ymax, zmax) = jax_box1.bounds
     coords = dict(
         x=np.linspace(xmin, xmax, Nx).tolist(),
@@ -351,6 +351,36 @@ def test_adjoint_pipeline(local, use_emulated_run):
     df_deps, df_dsize, df_dvertices, d_eps_base = grad_f(EPS, SIZE, VERTICES, BASE_EPS_VAL)
 
     print("gradient: ", df_deps, df_dsize, df_dvertices, d_eps_base)
+
+
+@pytest.mark.parametrize("local", (True, False))
+def test_adjoint_pipeline_2d(local, use_emulated_run):
+
+    run_fn = run_local if local else run
+
+    sim = make_sim(permittivity=EPS, size=SIZE, vertices=VERTICES, base_eps_val=BASE_EPS_VAL)
+
+    sim_size_2d = list(sim.size)
+    sim_size_2d[1] = 0
+    sim = sim.updated_copy(size=sim_size_2d)
+
+    sim_data = run_fn(sim, task_name="test", path=RUN_PATH)
+
+    def f(permittivity, size, vertices, base_eps_val):
+        sim = make_sim(
+            permittivity=permittivity, size=size, vertices=vertices, base_eps_val=base_eps_val
+        )
+        sim_size_2d = list(sim.size)
+        sim_size_2d[1] = 0
+
+        sim = sim.updated_copy(size=sim_size_2d)
+
+        sim_data = run_fn(sim, task_name="test", path=RUN_PATH)
+        amp = extract_amp(sim_data)
+        return objective(amp)
+
+    grad_f = grad(f, argnums=(0, 1, 2, 3))
+    df_deps, df_dsize, df_dvertices, d_eps_base = grad_f(EPS, SIZE, VERTICES, BASE_EPS_VAL)
 
 
 def test_adjoint_setup_fwd(use_emulated_run):
