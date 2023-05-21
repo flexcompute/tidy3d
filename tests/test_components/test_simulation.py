@@ -167,7 +167,7 @@ def test_sim_size():
         s = td.Simulation(
             size=(1, 1, 1),
             grid_spec=grid_spec,
-            run_time=1e-12,
+            run_time=1e-13,
         )
         s._validate_size()
 
@@ -175,7 +175,7 @@ def test_sim_size():
     s = td.Simulation(
         size=(1, 1, 1),
         grid_spec=grid_spec,
-        run_time=1e-12,
+        run_time=1e-13,
         symmetry=(1, -1, 1),
     )
     s._validate_size()

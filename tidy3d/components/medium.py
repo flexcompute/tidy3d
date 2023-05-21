@@ -1370,10 +1370,8 @@ class FullyAnisotropicMedium(AbstractMedium):
     -------
     >>> perm = [[2, 0, 0], [0, 1, 0], [0, 0, 3]]
     >>> cond = [[0.1, 0, 0], [0, 0, 0], [0, 0, 0]]
-    >>> anisotropic_dielectric = FullyAnisotropicMedium(
-    >>>    permittivity=perm, conductivity=cond
-    >>>)
-    """
+    >>> anisotropic_dielectric = FullyAnisotropicMedium(permittivity=perm, conductivity=cond)
+    """ 
 
     permittivity: TensorReal = pd.Field(
         [[1, 0, 0], [0, 1, 0], [0, 0, 1]],
