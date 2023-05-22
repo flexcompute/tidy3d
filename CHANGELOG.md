@@ -747,7 +747,8 @@ which fields are to be projected is now determined automatically based on the me
 - Job and Batch classes for better simulation handling (eventually to fully replace webapi functions).
 - A large number of small improvements and bug fixes.
 
-[Unreleased]: https://github.com/flexcompute/tidy3d/compare/v2.1.1...develop
+[Unreleased]: https://github.com/flexcompute/tidy3d/compare/v2.2.0...develop
+[2.2.0]: https://github.com/flexcompute/tidy3d/compare/v2.1.1...v2.2.0
 [2.1.1]: https://github.com/flexcompute/tidy3d/compare/v2.1.0...v2.1.1
 [2.1.0]: https://github.com/flexcompute/tidy3d/compare/v2.0.3...v2.1.0
 [2.0.3]: https://github.com/flexcompute/tidy3d/compare/v2.0.2...v2.0.3
