@@ -10,10 +10,11 @@ from .monitor_data import MonitorDataTypes, MonitorDataType, AbstractFieldData, 
 from ..base import Tidy3dBaseModel
 from ..simulation import Simulation
 from ..boundary import BlochBoundary
-from ..source import TFSF
+from ..source import TFSF, PointDipole
 from ..types import Ax, Axis, annotate_type, FieldVal, PlotScale, ColormapType
 from ..viz import equal_aspect, add_ax_if_none
 from ...exceptions import DataError, Tidy3dKeyError, ValidationError
+from ...constants import C_0, MU_0
 from ...log import log
 
 
@@ -152,6 +153,26 @@ class SimulationData(Tidy3dBaseModel):
         def source_spectrum_fn(freqs):
             """Source amplitude as function of frequency."""
             spectrum = source_time.spectrum(times, freqs, dt, complex_fields)
+
+            if isinstance(source, PointDipole):
+                # get background medium
+                sim = self.simulation
+                # if snap_zero_dim=False, then weird things happen at domain boundaries
+                dipole_grid = sim.discretize(box=source.bounding_box, snap_zero_dim=True)
+                coord_key = source.polarization if source.polarization[0] == "E" else "centers"
+                background_n = np.zeros(freqs.size)
+                # have to convert freqs into numpy otherwise there can happen a collision between
+                # python tuples and xarray's
+                for freq_id, freq in enumerate(np.array(freqs)):
+                    eps = sim.epsilon_on_grid(freq=freq, coord_key=coord_key, grid=dipole_grid)
+                    # We only use sim.medium in order to access the correct eps to nk conversion
+                    nk_medium = sim.medium.eps_complex_to_nk(eps.values)
+                    background_n[freq_id] = nk_medium[0]
+
+                dipole_normalization = (
+                    2 * np.pi * np.array(freqs) / np.sqrt(12 * np.pi * C_0 / MU_0 / background_n)
+                )
+                spectrum *= dipole_normalization
 
             # Remove user defined amplitude and phase from the normalization
             # such that they would still have an effect on the output fields.
