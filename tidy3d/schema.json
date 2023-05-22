@@ -1,6 +1,6 @@
 {
   "title": "Simulation",
-  "description": "Contains all information about Tidy3d simulation.\n\nParameters\n----------\ncenter : Tuple[float, float, float] = (0.0, 0.0, 0.0)\n    [units = um].  Center of object in x, y, and z.\nsize : Tuple[NonNegativeFloat, NonNegativeFloat, NonNegativeFloat]\n    [units = um].  Size in x, y, and z directions.\nrun_time : PositiveFloat\n    [units = sec].  Total electromagnetic evolution time in seconds. Note: If simulation 'shutoff' is specified, simulation will terminate early when shutoff condition met. \nmedium : Union[Medium, CustomMedium, AnisotropicMedium, PECMedium, PoleResidue, Sellmeier, Lorentz, Debye, Drude, Medium2D] = Medium(name=None, frequency_range=None, type='Medium', permittivity=1.0, conductivity=0.0)\n    Background medium of simulation, defaults to vacuum if not specified.\nsymmetry : Tuple[Literal[0, -1, 1], Literal[0, -1, 1], Literal[0, -1, 1]] = (0, 0, 0)\n    Tuple of integers defining reflection symmetry across a plane bisecting the simulation domain normal to the x-, y-, and z-axis at the simulation center of each axis, respectively. Each element can be ``0`` (no symmetry), ``1`` (even, i.e. 'PMC' symmetry) or ``-1`` (odd, i.e. 'PEC' symmetry). Note that the vectorial nature of the fields must be taken into account to correctly determine the symmetry value.\nstructures : Tuple[Structure, ...] = ()\n    Tuple of structures present in simulation. Note: Structures defined later in this list override the simulation material properties in regions of spatial overlap.\nsources : Tuple[Annotated[Union[tidy3d.components.source.UniformCurrentSource, tidy3d.components.source.PointDipole, tidy3d.components.source.GaussianBeam, tidy3d.components.source.AstigmaticGaussianBeam, tidy3d.components.source.ModeSource, tidy3d.components.source.PlaneWave, tidy3d.components.source.CustomFieldSource, tidy3d.components.source.TFSF], FieldInfo(default=PydanticUndefined, discriminator='type', extra={})], ...] = ()\n    Tuple of electric current sources injecting fields into the simulation.\nboundary_spec : BoundarySpec = BoundarySpec(x=Boundary(plus=PML(name=None,, type='PML',, num_layers=12,, parameters=PMLParams(sigma_order=3,, sigma_min=0.0,, sigma_max=1.5,, type='PMLParams',, kappa_order=3,, kappa_min=1.0,, kappa_max=3.0,, alpha_order=1,, alpha_min=0.0,, alpha_max=0.0)),, minus=PML(name=None,, type='PML',, num_layers=12,, parameters=PMLParams(sigma_order=3,, sigma_min=0.0,, sigma_max=1.5,, type='PMLParams',, kappa_order=3,, kappa_min=1.0,, kappa_max=3.0,, alpha_order=1,, alpha_min=0.0,, alpha_max=0.0)),, type='Boundary'), y=Boundary(plus=PML(name=None,, type='PML',, num_layers=12,, parameters=PMLParams(sigma_order=3,, sigma_min=0.0,, sigma_max=1.5,, type='PMLParams',, kappa_order=3,, kappa_min=1.0,, kappa_max=3.0,, alpha_order=1,, alpha_min=0.0,, alpha_max=0.0)),, minus=PML(name=None,, type='PML',, num_layers=12,, parameters=PMLParams(sigma_order=3,, sigma_min=0.0,, sigma_max=1.5,, type='PMLParams',, kappa_order=3,, kappa_min=1.0,, kappa_max=3.0,, alpha_order=1,, alpha_min=0.0,, alpha_max=0.0)),, type='Boundary'), z=Boundary(plus=PML(name=None,, type='PML',, num_layers=12,, parameters=PMLParams(sigma_order=3,, sigma_min=0.0,, sigma_max=1.5,, type='PMLParams',, kappa_order=3,, kappa_min=1.0,, kappa_max=3.0,, alpha_order=1,, alpha_min=0.0,, alpha_max=0.0)),, minus=PML(name=None,, type='PML',, num_layers=12,, parameters=PMLParams(sigma_order=3,, sigma_min=0.0,, sigma_max=1.5,, type='PMLParams',, kappa_order=3,, kappa_min=1.0,, kappa_max=3.0,, alpha_order=1,, alpha_min=0.0,, alpha_max=0.0)),, type='Boundary'), type='BoundarySpec')\n    Specification of boundary conditions along each dimension. If ``None``, periodic boundary conditions are applied on all sides. Default will change to PML in 2.0 so explicitly setting the boundaries is recommended.\nmonitors : Tuple[Annotated[Union[tidy3d.components.monitor.FieldMonitor, tidy3d.components.monitor.FieldTimeMonitor, tidy3d.components.monitor.PermittivityMonitor, tidy3d.components.monitor.FluxMonitor, tidy3d.components.monitor.FluxTimeMonitor, tidy3d.components.monitor.ModeMonitor, tidy3d.components.monitor.ModeSolverMonitor, tidy3d.components.monitor.FieldProjectionAngleMonitor, tidy3d.components.monitor.FieldProjectionCartesianMonitor, tidy3d.components.monitor.FieldProjectionKSpaceMonitor, tidy3d.components.monitor.DiffractionMonitor], FieldInfo(default=PydanticUndefined, discriminator='type', extra={})], ...] = ()\n    Tuple of monitors in the simulation. Note: monitor names are used to access data after simulation is run.\ngrid_spec : GridSpec = GridSpec(grid_x=AutoGrid(type='AutoGrid',, min_steps_per_wvl=10.0,, max_scale=1.4,, dl_min=0.0,, mesher=GradedMesher(type='GradedMesher')), grid_y=AutoGrid(type='AutoGrid',, min_steps_per_wvl=10.0,, max_scale=1.4,, dl_min=0.0,, mesher=GradedMesher(type='GradedMesher')), grid_z=AutoGrid(type='AutoGrid',, min_steps_per_wvl=10.0,, max_scale=1.4,, dl_min=0.0,, mesher=GradedMesher(type='GradedMesher')), wavelength=None, override_structures=(), type='GridSpec')\n    Specifications for the simulation grid along each of the three directions.\nshutoff : NonNegativeFloat = 1e-05\n    Ratio of the instantaneous integrated E-field intensity to the maximum value at which the simulation will automatically terminate time stepping. Used to prevent extraneous run time of simulations with fully decayed fields. Set to ``0`` to disable this feature.\nsubpixel : bool = True\n    If ``True``, uses subpixel averaging of the permittivity based on structure definition, resulting in much higher accuracy for a given grid size.\nnormalize_index : Optional[NonNegativeInt] = 0\n    Index of the source in the tuple of sources whose spectrum will be used to normalize the frequency-dependent data. If ``None``, the raw field data is returned unnormalized.\ncourant : ConstrainedFloatValue = 0.99\n    Courant stability factor, controls time step to spatial step ratio. Lower values lead to more stable simulations for dispersive materials, but result in longer simulation times. This factor is normalized to no larger than 1 when CFL stability condition is met in 3D.\nversion : str = 2.1.1\n    String specifying the front end version number.\n\nExample\n-------\n>>> from tidy3d import Sphere, Cylinder, PolySlab\n>>> from tidy3d import UniformCurrentSource, GaussianPulse\n>>> from tidy3d import FieldMonitor, FluxMonitor\n>>> from tidy3d import GridSpec, AutoGrid\n>>> from tidy3d import BoundarySpec, Boundary\n>>> sim = Simulation(\n...     size=(3.0, 3.0, 3.0),\n...     grid_spec=GridSpec(\n...         grid_x = AutoGrid(min_steps_per_wvl = 20),\n...         grid_y = AutoGrid(min_steps_per_wvl = 20),\n...         grid_z = AutoGrid(min_steps_per_wvl = 20)\n...     ),\n...     run_time=40e-11,\n...     structures=[\n...         Structure(\n...             geometry=Box(size=(1, 1, 1), center=(0, 0, 0)),\n...             medium=Medium(permittivity=2.0),\n...         ),\n...     ],\n...     sources=[\n...         UniformCurrentSource(\n...             size=(0, 0, 0),\n...             center=(0, 0.5, 0),\n...             polarization=\"Hx\",\n...             source_time=GaussianPulse(\n...                 freq0=2e14,\n...                 fwidth=4e13,\n...             ),\n...         )\n...     ],\n...     monitors=[\n...         FieldMonitor(size=(0, 0, 0), center=(0, 0, 0), freqs=[1.5e14, 2e14], name='point'),\n...         FluxMonitor(size=(1, 1, 0), center=(0, 0, 0), freqs=[2e14, 2.5e14], name='flux'),\n...     ],\n...     symmetry=(0, 0, 0),\n...     boundary_spec=BoundarySpec(\n...         x = Boundary.pml(num_layers=20),\n...         y = Boundary.pml(num_layers=30),\n...         z = Boundary.periodic(),\n...     ),\n...     shutoff=1e-6,\n...     courant=0.8,\n...     subpixel=False,\n... )",
+  "description": "Contains all information about Tidy3d simulation.\n\nParameters\n----------\ncenter : Tuple[float, float, float] = (0.0, 0.0, 0.0)\n    [units = um].  Center of object in x, y, and z.\nsize : Tuple[NonNegativeFloat, NonNegativeFloat, NonNegativeFloat]\n    [units = um].  Size in x, y, and z directions.\nrun_time : PositiveFloat\n    [units = sec].  Total electromagnetic evolution time in seconds. Note: If simulation 'shutoff' is specified, simulation will terminate early when shutoff condition met. \nmedium : Union[Medium, CustomMedium, AnisotropicMedium, PECMedium, PoleResidue, Sellmeier, Lorentz, Debye, Drude, FullyAnisotropicMedium] = Medium(name=None, frequency_range=None, type='Medium', permittivity=1.0, conductivity=0.0)\n    Background medium of simulation, defaults to vacuum if not specified.\nsymmetry : Tuple[Literal[0, -1, 1], Literal[0, -1, 1], Literal[0, -1, 1]] = (0, 0, 0)\n    Tuple of integers defining reflection symmetry across a plane bisecting the simulation domain normal to the x-, y-, and z-axis at the simulation center of each axis, respectively. Each element can be ``0`` (no symmetry), ``1`` (even, i.e. 'PMC' symmetry) or ``-1`` (odd, i.e. 'PEC' symmetry). Note that the vectorial nature of the fields must be taken into account to correctly determine the symmetry value.\nstructures : Tuple[Structure, ...] = ()\n    Tuple of structures present in simulation. Note: Structures defined later in this list override the simulation material properties in regions of spatial overlap.\nsources : Tuple[Annotated[Union[tidy3d.components.source.UniformCurrentSource, tidy3d.components.source.PointDipole, tidy3d.components.source.GaussianBeam, tidy3d.components.source.AstigmaticGaussianBeam, tidy3d.components.source.ModeSource, tidy3d.components.source.PlaneWave, tidy3d.components.source.CustomFieldSource, tidy3d.components.source.TFSF], FieldInfo(default=PydanticUndefined, discriminator='type', extra={})], ...] = ()\n    Tuple of electric current sources injecting fields into the simulation.\nboundary_spec : BoundarySpec = BoundarySpec(x=Boundary(plus=PML(name=None,, type='PML',, num_layers=12,, parameters=PMLParams(sigma_order=3,, sigma_min=0.0,, sigma_max=1.5,, type='PMLParams',, kappa_order=3,, kappa_min=1.0,, kappa_max=3.0,, alpha_order=1,, alpha_min=0.0,, alpha_max=0.0)),, minus=PML(name=None,, type='PML',, num_layers=12,, parameters=PMLParams(sigma_order=3,, sigma_min=0.0,, sigma_max=1.5,, type='PMLParams',, kappa_order=3,, kappa_min=1.0,, kappa_max=3.0,, alpha_order=1,, alpha_min=0.0,, alpha_max=0.0)),, type='Boundary'), y=Boundary(plus=PML(name=None,, type='PML',, num_layers=12,, parameters=PMLParams(sigma_order=3,, sigma_min=0.0,, sigma_max=1.5,, type='PMLParams',, kappa_order=3,, kappa_min=1.0,, kappa_max=3.0,, alpha_order=1,, alpha_min=0.0,, alpha_max=0.0)),, minus=PML(name=None,, type='PML',, num_layers=12,, parameters=PMLParams(sigma_order=3,, sigma_min=0.0,, sigma_max=1.5,, type='PMLParams',, kappa_order=3,, kappa_min=1.0,, kappa_max=3.0,, alpha_order=1,, alpha_min=0.0,, alpha_max=0.0)),, type='Boundary'), z=Boundary(plus=PML(name=None,, type='PML',, num_layers=12,, parameters=PMLParams(sigma_order=3,, sigma_min=0.0,, sigma_max=1.5,, type='PMLParams',, kappa_order=3,, kappa_min=1.0,, kappa_max=3.0,, alpha_order=1,, alpha_min=0.0,, alpha_max=0.0)),, minus=PML(name=None,, type='PML',, num_layers=12,, parameters=PMLParams(sigma_order=3,, sigma_min=0.0,, sigma_max=1.5,, type='PMLParams',, kappa_order=3,, kappa_min=1.0,, kappa_max=3.0,, alpha_order=1,, alpha_min=0.0,, alpha_max=0.0)),, type='Boundary'), type='BoundarySpec')\n    Specification of boundary conditions along each dimension. If ``None``, periodic boundary conditions are applied on all sides. Default will change to PML in 2.0 so explicitly setting the boundaries is recommended.\nmonitors : Tuple[Annotated[Union[tidy3d.components.monitor.FieldMonitor, tidy3d.components.monitor.FieldTimeMonitor, tidy3d.components.monitor.PermittivityMonitor, tidy3d.components.monitor.FluxMonitor, tidy3d.components.monitor.FluxTimeMonitor, tidy3d.components.monitor.ModeMonitor, tidy3d.components.monitor.ModeSolverMonitor, tidy3d.components.monitor.FieldProjectionAngleMonitor, tidy3d.components.monitor.FieldProjectionCartesianMonitor, tidy3d.components.monitor.FieldProjectionKSpaceMonitor, tidy3d.components.monitor.DiffractionMonitor], FieldInfo(default=PydanticUndefined, discriminator='type', extra={})], ...] = ()\n    Tuple of monitors in the simulation. Note: monitor names are used to access data after simulation is run.\ngrid_spec : GridSpec = GridSpec(grid_x=AutoGrid(type='AutoGrid',, min_steps_per_wvl=10.0,, max_scale=1.4,, dl_min=0.0,, mesher=GradedMesher(type='GradedMesher')), grid_y=AutoGrid(type='AutoGrid',, min_steps_per_wvl=10.0,, max_scale=1.4,, dl_min=0.0,, mesher=GradedMesher(type='GradedMesher')), grid_z=AutoGrid(type='AutoGrid',, min_steps_per_wvl=10.0,, max_scale=1.4,, dl_min=0.0,, mesher=GradedMesher(type='GradedMesher')), wavelength=None, override_structures=(), type='GridSpec')\n    Specifications for the simulation grid along each of the three directions.\nshutoff : NonNegativeFloat = 1e-05\n    Ratio of the instantaneous integrated E-field intensity to the maximum value at which the simulation will automatically terminate time stepping. Used to prevent extraneous run time of simulations with fully decayed fields. Set to ``0`` to disable this feature.\nsubpixel : bool = True\n    If ``True``, uses subpixel averaging of the permittivity based on structure definition, resulting in much higher accuracy for a given grid size.\nnormalize_index : Optional[NonNegativeInt] = 0\n    Index of the source in the tuple of sources whose spectrum will be used to normalize the frequency-dependent data. If ``None``, the raw field data is returned unnormalized.\ncourant : ConstrainedFloatValue = 0.99\n    Courant stability factor, controls time step to spatial step ratio. Lower values lead to more stable simulations for dispersive materials, but result in longer simulation times. This factor is normalized to no larger than 1 when CFL stability condition is met in 3D.\nversion : str = 2.2.0\n    String specifying the front end version number.\n\nExample\n-------\n>>> from tidy3d import Sphere, Cylinder, PolySlab\n>>> from tidy3d import UniformCurrentSource, GaussianPulse\n>>> from tidy3d import FieldMonitor, FluxMonitor\n>>> from tidy3d import GridSpec, AutoGrid\n>>> from tidy3d import BoundarySpec, Boundary\n>>> sim = Simulation(\n...     size=(3.0, 3.0, 3.0),\n...     grid_spec=GridSpec(\n...         grid_x = AutoGrid(min_steps_per_wvl = 20),\n...         grid_y = AutoGrid(min_steps_per_wvl = 20),\n...         grid_z = AutoGrid(min_steps_per_wvl = 20)\n...     ),\n...     run_time=40e-11,\n...     structures=[\n...         Structure(\n...             geometry=Box(size=(1, 1, 1), center=(0, 0, 0)),\n...             medium=Medium(permittivity=2.0),\n...         ),\n...     ],\n...     sources=[\n...         UniformCurrentSource(\n...             size=(0, 0, 0),\n...             center=(0, 0.5, 0),\n...             polarization=\"Hx\",\n...             source_time=GaussianPulse(\n...                 freq0=2e14,\n...                 fwidth=4e13,\n...             ),\n...         )\n...     ],\n...     monitors=[\n...         FieldMonitor(size=(0, 0, 0), center=(0, 0, 0), freqs=[1.5e14, 2e14], name='point'),\n...         FluxMonitor(size=(1, 1, 0), center=(0, 0, 0), freqs=[2e14, 2.5e14], name='flux'),\n...     ],\n...     symmetry=(0, 0, 0),\n...     boundary_spec=BoundarySpec(\n...         x = Boundary.pml(num_layers=20),\n...         y = Boundary.pml(num_layers=30),\n...         z = Boundary.periodic(),\n...     ),\n...     shutoff=1e-6,\n...     courant=0.8,\n...     subpixel=False,\n... )",
   "type": "object",
   "properties": {
     "type": {
@@ -103,7 +103,7 @@
           "$ref": "#/definitions/Drude"
         },
         {
-          "$ref": "#/definitions/Medium2D"
+          "$ref": "#/definitions/FullyAnisotropicMedium"
         }
       ]
     },
@@ -455,7 +455,7 @@
     "version": {
       "title": "Version",
       "description": "String specifying the front end version number.",
-      "default": "2.1.1",
+      "default": "2.2.0",
       "type": "string"
     }
   },
@@ -1263,9 +1263,9 @@
       },
       "additionalProperties": false
     },
-    "Medium2D": {
-      "title": "Medium2D",
-      "description": "2D diagonally anisotropic medium.\n\nParameters\n----------\nname : Optional[str] = None\n    Optional unique name for medium.\nfrequency_range : Optional[Tuple[float, float]] = None\n    [units = (Hz, Hz)].  Optional range of validity for the medium.\nss : Union[Medium, PoleResidue, Sellmeier, Lorentz, Debye, Drude]\n    Medium describing the ss-component of the diagonal permittivity tensor. The ss-component refers to the in-plane dimension of the medium that is the first component in order of 'x', 'y', 'z'. If the 2D material is normal to the y-axis, for example, then this determines the xx-component of the corresponding 3D medium.\ntt : Union[Medium, PoleResidue, Sellmeier, Lorentz, Debye, Drude]\n    Medium describing the tt-component of the diagonal permittivity tensor. The tt-component refers to the in-plane dimension of the medium that is the second component in order of 'x', 'y', 'z'. If the 2D material is normal to the y-axis, for example, then this determines the zz-component of the corresponding 3D medium.\n\nNote\n----\nOnly diagonal anisotropy is currently supported.\n\nExample\n-------\n>>> drude_medium = Drude(eps_inf=2.0, coeffs=[(1,2), (3,4)])\n>>> medium2d = Medium2D(ss=drude_medium, tt=drude_medium)",
+    "FullyAnisotropicMedium": {
+      "title": "FullyAnisotropicMedium",
+      "description": "Fully anisotropic medium including all 9 components of the permittivity and conductivity\ntensors. Provided permittivity tensor and the symmetric part of the conductivity tensor must\nhave coinciding main directions. A non-symmetric conductivity tensor can be used to model\nmagneto-optic effects. Note that dispersive properties and subpixel averaging are currently not\nsupported for fully anisotropic materials.\n\nParameters\n----------\nname : Optional[str] = None\n    Optional unique name for medium.\nfrequency_range : Optional[Tuple[float, float]] = None\n    [units = (Hz, Hz)].  Optional range of validity for the medium.\npermittivity : ArrayLike_dtype=<class 'float'>_ndim=2_shape=(3, 3) = [[1, 0, 0], [0, 1, 0], [0, 0, 1]]\n    [units = None (relative permittivity)].  Relative permittivity tensor.\nconductivity : ArrayLike_dtype=<class 'float'>_ndim=2_shape=(3, 3) = [[0, 0, 0], [0, 0, 0], [0, 0, 0]]\n    [units = S/um].  Electric conductivity tensor. Defined such that the imaginary part of the complex permittivity at angular frequency omega is given by conductivity/omega.\n\nNote\n----\nSimulations involving fully anisotropic materials are computationally more intensive, thus,\nthey take longer time to complete. This increase strongly depends on the filling fraction of\nthe simulation domain by fully anisotropic materials, varying approximately in the range from\n1.5 to 5. Cost of running a simulation is adjusted correspondingly.\n\nExample\n-------\n>>> perm = [[2, 0, 0], [0, 1, 0], [0, 0, 3]]\n>>> cond = [[0.1, 0, 0], [0, 0, 0], [0, 0, 0]]\n>>> anisotropic_dielectric = FullyAnisotropicMedium(permittivity=perm, conductivity=cond)",
       "type": "object",
       "properties": {
         "name": {
@@ -1294,87 +1294,59 @@
         },
         "type": {
           "title": "Type",
-          "default": "Medium2D",
+          "default": "FullyAnisotropicMedium",
           "enum": [
-            "Medium2D"
+            "FullyAnisotropicMedium"
           ],
           "type": "string"
         },
-        "ss": {
-          "title": "SS Component",
-          "description": "Medium describing the ss-component of the diagonal permittivity tensor. The ss-component refers to the in-plane dimension of the medium that is the first component in order of 'x', 'y', 'z'. If the 2D material is normal to the y-axis, for example, then this determines the xx-component of the corresponding 3D medium.",
-          "discriminator": {
-            "propertyName": "type",
-            "mapping": {
-              "Medium": "#/definitions/Medium",
-              "PoleResidue": "#/definitions/PoleResidue",
-              "Sellmeier": "#/definitions/Sellmeier",
-              "Lorentz": "#/definitions/Lorentz",
-              "Debye": "#/definitions/Debye",
-              "Drude": "#/definitions/Drude"
-            }
-          },
-          "oneOf": [
-            {
-              "$ref": "#/definitions/Medium"
-            },
-            {
-              "$ref": "#/definitions/PoleResidue"
-            },
-            {
-              "$ref": "#/definitions/Sellmeier"
-            },
-            {
-              "$ref": "#/definitions/Lorentz"
-            },
-            {
-              "$ref": "#/definitions/Debye"
-            },
-            {
-              "$ref": "#/definitions/Drude"
-            }
-          ]
+        "permittivity": {
+          "title": "ArrayLike",
+          "description": "Relative permittivity tensor.",
+          "default": [
+            [
+              1,
+              0,
+              0
+            ],
+            [
+              0,
+              1,
+              0
+            ],
+            [
+              0,
+              0,
+              1
+            ]
+          ],
+          "units": "None (relative permittivity)",
+          "type": "ArrayLike"
         },
-        "tt": {
-          "title": "TT Component",
-          "description": "Medium describing the tt-component of the diagonal permittivity tensor. The tt-component refers to the in-plane dimension of the medium that is the second component in order of 'x', 'y', 'z'. If the 2D material is normal to the y-axis, for example, then this determines the zz-component of the corresponding 3D medium.",
-          "discriminator": {
-            "propertyName": "type",
-            "mapping": {
-              "Medium": "#/definitions/Medium",
-              "PoleResidue": "#/definitions/PoleResidue",
-              "Sellmeier": "#/definitions/Sellmeier",
-              "Lorentz": "#/definitions/Lorentz",
-              "Debye": "#/definitions/Debye",
-              "Drude": "#/definitions/Drude"
-            }
-          },
-          "oneOf": [
-            {
-              "$ref": "#/definitions/Medium"
-            },
-            {
-              "$ref": "#/definitions/PoleResidue"
-            },
-            {
-              "$ref": "#/definitions/Sellmeier"
-            },
-            {
-              "$ref": "#/definitions/Lorentz"
-            },
-            {
-              "$ref": "#/definitions/Debye"
-            },
-            {
-              "$ref": "#/definitions/Drude"
-            }
-          ]
+        "conductivity": {
+          "title": "ArrayLike",
+          "description": "Electric conductivity tensor. Defined such that the imaginary part of the complex permittivity at angular frequency omega is given by conductivity/omega.",
+          "default": [
+            [
+              0,
+              0,
+              0
+            ],
+            [
+              0,
+              0,
+              0
+            ],
+            [
+              0,
+              0,
+              0
+            ]
+          ],
+          "units": "S/um",
+          "type": "ArrayLike"
         }
       },
-      "required": [
-        "ss",
-        "tt"
-      ],
       "additionalProperties": false
     },
     "Box": {
@@ -1775,9 +1747,123 @@
       ],
       "additionalProperties": false
     },
+    "Medium2D": {
+      "title": "Medium2D",
+      "description": "2D diagonally anisotropic medium.\n\nParameters\n----------\nname : Optional[str] = None\n    Optional unique name for medium.\nfrequency_range : Optional[Tuple[float, float]] = None\n    [units = (Hz, Hz)].  Optional range of validity for the medium.\nss : Union[Medium, PoleResidue, Sellmeier, Lorentz, Debye, Drude]\n    Medium describing the ss-component of the diagonal permittivity tensor. The ss-component refers to the in-plane dimension of the medium that is the first component in order of 'x', 'y', 'z'. If the 2D material is normal to the y-axis, for example, then this determines the xx-component of the corresponding 3D medium.\ntt : Union[Medium, PoleResidue, Sellmeier, Lorentz, Debye, Drude]\n    Medium describing the tt-component of the diagonal permittivity tensor. The tt-component refers to the in-plane dimension of the medium that is the second component in order of 'x', 'y', 'z'. If the 2D material is normal to the y-axis, for example, then this determines the zz-component of the corresponding 3D medium.\n\nNote\n----\nOnly diagonal anisotropy is currently supported.\n\nExample\n-------\n>>> drude_medium = Drude(eps_inf=2.0, coeffs=[(1,2), (3,4)])\n>>> medium2d = Medium2D(ss=drude_medium, tt=drude_medium)",
+      "type": "object",
+      "properties": {
+        "name": {
+          "title": "Name",
+          "description": "Optional unique name for medium.",
+          "type": "string"
+        },
+        "frequency_range": {
+          "title": "Frequency Range",
+          "description": "Optional range of validity for the medium.",
+          "units": [
+            "Hz",
+            "Hz"
+          ],
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "items": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            }
+          ]
+        },
+        "type": {
+          "title": "Type",
+          "default": "Medium2D",
+          "enum": [
+            "Medium2D"
+          ],
+          "type": "string"
+        },
+        "ss": {
+          "title": "SS Component",
+          "description": "Medium describing the ss-component of the diagonal permittivity tensor. The ss-component refers to the in-plane dimension of the medium that is the first component in order of 'x', 'y', 'z'. If the 2D material is normal to the y-axis, for example, then this determines the xx-component of the corresponding 3D medium.",
+          "discriminator": {
+            "propertyName": "type",
+            "mapping": {
+              "Medium": "#/definitions/Medium",
+              "PoleResidue": "#/definitions/PoleResidue",
+              "Sellmeier": "#/definitions/Sellmeier",
+              "Lorentz": "#/definitions/Lorentz",
+              "Debye": "#/definitions/Debye",
+              "Drude": "#/definitions/Drude"
+            }
+          },
+          "oneOf": [
+            {
+              "$ref": "#/definitions/Medium"
+            },
+            {
+              "$ref": "#/definitions/PoleResidue"
+            },
+            {
+              "$ref": "#/definitions/Sellmeier"
+            },
+            {
+              "$ref": "#/definitions/Lorentz"
+            },
+            {
+              "$ref": "#/definitions/Debye"
+            },
+            {
+              "$ref": "#/definitions/Drude"
+            }
+          ]
+        },
+        "tt": {
+          "title": "TT Component",
+          "description": "Medium describing the tt-component of the diagonal permittivity tensor. The tt-component refers to the in-plane dimension of the medium that is the second component in order of 'x', 'y', 'z'. If the 2D material is normal to the y-axis, for example, then this determines the zz-component of the corresponding 3D medium.",
+          "discriminator": {
+            "propertyName": "type",
+            "mapping": {
+              "Medium": "#/definitions/Medium",
+              "PoleResidue": "#/definitions/PoleResidue",
+              "Sellmeier": "#/definitions/Sellmeier",
+              "Lorentz": "#/definitions/Lorentz",
+              "Debye": "#/definitions/Debye",
+              "Drude": "#/definitions/Drude"
+            }
+          },
+          "oneOf": [
+            {
+              "$ref": "#/definitions/Medium"
+            },
+            {
+              "$ref": "#/definitions/PoleResidue"
+            },
+            {
+              "$ref": "#/definitions/Sellmeier"
+            },
+            {
+              "$ref": "#/definitions/Lorentz"
+            },
+            {
+              "$ref": "#/definitions/Debye"
+            },
+            {
+              "$ref": "#/definitions/Drude"
+            }
+          ]
+        }
+      },
+      "required": [
+        "ss",
+        "tt"
+      ],
+      "additionalProperties": false
+    },
     "Structure": {
       "title": "Structure",
-      "description": "Defines a physical object that interacts with the electromagnetic fields.\nA :class:`Structure` is a combination of a material property (:class:`AbstractMedium`)\nand a :class:`Geometry`.\n\nParameters\n----------\ngeometry : Union[Box, Sphere, Cylinder, PolySlab, TriangleMesh, GeometryGroup]\n    Defines geometric properties of the structure.\nname : Optional[str] = None\n    Optional name for the structure.\nmedium : Union[Medium, CustomMedium, AnisotropicMedium, PECMedium, PoleResidue, Sellmeier, Lorentz, Debye, Drude, Medium2D]\n    Defines the electromagnetic properties of the structure's medium.\n\nExample\n-------\n>>> from tidy3d import Box, Medium\n>>> box = Box(center=(0,0,1), size=(2, 2, 2))\n>>> glass = Medium(permittivity=3.9)\n>>> struct = Structure(geometry=box, medium=glass, name='glass_box')",
+      "description": "Defines a physical object that interacts with the electromagnetic fields.\nA :class:`Structure` is a combination of a material property (:class:`AbstractMedium`)\nand a :class:`Geometry`.\n\nParameters\n----------\ngeometry : Union[Box, Sphere, Cylinder, PolySlab, TriangleMesh, GeometryGroup]\n    Defines geometric properties of the structure.\nname : Optional[str] = None\n    Optional name for the structure.\nmedium : Union[Medium, CustomMedium, AnisotropicMedium, PECMedium, PoleResidue, Sellmeier, Lorentz, Debye, Drude, FullyAnisotropicMedium, Medium2D]\n    Defines the electromagnetic properties of the structure's medium.\n\nExample\n-------\n>>> from tidy3d import Box, Medium\n>>> box = Box(center=(0,0,1), size=(2, 2, 2))\n>>> glass = Medium(permittivity=3.9)\n>>> struct = Structure(geometry=box, medium=glass, name='glass_box')",
       "type": "object",
       "properties": {
         "geometry": {
@@ -1843,6 +1929,7 @@
               "Lorentz": "#/definitions/Lorentz",
               "Debye": "#/definitions/Debye",
               "Drude": "#/definitions/Drude",
+              "FullyAnisotropicMedium": "#/definitions/FullyAnisotropicMedium",
               "Medium2D": "#/definitions/Medium2D"
             }
           },
@@ -1873,6 +1960,9 @@
             },
             {
               "$ref": "#/definitions/Drude"
+            },
+            {
+              "$ref": "#/definitions/FullyAnisotropicMedium"
             },
             {
               "$ref": "#/definitions/Medium2D"
@@ -3073,7 +3163,7 @@
     },
     "TFSF": {
       "title": "TFSF",
-      "description": "Total field scattered field with a plane wave field in a volume.\n\nParameters\n----------\ncenter : Tuple[float, float, float] = (0.0, 0.0, 0.0)\n    [units = um].  Center of object in x, y, and z.\nsize : Tuple[NonNegativeFloat, NonNegativeFloat, NonNegativeFloat]\n    [units = um].  Size in x, y, and z directions.\nsource_time : Union[GaussianPulse, ContinuousWave]\n    Specification of the source time-dependence.\nname : Optional[str] = None\n    Optional name for the source.\ndirection : Literal['+', '-']\n    Specifies propagation in the positive or negative direction of the injection axis.\nangle_theta : float = 0.0\n    [units = rad].  Polar angle of the propagation axis from the injection axis.\nangle_phi : float = 0.0\n    [units = rad].  Azimuth angle of the propagation axis in the plane orthogonal to the injection axis.\npol_angle : float = 0\n    [units = rad].  Specifies the angle between the electric field polarization of the source and the plane defined by the injection axis and the propagation axis (rad). ``pol_angle=0`` (default) specifies P polarization, while ``pol_angle=np.pi/2`` specifies S polarization. At normal incidence when S and P are undefined, ``pol_angle=0`` defines: - ``Ey`` polarization for propagation along ``x``.- ``Ex`` polarization for propagation along ``y``.- ``Ex`` polarization for propagation along ``z``.\ninjection_axis : Literal[0, 1, 2]\n    Specifies the injection axis. The plane of incidence is defined via this ``injection_axis`` and the ``direction``. The popagation axis is defined with respect to the ``injection_axis`` by ``angle_theta`` and ``angle_phi``.",
+      "description": "Total-field scattered-field (TFSF) source that can inject a plane wave in a finite region.\nThe TFSF source injects 1 W / um^2 of power along the ``injection_axis``. Note that in the\ncase of angled incidence, 1 W / um^2 is still injected along the source's ``injection_axis``,\nand not the propagation direction, unlike a ``PlaneWave`` source. This allows computing\nscattering and absorption cross sections without the need for additional normalization.\n\n\nParameters\n----------\ncenter : Tuple[float, float, float] = (0.0, 0.0, 0.0)\n    [units = um].  Center of object in x, y, and z.\nsize : Tuple[NonNegativeFloat, NonNegativeFloat, NonNegativeFloat]\n    [units = um].  Size in x, y, and z directions.\nsource_time : Union[GaussianPulse, ContinuousWave]\n    Specification of the source time-dependence.\nname : Optional[str] = None\n    Optional name for the source.\ndirection : Literal['+', '-']\n    Specifies propagation in the positive or negative direction of the injection axis.\nangle_theta : float = 0.0\n    [units = rad].  Polar angle of the propagation axis from the injection axis.\nangle_phi : float = 0.0\n    [units = rad].  Azimuth angle of the propagation axis in the plane orthogonal to the injection axis.\npol_angle : float = 0\n    [units = rad].  Specifies the angle between the electric field polarization of the source and the plane defined by the injection axis and the propagation axis (rad). ``pol_angle=0`` (default) specifies P polarization, while ``pol_angle=np.pi/2`` specifies S polarization. At normal incidence when S and P are undefined, ``pol_angle=0`` defines: - ``Ey`` polarization for propagation along ``x``.- ``Ex`` polarization for propagation along ``y``.- ``Ex`` polarization for propagation along ``z``.\ninjection_axis : Literal[0, 1, 2]\n    Specifies the injection axis. The plane of incidence is defined via this ``injection_axis`` and the ``direction``. The popagation axis is defined with respect to the ``injection_axis`` by ``angle_theta`` and ``angle_phi``.",
       "type": "object",
       "properties": {
         "type": {

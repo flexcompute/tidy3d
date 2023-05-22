@@ -6,21 +6,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- `web.test()` to simply test if the authentication is configured correctly and raise exception otherwise.
-- Add `SimulationTask.get_running_tasks()` to get a list of running tasks from the server.
-- Argument `scale` to `ModeSolver.plot_field` to control plot scaling.
-- Retry for set number of seconds in web functions if internet connection error.
-- Adjoint processing is done server side by default, to avoid unnecessary downloading of data.
-- `run_local` and `run_async_local` options in `tidy3d.plugins.adjoint.web` to provide way to run adjoint processing locally.
-- `JaxPolySlab` in `adjoint` plugin, which can track derivatives through its `.vertices`.
+
+### Changed
+
+### Fixed
+
+## [2.2.0] - 2023-5-22
+
+### Added
 - Fully anisotropic medium class (`FullyAnisotropicMedium`) that allows to simulate materials with permittivity and conductivity tensors oriented arbitrary with respect to simulation grid.
+- Adjoint processing is done server side by default, to avoid unnecessary downloading of data.
+- `JaxPolySlab` in `adjoint` plugin, which can track derivatives through its `.vertices`.
+- `run_local` and `run_async_local` options in `tidy3d.plugins.adjoint.web` to provide way to run adjoint processing locally.
+- `web.test()` to simply test if the authentication is configured correctly and raise exception otherwise.
+- `SimulationTask.get_running_tasks()` to get a list of running tasks from the server.
+- Retry for set number of seconds in web functions if internet connection errors.
+- Argument `scale` to `ModeSolver.plot_field` to control plot scaling.
+
 
 ### Changed
 - Perfect electric conductors (PECs) are now modeled as high-conductivity media in both the frontend and backend mode solvers, and their presence triggers the use of a preconditioner to improve numerical stability and robustness. Consequently, the mode solver provides more accurate eigenvectors and field distributions when PEC structures are present.
 - Include source amplitude in `amp_time`.
 - Increased the maximum allowed estimated simulation data storage to 50GB. Individual monitors with projected data larger than 10GB will trigger a warning.
-- `PolySlab.inside` now uses `matplotlib.path.contains_points`.
-- `JaxCustomMedium` accepts a maximum of 250,000 grid cells.
+- `PolySlab.inside` now uses `matplotlib.path.contains_points` for better performance.
+- `JaxCustomMedium` accepts a maximum of 250,000 grid cells to avoid slow server-side processing.
 
 ### Fixed
 - Log messages provide the correct caller origin (file name and line number).
