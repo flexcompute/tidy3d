@@ -9,7 +9,7 @@ import functools
 
 import pydantic
 import numpy as np
-from matplotlib import patches
+from matplotlib import patches, path
 from shapely.geometry import Point, Polygon, box, MultiPolygon
 from shapely.validation import make_valid
 
@@ -24,6 +24,7 @@ from ..exceptions import Tidy3dKeyError, SetupError, ValidationError, DataError
 from ..constants import MICROMETER, LARGE_NUMBER, RADIAN, fp_eps, inf
 from .data.dataset import TriangleMeshDataset
 from .data.data_array import TriangleMeshDataArray, DATA_ARRAY_MAP
+from .transformation import RotationAroundAxis
 
 try:
     import trimesh
@@ -644,31 +645,8 @@ class Geometry(Tidy3dBaseModel, ABC):
         angle : float
             Angle of rotation counter-clockwise around the axis (rad).
         """
-
-        if isclose(angle % (2 * np.pi), 0):
-            return points
-
-        # Normalized axis vector components
-        (ux, uy, uz) = axis / np.linalg.norm(axis)
-
-        # General rotation matrix
-        rot_mat = np.zeros((3, 3))
-        cos = np.cos(angle)
-        sin = np.sin(angle)
-        rot_mat[0, 0] = cos + ux**2 * (1 - cos)
-        rot_mat[0, 1] = ux * uy * (1 - cos) - uz * sin
-        rot_mat[0, 2] = ux * uz * (1 - cos) + uy * sin
-        rot_mat[1, 0] = uy * ux * (1 - cos) + uz * sin
-        rot_mat[1, 1] = cos + uy**2 * (1 - cos)
-        rot_mat[1, 2] = uy * uz * (1 - cos) - ux * sin
-        rot_mat[2, 0] = uz * ux * (1 - cos) - uy * sin
-        rot_mat[2, 1] = uz * uy * (1 - cos) + ux * sin
-        rot_mat[2, 2] = cos + uz**2 * (1 - cos)
-
-        if len(points.shape) == 1:
-            return rot_mat @ points
-
-        return np.tensordot(rot_mat, points, axes=1)
+        rotation = RotationAroundAxis(axis=axis, angle=angle)
+        return rotation.rotate_vector(points)
 
     def reflect_points(
         self,
@@ -2533,12 +2511,13 @@ class PolySlab(Planar):
         z_local = z - z0  # distance to the middle
         dist = -z_local * self._tanq
 
-        def contains_pointwise(face_polygon):
-            def fun_contain(xy_point):
-                point = Point(xy_point)
-                return face_polygon.covers(point)
-
-            return fun_contain
+        # # Leaving this function and commented out lines using it below in case we want to revert
+        # # to it at some point, e.g. if we introduce a MATPLOTLIB_INSTALLED flag.
+        # def contains_pointwise(face_polygon):
+        #     def fun_contain(xy_point):
+        #         point = Point(xy_point)
+        #         return face_polygon.covers(point)
+        #     return fun_contain
 
         if isinstance(x, np.ndarray):
             inside_polygon = np.zeros_like(inside_height)
@@ -2547,9 +2526,11 @@ class PolySlab(Planar):
 
             # vertical sidewall
             if isclose(self.sidewall_angle, 0):
-                face_polygon = Polygon(self.reference_polygon)
-                fun_contain = contains_pointwise(face_polygon)
-                contains_vectorized = np.vectorize(fun_contain, signature="(n)->()")
+                # face_polygon = Polygon(self.reference_polygon)
+                # fun_contain = contains_pointwise(face_polygon)
+                # contains_vectorized = np.vectorize(fun_contain, signature="(n)->()")
+                poly_path = path.Path(self.reference_polygon)
+                contains_vectorized = poly_path.contains_points
                 points_stacked = np.stack((xs_slab, ys_slab), axis=1)
                 inside_polygon_slab = contains_vectorized(points_stacked)
                 inside_polygon[inside_height] = inside_polygon_slab
@@ -2572,9 +2553,11 @@ class PolySlab(Planar):
                     vertices_z = self._shift_vertices(
                         self.middle_polygon, _move_axis(dist)[0, 0, z_i]
                     )[0]
-                    face_polygon = Polygon(vertices_z)
-                    fun_contain = contains_pointwise(face_polygon)
-                    contains_vectorized = np.vectorize(fun_contain, signature="(n)->()")
+                    # face_polygon = Polygon(vertices_z)
+                    # fun_contain = contains_pointwise(face_polygon)
+                    # contains_vectorized = np.vectorize(fun_contain, signature="(n)->()")
+                    poly_path = path.Path(vertices_z)
+                    contains_vectorized = poly_path.contains_points
                     points_stacked = np.stack(
                         (x_axis[:, :, 0].flatten(), y_axis[:, :, 0].flatten()), axis=1
                     )

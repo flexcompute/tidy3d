@@ -2,19 +2,23 @@
 """Defines jax-compatible geometries and their conversion to grad monitors."""
 from __future__ import annotations
 
+import os
 from abc import ABC
-from typing import Tuple, Union
+from typing import Tuple, Union, Dict
+from multiprocessing import Pool
 
 import pydantic as pd
 import numpy as np
+import xarray as xr
 import jax.numpy as jnp
 from jax.tree_util import register_pytree_node_class
 import jax
 
 from ....components.base import cached_property
-from ....components.types import Bound, Axis
+from ....components.types import Bound, Coordinate2D
 from ....components.geometry import Geometry, Box, PolySlab
 from ....components.data.monitor_data import FieldData, PermittivityData
+from ....components.data.data_array import ScalarFieldDataArray
 from ....components.monitor import FieldMonitor, PermittivityMonitor
 from ....constants import fp_eps, MICROMETER
 from ....exceptions import AdjointError
@@ -27,6 +31,9 @@ PTS_PER_WVL_INTEGRATION = 50
 
 # how much to expand the gradient monitors on each side beyond the self.bounds
 GRAD_MONITOR_EXPANSION = fp_eps
+
+# maximum number of vertices allowed in JaxPolySlab
+MAX_NUM_VERTICES = 1000
 
 
 class JaxGeometry(Geometry, ABC):
@@ -79,6 +86,36 @@ class JaxGeometry(Geometry, ABC):
         tidy3d_type = map_reverse[type(self)]
         return tidy3d_type.parse_obj(self_dict)
 
+    @staticmethod
+    def compute_dotted_e_d_fields(
+        grad_data_fwd: FieldData, grad_data_adj: FieldData, grad_data_eps: PermittivityData
+    ) -> Tuple[Dict[str, ScalarFieldDataArray], Dict[str, ScalarFieldDataArray]]:
+        """Get the (x,y,z) components of E_fwd * E_adj and D_fwd * D_adj fields in the domain."""
+
+        e_mult_xyz = {}
+        d_mult_xyz = {}
+
+        for dim in "xyz":
+
+            # grab the E field components
+            e_fld_key = f"E{dim}"
+            e_fwd = grad_data_fwd.field_components[e_fld_key]
+            e_adj = grad_data_adj.field_components[e_fld_key]
+
+            # grab the epsilon data
+            eps_fld_key = f"eps_{dim}{dim}"
+            eps = grad_data_eps.field_components[eps_fld_key]
+
+            # compute d fields
+            d_fwd = eps * e_fwd
+            d_adj = eps * e_adj
+
+            # multiply the fwd and adj fields
+            e_mult_xyz[dim] = e_fwd * e_adj
+            d_mult_xyz[dim] = d_fwd * d_adj
+
+        return e_mult_xyz, d_mult_xyz
+
 
 @register_pytree_node_class
 class JaxBox(JaxGeometry, Box, JaxObject):
@@ -122,8 +159,15 @@ class JaxBox(JaxGeometry, Box, JaxObject):
         grad_data_eps: PermittivityData,
         sim_bounds: Bound,
         wvl_mat: float,
+        eps_out: complex,
+        eps_in: complex,
     ) -> JaxBox:
         """Stores the gradient of the box parameters given forward and adjoint field data."""
+
+        # multiply the E and D field components together for fwd and adj
+        e_mult_xyz, d_mult_xyz = self.compute_dotted_e_d_fields(
+            grad_data_fwd=grad_data_fwd, grad_data_adj=grad_data_adj, grad_data_eps=grad_data_eps
+        )
 
         rmin, rmax = bounds_intersect = self.bounds_intersection(self.bounds, sim_bounds)
 
@@ -176,11 +220,6 @@ class JaxBox(JaxGeometry, Box, JaxObject):
                 # for each field component
                 for field_cmp_dim in "xyz":
 
-                    # select the forward and adjoint E fields along this edge
-                    field_name = "E" + field_cmp_dim
-                    e_fwd = grad_data_fwd.field_components[field_name].isel(f=0)
-                    e_adj = grad_data_adj.field_components[field_name].isel(f=0)
-
                     # select the permittivity data
                     eps_field_name = f"eps_{field_cmp_dim}{field_cmp_dim}"
                     eps_data = grad_data_eps.field_components[eps_field_name].isel(f=0)
@@ -192,31 +231,33 @@ class JaxBox(JaxGeometry, Box, JaxObject):
                     eps2 = eps_data.isel(**{dim_normal: isel_out})
                     eps1 = eps_data.isel(**{dim_normal: isel_ins})
 
-                    # get gradient contribution for normal component using D field
+                    # get gradient contribution for normal component using normal D field
                     if field_cmp_dim == dim_normal:
 
-                        # construct normal D fields, dot together at surface
-                        d_fwd = e_fwd * eps_data
-                        d_adj = e_adj * eps_data
-                        d_normal = (d_fwd * d_adj).interp(**normal_coord)
+                        # construct normal D fields, dotted together at surface
+                        d_normal = d_mult_xyz[field_cmp_dim]
+                        d_normal = d_normal.interp(**normal_coord, assume_sorted=True)
 
                         # compute adjoint contribution using perturbation theory for shifting bounds
                         delta_eps_inv = 1.0 / eps1 - 1.0 / eps2
-                        d_integrand = -(delta_eps_inv * d_normal).interp(**area_coords).real
+                        d_integrand = -(delta_eps_inv * d_normal).real
+                        d_integrand = d_integrand.interp(**area_coords, assume_sorted=True)
                         grad_contrib = d_area * jnp.sum(d_integrand.values)
 
-                    # get gradient contribution for parallel components using E fields
+                    # get gradient contribution for parallel components using parallel E fields
                     else:
 
-                        # measure parallel E fields, dot together at surface
-                        e_parallel = (e_fwd * e_adj).interp(**normal_coord)
+                        # measure parallel E fields, dotted together at surface
+                        e_parallel = e_mult_xyz[field_cmp_dim]
+                        e_parallel = e_parallel.interp(**normal_coord, assume_sorted=True)
 
                         # compute adjoint contribution using perturbation theory for shifting bounds
                         delta_eps = eps1 - eps2
-                        e_integrand = +(delta_eps * e_parallel).interp(**area_coords).real
+                        e_integrand = +(delta_eps * e_parallel).real
+                        e_integrand = e_integrand.interp(**area_coords, assume_sorted=True)
                         grad_contrib = d_area * jnp.sum(e_integrand.values)
 
-                    # grad_contrib *= 1 / k0**3
+                    # add this field contribution to the dict storing the surface contributions
                     vjp_surfs[dim_normal][min_max_index] += grad_contrib
 
         # convert surface vjps to center, size vjps. Note, convert these to jax types w/ jnp.sum()
@@ -252,14 +293,6 @@ class JaxPolySlab(JaxGeometry, PolySlab, JaxObject):
             return val.tolist()
         return val
 
-    # @pd.validator("slab_bounds", always=True)
-    # def _is_3d(cls, val):
-    #     """Make sure the box is 3D."""
-    #     slab_min, slab_max = val
-    #     if slab_max <= slab_min:
-    #         raise AdjointError(f"'JaxPolySlab' has (min, max) bounds of '{val}', it must be 3D.")
-    #     return val
-
     _sanitize_vertices = validate_jax_tuple_tuple("vertices")
 
     @cached_property
@@ -274,8 +307,6 @@ class JaxPolySlab(JaxGeometry, PolySlab, JaxObject):
             Min and max bounds packaged as ``(minx, miny, minz), (maxx, maxy, maxz)``.
         """
 
-        # check for the maximum possible contribution from dilation/slant on each side
-
         xmin, ymin = np.amin(jax.lax.stop_gradient(self.vertices), axis=0)
         xmax, ymax = np.amax(jax.lax.stop_gradient(self.vertices), axis=0)
 
@@ -289,34 +320,225 @@ class JaxPolySlab(JaxGeometry, PolySlab, JaxObject):
 
     @pd.validator("sidewall_angle", always=True)
     def no_sidewall(cls, val):
-        """Overrides validator enforing that val is not inf."""
+        """Overrides validator enforcing that val is not inf."""
         if not np.isclose(val, 0.0):
             raise AdjointError("'JaxPolySlab' does not support slanted sidewall.")
         return val
 
     @pd.validator("dilation", always=True)
     def no_dilation(cls, val):
-        """Overrides validator enforing that val is not inf."""
+        """Overrides validator enforcing that val is not inf."""
         if not np.isclose(val, 0.0):
             raise AdjointError("'JaxPolySlab' does not support dilation.")
         return val
 
     @pd.validator("vertices", always=True)
     def correct_shape(cls, val):
-        """Overrides validator enforing that val is not inf."""
+        """Overrides validator enforcing that val is not inf."""
         return val
 
     @pd.validator("vertices", always=True)
     def no_self_intersecting_polygon_during_extrusion(cls, val, values):
-        """Overrides validator enforing that val is not inf."""
+        """Overrides validator enforcing that val is not inf."""
         return val
 
     @pd.validator("vertices", always=True)
     def no_complex_self_intersecting_polygon_at_reference_plane(cls, val, values):
-        """Overrides validator enforing that val is not inf."""
+        """Overrides validator enforcing that val is not inf."""
         return val
 
-    # pylint: disable=too-many-locals, too-many-arguments, too-many-statements, unused-argument
+    @pd.validator("vertices", always=True)
+    def limit_number_of_vertices(cls, val):
+        """Limit the maximum number of vertices."""
+        if len(val) > MAX_NUM_VERTICES:
+            raise AdjointError(
+                f"For performance, a maximum of {MAX_NUM_VERTICES} are allowed in 'JaxPolySlab'."
+            )
+        return val
+
+    @cached_property
+    def is_ccw(self) -> bool:
+        """Is this PolySlab CCW oriented?"""
+        vertices = np.array(jax.lax.stop_gradient(self.vertices))
+        return PolySlab._area(vertices) > 0
+
+    # pylint: disable=too-many-locals, too-many-arguments, too-many-statements
+    def edge_contrib(
+        self,
+        vertex_grad: Coordinate2D,
+        vertex_stat: Coordinate2D,
+        is_next: bool,
+        e_mult_xyz: Tuple[Dict[str, ScalarFieldDataArray]],
+        d_mult_xyz: Tuple[Dict[str, ScalarFieldDataArray]],
+        sim_bounds: Bound,
+        wvl_mat: float,
+        eps_out: complex,
+        eps_in: complex,
+    ) -> Coordinate2D:
+        """Gradient w.r.t change in `vertex_grad` connected to `vertex_stat`."""
+
+        # TODO: (later) compute these grabbing from grad_data_eps at some distance away
+        delta_eps_12 = eps_in - eps_out
+        delta_eps_inv_12 = 1.0 / eps_in - 1.0 / eps_out
+
+        # get edge pointing from moving vertex to static vertex
+        vertex_grad = np.array(jax.lax.stop_gradient(vertex_grad))
+        vertex_stat = np.array(jax.lax.stop_gradient(vertex_stat))
+        edge = vertex_stat - vertex_grad
+        length_edge = np.linalg.norm(edge)
+
+        # get normalized vectors tangent to and perpendicular to edge in global caresian basis
+        tx, ty = edge / length_edge
+        normal_vector = np.array((+ty, -tx))
+
+        # ensure normal vector is pointing "out" assuming clockwise vertices
+        if is_next:
+            normal_vector *= -1
+        nx, ny = normal_vector
+
+        # Check if vertices CCW or CW. Multiply by +1 if CCW to ensure normal out
+        if self.is_ccw:
+            normal_vector *= -1
+
+        def edge_position(s: np.array) -> np.array:
+            """Parameterization of position along edge from s=0 (static) to s=1 (gradient)."""
+            return (1 - s) * vertex_stat[:, None] + s * vertex_grad[:, None]
+
+        def edge_basis(
+            xyz_components: Tuple[FieldData, FieldData, FieldData]
+        ) -> Tuple[FieldData, FieldData, FieldData]:
+            """Puts a field component from the (x, y, z) basis to the (t, n, z) basis."""
+            cmp_z, (cmp_x_edge, cmp_y_edge) = self.pop_axis(xyz_components, axis=self.axis)
+
+            cmp_t = cmp_x_edge * tx + cmp_y_edge * ty
+            cmp_n = cmp_x_edge * nx + cmp_y_edge * ny
+
+            return cmp_t, cmp_n, cmp_z
+
+        def compute_integrand(s: np.array, z: np.array) -> np.array:
+            """Get integrand at positions `(s, z)` along the edge."""
+
+            # grab the position along edge and make dictionary of coords to interp with (s, z)
+            x, y = edge_position(s=s)
+            x = xr.DataArray(x, coords={"s": s})
+            y = xr.DataArray(y, coords={"s": s})
+            coords_interp = dict(x=x, y=y, z=z)
+
+            def evaluate(scalar_field: ScalarFieldDataArray) -> float:
+                """Evaluate a scalar field at a coordinate along the edge."""
+                scalar_field = scalar_field.isel(f=0)
+
+                # if only 1 z coordinate, just isel the data.
+                if len(z) == 1:
+                    scalar_field = scalar_field.isel(z=0)
+                    coords_xy = {key: coords_interp[key] for key in "xy"}
+                    return scalar_field.interp(**coords_xy, assume_sorted=True)
+
+                return scalar_field.interp(**coords_interp, assume_sorted=True)
+
+            e_xyz_eval = [evaluate(e_fld) for e_fld in e_mult_xyz.values()]
+            d_xyz_eval = [evaluate(d_fld) for d_fld in d_mult_xyz.values()]
+
+            e_t_edge, _, e_z_edge = edge_basis(xyz_components=e_xyz_eval)
+            _, d_n_edge, _ = edge_basis(xyz_components=d_xyz_eval)
+
+            # get the correct sign to apply to the new fields
+            sign_t, sign_n, sign_z = edge_basis(xyz_components=(1.0, 1.0, 1.0))
+            e_t_edge *= sign_t
+            d_n_edge *= sign_n
+            e_z_edge *= sign_z
+
+            # multiply by the change in epsilon (in, out) terms and sum contributions
+            contrib_e_t = delta_eps_12 * e_t_edge
+            contrib_e_z = delta_eps_12 * e_z_edge
+            contrib_d_n = -delta_eps_inv_12 * d_n_edge
+            contrib_total = contrib_e_t + contrib_d_n + contrib_e_z
+
+            # scale the gradient contribution by the normalized distange from the static edge
+            # make broadcasting work with both 2D and 3D simulation domains
+            return (s * contrib_total.T).T
+
+        # discretize along the edge
+        # TODO: handle edge case where a vertex lies far outside simulation domain
+        num_cells_edge = int(length_edge * PTS_PER_WVL_INTEGRATION / wvl_mat) + 1
+        ds = 1.0 / float(num_cells_edge)
+        s_vals = np.linspace(0 + ds / 2, 1 - ds / 2, num_cells_edge)
+
+        # find the min and max of the slab within the simulation bounds
+        slab_min, slab_max = self.slab_bounds
+        sim_rmin, sim_rmax = sim_bounds
+        sim_min = sim_rmin[self.axis]
+        sim_max = sim_rmax[self.axis]
+        z_max = min(slab_max, sim_max)
+        z_min = max(slab_min, sim_min)
+
+        # discretize along z
+        length_axis = abs(z_max - z_min)
+        num_cells_axis = int(length_axis * PTS_PER_WVL_INTEGRATION / wvl_mat) + 1
+        dz = float(length_axis) / float(num_cells_axis)
+
+        # handle a 2D simulation along axis (unitless)
+        z_vals = np.linspace(z_min + dz / 2, z_max - dz / 2, num_cells_axis)
+
+        if dz == 0.0:
+            dz = 1.0
+
+        # integrate by summing over axis edge (z) and parameterization point (s)
+        integrand = compute_integrand(s=s_vals, z=z_vals)
+        integral_result = np.sum(integrand.fillna(0).values)
+
+        # project to the normal direction
+        integral_result *= normal_vector
+
+        # take the real part (from adjoint math) and multiply by area element
+        return length_edge * ds * dz * np.real(integral_result)
+
+    # pylint: disable=too-many-arguments
+    def vertex_vjp(
+        self,
+        i_vertex,
+        e_mult_xyz: Tuple[Dict[str, ScalarFieldDataArray]],
+        d_mult_xyz: Tuple[Dict[str, ScalarFieldDataArray]],
+        sim_bounds: Bound,
+        wvl_mat: float,
+        eps_out: complex,
+        eps_in: complex,
+    ):
+        """Compute the vjp for every vertex."""
+
+        # get the location of the "previous" and "next" vertices in the polygon
+        vertex = self.vertices[i_vertex]
+        vertex_prev = self.vertices[(i_vertex - 1) % len(self.vertices)]
+        vertex_next = self.vertices[(i_vertex + 1) % len(self.vertices)]
+
+        # taking the current vertex "static", compute the edge contributions from prev and next
+        contrib_next = self.edge_contrib(
+            vertex_grad=vertex,
+            vertex_stat=vertex_next,
+            is_next=True,
+            e_mult_xyz=e_mult_xyz,
+            d_mult_xyz=d_mult_xyz,
+            sim_bounds=sim_bounds,
+            wvl_mat=wvl_mat,
+            eps_out=eps_out,
+            eps_in=eps_in,
+        )
+        contrib_prev = self.edge_contrib(
+            vertex_grad=vertex,
+            vertex_stat=vertex_prev,
+            is_next=False,
+            e_mult_xyz=e_mult_xyz,
+            d_mult_xyz=d_mult_xyz,
+            sim_bounds=sim_bounds,
+            wvl_mat=wvl_mat,
+            eps_out=eps_out,
+            eps_in=eps_in,
+        )
+
+        # add the "forward" contribution from the "previous" contribution to get the vertex VJP
+        return contrib_prev + contrib_next
+
+    # pylint: disable=too-many-arguments
     def store_vjp(
         self,
         grad_data_fwd: FieldData,
@@ -324,120 +546,41 @@ class JaxPolySlab(JaxGeometry, PolySlab, JaxObject):
         grad_data_eps: PermittivityData,
         sim_bounds: Bound,
         wvl_mat: float,
+        eps_out: complex,
+        eps_in: complex,
     ) -> JaxPolySlab:
         """Stores the gradient of the vertices given forward and adjoint field data."""
 
-        def edge_contrib(
-            v: Tuple[float, float], u: Tuple[float, float], axis: Axis
-        ) -> Tuple[float, float]:
-            """Gradient w.r.t. moving `vertex_grad` (v) in connection to `vertex_fixed` (u)."""
+        # multiply the E and D field components together for fwd and adj
+        e_mult_xyz, d_mult_xyz = self.compute_dotted_e_d_fields(
+            grad_data_fwd=grad_data_fwd, grad_data_adj=grad_data_adj, grad_data_eps=grad_data_eps
+        )
 
-            # get edge between vertices
-            v = np.array(jax.lax.stop_gradient(v))
-            u = np.array(jax.lax.stop_gradient(u))
-            edge = v - u
-            length_edge = np.linalg.norm(edge)
+        # Construct arguments to pass to the parallel vertices_vjp computation
+        num_verts = len(self.vertices)
+        args = [range(num_verts)]
+        # append all of the arguments that are the same for each call
+        constant_args = [e_mult_xyz, d_mult_xyz, sim_bounds, wvl_mat, eps_out, eps_in]
+        args += [[arg] * num_verts for arg in constant_args]
 
-            # get normal vectors tangent and perpendicular to edge
-            tx, ty = edge / length_edge
-            n = nx, ny = np.array((ty, -tx))
+        try:
+            # Try to use multiprocessing over polygon vertices.
+            # Use only half of the available cpus in case there is something else running.
+            num_proc = max(1, os.cpu_count() // 2)
+            with Pool(num_proc) as p:
+                vertices_vjp = p.starmap(self.vertex_vjp, zip(*args))
+        except Exception:  # pylint:disable=broad-except
+            # Compute without parallel pool
+            vertices_vjp = list(map(self.vertex_vjp, *args))
 
-            def r(s: float) -> float:
-                """Parameterization of position along edge from s=0 (u) to s=1 (v)."""
-                return s * v + (1 - s) * u
-
-            def edge_basis(field_data: FieldData, components_xyz: Tuple[str]):
-                """Puts a field component from the (x, y, z) basis to the (t, n, z) basis."""
-
-                # TODO: make this nicer and test
-                xyz_coords = {
-                    key[-1]: field_data.field_components[key].coords[key[-1]][1:-1]
-                    for key in components_xyz
-                }
-                field_data = field_data.colocate(**xyz_coords)
-
-                components_xyz_basis = [field_data[component] for component in components_xyz]
-
-                Ez, (Ex, Ey) = self.pop_axis(components_xyz_basis, axis=axis)
-
-                Et = Ex * tx + Ey * ty  # TODO: colocate at centers to do this properly
-                En = Ex * nx + Ey * ny  # TODO: colocate at centers to do this properly
-                return Et, En, Ez
-
-            # get forward and adjoint fields in edge basis
-            e_t_fwd, e_n_fwd, e_z_fwd = edge_basis(grad_data_fwd, components_xyz=("Ex", "Ey", "Ez"))
-            e_t_adj, e_n_adj, e_z_adj = edge_basis(grad_data_adj, components_xyz=("Ex", "Ey", "Ez"))
-
-            # get displacement fields
-            _, eps_n, _ = edge_basis(grad_data_eps, components_xyz=("eps_xx", "eps_yy", "eps_zz"))
-            d_n_fwd = eps_n * e_n_fwd
-            d_n_adj = eps_n * e_n_adj
-
-            # TODO: actually compute these..
-            eps1 = 2.0
-            eps2 = 1.0
-            delta_eps_12 = eps1 - eps2
-            delta_eps_inv_12 = 1.0 / eps1 - 1.0 / eps2
-
-            def scalar_integrand(s: float, z: float) -> float:
-                """Get integrand at position '(s, z)` along the edge."""
-
-                x, y = r(s)
-                coords_interp = dict(x=x, y=y, z=z)
-
-                def evaluate(scalar_field) -> float:
-                    scalar_field = scalar_field.isel(f=0)
-                    scalar_field = scalar_field.interp(**coords_interp)
-                    return scalar_field
-
-                contrib_e_t = evaluate(delta_eps_12 * e_t_fwd * e_t_adj)
-                contrib_e_z = evaluate(delta_eps_12 * e_z_fwd * e_z_adj)
-                contrib_d_n = -evaluate(delta_eps_inv_12 * d_n_fwd * d_n_adj)
-                return s * (contrib_e_t + contrib_d_n + contrib_e_z)
-
-            slab_min, slab_max = self.slab_bounds
-            length_axis = slab_max - slab_min
-
-            num_cells_edge = int(length_edge * PTS_PER_WVL_INTEGRATION / wvl_mat) + 1
-            num_cells_axis = int(length_axis * PTS_PER_WVL_INTEGRATION / wvl_mat) + 1
-
-            s_vals = np.linspace(0, 1, num_cells_edge)
-            z_vals = np.linspace(slab_min, slab_max, num_cells_axis)
-            ds = np.mean(np.diff(s_vals)) * length_edge
-            dz = np.mean(np.diff(z_vals))
-
-            integrand = 0.0
-            for s in s_vals:
-                integrand += np.sum(scalar_integrand(s=s, z=z_vals).fillna(0).values)
-
-            return n * np.real(ds * dz * integrand)
-
-        def mod(num: int) -> int:
-            """Get index modulo number of vertices."""
-            return num % len(self.vertices)
-
-        edge_contributions = []
-        for i_vertex, vertex in enumerate(self.vertices):
-            vertex_prev = self.vertices[mod(i_vertex - 1)]
-            vertex_next = self.vertices[mod(i_vertex + 1)]
-            edge_contribution = edge_contrib(vertex, vertex_next, axis=self.axis)
-            edge_contribution += edge_contrib(vertex, vertex_prev, axis=self.axis)
-            edge_contributions.append(edge_contribution)
-
-        # new_vertices = []
-        # for edge_index, edge_i in enumerate(edge_contributions):
-        #     prev_edge_index = mod(edge_index - 1)
-        #     edge_i_m1 = edge_contributions[prev_edge_index]
-        #     vertex_contrib = tuple(val_i + val_i_m1 for val_i, val_i_m1 in zip(edge_i, edge_i_m1))
-        #     new_vertices.append(vertex_contrib)
-
-        return self.copy(update=dict(vertices=edge_contributions))
+        # return copy of the polyslab with the vertices storing the
+        return self.copy(update=dict(vertices=vertices_vjp))
 
 
-JaxGeometryType = Union[JaxBox]  # , JaxPolySlab]
+JaxGeometryType = Union[JaxBox, JaxPolySlab]
 
 # pylint: disable=unhashable-member
 JAX_GEOMETRY_MAP = {
     Box: JaxBox,
-    # PolySlab: JaxPolySlab,
+    PolySlab: JaxPolySlab,
 }

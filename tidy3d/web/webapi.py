@@ -4,7 +4,11 @@ import os
 import time
 from datetime import datetime, timedelta
 from typing import List, Dict, Callable
+from functools import wraps
+
 from requests import HTTPError
+from requests.exceptions import ConnectionError as ConnErr
+from urllib3.exceptions import NewConnectionError
 
 import pytz
 from rich.console import Console
@@ -26,12 +30,45 @@ REFRESH_TIME = 0.3
 # time between checking run status
 RUN_REFRESH_TIME = 1.0
 
-TOTAL_DOTS = 3
-
 # file names when uploading to S3
 SIM_FILE_JSON = "simulation.json"
 
+# number of seconds to keep re-trying connection before erroring
+CONNECTION_RETRY_TIME = 30
 
+
+def wait_for_connection(decorated_fn=None, wait_time_sec: float = CONNECTION_RETRY_TIME):
+    """Causes function to ignore connection errors and retry for ``wait_time_sec`` secs."""
+
+    def decorator(web_fn):
+        """Decorator returned by @wait_for_connection()"""
+
+        @wraps(web_fn)
+        def web_fn_wrapped(*args, **kwargs):
+            """Function to return including connection waiting."""
+            time_start = time.time()
+            warned_previously = False
+
+            while (time.time() - time_start) < wait_time_sec:
+                try:
+                    return web_fn(*args, **kwargs)
+                except (ConnErr, ConnectionError, NewConnectionError):
+                    if not warned_previously:
+                        log.warning(f"No connection: Retrying for {wait_time_sec} seconds.")
+                        warned_previously = True
+                    time.sleep(REFRESH_TIME)
+
+            raise WebError("No internet connection: giving up on connection waiting.")
+
+        return web_fn_wrapped
+
+    if decorated_fn:
+        return decorator(decorated_fn)
+
+    return decorator
+
+
+@wait_for_connection
 def run(  # pylint:disable=too-many-arguments
     simulation: Simulation,
     task_name: str,
@@ -95,6 +132,7 @@ def run(  # pylint:disable=too-many-arguments
     )
 
 
+@wait_for_connection
 def upload(  # pylint:disable=too-many-locals,too-many-arguments
     simulation: Simulation,
     task_name: str,
@@ -102,6 +140,8 @@ def upload(  # pylint:disable=too-many-locals,too-many-arguments
     callback_url: str = None,
     verbose: bool = True,
     progress_callback: Callable[[float], None] = None,
+    simulation_type: str = "tidy3d",
+    parent_tasks: List[str] = None,
 ) -> TaskId:
     """Upload simulation to server, but do not start running :class:`.Simulation`.
 
@@ -120,6 +160,10 @@ def upload(  # pylint:disable=too-many-locals,too-many-arguments
         If `True`, will print progressbars and status, otherwise, will run silently.
     progress_callback : Callable[[float], None] = None
         Optional callback function called when uploading file with ``bytes_in_chunk`` as argument.
+    simulation_type : str
+        Type of simulation being uploaded.
+    parent_tasks : List[str]
+        List of related task ids.
 
     Returns
     -------
@@ -134,7 +178,9 @@ def upload(  # pylint:disable=too-many-locals,too-many-arguments
     simulation.validate_pre_upload()
     log.debug("Creating task.")
 
-    task = SimulationTask.create(simulation, task_name, folder_name, callback_url)
+    task = SimulationTask.create(
+        simulation, task_name, folder_name, callback_url, simulation_type, parent_tasks
+    )
     if verbose:
         console = Console()
         console.log(f"Created task '{task_name}' with task_id '{task.task_id}'.")
@@ -149,6 +195,7 @@ def upload(  # pylint:disable=too-many-locals,too-many-arguments
     return task.task_id
 
 
+@wait_for_connection
 def get_info(task_id: TaskId) -> TaskInfo:
     """Return information about a task.
 
@@ -168,6 +215,7 @@ def get_info(task_id: TaskId) -> TaskInfo:
     return TaskInfo(**{"taskId": task.task_id, **task.dict()})
 
 
+@wait_for_connection
 def start(
     task_id: TaskId,
     solver_version: str = None,
@@ -195,6 +243,7 @@ def start(
     task.submit(solver_version=solver_version, worker_group=worker_group)
 
 
+@wait_for_connection
 def get_run_info(task_id: TaskId):
     """Gets the % done and field_decay for a running task.
 
@@ -345,6 +394,7 @@ def monitor(task_id: TaskId, verbose: bool = True) -> None:
             time.sleep(REFRESH_TIME)
 
 
+@wait_for_connection
 def download(
     task_id: TaskId,
     path: str = "simulation_data.hdf5",
@@ -369,6 +419,7 @@ def download(
     task.get_simulation_hdf5(path, verbose=verbose, progress_callback=progress_callback)
 
 
+@wait_for_connection
 def download_json(
     task_id: TaskId,
     path: str = SIM_FILE_JSON,
@@ -394,6 +445,7 @@ def download_json(
     task.get_simulation_json(path, verbose=verbose, progress_callback=progress_callback)
 
 
+@wait_for_connection
 def download_hdf5(
     task_id: TaskId,
     path: str = SIM_FILE_HDF5,
@@ -419,6 +471,7 @@ def download_hdf5(
     task.get_simulation_hdf5(path, verbose=verbose, progress_callback=progress_callback)
 
 
+@wait_for_connection
 def load_simulation(
     task_id: TaskId,
     path: str = SIM_FILE_JSON,
@@ -450,6 +503,7 @@ def load_simulation(
     return Simulation.from_file(path)
 
 
+@wait_for_connection
 def download_log(
     task_id: TaskId,
     path: str = "tidy3d.log",
@@ -477,6 +531,7 @@ def download_log(
     task.get_log(path, verbose=verbose, progress_callback=progress_callback)
 
 
+@wait_for_connection
 def load(
     task_id: TaskId,
     path: str = "simulation_data.hdf5",
@@ -526,6 +581,7 @@ def load(
     return sim_data
 
 
+@wait_for_connection
 def delete(task_id: TaskId) -> TaskInfo:
     """Delete server-side data associated with task.
 
@@ -546,6 +602,7 @@ def delete(task_id: TaskId) -> TaskInfo:
     return TaskInfo(**{"taskId": task.task_id, **task.dict()})
 
 
+@wait_for_connection
 def delete_old(
     days_old: int = 100,
     folder: str = "default",
@@ -580,6 +637,7 @@ def delete_old(
 
 
 # TODO: make this return a list of TaskInfo instead?
+@wait_for_connection
 def get_tasks(
     num_tasks: int = None, order: Literal["new", "old"] = "new", folder: str = "default"
 ) -> List[Dict]:
@@ -610,6 +668,7 @@ def get_tasks(
     return [task.dict() for task in tasks]
 
 
+@wait_for_connection
 def estimate_cost(task_id: str) -> float:
     """Compute the maximum FlexCredit charge for a given task.
 
@@ -652,6 +711,7 @@ def estimate_cost(task_id: str) -> float:
     return flex_unit
 
 
+@wait_for_connection
 def real_cost(task_id: str) -> float:
     """Get the billed cost for given task after it has been run.
 
@@ -670,6 +730,7 @@ def real_cost(task_id: str) -> float:
     return flex_unit
 
 
+@wait_for_connection
 def test() -> None:
     """Confirm whether Tidy3D authentication is configured. Raises exception if not."""
     try:

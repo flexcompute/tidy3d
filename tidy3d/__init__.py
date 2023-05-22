@@ -11,7 +11,8 @@ from .components.geometry import TriangleMesh
 # medium
 from .components.medium import Medium, PoleResidue, AnisotropicMedium, PEC, PECMedium, Medium2D
 from .components.medium import Sellmeier, Debye, Drude, Lorentz
-from .components.medium import CustomMedium
+from .components.medium import CustomMedium, FullyAnisotropicMedium
+from .components.transformation import RotationAroundAxis
 
 # structures
 from .components.structure import Structure, MeshOverrideStructure

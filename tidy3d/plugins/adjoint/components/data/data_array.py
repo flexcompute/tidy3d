@@ -38,6 +38,13 @@ class JaxDataArray(Tidy3dBaseModel):
         """Convert supplied coordinates to Dict[str, list]."""
         return {coord_name: list(coord_list) for coord_name, coord_list in val.items()}
 
+    @pd.validator("values", always=True)
+    def _convert_values_to_np(cls, val):
+        """Convert supplied values to numpy if they are list (from file)."""
+        if isinstance(val, list):
+            return np.array(val)
+        return val
+
     # removed because it was slowing things down.
     # @pd.validator("coords", always=True)
     # def _coords_match_values(cls, val, values):

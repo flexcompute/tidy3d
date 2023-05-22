@@ -60,10 +60,30 @@ class Job(WebContainer):
         True, title="Verbose", description="Whether to print info messages and progressbars."
     )
 
+    simulation_type: str = pd.Field(
+        "tidy3d",
+        title="Simulation Type",
+        description="Type of simulation, used internally only.",
+    )
+
+    parent_tasks: Tuple[TaskId, ...] = pd.Field(
+        None, title="Parent Tasks", description="Tuple of parent task ids, used internally only."
+    )
+
     task_id: TaskId = pd.Field(
         None,
         title="Task Id",
         description="Task ID number, set when the task is uploaded, leave as None.",
+    )
+
+    _upload_fields = (
+        "simulation",
+        "task_name",
+        "folder_name",
+        "callback_url",
+        "verbose",
+        "simulation_type",
+        "parent_tasks",
     )
 
     def run(self, path: str = DEFAULT_DATA_PATH) -> SimulationData:
@@ -84,20 +104,21 @@ class Job(WebContainer):
         self.monitor()
         return self.load(path=path)
 
-    @pd.validator("task_id", always=True)
-    def _upload(cls, val, values) -> None:
+    @pd.root_validator()
+    def _upload(cls, values) -> None:
         """Upload simulation to server without running."""
-        if val is not None:
-            return val
 
-        task_id = web.upload(
-            simulation=values.get("simulation"),
-            task_name=values.get("task_name"),
-            folder_name=values.get("folder_name"),
-            callback_url=values.get("callback_url"),
-            verbose=values.get("verbose"),
-        )
-        return task_id
+        # task_id already present, don't re-upload
+        if values.get("task_id") is not None:
+            return values
+
+        # upload kwargs with all fields except task_id
+        upload_kwargs = {key: values.get(key) for key in cls._upload_fields}
+        task_id = web.upload(**upload_kwargs)
+
+        # then set the task_id and return
+        values["task_id"] = task_id
+        return values
 
     def get_info(self) -> TaskInfo:
         """Return information about a :class:`Job`.
@@ -268,6 +289,26 @@ class Batch(WebContainer):
         "otherwise uses default for the current front end version.",
     )
 
+    callback_url: str = pd.Field(
+        None,
+        title="Callback URL",
+        description="Http PUT url to receive simulation finish event. "
+        "The body content is a json file with fields "
+        "``{'id', 'status', 'name', 'workUnit', 'solverVersion'}``.",
+    )
+
+    simulation_type: str = pd.Field(
+        "tidy3d",
+        title="Simulation Type",
+        description="Type of each simulation in the batch, used internally only.",
+    )
+
+    parent_tasks: Dict[str, Tuple[TaskId, ...]] = pd.Field(
+        None,
+        title="Parent Tasks",
+        description="Collection of parent task ids for each job in batch, used internally only.",
+    )
+
     jobs: Dict[TaskName, Job] = pd.Field(
         None,
         title="Simulations",
@@ -324,17 +365,22 @@ class Batch(WebContainer):
         if val is not None:
             return val
 
-        verbose = bool(values.get("verbose"))
+        # the type of job to upload (to generalize to subclasses)
+        JobType = cls.__fields__["jobs"].type_  # pylint:disable=invalid-name
+        parent_tasks = values.get("parent_tasks")
 
+        verbose = bool(values.get("verbose"))
         jobs = {}
         for task_name, simulation in values.get("simulations").items():
-            job = Job(
-                simulation=simulation,
-                task_name=task_name,
-                folder_name=values.get("folder_name"),
-                solver_version=values.get("solver_version"),
-                verbose=verbose,
-            )
+
+            # pylint:disable=protected-access
+            upload_kwargs = {key: values.get(key) for key in JobType._upload_fields}
+            upload_kwargs["task_name"] = task_name
+            upload_kwargs["simulation"] = simulation
+            upload_kwargs["verbose"] = verbose
+            if parent_tasks and task_name in parent_tasks:
+                upload_kwargs["parent_tasks"] = parent_tasks[task_name]
+            job = JobType(**upload_kwargs)
             jobs[task_name] = job
         return jobs
 

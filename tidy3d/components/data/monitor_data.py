@@ -322,7 +322,7 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
             return field_components
 
         # Interpolate field components to cell centers
-        interp_dict = {}
+        interp_dict = {"assume_sorted": True}
         for dim, cents in zip(self._tangential_dims, self._plane_grid_centers):
             if cents.size > 0:
                 interp_dict[dim] = cents
@@ -456,7 +456,7 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
         """
         fields = self._tangential_fields
 
-        interp_dict = {}
+        interp_dict = {"assume_sorted": True}
         for dim, cents in zip(self._tangential_dims, centers):
             if cents.size > 0:
                 interp_dict[dim] = cents
@@ -585,7 +585,9 @@ class FieldData(FieldDataset, ElectromagneticFieldData):
     >>> data = FieldData(monitor=monitor, Ex=scalar_field, Hz=scalar_field)
     """
 
-    monitor: FieldMonitor
+    monitor: FieldMonitor = pd.Field(
+        ..., title="Monitor", description="Frequency-domain field monitor associated with the data."
+    )
 
     _contains_monitor_fields = enforce_monitor_fields_present()
 
@@ -654,7 +656,9 @@ class FieldTimeData(FieldTimeDataset, ElectromagneticFieldData):
     >>> data = FieldTimeData(monitor=monitor, Ex=scalar_field, Hz=scalar_field)
     """
 
-    monitor: FieldTimeMonitor
+    monitor: FieldTimeMonitor = pd.Field(
+        ..., title="Monitor", description="Time-domain field monitor associated with the data."
+    )
 
     _contains_monitor_fields = enforce_monitor_fields_present()
 
@@ -734,7 +738,9 @@ class ModeSolverData(ModeSolverDataset, ElectromagneticFieldData):
     ... )
     """
 
-    monitor: ModeSolverMonitor
+    monitor: ModeSolverMonitor = pd.Field(
+        ..., title="Monitor", description="Mode solver monitor associated with the data."
+    )
 
     # pylint:disable=too-many-locals
     def overlap_sort(
@@ -956,7 +962,9 @@ class PermittivityData(PermittivityDataset, AbstractFieldData):
     >>> data = PermittivityData(monitor=monitor, eps_xx=sclr_fld, eps_yy=sclr_fld, eps_zz=sclr_fld)
     """
 
-    monitor: PermittivityMonitor
+    monitor: PermittivityMonitor = pd.Field(
+        ..., title="Monitor", description="Permittivity monitor associated with the data."
+    )
 
 
 class ModeData(MonitorData):
@@ -982,7 +990,9 @@ class ModeData(MonitorData):
     >>> data = ModeData(monitor=monitor, amps=amp_data, n_complex=index_data)
     """
 
-    monitor: ModeMonitor
+    monitor: ModeMonitor = pd.Field(
+        ..., title="Monitor", description="Mode monitor associated with the data."
+    )
 
     amps: ModeAmpsDataArray = pd.Field(
         ..., title="Amplitudes", description="Complex-valued amplitudes associated with the mode."
@@ -1024,8 +1034,13 @@ class FluxData(MonitorData):
     >>> data = FluxData(monitor=monitor, flux=flux_data)
     """
 
-    monitor: FluxMonitor
-    flux: FluxDataArray
+    monitor: FluxMonitor = pd.Field(
+        ..., title="Monitor", description="Frequency-domain flux monitor associated with the data."
+    )
+
+    flux: FluxDataArray = pd.Field(
+        ..., title="Flux", description="Flux values in the frequency-domain."
+    )
 
     def normalize(self, source_spectrum_fn) -> FluxData:
         """Return copy of self after normalization is applied using source spectrum function."""
@@ -1048,8 +1063,13 @@ class FluxTimeData(MonitorData):
     >>> data = FluxTimeData(monitor=monitor, flux=flux_data)
     """
 
-    monitor: FluxTimeMonitor
-    flux: FluxTimeDataArray
+    monitor: FluxTimeMonitor = pd.Field(
+        ..., title="Monitor", description="Time-domain flux monitor associated with the data."
+    )
+
+    flux: FluxTimeDataArray = pd.Field(
+        ..., title="Flux", description="Flux values in the time-domain."
+    )
 
 
 ProjFieldType = Union[
@@ -1702,7 +1722,9 @@ class DiffractionData(AbstractFieldProjectionData):
     ... )
     """
 
-    monitor: DiffractionMonitor
+    monitor: DiffractionMonitor = pd.Field(
+        ..., title="Monitor", description="Diffraction monitor associated with the data."
+    )
 
     Er: DiffractionDataArray = pd.Field(
         ...,

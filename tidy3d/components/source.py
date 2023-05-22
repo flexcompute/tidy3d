@@ -261,7 +261,7 @@ class GaussianPulse(Pulse):
         const = 1j + time_shifted / twidth**2 / omega0
         offset = np.exp(1j * self.phase)
         oscillation = np.exp(-1j * omega0 * time)
-        amp = np.exp(-(time_shifted**2) / 2 / twidth**2)
+        amp = np.exp(-(time_shifted**2) / 2 / twidth**2) * self.amplitude
 
         return const * offset * oscillation * amp
 
@@ -285,7 +285,7 @@ class ContinuousWave(Pulse):
         const = 1.0
         offset = np.exp(1j * self.phase)
         oscillation = np.exp(-1j * omega0 * time)
-        amp = 1 / (1 + np.exp(-time_shifted / twidth))
+        amp = 1 / (1 + np.exp(-time_shifted / twidth)) * self.amplitude
 
         return const * offset * oscillation * amp
 
@@ -857,7 +857,12 @@ class AstigmaticGaussianBeam(AngledFieldSource, PlanarSource, BroadbandSource):
 
 
 class TFSF(AngledFieldSource, VolumeSource):
-    """Total field scattered field with a plane wave field in a volume."""
+    """Total-field scattered-field (TFSF) source that can inject a plane wave in a finite region.
+    The TFSF source injects 1 W / um^2 of power along the ``injection_axis``. Note that in the
+    case of angled incidence, 1 W / um^2 is still injected along the source's ``injection_axis``,
+    and not the propagation direction, unlike a ``PlaneWave`` source. This allows computing
+    scattering and absorption cross sections without the need for additional normalization.
+    """
 
     injection_axis: Axis = pydantic.Field(
         ...,

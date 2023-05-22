@@ -20,6 +20,7 @@ from .grid.grid import Coords1D, Grid, Coords
 from .grid.grid_spec import GridSpec, UniformGrid, AutoGrid
 from .medium import Medium, MediumType, AbstractMedium, PECMedium
 from .medium import CustomMedium, Medium2D, MediumType3D
+from .medium import AnisotropicMedium, FullyAnisotropicMedium
 from .boundary import BoundarySpec, BlochBoundary, PECBoundary, PMCBoundary, Periodic
 from .boundary import PML, StablePML, Absorber, AbsorberSpec
 from .structure import Structure
@@ -50,8 +51,9 @@ MAX_NUM_MEDIUMS = 65530
 # maximum numbers of simulation parameters
 MAX_TIME_STEPS = 1e8
 MAX_GRID_CELLS = 20e9
-MAX_CELLS_TIMES_STEPS = 1e17
-MAX_MONITOR_DATA_SIZE_BYTES = 10e9
+MAX_CELLS_TIMES_STEPS = 1e16
+WARN_MONITOR_DATA_SIZE_GB = 10
+MAX_SIMULATION_DATA_SIZE_GB = 50
 
 # number of grid cells at which we warn about slow Simulation.epsilon()
 NUM_CELLS_WARN_EPSILON = 100_000_000
@@ -125,7 +127,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         units=SECOND,
     )
 
-    medium: MediumType = pydantic.Field(
+    medium: MediumType3D = pydantic.Field(
         Medium(),
         title="Background Medium",
         description="Background medium of simulation, defaults to vacuum if not specified.",
@@ -232,13 +234,6 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         # otherwise, call the updator to update the values dictionary
         updater = Updater(sim_dict=values)
         return updater.update_to_current()
-
-    @pydantic.validator("medium", always=True)
-    def _validate_medium(cls, val):
-        """Check that the medium is not a :class:`.Medium2D`."""
-        if isinstance(val, Medium2D):
-            raise ValidationError("'Simulation.medium' cannot be a 'Medium2D'.")
-        return val
 
     @pydantic.validator("grid_spec", always=True)
     def _validate_auto_grid_wavelength(cls, val, values):
@@ -749,8 +744,10 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         return val
 
     @pydantic.validator("sources", always=True)
-    def _source_homogeneous(cls, val, values):
-        """Error if a plane wave or gaussian beam source is not in a homogeneous region."""
+    def _source_homogeneous_isotropic(cls, val, values):
+        """Error if a plane wave or gaussian beam source is not in a homogeneous and isotropic
+        region.
+        """
 
         if val is None:
             return val
@@ -777,6 +774,14 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
                         f"{len(mediums)} different mediums detected on plane "
                         f"intersecting a {source.type} source. Plane must be homogeneous."
                     )
+                if len(mediums) == 1 and isinstance(
+                    list(mediums)[0], (AnisotropicMedium, FullyAnisotropicMedium)
+                ):
+                    raise SetupError(
+                        f"An anisotropic medium is detected on plane intersecting a {source.type} "
+                        f"source. Injection of {source.type} into anisotropic media currently is "
+                        "not supported."
+                    )
 
         return val
 
@@ -788,11 +793,18 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         if val is None:
             return val
 
-        assert val >= 0, "normalize_index can't be negative."
-        num_sources = len(values.get("sources"))
+        sources = values.get("sources")
+        num_sources = len(sources)
         if num_sources > 0:
             # No check if no sources, but it should be irrelevant anyway
-            assert val < num_sources, f"{num_sources} sources smaller than normalize_index of {val}"
+            if val >= num_sources:
+                raise ValidationError(
+                    f"'normalize_index' {val} out of bounds for number of sources {num_sources}."
+                )
+
+            # Also error if normalizing by a zero-amplitude source
+            if sources[val].source_time.amplitude == 0:
+                raise ValidationError("Cannot set 'normalize_index' to source with zero amplitude.")
 
         return val
 
@@ -884,10 +896,10 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
     def _validate_size(self) -> None:
         """Ensures the simulation is within size limits before simulation is uploaded."""
 
-        num_cells = self.num_cells
-        if num_cells > MAX_GRID_CELLS:
+        num_comp_cells = self.num_cells / 2 ** (np.sum(np.abs(self.symmetry)))
+        if num_comp_cells > MAX_GRID_CELLS:
             raise SetupError(
-                f"Simulation has {num_cells:.2e} computational cells, "
+                f"Simulation has {num_comp_cells:.2e} computational cells, "
                 f"a maximum of {MAX_GRID_CELLS:.2e} are allowed."
             )
 
@@ -898,7 +910,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
                 f"a maximum of {MAX_TIME_STEPS:.2e} are allowed."
             )
 
-        num_cells_times_steps = num_time_steps * num_cells
+        num_cells_times_steps = num_time_steps * num_comp_cells
         if num_cells_times_steps > MAX_CELLS_TIMES_STEPS:
             raise SetupError(
                 f"Simulation has {num_cells_times_steps:.2e} grid cells * time steps, "
@@ -911,7 +923,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         tmesh = self.tmesh
         grid = self.grid
 
-        total_size_bytes = 0
+        total_size_gb = 0
         for monitor in self.monitors:
             monitor_inds = grid.discretize_inds(monitor, extend=True)
             num_cells = [inds[1] - inds[0] for inds in monitor_inds]
@@ -920,13 +932,21 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
                 num_cells = monitor.downsampled_num_cells(num_cells)
             num_cells = np.prod(num_cells)
             monitor_size = monitor.storage_size(num_cells=num_cells, tmesh=tmesh)
+            monitor_size_gb = monitor_size / 2**30
 
-            total_size_bytes += monitor_size
+            if monitor_size_gb > WARN_MONITOR_DATA_SIZE_GB:
+                log.warning(
+                    f"Monitor '{monitor.name}' estimated storage is {monitor_size_gb:1.2f}GB. "
+                    "Consider making it smaller, using fewer frequencies, or spatial or temporal "
+                    "downsampling using 'interval_space' and 'interval', respectively."
+                )
 
-        if total_size_bytes > MAX_MONITOR_DATA_SIZE_BYTES:
+            total_size_gb += monitor_size_gb
+
+        if total_size_gb > MAX_SIMULATION_DATA_SIZE_GB:
             raise SetupError(
-                f"Simulation's monitors have {total_size_bytes:.2e} bytes of estimated storage, "
-                f"a maximum of {MAX_MONITOR_DATA_SIZE_BYTES:.2e} are allowed."
+                f"Simulation's monitors have {total_size_gb:.2f}GB of estimated storage, "
+                f"a maximum of {MAX_SIMULATION_DATA_SIZE_GB:.2f}GB are allowed."
             )
 
     def _validate_datasets_not_none(self) -> None:
@@ -942,7 +962,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         """Error if the 4 sidewalls of a TFSF box don't all intersect the same structures.
         This validator may need to compute permittivities on the grid, so it is called
         pre-upload rather than at the time of definition. Also errors if any side wall
-        intersects with a custom medium.
+        intersects with a custom medium or a fully anisotropic media.
         """
         for source in self.sources:
             if not isinstance(source, TFSF):
@@ -962,11 +982,12 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
                     )
 
                     if any(
-                        isinstance(struct.medium, CustomMedium) for struct in intersecting_structs
+                        isinstance(struct.medium, (CustomMedium, FullyAnisotropicMedium))
+                        for struct in intersecting_structs
                     ):
                         raise SetupError(
-                            f"The surfaces of TFSF source '{source.name}' must not intersect "
-                            "any structures containing a 'CustomMedium'."
+                            f"The surfaces of TFSF source '{source.name}' must not intersect any "
+                            "structures containing a 'CustomMedium' or a 'FullyAnisotropicMedium'."
                         )
 
                     # if no structures intersect, just add a phantom associated with the simulation
@@ -2472,10 +2493,11 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
             Rectangular geometry specifying where to measure the permittivity.
         coord_key : str = 'centers'
             Specifies at what part of the grid to return the permittivity at.
-            Accepted values are ``{'centers', 'boundaries', 'Ex', 'Ey', 'Ez'}``.
-            The field values (eg. 'Ex') correspond to the correponding field locations on the yee
-            lattice. If field values are selected, the corresponding epsilon component from the
-            main diagonal of the epsilon tensor is returned. Otherwise, the average of the diagonal
+            Accepted values are ``{'centers', 'boundaries', 'Ex', 'Ey', 'Ez', 'Exy', 'Exz', 'Eyx',
+            'Eyz', 'Ezx', Ezy'}``. The field values (eg. 'Ex') correspond to the correponding field
+            locations on the yee lattice. If field values are selected, the corresponding diagonal
+            (eg. `eps_xx` in case of `Ex`) or off-diagonal (eg. `eps_xy` in case of `Exy`) epsilon
+            component from the epsilon tensor is returned. Otherwise, the average of the main
             values is returned.
         freq : float = None
             The frequency to evaluate the mediums at.
@@ -2505,10 +2527,11 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
             Grid specifying where to measure the permittivity.
         coord_key : str = 'centers'
             Specifies at what part of the grid to return the permittivity at.
-            Accepted values are ``{'centers', 'boundaries', 'Ex', 'Ey', 'Ez'}``.
-            The field values (eg. 'Ex') correspond to the correponding field locations on the yee
-            lattice. If field values are selected, the corresponding epsilon component from the
-            main diagonal of the epsilon tensor is returned. Otherwise, the average of the diagonal
+            Accepted values are ``{'centers', 'boundaries', 'Ex', 'Ey', 'Ez', 'Exy', 'Exz', 'Eyx',
+            'Eyz', 'Ezx', Ezy'}``. The field values (eg. 'Ex') correspond to the correponding field
+            locations on the yee lattice. If field values are selected, the corresponding diagonal
+            (eg. `eps_xx` in case of `Ex`) or off-diagonal (eg. `eps_xy` in case of `Exy`) epsilon
+            component from the epsilon tensor is returned. Otherwise, the average of the main
             values is returned.
         freq : float = None
             The frequency to evaluate the mediums at.
@@ -2538,8 +2561,12 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
             """Select the correct epsilon component if field locations are requested."""
             if coord_key[0] != "E":
                 return np.mean(structure.eps_diagonal(frequency, coords), axis=0)
-            component = ["x", "y", "z"].index(coord_key[1])
-            return structure.eps_diagonal(frequency, coords)[component]
+            row = ["x", "y", "z"].index(coord_key[1])
+            if len(coord_key) == 2:  # diagonal component in case of Ex, Ey, and Ez
+                col = row
+            else:  # off-diagonal component in case of Exy, Exz, Eyx, etc
+                col = ["x", "y", "z"].index(coord_key[2])
+            return structure.eps_comp(row, col, frequency, coords)
 
         def make_eps_data(coords: Coords):
             """returns epsilon data on grid of points defined by coords"""
@@ -2580,7 +2607,11 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
             return xr.DataArray(eps_array, coords=coords, dims=("x", "y", "z"))
 
         # combine all data into dictionary
-        coords = grid[coord_key]
+        if coord_key[0] == "E":
+            # off-diagonal componets are sampled at respective locations (eg. `eps_xy` at `Ex`)
+            coords = grid[coord_key[0:2]]
+        else:
+            coords = grid[coord_key]
         return make_eps_data(coords)
 
     @property

@@ -13,7 +13,7 @@ import xarray as xr
 from .base import Tidy3dBaseModel, cached_property
 from .grid.grid import Coords, Grid
 from .types import PoleAndResidue, Ax, FreqBound, TYPE_TAG_STR, InterpMethod, Bound, ArrayComplex4D
-from .types import Axis
+from .types import Axis, TensorReal
 from .data.dataset import PermittivityDataset
 from .data.data_array import ScalarFieldDataArray
 from .viz import add_ax_if_none
@@ -23,6 +23,7 @@ from ..constants import C_0, pec_val, EPSILON_0, LARGE_NUMBER, fp_eps
 from ..constants import HERTZ, CONDUCTIVITY, PERMITTIVITY, RADPERSEC, MICROMETER, SECOND
 from ..exceptions import ValidationError, SetupError
 from ..log import log
+from .transformation import RotationType
 
 
 # evaluate frequency as this number (Hz) if inf
@@ -130,6 +131,29 @@ class AbstractMedium(ABC, Tidy3dBaseModel):
         # This only needs to be overwritten for anisotropic materials
         eps = self.eps_model(frequency)
         return (eps, eps, eps)
+
+    def eps_comp(self, row: Axis, col: Axis, frequency: float) -> complex:
+        """Single component of the complex-valued permittivity tensor as a function of frequency.
+
+        Parameters
+        ----------
+        row : int
+            Component's row in the permittivity tensor (0, 1, or 2 for x, y, or z respectively).
+        col : int
+            Component's column in the permittivity tensor (0, 1, or 2 for x, y, or z respectively).
+        frequency : float
+            Frequency to evaluate permittivity at (Hz).
+
+        Returns
+        -------
+        complex
+           Element of the relative permittivity tensor evaluated at ``frequency``.
+        """
+
+        # This only needs to be overwritten for anisotropic materials
+        if row == col:
+            return self.eps_model(frequency)
+        return 0j
 
     @cached_property
     @abstractmethod
@@ -539,10 +563,47 @@ class CustomMedium(AbstractMedium):
         ]
         return tuple(eps_list)
 
+    def eps_comp_on_grid(
+        self,
+        row: Axis,
+        col: Axis,
+        frequency: float,
+        coords: Coords,
+    ) -> ArrayComplex4D:
+        """Spatial profile of a single component of the complex-valued permittivity tensor at
+        ``frequency`` interpolated at the supplied coordinates.
+
+        Parameters
+        ----------
+        row : int
+            Component's row in the permittivity tensor (0, 1, or 2 for x, y, or z respectively).
+        col : int
+            Component's column in the permittivity tensor (0, 1, or 2 for x, y, or z respectively).
+        frequency : float
+            Frequency to evaluate permittivity at (Hz).
+        coords : :class:`.Coords`
+            The grid point coordinates over which interpolation is performed.
+
+        Returns
+        -------
+        np.ndarray
+            Single component of the complex-valued permittivity tensor at ``frequency`` interpolated
+            at the supplied coordinates.
+        """
+
+        if row == col:
+            eps_freq = self.eps_dataset_freq(frequency)
+            interp_shape = [len(coord_comp) for coord_comp in coords.to_list]
+            comp = ["eps_xx", "eps_yy", "eps_zz"][row]
+            eps = self._interp(eps_freq.field_components[comp], coords, self.interp_method)
+            eps = np.array(eps).reshape(interp_shape)
+            return eps
+        return 0
+
     @ensure_freq_in_range
     def eps_diagonal(self, frequency: float) -> Tuple[complex, complex, complex]:
         """Main diagonal of the complex-valued permittivity tensor
-        at ``frequency``. Spatially, we take max{||eps||}, so that autoMesh generation
+        at ``frequency``. Spatially, we take max{|eps|}, so that autoMesh generation
         works appropriately.
         """
         eps_freq = self.eps_dataset_freq(frequency)
@@ -554,7 +615,7 @@ class CustomMedium(AbstractMedium):
 
     @ensure_freq_in_range
     def eps_model(self, frequency: float) -> complex:
-        """Spatial and poloarizaiton average of complex-valued permittivity
+        """Spatial and polarizaiton average of complex-valued permittivity
         as a function of frequency.
         """
         eps_freq = self.eps_dataset_freq(frequency)
@@ -1241,6 +1302,30 @@ class AnisotropicMedium(AbstractMedium):
         eps_zz = self.zz.eps_model(frequency)
         return (eps_xx, eps_yy, eps_zz)
 
+    def eps_comp(self, row: Axis, col: Axis, frequency: float) -> complex:
+        """Single component the complex-valued permittivity tensor as a function of frequency.
+
+        Parameters
+        ----------
+        row : int
+            Component's row in the permittivity tensor (0, 1, or 2 for x, y, or z respectively).
+        col : int
+            Component's column in the permittivity tensor (0, 1, or 2 for x, y, or z respectively).
+        frequency : float
+            Frequency to evaluate permittivity at (Hz).
+
+        Returns
+        -------
+        complex
+           Element of the relative permittivity tensor evaluated at ``frequency``.
+        """
+
+        if row != col:
+            return 0j
+        cmp = "xyz"[row]
+        field_name = cmp + cmp
+        return self.components[field_name].eps_model(frequency)
+
     @add_ax_if_none
     def plot(self, freqs: float, ax: Ax = None) -> Ax:
         """Plot n, k of a :class:`.Medium` as a function of frequency."""
@@ -1267,6 +1352,208 @@ class AnisotropicMedium(AbstractMedium):
         return dict(xx=self.xx, yy=self.yy, zz=self.zz)
 
 
+class FullyAnisotropicMedium(AbstractMedium):
+    """Fully anisotropic medium including all 9 components of the permittivity and conductivity
+    tensors. Provided permittivity tensor and the symmetric part of the conductivity tensor must
+    have coinciding main directions. A non-symmetric conductivity tensor can be used to model
+    magneto-optic effects. Note that dispersive properties and subpixel averaging are currently not
+    supported for fully anisotropic materials.
+
+    Note
+    ----
+    Simulations involving fully anisotropic materials are computationally more intensive, thus,
+    they take longer time to complete. This increase strongly depends on the filling fraction of
+    the simulation domain by fully anisotropic materials, varying approximately in the range from
+    1.5 to 5. Cost of running a simulation is adjusted correspondingly.
+
+    Example
+    -------
+    >>> perm = [[2, 0, 0], [0, 1, 0], [0, 0, 3]]
+    >>> cond = [[0.1, 0, 0], [0, 0, 0], [0, 0, 0]]
+    >>> anisotropic_dielectric = FullyAnisotropicMedium(permittivity=perm, conductivity=cond)
+    """
+
+    permittivity: TensorReal = pd.Field(
+        [[1, 0, 0], [0, 1, 0], [0, 0, 1]],
+        title="Permittivity",
+        description="Relative permittivity tensor.",
+        units=PERMITTIVITY,
+    )
+
+    conductivity: TensorReal = pd.Field(
+        [[0, 0, 0], [0, 0, 0], [0, 0, 0]],
+        title="Conductivity",
+        description="Electric conductivity tensor. Defined such that the imaginary part "
+        "of the complex permittivity at angular frequency omega is given by conductivity/omega.",
+        units=CONDUCTIVITY,
+    )
+
+    @pd.validator("permittivity", always=True)
+    def permittivity_spd_and_ge_one(cls, val):
+        """Check that provided permittivity tensor is symmetric positive definite
+        with eigenvalues >= 1.
+        """
+
+        if not np.allclose(val, np.transpose(val), atol=fp_eps):
+            raise ValidationError("Provided permittivity tensor is not symmetric.")
+
+        if np.any(np.linalg.eigvals(val) < 1 - fp_eps):
+            raise ValidationError("Main diagonal of provided permittivity tensor is not >= 1.")
+
+        return val
+
+    @pd.validator("conductivity", always=True)
+    def conductivity_ge_zero_and_commutes(cls, val, values):
+        """Check that the symmetric part of conductivity tensor commutes with permittivity tensor
+        (that is, simultaneously diagonalizable) with eigenvalues >= 0.
+        """
+
+        perm = values.get("permittivity")
+        cond_sym = 0.5 * (val + val.T)
+        comm_diff = np.abs(np.matmul(perm, cond_sym) - np.matmul(cond_sym, perm))
+
+        if not np.allclose(comm_diff, 0, atol=fp_eps):
+            raise ValidationError(
+                "Main directions of conductivity and permittivity tensor do not coincide."
+            )
+
+        if np.any(np.linalg.eigvals(cond_sym) < -fp_eps):
+            raise ValidationError("Main diagonal of provided conductivity tensor is not >= 0.")
+
+        return val
+
+    @classmethod
+    def from_diagonal(cls, xx: Medium, yy: Medium, zz: Medium, rotation: RotationType):
+        """Construct a fully anisotropic medium by rotating a diagonally ansisotropic medium.
+
+        Parameters
+        ----------
+        xx : :class:`.Medium`
+            Medium describing the xx-component of the diagonal permittivity tensor.
+        yy : :class:`.Medium`
+            Medium describing the yy-component of the diagonal permittivity tensor.
+        zz : :class:`.Medium`
+            Medium describing the zz-component of the diagonal permittivity tensor.
+        rotation : :class:`.RotationType`
+                Rotation applied to diagonal permittivity tensor.
+
+        Returns
+        -------
+        :class:`FullyAnisotropicMedium`
+            Resulting fully anisotropic medium.
+        """
+
+        permittivity_diag = np.diag([comp.permittivity for comp in [xx, yy, zz]]).tolist()
+        conductivity_diag = np.diag([comp.conductivity for comp in [xx, yy, zz]]).tolist()
+
+        permittivity = rotation.rotate_tensor(permittivity_diag)
+        conductivity = rotation.rotate_tensor(conductivity_diag)
+
+        return cls(permittivity=permittivity, conductivity=conductivity)
+
+    @cached_property
+    def _to_diagonal(self) -> AnisotropicMedium:
+        """Construct a diagonally anisotropic medium from main components.
+
+        Returns
+        -------
+        :class:`AnisotropicMedium`
+            Resulting diagonally anisotropic medium.
+        """
+
+        perm, cond, _ = self.eps_sigma_diag
+
+        return AnisotropicMedium(
+            xx=Medium(permittivity=perm[0], conductivity=cond[0]),
+            yy=Medium(permittivity=perm[1], conductivity=cond[1]),
+            zz=Medium(permittivity=perm[2], conductivity=cond[2]),
+        )
+
+    @cached_property
+    def eps_sigma_diag(
+        self,
+    ) -> Tuple[Tuple[float, float, float], Tuple[float, float, float], TensorReal]:
+        """Main components of permittivity and conductivity tensors and their directions."""
+
+        perm_diag, vecs = np.linalg.eig(self.permittivity)
+        cond_diag = np.diag(np.matmul(np.transpose(vecs), np.matmul(self.conductivity, vecs)))
+
+        return (perm_diag, cond_diag, vecs)
+
+    @ensure_freq_in_range
+    def eps_model(self, frequency: float) -> complex:
+        """Complex-valued permittivity as a function of frequency."""
+        perm_diag, cond_diag, _ = self.eps_sigma_diag
+
+        eps_diag = AbstractMedium.eps_sigma_to_eps_complex(perm_diag, cond_diag, frequency)
+        return np.mean(eps_diag)
+
+    @ensure_freq_in_range
+    def eps_diagonal(self, frequency: float) -> Tuple[complex, complex, complex]:
+        """Main diagonal of the complex-valued permittivity tensor as a function of frequency."""
+
+        perm_diag, cond_diag, _ = self.eps_sigma_diag
+
+        if not np.isscalar(frequency):
+            perm_diag = perm_diag[:, None]
+            cond_diag = cond_diag[:, None]
+        return AbstractMedium.eps_sigma_to_eps_complex(perm_diag, cond_diag, frequency)
+
+    def eps_comp(self, row: Axis, col: Axis, frequency: float) -> complex:
+        """Single component the complex-valued permittivity tensor as a function of frequency.
+
+        Parameters
+        ----------
+        row : int
+            Component's row in the permittivity tensor (0, 1, or 2 for x, y, or z respectively).
+        col : int
+            Component's column in the permittivity tensor (0, 1, or 2 for x, y, or z respectively).
+        frequency : float
+            Frequency to evaluate permittivity at (Hz).
+
+        Returns
+        -------
+        complex
+           Element of the relative permittivity tensor evaluated at ``frequency``.
+        """
+
+        eps = self.permittivity[row][col]
+        sig = self.conductivity[row][col]
+        return AbstractMedium.eps_sigma_to_eps_complex(eps, sig, frequency)
+
+    @cached_property
+    def n_cfl(self):
+        """This property computes the index of refraction related to CFL condition, so that
+        the FDTD with this medium is stable when the time step size that doesn't take
+        material factor into account is multiplied by ``n_cfl``.
+
+        For this medium, it take the minimal of ``sqrt(permittivity)`` for main directions.
+        """
+
+        perm_diag, _, _ = self.eps_sigma_diag
+        return min(np.sqrt(perm_diag))
+
+    @add_ax_if_none
+    def plot(self, freqs: float, ax: Ax = None) -> Ax:
+        """Plot n, k of a :class:`FullyAnisotropicMedium` as a function of frequency."""
+
+        diagonal_medium = self._to_diagonal
+        ax = diagonal_medium.plot(freqs=freqs, ax=ax)
+        _, _, directions = self.eps_sigma_diag
+
+        # rename components from xx, yy, zz to 1, 2, 3 to avoid misleading
+        # and add their directions
+        for label, n_line, k_line, direction in zip(
+            ("1", "2", "3"), ax.lines[-6::2], ax.lines[-5::2], directions.T
+        ):
+            direction_str = f"({direction[0]:.2f}, {direction[1]:.2f}, {direction[2]:.2f})"
+            k_line.set_label(f"k, eps_{label} {direction_str}")
+            n_line.set_label(f"n, eps_{label} {direction_str}")
+
+        ax.legend()
+        return ax
+
+
 # types of mediums that can be used in Simulation and Structures
 
 MediumType3D = Union[
@@ -1279,6 +1566,7 @@ MediumType3D = Union[
     Lorentz,
     Debye,
     Drude,
+    FullyAnisotropicMedium,
 ]
 
 

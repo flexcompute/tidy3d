@@ -20,7 +20,7 @@ def test_log():
 
 def test_log_config():
     td.config.logging_level = "DEBUG"
-    td.set_logging_file("test.log")
+    td.set_logging_file("tests/tmp/test.log")
     assert len(td.log.handlers) == 2
     assert td.log.handlers["console"].level == _get_level_int("DEBUG")
     assert td.log.handlers["file"].level == _get_level_int(DEFAULT_LEVEL)

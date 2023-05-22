@@ -141,7 +141,16 @@ def test_create(set_api_key):
     responses.add(
         responses.POST,
         f"{Env.current.web_api_endpoint}/tidy3d/projects/1234/tasks",
-        match=[matchers.json_params_matcher({"taskName": "test task", "callbackUrl": None})],
+        match=[
+            matchers.json_params_matcher(
+                {
+                    "taskName": "test task",
+                    "call_back_url": None,
+                    "simulationType": "tidy3d",
+                    "parentTasks": None,
+                }
+            )
+        ],
         json={
             "data": {
                 "taskId": "1234",
@@ -167,7 +176,12 @@ def test_submit(set_api_key):
     responses.add(
         responses.POST,
         f"{Env.current.web_api_endpoint}/tidy3d/projects/1234/tasks",
-        match=[matchers.json_params_matcher({"taskName": "test task", "callbackUrl": None})],
+        match=[matchers.json_params_matcher({
+            "taskName": "test task",
+            "call_back_url": None,
+            "simulationType": "tidy3d",
+            "parentTasks": None,
+        })],
         json={
             "data": {
                 "taskId": "1234",
@@ -246,3 +260,16 @@ def test_get_log(monkeypatch, set_api_key):
     with open(LOG_FNAME, "w") as f:
         task.get_log(LOG_FNAME)
         assert os.path.getsize(LOG_FNAME) > 0
+
+
+@responses.activate
+def test_get_running_tasks(set_api_key):
+    responses.add(
+        responses.GET,
+        f"{Env.current.web_api_endpoint}/tidy3d/py/tasks",
+        json={"data": [{"taskId": "1234", "status": "queued"}]},
+        status=200,
+    )
+
+    tasks = SimulationTask.get_running_tasks()
+    assert len(tasks) == 1

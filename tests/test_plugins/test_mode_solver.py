@@ -179,7 +179,7 @@ def test_compute_modes():
     coords = np.arange(11)
     mode_spec = td.ModeSpec(num_modes=3, target_neff=2.0)
     modes = compute_modes(
-        eps_cross=[eps_cross] * 3,
+        eps_cross=[eps_cross] * 9,
         coords=[coords, coords],
         freq=td.C_0 / 1.0,
         mode_spec=mode_spec,

@@ -41,8 +41,8 @@ class EigSolver(Tidy3dBaseModel):
         ----------
         eps_cross : array_like or tuple of array_like
             Either a single 2D array defining the relative permittivity in the cross-section,
-            or three 2D arrays defining the permittivity at the Ex, Ey, and Ez locations
-            of the Yee grid.
+            or nine 2D arrays defining the permittivity at the Ex, Ey, and Ez locations
+            of the Yee grid in the order xx, xy, xz, yx, yy, yz, zx, zy, zz.
         coords : List[Numpy]
             Two 1D arrays with each with size one larger than the corresponding axis of
             ``eps_cross``.
@@ -69,9 +69,11 @@ class EigSolver(Tidy3dBaseModel):
         k0 = omega / C_0
 
         if isinstance(eps_cross, Numpy):
-            eps_xx, eps_yy, eps_zz = eps_cross
-        elif len(eps_cross) == 3:
-            eps_xx, eps_yy, eps_zz = [np.copy(e) for e in eps_cross]
+            eps_xx, eps_xy, eps_xz, eps_yx, eps_yy, eps_yz, eps_zx, eps_zy, eps_zz = eps_cross
+        elif len(eps_cross) == 9:
+            eps_xx, eps_xy, eps_xz, eps_yx, eps_yy, eps_yz, eps_zx, eps_zy, eps_zz = [
+                np.copy(e) for e in eps_cross
+            ]
         else:
             raise ValueError("Wrong input to mode solver pemittivity!")
 
@@ -88,9 +90,12 @@ class EigSolver(Tidy3dBaseModel):
         (2N, 2N), and the full tensorial case, in which case it has shape (4N, 4N)."""
         eps_tensor = np.zeros((3, 3, N), dtype=np.complex128)
         mu_tensor = np.zeros((3, 3, N), dtype=np.complex128)
-        for dim, eps in enumerate([eps_xx, eps_yy, eps_zz]):
-            eps_tensor[dim, dim, :] = eps.ravel()
-            mu_tensor[dim, dim, :] = 1.0
+        for row, eps_row in enumerate(
+            [[eps_xx, eps_xy, eps_xz], [eps_yx, eps_yy, eps_yz], [eps_zx, eps_zy, eps_zz]]
+        ):
+            mu_tensor[row, row, :] = 1.0
+            for col, eps in enumerate(eps_row):
+                eps_tensor[row, col, :] = eps.ravel()
 
         # Get Jacobian of all coordinate transformations. Initialize as identity (same as mu so far)
         jac_e = np.real(np.copy(mu_tensor))
@@ -109,7 +114,7 @@ class EigSolver(Tidy3dBaseModel):
         different from just the transformation of the derivative operator. For example, in a bent
         waveguide, there is strictly speaking no k-vector in the original coordinates as the system
         is not translationally invariant there. However, if we define kz = R k_phi, then the
-        effective index approaches that for a straight-waveguide in the limit of infinite radius. 
+        effective index approaches that for a straight-waveguide in the limit of infinite radius.
         Since we use w = R phi in the radial_transform, there is nothing else neede in the k transform.
         For the angled_transform, the transformation between k-vectors follows from writing the field as
         E' exp(i k_p w) in transformed coordinates, and identifying this with
@@ -237,6 +242,15 @@ class EigSolver(Tidy3dBaseModel):
             Imaginary part of the effective index, shape (num_modes, ).
         """
 
+        # use a high-conductivity model for locations associated with a PEC
+        def conductivity_model_for_pec(eps, threshold=0.9 * pec_val):
+            """PEC entries associated with 'eps' are converted to a high-conductivity model."""
+            eps = eps.astype(complex)
+            eps[eps <= threshold] = 1 + 1j * np.abs(pec_val)
+            return eps
+
+        eps_tensor = conductivity_model_for_pec(eps_tensor)
+
         # Determine if ``eps`` and ``mu`` are diagonal or tensorial
         off_diagonals = (np.ones((3, 3)) - np.eye(3)).astype(bool)
         eps_offd = np.abs(eps_tensor[off_diagonals])
@@ -291,6 +305,21 @@ class EigSolver(Tidy3dBaseModel):
     ):  # pylint:disable=too-many-arguments
         """EM eigenmode solver assuming ``eps`` and ``mu`` are diagonal everywhere."""
 
+        # code associated with these options is included below in case it's useful in the future
+        enable_incidence_matrices = False
+        enable_preconditioner = False
+        analyze_conditioning = False
+
+        def incidence_matrix_for_pec(eps_vec, threshold=0.9 * np.abs(pec_val)):
+            """Incidence matrix indicating non-PEC entries associated with 'eps_vec'."""
+            nnz = eps_vec[np.abs(eps_vec) < threshold]
+            eps_nz = eps_vec.copy()
+            eps_nz[np.abs(eps_vec) >= threshold] = 0
+            rows = np.arange(0, len(nnz))
+            cols = np.argwhere(eps_nz).flatten()
+            dnz = sp.csr_matrix(([1] * len(nnz), (rows, cols)), shape=(len(rows), len(eps_vec)))
+            return dnz
+
         mode_solver_type = "diagonal"
         N = eps.shape[-1]
 
@@ -303,9 +332,22 @@ class EigSolver(Tidy3dBaseModel):
         mu_zz = mu[2, 2, :]
         dxf, dxb, dyf, dyb = der_mats
 
+        def any_pec(eps_vec, threshold=0.9 * np.abs(pec_val)):
+            """Check if there are any PEC values in the given permittivity array."""
+            return np.any(np.abs(eps_vec) >= threshold)
+
+        if np.any(any_pec(i) for i in [eps_xx, eps_yy, eps_zz]):
+            enable_preconditioner = True
+
         # Compute the matrix for diagonalization
         inv_eps_zz = sp.spdiags(1 / eps_zz, [0], N, N)
         inv_mu_zz = sp.spdiags(1 / mu_zz, [0], N, N)
+
+        if enable_incidence_matrices:
+            dnz_xx, dnz_yy, dnz_zz = [incidence_matrix_for_pec(i) for i in [eps_xx, eps_yy, eps_zz]]
+            dnz = sp.block_diag((dnz_xx, dnz_yy), format="csr")
+            inv_eps_zz = (dnz_zz.T) * dnz_zz * inv_eps_zz * (dnz_zz.T) * dnz_zz
+
         p11 = -dxf.dot(inv_eps_zz).dot(dyb)
         p12 = dxf.dot(inv_eps_zz).dot(dxb) + sp.spdiags(mu_yy, [0], N, N)
         p21 = -dyf.dot(inv_eps_zz).dot(dyb) - sp.spdiags(mu_xx, [0], N, N)
@@ -317,7 +359,25 @@ class EigSolver(Tidy3dBaseModel):
 
         pmat = sp.bmat([[p11, p12], [p21, p22]])
         qmat = sp.bmat([[q11, q12], [q21, q22]])
+
         mat = pmat.dot(qmat)
+
+        if enable_incidence_matrices:
+            mat = dnz * mat * dnz.T  # pylint: disable=used-before-assignment
+            vec_init = dnz * vec_init  # pylint: disable=used-before-assignment
+
+        if enable_preconditioner:
+            precon = sp.diags(1 / mat.diagonal())
+            mat = mat * precon
+        else:
+            precon = None
+
+        if analyze_conditioning:
+            aca = mat.conjugate().T * mat
+            aac = mat * mat.conjugate().T
+            diff = aca - aac
+            print(spl.norm(diff, ord=np.inf), spl.norm(aca, ord=np.inf), spl.norm(aac, ord=np.inf))
+            print(spl.norm(diff, ord="fro"), spl.norm(aca, ord="fro"), spl.norm(aac, ord="fro"))
 
         # Call the eigensolver. The eigenvalues are -(neff + 1j * keff)**2
         vals, vecs = cls.solver_eigs(
@@ -326,7 +386,15 @@ class EigSolver(Tidy3dBaseModel):
             vec_init,
             guess_value=-(neff_guess**2),
             mode_solver_type=mode_solver_type,
+            M=precon,
         )
+
+        if enable_preconditioner:
+            vecs = precon * vecs
+
+        if enable_incidence_matrices:
+            vecs = dnz.T * vecs  # pylint: disable=used-before-assignment
+
         neff, keff = cls.eigs_to_effective_index(vals, mode_solver_type)
 
         # Sort by descending neff
@@ -466,8 +534,8 @@ class EigSolver(Tidy3dBaseModel):
 
     @classmethod
     def solver_eigs(
-        cls, mat, num_modes, vec_init, guess_value=1.0, **kwargs
-    ):  # pylint:disable=unused-argument
+        cls, mat, num_modes, vec_init, guess_value=1.0, M=None, **kwargs
+    ):  # pylint:disable=unused-argument, too-many-arguments
         """Find ``num_modes`` eigenmodes of ``mat`` cloest to ``guess_value``.
 
         Parameters
@@ -479,7 +547,9 @@ class EigSolver(Tidy3dBaseModel):
         guess_value : float, optional
         """
 
-        values, vectors = spl.eigs(mat, k=num_modes, sigma=guess_value, tol=TOL_EIGS, v0=vec_init)
+        values, vectors = spl.eigs(
+            mat, k=num_modes, sigma=guess_value, tol=TOL_EIGS, v0=vec_init, M=M
+        )
         return values, vectors
 
     @classmethod

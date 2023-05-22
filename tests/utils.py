@@ -1,6 +1,7 @@
 import os
 from pathlib import Path
-from typing import Dict
+from typing import Dict, Tuple
+import pydantic as pd
 
 import pytest
 import numpy as np
@@ -8,7 +9,7 @@ from tidy3d import *
 import tidy3d as td
 from tidy3d.log import _get_level_int
 from tidy3d.web import BatchData
-
+from tidy3d.components.base import Tidy3dBaseModel
 
 """ utilities shared between all tests """
 
@@ -22,6 +23,7 @@ def clear_dir(path: str):
 
 
 TMP_DIR = "tests/tmp/"
+SIM_DATA_PATH = TMP_DIR + "simulation_data.hdf5"
 
 
 # decorator that clears the tmp/ directory before test
@@ -311,7 +313,7 @@ SIM_FULL = Simulation(
 )
 
 
-def run_emulated(simulation: Simulation, **kwargs) -> SimulationData:
+def run_emulated(simulation: Simulation, path: str = SIM_DATA_PATH, **kwargs) -> SimulationData:
     """Emulates a simulation run."""
 
     from scipy.ndimage.filters import gaussian_filter
@@ -319,9 +321,12 @@ def run_emulated(simulation: Simulation, **kwargs) -> SimulationData:
     def make_data(coords: dict, data_array_type: type, is_complex: bool = False) -> "data_type":
         """make a random DataArray out of supplied coordinates and data_type."""
         data_shape = [len(coords[k]) for k in data_array_type._dims]
+        np.random.seed(1)
         data = np.random.random(data_shape)
+
+        # data = np.ones(data_shape)
         data = (1 + 1j) * data if is_complex else data
-        data = gaussian_filter(data, sigma=0.5)  # smooth out the data a little so it isnt random
+        data = gaussian_filter(data, sigma=1.0)  # smooth out the data a little so it isnt random
         data_array = data_array_type(data, coords=coords)
         return data_array
 
@@ -350,7 +355,7 @@ def run_emulated(simulation: Simulation, **kwargs) -> SimulationData:
             symmetry=simulation.symmetry,
             symmetry_center=simulation.center,
             grid_expanded=simulation.discretize(monitor, extend=True),
-            **field_cmps
+            **field_cmps,
         )
 
     def make_eps_data(monitor: PermittivityMonitor) -> PermittivityData:
@@ -395,13 +400,50 @@ def run_emulated(simulation: Simulation, **kwargs) -> SimulationData:
     }
 
     data = [MONITOR_MAKER_MAP[type(mnt)](mnt) for mnt in simulation.monitors]
+    sim_data = SimulationData(simulation=simulation, data=data)
+    sim_data.to_file(path)
 
-    return SimulationData(simulation=simulation, data=data)
+    return sim_data
+
+
+class BatchDataTest(Tidy3dBaseModel):
+    """Holds a collection of :class:`.SimulationData` returned by :class:`.Batch`."""
+
+    task_paths: Dict[str, str] = pd.Field(
+        ...,
+        title="Data Paths",
+        description="Mapping of task_name to path to corresponding data for each task in batch.",
+    )
+
+    task_ids: Dict[str, str] = pd.Field(
+        ..., title="Task IDs", description="Mapping of task_name to task_id for each task in batch."
+    )
+
+    sim_data: Dict[str, SimulationData]
+
+    def load_sim_data(self, task_name: str) -> SimulationData:
+        """Load a :class:`.SimulationData` from file by task name."""
+        task_data_path = self.task_paths[task_name]
+        task_id = self.task_ids[task_name]
+        return self.sim_data[task_name]
+
+    def items(self) -> Tuple[str, SimulationData]:
+        """Iterate through the :class:`.SimulationData` for each task_name."""
+        for task_name in self.task_paths.keys():
+            yield task_name, self.load_sim_data(task_name)
+
+    def __getitem__(self, task_name: str) -> SimulationData:
+        """Get the :class:`.SimulationData` for a given ``task_name``."""
+        return self.load_sim_data(task_name)
 
 
 def run_async_emulated(simulations: Dict[str, Simulation], **kwargs) -> BatchData:
     """Emulate an async run function."""
-    return {task_name: run_emulated(sim) for task_name, sim in simulations.items()}
+    task_ids = {task_name: f"task_id={i}" for i, task_name in enumerate(simulations.keys())}
+    task_paths = {task_name: "NONE" for task_name in simulations.keys()}
+    sim_data = {task_name: run_emulated(sim) for task_name, sim in simulations.items()}
+
+    return BatchDataTest(task_paths=task_paths, task_ids=task_ids, sim_data=sim_data)
 
 
 # Log handler used to store log records during tests

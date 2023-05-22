@@ -154,6 +154,18 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
         "``{'id', 'status', 'name', 'workUnit', 'solverVersion'}``.",
     )
 
+    # simulation_type: str = pd.Field(
+    #     None,
+    #     title="Simulation Type",
+    #     description="Type of simulation, used internally only.",
+    # )
+
+    # parent_tasks: Tuple[TaskId, ...] = pd.Field(
+    #     None,
+    #     title="Parent Tasks",
+    #     description="List of parent task ids for the simulation, used internally only."
+    # )
+
     @pd.root_validator(pre=True)
     def _error_if_jax_sim(cls, values):
         """Raise error if user tries to submit simulation that's a JaxSimulation."""
@@ -168,10 +180,16 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
             )
         return values
 
-    # pylint: disable=arguments-differ
+    # pylint: disable=arguments-differ,too-many-arguments
     @classmethod
     def create(
-        cls, simulation: Simulation, task_name: str, folder_name="default", callback_url=None
+        cls,
+        simulation: Simulation,
+        task_name: str,
+        folder_name="default",
+        call_back_url=None,
+        simulation_type: str = "tidy3d",
+        parent_tasks: List[str] = None,
     ) -> SimulationTask:
         """Create a new task on the server.
 
@@ -188,6 +206,10 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
         callback_url: str
             Http PUT url to receive simulation finish event. The body content is a json file with
             fields ``{'id', 'status', 'name', 'workUnit', 'solverVersion'}``.
+        simulation_type : str
+            Type of simulation being uploaded.
+        parent_tasks : List[str]
+            List of related task ids.
 
         Returns
         -------
@@ -204,7 +226,12 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
 
         resp = http.post(
             f"tidy3d/projects/{folder.folder_id}/tasks",
-            {"taskName": task_name, "callbackUrl": callback_url},
+            {
+                "taskName": task_name,
+                "call_back_url": call_back_url,
+                "simulationType": simulation_type,
+                "parentTasks": parent_tasks,
+            },
         )
 
         return SimulationTask(**resp, simulation=simulation, folder=folder)
@@ -227,6 +254,25 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
         """
         resp = http.get(f"tidy3d/tasks/{task_id}/detail")
         return SimulationTask(**resp) if resp else None
+
+    @classmethod
+    def get_running_tasks(cls) -> List[SimulationTask]:
+        """Get a list of running tasks from the server"
+
+
+        Parameters
+        ----------
+
+        Returns
+        -------
+        List[:class:`.SimulationTask`]
+            :class:`.SimulationTask` object containing info about status,
+             size, credits of task and others.
+        """
+        resp = http.get("tidy3d/py/tasks")
+        if not resp:
+            return []
+        return parse_obj_as(List[SimulationTask], resp)
 
     def delete(self):
         """Delete current task from server."""

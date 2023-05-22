@@ -158,23 +158,33 @@ def test_sim_bounds():
 
 def test_sim_size():
 
-    mesh1d = td.UniformGrid(dl=1e-6)
+    # note dl may need to change if we change the maximum allowed number of cells
+    mesh1d = td.UniformGrid(dl=2e-4)
     grid_spec = td.GridSpec(grid_x=mesh1d, grid_y=mesh1d, grid_z=mesh1d)
 
+    # check too many cells
     with pytest.raises(SetupError):
         s = td.Simulation(
             size=(1, 1, 1),
             grid_spec=grid_spec,
-            run_time=1e-12,
-            boundary_spec=td.BoundarySpec.all_sides(boundary=td.Periodic()),
+            run_time=1e-13,
         )
         s._validate_size()
 
+    # should pass if symmetries applied
+    s = td.Simulation(
+        size=(1, 1, 1),
+        grid_spec=grid_spec,
+        run_time=1e-13,
+        symmetry=(1, -1, 1),
+    )
+    s._validate_size()
+
+    # check too many time steps
     with pytest.raises(pydantic.ValidationError):
         s = td.Simulation(
             size=(1, 1, 1),
             run_time=1e-7,
-            boundary_spec=td.BoundarySpec.all_sides(boundary=td.Periodic()),
         )
         s._validate_size()
 
@@ -253,6 +263,51 @@ def test_validate_bloch_with_symmetry():
             ),
             symmetry=(1, 1, 1),
             grid_spec=td.GridSpec(wavelength=1.0),
+        )
+
+
+def test_validate_normalize_index():
+    src = td.UniformCurrentSource(
+        source_time=td.GaussianPulse(freq0=2.0, fwidth=1.0),
+        size=(0, 0, 0),
+        polarization="Ex",
+    )
+    src0 = td.UniformCurrentSource(
+        source_time=td.GaussianPulse(freq0=2.0, fwidth=1.0, amplitude=0),
+        size=(0, 0, 0),
+        polarization="Ex",
+    )
+
+    # negative normalize index
+    with pytest.raises(pydantic.ValidationError):
+        td.Simulation(
+            size=(1, 1, 1),
+            run_time=1e-12,
+            grid_spec=td.GridSpec.uniform(dl=0.1),
+            normalize_index=-1,
+        )
+
+    # normalize index out of bounds
+    with pytest.raises(pydantic.ValidationError):
+        td.Simulation(
+            size=(1, 1, 1),
+            run_time=1e-12,
+            grid_spec=td.GridSpec.uniform(dl=0.1),
+            sources=[src],
+            normalize_index=1,
+        )
+    # skipped if no sources
+    td.Simulation(
+        size=(1, 1, 1), run_time=1e-12, grid_spec=td.GridSpec.uniform(dl=0.1), normalize_index=1
+    )
+
+    # normalize by zero-amplitude source
+    with pytest.raises(pydantic.ValidationError):
+        td.Simulation(
+            size=(1, 1, 1),
+            run_time=1e-12,
+            grid_spec=td.GridSpec.uniform(dl=0.1),
+            sources=[src0],
         )
 
 
@@ -377,7 +432,7 @@ def test_validate_components_none():
     assert SIM._warn_monitor_mediums_frequency_range(val=None, values=SIM.dict()) is None
     assert SIM._warn_monitor_simulation_frequency_range(val=None, values=SIM.dict()) is None
     assert SIM._warn_grid_size_too_small(val=None, values=SIM.dict()) is None
-    assert SIM._source_homogeneous(val=None, values=SIM.dict()) is None
+    assert SIM._source_homogeneous_isotropic(val=None, values=SIM.dict()) is None
 
 
 def test_sources_edge_case_validation():
@@ -401,8 +456,16 @@ def test_validate_size_spatial_and_time(monkeypatch):
         s._validate_size()
 
 
-def test_validate_mnt_size(monkeypatch):
-    monkeypatch.setattr(simulation, "MAX_MONITOR_DATA_SIZE_BYTES", 1)
+def test_validate_mnt_size(monkeypatch, log_capture):
+
+    # warning for monitor size
+    monkeypatch.setattr(simulation, "WARN_MONITOR_DATA_SIZE_GB", 1 / 2**30)
+    s = SIM.copy(update=dict(monitors=(td.FieldMonitor(name="f", freqs=[1], size=(1, 1, 1)),)))
+    s._validate_monitor_size()
+    assert_log_level(log_capture, "WARNING")
+
+    # error for simulation size
+    monkeypatch.setattr(simulation, "MAX_SIMULATION_DATA_SIZE_GB", 1 / 2**30)
     with pytest.raises(SetupError):
         s = SIM.copy(update=dict(monitors=(td.FieldMonitor(name="f", freqs=[1], size=(1, 1, 1)),)))
         s._validate_monitor_size()
@@ -601,6 +664,12 @@ def test_sim_plane_wave_error():
 
     medium_bg = td.Medium(permittivity=2)
     medium_air = td.Medium(permittivity=1)
+    medium_bg_diag = td.AnisotropicMedium(
+        xx=td.Medium(permittivity=1),
+        yy=td.Medium(permittivity=2),
+        zz=td.Medium(permittivity=3),
+    )
+    medium_bg_full = td.FullyAnisotropicMedium(permittivity=[[4, 0.1, 0], [0.1, 2, 0], [0, 0, 3]])
 
     box = td.Structure(geometry=td.Box(size=(0.1, 0.1, 0.1)), medium=medium_air)
 
@@ -630,6 +699,23 @@ def test_sim_plane_wave_error():
             size=(1, 1, 1),
             medium=medium_bg,
             structures=[box_transparent, box],
+            sources=[src],
+            boundary_spec=td.BoundarySpec.all_sides(boundary=td.Periodic()),
+        )
+
+    # raise with anisotropic medium
+    with pytest.raises(pydantic.ValidationError):
+        _ = td.Simulation(
+            size=(1, 1, 1),
+            medium=medium_bg_diag,
+            sources=[src],
+            boundary_spec=td.BoundarySpec.all_sides(boundary=td.Periodic()),
+        )
+
+    with pytest.raises(pydantic.ValidationError):
+        _ = td.Simulation(
+            size=(1, 1, 1),
+            medium=medium_bg_full,
             sources=[src],
             boundary_spec=td.BoundarySpec.all_sides(boundary=td.Periodic()),
         )
@@ -1306,6 +1392,25 @@ def test_tfsf_structures_grid(log_capture):
     with pytest.raises(SetupError) as e:
         sim.validate_pre_upload()
 
+    # TFSF box must not intersect a fully anisotropic medium
+    anisotropic_medium = td.FullyAnisotropicMedium(
+        permittivity=np.eye(3).tolist(), conductivity=np.eye(3).tolist()
+    )
+    sim = td.Simulation(
+        size=(2.0, 2.0, 2.0),
+        grid_spec=td.GridSpec.auto(wavelength=1.0),
+        run_time=1e-12,
+        sources=[source],
+        structures=[
+            td.Structure(
+                geometry=td.Box(center=(0.5, 0, 0), size=(td.inf, td.inf, 0.25)),
+                medium=anisotropic_medium,
+            )
+        ],
+    )
+    with pytest.raises(SetupError) as e:
+        sim.validate_pre_upload()
+
 
 @pytest.mark.parametrize(
     "size, num_struct, log_level", [(1, 1, None), (50, 1, "WARNING"), (1, 11000, "WARNING")]
@@ -1472,7 +1577,7 @@ def test_sim_volumetric_structures():
     assert np.isclose(sim.volumetric_structures[1].medium.xx.permittivity, 2, rtol=RTOL)
 
     # test simulation.medium can't be Medium2D
-    with pytest.raises(Exception):
+    with pytest.raises(pydantic.ValidationError):
         sim = td.Simulation(
             size=(10, 10, 10),
             structures=[],
@@ -1488,16 +1593,16 @@ def test_sim_volumetric_structures():
         )
 
     # test 2d medium is added to 2d geometry
-    with pytest.raises(Exception):
+    with pytest.raises(pydantic.ValidationError):
         _ = td.Structure(geometry=td.Box(center=(0, 0, 0), size=(1, 1, 1)), medium=box.medium)
-    with pytest.raises(Exception):
+    with pytest.raises(pydantic.ValidationError):
         _ = td.Structure(geometry=td.Cylinder(radius=1, length=1), medium=box.medium)
-    with pytest.raises(Exception):
+    with pytest.raises(pydantic.ValidationError):
         _ = td.Structure(
             geometry=td.PolySlab(vertices=[(0, 0), (1, 0), (1, 1)], slab_bounds=(-1, 1)),
             medium=box.medium,
         )
-    with pytest.raises(Exception):
+    with pytest.raises(pydantic.ValidationError):
         _ = td.Structure(geometry=td.Sphere(radius=1), medium=box.medium)
 
 

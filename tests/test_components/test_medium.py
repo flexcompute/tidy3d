@@ -290,3 +290,78 @@ def test_medium2d():
         sigma / 3,
         rtol=RTOL,
     )
+
+
+def test_rotation():
+    # check that transpose is inverse
+    axis = np.random.random(3)
+    rot = td.RotationAroundAxis(axis=tuple(axis), angle=1.23)
+
+    R = rot.matrix
+
+    assert np.all(np.abs(np.matmul(np.transpose(R), R) - np.eye(3)) < 1.0e-15)
+    assert np.all(np.abs(np.matmul(R, np.transpose(R)) - np.eye(3)) < 1.0e-15)
+
+    # check that rotation around x, y, z by 90 degrees works as expected
+    tan_dims = [[1, 2], [2, 0], [0, 1]]
+
+    for dim in range(3):
+        axis = [0, 0, 0]
+        axis[dim] = 1
+        rot = td.RotationAroundAxis(axis=axis, angle=np.pi / 2)
+
+        v0 = np.random.random(3)
+        vr = rot.rotate_vector(v0)
+        assert np.abs(v0[dim] - vr[dim]) < 1.0e-15
+        assert np.abs(v0[tan_dims[dim][0]] - vr[tan_dims[dim][1]]) < 1.0e-15
+        assert np.abs(v0[tan_dims[dim][1]] + vr[tan_dims[dim][0]]) < 1.0e-15
+
+
+def test_fully_anisotropic_media():
+    perm_diag = [[1, 0, 0], [0, 2, 0], [0, 0, 3]]
+    cond_diag = [[4, 0, 0], [0, 5, 0], [0, 0, 6]]
+
+    rot = td.RotationAroundAxis(axis=(1, 2, 3), angle=1.23)
+    rot2 = td.RotationAroundAxis(axis=(3, 2, 1), angle=1.23)
+
+    perm = rot.rotate_tensor(perm_diag)
+    cond = rot.rotate_tensor(cond_diag)
+    cond2 = rot2.rotate_tensor(cond_diag)
+
+    _ = td.FullyAnisotropicMedium(permittivity=perm, conductivity=cond)
+
+    # check that tensors are provided
+    with pytest.raises(pydantic.ValidationError):
+        td.FullyAnisotropicMedium(permittivity=2)
+    with pytest.raises(pydantic.ValidationError):
+        td.FullyAnisotropicMedium(permittivity=[3, 4, 2])
+
+    # check that permittivity >= 1 and conductivity >= 0
+    with pytest.raises(pydantic.ValidationError):
+        td.FullyAnisotropicMedium(permittivity=[[3, 0, 0], [0, 0.5, 0], [0, 0, 1]])
+    with pytest.raises(pydantic.ValidationError):
+        td.FullyAnisotropicMedium(conductivity=[[-3, 0, 0], [0, 0.5, 0], [0, 0, 1]])
+
+    # check that permittivity needs to be symmetric
+    with pytest.raises(pydantic.ValidationError):
+        td.FullyAnisotropicMedium(permittivity=[[3, 0.1, 0], [0.2, 2, 0], [0, 0, 1]])
+
+    # check that differently oriented permittivity and conductivity are not accepted
+    with pytest.raises(pydantic.ValidationError):
+        td.FullyAnisotropicMedium(permittivity=perm, conductivity=cond2)
+
+    # check creation from diagonal medium
+    m = td.FullyAnisotropicMedium.from_diagonal(
+        xx=td.Medium(permittivity=perm_diag[0][0], conductivity=cond_diag[0][0]),
+        yy=td.Medium(permittivity=perm_diag[1][1], conductivity=cond_diag[1][1]),
+        zz=td.Medium(permittivity=perm_diag[2][2], conductivity=cond_diag[2][2]),
+        rotation=rot,
+    )
+
+    assert np.allclose(m.permittivity, perm)
+    assert np.allclose(m.conductivity, cond)
+
+    perm_d, cond_d, _ = m.eps_sigma_diag
+
+    assert all(np.isin(np.round(perm_d), np.round(np.diag(perm_diag))))
+    assert all(np.isin(np.round(cond_d), np.round(np.diag(cond_diag))))

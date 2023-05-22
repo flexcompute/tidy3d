@@ -6,7 +6,7 @@ from .base import Tidy3dBaseModel
 from .validators import validate_name_str
 from .geometry import GeometryType
 from .medium import MediumType, CustomMedium, Medium2D
-from .types import Ax, TYPE_TAG_STR
+from .types import Ax, TYPE_TAG_STR, Axis
 from .viz import add_ax_if_none, equal_aspect
 from .grid.grid import Coords
 from ..constants import MICROMETER
@@ -108,6 +108,29 @@ class Structure(AbstractStructure):
                 )
             _ = geom._normal_2dmaterial  # pylint: disable=protected-access
         return val
+
+    def eps_comp(self, row: Axis, col: Axis, frequency: float, coords: Coords) -> complex:
+        """Single component of the complex-valued permittivity tensor as a function of frequency.
+
+        Parameters
+        ----------
+        row : int
+            Component's row in the permittivity tensor (0, 1, or 2 for x, y, or z respectively).
+        col : int
+            Component's column in the permittivity tensor (0, 1, or 2 for x, y, or z respectively).
+        frequency : float
+            Frequency to evaluate permittivity at (Hz).
+
+        Returns
+        -------
+        complex
+           Element of the relative permittivity tensor evaluated at ``frequency``.
+        """
+        if isinstance(self.medium, CustomMedium):
+            return self.medium.eps_comp_on_grid(
+                row=row, col=col, frequency=frequency, coords=coords
+            )
+        return self.medium.eps_comp(row=row, col=col, frequency=frequency)
 
 
 class MeshOverrideStructure(AbstractStructure):
