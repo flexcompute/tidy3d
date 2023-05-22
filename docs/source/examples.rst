@@ -86,6 +86,7 @@ Adjoint Plugin
     notebooks/AdjointPlugin_2_GradientChecking
     notebooks/AdjointPlugin_3_InverseDesign
     notebooks/AdjointPlugin_4_MultiObjective
+    notebooks/AdjointPlugin_5_BoundaryGradients
 
 Pre and Post Processing
 ~~~~~~~~~~~~~~~~~~~~~~~
