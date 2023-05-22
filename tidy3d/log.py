@@ -60,11 +60,56 @@ class LogHandler:
 class Logger:
     """Custom logger to avoid the complexities of the logging module"""
 
-    def __init__(self):
-        self.handlers = {}
+    _static_cache = set()
+
+    def __init__(self, handlers=None, cache=None):
+        self.handlers = {} if handlers is None else handlers
+        self._cache = cache
+
+    def __enter__(self):
+        if self._cache is not Logger._static_cache:
+            self._cache = {}
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        if self._cache is Logger._static_cache:
+            self._use_static_cache = False
+        elif self._cache is not None:
+            total = sum(v for v in self._cache.values())
+            counts = [f"{v} {_level_name[k]}" for k, v in self._cache.items() if v > 0]
+            self._cache = None
+            if total > 0:
+                noun = " messages." if total > 1 else " message."
+                self.info("Suppressed " + ", ".join(counts) + noun)
+        return False
+
+    def cached(self, use_static_cache: bool = False):
+        """Return a cached logger to be used in a context manager.
+
+        Parameters
+        ----------
+        use_static_cache: bool = False
+            If true, a global cache per python process is used, otherwise use a cache for a single
+            context.
+        """
+        if use_static_cache:
+            return Logger(self.handlers, Logger._static_cache)
+        return Logger(self.handlers, {})
 
     def _log(self, level: int, level_name: str, message: str, *args) -> None:
         """Distribute log messages to all handlers"""
+        if self._cache is Logger._static_cache:
+            # Static cache emits once each message
+            if message in self._cache:
+                return
+            self._cache.add(message)
+        elif self._cache is not None:
+            # Context-local cache emits a single message and stores the count
+            if len(self._cache) > 0:
+                self._cache[level] = 1 + self._cache.get(level, 0)
+                return
+            self._cache[level] = 0
+
         if len(args) > 0:
             try:
                 composed_message = str(message) % args
