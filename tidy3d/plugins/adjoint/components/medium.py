@@ -293,7 +293,6 @@ class JaxCustomMedium(CustomMedium, AbstractJaxMedium):
         return values
 
     @pd.validator("eps_dataset", always=True)
-
     def _is_not_3d(cls, val):
         """Ensure the custom medium pixels contain at least one dimension with only pixel thick."""
 

@@ -395,6 +395,38 @@ class AbstractCustomMedium(AbstractMedium, ABC):
             self._interp(eps_comp, coords, self.interp_method).values for eps_comp in eps_spatial
         )
 
+    def eps_comp_on_grid(
+        self,
+        row: Axis,
+        col: Axis,
+        frequency: float,
+        coords: Coords,
+    ) -> ArrayComplex3D:
+        """Spatial profile of a single component of the complex-valued permittivity tensor at
+        ``frequency`` interpolated at the supplied coordinates.
+
+        Parameters
+        ----------
+        row : int
+            Component's row in the permittivity tensor (0, 1, or 2 for x, y, or z respectively).
+        col : int
+            Component's column in the permittivity tensor (0, 1, or 2 for x, y, or z respectively).
+        frequency : float
+            Frequency to evaluate permittivity at (Hz).
+        coords : :class:`.Coords`
+            The grid point coordinates over which interpolation is performed.
+
+        Returns
+        -------
+        ArrayComplex3D
+            Single component of the complex-valued permittivity tensor at ``frequency`` interpolated
+            at the supplied coordinates.
+        """
+
+        if row == col:
+            return self.eps_diagonal_on_grid(frequency, coords)[row]
+        return 0
+
     @ensure_freq_in_range
     def eps_model(self, frequency: float) -> complex:
         """Complex-valued spatially averaged permittivity as a function of frequency."""
@@ -955,43 +987,6 @@ class CustomMedium(AbstractCustomMedium):
             at the supplied coordinate.
         """
         return self._medium.eps_diagonal_on_grid(frequency, coords)
-
-    def eps_comp_on_grid(
-        self,
-        row: Axis,
-        col: Axis,
-        frequency: float,
-        coords: Coords,
-    ) -> ArrayComplex4D:
-        """Spatial profile of a single component of the complex-valued permittivity tensor at
-        ``frequency`` interpolated at the supplied coordinates.
-
-        Parameters
-        ----------
-        row : int
-            Component's row in the permittivity tensor (0, 1, or 2 for x, y, or z respectively).
-        col : int
-            Component's column in the permittivity tensor (0, 1, or 2 for x, y, or z respectively).
-        frequency : float
-            Frequency to evaluate permittivity at (Hz).
-        coords : :class:`.Coords`
-            The grid point coordinates over which interpolation is performed.
-
-        Returns
-        -------
-        np.ndarray
-            Single component of the complex-valued permittivity tensor at ``frequency`` interpolated
-            at the supplied coordinates.
-        """
-
-        if row == col:
-            eps_freq = self.eps_dataset_freq(frequency)
-            interp_shape = [len(coord_comp) for coord_comp in coords.to_list]
-            comp = ["eps_xx", "eps_yy", "eps_zz"][row]
-            eps = self._interp(eps_freq.field_components[comp], coords, self.interp_method)
-            eps = np.array(eps).reshape(interp_shape)
-            return eps
-        return 0
 
     @ensure_freq_in_range
     def eps_diagonal(self, frequency: float) -> Tuple[complex, complex, complex]:
@@ -2438,6 +2433,7 @@ class FullyAnisotropicMedium(AbstractMedium):
         ax.legend()
         return ax
 
+
 class CustomAnisotropicMedium(AbstractCustomMedium, AnisotropicMedium):
     """Diagonally anisotropic custom medium.
 
@@ -2503,7 +2499,7 @@ class CustomAnisotropicMedium(AbstractCustomMedium, AnisotropicMedium):
         if isinstance(val, CustomMedium) and not val.is_isotropic:
             raise SetupError("The zz-component medium type is not isotropic.")
         return val
-        
+
     @cached_property
     def n_cfl(self):
         """This property computes the index of refraction related to CFL condition, so that
@@ -2627,7 +2623,6 @@ class CustomAnisotropicMediumInternal(CustomAnisotropicMedium):
         description="Medium describing the zz-component of the diagonal permittivity tensor.",
         discriminator=TYPE_TAG_STR,
     )
->>>>>>> a09163e6 (Revamp custom non-dispersive medium)
 
 
 # types of mediums that can be used in Simulation and Structures
