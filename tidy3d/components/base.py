@@ -13,7 +13,7 @@ import numpy as np
 import h5py
 import xarray as xr
 
-from .types import ComplexNumber, Literal, TYPE_TAG_STR
+from .types import ComplexNumber, Literal, TYPE_TAG_STR, ArrayLike
 from .data.data_array import DataArray, DATA_ARRAY_MAP
 from ..exceptions import FileError
 from ..log import log
@@ -21,7 +21,7 @@ from ..log import log
 # default indentation (# spaces) in files
 INDENT = 4
 JSON_TAG = "JSON_STRING"
-
+NUMPY_TAG = "NUMPY_ARRAY"
 
 def cache(prop):
     """Decorates a property to cache the first computed value and return it on subsequent calls."""
@@ -53,9 +53,7 @@ def cached_property(cached_property_getter):
 
 def ndarray_encoder(val):
     """How a ``np.ndarray`` gets handled before saving to json."""
-    if np.any(np.iscomplex(val)):
-        return dict(real=val.real.tolist(), imag=val.imag.tolist())
-    return val.real.tolist()
+    return NUMPY_TAG
 
 
 class Tidy3dBaseModel(pydantic.BaseModel):
@@ -113,6 +111,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         allow_population_by_field_name = True
         json_encoders = {
             np.ndarray: ndarray_encoder,
+            ArrayLike: lambda val: val.tolist(),
             complex: lambda x: ComplexNumber(real=x.real, imag=x.imag),
             xr.DataArray: DataArray._json_encoder,  # pylint:disable=unhashable-member, protected-access
         }
@@ -443,6 +442,13 @@ class Tidy3dBaseModel(pydantic.BaseModel):
                     model_dict[key] = data_array_type.from_hdf5(fname=fname, group_path=subpath)
                     continue
 
+                if isinstance(value, str) and value == NUMPY_TAG:
+                    with h5py.File(fname, "r") as f:
+                        sub_group = f[subpath]
+                        val_np = np.array(sub_group)
+                        model_dict[key] = val_np
+                    continue
+
                 # if a list, assign each element a unique key, recurse
                 if isinstance(value, (list, tuple)):
                     value_dict = cls.tuple_to_dict(tuple_values=value)
@@ -513,8 +519,12 @@ class Tidy3dBaseModel(pydantic.BaseModel):
                     if isinstance(value, xr.DataArray):
                         value.to_hdf5(fname=f_handle, group_path=subpath)
 
+                    # if the value is a numpy array, write it directly
+                    elif isinstance(value, np.ndarray):
+                        f_handle[subpath] = value 
+
                     # if a tuple, assign each element a unique key
-                    if isinstance(value, (list, tuple)):
+                    elif isinstance(value, (list, tuple)):
                         value_dict = self.tuple_to_dict(tuple_values=value)
                         add_data_to_file(data_dict=value_dict, group_path=subpath)
 

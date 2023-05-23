@@ -120,9 +120,10 @@ def run_emulated_bwd(
 
     # get gradient and insert into the resulting simulation structure medium
     sim_vjp = jax_sim_data_adj.simulation.store_vjp(grad_data_fwd, grad_data_adj, grad_eps_data_fwd)
-
+    # import pdb; pdb.set_trace()
     # write VJP sim to and from file to emulate webapi download and loading
     sim_vjp.to_file(SIM_VJP_FILE)
+
     sim_vjp = JaxSimulation.from_file(SIM_VJP_FILE)
 
     return sim_vjp
@@ -1217,3 +1218,50 @@ def test_custom_medium_size(use_emulated_run):
     make_custom_medium(num_cells=MAX_NUM_CELLS_CUSTOM_MEDIUM)
     with pytest.raises(pydantic.ValidationError):
         make_custom_medium(num_cells=MAX_NUM_CELLS_CUSTOM_MEDIUM + 1)
+
+def test_jax_sim_io():
+
+    jax_box = JaxBox(size=(1, 1, 1), center=(0, 0, 0))
+
+    def make_custom_medium(num_cells: int) -> JaxCustomMedium:
+
+        n = int(np.sqrt(num_cells))
+        Nx = n
+        Ny = n
+        Nz = 1
+
+        # custom medium
+        (xmin, ymin, zmin), (xmax, ymax, zmax) = jax_box.bounds
+        coords = dict(
+            x=np.linspace(xmin, xmax, Nx).tolist(),
+            y=np.linspace(ymin, ymax, Ny).tolist(),
+            z=np.linspace(zmin, zmax, Nz).tolist(),
+            f=[FREQ0],
+        )
+
+        values = np.random.random((Nx, Ny, Nz, 1)) + 1.0
+        eps_ii = JaxDataArray(values=values, coords=coords)
+        field_components = {f"eps_{dim}{dim}": eps_ii for dim in "xyz"}
+        jax_eps_dataset = JaxPermittivityDataset(**field_components)
+        return JaxCustomMedium(eps_dataset=jax_eps_dataset)
+
+    num_cells = 200 * 200
+    struct = JaxStructure(geometry=jax_box, medium=make_custom_medium(num_cells=num_cells))
+    sim = JaxSimulation(
+        size=(2,2,2),
+        input_structures=[struct],
+        run_time=1e-12,
+        grid_spec=td.GridSpec.auto(wavelength=1.0)
+    )
+
+    fname = 'tests/tmp/jax_sim_io_tmp.hdf5'
+    sim.to_file(fname)
+
+    import h5py
+
+    with h5py.File(fname, 'r') as f:
+        assert 'input_structures' in f.keys()
+
+    sim2 = JaxSimulation.from_file(fname)
+
+    assert sim == sim2

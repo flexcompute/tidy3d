@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 ### Changed
+- Made writing numpy arrays to hdf5 more efficient, reducing file size, especially for server side adjoint.
 
 ### Fixed
 
