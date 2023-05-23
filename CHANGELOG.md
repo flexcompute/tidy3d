@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 ### Fixed
+- Downgrade `typing_extensions` to `<=4.5.0` to avoid bug with pydantic for python <= 3.9.
 
 ## [2.2.0] - 2023-5-22
 
