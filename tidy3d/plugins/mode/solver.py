@@ -336,7 +336,7 @@ class EigSolver(Tidy3dBaseModel):
             """Check if there are any PEC values in the given permittivity array."""
             return np.any(np.abs(eps_vec) >= threshold)
 
-        if np.any(any_pec(i) for i in [eps_xx, eps_yy, eps_zz]):
+        if any(any_pec(i) for i in [eps_xx, eps_yy, eps_zz]):
             enable_preconditioner = True
 
         # Compute the matrix for diagonalization

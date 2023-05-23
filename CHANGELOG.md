@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 ### Fixed
+- Bug in `ModeSolver` which was causing a preconditioner to be applied even when it is not needed.
 
 ## [2.2.1] - 2023-5-23
 
