@@ -455,10 +455,8 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
                             f"Structure at structures[{istruct}] has bounds that extend exactly to "
                             "simulation edges. This can cause unexpected behavior. "
                             "If intending to extend the structure to infinity along one dimension, "
-                            "use td.inf as a size variable instead to make this explicit. "
-                            f"Skipping check for structure indexes > {istruct}."
+                            "use td.inf as a size variable instead to make this explicit."
                         )
-                        return val
 
         return val
 
@@ -484,8 +482,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
                     f"Structure at structures[{istruct}] was detected as being less "
                     f"than half of a central wavelength from a PML on side {side}. "
                     "To avoid inaccurate results, please increase gap between "
-                    "any structures and PML or fully extend structure through the pml. "
-                    f"Skipping check for structure indexes > {istruct}."
+                    "any structures and PML or fully extend structure through the pml."
                 )
 
             for istruct, structure in enumerate(structures):
@@ -505,7 +502,6 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
                             and abs(sim_val - struct_val) < lambda0 / 2
                         ):
                             warn(istruct, axis + "-min")
-                            return val
 
                     zipped = zip(["x", "y", "z"], sim_bound_max, struct_bound_max, boundaries)
                     for axis, sim_val, struct_val, boundary in zipped:
@@ -518,7 +514,6 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
                             and abs(sim_val - struct_val) < lambda0 / 2
                         ):
                             warn(istruct, axis + "-max")
-                            return val
 
         return val
 
