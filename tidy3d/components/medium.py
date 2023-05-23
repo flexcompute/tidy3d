@@ -349,6 +349,10 @@ class AbstractCustomMedium(AbstractMedium, ABC):
     def is_isotropic(self) -> bool:
         """The medium is isotropic or anisotropic."""
 
+    def _interp_method(self, comp: Axis) -> InterpMethod:  # pylint:disable=unused-argument
+        """Interpolation method applied to comp."""
+        return self.interp_method
+
     @abstractmethod
     def eps_dataarray_freq(
         self, frequency: float
@@ -389,10 +393,11 @@ class AbstractCustomMedium(AbstractMedium, ABC):
         """
         eps_spatial = self.eps_dataarray_freq(frequency)
         if self.is_isotropic:
-            eps_interp = self._interp(eps_spatial[0], coords, self.interp_method).values
+            eps_interp = self._interp(eps_spatial[0], coords, self._interp_method(0)).values
             return (eps_interp, eps_interp, eps_interp)
         return tuple(
-            self._interp(eps_comp, coords, self.interp_method).values for eps_comp in eps_spatial
+            self._interp(eps_comp, coords, self._interp_method(comp)).values
+            for comp, eps_comp in enumerate(eps_spatial)
         )
 
     def eps_comp_on_grid(
@@ -425,7 +430,7 @@ class AbstractCustomMedium(AbstractMedium, ABC):
 
         if row == col:
             return self.eps_diagonal_on_grid(frequency, coords)[row]
-        return 0
+        return 0j
 
     @ensure_freq_in_range
     def eps_model(self, frequency: float) -> complex:
@@ -2479,6 +2484,14 @@ class CustomAnisotropicMedium(AbstractCustomMedium, AnisotropicMedium):
         discriminator=TYPE_TAG_STR,
     )
 
+    interp_method: Optional[InterpMethod] = pd.Field(
+        None,
+        title="Interpolation method",
+        description="When the value is 'None', each component will follow its own "
+        "interpolation method. When the value is other than 'None', the interpolation "
+        "method specified by this field will override the one in each component.",
+    )
+
     @pd.validator("xx", always=True)
     def _isotropic_xx(cls, val):
         """If it's `CustomMedium`, make sure it's isotropic."""
@@ -2515,6 +2528,15 @@ class CustomAnisotropicMedium(AbstractCustomMedium, AnisotropicMedium):
         """Whether the medium is isotropic."""
         return False
 
+    def _interp_method(self, comp: Axis) -> InterpMethod:
+        """Interpolation method applied to comp."""
+        # override `interp_method` in components if self.interp_method is not None
+        if self.interp_method is not None:
+            return self.interp_method
+        # use component's interp_method
+        comp_map = ["xx", "yy", "zz"]
+        return self.components[comp_map[comp]].interp_method
+
     def eps_dataarray_freq(
         self, frequency: float
     ) -> Tuple[SpatialDataArray, SpatialDataArray, SpatialDataArray]:
@@ -2533,33 +2555,6 @@ class CustomAnisotropicMedium(AbstractCustomMedium, AnisotropicMedium):
         return tuple(
             mat_component.eps_dataarray_freq(frequency)[ind]
             for ind, mat_component in enumerate(self.components.values())
-        )
-
-    def eps_diagonal_on_grid(
-        self,
-        frequency: float,
-        coords: Coords,
-    ) -> Tuple[ArrayComplex3D, ArrayComplex3D, ArrayComplex3D]:
-        """Spatial profile of main diagonal of the complex-valued permittivity
-        at ``frequency`` interpolated at the supplied coordinates.
-
-        Parameters
-        ----------
-        frequency : float
-            Frequency to evaluate permittivity at (Hz).
-        coords : :class:`.Coords`
-            The grid point coordinates over which interpolation is performed.
-
-        Returns
-        -------
-        Tuple[ArrayComplex3D, ArrayComplex3D, ArrayComplex3D]
-            The complex-valued permittivity tensor at ``frequency`` interpolated
-            at the supplied coordinate.
-        """
-        eps_spatial = self.eps_dataarray_freq(frequency)
-        return tuple(
-            self._interp(eps_spatial_comp, coords, self.interp_method).values
-            for eps_spatial_comp in eps_spatial
         )
 
     @ensure_freq_in_range
