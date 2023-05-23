@@ -441,5 +441,6 @@ DATA_ARRAY_TYPES = [
     TimeDataArray,
     FreqModeDataArray,
     TriangleMeshDataArray,
+    DataArray,
 ]
 DATA_ARRAY_MAP = {data_array.__name__: data_array for data_array in DATA_ARRAY_TYPES}

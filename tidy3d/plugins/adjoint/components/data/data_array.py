@@ -6,10 +6,11 @@ from typing import Tuple, Any, Dict, List
 import pydantic as pd
 import numpy as np
 import jax.numpy as jnp
+
 from jax.tree_util import register_pytree_node_class
 from .....components.base import Tidy3dBaseModel, cached_property
 from .....exceptions import DataError, Tidy3dKeyError, AdjointError
-
+from .....components.data.data_array import DataArray
 
 # condition setting when to set value in DataArray to zero:
 # if abs(val) <= VALUE_FILTER_THRESHOLD * max(abs(val))
@@ -44,6 +45,30 @@ class JaxDataArray(Tidy3dBaseModel):
         if isinstance(val, list):
             return np.array(val)
         return val
+
+    @classmethod
+    def __get_validators__(cls):
+        """Validators that get run when :class:`.DataArray` objects are added to pydantic models."""
+        yield cls.check_unloaded_data
+
+    @classmethod
+    def check_unloaded_data(cls, val):
+        """If the data comes in as the raw data array string, raise a custom warning."""
+        return val
+
+    @pd.root_validator(pre=True)
+    def _handle_data_array(cls, values):
+        """Convert supplied values to numpy if they are list (from file)."""
+        return values
+
+    @property
+    def as_dataarray(self) -> DataArray:
+        """xarray represenation of self, only works if no tracers."""
+        values_np = self.as_ndarray
+        return DataArray(values_np, coords=self.coords)
+
+    # def dict(self, **kwargs):
+    #     return self.as_dataarray
 
     # removed because it was slowing things down.
     # @pd.validator("coords", always=True)

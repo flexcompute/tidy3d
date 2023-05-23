@@ -30,3 +30,10 @@ class JaxPermittivityDataset(PermittivityDataset, JaxObject):
         description="Spatial distribution of the zz-component of the relative permittivity.",
         jax_field=True,
     )
+
+    def dict(self, **kwargs):
+        return dict(epx_xx=self.eps_xx.as_dataarray, epx_yy=self.eps_yy.as_dataarray, epx_zz=self.eps_zz.as_dataarray)
+
+    @pd.root_validator(pre=True)
+    def handle_data_array(cls, values):
+        return values
