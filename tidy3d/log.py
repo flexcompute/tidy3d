@@ -63,6 +63,9 @@ class Logger:
     def __init__(self):
         self.handlers = {}
 
+        # for tracing
+        self.trace = None
+
     def _log(self, level: int, level_name: str, message: str, *args) -> None:
         """Distribute log messages to all handlers"""
         if len(args) > 0:
@@ -75,6 +78,11 @@ class Logger:
             composed_message = str(message)
         for handler in self.handlers.values():
             handler.handle(level, level_name, composed_message)
+
+        # if tracing is on, record for tracing purposes
+        # for now just record everything
+        if self.trace:
+            self.trace["logs"].append((level_name, message))
 
     def log(self, level: LogValue, message: str, *args) -> None:
         """Log (message) % (args) with given level"""

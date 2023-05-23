@@ -75,8 +75,88 @@ class Tidy3dBaseModel(pydantic.BaseModel):
 
     def __init__(self, **kwargs):
         """Init method, includes post-init validators."""
+
+        # initialize warning tracing and appoint ourselves as root who strated it
+        if log.trace:
+            root = False
+        else:
+            root = True
+            log.trace = {}
+
+        # create a dict that will be filled by child objects
+        # "children": here they will put their unique id's (hashes) as they get initialized
+        # "logs": where tidy3d.log will record info about warnings that pop up during our initialization
+        # "fields": this field will be populated by parent and it will contain all fields of parent
+        #           that point to us
+        dict_tmp = {"children": {}, "logs": [], "fields": []}
+
+        # temporarily assign it as log trace dict so tht children know where to write
+        log_prev = log.trace
+        log.trace = dict_tmp
+
+        # do initialization including chidren objects
         super().__init__(**kwargs)
         self._post_init_validators()
+
+        # at this point dict_tmp["children"] and/or dict_tmp["logs"] might contain stuff
+
+        # generate a unique id for ourselves
+        self_id = self.__hash__()
+
+        if self_id not in log_prev:  # we could be identical to object already created
+
+            # populate "fields" for every child
+            # basically we try to match hashes of objects stored in our fields to hashes recorded
+            # in "children" dict
+            child_dict = dict_tmp["children"]
+
+            for key in self.__fields__:
+                field = self.__getattribute__(key)
+                if isinstance(field, Tidy3dBaseModel):
+                    child_hash = field.__hash__()
+                    if child_hash in child_dict:
+                        child_dict[child_hash]["fields"].append(key)
+
+                # our fields could be arrays
+                # is there anything else I am missing?
+                if isinstance(field, (list, tuple, np.ndarray)):
+                    for ind, sub_field in enumerate(field):
+                        if isinstance(sub_field, Tidy3dBaseModel):
+                            child_hash = sub_field.__hash__()
+                            if child_hash in child_dict:
+                                child_dict[child_hash]["fields"].append((key, ind))
+
+            # there might be children with "fields" = [], that is, created objects that are not
+            # part of our class (temporary things?); we will filter those out here
+            new_dict = {"children": {}, "logs": [], "fields": []}
+            new_dict["type"] = self.__class__.__name__
+            new_dict["logs"] = dict_tmp["logs"]
+
+            for child in child_dict:
+                if child_dict[child]["fields"] != []:
+                    new_dict["children"][child] = child_dict[child]
+
+            # finally, we put ourselves into parent's "children"
+            # but only if we have "logs" to show and/or "children" (one of which eventually has "logs")
+            # we can remove "if" to display the entire object hierarchy
+            if new_dict["logs"] != [] or new_dict["children"] != {}:
+                if root:
+                    log_prev[self_id] = new_dict
+                else:
+                    log_prev["children"][self_id] = new_dict
+
+        # point logger trace to what it was pointing before
+        log.trace = log_prev
+
+        # if this object initialized tracing, let's process and clean up
+        if root:
+            # fow now just dump everything to make sure it works
+            if log.trace != {}:
+                print("Log dump: ")
+                print(json.dumps(log.trace, indent = 4))
+
+            # clean up
+            log.trace = None
 
     def _post_init_validators(self) -> None:
         """Call validators taking ``self`` that get run after init, implement in subclasses."""
