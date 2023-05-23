@@ -443,7 +443,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         sim_bound_min, sim_bound_max = sim_box.bounds
         sim_bounds = list(sim_bound_min) + list(sim_bound_max)
 
-        with log.cached() as cached_log:
+        with log.consolidate() as captured_log:
             for istruct, structure in enumerate(val):
                 struct_bound_min, struct_bound_max = structure.geometry.bounds
                 struct_bounds = list(struct_bound_min) + list(struct_bound_max)
@@ -451,7 +451,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
                 for sim_val, struct_val in zip(sim_bounds, struct_bounds):
 
                     if isclose(sim_val, struct_val):
-                        cached_log.warning(
+                        captured_log.warning(
                             f"Structure at structures[{istruct}] has bounds that extend exactly to "
                             "simulation edges. This can cause unexpected behavior. "
                             "If intending to extend the structure to infinity along one dimension, "
@@ -477,10 +477,10 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
 
             return val
 
-        with log.cached() as cached_log:
+        with log.consolidate() as captured_log:
             def warn(istruct, side):
                 """Warning message for a structure too close to PML."""
-                cached_log.warning(
+                captured_log.warning(
                     f"Structure at structures[{istruct}] was detected as being less "
                     f"than half of a central wavelength from a PML on side {side}. "
                     "To avoid inaccurate results, please increase gap between "
@@ -534,7 +534,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         medium_bg = values.get("medium")
         mediums = [medium_bg] + [structure.medium for structure in structures]
 
-        with log.cached() as cached_log:
+        with log.consolidate() as captured_log:
             for monitor_index, monitor in enumerate(val):
                 if not isinstance(monitor, FreqMonitor):
                     continue
@@ -556,7 +556,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
                         else:
                             medium_str = f"The medium associated with structures[{medium_index-1}]"
 
-                        cached_log.warning(
+                        captured_log.warning(
                             f"{medium_str} has a frequency range: ({fmin_med:2e}, {fmax_med:2e}) "
                             "(Hz) that does not fully cover the frequencies contained in "
                             f"monitors[{monitor_index}]. "
@@ -587,14 +587,14 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         freq_min = min((freq_range[0] for freq_range in source_ranges), default=0.0)
         freq_max = max((freq_range[1] for freq_range in source_ranges), default=0.0)
 
-        with log.cached() as cached_log:
+        with log.consolidate() as captured_log:
             for monitor_index, monitor in enumerate(val):
                 if not isinstance(monitor, FreqMonitor):
                     continue
 
                 freqs = np.array(monitor.freqs)
                 if freqs.min() < freq_min or freqs.max() > freq_max:
-                    log.warning(
+                    captured_log.warning(
                         f"monitors[{monitor_index}] contains frequencies "
                         f"outside of the simulation frequency range ({freq_min:2e}, {freq_max:2e})"
                         "(Hz) as defined by the sources."
@@ -666,7 +666,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
 
         sim_size = values.get("size")
 
-        with log.cached() as cached_log:
+        with log.consolidate() as captured_log:
             for idx, monitor in enumerate(val):
                 if isinstance(monitor, AbstractFieldProjectionMonitor):
                     if (
@@ -677,7 +677,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
                         val = list(val)
                         val[idx] = monitor
                         val = tuple(val)
-                        cached_log.warning(
+                        captured_log.warning(
                             "A very large projection distance was set for the field projection "
                             f"monitor '{monitor.name}'. Using exact field projections may result "
                             "in precision loss for large distances; automatically enabling "
@@ -715,7 +715,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         medium_bg = values.get("medium")
         mediums = [medium_bg] + [structure.medium for structure in structures]
 
-        with log.cached() as cached_log:
+        with log.consolidate() as captured_log:
             for source_index, source in enumerate(values.get("sources")):
                 freq0 = source.source_time.freq0
 
@@ -737,7 +737,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
                             isinstance(grid_spec, UniformGrid)
                             and grid_spec.dl > lambda_min / MIN_GRIDS_PER_WVL
                         ):
-                            cached_log.warning(
+                            captured_log.warning(
                                 f"The grid step in {key} has a value of {grid_spec.dl:.4f} (um)"
                                 ", which was detected as being large when compared to the "
                                 f"central wavelength of sources[{source_index}] "
@@ -829,7 +829,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         sim_bounds = self.bounds
         bound_spec = self.boundary_spec.to_list
 
-        with log.cached() as cached_log:
+        with log.consolidate() as captured_log:
             for i, structure in enumerate(self.structures):
                 geo_bounds = structure.geometry.bounds
                 for sim_bound, geo_bound, pml_thick, bound_dim, pm_val in zip(
@@ -842,7 +842,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
                         in_pml_plus = (pm_val > 0) and (sim_pos < geo_pos <= sim_pos_pml)
                         in_pml_mnus = (pm_val < 0) and (sim_pos > geo_pos >= sim_pos_pml)
                         if not isinstance(bound_edge, Absorber) and (in_pml_plus or in_pml_mnus):
-                            cached_log.warning(
+                            captured_log.warning(
                                 f"A bound of Simulation.structures[{i}] was detected as being "
                                 "within the simulation PML. We recommend extending structures to "
                                 "infinity or completely outside of the simulation PML to avoid "
@@ -858,7 +858,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         if not (self.grid_spec.auto_grid_used or self.grid_spec.custom_grid_used):
             return
 
-        with log.cached() as cached_log:
+        with log.consolidate() as captured_log:
             for source in self.sources:
                 if not isinstance(source, TFSF):
                     continue
@@ -881,7 +881,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
 
                     # check if all the grid sizes are sufficiently unequal
                     if not np.all(np.isclose(sizes_in_tfsf, sizes_in_tfsf[0])):
-                        cached_log.warning(
+                        captured_log.warning(
                             f"The grid is nonuniform along the '{'xyz'[ind]}' axis, which may lead "
                             "to sub-optimal cancellation of the incident field in the "
                             "scattered-field region for the total-field scattered-field (TFSF) "
@@ -932,7 +932,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         grid = self.grid
 
         total_size_gb = 0
-        with log.cached() as cached_log:
+        with log.consolidate() as captured_log:
             for monitor in self.monitors:
                 monitor_inds = grid.discretize_inds(monitor, extend=True)
                 num_cells = [inds[1] - inds[0] for inds in monitor_inds]
@@ -944,7 +944,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
                 monitor_size_gb = monitor_size / 2**30
 
                 if monitor_size_gb > WARN_MONITOR_DATA_SIZE_GB:
-                    cached_log.warning(
+                    captured_log.warning(
                         f"Monitor '{monitor.name}' estimated storage is {monitor_size_gb:1.2f}GB. "
                         "Consider making it smaller, using fewer frequencies, or spatial or "
                         "temporal downsampling using 'interval_space' and 'interval', respectively."
@@ -2280,7 +2280,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         grid_axes = [False, False, False]
         # must use volumetric grid for the ``AutoGrid`` in-plane directions of 2d materials
         volumetric_grid_axes = [False, False, False]
-        with log.cached() as cached_log:
+        with log.consolidate() as captured_log:
             for structure in self.structures:
                 if isinstance(structure.medium, Medium2D):
                     # pylint:disable=protected-access
@@ -2293,7 +2293,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
                             if axis != normal:
                                 volumetric_grid_axes[axis] = True
                             else:
-                                cached_log.warning(
+                                captured_log.warning(
                                     "Using 'AutoGrid' for the normal direction of a 2D material "
                                     "may generate a grid that is not sufficiently fine."
                                 )
@@ -2592,7 +2592,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
             shape = tuple(len(array) for array in arrays)
             eps_array = eps_background * np.ones(shape, dtype=complex)
             # replace 2d materials with volumetric equivalents
-            with log.cached() as cached_log:
+            with log.consolidate() as captured_log:
                 for structure in self.volumetric_structures:
                     # Indexing subset within the bounds of the structure
                     # pylint:disable=protected-access
@@ -2607,7 +2607,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
                     eps_structure = get_eps(structure=structure, frequency=freq, coords=red_coords)
 
                     if isinstance(structure.geometry, TriangleMesh):
-                        cached_log.warning(
+                        captured_log.warning(
                             "Client-side permittivity of a 'TriangleMesh' may be "
                             "inaccurate if the mesh is not unionized. We recommend unionizing "
                             "all meshes before import. A 'PermittivityMonitor' can be used to "

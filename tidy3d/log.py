@@ -83,18 +83,13 @@ class Logger:
                 self.info("Suppressed " + ", ".join(counts) + noun)
         return False
 
-    def cached(self, use_static_cache: bool = False):
-        """Return a cached logger to be used in a context manager.
-
-        Parameters
-        ----------
-        use_static_cache: bool = False
-            If true, a global cache per python process is used, otherwise use a cache for a single
-            context.
-        """
-        if use_static_cache:
-            return Logger(self.handlers, Logger._static_cache)
+    def consolidate(self):
+        """Return a logger that emits the one event and a summary of all events that may follow."""
         return Logger(self.handlers, {})
+
+    def suppress_repetitions(self):
+        """Return a logger that suppresses messages already emitted."""
+        return Logger(self.handlers, self._static_cache)
 
     def _log(self, level: int, level_name: str, message: str, *args) -> None:
         """Distribute log messages to all handlers"""
@@ -104,7 +99,7 @@ class Logger:
                 return
             self._cache.add(message)
         elif self._cache is not None:
-            # Context-local cache emits a single message and stores the count
+            # Context-local cache emits a single message and consolidates the rest
             if len(self._cache) > 0:
                 self._cache[level] = 1 + self._cache.get(level, 0)
                 return
