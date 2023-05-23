@@ -10,7 +10,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 ### Fixed
-- Bug in `ModeSolver` which was causing a preconditioner to be applied even when it is not needed.
 
 ## [2.2.1] - 2023-5-23
 
@@ -20,6 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - Downgrade `typing_extensions` to `<=4.5.0` to avoid bug with pydantic for python <= 3.9.
+- Bug in `ModeSolver` which was causing a preconditioner to be applied even when it is not needed.
 
 ## [2.2.0] - 2023-5-22
 
