@@ -1,47 +1,91 @@
 {% include header.html extra_class="absolute transparent" logo_class="logo fc-logo" container_class="container" %}
 <div class="wrapper bg-opacity-default">
     <div class="container inner pt-70">
-    <section id="container">
-        <div class="row">
-            <div id="example-left-navigation" class="col-2 pr-0 example-left-menu">
-                {% include example-left-side/menu.html %}
-            </div>
-            <main class="col-8 p-0" id="notebook-container">
-                <style>
-                    [class*="space"] {
-                        width: unset;
-                    }
-                </style>
-                <div class="d-flex justify-content-start align-items-center pl-10" style="column-gap: 10px; cursor: pointer;">
-                    <i id="toggle-navigation" class="jam jam-align-justify font-size-20"></i>
-                    <span class="font-size-14 color-dark-gray">
-                      <a class="color-dark-gray color-primary-hover" href="/tidy3d/examples/">Examples</a> /
-                        {{ page.page_title }}
-                    </span>
+        <section id="container">
+            <div class="row">
+                <div id="example-left-navigation" class="col-2 pr-0 example-left-menu">
+                    {% include example-left-side/menu.html %}
                 </div>
-            </main>
-            <div class="col-2 p-0 sticky-top notebook-anchor">{% include anchor.html %}</div>
-        </div>
-    </section>
-</div>
+                <main class="col-8 p-0" id="notebook-container">
+                    <style>
+                        [class*="space"] {
+                            width: unset;
+                        }
+                    </style>
+                    <div class="d-flex font-size-14 justify-content-between align-items-center pl-10">
+                        <div class="left d-flex align-items-center" style="column-gap: 10px; cursor: pointer;">
+                            <i class="jam jam-align-justify font-size-20" id="toggle-navigation"></i>
+                            <span class="color-dark-gray"><a class="color-dark-gray"
+                                                             href="/tidy3d/examples/">Examples</a> / {{ page.page_title }}</span>
+                        </div>
+
+                        <div class="right pr-20 d-flex align-items-center" style="column-gap: 10px; cursor: pointer;">
+                            {% if site.tidy3d.example_enable %}
+                            <span data-trigger="hover" data-toggle="tooltip" data-placement="bottom"
+                                  title="Sign Up Tidy3D"><a class="color-primary-hover font-weight-600" target="_blank"
+                                                            href="{{site.tidy3d.sign_up}}">Sign Up</a></span>
+                            {% endif %}
+                            <!--<span class="color-dark-gray d-flex align-items-center" data-trigger="hover" data-toggle="tooltip" data-placement="bottom" title="Download Python Notebook" onclick="downloadIpynb('{{page.source_link}}')">
+                        <i class="jam jam-download font-size-20"></i>
+                        <span>.ipynb</span>
+                      </span>-->
+                        </div>
+
+                    </div>
+                </main>
+                <div class="col-2 p-0 sticky-top notebook-anchor">{% include anchor.html %}</div>
+            </div>
+        </section>
+    </div>
 </div>
 <div class="space80"></div>
 {% include footer_2.html %}
 <script>
     const toggleDom = document.getElementById("toggle-navigation")
     if (toggleDom) {
-        toggleDom.addEventListener('click', e=> {
+        toggleDom.addEventListener('click', e => {
             const navigation = document.getElementById("example-left-navigation");
             const displayStyle = window.getComputedStyle(navigation).display;
             const notebook = document.getElementById("notebook-container");
             const notebookClassName = notebook.className
-            if (displayStyle !== 'none'){
+            if (displayStyle !== 'none') {
                 navigation.style.display = "none";
-                notebook.className = notebookClassName.replaceAll('col-8','col-10')
+                notebook.className = notebookClassName.replaceAll('col-8', 'col-10')
             } else {
                 navigation.style.display = "block";
-                notebook.className = notebookClassName.replaceAll('col-10','col-8')
+                notebook.className = notebookClassName.replaceAll('col-10', 'col-8')
             }
         })
     }
+    function downloadIpynb(url) {
+        function _xhrDownload(url, fileName) {
+            let xhr = new XMLHttpRequest();
+            xhr.open('get', url, true);
+            xhr.setRequestHeader('Cache-Control', 'no-cache');
+            xhr.setRequestHeader('Content-type', 'application/ipynb');
+            xhr.responseType = 'blob';
+            xhr.onload = function () {
+                if (this.status === 200) {
+                    let blob = this.response;
+                    let url = window.URL.createObjectURL(blob);
+                    let a = document.createElement('a');
+                    a.href = url;
+                    a.download = fileName;
+                    a.click();
+                }
+            };
+            xhr.onerror = function () {
+                console.error('error occurred when download file');
+            };
+            xhr.send();
+        }
+        const fileName = url.split("/").pop();
+        _xhrDownload(url, fileName)
+    }
+
+    (function () {
+        document.addEventListener('DOMContentLoaded', e => {
+            $('[data-toggle="tooltip"]').tooltip()
+        })
+    })()
 </script>

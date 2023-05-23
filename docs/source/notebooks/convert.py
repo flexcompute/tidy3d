@@ -15,7 +15,8 @@ def creat_yaml(meta, anchor={}):
     data = {
         'layout': 'default',
         'custom_css': "cobalt",
-        'custom_font': 'font2'
+        'custom_font': 'font2',
+        'source_link': meta['source_link']
     }
     if 'title' in meta:
         data['title'] = meta['title']
@@ -25,7 +26,8 @@ def creat_yaml(meta, anchor={}):
         data['tags'] = [tag.strip() for tag in meta['keywords'].split(",")]
     if 'page_title' in meta:
         data['page_title'] = meta['page_title']
-    # 将字典转换为 YAML 格式
+    if 'image' in meta:
+        data['image'] = meta['image']
     anchor_str = ""
     if anchor:
         anchor_str = yaml.dump(anchor)
@@ -33,10 +35,8 @@ def creat_yaml(meta, anchor={}):
     return '---\n' + yaml.dump(data) + anchor_str + '---\n'
 
 def read_template():
-    # 读取 HTML 文件
     with open(f'./_template/template.html', 'r') as f:
         html = f.read()
-        # 将 HTML 转换为 BeautifulSoup 对象
         return BeautifulSoup(html, 'html.parser')
 
 def get_anchor_list(soup):
@@ -48,7 +48,6 @@ def get_anchor_list(soup):
     if h1:
         anchor_dict['anchor_area']['key'] = h1.get('id')
         text = h1.get_text(strip=True)
-        # 删除子节点的文本内容
         for child in h1.children:
             if child.name is not None:
                 text = text.replace(child.get_text(strip=True), '')
@@ -60,7 +59,6 @@ def get_anchor_list(soup):
             dict = {}
             dict['key'] = tag.get('id')
             text = tag.get_text(strip=True)
-            # 删除子节点的文本内容
             for child in tag.children:
                 if child.name is not None:
                     text = text.replace(child.get_text(strip=True), '')
@@ -76,7 +74,6 @@ def write_css_file(style_tags, output_dir):
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
 
-    # 将样式内容写入 CSS 文件
     with open(output_dir+css_file_name, "w+") as f:
         f.write(css_content)
 
@@ -93,13 +90,13 @@ def write_template(meta, file_name, create_css=False):
         for tag in soup.find_all('style'):
             tag.string = re.sub(r'body\s*{\s*(.*?)\s*}', '', tag.string, flags=re.DOTALL)
             tag.string = re.sub(r'html\s*{\s*(.*?)\s*}', '', tag.string, flags=re.DOTALL)
-            # 删除 * 样式
+            # remove *
             # tag.string = re.sub(r'\*\s*{\s*(.*?)\s*}', '', tag.string, flags=re.DOTALL)
             tag.string = re.sub(r', \*|,\*', '', tag.string, flags=re.DOTALL)
-            # 删除 *::before 样式
+            # remove *::before
             # tag.string = re.sub(r'\*\s*::before\s*{\s*(.*?)\s*}', '', tag.string, flags=re.DOTALL)
             tag.string = re.sub(r'\*\:\:before\,', '', tag.string, flags=re.DOTALL)
-            # 删除 *::after 样式
+            # remove *::after
             tag.string = re.sub(r'\*\s*::after\s*{\s*(.*?)\s*}', '', tag.string, flags=re.DOTALL)
         if create_css:
             write_css_file(style_tags, css_output_directory)
@@ -107,7 +104,6 @@ def write_template(meta, file_name, create_css=False):
         # css_file_name = file_name+'.css'
         css_output_file = "" + css_output_directory + css_file_name
         if os.path.exists(css_output_file) and os.path.isfile(css_output_file):
-            # 创建 link 标签
             link_tag = soup.new_tag("link")
             link_tag['rel'] = 'stylesheet'
             link_tag['href'] = f'/assets/tidy3d/examples/css/{css_file_name}'
@@ -133,28 +129,37 @@ def write_template(meta, file_name, create_css=False):
         with open(html_output_file, 'w') as output_file:
             output_file.write(yam_str + str(ouptut_html))
 
-# 获取当前目录下的所有 ipynb 文件
+def generatorOG(metadata, description):
+    feature_image = metadata.get('feature_image', '')
+    img_output_directory = f'{output_dir}/image/'
+    if feature_image:
+        image_name = os.path.basename(feature_image)
+        if not os.path.exists(img_output_directory):
+            os.makedirs(img_output_directory)
+
+        shutil.copy(feature_image, img_output_directory)
+        return {
+            "path": f'/assets/tidy3d/examples/image/{image_name}',
+            "alt": description
+        }
+
+    return None
+
 ipynb_files = glob.glob("*.ipynb")
 shutil.rmtree(output_dir)
 
 os.mkdir(output_dir)
 index = 0
-# 遍历每个 ipynb 文件并读取内容
 for input_file in ipynb_files:
     if input_file.endswith('.ipynb'):
-        # 打印加粗的文本
         print(f'\033[1m [Converting] : {input_file}\033[0m')
 
         try:
-            # 构建 nbconvert 命令字符串
             cmd = f"jupyter nbconvert --to html --output-dir {output_dir} {input_file} --embed-images"
 
-            # 执行命令，并捕获输出和错误
             result = run(cmd, shell=True, capture_output=True, text=True, check=True)
 
-            # 检查命令是否成功完成
             if result.returncode == 0:
-                # 定义匹配一级标题的正则表达式
                 with open(input_file, 'r', encoding='utf-8') as f:
                     nb = nbformat.read(f, as_version=4)
                     default_title = ""
@@ -170,20 +175,23 @@ for input_file in ipynb_files:
                     description = metadata.get('description', '')
                     keywords = metadata.get('keywords', '')
                     dict = {
-                        "page_title": default_title
+                        "page_title": default_title,
+                        "source_link": f'https://docs.flexcompute.com/projects/tidy3d/en/last/_sources/notebook/{input_file}'
                     }
+                    open_graph = generatorOG(metadata, title if title else default_title)
                     if title:
                         dict['title'] = title
                     if description:
                         dict['description'] = description
                     if keywords:
                         dict['keywords'] = keywords
+                    if open_graph:
+                        dict['image'] = open_graph
                     write_template(dict, os.path.splitext(os.path.basename(input_file))[0], index == 0)
                     index += 1
 
             else:
                 print("Failed to convert notebook to HTML.")
         except CalledProcessError as e:
-            # 捕获异常并打印错误信息
             print(f"Command '{e.cmd}' returned non-zero exit status {e.returncode}: {e.stderr}")
             break
