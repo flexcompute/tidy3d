@@ -38,7 +38,7 @@ jobs:
         run: |
           case ${{ env.ENV }} in
             dev)
-            echo "::set-output name=branch::feature/examples"
+            echo "::set-output name=branch::develop"
             ;;
             prod)
             echo "::set-output name=branch::main"
