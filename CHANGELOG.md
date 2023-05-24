@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 ### Changed
+- Tidy3D component `.to_hdf5()` and `.from_hdf5` accept custom encoder and decoder functions for more flexible IO.
 
 ### Fixed
 - `JaxDataArrays` are properly handled when reading and writing to file, dramatically reducing the VJP simulation download size in server-side adjoint.

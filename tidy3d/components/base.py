@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from functools import wraps
+from typing import List, Callable
 
 import rich
 import pydantic
@@ -410,7 +411,9 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         return model_dict
 
     @classmethod
-    def dict_from_hdf5(cls, fname: str, group_path: str = "") -> dict:
+    def dict_from_hdf5(
+        cls, fname: str, group_path: str = "", custom_decoders: List[Callable] = None
+    ) -> dict:
         """Loads a dictionary containing the model contents from a .hdf5 file.
 
         Parameters
@@ -419,6 +422,10 @@ class Tidy3dBaseModel(pydantic.BaseModel):
             Full path to the .hdf5 file to load the :class:`Tidy3dBaseModel` from.
         group_path : str, optional
             Path to a group inside the file to selectively load a sub-element of the model only.
+        custom_decoders : List[Callable]
+            List of functions accepting
+            (fname: str, group_path: str, model_dict: dict, key: str, value: Any) that store the
+            value in the model dict after a custom decoding.
 
         Returns
         -------
@@ -436,6 +443,17 @@ class Tidy3dBaseModel(pydantic.BaseModel):
             for key, value in model_dict.items():
 
                 subpath = f"{group_path}/{key}"
+
+                # apply custom validation to the key value pair and modify model_dict
+                if custom_decoders:
+                    for custom_decoder in custom_decoders:
+                        custom_decoder(
+                            fname=fname,
+                            group_path=subpath,
+                            model_dict=model_dict,
+                            key=key,
+                            value=value,
+                        )
 
                 # write the path to the element of the json dict where the data_array should be
                 if isinstance(value, str) and value in DATA_ARRAY_MAP:
@@ -462,7 +480,13 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         return model_dict
 
     @classmethod
-    def from_hdf5(cls, fname: str, group_path: str = "", **parse_obj_kwargs) -> Tidy3dBaseModel:
+    def from_hdf5(
+        cls,
+        fname: str,
+        group_path: str = "",
+        custom_decoders: List[Callable] = None,
+        **parse_obj_kwargs,
+    ) -> Tidy3dBaseModel:
         """Loads :class:`Tidy3dBaseModel` instance to .hdf5 file.
 
         Parameters
@@ -472,6 +496,10 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         group_path : str, optional
             Path to a group inside the file to selectively load a sub-element of the model only.
             Starting `/` is optional.
+        custom_decoders : List[Callable]
+            List of functions accepting
+            (fname: str, group_path: str, model_dict: dict, key: str, value: Any) that store the
+            value in the model dict after a custom decoding.
         **parse_obj_kwargs
             Keyword arguments passed to pydantic's ``parse_obj`` method.
 
@@ -481,16 +509,21 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         """
 
         group_path = cls._construct_group_path(group_path)
-        model_dict = cls.dict_from_hdf5(fname=fname, group_path=group_path)
+        model_dict = cls.dict_from_hdf5(
+            fname=fname, group_path=group_path, custom_decoders=custom_decoders
+        )
         return cls.parse_obj(model_dict, **parse_obj_kwargs)
 
-    def to_hdf5(self, fname: str) -> None:
+    def to_hdf5(self, fname: str, custom_encoders: List[Callable] = None) -> None:
         """Exports :class:`Tidy3dBaseModel` instance to .hdf5 file.
 
         Parameters
         ----------
         fname : str
             Full path to the .hdf5 file to save the :class:`Tidy3dBaseModel` to.
+        custom_encoders : List[Callable]
+            List of functions accepting (fname: str, group_path: str, value: Any) that take
+            the ``value`` supplied and write it to the hdf5 ``fname`` at ``group_path``.
 
         Example
         -------
@@ -508,6 +541,10 @@ class Tidy3dBaseModel(pydantic.BaseModel):
 
                     # append the key to the path
                     subpath = f"{group_path}/{key}"
+
+                    if custom_encoders:
+                        for custom_encoder in custom_encoders:
+                            custom_encoder(fname=f_handle, group_path=subpath, value=value)
 
                     # write the path to the element of the json dict where the data_array should be
                     if isinstance(value, xr.DataArray):
