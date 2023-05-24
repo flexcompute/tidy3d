@@ -80,7 +80,7 @@ class JaxDataArray(Tidy3dBaseModel):
 
     #     return val
 
-    # pylint: disable=arguments-differ
+    # pylint: disable=arguments-differ, arguments-renamed
     def to_hdf5(self, fname: str, group_path: str) -> None:
         """Save an xr.DataArray to the hdf5 file with a given path to the group."""
         sub_group = fname.create_group(group_path)

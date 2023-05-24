@@ -1,16 +1,13 @@
 """Base model for Tidy3D components that are compatible with jax."""
 from __future__ import annotations
 
-from typing import Tuple, List
+from typing import Tuple, List, Any, Callable
 import json
-
-import h5py
-import xarray as xr
 
 from jax.tree_util import tree_flatten as jax_tree_flatten
 from jax.tree_util import tree_unflatten as jax_tree_unflatten
 
-from ....components.base import Tidy3dBaseModel, JSON_TAG, DATA_ARRAY_MAP, cached_property
+from ....components.base import Tidy3dBaseModel, cached_property
 from .data.data_array import JaxDataArray, JAX_DATA_ARRAY_TAG
 
 
@@ -88,55 +85,39 @@ class JaxObject(Tidy3dBaseModel):
         strip_data_array(json_dict)
         return json.dumps(json_dict)
 
-    def to_hdf5(self, fname: str) -> None:
+    def to_hdf5(self, fname: str, custom_encoders: List[Callable] = None) -> None:
         """Exports :class:`JaxObject` instance to .hdf5 file.
 
         Parameters
         ----------
         fname : str
             Full path to the .hdf5 file to save the :class:`JaxObject` to.
+        custom_encoders : List[Callable]
+            List of functions accepting (fname: str, group_path: str, value: Any) that take
+            the ``value`` supplied and write it to the hdf5 ``fname`` at ``group_path``.
 
         Example
         -------
         >>> simulation.to_hdf5(fname='folder/sim.hdf5') # doctest: +SKIP
         """
 
-        with h5py.File(fname, "w") as f_handle:
+        def data_array_encoder(fname: str, group_path: str, value: Any) -> None:
+            """Custom encoder to convert the JaxDataArray dict to an instance."""
+            if isinstance(value, dict) and "type" in value and value["type"] == "JaxDataArray":
+                data_array = JaxDataArray(values=value["values"], coords=value["coords"])
+                data_array.to_hdf5(fname=fname, group_path=group_path)
 
-            f_handle[JSON_TAG] = self._json_string
+        if custom_encoders is None:
+            custom_encoders = []
 
-            def add_data_to_file(data_dict: dict, group_path: str = "") -> None:
-                """For every DataArray item in dictionary, write path of hdf5 group as value."""
+        custom_encoders += [data_array_encoder]
 
-                for key, value in data_dict.items():
-
-                    # append the key to the path
-                    subpath = f"{group_path}/{key}"
-
-                    if (
-                        isinstance(value, dict)
-                        and "type" in value
-                        and value["type"] == "JaxDataArray"
-                    ):
-                        value = JaxDataArray(values=value["values"], coords=value["coords"])
-
-                    # write the path to the element of the json dict where the data_array should be
-                    if isinstance(value, (xr.DataArray, JaxDataArray)):
-                        value.to_hdf5(fname=f_handle, group_path=subpath)
-
-                    # if a tuple, assign each element a unique key
-                    if isinstance(value, (list, tuple)):
-                        value_dict = self.tuple_to_dict(tuple_values=value)
-                        add_data_to_file(data_dict=value_dict, group_path=subpath)
-
-                    # if a dict, recurse
-                    elif isinstance(value, dict):
-                        add_data_to_file(data_dict=value, group_path=subpath)
-
-            add_data_to_file(data_dict=self.dict())
+        return super().to_hdf5(fname=fname, custom_encoders=custom_encoders)
 
     @classmethod
-    def dict_from_hdf5(cls, fname: str, group_path: str = "") -> dict:
+    def dict_from_hdf5(
+        cls, fname: str, group_path: str = "", custom_decoders: List[Callable] = None
+    ) -> dict:
         """Loads a dictionary containing the model contents from a .hdf5 file.
 
         Parameters
@@ -145,6 +126,10 @@ class JaxObject(Tidy3dBaseModel):
             Full path to the .hdf5 file to load the :class:`JaxObject` from.
         group_path : str, optional
             Path to a group inside the file to selectively load a sub-element of the model only.
+        custom_decoders : List[Callable]
+            List of functions accepting
+            (fname: str, group_path: str, model_dict: dict, key: str, value: Any) that store the
+            value in the model dict after a custom decoding.
 
         Returns
         -------
@@ -156,39 +141,21 @@ class JaxObject(Tidy3dBaseModel):
         >>> sim_dict = Simulation.dict_from_hdf5(fname='folder/sim.hdf5') # doctest: +SKIP
         """
 
-        def load_data_from_file(model_dict: dict, group_path: str = "") -> None:
-            """For every DataArray item in dictionary, load path of hdf5 group as value."""
+        def data_array_decoder(
+            fname: str, group_path: str, model_dict: dict, key: str, value: Any
+        ) -> None:
+            """Custom decoder to grab JaxDataArray from file and save it in model_dict."""
 
-            for key, value in model_dict.items():
+            # write the path to the element of the json dict where the data_array should be
+            if isinstance(value, str) and value == JAX_DATA_ARRAY_TAG:
+                jax_data_array = JaxDataArray.from_hdf5(fname=fname, group_path=group_path)
+                model_dict[key] = jax_data_array
 
-                subpath = f"{group_path}/{key}"
+        if custom_decoders is None:
+            custom_decoders = []
 
-                # write the path to the element of the json dict where the data_array should be
-                if isinstance(value, str) and value == JAX_DATA_ARRAY_TAG:
+        custom_decoders += [data_array_decoder]
 
-                    jax_data_array = JaxDataArray.from_hdf5(fname=fname, group_path=subpath)
-                    model_dict[key] = jax_data_array
-                    continue
-
-                if isinstance(value, str) and value in DATA_ARRAY_MAP:
-                    data_array_type = DATA_ARRAY_MAP[value]
-                    model_dict[key] = data_array_type.from_hdf5(fname=fname, group_path=subpath)
-                    continue
-
-                # if a list, assign each element a unique key, recurse
-                if isinstance(value, (list, tuple)):
-                    value_dict = cls.tuple_to_dict(tuple_values=value)
-                    load_data_from_file(model_dict=value_dict, group_path=subpath)
-
-                # if a dict, recurse
-                elif isinstance(value, dict):
-                    load_data_from_file(model_dict=value, group_path=subpath)
-
-        with h5py.File(fname, "r") as f_handle:
-            json_string = f_handle[JSON_TAG][()]
-            model_dict = json.loads(json_string)
-
-        group_path = cls._construct_group_path(group_path)
-        model_dict = cls.get_sub_model(group_path=group_path, model_dict=model_dict)
-        load_data_from_file(model_dict=model_dict, group_path=group_path)
-        return model_dict
+        return super().dict_from_hdf5(
+            fname=fname, group_path=group_path, custom_decoders=custom_decoders
+        )
