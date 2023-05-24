@@ -1265,7 +1265,7 @@ class Sellmeier(DispersiveMedium):
     >>> eps = sellmeier_medium.eps_model(200e12)
     """
 
-    coeffs: Tuple[Tuple[pd.NonNegativeFloat, pd.PositiveFloat], ...] = pd.Field(
+    coeffs: Tuple[Tuple[float, pd.PositiveFloat], ...] = pd.Field(
         title="Coefficients",
         description="List of Sellmeier (:math:`B_i, C_i`) coefficients.",
         units=(None, MICROMETER + "^2"),
@@ -1422,7 +1422,7 @@ class Lorentz(DispersiveMedium):
         units=PERMITTIVITY,
     )
 
-    coeffs: Tuple[Tuple[pd.NonNegativeFloat, float, pd.NonNegativeFloat], ...] = pd.Field(
+    coeffs: Tuple[Tuple[float, float, float], ...] = pd.Field(
         ...,
         title="Coefficients",
         description="List of (:math:`\\Delta\\epsilon_i, f_i, \\delta_i`) values for model.",
@@ -1763,7 +1763,7 @@ class Debye(DispersiveMedium):
         units=PERMITTIVITY,
     )
 
-    coeffs: Tuple[Tuple[pd.NonNegativeFloat, pd.PositiveFloat], ...] = pd.Field(
+    coeffs: Tuple[Tuple[float, pd.PositiveFloat], ...] = pd.Field(
         ...,
         title="Coefficients",
         description="List of (:math:`\\Delta\\epsilon_i, \\tau_i`) values for model.",
