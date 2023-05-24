@@ -377,8 +377,17 @@ def verify_custom_dispersive_medium_methods(mat):
         assert mat.eps_dataarray_freq(freq)[i].shape == (Nx, Ny, Nz)
     np.testing.assert_allclose(mat.eps_model(freq), mat.pole_residue.eps_model(freq))
     coord_interp = Coords(**{ax: np.linspace(-1, 1, 20 + ind) for ind, ax in enumerate("xyz")})
-    eps_grid = mat.eps_diagonal_on_grid(freq, coord_interp)
-    np.testing.assert_allclose(eps_grid, mat.pole_residue.eps_diagonal_on_grid(freq, coord_interp))
+    np.testing.assert_allclose(
+        mat.eps_diagonal_on_grid(freq, coord_interp),
+        mat.pole_residue.eps_diagonal_on_grid(freq, coord_interp),
+    )
+    for col in range(3):
+        for row in range(3):
+            np.testing.assert_allclose(
+                mat.eps_comp_on_grid(row, col, freq, coord_interp),
+                mat.pole_residue.eps_comp_on_grid(row, col, freq, coord_interp),
+            )
+
     # interpolation
     poles_interp = mat.pole_residue.poles_on_grid(coord_interp)
     assert len(poles_interp) == len(mat.pole_residue.poles)
@@ -608,6 +617,55 @@ def test_custom_anisotropic_medium():
     # anisotropic
     mat = CustomAnisotropicMedium(xx=mat_xx, yy=mat_yy, zz=mat_zz)
     verify_custom_medium_methods(mat)
+
+    ## interpolation method verification for "xx" component
+    # 1) xx-component is using `interp_method = nearest`, and mat using `None`;
+    # so that xx-component is using "nearest"
+    freq = 2e14
+    dist_coeff = 0.6
+    coord_test = Coords(x=[X[0] * dist_coeff + X[1] * (1 - dist_coeff)], y=Y[0], z=Z[0])
+    eps_nearest = mat.eps_sigma_to_eps_complex(
+        permittivity.sel(x=X[0], y=Y[0], z=Z[0]), conductivity.sel(x=X[0], y=Y[0], z=Z[0]), freq
+    )
+    eps_interp = mat.eps_comp_on_grid(0, 0, freq, coord_test)[0, 0, 0]
+    assert eps_interp == eps_nearest.data
+
+    # 2) xx-component is using `interp_method = nearest`, and mat using `nearest`;
+    # so that xx-component is still using "nearest"
+    mat = CustomAnisotropicMedium(xx=mat_xx, yy=mat_yy, zz=mat_zz, interp_method="nearest")
+    eps_interp = mat.eps_comp_on_grid(0, 0, freq, coord_test)[0, 0, 0]
+    assert eps_interp == eps_nearest.data
+
+    # 3) xx-component is using `interp_method = nearest`, and mat using `linear`;
+    # so that xx-component is using "linear" (overridden by the one in mat)
+    mat = CustomAnisotropicMedium(xx=mat_xx, yy=mat_yy, zz=mat_zz, interp_method="linear")
+    eps_second_nearest = mat.eps_sigma_to_eps_complex(
+        permittivity.sel(x=X[1], y=Y[0], z=Z[0]), conductivity.sel(x=X[1], y=Y[0], z=Z[0]), freq
+    )
+    eps_manual_interp = eps_nearest * dist_coeff + eps_second_nearest * (1 - dist_coeff)
+    eps_interp = mat.eps_comp_on_grid(0, 0, freq, coord_test)[0, 0, 0]
+    assert np.isclose(eps_interp, eps_manual_interp.data)
+
+    # 4) xx-component is using `interp_method = linear`, and mat using `None`;
+    # so that xx-component is using "linear"
+    mat_xx = CustomMedium(
+        permittivity=permittivity, conductivity=conductivity, interp_method="linear"
+    )
+    mat = CustomAnisotropicMedium(xx=mat_xx, yy=mat_yy, zz=mat_zz)
+    eps_interp = mat.eps_comp_on_grid(0, 0, freq, coord_test)[0, 0, 0]
+    assert np.isclose(eps_interp, eps_manual_interp.data)
+
+    # 5) xx-component is using `interp_method = linear`, and mat using `linear`;
+    # so that xx-component is still using "linear"
+    mat = CustomAnisotropicMedium(xx=mat_xx, yy=mat_yy, zz=mat_zz, interp_method="linear")
+    eps_interp = mat.eps_comp_on_grid(0, 0, freq, coord_test)[0, 0, 0]
+    assert np.isclose(eps_interp, eps_manual_interp.data)
+
+    # 6) xx-component is using `interp_method = linear`, and mat using `nearest`;
+    # so that xx-component is using "nearest" (overridden by the one in mat)
+    mat = CustomAnisotropicMedium(xx=mat_xx, yy=mat_yy, zz=mat_zz, interp_method="nearest")
+    eps_interp = mat.eps_comp_on_grid(0, 0, freq, coord_test)[0, 0, 0]
+    assert eps_interp == eps_nearest.data
 
     # CustomMedium is anisotropic
     field_components = {f"eps_{d}{d}": make_scalar_data() for d in "xyz"}

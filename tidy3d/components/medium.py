@@ -1019,8 +1019,8 @@ class CustomMedium(AbstractCustomMedium):
         eps : :class:`.ScalarFieldDataArray`
             Dataset containing complex-valued permittivity as a function of space.
         interp_method : :class:`.InterpMethod`, optional
-                Interpolation method to obtain permittivity values that are not supplied
-                at the Yee grids.
+            Interpolation method to obtain permittivity values that are not supplied
+            at the Yee grids.
 
         Returns
         -------
@@ -1048,8 +1048,8 @@ class CustomMedium(AbstractCustomMedium):
         k : :class:`.ScalarFieldDataArray` = None
             Imaginary part of refrative index.
         interp_method : :class:`.InterpMethod`, optional
-                Interpolation method to obtain permittivity values that are not supplied
-                at the Yee grids.
+            Interpolation method to obtain permittivity values that are not supplied
+            at the Yee grids.
 
         Returns
         -------
@@ -1180,9 +1180,7 @@ class CustomDispersiveMedium(AbstractCustomMedium, DispersiveMedium, ABC):
     @cached_property
     def pole_residue(self):
         """Representation of Medium as a pole-residue model."""
-        pole_info = self._pole_residue_dict()
-        pole_info.update({"interp_method": self.interp_method})
-        return CustomPoleResidue(**pole_info)
+        return CustomPoleResidue(**self._pole_residue_dict(), interp_method=self.interp_method)
 
 
 class PoleResidue(DispersiveMedium):
@@ -1590,7 +1588,12 @@ class CustomSellmeier(CustomDispersiveMedium, Sellmeier):
 
     @classmethod
     def from_dispersion(
-        cls, n: SpatialDataArray, freq: float, dn_dwvl: SpatialDataArray, **kwargs
+        cls,
+        n: SpatialDataArray,
+        freq: float,
+        dn_dwvl: SpatialDataArray,
+        interp_method="nearest",
+        **kwargs,
     ):  # pylint:disable=signature-differs
         """Convert ``n`` and wavelength dispersion ``dn_dwvl`` values at frequency ``freq`` to
         a single-pole :class:`CustomSellmeier` medium.
@@ -1603,6 +1606,9 @@ class CustomSellmeier(CustomDispersiveMedium, Sellmeier):
             Derivative of the refractive index with wavelength (1/um). Must be negative.
         freq : float
             Frequency at which ``n`` and ``dn_dwvl`` are sampled.
+        interp_method : :class:`.InterpMethod`, optional
+            Interpolation method to obtain permittivity values that are not supplied
+            at the Yee grids.
 
         Returns
         -------
@@ -1617,7 +1623,11 @@ class CustomSellmeier(CustomDispersiveMedium, Sellmeier):
             raise ValidationError("Dispersion ``dn_dwvl`` must be smaller than zero.")
         if np.any(n < 1):
             raise ValidationError("Refractive index ``n`` cannot be smaller than one.")
-        return cls(coeffs=cls._from_dispersion_to_coeffs(n, freq, dn_dwvl), **kwargs)
+        return cls(
+            coeffs=cls._from_dispersion_to_coeffs(n, freq, dn_dwvl),
+            interp_method=interp_method,
+            **kwargs,
+        )
 
 
 class Lorentz(DispersiveMedium):
@@ -2556,22 +2566,6 @@ class CustomAnisotropicMedium(AbstractCustomMedium, AnisotropicMedium):
             mat_component.eps_dataarray_freq(frequency)[ind]
             for ind, mat_component in enumerate(self.components.values())
         )
-
-    @ensure_freq_in_range
-    def eps_model(self, frequency: float) -> complex:
-        """Complex-valued spatially averaged permittivity as a function of frequency."""
-        return np.mean(
-            [np.mean(eps_comp.values) for eps_comp in self.eps_dataarray_freq(frequency)]
-        )
-
-    @ensure_freq_in_range
-    def eps_diagonal(self, frequency: float) -> Tuple[complex, complex, complex]:
-        """Main diagonal of the complex-valued permittivity tensor
-        at ``frequency``. Spatially, we take max{||eps||}, so that autoMesh generation
-        works appropriately.
-        """
-        eps_freq = [eps_comp.values.ravel() for eps_comp in self.eps_dataarray_freq(frequency)]
-        return [eps_comp[np.argmax(np.abs(eps_comp))] for eps_comp in eps_freq]
 
 
 class CustomAnisotropicMediumInternal(CustomAnisotropicMedium):
