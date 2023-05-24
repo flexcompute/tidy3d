@@ -34,6 +34,12 @@ In a hosted jupyter notebook environment (eg google colab), it may be more conve
     import tidy3d.web as web
     web.configure("XXX")
 
+To test that the configuration is working from the python browser, you can perform:
+
+.. code-block:: bash
+    import tidy3d.web as web # if needed
+    web.test()
+
 If those commands did not work, there are advanced installation instructions below, which should help solve the issue.
 
 Advanced Installation Instructions
