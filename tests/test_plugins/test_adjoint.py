@@ -11,6 +11,7 @@ import jax
 from numpy.random import random
 import time
 import matplotlib.pylab as plt
+import h5py
 
 import tidy3d as td
 from typing import Tuple, Any, List
@@ -24,22 +25,15 @@ from tidy3d.plugins.adjoint.components.structure import JaxStructure
 from tidy3d.plugins.adjoint.components.simulation import JaxSimulation, JaxInfo
 from tidy3d.plugins.adjoint.components.data.sim_data import JaxSimulationData
 from tidy3d.plugins.adjoint.components.data.monitor_data import JaxModeData, JaxDiffractionData
-from tidy3d.plugins.adjoint.components.data.data_array import JaxDataArray
+from tidy3d.plugins.adjoint.components.data.data_array import JaxDataArray, JAX_DATA_ARRAY_TAG
 from tidy3d.plugins.adjoint.components.data.dataset import JaxPermittivityDataset
 from tidy3d.plugins.adjoint.web import run, run_async
 from tidy3d.plugins.adjoint.web import run_local, run_async_local
 from tidy3d.plugins.adjoint.components.data.data_array import VALUE_FILTER_THRESHOLD
 from tidy3d.web.container import BatchData
 
-from ..utils import (
-    run_emulated,
-    assert_log_level,
-    log_capture,
-    run_async_emulated,
-    SIM_DATA_PATH,
-    SIM_FULL,
-    TMP_DIR,
-)
+from ..utils import run_emulated, assert_log_level, log_capture, run_async_emulated
+from ..utils import SIM_DATA_PATH, SIM_FULL, TMP_DIR
 
 FWD_SIM_DATA_FILE = TMP_DIR + "adjoint_grad_data_fwd.hdf5"
 SIM_VJP_FILE = TMP_DIR + "adjoint_sim_vjp_file.hdf5"
@@ -1217,3 +1211,51 @@ def test_custom_medium_size(use_emulated_run):
     make_custom_medium(num_cells=MAX_NUM_CELLS_CUSTOM_MEDIUM)
     with pytest.raises(pydantic.ValidationError):
         make_custom_medium(num_cells=MAX_NUM_CELLS_CUSTOM_MEDIUM + 1)
+
+
+def test_jax_sim_io():
+
+    jax_box = JaxBox(size=(1, 1, 1), center=(0, 0, 0))
+
+    def make_custom_medium(num_cells: int) -> JaxCustomMedium:
+
+        n = int(np.sqrt(num_cells))
+        Nx = n
+        Ny = n
+        Nz = 1
+
+        # custom medium
+        (xmin, ymin, zmin), (xmax, ymax, zmax) = jax_box.bounds
+        coords = dict(
+            x=np.linspace(xmin, xmax, Nx).tolist(),
+            y=np.linspace(ymin, ymax, Ny).tolist(),
+            z=np.linspace(zmin, zmax, Nz).tolist(),
+            f=[FREQ0],
+        )
+
+        values = np.random.random((Nx, Ny, Nz, 1)) + 1.0
+        eps_ii = JaxDataArray(values=values, coords=coords)
+        field_components = {f"eps_{dim}{dim}": eps_ii for dim in "xyz"}
+        jax_eps_dataset = JaxPermittivityDataset(**field_components)
+        return JaxCustomMedium(eps_dataset=jax_eps_dataset)
+
+    num_cells = 200 * 200
+    struct = JaxStructure(geometry=jax_box, medium=make_custom_medium(num_cells=num_cells))
+    sim = JaxSimulation(
+        size=(2, 2, 2),
+        input_structures=[struct],
+        run_time=1e-12,
+        grid_spec=td.GridSpec.auto(wavelength=1.0),
+    )
+
+    fname = "tests/tmp/jax_sim_io_tmp.hdf5"
+    sim.to_file(fname)
+
+    with h5py.File(fname, "r") as f:
+        assert "input_structures" in f.keys()
+        json_string = str(f["JSON_STRING"][()])
+        assert JAX_DATA_ARRAY_TAG in json_string
+
+    sim2 = JaxSimulation.from_file(fname)
+
+    assert sim == sim2

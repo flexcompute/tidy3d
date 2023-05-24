@@ -3,10 +3,12 @@ from __future__ import annotations
 
 from typing import Tuple, Any, Dict, List
 
+import h5py
 import pydantic as pd
 import numpy as np
 import jax.numpy as jnp
 from jax.tree_util import register_pytree_node_class
+
 from .....components.base import Tidy3dBaseModel, cached_property
 from .....exceptions import DataError, Tidy3dKeyError, AdjointError
 
@@ -14,6 +16,9 @@ from .....exceptions import DataError, Tidy3dKeyError, AdjointError
 # condition setting when to set value in DataArray to zero:
 # if abs(val) <= VALUE_FILTER_THRESHOLD * max(abs(val))
 VALUE_FILTER_THRESHOLD = 1e-6
+
+# JaxDataArrays are written to json as JAX_DATA_ARRAY_TAG
+JAX_DATA_ARRAY_TAG = "<<JaxDataArray>>"
 
 
 @register_pytree_node_class
@@ -74,6 +79,42 @@ class JaxDataArray(Tidy3dBaseModel):
     #             )
 
     #     return val
+
+    # pylint: disable=arguments-differ
+    def to_hdf5(self, fname: str, group_path: str) -> None:
+        """Save an xr.DataArray to the hdf5 file with a given path to the group."""
+        sub_group = fname.create_group(group_path)
+        sub_group["values"] = self.values
+        dims = []
+        for key, val in self.coords.items():
+            # sub_group[key] = val
+            dims.append(key)
+            val = np.array(val)
+            if val.dtype == "<U1":
+                sub_group[key] = val.tolist()
+            else:
+                sub_group[key] = val
+        sub_group["dims"] = dims
+
+    # pylint: disable=arguments-differ
+    @classmethod
+    def from_hdf5(cls, fname: str, group_path: str) -> JaxDataArray:
+        """Load an DataArray from an hdf5 file with a given path to the group."""
+        with h5py.File(fname, "r") as f:
+            sub_group = f[group_path]
+            values = np.array(sub_group["values"])
+            dims = sub_group["dims"]
+            coords = {dim: np.array(sub_group[dim]) for dim in dims}
+            for key, val in coords.items():
+                val = np.array(val)
+                if val.dtype == "O":
+                    coords[key] = [byte_string.decode() for byte_string in val.tolist()]
+
+            coords = {
+                key: val.tolist() if isinstance(val, np.ndarray) else val
+                for key, val in coords.items()
+            }
+            return cls(values=values, coords=coords)
 
     @cached_property
     def as_ndarray(self) -> np.ndarray:
