@@ -37,6 +37,7 @@ In a hosted jupyter notebook environment (eg google colab), it may be more conve
 To test that the configuration is working from the python browser, you can perform:
 
 .. code-block:: bash
+
     import tidy3d.web as web # if needed
     web.test()
 
