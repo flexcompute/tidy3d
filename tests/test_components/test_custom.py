@@ -359,14 +359,13 @@ def test_custom_isotropic_medium():
         )
         mat = CustomIsotropicMedium(permittivity=permittivity, conductivity=sigmatmp)
 
-    # inconsistent shape
+    # inconsistent coords
     with pytest.raises(pydantic.ValidationError):
-        sigmatmp = SpatialDataArray(
-            np.random.random((Nx - 1, Ny, Nz)), coords=dict(x=X[:-1], y=Y, z=Z)
-        )
+        sigmatmp = SpatialDataArray(np.random.random((Nx, Ny, Nz)), coords=dict(x=X + 1, y=Y, z=Z))
         mat = CustomIsotropicMedium(permittivity=permittivity, conductivity=sigmatmp)
 
     mat = CustomIsotropicMedium(permittivity=permittivity, conductivity=conductivity)
+    print(permittivity.coords)
     verify_custom_medium_methods(mat)
 
 
@@ -406,10 +405,10 @@ def test_custom_pole_residue():
         )
         mat = CustomPoleResidue(eps_inf=eps_inf, poles=((a, c),))
 
-    # inconsistent size of eps_inf with a,c
+    # inconsistent coords of eps_inf with a,c
     with pytest.raises(pydantic.ValidationError):
         eps_inf = SpatialDataArray(
-            np.random.random((Nx - 1, Ny, Nz)) + 1, coords=dict(x=X[:-1], y=Y, z=Z)
+            np.random.random((Nx, Ny, Nz)) + 1, coords=dict(x=X + 1, y=Y, z=Z)
         )
         mat = CustomPoleResidue(eps_inf=eps_inf, poles=((a, c),))
 
@@ -447,9 +446,9 @@ def test_custom_sellmeier():
         ctmp = SpatialDataArray(np.random.random((Nx, Ny, Nz)) - 0.5, coords=dict(x=X, y=Y, z=Z))
         mat = CustomSellmeier(coeffs=((b1, c1), (b2, ctmp)))
 
-    # inconsistent shape
+    # inconsistent coord
     with pytest.raises(pydantic.ValidationError):
-        btmp = SpatialDataArray(np.random.random((Nx - 1, Ny, Nz)), coords=dict(x=X[:-1], y=Y, z=Z))
+        btmp = SpatialDataArray(np.random.random((Nx, Ny, Nz)), coords=dict(x=X + 1, y=Y, z=Z))
         mat = CustomSellmeier(coeffs=((b1, c2), (btmp, c2)))
 
     mat = CustomSellmeier(coeffs=((b1, c1), (b2, c2)))
@@ -498,11 +497,9 @@ def test_custom_lorentz():
         )
         mat = CustomLorentz(eps_inf=eps_inf, coeffs=((de1, f1, delta1), (de2, f2, deltatmp)))
 
-    # inconsistent shape
+    # inconsistent coords
     with pytest.raises(pydantic.ValidationError):
-        ftmp = SpatialDataArray(
-            1 + np.random.random((Nx - 1, Ny, Nz)), coords=dict(x=X[:-1], y=Y, z=Z)
-        )
+        ftmp = SpatialDataArray(1 + np.random.random((Nx, Ny, Nz)), coords=dict(x=X + 1, y=Y, z=Z))
         mat = CustomLorentz(eps_inf=eps_inf, coeffs=((de1, f1, delta1), (de2, ftmp, delta2)))
 
     mat = CustomLorentz(eps_inf=eps_inf, coeffs=((de1, f1, delta1), (de2, f2, delta2)))
@@ -534,11 +531,9 @@ def test_custom_drude():
         )
         mat = CustomDrude(eps_inf=eps_inf, coeffs=((f1, delta1), (f2, deltatmp)))
 
-    # inconsistent shape
+    # inconsistent coords
     with pytest.raises(pydantic.ValidationError):
-        ftmp = SpatialDataArray(
-            1 + np.random.random((Nx - 1, Ny, Nz)), coords=dict(x=X[:-1], y=Y, z=Z)
-        )
+        ftmp = SpatialDataArray(1 + np.random.random((Nx, Ny, Nz)), coords=dict(x=X + 1, y=Y, z=Z))
         mat = CustomDrude(eps_inf=eps_inf, coeffs=((f1, delta1), (ftmp, delta2)))
 
     mat = CustomDrude(eps_inf=eps_inf, coeffs=((f1, delta1), (f2, delta2)))
@@ -576,11 +571,9 @@ def test_custom_debye():
         tautmp = SpatialDataArray(np.random.random((Nx, Ny, Nz)) - 0.5, coords=dict(x=X, y=Y, z=Z))
         mat = CustomDebye(eps_inf=eps_inf, coeffs=((eps1, tau1), (eps2, tautmp)))
 
-    # inconsistent shape
+    # inconsistent coords
     with pytest.raises(pydantic.ValidationError):
-        epstmp = SpatialDataArray(
-            np.random.random((Nx - 1, Ny, Nz)), coords=dict(x=X[:-1], y=Y, z=Z)
-        )
+        epstmp = SpatialDataArray(np.random.random((Nx, Ny, Nz)), coords=dict(x=X + 1, y=Y, z=Z))
         mat = CustomDebye(eps_inf=eps_inf, coeffs=((eps1, tau1), (epstmp, tau2)))
 
     mat = CustomDebye(eps_inf=eps_inf, coeffs=((eps1, tau1), (eps2, tau2)))

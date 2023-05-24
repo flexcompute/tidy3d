@@ -683,8 +683,8 @@ class CustomIsotropicMedium(AbstractCustomMedium, Medium):
         if np.any(val.values < 0):
             raise SetupError("'conductivity' should be non-negative.")
 
-        if values["permittivity"].shape != val.shape:
-            raise SetupError("'permittivity' and 'conductivity' should have the same dimension.")
+        if values["permittivity"].coords != val.coords:
+            raise SetupError("'permittivity' and 'conductivity' should have the same coordinates.")
         return val
 
     @cached_property
@@ -873,8 +873,8 @@ class CustomMedium(AbstractCustomMedium):
         if np.any(val.values < 0):
             raise SetupError("'conductivity' should be non-negative.")
 
-        if values["permittivity"].shape != val.shape:
-            raise SetupError("'permittivity' and 'conductivity' should have the same dimension.")
+        if values["permittivity"].coords != val.coords:
+            raise SetupError("'permittivity' and 'conductivity' should have the same coordinates.")
         return val
 
     @cached_property
@@ -1346,13 +1346,13 @@ class CustomPoleResidue(CustomDispersiveMedium, PoleResidue):
         if values.get("eps_inf") is None:
             raise ValidationError("'eps_inf' failed validation.")
 
-        expected_shape = values["eps_inf"].shape
+        expected_coords = values["eps_inf"].coords
         for coeffs in val:
             for coeff in coeffs:
-                if coeff.shape != expected_shape:
+                if coeff.coords != expected_coords:
                     raise SetupError(
-                        "All pole coefficients 'a' and 'c' should have the same dimension; "
-                        "The dimension should also be consistent with 'eps_inf'."
+                        "All pole coefficients 'a' and 'c' should have the same coordinates; "
+                        "The coordinates should also be consistent with 'eps_inf'."
                     )
         return val
 
@@ -1552,10 +1552,10 @@ class CustomSellmeier(CustomDispersiveMedium, Sellmeier):
     @pd.validator("coeffs", always=True)
     def _correct_shape_and_sign(cls, val):
         """every term in coeffs should have the same shape, and B>=0 and C>0."""
-        expected_shape = val[0][0].shape
+        expected_coords = val[0][0].coords
         for (B, C) in val:
-            if B.shape != expected_shape or C.shape != expected_shape:
-                raise SetupError("Every term in 'coeffs' should have the same dimension.")
+            if B.coords != expected_coords or C.coords != expected_coords:
+                raise SetupError("Every term in 'coeffs' should have the same coordinates.")
             if not CustomDispersiveMedium._validate_isreal_dataarray_tuple((B, C)):
                 raise SetupError("'B' and 'C' should be real.")
             if np.any(B < 0):
@@ -1766,16 +1766,16 @@ class CustomLorentz(CustomDispersiveMedium, Lorentz):
         if values.get("eps_inf") is None:
             raise ValidationError("'eps_inf' failed validation.")
 
-        expected_shape = values["eps_inf"].shape
+        expected_coords = values["eps_inf"].coords
         for (de, f, delta) in val:
             if (
-                de.shape != expected_shape
-                or f.shape != expected_shape
-                or delta.shape != expected_shape
+                de.coords != expected_coords
+                or f.coords != expected_coords
+                or delta.coords != expected_coords
             ):
                 raise SetupError(
-                    "All terms in 'coeffs' should have the same dimension; "
-                    "The dimension should also be consistent with 'eps_inf'."
+                    "All terms in 'coeffs' should have the same coordinates; "
+                    "The coordinates should also be consistent with 'eps_inf'."
                 )
             if not CustomDispersiveMedium._validate_isreal_dataarray_tuple((de, f, delta)):
                 raise SetupError("All terms in 'coeffs' should be real.")
@@ -1933,12 +1933,12 @@ class CustomDrude(CustomDispersiveMedium, Drude):
         if values.get("eps_inf") is None:
             raise ValidationError("'eps_inf' failed validation.")
 
-        expected_shape = values["eps_inf"].shape
+        expected_coords = values["eps_inf"].coords
         for (f, delta) in val:
-            if f.shape != expected_shape or delta.shape != expected_shape:
+            if f.coords != expected_coords or delta.coords != expected_coords:
                 raise SetupError(
-                    "All terms in 'coeffs' should have the same dimension; "
-                    "The dimension should also be consistent with 'eps_inf'."
+                    "All terms in 'coeffs' should have the same coordinates; "
+                    "The coordinates should also be consistent with 'eps_inf'."
                 )
             if not CustomDispersiveMedium._validate_isreal_dataarray_tuple((f, delta)):
                 raise SetupError("All terms in 'coeffs' should be real.")
@@ -2075,12 +2075,12 @@ class CustomDebye(CustomDispersiveMedium, Debye):
         if values.get("eps_inf") is None:
             raise ValidationError("'eps_inf' failed validation.")
 
-        expected_shape = values["eps_inf"].shape
+        expected_coords = values["eps_inf"].coords
         for (de, tau) in val:
-            if de.shape != expected_shape or tau.shape != expected_shape:
+            if de.coords != expected_coords or tau.coords != expected_coords:
                 raise SetupError(
-                    "All terms in 'coeffs' should have the same dimension; "
-                    "The dimension should also be consistent with 'eps_inf'."
+                    "All terms in 'coeffs' should have the same coordinates; "
+                    "The coordinates should also be consistent with 'eps_inf'."
                 )
             if not CustomDispersiveMedium._validate_isreal_dataarray_tuple((de, tau)):
                 raise SetupError("All terms in 'coeffs' should be real.")
