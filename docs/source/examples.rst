@@ -1,36 +1,36 @@
 Examples
 ========
 
-Introduction
-------------
+Tidy3D Introduction
+-------------------
 
 .. toctree::
     :maxdepth: 1
-
-    notebooks/StartHere
+	
     notebooks/Simulation
     notebooks/Primer
+    notebooks/StartHere
 
-Tutorials
----------
+Tidy3D FDTD Feature Tutorials
+-----------------------------
 
-Advanced Structure Definition
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Defining Structures and Materials
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 .. toctree::
     :maxdepth: 1
 
     notebooks/GDS_import
+    notebooks/STLImport
     notebooks/Dispersion
     notebooks/Fitting
-    notebooks/Self_intersecting_polyslab
-    notebooks/STLImport
-    notebooks/TFSF
     notebooks/FullyAnisotropic
     notebooks/Gyrotropic
+    notebooks/Self_intersecting_polyslab
+    notebooks/TFSF
 
-Grid and Boundaries
-~~~~~~~~~~~~~~~~~~~
+Defining Grid and Boundary Conditions
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 .. toctree::
     :maxdepth: 1
@@ -49,8 +49,8 @@ Mode Solver
     notebooks/Modes_bent_angled
     notebooks/WaveguidePluginDemonstration
 
-Web API
-~~~~~~~
+Interacting with Tidy3D Web API
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 .. toctree::
     :maxdepth: 1
@@ -58,8 +58,8 @@ Web API
     notebooks/WebAPI
     notebooks/ParameterScan
 
-Visualization
-~~~~~~~~~~~~~
+Visualization of Simulation and Monitor Data
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 .. toctree::
     :maxdepth: 1
@@ -68,8 +68,8 @@ Visualization
     notebooks/VizData
     notebooks/AnimationTutorial
 
-Custom Components
-~~~~~~~~~~~~~~~~~
+Defining Custom Components
+~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 .. toctree::
     :maxdepth: 1
@@ -77,8 +77,8 @@ Custom Components
     notebooks/CustomFieldSource
     notebooks/CustomMediumTutorial
 
-Adjoint Plugin
-~~~~~~~~~~~~~~
+FDTD Adjoint Optimization
+~~~~~~~~~~~~~~~~~~~~~~~~~
 
 .. toctree::
     :maxdepth: 1
@@ -98,8 +98,8 @@ Pre and Post Processing
     notebooks/FieldProjections
     notebooks/SMatrix
 
-Case studies
-------------
+Tidy3D Case Studies
+-------------------
 
 Photonic Integrated Circuit Components
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
