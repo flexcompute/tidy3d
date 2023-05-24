@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 ### Fixed
+- `JaxDataArrays` are properly handled when reading and writing to file, dramatically reducing the VJP simulation download size in server-side adjoint.
 
 ## [2.2.1] - 2023-5-23
 
