@@ -15,7 +15,7 @@ def process_robots_txt(app, exception):
 
     # Modify the contents as needed
     # site_map = app.config['html_baseurl'] + app.config['version'] + app.config['language'] + 'sitemap.xml'
-    site_map = '/'.join([app.config['html_baseurl'],app.config['version'],app.config['language'],'sitemap.xml']).replace('//','/')
+    site_map = '/'.join([app.config['html_baseurl'],app.config['language'],app.config['version'],'sitemap.xml']).replace('//','/')
     new_content = f"\nSitemap: {site_map}"
     contents += new_content
 

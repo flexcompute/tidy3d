@@ -188,7 +188,7 @@ html_css_files = ["css/custom.css"]
 # }
 latex_engine = "xelatex"
 language='en'
-
+html_extra_path=['./_static/robots.txt']
 # for sphinx-sitemap
 html_baseurl = "https://docs.flexcompute.com/projects/tidy3d/"
 
