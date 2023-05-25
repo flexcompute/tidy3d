@@ -185,8 +185,8 @@ html_css_files = ["css/custom.css"]
 latex_engine = "xelatex"
 
 # for sphinx-sitemap
-html_baseurl = "https://docs.flexcompute.com/projects/tidy3d/en/latest/"
-sitemap_url_scheme = "{link}"
+html_baseurl = "https://docs.flexcompute.com/projects/tidy3d/"
+sitemap_url_scheme = "{lang}{version}{link}"
 
 # if pandoc isnt working, uncomment below but make sure to not commit the bin/ library
 # from inspect import getsourcefile
