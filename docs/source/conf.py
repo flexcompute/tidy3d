@@ -4,6 +4,7 @@ import os
 import re
 import codecs
 import sys
+import subprocess
 
 here = os.path.abspath(os.path.dirname(__file__))
 sys.path.insert(0, os.path.abspath("../notebooks"))
@@ -13,6 +14,7 @@ sys.path.insert(0, os.path.abspath("../../tidy3d/tidy3d"))
 sys.path.insert(0, os.path.abspath("../../tidy3d/tidy3d/components"))
 sys.path.insert(0, os.path.abspath("../../tidy3d/tidy3d/web"))
 sys.path.insert(0, os.path.abspath("../../tidy3d/tidy3d/plugins"))
+sys.path.append(os.path.abspath("./_ext"))
 # sys.path.insert(0, "../notebooks")
 # sys.path.insert(0, "../tidy3d/tidy3d/components")
 # sys.path.insert(0, "../tidy3d/tidy3d")
@@ -72,6 +74,8 @@ extensions = [
     "sphinx_copybutton",
     "m2r2",
     "sphinx_sitemap",
+    "custom-sitemap",
+    "custom-robots",
 ]
 
 source_suffix = [".rst", ".md"]
@@ -183,9 +187,29 @@ html_css_files = ["css/custom.css"]
 #     'preamble': r'''\renewcommand{\hyperref}[2][]{#2}'''
 # }
 latex_engine = "xelatex"
+language='en'
 
 # for sphinx-sitemap
 html_baseurl = "https://docs.flexcompute.com/projects/tidy3d/"
+
+GIT_TAG_OUTPUT = subprocess.check_output(["git", "tag", "--points-at", "HEAD"])
+GIT_BRANCH_OUTPUT = subprocess.check_output(["git", "rev-parse", "--abbrev-ref", "HEAD"])
+current_tag = GIT_TAG_OUTPUT.decode().strip()
+current_branch = GIT_BRANCH_OUTPUT.decode().strip()
+print(current_tag, current_branch)
+if not current_tag and current_branch:
+   if current_branch == "develop":
+        version = "stable"
+    elif current_branch == 'latest':
+        version = "latest"
+    else:
+        version = "latest"
+elif current_tag:
+    if re.match(r"^v(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$", current_tag):
+        version = current_tag
+    else:
+        version = "latest"
+custom_sitemap_excludes=[r'/notebooks/']
 sitemap_url_scheme = "{lang}{version}{link}"
 
 # if pandoc isnt working, uncomment below but make sure to not commit the bin/ library
