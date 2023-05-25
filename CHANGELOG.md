@@ -21,6 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - `JaxDataArrays` are properly handled when reading and writing to file, dramatically reducing the VJP simulation download size in server-side adjoint.
 - A bug in a total-field scattered-field (TFSF) validator which was causing unnecessary errors when a TFSF surface intersected with 2D materials.
+- CI tests working with binary installation of gdstk instead of compiling from source.
 
 ## [2.2.1] - 2023-5-23
 

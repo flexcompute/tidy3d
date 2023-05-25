@@ -28,9 +28,5 @@ jobs:
         python -m pip install --upgrade pip
         pip install tox-gh-actions
         pip install tox
-    - name: Install precompiled gdstk
-      if: matrix.platform == 'windows-latest'
-      run: |
-        pip install gdstk --only-binary=gdstk
     - name: Test with tox
       run: tox
