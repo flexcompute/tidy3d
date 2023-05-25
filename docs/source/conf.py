@@ -198,7 +198,7 @@ current_tag = GIT_TAG_OUTPUT.decode().strip()
 current_branch = GIT_BRANCH_OUTPUT.decode().strip()
 print(current_tag, current_branch)
 if not current_tag and current_branch:
-   if current_branch == "develop":
+    if current_branch == "develop":
         version = "stable"
     elif current_branch == 'latest':
         version = "latest"
@@ -209,6 +209,7 @@ elif current_tag:
         version = current_tag
     else:
         version = "latest"
+
 custom_sitemap_excludes=[r'/notebooks/']
 sitemap_url_scheme = "{lang}{version}{link}"
 
