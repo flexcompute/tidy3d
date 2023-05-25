@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 ### Fixed
+- A bug in a total-field scattered-field (TFSF) validator which was causing unnecessary errors when a TFSF surface intersected with 2D materials.
 
 ## [2.2.1] - 2023-5-23
 
