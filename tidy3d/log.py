@@ -98,7 +98,6 @@ class Logger:
 
     def end_capture(self, key):
         """TODO"""
-
         if not self._stack:
             return
 
@@ -118,12 +117,6 @@ class Logger:
     ) -> None:
         """Distribute log messages to all handlers"""
 
-        # Check global cache if requested
-        if log_once:
-            if message in self._static_cache:
-                return
-            self._static_cache.add(message)
-
         # Compose message
         if len(args) > 0:
             try:
@@ -134,9 +127,16 @@ class Logger:
         else:
             composed_message = str(message)
 
-        # Capture all unsuppressed messages
+        # Capture all messages (even if suppressed later)
         if self._stack:
             self._stack[-1]["messages"].append((level_name, composed_message))
+
+        # Check global cache if requested
+        if log_once:
+            # Use the message body before composition as key
+            if message in self._static_cache:
+                return
+            self._static_cache.add(message)
 
         # Context-local logger emits a single message and consolidates the rest
         if self._counts is not None:
