@@ -9,13 +9,14 @@ import jax.numpy as jnp
 
 from jax.tree_util import register_pytree_node_class
 
-from .....components.source import Source, GaussianPulse
-from .....components.source import ModeSource, PlaneWave, CustomFieldSource
+from .....components.geometry import Box
+from .....components.source import Source, GaussianPulse, PointDipole
+from .....components.source import ModeSource, PlaneWave, CustomFieldSource, CustomCurrentSource
 from .....components.data.monitor_data import MonitorData
 from .....components.data.monitor_data import ModeData, DiffractionData, FieldData
 from .....components.data.dataset import FieldDataset
 from .....components.data.data_array import ScalarFieldDataArray
-from .....constants import C_0, ETA_0
+from .....constants import C_0, ETA_0, MU_0
 from .....exceptions import AdjointError
 
 from .data_array import JaxDataArray
@@ -31,9 +32,12 @@ class JaxMonitorData(MonitorData, JaxObject, ABC):
         self_dict = mnt_data.dict(exclude={"type"}).copy()
         for field_name in cls.get_jax_field_names():
             data_array = self_dict[field_name]
-            coords = {dim: data_array.coords[dim].values.tolist() for dim in data_array.coords.dims}
-            jax_amps = JaxDataArray(values=data_array.values, coords=coords)
-            self_dict[field_name] = jax_amps
+            if data_array is not None:
+                coords = {
+                    dim: data_array.coords[dim].values.tolist() for dim in data_array.coords.dims
+                }
+                jax_amps = JaxDataArray(values=data_array.values, coords=coords)
+                self_dict[field_name] = jax_amps
         return cls.parse_obj(self_dict)
 
     @abstractmethod
@@ -156,27 +160,69 @@ class JaxFieldData(JaxMonitorData, FieldData):
             raise AdjointError("FieldData must all contain the same frequency.")
         freq0 = freqs[0]
 
-        # construct the source time dependence
-        src_amp = 1.0  # TODO: how to normalize?
-        source_time = self.make_source_time(amp_complex=src_amp, freq=freq0, fwidth=fwidth)
+        omega0 = 2 * np.pi * freq0
+        scaling_factor = 1 / (MU_0 * omega0)
 
-        # TODO: convert self to a 'CustomCurrentSource'-like object
+        # dipole case
+        if np.allclose(np.array(self.monitor.size), np.zeros(3)):
+            dipoles = []
+            for polarization, field_component in self.field_components.items():
+                if field_component is None:
+                    continue
+
+                forward_amp = complex(field_component.as_ndarray)
+                adj_phase = 3 * np.pi / 2 + np.angle(forward_amp)
+
+                adj_amp = scaling_factor * forward_amp
+
+                src_adj = PointDipole(
+                    center=self.monitor.center,
+                    polarization=polarization,
+                    source_time=GaussianPulse(
+                        freq0=freq0, fwidth=fwidth, amplitude=abs(adj_amp), phase=adj_phase
+                    ),
+                    interpolate=True,
+                )
+
+                dipoles.append(src_adj)
+            return dipoles
 
         # convert all of the scalar fields to ScalarFieldDataArray
+        data_mins = []
+        data_maxs = []
         src_field_components = {}
         for name, field_component in self.field_components.items():
-            values = field_component.as_ndarray
+            forward_amps = field_component.as_ndarray
+            values = -1j * forward_amps
             coords = field_component.coords
             src_field_components[name] = ScalarFieldDataArray(values, coords=coords)
 
-        # construct the CustomFieldSource and return the single instance in a list
+            def shift_value(coords) -> float:
+                """How much to shift the geometry by along a dimension (only if > 1D)."""
+                return 1e-5 if len(coords) > 1 else 0
+
+            data_mins.append({key: min(val) + shift_value(val) for key, val in coords.items()})
+            data_maxs.append({key: max(val) + shift_value(val) for key, val in coords.items()})
+
+        rmin = []
+        rmax = []
+        for dim in "xyz":
+            rmin.append(max(val[dim] for val in data_mins))
+            rmax.append(min(val[dim] for val in data_maxs))
+
+        source_geo = Box.from_bounds(rmin=rmin, rmax=rmax)
+
         dataset = FieldDataset(**src_field_components)
-        custom_source = CustomFieldSource(
-            center=self.monitor.center,
-            size=self.monitor.size,
-            source_time=source_time,
-            field_dataset=dataset,
+        custom_source = CustomCurrentSource(
+            center=source_geo.center,
+            size=source_geo.size,
+            source_time=GaussianPulse(
+                freq0=freq0,
+                fwidth=fwidth,
+            ),
+            current_dataset=dataset,
         )
+
         return [custom_source]
 
 
@@ -308,12 +354,12 @@ class JaxDiffractionData(JaxMonitorData, DiffractionData):
 
 
 # allowed types in JaxSimulationData.output_data
-JaxMonitorDataType = Union[JaxModeData, JaxDiffractionData]  # , JaxFieldData]
+JaxMonitorDataType = Union[JaxModeData, JaxDiffractionData, JaxFieldData]
 
 # maps regular Tidy3d MonitorData to the JaxTidy3d equivalents, used in JaxSimulationData loading
 # pylint: disable=unhashable-member
 JAX_MONITOR_DATA_MAP = {
     DiffractionData: JaxDiffractionData,
     ModeData: JaxModeData,
-    # FieldData: JaxFieldData,
+    FieldData: JaxFieldData,
 }

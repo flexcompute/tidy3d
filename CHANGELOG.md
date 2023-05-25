@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Causality validation in `PoleResidue` model.
 - Group index calculation added to mode monitors and available through `ModeData.n_group`.
 - Support for `JaxGeometryGroup` in adjoint plugin.
+- Support for gradients w.r.t. `FieldMonitor` data from `output_monitors` in adjoint plugin.
 
 ### Changed
 - Add `Medium2D` to full simulation in tests.
