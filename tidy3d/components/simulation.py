@@ -975,6 +975,10 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
             sidewall_structs = []
             # get the structures that intersect each sidewall
             for surface in tfsf_surfaces:
+                # ignore the sidewall surface if it falls outside the simulation domain
+                if not self.intersects(surface):
+                    continue
+
                 if surface.name[-2] != "xyz"[source.injection_axis]:
                     sidewall_surfaces.append(surface)
                     intersecting_structs = self.intersecting_structures(
