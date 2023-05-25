@@ -156,6 +156,7 @@ Optical Scattering and Far-field Radiation
     notebooks/PlasmonicNanoparticle
     notebooks/PlasmonicYagiUdaNanoantenna
     notebooks/ZonePlateFieldProjection
+    notebooks/AndersonLocalization
 
 Lenses
 ~~~~~~
