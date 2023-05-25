@@ -476,6 +476,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
             return val
 
         with log as captured_log:
+
             def warn(istruct, side):
                 """Warning message for a structure too close to PML."""
                 captured_log.warning(

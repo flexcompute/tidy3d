@@ -153,8 +153,7 @@ class JaxSimulation(Simulation, JaxObject):
             for i, in_struct_i in enumerate(input_structures):
                 geometry_i = in_struct_i.geometry
                 for j in range(i + 1, len(input_structures)):
-                    geometry_j = input_structures[j].geometry
-                    if geometry_i.intersects(geometry_j):
+                    if geometry_i.intersects(input_structures[j].geometry):
                         captured_log.warning(
                             f"'JaxSimulation.input_structures[{i}]' overlaps or touches "
                             f"'JaxSimulation.input_structures[{j}]'. Geometric gradients for "
@@ -167,8 +166,7 @@ class JaxSimulation(Simulation, JaxObject):
                 if not isinstance(geometry_i, JaxPolySlab):
                     continue
                 for j, struct_j in enumerate(structures):
-                    geometry_j = struct_j.geometry
-                    if geometry_i.intersects(geometry_j):
+                    if geometry_i.intersects(struct_j.geometry):
                         captured_log.warning(
                             f"'JaxPolySlab'-containing 'JaxSimulation.input_structures[{i}]' "
                             f"intersects with 'JaxSimulation.structures[{j}]'. Note that in this "

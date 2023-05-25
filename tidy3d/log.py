@@ -1,10 +1,10 @@
 """Logging for Tidy3d."""
 
-from typing import Union
-from typing_extensions import Literal
-
 import inspect
 import json
+
+from typing import Union
+from typing_extensions import Literal
 
 from rich.console import Console
 
@@ -63,8 +63,8 @@ class Logger:
 
     _static_cache = set()
 
-    def __init__(self, handlers=None, cache=None):
-        self.handlers = {} if handlers is None else handlers
+    def __init__(self):
+        self.handlers = {}
         self._counts = None
         self._stack = None
 
@@ -82,6 +82,7 @@ class Logger:
             self._counts = None
             if total > 0:
                 noun = " messages." if total > 1 else " message."
+                # Temporarily prevent capturing messages to emit consolidated summary
                 stack = self._stack
                 self._stack = None
                 self.log(max_level, "Suppressed " + ", ".join(counts) + noun)
@@ -89,28 +90,39 @@ class Logger:
         return False
 
     def begin_capture(self):
-        """TODO"""
+        """Start capturing log stack for consolidated validation log"""
         stack_item = {"messages": [], "children": {}}
         if self._stack:
             self._stack.append(stack_item)
         else:
             self._stack = [stack_item]
 
-    def end_capture(self, key):
-        """TODO"""
+    def end_capture(self, model):
+        """End capturing log stack for consolidated validation log"""
         if not self._stack:
             return
 
         stack_item = self._stack.pop()
-        used = len(stack_item["messages"]) > 0 or len(stack_item["children"]) > 0
-        if len(self._stack) > 0:
-            if used:
-                self._stack[-1]["children"][key] = stack_item
-        else:
-            if used:
-                print(json.dumps({key: stack_item}, indent=2))
+        if len(self._stack) == 0:
             self._stack = None
 
+        # Check if this stack item contains any messages or children
+        if len(stack_item["messages"]) > 0 or len(stack_item["children"]) > 0:
+            stack_item["type"] = model.__class__.__name__
+
+            # Set the path for each children
+            model_fields = model.get_submodels_by_hash()
+            for child_hash, child_dict in stack_item["children"].items():
+                child_dict["parent_fields"] = model_fields.get(child_hash, [])
+
+            # Are we at the bottom of the stack?
+            if self._stack is None:
+                # Yes, we're root
+                print(json.dumps(stack_item, indent=2))
+            else:
+                # No, we're someone else's child
+                hash_ = hash(model)
+                self._stack[-1]["children"][hash_] = stack_item
 
     def _log(
         self, level: int, level_name: str, message: str, *args, log_once: bool = False
