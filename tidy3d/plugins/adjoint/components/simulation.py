@@ -148,7 +148,7 @@ class JaxSimulation(Simulation, JaxObject):
             if not (size_all_floats and cent_all_floats):
                 return val
 
-        with log.consolidate() as captured_log:
+        with log as captured_log:
             # check intersections with other input_structures
             for i, in_struct_i in enumerate(input_structures):
                 geometry_i = in_struct_i.geometry

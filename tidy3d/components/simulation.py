@@ -443,7 +443,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         sim_bound_min, sim_bound_max = sim_box.bounds
         sim_bounds = list(sim_bound_min) + list(sim_bound_max)
 
-        with log.consolidate() as captured_log:
+        with log as captured_log:
             for istruct, structure in enumerate(val):
                 struct_bound_min, struct_bound_max = structure.geometry.bounds
                 struct_bounds = list(struct_bound_min) + list(struct_bound_max)
@@ -475,7 +475,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
 
             return val
 
-        with log.consolidate() as captured_log:
+        with log as captured_log:
             def warn(istruct, side):
                 """Warning message for a structure too close to PML."""
                 captured_log.warning(
@@ -529,7 +529,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         medium_bg = values.get("medium")
         mediums = [medium_bg] + [structure.medium for structure in structures]
 
-        with log.consolidate() as captured_log:
+        with log as captured_log:
             for monitor_index, monitor in enumerate(val):
                 if not isinstance(monitor, FreqMonitor):
                     continue
@@ -582,7 +582,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         freq_min = min((freq_range[0] for freq_range in source_ranges), default=0.0)
         freq_max = max((freq_range[1] for freq_range in source_ranges), default=0.0)
 
-        with log.consolidate() as captured_log:
+        with log as captured_log:
             for monitor_index, monitor in enumerate(val):
                 if not isinstance(monitor, FreqMonitor):
                     continue
@@ -661,7 +661,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
 
         sim_size = values.get("size")
 
-        with log.consolidate() as captured_log:
+        with log as captured_log:
             for idx, monitor in enumerate(val):
                 if isinstance(monitor, AbstractFieldProjectionMonitor):
                     if (
@@ -710,7 +710,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         medium_bg = values.get("medium")
         mediums = [medium_bg] + [structure.medium for structure in structures]
 
-        with log.consolidate() as captured_log:
+        with log as captured_log:
             for source_index, source in enumerate(values.get("sources")):
                 freq0 = source.source_time.freq0
 
@@ -824,7 +824,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         sim_bounds = self.bounds
         bound_spec = self.boundary_spec.to_list
 
-        with log.consolidate() as captured_log:
+        with log as captured_log:
             for i, structure in enumerate(self.structures):
                 geo_bounds = structure.geometry.bounds
                 for sim_bound, geo_bound, pml_thick, bound_dim, pm_val in zip(
@@ -853,7 +853,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         if not (self.grid_spec.auto_grid_used or self.grid_spec.custom_grid_used):
             return
 
-        with log.consolidate() as captured_log:
+        with log as captured_log:
             for source in self.sources:
                 if not isinstance(source, TFSF):
                     continue
@@ -927,7 +927,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         grid = self.grid
 
         total_size_gb = 0
-        with log.consolidate() as captured_log:
+        with log as captured_log:
             for monitor in self.monitors:
                 monitor_inds = grid.discretize_inds(monitor, extend=True)
                 num_cells = [inds[1] - inds[0] for inds in monitor_inds]
@@ -2275,7 +2275,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         grid_axes = [False, False, False]
         # must use volumetric grid for the ``AutoGrid`` in-plane directions of 2d materials
         volumetric_grid_axes = [False, False, False]
-        with log.consolidate() as captured_log:
+        with log as captured_log:
             for structure in self.structures:
                 if isinstance(structure.medium, Medium2D):
                     # pylint:disable=protected-access
@@ -2587,7 +2587,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
             shape = tuple(len(array) for array in arrays)
             eps_array = eps_background * np.ones(shape, dtype=complex)
             # replace 2d materials with volumetric equivalents
-            with log.consolidate() as captured_log:
+            with log as captured_log:
                 for structure in self.volumetric_structures:
                     # Indexing subset within the bounds of the structure
                     # pylint:disable=protected-access

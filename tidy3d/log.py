@@ -1,9 +1,10 @@
 """Logging for Tidy3d."""
 
-import inspect
-
 from typing import Union
 from typing_extensions import Literal
+
+import inspect
+import json
 
 from rich.console import Console
 
@@ -64,47 +65,66 @@ class Logger:
 
     def __init__(self, handlers=None, cache=None):
         self.handlers = {} if handlers is None else handlers
-        self._cache = cache
+        self._counts = None
+        self._stack = None
 
     def __enter__(self):
-        if self._cache is not Logger._static_cache:
-            self._cache = {}
+        if self._counts is None:
+            self._counts = {}
         return self
 
     def __exit__(self, exc_type, exc_value, traceback):
-        if self._cache is Logger._static_cache:
-            self._use_static_cache = False
-        elif self._cache is not None:
-            total = sum(v for v in self._cache.values())
-            counts = [f"{v} {_level_name[k]}" for k, v in self._cache.items() if v > 0]
-            self._cache = None
+        if self._counts is not None:
+            total = sum(v for v in self._counts.values())
+            if total > 0:
+                max_level = max(k for k, v in self._counts.items() if v > 0)
+                counts = [f"{v} {_level_name[k]}" for k, v in self._counts.items() if v > 0]
+            self._counts = None
             if total > 0:
                 noun = " messages." if total > 1 else " message."
-                self.info("Suppressed " + ", ".join(counts) + noun)
+                stack = self._stack
+                self._stack = None
+                self.log(max_level, "Suppressed " + ", ".join(counts) + noun)
+                self._stack = stack
         return False
 
-    def consolidate(self):
-        """Return a logger that emits the one event and a summary of all events that may follow."""
-        return Logger(self.handlers, {})
+    def begin_capture(self):
+        """TODO"""
+        stack_item = {"messages": [], "children": {}}
+        if self._stack:
+            self._stack.append(stack_item)
+        else:
+            self._stack = [stack_item]
 
-    def suppress_repetitions(self):
-        """Return a logger that suppresses messages already emitted."""
-        return Logger(self.handlers, self._static_cache)
+    def end_capture(self, key):
+        """TODO"""
 
-    def _log(self, level: int, level_name: str, message: str, *args) -> None:
+        if not self._stack:
+            return
+
+        stack_item = self._stack.pop()
+        used = len(stack_item["messages"]) > 0 or len(stack_item["children"]) > 0
+        if len(self._stack) > 0:
+            if used:
+                self._stack[-1]["children"][key] = stack_item
+        else:
+            if used:
+                print(json.dumps({key: stack_item}, indent=2))
+            self._stack = None
+
+
+    def _log(
+        self, level: int, level_name: str, message: str, *args, log_once: bool = False
+    ) -> None:
         """Distribute log messages to all handlers"""
-        if self._cache is Logger._static_cache:
-            # Static cache emits once each message
-            if message in self._cache:
-                return
-            self._cache.add(message)
-        elif self._cache is not None:
-            # Context-local cache emits a single message and consolidates the rest
-            if len(self._cache) > 0:
-                self._cache[level] = 1 + self._cache.get(level, 0)
-                return
-            self._cache[level] = 0
 
+        # Check global cache if requested
+        if log_once:
+            if message in self._static_cache:
+                return
+            self._static_cache.add(message)
+
+        # Compose message
         if len(args) > 0:
             try:
                 composed_message = str(message) % args
@@ -113,41 +133,50 @@ class Logger:
                 composed_message = f"{message} % {args}\n{e}"
         else:
             composed_message = str(message)
+
+        # Capture all unsuppressed messages
+        if self._stack:
+            self._stack[-1]["messages"].append((level_name, composed_message))
+
+        # Context-local logger emits a single message and consolidates the rest
+        if self._counts is not None:
+            if len(self._counts) > 0:
+                self._counts[level] = 1 + self._counts.get(level, 0)
+                return
+            self._counts[level] = 0
+
+        # Forward message to handlers
         for handler in self.handlers.values():
             handler.handle(level, level_name, composed_message)
 
-    def log(self, level: LogValue, message: str, *args) -> None:
+    def log(self, level: LogValue, message: str, *args, log_once: bool = False) -> None:
         """Log (message) % (args) with given level"""
         if isinstance(level, str):
             level_name = level
             level = _get_level_int(level)
         else:
             level_name = _level_name.get(level, "unknown")
-        self._log(level, level_name, message, *args)
+        self._log(level, level_name, message, *args, log_once=log_once)
 
-    def debug(self, message: str, *args) -> None:
+    def debug(self, message: str, *args, log_once: bool = False) -> None:
         """Log (message) % (args) at debug level"""
-        self._log(_level_value["DEBUG"], "DEBUG", message, *args)
+        self._log(_level_value["DEBUG"], "DEBUG", message, *args, log_once=log_once)
 
-    def info(self, message: str, *args) -> None:
+    def info(self, message: str, *args, log_once: bool = False) -> None:
         """Log (message) % (args) at info level"""
-        self._log(_level_value["INFO"], "INFO", message, *args)
+        self._log(_level_value["INFO"], "INFO", message, *args, log_once=log_once)
 
-    def warning(self, message: str, *args) -> None:
+    def warning(self, message: str, *args, log_once: bool = False) -> None:
         """Log (message) % (args) at warning level"""
-        self._log(_level_value["WARNING"], "WARNING", message, *args)
+        self._log(_level_value["WARNING"], "WARNING", message, *args, log_once=log_once)
 
-    def error(self, message: str, *args) -> None:
+    def error(self, message: str, *args, log_once: bool = False) -> None:
         """Log (message) % (args) at error level"""
-        self._log(_level_value["ERROR"], "ERROR", message, *args)
+        self._log(_level_value["ERROR"], "ERROR", message, *args, log_once=log_once)
 
-    def critical(self, message: str, *args) -> None:
+    def critical(self, message: str, *args, log_once: bool = False) -> None:
         """Log (message) % (args) at critical level"""
-        self._log(_level_value["CRITICAL"], "CRITICAL", message, *args)
-
-
-# Initialize Tidy3d's logger
-log = Logger()
+        self._log(_level_value["CRITICAL"], "CRITICAL", message, *args, log_once=log_once)
 
 
 def set_logging_level(level: LogValue = DEFAULT_LEVEL) -> None:
@@ -216,6 +245,9 @@ def set_logging_file(
 
     log.handlers["file"] = LogHandler(Console(file=file), level)
 
+
+# Initialize Tidy3d's logger
+log = Logger()
 
 # Set default logging output
 set_logging_console()
