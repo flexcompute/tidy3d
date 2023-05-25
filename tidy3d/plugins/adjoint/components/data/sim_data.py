@@ -114,9 +114,18 @@ class JaxSimulationData(SimulationData, JaxObject):
         data_dict = cls.split_data(mnt_data=sim_data.data, jax_info=jax_info)
 
         # convert the output data to the proper jax type
-        data_dict["output_data"] = [
-            JAX_MONITOR_DATA_MAP[type(x)].from_monitor_data(x) for x in data_dict["output_data"]
-        ]
+        output_data_list = []
+        for mnt_data in data_dict["output_data"]:
+            mnt_data_type_str = type(mnt_data)
+            if mnt_data_type_str not in JAX_MONITOR_DATA_MAP:
+                raise KeyError(
+                    f"MonitorData type '{mnt_data_type_str}' "
+                    "not currently supported by adjoint plugin."
+                )
+            mnt_data_type = JAX_MONITOR_DATA_MAP[mnt_data_type_str]
+            jax_mnt_data = mnt_data_type.from_monitor_data(mnt_data)
+            output_data_list.append(jax_mnt_data)
+            data_dict["output_data"] = output_data_list
 
         self_dict.update(data_dict)
         self_dict.update(dict(task_id=task_id))

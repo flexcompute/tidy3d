@@ -250,9 +250,15 @@ def make_sim(
     )
 
     output_mnt3 = td.FieldMonitor(
-        size=(10, 2, 0),
+        size=(2, 0, 2),
         freqs=[FREQ0],
         name=MNT_NAME + "3",
+    )
+
+    output_mnt4 = td.FieldMonitor(
+        size=(0, 0, 0),
+        freqs=[FREQ0],
+        name=MNT_NAME + "4",
     )
 
     extraneous_field_monitor = td.FieldMonitor(
@@ -267,7 +273,6 @@ def make_sim(
         grid_spec=td.GridSpec(wavelength=1.0),
         monitors=(extraneous_field_monitor,),
         structures=(extraneous_structure,),
-        output_monitors=(output_mnt1, output_mnt2),  # , output_mnt3),
         input_structures=(
             jax_struct1,
             jax_struct2,
@@ -275,6 +280,7 @@ def make_sim(
             jax_struct3,
             jax_struct_group,
         ),
+        output_monitors=(output_mnt1, output_mnt2, output_mnt3, output_mnt4),
         boundary_spec=td.BoundarySpec.pml(x=False, y=False, z=False),
     )
 
@@ -309,6 +315,16 @@ def extract_amp(sim_data: td.SimulationData) -> complex:
     ret_value += mnt_data.amps.isel(orders_x=0, orders_y=1, f=0, polarization=0)
     ret_value += mnt_data.Er.isel(orders_x=0, orders_y=1, f=0)
     ret_value += mnt_data.power.sel(orders_x=-1, orders_y=1, f=2e14)
+
+    # FieldData
+    mnt_name = MNT_NAME + "3"
+    mnt_data = sim_data.output_monitor_data[mnt_name]
+    ret_value += jnp.sum(jnp.array(mnt_data.Ex.values))
+
+    # FieldData (dipole)
+    mnt_name = MNT_NAME + "4"
+    mnt_data = sim_data.output_monitor_data[mnt_name]
+    ret_value += jnp.sum(jnp.array(mnt_data.Ex.values))
 
     return ret_value
 
@@ -905,12 +921,24 @@ def test_polyslab_2d(sim_size_axis, use_emulated_run):
             name=MNT_NAME + "2",
         )
 
+        output_mnt3 = td.FieldMonitor(
+            size=(2, 0, 2),
+            freqs=[FREQ0],
+            name=MNT_NAME + "3",
+        )
+
+        output_mnt4 = td.FieldMonitor(
+            size=(0, 0, 0),
+            freqs=[FREQ0],
+            name=MNT_NAME + "4",
+        )
+
         sim = JaxSimulation(
             size=(10, 10, sim_size_axis),
             run_time=1e-12,
             grid_spec=td.GridSpec(wavelength=1.0),
             boundary_spec=td.BoundarySpec.all_sides(boundary=td.Periodic()),
-            output_monitors=(output_mnt1, output_mnt2),
+            output_monitors=(output_mnt1, output_mnt2, output_mnt3, output_mnt4),
             input_structures=(jax_struct,),
             sources=[
                 td.PointDipole(
