@@ -650,8 +650,8 @@ class CustomIsotropicMedium(AbstractCustomMedium, Medium):
         units=PERMITTIVITY,
     )
 
-    conductivity: SpatialDataArray = pd.Field(
-        ...,
+    conductivity: Optional[SpatialDataArray] = pd.Field(
+        None,
         title="Conductivity",
         description="Electric conductivity. Defined such that the imaginary part of the complex "
         "permittivity at angular frequency omega is given by conductivity/omega.",
@@ -673,6 +673,9 @@ class CustomIsotropicMedium(AbstractCustomMedium, Medium):
     @pd.validator("conductivity", always=True)
     def _conductivity_non_negative_correct_shape(cls, val, values):
         """Assert conductivity>=0"""
+
+        if val is None:
+            return val
 
         if values.get("permittivity") is None:
             raise ValidationError("'permittivity' failed validation.")
@@ -717,7 +720,10 @@ class CustomIsotropicMedium(AbstractCustomMedium, Medium):
         Tuple[:class:`.SpatialDataArray`, :class:`.SpatialDataArray`, :class:`.SpatialDataArray`]
             The permittivity evaluated at ``frequency``.
         """
-        eps = Medium.eps_model(self, frequency)
+        conductivity = self.conductivity
+        if conductivity is None:
+            conductivity = xr.zeros_like(self.permittivity)
+        eps = self.eps_sigma_to_eps_complex(self.permittivity, conductivity, frequency)
         return (eps, eps, eps)
 
 
@@ -769,8 +775,10 @@ class CustomMedium(AbstractCustomMedium):
         conductivity = values.get("conductivity")
 
         # Incomplete custom medium definition.
-        if eps_dataset is None and (permittivity is None or conductivity is None):
-            raise SetupError("Missing spatial profiles of 'permittivity' and 'conductivity'.")
+        if eps_dataset is None and permittivity is None and conductivity is None:
+            raise SetupError("Missing spatial profiles of 'permittivity' or 'eps_dataset'.")
+        if eps_dataset is None and permittivity is None:
+            raise SetupError("Missing spatial profiles of 'permittivity'.")
 
         # Definition racing
         if eps_dataset is not None and (permittivity is not None or conductivity is not None):
@@ -888,7 +896,12 @@ class CustomMedium(AbstractCustomMedium):
 
     @cached_property
     def freqs(self) -> np.ndarray:
-        """float array of frequencies."""
+        """float array of frequencies.
+        This field is to be deprecated in v3.0.
+        """
+        # return dummy values in this case
+        if self.eps_dataset is None:
+            return np.array([0, 0, 0])
         return np.array(
             [
                 self.eps_dataset.eps_xx.coords["f"],

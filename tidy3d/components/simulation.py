@@ -2627,9 +2627,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         datasets_source = [
             src.field_dataset for src in self.sources if isinstance(src, CustomFieldSource)
         ]
-        datasets_medium = [
-            mat.eps_dataset for mat in self.mediums if isinstance(mat, AbstractCustomMedium)
-        ]
+        datasets_medium = [mat for mat in self.mediums if isinstance(mat, AbstractCustomMedium)]
         datasets_geometry = [
             struct.geometry.mesh_dataset
             for struct in self.structures

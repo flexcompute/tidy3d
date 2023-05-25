@@ -47,7 +47,7 @@ from .components.field_projection import FieldProjector
 
 # data
 from .components.data.data_array import ScalarFieldDataArray, ScalarModeFieldDataArray
-from .components.data.data_array import ScalarFieldTimeDataArray
+from .components.data.data_array import ScalarFieldTimeDataArray, SpatialDataArray
 from .components.data.data_array import ModeAmpsDataArray, ModeIndexDataArray
 from .components.data.data_array import FluxDataArray, FluxTimeDataArray
 from .components.data.data_array import FieldProjectionAngleDataArray

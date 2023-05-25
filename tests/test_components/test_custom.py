@@ -338,34 +338,36 @@ def test_custom_isotropic_medium():
         epstmp = SpatialDataArray(
             1 + np.random.random((Nx, Ny, Nz)) + 0.1j, coords=dict(x=X, y=Y, z=Z)
         )
-        mat = CustomIsotropicMedium(permittivity=epstmp, conductivity=conductivity)
+        mat = CustomMedium(permittivity=epstmp, conductivity=conductivity)
 
     # some terms in permittivity are < 1
     with pytest.raises(pydantic.ValidationError):
         epstmp = SpatialDataArray(np.random.random((Nx, Ny, Nz)), coords=dict(x=X, y=Y, z=Z))
-        mat = CustomIsotropicMedium(permittivity=epstmp, conductivity=conductivity)
+        mat = CustomMedium(permittivity=epstmp, conductivity=conductivity)
 
     # some terms in conductivity are complex
     with pytest.raises(pydantic.ValidationError):
         sigmatmp = SpatialDataArray(
             np.random.random((Nx, Ny, Nz)) + 0.1j, coords=dict(x=X, y=Y, z=Z)
         )
-        mat = CustomIsotropicMedium(permittivity=permittivity, conductivity=sigmatmp)
+        mat = CustomMedium(permittivity=permittivity, conductivity=sigmatmp)
 
     # some terms in conductivity are negative
     with pytest.raises(pydantic.ValidationError):
         sigmatmp = SpatialDataArray(
             np.random.random((Nx, Ny, Nz)) - 0.5, coords=dict(x=X, y=Y, z=Z)
         )
-        mat = CustomIsotropicMedium(permittivity=permittivity, conductivity=sigmatmp)
+        mat = CustomMedium(permittivity=permittivity, conductivity=sigmatmp)
 
     # inconsistent coords
     with pytest.raises(pydantic.ValidationError):
         sigmatmp = SpatialDataArray(np.random.random((Nx, Ny, Nz)), coords=dict(x=X + 1, y=Y, z=Z))
-        mat = CustomIsotropicMedium(permittivity=permittivity, conductivity=sigmatmp)
+        mat = CustomMedium(permittivity=permittivity, conductivity=sigmatmp)
 
-    mat = CustomIsotropicMedium(permittivity=permittivity, conductivity=conductivity)
-    print(permittivity.coords)
+    mat = CustomMedium(permittivity=permittivity, conductivity=conductivity)
+    verify_custom_medium_methods(mat)
+
+    mat = CustomMedium(permittivity=permittivity)
     verify_custom_medium_methods(mat)
 
 
