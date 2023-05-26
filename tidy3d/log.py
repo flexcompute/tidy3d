@@ -67,6 +67,18 @@ class Logger:
         self.handlers = {}
         self._counts = None
         self._stack = None
+        self._capture = False
+        self._captured_warnings = []
+
+    def set_capture(self, capture: bool):
+        """Turn on/off tree-like capturing of warnings"""
+        self._capture = capture
+
+    def captured_warnings(self):
+        """Get the formatted list of captured warnings"""
+        captured_warnings = self._captured_warnings
+        self._captured_warnings = []
+        return captured_warnings
 
     def __enter__(self):
         if self._counts is None:
@@ -91,6 +103,9 @@ class Logger:
 
     def begin_capture(self):
         """Start capturing log stack for consolidated validation log"""
+        if not self._capture:
+            return
+
         stack_item = {"messages": [], "children": {}}
         if self._stack:
             self._stack.append(stack_item)
@@ -118,11 +133,42 @@ class Logger:
             # Are we at the bottom of the stack?
             if self._stack is None:
                 # Yes, we're root
-                print(json.dumps(stack_item, indent=2))
+                self._parse_warning_capture(current_loc=[], stack_item=stack_item)
             else:
                 # No, we're someone else's child
                 hash_ = hash(model)
                 self._stack[-1]["children"][hash_] = stack_item
+
+    def _parse_warning_capture(self, current_loc, stack_item):
+        """Process capture tree to compile formatted captured warnings"""
+
+        if "parent_fields" in stack_item:
+            for field in stack_item["parent_fields"]:
+                if isinstance(field, tuple):
+                    # array field
+                    new_loc = current_loc + list(field)
+                else:
+                    # single field
+                    new_loc = current_loc + [field]
+
+                # process current level warnings
+                for level, msg in stack_item["messages"]:
+                    if level == "WARNING":
+                        self._captured_warnings.append({"loc": new_loc, "msg": msg})
+
+                # initialize processing at children level
+                for child_stack in stack_item["children"].values():
+                    self._parse_warning_capture(current_loc=new_loc, stack_item=child_stack)
+
+        else:  # for root object
+            # process current level warnings
+            for level, msg in stack_item["messages"]:
+                if level == "WARNING":
+                    self._captured_warnings.append({"loc": current_loc, "msg": msg})
+
+            # initialize processing at children level
+            for child_stack in stack_item["children"].values():
+                self._parse_warning_capture(current_loc=current_loc, stack_item=child_stack)
 
     def _log(
         self, level: int, level_name: str, message: str, *args, log_once: bool = False
