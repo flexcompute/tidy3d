@@ -1,7 +1,7 @@
 """Fit PoleResidue Dispersion models to optical NK data
 """
 
-from typing import Tuple, List, Optional, Union
+from typing import Tuple, List, Optional
 import csv
 import codecs
 import requests
@@ -12,7 +12,7 @@ from rich.progress import Progress
 from pydantic import Field, validator
 
 from ...log import log
-from ...components.base import Tidy3dBaseModel
+from ...components.base import Tidy3dBaseModel, cached_property
 from ...components.medium import PoleResidue, AbstractMedium
 from ...components.viz import add_ax_if_none
 from ...components.types import Ax, ArrayFloat1D
@@ -25,20 +25,20 @@ class DispersionFitter(Tidy3dBaseModel):
     """Tool for fitting refractive index data to get a
     dispersive medium described by :class:`.PoleResidue` model."""
 
-    wvl_um: Union[Tuple[float, ...], ArrayFloat1D] = Field(
+    wvl_um: ArrayFloat1D = Field(
         ...,
         title="Wavelength data",
         description="Wavelength data in micrometers.",
         units=MICROMETER,
     )
 
-    n_data: Union[Tuple[float, ...], ArrayFloat1D] = Field(
+    n_data: ArrayFloat1D = Field(
         ...,
         title="Index of refraction data",
         description="Real part of the complex index of refraction.",
     )
 
-    k_data: Union[Tuple[float, ...], ArrayFloat1D] = Field(
+    k_data: ArrayFloat1D = Field(
         None,
         title="Extinction coefficient data",
         description="Imaginary part of the complex index of refraction.",
@@ -47,72 +47,57 @@ class DispersionFitter(Tidy3dBaseModel):
     wvl_range: Tuple[Optional[float], Optional[float]] = Field(
         (None, None),
         title="Wavelength range [wvl_min,wvl_max] for fitting",
-        description="Truncate the wavelength-nk data to wavelength range "
-        "[wvl_min,wvl_max] for fitting",
+        description="Truncate the wavelength, n and k data to the wavelength range '[wvl_min, "
+        "wvl_max]' for fitting.",
         units=MICROMETER,
     )
 
     @validator("wvl_um", always=True)
     def _setup_wvl(cls, val):
-        """Convert wvl_um to a numpy array"""
-        if len(val) < 1:
-            raise ValidationError("The length of data cannot be empty.")
-        return np.array(val)
+        """Convert wvl_um to a numpy array."""
+        if val.size == 0:
+            raise ValidationError("Wavelength data cannot be empty.")
+        return val
 
     @validator("n_data", always=True)
     def _ndata_length_match_wvl(cls, val, values):
         """Validate n_data"""
-        _val = np.array(val)
-        if _val.shape != values["wvl_um"].shape:
-            raise ValidationError("The length of n_data doesn't match wvl_um.")
-        return _val
+        if val.shape != values["wvl_um"].shape:
+            raise ValidationError("The length of 'n_data' doesn't match 'wvl_um'.")
+        return val
 
     @validator("k_data", always=True)
     def _kdata_setup_and_length_match(cls, val, values):
-        """
-        validate the length of k_data, or setup k if it's None
-        """
+        """Validate the length of k_data, or setup k if it's None."""
         if val is None:
             return np.zeros_like(values["wvl_um"])
-        _val = np.array(val)
-        if _val.shape != values["wvl_um"].shape:
-            raise ValidationError("The length of k_data doesn't match wvl_um.")
-        return _val
+        if val.shape != values["wvl_um"].shape:
+            raise ValidationError("The length of 'k_data' doesn't match 'wvl_um'.")
+        return val
 
-    def _filter_wvl_range(
-        self, wvl_min: float = None, wvl_max: float = None
-    ) -> Tuple[Tuple[float, ...], Tuple[float, ...], Tuple[float, ...]]:
-        """
-        Filter the wavelength-nk data to wavelength range [wvl_min,wvl_max]
-        for fitting.
-
-        Parameters
-        ----------
-        wvl_min : float, optional
-            The beginning of wavelength range. Unit: micron
-        wvl_max : float, optional
-            The end of wavelength range. Unit: micron
+    @cached_property
+    def data_in_range(self) -> Tuple[ArrayFloat1D, ArrayFloat1D, ArrayFloat1D]:
+        """Filter the wavelength-nk data to wavelength range for fitting.
 
         Returns
         -------
-        Tuple[Tuple[float, ...], Tuple[float, ...], Tuple[float, ...]]
+        Tuple[ArrayFloat1D, ArrayFloat1D, ArrayFloat1D]
             Filtered wvl_um, n_data, k_data
-
         """
 
         ind_select = np.ones(self.wvl_um.shape, dtype=bool)
-        if wvl_min is not None:
-            ind_select = np.logical_and(self.wvl_um >= wvl_min, ind_select)
+        if self.wvl_range[0] is not None:
+            ind_select = np.logical_and(self.wvl_um >= self.wvl_range[0], ind_select)
 
-        if wvl_max is not None:
-            ind_select = np.logical_and(self.wvl_um <= wvl_max, ind_select)
+        if self.wvl_range[1] is not None:
+            ind_select = np.logical_and(self.wvl_um <= self.wvl_range[1], ind_select)
 
         if not np.any(ind_select):
-            raise SetupError("No data within [wvl_min,wvl_max]")
+            raise SetupError("No data within 'wvl_range'")
 
         return self.wvl_um[ind_select], self.n_data[ind_select], self.k_data[ind_select]
 
-    @property
+    @cached_property
     def lossy(self) -> bool:
         """Find out if the medium is lossy or lossless
         based on the filtered input data.
@@ -122,12 +107,8 @@ class DispersionFitter(Tidy3dBaseModel):
         bool
             True for lossy medium; False for lossless medium
         """
-        _, _, k_data = self._filter_wvl_range(wvl_min=self.wvl_range[0], wvl_max=self.wvl_range[1])
-        if k_data is None:
-            return False
-        if not np.any(k_data):
-            return False
-        return True
+        _, _, k_data = self.data_in_range
+        return k_data is not None and np.any(k_data)
 
     @property
     def eps_data(self) -> complex:
@@ -138,9 +119,7 @@ class DispersionFitter(Tidy3dBaseModel):
         complex
             Complex-valued relative permittivty.
         """
-        _, n_data, k_data = self._filter_wvl_range(
-            wvl_min=self.wvl_range[0], wvl_max=self.wvl_range[1]
-        )
+        _, n_data, k_data = self.data_in_range
         return AbstractMedium.nk_to_eps_complex(n=n_data, k=k_data)
 
     @property
@@ -153,7 +132,7 @@ class DispersionFitter(Tidy3dBaseModel):
             Frequency array converted from filtered input wavelength data
         """
 
-        wvl_um, _, _ = self._filter_wvl_range(wvl_min=self.wvl_range[0], wvl_max=self.wvl_range[1])
+        wvl_um, _, _ = self.data_in_range
         return C_0 / wvl_um
 
     @property
@@ -166,45 +145,11 @@ class DispersionFitter(Tidy3dBaseModel):
             The minimal frequency and the maximal frequency
         """
 
-        return (np.min(self.freqs), np.max(self.freqs))
-
-    @staticmethod
-    def _unpack_complex(complex_num):
-        """Returns real and imaginary parts from complex number.
-
-        Parameters
-        ----------
-        complex_num : complex
-            Complex number.
-
-        Returns
-        -------
-        Tuple[float, float]
-            Real and imaginary parts of the complex number.
-        """
-        return complex_num.real, complex_num.imag
-
-    @staticmethod
-    def _pack_complex(real_part, imag_part):
-        """Returns complex number from real and imaginary parts.
-
-        Parameters
-        ----------
-        real_part : float
-            Real part of the complex number.
-        imag_part : float
-            Imaginary part of the complex number.
-
-        Returns
-        -------
-        complex
-            The complex number.
-        """
-        return real_part + 1j * imag_part
+        return self.freqs.min(), self.freqs.max()
 
     @staticmethod
     def _unpack_coeffs(coeffs):
-        """Unpacks coefficient vector into complex pole parameters.
+        """Unpack coefficient vector into complex pole parameters.
 
         Parameters
         ----------
@@ -217,21 +162,19 @@ class DispersionFitter(Tidy3dBaseModel):
             "a" and "c" poles for the PoleResidue model.
         """
         assert len(coeffs) % 4 == 0, "len(coeffs) must be multiple of 4."
-        num_poles = len(coeffs) // 4
-        indices = 4 * np.arange(num_poles)
 
-        a_real = coeffs[indices + 0]
-        a_imag = coeffs[indices + 1]
-        c_real = coeffs[indices + 2]
-        c_imag = coeffs[indices + 3]
+        a_real = coeffs[0::4]
+        a_imag = coeffs[1::4]
+        c_real = coeffs[2::4]
+        c_imag = coeffs[3::4]
 
-        poles_a = DispersionFitter._pack_complex(a_real, a_imag)
-        poles_c = DispersionFitter._pack_complex(c_real, c_imag)
+        poles_a = a_real + 1j * a_imag
+        poles_c = c_real + 1j * c_imag
         return poles_a, poles_c
 
     @staticmethod
     def _pack_coeffs(pole_a, pole_c):
-        """Packs complex a and c pole parameters into coefficient array.
+        """Pack complex a and c pole parameters into coefficient array.
 
         Parameters
         ----------
@@ -245,14 +188,12 @@ class DispersionFitter(Tidy3dBaseModel):
         np.ndarray[float]
             Array of real coefficients for the pole residue fit.
         """
-        a_real, a_imag = DispersionFitter._unpack_complex(pole_a)
-        c_real, c_imag = DispersionFitter._unpack_complex(pole_c)
-        stacked_coeffs = np.stack((a_real, a_imag, c_real, c_imag), axis=1)
+        stacked_coeffs = np.stack((pole_a.real, pole_a.imag, pole_c.real, pole_c.imag), axis=1)
         return stacked_coeffs.flatten()
 
     @staticmethod
     def _coeffs_to_poles(coeffs):
-        """Converts model coefficients to poles.
+        """Convert model coefficients to poles.
 
         Parameters
         ----------
@@ -266,12 +207,11 @@ class DispersionFitter(Tidy3dBaseModel):
         """
         coeffs_scaled = coeffs / HBAR
         poles_a, poles_c = DispersionFitter._unpack_coeffs(coeffs_scaled)
-        # poles = [((a.real, a.imag), (c.real, c.imag)) for (a, c) in zip(poles_a, poles_c)]
-        return [(complex(a), complex(c)) for (a, c) in zip(poles_a, poles_c)]
+        return list(zip(poles_a, poles_c))
 
     @staticmethod
     def _poles_to_coeffs(poles):
-        """Converts poles to model coefficients.
+        """Convert poles to model coefficients.
 
         Parameters
         ----------
@@ -283,32 +223,30 @@ class DispersionFitter(Tidy3dBaseModel):
         np.ndarray[float]
             Array of real coefficients for the pole residue fit.
         """
-        poles_a, poles_c = np.array([[a, c] for (a, c) in poles]).T
-        coeffs = DispersionFitter._pack_coeffs(poles_a, poles_c)
+        poles = np.array(poles, dtype=complex)
+        coeffs = DispersionFitter._pack_coeffs(poles[:, 0], poles[:, 1])
         return coeffs * HBAR
 
     @staticmethod
     def _eV_to_Hz(f_eV: float):  # pylint:disable=invalid-name
-        """convert frequency in unit of eV to Hz
+        """Convert frequency in unit of eV to Hz.
 
         Parameters
         ----------
         f_eV : float
             Frequency in unit of eV
         """
-
-        return f_eV / HBAR / 2 / np.pi
+        return f_eV / (HBAR * 2 * np.pi)
 
     @staticmethod
     def _Hz_to_eV(f_Hz: float):  # pylint:disable=invalid-name
-        """convert frequency in unit of Hz to eV
+        """Convert frequency in unit of Hz to eV.
 
         Parameters
         ----------
         f_Hz : float
             Frequency in unit of Hz
         """
-
         return f_Hz * HBAR * 2 * np.pi
 
     def fit(
@@ -317,7 +255,7 @@ class DispersionFitter(Tidy3dBaseModel):
         num_tries: int = 50,
         tolerance_rms: float = 1e-2,
     ) -> Tuple[PoleResidue, float]:
-        """Fits data a number of times and returns best results.
+        """Fit data a number of times and returns best results.
 
         Parameters
         ----------
@@ -354,24 +292,21 @@ class DispersionFitter(Tidy3dBaseModel):
                     best_medium = medium
 
                 progress.update(
-                    task, advance=1, description=f"best RMS error so far: {best_rms:.2e}"
+                    task, advance=1, description=f"Best RMS error so far: {best_rms:.2e}"
                 )
 
                 # if below tolerance, return
                 if best_rms < tolerance_rms:
-                    log.info(f"\tfound optimal fit with RMS error = {best_rms:.2e}, returning")
+                    log.info(f"Found optimal fit with RMS error = {best_rms:.2e}")
                     return best_medium, best_rms
 
         # if exited loop, did not reach tolerance (warn)
-        log.warning(
-            f"\twarning: did not find fit "
-            f"with RMS error under tolerance_rms of {tolerance_rms:.2e}"
-        )
-        log.info(f"\treturning best fit with RMS error {best_rms:.2e}")
+        log.warning(f"Unable to fit with RMS error under 'tolerance_rms' of {tolerance_rms:.2e}")
+        log.info(f"Returning best fit with RMS error {best_rms:.2e}")
         return best_medium, best_rms
 
     def _make_medium(self, coeffs):
-        """returns medium from coeffs from optimizer
+        """Return medium from coeffs from optimizer.
 
         Parameters
         ----------
@@ -403,18 +338,17 @@ class DispersionFitter(Tidy3dBaseModel):
             Results of single fit: (dispersive medium, RMS error).
         """
 
-        def constraint(coeffs, _grad=None):
-            """Evaluates the nonlinear stability criterion of
-            Hongjin Choi, Jae-Woo Baek, and Kyung-Young Jung,
-            "Comprehensive Study on Numerical Aspects of Modified
-            Lorentz Model Based Dispersive FDTD Formulations,"
-            IEEE TAP 2019.  Note: not used.
+        # NOTE: Not used
+        def constraint(coeffs, grad=None):
+            """Evaluate the nonlinear stability criterion of Hongjin Choi, Jae-Woo Baek, and
+            Kyung-Young Jung, "Comprehensive Study on Numerical Aspects of Modified Lorentz Model
+            Based Dispersive FDTD Formulations," IEEE TAP 2019.
 
             Parameters
             ----------
             coeffs : np.ndarray[float]
                 Array of real coefficients for the pole residue fit.
-            _grad : np.ndarray[float]
+            grad : np.ndarray[float]
                 Gradient of ``constraint`` w.r.t coeffs, not used.
 
             Returns
@@ -423,22 +357,24 @@ class DispersionFitter(Tidy3dBaseModel):
                 Value of constraint.
             """
             poles_a, poles_c = DispersionFitter._unpack_coeffs(coeffs)
-            a_real, a_imag = DispersionFitter._unpack_complex(poles_a)
-            c_real, c_imag = DispersionFitter._unpack_complex(poles_c)
+            a_real = poles_a.real
+            a_imag = poles_a.imag
+            c_real = poles_c.real
+            c_imag = poles_c.imag
             prstar = a_real * c_real + a_imag * c_imag
             res = 2 * prstar * a_real - c_real * (a_real * a_real + a_imag * a_imag)
             res[res >= 0] = 0
             return np.sum(res)
 
-        def obj(coeffs, _grad=None):
-            """objective function for fit
+        def objective(coeffs, grad=None):
+            """Objective function for fit
 
             Parameters
             ----------
             coeffs : np.ndarray[float]
                 Array of real coefficients for the pole residue fit.
-            _grad : np.ndarray[float]
-                Gradient of ``obj`` w.r.t coeffs, not used.
+            grad : np.ndarray[float]
+                Gradient of ``objective`` w.r.t coeffs, not used.
 
             Returns
             -------
@@ -449,7 +385,7 @@ class DispersionFitter(Tidy3dBaseModel):
             medium = self._make_medium(coeffs)
             eps_model = medium.eps_model(self.freqs)
             residual = self.eps_data - eps_model
-            # cons = constraint(coeffs, _grad)
+            # cons = constraint(coeffs, grad)
             return np.sqrt(np.sum(np.square(np.abs(residual))) / len(self.eps_data))
 
         # set initial guess
@@ -459,23 +395,19 @@ class DispersionFitter(Tidy3dBaseModel):
         # set bounds
         bounds_upper = np.zeros(num_coeffs, dtype=float)
         bounds_lower = np.zeros(num_coeffs, dtype=float)
-        indices = 4 * np.arange(num_poles)
 
         if self.lossy:
             # if lossy, the real parts can take on values
-            bounds_lower[indices] = -np.inf
-            bounds_upper[indices + 2] = np.inf
-            coeffs0[indices] = -np.abs(coeffs0[indices])
-            coeffs0[indices + 2] = +np.abs(coeffs0[indices + 2])
+            bounds_lower[0::4] = -np.inf
+            bounds_upper[2::4] = np.inf
+            coeffs0[0::4] = -np.abs(coeffs0[0::4])
+            coeffs0[2::4] = +np.abs(coeffs0[2::4])
         else:
             # otherwise, they need to be 0
-            coeffs0[indices] = 0
-            coeffs0[indices + 2] = 0
+            coeffs0[0::2] = 0
 
-        bounds_lower[indices + 1] = -np.inf
-        bounds_upper[indices + 1] = np.inf
-        bounds_lower[indices + 3] = -np.inf
-        bounds_upper[indices + 3] = np.inf
+        bounds_lower[1::2] = -np.inf
+        bounds_upper[1::2] = np.inf
 
         bounds = list(zip(bounds_lower, bounds_upper))
 
@@ -484,7 +416,7 @@ class DispersionFitter(Tidy3dBaseModel):
 
         # TODO: set options properly
         res = opt.minimize(
-            obj,
+            objective,
             coeffs0,
             args=(),
             method="SLSQP",
@@ -496,7 +428,7 @@ class DispersionFitter(Tidy3dBaseModel):
         )
 
         coeffs = res.x
-        rms_error = obj(coeffs)
+        rms_error = objective(coeffs)
 
         # set the latest fit
         medium = self._make_medium(coeffs)
