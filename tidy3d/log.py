@@ -1,7 +1,6 @@
 """Logging for Tidy3d."""
 
 import inspect
-import json
 
 from typing import Union
 from typing_extensions import Literal
