@@ -59,7 +59,17 @@ class LogHandler:
 
 
 class Logger:
-    """Custom logger to avoid the complexities of the logging module"""
+    """Custom logger to avoid the complexities of the logging module
+
+    The logger can be used in a context manager to avoid the emission of multiple messages. In this
+    case, the first message in the context is emitted normally, but any others are discarded. When
+    the context is exited, the number of discarded messages of each level is displayed with the
+    highest level of the captures messages.
+
+    Messages can also be captured for post-processing. That can be enabled through 'set_capture' to
+    record all warnings emitted during model validation. A structured copy of all validation
+    messages can then be recovered through 'captured_warnings'.
+    """
 
     _static_cache = set()
 
@@ -71,21 +81,23 @@ class Logger:
         self._captured_warnings = []
 
     def set_capture(self, capture: bool):
-        """Turn on/off tree-like capturing of warnings"""
+        """Turn on/off tree-like capturing of log messages."""
         self._capture = capture
 
     def captured_warnings(self):
-        """Get the formatted list of captured warnings"""
+        """Get the formatted list of captured log messages."""
         captured_warnings = self._captured_warnings
         self._captured_warnings = []
         return captured_warnings
 
     def __enter__(self):
+        """Enter a consolidation context (only a single message is emitted)."""
         if self._counts is None:
             self._counts = {}
         return self
 
     def __exit__(self, exc_type, exc_value, traceback):
+        """Exist a consolidation context (report the number of messages discarded)."""
         if self._counts is not None:
             total = sum(v for v in self._counts.values())
             if total > 0:
@@ -102,7 +114,11 @@ class Logger:
         return False
 
     def begin_capture(self):
-        """Start capturing log stack for consolidated validation log"""
+        """Start capturing log stack for consolidated validation log.
+
+        This method is used before any model validation starts and is included in the initialization
+        of 'BaseModel'. It must be followed by a corresponding 'end_capture'.
+        """
         if not self._capture:
             return
 
@@ -113,7 +129,11 @@ class Logger:
             self._stack = [stack_item]
 
     def end_capture(self, model):
-        """End capturing log stack for consolidated validation log"""
+        """End capturing log stack for consolidated validation log.
+
+        This method is used after all model validations and is included in the initialization of
+        'BaseModel'. It must follow a corresponding 'begin_capture'.
+        """
         if not self._stack:
             return
 
@@ -140,7 +160,7 @@ class Logger:
                 self._stack[-1]["children"][hash_] = stack_item
 
     def _parse_warning_capture(self, current_loc, stack_item):
-        """Process capture tree to compile formatted captured warnings"""
+        """Process capture tree to compile formatted captured warnings."""
 
         if "parent_fields" in stack_item:
             for field in stack_item["parent_fields"]:
