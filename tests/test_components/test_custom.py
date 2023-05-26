@@ -4,6 +4,10 @@ import numpy as np
 import dill as pickle
 import pydantic
 
+import numpy as np
+import xarray as xr
+import tidy3d as td
+
 from tidy3d.components.simulation import Simulation
 from tidy3d.components.geometry import Box
 from tidy3d.components.structure import Structure
@@ -679,3 +683,45 @@ def test_custom_anisotropic_medium():
         mat = CustomAnisotropicMedium(xx=mat_xx, yy=mat_tmp, zz=mat_zz)
     with pytest.raises(pydantic.ValidationError):
         mat = CustomAnisotropicMedium(xx=mat_xx, yy=mat_yy, zz=mat_tmp)
+
+
+def test_io_dispersive():
+    Mx_custom = 1.0
+    My_custom = 2.1
+    Nx = 10
+    Ny = 11
+
+    x_custom = np.linspace(-Mx_custom / 2, Mx_custom / 2, Nx)
+    y_custom = np.linspace(-My_custom / 2, My_custom / 2, Ny)
+    z_custom = [0]
+
+    delep_data = np.ones([len(x_custom), len(y_custom), len(z_custom)])
+    delep_dataset = td.SpatialDataArray(
+        delep_data, coords={"x": x_custom, "y": y_custom, "z": z_custom}
+    )
+    gamma_dataset = xr.zeros_like(delep_dataset)
+    f0_dataset = td.SpatialDataArray(
+        np.ones_like(delep_data) * 3e14, coords={"x": x_custom, "y": y_custom, "z": z_custom}
+    )
+    eps_inf_dataset = xr.ones_like(delep_dataset)
+    mat_custom = td.CustomLorentz(
+        eps_inf=eps_inf_dataset, coeffs=((delep_dataset, f0_dataset, gamma_dataset),)
+    )
+
+    struct = td.Structure(
+        geometry=td.Box(size=(0.5, 0.5, 0.5)),
+        medium=mat_custom,
+    )
+
+    sim = td.Simulation(
+        run_time=1e-12,
+        size=(1, 1, 1),
+        grid_spec=td.GridSpec.auto(wavelength=1.0),
+        structures=(struct,),
+    )
+
+    filename = "tests/tmp/sim.hdf5"
+    sim.to_file(filename)
+    sim_load = td.Simulation.from_file(filename)
+
+    assert sim_load == sim
