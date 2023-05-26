@@ -148,13 +148,13 @@ class JaxSimulation(Simulation, JaxObject):
             if not (size_all_floats and cent_all_floats):
                 return val
 
-        with log as captured_log:
+        with log as consolidated_logger:
             # check intersections with other input_structures
             for i, in_struct_i in enumerate(input_structures):
                 geometry_i = in_struct_i.geometry
                 for j in range(i + 1, len(input_structures)):
                     if geometry_i.intersects(input_structures[j].geometry):
-                        captured_log.warning(
+                        consolidated_logger.warning(
                             f"'JaxSimulation.input_structures[{i}]' overlaps or touches "
                             f"'JaxSimulation.input_structures[{j}]'. Geometric gradients for "
                             "overlapping input structures may contain errors."
@@ -167,7 +167,7 @@ class JaxSimulation(Simulation, JaxObject):
                     continue
                 for j, struct_j in enumerate(structures):
                     if geometry_i.intersects(struct_j.geometry):
-                        captured_log.warning(
+                        consolidated_logger.warning(
                             f"'JaxPolySlab'-containing 'JaxSimulation.input_structures[{i}]' "
                             f"intersects with 'JaxSimulation.structures[{j}]'. Note that in this "
                             "version of the adjoint plugin, there may be errors in the gradient "
