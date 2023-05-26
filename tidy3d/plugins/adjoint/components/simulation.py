@@ -148,37 +148,31 @@ class JaxSimulation(Simulation, JaxObject):
             if not (size_all_floats and cent_all_floats):
                 return val
 
-        # check intersections with other input_structures
-        for i, in_struct_i in enumerate(input_structures):
-            geometry_i = in_struct_i.geometry
-            for j in range(i + 1, len(input_structures)):
-                geometry_j = input_structures[j].geometry
-                if geometry_i.intersects(geometry_j):
-                    log.warning(
-                        f"'JaxSimulation.input_structures[{i}]' overlaps or touches "
-                        f"'JaxSimulation.input_structures[{j}]'. "
-                        "Geometric gradients for overlapping input structures may contain errors. "
-                        "Skipping the rest of the structures."
-                    )
-                    return val
+        with log as consolidated_logger:
+            # check intersections with other input_structures
+            for i, in_struct_i in enumerate(input_structures):
+                geometry_i = in_struct_i.geometry
+                for j in range(i + 1, len(input_structures)):
+                    if geometry_i.intersects(input_structures[j].geometry):
+                        consolidated_logger.warning(
+                            f"'JaxSimulation.input_structures[{i}]' overlaps or touches "
+                            f"'JaxSimulation.input_structures[{j}]'. Geometric gradients for "
+                            "overlapping input structures may contain errors."
+                        )
 
-        # check JaxPolySlab intersections with background structures
-        for i, in_struct_i in enumerate(input_structures):
-            geometry_i = in_struct_i.geometry
-            if not isinstance(geometry_i, JaxPolySlab):
-                continue
-            for j, struct_j in enumerate(structures):
-                geometry_j = struct_j.geometry
-                if geometry_i.intersects(geometry_j):
-                    log.warning(
-                        f"'JaxPolySlab'-containing 'JaxSimulation.input_structures[{i}]' "
-                        f"intersects with 'JaxSimulation.structures[{j}]'. "
-                        "Note that in this version of the adjoint plugin, there may be errors "
-                        "in the gradient when "
-                        "'JaxPolySlab' intersects with background structures. "
-                        "Skipping the rest of the structures."
-                    )
-                    return val
+            # check JaxPolySlab intersections with background structures
+            for i, in_struct_i in enumerate(input_structures):
+                geometry_i = in_struct_i.geometry
+                if not isinstance(geometry_i, JaxPolySlab):
+                    continue
+                for j, struct_j in enumerate(structures):
+                    if geometry_i.intersects(struct_j.geometry):
+                        consolidated_logger.warning(
+                            f"'JaxPolySlab'-containing 'JaxSimulation.input_structures[{i}]' "
+                            f"intersects with 'JaxSimulation.structures[{j}]'. Note that in this "
+                            "version of the adjoint plugin, there may be errors in the gradient "
+                            "when 'JaxPolySlab' intersects with background structures."
+                        )
 
         return val
 

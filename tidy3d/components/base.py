@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 from functools import wraps
-from typing import List, Callable
+from typing import List, Callable, Dict, Union, Tuple
 
 import rich
 import pydantic
@@ -76,8 +76,12 @@ class Tidy3dBaseModel(pydantic.BaseModel):
 
     def __init__(self, **kwargs):
         """Init method, includes post-init validators."""
-        super().__init__(**kwargs)
-        self._post_init_validators()
+        log.begin_capture()
+        try:
+            super().__init__(**kwargs)
+            self._post_init_validators()
+        finally:
+            log.end_capture(self)
 
     def _post_init_validators(self) -> None:
         """Call validators taking ``self`` that get run after init, implement in subclasses."""
@@ -689,3 +693,34 @@ class Tidy3dBaseModel(pydantic.BaseModel):
 
         doc += "\n"
         cls.__doc__ = doc
+
+    def get_submodels_by_hash(self) -> Dict[int, List[Union[str, Tuple[str, int]]]]:
+        """Return a dictionary of this object's sub-models indexed by their hash values."""
+        fields = {}
+        for key in self.__fields__:
+            field = getattr(self, key)
+
+            if isinstance(field, Tidy3dBaseModel):
+                hash_ = hash(field)
+                if hash_ not in fields:
+                    fields[hash_] = []
+                fields[hash_].append(key)
+
+            # Do we need to consider np.ndarray here?
+            elif isinstance(field, (list, tuple, np.ndarray)):
+                for index, sub_field in enumerate(field):
+                    if isinstance(sub_field, Tidy3dBaseModel):
+                        hash_ = hash(sub_field)
+                        if hash_ not in fields:
+                            fields[hash_] = []
+                        fields[hash_].append((key, index))
+
+            elif isinstance(field, dict):
+                for index, sub_field in field.items():
+                    if isinstance(sub_field, Tidy3dBaseModel):
+                        hash_ = hash(sub_field)
+                        if hash_ not in fields:
+                            fields[hash_] = []
+                        fields[hash_].append((key, index))
+
+        return fields
