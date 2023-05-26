@@ -8,7 +8,7 @@ import tidy3d as td
 from tidy3d.exceptions import SetupError, ValidationError, Tidy3dKeyError
 from tidy3d.components import simulation
 from tidy3d.components.simulation import MAX_NUM_MEDIUMS
-from ..utils import assert_log_level, SIM_FULL, log_capture
+from ..utils import assert_log_level, SIM_FULL, log_capture, run_emulated, clear_tmp
 from tidy3d.constants import LARGE_NUMBER
 
 SIM = td.Simulation(size=(1, 1, 1), run_time=1e-12, grid_spec=td.GridSpec(wavelength=1.0))
@@ -1463,6 +1463,7 @@ def test_dt():
     assert sim_new.dt == 0.4 * dt
 
 
+@clear_tmp
 def test_sim_volumetric_structures():
     """Test volumetric equivalent of 2D materials."""
     sigma = 0.45
@@ -1514,11 +1515,17 @@ def test_sim_volumetric_structures():
         geometry=td.Box.from_bounds([-td.inf, -td.inf, -1000], [td.inf, td.inf, 0]),
         medium=aniso_medium,
     )
-
+    monitor = td.FieldMonitor(
+        center=(0, 0, 0),
+        size=(td.inf, 0, td.inf),
+        freqs=(1.5e14),
+        name="field_xz",
+    )
     sim = td.Simulation(
         size=(10, 10, 10),
         structures=[below, box],
         sources=[src],
+        monitors=[monitor],
         boundary_spec=td.BoundarySpec(
             x=td.Boundary.pml(num_layers=5),
             y=td.Boundary.pml(num_layers=5),
@@ -1538,6 +1545,12 @@ def test_sim_volumetric_structures():
         LARGE_NUMBER * thickness / grid_dl,
         rtol=RTOL,
     )
+    # check that plotting 2d material doesn't raise an error
+    sim_data = run_emulated(sim)
+    sim_data.plot_field(ax=AX, field_monitor_name="field_xz", field_name="Ex", val="real")
+    _ = sim.plot_eps(ax=AX, x=0, alpha=0.2)
+    _ = sim.plot(ax=AX, x=0)
+
     # nonuniform sub/super-strate should error
     below_half = td.Structure(
         geometry=td.Box.from_bounds([-100, -td.inf, -1000], [0, td.inf, 0]),

@@ -10,7 +10,7 @@ import functools
 import pydantic
 import numpy as np
 from matplotlib import patches, path
-from shapely.geometry import Point, Polygon, box, MultiPolygon
+from shapely.geometry import Point, Polygon, box, MultiPolygon, LineString
 from shapely.validation import make_valid
 
 from .base import Tidy3dBaseModel, cached_property
@@ -419,8 +419,12 @@ class Geometry(Tidy3dBaseModel, ABC):
     def plot_shape(self, shape: Shapely, plot_params: PlotParams, ax: Ax) -> Ax:
         """Defines how a shape is plotted on a matplotlib axes."""
         _shape = self.evaluate_inf_shape(shape)
-        patch = polygon_patch(_shape, **plot_params.to_kwargs())
-        ax.add_artist(patch)
+        if isinstance(_shape, LineString):
+            xs, ys = zip(*_shape.coords)
+            ax.plot(xs, ys, color=plot_params.edgecolor)
+        else:
+            patch = polygon_patch(_shape, **plot_params.to_kwargs())
+            ax.add_artist(patch)
         return ax
 
     @classmethod

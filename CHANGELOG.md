@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Add `Medium2D` to full simulation in tests.
 
 ### Fixed
+- Plotting 2D materials in `SimulationData.plot_field` and other circumstances.
 
 ## [2.2.2] - 2023-5-25
 
