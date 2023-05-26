@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 ### Changed
+- Add `Medium2D` to full simulation in tests.
 
 ### Fixed
 

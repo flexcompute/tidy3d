@@ -190,6 +190,64 @@
         },
         {
             "geometry": {
+                "type": "Box",
+                "center": [
+                    -1.0,
+                    0.0,
+                    0.0
+                ],
+                "size": [
+                    1.0,
+                    0.0,
+                    1.0
+                ]
+            },
+            "name": null,
+            "type": "Structure",
+            "medium": {
+                "name": null,
+                "frequency_range": null,
+                "type": "Medium2D",
+                "ss": {
+                    "name": null,
+                    "frequency_range": null,
+                    "type": "PoleResidue",
+                    "eps_inf": 1.0,
+                    "poles": [
+                        [
+                            {
+                                "real": 0.0,
+                                "imag": 0.0
+                            },
+                            {
+                                "real": 254117040158918.28,
+                                "imag": 0.0
+                            }
+                        ]
+                    ]
+                },
+                "tt": {
+                    "name": null,
+                    "frequency_range": null,
+                    "type": "PoleResidue",
+                    "eps_inf": 1.0,
+                    "poles": [
+                        [
+                            {
+                                "real": 0.0,
+                                "imag": 0.0
+                            },
+                            {
+                                "real": 254117040158918.28,
+                                "imag": 0.0
+                            }
+                        ]
+                    ]
+                }
+            }
+        },
+        {
+            "geometry": {
                 "type": "GeometryGroup",
                 "geometries": [
                     {
