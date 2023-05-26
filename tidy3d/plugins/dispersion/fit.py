@@ -665,13 +665,3 @@ class DispersionFitter(Tidy3dBaseModel):
         else:
             wvl_um, n_data, k_data = data.T
         return cls(wvl_um=wvl_um, n_data=n_data, k_data=k_data)
-
-
-class StableDispersionFitter:
-    """Deprecated."""
-
-    def __init__(self, *_args, **_kwargs):
-        log.error(
-            "'StableDispersionFitter' has been removed. Use 'DispersionFitter' with "
-            "'tidy3d.plugins.dispersion.web.run' to access the stable fitter from the web server."
-        )

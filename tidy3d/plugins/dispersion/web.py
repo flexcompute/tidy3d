@@ -339,3 +339,24 @@ def run(
     """
     task = FitterData.create(fitter, num_poles, num_tries, tolerance_rms, advanced_param)
     return task.run()
+
+
+class StableDispersionFitter(DispersionFitter):
+    """Deprecated."""
+
+    def __init__(self, *args, **kwargs):
+        log.warning(
+            "'StableDispersionFitter' has been deprecated. Use 'DispersionFitter' with "
+            "'tidy3d.plugins.dispersion.web.run' to access the stable fitter from the web server."
+        )
+        super().__init__(*args, **kwargs)
+
+    def fit(  # pylint:disable=arguments-differ, too-many-locals
+        self,
+        num_poles: PositiveInt = 1,
+        num_tries: PositiveInt = 50,
+        tolerance_rms: NonNegativeFloat = 1e-2,
+        advanced_param: AdvancedFitterParam = AdvancedFitterParam(),
+    ) -> Tuple[PoleResidue, float]:
+        """Deprecated."""
+        return run(self, num_poles, num_tries, tolerance_rms, advanced_param)

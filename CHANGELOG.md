@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Add `Medium2D` to full simulation in tests.
 - Removed `StableFitter`
 - Stable dispersion fitter is now executed through `plugins.dispersion.web.run`
+- Deprecated `StableFitter` — stable dispersion fitter is now executed through `plugins.dispersion.web.run`
 
 ### Fixed
 - Plotting 2D materials in `SimulationData.plot_field` and other circumstances.
