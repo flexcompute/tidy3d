@@ -92,6 +92,10 @@ SIM_FULL = Simulation(
             medium=Drude(eps_inf=2.0, coeffs=[(1, 3)]),
         ),
         Structure(
+            geometry=Box(size=(1, 0, 1), center=(-1, 0, 0)),
+            medium=Medium2D.from_medium(Medium(conductivity=0.45), thickness=0.01),
+        ),
+        Structure(
             geometry=GeometryGroup(geometries=[Box(size=(1, 1, 1), center=(-1, 0, 0))]),
             medium=PEC,
         ),
