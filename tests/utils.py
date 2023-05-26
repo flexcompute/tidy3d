@@ -110,6 +110,34 @@ SIM_FULL = Simulation(
             medium=PoleResidue(eps_inf=1.0, poles=((6206417594288582j, (-3.311074436985222e16j)),)),
         ),
         Structure(
+            geometry=Box(
+                size=(1, 1, 1),
+                center=(-1.0, 0.5, 0.5),
+            ),
+            medium=CustomMedium(
+                eps_dataset=PermittivityDataset(
+                    eps_xx=ScalarFieldDataArray(
+                        1 + np.random.random((2, 2, 2, 1)),
+                        coords=dict(x=[-1.5, -0.5], y=[0, 1], z=[0, 1], f=[1e14]),
+                    ),
+                    eps_yy=ScalarFieldDataArray(
+                        1 + np.random.random((2, 2, 2, 1)),
+                        coords=dict(x=[0, 1], y=[0, 1], z=[0, 1], f=[1e14]),
+                    ),
+                    eps_zz=ScalarFieldDataArray(
+                        1 + np.random.random((2, 2, 2, 1)),
+                        coords=dict(x=[0, 1], y=[0, 1], z=[0, 1], f=[1e14]),
+                    ),
+                )
+            ),
+        ),
+        Structure(
+            geometry=PolySlab(
+                vertices=[(-1.5, -1.5), (-0.5, -1.5), (-0.5, -0.5)], slab_bounds=[-1, 1]
+            ),
+            medium=PoleResidue(eps_inf=1.0, poles=((6206417594288582j, (-3.311074436985222e16j)),)),
+        ),
+        Structure(
             geometry=TriangleMesh.from_triangles(
                 np.array(
                     [

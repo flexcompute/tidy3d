@@ -307,6 +307,82 @@
         },
         {
             "geometry": {
+                "type": "Box",
+                "center": [
+                    -1.0,
+                    0.5,
+                    0.5
+                ],
+                "size": [
+                    1.0,
+                    1.0,
+                    1.0
+                ]
+            },
+            "name": null,
+            "type": "Structure",
+            "medium": {
+                "name": null,
+                "frequency_range": null,
+                "type": "CustomMedium",
+                "eps_dataset": {
+                    "type": "PermittivityDataset",
+                    "eps_xx": "ScalarFieldDataArray",
+                    "eps_yy": "ScalarFieldDataArray",
+                    "eps_zz": "ScalarFieldDataArray"
+                },
+                "interp_method": "nearest"
+            }
+        },
+        {
+            "geometry": {
+                "type": "PolySlab",
+                "axis": 2,
+                "sidewall_angle": 0.0,
+                "reference_plane": "middle",
+                "slab_bounds": [
+                    -1.0,
+                    1.0
+                ],
+                "dilation": 0.0,
+                "vertices": [
+                    [
+                        -1.5,
+                        -1.5
+                    ],
+                    [
+                        -0.5,
+                        -1.5
+                    ],
+                    [
+                        -0.5,
+                        -0.5
+                    ]
+                ]
+            },
+            "name": null,
+            "type": "Structure",
+            "medium": {
+                "name": null,
+                "frequency_range": null,
+                "type": "PoleResidue",
+                "eps_inf": 1.0,
+                "poles": [
+                    [
+                        {
+                            "real": 0.0,
+                            "imag": 6206417594288582.0
+                        },
+                        {
+                            "real": -0.0,
+                            "imag": -3.311074436985222e+16
+                        }
+                    ]
+                ]
+            }
+        },
+        {
+            "geometry": {
                 "type": "TriangleMesh",
                 "mesh_dataset": {
                     "type": "TriangleMeshDataset",
