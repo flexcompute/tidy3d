@@ -16,7 +16,7 @@ from .grid.grid import Coords, Grid
 from .types import PoleAndResidue, Ax, FreqBound, TYPE_TAG_STR, InterpMethod, Bound, ArrayComplex3D
 from .types import Axis, TensorReal
 from .data.dataset import PermittivityDataset
-from .data.data_array import SpatialDataArray, ScalarFieldDataArray
+from .data.data_array import SpatialDataArray, ScalarFieldDataArray, DATA_ARRAY_MAP
 from .viz import add_ax_if_none
 from .geometry import Geometry
 from .validators import validate_name_str
@@ -730,6 +730,34 @@ class CustomMedium(AbstractCustomMedium):
     )
 
     @pd.root_validator(pre=True)
+    def _warn_if_none(cls, values):
+        """Warn if the data array fails to load, and return a vacuum medium."""
+        eps_dataset = values.get("eps_dataset")
+        permittivity = values.get("permittivity")
+        conductivity = values.get("conductivity")
+        fail_load = False
+        if isinstance(permittivity, str) and permittivity in DATA_ARRAY_MAP.keys():
+            log.warning(
+                "Loading 'permittivity' without data; constructing a vacuum medium instead."
+            )
+            fail_load = True
+        if isinstance(conductivity, str) and conductivity in DATA_ARRAY_MAP.keys():
+            log.warning(
+                "Loading 'conductivity' without data; constructing a vacuum medium instead."
+            )
+            fail_load = True
+        if isinstance(eps_dataset, dict):
+            if any((v in DATA_ARRAY_MAP for _, v in eps_dataset.items() if isinstance(v, str))):
+                log.warning(
+                    "Loading 'eps_dataset' without data; constructing a vacuum medium instead."
+                )
+                fail_load = True
+        if fail_load:
+            eps_real = SpatialDataArray(np.ones((1, 1, 1)), coords=dict(x=[0], y=[0], z=[0]))
+            return dict(permittivity=eps_real)
+        return values
+
+    @pd.root_validator(pre=True)
     def _deprecation_dataset(cls, values):
         """Raise deprecation warning if dataset supplied and convert to dataset."""
 
@@ -1248,6 +1276,43 @@ class CustomDispersiveMedium(AbstractCustomMedium, DispersiveMedium, ABC):
             allow_gain=self.allow_gain,
         )
 
+    @staticmethod
+    def _warn_if_data_none(nested_tuple_field: str):
+        """Warn if any of `eps_inf` and nested_tuple_field are not loaded,
+        and return a vacuum with eps_inf = 1.
+        """
+
+        @pd.root_validator(pre=True, allow_reuse=True)
+        def _warn_if_none(cls, values):  # pylint:disable=unused-argument
+            """Warn if any of `eps_inf` and nested_tuple_field are not load."""
+            eps_inf = values.get("eps_inf")
+            coeffs = values.get(nested_tuple_field)
+            fail_load = False
+
+            if isinstance(eps_inf, str) and eps_inf in DATA_ARRAY_MAP.keys():
+                log.warning("Loading 'eps_inf' without data; constructing a vacuum medium instead.")
+                fail_load = True
+            for coeff in coeffs:
+                if fail_load:
+                    break
+                for coeff_i in coeff:
+                    if isinstance(coeff_i, str) and coeff_i in DATA_ARRAY_MAP.keys():
+                        log.warning(
+                            "Loading '{nested_tuple_field}' without data; "
+                            "constructing a vacuum medium instead."
+                        )
+                        fail_load = True
+                        break
+
+            if fail_load and eps_inf is None:
+                return {nested_tuple_field: ()}
+            if fail_load:
+                eps_inf = SpatialDataArray(np.ones((1, 1, 1)), coords=dict(x=[0], y=[0], z=[0]))
+                return {"eps_inf": eps_inf, nested_tuple_field: ()}
+            return values
+
+        return _warn_if_none
+
 
 class PoleResidue(DispersiveMedium):
     """A dispersive medium described by the pole-residue pair model.
@@ -1403,6 +1468,8 @@ class CustomPoleResidue(CustomDispersiveMedium, PoleResidue):
         description="Tuple of complex-valued (:math:`a_i, c_i`) poles for the model.",
         units=(RADPERSEC, RADPERSEC),
     )
+
+    _warn_if_none = CustomDispersiveMedium._warn_if_data_none("poles")
 
     @pd.validator("eps_inf", always=True)
     def _eps_inf_positive(cls, val):
@@ -1634,14 +1701,19 @@ class CustomSellmeier(CustomDispersiveMedium, Sellmeier):
     """
 
     coeffs: Tuple[Tuple[SpatialDataArray, SpatialDataArray], ...] = pd.Field(
+        ...,
         title="Coefficients",
         description="List of Sellmeier (:math:`B_i, C_i`) coefficients.",
         units=(None, MICROMETER + "^2"),
     )
 
+    _warn_if_none = CustomDispersiveMedium._warn_if_data_none("coeffs")
+
     @pd.validator("coeffs", always=True)
     def _correct_shape_and_sign(cls, val):
         """every term in coeffs must have the same shape, and B>=0 and C>0."""
+        if len(val) == 0:
+            return val
         expected_coords = val[0][0].coords
         for B, C in val:
             if B.coords != expected_coords or C.coords != expected_coords:
@@ -1670,7 +1742,8 @@ class CustomSellmeier(CustomDispersiveMedium, Sellmeier):
     def _pole_residue_dict(self) -> Dict:
         """Dict representation of Medium as a pole-residue model."""
         poles_dict = Sellmeier._pole_residue_dict(self)
-        poles_dict.update({"eps_inf": xr.ones_like(self.coeffs[0][0])})
+        if len(self.coeffs) > 0:
+            poles_dict.update({"eps_inf": xr.ones_like(self.coeffs[0][0])})
         return poles_dict
 
     def eps_dataarray_freq(
@@ -1689,6 +1762,10 @@ class CustomSellmeier(CustomDispersiveMedium, Sellmeier):
             The permittivity evaluated at ``frequency``.
         """
         eps = Sellmeier.eps_model(self, frequency)
+        # if `eps` is simply a float, convert it to a SpatialDataArray ; this is possible when
+        # `coeffs` is empty.
+        if isinstance(eps, (int, float, complex)):
+            eps = SpatialDataArray(eps * np.ones((1, 1, 1)), coords=dict(x=[0], y=[0], z=[0]))
         return (eps, eps, eps)
 
     @classmethod
@@ -1872,6 +1949,8 @@ class CustomLorentz(CustomDispersiveMedium, Lorentz):
         description="List of (:math:`\\Delta\\epsilon_i, f_i, \\delta_i`) values for model.",
         units=(PERMITTIVITY, HERTZ, HERTZ),
     )
+
+    _warn_if_none = CustomDispersiveMedium._warn_if_data_none("coeffs")
 
     @pd.validator("eps_inf", always=True)
     def _eps_inf_positive(cls, val):
@@ -2065,6 +2144,8 @@ class CustomDrude(CustomDispersiveMedium, Drude):
         units=(HERTZ, HERTZ),
     )
 
+    _warn_if_none = CustomDispersiveMedium._warn_if_data_none("coeffs")
+
     @pd.validator("eps_inf", always=True)
     def _eps_inf_positive(cls, val):
         """eps_inf must be positive"""
@@ -2222,6 +2303,8 @@ class CustomDebye(CustomDispersiveMedium, Debye):
         description="List of (:math:`\\Delta\\epsilon_i, \\tau_i`) values for model.",
         units=(PERMITTIVITY, SECOND),
     )
+
+    _warn_if_none = CustomDispersiveMedium._warn_if_data_none("coeffs")
 
     @pd.validator("eps_inf", always=True)
     def _eps_inf_positive(cls, val):
