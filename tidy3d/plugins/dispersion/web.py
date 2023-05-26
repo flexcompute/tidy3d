@@ -1,5 +1,7 @@
-"""Fit PoleResidue Dispersion models to optical NK data based on web service
-"""
+"""Fit PoleResidue Dispersion models to optical NK data based on web service"""
+
+from __future__ import annotations
+
 import ssl
 from typing import Tuple, Optional
 from enum import Enum
@@ -13,11 +15,25 @@ from ...components.medium import PoleResidue
 from ...constants import MICROMETER, HERTZ
 from ...exceptions import WebError, Tidy3dError, SetupError
 from ...web.httputils import get_headers
-from ...web.config import DEFAULT_CONFIG as Config
+from ...web.config import DEFAULT_CONFIG
+
 from .fit import DispersionFitter
 
 
 BOUND_MAX_FACTOR = 10
+
+URL_ENV = {
+    "local": "http://127.0.0.1:8000",
+    "dev": "https://tidy3d-service.dev-simulation.cloud",
+    "prod": "https://tidy3d-service.simulation.cloud",
+}
+
+
+class ExceptionCodes(Enum):
+    """HTTP exception codes to handle individually."""
+
+    GATEWAY_TIMEOUT = 504
+    NOT_FOUND = 404
 
 
 class AdvancedFitterParam(Tidy3dBaseModel):
@@ -90,7 +106,6 @@ class AdvancedFitterParam(Tidy3dBaseModel):
         return val
 
 
-# FitterData will be used internally
 class FitterData(AdvancedFitterParam):
     """Data class for request body of Fitter where dipsersion data is input through tuple."""
 
@@ -136,24 +151,70 @@ class FitterData(AdvancedFitterParam):
         units="eV",
     )
 
+    @staticmethod
+    def create(
+        fitter: DispersionFitter,
+        num_poles: PositiveInt,
+        num_tries: PositiveInt,
+        tolerance_rms: NonNegativeFloat,
+        advanced_param: AdvancedFitterParam,
+    ) -> FitterData:
+        """Setup FitterData to be provided to web service
 
-URL_ENV = {
-    "local": "http://127.0.0.1:8000",
-    "dev": "https://tidy3d-service.dev-simulation.cloud",
-    "prod": "https://tidy3d-service.simulation.cloud",
-}
+        Parameters
+        ----------
+        fitter : DispersionFitter
+            Fitter with the data to fit.
+        num_poles : PositiveInt
+            Number of poles in the model.
+        num_tries : PositiveInt
+            Number of optimizations to run with random initial guess.
+        tolerance_rms : NonNegativeFloat
+            RMS error below which the fit is successful and the result is returned.
+        advanced_param : :class:`AdvancedFitterParam`
+            Other advanced parameters.
 
+        Returns
+        -------
+        :class:`FitterData`
+            Data class for request body of Fitter where dispersion
+            data is input through tuple.
+        """
 
-class ExceptionCodes(Enum):
-    """HTTP exception codes to handle individually."""
+        # set up bound_f, bound_amp
+        if advanced_param.bound_f is None:
+            new_bound_f = (
+                advanced_param.bound_f_lower + fitter.frequency_range[1] * BOUND_MAX_FACTOR
+            )
+            advanced_param = advanced_param.copy(update={"bound_f": new_bound_f})
+        if advanced_param.bound_amp is None:
+            new_bound_amp = fitter.frequency_range[1] * BOUND_MAX_FACTOR
+            advanced_param = advanced_param.copy(update={"bound_amp": new_bound_amp})
 
-    GATEWAY_TIMEOUT = 504
-    NOT_FOUND = 404
+        wvl_um, n_data, k_data = fitter.data_in_range
 
+        if fitter.lossy:
+            k_data = k_data.tolist()
+        else:
+            k_data = None
 
-class StableDispersionFitter(DispersionFitter):
-
-    """Stable fitter based on web service"""
+        # pylint: disable=protected-access
+        task = FitterData(
+            wvl_um=wvl_um.tolist(),
+            n_data=n_data.tolist(),
+            k_data=k_data,
+            num_poles=num_poles,
+            num_tries=num_tries,
+            tolerance_rms=tolerance_rms,
+            bound_amp=fitter._Hz_to_eV(advanced_param.bound_amp),
+            bound_f=fitter._Hz_to_eV(advanced_param.bound_f),
+            bound_f_lower=fitter._Hz_to_eV(advanced_param.bound_f_lower),
+            bound_eps_inf=advanced_param.bound_eps_inf,
+            constraint=advanced_param.constraint,
+            nlopt_maxeval=advanced_param.nlopt_maxeval,
+            random_seed=advanced_param.random_seed,
+        )
+        return task
 
     @staticmethod
     def _set_url(config_env: Literal["default", "dev", "prod", "local"] = "default"):
@@ -167,8 +228,6 @@ class StableDispersionFitter(DispersionFitter):
 
         _env = config_env
         if _env == "default":
-            from ...web.config import DEFAULT_CONFIG  # pylint:disable=import-outside-toplevel
-
             _env = "dev" if "dev" in DEFAULT_CONFIG.web_api_endpoint else "prod"
         return URL_ENV[_env]
 
@@ -184,95 +243,19 @@ class StableDispersionFitter(DispersionFitter):
 
         try:
             # test connection
-            resp = requests.get(f"{url_server}/health", verify=Config.ssl_verify)
+            resp = requests.get(f"{url_server}/health", verify=DEFAULT_CONFIG.ssl_verify)
             resp.raise_for_status()
         except (requests.exceptions.SSLError, ssl.SSLError):
-            log.info("disable the ssl verify and retry")
-            Config.ssl_verify = False
-            resp = requests.get(f"{url_server}/health", verify=Config.ssl_verify)
+            log.info("Retrying with SSL verification disabled.")
+            DEFAULT_CONFIG.ssl_verify = False
+            resp = requests.get(f"{url_server}/health", verify=DEFAULT_CONFIG.ssl_verify)
         except Exception as e:
             raise WebError("Connection to the server failed. Please try again.") from e
 
         return get_headers()
 
-    def _setup_webdata(
-        self,
-        num_poles: PositiveInt,
-        num_tries: PositiveInt,
-        tolerance_rms: NonNegativeFloat,
-        advanced_param: AdvancedFitterParam,
-    ) -> FitterData:
-        """Setup FitterData to be provided to webservice
-
-        Parameters
-        ----------
-        num_poles : PositiveInt
-            Number of poles in the model.
-        num_tries : PositiveInt
-            Number of optimizations to run with random initial guess.
-        tolerance_rms : NonNegativeFloat
-            RMS error below which the fit is successful and the result is returned.
-        advanced_param : :class:`AdvancedFitterParam`
-            Other advanced parameters.
-
-        Returns
-        -------
-        :class:`FitterData`
-            Data class for request body of Fitter where dipsersion
-            data is input through tuple.
-        """
-
-        # set up bound_f, bound_amp
-        if advanced_param.bound_f is None:
-            new_bound_f = advanced_param.bound_f_lower + self.frequency_range[1] * BOUND_MAX_FACTOR
-            advanced_param = advanced_param.copy(update={"bound_f": new_bound_f})
-        if advanced_param.bound_amp is None:
-            new_bound_amp = self.frequency_range[1] * BOUND_MAX_FACTOR
-            advanced_param = advanced_param.copy(update={"bound_amp": new_bound_amp})
-
-        wvl_um, n_data, k_data = self.data_in_range
-
-        if self.lossy:
-            k_data = k_data.tolist()
-        else:
-            k_data = None
-
-        web_data = FitterData(
-            wvl_um=wvl_um.tolist(),
-            n_data=n_data.tolist(),
-            k_data=k_data,
-            num_poles=num_poles,
-            num_tries=num_tries,
-            tolerance_rms=tolerance_rms,
-            bound_amp=self._Hz_to_eV(advanced_param.bound_amp),
-            bound_f=self._Hz_to_eV(advanced_param.bound_f),
-            bound_f_lower=self._Hz_to_eV(advanced_param.bound_f_lower),
-            bound_eps_inf=advanced_param.bound_eps_inf,
-            constraint=advanced_param.constraint,
-            nlopt_maxeval=advanced_param.nlopt_maxeval,
-            random_seed=advanced_param.random_seed,
-        )
-        return web_data
-
-    def fit(  # pylint:disable=arguments-differ, too-many-locals
-        self,
-        num_poles: PositiveInt = 1,
-        num_tries: PositiveInt = 50,
-        tolerance_rms: NonNegativeFloat = 1e-2,
-        advanced_param: AdvancedFitterParam = AdvancedFitterParam(),
-    ) -> Tuple[PoleResidue, float]:
-        """Fits data a number of times and returns best results.
-
-        Parameters
-        ----------
-        num_poles : PositiveInt, optional
-            Number of poles in the model.
-        num_tries : PositiveInt, optional
-            Number of optimizations to run with random initial guess.
-        tolerance_rms : NonNegativeFloat, optional
-            RMS error below which the fit is successful and the result is returned.
-        advanced_param : :class:`AdvancedFitterParam`, optional
-            Other advanced parameters.
+    def run(self) -> Tuple[PoleResidue, float]:
+        """Execute the data fit using the stable fitter in the server.
 
         Returns
         -------
@@ -280,45 +263,79 @@ class StableDispersionFitter(DispersionFitter):
             Best results of multiple fits: (dispersive medium, RMS error).
         """
 
-        # get url
         url_server = self._set_url("default")
         headers = self._setup_server(url_server)
-
-        # setup web_data
-        web_data = self._setup_webdata(num_poles, num_tries, tolerance_rms, advanced_param)
 
         resp = requests.post(
             f"{url_server}/dispersion/fit",
             headers=headers,
-            data=web_data.json(),
-            verify=Config.ssl_verify,
+            data=self.json(),
+            verify=DEFAULT_CONFIG.ssl_verify,
         )
 
         try:
             resp.raise_for_status()
         except Exception as e:
             if resp.status_code == ExceptionCodes.GATEWAY_TIMEOUT.value:
-                raise Tidy3dError(
-                    "Fitter failed due to timeout. Try to decrease "
-                    "the number of tries, the number of inner iterations, "
-                    "to relax RMS tolerance, or to use the 'hard' constraint."
-                ) from e
+                msg = (
+                    (
+                        "Fitter failed due to timeout. Try to decrease the number of tries or "
+                        "inner iterations, to relax the RMS tolerance, or to use the 'hard' "
+                        "constraint."
+                    )
+                    if self.constraint != "hard"
+                    else (
+                        "Fitter failed due to timeout. Try to decrease the number of tries or "
+                        "inner iterations, or to relax the RMS tolerance."
+                    )
+                )
+                raise Tidy3dError(msg) from e
 
             raise WebError(
-                "Fitter failed. Try again, or tune the parameters, or contact us for more help."
+                "Fitter failed. Try again, tune the parameters, or contact us for more help."
             ) from e
 
         run_result = resp.json()
         best_medium = PoleResidue.parse_raw(run_result["message"])
         best_rms = float(run_result["rms"])
 
-        if best_rms < tolerance_rms:
-            log.info(f"\tfound optimal fit with RMS error = {best_rms:.2e}, returning")
+        if best_rms < self.tolerance_rms:
+            log.info("Found optimal fit with RMS error %.3g", best_rms)
         else:
             log.warning(
-                f"\twarning: did not find fit "
-                f"with RMS error under tolerance_rms of {tolerance_rms:.2e}"
+                "Unable to fit with RMS error under 'tolerance_rms' of %.3g", self.tolerance_rms
             )
-            log.info(f"\treturning best fit with RMS error {best_rms:.2e}")
+            log.info("Returning best fit with RMS error %.3g", best_rms)
 
         return best_medium, best_rms
+
+
+def run(
+    fitter: DispersionFitter,
+    num_poles: PositiveInt = 1,
+    num_tries: PositiveInt = 50,
+    tolerance_rms: NonNegativeFloat = 1e-2,
+    advanced_param: AdvancedFitterParam = AdvancedFitterParam(),
+) -> Tuple[PoleResidue, float]:
+    """Execute the data fit using the stable fitter in the server.
+
+    Parameters
+    ----------
+    fitter : DispersionFitter
+        Fitter with the data to fit.
+    num_poles : PositiveInt, optional
+        Number of poles in the model.
+    num_tries : PositiveInt, optional
+        Number of optimizations to run with random initial guess.
+    tolerance_rms : NonNegativeFloat, optional
+        RMS error below which the fit is successful and the result is returned.
+    advanced_param : :class:`AdvancedFitterParam`, optional
+        Advanced parameters passed on to the server.
+
+    Returns
+    -------
+    Tuple[:class:`.PoleResidue`, float]
+        Best results of multiple fits: (dispersive medium, RMS error).
+    """
+    task = FitterData.create(fitter, num_poles, num_tries, tolerance_rms, advanced_param)
+    return task.run()

@@ -292,17 +292,17 @@ class DispersionFitter(Tidy3dBaseModel):
                     best_medium = medium
 
                 progress.update(
-                    task, advance=1, description=f"Best RMS error so far: {best_rms:.2e}"
+                    task, advance=1, description=f"Best RMS error so far: {best_rms:.3g}"
                 )
 
                 # if below tolerance, return
                 if best_rms < tolerance_rms:
-                    log.info(f"Found optimal fit with RMS error = {best_rms:.2e}")
+                    log.info("Found optimal fit with RMS error %.3g", best_rms)
                     return best_medium, best_rms
 
         # if exited loop, did not reach tolerance (warn)
-        log.warning(f"Unable to fit with RMS error under 'tolerance_rms' of {tolerance_rms:.2e}")
-        log.info(f"Returning best fit with RMS error {best_rms:.2e}")
+        log.warning("Unable to fit with RMS error under 'tolerance_rms' of %.3g", tolerance_rms)
+        log.info("Returning best fit with RMS error %.3g", best_rms)
         return best_medium, best_rms
 
     def _make_medium(self, coeffs):
@@ -339,7 +339,7 @@ class DispersionFitter(Tidy3dBaseModel):
         """
 
         # NOTE: Not used
-        def constraint(coeffs, grad=None):
+        def constraint(coeffs, _grad=None):
             """Evaluate the nonlinear stability criterion of Hongjin Choi, Jae-Woo Baek, and
             Kyung-Young Jung, "Comprehensive Study on Numerical Aspects of Modified Lorentz Model
             Based Dispersive FDTD Formulations," IEEE TAP 2019.
@@ -348,7 +348,7 @@ class DispersionFitter(Tidy3dBaseModel):
             ----------
             coeffs : np.ndarray[float]
                 Array of real coefficients for the pole residue fit.
-            grad : np.ndarray[float]
+            _grad : np.ndarray[float]
                 Gradient of ``constraint`` w.r.t coeffs, not used.
 
             Returns
@@ -366,14 +366,14 @@ class DispersionFitter(Tidy3dBaseModel):
             res[res >= 0] = 0
             return np.sum(res)
 
-        def objective(coeffs, grad=None):
+        def objective(coeffs, _grad=None):
             """Objective function for fit
 
             Parameters
             ----------
             coeffs : np.ndarray[float]
                 Array of real coefficients for the pole residue fit.
-            grad : np.ndarray[float]
+            _grad : np.ndarray[float]
                 Gradient of ``objective`` w.r.t coeffs, not used.
 
             Returns
@@ -385,7 +385,7 @@ class DispersionFitter(Tidy3dBaseModel):
             medium = self._make_medium(coeffs)
             eps_model = medium.eps_model(self.freqs)
             residual = self.eps_data - eps_model
-            # cons = constraint(coeffs, grad)
+            # cons = constraint(coeffs, _grad)
             return np.sqrt(np.sum(np.square(np.abs(residual))) / len(self.eps_data))
 
         # set initial guess
@@ -465,17 +465,14 @@ class DispersionFitter(Tidy3dBaseModel):
         eps_model = medium.eps_model(freqs)
         n_model, k_model = AbstractMedium.eps_complex_to_nk(eps_model)
 
-        dot_sizes = 25
-        linewidth = 3
-
-        _ = ax.scatter(self.wvl_um, self.n_data, s=dot_sizes, c="black", label="n (data)")
-        ax.plot(wvl_um, n_model, linewidth=linewidth, color="crimson", label="n (model)")
+        ax.plot(self.wvl_um, self.n_data, "x", color="tab:blue", label="n (data)")
+        ax.plot(wvl_um, n_model, color="tab:blue", label="n (model)")
 
         if self.lossy:
-            ax.scatter(self.wvl_um, self.k_data, s=dot_sizes, c="black", label="k (data)")
-            ax.plot(wvl_um, k_model, linewidth=linewidth, color="blueviolet", label="k (model)")
+            ax.plot(self.wvl_um, self.k_data, "+", color="tab:orange", label="k (data)")
+            ax.plot(wvl_um, k_model, color="tab:orange", label="k (model)")
 
-        ax.set_ylabel("value")
+        ax.set_ylabel("n, k")
         ax.set_xlabel("Wavelength ($\\mu m$)")
         ax.legend()
 
@@ -668,3 +665,13 @@ class DispersionFitter(Tidy3dBaseModel):
         else:
             wvl_um, n_data, k_data = data.T
         return cls(wvl_um=wvl_um, n_data=n_data, k_data=k_data)
+
+
+class StableDispersionFitter:
+    """Deprecated."""
+
+    def __init__(self, *_args, **_kwargs):
+        log.error(
+            "'StableDispersionFitter' has been removed. Use 'DispersionFitter' with "
+            "'tidy3d.plugins.dispersion.web.run' to access the stable fitter from the web server."
+        )
