@@ -1,8 +1,0 @@
-docs/* linguist-vendored
-notebooks/* linguist-vendored
-tests/* linguist-vendored
-
-*.ipynb linguist-detectable=false
-*.ipynb linguist-generated=true
-
-CHANGELOG.md merge=union
