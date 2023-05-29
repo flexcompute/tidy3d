@@ -13,7 +13,7 @@ css_file_name = "example-notebook.css"
 
 def creat_yaml(meta, anchor={}):
     data = {
-        'layout': 'default',
+        'layout': 'example',
         'custom_css': "cobalt",
         'custom_font': 'font2',
         'source_link': meta['source_link']
@@ -118,12 +118,21 @@ def write_template(meta, file_name, create_css=False):
             if 'require.min.js' in str(script):
                 script.decompose()
 
-        template_soup = read_template()
-        insert_location = template_soup.find('main', {'id': 'notebook-container'})
+        # template_soup = read_template()
+        # insert_location = template_soup.find('main', {'id': 'notebook-container'})
 
-        insert_location.append(soup)
+        # insert_location.append(soup)
 
-        ouptut_html = str(template_soup)
+        # remove title tag
+        title_tag = soup.find('title')
+        if title_tag:
+            title_tag.decompose()
+
+        ouptut_html = str(soup)
+        # remove <!DOCTYPE html>
+        pattern = re.compile(r'<!DOCTYPE html>')
+        ouptut_html = pattern.sub('', ouptut_html)
+
         ouptut_html = ouptut_html.replace('In [','[')
         yam_str = creat_yaml(meta)
         with open(html_output_file, 'w') as output_file:
@@ -176,7 +185,7 @@ for input_file in ipynb_files:
                     keywords = metadata.get('keywords', '')
                     dict = {
                         "page_title": default_title,
-                        "source_link": f'https://docs.flexcompute.com/projects/tidy3d/en/last/_sources/notebook/{input_file}'
+                        "source_link": f'https://docs.flexcompute.com/projects/tidy3d/en/latest/_sources/notebooks/{input_file}'
                     }
                     open_graph = generatorOG(metadata, title if title else default_title)
                     if title:
