@@ -6,6 +6,7 @@ import ssl
 from typing import Tuple, Optional
 from enum import Enum
 import requests
+import pydantic
 from pydantic import PositiveInt, NonNegativeFloat, PositiveFloat, Field, validator
 
 from ...log import log
@@ -344,12 +345,13 @@ def run(
 class StableDispersionFitter(DispersionFitter):
     """Deprecated."""
 
-    def __init__(self, *args, **kwargs):
+    @pydantic.root_validator()
+    def _deprecate_stable_fitter(cls, values):
         log.warning(
             "'StableDispersionFitter' has been deprecated. Use 'DispersionFitter' with "
             "'tidy3d.plugins.dispersion.web.run' to access the stable fitter from the web server."
         )
-        super().__init__(*args, **kwargs)
+        return values
 
     def fit(  # pylint:disable=arguments-differ, too-many-locals
         self,
