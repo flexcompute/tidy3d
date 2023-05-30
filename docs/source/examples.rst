@@ -80,7 +80,7 @@ FDTD Adjoint Optimization
     notebooks/AdjointPlugin_5_BoundaryGradients
 
 Post Processing
-~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~
 
 .. toctree::
     :maxdepth: 1
