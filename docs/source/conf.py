@@ -74,6 +74,7 @@ extensions = [
     "sphinx_copybutton",
     "m2r2",
     "sphinx_sitemap",
+    "custom-meta",
     "custom-sitemap",
     "custom-robots",
 ]
