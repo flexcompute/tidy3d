@@ -292,11 +292,20 @@ class DispersionFitter(Tidy3dBaseModel):
                     best_medium = medium
 
                 progress.update(
-                    task, advance=1, description=f"Best RMS error so far: {best_rms:.3g}"
+                    task,
+                    advance=1,
+                    description=f"Best RMS error so far: {best_rms:.3g}",
+                    refresh=True,
                 )
 
                 # if below tolerance, return
                 if best_rms < tolerance_rms:
+                    progress.update(
+                        task,
+                        completed=num_tries,
+                        description=f"Best RMS error: {best_rms:.3g}",
+                        refresh=True,
+                    )
                     log.info("Found optimal fit with RMS error %.3g", best_rms)
                     return best_medium, best_rms
 
