@@ -1,18 +1,8 @@
-Examples
-========
+Learning FDTD Through Examples
+==============================
 
-Tidy3D Introduction
--------------------
-
-.. toctree::
-    :maxdepth: 1
-	
-    notebooks/Simulation
-    notebooks/Primer
-    notebooks/StartHere
-
-Tidy3D FDTD Feature Tutorials
------------------------------
+Examples of How to Use FDTD Features
+------------------------------------
 
 Defining Structures and Materials
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -89,7 +79,7 @@ FDTD Adjoint Optimization
     notebooks/AdjointPlugin_4_MultiObjective
     notebooks/AdjointPlugin_5_BoundaryGradients
 
-Pre and Post Processing
+Post Processing
 ~~~~~~~~~~~~~~~~~~~~~~~
 
 .. toctree::
@@ -125,7 +115,7 @@ Photonic Integrated Circuit Components
     notebooks/SWGBroadbandPolarizer
 
 Metamaterials, Gratings, and Other Periodic Structures
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 .. toctree::
     :maxdepth: 1
 
