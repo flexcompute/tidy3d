@@ -1,6 +1,6 @@
-**********
-Start Here
-**********
+*************************
+Installation instructions
+*************************
 
 Welcome to Tidy3D
 =================
