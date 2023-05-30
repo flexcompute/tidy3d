@@ -1,7 +1,34 @@
 import numpy as np
+import pytest
+import responses
 
+import tidy3d as td
 from tidy3d.plugins.dispersion import DispersionFitter
-from ..utils import clear_tmp
+from tidy3d.plugins.dispersion.web import run as run_fitter
+
+
+@pytest.fixture
+def random_data():
+    data_points = 11
+    wvl_um = np.linspace(1, 2, data_points)
+    n_data = np.random.random(data_points)
+    k_data = np.random.random(data_points)
+    return wvl_um, n_data, k_data
+
+
+@pytest.fixture
+def mock_remote_api(monkeypatch):
+    def mock_url(*args, **kwargs):
+        return "http://monkeypatched.com"
+
+    monkeypatch.setattr("tidy3d.plugins.dispersion.web.FitterData._set_url", mock_url)
+    responses.add(responses.GET, f"{mock_url()}/health", status=200)
+    responses.add(
+        responses.POST,
+        f"{mock_url()}/dispersion/fit",
+        json={"message": td.PoleResidue().json(), "rms": 1e-16},
+        status=200,
+    )
 
 
 def test_coeffs():
@@ -27,19 +54,24 @@ def test_pole_coeffs():
     assert np.allclose(poles, poles_)
 
 
-@clear_tmp
-def test_dispersion():
+@responses.activate
+def test_lossless_dispersion(random_data, mock_remote_api):
     """perform fitting on random data"""
-    num_data = 10
-    n_data = np.random.random(num_data)
-    wvls = np.linspace(1, 2, num_data)
-    fitter = DispersionFitter(wvl_um=wvls.tolist(), n_data=tuple(n_data))
+    wvl_um, n_data, _ = random_data
+    fitter = DispersionFitter(wvl_um=wvl_um.tolist(), n_data=tuple(n_data))
     medium, rms = fitter._fit_single()
     medium, rms = fitter.fit(num_tries=2)
-    medium.to_file("tests/tmp/medium_fit.json")
+    medium, rms = run_fitter(fitter)
 
-    k_data = np.random.random(num_data)
-    fitter = DispersionFitter(wvl_um=wvls, n_data=n_data, k_data=k_data)
+
+@responses.activate
+def test_lossy_dispersion(random_data, mock_remote_api):
+    """perform fitting on random lossy data"""
+    wvl_um, n_data, k_data = random_data
+    fitter = DispersionFitter(wvl_um=wvl_um, n_data=n_data, k_data=k_data)
+    medium, rms = fitter._fit_single()
+    medium, rms = fitter.fit(num_tries=2)
+    medium, rms = run_fitter(fitter)
 
 
 def test_dispersion_load():
@@ -48,22 +80,42 @@ def test_dispersion_load():
     medium, rms = fitter.fit(num_tries=20)
 
 
-def test_dispersion_plot():
+def test_dispersion_plot(random_data):
     """plots a medium fit from file"""
-    fitter = DispersionFitter.from_file("tests/data/nk_data.csv", skiprows=1, delimiter=",")
-    medium, rms = fitter.fit(num_tries=20)
+    wvl_um, n_data, k_data = random_data
+
+    fitter = DispersionFitter(wvl_um=wvl_um, n_data=n_data)
+    fitter.plot()
+    medium, rms = fitter.fit(num_tries=2)
+    fitter.plot(medium)
+
+    fitter = DispersionFitter(wvl_um=wvl_um, n_data=n_data, k_data=k_data)
+    fitter.plot()
+    medium, rms = fitter.fit(num_tries=2)
     fitter.plot(medium)
 
 
-def test_dispersion_set_wvg_range():
+def test_dispersion_set_wvg_range(random_data):
     """set wavelength range function"""
-    num_data = 50
-    n_data = np.random.random(num_data)
-    wvls = np.linspace(1, 2, num_data)
-    fitter = DispersionFitter(wvl_um=wvls, n_data=n_data)
+    wvl_um, n_data, k_data = random_data
+    fitter = DispersionFitter(wvl_um=wvl_um, n_data=n_data)
 
-    wvl_min = np.random.random(1)[0] * 0.5 + 1
-    wvl_max = wvl_min + 0.5
-    fitter = fitter.copy(update=dict(wvl_range=[wvl_min, wvl_max]))
-    assert len(fitter.freqs) < num_data
+    wvl_range = [1.2, 1.8]
+    fitter = fitter.copy(update={"wvl_range": wvl_range})
+    assert len(fitter.freqs) == 7
+    medium, rms = fitter.fit(num_tries=2)
+
+    wvl_range = [1.2, 2.8]
+    fitter = fitter.copy(update={"wvl_range": wvl_range, "k_data": k_data})
+    assert len(fitter.freqs) == 9
+    medium, rms = fitter.fit(num_tries=2)
+
+    wvl_range = [0.2, 1.8]
+    fitter = fitter.copy(update={"wvl_range": wvl_range})
+    assert len(fitter.freqs) == 9
+    medium, rms = fitter.fit(num_tries=2)
+
+    wvl_range = [0.2, 2.8]
+    fitter = fitter.copy(update={"wvl_range": wvl_range, "k_data": k_data})
+    assert len(fitter.freqs) == 11
     medium, rms = fitter.fit(num_tries=2)
