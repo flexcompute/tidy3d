@@ -16,8 +16,8 @@ Defining Structures and Materials
     notebooks/Fitting
     notebooks/FullyAnisotropic
     notebooks/Gyrotropic
+    notebooks/CustomMediumTutorial
     notebooks/Self_intersecting_polyslab
-    notebooks/TFSF
 
 Defining Grid and Boundary Conditions
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -28,19 +28,19 @@ Defining Grid and Boundary Conditions
     notebooks/BoundaryConditions
     notebooks/AutoGrid
 
-Mode Solver
-~~~~~~~~~~~
+Defining Sources and Monitors
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 .. toctree::
     :maxdepth: 1
 
-    notebooks/ModeSolver
     notebooks/Modal_sources_monitors
     notebooks/Modes_bent_angled
-    notebooks/WaveguidePluginDemonstration
+    notebooks/TFSF
+    notebooks/CustomFieldSource
 
-Interacting with Tidy3D Web API
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Running Simulations
+~~~~~~~~~~~~~~~~~~~
 
 .. toctree::
     :maxdepth: 1
@@ -58,14 +58,16 @@ Visualization of Simulation and Monitor Data
     notebooks/VizData
     notebooks/AnimationTutorial
 
-Defining Custom Components
-~~~~~~~~~~~~~~~~~~~~~~~~~~
+Utility Tools
+~~~~~~~~~~~~~
 
 .. toctree::
     :maxdepth: 1
 
-    notebooks/CustomFieldSource
-    notebooks/CustomMediumTutorial
+    notebooks/ModeSolver
+    notebooks/WaveguidePluginDemonstration
+    notebooks/FieldProjections
+    notebooks/SMatrix
 
 FDTD Adjoint Optimization
 ~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -78,15 +80,6 @@ FDTD Adjoint Optimization
     notebooks/AdjointPlugin_3_InverseDesign
     notebooks/AdjointPlugin_4_MultiObjective
     notebooks/AdjointPlugin_5_BoundaryGradients
-
-Post Processing
-~~~~~~~~~~~~~~~
-
-.. toctree::
-    :maxdepth: 1
-
-    notebooks/FieldProjections
-    notebooks/SMatrix
 
 Tidy3D Case Studies
 -------------------
