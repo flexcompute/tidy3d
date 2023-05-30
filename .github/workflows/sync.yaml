@@ -68,6 +68,7 @@ jobs:
           mkdir -p build && rsync -r ${{ github.workspace }}/docs/source/notebooks/html/ build
           mkdir -p build/css && rsync -r build/css/ build-css
           mkdir -p build/image && rsync -r build/image/ build-image
+          mkdir -p build-source && cp docs/source/notebooks/*.ipynb build-source
           rm -rf build/css
           rm -rf build/image
           ls -la build
@@ -92,6 +93,13 @@ jobs:
           token: ${{ secrets.GH_PAT }}
           repository-name: cmsflexc/flexcompute.com
           target-folder: /assets/tidy3d/examples/image
+          branch: ${{ needs.set_env.outputs.dest-branch }}
+      - uses: JamesIves/github-pages-deploy-action@v4
+        with:
+          folder: build-source
+          token: ${{ secrets.GH_PAT }}
+          repository-name: cmsflexc/flexcompute.com
+          target-folder: /assets/tidy3d/examples/notebooks
           branch: ${{ needs.set_env.outputs.dest-branch }}
       - uses: actions/upload-artifact@v3
         with:
