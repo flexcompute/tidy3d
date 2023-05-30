@@ -447,7 +447,7 @@ class DispersionFitter(Tidy3dBaseModel):
     def plot(
         self,
         medium: PoleResidue = None,
-        wvl_um: Tuple[float, ...] = None,
+        wvl_um: ArrayFloat1D = None,
         ax: Ax = None,
     ) -> Ax:
         """Make plot of model vs data, at a set of wavelengths (if supplied).
@@ -456,7 +456,7 @@ class DispersionFitter(Tidy3dBaseModel):
         ----------
         medium : :class:`.PoleResidue` = None
             medium containing model to plot against data
-        wvl_um : Tuple[float, ...] = None
+        wvl_um : ArrayFloat1D = None
             Wavelengths to evaluate model at for plot in micrometers.
         ax : matplotlib.axes._subplots.Axes = None
             Axes to plot the data on, if None, a new one is created.
@@ -467,19 +467,18 @@ class DispersionFitter(Tidy3dBaseModel):
             Matplotlib axis corresponding to plot.
         """
 
-        if wvl_um is None:
-            wvl_um = C_0 / self.freqs
-
-        freqs = C_0 / wvl_um
-        eps_model = medium.eps_model(freqs)
-        n_model, k_model = AbstractMedium.eps_complex_to_nk(eps_model)
-
-        ax.plot(self.wvl_um, self.n_data, "x", color="tab:blue", label="n (data)")
-        ax.plot(wvl_um, n_model, color="tab:blue", label="n (model)")
-
+        ax.plot(self.wvl_um, self.n_data, "x", label="n (data)")
         if self.lossy:
-            ax.plot(self.wvl_um, self.k_data, "+", color="tab:orange", label="k (data)")
-            ax.plot(wvl_um, k_model, color="tab:orange", label="k (model)")
+            ax.plot(self.wvl_um, self.k_data, "+", label="k (data)")
+
+        if medium:
+            if wvl_um is None:
+                wvl_um = C_0 / self.freqs
+            eps_model = medium.eps_model(C_0 / wvl_um)
+            n_model, k_model = AbstractMedium.eps_complex_to_nk(eps_model)
+            ax.plot(wvl_um, n_model, label="n (model)")
+            if self.lossy:
+                ax.plot(wvl_um, k_model, label="k (model)")
 
         ax.set_ylabel("n, k")
         ax.set_xlabel("Wavelength ($\\mu m$)")
