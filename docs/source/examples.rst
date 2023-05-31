@@ -81,6 +81,7 @@ FDTD Adjoint Optimization
     notebooks/AdjointPlugin_3_InverseDesign
     notebooks/AdjointPlugin_4_MultiObjective
     notebooks/AdjointPlugin_5_BoundaryGradients
+    notebooks/AdjointPlugin_6_GratingCoupler
 
 Tidy3D Case Studies
 -------------------
