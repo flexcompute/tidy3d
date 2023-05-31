@@ -140,6 +140,7 @@ Optical Scattering and Far-field Radiation
     notebooks/PlasmonicYagiUdaNanoantenna
     notebooks/ZonePlateFieldProjection
     notebooks/AndersonLocalization
+    notebooks/NonHermitianMetagratings
 
 Lenses
 ~~~~~~
