@@ -7,10 +7,11 @@ from typing_extensions import Literal
 import pydantic
 import numpy as np
 
-from .base import Tidy3dBaseModel, cached_property, DATA_ARRAY_MAP
+from .base import Tidy3dBaseModel, cached_property
 
 from .types import Direction, Polarization, Ax, FreqBound, ArrayFloat1D, Axis, PlotVal
 from .validators import assert_plane, assert_volumetric, validate_name_str, get_value
+from .validators import warn_if_dataset_none, assert_single_freq_in_range
 from .data.dataset import FieldDataset
 from .geometry import Box, Coordinate
 from .mode import ModeSpec
@@ -444,6 +445,46 @@ class PointDipole(CurrentSource):
     )
 
 
+class CustomCurrentSource(Source):
+    """Implements a source corresponding to an input dataset containing ``E`` and ``H`` fields.
+    Injects the specified components of the ``E`` and ``H`` dataset directly as ``J`` and ``M``
+    current distributions in the FDTD solver.
+
+    Note
+    ----
+        If only the ``E`` or only the ``H`` fields are provided, the source will not be directional,
+        but will inject equal power in both directions instead.
+
+    Example
+    -------
+    >>> from tidy3d import ScalarFieldDataArray
+    >>> pulse = GaussianPulse(freq0=200e12, fwidth=20e12)
+    >>> x = np.linspace(-1, 1, 101)
+    >>> y = np.linspace(-1, 1, 101)
+    >>> z = np.array([0])
+    >>> f = [2e14]
+    >>> coords = dict(x=x, y=y, z=z, f=f)
+    >>> scalar_field = ScalarFieldDataArray(np.ones((101, 101, 1, 1)), coords=coords)
+    >>> dataset = FieldDataset(Ex=scalar_field)
+    >>> custom_source = CustomCurrentSource(
+    ...     center=(1, 1, 1),
+    ...     size=(2, 2, 0),
+    ...     source_time=pulse,
+    ...     current_dataset=dataset)
+
+    """
+
+    current_dataset: Optional[FieldDataset] = pydantic.Field(
+        ...,
+        title="Current Dataset",
+        description=":class:`.FieldDataset` containing the desired frequency-domain "
+        "electric and magnetic current patterns to inject.",
+    )
+
+    _current_dataset_none_warning = warn_if_dataset_none("current_dataset")
+    _current_dataset_single_freq = assert_single_freq_in_range("current_dataset")
+
+
 class FieldSource(Source, ABC):
     """A Source defined by the desired E and/or H fields."""
 
@@ -583,36 +624,8 @@ class CustomFieldSource(FieldSource, PlanarSource):
         "fields patterns to inject. At least one tangetial field component must be specified.",
     )
 
-    @pydantic.validator("field_dataset", pre=True, always=True)
-    def _warn_if_none(cls, val: FieldDataset) -> FieldDataset:
-        """Warn if the DataArrays fail to load."""
-        if isinstance(val, dict):
-            if any((v in DATA_ARRAY_MAP for _, v in val.items() if isinstance(v, str))):
-                log.warning("Loading 'field_dataset' without data.")
-                return None
-        return val
-
-    @pydantic.validator("field_dataset", always=True)
-    def _single_frequency_in_range(cls, val: FieldDataset, values: dict) -> FieldDataset:
-        """Assert only one frequency supplied and it's in source time range."""
-        if val is None:
-            return val
-        source_time = get_value(key="source_time", values=values)
-        fmin, fmax = source_time.frequency_range()
-        for name, scalar_field in val.field_components.items():
-            freqs = scalar_field.f
-            if len(freqs) != 1:
-                raise SetupError(
-                    f"'field_dataset.{name}' must have a single frequency, "
-                    f"contains {len(freqs)} frequencies."
-                )
-            freq = float(freqs[0])
-            if (freq < fmin) or (freq > fmax):
-                raise SetupError(
-                    f"'field_dataset.{name}' contains frequency: {freq:.2e} Hz, which is outside "
-                    f"of the 'source_time' frequency range [{fmin:.2e}-{fmax:.2e}] Hz."
-                )
-        return val
+    _field_dataset_none_warning = warn_if_dataset_none("field_dataset")
+    _field_dataset_single_freq = assert_single_freq_in_range("field_dataset")
 
     @pydantic.validator("field_dataset", always=True)
     def _tangential_component_defined(cls, val: FieldDataset, values: dict) -> FieldDataset:
@@ -910,5 +923,6 @@ SourceType = Union[
     ModeSource,
     PlaneWave,
     CustomFieldSource,
+    CustomCurrentSource,
     TFSF,
 ]

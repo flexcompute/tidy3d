@@ -6,6 +6,9 @@ import pydantic
 
 from .geometry import Box
 from ..exceptions import ValidationError, SetupError
+from .data.dataset import Dataset, FieldDataset
+from .base import DATA_ARRAY_MAP
+from ..log import log
 
 """ Explanation of pydantic validators:
 
@@ -199,3 +202,46 @@ def required_if_symmetry_present(field_name: str):
         return val
 
     return _make_required
+
+
+def warn_if_dataset_none(field_name: str):
+    """Warn if a Dataset field has None in its dictionary."""
+
+    @pydantic.validator(field_name, pre=True, always=True, allow_reuse=True)
+    def _warn_if_none(cls, val: Dataset) -> Dataset:
+        """Warn if the DataArrays fail to load."""
+        if isinstance(val, dict):
+            if any((v in DATA_ARRAY_MAP for _, v in val.items() if isinstance(v, str))):
+                log.warning(f"Loading {field_name} without data.")
+                return None
+        return val
+
+    return _warn_if_none
+
+
+def assert_single_freq_in_range(field_name: str):
+    """Assert only one frequency supplied in source and it's in source time range."""
+
+    @pydantic.validator(field_name, always=True, allow_reuse=True)
+    def _single_frequency_in_range(cls, val: FieldDataset, values: dict) -> FieldDataset:
+        """Assert only one frequency supplied and it's in source time range."""
+        if val is None:
+            return val
+        source_time = get_value(key="source_time", values=values)
+        fmin, fmax = source_time.frequency_range()
+        for name, scalar_field in val.field_components.items():
+            freqs = scalar_field.f
+            if len(freqs) != 1:
+                raise SetupError(
+                    f"'{field_name}.{name}' must have a single frequency, "
+                    f"contains {len(freqs)} frequencies."
+                )
+            freq = float(freqs[0])
+            if (freq < fmin) or (freq > fmax):
+                raise SetupError(
+                    f"'{field_name}.{name}' contains frequency: {freq:.2e} Hz, which is outside "
+                    f"of the 'source_time' frequency range [{fmin:.2e}-{fmax:.2e}] Hz."
+                )
+        return val
+
+    return _single_frequency_in_range

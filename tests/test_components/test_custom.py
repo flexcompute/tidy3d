@@ -1,7 +1,9 @@
 """Tests custom sources and mediums."""
+import dill as pickle
+from typing import Tuple
+
 import pytest
 import numpy as np
-import dill as pickle
 import pydantic
 
 from tidy3d.components.simulation import Simulation
@@ -9,7 +11,7 @@ from tidy3d.components.geometry import Box
 from tidy3d.components.structure import Structure
 from tidy3d.components.grid.grid_spec import GridSpec
 from tidy3d import Coords
-from tidy3d.components.source import CustomFieldSource, GaussianPulse
+from tidy3d.components.source import CustomFieldSource, GaussianPulse, CustomCurrentSource
 from tidy3d.components.data.data_array import ScalarFieldDataArray
 from tidy3d.components.data.dataset import FieldDataset
 from tidy3d.exceptions import SetupError, DataError, ValidationError
@@ -53,19 +55,42 @@ def make_custom_field_source():
     return CustomFieldSource(size=SIZE, source_time=ST, field_dataset=field_dataset)
 
 
+def make_custom_current_source():
+    """Make a custom field source."""
+    field_components = {}
+    for field in "EH":
+        for component in "xyz":
+            field_components[field + component] = make_scalar_data()
+    current_dataset = FieldDataset(**field_components)
+    return CustomCurrentSource(size=SIZE, source_time=ST, current_dataset=current_dataset)
+
+
 # instance, which we use in the parameterized tests
 FIELD_SRC = make_custom_field_source()
+CURRENT_SRC = make_custom_current_source()
 
 
-def test_field_components():
+def get_dataset(custom_source_obj) -> Tuple[str, FieldDataset]:
+    """Get a dict containing dataset depending on type and its key."""
+    if isinstance(custom_source_obj, CustomFieldSource):
+        return "field_dataset", custom_source_obj.field_dataset
+    if isinstance(custom_source_obj, CustomCurrentSource):
+        return "current_dataset", custom_source_obj.current_dataset
+    raise ValueError("not supplied a custom current object.")
+
+
+@pytest.mark.parametrize("source", (FIELD_SRC, CURRENT_SRC))
+def test_field_components(source):
     """Get Dictionary of field components and select some data."""
-    for name, field in FIELD_SRC.field_dataset.field_components.items():
+    _, dataset = get_dataset(source)
+    for name, field in dataset.field_components.items():
         _ = field.interp(x=0, y=0, z=0).sel(f=freqs[0])
 
 
-def test_custom_source_simulation():
+@pytest.mark.parametrize("source", (FIELD_SRC, CURRENT_SRC))
+def test_custom_source_simulation(source):
     """Test adding to simulation."""
-    sim = Simulation(run_time=1e-12, size=(1, 1, 1), sources=(FIELD_SRC,))
+    sim = Simulation(run_time=1e-12, size=(1, 1, 1), sources=(source,))
 
 
 def test_validator_tangential_field():
@@ -88,25 +113,25 @@ def test_validator_non_planar():
         )
 
 
-def test_validator_freq_out_of_range():
+@pytest.mark.parametrize("source", (FIELD_SRC, CURRENT_SRC))
+def test_validator_freq_out_of_range_src(source):
     """Test that it errors if field_dataset frequency out of range of source_time."""
-    field_dataset = FIELD_SRC.field_dataset
-    Ex_new = ScalarFieldDataArray(field_dataset.Ex.data, coords=dict(x=X, y=Y, z=Z, f=[0]))
-    field_dataset = FIELD_SRC.field_dataset.copy(update=dict(Ex=Ex_new))
+    key, dataset = get_dataset(source)
+    Ex_new = ScalarFieldDataArray(dataset.Ex.data, coords=dict(x=X, y=Y, z=Z, f=[0]))
+    dataset_fail = dataset.copy(update=dict(Ex=Ex_new))
     with pytest.raises(pydantic.ValidationError):
-        field_source_no_tang = CustomFieldSource(
-            size=SIZE, source_time=ST, field_dataset=field_dataset
-        )
+        src_out_of_range = source.updated_copy(size=SIZE, source_time=ST, **{key: dataset_fail})
 
 
-def test_validator_freq_multiple():
+@pytest.mark.parametrize("source", (FIELD_SRC, CURRENT_SRC))
+def test_validator_freq_multiple(source):
     """Test that it errors more than 1 frequency given."""
-    field_dataset = FIELD_SRC.field_dataset
-    new_data = np.concatenate((field_dataset.Ex.data, field_dataset.Ex.data), axis=-1)
+    key, dataset = get_dataset(source)
+    new_data = np.concatenate((dataset.Ex.data, dataset.Ex.data), axis=-1)
     Ex_new = ScalarFieldDataArray(new_data, coords=dict(x=X, y=Y, z=Z, f=[1, 2]))
-    field_dataset = FIELD_SRC.field_dataset.copy(update=dict(Ex=Ex_new))
+    dataset_fail = dataset.copy(update=dict(Ex=Ex_new))
     with pytest.raises(pydantic.ValidationError):
-        field_source = FIELD_SRC.copy(update=dict(field_dataset=field_dataset))
+        source_fail = source.copy(update={key: dataset_fail})
 
 
 def test_validator_data_span():

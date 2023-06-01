@@ -27,7 +27,7 @@ from .components.apodization import ApodizationSpec
 from .components.source import GaussianPulse, ContinuousWave
 from .components.source import UniformCurrentSource, PlaneWave, ModeSource, PointDipole
 from .components.source import GaussianBeam, AstigmaticGaussianBeam
-from .components.source import CustomFieldSource, TFSF
+from .components.source import CustomFieldSource, TFSF, CustomCurrentSource
 
 # monitors
 from .components.monitor import FieldMonitor, FieldTimeMonitor, FluxMonitor, FluxTimeMonitor

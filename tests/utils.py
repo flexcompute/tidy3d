@@ -212,6 +212,25 @@ SIM_FULL = Simulation(
                 )
             ),
         ),
+        CustomCurrentSource(
+            center=(0, 1, 2),
+            size=(2, 2, 0),
+            source_time=GaussianPulse(
+                freq0=2e14,
+                fwidth=4e13,
+            ),
+            current_dataset=FieldDataset(
+                Ex=ScalarFieldDataArray(
+                    np.ones((101, 101, 1, 1)),
+                    coords=dict(
+                        x=np.linspace(-1, 1, 101),
+                        y=np.linspace(-1, 1, 101),
+                        z=np.array([0]),
+                        f=[2e14],
+                    ),
+                )
+            ),
+        ),
         TFSF(
             center=(1, 2, -3),
             size=(2.5, 2.5, 0.5),
