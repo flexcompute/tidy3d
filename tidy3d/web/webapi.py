@@ -6,8 +6,9 @@ from datetime import datetime, timedelta
 from typing import List, Dict, Callable
 from functools import wraps
 
-from requests import HTTPError
+from requests import HTTPError, ReadTimeout
 from requests.exceptions import ConnectionError as ConnErr
+from requests.exceptions import JSONDecodeError
 from urllib3.exceptions import NewConnectionError
 
 import pytz
@@ -52,7 +53,7 @@ def wait_for_connection(decorated_fn=None, wait_time_sec: float = CONNECTION_RET
             while (time.time() - time_start) < wait_time_sec:
                 try:
                     return web_fn(*args, **kwargs)
-                except (ConnErr, ConnectionError, NewConnectionError):
+                except (ConnErr, ConnectionError, NewConnectionError, ReadTimeout, JSONDecodeError):
                     if not warned_previously:
                         log.warning(f"No connection: Retrying for {wait_time_sec} seconds.")
                         warned_previously = True
