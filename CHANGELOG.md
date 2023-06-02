@@ -6,6 +6,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- `CustomCurrentSource`, which injects volumetric electric and magnetic current densities based on user-supplied data.
 
 ### Changed
 - Add `Medium2D` to full simulation in tests.
@@ -15,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - Plotting 2D materials in `SimulationData.plot_field` and other circumstances.
+- More segments in plotting of large cylinder and sphere cross-sections.
 
 ## [2.2.2] - 2023-5-25
 
