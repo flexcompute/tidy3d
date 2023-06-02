@@ -134,12 +134,6 @@ def test_validator_freq_multiple(source):
         source_fail = source.copy(update={key: dataset_fail})
 
 
-def test_validator_data_span():
-    """Test that it errors if data does not span source size."""
-    with pytest.raises(pydantic.ValidationError):
-        field_source = FIELD_SRC.copy(update=dict(size=(3, 0, 2)))
-
-
 @clear_tmp
 def test_io_hdf5():
     """Saving and loading from hdf5 file."""

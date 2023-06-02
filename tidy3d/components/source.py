@@ -642,21 +642,6 @@ class CustomFieldSource(FieldSource, PlanarSource):
                     return val
         raise SetupError("No tangential field found in the suppled 'field_dataset'.")
 
-    @pydantic.validator("field_dataset", always=True)
-    def _tangential_fields_span_source(cls, val: FieldDataset, values: dict) -> FieldDataset:
-        """Assert that provided data spans source bounds in the frame with the source center as the
-        origin."""
-        if val is None:
-            return val
-        size = get_value(key="size", values=values)
-        for name, field in val.field_components.items():
-            for dim, dim_name in enumerate("xyz"):
-                in_bounds_min = np.amin(field.coords[dim_name]) <= -size[dim] / 2 + DATA_SPAN_TOL
-                in_bounds_max = np.amax(field.coords[dim_name]) >= size[dim] / 2 - DATA_SPAN_TOL
-                if not (in_bounds_min and in_bounds_max):
-                    raise SetupError(f"Data for field {name} does not span the source plane.")
-        return val
-
 
 """ Source current profiles defined by (1) angle or (2) desired mode. Sets theta and phi angles."""
 
