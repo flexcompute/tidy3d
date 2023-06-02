@@ -6,7 +6,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- `CustomCurrentSource`, which injects volumetric electric and magnetic current densities based on user-supplied data.
 - Specification of spatial permittivity distribution of dispersive material using user-supplied data through `CustomPoleResidue`, `CustomSellmeier`, `CustomLorentz`, `CustomDebye`, and `CustomDrude` components.
 - `CustomAnisotropicMedium` where each component can take user-supplied data to define spatial permittivity distribution of non-dispersive or dispersive material.
 
