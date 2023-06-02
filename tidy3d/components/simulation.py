@@ -25,6 +25,7 @@ from .boundary import BoundarySpec, BlochBoundary, PECBoundary, PMCBoundary, Per
 from .boundary import PML, StablePML, Absorber, AbsorberSpec
 from .structure import Structure
 from .source import SourceType, PlaneWave, GaussianBeam, AstigmaticGaussianBeam, CustomFieldSource
+from .source import CustomCurrentSource
 from .source import TFSF, Source
 from .monitor import MonitorType, Monitor, FreqMonitor
 from .monitor import AbstractFieldMonitor, DiffractionMonitor, AbstractFieldProjectionMonitor
@@ -2640,8 +2641,11 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         """List of custom datasets for verification purposes. If the list is not empty, then
         the simulation needs to be exported to hdf5 to store the data.
         """
-        datasets_source = [
+        datasets_field_source = [
             src.field_dataset for src in self.sources if isinstance(src, CustomFieldSource)
+        ]
+        datasets_current_source = [
+            src.current_dataset for src in self.sources if isinstance(src, CustomCurrentSource)
         ]
         datasets_medium = [mat for mat in self.mediums if isinstance(mat, AbstractCustomMedium)]
         datasets_geometry = [
@@ -2649,7 +2653,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
             for struct in self.structures
             if isinstance(struct.geometry, TriangleMesh)
         ]
-        return datasets_source + datasets_medium + datasets_geometry
+        return datasets_field_source + datasets_current_source + datasets_medium + datasets_geometry
 
     def _volumetric_structures_grid(self, grid: Grid) -> Tuple[Structure]:
         """Generate a tuple of structures wherein any 2D materials are converted to 3D
