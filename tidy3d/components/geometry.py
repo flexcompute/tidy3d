@@ -48,6 +48,8 @@ _N_SAMPLE_POLYGON_INTERSECT = 5
 # for sampling conical frustum in visualization
 _N_SAMPLE_CURVE_SHAPELY = 40
 _IS_CLOSE_RTOL = np.finfo(float).eps
+# for shapely circular shapes discretization in visualization
+_N_SHAPELY_QUAD_SEGS = 200
 
 
 Points = ArrayFloat3D
@@ -1596,7 +1598,7 @@ class Sphere(Centered, Circular):
         intersect_dist = self._intersect_dist(position, z0)
         if not intersect_dist:
             return []
-        return [Point(x0, y0).buffer(0.5 * intersect_dist)]
+        return [Point(x0, y0).buffer(0.5 * intersect_dist, quad_segs=_N_SHAPELY_QUAD_SEGS)]
 
     @cached_property
     def bounds(self) -> Bound:
@@ -1710,7 +1712,7 @@ class Cylinder(Centered, Circular, Planar):
             return []
 
         _, (x0, y0) = self.pop_axis(self.center, axis=self.axis)
-        return [Point(x0, y0).buffer(radius_offset)]
+        return [Point(x0, y0).buffer(radius_offset, quad_segs=_N_SHAPELY_QUAD_SEGS)]
 
     def _intersections_side(self, position, axis):  # pylint:disable=too-many-locals
         """Find shapely geometries intersecting cylindrical geometry with axis orthogonal to length.
