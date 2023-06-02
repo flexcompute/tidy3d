@@ -90,17 +90,27 @@ Mediums
 Non-Dispersive Medium
 ---------------------
 
+Spatially uniform
+^^^^^^^^^^^^^^^^^
 .. autosummary::
    :toctree: _autosummary/
 
    Medium
    PECMedium
-   CustomMedium
    FullyAnisotropicMedium
+
+Spatially varying
+^^^^^^^^^^^^^^^^^   
+.. autosummary::
+   :toctree: _autosummary/
+
+   CustomMedium   
 
 Dispersive Mediums
 ------------------
 
+Spatially uniform
+^^^^^^^^^^^^^^^^^
 .. autosummary::
    :toctree: _autosummary/
 
@@ -110,8 +120,22 @@ Dispersive Mediums
    Drude
    Debye
 
+Spatially varying
+^^^^^^^^^^^^^^^^^   
+.. autosummary::
+   :toctree: _autosummary/
+
+   CustomPoleResidue
+   CustomLorentz
+   CustomSellmeier
+   CustomDrude
+   CustomDebye   
+
 General Mediums (can be both dispersive and non-dispersive)
 -----------------------------------------------------------
+
+Spatially uniform
+^^^^^^^^^^^^^^^^^
 
 .. autosummary::
    :toctree: _autosummary/
@@ -119,6 +143,12 @@ General Mediums (can be both dispersive and non-dispersive)
    AnisotropicMedium
    Medium2D
 
+Spatially varying
+^^^^^^^^^^^^^^^^^   
+.. autosummary::
+   :toctree: _autosummary/   
+
+   CustomAnisotropicMedium   
 
 Material Library
 ----------------
@@ -266,6 +296,7 @@ Individual Datasets
 .. autosummary::
    :toctree: _autosummary/
 
+   SpatialDataArray
    PermittivityDataset
    ScalarFieldDataArray
    ScalarModeFieldDataArray
