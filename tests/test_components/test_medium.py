@@ -10,7 +10,7 @@ from typing import Dict
 MEDIUM = td.Medium()
 ANIS_MEDIUM = td.AnisotropicMedium(xx=MEDIUM, yy=MEDIUM, zz=MEDIUM)
 PEC = td.PECMedium()
-PR = td.PoleResidue(poles=[(1 + 1j, 2 + 2j)])
+PR = td.PoleResidue(poles=[(-1 + 1j, 2 + 2j)])
 SM = td.Sellmeier(coeffs=[(1, 2)])
 LZ = td.Lorentz(coeffs=[(1, 2, 3)])
 DR = td.Drude(coeffs=[(1, 2)])
@@ -87,7 +87,7 @@ def test_PEC():
 def test_medium_dispersion():
 
     # construct media
-    m_PR = td.PoleResidue(eps_inf=1.0, poles=[((1 + 2j), (1 + 3j)), ((2 + 4j), (1 + 5j))])
+    m_PR = td.PoleResidue(eps_inf=1.0, poles=[((-1 + 2j), (1 + 3j)), ((-2 + 4j), (1 + 5j))])
     m_SM = td.Sellmeier(coeffs=[(2, 3), (2, 4)])
     m_LZ = td.Lorentz(eps_inf=1.0, coeffs=[(1, 3, 2), (2, 4, 1)])
     m_LZ2 = td.Lorentz(eps_inf=1.0, coeffs=[(1, 2, 3), (2, 1, 4)])
@@ -114,7 +114,7 @@ def test_medium_dispersion():
 
 def test_medium_dispersion_conversion():
 
-    m_PR = td.PoleResidue(eps_inf=1.0, poles=[((1 + 2j), (1 + 3j)), ((2 + 4j), (1 + 5j))])
+    m_PR = td.PoleResidue(eps_inf=1.0, poles=[((-1 + 2j), (1 + 3j)), ((-2 + 4j), (1 + 5j))])
     m_SM = td.Sellmeier(coeffs=[(2, 3), (2, 4)])
     m_LZ = td.Lorentz(eps_inf=1.0, coeffs=[(1, 3, 2), (2, 4, 1)])
     m_LZ2 = td.Lorentz(eps_inf=1.0, coeffs=[(1, 2, 3), (2, 1, 4)])
@@ -130,7 +130,7 @@ def test_medium_dispersion_conversion():
 
 def test_medium_dispersion_create():
 
-    m_PR = td.PoleResidue(eps_inf=1.0, poles=[((1 + 2j), (1 + 3j)), ((2 + 4j), (1 + 5j))])
+    m_PR = td.PoleResidue(eps_inf=1.0, poles=[((-1 + 2j), (1 + 3j)), ((-2 + 4j), (1 + 5j))])
     m_SM = td.Sellmeier(coeffs=[(2, 3), (2, 4)])
     m_LZ = td.Lorentz(eps_inf=1.0, coeffs=[(1, 3, 2), (2, 4, 1)])
     m_LZ2 = td.Lorentz(eps_inf=1.0, coeffs=[(1, 2, 3), (2, 1, 4)])
@@ -256,7 +256,7 @@ def test_n_cfl():
     material = td.AnisotropicMedium(xx=MEDIUM, yy=td.Medium(permittivity=4), zz=MEDIUM)
     assert material.n_cfl == 1
     # dispersive
-    material = td.PoleResidue(eps_inf=0.16, poles=[(1 + 1j, 2 + 2j)])
+    material = td.PoleResidue(eps_inf=0.16, poles=[(-1 + 1j, 2 + 2j)])
     assert material.n_cfl == 0.4
     assert SM.n_cfl == 1
     material = td.Lorentz(eps_inf=0.04, coeffs=[(1, 2, 3)])
@@ -265,6 +265,40 @@ def test_n_cfl():
     assert material.n_cfl == 2
     material = td.Debye(eps_inf=4, coeffs=[(1, 2)])
     assert material.n_cfl == 2
+
+
+def test_gain_medium():
+    """Test passive and gain medium validations."""
+    # non-dispersive
+    with pytest.raises(pydantic.ValidationError) as e_info:
+        m = td.Medium(conductivity=-0.1)
+    with pytest.raises(pydantic.ValidationError) as e_info:
+        m = td.Medium(conductivity=-1.0, allow_gain=False)
+    m = td.Medium(conductivity=-1.0, allow_gain=True)
+
+    # pole residue, causality
+    with pytest.raises(pydantic.ValidationError) as e_info:
+        m = td.PoleResidue(eps_inf=0.16, poles=[(1 + 1j, 2 + 2j)])
+
+    # Sellmeier
+    with pytest.raises(pydantic.ValidationError) as e_info:
+        m = td.Sellmeier(coeffs=((-1, 1),))
+    m = td.Sellmeier(coeffs=((-1, 1),), allow_gain=True)
+
+    # Lorentz
+    # causality, negative gamma
+    with pytest.raises(pydantic.ValidationError) as e_info:
+        m = td.Lorentz(eps_inf=0.04, coeffs=[(1, 2, -3)])
+    # gain, negative Delta epsilon
+    with pytest.raises(pydantic.ValidationError) as e_info:
+        m = td.Lorentz(eps_inf=0.04, coeffs=[(-1, 2, 3)])
+    m = td.Lorentz(eps_inf=0.04, coeffs=[(-1, 2, 3)], allow_gain=True)
+    # f_i can take whatever sign
+    m = td.Lorentz(eps_inf=0.04, coeffs=[(1, -2, 3)])
+
+    # Drude, only causality constraint
+    with pytest.raises(pydantic.ValidationError) as e_info:
+        m = td.Drude(eps_inf=0.04, coeffs=[(1, -2)])
 
 
 def test_medium2d():
@@ -341,6 +375,7 @@ def test_fully_anisotropic_media():
         td.FullyAnisotropicMedium(permittivity=[[3, 0, 0], [0, 0.5, 0], [0, 0, 1]])
     with pytest.raises(pydantic.ValidationError):
         td.FullyAnisotropicMedium(conductivity=[[-3, 0, 0], [0, 0.5, 0], [0, 0, 1]])
+    td.FullyAnisotropicMedium(conductivity=[[-3, 0, 0], [0, 0.5, 0], [0, 0, 1]], allow_gain=True)
 
     # check that permittivity needs to be symmetric
     with pytest.raises(pydantic.ValidationError):
