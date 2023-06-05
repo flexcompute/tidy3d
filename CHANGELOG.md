@@ -6,11 +6,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+
+### Changed
+
+### Fixed
+
+## [2.3.0rc1]
+
+### Added
 - Specification of spatial permittivity distribution of dispersive material using user-supplied data through `CustomPoleResidue`, `CustomSellmeier`, `CustomLorentz`, `CustomDebye`, and `CustomDrude` components.
 - `CustomAnisotropicMedium` where each component can take user-supplied data to define spatial permittivity distribution of non-dispersive or dispersive material.
 
 ### Changed
-- Add `Medium2D` to full simulation in tests.
+- Added `Medium2D` to full simulation in tests.
 - `DispersionFitter` and `StableDispersionFitter` unified in a single `DispersionFitter` interface.
 - `StableDispersionFitter` deprecated, with stable fitter now being run instead through `plugins.dispersion.web.run(DispersionFitter)`.
 - Removed validator from `CustomFieldSource` that ensured data spanned the source geometry. Now the current values are extrapolated outside of the supplied data ranges.
@@ -772,7 +780,8 @@ which fields are to be projected is now determined automatically based on the me
 - Job and Batch classes for better simulation handling (eventually to fully replace webapi functions).
 - A large number of small improvements and bug fixes.
 
-[Unreleased]: https://github.com/flexcompute/tidy3d/compare/v2.2.2...develop
+[Unreleased]: https://github.com/flexcompute/tidy3d/compare/v2.3.0rc1...develop
+[2.3.0rc1]: https://github.com/flexcompute/tidy3d/compare/v2.2.2...v2.3.0rc1
 [2.2.2]: https://github.com/flexcompute/tidy3d/compare/v2.2.1...v2.2.2
 [2.2.1]: https://github.com/flexcompute/tidy3d/compare/v2.2.0...v2.2.1
 [2.2.0]: https://github.com/flexcompute/tidy3d/compare/v2.1.1...v2.2.0
