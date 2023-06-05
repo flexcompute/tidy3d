@@ -288,6 +288,17 @@ class JaxCustomMedium(CustomMedium, AbstractJaxMedium):
     )
 
     @pd.root_validator(pre=True)
+    def _pre_deprecation_dataset(cls, values):
+        """Don't allow permittivity as a field until we support it."""
+        if values.get("permittivity"):
+            raise SetupError(
+                "'permittivity' is not yet supported in adjoint plugin. "
+                "Please continue to use the 'eps_dataset' field to define the component "
+                "of the permittivity tensor."
+            )
+        return values
+
+    @pd.root_validator(pre=True)
     def _deprecation_dataset(cls, values):
         """Raise deprecation warning if dataset supplied and convert to dataset."""
         return values

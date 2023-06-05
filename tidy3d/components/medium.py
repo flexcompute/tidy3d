@@ -793,27 +793,28 @@ class CustomMedium(AbstractCustomMedium):
         if eps_dataset is None:
             return values
 
-        if isinstance(eps_dataset, dict):
-            eps_components = [eps_dataset[f"eps_{dim}{dim}"] for dim in "xyz"]
-        else:
-            eps_components = [eps_dataset.eps_xx, eps_dataset.eps_yy, eps_dataset.eps_zz]
+        # TODO: sometime before 3.0, uncomment these lines to warn users to start using new API
+        # if isinstance(eps_dataset, dict):
+        #     eps_components = [eps_dataset[f"eps_{dim}{dim}"] for dim in "xyz"]
+        # else:
+        #     eps_components = [eps_dataset.eps_xx, eps_dataset.eps_yy, eps_dataset.eps_zz]
 
-        is_isotropic = eps_components[0] == eps_components[1] == eps_components[2]
+        # is_isotropic = eps_components[0] == eps_components[1] == eps_components[2]
 
-        if is_isotropic:
-            # deprecation warning for isotropic custom medium
-            log.warning(
-                "For spatially varying isotropic medium, the 'eps_dataset' field "
-                "is being replaced by 'permittivity' and 'conductivity' in v3.0. "
-                "We recommend you change your scripts to be compatible with the new API."
-            )
-        else:
-            # deprecation warning for anisotropic custom medium
-            log.warning(
-                "For spatially varying anisotropic medium, this class is being replaced "
-                "by 'CustomAnisotropicMedium' in v3.0. "
-                "We recommend you change your scripts to be compatible with the new API."
-            )
+        # if is_isotropic:
+        #     # deprecation warning for isotropic custom medium
+        #     log.warning(
+        #         "For spatially varying isotropic medium, the 'eps_dataset' field "
+        #         "is being replaced by 'permittivity' and 'conductivity' in v3.0. "
+        #         "We recommend you change your scripts to be compatible with the new API."
+        #     )
+        # else:
+        #     # deprecation warning for anisotropic custom medium
+        #     log.warning(
+        #         "For spatially varying anisotropic medium, this class is being replaced "
+        #         "by 'CustomAnisotropicMedium' in v3.0. "
+        #         "We recommend you change your scripts to be compatible with the new API."
+        #     )
 
         return values
 
