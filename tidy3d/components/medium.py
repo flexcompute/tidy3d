@@ -82,6 +82,13 @@ class AbstractMedium(ABC, Tidy3dBaseModel):
         units=(HERTZ, HERTZ),
     )
 
+    allow_gain: bool = pd.Field(
+        False,
+        title="Allow gain medium",
+        description="Allow the medium to be active. Caution: "
+        "simulations with gain medium are unstable, and are likely to diverge.",
+    )
+
     _name_validator = validate_name_str()
 
     @abstractmethod
@@ -511,12 +518,22 @@ class Medium(AbstractMedium):
 
     conductivity: float = pd.Field(
         0.0,
-        ge=0.0,
         title="Conductivity",
         description="Electric conductivity. Defined such that the imaginary part of the complex "
         "permittivity at angular frequency omega is given by conductivity/omega.",
         units=CONDUCTIVITY,
     )
+
+    @pd.validator("conductivity", always=True)
+    def _passivity_validation(cls, val, values):
+        """Assert passive medium if `allow_gain` is False."""
+        if not values.get("allow_gain") and val < 0:
+            raise ValidationError(
+                "For passive medium, 'conductivity' must be non-negative. "
+                "To simulate gain medium, please set 'allow_gain=True'. "
+                "Caution: simulations with gain medium are unstable, and are likely to diverge."
+            )
+        return val
 
     @cached_property
     def n_cfl(self):
@@ -603,8 +620,8 @@ class CustomIsotropicMedium(AbstractCustomMedium, Medium):
         return val
 
     @pd.validator("conductivity", always=True)
-    def _conductivity_non_negative_correct_shape(cls, val, values):
-        """Assert conductivity>=0"""
+    def _conductivity_real_and_correct_shape(cls, val, values):
+        """Assert conductivity is real and of right shape."""
 
         if val is None:
             return val
@@ -615,11 +632,21 @@ class CustomIsotropicMedium(AbstractCustomMedium, Medium):
         if not CustomIsotropicMedium._validate_isreal_dataarray(val):
             raise SetupError("'conductivity' must be real.")
 
-        if np.any(val.values < 0):
-            raise SetupError("'conductivity' must be non-negative.")
-
         if values["permittivity"].coords != val.coords:
             raise SetupError("'permittivity' and 'conductivity' must have the same coordinates.")
+        return val
+
+    @pd.validator("conductivity", always=True)
+    def _passivity_validation(cls, val, values):
+        """Assert passive medium if `allow_gain` is False."""
+        if val is None:
+            return val
+        if not values.get("allow_gain") and np.any(val.values < 0):
+            raise ValidationError(
+                "For passive medium, 'conductivity' must be non-negative. "
+                "To simulate gain medium, please set 'allow_gain=True'. "
+                "Caution: simulations with gain medium are unstable, and are likely to diverge."
+            )
         return val
 
     @cached_property
@@ -764,7 +791,7 @@ class CustomMedium(AbstractCustomMedium):
         return val
 
     @pd.validator("eps_dataset", always=True)
-    def _eps_dataset_eps_inf_greater_no_less_than_one_sigma_positive(cls, val):
+    def _eps_dataset_eps_inf_greater_no_less_than_one_sigma_positive(cls, val, values):
         """Assert any eps_inf must be >=1"""
         if val is None:
             return val
@@ -778,10 +805,12 @@ class CustomMedium(AbstractCustomMedium):
                     "Permittivity at infinite frequency at any spatial point "
                     "must be no less than one."
                 )
-            if np.any(sigma.values < 0):
-                raise SetupError(
-                    "Negative imaginary part of refrative index leads to a gain medium, "
-                    "which is not supported."
+            if not values.get("allow_gain") and np.any(sigma.values < 0):
+                raise ValidationError(
+                    "For passive medium, imaginary part of permittivity must be non-negative. "
+                    "To simulate gain medium, please set 'allow_gain=True'. "
+                    "Caution: simulations with gain medium are unstable, "
+                    "and are likely to diverge."
                 )
         return val
 
@@ -812,8 +841,13 @@ class CustomMedium(AbstractCustomMedium):
         if not CustomMedium._validate_isreal_dataarray(val):
             raise SetupError("'conductivity' must be real.")
 
-        if np.any(val.values < 0):
-            raise SetupError("'conductivity' must be non-negative.")
+        if not values.get("allow_gain") and np.any(val.values < 0):
+            raise ValidationError(
+                "For passive medium, 'conductivity' must be non-negative. "
+                "To simulate gain medium, please set 'allow_gain=True'. "
+                "Caution: simulations with gain medium are unstable, "
+                "and are likely to diverge."
+            )
 
         if values["permittivity"].coords != val.coords:
             raise SetupError("'permittivity' and 'conductivity' must have the same coordinates.")
@@ -849,13 +883,12 @@ class CustomMedium(AbstractCustomMedium):
         """Internal representation in the form of
         either `CustomIsotropicMedium` or `CustomAnisotropicMedium`.
         """
+        self_dict = self.dict(exclude={"type", "eps_dataset"})
         # isotropic
         if self.eps_dataset is None:
-            return CustomIsotropicMedium(
-                permittivity=self.permittivity,
-                conductivity=self.conductivity,
-                interp_method=self.interp_method,
-            )
+            self_dict.update({"permittivity": self.permittivity, "conductivity": self.conductivity})
+            return CustomIsotropicMedium.parse_obj(self_dict)
+
         # isotropic, but with `eps_dataset`
         if self.is_isotropic:
             eps_real, sigma = CustomMedium.eps_complex_to_eps_sigma(
@@ -866,27 +899,21 @@ class CustomMedium(AbstractCustomMedium):
             sigma = ScalarFieldDataArray(sigma, coords=coords)
             eps_real = SpatialDataArray(eps_real.squeeze(dim="f", drop=True))
             sigma = SpatialDataArray(sigma.squeeze(dim="f", drop=True))
-            return CustomIsotropicMedium(
-                permittivity=eps_real,
-                conductivity=sigma,
-                interp_method=self.interp_method,
-            )
+            self_dict.update({"permittivity": eps_real, "conductivity": sigma})
+            return CustomIsotropicMedium.parse_obj(self_dict)
+
         # anisotropic
         eps_field_components = self.eps_dataset.field_components
-        mat_comp = {"interp_method": self.interp_method}
+        mat_comp = {"interp_method": self.interp_method, "allow_gain": self.allow_gain}
         for comp in ["xx", "yy", "zz"]:
             eps_real, sigma = CustomMedium.eps_complex_to_eps_sigma(
                 eps_field_components["eps_" + comp], eps_field_components["eps_" + comp].coords["f"]
             )
             eps_real = SpatialDataArray(eps_real.squeeze(dim="f", drop=True))
             sigma = SpatialDataArray(sigma.squeeze(dim="f", drop=True))
-            mat_comp.update(
-                {
-                    comp: CustomIsotropicMedium(
-                        permittivity=eps_real, conductivity=sigma, interp_method=self.interp_method
-                    )
-                }
-            )
+            comp_dict = self_dict.copy()
+            comp_dict.update({"permittivity": eps_real, "conductivity": sigma})
+            mat_comp.update({comp: CustomIsotropicMedium.parse_obj(comp_dict)})
         return CustomAnisotropicMediumInternal(**mat_comp)
 
     def _interp_method(self, comp: Axis) -> InterpMethod:
@@ -965,6 +992,7 @@ class CustomMedium(AbstractCustomMedium):
         eps: Union[ScalarFieldDataArray, SpatialDataArray],
         freq: float = None,
         interp_method: InterpMethod = "nearest",
+        **kwargs,
     ) -> CustomMedium:
         """Construct a :class:`.CustomMedium` from datasets containing raw permittivity values.
 
@@ -995,14 +1023,16 @@ class CustomMedium(AbstractCustomMedium):
         if isinstance(eps, SpatialDataArray):
             # purely real, not need to know `freq`
             if CustomMedium._validate_isreal_dataarray(eps):
-                return cls(permittivity=eps, interp_method=interp_method)
+                return cls(permittivity=eps, interp_method=interp_method, **kwargs)
             # complex permittivity, needs to know `freq`
             if freq is None:
                 raise SetupError(
                     "For a complex 'eps', 'freq' at which 'eps' is defined must be supplied",
                 )
             eps_real, sigma = CustomMedium.eps_complex_to_eps_sigma(eps, freq)
-            return cls(permittivity=eps_real, conductivity=sigma, interp_method=interp_method)
+            return cls(
+                permittivity=eps_real, conductivity=sigma, interp_method=interp_method, **kwargs
+            )
 
         # eps is ScalarFieldDataArray
         # contradictory definition of frequency
@@ -1017,7 +1047,7 @@ class CustomMedium(AbstractCustomMedium):
         eps_real, sigma = CustomMedium.eps_complex_to_eps_sigma(eps, freq_data)
         eps_real = SpatialDataArray(eps_real.squeeze(dim="f", drop=True))
         sigma = SpatialDataArray(sigma.squeeze(dim="f", drop=True))
-        return cls(permittivity=eps_real, conductivity=sigma, interp_method=interp_method)
+        return cls(permittivity=eps_real, conductivity=sigma, interp_method=interp_method, **kwargs)
 
     @classmethod
     def from_nk(
@@ -1026,6 +1056,7 @@ class CustomMedium(AbstractCustomMedium):
         k: Optional[Union[ScalarFieldDataArray, SpatialDataArray]] = None,
         freq: float = None,
         interp_method: InterpMethod = "nearest",
+        **kwargs,
     ) -> CustomMedium:
         """Construct a :class:`.CustomMedium` from datasets containing n and k values.
 
@@ -1061,7 +1092,7 @@ class CustomMedium(AbstractCustomMedium):
                 n = SpatialDataArray(n.squeeze(dim="f", drop=True))
             freq = 0  # dummy value
             eps_real, _ = CustomMedium.nk_to_eps_sigma(n, 0 * n, freq)
-            return cls(permittivity=eps_real, interp_method=interp_method)
+            return cls(permittivity=eps_real, interp_method=interp_method, **kwargs)
 
         # lossy case
         if n.coords.keys() != k.coords.keys():
@@ -1077,7 +1108,9 @@ class CustomMedium(AbstractCustomMedium):
                     "and 'k' to a complex valued permittivity."
                 )
             eps_real, sigma = CustomMedium.nk_to_eps_sigma(n, k, freq)
-            return cls(permittivity=eps_real, conductivity=sigma, interp_method=interp_method)
+            return cls(
+                permittivity=eps_real, conductivity=sigma, interp_method=interp_method, **kwargs
+            )
 
         # k is a ScalarFieldDataArray
         freq_data = k.coords["f"].data[0]
@@ -1092,7 +1125,7 @@ class CustomMedium(AbstractCustomMedium):
         eps_real, sigma = CustomMedium.nk_to_eps_sigma(n, k, freq_data)
         eps_real = SpatialDataArray(eps_real.squeeze(dim="f", drop=True))
         sigma = SpatialDataArray(sigma.squeeze(dim="f", drop=True))
-        return cls(permittivity=eps_real, conductivity=sigma, interp_method=interp_method)
+        return cls(permittivity=eps_real, conductivity=sigma, interp_method=interp_method, **kwargs)
 
     def grids(self, bounds: Bound) -> Dict[str, Grid]:
         """Make a :class:`.Grid` corresponding to the data in each ``eps_ii`` component.
@@ -1206,7 +1239,11 @@ class CustomDispersiveMedium(AbstractCustomMedium, DispersiveMedium, ABC):
     @cached_property
     def pole_residue(self):
         """Representation of Medium as a pole-residue model."""
-        return CustomPoleResidue(**self._pole_residue_dict(), interp_method=self.interp_method)
+        return CustomPoleResidue(
+            **self._pole_residue_dict(),
+            interp_method=self.interp_method,
+            allow_gain=self.allow_gain,
+        )
 
 
 class PoleResidue(DispersiveMedium):
@@ -1223,7 +1260,7 @@ class PoleResidue(DispersiveMedium):
 
     Example
     -------
-    >>> pole_res = PoleResidue(eps_inf=2.0, poles=[((1+2j), (3+4j)), ((5+6j), (7+8j))])
+    >>> pole_res = PoleResidue(eps_inf=2.0, poles=[((-1+2j), (3+4j)), ((-5+6j), (7+8j))])
     >>> eps = pole_res.eps_model(200e12)
     """
 
@@ -1240,6 +1277,14 @@ class PoleResidue(DispersiveMedium):
         description="Tuple of complex-valued (:math:`a_i, c_i`) poles for the model.",
         units=(RADPERSEC, RADPERSEC),
     )
+
+    @pd.validator("poles", always=True)
+    def _causality_validation(cls, val):
+        """Assert causal medium."""
+        for a, _ in val:
+            if np.any(np.real(a) > 0):
+                raise SetupError("For causal medium, 'Re(a_i)' must be non-positive.")
+        return val
 
     @ensure_freq_in_range
     def eps_model(self, frequency: float) -> complex:
@@ -1334,9 +1379,9 @@ class CustomPoleResidue(CustomDispersiveMedium, PoleResidue):
     >>> z = np.linspace(-1, 1, 7)
     >>> coords = dict(x=x, y=y, z=z)
     >>> eps_inf = SpatialDataArray(np.ones((5, 6, 7)), coords=coords)
-    >>> a1 = SpatialDataArray(np.random.random((5, 6, 7)), coords=coords)
+    >>> a1 = SpatialDataArray(-np.random.random((5, 6, 7)), coords=coords)
     >>> c1 = SpatialDataArray(np.random.random((5, 6, 7)), coords=coords)
-    >>> a2 = SpatialDataArray(np.random.random((5, 6, 7)), coords=coords)
+    >>> a2 = SpatialDataArray(-np.random.random((5, 6, 7)), coords=coords)
     >>> c2 = SpatialDataArray(np.random.random((5, 6, 7)), coords=coords)
     >>> pole_res = CustomPoleResidue(eps_inf=eps_inf, poles=[(a1, c1), (a2, c2)])
     >>> eps = pole_res.eps_model(200e12)
@@ -1432,10 +1477,10 @@ class CustomPoleResidue(CustomDispersiveMedium, PoleResidue):
         :class:`.CustomPoleResidue`
             The pole residue equivalent.
         """
-        poles = [(0, medium.conductivity / (2 * EPSILON_0))]
-        return CustomPoleResidue(
-            eps_inf=medium.permittivity, poles=poles, frequency_range=medium.frequency_range
-        )
+        poles = [(xr.zeros_like(medium.conductivity), medium.conductivity / (2 * EPSILON_0))]
+        medium_dict = medium.dict(exclude={"type", "eps_dataset", "permittivity", "conductivity"})
+        medium_dict.update({"eps_inf": medium.permittivity, "poles": poles})
+        return CustomPoleResidue.parse_obj(medium_dict)
 
     def to_medium(self) -> CustomMedium:
         """Convert to a :class:`.CustomMedium`.
@@ -1449,15 +1494,16 @@ class CustomPoleResidue(CustomDispersiveMedium, PoleResidue):
         """
         res = 0
         for a, c in self.poles:
-            if abs(a) > fp_eps:
-                raise ValidationError("Cannot convert dispersive 'PoleResidue' to 'Medium'.")
+            if np.any(abs(a.values) > fp_eps):
+                raise ValidationError(
+                    "Cannot convert dispersive 'CustomPoleResidue' to 'CustomMedium'."
+                )
             res += (c + np.conj(c)) / 2
         sigma = res * 2 * EPSILON_0
-        return CustomMedium(
-            permittivity=self.eps_inf,
-            conductivity=np.real(sigma),
-            frequency_range=self.frequency_range,
-        )
+
+        self_dict = self.dict(exclude={"type", "eps_inf", "poles"})
+        self_dict.update({"permittivity": self.eps_inf, "conductivity": np.real(sigma)})
+        return CustomMedium.parse_obj(self_dict)
 
 
 class Sellmeier(DispersiveMedium):
@@ -1481,6 +1527,21 @@ class Sellmeier(DispersiveMedium):
         description="List of Sellmeier (:math:`B_i, C_i`) coefficients.",
         units=(None, MICROMETER + "^2"),
     )
+
+    @pd.validator("coeffs", always=True)
+    def _passivity_validation(cls, val, values):
+        """Assert passive medium if `allow_gain` is False."""
+        if values.get("allow_gain"):
+            return val
+        for B, _ in val:
+            if B < 0:
+                raise ValidationError(
+                    "For passive medium, 'B_i' must be non-negative. "
+                    "To simulate gain medium, please set 'allow_gain=True'. "
+                    "Caution: simulations with gain medium are unstable, "
+                    "and are likely to diverge."
+                )
+        return val
 
     def _n_model(self, frequency: float) -> complex:
         """Complex-valued refractive index as a function of frequency."""
@@ -1588,6 +1649,21 @@ class CustomSellmeier(CustomDispersiveMedium, Sellmeier):
                 raise SetupError("'C' must be positive.")
         return val
 
+    @pd.validator("coeffs", always=True)
+    def _passivity_validation(cls, val, values):
+        """Assert passive medium if `allow_gain` is False."""
+        if values.get("allow_gain"):
+            return val
+        for B, _ in val:
+            if np.any(B < 0):
+                raise ValidationError(
+                    "For passive medium, 'B_i' must be non-negative. "
+                    "To simulate gain medium, please set 'allow_gain=True'. "
+                    "Caution: simulations with gain medium are unstable, "
+                    "and are likely to diverge."
+                )
+        return val
+
     def _pole_residue_dict(self) -> Dict:
         """Dict representation of Medium as a pole-residue model."""
         poles_dict = Sellmeier._pole_residue_dict(self)
@@ -1680,7 +1756,7 @@ class Lorentz(DispersiveMedium):
         units=PERMITTIVITY,
     )
 
-    coeffs: Tuple[Tuple[float, float, float], ...] = pd.Field(
+    coeffs: Tuple[Tuple[float, float, pd.NonNegativeFloat], ...] = pd.Field(
         ...,
         title="Coefficients",
         description="List of (:math:`\\Delta\\epsilon_i, f_i, \\delta_i`) values for model.",
@@ -1689,10 +1765,25 @@ class Lorentz(DispersiveMedium):
 
     @pd.validator("coeffs", always=True)
     def _coeffs_unequal_f_delta(cls, val):
-        """f and delta cannot be exactly the same."""
+        """f**2 and delta**2 cannot be exactly the same."""
         for _, f, delta in val:
-            if f == delta:
+            if f**2 == delta**2:
                 raise SetupError("'f' and 'delta' cannot take equal values.")
+        return val
+
+    @pd.validator("coeffs", always=True)
+    def _passivity_validation(cls, val, values):
+        """Assert passive medium if `allow_gain` is False."""
+        if values.get("allow_gain"):
+            return val
+        for del_ep, _, _ in val:
+            if del_ep < 0:
+                raise ValidationError(
+                    "For passive medium, 'Delta epsilon_i' must be non-negative. "
+                    "To simulate gain medium, please set 'allow_gain=True'. "
+                    "Caution: simulations with gain medium are unstable, "
+                    "and are likely to diverge."
+                )
         return val
 
     @ensure_freq_in_range
@@ -1712,7 +1803,7 @@ class Lorentz(DispersiveMedium):
             w = 2 * np.pi * f
             d = 2 * np.pi * delta
 
-            if self._all_larger(d, w):
+            if self._all_larger(d**2, w**2):
                 r = np.sqrt(d * d - w * w) + 0j
                 a0 = -d + r
                 c0 = de * w**2 / 4 / r
@@ -1797,8 +1888,8 @@ class CustomLorentz(CustomDispersiveMedium, Lorentz):
         return val
 
     @pd.validator("coeffs", always=True)
-    def _coeffs_correct_shape_and_sign(cls, val, values):
-        """coeffs must have consistent shape and sign."""
+    def _coeffs_correct_shape(cls, val, values):
+        """coeffs must have consistent shape."""
         if values.get("eps_inf") is None:
             raise ValidationError("'eps_inf' failed validation.")
 
@@ -1819,12 +1910,30 @@ class CustomLorentz(CustomDispersiveMedium, Lorentz):
 
     @pd.validator("coeffs", always=True)
     def _coeffs_delta_all_smaller_or_larger_than_fi(cls, val):
-        """We restrict either all f>delta or all f<delta for now."""
+        """We restrict either all f**2>delta**2 or all f**2<delta**2 for now."""
         for _, f, delta in val:
-            if not (Lorentz._all_larger(f, delta) or Lorentz._all_larger(delta, f)):
+            f2 = f**2
+            delta2 = delta**2
+            if not (Lorentz._all_larger(f2, delta2) or Lorentz._all_larger(delta2, f2)):
                 raise SetupError(
                     "Coefficients in 'coeffs' are restricted to have "
-                    "either all 'delta'<'f' or all 'delta'>'f'."
+                    "either all 'delta**2'<'f**2' or all 'delta**2'>'f**2'."
+                )
+        return val
+
+    @pd.validator("coeffs", always=True)
+    def _passivity_validation(cls, val, values):
+        """Assert passive medium if `allow_gain` is False."""
+        allow_gain = values.get("allow_gain")
+        for del_ep, _, delta in val:
+            if np.any(delta < 0):
+                raise ValidationError("For causal medium, 'delta_i' must be non-negative.")
+            if not allow_gain and np.any(del_ep < 0):
+                raise ValidationError(
+                    "For passive medium, 'Delta epsilon_i' must be non-negative. "
+                    "To simulate gain medium, please set 'allow_gain=True'. "
+                    "Caution: simulations with gain medium are unstable, "
+                    "and are likely to diverge."
                 )
         return val
 
@@ -1977,8 +2086,8 @@ class CustomDrude(CustomDispersiveMedium, Drude):
                 )
             if not CustomDispersiveMedium._validate_isreal_dataarray_tuple((f, delta)):
                 raise SetupError("All terms in 'coeffs' must be real.")
-            if np.any(delta < 0):
-                raise SetupError("'delta' must be non-negative.")
+            if np.any(delta <= 0):
+                raise SetupError("For causal medium, 'delta' must be positive.")
         return val
 
     def eps_dataarray_freq(
@@ -2030,6 +2139,21 @@ class Debye(DispersiveMedium):
         description="List of (:math:`\\Delta\\epsilon_i, \\tau_i`) values for model.",
         units=(PERMITTIVITY, SECOND),
     )
+
+    @pd.validator("coeffs", always=True)
+    def _passivity_validation(cls, val, values):
+        """Assert passive medium if `allow_gain` is False."""
+        if values.get("allow_gain"):
+            return val
+        for del_ep, _ in val:
+            if del_ep < 0:
+                raise ValidationError(
+                    "For passive medium, 'Delta epsilon_i' must be non-negative. "
+                    "To simulate gain medium, please set 'allow_gain=True'. "
+                    "Caution: simulations with gain medium are unstable, "
+                    "and are likely to diverge."
+                )
+        return val
 
     @ensure_freq_in_range
     def eps_model(self, frequency: float) -> complex:
@@ -2106,8 +2230,8 @@ class CustomDebye(CustomDispersiveMedium, Debye):
         return val
 
     @pd.validator("coeffs", always=True)
-    def _coeffs_correct_shape_and_sign(cls, val, values):
-        """coeffs must have consistent shape and sign."""
+    def _coeffs_correct_shape(cls, val, values):
+        """coeffs must have consistent shape."""
         if values.get("eps_inf") is None:
             raise ValidationError("'eps_inf' failed validation.")
 
@@ -2120,8 +2244,22 @@ class CustomDebye(CustomDispersiveMedium, Debye):
                 )
             if not CustomDispersiveMedium._validate_isreal_dataarray_tuple((de, tau)):
                 raise SetupError("All terms in 'coeffs' must be real.")
+        return val
+
+    @pd.validator("coeffs", always=True)
+    def _passivity_validation(cls, val, values):
+        """Assert passive medium if `allow_gain` is False."""
+        allow_gain = values.get("allow_gain")
+        for del_ep, tau in val:
             if np.any(tau <= 0):
-                raise SetupError("'tau' must be positive.")
+                raise SetupError("For causal medium, 'tau_i' must be positive.")
+            if not allow_gain and np.any(del_ep < 0):
+                raise ValidationError(
+                    "For passive medium, 'Delta epsilon_i' must be non-negative. "
+                    "To simulate gain medium, please set 'allow_gain=True'. "
+                    "Caution: simulations with gain medium are unstable, "
+                    "and are likely to diverge."
+                )
         return val
 
     def eps_dataarray_freq(
@@ -2189,6 +2327,12 @@ class AnisotropicMedium(AbstractMedium):
         title="ZZ Component",
         description="Medium describing the zz-component of the diagonal permittivity tensor.",
         discriminator=TYPE_TAG_STR,
+    )
+
+    allow_gain: bool = pd.Field(
+        None,
+        title="Allow gain medium",
+        description="This field is ignored. Please set ``allow_gain`` in each component",
     )
 
     @cached_property
@@ -2321,9 +2465,9 @@ class FullyAnisotropicMedium(AbstractMedium):
         return val
 
     @pd.validator("conductivity", always=True)
-    def conductivity_ge_zero_and_commutes(cls, val, values):
+    def conductivity_commutes(cls, val, values):
         """Check that the symmetric part of conductivity tensor commutes with permittivity tensor
-        (that is, simultaneously diagonalizable) with eigenvalues >= 0.
+        (that is, simultaneously diagonalizable).
         """
 
         perm = values.get("permittivity")
@@ -2335,9 +2479,22 @@ class FullyAnisotropicMedium(AbstractMedium):
                 "Main directions of conductivity and permittivity tensor do not coincide."
             )
 
-        if np.any(np.linalg.eigvals(cond_sym) < -fp_eps):
-            raise ValidationError("Main diagonal of provided conductivity tensor is not >= 0.")
+        return val
 
+    @pd.validator("conductivity", always=True)
+    def _passivity_validation(cls, val, values):
+        """Assert passive medium if `allow_gain` is False."""
+        if values.get("allow_gain"):
+            return val
+
+        cond_sym = 0.5 * (val + val.T)
+        if np.any(np.linalg.eigvals(cond_sym) < -fp_eps):
+            raise ValidationError(
+                "For passive medium, main diagonal of provided conductivity tensor "
+                "must be non-negative. "
+                "To simulate gain medium, please set 'allow_gain=True'. "
+                "Caution: simulations with gain medium are unstable, and are likely to diverge."
+            )
         return val
 
     @classmethod
@@ -2524,6 +2681,12 @@ class CustomAnisotropicMedium(AbstractCustomMedium, AnisotropicMedium):
         description="When the value is 'None', each component will follow its own "
         "interpolation method. When the value is other than 'None', the interpolation "
         "method specified by this field will override the one in each component.",
+    )
+
+    allow_gain: bool = pd.Field(
+        None,
+        title="Allow gain medium",
+        description="This field is ignored. Please set ``allow_gain`` in each component",
     )
 
     @pd.validator("xx", always=True)

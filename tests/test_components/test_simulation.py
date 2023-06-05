@@ -1461,7 +1461,7 @@ def test_dt():
     # simulation with eps_inf < 1
     structure = td.Structure(
         geometry=td.Box(size=(1, 1, 1), center=(-1, 0, 0)),
-        medium=td.PoleResidue(eps_inf=0.16, poles=[(1 + 1j, 2 + 2j)]),
+        medium=td.PoleResidue(eps_inf=0.16, poles=[(-1 + 1j, 2 + 2j)]),
     )
     sim_new = sim.copy(update=dict(structures=[structure]))
     assert sim_new.dt == 0.4 * dt

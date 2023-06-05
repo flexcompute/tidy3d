@@ -315,6 +315,15 @@ def test_medium_nk():
     meds = CustomMedium.from_nk(n=ns, k=ks, freq=freqs[0])
     assert med.eps_model(1e14) == meds.eps_model(1e14)
 
+    # gain
+    with pytest.raises(pydantic.ValidationError):
+        med = CustomMedium.from_nk(n=n, k=-k)
+    with pytest.raises(pydantic.ValidationError):
+        meds = CustomMedium.from_nk(n=ns, k=-ks, freq=freqs[0])
+    med = CustomMedium.from_nk(n=n, k=-k, allow_gain=True)
+    meds = CustomMedium.from_nk(n=ns, k=-ks, freq=freqs[0], allow_gain=True)
+    assert med.eps_model(1e14) == meds.eps_model(1e14)
+
     # inconsistent freq
     with pytest.raises(SetupError):
         med = CustomMedium.from_nk(n=n, k=k, freq=freqs[0] * 1.1)
@@ -443,11 +452,11 @@ def test_custom_isotropic_medium():
         mat = CustomMedium(permittivity=permittivity, conductivity=sigmatmp)
 
     # some terms in conductivity are negative
+    sigmatmp = SpatialDataArray(np.random.random((Nx, Ny, Nz)) - 0.5, coords=dict(x=X, y=Y, z=Z))
     with pytest.raises(pydantic.ValidationError):
-        sigmatmp = SpatialDataArray(
-            np.random.random((Nx, Ny, Nz)) - 0.5, coords=dict(x=X, y=Y, z=Z)
-        )
         mat = CustomMedium(permittivity=permittivity, conductivity=sigmatmp)
+    mat = CustomMedium(permittivity=permittivity, conductivity=sigmatmp, allow_gain=True)
+    verify_custom_medium_methods(mat)
 
     # inconsistent coords
     with pytest.raises(pydantic.ValidationError):
@@ -491,7 +500,7 @@ def verify_custom_dispersive_medium_methods(mat):
 
 def test_custom_pole_residue():
     """Custom pole residue medium."""
-    a = SpatialDataArray(np.random.random((Nx, Ny, Nz)), coords=dict(x=X, y=Y, z=Z))
+    a = SpatialDataArray(-np.random.random((Nx, Ny, Nz)), coords=dict(x=X, y=Y, z=Z))
     c = SpatialDataArray(np.random.random((Nx, Ny, Nz)) * 1j, coords=dict(x=X, y=Y, z=Z))
 
     # some terms in eps_inf are negative
@@ -513,8 +522,32 @@ def test_custom_pole_residue():
         )
         mat = CustomPoleResidue(eps_inf=eps_inf, poles=((a, c),))
 
+    # break causality
+    with pytest.raises(pydantic.ValidationError):
+        atmp = SpatialDataArray(np.random.random((Nx, Ny, Nz)), coords=dict(x=X, y=Y, z=Z))
+        mat = CustomPoleResidue(eps_inf=xr.ones_like(a), poles=((atmp, c),))
+
     eps_inf = SpatialDataArray(np.random.random((Nx, Ny, Nz)) + 1, coords=dict(x=X, y=Y, z=Z))
     mat = CustomPoleResidue(eps_inf=eps_inf, poles=((a, c),))
+    verify_custom_dispersive_medium_methods(mat)
+    assert mat.n_cfl > 1
+
+    # to custom non-dispersive medium
+    # dispersive failure
+    with pytest.raises(ValidationError):
+        mat_medium = mat.to_medium()
+    # non-dispersive but gain
+    a = xr.zeros_like(c)
+    mat = CustomPoleResidue(eps_inf=eps_inf, poles=((a, c - 0.1),))
+    with pytest.raises(pydantic.ValidationError):
+        mat_medium = mat.to_medium()
+    mat = CustomPoleResidue(eps_inf=eps_inf, poles=((a, c - 0.1),), allow_gain=True)
+    mat_medium = mat.to_medium()
+    verify_custom_medium_methods(mat_medium)
+    assert mat_medium.n_cfl > 1
+
+    # custom medium to pole residue
+    mat = CustomPoleResidue.from_medium(mat_medium)
     verify_custom_dispersive_medium_methods(mat)
     assert mat.n_cfl > 1
 
@@ -541,6 +574,12 @@ def test_custom_sellmeier():
     with pytest.raises(pydantic.ValidationError):
         ctmp = SpatialDataArray(np.random.random((Nx, Ny, Nz)) - 0.5, coords=dict(x=X, y=Y, z=Z))
         mat = CustomSellmeier(coeffs=((b1, c1), (b2, ctmp)))
+
+    # negative b
+    btmp = SpatialDataArray(np.random.random((Nx, Ny, Nz)) - 0.5, coords=dict(x=X, y=Y, z=Z))
+    with pytest.raises(pydantic.ValidationError):
+        mat = CustomSellmeier(coeffs=((b1, c1), (btmp, c2)))
+    mat = CustomSellmeier(coeffs=((b1, c1), (btmp, c2)), allow_gain=True)
 
     # inconsistent coord
     with pytest.raises(pydantic.ValidationError):
@@ -585,6 +624,23 @@ def test_custom_lorentz():
     with pytest.raises(pydantic.ValidationError):
         ftmp = SpatialDataArray(1 + np.random.random((Nx, Ny, Nz)), coords=dict(x=X + 1, y=Y, z=Z))
         mat = CustomLorentz(eps_inf=eps_inf, coeffs=((de1, f1, delta1), (de2, ftmp, delta2)))
+
+    # break causality with negative delta
+    with pytest.raises(pydantic.ValidationError):
+        deltatmp = SpatialDataArray(
+            np.random.random((Nx, Ny, Nz)) - 0.5, coords=dict(x=X, y=Y, z=Z)
+        )
+        mat = CustomLorentz(eps_inf=eps_inf, coeffs=((de1, f1, delta1), (de2, f2, deltatmp)))
+
+    # gain medium with negative delta epsilon
+    with pytest.raises(pydantic.ValidationError):
+        detmp = SpatialDataArray(np.random.random((Nx, Ny, Nz)) - 0.5, coords=dict(x=X, y=Y, z=Z))
+        mat = CustomLorentz(eps_inf=eps_inf, coeffs=((de1, f1, delta1), (detmp, f2, delta2)))
+    mat = CustomLorentz(
+        eps_inf=eps_inf, coeffs=((de1, f1, delta1), (detmp, f2, delta2)), allow_gain=True
+    )
+    verify_custom_dispersive_medium_methods(mat)
+    assert mat.n_cfl > 1
 
     mat = CustomLorentz(eps_inf=eps_inf, coeffs=((de1, f1, delta1), (de2, f2, delta2)))
     verify_custom_dispersive_medium_methods(mat)
@@ -654,6 +710,14 @@ def test_custom_debye():
     with pytest.raises(pydantic.ValidationError):
         epstmp = SpatialDataArray(np.random.random((Nx, Ny, Nz)), coords=dict(x=X + 1, y=Y, z=Z))
         mat = CustomDebye(eps_inf=eps_inf, coeffs=((eps1, tau1), (epstmp, tau2)))
+
+    # negative delta epsilon
+    with pytest.raises(pydantic.ValidationError):
+        epstmp = SpatialDataArray(np.random.random((Nx, Ny, Nz)) - 0.5, coords=dict(x=X, y=Y, z=Z))
+        mat = CustomDebye(eps_inf=eps_inf, coeffs=((eps1, tau1), (epstmp, tau2)))
+    mat = CustomDebye(eps_inf=eps_inf, coeffs=((eps1, tau1), (epstmp, tau2)), allow_gain=True)
+    verify_custom_dispersive_medium_methods(mat)
+    assert mat.n_cfl > 1
 
     mat = CustomDebye(eps_inf=eps_inf, coeffs=((eps1, tau1), (eps2, tau2)))
     verify_custom_dispersive_medium_methods(mat)
