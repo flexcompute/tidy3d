@@ -267,6 +267,36 @@ def test_n_cfl():
     assert material.n_cfl == 2
 
 
+def test_gain_medium():
+    """Test passive and gain medium validations."""
+    # non-dispersive
+    with pytest.raises(pydantic.ValidationError) as e_info:
+        m = td.Medium(conductivity=-0.1)
+    with pytest.raises(pydantic.ValidationError) as e_info:
+        m = td.Medium(conductivity=-1.0, allow_gain=False)
+    m = td.Medium(conductivity=-1.0, allow_gain=True)
+
+    # Sellmeier
+    with pytest.raises(pydantic.ValidationError) as e_info:
+        m = td.Sellmeier(coeffs=((-1, 1),))
+    m = td.Sellmeier(coeffs=((-1, 1),), allow_gain=True)
+
+    # Lorentz
+    # causality, negative gamma
+    with pytest.raises(pydantic.ValidationError) as e_info:
+        m = td.Lorentz(eps_inf=0.04, coeffs=[(1, 2, -3)])
+    # gain, negative Delta epsilon
+    with pytest.raises(pydantic.ValidationError) as e_info:
+        m = td.Lorentz(eps_inf=0.04, coeffs=[(-1, 2, 3)])
+    m = td.Lorentz(eps_inf=0.04, coeffs=[(-1, 2, 3)], allow_gain=True)
+    # f_i can take whatever sign
+    m = td.Lorentz(eps_inf=0.04, coeffs=[(1, -2, 3)])
+
+    # Drude, only causality constraint
+    with pytest.raises(pydantic.ValidationError) as e_info:
+        m = td.Drude(eps_inf=0.04, coeffs=[(1, -2)])
+
+
 def test_medium2d():
     sigma = 0.45
     thickness = 0.01
@@ -341,6 +371,7 @@ def test_fully_anisotropic_media():
         td.FullyAnisotropicMedium(permittivity=[[3, 0, 0], [0, 0.5, 0], [0, 0, 1]])
     with pytest.raises(pydantic.ValidationError):
         td.FullyAnisotropicMedium(conductivity=[[-3, 0, 0], [0, 0.5, 0], [0, 0, 1]])
+    td.FullyAnisotropicMedium(conductivity=[[-3, 0, 0], [0, 0.5, 0], [0, 0, 1]], allow_gain=True)
 
     # check that permittivity needs to be symmetric
     with pytest.raises(pydantic.ValidationError):

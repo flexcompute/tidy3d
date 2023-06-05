@@ -148,6 +148,11 @@ class JaxMedium(Medium, AbstractJaxMedium):
         jax_field=True,
     )
 
+    @pd.validator("conductivity", always=True)
+    def _passivity_validation(cls, val, values):
+        """Override of inherited validator."""
+        return val
+
     _sanitize_permittivity = validate_jax_float("permittivity")
 
     def to_medium(self) -> Medium:
@@ -345,18 +350,18 @@ class JaxCustomMedium(CustomMedium, AbstractJaxMedium):
         return val
 
     @pd.validator("eps_dataset", always=True)
-    def _eps_dataset_eps_inf_greater_no_less_than_one_sigma_positive(cls, val):
+    def _eps_dataset_eps_inf_greater_no_less_than_one_sigma_positive(cls, val, values):
         """Override of inherited validator."""
         return val
 
     @pd.validator("permittivity", always=True)
     def _eps_inf_greater_no_less_than_one(cls, val):
-        """Assert any eps_inf must be >=1"""
+        """Override of inherited validator."""
         return val
 
     @pd.validator("conductivity", always=True)
     def _conductivity_non_negative_correct_shape(cls, val, values):
-        """Assert conductivity>=0"""
+        """Override of inherited validator."""
         return val
 
     def eps_dataarray_freq(self, frequency: float):
