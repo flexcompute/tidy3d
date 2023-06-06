@@ -510,3 +510,12 @@ def test_mode_solver_numerical_grid_data():
             max_diff = np.amax(np.abs(np.abs(field) - np.abs(tan_fields[comp])))
             max_diff /= np.amax(np.abs(field))
             assert 0.1 > max_diff > 0
+
+
+def test_outer_dot():
+    mode_data = make_mode_solver_data()
+    field_data = make_field_data_2d()
+    _ = mode_data.outer_dot(mode_data)
+    _ = field_data.outer_dot(mode_data)
+    _ = mode_data.outer_dot(field_data)
+    _ = field_data.outer_dot(field_data)
