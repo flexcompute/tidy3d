@@ -239,8 +239,8 @@ def test_medium_interp():
 
     # more than one entries per each axis
     orig_data = make_scalar_data()
-    data_fit_nearest = CustomMedium._interp(orig_data, coord_interp, "nearest")
-    data_fit_linear = CustomMedium._interp(orig_data, coord_interp, "linear")
+    data_fit_nearest = coord_interp.spatial_interp(orig_data, "nearest")
+    data_fit_linear = coord_interp.spatial_interp(orig_data, "linear")
     assert np.allclose(data_fit_nearest.shape[:3], [len(f) for f in coord_interp.to_list])
     assert np.allclose(data_fit_linear.shape[:3], [len(f) for f in coord_interp.to_list])
     # maximal or minimal values shouldn't exceed that in the supplied data
@@ -254,8 +254,8 @@ def test_medium_interp():
     X = [1.1]
     data = np.random.random((Nx, Ny, Nz, 1))
     orig_data = ScalarFieldDataArray(data, coords=dict(x=X, y=Y, z=Z, f=freqs))
-    data_fit_nearest = CustomMedium._interp(orig_data, coord_interp, "nearest")
-    data_fit_linear = CustomMedium._interp(orig_data, coord_interp, "linear")
+    data_fit_nearest = coord_interp.spatial_interp(orig_data, "nearest")
+    data_fit_linear = coord_interp.spatial_interp(orig_data, "linear")
     assert np.allclose(data_fit_nearest.shape[:3], [len(f) for f in coord_interp.to_list])
     assert np.allclose(data_fit_linear.shape[:3], [len(f) for f in coord_interp.to_list])
     # maximal or minimal values shouldn't exceed that in the supplied data
