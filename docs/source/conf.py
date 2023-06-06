@@ -175,6 +175,7 @@ html_theme_options = {
 # html_favicon = "_static/logo.svg"
 
 html_css_files = ["css/custom.css"]
+html_js_files = ["js/custom-download.js"]
 
 # sphinx_github_changelog_token = "..."
 
