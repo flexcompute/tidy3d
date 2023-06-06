@@ -20,6 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Plotting 2D materials in `SimulationData.plot_field` and other circumstances.
 - More segments in plotting of large cylinder and sphere cross-sections.
 - Proper handling of nested list of custom data components in IO, needed for custom dispersive medium coefficients.
+- `ElectromagneticFieldData.outer_dot` now works correctly for `FieldData`, not only `ModeSolverData`.
 
 ## [2.2.2] - 2023-5-25
 

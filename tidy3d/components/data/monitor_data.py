@@ -476,7 +476,8 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
         The tangential fields from ``field_data`` are interpolated to this object's grid, so the
         data arrays don't need to have the same discretization.  The calculation is performed for
         all common frequencies between data arrays.  In the output, ``mode_index_0`` and
-        ``mode_index_1`` are the mode indices from this object and ``field_data``, respectively.
+        ``mode_index_1`` are the mode indices from this object and ``field_data``, respectively, if
+        they are instances of ``ModeSolverData``.
 
         Parameters
         ----------
@@ -522,26 +523,38 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
         # Prepare array with proper dimensions for the dot product data
         arrays = (fields_self[e_1], fields_other[e_1])
         coords = (arrays[0].coords, arrays[1].coords)
+
         # Common frequencies to both data arrays
         f = np.array(sorted(set(coords[0]["f"].values).intersection(coords[1]["f"].values)))
-        mode_index_0 = coords[0]["mode_index"].values
-        mode_index_1 = coords[1]["mode_index"].values
+
+        # Mode indices, if available
+        modes_in_self = "mode_index" in coords[0]
+        mode_index_0 = coords[0]["mode_index"].values if modes_in_self else np.zeros(1, dtype=int)
+        modes_in_other = "mode_index" in coords[1]
+        mode_index_1 = coords[1]["mode_index"].values if modes_in_other else np.zeros(1, dtype=int)
+
         dtype = np.promote_types(arrays[0].dtype, arrays[1].dtype)
         dot = np.empty((f.size, mode_index_0.size, mode_index_1.size), dtype=dtype)
 
         # Calculate overlap for each common frequency and each mode pair
         for i, freq in enumerate(f):
+            indexer_self = {"f": freq}
+            indexer_other = {"f": freq}
             for mi0 in mode_index_0:
-                e_self_1 = fields_self[e_1].sel(f=freq, mode_index=mi0, drop=True)
-                e_self_2 = fields_self[e_2].sel(f=freq, mode_index=mi0, drop=True)
-                h_self_1 = fields_self[h_1].sel(f=freq, mode_index=mi0, drop=True)
-                h_self_2 = fields_self[h_2].sel(f=freq, mode_index=mi0, drop=True)
+                if modes_in_self:
+                    indexer_self["mode_index"] = mi0
+                e_self_1 = fields_self[e_1].sel(indexer_self, drop=True)
+                e_self_2 = fields_self[e_2].sel(indexer_self, drop=True)
+                h_self_1 = fields_self[h_1].sel(indexer_self, drop=True)
+                h_self_2 = fields_self[h_2].sel(indexer_self, drop=True)
 
                 for mi1 in mode_index_1:
-                    e_other_1 = fields_other[e_1].sel(f=freq, mode_index=mi1, drop=True)
-                    e_other_2 = fields_other[e_2].sel(f=freq, mode_index=mi1, drop=True)
-                    h_other_1 = fields_other[h_1].sel(f=freq, mode_index=mi1, drop=True)
-                    h_other_2 = fields_other[h_2].sel(f=freq, mode_index=mi1, drop=True)
+                    if modes_in_other:
+                        indexer_other["mode_index"] = mi1
+                    e_other_1 = fields_other[e_1].sel(indexer_other, drop=True)
+                    e_other_2 = fields_other[e_2].sel(indexer_other, drop=True)
+                    h_other_1 = fields_other[h_1].sel(indexer_other, drop=True)
+                    h_other_2 = fields_other[h_2].sel(indexer_other, drop=True)
 
                     # Cross products of fields
                     e_self_x_h_other = e_self_1 * h_other_2 - e_self_2 * h_other_1
@@ -553,7 +566,15 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
                     dot[i, mi0, mi1] = 0.25 * integrand.sum(dim=d_area.dims)
 
         coords = {"f": f, "mode_index_0": mode_index_0, "mode_index_1": mode_index_1}
-        return MixedModeDataArray(dot, coords=coords)
+        result = MixedModeDataArray(dot, coords=coords)
+
+        # Remove mode index coordinate if the input did not have it
+        if not modes_in_self:
+            result = result.isel(mode_index_0=0, drop=True)
+        if not modes_in_other:
+            result = result.isel(mode_index_1=0, drop=True)
+
+        return result
 
     @property
     def time_reversed_copy(self) -> FieldData:
