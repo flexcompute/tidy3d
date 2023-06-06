@@ -53,24 +53,25 @@ class Coords(Tidy3dBaseModel):
         self,
         spatial_dataarray: Union[SpatialDataArray, ScalarFieldDataArray],
         interp_method: InterpMethod,
+        clamp_extrapolation: bool = True,
     ) -> Union[SpatialDataArray, ScalarFieldDataArray]:
         """
-        Similar to ``xarrray.DataArray.interp`` with 3 enhancements:
+        Similar to ``xarrray.DataArray.interp`` with 2 enhancements:
 
             1) Check if the coordinate of the supplied data are in monotonically increasing order.
             If they are, apply the faster ``assume_sorted=True``.
 
             2) For axes of single entry, instead of error, apply ``isel()`` along the axis.
 
-            3) When linear interp is applied, in the extrapolated region, filter values smaller
-            or larger than the original data's min(max) will be replaced with the original min(max).
-
         Parameters
         ----------
-        spatial_dataarray: Union[:class:`.SpatialDataArray`, :class:`.ScalarFieldDataArray`]
+        spatial_dataarray : Union[:class:`.SpatialDataArray`, :class:`.ScalarFieldDataArray`]
             Supplied scalar dataset
         interp_method : :class:`.InterpMethod`
             Interpolation method.
+        clamp_extrapolation : bool = True
+            In the extrapolated region, clamp values within the original data's minimal and maximal
+            values.
 
         Returns
         -------
@@ -117,11 +118,13 @@ class Coords(Tidy3dBaseModel):
             **interp_param,
         )
 
-        # filter any values larger/smaller than the original data's max/min.
-        max_val = max(spatial_dataarray.values.ravel())
-        min_val = min(spatial_dataarray.values.ravel())
-        interp_dataarray = interp_dataarray.where(interp_dataarray >= min_val, min_val)
-        interp_dataarray = interp_dataarray.where(interp_dataarray <= max_val, max_val)
+        if clamp_extrapolation:
+            # filter any values larger/smaller than the original data's max/min.
+            max_val = max(spatial_dataarray.values.ravel())
+            min_val = min(spatial_dataarray.values.ravel())
+            interp_dataarray = interp_dataarray.where(interp_dataarray >= min_val, min_val)
+            interp_dataarray = interp_dataarray.where(interp_dataarray <= max_val, max_val)
+
         return interp_dataarray
 
 
