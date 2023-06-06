@@ -55,8 +55,9 @@ class Coords(Tidy3dBaseModel):
         interp_method: InterpMethod,
     ) -> Union[SpatialDataArray, ScalarFieldDataArray]:
         """
-        Enhance xarray's ``.interp`` in two ways:
-            1) Check if the coordinate of the supplied data are in monotically increasing order.
+        Similar to ``xarrray.DataArray.interp`` with 3 enhancements:
+
+            1) Check if the coordinate of the supplied data are in monotonically increasing order.
             If they are, apply the faster ``assume_sorted=True``.
 
             2) For axes of single entry, instead of error, apply ``isel()`` along the axis.
@@ -75,6 +76,13 @@ class Coords(Tidy3dBaseModel):
         -------
         Union[:class:`.SpatialDataArray`, :class:`.ScalarFieldDataArray`]
             The interpolated spatial dataset.
+
+        Note
+        ----
+        This method is called from a :class:`Coords` instance with the array to be interpolated as
+        an argument, not the other way around.
+        >>> coords.spatial_interp(some_data_array, interp_method)
+        >>> # xarray interp: some_data_array.interp(...)
         """
 
         all_coords = "xyz"
