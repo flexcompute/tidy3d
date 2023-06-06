@@ -1,6 +1,6 @@
 """Defines the FDTD grid."""
 from __future__ import annotations
-from typing import Tuple, List, Union
+from typing import Tuple, List, Union, Any
 
 import numpy as np
 import pydantic as pd
@@ -53,7 +53,7 @@ class Coords(Tidy3dBaseModel):
         self,
         spatial_dataarray: Union[SpatialDataArray, ScalarFieldDataArray],
         interp_method: InterpMethod,
-        clamp_extrapolation: bool = True,
+        fill_value: Union[Literal["extrapolate"], float] = "extrapolate",
     ) -> Union[SpatialDataArray, ScalarFieldDataArray]:
         """
         Similar to ``xarrray.DataArray.interp`` with 2 enhancements:
@@ -69,9 +69,10 @@ class Coords(Tidy3dBaseModel):
             Supplied scalar dataset
         interp_method : :class:`.InterpMethod`
             Interpolation method.
-        clamp_extrapolation : bool = True
-            In the extrapolated region, clamp values within the original data's minimal and maximal
-            values.
+        fill_value : Union[Literal['extrapolate'], float] = "extrapolate"
+            Value used to fill in for points outside the data range. If set to 'extrapolate',
+            values will be extrapolated into those regions and clamped within the original data
+            value range.
 
         Returns
         -------
@@ -82,6 +83,7 @@ class Coords(Tidy3dBaseModel):
         ----
         This method is called from a :class:`Coords` instance with the array to be interpolated as
         an argument, not the other way around.
+
         >>> coords.spatial_interp(some_data_array, interp_method)
         >>> # xarray interp: some_data_array.interp(...)
         """
@@ -108,7 +110,7 @@ class Coords(Tidy3dBaseModel):
         #   first check if it's sorted
         is_sorted = all((np.all(np.diff(spatial_dataarray.coords[f]) > 0) for f in interp_ax))
         interp_param = dict(
-            kwargs={"fill_value": "extrapolate"},
+            kwargs={"fill_value": fill_value},
             assume_sorted=is_sorted,
             method=interp_method,
         )
@@ -118,7 +120,7 @@ class Coords(Tidy3dBaseModel):
             **interp_param,
         )
 
-        if clamp_extrapolation:
+        if fill_value == "extrapolate":
             # filter any values larger/smaller than the original data's max/min.
             max_val = max(spatial_dataarray.values.ravel())
             min_val = min(spatial_dataarray.values.ravel())
