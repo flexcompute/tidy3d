@@ -120,7 +120,7 @@ class Coords(Tidy3dBaseModel):
             **interp_param,
         )
 
-        if fill_value == "extrapolate":
+        if fill_value == "extrapolate" and spatial_dataarray.values.size > 0:
             # filter any values larger/smaller than the original data's max/min.
             max_val = max(spatial_dataarray.values.ravel())
             min_val = min(spatial_dataarray.values.ravel())
