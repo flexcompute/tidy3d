@@ -1,13 +1,13 @@
 """Defines the FDTD grid."""
 from __future__ import annotations
-from typing import Tuple, List, Union, Literal
+from typing import Tuple, List, Union
 
 import numpy as np
 import pydantic as pd
 
 from ..base import Tidy3dBaseModel, cached_property
 from ..data.data_array import SpatialDataArray, ScalarFieldDataArray
-from ..types import ArrayFloat1D, Axis, TYPE_TAG_STR, InterpMethod
+from ..types import ArrayFloat1D, Axis, TYPE_TAG_STR, InterpMethod, Literal
 from ..geometry import Box
 
 from ...exceptions import SetupError
