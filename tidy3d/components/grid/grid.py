@@ -1,6 +1,6 @@
 """Defines the FDTD grid."""
 from __future__ import annotations
-from typing import Tuple, List, Union, Any
+from typing import Tuple, List, Union, Literal
 
 import numpy as np
 import pydantic as pd
