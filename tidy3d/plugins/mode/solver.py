@@ -259,7 +259,7 @@ class EigSolver(Tidy3dBaseModel):
         if np.any(eps_offd > TOL_TENSORIAL) or np.any(mu_offd > TOL_TENSORIAL):
             is_tensorial = True
 
-        # Determine data types
+        # Determine data type that should be used for the matrix for diagonalization
         mat_dtype = np.float32
         # In tensorial case, even though the matrix can be real, the
         # expected eigenvalue is purely imaginary. So for now we enforce
@@ -282,27 +282,26 @@ class EigSolver(Tidy3dBaseModel):
                 if mat_precision == "double":
                     mat_dtype = np.float64
 
-        # data type conversion
-        eps_tensor = cls.type_conversion(eps_tensor, mat_dtype)
-        mu_tensor = cls.type_conversion(mu_tensor, mat_dtype)
-        der_mats = [cls.type_conversion(f, mat_dtype) for f in der_mats]
-        neff_guess = cls.type_conversion(np.array([neff_guess]), mat_dtype)[0]
-
-        # initial vector for eigensolver
+        # initial vector for eigensolver in correct data type
         vec_init = cls.set_initial_vec(Nx, Ny, mat_dtype=mat_dtype, is_tensorial=is_tensorial)
 
         # call solver
+        kwargs = {
+            "eps": eps_tensor,
+            "mu": mu_tensor,
+            "der_mats": der_mats,
+            "num_modes": num_modes,
+            "neff_guess": neff_guess,
+            "vec_init": vec_init,
+            "mat_dtype": mat_dtype,
+        }
         if is_tensorial:
-            return cls.solver_tensorial(
-                eps_tensor, mu_tensor, der_mats, num_modes, vec_init, neff_guess
-            )
+            return cls.solver_tensorial(**kwargs)
+        return cls.solver_diagonal(**kwargs)
 
-        return cls.solver_diagonal(eps_tensor, mu_tensor, der_mats, num_modes, vec_init, neff_guess)
-
+    # pylint:disable=too-many-arguments
     @classmethod
-    def solver_diagonal(
-        cls, eps, mu, der_mats, num_modes, vec_init, neff_guess
-    ):  # pylint:disable=too-many-arguments
+    def solver_diagonal(cls, eps, mu, der_mats, num_modes, neff_guess, vec_init, mat_dtype):
         """EM eigenmode solver assuming ``eps`` and ``mu`` are diagonal everywhere."""
 
         # code associated with these options is included below in case it's useful in the future
@@ -359,8 +358,12 @@ class EigSolver(Tidy3dBaseModel):
 
         pmat = sp.bmat([[p11, p12], [p21, p22]])
         qmat = sp.bmat([[q11, q12], [q21, q22]])
-
         mat = pmat.dot(qmat)
+
+        # Cast matrix to target data type
+        mat = cls.type_conversion(mat, mat_dtype)
+        # Starting eigenvalue guess
+        eig_guess = cls.type_conversion(np.array([-(neff_guess**2)]), mat_dtype)[0]
 
         if enable_incidence_matrices:
             mat = dnz * mat * dnz.T  # pylint: disable=used-before-assignment
@@ -380,11 +383,13 @@ class EigSolver(Tidy3dBaseModel):
             print(spl.norm(diff, ord="fro"), spl.norm(aca, ord="fro"), spl.norm(aac, ord="fro"))
 
         # Call the eigensolver. The eigenvalues are -(neff + 1j * keff)**2
+
+        print(mat.dtype, eig_guess.dtype, vec_init.dtype)
         vals, vecs = cls.solver_eigs(
             mat,
             num_modes,
             vec_init,
-            guess_value=-(neff_guess**2),
+            guess_value=eig_guess,
             mode_solver_type=mode_solver_type,
             M=precon,
         )
@@ -423,10 +428,9 @@ class EigSolver(Tidy3dBaseModel):
 
         return E, H, neff, keff
 
+    # pylint:disable=too-many-arguments
     @classmethod
-    def solver_tensorial(
-        cls, eps, mu, der_mats, num_modes, vec_init, neff_guess
-    ):  # pylint:disable=too-many-arguments
+    def solver_tensorial(cls, eps, mu, der_mats, num_modes, neff_guess, vec_init, mat_dtype):
         """EM eigenmode solver assuming ``eps`` or ``mu`` have off-diagonal elements."""
 
         mode_solver_type = "tensorial"
@@ -494,13 +498,21 @@ class EigSolver(Tidy3dBaseModel):
             ]
         )
 
-        # Call the eigensolver. The eigenvalues are 1j * (neff + 1j * keff)
-        # Now multiply the matrix by -1j, so that eigenvalues are (neff + 1j * keff)
+        # The eigenvalues for the matrix above are 1j * (neff + 1j * keff)
+        # Multiply the matrix by -1j, so that eigenvalues are (neff + 1j * keff)
+        mat *= -1j
+
+        # Cast matrix to target data type
+        mat = cls.type_conversion(mat, mat_dtype)
+        # Starting eigenvalue guess
+        eig_guess = cls.type_conversion(np.array([neff_guess]), mat_dtype)[0]
+
+        # Call the eigensolver.
         vals, vecs = cls.solver_eigs(
-            -1j * mat,
+            mat,
             num_modes,
             vec_init,
-            guess_value=neff_guess,
+            guess_value=eig_guess,
             mode_solver_type=mode_solver_type,
         )
         neff, keff = cls.eigs_to_effective_index(vals, mode_solver_type)
