@@ -138,7 +138,8 @@ Ag_Rakic1998BB = VariantItem(
         frequency_range=(24179892422719.273, 1208994621135963.5),
     ),
     reference=[material_refs["Rakic1998"]],
-    data_url="https://refractiveindex.info/data_csv.php?datafile=data/main/Ag/Rakic-BB.yml",
+    data_url="https://refractiveindex.info/data_csv.php?datafile=database/data-nk/"
+    "main/Ag/Rakic-BB.yml",
 )
 
 Ag_RakicLorentzDrude1998 = VariantItem(
@@ -157,7 +158,8 @@ Ag_RakicLorentzDrude1998 = VariantItem(
         frequency_range=(24179892422719.273, 1208994621135963.5),
     ),
     reference=[material_refs["Rakic1998"]],
-    data_url="https://refractiveindex.info/data_csv.php?datafile=data/main/Ag/Rakic-LD.yml",
+    data_url="https://refractiveindex.info/data_csv.php?datafile=database/data-nk/"
+    "main/Ag/Rakic-LD.yml",
 )
 
 Ag_JohnsonChristy1972 = VariantItem(
@@ -177,7 +179,8 @@ Ag_JohnsonChristy1972 = VariantItem(
         frequency_range=(154771532566312.25, 1595489401708072.2),
     ),
     reference=[material_refs["JohnsonChristy1972"]],
-    data_url="https://refractiveindex.info/data_csv.php?datafile=data/main/Ag/Johnson.yml",
+    data_url="https://refractiveindex.info/data_csv.php?datafile=database/data-nk/"
+    "main/Ag/Johnson.yml",
 )
 
 Ag_Yang2015Drude = VariantItem(
@@ -196,7 +199,8 @@ Ag_Yang2015Drude = VariantItem(
         frequency_range=(154771532566312.25, 1595489401708072.2),
     ),
     reference=[material_refs["Yang2015"]],
-    data_url="https://refractiveindex.info/database/data/main/Ag/Yang.yml",
+    data_url="https://refractiveindex.info/data_csv.php?datafile=database/data-nk/"
+    "main/Ag/Yang.yml",
 )
 
 Al_Rakic1995 = VariantItem(
@@ -224,7 +228,8 @@ Al_Rakic1995 = VariantItem(
         frequency_range=(151926744799612.75, 1.5192674479961274e16),
     ),
     reference=[material_refs["Rakic1995"]],
-    data_url="https://refractiveindex.info/data_csv.php?datafile=data/main/Al/Rakic.yml",
+    data_url="https://refractiveindex.info/data_csv.php?datafile=database/data-nk/"
+    "main/Al/Rakic.yml",
 )
 
 Al_RakicLorentzDrude1998 = VariantItem(
@@ -242,7 +247,8 @@ Al_RakicLorentzDrude1998 = VariantItem(
         frequency_range=(1208994621135.9636, 4835978484543854.0),
     ),
     reference=[material_refs["Rakic1998"]],
-    data_url="https://refractiveindex.info/data_csv.php?datafile=data/main/Al/Rakic-LD.yml",
+    data_url="https://refractiveindex.info/data_csv.php?datafile=database/data-nk/"
+    "main/Al/Rakic-LD.yml",
 )
 
 Al2O3_Horiba = VariantItem(
@@ -275,7 +281,8 @@ AlAs_FernOnton1971 = VariantItem(
         frequency_range=(136269299354975.81, 535343676037405.0),
     ),
     reference=[material_refs["FernOnton1971"]],
-    data_url="https://refractiveindex.info/data_csv.php?datafile=data/main/AlAs/Fern.yml",
+    data_url="https://refractiveindex.info/data_csv.php?datafile=database/data-nk/"
+    "main/AlAs/Fern.yml",
 )
 
 AlGaN_Horiba = VariantItem(
@@ -332,7 +339,8 @@ Au_Olmon2012evaporated = VariantItem(
         frequency_range=(12025369359446.29, 999308193769986.8),
     ),
     reference=[material_refs["Olmon2012"]],
-    data_url="https://refractiveindex.info/data_csv.php?datafile=data/main/Au/Olmon-ev.yml",
+    data_url="https://refractiveindex.info/data_csv.php?datafile=database/data-nk/"
+    "main/Au/Olmon-ev.yml",
 )
 
 Au_Olmon2012stripped = VariantItem(
@@ -352,7 +360,8 @@ Au_Olmon2012stripped = VariantItem(
         frequency_range=(12025369359446.29, 999308193769986.8),
     ),
     reference=[material_refs["Olmon2012"]],
-    data_url="https://refractiveindex.info/data_csv.php?datafile=data/main/Au/Olmon-ts.yml",
+    data_url="https://refractiveindex.info/data_csv.php?datafile=database/data-nk/"
+    "main/Au/Olmon-ts.yml",
 )
 
 Au_Olmon2012crystal = VariantItem(
@@ -375,7 +384,8 @@ Au_Olmon2012crystal = VariantItem(
         frequency_range=(12025369359446.29, 999308193769986.8),
     ),
     reference=[material_refs["Olmon2012"]],
-    data_url="https://refractiveindex.info/data_csv.php?datafile=data/main/Au/Olmon-sc.yml",
+    data_url="https://refractiveindex.info/data_csv.php?datafile=database/data-nk/"
+    "main/Au/Olmon-sc.yml",
 )
 
 Au_Olmon2012Drude = VariantItem(
@@ -394,7 +404,8 @@ Au_Olmon2012Drude = VariantItem(
         frequency_range=(12025369359446.29, 241798930000000),
     ),
     reference=[material_refs["Olmon2012"]],
-    data_url="https://refractiveindex.info/data_csv.php?datafile=data/main/Au/Olmon-sc.yml",
+    data_url="https://refractiveindex.info/data_csv.php?datafile=database/data-nk/"
+    "main/Au/Olmon-sc.yml",
 )
 
 Au_JohnsonChristy1972 = VariantItem(
@@ -429,7 +440,8 @@ Au_JohnsonChristy1972 = VariantItem(
         frequency_range=(154751311505403.34, 1595872899899471.8),
     ),
     reference=[material_refs["JohnsonChristy1972"]],
-    data_url="https://refractiveindex.info/data_csv.php?datafile=data/main/Au/Johnson.yml",
+    data_url="https://refractiveindex.info/data_csv.php?datafile=database/data-nk/"
+    "main/Au/Johnson.yml",
 )
 
 Au_RakicLorentzDrude1998 = VariantItem(
@@ -447,7 +459,8 @@ Au_RakicLorentzDrude1998 = VariantItem(
         frequency_range=(4.83598623e13, 1.20898681e15),
     ),
     reference=[material_refs["Rakic1998"]],
-    data_url="https://refractiveindex.info/data_csv.php?datafile=data/main/Au/Rakic-LD.yml",
+    data_url="https://refractiveindex.info/data_csv.php?datafile=database/data-nk/"
+    "main/Au/Rakic-LD.yml",
 )
 
 BK7_Zemax = VariantItem(
@@ -488,7 +501,8 @@ Be_Rakic1998BB = VariantItem(
         frequency_range=(4835978484543.8545, 1208994621135963.5),
     ),
     reference=[material_refs["Rakic1998"]],
-    data_url="https://refractiveindex.info/data_csv.php?datafile=data/main/Be/Rakic-BB.yml",
+    data_url="https://refractiveindex.info/data_csv.php?datafile=database/data-nk/"
+    "main/Be/Rakic-BB.yml",
 )
 
 Be_RakicLorentzDrude1998 = VariantItem(
@@ -507,7 +521,8 @@ Be_RakicLorentzDrude1998 = VariantItem(
         frequency_range=(4835978484543.8545, 1208994621135963.5),
     ),
     reference=[material_refs["Rakic1998"]],
-    data_url="https://refractiveindex.info/data_csv.php?datafile=data/main/Be/Rakic-LD.yml",
+    data_url="https://refractiveindex.info/data_csv.php?datafile=database/data-nk/"
+    "main/Be/Rakic-LD.yml",
 )
 
 CaF2_Horiba = VariantItem(
@@ -554,7 +569,8 @@ Cr_Rakic1998BB = VariantItem(
         frequency_range=(4835362227919.29, 1208840556979822.5),
     ),
     reference=[material_refs["Rakic1998"]],
-    data_url="https://refractiveindex.info/data_csv.php?datafile=data/main/Cr/Rakic-BB.yml",
+    data_url="https://refractiveindex.info/data_csv.php?datafile=database/data-nk/"
+    "main/Cr/Rakic-BB.yml",
 )
 
 Cr_RakicLorentzDrude1998 = VariantItem(
@@ -573,7 +589,8 @@ Cr_RakicLorentzDrude1998 = VariantItem(
         frequency_range=(4835978484543.8545, 1208994621135963.5),
     ),
     reference=[material_refs["Rakic1998"]],
-    data_url="https://refractiveindex.info/data_csv.php?datafile=data/main/Cr/Rakic-LD.yml",
+    data_url="https://refractiveindex.info/data_csv.php?datafile=database/data-nk/"
+    "main/Cr/Rakic-LD.yml",
 )
 
 Cu_JohnsonChristy1972 = VariantItem(
@@ -601,7 +618,8 @@ Cu_JohnsonChristy1972 = VariantItem(
         frequency_range=(154771532266391.3, 1595489398616285.2),
     ),
     reference=[material_refs["JohnsonChristy1972"]],
-    data_url="https://refractiveindex.info/data_csv.php?datafile=data/main/Cu/Johnson.yml",
+    data_url="https://refractiveindex.info/data_csv.php?datafile=database/data-nk/"
+    "main/Cu/Johnson.yml",
 )
 
 Cu_RakicLorentzDrude1998 = VariantItem(
@@ -618,7 +636,8 @@ Cu_RakicLorentzDrude1998 = VariantItem(
         frequency_range=(2.41768111e13, 1.44827274e15),
     ),
     reference=[material_refs["Rakic1998"]],
-    data_url="https://refractiveindex.info/data_csv.php?datafile=data/main/Cu/Rakic-LD.yml",
+    data_url="https://refractiveindex.info/data_csv.php?datafile=database/data-nk/"
+    "main/Cu/Rakic-LD.yml",
 )
 
 FusedSilica_Zemax = VariantItem(
@@ -632,7 +651,8 @@ FusedSilica_Zemax = VariantItem(
         frequency_range=(44745143071783.1, 1427583136099746.8),
     ),
     reference=[material_refs["Malitson1965"], material_refs["Tan1998"]],
-    data_url="https://refractiveindex.info/data_csv.php?datafile=data/main/SiO2/Malitson.yml",
+    data_url="https://refractiveindex.info/data_csv.php?datafile=database/data-nk/"
+    "main/SiO2/Malitson.yml",
 )
 
 FusedSilica_Zemax_Visible_PMLStable = VariantItem(
@@ -642,7 +662,8 @@ FusedSilica_Zemax_Visible_PMLStable = VariantItem(
         frequency_range=(382925607524582.94, 739315556426623.9),
     ),
     reference=[material_refs["Malitson1965"], material_refs["Tan1998"]],
-    data_url="https://refractiveindex.info/data_csv.php?datafile=data/main/SiO2/Malitson.yml",
+    data_url="https://refractiveindex.info/data_csv.php?datafile=database/data-nk/"
+    "main/SiO2/Malitson.yml",
 )
 
 FusedSilica_Zemax_PMLStable = VariantItem(
@@ -652,7 +673,8 @@ FusedSilica_Zemax_PMLStable = VariantItem(
         frequency_range=(150347270878132.4, 739315556426623.9),
     ),
     reference=[material_refs["Malitson1965"], material_refs["Tan1998"]],
-    data_url="https://refractiveindex.info/data_csv.php?datafile=data/main/SiO2/Malitson.yml",
+    data_url="https://refractiveindex.info/data_csv.php?datafile=database/data-nk/"
+    "main/SiO2/Malitson.yml",
 )
 
 GaAs_Skauli2003 = VariantItem(
@@ -666,7 +688,8 @@ GaAs_Skauli2003 = VariantItem(
         frequency_range=(17634850504761.58, 309064390289635.9),
     ),
     reference=[material_refs["Skauli2003"]],
-    data_url="https://refractiveindex.info/data_csv.php?datafile=data/main/GaAs/Skauli.yml",
+    data_url="https://refractiveindex.info/data_csv.php?datafile=database/data-nk/"
+    "main/GaAs/Skauli.yml",
 )
 
 Ge_Icenogle1976 = VariantItem(
@@ -679,7 +702,8 @@ Ge_Icenogle1976 = VariantItem(
         frequency_range=(24982704881745.566, 119916983432378.72),
     ),
     reference=[material_refs["Icenogle1976"], material_refs["Barnes1979"]],
-    data_url="https://refractiveindex.info/data_csv.php?datafile=data/main/Ge/Icenogle.yml",
+    data_url="https://refractiveindex.info/data_csv.php?datafile=database/data-nk/"
+    "main/Ge/Icenogle.yml",
 )
 
 GeOx_Horiba = VariantItem(
@@ -749,7 +773,8 @@ InP_Pettit1965 = VariantItem(
         material_refs["Pikhtin1978"],
         material_refs["HandbookOptics"],
     ],
-    data_url="https://refractiveindex.info/data_csv.php?datafile=data/main/InP/Pettit.yml",
+    data_url="https://refractiveindex.info/data_csv.php?datafile=database/data-nk/"
+    "main/InP/Pettit.yml",
 )
 
 MgF2_Horiba = VariantItem(
@@ -781,7 +806,8 @@ MgO_StephensMalitson1952 = VariantItem(
         frequency_range=(55517121959434.59, 832756829391519.0),
     ),
     reference=[material_refs["StephensMalitson1952"]],
-    data_url="https://refractiveindex.info/data_csv.php?datafile=data/main/MgO/Stephens.yml",
+    data_url="https://refractiveindex.info/data_csv.php?datafile=database/data-nk/"
+    "main/MgO/Stephens.yml",
 )
 
 MoS2_Li2014 = VariantItem2D(
@@ -843,7 +869,8 @@ Ni_JohnsonChristy1972 = VariantItem(
         frequency_range=(154771532266391.3, 1594640734042553.2),
     ),
     reference=[material_refs["JohnsonChristy1972"]],
-    data_url="https://refractiveindex.info/data_csv.php?datafile=data/main/Ni/Johnson.yml",
+    data_url="https://refractiveindex.info/data_csv.php?datafile=database/data-nk/"
+    "main/Ni/Johnson.yml",
 )
 
 Ni_RakicLorentzDrude1998 = VariantItem(
@@ -862,7 +889,8 @@ Ni_RakicLorentzDrude1998 = VariantItem(
         frequency_range=(48359784845438.55, 1208994621135963.5),
     ),
     reference=[material_refs["Rakic1998"]],
-    data_url="https://refractiveindex.info/data_csv.php?datafile=data/main/Ni/Rakic-LD.yml",
+    data_url="https://refractiveindex.info/data_csv.php?datafile=database/data-nk/"
+    "main/Ni/Rakic-LD.yml",
 )
 
 PEI_Horiba = VariantItem(
@@ -954,7 +982,8 @@ Pd_JohnsonChristy1972 = VariantItem(
         frequency_range=(154751311505403.34, 1595872899899471.8),
     ),
     reference=[material_refs["JohnsonChristy1972"]],
-    data_url="https://refractiveindex.info/data_csv.php?datafile=data/main/Pd/Johnson.yml",
+    data_url="https://refractiveindex.info/data_csv.php?datafile=database/data-nk/"
+    "main/Pd/Johnson.yml",
 )
 
 Pd_RakicLorentzDrude1998 = VariantItem(
@@ -972,7 +1001,8 @@ Pd_RakicLorentzDrude1998 = VariantItem(
         frequency_range=(24179892422719.273, 1208994621135963.5),
     ),
     reference=[material_refs["Rakic1998"]],
-    data_url="https://refractiveindex.info/data_csv.php?datafile=data/main/Pd/Rakic-LD.yml",
+    data_url="https://refractiveindex.info/data_csv.php?datafile=database/data-nk/"
+    "main/Pd/Rakic-LD.yml",
 )
 
 Polycarbonate_Horiba = VariantItem(
@@ -1034,7 +1064,8 @@ Pt_Werner2009 = VariantItem(
         frequency_range=(120884055879414.03, 2997924585809468.0),
     ),
     reference=[material_refs["Werner2009"]],
-    data_url="https://refractiveindex.info/data_csv.php?datafile=data/main/Pt/Werner.yml",
+    data_url="https://refractiveindex.info/data_csv.php?datafile=database/data-nk/"
+    "main/Pt/Werner.yml",
 )
 
 Pt_RakicLorentzDrude1998 = VariantItem(
@@ -1051,7 +1082,8 @@ Pt_RakicLorentzDrude1998 = VariantItem(
         frequency_range=(24179892422719.273, 1208994621135963.5),
     ),
     reference=[material_refs["Rakic1998"]],
-    data_url="https://refractiveindex.info/data_csv.php?datafile=data/main/Pt/Rakic-LD.yml",
+    data_url="https://refractiveindex.info/data_csv.php?datafile=database/data-nk/"
+    "main/Pt/Rakic-LD.yml",
 )
 
 Sapphire_Horiba = VariantItem(
@@ -1084,7 +1116,8 @@ Si3N4_Luke2015 = VariantItem(
         frequency_range=(54468106573573.19, 967072447035312.2),
     ),
     reference=[material_refs["Luke2015"]],
-    data_url="https://refractiveindex.info/data_csv.php?datafile=data/main/Si3N4/Luke.yml",
+    data_url="https://refractiveindex.info/data_csv.php?datafile=database/data-nk/"
+    "main/Si3N4/Luke.yml",
 )
 
 Si3N4_Luke2015_PMLStable = VariantItem(
@@ -1094,7 +1127,8 @@ Si3N4_Luke2015_PMLStable = VariantItem(
         frequency_range=(152024573088740.38, 724311326723836.8),
     ),
     reference=[material_refs["Luke2015"]],
-    data_url="https://refractiveindex.info/data_csv.php?datafile=data/main/Si3N4/Luke.yml",
+    data_url="https://refractiveindex.info/data_csv.php?datafile=database/data-nk/"
+    "main/Si3N4/Luke.yml",
 )
 
 Si3N4_Philipp1973 = VariantItem(
@@ -1104,7 +1138,8 @@ Si3N4_Philipp1973 = VariantItem(
         frequency_range=(241768111758828.06, 1448272746767859.0),
     ),
     reference=[material_refs["Philipp1973"], material_refs["Baak1982"]],
-    data_url="https://refractiveindex.info/data_csv.php?datafile=data/main/Si3N4/Philipp.yml",
+    data_url="https://refractiveindex.info/data_csv.php?datafile=database/data-nk/"
+    "main/Si3N4/Philipp.yml",
 )
 
 SiC_Horiba = VariantItem(
@@ -1169,7 +1204,8 @@ Ti_Werner2009 = VariantItem(
         frequency_range=(120884055879414.03, 2997924585809468.0),
     ),
     reference=[material_refs["Werner2009"]],
-    data_url="https://refractiveindex.info/data_csv.php?datafile=data/main/Ti/Werner.yml",
+    data_url="https://refractiveindex.info/data_csv.php?datafile=database/data-nk/"
+    "main/Ti/Werner.yml",
 )
 
 Ti_RakicLorentzDrude1998 = VariantItem(
@@ -1187,7 +1223,8 @@ Ti_RakicLorentzDrude1998 = VariantItem(
         frequency_range=(9.67072446e12, 1.20884056e15),
     ),
     reference=[material_refs["Rakic1998"]],
-    data_url="https://refractiveindex.info/data_csv.php?datafile=data/main/Ti/Rakic-LD.yml",
+    data_url="https://refractiveindex.info/data_csv.php?datafile=database/data-nk/"
+    "main/Ti/Rakic-LD.yml",
 )
 
 TiOx_Horiba = VariantItem(
@@ -1239,7 +1276,8 @@ W_Werner2009 = VariantItem(
         frequency_range=(120884055879414.03, 2997924585809468.0),
     ),
     reference=[material_refs["Werner2009"]],
-    data_url="https://refractiveindex.info/data_csv.php?datafile=data/main/W/Werner.yml",
+    data_url="https://refractiveindex.info/data_csv.php?datafile=database/data-nk/"
+    "main/W/Werner.yml",
 )
 
 W_RakicLorentzDrude1998 = VariantItem(
@@ -1256,7 +1294,8 @@ W_RakicLorentzDrude1998 = VariantItem(
         frequency_range=(2.41768111e13, 1.20884056e15),
     ),
     reference=[material_refs["Rakic1998"]],
-    data_url="https://refractiveindex.info/data_csv.php?datafile=data/main/W/Rakic-LD.yml",
+    data_url="https://refractiveindex.info/data_csv.php?datafile=database/data-nk/"
+    "main/W/Rakic-LD.yml",
 )
 
 WS2_Li2014 = VariantItem2D(
@@ -1313,7 +1352,8 @@ Y2O3_Nigara1968 = VariantItem(
         frequency_range=(31228381102181.96, 1199169834323787.2),
     ),
     reference=[material_refs["Nigara1968"]],
-    data_url="https://refractiveindex.info/data_csv.php?datafile=data/main/Y2O3/Nigara.yml",
+    data_url="https://refractiveindex.info/data_csv.php?datafile=database/data-nk/"
+    "main/Y2O3/Nigara.yml",
 )
 
 YAG_Zelmon1998 = VariantItem(
@@ -1326,7 +1366,8 @@ YAG_Zelmon1998 = VariantItem(
         frequency_range=(59958491716189.36, 749481146452367.0),
     ),
     reference=[material_refs["Zelmon1998"]],
-    data_url="https://refractiveindex.info/data_csv.php?datafile=data/main/Y3Al5O12/Zelmon.yml",
+    data_url="https://refractiveindex.info/data_csv.php?datafile=database/data-nk/"
+    "main/Y3Al5O12/Zelmon.yml",
 )
 
 ZrO2_Horiba = VariantItem(
@@ -1358,7 +1399,8 @@ cSi_SalzbergVilla1957 = VariantItem(
         frequency_range=(27253859870995.164, 220435631309519.7),
     ),
     reference=[material_refs["SalzbergVilla1957"], material_refs["Tatian1984"]],
-    data_url="https://refractiveindex.info/data_csv.php?datafile=data/main/Si/Salzberg.yml",
+    data_url="https://refractiveindex.info/data_csv.php?datafile=database/data-nk/"
+    "main/Si/Salzberg.yml",
 )
 
 cSi_Li1993_293K = VariantItem(
@@ -1368,7 +1410,8 @@ cSi_Li1993_293K = VariantItem(
         frequency_range=(21413747041496.2, 249827048817455.7),
     ),
     reference=[material_refs["Li1993_293K"]],
-    data_url="https://refractiveindex.info/data_csv.php?datafile=data/main/Si/Li-293K.yml",
+    data_url="https://refractiveindex.info/data_csv.php?datafile=database/data-nk/"
+    "main/Si/Li-293K.yml",
 )
 
 cSi_Green2008 = VariantItem(
@@ -1395,7 +1438,8 @@ cSi_Green2008 = VariantItem(
         frequency_range=(206753419710997.8, 1199169834323787.2),
     ),
     reference=[material_refs["Green2008"]],
-    data_url="https://refractiveindex.info/data_csv.php?datafile=data/main/Si/Green-2008.yml",
+    data_url="https://refractiveindex.info/data_csv.php?datafile=database/data-nk/"
+    "main/Si/Green-2008.yml",
 )
 
 
