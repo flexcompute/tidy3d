@@ -1,12 +1,13 @@
 """Defines the FDTD grid."""
-
-from typing import Tuple, List
+from __future__ import annotations
+from typing import Tuple, List, Union, Any
 
 import numpy as np
 import pydantic as pd
 
 from ..base import Tidy3dBaseModel, cached_property
-from ..types import ArrayFloat1D, Axis, TYPE_TAG_STR
+from ..data.data_array import SpatialDataArray, ScalarFieldDataArray
+from ..types import ArrayFloat1D, Axis, TYPE_TAG_STR, InterpMethod
 from ..geometry import Box
 
 from ...exceptions import SetupError
@@ -47,6 +48,86 @@ class Coords(Tidy3dBaseModel):
     def to_list(self):
         """Return a list of the three Coord1D objects as numpy arrays."""
         return list(self.to_dict.values())
+
+    def spatial_interp(
+        self,
+        spatial_dataarray: Union[SpatialDataArray, ScalarFieldDataArray],
+        interp_method: InterpMethod,
+        fill_value: Union[Literal["extrapolate"], float] = "extrapolate",
+    ) -> Union[SpatialDataArray, ScalarFieldDataArray]:
+        """
+        Similar to ``xarrray.DataArray.interp`` with 2 enhancements:
+
+            1) Check if the coordinate of the supplied data are in monotonically increasing order.
+            If they are, apply the faster ``assume_sorted=True``.
+
+            2) For axes of single entry, instead of error, apply ``isel()`` along the axis.
+
+        Parameters
+        ----------
+        spatial_dataarray : Union[:class:`.SpatialDataArray`, :class:`.ScalarFieldDataArray`]
+            Supplied scalar dataset
+        interp_method : :class:`.InterpMethod`
+            Interpolation method.
+        fill_value : Union[Literal['extrapolate'], float] = "extrapolate"
+            Value used to fill in for points outside the data range. If set to 'extrapolate',
+            values will be extrapolated into those regions and clamped within the original data
+            value range.
+
+        Returns
+        -------
+        Union[:class:`.SpatialDataArray`, :class:`.ScalarFieldDataArray`]
+            The interpolated spatial dataset.
+
+        Note
+        ----
+        This method is called from a :class:`Coords` instance with the array to be interpolated as
+        an argument, not the other way around.
+
+        >>> coords.spatial_interp(some_data_array, interp_method)
+        >>> # xarray interp: some_data_array.interp(...)
+        """
+
+        all_coords = "xyz"
+        is_single_entry = [spatial_dataarray.sizes[ax] == 1 for ax in all_coords]
+        interp_ax = [
+            ax for (ax, single_entry) in zip(all_coords, is_single_entry) if not single_entry
+        ]
+        isel_ax = [ax for ax in all_coords if ax not in interp_ax]
+
+        # apply isel for the axis containing single entry
+        if len(isel_ax) > 0:
+            spatial_dataarray = spatial_dataarray.isel(
+                {ax: [0] * len(self.to_dict[ax]) for ax in isel_ax}
+            )
+            spatial_dataarray = spatial_dataarray.assign_coords(
+                {ax: self.to_dict[ax] for ax in isel_ax}
+            )
+            if len(interp_ax) == 0:
+                return spatial_dataarray
+
+        # Apply interp for the rest
+        #   first check if it's sorted
+        is_sorted = all((np.all(np.diff(spatial_dataarray.coords[f]) > 0) for f in interp_ax))
+        interp_param = dict(
+            kwargs={"fill_value": fill_value},
+            assume_sorted=is_sorted,
+            method=interp_method,
+        )
+        #   interpolation
+        interp_dataarray = spatial_dataarray.interp(
+            {ax: self.to_dict[ax] for ax in interp_ax},
+            **interp_param,
+        )
+
+        if fill_value == "extrapolate":
+            # filter any values larger/smaller than the original data's max/min.
+            max_val = max(spatial_dataarray.values.ravel())
+            min_val = min(spatial_dataarray.values.ravel())
+            interp_dataarray = interp_dataarray.where(interp_dataarray >= min_val, min_val)
+            interp_dataarray = interp_dataarray.where(interp_dataarray <= max_val, max_val)
+
+        return interp_dataarray
 
 
 class FieldGrid(Tidy3dBaseModel):

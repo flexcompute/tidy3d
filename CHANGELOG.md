@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - Specification of spatial permittivity distribution of dispersive material using user-supplied data through `CustomPoleResidue`, `CustomSellmeier`, `CustomLorentz`, `CustomDebye`, and `CustomDrude` components.
 - `CustomAnisotropicMedium` where each component can take user-supplied data to define spatial permittivity distribution of non-dispersive or dispersive material.
+- `Coords.spatial_interp` to interpolate spatial data avoiding pitfalls of `xarray.interp` in directions where there is a single data point.
 
 ### Changed
 - Add `Medium2D` to full simulation in tests.
@@ -15,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `StableDispersionFitter` deprecated, with stable fitter now being run instead through `plugins.dispersion.web.run(DispersionFitter)`.
 - Removed validator from `CustomFieldSource` that ensured data spanned the source geometry. Now the current values are extrapolated outside of the supplied data ranges.
 - `CustomMedium` now take fields `permittivity` and `conductivity`. `eps_dataset` will be deprecated in v3.0.
+- Moved `CustomMedium._interp` to `Coords.spatial_interp` to be used by custom current sources.
 
 ### Fixed
 - Plotting 2D materials in `SimulationData.plot_field` and other circumstances.
