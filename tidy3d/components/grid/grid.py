@@ -83,9 +83,6 @@ class Coords(Tidy3dBaseModel):
         ----
         This method is called from a :class:`Coords` instance with the array to be interpolated as
         an argument, not the other way around.
-
-        >>> coords.spatial_interp(some_data_array, interp_method)
-        >>> # xarray interp: some_data_array.interp(...)
         """
 
         all_coords = "xyz"
