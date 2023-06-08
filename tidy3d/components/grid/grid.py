@@ -6,7 +6,7 @@ import numpy as np
 import pydantic as pd
 
 from ..base import Tidy3dBaseModel, cached_property
-from ..data.data_array import SpatialDataArray, ScalarFieldDataArray
+from ..data.data_array import DataArray, SpatialDataArray, ScalarFieldDataArray
 from ..types import ArrayFloat1D, Axis, TYPE_TAG_STR, InterpMethod, Literal
 from ..geometry import Box
 
@@ -51,7 +51,7 @@ class Coords(Tidy3dBaseModel):
 
     def spatial_interp(
         self,
-        spatial_dataarray: Union[SpatialDataArray, ScalarFieldDataArray],
+        array: Union[SpatialDataArray, ScalarFieldDataArray],
         interp_method: InterpMethod,
         fill_value: Union[Literal["extrapolate"], float] = "extrapolate",
     ) -> Union[SpatialDataArray, ScalarFieldDataArray]:
@@ -65,7 +65,7 @@ class Coords(Tidy3dBaseModel):
 
         Parameters
         ----------
-        spatial_dataarray : Union[:class:`.SpatialDataArray`, :class:`.ScalarFieldDataArray`]
+        array : Union[:class:`.SpatialDataArray`, :class:`.ScalarFieldDataArray`]
             Supplied scalar dataset
         interp_method : :class:`.InterpMethod`
             Interpolation method.
@@ -86,56 +86,55 @@ class Coords(Tidy3dBaseModel):
         """
 
         all_coords = "xyz"
-        is_single_entry = [spatial_dataarray.sizes[ax] == 1 for ax in all_coords]
+
+        # Check for empty dimensions
+        result_coords = dict(self.to_dict)
+        if any(len(v) == 0 for v in result_coords.values()):
+            for c in array.coords:
+                if c not in result_coords:
+                    result_coords[c] = array.coords[c].values
+            result_shape = tuple(len(v) for v in result_coords.values())
+            result = DataArray(np.empty(result_shape, dtype=array.dtype), coords=result_coords)
+            return result
+
+        # Check wich axes need interpolation or selection
+        is_single_entry = [array.sizes[ax] == 1 for ax in all_coords]
         interp_ax = [
             ax for (ax, single_entry) in zip(all_coords, is_single_entry) if not single_entry
         ]
         isel_ax = [ax for ax in all_coords if ax not in interp_ax]
 
-        # apply isel for the axis containing single entry
+        # apply iselection for the axis containing single entry
         if len(isel_ax) > 0:
-            spatial_dataarray = spatial_dataarray.isel(
-                {ax: [0] * len(self.to_dict[ax]) for ax in isel_ax}
-            )
-            spatial_dataarray = spatial_dataarray.assign_coords(
-                {ax: self.to_dict[ax] for ax in isel_ax}
-            )
+            array = array.isel({ax: [0] * len(self.to_dict[ax]) for ax in isel_ax})
+            array = array.assign_coords({ax: self.to_dict[ax] for ax in isel_ax})
             if len(interp_ax) == 0:
-                return spatial_dataarray
+                return array
 
         # Apply interp for the rest
-        #   first check if it's sorted
-        is_sorted = all((np.all(np.diff(spatial_dataarray.coords[f]) > 0) for f in interp_ax))
+        is_sorted = all((np.all(np.diff(array.coords[f]) > 0) for f in interp_ax))
         interp_param = dict(
             kwargs={"fill_value": fill_value},
             assume_sorted=is_sorted,
             method=interp_method,
         )
         #   interpolation
-        interp_dataarray = spatial_dataarray.interp(
-            {ax: self.to_dict[ax] for ax in interp_ax},
-            **interp_param,
-        )
+        interp_dataarray = array.interp({ax: self.to_dict[ax] for ax in interp_ax}, **interp_param)
 
-        if fill_value == "extrapolate" and spatial_dataarray.values.size > 0:
+        if fill_value == "extrapolate" and array.values.size > 0:
             # filter any values larger/smaller than the original data's max/min.
-            if np.iscomplexobj(spatial_dataarray.values):
-                re = interp_dataarray.values.real
-                limit = spatial_dataarray.values.real.max()
-                re[re > limit] = limit
-                limit = spatial_dataarray.values.real.min()
-                re[re < limit] = limit
-                im = interp_dataarray.values.imag
-                limit = spatial_dataarray.values.imag.max()
-                im[re > limit] = limit
-                limit = spatial_dataarray.values.imag.min()
-                im[re < limit] = limit
+            if np.iscomplexobj(array.values):
+                min_val = array.values.real.min()
+                max_val = array.values.real.max()
+                re = interp_dataarray.values.real.clip(min_val, max_val)
+                min_val = array.values.imag.min()
+                max_val = array.values.imag.max()
+                im = interp_dataarray.values.imag.clip(min_val, max_val)
                 interp_dataarray.values[:] = re + 1j * im
             else:
-                max_val = spatial_dataarray.values.max()
-                min_val = spatial_dataarray.values.min()
-                interp_dataarray = interp_dataarray.where(interp_dataarray >= min_val, min_val)
-                interp_dataarray = interp_dataarray.where(interp_dataarray <= max_val, max_val)
+                max_val = array.values.max()
+                min_val = array.values.min()
+                interp_dataarray = interp_dataarray.clip(min_val, max_val)
 
         return interp_dataarray
 
