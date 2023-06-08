@@ -119,10 +119,23 @@ class Coords(Tidy3dBaseModel):
 
         if fill_value == "extrapolate" and spatial_dataarray.values.size > 0:
             # filter any values larger/smaller than the original data's max/min.
-            max_val = max(spatial_dataarray.values.ravel())
-            min_val = min(spatial_dataarray.values.ravel())
-            interp_dataarray = interp_dataarray.where(interp_dataarray >= min_val, min_val)
-            interp_dataarray = interp_dataarray.where(interp_dataarray <= max_val, max_val)
+            if np.iscomplexobj(spatial_dataarray.values):
+                re = interp_dataarray.values.real
+                limit = spatial_dataarray.values.real.max()
+                re[re > limit] = limit
+                limit = spatial_dataarray.values.real.min()
+                re[re < limit] = limit
+                im = interp_dataarray.values.imag
+                limit = spatial_dataarray.values.imag.max()
+                im[re > limit] = limit
+                limit = spatial_dataarray.values.imag.min()
+                im[re < limit] = limit
+                interp_dataarray.values[:] = re + 1j * im
+            else:
+                max_val = spatial_dataarray.values.max()
+                min_val = spatial_dataarray.values.min()
+                interp_dataarray = interp_dataarray.where(interp_dataarray >= min_val, min_val)
+                interp_dataarray = interp_dataarray.where(interp_dataarray <= max_val, max_val)
 
         return interp_dataarray
 
