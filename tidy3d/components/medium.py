@@ -1283,7 +1283,7 @@ class PoleResidue(DispersiveMedium):
         """Assert causal medium."""
         for a, _ in val:
             if np.any(np.real(a) > 0):
-                raise SetupError("For causal medium, 'Re(a_i)' must be non-positive.")
+                raise SetupError("For stable medium, 'Re(a_i)' must be non-positive.")
         return val
 
     @ensure_freq_in_range
@@ -1927,7 +1927,7 @@ class CustomLorentz(CustomDispersiveMedium, Lorentz):
         allow_gain = values.get("allow_gain")
         for del_ep, _, delta in val:
             if np.any(delta < 0):
-                raise ValidationError("For causal medium, 'delta_i' must be non-negative.")
+                raise ValidationError("For stable medium, 'delta_i' must be non-negative.")
             if not allow_gain and np.any(del_ep < 0):
                 raise ValidationError(
                     "For passive medium, 'Delta epsilon_i' must be non-negative. "
@@ -2087,7 +2087,7 @@ class CustomDrude(CustomDispersiveMedium, Drude):
             if not CustomDispersiveMedium._validate_isreal_dataarray_tuple((f, delta)):
                 raise SetupError("All terms in 'coeffs' must be real.")
             if np.any(delta <= 0):
-                raise SetupError("For causal medium, 'delta' must be positive.")
+                raise SetupError("For stable medium, 'delta' must be positive.")
         return val
 
     def eps_dataarray_freq(
@@ -2252,7 +2252,7 @@ class CustomDebye(CustomDispersiveMedium, Debye):
         allow_gain = values.get("allow_gain")
         for del_ep, tau in val:
             if np.any(tau <= 0):
-                raise SetupError("For causal medium, 'tau_i' must be positive.")
+                raise SetupError("For stable medium, 'tau_i' must be positive.")
             if not allow_gain and np.any(del_ep < 0):
                 raise ValidationError(
                     "For passive medium, 'Delta epsilon_i' must be non-negative. "
