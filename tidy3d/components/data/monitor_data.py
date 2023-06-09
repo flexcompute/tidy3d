@@ -490,8 +490,8 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
 
         Returns
         -------
-        :class:`.MixedModeDataArray`
-            Dataset with the complex-valued modal overlaps between the two mode data.
+        :class:`xarray.DataArray`
+            Data array with the complex-valued modal overlaps between the two mode data.
 
         See also
         --------
@@ -566,7 +566,7 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
                     dot[i, mi0, mi1] = 0.25 * integrand.sum(dim=d_area.dims)
 
         coords = {"f": f, "mode_index_0": mode_index_0, "mode_index_1": mode_index_1}
-        result = MixedModeDataArray(dot, coords=coords)
+        result = xr.DataArray(dot, coords=coords)
 
         # Remove mode index coordinate if the input did not have it
         if not modes_in_self:
