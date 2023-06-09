@@ -68,6 +68,7 @@ Utility Tools
     notebooks/WaveguidePluginDemonstration
     notebooks/FieldProjections
     notebooks/SMatrix
+    notebooks/PICComponents
 
 FDTD Adjoint Optimization
 ~~~~~~~~~~~~~~~~~~~~~~~~~
