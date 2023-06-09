@@ -49,11 +49,12 @@ class Coords(Tidy3dBaseModel):
         """Return a list of the three Coord1D objects as numpy arrays."""
         return list(self.to_dict.values())
 
+    # pylint: disable=too-many-locals,too-many-branches
     def spatial_interp(
         self,
         array: Union[SpatialDataArray, ScalarFieldDataArray],
         interp_method: InterpMethod,
-        fill_value: Union[Literal["extrapolate"], float] = "extrapolate",
+        fill_value: Union[Literal["extrapolate", "nearest"], float] = "extrapolate",
     ) -> Union[SpatialDataArray, ScalarFieldDataArray]:
         """
         Similar to ``xarrray.DataArray.interp`` with 2 enhancements:
@@ -69,7 +70,7 @@ class Coords(Tidy3dBaseModel):
             Supplied scalar dataset
         interp_method : :class:`.InterpMethod`
             Interpolation method.
-        fill_value : Union[Literal['extrapolate'], float] = "extrapolate"
+        fill_value : Union[Literal['extrapolate', 'nearest'], float] = "extrapolate"
             Value used to fill in for points outside the data range. If set to 'extrapolate',
             values will be extrapolated into those regions and clamped within the original data
             value range.
@@ -85,8 +86,6 @@ class Coords(Tidy3dBaseModel):
         an argument, not the other way around.
         """
 
-        all_coords = "xyz"
-
         # Check for empty dimensions
         result_coords = dict(self.to_dict)
         if any(len(v) == 0 for v in result_coords.values()):
@@ -98,11 +97,13 @@ class Coords(Tidy3dBaseModel):
             return result
 
         # Check wich axes need interpolation or selection
-        is_single_entry = [array.sizes[ax] == 1 for ax in all_coords]
-        interp_ax = [
-            ax for (ax, single_entry) in zip(all_coords, is_single_entry) if not single_entry
-        ]
-        isel_ax = [ax for ax in all_coords if ax not in interp_ax]
+        interp_ax = []
+        isel_ax = []
+        for ax in "xyz":
+            if array.sizes[ax] == 1:
+                isel_ax.append(ax)
+            else:
+                interp_ax.append(ax)
 
         # apply iselection for the axis containing single entry
         if len(isel_ax) > 0:
@@ -113,30 +114,51 @@ class Coords(Tidy3dBaseModel):
 
         # Apply interp for the rest
         is_sorted = all((np.all(np.diff(array.coords[f]) > 0) for f in interp_ax))
-        interp_param = dict(
-            kwargs={"fill_value": fill_value},
-            assume_sorted=is_sorted,
-            method=interp_method,
-        )
-        #   interpolation
-        interp_dataarray = array.interp({ax: self.to_dict[ax] for ax in interp_ax}, **interp_param)
+        interp_param = {
+            "method": interp_method,
+            "assume_sorted": is_sorted,
+            "kwargs": {
+                "bounds_error": False,
+                "fill_value": fill_value,
+            },
+        }
 
-        if fill_value == "extrapolate" and array.values.size > 0:
-            # filter any values larger/smaller than the original data's max/min.
+        # "nearest" extrapolation is not accepted by interp directly
+        if fill_value == "nearest":
+            if interp_method == "nearest":
+                # Works directly
+                interp_param["kwargs"]["fill_value"] = "extrapolate"
+            else:
+                # Mark extrapolated points with nan's to fill in later
+                interp_param["kwargs"]["fill_value"] = np.nan
+
+        # interpolation
+        interp_array = array.interp({ax: self.to_dict[ax] for ax in interp_ax}, **interp_param)
+
+        if fill_value == "nearest" and interp_method != "nearest":
+            # Fill in nan's with nearest values
+            interp_param["method"] = "nearest"
+            interp_param["kwargs"]["fill_value"] = "extrapolate"
+            nearest_array = array.interp({ax: self.to_dict[ax] for ax in interp_ax}, **interp_param)
+            interp_array.values[:] = np.where(
+                np.isnan(interp_array.values), nearest_array.values, interp_array.values
+            )
+        elif fill_value == "extrapolate" and interp_method != "nearest":
+            # clip any values larger/smaller than the original data's max/min.
             if np.iscomplexobj(array.values):
                 min_val = array.values.real.min()
                 max_val = array.values.real.max()
-                re = interp_dataarray.values.real.clip(min_val, max_val)
+                real = interp_array.values.real.clip(min_val, max_val)
                 min_val = array.values.imag.min()
                 max_val = array.values.imag.max()
-                im = interp_dataarray.values.imag.clip(min_val, max_val)
-                interp_dataarray.values[:] = re + 1j * im
+                imag = interp_array.values.imag.clip(min_val, max_val)
+                interp_array.values[:] = real + 1j * imag
             else:
-                max_val = array.values.max()
                 min_val = array.values.min()
-                interp_dataarray = interp_dataarray.clip(min_val, max_val)
+                max_val = array.values.max()
+                interp_array = interp_array.clip(min_val, max_val)
 
-        return interp_dataarray
+        return interp_array
 
 
 class FieldGrid(Tidy3dBaseModel):
