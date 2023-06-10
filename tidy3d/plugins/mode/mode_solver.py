@@ -151,7 +151,6 @@ class ModeSolver(Tidy3dBaseModel):
                 "f": list(self.freqs),
                 "mode_index": np.arange(self.mode_spec.num_modes),
             },
-            attrs={"long name": "Group index"},
         )
 
         # remove data corresponding to frequencies used only for group index calculation
