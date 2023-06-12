@@ -14,6 +14,7 @@
     "medium": {
         "name": null,
         "frequency_range": null,
+        "allow_gain": false,
         "type": "Medium",
         "permittivity": 1.0,
         "conductivity": 0.0
@@ -43,6 +44,7 @@
             "medium": {
                 "name": null,
                 "frequency_range": null,
+                "allow_gain": false,
                 "type": "Medium",
                 "permittivity": 2.0,
                 "conductivity": 0.0
@@ -67,6 +69,7 @@
             "medium": {
                 "name": null,
                 "frequency_range": null,
+                "allow_gain": false,
                 "type": "Medium",
                 "permittivity": 1.0,
                 "conductivity": 3.0
@@ -87,6 +90,7 @@
             "medium": {
                 "name": null,
                 "frequency_range": null,
+                "allow_gain": false,
                 "type": "Sellmeier",
                 "coeffs": [
                     [
@@ -119,6 +123,7 @@
             "medium": {
                 "name": null,
                 "frequency_range": null,
+                "allow_gain": false,
                 "type": "Lorentz",
                 "eps_inf": 2.0,
                 "coeffs": [
@@ -149,6 +154,7 @@
             "medium": {
                 "name": null,
                 "frequency_range": null,
+                "allow_gain": false,
                 "type": "Debye",
                 "eps_inf": 2.0,
                 "coeffs": [
@@ -178,6 +184,7 @@
             "medium": {
                 "name": null,
                 "frequency_range": null,
+                "allow_gain": false,
                 "type": "Drude",
                 "eps_inf": 2.0,
                 "coeffs": [
@@ -207,10 +214,12 @@
             "medium": {
                 "name": null,
                 "frequency_range": null,
+                "allow_gain": false,
                 "type": "Medium2D",
                 "ss": {
                     "name": null,
                     "frequency_range": null,
+                    "allow_gain": false,
                     "type": "PoleResidue",
                     "eps_inf": 1.0,
                     "poles": [
@@ -229,6 +238,7 @@
                 "tt": {
                     "name": null,
                     "frequency_range": null,
+                    "allow_gain": false,
                     "type": "PoleResidue",
                     "eps_inf": 1.0,
                     "poles": [
@@ -270,6 +280,7 @@
             "medium": {
                 "name": "PEC",
                 "frequency_range": null,
+                "allow_gain": false,
                 "type": "PECMedium"
             }
         },
@@ -292,10 +303,12 @@
             "medium": {
                 "name": null,
                 "frequency_range": null,
+                "allow_gain": null,
                 "type": "AnisotropicMedium",
                 "xx": {
                     "name": null,
                     "frequency_range": null,
+                    "allow_gain": false,
                     "type": "Medium",
                     "permittivity": 1.0,
                     "conductivity": 0.0
@@ -303,6 +316,7 @@
                 "yy": {
                     "name": null,
                     "frequency_range": null,
+                    "allow_gain": false,
                     "type": "Medium",
                     "permittivity": 2.0,
                     "conductivity": 0.0
@@ -310,6 +324,7 @@
                 "zz": {
                     "name": null,
                     "frequency_range": null,
+                    "allow_gain": false,
                     "type": "Medium",
                     "permittivity": 3.0,
                     "conductivity": 0.0
@@ -347,6 +362,7 @@
             "medium": {
                 "name": null,
                 "frequency_range": null,
+                "allow_gain": false,
                 "type": "PoleResidue",
                 "eps_inf": 1.0,
                 "poles": [
@@ -376,6 +392,7 @@
             "medium": {
                 "name": null,
                 "frequency_range": null,
+                "allow_gain": false,
                 "type": "Medium",
                 "permittivity": 5.0,
                 "conductivity": 0.0
@@ -1459,6 +1476,7 @@
                 "medium": {
                     "name": null,
                     "frequency_range": null,
+                    "allow_gain": false,
                     "type": "Medium",
                     "permittivity": 2.0,
                     "conductivity": 0.0
