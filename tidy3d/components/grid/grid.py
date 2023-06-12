@@ -6,7 +6,7 @@ import numpy as np
 import pydantic as pd
 
 from ..base import Tidy3dBaseModel, cached_property
-from ..data.data_array import SpatialDataArray, ScalarFieldDataArray
+from ..data.data_array import DataArray, SpatialDataArray, ScalarFieldDataArray
 from ..types import ArrayFloat1D, Axis, TYPE_TAG_STR, InterpMethod, Literal
 from ..geometry import Box
 
@@ -51,7 +51,7 @@ class Coords(Tidy3dBaseModel):
 
     def spatial_interp(
         self,
-        spatial_dataarray: Union[SpatialDataArray, ScalarFieldDataArray],
+        array: Union[SpatialDataArray, ScalarFieldDataArray],
         interp_method: InterpMethod,
         fill_value: Union[Literal["extrapolate"], float] = "extrapolate",
     ) -> Union[SpatialDataArray, ScalarFieldDataArray]:
@@ -65,14 +65,13 @@ class Coords(Tidy3dBaseModel):
 
         Parameters
         ----------
-        spatial_dataarray : Union[:class:`.SpatialDataArray`, :class:`.ScalarFieldDataArray`]
+        array : Union[:class:`.SpatialDataArray`, :class:`.ScalarFieldDataArray`]
             Supplied scalar dataset
         interp_method : :class:`.InterpMethod`
             Interpolation method.
         fill_value : Union[Literal['extrapolate'], float] = "extrapolate"
             Value used to fill in for points outside the data range. If set to 'extrapolate',
-            values will be extrapolated into those regions and clamped within the original data
-            value range.
+            values will be extrapolated into those regions using the "nearest" method.
 
         Returns
         -------
@@ -85,46 +84,60 @@ class Coords(Tidy3dBaseModel):
         an argument, not the other way around.
         """
 
-        all_coords = "xyz"
-        is_single_entry = [spatial_dataarray.sizes[ax] == 1 for ax in all_coords]
-        interp_ax = [
-            ax for (ax, single_entry) in zip(all_coords, is_single_entry) if not single_entry
-        ]
-        isel_ax = [ax for ax in all_coords if ax not in interp_ax]
+        # Check for empty dimensions
+        result_coords = dict(self.to_dict)
+        if any(len(v) == 0 for v in result_coords.values()):
+            for c in array.coords:
+                if c not in result_coords:
+                    result_coords[c] = array.coords[c].values
+            result_shape = tuple(len(v) for v in result_coords.values())
+            result = DataArray(np.empty(result_shape, dtype=array.dtype), coords=result_coords)
+            return result
 
-        # apply isel for the axis containing single entry
+        # Check wich axes need interpolation or selection
+        interp_ax = []
+        isel_ax = []
+        for ax in "xyz":
+            if array.sizes[ax] == 1:
+                isel_ax.append(ax)
+            else:
+                interp_ax.append(ax)
+
+        # apply iselection for the axis containing single entry
         if len(isel_ax) > 0:
-            spatial_dataarray = spatial_dataarray.isel(
-                {ax: [0] * len(self.to_dict[ax]) for ax in isel_ax}
-            )
-            spatial_dataarray = spatial_dataarray.assign_coords(
-                {ax: self.to_dict[ax] for ax in isel_ax}
-            )
+            array = array.isel({ax: [0] * len(self.to_dict[ax]) for ax in isel_ax})
+            array = array.assign_coords({ax: self.to_dict[ax] for ax in isel_ax})
             if len(interp_ax) == 0:
-                return spatial_dataarray
+                return array
 
         # Apply interp for the rest
-        #   first check if it's sorted
-        is_sorted = all((np.all(np.diff(spatial_dataarray.coords[f]) > 0) for f in interp_ax))
-        interp_param = dict(
-            kwargs={"fill_value": fill_value},
-            assume_sorted=is_sorted,
-            method=interp_method,
-        )
-        #   interpolation
-        interp_dataarray = spatial_dataarray.interp(
-            {ax: self.to_dict[ax] for ax in interp_ax},
-            **interp_param,
-        )
+        is_sorted = all((np.all(np.diff(array.coords[f]) > 0) for f in interp_ax))
+        interp_param = {
+            "method": interp_method,
+            "assume_sorted": is_sorted,
+            "kwargs": {
+                "bounds_error": False,
+                "fill_value": fill_value,
+            },
+        }
 
-        if fill_value == "extrapolate" and spatial_dataarray.values.size > 0:
-            # filter any values larger/smaller than the original data's max/min.
-            max_val = max(spatial_dataarray.values.ravel())
-            min_val = min(spatial_dataarray.values.ravel())
-            interp_dataarray = interp_dataarray.where(interp_dataarray >= min_val, min_val)
-            interp_dataarray = interp_dataarray.where(interp_dataarray <= max_val, max_val)
+        # Mark extrapolated points with nan's to fill in later
+        if fill_value == "extrapolate" and interp_method != "nearest":
+            interp_param["kwargs"]["fill_value"] = np.nan
 
-        return interp_dataarray
+        # interpolation
+        interp_array = array.interp({ax: self.to_dict[ax] for ax in interp_ax}, **interp_param)
+
+        # Fill in nan's with nearest values
+        if fill_value == "extrapolate" and interp_method != "nearest":
+            interp_param["method"] = "nearest"
+            interp_param["kwargs"]["fill_value"] = "extrapolate"
+            nearest_array = array.interp({ax: self.to_dict[ax] for ax in interp_ax}, **interp_param)
+            interp_array.values[:] = np.where(
+                np.isnan(interp_array.values), nearest_array.values, interp_array.values
+            )
+
+        return interp_array
 
 
 class FieldGrid(Tidy3dBaseModel):
