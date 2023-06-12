@@ -26,6 +26,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - More segments in plotting of large cylinder and sphere cross-sections.
 - Proper handling of nested list of custom data components in IO, needed for custom dispersive medium coefficients.
 - `ElectromagneticFieldData.outer_dot` now works correctly for `FieldData`, not only `ModeSolverData`.
+- Fix to the setting of the mode solver PML parameters that produces better results for modes which do not decay in the PML, and fewer spurious modes.
 
 ## [2.2.2] - 2023-5-25
 

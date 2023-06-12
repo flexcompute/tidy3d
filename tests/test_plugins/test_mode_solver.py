@@ -7,6 +7,7 @@ import tidy3d as td
 
 from tidy3d.plugins.dispersion import DispersionFitter
 from tidy3d.plugins.mode import ModeSolver
+from tidy3d.plugins.mode.derivatives import create_sfactor_b, create_sfactor_f
 from tidy3d.plugins.mode.solver import compute_modes
 from tidy3d import FieldData, ScalarFieldDataArray, FieldMonitor
 from tidy3d.plugins.smatrix.smatrix import Port, ComponentModeler
@@ -230,3 +231,29 @@ def test_group_index():
     assert (modes.n_group.sel(mode_index=0).values < 4.2).all()
     assert (modes.n_group.sel(mode_index=1).values > 3.7).all()
     assert (modes.n_group.sel(mode_index=1).values < 4.0).all()
+
+
+def test_pml_params():
+    """Test that mode solver pml parameters are computed correctly.
+    Profiles start with H-field locations on both sides. On the max side, they also terminate with
+    an H-field location, i.e. the last E-field parameter is missing.
+    """
+    omega = 1
+    N = 100
+    dls = np.ones((N,))
+    n_pml = 12
+
+    # Normalized target is just third power scaling with position
+    # E-field locations for backward derivatives
+    target_profile = (np.arange(1, n_pml + 1) / n_pml) ** 3
+    target_profile = target_profile / target_profile[0]
+    sf_b = create_sfactor_b(omega, dls, N, n_pml, dmin_pml=True)
+    assert np.allclose(sf_b[:n_pml] / sf_b[n_pml - 1], target_profile[::-1])
+    assert np.allclose(sf_b[N - n_pml + 1 :] / sf_b[N - n_pml + 1], target_profile[:-1])
+
+    # H-field locations for backward derivatives
+    target_profile = (np.arange(0.5, n_pml + 0.5, 1) / n_pml) ** 3
+    target_profile = target_profile / target_profile[0]
+    sf_f = create_sfactor_f(omega, dls, N, n_pml, dmin_pml=True)
+    assert np.allclose(sf_f[:n_pml] / sf_f[n_pml - 1], target_profile[::-1])
+    assert np.allclose(sf_f[N - n_pml :] / sf_f[N - n_pml], target_profile)
