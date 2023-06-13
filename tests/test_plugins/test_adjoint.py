@@ -226,7 +226,7 @@ def make_sim(
     jax_med_custom = JaxCustomMedium(eps_dataset=jax_eps_dataset)
     jax_struct_custom = JaxStructure(geometry=jax_box_custom, medium=jax_med_custom)
 
-    jax_geo_group = JaxGeometryGroup(geometries=[jax_box1, jax_box2])
+    jax_geo_group = JaxGeometryGroup(geometries=[jax_polyslab1, jax_polyslab1])
     jax_struct_group = JaxStructure(geometry=jax_geo_group, medium=jax_med1)
     # TODO: Add new geometries as they are created.
 
