@@ -15,7 +15,7 @@ from jax.tree_util import register_pytree_node_class
 import jax
 
 from ....components.base import cached_property
-from ....components.types import Bound, Coordinate2D, annotate_type
+from ....components.types import Bound, Coordinate2D  # , annotate_type
 from ....components.geometry import Geometry, Box, PolySlab, GeometryGroup
 from ....components.data.monitor_data import FieldData, PermittivityData
 from ....components.data.data_array import ScalarFieldDataArray
@@ -584,12 +584,13 @@ JaxSingleGeometryType = Union[JaxBox, JaxPolySlab]
 class JaxGeometryGroup(JaxGeometry, GeometryGroup, JaxObject):
     """A collection of Geometry objects that can be called as a single geometry object."""
 
-    geometries: Tuple[annotate_type(JaxSingleGeometryType), ...] = pd.Field(
+    geometries: Tuple[JaxPolySlab, ...] = pd.Field(
         ...,
         title="Geometries",
         description="Tuple of jax geometries in a single grouping. "
         "Can provide significant performance enhancement in ``JaxStructure`` when all geometries "
-        "are assigned the same ``JaxMedium``.",
+        "are assigned the same ``JaxMedium``. Note: at this moment, only ``JaxPolySlab`` "
+        "is supported.",
         jax_field=True,
     )
 
