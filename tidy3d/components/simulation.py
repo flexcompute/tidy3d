@@ -2769,3 +2769,15 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         """Generate a tuple of structures wherein any 2D materials are converted to 3D
         volumetric equivalents."""
         return self._volumetric_structures_grid(self.grid)
+
+    @cached_property
+    def allow_gain(self) -> bool:
+        """``True`` if any of the mediums in the simulation allows gain."""
+
+        for medium in self.mediums:
+            if isinstance(medium, AnisotropicMedium):
+                if np.any([med.allow_gain for med in [medium.xx, medium.yy, medium.zz]]):
+                    return True
+            elif medium.allow_gain:
+                return True
+        return False

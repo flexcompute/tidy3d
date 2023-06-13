@@ -86,7 +86,10 @@ class AbstractMedium(ABC, Tidy3dBaseModel):
         False,
         title="Allow gain medium",
         description="Allow the medium to be active. Caution: "
-        "simulations with gain medium are unstable, and are likely to diverge.",
+        "simulations with gain medium are unstable, and are likely to diverge."
+        "Simulations where 'allow_gain' is set to 'True' will still be charged even if "
+        "diverged. Monitor data up to the divergence point will still be returned and can be "
+        "useful in some cases.",
     )
 
     _name_validator = validate_name_str()
