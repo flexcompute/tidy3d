@@ -2,7 +2,7 @@
 
 # import the jax version of tidy3d components
 try:
-    from .components.geometry import JaxBox, JaxPolySlab
+    from .components.geometry import JaxBox, JaxPolySlab, JaxGeometryGroup
     from .components.medium import JaxMedium, JaxAnisotropicMedium, JaxCustomMedium
     from .components.structure import JaxStructure
     from .components.simulation import JaxSimulation

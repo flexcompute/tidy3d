@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - All medium types accept `allow_gain` which is `False` by default, but allows the medium to be active if `True`.
 - Causality validation in `PoleResidue` model.
 - Group index calculation added to mode monitors and available through `ModeData.n_group`.
+- Support for `JaxGeometryGroup` in adjoint plugin.
 
 ### Changed
 - Add `Medium2D` to full simulation in tests.

@@ -15,8 +15,8 @@ from jax.tree_util import register_pytree_node_class
 import jax
 
 from ....components.base import cached_property
-from ....components.types import Bound, Coordinate2D
-from ....components.geometry import Geometry, Box, PolySlab
+from ....components.types import Bound, Coordinate2D, annotate_type
+from ....components.geometry import Geometry, Box, PolySlab, GeometryGroup
 from ....components.data.monitor_data import FieldData, PermittivityData
 from ....components.data.data_array import ScalarFieldDataArray
 from ....components.monitor import FieldMonitor, PermittivityMonitor
@@ -577,10 +577,83 @@ class JaxPolySlab(JaxGeometry, PolySlab, JaxObject):
         return self.copy(update=dict(vertices=vertices_vjp))
 
 
-JaxGeometryType = Union[JaxBox, JaxPolySlab]
+JaxSingleGeometryType = Union[JaxBox, JaxPolySlab]
+
+
+@register_pytree_node_class
+class JaxGeometryGroup(JaxGeometry, GeometryGroup, JaxObject):
+    """A collection of Geometry objects that can be called as a single geometry object."""
+
+    geometries: Tuple[annotate_type(JaxSingleGeometryType), ...] = pd.Field(
+        ...,
+        title="Geometries",
+        description="Tuple of jax geometries in a single grouping. "
+        "Can provide significant performance enhancement in ``JaxStructure`` when all geometries "
+        "are assigned the same ``JaxMedium``.",
+        jax_field=True,
+    )
+
+    def to_tidy3d(self) -> GeometryGroup:
+        """Convert :class:`.JaxGeometryGroup` instance to :class:`.GeometryGroup`"""
+        self_dict = self.dict(exclude={"type"})
+        self_dict["geometries"] = [geo.to_tidy3d() for geo in self.geometries]
+        map_reverse = {v: k for k, v in JAX_GEOMETRY_MAP.items()}
+        tidy3d_type = map_reverse[type(self)]
+        return tidy3d_type.parse_obj(self_dict)
+
+    @classmethod
+    def from_tidy3d(cls, tidy3d_obj: GeometryGroup) -> JaxGeometryGroup:
+        """Convert :class:`.GeometryGroup` instance to :class:`.GeometryGroup`"""
+        obj_dict = tidy3d_obj.dict(exclude={"type"})
+        jax_geometries = []
+
+        tidy3d_type_map = {k.__name__: k for k, v in JAX_GEOMETRY_MAP.items()}
+        jax_type_map = {k.__name__: v for k, v in JAX_GEOMETRY_MAP.items()}
+
+        for geo in obj_dict["geometries"]:
+            type_str = geo["type"]
+            tidy3d_type = tidy3d_type_map[type_str]
+            jax_type = jax_type_map[type_str]
+            geo_tidy3d = tidy3d_type.parse_obj(geo)
+            geo_jax = jax_type.from_tidy3d(geo_tidy3d)
+            jax_geometries.append(geo_jax)
+        obj_dict["geometries"] = jax_geometries
+        return cls.parse_obj(obj_dict)
+
+    # pylint: disable=too-many-arguments
+    def store_vjp(
+        self,
+        grad_data_fwd: FieldData,
+        grad_data_adj: FieldData,
+        grad_data_eps: PermittivityData,
+        sim_bounds: Bound,
+        wvl_mat: float,
+        eps_out: complex,
+        eps_in: complex,
+    ) -> JaxGeometryGroup:
+        """Returns a `JaxGeometryGroup` where the `.geometries` store the gradient info."""
+
+        def store_vjp_single(geometry: JaxSingleGeometryType) -> JaxSingleGeometryType:
+            """Function to store a single vjp for a single geometry."""
+            return geometry.store_vjp(
+                grad_data_fwd=grad_data_fwd,
+                grad_data_adj=grad_data_adj,
+                grad_data_eps=grad_data_eps,
+                sim_bounds=sim_bounds,
+                wvl_mat=wvl_mat,
+                eps_out=eps_out,
+                eps_in=eps_in,
+            )
+
+        geometries_vjp = tuple(map(store_vjp_single, self.geometries))
+        return self.updated_copy(geometries=geometries_vjp)
+
+
+JaxGeometryType = Union[JaxSingleGeometryType, JaxGeometryGroup]
 
 # pylint: disable=unhashable-member
 JAX_GEOMETRY_MAP = {
     Box: JaxBox,
     PolySlab: JaxPolySlab,
+    GeometryGroup: JaxGeometryGroup,
 }
