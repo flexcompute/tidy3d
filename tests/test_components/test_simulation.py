@@ -1652,3 +1652,34 @@ def test_pml_boxes_2D(normal_axis):
 
     for pml_box in pml_boxes:
         assert pml_box.size[normal_axis] > 0, "PML box has size of 0 in normal direction of 2D sim."
+
+
+def test_allow_gain():
+    """Test if simulation allows gain."""
+
+    medium = td.Medium(permittivity=2.0)
+    medium_gain = td.Medium(permittivity=2.0, allow_gain=True)
+    medium_ani = td.AnisotropicMedium(xx=medium, yy=medium, zz=medium)
+    medium_gain_ani = td.AnisotropicMedium(xx=medium, yy=medium_gain, zz=medium)
+
+    # Test simulation medium
+    sim = td.Simulation(
+        size=(10, 10, 10), run_time=1e-12, medium=medium, grid_spec=td.GridSpec.uniform(dl=0.1)
+    )
+    assert not sim.allow_gain
+    sim = sim.updated_copy(medium=medium_gain)
+    assert sim.allow_gain
+
+    # Test structure with anisotropic gain medium
+    struct = td.Structure(geometry=td.Box(center=(0, 0, 0), size=(1, 1, 1)), medium=medium_ani)
+    struct_gain = struct.updated_copy(medium=medium_gain_ani)
+    sim = td.Simulation(
+        size=(1, 1, 1),
+        run_time=1e-12,
+        medium=medium,
+        grid_spec=td.GridSpec.uniform(dl=0.1),
+        structures=[struct],
+    )
+    assert not sim.allow_gain
+    sim = sim.updated_copy(structures=[struct_gain])
+    assert sim.allow_gain
