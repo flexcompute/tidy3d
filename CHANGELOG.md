@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `Coords.spatial_interp` to interpolate spatial data avoiding pitfalls of `xarray.interp` in directions where there is a single data point.
 - All medium types accept `allow_gain` which is `False` by default, but allows the medium to be active if `True`.
 - Causality validation in `PoleResidue` model.
+- Group index calculation added to mode monitors and available through `ModeData.n_group`.
 
 ### Changed
 - Add `Medium2D` to full simulation in tests.

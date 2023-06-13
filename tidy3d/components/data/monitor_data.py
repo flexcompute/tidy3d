@@ -1025,6 +1025,12 @@ class ModeData(MonitorData):
         description="Complex-valued effective propagation constants associated with the mode.",
     )
 
+    n_group: ModeIndexDataArray = pd.Field(
+        None,
+        title="Group Index",
+        description="Index associated with group velocity of the mode.",
+    )
+
     @property
     def n_eff(self):
         """Real part of the propagation index."""
