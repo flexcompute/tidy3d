@@ -425,7 +425,9 @@ class JaxSimulation(Simulation, JaxObject):
         return sim_fwd, jax_info_fwd, jax_info
 
     @staticmethod
-    def get_grad_monitors(input_structures: List[Structure], freq_adjoint: float) -> dict:
+    def get_grad_monitors(
+        input_structures: List[Structure], freq_adjoint: float, include_eps_mnts: bool = True
+    ) -> dict:
         """Return dictionary of gradient monitors for simulation."""
         grad_mnts = []
         grad_eps_mnts = []
@@ -434,7 +436,8 @@ class JaxSimulation(Simulation, JaxObject):
                 freq=freq_adjoint, name=f"grad_mnt_{index}"
             )
             grad_mnts.append(grad_mnt)
-            grad_eps_mnts.append(grad_eps_mnt)
+            if include_eps_mnts:
+                grad_eps_mnts.append(grad_eps_mnt)
         return dict(grad_monitors=grad_mnts, grad_eps_monitors=grad_eps_mnts)
 
     def store_vjp(

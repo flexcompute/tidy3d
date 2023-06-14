@@ -22,6 +22,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Removed validator from `CustomFieldSource` that ensured data spanned the source geometry. Now the current values are extrapolated outside of the supplied data ranges.
 - `CustomMedium` now take fields `permittivity` and `conductivity`. `eps_dataset` will be deprecated in v3.0.
 - Moved `CustomMedium._interp` to `Coords.spatial_interp` to be used by custom current sources.
+- Adjoint simulations no longer contain unused gradient permittivity monitors, reducing processing time.
 
 ### Fixed
 - Plotting 2D materials in `SimulationData.plot_field` and other circumstances.
