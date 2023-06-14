@@ -176,6 +176,20 @@ class JaxSimulation(Simulation, JaxObject):
 
         return val
 
+    @pd.validator("output_monitors", always=True)
+    def _warn_if_colocate(cls, val):
+        """warn if any colocate=True in output FieldMonitors."""
+        for index, mnt in enumerate(val):
+            if isinstance(mnt, FieldMonitor):
+                if mnt.colocate:
+                    log.warning(
+                        f"'FieldMonitor' at 'JaxSimulation.output_monitors[{index}]' "
+                        "has 'colocate=True', "
+                        "this may lead to decreased accuracy in adjoint gradient."
+                    )
+                    return val
+        return val
+
     @staticmethod
     def get_freq_adjoint(output_monitors: List[Monitor]) -> float:
         """Return the single adjoint frequency stripped from the output monitors."""
