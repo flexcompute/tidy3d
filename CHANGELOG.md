@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Group index calculation added to mode monitors and available through `ModeData.n_group`.
 - Support for `JaxGeometryGroup` in adjoint plugin.
 - Support for gradients w.r.t. `FieldMonitor` data from `output_monitors` in adjoint plugin.
+- `estimate_cost()` method for `Job` and `Batch`.
 
 ### Changed
 - Add `Medium2D` to full simulation in tests.
@@ -23,6 +24,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `CustomMedium` now take fields `permittivity` and `conductivity`. `eps_dataset` will be deprecated in v3.0.
 - Moved `CustomMedium._interp` to `Coords.spatial_interp` to be used by custom current sources.
 - Adjoint simulations no longer contain unused gradient permittivity monitors, reducing processing time.
+- `Batch` prints total estimated cost if `verbose=True`.
 
 ### Fixed
 - Plotting 2D materials in `SimulationData.plot_field` and other circumstances.

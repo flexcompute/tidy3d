@@ -195,13 +195,33 @@ class Job(WebContainer):
         """
         return web.load(task_id=self.task_id, path=path, verbose=self.verbose)
 
-    def delete(self):
+    def delete(self) -> None:
         """Delete server-side data associated with :class:`Job`."""
         web.delete(self.task_id)
 
-    def real_cost(self):
+    def real_cost(self) -> float:
         """Get the billed cost for the task associated with this job."""
         return web.real_cost(self.task_id)
+
+    def estimate_cost(self) -> float:
+        """Compute the maximum FlexCredit charge for a given :class:`.Job`.
+
+        Returns
+        -------
+        float
+            Estimated maximum cost for :class:`.Simulation` associated with given ``Job``.
+
+        Note
+        ----
+        Cost is calculated assuming the simulation runs for
+        the full ``run_time``. If early shut-off is triggered, the cost is adjusted proporionately.
+
+        Returns
+        -------
+        float
+            Estimated cost of the task in FlexCredits.
+        """
+        return web.estimate_cost(self.task_id)
 
 
 class BatchData(Tidy3dBaseModel):
@@ -456,6 +476,14 @@ class Batch(WebContainer):
             console = Console()
             console.log("Started working on Batch.")
 
+            est_flex_unit = self.estimate_cost()
+            if est_flex_unit is not None and est_flex_unit > 0:
+                console.log(
+                    f"Maximum FlexCredit cost: {est_flex_unit:1.3f} for the whole batch. "
+                    "Use 'Batch.real_cost()' to "
+                    "get the billed FlexCredit cost after the Batch has completed."
+                )
+
             with Progress(console=console) as progress:
 
                 # create progressbars
@@ -598,12 +626,12 @@ class Batch(WebContainer):
 
         return BatchData(task_paths=task_paths, task_ids=task_ids, verbose=self.verbose)
 
-    def delete(self):
+    def delete(self) -> None:
         """Delete server-side data associated with each task in the batch."""
         for _, job in self.jobs.items():
             job.delete()
 
-    def real_cost(self):
+    def real_cost(self) -> float:
         """Get the sum of billed costs for each task associated with this batch."""
         real_cost_sum = 0.0
         for _, job in self.jobs.items():
@@ -611,3 +639,23 @@ class Batch(WebContainer):
             if cost_job is not None:
                 real_cost_sum += cost_job
         return real_cost_sum or None
+
+    def estimate_cost(self) -> float:
+        """Compute the maximum FlexCredit charge for a given :class:`.Batch`.
+
+        Returns
+        -------
+        float
+            Estimated maximum cost for each :class:`.Simulation` associated with given ``Batch``.
+
+        Note
+        ----
+        Cost is calculated assuming the simulation runs for
+        the full ``run_time``. If early shut-off is triggered, the cost is adjusted proporionately.
+
+        Returns
+        -------
+        float
+            Estimated total cost of the tasks in FlexCredits.
+        """
+        return sum(job.estimate_cost() for _, job in self.jobs.items())

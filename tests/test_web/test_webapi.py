@@ -516,6 +516,29 @@ def test_real_cost(mock_get_info):
 @responses.activate
 def test_job(mock_webapi, monkeypatch):
 
+    responses.add(
+        responses.GET,
+        f"{Env.current.web_api_endpoint}/tidy3d/tasks/{TASK_ID}/detail",
+        json={
+            "data": {
+                "taskId": TASK_ID,
+                "createdAt": CREATED_AT,
+            }
+        },
+        status=200,
+    )
+    responses.add(
+        responses.POST,
+        f"{Env.current.web_api_endpoint}/tidy3d/tasks/{TASK_ID}/metadata",
+        json={
+            "data": {
+                "flex_unit": 11.11,
+                "createdAt": CREATED_AT,
+            }
+        },
+        status=200,
+    )
+
     monkeypatch.setattr("tidy3d.web.container.Job.load", lambda *args, **kwargs: True)
     sim = make_sim()
     j = Job(simulation=sim, task_name=TASK_NAME, folder_name=PROJECT_NAME)
@@ -523,6 +546,7 @@ def test_job(mock_webapi, monkeypatch):
     sim_data = j.run(path=FNAME_TMP)
     j.status
     j.get_info()
+    j.estimate_cost()
     # j.download
     j.delete
     assert j.real_cost() == FLEX_UNIT
@@ -540,8 +564,32 @@ def test_batch(mock_webapi, mock_job_status):
     # monkeypatch.setattr("tidy3d.web.container.Batch.monitor", lambda self: time.sleep(0.1))
     # monkeypatch.setattr("tidy3d.web.container.Job.status", property(lambda self: "success"))
 
+    responses.add(
+        responses.GET,
+        f"{Env.current.web_api_endpoint}/tidy3d/tasks/{TASK_ID}/detail",
+        json={
+            "data": {
+                "taskId": TASK_ID,
+                "createdAt": CREATED_AT,
+            }
+        },
+        status=200,
+    )
+    responses.add(
+        responses.POST,
+        f"{Env.current.web_api_endpoint}/tidy3d/tasks/{TASK_ID}/metadata",
+        json={
+            "data": {
+                "flex_unit": 11.11,
+                "createdAt": CREATED_AT,
+            }
+        },
+        status=200,
+    )
+
     sims = {TASK_NAME: make_sim()}
     b = Batch(simulations=sims, folder_name=PROJECT_NAME)
+    b.estimate_cost()
     batch_data = b.run(path_dir="tests/tmp/")
     assert b.real_cost() == FLEX_UNIT * len(sims)
 
@@ -551,6 +599,17 @@ def test_batch(mock_webapi, mock_job_status):
 
 @responses.activate
 def test_async(mock_webapi, mock_job_status):
+
+    responses.add(
+        responses.POST,
+        f"{Env.current.web_api_endpoint}/tidy3d/tasks/{TASK_ID}/metadata",
+        json={
+            "data": {
+                "flex_unit": 11.11,
+                "createdAt": CREATED_AT,
+            }
+        },
+    )
 
     # monkeypatch.setattr("tidy3d.web.container.Job.status", property(lambda self: "success"))
     sims = {TASK_NAME: make_sim()}
