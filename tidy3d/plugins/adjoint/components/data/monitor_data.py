@@ -9,13 +9,15 @@ import jax.numpy as jnp
 
 from jax.tree_util import register_pytree_node_class
 
+from .....components.base import cached_property
 from .....components.geometry import Box
 from .....components.source import Source, GaussianPulse, PointDipole
 from .....components.source import ModeSource, PlaneWave, CustomFieldSource, CustomCurrentSource
-from .....components.data.monitor_data import MonitorData
+from .....components.data.monitor_data import MonitorData, ModeSolverData
 from .....components.data.monitor_data import ModeData, DiffractionData, FieldData
 from .....components.data.dataset import FieldDataset
-from .....components.data.data_array import ScalarFieldDataArray
+from .....components.data.data_array import ScalarFieldDataArray, FluxDataArray, FreqModeDataArray
+from .....components.data.data_array import ModeAmpsDataArray, MixedModeDataArray
 from .....constants import C_0, ETA_0, MU_0
 from .....exceptions import AdjointError
 
@@ -146,6 +148,77 @@ class JaxFieldData(JaxMonitorData, FieldData):
         description="Spatial distribution of the z-component of the magnetic field.",
         jax_field=True,
     )
+
+    @property
+    def intensity(self) -> ScalarFieldDataArray:
+        """Return the sum of the squared absolute electric field components."""
+        raise NotImplementedError("'intensity' is not yet supported in the adjoint plugin.")
+
+    @property
+    def poynting(self) -> ScalarFieldDataArray:
+        """Time-averaged Poynting vector for frequency-domain data associated to a 2D monitor,
+        projected to the direction normal to the monitor plane."""
+        raise NotImplementedError("'poynting' is not yet supported in the adjoint plugin.")
+
+    @cached_property
+    def flux(self) -> FluxDataArray:
+        """Flux for data corresponding to a 2D monitor."""
+        raise NotImplementedError("'flux' is not yet supported in the adjoint plugin.")
+
+    @cached_property
+    def mode_area(self) -> FreqModeDataArray:
+        """Effective mode area corresponding to a 2D monitor.
+
+        Effective mode area is calculated as: (∫|E|²dA)² / (∫|E|⁴dA)
+        """
+        raise NotImplementedError("'mode_area' is not yet supported in the adjoint plugin.")
+
+    def dot(
+        self, field_data: Union[FieldData, ModeSolverData], conjugate: bool = True
+    ) -> ModeAmpsDataArray:
+        """Dot product (modal overlap) with another :class:`.FieldData` object. Both datasets have
+        to be frequency-domain data associated with a 2D monitor. Along the tangential directions,
+        the datasets have to have the same discretization. Along the normal direction, the monitor
+        position may differ and is ignored. Other coordinates (``frequency``, ``mode_index``) have
+        to be either identical or broadcastable. Broadcasting is also supported in the case in
+        which the other ``field_data`` has a dimension of size ``1`` whose coordinate is not in the
+        list of coordinates in the ``self`` dataset along the corresponding dimension. In that case,
+        the coordinates of the ``self`` dataset are used in the output.
+
+        Parameters
+        ----------
+        field_data : :class:`ElectromagneticFieldData`
+            A data instance to compute the dot product with.
+        conjugate : bool, optional
+            If ``True`` (default), the dot product is defined as ``1 / 4`` times the integral of
+            ``E_self* x H_other - H_self* x E_other``, where ``x`` is the cross product and ``*`` is
+            complex conjugation. If ``False``, the complex conjugation is skipped.
+
+        Note
+        ----
+            The dot product with and without conjugation is equivalent (up to a phase) for
+            modes in lossless waveguides but differs for modes in lossy materials. In that case,
+            the conjugated dot product can be interpreted as the fraction of the power of the first
+            mode carried by the second, but modes are not orthogonal with respect to that product
+            and the sum of carried power fractions exceed 1. In the non-conjugated definition,
+            orthogonal modes can be defined, but the interpretation of modal overlap as power
+            carried by a given mode is no longer valid.
+        """
+        raise NotImplementedError("'dot' is not yet supported in the adjoint plugin.")
+
+    # pylint: disable=too-many-locals
+    def outer_dot(
+        self, field_data: Union[FieldData, ModeSolverData], conjugate: bool = True
+    ) -> MixedModeDataArray:
+        """Dot product (modal overlap) with another :class:`.FieldData` object."""
+        raise NotImplementedError("'outer_dot' is not yet supported in the adjoint plugin.")
+
+    @property
+    def time_reversed_copy(self) -> FieldData:
+        """Make a copy of the data with time-reversed fields."""
+        raise NotImplementedError(
+            "'time_reversed_copy' is not yet supported in the adjoint plugin."
+        )
 
     # pylint:disable=too-many-locals
     def to_adjoint_sources(self, fwidth: float) -> List[CustomFieldSource]:
