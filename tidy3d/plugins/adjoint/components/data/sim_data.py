@@ -175,6 +175,7 @@ class JaxSimulationData(SimulationData, JaxObject):
             self.simulation.get_grad_monitors(
                 input_structures=self.simulation.input_structures,
                 freq_adjoint=self.simulation.freq_adjoint,
+                include_eps_mnts=False,
             )
         )
         return self.simulation.updated_copy(**update_dict)
