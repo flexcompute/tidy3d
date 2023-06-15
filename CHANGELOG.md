@@ -38,6 +38,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fix to single-precision mode solver to do the type conversion on the final matrix only rather than at intermediate steps, which improves accuracy in some cases.
 - Improvements to graphene medium fit.
 - Schema titles in `ArrayLike` fields.
+- Fix `web.estimate_cost` error/time-out for large simulations, it should now always work but may take some time for complex cases.
 
 ## [2.2.3] - 2023-6-15
 
@@ -46,7 +47,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 ### Fixed
-Callback URL: "call_back_url" replaced with proper "callbackUrl".
+- Callback URL: "call_back_url" replaced with proper "callbackUrl".
 
 ## [2.2.2] - 2023-5-25
 

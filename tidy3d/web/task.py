@@ -57,6 +57,7 @@ class TaskInfo(TaskBase):
     totalSolverTime: int = None
     callbackUrl: str = None
     taskType: str = None
+    metadataStatus: str = None
 
 
 class RunInfo(TaskBase):
