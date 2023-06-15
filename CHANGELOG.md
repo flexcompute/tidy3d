@@ -11,6 +11,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+## [2.2.3] - 2023-6-15
+
+### Added
+
+### Changed
+
+### Fixed
+Callback URL: "call_back_url" replaced with proper "callbackUrl".
+
 ## [2.2.2] - 2023-5-25
 
 ### Added
@@ -769,7 +778,8 @@ which fields are to be projected is now determined automatically based on the me
 - Job and Batch classes for better simulation handling (eventually to fully replace webapi functions).
 - A large number of small improvements and bug fixes.
 
-[Unreleased]: https://github.com/flexcompute/tidy3d/compare/v2.2.2...develop
+[Unreleased]: https://github.com/flexcompute/tidy3d/compare/v2.2.3...develop
+[2.2.3]: https://github.com/flexcompute/tidy3d/compare/v2.2.2...v2.2.3
 [2.2.2]: https://github.com/flexcompute/tidy3d/compare/v2.2.1...v2.2.2
 [2.2.1]: https://github.com/flexcompute/tidy3d/compare/v2.2.0...v2.2.1
 [2.2.0]: https://github.com/flexcompute/tidy3d/compare/v2.1.1...v2.2.0

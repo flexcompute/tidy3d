@@ -59,7 +59,7 @@ def mock_upload(monkeypatch, set_api_key):
             matchers.json_params_matcher(
                 {
                     "taskName": TASK_NAME,
-                    "call_back_url": None,
+                    "callbackUrl": None,
                     "simulationType": "tidy3d",
                     "parentTasks": None,
                 }
