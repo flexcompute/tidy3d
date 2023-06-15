@@ -686,7 +686,7 @@ def estimate_cost(task_id: str) -> float:
     Note
     ----
     Cost is calculated assuming the simulation runs for
-    the full ``run_time``. If early shut-off is triggered, the cost is adjusted proporionately.
+    the full ``run_time``. If early shut-off is triggered, the cost is adjusted proportionately.
 
     Parameters
     ----------
@@ -702,14 +702,25 @@ def estimate_cost(task_id: str) -> float:
     task = SimulationTask.get(task_id)
     if not task:
         raise ValueError("Task not found.")
-    resp = task.estimate_cost()
-    flex_unit = resp.get("flex_unit")
-    if not flex_unit:
-        log.warning(
-            "Could not get estimated cost! It will be reported in preprocessing upon "
-            "simulation run."
-        )
-    return flex_unit
+
+    task.estimate_cost()
+    task_info = get_info(task_id)
+    status = task_info.metadataStatus
+
+    # Wait for a termination status
+    while status not in ["processed", "success", "error", "failed"]:
+        time.sleep(REFRESH_TIME)
+        task_info = get_info(task_id)
+        status = task_info.metadataStatus
+
+    if status in ["processed", "success"]:
+        return task_info.estFlexUnit
+
+    log.warning(
+        "Could not get estimated cost! It will be reported during a simulation run in the "
+        "preprocessing step."
+    )
+    return None
 
 
 @wait_for_connection
