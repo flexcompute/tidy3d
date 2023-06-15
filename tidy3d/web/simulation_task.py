@@ -186,8 +186,8 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
         cls,
         simulation: Simulation,
         task_name: str,
-        folder_name="default",
-        call_back_url=None,
+        folder_name: str = "default",
+        callback_url: str = None,
         simulation_type: str = "tidy3d",
         parent_tasks: List[str] = None,
     ) -> SimulationTask:
@@ -228,7 +228,7 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
             f"tidy3d/projects/{folder.folder_id}/tasks",
             {
                 "taskName": task_name,
-                "call_back_url": call_back_url,
+                "callbackUrl": callback_url,
                 "simulationType": simulation_type,
                 "parentTasks": parent_tasks,
             },
