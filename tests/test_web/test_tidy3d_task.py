@@ -145,7 +145,7 @@ def test_create(set_api_key):
             matchers.json_params_matcher(
                 {
                     "taskName": "test task",
-                    "call_back_url": None,
+                    "callbackUrl": None,
                     "simulationType": "tidy3d",
                     "parentTasks": None,
                 }
@@ -180,7 +180,7 @@ def test_submit(set_api_key):
             matchers.json_params_matcher(
                 {
                     "taskName": "test task",
-                    "call_back_url": None,
+                    "callbackUrl": None,
                     "simulationType": "tidy3d",
                     "parentTasks": None,
                 }
