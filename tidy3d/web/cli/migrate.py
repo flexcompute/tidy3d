@@ -6,7 +6,7 @@ import requests
 import toml
 
 from tidy3d.web.cli.constants import CONFIG_FILE, CREDENTIAL_FILE, TIDY3D_DIR
-from tidy3d.web.config import DEFAULT_CONFIG
+from tidy3d.web.environment import Env
 
 
 # disable pylint for this file
@@ -35,7 +35,7 @@ def migrate() -> bool:
             if is_migrate:
                 headers = {"Application": "TIDY3D"}
                 resp = requests.get(
-                    f"{DEFAULT_CONFIG.auth_api_endpoint}/auth",
+                    f"{Env.current.auth_api_endpoint}/auth",
                     headers=headers,
                     auth=(email, password),
                 )
@@ -46,9 +46,7 @@ def migrate() -> bool:
                     # click.echo(json.dumps(resp.json(), indent=4))
                     access_token = resp.json()["data"]["auth"]["accessToken"]
                     headers["Authorization"] = f"Bearer {access_token}"
-                    resp = requests.get(
-                        f"{DEFAULT_CONFIG.web_api_endpoint}/apikey", headers=headers
-                    )
+                    resp = requests.get(f"{Env.current.web_api_endpoint}/apikey", headers=headers)
                     if resp.status_code != 200:
                         click.echo(f"Migrate to api key failed: {resp.text}")
                         return False
@@ -57,7 +55,7 @@ def migrate() -> bool:
                         apikey = resp.json()["data"]
                         if not apikey:
                             resp = requests.post(
-                                f"{DEFAULT_CONFIG.web_api_endpoint}/apikey", headers=headers
+                                f"{Env.current.web_api_endpoint}/apikey", headers=headers
                             )
                             if resp.status_code != 200:
                                 click.echo(f"Migrate to api key failed: {resp.text}")

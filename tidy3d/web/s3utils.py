@@ -1,5 +1,5 @@
 # pylint:disable=unused-argument
-"""handles filesystem, storage 
+"""handles filesystem, storage
 """
 import io
 import os
@@ -15,7 +15,7 @@ from rich.progress import TextColumn, Progress, BarColumn, DownloadColumn
 from rich.progress import TransferSpeedColumn, TimeRemainingColumn
 
 from . import httputils as http
-from .config import DEFAULT_CONFIG
+from .environment import Env
 
 
 class _UserCredential(BaseModel):
@@ -50,11 +50,11 @@ class _S3STSToken(BaseModel):
 
         return boto3.client(
             "s3",
-            region_name=DEFAULT_CONFIG.s3_region,
+            region_name=Env.current.s3_region,
             aws_access_key_id=self.user_credential.access_key_id,
             aws_secret_access_key=self.user_credential.secret_access_key,
             aws_session_token=self.user_credential.session_token,
-            verify=DEFAULT_CONFIG.ssl_verify,
+            verify=Env.current.ssl_verify,
         )
 
     def is_expired(self) -> bool:

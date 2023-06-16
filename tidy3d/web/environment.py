@@ -1,14 +1,20 @@
 """Environment Setup."""
+import os
 
-from pydantic import BaseModel
+from pydantic import BaseSettings, Field
 
 
-class EnvironmentConfig(BaseModel):
+class EnvironmentConfig(BaseSettings):
     """Basic Configuration for definition environment."""
+
+    def __hash__(self):
+        return hash((type(self),) + tuple(self.__dict__.values()))
 
     name: str
     web_api_endpoint: str
     website_endpoint: str
+    s3_region: str
+    ssl_verify: bool = Field(True, env="TIDY3D_SSL_VERIFY")
 
     def active(self) -> None:
         """Activate the environment instance."""
@@ -32,18 +38,21 @@ class EnvironmentConfig(BaseModel):
 
 dev = EnvironmentConfig(
     name="dev",
+    s3_region="us-east-1",
     web_api_endpoint="https://tidy3d-api.dev-simulation.cloud",
     website_endpoint="https://tidy3d.dev-simulation.cloud",
 )
 
 uat = EnvironmentConfig(
     name="uat",
+    s3_region="us-gov-west-1",
     web_api_endpoint="https://uat-tidy3d-api.simulation.cloud",
     website_endpoint="https://uat-tidy3d.simulation.cloud",
 )
 
 prod = EnvironmentConfig(
     name="prod",
+    s3_region="us-gov-west-1",
     web_api_endpoint="https://tidy3d-api.simulation.cloud",
     website_endpoint="https://tidy3d.simulation.cloud",
 )
@@ -60,7 +69,13 @@ class Environment:
 
     def __init__(self):
         """Initialize the environment."""
-        self._current = prod
+        env_key = os.environ.get("TIDY3D_ENV")
+        if env_key is None:
+            self._current = prod
+        elif env_key == "dev":
+            self._current = dev
+        elif env_key == "uat":
+            self._current = uat
 
     @property
     def current(self) -> EnvironmentConfig:

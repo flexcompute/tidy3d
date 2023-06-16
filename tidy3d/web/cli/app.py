@@ -10,7 +10,7 @@ import toml
 
 from tidy3d.web.cli.constants import TIDY3D_DIR, CONFIG_FILE, CREDENTIAL_FILE
 from tidy3d.web.cli.migrate import migrate
-from tidy3d.web.config import DEFAULT_CONFIG
+from tidy3d.web.environment import Env
 
 if not os.path.exists(TIDY3D_DIR):
     os.mkdir(TIDY3D_DIR)
@@ -90,7 +90,7 @@ def configure_fn(apikey: str) -> None:
         message = f"Current API key: [{current_apikey}]\n" if current_apikey else ""
         apikey = click.prompt(f"{message}Please enter your api key", type=str)
 
-    resp = requests.get(f"{DEFAULT_CONFIG.web_api_endpoint}/apikey", auth=auth, verify=False)
+    resp = requests.get(f"{Env.current.web_api_endpoint}/apikey", auth=auth, verify=False)
     if resp.status_code == 200:
         click.echo("Configured successfully.")
         with open(CONFIG_FILE, "w+", encoding="utf-8") as config_file:

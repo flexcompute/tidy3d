@@ -18,7 +18,7 @@ from ...components.viz import add_ax_if_none
 from ...components.types import Ax, ArrayFloat1D
 from ...constants import C_0, HBAR, MICROMETER
 from ...exceptions import ValidationError, WebError, SetupError
-from ...web.config import DEFAULT_CONFIG as Config
+from ...web.environment import Env
 
 
 class DispersionFitter(Tidy3dBaseModel):
@@ -649,8 +649,7 @@ class DispersionFitter(Tidy3dBaseModel):
         :class:`DispersionFitter`
             A :class:`DispersionFitter` instance.
         """
-
-        resp = requests.get(url_file, verify=Config.ssl_verify)
+        resp = requests.get(url_file, verify=Env.current.ssl_verify)
 
         try:
             resp.raise_for_status()

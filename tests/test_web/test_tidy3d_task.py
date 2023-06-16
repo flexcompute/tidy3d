@@ -11,6 +11,7 @@ from tidy3d.version import __version__
 
 test_env = EnvironmentConfig(
     name="test",
+    s3_region="test",
     web_api_endpoint="https://test",
     website_endpoint="https://test",
 )
