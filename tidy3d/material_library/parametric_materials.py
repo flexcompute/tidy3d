@@ -1,12 +1,14 @@
 """Parametric material models."""
 from abc import ABC, abstractmethod
 from typing import List, Tuple
+import warnings
 import pydantic as pd
 import numpy as np
 
 from ..components.medium import PoleResidue, Medium2D, Drude
 from ..components.base import Tidy3dBaseModel
 from ..constants import EPSILON_0, Q_e, HBAR, K_B, ELECTRON_VOLT, KELVIN
+from ..log import log
 
 try:
     from scipy import integrate
@@ -14,7 +16,6 @@ try:
     INTEGRATE_AVAILABLE = True
 except ImportError:
     INTEGRATE_AVAILABLE = False
-
 
 # default values of the physical parameters for graphene
 # scattering rate in eV
@@ -26,7 +27,7 @@ GRAPHENE_DEF_TEMP = 300
 
 # constants controlling the numerical integration of the interband term in graphene
 # frequency limits of integration
-GRAPHENE_INT_MIN = 0
+GRAPHENE_INT_MIN = 1e10
 GRAPHENE_INT_MAX = 1e16
 # integration absolute tolerance
 GRAPHENE_INT_TOL = 1e-20
@@ -35,8 +36,11 @@ GRAPHENE_INT_TOL = 1e-20
 # frequency range for fitting
 GRAPHENE_FIT_FREQ_MIN = 1e12
 GRAPHENE_FIT_FREQ_MAX = 1e15
-# the fitting for the interband feature has this width relative to the absorption threshold
-GRAPHENE_FIT_REL_WIDTH = 1.1
+GRAPHENE_FIT_NUM_FREQS = 100
+GRAPHENE_FIT_ATOL = 2e-5
+# parameters controlling node placement
+GRAPHENE_FIT_LARGE_MULTIPLIER = 10
+GRAPHENE_FIT_SMALL_MULTIPLIER = 0.25
 # number of optimization iterations for fitting
 GRAPHENE_FIT_NUM_ITERS = 100
 
@@ -116,19 +120,6 @@ class Graphene(ParametricVariantItem2D):
         "at the cost of decreased stability in the fitting algorithm.",
     )
 
-    @pd.validator("interband_fit_freq_nodes", always=True)
-    def _calculate_freq_nodes(cls, val, values):
-        """Calculate the default frequency nodes if none are provided."""
-        if val is None:
-            mu_c = values["mu_c"] / (2 * np.pi * HBAR)
-            temp = values["temp"] * K_B / (2 * np.pi * HBAR)
-            center = max(np.sqrt(abs(mu_c**2 - temp**2)), GRAPHENE_FIT_FREQ_MIN * 1e-5)
-            return [
-                (GRAPHENE_FIT_FREQ_MIN, GRAPHENE_FIT_FREQ_MAX),
-                (2 * center, 2 * (center + temp) * GRAPHENE_FIT_REL_WIDTH),
-            ]
-        return val
-
     @property
     def medium(self) -> Medium2D:
         """Surface conductivity model for graphene."""
@@ -138,7 +129,11 @@ class Graphene(ParametricVariantItem2D):
             intraband_poles = intraband.pole_residue.poles
             interband_poles = interband.pole_residue.poles
             poles = intraband_poles + interband_poles
-            pole_residue = self._filter_poles(PoleResidue(poles=poles))
+            pole_residue = self._filter_poles(
+                PoleResidue(
+                    poles=poles, frequency_range=(GRAPHENE_FIT_FREQ_MIN, GRAPHENE_FIT_FREQ_MAX)
+                )
+            )
             return Medium2D(ss=pole_residue, tt=pole_residue)
         return Medium2D(ss=intraband, tt=intraband)
 
@@ -170,14 +165,38 @@ class Graphene(ParametricVariantItem2D):
         :class:`.PoleResidue`
             A pole-residue model for the interband term of graphene.
         """
-
+        mu_c = self.mu_c / (2 * np.pi * HBAR)
+        temp = self.temp * K_B / (2 * np.pi * HBAR)
+        resonance = max(np.sqrt(abs(mu_c**2 - temp**2)), GRAPHENE_FIT_FREQ_MIN * 1e-5)
+        freqs = np.linspace(
+            resonance / GRAPHENE_FIT_LARGE_MULTIPLIER,
+            resonance * GRAPHENE_FIT_LARGE_MULTIPLIER,
+            GRAPHENE_FIT_NUM_FREQS,
+        )
+        sigma = self.interband_conductivity(freqs)
         nodes = self.interband_fit_freq_nodes
+        if nodes is None:
+            fcenter = freqs[np.argmin(np.imag(sigma))]
+            fwidth = (
+                fcenter - freqs[np.nonzero(np.imag(sigma) < 0.5 * np.amin(np.imag(sigma)))[0][0]]
+            )
+            nodes = [
+                (fcenter / GRAPHENE_FIT_LARGE_MULTIPLIER, fcenter * GRAPHENE_FIT_LARGE_MULTIPLIER),
+                (fcenter, fcenter + fwidth * GRAPHENE_FIT_SMALL_MULTIPLIER),
+            ]
+
         flattened_freqs = [freq for pair in nodes for freq in pair]
-        sigma = self.interband_conductivity(flattened_freqs)
+        sigma_inds = self.interband_conductivity(flattened_freqs)
         inds = [(2 * i, 2 * i + 1) for i in range(len(nodes))]
 
-        pole_residue = self._fit_interband_conductivity(flattened_freqs, sigma, inds)
-        return self._filter_poles(pole_residue)
+        pole_residue = self._fit_interband_conductivity(flattened_freqs, sigma_inds, inds)
+        pole_residue_filtered = self._filter_poles(pole_residue)
+        sigma_fit = pole_residue_filtered.sigma_model(freqs)
+        if not np.allclose(sigma, sigma_fit, rtol=0, atol=GRAPHENE_FIT_ATOL):
+            log.warning(
+                "Graphene fit may not be good. Try changing the physical or fitting parameters."
+            )
+        return pole_residue_filtered
 
     def numerical_conductivity(self, freqs: List[float]) -> List[complex]:
         """Numerically calculate the conductivity. If this differs from the
@@ -215,7 +234,10 @@ class Graphene(ParametricVariantItem2D):
 
         def fermi(E: float) -> float:
             """Fermi distribution."""
-            return 1 / (np.exp((E - self.mu_c) / (K_B * self.temp)) + 1)
+            # catch overflow warning
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                return 1 / (np.exp((E - self.mu_c) / (K_B * self.temp)) + 1)
 
         def fermi_g(E: float) -> float:
             """Difference of fermi distributions."""
@@ -340,7 +362,15 @@ class Graphene(ParametricVariantItem2D):
                 else:
                     poles.append((root1, res1))
 
-            return PoleResidue(poles=poles)
+            flipped_poles = []
+            for (a, c) in poles:
+                if np.real(a) > 0:
+                    flipped_poles += [(-1j * np.conj(1j * a), c)]
+                else:
+                    flipped_poles += [(a, c)]
+            return PoleResidue(
+                poles=flipped_poles, frequency_range=(GRAPHENE_FIT_FREQ_MIN, GRAPHENE_FIT_FREQ_MAX)
+            )
 
         # fitting works better with normalized quantities (THz and uS)
         omega_thz = 2 * np.pi * np.array(freqs) * 1e-12
@@ -356,17 +386,9 @@ class Graphene(ParametricVariantItem2D):
         # unnormalize, and convert from conductivity to permittivity
         poles = [(a * 1e12, -c / (a * EPSILON_0 * 1e6)) for (a, c) in pole_res.poles]
 
-        flipped_poles = []
-        for (a, c) in poles:
-            if np.real(a) > 0:
-                flipped_poles += [(-1j * np.conj(1j * a), c)]
-            else:
-                flipped_poles += [(a, c)]
-
-        # residue at omega = 0
-        zero_res = -np.sum([c for (_, c) in flipped_poles])
-
-        return PoleResidue(poles=flipped_poles + [(0, zero_res)])
+        return PoleResidue(
+            poles=poles, frequency_range=(GRAPHENE_FIT_FREQ_MIN, GRAPHENE_FIT_FREQ_MAX)
+        )
 
     def _filter_poles(self, medium: PoleResidue) -> PoleResidue:
         """Clean up poles, merging poles at zero frequency."""
@@ -379,4 +401,7 @@ class Graphene(ParametricVariantItem2D):
                 continue
             else:
                 poles += [(a, c)]
-        return PoleResidue(poles=poles + [(0, zero_res)])
+        return PoleResidue(
+            poles=poles + [(0, zero_res)],
+            frequency_range=(GRAPHENE_FIT_FREQ_MIN, GRAPHENE_FIT_FREQ_MAX),
+        )

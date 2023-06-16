@@ -33,6 +33,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `ElectromagneticFieldData.outer_dot` now works correctly for `FieldData`, not only `ModeSolverData`.
 - Fix to the setting of the mode solver PML parameters that produces better results for modes which do not decay in the PML, and fewer spurious modes.
 - Fix to single-precision mode solver to do the type conversion on the final matrix only rather than at intermediate steps, which improves accuracy in some cases.
+- Improvements to graphene medium fit.
 
 ## [2.2.3] - 2023-6-15
 
