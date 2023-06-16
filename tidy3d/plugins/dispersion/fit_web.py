@@ -12,10 +12,9 @@ from ...components.types import Literal
 from ...components.medium import PoleResidue
 from ...constants import MICROMETER, HERTZ
 from ...exceptions import WebError, Tidy3dError, SetupError
+from ...web.environment import Env
 from ...web.httputils import get_headers
-from ...web.config import DEFAULT_CONFIG as Config
 from .fit import DispersionFitter
-
 
 BOUND_MAX_FACTOR = 10
 
@@ -139,8 +138,8 @@ class FitterData(AdvancedFitterParam):
 
 URL_ENV = {
     "local": "http://127.0.0.1:8000",
-    "dev": "https://tidy3d-service.dev-simulation.cloud",
-    "prod": "https://tidy3d-service.simulation.cloud",
+    Env.dev: "https://tidy3d-service.dev-simulation.cloud",
+    Env.prod: "https://tidy3d-service.simulation.cloud",
 }
 
 
@@ -152,25 +151,18 @@ class ExceptionCodes(Enum):
 
 
 class StableDispersionFitter(DispersionFitter):
-
     """Stable fitter based on web service"""
 
     @staticmethod
-    def _set_url(config_env: Literal["default", "dev", "prod", "local"] = "default"):
+    def _set_url(_: Literal["default", "dev", "prod", "local"] = "default"):
         """Set the url of python web service
 
         Parameters
         ----------
-        config_env : Literal["default", "dev", "prod", "local"], optional
+        _ : Literal["default", "dev", "prod", "local"], optional
             Service environment to pick from
         """
-
-        _env = config_env
-        if _env == "default":
-            from ...web.config import DEFAULT_CONFIG  # pylint:disable=import-outside-toplevel
-
-            _env = "dev" if "dev" in DEFAULT_CONFIG.web_api_endpoint else "prod"
-        return URL_ENV[_env]
+        return URL_ENV[Env.current]
 
     @staticmethod
     def _setup_server(url_server: str):
@@ -184,12 +176,12 @@ class StableDispersionFitter(DispersionFitter):
 
         try:
             # test connection
-            resp = requests.get(f"{url_server}/health", verify=Config.ssl_verify)
+            resp = requests.get(f"{url_server}/health", verify=Env.current.ssl_verify)
             resp.raise_for_status()
         except (requests.exceptions.SSLError, ssl.SSLError):
             log.info("disable the ssl verify and retry")
-            Config.ssl_verify = False
-            resp = requests.get(f"{url_server}/health", verify=Config.ssl_verify)
+            Env.current.ssl_verify = False
+            resp = requests.get(f"{url_server}/health", verify=Env.current.ssl_verify)
         except Exception as e:
             raise WebError("Connection to the server failed. Please try again.") from e
 
@@ -293,7 +285,7 @@ class StableDispersionFitter(DispersionFitter):
             f"{url_server}/dispersion/fit",
             headers=headers,
             data=web_data.json(),
-            verify=Config.ssl_verify,
+            verify=Env.current.ssl_verify,
         )
 
         try:

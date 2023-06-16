@@ -11,7 +11,7 @@ from requests import Session
 import requests
 
 from .cli.constants import CONFIG_FILE
-from .config import DEFAULT_CONFIG as Config
+from .environment import Env
 from ..exceptions import WebError
 from ..version import __version__
 
@@ -68,7 +68,7 @@ def auth(request: requests.request) -> requests.request:
 
 
 session = Session()
-session.verify = Config.ssl_verify
+session.verify = Env.current.ssl_verify
 session.auth = auth
 
 
@@ -129,7 +129,7 @@ def get_query_url(method: str) -> str:
     str
         The full query url
     """
-    return f"{Config.web_api_endpoint}/{method}"
+    return f"{Env.current.web_api_endpoint}/{method}"
 
 
 def need_token_refresh(token: str) -> bool:
