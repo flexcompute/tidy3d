@@ -410,7 +410,18 @@ class CurrentSource(Source, ABC):
         return pol_vec
 
 
-class UniformCurrentSource(CurrentSource):
+class ReverseInterpolatedSource(Source):
+    """Abstract source that allows reverse-interpolation along zero-sized dimensions."""
+    interpolate: bool = pydantic.Field(
+        True,
+        title="Enable Interpolation",
+        description="If ``False``, the dipole is placed at the nearest Yee grid point "
+        "based on the chosen ``polarization``. If ``True``, uses linear interpolation "
+        "so that effectively the dipole is placed at the exact position requested.",
+    )
+
+
+class UniformCurrentSource(CurrentSource, ReverseInterpolatedSource):
     """Source in a rectangular volume with uniform time dependence. size=(0,0,0) gives point source.
 
     Example
@@ -420,7 +431,7 @@ class UniformCurrentSource(CurrentSource):
     """
 
 
-class PointDipole(CurrentSource):
+class PointDipole(CurrentSource, ReverseInterpolatedSource):
     """Uniform current source with a zero size.
 
     Example
@@ -436,16 +447,8 @@ class PointDipole(CurrentSource):
         units=MICROMETER,
     )
 
-    interpolate: bool = pydantic.Field(
-        True,
-        title="Enable Interpolation",
-        description="If ``False``, the dipole is placed at the nearest Yee grid point "
-        "based on the chosen ``polarization``. If ``True``, uses linear interpolation "
-        "so that effectively the dipole is placed at the exact position requested.",
-    )
 
-
-class CustomCurrentSource(Source):
+class CustomCurrentSource(ReverseInterpolatedSource):
     """Implements a source corresponding to an input dataset containing ``E`` and ``H`` fields.
     Injects the specified components of the ``E`` and ``H`` dataset directly as ``J`` and ``M``
     current distributions in the FDTD solver.
