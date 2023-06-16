@@ -282,6 +282,7 @@ def make_sim(
         ),
         output_monitors=(output_mnt1, output_mnt2, output_mnt3, output_mnt4),
         boundary_spec=td.BoundarySpec.pml(x=False, y=False, z=False),
+        symmetry=(0, 1, -1),
     )
 
     return sim
@@ -299,7 +300,7 @@ def extract_amp(sim_data: td.SimulationData) -> complex:
 
     # ModeData
     mnt_name = MNT_NAME + "1"
-    mnt_data = sim_data.output_monitor_data[mnt_name]
+    mnt_data = sim_data[mnt_name]
     amps = mnt_data.amps
     ret_value += amps.sel(direction="+", f=2e14, mode_index=0)
     ret_value += amps.isel(direction=0, f=0, mode_index=0)
@@ -309,7 +310,7 @@ def extract_amp(sim_data: td.SimulationData) -> complex:
 
     # DiffractionData
     mnt_name = MNT_NAME + "2"
-    mnt_data = sim_data.output_monitor_data[mnt_name]
+    mnt_data = sim_data[mnt_name]
     ret_value += mnt_data.amps.sel(orders_x=0, orders_y=0, f=2e14, polarization="p")
     ret_value += mnt_data.amps.sel(orders_x=-1, orders_y=1, f=2e14, polarization="p")
     ret_value += mnt_data.amps.isel(orders_x=0, orders_y=1, f=0, polarization=0)
@@ -318,12 +319,12 @@ def extract_amp(sim_data: td.SimulationData) -> complex:
 
     # FieldData
     mnt_name = MNT_NAME + "3"
-    mnt_data = sim_data.output_monitor_data[mnt_name]
+    mnt_data = sim_data[mnt_name]
     ret_value += jnp.sum(jnp.array(mnt_data.Ex.values))
 
     # FieldData (dipole)
     mnt_name = MNT_NAME + "4"
-    mnt_data = sim_data.output_monitor_data[mnt_name]
+    mnt_data = sim_data[mnt_name]
     ret_value += jnp.sum(jnp.array(mnt_data.Ex.values))
 
     return ret_value

@@ -203,7 +203,8 @@ class JaxDataArray(Tidy3dBaseModel):
 
         return self_sel
 
-    def sel(self, **sel_kwargs) -> JaxDataArray:
+    # pylint:disable=unused-argument
+    def sel(self, indexers: dict = None, method: str = "nearest", **sel_kwargs) -> JaxDataArray:
         """Select a value from the :class:`.JaxDataArray` by indexing into coordinate values."""
         isel_kwargs = {}
         for coord_name, sel_kwarg in sel_kwargs.items():
@@ -213,6 +214,24 @@ class JaxDataArray(Tidy3dBaseModel):
             coord_index = coord_list.index(sel_kwarg)
             isel_kwargs[coord_name] = coord_index
         return self.isel(**isel_kwargs)
+
+    def assign_coords(self, coords: dict = None, **coords_kwargs) -> JaxDataArray:
+        """Assign new coordinates to this object."""
+
+        if coords:
+            coords_kwargs.update(coords)
+
+        new_coords = {key: np.array(value).tolist() for key, value in coords_kwargs.items()}
+        return self.updated_copy(coords=new_coords)
+
+    def multiply_at(self, value: complex, coord_name: str, indices: List[int]) -> JaxDataArray:
+        """Multiply self by value at indices into ."""
+        axis = list(self.coords.keys()).index(coord_name)
+        scalar_data_arr = self.as_jnp_array
+        scalar_data_arr = jnp.moveaxis(scalar_data_arr, axis, 0)
+        scalar_data_arr = scalar_data_arr.at[indices].multiply(value)
+        scalar_data_arr = jnp.moveaxis(scalar_data_arr, 0, axis)
+        return self.updated_copy(values=scalar_data_arr)
 
     def interp(self, **interp_kwargs):
         """Interpolate into the :class:`.JaxDataArray`. Not yet supported."""

@@ -138,7 +138,9 @@ class AbstractFieldData(MonitorData, AbstractFieldDataset, ABC):
                 # apply the symmetry eigenvalue (if defined) to the flipped values
                 if eigenval_fn is not None:
                     sym_eigenvalue = eigenval_fn(sym_dim)
-                    scalar_data[{dim_name: flip_inds}] *= sym_val * sym_eigenvalue
+                    scalar_data = scalar_data.multiply_at(
+                        value=sym_val * sym_eigenvalue, coord_name=dim_name, indices=flip_inds
+                    )
 
             # assign the final scalar data to the update_dict
             update_dict[field_name] = scalar_data
