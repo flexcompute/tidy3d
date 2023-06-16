@@ -88,6 +88,7 @@ Adjoint Plugin
     notebooks/AdjointPlugin_3_InverseDesign
     notebooks/AdjointPlugin_4_MultiObjective
     notebooks/AdjointPlugin_5_BoundaryGradients
+    notebooks/AdjointPlugin_7_Metalens
 
 Pre and Post Processing
 ~~~~~~~~~~~~~~~~~~~~~~~
