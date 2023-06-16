@@ -168,11 +168,6 @@ class ModeSolver(Tidy3dBaseModel):
         """
 
         if self.mode_spec.group_index_step > 0:
-            if self.mode_spec.precision != "double":
-                log.warning(
-                    "In the local solver, group index calculation should be performed with double "
-                    "precision for better accuracy. Consider setting 'precision' to 'double'."
-                )
             return self._get_data_with_group_index()
 
         _, _solver_coords = self.plane.pop_axis(

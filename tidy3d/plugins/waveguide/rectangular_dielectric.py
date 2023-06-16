@@ -176,7 +176,7 @@ class RectangularDielectric(Tidy3dBaseModel):
     )
 
     mode_spec: ModeSpec = pydantic.Field(
-        ModeSpec(num_modes=2, precision="double"),
+        ModeSpec(num_modes=2),
         title="Mode Specification",
         description=":class:`ModeSpec` defining waveguide mode properties.",
     )
