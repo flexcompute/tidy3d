@@ -1,6 +1,6 @@
 """Storing tidy3d data at it's most fundamental level as xr.DataArray objects"""
 from __future__ import annotations
-from typing import Dict
+from typing import Dict, List
 
 import xarray as xr
 import numpy as np
@@ -163,6 +163,12 @@ class DataArray(xr.DataArray):
         """Generate hash value for a :class:.`DataArray` instance, needed for custom components."""
         token_str = dask.base.tokenize(self)
         return hash(token_str)
+
+    def multiply_at(self, value: complex, coord_name: str, indices: List[int]) -> DataArray:
+        """Multiply self by value at indices into ."""
+        self_mult = self.copy()
+        self_mult[{coord_name: indices}] *= value
+        return self_mult
 
 
 class FreqDataArray(DataArray):
