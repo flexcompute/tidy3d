@@ -245,6 +245,8 @@ class JaxFieldData(JaxMonitorData, FieldData):
         omega0 = 2 * np.pi * freq0
         scaling_factor = 1 / (MU_0 * omega0)
 
+        interpolate_source = True
+
         # dipole case
         if np.allclose(np.array(self.monitor.size), np.zeros(3)):
             dipoles = []
@@ -263,27 +265,22 @@ class JaxFieldData(JaxMonitorData, FieldData):
                     source_time=GaussianPulse(
                         freq0=freq0, fwidth=fwidth, amplitude=abs(adj_amp), phase=adj_phase
                     ),
-                    interpolate=True,
+                    interpolate=interpolate_source,
                 )
 
                 dipoles.append(src_adj)
             return dipoles
 
-        # convert all of the scalar fields to ScalarFieldDataArray
+        # Define source geometry based on coordinates in the data
         data_mins = []
         data_maxs = []
-        src_field_components = {}
+
+        def shift_value(coords) -> float:
+            """How much to shift the geometry by along a dimension (only if > 1D)."""
+            return 1e-5 if len(coords) > 1 else 0
+
         for name, field_component in self.field_components.items():
-            forward_amps = field_component.as_ndarray
-            values = -1j * forward_amps
             coords = field_component.coords
-            if not np.all(values == 0):
-                src_field_components[name] = ScalarFieldDataArray(values, coords=coords)
-
-            def shift_value(coords) -> float:
-                """How much to shift the geometry by along a dimension (only if > 1D)."""
-                return 1e-5 if len(coords) > 1 else 0
-
             data_mins.append({key: min(val) + shift_value(val) for key, val in coords.items()})
             data_maxs.append({key: max(val) + shift_value(val) for key, val in coords.items()})
 
@@ -295,6 +292,18 @@ class JaxFieldData(JaxMonitorData, FieldData):
 
         source_geo = Box.from_bounds(rmin=rmin, rmax=rmax)
 
+        # Define source dataset
+        # Offset coordinates by source center since local coords are assumed in CustomCurrentSource
+        src_field_components = {}
+        for name, field_component in self.field_components.items():
+            forward_amps = field_component.as_ndarray
+            values = -1j * forward_amps
+            coords = field_component.coords
+            for dim, key in enumerate("xyz"):
+                coords[key] = np.array(coords[key]) - source_geo.center[dim]
+            if not np.all(values == 0):
+                src_field_components[name] = ScalarFieldDataArray(values, coords=coords)
+
         dataset = FieldDataset(**src_field_components)
         custom_source = CustomCurrentSource(
             center=source_geo.center,
@@ -304,6 +313,7 @@ class JaxFieldData(JaxMonitorData, FieldData):
                 fwidth=fwidth,
             ),
             current_dataset=dataset,
+            interpolate=interpolate_source,
         )
 
         return [custom_source]
