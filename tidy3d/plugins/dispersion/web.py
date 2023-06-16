@@ -16,7 +16,7 @@ from ...components.medium import PoleResidue
 from ...constants import MICROMETER, HERTZ
 from ...exceptions import WebError, Tidy3dError, SetupError
 from ...web.httputils import get_headers
-from ...web.config import DEFAULT_CONFIG
+from ...web.environment import Env
 
 from .fit import DispersionFitter
 
@@ -229,7 +229,7 @@ class FitterData(AdvancedFitterParam):
 
         _env = config_env
         if _env == "default":
-            _env = "dev" if "dev" in DEFAULT_CONFIG.web_api_endpoint else "prod"
+            _env = "dev" if "dev" in Env.current.web_api_endpoint else "prod"
         return URL_ENV[_env]
 
     @staticmethod
@@ -244,12 +244,12 @@ class FitterData(AdvancedFitterParam):
 
         try:
             # test connection
-            resp = requests.get(f"{url_server}/health", verify=DEFAULT_CONFIG.ssl_verify)
+            resp = requests.get(f"{url_server}/health", verify=Env.current.ssl_verify)
             resp.raise_for_status()
         except (requests.exceptions.SSLError, ssl.SSLError):
             log.info("Retrying with SSL verification disabled.")
-            DEFAULT_CONFIG.ssl_verify = False
-            resp = requests.get(f"{url_server}/health", verify=DEFAULT_CONFIG.ssl_verify)
+            Env.current.ssl_verify = False
+            resp = requests.get(f"{url_server}/health", verify=Env.current.ssl_verify)
         except Exception as e:
             raise WebError("Connection to the server failed. Please try again.") from e
 
@@ -271,7 +271,7 @@ class FitterData(AdvancedFitterParam):
             f"{url_server}/dispersion/fit",
             headers=headers,
             data=self.json(),
-            verify=DEFAULT_CONFIG.ssl_verify,
+            verify=Env.current.ssl_verify,
         )
 
         try:
