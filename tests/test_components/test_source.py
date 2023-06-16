@@ -41,7 +41,10 @@ def test_UniformCurrentSource():
     g = td.GaussianPulse(freq0=1, fwidth=0.1)
 
     # test we can make generic UniformCurrentSource
-    s = td.UniformCurrentSource(size=(1, 1, 1), source_time=g, polarization="Ez")
+    s1 = td.UniformCurrentSource(
+        size=(1, 1, 1), source_time=g, polarization="Ez", interpolate=False
+    )
+    s2 = td.UniformCurrentSource(size=(1, 1, 1), source_time=g, polarization="Ez", interpolate=True)
 
 
 def test_source_times():
@@ -63,7 +66,8 @@ def test_source_times():
 def test_dipole():
 
     g = td.GaussianPulse(freq0=1, fwidth=0.1)
-    p = td.PointDipole(center=(1, 2, 3), source_time=g, polarization="Ex")
+    p1 = td.PointDipole(center=(1, 2, 3), source_time=g, polarization="Ex", interpolate=True)
+    p2 = td.PointDipole(center=(1, 2, 3), source_time=g, polarization="Ex", interpolate=False)
     # p.plot(y=2)
 
     with pytest.raises(pydantic.ValidationError) as e_info:
