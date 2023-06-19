@@ -552,7 +552,11 @@ class AbstractFieldProjectionMonitor(SurfaceIntegrationMonitor, FreqMonitor):
     far_field_approx: bool = pydantic.Field(
         True,
         title="Far field approximation",
-        description="Whether to enable the far field approximation when projecting fields.",
+        description="Whether to enable the far field approximation when projecting fields. "
+        "If ``True``, terms that decay as O(1/r^2) are ignored, as are the radial components "
+        "of fields. Typically, this should be set to ``True`` only when the projection distance "
+        "is much larger than the size of the device being modeled, and the projected points are "
+        "in the far field of the device.",
     )
 
     @property
@@ -579,7 +583,19 @@ class AbstractFieldProjectionMonitor(SurfaceIntegrationMonitor, FreqMonitor):
 
 class FieldProjectionAngleMonitor(AbstractFieldProjectionMonitor):
     """:class:`Monitor` that samples electromagnetic near fields in the frequency domain
-    and projects them at given observation angles.
+    and projects them at given observation angles. The ``center`` and ``size`` fields define
+    where the monitor will be placed in order to record near fields, typically very close
+    to the structure of interest. The near fields are then projected
+    to far-field locations defined by ``phi``, ``theta``, and ``proj_distance``, relative
+    to the ``custom_origin``. If the distance between the near and far field locations is
+    much larger than the size of the device, one can typically set ``far_field_approx`` to
+    ``True``, which will make use of the far-field approximation to speed up calculations.
+    If the projection distance is comparable to the size of the device, we recommend setting
+    ``far_field_approx`` to ``False``, so that the approximations are not used, and the
+    projection is accurate even just a few wavelengths away from the near field locations.
+    For applications where the monitor is an open surface rather than a box that
+    encloses the device, it is advisable to pick the size of the monitor such that the
+    recorded near fields decay to negligible values near the edges of the monitor.
 
     Example
     -------
@@ -626,7 +642,21 @@ class FieldProjectionAngleMonitor(AbstractFieldProjectionMonitor):
 
 class FieldProjectionCartesianMonitor(AbstractFieldProjectionMonitor):
     """:class:`Monitor` that samples electromagnetic near fields in the frequency domain
-    and projects them on a Cartesian observation plane.
+    and projects them on a Cartesian observation plane. The ``center`` and ``size`` fields define
+    where the monitor will be placed in order to record near fields, typically very close
+    to the structure of interest. The near fields are then projected
+    to far-field locations defined by ``x``, ``y``, and ``proj_distance``, relative
+    to the ``custom_origin``. Here, ``x`` and ``y`` correspond to a local coordinate system
+    where the local z axis is defined by ``proj_axis``: which is the axis normal to this monitor.
+    If the distance between the near and far field locations is much larger than the size of the
+    device, one can typically set ``far_field_approx`` to ``True``, which will make use of the
+    far-field approximation to speed up calculations. If the projection distance is comparable
+    to the size of the device, we recommend setting ``far_field_approx`` to ``False``,
+    so that the approximations are not used, and the projection is accurate even just a few
+    wavelengths away from the near field locations.
+    For applications where the monitor is an open surface rather than a box that
+    encloses the device, it is advisable to pick the size of the monitor such that the
+    recorded near fields decay to negligible values near the edges of the monitor.
 
     Example
     -------
@@ -686,7 +716,21 @@ class FieldProjectionCartesianMonitor(AbstractFieldProjectionMonitor):
 
 class FieldProjectionKSpaceMonitor(AbstractFieldProjectionMonitor):
     """:class:`Monitor` that samples electromagnetic near fields in the frequency domain
-    and projects them on an observation plane defined in k-space.
+    and projects them on an observation plane defined in k-space. The ``center`` and ``size``
+    fields define where the monitor will be placed in order to record near fields, typically
+    very close to the structure of interest. The near fields are then
+    projected to far-field locations defined in k-space by ``ux``, ``uy``, and ``proj_distance``,
+    relative to the ``custom_origin``. Here, ``ux`` and ``uy`` are associated with a local
+    coordinate system where the local 'z' axis is defined by ``proj_axis``: which is the axis
+    normal to this monitor. If the distance between the near and far field locations is much
+    larger than the size of the device, one can typically set ``far_field_approx`` to ``True``,
+    which will make use of the far-field approximation to speed up calculations. If the
+    projection distance is comparable to the size of the device, we recommend setting
+    ``far_field_approx`` to ``False``, so that the approximations are not used, and the
+    projection is accurate even just a few wavelengths away from the near field locations.
+    For applications where the monitor is an open surface rather than a box that
+    encloses the device, it is advisable to pick the size of the monitor such that the
+    recorded near fields decay to negligible values near the edges of the monitor.
 
     Example
     -------
