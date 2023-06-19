@@ -175,7 +175,7 @@ class GradedMesher(Mesher):
         # Truncate intervals to domain bounds
         coords = np.array(intervals["coords"])
         num_ints = len(intervals["structs"])
-        in_domain = np.argwhere((coords >= domain_bounds[0]) * (coords <= domain_bounds[1]))
+        in_domain = np.nonzero((coords >= domain_bounds[0]) * (coords <= domain_bounds[1]))[0]
         intervals["coords"] = [intervals["coords"][int(i)] for i in in_domain]
         intervals["structs"] = [intervals["structs"][int(i)] for i in in_domain if i < num_ints]
 
@@ -236,7 +236,7 @@ class GradedMesher(Mesher):
 
         # Left structure bound
         bound_coord = str_bbox[0, 2]
-        indsmin = np.argwhere(bound_coord <= coords)
+        indsmin = np.nonzero(bound_coord <= coords)[0]
         indmin = int(indsmin[0])  # coordinate is in interval index ``indmin - 1````
         is_close_l = self.is_close(bound_coord, coords, indmin - 1, min_step)
         is_close_r = self.is_close(bound_coord, coords, indmin, min_step)
@@ -255,7 +255,7 @@ class GradedMesher(Mesher):
 
         # Right structure bound
         bound_coord = str_bbox[1, 2]
-        indsmax = np.argwhere(bound_coord >= coords)
+        indsmax = np.nonzero(bound_coord >= coords)[0]
         indmax = int(indsmax[-1])  # coordinate is in interval index ``indmax``
         is_close_l = self.is_close(bound_coord, coords, indmax, min_step)
         is_close_r = self.is_close(bound_coord, coords, indmax + 1, min_step)
