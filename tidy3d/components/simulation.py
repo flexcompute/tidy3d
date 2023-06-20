@@ -50,7 +50,8 @@ MIN_GRIDS_PER_WVL = 6.0
 MAX_NUM_MEDIUMS = 65530
 
 # maximum numbers of simulation parameters
-MAX_TIME_STEPS = 1e8
+MAX_TIME_STEPS = 2e7
+WARN_TIME_STEPS = 1e6
 MAX_GRID_CELLS = 20e9
 MAX_CELLS_TIMES_STEPS = 1e16
 WARN_MONITOR_DATA_SIZE_GB = 10
@@ -913,6 +914,11 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
             raise SetupError(
                 f"Simulation has {num_time_steps:.2e} time steps, "
                 f"a maximum of {MAX_TIME_STEPS:.2e} are allowed."
+            )
+        if num_time_steps > WARN_TIME_STEPS:
+            log.warning(
+                f"Simulation has {num_time_steps:.2e} time steps. The 'run_time' may be "
+                "unnecessarily large, unless there are very long-lived resonances."
             )
 
         num_cells_times_steps = num_time_steps * num_comp_cells
