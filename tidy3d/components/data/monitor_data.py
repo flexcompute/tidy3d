@@ -104,7 +104,6 @@ class AbstractFieldData(MonitorData, AbstractFieldDataset, ABC):
             return self.copy()
 
         update_dict = {}
-
         for field_name, scalar_data in self.field_components.items():
 
             eigenval_fn = self.symmetry_eigenvalues[field_name]
