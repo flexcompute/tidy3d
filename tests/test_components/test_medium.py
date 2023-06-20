@@ -5,6 +5,7 @@ import pydantic
 import matplotlib.pylab as plt
 import tidy3d as td
 from tidy3d.exceptions import ValidationError
+from ..utils import assert_log_level, log_capture
 from typing import Dict
 
 MEDIUM = td.Medium()
@@ -267,14 +268,14 @@ def test_n_cfl():
     assert material.n_cfl == 2
 
 
-def test_gain_medium():
+def test_gain_medium(log_capture):
     """Test passive and gain medium validations."""
     # non-dispersive
     with pytest.raises(pydantic.ValidationError) as e_info:
         m = td.Medium(conductivity=-0.1)
     with pytest.raises(pydantic.ValidationError) as e_info:
         m = td.Medium(conductivity=-1.0, allow_gain=False)
-    m = td.Medium(conductivity=-1.0, allow_gain=True)
+    mM = td.Medium(conductivity=-1.0, allow_gain=True)
 
     # pole residue, causality
     with pytest.raises(pydantic.ValidationError) as e_info:
@@ -283,7 +284,7 @@ def test_gain_medium():
     # Sellmeier
     with pytest.raises(pydantic.ValidationError) as e_info:
         m = td.Sellmeier(coeffs=((-1, 1),))
-    m = td.Sellmeier(coeffs=((-1, 1),), allow_gain=True)
+    mS = td.Sellmeier(coeffs=((-1, 1),), allow_gain=True)
 
     # Lorentz
     # causality, negative gamma
@@ -292,13 +293,22 @@ def test_gain_medium():
     # gain, negative Delta epsilon
     with pytest.raises(pydantic.ValidationError) as e_info:
         m = td.Lorentz(eps_inf=0.04, coeffs=[(-1, 2, 3)])
-    m = td.Lorentz(eps_inf=0.04, coeffs=[(-1, 2, 3)], allow_gain=True)
+    mL = td.Lorentz(eps_inf=0.04, coeffs=[(-1, 2, 3)], allow_gain=True)
+    assert mL.pole_residue.allow_gain
+
     # f_i can take whatever sign
     m = td.Lorentz(eps_inf=0.04, coeffs=[(1, -2, 3)])
 
     # Drude, only causality constraint
     with pytest.raises(pydantic.ValidationError) as e_info:
         m = td.Drude(eps_inf=0.04, coeffs=[(1, -2)])
+
+    # anisotropic medium, warn allow_gain is ignored
+    m = td.AnisotropicMedium(xx=td.Medium(), yy=mL, zz=mS, allow_gain=True)
+    assert_log_level(log_capture, "WARNING")
+
+    m = td.AnisotropicMedium(xx=td.Medium(), yy=mL, zz=mS, allow_gain=False)
+    assert_log_level(log_capture, "WARNING")
 
 
 def test_medium2d():
