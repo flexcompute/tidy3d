@@ -79,11 +79,11 @@ class AbstractFieldDataset(Dataset, ABC):
 
             # loop through x, y, z dimensions and raise an error if only one element along dim
             for coord_name, coords_supplied in supplied_coord_map.items():
-                coord_data = field_data.coords[coord_name]
+                coord_data = np.array(field_data.coords[coord_name])
                 if coord_data.size == 1:
                     raise DataError(
                         f"colocate given {coord_name}={coords_supplied}, but "
-                        f"data only has one coordinate at {coord_name}={coord_data.values[0]}. "
+                        f"data only has one coordinate at {coord_name}={coord_data[0]}. "
                         "Therefore, can't colocate along this dimension. "
                         f"supply {coord_name}=None to skip it."
                     )

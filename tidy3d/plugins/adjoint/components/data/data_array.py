@@ -171,7 +171,13 @@ class JaxDataArray(Tidy3dBaseModel):
         values = self.as_jnp_array
         new_values = jnp.take(values, indices=coord_index, axis=coord_axis)
         new_coords = self.coords.copy()
-        new_coords.pop(coord_name)
+
+        # if the coord index has more than one item, keep that coordinate
+        coord_index = np.array(coord_index)
+        if coord_index.size > 1:
+            new_coords[coord_name] = coord_index.tolist()
+        else:
+            new_coords.pop(coord_name)
 
         # return just the values if no coordinate remain
         if not new_coords:
@@ -193,8 +199,9 @@ class JaxDataArray(Tidy3dBaseModel):
 
         self_sel = self.copy()
         for coord_name, coord_index in isel_kwargs.items():
+            coord_index = np.array(coord_index)
             coord_list = self_sel.get_coord_list(coord_name)
-            if coord_index < 0 or coord_index >= len(coord_list):
+            if np.any(coord_index < 0) or np.any(coord_index >= len(coord_list)):
                 raise DataError(
                     f"'isel' kwarg '{coord_name}={coord_index}' is out of range "
                     f"for the coordinate '{coord_name}' with {len(coord_list)} values."
@@ -218,11 +225,14 @@ class JaxDataArray(Tidy3dBaseModel):
     def assign_coords(self, coords: dict = None, **coords_kwargs) -> JaxDataArray:
         """Assign new coordinates to this object."""
 
-        if coords:
-            coords_kwargs.update(coords)
+        update_kwargs = self.coords.copy()
 
-        new_coords = {key: np.array(value).tolist() for key, value in coords_kwargs.items()}
-        return self.updated_copy(coords=new_coords)
+        update_kwargs.update(coords_kwargs)
+        if coords:
+            update_kwargs.update(coords)
+
+        update_kwargs = {key: np.array(value).tolist() for key, value in update_kwargs.items()}
+        return self.updated_copy(coords=update_kwargs)
 
     def multiply_at(self, value: complex, coord_name: str, indices: List[int]) -> JaxDataArray:
         """Multiply self by value at indices into ."""
@@ -233,10 +243,67 @@ class JaxDataArray(Tidy3dBaseModel):
         scalar_data_arr = jnp.moveaxis(scalar_data_arr, 0, axis)
         return self.updated_copy(values=scalar_data_arr)
 
-    def interp(self, **interp_kwargs):
-        """Interpolate into the :class:`.JaxDataArray`. Not yet supported."""
+    def interp_single(self, key: str, val: float) -> JaxDataArray:
+        """Interpolate into a single dimension of self."""
 
-        raise NotImplementedError("Interpolation is not currently supported in the 'output_data'.")
+        # get the coordinates associated with this key.
+        if key not in self.coords:
+            raise Tidy3dKeyError(f"Key '{key}' not found in JaxDataArray coords.")
+        coords_1d = jnp.array(self.coords[key])
+
+        # get floating point index of the value into these coordinates
+        coord_indices = jnp.arange(len(coords_1d))
+        index_interp = jnp.interp(x=val, xp=coords_1d, fp=coord_indices)
+
+        # strip out the linear interpolation coefficients from the float index
+        index_minus = np.array(index_interp).astype(int)
+        index_plus = index_minus + 1
+        coeff_plus = index_interp - index_minus
+
+        # if plus index is out of range, set it in range and fix the coefficient
+        if index_plus.shape:
+            index_plus[index_plus >= len(coord_indices)] = index_minus[0]
+            coeff_plus[index_plus >= len(coord_indices)] = 0.0
+        else:
+            if index_plus > len(coord_indices):
+                index_plus = index_minus
+                coeff_plus = 0.0
+
+        coeff_minus = 1 - coeff_plus
+
+        def get_values_at_index(key: str, index: int) -> jnp.array:
+            """grab values array at index into coordinate key."""
+            values_sel = self.isel(**{key: index})
+            if isinstance(values_sel, JaxDataArray):
+                return values_sel.values
+            return values_sel
+
+        # return weighted average of this object along these dimensions
+        values_minus = get_values_at_index(key=key, index=index_minus)
+
+        if coeff_plus > 0:
+            values_plus = get_values_at_index(key=key, index=index_plus)
+            values_interp = coeff_minus * values_minus + coeff_plus * values_plus
+        else:
+            values_interp = values_minus
+
+        # construct a new JaxDataArray to return
+        coords_interp = self.coords.copy()
+        coords_interp.pop(key)
+
+        if coords_interp:
+            return JaxDataArray(values=values_interp, coords=coords_interp)
+        return values_interp
+
+    def interp(self, kwargs=None, **interp_kwargs) -> JaxDataArray:
+        """Linearly interpolate into the :class:`.JaxDataArray` at values into coordinates."""
+
+        # note: kwargs does nothing, only used for making this subclass compatible with super
+
+        ret_value = self.copy()
+        for key, val in interp_kwargs.items():
+            ret_value = ret_value.interp_single(key=key, val=val)
+        return ret_value
 
     @cached_property
     def nonzero_val_coords(self) -> Tuple[List[complex], Dict[str, Any]]:
