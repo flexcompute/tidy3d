@@ -20,6 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Support for `JaxDataArray.interp`, allowing differentiable linear interpolation.
 - Support for `JaxSimulationData.get_intensity()`, allowing intensity distribution to be differentiated in `adjoint` plugin.
 - Support for `JaxFieldData.flux` to compute differentiable flux value from `FieldData`.
+- All custom medium types accept `subpixel` which is `False` by default, but applies subpixel averaging of the permittivity on the interfaces of the structure (including exterior boundary and intersection interfaces with other structures) if `True` and simulation's `subpixel` is also `True`.
 
 ### Changed
 - Add `Medium2D` to full simulation in tests.

@@ -355,6 +355,15 @@ class AbstractCustomMedium(AbstractMedium, ABC):
         "the extrapolated value will take the minimal (maximal) of the supplied data.",
     )
 
+    subpixel: bool = pd.Field(
+        False,
+        title="Subpixel averaging",
+        description="If ``True`` and simulation's ``subpixel`` is also ``True``, "
+        "applies subpixel averaging of the permittivity "
+        "on the interface of the structure, including exterior boundary and "
+        "intersection interfaces with other structures.",
+    )
+
     @cached_property
     @abstractmethod
     def is_isotropic(self) -> bool:
@@ -935,7 +944,7 @@ class CustomMedium(AbstractCustomMedium):
 
         # anisotropic
         eps_field_components = self.eps_dataset.field_components
-        mat_comp = {"interp_method": self.interp_method, "allow_gain": self.allow_gain}
+        mat_comp = {"interp_method": self.interp_method}
         for comp in ["xx", "yy", "zz"]:
             eps_real, sigma = CustomMedium.eps_complex_to_eps_sigma(
                 eps_field_components["eps_" + comp], eps_field_components["eps_" + comp].coords["f"]
@@ -1221,7 +1230,7 @@ class DispersiveMedium(AbstractMedium, ABC):
     @cached_property
     def pole_residue(self):
         """Representation of Medium as a pole-residue model."""
-        return PoleResidue(**self._pole_residue_dict())
+        return PoleResidue(**self._pole_residue_dict(), allow_gain=self.allow_gain)
 
     @cached_property
     def n_cfl(self):
@@ -1274,6 +1283,7 @@ class CustomDispersiveMedium(AbstractCustomMedium, DispersiveMedium, ABC):
             **self._pole_residue_dict(),
             interp_method=self.interp_method,
             allow_gain=self.allow_gain,
+            subpixel=self.subpixel,
         )
 
     @staticmethod
@@ -2421,6 +2431,15 @@ class AnisotropicMedium(AbstractMedium):
         description="This field is ignored. Please set ``allow_gain`` in each component",
     )
 
+    @pd.validator("allow_gain", always=True)
+    def _allow_gain_ignored(cls, val):
+        """The field is ignored."""
+        if val is not None:
+            log.warning(
+                "The field 'allow_gain' is ignored. Please set 'allow_gain' in each component."
+            )
+        return val
+
     @cached_property
     def components(self) -> Dict[str, Medium]:
         """Dictionary of diagonal medium components."""
@@ -2775,6 +2794,12 @@ class CustomAnisotropicMedium(AbstractCustomMedium, AnisotropicMedium):
         description="This field is ignored. Please set ``allow_gain`` in each component",
     )
 
+    subpixel: bool = pd.Field(
+        None,
+        title="Subpixel averaging",
+        description="This field is ignored. Please set ``subpixel`` in each component",
+    )
+
     @pd.validator("xx", always=True)
     def _isotropic_xx(cls, val):
         """If it's `CustomMedium`, make sure it's isotropic."""
@@ -2794,6 +2819,22 @@ class CustomAnisotropicMedium(AbstractCustomMedium, AnisotropicMedium):
         """If it's `CustomMedium`, make sure it's isotropic."""
         if isinstance(val, CustomMedium) and not val.is_isotropic:
             raise SetupError("The zz-component medium type is not isotropic.")
+        return val
+
+    @pd.validator("allow_gain", always=True)
+    def _allow_gain_ignored(cls, val):
+        """The field is ignored."""
+        if val is not None:
+            log.warning(
+                "The field 'allow_gain' is ignored. Please set 'allow_gain' in each component."
+            )
+        return val
+
+    @pd.validator("subpixel", always=True)
+    def _subpixel_ignored(cls, val):
+        """The value subpixel is ignored."""
+        if val is not None:
+            log.warning("The field 'subpixel' is ignored. Please set 'subpixel' in each component.")
         return val
 
     @cached_property

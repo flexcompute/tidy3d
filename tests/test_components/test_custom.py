@@ -580,6 +580,7 @@ def test_custom_sellmeier():
     with pytest.raises(pydantic.ValidationError):
         mat = CustomSellmeier(coeffs=((b1, c1), (btmp, c2)))
     mat = CustomSellmeier(coeffs=((b1, c1), (btmp, c2)), allow_gain=True)
+    assert mat.pole_residue.allow_gain
 
     # inconsistent coord
     with pytest.raises(pydantic.ValidationError):
@@ -642,9 +643,12 @@ def test_custom_lorentz():
     verify_custom_dispersive_medium_methods(mat)
     assert mat.n_cfl > 1
 
-    mat = CustomLorentz(eps_inf=eps_inf, coeffs=((de1, f1, delta1), (de2, f2, delta2)))
+    mat = CustomLorentz(
+        eps_inf=eps_inf, coeffs=((de1, f1, delta1), (de2, f2, delta2)), subpixel=True
+    )
     verify_custom_dispersive_medium_methods(mat)
     assert mat.n_cfl > 1
+    assert mat.pole_residue.subpixel
 
 
 def test_custom_drude():
@@ -724,7 +728,7 @@ def test_custom_debye():
     assert mat.n_cfl > 1
 
 
-def test_custom_anisotropic_medium():
+def test_custom_anisotropic_medium(log_capture):
     """Custom anisotropic medium."""
 
     # xx
@@ -751,6 +755,9 @@ def test_custom_anisotropic_medium():
     # anisotropic
     mat = CustomAnisotropicMedium(xx=mat_xx, yy=mat_yy, zz=mat_zz)
     verify_custom_medium_methods(mat)
+
+    mat = CustomAnisotropicMedium(xx=mat_xx, yy=mat_yy, zz=mat_zz, subpixel=True)
+    assert_log_level(log_capture, "WARNING")
 
     ## interpolation method verification for "xx" component
     # 1) xx-component is using `interp_method = nearest`, and mat using `None`;
