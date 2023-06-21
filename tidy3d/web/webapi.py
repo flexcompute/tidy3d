@@ -91,10 +91,10 @@ def run(  # pylint:disable=too-many-arguments
         Simulation to upload to server.
     task_name : str
         Name of task.
-    path : str = "simulation_data.hdf5"
-        Path to download results file (.hdf5), including filename.
     folder_name : str = "default"
         Name of folder to store task on web UI.
+    path : str = "simulation_data.hdf5"
+        Path to download results file (.hdf5), including filename.
     callback_url : str = None
         Http PUT url to receive simulation finish event. The body content is a json file with
         fields ``{'id', 'status', 'name', 'workUnit', 'solverVersion'}``.

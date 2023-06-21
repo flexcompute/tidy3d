@@ -2,11 +2,11 @@
 """handles filesystem, storage
 """
 import io
-import os
+import pathlib
 import urllib
 from datetime import datetime
 from enum import Enum
-from typing import Callable
+from typing import Callable, Mapping
 
 import boto3
 from boto3.s3.transfer import TransferConfig
@@ -173,7 +173,9 @@ _s3_config = TransferConfig(
 _s3_sts_tokens: [str, _S3STSToken] = {}
 
 
-def get_s3_sts_token(resource_id: str, file_name: str) -> _S3STSToken:
+def get_s3_sts_token(
+    resource_id: str, file_name: str, extra_arguments: Mapping[str, str] = None
+) -> _S3STSToken:
     """Get s3 sts token for the given resource id and file name.
 
     Parameters
@@ -182,6 +184,8 @@ def get_s3_sts_token(resource_id: str, file_name: str) -> _S3STSToken:
         The resource id, e.g. task id.
     file_name : str
         The remote file name on S3.
+    extra_arguments : Mapping[str, str]
+        Additional arguments for the query url.
 
     Returns
     -------
@@ -190,19 +194,23 @@ def get_s3_sts_token(resource_id: str, file_name: str) -> _S3STSToken:
     """
     cache_key = f"{resource_id}:{file_name}"
     if cache_key not in _s3_sts_tokens or _s3_sts_tokens[cache_key].is_expired():
-        method = f"tidy3d/tasks/{resource_id}/file?filename={file_name}"
+        method = f"tidy3d/py/tasks/{resource_id}/file?filename={file_name}"
+        if extra_arguments is not None:
+            method += "&" + "&".join(f"{k}={v}" for k, v in extra_arguments.items())
         resp = http.get(method)
         token = _S3STSToken.parse_obj(resp)
         _s3_sts_tokens[cache_key] = token
     return _s3_sts_tokens[cache_key]
 
 
+# pylint: disable=too-many-arguments
 def upload_string(
     resource_id: str,
     content: str,
     remote_filename: str,
     verbose: bool = True,
     progress_callback: Callable[[float], None] = None,
+    extra_arguments: Mapping[str, str] = None,
 ):
     """Upload a string to a file on S3.
 
@@ -218,9 +226,11 @@ def upload_string(
         Whether to display a progressbar for the upload.
     progress_callback : Callable[[float], None] = None
         User-supplied callback function with ``bytes_in_chunk`` as argument.
+    extra_arguments : Mapping[str, str]
+        Additional arguments used to specify the upload bucket.
     """
 
-    token = get_s3_sts_token(resource_id, remote_filename)
+    token = get_s3_sts_token(resource_id, remote_filename, extra_arguments)
 
     def _upload(_callback: Callable) -> None:
         """Perform the upload with a callback fn
@@ -256,12 +266,14 @@ def upload_string(
             _upload(lambda bytes_in_chunk: None)
 
 
+# pylint: disable=too-many-arguments
 def upload_file(
     resource_id: str,
     path: str,
     remote_filename: str,
     verbose: bool = True,
     progress_callback: Callable[[float], None] = None,
+    extra_arguments: Mapping[str, str] = None,
 ):
     """Upload a file to S3.
 
@@ -277,9 +289,11 @@ def upload_file(
         Whether to display a progressbar for the upload.
     progress_callback : Callable[[float], None] = None
         User-supplied callback function with ``bytes_in_chunk`` as argument.
+    extra_arguments : Mapping[str, str]
+        Additional arguments used to specify the upload bucket.
     """
 
-    token = get_s3_sts_token(resource_id, remote_filename)
+    token = get_s3_sts_token(resource_id, remote_filename, extra_arguments)
 
     def _upload(_callback: Callable) -> None:
         """Perform the upload with a callback function.
@@ -304,7 +318,7 @@ def upload_file(
     else:
         if verbose:
             with _get_progress(_S3Action.UPLOADING) as progress:
-                total_size = os.path.getsize(path)
+                total_size = pathlib.Path(path).stat().st_size
                 task_id = progress.add_task("upload", filename=remote_filename, total=total_size)
 
                 def _callback(bytes_in_chunk):
@@ -324,7 +338,7 @@ def download_file(
     to_file: str = None,
     verbose: bool = True,
     progress_callback: Callable[[float], None] = None,
-):
+) -> pathlib.Path:
     """Download file from S3.
 
     Parameters
@@ -345,14 +359,18 @@ def download_file(
     client = token.get_client()
     meta_data = client.head_object(Bucket=token.get_bucket(), Key=token.get_s3_key())
 
-    if not to_file:
-        os.makedirs(resource_id, exist_ok=True)
-        to_file = os.path.join(resource_id, os.path.basename(remote_filename))
+    # Get only last part of the remote file name
+    remote_basename = pathlib.Path(remote_filename).name
 
-    # make the leading directories in the 'to_file', if specified.
-    base_dir, _ = os.path.split(to_file)
-    if base_dir and not os.path.exists(base_dir):
-        os.makedirs(base_dir, exist_ok=True)
+    # set to_file if None
+    if not to_file:
+        path = pathlib.Path(resource_id)
+        to_file = path / remote_basename
+    else:
+        to_file = pathlib.Path(to_file)
+
+    # make the leading directories in the 'to_file', if any
+    to_file.parent.mkdir(parents=True, exist_ok=True)
 
     def _download(_callback: Callable) -> None:
         """Perform the download with a callback function.
@@ -364,7 +382,10 @@ def download_file(
         """
 
         client.download_file(
-            Bucket=token.get_bucket(), Filename=to_file, Key=token.get_s3_key(), Callback=_callback
+            Bucket=token.get_bucket(),
+            Filename=str(to_file),
+            Key=token.get_s3_key(),
+            Callback=_callback,
         )
 
     if progress_callback is not None:
@@ -374,11 +395,7 @@ def download_file(
             with _get_progress(_S3Action.DOWNLOADING) as progress:
                 total_size = meta_data.get("ContentLength", 0)
                 progress.start()
-                task_id = progress.add_task(
-                    "download",
-                    filename=os.path.basename(remote_filename),
-                    total=total_size,
-                )
+                task_id = progress.add_task("download", filename=remote_basename, total=total_size)
 
                 def _callback(bytes_in_chunk):
                     progress.update(task_id, advance=bytes_in_chunk)
@@ -389,3 +406,5 @@ def download_file(
 
         else:
             _download(lambda bytes_in_chunk: None)
+
+    return to_file
