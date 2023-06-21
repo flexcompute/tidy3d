@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Union, List
+from typing import Union, List, Dict, Any
 import pydantic as pd
 import numpy as np
 import jax.numpy as jnp
@@ -148,6 +148,19 @@ class JaxFieldData(JaxMonitorData, FieldData):
         description="Spatial distribution of the z-component of the magnetic field.",
         jax_field=True,
     )
+
+    def __contains__(self, item: str) -> bool:
+        """Whether this data array contains a field name."""
+        if item not in self.field_components:
+            return False
+        return self.field_components[item] is not None
+
+    def __getitem__(self, item: str) -> bool:
+        return self.field_components[item]
+
+    def package_colocate_results(self, centered_fields: Dict[str, ScalarFieldDataArray]) -> Any:
+        """How to package the dictionary of fields computed via self.colocate()."""
+        return self.updated_copy(**centered_fields)
 
     @property
     def intensity(self) -> ScalarFieldDataArray:
