@@ -156,6 +156,28 @@ class JaxDataArray(Tidy3dBaseModel):
         new_values = np.imag(self.as_ndarray)
         return self.copy(update=dict(values=new_values))
 
+    def __abs__(self) -> JaxDataArray:
+        """Absolute value of self's values."""
+        new_values = jnp.abs(self.values)
+        return self.updated_copy(values=new_values)
+
+    def __pow__(self, power: int) -> JaxDataArray:
+        """Values raised to a power."""
+        new_values = self.values**power
+        return self.updated_copy(values=new_values)
+
+    def __add__(self, other: JaxDataArray) -> JaxDataArray:
+        """Sum self with something else."""
+        if isinstance(other, JaxDataArray):
+            new_values = self.values + other.values
+        else:
+            new_values = self.values + other
+        return self.updated_copy(values=new_values)
+
+    def __radd__(self, other) -> JaxDataArray:
+        """Sum self with something else."""
+        return self + other
+
     def get_coord_list(self, coord_name: str) -> list:
         """Get a coordinate list by name."""
 
@@ -243,13 +265,22 @@ class JaxDataArray(Tidy3dBaseModel):
         scalar_data_arr = jnp.moveaxis(scalar_data_arr, 0, axis)
         return self.updated_copy(values=scalar_data_arr)
 
+    # pylint:disable=too-many-locals
     def interp_single(self, key: str, val: float) -> JaxDataArray:
-        """Interpolate into a single dimension of self."""
+        """Interpolate into a single dimension of self.
+
+        Note: this interpolation works by finding the index of the value into the coords list.
+        Instead of an integer value, we use interpolation to get a floating point index.
+        The floor() of this value is the 'minus' index and the ceil() gives the 'plus' index.
+        We then apply coefficients linearly based on how close to `plus` or minus we are.
+        This is a workaround to `jnp.interp` not allowing multi-dimensional interpolation.
+        """
 
         # get the coordinates associated with this key.
         if key not in self.coords:
             raise Tidy3dKeyError(f"Key '{key}' not found in JaxDataArray coords.")
         coords_1d = jnp.array(self.coords[key])
+        axis = list(self.coords.keys()).index(key)
 
         # get floating point index of the value into these coordinates
         coord_indices = jnp.arange(len(coords_1d))
@@ -260,10 +291,9 @@ class JaxDataArray(Tidy3dBaseModel):
         index_plus = index_minus + 1
         coeff_plus = index_interp - index_minus
 
-        # if plus index is out of range, set it in range and fix the coefficient
+        # if any plus_index is out of range, set it in range (coeff will be 0 anyway)
         if index_plus.shape:
-            index_plus[index_plus >= len(coord_indices)] = index_minus[0]
-            coeff_plus[index_plus >= len(coord_indices)] = 0.0
+            index_plus[index_plus >= len(coord_indices)] = len(coord_indices) - 1
         else:
             if index_plus > len(coord_indices):
                 index_plus = index_minus
@@ -281,8 +311,15 @@ class JaxDataArray(Tidy3dBaseModel):
         # return weighted average of this object along these dimensions
         values_minus = get_values_at_index(key=key, index=index_minus)
 
-        if coeff_plus > 0:
+        if np.any(coeff_plus > 0):
             values_plus = get_values_at_index(key=key, index=index_plus)
+
+            if coeff_minus.shape:
+                coeff_shape = np.ones(len(values_minus.shape), dtype=int)
+                coeff_shape[axis] = len(coeff_minus)
+                coeff_minus = coeff_minus.reshape(coeff_shape)
+                coeff_plus = coeff_plus.reshape(coeff_shape)
+
             values_interp = coeff_minus * values_minus + coeff_plus * values_plus
         else:
             values_interp = values_minus

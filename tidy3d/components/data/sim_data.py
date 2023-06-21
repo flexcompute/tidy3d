@@ -369,12 +369,13 @@ class SimulationData(Tidy3dBaseModel):
                 derived_data.name = f"|Im{{{field_name}}}|"
 
             elif val == "abs":
-                derived_data = sum(np.abs(f) ** 2 for f in field_components) ** 0.5
+                derived_data = sum(abs(f) ** 2 for f in field_components) ** 0.5
                 derived_data.name = f"|{field_name}|"
 
             elif val == "abs^2":
-                derived_data = sum(np.abs(f) ** 2 for f in field_components)
-                derived_data.name = f"|{field_name}|²"
+                derived_data = sum(abs(f) ** 2 for f in field_components)
+                if hasattr(derived_data, "name"):
+                    derived_data.name = f"|{field_name}|²"
 
             elif val == "phase":
                 raise Tidy3dKeyError(f"Phase is not defined for complex vector {field_name}")

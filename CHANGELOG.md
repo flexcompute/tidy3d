@@ -18,6 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `s3utils.get_s3_sts_token` accepts extra query parameters.
 - `plugins.mode.web` to control the server-side mode solver.
 - Support for `JaxDataArray.interp`, allowing differentiable linear interpolation.
+- Support for `JaxSimulationData.get_intensity()`, allowing intensity distribution to be differentiated in `adjoint` plugin.
 
 ### Changed
 - Add `Medium2D` to full simulation in tests.
