@@ -90,7 +90,6 @@ class ArrayLike:
         """Sets the schema of DataArray object."""
 
         schema = dict(
-            title="ArrayLike",
             type="ArrayLike",
         )
         field_schema.update(schema)
