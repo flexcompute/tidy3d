@@ -79,7 +79,7 @@ def run(  # pylint:disable=too-many-arguments
     verbose: bool = True,
     progress_callback_upload: Callable[[float], None] = None,
     progress_callback_download: Callable[[float], None] = None,
-    solver_version: str = None,
+    solver_version: str = "shash-0.0.0",
     worker_group: str = None,
 ) -> SimulationData:
     """Submits a :class:`.Simulation` to server, starts running, monitors progress, downloads,
@@ -219,7 +219,7 @@ def get_info(task_id: TaskId) -> TaskInfo:
 @wait_for_connection
 def start(
     task_id: TaskId,
-    solver_version: str = None,
+    solver_version: str = "shash-0.0.0",
     worker_group: str = None,
 ) -> None:
     """Start running the simulation associated with task.
