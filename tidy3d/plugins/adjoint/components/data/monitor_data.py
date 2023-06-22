@@ -236,7 +236,7 @@ class JaxFieldData(JaxMonitorData, FieldData):
         omega0 = 2 * np.pi * freq0
         scaling_factor = 1 / (MU_0 * omega0)
 
-        interpolate_source = True
+        interpolate_source = False
 
         # dipole case
         if np.allclose(np.array(self.monitor.size), np.zeros(3)):
@@ -256,7 +256,7 @@ class JaxFieldData(JaxMonitorData, FieldData):
                     source_time=GaussianPulse(
                         freq0=freq0, fwidth=fwidth, amplitude=abs(adj_amp), phase=adj_phase
                     ),
-                    interpolate=interpolate,
+                    interpolate=interpolate_source,
                 )
 
                 dipoles.append(src_adj)
@@ -296,7 +296,7 @@ class JaxFieldData(JaxMonitorData, FieldData):
                 fwidth=fwidth,
             ),
             current_dataset=dataset,
-            interpolate=interpolate,
+            interpolate=interpolate_source,
         )
 
         return [custom_source]
