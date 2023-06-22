@@ -50,7 +50,7 @@ class Job(WebContainer):
     )
 
     solver_version: str = pd.Field(
-        None,
+        "shash-0.0.0",
         title="Solver Version",
         description_str="Custom solver version to use, "
         "otherwise uses default for the current front end version.",
