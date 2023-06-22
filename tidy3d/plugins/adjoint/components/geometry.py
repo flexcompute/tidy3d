@@ -2,7 +2,6 @@
 """Defines jax-compatible geometries and their conversion to grad monitors."""
 from __future__ import annotations
 
-import os
 from abc import ABC
 from typing import Tuple, Union, Dict
 from multiprocessing import Pool
@@ -161,6 +160,7 @@ class JaxBox(JaxGeometry, Box, JaxObject):
         wvl_mat: float,
         eps_out: complex,
         eps_in: complex,
+        num_proc: int = 1,
     ) -> JaxBox:
         """Stores the gradient of the box parameters given forward and adjoint field data."""
 
@@ -548,6 +548,7 @@ class JaxPolySlab(JaxGeometry, PolySlab, JaxObject):
         wvl_mat: float,
         eps_out: complex,
         eps_in: complex,
+        num_proc: int = 1,
     ) -> JaxPolySlab:
         """Stores the gradient of the vertices given forward and adjoint field data."""
 
@@ -563,14 +564,11 @@ class JaxPolySlab(JaxGeometry, PolySlab, JaxObject):
         constant_args = [e_mult_xyz, d_mult_xyz, sim_bounds, wvl_mat, eps_out, eps_in]
         args += [[arg] * num_verts for arg in constant_args]
 
-        try:
-            # Try to use multiprocessing over polygon vertices.
-            # Use only half of the available cpus in case there is something else running.
-            num_proc = max(1, os.cpu_count() // 2)
-            with Pool(num_proc) as p:
-                vertices_vjp = p.starmap(self.vertex_vjp, zip(*args))
-        except Exception:  # pylint:disable=broad-except
-            # Compute without parallel pool
+        # Use multiprocessing over polygon vertices if requested
+        if num_proc > 1:
+            with Pool(num_proc) as pool:
+                vertices_vjp = pool.starmap(self.vertex_vjp, zip(*args))
+        else:
             vertices_vjp = list(map(self.vertex_vjp, *args))
 
         # return copy of the polyslab with the vertices storing the
@@ -622,6 +620,29 @@ class JaxGeometryGroup(JaxGeometry, GeometryGroup, JaxObject):
         return cls.parse_obj(obj_dict)
 
     # pylint: disable=too-many-arguments
+    @staticmethod
+    def _store_vjp_geometry(
+        geometry: JaxSingleGeometryType,
+        grad_data_fwd: FieldData,
+        grad_data_adj: FieldData,
+        grad_data_eps: PermittivityData,
+        sim_bounds: Bound,
+        wvl_mat: float,
+        eps_out: complex,
+        eps_in: complex,
+    ) -> JaxSingleGeometryType:
+        """Function to store a single vjp for a single geometry."""
+        return geometry.store_vjp(
+            grad_data_fwd=grad_data_fwd,
+            grad_data_adj=grad_data_adj,
+            grad_data_eps=grad_data_eps,
+            sim_bounds=sim_bounds,
+            wvl_mat=wvl_mat,
+            eps_out=eps_out,
+            eps_in=eps_in,
+        )
+
+    # pylint: disable=too-many-arguments
     def store_vjp(
         self,
         grad_data_fwd: FieldData,
@@ -631,22 +652,27 @@ class JaxGeometryGroup(JaxGeometry, GeometryGroup, JaxObject):
         wvl_mat: float,
         eps_out: complex,
         eps_in: complex,
+        num_proc: int = 1,
     ) -> JaxGeometryGroup:
         """Returns a `JaxGeometryGroup` where the `.geometries` store the gradient info."""
 
-        def store_vjp_single(geometry: JaxSingleGeometryType) -> JaxSingleGeometryType:
-            """Function to store a single vjp for a single geometry."""
-            return geometry.store_vjp(
-                grad_data_fwd=grad_data_fwd,
-                grad_data_adj=grad_data_adj,
-                grad_data_eps=grad_data_eps,
-                sim_bounds=sim_bounds,
-                wvl_mat=wvl_mat,
-                eps_out=eps_out,
-                eps_in=eps_in,
-            )
+        map_args = (
+            self.geometries,
+            [grad_data_fwd] * len(self.geometries),
+            [grad_data_adj] * len(self.geometries),
+            [grad_data_eps] * len(self.geometries),
+            [sim_bounds] * len(self.geometries),
+            [wvl_mat] * len(self.geometries),
+            [eps_out] * len(self.geometries),
+            [eps_in] * len(self.geometries),
+        )
 
-        geometries_vjp = tuple(map(store_vjp_single, self.geometries))
+        if num_proc == 1:
+            geometries_vjp = tuple(map(self._store_vjp_geometry, *map_args))
+        else:
+            with Pool(num_proc) as pool:
+                geometries_vjp = tuple(pool.starmap(self._store_vjp_geometry, zip(*map_args)))
+
         return self.updated_copy(geometries=geometries_vjp)
 
 
