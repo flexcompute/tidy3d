@@ -97,6 +97,7 @@ def run_emulated_bwd(
     folder_name: str,
     callback_url: str,
     verbose: bool,
+    num_proc: int = 2,
 ) -> JaxSimulation:
     """Runs adjoint simulation on our servers, grabs the gradient data from fwd for processing."""
 
@@ -116,7 +117,9 @@ def run_emulated_bwd(
     grad_data_adj = jax_sim_data_adj.grad_data_symmetry
 
     # get gradient and insert into the resulting simulation structure medium
-    sim_vjp = jax_sim_data_adj.simulation.store_vjp(grad_data_fwd, grad_data_adj, grad_eps_data_fwd)
+    sim_vjp = jax_sim_data_adj.simulation.store_vjp_parallel(
+        grad_data_fwd, grad_data_adj, grad_eps_data_fwd, num_proc=num_proc
+    )
 
     # write VJP sim to and from file to emulate webapi download and loading
     sim_vjp.to_file(SIM_VJP_FILE)
@@ -177,6 +180,7 @@ def run_async_emulated_bwd(
             folder_name=folder_name,
             callback_url=callback_url,
             verbose=verbose,
+            num_proc=1,
         )
         sim_vjps_orig.append(sim_vjp)
 
