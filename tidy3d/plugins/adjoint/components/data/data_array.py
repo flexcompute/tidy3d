@@ -9,6 +9,7 @@ import numpy as np
 import jax.numpy as jnp
 import jax
 from jax.tree_util import register_pytree_node_class
+import xarray as xr
 
 from .....components.base import Tidy3dBaseModel, cached_property
 from .....exceptions import DataError, Tidy3dKeyError, AdjointError
@@ -22,6 +23,7 @@ VALUE_FILTER_THRESHOLD = 1e-6
 JAX_DATA_ARRAY_TAG = "<<JaxDataArray>>"
 
 
+# pylint:disable=too-many-public-methods
 @register_pytree_node_class
 class JaxDataArray(Tidy3dBaseModel):
     """A :class:`.DataArray`-like class that only wraps xarray for jax compability."""
@@ -138,7 +140,7 @@ class JaxDataArray(Tidy3dBaseModel):
     @cached_property
     def shape(self) -> tuple:
         """Shape of self.values."""
-        return self.as_ndarray.shape
+        return self.as_jnp_array.shape
 
     @cached_property
     def as_list(self) -> list:
@@ -148,13 +150,18 @@ class JaxDataArray(Tidy3dBaseModel):
     @cached_property
     def real(self) -> np.ndarray:
         """Real part of self."""
-        new_values = np.real(self.as_ndarray)
+        new_values = jnp.real(self.as_jnp_array)
         return self.copy(update=dict(values=new_values))
 
     @cached_property
     def imag(self) -> np.ndarray:
         """Imaginary part of self."""
-        new_values = np.imag(self.as_ndarray)
+        new_values = jnp.imag(self.as_jnp_array)
+        return self.copy(update=dict(values=new_values))
+
+    def conj(self) -> JaxDataArray:
+        """Complex conjugate of self."""
+        new_values = jnp.conj(self.as_jnp_array)
         return self.copy(update=dict(values=new_values))
 
     def __abs__(self) -> JaxDataArray:
@@ -164,20 +171,85 @@ class JaxDataArray(Tidy3dBaseModel):
 
     def __pow__(self, power: int) -> JaxDataArray:
         """Values raised to a power."""
-        new_values = self.values**power
+        new_values = self.as_jnp_array**power
         return self.updated_copy(values=new_values)
 
     def __add__(self, other: JaxDataArray) -> JaxDataArray:
         """Sum self with something else."""
         if isinstance(other, JaxDataArray):
-            new_values = self.values + other.values
+            new_values = self.as_jnp_array + other.as_jnp_array
         else:
-            new_values = self.values + other
+            new_values = self.as_jnp_array + other
         return self.updated_copy(values=new_values)
+
+    def __neg__(self) -> JaxDataArray:
+        """Negative of self."""
+        new_values = -self.as_jnp_array
+        return self.updated_copy(values=new_values)
+
+    def __sub__(self, other) -> JaxDataArray:
+        """Subtraction"""
+        return self + (-other)
 
     def __radd__(self, other) -> JaxDataArray:
         """Sum self with something else."""
         return self + other
+
+    def __mul__(self, other: JaxDataArray) -> JaxDataArray:
+        """Multiply self with something else."""
+        if isinstance(other, JaxDataArray):
+            new_values = self.as_jnp_array * other.as_jnp_array
+        elif isinstance(other, xr.DataArray):
+
+            other_values = other.values.reshape(self.values.shape)
+            new_values = self.as_jnp_array * other_values
+
+        else:
+            new_values = self.as_jnp_array * other
+        return self.updated_copy(values=new_values)
+
+    def __rmul__(self, other) -> JaxDataArray:
+        """Multiply self with something else."""
+        return self * other
+
+    def sum(self, dim: str = None):
+        """Sum (optionally along a single or multiple dimensions)."""
+
+        if dim is None:
+            return jnp.sum(self.values)
+
+        # dim is supplied
+        if isinstance(dim, str):
+            axis = list(self.coords.keys()).index(dim)
+            new_values = jnp.sum(self.values, axis=axis)
+            new_coords = self.coords.copy()
+            new_coords.pop(dim)
+            return self.updated_copy(values=new_values, coords=new_coords)
+
+        # dim is iterative, recursively call sum with single dim
+        ret = self.copy()
+        for dim_i in dim:
+            ret = ret.sum(dim=dim_i)
+        return ret
+
+    # pylint:disable=unused-argument
+    def squeeze(self, dim: str = None, drop: bool = True) -> JaxDataArray:
+        """Remove any non-zero dims."""
+
+        if dim is None:
+            new_values = jnp.squeeze(self.as_jnp_array)
+
+            new_coords = {}
+            for (key, val), dim_size in zip(self.coords.items(), self.values.shape):
+                if dim_size > 1:
+                    new_coords.update({key: val})
+
+        else:
+            axis = list(self.coords.keys()).index(dim)
+            new_values = jnp.array(jnp.squeeze(self.as_jnp_array, axis=axis))
+            new_coords = self.coords.copy()
+            new_coords.pop(dim)
+        return self.updated_copy(values=new_values, coords=new_coords)
 
     def get_coord_list(self, coord_name: str) -> list:
         """Get a coordinate list by name."""
@@ -338,7 +410,7 @@ class JaxDataArray(Tidy3dBaseModel):
             return JaxDataArray(values=values_interp, coords=coords_interp)
         return values_interp
 
-    def interp(self, kwargs=None, **interp_kwargs) -> JaxDataArray:
+    def interp(self, kwargs=None, assume_sorted=None, **interp_kwargs) -> JaxDataArray:
         """Linearly interpolate into the :class:`.JaxDataArray` at values into coordinates."""
 
         # note: kwargs does nothing, only used for making this subclass compatible with super
