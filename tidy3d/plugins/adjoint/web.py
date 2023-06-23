@@ -21,9 +21,7 @@ from .components.simulation import JaxSimulation, JaxInfo
 from .components.data.sim_data import JaxSimulationData
 
 
-# TODO: confused about these paths, they aren't local but rather wherre the jax info and sim_vjp get
-# stored on the server? maybe add a comment for each?
-# when i changed them, adjoint runs errored on the solver.
+# file names and paths for server side adjoint
 SIM_VJP_FILE = "output/jax_sim_vjp.hdf5"
 JAX_INFO_FILE = "jax_info.json"
 
