@@ -1273,8 +1273,9 @@ def test_validate_vertices():
         poly = JaxPolySlab(vertices=vertices, slab_bounds=(-1, 1))
 
 
-def test_custom_medium_3D(use_emulated_run):
+def _test_custom_medium_3D(use_emulated_run):
     """Ensure custom medium fails if 3D pixelated grid."""
+    # NOTE: turned off since we relaxed this restriction
 
     jax_box = JaxBox(size=(1, 1, 1), center=(0, 0, 0))
 

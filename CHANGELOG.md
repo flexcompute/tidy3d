@@ -32,6 +32,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Adjoint simulations no longer contain unused gradient permittivity monitors, reducing processing time.
 - `Batch` prints total estimated cost if `verbose=True`.
 - Unified config and authentication.
+- Remove restriction that `JaxCustomMedium` must not be a 3D pixelated array.
 
 ### Fixed
 - Plotting 2D materials in `SimulationData.plot_field` and other circumstances.

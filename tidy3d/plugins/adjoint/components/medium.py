@@ -308,23 +308,22 @@ class JaxCustomMedium(CustomMedium, AbstractJaxMedium):
         """Raise deprecation warning if dataset supplied and convert to dataset."""
         return values
 
-    @pd.validator("eps_dataset", always=True)
-    def _is_not_3d(cls, val):
-        """Ensure the custom medium pixels contain at least one dimension with only pixel thick."""
+    # @pd.validator("eps_dataset", always=True)
+    # def _is_not_3d(cls, val):
+    #     """Ensure the custom medium pixels contain at least one dimension with one pixel thick."""
+    #     for field_dim in "xyz":
+    #         field_name = f"eps_{field_dim}{field_dim}"
+    #         data_array = val.field_components[field_name]
+    #         coord_lens = [len(data_array.coords[key]) for key in "xyz"]
+    #         dims_len1 = [val == 1 for val in coord_lens]
+    #         if sum(dims_len1) == 0:
+    #             raise SetupError(
+    #                 "For adjoint plugin, the 'JaxCustomMedium' is restricted to a 1D or 2D "
+    #                 "pixellated grid. It may not contain multiple pixels along all 3 dimensions. "
+    #                 f"Detected 3D pixelated grid in '{field_name}' component of 'eps_dataset'."
+    #             )
 
-        for field_dim in "xyz":
-            field_name = f"eps_{field_dim}{field_dim}"
-            data_array = val.field_components[field_name]
-            coord_lens = [len(data_array.coords[key]) for key in "xyz"]
-            dims_len1 = [val == 1 for val in coord_lens]
-            if sum(dims_len1) == 0:
-                raise SetupError(
-                    "For adjoint plugin, the 'JaxCustomMedium' is restricted to a 1D or 2D "
-                    "pixellated grid. It may not contain multiple pixels along all 3 dimensions. "
-                    f"Detected 3D pixelated grid in '{field_name}' component of 'eps_dataset'."
-                )
-
-        return val
+    #     return val
 
     @pd.validator("eps_dataset", always=True)
     def _is_not_too_large(cls, val):
