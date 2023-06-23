@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from abc import ABC
-from typing import Union, Tuple, Callable, Dict, List
+from typing import Union, Tuple, Callable, Dict, List, Any
 import warnings
 
 import xarray as xr
@@ -104,7 +104,6 @@ class AbstractFieldData(MonitorData, AbstractFieldDataset, ABC):
             return self.copy()
 
         update_dict = {}
-
         for field_name, scalar_data in self.field_components.items():
 
             eigenval_fn = self.symmetry_eigenvalues[field_name]
@@ -235,8 +234,8 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
             # This is because we cannot colocate the fields to the center of that pixel.
             # However, the monitor should be completely outside of this last pixel.
             fields = self.symmetry_expanded_copy.field_components
-            plane_bounds1 = fields["E" + dim2].coords[dim1].values
-            plane_bounds2 = fields["E" + dim1].coords[dim2].values
+            plane_bounds1 = np.array(fields["E" + dim2].coords[dim1])
+            plane_bounds2 = np.array(fields["E" + dim1].coords[dim2])
 
         return plane_bounds1, plane_bounds2
 
@@ -363,10 +362,15 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
         # Tangential fields are ordered as E1, E2, H1, H2
         tan_fields = self._centered_tangential_fields
         dim1, dim2 = self._tangential_dims
+
         e_x_h_star = tan_fields["E" + dim1] * tan_fields["H" + dim2].conj()
         e_x_h_star -= tan_fields["E" + dim2] * tan_fields["H" + dim1].conj()
         poynting = 0.5 * np.real(e_x_h_star)
         return poynting
+
+    def package_flux_results(self, flux_values: xr.DataArray) -> Any:
+        """How to package flux"""
+        return FluxDataArray(flux_values)
 
     @cached_property
     def flux(self) -> FluxDataArray:
@@ -374,7 +378,12 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
 
         # Compute flux by integrating Poynting vector in-plane
         d_area = self._diff_area
-        return FluxDataArray((self.poynting * d_area).sum(dim=d_area.dims))
+        poynting = self.poynting
+
+        flux_values = poynting * d_area
+        flux_values = flux_values.sum(dim=d_area.dims)
+
+        return self.package_flux_results(flux_values)
 
     @cached_property
     def mode_area(self) -> FreqModeDataArray:

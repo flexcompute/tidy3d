@@ -32,6 +32,7 @@ from tidy3d.plugins.adjoint.web import run, run_async
 from tidy3d.plugins.adjoint.web import run_local, run_async_local
 from tidy3d.plugins.adjoint.components.data.data_array import VALUE_FILTER_THRESHOLD
 from tidy3d.web.container import BatchData
+from tidy3d.web import run as run_regular
 
 from ..utils import run_emulated, assert_log_level, log_capture, run_async_emulated
 from ..utils import SIM_DATA_PATH, SIM_FULL, TMP_DIR
@@ -293,6 +294,73 @@ def objective(amp: complex) -> float:
     return abs(amp) ** 2
 
 
+def test_run_flux(use_emulated_run):
+    td.config.logging_level = "ERROR"
+
+    def make_components(eps, size, vertices, base_eps_val):
+        sim = make_sim(permittivity=eps, size=size, vertices=vertices, base_eps_val=base_eps_val)
+        # sim = sim.to_simulation()[0]
+        td.config.logging_level = "WARNING"
+        sim = sim.updated_copy(
+            sources=[
+                td.PointDipole(
+                    center=(0, 0, 0),
+                    polarization="Ex",
+                    source_time=td.GaussianPulse(freq0=2e14, fwidth=1e15),
+                )
+            ]
+        )
+        sim_data = run_local(sim, task_name="test", path=RUN_PATH)
+        mnt_data = sim_data[MNT_NAME + "3"]
+        flat_components = {}
+        for key, fld in mnt_data.field_components.items():
+            values = jnp.array(jax.lax.stop_gradient(fld.values))[:, 1, ...]
+            values = values[:, None, ...]
+            coords = dict(fld.coords).copy()
+            coords["y"] = [0.0]
+            if isinstance(fld, td.ScalarFieldDataArray):
+                flat_components[key] = td.ScalarFieldDataArray(values, coords=coords)
+            else:
+                flat_components[key] = fld.updated_copy(values=values, coords=coords)
+        return mnt_data.updated_copy(**flat_components)
+
+    mnt_data = make_components(EPS, SIZE, VERTICES, BASE_EPS_VAL)
+
+    # whether to run the flux pipeline through jax (True) or regular tidy3d (False)
+    use_jax = True
+    if not use_jax:
+
+        td_field_components = {}
+        for fld, jax_data_array in mnt_data.field_components.items():
+            data_array = td.ScalarFieldDataArray(
+                np.array(jax_data_array.values), coords=jax_data_array.coords
+            )
+            td_field_components[fld] = data_array
+
+        mnt_data = td.FieldData(monitor=mnt_data.monitor, **td_field_components)
+
+    def get_flux(x):
+
+        fld_components = {}
+        for fld, fld_component in mnt_data.field_components.items():
+            new_values = x * fld_component.values
+            if isinstance(fld_component, td.ScalarFieldDataArray):
+                fld_data = td.ScalarFieldDataArray(new_values, coords=fld_component.coords)
+            else:
+                fld_data = fld_component.updated_copy(values=new_values)
+            fld_components[fld] = fld_data
+
+        mnt_data2 = mnt_data.updated_copy(**fld_components)
+
+        return jnp.sum(mnt_data2.flux)
+
+    f = get_flux(1.0)
+
+    if use_jax:
+        get_flux_grad = jax.grad(get_flux)
+        g = get_flux_grad(1.0)
+
+
 def extract_amp(sim_data: td.SimulationData) -> complex:
     """get the amplitude from a simulation data object."""
 
@@ -325,6 +393,7 @@ def extract_amp(sim_data: td.SimulationData) -> complex:
 
     # this should work when we figure out a jax version of xr.DataArray
     sim_data.get_intensity(mnt_name)
+    # ret_value += jnp.sum(jnp.array(mnt_data.flux().values))
 
     # FieldData (dipole)
     mnt_name = MNT_NAME + "4"
@@ -636,6 +705,7 @@ def test_jax_data_array():
 
     # isel multi
     z = da.isel(a=1, b=[0, 1], c=0)
+    assert z.shape == (2,)
 
     # isel
     z = da.isel(a=1, b=1, c=0)
@@ -661,6 +731,8 @@ def test_jax_data_array():
     with pytest.raises(DataError):
         da.sel(c=5)
 
+    # not implemented
+    # with pytest.raises(NotImplementedError):
     da.interp(b=2.5)
 
     assert np.isclose(da.interp(a=2, b=3, c=4), values[1, 1, 0])

@@ -16,7 +16,7 @@ from .....components.source import ModeSource, PlaneWave, CustomFieldSource, Cus
 from .....components.data.monitor_data import MonitorData, ModeSolverData
 from .....components.data.monitor_data import ModeData, DiffractionData, FieldData
 from .....components.data.dataset import FieldDataset
-from .....components.data.data_array import ScalarFieldDataArray, FluxDataArray, FreqModeDataArray
+from .....components.data.data_array import ScalarFieldDataArray, FreqModeDataArray
 from .....components.data.data_array import ModeAmpsDataArray, MixedModeDataArray
 from .....constants import C_0, ETA_0, MU_0
 from .....exceptions import AdjointError
@@ -162,21 +162,17 @@ class JaxFieldData(JaxMonitorData, FieldData):
         """How to package the dictionary of fields computed via self.colocate()."""
         return self.updated_copy(**centered_fields)
 
+    def package_flux_results(self, flux_values: JaxDataArray) -> float:
+        """How to package the dictionary of fields computed via self.colocate()."""
+        flux_data = flux_values
+        if isinstance(flux_data, JaxDataArray):
+            return jnp.sum(flux_data.values)
+        return jnp.sum(flux_data)
+
     @property
     def intensity(self) -> ScalarFieldDataArray:
         """Return the sum of the squared absolute electric field components."""
         raise NotImplementedError("'intensity' is not yet supported in the adjoint plugin.")
-
-    @property
-    def poynting(self) -> ScalarFieldDataArray:
-        """Time-averaged Poynting vector for frequency-domain data associated to a 2D monitor,
-        projected to the direction normal to the monitor plane."""
-        raise NotImplementedError("'poynting' is not yet supported in the adjoint plugin.")
-
-    @cached_property
-    def flux(self) -> FluxDataArray:
-        """Flux for data corresponding to a 2D monitor."""
-        raise NotImplementedError("'flux' is not yet supported in the adjoint plugin.")
 
     @cached_property
     def mode_area(self) -> FreqModeDataArray:
