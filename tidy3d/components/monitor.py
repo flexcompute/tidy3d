@@ -148,7 +148,7 @@ class TimeMonitor(Monitor, ABC):
         # Step to compare to in order to handle t_start = t_stop
         dt = 1e-20 if np.array(tmesh).size < 2 else tmesh[1] - tmesh[0]
         # If equal start and stopping time, record one time step
-        if np.abs(self.start - t_stop) < dt:
+        if np.abs(self.start - t_stop) < dt and self.start <= tmesh[-1]:
             tind_beg = max(tind_end - 1, 0)
         else:
             tbeg = np.nonzero(tmesh[:tind_end] >= self.start)[0]
