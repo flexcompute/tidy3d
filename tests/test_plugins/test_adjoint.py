@@ -39,6 +39,7 @@ from ..utils import SIM_DATA_PATH, SIM_FULL, TMP_DIR
 FWD_SIM_DATA_FILE = TMP_DIR + "adjoint_grad_data_fwd.hdf5"
 SIM_VJP_FILE = TMP_DIR + "adjoint_sim_vjp_file.hdf5"
 RUN_PATH = TMP_DIR + "simulation.hdf5"
+NUM_PROC_PARALLEL = 2
 
 EPS = 2.0
 SIZE = (1.0, 2.0, 3.0)
@@ -95,7 +96,7 @@ def run_emulated_bwd(
     folder_name: str,
     callback_url: str,
     verbose: bool,
-    num_proc: int = 2,
+    num_proc: int = NUM_PROC_PARALLEL,
 ) -> JaxSimulation:
     """Runs adjoint simulation on our servers, grabs the gradient data from fwd for processing."""
 
@@ -115,7 +116,7 @@ def run_emulated_bwd(
     grad_data_adj = jax_sim_data_adj.grad_data_symmetry
 
     # get gradient and insert into the resulting simulation structure medium
-    sim_vjp = jax_sim_data_adj.simulation.store_vjp_parallel(
+    sim_vjp = jax_sim_data_adj.simulation.store_vjp(
         grad_data_fwd, grad_data_adj, grad_eps_data_fwd, num_proc=num_proc
     )
 
@@ -178,7 +179,7 @@ def run_async_emulated_bwd(
             folder_name=folder_name,
             callback_url=callback_url,
             verbose=verbose,
-            num_proc=1,
+            num_proc=NUM_PROC_PARALLEL,
         )
         sim_vjps_orig.append(sim_vjp)
 
