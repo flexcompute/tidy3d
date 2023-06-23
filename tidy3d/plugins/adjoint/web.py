@@ -311,6 +311,7 @@ def webapi_run_adjoint_fwd(
         verbose=verbose,
         simulation_type="adjoint_fwd",
         jax_info=jax_info,
+        solver_version="parallel-0.0.0",
     )
 
     sim_data = job.run()
@@ -337,6 +338,7 @@ def webapi_run_adjoint_bwd(
         simulation_type="adjoint_bwd",
         parent_tasks=[fwd_task_id],
         jax_info=jax_info_adj,
+        solver_version="parallel-0.0.0",
     )
 
     job.start()

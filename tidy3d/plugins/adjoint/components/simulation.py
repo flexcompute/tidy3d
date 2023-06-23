@@ -531,9 +531,16 @@ class JaxSimulation(Simulation, JaxObject):
 
         # Indexing into structures which use internal parallelization, and those which don't.
         # For the latter, simple parallelization over the list will be used.
+        internal_par_structs = [JaxGeometryGroup]
+
+        # Parallelize polyslabs internally or externally depending on total number
+        polyslabs = [struct for struct in self.input_structures if isinstance(struct, JaxPolySlab)]
+        if len(polyslabs) < num_proc:
+            internal_par_structs += [JaxPolySlab]
+
         inds_par_internal, inds_par_external = [], []
         for index, structure in enumerate(self.input_structures):
-            if isinstance(structure.geometry, (JaxPolySlab, JaxGeometryGroup)):
+            if isinstance(structure.geometry, tuple(internal_par_structs)):
                 inds_par_internal.append(index)
             else:
                 inds_par_external.append(index)
