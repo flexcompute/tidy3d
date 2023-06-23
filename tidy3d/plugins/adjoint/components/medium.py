@@ -497,9 +497,6 @@ class JaxCustomMedium(CustomMedium, AbstractJaxMedium):
                 inside_fn=inside_fn,
             ).sum(sum_axes)
 
-            # if np.any(np.isnan(e_dotted)) or np.isclose(np.sum(e_dotted), 0):
-            #     import pdb; pdb.set_trace()
-
             # reshape values to the expected vjp shape to be more safe
             vjp_shape = tuple(len(coord) for _, coord in coords.items())
             vjp_values = e_dotted.real.values.reshape(vjp_shape)

@@ -7,6 +7,7 @@ import h5py
 import pydantic as pd
 import numpy as np
 import jax.numpy as jnp
+import jax
 from jax.tree_util import register_pytree_node_class
 
 from .....components.base import Tidy3dBaseModel, cached_property
@@ -276,6 +277,8 @@ class JaxDataArray(Tidy3dBaseModel):
         This is a workaround to `jnp.interp` not allowing multi-dimensional interpolation.
         """
 
+        val = jax.lax.stop_gradient(val)
+
         # get the coordinates associated with this key.
         if key not in self.coords:
             raise Tidy3dKeyError(f"Key '{key}' not found in JaxDataArray coords.")
@@ -326,7 +329,10 @@ class JaxDataArray(Tidy3dBaseModel):
 
         # construct a new JaxDataArray to return
         coords_interp = self.coords.copy()
-        coords_interp.pop(key)
+        if jnp.array(index_interp).size <= 1:
+            coords_interp.pop(key)
+        else:
+            coords_interp[key] = np.atleast_1d(val).tolist()
 
         if coords_interp:
             return JaxDataArray(values=values_interp, coords=coords_interp)
