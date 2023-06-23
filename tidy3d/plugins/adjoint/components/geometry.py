@@ -557,21 +557,76 @@ class JaxPolySlab(JaxGeometry, PolySlab, JaxObject):
             grad_data_fwd=grad_data_fwd, grad_data_adj=grad_data_adj, grad_data_eps=grad_data_eps
         )
 
-        # Construct arguments to pass to the parallel vertices_vjp computation
+        if num_proc is not None and num_proc > 1:
+            return self.store_vjp_parallel(
+                e_mult_xyz=e_mult_xyz,
+                d_mult_xyz=d_mult_xyz,
+                sim_bounds=sim_bounds,
+                wvl_mat=wvl_mat,
+                eps_out=eps_out,
+                eps_in=eps_in,
+                num_proc=num_proc,
+            )
+
+        return self.store_vjp_sequential(
+            e_mult_xyz=e_mult_xyz,
+            d_mult_xyz=d_mult_xyz,
+            sim_bounds=sim_bounds,
+            wvl_mat=wvl_mat,
+            eps_out=eps_out,
+            eps_in=eps_in,
+        )
+
+    def _make_vertex_args(
+        self,
+        e_mult_xyz: FieldData,
+        d_mult_xyz: FieldData,
+        sim_bounds: Bound,
+        wvl_mat: float,
+        eps_out: complex,
+        eps_in: complex,
+    ) -> tuple:
+        """Generate arguments for `vertex_vjp`."""
+
         num_verts = len(self.vertices)
         args = [range(num_verts)]
+
         # append all of the arguments that are the same for each call
         constant_args = [e_mult_xyz, d_mult_xyz, sim_bounds, wvl_mat, eps_out, eps_in]
         args += [[arg] * num_verts for arg in constant_args]
+        return args
 
-        # Use multiprocessing over polygon vertices if requested
-        if num_proc > 1:
-            with Pool(num_proc) as pool:
-                vertices_vjp = pool.starmap(self.vertex_vjp, zip(*args))
-        else:
-            vertices_vjp = list(map(self.vertex_vjp, *args))
+    def store_vjp_sequential(
+        self,
+        e_mult_xyz: FieldData,
+        d_mult_xyz: FieldData,
+        sim_bounds: Bound,
+        wvl_mat: float,
+        eps_out: complex,
+        eps_in: complex,
+    ) -> JaxPolySlab:
+        """Stores the gradient of the vertices given forward and adjoint field data."""
+        # Construct arguments to pass to the parallel vertices_vjp computation
 
-        # return copy of the polyslab with the vertices storing the
+        args = self._make_vertex_args(e_mult_xyz, d_mult_xyz, sim_bounds, wvl_mat, eps_out, eps_in)
+        vertices_vjp = list(map(self.vertex_vjp, *args))
+        return self.copy(update=dict(vertices=vertices_vjp))
+
+    def store_vjp_parallel(
+        self,
+        e_mult_xyz: FieldData,
+        d_mult_xyz: FieldData,
+        sim_bounds: Bound,
+        wvl_mat: float,
+        eps_out: complex,
+        eps_in: complex,
+        num_proc: int = 1,
+    ) -> JaxPolySlab:
+        """Stores the gradient of the vertices given forward and adjoint field data."""
+
+        args = self._make_vertex_args(e_mult_xyz, d_mult_xyz, sim_bounds, wvl_mat, eps_out, eps_in)
+        with Pool(num_proc) as pool:
+            vertices_vjp = pool.starmap(self.vertex_vjp, zip(*args))
         return self.copy(update=dict(vertices=vertices_vjp))
 
 

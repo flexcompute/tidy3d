@@ -25,6 +25,16 @@ from .structure import JaxStructure
 from .geometry import JaxPolySlab, JaxGeometryGroup
 
 
+# bandwidth of adjoint source in units of freq0 if no sources and no `fwidth_adjoint` specified
+FWIDTH_FACTOR = 1.0 / 10
+
+# how many processors to use for server and client side adjoint
+NUM_PROC_LOCAL = 1
+
+# number of input structures before it errors
+MAX_NUM_INPUT_STRUCTURES = 400
+
+
 class JaxInfo(Tidy3dBaseModel):
     """Class to store information when converting between jax and tidy3d."""
 
@@ -58,13 +68,6 @@ class JaxInfo(Tidy3dBaseModel):
         description="Custom frequency width of the original JaxSimulation.",
         units=HERTZ,
     )
-
-
-# bandwidth of adjoint source in units of freq0 if no sources and no `fwidth_adjoint` specified
-FWIDTH_FACTOR = 1.0 / 10
-
-# number of input structures before it errors
-MAX_NUM_INPUT_STRUCTURES = 400
 
 
 @register_pytree_node_class
@@ -462,7 +465,7 @@ class JaxSimulation(Simulation, JaxObject):
         fld_fwd: FieldData,
         fld_adj: FieldData,
         eps_data: PermittivityData,
-        num_proc: int = 1,
+        num_proc: int = NUM_PROC_LOCAL,
     ) -> JaxStructure:
         """Store the vjp for a single structure."""
 
@@ -482,9 +485,31 @@ class JaxSimulation(Simulation, JaxObject):
         grad_data_fwd: Tuple[FieldData],
         grad_data_adj: Tuple[FieldData],
         grad_eps_data: Tuple[PermittivityData],
+        num_proc: int = NUM_PROC_LOCAL,
     ) -> JaxSimulation:
         """Store the vjp w.r.t. each input_structure as a sim using fwd and adj grad_data."""
 
+        # if num_proc supplied and greater than 1, run parallel
+        if num_proc is not None and num_proc > 1:
+            return self.store_vjp_parallel(
+                grad_data_fwd=grad_data_fwd,
+                grad_data_adj=grad_data_adj,
+                grad_eps_data=grad_eps_data,
+                num_proc=num_proc,
+            )
+
+        # otherwise, call regular sequential one
+        return self.store_vjp_sequential(
+            grad_data_fwd=grad_data_fwd, grad_data_adj=grad_data_adj, grad_eps_data=grad_eps_data
+        )
+
+    def store_vjp_sequential(
+        self,
+        grad_data_fwd: Tuple[FieldData],
+        grad_data_adj: Tuple[FieldData],
+        grad_eps_data: Tuple[PermittivityData],
+    ) -> JaxSimulation:
+        """Store the vjp w.r.t. each input_structure without multiprocessing."""
         map_args = [self.input_structures, grad_data_fwd, grad_data_adj, grad_eps_data]
         input_structures_vjp = list(map(self._store_vjp_structure, *map_args))
 
@@ -528,7 +553,7 @@ class JaxSimulation(Simulation, JaxObject):
         vjps_par_internal = list(map(self._store_vjp_structure, *args_par_internal))
 
         # Get vjps for structures where we parallelize directly here
-        args_par_external = make_args(inds_par_external, num_proc_internal=1)
+        args_par_external = make_args(inds_par_external, num_proc_internal=NUM_PROC_LOCAL)
         with Pool(num_proc) as pool:
             vjps_par_external = list(
                 pool.starmap(self._store_vjp_structure, zip(*args_par_external))
