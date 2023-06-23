@@ -24,6 +24,7 @@ from tidy3d.plugins.adjoint.components.medium import JaxMedium, JaxAnisotropicMe
 from tidy3d.plugins.adjoint.components.medium import JaxCustomMedium, MAX_NUM_CELLS_CUSTOM_MEDIUM
 from tidy3d.plugins.adjoint.components.structure import JaxStructure
 from tidy3d.plugins.adjoint.components.simulation import JaxSimulation, JaxInfo
+from tidy3d.plugins.adjoint.components.simulation import MAX_NUM_INPUT_STRUCTURES
 from tidy3d.plugins.adjoint.components.data.sim_data import JaxSimulationData
 from tidy3d.plugins.adjoint.components.data.monitor_data import JaxModeData, JaxDiffractionData
 from tidy3d.plugins.adjoint.components.data.data_array import JaxDataArray, JAX_DATA_ARRAY_TAG
@@ -1384,3 +1385,18 @@ def test_jax_sim_io():
     sim2 = JaxSimulation.from_file(fname)
 
     assert sim == sim2
+
+
+def test_num_input_structures():
+    """Assert proper error is raised if number of input structures is too large."""
+
+    def make_sim_(num_input_structures: int) -> JaxSimulation:
+
+        sim = make_sim(permittivity=EPS, size=SIZE, vertices=VERTICES, base_eps_val=BASE_EPS_VAL)
+        struct = sim.input_structures[0]
+        return sim.updated_copy(input_structures=num_input_structures * [struct])
+
+    sim = make_sim_(num_input_structures=MAX_NUM_INPUT_STRUCTURES)
+
+    with pytest.raises(pydantic.ValidationError):
+        sim = make_sim_(num_input_structures=MAX_NUM_INPUT_STRUCTURES + 1)
