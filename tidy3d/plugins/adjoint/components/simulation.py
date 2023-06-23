@@ -62,6 +62,9 @@ class JaxInfo(Tidy3dBaseModel):
 # bandwidth of adjoint source in units of freq0 if no sources and no `fwidth_adjoint` specified
 FWIDTH_FACTOR = 1.0 / 10
 
+# number of input structures before it errors
+MAX_NUM_INPUT_STRUCTURES = 400
+
 
 @register_pytree_node_class
 class JaxSimulation(Simulation, JaxObject):
@@ -131,6 +134,18 @@ class JaxSimulation(Simulation, JaxObject):
         """Assert subpixel is on."""
         if not val:
             raise AdjointError("'JaxSimulation.subpixel' must be 'True' to use adjoint plugin.")
+        return val
+
+    @pd.validator("input_structures", always=True)
+    def _restrict_input_structures(cls, val):
+        """Restrict number of input structures."""
+        num_input_structures = len(val)
+        if num_input_structures > MAX_NUM_INPUT_STRUCTURES:
+            raise AdjointError(
+                "For performance, adjoint plugin restricts the number of input structures to "
+                f"{MAX_NUM_INPUT_STRUCTURES}. Found {num_input_structures}."
+            )
+
         return val
 
     @pd.validator("input_structures", always=True)
