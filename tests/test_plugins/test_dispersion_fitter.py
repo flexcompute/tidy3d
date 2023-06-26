@@ -3,8 +3,12 @@ import pytest
 import responses
 
 import tidy3d as td
-from tidy3d.plugins.dispersion import DispersionFitter
+from tidy3d.plugins.dispersion import DispersionFitter, FastDispersionFitter
+from tidy3d.plugins.dispersion import AdvancedFastFitterParam
 from tidy3d.plugins.dispersion.web import run as run_fitter
+
+
+advanced_param = AdvancedFastFitterParam(num_iters=1, passivity_num_iters=1)
 
 
 @pytest.fixture
@@ -63,6 +67,9 @@ def test_lossless_dispersion(random_data, mock_remote_api):
     medium, rms = fitter.fit(num_tries=2)
     medium, rms = run_fitter(fitter)
 
+    fitter = FastDispersionFitter(wvl_um=wvl_um.tolist(), n_data=tuple(n_data))
+    medium, rms = fitter.fit(advanced_param=advanced_param)
+
 
 @responses.activate
 def test_lossy_dispersion(random_data, mock_remote_api):
@@ -73,11 +80,17 @@ def test_lossy_dispersion(random_data, mock_remote_api):
     medium, rms = fitter.fit(num_tries=2)
     medium, rms = run_fitter(fitter)
 
+    fitter = FastDispersionFitter(wvl_um=wvl_um.tolist(), n_data=n_data, k_data=k_data)
+    medium, rms = fitter.fit(advanced_param=advanced_param)
+
 
 def test_dispersion_load():
     """loads dispersion model from nk data file"""
     fitter = DispersionFitter.from_file("tests/data/nk_data.csv", skiprows=1, delimiter=",")
     medium, rms = fitter.fit(num_tries=20)
+
+    fitter = FastDispersionFitter.from_file("tests/data/nk_data.csv", skiprows=1, delimiter=",")
+    medium, rms = fitter.fit(advanced_param=advanced_param)
 
 
 def test_dispersion_plot(random_data):
@@ -99,23 +112,36 @@ def test_dispersion_set_wvg_range(random_data):
     """set wavelength range function"""
     wvl_um, n_data, k_data = random_data
     fitter = DispersionFitter(wvl_um=wvl_um, n_data=n_data)
+    fastfitter = FastDispersionFitter(wvl_um=wvl_um, n_data=n_data)
 
     wvl_range = [1.2, 1.8]
     fitter = fitter.copy(update={"wvl_range": wvl_range})
     assert len(fitter.freqs) == 7
     medium, rms = fitter.fit(num_tries=2)
+    fastfitter = fastfitter.copy(update={"wvl_range": wvl_range})
+    assert len(fastfitter.freqs) == 7
+    medium, rms = fastfitter.fit(advanced_param=advanced_param)
 
     wvl_range = [1.2, 2.8]
     fitter = fitter.copy(update={"wvl_range": wvl_range, "k_data": k_data})
     assert len(fitter.freqs) == 9
     medium, rms = fitter.fit(num_tries=2)
+    fastfitter = fastfitter.copy(update={"wvl_range": wvl_range})
+    assert len(fastfitter.freqs) == 9
+    medium, rms = fastfitter.fit(advanced_param=advanced_param)
 
     wvl_range = [0.2, 1.8]
     fitter = fitter.copy(update={"wvl_range": wvl_range})
     assert len(fitter.freqs) == 9
     medium, rms = fitter.fit(num_tries=2)
+    fastfitter = fastfitter.copy(update={"wvl_range": wvl_range})
+    assert len(fastfitter.freqs) == 9
+    medium, rms = fastfitter.fit(advanced_param=advanced_param)
 
     wvl_range = [0.2, 2.8]
     fitter = fitter.copy(update={"wvl_range": wvl_range, "k_data": k_data})
     assert len(fitter.freqs) == 11
     medium, rms = fitter.fit(num_tries=2)
+    fastfitter = fastfitter.copy(update={"wvl_range": wvl_range})
+    assert len(fastfitter.freqs) == 11
+    medium, rms = fastfitter.fit(advanced_param=advanced_param)
