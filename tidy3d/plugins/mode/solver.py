@@ -5,7 +5,7 @@ import numpy as np
 import scipy.sparse as sp
 import scipy.sparse.linalg as spl
 
-from ...components.types import Numpy, ModeSolverType
+from ...components.types import Numpy, ModeSolverType, EpsSpecType
 from ...components.base import Tidy3dBaseModel
 from ...constants import ETA_0, C_0, fp_eps, pec_val
 from .derivatives import create_d_matrices as d_mats
@@ -34,7 +34,8 @@ class EigSolver(Tidy3dBaseModel):
         freq,
         mode_spec,
         symmetry=(0, 0),
-    ) -> Tuple[Numpy, Numpy]:
+        direction="+",
+    ) -> Tuple[Numpy, Numpy, EpsSpecType]:
         """Solve for the modes of a waveguide cross section.
 
         Parameters
@@ -51,12 +52,15 @@ class EigSolver(Tidy3dBaseModel):
             (Hertz) Frequency at which the eigenmodes are computed.
         mode_spec : ModeSpec
             ``ModeSpec`` object containing specifications of the mode solver.
+        direction : Union["+", "-"]
+            Direction of mode propagation.
 
         Returns
         -------
-        Tuple[Numpy, Numpy]
-            The first array gives the E and H fields for all modes, the second one give sthe complex
-            effective index.
+        Tuple[Numpy, Numpy, str]
+            The first array gives the E and H fields for all modes, the second one gives the complex
+            effective index. The last variable describes permittivity characterization on the mode
+            solver's plane ("diagonal", "tensorial_real", or "tensorial_complex").
         """
 
         # freq += 0.0001j
@@ -166,7 +170,7 @@ class EigSolver(Tidy3dBaseModel):
         target_neff_p = target / np.linalg.norm(kp_to_k) + fp_eps
 
         # Solve for the modes
-        E, H, neff, keff = cls.solver_em(
+        E, H, neff, keff, eps_spec = cls.solver_em(
             Nx,
             Ny,
             eps_tensor,
@@ -175,6 +179,7 @@ class EigSolver(Tidy3dBaseModel):
             num_modes,
             target_neff_p,
             mode_spec.precision,
+            direction,
         )
 
         # Filter polarization if needed
@@ -199,14 +204,24 @@ class EigSolver(Tidy3dBaseModel):
         H = np.sum(jac_h[..., None] * H[:, None, ...], axis=0)
         H = H.reshape((3, Nx, Ny, 1, num_modes))
         neff = neff * np.linalg.norm(kp_to_k)
+        keff = keff * np.linalg.norm(kp_to_k)
 
         fields = np.stack((E, H), axis=0)
 
-        return fields, neff + 1j * keff
+        return fields, neff + 1j * keff, eps_spec
 
     @classmethod
     def solver_em(
-        cls, Nx, Ny, eps_tensor, mu_tensor, der_mats, num_modes, neff_guess, mat_precision
+        cls,
+        Nx,
+        Ny,
+        eps_tensor,
+        mu_tensor,
+        der_mats,
+        num_modes,
+        neff_guess,
+        mat_precision,
+        direction,
     ):  # pylint:disable=too-many-arguments
         """Solve for the electromagnetic modes of a system defined by in-plane permittivity and
         permeability and assuming translational invariance in the normal direction.
@@ -229,6 +244,8 @@ class EigSolver(Tidy3dBaseModel):
             Initial guess for the effective index.
         mat_precision : Union['single', 'double']
             Single or double-point precision in eigensolver.
+        direction : Union["+", "-"]
+            Direction of mode propagation.
 
         Returns
         -------
@@ -240,6 +257,8 @@ class EigSolver(Tidy3dBaseModel):
             Real part of the effective index, shape (num_modes, ).
         keff : np.ndarray
             Imaginary part of the effective index, shape (num_modes, ).
+        eps_spec : Union["diagonal", "tensorial_real", "tensorial_complex"]
+            Permittivity characterization on the mode solver's plane.
         """
 
         # use a high-conductivity model for locations associated with a PEC
@@ -270,9 +289,32 @@ class EigSolver(Tidy3dBaseModel):
             "vec_init": vec_init,
             "mat_precision": mat_precision,
         }
-        if is_tensorial:
-            return cls.solver_tensorial(**kwargs)
-        return cls.solver_diagonal(**kwargs)
+
+        is_eps_complex = cls.isinstance_complex(eps_tensor)
+
+        if not is_tensorial:
+
+            eps_spec = "diagonal"
+            E, H, neff, keff = cls.solver_diagonal(**kwargs)
+            if direction == "-":
+                H[0] *= -1
+                H[1] *= -1
+                E[2] *= -1
+
+        elif not is_eps_complex:
+
+            eps_spec = "tensorial_real"
+            E, H, neff, keff = cls.solver_tensorial(**kwargs, direction="+")
+            if direction == "-":
+                E = np.conj(E)
+                H = -np.conj(H)
+
+        else:
+
+            eps_spec = "tensorial_complex"
+            E, H, neff, keff = cls.solver_tensorial(**kwargs, direction=direction)
+
+        return E, H, neff, keff, eps_spec
 
     # pylint:disable=too-many-arguments
     @classmethod
@@ -447,7 +489,9 @@ class EigSolver(Tidy3dBaseModel):
 
     # pylint:disable=too-many-arguments
     @classmethod
-    def solver_tensorial(cls, eps, mu, der_mats, num_modes, neff_guess, vec_init, mat_precision):
+    def solver_tensorial(
+        cls, eps, mu, der_mats, num_modes, neff_guess, vec_init, mat_precision, direction
+    ):
         """EM eigenmode solver assuming ``eps`` or ``mu`` have off-diagonal elements."""
 
         mode_solver_type = "tensorial"
@@ -518,6 +562,10 @@ class EigSolver(Tidy3dBaseModel):
         # The eigenvalues for the matrix above are 1j * (neff + 1j * keff)
         # Multiply the matrix by -1j, so that eigenvalues are (neff + 1j * keff)
         mat *= -1j
+
+        # change matrix sign for backward direction
+        if direction == "-":
+            mat *= -1
 
         # Cast matrix to target data type
         mat_dtype = cls.matrix_data_type(eps, mu, der_mats, mat_precision, is_tensorial=True)
@@ -705,6 +753,6 @@ class EigSolver(Tidy3dBaseModel):
         raise RuntimeError(f"Unidentified 'mode_solver_type={mode_solver_type}'.")
 
 
-def compute_modes(*args, **kwargs) -> Tuple[Numpy, Numpy]:
+def compute_modes(*args, **kwargs) -> Tuple[Numpy, Numpy, str]:
     """A wrapper around ``EigSolver.compute_modes``, which is used in ``ModeSolver``."""
     return EigSolver.compute_modes(*args, **kwargs)

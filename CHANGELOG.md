@@ -34,6 +34,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Unified config and authentication.
 - Remove restriction that `JaxCustomMedium` must not be a 3D pixelated array.
 - Limit total number of input structures in adjoint plugin for performance reasons.
+- `ModeSolver` and `ModeSolverMonitor` now contain `direction` field that explicitly specifies the mode propagation direction (default is "+").
 
 ### Fixed
 - Plotting 2D materials in `SimulationData.plot_field` and other circumstances.
@@ -45,6 +46,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Improvements to graphene medium fit.
 - Schema titles in `ArrayLike` fields.
 - Fix `web.estimate_cost` error/time-out for large simulations, it should now always work but may take some time for complex cases.
+- A more accurate injection and decomposition of backward propagating waveguide modes in lossy and gyrotropic systems.
 
 ## [2.2.3] - 2023-6-15
 

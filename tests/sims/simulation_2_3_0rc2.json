@@ -1200,7 +1200,8 @@
                 "track_freq": "central",
                 "group_index_step": false,
                 "type": "ModeSpec"
-            }
+            },
+            "direction": "+"
         },
         {
             "type": "FieldProjectionAngleMonitor",
