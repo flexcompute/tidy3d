@@ -266,6 +266,23 @@ def get_run_info(task_id: TaskId):
     return task.get_running_info()
 
 
+def get_status(task_id) -> str:
+    """Get the status of a task. Raises an error if status is "error".
+
+    Parameters
+    ----------
+    task_id : str
+        Unique identifier of task on server.  Returned by :meth:`upload`.
+    """
+    task_info = get_info(task_id)
+    status = task_info.status
+    if status == "visualize":
+        return "success"
+    if status == "error":
+        raise WebError("Error running task!")
+    return status
+
+
 # pylint: disable=too-many-statements, too-many-locals, too-many-branches
 def monitor(task_id: TaskId, verbose: bool = True) -> None:
     # pylint:disable=too-many-statements
@@ -290,16 +307,6 @@ def monitor(task_id: TaskId, verbose: bool = True) -> None:
 
     console = Console() if verbose else None
 
-    def get_status() -> str:
-        """Get status for this task."""
-        task_info = get_info(task_id)
-        status = task_info.status
-        if status == "visualize":
-            return "success"
-        if status == "error":
-            raise WebError("Error running task!")
-        return status
-
     def get_estimated_cost() -> float:
         """Get estimated cost, if None, is not ready."""
         task_info = get_info(task_id)
@@ -307,16 +314,16 @@ def monitor(task_id: TaskId, verbose: bool = True) -> None:
 
     def monitor_preprocess() -> None:
         """Periodically check the status."""
-        status = get_status()
+        status = get_status(task_id)
         while status not in break_statuses and status != "running":
-            new_status = get_status()
+            new_status = get_status(task_id)
             if new_status != status:
                 status = new_status
                 if verbose and status != "running":
                     console.log(f"status = {status}")
             time.sleep(REFRESH_TIME)
 
-    status = get_status()
+    status = get_status(task_id)
 
     if verbose:
         console.log(f"status = {status}")
@@ -343,7 +350,7 @@ def monitor(task_id: TaskId, verbose: bool = True) -> None:
         console.log("starting up solver")
 
     # while running but before the percentage done is available, keep waiting
-    while get_run_info(task_id)[0] is None and get_status() == "running":
+    while get_run_info(task_id)[0] is None and get_status(task_id) == "running":
         time.sleep(REFRESH_TIME)
 
     # while running but percentage done is available
@@ -356,7 +363,7 @@ def monitor(task_id: TaskId, verbose: bool = True) -> None:
             pbar_pd = progress.add_task("% done", total=100)
             perc_done, _ = get_run_info(task_id)
 
-            while perc_done is not None and perc_done < 100 and get_status() == "running":
+            while perc_done is not None and perc_done < 100 and get_status(task_id) == "running":
                 perc_done, field_decay = get_run_info(task_id)
                 new_description = f"solver progress (field decay = {field_decay:.2e})"
                 progress.update(pbar_pd, completed=perc_done, description=new_description)
@@ -372,26 +379,26 @@ def monitor(task_id: TaskId, verbose: bool = True) -> None:
 
         # non-verbose case, just keep checking until status is not running or perc_done >= 100
         perc_done, _ = get_run_info(task_id)
-        while perc_done is not None and perc_done < 100 and get_status() == "running":
+        while perc_done is not None and perc_done < 100 and get_status(task_id) == "running":
             perc_done, field_decay = get_run_info(task_id)
             time.sleep(1.0)
 
     # post processing
     if verbose:
 
-        status = get_status()
+        status = get_status(task_id)
         if status != "running":
             console.log(f"status = {status}")
 
         with console.status(f"[bold green]Finishing '{task_name}'...", spinner="runner"):
             while status not in break_statuses:
-                new_status = get_status()
+                new_status = get_status(task_id)
                 if new_status != status:
                     status = new_status
                     console.log(f"status = {status}")
                 time.sleep(REFRESH_TIME)
     else:
-        while get_status() not in break_statuses:
+        while get_status(task_id) not in break_statuses:
             time.sleep(REFRESH_TIME)
 
 
