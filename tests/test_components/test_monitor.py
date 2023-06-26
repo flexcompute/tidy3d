@@ -231,7 +231,12 @@ def test_monitor():
         size=(1, 1, 0), center=center, mode_spec=td.ModeSpec(), freqs=[1, 2, 3], name="test_mon"
     )
     m6 = td.ModeSolverMonitor(
-        size=(1, 1, 0), center=center, mode_spec=td.ModeSpec(), freqs=[1, 2, 3], name="test_mon"
+        size=(1, 1, 0),
+        center=center,
+        mode_spec=td.ModeSpec(),
+        freqs=[1, 2, 3],
+        name="test_mon",
+        direction="-",
     )
     m7 = td.PermittivityMonitor(size=size, center=center, freqs=[1, 2, 3], name="perm")
 

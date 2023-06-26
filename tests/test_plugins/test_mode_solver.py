@@ -166,6 +166,7 @@ def test_compute_modes():
         coords=[coords, coords],
         freq=td.C_0 / 1.0,
         mode_spec=mode_spec,
+        direction="-",
     )
 
 
@@ -190,11 +191,16 @@ def test_mode_solver_simple(mock_remote_api, local):
         precision="double" if local else "single",
         track_freq="lowest",
     )
+    if local:
+        freqs = [td.C_0 / 0.9, td.C_0 / 1.0, td.C_0 / 1.1]
+    else:
+        freqs = [td.C_0 / 1.0]
     ms = ModeSolver(
         simulation=simulation,
         plane=PLANE,
         mode_spec=mode_spec,
-        freqs=[td.C_0 / 0.9, td.C_0 / 1.0, td.C_0 / 1.1],
+        freqs=freqs,
+        direction="-",
     )
     _ = ms.solve() if local else msweb.run(ms)
 
@@ -239,6 +245,7 @@ def test_mode_solver_custom_medium(mock_remote_api, local):
             plane=plane,
             mode_spec=mode_spec,
             freqs=[freq0],
+            direction="+",
         )
         modes = ms.solve() if local else msweb.run(ms)
         n_eff.append(modes.n_eff.values)
@@ -271,7 +278,9 @@ def test_mode_solver_angle_bend():
     )
     # put plane entirely in the symmetry quadrant rather than sitting on its center
     plane = td.Box(center=(0, 0.5, 0), size=(1, 0, 1))
-    ms = ModeSolver(simulation=simulation, plane=plane, mode_spec=mode_spec, freqs=[td.C_0 / 1.0])
+    ms = ModeSolver(
+        simulation=simulation, plane=plane, mode_spec=mode_spec, freqs=[td.C_0 / 1.0], direction="-"
+    )
     _ = ms.solve()
     # Plot field
     _, ax = plt.subplots(1)
@@ -301,7 +310,9 @@ def test_mode_solver_2D():
         boundary_spec=td.BoundarySpec.all_sides(boundary=td.Periodic()),
         sources=[SRC],
     )
-    ms = ModeSolver(simulation=simulation, plane=PLANE, mode_spec=mode_spec, freqs=[td.C_0 / 1.0])
+    ms = ModeSolver(
+        simulation=simulation, plane=PLANE, mode_spec=mode_spec, freqs=[td.C_0 / 1.0], direction="-"
+    )
     _ = ms.solve()
 
     mode_spec = td.ModeSpec(
@@ -317,7 +328,9 @@ def test_mode_solver_2D():
         run_time=1e-12,
         sources=[SRC],
     )
-    ms = ModeSolver(simulation=simulation, plane=PLANE, mode_spec=mode_spec, freqs=[td.C_0 / 1.0])
+    ms = ModeSolver(
+        simulation=simulation, plane=PLANE, mode_spec=mode_spec, freqs=[td.C_0 / 1.0], direction="+"
+    )
     _ = ms.solve()
 
     # The simulation and the mode plane are both 0D along the same dimension
@@ -357,12 +370,18 @@ def test_group_index(mock_remote_api, local):
         track_freq="central",
     )
 
+    if local:
+        freqs = [td.C_0 / 1.54, td.C_0 / 1.55, td.C_0 / 1.56]
+    else:
+        freqs = [td.C_0 / 1.0]
+
     # No group index calculation by default
     ms = ModeSolver(
         simulation=simulation,
         plane=td.Box(size=(td.inf, td.inf, 0)),
         mode_spec=mode_spec,
-        freqs=[td.C_0 / 1.54, td.C_0 / 1.55, td.C_0 / 1.56],
+        freqs=freqs,
+        direction="-",
     )
     modes = ms.solve() if local else msweb.run(ms)
     if local:
@@ -373,7 +392,7 @@ def test_group_index(mock_remote_api, local):
         simulation=simulation,
         plane=td.Box(size=(td.inf, td.inf, 0)),
         mode_spec=mode_spec.copy(update={"group_index_step": True}),
-        freqs=[td.C_0 / 1.54, td.C_0 / 1.55, td.C_0 / 1.56],
+        freqs=freqs,
     )
     modes = ms.solve() if local else msweb.run(ms)
     if local:

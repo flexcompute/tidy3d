@@ -489,6 +489,13 @@ class ModeSolverMonitor(AbstractModeMonitor):
     ...     name='mode_monitor')
     """
 
+    direction: Direction = pydantic.Field(
+        "+",
+        title="Propagation direction",
+        description="Direction of waveguide mode propagation along the axis defined by its normal "
+        "dimension.",
+    )
+
     def storage_size(self, num_cells: int, tmesh: int) -> int:
         """Size of monitor storage given the number of points after discretization."""
         return 6 * BYTES_COMPLEX * num_cells * len(self.freqs) * self.mode_spec.num_modes

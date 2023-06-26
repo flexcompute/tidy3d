@@ -252,6 +252,20 @@ def test_mode_solver_data():
     # Check that broadcasting worked
     assert data.Ex.f == dot.f
     assert data.Ex.mode_index == dot.mode_index
+    # Check eps_spec validator
+    num_freqs = len(data.monitor.freqs)
+    data_eps_spec = data.updated_copy(eps_spec=["diagonal"] * num_freqs)
+    data_eps_spec = data.updated_copy(eps_spec=["tensorial_real"] * num_freqs)
+    data_eps_spec = data.updated_copy(eps_spec=["tensorial_complex"] * num_freqs)
+    # wrong keyword
+    with pytest.raises(pydantic.ValidationError):
+        data_eps_spec = data.updated_copy(eps_spec=["tensorial"] * num_freqs)
+    # wrong number
+    with pytest.raises(pydantic.ValidationError):
+        data_eps_spec = data.updated_copy(eps_spec=["diagonal"] * (num_freqs + 1))
+    # check monitor direction changes upon time reversal
+    data_reversed = data.time_reversed_copy
+    assert data_reversed.monitor.direction == "-"
 
 
 def test_permittivity_data():

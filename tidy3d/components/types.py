@@ -219,6 +219,7 @@ ColormapType = Literal["divergent", "sequential", "cyclic"]
 """ mode solver """
 
 ModeSolverType = Literal["tensorial", "diagonal"]
+EpsSpecType = Literal["diagonal", "tensorial_real", "tensorial_complex"]
 
 """ mode tracking """
 

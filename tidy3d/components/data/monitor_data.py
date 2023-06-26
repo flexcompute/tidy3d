@@ -21,6 +21,7 @@ from .dataset import Dataset, AbstractFieldDataset, ElectromagneticFieldDataset
 from .dataset import FieldDataset, FieldTimeDataset, ModeSolverDataset, PermittivityDataset
 from ..base import TYPE_TAG_STR, cached_property
 from ..types import Coordinate, Symmetry, ArrayFloat1D, ArrayFloat2D, Size, Numpy, TrackFreq
+from ..types import EpsSpecType
 from ..grid.grid import Grid, Coords
 from ..validators import enforce_monitor_fields_present, required_if_symmetry_present
 from ..monitor import MonitorType, FieldMonitor, FieldTimeMonitor, ModeSolverMonitor
@@ -30,7 +31,7 @@ from ..monitor import FieldProjectionKSpaceMonitor, FieldProjectionSurface
 from ..monitor import DiffractionMonitor
 from ..source import SourceTimeType, CustomFieldSource
 from ..medium import Medium, MediumType
-from ...exceptions import SetupError, DataError, Tidy3dNotImplementedError
+from ...exceptions import SetupError, DataError, Tidy3dNotImplementedError, ValidationError
 from ...constants import ETA_0, C_0, MICROMETER
 from ...log import log
 
@@ -591,7 +592,8 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
     def time_reversed_copy(self) -> FieldData:
         """Make a copy of the data with time-reversed fields."""
 
-        # Time reversal for frequency-domain fields; overwritten in :class:`FieldTimeData`.
+        # Time reversal for frequency-domain fields; overwritten in :class:`FieldTimeData`
+        # and :class:`ModeSolverData`.
         new_data = {}
         for comp, field in self.field_components.items():
             if comp[0] == "H":
@@ -774,6 +776,24 @@ class ModeSolverData(ModeSolverDataset, ElectromagneticFieldData):
         ..., title="Monitor", description="Mode solver monitor associated with the data."
     )
 
+    eps_spec: List[EpsSpecType] = pd.Field(
+        None,
+        title="Permettivity Specification",
+        description="Characterization of the permittivity profile on the plane where modes are "
+        "computed. Possible values are 'diagonal', 'tensorial_real', 'tensorial_complex'.",
+    )
+
+    @pd.validator("eps_spec", always=True)
+    def eps_spec_match_mode_spec(cls, val, values):
+        """Raise validation error if frequencies in eps_spec does not match frequency list"""
+        if val:
+            mode_data_freqs = values["monitor"].freqs
+            if len(val) != len(mode_data_freqs):
+                raise ValidationError(
+                    "eps_spec must be provided at the same frequencies as mode solver data."
+                )
+        return val
+
     # pylint:disable=too-many-locals
     def overlap_sort(
         self,
@@ -882,6 +902,8 @@ class ModeSolverData(ModeSolverDataset, ElectromagneticFieldData):
         # Current pairs and their overlaps
         pairs = np.arange(num_modes)
         complex_amps = self.dot(data_to_sort).data.ravel()
+        if self.monitor.direction == "-":
+            complex_amps *= -1
 
         # Check whether modes already match
         modes_to_sort = np.where(np.abs(complex_amps) < overlap_thresh)[0]
@@ -903,6 +925,8 @@ class ModeSolverData(ModeSolverDataset, ElectromagneticFieldData):
 
             # Project to all modes of interest from data_template
             amps_reduced[:, i] = data_template_reduced.dot(one_mode).data.ravel()
+            if self.monitor.direction == "-":
+                amps_reduced[:, i] *= -1
 
         # Find the most similar modes and corresponding overlap values
         pairs_reduced, amps_reduced = self._find_closest_pairs(amps_reduced)
@@ -1022,7 +1046,31 @@ class ModeSolverData(ModeSolverDataset, ElectromagneticFieldData):
         for key, data in self._grid_correction_dict.items():
             update_dict[key] = data.isel(f=center)
 
+        if self.eps_spec:
+            update_dict["eps_spec"] = self.eps_spec[center]
+
+        update_dict["monitor"] = self.monitor.updated_copy(freqs=freqs[center])
+
         return self.copy(update=update_dict)
+
+    @property
+    def time_reversed_copy(self) -> FieldData:
+        """Make a copy of the data with direction-reversed fields. In lossy or gyrotropic systems,
+        the time-reversed fields will not be the same as the backward-propagating modes."""
+
+        # Time reversal
+        new_data = {}
+        for comp, field in self.field_components.items():
+            if comp[0] == "H":
+                new_data[comp] = -np.conj(field)
+            else:
+                new_data[comp] = np.conj(field)
+
+        # switch direction in the monitor
+        mnt = self.monitor
+        new_direction = "+" if mnt.direction == "-" else "-"
+        new_data["monitor"] = mnt.updated_copy(direction=new_direction)
+        return self.copy(update=new_data)
 
 
 class PermittivityData(PermittivityDataset, AbstractFieldData):

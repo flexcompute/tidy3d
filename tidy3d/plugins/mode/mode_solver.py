@@ -18,7 +18,7 @@ from ...components.mode import ModeSpec
 from ...components.monitor import ModeSolverMonitor, ModeMonitor
 from ...components.source import ModeSource, SourceTime
 from ...components.types import Direction, FreqArray, Ax, Literal, Axis, Symmetry, PlotScale
-from ...components.types import ArrayComplex3D, ArrayComplex4D, ArrayFloat1D
+from ...components.types import ArrayComplex3D, ArrayComplex4D, ArrayFloat1D, EpsSpecType
 from ...components.data.data_array import ModeIndexDataArray, ScalarModeFieldDataArray
 from ...components.data.data_array import FreqModeDataArray
 from ...components.data.sim_data import SimulationData
@@ -56,6 +56,13 @@ class ModeSolver(Tidy3dBaseModel):
 
     freqs: FreqArray = pydantic.Field(
         ..., title="Frequencies", description="A list of frequencies at which to solve."
+    )
+
+    direction: Direction = pydantic.Field(
+        "+",
+        title="Propagation direction",
+        description="Direction of waveguide mode propagation along the axis defined by its normal "
+        "dimension.",
     )
 
     @pydantic.validator("plane", always=True)
@@ -157,6 +164,7 @@ class ModeSolver(Tidy3dBaseModel):
         # pylint:disable=protected-access
         return mode_solver.data_raw._group_index_post_process(self.mode_spec.group_index_step)
 
+    # pylint:disable=too-many-locals
     @cached_property
     def data_raw(self) -> ModeSolverData:
         """:class:`.ModeSolverData` containing the field and effective index on unexpanded grid.
@@ -175,7 +183,7 @@ class ModeSolver(Tidy3dBaseModel):
         )
 
         # Compute and store the modes at all frequencies
-        n_complex, fields = self._solve_all_freqs(
+        n_complex, fields, eps_spec = self._solve_all_freqs(
             coords=_solver_coords, symmetry=self.solver_symmetry
         )
 
@@ -214,7 +222,13 @@ class ModeSolver(Tidy3dBaseModel):
             data_dict[field_name] = scalar_field_data
 
         # finite grid corrections
-        grid_factors = self._grid_correction(index_data)
+        grid_factors = self._grid_correction(
+            simulation=self.simulation,
+            plane=self.plane,
+            mode_spec=self.mode_spec,
+            n_complex=index_data,
+            direction=self.direction,
+        )
 
         # make mode solver data
         mode_solver_monitor = self.to_mode_solver_monitor(name=MODE_MONITOR_NAME)
@@ -225,6 +239,7 @@ class ModeSolver(Tidy3dBaseModel):
             grid_expanded=self.simulation.discretize(self.plane, extend=True),
             grid_primal_correction=grid_factors[0],
             grid_dual_correction=grid_factors[1],
+            eps_spec=eps_spec,
             **data_dict,
         )
         self._field_decay_warning(mode_solver_data.symmetry_expanded_copy)
@@ -312,19 +327,22 @@ class ModeSolver(Tidy3dBaseModel):
         self,
         coords: Tuple[ArrayFloat1D, ArrayFloat1D],
         symmetry: Tuple[Symmetry, Symmetry],
-    ) -> Tuple[List[float], List[Dict[str, ArrayComplex4D]]]:
+    ) -> Tuple[List[float], List[Dict[str, ArrayComplex4D]], List[EpsSpecType]]:
         """Call the mode solver at all requested frequencies."""
 
         fields = []
         n_complex = []
+        eps_spec = []
         for freq in self.freqs:
-            n_freq, fields_freq = self._solve_single_freq(
+            # pylint: disable=unbalanced-tuple-unpacking
+            n_freq, fields_freq, eps_spec_freq = self._solve_single_freq(
                 freq=freq, coords=coords, symmetry=symmetry
             )
             fields.append(fields_freq)
             n_complex.append(n_freq)
+            eps_spec.append(eps_spec_freq)
 
-        return n_complex, fields
+        return n_complex, fields, eps_spec
 
     # pylint:disable=too-many-locals
     def _solve_single_freq(
@@ -332,18 +350,19 @@ class ModeSolver(Tidy3dBaseModel):
         freq: float,
         coords: Tuple[ArrayFloat1D, ArrayFloat1D],
         symmetry: Tuple[Symmetry, Symmetry],
-    ) -> Tuple[float, Dict[str, ArrayComplex4D]]:
+    ) -> Tuple[float, Dict[str, ArrayComplex4D], EpsSpecType]:
         """Call the mode solver at a single frequency.
 
         The fields are rotated from propagation coordinates back to global coordinates.
         """
 
-        solver_fields, n_complex = compute_modes(
+        solver_fields, n_complex, eps_spec = compute_modes(
             eps_cross=self._solver_eps(freq),
             coords=coords,
             freq=freq,
             mode_spec=self.mode_spec,
             symmetry=symmetry,
+            direction=self.direction,
         )
 
         fields = {key: [] for key in ("Ex", "Ey", "Ez", "Hx", "Hy", "Hz")}
@@ -359,7 +378,7 @@ class ModeSolver(Tidy3dBaseModel):
         for field_name, field in fields.items():
             fields[field_name] = np.stack(field, axis=-1)
 
-        return n_complex, fields
+        return n_complex, fields, eps_spec
 
     def _rotate_field_coords(self, field: FIELD) -> FIELD:
         """Move the propagation axis=z to the proper order in the array."""
@@ -418,8 +437,13 @@ class ModeSolver(Tidy3dBaseModel):
                         "not decay at the plane boundaries."
                     )
 
+    @staticmethod
     def _grid_correction(
-        self, n_complex: ModeIndexDataArray
+        simulation: Simulation,
+        plane: Box,
+        mode_spec: ModeSpec,
+        n_complex: ModeIndexDataArray,
+        direction: Direction,
     ) -> [FreqModeDataArray, FreqModeDataArray]:
         """Correct the fields due to propagation on the grid.
 
@@ -439,22 +463,25 @@ class ModeSolver(Tidy3dBaseModel):
         :class:`.ModeSolverData`
             Copy of the data with renormalized fields.
         """
-        normal_pos = self.plane.center[self.normal_axis]
-        normal_dim = "xyz"[self.normal_axis]
+        normal_axis = plane.size.index(0.0)
+        normal_pos = plane.center[normal_axis]
+        normal_dim = "xyz"[normal_axis]
 
         # Primal and dual grid along the normal direction,
         # i.e. locations of the tangential E-field and H-field components, respectively
-        grid = self.simulation.grid
-        normal_primal = grid.boundaries.to_list[self.normal_axis]
+        grid = simulation.grid
+        normal_primal = grid.boundaries.to_list[normal_axis]
         normal_primal = xr.DataArray(normal_primal, coords={normal_dim: normal_primal})
-        normal_dual = grid.centers.to_list[self.normal_axis]
+        normal_dual = grid.centers.to_list[normal_axis]
         normal_dual = xr.DataArray(normal_dual, coords={normal_dim: normal_dual})
 
         # Propagation phase at the primal and dual locations. The k-vector is along the propagation
         # direction, so angle_theta has to be taken into account. The distance along the propagation
         # direction is the distance along the normal direction over cosine(theta).
-        cos_theta = np.cos(self.mode_spec.angle_theta)
+        cos_theta = np.cos(mode_spec.angle_theta)
         k_vec = 2 * np.pi * n_complex * n_complex.f / C_0 / cos_theta
+        if direction == "-":
+            k_vec *= -1
         phase_primal = np.exp(1j * k_vec * (normal_primal - normal_pos))
         phase_dual = np.exp(1j * k_vec * (normal_dual - normal_pos))
 
@@ -548,6 +575,7 @@ class ModeSolver(Tidy3dBaseModel):
             center=self.plane.center,
             mode_spec=self.mode_spec,
             freqs=self.freqs,
+            direction=self.direction,
             name=name,
         )
 
