@@ -102,7 +102,7 @@ The backward vjp function defined for `web.run()` accepts and returns quite abst
 
 As the return value of the `web.run()` must look like the derivative of its input arguments, ths function returns a tuple of length 1 storing a `Simulation` where the contents of each field are simply the derivatives that field w.r.t. the outputs of the function being differentiated. 
 
-This concept is hard to understand but is the crucial idea behind the workings of the plugin so it's again worth spending some time to digest. To reiterate, in its essence, the goal of the adjoint `web.run()` is to propagate the derivative of the function w.r.t. the output data (stored as a `SimulationData`) into the derivative of the function w.r.t. the S`imulation` fields (stored as a `Simulation`).
+This concept is hard to understand but is the crucial idea behind the workings of the plugin so it's again worth spending some time to digest. To reiterate, in its essence, the goal of the adjoint `web.run()` is to propagate the derivative of the function w.r.t. the output data (stored as a `SimulationData`) into the derivative of the function w.r.t. the `Simulation` fields (stored as a `Simulation`).
 
 ### Where do derivatives come from?
 
@@ -231,7 +231,7 @@ While they are hidden from normal use, the `JaxSimulation` contains fields stori
 Finally, the `JaxSimulation` has a few other differences with the regular `Simulation` class.
 - It validates that `subpixel=True`, because otherwise adjoint gives innacurate and ill-defined results.
 - It has an `fwidth_adjoint` field, which, if specified, overwrites the `fwidth` of the adjoint source with a custom value. If not specified, the adjoint sources' `fwidth` is determined from the average of the `fwidths` contained in `.sources`.
-- To convert a `JaxSimulation` to a regular `Simulation`, one may call  .to_simulation()` method, which returns a tuple of the `Simulation` and a datastructure containing extra information needed to reconstruct the `JaxSimulation` with `JaxSimulation.from_simulation()`. So a conversion would look like `sim=jax_sim.to_simulation()[0]`. If desired, we could easily add a `.simulation` `@property` to just return the `Simulation` part for convenience.
+- To convert a `JaxSimulation` to a regular `Simulation`, one may call  `.to_simulation()` method, which returns a tuple of the `Simulation` and a datastructure containing extra information needed to reconstruct the `JaxSimulation` with `JaxSimulation.from_simulation()`. So a conversion would look like `sim=jax_sim.to_simulation()[0]`. If desired, we could easily add a `.simulation` `@property` to just return the `Simulation` part for convenience.
 - The `JaxSimulation` objects have their `.plot` and `.plot_eps` methods overwritten for convenience, which calls `.to_simulation()` and plots the result.
 
 ### Adjoint `web.run` function
