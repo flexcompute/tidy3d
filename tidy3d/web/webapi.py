@@ -17,12 +17,13 @@ from rich.progress import Progress
 
 from .environment import Env
 from .simulation_task import SimulationTask, SIM_FILE_HDF5, Folder
-from .task import TaskId, TaskInfo
+from .task import TaskId, TaskInfo, ChargeType
 from ..components.data.sim_data import SimulationData
 from ..components.simulation import Simulation
 from ..components.types import Literal
 from ..log import log
 from ..exceptions import WebError
+from enum import Enum
 
 
 # time between checking task status
@@ -310,7 +311,39 @@ def monitor(task_id: TaskId, verbose: bool = True) -> None:
     def get_estimated_cost() -> float:
         """Get estimated cost, if None, is not ready."""
         task_info = get_info(task_id)
-        return task_info.estFlexUnit
+        block_info = task_info.taskBlockInfo
+        if block_info and block_info.chargeType == ChargeType.FREE:
+            grid_points = block_info.maxGridPoints
+            time_steps = block_info.maxTimeSteps
+            if grid_points < 1000:
+                grid_points_str = f"{grid_points}"
+            elif 1000 <= grid_points < 1000 * 1000:
+                grid_points_str = f"{grid_points/1000}K"
+            else:
+                grid_points_str = f"{grid_points/1000/1000}M"
+
+            if time_steps < 1000:
+                time_steps_str = f"{time_steps}"
+            elif 1000 <= grid_points < 1000 * 1000:
+                time_steps_str = f"{time_steps/1000}K"
+            else:
+                time_steps_str = f"{time_steps/1000/1000}M"
+
+            console.log(
+                f"You are running this simulation for FREE. Your current plan allows up to {block_info.maxFreeCount}"
+                f" free non-concurrent simulations per day (under {grid_points_str} grid points and {time_steps_str}"
+                f" time steps)"
+            )
+            return 0
+
+        else:
+            est_flex_unit = task_info.estFlexUnit
+            if est_flex_unit is not None and est_flex_unit > 0:
+                console.log(
+                    f"Maximum FlexCredit cost: {est_flex_unit:1.3f}. Use 'web.real_cost(task_id)' to "
+                    "get the billed FlexCredit cost after a simulation run."
+                )
+            return est_flex_unit
 
     def monitor_preprocess() -> None:
         """Periodically check the status."""
@@ -341,12 +374,7 @@ def monitor(task_id: TaskId, verbose: bool = True) -> None:
 
     # if the estimated cost is ready, print it
     if verbose:
-        est_flex_unit = get_estimated_cost()
-        if est_flex_unit is not None and est_flex_unit > 0:
-            console.log(
-                f"Maximum FlexCredit cost: {est_flex_unit:1.3f}. Use 'web.real_cost(task_id)' to "
-                "get the billed FlexCredit cost after a simulation run."
-            )
+        get_estimated_cost()
         console.log("starting up solver")
 
     # while running but before the percentage done is available, keep waiting
