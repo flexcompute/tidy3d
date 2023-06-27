@@ -5,6 +5,7 @@ import tempfile
 import responses
 from responses import matchers
 
+from tidy3d.web import monitor
 from tidy3d.web.environment import Env, EnvironmentConfig
 from tidy3d.web.simulation_task import Folder, SimulationTask
 from tidy3d.version import __version__
@@ -167,20 +168,23 @@ def test_create(set_api_key):
 
 @responses.activate
 def test_submit(set_api_key):
+    project_id = "1234"
+    task_id = "1234"
+    task_name = "test task"
     responses.add(
         responses.GET,
         f"{Env.current.web_api_endpoint}/tidy3d/project",
         match=[matchers.query_param_matcher({"projectName": "test folder1"})],
-        json={"data": {"projectId": "1234", "projectName": "test folder1"}},
+        json={"data": {"projectId": project_id, "projectName": "test folder1"}},
         status=200,
     )
     responses.add(
         responses.POST,
-        f"{Env.current.web_api_endpoint}/tidy3d/projects/1234/tasks",
+        f"{Env.current.web_api_endpoint}/tidy3d/projects/{project_id}/tasks",
         match=[
             matchers.json_params_matcher(
                 {
-                    "taskName": "test task",
+                    "taskName": task_name,
                     "callbackUrl": None,
                     "simulationType": "tidy3d",
                     "parentTasks": None,
@@ -189,8 +193,8 @@ def test_submit(set_api_key):
         ],
         json={
             "data": {
-                "taskId": "1234",
-                "taskName": "test task",
+                "taskId": task_id,
+                "taskName": task_name,
                 "createdAt": "2022-01-01T00:00:00.000Z",
             }
         },
@@ -198,7 +202,7 @@ def test_submit(set_api_key):
     )
     responses.add(
         responses.POST,
-        f"{Env.current.web_api_endpoint}/tidy3d/tasks/1234/submit",
+        f"{Env.current.web_api_endpoint}/tidy3d/tasks/{task_id}/submit",
         match=[
             matchers.json_params_matcher(
                 {"solverVersion": None, "workerGroup": None, "protocolVersion": __version__}
@@ -206,15 +210,40 @@ def test_submit(set_api_key):
         ],
         json={
             "data": {
-                "taskId": "1234",
-                "taskName": "test task",
+                "taskId": task_id,
+                "taskName": task_name,
                 "createdAt": "2022-01-01T00:00:00.000Z",
+                "taskBlockInfo": {
+                    "chargeType": "free",
+                    "maxFreeCount": 20,
+                    "maxGridPoints": 1000,
+                    "maxTimeSteps": 1000,
+                },
             }
         },
         status=200,
     )
-    task = SimulationTask.create(None, "test task", "test folder1")
+    responses.add(
+        responses.GET,
+        f"{Env.current.web_api_endpoint}/tidy3d/tasks/{task_id}/detail",
+        json={
+            "taskId": task_id,
+            "taskName": task_name,
+            "createdAt": "2022-01-01T00:00:00.000Z",
+            "status": "running",
+            "taskBlockInfo": {
+                "chargeType": "free",
+                "maxFreeCount": 20,
+                "maxGridPoints": 1000,
+                "maxTimeSteps": 1000,
+            },
+        },
+        status=200,
+    )
+    task = SimulationTask.create(None, task_name, "test folder1")
     task.submit()
+    # test DE need to open the comment
+    # monitor(task_id, True)
 
 
 @responses.activate
@@ -226,6 +255,12 @@ def test_estimate_cost(set_api_key):
             "data": {
                 "taskId": "3eb06d16-208b-487b-864b-e9b1d3e010a7",
                 "createdAt": "2022-01-01T00:00:00.000Z",
+                "taskBlockInfo": {
+                    "chargeType": "free",
+                    "maxFreeCount": 20,
+                    "maxGridPoints": 1000,
+                    "maxTimeSteps": 1000,
+                },
             }
         },
         status=200,
