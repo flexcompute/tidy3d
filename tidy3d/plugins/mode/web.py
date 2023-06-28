@@ -74,6 +74,10 @@ def run(
         console = rich.console.Console()
 
     task = ModeSolverTask.create(mode_solver, task_name, mode_solver_name, folder_name)
+    if verbose:
+        console.log(
+            f"Mode solver created with task_id='{task.task_id}', solver_id='{task.solver_id}'."
+        )
     task.upload(verbose=verbose, progress_callback=progress_callback_upload)
     task.submit()
 
