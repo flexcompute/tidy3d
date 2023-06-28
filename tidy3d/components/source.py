@@ -452,8 +452,7 @@ class CustomCurrentSource(Source):
 
     Note
     ----
-        If only the ``E`` or only the ``H`` fields are provided, the source will not be directional,
-        but will inject equal power in both directions instead.
+        The coordinates of all provided fields are assumed to be relative to the source center.
 
     Example
     -------
@@ -582,16 +581,19 @@ class BroadbandSource(Source, ABC):
 
 
 class CustomFieldSource(FieldSource, PlanarSource):
-    """Implements a source corresponding to an input dataset containing ``E`` and ``H`` fields.
-    For the injection to work as expected, the fields must decay by the edges of the source plane,
-    or the source plane must span the entire simulation domain and the fields must match the
-    simulation boundary conditions. The equivalent source currents are fully defined by the field
-    components tangential to the source plane. The normal components (e.g. ``Ez`` and ``Hz``) can be
-    provided but will have no effect on the results, in accordance with the equivalence principle.
-    At least one of the tangential components has to be defined. For example, for a ``z``-normal
-    source, at least one of ``Ex``, ``Ey``, ``Hx``, and ``Hy`` has to be present in the provided
-    dataset. The coordinates of all provided fields are assumed to be relative to the source
-    center. Each provided field component must also span the size of the source.
+    """Implements a source corresponding to an input dataset containing ``E`` and ``H`` fields,
+    using the equivalence principle to define the actual injected currents. For the injection to
+    work as expected (i.e. to reproduce the required ``E`` and ``H`` fields), the field data must
+    decay by the edges of the source plane, or the source plane must span the entire simulation
+    domain and the fields must match the simulation boundary conditions.
+    The equivalent source currents are fully defined by the field components tangential to the
+    source plane. For e.g. source normal along ``z``, the normal components (``Ez`` and ``Hz``)
+    can be provided but will have no effect on the results, and at least one of the tangential
+    components has to be in the dataset, i.e. at least one of ``Ex``, ``Ey``, ``Hx``, and ``Hy``.
+
+    Note
+    ----
+        The coordinates of all provided fields are assumed to be relative to the source center.
 
     Note
     ----
