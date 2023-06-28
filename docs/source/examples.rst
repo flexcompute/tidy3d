@@ -10,14 +10,14 @@ Defining Structures and Materials
 .. toctree::
     :maxdepth: 1
 
-    notebooks/GDS_import
+    notebooks/GDSImport
     notebooks/STLImport
     notebooks/Dispersion
     notebooks/Fitting
     notebooks/FullyAnisotropic
     notebooks/Gyrotropic
     notebooks/CustomMediumTutorial
-    notebooks/Self_intersecting_polyslab
+    notebooks/SelfIntersectingPolyslab
 
 Defining Grid and Boundary Conditions
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -34,8 +34,8 @@ Defining Sources and Monitors
 .. toctree::
     :maxdepth: 1
 
-    notebooks/Modal_sources_monitors
-    notebooks/Modes_bent_angled
+    notebooks/ModalSourcesMonitors
+    notebooks/ModesBentAngled
     notebooks/TFSF
     notebooks/CustomFieldSource
 
@@ -76,12 +76,12 @@ FDTD Adjoint Optimization
 .. toctree::
     :maxdepth: 1
 
-    notebooks/AdjointPlugin_1_Intro
-    notebooks/AdjointPlugin_2_GradientChecking
-    notebooks/AdjointPlugin_3_InverseDesign
-    notebooks/AdjointPlugin_4_MultiObjective
-    notebooks/AdjointPlugin_5_BoundaryGradients
-    notebooks/AdjointPlugin_6_GratingCoupler
+    notebooks/AdjointPlugin1Intro
+    notebooks/AdjointPlugin2GradientChecking
+    notebooks/AdjointPlugin3InverseDesign
+    notebooks/AdjointPlugin4MultiObjective
+    notebooks/AdjointPlugin5BoundaryGradients
+    notebooks/AdjointPlugin6GratingCoupler
 
 Tidy3D Case Studies
 -------------------
@@ -92,7 +92,7 @@ Photonic Integrated Circuit Components
     :maxdepth: 1
 
     notebooks/YJunction
-    notebooks/MMI_1x4
+    notebooks/MMI1x4
     notebooks/BilevelPSR
     notebooks/WaveguideCrossing
     notebooks/WaveguideSizeConverter
@@ -120,8 +120,8 @@ Metamaterials, Gratings, and Other Periodic Structures
     notebooks/GradientMetasurfaceReflector
     notebooks/GrapheneMetamaterial.ipynb
     notebooks/MicrowaveFrequencySelectiveSurface
-    notebooks/HighQ_Si
-    notebooks/HighQ_Ge
+    notebooks/HighQSi
+    notebooks/HighQGe
     notebooks/GratingEfficiency
     notebooks/BiosensorGrating
     notebooks/DistributedBraggReflectorCavity
