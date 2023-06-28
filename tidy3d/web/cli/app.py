@@ -3,6 +3,7 @@ Commandline interface for tidy3d.
 """
 import json
 import os.path
+import ssl
 
 import click
 import requests
@@ -90,7 +91,13 @@ def configure_fn(apikey: str) -> None:
         message = f"Current API key: [{current_apikey}]\n" if current_apikey else ""
         apikey = click.prompt(f"{message}Please enter your api key", type=str)
 
-    resp = requests.get(f"{Env.current.web_api_endpoint}/apikey", auth=auth, verify=False)
+    try:
+        resp = requests.get(
+            f"{Env.current.web_api_endpoint}/apikey", auth=auth, verify=Env.current.ssl_verify
+        )
+    except (requests.exceptions.SSLError, ssl.SSLError):
+        resp = requests.get(f"{Env.current.web_api_endpoint}/apikey", auth=auth, verify=False)
+
     if resp.status_code == 200:
         click.echo("Configured successfully.")
         with open(CONFIG_FILE, "w+", encoding="utf-8") as config_file:
