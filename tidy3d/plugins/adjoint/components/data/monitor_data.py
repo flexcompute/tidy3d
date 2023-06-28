@@ -277,7 +277,8 @@ class JaxFieldData(JaxMonitorData, FieldData):
             forward_amps = field_component.as_ndarray
             values = -1j * forward_amps
             coords = field_component.coords
-            src_field_components[name] = ScalarFieldDataArray(values, coords=coords)
+            if not np.all(values == 0):
+                src_field_components[name] = ScalarFieldDataArray(values, coords=coords)
 
             def shift_value(coords) -> float:
                 """How much to shift the geometry by along a dimension (only if > 1D)."""
@@ -295,6 +296,7 @@ class JaxFieldData(JaxMonitorData, FieldData):
         source_geo = Box.from_bounds(rmin=rmin, rmax=rmax)
 
         dataset = FieldDataset(**src_field_components)
+        print(dataset.field_components)
         custom_source = CustomCurrentSource(
             center=source_geo.center,
             size=source_geo.size,
