@@ -296,7 +296,6 @@ class JaxFieldData(JaxMonitorData, FieldData):
         source_geo = Box.from_bounds(rmin=rmin, rmax=rmax)
 
         dataset = FieldDataset(**src_field_components)
-        print(dataset.field_components)
         custom_source = CustomCurrentSource(
             center=source_geo.center,
             size=source_geo.size,
